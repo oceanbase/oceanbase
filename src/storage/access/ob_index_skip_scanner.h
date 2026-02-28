@@ -124,7 +124,7 @@ class ObIndexSkipCtlStrategy
 {
 public:
   ObIndexSkipCtlStrategy(const ObIndexSkipCtlStrategyType type);
-  ~ObIndexSkipCtlStrategy() = default;
+  ~ObIndexSkipCtlStrategy() { reset(); };
   void reset();
   int check_disabled(const ObIndexSkipState &state, bool &disabled) const;
   OB_INLINE void add_total_row_count(const int64_t row_count)
@@ -149,62 +149,154 @@ private:
   double final_ratio_threshold_;
 };
 
-class ObIndexSkipScanner
+enum class ObSkipScannerType : int8_t
+{
+  INDEX_SKIP_SCAN = 0,
+  ADVANCE_SCAN = 1,
+};
+
+class ObISkipScanner
+{
+public:
+  ObISkipScanner(const bool is_for_memtable, const ObSkipScannerType type, const blocksstable::ObStorageDatumUtils &datum_utils);
+  virtual ~ObISkipScanner();
+  virtual void reset();
+  virtual int init(
+      const bool is_reverse_scan,
+      const int64_t prefix_cnt,
+      const blocksstable::ObDatumRange &scan_range,
+      const blocksstable::ObDatumRange &skip_range,
+      const ObITableReadInfo &read_info,
+      common::ObIAllocator &stmt_allocator) = 0;
+  virtual int switch_info(
+      const bool is_reverse_scan,
+      const int64_t prefix_cnt,
+      const blocksstable::ObDatumRange &scan_range,
+      const blocksstable::ObDatumRange &skip_range,
+      const ObITableReadInfo &read_info,
+      common::ObIAllocator &stmt_allocator) = 0;
+  virtual int advance_scan(const blocksstable::ObDatumRange &scan_range)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int skip(
+      blocksstable::ObMicroIndexInfo &index_info,
+      ObIndexSkipState &prev_state,
+      ObIndexSkipState &state) = 0;
+  virtual int skip(
+      blocksstable::ObMicroIndexInfo &index_info,
+      const ObIndexSkipState &next_state,
+      ObIndexSkipState &state) = 0;
+  virtual int skip(
+      blocksstable::ObIMicroBlockRowScanner &micro_scanner,
+      blocksstable::ObMicroIndexInfo &index_info,
+      const bool first = false) = 0;
+  virtual int skip(
+      memtable::ObMemtableSkipScanIterator &mem_iter,
+      bool &is_end,
+      const bool first = false) = 0;
+  virtual common::ObIAllocator *get_stmt_alloc() = 0;
+  virtual bool is_opened() const = 0;
+  virtual bool is_disabled() const = 0;
+  virtual bool is_border_after_disabled() const = 0;
+  virtual bool should_skip() const
+  {
+    return !is_disabled() || is_border_after_disabled();
+  }
+  virtual bool force_skip() const
+  {
+    return false;
+  }
+  OB_INLINE ObSkipScannerType get_type() const
+  {
+    return type_;
+  }
+  OB_INLINE bool is_index_skip_scanner() const
+  {
+    return type_ == ObSkipScannerType::INDEX_SKIP_SCAN;
+  }
+  OB_INLINE bool is_advance_skip_scanner() const
+  {
+    return type_ == ObSkipScannerType::ADVANCE_SCAN;
+  }
+  VIRTUAL_TO_STRING_KV(K_(is_inited),
+                       K_(type),
+                       K_(micro_start),
+                       K_(micro_last),
+                       K_(micro_current),
+                       K_(index_skip_strategy),
+                       KP_(range_datums),
+                       KP_(scan_range),
+                       KP_(read_info),
+                       KP_(stmt_alloc));
+protected:
+  common::ObArenaAllocator range_alloc_;
+  bool is_inited_;
+  ObSkipScannerType type_;
+  int64_t micro_start_;
+  int64_t micro_last_;
+  int64_t micro_current_;
+  ObIndexSkipCtlStrategy index_skip_strategy_;
+  const blocksstable::ObStorageDatumUtils &datum_utils_;
+  blocksstable::ObDatumRange complete_range_;
+  blocksstable::ObStorageDatum *range_datums_;
+  const blocksstable::ObDatumRange *scan_range_;
+  const ObITableReadInfo *read_info_;
+  common::ObIAllocator *stmt_alloc_;
+};
+
+class ObIndexSkipScanner : public ObISkipScanner
 {
 public:
   ObIndexSkipScanner(const bool is_for_memtable, const blocksstable::ObStorageDatumUtils &datum_utils);
-  ~ObIndexSkipScanner();
-  void reset();
-  int init(
+  virtual ~ObIndexSkipScanner();
+  virtual void reset() override;
+  virtual int init(
       const bool is_reverse_scan,
       const int64_t prefix_cnt,
       const blocksstable::ObDatumRange &scan_range,
       const blocksstable::ObDatumRange &skip_range,
       const ObITableReadInfo &read_info,
-      common::ObIAllocator &stmt_allocator);
-  int switch_info(
+      common::ObIAllocator &stmt_allocator) override;
+  virtual int switch_info(
       const bool is_reverse_scan,
       const int64_t prefix_cnt,
       const blocksstable::ObDatumRange &scan_range,
       const blocksstable::ObDatumRange &skip_range,
       const ObITableReadInfo &read_info,
-      common::ObIAllocator &stmt_allocator);
-  int skip(
+      common::ObIAllocator &stmt_allocator) override;
+  virtual int skip(
       blocksstable::ObMicroIndexInfo &index_info,
       ObIndexSkipState &prev_state,
-      ObIndexSkipState &state);
+      ObIndexSkipState &state) override;
   // for reverse scan
-  int skip(
+  virtual int skip(
       blocksstable::ObMicroIndexInfo &index_info,
       const ObIndexSkipState &next_state,
-      ObIndexSkipState &state);
-  int skip(
+      ObIndexSkipState &state) override;
+  virtual int skip(
       blocksstable::ObIMicroBlockRowScanner &micro_scanner,
       blocksstable::ObMicroIndexInfo &index_info,
-      const bool first = false);
-  int skip(
+      const bool first = false) override;
+  virtual int skip(
       memtable::ObMemtableSkipScanIterator &mem_iter,
       bool &is_end,
-      const bool first = false);
-  OB_INLINE common::ObIAllocator *get_stmt_alloc()
+      const bool first = false) override;
+  virtual common::ObIAllocator *get_stmt_alloc() override
   {
     return stmt_alloc_;
   }
-  OB_INLINE bool is_opened() const
+  virtual bool is_opened() const override
   {
     return nullptr != skip_range_;
   }
-  OB_INLINE bool is_disabled() const
+  virtual bool is_disabled() const override
   {
     return is_disabled_;
   }
-  OB_INLINE bool is_border_after_disabled() const
+  virtual bool is_border_after_disabled() const override
   {
     return is_border_after_disabled_;
-  }
-  OB_INLINE bool should_skip() const
-  {
-    return !is_disabled() || is_border_after_disabled();
   }
   OB_INLINE bool is_prefix_filled() const
   {
@@ -218,25 +310,17 @@ public:
   {
     skip_scan_factory_ = skip_scan_factory;
   }
-  TO_STRING_KV(K_(is_inited),
-               K_(is_disabled),
-               K_(is_border_after_disabled),
-               K_(is_reverse_scan),
-               K_(is_prefix_filled),
-               K_(is_scan_range_complete),
-               K_(prefix_cnt),
-               K_(micro_start),
-               K_(micro_last),
-               K_(micro_current),
-               K_(prefix_range_idx),
-               K_(index_skip_state),
-               K_(index_skip_strategy),
-               KP_(scan_range),
-               KP_(skip_range),
-               KP_(range_datums),
-               KP_(read_info),
-               KP_(skip_scan_factory),
-               KP_(stmt_alloc));
+  INHERIT_TO_STRING_KV("ObISkipScanner", ObISkipScanner,
+                       K_(is_disabled),
+                       K_(is_border_after_disabled),
+                       K_(is_reverse_scan),
+                       K_(is_prefix_filled),
+                       K_(is_scan_range_complete),
+                       K_(prefix_cnt),
+                       K_(prefix_range_idx),
+                       K_(index_skip_state),
+                       KP_(skip_range),
+                       KP_(skip_scan_factory));
 private:
   int check_and_preprocess(
       const bool first,
@@ -290,30 +374,88 @@ private:
     return is_reverse_scan_ ? ObIndexSkipNodeState::PREFIX_SKIPPED_RIGHT : ObIndexSkipNodeState::PREFIX_SKIPPED_LEFT;
   }
   const static int64_t CHECK_INTERRUPT_RANGE_CNT = 100;
-  common::ObArenaAllocator range_alloc_;
   common::ObArenaAllocator prefix_alloc_;
-  bool is_inited_;
   bool is_disabled_;
   bool is_border_after_disabled_;
   bool is_reverse_scan_;
   bool is_prefix_filled_;
   bool is_scan_range_complete_;
   int64_t prefix_cnt_;
-  int64_t micro_start_;
-  int64_t micro_last_;
-  int64_t micro_current_;
   int64_t prefix_range_idx_;
   ObIndexSkipState index_skip_state_;
-  ObIndexSkipCtlStrategy index_skip_strategy_;
-  const blocksstable::ObStorageDatumUtils &datum_utils_;
-  const blocksstable::ObDatumRange *scan_range_;
   const blocksstable::ObDatumRange *skip_range_;
-  blocksstable::ObDatumRange complete_range_;
   blocksstable::ObDatumRange prefix_range_;
-  blocksstable::ObStorageDatum *range_datums_;
-  const ObITableReadInfo *read_info_;
   ObIndexSkipScanFactory *skip_scan_factory_;
-  common::ObIAllocator *stmt_alloc_;
+};
+
+class ObAdvanceSkipScanner : public ObISkipScanner
+{
+public:
+  ObAdvanceSkipScanner(const bool is_for_memtable, const blocksstable::ObStorageDatumUtils &datum_utils);
+  virtual ~ObAdvanceSkipScanner();
+  virtual void reset() override;
+  virtual int init(
+      const bool is_reverse_scan,
+      const int64_t prefix_cnt,
+      const blocksstable::ObDatumRange &scan_range,
+      const blocksstable::ObDatumRange &skip_range,
+      const ObITableReadInfo &read_info,
+      common::ObIAllocator &stmt_allocator) override;
+  virtual int switch_info(
+      const bool is_reverse_scan,
+      const int64_t prefix_cnt,
+      const blocksstable::ObDatumRange &scan_range,
+      const blocksstable::ObDatumRange &skip_range,
+      const ObITableReadInfo &read_info,
+      common::ObIAllocator &stmt_allocator) override;
+  virtual int advance_scan(const blocksstable::ObDatumRange &scan_range) override;
+  virtual int skip(
+      blocksstable::ObMicroIndexInfo &index_info,
+      ObIndexSkipState &prev_state,
+      ObIndexSkipState &state) override;
+  // for reverse scan
+  virtual int skip(
+      blocksstable::ObMicroIndexInfo &index_info,
+      const ObIndexSkipState &next_state,
+      ObIndexSkipState &state) override
+  {
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int skip(
+      blocksstable::ObIMicroBlockRowScanner &micro_scanner,
+      blocksstable::ObMicroIndexInfo &index_info,
+      const bool first = false) override;
+  virtual int skip(
+      memtable::ObMemtableSkipScanIterator &mem_iter,
+      bool &is_end,
+      const bool first = false) override
+  {
+    return OB_NOT_SUPPORTED;
+  }
+  virtual common::ObIAllocator *get_stmt_alloc() override
+  {
+    return stmt_alloc_;
+  }
+  virtual bool is_opened() const override
+  {
+    return nullptr != scan_range_;
+  }
+  virtual bool is_disabled() const override
+  {
+    return false;
+  }
+  virtual bool is_border_after_disabled() const override
+  {
+    return false;
+  }
+  virtual bool force_skip() const override
+  {
+    return !left_border_reached_;
+  }
+  INHERIT_TO_STRING_KV("ObISkipScanner", ObISkipScanner,
+                       K_(left_border_reached));
+private:
+  bool left_border_reached_;
 };
 
 class ObIndexSkipScanFactory
@@ -323,15 +465,15 @@ public:
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
       const blocksstable::ObDatumRange *range,
-      ObIndexSkipScanner *&skip_scanner,
+      ObISkipScanner *&skip_scanner,
       const bool is_for_memtable = false);
-  static void destroy_index_skip_scanner(ObIndexSkipScanner *&skip_scanner);
+  static void destroy_index_skip_scanner(ObISkipScanner *&skip_scanner);
 
   ObIndexSkipScanFactory();
   ~ObIndexSkipScanFactory();
   void reuse();
   void reset();
-  int add_skip_scanner(ObIndexSkipScanner *skip_scanner);
+  int add_skip_scanner(ObISkipScanner *skip_scanner);
   int set_pending_disabled(
       const bool is_reverse_scan,
       const int64_t prefix_cnt,
@@ -347,7 +489,7 @@ private:
   common::ObArenaAllocator alloc_;
   bool is_pending_disabled_;
   blocksstable::ObDatumRowkey newest_prefix_key_;
-  common::ObSEArray<ObIndexSkipScanner*, 8> skip_scanners_;
+  common::ObSEArray<ObISkipScanner*, 8> skip_scanners_;
 };
 
 } // namespace storage

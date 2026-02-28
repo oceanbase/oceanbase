@@ -110,6 +110,11 @@ public:
   static int construct_array_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t subschema_id, ObIArrayType *&res, bool read_only = true);
   static int calc_nested_expr_data_size(const ObExpr &expr, ObEvalCtx &ctx, const int64_t batch_idx, int64_t &size);
   static int get_array_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t subschema_id, const ObString &raw_data, ObIArrayType *&res);
+  // Canonicalize MAP compact payload by sorting key/value pairs (via map_obj->distinct()) per row,
+  // then rewrite the compact payload back to the root vector.
+  // Caller must ensure the root vector is already in compact format (e.g. after cast_vector2compact_fmt).
+  static int canonicalize_map_compact_payload(ObIAllocator &tmp_alloc, ObEvalCtx &ctx, const ObExpr &map_expr,
+                                             ObIVector &root_vec, const int64_t start_row, const int64_t end_row);
   static int dispatch_array_attrs_rows(ObEvalCtx &ctx, ObIArrayType *arr_obj, const int64_t row_idx,
                                        ObExpr **attrs, uint32_t attr_count, bool is_shallow = true);
   static int nested_expr_from_rows(const ObExpr &expr, ObEvalCtx &ctx, const sql::RowMeta &row_meta, const sql::ObCompactRow **stored_rows,

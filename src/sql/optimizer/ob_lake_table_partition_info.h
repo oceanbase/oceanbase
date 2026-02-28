@@ -30,22 +30,14 @@ namespace sql
 class ObLakeTablePartitionInfo : public ObTablePartitionInfo
 {
 public:
-  ObLakeTablePartitionInfo()
-  : ObTablePartitionInfo(PartitionInfoType::LAKE_TABLE),
-    is_hash_aggregate_(false),
-    hash_count_(0),
-    first_bucket_partition_value_offset_(-1),
-    file_pruner_(NULL),
-    iceberg_file_descs_()
-  {}
-
   ObLakeTablePartitionInfo(common::ObIAllocator &allocator)
-  : ObTablePartitionInfo(allocator, PartitionInfoType::LAKE_TABLE),
+  : ObTablePartitionInfo(allocator),
+    allocator_(allocator),
     is_hash_aggregate_(false),
     hash_count_(0),
     first_bucket_partition_value_offset_(-1),
     file_pruner_(NULL),
-    iceberg_file_descs_()
+    iceberg_file_descs_(allocator)
   {}
   virtual ~ObLakeTablePartitionInfo() {}
 
@@ -62,6 +54,10 @@ public:
   {
     return file_pruner_->is_partitioned() ? share::schema::ObPartitionLevel::PARTITION_LEVEL_ONE
                                            : share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO;
+  }
+  virtual PartitionInfoType get_partition_info_type() const override
+  {
+    return PartitionInfoType::LAKE_TABLE;
   }
   virtual const ObDASTableLocMeta &get_loc_meta() const override
   {
@@ -108,6 +104,7 @@ private:
   int add_table_file_for_hive(ObCandiTabletLoc &tablet_loc, ObHiveFileDesc &file_desc);
 
 private:
+  ObIAllocator &allocator_;
   // 外表的分区是否是按照hash聚合的
   bool is_hash_aggregate_;
   // hash聚合的外表的总分区数
@@ -115,7 +112,7 @@ private:
   // 第一个使用 bucket 的 partition value 的 offset
   int64_t first_bucket_partition_value_offset_ = -1;
   ObILakeTableFilePruner *file_pruner_;
-  ObSEArray<ObIcebergFileDesc*, 16, common::ModulePageAllocator, true> iceberg_file_descs_;
+  ObSqlArray<ObIcebergFileDesc*> iceberg_file_descs_;
 };
 
 

@@ -26,6 +26,14 @@ public:
 
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_crc32_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
+  static int calc_crc32_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+
+  template <typename ArgVec, typename ResVec>
+  static int vector_crc32(VECTOR_EVAL_FUNC_ARG_DECL);
+
+  static const uint32_t Crc32Lookup[16][256];
+
+  static uint32_t crc32_16bytes(uint32_t previousCrc32, unsigned char *data, size_t length);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCrc32);

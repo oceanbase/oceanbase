@@ -14,6 +14,14 @@
 #include "ob_transfer_struct.h"
 #include "common/ob_version_def.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "share/schema/ob_tenant_schema_service.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "src/storage/tablet/ob_tablet_meta.h"
+#include "storage/tablet/ob_tablet_create_delete_helper.h"
+#include "storage/ls/ob_ls.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
+#include "storage/ob_storage_schema_util.h"
+#include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "src/storage/tx_storage/ob_ls_map.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
@@ -558,8 +566,6 @@ int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *table
       if (OB_UNLIKELY(memtables.at(i).get_tablet_memtable(mt))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table in tables_handle is not memtable", K(ret), K(memtables.at(i)));
-      } else if (!mt->is_active_memtable()) {
-        // skip
       } else if (OB_UNLIKELY(!mt->is_data_memtable())) {
         // incremental direct load hold table lock will block transfer scheduling, so there will be no active direct load memtable
         ret = OB_TRANSFER_SYS_ERROR;
@@ -761,7 +767,7 @@ ObTransferRelatedInfo::ObTransferRelatedInfo()
     finish_out_log_replay_num_(0),
     finish_in_log_replay_num_(0),
     map_(),
-    lock_()
+    lock_(common::ObLatchIds::OB_TRANSFER_STRUCT_RELATED_INFO_LOCK)
 {
 }
 
@@ -1169,7 +1175,7 @@ int ObTransferRelatedInfo::get_related_info_task_id(share::ObTransferTaskID &tas
 
 /******************ObTransferTabletInfoMgr*********************/
 ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::ObTransferTabletInfoMgr()
-  : lock_(),
+  : lock_(common::ObLatchIds::OB_TRANSFER_TABLET_INFO_MGR_LOCK),
     tablet_info_array_(),
     storage_schema_mgr_()
 
@@ -1262,7 +1268,7 @@ int ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::build_storage_schema(
 
 /******************ObTransferBuildTabletInfoCtx*********************/
 ObTransferBuildTabletInfoCtx::ObTransferBuildTabletInfoCtx()
-  : lock_(),
+  : lock_(common::ObLatchIds::OB_TRANSFER_BUILD_TABLET_INFO_CTX_LOCK),
     dest_ls_id_(),
     index_(0),
     tablet_info_array_(),
@@ -1607,6 +1613,7 @@ int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::build_tablet_stora
   ObTablet *tablet = nullptr;
   ObStorageSchema *storage_schema = nullptr;
   uint64_t compat_version = 0;
+  uint64_t unused_table_id = OB_INVALID_ID;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1625,7 +1632,7 @@ int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::build_tablet_stora
   } else if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(allocator_, storage_schema))) {
     LOG_WARN("failed to alloc storage schema", K(ret));
   } else if (OB_FAIL(compaction::ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
-      schema_service, *tablet, schema_version, compat_version, allocator_, *storage_schema))) {
+      schema_service, *tablet, schema_version, compat_version, allocator_, *storage_schema, unused_table_id))) {
     LOG_WARN("failed to get table schema to merge", K(ret), KPC(tablet), K(task_info));
   } else if (OB_FAIL(storage_schema_map_.set_refactored(tablet_id, storage_schema))) {
     LOG_WARN("failed to push storage schema into map", K(ret), K(tablet_id), KPC(storage_schema));
@@ -1690,5 +1697,10 @@ int ObTransferBuildTabletInfoCtx::get_src_reorganization_scn(
   }
   return ret;
 }
-
 #endif
+
+void ObTransferLSInfo::reset()
+{
+  src_is_duplicate_ls_ = false;
+  dest_is_duplicate_ls_ = false;
+}

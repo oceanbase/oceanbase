@@ -3653,9 +3653,11 @@ int ObLSGroupCountBalance::expand_empty_row_by_create_(LSGroupMatrix &lg_matrix,
 }
 
 /*
- * 算法步骤：1. 确定在这行中，每个需要扩容出来的lg需要放在哪个单元格内；
- *           2. 找到每个单元格内需要扩容的lg，首先进行alter操作，由于单元格实际上unit_list都是相同的，所以只是做了一个ls_group_id的变更。
- *           3. 经过上述的操作，单元格内的日志流还是空的，则根据enable_transfer是否开启决定生成分裂合并操作，还是创建空日志流的操作
+ * 算法步骤：
+ * 1. 确定在这行中，每个需要扩容出来的lg需要放在哪个单元格内；
+ * 2. 根据是否开启 enable_transfer
+ *   a. 如果开启 enable_transfer，将日志流平均分裂到各ls group,并尽量按照primary zone对齐.
+ *   b. 如果关闭 enable_transfer，则通过alter操作，将日志流尽量平铺到各ls group.
  * */
 int ObLSGroupCountBalance::expand_ls_group_cnt_(
     LSGroupMatrix &lg_matrix, const int64_t row_index, const int64_t target_lg_cnt,
@@ -3686,16 +3688,15 @@ int ObLSGroupCountBalance::expand_ls_group_cnt_(
         //构造出这个cell上所有的lg_array，target_lg_array 包含了现有的和即将扩容出来的lg的指针
         if (OB_FAIL(get_cell_expand_lg_(*cell, target_lg_array))) {
           LOG_WARN("failed to get cell expand lg", KR(ret), KPC(cell));
-        }
-        //在curr_lg_array范围内，把日志流从这个lg调整到另一个lg，保证最大最小不大于1
-        else if (OB_FAIL(balance_ls_between_lgs_in_cell_(target_lg_array))) {
-          LOG_WARN("failed to construct migrate task", KR(ret), K(target_lg_array));
         } else if (tenant_info_->job_desc_.get_enable_transfer()) {
-          if (OB_FAIL(construct_expand_task_for_cell_emtpy_lg_(target_lg_array))) {
+          if (OB_FAIL(expand_ls_group_cnt_in_cell_by_transfer_(target_lg_array))) {
             LOG_WARN("failed to construct expand task", KR(ret), K(row_index), K(target_lg_array));
           }
         } else {
-          //关掉transfer了，经过均衡了，没有什么可以做的了
+          //在curr_lg_array范围内，把日志流从这个lg调整到另一个lg，保证最大最小不大于1
+          if (OB_FAIL(expand_ls_group_cnt_in_cell_by_alter_(target_lg_array))) {
+            LOG_WARN("failed to construct migrate task", KR(ret), K(target_lg_array));
+          }
         }
         LOG_INFO("after expand", K(target_lg_array));
       }
@@ -3800,11 +3801,10 @@ int ObLSGroupCountBalance::set_cell_expand_lg_cnt_(LSGroupMatrix &lg_matrix,
  * 经过前面的操作，如果某一个cell上的日志流组内没有日志流，则对通过分裂其他日志流组内的日志流，在空日志流组内构造出新的日志流
  * 1. 首先检查是否存在空的日志流组。如果不存在结束。找到所有的空日志流组的个数
  * 2. 把非空日志流组内的日志流作为分裂源端。
- * 3. 走到这一步，所有的非空日志流组，只会有一条日志流（不然前面的步骤会保证迁移到空日志流中取。）对这些非空日志流组，也只通过分裂合并搞出一条日志流。
- * 4. 构造每个日志流组内一条日志流的任务
- *
+ * 3. 每个空日志流组分别构造固定数量的新日志流，作为分裂目的端(数量为源端日志流组的日志流最少个数)
+ * 4. 构造split + alter + merge任务
  * */
-int ObLSGroupCountBalance::construct_expand_task_for_cell_emtpy_lg_(ObIArray<ObLSGroupStat*> &curr_lg)
+int ObLSGroupCountBalance::expand_ls_group_cnt_in_cell_by_transfer_(ObIArray<ObLSGroupStat*> &curr_lg)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -3813,12 +3813,15 @@ int ObLSGroupCountBalance::construct_expand_task_for_cell_emtpy_lg_(ObIArray<ObL
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls group is empty", KR(ret), K(curr_lg));
   } else {
-    //把多出来的日志流给空ls_group分过去,从每个有lg
-    //前面已经进行了cell内日志流个数的均衡，如果还存在空的ls_group,则走分裂合并的逻辑
+    // 空lsg为新expand的lsg，需要创建新日志流，并将旧lsg上的日志流平均分裂到新日志流上。
+    // 每个新lsg的初始LS个数与旧lsg的LS个数相同，且src_ls以primary_zone排序，以保证源端和目的端日志流按primary_zone聚合,
+    //   在各lsg的LS已经按primary_zone打散的情况下，可避免跨primary_zone的transfer导致分区切主。
+    // (为能处理各lsg个数不等的非稳态情况，取各lsg中LS个数最少的作为新lsg的初始LS个数)
     int64_t expand_ls_cnt = 0;
     ObSplitLSParamArray src_ls;
     ObArray<ObSplitLSParamArray> dest_split_array;
     ObArray<uint64_t> ls_group_ids;
+    int64_t min_ls_cnt_in_group = INT64_MAX;
     ARRAY_FOREACH(curr_lg, idx) {
       ObLSGroupStat *lg_stat = curr_lg.at(idx);
       CK(OB_NOT_NULL(lg_stat))
@@ -3828,35 +3831,41 @@ int ObLSGroupCountBalance::construct_expand_task_for_cell_emtpy_lg_(ObIArray<ObL
         if (OB_FAIL(ls_group_ids.push_back(lg_stat->lg_id_))) {
           LOG_WARN("failed to push back", KR(ret), KPC(lg_stat));
         }
-      } else if (1 != lg_stat->ls_count_in_group() && !ls_group_ids.empty()) {
-        //存在空日志流组的情况下，不可能存在一个日志流组内的日志流个数大于1
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ls count in group can not more than one", KR(ret), K(curr_lg));
       //日志流组非空，则作为分裂源端
       } else if (OB_FAIL(construct_src_split_param_array(*lg_stat, src_ls))) {
         LOG_WARN("failed to construct src split param", KR(ret), KPC(lg_stat));
+      } else {
+        min_ls_cnt_in_group = MIN(min_ls_cnt_in_group, lg_stat->ls_count_in_group());
       }
     }//end for get src param and expand_ls_cnt
+
+    // sort src_ls by primary_zone
+    if (OB_SUCC(ret)) {
+      lib::ob_sort(src_ls.begin(), src_ls.end(), CompareByPrimaryZone());
+    }
+
     if (OB_FAIL(ret)) {
     } else if (ls_group_ids.empty()) {
-      //没有空lg是预期内的结果
-      LOG_INFO("no need expand by transfer", K(curr_lg));
-    } else if (FALSE_IT(expand_ls_cnt = ls_group_ids.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expand target ls group ids is empty", KR(ret), K(ls_group_ids));
+    } else if (FALSE_IT(expand_ls_cnt = ls_group_ids.count() * min_ls_cnt_in_group)) {
     } else if (OB_FAIL(construct_expand_dest_param(expand_ls_cnt, src_ls, dest_split_array))) {
       LOG_WARN("failed to construct dest split array", KR(ret), K(expand_ls_cnt), K(src_ls));
     } else if (OB_UNLIKELY(dest_split_array.count() != expand_ls_cnt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dest split array not equal to expand ls count", KR(ret), K(expand_ls_cnt), K(src_ls), K(dest_split_array));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < expand_ls_cnt; ++i) {
-      //获取新的ls_group_id
-      uint64_t ls_group_id = ls_group_ids.at(i);
-      LOG_INFO("expand in new ls group", K(ls_group_id), K(i));
+    ARRAY_FOREACH(dest_split_array, i) {
+      //dest_split_array的LS预期按照primary_zone聚合并排序
+      //新ls_group_id按round-robin方式分配给每个新LS, 保证各LSG的primary_zone均衡
+      uint64_t ls_group_id = ls_group_ids.at(i % ls_group_ids.count());
       if (OB_FAIL(construct_ls_expand_task(ls_group_id, dest_split_array.at(i)))) {
-        LOG_WARN("failed to construct ls expand task", KR(ret), K(ls_group_id),
-            K(i), K(dest_split_array.at(i)));
+        LOG_WARN("failed to construct ls expand task", KR(ret), K(ls_group_id), K(i), K(dest_split_array.at(i)));
+      } else {
+        LOG_INFO("expand new ls for empty ls group", K(ls_group_id), K(i));
       }
     } //end for all lg
+    LOG_INFO("construct expand task for cell empty lg success", KR(ret), K(curr_lg), K(ls_group_ids), K(dest_split_array));
   }
   return ret;
 }
@@ -3959,14 +3968,17 @@ int ObLSGroupCountBalance::construct_ls_expand_task(const uint64_t ls_group_id,
     const share::ObBalanceJobID job_id = job_->get_job_id();
     const share::ObBalanceStrategy balance_strategy = job_->get_balance_strategy();
     ObTransferPartList part_list;
-    //dest_split_param会涉及多个ls_group的，虽然我们外层保证了他们的member_list一定是
-    //一样的，但是备库要感知这件事情，所以不能是一个split + transfer
-    //正确的顺序应该是对于第一个ls_group，是split+  alter
-    //剩下的ls_group是split+alter+merge到一个ls_group分裂出来的日志流上
+    // 对每个src ls group内的多个src_ls，第一个src_ls需要生成split任务，其他src_ls需要生成transfer任务
+    // 对于第一个ls group内的dest_ls，直接作为target ls，alter到目标lsg. 其他ls group的dest_ls，还需要merge到target_ls
+    // For example:
+    // src_ls: lg1 {1001, 1002}, lg2 {1003, 1004}
+    // target_ls: lg3 {1005}
+    // tasks:
+    // split 1001 -> 1005, transfer 1002 -> 1005, alter 1005 -> lg3
+    // split 1003 -> 1006, transfer 1004 -> 1006, alter 1006 -> lg3, merge 1006 -> 1005
     uint64_t last_lg_id = 0;
-    ObLSID dest_ls_id;
-    //最后要留下来的ls_id
-    ObLSID target_ls_id;
+    ObLSID dest_ls_id;  // temporary dest_ls_id for each ls_group
+    ObLSID target_ls_id;  // the final single LS in new expanded ls_group
     if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_id(sql_proxy_, tenant_id, target_ls_id))) {
       LOG_WARN("failed to fetch new ls id", KR(ret), K(tenant_id));
     }
@@ -3977,16 +3989,17 @@ int ObLSGroupCountBalance::construct_ls_expand_task(const uint64_t ls_group_id,
         LOG_WARN("src ls is null", KR(ret), K(i), K(dest_split_param));
       } else if (OB_FAIL(construct_ls_part_info(dest_split_param.at(i), target_ls_id, part_list))) {
         LOG_WARN("failed to construct ls part info", KR(ret), KPC(src_ls));
-      } else if (0 != last_lg_id && src_ls->ls_group_id_ != last_lg_id) {
-        //生成alter,结束上一个日志流组的操作,如果不是第一个日志流，还是需要生成merge任务
-        FINISH_LS_GROUP_OP;
-        dest_ls_id.reset();
-      }
-      if (OB_SUCC(ret) && src_ls->ls_group_id_ != last_lg_id) {
-        if (0 == i) {
+      } else if (src_ls->ls_group_id_ != last_lg_id) {
+        // new ls group, need to end previous ls_group operation
+        if (0 != last_lg_id) {
+          FINISH_LS_GROUP_OP;
+          dest_ls_id.reset(); // will be generated by split task
+        } else {
+          // first ls group, dest_ls_id is target_ls_id
           dest_ls_id = target_ls_id;
         }
-        if (OB_FAIL(ObLSBalanceTaskHelper::add_ls_split_task(
+        // first src_ls in each ls_group need to generate split task
+        if (FAILEDx(ObLSBalanceTaskHelper::add_ls_split_task(
                 GCTX.sql_proxy_, tenant_id, job_id, src_ls->ls_group_id_,
                 src_ls->ls_id_, part_list, balance_strategy, dest_ls_id,
                 *task_array_))) {
@@ -3995,10 +4008,13 @@ int ObLSGroupCountBalance::construct_ls_expand_task(const uint64_t ls_group_id,
         }
         last_lg_id = src_ls->ls_group_id_;
       } else {
-        //先前的balance_ls_between_lgs_in_cell_算法保证了
-        //每个日志流组内只会有一个日志流，所以不会存在这种情况
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("can not has more than one LS in group", KR(ret), K(i), K(dest_split_param));
+        // other src_ls in each ls_group need to generate transfer task to dest_ls_id
+        if (OB_FAIL(ObLSBalanceTaskHelper::add_ls_transfer_task(
+                tenant_id, job_id, src_ls->ls_group_id_, src_ls->ls_id_, dest_ls_id,
+                part_list, balance_strategy, *task_array_))) {
+          LOG_WARN("failed to add ls transfer task", KR(ret), K(tenant_id), K(job_id),
+              K(balance_strategy), KPC(src_ls), K(dest_ls_id), K(part_list));
+        }
       }
     }
     //最后还需要一个alter任务，把最后一批生成的日志流alter到目标ls_group_id
@@ -4010,12 +4026,11 @@ int ObLSGroupCountBalance::construct_ls_expand_task(const uint64_t ls_group_id,
 #undef FINISH_LS_GROUP_OP
 /*
  * curr_lg_array:包含了需要扩容出来的日志流和当前cell上全部的日志流
- * 为什么扩容要先执行alter任务：在同cell内，如果存在需要扩容出来的日志流组，执行做alter操作
- * 是没有任何代价的，只需要变更日志流的日志流组id即可，不需要有实际的迁移或者其他的操作。
+ * 如果enable_transfer关闭，只能通过alter任务将日志流尽量平铺到各ls group.
  * 找到日志流个数最多的日志流组max_lg，找到日志流最少的日志流组min_lg
  * 如果max_lg内的日志流个数减去min_lg的日志流个数大于1，则调整max_lg内的一个日志流到min_lg内
  * */
-int ObLSGroupCountBalance::balance_ls_between_lgs_in_cell_(ObArray<ObLSGroupStat*> &curr_lg_array)
+int ObLSGroupCountBalance::expand_ls_group_cnt_in_cell_by_alter_(ObIArray<ObLSGroupStat*> &curr_lg_array)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -4024,6 +4039,20 @@ int ObLSGroupCountBalance::balance_ls_between_lgs_in_cell_(ObArray<ObLSGroupStat
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(curr_lg_array));
   } else {
+    // round-robin sort each ls_info_list_ of each curr_lg in place by primary zone
+    ARRAY_FOREACH(curr_lg_array, i) {
+      ObLSGroupStat *curr_lg = curr_lg_array.at(i);
+      CK(OB_NOT_NULL(curr_lg));
+      if (OB_SUCC(ret) && curr_lg->ls_info_list_.count() > 1) {
+        ObArray<ObLSStatusInfo*> sorted_ls_array;
+        if (OB_FAIL(sort_ls_array_by_primary_zone_round_robin(curr_lg->ls_info_list_, sorted_ls_array))) {
+          LOG_WARN("failed to sort ls array by round-robin", KR(ret), KPC(curr_lg));
+        } else if (OB_FAIL(curr_lg->ls_info_list_.assign(sorted_ls_array))) {
+          LOG_WARN("failed to assign sorted ls list", KR(ret), KPC(curr_lg));
+        }
+      }
+    }
+
     ObLSGroupStat* max_lg = NULL;
     ObLSGroupStat* min_lg = NULL;
     //找到max_lg和min_lg
@@ -4073,7 +4102,7 @@ int ObLSGroupCountBalance::balance_ls_between_lgs_in_cell_(ObArray<ObLSGroupStat
  * 上面的逻辑存在把一个日志流从一个组调整到另外一个组的处理，保证日志流在各个日志流组内日志流个数相同。
  * 对于一个日志流组内日志流的ls_group_id信息和ObLSGroupStat不一致的，需要生成alter任务
  * */
-int ObLSGroupCountBalance::generate_alter_task_for_each_lg_(ObArray<ObLSGroupStat*> &curr_lg_array)
+int ObLSGroupCountBalance::generate_alter_task_for_each_lg_(ObIArray<ObLSGroupStat*> &curr_lg_array)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -4438,35 +4467,27 @@ int ObLSGroupCountBalance::construct_lg_shrink_task_(
   return ret;
 }
 
-// used only in ObLSGroupCountBalance::construct_lg_shrink_transfer_task_
-struct CompareByPrimaryZone
+// compare ls by primary_zone and ls_group_id
+bool ObLSBalanceStrategy::CompareByPrimaryZone::operator() (
+    const ObSplitLSParam &left, const ObSplitLSParam &right)
 {
-  bool operator() (const ObSplitLSParam &left, const ObSplitLSParam &right)
-  {
-    int ret = OB_SUCCESS; // only for logging
-    bool bret = false;
-    if (OB_UNLIKELY(!left.is_valid() || !right.is_valid())) {
-      ret_ = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", KR(ret_), K(left), K(right));
-    } else {
-      bret = left.get_ls_info()->primary_zone_ < right.get_ls_info()->primary_zone_;
-    }
-    return bret;
+  return (*this)(left.get_ls_info(), right.get_ls_info());
+}
+
+// compare ls by primary_zone and ls_group_id
+bool ObLSBalanceStrategy::CompareByPrimaryZone::operator() (
+    const ObLSStatusInfo *left, const ObLSStatusInfo *right)
+{
+  bool bret = false;
+  if (OB_UNLIKELY(NULL == left || NULL == right)) {
+    bret = false;
+  } else if (left->primary_zone_ != right->primary_zone_) {
+    bret = left->primary_zone_ < right->primary_zone_;
+  } else {
+    bret = left->get_ls_group_id() < right->get_ls_group_id();
   }
-  bool operator() (const ObLSStatusInfo *left, const ObLSStatusInfo *right)
-  {
-    int ret = OB_SUCCESS; // only for logging
-    bool bret = false;
-    if (OB_UNLIKELY(NULL == left || NULL == right)) {
-      ret_ = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", KR(ret_), KP(left), KP(right));
-    } else {
-      bret = left->primary_zone_ < right->primary_zone_;
-    }
-    return bret;
-  }
-  int ret_ = OB_SUCCESS;
-};
+  return bret;
+}
 
 /*
  * 开启transfer，构造分裂源端和分裂目的端
@@ -4486,7 +4507,6 @@ int ObLSGroupCountBalance::construct_lg_shrink_transfer_task_(
     ObSplitLSParamArray src_ls;
     ObArray<ObSplitLSParamArray> dest_ls;
     ObArray<ObLSStatusInfo*> ls_array;
-    CompareByPrimaryZone compare;
     for (int64_t i = 0; OB_SUCC(ret) && i < target_lg.count(); ++i) {
       ObLSGroupStat* lg = target_lg.at(i);
       CK(OB_NOT_NULL(lg))
@@ -4503,16 +4523,8 @@ int ObLSGroupCountBalance::construct_lg_shrink_transfer_task_(
     }
     // sort src_ls and ls_array(target ls) by primary_zone
     if (OB_SUCC(ret)) {
-      lib::ob_sort(src_ls.begin(), src_ls.end(), compare);
-      if (OB_FAIL(compare.ret_)) {
-        LOG_WARN("failed to sort src_ls", KR(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      lib::ob_sort(ls_array.begin(), ls_array.end(), compare);
-      if (OB_FAIL(compare.ret_)) {
-        LOG_WARN("failed to sort ls_array", KR(ret));
-      }
+      lib::ob_sort(src_ls.begin(), src_ls.end(), CompareByPrimaryZone());
+      lib::ob_sort(ls_array.begin(), ls_array.end(), CompareByPrimaryZone());
     }
 
     const int64_t target_ls_count = ls_array.count();
@@ -4652,6 +4664,14 @@ int ObLSGroupCountBalance::generate_shrink_lg_disable_transfer_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("row index is invalid", KR(ret), K(target_lg), K(shrink_lg));
   } else {
+    // sort ls_info_list_ of each shrink_lg by primary zone
+    ARRAY_FOREACH(shrink_lg, i) {
+      ObLSGroupStat *lg = shrink_lg.at(i);
+      CK(OB_NOT_NULL(lg));
+      if (OB_SUCC(ret) && lg->ls_info_list_.count() > 1) {
+        lib::ob_sort(lg->ls_info_list_.begin(), lg->ls_info_list_.end(), CompareByPrimaryZone());
+      }
+    }
     //给shrink_lg中的每个ls都在target_ls中找到一个最小日志流个数的lg塞进去
     const uint64_t tenant_id = tenant_info_->tenant_id_;
     for (int64_t i = 0; OB_SUCC(ret) && i < shrink_lg.count(); ++i) {
@@ -5216,6 +5236,8 @@ int ObLSCountBalance::generate_expand_task_(ObLSGroupStat &lg_stat)
     LOG_WARN("invalid arg", KR(ret), K(lg_stat), K(tenant_info_->job_desc_.get_ls_cnt_in_group()));
   } else if (OB_FAIL(construct_src_split_param_array(lg_stat, src_ls))) {
     LOG_WARN("failed to construct src split param", KR(ret), K(lg_stat));
+  } else {
+    lib::ob_sort(src_ls.begin(), src_ls.end(), CompareByPrimaryZone());
   }
   if (OB_SUCC(ret)) {
     const int64_t lack_ls_cnt = tenant_info_->job_desc_.get_ls_cnt_in_group() - lg_stat.ls_count_in_group();
@@ -5245,22 +5267,35 @@ int ObLSCountBalance::generate_shrink_task_(ObLSGroupStat &lg_stat)
   } else {
     ObSplitLSParamArray src_ls;
     ObArray<ObSplitLSParamArray> dest_ls;
+    ObArray<ObLSStatusInfo*> target_ls_array;
     const int64_t target_ls_cnt = tenant_info_->job_desc_.get_ls_cnt_in_group();
     const double src_factor = 1;
-    ARRAY_FOREACH(lg_stat.ls_info_list_, i) {
-      ObLSStatusInfo *status_info = lg_stat.ls_info_list_.at(i);
-      if (OB_ISNULL(status_info) || !status_info->is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("status_info is invalid", KR(ret), K(i), K(lg_stat));
+    ObArray<ObLSStatusInfo*> sorted_ls_array;
+    if (OB_FAIL(sort_ls_array_by_primary_zone_round_robin(lg_stat.ls_info_list_, sorted_ls_array))) {
+      LOG_WARN("failed to sort ls array", KR(ret), K(lg_stat.ls_info_list_));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < sorted_ls_array.count(); ++i) {
+      ObLSStatusInfo *status_info = sorted_ls_array.at(i);
+      CK(OB_NOT_NULL(status_info), status_info->is_valid())
+      if (OB_FAIL(ret)) {
       } else if (i < target_ls_cnt) { // redundant ls: i = target_ls_cnt ... end
-        // skip
+        if (OB_FAIL(target_ls_array.push_back(status_info))) {
+          LOG_WARN("fail to push back target ls", KR(ret));
+        }
       } else {
         ObSplitLSParam param(status_info, src_factor);
         if (OB_FAIL(src_ls.push_back(param))) {
           LOG_WARN("failed to push back param", KR(ret), K(param), K(i));
         }
-      }
+      }//end for i
     }
+
+    if (OB_SUCC(ret)) {
+      lib::ob_sort(src_ls.begin(), src_ls.end(), CompareByPrimaryZone());
+      lib::ob_sort(target_ls_array.begin(), target_ls_array.end(), CompareByPrimaryZone());
+    }
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(construct_shrink_src_param(target_ls_cnt, src_ls, dest_ls))) {
         LOG_WARN("failed to construct shrink src param", KR(ret), K(target_ls_cnt), K(src_ls));
@@ -5268,15 +5303,13 @@ int ObLSCountBalance::generate_shrink_task_(ObLSGroupStat &lg_stat)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("target_ls_cnt should be equal to the size of dest_ls", KR(ret), K(target_ls_cnt), K(dest_ls), K(src_ls));
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < target_ls_cnt; ++i) {
-        ObLSStatusInfo *status_info = lg_stat.ls_info_list_.at(i);
-        if (OB_ISNULL(status_info) || !status_info->is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("status_info is invalid", KR(ret), K(i), K(lg_stat));
-        } else if (OB_FAIL(generate_shrink_task_for_each_ls_(dest_ls.at(i), *status_info))) {
+      ARRAY_FOREACH(target_ls_array, i) {
+        const ObLSStatusInfo *status_info = target_ls_array.at(i);
+        CK(OB_NOT_NULL(status_info), status_info->is_valid())
+        if (FAILEDx(generate_shrink_task_for_each_ls_(dest_ls.at(i), *status_info))) {
           LOG_WARN("fail to execute generate_task_for_shrink", KR(ret), K(i), K(lg_stat),
               "dest_ls_param", dest_ls.at(i), KPC(status_info));
-        }
+        }//end for i
       }
     }
   }
@@ -5396,6 +5429,70 @@ int ObLSCountBalance::generate_transfer_task_(const ObSplitLSParam &param, const
         balance_strategy,
         *task_array_))) {
       LOG_WARN("add ls transfer task failed", KR(ret), K(tenant_id), K(job_id), K(balance_strategy), K(part_list));
+    }
+  }
+  return ret;
+}
+
+// Sort ls array by primary zone round-robin. For example:
+// Input ls_array: [LS1@z1, LS2@z1, LS3@z2, LS4@z2]
+// Sorted result (round robin): [LS1@z1, LS3@z2, LS2@z1, LS4@z2]
+//   (start from first zone, alternate zones for each LS, repeat until all are used)
+int ObLSBalanceStrategy::sort_ls_array_by_primary_zone_round_robin(
+    const ObIArray<ObLSStatusInfo*> &ls_array,
+    ObArray<ObLSStatusInfo*> &sorted_ls_array)
+{
+  int ret = OB_SUCCESS;
+  common::hash::ObHashMap<ObZone, ObArray<int64_t>> zone_indices;
+  if (OB_UNLIKELY(ls_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("empty ls array", KR(ret));
+  } else if (OB_FAIL(zone_indices.create(ls_array.count(), "LSRR"))) {
+    LOG_WARN("failed to create map", KR(ret));
+  } else {
+    // collect zone indices
+    ObArray<ObZone> unique_zones;
+    int64_t max_count = 0;
+    ARRAY_FOREACH(ls_array, i) {
+      const ObLSStatusInfo *info = ls_array.at(i);
+      CK(OB_NOT_NULL(info), info->is_valid())
+      if (OB_SUCC(ret)) {
+        const ObZone &zone = info->primary_zone_;
+        ObArray<int64_t> indices;
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(zone_indices.get_refactored(zone, indices))) {
+          if (OB_HASH_NOT_EXIST != tmp_ret) {
+            ret = tmp_ret;
+            LOG_WARN("get indices fail", KR(ret), K(zone));
+          } else if (OB_FAIL(unique_zones.push_back(zone))) {
+            LOG_WARN("push zone fail", KR(ret), K(zone));
+          }
+        }
+        if (FAILEDx(indices.push_back(i))) {
+          LOG_WARN("push index fail", KR(ret), K(i));
+        } else if (OB_FAIL(zone_indices.set_refactored(zone, indices, 1))) {
+          LOG_WARN("set indices fail", KR(ret), K(zone));
+        } else if (indices.count() > max_count) {
+          max_count = indices.count();
+        }
+      }
+    }
+    // round-robin
+    sorted_ls_array.reset();
+    for (int64_t r = 0; OB_SUCC(ret) && r < max_count; ++r) {
+      for (int64_t z = 0; OB_SUCC(ret) && z < unique_zones.count(); ++z) {
+        const ObZone &zone = unique_zones.at(z);
+        ObArray<int64_t> indices;
+        if (OB_FAIL(zone_indices.get_refactored(zone, indices))) {
+          LOG_WARN("fail to get indices, should exist", KR(ret));
+        } else if (r < indices.count()) {
+          const int64_t idx = indices.at(r);
+          CK(idx >= 0 && idx < ls_array.count())
+          if (FAILEDx(sorted_ls_array.push_back(ls_array.at(idx)))) {
+            LOG_WARN("push ls fail", KR(ret), K(ls_array), K(idx));
+          }
+        }
+      }
     }
   }
   return ret;

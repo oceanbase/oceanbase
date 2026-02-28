@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "ob_das_retry_ctrl.h"
 #include "sql/engine/ob_exec_context.h"
+#include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
 
 namespace oceanbase {
 using namespace common;
@@ -60,27 +61,33 @@ void ObDASRetryCtrl::tablet_location_retry_proc(ObDASRef &das_ref,
   } else if (table_schema->is_vir_table()) {
     // the location of the virtual table can't be refreshed,
     // so when a location exception occurs, virtual table is not retryable
-  } else if (OB_FAIL(table_schema->check_if_tablet_exists(tablet_loc->tablet_id_, tablet_exist))) {
-    LOG_WARN("failed to check if tablet exists", K(ret), K(tablet_loc), K(ref_table_id));
-  } else if (!tablet_exist) {
-    // partition could be dropped or table could be truncated, in this case we return OB_SCHEMA_EAGAIN and
-    // attempt statement-level retry
-    task_op.set_errcode(OB_SCHEMA_EAGAIN);
-    LOG_WARN("partition not exist, maybe dropped by DDL or table was truncated", K(tablet_loc), K(ref_table_id));
   } else {
-    loc_router.force_refresh_location_cache(true, task_op.get_errcode());
-    need_retry = true;
-    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
-    if (OB_NOT_NULL(di) && di->get_ash_stat().can_start_das_retry() &&
-        OB_NOT_NULL(das_ref.get_exec_ctx().get_my_session())) {
-      di->get_ash_stat().record_cur_das_test_start_ts(
-          common::ObTimeUtility::current_time() - task_op.das_task_start_timestamp_, need_retry);
-      observer::ObQueryRetryCtrl::start_location_error_retry_wait_event(
-          *das_ref.get_exec_ctx().get_my_session(), task_op.errcode_);
+    const bool is_orcl_tmp_table_v2 = table_schema->is_oracle_tmp_table_v2() || table_schema->is_oracle_tmp_table_v2_index_table();
+    if (is_orcl_tmp_table_v2 && OB_FAIL(ObTabletToGlobalTmpTableOperator::check_tablet_exist(*GCTX.sql_proxy_, MTL_ID(),
+                                        ref_table_id, tablet_loc->tablet_id_, tablet_exist))) {
+      LOG_WARN("failed to check if tablet exists", K(ret), K(tablet_loc), K(ref_table_id));
+    } else if (!is_orcl_tmp_table_v2 && OB_FAIL(table_schema->check_if_tablet_exists(tablet_loc->tablet_id_, tablet_exist))) {
+      LOG_WARN("failed to check if tablet exists", K(ret), K(tablet_loc), K(ref_table_id));
+    } else if (!tablet_exist) {
+      // partition could be dropped or table could be truncated, in this case we return OB_SCHEMA_EAGAIN and
+      // attempt statement-level retry
+      task_op.set_errcode(OB_SCHEMA_EAGAIN);
+      LOG_WARN("partition not exist, maybe dropped by DDL or table was truncated", K(tablet_loc), K(ref_table_id));
+    } else {
+      loc_router.force_refresh_location_cache(true, task_op.get_errcode());
+      need_retry = true;
+      ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+      if (OB_NOT_NULL(di) && di->get_ash_stat().can_start_das_retry() &&
+          OB_NOT_NULL(das_ref.get_exec_ctx().get_my_session())) {
+        di->get_ash_stat().record_cur_das_test_start_ts(
+            common::ObTimeUtility::current_time() - task_op.das_task_start_timestamp_, need_retry);
+        observer::ObQueryRetryCtrl::start_location_error_retry_wait_event(
+            *das_ref.get_exec_ctx().get_my_session(), task_op.errcode_);
+      }
+      const ObDASTableLocMeta *loc_meta = tablet_loc->loc_meta_;
+      LOG_INFO("[DAS RETRY] refresh tablet location cache and retry DAS task",
+               "errcode", task_op.get_errcode(), KPC(loc_meta), KPC(tablet_loc));
     }
-    const ObDASTableLocMeta *loc_meta = tablet_loc->loc_meta_;
-    LOG_INFO("[DAS RETRY] refresh tablet location cache and retry DAS task",
-             "errcode", task_op.get_errcode(), KPC(loc_meta), KPC(tablet_loc));
   }
 }
 

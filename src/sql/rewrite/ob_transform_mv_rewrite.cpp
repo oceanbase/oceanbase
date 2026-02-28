@@ -252,9 +252,11 @@ int ObTransformMVRewrite::gen_base_table_map(const ObIArray<TableItem*> &from_ta
       if (OB_ISNULL(from_table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null table", K(ret), K(i));
-      } else if (!(from_table->is_basic_table() || from_table->is_link_table())
-                 || OB_INVALID_ID == from_table->ref_id_) {
+      } else if (!is_mv_rewrite_supported_table(*from_table)) {
         // do nothing
+      } else if (OB_UNLIKELY(common::OB_INVALID_ID == from_table->ref_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid ref id", K(ret), KPC(from_table));
       } else if (NULL == (num = from_table_num.get(from_table->ref_id_))) {
         if (OB_FAIL(from_table_num.set_refactored(from_table->ref_id_, 1))) {
           LOG_WARN("failed to set refactored", K(ret), K(from_table->ref_id_));
@@ -270,9 +272,11 @@ int ObTransformMVRewrite::gen_base_table_map(const ObIArray<TableItem*> &from_ta
       if (OB_ISNULL(to_table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null table", K(ret), K(i));
-      } else if (!(to_table->is_basic_table() || to_table->is_link_table())
-                 || OB_INVALID_ID == to_table->ref_id_) {
+      } else if (!is_mv_rewrite_supported_table(*to_table)) {
         // do nothing
+      } else if (OB_UNLIKELY(common::OB_INVALID_ID == to_table->ref_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid ref id", K(ret), KPC(to_table));
       } else if (NULL == (idx = to_table_map.get(to_table->ref_id_))) {
         ObSEArray<int64_t,4> temp_array;
         if (OB_FAIL(temp_array.push_back(i))) {
@@ -349,8 +353,7 @@ int ObTransformMVRewrite::inner_gen_base_table_map(int64_t from_table_idx,
     if (OB_ISNULL(from_table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("from table item is NULL", K(ret), K(from_table_idx));
-    } else if (!(from_table->is_basic_table() || from_table->is_link_table())
-               || OB_INVALID_ID == from_table->ref_id_
+    } else if (!is_mv_rewrite_supported_table(*from_table)
                || NULL == (to_idx = to_table_map.get(from_table->ref_id_))) {
       // table does not exists in to_tables, map from_table to nothing
       current_map.at(from_table_idx) = -1;
@@ -1108,7 +1111,7 @@ int ObTransformMVRewrite::build_join_tree_node(JoinTreeNode *left_node,
   } else if (OB_ISNULL(ptr = ctx_->allocator_->alloc(sizeof(JoinTreeNode)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate join tree node", K(ret));
-  } else if (OB_FALSE_IT(new_node = new(ptr) JoinTreeNode())) {
+  } else if (OB_FALSE_IT(new_node = new(ptr) JoinTreeNode(*ctx_->allocator_))) {
   } else if (OB_FAIL(new_node->table_set_.add_members(left_node->table_set_))) {
     LOG_WARN("failed to add left table rel ids", K(ret));
   } else if (OB_FAIL(new_node->table_set_.add_members(right_node->table_set_))) {
@@ -1161,7 +1164,7 @@ int ObTransformMVRewrite::build_leaf_tree_node(int64_t rel_id,
   } else if (OB_ISNULL(ptr = ctx_->allocator_->alloc(sizeof(JoinTreeNode)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate join tree node", K(ret));
-  } else if (OB_FALSE_IT(leaf_node = new(ptr) JoinTreeNode())) {
+  } else if (OB_FALSE_IT(leaf_node = new(ptr) JoinTreeNode(*ctx_->allocator_))) {
   } else if (OB_FAIL(leaf_node->table_set_.add_member(rel_id))) {
     LOG_WARN("failed to add table rel id", K(ret));
   } else if (OB_UNLIKELY(rel_id < 1 || rel_id > baserel_filters.count())) {
@@ -1527,21 +1530,27 @@ int ObTransformMVRewrite::check_predicate_compatibility(MvRewriteHelper &helper,
   is_valid = true;
   ObSEArray<ObRawExpr*, 8> mv_equal_conds;
   ObSEArray<ObRawExpr*, 8> mv_other_conds;
+  ObSEArray<ObRawExpr*, 8> mv_range_conds;
   ObSEArray<ObRawExpr*, 8> query_equal_conds;
   ObSEArray<ObRawExpr*, 8> query_other_conds;
+  ObSEArray<ObRawExpr*, 8> query_range_conds;
   if (OB_FAIL(classify_predicates(helper.mv_conds_,
                                   mv_equal_conds,
+                                  mv_range_conds,
                                   mv_other_conds))) {
     LOG_WARN("failed to split predicate", K(ret));
   } else if (OB_FAIL(classify_predicates(helper.query_conds_,
                                          query_equal_conds,
+                                         query_range_conds,
                                          query_other_conds))) {
     LOG_WARN("failed to split predicate", K(ret));
   } else if (OB_FAIL(check_equal_predicate(helper, mv_equal_conds, query_equal_conds, is_valid))) {
     LOG_WARN("failed to check equal predicate", K(ret));
   } else if (!is_valid) {
     // do nothing
-  } else if (OB_FAIL(check_other_predicate(helper, mv_other_conds, query_other_conds))) {
+  } else if (OB_FAIL(check_range_predicate(helper, mv_range_conds, query_range_conds))) {
+    LOG_WARN("failed to check range predicate", K(ret));
+  } else if (OB_FAIL(check_identical_predicate(helper, mv_other_conds, query_other_conds))) {
     LOG_WARN("failed to check other predicate", K(ret));
   } else if (OB_FAIL(check_compensation_preds_validity(helper, is_valid))) {
     LOG_WARN("failed to check compensation preds validity", K(ret));
@@ -1815,17 +1824,8 @@ int ObTransformMVRewrite::check_mv_equal_set_used(MvRewriteHelper &helper,
                                                            current_es->at(0),
                                                            equal_expr))) {
         LOG_WARN("failed to create equal expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_lnnvl_expr(*ctx_->expr_factory_,
-                                                          equal_expr,
-                                                          compensate_expr))) {
-        LOG_WARN("failed to build lnnvl expr", K(ret));
-      } else if (OB_ISNULL(compensate_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("built compensate expr is null", K(ret), KPC(equal_expr));
-      } else if (OB_FAIL(compensate_expr->formalize(ctx_->session_info_))) {
-        LOG_WARN("failed to formalize expr", K(ret));
-      } else if (OB_FAIL(helper.query_compensation_preds_.push_back(compensate_expr))) {
-        LOG_WARN("failed to push back compensate expr", K(ret));
+      } else if (OB_FAIL(add_query_compensation_pred(helper, equal_expr))) {
+        LOG_WARN("failed to add query compensation pred", K(ret));
       }
     }
     if (OB_SUCC(ret) && OB_FAIL(mv_map_query_ids.push_back(current_query_es_id))) {
@@ -1871,16 +1871,48 @@ int ObTransformMVRewrite::map_to_mv_column(MvRewriteHelper &helper,
   return ret;
 }
 
-int ObTransformMVRewrite::check_other_predicate(MvRewriteHelper &helper,
+int ObTransformMVRewrite::map_to_query_column(MvRewriteHelper &helper,
+                                              const ObColumnRefRawExpr *mv_column,
+                                              ObColumnRefRawExpr *&query_column)
+{
+  int ret = OB_SUCCESS;
+  query_column = NULL;
+  ObSelectStmt *query_stmt = helper.query_stmt_;
+  int64_t mv_rel_id;
+  int64_t query_tbl_idx = -1; // = rel id - 1
+  TableItem *query_table_item;
+  ColumnItem *query_column_item;
+  if (OB_ISNULL(mv_column) || OB_ISNULL(helper.mv_info_.view_stmt_) || OB_ISNULL(query_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(mv_column), K(helper.mv_info_.view_stmt_), K(query_stmt));
+  } else if (OB_FALSE_IT(mv_rel_id = helper.mv_info_.view_stmt_->get_table_bit_index(mv_column->get_table_id()))) {
+  } else if (OB_UNLIKELY(mv_rel_id < 1 || mv_rel_id > helper.mv_info_.view_stmt_->get_table_items().count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected query rel id", K(ret), K(mv_rel_id));
+  } else if (!ObOptimizerUtil::find_item(helper.base_table_map_, mv_rel_id - 1, &query_tbl_idx)) {
+    // it is mv delta table
+    query_column = NULL;
+  } else if (OB_UNLIKELY(query_tbl_idx < 0 || query_tbl_idx >= query_stmt->get_table_size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected mv table idx", K(ret), K(query_tbl_idx), K(query_stmt->get_table_size()), K(mv_rel_id));
+  } else if (OB_ISNULL(query_table_item = query_stmt->get_table_item(query_tbl_idx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null table item", K(ret), K(query_tbl_idx));
+  } else if (NULL == (query_column_item
+                       = query_stmt->get_column_item(query_table_item->table_id_, mv_column->get_column_id()))) {
+    query_column = NULL;
+  } else {
+    query_column = query_column_item->expr_;
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::check_identical_predicate(MvRewriteHelper &helper,
                                                 const ObIArray<ObRawExpr*> &mv_conds,
                                                 const ObIArray<ObRawExpr*> &query_conds)
 {
   int ret = OB_SUCCESS;
   ObSqlBitSet<> mv_common_conds;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(ctx_));
-  }
   // check query conditions and generate mv compensation predicate
   for (int64_t i = 0; OB_SUCC(ret) && i < query_conds.count(); ++i) {
     bool has_found = false;
@@ -1907,18 +1939,412 @@ int ObTransformMVRewrite::check_other_predicate(MvRewriteHelper &helper,
   }
   // check mv conditions and generate query compensation predicate
   for (int64_t i = 0; OB_SUCC(ret) && i < mv_conds.count(); ++i) {
-    ObRawExpr *compensate_expr;
     if (mv_common_conds.has_member(i)) {
       // do nothing
-    } else if (OB_FAIL(ObRawExprUtils::build_lnnvl_expr(*ctx_->expr_factory_,
-                                                        mv_conds.at(i),
-                                                        compensate_expr))) {
-      LOG_WARN("failed to build lnnvl expr", K(ret));
-    } else if (OB_FAIL(compensate_expr->formalize(ctx_->session_info_))) {
-      LOG_WARN("failed to formalize expr", K(ret));
-    } else if (OB_FAIL(helper.query_compensation_preds_.push_back(compensate_expr))) {
-      LOG_WARN("failed to push back compensate expr", K(ret));
+    } else if (OB_FAIL(add_query_compensation_pred(helper, mv_conds.at(i)))) {
+      LOG_WARN("failed to add mv cond to query compensation preds", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::add_query_compensation_preds(MvRewriteHelper &helper,
+                                                       const ObIArray<ObRawExpr*> &mv_range_conds)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < mv_range_conds.count(); i++) {
+    if (OB_FAIL(add_query_compensation_pred(helper, mv_range_conds.at(i)))) {
+      LOG_WARN("failed to add query compensation pred", K(ret), KPC(mv_range_conds.at(i)));
+    }
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::add_query_compensation_pred(MvRewriteHelper &helper,
+                                                       ObRawExpr *mv_pred)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *compensate_expr;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx_));
+  } else if (OB_FAIL(ObRawExprUtils::build_lnnvl_expr(*ctx_->expr_factory_,
+                                                      mv_pred,
+                                                      compensate_expr))) {
+    LOG_WARN("failed to build lnnvl expr", K(ret), KPC(mv_pred));
+  } else if (OB_FAIL(compensate_expr->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  } else if (OB_FAIL(helper.query_compensation_preds_.push_back(compensate_expr))) {
+    LOG_WARN("failed to push back compensate expr", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::split_single_column_range_preds(ObRawExpr *target_column,
+                                                          ObIArray<ObRawExpr *> &all_range_preds,
+                                                          ObIArray<ObRawExpr *> &current_column_range_preds)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(target_column)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null target column expr", K(ret));
+  }
+  for (int64_t j = all_range_preds.count() - 1; OB_SUCC(ret) && j >= 0; j--) {
+    if (OB_ISNULL(all_range_preds.at(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null range cond", K(ret));
+    } else if (target_column != ObRawExprUtils::get_column_ref_expr_recursively(all_range_preds.at(j))) {
+      // Not target column, do nothing
+    } else if (OB_FAIL(current_column_range_preds.push_back(all_range_preds.at(j)))){
+      LOG_WARN("failed to extract current range pred", K(ret), KPC(all_range_preds.at(j)));
+    } else if (OB_FAIL(all_range_preds.remove(j))) {
+      LOG_WARN("failed to add member to preds extracted set", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::check_range_predicate(MvRewriteHelper &helper,
+                                                ObIArray<ObRawExpr*> &mv_range_preds,
+                                                ObIArray<ObRawExpr*> &query_range_preds)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  if (OB_ISNULL(helper.ori_stmt_.get_query_ctx()) || OB_ISNULL(helper.mv_info_.view_stmt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null query or mv stmt", K(ret));
+  } else if (!helper.ori_stmt_.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2)) {
+    // Before 4_4_2, check identical preds.
+    if (OB_FAIL(check_identical_predicate(helper, mv_range_preds, query_range_preds))) {
+      LOG_WARN("failed to check identical preds in mv and query range conds", K(ret));
+    }
+  } else {
+    // Check range preds compatibility.
+    ObSEArray<ObRawExpr*, 4> mv_range_columns;
+    ObSEArray<ObRawExpr*, 4> mv_current_column_range_preds;
+    ObSEArray<ObRawExpr*, 4> query_current_column_range_preds;
+    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(mv_range_preds, mv_range_columns))) {
+      LOG_WARN("failed to extract mv column used in range preds", K(ret));
+    }
+    // For each column in mv range conds, check if its range is wider than the same column in query.
+    for (int64_t i = 0; OB_SUCC(ret) && i < mv_range_columns.count(); i++) {
+      ObColumnRefRawExpr *current_mv_column = static_cast<ObColumnRefRawExpr*>(mv_range_columns.at(i));
+      ObColumnRefRawExpr *current_query_column = NULL;
+      mv_current_column_range_preds.reuse();
+      query_current_column_range_preds.reuse();
+      if (OB_ISNULL(current_mv_column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null mv ref column expr", K(ret));
+      } else if (OB_FAIL(split_single_column_range_preds(current_mv_column, mv_range_preds,
+                                                         mv_current_column_range_preds))) {
+        LOG_WARN("failed to extract single column range preds from mv", K(ret));
+      } else if (OB_FAIL(map_to_query_column(helper, current_mv_column, current_query_column))) {
+        LOG_WARN("failed to map to query column", K(ret));
+      } else if (NULL == current_query_column) {
+        // Mv range preds use column A and query range preds don't, do nothing here
+        // Add mv range preds on column A to query compensation preds.
+        if (OB_FAIL(add_query_compensation_preds(helper, mv_current_column_range_preds))) {
+          LOG_WARN("failed to add mv delta column range preds to query compensation preds", K(ret));
+        }
+      } else if (OB_FAIL(split_single_column_range_preds(current_query_column, query_range_preds,
+                                                         query_current_column_range_preds))) {
+        LOG_WARN("failed to extract single column range preds query", K(ret));
+      } else if (helper.mv_info_.view_stmt_->has_group_by() &&
+                 !ObOptimizerUtil::find_item(helper.mv_info_.view_stmt_->get_group_exprs(), current_mv_column)) {
+        // If MV has aggregation, we can not add compensation predicates on non group by columns
+        if (OB_FAIL(check_identical_predicate(helper, mv_current_column_range_preds, query_current_column_range_preds))) {
+          LOG_WARN("failed to check identical range preds without group column", K(ret));
+        }
+        // Check if mv column range contains query column range
+      } else if (OB_FAIL(check_column_range_validity(helper, mv_current_column_range_preds,
+                                                     query_current_column_range_preds))) {
+        LOG_WARN("failed to check column range preds validity", K(ret));
+      }
+    }
+    // Add rest query range conds to mv compensation preds.
+    if (OB_FAIL(ret)) {
+      // do nothing.
+    } else if (OB_FAIL(append(helper.mv_compensation_preds_, query_range_preds))) {
+      LOG_WARN("failed to append rest query range preds to mv compensation preds", K(ret));
+    }
+  }
+  return ret;
+}
+
+ /**
+ * @brief ObTransformMVRewrite::check_column_range_validity
+ * Check if a column's range in mv is wider than that in query.
+ * ColumnRangeDesc describes range for the column.
+ * Contains 4 arrays for const exprs from range conds.
+ * Use arrays to build up const constraints and to find the smallest range.
+ * Example:
+ * range conds: a > 1 and a > 2 and a >= 2 and a < 3 and a <= 4 and a = 5. Arrays in
+ * ColumnRangeDesc: left_open_exprs = {1, 2}, left_close_exprs = {2}, right_open_exprs = {3}, right_close_exprs = {4, 5}.
+ * They describe a range of [2,3).
+ */
+int ObTransformMVRewrite::check_column_range_validity(MvRewriteHelper &helper,
+                                                      const ObIArray<ObRawExpr*> &mv_range_conds,
+                                                      const ObIArray<ObRawExpr*> &query_range_conds)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  // ColumnRangeDesc contains 4 arrays that describe left/right open/close borders of column range.
+  ColumnRangeDesc mv_col_range_desc;
+  ColumnRangeDesc query_col_range_desc;
+  ObRawExpr *current_range_constraint = NULL;
+  if (OB_FAIL(build_column_range_desc(mv_range_conds, mv_col_range_desc)) ||
+      OB_FAIL(build_column_range_desc(query_range_conds, query_col_range_desc))) {
+    LOG_WARN("failed to build mv and query range desc", K(ret));
+  } else if (OB_FAIL(inner_check_column_range_validity(helper, mv_col_range_desc, query_col_range_desc,
+                                                       current_range_constraint, is_valid))) {
+    LOG_WARN("failed to compare mv and query range", K(ret));
+  } else if (!is_valid) {
+    // If query column range overlaps mv column range, add mv range preds to query compensation preds.
+    if (OB_FAIL(add_query_compensation_preds(helper, mv_range_conds))) {
+      LOG_WARN("failed to add current mv range preds to query compensation preds", K(ret));
+    }
+    // If mv column range contains query column range, add query range preds to mv compensation preds.
+  } else if (OB_ISNULL(current_range_constraint)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null range constraint expr", K(ret));
+  } else if (OB_FAIL(append(helper.mv_compensation_preds_, query_range_conds))) {
+    LOG_WARN("failed to add current query range preds to mv compensation preds", K(ret));
+  } else {
+    ObExprConstraint cons(current_range_constraint, PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE);
+    if (OB_FAIL(helper.expr_cons_info_.push_back(cons))) {
+      LOG_WARN("failed to push back range constraint", K(ret));
+    }
+  }
+  return ret;
+}
+
+/**
+ * @brief ObTransformMVRewrite::build_column_range_desc
+ * Construct ColumnRangeDesc from range conds with target ObColumnRefRawExpr.
+ * Example:
+ * where a > 1 and a >= 2 and a < 3 and a <= 4 and a = 5:
+ * left_open_exprs = {1}, left_close_exprs = {2, 5}, right_open_exprs = {3}, right_close_exprs = {4, 5}.
+ */
+int ObTransformMVRewrite::build_column_range_desc(const ObIArray<ObRawExpr*> &range_conds,
+                                                  ColumnRangeDesc &col_range_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null ctx", K(ret));
+  }
+  for (int64_t j = 0; OB_SUCC(ret) && j < range_conds.count(); j++) {
+    if (OB_FAIL(col_range_desc.update_borders(range_conds.at(j)))) {
+      LOG_WARN("failed to compute column range desc", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(col_range_desc.compute_range(ctx_->expr_factory_, ctx_->session_info_))) {
+    LOG_WARN("failed to computer column range borders", K(ret));
+  }
+  return ret;
+}
+
+/**
+ * @brief ObTransformMVRewrite::inner_check_column_range_validity
+ * Use const exprs that describe borders of mv and query column
+ * to build up constraint exprs and check if it is true.
+ * If it is, current column passes range validity check.
+ * const exprs:
+ * mv_left_open_greatest = 1, mv_left_close_greatest = greatest(2, 5), mv_right_open_least = 7, mv_right_close_least = least(8, 9)
+ * query_left_open_greatest = 3, query_left_close_greatest = greatest(4, 5), query_right_open_least = least(8, 9), query_right_close_least = least(7, 8)
+ * mv range:[5,7)
+ * query range:(5,7]
+ * range_constraint_expr:
+ * 1 <= 3 and 1 < greatest(4,5) and greatest(2,5) <= 3 and greatest(2,5) <= greatest(4,5) and
+ * 7 >= 7 and 7 > least(7,8) and least(8,9) >= least(8,9) and least(8,9) >= least(7,8)
+ * Range constraint expr is false, because query range overlaps mv range. Cannot apply current mv for rewrite
+ */
+int ObTransformMVRewrite::inner_check_column_range_validity(MvRewriteHelper &helper,
+                                                            ColumnRangeDesc &mv_col,
+                                                            ColumnRangeDesc &query_col,
+                                                            ObRawExpr *&current_range_constraint,
+                                                            bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  bool calc_happend = false;
+  is_valid = true;
+  bool mv_has_left_bound = (mv_col.left_open_greatest_ != NULL || mv_col.left_close_greatest_ != NULL);
+  bool mv_has_right_bound = (mv_col.right_open_least_ != NULL || mv_col.right_close_least_ != NULL);
+  bool query_has_left_bound = (query_col.left_open_greatest_ != NULL || query_col.left_close_greatest_ != NULL);
+  bool query_has_right_bound = (query_col.right_open_least_ != NULL || query_col.right_close_least_ != NULL);
+
+  if (OB_ISNULL(ctx_)|| OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx_));
+  } else if ((mv_has_left_bound && !query_has_left_bound) ||
+             (mv_has_right_bound && !query_has_right_bound)) {
+    // Mv has finite border and query has infinite border, unable to rewrite using mv(for now).
+    is_valid = false;
+  } else {
+    ObRawExprCopier mv_expr_copier(*ctx_->expr_factory_);
+    ObObj result;
+    if (OB_FAIL(build_range_constraint(mv_expr_copier, mv_col, query_col, current_range_constraint))) {
+      LOG_WARN("failed to build range constraint", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_->exec_ctx_,
+                                                                 current_range_constraint,
+                                                                 result,
+                                                                 calc_happend,
+                                                                 *ctx_->allocator_))) {
+      LOG_WARN("failed to calc const or calculable expr", K(ret));
+    } else if (!calc_happend) {
+      is_valid = false;
+      LOG_DEBUG("calculate range constraint not happened", K(ret), K(*current_range_constraint));
+    } else if (OB_FAIL(ObObjEvaluator::is_true(result, is_valid))) {
+      LOG_WARN("failed to get range constraint expr bool value", K(ret), K(result));
+    }
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::build_range_constraint(ObRawExprCopier &mv_expr_copier,
+                                                 ColumnRangeDesc &mv_col,
+                                                 ColumnRangeDesc &query_col,
+                                                 ObRawExpr* &range_constraint)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *left_border_constraint = NULL;
+  ObRawExpr *right_border_constraint = NULL;
+  range_constraint = NULL;
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null ctx", K(ret));
+  } else if (OB_FAIL(build_left_border_constraint(mv_expr_copier, mv_col, query_col, left_border_constraint)) ||
+             OB_FAIL(build_right_border_constraint(mv_expr_copier, mv_col, query_col, right_border_constraint))) {
+    LOG_WARN("failed to build left and right border constraint", K(ret));
+  } else if (OB_FAIL(merge_conds(left_border_constraint, right_border_constraint, T_OP_AND, range_constraint))) {
+    LOG_WARN("failed to build final range constraint", K(ret));
+  } else if (OB_ISNULL(range_constraint)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null range constraint", K(ret));
+  } else if (OB_FAIL(range_constraint->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize and expr", K(ret));
+  } else if (OB_FAIL(range_constraint->pull_relation_id())) {
+    LOG_WARN("failed to pull relation id and levels", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::build_left_border_constraint(ObRawExprCopier &mv_expr_copier,
+                                                       ColumnRangeDesc &mv_col,
+                                                       ColumnRangeDesc &query_col,
+                                                       ObRawExpr* &left_border_constraint)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr* mv_open_border_constraint = NULL;
+  ObRawExpr* mv_close_border_constraint = NULL;
+  ObRawExpr* query_open_border_constraint = NULL;
+  ObRawExpr* query_close_border_constraint = NULL;
+  if (OB_FAIL(create_single_bound_constraint(mv_expr_copier, mv_col.left_open_greatest_, query_col.left_open_greatest_,
+                                             T_OP_LE, mv_open_border_constraint))) {
+    LOG_WARN("failed to append mv left open and query left open constrain", K(ret));
+  } else if (OB_FAIL(create_single_bound_constraint(mv_expr_copier, mv_col.left_close_greatest_, query_col.left_open_greatest_,
+                                                    T_OP_LE, mv_close_border_constraint))) {
+    LOG_WARN("failed to append mv left open and query left open constrain", K(ret));
+  } else if (OB_FAIL(merge_conds(mv_open_border_constraint, mv_close_border_constraint, T_OP_AND, query_open_border_constraint))) {
+    LOG_WARN("failed to merge mv left open and mv left close into query left open constraint", K(ret));
+  } else if (OB_FAIL(create_single_bound_constraint(mv_expr_copier, mv_col.left_open_greatest_, query_col.left_close_greatest_,
+                                                    T_OP_LT, mv_open_border_constraint))) {
+    LOG_WARN("failed to append mv left open and query left open constrain", K(ret));
+  } else if (OB_FAIL(create_single_bound_constraint(mv_expr_copier, mv_col.left_close_greatest_, query_col.left_close_greatest_,
+                                                    T_OP_LE, mv_close_border_constraint))) {
+    LOG_WARN("failed to append mv left open and query left open constrain", K(ret));
+  } else if (OB_FAIL(merge_conds(mv_open_border_constraint, mv_close_border_constraint, T_OP_AND, query_close_border_constraint)) ||
+             OB_FAIL(merge_conds(query_open_border_constraint, query_close_border_constraint, T_OP_OR, left_border_constraint))) {
+    LOG_WARN("failed to build left border constraint", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::build_right_border_constraint(ObRawExprCopier &mv_expr_copier,
+                                                        ColumnRangeDesc &mv_col,
+                                                        ColumnRangeDesc &query_col,
+                                                        ObRawExpr* &right_border_constraint)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr* mv_open_border_constraint = NULL;
+  ObRawExpr* mv_close_border_constraint = NULL;
+  ObRawExpr* query_open_border_constraint = NULL;
+  ObRawExpr* query_close_border_constraint = NULL;
+  if (OB_FAIL(create_single_bound_constraint(mv_expr_copier, mv_col.right_open_least_, query_col.right_open_least_,
+                                             T_OP_GE, mv_open_border_constraint))) {
+    LOG_WARN("failed to append mv left open and query left open constrain", K(ret));
+  } else if (OB_FAIL(create_single_bound_constraint(mv_expr_copier, mv_col.right_close_least_, query_col.right_open_least_,
+                                                    T_OP_GE, mv_close_border_constraint))) {
+    LOG_WARN("failed to append mv left open and query left open constrain", K(ret));
+  } else if (OB_FAIL(merge_conds(mv_open_border_constraint, mv_close_border_constraint, T_OP_AND, query_open_border_constraint))) {
+    LOG_WARN("failed to merge mv left open and mv left close into query left open constraint", K(ret));
+  } else if (OB_FAIL(create_single_bound_constraint(mv_expr_copier, mv_col.right_open_least_, query_col.right_close_least_,
+                                                    T_OP_GT, mv_open_border_constraint))) {
+    LOG_WARN("failed to append mv left open and query left open constrain", K(ret));
+  } else if (OB_FAIL(create_single_bound_constraint(mv_expr_copier, mv_col.right_close_least_, query_col.right_close_least_,
+                                                    T_OP_GE, mv_close_border_constraint))) {
+    LOG_WARN("failed to append mv left open and query left open constrain", K(ret));
+  } else if (OB_FAIL(merge_conds(mv_open_border_constraint, mv_close_border_constraint, T_OP_AND, query_close_border_constraint)) ||
+             OB_FAIL(merge_conds(query_open_border_constraint, query_close_border_constraint, T_OP_OR, right_border_constraint))) {
+    LOG_WARN("failed to build left border constraint", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::merge_conds(ObRawExpr* &left_cond,
+                                      ObRawExpr* &right_cond,
+                                      ObItemType merge_type,
+                                      ObRawExpr* &output_cond)
+{
+  int ret = OB_SUCCESS;
+  output_cond = NULL;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx_));
+  } else if (OB_UNLIKELY(T_OP_AND != merge_type && T_OP_OR != merge_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected merge type", K(ret), K(merge_type));
+  } else if (NULL == left_cond || NULL == right_cond) {
+    output_cond = NULL == left_cond ? right_cond : left_cond;
+  } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx_->expr_factory_,
+                                                           ctx_->session_info_,
+                                                           merge_type,
+                                                           output_cond,
+                                                           left_cond,
+                                                           right_cond))) {
+    LOG_WARN("failed to create and or expr", K(ret), KPC(left_cond), KPC(right_cond));
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::create_single_bound_constraint(ObRawExprCopier &mv_expr_copier,
+                                                         ObRawExpr *mv_col_range,
+                                                         ObRawExpr *query_col_range,
+                                                         ObItemType cmp_type,
+                                                         ObRawExpr* &cmp_expr)
+{
+  int ret = OB_SUCCESS;
+  cmp_expr = NULL;
+  ObRawExpr *copied_mv_col_range = NULL;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx_), K(mv_col_range), K(query_col_range));
+  } else if (OB_UNLIKELY(!IS_RANGE_CMP_OP(cmp_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected cmp op", K(ret), K(cmp_type));
+  } else if (NULL == mv_col_range || NULL == query_col_range) {
+    // do nothing
+  } else if (OB_FAIL(mv_expr_copier.copy(mv_col_range, copied_mv_col_range))) {
+    LOG_WARN("failed to deep copy mv column range expr", K(ret), K(mv_col_range));
+  } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx_->expr_factory_,
+                                                           ctx_->session_info_,
+                                                           cmp_type,
+                                                           cmp_expr,
+                                                           copied_mv_col_range,
+                                                           query_col_range))) {
+    LOG_WARN("failed to create cmp expr", K(ret));
   }
   return ret;
 }
@@ -1967,18 +2393,30 @@ int ObTransformMVRewrite::check_compensation_preds_validity(MvRewriteHelper &hel
 
 int ObTransformMVRewrite::classify_predicates(const ObIArray<ObRawExpr*> &input_conds,
                                               ObIArray<ObRawExpr*> &equal_conds,
+                                              ObIArray<ObRawExpr*> &range_conds,
                                               ObIArray<ObRawExpr*> &other_conds)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < input_conds.count(); ++i) {
-    ObRawExpr *expr = input_conds.at(i);
-    if (is_equal_cond(expr)) {
-      if (OB_FAIL(equal_conds.push_back(expr))) {
-        LOG_WARN("failed to push back equal expr", K(ret));
-      }
-    } else {
-      if (OB_FAIL(other_conds.push_back(expr))) {
-        LOG_WARN("failed to push back other expr", K(ret));
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null ctx", K(ret));
+  } else {
+    ObNotNullContext not_null_ctx(*ctx_);
+    bool is_range_cond = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < input_conds.count(); ++i) {
+      ObRawExpr *expr = input_conds.at(i);
+      if (is_equal_cond(expr)) {
+        if (OB_FAIL(equal_conds.push_back(expr))) {
+          LOG_WARN("failed to push back equal expr", K(ret));
+        }
+      } else if (OB_FAIL(check_range_cond(not_null_ctx, expr, is_range_cond))) {
+        LOG_WARN("failed to check if is range cond", K(ret), KPC(expr));
+      } else if (is_range_cond) {
+        if (OB_FAIL(range_conds.push_back(expr))) {
+          LOG_WARN("failed to push back range expr", K(ret));
+        }
+      } else if (OB_FAIL(other_conds.push_back(expr))) {
+          LOG_WARN("failed to push back other expr", K(ret));
       }
     }
   }
@@ -2015,46 +2453,65 @@ bool ObTransformMVRewrite::is_equal_cond(ObRawExpr *expr)
 
 // t1.c1 > 20      -> true
 // t1.c1 > t2.c2   -> false
-bool ObTransformMVRewrite::is_range_cond(ObRawExpr *expr)
+int ObTransformMVRewrite::check_range_cond(ObNotNullContext &not_null_ctx,
+                                           ObRawExpr *expr,
+                                           bool &is_range_cond)
 {
-  bool bret = true;
+  int ret = OB_SUCCESS;
   bool has_colref = false;
   bool has_const = false;
+  is_range_cond = false;
   if (OB_ISNULL(expr)) {
-    bret = false;
-  } else if (expr->get_expr_type() < T_OP_LE
-             || expr->get_expr_type() > T_OP_GT) {
-    bret = false;
-  } else if (OB_UNLIKELY(2 != expr->get_param_count())) {
-    bret = false;
-  } else {
-    if (OB_ISNULL(expr->get_param_expr(0))) {
-      bret = false;
-    } else if (expr->get_param_expr(0)->is_column_ref_expr()) {
-      has_colref = true;
-    } else if (expr->get_param_expr(0)->is_const_expr()) {
-      if (expr->get_type_class() >= ObIntTC
-          && expr->get_type_class() <= ObYearTC) {
-        has_const = true;
-      }
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null expr", K(ret));
+  } else if ((expr->get_expr_type() < T_OP_LE || expr->get_expr_type() > T_OP_GT) &&
+             expr->get_expr_type() != T_OP_EQ &&
+             expr->get_expr_type() != T_OP_BTW) {
+    // do nothing
+  } else if (expr->get_expr_type() == T_OP_BTW) {
+    bool is_null = true;
+    bool is_null_2 = true;
+    bool is_not_null = true;
+    if (OB_UNLIKELY(3 != expr->get_param_count()) || OB_ISNULL(expr->get_param_expr(0)) ||
+        OB_ISNULL(expr->get_param_expr(1)) || OB_ISNULL(expr->get_param_expr(2))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get wrong param", K(ret), KPC(expr));
+    } else if (expr->get_param_expr(1)->get_type_class() != expr->get_param_expr(2)->get_type_class() ||
+               !expr->get_param_expr(0)->is_column_ref_expr() ||
+               !expr->get_param_expr(1)->is_static_const_expr() ||
+               !expr->get_param_expr(2)->is_static_const_expr()) {
+      // do nothing
+    } else if (OB_FALSE_IT(has_colref = true)) {
+    } else if (OB_FAIL(ObTransformUtils::is_const_expr_not_null(not_null_ctx, expr->get_param_expr(1), is_not_null, is_null)) ||
+               OB_FAIL(ObTransformUtils::is_const_expr_not_null(not_null_ctx, expr->get_param_expr(2), is_not_null, is_null_2))) {
+      LOG_WARN("failed to check bewtween and param is null", K(ret), KPC(expr));
+    } else if (!is_null && !is_null_2) {
+      has_const = true;
     }
-    if (OB_ISNULL(expr->get_param_expr(1))) {
-      bret = false;
-    } else if (expr->get_param_expr(1)->is_column_ref_expr()) {
-      has_colref = true;
-    } else if (expr->get_param_expr(1)->is_const_expr()) {
-      if (expr->get_type_class() >= ObIntTC
-          && expr->get_type_class() <= ObYearTC) {
-        has_const = true;
-      }
+  } else {
+    bool is_null = true;
+    bool is_not_null = true;
+    ObRawExpr *const_expr = NULL;
+    if (OB_UNLIKELY(2 != expr->get_param_count()) || OB_ISNULL(expr->get_param_expr(0)) || OB_ISNULL(expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get wrong param", K(ret), KPC(expr));
+    } else if (!(expr->get_param_expr(0)->is_column_ref_expr() && expr->get_param_expr(1)->is_static_const_expr()) &&
+               !(expr->get_param_expr(1)->is_column_ref_expr() && expr->get_param_expr(0)->is_static_const_expr())) {
+      // do nothing
+    } else if (OB_FALSE_IT(has_colref = true)) {
+    } else if (OB_FALSE_IT(const_expr = expr->get_param_expr(0)->is_static_const_expr() ?
+                                        expr->get_param_expr(0) : expr->get_param_expr(1))) {
+    } else if (OB_FAIL(ObTransformUtils::is_const_expr_not_null(not_null_ctx, const_expr, is_not_null, is_null))) {
+      LOG_WARN("failed to check range cond param is null", K(ret), KPC(expr));
+    } else if (!is_null) {
+      has_const = true;
     }
   }
-  if (bret && has_colref && has_const) {
-    bret = true;
-  } else {
-    bret = false;
+
+  if (OB_SUCC(ret) && has_colref && has_const) {
+    is_range_cond = true;
   }
-  return bret;
+  return ret;
 }
 
 int ObTransformMVRewrite::is_same_condition(MvRewriteHelper &helper,
@@ -3040,7 +3497,7 @@ int ObTransformMVRewrite::check_rewrite_expected(MvRewriteHelper &helper,
   int ret = OB_SUCCESS;
   bool hint_rewrite = false;
   bool hint_no_rewrite = false;
-  bool is_match_index = false;
+  bool is_match_index = true;
   bool accepted = false;
   bool need_check_cost = !helper.query_delta_table_.is_empty();
   int64_t query_rewrite_enabled = QueryRewriteEnabledType::REWRITE_ENABLED_TRUE;
@@ -3048,8 +3505,8 @@ int ObTransformMVRewrite::check_rewrite_expected(MvRewriteHelper &helper,
   ObSelectStmt *rewrite_stmt = helper.query_stmt_;
   is_expected = false;
   bool partial_cost_check = false;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)
-      || OB_ISNULL(parent_stmts_) || OB_ISNULL(ori_stmt) || OB_ISNULL(rewrite_stmt)) {
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(parent_stmts_) ||
+      OB_ISNULL(ori_stmt) || OB_ISNULL(ori_stmt->get_query_ctx()) || OB_ISNULL(rewrite_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(ctx_), K(parent_stmts_), K(ori_stmt), K(rewrite_stmt));
   } else if (OB_FAIL(check_hint_valid(helper.ori_stmt_, hint_rewrite, hint_no_rewrite))) {
@@ -3062,7 +3519,8 @@ int ObTransformMVRewrite::check_rewrite_expected(MvRewriteHelper &helper,
   } else if (QueryRewriteEnabledType::REWRITE_ENABLED_FORCE == query_rewrite_enabled) {
     is_expected = true;
     OPT_TRACE("system variable force mv rewrite, skip cost check");
-  } else if (OB_FAIL(check_condition_match_index(helper, is_match_index))) {
+  } else if (!ori_stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2) &&
+             OB_FAIL(check_condition_match_index(helper, is_match_index))) {
     LOG_WARN("failed to check condition match index", K(ret));
   } else if (!is_match_index) {
     is_expected = false;
@@ -3286,5 +3744,133 @@ ObTransformMVRewrite::MvRewriteHelper::~MvRewriteHelper() {
   }
 }
 
+/**
+ * @brief ObTransformMVRewrite::ColumnRangeDesc::update_borders
+ * Update ColumnRangeDesc by push back new const expr from current range cond.
+ * Example:
+ * range cond is a > 5, old left_open_exprs = {3,4}
+ * After update_borders, left_open_exprs = {3,4,5}
+ */
+int ObTransformMVRewrite::ColumnRangeDesc::update_borders(ObRawExpr *range_cond)
+{
+  int ret = OB_SUCCESS;
+  bool is_left_border;
+  bool is_open_border;
+  ObRawExpr *const_expr = NULL;
+  if (OB_ISNULL(range_cond)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null param", K(ret));
+  } else if ((OB_UNLIKELY(range_cond->get_param_count() != (T_OP_BTW == range_cond->get_expr_type() ? 3 : 2)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get wrong param size", K(ret), KPC(range_cond));
+  } else if (OB_ISNULL(range_cond->get_param_expr(0)) || OB_ISNULL(range_cond->get_param_expr(1)) ||
+             (T_OP_BTW == range_cond->get_expr_type() && OB_ISNULL(range_cond->get_param_expr(2)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null param exprs", K(ret), KPC(range_cond));
+  } else if (T_OP_BTW == range_cond->get_expr_type()) {
+    if ((OB_FAIL(update_border(range_cond->get_param_expr(1), true, false)) ||
+         OB_FAIL(update_border(range_cond->get_param_expr(2), false, false)))) {
+      LOG_WARN("failed to update left or right close borders", K(ret));
+    }
+  } else if (OB_FAIL(get_const_expr_in_range_cond(range_cond, const_expr, is_left_border, is_open_border))) {
+    LOG_WARN("failed to get const expr in range cond", K(ret), KPC(range_cond));
+  } else if (T_OP_EQ == range_cond->get_expr_type()) {
+    if (OB_FAIL(update_border(const_expr, true, false)) ||
+        OB_FAIL(update_border(const_expr, false, false))) {
+      LOG_WARN("failed to update equal cond to left and right close borders", K(ret));
+    }
+  } else if (OB_FAIL(update_border(const_expr, is_left_border, is_open_border))) {
+    LOG_WARN("failed to update border", K(ret), KPC(const_expr));
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::ColumnRangeDesc::update_border(ObRawExpr *const_expr,
+                                                         bool is_left_border,
+                                                         bool is_open_border)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == const_expr) {
+    // do nothing
+  } else if (is_left_border && is_open_border && OB_FAIL(left_open_borders_.push_back(const_expr))) {
+    LOG_WARN("failed to push back to left open borders", K(ret), KPC(const_expr));
+  } else if (is_left_border && !is_open_border && OB_FAIL(left_close_borders_.push_back(const_expr))) {
+    LOG_WARN("failed to push back to left open borders", K(ret), KPC(const_expr));
+  } else if (!is_left_border && is_open_border && OB_FAIL(right_open_borders_.push_back(const_expr))) {
+    LOG_WARN("failed to push back to left open borders", K(ret), KPC(const_expr));
+  } else if (!is_left_border && !is_open_border && OB_FAIL(right_close_borders_.push_back(const_expr))) {
+    LOG_WARN("failed to push back to left open borders", K(ret), KPC(const_expr));
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::ColumnRangeDesc::get_const_expr_in_range_cond(ObRawExpr *range_cond,
+                                                                        ObRawExpr *&const_expr,
+                                                                        bool &is_left_border,
+                                                                        bool &is_open_border)
+{
+  int ret = OB_SUCCESS;
+  bool const_on_left;
+  if (OB_ISNULL(range_cond) || OB_ISNULL(range_cond->get_param_expr(0)) || OB_ISNULL(range_cond->get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null range cond",K(ret));
+  } else if (!IS_RANGE_CMP_OP(range_cond->get_expr_type()) && T_OP_EQ != range_cond->get_expr_type() ) {
+    // do nothing.
+  } else if (range_cond->get_param_expr(0)->is_const_expr()) {
+    const_expr = range_cond->get_param_expr(0);
+    const_on_left = true;
+  } else if (range_cond->get_param_expr(1)->is_const_expr()) {
+    const_expr = range_cond->get_param_expr(1);
+    const_on_left = false;
+  }
+  if (OB_FAIL(ret) || const_expr == NULL) {
+    // do nothing
+  } else if (T_OP_LT == range_cond->get_expr_type() ||
+             T_OP_LE == range_cond->get_expr_type()) {
+    is_left_border = const_on_left ? true : false;
+    is_open_border = T_OP_LT == range_cond->get_expr_type() ? true : false;
+  } else if (T_OP_GT == range_cond->get_expr_type() ||
+             T_OP_GE == range_cond->get_expr_type()) {
+    is_left_border = const_on_left ? false : true;
+    is_open_border = T_OP_GT == range_cond->get_expr_type() ? true : false;
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::ColumnRangeDesc::compute_range(ObRawExprFactory *expr_factory,
+                                                         const ObSQLSessionInfo *session_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_greatest_or_least_expr(true, left_open_borders_, expr_factory, session_info, left_open_greatest_)) ||
+      OB_FAIL(get_greatest_or_least_expr(true, left_close_borders_, expr_factory, session_info, left_close_greatest_)) ||
+      OB_FAIL(get_greatest_or_least_expr(false, right_open_borders_, expr_factory, session_info, right_open_least_)) ||
+      OB_FAIL(get_greatest_or_least_expr(false, right_close_borders_, expr_factory, session_info, right_close_least_))) {
+    LOG_WARN("failed to create boundary exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformMVRewrite::ColumnRangeDesc::get_greatest_or_least_expr(bool is_greatest,
+                                                                      ObIArray<ObRawExpr *> &param_exprs,
+                                                                      ObRawExprFactory *expr_factory,
+                                                                      const ObSQLSessionInfo *session_info,
+                                                                      ObRawExpr *&dst_expr)
+{
+  int ret = OB_SUCCESS;
+  dst_expr = NULL;
+  if (OB_ISNULL(expr_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null expr factory", K(ret));
+  } else if (param_exprs.empty()) {
+    // do nothing
+  } else if (param_exprs.count() == 1) {
+    // If param_exprs only contains one expr, greatest/least is the expr itself.
+    dst_expr = param_exprs.at(0);
+  } else if (OB_FAIL(ObRawExprUtils::build_greatest_or_least_expr(*expr_factory, session_info,
+                                                                  is_greatest, param_exprs, dst_expr))) {
+    LOG_WARN("failed to build greatest or least expr", K(ret));
+  }
+  return ret;
+}
 } //namespace sql
 } //namespace oceanbase

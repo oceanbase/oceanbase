@@ -119,6 +119,20 @@ public:
       int64_t &acc_dr_task);
   int execute_manual_dr_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
   int do_add_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int do_replace_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int check_for_replace_ls_replica_task_(
+    const obrpc::ObAdminAlterLSReplicaArg &arg,
+    palf::LogConfigVersion &config_version);
+  int check_member_list_for_replace_ls_(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    palf::LogConfigVersion &config_version);
+  int build_replace_ls_replica_task_(
+    const obrpc::ObAdminAlterLSReplicaArg &arg,
+    const palf::LogConfigVersion &config_version,
+    ObReplaceLSReplicaTask &replace_task);
+  int check_ls_exist_for_replace_ls_(
+    const obrpc::ObAdminAlterLSReplicaArg &arg);
   int do_remove_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
   int do_migrate_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
   int do_modify_ls_replica_type_task(const obrpc::ObAdminAlterLSReplicaArg &arg);

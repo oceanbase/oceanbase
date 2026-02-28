@@ -71,8 +71,8 @@ private:
       ASSERT_EQ(OB_SUCCESS, entity->set_property(V, value));
       ASSERT_EQ(OB_SUCCESS, entities.push_back(entity));
     }
-
-    ASSERT_EQ(OB_SUCCESS, adapter->convert_normal_to_series(entities, series_entities, real_tablet_ids));
+    bool is_inrow_series = false;
+    ASSERT_EQ(OB_SUCCESS, adapter->convert_normal_to_series(entities, series_entities, real_tablet_ids, is_inrow_series));
     ASSERT_EQ(1, series_entities.count());
     ASSERT_EQ(1, real_tablet_ids.count());
 
@@ -175,7 +175,8 @@ TEST_F(TestSeriesConvert, htable_normal_convert_series)
 
   ObSEArray<const ObITableEntity *, 16> series_entities;
   ObSEArray<ObTabletID, 16> real_tablet_ids;
-  ASSERT_EQ(OB_SUCCESS, adapter->convert_normal_to_series(entities, series_entities, real_tablet_ids));
+  bool is_inrow_series = false;
+  ASSERT_EQ(OB_SUCCESS, adapter->convert_normal_to_series(entities, series_entities, real_tablet_ids, is_inrow_series));
   ASSERT_EQ(2, series_entities.count());
   ASSERT_EQ(2, real_tablet_ids.count());
 
@@ -255,8 +256,7 @@ TEST_F(TestSeriesConvert, htable_normal_convert_series)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(V, value));
     ASSERT_EQ(OB_SUCCESS, entities.push_back(entity));
   }  // end for
-
-  ASSERT_EQ(OB_SUCCESS, adapter->convert_normal_to_series(entities, series_entities, real_tablet_ids));
+  ASSERT_EQ(OB_SUCCESS, adapter->convert_normal_to_series(entities, series_entities, real_tablet_ids, is_inrow_series));
   ASSERT_EQ(1, series_entities.count());
   ASSERT_EQ(1, real_tablet_ids.count());
 
@@ -350,8 +350,7 @@ TEST_F(TestSeriesConvert, htable_normal_convert_series)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(V, value));
     ASSERT_EQ(OB_SUCCESS, entities.push_back(entity));
   }
-
-  ASSERT_EQ(OB_SUCCESS, adapter->convert_normal_to_series(entities, series_entities, real_tablet_ids));
+  ASSERT_EQ(OB_SUCCESS, adapter->convert_normal_to_series(entities, series_entities, real_tablet_ids, is_inrow_series));
   ASSERT_EQ(1, series_entities.count());
   ASSERT_EQ(1, real_tablet_ids.count());
 

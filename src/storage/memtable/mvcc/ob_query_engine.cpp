@@ -456,7 +456,9 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter,
           // Case5: existent row, not change estimation total row count
         }
 
-        if (sample_row_count >= MAX_SAMPLE_ROW_COUNT) {
+        // In full scan mode, don't limit sample count for accurate estimation
+        int64_t event_ret = (OB_E(EventTable::EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE) OB_SUCCESS);
+        if (OB_SUCCESS == event_ret && sample_row_count >= MAX_SAMPLE_ROW_COUNT) {
           break;
         }
       }

@@ -133,12 +133,19 @@ public:
   int splice_batch_insert_update_sql(
       const char *table_name,
       common::ObSqlString &sql) const;
+  int splice_batch_insert_in_array(const char *table_name,
+      common::ObIArray<common::ObSqlString> &sqls, const char *insert_header) const;
   int splice_batch_replace_sql_without_plancache(const char *table_name, common::ObSqlString &sql) const;
   int splice_batch_replace_sql(const char *table_name, common::ObSqlString &sql) const;
   int splice_batch_delete_sql(const char *table_name, common::ObSqlString &sql) const;
   // "(c1, c2, c3) IN ((v11, v12, v13), (v21, v22, v23))"
   int splice_batch_predicates_sql(common::ObSqlString &sql) const;
   int64_t get_row_count() const { return rows_end_pos_.count(); }
+  // only used for batch_insert
+  // header and value can be multiple columns
+  // the caller should use X'abcdef' for strings values
+  int set_default_columns(const char *header, const char *value);
+  bool empty() const { return columns_.count() == 0; }
 private:
   struct Column
   {
@@ -212,10 +219,23 @@ private:
   int splice_insert(const char *table_name, const char *head, common::ObSqlString &sql) const;
 
   int build_rows_matrix(common::ObIArray<common::ObString> &all_names, common::ObIArray<int64_t> &rows_matrix) const;
-  int splice_rows_matrix(const common::ObArray<common::ObString> &all_names, const common::ObArray<int64_t> &rows_matrix, common::ObSqlString &sql) const;
+  int splice_rows_matrix(const common::ObArray<common::ObString> &all_names,
+      const common::ObSqlString &sql_header,
+      const common::ObArray<int64_t> &rows_matrix,
+      common::ObSqlString &sql) const;
+  int splice_rows_matrix_in_array(const common::ObArray<common::ObString> &all_names,
+      const common::ObArray<int64_t> &rows_matrix, const int64_t rows_in_sql, const int64_t max_sql_length,
+      const ObSqlString &header, ObIArray<common::ObSqlString> &sqls) const;
+  int splice_batch_insert_header(const char *table_name, const char *head,
+      const ObArray<ObString> &all_names, ObSqlString &sql) const;
+  int construct_insert_row(const common::ObArray<common::ObString> &all_names,
+      const int64_t row_id, const common::ObArray<int64_t> &rows_matrix, ObSqlString &sql) const;
   int splice_batch_insert(const char *table_name, const char *head, common::ObSqlString &sql,
                           common::ObArray<common::ObString> &all_names, common::ObArray<int64_t> &rows_matrix) const;
   int splice_batch_predicates(const common::ObArray<common::ObString> &all_names, const common::ObArray<int64_t> &rows_matrix, common::ObSqlString &sql) const;
+protected:
+  // just for test
+  virtual int64_t get_max_dml_num() const { return MAX_DML_NUM; }
 private:
   Mode mode_;
   common::ObSqlString values_;
@@ -225,7 +245,10 @@ private:
   // mark value string is hex
   bool is_hex_value_;
   common::ObSEArray<int64_t, DEF_COLUMN_CNT> rows_end_pos_;
+  ObSqlString default_column_header_;
+  ObSqlString default_column_value_;
   DISALLOW_COPY_AND_ASSIGN(ObDMLSqlSplicer);
+  static const int64_t MAX_DML_NUM = 128;
 };
 
 class ObPTSqlSplicer : public ObDMLSqlSplicer
@@ -261,6 +284,8 @@ public:
 
   int exec_insert(const char *table_name, const ObDMLSqlSplicer &splicer,
       int64_t &affected_rows);
+  int exec_batch_insert(const char *table_name, const ObDMLSqlSplicer &splicer,
+      int64_t &affected_rows, const char *insert_header = "INSERT");
   int exec_insert_ignore(const char *table_name, const ObDMLSqlSplicer &splicer,
       int64_t &affected_rows);
   int exec_insert_update(const char *table_name, const ObDMLSqlSplicer &splicer,

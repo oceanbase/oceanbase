@@ -740,6 +740,18 @@ int ObRpcBackupLSCleanP::process()
   return ret;
 }
 
+int ObRpcBackupLSValidateP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KP(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->validate_backup_ls_task(arg_);
+  }
+  return ret;
+}
+
 int ObRpcNotifyArchiveP::process()
 {
   int ret = OB_SUCCESS;
@@ -858,6 +870,18 @@ int ObRpcTabletMajorFreezeP::process()
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
     ret = gctx_.ob_service_->tablet_major_freeze(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcTableMajorFreezeP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->table_major_freeze(arg_, result_);
   }
   return ret;
 }
@@ -2638,6 +2662,50 @@ int ObRpcGetSSGCLastSuccScnsP::process()
   return ret;
 }
 
+int ObRpcGetSSGCDetectInfosP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSSGarbageCollectorService *ss_gc_srv = nullptr;
+
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ObSSGCDetectInfoArg is invalid", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSGarbageCollectorService is null", KR(ret), K_(arg));
+      } else if (OB_FAIL(ss_gc_srv->get_detect_gc_infos(result_.detect_gc_infos_))) {
+        LOG_WARN("get detect gc infos failed", KR(ret), K_(arg));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRpcGetSSGCStartScnItemsP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSSGarbageCollectorService *ss_gc_srv = nullptr;
+
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ObSSGCStartSCNArg is invalid", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSGarbageCollectorService is null", KR(ret), K_(arg));
+      } else if (OB_FAIL(ss_gc_srv->get_gc_start_scn_items(result_.start_scn_items_))) {
+        LOG_WARN("get gc start scn items failed", KR(ret), K_(arg));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRpcPushSSGCLastSuccScnP::process()
 {
   int ret = OB_SUCCESS;
@@ -3158,6 +3226,18 @@ int ObRpcBackupCleanLSResP::process()
   return ret;
 }
 
+int ObRpcBackupValidateLSResP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->report_backup_validate_over(arg_);
+  }
+  return ret;
+}
+
 #ifdef OB_BUILD_SPM
 int ObServerAcceptPlanBaselineP::process()
 {
@@ -3510,6 +3590,15 @@ int ObRpcDetectSessionAliveP::process()
 {
   return ObTableLockDetectFuncList::detect_session_alive_for_rpc(arg_, result_);
 }
+int ObRpcDetectClientSessionAliveP::process()
+{
+  return ObTableLockDetectFuncList::do_session_at_least_one_alive_detect_for_rpc(arg_, result_);
+}
+
+int ObRpcBatchDetectSessionAliveP::process()
+{
+  return ObTableLockDetectFuncList::batch_detect_session_alive_for_rpc(arg_, result_);
+}
 
 int ObRpcGetServerResourceInfoP::process()
 {
@@ -3733,7 +3822,7 @@ int ObRpcNotifyTenantThreadP::process()
         rootserver::ObBackupDataService *service = MTL(rootserver::ObBackupDataService*);
         WAKE_UP_TENANT_SERVICE
       } else if (obrpc::ObNotifyTenantThreadArg::BACKUP_CLEAN_SERVICE == arg_.get_thread_type()) {
-        rootserver::ObBackupCleanService *service = MTL(rootserver::ObBackupCleanService*);
+        rootserver::ObBackupMgrService *service = MTL(rootserver::ObBackupMgrService*);
         WAKE_UP_TENANT_SERVICE
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -4837,7 +4926,7 @@ int ObRpcCheckBackupDestVaildityP::process()
             arg_.backup_dest_str_,
             *gctx_.sql_proxy_))) {
         LOG_WARN("fail to init dest mgr", K(ret), K_(arg));
-      } else if (OB_FAIL(dest_mgr.check_dest_validity(*gctx_.srv_rpc_proxy_, arg_.need_format_file_))) {
+      } else if (OB_FAIL(dest_mgr.check_dest_validity(*gctx_.srv_rpc_proxy_, arg_.need_format_file_, arg_.need_check_permission_))) {
         LOG_WARN("fail to check dest validity", K(ret), K_(arg));
       }
     }

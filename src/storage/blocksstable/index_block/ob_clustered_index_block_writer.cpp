@@ -158,22 +158,12 @@ int ObClusteredIndexBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_s
   const bool need_pre_aggregation =
       nullptr != data_store_desc.sstable_index_builder_
       && full_agg_metas.count() > 0;
-  bool agg_meta_valid_for_minor = true;
-  for (int64_t i = 0; i < full_agg_metas.count(); ++i) {
-    const ObSkipIndexColMeta &agg_meta = full_agg_metas.at(i);
-    if (!non_baseline_enabled_agg_type(agg_meta.get_col_type())) {
-      agg_meta_valid_for_minor = false;
-    }
-  }
 
   if (!need_pre_aggregation) {
     // Skip
   } else if (OB_ISNULL(task_allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task allocator is null", K(ret));
-  } else if (OB_UNLIKELY(!data_store_desc.is_major_or_meta_merge_type() && !agg_meta_valid_for_minor)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid agg meta for mini / minor sstable", K(ret));
   } else {
     char *aggregator_buf = nullptr;
     if (OB_ISNULL(aggregator_buf = static_cast<char *>(
@@ -525,14 +515,16 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_rewrite(
   compaction::ObLocalArena temp_allocator("MakeClusterMic");
   ObMicroBlockReaderHelper micro_reader_helper;
   ObIMicroBlockReader *micro_block_reader = nullptr;
-  const ObMicroBlockHeader *micro_block_header =
-      reinterpret_cast<const ObMicroBlockHeader *>(micro_block_data.get_buf());
-  const int64_t rowkey_column_count = micro_block_header->rowkey_column_count_;
-  if (OB_FAIL(micro_reader_helper.init(temp_allocator))) {
+  const ObMicroBlockHeader *micro_block_header = micro_block_data.get_micro_header();
+  int64_t rowkey_column_count = 0;
+  if (OB_ISNULL(micro_block_header)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid micro block header", KR(ret), K(micro_block_data));
+  } else if (FALSE_IT(rowkey_column_count = micro_block_header->rowkey_column_count_)) {
+  } else if (OB_FAIL(micro_reader_helper.init(temp_allocator))) {
     LOG_WARN("fail to init micro reader helper", K(ret));
-  } else if (OB_FAIL(micro_reader_helper.get_reader(
-                 micro_block_data.get_store_type(), micro_block_reader))) {
-    LOG_WARN("fail to get micro reader", K(ret), K(micro_block_data.get_store_type()));
+  } else if (OB_FAIL(micro_reader_helper.get_reader(*micro_block_data.get_micro_header(), micro_block_reader))) {
+    LOG_WARN("fail to get micro reader", K(ret), "header", *micro_block_data.get_micro_header());
   } else if (OB_FAIL(micro_block_reader->init(micro_block_data, nullptr))) {
     LOG_WARN("fail to init micro block reader", K(ret));
   }
@@ -622,17 +614,20 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
 {
   int ret = OB_SUCCESS;
   compaction::ObLocalArena temp_allocator("MakeClusterMic");
-  const ObMicroBlockHeader *micro_block_header =
-      reinterpret_cast<const ObMicroBlockHeader *>(micro_block_data.get_buf());
-  int64_t rowkey_column_count = micro_block_header->rowkey_column_count_;
-  const ObStorageDatumUtils *datum_utils;
+  const ObMicroBlockHeader *micro_block_header = micro_block_data.get_micro_header();
+  int64_t rowkey_column_count = 0;
+  const ObStorageDatumUtils *datum_utils = nullptr;
   ObIndexBlockRowScanner index_block_row_scanner;
   // Init and open index block row scanner for reused clustered micro block
   // (maybe transformed in micro block cache).
   common::ObQueryFlag mock_query_flag;
   mock_query_flag.multi_version_minor_merge_ = compaction::is_mini_merge(clustered_index_store_desc_.get_merge_type());
-  if (clustered_index_store_desc_.is_cg()) {  // Fetch datum utils for index row scanner
-    const ObITableReadInfo *index_read_info;
+  if (OB_ISNULL(micro_block_header)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid micro block header", KR(ret), K(micro_block_data));
+  } else if (FALSE_IT(rowkey_column_count = micro_block_header->rowkey_column_count_)) {
+  } else if (clustered_index_store_desc_.is_cg()) {  // Fetch datum utils for index row scanner
+    const ObITableReadInfo *index_read_info = nullptr;
     if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
       LOG_WARN("fail to get index read info for cg sstable", K(ret), K(clustered_index_store_desc_));
     } else if (OB_UNLIKELY(!index_read_info->get_datum_utils().is_valid())) {
@@ -781,7 +776,7 @@ int ObClusteredIndexBlockWriter::decompress_micro_block_data(
     LOG_WARN("fail to deserialize and check header", K(ret));
   } else if (OB_FAIL(macro_reader.do_decrypt_and_decompress_data(
                  header, block_des_meta, micro_block_buf, micro_block_size,
-                 micro_block_data.get_buf(), micro_block_data.get_buf_size(),
+                 micro_block_data,
                  is_compressed, true /* need deep copy */,
                  &decompress_allocator_ /* allocator */))) {
     LOG_WARN("Fail to decrypt and decompress data", K(ret));

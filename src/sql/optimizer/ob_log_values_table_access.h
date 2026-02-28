@@ -13,17 +13,22 @@
 #ifndef _OB_LOG_VALUES_TABLE_ACCESS_H
 #define _OB_LOG_VALUES_TABLE_ACCESS_H
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
+
 
 namespace oceanbase
 {
 namespace sql
 {
 class ValuesTablePath;
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogValuesTableAccess : public ObLogicalOperator
   {
   public:
     ObLogValuesTableAccess(ObLogPlan &plan)
         : ObLogicalOperator(plan),
+          column_exprs_(plan.get_allocator()),
           table_def_(NULL),
           table_name_(),
           table_id_(common::OB_INVALID_ID),
@@ -56,7 +61,7 @@ class ObLogValuesTableAccess : public ObLogicalOperator
   private:
 
   private:
-    common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> column_exprs_;
+    ObSqlArray<ObColumnRefRawExpr*> column_exprs_;
     ObValuesTableDef *table_def_;
     common::ObString table_name_;
     uint64_t table_id_;

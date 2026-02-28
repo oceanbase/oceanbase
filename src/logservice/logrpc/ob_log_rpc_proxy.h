@@ -46,6 +46,12 @@ public:
       (logservice::LogGetCkptReq), logservice::LogGetCkptResp);
   RPC_AP(PR3 sync_base_lsn, OB_LOG_SYNC_BASE_LSN_REQ,
          (logservice::LogSyncBaseLSNReq));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  RPC_AP(PR3 report_replay_reaching_machine, OB_LOG_REPORT_REPLAY_REACHING_MACHINE_REQ,
+         (logservice::LogFollowerReportReplayReachingMachineReq));
+  RPC_AP(PR3 notify_follower_move_out_from_rto_group, OB_LOG_NOTIFY_FOLLOWER_MOVE_OUT_FROM_RTO_GROUP_RESP,
+         (logservice::LogNotifyFollowerMoveOutFromRTOGroupResp));
+#endif // OB_BUILD_SHARED_LOG_SERVICE
 };
 
 } // end namespace obrpc

@@ -273,6 +273,9 @@ constexpr int OB_MIGRATE_TX_DATA_NOT_CONTINUES = -4408;
 constexpr int OB_INVALID_ZERO_DATE = -4409;
 constexpr int OB_LS_NOT_IN_LEARNER_LIST = -4410;
 constexpr int OB_MEMORY_LEAK = -4411;
+constexpr int OB_OUT_OF_MAX_EXECUTION_TIME = -4412;
+constexpr int OB_ERR_MAX_EXECUTION_TIME_TRUNCATED = -4413;
+constexpr int OB_NON_RO_SELECT_DISABLE_TIMER = -4414;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -1387,6 +1390,7 @@ constexpr int OB_LOG_ALREADY_SPLIT = -6283;
 constexpr int INCORRECT_ARGUMENTS_TO_URL_DECODE = -6286;
 constexpr int OB_TX_PENDING_LOG_OVERFLOW = -6288;
 constexpr int OB_TX_NOT_SUPPORT_AGGREGATION = -6289;
+constexpr int OB_ROLLBACK_ON_NO_AFFECTED_ROWS = -6290;
 constexpr int OB_LOG_ID_NOT_FOUND = -6301;
 constexpr int OB_LSR_THREAD_STOPPED = -6302;
 constexpr int OB_NO_LOG = -6303;
@@ -2078,8 +2082,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
+constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -2454,6 +2458,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_ZERO_DATE__USER_ERROR_MSG "invalid zero date in no_zero_date mode"
 #define OB_LS_NOT_IN_LEARNER_LIST__USER_ERROR_MSG "ls not in learner list"
 #define OB_MEMORY_LEAK__USER_ERROR_MSG "observer has memory leak"
+#define OB_OUT_OF_MAX_EXECUTION_TIME__USER_ERROR_MSG "Query execution was interrupted, maximum statement execution time exceeded. maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again"
+#define OB_ERR_MAX_EXECUTION_TIME_TRUNCATED__USER_ERROR_MSG "Max execution time is truncated to the range [0, 4294967295]"
+#define OB_NON_RO_SELECT_DISABLE_TIMER__USER_ERROR_MSG "Select is not a read only statement, disabling timer"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -3705,6 +3712,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define INCORRECT_ARGUMENTS_TO_URL_DECODE__USER_ERROR_MSG "Incorrect arguments to URL_DECODE, %s: %%%c%c"
 #define OB_TX_PENDING_LOG_OVERFLOW__USER_ERROR_MSG "too many pending log in the trx"
 #define OB_TX_NOT_SUPPORT_AGGREGATION__USER_ERROR_MSG "This transaction is not eligible for aggregation"
+#define OB_ROLLBACK_ON_NO_AFFECTED_ROWS__USER_ERROR_MSG "Transaction rollbacked as no rows were affected"
 #define OB_LOG_ID_NOT_FOUND__USER_ERROR_MSG "log id not found"
 #define OB_LSR_THREAD_STOPPED__USER_ERROR_MSG "log scan runnable thread stop"
 #define OB_NO_LOG__USER_ERROR_MSG "no log ever scanned"
@@ -4095,6 +4103,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_DEVICE_NOT_MOUNTED__USER_ERROR_MSG "backup device may be not mounted, %s did not read any data written by %s"
 #define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__USER_ERROR_MSG "backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
 #define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__USER_ERROR_MSG "ls archive max scn less than checkpoint scn"
+#define OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE__USER_ERROR_MSG "micro block is too large and rejected from micro cache"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4599,8 +4608,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -5347,6 +5356,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_NOT_IN_LEARNER_LIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4410, ls not in learner list"
 #define OB_MEMORY_LEAK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4411, observer has memory leak"
 #define OB_MEMORY_LEAK__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4411, observer has memory leak"
+#define OB_OUT_OF_MAX_EXECUTION_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4412, Query execution was interrupted, maximum statement execution time exceeded. maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again"
+#define OB_OUT_OF_MAX_EXECUTION_TIME__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4412, Query execution was interrupted, maximum statement execution time exceeded. maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again"
+#define OB_ERR_MAX_EXECUTION_TIME_TRUNCATED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4413, Max execution time is truncated to the range [0, 4294967295]"
+#define OB_ERR_MAX_EXECUTION_TIME_TRUNCATED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4413, Max execution time is truncated to the range [0, 4294967295]"
+#define OB_NON_RO_SELECT_DISABLE_TIMER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4414, Select is not a read only statement, disabling timer"
+#define OB_NON_RO_SELECT_DISABLE_TIMER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4414, Select is not a read only statement, disabling timer"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_IMPORT_NOT_IN_SERVER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
@@ -7849,6 +7864,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TX_PENDING_LOG_OVERFLOW__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6288, too many pending log in the trx"
 #define OB_TX_NOT_SUPPORT_AGGREGATION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6289, This transaction is not eligible for aggregation"
 #define OB_TX_NOT_SUPPORT_AGGREGATION__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6289, This transaction is not eligible for aggregation"
+#define OB_ROLLBACK_ON_NO_AFFECTED_ROWS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6290, Transaction rollbacked as no rows were affected"
+#define OB_ROLLBACK_ON_NO_AFFECTED_ROWS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6290, Transaction rollbacked as no rows were affected"
 #define OB_LOG_ID_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6301, log id not found"
 #define OB_LOG_ID_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6301, log id not found"
 #define OB_LSR_THREAD_STOPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6302, log scan runnable thread stop"
@@ -8629,6 +8646,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9153, backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
 #define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9154, ls archive max scn less than checkpoint scn"
 #define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9154, ls archive max scn less than checkpoint scn"
+#define OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9155, micro block is too large and rejected from micro cache"
+#define OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9155, micro block is too large and rejected from micro cache"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9637,12 +9656,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2517];
+extern int g_all_ob_errnos[2522];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

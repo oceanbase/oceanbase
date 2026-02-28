@@ -162,6 +162,19 @@ public:
                || lake_table_format_ == share::ObLakeTableFormat::HIVE);
   }
 
+  bool check_need_fill_scn() const
+  {
+    bool bret = false;
+    for (int64_t i = 0; i < access_column_ids_.count(); ++i) {
+      uint64_t column_id = access_column_ids_.at(i);
+      if (column_id == OB_HIDDEN_TRANS_VERSION_COLUMN_ID) {
+        bret = true;
+        break;
+      }
+    }
+    return bret;
+  }
+
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
                        K_(ref_table_id),
                        K_(access_column_ids),
@@ -230,7 +243,8 @@ public:
       uint64_t is_new_query_range_           : 1; // whether use new query range
       uint64_t enable_new_false_range_       : 1; // whether use new false range
       uint64_t has_local_dynamic_filter_     : 1; // whether has local dynamic filter
-      uint64_t reserved_                     : 60;
+      uint64_t hybrid_search_monitor_        : 1; // whether hybrid search monitor is enabled
+      uint64_t reserved_                     : 59;
     };
   };
   ObFixedArray<share::DomainIdxs, common::ObIAllocator> domain_id_idxs_;

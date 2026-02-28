@@ -813,6 +813,8 @@ inline int ObITabletMdsInterface::fill_virtual_info(ObIArray<mds::MdsNodeInfoFor
     MDS_LOG_GET(WARN, "fail to fill medium compaction info");
   } else if (CLICK_FAIL((fill_virtual_info_from_mds_sstable<ObTruncateInfoKey, ObTruncateInfo>(mds_node_info_array)))) {
     MDS_LOG_GET(WARN, "fail to fill truncate info");
+  } else if (CLICK_FAIL((fill_virtual_info_from_mds_sstable<ObTTLFilterInfoKey, ObTTLFilterInfo>(mds_node_info_array)))) {
+    MDS_LOG_GET(WARN, "fail to fill ttl filter info");
   } else {
     MDS_LOG_GET(TRACE, "sucess to fill virtual info");
   }

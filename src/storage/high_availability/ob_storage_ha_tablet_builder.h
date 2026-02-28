@@ -66,19 +66,20 @@ struct ObBuildMajorSSTablesParam final
 {
   ObBuildMajorSSTablesParam(
       const ObStorageSchema &storage_schema,
-      const bool has_truncate_info)
+      const bool has_merged_with_mds_info)
     : storage_schema_(storage_schema),
-      has_truncate_info_(has_truncate_info)
+      has_merged_with_mds_info_(has_merged_with_mds_info)
   {}
   bool is_valid() const
   {
     return storage_schema_.is_valid();
   }
-  TO_STRING_KV(K_(storage_schema), K_(has_truncate_info));
+  TO_STRING_KV(K_(storage_schema), K_(has_merged_with_mds_info));
   const ObStorageSchema &storage_schema_;
-  const bool has_truncate_info_;
+  const bool has_merged_with_mds_info_;
 };
 
+class ObTabletCopyDependencyMgr;
 class ObStorageHATabletsBuilder
 {
 public:
@@ -93,8 +94,8 @@ public:
       ObICopyLSViewInfoReader *reader,
       ObIDagNet *dag_net,
       common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
-      common::ObIArray<ObLogicTabletID> &data_tablet_id_list,
-      CopyTabletSimpleInfoMap &simple_info_map);
+      ObTabletCopyDependencyMgr &tablet_dep_mgr
+    );
   // Restore PENDING tablets meta. PENDING tablets will be exist at restore phase RESTORE_SYS_TABLETS,
   // RESTORE_TO_CONSISTENT_SCN, or QUICK_RESTORE. Leader gets the meta from backup, follower gets it from leader.
   // If that tablet meta identified uniquely by transfer sequence exists, replace and update the restore status to EMPTY.
@@ -103,9 +104,8 @@ public:
   int build_tablets_sstable_info(ObIDagNet *dag_net);
   int create_all_tablets_with_4_1_rpc(
       ObIDagNet *dag_net,
-      CopyTabletSimpleInfoMap &simple_info_map,
       common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
-      common::ObIArray<ObLogicTabletID> &data_tablet_id_list);
+      ObTabletCopyDependencyMgr &tablet_dep_mgr);
 private:
   int get_tablet_info_reader_(ObICopyTabletInfoReader *&reader);
   int get_tablet_info_restore_reader_(ObICopyTabletInfoReader *&reader);

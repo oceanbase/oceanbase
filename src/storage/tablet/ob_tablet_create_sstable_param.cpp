@@ -27,6 +27,7 @@
 namespace oceanbase
 {
 using namespace share;
+using namespace blocksstable;
 namespace storage
 {
 // if you add membership for this param, plz check all paths that use it, including
@@ -83,7 +84,8 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     co_base_snapshot_version_(-1),
     uncommit_tx_info_(),
     rec_scn_(),
-    upper_trans_version_(0)
+    upper_trans_version_(0),
+    min_merged_trans_version_(0)
 {
   data_block_ids_.set_attr(ObMemAttr(MTL_ID(), "CreateSSTable"));
   other_block_ids_.set_attr(ObMemAttr(MTL_ID(), "CreateSSTable"));
@@ -132,7 +134,8 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && nested_offset_ >= 0
                && nested_size_ >= 0
                && co_base_snapshot_version_ >= 0
-               && rec_scn_.is_valid())) {
+               && rec_scn_.is_valid()
+               && min_merged_trans_version_ >= 0)) {
     ret = false;
     LOG_WARN("invalid basic params", KPC(this)); // LOG_KVS arg number overflow
     } else if (ObITable::is_ddl_type_sstable(table_key_.table_type_)) {
@@ -176,10 +179,6 @@ bool ObTabletCreateSSTableParam::is_block_meta_valid(const storage::ObMetaDiskAd
 int ObTabletCreateSSTableParam::inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res)
 {
   int ret = OB_SUCCESS;
-  blocksstable::ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
-      root_block_addr_, root_block_data_);
-  blocksstable::ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
-      data_block_macro_meta_addr_, data_block_macro_meta_);
   root_row_store_type_ = res.root_row_store_type_;
   data_index_tree_height_ = res.root_desc_.height_;
   index_blocks_cnt_ = res.index_blocks_cnt_;
@@ -203,7 +202,13 @@ int ObTabletCreateSSTableParam::inner_init_with_merge_res(const blocksstable::Ob
   MEMCPY(encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   table_backup_flag_ = res.table_backup_flag_;
 
-  if (OB_FAIL(data_block_ids_.assign(res.data_block_ids_))) {
+  if (OB_FAIL(ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
+      root_block_addr_, root_block_data_))) {
+    LOG_WARN("failed to fill root_block_data", K(res.root_desc_), K(table_key_));
+  } else if (OB_FAIL(ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
+      data_block_macro_meta_addr_, data_block_macro_meta_))) {
+    LOG_WARN("failed to fill data_block_macro_meta", K(res.data_root_desc_), K(table_key_));
+  } else if (OB_FAIL(data_block_ids_.assign(res.data_block_ids_))) {
     LOG_WARN("fail to fill data block ids", K(ret), K(res.data_block_ids_));
   } else if (OB_FAIL(other_block_ids_.assign(res.other_block_ids_))) {
     LOG_WARN("fail to fill other block ids", K(ret), K(res.other_block_ids_));
@@ -241,6 +246,7 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
     table_key_.tablet_id_ = tablet_id;
     table_key_.version_range_.snapshot_version_ = snapshot_version;
     max_merged_trans_version_ = snapshot_version;
+    min_merged_trans_version_ = 0;
 
     schema_version_ = storage_schema.get_schema_version();
     create_snapshot_version_ = 0;
@@ -343,6 +349,7 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
   table_key_.scn_range_.start_scn_ = start_scn;
   table_key_.scn_range_.end_scn_ = end_scn;
   max_merged_trans_version_ = 0;
+  min_merged_trans_version_ = 0;
 
   schema_version_ = basic_meta.schema_version_;
   progressive_merge_round_ = basic_meta.progressive_merge_round_;
@@ -357,8 +364,6 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
   schema_version_ = basic_meta.schema_version_;
   create_snapshot_version_ = basic_meta.create_snapshot_version_;
   ddl_scn_ = basic_meta.ddl_scn_;
-  progressive_merge_round_ = basic_meta.progressive_merge_round_;
-  progressive_merge_step_ = basic_meta.progressive_merge_step_;
   column_cnt_ = basic_meta.column_cnt_;
   master_key_id_ = basic_meta.master_key_id_;
   co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
@@ -392,12 +397,6 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
     table_shared_flag_.set_shared_sstable();
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(ObStoreFormat::is_row_store_type_with_encoding(root_row_store_type_))) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("split empty minor sstable do not support encoding row store", K(ret), K(root_row_store_type_),
-              K(basic_meta), KPC(this));
-  }
   return ret;
 }
 
@@ -417,6 +416,7 @@ int ObTabletCreateSSTableParam::init_for_transfer_empty_mini_minor_sstable(const
   table_key_.scn_range_.start_scn_ = start_scn;
   table_key_.scn_range_.end_scn_ = end_scn;
   max_merged_trans_version_ = end_scn.get_val_for_tx();
+  min_merged_trans_version_ = end_scn.get_val_for_tx();
 
   schema_version_ = table_schema.get_schema_version();
   create_snapshot_version_ = 0;
@@ -503,6 +503,9 @@ int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSST
   max_merged_trans_version_ = table_key_.is_inc_major_type_sstable()
                             ? basic_meta.max_merged_trans_version_
                             : res.max_merged_trans_version_;
+  min_merged_trans_version_ = table_key_.is_inc_major_type_sstable()
+                            ? basic_meta.max_merged_trans_version_
+                            : res.min_merged_trans_version_;
   if (table_key.is_inc_major_type_sstable()) {
     upper_trans_version_ = basic_meta.upper_trans_version_;
   }
@@ -566,11 +569,7 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
     } else {
       table_key.scn_range_ = static_param.scn_range_;
     }
-    if (is_minor_merge_type(static_param.get_merge_type()) && res.contain_uncommitted_row_) {
-      uncommitted_tx_id_ = static_param.tx_id_;
-    } else {
-      uncommitted_tx_id_ = 0;
-    }
+    uncommitted_tx_id_ = 0;
     table_key_ = table_key;
 
     if (ObITable::TableType::COLUMN_ORIENTED_SSTABLE == table_key.table_type_ ||
@@ -597,16 +596,12 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
             + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     }
     latest_row_store_type_ = ctx.get_schema()->get_row_store_type();
-    if (is_minor_merge_type(static_param.get_merge_type())) {
-      recycle_version_ = static_param.version_range_.base_version_;
-    } else {
-      recycle_version_ = 0;
-    }
+    recycle_version_ = ctx.get_recycle_version();
     schema_version_ = ctx.get_schema()->get_schema_version();
     create_snapshot_version_ = static_param.create_snapshot_version_;
     progressive_merge_round_ = ctx.get_progressive_merge_round();
     progressive_merge_step_ = ctx.get_result_progressive_merge_step(column_group_idx);
-    is_co_table_without_cgs_ = is_main_table ? (0 == res.data_blocks_cnt_ || static_param.is_build_row_store()) : false;
+    is_co_table_without_cgs_ = is_main_table ? (0 == res.data_blocks_cnt_ || static_param.is_build_all_cg_only()) : false;
     column_cnt_ = res.data_column_cnt_;
     if ((0 == res.row_count_ && 0 == res.max_merged_trans_version_)
         || (nullptr != cg_schema && !cg_schema->has_multi_version_column())) {
@@ -615,6 +610,7 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
     } else {
       max_merged_trans_version_ = res.max_merged_trans_version_;
     }
+    min_merged_trans_version_ = res.min_merged_trans_version_;
     nested_size_ = res.nested_size_;
     nested_offset_ = res.nested_offset_;
     ddl_scn_.set_min();
@@ -745,6 +741,7 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
                                       INT64_MAX : ddl_param.snapshot_version_;
       upper_trans_version_ = ddl_param.table_key_.is_inc_major_type_sstable() ?
                                       ddl_param.inc_major_trans_version_ : 0;
+      min_merged_trans_version_ = ddl_param.snapshot_version_;
       nested_size_ = res.nested_size_;
       nested_offset_ = res.nested_offset_;
       table_shared_flag_.reset();
@@ -922,6 +919,7 @@ int ObTabletCreateSSTableParam::init_for_ddl_mem(const ObITable::TableKey &table
     latest_row_store_type_ = storage_schema.get_row_store_type();
     create_snapshot_version_ = table_key.get_snapshot_version();
     max_merged_trans_version_ = table_key_.is_inc_major_ddl_mem_sstable() ? INT64_MAX : table_key.get_snapshot_version();
+    min_merged_trans_version_ = table_key.get_snapshot_version();
     ddl_scn_ = ddl_start_scn;
     root_row_store_type_ = data_desc.get_row_store_type(); // for root block, not used for ddl memtable
     data_index_tree_height_ = 2; // fixed tree height, because there is only one root block
@@ -974,16 +972,13 @@ int ObTabletCreateSSTableParam::init_for_ddl_mem(const ObITable::TableKey &table
         root_block_data_.size_ = root_block_size;
       }
     }
-
-    if (OB_SUCC(ret)) {
-      // set root block for secondary meta tree
-      if (OB_FAIL(data_block_macro_meta_addr_.set_mem_addr(0/*offset*/, root_block_size/*size*/))) {
-        LOG_WARN("set root block address for secondary meta tree failed", K(ret));
-      } else {
-        data_block_macro_meta_.type_ = ObMicroBlockData::DDL_BLOCK_TREE;
-        data_block_macro_meta_.buf_ = reinterpret_cast<char *>(&block_meta_tree);
-        data_block_macro_meta_.size_ = root_block_size;
-      }
+    // set root block for secondary meta tree
+    if (FAILEDx(data_block_macro_meta_addr_.set_mem_addr(0/*offset*/, root_block_size/*size*/))) {
+      LOG_WARN("set root block address for secondary meta tree failed", K(ret));
+    } else {
+      data_block_macro_meta_.type_ = ObMicroBlockData::DDL_BLOCK_TREE;
+      data_block_macro_meta_.buf_ = reinterpret_cast<char *>(&block_meta_tree);
+      data_block_macro_meta_.size_ = root_block_size;
     }
   }
   return ret;
@@ -1054,6 +1049,7 @@ int ObTabletCreateSSTableParam::init_for_ss_ddl(blocksstable::ObSSTableMergeRes 
     full_column_cnt_ = full_column_cnt;
     max_merged_trans_version_ = snapshot_version;
     upper_trans_version_ = table_key.is_inc_major_type_sstable() ? INT64_MAX : 0;
+    min_merged_trans_version_ = snapshot_version;
     nested_size_ = res.nested_size_;
     nested_offset_ = res.nested_offset_;
     table_shared_flag_.set_shared_sstable();
@@ -1127,7 +1123,7 @@ int ObTabletCreateSSTableParam::init_for_ss_ddl(blocksstable::ObSSTableMergeRes 
 
 
 int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
-                                               const ObITable::TableKey &src_table_key,
+                                               const blocksstable::ObSSTable &src_sstable,
                                                const blocksstable::ObSSTableBasicMeta &basic_meta,
                                                const int64_t schema_version,
                                                const ObIArray<blocksstable::MacroBlockId> &split_point_macros_id,
@@ -1135,7 +1131,7 @@ int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
 {
   int ret = OB_SUCCESS;
   set_init_value_for_column_store_();
-  table_key_ = src_table_key;
+  table_key_ = src_sstable.get_key();
   table_key_.tablet_id_ = dst_tablet_id;
   sstable_logic_seq_ = basic_meta.sstable_logic_seq_;
   filled_tx_scn_ = basic_meta.filled_tx_scn_;
@@ -1156,10 +1152,18 @@ int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
   nested_size_ = res.nested_size_;
   nested_offset_ = res.nested_offset_;
   max_merged_trans_version_ = res.max_merged_trans_version_;
+  min_merged_trans_version_ = res.min_merged_trans_version_;
   column_cnt_ = res.data_column_cnt_;
   full_column_cnt_ = 0;
   tx_data_recycle_scn_.set_min();
   column_group_cnt_ = 1;
+  if (src_sstable.is_co_sstable()) {
+    column_group_cnt_ = static_cast<const ObCOSSTableV2 &>(src_sstable).get_cs_meta().get_column_group_count();
+    co_base_type_ = static_cast<const ObCOSSTableV2 &>(src_sstable).is_all_cg_base()
+        ? ObCOSSTableBaseType::ALL_CG_TYPE : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
+    full_column_cnt_ = static_cast<const ObCOSSTableV2 &>(src_sstable).get_cs_meta().full_column_cnt_;
+    is_co_table_without_cgs_ = static_cast<const ObCOSSTableV2 &>(src_sstable).is_cgs_empty_co_table();
+  }
 
   if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to inner init with merge res", K(ret), K(res));
@@ -1224,6 +1228,7 @@ int ObTabletCreateSSTableParam::init_for_lob_split(const ObTabletID &new_tablet_
   // init from merge_res
   column_cnt_ = res.data_column_cnt_;
   max_merged_trans_version_ = res.max_merged_trans_version_;
+  min_merged_trans_version_ = res.min_merged_trans_version_;
   nested_size_ = res.nested_size_;
   nested_offset_ = res.nested_offset_;
   full_column_cnt_ = 0;
@@ -1267,6 +1272,9 @@ int ObTabletCreateSSTableParam::init_for_ha(
   max_merged_trans_version_ = (table_key_.is_inc_major_type_sstable() || table_key_.is_inc_major_ddl_dump_sstable())
                             ? sstable_param.basic_meta_.max_merged_trans_version_
                             : res.max_merged_trans_version_;
+  min_merged_trans_version_ = (table_key_.is_inc_major_type_sstable() || table_key_.is_inc_major_ddl_dump_sstable())
+                            ? sstable_param.basic_meta_.min_merged_trans_version_
+                            : res.min_merged_trans_version_;
   if (sstable_param.table_key_.is_inc_major_type_sstable()) {
     upper_trans_version_ = sstable_param.basic_meta_.upper_trans_version_;
   }
@@ -1337,6 +1345,7 @@ int ObTabletCreateSSTableParam::init_for_ha(
   occupy_size_ = sstable_param.basic_meta_.occupy_size_;
   original_size_ = sstable_param.basic_meta_.original_size_;
   max_merged_trans_version_ = sstable_param.basic_meta_.max_merged_trans_version_;
+  min_merged_trans_version_ = sstable_param.basic_meta_.min_merged_trans_version_;
   if (sstable_param.table_key_.is_inc_major_type_sstable()) {
     upper_trans_version_ = sstable_param.basic_meta_.upper_trans_version_;
   }
@@ -1401,8 +1410,6 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   latest_row_store_type_ = sstable_param.basic_meta_.latest_row_store_type_;
 
   root_block_addr_ = sstable_param.root_block_addr_;
-  root_block_data_.buf_ = sstable_param.root_block_buf_;
-  root_block_data_.size_ = sstable_param.root_block_addr_.size();
   data_block_macro_meta_addr_ = sstable_param.data_block_macro_meta_addr_;
   data_block_macro_meta_.buf_ = sstable_param.data_block_macro_meta_buf_;
   data_block_macro_meta_.size_ = sstable_param.data_block_macro_meta_addr_.size();
@@ -1420,6 +1427,7 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   occupy_size_ = sstable_param.basic_meta_.occupy_size_;
   original_size_ = sstable_param.basic_meta_.original_size_;
   max_merged_trans_version_ = sstable_param.basic_meta_.max_merged_trans_version_;
+  min_merged_trans_version_ = sstable_param.basic_meta_.min_merged_trans_version_;
   if (sstable_param.table_key_.is_inc_major_type_sstable()) {
     upper_trans_version_ = sstable_param.basic_meta_.upper_trans_version_;
   }
@@ -1448,7 +1456,11 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   nested_offset_ = 0;
   nested_size_ = 0;
   MEMCPY(encrypt_key_, sstable_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-  if (OB_FAIL(column_checksums_.assign(sstable_param.column_checksums_))) {
+  if (OB_FAIL(root_block_data_.init_with_prepare_micro_header(
+      sstable_param.root_block_buf_,
+      sstable_param.root_block_addr_.size()))) {
+    LOG_WARN("fail to init root_block_data", K(ret), K(sstable_param));
+  } else if (OB_FAIL(column_checksums_.assign(sstable_param.column_checksums_))) {
     LOG_WARN("fail to fill column checksum", K(ret), K(sstable_param));
   } else if (OB_FAIL(uncommit_tx_info_.assign(sstable_param.uncommit_tx_info_))) {
     LOG_WARN("failed to assgin migration param", K(ret), K(sstable_param.uncommit_tx_info_));
@@ -1509,6 +1521,7 @@ int ObTabletCreateSSTableParam::init_for_mds(
   } else {
     max_merged_trans_version_ = res.max_merged_trans_version_;
   }
+  min_merged_trans_version_ = res.min_merged_trans_version_;
   nested_size_ = res.nested_size_;
   nested_offset_ = res.nested_offset_;
   ddl_scn_.set_min();

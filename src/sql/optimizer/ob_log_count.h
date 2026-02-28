@@ -14,11 +14,15 @@
 #define OB_SQL_OPTIMIZER_OB_LOG_COUNT_H_
 
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+
+template<typename R, typename C>
+class PlanVisitor;
 
 class ObLogCount: public ObLogicalOperator
 {

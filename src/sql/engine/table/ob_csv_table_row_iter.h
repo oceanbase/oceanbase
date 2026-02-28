@@ -46,7 +46,12 @@ public:
     need_expand_buf_(false),
     duration_(0),
     cur_file_size_(0),
-    has_escape_(true) {}
+    has_escape_(true),
+    bounded_start_pos_(0),
+    bounded_end_pos_(INT64_MAX),
+    already_read_size_(0),
+    is_scan_full_file_(true),
+    chunk_idx_(OB_INVALID_INDEX) {}
 
   virtual void reuse() override
   {
@@ -63,6 +68,11 @@ public:
     duration_ = 0;
     cur_file_size_ = 0;
     has_escape_ = true;
+    bounded_start_pos_ = 0;
+    bounded_end_pos_ = INT64_MAX;
+    already_read_size_ = 0;
+    is_scan_full_file_ = true;
+    chunk_idx_ = OB_INVALID_INDEX;
   }
   DECLARE_VIRTUAL_TO_STRING;
   char *buf_;
@@ -80,6 +90,11 @@ public:
   int64_t duration_;
   int64_t cur_file_size_;
   bool has_escape_;
+  int64_t bounded_start_pos_;
+  int64_t bounded_end_pos_;
+  int64_t already_read_size_;
+  bool is_scan_full_file_;
+  int64_t chunk_idx_;
 };
 
 class ObCSVTableRowIterator : public ObExternalTableRowIterator {
@@ -109,12 +124,15 @@ private:
   int expand_buf();
   int load_next_buf();
   int open_next_file();
-  int get_next_file_and_line_number(const int64_t task_idx,
-                                    common::ObString &file_url,
-                                    int64_t &file_id,
-                                    int64_t &part_id,
-                                    int64_t &start_line,
-                                    int64_t &end_line);
+  int get_next_file_scan_info(const int64_t task_idx,
+                               common::ObString &file_url,
+                               int64_t &file_id,
+                               int64_t &part_id,
+                               int64_t &start_line,
+                               int64_t &end_line,
+                               int64_t &bounded_start_pos,
+                               int64_t &bounded_end_pos,
+                               int64_t &chunk_idx);
   int skip_lines();
   void release_buf();
   void dump_error_log(common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs);
@@ -122,6 +140,7 @@ private:
   static int handle_bad_file_line(ObCSVTableRowIterator *csv_iter,
                                   ObEvalCtx &eval_ctx,
                                   ObCSVGeneralParser::HandleOneLineParam &param);
+  bool is_end_of_file();
 private:
   ObCSVIteratorState state_;
   ObBitVector *bit_vector_cache_;

@@ -256,6 +256,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
       } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_mocked_external_table_files(
                                                             tenant_id, part_ids, ctx,
                                                             scan_ops.at(0)->tsc_ctdef_.scan_ctdef_,
+                                                            dfo.get_dop(),
                                                             ext_file_urls))) {
         LOG_WARN("fail to get mocked external table files", K(ret));
       }
@@ -266,6 +267,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
                                                                                     is_external_files_on_disk,
                                                                                     ctx.get_allocator(),
                                                                                     ext_file_urls,
+                                                                                    ctx,
                                                                                     ranges.empty() ? NULL : &ranges));
     }
 
@@ -541,6 +543,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     if (OB_FAIL(ret)) {
     } else if (dml_op && dml_op->is_table_location_uncertain()) {
       OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(ctx).get_location_router(),
+                                                    *ctx.get_my_session(),
                                                     ctx.get_allocator(),
                                                     ctx.get_my_session()->get_effective_tenant_id(),
                                                     table_location_key,
@@ -611,6 +614,7 @@ int ObPXServerAddrUtil::add_pdml_merge_gindex_locations(const ObTableModifySpec 
         uint64_t idx_ref_table_id = dml_ctdefs.at(i)->das_base_ctdef_.index_tid_;
         ObDASTableLoc *idx_table_loc = NULL;
         if (OB_FAIL(ObTableLocation::get_full_leader_table_loc(DAS_CTX(ctx).get_location_router(),
+                                              *ctx.get_my_session(),
                                               ctx.get_allocator(),
                                               ctx.get_my_session()->get_effective_tenant_id(),
                                               idx_table_location_key,
@@ -1545,7 +1549,8 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(
 int ObPXServerAddrUtil::build_tablet_idx_map(ObTaskExecutorCtx &task_exec_ctx,
                                               int64_t tenant_id,
                                               uint64_t ref_table_id,
-                                              ObTabletIdxMap &idx_map)
+                                              ObTabletIdxMap &idx_map,
+                                              int64_t &local_tenant_version_latest)
 {
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard schema_guard;
@@ -1560,6 +1565,8 @@ int ObPXServerAddrUtil::build_tablet_idx_map(ObTaskExecutorCtx &task_exec_ctx,
     LOG_WARN("fail get schema", K(ref_table_id), K(ret));
   } else if (OB_FAIL(build_tablet_idx_map(table_schema, idx_map))) {
     LOG_WARN("fail create index map", K(ret), "cnt", table_schema->get_all_part_num());
+  } else {
+    int tmp_ret = schema_guard.get_schema_version(tenant_id, local_tenant_version_latest);
   }
   return ret;
 }
@@ -1577,10 +1584,10 @@ public:
     bool bret = false;
     int64_t lv, rv;
     if (OB_FAIL(map_->get_refactored(left->tablet_id_.id(), lv))) {
-      LOG_WARN("fail get partition index", K(asc_), K(left), K(right), K(ret));
+      LOG_WARN("fail get partition index", K(asc_), KPC(left), KPC(right), K(ret));
       throw OB_EXCEPTION<OB_HASH_NOT_EXIST>();
     } else if (OB_FAIL(map_->get_refactored(right->tablet_id_.id(), rv))) {
-      LOG_WARN("fail get partition index", K(asc_), K(left), K(right), K(ret));
+      LOG_WARN("fail get partition index", K(asc_), KPC(left), KPC(right), K(ret));
       throw OB_EXCEPTION<OB_HASH_NOT_EXIST>();
     } else {
       bret = asc_ ? (lv < rv) : (lv > rv);
@@ -1602,6 +1609,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(
   dst_locations.reset();
   if (src_locations.size() > 1) {
     ObTabletIdxMap tablet_order_map;
+    int64_t local_tenant_version_latest = 0;
     if (OB_FAIL(dst_locations.reserve(src_locations.size()))) {
       LOG_WARN("fail reserve locations", K(ret), K(src_locations.size()));
     // virtual table is list partition now,
@@ -1610,7 +1618,8 @@ int ObPXServerAddrUtil::reorder_all_partitions(
     } else if (!is_virtual_table(ref_table_id) &&
         OB_FAIL(build_tablet_idx_map(exec_ctx.get_task_exec_ctx(),
                                      GET_MY_SESSION(exec_ctx)->get_effective_tenant_id(),
-                                     ref_table_id, tablet_order_map))) {
+                                     ref_table_id, tablet_order_map,
+                                     local_tenant_version_latest))) {
       LOG_WARN("fail build index lookup map", K(ret));
     }
     for (auto iter = src_locations.begin(); iter != src_locations.end() && OB_SUCC(ret); ++iter) {
@@ -1633,7 +1642,18 @@ int ObPXServerAddrUtil::reorder_all_partitions(
       }
       GroupPWJTabletIdMap *group_pwj_map = nullptr;
       if (OB_FAIL(ret)) {
-        LOG_WARN("fail to sort  locations", K(ret));
+        int tmp_ret = OB_SUCCESS;
+        ObArray<int64_t> tablet_ids;
+        if (OB_TMP_FAIL(tablet_ids.reserve(tablet_order_map.size()))) {
+          LOG_WARN("reserve failed", K(tmp_ret));
+        } else {
+          ObTabletIdxMap::iterator iter = tablet_order_map.begin();
+          for (; iter != tablet_order_map.end(); iter++) {
+            tablet_ids.push_back(iter->first);
+          }
+        }
+        LOG_WARN("fail to sort locations", K(ret), K(local_tenant_version_latest),
+                 K(tablet_order_map.size()), K(tablet_ids));
       } else if (OB_NOT_NULL(group_pwj_map = exec_ctx.get_group_pwj_map())) {
         GroupPWJTabletIdInfo group_pwj_tablet_id_info;
         TabletIdArray &tablet_id_array = group_pwj_tablet_id_info.tablet_id_array_;
@@ -2300,6 +2320,8 @@ int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf,
       if (expr.is_const_expr()
           && UINT32_MAX != expr.vector_header_off_
           && T_OP_ROW != expr.type_) {
+        // set const expr vector format to VEC_INVALID to avoid const expr check failed
+        expr.get_vector_header(eval_ctx).format_ = VEC_INVALID;
         ret = expr.init_vector(eval_ctx, VEC_UNIFORM_CONST, 1/*size*/);
       }
     }
@@ -3694,6 +3716,10 @@ int ObPxEstimateSizeUtil::prepare_px_tablets_info(ObExecContext &ctx,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("null schema, may be deleted", K(tenant_id), K(ref_table_id));
+  } else if (table_schema->is_oracle_tmp_table_v2() || table_schema->is_oracle_tmp_table_v2_index_table()) {
+    // not support for oracle temporary table
+    is_opt_stat_valid = false;
+    LOG_INFO("not support for oracle temporary table", K(ref_table_id));
   } else if (OB_FAIL(ObPXServerAddrUtil::build_tablet_idx_map(table_schema, idx_map))) {
     LOG_WARN("fail to build tablet idx map");
   } else if (OB_FAIL(fill_px_tablets_info_with_stat(ctx, scan_op, locations, idx_map,
@@ -4254,8 +4280,8 @@ int ObSlaveMapUtil::build_ppwj_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_
 }
 
 // 本函数用于 pdml 场景，支持：
-//  1. 将 pkey 映射到一个或多个线程上
-//  2. 将 多个 pkey 映射到一个线程上
+//  1. 当分区数小于线程数，将一个 partition 映射到对应 SQC 的一组线程上
+//  2. 当分区数大于线程数，将一组 partitions 映射到对应 SQC 的一个线程上
 // 并且保证：pkey 最小化分布（在充分运用算力的前提下，让尽可能少的线程并发处理同一个分区）
 // pkey-hash, pkey-range 等都可以用这个 map
 int ObSlaveMapUtil::build_pkey_affinitized_ch_mn_map(ObDfo &parent,
@@ -4273,10 +4299,10 @@ int ObSlaveMapUtil::build_pkey_affinitized_ch_mn_map(ObDfo &parent,
       K(child.get_dfo_id()), K(child.get_sqcs_count()));
       //  .....
       //    PDML
-      //      EX (pkey hash)
+      //      EX (pkey hash or pkey range)
       //  .....
-      // 为child dfo建立其发送数据的channel map，在pkey random模型下，parent dfo的每一个SQC中的worker都可以
-      // 处理其对应SQC中所包含的所有partition，所以直接采用`build_ch_map_by_sqcs`
+      // 为 child dfo 建立其发送数据的 channel map，在 pkey affinitized 模型下，
+      // 一个 parttions 会被分发到对应 SQC 上的一组线程中
       ObPxPartChMapArray &map = child.get_part_ch_map();
       ObIArray<ObPxSqcMeta> &sqcs = parent.get_sqcs();
       ObPxChTotalInfos *dfo_ch_total_infos = &child.get_dfo_ch_total_infos();
@@ -4310,23 +4336,26 @@ int ObSlaveMapUtil::build_pkey_affinitized_ch_mn_map(ObDfo &parent,
   return ret;
 }
 
-
-int ObSlaveMapUtil::build_pkey_random_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id)
+// 本函数用于 pdml 场景，支持：
+// 将每个 partition 映射到对应 SQC 的所有线程上
+int ObSlaveMapUtil::build_pkey_scatter_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (1 != parent.get_child_count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected dfo", K(ret), K(parent));
-  } else if (ObPQDistributeMethod::PARTITION_RANDOM == child.get_dist_method()) {
-    LOG_TRACE("build pkey random channel map",
+  } else if (ObPQDistributeMethod::PARTITION_RANDOM == child.get_dist_method()
+          || ObPQDistributeMethod::PARTITION_HASH == child.get_dist_method()) {
+      LOG_TRACE("build pkey random channel map",
       K(parent.get_dfo_id()), K(parent.get_sqcs_count()),
       K(child.get_dfo_id()), K(child.get_sqcs_count()));
       //  .....
       //    PDML
-      //      EX (pkey random)
+      //      EX (pkey random or pkey hash)
       //  .....
-      // 为child dfo建立其发送数据的channel map，在pkey random模型下，parent dfo的每一个SQC中的worker都可以
-      // 处理其对应SQC中所包含的所有partition，所以直接采用`build_ch_map_by_sqcs`
+      // 为 child dfo 建立其发送数据的 channel map，在 pkey scatter 模型下，
+      // 每个 parttions 可以被分发到对应 SQC 上的所有线程
+      // 所以直接采用`build_ch_map_by_sqcs`
       ObPxPartChMapArray &map = child.get_part_ch_map();
       ObIArray<ObPxSqcMeta> &sqcs = parent.get_sqcs();
       ObPxChTotalInfos *dfo_ch_total_infos = &child.get_dfo_ch_total_infos();
@@ -4513,16 +4542,27 @@ int ObSlaveMapUtil::build_pkey_mn_ch_map(ObExecContext &ctx, ObDfo &child, ObDfo
     }
     break;
   }
-  case ObPQDistributeMethod::Type::PARTITION_HASH:
-  case ObPQDistributeMethod::Type::PARTITION_RANGE: {
-    if (OB_FAIL(build_pkey_affinitized_ch_mn_map(parent, child, tenant_id))) {
-      LOG_WARN("failed to build pkey random channel map", K(ret));
+  case ObPQDistributeMethod::Type::PARTITION_HASH:  {
+    if (child.use_scatter_channel_for_pkey_hash()){
+      if (OB_FAIL(build_pkey_scatter_ch_mn_map(parent, child, tenant_id))) {
+        LOG_WARN("failed to build pkey random channel map", K(ret));
+      }
+    } else {
+      if (OB_FAIL(build_pkey_affinitized_ch_mn_map(parent, child, tenant_id))) {
+        LOG_WARN("failed to build pkey affinitized channel map", K(ret));
+      }
     }
+    break;
+  }
+  case ObPQDistributeMethod::Type::PARTITION_RANGE: {
+      if (OB_FAIL(build_pkey_affinitized_ch_mn_map(parent, child, tenant_id))) {
+        LOG_WARN("failed to build pkey affinitized channel map", K(ret));
+      }
     break;
   }
   case ObPQDistributeMethod::Type::PARTITION_RANDOM: {
     // PDML: shuffle to any worker in parent dfo
-    if (OB_FAIL(build_pkey_random_ch_mn_map(parent, child, tenant_id))) {
+    if (OB_FAIL(build_pkey_scatter_ch_mn_map(parent, child, tenant_id))) {
       LOG_WARN("failed to build pkey random channel map", K(ret));
     }
     break;

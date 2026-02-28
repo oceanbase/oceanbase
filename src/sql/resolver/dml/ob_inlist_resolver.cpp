@@ -119,7 +119,7 @@ int ObInListResolver::resolve_values_table_from_inlist(const ParseNode *in_list,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("sub_query or table_buf is null", K(ret), KP(table_buf));
   } else {
-    table_def = new (table_buf) ObValuesTableDef();
+    table_def = new (table_buf) ObValuesTableDef(*allocator);
     table_def->column_cnt_ = column_cnt;
     table_def->row_cnt_ = row_cnt;
     table_def->access_type_ = access_type;
@@ -543,6 +543,7 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
                                                  compat_type,
                                                  enable_mysql_compatible_dates,
                                                  session_info->get_min_const_integer_precision(),
+                                                 session_info->get_exec_min_cluster_version(),
                                                  is_from_pl))) {
         LOG_WARN("failed to resolve const", K(ret));
       } else if (OB_FAIL(table_def.access_objs_.push_back(obj_param))) {

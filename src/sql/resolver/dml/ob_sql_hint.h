@@ -29,6 +29,13 @@ class ObSQLSessionInfo;
 struct PlanText;
 struct TableItem;
 
+enum class APQueryRoutePolicy {
+  OFF,
+  AUTO,
+  FORCE,
+  MAX
+};
+
 struct ObHints
 {
   ObHints () : stmt_id_(OB_INVALID_STMT_ID) {}
@@ -63,13 +70,15 @@ struct QbNames {
 };
 
 struct ObQueryHint {
-  ObQueryHint() { reset(); }
+  ObQueryHint(ObIAllocator &allocator);
   void reset();
 
   ObGlobalHint &get_global_hint() { return global_hint_; }
   const ObGlobalHint &get_global_hint() const { return global_hint_; }
   bool has_outline_data() const { return is_valid_outline_; }
   bool has_user_def_outline() const { return user_def_outline_; }
+  int get_ap_query_route_policy(const ObSQLSessionInfo *session,
+                                APQueryRoutePolicy &val) const;
 
   int set_outline_data_hints(const ObGlobalHint &global_hint,
                              const int64_t stmt_id,
@@ -150,7 +159,9 @@ struct ObQueryHint {
   { //6 space, align with 'Outputs & filters'
     return is_oneline ? " " : "\n      ";
   }
-  template <typename HintType>
+  template <typename HintType, typename std::enable_if<std::is_constructible<HintType, ObItemType>::value, bool>::type = true>
+  static int create_hint(ObIAllocator *allocator, ObItemType hint_type, HintType *&hint);
+  template <typename HintType, typename std::enable_if<std::is_constructible<HintType, common::ObIAllocator&, ObItemType>::value, bool>::type = true>
   static int create_hint(ObIAllocator *allocator, ObItemType hint_type, HintType *&hint);
   static int create_hint_table(ObIAllocator *allocator, ObTableInHint *&table);
   static int create_leading_table(ObIAllocator *allocator, ObLeadingTable *&table);
@@ -169,12 +180,12 @@ struct ObQueryHint {
   bool is_valid_outline_;
   bool user_def_outline_;
   int64_t outline_stmt_id_;
-  ObSEArray<ObHints, 8, common::ModulePageAllocator, true> qb_hints_;  // hints with qb name
-  ObSEArray<ObHints, 8, common::ModulePageAllocator, true> stmt_id_hints_; // hints without qb name, used before transform
-  ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> trans_list_; // transform hints from outline data, need keep order
-  ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> outline_trans_hints_; // tranform hints to generate outline data
-  ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> used_trans_hints_;
-  ObSEArray<QbNames, 8, common::ModulePageAllocator, true> stmt_id_map_;	//	stmt id -> qb name list, position is stmt id
+  ObSqlArray<ObHints> qb_hints_;  // hints with qb name
+  ObSqlArray<ObHints> stmt_id_hints_; // hints without qb name, used before transform
+  ObSqlArray<const ObHint*> trans_list_; // transform hints from outline data, need keep order
+  ObSqlArray<const ObHint*> outline_trans_hints_; // tranform hints to generate outline data
+  ObSqlArray<const ObHint*> used_trans_hints_;
+  ObSqlArray<QbNames> stmt_id_map_;	//	stmt id -> qb name list, position is stmt id
   hash::ObHashMap<ObString, int64_t, common::hash::NoPthreadDefendMode> qb_name_map_;	// qb name -> stmt id
   int64_t sel_start_id_;
   int64_t set_start_id_;
@@ -184,7 +195,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryHint);
 };
 
-template <typename HintType>
+template <typename HintType, typename std::enable_if<std::is_constructible<HintType, ObItemType>::value, bool>::type>
 int ObQueryHint::create_hint(ObIAllocator *allocator, ObItemType hint_type, HintType *&hint)
 {
   int ret = common::OB_SUCCESS;
@@ -202,10 +213,31 @@ int ObQueryHint::create_hint(ObIAllocator *allocator, ObItemType hint_type, Hint
   return ret;
 }
 
+template <typename HintType, typename std::enable_if<std::is_constructible<HintType, common::ObIAllocator&, ObItemType>::value, bool>::type>
+int ObQueryHint::create_hint(ObIAllocator *allocator, ObItemType hint_type, HintType *&hint)
+{
+  int ret = common::OB_SUCCESS;
+  hint = NULL;
+  void *ptr = NULL;
+  if (OB_ISNULL(allocator) || OB_UNLIKELY(T_INVALID == hint_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_LOG(WARN, "unexpected params",K(ret), K(allocator), K(hint_type));
+  } else if (OB_ISNULL(ptr = allocator->alloc(sizeof(HintType)))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    SQL_RESV_LOG(ERROR, "no more memory to create hint");
+  } else {
+    hint = new(ptr) HintType(*allocator, hint_type);
+  }
+  return ret;
+}
+
 // used in embedded hint transform
 struct ObStmtHint
 {
-  ObStmtHint() { reset(); }
+  ObStmtHint(ObIAllocator &allocator) : normal_hints_(allocator), other_opt_hints_(allocator)
+  {
+    reset();
+  }
   void reset();
   int assign(const ObStmtHint &other);
   bool inited() const { return NULL != query_hint_; }
@@ -236,8 +268,8 @@ struct ObStmtHint
   DECLARE_TO_STRING;
 
   const ObQueryHint *query_hint_;
-  ObSEArray<ObHint*, 8, common::ModulePageAllocator, true> normal_hints_;
-  ObSEArray<ObHint*, 8, common::ModulePageAllocator, true> other_opt_hints_;
+  ObSqlArray<ObHint*> normal_hints_;
+  ObSqlArray<ObHint*> other_opt_hints_;
 
 private:
   int64_t get_hint_count() const {
@@ -250,14 +282,15 @@ private:
 
 struct LogJoinHint
 {
-  LogJoinHint() : join_tables_(),
-                  local_methods_(0),
-                  dist_methods_(0),
-                  parallel_(ObGlobalHint::UNSET_PARALLEL),
-                  slave_mapping_(NULL),
-                  nl_material_(NULL),
-                  local_method_hints_(),
-                  dist_method_hints_() {}
+  LogJoinHint(common::ObIAllocator &allocator)
+    : join_tables_(),
+      local_methods_(0),
+      dist_methods_(0),
+      parallel_(ObGlobalHint::UNSET_PARALLEL),
+      slave_mapping_(NULL),
+      nl_material_(NULL),
+      local_method_hints_(allocator),
+      dist_method_hints_(allocator) {}
   int assign(const LogJoinHint &other);
   int add_join_hint(const ObJoinHint &join_hint);
   int init_log_join_hint();
@@ -277,29 +310,36 @@ struct LogJoinHint
   int64_t parallel_;
   const ObJoinHint *slave_mapping_;
   const ObJoinHint *nl_material_;
-  ObSEArray<const ObJoinHint*, 4, common::ModulePageAllocator, true> local_method_hints_;
-  ObSEArray<const ObJoinHint*, 4, common::ModulePageAllocator, true> dist_method_hints_;
+  ObSqlArray<const ObJoinHint*> local_method_hints_;
+  ObSqlArray<const ObJoinHint*> dist_method_hints_;
 };
 
 struct LogTableHint
 {
-  LogTableHint() :  table_(NULL),
-                    parallel_hint_(NULL),
-                    use_das_hint_(NULL),
-                    use_column_store_hint_(NULL),
-                    dynamic_sampling_hint_(NULL),
-                    is_ds_hint_conflict_(false) {}
-  LogTableHint(const TableItem *table) :  table_(table),
-                                          parallel_hint_(NULL),
-                                          use_das_hint_(NULL),
-                                          use_column_store_hint_(NULL),
-                                          dynamic_sampling_hint_(NULL),
-                                          is_ds_hint_conflict_(false) {}
+  LogTableHint(common::ObIAllocator &allocator)
+    : table_(NULL),
+      index_list_(allocator),
+      index_hints_(allocator),
+      vec_index_list_(allocator),
+      vec_index_hints_(allocator),
+      parallel_hint_(NULL),
+      use_das_hint_(NULL),
+      use_column_store_hint_(NULL),
+      index_merge_list_(allocator),
+      index_merge_hints_(allocator),
+      join_filter_hints_(allocator),
+      left_tables_(allocator),
+      dynamic_sampling_hint_(NULL),
+      is_ds_hint_conflict_(false) {}
   int assign(const LogTableHint &other);
+  int check_vec_hint_index_id(const ObDMLStmt &stmt,
+                              ObSqlSchemaGuard &schema_guard,
+                              const uint64_t hint_index_id,
+                              bool &is_valid);
   int init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &schema_guard);
   bool is_use_index_hint() const { return !index_hints_.empty() && NULL != index_hints_.at(0)
                                           && index_hints_.at(0)->is_use_index_hint(); }
-  bool is_valid() const { return !index_list_.empty() || NULL != parallel_hint_
+  bool is_valid() const { return !index_list_.empty() || !vec_index_list_.empty() || NULL != parallel_hint_
                                 || NULL != use_das_hint_ || !join_filter_hints_.empty()
                                 || dynamic_sampling_hint_ != NULL
                                 || NULL != use_column_store_hint_
@@ -315,7 +355,8 @@ struct LogTableHint
                            const ObJoinFilterHint *&hint) const;
   int get_join_filter_hints(const ObRelIds &left_tables,
                             bool part_join_filter,
-                            ObIArray<const ObJoinFilterHint*> &hints) const;
+                            ObIArray<const ObJoinFilterHint*> &hints,
+                            bool match_empty_tables = false) const;
   int add_join_filter_hint(const ObDMLStmt &stmt,
                            const ObQueryHint &query_hint,
                            const ObJoinFilterHint &hint);
@@ -325,92 +366,140 @@ struct LogTableHint
   TO_STRING_KV(K_(table), K_(index_list), K_(index_hints),
                K_(parallel_hint), K_(use_das_hint), K_(index_merge_list),
                K_(index_merge_hints), K_(join_filter_hints), K_(left_tables),
-               KPC(dynamic_sampling_hint_), K(is_ds_hint_conflict_));
+               KPC(dynamic_sampling_hint_), K(is_ds_hint_conflict_), K_(vec_index_list), K_(vec_index_hints));
 
   const TableItem *table_;
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> index_list_;
-  common::ObSEArray<const ObIndexHint*, 4, common::ModulePageAllocator, true> index_hints_;
+  ObSqlArray<uint64_t> index_list_;
+  ObSqlArray<const ObIndexHint*> index_hints_;
+  ObSqlArray<uint64_t> vec_index_list_;
+  ObSqlArray<const ObIndexHint*> vec_index_hints_;
   const ObTableParallelHint *parallel_hint_;
   const ObIndexHint *use_das_hint_;
   const ObIndexHint *use_column_store_hint_;
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> index_merge_list_;
-  common::ObSEArray<const ObIndexMergeHint*, 4, common::ModulePageAllocator, true> index_merge_hints_;
-  ObSEArray<const ObJoinFilterHint*, 1, common::ModulePageAllocator, true> join_filter_hints_;
-  ObSEArray<ObRelIds, 1, common::ModulePageAllocator, true> left_tables_; // left table relids in join filter hint
+  ObSqlArray<uint64_t> index_merge_list_;
+  ObSqlArray<const ObIndexMergeHint*> index_merge_hints_;
+  ObSqlArray<const ObJoinFilterHint*> join_filter_hints_;
+  ObSqlArray<ObRelIds> left_tables_; // left table relids in join filter hint
   const ObTableDynamicSamplingHint *dynamic_sampling_hint_;
   bool is_ds_hint_conflict_;
 };
 
 struct LeadingInfo {
-  TO_STRING_KV(K_(table_set),
-                 K_(left_table_set),
-                 K_(right_table_set));
+  LeadingInfo() :
+    left_info_(nullptr),
+    right_info_(nullptr)
+    {}
+
+  TO_STRING_KV(KP(this),
+               K_(table_set),
+               K_(left_table_set),
+               K_(right_table_set),
+               KP_(left_info),
+               KP_(right_info));
 
   ObRelIds table_set_;
   ObRelIds left_table_set_;
   ObRelIds right_table_set_;
+  LeadingInfo *left_info_;
+  LeadingInfo *right_info_;
+
+  DISALLOW_COPY_AND_ASSIGN(LeadingInfo);
 };
 
 struct JoinFilterPushdownHintInfo
 {
+  JoinFilterPushdownHintInfo(common::ObIAllocator &allocator)
+    : join_filter_hints_(allocator),
+      part_join_filter_hints_(allocator)
+  {}
   int check_use_join_filter(const ObDMLStmt &stmt,
                             const ObQueryHint &query_hint,
                             uint64_t filter_table_id,
                             bool part_join_filter,
                             bool &can_use,
                             const ObJoinFilterHint *&force_hint) const;
+  bool match_table(const ObQueryHint &query_hint,
+                   ObTableInHint table,
+                   const TableItem *table_item) const;
+  int check_use_join_filter_v2(const TableItem *table,
+                               const TableItem *view_tableitem,
+                               const ObQueryHint &query_hint,
+                               bool part_join_filter,
+                               bool &can_use,
+                               const ObJoinFilterHint *&force_hint) const;
   TO_STRING_KV(K_(filter_table_id),
                  K_(join_filter_hints),
                  K_(part_join_filter_hints));
 
   uint64_t filter_table_id_;
   bool config_disable_;
-  common::ObSEArray<const ObJoinFilterHint*, 4, common::ModulePageAllocator, true> join_filter_hints_;
-  common::ObSEArray<const ObJoinFilterHint*, 4, common::ModulePageAllocator, true> part_join_filter_hints_;
+  ObSqlArray<const ObJoinFilterHint*> join_filter_hints_;
+  ObSqlArray<const ObJoinFilterHint*> part_join_filter_hints_;
 };
 
 struct LogLeadingHint
 {
+  LogLeadingHint(common::ObIAllocator &allocator) :
+    leading_infos_(allocator),
+    top_leading_info_(NULL),
+    hint_(NULL) {}
+
   void reset() {
     leading_tables_.reuse();
     leading_infos_.reuse();
+    top_leading_info_ = NULL;
     hint_ = NULL;
   }
 
-  int init_leading_info(const ObDMLStmt &stmt,
+  int init_leading_info(ObIAllocator &allocator,
+                        const ObDMLStmt &stmt,
                         const ObQueryHint &query_hint,
                         const ObHint *hint);
-  int init_leading_info_from_leading_hint(const ObDMLStmt &stmt,
+  int init_leading_info_from_leading_hint(ObIAllocator &allocator,
+                                          const ObDMLStmt &stmt,
                                           const ObQueryHint &query_hint,
                                           const ObLeadingTable &cur_table,
-                                          ObRelIds& table_set);
-  int init_leading_info_from_ordered_hint(const ObDMLStmt &stmt);
-  int init_leading_info_from_table(const ObDMLStmt &stmt,
-                                   ObIArray<LeadingInfo> &leading_infos,
+                                          ObRelIds& table_set,
+                                          LeadingInfo *&leading_info);
+  int init_leading_info_from_ordered_hint(ObIAllocator &allocator,
+                                          const ObDMLStmt &stmt);
+  int init_leading_info_from_table(ObIAllocator &allocator,
+                                   const ObDMLStmt &stmt,
+                                   ObIArray<LeadingInfo *> &leading_infos,
                                    TableItem *table,
-                                   ObRelIds &table_set);
-  int try_init_leading_info_for_major_refresh_real_time_mview(const ObDMLStmt &stmt);
+                                   ObRelIds &table_set,
+                                   LeadingInfo *&leading_info);
+  int try_init_leading_info_for_major_refresh_real_time_mview(ObIAllocator &allocator,
+                                                              const ObDMLStmt &stmt);
+  int create_leading_info(ObIAllocator &allocator,
+                          LeadingInfo *&leading_info);
 
   TO_STRING_KV(K_(leading_tables),
                K_(leading_infos),
-               K_(hint));
+               K_(hint),
+               K_(top_leading_info));
 
   ObRelIds leading_tables_;
-  common::ObSEArray<LeadingInfo, 8, common::ModulePageAllocator, true> leading_infos_;
+  ObSqlArray<LeadingInfo *> leading_infos_;
+  LeadingInfo *top_leading_info_;
   const ObJoinOrderHint *hint_;
+
+  DISALLOW_COPY_AND_ASSIGN(LogLeadingHint);
 };
 
 struct ObLogPlanHint
 {
-  ObLogPlanHint() { reset(); }
+  ObLogPlanHint(common::ObIAllocator &allocator);
   void reset();
   int init_normal_hints(const ObIArray<ObHint*> &normal_hints, const ObQueryCtx &query_ctx);
 #ifndef OB_BUILD_SPM
-  int init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
+  int init_log_plan_hint(ObIAllocator &allocator,
+                         ObSqlSchemaGuard &schema_guard,
                          const ObDMLStmt &stmt,
                          const ObQueryHint &query_hint);
 #else
-  int init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
+  int init_log_plan_hint(ObIAllocator &allocator,
+                         ObSqlSchemaGuard &schema_guard,
                          const ObDMLStmt &stmt,
                          const ObQueryHint &query_hint,
                          const bool is_spm_evolution);
@@ -456,10 +545,22 @@ struct ObLogPlanHint
                             bool config_disable,
                             bool &can_use,
                             const ObJoinFilterHint *&force_hint) const;
+  int check_join_filter_pushdown_hints(ObIAllocator &allocator,
+                                       const ObQueryHint &query_hint,
+                                       uint64_t filter_table_id,
+                                       const ObRelIds &left_tables,
+                                       TableItem* view_tableitem,
+                                       TableItem* tableitem,
+                                       bool part_join_filter,
+                                       bool config_disable,
+                                       bool &can_use,
+                                       const ObJoinFilterHint *&force_hint) const;
+
   int get_pushdown_join_filter_hints(uint64_t filter_table_id,
                                      const ObRelIds &left_tables,
                                      bool config_disable,
-                                     JoinFilterPushdownHintInfo& info) const;
+                                     JoinFilterPushdownHintInfo& info,
+                                     bool left_table_empty_included = false) const;
   int check_use_das(uint64_t table_id, bool &force_das, bool &force_no_das) const;
   int check_use_column_store(uint64_t table_id, bool &force_column_store, bool &force_no_column_store) const;
   int check_use_skip_scan(uint64_t table_id,  uint64_t index_id,
@@ -515,6 +616,18 @@ struct ObLogPlanHint
   bool no_pushdown_distinct() const { return has_disable_hint(T_DISTINCT_PUSHDOWN); }
   bool use_distributed_dml() const { return has_enable_hint(T_USE_DISTRIBUTED_DML); }
   bool no_use_distributed_dml() const { return has_disable_hint(T_USE_DISTRIBUTED_DML); }
+  int init_hints_capacity(const ObDMLStmt &stmt,
+                          const ObQueryHint &query_hint,
+                          const ObIArray<ObHint*> &hints);
+  int extract_hint_table(const ObDMLStmt &stmt,
+                         const ObQueryHint &query_hint,
+                         const ObTableInHint &table,
+                         const bool basic_table_only,
+                         ObIArray<uint64_t> &table_ids);
+  int extract_hint_join_tables(const ObDMLStmt &stmt,
+                               const ObQueryHint &query_hint,
+                               const ObJoinHint &join_hint,
+                               ObIArray<ObRelIds> &join_tables);
 
   const ObWindowDistHint *get_window_dist() const;
 
@@ -527,10 +640,12 @@ struct ObLogPlanHint
   bool is_spm_evolution_;
 #endif
   LogLeadingHint join_order_;
-  common::ObSEArray<LogTableHint, 4, common::ModulePageAllocator, true> table_hints_;
-  common::ObSEArray<LogJoinHint, 8, common::ModulePageAllocator, true> join_hints_;
-  common::ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> normal_hints_;
+  ObSqlArray<LogTableHint, true> table_hints_;
+  ObSqlArray<LogJoinHint, true> join_hints_;
+  ObSqlArray<const ObHint*> normal_hints_;
   uint64_t optimizer_features_enable_version_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObLogPlanHint);
 };
 
 }

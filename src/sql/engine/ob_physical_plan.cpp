@@ -17,6 +17,7 @@
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "sql/monitor/ob_sql_plan.h"
 #include "sql/code_generator/ob_enable_rich_format_flags.h"
+#include "sql/optimizer/ob_route_policy.h"
 
 namespace oceanbase
 {
@@ -144,7 +145,13 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     px_node_count_(ObPxNodeHint::UNSET_PX_NODE_COUNT),
     px_worker_share_plan_enabled_(false),
     extend_sql_plan_monitor_metrics_(false),
-    optimizer_features_enable_version_(0)
+    optimizer_features_enable_version_(0),
+    route_to_column_replica_(false),
+    is_gtt_temp_table_v2_(false),
+    create_reason_(),
+    cache_node_id_(common::OB_INVALID_ID),
+    pcv_id_(common::OB_INVALID_ID),
+    plan_set_id_(common::OB_INVALID_ID)
 {
 }
 
@@ -192,6 +199,7 @@ void ObPhysicalPlan::reset()
   contain_table_scan_ = false;
   has_nested_sql_ = false;
   session_id_ = 0;
+  is_gtt_temp_table_v2_ = false;
   contain_oracle_trx_level_temporary_table_ = false;
   contain_oracle_session_level_temporary_table_ = false;
   gtt_session_scope_ids_.reset();
@@ -247,6 +255,7 @@ void ObPhysicalPlan::reset()
   is_batch_params_execute_ = false;
   mview_ids_.reset();
   enable_inc_direct_load_ = false;
+  enable_inc_major_ = false;
   enable_replace_ = false;
   insert_overwrite_ = false;
   online_sample_percent_ = 1.;
@@ -263,6 +272,7 @@ void ObPhysicalPlan::reset()
   px_worker_share_plan_enabled_ = false;
   extend_sql_plan_monitor_metrics_ = false;
   optimizer_features_enable_version_ = 0;
+  route_to_column_replica_ = false;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -922,7 +932,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     extend_sql_plan_monitor_metrics_,
                     is_online_gather_statistics_,
                     phy_hint_.table_lock_mode_,
-                    route_to_column_replica_);
+                    route_to_column_replica_,
+                    enable_inc_major_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -955,6 +966,23 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
       }
     }
     LOG_DEBUG("set table location", K(tl), K(tl.use_das()));
+  }
+
+  // Check if any table location has COLUMN_STORE_ONLY route policy
+  if (OB_SUCC(ret)) {
+    route_to_column_replica_ = false;
+    for (int64_t i = 0; !route_to_column_replica_ && i < table_locations_.count(); ++i) {
+      const ObTableLocation &tl = table_locations_.at(i);
+      if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(tl.get_loc_meta().route_policy_)) {
+        route_to_column_replica_ = true;
+      }
+    }
+    for (int64_t i = 0; !route_to_column_replica_ && i < das_table_locations_.count(); ++i) {
+      const ObTableLocation &tl = das_table_locations_.at(i);
+      if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(tl.get_loc_meta().route_policy_)) {
+        route_to_column_replica_ = true;
+      }
+    }
   }
 
   return ret;
@@ -1414,7 +1442,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
       // do nothing
     } else if (pc_ctx.tmp_table_names_.count() > 0) {
       LOG_DEBUG("set tmp table name str", K(pc_ctx.tmp_table_names_));
-      stat_.sessid_ = pc_ctx.sql_ctx_.session_info_->get_sid();\
+      stat_.sessid_ = pc_ctx.sql_ctx_.session_info_->get_sessid_for_table();\
       int64_t pos = 0;
       // fill temporary table name
       for (int64_t i = 0; OB_SUCC(ret) && i < pc_ctx.tmp_table_names_.count(); i++) {
@@ -1602,7 +1630,7 @@ int ObPhysicalPlan::set_feedback_info(ObExecContext &ctx)
         }
         plan_item->real_cardinality_ = feedback_node.output_row_count_;
         plan_item->real_cost_ = real_cost > 0 ? real_cost : 0;
-        plan_item->cpu_cost_ = feedback_node.db_time_;
+        plan_item->cpu_cost_ = feedback_node.cpu_time_;
         plan_item->io_cost_ = feedback_node.block_time_;
         plan_item->search_columns_ = feedback_node.worker_count_;
       }
@@ -1713,6 +1741,7 @@ void ObPhysicalPlan::update_adaptive_pc_info(const ObAuditRecordData &record,
     }
   }
 }
+
 
 } //namespace sql
 } //namespace oceanbase

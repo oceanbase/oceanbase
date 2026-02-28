@@ -247,6 +247,7 @@ int ObDatumRow::from_store_row(const storage::ObStoreRow &store_row)
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObDatumRow is not inited", K(ret), K(*this));
   } else if (OB_FAIL(reserve(store_row.row_val_.count_))) {
     STORAGE_LOG(WARN, "Failed to reserve datums", K(ret), K(store_row));
@@ -338,6 +339,24 @@ int ObDatumRow::shallow_copy(const ObDatumRow &other)
     read_flag_ = other.read_flag_;
     count_ = other.count_;
   }
+  return ret;
+}
+
+int ObDatumRow::shallow_copy_with_local_storage_datum(const ObDatumRow &other)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(copy_attributes_except_datums(other))) {
+    STORAGE_LOG(WARN, "Failed to copy attributes except datums", K(ret), K(other));
+  } else if (OB_ISNULL(storage_datums_) && get_capacity() < other.count_) {
+    STORAGE_LOG(WARN, "Failed to reserve memory for storage datums", K(ret), K(other));
+  } else {
+    trans_info_ = other.trans_info_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < count_; i++) {
+      storage_datums_[i] = other.storage_datums_[i];
+    }
+  }
+
   return ret;
 }
 

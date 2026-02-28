@@ -251,8 +251,6 @@ int ObStorageObjectHandle::sn_async_read(const ObStorageObjectReadInfo &read_inf
                                                                   backup_device,
                                                                   io_info.fd_))) {
         LOG_WARN("failed to get backup device and fd", K(ret), K(read_info));
-      } else {
-        io_info.flag_.set_sync();
       }
     }
 
@@ -359,16 +357,25 @@ int ObStorageObjectHandle::ss_update_object_type_rw_stat(const blocksstable::ObS
       LOG_WARN("local cache service is null", KR(ret), K(MTL_ID()));
     } else {
       ObIOFlag io_flag;
+      int64_t io_time_us = 0;
       if (OB_FAIL(io_handle_.get_io_flag(io_flag))) {
         LOG_WARN("fail to get io flag", KR(ret));
+      } else if (OB_TIMEOUT == result) {
+        int64_t tmp_real_wait_timeout_ms = 0;
+        io_handle_.get_remained_io_timeout_ms(tmp_real_wait_timeout_ms);
+        io_time_us = tmp_real_wait_timeout_ms * 1000L;
+      } else if (OB_FAIL(io_handle_.get_io_time_us(io_time_us))) {
+        LOG_WARN("fail to get io time", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else {
         ObIOMode mode = io_flag.get_mode();
         if (mode == ObIOMode::READ) {
           IGNORE_RETURN local_cache_service->update_object_type_stat(object_type, ObSSObjectTypeStatType::READ,
-            io_flag.is_sync(), result, delta_cnt, get_data_size());
+            io_handle_.is_limit_net_bandwidth_req(), result, delta_cnt, get_data_size(), io_time_us/*delta_time_us*/);
         } else if (mode == ObIOMode::WRITE) {
           IGNORE_RETURN local_cache_service->update_object_type_stat(object_type, ObSSObjectTypeStatType::WRITE,
-            io_flag.is_sync(), result, delta_cnt, get_data_size());
+            io_handle_.is_limit_net_bandwidth_req(), result, delta_cnt, get_data_size(), io_time_us/*delta_time_us*/);
         } else {
           LOG_WARN("unexpected io mode", KR(ret), K(mode));
         }
@@ -454,27 +461,44 @@ int ObStorageObjectHandle::wait()
 #endif
   }
 
-  print_slow_local_io_info(ret);
+  print_slow_io_info(ret);
 #ifdef OB_BUILD_SHARED_STORAGE
   IGNORE_RETURN ss_update_object_type_rw_stat(macro_id_.storage_object_type(), ret, 1/*delta_cnt*/);
 #endif
   return ret;
 }
 
-void ObStorageObjectHandle::print_slow_local_io_info(int ret_code) const
+void ObStorageObjectHandle::print_slow_io_info(int ret_code) const
 {
   int ret = OB_SUCCESS;
-  if ((OB_SUCCESS == ret_code) && (!io_handle_.is_empty()) && (!io_handle_.is_limit_net_bandwidth_req())) {
-    const int64_t MID_IO_TIME_US = 5 * 1000; // 5ms
-    const int64_t SLOW_IO_TIME_US = 10 * 1000; // 10ms
-    int tmp_ret = OB_SUCCESS;
+  if ((OB_SUCCESS == ret_code) && (!io_handle_.is_empty())) {
+    static const int64_t MID_REMOTE_IO_TIME_US = 500 * 1000L; // 500ms
+    static const int64_t SLOW_REMOTE_IO_TIME_US = 1 * 1000L * 1000L; // 1s
+    static const int64_t MID_LOCAL_IO_TIME_US = 5 * 1000L; // 5ms
+    static const int64_t SLOW_LOCAL_IO_TIME_US = 10 * 1000L; // 10ms
+    static const int64_t SLOW_CALLBACK_TIME_US = 10 * 1000L; // 10ms
     int64_t io_time_us = 0;
-    if (OB_TMP_FAIL(io_handle_.get_io_time_us(io_time_us))) {
-      LOG_WARN("fail to get io time", KR(tmp_ret));
-    } else if (OB_UNLIKELY(io_time_us > SLOW_IO_TIME_US)) {
-      LOG_INFO("slow local io", K(io_time_us), KPC(this));
-    } else if (OB_UNLIKELY(io_time_us > MID_IO_TIME_US)) {
-      LOG_TRACE("slow local io", K(io_time_us), KPC(this));
+    int64_t io_callback_time_us = 0;
+    bool has_slow_callback = false;
+    if (OB_FAIL(io_handle_.get_io_time_us(io_time_us))) {
+      LOG_WARN("fail to get io time", KR(ret));
+    } else if (OB_FAIL(io_handle_.get_io_callback_time_us(io_callback_time_us))) {
+      LOG_WARN("fail to get io callback time", KR(ret));
+    } else if (FALSE_IT(has_slow_callback = (io_callback_time_us > SLOW_CALLBACK_TIME_US))) {
+    } else if ((io_handle_.is_limit_net_bandwidth_req())) { // 1. remote io
+      if (io_time_us > SLOW_REMOTE_IO_TIME_US) {
+        LOG_INFO("slow remote io", K(io_time_us), K(has_slow_callback), KPC(this));
+      } else if (io_time_us > MID_REMOTE_IO_TIME_US) {
+        LOG_TRACE("slow remote io", K(io_time_us), K(has_slow_callback), KPC(this));
+      } else if (has_slow_callback) {
+        LOG_INFO("remote io has slow callback", K(io_time_us), K(has_slow_callback), KPC(this));
+      }
+    } else { // 2. local io
+      if (io_time_us > SLOW_LOCAL_IO_TIME_US) {
+        LOG_INFO("slow local io", K(io_time_us), K(has_slow_callback), KPC(this));
+      } else if (io_time_us > MID_LOCAL_IO_TIME_US) {
+        LOG_TRACE("slow local io", K(io_time_us), K(has_slow_callback), KPC(this));
+      }
     }
   }
 }

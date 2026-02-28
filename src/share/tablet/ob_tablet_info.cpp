@@ -48,7 +48,8 @@ ObTabletReplica::ObTabletReplica()
       data_size_(0),
       required_size_(0),
       report_scn_(0),
-      status_(SCN_STATUS_MAX)
+      status_(SCN_STATUS_MAX),
+      ddl_create_snapshot_(0)
 {
 }
 
@@ -68,6 +69,7 @@ void ObTabletReplica::reset()
   required_size_ = 0;
   report_scn_ = 0;
   status_ = SCN_STATUS_MAX;
+  ddl_create_snapshot_ = 0;
 }
 
 int ObTabletReplica::assign(const ObTabletReplica &other)
@@ -83,6 +85,7 @@ int ObTabletReplica::assign(const ObTabletReplica &other)
     required_size_ = other.required_size_;
     report_scn_ = other.report_scn_;
     status_ = other.status_;
+    ddl_create_snapshot_ = other.ddl_create_snapshot_;
   }
   return ret;
 }
@@ -139,7 +142,8 @@ bool ObTabletReplica::is_equal_for_report(const ObTabletReplica &other) const
       && server_ == other.server_
       && snapshot_version_ == other.snapshot_version_
       && data_size_ == other.data_size_
-      && required_size_ == other.required_size_) {
+      && required_size_ == other.required_size_
+      && ddl_create_snapshot_ == other.ddl_create_snapshot_) {
     is_equal = true;
   }
   return is_equal;

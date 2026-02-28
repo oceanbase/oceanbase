@@ -41,6 +41,7 @@ public:
       opt_tenant_ids_(),
       opt_tablet_id_(),
       opt_ls_id_(share::ObLSID::INVALID_LS_ID),
+      opt_table_id_(0),
       rebuild_column_group_(false) {}
   ObFreezeStmt(common::ObIAllocator *name_pool)
     : ObSystemCmdStmt(name_pool, stmt::T_FREEZE),
@@ -50,6 +51,7 @@ public:
       opt_tenant_ids_(),
       opt_tablet_id_(),
       opt_ls_id_(share::ObLSID::INVALID_LS_ID),
+      opt_table_id_(0),
       rebuild_column_group_(false) {}
   virtual ~ObFreezeStmt() {}
 
@@ -68,13 +70,14 @@ public:
   inline common::ObSArray<uint64_t> &get_tenant_ids() { return opt_tenant_ids_; }
   inline common::ObZone &get_zone() { return opt_zone_; }
   inline common::ObTabletID &get_tablet_id() { return opt_tablet_id_; }
+  inline uint64_t &get_table_id() { return opt_table_id_; }
   inline int64_t &get_ls_id() { return opt_ls_id_; }
   inline int push_server(const common::ObAddr& server) {
     return opt_server_list_.push_back(server);
   }
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(major_freeze), K(freeze_all_flag_),
-               K(opt_server_list_), K(opt_tenant_ids_), K(opt_tablet_id_), K(opt_ls_id_));
+               K(opt_server_list_), K(opt_tenant_ids_), K(opt_tablet_id_), K(opt_ls_id_), K(opt_table_id_), K(rebuild_column_group_));
 private:
   bool major_freeze_;
   // for major_freeze, it is ignore server list
@@ -91,6 +94,7 @@ private:
   common::ObTabletID opt_tablet_id_;
   int64_t opt_ls_id_;
   // for major_freeze only
+  uint64_t opt_table_id_;
   bool rebuild_column_group_;
 };
 
@@ -728,24 +732,6 @@ private:
   obrpc::ObUpgradeJobArg rpc_arg_;
 };
 
-class ObLoadTimeZoneInfoStmt : public ObSystemCmdStmt
-{
-public:
-  ObLoadTimeZoneInfoStmt() : ObSystemCmdStmt(stmt::T_LOAD_TIME_ZONE_INFO),
-                                tenant_id_(OB_INVALID_TENANT_ID), path_()
-  { }
-  virtual ~ObLoadTimeZoneInfoStmt() {}
-  void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
-  uint64_t get_tenant_id() { return tenant_id_; }
-  ObString get_path() const { return path_; }
-  void set_path(ObString path) { path_ = path; }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id));
-
-private:
-  uint64_t tenant_id_;
-  ObString path_;
-};
-
 class ObCancelTaskStmt : public ObSystemCmdStmt
 {
 public:
@@ -925,6 +911,48 @@ private:
   bool enable_;
   uint64_t tenant_id_;
   common::ObArray<uint64_t> archive_tenant_ids_;
+};
+
+class ObBackupValidateStmt : public ObSystemCmdStmt
+{
+public:
+  ObBackupValidateStmt()
+    : ObSystemCmdStmt(stmt::T_BACKUP_VALIDATE),
+      tenant_id_(OB_INVALID_ID),
+      validate_type_(),
+      set_or_piece_ids_(),
+      validate_level_(),
+      path_(),
+      description_(),
+      execute_tenant_ids_()
+  {
+  }
+  virtual ~ObBackupValidateStmt() {}
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  const share::ObBackupValidateType &get_validate_type() const { return validate_type_; }
+  const common::ObSArray<uint64_t> &get_set_or_piece_ids() const { return set_or_piece_ids_; }
+  const share::ObBackupValidateLevel &get_validate_level() const { return validate_level_; }
+  const share::ObBackupPathString &get_backup_dest() const { return path_; }
+  const share::ObBackupDescription &get_backup_description() const { return description_; }
+  const common::ObSArray<uint64_t> &get_execute_tenant_ids() const { return execute_tenant_ids_; }
+  int set_param(
+      const uint64_t tenant_id,
+      const uint64_t validate_type_value,
+      const common::ObSArray<uint64_t> &set_or_piece_ids,
+      const share::ObBackupValidateLevel validate_level,
+      const share::ObBackupPathString &path,
+      const share::ObBackupDescription &description,
+      const common::ObSArray<uint64_t> &execute_tenant_ids);
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(validate_type), K_(set_or_piece_ids),
+      K_(validate_level), K_(path), K_(description), K_(execute_tenant_ids));
+private:
+  uint64_t tenant_id_;
+  share::ObBackupValidateType validate_type_;
+  common::ObSArray<uint64_t> set_or_piece_ids_;
+  share::ObBackupValidateLevel validate_level_;
+  share::ObBackupPathString path_;
+  share::ObBackupDescription description_;
+  common::ObSArray<uint64_t> execute_tenant_ids_;
 };
 
 class ObBackupDatabaseStmt : public ObSystemCmdStmt
@@ -1387,7 +1415,7 @@ public:
   {
     int ret = common::OB_SUCCESS;
 
-    if (type < 0 || type >= obrpc::ObTTLRequestArg::TTL_MOVE_TYPE) {
+    if (type < 0 || type >= obrpc::ObTTLRequestArg::TTL_INVALID_TYPE) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid args", K(type));
     } else {

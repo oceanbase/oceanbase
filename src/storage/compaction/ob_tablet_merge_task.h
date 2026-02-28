@@ -66,14 +66,15 @@ struct ObMergeParameter {
   {
     return nullptr != mview_merge_param_;
   }
+  ObMergeType get_merge_type() const;
   bool is_delete_insert_merge() const;
   int get_rowid_range_by_scn_range(const share::ObScnRange &scn_range, const blocksstable::ObDatumRange *&rowid_range) const;
   bool is_ha_compeleted() const;
+  const ObVersionRange &get_merge_version_range() const;
   bool is_empty_table(const ObITable &table) const;
 
   const ObStaticMergeParam &static_param_;
   /* rest variables are different for MergeTask */
-  ObVersionRange merge_version_range_; // modify for different merge_type
   blocksstable::ObDatumRange merge_range_; // rowkey_range
   share::ObScnRange *sstable_scn_range_array_; // to distinguish which major/inc major each merge_rowid_range corresponds to
   blocksstable::ObDatumRange *merge_rowid_range_array_; // each major/inc major a range

@@ -696,6 +696,7 @@ const char *const OB_HIDDEN_LINE_NUMBER_COLUMN_NAME = "__line_number"; // used f
 // hidden rowid name
 const char *const OB_HIDDEN_ROWID_COLUMN_NAME = "__ob_rowid";
 const int32_t OB_HIDDEN_ROWID_COLUMN_LENGTH = 16;
+const char *const OB_ORA_ROWSCN_STR = "ORA_ROWSCN";
 
 const char *const OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME = "ROWID";
 const int32_t OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME_LENGTH = 5;
@@ -782,9 +783,11 @@ const int64_t OB_INNER_TABLE_DEFAULT_KEY_LENTH = 1024;
 const int64_t OB_INNER_TABLE_DEFAULT_VALUE_LENTH = 4096;
 const int64_t OB_INNER_TABLE_BACKUP_TYPE_LENTH = 64;
 const int64_t OB_DEFAULT_STATUS_LENTH = 64;
+const int64_t OB_DEFAULT_LEVEL_LENGTH = 64;
 const int64_t OB_DEFAULT_LOG_INFO_LENGTH = 64;
 const int64_t OB_DEFAULT_OUTPUT_DEVICE_TYPE_LENTH = 64;
 const int64_t OB_INNER_TABLE_BACKUP_CLEAN_TYPE_LENGTH = 64;
+const int64_t OB_INNER_TABLE_BACKUP_VALIDATE_TYPE_LENGTH = 64;
 const int64_t OB_INNER_TABLE_BACKUP_CLEAN_PARAMETER_LENGTH = 256;
 const int64_t OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH = 64;
 const int64_t OB_INNER_TABLE_BACKUP_LEVEL_LENGTH = 64;
@@ -985,8 +988,9 @@ const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 30L * 60L * 1000L * 1000
 const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 7L * 24L * 60L * 60L * 1000L * 1000L; // 7days
 #endif
 
-const int64_t OB_MAX_PARTITION_SHARDING_LENGTH = 10;
+const int64_t OB_MAX_PARTITION_SHARDING_LENGTH = 20;
 
+const int64_t OB_MAX_TABLEGROUP_SCOPE_LENGTH = 20;
 // The default user name of the standby database to log in to the main database
 const char *const OB_STANDBY_USER_NAME = "__oceanbase_inner_standby_user";
 
@@ -2106,6 +2110,7 @@ const char *const OB_SSL_SM_SIGN_CERT_FILE = "wallet/SS.cert.pem";
 const char *const OB_SSL_SM_SIGN_KEY_FILE  = "wallet/SS.key.pem";
 const char *const OB_SSL_SM_ENC_CERT_FILE  = "wallet/SE.cert.pem";
 const char *const OB_SSL_SM_ENC_KEY_FILE   = "wallet/SE.key.pem";
+const char *const OB_SSL_REST_CA_FILE = "wallet/rest_ca_trust.pem";
 
 const int64_t MAX_CLUSTER_IDX_VALUE = 32;
 
@@ -2725,6 +2730,13 @@ OB_INLINE char* ob_get_origin_thread_name()
 {
   thread_local char ori_tname[oceanbase::OB_THREAD_NAME_BUF_LEN] = {0};
   return ori_tname;
+}
+// used to control how to generate and get schema version
+// relyed by ddl_helper
+OB_INLINE bool& ob_batch_generate_schema_version()
+{
+  thread_local bool batch_generate_schema_version = false;
+  return batch_generate_schema_version;
 }
 
 OB_INLINE char* ob_get_extended_thread_name()

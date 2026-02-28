@@ -24,7 +24,7 @@ namespace lib
 {
 class ObMutex {
 public:
-  explicit ObMutex(uint32_t latch_id = common::ObLatchIds::DEFAULT_MUTEX)
+  explicit ObMutex(uint32_t latch_id)
       : latch_(), latch_id_(latch_id)
   {
   }

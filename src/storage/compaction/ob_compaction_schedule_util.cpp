@@ -113,6 +113,27 @@ void ObBasicMergeScheduler::update_merged_version(const int64_t merged_version)
    merged_version_ = merged_version;
 }
 
+int ObBasicMergeScheduler::update_merge_info(
+    const share::ObGlobalMergeInfo::MergeMode merge_mode,
+    const share::ObZoneMergeInfo::MergeStatus merge_status,
+    const int64_t merge_start_time)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(merge_mode < share::ObGlobalMergeInfo::MERGE_MODE_TENANT
+               || merge_mode >= share::ObGlobalMergeInfo::MERGE_MODE_MAX
+               || merge_status < share::ObZoneMergeInfo::MERGE_STATUS_IDLE
+               || merge_status >= share::ObZoneMergeInfo::MERGE_STATUS_MAX
+               || merge_start_time < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid merge mode, status or start time", K(ret), K(merge_mode), K(merge_status), K(merge_start_time));
+  } else {
+    merge_info_.merge_mode_ = merge_mode;
+    merge_info_.merge_status_ = merge_status;
+    merge_info_.merge_start_time_ = merge_start_time;
+  }
+  return ret;
+}
+
 void ObBasicMergeScheduler::try_finish_merge_progress(const int64_t merge_version)
 {
   int ret = OB_SUCCESS;

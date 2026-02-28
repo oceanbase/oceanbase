@@ -367,7 +367,6 @@ int ObExprKeyValue::calc_key_value_expr_vector(const ObExpr &expr,
           }
         }
       }
-      eval_flags.set(i);
     }
   }
   return ret;

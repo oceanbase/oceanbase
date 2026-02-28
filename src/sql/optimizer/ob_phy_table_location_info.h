@@ -17,6 +17,7 @@
 #include "sql/ob_sql_define.h"
 #include "sql/optimizer/ob_route_policy.h"
 #include "sql/optimizer/file_prune/ob_lake_table_fwd.h"
+#include "sql/resolver/ob_sql_array.h"
 namespace oceanbase
 {
 namespace sql
@@ -27,11 +28,9 @@ class ObOptTabletLoc
   OB_UNIS_VERSION(1);
   //friend class ObPartitionReplicaLocation;
 public:
-  typedef common::ObSEArray<ObRoutePolicy::CandidateReplica,
-                            common::OB_MAX_MEMBER_NUMBER, common::ModulePageAllocator,
-                            true> ObSmartReplicaLocationArray;
+  typedef ObSqlArray<ObRoutePolicy::CandidateReplica> ObSmartReplicaLocationArray;
 
-  ObOptTabletLoc();
+  ObOptTabletLoc(common::ObIAllocator &allocator);
   virtual ~ObOptTabletLoc();
 
   void reset();
@@ -86,7 +85,7 @@ private:
 class ObCandiTabletLoc
 {
 public:
-  ObCandiTabletLoc();
+  ObCandiTabletLoc(common::ObIAllocator &allocator);
   ~ObCandiTabletLoc();
 
   void reset();
@@ -123,20 +122,19 @@ private:
   //对所有partition求完交集后的结果，是最终选定的replica的index
   int64_t selected_replica_idx_;
   //对当前partition的所有副本进行优先级判断后，将最高优先级的replica index存到这里
-  common::ObSEArray<int64_t, 2, common::ModulePageAllocator, true> priority_replica_idxs_;
-  common::ObSEArray<ObIOptLakeTableFile*, 1, common::ModulePageAllocator, true> files_;
-  // ObLakeTablePartInfo lake_table_part_info_;
+  ObSqlArray<int64_t> priority_replica_idxs_;
+  ObSqlArray<ObIOptLakeTableFile*> files_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCandiTabletLoc);
 };
 
 typedef common::ObIArray<ObCandiTabletLoc> ObCandiTabletLocIArray;
-typedef common::ObSEArray<ObCandiTabletLoc, 2, common::ModulePageAllocator, true> ObCandiTabletLocSEArray;
+typedef ObSqlArray<ObCandiTabletLoc, true> ObCandiTabletLocArray;
 
 class ObCandiTableLoc
 {
 public:
-  ObCandiTableLoc();
+  ObCandiTableLoc(common::ObIAllocator &allocator);
   virtual ~ObCandiTableLoc();
 public:
   void reset();
@@ -185,7 +183,7 @@ private:
   /* 用于获取实际的物理表ID */
   uint64_t ref_table_id_;
   /* locations */
-  ObCandiTabletLocSEArray candi_tablet_locs_;
+  ObCandiTabletLocArray candi_tablet_locs_;
   //复制表类型, 如果是复制表且未被更改则可以在分配exg算子时挑选更合适的副本
   ObDuplicateType duplicate_type_;
   // for lake table

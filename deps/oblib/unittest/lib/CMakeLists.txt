@@ -134,6 +134,8 @@ oblib_addtest(utility/test_fast_convert.cpp)
 oblib_addtest(utility/test_defer.cpp)
 oblib_addtest(hash/test_ob_ref_mgr.cpp)
 oblib_addtest(compress/test_compressor.cpp)
+oblib_addtest(compress/test_snappy_1_2_2_compressor.cpp)
+oblib_addtest(compress/test_arrow_version.cpp)
 
 ##codec
 oblib_addtest(codec/test_composite.cpp)
@@ -142,6 +144,9 @@ oblib_addtest(codec/test_bitpacking.cpp)
 oblib_addtest(codec/test_codec_performance.cpp)
 oblib_addtest(codec/test_bitpacking_performance.cpp)
 oblib_addtest(compress/test_compressor_pool.cpp)
+
+# mysqlclient
+oblib_addtest(mysqlclient/test_connection_pool_deadlock.cpp)
 
 if (NOT OB_BUILD_OPENSOURCE)
   add_subdirectory(allocator_new)

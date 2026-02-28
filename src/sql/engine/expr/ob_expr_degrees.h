@@ -28,8 +28,12 @@ public:
   virtual int calc_result_type1(ObExprResType &type,
                                 ObExprResType &radian,
                                 common::ObExprTypeCtx &type_ctx) const;
+  static int check_overflow(const double res, const double val);
   static int calc_degrees_expr(const ObExpr &expr, ObEvalCtx &ctx,
                                ObDatum &res_datum);
+  template <typename ArgVec, typename ResVec>
+  static int vector_degrees(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int calc_degrees_vector_expr(VECTOR_EVAL_FUNC_ARG_DECL);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:

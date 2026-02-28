@@ -449,8 +449,8 @@ bool ObMVChecker::check_mlog_table_valid(const share::schema::ObTableSchema *tab
     LOG_WARN("failed to get table rowkey ids", K(ret), KPC(table_schema));
   }
   for (int i = 0; is_valid && OB_SUCC(ret) && i < unique_col_ids.count(); ++i) {
-    is_valid = NULL != mlog_schema.get_column_schema(unique_col_ids.at(i))
-               || OB_HIDDEN_PK_INCREMENT_COLUMN_ID == unique_col_ids.at(i);
+    mlog_cid = ObTableSchema::gen_mlog_col_id_from_ref_col_id(unique_col_ids.at(i));
+    is_valid = NULL != mlog_schema.get_column_schema(mlog_cid);
     if (!is_valid) {
       ObString column_name;
       bool column_exist = false;
@@ -1209,13 +1209,10 @@ int ObMVChecker::collect_tables_primary_key_for_select(const ObSelectStmt &stmt,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column expr is null", K(ret), KPC(table_item), K(pk_ids.at(j)), KPC(col_item));
         } else {
-          col_expr->set_ref_id(table_item->table_id_, col_schema->get_column_id());
+          col_expr->set_table_item_info(*table_item);
+          col_expr->set_column_id(col_schema->get_column_id());
+          col_expr->set_column_name(col_schema->get_column_name_str());
           col_expr->get_relation_ids().reuse();
-          col_expr->set_column_attr(table_item->get_table_name(), col_schema->get_column_name_str());
-          col_expr->set_database_name(table_item->database_name_);
-          if (!table_item->alias_name_.empty()) {
-            col_expr->set_table_alias_name();
-          }
           if (OB_FAIL(col_expr->formalize(session_info_))) {
             LOG_WARN("formalize col_expr failed", K(ret));
           }

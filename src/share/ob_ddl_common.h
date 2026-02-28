@@ -539,6 +539,7 @@ static inline bool is_direct_load_retry_err(const int ret)
     || ret == OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH
     || ret == OB_ERR_REMOTE_SCHEMA_NOT_FULL
     || ret == OB_SQL_RETRY_SPM
+    || ret == OB_AP_QUERY_NEED_RETRY
     ;
 }
 
@@ -1169,6 +1170,7 @@ public:
       const ObColumnNameMap *col_name_map,
       const ObString &partition_names,
       const bool is_alter_clustering_key_tbl_partition_by,
+      const ObString &filter_sql_str,
       ObSqlString &sql_string);
 
   static int generate_build_mview_replica_sql(
@@ -1562,14 +1564,6 @@ public:
     rootserver::ObDDLTask &task,
     obrpc::ObCreateIndexArg &create_index_arg,
     ObDDLType &ddl_type);
-
-  static int get_domain_index_share_table_snapshot(
-    const ObTableSchema *table_schema,
-    const ObTableSchema *index_schema,
-    const int64_t task_id,
-    const obrpc::ObCreateIndexArg &create_index_arg,
-    int64_t &fts_snapshot_version);
-
   static int write_defensive_and_obtain_snapshot(
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
@@ -1888,12 +1882,14 @@ public:
   }
 
   void set_data_incomplete(const bool is_data_incomplete) { is_data_incomplete_ = is_data_incomplete; }
+  void set_reuse_macro_block(const bool can_reuse_macro_block) { can_reuse_macro_block_ = can_reuse_macro_block; }
   void set_can_not_execute_ss_minor(const bool can_not_execute_ss_minor) { cant_execute_ss_minor_ = can_not_execute_ss_minor; }
   void set_can_not_gc_data_blks(const bool can_not_gc_data_blks) { cant_gc_macro_blks_ = can_not_gc_data_blks; }
   void set_split_src_tablet_id(const ObTabletID &split_src_tablet_id) { split_src_tablet_id_ = split_src_tablet_id; }
   void set_split_start_scn(const share::SCN &split_scn) { split_start_scn_ = split_scn; }
 
   bool is_data_incomplete() const { return is_data_incomplete_; }
+  bool can_reuse_macro_block() const { return can_reuse_macro_block_; }
   bool can_not_execute_ss_minor() const { return cant_execute_ss_minor_; }
   bool can_not_gc_macro_blks() const { return cant_gc_macro_blks_; }
   const ObTabletID &get_split_src_tablet_id() const { return split_src_tablet_id_; }

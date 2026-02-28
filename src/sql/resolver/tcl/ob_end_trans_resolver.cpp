@@ -34,7 +34,7 @@ int ObEndTransResolver::resolve(const ParseNode &parse_node)
   int ret = OB_SUCCESS;
   ObEndTransStmt *end_stmt = NULL;
   if (OB_LIKELY((T_COMMIT == parse_node.type_ || T_ROLLBACK == parse_node.type_)
-                && parse_node.num_child_ == 1)) {
+                && parse_node.num_child_ >= 1)) {
     if (OB_UNLIKELY(NULL == (end_stmt = create_stmt<ObEndTransStmt>()))) {
       ret = OB_SQL_RESOLVER_NO_MEMORY;
       LOG_WARN("failed to create select stmt");

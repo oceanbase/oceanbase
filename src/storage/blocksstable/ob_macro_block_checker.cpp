@@ -263,13 +263,13 @@ int ObSSTableMacroBlockChecker::check_logical_checksum(
         STORAGE_LOG(ERROR, "micro block data is corrupted", K(ret), K(raw_micro_data));
       } else if (OB_FAIL(reader.decrypt_and_decompress_data(sstable_header,
           raw_micro_data.get_buf(), raw_micro_data.get_buf_size(), false,
-          micro_data.get_buf(), micro_data.get_buf_size(), is_compressed))) {
+          micro_data, is_compressed))) {
         STORAGE_LOG(ERROR, "fail to get micro block data", K(ret), K(sstable_header),
             K(raw_micro_data));
       } else if (OB_UNLIKELY(!micro_data.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "invalid micro block data", K(ret), K(micro_data));
-      } else if (OB_FAIL(micro_reader_helper.get_reader(micro_data.get_store_type(), micro_reader))) {
+      } else if (OB_FAIL(micro_reader_helper.get_reader(*micro_data.get_micro_header(), micro_reader))) {
         STORAGE_LOG(WARN, "fail to get micro reader by store type",
             K(ret), K(micro_data.get_store_type()));
       } else if (OB_FAIL(micro_reader->init(micro_data, nullptr))) {

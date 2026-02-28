@@ -24,7 +24,7 @@ namespace share
 ObTabletLocationRefreshMgr::ObTabletLocationRefreshMgr(
    const uint64_t tenant_id,
    const ObTransferTaskID &base_task_id)
-  : mutex_(),
+  : mutex_(common::ObLatchIds::OB_TABLET_LOCATION_REFRESH_MGR_MUTEX),
     tenant_id_(tenant_id),
     base_task_id_(base_task_id),
     tablet_ids_(),
@@ -263,7 +263,7 @@ ObTabletLocationRefreshService::ObTabletLocationRefreshService()
     schema_service_(NULL),
     sql_proxy_(NULL),
     allocator_(SET_USE_500("TbltReSrv")),
-    rwlock_(),
+    rwlock_(common::ObLatchIds::OB_TABLET_LOCATION_REFRESH_SERVICE_RWLOCK),
     tenant_mgr_map_()
 {
 }

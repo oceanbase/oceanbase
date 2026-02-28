@@ -667,6 +667,8 @@ int ObLobTabletDmlHelper::is_support_ext_info_log(ObDMLRunningCtx &run_ctx, bool
 
   if (!run_ctx.dml_param_.is_total_quantity_log_ || is_sys_table(run_ctx.relative_table_.get_table_id())) {
     is_support = false;
+  } else if (run_ctx.relative_table_.is_vector_index()) {
+    is_support = false;
   } else if (OB_FAIL(is_disable_version_(is_disable))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (is_disable) {

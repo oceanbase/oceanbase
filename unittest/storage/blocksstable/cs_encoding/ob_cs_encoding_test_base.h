@@ -53,31 +53,51 @@ public:
   void reuse();
 
 protected:
+  template<bool IS_MULTI_VERSION>
   int init_cs_decoder(const ObMicroBlockHeader *header,
                       const ObMicroBlockDesc &desc,
                       ObMicroBlockData &full_transformed_data,
-                      ObMicroBlockCSDecoder &decoder);
-  int build_micro_block_desc(ObMicroBlockCSEncoder &encoder, ObMicroBlockDesc &desc, ObMicroBlockHeader* &header);
-  int check_decode_vector(ObMicroBlockCSDecoder &decoder,
+                      ObMicroBlockCSDecoder<IS_MULTI_VERSION> &decoder);
+  template<bool IS_MULTI_VERSION>
+  int build_micro_block_desc_in_unittest(ObMicroBlockCSEncoder<IS_MULTI_VERSION> &encoder, ObMicroBlockDesc &desc, ObMicroBlockHeader* &header);
+  template<bool IS_MULTI_VERSION>
+  int check_decode_vector(ObMicroBlockCSDecoder<IS_MULTI_VERSION> &decoder,
                           const ObDatumRow *row_arr,
                           const int64_t row_cnt,
                           const VectorFormat vector_format);
+  template<bool IS_MULTI_VERSION = false>
   int full_transform_check_row(const ObMicroBlockHeader *header,
                                const ObMicroBlockDesc &desc,
                                const ObDatumRow *row_arr,
                                const int64_t row_cnt,
                                const bool check_by_get = false);
- int part_transform_check_row(const ObMicroBlockHeader *header,
-                              const ObMicroBlockDesc &desc,
-                              const ObDatumRow *row_arr,
-                              const int64_t row_cnt,
-                              const bool check_by_get = false);
- int check_get_row_count(const ObMicroBlockHeader *header,
-                         const ObMicroBlockDesc &desc,
-                         const int64_t *expected_row_cnt_arr,
-                         const int64_t col_cnt,
-                         const bool contains_null);
-
+  template <bool IS_MULTI_VERSION = false>
+  int part_transform_check_row(const ObMicroBlockHeader *header,
+                               const ObMicroBlockDesc &desc,
+                               const ObDatumRow *row_arr,
+                               const int64_t row_cnt,
+                               const bool check_by_get = false);
+  template <bool IS_MULTI_VERSION = false>
+  int check_get_row_count(const ObMicroBlockHeader *header,
+                          const ObMicroBlockDesc &desc,
+                          const int64_t *expected_row_cnt_arr,
+                          const int64_t col_cnt,
+                          const bool contains_null);
+  int check_multi_version(const ObDatumRow &row_arr, const ObDatumRow &row);
+  template<bool IS_MULTI_VERSION>
+  int build_block(
+    ObMicroBlockCSEncoder<IS_MULTI_VERSION> &encoder,
+    char *&buf,
+    int64_t &size)
+  {
+    int ret = OB_SUCCESS;
+    ObMicroBlockDesc micro_block_desc;
+    if (OB_SUCC(encoder.build_micro_block_desc_in_unittest(micro_block_desc))) {
+      buf = encoder.data_buffer_.data();
+      size = encoder.data_buffer_.length();
+    }
+    return ret;
+  }
 protected:
   ObRowGenerate row_generate_;
   ObMicroBlockEncodingCtx ctx_;
@@ -193,27 +213,24 @@ void ObCSEncodingTestBase::reuse()
   ctx_.column_encodings_ = nullptr;
 }
 
-int ObCSEncodingTestBase::build_micro_block_desc(ObMicroBlockCSEncoder &encoder, ObMicroBlockDesc &desc, ObMicroBlockHeader* &header)
+template<bool IS_MULTI_VERSION>
+int ObCSEncodingTestBase::build_micro_block_desc_in_unittest(ObMicroBlockCSEncoder<IS_MULTI_VERSION> &encoder, ObMicroBlockDesc &desc, ObMicroBlockHeader* &header)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(encoder.build_micro_block_desc(desc))) {
+  if (OB_FAIL(encoder.build_micro_block_desc_in_unittest(desc))) {
     LOG_WARN("fail to build_micro_block_desc", K(ret));
   } else {
     header = const_cast<ObMicroBlockHeader *>(desc.header_);
-    header->data_length_ = desc.buf_size_;
-    header->data_zlength_ = desc.buf_size_;
-    header->data_checksum_ = ob_crc64_sse42(0, desc.buf_, desc.buf_size_);
-    header->original_length_ = desc.original_size_;
-    header->set_header_checksum();
   }
 
   return ret;
 }
 
+template<bool IS_MULTI_VERSION>
 int ObCSEncodingTestBase::init_cs_decoder(const ObMicroBlockHeader *header,
                                           const ObMicroBlockDesc &desc,
                                           ObMicroBlockData &full_transformed_data,
-                                          ObMicroBlockCSDecoder &decoder)
+                                          ObMicroBlockCSDecoder<IS_MULTI_VERSION> &decoder)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -232,16 +249,15 @@ int ObCSEncodingTestBase::init_cs_decoder(const ObMicroBlockHeader *header,
   } else if (buf_len != pos) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pos is unexpected", K(ret), K(buf_len), K(pos));
-  } else {
-    full_transformed_data.buf_ = buf;
-    full_transformed_data.size_ = buf_len;
-    if (OB_FAIL(decoder.init(full_transformed_data, read_info_))) {
-      LOG_WARN("fail to init decoder", K(ret));
-    }
+  } else if (OB_FAIL(full_transformed_data.init_with_prepare_micro_header(buf, buf_len))) {
+    LOG_WARN("fail to prepare micro header", K(ret), K(full_transformed_data));
+  } else if (OB_FAIL(decoder.init(full_transformed_data, read_info_))) {
+    LOG_WARN("fail to init decoder", K(ret));
   }
   return ret;
 }
 
+template<bool IS_MULTI_VERSION>
 int ObCSEncodingTestBase::full_transform_check_row(const ObMicroBlockHeader *header,
                                                    const ObMicroBlockDesc &desc,
                                                    const ObDatumRow *row_arr,
@@ -250,7 +266,7 @@ int ObCSEncodingTestBase::full_transform_check_row(const ObMicroBlockHeader *hea
 {
   int ret = OB_SUCCESS;
   ObMicroBlockData full_transformed_data;
-  ObMicroBlockCSDecoder decoder;
+  ObMicroBlockCSDecoder<IS_MULTI_VERSION> decoder;
   if (OB_FAIL(init_cs_decoder(header, desc, full_transformed_data, decoder))) {
     LOG_WARN("fail to init cs_decoder", KR(ret));
   } else {
@@ -268,6 +284,9 @@ int ObCSEncodingTestBase::full_transform_check_row(const ObMicroBlockHeader *hea
           ret = OB_ERR_UNEXPECTED;
           LOG_INFO("not equal row: ", K(ret), K(i), K(j), K(row_arr[i].storage_datums_[j]), K(row.storage_datums_[j]));
         }
+        if (IS_MULTI_VERSION) {
+          ret = check_multi_version(row_arr[i], row);
+       }
       }
     }
     if (OB_FAIL(ret)) {
@@ -282,7 +301,7 @@ int ObCSEncodingTestBase::full_transform_check_row(const ObMicroBlockHeader *hea
     }
 
     if (OB_SUCC(ret) && check_by_get) {
-      ObCSEncodeBlockGetReader get_reader;
+      ObCSEncodeBlockGetReader<IS_MULTI_VERSION> get_reader;
       ObDatumRowkey rowkey;
       ObMicroBlockAddr block_addr;
       for(int32_t i = 0; i < row_cnt; ++i) {
@@ -295,6 +314,9 @@ int ObCSEncodingTestBase::full_transform_check_row(const ObMicroBlockHeader *hea
             ret = OB_ERR_UNEXPECTED;
             LOG_INFO("not equal row: ", K(ret), K(i), K(j), K(row_arr[i].storage_datums_[j]), K(row.storage_datums_[j]));
           }
+          if (IS_MULTI_VERSION) {
+            ret = check_multi_version(row_arr[i], row);
+          }
         }
       }
     }
@@ -303,7 +325,8 @@ int ObCSEncodingTestBase::full_transform_check_row(const ObMicroBlockHeader *hea
   return ret;
 }
 
-int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder &decoder,
+template<bool IS_MULTI_VERSION = false>
+int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder<IS_MULTI_VERSION> &decoder,
                                               const ObDatumRow *row_arr,
                                               const int64_t row_cnt,
                                               const VectorFormat vector_format)
@@ -393,6 +416,7 @@ int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder &decoder,
   return ret;
 }
 
+template<bool IS_MULTI_VERSION>
 int ObCSEncodingTestBase::part_transform_check_row(const ObMicroBlockHeader *header,
                                                    const ObMicroBlockDesc &desc,
                                                    const ObDatumRow *row_arr,
@@ -401,10 +425,10 @@ int ObCSEncodingTestBase::part_transform_check_row(const ObMicroBlockHeader *hea
 {
   int ret = OB_SUCCESS;
   // test part transform
-  ObMicroBlockCSDecoder decoder;
+  ObMicroBlockCSDecoder<IS_MULTI_VERSION> decoder;
   const char *block_buf = desc.buf_  - header->header_size_;
   const int64_t block_buf_len = desc.buf_size_ + header->header_size_;
-  ObMicroBlockData part_transformed_data(block_buf, block_buf_len);
+  ObMicroBlockData part_transformed_data;
   int32_t project_step = 1;
   for (int project_step = 1; OB_SUCC(ret) && project_step < ctx_.column_cnt_; project_step++) {
     ObDatumRow row;
@@ -423,6 +447,8 @@ int ObCSEncodingTestBase::part_transform_check_row(const ObMicroBlockHeader *hea
                row_generate_.get_schema().get_rowkey_column_num(), lib::is_oracle_mode(),
                col_descs, &storage_cols_index))) {
       LOG_WARN("fail to init read_info", K(ret), K(col_descs), K(storage_cols_index));
+    } else if (OB_FAIL(part_transformed_data.init_with_prepare_micro_header(block_buf, block_buf_len))) {
+      LOG_WARN("failed to prepare micro header", KR(ret), K(part_transformed_data));
     } else if (OB_FAIL(decoder.init(part_transformed_data, read_info))) {
       LOG_WARN("fail to init decoder", K(ret));
     } else if (OB_FAIL(row.init(allocator_, col_descs.count()))) {
@@ -440,11 +466,14 @@ int ObCSEncodingTestBase::part_transform_check_row(const ObMicroBlockHeader *hea
           ret = OB_ERR_UNEXPECTED;
           LOG_INFO("not equal row: ", K(ret), K(i), K(j), K(row_arr[i].storage_datums_[j]), K(row.storage_datums_[j]));
         }
+        if (IS_MULTI_VERSION) {
+          ret = check_multi_version(row_arr[i], row);
+        }
       }
     }
 
     if (OB_SUCC(ret) && check_by_get) {
-      ObCSEncodeBlockGetReader get_reader;
+      ObCSEncodeBlockGetReader<IS_MULTI_VERSION> get_reader;
       ObDatumRowkey rowkey;
       ObMicroBlockAddr block_addr;
       for(int32_t i = 0; i < row_cnt; ++i) {
@@ -458,6 +487,9 @@ int ObCSEncodingTestBase::part_transform_check_row(const ObMicroBlockHeader *hea
             LOG_INFO("not equal row: ", K(ret), K(i), K(j), K(storage_cols_index.at(j)),
                 K(row_arr[i].storage_datums_[storage_cols_index.at(j)]), K(row.storage_datums_[j]));
           }
+          if (IS_MULTI_VERSION) {
+            ret = check_multi_version(row_arr[i], row);
+          }
         }
       }
     }
@@ -466,6 +498,7 @@ int ObCSEncodingTestBase::part_transform_check_row(const ObMicroBlockHeader *hea
   return ret;
 }
 
+template<bool IS_MULTI_VERSION>
 int ObCSEncodingTestBase::check_get_row_count(const ObMicroBlockHeader *header,
                                               const ObMicroBlockDesc &desc,
                                               const int64_t *expected_row_cnt_arr,
@@ -474,7 +507,7 @@ int ObCSEncodingTestBase::check_get_row_count(const ObMicroBlockHeader *header,
 {
   int ret = OB_SUCCESS;
   ObMicroBlockData full_transformed_data;
-  ObMicroBlockCSDecoder decoder;
+  ObMicroBlockCSDecoder<IS_MULTI_VERSION> decoder;
   int32_t *row_ids = nullptr;
   if (OB_FAIL(init_cs_decoder(header, desc, full_transformed_data, decoder))) {
     LOG_WARN("fail to init cs_decoder", KR(ret));
@@ -499,6 +532,29 @@ int ObCSEncodingTestBase::check_get_row_count(const ObMicroBlockHeader *header,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObCSEncodingTestBase::check_multi_version(const ObDatumRow &row_arr, const ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  if (row_arr.trans_id_ != row.trans_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_INFO(
+        "trans_id mismatch", K(ret), K(row_arr.trans_id_), K(row.trans_id_));
+  }
+  if (row_arr.mvcc_row_flag_.flag_ != row.mvcc_row_flag_.flag_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_INFO("mvcc_row_flag mismatch",
+             K(ret),
+             K(row_arr.mvcc_row_flag_.flag_),
+             K(row.mvcc_row_flag_.flag_));
+  }
+  if (row_arr.row_flag_ != row.row_flag_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_INFO(
+        "row_flag mismatch", K(ret), K(row_arr.row_flag_), K(row.row_flag_));
   }
   return ret;
 }

@@ -99,7 +99,8 @@ OB_DEF_SERIALIZE_SIZE(ObExprJsonQueryParamInfo)
               scalars_type_,
               path_str_,
               on_mismatch_,
-              on_mismatch_type_);
+              on_mismatch_type_,
+              pick_);
   return len;
 }
 
@@ -117,7 +118,8 @@ OB_DEF_SERIALIZE(ObExprJsonQueryParamInfo)
               scalars_type_,
               path_str_,
               on_mismatch_,
-              on_mismatch_type_);
+              on_mismatch_type_,
+              pick_);
   return ret;
 }
 
@@ -135,7 +137,8 @@ OB_DEF_DESERIALIZE(ObExprJsonQueryParamInfo)
               scalars_type_,
               path_str_,
               on_mismatch_,
-              on_mismatch_type_);
+              on_mismatch_type_,
+              pick_);
   OZ(parse_json_path(path_str_, j_path_));
   return ret;
 }
@@ -1100,20 +1103,21 @@ int cast_to_timstamp(common::ObIAllocator *allocator,
     } else if (cast_param.dst_type_ == ObTimestampType) {
       out_val.time_us_ = val;
       out_val.time_ctx_.tail_nsec_ = 0;
-    } else if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(val, cvrt_ctx.tz_info_, cast_param.dst_type_, out_val))) {
-      is_type_mismatch = 1;
-      LOG_WARN("fail to timestamp_to_timestamp_tz", K(ret), K(val), K(cast_param.dst_type_));
-    }
-    if (OB_SUCC(ret)) {
-      ObScale scale = accuracy.get_scale();
-      if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_ORACLE_TEMPORAL)) {
-        ObOTimestampData ot_data = ObTimeConverter::round_otimestamp(scale, out_val);
-        if (ObTimeConverter::is_valid_otimestamp(ot_data.time_us_,
-            static_cast<int32_t>(ot_data.time_ctx_.tail_nsec_))) {
-          out_val = ot_data;
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid otimestamp, set it null ", K(ot_data), K(scale), "orig_date", out_val);
+    } else {
+      if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(val, cvrt_ctx.tz_info_, cast_param.dst_type_, out_val))) {
+        is_type_mismatch = 1;
+        LOG_WARN("fail to timestamp_to_timestamp_tz", K(ret), K(val), K(cast_param.dst_type_));
+      } else{
+        ObScale scale = accuracy.get_scale();
+        if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_ORACLE_TEMPORAL)) {
+          ObOTimestampData ot_data = ObTimeConverter::round_otimestamp(scale, out_val);
+          if (ObTimeConverter::is_valid_otimestamp(ot_data.time_us_,
+              static_cast<int32_t>(ot_data.time_ctx_.tail_nsec_))) {
+            out_val = ot_data;
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid otimestamp, set it null ", K(ot_data), K(scale), "orig_date", out_val);
+          }
         }
       }
     }

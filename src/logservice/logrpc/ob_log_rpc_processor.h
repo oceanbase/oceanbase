@@ -133,6 +133,16 @@ DEFINE_LOGSERVICE_SYNC_RPC_PROCESSOR(LogGetCkptReqP,
                                      LogGetCkptReq,
                                      LogGetCkptResp,
                                      obrpc::OB_LOG_GET_LS_CKPT);
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+DEFINE_LOGSERVICE_RPC_PROCESSOR(LogReportReplayReachingMachineP,
+                                obrpc::ObLogServiceRpcProxy,
+                                LogFollowerReportReplayReachingMachineReq,
+                                obrpc::OB_LOG_REPORT_REPLAY_REACHING_MACHINE_REQ);
+DEFINE_LOGSERVICE_RPC_PROCESSOR(LogNotifyFollowerMoveOutFromRTOGroupP,
+                                obrpc::ObLogServiceRpcProxy,
+                                LogNotifyFollowerMoveOutFromRTOGroupResp,
+                                obrpc::OB_LOG_NOTIFY_FOLLOWER_MOVE_OUT_FROM_RTO_GROUP_RESP);
+#endif // OB_BUILD_SHARED_LOG_SERVICE
 
 } // end namespace logservice
 } // end namespace oceanbase

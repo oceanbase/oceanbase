@@ -282,7 +282,7 @@ struct ToDateCastImpl
         StringToDateFn(CAST_ARG_LIST_DECL, ArgVec* arg_vec, ResVec* res_vec,
                             ObDateSqlMode date_sql_mode)
             : CastFnBase(CAST_ARG_DECL), arg_vec_(arg_vec), res_vec_(res_vec),
-              date_sql_mode_(date_sql_mode) {}
+              date_sql_mode_(date_sql_mode), ob_time_(DT_TYPE_DATE) {}
 
         OB_INLINE int operator() (const ObExpr &expr, int idx)
         {
@@ -293,14 +293,44 @@ struct ToDateCastImpl
             res_vec_->set_null(idx);
           } else {
             int32_t out_val = 0;
-            ObString in_str = arg_vec_->get_string(idx);
-            if (CAST_FAIL(ObTimeConverter::str_to_date(in_str, out_val, date_sql_mode_))) {
-              SQL_LOG(WARN, "str_to_date failed", K(ret), K(in_str));
-            } else if (CM_IS_ERROR_ON_SCALE_OVER(expr.extra_) && out_val == ObTimeConverter::ZERO_DATE) {
-              // check zero date for scale over mode
-              ret = OB_INVALID_DATE_VALUE;
-              LOG_USER_ERROR(OB_INVALID_DATE_VALUE, in_str.length(), in_str.ptr(), "");
+            ObString in_val = arg_vec_->get_string(idx);
+            bool datetime_valid = false;
+            bool is_match_format = false;
+            if (use_quick_parser_) {
+              // try quick parser
+              ObTimeConverter::string_to_obtime_quick(in_val.ptr(),
+                in_val.length(),
+                ob_time_,
+                datetime_valid,
+                is_match_format,
+                last_first_8digits_,
+                last_quick_parser_type_);
+            }
+            if (datetime_valid && is_match_format) {
+              ob_time_.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time_);
+              out_val = ob_time_.parts_[DT_DATE];
             } else {
+              // go common parser
+              last_quick_parser_type_ = ObTimeConverter::QuickParserType::QuickParserUnused;
+              if (use_quick_parser_) {
+                quick_parser_failed_count_++;
+                if (quick_parser_failed_count_ % 32 == 0) {
+                  if (quick_parser_failed_count_ * 2 > idx) {
+                    use_quick_parser_ = false;
+                  }
+                }
+              }
+              if (CAST_FAIL(ObTimeConverter::str_to_ob_time_with_date(in_val, ob_time_, NULL, date_sql_mode_, false, digits_))) {
+                SQL_LOG(WARN, "failed to convert string to date", K(ret));
+              } else if (CM_IS_ERROR_ON_SCALE_OVER(expr.extra_) && out_val == ObTimeConverter::ZERO_DATE) {
+                // check zero date for scale over mode
+                ret = OB_INVALID_DATE_VALUE;
+                LOG_USER_ERROR(OB_INVALID_DATE_VALUE, in_val.length(), in_val.ptr(), "");
+              } else {
+                out_val = ob_time_.parts_[DT_DATE];
+              }
+            }
+            if (OB_SUCC(ret)) {
               SET_RES_DATE(idx, out_val);
             }
           }
@@ -310,6 +340,12 @@ struct ToDateCastImpl
         ArgVec *arg_vec_;
         ResVec *res_vec_;
         ObDateSqlMode date_sql_mode_;
+        int64_t last_first_8digits_ = INT64_MAX;
+        int quick_parser_failed_count_ = 0;
+        bool use_quick_parser_ = true;
+        ObTime ob_time_;
+        ObTimeConverter::ObTimeDigits digits_[DATETIME_PART_CNT];
+        ObTimeConverter::QuickParserType last_quick_parser_type_ = ObTimeConverter::QuickParserType::QuickParserUnused;
       };
 
       ObDateSqlMode date_sql_mode;

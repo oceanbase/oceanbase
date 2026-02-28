@@ -521,6 +521,7 @@ int ObDDLMergeTaskUtils::update_tablet_table_store(ObDDLTabletMergeDagParamV2 &d
         table_store_param.ddl_info_.ddl_replay_status_ = tablet_handle.get_obj()->get_tablet_meta().ddl_replay_status_;
       } else {
         // data is complete, mark ddl replay status finished
+        table_store_param.ddl_info_.ddl_snapshot_version_ = dag_merge_param.table_key_.get_snapshot_version();
         table_store_param.ddl_info_.ddl_replay_status_ = dag_merge_param.table_key_.is_co_sstable() ? CS_REPLICA_REPLAY_COLUMN_FINISH : CS_REPLICA_REPLAY_ROW_STORE_FINISH;
       }
 

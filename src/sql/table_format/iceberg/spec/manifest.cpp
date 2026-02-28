@@ -12,13 +12,13 @@
 
 #define USING_LOG_PREFIX SQL
 
-#include "sql/table_format/iceberg/spec/manifest.h"
-
 #include "share/ob_define.h"
 #include "sql/table_format/iceberg/avro_schema_util.h"
 #include "sql/table_format/iceberg/spec/manifest_list.h"
 #include "sql/table_format/iceberg/spec/table_metadata.h"
 #include "storage/lob/ob_lob_manager.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
+#include "sql/table_format/iceberg/spec/manifest.h"
 
 #include <avro/Generic.hh>
 #include <avro/GenericDatum.hh>
@@ -165,12 +165,114 @@ int ManifestMetadata::init_partition_fields_from_metadata(const ObString &metada
   return ret;
 }
 
+int ObSerializableDataFile::assign(const DataFile &other)
+{
+  int ret = OB_SUCCESS;
+  if (other.file_path.length() > common::OB_MAX_FILE_NAME_LENGTH) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("file path is too long", K(ret), K(other.file_path.length()));
+  } else {
+    content_ = other.content;
+    file_format_ = other.file_format;
+    record_count_ = other.record_count;
+    file_size_in_bytes_ = other.file_size_in_bytes;
+    MEMCPY(file_path_, other.file_path.ptr(), other.file_path.length());
+  }
+  return ret;
+}
+
+int ObSerializableDataFile::assign(const ObSerializableDataFile &other)
+{
+  int ret = OB_SUCCESS;
+  content_ = other.content_;
+  file_format_ = other.file_format_;
+  record_count_ = other.record_count_;
+  file_size_in_bytes_ = other.file_size_in_bytes_;
+  MEMCPY(file_path_, other.file_path_, common::OB_MAX_FILE_NAME_LENGTH);
+  return ret;
+}
+
 DataFile::DataFile(ObIAllocator &allocator)
     : SpecWithAllocator(allocator), partition(allocator_), column_sizes(allocator_),
       value_counts(allocator_), null_value_counts(allocator_), nan_value_counts(allocator_),
       lower_bounds(allocator_), upper_bounds(allocator_), split_offsets(allocator_),
       equality_ids(allocator_)
 {
+}
+
+DataFile::DataFile(ObIAllocator& allocator,
+                   DataFileContent content,
+                   ObString file_path,
+                   DataFileFormat file_format,
+                   int64_t record_count,
+                   int64_t file_size_in_bytes)
+  : SpecWithAllocator(allocator),
+    content(content),
+    file_format(file_format),
+    partition(allocator_),
+    record_count(record_count),
+    file_size_in_bytes(file_size_in_bytes),
+    column_sizes(allocator_),
+    value_counts(allocator_),
+    null_value_counts(allocator_),
+    nan_value_counts(allocator_),
+    lower_bounds(allocator_),
+    upper_bounds(allocator_),
+    split_offsets(allocator_),
+    equality_ids(allocator_)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ob_write_string(allocator_, file_path, this->file_path))) {
+    LOG_WARN("failed to write file path", K(ret));
+    throw std::runtime_error("failed to deep copy file path");
+  }
+}
+
+void DataFile::shallow_copy(const DataFile &other)
+{
+  content = other.content;
+  file_path = other.file_path;
+  file_format = other.file_format;
+  partition = other.partition;
+  record_count = other.record_count;
+  file_size_in_bytes = other.file_size_in_bytes;
+  column_sizes = other.column_sizes;
+  value_counts = other.value_counts;
+  null_value_counts = other.null_value_counts;
+  nan_value_counts = other.nan_value_counts;
+  lower_bounds = other.lower_bounds;
+  upper_bounds = other.upper_bounds;
+  key_metadata = other.key_metadata;
+  split_offsets = other.split_offsets;
+  equality_ids = other.equality_ids;
+  sort_order_id = other.sort_order_id;
+  referenced_data_file = other.referenced_data_file;
+  allocator_ = other.allocator_;
+}
+
+int DataFile::assign(const DataFile &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    content = other.content;
+    file_format = other.file_format;
+    partition = other.partition;
+    record_count = other.record_count;
+    file_size_in_bytes = other.file_size_in_bytes;
+    OZ(ob_write_string(allocator_, other.file_path, file_path));
+  }
+  return ret;
+}
+
+int DataFile::assign(const ObSerializableDataFile &other)
+{
+  int ret = OB_SUCCESS;
+  content = other.content_,
+  file_format = other.file_format_,
+  record_count = other.record_count_;
+  file_size_in_bytes = other.file_size_in_bytes_;
+  OZ(ob_write_string(allocator_, other.file_path_, this->file_path));
+  return ret;
 }
 
 int DataFile::decode_field(const ManifestMetadata &manifest_metadata,

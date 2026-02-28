@@ -35,7 +35,7 @@ ObArchiveSequencer::ObArchiveSequencer() :
   ls_mgr_(NULL),
   round_mgr_(NULL),
   min_scn_(),
-  seq_cond_()
+  seq_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::ARCHIVE_SEQUENCER_COND_WAIT)
 {}
 
 ObArchiveSequencer::~ObArchiveSequencer()

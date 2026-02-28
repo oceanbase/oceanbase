@@ -352,7 +352,7 @@ void ObInnerSQLConnection::set_ob_enable_pl_cache(bool v)
 {
   get_session().set_local_ob_enable_pl_cache(v);
 }
-
+ERRSIM_POINT_DEF(NOT_SPEED_UP_INIT_SESSION_INFO);
 int ObInnerSQLConnection::init_session_info(
     sql::ObSQLSessionInfo *session,
     const bool is_extern_session,
@@ -377,7 +377,9 @@ int ObInnerSQLConnection::init_session_info(
     ObObj oracle_sql_mode;
     mysql_sql_mode.set_uint(ObUInt64Type, DEFAULT_MYSQL_MODE);
     oracle_sql_mode.set_uint(ObUInt64Type, DEFAULT_ORACLE_MODE);
-    if (OB_FAIL(session->load_default_sys_variable(print_info_log, is_sys_tenant))) {
+    if (!NOT_SPEED_UP_INIT_SESSION_INFO && OB_FAIL(session->load_essential_sys_vars_only(print_info_log, is_sys_tenant))) {
+      LOG_WARN("session load default system variable failed", K(ret));
+    } else if (NOT_SPEED_UP_INIT_SESSION_INFO && OB_FAIL(session->load_default_sys_variable(print_info_log, is_sys_tenant))) {
       LOG_WARN("session load default system variable failed", K(ret));
     } else if (OB_FAIL(session->update_max_packet_size())) {
       LOG_WARN("fail to update max packet size", K(ret));
@@ -398,7 +400,9 @@ int ObInnerSQLConnection::init_session_info(
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(session->update_sys_variable(
+        if (OB_FAIL(session->gen_exec_env())) {
+          LOG_WARN("fail to gen exec env", K(ret));
+        } else if (OB_FAIL(session->update_sys_variable(
             SYS_VAR_SQL_MODE, is_oracle_mode ? oracle_sql_mode : mysql_sql_mode))) {
           LOG_WARN("update sys variables failed", K(ret));
         } else if (OB_FAIL(session->update_sys_variable(
@@ -420,11 +424,17 @@ int ObInnerSQLConnection::init_session_info(
           } else if (OB_FAIL(session->get_pc_mem_conf(pc_mem_conf))) {
             LOG_WARN("fail to get pc mem conf", K(ret));
           } else {
+            session->gen_gtt_trans_scope_unique_id();
+            session->gen_gtt_session_scope_unique_id();
             session->set_database_id(OB_SYS_DATABASE_ID);
             //TODO shengle ?
-            session->get_ddl_info().set_is_ddl(is_ddl);
+            InnerDDLInfo ddl_info;
+            ddl_info.set_is_ddl(is_ddl);
             session->reset_timezone();
             session->init_use_rich_format();
+            if (OB_FAIL(session->get_ddl_info().init(ddl_info, 0 /*session_id*/))) {
+              LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info));
+            }
           }
         }
       }
@@ -955,7 +965,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
               get_session().sql_sess_record_sql_stat_start_value(sqlstat_record);
             }
           }
-
+          get_session().set_retry_wait_event_begin_time();
           const uint64_t tenant_id = get_session().get_effective_tenant_id();
 
           if (OB_FAIL(ret)){
@@ -1654,6 +1664,7 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_execute_write);
+  ObMemPerfGuard mem_perf_guard("inner_execute_write");
   ObSqlQueryExecutor executor(sql);
   const bool local_execute = is_local_execute(GCONF.cluster_id, tenant_id);
   SMART_VAR(ObInnerSQLResult, res, get_session(), is_inner_session(), diagnostic_info_) {
@@ -1875,6 +1886,7 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_execute_read);
+  ObMemPerfGuard mem_perf_guard("inner_execute_read");
   ObInnerSQLReadContext *read_ctx = NULL;
   const static int64_t ctx_size = sizeof(ObInnerSQLReadContext);
   static_assert(ctx_size <= ObISQLClient::ReadResult::BUF_SIZE, "buffer not enough");

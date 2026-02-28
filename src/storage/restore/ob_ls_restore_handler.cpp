@@ -20,6 +20,9 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "share/backup/ob_backup_connectivity.h"
+#include "rootserver/ob_tenant_info_loader.h"
+#include "src/storage/restore/ob_tenant_restore_info_mgr.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -35,13 +38,16 @@ ObLSRestoreHandler::ObLSRestoreHandler()
     is_stop_(false),
     is_online_(false),
     rebuild_seq_(0),
+    mtx_(common::ObLatchIds::OB_LS_RESTORE_HANDLER_LOCK),
     result_mgr_(),
     ls_(nullptr),
     ls_restore_arg_(),
     state_handler_(nullptr),
     allocator_(),
     restore_stat_(),
-    trace_id_()
+    trace_id_(),
+    succeed_set_dest_info_(false),
+    restore_job_id_(-1)
 {
 }
 
@@ -82,6 +88,8 @@ void ObLSRestoreHandler::destroy()
   }
   ls_ = nullptr;
   trace_id_.reset();
+  succeed_set_dest_info_ = false;
+  restore_job_id_ = -1;
 }
 
 int ObLSRestoreHandler::offline()
@@ -281,6 +289,8 @@ int ObLSRestoreHandler::process()
       LOG_INFO("ls stopped or disabled", KPC(ls_));
   } else if (OB_FAIL(check_before_do_restore_(can_do_restore))) {
     LOG_WARN("fail to check before do restore", K(ret), KPC(ls_));
+  } else if (OB_FAIL(refresh_restore_info_())) {
+    LOG_WARN("fail to refresh restore info", K(ret), KPC(ls_));
   } else if (!can_do_restore) {
   } else if (OB_FAIL(update_state_handle_())) {
     LOG_WARN("fail to update state handle", K(ret));
@@ -414,6 +424,96 @@ int ObLSRestoreHandler::check_meta_tenant_normal_(bool &is_normal)
     LOG_WARN("failed to get tenant info", K(ret), K(meta_tenant_id));
   } else if (OB_NOT_NULL(tenant_schema) && tenant_schema->is_normal()) {
     is_normal = true;
+  }
+  return ret;
+}
+
+int ObLSRestoreHandler::refresh_restore_info_()
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  const uint64_t tenant_id = ls_->get_tenant_id();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLSRestoreHandler is not init", K(ret));
+  } else if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql can't be null", K(ret), KP(sql_proxy));
+  } else if (MTL_TENANT_ROLE_CACHE_IS_INVALID()) {
+    // wait tenant role refresh
+  } else if (MTL_TENANT_ROLE_CACHE_IS_CLONE()) {
+    // do nothing for clone tenant
+  } else if (MTL_TENANT_ROLE_CACHE_IS_RESTORE()) {
+    // tenant in restore, get backup set list from table __all_restore_job
+    share::ObPhysicalRestoreTableOperator restore_table_operator;
+    const ObBackupDestType::TYPE backup_dest_type = ObBackupDestType::DEST_TYPE_RESTORE_DATA;
+    int64_t dest_id = 0;
+    common::ObArray<share::ObBackupSetBriefInfo> backup_set_list;
+    ObTenantBackupDestInfoMgr *mgr = MTL(ObTenantBackupDestInfoMgr *);
+    HEAP_VAR(ObPhysicalRestoreJob, job) {
+      if (succeed_set_dest_info_) {
+        // do nothing for succeed set dest info
+      } else if (OB_ISNULL(mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mgr is null", K(ret), K(tenant_id));
+      } else if (OB_FAIL(restore_table_operator.init(sql_proxy, tenant_id, share::OBCG_STORAGE))) {
+        LOG_WARN("fail to init restore table operator", K(ret));
+      } else if (OB_FAIL(restore_table_operator.get_job_by_tenant_id(tenant_id, job))) {
+        LOG_WARN("fail to get restore job", K(ret), K(tenant_id));
+      } else if (OB_FAIL(share::ObBackupStorageInfoOperator::get_restore_dest_id(
+            *sql_proxy, tenant_id, backup_dest_type, dest_id))) {
+        LOG_WARN("failed to get restore dest id", K(ret), K(tenant_id), K(backup_dest_type));
+      } else if (OB_FAIL(job.get_multi_restore_path_list().get_backup_set_brief_info_list(backup_set_list))) {
+        LOG_WARN("fail to get backup set brief info list", K(ret), K(job));
+      } else if (backup_set_list.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("backup set list is empty", K(ret), K(tenant_id));
+      } else if (OB_FAIL(mgr->set_backup_set_info(backup_set_list, dest_id, ObTenantBackupDestInfoMgr::InfoType::RESTORE))) {
+        LOG_WARN("failed to set restore info", K(ret), K(job));
+      } else {
+        succeed_set_dest_info_ = true;
+        restore_job_id_ = job.get_job_id();
+        LOG_INFO("refresh restore info for restore tenant", K(tenant_id), K(backup_set_list));
+      }
+    }
+  } else {
+    ObAllTenantInfo tenant_info;
+    ObRestorePersistHelper persist_helper;
+    ObPhysicalRestoreBackupDestList backup_dest_list;
+    common::ObArray<share::ObBackupSetBriefInfo> backup_set_list;
+    const ObBackupDestType::TYPE backup_dest_type = ObBackupDestType::DEST_TYPE_RESTORE_DATA;
+    int64_t dest_id = 0;
+    ObTenantBackupDestInfoMgr *mgr = MTL(ObTenantBackupDestInfoMgr *);
+    if (OB_ISNULL(mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mgr is null", K(ret), K(tenant_id));
+    } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy, false/*for_update*/, tenant_info))) {
+      LOG_WARN("failed to load tenant info", K(ret), K(tenant_id));
+    } else if (!tenant_info.get_restore_data_mode().is_remote_mode()) {
+      // do nothing
+    } else if (succeed_set_dest_info_) {
+      // do nothing for succeed set dest info
+    } else if (OB_FAIL(persist_helper.init(tenant_id, share::OBCG_STORAGE))) {
+      LOG_WARN("failed to init persist helper", K(ret), K(tenant_id));
+    } else if (OB_FAIL(persist_helper.get_backup_dest_list_from_restore_info(
+                       *sql_proxy,
+                       restore_job_id_,
+                       backup_dest_list))) {
+      LOG_WARN("failed to get backup dest list from restore info", K(ret), K(tenant_id));
+    } else if (OB_FAIL(backup_dest_list.get_backup_set_brief_info_list(backup_set_list))) {
+      LOG_WARN("fail to get backup set brief info list", K(ret), K(backup_dest_list));
+    } else if (OB_FAIL(share::ObBackupStorageInfoOperator::get_restore_dest_id(*sql_proxy, tenant_id,
+                                                                                  backup_dest_type, dest_id))) {
+      LOG_WARN("failed to get restore dest id", K(ret), K(tenant_id), K(backup_dest_type));
+    } else if (backup_set_list.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("backup set list is empty", K(ret), K(tenant_id));
+    } else if (OB_FAIL(mgr->set_backup_set_info(backup_set_list, dest_id, ObTenantBackupDestInfoMgr::InfoType::RESTORE))) {
+        LOG_WARN("failed to set restore info", K(ret));
+    } else {
+      succeed_set_dest_info_ = true;
+      LOG_INFO("refresh restore info for normal tenant", K(tenant_id), K(backup_set_list));
+    }
   }
   return ret;
 }
@@ -1891,7 +1991,7 @@ int ObLSRestoreStartState::check_ls_meta_exist_(bool &is_exist)
   int tmp_ret = OB_SUCCESS;
   bool is_backup_set_info_exist = false;
   storage::ObBackupDataStore store;
-  const ObArray<share::ObRestoreBackupSetBriefInfo> &backup_set_array = ls_restore_arg_->get_backup_set_list();
+  const ObArray<share::ObBackupSetBriefInfo> &backup_set_array = ls_restore_arg_->get_backup_set_list();
   int idx = backup_set_array.count() - 1;
   ObLSMetaPackage ls_meta_packge;
   is_exist = false;
@@ -3213,7 +3313,7 @@ int ObLSRestoreWaitRestoreMajorDataState::report_restore_stat_()
 
 
 ObLSRestoreResultMgr::ObLSRestoreResultMgr()
-  : mtx_(),
+  : mtx_(common::ObLatchIds::OB_LS_RESTORE_RESULT_MGR_LOCK),
     result_(OB_SUCCESS),
     retry_cnt_(0),
     last_err_ts_(0),

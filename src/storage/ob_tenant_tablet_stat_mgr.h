@@ -138,11 +138,14 @@ struct ObTabletStatAnalyzer
 public:
   ObTabletStatAnalyzer();
   ~ObTabletStatAnalyzer() = default;
+  void reset();
   bool is_hot_tablet() const;
   bool is_insert_mostly() const;
   bool is_update_or_delete_mostly() const;
   bool has_frequent_slow_query() const;
-  bool has_accumnulated_delete() const;
+  bool has_accumulated_delete() const;
+  double get_read_amplification() const;
+  int64_t get_satisfied_condition_number() const;
   TO_STRING_KV(K_(tablet_stat), K_(total_tablet_stat), K_(is_small_tenant), K_(boost_factor));
 public:
   static constexpr int64_t BASE_FACTOR = 10;
@@ -289,13 +292,23 @@ private:
   ObTabletStatBucket<PAST_BUCKET_CNT> past_buckets_;
 };
 
+struct DynamicTableOptions {
+  DynamicTableOptions()
+    : mode_(share::schema::ObTableModeFlag::TABLE_MODE_NORMAL),
+      minor_row_store_type_(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE)
+  {}
+  void refresh(const share::schema::ObSimpleTableSchemaV2 &table_schema);
+  share::schema::ObTableModeFlag mode_;
+  ObRowStoreType minor_row_store_type_;
+  TO_STRING_KV(K_(mode), K_(minor_row_store_type));
+};
 
 class ObTabletStreamNode : public ObDLinkBase<ObTabletStreamNode>
 {
 public:
   using QueuingMode = share::schema::ObTableModeFlag;
   explicit ObTabletStreamNode(const int64_t flag = 0)
-    : stream_(), flag_(flag), mode_(QueuingMode::TABLE_MODE_NORMAL) {}
+      : stream_(), flag_(flag), dynamic_table_option_() {}
   ~ObTabletStreamNode() { reset(); }
   void reset() { stream_.reset(); }
   void clear_stat() { stream_.clear_stat(); }
@@ -304,7 +317,7 @@ public:
 public:
   ObTabletStream stream_;
   const int64_t flag_;
-  QueuingMode mode_;
+  DynamicTableOptions dynamic_table_option_;
 };
 
 
@@ -403,6 +416,8 @@ public:
       common::ObIArray<ObTabletStat> &tablet_stats);
   int get_all_tablet_stats(
       common::ObIArray<ObTabletStat> &tablet_stats);
+  int get_all_tablet_analyzers(
+      common::ObIArray<ObTabletStatAnalyzer> &tablet_analyzers);
   int get_tablet_analyzer(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
@@ -415,11 +430,19 @@ public:
       const ObIArray<ObTabletID> &tablet_ids);
   void process_stats();
   void refresh_all(const int64_t step);
-  void refresh_queuing_mode();
+  void refresh_dynamic_table_options();
+  int get_dynamic_table_options(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const DynamicTableOptions*& dynamic_table_options);
   int get_queuing_cfg(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       ObTableQueuingModeCfg& queuing_cfg);
+  int get_minor_row_store_type(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      ObRowStoreType& minor_row_store_type);
   int64_t get_last_update_time() { return report_stat_task_.last_update_time_; }
   bool is_high_tenant_cpu_load() const { return get_load_shedding_factor() >= ObTenantSysLoadShedder::DEFAULT_LOAD_SHEDDING_FACTOR; }
   int64_t get_load_shedding_factor() const { return load_shedder_.get_load_shedding_factor(); }

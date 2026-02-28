@@ -4918,6 +4918,7 @@ ObTablegroupSchema::ObTablegroupSchema()
       tablegroup_name_(),
       comment_(),
       sharding_(),
+      scope_(),
       part_func_expr_num_(OB_INVALID_INDEX),
       sub_part_func_expr_num_(OB_INVALID_INDEX),
       split_partition_name_(),
@@ -4935,6 +4936,7 @@ ObTablegroupSchema::ObTablegroupSchema(common::ObIAllocator *allocator)
       tablegroup_name_(),
       comment_(),
       sharding_(),
+      scope_(),
       part_func_expr_num_(OB_INVALID_INDEX),
       sub_part_func_expr_num_(OB_INVALID_INDEX),
       split_partition_name_(),
@@ -4951,6 +4953,7 @@ ObTablegroupSchema::ObTablegroupSchema(const ObTablegroupSchema &other)
       tablegroup_name_(),
       comment_(),
       sharding_(),
+      scope_(),
       part_func_expr_num_(OB_INVALID_INDEX),
       sub_part_func_expr_num_(OB_INVALID_INDEX),
       split_partition_name_(),
@@ -5006,6 +5009,8 @@ ObTablegroupSchema &ObTablegroupSchema::operator =(const ObTablegroupSchema &src
         LOG_WARN("fail to deep copy split partition name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.sharding_, sharding_))) {
         LOG_WARN("fail to deep copy split partition name", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.scope_, scope_))) {
+        LOG_WARN("fail to deep copy scope", K(ret));
       } else if (OB_FAIL(src_schema.split_high_bound_val_.deep_copy(split_high_bound_val_, *get_allocator()))) {
         LOG_WARN("fail to deep copy split row key", K(ret));
       } else if (OB_FAIL(src_schema.split_list_row_values_.deep_copy(split_list_row_values_, *get_allocator()))) {
@@ -5025,6 +5030,7 @@ int64_t ObTablegroupSchema::get_convert_size() const
   convert_size += tablegroup_name_.length() + 1;
   convert_size += comment_.length() + 1;
   convert_size += sharding_.length() + 1;
+  convert_size += scope_.length() + 1;
   convert_size += part_option_.get_convert_size() - sizeof(part_option_);
   convert_size += sub_part_option_.get_convert_size() - sizeof(sub_part_option_);
   convert_size += split_partition_name_.length() + 1;
@@ -5058,6 +5064,7 @@ void ObTablegroupSchema::reset()
   split_high_bound_val_.reset();
   split_list_row_values_.reset();
   sharding_.reset();
+  scope_.reset();
   ObPartitionSchema::reset();
 }
 
@@ -5114,6 +5121,10 @@ OB_DEF_SERIALIZE(ObTablegroupSchema)
     LST_DO_CODE(OB_UNIS_ENCODE,
                 sharding_);
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                scope_);
+  }
   LOG_TRACE("serialize tablegroup schema", K(*this));
 
   return ret;
@@ -5153,6 +5164,8 @@ OB_DEF_SERIALIZE_SIZE(ObTablegroupSchema)
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               sharding_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              scope_);
   return len;
 }
 
@@ -5218,7 +5231,11 @@ OB_DEF_DESERIALIZE(ObTablegroupSchema)
     LST_DO_CODE(OB_UNIS_DECODE,
                 sharding_);
   }
-  LOG_WARN("serialize tablegroup schema", K(*this));
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                scope_);
+  }
+  LOG_TRACE("deserialize tablegroup schema", K(*this));
   return ret;
 }
 
@@ -5247,7 +5264,8 @@ int64_t ObTablegroupSchema::to_string(char *buf, const int64_t buf_len) const
        K_(split_high_bound_val),
        K_(split_list_row_values),
        K_(sub_part_template_flags),
-       K_(sharding));
+       K_(sharding),
+       K_(scope));
   J_OBJ_END();
   return pos;
 }
@@ -8448,9 +8466,6 @@ ObViewSchema &ObViewSchema::operator =(const ObViewSchema &src_schema)
     } else if (OB_FAIL(deep_copy_str(src_schema.expand_view_definition_for_mv_, expand_view_definition_for_mv_))) {
       LOG_WARN("Fail to deep copy expand view definition for mv, ", K(ret));
     }
-    if (OB_FAIL(deep_copy_str(src_schema.expand_view_definition_for_mv_, expand_view_definition_for_mv_))) {
-      LOG_WARN("Fail to deep copy expand view definition for mv, ", K(ret));
-    }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
     }
@@ -9062,7 +9077,9 @@ ObUserInfo::ObUserInfo(ObIAllocator *allocator)
     proxy_user_info_cnt_(0),
     user_flags_(),
     trigger_list_(),
-    plugin_()
+    plugin_(),
+    old_password_(),
+    old_password_start_time_(OB_INVALID_TIMESTAMP)
 {
 }
 
@@ -9176,6 +9193,10 @@ int ObUserInfo::assign(const ObUserInfo &other)
       if (OB_SUCC(ret) && trigger_list_.assign(other.trigger_list_)) {
         LOG_WARN("assign trigger list failed", K(ret));
       }
+      if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(other.old_password_, old_password_))) {
+        LOG_WARN("Fail to deep copy old_password", K(ret));
+      }
+      old_password_start_time_ = other.old_password_start_time_;
     }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
@@ -9319,6 +9340,8 @@ void ObUserInfo::reset()
   ObSchema::reset();
   ObPriv::reset();
   plugin_.reset();
+  old_password_.reset();
+  old_password_start_time_ = OB_INVALID_TIMESTAMP;
 }
 
 int64_t ObUserInfo::get_convert_size() const
@@ -9350,6 +9373,7 @@ int64_t ObUserInfo::get_convert_size() const
   }
   convert_size += trigger_list_.get_data_size();
   convert_size += plugin_.length() + 1;
+  convert_size += old_password_.length() + 1;
   return convert_size;
 }
 
@@ -9403,6 +9427,8 @@ OB_DEF_SERIALIZE(ObUserInfo)
     LST_DO_CODE(OB_UNIS_ENCODE, user_flags_);
     LST_DO_CODE(OB_UNIS_ENCODE, trigger_list_);
     LST_DO_CODE(OB_UNIS_ENCODE, plugin_);
+    LST_DO_CODE(OB_UNIS_ENCODE, old_password_);
+    LST_DO_CODE(OB_UNIS_ENCODE, old_password_start_time_);
   }
   return ret;
 }
@@ -9504,6 +9530,8 @@ OB_DEF_DESERIALIZE(ObUserInfo)
       LST_DO_CODE(OB_UNIS_DECODE, user_flags_);
       LST_DO_CODE(OB_UNIS_DECODE, trigger_list_);
       LST_DO_CODE(OB_UNIS_DECODE, plugin_);
+      LST_DO_CODE(OB_UNIS_DECODE, old_password_);
+      LST_DO_CODE(OB_UNIS_DECODE, old_password_start_time_);
     }
   }
 
@@ -9546,6 +9574,8 @@ OB_DEF_SERIALIZE_SIZE(ObUserInfo)
   LST_DO_CODE(OB_UNIS_ADD_LEN, user_flags_);
   LST_DO_CODE(OB_UNIS_ADD_LEN, trigger_list_);
   LST_DO_CODE(OB_UNIS_ADD_LEN, plugin_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, old_password_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, old_password_start_time_);
   return len;
 }
 
@@ -13180,7 +13210,8 @@ ObProfileSchema::ObProfileSchema(ObIAllocator *allocator)
     password_lock_time_(-1),
     password_verify_function_(),
     password_life_time_(-1),
-    password_grace_time_(-1)
+    password_grace_time_(-1),
+    password_rollover_time_(-1)
 {
 }
 
@@ -13213,6 +13244,7 @@ ObProfileSchema &ObProfileSchema::operator=(const ObProfileSchema &other)
       password_lock_time_ = other.password_lock_time_;
       password_life_time_ = other.password_life_time_;
       password_grace_time_ = other.password_grace_time_;
+      password_rollover_time_ = other.password_rollover_time_;
     }
 
     if (OB_FAIL(ret)) {
@@ -13246,6 +13278,7 @@ void ObProfileSchema::reset()
   password_verify_function_.reset();
   password_life_time_ = -1;
   password_grace_time_ = -1;
+  password_rollover_time_ = -1;
 }
 
 int64_t ObProfileSchema::get_convert_size() const
@@ -13271,6 +13304,9 @@ int ObProfileSchema::set_value(const int64_t type, const int64_t value)
     break;
   case PASSWORD_GRACE_TIME:
     set_password_grace_time(value);
+    break;
+  case PASSWORD_ROLLOVER_TIME:
+    set_password_rollover_time(value);
     break;
   default:
     ret = OB_ERR_UNEXPECTED;
@@ -13347,6 +13383,7 @@ const int64_t ObProfileSchema::DEFAULT_PARAM_VALUES[] = {
   -1,                   //nouse
   180 * USECS_PER_DAY,  //180 day
   7 * USECS_PER_DAY,    //7 day
+  0,                    //no rollover window by default
 };
 const int64_t ObProfileSchema::INVALID_PARAM_VALUES[] = {
   -1,        //times
@@ -13354,6 +13391,7 @@ const int64_t ObProfileSchema::INVALID_PARAM_VALUES[] = {
   -1,        //nouse
   -1,        //1 day
   -1,        //1 day
+  -1,        //invalid rollover time
 };
 static_assert(ARRAYSIZEOF(ObProfileSchema::DEFAULT_PARAM_VALUES) == ObProfileSchema::MAX_PARAMS, "array size");
 static_assert(ARRAYSIZEOF(ObProfileSchema::INVALID_PARAM_VALUES) == ObProfileSchema::MAX_PARAMS, "array size");
@@ -13364,6 +13402,7 @@ const char* ObProfileSchema::PARAM_VALUE_NAMES[] = {
   "PASSWORD_VERIFY_FUNCTION",
   "PASSWORD_LIFE_TIME",
   "PASSWORD_GRACE_TIME",
+  "PASSWORD_ROLLOVER_TIME",
 };
 
 static_assert(ARRAYSIZEOF(ObProfileSchema::PARAM_VALUE_NAMES) == ObProfileSchema::MAX_PARAMS, "array size");
@@ -13377,7 +13416,8 @@ OB_SERIALIZE_MEMBER(ObProfileSchema,
                     password_lock_time_,
                     password_verify_function_,
                     password_life_time_,
-                    password_grace_time_);
+                    password_grace_time_,
+                    password_rollover_time_);
 
 ObDirectorySchema::ObDirectorySchema()
   : ObSchema()

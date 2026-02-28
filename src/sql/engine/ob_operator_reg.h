@@ -278,10 +278,10 @@ REGISTER_OPERATOR(ObLogSet, PHY_MERGE_UNION, ObMergeUnionSpec, ObMergeUnionOp,
                   NOINPUT, VECTORIZED_OP);
 
 class ObLogSet;
-class ObRecursiveUnionAllSpec;
-class ObRecursiveUnionAllOp;
-REGISTER_OPERATOR(ObLogSet, PHY_RECURSIVE_UNION_ALL, ObRecursiveUnionAllSpec,
-                  ObRecursiveUnionAllOp, NOINPUT, VECTORIZED_OP);
+class ObRecursiveUnionSpec;
+class ObRecursiveUnionOp;
+REGISTER_OPERATOR(ObLogSet, PHY_RECURSIVE_UNION_ALL, ObRecursiveUnionSpec,
+                  ObRecursiveUnionOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogTableScan;
 class ObFakeCTETableSpec;
@@ -804,6 +804,14 @@ class ObExpandVecOp;
 REGISTER_OPERATOR(ObLogExpand, PHY_EXPAND, ObExpandVecSpec, ObExpandVecOp, NOINPUT, VECTORIZED_OP,
                   0, /*version*/
                   SUPPORT_RICH_FORMAT, "PHY_VEC_EXPAND");
+
+// rescan op
+class ObLogRescan;
+class ObRescanSpec;
+class ObRescanOp;
+REGISTER_OPERATOR(ObLogRescan, PHY_RESCAN, ObRescanSpec, ObRescanOp,
+                  NOINPUT, VECTORIZED_OP, 0,
+                  SUPPORT_RICH_FORMAT);
 
 // table-direct-insert
 class ObLogInsert;

@@ -48,6 +48,7 @@
    int lock_rows();
    int init_schema_and_calc_part(share::ObLSID &ls_id);
    int decide_use_which_table_operation(table::ObTableCtx &tb_ctx);
+   int check_mode_defense();
    ObTableProccessType get_stat_process_type();
  private:
    DISALLOW_COPY_AND_ASSIGN(ObHbaseExecuteP);

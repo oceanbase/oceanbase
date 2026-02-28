@@ -449,6 +449,8 @@ bool ObSchemaUtils::is_support_parallel_drop(const ObTableType table_type)
          || TMP_TABLE == table_type
          || TMP_TABLE_ORA_SESS == table_type
          || TMP_TABLE_ORA_TRX == table_type
+         || TMP_TABLE_ORA_TRX_V2 == table_type
+         || TMP_TABLE_ORA_SESS_V2 == table_type
          || EXTERNAL_TABLE == table_type;
 }
 
@@ -859,9 +861,11 @@ int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
   int64_t start_time = ObTimeUtility::current_time();
   ObMultiVersionSchemaService *schema_service = NULL;
   int64_t consensus_timeout = 30 * 1000 * 1000L; // 30s
+  bool is_async = false;
   omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
   if (tenant_config.is_valid()) {
     consensus_timeout = tenant_config->_wait_interval_after_parallel_ddl;
+    is_async = (0 == tenant_config->_publish_schema_mode.case_compare(PUBLISH_SCHEMA_MODE_ASYNC));
   }
   if (OB_ISNULL(session) || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
       || schema_version <= 0
@@ -873,7 +877,7 @@ int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
     LOG_WARN("schema_service is null", KR(ret));
   }
   bool is_dropped = false;
-  while (OB_SUCC(ret) && ctx.get_timeout() > 0) {
+  while (OB_SUCC(ret) && ctx.get_timeout() > 0 && !is_async) {
     int64_t refreshed_schema_version = OB_INVALID_VERSION;
     int64_t consensus_schema_version = OB_INVALID_VERSION;
     if (OB_FAIL(schema_service->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {

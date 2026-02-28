@@ -201,7 +201,15 @@ public:
   virtual bool is_needed() const { return col_param_ != NULL && col_param_->need_avg_len(); }
   const char *get_fmt() const
   {
-    return lib::is_oracle_mode() ? " SUM_OPNSIZE(\"%.*s\")/decode(COUNT(*),0,1,COUNT(*))" : " SUM_OPNSIZE(`%.*s`)/(case when COUNT(*) = 0 then 1 else COUNT(*) end)";
+    const char* fmt = nullptr;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) {
+      fmt = lib::is_oracle_mode() ? " SUM_OPNSIZE(\"%.*s\")/decode(COUNT(*),0,1,COUNT(*))"
+                                  : " SUM_OPNSIZE(`%.*s`)/(case when COUNT(*) = 0 then 1 else COUNT(*) end)";
+    } else {
+      fmt = lib::is_oracle_mode() ? " AVG(SYS_OP_OPNSIZE(\"%.*s\"))"
+                                  : " AVG(SYS_OP_OPNSIZE(`%.*s`))";
+    }
+    return fmt;
   }
   virtual int decode(ObObj &obj) override;
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
@@ -302,6 +310,38 @@ public:
   virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
 };
 
+class ObStatLobInrowCount : public ObStatColItem
+{
+public:
+  ObStatLobInrowCount() {}
+  ObStatLobInrowCount(const ObColumnStatParam *param,
+                      ObOptColumnStat *stat) :
+    ObStatColItem(param, stat)
+  {}
+  virtual bool is_needed() const override
+  {
+    bool bret = false;
+    if (col_param_ != NULL) {
+      bret = col_param_->need_basic_stat() &&
+      (col_param_->is_string_column() || col_param_->is_text_column());
+    }
+    return bret;
+  }
+  const char *get_fmt() const
+  {
+    const char *fmt = nullptr;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0) {
+      fmt = lib::is_oracle_mode() ? " SYS_COUNT_INROW(\"%.*s\")"
+                                  : " SYS_COUNT_INROW(`%.*s`)";
+    } else {
+      fmt = lib::is_oracle_mode() ? " COUNT(\"%.*s\")"
+                                  : " COUNT(`%.*s`)";
+    }
+    return fmt;
+  }
+
+  virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
+};
 class ObGlobalTableStat
 {
 public:
@@ -523,6 +563,31 @@ public:
 
 private:
   int64_t global_num_not_null_;
+};
+
+class ObGlobalLobInrowCountEval
+{
+public:
+  ObGlobalLobInrowCountEval() : global_lob_inrow_count_(0), is_valid_(false)
+  {
+  }
+
+  void add(int64_t lob_inrow_count)
+  {
+    if (lob_inrow_count > 0) {
+      global_lob_inrow_count_ += lob_inrow_count;
+      is_valid_ = true;
+    }
+  }
+
+  int64_t get() const
+  {
+    return is_valid_ ? global_lob_inrow_count_ : -1;
+  }
+
+private:
+  int64_t global_lob_inrow_count_;
+  bool is_valid_;
 };
 
 class ObGlobalCgBlockCntEval {

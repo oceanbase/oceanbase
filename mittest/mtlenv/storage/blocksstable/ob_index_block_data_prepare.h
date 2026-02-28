@@ -13,6 +13,7 @@
 #ifndef OB_INDEX_BLOCK_DATA_PREPARE_H_
 #define OB_INDEX_BLOCK_DATA_PREPARE_H_
 
+#include <algorithm>
 #include <gtest/gtest.h>
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 #define private public
@@ -325,6 +326,9 @@ void TestIndexBlockDataPrepare::SetUp()
   } else {
     prepare_data();
   }
+  if (!GCTX.is_shared_storage_mode()) {
+    ASSERT_EQ(OB_SUCCESS, LOCAL_DEVICE_INSTANCE.fsync_block());
+  }
 }
 void TestIndexBlockDataPrepare::TearDown()
 {
@@ -527,13 +531,12 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
     // decompress and decrypt root block
     ObMicroBlockDesMeta meta(ObCompressorType::NONE_COMPRESSOR, root_row_store_type, 0, 0, nullptr);
     ObMacroBlockReader reader;
-    const char *decomp_buf = nullptr;
-    int64_t decomp_size = 0;
+    ObMicroBlockData decomp_data;
     bool is_compressed = false;
     ASSERT_EQ(OB_SUCCESS, reader.decrypt_and_decompress_data(meta, block_buf, root_desc.addr_.size_,
-        decomp_buf, decomp_size, is_compressed, true, &allocator_));
-    root_buf = const_cast<char *>(decomp_buf);
-    root_size = decomp_size;
+        decomp_data, is_compressed, true, &allocator_));
+    root_buf = const_cast<char *>(decomp_data.get_buf());
+    root_size = decomp_data.get_buf_size();
   } else if (root_desc.is_mem_type()) {
     root_buf = root_desc.buf_;
     root_size = root_desc.addr_.size_;
@@ -542,18 +545,10 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
     ASSERT_TRUE(false);
   }
 
-  // deserialize micro block header in root block buf
-  ObMicroBlockHeader root_micro_header;
-  int64_t des_pos = 0;
-  ASSERT_EQ(OB_SUCCESS, root_micro_header.deserialize(root_buf, root_size, des_pos));
   root_block_data_buf_.buf_ = static_cast<char *>(allocator_.alloc(root_size));
   root_block_data_buf_.size_ = root_size;
-  int64_t copy_pos = 0;
-  ObMicroBlockHeader *copied_micro_header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, root_micro_header.deep_copy(
-      (char *)root_block_data_buf_.buf_, root_block_data_buf_.size_, copy_pos, copied_micro_header));
-  ASSERT_TRUE(copied_micro_header->is_valid());
-  MEMCPY((char *)(root_block_data_buf_.buf_ + copy_pos), root_buf + des_pos, root_size - des_pos);
+  MEMCPY((char *)(root_block_data_buf_.buf_), root_buf, root_size);
+  ASSERT_EQ(OB_SUCCESS, root_block_data_buf_.prepare_micro_header());
   row_store_type_ = root_row_store_type;
 
   ObITable::TableKey table_key;
@@ -577,12 +572,13 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
       + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   }
 
-  ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
-    param.root_block_addr_, param.root_block_data_);
-  ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
-    param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
+    param.root_block_addr_, param.root_block_data_));
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
+    param.data_block_macro_meta_addr_, param.data_block_macro_meta_));
   param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
   param.max_merged_trans_version_ = res.max_merged_trans_version_;
+  param.min_merged_trans_version_ = res.min_merged_trans_version_;
   param.row_count_ = res.row_count_;
   param.root_row_store_type_ = root_row_store_type;
   param.latest_row_store_type_ = table_schema_.get_row_store_type();
@@ -636,6 +632,7 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_co_sstable(const int64
 
   char *root_buf = nullptr;
   int64_t root_size = 0;
+  ObMicroBlockData decomp_data;
   if (root_desc.addr_.is_block()) {
     // read macro block
     ObMacroBlockReadInfo read_info;
@@ -657,11 +654,11 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_co_sstable(const int64
     // decompress and decrypt root block
     ObMicroBlockDesMeta meta(ObCompressorType::NONE_COMPRESSOR, root_row_store_type, 0, 0, nullptr);
     ObMacroBlockReader reader;
-    const char *decomp_buf = nullptr;
-    int64_t decomp_size = 0;
     bool is_compressed = false;
     ASSERT_EQ(OB_SUCCESS, reader.decrypt_and_decompress_data(meta, block_buf, root_desc.addr_.size_,
-        decomp_buf, decomp_size, is_compressed, true, &allocator_));
+        decomp_data, is_compressed, true, &allocator_));
+    const char *decomp_buf = decomp_data.get_buf();
+    int64_t decomp_size = decomp_data.get_buf_size();
     root_buf = const_cast<char *>(decomp_buf);
     root_size = decomp_size;
   } else if (root_desc.is_mem_type()) {
@@ -1126,6 +1123,7 @@ void TestIndexBlockDataPrepare::convert_to_multi_version_row(const ObDatumRow &o
 
 void TestIndexBlockDataPrepare::prepare_partial_ddl_data()
 {
+  int ret = OB_SUCCESS; // required by SMART_VAR/LOG_* macros
   prepare_contrastive_sstable();
   ObMacroBlockWriter writer;
   row_generate_.reset();
@@ -1149,7 +1147,51 @@ void TestIndexBlockDataPrepare::prepare_partial_ddl_data()
   ObSSTablePrivateObjectCleaner cleaner;
   ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_, &allocator_));
-  const int64_t partial_row_cnt = max_partial_row_cnt_;
+  // Make partial row count end at a macro boundary of `sstable_` when possible.
+  //
+  // Otherwise `partial_sstable_` may end in the middle of a macro block, and the remaining rows within that macro
+  // cannot be represented by macro-meta-only ddl kvs without either:
+  // - leaving a gap (missing rows), or
+  // - introducing overlaps (duplicate rows in scan).
+  //
+  // `partial_kv_start_idx_` is a test hint for the macro boundary index on the baseline branch.
+  // If it is set, try to align `max_partial_row_cnt_` down to the end offset of that macro in `sstable_`.
+  int64_t partial_row_cnt = max_partial_row_cnt_;
+  if (partial_kv_start_idx_ > 0) {
+    int64_t boundary_row_cnt = 0;
+    int64_t macro_idx = 0;
+    SMART_VAR(ObSSTableSecMetaIterator, full_meta_iter) {
+      ObDatumRange whole_range;
+      whole_range.set_whole_range();
+      ObDataMacroBlockMeta full_meta;
+      ASSERT_EQ(OB_SUCCESS, full_meta_iter.open(whole_range,
+                                                ObMacroBlockMetaType::DATA_BLOCK_META,
+                                                sstable_,
+                                                tablet_handle_.get_obj()->get_rowkey_read_info(),
+                                                allocator_));
+      int ret2 = OB_SUCCESS;
+      while (OB_SUCCESS == ret2 && macro_idx < partial_kv_start_idx_) {
+        ret2 = full_meta_iter.get_next(full_meta);
+        if (OB_SUCCESS == ret2) {
+          ++macro_idx;
+          boundary_row_cnt += full_meta.val_.row_count_;
+        } else if (OB_ITER_END != ret2) {
+          STORAGE_LOG(WARN, "get sstable data macro meta failed", K(ret2));
+        }
+      }
+      ASSERT_TRUE(OB_SUCCESS == ret2 || OB_ITER_END == ret2);
+    }
+    if (macro_idx == partial_kv_start_idx_ &&
+        boundary_row_cnt > 0 &&
+        boundary_row_cnt < row_cnt_ &&
+        boundary_row_cnt <= partial_row_cnt) {
+      partial_row_cnt = boundary_row_cnt;
+      max_partial_row_cnt_ = partial_row_cnt;
+      if (co_sstable_row_offset_ != 0) {
+        co_sstable_row_offset_ = partial_row_cnt - 1;
+      }
+    }
+  }
   insert_partial_data(writer, partial_row_cnt);
   ASSERT_EQ(OB_SUCCESS, writer.close());
   // data write ctx has been moved to merge_root_index_builder_
@@ -1196,7 +1238,33 @@ void TestIndexBlockDataPrepare::prepare_partial_ddl_data()
                                          arena,
                                          sorted_metas));
   if (co_sstable_row_offset_ != 0) {
-    ASSERT_EQ(sorted_metas.at(2).end_row_offset_, co_sstable_row_offset_);
+    // The number of macro metas in partial_sstable_ may change across branches due to macro block slicing.
+    // Instead of assuming a fixed index, locate the last macro meta of partial_sstable_.
+    int ret = OB_SUCCESS; // required by SMART_VAR/OB_* macros
+    int64_t partial_macro_cnt = 0;
+    SMART_VAR(ObSSTableSecMetaIterator, partial_meta_iter) {
+      ObDatumRange whole_range;
+      whole_range.set_whole_range();
+      ObDataMacroBlockMeta partial_meta;
+      ASSERT_EQ(OB_SUCCESS, partial_meta_iter.open(whole_range,
+                                                   ObMacroBlockMetaType::DATA_BLOCK_META,
+                                                   partial_sstable_,
+                                                   tablet_handle.get_obj()->get_rowkey_read_info(),
+                                                   arena));
+      int ret2 = OB_SUCCESS;
+      while (OB_SUCCESS == ret2) {
+        ret2 = partial_meta_iter.get_next(partial_meta);
+        if (OB_SUCCESS == ret2) {
+          ++partial_macro_cnt;
+        } else if (OB_ITER_END != ret2) {
+          STORAGE_LOG(WARN, "get partial data macro meta failed", K(ret2));
+        }
+      }
+      ASSERT_EQ(OB_ITER_END, ret2);
+    }
+    ASSERT_GT(partial_macro_cnt, 0);
+    ASSERT_GE(sorted_metas.count(), partial_macro_cnt);
+    ASSERT_EQ(sorted_metas.at(partial_macro_cnt - 1).end_row_offset_, co_sstable_row_offset_);
   }
   arena.reset();
   ObTabletObjLoadHelper::free(allocator_, storage_schema);
@@ -1281,13 +1349,12 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
     // decompress and decrypt root block
     ObMicroBlockDesMeta meta(ObCompressorType::NONE_COMPRESSOR, root_row_store_type, 0, 0, nullptr);
     ObMacroBlockReader reader;
-    const char *decomp_buf = nullptr;
-    int64_t decomp_size = 0;
+    ObMicroBlockData decomp_data;
     bool is_compressed = false;
     ASSERT_EQ(OB_SUCCESS, reader.decrypt_and_decompress_data(meta, block_buf, root_desc.addr_.size_,
-        decomp_buf, decomp_size, is_compressed, true, &allocator_));
-    root_buf = const_cast<char *>(decomp_buf);
-    root_size = decomp_size;
+        decomp_data, is_compressed, true, &allocator_));
+    root_buf = const_cast<char *>(decomp_data.get_buf());
+    root_size = decomp_data.get_buf_size();
   } else if (root_desc.is_mem_type()) {
     root_buf = root_desc.buf_;
     root_size = root_desc.addr_.size_;
@@ -1295,11 +1362,12 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
     STORAGE_LOG(INFO, "not supported root block", K(root_desc));
     ASSERT_TRUE(false);
   }
+  ObMicroBlockData root_block;
+  OK(root_block.init_with_prepare_micro_header(root_buf, root_size));
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(merge_root_index_builder_->index_store_desc_.get_desc().row_store_type_, micro_reader));
-  ObMicroBlockData root_block(root_buf, root_size);
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block.get_micro_header(), micro_reader));
   ObDatumRow row;
   OK(row.init(allocator_, merge_root_index_builder_->index_store_desc_.get_desc().col_desc_->row_column_count_));
   OK(micro_reader->init(root_block, nullptr));
@@ -1314,17 +1382,10 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
   }
 
   // deserialize micro block header in root block buf
-  ObMicroBlockHeader root_micro_header;
-  int64_t des_pos = 0;
-  ASSERT_EQ(OB_SUCCESS, root_micro_header.deserialize(root_buf, root_size, des_pos));
   merge_root_block_data_buf_.buf_ = static_cast<char *>(allocator_.alloc(root_size));
   merge_root_block_data_buf_.size_ = root_size;
-  int64_t copy_pos = 0;
-  ObMicroBlockHeader *copied_micro_header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, root_micro_header.deep_copy(
-      (char *)merge_root_block_data_buf_.buf_, merge_root_block_data_buf_.size_, copy_pos, copied_micro_header));
-  ASSERT_TRUE(copied_micro_header->is_valid());
-  MEMCPY((char *)(merge_root_block_data_buf_.buf_ + copy_pos), root_buf + des_pos, root_size - des_pos);
+  MEMCPY((char *)(merge_root_block_data_buf_.buf_), root_buf, root_size);
+  ASSERT_EQ(OB_SUCCESS, merge_root_block_data_buf_.prepare_micro_header());
   row_store_type_ = root_row_store_type;
   ObITable::TableKey table_key;
   int64_t table_id = 3001;
@@ -1346,10 +1407,10 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
     param.rowkey_column_cnt_ = table_schema_.get_rowkey_column_num()
       + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   }
-  ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
-    param.root_block_addr_, param.root_block_data_);
-  ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
-    param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
+    param.root_block_addr_, param.root_block_data_));
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
+    param.data_block_macro_meta_addr_, param.data_block_macro_meta_));
   param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
   param.max_merged_trans_version_ = res.max_merged_trans_version_;
   param.row_count_ = res.row_count_;
@@ -1537,6 +1598,46 @@ void TestIndexBlockDataPrepare::prepare_merge_ddl_kvs()
   ddl_kv_ptr_ = ddl_kv_handle_.get_obj();
   tablet_handle.get_obj()->ddl_kvs_ = &ddl_kv_ptr_;
   tablet_handle.get_obj()->ddl_kv_count_ = 1;
+
+  // To build ddl kvs that complements `partial_sstable_`, we must avoid:
+  // - gaps (missing rows after partial_sstable_)
+  // - duplicated endkeys (would break loser-tree merge)
+  //
+  // The robust way is to use the end rowkey of the last macro meta in `partial_sstable_` as the boundary,
+  // then only put macro metas from `sstable_` whose end rowkey is strictly greater than that boundary.
+  //
+  // NOTE: `partial_kv_start_idx_` is a test hint based on macro slicing on master, but macro slicing may change
+  // across branches, so comparing by endkey is more stable than comparing by macro index.
+  ObDatumRowkey partial_last_endkey;
+  bool has_partial_endkey = false;
+  SMART_VAR(ObSSTableSecMetaIterator, partial_meta_iter) {
+    ObDatumRange whole_range;
+    whole_range.set_whole_range();
+    ObDataMacroBlockMeta partial_meta;
+    ASSERT_EQ(OB_SUCCESS, partial_meta_iter.open(whole_range,
+                                                 ObMacroBlockMetaType::DATA_BLOCK_META,
+                                                 partial_sstable_,
+                                                 tablet_handle.get_obj()->get_rowkey_read_info(),
+                                                 allocator_));
+    int ret2 = OB_SUCCESS;
+    // NOTE: Do NOT use OB_SUCC(ret2) here. OB_SUCC() assigns to the outer `ret`,
+    // which would prematurely stop the following meta iteration and leave ddl kvs empty.
+    while (OB_SUCCESS == ret2) {
+      ret2 = partial_meta_iter.get_next(partial_meta);
+      if (OB_SUCCESS == ret2) {
+        ObDatumRowkey tmp_endkey;
+        ASSERT_EQ(OB_SUCCESS, partial_meta.get_rowkey(tmp_endkey));
+        ASSERT_EQ(OB_SUCCESS, tmp_endkey.deep_copy(partial_last_endkey, allocator_));
+        has_partial_endkey = true;
+      } else if (OB_ITER_END != ret2) {
+        STORAGE_LOG(WARN, "get partial data macro meta failed", K(ret2));
+      }
+    }
+    ASSERT_EQ(OB_ITER_END, ret2);
+  }
+  ASSERT_TRUE(has_partial_endkey);
+  const ObStorageDatumUtils &datum_utils = tablet_handle.get_obj()->get_rowkey_read_info().get_datum_utils();
+
   SMART_VAR(ObSSTableSecMetaIterator, meta_iter) {
     ObDatumRange query_range;
     query_range.set_whole_range();
@@ -1546,7 +1647,6 @@ void TestIndexBlockDataPrepare::prepare_merge_ddl_kvs()
                                          sstable_,
                                          tablet_handle.get_obj()->get_rowkey_read_info(),
                                          allocator_));
-    int64_t macro_idx = 0;
     int64_t kv_idx = 0;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(meta_iter.get_next(data_macro_meta))) {
@@ -1555,13 +1655,20 @@ void TestIndexBlockDataPrepare::prepare_merge_ddl_kvs()
         }
       } else {
         STORAGE_LOG(INFO, "data_macro_meta_key", K(data_macro_meta));
-        ++macro_idx;
         ObDDLMacroHandle macro_handle;
         macro_handle.set_block_id(data_macro_meta.get_macro_id());
-        if (macro_idx > partial_kv_start_idx_) {
+        ObDatumRowkey data_endkey;
+        ASSERT_EQ(OB_SUCCESS, data_macro_meta.get_rowkey(data_endkey));
+        int cmp_ret = 0;
+        ASSERT_EQ(OB_SUCCESS, data_endkey.compare(partial_last_endkey, datum_utils, cmp_ret));
+        if (cmp_ret > 0) {
           ObDataMacroBlockMeta *copied_meta = nullptr;
+          const int64_t ddl_memtable_cnt = ddl_kv_handle_.get_obj()->get_ddl_memtables().count();
+          ASSERT_GT(ddl_memtable_cnt, 0);
           ASSERT_EQ(OB_SUCCESS, data_macro_meta.deep_copy(copied_meta, allocator_));
-          ASSERT_EQ(OB_SUCCESS, ddl_kv_handle_.get_obj()->get_ddl_memtables().at(kv_idx)->insert_block_meta_tree(macro_handle, copied_meta, 0));
+          ASSERT_EQ(OB_SUCCESS,
+                    ddl_kv_handle_.get_obj()->get_ddl_memtables().at(kv_idx % ddl_memtable_cnt)
+                      ->insert_block_meta_tree(macro_handle, copied_meta, 0));
           ++kv_idx;
         }
       }

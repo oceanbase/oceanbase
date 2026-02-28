@@ -165,8 +165,9 @@ ObOptimizerTraceImpl::ObOptimizerTraceImpl()
     section_(0),
     trace_level_(0),
     enable_(false),
-    trace_state_(1),
-    enable_trace_cost_model_(false)
+    enable_trace_cost_model_(false),
+    enable_mem_perf_(false),
+    trace_state_(1)
 {
 
 }
@@ -210,13 +211,25 @@ int ObOptimizerTraceImpl::set_parameters(const common::ObString &identifier,
   return ret;
 }
 
+int ObOptimizerTraceImpl::enable_mem_perf(const common::ObString &identifier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(log_handle_.set_identifier(identifier))) {
+    LOG_WARN("ObStringBuf write string error", K(ret));
+  } else {
+    set_mem_perf_enable(true);
+  }
+  return ret;
+}
+
 void ObOptimizerTraceImpl::reset()
 {
   log_handle_.close();
   sql_id_.reset();
   enable_ = false;
-  trace_state_ = 1;
   enable_trace_cost_model_ = false;
+  enable_mem_perf_ = false;
+  trace_state_ = 1;
 }
 
 bool ObOptimizerTraceImpl::enable(const common::ObString &sql_id)
@@ -351,7 +364,7 @@ int ObOptimizerTraceImpl::append(const uint32_t &value)
 
 int ObOptimizerTraceImpl::append(const double & value)
 {
-  return append_format<32>("%f", value);
+  return append_format<32>("%g", value);
 }
 
 int ObOptimizerTraceImpl::append(const ObObj& value)
@@ -473,7 +486,11 @@ int ObOptimizerTraceImpl::append(const ObLogPlan *log_plan)
   if (OB_NOT_NULL(target_plan) &&
       target_plan->get_stmt()->is_explain_stmt()) {
     const ObLogValues *op = static_cast<const ObLogValues*>(target_plan->get_plan_root());
-    target_plan = op->get_explain_plan();
+    if (op != NULL && op->get_explain_plan() != NULL) {
+      target_plan = op->get_explain_plan();
+    } else {
+      LOG_WARN("unexpected explain plan root or explain_plan_ is null");
+    }
   }
   if (OB_NOT_NULL(target_plan)) {
     ObExplainDisplayOpt option;
@@ -562,6 +579,8 @@ int ObOptimizerTraceImpl::append(const Path *path)
   if (OB_NOT_NULL(path)) {
     increase_section();
     new_line();
+    append("path#");
+    append(path->path_number_, ",");
     append_ptr(path);
     new_line();
     append("tables:", path->parent_);
@@ -613,6 +632,9 @@ int ObOptimizerTraceImpl::append(const Path *path)
     append(", server count:", path->server_cnt_);
     new_line();
     append(path->get_sharding());
+    new_line();
+    append("ordering:", path->get_ordering());
+    append("intersting info:", path->get_interesting_order_info());
     decrease_section();
   }
   return ret;
@@ -624,6 +646,8 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
   if (OB_NOT_NULL(join_path)) {
     increase_section();
     new_line();
+    append("path#");
+    append(join_path->path_number_, ",");
     append_ptr(join_path);
     new_line();
     if (HASH_JOIN == join_path->join_algo_) {
@@ -643,12 +667,33 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
     new_line();
     append(join_path->get_sharding());
     new_line();
+    if (join_path->is_nl_style_pipelined_path()) {
+      append("Is nl style pipeline path");
+      new_line();
+    } else if (join_path->is_pipelined_path()) {
+      append("Is pipeline path");
+      new_line();
+    }
+    if (join_path->contain_normal_nl()) {
+      append("Contain normal nl");
+      new_line();
+    }
+    if (join_path->has_none_equal_join()) {
+      append("Contain non-equal join");
+      new_line();
+    }
+    if (join_path->contain_expansion_join()) {
+      append("Contain expansion join");
+      new_line();
+    }
     append("left path:");
     if (OB_NOT_NULL(join_path->left_path_) && OB_NOT_NULL(join_path->left_path_->parent_)) {
       increase_section();
       new_line();
       append("tables:", join_path->left_path_->parent_);
       new_line();
+      append("path#");
+      append(join_path->left_path_->path_number_, ",");
       append_ptr(join_path->left_path_);
       new_line();
       append("cost:", join_path->left_path_->cost_, ",card:", join_path->left_path_->parent_->get_output_rows(),
@@ -658,6 +703,8 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
       if (NULL != join_path->left_path_->get_sharding()) {
         append(",part count:", join_path->left_path_->get_sharding()->get_part_cnt());
       }
+      new_line();
+      append("ordering:", join_path->left_path_->get_ordering());
       decrease_section();
     }
     new_line();
@@ -672,6 +719,8 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
         new_line();
         append("tables:", join_path->right_path_->parent_);
         new_line();
+        append("path#");
+        append(join_path->right_path_->path_number_, ",");
         append_ptr(join_path->right_path_);
         new_line();
         append("cost:", join_path->right_path_->cost_, ",card:", join_path->right_path_->parent_->get_output_rows(),
@@ -1046,6 +1095,23 @@ int ObOptimizerTraceImpl::append<ColumnItem>(const ObIArrayWrap<ColumnItem>& val
   return ret;
 }
 
+int ObOptimizerTraceImpl::append(const OrderItem &order)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(order.expr_))) {
+    LOG_WARN("failed to append");
+  } else if (order.is_ascending()) {
+    if (OB_FAIL(append(" ASC"))) {
+      LOG_WARN("failed to append");
+    }
+  } else {
+    if (OB_FAIL(append(" DESC"))) {
+      LOG_WARN("failed to append");
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerTraceImpl::trace_env()
 {
   int ret = OB_SUCCESS;
@@ -1272,6 +1338,21 @@ int ObOptimizerTraceImpl::trace_mem_used()
     }
   }
   return ret;
+}
+
+ObMemPerfGuard::ObMemPerfGuard(const ObString &section) : section_(section)
+{
+  print_trace("begin");
+}
+
+ObMemPerfGuard::~ObMemPerfGuard()
+{
+  print_trace("end");
+}
+
+void ObMemPerfGuard::print_trace(const ObString &stage)
+{
+  MEM_TRACE("[MEM PERF]", K_(section), stage);
 }
 
 }

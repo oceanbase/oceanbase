@@ -29,6 +29,7 @@
 #include "storage/ddl/ob_cg_block_tmp_files_iterator.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "unittest/storage/blocksstable/cs_encoding/ob_row_vector_converter.h"
+#include "plugin/sys/ob_plugin_mgr.h"
 
 namespace oceanbase
 {
@@ -39,6 +40,7 @@ using namespace tmp_file;
 using namespace storage;
 using namespace share::schema;
 using namespace std;
+using namespace plugin;
 
 
 int ObDDLRedoLogWriterCallback::wait()
@@ -134,11 +136,18 @@ void TestDagMacroWriter::SetUpTestCase()
   int ret = OB_SUCCESS;
   STORAGE_LOG(INFO, "SetUpTestCase");
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  static ObPluginMgr plugin_mgr;
+  ASSERT_EQ(OB_SUCCESS, plugin_mgr.init(ObString()));
+  GCTX.plugin_mgr_ = &plugin_mgr;
 }
 
 void TestDagMacroWriter::TearDownTestCase()
 {
   MockTenantModuleEnv::get_instance().destroy();
+  if (GCTX.plugin_mgr_) {
+    GCTX.plugin_mgr_->destroy();
+    GCTX.plugin_mgr_ = nullptr;
+  }
 }
 
 static ObSimpleMemLimitGetter getter;

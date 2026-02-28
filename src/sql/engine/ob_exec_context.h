@@ -599,6 +599,11 @@ public:
   void set_py_sub_inter_ctx(void *sub_inter_ctx) { py_sub_inter_ctx_ = sub_inter_ctx; }
   bool need_try_serialize_package_var() const { return need_try_serialize_package_var_; }
   void set_need_try_serialize_package_var(bool need_try_serialize_package_var) { need_try_serialize_package_var_ = need_try_serialize_package_var; }
+    common::hash::ObHashMap<ObOdpsPartitionKey, int64_t>& get_odps_partition_str_to_file_size() { return odps_partition_str_to_file_size_; }
+
+  const common::ObZone &get_first_weak_select_zone() const { return first_weak_select_zone_; }
+  void set_first_weak_select_zone(const common::ObZone &zone) { first_weak_select_zone_ = zone; }
+  bool has_first_weak_select_zone() const { return !first_weak_select_zone_.is_empty(); }
 
   void set_granule_type(ObGranuleType granule_type) { current_granule_type_ = granule_type; }
   bool is_block_granule_type() { return current_granule_type_ == OB_BLOCK_RANGE_GRANULE; }
@@ -816,6 +821,8 @@ protected:
   // Granule type for current GI task
   ObGranuleType current_granule_type_;
 
+  common::ObZone first_weak_select_zone_;
+  common::hash::ObHashMap<ObOdpsPartitionKey, int64_t> odps_partition_str_to_file_size_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

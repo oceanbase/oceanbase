@@ -116,6 +116,7 @@ public:
   }
   OB_INLINE int64_t get_upper_trans_version() const { return ATOMIC_LOAD(&upper_trans_version_); }
   OB_INLINE int64_t get_max_merged_trans_version() const { return max_merged_trans_version_; }
+  OB_INLINE int64_t get_min_merged_trans_version() const { return min_merged_trans_version_; }
   OB_INLINE share::SCN get_ddl_scn() const { return ddl_scn_; }
   OB_INLINE int64_t get_create_snapshot_version() const { return create_snapshot_version_; }
   OB_INLINE share::SCN get_filled_tx_scn() const { return filled_tx_scn_; }
@@ -154,7 +155,7 @@ public:
       K(contain_uncommitted_row_), K(status_), K_(root_row_store_type), K_(compressor_type),
       K_(encrypt_id), K_(master_key_id), K_(sstable_logic_seq), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
       K_(latest_row_store_type), K_(table_backup_flag), K_(table_shared_flag), K_(root_macro_seq),
-      K_(co_base_snapshot_version), K_(rec_scn));
+      K_(co_base_snapshot_version), K_(rec_scn), K_(min_merged_trans_version));
 
 public:
   int32_t version_;
@@ -282,6 +283,10 @@ public:
   {
     return basic_meta_.get_max_merged_trans_version();
   }
+  OB_INLINE int64_t get_min_merged_trans_version() const
+  {
+    return basic_meta_.get_min_merged_trans_version();
+  }
   OB_INLINE int64_t get_create_snapshot_version() const
   {
     return basic_meta_.get_create_snapshot_version();
@@ -331,6 +336,7 @@ public:
   bool is_split_table() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
+  int fsync_block(const ObTabletCreateSSTableParam &param);
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
   int init_data_index_tree_info(

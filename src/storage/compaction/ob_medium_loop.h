@@ -25,7 +25,7 @@ struct ObMediumLoop
       loop_version_(ObBasicMergeScheduler::INIT_COMPACTION_SCN),
       loop_cnt_(0),
       ls_tablet_iter_(true/*is_major*/),
-      lock_()
+      lock_(common::ObLatchIds::OB_MEDIUM_LOOP_LOCK)
   {}
   ~ObMediumLoop() {}
   int start_merge(const int64_t merge_version);

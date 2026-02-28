@@ -105,7 +105,6 @@ int ObExprArrayCardinality::eval_array_cardinality_batch(const ObExpr &expr, ObE
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (arr_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) {
@@ -149,10 +148,8 @@ int ObExprArrayCardinality::eval_array_cardinality_vector(const ObExpr &expr, Ob
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         res_vec->set_int(idx, static_cast<int64_t>(src_arr->cardinality()));
-        eval_flags.set(idx);
       }
     } // end for
   }

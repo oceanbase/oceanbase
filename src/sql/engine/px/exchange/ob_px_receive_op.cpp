@@ -102,7 +102,7 @@ ObPxReceiveOp::ObPxReceiveOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
       ((ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
         ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() < CLUSTER_VERSION_4_4_0_0) ||
       ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_4_1_0
-      )? &ctx_.get_allocator() : NULL),
+      )? &ctx_.get_allocator() : NULL, this),
     px_row_msg_proc_(&row_reader_),
     msg_loop_(op_monitor_info_),
     ts_cnt_(0),
@@ -816,7 +816,9 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
           ret = OB_TIMEOUT;
           LOG_WARN("get row from channel timeout", K(ret));
         } else {
+          int64_t begin_sleep_time = rdtsc();
           ob_usleep<ObWaitEventIds::WAIT_DTL_RECEIVE_RESPONSE>(1 * 1000, 0, 0, 0);
+          op_monitor_info_.block_time_ += rdtsc() - begin_sleep_time;
           int tmp_ret = ctx_.fast_check_status();
           if (OB_SUCCESS != tmp_ret) {
             LOG_WARN("wait to receive row interrupted", K(tmp_ret), K(ret));

@@ -29,6 +29,7 @@ ObMViewMaintenanceService::ObMViewMaintenanceService() : is_inited_(false),
                                                          mview_refresh_info_timestamp_(0),
                                                          mview_mds_timestamp_(0),
                                                          mview_deps_timestamp_(0),
+                                                         mview_deps_lock_(common::ObLatchIds::MVIEW_MAINTENANCE_SERVICE_LOCK),
                                                          proposal_id_(0)
   {}
 
@@ -985,7 +986,9 @@ int ObMViewMaintenanceService::GetMinMVMdsSnapshotFunctor::
       }
     }
   }
-  scn_ = scn;
+  if (scn.is_valid() && (!scn_.is_valid() || scn < scn_)) {
+    scn_ = scn;
+  }
   return ret;
 }
 

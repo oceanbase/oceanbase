@@ -44,7 +44,26 @@ int ObLoadDataExecutor::execute(ObExecContext &ctx, ObLoadDataStmt &stmt)
       optimizer_ctx.set_use_direct_load();
     }
     table_direct_insert_ctx.set_is_direct(optimizer_ctx.use_direct_load());
-    if (!table_direct_insert_ctx.get_is_direct()) {
+    ObSchemaGetterGuard *schema_guard = nullptr;
+    if (OB_ISNULL(schema_guard = ctx.get_sql_ctx()->schema_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", KR(ret));
+    } else {
+      const ObLoadArgument &load_args = stmt.get_load_arguments();
+      const ObSimpleTableSchemaV2 *table_schema = nullptr;
+      if (OB_FAIL(schema_guard->get_simple_table_schema(load_args.tenant_id_, load_args.table_id_, table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(load_args.tenant_id_), K(load_args.table_id_));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table not exist", KR(ret), K(load_args.tenant_id_), K(load_args.table_id_));
+      } else if (!table_direct_insert_ctx.get_is_direct() && ObTableType::TMP_TABLE == table_schema->get_table_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support simple load data to mysql_tmp_table", KR(ret), KPC(table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "please use direct load hint, normal load data to mysql temporary table");
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!table_direct_insert_ctx.get_is_direct()) {
       if (OB_ISNULL(load_impl = OB_NEWx(ObLoadDataSPImpl, (&ctx.get_allocator())))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));

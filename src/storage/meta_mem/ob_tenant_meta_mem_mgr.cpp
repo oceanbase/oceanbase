@@ -19,6 +19,7 @@
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/slog_ckpt/ob_tenant_slog_checkpoint_util.h"
 #include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
 
 namespace oceanbase
 {
@@ -77,6 +78,33 @@ void ObTenantMetaMemMgr::TabletGCTask::runTimerTask()
   bool all_tablet_cleaned = false;
   if (OB_FAIL(t3m_->gc_tablets_in_queue(all_tablet_cleaned))) {
     LOG_WARN("fail to gc tablets in queue", K(ret));
+  }
+}
+
+// Each tenant will find the LS leader on the current server.
+// Each server only deletes the temporary table tablets owned by its own LS leader,
+// thus avoiding remote transactions.
+void ObTenantMetaMemMgr::SessionTabletGCTask::runTimerTask()
+{
+  ObDIActionGuard ag("SessionTabletGCTask");
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObSessionTabletGCHelper session_tablet_gc_helper(tenant_id);
+  switch (compat_mode_) {
+    case lib::Worker::CompatMode::INVALID: {
+      if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode_))) {
+        LOG_WARN("fail to get tenant mode", K(ret));
+      }
+      break;
+    }
+    case lib::Worker::CompatMode::ORACLE: {
+      if (OB_FAIL(session_tablet_gc_helper.do_work())) {
+        LOG_WARN("fail to gc session tablet", K(ret));
+      }
+      break;
+    }
+    default:
+      break;
   }
 }
 
@@ -167,9 +195,11 @@ ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
     external_tablet_cnt_map_(),
     ss_tablet_local_cache_map_(),
     tg_id_(-1),
+    oracle_temp_table_gc_tg_id_(-1),
     table_gc_task_(this),
     refresh_config_task_(),
     tablet_gc_task_(this),
+    session_tablet_gc_task_(),
     tablet_gc_queue_(),
     free_tables_queue_(),
     gc_queue_lock_(common::ObLatchIds::TENANT_META_MEM_MGR_LOCK),
@@ -260,6 +290,8 @@ int ObTenantMetaMemMgr::init()
     LOG_WARN("fail to initialize gc memtable map", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantMetaMemMgr, tg_id_))) {
     LOG_WARN("fail to create thread for t3m", K(ret));
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::OracleTempTableGCTask, oracle_temp_table_gc_tg_id_))) {
+    LOG_WARN("fail to create thread for oracle temp table gc", K(ret), K(oracle_temp_table_gc_tg_id_));
   } else if (OB_FAIL(meta_cache_io_allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE, "StorMetaCacheIO", tenant_id_, mem_limit))) {
     LOG_WARN("fail to init storage meta cache io allocator", K(ret), K_(tenant_id), K(mem_limit));
   } else if (OB_FAIL(fetch_tenant_config())) {
@@ -403,10 +435,15 @@ int ObTenantMetaMemMgr::start()
   } else if (OB_FAIL(TG_SCHEDULE(
       tg_id_, tablet_gc_task_, TABLE_GC_INTERVAL_US, true/*repeat*/))) {
     LOG_WARN("fail to schedule tablet gc task", K(ret));
+  } else if (OB_FAIL(TG_START(oracle_temp_table_gc_tg_id_))) {
+    LOG_WARN("fail to start thread for oracle temp table gc", K(ret), K(oracle_temp_table_gc_tg_id_));
+  } else if (OB_FAIL(TG_SCHEDULE(
+      oracle_temp_table_gc_tg_id_, session_tablet_gc_task_, SESSION_TABLET_GC_INTERVAL_US, true/*repeat*/))) {
+    LOG_WARN("fail to schedule session tablet gc task", K(ret), K(oracle_temp_table_gc_tg_id_));
   } else if (OB_FAIL(bf_load_tg_.start())) {
     LOG_WARN("fail to lstart bloom filter load tg", K(ret));
   } else {
-    LOG_INFO("successfully to start t3m's three tasks", K(ret), K(tg_id_));
+    LOG_INFO("successfully to start t3m's tasks", K(ret), K(tg_id_), K(oracle_temp_table_gc_tg_id_));
   }
   return ret;
 }
@@ -441,9 +478,10 @@ void ObTenantMetaMemMgr::wait()
     }
 
     TG_STOP(tg_id_);
+    TG_STOP(oracle_temp_table_gc_tg_id_);
 
     TG_WAIT(tg_id_);
-
+    TG_WAIT(oracle_temp_table_gc_tg_id_);
     // Wait for bloom filter load tg.
     bf_load_tg_.wait();
   }
@@ -455,6 +493,10 @@ void ObTenantMetaMemMgr::destroy()
   if (tg_id_ != -1) {
     TG_DESTROY(tg_id_);
     tg_id_ = -1;
+  }
+  if (oracle_temp_table_gc_tg_id_ != -1) {
+    TG_DESTROY(oracle_temp_table_gc_tg_id_);
+    oracle_temp_table_gc_tg_id_ = -1;
   }
   full_tablet_creator_.reset(); // must reset after gc_tablets
   flying_tablet_map_.destroy();
@@ -1107,13 +1149,13 @@ int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(ObTablet *tablet,
     SCN cur_recycle_end_scn = SCN::max_scn();
     bool contain_uncommitted_row = false;
     const storage::ObSSTableArray &minor_sstables = table_store_wrapper.get_member()->get_minor_sstables();
+    // NOTICE : each sstable should be iterated because filled_tx_scn is not monotonically increasing
     for (int64_t i = 0; i < minor_sstables.count(); i++) {
       if (minor_sstables.at(i)->contain_uncommitted_row()) {
         // find the first minor sstable which contain uncomitted row.
         // get cur_recycle_end_scn and quit loop
         contain_uncommitted_row = true;
-        cur_recycle_end_scn = MIN(cur_recycle_end_scn, minor_sstables.at(i)->get_end_scn());
-        break;
+        cur_recycle_end_scn = MIN(cur_recycle_end_scn, minor_sstables.at(i)->get_filled_tx_scn());
       }
     }
     if (OB_FAIL(storage::ObIncDDLMergeTaskUtils::calculate_tx_data_recycle_scn(

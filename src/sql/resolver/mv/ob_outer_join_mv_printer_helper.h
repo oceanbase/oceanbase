@@ -46,7 +46,7 @@ private:
                              const JoinedTable *upper_table);
 
 protected:
-  ObSEArray<ObSqlBitSet<>, 8, common::ModulePageAllocator, true> right_table_idxs_;
+  ObSEArray<ObSqlBitSet<>, 8> right_table_idxs_;
   ObSqlBitSet<> refreshed_table_idxs_;
 
 private:

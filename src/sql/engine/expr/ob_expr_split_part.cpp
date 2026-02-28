@@ -270,7 +270,6 @@ int ObExprSplitPart::calc_split_part_expr_dispatch(const ObExpr &expr,
         }
       }
     }
-    eval_flags.set(i);
   }
   return ret;
 }

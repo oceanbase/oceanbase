@@ -82,7 +82,7 @@ int LogRuntimeFilterDependencyInfo::describe_dependency(DfoInfo *root_dfo)
     const ObLogicalOperator *use_op = create_op->get_paired_join_filter();
     if (OB_ISNULL(use_op)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("use_op is null");
+      LOG_WARN("use_op is null", K(create_op->get_filter_id()));
     } else {
       const ObLogicalOperator *ancestor_op = nullptr;
       DfoInfo *op_dfo = nullptr;;

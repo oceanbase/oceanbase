@@ -19,7 +19,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprBM25::ObExprBM25(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_BM25, N_BM25, 4, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_BM25, N_BM25, MORE_THAN_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -31,13 +31,24 @@ int ObExprBM25::calc_result_typeN(
 {
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
-  if (OB_UNLIKELY(param_num != 5)) {
+  const bool use_new_version = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0);
+  int64_t expected_param_num = use_new_version ? 6 : 5;
+
+  if (OB_UNLIKELY(param_num != expected_param_num)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("BM25 expr should have 4 parameters", K(ret), K(param_num));
-  } else {
+    LOG_WARN("BM25 expr should have correct parameters", K(ret), K(param_num), K(expected_param_num), K(use_new_version));
+  } else if (!use_new_version) {
     types[TOKEN_DOC_CNT_PARAM_IDX].set_calc_type(ObIntType);
     types[TOTAL_DOC_CNT_PARAM_IDX].set_calc_type(ObIntType);
     types[DOC_TOKEN_CNT_PARAM_IDX].set_calc_type(ObIntType);
+    types[AVG_DOC_CNT_PARAM_IDX_OLD].set_calc_type(ObDoubleType);
+    types[RELATED_TOKEN_CNT_PARAM_IDX_OLD].set_calc_type(ObUInt64Type);
+    result_type.set_double();
+  } else {
+    types[TOKEN_DOC_CNT_PARAM_IDX].set_calc_type(ObIntType);
+    types[TOTAL_DOC_CNT_PARAM_IDX].set_calc_type(ObIntType);
+    types[DOC_LENGTH_PARAM_IDX].set_calc_type(ObUInt64Type);
+    types[TOKEN_WEIGHT_PARAM_IDX].set_calc_type(ObDoubleType);
     types[AVG_DOC_CNT_PARAM_IDX].set_calc_type(ObDoubleType);
     types[RELATED_TOKEN_CNT_PARAM_IDX].set_calc_type(ObUInt64Type);
     result_type.set_double();
@@ -49,7 +60,8 @@ int ObExprBM25::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObE
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
-  CK(5 == raw_expr.get_param_count());
+  const int64_t expected_param_num = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0 ? 6 : 5;
+  CK(expected_param_num == raw_expr.get_param_count());
   rt_expr.eval_func_ = eval_bm25_relevance_expr;
   rt_expr.eval_batch_func_ = eval_batch_bm25_relevance_expr;
   return ret;
@@ -58,38 +70,77 @@ int ObExprBM25::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObE
 int ObExprBM25::eval_bm25_relevance_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum *token_doc_cnt_datum = nullptr;
-  ObDatum *total_doc_cnt_datum = nullptr;
-  ObDatum *doc_token_cnt_datum = nullptr;
-  ObDatum *avg_doc_token_cnt_datum = nullptr;
-  ObDatum *related_token_cnt_datum = nullptr;
-  if (OB_FAIL(expr.eval_param_value(
-      ctx,
-      token_doc_cnt_datum,
-      total_doc_cnt_datum,
-      doc_token_cnt_datum,
-      avg_doc_token_cnt_datum,
-      related_token_cnt_datum))) {
-    LOG_WARN("evaluate parameter value failed", K(ret));
-  } else if (OB_UNLIKELY(token_doc_cnt_datum->is_null() || total_doc_cnt_datum->is_null()
-      || doc_token_cnt_datum->is_null() || avg_doc_token_cnt_datum->is_null() || related_token_cnt_datum->is_null())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null datum", K(ret), KPC(token_doc_cnt_datum), KPC(total_doc_cnt_datum),
-        KPC(doc_token_cnt_datum), KPC(avg_doc_token_cnt_datum), KPC(related_token_cnt_datum));
+  if (!use_new_version(expr)) {
+    ObDatum *token_doc_cnt_datum = nullptr;
+    ObDatum *total_doc_cnt_datum = nullptr;
+    ObDatum *doc_token_cnt_datum = nullptr;
+    ObDatum *avg_doc_token_cnt_datum = nullptr;
+    ObDatum *related_token_cnt_datum = nullptr;
+    if (OB_FAIL(expr.eval_param_value(
+        ctx,
+        token_doc_cnt_datum,
+        total_doc_cnt_datum,
+        doc_token_cnt_datum,
+        avg_doc_token_cnt_datum,
+        related_token_cnt_datum))) {
+      LOG_WARN("evaluate parameter value failed", K(ret));
+    } else if (OB_UNLIKELY(token_doc_cnt_datum->is_null() || total_doc_cnt_datum->is_null()
+        || doc_token_cnt_datum->is_null() || avg_doc_token_cnt_datum->is_null() || related_token_cnt_datum->is_null())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null datum", K(ret), KPC(token_doc_cnt_datum), KPC(total_doc_cnt_datum),
+          KPC(doc_token_cnt_datum), KPC(avg_doc_token_cnt_datum), KPC(related_token_cnt_datum));
+    } else {
+      const int64_t token_doc_cnt = token_doc_cnt_datum->get_int();
+      const int64_t total_doc_cnt = total_doc_cnt_datum->get_int();
+      const int64_t related_token_cnt = related_token_cnt_datum->get_uint();
+      const int64_t doc_token_cnt = doc_token_cnt_datum->get_uint();
+      const double avg_doc_token_cnt = avg_doc_token_cnt_datum->get_double();
+      const double norm_len = doc_token_cnt / avg_doc_token_cnt;
+      const double token_weight = query_token_weight(token_doc_cnt, total_doc_cnt);
+      const double doc_weight = doc_token_weight(related_token_cnt, norm_len);
+      const double relevance = token_weight * doc_weight;
+      res_datum.set_double(relevance);
+      LOG_DEBUG("show bm25 parameters for current document",
+          K(token_doc_cnt), K(total_doc_cnt), K(related_token_cnt), K(doc_token_cnt), K(avg_doc_token_cnt),
+          K(norm_len), K(token_weight), K(doc_weight), K(relevance));
+    }
   } else {
-    const int64_t token_doc_cnt = token_doc_cnt_datum->get_int();
-    const int64_t total_doc_cnt = total_doc_cnt_datum->get_int();
-    const int64_t related_token_cnt = related_token_cnt_datum->get_uint();
-    const int64_t doc_token_cnt = doc_token_cnt_datum->get_int();
-    const double avg_doc_token_cnt = avg_doc_token_cnt_datum->get_double();
-    const double norm_len = doc_token_cnt / avg_doc_token_cnt;
-    const double token_weight = query_token_weight(token_doc_cnt, total_doc_cnt);
-    const double doc_weight = doc_token_weight(related_token_cnt, norm_len);
-    const double relevance = token_weight * doc_weight;
-    res_datum.set_double(relevance);
-    LOG_DEBUG("show bm25 parameters for current document",
-        K(token_doc_cnt), K(total_doc_cnt), K(related_token_cnt), K(doc_token_cnt), K(avg_doc_token_cnt),
-        K(norm_len), K(token_weight), K(doc_weight), K(relevance));
+    ObDatum *token_doc_cnt_datum = nullptr;
+    ObDatum *total_doc_cnt_datum = nullptr;
+    ObDatum *doc_length_datum = nullptr;
+    ObDatum *token_weight_datum = nullptr;
+    ObDatum *avg_doc_token_cnt_datum = nullptr;
+    ObDatum *related_token_cnt_datum = nullptr;
+    if (OB_FAIL(expr.eval_param_value(
+        ctx,
+        token_doc_cnt_datum,
+        total_doc_cnt_datum,
+        doc_length_datum,
+        token_weight_datum,
+        avg_doc_token_cnt_datum,
+        related_token_cnt_datum))) {
+      LOG_WARN("evaluate parameter value failed", K(ret));
+    } else if (OB_UNLIKELY(token_doc_cnt_datum->is_null() || total_doc_cnt_datum->is_null()
+        || doc_length_datum->is_null() || token_weight_datum->is_null()
+        || avg_doc_token_cnt_datum->is_null() || related_token_cnt_datum->is_null())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null datum", K(ret),  KPC(token_doc_cnt_datum), KPC(total_doc_cnt_datum), KPC(doc_length_datum),
+          KPC(token_weight_datum), KPC(avg_doc_token_cnt_datum), KPC(related_token_cnt_datum));
+    } else {
+      const int64_t token_doc_cnt = token_doc_cnt_datum->get_int();
+      const int64_t total_doc_cnt = total_doc_cnt_datum->get_int();
+      const int64_t related_token_cnt = related_token_cnt_datum->get_uint();
+      const int64_t doc_token_cnt = doc_length_datum->get_uint();
+      const double avg_doc_token_cnt = avg_doc_token_cnt_datum->get_double();
+      const double norm_len = doc_token_cnt / avg_doc_token_cnt;
+      const double token_weight = token_weight_datum->get_double();
+      const double doc_weight = doc_token_weight(related_token_cnt, norm_len);
+      const double relevance = token_weight * doc_weight;
+      res_datum.set_double(relevance);
+      LOG_DEBUG("show bm25 parameters for current document",
+          K(token_doc_cnt), K(total_doc_cnt), K(related_token_cnt), K(doc_token_cnt), K(avg_doc_token_cnt),
+          K(norm_len), K(token_weight), K(doc_weight), K(relevance));
+    }
   }
   return ret;
 }
@@ -97,27 +148,28 @@ int ObExprBM25::eval_bm25_relevance_expr(const ObExpr &expr, ObEvalCtx &ctx, ObD
 int ObExprBM25::eval_batch_bm25_relevance_expr(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t size)
 {
   int ret = OB_SUCCESS;
-  ObDatumVector token_doc_cnt_datum;
-  ObDatumVector total_doc_cnt_datum;
-  ObDatumVector doc_token_cnt_datum;
-  ObDatumVector avg_doc_token_cnt_datum;
-  ObDatumVector related_token_cnt_datum;
-  if (OB_FAIL(expr.eval_batch_param_value(
-    ctx,
-    skip,
-    size,
-    token_doc_cnt_datum,
-    total_doc_cnt_datum,
-    doc_token_cnt_datum,
-    avg_doc_token_cnt_datum,
-    related_token_cnt_datum))) {
-      LOG_WARN("evaluate parameter value failed", K(ret));
-  } else if (OB_UNLIKELY(token_doc_cnt_datum.at(0)->is_null() || total_doc_cnt_datum.at(0)->is_null()
-      || avg_doc_token_cnt_datum.at(0)->is_null())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null datum", K(ret), KPC(token_doc_cnt_datum.at(0)), KPC(total_doc_cnt_datum.at(0)),
-         KPC(avg_doc_token_cnt_datum.at(0)));
-  } else {
+  if (!use_new_version(expr)) {
+    ObDatumVector token_doc_cnt_datum;
+    ObDatumVector total_doc_cnt_datum;
+    ObDatumVector doc_token_cnt_datum;
+    ObDatumVector avg_doc_token_cnt_datum;
+    ObDatumVector related_token_cnt_datum;
+    if (OB_FAIL(expr.eval_batch_param_value(
+      ctx,
+      skip,
+      size,
+      token_doc_cnt_datum,
+      total_doc_cnt_datum,
+      doc_token_cnt_datum,
+      avg_doc_token_cnt_datum,
+      related_token_cnt_datum))) {
+        LOG_WARN("evaluate parameter value failed", K(ret));
+    } else if (OB_UNLIKELY(token_doc_cnt_datum.at(0)->is_null() || total_doc_cnt_datum.at(0)->is_null()
+        || avg_doc_token_cnt_datum.at(0)->is_null())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null datum", K(ret), KPC(token_doc_cnt_datum.at(0)), KPC(total_doc_cnt_datum.at(0)),
+           KPC(avg_doc_token_cnt_datum.at(0)));
+    } else {
       const int64_t token_doc_cnt = token_doc_cnt_datum.at(0)->get_int();
       const int64_t total_doc_cnt = total_doc_cnt_datum.at(0)->get_int();
       const double token_weight = query_token_weight(token_doc_cnt, total_doc_cnt);
@@ -131,17 +183,65 @@ int ObExprBM25::eval_batch_bm25_relevance_expr(const ObExpr &expr, ObEvalCtx &ct
           LOG_WARN("unexpected null datum", K(ret), KPC(doc_token_cnt_datum.at(i)), KPC(related_token_cnt_datum.at(i)));
         }  else if (!skip.contain(i) && !eval_flags.at(i)) {
           const int64_t related_token_cnt = related_token_cnt_datum.at(i)->get_uint();
-          const int64_t doc_token_cnt = doc_token_cnt_datum.at(i)->get_int();
+          const uint64_t doc_token_cnt = doc_token_cnt_datum.at(i)->get_uint();
           const double norm_len = doc_token_cnt / avg_doc_token_cnt;
           const double doc_weight = doc_token_weight(related_token_cnt, norm_len);
           const double relevance = token_weight * doc_weight;
           res_datum[i].set_double(relevance);
-          eval_flags.set(i);
           LOG_DEBUG("show bm25 parameters for current document",
               K(token_doc_cnt), K(total_doc_cnt), K(related_token_cnt), K(doc_token_cnt), K(avg_doc_token_cnt),
               K(norm_len), K(token_weight), K(doc_weight), K(relevance));
         }
       }
+    }
+  } else {
+    ObDatumVector token_doc_cnt_datum;
+    ObDatumVector total_doc_cnt_datum;
+    ObDatumVector doc_length_datum;
+    ObDatumVector token_weight_datum;
+    ObDatumVector avg_doc_token_cnt_datum;
+    ObDatumVector related_token_cnt_datum;
+    if (OB_FAIL(expr.eval_batch_param_value(
+      ctx,
+      skip,
+      size,
+      token_doc_cnt_datum,
+      total_doc_cnt_datum,
+      doc_length_datum,
+      token_weight_datum,
+      avg_doc_token_cnt_datum,
+      related_token_cnt_datum))) {
+        LOG_WARN("evaluate parameter value failed", K(ret));
+    } else if (OB_UNLIKELY(token_doc_cnt_datum.at(0)->is_null() || total_doc_cnt_datum.at(0)->is_null()
+        || token_weight_datum.at(0)->is_null() || avg_doc_token_cnt_datum.at(0)->is_null())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null datum", K(ret), KPC(token_weight_datum.at(0)), KPC(avg_doc_token_cnt_datum.at(0)));
+    } else {
+        const int64_t token_doc_cnt = token_doc_cnt_datum.at(0)->get_int();
+        const int64_t total_doc_cnt = total_doc_cnt_datum.at(0)->get_int();
+        const double token_weight = token_weight_datum.at(0)->get_double();
+        const double avg_doc_token_cnt = avg_doc_token_cnt_datum.at(0)->get_double();
+        ObDatum *res_datum = expr.locate_batch_datums(ctx);
+        ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+        for(int64_t i = 0; OB_SUCC(ret) && i < size; ++i)
+        {
+          if (OB_UNLIKELY(doc_length_datum.at(i)->is_null() || related_token_cnt_datum.at(i)->is_null())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null datum", K(ret), KPC(doc_length_datum.at(i)), KPC(related_token_cnt_datum.at(i)));
+          }  else if (!skip.contain(i) && !eval_flags.at(i)) {
+            const int64_t related_token_cnt = related_token_cnt_datum.at(i)->get_uint();
+            const uint64_t doc_token_cnt = doc_length_datum.at(i)->get_uint();
+            const double norm_len = doc_token_cnt / avg_doc_token_cnt;
+            const double doc_weight = doc_token_weight(related_token_cnt, norm_len);
+            const double relevance = token_weight * doc_weight;
+            res_datum[i].set_double(relevance);
+            eval_flags.set(i);
+            LOG_DEBUG("show bm25 parameters for current document",
+                K(token_doc_cnt), K(total_doc_cnt), K(related_token_cnt), K(doc_token_cnt), K(avg_doc_token_cnt),
+                K(norm_len), K(token_weight), K(doc_weight), K(relevance));
+          }
+        }
+    }
   }
   return ret;
 }

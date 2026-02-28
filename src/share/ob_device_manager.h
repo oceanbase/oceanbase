@@ -52,6 +52,7 @@ public:
   virtual bool is_shared_storage_mode() const override;
   virtual bool is_write_with_if_match() const override;
   virtual bool is_enable_obdal() const override;
+  virtual bool is_enable_object_storage_async_io() const override;
   static ObClusterStateMgr &get_instance()
   {
     static ObClusterStateMgr mgr;

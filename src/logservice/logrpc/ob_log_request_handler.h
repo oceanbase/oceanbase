@@ -39,6 +39,7 @@ class ObArbitrationService;
 class ObLogFlashbackService;
 class ObLogHandler;
 class ObLogReplayService;
+class LogChangeAccessModeCmd;
 
 class LogRequestHandler
 {

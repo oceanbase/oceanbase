@@ -68,11 +68,6 @@ public:
   ObMicroBlockWriter();
   virtual ~ObMicroBlockWriter();
   int init(const ObDataStoreDesc *data_store_desc);
-
-  int init(const int64_t micro_block_size_limit,
-           const int64_t rowkey_column_count,
-           const int64_t column_count);
-
   virtual int append_row(const ObDatumRow &row);
   virtual int build_block(char *&buf, int64_t &size);
   virtual void reuse();
@@ -84,16 +79,16 @@ public:
   virtual int append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder);
   void reset();
 private:
+  int init(const int64_t micro_block_size_limit,
+           const int64_t rowkey_column_count,
+           const int64_t column_count);
   int inner_init();
   inline int64_t get_index_size() const;
   inline int64_t get_data_size() const;
   inline int64_t get_future_block_size() const;
   int try_to_append_row();
   int finish_row();
-  int reserve_header(
-      const int64_t column_count,
-      const int64_t rowkey_column_count,
-      const bool need_calc_column_chksum);
+  int reserve_header();
   bool is_exceed_limit();
   int64_t get_data_base_offset() const;
   int64_t get_index_base_offset() const;
@@ -107,10 +102,7 @@ private:
 
 private:
   int64_t micro_block_size_limit_;
-  int64_t column_count_;
-  int64_t rowkey_column_count_;
   const common::ObIArray<share::schema::ObColDesc> *col_desc_array_;
-  int64_t row_count_;
   ObMicroBufferFlatWriter<EnableNewFlatFormat> data_buffer_;
   ObMicroBufferWriter index_buffer_;
   ObMicroBlockHashIndexBuilder hash_index_builder_;
@@ -129,7 +121,7 @@ inline int64_t ObMicroBlockWriter<EnableNewFlatFormat>::get_block_size() const
 template<bool EnableNewFlatFormat>
 inline int64_t ObMicroBlockWriter<EnableNewFlatFormat>::get_row_count() const
 {
-  return row_count_;
+  return micro_header_.row_count_;
 }
 
 template<bool EnableNewFlatFormat>
@@ -145,7 +137,7 @@ inline int64_t ObMicroBlockWriter<EnableNewFlatFormat>::get_data_size() const
 template<bool EnableNewFlatFormat>
 inline int64_t ObMicroBlockWriter<EnableNewFlatFormat>::get_column_count() const
 {
-  return column_count_;
+  return micro_header_.column_count_;
 }
 
 template<bool EnableNewFlatFormat>
@@ -171,7 +163,7 @@ inline int64_t ObMicroBlockWriter<EnableNewFlatFormat>::get_future_block_size() 
 template<bool EnableNewFlatFormat>
 inline int64_t ObMicroBlockWriter<EnableNewFlatFormat>::get_data_base_offset() const
 {
-  return ObMicroBlockHeader::get_serialize_size(column_count_, is_major_);
+  return micro_header_.get_serialize_size();
 }
 
 template<bool EnableNewFlatFormat>
@@ -185,7 +177,7 @@ inline int64_t ObMicroBlockWriter<EnableNewFlatFormat>::get_original_size() cons
 {
   int64_t original_size = 0;
   if (data_buffer_.length() > 0) {
-    original_size = data_buffer_.length() - ObMicroBlockHeader::get_serialize_size(column_count_, is_major_);
+    original_size = data_buffer_.length() - micro_header_.get_serialize_size();
   }
   return original_size;
 }

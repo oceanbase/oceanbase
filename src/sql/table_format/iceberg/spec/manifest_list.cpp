@@ -19,6 +19,7 @@
 #include "sql/table_format/iceberg/spec/manifest.h"
 #include "sql/table_format/iceberg/spec/partition.h"
 #include "sql/table_format/iceberg/spec/schema.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 
 #include <avro/DataFile.hh>
 
@@ -28,6 +29,27 @@ namespace sql
 {
 namespace iceberg
 {
+
+const StructType ManifestFile::partition_summary_type = StructType({new (std::nothrow) SchemaField(509,
+                                                                                                   "contains_null",
+                                                                                                   BooleanType::get_instance(),
+                                                                                                   false,
+                                                                                                   "True if any file has a null partition value"),
+                                                                     new (std::nothrow) SchemaField(518,
+                                                                                                   "contains_nan",
+                                                                                                   BooleanType::get_instance(),
+                                                                                                   true,
+                                                                                                   "True if any file has a nan partition value"),
+                                                                     new (std::nothrow) SchemaField(510,
+                                                                                                   "lower_bound",
+                                                                                                   BinaryType::get_instance(),
+                                                                                                   true,
+                                                                                                   "Partition lower bound for all files"),
+                                                                     new (std::nothrow) SchemaField(511,
+                                                                                                   "upper_bound",
+                                                                                                   BinaryType::get_instance(),
+                                                                                                   true,
+                                                                                                   "Partition upper bound for all files")});
 
 PartitionFieldSummary::PartitionFieldSummary(ObIAllocator &allocator) : SpecWithAllocator(allocator)
 {

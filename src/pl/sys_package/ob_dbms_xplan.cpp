@@ -498,6 +498,65 @@ int ObDbmsXplan::display_active_session_plan(ObPLExecCtx &ctx,
   return ret;
 }
 
+/**
+ * @brief ObDbmsXplan::enable_mem_perf
+ * @param ctx
+ * @param params
+ *      identifier  IN VARCHAR2 DEFAULT ''
+ * @param result
+ * @return
+ */
+int ObDbmsXplan::enable_mem_perf(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(result);
+  ObString identifier;
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(ctx.exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(session = ctx.exec_ctx_->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null session", K(ret));
+  } else if (1 != params.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect four params", K(ret));
+  } else if (OB_FAIL(params.at(0).get_varchar(identifier))) {
+    LOG_WARN("failed to get identified", K(ret));
+  } else if (OB_FALSE_IT(session->get_optimizer_tracer().set_session_info(session))) {
+  } else if (OB_FAIL(session->get_optimizer_tracer().enable_mem_perf(identifier))) {
+    LOG_WARN("failed to enable memory perf", K(ret));
+  }
+  return ret;
+}
+
+/**
+ * @brief ObDbmsXplan::disable_mem_perf
+ * @param ctx
+ * @param params
+ * @param result
+ * @return
+ */
+int ObDbmsXplan::disable_mem_perf(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(result);
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(ctx.exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null exec context", K(ret));
+  } else if (OB_ISNULL(session = ctx.exec_ctx_->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null session", K(ret));
+  } else if (0 != params.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect four params", K(ret));
+  } else {
+    session->get_optimizer_tracer().set_mem_perf_enable(false);
+  }
+  return ret;
+}
+
 int ObDbmsXplan::get_server_ip_port(ObPLExecCtx &ctx,
                                     ObString &svr_ip,
                                     int64_t &svr_port)

@@ -28,8 +28,6 @@ namespace oceanbase
 {
 namespace sql
 {
-
-
 ObObjDatumMapType ObFTIndexRowCache::FTS_INDEX_TYPES[] = {OBJ_DATUM_STRING, OBJ_DATUM_STRING, OBJ_DATUM_8BYTE_DATA, OBJ_DATUM_8BYTE_DATA};
 ObObjDatumMapType ObFTIndexRowCache::FTS_DOC_WORD_TYPES[] = {OBJ_DATUM_STRING, OBJ_DATUM_STRING, OBJ_DATUM_8BYTE_DATA, OBJ_DATUM_8BYTE_DATA};
 
@@ -509,6 +507,13 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
     // for normal multivalue index, column_ids: [multivalue_col, rowkeys, docid]
     // when doc id optimization is enabled, column_ids: [multivalue_col, pk_increment]
     bool use_docid = !(data_table_rowkey_cnt == 1 && column_num == 2);
+    if (use_docid) {
+      ObDocIDType doc_id_type = das_ctdef.table_param_.get_data_table().get_multivalue_doc_id_type();
+      // for non-primary key heap table with cluster key, doc_id_type is HIDDEN_INC_PK, column_ids: [multivalue_col, rowkeys(pk_increment included)]
+      if (doc_id_type == ObDocIDType::HIDDEN_INC_PK) {
+        use_docid = false;
+      }
+    }
 
     void *rows_buf = nullptr;
     bool is_save_rowkey = true;

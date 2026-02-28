@@ -196,7 +196,8 @@ ObOptColumnStat::ObOptColumnStat()
       cg_macro_blk_cnt_(0),
       cg_micro_blk_cnt_(0),
       cg_skip_rate_(0.0),
-      is_internal_(false)
+      is_internal_(false),
+      lob_inrow_count_(-1)
 {
   min_value_.set_null();
   max_value_.set_null();
@@ -225,7 +226,8 @@ ObOptColumnStat::ObOptColumnStat(ObIAllocator &allocator)
       cg_macro_blk_cnt_(0),
       cg_micro_blk_cnt_(0),
       cg_skip_rate_(0.0),
-      is_internal_(false)
+      is_internal_(false),
+      lob_inrow_count_(-1)
 {
   min_value_.set_null();
   max_value_.set_null();
@@ -258,6 +260,7 @@ void ObOptColumnStat::reset()
   cg_micro_blk_cnt_ = 0;
   cg_skip_rate_ = 0.0;
   is_internal_ = false;
+  lob_inrow_count_ = -1;
 }
 
 int64_t ObOptColumnStat::size() const
@@ -310,6 +313,7 @@ int ObOptColumnStat::deep_copy(const ObOptColumnStat &src)
   cg_micro_blk_cnt_ = src.cg_micro_blk_cnt_;
   cg_skip_rate_ = src.cg_skip_rate_;
   is_internal_ = src.is_internal_;
+  lob_inrow_count_ = src.lob_inrow_count_;
   if (OB_FAIL(ob_write_obj(allocator_, src.min_value_, min_value_))) {
     LOG_WARN("deep copy min_value_ failed.", K_(src.min_value), K(ret));
   } else if (OB_FAIL(ob_write_obj(allocator_, src.max_value_, max_value_))) {
@@ -373,6 +377,7 @@ int ObOptColumnStat::deep_copy(const ObOptColumnStat &src, char *buf, const int6
   cg_micro_blk_cnt_ = src.cg_micro_blk_cnt_;
   cg_skip_rate_ = src.cg_skip_rate_;
   is_internal_ = src.is_internal_;
+  lob_inrow_count_ = src.lob_inrow_count_;
   if (!src.is_valid() || nullptr == buf || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments.", K(src), KP(buf), K(size), K(ret));
@@ -412,6 +417,7 @@ int ObOptColumnStat::assign(const ObOptColumnStat &other)
   llc_bitmap_ = other.llc_bitmap_;
   cg_skip_rate_ = other.cg_skip_rate_;
   is_internal_ = other.is_internal_;
+  lob_inrow_count_ = other.lob_inrow_count_;
   if (OB_FAIL(histogram_.assign(other.histogram_))) {
     LOG_WARN("failed to assign", K(ret));
   } else {
@@ -436,9 +442,12 @@ void ObHistogram::calc_density(ObHistType hist_type,
                                const int64_t ndv,
                                const int64_t pop_ndv)
 {
-  if (ObHistType::FREQUENCY == hist_type ||
-      ObHistType::TOP_FREQUENCY == hist_type ||
-      ndv <= pop_ndv || row_count == pop_row_count ) {
+  if (row_count == 0) {
+    density_ = 0;
+  } else if (ObHistType::FREQUENCY == hist_type ||
+             ObHistType::TOP_FREQUENCY == hist_type ||
+             ndv <= pop_ndv ||
+             row_count == pop_row_count ) {
     density_ = 1.0 / (row_count * 2);
   } else {
     density_ = (1.0 * (row_count - pop_row_count)) / ((ndv - pop_ndv) * row_count);
@@ -464,6 +473,9 @@ int ObOptColumnStat::merge_column_stat(const ObOptColumnStat &other)
       add_num_null(other.get_num_null());
       add_num_not_null(other.get_num_not_null());
       add_col_len(other.get_total_col_len());
+      if (other.get_lob_inrow_count() >= 0) {
+        add_lob_inrow_count(other.get_lob_inrow_count());
+      }
       calc_avg_len();
       if (get_llc_bitmap_size() == other.get_llc_bitmap_size()) {
         ObGlobalNdvEval::update_llc(get_llc_bitmap(), other.get_llc_bitmap());
@@ -536,6 +548,7 @@ OB_DEF_SERIALIZE(ObOptColumnStat) {
     pos += llc_bitmap_size_;
   }
   OB_UNIS_ENCODE(total_col_len_);
+  OB_UNIS_ENCODE(lob_inrow_count_);
   return ret;
 }
 
@@ -556,6 +569,7 @@ OB_DEF_SERIALIZE_SIZE(ObOptColumnStat) {
   if (llc_bitmap_size_ !=0)
     len += llc_bitmap_size_;
   OB_UNIS_ADD_LEN(total_col_len_);
+  OB_UNIS_ADD_LEN(lob_inrow_count_);
   return len;
 }
 
@@ -583,6 +597,7 @@ OB_DEF_DESERIALIZE(ObOptColumnStat) {
     }
   }
   OB_UNIS_DECODE(total_col_len_);
+  OB_UNIS_DECODE(lob_inrow_count_);
   return ret;
 }
 

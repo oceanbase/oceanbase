@@ -25,7 +25,7 @@ template <class MUTEX>
 class TestLatchContend: public lib::ThreadPool
 {
 public:
-  TestLatchContend() {}
+  TestLatchContend(): mutex_(common::ObLatchIds::TEST_LATCH_LOCK) {}
   virtual ~TestLatchContend() {}
   void run1() final
   {
@@ -95,7 +95,7 @@ class RWLockWithTimeout
 {
   public:
     RWLockWithTimeout(bool has_timeout,
-        uint32_t latch_id = ObLatchIds::DEFAULT_SPIN_RWLOCK)
+        uint32_t latch_id = common::ObLatchIds::TEST_LATCH_LOCK)
         : latch_(), has_timeout_(has_timeout), latch_id_(latch_id)
     {
     }
@@ -204,6 +204,11 @@ struct CriticalSec
     char *data_;
   };
   int64_t ref_cnt_;
+
+  void init_lock()
+  {
+    new(&lock_) SpinRWLock(common::ObLatchIds::TEST_LATCH_LOCK);
+  }
 };
 
 static const int64_t core_test_th_cnt = 4;
@@ -216,6 +221,7 @@ public:
     buf_ = (char *)malloc(sizeof(CriticalSec) * 2);
     memset(buf_, 0, sizeof(CriticalSec) * 2);
     cs_ = new (buf_) CriticalSec();
+    cs_->init_lock();
     pthread_barrier_init(&start_, NULL, core_test_th_cnt);
   }
   virtual ~ObLatchTestRun() { free(buf_); }
@@ -286,8 +292,8 @@ TEST(ObLatch,wr2rdlock)
 
 TEST(ObLatch, invaid_unlock)
 {
-  lib::ObMutex mutex;
-  common::SpinRWLock rwlock;
+  lib::ObMutex mutex(common::ObLatchIds::TEST_LATCH_LOCK);
+  common::SpinRWLock rwlock(common::ObLatchIds::TEST_LATCH_LOCK);
 
   ASSERT_EQ(OB_ERR_UNEXPECTED, mutex.unlock());
   ASSERT_EQ(OB_ERR_UNEXPECTED, rwlock.unlock());

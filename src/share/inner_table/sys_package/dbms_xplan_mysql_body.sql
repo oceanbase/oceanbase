@@ -57,4 +57,12 @@ CREATE OR REPLACE PACKAGE BODY dbms_xplan
     return text;
     PRAGMA INTERFACE(C, DISPLAY_ACTIVE_SESSION_PLAN);
 
+    PROCEDURE enable_mem_perf(
+        identifier      VARCHAR(20)  DEFAULT DEFAULT_INENTIFIER
+    );
+    PRAGMA INTERFACE(C, ENABLE_MEM_PERF);
+
+    PROCEDURE disable_mem_perf();
+    PRAGMA INTERFACE(C, DISABLE_MEM_PERF);
+
 END dbms_xplan;

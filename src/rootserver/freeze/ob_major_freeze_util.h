@@ -14,6 +14,8 @@
 #define OCEANBASE_ROOTSERVER_FREEZE_OB_MAJOR_FREEZE_UTIL_H_
 
 #include <stdint.h>
+#include "share/ob_define.h"
+#include "lib/utility/ob_unify_serialize.h"
 
 namespace oceanbase
 {
@@ -34,6 +36,9 @@ public:
                                       ObRestoreMajorFreezeService *restore_major_freeze_service,
                                       ObMajorFreezeService *&major_freeze_service,
                                       bool &is_primary_service);
+  static int check_epoch_immediately(common::ObISQLClient &sql_proxy,
+                                      const uint64_t tenant_id,
+                                      const int64_t expected_epoch);
   static int check_epoch_periodically(common::ObISQLClient &sql_proxy,
                                       const uint64_t tenant_id,
                                       const int64_t expected_epoch,
@@ -75,6 +80,26 @@ enum ObMajorFreezeReason : uint8_t {
 
 const char *major_freeze_reason_to_str(const int64_t freeze_reason);
 bool is_valid_major_freeze_reason(const ObMajorFreezeReason &freeze_reason);
+
+struct ObWindowCompactionParam
+{
+public:
+  ObWindowCompactionParam()
+    : with_start_ts_(false),
+      window_start_time_us_(-1)
+  {}
+  ObWindowCompactionParam(const bool with_start_ts, const int64_t window_start_time_us)
+    : with_start_ts_(with_start_ts),
+      window_start_time_us_(window_start_time_us)
+  {}
+  ~ObWindowCompactionParam() = default;
+  bool is_valid() const { return !with_start_ts_ || (with_start_ts_ && window_start_time_us_ > 0); }
+  TO_STRING_KV(K_(with_start_ts), K_(window_start_time_us));
+  OB_UNIS_VERSION(1);
+public:
+  bool with_start_ts_;
+  int64_t window_start_time_us_;
+};
 
 } // end namespace rootserver
 } // end namespace oceanbase

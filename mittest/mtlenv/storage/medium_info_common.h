@@ -56,9 +56,19 @@ public:
   static int remove_ls(const share::ObLSID &ls_id);
   int create_tablet(const common::ObTabletID &tablet_id, ObTabletHandle &tablet_handle);
   int insert_medium_info(const int64_t trans_id, const compaction::ObMediumCompactionInfoKey &key);
-  int insert_truncate_info(const int64_t trans_id, const int64_t commit_version, ObTruncateInfo &info);
+
+  template <typename T>
+  int insert_info(const int64_t trans_id, const int64_t commit_version, T &info);
+
+  int insert_truncate_info(const int64_t trans_id, const int64_t commit_version, ObTruncateInfo &info)
+  { return insert_info(trans_id, commit_version, info); }
   int insert_truncate_info(ObTruncateInfo &info)
   { return insert_truncate_info(info.key_.tx_id_, info.commit_version_, info); }
+  int insert_ttl_filter_info(const int64_t trans_id, const int64_t commit_version, ObTTLFilterInfo &info)
+  { return insert_info(trans_id, commit_version, info); }
+  int insert_ttl_filter_info(ObTTLFilterInfo &info)
+  { return insert_ttl_filter_info(info.key_.tx_id_, info.commit_version_, info); }
+
   static int get_tablet(const common::ObTabletID &tablet_id, ObTabletHandle &tablet_handle);
   int wait_mds_mini_finish(const common::ObTabletID &tablet_id, const int64_t commit_version);
   int wait_for_mds_table_flush(const common::ObTabletID &tablet_id, const int64_t prev_mds_sstable_cnt = 0);
@@ -201,10 +211,8 @@ int MediumInfoCommon::wait_mds_mini_finish(const common::ObTabletID &tablet_id, 
   return ret;
 }
 
-int MediumInfoCommon::insert_truncate_info(
-  const int64_t trans_id,
-  const int64_t commit_version,
-  ObTruncateInfo &info)
+template <typename T>
+int MediumInfoCommon::insert_info(const int64_t trans_id, const int64_t commit_version, T &info)
 {
   int ret = OB_SUCCESS;
   mds::MdsCtx ctx{mds::MdsWriter{transaction::ObTransID{trans_id}}};

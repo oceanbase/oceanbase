@@ -112,11 +112,47 @@ protected:
   };
 
 public:
+  struct BloomFilterItem
+  {
+    BloomFilterItem(const int64_t ext_tbl_col_id, const ObDatumMeta *datum_meta, const ObDatum *datum):
+    ext_tbl_col_id_(ext_tbl_col_id), datum_meta_(datum_meta), datum_(datum) {}
+
+    // adapt ObSEArray assign()
+    BloomFilterItem() {}
+    int assign(const BloomFilterItem& other) {
+      ext_tbl_col_id_ = other.ext_tbl_col_id_;
+      datum_meta_ = other.datum_meta_;
+      datum_ = other.datum_;
+      return OB_SUCCESS;
+    }
+
+    int64_t ext_tbl_col_id_;
+    const ObDatumMeta *datum_meta_;
+    const ObDatum *datum_;
+    TO_STRING_KV(K_(ext_tbl_col_id), KPC(datum_meta_), KPC(datum_));
+  };
+
+  class BloomFilterParamBuilder
+  {
+  public:
+    virtual ~BloomFilterParamBuilder() = default;
+    virtual int may_contain(
+      const PushdownLevel filter_level,
+      const BloomFilterItem& item,
+      bool& /* out */ may_contain) = 0;
+    // parse timezone offset info from session
+    void set_tz_offset(int32_t tz_offset) {
+      tz_offset_sec_ = tz_offset;
+    }
+  protected:
+    int32_t tz_offset_sec_{INT32_MAX};
+  };
+
   ObExternalTablePushdownFilter() : is_eager_column_(allocator_), is_dup_project_(allocator_),
     eager_columns_(), lazy_columns_(), skip_filter_executor_(), skipping_filter_nodes_(),
     file_filter_col_ids_(allocator_), file_filter_col_metas_(allocator_),
     pd_storage_filters_(nullptr), ext_tbl_filter_pd_level_(0),
-    column_ids_(nullptr), filter_enabled_(false) {}
+    column_ids_(nullptr), filter_enabled_(false), bloom_filter_enabled_(false) {}
   virtual ~ObExternalTablePushdownFilter() {}
   virtual int init(sql::ObPushdownFilterExecutor *pd_storage_filters,
                    int64_t ext_tbl_filter_pd_level,
@@ -126,10 +162,25 @@ public:
   int prepare_filter_col_meta(const common::ObArrayWrap<int> &file_col_index,
                               const common::ObIArray<uint64_t> &col_ids,
                               const common::ObIArray<ObColumnMeta> &col_metas);
+
+  int apply_skipping_index_filter(const PushdownLevel filter_level,
+                                  MinMaxFilterParamBuilder &param_builder,
+                                  BloomFilterParamBuilder* bloom_filter_builder,
+                                  bool &skipped,
+                                  const int64_t row_count = MOCK_ROW_COUNT);
+
+
   int apply_skipping_index_filter(const PushdownLevel filter_level,
                                   MinMaxFilterParamBuilder &param_builder,
                                   bool &skipped,
-                                  const int64_t row_count = MOCK_ROW_COUNT);
+                                  const int64_t row_count = MOCK_ROW_COUNT) {
+    return apply_skipping_index_filter(filter_level, param_builder, nullptr, skipped, row_count);
+  }
+
+  int apply_bloom_filter(const PushdownLevel filter_level,
+                         BloomFilterParamBuilder *bloom_filter_builder,
+                         bool &skipped);
+
   OB_INLINE bool has_pushdown_filter() const { return filter_enabled_ && !skipping_filter_nodes_.empty(); }
   OB_INLINE bool has_skip_index_filter() const { return !skipping_filter_nodes_.empty(); }
   int apply_skipping_index_filter(const PushdownLevel filter_level,
@@ -208,6 +259,7 @@ private:
   int64_t ext_tbl_filter_pd_level_;
   const ObIArray<uint64_t> *column_ids_;
   bool filter_enabled_;
+  bool bloom_filter_enabled_;
 };
 
 }

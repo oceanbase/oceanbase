@@ -116,8 +116,11 @@ public:
     bool last_child_processed_{false};
   };
 
-  ProfilePrefixHelper(ObIAllocator &allocator)
-      : allocator_(allocator), prefix_infos_(), ancestors_stack_() {}
+  ProfilePrefixHelper()
+      : allocator_(), prefix_infos_(), ancestors_stack_() {
+    allocator_.set_tenant_id(MTL_ID());
+    allocator_.set_label("ProfilePrefix");
+  }
   int prepare_pretty_prefix(const ObIArray<ObMergedProfileItem> &merged_items);
   const ObIArray<PrefixInfo> &get_prefixs() const { return prefix_infos_; }
   bool is_full_plan() const { return is_full_plan_; }
@@ -128,7 +131,7 @@ private:
   int append_metric_prefix(PrefixInfo &current_profile, int64_t current_depth,
                            const ObMergedProfileItem &merged_item);
 private:
-  ObIAllocator &allocator_;
+  ObArenaAllocator allocator_;
   ObSEArray<PrefixInfo, 4> prefix_infos_;
   // each element reference to an ancestor of current operator
   ObSEArray<Ancestor, 4> ancestors_stack_;

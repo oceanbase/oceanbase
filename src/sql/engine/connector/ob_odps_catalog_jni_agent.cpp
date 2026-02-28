@@ -192,20 +192,22 @@ int ObOdpsJniCatalogAgent::get_java_catalog_service_obj(ObIAllocator &allocator,
           LOG_WARN("failed to construct jni object", K(ret));
         }
       }
-      env_->DeleteLocalRef(access_id);
-      env_->DeleteLocalRef(j_access_id);
-      env_->DeleteLocalRef(access_key);
-      env_->DeleteLocalRef(j_access_key);
-      env_->DeleteLocalRef(project);
-      env_->DeleteLocalRef(j_project);
-      env_->DeleteLocalRef(tunnel_endpoint);
-      env_->DeleteLocalRef(j_tunnel_endpoint);
-      env_->DeleteLocalRef(region);
-      env_->DeleteLocalRef(j_region);
-      env_->DeleteLocalRef(quota);
-      env_->DeleteLocalRef(j_quota);
-      env_->DeleteLocalRef(compression_code);
-      env_->DeleteLocalRef(j_compression_code);
+      if (OB_NOT_NULL(access_id)) env_->DeleteLocalRef(access_id);
+      if (OB_NOT_NULL(j_access_id)) env_->DeleteLocalRef(j_access_id);
+      if (OB_NOT_NULL(access_key)) env_->DeleteLocalRef(access_key);
+      if (OB_NOT_NULL(j_access_key)) env_->DeleteLocalRef(j_access_key);
+      if (OB_NOT_NULL(project)) env_->DeleteLocalRef(project);
+      if (OB_NOT_NULL(j_project)) env_->DeleteLocalRef(j_project);
+      if (OB_NOT_NULL(endpoint)) env_->DeleteLocalRef(endpoint);
+      if (OB_NOT_NULL(j_endpoint)) env_->DeleteLocalRef(j_endpoint);
+      if (OB_NOT_NULL(tunnel_endpoint)) env_->DeleteLocalRef(tunnel_endpoint);
+      if (OB_NOT_NULL(j_tunnel_endpoint)) env_->DeleteLocalRef(j_tunnel_endpoint);
+      if (OB_NOT_NULL(region)) env_->DeleteLocalRef(region);
+      if (OB_NOT_NULL(j_region)) env_->DeleteLocalRef(j_region);
+      if (OB_NOT_NULL(quota)) env_->DeleteLocalRef(quota);
+      if (OB_NOT_NULL(j_quota)) env_->DeleteLocalRef(j_quota);
+      if (OB_NOT_NULL(compression_code)) env_->DeleteLocalRef(compression_code);
+      if (OB_NOT_NULL(j_compression_code)) env_->DeleteLocalRef(j_compression_code);
       allocator.free(access_id_str.ptr());
       allocator.free(access_key_str.ptr());
       allocator.free(project_str.ptr());
@@ -289,11 +291,15 @@ int ObOdpsJniCatalogAgent::do_query_table_list(ObIAllocator &allocator, ObIArray
             env_->DeleteLocalRef(j_table_name);
           }
         }
+      }
+      if (OB_NOT_NULL(jstr_array_list)) {
         env_->DeleteLocalRef(jstr_array_list);
       }
     }
   }
-  env_->DeleteLocalRef(array_list_class);
+  if (OB_NOT_NULL(array_list_class)) {
+    env_->DeleteLocalRef(array_list_class);
+  }
   return ret;
 }
 
@@ -343,11 +349,17 @@ int ObOdpsJniCatalogAgent::do_query_table_info(ObIAllocator &allocator, const Ob
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("array length is less than expected", K(ret), K(array_length));
         }
+      }
+      // Note: release resource outside of condition to avoid memory leak
+      if (OB_NOT_NULL(jlong_array)) {
         env_->DeleteLocalRef(jlong_array);
       }
-      env_->DeleteLocalRef(jstr_table_name);
-      allocator.free(tbl_name_cstr.ptr());
     }
+    // Note: release resource outside of condition to avoid memory leak
+    if (OB_NOT_NULL(jstr_table_name)) {
+      env_->DeleteLocalRef(jstr_table_name);
+    }
+    allocator.free(tbl_name_cstr.ptr());
   }
   return ret;
 }

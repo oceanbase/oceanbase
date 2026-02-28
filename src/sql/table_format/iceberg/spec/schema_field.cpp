@@ -45,7 +45,5 @@ int SchemaField::to_json_kv_string(char *buf, const int64_t buf_len, int64_t &po
 }
 
 } // namespace iceberg
-
 } // namespace sql
-
 } // namespace oceanbase

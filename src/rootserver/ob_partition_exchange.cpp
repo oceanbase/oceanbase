@@ -18,6 +18,7 @@
 #include "share/tablet/ob_tablet_to_table_history_operator.h" // ObTabletToTableHistoryOperator
 #include "share/tablet/ob_tablet_to_ls_operator.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "share/ob_lob_access_utils.h" // ObTextStringIter
 #include "lib/roaringbitmap/ob_rb_utils.h" // ObRbUtils
 
@@ -456,6 +457,8 @@ int ObPartitionExchange::check_partition_exchange_conditions_(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("exchange partition table is not user table", K(ret), K(base_table_schema.is_user_table()), K(base_table_schema.is_ctas_tmp_table()), K(inc_table_schema.is_user_table()), K(inc_table_schema.is_ctas_tmp_table()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Partition exchange operations for non-user tables are");
+  } else if (OB_FAIL(ObCompactionTTLUtil::check_exchange_partition_for_append_only_valid(base_table_schema, inc_table_schema))) {
+    LOG_WARN("failed to check exchange partition for append only valid", K(ret), K(base_table_schema), K(inc_table_schema), K(arg.tenant_id_));
   } else if (OB_UNLIKELY(arg.base_table_part_name_.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("base table part name should not be empty", K(ret), K(arg.base_table_part_name_));
@@ -743,6 +746,8 @@ int ObPartitionExchange::check_table_conditions_in_common_(
       LOG_WARN("table flags of exchanging partition tables are not equal", K(ret), K(base_table_schema.get_table_flags()), K(inc_table_schema.get_table_flags()));
     } else if (OB_UNLIKELY(0 != base_table_schema.get_ttl_definition().compare(inc_table_schema.get_ttl_definition()))) {
       LOG_WARN("ttl definition of exchanging partition tables are not equal", K(ret), K(base_table_schema.get_ttl_definition()), K(inc_table_schema.get_ttl_definition()));
+    } else if (OB_UNLIKELY(base_table_schema.get_ttl_flag().flag_ != inc_table_schema.get_ttl_flag().flag_)) {
+      LOG_WARN("ttl flag of exchanging partition tables are not equal", K(ret), K(base_table_schema.get_ttl_flag()), K(inc_table_schema.get_ttl_flag()));
     } else if (OB_UNLIKELY(0 != base_table_schema.get_kv_attributes().compare(inc_table_schema.get_kv_attributes()))) {
       LOG_WARN("kv attributes of exchanging partition tables are not equal", K(ret), K(base_table_schema.get_kv_attributes()), K(inc_table_schema.get_kv_attributes()));
     } else if (OB_UNLIKELY(base_table_schema.get_index_using_type() != inc_table_schema.get_index_using_type())) {
@@ -2544,7 +2549,7 @@ int ObPartitionExchange::generate_auxiliary_table_mapping_(const ObTableSchema &
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < base_table_schemas.count(); i++) {
       // for each base table, find a one-to-one corresponding table in the inc table
-      if (OB_FAIL(generate_local_storage_index_and_lob_table_mapping_(*base_table_schemas.at(i), inc_table_schemas, is_oracle_mode, used_nt_schema_flag))) {
+      if (OB_FAIL(generate_local_storage_index_and_lob_table_mapping_(base_data_table_schema, inc_data_table_schema, *base_table_schemas.at(i), inc_table_schemas, is_oracle_mode, used_nt_schema_flag))) {
         LOG_WARN("fail to generate used aux table id mapping", K(ret), KPC(base_table_schemas.at(i)), K(inc_table_schemas.count()), K(is_oracle_mode), K(used_nt_schema_flag.count()));
       }
     }
@@ -2552,7 +2557,9 @@ int ObPartitionExchange::generate_auxiliary_table_mapping_(const ObTableSchema &
   return ret;
 }
 
-int ObPartitionExchange::generate_local_storage_index_and_lob_table_mapping_(const ObTableSchema &base_table_schema,
+int ObPartitionExchange::generate_local_storage_index_and_lob_table_mapping_(const ObTableSchema &base_data_table_schema,
+                                                                             const ObTableSchema &inc_data_table_schema,
+                                                                             const ObTableSchema &base_table_schema,
                                                                              ObIArray<const ObTableSchema*> &inc_table_schemas,
                                                                              const bool is_oracle_mode,
                                                                              ObIArray<bool> &used_nt_schema_flag)
@@ -2564,13 +2571,13 @@ int ObPartitionExchange::generate_local_storage_index_and_lob_table_mapping_(con
     LOG_WARN("invalid argument", K(ret), K(base_table_schema), K(inc_table_schemas.count()), K(used_nt_schema_flag.count()));
   } else if (base_table_schema.is_index_local_storage()) {
     if (!is_oracle_mode) {
-      if (OB_FAIL(generate_local_storage_index_table_mapping_in_mysql_mode_(base_table_schema, inc_table_schemas, used_nt_schema_flag, find_related_nt_schema))) {
+      if (OB_FAIL(generate_local_storage_index_table_mapping_in_mysql_mode_(base_data_table_schema, inc_data_table_schema, base_table_schema, inc_table_schemas, used_nt_schema_flag, find_related_nt_schema))) {
         LOG_WARN("fail to generate local storage index table mapping in mysql mode", K(ret), K(base_table_schema), K(inc_table_schemas.count()), K(used_nt_schema_flag.count()), K(find_related_nt_schema));
       } else if (!find_related_nt_schema) {
         ret = OB_TABLES_DIFFERENT_DEFINITIONS;
         LOG_WARN("can't find related nt schema in mysql mode", K(ret), K(base_table_schema), K(inc_table_schemas.count()), K(used_nt_schema_flag.count()), K(find_related_nt_schema));
       }
-    } else if (OB_FAIL(generate_local_storage_index_table_mapping_in_oracle_mode_(base_table_schema, inc_table_schemas, used_nt_schema_flag, find_related_nt_schema))) {
+    } else if (OB_FAIL(generate_local_storage_index_table_mapping_in_oracle_mode_(base_data_table_schema, inc_data_table_schema, base_table_schema, inc_table_schemas, used_nt_schema_flag, find_related_nt_schema))) {
       LOG_WARN("fail to generate local storage index table mapping in oracle mode", K(ret), K(base_table_schema), K(inc_table_schemas.count()), K(used_nt_schema_flag.count()), K(find_related_nt_schema));
     } else if (!find_related_nt_schema) {
       ret = OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION;
@@ -2589,7 +2596,9 @@ int ObPartitionExchange::generate_local_storage_index_and_lob_table_mapping_(con
   return ret;
 }
 
-int ObPartitionExchange::generate_local_storage_index_table_mapping_in_mysql_mode_(const ObTableSchema &base_table_schema,
+int ObPartitionExchange::generate_local_storage_index_table_mapping_in_mysql_mode_(const ObTableSchema &base_data_table_schema,
+                                                                                   const ObTableSchema &inc_data_table_schema,
+                                                                                   const ObTableSchema &base_table_schema,
                                                                                    ObIArray<const ObTableSchema*> &inc_table_schemas,
                                                                                    ObIArray<bool> &used_nt_schema_flag,
                                                                                    bool &find_related_nt_schema)
@@ -2612,10 +2621,12 @@ int ObPartitionExchange::generate_local_storage_index_table_mapping_in_mysql_mod
       } else if (OB_FAIL(inc_table_schemas.at(i)->get_index_name(nt_index_name))) {
         LOG_WARN("fail to get index name", K(ret), KPC(inc_table_schemas.at(i)));
       } else if (0 == pt_index_name.compare(nt_index_name)) {
-        if (OB_FAIL(check_table_conditions_in_common_(base_table_schema, *inc_table_schemas.at(i), false /*is mysql mode*/))) {
+        if (OB_FAIL(check_table_conditions_in_common_(base_table_schema, *inc_table_schemas.at(i), false /*is_oracle_mode*/))) {
           LOG_WARN("fail to check table conditions in common", K(ret), K(base_table_schema), KPC(inc_table_schemas.at(i)));
-        } else if (OB_FAIL(check_table_all_column_conditions_(base_table_schema, *inc_table_schemas.at(i), false /*is mysql mode*/))) {
+        } else if (OB_FAIL(check_table_all_column_conditions_(base_table_schema, *inc_table_schemas.at(i), false /*is_oracle_mode*/))) {
           LOG_WARN("fail to check table all column conditions", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
+        } else if (OB_FAIL(check_index_column_data_table_mapping_(base_data_table_schema, inc_data_table_schema, base_table_schema, *inc_table_schemas.at(i), false /*is_oracle_mode*/))) {
+          LOG_WARN("fail to check index column data table mapping", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
         } else {
           find_related_nt_schema = true;
           used_nt_schema_flag.at(i) = true;
@@ -2631,7 +2642,9 @@ int ObPartitionExchange::generate_local_storage_index_table_mapping_in_mysql_mod
   return ret;
 }
 
-int ObPartitionExchange::generate_local_storage_index_table_mapping_in_oracle_mode_(const ObTableSchema &base_table_schema,
+int ObPartitionExchange::generate_local_storage_index_table_mapping_in_oracle_mode_(const ObTableSchema &base_data_table_schema,
+                                                                                    const ObTableSchema &inc_data_table_schema,
+                                                                                    const ObTableSchema &base_table_schema,
                                                                                     ObIArray<const ObTableSchema*> &inc_table_schemas,
                                                                                     ObIArray<bool> &used_nt_schema_flag,
                                                                                     bool &find_related_nt_schema)
@@ -2647,20 +2660,28 @@ int ObPartitionExchange::generate_local_storage_index_table_mapping_in_oracle_mo
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", K(ret));
       } else if (!inc_table_schemas.at(i)->is_index_local_storage() || used_nt_schema_flag.at(i)) {
-      } else if (OB_FAIL(check_table_conditions_in_common_(base_table_schema, *inc_table_schemas.at(i), true /*is oracle mode*/))) {
+      } else if (OB_FAIL(check_table_conditions_in_common_(base_table_schema, *inc_table_schemas.at(i), true /*is_oracle_mode*/))) {
         if (in_find_same_aux_table_retry_white_list_(ret)) {
           LOG_WARN("all column conditions of exchanging partition tables are not equal, and retry find the matched table", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("all column conditions of exchanging partition tables are not equal, and ret_code not in in_find_same_aux_table_retry_white_list", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
         }
-      } else if (OB_FAIL(check_table_all_column_conditions_(base_table_schema, *inc_table_schemas.at(i), true /*is oracle mode*/))) {
+      } else if (OB_FAIL(check_table_all_column_conditions_(base_table_schema, *inc_table_schemas.at(i), true /*is_oracle_mode*/))) {
         // uncertain if other inc tables match the base table, so try matching other inc tables
         if (in_find_same_aux_table_retry_white_list_(ret)) {
           LOG_WARN("all column conditions of exchanging partition tables are not equal, and retry find the matched table", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("all column conditions of exchanging partition tables are not equal, and ret_code not in in_find_same_aux_table_retry_white_list", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
+        }
+      } else if (OB_FAIL(check_index_column_data_table_mapping_(base_data_table_schema, inc_data_table_schema, base_table_schema, *inc_table_schemas.at(i), true /*is_oracle_mode*/))) {
+        // uncertain if other inc tables match the base table, so try matching other inc tables
+        if (in_find_same_aux_table_retry_white_list_(ret)) {
+          LOG_WARN("index column data table mapping check failed, and retry find the matched table", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("index column data table mapping check failed, and ret_code not in in_find_same_aux_table_retry_white_list", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
         }
       } else {
         find_related_nt_schema = true;
@@ -2669,6 +2690,100 @@ int ObPartitionExchange::generate_local_storage_index_table_mapping_in_oracle_mo
           LOG_WARN("fail to set refactored pt nt schema mapping", K(ret), K(base_table_schema), K(inc_table_schemas.at(i)->get_table_id()));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObPartitionExchange::check_index_column_data_table_mapping_(const ObTableSchema &base_data_table_schema,
+                                                                const ObTableSchema &inc_data_table_schema,
+                                                                const ObTableSchema &base_index_schema,
+                                                                const ObTableSchema &inc_index_schema,
+                                                                const bool is_oracle_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!base_index_schema.is_index_local_storage() || !inc_index_schema.is_index_local_storage())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, both schemas should be local index tables", K(ret),
+             K(base_index_schema.is_index_local_storage()), K(inc_index_schema.is_index_local_storage()));
+  } else {
+    const common::ObIndexInfo &base_index_info = base_index_schema.get_index_info();
+    const common::ObIndexInfo &inc_index_info = inc_index_schema.get_index_info();
+
+    if (OB_UNLIKELY(base_index_info.get_size() != inc_index_info.get_size())) {
+      if (is_oracle_mode) {
+        ret = OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION;
+      } else {
+        ret = OB_TABLES_DIFFERENT_DEFINITIONS;
+      }
+      LOG_WARN("index column count mismatch", K(ret), K(is_oracle_mode), K(base_index_info), K(inc_index_info));
+    } else if (!is_oracle_mode) {
+      // check whether each index column refers to the same data table column
+      for (int64_t i = 0; OB_SUCC(ret) && (i < base_index_info.get_size()); ++i) {
+        common::ObIndexColumn base_index_col;
+        common::ObIndexColumn inc_index_col;
+        if (OB_FAIL(base_index_info.get_column(i, base_index_col))) {
+          LOG_WARN("failed to get base index column", K(ret), K(i));
+        } else if (OB_FAIL(inc_index_info.get_column(i, inc_index_col))) {
+          LOG_WARN("failed to get inc index column", K(ret), K(i));
+        } else {
+          // get the data table column that the index column refers to
+          const ObColumnSchemaV2 *base_data_col = base_data_table_schema.get_column_schema(base_index_col.column_id_);
+          const ObColumnSchemaV2 *inc_data_col = inc_data_table_schema.get_column_schema(inc_index_col.column_id_);
+          int64_t base_col_idx = -1;
+          int64_t inc_col_idx = -1;
+
+          if (OB_ISNULL(base_data_col)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("base data table column not found", K(ret), K(base_index_col.column_id_), K(base_data_table_schema));
+          } else if (OB_ISNULL(inc_data_col)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("inc data table column not found", K(ret), K(inc_index_col.column_id_), K(inc_data_table_schema));
+          } else if (OB_FAIL(get_column_position_in_table_(base_data_table_schema, base_data_col, base_col_idx))) {
+            LOG_WARN("failed to get base data column position", K(ret), K(base_index_col.column_id_), K(base_data_table_schema));
+          } else if (OB_FAIL(get_column_position_in_table_(inc_data_table_schema, inc_data_col, inc_col_idx))) {
+            LOG_WARN("failed to get inc data column position", K(ret), K(inc_index_col.column_id_), K(inc_data_table_schema));
+          } else if (OB_UNLIKELY(base_col_idx != inc_col_idx)) {
+            ret = OB_TABLES_DIFFERENT_DEFINITIONS;
+            LOG_WARN("index column references different data table column positions", K(ret),
+                      K(base_index_col.column_id_), K(inc_index_col.column_id_), K(base_col_idx), K(inc_col_idx));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPartitionExchange::get_column_position_in_table_(const ObTableSchema &table_schema,
+                                                       const ObColumnSchemaV2 *column_schema,
+                                                       int64_t &position)
+{
+  int ret = OB_SUCCESS;
+  position = -1;
+  if (OB_ISNULL(column_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, column_schema is null", K(ret));
+  } else {
+    // iterate columns in show create table order, instead of column id order
+    ObColumnIterByPrevNextID iter(table_schema);
+    const ObColumnSchemaV2 *col = NULL;
+    for (int64_t idx = 0; OB_SUCC(ret) && OB_SUCC(iter.next(col)); ++idx) {
+      if (OB_ISNULL(col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("The column is null", K(ret));
+      } else if (col->get_column_id() == column_schema->get_column_id()) {
+        if (col->is_virtual_generated_column()) {
+          // we cannot handle virtual generated column for now because its position is not fixed
+          position = -1;
+        } else {
+          position = idx;
+        }
+        break;
+      }
+    }
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
     }
   }
   return ret;

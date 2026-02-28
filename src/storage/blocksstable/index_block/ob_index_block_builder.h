@@ -228,14 +228,16 @@ struct ObIndexTreeInfo final
     :root_desc_(),
      row_count_(0),
      max_merged_trans_version_(0),
+     min_merged_trans_version_(0),
      contain_uncommitted_row_(false) {}
   ~ObIndexTreeInfo() = default;
   void set_empty();
   TO_STRING_KV(K_(root_desc), K_(row_count),
-      K_(max_merged_trans_version), K_(contain_uncommitted_row));
+      K_(max_merged_trans_version), K_(min_merged_trans_version), K_(contain_uncommitted_row));
   ObIndexTreeRootBlockDesc root_desc_;
   int64_t row_count_;
   int64_t max_merged_trans_version_;
+  int64_t min_merged_trans_version_;
   bool contain_uncommitted_row_;
 };
 
@@ -252,20 +254,19 @@ public:
   static int fill_column_checksum_for_empty_major(
       const int64_t column_count,
       common::ObIArray<int64_t> &column_checksums);
-  OB_INLINE static void fill_addr_and_data(const ObIndexTreeRootBlockDesc &src_block_desc,
+  OB_INLINE static int fill_addr_and_data(const ObIndexTreeRootBlockDesc &src_block_desc,
                                            storage::ObMetaDiskAddr &dst_addr,
                                            ObMicroBlockData &dst_data)
   {
     dst_addr = src_block_desc.addr_;
-    dst_data.buf_ = src_block_desc.buf_;
-    dst_data.size_ = src_block_desc.addr_.size();
+    return dst_data.init_with_prepare_micro_header(src_block_desc.buf_, src_block_desc.addr_.size());
   }
   void set_table_flag_with_macro_id_array();
   TO_STRING_KV(K_(root_desc), K_(data_root_desc), K(data_block_ids_.count()),
                K(other_block_ids_.count()), K_(index_blocks_cnt),
                K_(data_blocks_cnt), K_(micro_block_cnt), K_(data_column_cnt),
                K_(data_column_checksums), K_(row_count),
-               K_(max_merged_trans_version), K_(contain_uncommitted_row),
+               K_(max_merged_trans_version), K_(min_merged_trans_version), K_(contain_uncommitted_row),
                K_(occupy_size), K_(original_size), K_(data_checksum),
                K_(use_old_macro_block_count), K_(compressor_type),
                K_(root_row_store_type), K_(nested_offset), K_(nested_size), K_(is_small_sstable),
@@ -283,6 +284,7 @@ public:
   int64_t data_column_cnt_;
   int64_t row_count_;
   int64_t max_merged_trans_version_;
+  int64_t min_merged_trans_version_;
   bool contain_uncommitted_row_;
   int64_t occupy_size_;
   int64_t original_size_;
@@ -355,6 +357,7 @@ private:
   int new_next_builder(ObBaseIndexBlockBuilder *&next_builder);
   virtual int append_next_row(const ObMicroBlockDesc &micro_block_desc);
   int64_t calc_basic_micro_block_data_offset(const uint64_t column_cnt);
+  int init_tree_info(const ObIndexBlockAggregator &root_aggregator, ObIndexTreeInfo &tree_info) const;
 public:
   static const int64_t MIN_INDEX_MICRO_BLOCK_ROW_CNT = 10;
 protected:
@@ -734,6 +737,7 @@ private:
   int get_clustered_micro_info(const int64_t roots_idx,
                                const int64_t macro_meta_idx,
                                ObClusteredIndexBlockMicroInfos *&clustered_micro_info) const;
+  int fsync_block();
   int merge_index_tree(const share::ObPreWarmerParam &pre_warm_param,
                        ObSSTableMergeRes &res,
                        int64_t &macro_seq,

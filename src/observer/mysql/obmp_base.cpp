@@ -396,6 +396,7 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
   ob_setup_tsi_warning_buffer(NULL);
   session.reset_plsql_exec_time();
   session.reset_plsql_compile_time();
+  session.set_route_to_column_replica(false);
   ObQueryRetryAshGuard::reset_info();
   return ret;
 }
@@ -725,7 +726,6 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
       session->set_user(session_priv.user_name_, session_priv.host_name_, session_priv.user_id_);
       session->set_user_priv_set(session_priv.user_priv_set_);
       session->set_db_priv_set(session_priv.db_priv_set_);
-      session->set_enable_role_array(enable_role_id_array);
       if (OB_FAIL(session->set_tenant(login_info.tenant_name_, session_priv.tenant_id_))) {
         OB_LOG(WARN, "fail to set tenant", "tenant name", login_info.tenant_name_, K(ret));
       } else if (OB_FAIL(session->set_real_client_ip_and_port(login_info.client_ip_, session->get_client_addr_port()))) {
@@ -755,10 +755,32 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
       } else {
         session->set_database_id(db_id);
         session->reset_user_var();
+        session->set_enable_role_array(enable_role_id_array);
       }
     }
   }
   return ret;
+}
+
+void ObMemPerfCallback::operator()(const ObMemAttr &attr, int64_t add_size, const lib::AObject &obj)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_enable_ || ObCtxIds::LOGGER_CTX_ID == attr.ctx_id_)) {
+    // do nothing
+  } else {
+    bool old_value = is_enable_;
+    is_enable_ = false;
+    cur_used_ += add_size;
+    max_used_ = cur_used_ > max_used_ ? cur_used_ : max_used_;
+    total_used_ += MAX(add_size, 0);
+    total_freed_ += MAX(-add_size, 0);
+    tracer_.new_line();
+    tracer_.append("[MEM PERF]", add_size, ",", (void*)obj.data_);
+    if (add_size > 0) {
+      tracer_.append(",", lbt());
+    }
+    is_enable_ = old_value;
+  }
 }
 
 } // namespace observer

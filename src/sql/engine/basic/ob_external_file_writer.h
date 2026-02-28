@@ -25,8 +25,9 @@
 #include <odps/odps_api.h>
 #endif
 #include <parquet/api/writer.h>
-#include "ob_select_into_basic.h"
+#include "sql/engine/basic/ob_select_into_basic.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/table_format/iceberg/spec/manifest.h"
 
 namespace oceanbase
 {
@@ -137,16 +138,41 @@ private:
   int64_t &write_offset_;
 };
 
+class ObIcebergDataGenerator
+{
+public:
+  ObIcebergDataGenerator() = default;
+  ~ObIcebergDataGenerator()
+  {
+    for (int i = 0; i < data_files_.count(); i++) {
+      if (data_files_.at(i) != nullptr) {
+        data_files_.at(i)->~DataFile();
+      }
+    }
+  }
+  int generate_datafile(const ObStorageAppender& storage_appender,
+                        const ObString& url,
+                        int record_count,
+                        iceberg::DataFileFormat file_format);
+  const ObArray<iceberg::DataFile*>& get_data_files() const { return data_files_; }
+private:
+  ObArenaAllocator datafile_allocator_;
+  ObArray<iceberg::DataFile*> data_files_;
+};
+
 class ObBatchFileWriter : public ObExternalFileWriter
 {
 public:
   ObBatchFileWriter(const common::ObObjectStorageInfo *access_info,
-                    const IntoFileLocation &file_location):
+                    const IntoFileLocation &file_location,
+                    share::ObLakeTableFormat lake_table_format = share::ObLakeTableFormat::INVALID):
     ObExternalFileWriter(access_info, file_location),
     row_batch_size_(64),
     row_batch_offset_(0),
     batch_has_written_(true),
-    batch_allocator_("ParquetOrc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    batch_allocator_("ParquetOrc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    lake_table_format_(lake_table_format),
+    record_count_(0)
   {}
 
   virtual ~ObBatchFileWriter()
@@ -162,12 +188,20 @@ public:
   ObIAllocator &get_batch_allocator() { return batch_allocator_; }
   virtual int write_file() = 0;
   virtual int64_t get_file_size() = 0;
+  void increase_record_count() { record_count_++; }
+  void reset_record_count() { record_count_ = 0; }
+  ObIcebergDataGenerator& get_datafile_generator() {
+    return datafile_generator_;
+  }
 
 protected:
   int64_t row_batch_size_;
   int64_t row_batch_offset_;
   bool batch_has_written_;
   ObArenaAllocator batch_allocator_;
+  share::ObLakeTableFormat lake_table_format_;
+  int record_count_;
+  ObIcebergDataGenerator datafile_generator_;
 };
 
 class ObParquetFileWriter : public ObBatchFileWriter
@@ -175,8 +209,9 @@ class ObParquetFileWriter : public ObBatchFileWriter
 public:
   ObParquetFileWriter(const common::ObObjectStorageInfo *access_info,
                       const IntoFileLocation &file_location,
-                      std::shared_ptr<parquet::schema::GroupNode> parquet_writer_schema):
-    ObBatchFileWriter(access_info, file_location),
+                      std::shared_ptr<parquet::schema::GroupNode> parquet_writer_schema,
+                      share::ObLakeTableFormat lake_table_format = share::ObLakeTableFormat::INVALID):
+    ObBatchFileWriter(access_info, file_location, lake_table_format),
     parquet_file_writer_(nullptr),
     parquet_rg_writer_(NULL),
     parquet_row_batch_(),
@@ -227,7 +262,7 @@ public:
   virtual int write_file() override;
   virtual int close_file() override;
 
-private:
+protected:
   std::unique_ptr<parquet::ParquetFileWriter> parquet_file_writer_;
   parquet::RowGroupWriter* parquet_rg_writer_;
   ObArrayWrap<void*> parquet_row_batch_;
@@ -241,8 +276,9 @@ class ObOrcFileWriter : public ObBatchFileWriter
 {
 public:
   ObOrcFileWriter(const common::ObObjectStorageInfo *access_info,
-                  const IntoFileLocation &file_location):
-    ObBatchFileWriter(access_info, file_location),
+                  const IntoFileLocation &file_location,
+                  share::ObLakeTableFormat lake_table_format = share::ObLakeTableFormat::INVALID):
+    ObBatchFileWriter(access_info, file_location, lake_table_format),
     orc_output_stream_(nullptr),
     orc_file_writer_(nullptr),
     orc_row_batch_(nullptr)

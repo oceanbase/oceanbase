@@ -249,7 +249,6 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
 
   ObSEArray<int64_t, 4> tmp_part_id;
   ObSEArray<ObString, 4> tmp_part_path;
-  ObSEArray<int64_t, 4> tmp_part_modify_ts;
 
   if (OB_FAIL(sql_schema_guard_->get_table_schema(loc_meta_.ref_table_id_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret), K(loc_meta_.ref_table_id_));
@@ -352,22 +351,13 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
           if (!partition_exists) {
             // 添加新的分区信息
             ObTableSchema *tmp_update_table_schema = const_cast<ObTableSchema *>(table_schema);
-            ObSqlString tmp_part_name;
-            ObString part_name;
             ObPartition partition;
             OX(partition.set_part_id(part_index));
-            if (OB_FAIL(tmp_part_name.append_fmt("P%ld", part_index))) {
-              LOG_WARN("failed to append part name", K(ret));
-            } else if (OB_FAIL(partition.set_external_location(
+            if (OB_FAIL(partition.set_external_location(
                            const_cast<ObString &>(partition_info->path_)))) {
               LOG_WARN("failed to set external location", K(ret), K(partition_info->path_));
-            } else if (OB_FAIL(ob_write_string(allocator_,
-                                               tmp_part_name.string(),
-                                               part_name,
-                                               true /*c_style*/))) {
-              LOG_WARN("failed to write part name", K(ret));
-            } else if (OB_FAIL(partition.set_part_name(part_name))) {
-              LOG_WARN("set partition name failed", K(ret));
+            } else if (OB_FAIL(partition.set_part_name(partition_info->partition_))) {
+              LOG_WARN("set partition name failed", K(ret), K(partition_info->partition_));
             } else if (OB_FAIL(partition.add_list_row(ob_part_row))) {
               LOG_WARN("add list row failed", K(ret));
             } else if (OB_FAIL(tmp_update_table_schema->add_partition(partition))) {
@@ -379,7 +369,6 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
           if (OB_SUCC(ret)) {
             tmp_part_id.push_back(part_index);
             tmp_part_path.push_back(partition_info->path_);
-            tmp_part_modify_ts.push_back(partition_info->modify_ts_);
           }
         }
       }
@@ -387,12 +376,16 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
 
     // 批量获取分区下的文件列表
     if (tmp_part_path.count() > 0) {
+      ObString access_info;
+      CK (OB_NOT_NULL(exec_ctx.get_sql_ctx()));
+      CK (OB_NOT_NULL(exec_ctx.get_sql_ctx()->schema_guard_));
+      OZ(ObExternalTableUtils::get_external_file_location_access_info(*table_schema, *(exec_ctx.get_sql_ctx()->schema_guard_), access_info));
       OZ(ObExternalTableUtils::collect_external_file_list_with_cache(
+          *(exec_ctx.get_my_session()),
           table_schema->get_tenant_id(),
           tmp_part_path,
           tmp_part_id,
-          tmp_part_modify_ts,
-          table_schema->get_external_file_location_access_info(),
+          access_info,
           empty_patten,
           allocator_,
           refresh_interval_sec * 1000,

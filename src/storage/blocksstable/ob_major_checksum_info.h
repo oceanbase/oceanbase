@@ -91,7 +91,7 @@ class ObCOMajorChecksumInfo : public ObMajorChecksumInfo
 {
 public:
   ObCOMajorChecksumInfo()
-    : ObMajorChecksumInfo(), lock_()
+    : ObMajorChecksumInfo(), lock_(common::ObLatchIds::OB_MAJOR_CHECKSUM_INFO_LOCK)
   {}
   virtual ~ObCOMajorChecksumInfo() {}
   int init_from_merge_result(

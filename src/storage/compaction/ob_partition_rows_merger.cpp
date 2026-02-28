@@ -571,7 +571,9 @@ int ObPartitionMajorRowsMerger::check_row_iters_purge(
 /**
  * ---------------------------------------------------------ObPartitionMergeHelper--------------------------------------------------------------
  */
-int ObPartitionMergeHelper::init(const ObMergeParameter &merge_param)
+int ObPartitionMergeHelper::init(
+  const ObMergeParameter &merge_param,
+  ObCompactionFilterHandle &filter_handle)
 {
   int ret = OB_SUCCESS;
 
@@ -581,7 +583,7 @@ int ObPartitionMergeHelper::init(const ObMergeParameter &merge_param)
   } else if (!merge_param.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected invalid input arguments", K(ret), K(merge_param));
-  } else if (OB_FAIL(init_merge_iters(merge_param))){
+  } else if (OB_FAIL(init_merge_iters(merge_param, filter_handle))){
     STORAGE_LOG(WARN, "Failed to init merge iters", K(ret), K(merge_param));
   } else if (OB_FAIL(move_iters_next(merge_iters_))) {
     STORAGE_LOG(WARN, "failed to move iters", K(ret), K(merge_iters_));
@@ -595,11 +597,15 @@ int ObPartitionMergeHelper::init(const ObMergeParameter &merge_param)
   return ret;
 }
 
-int ObPartitionMergeHelper::init_merge_iters(const ObMergeParameter &merge_param)
+int ObPartitionMergeHelper::init_merge_iters(
+  const ObMergeParameter &merge_param,
+  ObCompactionFilterHandle &filter_handle)
 {
     int ret = OB_SUCCESS;
     merge_iters_.reset();
     const ObTablesHandleArray &tables_handle = merge_param.get_tables_handle();
+    const ObStaticMergeParam &static_param = merge_param.static_param_;
+    const bool check_sstable_op = is_major_or_meta_merge_type(static_param.get_merge_type()) && filter_handle.is_valid();
     int64_t table_cnt = tables_handle.get_count();
     ObITable *table = nullptr;
     ObSSTable *sstable = nullptr;
@@ -625,7 +631,9 @@ int ObPartitionMergeHelper::init_merge_iters(const ObMergeParameter &merge_param
         // do nothing. don't need to construct iter for empty sstable
         FLOG_INFO("table is empty, need not create iter", K(i), "sstable_key", sstable->get_key());
         continue;
-      } else if (OB_ISNULL(merge_iter = alloc_merge_iter(merge_param, i, table))) {
+      } else if (check_sstable_op && static_param.get_merge_sstable_op(i).is_filter_or_empty()) {
+        continue;
+      } else if (OB_ISNULL(merge_iter = alloc_merge_iter(merge_param, i, table, filter_handle))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "Failed to alloc memory for merge iter", K(ret));
       } else if (OB_FAIL(merge_iter->init(merge_param, i, &read_info_))) {
@@ -984,11 +992,14 @@ void ObPartitionMergeHelper::reset()
 /**
  * ---------------------------------------------------------ObPartitionMajorMergeHelper--------------------------------------------------------------
  */
+
 ObPartitionMergeIter *ObPartitionMajorMergeHelper::alloc_merge_iter(
-    const ObMergeParameter &merge_param,
-    const int64_t sstable_idx,
-    const ObITable *table)
+  const ObMergeParameter &merge_param,
+  const int64_t sstable_idx,
+  const ObITable *table,
+  ObCompactionFilterHandle &filter_handle)
 {
+  UNUSED(filter_handle);
   ObPartitionMergeIter *merge_iter = nullptr;
   if (OB_UNLIKELY(nullptr == table || !table->is_sstable())) {
     // do nothing
@@ -1050,7 +1061,7 @@ bool ObMultiMajorMergeIter::need_all_column_from_rowkey_co_sstable(const ObITabl
     // do nothing
   } else {
     bret = replay_base_directly_ &&
-      (merge_param.get_schema()->has_all_column_group() || merge_param.static_param_.is_build_row_store()) && // replay_add_cg_directly
+      (merge_param.get_schema()->has_all_column_group() || merge_param.static_param_.is_build_all_cg_only()) && // replay_add_cg_directly
       (table.is_co_sstable() ? static_cast<const ObCOSSTableV2 &>(table).is_rowkey_cg_base() : false);
   }
   return bret;
@@ -1068,11 +1079,11 @@ bool ObMultiMajorMergeIter::table_need_full_merge(
   } else if (OB_SUCCESS != (merge_param.static_param_.get_sstable_need_full_merge(sstable_idx, bret))) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to get sstable need_full_merge", K(sstable_idx), K(table), K(merge_param));
   } else if (bret) {
-  } else if (merge_param.get_schema()->has_all_column_group() || merge_param.static_param_.is_build_row_store()) {
+  } else if (merge_param.get_schema()->has_all_column_group() || merge_param.static_param_.is_build_all_cg_only()) {
     // rowkey base cg output all column
     bret = static_cast<const ObCOSSTableV2 &>(table).is_rowkey_cg_base();
   } else {
-    // PURE_COL_ONLY_ALL output rowkey column
+    // ALL_CG -> EACH_CG
     bret = static_cast<const ObCOSSTableV2 &>(table).is_row_store_only_co_table() && !merge_param.get_schema()->has_all_column_group();
   }
   return bret;
@@ -1170,9 +1181,10 @@ static bool is_ss_local_minor_with_shared_sstable(const ObStaticMergeParam &stat
 }
 
 ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(
-    const ObMergeParameter &merge_param,
-    const int64_t sstable_idx,
-    const ObITable *table)
+  const ObMergeParameter &merge_param,
+  const int64_t sstable_idx,
+  const ObITable *table,
+  ObCompactionFilterHandle &filter_handle)
 {
   UNUSED(sstable_idx);
   int ret = OB_SUCCESS;
@@ -1203,9 +1215,9 @@ ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(
         //reuse_uncommit_row = tx_id == static_param.tx_id_;
       //}
     //}
-    merge_iter = alloc_helper<ObPartitionMinorMacroMergeIter>(allocator_, allocator_, reuse_uncommit_row);
+    merge_iter = alloc_helper<ObPartitionMinorMacroMergeIter>(allocator_, allocator_, filter_handle, reuse_uncommit_row);
   } else {
-    merge_iter = alloc_helper<ObPartitionMinorRowMergeIter>(allocator_, allocator_);
+    merge_iter = alloc_helper<ObPartitionMinorRowMergeIter>(allocator_, allocator_, filter_handle);
   }
 
   return merge_iter;

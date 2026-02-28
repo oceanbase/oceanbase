@@ -136,7 +136,7 @@ public:
   void update_memory(int64_t delta_size);
   void update_tempseg(int64_t delta_size);
   uint64_t calc_db_time();
-  void covert_to_static_node();
+  void convert_to_static_node();
   int set_sql_id(const ObString &sql_id);
   void set_plan_hash_value(uint64_t plan_hash_value) { plan_hash_value_ = plan_hash_value; }
   TO_STRING_KV(K_(tenant_id), K_(op_id), "op_name", get_operator_name(), K_(thread_id));

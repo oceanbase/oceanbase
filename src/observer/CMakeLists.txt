@@ -33,6 +33,7 @@ ob_set_subtarget(ob_server common
   ob_srv_xlator_rootserver.cpp
   ob_srv_xlator_storage.cpp
   ob_tenant_duty_task.cpp
+  ob_temporary_table_cleaner.cpp
   ob_uniq_task_queue.cpp
   ob_startup_accel_task_handler.cpp
   ob_srv_rpc_handler.cpp
@@ -351,7 +352,9 @@ ob_set_subtarget(ob_server table_load
   table_load/plan/ob_table_load_data_channel.cpp
   table_load/plan/ob_table_load_data_table_row_handler.cpp
   table_load/plan/ob_table_load_data_to_delete_data_table_channel.cpp
+  table_load/plan/ob_table_load_data_to_delete_index_table_channel.cpp
   table_load/plan/ob_table_load_data_to_insert_data_table_channel.cpp
+  table_load/plan/ob_table_load_data_to_insert_index_table_channel.cpp
   table_load/plan/ob_table_load_data_to_index_table_channel.cpp
   table_load/plan/ob_table_load_data_to_lob_table_channel.cpp
   table_load/plan/ob_table_load_dml_row_handler.cpp
@@ -448,6 +451,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_virtual_table_tablet_iter.cpp
   virtual_table/ob_all_virtual_dag.cpp
   virtual_table/ob_all_virtual_dag_warning_history.cpp
+  virtual_table/ob_all_virtual_deadlock_detector_stat.cpp
   virtual_table/ob_all_virtual_dblink_info.cpp
   virtual_table/ob_all_virtual_diag_index_scan.cpp
   virtual_table/ob_all_virtual_dtl_channel.cpp
@@ -556,6 +560,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_apply_stat.cpp
   virtual_table/ob_all_virtual_replay_stat.cpp
   virtual_table/ob_all_virtual_ha_diagnose.cpp
+  virtual_table/ob_all_virtual_catalog_client_pool_stat.cpp
   virtual_table/ob_all_virtual_hms_client_pool_stat.cpp
   virtual_table/ob_all_virtual_ls_migration_task.cpp
   virtual_table/ob_global_variables.cpp
@@ -581,7 +586,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_information_schema_enable_roles_table.cpp
   virtual_table/ob_iterate_private_virtual_table.cpp
   virtual_table/ob_iterate_virtual_table.cpp
-  virtual_table/ob_list_file.cpp
+  virtual_table/ob_all_virtual_external_location_list_file.cpp
   virtual_table/ob_mem_leak_checker_info.cpp
   virtual_table/ob_mysql_db_table.cpp
   virtual_table/ob_mysql_proc_table.cpp
@@ -678,6 +683,8 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ccl_status.cpp
   virtual_table/ob_all_virtual_ss_object_type_io_stat.cpp
   virtual_table/ob_all_virtual_tablet_replica_info.cpp
+  virtual_table/ob_all_virtual_tablet_window_loop_info.cpp
+  virtual_table/ob_all_virtual_vector_segment_info.cpp
 )
 
 ob_server_add_target(ob_server)

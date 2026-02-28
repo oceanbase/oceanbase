@@ -15,9 +15,13 @@
 #include "sql/optimizer/ob_replica_compare.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "storage/ob_locality_manager.h"
+#include "sql/resolver/ob_stmt.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "share/schema/ob_schema_getter_guard.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::storage;
+using namespace oceanbase::share::schema;
 namespace oceanbase
 {
 namespace sql
@@ -160,7 +164,8 @@ int ObRoutePolicy::calculate_replica_priority(const ObAddr &local_server,
       ret = OB_NO_REPLICA_VALID;
       LOG_USER_ERROR(OB_NO_REPLICA_VALID);
     }
-  } else if (WEAK == ctx.consistency_level_) {
+  } else if (WEAK == ctx.consistency_level_ ||
+             COLUMN_STORE_ONLY == get_calc_route_policy_type(ctx)) {
     if (OB_FAIL(filter_replica(local_server, ls_id, candi_replicas, ctx))) {
       LOG_WARN("fail to filter replicas", K(candi_replicas), K(ctx), K(ret));
     } else if (OB_FAIL(weak_sort_replicas(candi_replicas, ctx))) {
@@ -198,7 +203,8 @@ int ObRoutePolicy::calc_position_type(const ObServerLocality &candi_locality,
 }
 
 int ObRoutePolicy::init_candidate_replica(const ObIArray<share::ObServerLocality> &server_locality_array,
-                                          CandidateReplica &candi_replica)
+                                          CandidateReplica &candi_replica,
+                                          const common::ObZone &preferred_zone)
 {
   int ret = OB_SUCCESS;
   ObServerLocality candi_locality;
@@ -218,6 +224,9 @@ int ObRoutePolicy::init_candidate_replica(const ObIArray<share::ObServerLocality
     candi_replica.attr_.start_service_time_ = candi_locality.get_start_service_time();
     candi_replica.attr_.server_stop_time_ = candi_locality.get_server_stop_time();
     candi_replica.attr_.server_status_ = candi_locality.get_server_status();
+    if (!preferred_zone.is_empty() && candi_locality.get_zone() == preferred_zone) {
+      candi_replica.attr_.is_preferred_zone_ = true;
+    }
   }
   return ret;
 }
@@ -268,7 +277,8 @@ int ObRoutePolicy::get_server_locality(const ObAddr &addr,
   return ret;
 }
 
-int ObRoutePolicy::init_candidate_replicas(common::ObIArray<CandidateReplica> &candi_replicas)
+int ObRoutePolicy::init_candidate_replicas(common::ObIArray<CandidateReplica> &candi_replicas,
+                                           const common::ObZone &preferred_zone)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -276,7 +286,7 @@ int ObRoutePolicy::init_candidate_replicas(common::ObIArray<CandidateReplica> &c
     LOG_WARN("not init", K(ret));
   }
   for (int64_t i = 0 ; OB_SUCC(ret) && i < candi_replicas.count(); ++i) {
-    if (OB_FAIL(init_candidate_replica(server_locality_array_, candi_replicas.at(i)))) {
+    if (OB_FAIL(init_candidate_replica(server_locality_array_, candi_replicas.at(i), preferred_zone))) {
       LOG_WARN("fail to candidate replica", K(i), K(server_locality_array_), K(candi_replicas), K(ret));
     }
   }
@@ -433,6 +443,7 @@ int ObRoutePolicy::select_intersect_replica(ObRoutePolicyCtx &route_policy_ctx,
     ObSEArray<ObAddr, 16> same_priority_servers;
     selected_replica.attr_.pos_type_ = POSITION_TYPE_MAX;
     bool is_first = true;
+    ObReplicaCompare cmp(route_policy_ctx.policy_type_);
     for (; OB_SUCC(ret) && replica_iter != intersect_server_list.end(); replica_iter++) {
       if (is_first) {
         selected_replica = *replica_iter;
@@ -440,19 +451,22 @@ int ObRoutePolicy::select_intersect_replica(ObRoutePolicyCtx &route_policy_ctx,
         if (OB_FAIL(same_priority_servers.push_back(replica_iter->get_server()))) {
           LOG_WARN("fail to replica iterator", K(replica_iter), K(ret));
         }
-      } else if (replica_iter->attr_.pos_type_ == selected_replica.attr_.pos_type_) {
-        //将same priority server统计起来，用于后面随机选择
-        if (OB_FAIL(same_priority_servers.push_back(replica_iter->get_server()))) {
-          LOG_WARN("fail to replica iterator", K(replica_iter), K(ret));
-        }
-      } else if (replica_iter->attr_.pos_type_ < selected_replica.attr_.pos_type_) {
-        selected_replica = *replica_iter;
-        same_priority_servers.reset();
-        if (OB_FAIL(same_priority_servers.push_back(replica_iter->get_server()))) {
-          LOG_WARN("fail to replica iterator", K(replica_iter), K(ret));
-        }
       } else {
-        /* replica_iter->attr_.pos_type_ > selected_replica.attr_.pos_type_ do nothing */
+        ObReplicaCompare::CompareRes cmp_res = cmp.compare_replica(*replica_iter, selected_replica);
+        if (cmp_res == ObReplicaCompare::EQUAL) {
+          //将same priority server统计起来，用于后面随机选择
+          if (OB_FAIL(same_priority_servers.push_back(replica_iter->get_server()))) {
+            LOG_WARN("fail to replica iterator", K(replica_iter), K(ret));
+          }
+        } else if (cmp_res == ObReplicaCompare::LESS) {
+          selected_replica = *replica_iter;
+          same_priority_servers.reset();
+          if (OB_FAIL(same_priority_servers.push_back(replica_iter->get_server()))) {
+            LOG_WARN("fail to replica iterator", K(replica_iter), K(ret));
+          }
+        } else {
+          /* cmp_res == ObReplicaCompare::GREATER do nothing */
+        }
       }
     }
 
@@ -519,6 +533,60 @@ bool ObRoutePolicy::is_same_region(const share::ObServerLocality &locality1, con
     ret_bool = true;
   }
   return ret_bool;
+}
+
+int ObRoutePolicy::check_can_route_to_columnstore_replica(const ObStmt *stmt,
+                                                          ObSQLSessionInfo *session_info,
+                                                          bool &can_route)
+{
+  int ret = OB_SUCCESS;
+  can_route = false;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  const share::schema::ObTenantSchema *tenant_schema = NULL;
+  bool has_cs_zone = false;
+  common::ObArray<share::ObZoneReplicaNumSet> zone_locality;
+  ObQueryCtx *query_ctx = NULL;
+  share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+  const ObStmt *top_stmt = OB_NOT_NULL(stmt) && stmt->is_explain_stmt() ?
+                           static_cast<const ObExplainStmt*>(stmt)->get_explain_query_stmt() :
+                           stmt;
+  if (OB_ISNULL(top_stmt) || OB_ISNULL(session_info) ||
+      OB_ISNULL(query_ctx = top_stmt->get_query_ctx()) ||
+      OB_ISNULL(schema_guard = query_ctx->sql_schema_guard_.get_schema_guard()) ||
+      FALSE_IT(tenant_id = session_info->get_effective_tenant_id())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(top_stmt), KP(session_info), KP(schema_guard));
+  } else if (!query_ctx->check_opt_compat_version(COMPAT_VERSION_4_6_0) ||
+             GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+    // do nothing
+  } else if (session_info->is_in_transaction() || !session_info->is_user_session()) {
+    // in transaction, cannot route to columnstore replica
+  } else if (!top_stmt->is_select_stmt() && !top_stmt->is_insert_stmt()) {
+    // not insert or select statement, cannot route to columnstore replica
+  } else if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard->get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("fail to get tenant info", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null tenant schema", K(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array_inherit(*schema_guard, zone_locality))) {
+    LOG_WARN("fail to get zone locality", K(ret), K(tenant_id));
+  } else {
+    // check has columnstore zone
+    has_cs_zone = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !has_cs_zone && i < zone_locality.count(); ++i) {
+      const share::ObZoneReplicaNumSet &z = zone_locality.at(i);
+      if (z.get_columnstore_replica_num() > 0) {
+        has_cs_zone = true;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      can_route = has_cs_zone;
+    }
+  }
+  return ret;
 }
 
 }//sql

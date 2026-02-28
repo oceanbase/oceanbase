@@ -54,8 +54,13 @@ int ObMViewPurgeLogExecutor::execute(ObExecContext &ctx, const ObMViewPurgeLogAr
     purge_param.tenant_id_ = tenant_id_;
     purge_param.master_table_id_ = master_table_id_;
     purge_param.purge_log_parallel_ = arg.purge_log_parallel_;
-    if (OB_FAIL(purger.init(ctx, purge_param))) {
-      LOG_WARN("fail to init mlog purger", KR(ret), K(purge_param));
+    bool purge_data_by_sql = true;
+    if (OB_NOT_NULL(session_info_->get_job_info())) {
+      // backend job, use ttl to purge mlog
+      purge_data_by_sql = false;
+    }
+    if (OB_FAIL(purger.init(ctx, purge_param, purge_data_by_sql))) {
+      LOG_WARN("fail to init mlog purger", KR(ret), K(purge_param), K(purge_data_by_sql));
     } else if (OB_FAIL(purger.purge())) {
       LOG_WARN("fail to do purge", KR(ret), K(purge_param));
     }

@@ -22,6 +22,50 @@ namespace sql
 class ObExprConcat : public ObStringExprOperator
 {
 public:
+  class ObExprConcatContext : public ObExprOperatorCtx
+  {
+  public:
+    ObExprConcatContext()
+        : ObExprOperatorCtx(),
+          buf_array_(NULL),
+          res_lengths_(NULL),
+          capacity_(0),
+          allocator_(NULL)
+    {}
+    ~ObExprConcatContext()
+    {
+      reset();
+    }
+    void reset() {
+      if (NULL != allocator_) {
+        if (NULL != buf_array_) {
+          allocator_->free(buf_array_);
+          buf_array_ = NULL;
+        }
+        if (NULL != res_lengths_) {
+          allocator_->free(res_lengths_);
+          res_lengths_ = NULL;
+        }
+        allocator_ = NULL;
+      }
+      capacity_ = 0;
+    }
+    OB_INLINE char **get_buf_array() { return buf_array_; }
+    OB_INLINE void set_buf_array(char **buf_array) { buf_array_ = buf_array; }
+    OB_INLINE ObLength *get_res_lengths() { return res_lengths_; }
+    OB_INLINE void set_res_lengths(ObLength *res_lengths) { res_lengths_ = res_lengths; }
+    OB_INLINE int64_t get_capacity() { return capacity_; }
+    OB_INLINE void set_capacity(int64_t capacity) { capacity_ = capacity; }
+    OB_INLINE common::ObIAllocator *get_allocator() { return allocator_; }
+    OB_INLINE void set_allocator(common::ObIAllocator *allocator) { allocator_ = allocator; }
+    TO_STRING_KV(K_(buf_array), K_(res_lengths), K_(capacity));
+    char **buf_array_;
+    ObLength *res_lengths_;
+    int64_t capacity_;
+    common::ObIAllocator *allocator_;
+  };
+  virtual bool need_rt_ctx() const override { return true; }
+public:
   explicit  ObExprConcat(common::ObIAllocator &alloc);
   virtual ~ObExprConcat();
 
@@ -63,6 +107,100 @@ public:
                       ObExpr &rt_expr) const override;
 
   static int eval_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
+  static int eval_concat_vector_with_text(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          const ObBitVector &skip,
+                                          const EvalBound &bound);
+
+  template <typename ArgVec, typename ResVec, bool exist_text, bool ExistsNull, bool is_mysql_mode, bool all_rows_active>
+  static int eval_concat_one_param(const ObExpr &expr,
+                                   ObEvalCtx &ctx,
+                                   const ObBitVector &skip,
+                                   const EvalBound &bound);
+
+  template <typename ArgVec, typename ResVec>
+  static int eval_concat_vector_spec_vec(const ObExpr &expr,
+                                         ObEvalCtx &ctx,
+                                         const ObBitVector &skip,
+                                         const EvalBound &bound);
+
+  template <typename ArgVec>
+  static int do_concat_memcpy_dispatch(const ObExpr &expr,
+                                       ObEvalCtx &ctx,
+                                       const ObBitVector &skip,
+                                       const EvalBound &bound,
+                                       char *buf_array[],
+                                       ObLength res_lengths[],
+                                       int64_t arg_idx);
+
+  template <typename ArgVec, bool ExistsNull, bool all_rows_active, bool is_mysql_mode>
+  static int do_concat_memcpy_inner(const ObExpr &expr,
+                                    ObEvalCtx &ctx,
+                                    const ObBitVector &skip,
+                                    const EvalBound &bound,
+                                    char *buf_array[],
+                                    ObLength res_lengths[],
+                                    int64_t arg_idx);
+
+  template <typename ArgVec, bool ExistsNull, bool is_mysql_mode, bool all_rows_active>
+  static int calc_concat_length_inner(const ObExpr &expr,
+                                      ObEvalCtx &ctx,
+                                      const ObBitVector &skip,
+                                      const EvalBound &bound,
+                                      int64_t arg_idx,
+                                      ObLength res_lengths[]);
+
+  template <typename ArgVec>
+  static int calc_concat_length_dispatch(const ObExpr &expr,
+                                         ObEvalCtx &ctx,
+                                         const ObBitVector &skip,
+                                         const EvalBound &bound,
+                                         int64_t arg_idx,
+                                         ObLength res_lengths[]);
+
+  template <typename ResVec, bool is_mysql_mode, bool all_rows_active>
+  static int get_concat_result_buffer_inner(const ObExpr &expr,
+                                            ObEvalCtx &ctx,
+                                            const ObBitVector &skip,
+                                            const EvalBound &bound,
+                                            char *buf_array[],
+                                            ObLength res_lengths[]);
+
+  template <typename ResVec>
+  static int get_concat_result_buffer_dispatch(const ObExpr &expr,
+                                                ObEvalCtx &ctx,
+                                                const ObBitVector &skip,
+                                                const EvalBound &bound,
+                                                char *buf_array[],
+                                                ObLength res_lengths[]);
+
+  static int eval_concat_text(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum, const int64_t &res_len);
+
+  static int eval_concat_text_vector(const ObExpr &expr, ObEvalCtx &ctx, const int64_t &res_len, int64_t idx);
+
+  static int eval_concat_vector_for_text(const ObExpr &expr,
+                                         ObEvalCtx &ctx,
+                                         const ObBitVector &skip,
+                                         const EvalBound &bound);
+
+  static int eval_concat_vector_by_column(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          const ObBitVector &skip,
+                                          const EvalBound &bound);
+
+  static int eval_concat_vector(const ObExpr &expr,
+                                ObEvalCtx &ctx,
+                                const ObBitVector &skip,
+                                const EvalBound &bound);
+
+  // Get or create context and ensure capacity is sufficient
+  static int get_or_create_concat_ctx(const ObExpr &expr,
+                                       ObEvalCtx &ctx,
+                                       int64_t required_capacity,
+                                       ObExprConcatContext *&concat_ctx,
+                                       char **&buf_array,
+                                       ObLength *&res_lengths);
 
   DECLARE_SET_LOCAL_SESSION_VARS;
 

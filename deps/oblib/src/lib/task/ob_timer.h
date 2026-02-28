@@ -28,6 +28,7 @@ public:
   ObTimer()
       : is_inited_(false),
         is_stopped_(true),
+        is_cancelling_all_(false),
         timer_service_(nullptr),
         run_wrapper_(nullptr)
   {
@@ -64,6 +65,7 @@ private:
 private:
   bool is_inited_;
   bool is_stopped_;
+  bool is_cancelling_all_;
   char timer_name_[OB_THREAD_NAME_BUF_LEN];
   ObTimerService *timer_service_;
   lib::IRunWrapper *run_wrapper_;

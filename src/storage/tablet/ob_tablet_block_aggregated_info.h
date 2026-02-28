@@ -133,6 +133,7 @@ public:
 class ObTabletMacroInfo final
 {
 friend class ObMacroInfoIterator;
+friend class ObTablet;
 private:
   template <typename T>
   class ObBlockInfoArray final
@@ -203,7 +204,12 @@ public:
   ObBlockInfoArray<blocksstable::MacroBlockId> data_block_info_arr_;
   ObBlockInfoArray<blocksstable::MacroBlockId> shared_meta_block_info_arr_;
   ObBlockInfoArray<ObSharedBlockInfo> shared_data_block_info_arr_;
+private:
   bool is_inited_;
+  // Non-persistent flag indicating whether this object is owned by tablet (in tablet's memory buffer).
+  // If true, the object is a shallow copy from tablet's macro_info_addr_.ptr_ and should not be reset.
+  // If false, the object is newly allocated/deserialized and should be reset when done.
+  bool is_owned_by_tablet_;
 };
 
 /**

@@ -30,9 +30,14 @@ namespace sql
 class ObSQLParser
 {
 public:
-  ObSQLParser(common::ObIAllocator &allocator, ObSQLMode mode)
-    : allocator_(allocator),
-      sql_mode_(mode)
+  ObSQLParser(common::ObIAllocator &allocator,
+              ObSQLMode mode,
+              int collation_connection = 45,  // CS_TYPE_UTF8MB4_GENERAL_CI
+              int nls_collation = 0)          // CS_TYPE_INVALID
+      : allocator_(allocator),
+        sql_mode_(mode),
+        collation_connection_(collation_connection),
+        nls_collation_(nls_collation)
   {}
 
   int parse(const char *str_ptr, const int64_t str_len, ParseResult &result);
@@ -50,6 +55,8 @@ private:
 private:
   common::ObIAllocator &allocator_ __attribute__((unused));
   ObSQLMode sql_mode_ __attribute__((unused));
+  int collation_connection_ __attribute__((unused));
+  int nls_collation_ __attribute__((unused));
 };
 }  // namespace pl
 }  // namespace oceanbase

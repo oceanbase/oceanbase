@@ -146,6 +146,8 @@ private:
   int check_building_domain_index_legal();
   int set_default_merge_engine_type_(share::schema::ObTableSchema &table_schema);
   int resolve_clustering_key_option(const ParseNode *node, const int64_t clustering_key_index);
+  int set_default_delta_format_(share::schema::ObTableSchema &table_schema);
+  int set_default_skip_index_level_(share::schema::ObTableSchema &table_schema);
   int check_stmt_is_empty_set(ObSelectStmt *select_stmt, bool &is_empty_set);
 
 private:
@@ -155,6 +157,7 @@ private:
   common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> column_name_set_;
   bool if_not_exist_;
   bool is_oracle_temp_table_; //是否创建oracle的临时表
+  bool is_old_oracle_temp_table_;
   bool is_temp_table_pk_added_;
   obrpc::ObCreateIndexArg index_arg_;
   IndexNameSet current_index_name_set_;

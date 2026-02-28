@@ -1041,14 +1041,61 @@ int ObDMLService::check_filter_row(
     //check column constraint expr
     LOG_WARN("filter row for check cst failed", K(ret));
   } else if (OB_UNLIKELY(is_filtered)) {
-    ret = OB_ERR_CHECK_OPTION_VIOLATED;
-    LOG_WARN("view check option violated", K(ret));
+    if (is_mysql_mode() && ins_ctdef.das_ctdef_.is_ignore_) {
+      is_skipped = true;
+      LOG_WARN("view check option violated, skip this row", K(ret));
+      ObString empty_string;
+      LOG_MYSQL_USER_WARN(OB_ERR_CHECK_OPTION_VIOLATED,empty_string.length(),empty_string.ptr(),
+                          empty_string.length(),empty_string.ptr());
+    } else {
+      ret = OB_ERR_CHECK_OPTION_VIOLATED;
+      LOG_WARN("view check option violated", K(ret));
+    }
   } else if (OB_FAIL(filter_row_for_check_cst(ins_ctdef.check_cst_exprs_,
                                               eval_ctx, is_filtered))) {
     //check column constraint expr
     LOG_WARN("filter row for check cst failed", K(ret));
   } else if (OB_UNLIKELY(is_filtered)) {
     if (is_mysql_mode() && ins_ctdef.das_ctdef_.is_ignore_) {
+      is_skipped = true;
+      LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+      LOG_WARN("check constraint violated, skip this row", K(ret));
+    } else {
+      ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+      LOG_WARN("column constraint check failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLService::check_filter_row(
+    const ObUpdCtDef &upd_ctdef,
+    ObEvalCtx &eval_ctx,
+    bool &is_skipped)
+{
+  int ret = OB_SUCCESS;
+  bool is_filtered = false;
+  if (OB_FAIL(filter_row_for_view_check(upd_ctdef.view_check_exprs_,
+                                        eval_ctx, is_filtered))) {
+    //check column constraint expr
+    LOG_WARN("filter row for check cst failed", K(ret));
+  } else if (OB_UNLIKELY(is_filtered)) {
+    if (is_mysql_mode() && upd_ctdef.dupd_ctdef_.is_ignore_) {
+      is_skipped = true;
+      LOG_WARN("view check option violated, skip this row", K(ret));
+      ObString empty_string;
+      LOG_MYSQL_USER_WARN(OB_ERR_CHECK_OPTION_VIOLATED,empty_string.length(),empty_string.ptr(),
+                          empty_string.length(),empty_string.ptr());
+    } else {
+      ret = OB_ERR_CHECK_OPTION_VIOLATED;
+      LOG_WARN("view check option violated", K(ret));
+    }
+  } else if (OB_FAIL(filter_row_for_check_cst(upd_ctdef.check_cst_exprs_,
+                                              eval_ctx, is_filtered))) {
+    //check column constraint expr
+    LOG_WARN("filter row for check cst failed", K(ret));
+  } else if (OB_UNLIKELY(is_filtered)) {
+    if (is_mysql_mode() && upd_ctdef.dupd_ctdef_.is_ignore_) {
       is_skipped = true;
       LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
       LOG_WARN("check constraint violated, skip this row", K(ret));
@@ -1230,7 +1277,6 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
       }
     }
     if (OB_SUCC(ret) && !is_skipped) {
-      bool is_filtered = false;
       //first, check assignment column whether matched column type
       if (OB_FAIL(check_column_type(upd_ctdef.new_row_,
                                     upd_rtdef.cur_row_num_,
@@ -1264,22 +1310,8 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
         LOG_WARN("check row whether changed failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else if (OB_UNLIKELY(!upd_rtdef.is_row_changed_)) {
         //do nothing
-      } else if (OB_FAIL(filter_row_for_view_check(upd_ctdef.view_check_exprs_, dml_op.get_eval_ctx(), is_filtered))) {
-        LOG_WARN("filter row for view check exprs failed", K(ret));
-      } else if (OB_UNLIKELY(is_filtered)) {
-        ret = OB_ERR_CHECK_OPTION_VIOLATED;
-        LOG_WARN("view check option violated", K(ret));
-      } else if (OB_FAIL(filter_row_for_check_cst(upd_ctdef.check_cst_exprs_, dml_op.get_eval_ctx(), is_filtered))) {
-        LOG_WARN("filter row for check cst failed", K(ret));
-      } else if (OB_UNLIKELY(is_filtered)) {
-        if (is_mysql_mode() && upd_ctdef.dupd_ctdef_.is_ignore_) {
-          is_skipped = true;
-          LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
-          LOG_WARN("check constraint violated, skip this row", K(ret));
-        } else {
-          ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-          LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
-        }
+      } else if (OB_FAIL(check_filter_row(upd_ctdef, dml_op.get_eval_ctx(), is_skipped))) {
+        LOG_WARN("failed to check filter row", KR(ret));
       }
     }
   } else {
@@ -2691,10 +2723,10 @@ int ObDMLService::check_nested_sql_legality(ObExecContext &ctx, common::ObTableI
   return ret;
 }
 
-int ObDMLService::create_anonymous_savepoint(ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint)
+int ObDMLService::create_anonymous_savepoint(ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint, int16_t branch_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(tx_desc, savepoint))) {
+  if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(tx_desc, savepoint, branch_id))) {
     LOG_WARN("create savepoint failed", K(ret));
   }
   return ret;

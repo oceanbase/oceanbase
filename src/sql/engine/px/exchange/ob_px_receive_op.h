@@ -100,6 +100,16 @@ public:
 
   ObPxTaskChSet &get_ch_set() { return task_ch_set_; };
   virtual int try_link_channel() = 0;
+
+  virtual int do_project_recv_exprs(const int64_t read_rows, const ObCompactRow **srows,
+                                    const ObIArray<ObExpr *> &recv_exprs, ObEvalCtx &eval_ctx)
+  {
+    UNUSED(read_rows);
+    UNUSED(srows);
+    UNUSED(recv_exprs);
+    UNUSED(eval_ctx);
+    return OB_SUCCESS;
+  }
   /**
    * This function will block the thread until receive the task channel
    * info from SQC.

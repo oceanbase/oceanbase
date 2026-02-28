@@ -426,7 +426,6 @@ int ObDirectLoadMgrUtil::prepare_schema_item_for_vec_idx_data(
     ObTableSchemaItem &schema_item)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<uint64_t , 1> col_ids;
   uint64_t with_param_table_tid;
   // for hnsw, table_schema here is snapshot table, need to get related delta buffer table.
   ObIndexType index_type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
@@ -446,33 +445,15 @@ int ObDirectLoadMgrUtil::prepare_schema_item_for_vec_idx_data(
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(ret), K(tenant_id), K(table_schema->get_data_table_id()));
-  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_id(*data_table_schema, *table_schema, col_ids))) {
-    LOG_WARN("fail to get vector index id", K(ret));
-  } else if (col_ids.count() != 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid col id array", K(ret), K(col_ids));
   } else {
-    if (index_type == INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL) {
-      ObString index_prefix;
-      if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*table_schema, index_prefix))) {
-        LOG_WARN("failed to get index prefix", K(ret));
-      } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid_with_index_prefix(&schema_guard,
-                                                                                   *data_table_schema,
-                                                                                   index_type,
-                                                                                   col_ids.at(0),
-                                                                                   index_prefix,
-                                                                                   with_param_table_tid))) {
-        LOG_WARN("failed to get index prefix", K(ret), K(index_prefix));
-      }
-    } else { // ivf centroid tables
-      if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(&schema_guard,
-                                                          *data_table_schema,
-                                                          index_type,
-                                                          col_ids.at(0),
-                                                          false,
-                                                          with_param_table_tid))) {
-        LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(col_ids), KPC(data_table_schema));
-      }
+    const ObTableSchema *domain_table_schema = nullptr;
+    if (OB_FAIL(ObPluginVectorIndexUtils::get_domain_table_schema(schema_guard, *table_schema, domain_table_schema))) {
+      LOG_WARN("failed to get domain table schema", K(ret));
+    } else if (OB_ISNULL(domain_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("failed to get domain table schema", K(ret));
+    } else {
+      with_param_table_tid = domain_table_schema->get_table_id();
     }
   }
 

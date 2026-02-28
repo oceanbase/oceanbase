@@ -140,7 +140,7 @@ ObTabletAutoincSeqRpcHandler &ObTabletAutoincSeqRpcHandler::get_instance()
 int ObTabletAutoincSeqRpcHandler::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(bucket_lock_.init(BUCKET_LOCK_BUCKET_CNT))) {
+  if (OB_FAIL(bucket_lock_.init(BUCKET_LOCK_BUCKET_CNT, common::ObLatchIds::OB_TABLET_AUTOINC_SEQ_RPC_HANDLER_BUCKET_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else {
     is_inited_ = true;

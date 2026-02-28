@@ -270,6 +270,18 @@ int ObCatalogResolver::resolve_catalog_properties(const ParseNode &properties_no
         }
         break;
       }
+      case ObCatalogProperties::CatalogType::REST_TYPE: {
+        if (data_version < DATA_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("rest catalog supported in 4.5.1", K(data_version));
+        } else {
+          ObRestCatalogProperties properties;
+          OZ(properties.resolve_catalog_properties(properties_node));
+          OZ(properties.encrypt(*allocator_));
+          OZ(properties.to_string_with_alloc(catalog_properties, *allocator_));
+        }
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not supported catalog type", K(type));

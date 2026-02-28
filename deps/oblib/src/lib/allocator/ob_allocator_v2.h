@@ -228,7 +228,7 @@ inline ObParallelAllocator::ObParallelAllocator(ObAllocator &root_allocator,
                                                  const uint32_t ablock_size)
   : root_allocator_(root_allocator), mem_context_(mem_context), attr_(attr),
     ablock_size_(ablock_size), buf_(nullptr), sub_cnt_(MIN(parallel, N)),
-    is_inited_(false)
+    is_inited_(false), mutex_(common::ObLatchIds::OB_ALLOCATOR_LOCK)
 {
   for (int i = 0; i < sub_cnt_; i++) {
     sub_allocators_[i] = nullptr;

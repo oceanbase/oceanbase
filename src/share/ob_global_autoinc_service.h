@@ -228,6 +228,10 @@ private:
                                 ObAutoIncCacheNode &received_node);
 
 private:
+  struct GlobalAutoIncMutexWrapper {
+    lib::ObMutex mutex_;
+    GlobalAutoIncMutexWrapper() : mutex_(common::ObLatchIds::AUTO_INCREMENT_GAIS_LOCK) {}
+  };
   bool is_inited_;
   bool is_leader_;
   common::ObAddr self_;
@@ -235,7 +239,7 @@ private:
   common::hash::ObHashMap<uint64_t, ObAutoIncCacheNode> autoinc_map_; // table_id -> node
   common::ObSpinLock cache_ls_lock_;
   storage::ObLS *cache_ls_;
-  lib::ObMutex op_mutex_[MUTEX_NUM];
+  GlobalAutoIncMutexWrapper op_mutex_[MUTEX_NUM];
   ObGAISRequestRpc* gais_request_rpc_;
   bool is_switching_;
   lib::ObMutex switching_mutex_;

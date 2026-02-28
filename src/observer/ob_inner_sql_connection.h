@@ -272,7 +272,7 @@ public:
   bool is_spi_conn() const { return is_spi_conn_; }
   // set timeout to session variable
   int set_session_timeout(int64_t query_timeout, int64_t trx_timeout);
-
+  bool is_valid() const { return inited_; }
 public:// for mds
   int register_multi_data_source(const uint64_t &tenant_id,
                                  const share::ObLSID ls_id,

@@ -177,6 +177,7 @@ public:
 
   static uint64_t get_tenant_id();
   static int64_t get_timeout_us();
+  static int64_t get_timeout_ms();
 
 private:
   static thread_local uint64_t tl_tenant_id_;

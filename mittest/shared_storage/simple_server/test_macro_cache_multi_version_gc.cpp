@@ -118,8 +118,9 @@ public:
   virtual void SetUp() override
   {
     ObSimpleClusterTestBase::SetUp();
+    oceanbase::palf::election::MAX_TST = 500 * 1000;  // 500ms, lease interval = 4 * 500ms = 2s
     if (!tenant_created_) {
-      OK(create_tenant("tt1", "5G", "10G", false/*oracle_mode*/, 8));
+      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8));
       OK(get_tenant_id(run_ctx_.tenant_id_));
       ASSERT_NE(0, run_ctx_.tenant_id_);
       OK(get_curr_simple_server().init_sql_proxy2());
@@ -513,7 +514,12 @@ TEST_F(ObMacroCacheMultiVersionGCTest, multi_version_gc_and_tablet_gc)
   OK(sys_exe_sql("alter system set _ss_major_compaction_prewarm_level = 0 tenant tt1;"));
   OK(exe_sql("create table test_table (a int)"));
   set_ls_and_tablet_id_for_run_ctx();
-  storage::ObSSBasePrewarmer::OB_SS_PREWARM_CACHE_THRESHOLD = 0;
+  {
+    const uint64_t tenant_id = MTL_ID();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    ASSERT_TRUE(tenant_config.is_valid());
+    tenant_config->_ss_micro_cache_max_block_size = 1;
+  }
   // trigger minor compaction by minor freeze 3 times. it prewarms minor sstable into local
   // macro cache, and update tablet table store.
   OK(exe_sql("insert into test_table values (1);"));

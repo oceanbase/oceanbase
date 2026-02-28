@@ -62,6 +62,7 @@ public:
 
   virtual int do_table_scan() override;
   virtual int rescan() override;
+  virtual int advance_scan() override;
   virtual void clear_evaluated_flag() override;
 
   virtual int set_scan_rowkey(ObEvalCtx *eval_ctx,

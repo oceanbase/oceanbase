@@ -42,11 +42,11 @@
 #include "lib/container/ob_iarray.h"
 #include "observer/ob_server_struct.h"
 #include "common/storage/ob_sequence.h"
-#include "ob_tx_elr_util.h"
 #include "storage/tx/ob_dup_table_util.h"
 #include "ob_tx_free_route.h"
 #include "ob_tx_free_route_msg.h"
 #include "ob_tablet_to_ls_cache.h"
+#include "ob_tx_sby_read_define.h"
 #include "src/storage/tx_storage/ob_tx_leak_checker.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/sslog/ob_sslog_uid_source.h"
@@ -180,6 +180,26 @@ public:
 class ObTransService : public common::ObSimpleThreadPool
 {
 public:
+  struct TenantConfigCache {
+    TenantConfigCache();
+    ~TenantConfigCache();
+    const TenantConfigCache &refresh_and_get();
+    int init(const uint64_t tenant_id) {
+       tenant_id_ = tenant_id;
+       return OB_SUCCESS;
+    }
+    int refresh();
+    void reset();
+    ObSpinLock lock_;
+    uint64_t tenant_id_;
+    volatile bool can_tenant_elr_;
+    volatile int64_t tenant_config_refresh_ts_;
+    volatile int64_t write_throttle_by_pending_log_size_limit_;
+    volatile int64_t write_throttle_by_pending_log_sleep_interval_;
+    volatile int64_t trx_max_log_cb_limit_;
+    volatile int64_t col_replica_max_local_wait_time_;
+  };
+public:
   ObTransService();
   virtual ~ObTransService() { destroy(); }
   static int mtl_init(ObTransService* &trans_service);
@@ -211,7 +231,7 @@ public:
   int check_dup_table_lease_valid(const share::ObLSID ls_id, bool &is_dup_ls, bool &is_lease_valid);
   //get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_iter);
-  int get_trans_start_session_id(const share::ObLSID &ls_id, const ObTransID &tx_id, uint32_t &session_id);
+  int get_trans_start_session_id_and_ts(const share::ObLSID &ls_id, const ObTransID &tx_id, uint32_t &session_id, int64_t &tx_start_time);
   int dump_elr_statistic();
   int remove_callback_for_uncommited_txn(
     const share::ObLSID ls_id,
@@ -222,6 +242,7 @@ public:
   ObITransRpc *get_trans_rpc() { return rpc_; }
   ObIDupTableRpc *get_dup_table_rpc() { return dup_table_rpc_; }
   ObDupTableRpc &get_dup_table_rpc_impl() { return dup_table_rpc_impl_; }
+  ObTxSbyRpc &get_sby_rpc_impl() { return sby_rpc_impl_; }
   ObDupTableLoopWorker &get_dup_table_loop_worker() { return dup_table_loop_worker_; }
   const ObDupTabletScanTask &get_dup_table_scan_task() { return dup_tablet_scan_task_; }
   ObILocationAdapter *get_location_adapter() { return location_adapter_; }
@@ -241,7 +262,6 @@ public:
                            const int64_t request_id = 0,
                            const ObRegisterMdsFlag &register_flag = ObRegisterMdsFlag(),
                            const transaction::ObTxSEQ seq_no = transaction::ObTxSEQ());
-  ObTxELRUtil &get_tx_elr_util() { return elr_util_; }
   int create_tablet(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id)
   {
     return tablet_to_ls_cache_.create_tablet(tablet_id, ls_id);
@@ -297,6 +317,13 @@ public:
                                  const int64_t max_read_stale_time,
                                  const bool local_single_ls_plan,
                                  ObTxReadSnapshot &snapshot);
+  int handle_sby_msg(const ObTxSbyBaseMsg *sby_msg);
+  int get_sby_tx_state_from_tx_table(const ObLSID &ls_id,
+                                     const ObTransID &tx_id,
+                                     const share::SCN &ls_readable_scn,
+                                     const share::SCN &msg_snapshot,
+                                     ObTxSbyStateInfo &sby_state_info);
+  int ask_sby_state_info_from_replicas(const ObTxSbyBaseMsg *sby_msg);
 public:
   int end_1pc_trans(ObTxDesc &trans_desc,
                     ObITxCallback *endTransCb,
@@ -304,6 +331,8 @@ public:
                     const int64_t expire_ts);
   int get_max_commit_version(share::SCN &commit_version) const;
   int get_max_decided_scn(const share::ObLSID &ls_id, share::SCN & scn);
+  TenantConfigCache &get_tenant_config_cache() { return tenant_config_cache_; }
+  int refresh_tenant_config() { return tenant_config_cache_.refresh(); }
   #include "ob_trans_service_v4.h"
   #include "ob_tx_free_route_api.h"
 private:
@@ -373,9 +402,9 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
   sslog::ObPalfKVGcTask *palf_kv_gc_task_;
 #endif
+  ObTxSbyRpc sby_rpc_impl_;
 
   obrpc::ObSrvRpcProxy *rpc_proxy_;
-  ObTxELRUtil elr_util_;
   // for rollback-savepoint request-id
   int64_t rollback_sp_msg_sequence_;
   // for rollback-savepoint msg resp callback to find tx_desc
@@ -384,6 +413,8 @@ private:
   // tenant level atomic inc seq, just for debug
   int64_t tx_debug_seq_;
   ObReadOnlyTxChecker read_only_checker_;
+private:
+  TenantConfigCache tenant_config_cache_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransService);
 };

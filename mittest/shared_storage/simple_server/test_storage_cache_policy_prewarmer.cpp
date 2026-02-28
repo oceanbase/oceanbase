@@ -278,7 +278,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, basic)
 
   OK(exe_sql("insert into test_table values (1)"));
   sleep(1);
-  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  OK(TestCompactionUtil::medium_compact(run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), run_ctx_.ls_id_));
 
   // 1.test basic hot retention prewarm
   ObStorageCacheTabletTask *task = static_cast<ObStorageCacheTabletTask *>(ob_malloc(
@@ -365,7 +365,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_convert_hot_to_auto)
   OK(exe_sql("insert into test_convert_hot_to_auto values (2)"));
   OK(exe_sql("insert into test_convert_hot_to_auto values (3)"));
 
-  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  OK(TestCompactionUtil::medium_compact(run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), run_ctx_.ls_id_));
   OK(exe_sql("alter table test_convert_hot_to_auto storage_cache_policy (global = 'hot');"));
   wait_task_finished(run_ctx_.tablet_id_.id());
   check_macro_blocks_type(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK);
@@ -426,7 +426,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   OK(exe_sql("insert into test_incremental_trigger values (7)"));
   OK(exe_sql("insert into test_incremental_trigger values (8)"));
   OK(exe_sql("insert into test_incremental_trigger values (9)"));
-  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  OK(TestCompactionUtil::medium_compact(run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), run_ctx_.ls_id_));
   OK(exe_sql("alter table test_incremental_trigger storage_cache_policy (global = 'hot');"));
   wait_task_finished(run_ctx_.tablet_id_.id());
 
@@ -466,7 +466,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   OK(exe_sql("insert into test_incremental_trigger2 values (1)"));
   OK(exe_sql("insert into test_incremental_trigger2 values (2)"));
   OK(exe_sql("insert into test_incremental_trigger2 values (3)"));
-  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  OK(TestCompactionUtil::medium_compact(run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), run_ctx_.ls_id_));
   OK(exe_sql("alter table test_incremental_trigger2 storage_cache_policy (global = 'hot');"));
   wait_task_finished(run_ctx_.tablet_id_.id());
 
@@ -482,17 +482,32 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
 
   // 2. Free space is below free threshold while hot tablet space is exceed min value
   int64_t max_tablet_size4 = tnt_disk_space_mgr->get_macro_cache_size();
-  // hot tablet macro cache: 75%
-  const int64_t alloc_hot_tablet_perc = (hot_tablet_macro_cache_min_threshold + 5);
-  int64_t alloc_size1 = (max_tablet_size4 * alloc_hot_tablet_perc) / 100;
-  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size1, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
+  int64_t max_free_size4 = tnt_disk_space_mgr->get_macro_cache_free_size();
   ObSSMacroCacheStat macro_cache_stat1;
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, macro_cache_stat1));
-  ASSERT_GT(macro_cache_stat1.used_, (max_tablet_size4 * hot_tablet_macro_cache_min_threshold) / 100);
+  // hot tablet macro cache: 75%
+  const int64_t alloc_hot_tablet_perc = (hot_tablet_macro_cache_min_threshold);
+  // Get current HOT_TABLET usage and only allocate the delta needed
+  // Use +100 to ensure target_hot_tablet_size is strictly greater than the threshold after integer division
+  int64_t target_hot_tablet_size = (max_tablet_size4 * (alloc_hot_tablet_perc + 2)) / 100;
+  int64_t alloc_size1 = target_hot_tablet_size - macro_cache_stat1.used_;
+  if (alloc_size1 < 0) {
+    alloc_size1 = 0;
+  }
+  FLOG_INFO("[TEST] alloc_size1 calculation", K(max_tablet_size4), K(max_free_size4), K(target_hot_tablet_size), K(alloc_size1));
+  if (alloc_size1 > 0) {
+    OK(tnt_disk_space_mgr->alloc_file_size(alloc_size1, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
+  }
+  ObSSMacroCacheStat macro_cache_stat2;
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, macro_cache_stat2));
+  ASSERT_GT(macro_cache_stat2.used_, (max_tablet_size4 * hot_tablet_macro_cache_min_threshold) / 100);
   int64_t alloc_size2 = tnt_disk_space_mgr->get_macro_cache_free_size();
+  ASSERT_GT(alloc_size2, (max_tablet_size4 * ObStorageCachePolicyService::MACRO_CACHE_FREE_SPACE_THRESHOLD) / 100);
+  FLOG_INFO("[TEST] alloc_size2", K(alloc_size2), K(max_tablet_size4));
   alloc_size2 -= (max_tablet_size4 * (ObStorageCachePolicyService::MACRO_CACHE_FREE_SPACE_THRESHOLD + 2)) / 100;
-
-  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size2, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
+  if (alloc_size2 > 0) {
+    OK(tnt_disk_space_mgr->alloc_file_size(alloc_size2, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
+  }
   for (int i=0; i<SS_MACRO_CACHE_MAX_TYPE_VAL; i++) {
     FLOG_INFO("[TEST] print macro cache all stats444", K(tnt_disk_space_mgr->macro_cache_stats_[i]));
   }
@@ -556,7 +571,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_prewarm_tablet_if_hot_on_macro_mi
 
   OK(exe_sql("insert into test_prewarm_if_hot values (1)"));
   sleep(1);
-  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  OK(TestCompactionUtil::medium_compact(run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), run_ctx_.ls_id_));
   OK(exe_sql("alter table test_prewarm_if_hot storage_cache_policy (global = 'hot');"));
 
   // Wait the initial HOT prewarm task finished to make tablet_status_map_ stable

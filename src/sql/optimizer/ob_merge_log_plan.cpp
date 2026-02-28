@@ -316,6 +316,7 @@ int ObMergeLogPlan::candi_allocate_subplan_filter_for_merge()
   ObSEArray<ObRawExpr*, 8> condition_subquery_exprs;
   ObSEArray<ObRawExpr*, 8> target_subquery_exprs;
   ObSEArray<ObRawExpr*, 8> delete_subquery_exprs;
+  ObSEArray<ObRawExpr *, 8> view_check_exprs;
   const ObMergeStmt *merge_stmt = get_stmt();
   if (OB_ISNULL(merge_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -353,6 +354,10 @@ int ObMergeLogPlan::candi_allocate_subplan_filter_for_merge()
   } else if (!delete_subquery_exprs.empty() &&
              OB_FAIL(candi_allocate_subplan_filter(delete_subquery_exprs))) {
     LOG_WARN("failed to allocate subplan filter", K(ret));
+  } else if (OB_FAIL(merge_stmt->get_view_check_exprs(view_check_exprs))) {
+    LOG_WARN("get view check exprs", K(ret));
+  } else if (OB_FAIL(candi_allocate_subplan_filter(view_check_exprs))) {
+    LOG_WARN("failed to allocate subplan filter for view check exprs", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
@@ -993,7 +998,8 @@ int ObMergeLogPlan::prepare_table_dml_info_delete(const ObMergeTableInfo& merge_
                                                   ObIArray<IndexDMLInfo*> &all_index_dml_infos)
 {
   int ret = OB_SUCCESS;
-  ObAssignments empty_assignments;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObAssignments empty_assignments(allocator);
   IndexDMLInfo* index_dml_info = NULL;
   ObSchemaGetterGuard* schema_guard = optimizer_context_.get_schema_guard();
   ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();

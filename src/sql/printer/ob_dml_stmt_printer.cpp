@@ -71,7 +71,6 @@ int ObDMLStmtPrinter::prepare_dblink_hint(ObQueryHint &query_hint_dblink)
     ObGlobalHint &global_hint_dblink = query_hint_dblink.get_global_hint();
     global_hint_dblink.reset();
     global_hint_dblink.merge_query_timeout_hint(global_hint.query_timeout_);
-    global_hint_dblink.merge_read_consistency_hint(global_hint.read_consistency_, global_hint.frozen_version_);
     global_hint_dblink.merge_log_level_hint(global_hint.log_level_);
     global_hint_dblink.force_trace_log_ = global_hint.force_trace_log_;
     global_hint_dblink.monitor_ = global_hint.monitor_;
@@ -79,6 +78,17 @@ int ObDMLStmtPrinter::prepare_dblink_hint(ObQueryHint &query_hint_dblink)
     if (OB_ISNULL(session_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret), K(lbt()));
+    } else {
+      int64_t read_consistency = INVALID_CONSISTENCY;
+      if (INVALID_CONSISTENCY != global_hint.read_consistency_) {
+        global_hint_dblink.merge_read_consistency_hint(global_hint.read_consistency_, global_hint.frozen_version_);
+      } else if (OB_FAIL(session_->get_sys_variable(SYS_VAR_OB_READ_CONSISTENCY, read_consistency))) {
+        LOG_WARN("get read consistency failed", K(ret));
+      } else {
+        global_hint_dblink.merge_read_consistency_hint(static_cast<ObConsistencyLevel>(read_consistency), -1);
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (stmt_->is_select_stmt()) {
       uint64_t dblink_id = OB_INVALID_ID;
       dblink_id = stmt_->get_dblink_id();
@@ -161,7 +171,8 @@ int ObDMLStmtPrinter::print_hint()
     DATA_PRINTF("%s", hint_begin);
     if (OB_SUCC(ret)) {
       const ObQueryHint &query_hint = stmt_->get_query_ctx()->get_query_hint();
-      ObQueryHint query_hint_dblink;
+      ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+      ObQueryHint query_hint_dblink(allocator);
       if (print_params_.for_dblink_ &&
           is_first_stmt_for_hint_ &&
           OB_FAIL(prepare_dblink_hint(query_hint_dblink))) {
@@ -716,6 +727,23 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
             } else {
               DATA_PRINTF(")");
             }
+          }
+          break;
+        }
+        case MulModeTableType::OB_AI_SPLIT_DOCUMENT_TABLE_TYPE : {
+          DATA_PRINTF("AI_SPLIT_DOCUMENT(");
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_item->json_table_def_->doc_exprs_.count(); ++i) {
+            if (OB_FAIL(expr_printer_.do_print(table_item->json_table_def_->doc_exprs_.at(i), T_FROM_SCOPE))) {
+              LOG_WARN("failed to print expr", K(ret));
+            } else if (i != table_item->json_table_def_->doc_exprs_.count() - 1) {
+              DATA_PRINTF(",");
+            } else {
+              DATA_PRINTF(")");
+            }
+          }
+          if (OB_SUCC(ret) && !table_item->alias_name_.empty()) {
+            DATA_PRINTF(" ");
+            PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
           }
           break;
         }
@@ -1566,7 +1594,7 @@ int ObDMLStmtPrinter::build_json_table_nested_tree(const TableItem* table_item, 
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate col node", K(ret));
     } else {
-      col_def = new (col_def) ObDmlJtColDef();
+      col_def = new (col_def) ObDmlJtColDef(*allocator);
       col_def->col_base_info_.assign(info);
 
       if (info.col_type_ != NESTED_COL_TYPE) {

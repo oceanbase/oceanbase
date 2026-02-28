@@ -53,15 +53,6 @@ int ObTabletMdsMinorMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_tables_by_key(get_merge_table_result))) {
     LOG_WARN("failed to get tables by key", KR(ret), "param", get_dag_param(), KPC(merge_dag_));
-  } else {
-    int tmp_ret = OB_SUCCESS;
-    filter_ctx_.compaction_filter_ = NULL;
-    ObICompactionFilter *compaction_filter = NULL;
-    if (OB_TMP_FAIL(prepare_compaction_filter(mem_ctx_.get_allocator(), *get_tablet(), static_param_.get_ls_id(), compaction_filter))) {
-      LOG_WARN("prepare compaction filter fail", K(tmp_ret));
-    } else {
-      filter_ctx_.compaction_filter_ = compaction_filter;
-    }
   }
   return ret;
 }
@@ -80,7 +71,7 @@ int ObTabletMdsMinorMergeCtx::update_tablet(ObTabletHandle &new_tablet_handle)
                                       sstable,
                                       false/*allow_duplicate_sstable*/);
     if (OB_FAIL(mds_param.init_with_compaction_info(
-      ObCompactionTableStoreParam(get_merge_type(), sstable->get_end_scn()/*clog_checkpoint_scn*/, false/*need_report*/, false/*has_truncate_info*/)))) {
+      ObCompactionTableStoreParam(get_merge_type(), sstable->get_end_scn()/*clog_checkpoint_scn*/, false/*need_report*/, false/*has_merged_with_mds_info*/)))) {
       LOG_WARN("failed to init with compaction info", KR(ret));
     } else if (OB_FAIL(get_ls()->update_tablet_table_store(get_tablet_id(), mds_param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(mds_param), K(new_tablet_handle));

@@ -1606,6 +1606,85 @@ bool ObOptimizerUtil::find_equal_expr(const ObIArray<const ObRawExpr *> &exprs,
   return found;
 }
 
+int ObOptimizerUtil::rewrite_expr_using_equal_sets(const ObRawExpr *input_expr,
+                                                   const ObRelIds &tableset,
+                                                   const EqualSets &equal_sets,
+                                                   ObRawExpr *&output_expr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(input_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("input_expr is null", K(ret));
+  } else {
+    ObRawExpr *equivalent_expr = NULL;
+    if (OB_FAIL(find_equivalent_in_range(input_expr, tableset, equal_sets, equivalent_expr))) {
+      LOG_WARN("failed to find equivalent expression", K(ret));
+    } else if (OB_NOT_NULL(equivalent_expr)) {
+      output_expr = equivalent_expr;
+    } else {
+      // No equivalent expression found that satisfies the condition, return original
+      output_expr = const_cast<ObRawExpr *>(input_expr);
+    }
+  }
+
+  return ret;
+}
+
+int ObOptimizerUtil::find_equivalent_in_range(const ObRawExpr *input_expr,
+                                              const ObRelIds &tableset,
+                                              const EqualSets &equal_sets,
+                                              ObRawExpr *&equivalent_expr)
+{
+  bool found = false;
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(input_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("input_expr is null", K(ret));
+  } else {
+    // First check if input_expr itself satisfies the condition
+    const ObRelIds &input_rel_ids = input_expr->get_relation_ids();
+    equivalent_expr = NULL;
+    if (input_rel_ids.is_subset(tableset)) {
+      found = true;
+      equivalent_expr = const_cast<ObRawExpr *>(input_expr);
+    } else {
+      // Search for equivalent expression in EqualSets
+      int64_t N = equal_sets.count();
+      for (int64_t i = 0; !found && i < N; ++i) {
+        if (OB_ISNULL(equal_sets.at(i))) {
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "get null equal set");
+        } else {
+          // Check if input_expr is in this equal set
+          if (find_equal_expr(*equal_sets.at(i), input_expr)) {
+            // Found the equal set containing input_expr, search for equivalent expression
+            const EqualSet &equal_set = *equal_sets.at(i);
+            for (int64_t j = 0; !found && j < equal_set.count(); ++j) {
+              const ObRawExpr *candidate = equal_set.at(j);
+              if (OB_ISNULL(candidate)) {
+                LOG_WARN_RET(OB_ERR_UNEXPECTED, "get null expr in equal set");
+              } else {
+                const ObRelIds &candidate_rel_ids = candidate->get_relation_ids();
+                // Check if candidate's relation_ids is subset of tableset or is empty
+                if (candidate_rel_ids.is_subset(tableset)) {
+                  found = true;
+                  equivalent_expr = const_cast<ObRawExpr *>(candidate);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (!found) {
+        equivalent_expr = NULL;
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObOptimizerUtil::find_stmt_expr_direction(const ObDMLStmt &stmt,
                                               const common::ObIArray<ObRawExpr*> &exprs,
                                               const EqualSets &equal_sets,
@@ -2663,6 +2742,72 @@ int ObOptimizerUtil::find_table_item(const TableItem *table_item, uint64_t table
   return ret;
 }
 
+int ObOptimizerUtil::is_table_item_on_null_side(const ObDMLStmt *stmt,
+                                                TableItem *target_table,
+                                                bool &is_on_null_side)
+{
+  int ret = OB_SUCCESS;
+  is_on_null_side = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(target_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+
+  } else if (!target_table->is_joined_table()) {
+    if (OB_FAIL(is_table_on_null_side(stmt, target_table->table_id_, is_on_null_side))) {
+      LOG_WARN("failed to check null side", K(ret));
+    }
+  } else {
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < stmt->get_joined_tables().count(); ++i) {
+      JoinedTable *joined_table = stmt->get_joined_tables().at(i);
+      bool found_on_null_side = false;
+      if (OB_ISNULL(joined_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(is_table_item_on_null_side_recursively(joined_table, target_table, false, found, found_on_null_side))) {
+        LOG_WARN("failed to check null side", K(ret));
+      } else if (found) {
+        is_on_null_side = found_on_null_side;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::is_table_item_on_null_side_recursively(const TableItem *current_table,
+                                                            const TableItem *target_table,
+                                                            bool is_on_null_side,
+                                                            bool &found,
+                                                            bool &found_on_null_side)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(target_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Get unexpected null", K(ret), K(target_table));
+  } else if (current_table == target_table) {
+    found = true;
+    found_on_null_side = is_on_null_side;
+  } else if (current_table->is_joined_table()) {
+    TableItem *left_table = NULL;
+    TableItem *right_table = NULL;
+    bool left_is_null_side = false;
+    bool right_is_null_side = false;
+    const JoinedTable *joined_table = static_cast<const JoinedTable *>(current_table);
+    ObJoinType join_type = joined_table->joined_type_;
+    if (OB_ISNULL(left_table = joined_table->left_table_) || OB_ISNULL(right_table = joined_table->right_table_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Get unexpected null", K(ret), K(current_table), K(left_table), K(right_table));
+    } else if (OB_FALSE_IT(left_is_null_side = (is_on_null_side || FULL_OUTER_JOIN == join_type || RIGHT_OUTER_JOIN == join_type))) {
+    } else if (OB_FALSE_IT(right_is_null_side = (is_on_null_side || FULL_OUTER_JOIN == join_type || LEFT_OUTER_JOIN == join_type))) {
+    } else if (OB_FAIL(SMART_CALL(is_table_item_on_null_side_recursively(left_table, target_table, left_is_null_side, found, found_on_null_side)))) {
+      LOG_WARN("Checking for table on null side recursively fails", K(ret));
+    } else if (!found && OB_FAIL(SMART_CALL(is_table_item_on_null_side_recursively(right_table, target_table, right_is_null_side, found, found_on_null_side)))) {
+      LOG_WARN("Checking for table on null side recursively fails", K(ret));
+    }
+  }
+
+  return ret;
+}
 int ObOptimizerUtil::get_referenced_columns(const ObDMLStmt *stmt,
                                             const uint64_t table_id,
                                             const common::ObIArray<ObRawExpr*> &keys,
@@ -3033,7 +3178,7 @@ int ObOptimizerUtil::check_prefix_ranges_count(const ObIArray<common::ObNewRange
   range_prefix_count = 0;
   contain_always_false = false;
   if (ranges.count() > 0) {
-    equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+    equal_prefix_count = OB_MAX_ROWKEY_COLUMN_NUMBER;
     range_prefix_count = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
       ObNewRange *range = ranges.at(i);
@@ -3952,7 +4097,7 @@ int ObOptimizerUtil::convert_subplan_scan_equal_sets(ObIAllocator *allocator,
                                                      EqualSets &output_equal_sets)
 {
   int ret = OB_SUCCESS;
-  EqualSets dummy_equal_sets;
+  TemporaryEqualSets dummy_equal_sets;
   ObSEArray<ObRawExpr *, 8> raw_eset;
   TableItem *table_item = NULL;
   if (OB_ISNULL(table_item = parent_stmt.get_table_item_by_id(table_id))) {
@@ -8290,7 +8435,8 @@ bool ObOptimizerUtil::has_psedu_column(const ObRawExpr &expr)
          expr.has_flag(CNT_SEQ_EXPR) ||
          expr.has_flag(CNT_LEVEL) ||
          expr.has_flag(CNT_CONNECT_BY_ISLEAF) ||
-         expr.has_flag(CNT_CONNECT_BY_ISCYCLE);
+         expr.has_flag(CNT_CONNECT_BY_ISCYCLE) ||
+         expr.has_flag(CNT_PSEUDO_COLUMN);
 }
 
 bool ObOptimizerUtil::has_hierarchical_expr(const ObRawExpr &expr)
@@ -8819,7 +8965,7 @@ int ObOptimizerUtil::compute_duplicate_table_sharding(const ObAddr &local_addr,
                                   allocator.alloc(sizeof(ObShardingInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
-  } else if (OB_FALSE_IT(target_sharding = new(target_sharding) ObShardingInfo())) {
+  } else if (OB_FALSE_IT(target_sharding = new(target_sharding) ObShardingInfo(allocator))) {
   } else if (OB_FAIL(target_sharding->copy_with_part_keys(src_sharding))) {
     LOG_WARN("failed to copy sharding info", K(ret));
   } else if (OB_ISNULL(src_sharding.get_phy_table_location_info()) ||
@@ -8874,7 +9020,7 @@ int ObOptimizerUtil::generate_duplicate_table_replicas(ObIAllocator &allocator,
                        allocator.alloc(sizeof(ObCandiTableLoc))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
-  } else if (OB_FALSE_IT(target_table_loc = new(target_table_loc) ObCandiTableLoc())) {
+  } else if (OB_FALSE_IT(target_table_loc = new(target_table_loc) ObCandiTableLoc(allocator))) {
     // do nothing
   } else if (OB_FAIL(target_table_loc->assign(*source_table_loc))) {
     LOG_WARN("failed to assign table location", K(ret));
@@ -9132,16 +9278,20 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
              T_FUN_COUNT_SUM == aggr_type ||
              T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == aggr_type ||
              T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE == aggr_type ||
+             T_FUN_ANY == aggr_type ||
+             T_FUN_ARBITRARY == aggr_type ||
              T_FUN_SYS_BIT_AND == aggr_type ||
              T_FUN_SYS_BIT_OR == aggr_type ||
              T_FUN_SYS_BIT_XOR == aggr_type ||
              T_FUN_SUM_OPNSIZE == aggr_type ||
              T_FUN_SYS_RB_OR_AGG == aggr_type ||
              T_FUN_SYS_RB_AND_AGG == aggr_type ||
-             T_FUN_SYS_RB_BUILD_AGG == aggr_type) {
+             T_FUN_SYS_RB_BUILD_AGG == aggr_type ||
+             T_FUN_SYS_COUNT_INROW == aggr_type) {
     /* MAX(a) -> MAX(MAX(a)), MIN(a) -> MIN(MIN(a)) SUM(a) -> SUM(SUM(a)) */
     ObItemType pullup_aggr_type = aggr_type;
-    if (T_FUN_COUNT == pullup_aggr_type || T_FUN_SUM_OPNSIZE == pullup_aggr_type) {
+    if (T_FUN_COUNT == pullup_aggr_type || T_FUN_SUM_OPNSIZE == pullup_aggr_type ||
+        T_FUN_SYS_COUNT_INROW == pullup_aggr_type) {
       pullup_aggr_type = T_FUN_COUNT_SUM;
     } else if (T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == pullup_aggr_type) {
       pullup_aggr_type = T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE;
@@ -9641,7 +9791,7 @@ int ObOptimizerUtil::check_can_encode_sortkey(const common::ObIArray<OrderItem> 
   bool has_hint = false;
   can_sort_opt = true;
   bool old_can_opt = false;
-  const ObOptParamHint opt_params = plan.get_optimizer_context().get_global_hint().opt_params_;
+  const ObOptParamHint &opt_params = plan.get_optimizer_context().get_global_hint().opt_params_;
   if (OB_FAIL(opt_params.has_opt_param(ObOptParamHint::ENABLE_NEWSORT, has_hint))) {
     LOG_WARN("failed to check whether has hint param", K(ret));
   } else if (has_hint) {
@@ -10831,7 +10981,9 @@ int ObOptimizerUtil::check_can_batch_rescan(const ObLogicalOperator *op,
     /* contains limit pushdown, enabled after 4.2.5 */
   } else if (op->is_table_scan()) {
     const ObLogTableScan *table_scan = static_cast<const ObLogTableScan*>(op);
-    if (OB_ISNULL(table_scan->get_est_cost_info())) {
+    if (table_scan->get_contains_fake_cte()) {
+      can_batch_rescan = false;
+    } else if (OB_ISNULL(table_scan->get_est_cost_info())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null est cost info", K(ret));
     } else if (!table_scan->can_batch_rescan()) {
@@ -10943,7 +11095,8 @@ int ObOptimizerUtil::check_aggr_can_pre_aggregate(const ObAggFunRawExpr *aggr,
              T_FUN_SYS_BIT_AND == aggr->get_expr_type() ||
              T_FUN_SYS_BIT_OR == aggr->get_expr_type() ||
              T_FUN_SYS_BIT_XOR == aggr->get_expr_type() ||
-             T_FUN_SUM_OPNSIZE == aggr->get_expr_type()) {
+             T_FUN_SUM_OPNSIZE == aggr->get_expr_type() ||
+             T_FUN_SYS_COUNT_INROW == aggr->get_expr_type()) {
     can_pre_aggr = true;
   }
   return ret;

@@ -15,6 +15,7 @@
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/ddl/ob_ddl_replay_executor.h"
+#include "storage/ddl/ob_ddl_merge_task.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/ddl/ob_direct_load_mgr_utils.h"
 #include "storage/ddl/ob_ddl_merge_schedule.h"
@@ -30,7 +31,7 @@ namespace storage
 {
 
 ObActiveDDLKVMgr::ObActiveDDLKVMgr()
-  : lock_(), active_ddl_tablets_()
+  : lock_(common::ObLatchIds::OB_ACTIVE_D_D_L_K_V_MGR_LOCK), active_ddl_tablets_()
 {
 }
 

@@ -1259,6 +1259,44 @@ int ObArrayExprUtils::get_array_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const u
   return ret;
 }
 
+int ObArrayExprUtils::canonicalize_map_compact_payload(ObIAllocator &tmp_alloc, ObEvalCtx &ctx, const ObExpr &map_expr,
+                                                       ObIVector &root_vec, const int64_t start_row, const int64_t end_row)
+{
+  int ret = OB_SUCCESS;
+  const uint16_t subschema_id = map_expr.obj_meta_.get_subschema_id();
+  ObCollectionTypeBase *coll_type = NULL;
+  ObCollectionMapType *map_type = NULL;
+  if (OB_FAIL(get_coll_type_by_subschema_id(&ctx.exec_ctx_, subschema_id, coll_type))) {
+    LOG_WARN("failed to get coll type by subschema id", K(ret), K(subschema_id));
+  } else if (OB_ISNULL(map_type = dynamic_cast<ObCollectionMapType *>(coll_type))) {
+    // not a map, do nothing
+  } else if (OB_UNLIKELY(root_vec.get_format() != VEC_DISCRETE)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only support discrete vector", K(ret), K(root_vec.get_format()));
+  } else {
+    ObDiscreteFormat *discrete = static_cast<ObDiscreteFormat *>(&root_vec);
+    ObIArrayType *map_obj = NULL;
+    for (int64_t row_idx = start_row; OB_SUCC(ret) && row_idx < end_row; ++row_idx) {
+      if (discrete->is_null(row_idx)) {
+        continue;
+      }
+      const char *payload = NULL;
+      ObLength payload_len = 0;
+      discrete->get_payload(row_idx, payload, payload_len);
+      ObString raw_data(payload_len, payload);
+      ObIArrayType *sorted_obj = NULL;
+      if (OB_FAIL(get_array_obj(tmp_alloc, ctx, subschema_id, raw_data, map_obj))) {
+        LOG_WARN("init map obj from compact payload failed", K(ret), K(subschema_id), K(row_idx));
+      } else if (OB_FAIL(map_obj->distinct(tmp_alloc, sorted_obj))) {
+        LOG_WARN("map distinct(canonicalize) failed", K(ret), K(row_idx));
+      } else if (OB_FAIL(set_array_res<ObDiscreteFormat>(sorted_obj, map_expr, ctx, discrete, row_idx))) {
+        LOG_WARN("rewrite compact map payload failed", K(ret), K(row_idx));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObArrayExprUtils::dispatch_array_attrs_rows(ObEvalCtx &ctx, ObIArrayType *arr_obj, const int64_t row_idx,
                                                 ObExpr **attrs, uint32_t attr_count, bool is_shallow)
 {

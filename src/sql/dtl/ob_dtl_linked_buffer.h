@@ -237,9 +237,10 @@ public:
         enable_channel_sync_(false),
         register_dm_info_(),
         row_meta_(),
-        op_info_()
+        op_info_(),
+        capacity_(0)
   {}
-  ObDtlLinkedBuffer(char * buf, int64_t size)
+  ObDtlLinkedBuffer(char * buf, int64_t size, const int64_t capacity)
       : buf_(buf), size_(size), pos_(), is_data_msg_(false), seq_no_(0), tenant_id_(0),
         allocated_chid_(0), is_eof_(false), timeout_ts_(0), msg_type_(ObDtlMsgType::MAX),
         flags_(0), dfo_key_(), use_interm_result_(false), batch_id_(0), batch_info_valid_(false),
@@ -249,7 +250,8 @@ public:
         enable_channel_sync_(false),
         register_dm_info_(),
         row_meta_(),
-        op_info_()
+        op_info_(),
+        capacity_(capacity)
   {}
   TO_STRING_KV(K_(size), K_(pos), K_(is_data_msg), K_(seq_no), K_(tenant_id), K_(allocated_chid),
       K_(is_eof), K_(timeout_ts), K(msg_type_), K_(flags), K(is_bcast()), K_(rows_cnt), K_(enable_channel_sync),
@@ -273,7 +275,7 @@ public:
     }
   }
 
-  void set_buf(char *buf) { buf_ = buf; }
+  void set_buf(char *buf, const int64_t capacity) { buf_ = buf; capacity_ = capacity; }
 
   OB_INLINE char *buf() {
     return buf_;
@@ -289,6 +291,10 @@ public:
 
   OB_INLINE int64_t &size() {
     return size_;
+  }
+
+  OB_INLINE int64_t capacity() const {
+    return capacity_;
   }
 
   OB_INLINE int64_t &pos() const {
@@ -403,7 +409,7 @@ public:
   int shallow_copy(const ObDtlLinkedBuffer &src)
   {
     int ret = OB_SUCCESS;
-    buf_ = src.buf_;
+    set_buf(src.buf_, src.capacity_);
     size_ = src.size_;
     is_data_msg_ = src.is_data_msg_;
     seq_no_ = src.seq_no_;
@@ -597,6 +603,7 @@ The memory layout is as below:
   common::ObRegisterDmInfo register_dm_info_;
   RowMeta row_meta_;
   ObDtlOpInfo op_info_;
+  int64_t capacity_;
 };
 
 }  // dtl

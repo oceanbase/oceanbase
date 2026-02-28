@@ -116,6 +116,10 @@ private:
   int inner_merge_max(const ObDatum &datum, const ObObjMeta &meta, const ObDatumCmpFuncType cmp_func);
   int inner_merge_min_max(const ObDatum &datum, const ObObjMeta &meta, const ObDatumCmpFuncType cmp_func);
   int calc_col_len(const ObDatum &datum, const ObObjMeta &meta, int64_t &col_len);
+  OB_INLINE int copy_min_max_datum_with_truncate(ObIAllocator &alloc,
+                                                 const ObDatum &datum,
+                                                 const ObObjMeta &meta,
+                                                 ObMinMaxValEval &val_eval);
   DISALLOW_COPY_AND_ASSIGN(ObOptOSGColumnStat);
 };
 

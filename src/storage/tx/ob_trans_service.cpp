@@ -53,7 +53,8 @@ ObTransService::ObTransService()
       palf_kv_gc_task_(nullptr),
 #endif
       tx_debug_seq_(0),
-      read_only_checker_()
+      read_only_checker_(),
+      tenant_config_cache_()
 {
   check_env_();
 }
@@ -75,6 +76,8 @@ int ObTransService::mtl_init(ObTransService *&it)
     TRANS_LOG(ERROR, "dup table rpc init error", KR(ret));
   } else if (OB_FAIL(it->dup_table_rpc_impl_.init(req_transport, self))) {
     TRANS_LOG(ERROR, "dup table rpc init error", KR(ret));
+  } else if (OB_FAIL(it->sby_rpc_impl_.init(req_transport, self))) {
+    TRANS_LOG(ERROR, "sby rpc init error", KR(ret));
   } else if (OB_FAIL(it->location_adapter_def_.init(schema_service, location_service))) {
     TRANS_LOG(ERROR, "location adapter init error", KR(ret));
   } else if (OB_FAIL(it->gti_source_def_.init(self, req_transport, MTL_ID()))) {
@@ -152,6 +155,8 @@ int ObTransService::init(const ObAddr &self,
     TRANS_LOG(WARN, "init tablet to ls cache failed", K(ret));
   } else if (OB_FAIL(read_only_checker_.init(tenant_id))) {
     TRANS_LOG(WARN, "read only checker init failed", K(ret));
+  } else if (OB_FAIL(tenant_config_cache_.init(tenant_id))) {
+    TRANS_LOG(WARN, "tenant config cache init failed", K(ret));
   } else {
     self_ = self;
     tenant_id_ = tenant_id;
@@ -227,12 +232,52 @@ int ObTransService::start()
     TRANS_LOG(WARN, "tx_ctx_mgr_ start error", KR(ret));
   } else if (OB_FAIL(tx_desc_mgr_.start())) {
     TRANS_LOG(WARN, "tx_desc_mgr_ start error", KR(ret));
+  } else if (OB_FAIL(tenant_config_cache_.refresh())) {
+    TRANS_LOG(WARN, "refresh tenant config error", KR(ret));
   } else {
     is_running_ = true;
-
     TRANS_LOG(INFO, "transaction service start success", KPC(this));
   }
 
+  return ret;
+}
+
+ObTransService::TenantConfigCache::TenantConfigCache() : lock_(common::ObLatchIds::OB_TRANS_TENANT_CONFIG_CACHE_LATCH)
+{
+  reset();
+}
+
+ObTransService::TenantConfigCache::~TenantConfigCache()
+{
+  reset();
+}
+
+void ObTransService::TenantConfigCache::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  can_tenant_elr_ = false;
+  tenant_config_refresh_ts_ = 0;
+  write_throttle_by_pending_log_size_limit_ = 0;
+  write_throttle_by_pending_log_sleep_interval_ = 0;
+  trx_max_log_cb_limit_ = 0;
+  col_replica_max_local_wait_time_ = 0;
+}
+
+int ObTransService::TenantConfigCache::refresh()
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (OB_LIKELY(tenant_config.is_valid())) {
+    can_tenant_elr_ = tenant_config->enable_early_lock_release;
+    tenant_config_refresh_ts_ = ObTimeUtil::current_time();
+    write_throttle_by_pending_log_size_limit_ = tenant_config->_write_throttle_by_pending_log_size_limit;
+    write_throttle_by_pending_log_sleep_interval_ = tenant_config->_write_throttle_by_pending_log_sleep_interval;
+    trx_max_log_cb_limit_ = tenant_config->_trx_max_log_cb_limit;
+    col_replica_max_local_wait_time_ = tenant_config->_c_replica_strong_read_local_max_wait_time;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid tenant config", KR(ret), K(tenant_id_));
+  }
   return ret;
 }
 
@@ -338,6 +383,7 @@ void ObTransService::destroy()
       defensive_check_mgr_ = NULL;
     }
 #endif
+    tenant_config_cache_.reset();
 #ifdef OB_BUILD_SHARED_STORAGE
     sslog::ObPalfKVGcTask::free_palf_kv_gc_task(palf_kv_gc_task_);
 #endif
@@ -457,10 +503,11 @@ int ObTransService::iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_i
   return ret;
 }
 
-int ObTransService::get_trans_start_session_id(const share::ObLSID &ls_id, const ObTransID &tx_id, uint32_t &session_id)
+int ObTransService::get_trans_start_session_id_and_ts(const share::ObLSID &ls_id, const ObTransID &tx_id, uint32_t &session_id, int64_t &tx_start_time)
 {
   int ret = OB_SUCCESS;
   transaction::ObPartTransCtx *part_ctx = nullptr;
+  ObLSService *ls_svr = nullptr;
   ObLSHandle ls_handle;
   session_id = ObBasicSessionInfo::INVALID_SESSID;
   if (IS_NOT_INIT) {
@@ -469,12 +516,15 @@ int ObTransService::get_trans_start_session_id(const share::ObLSID &ls_id, const
   } else if (OB_UNLIKELY(!is_running_)) {
     TRANS_LOG(WARN, "ObTransService is not running");
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+  } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "ObLSService is null", K(ret), K(ls_id), K(tx_id));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
     TRANS_LOG(WARN, "get ls failed", K(ret), K(ls_id), K(tx_id));
   } else if (!ls_handle.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "ls is null in ObLSHandle", K(ret), K(ls_id), K(tx_id));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tx_start_session_id(tx_id, session_id))) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tx_start_session_id_and_ts(tx_id, session_id, tx_start_time))) {
     TRANS_LOG(WARN, "get ObPartTransCtx by ls_id and tx_id failed", K(ls_id), K(tx_id));
   }
   return ret;

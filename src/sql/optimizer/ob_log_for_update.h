@@ -18,6 +18,8 @@ namespace oceanbase
 {
 namespace sql
 {
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogForUpdate : public ObLogicalOperator
 {
 public:
@@ -30,6 +32,7 @@ public:
   virtual int est_cost();
   virtual int compute_op_ordering();
   int compute_sharding_info() override;
+  int compute_plan_type() override;
   int allocate_granule_pre(AllocGIContext &ctx) override;
   int allocate_granule_post(AllocGIContext &ctx) override;
 
@@ -60,7 +63,7 @@ private:
   bool gi_charged_;
   int64_t wait_ts_;
   ObRawExpr *lock_rownum_; // only used for skip locked
-  ObSEArray<IndexDMLInfo*, 1, common::ModulePageAllocator, true> index_dml_info_;
+  ObSqlArray<IndexDMLInfo*> index_dml_info_;
   DISALLOW_COPY_AND_ASSIGN(ObLogForUpdate);
 };
 } // end of namespace sql

@@ -165,11 +165,14 @@ TEST_F(TestMicroBlockDecoder, decode_test)
     LOG_INFO("generate row", K(i),  K(row));
     ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
   }
-  char *buf = NULL;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder_.data_buffer_.data();
+  const int64_t size = encoder_.data_buffer_.size();
+
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   LOG_INFO("col_descs before init decoder : ",K(col_descs_));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, nullptr)) << "buffer size: " << data.get_buf_size() << std::endl;
   ObDatumRow single_row;
@@ -191,7 +194,7 @@ TEST_F(TestMicroBlockDecoder, decode_test)
 int main(int argc, char **argv)
 {
   system("rm -f test_micro_block_decoder.log*");
-  OB_LOGGER.set_file_name("test_micro_block_decoder.log", true, false);
+  OB_LOGGER.set_file_name("test_micro_block_decoder.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

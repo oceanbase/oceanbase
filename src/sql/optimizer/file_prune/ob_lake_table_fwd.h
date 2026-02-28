@@ -14,6 +14,7 @@
 #define _OCEANBASE_SQL_OPTIMIZER_OB_LAKE_TABLE_FWD_H
 
 #include "common/object/ob_object.h"
+#include "sql/resolver/ob_sql_array.h"
 #include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
 
 namespace oceanbase
@@ -75,6 +76,13 @@ enum class LakeFileType{
     HIVE = 2
   };
 
+enum class CsvTaskType{
+  INVALID = 0,
+  GAMBLING_BOUND = 1,
+  FULL_SCAN_BOUND = 2,
+  PARSE_DATA = 3
+};
+
 /* structs for optimization */
 
 struct ObIOptLakeTableFile
@@ -97,10 +105,10 @@ public:
 struct ObOptIcebergFile : public ObIOptLakeTableFile
 {
 public:
-  ObOptIcebergFile()
+  ObOptIcebergFile(common::ObIAllocator &allocator)
   : ObIOptLakeTableFile(LakeFileType::ICEBERG),
     file_url_(), file_size_(0), modification_time_(0),
-    file_format_(iceberg::DataFileFormat::INVALID), delete_files_(), record_count_(0)
+    file_format_(iceberg::DataFileFormat::INVALID), delete_files_(allocator), record_count_(0)
   {}
   virtual int assign(const ObIOptLakeTableFile &other) override;
   virtual void reset() override;
@@ -110,7 +118,7 @@ public:
   int64_t file_size_;
   int64_t modification_time_;
   iceberg::DataFileFormat file_format_;
-  common::ObSEArray<const ObLakeDeleteFile *, 1, common::ModulePageAllocator, true> delete_files_;
+  ObSqlArray<const ObLakeDeleteFile *> delete_files_;
   int64_t record_count_;
 };
 
@@ -132,6 +140,34 @@ public:
 };
 
 /* structs for execution */
+
+struct ObCsvParallelInfo
+{
+public:
+  explicit ObCsvParallelInfo()
+  : start_pos_(0),
+    end_pos_(INT64_MAX),
+    chunk_idx_(OB_INVALID_INDEX),
+    chunk_cnt_(OB_INVALID_INDEX),
+    csv_task_type_(CsvTaskType::INVALID),
+    is_gambling_end_with_escaped_(false)
+  {}
+  ~ObCsvParallelInfo();
+  TO_STRING_KV(K_(start_pos), K_(end_pos),
+               K_(chunk_idx), K_(chunk_cnt), K_(csv_task_type),
+               K_(is_gambling_end_with_escaped));
+
+  int64_t start_pos_;
+  int64_t end_pos_;
+  int64_t chunk_idx_;
+  int64_t chunk_cnt_;
+  CsvTaskType csv_task_type_;
+  bool is_gambling_end_with_escaped_;  // gambling 阶段结束时的 escape 状态，传递给 full scan
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCsvParallelInfo);
+  int assign(const ObCsvParallelInfo &other);
+};
+
 struct ObIExtTblScanTask
 {
 public:
@@ -140,6 +176,7 @@ public:
   explicit ObIExtTblScanTask()
   : file_url_(), part_id_(OB_INVALID_PARTITION_ID), first_lineno_(1), last_lineno_(INT64_MAX)
   {}
+  virtual ~ObIExtTblScanTask() {}
 
   VIRTUAL_TO_STRING_KV(K_(file_url), K_(part_id), K_(first_lineno), K_(last_lineno));
 
@@ -167,7 +204,7 @@ public:
     content_digest_(),
     record_count_(0)
   {}
-
+  virtual ~ObFileScanTask() {}
   virtual LakeFileType get_file_type() const { return type_; }
   virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
                                            const ObIOptLakeTableFile &opt_table_file) = 0;
@@ -181,7 +218,6 @@ public:
   int64_t file_id_;
   common::ObString content_digest_;
   int64_t record_count_; // serialized in ObIcebergScanTask
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFileScanTask);
   int assign(const ObFileScanTask &other);
@@ -194,11 +230,10 @@ public:
 public:
   explicit ObIcebergScanTask(ObIAllocator &allocator)
   : ObFileScanTask(LakeFileType::ICEBERG),
-    allocator_(allocator),
     file_format_(iceberg::DataFileFormat::INVALID),
     delete_files_(allocator)
   {}
-
+  virtual ~ObIcebergScanTask() {}
   virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
                                            const ObIOptLakeTableFile &opt_table_file) override;
 
@@ -206,7 +241,6 @@ public:
                       K_(delete_files), K_(file_id), K_(part_id), K_(content_digest),
                       K_(record_count));
 
-  ObIAllocator &allocator_;
   iceberg::DataFileFormat file_format_;
   common::ObFixedArray<ObLakeDeleteFile, ObIAllocator> delete_files_;
 
@@ -221,15 +255,19 @@ public:
   OB_UNIS_VERSION_V(1);
 public:
   explicit ObHiveScanTask()
-  : ObFileScanTask(LakeFileType::HIVE)
+  : ObFileScanTask(LakeFileType::HIVE),
+    parallel_parse_csv_info_(nullptr)
   {}
+  virtual ~ObHiveScanTask() {}
 
   virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
                                            const ObIOptLakeTableFile &opt_table_file) override;
 
   VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
-                      K_(file_id), K_(part_id), K_(content_digest), K_(record_count));
-
+                      K_(file_id), K_(part_id), K_(content_digest), K_(record_count),
+                      KPC_(parallel_parse_csv_info));
+  // for parallel parse csv
+  ObCsvParallelInfo *parallel_parse_csv_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHiveScanTask);
   int assign(const ObHiveScanTask &other);
@@ -239,16 +277,23 @@ struct ObExtTableScanTask : public ObFileScanTask
 {
 public:
   explicit ObExtTableScanTask()
-  : ObFileScanTask(LakeFileType::INVALID)
+  : ObFileScanTask(LakeFileType::INVALID),
+    parallel_parse_csv_info_(nullptr)
   {}
+  virtual ~ObExtTableScanTask() {}
 
   int init_with_opt_lake_table_file(ObIAllocator &allocator,
                                     const ObIOptLakeTableFile &opt_table_file) override
   { return OB_NOT_SUPPORTED; }
 
-  VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
-                      K_(file_id), K_(part_id), K_(content_digest), K_(record_count));
+  int init_parallel_parse_csv_info(ObIAllocator &allocator);
 
+  VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
+                      K_(file_id), K_(part_id), K_(content_digest), K_(record_count),
+                      KPC_(parallel_parse_csv_info));
+
+  // for parallel parse csv
+  ObCsvParallelInfo *parallel_parse_csv_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExtTableScanTask);
   int assign(const ObExtTableScanTask &other);
@@ -261,6 +306,7 @@ public:
   : ObIExtTblScanTask(),
     session_id_(), first_split_idx_(0), last_split_idx_(0)
   {}
+  virtual ~ObOdpsScanTask() {}
 
   VIRTUAL_TO_STRING_KV(K_(file_url), K_(part_id), K_(session_id), K_(first_split_idx),
                       K_(last_split_idx));

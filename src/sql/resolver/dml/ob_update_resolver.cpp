@@ -457,7 +457,7 @@ int ObUpdateResolver::resolve_table_list(const ParseNode &parse_tree)
         LOG_DEBUG("succ to add from item", KPC(table_item));
       }
     }
-    if (OB_ISNULL(table_item) || session_info_->is_inner()) {
+    if (OB_ISNULL(table_item) || (session_info_->is_inner() && OB_ISNULL(session_info_->get_job_info()))) {
     } else if (OB_UNLIKELY(table_item->is_system_table_ && table_item->table_name_.case_compare(OB_ALL_LICENSE_TNAME) == 0)) {
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("modify license table is not allowed", KR(ret), K(table_item->table_name_), K(table_item->is_system_table_));
@@ -508,6 +508,8 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(check_is_mview_refresh_sql(*table_schema))) {
+    LOG_WARN("failed to check is mview refresh sql", K(ret));
   } else if (OB_FAIL(schema_checker_->get_can_write_index_array(params_.session_info_->get_effective_tenant_id(),
                                                                 table_item->get_base_table_item().ref_id_,
                                                                 index_tid, gindex_cnt, true))) {
@@ -519,7 +521,7 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
     LOG_WARN("failed to allocate table info", K(ret));
   } else {
     bool need_all_cols = true;
-    table_info = new(ptr) ObUpdateTableInfo();
+    table_info = new(ptr) ObUpdateTableInfo(*allocator_);
     if (OB_FAIL(table_info->assignments_.assign(table_assign.assignments_))) {
       LOG_WARN("failed to assign exprs", K(ret));
     } else if (OB_FAIL(table_info->part_ids_.assign(table_item->get_base_table_item().part_ids_))) {
@@ -886,6 +888,8 @@ int ObUpdateResolver::resolve_update_constraints()
           OB_ISNULL(table_item = update_stmt->get_table_item_by_id(table_info->table_id_))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(table_item), K(ret));
+      } else if (OB_FAIL(resolve_check_merge_engine(table_item))) {
+        LOG_WARN("failed to resolve check merge engine", K(ret));
       } else if (!update_stmt->has_instead_of_trigger() &&
                  OB_FAIL(resolve_view_check_exprs(table_item->table_id_, table_item, false, table_info->view_check_exprs_))) {
         LOG_WARN("failed to resolve view check exprs", K(ret));
@@ -896,16 +900,54 @@ int ObUpdateResolver::resolve_update_constraints()
         LOG_WARN("failed to prune check constraints", K(ret));
       } else {
         // TODO @yibo remove view check exprs in log_del_upd
+        ObRawExprReplacer replacer;
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_info->assignments_.count(); ++i) {
+          if (OB_FAIL(replacer.add_replace_expr(table_info->assignments_.at(i).column_expr_,
+                                                 table_info->assignments_.at(i).expr_))) {
+            LOG_WARN("failed to add replace expr", K(ret));
+          }
+        }
         for (uint64_t j = 0; OB_SUCC(ret) && j < table_info->view_check_exprs_.count(); ++j) {
-          if (OB_FAIL(ObTableAssignment::expand_expr(*params_.expr_factory_,
-                                                     table_info->assignments_,
-                                                     table_info->view_check_exprs_.at(j)))) {
+          if (OB_FAIL(replacer.replace(table_info->view_check_exprs_.at(j)))) {
             LOG_WARN("expand generated column expr failed", K(ret));
+          }
+        }
+        if (!table_info->view_check_exprs_.empty()) {
+          ObRawExpr *child = NULL;
+          if (table_info->view_check_exprs_.at(0)->is_op_expr()) {
+            child = static_cast<ObOpRawExpr *>(table_info->view_check_exprs_.at(0))->get_param_expr(0);
           }
         }
       }
     }
   }
+  return ret;
+}
+
+int ObUpdateResolver::resolve_check_merge_engine(const TableItem* table_item)
+{
+  int ret = OB_SUCCESS;
+
+  const ObTableSchema *table_schema = NULL;
+  if (OB_ISNULL(table_item) || OB_ISNULL(schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table_item), K(schema_checker_));
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_info_ is null", K(ret));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                       table_item->get_base_table_item().ref_id_,
+                                                       table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_item->get_base_table_item().ref_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("fail to get tale schema", K(ret), K(table_schema));
+  } else if (table_schema->is_append_only_merge_engine()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("update append_only table is not supported", K(ret), KPC(table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "update append_only table is");
+  }
+
   return ret;
 }
 

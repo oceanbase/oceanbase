@@ -97,13 +97,13 @@ public:
   int get_cache_refresh_interval_sec(const ObILakeTableMetadata *table_metadata,
                                      int64_t &sec) override;
 
+  int get_catalog(const uint64_t tenant_id, const uint64_t catalog_id, ObIExternalCatalog *&catalog);
+
 private:
   schema::ObSchemaGetterGuard &schema_getter_guard_;
   ObCatalogLocationSchemaProvider location_schema_provider_;
   ObArray<CatalogEntry> created_catalog_;
   ObIAllocator &allocator_;
-
-  int get_catalog_(const uint64_t tenant_id, const uint64_t catalog_id, ObIExternalCatalog *&catalog);
 };
 
 } // namespace share

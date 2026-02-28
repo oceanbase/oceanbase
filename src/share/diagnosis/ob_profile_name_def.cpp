@@ -30,12 +30,12 @@ ObProfileNameSet::ObProfileNameSet()
 #include "share/diagnosis/ob_profile_name_def.h"
 #undef OP_PROFILE_NAME_DEF
 
-#define OTHER_PROFILE_NAME_DEF(enum_type, name)                                                    \
+#define OTHER_PROFILE_NAME_DEF(enum_type, name, ...)                                               \
   static_assert(sizeof(name) <= 32, "profile name length is bigger than 32");
 #include "share/diagnosis/ob_profile_name_def.h"
 #undef OTHER_PROFILE_NAME_DEF
 
-#define OTHER_PROFILE_NAME_DEF(enum_type, name)                                                    \
+#define OTHER_PROFILE_NAME_DEF(enum_type, name, ...)                                               \
   set_profile_type_name(ObProfileId::enum_type, name);
 #include "share/diagnosis/ob_profile_name_def.h"
 #undef OTHER_PROFILE_NAME_DEF

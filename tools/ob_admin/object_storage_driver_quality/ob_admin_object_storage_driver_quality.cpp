@@ -467,7 +467,8 @@ int OSDQMetric::print_csv_dump_()
 }
 
 OSDQMetric::OSDQMetric()
-  : is_inited_(false),
+  : mutex_(common::ObLatchIds::OB_ADMIN_COMMON_LOCK),
+    is_inited_(false),
     summary_cnt_(0),
     start_real_time_us_(ObTimeUtility::current_time()),
     last_real_time_us_(start_real_time_us_),
@@ -1178,6 +1179,7 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
     {"interval", 1, NULL, 'i'},
     {"thread_cnt", 1, NULL, 't'},
     {"enable_obdal", 0, NULL, 'a'},
+    {"sync-io", 0, NULL, '0'},
     {NULL, 0, NULL, 0},
   };
   ObClusterStateBaseMgr::get_instance().set_enable_obdal(false);
@@ -1257,6 +1259,8 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
               ret = OB_INVALID_ARGUMENT;
               OB_LOG(WARN, "failed to parse limit cpu", KR(ret), K((char *) optarg));
             }
+          } else if (strcmp(opt_name, "sync-io") == 0) {
+            ObClusterStateBaseMgr::get_instance().set_enable_object_storage_async_io(false);
           }
           break;
         } else {
@@ -1406,7 +1410,7 @@ void ObAdminObjectStorageDriverQualityExecutor::free_scene_(OSDQScene *&scene)
 
 //=========================== OSDQFileSet ===============================
 
-OSDQFileSet::OSDQFileSet() {}
+OSDQFileSet::OSDQFileSet() : mutex_(common::ObLatchIds::OB_ADMIN_COMMON_LOCK) {}
 OSDQFileSet::~OSDQFileSet()
 {
   FilePathMap::iterator it = file_path_map_.begin();

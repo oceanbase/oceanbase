@@ -20,6 +20,8 @@
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #include "storage/shared_storage/mem_macro_cache/ob_ss_mem_macro_cache.h"
+#include "storage/shared_storage/ob_ss_object_access_util.h"
+#include "storage/blocksstable/ob_ss_obj_util.h"
 #undef private
 #undef protected
 
@@ -43,7 +45,7 @@ public:
   virtual void TearDown();
 
 public:
-  static const int64_t WRITE_IO_SIZE = 16 * 1024; // 16KB
+  static const int64_t WRITE_IO_SIZE = 257 * 1024; // 257KB
   ObStorageObjectWriteInfo write_info_;
   ObStorageObjectReadInfo read_info_;
   char write_buf_[WRITE_IO_SIZE];
@@ -92,6 +94,10 @@ void TestSSPreReadTask::SetUp()
   read_info_.size_ = WRITE_IO_SIZE;
   read_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   read_info_.mtl_tenant_id_ = MTL_ID();
+
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+  ASSERT_NE(nullptr, mem_macro_cache);
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->clear_mem_macro_cache());
 }
 
 void TestSSPreReadTask::TearDown()
@@ -142,6 +148,10 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
     }
   }
   // 3. read and compare the read data with the written data
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+  ObSSMemMacroCacheStat &cache_stat = mem_macro_cache->cache_stat_;
+  const int64_t hit_cnt_before = cache_stat.hit_stat().hit_cnt_;
+  const int64_t miss_cnt_before = cache_stat.hit_stat().miss_cnt_;
   for (int64_t i = 0; i < tmp_file_cnt; ++i) {
     read_info_.macro_block_id_ = macro_ids[i];
     ObStorageObjectHandle read_object_handle;
@@ -152,10 +162,14 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
     ASSERT_EQ(read_info_.size_, read_object_handle.get_data_size());
     ASSERT_EQ(0, memcmp(write_buf_, read_object_handle.get_buffer(), WRITE_IO_SIZE));
 
-    ObIOFlag flag;
-    ASSERT_EQ(OB_SUCCESS, read_object_handle.get_io_handle().get_io_flag(flag));
-    // check read tmp_file from mem_macro_cache, and it will set_sync
-    ASSERT_TRUE(flag.is_sync());
+    // Verify that data was read from mem_macro_cache by checking cache statistics
+    // When reading from mem_macro_cache, there is no actual IO operation,
+    // data is directly copied from memory. The correct way to verify is to check
+    // cache hit statistics instead of IO flags.
+    const int64_t hit_cnt_after = cache_stat.hit_stat().hit_cnt_;
+    const int64_t miss_cnt_after = cache_stat.hit_stat().miss_cnt_;
+    ASSERT_EQ(hit_cnt_before + i + 1, hit_cnt_after);
+    ASSERT_EQ(miss_cnt_before, miss_cnt_after); // miss count should not change
   }
 
   // 4. wait preread_next_segment_file finish
@@ -182,6 +196,160 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
   for (int64_t i = 0; i < tmp_file_cnt; ++i) {
     ASSERT_EQ(OB_SUCCESS, file_manager->delete_tmp_file(macro_ids[i]));
   }
+}
+
+TEST_F(TestSSPreReadTask, preread_without_effective_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ObPrereadCacheManager &preread_cache_mgr = file_manager->preread_cache_mgr_;
+  ObSSPreReadTask &preread_task = preread_cache_mgr.preread_task_;
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+  ASSERT_NE(nullptr, mem_macro_cache);
+
+  // 1. write one macro to object storage
+  uint64_t tablet_id = 200001;
+  uint64_t data_seq = 1;
+  uint64_t reorganization_scn = 0;
+
+  // 1. write
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_META_MACRO);
+  macro_id.set_second_id(tablet_id); // tablet_id
+  macro_id.set_third_id(data_seq); // data_seq
+  macro_id.set_fourth_id(reorganization_scn); // reorganization_scn
+  ASSERT_TRUE(macro_id.is_valid());
+  ObStorageObjectHandle write_object_handle;
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+
+  ObSSShareMacroWriter share_macro_writer;
+  ASSERT_EQ(OB_SUCCESS, share_macro_writer.aio_write(write_info_, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_remote_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_TRUE(is_exist);
+
+  // 2. read and cache-miss, which should trigger preread
+  read_info_.macro_block_id_ = macro_id;
+  read_info_.offset_ = 1;
+  read_info_.size_ = WRITE_IO_SIZE / 2;
+  read_info_.set_effective_tablet_id(ObTabletID(ObTabletID::INVALID_TABLET_ID));
+  ObStorageObjectHandle read_object_handle;
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_pread_file(read_info_, read_object_handle));
+  ASSERT_EQ(OB_SUCCESS, read_object_handle.wait());
+  ASSERT_NE(nullptr, read_object_handle.get_buffer());
+  ASSERT_EQ(read_info_.size_, read_object_handle.get_data_size());
+  ASSERT_EQ(0, memcmp(write_buf_ + read_info_.offset_, read_object_handle.get_buffer(), read_info_.size_));
+  read_object_handle.reset();
+
+  // 3. wait preread task preread macro to local cache (mem_macro_cache)
+  int64_t start_us = ObTimeUtility::current_time();
+  const int64_t timeout_us = 20 * 1000 * 1000L;
+  while ((preread_cache_mgr.preread_queue_.size() != 0) ||
+         (preread_task.segment_files_.count() != 0) ||
+         (preread_task.free_list_.get_curr_total() != file_manager->preread_cache_mgr_.preread_task_.max_pre_read_parallelism_)) {
+    ob_usleep(1000);
+    if (timeout_us + start_us < ObTimeUtility::current_time()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("waiting time is too long", KR(ret),
+          K(preread_cache_mgr.preread_queue_.size()), K(preread_task.segment_files_.count()),
+          K(preread_task.async_read_list_.get_curr_total()), K(preread_task.async_write_list_.get_curr_total()));
+      break;
+    }
+  }
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->check_exist(macro_id, is_exist));
+  ASSERT_TRUE(is_exist);
+
+  // 4. delete file
+  ASSERT_EQ(OB_SUCCESS, file_manager->delete_file(macro_id));
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_remote_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_FALSE(is_exist);
+}
+
+TEST_F(TestSSPreReadTask, preread_only_when_need_read_cache)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ObPrereadCacheManager &preread_cache_mgr = file_manager->preread_cache_mgr_;
+  ObSSPreReadTask &preread_task = preread_cache_mgr.preread_task_;
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+  ASSERT_NE(nullptr, mem_macro_cache);
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+
+  // 1. write one macro to object storage
+  uint64_t tablet_id = 200002;
+  uint64_t data_seq = 1;
+  uint64_t reorganization_scn = 0;
+
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_META_MACRO);
+  macro_id.set_second_id(tablet_id); // tablet_id
+  macro_id.set_third_id(data_seq); // data_seq
+  macro_id.set_fourth_id(reorganization_scn); // reorganization_scn
+  ASSERT_TRUE(macro_id.is_valid());
+  ObStorageObjectHandle write_object_handle;
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+
+  ObSSShareMacroWriter share_macro_writer;
+  ASSERT_EQ(OB_SUCCESS, share_macro_writer.aio_write(write_info_, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_remote_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_TRUE(is_exist);
+
+  // 2. read with ObSSObjectStorageReader which does not read cache, expect would not trigger preread
+  read_info_.macro_block_id_ = macro_id;
+  read_info_.offset_ = 1;
+  read_info_.size_ = WRITE_IO_SIZE / 2;
+  read_info_.set_effective_tablet_id(ObTabletID(ObTabletID::INVALID_TABLET_ID));
+  ObStorageObjectHandle read_object_handle;
+  ObSSObjectStorageReader object_storage_reader;
+  ASSERT_EQ(OB_SUCCESS, object_storage_reader.aio_read(read_info_, read_object_handle));
+  ASSERT_EQ(OB_SUCCESS, read_object_handle.wait());
+  ASSERT_NE(nullptr, read_object_handle.get_buffer());
+  ASSERT_EQ(read_info_.size_, read_object_handle.get_data_size());
+  ASSERT_EQ(0, memcmp(write_buf_ + read_info_.offset_, read_object_handle.get_buffer(), read_info_.size_));
+  read_object_handle.reset();
+
+  // 3. wait preread task finish, and expect this macro would not be preread to mem_macro_cache/macro_cache
+  int64_t start_us = ObTimeUtility::current_time();
+  const int64_t timeout_us = 20 * 1000 * 1000L;
+  while ((preread_cache_mgr.preread_queue_.size() != 0) ||
+         (preread_task.segment_files_.count() != 0) ||
+         (preread_task.free_list_.get_curr_total() != file_manager->preread_cache_mgr_.preread_task_.max_pre_read_parallelism_)) {
+    ob_usleep(1000);
+    if (timeout_us + start_us < ObTimeUtility::current_time()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("waiting time is too long", KR(ret),
+          K(preread_cache_mgr.preread_queue_.size()), K(preread_task.segment_files_.count()),
+          K(preread_task.async_read_list_.get_curr_total()), K(preread_task.async_write_list_.get_curr_total()));
+      break;
+    }
+  }
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->check_exist(macro_id, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->exist(macro_id, is_exist));
+  ASSERT_FALSE(is_exist);
+
+  // 4. delete file
+  ASSERT_EQ(OB_SUCCESS, file_manager->delete_file(macro_id));
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_remote_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_FALSE(is_exist);
 }
 
 TEST_F(TestSSPreReadTask, preread_and_gc_parallel)
@@ -249,6 +417,182 @@ TEST_F(TestSSPreReadTask, preread_and_gc_parallel)
   // ASSERT_EQ(0, cache_stat.used_);
   // // update_to_normal
   // ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.update_to_normal_status(file_id, preread_entry.write_handle_.get_data_size()));
+}
+
+TEST_F(TestSSPreReadTask, preread_shared_tablet_sub_meta)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ObPrereadCacheManager &preread_cache_mgr = file_manager->preread_cache_mgr_;
+  ObSSPreReadTask &preread_task = preread_cache_mgr.preread_task_;
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+  ASSERT_NE(nullptr, mem_macro_cache);
+
+  // 1. Construct a macro_id of type shared_tablet_sub_meta with size 256KB
+  const int64_t SHARED_TABLET_SUB_META_SIZE = 256 * 1024; // 256KB
+  uint64_t tablet_id = 200001;
+  uint64_t op_id = 1;
+  uint64_t data_seq = 1;
+
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_TABLET_SUB_META);
+  macro_id.set_second_id(tablet_id); // tablet_id
+  macro_id.set_third_id(op_id); // op_id
+  macro_id.set_fourth_id(data_seq); // data_seq
+  ASSERT_TRUE(macro_id.is_valid());
+
+  // 2. Prepare write data (256KB)
+  ObMemAttr attr(MTL_ID(), "test_ss_preread");
+  char *write_buf = static_cast<char *>(ob_malloc(SHARED_TABLET_SUB_META_SIZE, attr));
+  ASSERT_NE(nullptr, write_buf);
+  memset(write_buf, 'x', SHARED_TABLET_SUB_META_SIZE);
+
+  ObStorageObjectWriteInfo write_info;
+  write_info.io_desc_.set_wait_event(1);
+  write_info.buffer_ = write_buf;
+  write_info.offset_ = 0;
+  write_info.size_ = SHARED_TABLET_SUB_META_SIZE;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_info.mtl_tenant_id_ = MTL_ID();
+
+  ObStorageObjectHandle write_object_handle;
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+
+  // 3. Write to object storage
+  ObSSShareMacroWriter share_macro_writer;
+  ASSERT_EQ(OB_SUCCESS, share_macro_writer.aio_write(write_info, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+
+  // 4. Verify file exists in remote storage
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_remote_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_TRUE(is_exist);
+
+  // 5. Clear macro block cache
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->clear_mem_macro_cache());
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->check_exist(macro_id, is_exist));
+  ASSERT_FALSE(is_exist);
+
+  // 6. Prepare read info
+  char *read_buf = static_cast<char *>(ob_malloc(SHARED_TABLET_SUB_META_SIZE, attr));
+  ASSERT_NE(nullptr, read_buf);
+  memset(read_buf, 0, SHARED_TABLET_SUB_META_SIZE);
+
+  ObStorageObjectReadInfo read_info;
+  read_info.io_desc_.set_wait_event(1);
+  read_info.buf_ = read_buf;
+  read_info.macro_block_id_ = macro_id;
+  read_info.offset_ = 1;
+  read_info.size_ = SHARED_TABLET_SUB_META_SIZE / 2;
+  read_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  read_info.mtl_tenant_id_ = MTL_ID();
+  read_info.set_effective_tablet_id(ObTabletID(tablet_id));
+
+  // 7. Call aio_read multiple times to trigger cache miss and preread
+  const int READ_COUNT = 3;
+  for (int i = 0; i < READ_COUNT; ++i) {
+    ObStorageObjectHandle read_object_handle;
+    ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_pread_file(read_info, read_object_handle));
+    ASSERT_EQ(OB_SUCCESS, read_object_handle.wait());
+    ASSERT_NE(nullptr, read_object_handle.get_buffer());
+    ASSERT_EQ(read_info.size_, read_object_handle.get_data_size());
+    // Verify read data correctness
+    ASSERT_EQ(0, memcmp(write_buf + read_info.offset_, read_object_handle.get_buffer(), read_info.size_));
+    read_object_handle.reset();
+  }
+
+  // 8. Wait for preread task to complete
+  int64_t start_us = ObTimeUtility::current_time();
+  const int64_t timeout_us = 20 * 1000 * 1000L;
+  while ((preread_cache_mgr.preread_queue_.size() != 0) ||
+         (preread_task.segment_files_.count() != 0) ||
+         (preread_task.free_list_.get_curr_total() != file_manager->preread_cache_mgr_.preread_task_.max_pre_read_parallelism_)) {
+    ob_usleep(1000);
+    if (timeout_us + start_us < ObTimeUtility::current_time()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("waiting time is too long", KR(ret),
+          K(preread_cache_mgr.preread_queue_.size()), K(preread_task.segment_files_.count()),
+          K(preread_task.async_read_list_.get_curr_total()), K(preread_task.async_write_list_.get_curr_total()));
+      break;
+    }
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 9. Verify data exists in macro block memory cache (because 256KB > 128KB threshold)
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->check_exist(macro_id, is_exist));
+  ASSERT_TRUE(is_exist);
+
+  // 10. Manually trigger eviction task to write data to disk cache
+  LOG_INFO("before eviction, cache stat", K(mem_macro_cache->cache_stat_));
+
+  // Get eviction task and manually set eviction context to force eviction
+  ObSSMemMacroCacheEvictTask &evict_task = mem_macro_cache->evict_task_;
+
+  // Method: Temporarily modify memory statistics to make calc_evict_mem_blk_cnt() return > 0
+  // Save original values
+  ObSSMemMacroCacheMemBlkStat &mem_blk_stat = mem_macro_cache->cache_stat_.mem_blk_stat_;
+  const int64_t orig_alloc_blk_cnt = mem_blk_stat.alloc_blk_cnt_;
+  const int64_t orig_total_blk_cnt = mem_blk_stat.total_blk_cnt_;
+
+  // Temporarily modify statistics to make alloc_blk_cnt exceed 80% of total_blk_cnt
+  // Assume total_blk_cnt = 100, then alloc_blk_cnt = 90, which will trigger eviction
+  const int64_t fake_total_cnt = 100;
+  const int64_t fake_alloc_cnt = 90;  // 90% > 80%
+  ATOMIC_STORE(&mem_blk_stat.total_blk_cnt_, fake_total_cnt);
+  ATOMIC_STORE(&mem_blk_stat.alloc_blk_cnt_, fake_alloc_cnt);
+
+  LOG_INFO("modified mem_blk_stat to trigger eviction",
+           K(orig_alloc_blk_cnt), K(orig_total_blk_cnt),
+           K(fake_alloc_cnt), K(fake_total_cnt));
+
+  // Manually call eviction task
+  evict_task.runTimerTask();
+
+  // Restore original statistics
+  ATOMIC_STORE(&mem_blk_stat.total_blk_cnt_, orig_total_blk_cnt);
+  ATOMIC_STORE(&mem_blk_stat.alloc_blk_cnt_, orig_alloc_blk_cnt);
+
+  // Wait for eviction task to complete (wait for write to complete)
+  start_us = ObTimeUtility::current_time();
+  const int64_t evict_timeout_us = 10 * 1000 * 1000L;  // 10秒超时
+  int64_t write_back_macro_cnt = 0;
+  bool evict_success = false;
+  while (ObTimeUtility::current_time() - start_us < evict_timeout_us) {
+    ob_usleep(50 * 1000);  // 50ms
+    write_back_macro_cnt = mem_macro_cache->cache_stat_.macro_blk_stat().write_back_macro_cnt_;
+    if (write_back_macro_cnt > 0) {
+      LOG_INFO("eviction to macro cache succeeded", K(write_back_macro_cnt),
+               K(mem_macro_cache->cache_stat_.mem_blk_stat()),
+               K(mem_macro_cache->cache_stat_.macro_blk_stat()));
+      evict_success = true;
+      break;
+    }
+  }
+
+  LOG_INFO("after eviction, cache stat", K(mem_macro_cache->cache_stat_), K(evict_success), K(write_back_macro_cnt));
+
+  // 11. Verify eviction has occurred and data has been written to disk cache
+  ASSERT_TRUE(evict_success);
+  ASSERT_GT(write_back_macro_cnt, 0);
+
+  // 12. Verify data has been written to local disk cache
+  bool is_local_exist = false;
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_local_exist));
+  ASSERT_TRUE(is_local_exist);
+  LOG_INFO("macro block is now in local disk cache", K(macro_id));
+
+  // 13. delete file
+  ASSERT_EQ(OB_SUCCESS, file_manager->delete_file(macro_id, 0/*ls_epoch_id*/));
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_remote_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_FALSE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_local_exist));
+  ASSERT_FALSE(is_local_exist);
+
+  // 13. Clean up resources
+  ob_free(write_buf);
+  ob_free(read_buf);
 }
 
 } // namespace storage

@@ -56,7 +56,7 @@ TestMultiVersionIndexSSTableEstimator::TestMultiVersionIndexSSTableEstimator()
 {
   is_ddl_merge_data_ = true;
   max_row_cnt_ = 150000;
-  max_partial_row_cnt_ = 137312;
+  max_partial_row_cnt_ = 136494;
   partial_kv_start_idx_ = 29;
 }
 

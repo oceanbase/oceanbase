@@ -132,7 +132,7 @@ struct partition_location
  */
 #define EXPLAIN_PRINT_IDXS(idxs)                                                \
 {                                                                               \
-  ObSEArray<int64_t, 4, common::ModulePageAllocator, true> arr;                 \
+  ObSEArray<int64_t, 4> arr;                                                    \
   int64_t N = -1;                                                               \
   if (OB_FAIL(ret)) { /* Do nothing */                                          \
   } else if (OB_FAIL(BUF_PRINTF(#idxs"("))) { /* Do nothing */                  \
@@ -426,9 +426,12 @@ class AllocBloomFilterContext
 {
 public:
   TO_STRING_KV(K_(filter_id));
-  AllocBloomFilterContext() : filter_id_(0) {};
+  AllocBloomFilterContext() : filter_id_(0), in_px_scope_(false), previous_px_scopes_() {};
   ~AllocBloomFilterContext() = default;
   int64_t filter_id_;
+
+  bool in_px_scope_;
+  common::ObSEArray<bool, 8> previous_px_scopes_;
 };
 
 struct ObExchangeInfo
@@ -476,7 +479,8 @@ struct ObExchangeInfo
     parallel_(ObGlobalHint::UNSET_PARALLEL),
     server_cnt_(0),
     server_list_(),
-    hidden_pk_expr_(NULL)
+    hidden_pk_expr_(NULL),
+    use_scatter_channel_for_pkey_hash_(false)
   {
     repartition_table_id_ = 0;
   }
@@ -539,9 +543,14 @@ struct ObExchangeInfo
   int64_t parallel_;
   int64_t server_cnt_;
   common::ObSEArray<common::ObAddr, 4> server_list_;
+  bool is_ordered_agg_;
   // Hidden primary key expression for PDML heap table insert scenario.
   // Needs to be passed through exchange but not used for hash calculation.
   ObRawExpr *hidden_pk_expr_;
+  // for pkey hash: use scatter channel or use default affinitied channel
+  // scatter channel: rows of partition can be distributed to any worker of all workers
+  // affinitied channel: rows of partition can be distributed to any worker of one worker group
+  bool use_scatter_channel_for_pkey_hash_;
 
   TO_STRING_KV(K_(is_remote),
                K_(is_task_order),
@@ -569,7 +578,9 @@ struct ObExchangeInfo
                K_(parallel),
                K_(server_cnt),
                K_(server_list),
-               K_(hidden_pk_expr));
+               K_(is_ordered_agg),
+               K_(hidden_pk_expr),
+               K_(use_scatter_channel_for_pkey_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExchangeInfo);
 };
@@ -672,9 +683,9 @@ struct ObAllocExprContext
   // record each expr and its children expr reference count in expr producers
   //  {key => flattern expr, value => reference count }
   hash::ObHashMap<uint64_t, int64_t> flattern_expr_map_;
-  common::ObSEArray<ExprProducer, 16, common::ModulePageAllocator, true> expr_producers_;
+  common::ObSEArray<ExprProducer, 16> expr_producers_;
   // Exprs that cannot be used to extract shared child exprs
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> inseparable_exprs_;
+  common::ObSEArray<ObRawExpr *, 4> inseparable_exprs_;
 };
 
 struct ObPxPipeBlockingCtx
@@ -754,19 +765,19 @@ struct ObBatchExecParamCtx
 
     TO_STRING_KV(K_(expr), K_(branch_id));
   };
-  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> params_idx_;
-  common::ObSEArray<ExecParam, 8, common::ModulePageAllocator, true> exec_params_;
+  common::ObSEArray<int64_t, 8> params_idx_;
+  common::ObSEArray<ExecParam, 8> exec_params_;
 };
 
 struct ObErrLogDefine
 {
-  ObErrLogDefine() :
+  ObErrLogDefine(common::ObIAllocator &allocator) :
     is_err_log_(false),
     err_log_database_name_(),
     err_log_table_name_(),
     reject_limit_(0),
-    err_log_value_exprs_(),
-    err_log_column_names_()
+    err_log_value_exprs_(allocator),
+    err_log_column_names_(allocator)
   {
   }
   bool is_err_log_;
@@ -774,13 +785,15 @@ struct ObErrLogDefine
   ObString err_log_table_name_; // now not support insert all
   uint64_t reject_limit_;
   // error logging the value expr of the column to be inserted
-  ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> err_log_value_exprs_;
+  ObSqlArray<ObRawExpr*> err_log_value_exprs_;
   //  the name of error logging table column which will be inserted
-  ObSEArray<ObString, 4, common::ModulePageAllocator, true> err_log_column_names_;
+  ObSqlArray<ObString> err_log_column_names_;
 };
 
 class Path;
 class ObLogPlan;
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogicalOperator
 {
 public:
@@ -870,6 +883,7 @@ public:
    * 如果不维护parent这个结构，就可以避免这种计划拷贝。
    */
   void set_parent(ObLogicalOperator *parent);
+
   /**
    *  Get the cardinality
    */
@@ -1249,6 +1263,11 @@ public:
 
   bool can_update_producer_id_for_shared_expr(const ObRawExpr *expr);
 
+  virtual int update_optimizer_info(const JoinFilterInfo &join_filter_info) const {
+    UNUSED(join_filter_info);
+    return OB_SUCCESS;
+  }
+
   int extract_non_const_exprs(const ObIArray<ObRawExpr*> &input_exprs,
                               ObIArray<ObRawExpr*> &non_const_exprs);
   int check_need_pushdown_expr(const uint64_t producer_id,
@@ -1343,6 +1362,7 @@ public:
   virtual int compute_property();
 
   int check_property_valid() const;
+
   int compute_normal_multi_child_parallel_and_server_info();
   int set_parallel_and_server_info_for_match_all();
   int get_limit_offset_value(ObRawExpr *percent_expr,
@@ -1387,6 +1407,10 @@ public:
   int alloc_nodes_above(AllocOpContext& ctx, const uint64_t &flags);
   int allocate_material_node_above();
   int allocate_monitoring_dump_node_above(uint64_t flags, uint64_t line_id);
+  int allocate_rescan_node_above(uint64_t rescan_cnt);
+  int is_top_rescan_allowed(bool &allowed);
+  int allocate_rescan_as_top(ObLogicalOperator *&top,
+                             const uint64_t rescan_cnt);
 
   virtual int gen_location_constraint(void *ctx);
 
@@ -1408,6 +1432,9 @@ public:
   int get_table_scan(ObLogicalOperator *&tsc, uint64_t table_id);
 
   int find_all_tsc(common::ObIArray<ObLogicalOperator*> &tsc_ops, ObLogicalOperator *root);
+
+  int find_all_tsc_like_ops(common::ObIArray<ObLogicalOperator*> &tsc_ops, const ObLogicalOperator *root);
+
   /**
    * Check if a exchange need rescan is below me.
    */
@@ -1421,7 +1448,9 @@ public:
    * Allocate runtime filter operator.
    */
   int allocate_runtime_filter_for_hash_join(AllocBloomFilterContext &ctx);
+  int check_in_px_scope_pre(AllocBloomFilterContext &ctx);
 
+  int check_in_px_scope_post(AllocBloomFilterContext &ctx);
   static int check_is_table_scan(const ObLogicalOperator &op,
                                  bool &is_table_scan);
 
@@ -1742,11 +1771,15 @@ public:
 
   inline void set_is_order_by_plan_top(const bool is_top) { is_order_by_plan_top_ = is_top; }
   inline bool is_order_by_plan_top() const { return is_order_by_plan_top_; }
+
+  int find_pkey_exchange_out(ObLogicalOperator* root_op,
+    ObLogExchange*& exchange_output_op,
+    bool &found);
 public:
-  ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
-  ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
-  ObSEArray<ObPCConstParamInfo, 4, common::ModulePageAllocator, true> const_param_constraints_;
-  ObSEArray<ObExprConstraint, 4, common::ModulePageAllocator, true> expr_constraints_;
+  ObSqlArray<ObLogicalOperator *> child_;
+  ObSqlArray<ObPCParamEqualInfo> equal_param_constraints_;
+  ObSqlArray<ObPCConstParamInfo> const_param_constraints_;
+  ObSqlArray<ObExprConstraint> expr_constraints_;
 protected:
   enum TraverseType
   {
@@ -1803,9 +1836,13 @@ protected:
                     bool& table_scan_has_exchange,
                     bool &has_px_coord);
 
+  int fill_in_part_join_filter_info(const ObLogicalOperator *cur, ObLogGranuleIterator *&gi_op);
+
+  int collect_and_prune_left_child(ObLogicalOperator*& root, ObIArray<uint64_t> &to_prune);
+  int prune_unpaired_join_filter_create();
   int check_sort_key_can_pushdown_to_tsc(
       ObLogicalOperator *op,
-      common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> &effective_sk_exprs,
+      common::ObIArray<ObRawExpr *> &effective_sk_exprs,
       uint64_t table_id, ObLogicalOperator *&scan_op, bool &table_scan_has_exchange,
       bool &has_px_coord, int64_t &effective_sk_cnt);
 
@@ -1813,16 +1850,16 @@ protected:
 
   log_op_def::ObLogOpType type_;
   ObLogPlan *my_plan_;                     // the entry point of the plan
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> output_exprs_;    // expressions produced
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> filter_exprs_;        // filtering exprs.
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> pushdown_filter_exprs_; // pushdown filtering exprs，用于计算条件下推的nl join的join keys
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> startup_exprs_;        // startup filtering exprs.
+  ObSqlArray<ObRawExpr *> output_exprs_;    // expressions produced
+  ObSqlArray<ObRawExpr *> filter_exprs_;        // filtering exprs.
+  ObSqlArray<ObRawExpr *> pushdown_filter_exprs_; // pushdown filtering exprs，用于计算条件下推的nl join的join keys
+  ObSqlArray<ObRawExpr *> startup_exprs_;        // startup filtering exprs.
 
-  common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> output_const_exprs_;
+  ObSqlArray<ObRawExpr *> output_const_exprs_;
   const EqualSets *output_equal_sets_;
   const ObFdItemSet *fd_item_set_;
   const ObRelIds *table_set_;
-  common::ObSEArray<double, 8, common::ModulePageAllocator, true> ambient_card_;
+  ObSqlArray<double> ambient_card_;
 
   uint64_t id_;                        // operator 0-based depth-first id
   uint64_t branch_id_;
@@ -1859,9 +1896,9 @@ private:
     bool &need_remove,
     bool global_order);
   //private function, just used for allocating join filter node.
-  int allocate_partition_join_filter(const ObIArray<JoinFilterInfo> &infos,
+  int allocate_partition_join_filter(ObIArray<JoinFilterInfo*> &infos,
                                      int64_t &filter_id);
-  int allocate_normal_join_filter(const ObIArray<JoinFilterInfo> &infos,
+  int allocate_normal_join_filter(ObIArray<JoinFilterInfo*> &infos,
                                   int64_t &filter_id);
   int create_runtime_filter_info(
       ObLogicalOperator *op,
@@ -1963,7 +2000,7 @@ protected:
   bool contain_das_op_;
   bool contain_match_all_fake_cte_;
   ObShardingInfo *strong_sharding_;
-  common::ObSEArray<ObShardingInfo*, 8, common::ModulePageAllocator, true> weak_sharding_;
+  ObSqlArray<ObShardingInfo*> weak_sharding_;
   bool is_pipelined_plan_;
   bool is_nl_style_pipelined_plan_;
   bool is_at_most_one_row_;
@@ -1975,8 +2012,8 @@ protected:
   // is_local_order has no meanings
   bool is_local_order_;
   bool is_range_order_;
-  common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> op_ordering_;
-  const ObRawExprSets &empty_expr_sets_;
+  ObSqlArray<OrderItem> op_ordering_;
+  const EqualSets &empty_expr_sets_;
   const ObFdItemSet &empty_fd_item_set_;
   const ObRelIds &empty_table_set_;
   int64_t interesting_order_info_;  // 记录算子的序在stmt中的哪些地方用到 e.g. join, group by, order by
@@ -1984,10 +2021,10 @@ protected:
   OpParallelRule op_parallel_rule_;
   int64_t available_parallel_;  // parallel degree used by serial op to enable parallel again
   int64_t server_cnt_;
-  ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
+  ObSqlArray<common::ObAddr> server_list_;
   bool need_late_materialization_;
   // all non_const exprs for this op, generated by allocate_expr_pre and used by project pruning
-  ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> op_exprs_;
+  ObSqlArray<ObRawExpr*> op_exprs_;
   // Used to indicate which child node the current sharding inherits from
   int64_t inherit_sharding_index_;
   // wether has allocated a osg_gather.

@@ -219,10 +219,8 @@ int ObExprRbContains::eval_rb_contains_vector(const ObExpr &expr,
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         res_vec->set_bool(idx, is_contains);
-        eval_flags.set(idx);
       }
     }
 

@@ -304,6 +304,36 @@ struct ObGetMergeTablesParam
 
 struct ObGetMergeTablesResult
 {
+  struct FillTxInfo {
+  public:
+    FillTxInfo() : type_(compaction::FILL_TX_TYPE_NORMAL), fill_tx_scn_() {}
+
+    void reset()
+    {
+      type_ = compaction::FILL_TX_TYPE_NORMAL;
+      fill_tx_scn_.reset();
+    }
+    bool is_valid() const {
+      return is_normal() || (!is_normal() && fill_tx_scn_.is_valid_and_not_min());
+    }
+    void set_special_fill_tx_type(const compaction::ObFillTxType type, const share::SCN &fill_tx_scn)
+    {
+      type_ = type;
+      fill_tx_scn_ = fill_tx_scn;
+    }
+    bool is_normal() const { return type_ == compaction::FILL_TX_TYPE_NORMAL; }
+    bool is_data_mini() const { return type_ == compaction::FILL_TX_TYPE_DATA_MINI; }
+    bool is_data_minor() const { return type_ == compaction::FILL_TX_TYPE_DATA_MINOR; }
+    bool is_gc_tx_data() const { return type_ == compaction::FILL_TX_TYPE_GC_TX_DATA; }
+    bool is_backfill() const { return type_ == compaction::FILL_TX_TYPE_BACKFILL; }
+
+    TO_STRING_KV("type", compaction::FillTxTypeToStr(type_), K(fill_tx_scn_));
+
+  public:
+    compaction::ObFillTxType type_;
+    share::SCN fill_tx_scn_;
+  } fill_tx_info_;
+
   common::ObVersionRange version_range_;
   ObTablesHandleArray handle_;
   int64_t merge_version_;
@@ -313,9 +343,6 @@ struct ObGetMergeTablesResult
   share::ObScnRange scn_range_;
   share::ObDiagnoseLocation *error_location_;
   ObStorageSnapshotInfo snapshot_info_;
-  //for backfill
-  bool is_backfill_;
-  share::SCN backfill_scn_;
   int32_t private_transfer_epoch_; // is_used for write_macro_block in ss, used for all compaction.
 
   // for sstorage
@@ -329,8 +356,20 @@ struct ObGetMergeTablesResult
   int assign(const ObGetMergeTablesResult &src);
   int copy_basic_info(const ObGetMergeTablesResult &src);
   share::SCN get_merge_scn() const;
-  TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version), K_(is_simplified),
-      K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(is_backfill), K_(backfill_scn), K_(private_transfer_epoch));
+  bool is_data_mini() const { return fill_tx_info_.is_data_mini(); }
+  bool is_data_minor() const { return fill_tx_info_.is_data_minor(); }
+  bool is_gc_tx_data() const { return fill_tx_info_.is_gc_tx_data(); }
+  bool is_backfill() const { return fill_tx_info_.is_backfill(); }
+
+  TO_STRING_KV(K_(fill_tx_info),
+               K_(version_range),
+               K_(scn_range),
+               K_(merge_version),
+               K_(is_simplified),
+               K_(handle),
+               K_(update_tablet_directly),
+               K_(schedule_major),
+               K_(private_transfer_epoch));
 };
 
 OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)
@@ -397,20 +436,20 @@ public:
     const compaction::ObMergeType merge_type,
     const share::SCN clog_checkpoint_scn,
     const bool need_report,
-    const bool has_truncate_info);
+    const bool has_merged_with_mds_info);
   ~ObCompactionTableStoreParam() = default;
   bool is_valid() const;
   bool is_valid_with_sstable(const bool have_sstable) const;
   int assign(const ObCompactionTableStoreParam &other, ObArenaAllocator *allocator = nullptr);
   int64_t get_report_scn() const;
   TO_STRING_KV(K_(clog_checkpoint_scn), K_(need_report),
-    "merge_type", merge_type_to_str(merge_type_),  K_(major_ckm_info), K_(has_truncate_info));
+    "merge_type", merge_type_to_str(merge_type_),  K_(major_ckm_info), K_(has_merged_with_mds_info));
 public:
   compaction::ObMergeType merge_type_;
   share::SCN clog_checkpoint_scn_;
   blocksstable::ObMajorChecksumInfo major_ckm_info_;
   bool need_report_;
-  bool has_truncate_info_;
+  bool has_merged_with_mds_info_;
 };
 
 struct UpdateUpperTransParam final

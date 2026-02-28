@@ -29,12 +29,17 @@ int init_count_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id, ObIA
   ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
   agg = nullptr;
   bool has_distinct = aggr_info.has_distinct_;
+  bool is_statistic_agg = false;
+  if (aggr_info.get_expr_type() == T_FUN_SYS_COUNT_INROW) {
+    is_statistic_agg = is_lob_storage(aggr_info.get_first_child_type()) &&
+      aggr_info.param_exprs_.at(0)->obj_meta_.has_lob_header();
+  }
   if (lib::is_oracle_mode()) {
     ret = init_agg_func<CountAggregate<VEC_TC_NUMBER>>(agg_ctx, agg_col_id, has_distinct, allocator,
-                                                       agg);
+                                                       agg, false, is_statistic_agg);
   } else {
     ret = init_agg_func<CountAggregate<VEC_TC_INTEGER>>(agg_ctx, agg_col_id, has_distinct,
-                                                        allocator, agg);
+                                                        allocator, agg, false, is_statistic_agg);
   }
   return ret;
 #undef INIT_COUNT_CASE

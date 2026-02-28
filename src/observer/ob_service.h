@@ -25,6 +25,7 @@
 #include "observer/report/ob_ls_table_updater.h"
 #include "observer/report/ob_tablet_table_updater.h"
 #include "observer/report/ob_server_meta_table_checker.h" // ObServerMetaTableChecker
+#include "share/ob_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -159,9 +160,11 @@ public:
   int check_sys_task_exist(const share::ObTaskId &arg, bool &res);
   int check_migrate_task_exist(const share::ObTaskId &arg, bool &res);
   int delete_backup_ls_task(const obrpc::ObLSBackupCleanArg &arg);
+  int validate_backup_ls_task(const obrpc::ObBackupValidateLSArg &arg);
   int notify_archive(const obrpc::ObNotifyArchiveArg &arg);
   int report_backup_over(const obrpc::ObBackupTaskRes &res);
   int report_backup_clean_over(const obrpc::ObBackupTaskRes &res);
+  int report_backup_validate_over(const obrpc::ObBackupTaskRes &res);
 
   int get_ls_sync_scn(const obrpc::ObGetLSSyncScnArg &arg,
                            obrpc::ObGetLSSyncScnRes &result);
@@ -188,6 +191,9 @@ public:
   // ObRpcTabletMajorFreezeP @RS tablet major freeze
   int tablet_major_freeze(const obrpc::ObTabletMajorFreezeArg &arg,
                    obrpc::Int64 &result);
+  // ObRpcTableMajorFreezeP @RS table major freeze
+  int table_major_freeze(const obrpc::ObTableMajorFreezeRequest &arg,
+                   obrpc::ObTableMajorFreezeResult &result);
   // ObRpcCheckSchemaVersionElapsedP @RS global index builder
   int check_schema_version_elapsed(
       const obrpc::ObCheckSchemaVersionElapsedArg &arg,

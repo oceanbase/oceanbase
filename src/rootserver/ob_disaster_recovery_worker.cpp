@@ -17,6 +17,7 @@
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
+#include "sql/resolver/cmd/ob_alter_system_resolver.h"
 
 namespace oceanbase
 {
@@ -2718,7 +2719,7 @@ int ObDRWorker::check_ls_single_replica_dr_tasks(
                                                             member_list,
                                                             learner_list))) {
     LOG_WARN("failed to get member info", KR(ret), K(dr_ls_info));
-  } else if (OB_FAIL(DisasterRecoveryUtils::check_member_list_for_single_replica(member_list, pass_check))) {
+  } else if (OB_FAIL(DisasterRecoveryUtils::check_member_list_for_single_replica(member_list, true/*check_same_zone*/, pass_check))) {
     LOG_WARN("failed to check member list", KR(ret), K(member_list));
   } else if (!pass_check) {
     LOG_INFO("not all server is inactive or same zone", K(member_list));
@@ -3013,6 +3014,12 @@ int ObDRWorker::execute_manual_dr_task(const obrpc::ObAdminAlterLSReplicaArg &ar
         }
         break;
       }
+      case ObAlterLSReplicaTaskType::ReplaceLSReplicaTask: {
+        if (OB_FAIL(do_replace_ls_replica_task(arg))) {
+          LOG_WARN("replace ls replica task failed", KR(ret), K(arg));
+        }
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("task type unexpected", KR(ret), K(arg));
@@ -3093,6 +3100,174 @@ int ObDRWorker::check_clone_status_and_insert_task_(
     LOG_WARN("failed to insert task", KR(ret), K(task));
   } else {
     LOG_INFO("succeed to insert task", K(task));
+  }
+  return ret;
+}
+
+int ObDRWorker::do_replace_ls_replica_task(
+    const obrpc::ObAdminAlterLSReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else {
+    ObArray<ObDRTask*> dr_tasks;
+    ObReplaceLSReplicaTask replace_task;
+    palf::LogConfigVersion config_version;
+    if (OB_FAIL(check_for_replace_ls_replica_task_(arg, config_version))) {
+      LOG_WARN("fail to check for replace ls replica task", KR(ret), K(arg));
+    } else if (OB_FAIL(build_replace_ls_replica_task_(arg, config_version, replace_task))) {
+      LOG_WARN("fail to build replace ls replica task parameters", KR(ret), K(arg), K(config_version), K(replace_task));
+    } else if (OB_FAIL(dr_tasks.push_back(&replace_task))) {
+      LOG_WARN("fail to build push back task", KR(ret), K(arg), K(replace_task));
+    } else if (OB_FAIL(persist_tasks_into_inner_table(dr_tasks, arg.get_tenant_id(), arg.get_ls_id(), true/*is_manual*/))) {
+      LOG_WARN("fail to persist tasks into table", KR(ret), K(arg), K(replace_task));
+    }
+  }
+  FLOG_INFO("ObDRWorker do replace ls replica task", KR(ret), K(arg));
+  return ret;
+}
+
+int ObDRWorker::check_for_replace_ls_replica_task_(
+    const obrpc::ObAdminAlterLSReplicaArg &arg,
+    palf::LogConfigVersion &config_version)
+{
+  int ret = OB_SUCCESS;
+  config_version.reset();
+  share::ObUnit unit; // not used
+  uint64_t tenant_data_version = 0;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Not in shared storage mode, replace LS is");
+    LOG_WARN("not in ss mode", KR(ret));
+  } else if (is_sys_tenant(arg.get_tenant_id())) {
+    // already been checked in resolver
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("replace LS is not supported for sys tenant", KR(ret), K(arg));
+  } else if (OB_FAIL(sql::ObAlterSystemResolverUtil::check_compatibility_for_replace_ls(arg.get_tenant_id()))) {
+    LOG_WARN("fail to check compatibility for replace ls", KR(ret), K(arg));
+  } else if (OB_FAIL(check_task_execute_server_status_(arg.get_server_addr(), true/*need_check_can_migrate_in*/))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "server does not exist");
+    }
+    LOG_WARN("fail to check server status", KR(ret), K(arg));
+  } else if (OB_FAIL(check_ls_exist_for_replace_ls_(arg))) {
+    LOG_WARN("fail to check tenent ls", KR(ret), K(arg));
+  } else if (OB_FAIL(check_unit_exist_and_get_unit_(arg.get_server_addr(),
+                                                    arg.get_tenant_id(),
+                                                    false/*is_migrate_source_valid*/,
+                                                    unit))) {
+    LOG_WARN("fail to check unit exist and get unit", KR(ret), K(arg));
+  } else if (OB_FAIL(check_member_list_for_replace_ls_(arg.get_tenant_id(), arg.get_ls_id(), config_version))) {
+    LOG_WARN("failed to check member list for replace", KR(ret), K(arg));
+  }
+  return ret;
+}
+
+int ObDRWorker::build_replace_ls_replica_task_(
+    const obrpc::ObAdminAlterLSReplicaArg &arg,
+    const palf::LogConfigVersion &config_version,
+    ObReplaceLSReplicaTask &replace_task)
+{
+  int ret = OB_SUCCESS;
+  ObReplicaMember dst_member(arg.get_server_addr(), ObTimeUtility::current_time(), REPLICA_TYPE_FULL);
+  const char* task_comment = drtask::ALTER_SYSTEM_COMMAND_REPLACE_LS;
+  ObDRTaskKey task_key;
+  share::ObTaskId task_id;
+  common::ObZone zone;
+  if (OB_UNLIKELY(!arg.is_valid() || !config_version.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg), K(config_version));
+  } else if (OB_FAIL(SVR_TRACER.get_server_zone(arg.get_server_addr(), zone))) {
+    LOG_WARN("get server zone failed", KR(ret));
+  } else if (FALSE_IT(task_id.init(GCONF.self_addr_))) {
+  } else if (OB_FAIL(task_key.init(arg.get_tenant_id(), arg.get_ls_id(), zone, ObDRTaskType::LS_REPLACE_REPLICA))) {
+    LOG_WARN("fail to init task key", KR(ret), K(arg), K(zone));
+  } else if (OB_FAIL(replace_task.build(task_key,
+                                        task_id,
+                                        task_comment,
+                                        dst_member,
+                                        config_version,
+                                        ObDRTaskPriority::HIGH_PRI,
+                                        obrpc::ObAdminClearDRTaskArg::TaskType::MANUAL))) {
+    LOG_WARN("fail to build replace task", KR(ret), K(arg), K(replace_task));
+  }
+  return ret;
+}
+
+int ObDRWorker::check_ls_exist_for_replace_ls_(
+  const obrpc::ObAdminAlterLSReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSStatusOperator ls_status_operator;
+  share::ObLSInfo ls_info;
+  const share::ObLSReplica *ls_replica_ptr = nullptr;
+  share::ObLSStatusInfo ls_status_info;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (OB_ISNULL(GCTX.lst_operator_) || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("nullptr is found", KR(ret), KP(GCTX.lst_operator_), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ls_status_operator.get_ls_status_info(arg.get_tenant_id(),
+                                                           arg.get_ls_id(),
+                                                           ls_status_info,
+                                                           *GCTX.sql_proxy_))) {
+    // no check ls status, just check ls exist
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "LS does not exist");
+    }
+    LOG_WARN("fail to get all ls status", KR(ret), K(arg));
+  } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id,
+                                             arg.get_tenant_id(),
+                                             arg.get_ls_id(),
+                                             share::ObLSTable::COMPOSITE_MODE,
+                                             ls_info))) {
+    LOG_WARN("get ls info failed", KR(ret), K(arg));
+  } else if (OB_FAIL(ls_info.find(arg.get_server_addr(), ls_replica_ptr))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to find replica by server", KR(ret), K(arg), K(ls_info));
+    } else {
+      ret = OB_SUCCESS;
+      LOG_INFO("dose not have replica", KR(ret), K(arg), K(ls_info));
+    }
+  } else {
+    ret = OB_ENTRY_EXIST;
+    LOG_USER_ERROR(OB_ENTRY_EXIST, "server already has a replica");
+    LOG_WARN("server already has a replica", KR(ret), K(arg), K(ls_info));
+  }
+  return ret;
+}
+
+int ObDRWorker::check_member_list_for_replace_ls_(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    palf::LogConfigVersion &config_version)
+{
+  int ret = OB_SUCCESS;
+  config_version.reset();
+  bool pass_check = false;
+  common::ObMemberList member_list; // not used
+  common::GlobalLearnerList learner_list; // not used
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+               || !ls_id.is_valid_with_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_member_info_from_log_service(tenant_id, ls_id,
+                      config_version, member_list, learner_list))) {
+    LOG_WARN("failed to get member info", KR(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(DisasterRecoveryUtils::check_member_list_for_single_replica(member_list,
+                                                                                 false/*check_same_zone*/,
+                                                                                 pass_check))) {
+    LOG_WARN("failed to check member list", KR(ret), K(member_list));
+  } else if (!pass_check) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Not all server in member list is inactive, current operation is");
+    LOG_WARN("not all server is inactive or same zone", K(member_list));
   }
   return ret;
 }
@@ -5029,8 +5204,15 @@ int ObDRWorker::try_replicate_to_unit(
   ObDRTaskKey task_key;
   bool task_exist = false;
   int64_t replica_cnt = 0;
-  if (!dr_ls_info.has_leader()) {
-    LOG_WARN("has no leader, maybe not report yet", KR(ret), K(dr_ls_info));
+  common::ObAddr leader_addr;
+  share::ObServerInfoInTable server_info;
+  if (OB_FAIL(dr_ls_info.get_leader(leader_addr))) {
+    LOG_WARN("fail to get leader", KR(ret), K(dr_ls_info));
+  } else if (OB_FAIL(SVR_TRACER.get_server_info(leader_addr, server_info))) {
+    LOG_WARN("fail to get server info", KR(ret), K(leader_addr));
+  } else if (OB_UNLIKELY(!server_info.is_alive())) {
+    ret = OB_EAGAIN;
+    LOG_WARN("leader is not alive, try again", KR(ret), K(leader_addr), K(server_info));
   } else if (dr_ls_info.get_paxos_replica_number() <= 0) {
     LOG_WARN("paxos_replica_number is invalid, maybe not report yet", KR(ret), K(dr_ls_info));
   } else if (OB_FAIL(dr_ls_info.get_replica_cnt(replica_cnt))) {

@@ -953,7 +953,6 @@ int ObInnerTabletAccessService::build_scan_param_(
     scan_param.allocator_ = &ctx.allocator_;
     scan_param.scan_allocator_ = &ctx.allocator_;
     scan_param.frozen_version_ = -1;
-    scan_param.need_scn_ = false;
     scan_param.for_update_ = false;
     scan_param.is_mds_query_ = false;
     scan_param.fb_snapshot_ = ctx.snapshot_;

@@ -471,6 +471,9 @@ public:
   bool all_partition_is_valid_;
 };
 
+// Helper function to revise NDV (Number of Distinct Values)
+inline double revise_ndv(double ndv) { return ndv < 1.0 ? 1.0 : ndv; }
+
 }
 }
 

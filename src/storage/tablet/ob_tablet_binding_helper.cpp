@@ -349,6 +349,8 @@ int ObTabletBindingHelper::build_single_table_write_defensive(
   const uint64_t tenant_id = table_schema.get_tenant_id();
   int64_t timeout_us = 0;
   if (OB_FAIL(ret)) {
+  } else if (table_schema.is_oracle_tmp_table_v2() || table_schema.is_oracle_tmp_table_v2_index_table()) {
+    // just skip for oracle tmp table v2
   } else if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
     LOG_WARN("invalid args", KR(ret), K(table_schema), K(tablet_ids));
   } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tablet_ids.count(), timeout_us))) {

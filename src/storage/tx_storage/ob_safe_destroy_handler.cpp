@@ -68,6 +68,7 @@ bool ObSafeDestroyProcessFunctor::operator()(
 ObSafeDestroyTaskQueue::ObSafeDestroyTaskQueue()
   : looping_(false),
     stop_(false),
+    rwlock_(common::ObLatchIds::OB_SAFE_DESTROY_TASK_QUEUE_RWLOCK),
     queue_()
 {
 }

@@ -109,7 +109,8 @@ public:
       need_co_scan_(need_co_scan),
       error_location_(nullptr),
       last_skip_major_idx_(-1),
-      last_skip_major_row_id_(-1)
+      last_skip_major_row_id_(-1),
+      cg_idx_(-1)
   {}
   virtual ~ObCOMergeWriter();
   // for rows writer
@@ -146,12 +147,12 @@ public:
     ObTabletMergeInfo &merge_info,
     blocksstable::ObDatumRow &default_row);
 
-  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(default_row))
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(default_row), K_(cg_idx));
 
 protected:
-  virtual int replay_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row);
+  virtual int replay_single_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row);
   // replay major without incremental row
-  virtual int replay_mergelog(const ObMergeLog &mergelog);
+  virtual int replay_range_mergelog(const ObMergeLog &mergelog);
   int basic_init(
       const blocksstable::ObDatumRow &default_row,
       const ObMergeParameter &merge_param,
@@ -169,7 +170,7 @@ protected:
   int get_curr_major_iter(const ObMergeLog &mergelog, ObCOMajorMergeIter *&merge_iter);
   void dump_info() const;
   int process_macro_rewrite(ObCOMajorMergeIter *iter);
-  int append_iter_curr_row_or_range(ObCOMajorMergeIter *iter);
+  int append_iter_curr_row_or_range(ObCOMajorMergeIter *iter, const ObMergeLog::OpType op_type);
   int process_mergelog_row(ObCOMajorMergeIter *iter, const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row);
   bool check_is_all_nop(const blocksstable::ObDatumRow &row);
   virtual bool is_base_cg_writer() const { return false; }
@@ -199,6 +200,8 @@ protected:
   // for skip update nop or no need cg opt
   int64_t last_skip_major_idx_;
   int64_t last_skip_major_row_id_;
+  int64_t cg_idx_;
+  uint64_t compat_version_;
 };
 
 class ObCOMergeRowWriter : public ObCOMergeWriter
@@ -226,7 +229,7 @@ public:
   virtual int end_write(ObTabletMergeInfo &merge_info) override;
   INHERIT_TO_STRING_KV("ObCOMergeRowWriter", ObCOMergeWriter, K_(write_helper));
 protected:
-  virtual int replay_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row) override;
+  virtual int replay_single_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row) override;
 private:
   virtual int get_curr_major_row(ObCOMajorMergeIter &iter, const blocksstable::ObDatumRow *&row) override;
   virtual int process(ObCOMajorMergeIter *iter, const ObMacroBlockDesc &macro_desc, const ObMicroBlockData *micro_block_data) override;
@@ -268,8 +271,8 @@ public:
   }
   void set_merge_iter(ObMergeIter *iter) { merge_iter_.iter_ = iter; }
 protected:
-  virtual int replay_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row) override;
-  virtual int replay_mergelog(const ObMergeLog &mergelog) override;
+  virtual int replay_single_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row) override;
+  virtual int replay_range_mergelog(const ObMergeLog &mergelog) override;
   virtual bool is_base_cg_writer() const override { return true; }
 private:
   ObCOMajorMergeIter merge_iter_;

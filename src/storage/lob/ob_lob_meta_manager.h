@@ -45,6 +45,9 @@ public:
   int rebuild(ObLobAccessParam& param);
   // specified range LobMeta scan
   int scan(ObLobAccessParam& param, ObLobMetaScanIter &iter);
+  // scan raw lob meta
+  int scan(ObLobAccessParam& param, ObLobMetaIterator *&iter);
+  int revert_scan_iter(ObLobMetaIterator *iter);
   // specified range erase
   int erase(ObLobAccessParam& param, ObLobMetaInfo& in_row);
   // specified range update
@@ -54,7 +57,8 @@ public:
 
   int open(ObLobAccessParam &param, ObLobMetaSingleGetter* getter);
   int getlength(ObLobAccessParam &param, uint64_t &char_len);
-
+  int get_table_param(const ObTableParam *&table_param);
+  int get_table_dml_param(const ObTableDMLParam *&table_dml_param);
   TO_STRING_KV("[LOB]", "meta mngr");
 
 private:

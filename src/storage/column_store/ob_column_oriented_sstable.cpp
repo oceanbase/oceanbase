@@ -202,26 +202,23 @@ int ObCOSSTableMeta::deserialize(const char *buf, const int64_t data_len, int64_
   return ret;
 }
 
-/************************************* ObCOMajorSSTableStatus *************************************/
-const char* ObCOMajorSSTableStatusStr[] = {
+/************************************* ObMajorSSTableStatus *************************************/
+const char* ObMajorSSTableStatusStr[] = {
   "INVALID_STATUS",
-  "COL_WITH_ALL",
-  "COL_ONLY_ALL",
-  "PURE_COL",
-  "PURE_COL_ONLY_ALL",
-  "COL_REPLICA_MAJOR",
-  "DELAYED_TRANSFORM_MAJOR",
-  "PURE_COL_WITH_ALL"
+  "ROW_STORE",
+  "ALL_CG",
+  "ALL_EACH_CG",
+  "EACH_CG"
 };
 
-const char* co_major_sstable_status_to_str(const ObCOMajorSSTableStatus& major_sstable_status)
+const char* major_sstable_status_to_str(const ObMajorSSTableStatus status)
 {
-  STATIC_ASSERT(static_cast<int64_t>(MAX_CO_MAJOR_SSTABLE_STATUS) == ARRAYSIZEOF(ObCOMajorSSTableStatusStr), "co major sstable str len is mismatch");
+  STATIC_ASSERT(static_cast<int64_t>(MAJOR_SSTABLE_STATUS_MAX) == ARRAYSIZEOF(ObMajorSSTableStatusStr), "major sstable status str len is mismatch");
   const char *str = "";
-  if (is_valid_co_major_sstable_status(major_sstable_status)) {
-    str = ObCOMajorSSTableStatusStr[major_sstable_status];
+  if (is_valid_major_sstable_status(status)) {
+    str = ObMajorSSTableStatusStr[status];
   } else {
-    str = "invalid_co_major_status";
+    str = "invalid_status";
   }
   return str;
 }
@@ -694,12 +691,10 @@ int ObCOSSTableV2::scan(
     ObStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
+  // Scan the split dest tablet will scan the split source one, don't check tablet id.
   if (OB_UNLIKELY(!is_cs_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_cs_reading), K_(key), K_(base_type), K_(meta));
-  } else if (OB_UNLIKELY(param.tablet_id_ != key_.tablet_id_)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (OB_UNLIKELY(!param.is_valid() || !context.is_valid() || !key_range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(key_range));
@@ -738,9 +733,6 @@ int ObCOSSTableV2::multi_scan(
   if (OB_UNLIKELY(!is_cs_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(param.tablet_id_ != key_.tablet_id_)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (OB_UNLIKELY(!param.is_valid() || !context.is_valid() || 0 >= ranges.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(ranges));
@@ -874,7 +866,7 @@ int ObCOSSTableV2::get(
   if (OB_UNLIKELY(!is_cs_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(!param.is_valid() || param.tablet_id_ != key_.tablet_id_)) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (param.read_info_->is_access_rowkey_only() || is_all_cg_base()) {
@@ -914,9 +906,6 @@ int ObCOSSTableV2::multi_get(
   if (OB_UNLIKELY(!is_cs_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(param.tablet_id_ != key_.tablet_id_)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (OB_UNLIKELY(!param.is_valid() || !context.is_valid() || 0 >= rowkeys.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(rowkeys));

@@ -14,6 +14,7 @@
 #define SRC_SQL_RESOLVER_DML_OB_INSERT_ALL_STMT_H_
 
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
+#include "sql/resolver/ob_sql_array.h"
 
 namespace oceanbase
 {
@@ -24,7 +25,7 @@ namespace sql
 class ObInsertAllStmt: public sql::ObDelUpdStmt
 {
 public:
-  ObInsertAllStmt();
+  ObInsertAllStmt(ObIAllocator &allocator);
   virtual ~ObInsertAllStmt();
   int deep_copy_stmt_struct(ObIAllocator &allocator,
                             ObRawExprCopier &expr_copier,
@@ -67,7 +68,7 @@ public:
 private:
   bool is_multi_insert_first_;
   bool is_multi_condition_insert_;
-  common::ObSEArray<ObInsertAllTableInfo*, 8, common::ModulePageAllocator, true> table_info_;
+  ObSqlArray<ObInsertAllTableInfo*> table_info_;
 };
 
 } // namespace sql

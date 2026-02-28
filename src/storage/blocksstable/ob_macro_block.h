@@ -97,10 +97,11 @@ public:
   {
     return static_cast<ObRowStoreType>(macro_header_.fixed_header_.row_store_type_);
   }
-  void update_max_merged_trans_version(const int64_t max_merged_trans_version)
+
+  void update_max_merged_trans_version(const int64_t input_trans_version)
   {
-    if (max_merged_trans_version > max_merged_trans_version_) {
-      max_merged_trans_version_ = max_merged_trans_version;
+    if (input_trans_version > max_merged_trans_version_) {
+      max_merged_trans_version_ = input_trans_version;
     }
   }
   void set_contain_uncommitted_row()

@@ -17,6 +17,7 @@
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_compile.h"
 #include "share/table/ob_ttl_util.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -234,11 +235,21 @@ int ObTriggerResolver::resolve_create_trigger_stmt(const ParseNode &parse_node,
                                                               trigger_arg.trigger_info_.get_base_object_id(),
                                                               table_schema));
     CK (OB_NOT_NULL(table_schema));
+
     OZ (trigger_arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(table_schema->get_table_id(),
                                                                                  TABLE_SCHEMA,
                                                                                  table_schema->get_schema_version())));
     OZ(ObTTLUtil::check_htable_ddl_supported(*table_schema, false/*by_admin*/));
+
+    // check create trigger whether is valid for ttl table
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObCompactionTTLUtil::check_create_trigger_for_ttl_valid(
+                   *table_schema,
+                   trigger_arg.trigger_info_))) {
+      LOG_WARN("failed to check create trigger for ttl table", KR(ret));
+    }
   }
+
   if (OB_SUCC(ret)) {
     ObErrorInfo &error_info = trigger_arg.error_info_;
     error_info.collect_error_info(&(trigger_arg.trigger_info_));
@@ -452,7 +463,9 @@ int ObTriggerResolver::resolve_simple_dml_trigger(const ParseNode &parse_node,
       OZ (trigger_arg.trigger_info_.set_ref_parent_name(REF_PARENT));
     }
     OZ (resolve_schema_name(*parse_node.children_[1],
-                            trigger_arg.base_object_database_, trigger_arg.base_object_name_));
+                            trigger_arg.base_object_database_,
+                            trigger_arg.base_object_name_,
+                            &trigger_arg.trigger_database_));
     OZ (resolve_base_object(trigger_arg, false));
   }
   OZ (resolve_order_clause(parse_node.children_[2], trigger_arg));
@@ -1020,7 +1033,8 @@ int ObTriggerResolver::resolve_trigger_body(const ParseNode &parse_node,
     pl::ObPLParser parser(*allocator_, session_info_->get_charsets4parser(), session_info_->get_sql_mode());
     ObStmtNodeTree *parse_tree = NULL;
     CHECK_COMPATIBILITY_MODE(session_info_);
-    OZ (trigger_info.gen_procedure_source(trigger_arg.base_object_database_,
+    OZ (trigger_info.gen_procedure_source(trigger_arg.trigger_database_,
+                                          trigger_arg.base_object_database_,
                                           trigger_arg.base_object_name_,
                                           parse_node,
                                           session_info_->get_dtc_params(),
@@ -1077,11 +1091,12 @@ int ObTriggerResolver::resolve_compound_trigger_body(const ParseNode &parse_node
 
 int ObTriggerResolver::resolve_schema_name(const ParseNode &parse_node,
                                            ObString &database_name,
-                                           ObString &schema_name)
+                                           ObString &schema_name,
+                                           const ObString *default_db_name)
 {
   int ret = OB_SUCCESS;
   OV (OB_NOT_NULL(session_info_));
-  OZ (ObResolverUtils::resolve_sp_name(*session_info_, parse_node, database_name, schema_name));
+  OZ (ObResolverUtils::resolve_sp_name(*session_info_, parse_node, database_name, schema_name, true, default_db_name));
   return ret;
 }
 

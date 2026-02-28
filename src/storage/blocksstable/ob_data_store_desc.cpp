@@ -13,6 +13,7 @@
 #include "storage/blocksstable/ob_data_store_desc.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "observer/ob_server_struct.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -75,7 +76,7 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   enable_macro_block_bloom_filter_ = desc.enable_macro_block_bloom_filter_;
   micro_block_format_version_ = desc.micro_block_format_version_;
   need_submit_io_ = desc.need_submit_io_;
-  is_delete_insert_table_ = desc.is_delete_insert_table_;
+  merge_engine_type_ = desc.merge_engine_type_;
   encoding_granularity_ = desc.encoding_granularity_;
   concurrent_cnt_ = desc.concurrent_cnt_;
   reorganization_scn_ = desc.reorganization_scn_;
@@ -157,7 +158,6 @@ int ObStaticDataStoreDesc::init(
     concurrent_cnt_ = concurrent_cnt;
     micro_block_format_version_ = merge_schema.get_micro_block_format_version();
     reorganization_scn_ = reorganization_scn;
-    ObSemiStructEncodingType semi_type;
 
     if (compaction::is_mds_merge(merge_type_)) {
       // Disable for mds table.
@@ -175,32 +175,42 @@ int ObStaticDataStoreDesc::init(
 
     if (FAILEDx(init_encryption_info(merge_schema))) {
       STORAGE_LOG(WARN, "fail to get encrypt info from table schema", K(ret));
-    } else if (OB_FAIL(merge_schema.get_semistruct_encoding_type(semi_type))) {
-      STORAGE_LOG(WARN, "Failed to get semistruct encoding type", K(ret), K(semi_type));
-    } else if (semi_type.is_enable_semistruct_encoding() &&
-          OB_FAIL(semistruct_properties_.resolve_semistruct_properties(semi_type.mode_, merge_schema.get_semistruct_properties()))) {
-      STORAGE_LOG(WARN, "Failed to resolve semistruct properties", K(ret), K(semi_type));
+    } else if (is_major) {
+      // only enable semistruct encoding for major merge
+      ObSemiStructEncodingType semi_type;
+      if (OB_FAIL(merge_schema.get_semistruct_encoding_type(semi_type))) {
+        STORAGE_LOG(WARN, "Failed to get semistruct encoding type", K(ret),
+                    K(semi_type));
+      } else if (semi_type.is_enable_semistruct_encoding() &&
+                 OB_FAIL(semistruct_properties_.resolve_semistruct_properties(
+                     semi_type.mode_,
+                     merge_schema.get_semistruct_properties()))) {
+        STORAGE_LOG(WARN, "Failed to resolve semistruct properties", K(ret),
+                    K(semi_type));
+      }
     } else {
+      semistruct_properties_.reset();
+    }
+    if (OB_SUCC(ret)) {
       schema_version_ = merge_schema.get_schema_version();
       snapshot_version_ = snapshot_version;
       progressive_merge_round_ = merge_schema.get_progressive_merge_round();
       compressor_type_ = merge_schema.get_compressor_type();
-      is_delete_insert_table_ = merge_schema.is_delete_insert_merge_engine();
-      (void) init_block_size(merge_schema);
-      if (is_major) {
-        uint64_t compat_version = 0;
-        if (cluster_version > 0) {
-          major_working_cluster_version_ = cluster_version;
-        } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
-          STORAGE_LOG(WARN, "fail to get data version", K(ret));
-        } else {
-          major_working_cluster_version_ = compat_version;
-          STORAGE_LOG(INFO, "success to set major working cluster version", K(ret), "merge_type", merge_type_to_str(merge_type),
-            K(cluster_version), K(major_working_cluster_version_));
-        }
-      } else if (compressor_type_ != ObCompressorType::NONE_COMPRESSOR) {
+      if (!is_major && compressor_type_ != ObCompressorType::NONE_COMPRESSOR) {
         // for mini/minor, use default compressor
         compressor_type_ = DEFAULT_MINOR_COMPRESSOR_TYPE;
+      }
+      merge_engine_type_ = merge_schema.get_merge_engine_type();
+      (void) init_block_size(merge_schema);
+      uint64_t compat_version = 0;
+      if (cluster_version > 0) {
+        major_working_cluster_version_ = cluster_version;
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+        STORAGE_LOG(WARN, "fail to get data version", K(ret));
+      } else {
+        major_working_cluster_version_ = compat_version;
+        STORAGE_LOG(INFO, "success to set major working cluster version", K(ret), "merge_type", merge_type_to_str(merge_type),
+          K(cluster_version), K(major_working_cluster_version_));
       }
     }
   }
@@ -281,10 +291,9 @@ int ObColDataStoreDesc::assign(const ObColDataStoreDesc &desc)
 }
 
 int ObColDataStoreDesc::init(
-  const bool is_major,
   const ObMergeSchema &merge_schema,
   const uint16_t table_cg_idx,
-  const int64_t major_working_cluster_version)
+  const ObStaticDataStoreDesc &static_desc)
 {
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
@@ -298,12 +307,16 @@ int ObColDataStoreDesc::init(
       schema_rowkey_col_cnt_ + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     full_stored_col_cnt_ += storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     row_column_count_ = full_stored_col_cnt_;
-    if (!merge_schema.is_column_info_simplified()) {
+    if (!merge_schema.is_column_info_simplified() ||
+        share::schema::is_fts_index_aux(merge_schema.get_index_type()) ||
+        share::schema::is_fts_doc_word_aux(merge_schema.get_index_type())) {
       if (OB_FAIL(col_desc_array_.init(row_column_count_))) {
         STORAGE_LOG(WARN, "Failed to reserve column desc array", K(ret));
-      } else if (OB_FAIL(merge_schema.get_multi_version_column_descs(col_desc_array_))) {
+      } else if (OB_FAIL(merge_schema.get_multi_version_column_descs(
+                     col_desc_array_))) {
         STORAGE_LOG(WARN, "Failed to generate multi version column ids", K(ret));
-      } else if (OB_FAIL(generate_skip_index_meta(is_major, merge_schema, nullptr/*cg_schema*/, major_working_cluster_version))) {
+      } else if (OB_FAIL(generate_skip_index_meta(
+                     merge_schema, nullptr /*cg_schema*/, static_desc))) {
         STORAGE_LOG(WARN, "failed to generate skip index meta", K(ret));
       }
     } else {
@@ -311,7 +324,7 @@ int ObColDataStoreDesc::init(
         STORAGE_LOG(WARN, "fail to reserve column desc array", K(ret));
       } else if (OB_FAIL(merge_schema.get_mulit_version_rowkey_column_ids(col_desc_array_))) {
         STORAGE_LOG(WARN, "fail to get rowkey column ids", K(ret));
-      } else if (OB_FAIL(generate_skip_index_meta(is_major, merge_schema, nullptr/*cg_schema*/, major_working_cluster_version))) {
+      } else if (OB_FAIL(generate_skip_index_meta(merge_schema, nullptr/*cg_schema*/, static_desc))) {
         STORAGE_LOG(WARN, "failed to generate skip index meta", K(ret));
       }
     }
@@ -389,14 +402,14 @@ int ObColDataStoreDesc::add_col_desc_from_cg_schema(
   return ret;
 }
 
-int ObColDataStoreDesc::init(const bool is_major,
-                             const ObMergeSchema &merge_schema,
+int ObColDataStoreDesc::init(const ObMergeSchema &merge_schema,
                              const storage::ObStorageColumnGroupSchema &cg_schema,
                              const uint16_t table_cg_idx,
-                             const int64_t major_working_cluster_version)
+                             const ObStaticDataStoreDesc &static_desc)
 {
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
+  const bool is_major = compaction::is_major_or_meta_merge_type(static_desc.merge_type_);
   if (OB_UNLIKELY(!merge_schema.is_valid() || !cg_schema.is_valid() || cg_schema.is_all_column_group() || !is_major)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "arguments is invalid", K(ret), K(merge_schema), K(cg_schema), K(is_major));
@@ -417,8 +430,8 @@ int ObColDataStoreDesc::init(const bool is_major,
 
     if (FAILEDx(gene_col_default_checksum_array(merge_schema))) {
       STORAGE_LOG(WARN, "failed to init default column checksum", KR(ret), K(merge_schema));
-    } else if (OB_FAIL(generate_skip_index_meta(is_major, merge_schema, &cg_schema, major_working_cluster_version))) {
-      STORAGE_LOG(WARN, "failed to generate skip index meta", K(ret), K(major_working_cluster_version), K(merge_schema), K(cg_schema));
+    } else if (OB_FAIL(generate_skip_index_meta(merge_schema, &cg_schema, static_desc))) {
+      STORAGE_LOG(WARN, "failed to generate skip index meta", K(ret), K(static_desc.major_working_cluster_version_), K(merge_schema), K(cg_schema));
     } else if (OB_FAIL(get_compat_mode_from_schema(merge_schema, is_oracle_mode))) {
       STORAGE_LOG(WARN, "failed to get compat mode", KR(ret), K(merge_schema));
     } else if (OB_FAIL(datum_utils_.init(col_desc_array_, schema_rowkey_col_cnt_,
@@ -510,13 +523,33 @@ int ObColDataStoreDesc::init_col_default_checksum_array(
   return ret;
 }
 
-int ObColDataStoreDesc::generate_skip_index_meta(
-    const bool is_major,
-    const share::schema::ObMergeSchema &schema,
-    const storage::ObStorageColumnGroupSchema *cg_schema,
-    const int64_t major_working_cluster_version)
+int ObColDataStoreDesc::init_skip_idx_attrs(
+  const bool is_full_column_sstable,
+  const share::schema::ObMergeSchema &schema,
+  ObArray<ObSkipIndexColumnAttr> &skip_idx_attrs)
 {
   int ret = OB_SUCCESS;
+  int64_t skip_idx_attrs_column_cnt = full_stored_col_cnt_;
+  if (!is_full_column_sstable) {
+    if (OB_FAIL(schema.get_store_column_count(skip_idx_attrs_column_cnt, true))) {
+      STORAGE_LOG(WARN, "failed to get store column count", K(ret), K(schema), K(skip_idx_attrs_column_cnt));
+    } else {
+      skip_idx_attrs_column_cnt += storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(skip_idx_attrs.prepare_allocate(skip_idx_attrs_column_cnt))) {
+    STORAGE_LOG(WARN, "failed to prepare allocate skip index col attr", K(ret), K(skip_idx_attrs_column_cnt));
+  }
+  return ret;
+}
+
+int ObColDataStoreDesc::generate_skip_index_meta(
+    const share::schema::ObMergeSchema &schema,
+    const storage::ObStorageColumnGroupSchema *cg_schema,
+    const ObStaticDataStoreDesc &static_desc)
+{
+  int ret = OB_SUCCESS;
+  const bool is_major = compaction::is_major_or_meta_merge_type(static_desc.merge_type_);
   ObArray<ObSkipIndexColumnAttr> skip_idx_attrs;
   const bool is_full_column_sstable = !(nullptr != cg_schema && !cg_schema->is_all_column_group());
   if (OB_UNLIKELY(!schema.is_valid() || (nullptr != cg_schema && !cg_schema->is_valid()))) {
@@ -528,41 +561,44 @@ int ObColDataStoreDesc::generate_skip_index_meta(
   } else if (OB_UNLIKELY(!agg_meta_array_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected non-empty aggregate meta array", K(ret));
-  } else if (schema.is_column_info_simplified()) {
-      // simplified do not generate skip index, do not init agg_meta_array
-  } else if (OB_FAIL(schema.get_skip_index_col_attr(skip_idx_attrs))) {
-    STORAGE_LOG(WARN, "failed to get skip index col attr", K(ret));
-  } else if (OB_UNLIKELY(skip_idx_attrs.count() < full_stored_col_cnt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected stored col count and skip attr array count not match",
-        K(ret), K(skip_idx_attrs), K_(col_desc_array), K_(full_stored_col_cnt));
+  } else if (schema.is_column_info_simplified() && static_desc.major_working_cluster_version_ < share::ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
+    // after(>=) COMPACTION_TTL_CMP_DATA_VERSION, trans version column may have skip index, don't skip this
+  } else if (OB_FAIL(init_skip_idx_attrs(is_full_column_sstable, schema, skip_idx_attrs))) {
+    STORAGE_LOG(WARN, "failed to prepare allocate skip index col attr", K(ret), K(full_stored_col_cnt_));
+  } else if (OB_FAIL(schema.get_skip_index_col_attr(is_major, static_desc.major_working_cluster_version_, skip_idx_attrs))) {
+    STORAGE_LOG(WARN, "failed to get skip index col attr", K(ret), K(is_major), K(static_desc.major_working_cluster_version_), K(full_stored_col_cnt_));
   } else if (OB_FAIL(agg_meta_array_.init(ObSkipIndexColMeta::MAX_AGG_COLUMN_PER_ROW * full_stored_col_cnt_))) {
-    STORAGE_LOG(WARN, "failed to init agg meta array", K(ret), K_(full_stored_col_cnt));
+    STORAGE_LOG(WARN, "failed to init agg meta array", K(ret), K_(full_stored_col_cnt), K(skip_idx_attrs));
   } else if (is_full_column_sstable) {
     // generate skip index for row store
-    for (int64_t i = 0; OB_SUCC(ret) && i < full_stored_col_cnt_; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < skip_idx_attrs.count(); ++i) {
       if (!skip_idx_attrs.at(i).has_skip_index()) {
       } else if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
-          is_major, skip_idx_attrs.at(i), i, agg_meta_array_))) {
+                 skip_idx_attrs.at(i), i, agg_meta_array_))) {
         STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), K(is_major), KPC(cg_schema), K(i));
       }
     }
   } else if (cg_schema->is_single_column_group()) {
     // build min_max and sum aggregate for single column group by default;
     const uint16_t single_cg_column_idx = cg_schema->column_idxs_[0];
-    if (OB_FAIL(generate_single_cg_skip_index_meta(
-        skip_idx_attrs.at(single_cg_column_idx), *cg_schema, major_working_cluster_version))) {
+    if (single_cg_column_idx >= skip_idx_attrs.count()) {
+      // column info simplified, skip index is null
+    } else if (OB_FAIL(generate_single_cg_skip_index_meta(
+                               skip_idx_attrs.at(single_cg_column_idx), *cg_schema, static_desc.major_working_cluster_version_))) {
       STORAGE_LOG(WARN, "failed to generate skip index meta for single column group",
-          K(ret), "skip_idx_attr", skip_idx_attrs.at(single_cg_column_idx),
-          K(major_working_cluster_version), KPC(cg_schema));
+                  K(ret), "skip_idx_attr", skip_idx_attrs.at(single_cg_column_idx),
+                  K(static_desc.major_working_cluster_version_), KPC(cg_schema));
     }
   } else {
     // generate skip index for column in column group
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_schema->column_cnt_; ++i) {
       const uint16_t column_idx = cg_schema->get_column_idx(i);
-      if (!skip_idx_attrs.at(column_idx).has_skip_index()) {
+      if (column_idx >= skip_idx_attrs.count()) {
+        // column info simplified, skip index is null
+      } else if (!skip_idx_attrs.at(column_idx).has_skip_index()) {
+        // the column's skip-index is empty
       } else if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
-          is_major, skip_idx_attrs.at(column_idx), i, agg_meta_array_))) {
+                 skip_idx_attrs.at(column_idx), i, agg_meta_array_))) {
         STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), K(is_major), KPC(cg_schema), K(i), K(column_idx));
       }
     }
@@ -592,7 +628,7 @@ int ObColDataStoreDesc::generate_single_cg_skip_index_meta(
       single_cg_skip_idx_attr.set_sum();
     }
     if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
-        true, single_cg_skip_idx_attr, 0, agg_meta_array_))) {
+        single_cg_skip_idx_attr, 0, agg_meta_array_))) {
       STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), K(column_idx), K(cg_schema));
     }
 
@@ -661,12 +697,13 @@ ObDataStoreDesc::~ObDataStoreDesc()
 
 const ObTabletID ObDataStoreDesc::EMERGENCY_TABLET_ID_MAGIC = ObTabletID(0);
 
-int ObDataStoreDesc::get_emergency_row_store_type(const ObMergeSchema &merge_schema)
+int ObDataStoreDesc::get_emergency_row_store_type()
 {
   int ret = OB_SUCCESS;
 
   if (GCONF._force_skip_encoding_partition_id.get_value_string().empty()) {
     // no need check emergency row store type
+  } else if (ObRowStoreType::FLAT_ROW_STORE == row_store_type_) {
   } else {
     char partition_key[OB_TMP_BUF_SIZE_256];
     if (OB_FAIL(GCONF._force_skip_encoding_partition_id.copy(partition_key, OB_TMP_BUF_SIZE_256))) {
@@ -709,15 +746,13 @@ int ObDataStoreDesc::get_emergency_row_store_type(const ObMergeSchema &merge_sch
                 && EMERGENCY_TABLET_ID_MAGIC == emergency_tablet_id) {
               STORAGE_LOG(INFO, "Magic emergency partition key set to skip encoding for all the tablet",
                   K(emergency_tenant_id), K(emergency_ls_id), K(emergency_tablet_id), K(*this));
-              row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(
-                  merge_schema.get_micro_block_format_version());
+              row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
             } else if (get_tablet_id() == emergency_tablet_id
                           && get_ls_id().id() == emergency_ls_id
                           && MTL_ID() == emergency_tenant_id) {
               STORAGE_LOG(INFO, "Succ to find specified emergency partition to skip encoding",
                   K(emergency_tenant_id), K(emergency_ls_id), K(emergency_tablet_id), K(*this));
-              row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(
-                  merge_schema.get_micro_block_format_version());
+              row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
             } else {
               STORAGE_LOG(INFO, "this partition is not the emergency partition to skip encoding",
                   K(emergency_tenant_id), K(emergency_ls_id), K(emergency_tablet_id), K(*this));
@@ -737,22 +772,27 @@ int ObDataStoreDesc::cal_row_store_type(
     const compaction::ObMergeType merge_type)
 {
   int ret = OB_SUCCESS;
-  if (!compaction::is_major_or_meta_merge_type(merge_type) || row_store_type == FLAT_ROW_STORE) { // not major or meta merge
+  if (compaction::is_major_or_meta_merge_type(merge_type)) {
+    row_store_type_ = row_store_type;
+  } else if (FALSE_IT(row_store_type_ = merge_schema.get_minor_row_store_type())) {
+  } else if (ObStoreFormat::is_row_store_type_with_encoding(row_store_type_) && merge_schema.is_column_info_simplified()) {
+    row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  }
+  if (!ObStoreFormat::is_row_store_type_valid(row_store_type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "Unexpected row store type", K(row_store_type_), K_(row_store_type), K(ret));
+  } else if (OB_FAIL(get_emergency_row_store_type())) {
+    STORAGE_LOG(WARN, "Failed to check and get emergency row store type", K(ret));
+  } else if (ObStoreFormat::is_row_store_type_with_encoding(row_store_type_)) {
+    encoder_opt_.set_store_type(row_store_type_);
+  } else if (ObRowStoreType::FLAT_ROW_STORE == row_store_type_) {
     row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(
         merge_schema.get_micro_block_format_version());
+  } else if (ObRowStoreType::FLAT_OPT_ROW_STORE == row_store_type_) {
+    // do nothing
   } else {
-    row_store_type_ = row_store_type;
-    if (!ObStoreFormat::is_row_store_type_valid(row_store_type_)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "Unexpected row store type", K(row_store_type_), K_(row_store_type), K(ret));
-    } else if (OB_FAIL(get_emergency_row_store_type(merge_schema))) {
-      STORAGE_LOG(WARN, "Failed to check and get emergency row store type", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      if (ObStoreFormat::is_row_store_type_with_encoding(row_store_type_)) {
-        encoder_opt_.set_store_type(row_store_type_);
-      }
-    }
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected row store type", K_(row_store_type));
   }
 
   return ret;
@@ -854,7 +894,7 @@ bool ObDataStoreDesc::is_store_type_valid() const
   } else if (is_force_flat_store_type_) {
     ret = ObStoreFormat::is_row_store_type_with_flat(row_store_type_);
   } else if (is_mini_or_minor_merge) {
-    ret = !ObStoreFormat::is_row_store_type_with_encoding(row_store_type_);
+    ret = common::ObStoreFormat::is_minor_row_store_type_valid(row_store_type_);
   } else {
     ret = (ObMacroBlockCommonHeader::SSTableData == data_store_type_ ||
            ObMacroBlockCommonHeader::SSTableIndex == data_store_type_ ||
@@ -1015,10 +1055,10 @@ int ObWholeDataStoreDesc::inner_init(
   const bool is_major = compaction::is_major_or_meta_merge_type(static_desc_.merge_type_);
   if (is_major && nullptr != cg_schema && !cg_schema->is_all_column_group()) {
     // Only normal cg and rowkey cg (which means it must be major sstable) will get in here.
-    if (OB_FAIL(col_desc_.init(is_major, merge_schema, *cg_schema, table_cg_idx, static_desc_.major_working_cluster_version_))) {
+    if (OB_FAIL(col_desc_.init(merge_schema, *cg_schema, table_cg_idx, static_desc_))) {
       STORAGE_LOG(WARN, "failed to init data store desc for column grouo", K(ret));
     }
-  } else if (OB_FAIL(col_desc_.init(is_major, merge_schema, table_cg_idx, static_desc_.major_working_cluster_version_))) {
+  } else if (OB_FAIL(col_desc_.init(merge_schema, table_cg_idx, static_desc_))) {
     STORAGE_LOG(WARN, "failed to inner init data desc", K(ret));
   }
   if (FAILEDx(desc_.init(static_desc_, col_desc_, merge_schema,

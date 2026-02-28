@@ -111,6 +111,10 @@ protected:
   int add_batch_row_for_piece_msg(ObChunkDatumStore &sample_store);
   int add_batch_row_for_piece_msg_vec(ObChunkDatumStore &sample_store);
   int add_row_for_piece_msg(ObChunkDatumStore &sample_store);
+
+  virtual int do_project_trans_exprs(const ObIArray<ObExpr *> &trans_exprs, const ObBatchRows &brs,
+                                     ObEvalCtx &eval_ctx) override;
+
 private:
   int build_row_sample_piece_msg(int64_t expected_range_count,
     ObDynamicSamplePieceMsg &piece_msg);

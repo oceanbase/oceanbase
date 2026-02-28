@@ -127,11 +127,13 @@ ObMergeStaticInfo::ObMergeStaticInfo()
     kept_snapshot_info_(),
     participant_table_info_(),
     mds_filter_info_str_("\0"),
+    window_decision_log_info_str_("\0"),
     merge_level_(MERGE_LEVEL_MAX),
     exec_mode_(ObExecMode::EXEC_MODE_MAX),
     merge_reason_(ObAdaptiveMergePolicy::NONE),
-    base_major_status_(ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS),
-    co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE),
+    base_major_status_(MAJOR_SSTABLE_STATUS_INVALID),
+    co_major_merge_strategy_(),
+    window_decision_log_info_(),
     is_full_merge_(false)
 {}
 
@@ -157,10 +159,12 @@ void ObMergeStaticInfo::reset()
   merge_level_ = MERGE_LEVEL_MAX;
   exec_mode_ = ObExecMode::EXEC_MODE_MAX;
   merge_reason_ = ObAdaptiveMergePolicy::NONE;
-  base_major_status_ = ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS;
-  co_major_merge_type_ = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
+  base_major_status_ = MAJOR_SSTABLE_STATUS_INVALID;
+  co_major_merge_strategy_.reset();
+  window_decision_log_info_.reset();
   is_full_merge_ = false;
   MEMSET(mds_filter_info_str_, '\0', sizeof(mds_filter_info_str_));
+  MEMSET(window_decision_log_info_str_, '\0', sizeof(window_decision_log_info_str_));
 }
 
 void ObMergeStaticInfo::shallow_copy(const ObMergeStaticInfo &other)
@@ -179,10 +183,13 @@ void ObMergeStaticInfo::shallow_copy(const ObMergeStaticInfo &other)
   exec_mode_ = other.exec_mode_;
   merge_reason_ = other.merge_reason_;
   base_major_status_ = other.base_major_status_;
-  co_major_merge_type_ = other.co_major_merge_type_;
+  co_major_merge_strategy_ = other.co_major_merge_strategy_;
+  window_decision_log_info_ = other.window_decision_log_info_;
   is_full_merge_ = other.is_full_merge_;
   MEMSET(mds_filter_info_str_, '\0', sizeof(mds_filter_info_str_));
   snprintf(mds_filter_info_str_, sizeof(mds_filter_info_str_), "%s", other.mds_filter_info_str_);
+  MEMSET(window_decision_log_info_str_, '\0', sizeof(window_decision_log_info_str_));
+  snprintf(window_decision_log_info_str_, sizeof(window_decision_log_info_str_), "%s", other.window_decision_log_info_str_);
 }
 
 int64_t ObMergeStaticInfo::to_string(char* buf, const int64_t buf_len) const
@@ -199,14 +206,14 @@ int64_t ObMergeStaticInfo::to_string(char* buf, const int64_t buf_len) const
       J_COMMA();
       J_KV("merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(merge_reason_),
         "progressive_merge_round", progressive_merge_round_, "progressive_merge_num", progressive_merge_num_);
-      if (ObCOMajorMergePolicy::is_valid_major_merge_type(co_major_merge_type_)) {
+      if (co_major_merge_strategy_.is_valid()) {
         J_COMMA();
-        J_KV("base_major_status", co_major_sstable_status_to_str(base_major_status_),
-        "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(co_major_merge_type_));
+        J_KV("base_major_status", major_sstable_status_to_str(base_major_status_),
+        "co_major_merge_strategy", co_major_merge_strategy_);
       }
     }
     J_COMMA();
-    J_KV(K_(kept_snapshot_info), K_(participant_table_info), K_(mds_filter_info_str));
+    J_KV(K_(kept_snapshot_info), K_(participant_table_info), K_(mds_filter_info_str), K_(window_decision_log_info));
     J_OBJ_END();
   }
   return pos;
@@ -271,6 +278,7 @@ ObMergeBlockInfo::ObMergeBlockInfo()
     multiplexed_micro_count_in_new_macro_(0),
     total_row_count_(0),
     incremental_row_count_(0),
+    filter_row_count_(0),
     new_flush_data_rate_(0),
     new_micro_info_(),
     block_io_us_(0),
@@ -288,6 +296,7 @@ void ObMergeBlockInfo::reset()
   multiplexed_micro_count_in_new_macro_ = 0;
   total_row_count_ = 0;
   incremental_row_count_ = 0;
+  filter_row_count_ = 0;
   new_flush_data_rate_ = 0;
   new_micro_info_.reset();
   block_io_us_ = 0;
@@ -310,6 +319,7 @@ void ObMergeBlockInfo::shallow_copy(const ObMergeBlockInfo &other)
   multiplexed_micro_count_in_new_macro_ = other.multiplexed_micro_count_in_new_macro_;
   total_row_count_ = other.total_row_count_;
   incremental_row_count_ = other.incremental_row_count_;
+  filter_row_count_ = other.filter_row_count_;
   new_flush_data_rate_ = other.new_flush_data_rate_;
   new_micro_info_ = other.new_micro_info_;
   block_io_us_ = other.block_io_us_;
@@ -321,6 +331,7 @@ void ObMergeBlockInfo::add(const ObMergeBlockInfo &other)
 {
   total_row_count_ += other.total_row_count_;
   incremental_row_count_ += other.incremental_row_count_;
+  filter_row_count_ += other.filter_row_count_;
   add_without_row_cnt(other);
 }
 
@@ -386,7 +397,8 @@ ObSSTableMergeHistory::ObSSTableMergeHistory(const bool need_free_param)
     running_info_(),
     block_info_(),
     diagnose_info_(),
-    sstable_merge_block_info_array_()
+    sstable_merge_block_info_array_(),
+    lock_(common::ObLatchIds::OB_MERGE_BLOCK_INFO_MUTEX)
 {}
 
 void ObSSTableMergeHistory::reset()

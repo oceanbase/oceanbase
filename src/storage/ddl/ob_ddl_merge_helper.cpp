@@ -294,7 +294,11 @@ int ObSNDDLMergeHelperV2::process_prepare_task(ObIDag *dag,
     if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), arena, user_data))) {
       if (OB_EMPTY_RESULT == ret) {
         /* for ddl execute node, should wait take effect */
-        ret = ddl_merge_param.for_replay_ ? OB_EAGAIN : OB_DAG_TASK_IS_SUSPENDED;
+        if (ObDagType::DAG_TYPE_DDL == dag->get_type()) {
+          ret = OB_EAGAIN;
+        } else {
+          ret = ddl_merge_param.for_replay_ ? OB_EAGAIN : OB_DAG_TASK_IS_SUSPENDED;
+        }
       }
       LOG_WARN("failed to get ddl complete mds user data", K(ret));
     } else if (!user_data.has_complete_) {
@@ -1608,6 +1612,7 @@ int ObSSDDLMergeHelper::update_tablet_table_store(ObDDLTabletMergeDagParamV2 &da
       table_store_param.ddl_info_.data_format_version_    = dag_merge_param.ddl_task_param_.tenant_data_version_;
       table_store_param.ddl_info_.ddl_commit_scn_         = dag_merge_param.rec_scn_;
       table_store_param.ddl_info_.ddl_checkpoint_scn_      = dag_merge_param.rec_scn_;
+      table_store_param.ddl_info_.ddl_snapshot_version_    = dag_merge_param.table_key_.get_snapshot_version();
 
       if (!dag_merge_param.for_major_) {
         // data is not complete, now update ddl table store only for reducing count of ddl dump sstable.

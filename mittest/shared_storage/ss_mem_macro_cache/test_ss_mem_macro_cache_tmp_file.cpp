@@ -53,7 +53,7 @@ public:
 void TestSSMemMacroCache::SetUpTestCase()
 {
   GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
-  EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
 }
 
 void TestSSMemMacroCache::TearDownTestCase()
@@ -226,6 +226,10 @@ TEST_F(TestSSMemMacroCache, test_tmp_file_aio_read_from_mem_macro_cache)
 
   // Step 2: Test aio_read using ObSSTmpFileReader
   ObSSTmpFileReader tmp_file_reader;
+  ObSSMemMacroCacheStat &cache_stat = mem_macro_cache->cache_stat_;
+  const int64_t hit_cnt_before = cache_stat.hit_stat().hit_cnt_;
+  const int64_t miss_cnt_before = cache_stat.hit_stat().miss_cnt_;
+
   for (int64_t i = 0; i < test_macro_cnt; ++i) {
     const MacroBlockId &macro_id = test_macro_ids[i];
     char expected_pattern = 'A' + (i % 26);
@@ -272,18 +276,18 @@ TEST_F(TestSSMemMacroCache, test_tmp_file_aio_read_from_mem_macro_cache)
     }
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    // Verify that data was read from mem_macro_cache by checking IO flag
-    ObIOFlag io_flag;
-    if (OB_FAIL(object_handle.get_io_handle().get_io_flag(io_flag))) {
-      LOG_WARN("fail to get io flag", KR(ret), K(i), K(macro_id));
-    }
-    ASSERT_EQ(OB_SUCCESS, ret);
-
-    // When reading from mem_macro_cache, the IO should be synchronous
-    ASSERT_TRUE(io_flag.is_sync());
+    // Verify that data was read from mem_macro_cache by checking cache statistics
+    // When reading from mem_macro_cache, there is no actual IO operation,
+    // data is directly copied from memory. The correct way to verify is to check
+    // cache hit statistics instead of IO flags.
+    const int64_t hit_cnt_after = cache_stat.hit_stat().hit_cnt_;
+    const int64_t miss_cnt_after = cache_stat.hit_stat().miss_cnt_;
+    ASSERT_EQ(hit_cnt_before + i + 1, hit_cnt_after);
+    ASSERT_EQ(miss_cnt_before, miss_cnt_after); // miss count should not change
 
     LOG_INFO("Successfully verified aio_read from mem_macro_cache", K(i), K(macro_id),
-             K(expected_pattern), "is_sync", io_flag.is_sync());
+             K(expected_pattern), "hit_cnt_increase", hit_cnt_after - hit_cnt_before,
+             "miss_cnt_unchanged", miss_cnt_after - miss_cnt_before);
   }
 }
 
@@ -373,26 +377,20 @@ TEST_F(TestSSMemMacroCache, test_tmp_file_read_mem_macro_cache_flow)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // Step 5: Verify cache hit statistics after read
+  // When reading from mem_macro_cache, there is no actual IO operation,
+  // data is directly copied from memory. The correct way to verify is to check
+  // cache hit statistics instead of IO flags.
   const int64_t hit_cnt_after = cache_stat.hit_stat().hit_cnt_;
   const int64_t miss_cnt_after = cache_stat.hit_stat().miss_cnt_;
 
   ASSERT_EQ(hit_cnt_before + 1, hit_cnt_after);
   ASSERT_EQ(miss_cnt_before, miss_cnt_after); // miss count should not change
 
-  // Step 6: Verify IO flag indicates synchronous read (from cache)
-  ObIOFlag io_flag;
-  if (OB_FAIL(object_handle.get_io_handle().get_io_flag(io_flag))) {
-    LOG_WARN("fail to get io flag", KR(ret), K(macro_id));
-  }
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_TRUE(io_flag.is_sync());
-
   LOG_INFO("Successfully verified read_mem_macro_cache flow", K(macro_id),
            K(test_pattern), "hit_cnt_increase", hit_cnt_after - hit_cnt_before,
-           "miss_cnt_unchanged", miss_cnt_after - miss_cnt_before,
-           "is_sync", io_flag.is_sync());
+           "miss_cnt_unchanged", miss_cnt_after - miss_cnt_before);
 
-  // Step 7: Test cache miss scenario by reading non-existent macro
+  // Step 6: Test cache miss scenario by reading non-existent macro
   // Clear memory cache first to force a cache miss
   ASSERT_EQ(OB_SUCCESS, mem_macro_cache->clear_mem_macro_cache());
 

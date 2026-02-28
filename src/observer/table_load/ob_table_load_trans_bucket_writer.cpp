@@ -36,7 +36,7 @@ using namespace table;
 using namespace common::number;
 
 ObTableLoadTransBucketWriter::SessionContext::SessionContext()
-  : session_id_(0), allocator_("TLD_TB_SessCtx"), last_receive_sequence_no_(0)
+  : session_id_(0), allocator_("TLD_TB_SessCtx"), mutex_(common::ObLatchIds::OB_TABLE_LOAD_TRANS_BUCKET_WRITER_MUTEX), last_receive_sequence_no_(0)
 {
   allocator_.set_tenant_id(MTL_ID());
   load_bucket_array_.set_tenant_id(MTL_ID());

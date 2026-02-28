@@ -205,6 +205,101 @@ public:
   int64_t cache_refresh_interval_sec_;
 };
 
+class ObRestCatalogProperties : public ObCatalogProperties
+{
+public:
+  enum ObRestCatalogOptions {
+    URI = 0,
+    PREFIX,
+    AUTH_TYPE,
+    ACCESSID,
+    ACCESSKEY,
+    SCOPE,
+    OAUTH2_SVR_URI,
+    SIGN_NAME,
+    SIGN_REGION,
+    TOKEN,
+    VENDED_CREDENTAIL_ENABLED,
+    MAX_CLIENT_POOL_SIZE,
+    HTTP_TIMEOUT,
+    HTTP_KEEPALIVE_TIME,
+    MAX_OPTIONS
+  };
+  enum class ObRestAuthType
+  {
+    INVALID_TYPE = -1,
+    NONE_TYPE,
+    OAUTH2_TYPE,
+    SIGV4_TYPE,
+    MAX_TYPE
+  };
+  ObRestCatalogProperties()
+  : ObCatalogProperties(CatalogType::REST_TYPE),
+    uri_(), prefix_(), auth_type_(ObRestAuthType::NONE_TYPE),
+    accessid_(), accesskey_(),
+    scope_(), oauth2_svr_uri_(),
+    sign_name_(), sign_region_(),
+    token_(), vended_credential_enabled_(false),
+    max_client_pool_size_(DEFAULT_MAX_CLIENT_POOL_SIZE),
+    http_timeout_(DEFAULT_HTTP_TIMEOUT),
+    http_keep_alive_time_(DEFAULT_HTTP_KEEP_ALIVE_TIME)
+  {}
+  virtual ~ObRestCatalogProperties() {}
+  virtual int to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int load_from_string(const common::ObString &str, common::ObIAllocator &allocator) override;
+  virtual int resolve_catalog_properties(const ParseNode &node) override;
+  virtual int encrypt(ObIAllocator &allocator) override;
+  virtual int decrypt(ObIAllocator &allocator) override;
+
+  int get_auth_type_str(common::ObString &auth_type_str) const;
+
+  static constexpr const char *OPTION_NAMES[] = {
+    "URI",
+    "PREFIX",
+    "AUTH_TYPE",
+    "ACCESSID",
+    "ACCESSKEY",
+    "SCOPE",
+    "OAUTH2_SVR_URI",
+    "SIGN_NAME",
+    "SIGN_REGION",
+    "TOKEN",
+    "VENDED_CREDENTIAL_ENABLED",
+    "MAX_CLIENT_POOL_SIZE",
+    "HTTP_TIMEOUT",
+    "HTTP_KEEPALIVE_TIME"
+  };
+  static constexpr const char *HTTP_PREFIX = "http://";
+  static constexpr const char *HTTPS_PREFIX = "https://";
+  static constexpr const char *AUTH_TYPE_NAMES[] = {
+    "none",
+    "oauth2",
+    "sigv4"
+  };
+  static_assert(sizeof(AUTH_TYPE_NAMES) / sizeof(AUTH_TYPE_NAMES[0]) == static_cast<int>(ObRestAuthType::MAX_TYPE),
+                "AUTH_TYPE_NAMES size mismatch with ObRestAuthType");
+  static constexpr int64_t DEFAULT_MAX_CLIENT_POOL_SIZE = 20;
+  static constexpr int64_t DEFAULT_HTTP_TIMEOUT = 10 * 1000 * 1000; // 10 seconds
+  static constexpr int64_t DEFAULT_HTTP_KEEP_ALIVE_TIME = 60 * 1000 * 1000; // 1 minute
+  static constexpr int64_t OB_MAX_ACCESSID_LENGTH = 256;
+  static constexpr int64_t OB_MAX_ACCESSKEY_LENGTH = 256;
+  static constexpr int64_t OB_MAX_SCOPE_LENGTH = 256;
+  common::ObString uri_;
+  common::ObString prefix_;
+  ObRestAuthType auth_type_;
+  common::ObString accessid_;
+  common::ObString accesskey_;
+  common::ObString scope_;
+  common::ObString oauth2_svr_uri_;
+  common::ObString sign_name_;
+  common::ObString sign_region_;
+  common::ObString token_;
+  bool vended_credential_enabled_;
+  int64_t max_client_pool_size_;
+  int64_t http_timeout_;
+  int64_t http_keep_alive_time_;
+};
+
 } // namespace share
 } // namespace oceanbase
 

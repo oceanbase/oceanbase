@@ -123,6 +123,7 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
                                                                    param.insert_mode_,
                                                                    param.load_mode_,
                                                                    param.load_level_,
+                                                                   param.dup_action_,
                                                                    column_ids,
                                                                    param.enable_inc_major_))) {
       LOG_WARN("fail to check support direct load", KR(ret), K(param));

@@ -18,6 +18,8 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 #include <parquet/exception.h>
+#include <parquet/bloom_filter_reader.h>
+#include <parquet/bloom_filter.h>
 
 #include "share/ob_i_tablet_scan.h"
 #include "lib/file/ob_file.h"
@@ -28,6 +30,7 @@
 #include "sql/engine/basic/ob_arrow_basic.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/engine/table/ob_external_table_pushdown_filter.h"
+#include "sql/engine/table/ob_parquet_dict_filter.h"
 #include "storage/access/ob_sstable_index_filter.h"
 #include <parquet/page_index.h>
 #include <parquet/stream_reader.h>
@@ -170,7 +173,8 @@ public:
     mode_(FilterCalcMode::DYNAMIC_EAGER_CALC),
     reader_metrics_(),
     column_index_type_(sql::ColumnIndexType::NAME),
-    is_col_name_case_sensitive_(false) {}
+    is_col_name_case_sensitive_(false),
+    dict_filter_pushdown_(nullptr) {}
   virtual ~ObParquetTableRowIterator();
 
   int init(const storage::ObTableScanParam *scan_param) override;
@@ -198,6 +202,42 @@ public:
   int64_t get_lazy_file_count() const { return is_eager_calc() ? lazy_columns_.count() : file_column_exprs_.count(); }
   int64_t get_lazy_access_count() const { return is_eager_calc() ? lazy_columns_.count() : column_exprs_.count();  }
   int64_t get_lazy_column_id(const int64_t i) const { return is_eager_calc() ? lazy_columns_.at(i) : i; }
+  bool is_dict_load_func(int32_t file_col_idx) const
+  {
+    return load_funcs_.at(file_col_idx) == &DataLoader::load_string_col_dict;
+  }
+
+  class ParquetBloomFilterParamBuilder : public ObExternalTablePushdownFilter::BloomFilterParamBuilder
+  {
+  public:
+    explicit ParquetBloomFilterParamBuilder(
+        const std::shared_ptr<parquet::RowGroupReader> &rg_reader,
+        const std::shared_ptr<parquet::RowGroupBloomFilterReader> &rg_bf_reader,
+        const std::shared_ptr<parquet::FileMetaData> &file_meta,
+        struct ObLakeTableParquetReaderMetrics *metrics,
+        const int bloom_filter_percent_threshold)
+        : rg_reader_(rg_reader), rg_bf_reader_(rg_bf_reader),
+          file_meta_(file_meta), metrics_(metrics), bloom_filter_percent_threshold_(bloom_filter_percent_threshold) {}
+
+    int may_contain(const PushdownLevel filter_level,
+                    const BloomFilterItem &item,
+                    bool & /* out */ is_contain) override;
+
+  private:
+    bool type_supported(const parquet::Type::type& parquet_type, const ObDatumMeta &datum_type);
+    int hash(const BloomFilterItem& item, const parquet::Type::type& parquet_type, uint64_t& hash_val) const;
+    bool check_load_overhead_adaptively(const BloomFilterItem& item, int64_t bloom_filter_size, int64_t total_compressed_size);
+
+    std::shared_ptr<parquet::RowGroupReader> rg_reader_;
+    std::shared_ptr<parquet::RowGroupBloomFilterReader> rg_bf_reader_;
+    std::shared_ptr<parquet::FileMetaData> file_meta_;
+    struct ObLakeTableParquetReaderMetrics *metrics_;
+    const uint64_t bloom_filter_percent_threshold_;
+
+    std::unique_ptr<parquet::BloomFilter> bloom_filter_{nullptr};
+    int ext_tbl_col_id_{-1};
+  };
+
 private:
   class ParquetMinMaxFilterParamBuilder : public MinMaxFilterParamBuilder
   {
@@ -255,12 +295,14 @@ private:
     int64_t last_column_id_;
   };
   // load vec data from parquet file to expr mem
+
   struct DataLoader {
     DataLoader(ObEvalCtx &eval_ctx,
                ObExpr *file_col_expr,
                ObCollectionTypeBase *arr_type,
                parquet::ColumnReader *reader,
                parquet::internal::RecordReader *record_reader,
+               common::ObArrayWrap<std::shared_ptr<parquet::internal::RecordReader>> &collection_readers,
                common::ObIArrayWrap<int16_t> &def_levels_buf,
                common::ObIArrayWrap<int16_t> &rep_levels_buf,
                common::ObIAllocator &str_res_mem,
@@ -271,12 +313,17 @@ private:
                ObColumnDefaultValue &col_def,
                int64_t &read_progress,
                const bool cross_page,
-               ParquetStatInfo &stat):
+               ParquetStatInfo &stat,
+               int32_t col_idx,
+               bool first_batch,
+               ObParquetDictFilterPushdown * dict_filter_pushdown,
+               bool need_decode):
       eval_ctx_(eval_ctx),
       file_col_expr_(file_col_expr),
       arr_type_(arr_type),
       reader_(reader),
       record_reader_(record_reader),
+      collection_readers_(&collection_readers),
       batch_size_(batch_size),
       row_offset_(row_offset),
       row_count_(row_count),
@@ -287,14 +334,33 @@ private:
       col_def_(col_def),
       read_progress_(read_progress),
       cross_page_(cross_page),
-      stat_(stat)
+      stat_(stat),
+      col_idx_(col_idx),
+      first_batch_(first_batch),
+      dict_filter_pushdown_(dict_filter_pushdown),
+      need_decode_(need_decode)
     {}
     typedef int (DataLoader::*LOAD_FUNC)();
+    static LOAD_FUNC
+    select_load_function_for_group(const ObDatumMeta &datum_type,
+                                   std::shared_ptr<parquet::FileMetaData> file_metadata,
+                                   const int64_t column_index, const uint16_t type_id,
+                                   common::ObArrayWrap<int> &coll_column_index, int &col_cnt,
+                                   common::hash::ObHashMap<int64_t, int> &node_to_column_idx);
     static LOAD_FUNC select_load_function(const ObDatumMeta &datum_type,
-                                          const parquet::ColumnDescriptor *col_desc,
-                                          const ::parquet::schema::Node* node,
-                                          const uint16_t type_id);
-    static bool check_array_column_schema(const ::parquet::schema::Node* node);
+                                          const parquet::ColumnDescriptor *col_desc);
+    static int get_column_idx_by_node(std::shared_ptr<parquet::FileMetaData> file_metadata,
+                                      const ::parquet::schema::Node *node,
+                                      common::hash::ObHashMap<int64_t, int> &node_to_column_idx);
+    static bool
+    check_array_column_schema(std::shared_ptr<parquet::FileMetaData> file_metadata,
+                              const ::parquet::schema::Node *node,
+                              common::ObArrayWrap<int> &coll_column_index, int &col_idx,
+                              common::hash::ObHashMap<int64_t, int> &node_to_column_idx);
+    static bool check_map_column_schema(std::shared_ptr<parquet::FileMetaData> file_metadata,
+                                        const ::parquet::schema::Node *node,
+                                        common::ObArrayWrap<int> &coll_column_index, int &col_idx,
+                                        common::hash::ObHashMap<int64_t, int> &node_to_column_idx);
     int16_t get_max_def_level();
     int load_data_for_col(LOAD_FUNC &func);
 
@@ -305,6 +371,7 @@ private:
     int load_bool_to_int64_vec();
     int load_date_to_mysql_date();
     int load_string_col();
+    int load_string_col_dict();
     int load_default();
     int load_fixed_string_col();
     int load_decimal_any_col();
@@ -321,30 +388,38 @@ private:
     int load_float();
     int load_double();
     int load_float_to_double();
-    int get_offset_nulls_from_levels(const ObArrayWrap<int16_t> &def_levels_buf,
-                                     const ObArrayWrap<int16_t> &rep_levels_buf,
-                                     const int64_t parent_def_level, const int64_t max_rep_level,
+    int get_offset_nulls_from_levels(const int64_t parent_def_level, const int64_t max_rep_level,
                                      const int64_t max_def_level, const int64_t levels_count,
                                      uint32_t *offsets, uint8_t *nulls);
     template <typename T>
-    int set_attr_vector_payload(const uint32_t attrs_idx,
-                                common::ObIArrayWrap<uint32_t> &parent_offsets, uint8_t *nulls,
-                                T *values_buf);
-    int set_data_attr_vector_payload_for_varchar_array(const uint32_t attrs_idx,
-                                                   common::ObIArrayWrap<uint32_t> &parent_offsets,
-                                                   uint8_t *nulls, uint32_t *offsets,
-                                                   const ObLength &max_accuracy_len);
-
+    int set_attr_vector_payload(common::ObArrayWrap<uint32_t> &parent_offsets,
+                                const int32_t attrs_idx, uint8_t *nulls, T *values_buf);
+    int set_data_attr_vector_payload_for_varchar_array(
+                                common::ObArrayWrap<uint32_t> &parent_offsets,
+                                int32_t &attrs_idx, uint8_t *nulls, uint32_t *offsets,
+                                const ObLength &max_accuracy_len);
     template <typename SrcType, typename DstType>
-    int decode_list_to_array(const ObArrayWrap<int16_t> &def_levels_buf,
-                             const ObArrayWrap<int16_t> &rep_levels_buf,
-                             const ::parquet::schema::Node *&node,
-                             ObArrayWrap<uint32_t> &parent_offsets, ObExpr **attrs,
-                             uint32_t &attrs_idx, int64_t &parent_def_level, int64_t &max_rep_level,
-                             int64_t &max_def_level, const ObLength &max_accuracy_len);
-    template<typename SrcType, typename DstType>
-    int load_list_to_array_dispatch_type(const ObLength &max_accuracy_len);
+    int recursively_load_parquet_col_to_attr(const ObLength &max_accuracy_len,
+                                         common::ObArrayWrap<uint32_t> &parent_offsets,
+                                         int32_t &attrs_idx, int64_t max_rep_level,
+                                         int64_t max_def_level,
+                                         const ::parquet::schema::Node *&node);
+    int read_record_levels(parquet::internal::RecordReader *reader, ObIAllocator &allocator);
+    int load_list_to_array_dispatch_type(ObIAllocator &allocator,
+                                             common::ObArrayWrap<uint32_t> &parent_offsets,
+                                             const ::parquet::schema::Node *&node,
+                                             const ObDataType &basic_meta,
+                                             const int64_t depth, int32_t &attrs_idx,
+                                             int64_t max_rep_level, int64_t max_def_level);
     int load_list_to_array();
+    int set_collection_size_and_nulls(common::ObArrayWrap<uint32_t> &parent_offsets,
+                                      int64_t max_def_level, ObIAllocator &allocator);
+    int convert_collection_vector_to_compact_fmt();
+    int load_map_key_value(common::ObArrayWrap<uint32_t> &key_offsets,
+                           const ::parquet::schema::Node *&node, ObIAllocator &allocator,
+                           const int reader_idx, int32_t &attrs_idx, int64_t max_rep_level,
+                           int64_t max_def_level);
+    int load_map();
     int to_numeric(const int64_t idx, const int64_t int_value);
     int to_numeric(const int64_t idx, const char *str, const int32_t length);
     int to_numeric_hive(const int64_t idx, const char *str, const int32_t length, char *buf, const int64_t data_len);
@@ -358,6 +433,7 @@ private:
     ObCollectionTypeBase *arr_type_;
     parquet::ColumnReader *reader_;
     parquet::internal::RecordReader *record_reader_;
+    common::ObArrayWrap<std::shared_ptr<parquet::internal::RecordReader>> *collection_readers_; // for collection type
     const int64_t batch_size_;
     const int64_t row_offset_;
     int64_t &row_count_;
@@ -369,6 +445,13 @@ private:
     int64_t &read_progress_;
     bool cross_page_;
     ParquetStatInfo &stat_;
+    // only uesd for collection type:
+    common::ObArrayWrap<int16_t> coll_def_levels_buf_;
+    common::ObArrayWrap<int16_t> coll_rep_levels_buf_;
+    int32_t col_idx_;
+    bool first_batch_;
+    ObParquetDictFilterPushdown *dict_filter_pushdown_;
+    bool need_decode_;
   };
   class ParquetSectorIterator {
     public:
@@ -442,6 +525,9 @@ private:
                         std::unique_ptr<parquet::ParquetFileReader>& eager_file_reader);
   void reset_column_readers();
   int project_eager_columns(int64_t &count, int64_t capacity);
+  int calc_eager_column_convert(const int64_t read_count);
+  int apply_dict_code_filters(const int64_t count,
+                              ObPushdownFilterExecutor *curr_filter);
   int calc_filters(const int64_t count,
                    ObPushdownFilterExecutor *curr_filter,
                    ObPushdownFilterExecutor *parent_filter);
@@ -451,6 +537,7 @@ private:
                            const int64_t logical_idx, const bool is_lazy,
                            int64_t &curr_idx, parquet::ColumnReader* reader,
                            parquet::internal::RecordReader* record_reader,
+                           common::ObArrayWrap<std::shared_ptr<parquet::internal::RecordReader>> &collection_readers,
                            bool is_collection_column);
   void clear_eager_flags(ObEvalCtx &eval_ctx);
   void move_next();
@@ -468,6 +555,9 @@ private:
   int calc_column_convert(const int64_t read_count, const bool is_eager, ObEvalCtx &eval_ctx);
   int calc_file_meta_column(const int64_t read_count, ObEvalCtx &eval_ctx);
   static bool is_contain_field_id(std::shared_ptr<parquet::FileMetaData> file_meta);
+  // 根据字典编码检查结果，动态更新 load_funcs_
+  int update_load_funcs_for_dict_optimization();
+  int collect_dict_filter_executors(ObPushdownFilterExecutor *filter);
 private:
   ObParquetIteratorState state_;
   lib::ObMemAttr mem_attr_;
@@ -481,10 +571,14 @@ private:
   std::unique_ptr<parquet::ParquetFileReader> eager_file_reader_;
   std::shared_ptr<parquet::FileMetaData> file_meta_;
   common::ObArrayWrap<int> column_indexs_;
+  common::ObArrayWrap<common::ObArrayWrap<int>> coll_column_indexs_;
   common::ObArrayWrap<std::shared_ptr<parquet::ColumnReader>> column_readers_;
   common::ObArrayWrap<std::shared_ptr<parquet::internal::RecordReader>> record_readers_;
+  common::ObArrayWrap<common::ObArrayWrap<std::shared_ptr<parquet::internal::RecordReader>>> coll_record_readers_;
   common::ObArrayWrap<std::shared_ptr<parquet::ColumnReader>> eager_column_readers_;
   common::ObArrayWrap<std::shared_ptr<parquet::internal::RecordReader>> eager_record_readers_;
+  common::ObArrayWrap<common::ObArrayWrap<std::shared_ptr<parquet::internal::RecordReader>>> eager_coll_record_readers_;
+
   common::ObArrayWrap<DataLoader::LOAD_FUNC> load_funcs_;
   ObSqlString url_;
   ObBitVector *bit_vector_cache_;
@@ -512,6 +606,7 @@ private:
   ObLakeTableParquetReaderMetrics reader_metrics_;
   sql::ColumnIndexType column_index_type_;
   bool is_col_name_case_sensitive_;
+  ObParquetDictFilterPushdown *dict_filter_pushdown_;  // 字典优化模块
 };
 
 }

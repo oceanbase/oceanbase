@@ -26,6 +26,7 @@
 #include "pl/ob_pl_package_type.h"
 #endif
 #include "share/schema/ob_external_resource_sql_service.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -1194,7 +1195,8 @@ int ObPLDDLOperator::del_routines_in_package(const ObPackageInfo &package_info,
 }
 
 // functions for managing trigger
-int ObPLDDLOperator::create_trigger(share::schema::ObTriggerInfo &trigger_info,
+int ObPLDDLOperator::create_trigger(share::schema::ObSchemaGetterGuard &schema_guard,
+                                    share::schema::ObTriggerInfo &trigger_info,
                                     common::ObMySQLTransaction &trans,
                                     share::schema::ObErrorInfo &error_info,
                                     ObIArray<ObDependencyInfo> &dep_infos,
@@ -1210,6 +1212,14 @@ int ObPLDDLOperator::create_trigger(share::schema::ObTriggerInfo &trigger_info,
   int64_t new_schema_version = OB_INVALID_VERSION;
   bool is_replace = false;
   OV (OB_NOT_NULL(schema_service));
+
+  if (OB_SUCC(ret) && !trigger_info.is_system_type()) {
+    const ObTableSchema *table_schema = NULL;
+    OZ (schema_guard.get_table_schema(tenant_id, trigger_info.get_data_table_id(), table_schema));
+    OV (OB_NOT_NULL(table_schema));
+    OZ (ObCompactionTTLUtil::check_create_trigger_for_ttl_valid(*table_schema, trigger_info));
+  }
+
   if (!is_for_truncate_table) {
     // If create_trigger through truncate table, trigger_info already has its own trigger_id.
     // but there is no such trigger in the internal table at this time, so is_replace must be false

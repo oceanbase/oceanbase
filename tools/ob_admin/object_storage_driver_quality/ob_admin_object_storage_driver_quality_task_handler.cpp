@@ -31,7 +31,8 @@ OSDQTaskHandler::OSDQTaskHandler()
     metric_(nullptr),
     file_set_(nullptr),
     storage_info_(nullptr),
-    adapter_()
+    adapter_(),
+    mutex_(common::ObLatchIds::OB_ADMIN_COMMON_LOCK)
 {}
 
 OSDQTaskHandler::~OSDQTaskHandler()

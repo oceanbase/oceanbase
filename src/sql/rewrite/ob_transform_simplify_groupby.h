@@ -167,6 +167,7 @@ private:
                             common::ObIArray<ObAggFunRawExpr *> &sum_exprs,
                             common::ObIArray<ObAggFunRawExpr *> &count_exprs,
                             bool &trans_happened);
+  int remove_const_group_by_exprs(ObDMLStmt *stmt, bool &trans_happened);
 };
 
 }

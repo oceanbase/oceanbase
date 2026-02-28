@@ -25,6 +25,7 @@
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/rewrite/ob_range_generator.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 namespace oceanbase
 {
@@ -1095,7 +1096,7 @@ int ObExprRangeConverter::build_decode_like_expr(ObRawExpr *pattern,
                                                           escape_ch,
                                                           ctx_.cur_is_precise_))) {
       LOG_WARN("failed to jugde whether is precise", K(ret));
-    } else if (OB_FAIL(add_precise_constraint(pattern, ctx_.cur_is_precise_))) {
+    } else if (OB_FAIL(add_precise_constraint(pattern, ctx_.cur_is_precise_, escape_ch))) {
       LOG_WARN("failed to add precise constraint", K(ret));
     } else if (OB_FAIL(add_prefix_pattern_constraint(pattern))) {
       LOG_WARN("failed to add prefix pattern constraint", K(ret));
@@ -1881,12 +1882,14 @@ int ObExprRangeConverter::check_calculable_expr_valid(const ObRawExpr *expr,
   return ret;
 }
 
-int ObExprRangeConverter::add_precise_constraint(const ObRawExpr *expr, bool is_precise)
+int ObExprRangeConverter::add_precise_constraint(const ObRawExpr *expr, bool is_precise, char escape)
 {
   int ret = OB_SUCCESS;
   PreCalcExprExpectResult expect_result = is_precise ? PreCalcExprExpectResult::PRE_CALC_PRECISE :
                                                        PreCalcExprExpectResult::PRE_CALC_NOT_PRECISE;
-  ObExprConstraint cons(const_cast<ObRawExpr*>(expr), expect_result);
+  ObConstraintExtra cons_extra;
+  cons_extra.escape_char_ = static_cast<int8_t>(escape);
+  ObExprConstraint cons(const_cast<ObRawExpr*>(expr), expect_result, cons_extra);
   if (NULL == ctx_.expr_constraints_) {
     // do nothing
   } else if (OB_FAIL(add_var_to_array_no_dup(*ctx_.expr_constraints_, cons))) {
@@ -1906,6 +1909,27 @@ int ObExprRangeConverter::add_prefix_pattern_constraint(const ObRawExpr *expr)
     LOG_WARN("unexpected null", K(ret));
   } else if (T_FUN_SYS_PREFIX_PATTERN == expr->get_expr_type()) {
     ObExprConstraint cons(const_cast<ObRawExpr*>(expr), PreCalcExprExpectResult::PRE_CALC_RESULT_NOT_NULL);
+    if (NULL == ctx_.expr_constraints_) {
+      // do nothing
+    } else if (OB_FAIL(add_var_to_array_no_dup(*ctx_.expr_constraints_, cons))) {
+      LOG_WARN("failed to add precise constraint", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprRangeConverter::add_json_contains_constraint(const ObRawExpr *expr, bool is_precise)
+{
+  int ret = OB_SUCCESS;
+  PreCalcExprExpectResult expect_result = is_precise ? PreCalcExprExpectResult::PRE_CALC_JSON_CONTAINS_PRECISE :
+                                                       PreCalcExprExpectResult::PRE_CALC_JSON_CONTAINS_NOT_PRECISE;
+  if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(expr, expr))) {
+    LOG_WARN("fail to get real expr", K(ret));
+  } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    ObExprConstraint cons(const_cast<ObRawExpr*>(expr), expect_result);
     if (NULL == ctx_.expr_constraints_) {
       // do nothing
     } else if (OB_FAIL(add_var_to_array_no_dup(*ctx_.expr_constraints_, cons))) {
@@ -3770,6 +3794,7 @@ int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr,
     ObRangeColumnMeta *column_meta = nullptr;
     int64_t key_idx;
     bool always_true = true;
+    bool is_left_column = false;
     if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, l_expr))) {
       LOG_WARN("failed to get expr without lossless cast", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(r_expr, r_expr))) {
@@ -3777,9 +3802,11 @@ int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr,
     } else if (OB_UNLIKELY(r_expr->has_flag(CNT_COLUMN))) {
       column_param = ObRawExprUtils::get_column_ref_expr_recursively(r_expr);
       const_param = l_expr;
+      is_left_column = false;
     } else if (l_expr->has_flag(CNT_COLUMN)) {
       column_param = ObRawExprUtils::get_column_ref_expr_recursively(l_expr);
       const_param = r_expr;
+      is_left_column = true;
     }
 
     if (OB_SUCC(ret) && OB_NOT_NULL(column_param) && OB_NOT_NULL(const_param)) {
@@ -3800,8 +3827,36 @@ int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr,
                                             NULL,
                                             range_node))) {
         LOG_WARN("failed to get geo range node", K(ret));
+      } else if (op_type == ObDomainOpType::T_JSON_MEMBER_OF) {
+        ctx_.cur_is_precise_ = ObSQLUtils::is_same_type_for_compare(column_param->get_result_type().get_obj_meta(),
+                                                                    const_param->get_result_type().get_obj_meta());
+      } else if (op_type == ObDomainOpType::T_JSON_OVERLAPS) {
+        ctx_.cur_is_precise_ = true;
+      } else if (!is_left_column) {
+        ctx_.cur_is_precise_ = false;
+      } else if (op_type == ObDomainOpType::T_JSON_CONTAINS) {
+        bool is_precise = false;
+        ObObj json_value;
+        bool is_valid = false;
+        if (OB_FAIL(get_calculable_expr_val(const_param, json_value, is_valid))) {
+          LOG_WARN("failed to get calculable expr val", KPC(const_param));
+        } else if (!is_valid) {
+          ctx_.cur_is_precise_ = false;
+        } else if (expr->is_inner_split_contains_expr()) {
+          ctx_.cur_is_precise_ = true;
+        } else if(json_value.is_null()) {
+          ctx_.cur_is_precise_ = false;
+        } else if (OB_FAIL(is_precise_json_contains(*ctx_.exec_ctx_,
+                                                    json_value,
+                                                    is_precise))) {
+          LOG_WARN("failed to check is precise json contains", K(ret));
+        } else if (OB_FAIL(add_json_contains_constraint(const_param, is_precise))) {
+          LOG_WARN("failed to add json contains constraint", K(ret));
+        } else {
+          ctx_.cur_is_precise_ = is_precise;
+        }
       } else {
-        ctx_.cur_is_precise_ = op_type == ObDomainOpType::T_JSON_MEMBER_OF;
+        ctx_.cur_is_precise_ = false;
       }
     }
   }
@@ -4164,6 +4219,33 @@ int ObExprRangeConverter::add_string_equal_expr_constraint(const ObRawExpr *cons
   }
   return ret;
 }
+
+int ObExprRangeConverter::is_precise_json_contains(ObExecContext &exec_ctx,
+                                                   const ObObj &json_value,
+                                                   bool &is_precise)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::JSON_PARSER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObIJsonBase *j_base = nullptr;
+  is_precise = false;
+  if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(json_value,
+                                                              &exec_ctx,
+                                                              false,
+                                                              &allocator,
+                                                              j_base))) {
+    LOG_WARN("failed to refine range json value const", K(ret));
+  } else if (OB_ISNULL(j_base)) {
+    is_precise = false;
+  } else if (j_base->is_json_scalar(j_base->json_type())) {
+    is_precise = true;
+  } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
+    is_precise = j_base->element_count() == 1;
+  } else {
+    is_precise = false;
+  }
+  return ret;
+}
+
 
 }  // namespace sql
 }  // namespace oceanbase

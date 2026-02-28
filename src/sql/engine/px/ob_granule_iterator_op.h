@@ -204,6 +204,7 @@ public:
   ObPxRFStaticInfo px_rf_info_;
   bool hash_part_;
   bool enable_adaptive_task_splitting_;
+  ObExpr *ddl_slice_id_expr_; // for DDL slice_id pseudo column
 };
 
 class ObGranuleIteratorOp : public ObOperator
@@ -266,6 +267,12 @@ public:
   void set_has_add_to_finished_worker(bool value) { has_add_to_finished_worker_ = value; }
   const common::ObIArray<int64_t> &get_pw_dml_tsc_ids() const { return MY_SPEC.pw_dml_tsc_ids_; }
   ObGranulePumpArgs *pump_arg() { return pump_arg_; }
+
+// for external table range gen parallel
+  int64_t get_parallelism() const { return parallelism_; }
+  int get_next_granule_task_map_for_range_gen_parallel();
+  int fetch_task_for_range_gen_parallel(int64_t tsc_op_id, ObGranuleTaskInfo &task_info);
+
 private:
   int parameters_init();
   // 非full partition wise获得task的方式

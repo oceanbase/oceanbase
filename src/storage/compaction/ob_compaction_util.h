@@ -38,6 +38,32 @@ enum ObMergeType : uint8_t
   MERGE_TYPE_MAX
 };
 
+enum ObFillTxType : uint8_t {
+  // NORMAL type use the last sstable's end_scn as fill_tx_scn(for example, ls_inner_tablets' mini/minor)
+  FILL_TX_TYPE_NORMAL = 0,
+  FILL_TX_TYPE_DATA_MINI = 1,
+  FILL_TX_TYPE_DATA_MINOR = 2,
+  FILL_TX_TYPE_BACKFILL = 3,
+  FILL_TX_TYPE_GC_TX_DATA = 4
+};
+static const char *FillTxTypeToStr(ObFillTxType type)
+{
+  switch (type) {
+    case FILL_TX_TYPE_NORMAL:
+      return "NORMAL";
+    case FILL_TX_TYPE_DATA_MINI:
+      return "DATA_MINI";
+    case FILL_TX_TYPE_DATA_MINOR:
+      return "DATA_MINOR";
+    case FILL_TX_TYPE_BACKFILL:
+      return "BACKFILL";
+    case FILL_TX_TYPE_GC_TX_DATA:
+      return "GC_TX_DATA";
+    default:
+      return "UNKNOWN";
+  }
+}
+
 const char *merge_type_to_str(const ObMergeType &merge_type);
 inline bool is_valid_merge_type(const ObMergeType &merge_type)
 {
@@ -131,7 +157,6 @@ const char *merge_level_to_str(const ObMergeLevel &merge_level);
 
 enum ObExecMode : uint8_t {
   EXEC_MODE_LOCAL = 0,
-  EXEC_MODE_CALC_CKM, // calc checksum, not output macro
   EXEC_MODE_OUTPUT,   // normal compaction, output macro to share_storage
   EXEC_MODE_VALIDATE,   // verify checksum and dump macro block
   EXEC_MODE_MAX
@@ -148,10 +173,6 @@ inline bool is_local_exec_mode(const ObExecMode &exec_mode)
 inline bool is_output_exec_mode(const ObExecMode &exec_mode)
 {
   return EXEC_MODE_OUTPUT == exec_mode;
-}
-inline bool is_calc_ckm_exec_mode(const ObExecMode &exec_mode)
-{
-  return EXEC_MODE_CALC_CKM == exec_mode;
 }
 inline bool is_validate_exec_mode(const ObExecMode &exec_mode)
 {
@@ -170,7 +191,6 @@ enum ObGetMacroSeqStage : uint8_t
   GET_NEW_ROOT_MACRO_SEQ = 1, // for next major
   MACRO_SEQ_TYPE_MAX
 };
-bool is_valid_get_macro_seq_stage(const ObGetMacroSeqStage stage);
 
 const int64_t MAX_MERGE_THREAD = 64;
 const int64_t DEFAULT_CG_MERGE_BATCH_SIZE = 10;

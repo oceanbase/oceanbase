@@ -26,9 +26,9 @@ TEST(ObPTSqlSplicer, batch) {
   share::ObDMLSqlSplicer splicer;
   ObSqlString sql;
   ObString result("INSERT INTO tname (gmt_modified, gmt_create, tenant_id, tablet_id, svr_ip, svr_port, ls_id, compaction_scn, row_count, data_checksum, column_checksums, b_column_checksums) VALUES "
-                  "(now(6),now(6),1004,200001,'127.0.0.1',1001,1001,1234567890,100,1234567,'column_checksums-01','b_column_checksums-01'), "
-                  "(now(6),now(6),1004,200001,'127.0.0.2',1002,1001,1234567890,100,1234567,'column_checksums-02','b_column_checksums-02'), "
-                  "(now(6),now(6),1004,200001,'127.0.0.3',1003,1001,1234567890,100,1234567,'column_checksums-03','b_column_checksums-03') "
+                  "(now(6), now(6), 1004, 200001, '127.0.0.1', 1001, 1001, 1234567890, 100, 1234567, 'column_checksums-01', 'b_column_checksums-01'),"
+                  "(now(6), now(6), 1004, 200001, '127.0.0.2', 1002, 1001, 1234567890, 100, 1234567, 'column_checksums-02', 'b_column_checksums-02'),"
+                  "(now(6), now(6), 1004, 200001, '127.0.0.3', 1003, 1001, 1234567890, 100, 1234567, 'column_checksums-03', 'b_column_checksums-03') "
                   "ON DUPLICATE KEY UPDATE "
                   "gmt_modified=VALUES(gmt_modified),"
                   "gmt_create=VALUES(gmt_create),"

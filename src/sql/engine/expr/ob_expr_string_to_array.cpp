@@ -180,7 +180,6 @@ int ObExprStringToArray::eval_string_to_array_batch(const ObExpr &expr, ObEvalCt
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (!arr_str_array.at(j)->is_null()) {
         has_arr_str = true;
         ObString get_arr_str;
@@ -274,7 +273,6 @@ int ObExprStringToArray::eval_string_to_array_vector(const ObExpr &expr, ObEvalC
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
       }
-      eval_flags.set(idx);
       if (!arr_str_vec->is_null(idx)) {
         has_arr_str = true;
         ObString get_arr_str;

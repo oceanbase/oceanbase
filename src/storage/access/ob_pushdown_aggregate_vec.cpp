@@ -103,7 +103,6 @@ int ObAggCellVec::init(const ObTableAccessParam &param)
 
 void ObAggCellVec::reset()
 {
-  ObAggCellBase::reset();
   if (nullptr != aggregate_) {
     aggregate_->destroy();
     allocator_.free(aggregate_);
@@ -113,6 +112,7 @@ void ObAggCellVec::reset()
   default_datum_.set_nop();
   single_row_count_ = 0;
   agg_row_id_ = OB_INVALID_CS_ROW_ID;
+  ObAggCellBase::reset();
 }
 
 void ObAggCellVec::reuse()
@@ -757,11 +757,11 @@ ObCountAggCellVec::ObCountAggCellVec(
 
 void ObCountAggCellVec::reset()
 {
-  ObAggCellVec::reset();
   if (nullptr != row_id_buffer_) {
     allocator_.free(row_id_buffer_);
     row_id_buffer_ = nullptr;
   }
+  ObAggCellVec::reset();
 }
 
 int ObCountAggCellVec::init(const ObTableAccessParam &param)
@@ -1143,16 +1143,39 @@ ObSumAggCellVec::ObSumAggCellVec(
     const share::ObAggrParamProperty &param_prop,
     common::ObIAllocator &allocator)
       : ObAggCellVec(agg_idx, basic_info, param_prop, allocator),
-        cast_datum_()
+        cast_datum_(),
+        cast_datum_buf_(nullptr)
 {
   agg_type_ = PD_SUM;
 }
 
-void ObSumAggCellVec::reuse()
+void ObSumAggCellVec::reset()
 {
-  ObAggCellVec::reuse();
-  cast_datum_.reuse();
-  cast_datum_.set_null();
+  cast_datum_.reset();
+  if (nullptr != cast_datum_buf_) {
+    allocator_.free(cast_datum_buf_);
+    cast_datum_buf_ = nullptr;
+  }
+  ObAggCellVec::reset();
+}
+
+int ObSumAggCellVec::init(const ObTableAccessParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObAggCellVec::init(param))) {
+    LOG_WARN("Failed to init agg cell", K(ret));
+  } else if (ObObjTypeClass::ObDecimalIntTC == ob_obj_type_class(get_agg_expr()->datum_meta_.type_)) {
+    const int16_t res_prec = get_agg_expr()->datum_meta_.precision_;
+    if (res_prec > MAX_PRECISION_DECIMAL_INT_256) {
+      if (OB_ISNULL(cast_datum_buf_ = static_cast<char*>(allocator_.alloc(sizeof(int512_t))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to alloc cast datum buf", K(ret));
+      } else {
+        cast_datum_.ptr_ = cast_datum_buf_;
+      }
+    }
+  }
+  return ret;
 }
 
 int ObSumAggCellVec::eval(
@@ -1197,7 +1220,7 @@ int ObSumAggCellVec::eval_index_info(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret), K(is_lob_col()), K(index_info));
   } else {
-    const ObExpr *agg_expr = basic_info_.agg_ctx_.aggr_infos_.at(agg_idx_).expr_;
+    const ObExpr *agg_expr = get_agg_expr();
     const ObObjTypeClass res_tc = ob_obj_type_class(agg_expr->datum_meta_.type_);
     if (ObObjTypeClass::ObDecimalIntTC == res_tc) {
       // cast number to decimal
@@ -1276,11 +1299,11 @@ ObSumOpNSizeAggCellVec::ObSumOpNSizeAggCellVec(
 
 void ObSumOpNSizeAggCellVec::reset()
 {
-  ObAggCellVec::reset();
   if (nullptr != row_id_buffer_) {
     allocator_.free(row_id_buffer_);
     row_id_buffer_ = nullptr;
   }
+  ObAggCellVec::reset();
 }
 
 int ObSumOpNSizeAggCellVec::init(const ObTableAccessParam &param)
@@ -1644,6 +1667,7 @@ int ObPDAggVecFactory::alloc_cell(
       INIT_AGG_CELL(T_FUN_SYS_RB_BUILD_AGG, Rb, PD_RB_BUILD)
       INIT_AGG_CELL(T_FUN_SYS_RB_AND_AGG, Rb, PD_RB_AND)
       INIT_AGG_CELL(T_FUN_SYS_RB_OR_AGG, Rb, PD_RB_OR)
+      INIT_AGG_CELL(T_FUN_SYS_COUNT_INROW, Count, false)
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("Not supported aggregate type", K(ret), K(type));
@@ -1697,7 +1721,6 @@ ObGroupByCellVec::~ObGroupByCellVec()
 
 void ObGroupByCellVec::reset()
 {
-  ObGroupByCellBase::reset();
   agg_cell_factory_vec_.release(agg_cells_);
   if (OB_NOT_NULL(group_by_col_datum_buf_)) {
     group_by_col_datum_buf_->reset();
@@ -1711,6 +1734,7 @@ void ObGroupByCellVec::reset()
   }
   tmp_datum_allocator_.reset();
   group_by_datum_allocator_.reset();
+  ObGroupByCellBase::reset();
 }
 
 void ObGroupByCellVec::reuse()

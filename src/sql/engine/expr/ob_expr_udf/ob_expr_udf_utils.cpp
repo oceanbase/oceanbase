@@ -1017,7 +1017,8 @@ int ObExprUDFUtils::process_singal_out_param(int64_t i,
     OX (dones.at(i) = true);
   } else if (params_desc.at(i).is_obj_access_out() &&
              OB_INVALID_ID != params_desc.at(i).get_package_id() &&
-             OB_INVALID_ID != params_desc.at(i).get_index()) {
+             OB_INVALID_ID != params_desc.at(i).get_index() &&
+             params_desc.at(i).is_obj_access_package_var_out()) {
     OZ (SMART_CALL(process_package_out_param(
       i, dones, objs_stack, param_num, iparams, alloc, exec_ctx, nocopy_params, params_desc, params_type)));
   } else if (!params_type.at(i).is_ext()) {

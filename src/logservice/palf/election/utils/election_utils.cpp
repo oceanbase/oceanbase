@@ -287,9 +287,10 @@ int64_t MemberListWithStates::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
-Lease::Lease() : lease_end_ts_(INVALID_VALUE), ballot_number_(INVALID_VALUE) {}
+Lease::Lease() : owner_(), lease_end_ts_(INVALID_VALUE), ballot_number_(INVALID_VALUE), lock_(common::ObLatchIds::OB_ELECTION_LEASE_LOCK) {}
 
 Lease::Lease(const Lease &rhs)
+  : owner_(), lease_end_ts_(INVALID_VALUE), ballot_number_(INVALID_VALUE), lock_(common::ObLatchIds::OB_ELECTION_LEASE_LOCK)
 {
   int64_t lease_end_ts = 0;
   int64_t ballot_number = 0;

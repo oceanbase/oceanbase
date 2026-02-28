@@ -161,6 +161,11 @@ ob_set_subtarget(oblib_lib roaringbitmap
   roaringbitmap/ob_rb_memory_mgr.cpp
 )
 
+ob_set_subtarget(oblib_lib ai_split_document
+  ai_split_document/ob_ai_split_document.cpp
+  ai_split_document/ob_ai_split_document_util.cpp
+)
+
 ob_set_subtarget(oblib_lib encode
   encode/ob_base64_encode.cpp
   encode/ob_quoted_printable_encode.cpp
@@ -248,6 +253,7 @@ ob_set_subtarget(oblib_lib common_mixed
   stat/ob_diagnostic_info_container.cpp
   stat/ob_diagnostic_info_guard.cpp
   string/ob_hex_utils_base.cpp
+  string/ob_occam_regex.cpp
   string/ob_sql_string.cpp
   string/ob_string.cpp
   string/ob_strings.cpp

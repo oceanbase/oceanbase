@@ -406,7 +406,6 @@ int ObExprInstrb::calc_instrb_expr_batch(const ObExpr &expr,
           }
         }
       }
-      eval_flags.set(i);
     }
   }
   return ret;

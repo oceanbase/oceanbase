@@ -51,8 +51,8 @@ private:
   int gen_pre_data_access_stmt(const TableItem &source_table, ObSelectStmt *&access_sel);
 
 protected:
-  ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> all_delta_datas_;
-  ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> all_pre_datas_;
+  ObSEArray<ObSelectStmt*, 8> all_delta_datas_;
+  ObSEArray<ObSelectStmt*, 8> all_pre_datas_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSimpleJoinMAVPrinter);

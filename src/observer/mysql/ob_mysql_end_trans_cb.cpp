@@ -78,7 +78,8 @@ void ObSqlEndTransCb::callback(int cb_param)
     bool reuse_tx = OB_SUCCESS == cb_param
       || OB_TRANS_COMMITED == cb_param
       || OB_TRANS_ROLLBACKED == cb_param;
-      ObSqlTransControl::reset_session_tx_state(session_info, reuse_tx);
+    ObSQLUtils::fixup_commit_time(*session_info);
+    ObSqlTransControl::reset_session_tx_state(session_info, reuse_tx);
     sessid = session_info->get_server_sid();
     proxy_sessid = session_info->get_proxy_sessid();
     send_response_packet(cb_param, session_info);
@@ -222,20 +223,22 @@ void ObPLEndTransCb::callback(int cb_param)
   sql::ObSQLSessionInfo *session_info = sess_info_;
   int64_t tx_id = 0;
   set_err(cb_param);
-  bool need_response_packet = get_need_response_packet();
+  // has get lock_ in ObEndTransAsyncCallback::dispatch_callback
   if (OB_ISNULL(tx_desc) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[PL_ASYNC_COMMIT] tx_desc or session_info is NULL!");
   } else {
-    tx_id = tx_desc->get_tx_id();
-    uint64_t effect_tid = session_info->get_effective_tenant_id();
-    MTL_SWITCH(effect_tid) {
-      transaction::ObTransService *txs = NULL;
-      if (OB_ISNULL(txs = MTL_WITH_CHECK_TENANT(transaction::ObTransService*, effect_tid))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("get_tx_service", K(ret), K(effect_tid), K(MTL_ID()));
+    if (get_can_release_tx_desc()) {
+      tx_id = tx_desc->get_tx_id();
+      uint64_t effect_tid = session_info->get_effective_tenant_id();
+      MTL_SWITCH(effect_tid) {
+        transaction::ObTransService *txs = NULL;
+        if (OB_ISNULL(txs = MTL_WITH_CHECK_TENANT(transaction::ObTransService*, effect_tid))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("get_tx_service", K(ret), K(effect_tid), K(MTL_ID()));
+        }
+        OZ (txs->release_tx(*tx_desc), tx_id);
       }
-      OZ (txs->release_tx(*tx_desc), tx_id);
     }
     set_tx_desc(NULL);
   }
@@ -245,13 +248,12 @@ void ObPLEndTransCb::callback(int cb_param)
     }
     LOG_WARN("[PL_ASYNC_COMMIT] Failed to release tx_desc", K(ret));
   }
-  if (need_response_packet) {
+  if (get_need_response_packet()) {
     sql::ObSQLSessionInfo::LockGuard lock_guard(session_info->get_query_lock());
     send_response_packet(get_err(), session_info);
     clear_session_state(session_info);
     destroy();
   }
-  LOG_TRACE("[PL_ASYNC_COMMIT] async callback completed", K(ret), K(tx_id), K(cb_param), K(need_response_packet));
   if (NULL != session_info) {
     MEM_BARRIER();
     int sret = packet_sender_.revert_session(session_info);
@@ -292,6 +294,7 @@ int ObPLEndTransCb::wait_tx_end(sql::ObPhysicalPlanCtx *plan_ctx, bool force_wai
     reset();
   } else if (OB_NOT_NULL(get_tx_desc())) {
     int64_t timeout_us = 0;
+    bool timeout = false;
     OZ (sess_info_->get_tx_timeout(timeout_us));
     while (OB_NOT_NULL(get_tx_desc())) {
       if (force_wait) {
@@ -301,6 +304,7 @@ int ObPLEndTransCb::wait_tx_end(sql::ObPhysicalPlanCtx *plan_ctx, bool force_wai
         if (elapsed_us >= timeout_us) {
           ret = OB_TRANS_TIMEOUT;
           LOG_WARN("[PL_ASYNC_COMMIT] Wait pl async commit timeout", K(ret), K(elapsed_us), K(timeout_us));
+          timeout = true;
           break;
         }
       }
@@ -314,7 +318,12 @@ int ObPLEndTransCb::wait_tx_end(sql::ObPhysicalPlanCtx *plan_ctx, bool force_wai
       plan_ctx->set_timeout_timestamp(modified_timeout_ts);
     }
     OZ (get_err());
-    reset();
+    //if wait tx end timeout, do not reset tx_desc and will throw an error to pl layer.
+    // It will wait until tx end in clean_pl_async_commit_state and report error
+    // to avoid the inability to execute callback, which could lead to a leak of tx_desc.
+    if (!timeout) {
+      reset();
+    }
   }
   return ret;
 }
@@ -365,6 +374,7 @@ void ObPLEndTransCb::reset()
   tx_desc_ = NULL;
   err_ = OB_SUCCESS;
   need_response_packet_ = false;
+  can_release_tx_desc_ = false;
   need_disconnect_ = false;
 }
 

@@ -125,6 +125,9 @@ public:
   int write(ObLobAccessParam& param,
             ObLobLocatorV2& lob,
             uint64_t offset);
+  int scan_lob_meta(ObLobAccessParam& param, ObLobMetaIterator *&iter);
+  int delete_lob_meta(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter);
+  int revert_scan_iter(ObLobMetaIterator *iter);
 
   // compare lob byte wise, collation type is binary
   // @param [in] lob_left lob param of left operand for comparison
@@ -156,7 +159,8 @@ public:
                       uint64_t len,
                       int64_t timeout,
                       ObLobLocatorV2 &lob);
-
+  int get_table_param(const ObTableParam *&table_param);
+  int get_table_dml_param(const ObTableDMLParam *&table_dml_param);
   common::ObIAllocator& get_ext_info_log_allocator() { return ext_info_log_allocator_; }
   share::LobExtInfoLogThrottleTool& get_ext_info_log_throttle_tool() { return throttle_tool_; }
   inline bool can_write_inrow(uint64_t len, int64_t inrow_threshold) { return len <= inrow_threshold; }

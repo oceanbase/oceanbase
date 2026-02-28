@@ -186,9 +186,17 @@ public:
     MULTI_SCAN = 2,
     INVALID_TYPE
   };
+  enum ObPrefetcherSSTableType : uint8_t
+  {
+    ROW_STORE_PREFETCHER = 0,
+    CG_PREFETCH = 1,
+    CO_PREFETCH = 2,
+    INVALID_PREFETCHER_TYPE,
+  };
 public:
   ObIndexTreePrefetcher() :
       is_inited_(false),
+      prefetcher_sstable_type_(ROW_STORE_PREFETCHER),
       prefetcher_type_(BASIC),
       iter_type_(0),
       cur_level_(0),
@@ -233,7 +241,7 @@ public:
   ObMicroBlockDataHandle &get_last_data_handle() { return last_micro_block_handle_; }
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(prefetcher_type), K_(iter_type), K_(cur_level), K_(index_tree_height),
       K_(max_rescan_height), K_(max_rescan_range_cnt), K_(data_version), K_(table_scan_cnt), K_(index_scanner),
-      KPC_(sstable), KPC_(iter_param), K_(last_micro_block_handle));
+      KP_(sstable), KP_(iter_param), K_(last_micro_block_handle));
 protected:
   void inner_reset();
   int init_index_scanner(ObIndexBlockRowScanner &index_scanner);
@@ -267,6 +275,7 @@ protected:
   static const int64_t MAX_RESCAN_HOLD_LIMIT = 64;
   static const int16_t MAX_INDEX_TREE_HEIGHT = 16;
   bool is_inited_;
+  ObPrefetcherSSTableType prefetcher_sstable_type_;
   ObPrefetcherType prefetcher_type_;
   int16_t iter_type_;
   int16_t cur_level_;
@@ -593,9 +602,10 @@ public:
   OB_INLINE bool can_index_filter_skip(ObMicroIndexInfo &index_info, ObSampleFilterExecutor *sample_executor)
   {
     return (nullptr == sample_executor || is_not_border(index_info))
+        && (!sstable_->is_co_sstable() || prefetcher_sstable_type_ != CO_PREFETCH || is_not_border(index_info))
         && index_info.has_agg_data()
-        && index_info.can_blockscan()
-        && (!iter_param_->has_lob_column_out() || !index_info.has_lob_out_row())
+        && (sstable_->is_major_sstable() || iter_param_->enable_inc_skip_index())
+        && (index_info.can_blockscan() || iter_param_->is_delete_insert_ || iter_param_->is_append_only_merge_engine())
         && index_info.is_filter_uncertain();
   }
   virtual bool read_wait()
@@ -705,7 +715,7 @@ protected:
       ObMicroIndexInfo &index_block_info,
       ObMicroBlockDataHandle &micro_handle);
   int prefetch_multi_data_block(const int64_t max_prefetch_idx);
-  void update_table_store_stat(ObTableScanStoreStat &table_store_stat, const ObMicroIndexInfo &index_info);
+  void update_table_store_stat(ObTableScanStoreStat &table_store_stat, const ObMicroIndexInfo &index_info, bool is_agg=false/* filter or aggregate */);
 
   struct ObIndexBlockReadHandle {
     ObIndexBlockReadHandle() :
@@ -776,7 +786,7 @@ protected:
     OB_INLINE int get_next_data_row(
         const bool is_multi_check,
         ObMicroIndexInfo &block_info,
-        ObIndexSkipScanner *skip_scanner = nullptr)
+        ObISkipScanner *skip_scanner = nullptr)
     {
       int ret = OB_SUCCESS;
       if (is_skip_prefetch_) {
@@ -803,7 +813,7 @@ protected:
         ObIndexTreeMultiPassPrefetcher &prefetcher)
     {
       int ret = OB_SUCCESS;
-      ObIndexSkipScanner *skip_scanner = prefetcher.access_ctx_->query_flag_.is_reverse_scan() ? nullptr : prefetcher.skip_scanner_;
+      ObISkipScanner *skip_scanner = prefetcher.access_ctx_->query_flag_.is_reverse_scan() ? nullptr : prefetcher.skip_scanner_;
       while (OB_SUCC(ret)) {
         if (is_skip_prefetch_) {
           ret = OB_ITER_END;
@@ -985,7 +995,7 @@ public:
   int64_t micro_data_prefetch_idx_;
   int64_t row_lock_check_version_;
   ObAggStoreBase *agg_store_;
-  ObIndexSkipScanner *skip_scanner_;
+  ObISkipScanner *skip_scanner_;
 protected:
   bool can_blockscan_;
   bool need_check_prefetch_depth_;

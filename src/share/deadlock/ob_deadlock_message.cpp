@@ -73,22 +73,24 @@ const ObSArray<ObDetectorInnerReportInfo> &ObDeadLockCollectInfoMessage::get_col
 int ObDeadLockNotifyParentMessage::set_args(const ObAddr &parent_addr,
                                             const UserBinaryKey &parent_key,
                                             const ObAddr &src_addr,
-                                            const UserBinaryKey &src_key)
+                                            const UserBinaryKey &src_key,
+                                            const ObStringHolder &action)
 {
   int ret = OB_SUCCESS;
-
   if (!parent_addr.is_valid() ||
       !parent_key.is_valid() ||
       !src_addr.is_valid() ||
       !src_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(action_.assign(action))) {
+    DETECT_LOG(WARN, "failed to assgn obstring holder",
+                     K(action), K(parent_addr), K(parent_key), K(src_addr), K(src_key), K(action));
   } else {
     parent_addr_ = parent_addr;
     parent_key_ = parent_key;
     src_addr_ = src_addr;
     src_key_ = src_key;
   }
-
   return ret;
 }
 

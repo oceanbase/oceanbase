@@ -122,7 +122,15 @@ int ObTransformSimplifyGroupby::transform_one_stmt(common::ObIArray<ObParentDMLS
       LOG_TRACE("success to rewrite agg by associative rule", K(is_happened));
     }
   }
-
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(remove_const_group_by_exprs(stmt, is_happened))) {
+      LOG_WARN("failed to remove const group by exprs", K(ret));
+    } else {
+      trans_happened |= is_happened;
+      OPT_TRACE("remove const group by exprs:", is_happened);
+      LOG_TRACE("succeed to remove const group by exprs", K(is_happened));
+    }
+  }
   if (OB_SUCC(ret) && trans_happened) {
     if (OB_FAIL(add_transform_hint(*stmt))) {
       LOG_WARN("failed to add transform hint", K(ret));
@@ -772,7 +780,8 @@ int ObTransformSimplifyGroupby::check_can_remove_redundant_aggr(
       break;
     }
     case T_FUN_GROUP_CONCAT:
-    case T_FUN_COUNT: {
+    case T_FUN_COUNT:
+    case T_FUN_CK_GROUPCONCAT: {
       // do not rewrite group_concat and count with multiple parameters for now
       can_remove = aggr_expr.is_param_distinct() && (1 == aggr_expr.get_real_param_count());
       break;
@@ -813,7 +822,8 @@ int ObTransformSimplifyGroupby::simplify_redundant_aggr(
       case T_FUN_MIN:
       case T_FUN_MEDIAN:
       case T_FUN_SUM:
-      case T_FUN_GROUP_CONCAT: {
+      case T_FUN_GROUP_CONCAT:
+      case T_FUN_CK_GROUPCONCAT: {
         // max/min/median -> expr
         // sum/group_concat(distinct expr) -> expr
         new_expr = param_expr;
@@ -918,7 +928,8 @@ int ObTransformSimplifyGroupby::remove_aggr_distinct(ObDMLStmt *stmt, bool &tran
       } else if (T_FUN_SUM == aggr_expr->get_expr_type() ||
                  T_FUN_COUNT == aggr_expr->get_expr_type() ||
                  T_FUN_GROUP_CONCAT == aggr_expr->get_expr_type() ||
-                 T_FUNC_SYS_ARRAY_AGG == aggr_expr->get_expr_type()) {
+                 T_FUNC_SYS_ARRAY_AGG == aggr_expr->get_expr_type() ||
+                 (T_FUN_CK_GROUPCONCAT == aggr_expr->get_expr_type() && aggr_expr->get_real_param_count() == 1)) {
         // sum/count/group_concat(distinct) 要求param在做group by之前是非严格unique的
         ObSEArray<ObRawExpr *, 4> aggr_param_exprs;
         bool is_unique = false;
@@ -1336,7 +1347,8 @@ int ObTransformSimplifyGroupby::check_aggr_win_can_be_removed(const ObDMLStmt *s
       can_remove = true;
       break;
     }
-    case T_FUN_GROUP_CONCAT:{
+    case T_FUN_GROUP_CONCAT:
+    case T_FUN_CK_GROUPCONCAT: {
       if (OB_ISNULL(aggr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected func", K(ret));
@@ -1482,6 +1494,7 @@ int ObTransformSimplifyGroupby::transform_aggr_win_to_common_expr(ObSelectStmt *
     case T_FUN_AVG:
     case T_FUN_SUM:
     case T_FUN_GROUP_CONCAT:
+    case T_FUN_CK_GROUPCONCAT:
     case T_FUN_MEDIAN:
     case T_FUN_KEEP_MAX:
     case T_FUN_KEEP_MIN:
@@ -2810,6 +2823,61 @@ int ObTransformSimplifyGroupby::do_prune_grouping_sets(ObSelectStmt &stmt, ObIAr
     ObGroupingSetsItem &grouping_set_item = stmt.get_grouping_sets_items().at(0);
     if (OB_FAIL(append(grouping_set_item.pruned_grouping_set_ids_, prune_ids))) {
       LOG_WARN("append failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyGroupby::remove_const_group_by_exprs(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  ObSelectStmt *select_stmt = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (!stmt->is_select_stmt()) {
+  } else if (FALSE_IT(select_stmt = static_cast<ObSelectStmt*>(stmt))) {
+  } else if (select_stmt->is_scala_group_by()) {
+  } else if (select_stmt->has_rollup() || select_stmt->has_grouping_sets()) {
+  } else {
+    ObIArray<ObRawExpr*> &group_exprs = select_stmt->get_group_exprs();
+    ObArray<ObRawExpr*> new_group_exprs;
+    ObArray<ObRawExpr*> const_exprs;
+    ObArray<ObRawExpr*> non_const_exprs;
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs.count(); ++i) {
+      ObRawExpr *group_expr = group_exprs.at(i);
+      if (OB_ISNULL(group_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("group expr is null", K(ret));
+      } else if (group_expr->is_const_expr()) {
+        if (OB_FAIL(const_exprs.push_back(group_expr))) {
+          LOG_WARN("failed to push back const expr", K(ret));
+        }
+      } else {
+        if (OB_FAIL(non_const_exprs.push_back(group_expr))) {
+          LOG_WARN("failed to push back non const expr", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && const_exprs.count() > 0) {
+      if (non_const_exprs.count() == 0) {
+        if (OB_FAIL(new_group_exprs.push_back(const_exprs.at(0)))) {
+          LOG_WARN("failed to push back const expr", K(ret));
+        }
+      } else {
+        if (OB_FAIL(new_group_exprs.assign(non_const_exprs))) {
+          LOG_WARN("failed to assign non const exprs", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && new_group_exprs.count() != group_exprs.count()) {
+        group_exprs.reuse();
+        if (OB_FAIL(append(group_exprs, new_group_exprs))) {
+          LOG_WARN("failed to assign new group exprs", K(ret));
+        } else {
+          trans_happened = true;
+        }
+      }
     }
   }
   return ret;

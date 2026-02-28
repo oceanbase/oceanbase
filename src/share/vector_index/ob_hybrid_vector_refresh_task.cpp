@@ -602,7 +602,8 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
           LOG_WARN("get invalid op length.", K(ret), K(op));
         } else {
           if (op.ptr()[0] == sql::ObVecIndexDMLIterator::VEC_DELTA_INSERT[0] && !copied_row->storage_datums_[2].is_null()) {
-            if (OB_FAIL(tmp_chunk_array.push_back(copied_row->storage_datums_[2].get_string()))) {
+            if (copied_row->storage_datums_[2].get_string().empty()) {
+            } else if (OB_FAIL(tmp_chunk_array.push_back(copied_row->storage_datums_[2].get_string()))) {
               LOG_WARN("failed to push back chunk str", K(ret), K(copied_row->storage_datums_[2].get_string()));
             } else if (OB_FAIL(tmp_embedding_vids.push_back(copied_row->storage_datums_[0].get_int()))) {
               LOG_WARN("failed to push back vid", K(ret), K(copied_row->storage_datums_[0].get_int()));
@@ -1136,7 +1137,7 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
   timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
   if (OB_NOT_NULL(tx_desc) && trans_start && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, ret != OB_SUCCESS, timeout_us))) {
     ret = tmp_ret;
-    LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
+    LOG_WARN("fail to end trans", K(ret));
   }
   if (OB_FAIL(ret) || !embedding_finish) {
     // do nothing.

@@ -25,7 +25,12 @@ class ObMergeLogPlan : public ObDelUpdLogPlan
 {
 public:
   ObMergeLogPlan(ObOptimizerContext &ctx, const ObMergeStmt *merge_stmt)
-      : ObDelUpdLogPlan(ctx, merge_stmt)
+      : ObDelUpdLogPlan(ctx, merge_stmt),
+        index_update_infos_(allocator_),
+        index_delete_infos_(allocator_),
+        insert_condition_exprs_(allocator_),
+        update_condition_exprs_(allocator_),
+        delete_condition_exprs_(allocator_)
       {
       }
   virtual ~ObMergeLogPlan() {}
@@ -115,12 +120,12 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeLogPlan);
 
 private:
-  common::ObSEArray<IndexDMLInfo *, 4, common::ModulePageAllocator, true> index_update_infos_;
-  common::ObSEArray<IndexDMLInfo *, 4, common::ModulePageAllocator, true> index_delete_infos_;
+  ObSqlArray<IndexDMLInfo *> index_update_infos_;
+  ObSqlArray<IndexDMLInfo *> index_delete_infos_;
 
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> insert_condition_exprs_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> update_condition_exprs_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> delete_condition_exprs_;
+  ObSqlArray<ObRawExpr *> insert_condition_exprs_;
+  ObSqlArray<ObRawExpr *> update_condition_exprs_;
+  ObSqlArray<ObRawExpr *> delete_condition_exprs_;
 };
 }//sql
 }//oceanbase

@@ -157,8 +157,9 @@ class ObPlanSet : public common::ObDLinkBase<ObPlanSet>
   friend struct ObPhyLocationGetter;
 public:
   static const ObPCUserVarMeta UNKNOWN_VAR_DEFAULT_META;
-  explicit ObPlanSet(ObPlanSetType type)
-      : alloc_(common::ObNewModIds::OB_SQL_PLAN_CACHE),
+  explicit ObPlanSet(uint64_t id, ObPlanSetType type)
+      : id_(id),
+        alloc_(common::ObNewModIds::OB_SQL_PLAN_CACHE),
         plan_cache_value_(NULL),
         type_(type),
         params_info_(ObWrapperAllocator(alloc_)),
@@ -177,6 +178,7 @@ public:
         pre_cal_expr_handler_(NULL),
         can_skip_params_match_(false),
         can_delay_init_datum_store_(false),
+        route_to_column_replica_(false),
         resource_map_rule_(),
         is_cli_return_rowid_(false),
         params_constraint_(alloc_)
@@ -192,12 +194,13 @@ public:
                         common::OB_MALLOC_BIG_BLOCK_SIZE,
                         common::ObWrapperAllocator, false> &infos,
                         int64_t outline_param_idx,
-                        const ObPlanCacheCtx &pc_ctx,
+                        ObPlanCacheCtx &pc_ctx,
                         const bool need_match_cons,
                         bool &is_same);
   bool can_skip_params_match();
   bool can_delay_init_datum_store();
-  int match_param_info(const ObParamInfo &param_info,
+  int match_param_info(ObPlanCacheCtx &pc_ctx,
+                       const ObParamInfo &param_info,
                        const ObObjParam &param,
                        bool &is_same,
                        bool is_sql_planset) const;
@@ -205,7 +208,8 @@ public:
   int match_param_bool_value(const ObParamInfo &param_info,
                              const ObObjParam &param,
                              bool &is_same) const;
-  static int match_multi_stmt_info(const ParamStore &params,
+  static int match_multi_stmt_info(ObPlanCacheCtx &pc_ctx,
+                                   const ParamStore &params,
                                    const common::ObIArray<int64_t> &multi_stmt_rowkey_pos,
                                    bool &is_match);
   ObPlanSetType get_type() { return type_; }
@@ -239,6 +243,10 @@ public:
 
   bool get_can_skip_params_match() { return can_skip_params_match_; }
   bool get_can_delay_init_datum_store() { return can_delay_init_datum_store_; }
+  bool is_route_to_column_replica() const { return route_to_column_replica_; }
+  static int process_replica_error(const int error_code,
+                                   const ObPhysicalPlan *plan,
+                                   ObBasicSessionInfo *session_info);
   int match_and_merge_plan_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched);
   virtual bool has_any_plan() = 0;
 
@@ -272,7 +280,7 @@ private:
    * @param params Const Params about to match
    * @retval is_matched Matching result
    */
-  int match_constraint(const ParamStore &params, bool &is_matched);
+  int match_constraint(ObPlanCacheCtx &pc_ctx, const ParamStore &params, bool &is_matched);
 
   int init_pre_calc_exprs(const ObPlanCacheObject &cache_obj, common::ObIAllocator* pc_alloc_);
 
@@ -289,6 +297,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanSet);
   friend class ::test::TestPlanSet_basic_Test;
 protected:
+  uint64_t id_;
   common::ObArenaAllocator alloc_;
   ObPlanCacheValue *plan_cache_value_;
   ObPlanSetType type_;
@@ -314,6 +323,8 @@ protected:
   PreCalcExprHandler* pre_cal_expr_handler_;
   bool can_skip_params_match_;
   bool can_delay_init_datum_store_;
+  // if true, this plan needs to route to column replica
+  bool route_to_column_replica_;
 
 public:
   //variable for resource map rule
@@ -325,8 +336,8 @@ public:
 class ObSqlPlanSet : public ObPlanSet
 {
 public:
-  ObSqlPlanSet()
-    : ObPlanSet(PST_SQL_CRSR),
+  ObSqlPlanSet(uint64_t id)
+    : ObPlanSet(id, PST_SQL_CRSR),
       array_binding_plan_(),
       local_plans_(),
       remote_plan_(NULL),

@@ -43,6 +43,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcBatchSwitchRsLeaderP, gctx_);
     RPC_PROCESSOR(ObRpcGetPartitionCountP, gctx_);
     RPC_PROCESSOR(ObRpcSwitchSchemaP, gctx_);
+    RPC_PROCESSOR(ObRpcDetectClientSessionAliveP, gctx_);
     RPC_PROCESSOR(ObRpcRefreshMemStatP, gctx_);
     RPC_PROCESSOR(ObRpcWashMemFragmentationP, gctx_);
     RPC_PROCESSOR(ObRpcBootstrapP, gctx_);
@@ -129,8 +130,10 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcNotifyCloneSchedulerP, gctx_);
     RPC_PROCESSOR(ObRpcNotifyTenantThreadP, gctx_);
     RPC_PROCESSOR(ObRpcTabletMajorFreezeP, gctx_);
+    RPC_PROCESSOR(ObRpcTableMajorFreezeP, gctx_);
     RPC_PROCESSOR(ObRpcAlterLSP, gctx_);
     RPC_PROCESSOR(ObRpcDetectSessionAliveP, gctx_);
+    RPC_PROCESSOR(ObRpcBatchDetectSessionAliveP, gctx_);
     RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
     RPC_PROCESSOR(ObCollectMvMergeInfoP, gctx_);
     RPC_PROCESSOR(ObFetchStableMemberListP, gctx_);
@@ -162,6 +165,8 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcPushSSGCLastSuccScnP, gctx_);
     RPC_PROCESSOR(ObDelSSMacroCacheP, gctx_);
     RPC_PROCESSOR(ObDelSSTabletMacroCacheP, gctx_);
+    RPC_PROCESSOR(ObRpcGetSSGCDetectInfosP, gctx_);
+    RPC_PROCESSOR(ObRpcGetSSGCStartScnItemsP, gctx_);
 #endif
     RPC_PROCESSOR(ObRebuildTabletP, gctx_);
     RPC_PROCESSOR(ObNotifySharedStorageInfoP, gctx_);
@@ -178,4 +183,6 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcCheckBackupDestVaildityP, gctx_);
     RPC_PROCESSOR(ObRpcWriteBackupDestFormatFileP, gctx_);
     RPC_PROCESSOR(ObRpcFetchTabletPhysicalRowCntP, gctx_);
+    RPC_PROCESSOR(ObRpcBackupLSValidateP, gctx_);
+    RPC_PROCESSOR(ObRpcBackupValidateLSResP, gctx_);
 }

@@ -191,6 +191,7 @@ int ObRawExprPartFuncChecker::visit(ObSysFunRawExpr &expr)
       case T_FUN_SYS_FROM_DAYS: //FROM_DAYS
       case T_FUN_SYS_TO_SECONDS:
       case T_FUN_SYS_TIME_TO_USEC: //TIME_TO_USEC only exist in OB
+      case T_FUN_SYS_TO_UNIX_TIMESTAMP:
       case T_FUN_SYS_UNIX_TIMESTAMP: //UNIX_TIMESATMP()
       case T_FUN_SYS_WEEKDAY_OF_DATE: //case WEEKDAY()
       case T_FUN_SYS_YEAR:

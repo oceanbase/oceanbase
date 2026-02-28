@@ -28,6 +28,7 @@ namespace storage
 {
 class ObBackfillTXCtx;
 class ObTransferHandler;
+class ObMigrationSourceValidationResult;
 class ObStorageHAUtils
 {
 public:
@@ -73,7 +74,9 @@ public:
       const bool is_normal_cg_sstable,
       const storage::ObITableReadInfo *&index_read_info);
 
-  static int check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info);
+  static int check_replica_validity(
+      const obrpc::ObFetchLSMetaInfoResp &ls_info,
+      ObMigrationSourceValidationResult &result);
   static int check_log_status(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
@@ -81,16 +84,13 @@ public:
   static int append_tablet_list(
       const common::ObIArray<ObLogicTabletID> &logic_tablet_id_array,
       common::ObIArray<ObTabletID> &tablet_id_array);
-  static int build_major_sstable_reuse_info(
-      const ObTabletHandle &tablet_handle,
-      ObMacroBlockReuseMgr &macro_block_reuse_mgr,
-      const bool &is_restore);
   static void sort_table_key_array_by_snapshot_version(common::ObArray<ObITable::TableKey> &table_key_array);
   static int get_tablet_backup_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &backup_size);
   static int get_tablet_occupy_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &occupy_size);
   static int deal_compat_with_ls_inner_tablet(const ObLSID &ls_id);
 #ifdef ERRSIM
   static int is_errsim_transfer_server(bool &is_errsim_server);
+  static int is_errsim_tablet_id(const common::ObTabletID &tablet_id, bool &is_errsim_tablet_id);
 #endif
 private:
   struct TableKeySnapshotVersionComparator final
@@ -106,16 +106,6 @@ private:
   static int check_tablet_replica_checksum_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
       const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
   static int get_readable_scn_(share::SCN &readable_scn);
-  static int get_latest_major_sstable_array_(
-      ObTableHandleV2 &latest_major,
-      common::ObArray<ObSSTableWrapper> &major_sstables);
-  static int build_reuse_info_(
-      const common::ObArray<ObSSTableWrapper> &major_sstabls,
-      const ObTabletHandle &tablet_handle,
-      ObMacroBlockReuseMgr &macro_block_reuse_mgr);
-  static int get_latest_available_major_(
-      storage::ObTableStoreIterator &major_sstables_iter,
-      ObTableHandleV2 &latest_major);
   static int create_ls_inner_tablet_for_compat_(
       const common::ObIArray<ObTabletID> &tablet_id_array,
       ObLS *ls);
@@ -215,6 +205,10 @@ public:
       const share::ObLSID &dest_ls_id);
   static bool enable_transfer_dml_ctrl(const uint64_t data_version);
   static int get_ls_member_list(const share::ObLSID &ls_id, common::ObMemberList &member_list);
+  static int get_ls_member_list_and_learner_list(
+      const share::ObLSID &ls_id,
+      common::ObMemberList &member_list,
+      common::GlobalLearnerList &learner_list);
   static int get_ls_leader(const share::ObLSID &ls_id, common::ObAddr &addr);
   static int check_inc_major_backfill(
       const share::ObLSID &ls_id,
@@ -224,6 +218,22 @@ public:
       bool &is_trans_abort);
   static int check_ddl_merge_finished(
     const ObTablet *tablet);
+  // check whether member list / learner list is same (element must be ObMember)
+  template <typename ListType>
+  static int check_list_is_same(const ListType &lhs, const ListType &rhs, bool &is_same);
+  static int get_transfer_ls_info(
+      const uint64_t tenant_id,
+      const ObLSID &src_ls_id,
+      const ObLSID &dest_ls_id,
+      ObISQLClient &sql_client,
+      ObTransferLSInfo &transfer_ls_info);
+  static int get_transfer_need_check_addr_list(
+      const share::ObLSID src_ls_id,
+      const share::ObLSID dest_ls_id,
+      const ObTransferLSInfo &transfer_ls_info,
+      common::ObMemberList &member_list,
+      common::GlobalLearnerList &learner_list,
+      common::ObIArray<common::ObAddr> &addr_list);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,
@@ -259,7 +269,34 @@ private:
               const share::ObStorageHACostItemType item_type,
               const share::ObStorageHACostItemName item_name,
               share::ObStorageHAPerfDiagParams &params);
+  static int get_need_check_addr_list_(
+      const common::ObMemberList &member_list,
+      const common::GlobalLearnerList &learner_list,
+      const bool need_check_r_replica,
+      common::ObIArray<common::ObAddr> &addr_list);
 };
+
+template <typename ListType>
+int ObTransferUtils::check_list_is_same(const ListType &lhs, const ListType &rhs, bool &is_same)
+{
+  int ret = OB_SUCCESS;
+  is_same = true;
+  if (lhs.get_member_number() != rhs.get_member_number()) {
+    is_same = false;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < lhs.get_member_number() && is_same; ++i) {
+      common::ObMember member;
+      if (OB_FAIL(lhs.get_member_by_index(i, member))) {
+        STORAGE_LOG(WARN, "failed to get member by index", K(ret), K(i));
+        break;
+      } else if (!rhs.contains(member.get_server())) {
+        is_same = false;
+      }
+    }
+  }
+
+  return ret;
+}
 
 } // end namespace storage
 } // end namespace oceanbase

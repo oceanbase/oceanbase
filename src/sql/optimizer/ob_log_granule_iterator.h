@@ -23,6 +23,9 @@ namespace oceanbase
 namespace sql
 {
 
+template<typename R, typename C>
+class PlanVisitor;
+
 class ObLogGranuleIterator : public ObLogicalOperator
 {
 public:
@@ -34,12 +37,14 @@ public:
   hash_part_(false),
   bf_info_(),
   tablet_id_expr_(NULL),
+  slice_id_expr_(NULL),
   repartition_ref_table_id_(OB_INVALID_ID),
   used_by_external_table_(false),
   used_by_lake_table_(false),
   px_rf_info_(),
   enable_adaptive_task_splitting_(false),
-  controlled_tsc_(nullptr)
+  controlled_tsc_(nullptr),
+  index_table_id_(OB_INVALID_ID)
   { }
   virtual ~ObLogGranuleIterator()
   { }
@@ -83,6 +88,8 @@ public:
   ObOpPseudoColumnRawExpr *get_tablet_id_expr() { return tablet_id_expr_; }
   void set_repartition_ref_table_id(int64_t table_id) { repartition_ref_table_id_ = table_id; }
   int64_t get_repartition_ref_table_id() { return repartition_ref_table_id_; }
+  void set_ddl_slice_id_expr(ObRawExpr *slice_id_expr) { slice_id_expr_ = slice_id_expr; }
+  ObRawExpr *get_ddl_slice_id_expr() { return slice_id_expr_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
   virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
@@ -95,6 +102,8 @@ public:
   void set_enable_adaptive_task_splitting(bool value) { enable_adaptive_task_splitting_ = value; }
   bool enable_adaptive_task_splitting() const { return enable_adaptive_task_splitting_; }
   int check_adaptive_task_splitting(ObLogTableScan *tsc);
+  void set_index_table_id(uint64_t index_table_id) {index_table_id_ = index_table_id; }
+  uint64_t get_index_table_id() { return index_table_id_;}
 private:
   int check_exist_deadlock_condition(const ObLogicalOperator *op, bool &exist);
   int branch_has_exchange(const ObLogicalOperator *op, bool &has_exchange);
@@ -106,12 +115,15 @@ private:
   bool hash_part_;
   ObPxBFStaticInfo bf_info_; // for join partition filter
   ObOpPseudoColumnRawExpr *tablet_id_expr_;
+  ObRawExpr *slice_id_expr_; // for FTS slice_id pseudo column
   int64_t repartition_ref_table_id_;
   bool used_by_external_table_;
   bool used_by_lake_table_;
   ObPxRFStaticInfo px_rf_info_; // for runtime filter extract query range
   bool enable_adaptive_task_splitting_;
   ObLogicalOperator *controlled_tsc_; // only when gi is directly add above tsc.
+
+  uint64_t index_table_id_;
 };
 
 }

@@ -192,6 +192,36 @@ int ObExprHex::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   rt_expr.eval_func_ = &ObExprHex::eval_hex;
+  rt_expr.eval_vector_func_ = &ObExprHex::eval_hex_vector;
+  return ret;
+}
+
+int ObExprHex::uint64_to_hex(uint64_t val, char *buf, int &len) {
+  int ret = OB_SUCCESS;
+  len = 0;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is null", K(ret));
+  } else if (OB_UNLIKELY(val == 0)) {
+    // special case for 0 because __builtin_clzll(0) is undefined
+    buf[0] = '0';
+    len = 1;
+  } else {
+    const int leading_zeros = __builtin_clzll(val);  // ∈ [0, 63], leading zeros of val
+    const int bits = 63 - leading_zeros;             // ∈ [0, 63], significant bits
+    const int nibbles = (bits >> 2) + 1;             // ∈ [1, 16], number of hex digits needed
+    if (OB_UNLIKELY(nibbles > MAX_HEX_LEN_FOR_INT)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("nibbles is too large", K(ret), K(nibbles));
+    } else {
+      for (int i = 0; i < nibbles; ++i) {
+        // extract the i-th nibble from val and convert to hex character
+        // from least significant nibble to most significant nibble
+        buf[nibbles - 1 - i] = HEX_CHARS_UPPER[(val >> (i << 2)) & 0xF];
+      }
+      len = nibbles;
+    }
+  }
   return ret;
 }
 
@@ -216,42 +246,210 @@ int ObExprHex::eval_hex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
       } else {
         val = arg->get_uint();
       }
-      const int64_t max_len = sizeof(uint64_t) * 2 + 1;
-      char *buf = expr.get_str_res_mem(ctx, max_len);
+      char *buf = expr.get_str_res_mem(ctx, MAX_HEX_LEN_FOR_INT);
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("get memory failed", K(ret));
       } else {
-        const int len = snprintf(buf, max_len, "%lX", val);
-        if (len < 0 || len > max_len) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("snprintf failed", K(ret), K(len));
+        int len = 0;
+        if (OB_FAIL(uint64_to_hex(val, buf, len))) {
+          LOG_WARN("uint64_to_hex failed", K(ret));
         } else {
           expr_datum.set_string(buf, len);
         }
       }
     } else {
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObString input_str;
       if (!ob_is_text_tc(in_type)) {
-        if (OB_FAIL(ObDatumHexUtils::hex(expr, arg->get_string(), ctx,
-                                         alloc_guard.get_allocator(), expr_datum))) {
-          LOG_WARN("to hex failed", K(ret));
-        }
-      } else { // text tc
-        ObString str;
-        if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc_guard.get_allocator(),
-                                                              *arg,
-                                                              expr.args_[0]->datum_meta_,
-                                                              expr.args_[0]->obj_meta_.has_lob_header(),
-                                                              str))) {
-          LOG_WARN("failed to get lob data", K(ret));
-        } else if (OB_FAIL(ObDatumHexUtils::hex(expr, str, ctx,
-                                                alloc_guard.get_allocator(), expr_datum))) {
+        input_str = arg->get_string();
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc_guard.get_allocator(),
+                                                                   *arg,
+                                                                   expr.args_[0]->datum_meta_,
+                                                                   expr.args_[0]->obj_meta_.has_lob_header(),
+                                                                   input_str))) {
+        LOG_WARN("failed to get lob data", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObDatumHexUtils::hex(expr, input_str, ctx, alloc_guard.get_allocator(), expr_datum))) {
           LOG_WARN("to hex failed", K(ret));
         }
       }
     }
   }
+  return ret;
+}
+
+// ==================== Vector Evaluation Implementation ====================
+
+template <typename ArgVec, typename ResVec, ObObjType IN_TYPE>
+int ObExprHex::hex_numeric_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (skip.at(idx) || eval_flags.at(idx)) {
+      continue;
+    } else if (arg_vec->is_null(idx)) {
+      res_vec->set_null(idx);
+    } else {
+      uint64_t val = 0;
+      if constexpr (IN_TYPE == ObUInt64Type) {
+        val = arg_vec->get_uint(idx);
+      } else if constexpr (IN_TYPE == ObNumberType) {
+        number::ObNumber num(arg_vec->get_number(idx));
+        if (OB_FAIL(number_uint64(num, val))) {
+          LOG_WARN("convert number to uint64 failed", K(ret), K(idx));
+        }
+      } else if constexpr (IN_TYPE == ObDecimalIntType) {
+        ObDatum datum;
+        ObString str = arg_vec->get_string(idx);
+        datum.ptr_ = str.ptr();
+        datum.pack_ = str.length();
+        if (OB_FAIL(decimalint_uint64(expr.args_[0]->datum_meta_, &datum, val))) {
+          LOG_WARN("convert decimalint to uint64 failed", K(ret), K(idx));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected numeric type in template", K(ret), K(IN_TYPE));
+      }
+      if (OB_SUCC(ret)) {
+        char *buf = expr.get_str_res_mem(ctx, MAX_HEX_LEN_FOR_INT, idx);
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret), K(idx));
+        } else {
+          int len = 0;
+          if (OB_FAIL(uint64_to_hex(val, buf, len))) {
+            LOG_WARN("uint64_to_hex failed", K(ret), K(idx));
+          } else {
+            res_vec->set_string(idx, ObString(len, buf));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+template <typename ArgVec, typename ResVec>
+int ObExprHex::hex_string_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+
+  ObCollationType def_cs = ObCharset::get_system_collation();
+  ObCollationType dst_cs = expr.datum_meta_.cs_type_;
+  bool need_convert_coll = false;
+  if (OB_FAIL(ObExprUtil::need_convert_string_collation(def_cs, dst_cs, need_convert_coll))) {
+    LOG_WARN("check need convert cs type failed", K(ret), K(def_cs), K(dst_cs));
+  }
+
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (skip.at(idx) || eval_flags.at(idx)) {
+      continue;
+    } else if (arg_vec->is_null(idx)) {
+      res_vec->set_null(idx);
+    } else {
+      ObString input_str;
+      if (OB_LIKELY(!ob_is_text_tc(expr.datum_meta_.type_))) {
+        input_str = arg_vec->get_string(idx);
+      } else {
+        ObDatum tmp_datum;
+        input_str = arg_vec->get_string(idx);
+        tmp_datum.set_string(input_str);
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc_guard.get_allocator(),
+                                                              tmp_datum,
+                                                              expr.args_[0]->datum_meta_,
+                                                              expr.args_[0]->obj_meta_.has_lob_header(),
+                                                              input_str))) {
+          LOG_WARN("failed to read lob data", K(ret), K(idx));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObDatumHexUtils::hex<ResVec>(expr, input_str, ctx, alloc_guard.get_allocator(),
+                                                 *res_vec, idx, need_convert_coll, true))) {
+          LOG_WARN("to hex failed", K(ret));
+        }
+      }
+    }
+
+  }
+
+  return ret;
+}
+
+int ObExprHex::eval_hex_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("evaluate vector parameter failed", K(ret));
+  } else {
+    const ObObjType in_type = expr.args_[0]->datum_meta_.type_;
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+
+    if (ObUInt64Type == in_type) {
+      if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {
+        ret = hex_numeric_vector<IntegerFixedVec, StrUniVec, ObUInt64Type>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_FIXED == arg_format && VEC_DISCRETE == res_format) {
+        ret = hex_numeric_vector<IntegerFixedVec, StrDiscVec, ObUInt64Type>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+        ret = hex_numeric_vector<IntegerUniVec, StrUniVec, ObUInt64Type>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
+        ret = hex_numeric_vector<IntegerUniVec, StrDiscVec, ObUInt64Type>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else {
+        ret = hex_numeric_vector<ObVectorBase, ObVectorBase, ObUInt64Type>(VECTOR_EVAL_FUNC_ARG_LIST);
+      }
+    } else if (ObNumberType == in_type) {
+      if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
+        ret = hex_numeric_vector<NumberDiscVec, StrUniVec, ObNumberType>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
+        ret = hex_numeric_vector<NumberDiscVec, StrDiscVec, ObNumberType>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+        ret = hex_numeric_vector<NumberUniVec, StrUniVec, ObNumberType>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
+        ret = hex_numeric_vector<NumberUniVec, StrDiscVec, ObNumberType>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else {
+        ret = hex_numeric_vector<ObVectorBase, ObVectorBase, ObNumberType>(VECTOR_EVAL_FUNC_ARG_LIST);
+      }
+    } else if (ObDecimalIntType == in_type) {
+      if (VEC_UNIFORM == res_format) {
+        ret = hex_numeric_vector<ObVectorBase, StrUniVec, ObDecimalIntType>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_DISCRETE == res_format) {
+        ret = hex_numeric_vector<ObVectorBase, StrDiscVec, ObDecimalIntType>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else {
+        ret = hex_numeric_vector<ObVectorBase, ObVectorBase, ObDecimalIntType>(VECTOR_EVAL_FUNC_ARG_LIST);
+      }
+    } else if (ob_is_string_type(in_type) || ob_is_text_tc(in_type)) {
+      if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+        ret = hex_string_vector<StrUniVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
+        ret = hex_string_vector<StrUniVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
+        ret = hex_string_vector<StrDiscVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
+        ret = hex_string_vector<StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {
+        ret = hex_string_vector<StrContVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
+        ret = hex_string_vector<StrContVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else {
+        ret = hex_string_vector<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
+      }
+    } else {
+      ret = expr_default_eval_vector_func(VECTOR_EVAL_FUNC_ARG_LIST);
+    }
+  }
+
   return ret;
 }
 

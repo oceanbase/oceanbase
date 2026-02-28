@@ -137,6 +137,9 @@ public:
   int put(ObSchemaMgr *schema_mgr,
           ObSchemaMgr *&eli_schema_mgr,
           ObSchemaMgrHandle *handle = NULL);
+  int find_dst_item_for_put(const uint64_t tenant_id,
+                            ObSchemaMgrItem *&dst_item,
+                            int64_t &target_pos);
   int try_gc_tenant_schema_mgr(ObSchemaMgr *&eli_schema_mgr);
   int try_eliminate_schema_mgr(ObSchemaMgr *&eli_schema_mgr);
   void dump() const;

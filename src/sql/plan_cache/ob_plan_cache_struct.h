@@ -28,6 +28,7 @@
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "sql/udr/ob_udr_struct.h"
 #include "sql/plan_cache/ob_plan_cache_param_constraint.h"
+#include "sql/plan_cache/ob_lib_cache_miss_diag.h"
 
 namespace oceanbase
 {
@@ -268,6 +269,7 @@ public:
     question_mark_ctx_.by_ordinal_ = false;
     question_mark_ctx_.by_name_ = false;
     question_mark_ctx_.by_defined_name_ = false;
+    question_mark_ctx_.by_order_ = false;
   }
   int assign(const ObFastParserResult &other)
   {
@@ -374,7 +376,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
                  ObSqlCtx &sql_ctx,
                  ObExecContext &exec_ctx,
                  uint64_t tenant_id)
-    : mode_(mode),
+    : ObILibCacheCtx(&allocator),
+      mode_(mode),
       raw_sql_(sql),
       allocator_(allocator),
       sql_ctx_(sql_ctx),

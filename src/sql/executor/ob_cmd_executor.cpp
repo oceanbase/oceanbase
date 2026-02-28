@@ -180,6 +180,8 @@
 #include "sql/engine/cmd/ob_sensitive_rule_executor.h"
 #include "sql/resolver/cmd/ob_sys_dispatch_call_stmt.h"
 #include "sql/engine/cmd/ob_sys_dispatch_call_executor.h"
+#include "sql/resolver/cmd/ob_routine_load_stmt.h"
+#include "sql/engine/cmd/ob_routine_load_executor.h"
 
 namespace oceanbase
 {
@@ -202,6 +204,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
   ObString sql_text;
   ObSQLSessionInfo *my_session = ctx.get_my_session();
   bool is_ddl_or_dcl_stmt = false;
+  bool is_xa_stmt = false;
   int64_t ori_query_timeout;
   int64_t ori_trx_timeout;
   omt::ObMultiTenant *omt = GCTX.omt_;
@@ -880,10 +883,6 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObAlterTriggerStmt, ObAlterTriggerExecutor);
         break;
       }
-      case stmt::T_LOAD_TIME_ZONE_INFO: {
-        DEFINE_EXECUTE_CMD(ObLoadTimeZoneInfoStmt, ObLoadTimeZoneInfoExecutor);
-        break;
-      }
       case stmt::T_SET_DISK_VALID: {
         DEFINE_EXECUTE_CMD(ObSetDiskValidStmt, ObSetDiskValidExecutor);
         break;
@@ -969,22 +968,27 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         break;
       }
       case stmt::T_XA_START: {
+        is_xa_stmt = true;
         DEFINE_EXECUTE_CMD(ObXaStartStmt, ObXaStartExecutor);
         break;
       }
       case stmt::T_XA_END: {
+        is_xa_stmt = true;
         DEFINE_EXECUTE_CMD(ObXaEndStmt, ObXaEndExecutor);
         break;
       }
       case stmt::T_XA_PREPARE: {
+        is_xa_stmt = true;
         DEFINE_EXECUTE_CMD(ObXaPrepareStmt, ObXaPrepareExecutor);
         break;
       }
       case stmt::T_XA_COMMIT: {
+        is_xa_stmt = true;
         DEFINE_EXECUTE_CMD(ObXaCommitStmt, ObXaCommitExecutor);
         break;
       }
       case stmt::T_XA_ROLLBACK: {
+        is_xa_stmt = true;
         DEFINE_EXECUTE_CMD(ObXaRollBackStmt, ObXaRollbackExecutor);
         break;
       }
@@ -1046,6 +1050,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_BACKUP_DATABASE: {
         DEFINE_EXECUTE_CMD(ObBackupDatabaseStmt, ObBackupDatabaseExecutor);
+        break;
+      }
+      case stmt::T_BACKUP_VALIDATE: {
+        DEFINE_EXECUTE_CMD(ObBackupValidateStmt, ObBackupValidateExecutor);
         break;
       }
       case stmt::T_CANCEL_RESTORE: {
@@ -1255,6 +1263,22 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObSensitiveRuleStmt, ObSensitiveRuleExecutor);
         break;
       }
+      case stmt::T_CREATE_ROUTINE_LOAD: {
+        DEFINE_EXECUTE_CMD(ObCreateRoutineLoadStmt, ObCreateRoutineLoadExecutor);
+        break;
+      }
+      case stmt::T_PAUSE_ROUTINE_LOAD: {
+        DEFINE_EXECUTE_CMD(ObPauseRoutineLoadStmt, ObPauseRoutineLoadExecutor);
+        break;
+      }
+      case stmt::T_RESUME_ROUTINE_LOAD: {
+        DEFINE_EXECUTE_CMD(ObResumeRoutineLoadStmt, ObResumeRoutineLoadExecutor);
+        break;
+      }
+      case stmt::T_STOP_ROUTINE_LOAD: {
+        DEFINE_EXECUTE_CMD(ObStopRoutineLoadStmt, ObStopRoutineLoadExecutor);
+        break;
+      }
       case stmt::T_CS_DISKMAINTAIN:
       case stmt::T_TABLET_CMD:
       case stmt::T_SWITCH_ROOTSERVER:
@@ -1272,7 +1296,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
     }
   }
-  if (!sql_text.empty()) {
+  if (!sql_text.empty() && !is_xa_stmt) {
     SERVER_EVENT_ADD("sql", "execute_cmd",
                      "cmd_type", cmd.get_cmd_type(),
                      "sql_text", ObHexEscapeSqlStr(ctx.get_sql_ctx()->is_sensitive_ ?

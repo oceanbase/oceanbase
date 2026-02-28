@@ -47,7 +47,7 @@ ObRemoteFetchWorker::ObRemoteFetchWorker() :
   allocator_(NULL),
   writer_(NULL),
   log_ext_handler_(),
-  cond_()
+  cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::FETCH_LOG_WORKER_COND_WAIT)
 {}
 
 ObRemoteFetchWorker::~ObRemoteFetchWorker()

@@ -93,6 +93,21 @@ public:
 protected:
   int open();
   virtual int calc_scan_range() = 0;
+
+  /**
+   * @brief This function will iterate all tables and build ObStoreRowIterator for each table.
+   *        It include iters_ and di_base_iters_.
+   *        derived class should implement build_iter and init_iter virtual functions.
+   */
+  int build_iter_array_for_all_tables();
+  virtual int build_iter(ObITable *table, const ObTableIterParam *iter_param, ObStoreRowIterator *&iter) { return OB_NOT_SUPPORTED; };
+  virtual int init_iter(ObITable *table, const ObTableIterParam *iter_param, ObStoreRowIterator *iter) { return OB_NOT_SUPPORTED; };
+
+  /**
+   * @brief This function will construct iters array.
+   *        You can reuse build_iter_array_for_all_tables function to build iters array.
+   *        *And then do some post process for iters arrays such as set blockscan.*
+   */
   virtual int construct_iters() = 0;
   virtual OB_INLINE int prepare() { return common::OB_SUCCESS; }
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row) = 0;
@@ -123,7 +138,6 @@ protected:
   OB_INLINE int64_t get_di_base_iter_cnt() const { return use_di_merge_scan() ? di_base_sstable_row_scanner_->get_di_base_iter_cnt() : 0; }
   OB_INLINE int64_t get_di_base_table_cnt() const { return use_di_merge_scan() ? di_base_sstable_row_scanner_->get_di_base_table_cnt() : 0; }
 private:
-  int get_next_normal_row(blocksstable::ObDatumRow *&row);
   int get_next_normal_rows(int64_t &count, int64_t capacity);
   int get_next_aggregate_row(blocksstable::ObDatumRow *&row);
   int fuse_default(blocksstable::ObDatumRow &row);
@@ -131,11 +145,11 @@ private:
   int fuse_lob_default(ObObj &def_cell, const uint64_t col_id);
   int pad_columns(blocksstable::ObDatumRow &row);
   int fill_virtual_columns(blocksstable::ObDatumRow &row);
-  int project_row(const blocksstable::ObDatumRow &unprojected_row, blocksstable::ObDatumRow &projected_row);
   // project to output expressions
   int project2output_exprs(blocksstable::ObDatumRow &unprojected_row, blocksstable::ObDatumRow &cur_row);
   int prepare_read_tables(bool refresh = false);
   int prepare_mds_tables(bool refresh);
+  OB_INLINE int init_major_version(ObTableStoreIterator &table_iter);
   int prepare_tables_from_iterator(ObTableStoreIterator &table_iter, const bool has_split_extra_tables, const common::SampleInfo *sample_info = nullptr);
   int refresh_table_on_demand();
   int refresh_tablet_iter();
@@ -154,10 +168,10 @@ private:
   int handle_lob_before_fuse_row();
   OB_INLINE void reuse_lob_locator();
   void report_tablet_stat();
-  int update_and_report_tablet_stat();
+  void update_and_report_tablet_stat();
   void inner_reset();
   int refresh_filter_params_on_demand(const bool is_open);
-  int prepare_truncate_filter();
+  int prepare_mds_filter();
   int init_di_base_sstable_row_scanner();
 
 public:
@@ -219,8 +233,9 @@ OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh, bool
   } else if (access_param_->iter_param_.is_mds_query_) {
     // skip refresh table for mds query
   } else if (get_table_param_->tablet_iter_.table_iter()->check_store_expire() || OB_SUCCESS != tmp_ret) {
-    if (get_di_base_iter_cnt() > 1) {
+    if (type_ == T_LEVEL_ORDER_SCAN || type_ == T_LEVEL_ORDER_MULTI_SCAN || get_di_base_iter_cnt() > 1) {
       // TODO: zhanghuidong.zhd, support refresh table for multiple di base tables
+      // TODO: LEVEL_ORDER_SCAN and LEVEL_ORDER_MULTI_SCAN are not supported for refresh table on demand yet.
       if (0 == start_time_ns_) {
         start_time_ns_ = common::ObTimeUtility::current_time_ns();
       } else if (common::ObTimeUtility::current_time_ns() - start_time_ns_ > RETRY_QUERY_THRESHOLD_NS) {
@@ -244,6 +259,22 @@ OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh, bool
       ret = OB_ERR_UNSUPPORTED_TYPE;
       STORAGE_LOG(WARN, "unsupported scan state", K(ret), K(scan_state_));
     }
+  }
+
+  return ret;
+}
+
+int ObMultipleMerge::init_major_version(ObTableStoreIterator &table_iter)
+{
+  int ret = OB_SUCCESS;
+
+  ObITable *table_ptr = nullptr;
+  if (OB_FAIL(table_iter.get_boundary_table(/* is_last */ false, table_ptr))) {
+    STORAGE_LOG(WARN, "failed to get boundary table", K(ret), K(table_iter));
+  } else {
+    major_table_version_ = table_ptr != nullptr && table_ptr->is_major_sstable()
+                               ? table_ptr->get_snapshot_version()
+                               : 0;
   }
 
   return ret;

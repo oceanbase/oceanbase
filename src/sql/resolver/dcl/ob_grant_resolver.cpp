@@ -1309,7 +1309,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
 
           if (OB_SUCC(ret)
               && grant_level != OB_PRIV_CATALOG_LEVEL
-              && grant_level != OB_PRIV_SENSITIVE_RULE_LEVEL) {
+              && grant_level != OB_PRIV_SENSITIVE_RULE_LEVEL
+              && grant_level != OB_PRIV_OBJECT_LEVEL) {
             if (OB_FAIL(check_and_convert_name(db, table))) {
               LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
             } else if (OB_FAIL(grant_stmt->set_database_name(db))) {

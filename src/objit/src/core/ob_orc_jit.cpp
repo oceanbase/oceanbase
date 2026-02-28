@@ -31,7 +31,10 @@ namespace core
 
 DenseMap<StringRef, JITTargetAddress> ObJitGlobalSymbolGenerator::symbol_table;
 
-std::pair<lib::ObMutex, ObNotifyLoaded::KeyEntryMap> ObNotifyLoaded::AllGdbReg;
+std::pair<lib::ObMutex, ObNotifyLoaded::KeyEntryMap> ObNotifyLoaded::AllGdbReg{
+    std::piecewise_construct,
+    std::forward_as_tuple(common::ObLatchIds::OB_ORC_JIT_LOCK),
+    std::forward_as_tuple()};
 
 ObOrcJit::ObOrcJit(common::ObIAllocator &Allocator)
   : DebugBuf(nullptr),

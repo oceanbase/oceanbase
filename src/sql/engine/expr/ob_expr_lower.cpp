@@ -509,7 +509,6 @@ int ObExprLowerUpper::vector_lower_upper(VECTOR_EVAL_FUNC_ARG_DECL, common::ObCo
       continue;
     } else if (arg0_vec->is_null(idx)) {
       res_vec->set_null(idx);
-      eval_flags.set(idx);
     } else {
       is_params_all_null = false;
     }
@@ -532,7 +531,7 @@ int ObExprLowerUpper::vector_lower_upper(VECTOR_EVAL_FUNC_ARG_DECL, common::ObCo
                                           : ObCharset::get_charset(cs_type)->caseup_multiply))) {
     } else if (!ob_is_text_tc(text_meta.type_)) { // 2.1 deal with string tc
       for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
-        if (skip.at(idx) || eval_flags.at(idx)) {
+        if (skip.at(idx) || eval_flags.at(idx) || arg0_vec->is_null(idx)) {
           continue;
         } else {
           ObString m_text = arg0_vec->get_string(idx);
@@ -562,7 +561,6 @@ int ObExprLowerUpper::vector_lower_upper(VECTOR_EVAL_FUNC_ARG_DECL, common::ObCo
             } else {
               res_vec->set_string(idx, str_result);
             }
-            eval_flags.set(idx);
           }
         }
       }
@@ -570,7 +568,7 @@ int ObExprLowerUpper::vector_lower_upper(VECTOR_EVAL_FUNC_ARG_DECL, common::ObCo
       const ObDatumMeta &input_meta = expr.args_[0]->datum_meta_;
       const bool has_lob_header = expr.args_[0]->obj_meta_.has_lob_header();
       for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
-        if (skip.at(idx) || eval_flags.at(idx)) {
+        if (skip.at(idx) || eval_flags.at(idx) || arg0_vec->is_null(idx)) {
           continue;
         } else {
           ObEvalCtx::TempAllocGuard alloc_guard(ctx);
@@ -652,7 +650,6 @@ int ObExprLowerUpper::vector_lower_upper(VECTOR_EVAL_FUNC_ARG_DECL, common::ObCo
             } else {
               res_vec->set_string(idx, str_result);
             }
-            eval_flags.set(idx);
           }
         }
       }

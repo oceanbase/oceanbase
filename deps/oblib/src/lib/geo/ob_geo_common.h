@@ -81,6 +81,10 @@ enum class ObDomainOpType
   T_GEO_DFULLYWITHIN,
   T_GEO_COVEREDBY,
   T_GEO_RELATE,
+  T_ARRAY_CONTAINS,
+  T_ARRAY_CONTAINS_ALL,
+  T_ARRAY_OVERLAPS,
+  T_JSON_IN_QUERY,
   T_DOMAIN_OP_END,
 };
 // sort from inside to outside, the order cannot be changed

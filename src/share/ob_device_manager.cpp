@@ -19,6 +19,7 @@
 #include "share/ob_server_struct.h"
 #include "share/ob_server_struct.h"
 #include "share/io/ob_io_manager.h"
+#include "share/io/ob_io_struct.h"
 #include "share/ob_local_device.h"
 #include "share/external_table/ob_hdfs_table_device.h"
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -49,7 +50,7 @@ int find_existing_parent_path(ObIAllocator &allocator, const char *path, char *&
     while (exist_path[0] != '\0' && access(exist_path, F_OK) != 0 && OB_SUCC(ret)) {
       char *last_slash = strrchr(exist_path, '/');
       if (OB_ISNULL(last_slash)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
         OB_LOG(WARN, "failed to find a existing parent path", KR(ret), K(path), K(exist_path));
       } else {
         *last_slash = '\0';
@@ -84,7 +85,7 @@ int check_is_local_disk(const ObString &path, bool &is_local_disk)
     OB_LOG(WARN, "failed to find an existing parent path", KR(ret), K(path));
   } else if (OB_FALSE_IT(stat_ret = statfs(exist_path, &stat))) {
   } else if (OB_UNLIKELY(stat_ret != 0)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
     OB_LOG(WARN, "failed to get file system stat, please make sure the path exists", KR(ret), K(path), K(stat_ret), K(exist_path));
   } else if (FALSE_IT(f_type = static_cast<int64_t>(stat.f_type))) {
   } else if (f_type == NFS_SUPER_MAGIC
@@ -188,6 +189,11 @@ bool ObClusterStateMgr::is_write_with_if_match() const
   return (0 == ObString(GCONF._object_storage_condition_put_mode).case_compare("if-match"));
 }
 
+bool ObClusterStateMgr::is_enable_object_storage_async_io() const
+{
+  return GCONF._enable_object_storage_async_io;
+}
+
 bool ObClusterStateMgr::is_enable_obdal() const
 {
   return GCONF._enable_obdal;
@@ -236,7 +242,7 @@ int ObClusterStateMgr::is_supported_azblob_version() const
 }
 
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
-ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), is_init_(false)
+ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), lock_(common::ObLatchIds::OB_DEVICE_MANAGER_LOCK), is_init_(false)
 {
 }
 
@@ -549,7 +555,9 @@ int ObDeviceManager::alloc_device_and_init_(
   int ret = OB_SUCCESS;
   ObDeviceInsInfo *dev_info = nullptr;
   device_handle = nullptr;
-  const int64_t fake_max_io_depth = 512;
+  const int64_t max_io_depth = get_io_depth(min(
+      max(GMEMCONF.get_server_memory_limit() / 10, 500 * 1024L * 1024L),
+      4 * 1024L * 1024L * 1024L));
   ObQSyncLockWriteGuard guard(lock_);
 
   // Re-check to see if the device was created while acquiring the lock
@@ -570,9 +578,9 @@ int ObDeviceManager::alloc_device_and_init_(
         ObResetThreadTenantIdGuard tenant_guard;
         DISABLE_SQL_MEMLEAK_GUARD;
         if (OB_FAIL(ObIOManager::get_instance().add_device_channel(dev_info->device_,
-                                                                   0/*async_channel_thread_count*/,
+                                                                   1/*async_channel_thread_count*/,
                                                                    GCONF.sync_io_thread_count,
-                                                                   fake_max_io_depth))) {
+                                                                   max_io_depth))) {
           OB_LOG(WARN, "add device channel failed", K(ret), KP(dev_info), KP(device_key.ptr()));
         } else {
           // set storage_used_mod and storage_id into ObObjectDevice for QoS of ObIOManager

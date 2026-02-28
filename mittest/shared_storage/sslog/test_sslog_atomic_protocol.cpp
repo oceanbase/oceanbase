@@ -1546,12 +1546,11 @@ static void build_tablet_block_set(
   /* out */ std::set<MacroBlockId, MacroIdComp> &block_set)
 {
   int ret = OB_SUCCESS;
-  bool in_memory = false;
   ObTabletMacroInfo *macro_info = nullptr;
   storage::ObMacroInfoIterator macro_iter;
 
   ASSERT_TRUE(tablet.is_valid());
-  ASSERT_EQ(OB_SUCCESS, tablet.load_macro_info(0, allocator, macro_info, in_memory));
+  ASSERT_EQ(OB_SUCCESS, tablet.load_macro_info(0, allocator, macro_info));
   ASSERT_NE(nullptr, macro_info);
   ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, *macro_info));
 

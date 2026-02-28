@@ -291,15 +291,14 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
     const ObString &select_sql_string = mview_table_schema->get_view_schema().get_expand_view_definition_for_mv_str().empty() ?
       mview_table_schema->get_view_schema().get_view_definition_str() :
       mview_table_schema->get_view_schema().get_expand_view_definition_for_mv_str();
-    std::string select_sql(mview_select_sql.ptr());
     std::string real_sql;
     ObSqlString insert_columns;
     if (nested_consistent_refresh) {
-      if (mview_select_sql.empty()) {
+      if (OB_UNLIKELY(mview_select_sql.empty())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("nested sync refresh with empty sql string", K(mview_select_sql), K(mview_table_id));
       } else if (OB_FAIL(ObMViewRefreshHelper::replace_all_snapshot_zero(
-                         select_sql, snapshot_version, real_sql, is_oracle_mode))) {
+                         mview_select_sql, snapshot_version, real_sql, is_oracle_mode))) {
         LOG_WARN("fail to replace snapshot", K(ret));
       }
     }
@@ -494,22 +493,6 @@ int ObMViewUtils::get_mlog_column_list_str(const ObIArray<ObString> &mlog_column
   }
 
   return ret;
-}
-
-// Helper function to check if a column is a hidden column
-bool ObMViewUtils::is_hidden_column(const ObString &column_name)
-{
-  // Check for __MV_DEP_COL_0$$ pattern
-  bool is_hidden = false;
-  if (column_name.prefix_match("__MV_DEP_COL_") && column_name.suffix_match("$$")) {
-    is_hidden = true;
-  }
-  // Check for OB_HIDDEN_PK_INCREMENT_COLUMN_NAME
-  if (0 == column_name.case_compare(OB_HIDDEN_PK_INCREMENT_COLUMN_NAME)) {
-    is_hidden = true;
-  }
-
-  return is_hidden;
 }
 
 int ObMViewUtils::extract_columns_from_schema(const ObTableSchema &container_table_schema,

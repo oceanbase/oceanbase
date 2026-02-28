@@ -96,7 +96,6 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
             // If set calc type when calc_type is not varchar, for example, uint64,
             // implicit cast from enum_inner to uint64 will be added on EnumToInner expression.
             type1.set_calc_type(calc_type);
-            type1.set_calc_collation_type(cmp_type.get_calc_collation_type());
             type1.set_calc_collation_level(cmp_type.get_calc_collation_level());
           }
         }

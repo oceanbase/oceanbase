@@ -17,6 +17,7 @@
 #include "observer/omt/ob_multi_tenant_operator.h"
 #include "rpc/ob_request.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "storage/memtable/hash_holder/ob_row_hash_holder_map.h"
 
 namespace oceanbase
 {
@@ -38,7 +39,7 @@ private:
   void release_last_tenant() override;
 
   int get_lock_type(int64_t hash, int &type);
-  int get_rowkey_holder(int64_t hash, transaction::ObTransID &holder);
+  int get_rowkey_holder(int64_t hash, memtable::RowHolderInfo &holder_info);
   int make_this_ready_to_read();
 private:
   enum {

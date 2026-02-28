@@ -33,6 +33,7 @@ ObLogMinerAnalyzer::ObLogMinerAnalyzer():
     is_inited_(false),
     is_stopped_(false),
     start_time_(-1),
+    stop_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::OB_LOG_MINER_ANALYZER_COND),
     producer_(nullptr),
     data_filter_(nullptr),
     data_converter_(nullptr),

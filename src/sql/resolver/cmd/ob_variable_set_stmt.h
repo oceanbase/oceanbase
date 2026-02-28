@@ -48,10 +48,10 @@ public:
     ObSetNamesStmt *set_names_stmt_;
   };
 
-  ObVariableSetStmt() : ObDDLStmt(stmt::T_VARIABLE_SET),
-                        actual_tenant_id_(common::OB_INVALID_ID),
-                        variable_nodes_(),
-                        has_global_variable_(false)
+  ObVariableSetStmt(common::ObIAllocator &allocator) : ObDDLStmt(stmt::T_VARIABLE_SET),
+                                                      actual_tenant_id_(common::OB_INVALID_ID),
+                                                      variable_nodes_(allocator),
+                                                      has_global_variable_(false)
   {}
   virtual ~ObVariableSetStmt() {}
 
@@ -81,7 +81,7 @@ public:
   TO_STRING_KV(K_(actual_tenant_id), K_(variable_nodes));
 private:
   uint64_t actual_tenant_id_;
-  common::ObArray<VariableSetNode, common::ModulePageAllocator, true> variable_nodes_;
+  ObSqlArray<VariableSetNode> variable_nodes_;
   bool has_global_variable_;
   obrpc::ObModifySysVarArg modify_sysvar_arg_; // 用于返回exec_tenant_id_
   DISALLOW_COPY_AND_ASSIGN(ObVariableSetStmt);

@@ -76,8 +76,6 @@ DEF_SIMPLE_EXECUTOR(ObWashMemFragmentation);
 
 DEF_SIMPLE_EXECUTOR(ObRefreshIOCalibraiton);
 
-DEF_SIMPLE_EXECUTOR(ObSetConfig);
-
 DEF_SIMPLE_EXECUTOR(ObChangeExternalStorageDest);
 
 DEF_SIMPLE_EXECUTOR(ObClearLocationCache);
@@ -114,7 +112,6 @@ DEF_SIMPLE_EXECUTOR(ObStopUpgradeJob);
 
 DEF_SIMPLE_EXECUTOR(ObSetTP);
 
-DEF_SIMPLE_EXECUTOR(ObLoadTimeZoneInfo);
 
 DEF_SIMPLE_EXECUTOR(ObEnableSqlThrottle);
 
@@ -129,6 +126,7 @@ DEF_SIMPLE_EXECUTOR(ObDropDisk);
 
 DEF_SIMPLE_EXECUTOR(ObArchiveLog);
 DEF_SIMPLE_EXECUTOR(ObBackupDatabase);
+DEF_SIMPLE_EXECUTOR(ObBackupValidate);
 DEF_SIMPLE_EXECUTOR(ObCancelRestore);
 DEF_SIMPLE_EXECUTOR(ObBackupManage);
 DEF_SIMPLE_EXECUTOR(ObBackupClean);
@@ -244,6 +242,17 @@ private:
 };
 
 DEF_SIMPLE_EXECUTOR(ObModuleData);
+
+class ObSetConfigExecutor
+{
+public:
+  ObSetConfigExecutor() {}
+  virtual ~ObSetConfigExecutor() {}
+  int execute(ObExecContext &ctx, ObSetConfigStmt &stmt);
+private:
+  int wait_config_sync(const obrpc::ObAdminSetConfigArg &arg);
+  DISALLOW_COPY_AND_ASSIGN(ObSetConfigExecutor);
+};
 
 #undef DEF_SIMPLE_EXECUTOR
 

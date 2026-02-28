@@ -659,7 +659,10 @@ int ObTablesHandleArray::add_memtable(ObITable *table)
 int ObTablesHandleArray::add_table(const ObTableHandleV2 &handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(tablet_id_check(handle.get_table()->get_key().get_tablet_id()))) {
+  if (OB_UNLIKELY(!handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(handle));
+  } else if (OB_FAIL(tablet_id_check(handle.get_table()->get_key().get_tablet_id()))) {
     LOG_WARN("failed  to add table handle to array", K(ret));
   } else if (OB_FAIL(handles_array_.push_back(handle))) {
     STORAGE_LOG(WARN, "failed to add sstable", K(ret), K(handle));

@@ -12,6 +12,8 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_cg_iter_param_pool.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/access/ob_table_read_info.h"
+#include "storage/ob_micro_block_format_version_helper.h"
 
 namespace oceanbase
 {
@@ -134,6 +136,86 @@ int ObCGIterParamPool::new_iter_param(
   return ret;
 }
 
+int ObCGIterParamPool::build_read_info_for_rowkey_cg(const ObTableIterParam &row_param,
+                                                     const ObITableReadInfo *&rowkey_cg_read_info)
+{
+  int ret = OB_SUCCESS;
+
+  ObTableReadInfo *table_read_info = nullptr;
+  common::ObSEArray<ObColDesc, 8> rowkey_col_descs;
+  common::ObSEArray<ObColumnParam*, 8> rowkey_col_params;
+  common::ObSEArray<int32_t, 8> storage_cols_index;
+  common::ObSEArray<ObColExtend, 8> column_extends;
+  common::ObSEArray<int32_t, 8> cg_idxs;
+
+  if (OB_UNLIKELY(!row_param.is_valid() || nullptr == row_param.read_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(row_param));
+  } else {
+    const ObITableReadInfo *read_info = row_param.read_info_;
+    const int64_t schema_rowkey_cnt = read_info->get_schema_rowkey_count();
+    const int64_t schema_column_count = read_info->get_schema_column_count();
+    const common::ObIArray<ObColDesc> &all_col_descs = read_info->get_columns_desc();
+    const common::ObIArray<ObColumnParam *> *all_col_params = read_info->get_columns();
+    const common::ObIArray<ObColExtend> *all_col_extends = read_info->get_columns_extend();
+
+    // TODO(menglan): only add trans version column
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_col_descs.count(); i++) {
+      if (i < schema_rowkey_cnt || all_col_descs.at(i).col_id_ == common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID) {
+        if (OB_FAIL(rowkey_col_descs.push_back(all_col_descs.at(i)))) {
+          LOG_WARN("Fail to push back rowkey col desc", K(ret), K(i));
+        } else if (all_col_params != nullptr && OB_FAIL(rowkey_col_params.push_back(all_col_params->at(i)))) {
+          LOG_WARN("Fail to push back rowkey col param", K(ret), K(i));
+        } else if (OB_FAIL(storage_cols_index.push_back(i < schema_rowkey_cnt ? i : OB_INVALID_INDEX))) {
+          LOG_WARN("Fail to push back storage col index", K(ret), K(i));
+        } else if (OB_FAIL(cg_idxs.push_back(0))) {
+          LOG_WARN("Fail to push back cg idx", K(ret), K(schema_rowkey_cnt));
+        } else if (all_col_extends != nullptr && OB_FAIL(column_extends.push_back(all_col_extends->at(i)))) {
+          LOG_WARN("Fail to push back column extend", K(ret), K(all_col_extends->at(i)));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (rowkey_col_descs.count() != schema_rowkey_cnt + 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected, ora_rowscn is not in TableReadInfo", K(ret), K(rowkey_col_descs.count()));
+    } else if (OB_ISNULL(table_read_info = OB_NEWx(ObTableReadInfo, (&alloc_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Fail to alloc table read info", K(ret));
+    } else if (OB_FAIL(table_read_info->init(
+        alloc_,
+        schema_rowkey_cnt + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
+        schema_rowkey_cnt,
+        read_info->is_oracle_mode(),
+        rowkey_col_descs,
+        &storage_cols_index,
+        &rowkey_col_params,
+        &cg_idxs,
+        &column_extends,
+        false /*has_all_column_group*/,
+        false /*is_cg_sstable*/,
+        false /*need_truncate_filter*/,
+        false /*is_delete_insert_table*/,
+        ObMicroBlockFormatVersionHelper::DEFAULT_VERSION,
+        read_info->has_ttl_definition()))) {
+      LOG_WARN("Fail to init table read info", K(ret), K(schema_rowkey_cnt), K(schema_column_count));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    if (nullptr != table_read_info) {
+      table_read_info->~ObTableReadInfo();
+      alloc_.free(table_read_info);
+      table_read_info = nullptr;
+    }
+  } else {
+    rowkey_cg_read_info = table_read_info;
+  }
+
+  return ret;
+}
+
 int ObCGIterParamPool::fill_cg_iter_param(
     const ObTableIterParam &row_param,
     const int32_t cg_idx,
@@ -154,7 +236,7 @@ int ObCGIterParamPool::fill_cg_iter_param(
     LOG_WARN("Fail to alloc out cols projector", K(ret));
   } else if (OB_FAIL(out_cols_project->init(1, alloc_))) {
     LOG_WARN("Fail to init out cols projector", K(ret));
-  } else if (OB_FAIL(out_cols_project->push_back(0))) {
+  } else if (OB_FAIL(out_cols_project->push_back(cg_idx == 0 && row_param.is_normal_cgs_at_the_end() ? row_param.get_schema_rowkey_count() : 0))) {
     LOG_WARN("Fail to push back out cols project", K(ret));
   }
   if (OB_FAIL(ret)) {
@@ -284,7 +366,11 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
       cg_param.table_scan_opt_ = row_param.table_scan_opt_;
       cg_param.is_column_replica_table_ = row_param.is_column_replica_table_;
       cg_param.plan_enable_rich_format_ = row_param.plan_enable_rich_format_;
-      if (nullptr != row_param.cg_read_infos_) {
+      if (cg_idx == 0 && row_param.is_normal_cgs_at_the_end()) {
+        if (OB_FAIL(build_read_info_for_rowkey_cg(row_param, cg_param.read_info_))) {
+          LOG_WARN("Fail to build read info for rowkey cg", K(ret), K(row_param));
+        }
+      } else if (nullptr != row_param.cg_read_infos_) {
         if (OB_UNLIKELY(nullptr == row_param.cg_read_infos_->at(cg_pos))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected null cg read info", K(ret), K(cg_pos), K(row_param));
@@ -315,6 +401,16 @@ void ObCGIterParamPool::free_iter_param(ObTableIterParam *iter_param)
     if (OB_NOT_NULL(iter_param->out_cols_project_)) {
       const_cast<ObIArray<int32_t> *>(iter_param->out_cols_project_)->reset();
       alloc_.free((void*)iter_param->out_cols_project_);
+    }
+    if (OB_NOT_NULL(iter_param->read_info_) && iter_param->cg_idx_ == 0) {
+      const ObTableReadInfo *table_read_info = dynamic_cast<const ObTableReadInfo*>(iter_param->read_info_);
+      if (nullptr != table_read_info) {
+        const_cast<ObTableReadInfo*>(table_read_info)->~ObTableReadInfo();
+        alloc_.free((void*)table_read_info);
+      } else {
+        int ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null table read info", K(ret), KPC(iter_param), KPC(iter_param->read_info_));
+      }
     }
     iter_param->~ObTableIterParam();
     alloc_.free(iter_param);

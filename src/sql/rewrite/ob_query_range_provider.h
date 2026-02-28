@@ -17,6 +17,7 @@
 #include "lib/container/ob_se_array.h"
 #include "common/ob_range.h"
 #include "lib/geo/ob_s2adapter.h"
+#include "sql/resolver/ob_sql_array.h"
 namespace oceanbase
 {
 namespace common
@@ -28,8 +29,9 @@ namespace sql
 struct ColumnItem;
 class ObRawExpr;
 typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
-typedef common::ObSEArray<common::ObNewRange, 4, common::ModulePageAllocator, true> ObRangesArray;
-typedef common::ObSEArray<ColumnItem, 16, common::ModulePageAllocator, true> ColumnArray;
+typedef common::ObIArray<common::ObNewRange> ObRangesArray;
+typedef common::ObSEArray<common::ObNewRange, 4> ObRangesSEArray;
+typedef ObSqlArray<common::ObNewRange> ObRangesSqlArray;
 static const int64_t MAX_NOT_IN_SIZE = 10; //do not extract range for not in row over this size
 static const int64_t NEW_MAX_NOT_IN_SIZE = 1000; // mysql support 1000 not in range node
 class ObFastFinalNLJRangeCtx;

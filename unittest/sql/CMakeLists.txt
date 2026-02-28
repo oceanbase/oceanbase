@@ -4,6 +4,7 @@ add_library(sql_ut_base OBJECT
   optimizer/ob_mock_part_mgr.h
   optimizer/test_optimizer_utils.h
   optimizer/test_optimizer_utils.cpp
+  optimizer/ob_mock_location_service.cpp
   )
 target_link_libraries(sql_ut_base PUBLIC mockcontainer)
 
@@ -24,6 +25,8 @@ add_subdirectory(session)
 add_subdirectory(module)
 add_subdirectory(monitor)
 add_subdirectory(dtl)
+add_subdirectory(memory_usage)
+add_subdirectory(external_table)
 if(OB_BUILD_CLOSE_MODULES)
   add_subdirectory(audit)
 endif()

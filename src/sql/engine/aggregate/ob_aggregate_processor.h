@@ -174,7 +174,9 @@ public:
     external_routine_url_(),
     external_routine_resource_(),
     grouping_set_info_(nullptr),
-    enable_fast_bypass_(false)
+    has_ignore_null_(false),
+    enable_fast_bypass_(false),
+    is_statistic_agg_(false)
   {}
   ObAggrInfo(common::ObIAllocator &alloc)
   : alloc_(&alloc),
@@ -212,7 +214,9 @@ public:
     external_routine_url_(),
     external_routine_resource_(),
     grouping_set_info_(nullptr),
-    enable_fast_bypass_(false)
+    has_ignore_null_(false),
+    enable_fast_bypass_(false),
+    is_statistic_agg_(false)
   {}
   virtual ~ObAggrInfo();
   inline ObObjType get_first_child_type() const;
@@ -305,7 +309,9 @@ public:
   ObString external_routine_url_;
   ObString external_routine_resource_;
   GroupingSetRTInfo *grouping_set_info_;
+  bool has_ignore_null_;
   bool enable_fast_bypass_;
+  bool is_statistic_agg_;
 };
 
 typedef common::ObFixedArray<ObAggrInfo, common::ObIAllocator> AggrInfoFixedArray;

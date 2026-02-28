@@ -191,9 +191,12 @@ private:
 class ObPartSqlHelper
 {
 public:
-  ObPartSqlHelper(const ObPartitionSchema *table, common::ObISQLClient &sql_client)
-  : table_(table),
-    sql_client_(sql_client) {}
+  ObPartSqlHelper(common::ObISQLClient &sql_client, const uint64_t tenant_id)
+  : tables_(),
+    sql_client_(sql_client),
+    tenant_id_(tenant_id) {}
+  int init(const ObPartitionSchema *table);
+  int init(ObIArray<const ObPartitionSchema *> &tables);
   virtual ~ObPartSqlHelper() {}
 protected:
   virtual bool is_deleted() const = 0;
@@ -216,23 +219,54 @@ protected:
                                          const ObSubPartition &subpart,
                                          ObDMLSqlSplicer &dml) = 0;
 
-  int iterate_part_info(const bool only_history);
-  int iterate_all_part(const bool only_history, const bool include_hidden);
-  int iterate_all_sub_part(const bool only_history);
-  int iterate_all_def_sub_part(const bool only_history);
+  int iterate_part_info(const bool only_history, const bool include_hidden = true);
+  int iterate_all_part(const bool only_history, const bool include_hidden = true);
+  int iterate_all_sub_part(const bool only_history, const bool include_hidden = true);
+  int iterate_all_def_sub_part(const bool only_history, const bool include_hidden = true);
+private:
+  struct BatchInsertCtx {
+    BatchInsertCtx() { reset(); }
+    void reset() {
+      count_ = 0;
+      sql_.reset();
+      history_sql_.reset();
+    }
+    ObSqlString sql_;
+    ObSqlString history_sql_;
+    int64_t count_;
+    TO_STRING_KV(K(sql_), K(history_sql_), K(count_));
+  };
+  int write_batch_sql_(const bool only_history, BatchInsertCtx &ctx);
+  // `dml` is used to generate header and values
+  // insert values are stored in `sql`
+  int generate_batch_sql_(const ObDMLSqlSplicer &dml, const char *table_name, ObSqlString &sql);
+  int generate_and_batch_write_sqls_(
+      ObDMLSqlSplicer &dml,
+      const bool only_history,
+      const char *table_name,
+      const char *history_table_name,
+      BatchInsertCtx &ctx);
+  int iterate_part_info_(const bool only_history, const ObPartitionSchema *table,
+                         BatchInsertCtx &ctx, const bool include_hidden);
+  int iterate_all_part_(const bool only_history, const ObPartitionSchema *table,
+                        BatchInsertCtx &ctx, const bool include_hidden);
+  int iterate_all_sub_part_(const bool only_history, const ObPartitionSchema *table,
+                            BatchInsertCtx &ctx, const bool include_hidden);
+  int iterate_all_def_sub_part_(const bool only_history, const ObPartitionSchema *table,
+                                BatchInsertCtx &ctx, const bool include_hidden);
 protected:
   static const int64_t MAX_DML_NUM = 128;
-  const ObPartitionSchema *table_;
+  ObSEArray<const ObPartitionSchema *, 1> tables_;
   common::ObISQLClient &sql_client_;
+  const uint64_t tenant_id_;
 };
 
 // for create table
 class ObAddPartInfoHelper : public ObPartSqlHelper
 {
 public:
-  ObAddPartInfoHelper(const ObPartitionSchema *table,
-                      common::ObISQLClient &sql_client)
-    : ObPartSqlHelper(table, sql_client),
+  ObAddPartInfoHelper(common::ObISQLClient &sql_client, const uint64_t tenant_id)
+    : ObPartSqlHelper(sql_client, tenant_id),
       high_bound_val_(NULL), list_val_(NULL), allocator_() {
   }
   virtual ~ObAddPartInfoHelper() {}
@@ -267,8 +301,10 @@ private:
                                      const ObBasePartition &part,
                                      share::ObDMLSqlSplicer &dml);
   template<class P>  //ObPartition or ObSubPartition
-  int add_high_bound_val_column(const P &partition,
-                                ObDMLSqlSplicer &dml);
+  int add_high_bound_val_column(
+      const ObPartitionSchema *table,
+      const P &partition,
+      ObDMLSqlSplicer &dml);
 
   //add part high bound val column to dml
   int add_part_list_val_column(const ObPartitionSchema *table,
@@ -278,11 +314,12 @@ private:
   int add_subpart_list_val_column(const ObPartitionSchema *table,
                                      const ObBasePartition &part,
                                      share::ObDMLSqlSplicer &dml);
-
-  template<class P>  //ObPartition or ObSubPartition
-  int add_list_val_column(const P &partition,
-                                ObDMLSqlSplicer &dml);
   int add_part_storage_cache_policy_column(const ObBasePartition &part, ObDMLSqlSplicer &dml);
+  template<class P>  //ObPartition or ObSubPartition
+  int add_list_val_column(
+      const ObPartitionSchema *table,
+      const P &partition,
+      ObDMLSqlSplicer &dml);
 
 private:
   char *high_bound_val_;
@@ -295,9 +332,8 @@ private:
 class ObDropPartInfoHelper : public ObPartSqlHelper
 {
 public:
-  ObDropPartInfoHelper(const ObPartitionSchema *table,
-                       common::ObISQLClient &sql_client)
-   : ObPartSqlHelper(table, sql_client) {}
+  ObDropPartInfoHelper(common::ObISQLClient &sql_client, const uint64_t tenant_id)
+   : ObPartSqlHelper(sql_client, tenant_id) {}
   virtual ~ObDropPartInfoHelper() {}
   int delete_partition_info();
 protected:

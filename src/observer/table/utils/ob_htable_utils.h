@@ -542,6 +542,8 @@ public:
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               const share::schema::ObTableSchema *&table_schema,
                               ObKvSchemaCacheGuard &schema_cache_guard);
+  static int check_ddl_alter_partition(const share::schema::ObTableSchema &table_schema, const uint64_t tenant_id);
+  static int check_ddl_add_column(const share::schema::ObTableSchema &table_schema, const uint64_t tenant_id);
 private:
   static int build_range_by_entity(const ObITableEntity &entity, ObIAllocator &allocator, ObTableQuery &query);
   static int match_hbase_normal_mode(const share::schema::ObTableSchema &table_schema, bool &matched);

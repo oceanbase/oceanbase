@@ -32,6 +32,9 @@
 #include "share/config/ob_server_config.h"
 #include "lib/jni_env/ob_java_env.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
+#include "sql/engine/expr/ob_expr_uuid.h"
+#include "sql/table_format/iceberg/write/ob_snapshot_producer.h"
+#include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 
 #include <arrow/c/bridge.h>
 #include <arrow/array.h>
@@ -114,14 +117,14 @@ int ObSelectIntoOp::inner_open()
       case ObExternalFileFormat::FormatType::PARQUET_FORMAT:
       {
         if (OB_FAIL(init_parquet_env())) {
-          LOG_WARN("failed to init csv env", K(ret));
+          LOG_WARN("failed to init parquet env", K(ret));
         }
         break;
       }
       case ObExternalFileFormat::FormatType::ORC_FORMAT:
       {
         if (OB_FAIL(init_orc_env())) {
-          LOG_WARN("failed to init csv env", K(ret));
+          LOG_WARN("failed to init orc env", K(ret));
         }
         break;
       }
@@ -416,6 +419,11 @@ int ObSelectIntoOp::init_env_common()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected column count", K(MY_SPEC.select_exprs_.count()),
               K(MY_SPEC.alias_names_.strs_.count()), K(ret));
+  } else if (share::ObLakeTableFormat::ICEBERG == MY_SPEC.lake_table_format_
+             && ObExternalFileFormat::FormatType::PARQUET_FORMAT != format_type_
+             && ObExternalFileFormat::FormatType::ORC_FORMAT != format_type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected format type", K(format_type_), K(ret));
   }
   return ret;
 }
@@ -430,7 +438,9 @@ int ObSelectIntoOp::calc_url_and_set_access_info()
     file_location_ = IntoFileLocation::REMOTE_OSS;
   } else if (path.prefix_match_ci(OB_COS_PREFIX)) {
     file_location_ = IntoFileLocation::REMOTE_COS;
-  } else if (path.prefix_match_ci(OB_S3_PREFIX)) {
+  } else if (path.prefix_match_ci(OB_S3_PREFIX)
+             || path.prefix_match(OB_S3A_PREFIX)
+             || path.prefix_match(OB_S3N_PREFIX)) {
     file_location_ = IntoFileLocation::REMOTE_S3;
   } else if (path.prefix_match_ci(OB_HDFS_PREFIX)) {
     file_location_ = IntoFileLocation::REMOTE_HDFS;
@@ -438,6 +448,9 @@ int ObSelectIntoOp::calc_url_and_set_access_info()
     file_location_ = IntoFileLocation::REMOTE_AZBLOB;
   } else {
     file_location_ = IntoFileLocation::SERVER_DISK;
+    if (path.prefix_match_ci(OB_FILE_PREFIX)) {
+      path += strlen(OB_FILE_PREFIX);
+    }
   }
   int64_t tenant_id = MTL_ID();
   uint64_t tenant_version = 0;
@@ -461,7 +474,9 @@ int ObSelectIntoOp::calc_url_and_set_access_info()
   } else if (file_location_ != IntoFileLocation::SERVER_DISK) {
     const char *storage_ptr = path.reverse_find('?');
     ObString storage_info;
-    access_info_ = &backup_info_;
+    access_info_ = (file_location_ == IntoFileLocation::REMOTE_HDFS)
+                    ? static_cast<ObObjectStorageInfo*>(&hdfs_info_)
+                    : static_cast<ObObjectStorageInfo*>(&backup_info_);
     if (OB_ISNULL(storage_ptr)) {
       ObSQLSessionInfo *session = NULL;
       ObSessionPrivInfo session_priv;
@@ -483,46 +498,24 @@ int ObSelectIntoOp::calc_url_and_set_access_info()
                                 schema_ptr,
                                 true))) {
         LOG_WARN("get location schema failed", K(ret), K(session->get_effective_tenant_id()), K(path));
-      } else if (OB_ISNULL(schema_ptr) && IntoFileLocation::REMOTE_HDFS != file_location_) {  // hdfs可能不需要k8s认证
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("match location object failed", K(ret), K(session->get_effective_tenant_id()), K(path));
       } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, basic_url_, true))) {
         LOG_WARN("failed to append string", K(ret));
-      } else if (OB_NOT_NULL(schema_ptr) && OB_FAIL(ob_write_string(ctx_.get_allocator(), schema_ptr->get_location_access_info(), storage_info, true))) {
+      } else if (OB_NOT_NULL(schema_ptr) && OB_FAIL(ob_write_string(ctx_.get_allocator(),
+                                                                    schema_ptr->get_location_access_info(),
+                                                                    storage_info, true))) {
         LOG_WARN("failed to append string", K(ret));
-      } else if (IntoFileLocation::REMOTE_HDFS == file_location_) {
-        access_info_ = &hdfs_info_;
       }
     } else {
-      ObString temp_url = path.split_on('?');
-      temp_url.trim();
-      if (OB_LIKELY(!temp_url.empty() && temp_url.prefix_match(OB_HDFS_PREFIX)) ||
-          OB_LIKELY(path.prefix_match(OB_HDFS_PREFIX))) {
-        access_info_ = &hdfs_info_;
-      }
-
-      // If the hdfs is with simple auth, temp url will be empty.
-      if (OB_LIKELY(temp_url.empty())) {
-        if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, basic_url_, true))) {
-          LOG_WARN("failed to append full path string", K(ret), K(path));
-        }
-      } else {
-        if (OB_FAIL(ob_write_string(ctx_.get_allocator(), temp_url, basic_url_, true))) {
-          LOG_WARN("failed to append string", K(ret));
-        }
-      }
-
-      if (OB_FAIL(ret)) {
-        /* do nothing */
+      ObString temp_url = path.split_on('?').trim();
+      if (OB_FAIL(ob_write_string(ctx_.get_allocator(), temp_url, basic_url_, true))) {
+        LOG_WARN("failed to append string", K(ret));
       } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, storage_info, true))) {
         LOG_WARN("failed to append string", K(ret));
       }
     }
-
     if (OB_FAIL(ret)) {
-      // do nothing
     } else if (OB_FAIL(access_info_->set(basic_url_.ptr(), storage_info.ptr()))) {
-      LOG_WARN("failed to set access info", K(ret), K(path));
+      LOG_WARN("failed to set access info", K(ret), K(storage_info));
     } else if (basic_url_.empty() || !access_info_->is_valid()) {
       ret = OB_FILE_NOT_EXIST;
       LOG_WARN("file path not exist", K(ret), K(basic_url_), KP(access_info_));
@@ -792,9 +785,49 @@ int ObSelectIntoOp::inner_close()
         LOG_WARN("failed to close data writer", K(ret));
       }
     }
-  } else if (OB_NOT_NULL(data_writer_)
-             && OB_FAIL(data_writer_->close_data_writer(need_retry))) {
-    LOG_WARN("failed to close data writer", K(ret));
+  } else if (OB_NOT_NULL(data_writer_)) {
+    if (OB_FAIL(data_writer_->close_data_writer(need_retry))) {
+      LOG_WARN("failed to close data writer", K(ret));
+    }
+    // insert into iceberg table not support partition now
+    if (OB_SUCC(ret) && share::ObLakeTableFormat::ICEBERG == MY_SPEC.lake_table_format_) {
+      const ObIcebergDataGenerator& iceberg_data_generator =
+                            static_cast<ObBatchFileWriter*>(data_writer_)->get_datafile_generator();
+      if (iceberg_data_generator.get_data_files().empty()) {
+        // do nothing
+      } else if (ctx_.get_sqc_handler() != NULL) {
+        ObSqcCtx& sqc_ctx = ctx_.get_sqc_handler()->get_sqc_ctx();
+        ObLockGuard<ObSpinLock> lock_guard(sqc_ctx.iceberg_data_file_lock_);
+        for (int64_t i = 0; OB_SUCC(ret) && i < iceberg_data_generator.get_data_files().size(); ++i) {
+          iceberg::DataFile* data_file = OB_NEWx(iceberg::DataFile,
+                                                &ctx_.get_sqc_handler()->get_exec_ctx().get_allocator(),
+                                                ctx_.get_sqc_handler()->get_exec_ctx().get_allocator());
+          if (OB_ISNULL(data_file)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate memory for data file", K(ret));
+          } else {
+            OZ(data_file->assign(*iceberg_data_generator.get_data_files().at(i)));
+            OZ(sqc_ctx.iceberg_data_files_.push_back(data_file));
+          }
+        }
+      } else {
+        ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+        if (OB_ISNULL(phy_plan_ctx = ctx_.get_physical_plan_ctx())
+            || OB_ISNULL(phy_plan_ctx->get_lake_table_metadata())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else {
+          const iceberg::ObIcebergTableMetadata& iceberg_table_metadata =
+            *static_cast<const iceberg::ObIcebergTableMetadata*>(phy_plan_ctx->get_lake_table_metadata());
+          ObArenaAllocator tmp_allocator;
+          iceberg::ObSnapshotProducer snapshot_producer(iceberg_table_metadata,
+                                                        tmp_allocator,
+                                                        iceberg_data_generator.get_data_files());
+          OZ(snapshot_producer.init());
+          OZ(snapshot_producer.commit());
+        }
+      }
+    }
   }
   for (int64_t i = 0; i < array_helpers_.count(); ++i) {
     if (array_helpers_.at(i) != nullptr) {
@@ -864,13 +897,15 @@ int ObSelectIntoOp::calc_first_file_path(ObString &path)
   ObString file_extension;
   ObSelectIntoOpInput *input = static_cast<ObSelectIntoOpInput*>(input_);
   ObString input_file_name;
+  ObString access_info_str;
   if (OB_UNLIKELY(file_location_ != IntoFileLocation::SERVER_DISK)) {
-    // Handle hdfs with simple auth
-    if (OB_LIKELY(file_location_ == IntoFileLocation::REMOTE_HDFS &&
-                  !path.contains(path.find('?')))) {
+    // Handle simple auth
+    if (OB_LIKELY(!path.contains(path.find('?')))) {
       input_file_name = path.trim();
+      access_info_str = ObString();
     } else {
       input_file_name = path.split_on('?').trim();
+      access_info_str = path;
     }
   } else {
     input_file_name = path;
@@ -879,20 +914,37 @@ int ObSelectIntoOp::calc_first_file_path(ObString &path)
   if (OB_ISNULL(input)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("op input is null", K(ret));
-  } else if (input_file_name.length() == 0 || path.length() == 0) {
+  } else if (input_file_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid outfile path");
     LOG_WARN("invalid outfile path", K(ret));
   } else {
-    if (input_file_name.ptr()[input_file_name.length() - 1] == '/'){
-      OZ(file_name_with_suffix.append_fmt("%.*sdata", input_file_name.length(), input_file_name.ptr()));
+    if (share::ObLakeTableFormat::ICEBERG != MY_SPEC.lake_table_format_) {
+      if (input_file_name.ptr()[input_file_name.length() - 1] == '/') {
+        OZ(file_name_with_suffix.append_fmt("%.*sdata", input_file_name.length(), input_file_name.ptr()));
+      } else {
+        OZ(file_name_with_suffix.append_fmt("%.*s", input_file_name.length(), input_file_name.ptr()));
+      }
+      if (MY_SPEC.parallel_ > 1) {
+        OZ(file_name_with_suffix.append_fmt("_%ld_%ld_0", input->sqc_id_, input->task_id_));
+      } else {
+        OZ(file_name_with_suffix.append("_0"));
+      }
     } else {
-      OZ(file_name_with_suffix.append_fmt("%.*s", input_file_name.length(), input_file_name.ptr()));
-    }
-    if (MY_SPEC.parallel_ > 1) {
-      OZ(file_name_with_suffix.append_fmt("_%ld_%ld_%d", input->sqc_id_, input->task_id_, 0));
-    } else {
-      OZ(file_name_with_suffix.append_fmt("_%d", 0));
+      if (input_file_name.ptr()[input_file_name.length() - 1] != '/') {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid outfile path", K(ret));
+      } else {
+        OZ(file_name_with_suffix.append_fmt("%.*sdata/", input_file_name.length(), input_file_name.ptr()));
+      }
+      if (MY_SPEC.parallel_ > 1) {
+        OZ(file_name_with_suffix.append_fmt("%05ld-%ld-", input->sqc_id_, input->task_id_));
+      } else {
+        OZ(file_name_with_suffix.append("00000-0-"));
+      }
+      char commit_uuid[UuidCommon::LENGTH_UUID] = {0};
+      OZ(ObExprUuid::gen_server_uuid(commit_uuid, UuidCommon::LENGTH_UUID));
+      OZ(file_name_with_suffix.append_fmt("%.*s-0-00001", UuidCommon::LENGTH_UUID, commit_uuid));
     }
     OZ(external_properties_.get_format_file_extension(format_type_, file_extension));
     if (!file_extension.empty() && file_extension.ptr()[0] != '.') {
@@ -902,12 +954,10 @@ int ObSelectIntoOp::calc_first_file_path(ObString &path)
     if (format_type_ == ObExternalFileFormat::FormatType::CSV_FORMAT) {
       OZ(file_name_with_suffix.append(compression_algorithm_to_suffix(external_properties_.csv_format_.compression_algorithm_)));
     }
-    if (file_location_ != IntoFileLocation::SERVER_DISK) {
-      OZ(file_name_with_suffix.append_fmt("?%.*s", path.length(), path.ptr()));
+    if (!access_info_str.empty()) {
+      OZ(file_name_with_suffix.append_fmt("?%.*s", access_info_str.length(), access_info_str.ptr()));
     }
-    if (OB_SUCC(ret) && OB_FAIL(ob_write_string(ctx_.get_allocator(), file_name_with_suffix.string(), path))) {
-      LOG_WARN("failed to write string", K(ret));
-    }
+    OZ(ob_write_string(ctx_.get_allocator(), file_name_with_suffix.string(), path));
   }
   return ret;
 }
@@ -918,7 +968,10 @@ int ObSelectIntoOp::calc_next_file_path(ObExternalFileWriter &data_writer)
   ObSqlString url_with_suffix;
   ObString file_path;
   data_writer.split_file_id_++;
-  if (data_writer.split_file_id_ > 0) {
+  if (OB_UNLIKELY(data_writer.split_file_id_ <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected split file id", K(ret));
+  } else {
     if (MY_SPEC.is_single_ && IntoFileLocation::SERVER_DISK != file_location_) {
       file_path = (data_writer.split_file_id_ > 1)
                   ? data_writer.url_.split_on(data_writer.url_.reverse_find('.'))
@@ -929,11 +982,20 @@ int ObSelectIntoOp::calc_next_file_path(ObExternalFileWriter &data_writer)
         LOG_WARN("failed to append string", K(ret));
       }
     } else if (!MY_SPEC.is_single_) {
-      file_path = data_writer.url_.split_on(data_writer.url_.reverse_find('_'));
-      if (OB_FAIL(url_with_suffix.assign(file_path))) {
-        LOG_WARN("failed to assign string", K(ret));
-      } else if (OB_FAIL(url_with_suffix.append_fmt("_%ld", data_writer.split_file_id_))) {
-        LOG_WARN("failed to append string", K(ret));
+      if (share::ObLakeTableFormat::ICEBERG != MY_SPEC.lake_table_format_) {
+        file_path = data_writer.url_.split_on(data_writer.url_.reverse_find('_'));
+        if (OB_FAIL(url_with_suffix.assign(file_path))) {
+          LOG_WARN("failed to assign string", K(ret));
+        } else if (OB_FAIL(url_with_suffix.append_fmt("_%ld", data_writer.split_file_id_))) {
+          LOG_WARN("failed to append string", K(ret));
+        }
+      } else {
+        file_path = data_writer.url_.split_on(data_writer.url_.reverse_find('-'));
+        if (OB_FAIL(url_with_suffix.assign(file_path))) {
+          LOG_WARN("failed to assign string", K(ret));
+        } else if (OB_FAIL(url_with_suffix.append_fmt("-%05ld", data_writer.split_file_id_ + 1))) {
+          LOG_WARN("failed to append string", K(ret));
+        }
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -947,18 +1009,10 @@ int ObSelectIntoOp::calc_next_file_path(ObExternalFileWriter &data_writer)
       }
       OZ(url_with_suffix.append(file_extension));
     }
-    if (!MY_SPEC.is_single_
-        && format_type_ == ObExternalFileFormat::FormatType::CSV_FORMAT) {
+    if (!MY_SPEC.is_single_ && format_type_ == ObExternalFileFormat::FormatType::CSV_FORMAT) {
       OZ(url_with_suffix.append(compression_algorithm_to_suffix(external_properties_.csv_format_.compression_algorithm_)));
     }
-    if (OB_SUCC(ret) && OB_FAIL(ob_write_string(ctx_.get_allocator(),
-                                                url_with_suffix.string(),
-                                                data_writer.url_, true))) {
-      LOG_WARN("failed to write string", K(ret));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected split file id", K(ret));
+    OZ(ob_write_string(ctx_.get_allocator(), url_with_suffix.string(), data_writer.url_, true));
   }
   return ret;
 }
@@ -3863,7 +3917,8 @@ int ObSelectIntoOp::into_outfile_batch_csv(const ObBatchRows &brs, ObExternalFil
 int ObSelectIntoOp::get_parquet_logical_type(std::shared_ptr<const parquet::LogicalType> &logical_type,
                                              const ObObjType &obj_type,
                                              const int32_t precision,
-                                             const int32_t scale)
+                                             const int32_t scale,
+                                             const ObCollationType cs_type)
 {
   int ret = OB_SUCCESS;
   if (ObTinyIntType == obj_type) {
@@ -3899,7 +3954,11 @@ int ObSelectIntoOp::get_parquet_logical_type(std::shared_ptr<const parquet::Logi
   } else if (ob_is_year_tc(obj_type)) {
     logical_type = parquet::LogicalType::Int(8, false);
   } else if (ob_is_string_type(obj_type) || ObNullType == obj_type || ObRawType == obj_type) {
-    logical_type = parquet::LogicalType::String();
+    if (CS_TYPE_BINARY == cs_type) {
+      logical_type = parquet::LogicalType::None();
+    } else {
+      logical_type = parquet::LogicalType::String();
+    }
   } else if (ob_is_bit_tc(obj_type) /*uint64_t*/) {
     logical_type = parquet::LogicalType::Int(64, false);
   } else if (ob_is_enum_or_set_type(obj_type) /*uint64_t*/) {
@@ -4075,13 +4134,23 @@ int ObSelectIntoOp::setup_parquet_schema()
   std::shared_ptr<const parquet::LogicalType> logical_type;
   parquet::Type::type physical_type;
   parquet::schema::NodePtr node;
+  ObDatumMeta meta;
+  ObObjType obj_type;
+  ObString alias_name;
+  int primitive_length = -1;
+  int field_id = -1;
+  if (share::ObLakeTableFormat::ICEBERG == MY_SPEC.lake_table_format_
+      && MY_SPEC.field_ids_.count() != select_exprs.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected column count", K(MY_SPEC.select_exprs_.count()),
+              K(MY_SPEC.field_ids_.count()), K(ret));
+  }
   try {
     for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
-      ObDatumMeta meta = select_exprs.at(i)->datum_meta_;
-      ObObjType obj_type = meta.get_type();
-      ObString alias_name = MY_SPEC.alias_names_.strs_.at(i);
-      std::string column_name(alias_name.ptr(), alias_name.length());
-      int primitive_length = -1;
+      meta = select_exprs.at(i)->datum_meta_;
+      obj_type = meta.get_type();
+      alias_name = MY_SPEC.alias_names_.strs_.at(i);
+      primitive_length = -1;
       if (OB_FAIL(check_oracle_number(obj_type,
                                       select_exprs.at(i)->datum_meta_.precision_,
                                       select_exprs.at(i)->datum_meta_.scale_))) {
@@ -4089,17 +4158,22 @@ int ObSelectIntoOp::setup_parquet_schema()
       } else if (OB_FAIL(get_parquet_logical_type(logical_type,
                                                   obj_type,
                                                   select_exprs.at(i)->datum_meta_.precision_,
-                                                  select_exprs.at(i)->datum_meta_.scale_))) {
+                                                  select_exprs.at(i)->datum_meta_.scale_,
+                                                  select_exprs.at(i)->datum_meta_.cs_type_))) {
         LOG_WARN("failed to get related logical type", K(ret));
       } else if (OB_FAIL(get_parquet_physical_type(physical_type, obj_type))) {
         LOG_WARN("failed to get related physical type", K(ret));
       } else if (ob_is_number_or_decimal_int_tc(obj_type)
                 && OB_FALSE_IT(primitive_length = calc_parquet_decimal_length(
                                                       select_exprs.at(i)->datum_meta_.precision_))) {
+      } else if (share::ObLakeTableFormat::ICEBERG == MY_SPEC.lake_table_format_
+                && OB_FALSE_IT(field_id = MY_SPEC.field_ids_.at(i))) {
       } else {
         //todo@linyi repetition level
-        node = parquet::schema::PrimitiveNode::Make(column_name, parquet::Repetition::OPTIONAL,
-                                                    logical_type, physical_type, primitive_length);
+        node = parquet::schema::PrimitiveNode::Make(std::string(alias_name.ptr(), alias_name.length()),
+                                                    parquet::Repetition::OPTIONAL,
+                                                    logical_type, physical_type,
+                                                    primitive_length, field_id);
         fields.push_back(node);
       }
     }
@@ -4194,6 +4268,7 @@ int ObSelectIntoOp::into_outfile_batch_parquet(const ObBatchRows &brs, ObExterna
         }
         parquet_data_writer->set_batch_written(false);
         parquet_data_writer->increase_row_batch_offset();
+        parquet_data_writer->increase_record_count();
         if (OB_FAIL(ret)) {
           // discard unwritten data if an error occurs
           parquet_data_writer->set_batch_written(true);
@@ -4336,6 +4411,7 @@ int ObSelectIntoOp::into_outfile_batch_orc(const ObBatchRows &brs, ObExternalFil
         }
         orc_data_writer->set_batch_written(false);
         orc_data_writer->increase_row_batch_offset();
+        orc_data_writer->increase_record_count();
         if (OB_FAIL(ret)) {
           // discard unwritten data if an error occurs
           orc_data_writer->set_batch_written(true);
@@ -5159,37 +5235,35 @@ int ObSelectIntoOp::create_the_only_data_writer(ObExternalFileWriter *&data_writ
 int ObSelectIntoOp::new_data_writer(ObExternalFileWriter *&data_writer)
 {
   int ret = OB_SUCCESS;
-  void *ptr = NULL;
   switch (format_type_)
   {
     case ObExternalFileFormat::FormatType::CSV_FORMAT:
     {
-      if (OB_ISNULL(ptr = ctx_.get_allocator().alloc(sizeof(ObCsvFileWriter)))) {
+      if (OB_ISNULL(data_writer = OB_NEWx(ObCsvFileWriter, &ctx_.get_allocator(),
+                                          access_info_, file_location_, use_shared_buf_,
+                                          has_compress_, has_lob_, write_offset_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate data writer", K(ret), K(sizeof(ObCsvFileWriter)));
-      } else {
-        data_writer = new(ptr) ObCsvFileWriter(access_info_, file_location_, use_shared_buf_,
-                                               has_compress_, has_lob_, write_offset_);
+        LOG_WARN("failed to allocate csv data writer", K(ret), K(sizeof(ObCsvFileWriter)));
       }
       break;
     }
     case ObExternalFileFormat::FormatType::PARQUET_FORMAT:
     {
-      if (OB_ISNULL(ptr = ctx_.get_allocator().alloc(sizeof(ObParquetFileWriter)))) {
+      if (OB_ISNULL(data_writer = OB_NEWx(ObParquetFileWriter, &ctx_.get_allocator(),
+                                          access_info_, file_location_, parquet_writer_schema_,
+                                          MY_SPEC.lake_table_format_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate data writer", K(ret), K(sizeof(ObParquetFileWriter)));
-      } else {
-        data_writer = new(ptr) ObParquetFileWriter(access_info_, file_location_, parquet_writer_schema_);
+        LOG_WARN("failed to allocate parquet data writer", K(ret), K(sizeof(ObParquetFileWriter)));
       }
       break;
     }
     case ObExternalFileFormat::FormatType::ORC_FORMAT:
     {
-      if (OB_ISNULL(ptr = ctx_.get_allocator().alloc(sizeof(ObOrcFileWriter)))) {
+      if (OB_ISNULL(data_writer = OB_NEWx(ObOrcFileWriter, &ctx_.get_allocator(),
+                                          access_info_, file_location_,
+                                          MY_SPEC.lake_table_format_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate data writer", K(ret), K(sizeof(ObOrcFileWriter)));
-      } else {
-        data_writer = new(ptr) ObOrcFileWriter(access_info_, file_location_);
+        LOG_WARN("failed to allocate orc data writer", K(ret), K(sizeof(ObOrcFileWriter)));
       }
       break;
     }

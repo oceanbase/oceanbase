@@ -193,7 +193,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 43;
+  static const int64_t DATA_VERSION_NUM = 45;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -405,15 +405,18 @@ public:
   ObUpgradeFor4420Processor() : ObBaseUpgradeProcessor() {}
   virtual ~ObUpgradeFor4420Processor() {}
   virtual int pre_upgrade() override { return common::OB_SUCCESS; }
-  virtual int post_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
   virtual int finish_upgrade() override;
 private:
+  int post_upgrade_for_sys_schema_version();
   int finish_upgrade_for_grant_sys_privs();
   int grant_priv(const ObPrivSet user_priv_set,
                  const ObPrivSet grant_priv_set,
                  const char *grant_sql,
                  const lib::Worker::CompatMode compat_mode);
 };
+
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 2, 1)
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 5, 0, 0)
 
@@ -423,15 +426,19 @@ public:
   ObUpgradeFor4510Processor() : ObBaseUpgradeProcessor() {}
   virtual ~ObUpgradeFor4510Processor() {}
   virtual int pre_upgrade() override { return common::OB_SUCCESS; }
-  virtual int post_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
   virtual int finish_upgrade() override;
 private:
+  int post_upgrade_for_set_paralllel_target_();
+  int finish_upgrade_for_daily_maintenance_window();
   int finish_upgrade_for_grant_sys_privs();
   int grant_priv(const ObPrivSet user_priv_set,
                  const ObPrivSet grant_priv_set,
                  const char *grant_sql,
                  const lib::Worker::CompatMode compat_mode);
 };
+
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 6, 0, 0)
 
 /* =========== special upgrade processor end   ============= */
 

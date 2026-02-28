@@ -25,8 +25,7 @@ namespace sql
 class ObCreateTenantStmt : public ObDDLStmt
 {
 public:
-  explicit ObCreateTenantStmt(common::ObIAllocator *name_pool);
-  ObCreateTenantStmt();
+  ObCreateTenantStmt(common::ObIAllocator &allocator);
   virtual ~ObCreateTenantStmt();
   inline obrpc::ObCreateTenantArg &get_create_tenant_arg();
   virtual void print(FILE *fp, int32_t level, int32_t index = 0);
@@ -56,7 +55,7 @@ public:
   void set_log_restore_source(const common::ObString &log_restore_source);
 private:
   obrpc::ObCreateTenantArg create_tenant_arg_;
-  common::ObArray<ObVariableSetStmt::VariableSetNode, common::ModulePageAllocator, true> sys_var_nodes_;
+  ObSqlArray<ObVariableSetStmt::VariableSetNode> sys_var_nodes_;
   DISALLOW_COPY_AND_ASSIGN(ObCreateTenantStmt);
 };
 

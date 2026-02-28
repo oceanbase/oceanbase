@@ -219,10 +219,12 @@ public:
   int get_nearest_probe_centers(
       float *vector,
       const int64_t dim,
-      ObIArray<float*> &centers,
+      float *centers_data,
+      const int64_t centers_count,
+      const int64_t center_dim,
       const int64_t nprobe,
       ObIAllocator &allocator,
-      share::ObVectorNormalizeInfo *norm_info = nullptr,
+      ObVectorNormalizeInfo *norm_info = nullptr,
       int l_idx = 0,
       int r_idx = -1);
   int get_center_idx(const int64_t idx, int64_t &center_id);
@@ -324,7 +326,7 @@ public:
   {}
   explicit ObCenterWithBuf(ObIAllocator *alloc) : alloc_(alloc), buf_(nullptr), buf_size_(0)
   {}
-  TO_STRING_KV(K_(buf_size), KP_(buf));
+  TO_STRING_KV(K_(buf_size), KP_(buf), K_(center));
 
   void reset()
   {
@@ -459,12 +461,15 @@ public:
       if (OB_ISNULL(cur_top.center_with_buf_)) {
         ret = OB_ERR_UNEXPECTED;
         SHARE_LOG(WARN, "center_with_buf is null", K(ret), K(cur_top));
-      } else if (OB_FAIL(map.set_refactored(cur_top.center_with_buf_->get_center(), ObIvfRowkeyDistEntry(cur_top.center_with_buf_->get_center(), cur_top.distance_)))) {
-        ret = OB_ERR_UNEXPECTED;
-        SHARE_LOG(WARN, "failed to push center id", K(ret), K(cur_top));
-      } else if (OB_FAIL(heap_.pop())) {
-        ret = OB_ERR_UNEXPECTED;
-        SHARE_LOG(WARN, "failed to pop max heap", K(ret));
+      } else {
+        SHARE_LOG(TRACE, "push center id", K(cur_top.center_with_buf_->get_center()), K(cur_top.distance_));
+        if (OB_FAIL(map.set_refactored(cur_top.center_with_buf_->get_center(), ObIvfRowkeyDistEntry(cur_top.center_with_buf_->get_center(), cur_top.distance_)))) {
+          SHARE_LOG(WARN, "failed to push center id", K(ret), K(cur_top));
+          ret = OB_ERR_UNEXPECTED;
+        } else if (OB_FAIL(heap_.pop())) {
+          ret = OB_ERR_UNEXPECTED;
+          SHARE_LOG(WARN, "failed to pop max heap", K(ret));
+        }
       }
     }
     return ret;
@@ -548,7 +553,7 @@ public:
     ObCenterWithBuf<CENTER_T>* center_with_buf_;
     // for pq, need center idx to get center vector
     ObVecWithDim<VEC_T> vec_dim_;
-    TO_STRING_KV(K_(distance), KP_(center_with_buf), K_(vec_dim));
+    TO_STRING_KV(K_(distance), KPC_(center_with_buf), K_(vec_dim));
   };
   struct HeapCompare {
     HeapCompare() : is_max_heap_(true) {}
@@ -796,6 +801,9 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::push_center(
         }
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    SHARE_LOG(TRACE, "push center", K(center), K(distance));
   }
   return ret;
 }

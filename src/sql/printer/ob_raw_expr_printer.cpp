@@ -1195,6 +1195,8 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("var_pop");
     case T_FUN_VAR_SAMP:
       SET_SYMBOL_IF_EMPTY("var_samp");
+    case T_FUN_CK_VARSAMP:
+      SET_SYMBOL_IF_EMPTY("varsamp");
     case T_FUN_REGR_SLOPE:
       SET_SYMBOL_IF_EMPTY("regr_slope");
     case T_FUN_REGR_INTERCEPT:
@@ -1219,6 +1221,8 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("stddev_pop");
     case T_FUN_STDDEV_SAMP:
       SET_SYMBOL_IF_EMPTY("stddev_samp");
+    case T_FUN_CK_STDDEVSAMP:
+      SET_SYMBOL_IF_EMPTY("stddevsamp");
     case T_FUN_WM_CONCAT:
       SET_SYMBOL_IF_EMPTY("wm_concat");
     case T_FUN_TOP_FRE_HIST:
@@ -1239,12 +1243,18 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("arg_min");
     case T_FUN_ARG_MAX:
       SET_SYMBOL_IF_EMPTY("arg_max");
+    case T_FUN_ANY:
+      SET_SYMBOL_IF_EMPTY("any");
+    case T_FUN_ARBITRARY:
+      SET_SYMBOL_IF_EMPTY("arbitrary");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis_merge");
     case T_FUN_SUM_OPNSIZE:
       SET_SYMBOL_IF_EMPTY("sum_opnsize");
+    case T_FUN_SYS_COUNT_INROW:
+      SET_SYMBOL_IF_EMPTY("sys_count_inrow");
     case T_FUN_PL_AGG_UDF:{
       if (type == T_FUN_PL_AGG_UDF) {
         if (OB_ISNULL(expr->get_pl_agg_udf_expr()) ||
@@ -1297,6 +1307,15 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
 
       // on null
       DATA_PRINTF(")");
+      if (OB_SUCC(ret)) {
+        if (type == T_FUN_ANY) {
+          if (expr->is_ignore_null()) {
+            DATA_PRINTF(" ignore nulls");
+          } else {
+            DATA_PRINTF(" respect nulls");
+          }
+        }
+      }
       break;
     }
     case T_FUN_ORA_JSON_ARRAYAGG: {
@@ -1403,16 +1422,40 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("percentile_cont");
     case T_FUN_GROUP_PERCENTILE_DISC:
       SET_SYMBOL_IF_EMPTY("percentile_disc");
-    case T_FUN_GROUP_CONCAT: {
+    case T_FUN_GROUP_CONCAT:
+    case T_FUN_CK_GROUPCONCAT: {
       // mysql: group_concat(distinct c1,c2+1 order by c1 desc separator ',')
       // oracle: listagg(c1,',') within group(order by c1);
+      // clickhouse: groupConcat(',', 1)(distinct c1)
       if (lib::is_oracle_mode()) {
         SET_SYMBOL_IF_EMPTY("listagg");
+      } else if (type == T_FUN_CK_GROUPCONCAT) {
+        SET_SYMBOL_IF_EMPTY("groupConcat");
       } else {
         SET_SYMBOL_IF_EMPTY("group_concat");
       }
       DATA_PRINTF("%.*s(", LEN_AND_PTR(symbol));
-      if (lib::is_mysql_mode() && type == T_FUN_GROUP_PERCENTILE_CONT) {
+      if (type == T_FUN_CK_GROUPCONCAT) {
+        if (OB_NOT_NULL(expr->get_separator_param_expr())) {
+          PRINT_EXPR(expr->get_separator_param_expr());
+          if (expr->get_real_param_count() > 1) {
+            DATA_PRINTF(",");
+            PRINT_EXPR(expr->get_real_param_exprs().at(1));
+          }
+          DATA_PRINTF(")(");
+        }
+        if (OB_SUCC(ret)) {
+          if (expr->is_param_distinct()) {
+            DATA_PRINTF("distinct ");
+          }
+        }
+        if (OB_UNLIKELY(expr->get_real_param_count() < 1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected param count of expr to type", K(ret), KPC(expr));
+        } else {
+          PRINT_EXPR(expr->get_real_param_exprs().at(0));
+        }
+      } else if (lib::is_mysql_mode() && type == T_FUN_GROUP_PERCENTILE_CONT) {
         // mysql: percentile_cont(expr, percentile_num)
         const ObIArray<OrderItem> &order_items = expr->get_order_items();
         int64_t order_item_size = order_items.count();
@@ -3058,6 +3101,34 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_FUN_SYS_DATE_ADD_CLICKHOUSE:
+      case T_FUN_SYS_DATE_SUB_CLICKHOUSE: {
+        if (OB_UNLIKELY(3 != expr->get_param_count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param count should be equal 3", K(ret), K(expr->get_param_count()));
+        } else {
+          // ClickHouse function call format: adddate(date, INTERVAL value unit) or subdate(date, INTERVAL value unit)
+          if (T_FUN_SYS_DATE_ADD_CLICKHOUSE == expr->get_expr_type()) {
+            DATA_PRINTF("adddate(");
+          } else {
+            DATA_PRINTF("subdate(");
+          }
+          // date parameter
+          PRINT_EXPR(expr->get_param_expr(0));
+          DATA_PRINTF(", interval ");
+          // interval value
+          PRINT_EXPR(expr->get_param_expr(1));
+          DATA_PRINTF(" ");
+          // date unit
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(print_date_unit(expr->get_param_expr(2)))) {
+              LOG_WARN("fail to print date unit", K(ret));
+            }
+          }
+          DATA_PRINTF(")");
+        }
+        break;
+      }
       case T_FUN_SYS_TIME_STAMP_DIFF: {
         if (3 != expr->get_param_count()) {
           ret = OB_ERR_UNEXPECTED;
@@ -3918,6 +3989,8 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
         SET_SYMBOL_IF_EMPTY("var_pop");
       case T_FUN_VAR_SAMP:
         SET_SYMBOL_IF_EMPTY("var_samp");
+      case T_FUN_CK_VARSAMP:
+        SET_SYMBOL_IF_EMPTY("varsamp");
       case T_FUN_REGR_SLOPE:
         SET_SYMBOL_IF_EMPTY("regr_slope");
       case T_FUN_REGR_INTERCEPT:
@@ -3944,6 +4017,8 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
         SET_SYMBOL_IF_EMPTY("stddev_pop");
       case T_FUN_STDDEV_SAMP:
         SET_SYMBOL_IF_EMPTY("stddev_samp");
+      case T_FUN_CK_STDDEVSAMP:
+        SET_SYMBOL_IF_EMPTY("stddevsamp");
       case T_FUN_WM_CONCAT:
         SET_SYMBOL_IF_EMPTY("wm_concat");
       case T_FUN_TOP_FRE_HIST:
@@ -4105,6 +4180,46 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
         DATA_PRINTF(")");
         break;
       }
+      case T_WIN_FUN_LEAD_IN_FRAME:
+        SET_SYMBOL_IF_EMPTY("leadInFrame");
+      case T_WIN_FUN_LAG_IN_FRAME:{
+        SET_SYMBOL_IF_EMPTY("lagInFrame");
+        DATA_PRINTF("%.*s(", LEN_AND_PTR(symbol));
+        if (OB_SUCC(ret)) {
+          if (0 == expr->get_param_count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expr count should not be 0 ", K(ret), K(type));
+          } else {
+            int64_t N = expr->get_func_params().count();
+            for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+              PRINT_EXPR(expr->get_func_params().at(i));
+              DATA_PRINTF(",");
+            }
+            if (OB_SUCC(ret)) {
+              --*pos_;
+            }
+          }
+        }
+        DATA_PRINTF(")");
+        if (OB_SUCC(ret)) {
+          if (expr->is_ignore_null()) {
+            DATA_PRINTF(" ignore nulls");
+          } else {
+            DATA_PRINTF(" respect nulls");
+          }
+        }
+        DATA_PRINTF(" over(");
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(print_partition_exprs(expr))) {
+          LOG_WARN("failed to print partition exprs.", K(ret));
+        } else if (OB_FAIL(print_order_items(expr))) {
+          LOG_WARN("failed to print order items.", K(ret));
+        } else if (OB_FAIL(print_window_clause(expr))) {
+          LOG_WARN("failed to print window clause.", K(ret));
+        } else {/* do nothing. */  }
+        DATA_PRINTF(")");
+        break;
+      }
       case T_WIN_FUN_RATIO_TO_REPORT:{
         SET_SYMBOL_IF_EMPTY("ratio_to_report");
         DATA_PRINTF("%.*s(", LEN_AND_PTR(symbol));
@@ -4177,7 +4292,8 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
        DATA_PRINTF(")");
        break;
       }
-      case T_FUN_GROUP_CONCAT: {
+      case T_FUN_GROUP_CONCAT:
+      case T_FUN_CK_GROUPCONCAT: {
         if (OB_FAIL(print(expr->get_agg_expr()))) {
           LOG_WARN("failed to print agg expr", K(ret));
         }

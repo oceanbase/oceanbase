@@ -12,6 +12,10 @@
 
 #include "observer/virtual_table/ob_session_variables.h"
 #include "sql/plan_cache/ob_plan_cache.h"
+#include "observer/omt/ob_tenant_config.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
+#include "share/ob_cluster_version.h"
+#include "observer/ob_server.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::share;

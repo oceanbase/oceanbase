@@ -25,6 +25,7 @@ const char *ObGlobalStatProxy::TENANT_ID_CNAME = "tenant_id";
 
 int ObGlobalStatProxy::set_init_value(
     const int64_t core_schema_version,
+    const int64_t sys_schema_version,
     const int64_t baseline_schema_version,
     const int64_t rootservice_epoch,
     const SCN &snapshot_gc_scn,
@@ -35,16 +36,17 @@ int ObGlobalStatProxy::set_init_value(
     const uint64_t upgrade_begin_data_version)
 {
   int ret = OB_SUCCESS;
-  if (!is_valid() || core_schema_version <= 0 || baseline_schema_version < -1
+  if (!is_valid() || core_schema_version <= 0 || sys_schema_version <= 0 || baseline_schema_version < -1
       || !snapshot_gc_scn.is_valid() || OB_INVALID_ID == rootservice_epoch || gc_schema_version < 0 || ddl_epoch < 0
       || target_data_version <= 0 || current_data_version <= 0 || upgrade_begin_data_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), "self valid", is_valid(), K(rootservice_epoch),
-             K(core_schema_version), K(baseline_schema_version), K(snapshot_gc_scn),
+             K(core_schema_version), K(sys_schema_version), K(baseline_schema_version), K(snapshot_gc_scn),
              K(gc_schema_version), K(target_data_version), K(current_data_version), K(upgrade_begin_data_version));
   } else {
     ObGlobalStatItem::ItemList list;
     ObGlobalStatItem core_schema_version_item(list, "core_schema_version", core_schema_version);
+    ObGlobalStatItem sys_schema_version_item(list, "sys_schema_version", sys_schema_version);
     ObGlobalStatItem baseline_schema_version_item(list, "baseline_schema_version", baseline_schema_version);
     ObGlobalStatItem rootservice_epoch_item(list, "rootservice_epoch", rootservice_epoch);
     ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn.get_val_for_inner_table_field());
@@ -63,6 +65,7 @@ int ObGlobalStatProxy::set_init_value(
 
 int ObGlobalStatProxy::set_tenant_init_global_stat(
     const int64_t core_schema_version,
+    const int64_t sys_schema_version,
     const int64_t baseline_schema_version,
     const SCN &snapshot_gc_scn,
     const int64_t ddl_epoch,
@@ -72,6 +75,7 @@ int ObGlobalStatProxy::set_tenant_init_global_stat(
 {
   int ret = OB_SUCCESS;
   if (!is_valid() || core_schema_version <= 0
+      || sys_schema_version <= 0
       || baseline_schema_version < OB_INVALID_VERSION
       || !snapshot_gc_scn.is_valid()
       || target_data_version <= 0
@@ -79,12 +83,13 @@ int ObGlobalStatProxy::set_tenant_init_global_stat(
       || upgrade_begin_data_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), "self valid", is_valid(),
-             K(core_schema_version), K(baseline_schema_version),
+             K(core_schema_version), K(sys_schema_version), K(baseline_schema_version),
              K(snapshot_gc_scn), K(target_data_version),
              K(current_data_version), K(upgrade_begin_data_version));
   } else {
     ObGlobalStatItem::ItemList list;
     ObGlobalStatItem core_schema_version_item(list, "core_schema_version", core_schema_version);
+    ObGlobalStatItem sys_schema_version_item(list, "sys_schema_version", sys_schema_version);
     ObGlobalStatItem baseline_schema_version_item(list, "baseline_schema_version", baseline_schema_version);
     ObGlobalStatItem ddl_epoch_item(list, "ddl_epoch", ddl_epoch);
     ObGlobalStatItem target_data_version_item(list, "target_data_version", static_cast<int64_t>(target_data_version));
@@ -117,6 +122,19 @@ int ObGlobalStatProxy::set_core_schema_version(const int64_t core_schema_version
   } else {
     bool is_incremental = true;
     SET_ITEM("core_schema_version", core_schema_version, is_incremental);
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::set_sys_schema_version(const int64_t sys_schema_version)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid() || sys_schema_version <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), "self valid", is_valid(), K(sys_schema_version));
+  } else {
+    bool is_incremental = true;
+    SET_ITEM("sys_schema_version", sys_schema_version, is_incremental);
   }
   return ret;
 }
@@ -491,6 +509,37 @@ int ObGlobalStatProxy::get_core_schema_version(int64_t &core_schema_version)
     LOG_WARN("get failed", K(ret));
   } else {
     core_schema_version = core_schema_version_item.value_;
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::get_sys_schema_version(int64_t &sys_schema_version)
+{
+  int64_t core_schema_version = OB_INVALID_VERSION;
+  return get_core_and_sys_schema_version(core_schema_version, sys_schema_version);
+}
+
+int ObGlobalStatProxy::get_core_and_sys_schema_version(int64_t &core_schema_version,
+    int64_t &sys_schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem core_schema_version_item(list, "core_schema_version", core_schema_version);
+  ObGlobalStatItem sys_schema_version_item(list, "sys_schema_version", sys_schema_version);
+  if (OB_FAIL(get(list))) {
+    if (OB_ERR_NULL_VALUE == ret) {
+      // sys schema version may not exists during upgrade, retry get core_schema_version
+      sys_schema_version = OB_INVALID_VERSION;
+      // rewrite errcode
+      if (OB_FAIL(get_core_schema_version(core_schema_version))) {
+        LOG_WARN("failed to get core schema version", KR(ret));
+      } else {
+        core_schema_version = core_schema_version_item.value_;
+      }
+    }
+  } else {
+    core_schema_version = core_schema_version_item.value_;
+    sys_schema_version = sys_schema_version_item.value_;
   }
   return ret;
 }

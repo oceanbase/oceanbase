@@ -201,7 +201,6 @@ int ObExprOr::eval_or_batch_exprN(const ObExpr &expr, ObEvalCtx &ctx,
         } else {
           results[j].set_bool(false);
         }
-        eval_flags.set(j);
       }
     } else {
       ObDatum *curr_datum = &expr.args_[0]->locate_expr_datum(ctx);
@@ -217,7 +216,6 @@ int ObExprOr::eval_or_batch_exprN(const ObExpr &expr, ObEvalCtx &ctx,
         } else {
           results[j].set_bool(false);
         }
-        eval_flags.set(j);
       }
     }
     //eval middle

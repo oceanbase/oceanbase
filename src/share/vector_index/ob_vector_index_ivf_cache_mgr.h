@@ -17,6 +17,8 @@
 #include "share/ob_ls_id.h"
 #include "share/rc/ob_tenant_base.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/vector/ob_vsag_adaptor.h"
+#include "share/allocator/ob_tenant_vector_allocator.h"
 #include "ob_vector_index_util.h"
 #include "lib/lock/ob_recursive_mutex.h"
 #include "ob_plugin_vector_index_adaptor.h"
@@ -117,7 +119,7 @@ public:
         tenant_id_(tenant_id),
         key_(IvfCacheType::IVF_CACHE_MAX),
         sub_mem_ctx_(nullptr),
-        rwlock_(),
+        rwlock_(common::ObLatchIds::VECTOR_IVF_CACHE_LOCK),
         status_(IvfCacheStatus::IVF_CACHE_IDLE)
   {}
   virtual ~ObIvfICache();
@@ -125,8 +127,8 @@ public:
   virtual void reuse();
   ObIAllocator &get_self_allocator() { return self_allocator_; }
 
-  uint64_t get_actual_memory_used() { return sub_mem_ctx_ == nullptr ? 0 : sub_mem_ctx_->used(); }
-  uint64_t get_memory_hold() { return sub_mem_ctx_ == nullptr ? 0 : sub_mem_ctx_->hold(); }
+  virtual uint64_t get_actual_memory_used() { return sub_mem_ctx_ == nullptr ? 0 : sub_mem_ctx_->used(); }
+  virtual uint64_t get_memory_hold() { return sub_mem_ctx_ == nullptr ? 0 : sub_mem_ctx_->hold(); }
   virtual int64_t get_expect_memory_used(const IvfCacheKey &key, const ObVectorIndexParam &param) = 0;
   RWLock &get_lock() { return rwlock_; }
   OB_INLINE bool is_writing() { return ATOMIC_LOAD(&status_) == IvfCacheStatus::IVF_CACHE_WRITING; }
@@ -141,6 +143,7 @@ public:
   }
   OB_INLINE bool is_idle() { return ATOMIC_LOAD(&status_) == IvfCacheStatus::IVF_CACHE_IDLE; }
   OB_INLINE void set_idle() { ATOMIC_STORE(&status_, IvfCacheStatus::IVF_CACHE_IDLE); }
+  OB_INLINE IvfCacheType get_cache_type() const { return key_.type_; }
 
   VIRTUAL_TO_STRING_KV(K(is_inited_), K(key_), K(status_));
 
@@ -166,9 +169,18 @@ class ObIvfCentCache : public ObIvfICache
 public:
   friend class ObIvfCacheMgr;
   explicit ObIvfCentCache(ObIAllocator &allocator, int64_t tenant_id)
-      : ObIvfICache(allocator, tenant_id), centroids_(nullptr), cent_vec_dim_(0), nlist_(0), capacity_(0), count_(0)
+      : ObIvfICache(allocator, tenant_id),
+        centroids_(nullptr),
+        cent_vec_dim_(0),
+        nlist_(0),
+        capacity_(0),
+        count_(0),
+        hgraph_index_(nullptr),
+        hgraph_mem_ctx_(nullptr)
   {}
   virtual ~ObIvfCentCache();
+  uint64_t get_actual_memory_used() override;
+  uint64_t get_memory_hold() override;
   // NOTE(liyao): attention! read_centroid and write_centroid are not thread-safe
   //              if need deep copy, allocator should not be null
   int read_centroid(int64_t centroid_idx, float *&centroid_vec, bool deep_copy = false,
@@ -181,12 +193,17 @@ public:
   OB_INLINE int64_t get_capacity() { return capacity_; }
   OB_INLINE int64_t get_count() { return count_; }
   OB_INLINE bool is_full_cache() { return count_ == capacity_; }
-  OB_INLINE float* get_centroids() { return centroids_; }
+  float* get_centroids();
+  int get_centroids(ObIAllocator *allocator, float **vectors);
   OB_INLINE int64_t get_cent_vec_dim() { return cent_vec_dim_; }
+  OB_INLINE common::obvsag::VectorIndexPtr get_hgraph_index() { return hgraph_index_; }
+  OB_INLINE bool has_hgraph_index() const { return OB_NOT_NULL(hgraph_index_); }
   void reuse() override;
   int64_t get_expect_memory_used(const IvfCacheKey &key, const ObVectorIndexParam &param) override;
   int write_centroid_with_real_idx(const int64_t real_idx, const float *centroid,
                                    const int64_t length);
+  int build_hgraph_and_release_centers(const ObVectorIndexParam &param);
+  int release_centroids();
 
   TO_STRING_KV(K(centroids_), K(cent_vec_dim_), K(capacity_), K(nlist_));
 
@@ -195,6 +212,11 @@ protected:
                           ObIAllocator *allocator = nullptr);
   int init(ObIvfMemContext *parent_mem_ctx, const IvfCacheKey &key,
            const ObVectorIndexParam &param, uint64_t* all_vsag_use_mem) override;
+  int build_hgraph_index(const ObVectorIndexParam &param, bool use_default_params);
+  void cleanup_hgraph_index();
+  int get_raw_vector_from_hgraph(int64_t centroid_idx, float *&centroid_vec,
+                                  ObIAllocator *allocator = nullptr);
+
   // NOTE(liyao): to avoid ObIArray using sizeof(float*) * capacity_ extra memory,
   //              we use float* to save centroids_
   float *centroids_;
@@ -202,6 +224,9 @@ protected:
   int nlist_; // 0 for flat
   int32_t capacity_;
   int32_t count_; // maybe not enough vector for nlist
+  common::obvsag::VectorIndexPtr hgraph_index_;  // VSAG's HGraph index
+  share::ObVsagMemContext *hgraph_mem_ctx_;      // dedicated mem ctx for hgraph
+
 };
 
 using ObIvfCacheMap = common::hash::ObHashMap<IvfCacheKey, ObIvfICache *>;

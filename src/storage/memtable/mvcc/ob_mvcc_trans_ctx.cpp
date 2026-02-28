@@ -11,7 +11,7 @@
  */
 
 #include "ob_mvcc_trans_ctx.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase
@@ -19,6 +19,7 @@ namespace oceanbase
 using namespace common;
 using namespace share;
 using namespace transaction;
+using namespace lockwaitmgr;
 namespace memtable
 {
 
@@ -153,6 +154,14 @@ int ObITransCallback::remove()
     prev->set_next(next);
     next->set_prev(prev);
   }
+  return ret;
+}
+
+int ObITransCallback::get_holder_info(RowHolderInfo &holder_info) const
+{
+  int ret = OB_ERR_UNEXPECTED;
+  DETECT_LOG(WARN, "this callback should not be called", KP(this), K(lbt()));
+  ob_abort();
   return ret;
 }
 
@@ -1367,11 +1376,11 @@ void ObTransCallbackMgr::revert_callback_list()
 
 void ObTransCallbackMgr::wakeup_waiting_txns_()
 {
-  if (OB_ISNULL(MTL(ObLockWaitMgr*))) {
+  if (OB_ISNULL(MTL(lockwaitmgr::ObLockWaitMgr*))) {
     TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "MTL(ObLockWaitMgr*) is null");
   } else {
     ObMemtableCtx &mem_ctx = static_cast<ObMemtableCtx&>(host_);
-    MTL(ObLockWaitMgr*)->wakeup(mem_ctx.get_trans_ctx()->get_trans_id());
+    MTL(lockwaitmgr::ObLockWaitMgr*)->wakeup(mem_ctx.get_trans_ctx()->get_trans_id());
   }
 }
 
@@ -1691,7 +1700,8 @@ int ObMvccRowCallback::elr_trans_preparing()
     value_.elr(mem_ctx->get_trans_ctx()->get_trans_id(),
                ctx_.get_commit_version(),
                get_tablet_id(),
-               (ObMemtableKey*)&key_);
+               (ObMemtableKey*)&key_,
+               is_non_unique_local_index_cb_);
   }
   return OB_SUCCESS;
 }
@@ -1739,11 +1749,11 @@ int ObMvccRowCallback::get_cluster_version(uint64_t &cluster_version) const
   return ret;
 }
 
-ObTransCtx *ObMvccRowCallback::get_trans_ctx() const
+ObPartTransCtx *ObMvccRowCallback::get_trans_ctx() const
 {
   int ret = OB_SUCCESS;
   ObMemtableCtx *mem_ctx = static_cast<ObMemtableCtx*>(&ctx_);
-  ObTransCtx *trans_ctx = NULL;
+  ObPartTransCtx *trans_ctx = NULL;
 
   if (OB_ISNULL(mem_ctx)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1790,9 +1800,13 @@ int ObMvccRowCallback::checkpoint_callback()
   if (need_submit_log_) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "checkpoint never called on submitted callback", KPC(this));
-  } else if (OB_FAIL(value_.remove_callback(*this))) {
-    TRANS_LOG(ERROR, "remove callback from trans node failed", K(ret), K(*this));
   } else if (OB_NOT_NULL(tnode_)) {
+    ObAddr tx_scheduler = get_trans_ctx()->get_scheduler();
+    (void) MTL(ObLockWaitMgr*)->transform_row_lock_to_tx_lock(get_tablet_id(),
+                                                              *get_key(),
+                                                              tnode_->tx_id_,
+                                                              tx_scheduler);
+    tnode_->set_delayed_cleanout();
     (void)value_.update_dml_flag_(get_dml_flag(), tnode_->get_scn());
   }
 
@@ -1806,6 +1820,13 @@ void ObMvccRowCallback::after_append_fail(const bool is_replay)
   }
 }
 
+int ObMvccRowCallback::get_holder_info(RowHolderInfo &holder_info) const
+{
+  holder_info.scn_ = get_scn();
+  holder_info.seq_ = get_seq_no();
+  return get_trans_id(holder_info.tx_id_);
+}
+
 static blocksstable::ObDmlFlag get_dml_flag(ObMvccTransNode *node)
 {
   return NULL == node ? blocksstable::ObDmlFlag::DF_NOT_EXIST : reinterpret_cast<ObMemtableDataHeader *>(node->buf_)->dml_flag_;
@@ -1816,6 +1837,9 @@ blocksstable::ObDmlFlag ObMvccRowCallback::get_dml_flag() const
   return memtable::get_dml_flag(tnode_);
 }
 
+void ObMvccRowCallback::commit_trans_node_() {
+  tnode_->trans_commit(ctx_.get_commit_version(), ctx_.get_tx_end_scn());
+}
 int ObMvccRowCallback::trans_commit()
 {
   int ret = OB_SUCCESS;
@@ -1875,7 +1899,7 @@ int ObMvccRowCallback::trans_commit()
       if (OB_SUCC(ret)) {
         if (OB_FAIL(value_.trans_commit(ctx_.get_commit_version(), *tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K_(ctx), K_(value));
-        } else if (FALSE_IT(tnode_->trans_commit(ctx_.get_commit_version(), ctx_.get_tx_end_scn()))) {
+        } else if (FALSE_IT(commit_trans_node_())) {
         } else if (FALSE_IT(wakeup_row_waiter_if_need_())) {
         } else if (blocksstable::ObDmlFlag::DF_LOCK == get_dml_flag()) {
           unlink_trans_node();
@@ -1931,10 +1955,10 @@ int ObMvccRowCallback::trans_commit()
 int ObMvccRowCallback::wakeup_row_waiter_if_need_()
 {
   int ret = OB_SUCCESS;
-  if (NULL != tnode_ &&
-      (tnode_->is_committed() || tnode_->is_aborted()) // tnode trans end
+  if (NULL != tnode_
+    && (tnode_->is_committed() || tnode_->is_aborted()) // tnode trans end
     && !tnode_->is_elr() // no need for elr trx
-    && tnode_->next_ == NULL // latest trans node
+    && (tnode_->next_ == NULL) // latest trans node
     && (tnode_->prev_ == NULL || (tnode_->prev_->is_committed() // pre node status should be decided
                                || tnode_->prev_->is_aborted()
                                || tnode_->prev_->is_elr()))) {
@@ -1945,15 +1969,6 @@ int ObMvccRowCallback::wakeup_row_waiter_if_need_()
     // no need to wake up:
     //   case 1: elr transaction
     ret = value_.wakeup_waiter(get_tablet_id(), key_);
-    /*****[for deadlock]*****/
-    ObLockWaitMgr *p_lwm = MTL(ObLockWaitMgr *);
-    if (OB_ISNULL(p_lwm)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "lock wait mgr is nullptr", K(*this));
-    } else {
-      p_lwm->reset_hash_holder(get_tablet_id(), key_, ctx_.get_tx_id());
-    }
-    /************************/
   }
   return ret;
 }
@@ -1986,7 +2001,7 @@ int ObMvccRowCallback::rollback_callback()
   ObRowLatchGuard guard(value_.latch_);
 
   if (NULL != tnode_) {
-    tnode_->set_aborted();
+    tnode_->trans_rollback();
     wakeup_row_waiter_if_need_();
     unlink_trans_node();
   }
@@ -2114,10 +2129,7 @@ int ObMvccRowCallback::log_sync_fail(const share::SCN max_committed_scn)
 {
   int ret = OB_SUCCESS;
   ObRowLatchGuard guard(value_.latch_);
-  if (nullptr != tnode_) {
-    tnode_->set_aborted();
-    unlink_trans_node();
-  }
+  unlink_trans_node();
   memtable_->set_max_end_scn(max_committed_scn, true);
   return ret;
 }
@@ -2131,7 +2143,6 @@ int ObMvccRowCallback::clean_unlog_cb()
 
   if (need_submit_log_) {
     if (nullptr != tnode_) {
-      tnode_->set_aborted();
       unlink_trans_node();
     }
     need_submit_log_ = false;
@@ -2228,6 +2239,23 @@ inline ObTxCallbackList *ObTransCallbackMgr::get_callback_list_(const int16_t in
   return NULL;
 }
 
+inline const ObTxCallbackList *ObTransCallbackMgr::get_callback_list_(const int16_t index, const bool nullable) const
+{
+  if (index == 0) {
+    return &callback_list_;
+  }
+  if (callback_lists_) {
+    OB_ASSERT(index < MAX_CALLBACK_LIST_COUNT);
+    return &callback_lists_[index - 1];
+  } else if (!nullable) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback list is null", K(index));
+#ifdef ENABLE_DEBUG_LOG
+    ob_abort();
+#endif
+  }
+  return NULL;
+}
+
 void ObTransCallbackMgr::check_all_redo_flushed()
 {
   bool ok = true;
@@ -2248,15 +2276,33 @@ int ObTransCallbackMgr::get_logging_list_count() const
   return callback_lists_ ? MAX_CALLBACK_LIST_COUNT : 1;
 }
 
-bool ObTransCallbackMgr::pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no,
+bool ObTransCallbackMgr::pending_log_size_too_large(const int16_t branch_id,
                                                     const int64_t limit)
 {
   if (is_parallel_logging_()) {
-    ObTxCallbackList *list = get_callback_list_(write_seq_no.get_branch() % MAX_CALLBACK_LIST_COUNT, true);
+    ObTxCallbackList *list = get_callback_list_(branch_id % MAX_CALLBACK_LIST_COUNT, true);
     return list ? list->pending_log_too_large(limit) : 0;
   } else {
     return ATOMIC_LOAD(&pending_log_size_) > limit;
   }
+}
+
+int16_t ObTransCallbackMgr::get_pending_log_size_too_large_list(const int64_t limit) const
+{
+  int16_t ret = -1;
+  if (is_parallel_logging_() && callback_lists_) {
+    int16_t start_idx = get_itid() % MAX_CALLBACK_LIST_COUNT;
+    for (int i = start_idx; i < MAX_CALLBACK_LIST_COUNT; i++) {
+      const ObTxCallbackList *list = get_callback_list_(i, true);
+      if (list && !list->is_logging_locked() && list->pending_log_too_large(limit)) {
+        ret = i;
+        break;
+      }
+    }
+  } else if (ATOMIC_LOAD(&pending_log_size_) > limit) {
+    ret = 0;
+  }
+  return ret;
 }
 
 void ObTransCallbackMgr::set_parallel_logging(const share::SCN serial_final_scn,
@@ -2317,6 +2363,16 @@ int64_t ObTransCallbackMgr::get_pending_log_size() const
       size += list->get_pending_log_size();
     }
     return size;
+  }
+}
+
+int64_t ObTransCallbackMgr::get_branch_pending_log_size(const int16_t branch) const
+{
+  if (is_parallel_logging_()) {
+    const ObTxCallbackList *list = get_callback_list_(branch % MAX_CALLBACK_LIST_COUNT, true);
+    return list ? list->get_pending_log_size() : 0;
+  } else {
+    return ATOMIC_LOAD(&pending_log_size_);
   }
 }
 

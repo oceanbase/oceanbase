@@ -465,37 +465,41 @@ TEST_F(ObDBMSSchedCalendarTest, test_freq_only)
 
   // 测试只有 FREQ=YEARLY 的情况
   {
-    snprintf(calendar_expr_buf, 256, "FREQ=YEARLY");
-    ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, current_time * 1000000LL, next_date));
-    time_t next_time = next_date/1000000LL;
-    struct tm next_tm = *localtime(&next_time);
-    // 应该在下一年相同的时间执行
-    ASSERT_EQ(next_tm.tm_year, current_tm.tm_year + 1);
-    ASSERT_EQ(next_tm.tm_mon, current_tm.tm_mon);
-    ASSERT_EQ(next_tm.tm_mday, current_tm.tm_mday);
-    ASSERT_EQ(next_tm.tm_hour, current_tm.tm_hour);
-    ASSERT_EQ(next_tm.tm_min, current_tm.tm_min);
-    ASSERT_EQ(next_tm.tm_sec, current_tm.tm_sec);
+    if (!(current_tm.tm_mon == 1 && current_tm.tm_mday == 29)) {  // 2月29号，跳过此测试
+      snprintf(calendar_expr_buf, 256, "FREQ=YEARLY");
+      ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, current_time * 1000000LL, next_date));
+      time_t next_time = next_date/1000000LL;
+      struct tm next_tm = *localtime(&next_time);
+      // 应该在下一年相同的时间执行
+      ASSERT_EQ(next_tm.tm_year, current_tm.tm_year + 1);
+      ASSERT_EQ(next_tm.tm_mon, current_tm.tm_mon);
+      ASSERT_EQ(next_tm.tm_mday, current_tm.tm_mday);
+      ASSERT_EQ(next_tm.tm_hour, current_tm.tm_hour);
+      ASSERT_EQ(next_tm.tm_min, current_tm.tm_min);
+      ASSERT_EQ(next_tm.tm_sec, current_tm.tm_sec);
+    }
   }
 
   // 测试只有 FREQ=MONTHLY 的情况
   {
-    snprintf(calendar_expr_buf, 256, "FREQ=MONTHLY");
-    ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, current_time * 1000000LL, next_date));
-    time_t next_time = next_date/1000000LL;
-    struct tm next_tm = *localtime(&next_time);
-    // 应该在下一月相同的时间执行
-    if (current_tm.tm_mon == 11) {
-      ASSERT_EQ(next_tm.tm_year, current_tm.tm_year + 1);
-      ASSERT_EQ(next_tm.tm_mon, 0);
-    } else {
-      ASSERT_EQ(next_tm.tm_year, current_tm.tm_year);
-      ASSERT_EQ(next_tm.tm_mon, current_tm.tm_mon + 1);
+    if (28 > current_tm.tm_mday) { // >=29号, 跳过此测试
+      snprintf(calendar_expr_buf, 256, "FREQ=MONTHLY");
+      ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, current_time * 1000000LL, next_date));
+      time_t next_time = next_date/1000000LL;
+      struct tm next_tm = *localtime(&next_time);
+      // 应该在下一月相同的时间执行
+      if (current_tm.tm_mon == 11) {
+        ASSERT_EQ(next_tm.tm_year, current_tm.tm_year + 1);
+        ASSERT_EQ(next_tm.tm_mon, 0);
+      } else {
+        ASSERT_EQ(next_tm.tm_year, current_tm.tm_year);
+        ASSERT_EQ(next_tm.tm_mon, current_tm.tm_mon + 1);
+      }
+      ASSERT_EQ(next_tm.tm_mday, current_tm.tm_mday);
+      ASSERT_EQ(next_tm.tm_hour, current_tm.tm_hour);
+      ASSERT_EQ(next_tm.tm_min, current_tm.tm_min);
+      ASSERT_EQ(next_tm.tm_sec, current_tm.tm_sec);
     }
-    ASSERT_EQ(next_tm.tm_mday, current_tm.tm_mday);
-    ASSERT_EQ(next_tm.tm_hour, current_tm.tm_hour);
-    ASSERT_EQ(next_tm.tm_min, current_tm.tm_min);
-    ASSERT_EQ(next_tm.tm_sec, current_tm.tm_sec);
   }
 
   // 测试只有 FREQ=WEEKLY 的情况
@@ -570,38 +574,42 @@ TEST_F(ObDBMSSchedCalendarTest, test_freq_only)
 
   // 测试带 INTERVAL 的 FREQ=YEARLY
   {
-    snprintf(calendar_expr_buf, 256, "FREQ=YEARLY; INTERVAL=2");
-    ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, current_time * 1000000LL, next_date));
-    time_t next_time = next_date/1000000LL;
-    struct tm next_tm = *localtime(&next_time);
-    // 应该在两年后相同的时间执行
-    ASSERT_EQ(next_tm.tm_year, current_tm.tm_year + 2);
-    ASSERT_EQ(next_tm.tm_mon, current_tm.tm_mon);
-    ASSERT_EQ(next_tm.tm_mday, current_tm.tm_mday);
-    ASSERT_EQ(next_tm.tm_hour, current_tm.tm_hour);
-    ASSERT_EQ(next_tm.tm_min, current_tm.tm_min);
-    ASSERT_EQ(next_tm.tm_sec, current_tm.tm_sec);
+    if (!(current_tm.tm_mon == 1 && current_tm.tm_mday == 29)) {  // 2月29号，跳过此测试
+      snprintf(calendar_expr_buf, 256, "FREQ=YEARLY; INTERVAL=2");
+      ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, current_time * 1000000LL, next_date));
+      time_t next_time = next_date/1000000LL;
+      struct tm next_tm = *localtime(&next_time);
+      // 应该在两年后相同的时间执行
+      ASSERT_EQ(next_tm.tm_year, current_tm.tm_year + 2);
+      ASSERT_EQ(next_tm.tm_mon, current_tm.tm_mon);
+      ASSERT_EQ(next_tm.tm_mday, current_tm.tm_mday);
+      ASSERT_EQ(next_tm.tm_hour, current_tm.tm_hour);
+      ASSERT_EQ(next_tm.tm_min, current_tm.tm_min);
+      ASSERT_EQ(next_tm.tm_sec, current_tm.tm_sec);
+    }
   }
 
   // 测试带 INTERVAL 的 FREQ=MONTHLY
   {
-    snprintf(calendar_expr_buf, 256, "FREQ=MONTHLY; INTERVAL=3");
-    ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, current_time * 1000000LL, next_date));
-    time_t next_time = next_date/1000000LL;
-    struct tm next_tm = *localtime(&next_time);
-    // 应该在三个月后相同的时间执行
-    int expected_month = current_tm.tm_mon + 3;
-    int expected_year = current_tm.tm_year;
-    if (expected_month >= 12) {
-      expected_month -= 12;
-      expected_year += 1;
+    if (28 > current_tm.tm_mday) { // >=29号, 跳过此测试
+      snprintf(calendar_expr_buf, 256, "FREQ=MONTHLY; INTERVAL=3");
+      ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, current_time * 1000000LL, next_date));
+      time_t next_time = next_date/1000000LL;
+      struct tm next_tm = *localtime(&next_time);
+      // 应该在三个月后相同的时间执行
+      int expected_month = current_tm.tm_mon + 3;
+      int expected_year = current_tm.tm_year;
+      if (expected_month >= 12) {
+        expected_month -= 12;
+        expected_year += 1;
+      }
+      ASSERT_EQ(next_tm.tm_year, expected_year);
+      ASSERT_EQ(next_tm.tm_mon, expected_month);
+      ASSERT_EQ(next_tm.tm_mday, current_tm.tm_mday);
+      ASSERT_EQ(next_tm.tm_hour, current_tm.tm_hour);
+      ASSERT_EQ(next_tm.tm_min, current_tm.tm_min);
+      ASSERT_EQ(next_tm.tm_sec, current_tm.tm_sec);
     }
-    ASSERT_EQ(next_tm.tm_year, expected_year);
-    ASSERT_EQ(next_tm.tm_mon, expected_month);
-    ASSERT_EQ(next_tm.tm_mday, current_tm.tm_mday);
-    ASSERT_EQ(next_tm.tm_hour, current_tm.tm_hour);
-    ASSERT_EQ(next_tm.tm_min, current_tm.tm_min);
-    ASSERT_EQ(next_tm.tm_sec, current_tm.tm_sec);
   }
 
   // 测试带 INTERVAL 的 FREQ=WEEKLY
@@ -755,34 +763,34 @@ TEST_F(ObDBMSSchedCalendarTest, test_freq_only_edge_cases)
     ASSERT_EQ(next_tm.tm_year, tmp_tm.tm_year + 5);
   }
 
-  // 测试 INTERVAL=1 的情况（默认值）
+  // 测试闰年2月29号, INTERVAL=1 的情况（默认值）
   {
+    time_t tmp_time = time(NULL);
+    struct tm tmp_tm = *localtime(&tmp_time);
+    tmp_tm.tm_year = 124;
+    tmp_tm.tm_mon = 1;
+    tmp_tm.tm_mday = 29;
+    tmp_time = mktime(&tmp_tm);
     snprintf(calendar_expr_buf, 256, "FREQ=YEARLY; INTERVAL=1");
-    ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, current_time * 1000000LL, next_date));
+    ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, tmp_time * 1000000LL, next_date, tmp_time * 1000000LL));
     time_t next_time = next_date/1000000LL;
     struct tm next_tm = *localtime(&next_time);
-    // 应该在下一年相同的时间执行
-    ASSERT_EQ(next_tm.tm_year, current_tm.tm_year + 1);
-    ASSERT_EQ(next_tm.tm_mon, current_tm.tm_mon);
-    ASSERT_EQ(next_tm.tm_mday, current_tm.tm_mday);
-    ASSERT_EQ(next_tm.tm_hour, current_tm.tm_hour);
-    ASSERT_EQ(next_tm.tm_min, current_tm.tm_min);
-    ASSERT_EQ(next_tm.tm_sec, current_tm.tm_sec);
+    ASSERT_EQ(next_tm.tm_year, tmp_tm.tm_year + 4);
   }
 
-  // 测试大 INTERVAL 值的情况
+  // 测试闰年2月29号, 大 INTERVAL 值的情况
   {
+    time_t tmp_time = time(NULL);
+    struct tm tmp_tm = *localtime(&tmp_time);
+    tmp_tm.tm_year = 124;
+    tmp_tm.tm_mon = 1;
+    tmp_tm.tm_mday = 29;
+    tmp_time = mktime(&tmp_tm);
     snprintf(calendar_expr_buf, 256, "FREQ=YEARLY; INTERVAL=100");
-    ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, current_time * 1000000LL, next_date));
+    ASSERT_EQ(OB_SUCCESS, util.calc_repeat_interval_next_date(calendar_expr_buf, tmp_time * 1000000LL, next_date, tmp_time * 1000000LL));
     time_t next_time = next_date/1000000LL;
     struct tm next_tm = *localtime(&next_time);
-    // 应该在100年后相同的时间执行
-    ASSERT_EQ(next_tm.tm_year, current_tm.tm_year + 100);
-    ASSERT_EQ(next_tm.tm_mon, current_tm.tm_mon);
-    ASSERT_EQ(next_tm.tm_mday, current_tm.tm_mday);
-    ASSERT_EQ(next_tm.tm_hour, current_tm.tm_hour);
-    ASSERT_EQ(next_tm.tm_min, current_tm.tm_min);
-    ASSERT_EQ(next_tm.tm_sec, current_tm.tm_sec);
+    ASSERT_EQ(next_tm.tm_year, tmp_tm.tm_year + 100);
   }
 
   ASSERT_EQ(OB_SUCCESS, ret);

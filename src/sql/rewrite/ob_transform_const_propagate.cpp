@@ -1286,7 +1286,7 @@ int ObTransformConstPropagate::replace_internal(ObRawExpr *&cur_expr,
     } else if (expr_const_infos.at(i).mem_equal_) {
       can_replace = true;
     } else if (OB_FAIL(ObTransformUtils::check_can_replace(cur_expr, parent_exprs,
-                                                           used_in_compare, can_replace))) {
+                                                           used_in_compare, can_replace, true))) {
       LOG_WARN("failed to check can replace", K(ret));
     }
 
@@ -2139,20 +2139,24 @@ int ObTransformConstPropagate::replace_check_constraint_exprs(ObDMLStmt *stmt,
   } else {
     LOG_TRACE("begin replace check constraint exprs", K(const_ctx), K(stmt->get_check_constraint_items()));
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_check_constraint_items().count(); ++i) {
-      CheckConstraintItem &item = stmt->get_check_constraint_items().at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < item.check_constraint_exprs_.count(); ++j) {
-        ObRawExpr *check_constraint_expr = item.check_constraint_exprs_.at(j);
+      CheckConstraintItem *item = stmt->get_check_constraint_items().at(i);
+      if (OB_ISNULL(item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("check constraint item is null", K(ret));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < item->check_constraint_exprs_.count(); ++j) {
+        ObRawExpr *check_constraint_expr = item->check_constraint_exprs_.at(j);
         bool is_valid = false;
         ObSEArray<ObRawExpr*, 16> old_column_exprs;
         ObSEArray<ObRawExpr*, 16> new_const_exprs;
         ObRawExpr *part_column_expr = NULL;
         int64_t complex_cst_info_idx = -1;
         if (OB_ISNULL(check_constraint_expr) ||
-            OB_UNLIKELY(item.check_constraint_exprs_.count() != item.check_flags_.count())) {
+            OB_UNLIKELY(item->check_constraint_exprs_.count() != item->check_flags_.count())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret), K(item));
-        } else if (!(item.check_flags_.at(j) & CheckConstraintFlag::IS_VALIDATE_CHECK) &&
-                   !(item.check_flags_.at(j) & CheckConstraintFlag::IS_RELY_CHECK)) {
+          LOG_WARN("get unexpected null", K(ret), KPC(item));
+        } else if (!(item->check_flags_.at(j) & CheckConstraintFlag::IS_VALIDATE_CHECK) &&
+                   !(item->check_flags_.at(j) & CheckConstraintFlag::IS_RELY_CHECK)) {
           //do nothing
         } else if (OB_FAIL(check_constraint_expr_validity(check_constraint_expr,
                                                           stmt->get_part_exprs(),

@@ -39,7 +39,8 @@ public:
       const uint64_t tenant_data_version,
       const int64_t parent_task_id = 0,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
-      const int64_t snapshot_version = 0);
+      const int64_t snapshot_version = 0,
+      const bool is_retryable_ddl = true);
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;
   virtual int cleanup_impl() override;
@@ -59,6 +60,13 @@ public:
   virtual int on_child_task_finish(
     const uint64_t child_task_key,
     const int ret_code) override;
+  virtual bool task_can_retry() const override
+  {
+    return (share::ObDDLTaskStatus::WAIT_CENTROID_TABLE_COMPLEMENT == task_status_ || share::ObDDLTaskStatus::WAIT_PQ_CENTROID_TABLE_COMPLEMENT == task_status_)
+           ? is_retryable_ddl_
+           : true;
+  }
+  virtual bool is_ddl_retryable() const override { return is_retryable_ddl_; }
   TO_STRING_KV(K(centroid_table_id_), K(cid_vector_table_id_), K(rowkey_cid_table_id_),
       K(sq_meta_table_id_), K(pq_centroid_table_id_), K(pq_code_table_id_), K(pq_rowkey_cid_table_id_),
       K(centroid_table_task_submitted_), K(cid_vector_table_task_submitted_), K(rowkey_cid_table_task_submitted_),
@@ -69,7 +77,7 @@ public:
       K(pq_rowkey_cid_table_task_id_),
       K(drop_index_task_id_), K(is_rebuild_index_),
       K(drop_index_task_submitted_), K(schema_version_), K(execution_id_),
-      K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_));
+      K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_), K(is_retryable_ddl_));
 
 public:
   void set_centroid_table_id(const uint64_t id) { centroid_table_id_ = id; }
@@ -237,6 +245,7 @@ private:
   ObDDLWaitTransEndCtx wait_trans_ctx_;
   obrpc::ObCreateIndexArg create_index_arg_;
   common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> dependent_task_result_map_;
+  bool is_retryable_ddl_;
 };
 
 } // end namespace rootserver

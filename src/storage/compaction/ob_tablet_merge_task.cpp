@@ -59,6 +59,11 @@ bool ObMergeParameter::is_valid() const
   return static_param_.is_valid();
 }
 
+ObMergeType ObMergeParameter::get_merge_type() const
+{
+  return static_param_.get_merge_type();
+}
+
 void ObMergeParameter::reset()
 {
   merge_range_.reset();
@@ -95,20 +100,7 @@ int ObMergeParameter::init(
     STORAGE_LOG(WARN, "failed to get merge range from merge context", K(ret));
   } else {
     const ObMergeType merge_type = static_param_.get_merge_type();
-    merge_version_range_ = static_param_.version_range_;
     allocator_ = allocator;
-    if (is_major_merge_type(merge_type)) {
-      // major merge should only read data between two major freeze points
-      // but there will be some minor sstables which across major freeze points
-      merge_version_range_.base_version_ = merge_ctx.get_read_base_version();
-    } else if (is_meta_major_merge(merge_type)) {
-      // meta major merge does not keep multi-version
-      merge_version_range_.multi_version_start_ = static_param_.version_range_.snapshot_version_;
-    } else if (is_multi_version_merge(merge_type)) {
-      // minor compaction always need to read all the data from input table
-      // rewrite version to whole version range
-      merge_version_range_.snapshot_version_ = MERGE_READ_SNAPSHOT_VERSION;
-    }
 
     if (is_major_or_meta_merge_type(static_param_.get_merge_type()) && !get_schema()->is_row_store()) {
       if (OB_ISNULL(allocator)) {
@@ -119,16 +111,6 @@ int ObMergeParameter::init(
       } else if (OB_ISNULL(cg_rowkey_read_info_ = OB_NEWx(ObCGRowkeyReadInfo, allocator, *static_param_.rowkey_read_info_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "unexpected null rowkey read info", K(ret));
-      }
-    }
-
-    if (OB_SUCC(ret) & static_param_.merge_scn_ > static_param_.scn_range_.end_scn_) {
-      if (!static_param_.is_backfill_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("merge scn is bigger than scn range but merge type is not backfill, unexpected",
-            K(ret), K(static_param_.merge_scn_), K(static_param_.scn_range_), K(static_param_.get_merge_type()));
-      } else {
-        FLOG_INFO("set backfill merge scn", K(static_param_.merge_scn_), K(static_param_.scn_range_), K(static_param_.get_merge_type()));
       }
     }
   }
@@ -142,7 +124,7 @@ int ObMergeParameter::init(
     }
   }
   if (OB_SUCC(ret)) {
-    FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), KPC(this));
+    LOG_INFO("success to init ObMergeParameter", K(ret), K(idx), K_(static_param_.merge_scn), KPC_(merge_rowid_range_array));
   }
   return ret;
 }
@@ -243,6 +225,11 @@ bool ObMergeParameter::is_ha_compeleted() const
   return static_param_.is_ha_compeleted_;
 }
 
+const ObVersionRange & ObMergeParameter::get_merge_version_range() const
+{
+  return static_param_.merge_version_range_;
+}
+
 bool ObMergeParameter::is_empty_table(const ObITable &table) const
 {
   int ret = OB_SUCCESS;
@@ -270,8 +257,9 @@ int64_t ObMergeParameter::to_string(char* buf, const int64_t buf_len) const
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV(K_(static_param), K_(merge_version_range), K_(merge_range));
+    J_KV(K_(static_param), K_(merge_range));
     if (nullptr != merge_rowid_range_array_) {
+      J_COMMA();
       for (int64_t i = 0; i < static_param_.get_major_sstable_count(); ++i) {
         J_KV(K(i), K(merge_rowid_range_array_[i]));
       }

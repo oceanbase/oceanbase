@@ -361,6 +361,15 @@ int64_t ObAshBuffer::append(const ObActiveSessionStat &stat)
   int64_t idx = (write_pos_++ + buffer_.size()) % buffer_.size();
   MEMCPY(&buffer_[idx], &stat, sizeof(ObActiveSessionStatItem));
   buffer_[idx].id_ = write_pos_;
+  const ObActiveSessionStat & ash_stat = static_cast<const ObActiveSessionStat &>(stat);
+  int ret = OB_SUCCESS;
+  if (ash_stat.retry_wait_event_no_ > 0) {
+    // We think retry wait event is more import than normal wait event
+    buffer_[idx].event_no_ = ash_stat.retry_wait_event_no_;
+    buffer_[idx].p1_ = ash_stat.retry_wait_event_p1_;
+    buffer_[idx].p2_ = ash_stat.retry_wait_event_p2_;
+    buffer_[idx].p3_ = ash_stat.retry_wait_event_p3_;
+  }
   if (0 == write_pos_ % WR_ASH_SAMPLE_INTERVAL) {
     buffer_[idx].is_wr_sample_ = true;
   }

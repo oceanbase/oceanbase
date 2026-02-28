@@ -14,6 +14,7 @@
 #include "lib/thread/thread_mgr.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "share/compaction/ob_batch_exec_dag.h"
@@ -481,6 +482,14 @@ const char *ObITask::ObITaskTypeStr[] = {
   "COMPLEMENT_REPORT_REPLICA_TASK",
   "LOB_CHECK_TASK",
   "ATTACH_SHARED_MAJOR_SSTABLE",
+  "SSTABLE_SPLIT_PREPARE",
+  "SSTABLE_SPLIT_WRITE",
+  "SSTABLE_SPLIT_MERGE",
+  "BACKUP_VALIDATE_PREPARE",
+  "BACKUP_VALIDATE_FINISH",
+  "BACKUP_VALIDATE_BASIC",
+  "BACKUP_VALIDATE_BACKUPSET_PHYSICAL",
+  "BACKUP_VALIDATE_ARCHIVE_PIECE_PHYSICAL",
   "MAX"
 };
 
@@ -2769,9 +2778,6 @@ int ObDagPrioScheduler::rank_compaction_dags_()
     }
   }
 
-  if (OB_SUCC(ret)) {
-    adaptive_task_limit_ = limits_;
-  }
   return ret;
 }
 
@@ -2983,7 +2989,7 @@ int ObDagPrioScheduler::finish_dag_(
         // do nothing
       } else {
         compaction::ObTabletMergeDag &merge_dag = static_cast<compaction::ObTabletMergeDag &>(*dag);
-        if (OB_SUCCESS != dag->get_dag_ret()) {
+        if (OB_SUCCESS != dag->get_dag_ret() && OB_NO_NEED_MERGE != dag->get_dag_ret()) {
           if (OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(
                 merge_dag.ls_id_, merge_dag.tablet_id_, ObIDag::get_diagnose_tablet_type(dag->get_type())))) {
             COMMON_LOG(WARN, "failed to add diagnose tablet", K(tmp_ret),
@@ -3813,6 +3819,28 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
   return need_pause;
 }
 
+void ObDagPrioScheduler::adapt_window_thread_cnt()
+{
+  int ret = OB_SUCCESS;
+  int64_t adaptive_thread_cnt = 0;
+  ObTenantTabletScheduler *tablet_scheduler = MTL(ObTenantTabletScheduler *);
+  ObMutexGuard guard(prio_lock_);
+  if (OB_FAIL(guard.get_ret())) {
+    LOG_WARN("failed to get lock", KR(ret));
+  } else if (OB_UNLIKELY(ObDagPrio::DAG_PRIO_COMPACTION_LOW != priority_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only compaction low thread affected by window compaction", KR(ret), K_(priority));
+  } else if (OB_ISNULL(tablet_scheduler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet scheduler is nullptr", KR(ret));
+  } else if (OB_FAIL(tablet_scheduler->get_window_loop().get_adaptive_compaction_thread_cnt(limits_, adaptive_thread_cnt))) {
+    adaptive_task_limit_ = limits_;
+    LOG_WARN("failed to get adaptive compaction thread cnt, take limits_", KR(ret), K(limits_));
+  } else {
+    adaptive_task_limit_ = adaptive_thread_cnt;
+  }
+}
+
 // under prio lock
 bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
 {
@@ -4251,13 +4279,15 @@ int ObDagNetScheduler::loop_blocking_dag_net_list()
 }
 
 int ObDagNetScheduler::check_dag_net_exist(
-    const ObDagId &dag_id, bool &exist)
+    const ObDagId &dag_id, bool &exist, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
   const ObIDagNet *dag_net = nullptr;
-  ObMutexGuard guard(dag_net_map_lock_);
+  ObMutexGuardWithTimeout guard(dag_net_map_lock_, abs_timeout_us);
 
-  if (OB_FAIL(dag_net_id_map_.get_refactored(dag_id, dag_net))) {
+  if (OB_FAIL(guard.get_ret())) {
+    LOG_WARN("failed to lock dag_net_map_lock_", K(ret), K(dag_id));
+  } else if (OB_FAIL(dag_net_id_map_.get_refactored(dag_id, dag_net))) {
     if (OB_HASH_NOT_EXIST == ret) {
       exist = false;
       ret = OB_SUCCESS;
@@ -5139,6 +5169,9 @@ void ObTenantDagScheduler::run1()
       adapt_ss_work_thread();
     }
 #endif
+    if (!GCTX.is_shared_storage_mode()) {
+      adapt_window_thread_cnt();
+    }
     dump_dag_status();
     loop_dag_net();
     {
@@ -5603,14 +5636,14 @@ int ObTenantDagScheduler::cancel_dag(const ObIDag *dag, const bool force_cancel)
 }
 
 int ObTenantDagScheduler::check_dag_net_exist(
-    const ObDagId &dag_id, bool &exist)
+    const ObDagId &dag_id, bool &exist, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
-  } else if (OB_FAIL(dag_net_sche_.check_dag_net_exist(dag_id, exist))) {
+  } else if (OB_FAIL(dag_net_sche_.check_dag_net_exist(dag_id, exist, abs_timeout_us))) {
     COMMON_LOG(WARN, "fail to check dag net exist", K(ret));
   }
   return ret;

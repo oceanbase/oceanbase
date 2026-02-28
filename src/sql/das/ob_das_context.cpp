@@ -88,6 +88,7 @@ int ObDASCtx::get_das_tablet_mapper(const uint64_t ref_table_id,
       //record the ObTableSchema into tablet_mapper
       //the tablet and partition info come from ObTableSchema in the real table
       ObSchemaGetterGuard *schema_guard = nullptr;
+      ObSQLSessionInfo *session_info = nullptr;
       if (OB_ISNULL(sql_ctx_) || OB_ISNULL(schema_guard = sql_ctx_->schema_guard_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is nullptr", K(ret), K(sql_ctx_), K(schema_guard));
@@ -97,8 +98,16 @@ int ObDASCtx::get_das_tablet_mapper(const uint64_t ref_table_id,
       } else if (OB_ISNULL(tablet_mapper.table_schema_)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table schema is not found", K(ret), K(real_table_id));
+      } else if (OB_ISNULL(session_info = sql_ctx_->session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session info is nullptr", K(ret), K(sql_ctx_), K(session_info));
       } else {
         tablet_mapper.related_info_.guard_ = schema_guard;
+        const storage::ObGTTTabletInfo gtt_tablet_info(real_table_id,
+                                                      session_info->get_gtt_session_scope_unique_id(),
+                                                      session_info->get_gtt_trans_scope_unique_id(),
+                                                      session_info->get_sessid_for_table());
+        tablet_mapper.set_session_tablet_info(gtt_tablet_info, &(session_info->get_gtt_tablet_info_map()));
       }
     } else {
       ObSqlSchemaGuard *sql_schema_guard = &(sql_ctx_->cur_stmt_->get_query_ctx()->sql_schema_guard_);

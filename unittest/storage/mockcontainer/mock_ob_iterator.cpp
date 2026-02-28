@@ -1623,6 +1623,12 @@ int ObMockIteratorBuilder::static_init()
               || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
                   ObString::make_string("schema_ver"), ObMockIteratorBuilder::parse_obj_bigint)
               || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
+                  ObString::make_string("filter_type"), ObMockIteratorBuilder::parse_obj_bigint)
+              || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
+                  ObString::make_string("filter_value"), ObMockIteratorBuilder::parse_obj_bigint)
+              || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
+                  ObString::make_string("filter_col"), ObMockIteratorBuilder::parse_obj_bigint)
+              || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
                   ObString::make_string("lower_bound"), ObMockIteratorBuilder::parse_obj_bigint)
               || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
                   ObString::make_string("upper_bound"), ObMockIteratorBuilder::parse_obj_bigint))) {
@@ -1638,6 +1644,12 @@ int ObMockIteratorBuilder::static_init()
                   ObString::make_string("commit_ver"),&BIGINT_TYPE)
               || OB_SUCCESS != str_to_obj_type_.set_refactored(
                   ObString::make_string("schema_ver"),&BIGINT_TYPE)
+              || OB_SUCCESS != str_to_obj_type_.set_refactored(
+                  ObString::make_string("filter_type"),&BIGINT_TYPE)
+              || OB_SUCCESS != str_to_obj_type_.set_refactored(
+                  ObString::make_string("filter_value"),&BIGINT_TYPE)
+              || OB_SUCCESS != str_to_obj_type_.set_refactored(
+                  ObString::make_string("filter_col"),&BIGINT_TYPE)
               || OB_SUCCESS != str_to_obj_type_.set_refactored(
                   ObString::make_string("lower_bound"),&BIGINT_TYPE)
               || OB_SUCCESS != str_to_obj_type_.set_refactored(

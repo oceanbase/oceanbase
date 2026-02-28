@@ -141,7 +141,8 @@ public:
           ObSSTableWrapper &cg_wrapper) const override;
   virtual int get_cg_sstable(const uint32_t cg_idx, ObSSTableWrapper &cg_wrapper) const override;
   virtual int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers) const override;
-  int check_can_access(const ObTableAccessContext &context, bool &can_access) const;
+  int get_trans_id_and_seq_no(transaction::ObTransID &trans_id, transaction::ObTxSEQ &seq_no) const;
+  int check_can_access(ObTableAccessContext &context, bool &can_access) const;
 public:
   // derived from ObCOSSTableV2
   // query interfaces
@@ -168,7 +169,6 @@ public:
 private:
   int calculate_rowkey_column_cnt_and_row_cnt(ObIArray<ObITable *> &tables);
   int add_table(ObITable *table);
-  int init_tx_info(const ObSSTable &sstable);
   int add_ddl_sstable(ObSSTable *sstable);
   int add_ddl_memtable(ObSSTable *memtable);
   int add_cg_sstable(const int64_t cg_idx, ObITable *table);

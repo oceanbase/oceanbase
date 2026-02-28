@@ -53,7 +53,7 @@ int ObBloomFilterMacroBlockReader::read_macro_block(
     int64_t &bf_size)
 {
  int ret = OB_SUCCESS;
- const char *block_buf = nullptr;
+ ObMicroBlockData block_data;
  int64_t block_size = 0;
 
  if (OB_UNLIKELY(!macro_id.is_valid())) {
@@ -61,9 +61,9 @@ int ObBloomFilterMacroBlockReader::read_macro_block(
    STORAGE_LOG(WARN, "Invalid macro block id to read bloomfilter", K(ret), K(macro_id));
  } else if (OB_FAIL(read_macro_block(macro_id))) {
    STORAGE_LOG(WARN, "Failed to read bloomfilter macro block", K(ret));
- } else if (OB_FAIL(decompress_micro_block(block_buf, block_size))) {
+ } else if (OB_FAIL(decompress_micro_block(block_data))) {
    STORAGE_LOG(WARN, "Failed to decompress micro block", K(ret));
- } else if (OB_FAIL(read_micro_block(block_buf, block_size, bf_buf, bf_size))) {
+ } else if (OB_FAIL(read_micro_block(block_data.get_buf(), block_data.get_buf_size(), bf_buf, bf_size))) {
    STORAGE_LOG(WARN, "Failed to read micro block to bloom filter", K(ret));
  }
 
@@ -106,8 +106,7 @@ int ObBloomFilterMacroBlockReader::read_macro_block(const MacroBlockId &macro_id
 }
 
 int ObBloomFilterMacroBlockReader::decompress_micro_block(
-    const char *&block_buf,
-    int64_t &block_size)
+    ObMicroBlockData &block_data)
 {
   int ret = OB_SUCCESS;
   const char *data_buf = nullptr;
@@ -138,8 +137,7 @@ int ObBloomFilterMacroBlockReader::decompress_micro_block(
         bf_macro_header_->compressor_type_,
         micro_data_buf,
         micro_data_size,
-        block_buf,
-        block_size,
+        block_data,
         is_compressed))) {
       STORAGE_LOG(WARN, "Fail to decompress micro block data", K(ret));
     }

@@ -195,7 +195,6 @@ int ObExprSubstringIndex::eval_substring_index_batch(const ObExpr &expr,
       } else {
         res[i].set_string(res_str);
       }
-      eval_flags.set(i);
     }
   }
   return ret;

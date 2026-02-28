@@ -137,7 +137,7 @@ int ObGCUpperTransHelper::check_need_gc_or_update_upper_trans_version(
     }
 
     // only check inc major ddl dump sstable, cannot gc ddl memtable here!
-    if (OB_SUCC(ret)) {
+    if (!GCTX.is_shared_storage_mode() && OB_SUCC(ret)) {
       int tmp_ret = OB_SUCCESS;
       const ObSSTableArray &inc_major_ddl_dump_sstable = table_store_wrapper.get_member()->get_inc_major_ddl_sstables();
       for (int64_t idx = 0; (OB_SUCCESS == tmp_ret) && idx < inc_major_ddl_dump_sstable.count(); ++idx) {

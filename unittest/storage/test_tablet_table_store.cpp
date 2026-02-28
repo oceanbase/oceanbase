@@ -972,7 +972,7 @@ TEST_F(TestTableStore, test_compat_serialization)
   ObITable::TableKey inc_major_ddl_key;
   inc_major_ddl_key.tablet_id_ = tablet_id_;
   inc_major_ddl_key.scn_range_.start_scn_.convert_for_tx(130);
-  inc_major_ddl_key.scn_range_.end_scn_.convert_for_tx(200);
+  inc_major_ddl_key.scn_range_.end_scn_.convert_for_tx(350);  // must >= clog_checkpoint_scn_(300) when MINI_MERGE
   inc_major_ddl_key.table_type_ = ObITable::TableType::INC_MAJOR_DDL_DUMP_SSTABLE;
   EXPECT_EQ(OB_SUCCESS, mock_sstable(inc_major_ddl_key, new_inc_major_ddl_sstable, 300, 400));
   new_inc_major_ddl_sstable->meta_->basic_meta_.upper_trans_version_ = INT64_MAX;
@@ -1032,6 +1032,252 @@ TEST_F(TestTableStore, test_compat_serialization)
   EXPECT_EQ(new_table_store.major_tables_.count(), deserialized_table_store.major_tables_.count());
   EXPECT_EQ(new_table_store.minor_tables_.count(), deserialized_table_store.minor_tables_.count());
   EXPECT_EQ(new_table_store.inc_major_tables_.count(), deserialized_table_store.inc_major_tables_.count());
+}
+
+
+// Test major sstable recycle - not triggered when total count below threshold
+TEST_F(TestTableStore, test_major_recycle_not_triggered_by_table_count)
+{
+  // total_table_count < MAJOR_RECYCLE_TRIGGER_THRESHOLD (134), should not recycle
+  key_data_ = "table_type    start_scn    end_scn    max_ver    upper_ver\n"
+              "10            0            100        100        100      \n"
+              "10            0            200        200        200      \n"
+              "10            0            300        300        300      \n"
+              "11            300          400        400        400      \n";
+  ObTabletTableStore table_store;
+  EXPECT_EQ(OB_SUCCESS, mock_old_table_store(&table_store));
+  EXPECT_EQ(3, table_store.major_tables_.count());
+  EXPECT_EQ(1, table_store.minor_tables_.count());
+
+  // total = 4, far below threshold (134), should not trigger recycle
+  const int64_t original_major_count = table_store.major_tables_.count();
+  EXPECT_EQ(OB_SUCCESS, table_store.try_recycle_major_tables_(allocator_));
+  EXPECT_EQ(original_major_count, table_store.major_tables_.count());
+}
+
+
+// Test major sstable recycle - not triggered when major count <= min_keep_cnt
+TEST_F(TestTableStore, test_major_recycle_not_triggered_by_major_count)
+{
+  // Even if we could exceed threshold, major_count <= MAJOR_RECYCLE_MIN_KEEP_CNT (8) should not recycle
+  // This test verifies the major_count check logic
+  ObTabletTableStore table_store;
+
+  // Create only 5 majors (< min_keep_cnt = 8)
+  ObArray<ObITable *> major_tables;
+  for (int64_t i = 1; i <= 5; ++i) {
+    ObITable::TableKey key;
+    key.tablet_id_ = tablet_id_;
+    key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+    key.scn_range_.start_scn_.set_min();
+    key.scn_range_.end_scn_.convert_for_tx(i * 100);
+    ObSSTable *sstable = nullptr;
+    EXPECT_EQ(OB_SUCCESS, mock_sstable(key, sstable));
+    sstable->meta_->basic_meta_.max_merged_trans_version_ = i * 100;
+    sstable->meta_cache_.max_merged_trans_version_ = i * 100;
+    EXPECT_EQ(OB_SUCCESS, major_tables.push_back(sstable));
+  }
+
+  // Create many minor tables to make total exceed threshold
+  ObArray<ObITable *> minor_tables;
+  for (int64_t i = 1; i <= 130; ++i) {
+    ObITable::TableKey key;
+    key.tablet_id_ = tablet_id_;
+    key.table_type_ = ObITable::TableType::MINOR_SSTABLE;
+    key.scn_range_.start_scn_.convert_for_tx(500 + i);
+    key.scn_range_.end_scn_.convert_for_tx(500 + i + 1);
+    ObSSTable *sstable = nullptr;
+    EXPECT_EQ(OB_SUCCESS, mock_sstable(key, sstable));
+    sstable->meta_->basic_meta_.upper_trans_version_ = 500 + i + 1;
+    sstable->meta_cache_.upper_trans_version_ = 500 + i + 1;
+    EXPECT_EQ(OB_SUCCESS, minor_tables.push_back(sstable));
+  }
+
+  EXPECT_EQ(OB_SUCCESS, table_store.major_tables_.init(allocator_, major_tables));
+  EXPECT_EQ(OB_SUCCESS, table_store.minor_tables_.init(allocator_, minor_tables));
+  table_store.is_inited_ = true;
+
+  // total = 135 > threshold (134), but major_count = 5 <= min_keep_cnt (8)
+  EXPECT_EQ(135, table_store.get_table_count());
+  EXPECT_EQ(5, table_store.major_tables_.count());
+
+  const int64_t original_major_count = table_store.major_tables_.count();
+  EXPECT_EQ(OB_SUCCESS, table_store.try_recycle_major_tables_(allocator_));
+  // Should NOT recycle because major_count <= min_keep_cnt
+  EXPECT_EQ(original_major_count, table_store.major_tables_.count());
+}
+
+
+// Test major sstable recycle - basic recycle scenario
+TEST_F(TestTableStore, test_major_recycle_basic)
+{
+  ObTabletTableStore table_store;
+
+  // Create 50 major sstables
+  ObArray<ObITable *> major_tables;
+  for (int64_t i = 1; i <= 50; ++i) {
+    ObITable::TableKey key;
+    key.tablet_id_ = tablet_id_;
+    key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+    key.scn_range_.start_scn_.set_min();
+    key.scn_range_.end_scn_.convert_for_tx(i * 100);
+    ObSSTable *sstable = nullptr;
+    EXPECT_EQ(OB_SUCCESS, mock_sstable(key, sstable));
+    sstable->meta_->basic_meta_.max_merged_trans_version_ = i * 100;
+    sstable->meta_cache_.max_merged_trans_version_ = i * 100;
+    EXPECT_EQ(OB_SUCCESS, major_tables.push_back(sstable));
+  }
+
+  // Create 90 minor tables to make total = 140 > threshold (134)
+  ObArray<ObITable *> minor_tables;
+  for (int64_t i = 1; i <= 90; ++i) {
+    ObITable::TableKey key;
+    key.tablet_id_ = tablet_id_;
+    key.table_type_ = ObITable::TableType::MINOR_SSTABLE;
+    key.scn_range_.start_scn_.convert_for_tx(5000 + i);
+    key.scn_range_.end_scn_.convert_for_tx(5000 + i + 1);
+    ObSSTable *sstable = nullptr;
+    EXPECT_EQ(OB_SUCCESS, mock_sstable(key, sstable));
+    sstable->meta_->basic_meta_.upper_trans_version_ = 5000 + i + 1;
+    sstable->meta_cache_.upper_trans_version_ = 5000 + i + 1;
+    EXPECT_EQ(OB_SUCCESS, minor_tables.push_back(sstable));
+  }
+
+  EXPECT_EQ(OB_SUCCESS, table_store.major_tables_.init(allocator_, major_tables));
+  EXPECT_EQ(OB_SUCCESS, table_store.minor_tables_.init(allocator_, minor_tables));
+  table_store.is_inited_ = true;
+
+  EXPECT_EQ(140, table_store.get_table_count());
+  EXPECT_EQ(50, table_store.major_tables_.count());
+
+  EXPECT_EQ(OB_SUCCESS, table_store.try_recycle_major_tables_(allocator_));
+
+  // After recycle:
+  // - other_table_count = 90
+  // - target_threshold = 57
+  // - keep_count = MAX(57 - 90, 8) = 8 (capped by min_keep_cnt)
+  // So should keep 8 majors
+  EXPECT_EQ(8, table_store.major_tables_.count());
+
+  // Verify oldest is kept (end_scn = 100)
+  EXPECT_EQ(100, table_store.major_tables_[0]->get_key().scn_range_.end_scn_.get_val_for_tx());
+
+  // Verify newest is kept (end_scn = 5000)
+  const int64_t new_count = table_store.major_tables_.count();
+  EXPECT_EQ(5000, table_store.major_tables_[new_count - 1]->get_key().scn_range_.end_scn_.get_val_for_tx());
+}
+
+
+// Test major sstable recycle - verify oldest and newest are always kept
+TEST_F(TestTableStore, test_major_recycle_keeps_oldest_and_newest)
+{
+  ObTabletTableStore table_store;
+
+  // Create 20 major sstables with specific versions
+  ObArray<ObITable *> major_tables;
+  for (int64_t i = 1; i <= 20; ++i) {
+    ObITable::TableKey key;
+    key.tablet_id_ = tablet_id_;
+    key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+    key.scn_range_.start_scn_.set_min();
+    key.scn_range_.end_scn_.convert_for_tx(i * 1000);  // 1000, 2000, ..., 20000
+    ObSSTable *sstable = nullptr;
+    EXPECT_EQ(OB_SUCCESS, mock_sstable(key, sstable));
+    sstable->meta_->basic_meta_.max_merged_trans_version_ = i * 1000;
+    sstable->meta_cache_.max_merged_trans_version_ = i * 1000;
+    EXPECT_EQ(OB_SUCCESS, major_tables.push_back(sstable));
+  }
+
+  // Create 120 minor tables
+  ObArray<ObITable *> minor_tables;
+  for (int64_t i = 1; i <= 120; ++i) {
+    ObITable::TableKey key;
+    key.tablet_id_ = tablet_id_;
+    key.table_type_ = ObITable::TableType::MINOR_SSTABLE;
+    key.scn_range_.start_scn_.convert_for_tx(20000 + i);
+    key.scn_range_.end_scn_.convert_for_tx(20000 + i + 1);
+    ObSSTable *sstable = nullptr;
+    EXPECT_EQ(OB_SUCCESS, mock_sstable(key, sstable));
+    sstable->meta_->basic_meta_.upper_trans_version_ = 20000 + i + 1;
+    sstable->meta_cache_.upper_trans_version_ = 20000 + i + 1;
+    EXPECT_EQ(OB_SUCCESS, minor_tables.push_back(sstable));
+  }
+
+  EXPECT_EQ(OB_SUCCESS, table_store.major_tables_.init(allocator_, major_tables));
+  EXPECT_EQ(OB_SUCCESS, table_store.minor_tables_.init(allocator_, minor_tables));
+  table_store.is_inited_ = true;
+
+  // total = 140 > threshold (134)
+  EXPECT_EQ(140, table_store.get_table_count());
+
+  const int64_t oldest_version = table_store.major_tables_[0]->get_key().scn_range_.end_scn_.get_val_for_tx();
+  const int64_t newest_version = table_store.major_tables_[table_store.major_tables_.count() - 1]->get_key().scn_range_.end_scn_.get_val_for_tx();
+
+  EXPECT_EQ(OB_SUCCESS, table_store.try_recycle_major_tables_(allocator_));
+
+  // Verify oldest is still kept
+  EXPECT_EQ(oldest_version, table_store.major_tables_[0]->get_key().scn_range_.end_scn_.get_val_for_tx());
+
+  // Verify newest is still kept
+  const int64_t new_count = table_store.major_tables_.count();
+  EXPECT_EQ(newest_version, table_store.major_tables_[new_count - 1]->get_key().scn_range_.end_scn_.get_val_for_tx());
+}
+
+
+// Test major sstable recycle - verify newest K majors are kept consecutively
+TEST_F(TestTableStore, test_major_recycle_keeps_newest_consecutive)
+{
+  ObTabletTableStore table_store;
+
+  // Create 30 major sstables
+  ObArray<ObITable *> major_tables;
+  for (int64_t i = 1; i <= 30; ++i) {
+    ObITable::TableKey key;
+    key.tablet_id_ = tablet_id_;
+    key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+    key.scn_range_.start_scn_.set_min();
+    key.scn_range_.end_scn_.convert_for_tx(i * 100);
+    ObSSTable *sstable = nullptr;
+    EXPECT_EQ(OB_SUCCESS, mock_sstable(key, sstable));
+    sstable->meta_->basic_meta_.max_merged_trans_version_ = i * 100;
+    sstable->meta_cache_.max_merged_trans_version_ = i * 100;
+    EXPECT_EQ(OB_SUCCESS, major_tables.push_back(sstable));
+  }
+
+  // Create 110 minor tables to make total = 140
+  ObArray<ObITable *> minor_tables;
+  for (int64_t i = 1; i <= 110; ++i) {
+    ObITable::TableKey key;
+    key.tablet_id_ = tablet_id_;
+    key.table_type_ = ObITable::TableType::MINOR_SSTABLE;
+    key.scn_range_.start_scn_.convert_for_tx(3000 + i);
+    key.scn_range_.end_scn_.convert_for_tx(3000 + i + 1);
+    ObSSTable *sstable = nullptr;
+    EXPECT_EQ(OB_SUCCESS, mock_sstable(key, sstable));
+    sstable->meta_->basic_meta_.upper_trans_version_ = 3000 + i + 1;
+    sstable->meta_cache_.upper_trans_version_ = 3000 + i + 1;
+    EXPECT_EQ(OB_SUCCESS, minor_tables.push_back(sstable));
+  }
+
+  EXPECT_EQ(OB_SUCCESS, table_store.major_tables_.init(allocator_, major_tables));
+  EXPECT_EQ(OB_SUCCESS, table_store.minor_tables_.init(allocator_, minor_tables));
+  table_store.is_inited_ = true;
+
+  EXPECT_EQ(OB_SUCCESS, table_store.try_recycle_major_tables_(allocator_));
+
+  const int64_t new_count = table_store.major_tables_.count();
+  // keep_count = max(57 - 110, 8) = 8
+  EXPECT_EQ(8, new_count);
+
+  // MAJOR_RECYCLE_KEEP_NEWEST_CNT = 4, keep_count = 8, so keep_newest_cnt = min(4, max(8-1, 1)) = 4
+  // So newest 4 should be consecutive (2700, 2800, 2900, 3000)
+
+  // Check that the newest majors are consecutive
+  const int64_t keep_newest_cnt = MIN(ObTabletTableStore::MAJOR_RECYCLE_KEEP_NEWEST_CNT, MAX(new_count - 1, 1));
+  for (int64_t i = 0; i < keep_newest_cnt; ++i) {
+    const int64_t expected_version = (30 - keep_newest_cnt + 1 + i) * 100;
+    EXPECT_EQ(expected_version, table_store.major_tables_[new_count - keep_newest_cnt + i]->get_key().scn_range_.end_scn_.get_val_for_tx());
+  }
 }
 
 } // unittest

@@ -266,6 +266,8 @@ public:
       uint8_t reserved_        : 2;
     };
   };
+  // 00101001: first, committed, compacted, last, not shadow, not ghost
+  constexpr static uint8_t MAJOR_FLAG = 0b00101001;
 
   ObMultiVersionRowFlag() : flag_(0) {}
   ObMultiVersionRowFlag(uint8_t flag) : flag_(flag) {}
@@ -294,6 +296,10 @@ public:
   {
     is_shadow_ = is_shadow_row;
   }
+  inline void set_major()
+  {
+    flag_ = MAJOR_FLAG;
+  }
   inline bool is_valid() const
   {
     return !is_first_multi_version_row() || is_uncommitted_row() || is_last_multi_version_row() || is_ghost_row() || is_shadow_row();
@@ -317,6 +323,15 @@ public:
                K_(flag));
 };
 
+struct MultiVersionInfo
+{
+  transaction::ObTransID trans_id_;
+  ObMultiVersionRowFlag mvcc_row_flag_;
+  ObDmlRowFlag dml_row_flag_;
+
+  TO_STRING_KV(K_(dml_row_flag), K_(mvcc_row_flag), K_(trans_id));
+};
+
 struct ObDatumRow
 {
   OB_UNIS_VERSION(1);
@@ -331,6 +346,7 @@ public:
   int deep_copy(const ObDatumRow &src, common::ObIAllocator &allocator);
   int from_store_row(const storage::ObStoreRow &store_row);
   int shallow_copy(const ObDatumRow &other);
+  int shallow_copy_with_local_storage_datum(const ObDatumRow &other);
   //only for unittest
   bool operator==(const ObDatumRow &other) const;
   bool operator==(const common::ObNewRow &other) const;

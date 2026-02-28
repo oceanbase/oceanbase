@@ -144,7 +144,7 @@ int ObIOManagerV2::set_default_net_tc_limits()
 }
 
 
-ObTenantIOSchedulerV2::ObTenantIOSchedulerV2(): tenant_id_(0)
+ObTenantIOSchedulerV2::ObTenantIOSchedulerV2(): rwlock_(common::ObLatchIds::OB_TENANT_IO_SCHEDULER_V2_DRW_LOCK), tenant_id_(0)
 {
   memset(top_qid_, -1, sizeof(top_qid_));
   memset(default_qid_, -1, sizeof(default_qid_));
@@ -340,7 +340,8 @@ int ObTenantIOSchedulerV2::schedule_request(ObIORequest &req)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret), K(req));
   } else if (OB_UNLIKELY(is_default_q)) {
-    if (0 != qsched_submit(root, &req.qsched_req_, assign_chan_id())) {
+    if (FALSE_IT(req.io_result_->time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time())) {
+    } else if (0 != qsched_submit(root, &req.qsched_req_, assign_chan_id())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("qsched_submit fail", K(ret), K(req));
     }

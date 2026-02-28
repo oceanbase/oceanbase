@@ -27,7 +27,7 @@ namespace storage
 
 ObTxCtxMemtableMgr::ObTxCtxMemtableMgr()
   : ls_id_(),
-    lock_def_()
+    lock_def_(common::ObLatchIds::OB_TX_CTX_MEMTABLE_MGR_LOCK)
 {
   lock_.lock_type_ = LockType::OB_SPIN_RWLOCK;
   lock_.lock_ = &lock_def_;

@@ -39,9 +39,11 @@
 #include "share/ob_scheduled_manage_dynamic_partition.h"
 #include "share/schema/ob_ccl_rule_sql_service.h"
 #include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
+#include "share/ob_lob_check_job_scheduler.h"                    // ObLobCheckJobScheduler
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
+#include "share/compaction/ob_schedule_daily_maintenance_window.h"
 
 namespace oceanbase
 {
@@ -1617,7 +1619,8 @@ int ObDDLOperator::create_table(ObTableSchema &table_schema,
                                 ObMySQLTransaction &trans,
                                 const ObString *ddl_stmt_str/*=NULL*/,
                                 const bool need_sync_schema_version,
-                                const bool is_truncate_table /*false*/)
+                                const bool is_truncate_table /*false*/,
+                                const int64_t create_vec_index_parallel /* =0 */)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -1702,7 +1705,8 @@ int ObDDLOperator::create_table(ObTableSchema &table_schema,
       table_schema.is_hybrid_vec_index_log_type()) &&
       OB_FAIL(ObVectorIndexUtil::add_dbms_vector_jobs(trans, tenant_id,
                                                       table_schema.get_table_id(),
-                                                      table_schema.get_exec_env()))) {
+                                                      table_schema.get_exec_env(),
+                                                      create_vec_index_parallel))) {
     LOG_WARN("failed to add dbms_vector jobs", K(ret), K(tenant_id), K(table_schema));
   }
   return ret;
@@ -1757,7 +1761,7 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
                                                    const obrpc::ObSequenceDDLArg *sequence_ddl_arg)
 {
   int ret = OB_SUCCESS;
-  if (!(table_schema.is_user_table() || table_schema.is_oracle_tmp_table())) {
+  if (!(table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2())) {
     // do nothing
   } else {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
@@ -1858,7 +1862,7 @@ int ObDDLOperator::drop_sequence_in_drop_table(const ObTableSchema &table_schema
                                                share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table()) {
+  if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
          OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
       ObColumnSchemaV2 &column_schema = (**iter);
@@ -2547,6 +2551,11 @@ int ObDDLOperator::truncate_table(const ObString *ddl_stmt_str,
                                                         schema_version,
                                                         is_truncate_table))) {
       LOG_WARN("add part info failed", KR(ret), K(table_id), K(schema_version));
+    }
+  } else {
+    if (OB_FAIL(schema_service->get_table_sql_service()
+                                .truncate_table_stats_info(trans, orig_table_schema))) {
+      LOG_WARN("truncate table stats info failed", KR(ret), K(orig_table_schema.get_table_id()));
     }
   }
   if (FAILEDx(schema_service->get_table_sql_service()
@@ -4337,9 +4346,25 @@ int ObDDLOperator::alter_index_table_tablespace(const uint64_t data_table_id,
       LOG_WARN("fail to get table schema",
         K(ret), K(tenant_id), K(database_id), K(index_table_schema));
     } else if (OB_ISNULL(index_table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      RS_LOG(WARN, "get index table schema failed",
-        K(tenant_id), K(database_id), K(index_table_name), K(ret));
+      // try to get builtin index table schema
+      const bool is_builtin_index = true;
+      const bool no_hidden_flag = false;
+      if (OB_FAIL(schema_guard.get_table_schema(
+              tenant_id,
+              database_id,
+              index_table_name,
+              true,
+              index_table_schema,
+              no_hidden_flag,
+              is_builtin_index))) {
+        LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_id), K(index_table_name), K(ret));
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        RS_LOG(WARN, "get index table schema failed", K(tenant_id), K(database_id), K(index_table_name), K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (index_table_schema->is_in_recyclebin()) {
       ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
       LOG_WARN("index table is in recyclebin", K(ret));
@@ -4573,8 +4598,13 @@ int ObDDLOperator::update_aux_table(
           new_aux_table_schema.set_store_format(new_table_schema.get_store_format());
           new_aux_table_schema.set_progressive_merge_round(new_table_schema.get_progressive_merge_round());
           new_aux_table_schema.set_storage_format_version(new_table_schema.get_storage_format_version());
-          // index table should only inherit table mode flag and table state flag from data table
-          new_aux_table_schema.set_table_mode_flag(new_table_schema.get_table_mode_flag());
+          if (aux_table_schema->is_vec_delta_buffer_type() || aux_table_schema->is_vec_index_id_type()) {
+            // set TABLE_MODE_QUEUING_EXTREME for delta_buffer and index_id table.
+            new_aux_table_schema.set_table_mode_flag(share::schema::TABLE_MODE_QUEUING_EXTREME);
+          } else {
+            // index table should only inherit table mode flag and table state flag from data table
+            new_aux_table_schema.set_table_mode_flag(new_table_schema.get_table_mode_flag());
+          }
           new_aux_table_schema.set_table_state_flag(new_table_schema.get_table_state_flag());
           new_aux_table_schema.set_duplicate_attribute(new_table_schema.get_duplicate_scope(), new_table_schema.get_duplicate_read_consistency());
           new_aux_table_schema.set_enable_macro_block_bloom_filter(new_table_schema.get_enable_macro_block_bloom_filter());
@@ -4582,6 +4612,10 @@ int ObDDLOperator::update_aux_table(
           new_aux_table_schema.set_micro_block_format_version(new_table_schema.get_micro_block_format_version());
         }
         if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(new_aux_table_schema.set_ttl_definition(
+            new_table_schema.get_ttl_definition(),
+            new_table_schema.get_ttl_flag()))) {
+          LOG_WARN("set_ttl_definition failed", K(new_table_schema));
         } else if (OB_FAIL(new_aux_table_schema.set_compress_func_name(new_table_schema.get_compress_func_name()))) {
           LOG_WARN("set_compress_func_name failed", K(new_table_schema));
         } else if (aux_table_schema->is_in_recyclebin()) {
@@ -5313,6 +5347,8 @@ int ObDDLOperator::drop_tablet_of_table(
     ObSEArray<const ObTableSchema*, 1> schemas;
     if (table_schema.is_vir_table()
         || table_schema.is_view_table()
+        || table_schema.is_oracle_tmp_table_v2()
+        || table_schema.is_oracle_tmp_table_v2_index_table()
         || is_inner_table(table_schema.get_table_id())) {
       // skip
     } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
@@ -5366,7 +5402,8 @@ int ObDDLOperator::drop_table(
 
   if (OB_FAIL(ret)) {
   } else if ((table_schema.is_aux_table() || table_schema.is_mlog_table())
-      && !is_inner_table(table_schema.get_table_id())) {
+      && !is_inner_table(table_schema.get_table_id())
+      && !table_schema.is_oracle_tmp_table_v2_index_table()) {
     ObSnapshotInfoManager snapshot_mgr;
     ObArray<ObTabletID> tablet_ids;
     SCN invalid_scn;
@@ -11922,6 +11959,13 @@ int ObDDLOperator::init_tenant_scheduled_job(
       false/*schedule_at_once*/,
       trans))) {
     LOG_WARN("create scheduled trigger dump_data_dict job failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObLobCheckJobScheduler::create_lob_check_job(sys_variable, tenant_id, trans))) {
+    LOG_WARN("create scheduled lob check job failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObScheduleDailyMaintenanceWindow::create_jobs_for_tenant_creation(
+                     sys_variable,
+                     tenant_id,
+                     trans))) {
+    LOG_WARN("create scheduled daily maintenance window job failed", KR(ret), K(tenant_id));
   }
   return ret;
 }

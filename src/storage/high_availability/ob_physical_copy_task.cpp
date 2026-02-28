@@ -30,7 +30,7 @@ ObPhysicalCopyTask::ObPhysicalCopyTask()
     copy_ctx_(nullptr),
     finish_task_(nullptr),
     copy_table_key_(),
-    copy_macro_range_info_(),
+    copy_macro_range_id_info_(),
     task_idx_(0)
 {
 }
@@ -68,13 +68,13 @@ int ObPhysicalCopyTask::build_macro_block_copy_info_(ObSSTableCopyFinishTask *fi
   if (OB_ISNULL(finish_task)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("build macro block copy info get invalid argument", K(ret), KP(finish_task));
-  } else if (OB_FAIL(finish_task->get_next_macro_block_copy_info(copy_table_key_, copy_macro_range_info_))) {
+  } else if (OB_FAIL(finish_task->get_next_macro_block_copy_info(copy_table_key_, copy_macro_range_id_info_))) {
     if (OB_ITER_END == ret) {
     } else {
       LOG_WARN("failed to get macro block copy info", K(ret));
     }
   } else {
-    LOG_INFO("succeed get macro block copy info", K(copy_table_key_), K(copy_macro_range_info_));
+    LOG_INFO("succeed get macro block copy info", K(copy_table_key_), K(copy_macro_range_id_info_));
   }
   return ret;
 }
@@ -104,18 +104,18 @@ int ObPhysicalCopyTask::process()
       DEBUG_SYNC(FETCH_MACRO_BLOCK);
     }
 
-    if (OB_SUCC(ret) && copy_macro_range_info_->macro_block_count_ > 0) {
+    if (OB_SUCC(ret) && copy_macro_range_id_info_->range_info_.macro_block_count_ > 0) {
       if (OB_FAIL(fetch_macro_block_with_retry_(copied_ctx))) {
-        LOG_WARN("failed to fetch major block", K(ret), K(copy_table_key_), KPC(copy_macro_range_info_));
-      } else if (copy_macro_range_info_->macro_block_count_ != copied_ctx.get_macro_block_count()) {
+        LOG_WARN("failed to fetch major block", K(ret), K(copy_table_key_), KPC(copy_macro_range_id_info_));
+      } else if (copy_macro_range_id_info_->range_info_.macro_block_count_ != copied_ctx.get_macro_block_count()) {
         ret = OB_ERR_SYS;
-        LOG_ERROR("list count not match", K(ret), KPC(copy_macro_range_info_),
+        LOG_ERROR("list count not match", K(ret), KPC(copy_macro_range_id_info_),
             K(copied_ctx.get_macro_block_count()), K(copied_ctx));
       }
     }
     copy_ctx_->total_macro_count_ += copied_ctx.get_macro_block_count();
     copy_ctx_->reuse_macro_count_ += copied_ctx.use_old_macro_block_count_;
-    LOG_INFO("physical copy task finish", K(ret), KPC(copy_macro_range_info_), KPC(copy_ctx_));
+    LOG_INFO("physical copy task finish", K(ret), KPC(copy_macro_range_id_info_), KPC(copy_ctx_));
   }
 
   if (OB_SUCCESS != (tmp_ret = record_server_event_())) {
@@ -211,9 +211,9 @@ int ObPhysicalCopyTask::fetch_macro_block_(
       LOG_WARN("failed to get macro block writer", K(ret), K(copy_table_key_));
     } else if (OB_FAIL(writer->process(copied_ctx, *copy_ctx_->ha_dag_->get_ha_dag_net_ctx()))) {
       LOG_WARN("failed to process writer", K(ret), K(copy_table_key_));
-    } else if (copy_macro_range_info_->macro_block_count_ != copied_ctx.get_macro_block_count()) {
+    } else if (copy_macro_range_id_info_->range_info_.macro_block_count_ != copied_ctx.get_macro_block_count()) {
       ret = OB_ERR_SYS;
-      LOG_ERROR("list count not match", K(ret), K(copy_table_key_), KPC(copy_macro_range_info_),
+      LOG_ERROR("list count not match", K(ret), K(copy_table_key_), KPC(copy_macro_range_id_info_),
           K(copied_ctx.get_macro_block_count()), K(copied_ctx));
     }
 
@@ -552,65 +552,76 @@ int ObPhysicalCopyTask::build_copy_macro_block_reader_init_param_(
     init_param.meta_index_store_ = copy_ctx_->meta_index_store_;
     init_param.second_meta_index_store_ = copy_ctx_->second_meta_index_store_;
     init_param.restore_macro_block_id_mgr_ = copy_ctx_->restore_macro_block_id_mgr_;
-    init_param.copy_macro_range_info_ = copy_macro_range_info_;
+    init_param.copy_macro_range_info_ = &copy_macro_range_id_info_->range_info_;
     init_param.need_check_seq_ = copy_ctx_->need_check_seq_;
     init_param.ls_rebuild_seq_ = copy_ctx_->ls_rebuild_seq_;
     init_param.backfill_tx_scn_ = finish_task_->get_sstable_param()->basic_meta_.filled_tx_scn_;
     init_param.macro_block_reuse_mgr_ = copy_ctx_->macro_block_reuse_mgr_;
     init_param.data_version_ = 0;
+    init_param.copy_macro_block_infos_.reset();
 
-    if (OB_FAIL(build_data_version_for_macro_block_reuse_(init_param))) {
-      LOG_WARN("failed to check enable macro block reuse", K(ret), K(init_param));
+    if (OB_FAIL(build_copy_sstable_macro_info_for_macro_block_reuse_(init_param))) {
+      LOG_WARN("failed to build data version for macro block reuse", K(ret), K(init_param));
     } else if (!init_param.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("copy macro block reader init param is invalid", K(ret), K(init_param));
     } else {
-      LOG_INFO("succeed init param", KPC(copy_macro_range_info_), K(init_param));
+      LOG_INFO("succeed init param", KPC(copy_macro_range_id_info_), K(init_param));
     }
   }
   return ret;
 }
 
-int ObPhysicalCopyTask::build_data_version_for_macro_block_reuse_(ObCopyMacroBlockReaderInitParam &init_param)
+int ObPhysicalCopyTask::build_copy_sstable_macro_info_for_macro_block_reuse_(ObCopyMacroBlockReaderInitParam &init_param)
 {
   int ret = OB_SUCCESS;
-  int64_t snapshot_version = 0;
-  int64_t co_base_snapshot_version = 0;
-  int64_t src_co_base_snapshot_version = 0;
-  uint64_t compat_version = 0;
-  init_param.data_version_ = 0;
 
-  if (OB_ISNULL(copy_ctx_->macro_block_reuse_mgr_)) {
-    // skip reuse
-    init_param.data_version_ = 0;
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(copy_ctx_->tenant_id_, compat_version))) {
-    LOG_INFO("failed to get min data version", K(ret), KPC(copy_ctx_));
-  } else if (compat_version < DATA_VERSION_4_3_4_0) {
-    // when reuse macro block, dst will send data_version to src, but data_version cannot be set to larger than 0 before 4.3.4
-    // therefore, if src observer version is less than 4.3.4, skip reuse for compatibility
-    init_param.data_version_ = 0;
-    LOG_INFO("skip reuse for compatibility", K(compat_version), KPC(copy_ctx_));
-  } else if (finish_task_->get_sstable_param()->is_small_sstable_) {
-    // skip reuse for small sstable
-    init_param.data_version_ = 0;
-    LOG_INFO("skip reuse for small sstable", KPC(copy_ctx_));
-  } else if (OB_FAIL(copy_ctx_->macro_block_reuse_mgr_->get_major_snapshot_version(copy_ctx_->table_key_, snapshot_version, co_base_snapshot_version))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to get reuse major snapshot version", K(ret), KPC(copy_ctx_));
-    } else {
-      ret = OB_SUCCESS;
-      init_param.data_version_ = 0;
-      LOG_INFO("major snapshot version not exist, maybe copying first major in this tablet or copying F major to C replica, skip reuse, set data_version_ to 0", K(ret), KPC(copy_ctx_), K(init_param));
-    }
-  } else if (FALSE_IT(src_co_base_snapshot_version = finish_task_->get_sstable_param()->basic_meta_.get_co_base_snapshot_version())) {
-  } else if (co_base_snapshot_version != src_co_base_snapshot_version) {
-    // when co_base_snapshot_version not match (dst C's major is converted from different version of src major), skip reuse
-    init_param.data_version_ = 0;
-    LOG_INFO("co_base_snapshot_version not match, skip reuse, set data_version_ to 0", K(snapshot_version), K(co_base_snapshot_version),
-        K(src_co_base_snapshot_version), KPC(copy_ctx_), K(init_param));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("physical copy task do not init", K(ret));
+  } else if (!init_param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("build copy sstable macro info for macro block reuse get invalid argument", K(ret), K(init_param));
   } else {
-    init_param.data_version_ = snapshot_version;
-    LOG_INFO("succeed get and set reuse major max snapshot version", K(snapshot_version), K(co_base_snapshot_version), K(src_co_base_snapshot_version), KPC(copy_ctx_), K(init_param));
+    const ObIArray<ObLogicMacroBlockId> &macro_block_ids = copy_macro_range_id_info_->macro_block_ids_;
+    if (macro_block_ids.empty()) {
+      // compatible with old version, if macro block id list is empty, skip reuse
+      LOG_INFO("macro block id list in copy macro range info is empty, maybe src is old version, skip reuse", KPC(copy_macro_range_id_info_));
+    } else {
+      int block_count = macro_block_ids.count();
+      const ObMacroBlockReuseMgr &macro_block_reuse_mgr = finish_task_->get_macro_block_reuse_mgr();
+      ObLogicMacroBlockId logical_id;
+      ObCopyMacroBlockInfo copy_macro_info;
+      MacroBlockId physical_id;
+      int64_t data_checksum = 0;
+
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < block_count; ++idx) {
+        logical_id = macro_block_ids.at(idx);
+        copy_macro_info.reset();
+        physical_id.reset();
+        data_checksum = 0;
+        copy_macro_info.logical_id_ = logical_id;
+
+        if (OB_FAIL(macro_block_reuse_mgr.get_macro_block_reuse_info(logical_id, physical_id, data_checksum))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            copy_macro_info.data_type_ = ObCopyMacroBlockDataType::MACRO_DATA;
+            LOG_INFO("macro block reuse info not exist, skip reuse", K(logical_id));
+          } else {
+            LOG_WARN("failed to get macro block reuse info", K(ret), K(logical_id));
+          }
+        } else {
+          copy_macro_info.data_type_ = ObCopyMacroBlockDataType::MACRO_META_ROW;
+          LOG_INFO("succeed get macro block reuse info", K(logical_id), K(physical_id), K(data_checksum));
+        }
+
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(init_param.copy_macro_block_infos_.push_back(copy_macro_info))) {
+            LOG_WARN("failed to push back copy macro info", K(ret), K(copy_macro_info));
+          }
+        }
+      }
+    }
   }
 
   return ret;
@@ -628,7 +639,7 @@ int ObPhysicalCopyTask::record_server_event_()
         "ls_id", copy_ctx_->ls_id_.id(),
         "tablet_id", copy_ctx_->tablet_id_.id(),
         "table_key", copy_table_key_,
-        "macro_block_count", copy_macro_range_info_->macro_block_count_,
+        "macro_block_count", copy_macro_range_id_info_->range_info_.macro_block_count_,
         "src", copy_ctx_->src_info_.src_addr_);
   }
   return ret;

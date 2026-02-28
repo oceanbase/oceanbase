@@ -47,8 +47,8 @@ public:
         MYSQL_LOCK_TABLE_STMT =   2,
         MYSQL_UNLOCK_TABLE_STMT = 3
   };
-  explicit ObLockTableStmt()
-    : ObDMLStmt(stmt::T_LOCK_TABLE),
+  explicit ObLockTableStmt(ObIAllocator &allocator)
+    : ObDMLStmt(stmt::T_LOCK_TABLE, allocator),
       lock_stmt_type_(0),
       lock_mode_(0),
       wait_lock_seconds_(-1),

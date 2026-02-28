@@ -15,6 +15,7 @@
 #include "rootserver/ob_root_service.h"
 #include "share/object_storage/ob_zone_storage_table_operation.h"
 #include "share/object_storage/ob_device_config_mgr.h"
+#include "share/ob_kv_parser.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_ss_format_util.h"
 #endif
@@ -134,6 +135,162 @@ ObScopeType::TYPE ObScopeType::get_type(const char *type_str)
     }
   }
   return type;
+}
+
+int ObKVStringUtil::find_key_ci(const ObIArray<ObKVPair> &kvs, const ObString &key, int64_t &idx)
+{
+  int ret = OB_SUCCESS;
+  idx = OB_INVALID_INDEX;
+  bool found = false;
+  for (int64_t i = 0; !found && i < kvs.count(); ++i) {
+    if (kvs.at(i).key_.case_compare_equal(key)) {
+      idx = i;
+      found = true;
+    }
+  }
+  return ret;
+}
+
+int ObKVStringUtil::parse_kv_list(
+    const ObString &input,
+    char *buf,
+    const int64_t buf_len,
+    ObIArray<ObKVPair> &kvs)
+{
+  int ret = OB_SUCCESS;
+  kvs.reset();
+  if (input.empty()) {
+    // empty ok
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(buf), K(buf_len));
+  } else {
+    struct ObKVCollectCb final : public share::ObKVMatchCb
+    {
+      ObKVCollectCb(char *buf, const int64_t buf_len, ObIArray<ObKVPair> &kvs)
+        : buf_(buf), buf_len_(buf_len), kvs_(kvs), pos_(0) {}
+      virtual int match(const char *key, const char *value) override
+      {
+        int ret = OB_SUCCESS;
+        int64_t key_len = 0;
+        int64_t value_len = 0;
+        if (OB_ISNULL(key) || OB_ISNULL(value)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid kv", KR(ret), KP(key), KP(value));
+        } else if (FALSE_IT(key_len = STRLEN(key))) {
+        } else if (FALSE_IT(value_len = STRLEN(value))) {
+        } else if (OB_UNLIKELY(key_len == 0 || value_len == 0)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("empty kv", KR(ret), KCSTRING(key), KCSTRING(value));
+        } else {
+          const int64_t need = key_len + 1 + value_len + 1;
+          if (OB_UNLIKELY(pos_ + need >= buf_len_)) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("kv buf too small", KR(ret), K(pos_), K(need), K(buf_len_), K(key), K(value));
+          } else {
+            char *kptr = buf_ + pos_;
+            MEMCPY(kptr, key, key_len);
+            kptr[key_len] = '\0';
+            pos_ += key_len + 1;
+
+            char *vptr = buf_ + pos_;
+            MEMCPY(vptr, value, value_len);
+            vptr[value_len] = '\0';
+            pos_ += value_len + 1;
+
+            const ObString k(kptr);
+            const ObString v(vptr);
+            int64_t exist_idx = OB_INVALID_INDEX;
+            if (OB_FAIL(ObKVStringUtil::find_key_ci(kvs_, k, exist_idx))) {
+              LOG_WARN("find key failed", KR(ret), K(k));
+            } else if (exist_idx != OB_INVALID_INDEX) {
+              if (OB_FAIL(kvs_.remove(exist_idx))) {
+                LOG_WARN("remove kv failed", KR(ret), K(exist_idx), K(k));
+              }
+            }
+            if (FAILEDx(kvs_.push_back(ObKVPair(k, v)))) {
+              LOG_WARN("push kv failed", KR(ret), K(k), K(v));
+            }
+          }
+        }
+        return ret;
+      }
+      char *buf_;
+      const int64_t buf_len_;
+      ObIArray<ObKVPair> &kvs_;
+      int64_t pos_;
+    };
+
+    ObKVCollectCb cb(buf, buf_len, kvs);
+    share::ObKVParser parser('='/*kv_sep*/, '&'/*pair_sep*/);
+    parser.set_allow_space(true);
+    parser.set_match_callback(cb);
+    if (OB_FAIL(parser.parse(input.ptr(), input.length()))) {
+      LOG_WARN("failed to parse kv string", KR(ret), K(input));
+    }
+  }
+  return ret;
+}
+
+int ObKVStringUtil::merge_kv_list(
+    ObIArray<ObKVPair> &base, const ObIArray<ObKVPair> &patch, bool &changed)
+{
+  int ret = OB_SUCCESS;
+  changed = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < patch.count(); ++i) {
+    const ObKVPair &p = patch.at(i);
+    int64_t exist_idx = OB_INVALID_INDEX;
+    if (OB_FAIL(find_key_ci(base, p.key_, exist_idx))) {
+      LOG_WARN("find key failed", KR(ret), K(p.key_));
+    } else if (exist_idx != OB_INVALID_INDEX) {
+      ObKVPair cur;
+      if (OB_FAIL(base.at(exist_idx, cur))) {
+        LOG_WARN("get kv failed", KR(ret), K(exist_idx), K(base.count()));
+      } else if (cur.value_ != p.value_) {
+        if (OB_FAIL(base.remove(exist_idx))) {
+          LOG_WARN("remove kv failed", KR(ret), K(exist_idx), K(p.key_));
+        } else if (OB_FAIL(base.push_back(p))) {
+          LOG_WARN("push kv failed", KR(ret), K(p));
+        } else {
+          changed = true;
+        }
+      }
+    } else { // new key
+      if (OB_FAIL(base.push_back(p))) {
+        LOG_WARN("push patch kv failed", KR(ret), K(p));
+      } else {
+        changed = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObKVStringUtil::serialize_kv_list(
+    const ObIArray<ObKVPair> &kvs,
+    char *out, const int64_t out_len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(out) || OB_UNLIKELY(out_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(out), K(out_len));
+  } else {
+    out[0] = '\0';
+    int64_t pos = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < kvs.count(); ++i) {
+      const ObKVPair &kv = kvs.at(i);
+      if (i > 0) {
+        if (OB_FAIL(databuff_printf(out, out_len, pos, "&"))) {
+          LOG_WARN("append delimiter failed", KR(ret), K(i), K(out), K(pos), K(out_len));
+        }
+      }
+      if (FAILEDx(databuff_printf(out, out_len, pos, "%.*s=%.*s",
+          kv.key_.length(), kv.key_.ptr(), kv.value_.length(), kv.value_.ptr()))) {
+        LOG_WARN("append kv failed", KR(ret), K(i), K(kv), K(out), K(pos), K(out_len));
+      }
+    }
+  }
+  return ret;
 }
 
 //***********************ObStorageDestCheck***************************
@@ -328,8 +485,8 @@ int ObStorageDestCheck::parse_shared_storage_info(const char *shared_storage_inf
         } else {
           used_for_type = share::ObStorageUsedType::get_type(used_for_type_str);
         }
-      } else if (0 == STRNCASECMP(STORAGE_MAX_IOPS, token, strlen(STORAGE_MAX_IOPS))) {
-        const char *max_iops_start_str = token + strlen(STORAGE_MAX_IOPS);
+      } else if (0 == STRNCASECMP(MAX_IOPS, token, strlen(MAX_IOPS))) {
+        const char *max_iops_start_str = token + strlen(MAX_IOPS);
         if (false == ObString(max_iops_start_str).is_numeric()) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("max_iops is invalid argument", KR(ret), K(token));
@@ -341,9 +498,9 @@ int ObStorageDestCheck::parse_shared_storage_info(const char *shared_storage_inf
             LOG_WARN("invalid int value", KR(ret), K(max_iops_start_str));
           }
         }
-      } else if (0 == STRNCASECMP(STORAGE_MAX_BANDWIDTH, token, strlen(STORAGE_MAX_BANDWIDTH))) {
+      } else if (0 == STRNCASECMP(MAX_BANDWIDTH, token, strlen(MAX_BANDWIDTH))) {
         bool is_valid = false;
-        max_bandwidth = ObConfigCapacityParser::get(token + strlen(STORAGE_MAX_BANDWIDTH), is_valid, true /*check_unit*/);
+        max_bandwidth = ObConfigCapacityParser::get(token + strlen(MAX_BANDWIDTH), is_valid, true /*check_unit*/);
         if (!is_valid) {
           ret = OB_CONVERT_ERROR;
           LOG_WARN("convert failed", KR(ret), K(token));
@@ -372,7 +529,7 @@ int ObStorageDestCheck::parse_shared_storage_info(
   storage_dest.reset();
   char access_info[OB_MAX_BACKUP_AUTHORIZATION_LENGTH] = {0};
   char path[OB_MAX_BACKUP_DEST_LENGTH] = {0};
-  char attribute[OB_MAX_STORAGE_ATTRIBUTE_LENGTH] = {0};
+  char attribute[OB_MAX_BACKUP_EXTENSION_LENGTH] = {0};
   int64_t max_iops = 0;
   int64_t max_bandwidth = 0;
   share::ObScopeType::TYPE scope_type = share::ObScopeType::TYPE::MAX; // no use
@@ -412,7 +569,7 @@ int ObStorageDestCheck::parse_shared_storage_info(
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(databuff_printf(attribute, sizeof(attribute), "%s%ld&%s%ldB",
-                     STORAGE_MAX_IOPS, max_iops, STORAGE_MAX_BANDWIDTH, max_bandwidth))) {
+                     MAX_IOPS, max_iops, MAX_BANDWIDTH, max_bandwidth))) {
     LOG_WARN("fail to databuff printf", KR(ret));
   } else if (OB_FAIL(storage_dest.get_backup_path_str(path, sizeof(path)))) {
     LOG_WARN("fail to set storage path", KR(ret), K(path), K(storage_dest));

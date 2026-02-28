@@ -31,7 +31,10 @@ OB_SERIALIZE_MEMBER((ObStatCollectorSpec, ObOpSpec),
                     sort_exprs_,
                     sort_collations_,
                     sort_cmp_funs_,
-                    type_);
+                    type_,
+                    sort_exprs_inverted_,
+                    sort_collations_inverted_,
+                    sort_cmp_funs_inverted_);
 
 ObStatCollectorOp::ObStatCollectorOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input)
   : ObOperator(ctx_, spec, input),
@@ -124,9 +127,7 @@ int ObStatCollectorOp::find_sample_scan(ObOperator *op, ObOperator *&tsc)
   int ret = OB_SUCCESS;
   if (OB_ISNULL(op) || OB_NOT_NULL(tsc)) {
     /*do nothing*/
-  } else if (PHY_BLOCK_SAMPLE_SCAN == op->get_spec().get_type() ||
-             PHY_ROW_SAMPLE_SCAN == op->get_spec().get_type() ||
-             PHY_DDL_BLOCK_SAMPLE_SCAN == op->get_spec().get_type()) {
+  } else if (IS_SAMPLE_SCAN(op->get_spec().get_type())) {
     tsc = op;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < op->get_child_cnt(); ++i) {

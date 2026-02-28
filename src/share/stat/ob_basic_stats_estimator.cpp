@@ -141,7 +141,8 @@ int ObBasicStatsEstimator::estimate(const ObOptStatGatherParam &param,
         OB_FAIL(add_stat_item(ObStatNumNull(col_param, src_tab_stat, src_col_stats.at(i)))) ||
         OB_FAIL(add_stat_item(ObStatNumDistinct(col_param, src_col_stats.at(i), param.need_approx_ndv_))) ||
         OB_FAIL(add_stat_item(ObStatAvgLen(col_param, src_col_stats.at(i)))) ||
-        OB_FAIL(add_stat_item(ObStatLlcBitmap(col_param, src_col_stats.at(i))))) {
+        OB_FAIL(add_stat_item(ObStatLlcBitmap(col_param, src_col_stats.at(i)))) ||
+        OB_FAIL(add_stat_item(ObStatLobInrowCount(col_param, src_col_stats.at(i))))) {
       LOG_WARN("failed to add statistic item", K(ret));
     } else {/*do nothing*/}
   }
@@ -379,98 +380,97 @@ int ObBasicStatsEstimator::do_estimate_block_count_and_row_count(ObExecContext &
                                                                  ObIArray<EstimateBlockRes> &estimate_res)
 {
   int ret = OB_SUCCESS;
-  typedef common::ObSEArray<ObCandiTabletLoc, 4> ObCandiTabletLocArray;
-  SMART_VAR(ObCandiTabletLocArray, candi_tablet_locs) {
-    if (OB_FAIL(get_tablet_locations(ctx, table_id, tablet_ids, partition_ids, candi_tablet_locs))) {
-      LOG_WARN("failed to get tablet locations", K(ret));
-    } else if (OB_UNLIKELY(candi_tablet_locs.count() != tablet_ids.count() ||
-                          candi_tablet_locs.count() != partition_ids.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(candi_tablet_locs.count()), K(tablet_ids.count()),
-                                      K(partition_ids.count()), K(ret));
-    } else if (OB_FAIL(estimate_res.prepare_allocate(partition_ids.count()))) {
-      LOG_WARN("Partitoin location list prepare error", K(ret));
-    } else {
-      ObSEArray<ObAddr, 4> all_selected_addr;
-      for (int64_t i = 0; OB_SUCC(ret) && i < candi_tablet_locs.count(); ++i) {
-        ObAddr selected_addr;
-        if (!force_leader &&
-            OB_FAIL(ObSQLUtils::choose_best_partition_replica_addr(ctx.get_addr(),
-                                                                  candi_tablet_locs.at(i),
-                                                                  true,
-                                                                  selected_addr))) {
-          LOG_WARN("failed to get best partition replica addr", K(ret), K(candi_tablet_locs), K(i),
-                                                                K(ctx.get_addr()));
-        } else if (force_leader &&
-                   OB_FAIL(ObSQLUtils::get_strong_partition_replica_addr(candi_tablet_locs.at(i),
-                                                                         selected_addr))) {
-          LOG_WARN("failed to get strong partition replicate addr", K(ret));
-        } else if (OB_FAIL(all_selected_addr.push_back(selected_addr))) {
-          LOG_WARN("failed to push back", K(ret));
-        } else {/*do nothing*/}
-      }
-      ObSqlBitSet<> skip_idx_set;
-      for (int64_t i = 0; OB_SUCC(ret) && i < all_selected_addr.count(); ++i) {
-        if (skip_idx_set.has_member(i)) {//have been estimate
-          //do nothing
-        } else {
-          ObAddr &cur_selected_addr = all_selected_addr.at(i);
-          obrpc::ObEstBlockArg arg;
-          obrpc::ObEstBlockRes result;
-          ObSEArray<int64_t, 4> selected_tablet_idx;
-          for (int64_t j = i ; OB_SUCC(ret) && j < all_selected_addr.count(); ++j) {
-            if (skip_idx_set.has_member(j)) {//have been estimate
-              //do nothing
-            } else if (all_selected_addr.at(j) == cur_selected_addr) {
-              if (OB_UNLIKELY(tablet_ids.at(j) !=
-                              candi_tablet_locs.at(j).get_partition_location().get_tablet_id())) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("get unexpected error", K(ret), K(tablet_ids), K(j),
-                                K(candi_tablet_locs.at(j).get_partition_location().get_tablet_id()));
-              } else {
-                obrpc::ObEstBlockArgElement arg_element;
-                arg_element.tenant_id_ = tenant_id;
-                arg_element.tablet_id_ = candi_tablet_locs.at(j).get_partition_location().get_tablet_id();
-                arg_element.ls_id_ = candi_tablet_locs.at(j).get_partition_location().get_ls_id();
-                if (OB_FAIL(arg_element.column_group_ids_.assign(column_group_ids))) {
-                  LOG_WARN("failed to assign", K(ret));
-                } else if (OB_FAIL(arg.tablet_params_arg_.push_back(arg_element))) {
-                  LOG_WARN("failed to push back", K(ret));
-                } else if (OB_FAIL(skip_idx_set.add_member(j))) {//record
-                  LOG_WARN("failed to add members", K(ret));
-                } else if (OB_FAIL(selected_tablet_idx.push_back(j))) {
-                  LOG_WARN("failed to push back", K(ret));
-                } else {/*do nothing*/}
-              }
-            } else {/*do nothing*/}
-          }
-          if (OB_SUCC(ret)) {//begin storage estimate block count
-            if (OB_FAIL(stroage_estimate_block_count_and_row_count(ctx, cur_selected_addr, arg, result))) {
-              LOG_WARN("failed to stroage estimate block count", K(ret));
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObCandiTabletLocArray candi_tablet_locs(allocator);
+  if (OB_FAIL(get_tablet_locations(ctx, table_id, tablet_ids, partition_ids, candi_tablet_locs))) {
+    LOG_WARN("failed to get tablet locations", K(ret));
+  } else if (OB_UNLIKELY(candi_tablet_locs.count() != tablet_ids.count() ||
+                        candi_tablet_locs.count() != partition_ids.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(candi_tablet_locs.count()), K(tablet_ids.count()),
+                                    K(partition_ids.count()), K(ret));
+  } else if (OB_FAIL(estimate_res.prepare_allocate(partition_ids.count()))) {
+    LOG_WARN("Partitoin location list prepare error", K(ret));
+  } else {
+    ObSEArray<ObAddr, 4> all_selected_addr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < candi_tablet_locs.count(); ++i) {
+      ObAddr selected_addr;
+      if (!force_leader &&
+          OB_FAIL(ObSQLUtils::choose_best_partition_replica_addr(ctx.get_addr(),
+                                                                candi_tablet_locs.at(i),
+                                                                true,
+                                                                selected_addr))) {
+        LOG_WARN("failed to get best partition replica addr", K(ret), K(candi_tablet_locs), K(i),
+                                                              K(ctx.get_addr()));
+      } else if (force_leader &&
+                 OB_FAIL(ObSQLUtils::get_strong_partition_replica_addr(candi_tablet_locs.at(i),
+                                                                       selected_addr))) {
+        LOG_WARN("failed to get strong partition replicate addr", K(ret));
+      } else if (OB_FAIL(all_selected_addr.push_back(selected_addr))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {/*do nothing*/}
+    }
+    ObSqlBitSet<> skip_idx_set;
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_selected_addr.count(); ++i) {
+      if (skip_idx_set.has_member(i)) {//have been estimate
+        //do nothing
+      } else {
+        ObAddr &cur_selected_addr = all_selected_addr.at(i);
+        obrpc::ObEstBlockArg arg;
+        obrpc::ObEstBlockRes result;
+        ObSEArray<int64_t, 4> selected_tablet_idx;
+        for (int64_t j = i ; OB_SUCC(ret) && j < all_selected_addr.count(); ++j) {
+          if (skip_idx_set.has_member(j)) {//have been estimate
+            //do nothing
+          } else if (all_selected_addr.at(j) == cur_selected_addr) {
+            if (OB_UNLIKELY(tablet_ids.at(j) !=
+                            candi_tablet_locs.at(j).get_partition_location().get_tablet_id())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected error", K(ret), K(tablet_ids), K(j),
+                              K(candi_tablet_locs.at(j).get_partition_location().get_tablet_id()));
             } else {
-              for (int64_t i = 0; OB_SUCC(ret) && i < selected_tablet_idx.count(); ++i) {
-                int64_t idx = selected_tablet_idx.at(i);
-                if (OB_UNLIKELY(idx >= estimate_res.count() || idx >= partition_ids.count() ||
-                                selected_tablet_idx.count() != result.tablet_params_res_.count())) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("get unexpected error", K(idx), K(estimate_res), K(result), K(partition_ids),
-                                                  K(selected_tablet_idx), K(ret));
-                } else {
-                  estimate_res.at(idx).part_id_ = partition_ids.at(idx);
-                  estimate_res.at(idx).macro_block_count_ = result.tablet_params_res_.at(i).macro_block_count_;
-                  estimate_res.at(idx).micro_block_count_ = result.tablet_params_res_.at(i).micro_block_count_;
-                  estimate_res.at(idx).sstable_row_count_ = result.tablet_params_res_.at(i).sstable_row_count_;
-                  estimate_res.at(idx).memtable_row_count_ = result.tablet_params_res_.at(i).memtable_row_count_;
-                  if (OB_FAIL(estimate_res.at(idx).cg_macro_cnt_arr_.assign(result.tablet_params_res_.at(i).cg_macro_cnt_arr_))) {
-                    LOG_WARN("failed to assign", K(ret));
-                  } else if (OB_FAIL(estimate_res.at(idx).cg_micro_cnt_arr_.assign(result.tablet_params_res_.at(i).cg_micro_cnt_arr_))) {
-                    LOG_WARN("failed to assign", K(ret));
-                  }
+              obrpc::ObEstBlockArgElement arg_element;
+              arg_element.tenant_id_ = tenant_id;
+              arg_element.tablet_id_ = candi_tablet_locs.at(j).get_partition_location().get_tablet_id();
+              arg_element.ls_id_ = candi_tablet_locs.at(j).get_partition_location().get_ls_id();
+              if (OB_FAIL(arg_element.column_group_ids_.assign(column_group_ids))) {
+                LOG_WARN("failed to assign", K(ret));
+              } else if (OB_FAIL(arg.tablet_params_arg_.push_back(arg_element))) {
+                LOG_WARN("failed to push back", K(ret));
+              } else if (OB_FAIL(skip_idx_set.add_member(j))) {//record
+                LOG_WARN("failed to add members", K(ret));
+              } else if (OB_FAIL(selected_tablet_idx.push_back(j))) {
+                LOG_WARN("failed to push back", K(ret));
+              } else {/*do nothing*/}
+            }
+          } else {/*do nothing*/}
+        }
+        if (OB_SUCC(ret)) {//begin storage estimate block count
+          if (OB_FAIL(stroage_estimate_block_count_and_row_count(ctx, cur_selected_addr, arg, result))) {
+            LOG_WARN("failed to stroage estimate block count", K(ret));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < selected_tablet_idx.count(); ++i) {
+              int64_t idx = selected_tablet_idx.at(i);
+              if (OB_UNLIKELY(idx >= estimate_res.count() || idx >= partition_ids.count() ||
+                              selected_tablet_idx.count() != result.tablet_params_res_.count())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected error", K(idx), K(estimate_res), K(result), K(partition_ids),
+                                                K(selected_tablet_idx), K(ret));
+              } else {
+                estimate_res.at(idx).part_id_ = partition_ids.at(idx);
+                estimate_res.at(idx).macro_block_count_ = result.tablet_params_res_.at(i).macro_block_count_;
+                estimate_res.at(idx).micro_block_count_ = result.tablet_params_res_.at(i).micro_block_count_;
+                estimate_res.at(idx).sstable_row_count_ = result.tablet_params_res_.at(i).sstable_row_count_;
+                estimate_res.at(idx).memtable_row_count_ = result.tablet_params_res_.at(i).memtable_row_count_;
+                if (OB_FAIL(estimate_res.at(idx).cg_macro_cnt_arr_.assign(result.tablet_params_res_.at(i).cg_macro_cnt_arr_))) {
+                  LOG_WARN("failed to assign", K(ret));
+                } else if (OB_FAIL(estimate_res.at(idx).cg_micro_cnt_arr_.assign(result.tablet_params_res_.at(i).cg_micro_cnt_arr_))) {
+                  LOG_WARN("failed to assign", K(ret));
                 }
               }
-              LOG_TRACE("succeed to estimate block count", K(selected_tablet_idx), K(partition_ids),
-                                                  K(tablet_ids), K(arg), K(result), K(estimate_res));
             }
+            LOG_TRACE("succeed to estimate block count", K(selected_tablet_idx), K(partition_ids),
+                                                K(tablet_ids), K(arg), K(result), K(estimate_res));
           }
         }
       }
@@ -527,7 +527,7 @@ int ObBasicStatsEstimator::get_tablet_locations(ObExecContext &ctx,
   if (OB_ISNULL(session) || OB_UNLIKELY(tablet_ids.count() != partition_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(session), K(tablet_ids.count()), K(partition_ids.count()));
-  } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+  } else if (OB_FAIL(session->get_ob_route_policy(route_policy))) {
     LOG_WARN("get route policy failed", K(ret));
   } else {
     candi_tablet_locs.reset();
@@ -2030,99 +2030,98 @@ int ObBasicStatsEstimator::do_estimate_skip_rate(ObExecContext &ctx,
                                                  ObIArray<EstimateSkipRateRes> &estimate_res)
 {
   int ret = OB_SUCCESS;
-  typedef common::ObSEArray<ObCandiTabletLoc, 4> ObCandiTabletLocArray;
-  SMART_VAR(ObCandiTabletLocArray, candi_tablet_locs) {
-    if (OB_FAIL(get_tablet_locations(ctx, table_id, tablet_ids, partition_ids, candi_tablet_locs))) {
-      LOG_WARN("failed to get tablet locations", K(ret));
-    } else if (OB_UNLIKELY(candi_tablet_locs.count() != tablet_ids.count() ||
-                           candi_tablet_locs.count() != partition_ids.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(candi_tablet_locs.count()), K(tablet_ids.count()),
-                                      K(partition_ids.count()), K(ret));
-    } else if (OB_FAIL(estimate_res.prepare_allocate(partition_ids.count()))) {
-      LOG_WARN("Partitoin location list prepare error", K(ret));
-    } else {
-      ObSEArray<ObAddr, 4> all_selected_addr;
-      for (int64_t i = 0; OB_SUCC(ret) && i < candi_tablet_locs.count(); ++i) {
-        ObAddr selected_addr;
-        if (!force_leader &&
-            OB_FAIL(ObSQLUtils::choose_best_partition_replica_addr(ctx.get_addr(),
-                                                                  candi_tablet_locs.at(i),
-                                                                  true,
-                                                                  selected_addr))) {
-          LOG_WARN("failed to get best partition replica addr", K(ret), K(candi_tablet_locs), K(i),
-                                                                K(ctx.get_addr()));
-        } else if (force_leader &&
-                   OB_FAIL(ObSQLUtils::get_strong_partition_replica_addr(candi_tablet_locs.at(i),
-                                                                         selected_addr))) {
-          LOG_WARN("failed to get strong partition replicate addr", K(ret));
-        } else if (OB_FAIL(all_selected_addr.push_back(selected_addr))) {
-          LOG_WARN("failed to push back", K(ret));
-        } else {/*do nothing*/}
-      }
-      ObSqlBitSet<> skip_idx_set;
-      for (int64_t i = 0; OB_SUCC(ret) && i < all_selected_addr.count(); ++i) {
-        if (skip_idx_set.has_member(i)) {//have been estimate
-          //do nothing
-        } else {
-          ObAddr &cur_selected_addr = all_selected_addr.at(i);
-          obrpc::ObEstSkipRateArg arg;
-          obrpc::ObEstSkipRateRes result;
-          ObSEArray<int64_t, 4> selected_tablet_idx;
-          for (int64_t j = i ; OB_SUCC(ret) && j < all_selected_addr.count(); ++j) {
-            if (skip_idx_set.has_member(j)) {//have been estimate
-              //do nothing
-            } else if (all_selected_addr.at(j) == cur_selected_addr) {
-              if (OB_UNLIKELY(tablet_ids.at(j) !=
-                              candi_tablet_locs.at(j).get_partition_location().get_tablet_id())) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("get unexpected error", K(ret), K(tablet_ids), K(j),
-                                K(candi_tablet_locs.at(j).get_partition_location().get_tablet_id()));
-              } else {
-                obrpc::ObEstSkipRateArgElement arg_element;
-                arg_element.tenant_id_ = param.tenant_id_;
-                arg_element.table_id_ = table_id;
-                arg_element.tablet_id_ = candi_tablet_locs.at(j).get_partition_location().get_tablet_id();
-                arg_element.ls_id_ = candi_tablet_locs.at(j).get_partition_location().get_ls_id();
-                if (OB_FAIL(arg_element.sample_count_.assign(sample_counts))) {
-                  LOG_WARN("failed to assign", K(ret));
-                } else if (OB_FAIL(arg_element.column_ids_.assign(column_ids))) {
-                  LOG_WARN("failed to assign", K(ret));
-                } else if (OB_FAIL(arg.tablet_params_arg_.push_back(arg_element))) {
-                  LOG_WARN("failed to push back", K(ret));
-                } else if (OB_FAIL(skip_idx_set.add_member(j))) {//record
-                  LOG_WARN("failed to add members", K(ret));
-                } else if (OB_FAIL(selected_tablet_idx.push_back(j))) {
-                  LOG_WARN("failed to push back", K(ret));
-                } else {/*do nothing*/}
-              }
-            } else {/*do nothing*/}
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(storage_estimate_skip_rate(ctx, cur_selected_addr, arg, result))) {
-              LOG_WARN("failed to stroage estimate skip rate", K(ret));
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObCandiTabletLocArray candi_tablet_locs(allocator);
+  if (OB_FAIL(get_tablet_locations(ctx, table_id, tablet_ids, partition_ids, candi_tablet_locs))) {
+    LOG_WARN("failed to get tablet locations", K(ret));
+  } else if (OB_UNLIKELY(candi_tablet_locs.count() != tablet_ids.count() ||
+                          candi_tablet_locs.count() != partition_ids.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(candi_tablet_locs.count()), K(tablet_ids.count()),
+                                    K(partition_ids.count()), K(ret));
+  } else if (OB_FAIL(estimate_res.prepare_allocate(partition_ids.count()))) {
+    LOG_WARN("Partitoin location list prepare error", K(ret));
+  } else {
+    ObSEArray<ObAddr, 4> all_selected_addr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < candi_tablet_locs.count(); ++i) {
+      ObAddr selected_addr;
+      if (!force_leader &&
+          OB_FAIL(ObSQLUtils::choose_best_partition_replica_addr(ctx.get_addr(),
+                                                                candi_tablet_locs.at(i),
+                                                                true,
+                                                                selected_addr))) {
+        LOG_WARN("failed to get best partition replica addr", K(ret), K(candi_tablet_locs), K(i),
+                                                              K(ctx.get_addr()));
+      } else if (force_leader &&
+                 OB_FAIL(ObSQLUtils::get_strong_partition_replica_addr(candi_tablet_locs.at(i),
+                                                                       selected_addr))) {
+        LOG_WARN("failed to get strong partition replicate addr", K(ret));
+      } else if (OB_FAIL(all_selected_addr.push_back(selected_addr))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {/*do nothing*/}
+    }
+    ObSqlBitSet<> skip_idx_set;
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_selected_addr.count(); ++i) {
+      if (skip_idx_set.has_member(i)) {//have been estimate
+        //do nothing
+      } else {
+        ObAddr &cur_selected_addr = all_selected_addr.at(i);
+        obrpc::ObEstSkipRateArg arg;
+        obrpc::ObEstSkipRateRes result;
+        ObSEArray<int64_t, 4> selected_tablet_idx;
+        for (int64_t j = i ; OB_SUCC(ret) && j < all_selected_addr.count(); ++j) {
+          if (skip_idx_set.has_member(j)) {//have been estimate
+            //do nothing
+          } else if (all_selected_addr.at(j) == cur_selected_addr) {
+            if (OB_UNLIKELY(tablet_ids.at(j) !=
+                            candi_tablet_locs.at(j).get_partition_location().get_tablet_id())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected error", K(ret), K(tablet_ids), K(j),
+                              K(candi_tablet_locs.at(j).get_partition_location().get_tablet_id()));
             } else {
-              for (int64_t i = 0; OB_SUCC(ret) && i < selected_tablet_idx.count(); ++i) {
-                int64_t idx = selected_tablet_idx.at(i);
-                if (OB_UNLIKELY(idx >= estimate_res.count() || idx >= partition_ids.count() ||
-                                selected_tablet_idx.count() != result.tablet_params_res_.count())) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("get unexpected error", K(idx), K(arg), K(estimate_res), K(result), K(partition_ids),
-                                                  K(selected_tablet_idx), K(ret));
-                } else if (OB_FAIL(estimate_res.at(idx).cg_skip_rate_arr_.assign(result.tablet_params_res_.at(i).cg_skip_rate_arr_))) {
-                    LOG_WARN("failed to assign", K(ret));
-                } else if (OB_FAIL(estimate_res.at(idx).skip_sample_cnt_arr_.assign(result.tablet_params_res_.at(i).sample_count_))) {
-                    LOG_WARN("failed to assign", K(ret));
-                } else {
-                  estimate_res.at(idx).part_id_ = partition_ids.at(idx);
-                }
-              }
-              LOG_TRACE("OPT:succeed to estimate skip rate", K(selected_tablet_idx),
-                                                             K(partition_ids),
-                                                             K(tablet_ids),
-                                                             K(arg), K(result),
-                                                             K(estimate_res));
+              obrpc::ObEstSkipRateArgElement arg_element;
+              arg_element.tenant_id_ = param.tenant_id_;
+              arg_element.table_id_ = table_id;
+              arg_element.tablet_id_ = candi_tablet_locs.at(j).get_partition_location().get_tablet_id();
+              arg_element.ls_id_ = candi_tablet_locs.at(j).get_partition_location().get_ls_id();
+              if (OB_FAIL(arg_element.sample_count_.assign(sample_counts))) {
+                LOG_WARN("failed to assign", K(ret));
+              } else if (OB_FAIL(arg_element.column_ids_.assign(column_ids))) {
+                LOG_WARN("failed to assign", K(ret));
+              } else if (OB_FAIL(arg.tablet_params_arg_.push_back(arg_element))) {
+                LOG_WARN("failed to push back", K(ret));
+              } else if (OB_FAIL(skip_idx_set.add_member(j))) {//record
+                LOG_WARN("failed to add members", K(ret));
+              } else if (OB_FAIL(selected_tablet_idx.push_back(j))) {
+                LOG_WARN("failed to push back", K(ret));
+              } else {/*do nothing*/}
             }
+          } else {/*do nothing*/}
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(storage_estimate_skip_rate(ctx, cur_selected_addr, arg, result))) {
+            LOG_WARN("failed to stroage estimate skip rate", K(ret));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < selected_tablet_idx.count(); ++i) {
+              int64_t idx = selected_tablet_idx.at(i);
+              if (OB_UNLIKELY(idx >= estimate_res.count() || idx >= partition_ids.count() ||
+                              selected_tablet_idx.count() != result.tablet_params_res_.count())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected error", K(idx), K(arg), K(estimate_res), K(result), K(partition_ids),
+                                                K(selected_tablet_idx), K(ret));
+              } else if (OB_FAIL(estimate_res.at(idx).cg_skip_rate_arr_.assign(result.tablet_params_res_.at(i).cg_skip_rate_arr_))) {
+                  LOG_WARN("failed to assign", K(ret));
+              } else if (OB_FAIL(estimate_res.at(idx).skip_sample_cnt_arr_.assign(result.tablet_params_res_.at(i).sample_count_))) {
+                  LOG_WARN("failed to assign", K(ret));
+              } else {
+                estimate_res.at(idx).part_id_ = partition_ids.at(idx);
+              }
+            }
+            LOG_TRACE("OPT:succeed to estimate skip rate", K(selected_tablet_idx),
+                                                            K(partition_ids),
+                                                            K(tablet_ids),
+                                                            K(arg), K(result),
+                                                            K(estimate_res));
           }
         }
       }

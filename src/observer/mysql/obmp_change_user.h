@@ -66,6 +66,7 @@ private:
                       sql::ObBasicSessionInfo &session) const;
   int verify_connection(const uint64_t tenant_id) const;
   int verify_ip_white_list(const uint64_t tenant_id) const;
+  int reset_session_for_change_user(sql::ObSQLSessionInfo *session);
 
 private:
   obmysql::ObMySQLRawPacket pkt_;

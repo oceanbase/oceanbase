@@ -269,6 +269,30 @@ int ObRespTimeInfoCollector::collect(const sql::stmt::StmtType sql_type, const b
         }
         break;
       }
+      case sql::stmt::T_HBASE_GET : {
+        if (OB_FAIL(hbase_get_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase get sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_BATCH_PUT : {
+        if (OB_FAIL(hbase_batch_put_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase batch put sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_BATCH_DELETE : {
+        if (OB_FAIL(hbase_batch_delete_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase batch delete sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_BATCH_GET : {
+        if (OB_FAIL(hbase_batch_get_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase batch get sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
       default: {
         if (OB_FAIL(other_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("other info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
@@ -928,6 +952,12 @@ int ObRespTimeInfoCollector::collect(const ObTableHistogramType table_his_type, 
         }
         break;
       }
+      case sql::stmt::T_HBASE_CHECK_AND_MUTATE : {
+        if (OB_FAIL(hbase_check_and_mutate_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase check and mutate sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
       case sql::stmt::T_HBASE_CHECK_AND_DELETE : {
         if (OB_FAIL(hbase_check_and_delete_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("hbase check and delete sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
@@ -937,6 +967,30 @@ int ObRespTimeInfoCollector::collect(const ObTableHistogramType table_his_type, 
       case sql::stmt::T_HBASE_HYBRID_BATCH : {
         if (OB_FAIL(hbase_hybrid_batch_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("hbase bybrid batch sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_GET : {
+        if (OB_FAIL(hbase_get_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase get sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_BATCH_PUT : {
+        if (OB_FAIL(hbase_batch_put_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase batch put sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_BATCH_DELETE : {
+        if (OB_FAIL(hbase_batch_delete_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase batch delete sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_BATCH_GET : {
+        if (OB_FAIL(hbase_batch_get_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase batch get sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
         }
         break;
       }

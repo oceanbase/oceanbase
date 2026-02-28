@@ -374,14 +374,19 @@ int ObOptEstCostModel::cost_hashjoin(const ObCostHashJoinInfo &est_cost_info,
   out_tuples = cond_tuples * filter_sel;
   double join_filter_cost = 0.0;
   for (int i = 0; i < est_cost_info.join_filter_infos_.count(); ++i) {
-    const JoinFilterInfo& info = est_cost_info.join_filter_infos_.at(i);
-    //bloom filter构建、使用代价
-    join_filter_cost += cost_hash(left_rows, info.lexprs_) + cost_hash(right_rows, info.rexprs_);
-    if (info.need_partition_join_filter_) {
-      //partition join filter代价
-      join_filter_cost += cost_hash(left_rows, info.lexprs_);
+    const JoinFilterInfo *info = est_cost_info.join_filter_infos_.at(i);
+    if (OB_ISNULL(info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("join filter info is null", K(ret));
+    } else {
+      //bloom filter构建、使用代价
+      join_filter_cost += cost_hash(left_rows, info->lexprs_) + cost_hash(right_rows, info->rexprs_);
+      if (info->need_partition_join_filter_) {
+        //partition join filter代价
+        join_filter_cost += cost_hash(left_rows, info->lexprs_);
+      }
+      right_rows *= info->join_filter_selectivity_;
     }
-    right_rows *= info.join_filter_selectivity_;
   }
   cost += join_filter_cost;
   // build hash cost for left table
@@ -1461,7 +1466,8 @@ int ObOptEstCostModel::cost_column_store_index_scan(const ObCostTableScanInfo &e
   int ret = OB_SUCCESS;
   double prefix_filter_sel = 1.0;
   double runtime_filter_sel = est_cost_info.join_filter_sel_;
-  SMART_VAR(ObCostTableScanInfo, column_group_est_cost_info, OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_ID) {
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  SMART_VAR(ObCostTableScanInfo, column_group_est_cost_info, OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_ID, allocator) {
     if (OB_FAIL(column_group_est_cost_info.assign(est_cost_info))) {
       LOG_WARN("failed to assign est cost info", K(ret));
     } else {
@@ -1513,7 +1519,8 @@ int ObOptEstCostModel::cost_column_store_index_back(const ObCostTableScanInfo &e
                                                     double &index_back_cost)
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(ObCostTableScanInfo, column_group_est_cost_info, OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_ID) {
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  SMART_VAR(ObCostTableScanInfo, column_group_est_cost_info, OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_ID, allocator) {
     double network_cost = 0.0;
     index_back_cost = 0.0;
     const bool limit_before_indexback = est_cost_info.table_filters_.empty() && limit_count >= 0.0;

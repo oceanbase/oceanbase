@@ -76,6 +76,7 @@ int get_hard_code_schema_version_mapping(const uint64_t table_id, int64_t &schem
 {
   int ret = OB_SUCCESS;  return ret;
 }
+const int64_t INNER_TABLE_SYS_SCHEMA_VERSION = 0;
 const int64_t INNER_TABLE_CORE_SCHEMA_VERSION = 0;
 const char * INNER_TABLE_ALL_CORE_TABLE_ROWS[] = {
 };

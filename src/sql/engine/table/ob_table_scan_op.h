@@ -35,6 +35,7 @@
 #include "sql/das/ob_das_domain_utils.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "sql/rewrite/ob_range_generator.h"
+#include "share/schema/ob_schema_struct_fts.h"
 
 namespace oceanbase
 {
@@ -172,7 +173,9 @@ public:
       global_index_rowkey_exprs_(allocator),
       pre_range_graph_(allocator),
       attach_spec_(allocator_, &scan_ctdef_),
-      flags_(0)
+      flags_(0),
+      hint_enabled_caches_(0),
+      hint_disabled_caches_(0)
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
@@ -244,9 +247,12 @@ public:
       uint64_t use_index_merge_              : 1; // whether use index merge
       uint64_t ordering_used_by_parent_      : 1; // whether tsc ordering used by parent
       uint64_t enable_new_false_range_       : 1; // whether use new false range
-      uint64_t reserved_                     : 60;
+      uint64_t is_hybrid_search_             : 1; // whether is hybrid search
+      uint64_t reserved_                     : 59;
     };
   };
+  uint8_t hint_enabled_caches_;
+  uint8_t hint_disabled_caches_;
 };
 
 struct ObTableScanRtDef
@@ -496,6 +502,8 @@ public:
   ExprFixedArray pseudo_column_exprs_;
   int64_t lob_inrow_threshold_;
   share::ObLakeTableFormat lake_table_format_;
+  int64_t ft_doc_id_expr_idx_;
+  share::schema::ObFTSIndexType fts_index_type_;
 };
 
 // for random batch_size & skip

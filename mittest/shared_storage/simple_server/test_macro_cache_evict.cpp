@@ -137,8 +137,9 @@ public:
   virtual void SetUp() override
   {
     ObSimpleClusterTestBase::SetUp();
+    oceanbase::palf::election::MAX_TST = 500 * 1000;  // 500ms, lease interval = 4 * 500ms = 2s
     if (!tenant_created_) {
-      OK(create_tenant("tt1", "5G", "10G", false/*oracle_mode*/, 8, "2G"));
+      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8, "2G"));
       OK(get_tenant_id(run_ctx_.tenant_id_));
       ASSERT_NE(0, run_ctx_.tenant_id_);
       tenant_created_ = true;

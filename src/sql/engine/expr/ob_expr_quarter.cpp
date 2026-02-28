@@ -14,6 +14,8 @@
 #include "sql/engine/expr/ob_expr_quarter.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_expr_time.h"
+#include "share/vector/ob_vector_define.h"
 namespace oceanbase
 {
 namespace sql
@@ -56,6 +58,13 @@ int ObExprQuarter::cg_expr(ObExprCGCtx &op_cg_ctx,
     LOG_WARN("children of quater expr is null", K(ret), K(rt_expr.args_));
   } else {
     rt_expr.eval_func_ = &calc_quater;
+    // The vectorization of other types for the expression not completed yet.
+    if (ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_) ||
+        ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_) ||
+        ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_) ||
+        ob_is_int_uint_tc(rt_expr.args_[0]->datum_meta_.type_)) {
+      rt_expr.eval_vector_func_ = ObExprQuarter::calc_quarter_vector;
+    }
   }
   return ret;
 }
@@ -107,6 +116,67 @@ int ObExprQuarter::calc_quater(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr
   return ret;
 }
 
+#define DISPATCH_TIME_EXPR_VECTOR(FUNC, TYPE)\
+if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {\
+  ret = FUNC<CONCAT(TYPE, FixedVec), IntegerFixedVec, CONCAT(TYPE, Type)>(expr, ctx, skip, bound);\
+} else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {\
+  ret = FUNC<CONCAT(TYPE, FixedVec), IntegerUniVec, CONCAT(TYPE, Type)>(expr, ctx, skip, bound);\
+} else if (VEC_FIXED == arg_format && VEC_UNIFORM_CONST == res_format) {\
+  ret = FUNC<CONCAT(TYPE, FixedVec), IntegerUniCVec, CONCAT(TYPE, Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {\
+  ret = FUNC<CONCAT(TYPE, UniVec), IntegerFixedVec, CONCAT(TYPE, Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {\
+  ret = FUNC<CONCAT(TYPE, UniVec), IntegerUniVec, CONCAT(TYPE, Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_UNIFORM_CONST == res_format) {\
+  ret = FUNC<CONCAT(TYPE, UniVec), IntegerUniCVec, CONCAT(TYPE, Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {\
+  ret = FUNC<CONCAT(TYPE, UniCVec), IntegerFixedVec, CONCAT(TYPE, Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {\
+  ret = FUNC<CONCAT(TYPE, UniCVec), IntegerUniVec, CONCAT(TYPE, Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM_CONST == res_format) {\
+  ret = FUNC<CONCAT(TYPE, UniCVec), IntegerUniCVec, CONCAT(TYPE, Type)>(expr, ctx, skip, bound);\
+} else { \
+  ret = FUNC<ObVectorBase, ObVectorBase, CONCAT(TYPE, Type)>(expr, ctx, skip, bound);\
+}
+
+
+template <typename ArgVec, typename ResVec, typename IN_TYPE>
+int vector_quarter(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  return ObExprTimeBase::calc_for_date_vector<ArgVec, ResVec, IN_TYPE, DT_QUARTER>(expr, ctx, skip, bound);
+}
+
+int ObExprQuarter::calc_quarter_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval quarter param", K(ret));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
+    // Use ObExprTimeBase static methods directly, which handle DT_QUARTER internally
+    if (ObMySQLDateTC == ob_obj_type_class(arg_type)) {
+      DISPATCH_TIME_EXPR_VECTOR(vector_quarter, MySQLDate);
+    } else if (ObMySQLDateTimeTC == ob_obj_type_class(arg_type)) {
+      DISPATCH_TIME_EXPR_VECTOR(vector_quarter, MySQLDateTime);
+    } else if (ObDateTC == ob_obj_type_class(arg_type)) {
+      DISPATCH_TIME_EXPR_VECTOR(vector_quarter, Date);
+    } else if (ObDateTimeTC == ob_obj_type_class(arg_type)) {
+      DISPATCH_TIME_EXPR_VECTOR(vector_quarter, DateTime);
+    } else if (ObStringTC == ob_obj_type_class(arg_type)) {
+      DISPATCH_STRING_CALC_EXPR_VECTOR(ObExprTimeBase::calc_for_string_vector, DT_QUARTER, false);
+    } else if (ob_is_int_uint_tc(arg_type)) {
+      DISPATCH_INTEGER_CALC_EXPR_VECTOR(ObExprTimeBase::calc_for_integer_vector, DT_QUARTER);
+    }
+
+    if (OB_FAIL(ret)) {
+      LOG_WARN("expr calculation failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 DEF_SET_LOCAL_SESSION_VARS(ObExprQuarter, raw_expr) {
   int ret = OB_SUCCESS;
   if (is_mysql_mode()) {
@@ -120,5 +190,6 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprQuarter, raw_expr) {
   return ret;
 }
 
+#undef DISPATCH_TIME_EXPR_VECTOR
 } // end namespace sql
 } // end namespace oceanbase

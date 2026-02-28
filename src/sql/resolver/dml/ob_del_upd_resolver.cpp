@@ -390,6 +390,11 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
             ret = OB_ERR_NOT_SUBQUERY;
             LOG_WARN("subquery is cte", K(ret));
           } else if (columns.count() > 1) {
+            // TODO tuliwei.tlw change to new version
+            // if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0 && OB_FAIL(try_add_remove_const_epxr(*sel_stmt))) {
+            //   LOG_WARN("failed to add remove const expr", K(ret));
+            // }
+            // YIHUA-TAG
             if (OB_FAIL(try_add_remove_const_epxr(*sel_stmt))) {
               LOG_WARN("failed to add remove const expr", K(ret));
             }
@@ -2468,14 +2473,13 @@ int ObDelUpdResolver::add_all_mlog_columns_to_stmt(const TableItem &table_item,
       if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", KR(ret));
-      } else if (column_schema->get_column_id() >= OB_MLOG_SEQ_NO_COLUMN_ID) {
+      } else if (column_schema->get_column_id() >= OB_MIN_MLOG_SPECIAL_COLUMN_ID) {
         // skip
       } else if (OB_FAIL(add_column_to_stmt(table_item, *column_schema, column_exprs))) {
         LOG_WARN("add column to stmt failed", K(ret), K(table_item));
       } else { /*do nothing*/}
     }
   }
-
   return ret;
 }
 
@@ -2941,7 +2945,7 @@ int ObDelUpdResolver::resolve_check_constraints(const TableItem* table_item,
 }
 
 int ObDelUpdResolver::resolve_view_check_exprs(uint64_t table_id,
-                                               const TableItem* table_item,
+                                               TableItem* table_item,
                                                const bool cascaded,
                                                common::ObIArray<ObRawExpr*> &check_exprs)
 {
@@ -2961,7 +2965,9 @@ int ObDelUpdResolver::resolve_view_check_exprs(uint64_t table_id,
     LOG_WARN("get unexpected null", K(ret), K(del_upd_stmt), K(select_stmt));
   } else if (!cascaded && VIEW_CHECK_OPTION_NONE ==
                   (check_option = select_stmt->get_check_option())) {
-    if (OB_FAIL(resolve_view_check_exprs(table_id, table_item->view_base_item_, cascaded, check_exprs))) {
+    if (OB_FAIL(resolve_view_check_exprs(table_id,
+                                         const_cast<TableItem *>(table_item->view_base_item_),
+                                         cascaded, check_exprs))) {
       LOG_WARN("resolve view check exprs failed", K(ret));
     }
   } else {
@@ -2970,6 +2976,8 @@ int ObDelUpdResolver::resolve_view_check_exprs(uint64_t table_id,
       ObSEArray<ObRawExpr *, 4> view_columns;
       ObSEArray<ObRawExpr *, 4> base_columns;
       ObSEArray<ObRawExpr *, 4> pullup_conditions;
+      ObNotNullContext not_null_ctx(session_info_->get_cur_exec_ctx(), allocator_, select_stmt,
+                                   false);
       // todo link.zt, why the ref_id is used here?
       // may have problem when a table is used twice by the view.
       if (OB_FAIL(get_pullup_column_map(*del_upd_stmt,
@@ -2980,16 +2988,27 @@ int ObDelUpdResolver::resolve_view_check_exprs(uint64_t table_id,
         LOG_WARN("failed to get pullup column map", K(ret));
       } else if (OB_FAIL(copier.add_replaced_expr(base_columns, view_columns))) {
         LOG_WARN("failed to add replace pair", K(ret));
-      } else if (OB_FAIL(copier.copy_on_replace(select_stmt->get_condition_exprs(),
-                                                pullup_conditions))) {
+      } else if (OB_FAIL(copier.copy(select_stmt->get_condition_exprs(), pullup_conditions))) {
         LOG_WARN("failed to copy condition expr as view check exprs", K(ret));
+      } else if (OB_FAIL(replace_ref_query_stmt(pullup_conditions, copier))) {
+        LOG_WARN("replace ref query stmt failed", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::extract_view_check_shared_exprs(
+                                select_stmt->get_condition_exprs(),
+                                del_upd_stmt, *table_item, select_stmt,
+                                not_null_ctx, expr_factory, session_info_, pullup_conditions))) {
+        LOG_WARN("failed to extract view check shared exprs", K(ret));
       } else if (OB_FAIL(append(check_exprs, pullup_conditions))) {
         LOG_WARN("failed to append pullup conditions", K(ret));
+      } else {
+        LOG_TRACE("resolve_view_check_exprs", K(select_stmt),
+                  K(select_stmt->get_condition_exprs()), K(pullup_conditions));
       }
     }
     if (OB_SUCC(ret)) {
       const bool new_cascaded = cascaded || VIEW_CHECK_OPTION_CASCADED == check_option;
-      if (OB_FAIL(resolve_view_check_exprs(table_id, table_item->view_base_item_, new_cascaded, check_exprs))) {
+      if (OB_FAIL(resolve_view_check_exprs(table_id,
+                                           const_cast<TableItem *>(table_item->view_base_item_),
+                                           new_cascaded, check_exprs))) {
         LOG_WARN("resolve view check exprs failed", K(ret));
       }
     }
@@ -3017,6 +3036,61 @@ int ObDelUpdResolver::get_pullup_column_map(ObDMLStmt &stmt,
             LOG_WARN("failed to push back column expr", K(ret));
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+
+int ObDelUpdResolver::replace_ref_query_stmt(ObIArray<ObRawExpr *> &exprs, ObRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); i++) {
+    if (OB_FAIL(recursive_replace_ref_query_stmt(exprs.at(i), copier))) {
+      LOG_WARN("recursive replace ref query stmt failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::recursive_replace_ref_query_stmt(ObRawExpr *&expr, ObRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr) || OB_ISNULL(get_stmt()) || OB_ISNULL(params_.expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr), K(get_stmt()));
+  } else if (expr->is_query_ref_expr()) {
+    ObSelectStmt *ref_stmt = NULL;
+    ObSelectStmt *copied_stmt = NULL;
+    ObQueryRefRawExpr *ref_expr = static_cast<ObQueryRefRawExpr *>(expr);
+    if (OB_ISNULL(ref_expr)
+        || OB_ISNULL(ref_stmt = ref_expr->get_ref_stmt())
+        || OB_ISNULL(get_stmt())
+        || OB_ISNULL(params_.stmt_factory_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ref stmt is null", K(ret), K(ref_stmt), K(get_stmt()));
+    } else if (OB_FAIL(params_.stmt_factory_->create_stmt(copied_stmt))) {
+      LOG_WARN("failed to create child stmt", K(ret));
+    } else if (OB_ISNULL(copied_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child stmt is not created", K(ret));
+    } else if (OB_FAIL(copied_stmt->deep_copy(*params_.stmt_factory_, copier, *ref_stmt))) {
+      LOG_WARN("failed to deep copy stmt struct", K(ret));
+    } else if (OB_FAIL(copied_stmt->recursive_set_statement_id())) {
+      LOG_WARN("set stmt id failed", K(ret));
+    } else if (OB_FAIL(copied_stmt->update_stmt_table_id(allocator_, *ref_stmt, false))) {
+      LOG_WARN("update stmt table id", K(ret));
+    } else {
+      ref_expr->set_ref_stmt(copied_stmt);
+      if (OB_FAIL(get_stmt()->add_subquery_ref(ref_expr))) {
+        LOG_WARN("add subquery ref failed", K(ret));
+      }
+    }
+  } else {
+    for (int64_t i = 0; i < expr->get_param_count() && OB_SUCC(ret); i++) {
+      if (OB_FAIL(SMART_CALL(recursive_replace_ref_query_stmt(expr->get_param_expr(i), copier)))) {
+        LOG_WARN("recursive_replace_ref_query_stmt", K(ret));
       }
     }
   }
@@ -4332,6 +4406,8 @@ int ObDelUpdResolver::generate_insert_table_info(const TableItem &table_item,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(check_is_mview_refresh_sql(*table_schema))) {
+    LOG_WARN("failed to check is mview refresh sql", K(ret));
   } else if (OB_FAIL(table_info.part_ids_.assign(base_table_item.part_ids_))) {
       LOG_WARN("failed to assign part ids", K(ret));
   } else if (!del_upd_stmt->has_instead_of_trigger()) {
@@ -4746,7 +4822,7 @@ int ObDelUpdResolver::get_session_columns_for_oracle_temp_table(uint64_t ref_tab
     const share::schema::ObColumnSchemaV2 *column_schema = NULL;
     const share::schema::ObColumnSchemaV2 *column_schema2 = NULL;
     const ObTableSchema *table_schema = NULL;
-    common::ObSEArray<ObColumnRefRawExpr*, 8, common::ModulePageAllocator, true> column_exprs;
+    common::ObSEArray<ObColumnRefRawExpr*, 8> column_exprs;
     TableItem *table_item = NULL;
     if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -5228,55 +5304,6 @@ int ObDelUpdResolver::prune_columns_for_ddl(const TableItem &table_item,
       }
     }
   }
-  return ret;
-}
-
-int ObDelUpdResolver::replace_column_ref_for_check_constraint(ObInsertTableInfo& table_info,
-                                                              ObRawExpr *&expr)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr) || OB_ISNULL(params_.expr_factory_)) {
-    LOG_WARN("invalid argument", K(expr));
-    ret = OB_INVALID_ARGUMENT;
-  } else if (ObRawExprUtils::find_expr(table_info.column_conv_exprs_, expr)) {
-    // do nothing
-  } else if (expr->get_param_count() > 0) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
-      if (OB_FAIL(SMART_CALL(replace_column_ref_for_check_constraint(table_info,
-                                                                    expr->get_param_expr(i))))) {
-        LOG_WARN("replace column ref for check constraint", K(ret), KPC(expr->get_param_expr(i)));
-      }
-    }
-  } else if (expr->is_column_ref_expr()) {
-    const ObIArray<ObColumnRefRawExpr*>& insert_columns = table_info.column_exprs_;
-    ObColumnRefRawExpr *b_expr = static_cast<ObColumnRefRawExpr*>(expr);
-    if (OB_ISNULL(b_expr)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid expr or insert_columns", K(b_expr));
-    } else {
-      const int64_t N = insert_columns.count();
-      int64_t index = OB_INVALID_INDEX;
-      ret = OB_ENTRY_NOT_EXIST;
-      for(int64_t i = 0; i < N && OB_ENTRY_NOT_EXIST == ret; ++i) {
-        if (OB_ISNULL(insert_columns.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("invalid insert columns", K(i), K(insert_columns.at(i)));
-        } else if (b_expr == insert_columns.at(i)) {
-          index = i;
-          ret = OB_SUCCESS;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_UNLIKELY(index == OB_INVALID_INDEX)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail to find column position", K(ret));
-        } else {
-          expr = table_info.column_conv_exprs_.at(index);
-        }
-      }
-    }
-  }
-
   return ret;
 }
 

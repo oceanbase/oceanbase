@@ -17,6 +17,7 @@
 #include "storage/backup/ob_backup_operator.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/backup/ob_backup_data_table_operator.h"
+#include "storage/blocksstable/ob_macro_block_common_header.h"
 
 
 using namespace oceanbase::blocksstable;
@@ -28,6 +29,7 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace backup {
 
+ERRSIM_POINT_DEF(EN_BACKUP_MACRO_BLOCK_WRITE_WITH_ERROR);
 /* ObSimpleBackupStat */
 
 ObSimpleBackupStat::ObSimpleBackupStat()
@@ -484,9 +486,19 @@ int ObBackupDataCtx::write_macro_block_data_(const blocksstable::ObBufferReader 
   } else if (OB_FAIL(write_data_align_(reader, block_type, alignment))) {
     LOG_WARN("failed to write data align", K(ret), K(reader));
   } else {
+#ifdef ERRSIM
+    static bool has_injected_macro_corruption = false;
+    const int64_t errsim_ret = OB_E(EN_BACKUP_MACRO_BLOCK_WRITE_WITH_ERROR) OB_SUCCESS;
+    if (OB_SUCCESS != errsim_ret && !has_injected_macro_corruption) {
+      has_injected_macro_corruption = true;
+      if (OB_FAIL(corrupt_macro_block_after_checksum_(logic_id, reader.length()))) {
+        LOG_WARN("failed to maybe corrupt macro block after checksum", K(ret), K(logic_id));
+      }
+    }
+#endif
     int64_t length = 0;
     ObBufferReader buffer_reader(tmp_buffer_.data(), tmp_buffer_.length(), tmp_buffer_.length());
-    if (OB_FAIL(file_write_ctx_.append_buffer(buffer_reader))) {
+    if (FAILEDx(file_write_ctx_.append_buffer(buffer_reader))) {
       LOG_WARN("failed to append buffer", K(ret), K(tmp_buffer_), K(buffer_reader));
     } else if (FALSE_IT(length = tmp_buffer_.pos())) {
     } else if (OB_FAIL(build_macro_block_index_(table_key, logic_id, file_offset_, length, macro_index))) {
@@ -498,6 +510,38 @@ int ObBackupDataCtx::write_macro_block_data_(const blocksstable::ObBufferReader 
   }
   return ret;
 }
+
+#ifdef ERRSIM
+int ObBackupDataCtx::corrupt_macro_block_after_checksum_(
+    const blocksstable::ObLogicMacroBlockId &logic_id, const int64_t macro_data_len)
+{
+  int ret = OB_SUCCESS;
+  ObMacroBlockCommonHeader macro_header;
+  ObBackupCommonHeader *backup_header = NULL;
+  int64_t header_pos = 0;
+  char *macro_data = NULL;
+  if (!logic_id.is_valid() || macro_data_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ERRSIM: invalid args for macro block corruption", K(ret), K(logic_id), K(macro_data_len));
+  } else if (OB_ISNULL(tmp_buffer_.data()) || tmp_buffer_.length() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ERRSIM: tmp buffer invalid for macro corruption", K(ret), K(tmp_buffer_));
+  } else if (FALSE_IT(backup_header = reinterpret_cast<ObBackupCommonHeader *>(tmp_buffer_.data()))) {
+  } else if (backup_header->header_length_ <= 0
+             || backup_header->header_length_ + macro_data_len > tmp_buffer_.length()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ERRSIM: macro block not in tmp buffer", K(ret), "header_len", backup_header->header_length_,
+        K(macro_data_len), "buffer_len", tmp_buffer_.length());
+  } else if (FALSE_IT(macro_data = tmp_buffer_.data() + backup_header->header_length_)) {
+  } else {
+    const int64_t payload_off = macro_header.get_payload_size() / 2;
+    macro_data[payload_off] ^= 0x1;
+    LOG_WARN("ERRSIM: corrupt macro block data once after checksum",
+        K(logic_id), K(macro_data_len), K(payload_off), K(macro_header));
+  }
+  return ret;
+}
+#endif
 
 int ObBackupDataCtx::write_meta_data_(const blocksstable::ObBufferReader &reader, const common::ObTabletID &tablet_id,
     const ObBackupMetaType &meta_type, ObBackupMetaIndex &meta_index)
@@ -1227,7 +1271,7 @@ ObLSBackupCtx::ObLSBackupCtx()
       bandwidth_throttle_(NULL),
       mview_dep_tablet_map_(),
       wait_reuse_across_sstable_time_(0),
-      mv_mutex_(),
+      mv_mutex_(common::ObLatchIds::OB_BACKUP_LS_BACKUP_MV_MUTEX),
       ls_clog_checkpoint_scn_(share::SCN::min_scn()),
       is_newly_created_ls_(true)
 {}

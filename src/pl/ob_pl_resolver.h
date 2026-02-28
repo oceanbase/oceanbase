@@ -312,6 +312,7 @@ public:
   inline const ObIArray<ObPLStmt *> &get_goto_stmts() const { return goto_stmts_; }
   inline int push_goto_stmts(ObPLStmt *stmt) { return goto_stmts_.push_back(stmt); }
   inline void pop_goto_stmts() { goto_stmts_.pop_back(); }
+  inline sql::ObResolverParams &get_params() { return params_; }
 
 public:
   /**

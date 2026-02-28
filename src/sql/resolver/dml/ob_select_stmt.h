@@ -20,6 +20,7 @@
 #include "lib/container/ob_bit_set.h"
 #include "lib/container/ob_vector.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
+#include "sql/resolver/ob_sql_array.h"
 #include "sql/ob_sql_temp_table.h"
 
 namespace oceanbase
@@ -111,13 +112,13 @@ struct SelectItem
 
 struct ObSelectIntoItem
 {
-  ObSelectIntoItem()
+  ObSelectIntoItem(ObIAllocator &allocator)
       : into_type_(),
         outfile_name_(),
         field_str_(),
         line_str_(),
-        user_vars_(),
-        pl_vars_(),
+        user_vars_(allocator),
+        pl_vars_(allocator),
         closed_cht_(),
         is_optional_(DEFAULT_OPTIONAL_ENCLOSED),
         is_single_(DEFAULT_SINGLE_OPT),
@@ -175,8 +176,8 @@ struct ObSelectIntoItem
   common::ObObj outfile_name_;
   common::ObObj field_str_; // field terminated str
   common::ObObj line_str_; // line terminated str
-  common::ObSEArray<common::ObString, 16> user_vars_; // user variables
-  common::ObSEArray<sql::ObRawExpr*, 16> pl_vars_; // pl variables
+  ObSqlArray<common::ObString> user_vars_; // user variables
+  ObSqlArray<sql::ObRawExpr*> pl_vars_; // pl variables
   common::ObObj closed_cht_; // all fields, "123","ab"
   bool is_optional_; //  for string, closed character, such as "aa"
   bool is_single_;
@@ -199,8 +200,8 @@ struct ObSelectIntoItem
 
 struct ObGroupbyExpr
 {
-  ObGroupbyExpr()
-    : groupby_exprs_()
+  ObGroupbyExpr(common::ObIAllocator &allocator)
+    : groupby_exprs_(allocator)
   {
   }
   int assign(const ObGroupbyExpr& other) {
@@ -208,13 +209,13 @@ struct ObGroupbyExpr
   }
 
   TO_STRING_KV("grouping sets groupby expr", groupby_exprs_);
-  common::ObSEArray<sql::ObRawExpr*, 8, common::ModulePageAllocator, true> groupby_exprs_;
+  ObSqlArray<sql::ObRawExpr*> groupby_exprs_;
 };
 
 struct ObRollupItem
 {
-  ObRollupItem()
-  : rollup_list_exprs_()
+  ObRollupItem(common::ObIAllocator &allocator)
+  : rollup_list_exprs_(allocator)
   {
   }
   int assign(const ObRollupItem& other) {
@@ -223,28 +224,28 @@ struct ObRollupItem
   int deep_copy(ObIRawExprCopier &expr_copier,
                 const ObRollupItem &other);
   TO_STRING_KV("rollup list exprs", rollup_list_exprs_);
-  common::ObSEArray<ObGroupbyExpr, 2, common::ModulePageAllocator, true> rollup_list_exprs_;
+  ObSqlArray<ObGroupbyExpr, true> rollup_list_exprs_;
 };
 
 struct ObCubeItem
 {
-  ObCubeItem() : cube_list_exprs_() { }
+  ObCubeItem(common::ObIAllocator &allocator) : cube_list_exprs_(allocator) { }
   int assign(const ObCubeItem& other) {
     return cube_list_exprs_.assign(other.cube_list_exprs_);
   }
   int deep_copy(ObIRawExprCopier &expr_copier,
                 const ObCubeItem &other);
   TO_STRING_KV("cube list exprs", cube_list_exprs_);
-  common::ObSEArray<ObGroupbyExpr, 2, common::ModulePageAllocator, true> cube_list_exprs_;
+  ObSqlArray<ObGroupbyExpr, true> cube_list_exprs_;
 };
 
 struct ObGroupingSetsItem
 {
-  ObGroupingSetsItem()
-  : grouping_sets_exprs_(),
-    rollup_items_(),
-    cube_items_(),
-    pruned_grouping_set_ids_()
+  ObGroupingSetsItem(common::ObIAllocator &allocator)
+  : grouping_sets_exprs_(allocator),
+    rollup_items_(allocator),
+    cube_items_(allocator),
+    pruned_grouping_set_ids_(allocator)
   {
   }
   int assign(const ObGroupingSetsItem& other);
@@ -252,22 +253,23 @@ struct ObGroupingSetsItem
                 const ObGroupingSetsItem &other);
   TO_STRING_KV("grouping sets exprs", grouping_sets_exprs_, K_(rollup_items), K_(cube_items),
                K_(pruned_grouping_set_ids));
-  common::ObSEArray<ObGroupbyExpr, 2, common::ModulePageAllocator, true> grouping_sets_exprs_;
-  common::ObSEArray<ObRollupItem, 2, common::ModulePageAllocator, true> rollup_items_;
-  common::ObSEArray<ObCubeItem, 2, common::ModulePageAllocator, true> cube_items_;
+  ObSqlArray<ObGroupbyExpr, true> grouping_sets_exprs_;
+  ObSqlArray<ObRollupItem, true> rollup_items_;
+  ObSqlArray<ObCubeItem, true> cube_items_;
   // select sum(a) from t group by grouping sets(b, c) having b > 1
   // `grouping_sets_exprs_` will contain '[b], [c]'
   // `pruned_grouping_sets_exprs_` will contain `[1]`
-  common::ObSEArray<int64_t, 2, common::ModulePageAllocator, true> pruned_grouping_set_ids_;
+  ObSqlArray<int64_t> pruned_grouping_set_ids_;
 };
 
 struct ForUpdateDMLInfo
 {
-  ForUpdateDMLInfo()
+  ForUpdateDMLInfo(ObIAllocator &allocator)
   : table_id_(OB_INVALID_ID),
     base_table_id_(OB_INVALID_ID),
     ref_table_id_(OB_INVALID_ID),
     rowkey_cnt_(0),
+    unique_column_ids_(allocator),
     is_nullable_(false),
     for_update_wait_us_(-1),
     skip_locked_(false)
@@ -287,37 +289,12 @@ struct ForUpdateDMLInfo
   uint64_t base_table_id_;  // for update base table id
   uint64_t ref_table_id_;   // base table ref id
   int64_t rowkey_cnt_;
-  common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> unique_column_ids_;
+  ObSqlArray<uint64_t> unique_column_ids_;
   bool is_nullable_;
   int64_t for_update_wait_us_;
   bool skip_locked_;
 };
 
-}
-
-namespace common
-{
-template <>
-struct ob_vector_traits<oceanbase::sql::SelectItem>
-{
-  typedef oceanbase::sql::SelectItem *pointee_type;
-  typedef oceanbase::sql::SelectItem value_type;
-  typedef const oceanbase::sql::SelectItem const_value_type;
-  typedef value_type *iterator;
-  typedef const value_type *const_iterator;
-  typedef int32_t difference_type;
-};
-
-template <>
-struct ob_vector_traits<oceanbase::sql::FromItem>
-{
-  typedef oceanbase::sql::FromItem *pointee_type;
-  typedef oceanbase::sql::FromItem value_type;
-  typedef const oceanbase::sql::FromItem const_value_type;
-  typedef value_type *iterator;
-  typedef const value_type *const_iterator;
-  typedef int32_t difference_type;
-};
 }
 
 namespace sql
@@ -398,7 +375,7 @@ public:
                  K_(show_seed));
   };
 
-  ObSelectStmt();
+  ObSelectStmt(ObIAllocator &allocator);
   virtual ~ObSelectStmt();
   int assign(const ObSelectStmt &other);
 
@@ -408,7 +385,7 @@ public:
                           ObStmtExprVisitor &visitor);
   int iterate_rollup_items(ObIArray<ObRollupItem> &rollup_items, ObStmtExprVisitor &visitor);
   int iterate_cube_items(ObIArray<ObCubeItem> &cube_items, ObStmtExprVisitor &visitor);
-  int update_stmt_table_id(ObIAllocator *allocator, const ObSelectStmt &other);
+  int update_stmt_table_id(ObIAllocator *allocator, const ObSelectStmt &other, bool need_update_qb_name = true);
   int64_t get_select_item_size() const { return select_items_.count(); }
   int64_t get_group_expr_size() const { return group_exprs_.count(); }
   int64_t get_rollup_expr_size() const { return rollup_exprs_.count(); }
@@ -483,6 +460,10 @@ public:
   bool is_hierarchical_query() const { return is_hierarchical_query_; }
   inline void set_expanded_mview(bool is_expanded_mview) { is_expanded_mview_ = is_expanded_mview; }
   inline bool is_expanded_mview() const { return is_expanded_mview_; }
+  inline void set_expanded_realtime_major_refresh_mview(bool is_expanded_realtime_major_refresh_mview) {
+    is_expanded_realtime_major_refresh_mview_ = is_expanded_realtime_major_refresh_mview;
+  }
+  inline bool is_expanded_realtime_major_refresh_mview() const { return is_expanded_realtime_major_refresh_mview_; }
   int contain_hierarchical_query(bool &contain_hie_query) const;
   void set_has_prior(bool has_prior) { has_prior_ = has_prior; }
   bool has_prior() const { return has_prior_; }
@@ -566,6 +547,7 @@ public:
   const common::ObIArray<ObOrderDirection> &get_rollup_dirs() const { return rollup_directions_; }
   common::ObIArray<ObOrderDirection> &get_rollup_dirs() { return rollup_directions_; }
   ObSelectIntoItem* get_select_into() const { return into_item_; }
+  int init_group_clause_capacity(int64_t rollup_num, int64_t cube_num, int64_t grouping_num);
   int add_group_expr(ObRawExpr* expr) { return group_exprs_.push_back(expr); }
   int add_rollup_expr(ObRawExpr* expr) { return rollup_exprs_.push_back(expr); }
   int add_grouping_sets_item(ObGroupingSetsItem &grouping_sets_item)
@@ -729,38 +711,38 @@ private:
   bool is_distinct_;
   bool is_nocycle_;
   //用于cte递归句式中的search by子句指定的排序列
-  common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> search_by_items_;
+  ObSqlArray<OrderItem> search_by_items_;
   //用于cte递归句式中的cycle by子句指定的检测循环的列
-  common::ObSEArray<ColumnItem, 8, common::ModulePageAllocator, true> cycle_by_items_;
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> cte_exprs_;
-  common::ObSEArray<SelectItem, 16, common::ModulePageAllocator, true> select_items_;
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> group_exprs_;
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> rollup_exprs_;
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> having_exprs_;
-  common::ObSEArray<ObAggFunRawExpr*, 8, common::ModulePageAllocator, true> agg_items_;
-  common::ObSEArray<ObWinFunRawExpr*, 8, common::ModulePageAllocator, true> win_func_exprs_;
+  ObSqlArray<ColumnItem> cycle_by_items_;
+  ObSqlArray<ObRawExpr*> cte_exprs_;
+  ObSqlArray<SelectItem> select_items_;
+  ObSqlArray<ObRawExpr*> group_exprs_;
+  ObSqlArray<ObRawExpr*> rollup_exprs_;
+  ObSqlArray<ObRawExpr*> having_exprs_;
+  ObSqlArray<ObAggFunRawExpr*> agg_items_;
+  ObSqlArray<ObWinFunRawExpr*> win_func_exprs_;
   //a child set of the filters in the parent stmts, only used for partition topn sort
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> qualify_filters_;
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> start_with_exprs_;
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_exprs_;
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_prior_exprs_;
+  ObSqlArray<ObRawExpr*> qualify_filters_;
+  ObSqlArray<ObRawExpr*> start_with_exprs_;
+  ObSqlArray<ObRawExpr*> connect_by_exprs_;
+  ObSqlArray<ObRawExpr*> connect_by_prior_exprs_;
   //这个结构仅仅是在mysql模式下的rollup语句中才有意义。比如下面这条语句
   //select a,b,sum(d) from t group by a desc, b asc with rollup.
-  common::ObSEArray<ObOrderDirection, 8, common::ModulePageAllocator, true> rollup_directions_;
-  common::ObSEArray<ObGroupingSetsItem, 8, common::ModulePageAllocator, true> grouping_sets_items_;
-  common::ObSEArray<ObRollupItem, 8, common::ModulePageAllocator, true> rollup_items_;
-  common::ObSEArray<ObCubeItem, 8, common::ModulePageAllocator, true> cube_items_;
+  ObSqlArray<ObOrderDirection> rollup_directions_;
+  ObSqlArray<ObGroupingSetsItem, true> grouping_sets_items_;
+  ObSqlArray<ObRollupItem, true> rollup_items_;
+  ObSqlArray<ObCubeItem, true> cube_items_;
 
   // for oracle mode only, for stmt print only
-  common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> for_update_columns_;
+  ObSqlArray<ObColumnRefRawExpr*> for_update_columns_;
 
   /* These fields are only used by set select */
   bool is_set_distinct_;
   /* for set stmt child stmt*/
-  common::ObSEArray<ObSelectStmt*, 2, common::ModulePageAllocator, true> set_query_;
+  ObSqlArray<ObSelectStmt*> set_query_;
 
   /* for hierarchical query with for update */
-  common::ObSEArray<ForUpdateDMLInfo*, 2, common::ModulePageAllocator, true> for_update_dml_info_;
+  ObSqlArray<ForUpdateDMLInfo*> for_update_dml_info_;
 
   /* for show statment*/
   ObShowStmtCtx show_stmt_ctx_;
@@ -781,6 +763,7 @@ private:
   bool has_prior_;
   bool has_reverse_link_;
   bool is_expanded_mview_;
+  bool is_expanded_realtime_major_refresh_mview_;
   //denote if the query option 'STRAIGHT_JOIN' has been specified
   bool is_select_straight_join_;
   // denote if the duplicate value of this stmt will not change the query result

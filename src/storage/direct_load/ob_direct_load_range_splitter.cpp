@@ -34,7 +34,8 @@ int ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
   const ObDatumRange &scan_range,
   const ObITableReadInfo &index_read_info,
   ObIAllocator &allocator,
-  ObIDirectLoadDatumRowkeyIterator *&rowkey_iter)
+  ObIDirectLoadDatumRowkeyIterator *&rowkey_iter,
+  const ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
   ObSSTableSecMetaIterator *macro_meta_iter = nullptr;
@@ -47,7 +48,7 @@ int ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
                          OB_NEWx(ObDirectLoadMacroBlockEndKeyIterator, (&allocator)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObDirectLoadMacroBlockEndKeyIterator", KR(ret));
-  } else if (OB_FAIL(end_key_iter->init(macro_meta_iter))) {
+  } else if (OB_FAIL(end_key_iter->init(macro_meta_iter, tablet_handle))) {
     LOG_WARN("fail to init rowkey iter", KR(ret));
   } else {
     rowkey_iter = end_key_iter;
@@ -140,7 +141,7 @@ int ObDirectLoadRangeSplitUtils::construct_origin_table_rowkey_iters(
       const ObITableReadInfo &read_info = tablet_handle.get_obj()->get_rowkey_read_info();
       ObIDirectLoadDatumRowkeyIterator *rowkey_iter = nullptr;
       if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
-            major_sstable, scan_range, read_info, allocator, rowkey_iter))) {
+            major_sstable, scan_range, read_info, allocator, rowkey_iter, tablet_handle))) {
         LOG_WARN("fail to construct rowkey iter", KR(ret));
       } else if (OB_FAIL(iter_guard.push_back(rowkey_iter))) {
         LOG_WARN("fail to push back rowkey iter", KR(ret));
@@ -158,7 +159,7 @@ int ObDirectLoadRangeSplitUtils::construct_origin_table_rowkey_iters(
         ObSSTable *ddl_sstable = ddl_sstables.at(i);
         ObIDirectLoadDatumRowkeyIterator *rowkey_iter = nullptr;
         if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
-              ddl_sstable, scan_range, read_info, allocator, rowkey_iter))) {
+              ddl_sstable, scan_range, read_info, allocator, rowkey_iter, tablet_handle))) {
           LOG_WARN("fail to construct rowkey iter", KR(ret));
         } else if (OB_FAIL(iter_guard.push_back(rowkey_iter))) {
           LOG_WARN("fail to push back rowkey iter", KR(ret));

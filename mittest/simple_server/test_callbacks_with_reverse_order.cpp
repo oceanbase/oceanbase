@@ -275,7 +275,7 @@ TEST_F(ObCallbackReverseTest, callback_reverse_test)
   TRANS_LOG(INFO, "create_table end");
   prepare_tenant_env();
   std::thread t1(
-    [this]() {
+    []() {
       ObSqlString sql;
       int64_t affected_rows = 0;
       common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
@@ -293,7 +293,7 @@ TEST_F(ObCallbackReverseTest, callback_reverse_test)
       TRANS_LOG(INFO, "insert data end1");
     });
   std::thread t2(
-    [this]() {
+    []() {
       ObSqlString sql;
       int64_t affected_rows = 0;
       common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();

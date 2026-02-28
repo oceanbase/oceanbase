@@ -116,6 +116,7 @@ public:
   // required by iters related to DAS SCAN OP
   virtual int do_table_scan() { return OB_NOT_IMPLEMENT; }
   virtual int rescan() { return OB_NOT_IMPLEMENT; }
+  virtual int advance_scan() { return OB_NOT_IMPLEMENT; }
   // required by iters related to DAS SCAN OP
 
   // for compatibility with ObNewRowIterator

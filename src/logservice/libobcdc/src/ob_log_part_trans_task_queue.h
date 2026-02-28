@@ -143,7 +143,7 @@ private:
 class SafePartTransTaskQueue
 {
 public:
-  SafePartTransTaskQueue() : queue_(), lock_() {}
+  SafePartTransTaskQueue() : queue_(), lock_(common::ObLatchIds::OB_CDC_COMMON_LOCK) {}
   virtual ~SafePartTransTaskQueue() { reset(); }
 
   void reset()

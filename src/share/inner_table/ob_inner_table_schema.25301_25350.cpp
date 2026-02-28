@@ -586,6 +586,210 @@ int ObInnerTableSchema::dba_ob_dynamic_partition_tables_ora_schema(ObTableSchema
   return ret;
 }
 
+int ObInnerTableSchema::dba_ob_backup_validate_jobs_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_BACKUP_VALIDATE_JOBS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_BACKUP_VALIDATE_JOBS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       INCARNATION,       INITIATOR_TENANT_ID,       INITIATOR_JOB_ID,       EXECUTOR_TENANT_ID,       TYPE,       PATH,       PATH_TYPE,       ID,       VALIDATE_LEVEL,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')         END AS END_TIMESTAMP,       STATUS,       TASK_COUNT,       SUCCESS_TASK_COUNT,       RESULT,       "COMMENT"     FROM SYS.ALL_VIRTUAL_BACKUP_VALIDATE_JOB     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_ob_backup_validate_job_history_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_BACKUP_VALIDATE_JOB_HISTORY_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_BACKUP_VALIDATE_JOB_HISTORY_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       INCARNATION,       INITIATOR_TENANT_ID,       INITIATOR_JOB_ID,       EXECUTOR_TENANT_ID,       TYPE,       PATH,       PATH_TYPE,       ID,       VALIDATE_LEVEL,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')         END AS END_TIMESTAMP,       STATUS,       TASK_COUNT,       SUCCESS_TASK_COUNT,       RESULT,       "COMMENT"     FROM SYS.ALL_VIRTUAL_BACKUP_VALIDATE_JOB_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_ob_backup_validate_tasks_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_BACKUP_VALIDATE_TASKS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_BACKUP_VALIDATE_TASKS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TENANT_ID,       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       PATH,       PATH_TYPE,       DEST_ID,       PLUS_ARCHIVELOG,       INITIATOR_TASK_ID,       VALIDATE_LEVEL,       ROUND_ID,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')         END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT,       FINISH_LS_COUNT,       TOTAL_BYTES,       VALIDATED_BYTES,       RESULT,       "COMMENT"     FROM SYS.ALL_VIRTUAL_BACKUP_VALIDATE_TASK     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_ob_backup_validate_task_history_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_BACKUP_VALIDATE_TASK_HISTORY_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_BACKUP_VALIDATE_TASK_HISTORY_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TENANT_ID,       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       PATH,       PATH_TYPE,       DEST_ID,       PLUS_ARCHIVELOG,       INITIATOR_TASK_ID,       VALIDATE_LEVEL,       ROUND_ID,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')         END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT,       FINISH_LS_COUNT,       TOTAL_BYTES,       VALIDATED_BYTES,       RESULT,       "COMMENT"     FROM SYS.ALL_VIRTUAL_BACKUP_VALIDATE_TASK_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::dba_ob_ss_space_usage_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
@@ -672,7 +876,7 @@ int ObInnerTableSchema::dba_ob_source_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     WITH s AS (       SELECT owner, name, type, line, text, origin_con_id       FROM dba_source     ),     r (owner, name, type, line, origin_con_id, part_no, part_text, rest_text) AS (       SELECT owner, name, type, line, origin_con_id,             1 AS part_no,             CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, 1, INSTR(text, CHR(10)) - 1) ELSE SUBSTR(text, 1, 4000) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 1, 4000) ELSE text END AS part_text,             CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, INSTR(text, CHR(10)) + 1) ELSE SUBSTR(text, 4001) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 4001) ELSE NULL END AS rest_text       FROM s       UNION ALL       SELECT owner, name, type, line, origin_con_id,             part_no + 1,             CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, 1, INSTR(rest_text, CHR(10)) - 1) ELSE SUBSTR(rest_text, 1, 4000) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 1, 4000) ELSE rest_text END AS part_text,             CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, INSTR(rest_text, CHR(10)) + 1) ELSE SUBSTR(rest_text, 4001) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 4001) ELSE NULL END AS rest_text       FROM r       WHERE rest_text IS NOT NULL     )     SELECT owner,           name,           type,           line + part_no - 1 AS line,           CASE WHEN part_text IS NULL THEN TO_CLOB(CHR(10)) ELSE part_text END AS text,           origin_con_id     FROM r     ORDER BY owner, type, name, line; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -723,7 +927,7 @@ int ObInnerTableSchema::all_ob_source_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE     WHERE origin_con_id != 1 AND       (owner = USER OR        USER_CAN_ACCESS_OBJ(CASE type          WHEN 'PACKAGE' THEN 3          WHEN 'PACKAGE BODY' THEN 3          WHEN 'PROCEDURE' THEN 12          WHEN 'FUNCTION' THEN 9          WHEN 'TRIGGER' THEN 7          WHEN 'TYPE' THEN 4          WHEN 'TYPE BODY' THEN 4          END, object_id, database_id) = 1)     UNION ALL     SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE WHERE origin_con_id = 1; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     WITH s AS (       SELECT owner, name, type, line, text, origin_con_id       FROM all_source     ),     r (owner, name, type, line, origin_con_id, part_no, part_text, rest_text) AS (       SELECT owner, name, type, line, origin_con_id,             1 AS part_no,             CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, 1, INSTR(text, CHR(10)) - 1) ELSE SUBSTR(text, 1, 4000) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 1, 4000) ELSE text END AS part_text,             CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, INSTR(text, CHR(10)) + 1) ELSE SUBSTR(text, 4001) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 4001) ELSE NULL END AS rest_text       FROM s       UNION ALL       SELECT owner, name, type, line, origin_con_id,             part_no + 1,             CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, 1, INSTR(rest_text, CHR(10)) - 1) ELSE SUBSTR(rest_text, 1, 4000) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 1, 4000) ELSE rest_text END AS part_text,             CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, INSTR(rest_text, CHR(10)) + 1) ELSE SUBSTR(rest_text, 4001) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 4001) ELSE NULL END AS rest_text       FROM r       WHERE rest_text IS NOT NULL     )     SELECT r.owner,           name,           type,           line + part_no - 1 AS line,           CASE WHEN part_text IS NULL THEN TO_CLOB(CHR(10)) ELSE part_text END AS text,           origin_con_id     FROM r     ORDER BY r.owner, type, name, line; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -774,7 +978,7 @@ int ObInnerTableSchema::user_ob_source_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE WHERE owner = USER AND origin_con_id != 1; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(WITH s AS (       SELECT name, type, line, text, origin_con_id       FROM user_source     ),     r (name, type, line, origin_con_id, part_no, part_text, rest_text) AS (       SELECT name, type, line, origin_con_id,             1 AS part_no,             CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, 1, INSTR(text, CHR(10)) - 1) ELSE SUBSTR(text, 1, 4000) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 1, 4000) ELSE text END AS part_text,             CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, INSTR(text, CHR(10)) + 1) ELSE SUBSTR(text, 4001) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 4001) ELSE NULL END AS rest_text       FROM s       UNION ALL       SELECT name, type, line, origin_con_id,             part_no + 1,             CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, 1, INSTR(rest_text, CHR(10)) - 1) ELSE SUBSTR(rest_text, 1, 4000) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 1, 4000) ELSE rest_text END AS part_text,             CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, INSTR(rest_text, CHR(10)) + 1) ELSE SUBSTR(rest_text, 4001) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 4001) ELSE NULL END AS rest_text       FROM r       WHERE rest_text IS NOT NULL     )     SELECT name,           type,           line + part_no - 1 AS line,           CASE WHEN part_text IS NULL THEN TO_CLOB(CHR(10)) ELSE part_text END AS text,           origin_con_id     FROM r     ORDER BY type, name, line; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

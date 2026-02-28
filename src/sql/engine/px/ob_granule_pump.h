@@ -22,8 +22,13 @@
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/engine/px/ob_granule_util.h"
 #include "sql/engine/ob_engine_op_traits.h"
+#ifdef OB_BUILD_CPP_ODPS
+#include "sql/engine/table/ob_odps_table_row_iter.h"
+#endif
+#ifdef OB_BUILD_JNI_ODPS
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
-
+#endif
+#include "sql/engine/px/ob_granule_parallel_task_gen.h"
 
 namespace oceanbase
 {
@@ -409,8 +414,9 @@ public:
   pruning_table_locations_(),
   is_taskset_reset_(false),
   fetch_task_ret_(OB_SUCCESS),
-  finished_cnt_(0)
-  {
+  finished_cnt_(0),
+  external_task_runners_() {
+    external_task_runners_.set_attr(common::ObMemAttr(MTL_ID(), MEM_ATTR_EXT_TASK_GEN));
   }
 
   virtual ~ObGranulePump() {
@@ -468,38 +474,13 @@ public:
   { return pruning_table_locations_.assign(table_locations); }
   common::ObIArray<ObTableLocation> *get_pruning_table_location() { return &pruning_table_locations_; }
   int get_first_tsc_range_cnt(int64_t &cnt);
+  int get_first_tsc_op_id(int64_t &op_id);
   const GITaskArrayMap &get_task_array_map() const { return gi_task_array_map_; }
   static int find_task_array_item(GITaskArrayMap &gi_task_map,
                               common::ObIArray<const ObTableScanSpec *> &scan_ops,
                               const bool check_task_exist, int64_t &idx);
-
-#ifdef OB_BUILD_CPP_ODPS
-  inline int get_odps_downloader(int64_t part_id, apsara::odps::sdk::IDownloadPtr &downloader) {
-    int ret = OB_SUCCESS;
-    downloader = NULL;
-    ret = odps_partition_downloader_mgr_.get_odps_downloader(part_id, downloader);
-    return ret;
-  }
-  inline ObOdpsPartitionDownloaderMgr::OdpsMgrMap& get_odps_map() {
-    return odps_partition_downloader_mgr_.get_odps_map();
-  }
-  inline bool is_odps_downloader_inited() {  return odps_partition_downloader_mgr_.is_download_mgr_inited(); }
-  ObOdpsPartitionDownloaderMgr &get_odps_downloader_mgr() { return odps_partition_downloader_mgr_; }
-  ObOdpsPartitionUploaderMgr &get_odps_uploader_mgr() { return odps_partition_uploader_mgr_; }
-#endif
-#ifdef OB_BUILD_JNI_ODPS
-  inline bool is_odps_scanner_mgr_inited() {
-    return odps_partition_jni_scanner_mgr_.is_jni_scanner_mgr_inited();
-  }
-  ObOdpsPartitionJNIDownloaderMgr &get_odps_jni_scanner_mgr() {
-    return odps_partition_jni_scanner_mgr_;
-  }
-  ObOdpsPartitionJNIUploaderMgr &get_odps_jni_uploader_mgr() {
-    return odps_jni_uploader_mgr_;
-  }
-#endif
 private:
-  int init_external_odps_table_downloader(ObGranulePumpArgs &args);
+
   int fetch_granule_by_worker_id(const ObGITaskSet *&task_set,
                                  int64_t &pos,
                                  ObGranuleTaskInfo &info,
@@ -548,24 +529,59 @@ private:
   int64_t tablet_size_;
   bool partition_wise_join_;
   GITaskArrayMap gi_task_array_map_;
-#ifdef OB_BUILD_CPP_ODPS
-  ObOdpsPartitionDownloaderMgr odps_partition_downloader_mgr_;
-  ObOdpsPartitionUploaderMgr odps_partition_uploader_mgr_;
-#endif
-#ifdef OB_BUILD_JNI_ODPS
-  ObOdpsPartitionJNIDownloaderMgr odps_partition_jni_scanner_mgr_;
-  ObOdpsPartitionJNIUploaderMgr         odps_jni_uploader_mgr_;
-#endif
   common::ObArray<ObGranulePumpArgs> pump_args_;
   bool need_partition_pruning_;
   common::ObArray<ObTableLocation> pruning_table_locations_;
-
 
   bool is_taskset_reset_;
   // when granule tasks are fetched concurrently, if one thread failed to fetch task,
   // others should not fetch tasks any more.
   int fetch_task_ret_;
   uint64_t finished_cnt_;
+
+public:
+// external table start;
+#ifdef OB_BUILD_CPP_ODPS
+  inline bool is_odps_downloader_inited() {
+    return odps_partition_downloader_mgr_.is_download_mgr_inited();
+  }
+  ObOdpsPartitionDownloaderMgr &get_odps_downloader_mgr() {
+    return odps_partition_downloader_mgr_;
+  }
+  ObOdpsPartitionUploaderMgr &get_odps_uploader_mgr() {
+    return odps_partition_uploader_mgr_;
+  }
+#endif
+#ifdef OB_BUILD_JNI_ODPS
+  ObOdpsPartitionJNIDownloaderMgr &get_odps_jni_scanner_mgr() {
+    return odps_partition_jni_scanner_mgr_;
+  }
+  ObOdpsPartitionJNIUploaderMgr &get_odps_jni_uploader_mgr() {
+    return odps_jni_uploader_mgr_;
+  }
+#endif
+  int init_external_odps_table_downloader(ObGranulePumpArgs &args);
+  int create_and_add_runner(int64_t tsc_op_id,
+                            ObExecContext &exec_ctx,
+                            GITaskGenRunner *&runner);
+
+  void find_external_task_runner(int64_t tsc_op_id,
+                                 GITaskGenRunner *&runner);
+
+  int refill_pump_with_new_gen_tasks(int64_t tsc_op_id,
+                                     uint64_t gi_attri_flag,
+                                     GIExternalTaskArgs &task_args);
+  // external table end;
+private:
+#ifdef OB_BUILD_CPP_ODPS
+  ObOdpsPartitionDownloaderMgr odps_partition_downloader_mgr_;
+  ObOdpsPartitionUploaderMgr odps_partition_uploader_mgr_;
+#endif
+#ifdef OB_BUILD_JNI_ODPS
+  ObOdpsPartitionJNIDownloaderMgr odps_partition_jni_scanner_mgr_;
+  ObOdpsPartitionJNIUploaderMgr odps_jni_uploader_mgr_;
+#endif
+  common::ObArray<GITaskGenRunner *> external_task_runners_;
 };
 
 }//sql

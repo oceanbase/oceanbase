@@ -41,7 +41,7 @@ int ObDDLRedoLogReplayer::init(ObLS *ls)
     LOG_WARN("ObDDLRedoLogReplayer has been inited twice", K(ret));
   } else if (OB_FAIL(allocator_.init(TOTAL_LIMIT, HOLD_LIMIT, OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_WARN("fail to init allocator", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(DEFAULT_HASH_BUCKET_COUNT, ObLatchIds::DEFAULT_BUCKET_LOCK, attr))) {
+  } else if (OB_FAIL(bucket_lock_.init(DEFAULT_HASH_BUCKET_COUNT, ObLatchIds::DDL_REDO_LOG_REPLAY_LOCK, attr))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else {
     ls_ = ls;

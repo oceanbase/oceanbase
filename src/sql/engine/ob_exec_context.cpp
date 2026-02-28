@@ -271,6 +271,9 @@ ObExecContext::~ObExecContext()
     lake_table_file_map_ = NULL;
   }
   need_try_serialize_package_var_ = false;
+  if (odps_partition_str_to_file_size_.created()) {
+    odps_partition_str_to_file_size_.destroy();
+  }
 }
 
 void ObExecContext::clean_resolve_ctx()
@@ -429,14 +432,15 @@ int ObExecContext::build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCt
   int ret = OB_SUCCESS;
   uint64_t frame_cnt = 0;
   char **frames = NULL;
-  char *mem = static_cast<char*>(get_allocator().alloc(sizeof(ObTempExprCtx)));
+  ObIAllocator &allocator = get_allocator();
+  char *mem = static_cast<char*>(allocator.alloc(sizeof(ObTempExprCtx)));
   ObArray<char *> tmp_param_frame_ptrs;
   if (OB_ISNULL(mem)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("no more memory to create temp expr ctx", K(ret));
   }
   OX(temp_expr_ctx = new(mem)ObTempExprCtx(*this));
-  OZ(temp_expr.alloc_frame(get_allocator(), tmp_param_frame_ptrs, frame_cnt, frames));
+  OZ(temp_expr.alloc_frame(allocator, tmp_param_frame_ptrs, frame_cnt, frames));
   OX(temp_expr_ctx->frames_ = frames);
   OX(temp_expr_ctx->frame_cnt_ = frame_cnt);
   // init expr_op_size_ and expr_op_ctx_store_
@@ -445,7 +449,7 @@ int ObExecContext::build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCt
       int64_t ctx_store_size = static_cast<int64_t>(
                                temp_expr.need_ctx_cnt_ * sizeof(ObExprOperatorCtx *));
       if (OB_ISNULL(temp_expr_ctx->expr_op_ctx_store_
-                    = static_cast<ObExprOperatorCtx **>(allocator_.alloc(ctx_store_size)))) {
+                    = static_cast<ObExprOperatorCtx **>(allocator.alloc(ctx_store_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to alloc expr_op_ctx_store_ memory", K(ret), K(ctx_store_size));
       } else {

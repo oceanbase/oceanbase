@@ -25,6 +25,7 @@
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/resolver/ddl/ob_interval_partition_resolver.h"
 #include "rootserver/ob_partition_exchange.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -417,6 +418,23 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("failed to check htable ddl supported", K(ret));
       }
     }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(table_schema_)) {
+      if (OB_ISNULL(schema_checker_) || OB_ISNULL(schema_checker_->get_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema checker or schema guard is null", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_ttl_schema_valid(
+              *table_schema_,
+              alter_table_stmt->get_alter_table_arg().alter_table_schema_,
+              session_info_->get_effective_tenant_id(),
+              *schema_checker_->get_schema_guard()))) {
+        LOG_WARN("failed to check ttl schema valid", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_merge_engine_valid(
+                     *table_schema_,
+                     alter_table_stmt->get_alter_table_arg().alter_table_schema_))) {
+        LOG_WARN("failed to check append_only engine valid", K(ret));
+      }
+    }
   }
   DEBUG_SYNC(HANG_BEFORE_RESOLVER_FINISH);
   return ret;
@@ -473,7 +491,7 @@ int ObAlterTableResolver::set_table_options()
       SQL_RESV_LOG(WARN, "Write database_name to alter_table_schema failed!", K(database_name_), K(ret));
     } else if (OB_FAIL(alter_table_schema.set_encryption_str(encryption_))) {
       SQL_RESV_LOG(WARN, "Write encryption to alter_table_schema failed!", K(encryption_), K(ret));
-    } else if (OB_FAIL(alter_table_schema.set_ttl_definition(ttl_definition_))) {
+    } else if (OB_FAIL(alter_table_schema.set_ttl_definition(ttl_definition_, ttl_flag_))) {
       SQL_RESV_LOG(WARN, "Write ttl_definition to alter_table_schema failed!", K(ret));
     } else if (OB_FAIL(alter_table_schema.set_kv_attributes(kv_attributes_))) {
       SQL_RESV_LOG(WARN, "Write kv_attributes to alter_table_schema failed!", K(ret));
@@ -506,10 +524,6 @@ int ObAlterTableResolver::set_table_options()
                  K(ret), K(tenant_data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.3, zlib_lite");
       }
-    }
-
-    if (OB_FAIL(ret)) {
-      //do nothing
     }
 
     if (OB_FAIL(ret)) {
@@ -1010,6 +1024,13 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
                 K(ret));
             } else if (OB_FAIL(resolve_partition_options(*action_node))) {
               SQL_RESV_LOG(WARN, "Resolve partition option failed!", K(ret));
+            } else if (OB_ISNULL(table_schema_)) {
+              ret = OB_ERR_UNEXPECTED;
+              SQL_RESV_LOG(WARN, "table schema is null", K(ret));
+            } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_partition_for_append_only_valid(
+                           *table_schema_,
+                           alter_table_stmt->get_alter_table_arg().alter_part_type_))) {
+              SQL_RESV_LOG(WARN, "check alter partition for append only valid failed", KR(ret));
             }
             break;
           }
@@ -1190,6 +1211,8 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "REMOVE TTL in data version less than 4.2.1");
           } else {
             ttl_definition_.reset();
+            ttl_flag_ = table_schema_->get_ttl_flag();
+            ttl_flag_.ttl_type_ = ObTTLDefinition::NONE;
             if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TTL_DEFINITION))) {
               SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
             }
@@ -1263,6 +1286,19 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         }
       }
     }
+    // after resolve drop column, check append_only table requirements
+    if (OB_SUCC(ret)) {
+       if (OB_ISNULL(table_schema_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "table schema is null", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_column_for_append_only_valid(
+                     alter_table_stmt->get_alter_table_arg(),
+                     *table_schema_,
+                     lib::is_oracle_mode()))) {
+        SQL_RESV_LOG(WARN, "check alter column for append only valid failed", KR(ret));
+      }
+    }
+
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < add_index_action_idxs.count(); ++i) {
         ParseNode *action_node = NULL;
@@ -1519,12 +1555,19 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         } else if (OB_ISNULL(tbl_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table schema is NULL", K(ret));
-        } else if (!tbl_schema->get_kv_attributes().empty() &&
-            OB_FAIL(ObTTLUtil::check_kv_attributes(tbl_schema->get_kv_attributes(),
-                                                   *tbl_schema,
-                                                   PARTITION_LEVEL_TWO))) {
-          LOG_WARN("fail to check kv attributes", K(ret));
+        } else if (OB_FAIL(table::ObHTableUtils::check_ddl_alter_partition(*tbl_schema, table_schema_->get_tenant_id()))) {
+          LOG_WARN("fail to check ddl alter partition", K(ret));
         }
+      }
+    } else if (OB_SUCC(ret) && has_add_column) { // alter timeseries hbase table add column is not supported
+      const ObTableSchema *tbl_schema = nullptr;
+      if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret));
+      } else if (OB_ISNULL(tbl_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is NULL", K(ret));
+      } else if (OB_FAIL(table::ObHTableUtils::check_ddl_add_column(*tbl_schema, table_schema_->get_tenant_id()))) {
+        LOG_WARN("fail to check ddl add column", K(ret));
       }
     }
     } // end for heap_vars_2.
@@ -1703,6 +1746,11 @@ int ObAlterTableResolver::resolve_drop_unused_columns(const ParseNode& node)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported to alter table force under this tenant_data_version", KR(ret), K(tenant_data_version), K(lib::is_oracle_mode()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is illegal, alter table force");
+  } else if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", KR(ret), KP(table_schema_));
+  } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_table_force_valid(*table_schema_))) {
+    LOG_WARN("failed to check alter table flush valid", KR(ret), K(table_schema_));
   }
 
   if (OB_SUCC(ret)) {
@@ -2790,7 +2838,7 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
     index_arg.index_option_.parser_properties_ = parser_properties_;
     if (OB_SUCC(ret)) {
       ObIndexType type = INDEX_TYPE_IS_NOT;
-      if (OB_NOT_NULL(table_schema_) && table_schema_->is_oracle_tmp_table()) {
+      if (OB_NOT_NULL(table_schema_) && (table_schema_->is_oracle_tmp_table() || table_schema_->is_oracle_tmp_table_v2())) {
         index_scope_ = LOCAL_INDEX;
       }
       if (NOT_SPECIFIED == index_scope_) {
@@ -2854,6 +2902,16 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.3.1, multivalue index not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, multivalue index");
+        }  else if (table_schema_->is_mysql_tmp_table() && index_keyname_ == FTS_KEY) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("fulltext index on mysql temporary table is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext index on mysql temporary table is");
+        } else if (table_schema_->is_mysql_tmp_table()
+                   && ( index_keyname_ == MULTI_KEY
+                      || index_keyname_ == MULTI_UNIQUE_KEY)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("multivalue index on mysql temporary table is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue index on mysql temporary table is");
         } else if (global_) {
           if (index_keyname_ == SPATIAL_KEY) {
             type = INDEX_TYPE_SPATIAL_GLOBAL;
@@ -2960,6 +3018,26 @@ int ObAlterTableResolver::resolve_drop_index(const ParseNode &node)
           } else if (!has_other_indexes_on_same_cols && lib::is_mysql_mode()) {
             if (OB_FAIL(check_index_columns_equal_foreign_key(*table_schema_, *index_table_schema))) {
               LOG_WARN("failed to check_index_columns_equal_foreign_key", K(ret), K(index_table_name));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            drop_index_arg->is_oracle_tmp_table_v2_index_table_ = index_table_schema->is_oracle_tmp_table_v2_index_table();
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObString kv_attributes = table_schema_->get_kv_attributes();
+          if (!kv_attributes.empty()) {
+            ObKVAttr kv_attr;
+            uint64_t tenant_id = session_info_->get_effective_tenant_id();
+            if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tenant_id, kv_attributes, kv_attr))) {
+              LOG_WARN("failed to parse kv attributes", K(ret));
+            } else if (!ObTTLUtil::is_default_scan_index(kv_attr.ttl_scan_index_) &&
+                       ObTTLUtil::is_index_name_match(tenant_id,
+                                                      table_schema_->get_name_case_mode(),
+                                                      kv_attr.ttl_scan_index_, drop_index_name)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("drop index when kv_atrributes has specified it is not supported", K(ret), K(drop_index_name), K(kv_attr));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop index when kv_atrributes has specified it");
             }
           }
         }
@@ -3390,6 +3468,8 @@ int ObAlterTableResolver::resolve_exchange_partition_stmt(
     } else if (OB_ISNULL(exchange_table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table not found", K(ret), KPC(exchange_table_schema), K(exchange_db_name), K(exchange_table_name));
+    } else if (OB_FAIL(ObCompactionTTLUtil::check_exchange_partition_for_append_only_valid(orig_table_schema, *exchange_table_schema))) {
+      LOG_WARN("check alter partition for append only valid failed", KR(ret));
     } else {
       orig_part_name.assign_ptr(node.children_[0]->str_value_, static_cast<int32_t>(node.children_[0]->str_len_));
     }
@@ -5464,6 +5544,9 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("alter partition of materialized view is not supported", KR(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition of materialized view is");
+    } else if (table_schema_->is_mysql_tmp_table()) {
+      ret = OB_ERR_TEMPORARY_TABLE_WITH_PARTITION;
+      LOG_WARN("alter partition of temporary is not supported", KR(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -5486,6 +5569,10 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can't re-partitioned a partitioned table", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Re-partition a patitioned table");
+      } else if (T_ALTER_PARTITION_PARTITIONED == node.children_[0]->type_ && table_schema_->is_oracle_tmp_table_v2()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can't re-partitioned a temporary table", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Re-partition a temporary table");
       } else if (OB_FAIL(ObAlterMviewUtils::check_partition_option_for_mlog_master(
                      *table_schema_, partition_node->type_))) {
         LOG_WARN("mlog master is not supported", KR(ret));
@@ -6386,7 +6473,7 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node, ObColumnName
                                                           stat,
                                                           is_modify_column_visibility,
                                                           resolved_cols,
-                                                          table_schema_->is_oracle_tmp_table()))) {
+                                                          table_schema_->is_oracle_tmp_table() || table_schema_->is_oracle_tmp_table_v2()))) {
           SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));
         } else if (OB_FAIL(fill_column_schema_according_stat(stat, alter_column_schema))) {
           SQL_RESV_LOG(WARN, "fail to fill column schema", K(alter_column_schema), K(stat), K(ret));
@@ -6834,7 +6921,7 @@ int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &tabl
   ObResolverParams resolver_ctx;
   ObRawExprFactory expr_factory(*allocator_);
   ObStmtFactory stmt_factory(*allocator_);
-  TableItem table_item;
+  TableItem table_item(*allocator_);
   resolver_ctx.allocator_ = allocator_;
   resolver_ctx.schema_checker_ = schema_checker_;
   resolver_ctx.session_info_ = session_info_;
@@ -6852,7 +6939,10 @@ int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &tabl
   ObPartitionFuncType part_type;
   SMART_VAR (ObDeleteResolver, delete_resolver, resolver_ctx) {
     ObDeleteStmt *delete_stmt = delete_resolver.create_stmt<ObDeleteStmt>();
-    CK (OB_NOT_NULL(delete_stmt));
+    if (OB_ISNULL(delete_stmt)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("create delete stmt failed", K(ret));
+    }
     CK (OB_NOT_NULL(resolver_ctx.query_ctx_));
     OZ (delete_stmt->get_table_items().push_back(&table_item));
     OZ (delete_stmt->set_table_bit_index(table_id));
@@ -7299,7 +7389,7 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
         } else if (OB_FAIL(resolve_alter_table_column_definition(
                     alter_column_schema, node.children_[i], stat, is_modify_column_visibility,
                     resolved_cols,
-                    table_schema_->is_oracle_tmp_table(),
+                    table_schema_->is_oracle_tmp_table() || table_schema_->is_oracle_tmp_table_v2(),
                     allow_has_default))) {
           SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));
         } else if (!is_oracle_mode() && !stat.is_primary_key_ &&

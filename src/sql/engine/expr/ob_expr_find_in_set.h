@@ -38,6 +38,11 @@ public:
   static int calc_find_in_set_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
+public:
+  // hashmap is better than array when str_list is large
+  // the threshold is set to 6 after a simple test
+  static const int HASH_MAP_THRESHOLD = 6;
+
 private:
   template <typename Arg0Vec, typename Arg1Vec, typename ResVec>
   static int calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL);

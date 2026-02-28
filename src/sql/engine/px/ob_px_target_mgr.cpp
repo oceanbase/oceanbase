@@ -282,6 +282,43 @@ int ObPxTargetMgr::get_parallel_session_count(uint64_t tenant_id, int64_t &paral
   return ret;
 }
 
+int ObPxTargetMgr::inc_realtime_px_task_cnt(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  GET_TARGET_MONITOR(tenant_id, {
+    target_monitor->inc_realtime_px_task_cnt();
+  });
+  return ret;
+}
+
+int ObPxTargetMgr::dec_realtime_px_task_cnt(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  GET_TARGET_MONITOR(tenant_id, {
+    target_monitor->dec_realtime_px_task_cnt();
+  });
+  return ret;
+}
+
+int ObPxTargetMgr::get_realtime_px_task_cnt(uint64_t tenant_id, int64_t &px_task_cnt)
+{
+  int ret = OB_SUCCESS;
+  GET_TARGET_MONITOR(tenant_id, {
+    px_task_cnt = target_monitor->get_realtime_px_task_cnt();
+  });
+  return ret;
+}
+
+int ObPxTargetMgr::get_enable_px_dop_dynamic_scaling(uint64_t tenant_id, bool &enable_px_dop_dynamic_scaling)
+{
+  int ret = OB_SUCCESS;
+  GET_TARGET_MONITOR(tenant_id, {
+    enable_px_dop_dynamic_scaling = target_monitor->enable_px_dop_dynamic_scaling();
+  });
+  return ret;
+}
+
+
 int ObPxTargetMgr::is_leader(uint64_t tenant_id, bool &is_leader)
 {
   int ret = OB_SUCCESS;
@@ -307,7 +344,7 @@ int ObPxTargetMgr::update_peer_target_used(uint64_t tenant_id, const ObAddr &ser
   // return OB_HASH_EXIST instead of replacing the element.
   int flag = 0;
   GET_TARGET_MONITOR(tenant_id, {
-    if (OB_FAIL(target_monitor->update_peer_target_used(server, peer_used, version))) {
+    if (OB_FAIL(target_monitor->update_peer_target_used(server, peer_used, version, true))) {
       LOG_WARN("update peer target_used failed", K(ret), K(tenant_id), K(peer_used));
     } else if (server_ != server && OB_FAIL(alive_server_set_.set_refactored(server, flag))) {
       if (OB_HASH_EXIST == ret) {
@@ -315,6 +352,17 @@ int ObPxTargetMgr::update_peer_target_used(uint64_t tenant_id, const ObAddr &ser
       } else {
         LOG_WARN("alive_server_set_ push_back failed", K(ret), K(server));
       }
+    }
+  });
+  return ret;
+}
+
+int ObPxTargetMgr::set_peer_realtime_target_used(uint64_t tenant_id, const ObAddr &server, int64_t realtime_target_used)
+{
+  int ret = OB_SUCCESS;
+  GET_TARGET_MONITOR(tenant_id, {
+    if (OB_FAIL(target_monitor->set_peer_realtime_target_used(server, realtime_target_used))) {
+      LOG_WARN("set realtime_target_used failed", K(ret), K(tenant_id), K(server));
     }
   });
   return ret;
@@ -354,14 +402,16 @@ int ObPxTargetMgr::apply_target(uint64_t tenant_id, hash::ObHashMap<ObAddr, int6
 {
   int ret = OB_SUCCESS;
   GET_TARGET_MONITOR(tenant_id, {
-    if (OB_FAIL(target_monitor->apply_target(worker_map, wait_time_us, session_target, req_cnt, admit_count, admit_version))) {
+    if (OB_FAIL(target_monitor->apply_target(worker_map, wait_time_us, session_target, req_cnt,
+                                      admit_count, admit_version))) {
       LOG_WARN("apply target failed", K(ret), K(tenant_id), K(session_target), K(req_cnt));
     }
   });
   return ret;
 }
 
-int ObPxTargetMgr::release_target(uint64_t tenant_id, hash::ObHashMap<ObAddr, int64_t> &worker_map, uint64_t admit_version)
+int ObPxTargetMgr::release_target(uint64_t tenant_id, hash::ObHashMap<ObAddr, int64_t> &worker_map,
+                                  uint64_t admit_version)
 {
   int ret = OB_SUCCESS;
   GET_TARGET_MONITOR(tenant_id, {

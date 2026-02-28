@@ -13,11 +13,14 @@
 #ifndef _OB_LOG_FUNCTION_TABLE_H
 #define _OB_LOG_FUNCTION_TABLE_H
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogFunctionTable : public ObLogicalOperator
 {
 public:
@@ -26,7 +29,7 @@ public:
         table_id_(OB_INVALID_ID),
         value_expr_(NULL),
         table_name_(),
-        access_exprs_() { }
+        access_exprs_(plan.get_allocator()) { }
   virtual ~ObLogFunctionTable() {}
   void add_values_expr(ObRawExpr* expr) { value_expr_ = expr; }
   const ObRawExpr* get_value_expr() const { return value_expr_; }
@@ -51,7 +54,7 @@ private:
   uint64_t table_id_;
   ObRawExpr* value_expr_;
   common::ObString table_name_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> access_exprs_;
+  ObSqlArray<ObRawExpr*> access_exprs_;
   DISALLOW_COPY_AND_ASSIGN(ObLogFunctionTable);
 };
 }

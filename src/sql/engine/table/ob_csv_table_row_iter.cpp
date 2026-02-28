@@ -176,28 +176,71 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
   return ret;
 }
 
-int ObCSVTableRowIterator::get_next_file_and_line_number(const int64_t task_idx,
+template <typename TaskType>
+static int extract_file_scan_task_info(const TaskType *task,
+                                        ObString &file_url,
+                                        int64_t &file_id,
+                                        int64_t &part_id,
+                                        int64_t &start_line,
+                                        int64_t &end_line,
+                                        int64_t &bounded_start_pos,
+                                        int64_t &bounded_end_pos,
+                                        int64_t &chunk_idx)
+{
+  int ret = OB_SUCCESS;
+  start_line = task->first_lineno_;
+  end_line = task->last_lineno_;
+  part_id = task->part_id_;
+  file_url = task->file_url_;
+  file_id = task->file_id_;
+
+  ObCsvParallelInfo *csv_parallel_info = task->parallel_parse_csv_info_;
+  if (OB_ISNULL(csv_parallel_info)) {
+    bounded_start_pos = 0;
+    bounded_end_pos = INT64_MAX;
+    chunk_idx = 0;
+  } else if (csv_parallel_info->csv_task_type_ != CsvTaskType::PARSE_DATA) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected parallel parse csv type", K(ret), K(csv_parallel_info->csv_task_type_));
+  } else {
+    bounded_start_pos = csv_parallel_info->start_pos_;
+    bounded_end_pos = csv_parallel_info->end_pos_;
+    chunk_idx = csv_parallel_info->chunk_idx_;
+  }
+  return ret;
+}
+
+int ObCSVTableRowIterator::get_next_file_scan_info(const int64_t task_idx,
                                                          ObString &file_url,
                                                          int64_t &file_id,
                                                          int64_t &part_id,
                                                          int64_t &start_line,
-                                                         int64_t &end_line)
+                                                         int64_t &end_line,
+                                                         int64_t &bounded_start_pos,
+                                                         int64_t &bounded_end_pos,
+                                                         int64_t &chunk_idx)
 {
   int ret = OB_SUCCESS;
   if (task_idx >= scan_param_->scan_tasks_.count()) {
     ret = OB_ITER_END;
   } else {
-    const ObFileScanTask *scan_task =
-      static_cast<const ObFileScanTask *>(scan_param_->scan_tasks_.at(task_idx));
-    if (OB_ISNULL(scan_task)) {
+    const ObFileScanTask *file_scan_task = static_cast<const ObFileScanTask *>(scan_param_->scan_tasks_.at(task_idx));
+    if (OB_ISNULL(file_scan_task)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null scan task", K(ret), K(task_idx));
+      LOG_WARN("get null file scan task", K(ret), K(task_idx));
     } else {
-      start_line = scan_task->first_lineno_;
-      end_line = scan_task->last_lineno_;
-      part_id = scan_task->part_id_;
-      file_url = scan_task->file_url_;
-      file_id = scan_task->file_id_;
+      if (file_scan_task->get_file_type() == LakeFileType::HIVE) {
+        ret = extract_file_scan_task_info(static_cast<const ObHiveScanTask *>(file_scan_task),
+                                          file_url, file_id, part_id, start_line, end_line,
+                                          bounded_start_pos, bounded_end_pos, chunk_idx);
+      } else if (file_scan_task->get_file_type() == LakeFileType::INVALID) {
+        ret = extract_file_scan_task_info(static_cast<const ObExtTableScanTask *>(file_scan_task),
+                                          file_url, file_id, part_id, start_line, end_line,
+                                          bounded_start_pos, bounded_end_pos, chunk_idx);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected file scan task type", K(ret), K(file_scan_task->get_file_type()));
+      }
     }
   }
   return ret;
@@ -208,9 +251,9 @@ int ObCSVTableRowIterator::open_next_file()
   int ret = OB_SUCCESS;
   ObString location = scan_param_->external_file_location_;
   int64_t file_size = 0;
-
   file_reader_.close();
   do {
+    // todo@lekou: 考虑头部跳行的情况
     ObString file_url;
     int64_t file_id = 0;
     int64_t part_id = 0;
@@ -226,7 +269,11 @@ int ObCSVTableRowIterator::open_next_file()
 
     file_size = 0;
     url_.reuse();
-    ret = get_next_file_and_line_number(task_idx, file_url, file_id, part_id, start_line, end_line);
+    state_.already_read_size_ = 0;
+    ret = get_next_file_scan_info(task_idx, file_url, file_id,
+                                  part_id, start_line, end_line,
+                                  state_.bounded_start_pos_, state_.bounded_end_pos_,
+                                  state_.chunk_idx_);
     if (OB_FAIL(ret)) {
     } else if (part_id == 0) {
       //empty file do not belong to any partitions
@@ -262,7 +309,7 @@ int ObCSVTableRowIterator::open_next_file()
         state_.skip_lines_ = parser_.get_format().skip_header_lines_ + start_line - 1;
         state_.line_count_limit_ = end_line - start_line + 1;
       }
-      if (!is_abs_url(file_url)) {
+      if (!share::ObExternalTableUtils::is_abs_url(file_url)) {
         const char *split_char = "/";
         OZ (url_.append_fmt("%.*s%s%.*s", location.length(), location.ptr(),
                                           (location.empty() || location[location.length() - 1] == '/') ? "" : split_char,
@@ -288,7 +335,10 @@ int ObCSVTableRowIterator::open_next_file()
   } while (OB_SUCC(ret) && file_size <= 0);
 
   OZ(file_reader_.open(url_.ptr()));
-
+  if (OB_SUCC(ret) && state_.bounded_end_pos_ != INT64_MAX) {
+    file_reader_.advance(state_.bounded_start_pos_);
+    state_.is_scan_full_file_ = false;
+  }
   LOG_DEBUG("open external file", K(ret), K(url_), K(location));
 
   return ret;
@@ -301,7 +351,7 @@ int ObCSVTableRowIterator::load_next_buf()
   do {
     char *next_load_pos = NULL;
     int64_t next_buf_len = 0;
-    if (file_reader_.eof()) {
+    if (file_reader_.eof() || state_.already_read_size_ >= state_.bounded_end_pos_ - state_.bounded_start_pos_) {
       if (OB_FAIL(open_next_file())) {
         //do not print log
       } else {
@@ -335,7 +385,14 @@ int ObCSVTableRowIterator::load_next_buf()
       state_.duration_ += ObTimeUtility::current_time() - start_read_time;
       if (OB_SUCC(ret)) {
         state_.pos_ = state_.buf_;
-        state_.data_end_ = next_load_pos + read_size;
+        if (state_.bounded_start_pos_ == 0 && state_.bounded_end_pos_ == INT64_MAX) {
+          state_.data_end_ = next_load_pos + read_size;
+        } else {
+          int64_t remain_size = max(0, state_.bounded_end_pos_ - state_.bounded_start_pos_ - state_.already_read_size_);
+          int64_t tmp_read_size = min(read_size, remain_size);
+          state_.data_end_ = next_load_pos + tmp_read_size;
+          state_.already_read_size_ += tmp_read_size;
+        }
         state_.has_escape_ = (nullptr != memchr(state_.buf_,
                                                 parser_.get_format().field_escaped_char_,
                                                 state_.data_end_ - state_.pos_));
@@ -362,13 +419,22 @@ int ObCSVTableRowIterator::skip_lines()
     }
   };
   struct Functor temp_handle;
-  do {
-    nrows = state_.skip_lines_;
-    OZ (parser_.scan(state_.pos_, state_.data_end_, nrows, nullptr, nullptr,
-                     temp_handle, error_msgs, file_reader_.eof()));
-    error_msgs.reuse();
-    state_.skip_lines_ -= nrows;
-  } while (OB_SUCC(ret) && state_.skip_lines_ > 0 && OB_SUCC(load_next_buf()));
+  if (state_.chunk_idx_ == 0 || state_.is_scan_full_file_) {
+    do {
+      nrows = state_.skip_lines_;
+      OZ (parser_.scan(state_.pos_, state_.data_end_, nrows, nullptr, nullptr,
+                      temp_handle, error_msgs, file_reader_.eof()));
+      error_msgs.reuse();
+      state_.skip_lines_ -= nrows;
+    } while (OB_SUCC(ret) && state_.skip_lines_ > 0 && OB_SUCC(load_next_buf()));
+
+    // 并行解析单个CSV文件时, 只会在chunk 0进行跳行, 如果chunk 0的数据不足, 则返回错误
+    if (OB_SUCC(ret) && state_.chunk_idx_ == 0 && state_.skip_lines_ > 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("skip lines failed", K(ret), K(state_.chunk_idx_));
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "Skipping lines failed due to insufficient data in chunk 0 during parallel parsing");
+    }
+  }
   return ret;
 }
 
@@ -404,6 +470,15 @@ int ObCSVTableRowIterator::handle_error_msgs(
   }
 
   return ret;
+}
+
+bool ObCSVTableRowIterator::is_end_of_file()
+{
+  bool is_end = file_reader_.eof();
+  if (!state_.is_scan_full_file_ && !is_end) {
+    is_end = state_.already_read_size_ >= state_.bounded_end_pos_ - state_.bounded_start_pos_;
+  }
+  return is_end;
 }
 
 int ObCSVTableRowIterator::handle_bad_file_line(ObCSVTableRowIterator *csv_iter,
@@ -526,7 +601,8 @@ int ObCSVTableRowIterator::get_next_row()
       } else {
         ret = parser_.scan<decltype(handle_one_line), true>(state_.pos_, state_.data_end_, nrows,
                                                   state_.escape_buf_, state_.escape_buf_end_,
-                                                  handle_one_line, error_msgs, file_reader_.eof());
+                                                  handle_one_line, error_msgs,
+                                                  is_end_of_file());
         if (OB_FAIL(ret)) {
           LOG_WARN("fail to scan csv", K(ret));
         } else if (OB_UNLIKELY(error_msgs.count() > 0)) {
@@ -739,21 +815,21 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
             if (use_handle_batch_lines_ && enable_rich_format && !is_bad_file_enabled_) {
               ret = parser_.scan<decltype(handle_one_line), true, true>(state_.pos_, state_.data_end_, nrows,
                                             state_.escape_buf_, state_.escape_buf_end_, handle_one_line,
-                                            error_msgs, file_reader_.eof());
+                                            error_msgs, is_end_of_file());
             } else {
               ret = parser_.scan<decltype(handle_one_line), true, false>(state_.pos_, state_.data_end_, nrows,
                                             state_.escape_buf_, state_.escape_buf_end_, handle_one_line,
-                                            error_msgs, file_reader_.eof());
+                                            error_msgs, is_end_of_file());
             }
           } else {
             if (use_handle_batch_lines_ && enable_rich_format && !is_bad_file_enabled_) {
               ret = parser_.scan<decltype(handle_one_line), false, true>(state_.pos_, state_.data_end_, nrows,
                                             NULL, NULL, handle_one_line,
-                                            error_msgs, file_reader_.eof());
+                                            error_msgs, is_end_of_file());
             } else {
               ret = parser_.scan<decltype(handle_one_line), false, false>(state_.pos_, state_.data_end_, nrows,
                                             NULL, NULL, handle_one_line,
-                                            error_msgs, file_reader_.eof());
+                                            error_msgs, is_end_of_file());
             }
           }
           if (OB_FAIL(ret)) {

@@ -71,6 +71,23 @@ struct ObTableMetaInfo
   virtual ~ObTableMetaInfo()
   { }
 
+  void reuse() {
+    ref_table_id_ = OB_INVALID_ID;
+    schema_version_ = share::OB_INVALID_SCHEMA_VERSION;
+    part_count_ = 0;
+    micro_block_size_ = 0;
+    table_column_count_ = 0;
+    table_rowkey_count_ = 0;
+    table_row_count_ = 0;
+    part_size_ = 0;
+    average_row_size_ = 0;
+    row_count_ = 0;
+    has_opt_stat_ = false;
+    micro_block_count_ = 0;
+    table_type_ = share::schema::MAX_TABLE_TYPE;
+    is_broadcast_table_ = false;
+  }
+
   void assign(const ObTableMetaInfo &table_meta_info);
   double get_micro_block_numbers() const;
   TO_STRING_KV(K_(ref_table_id), K_(part_count), K_(micro_block_size),
@@ -215,7 +232,7 @@ struct ObCostColumnGroupInfo {
  */
 struct ObCostTableScanInfo
 {
-  ObCostTableScanInfo(uint64_t table_id, uint64_t ref_table_id, uint64_t index_id)
+  ObCostTableScanInfo(uint64_t table_id, uint64_t ref_table_id, uint64_t index_id, common::ObIAllocator &allocator)
    : table_id_(table_id),
      ref_table_id_(ref_table_id),
      index_id_(index_id),
@@ -226,16 +243,22 @@ struct ObCostTableScanInfo
      is_das_scan_(false),
      is_rescan_(false),
      is_batch_rescan_(false),
-     ranges_(),
+     ranges_(allocator),
      total_range_cnt_(0),
-     ss_ranges_(),
-     range_columns_(),
-     prefix_filters_(),
-     pushdown_prefix_filters_(),
-     ss_postfix_range_filters_(),
-     postfix_filters_(),
-     table_filters_(),
-     functional_lookup_exprs_(),
+     ss_ranges_(allocator),
+     range_columns_(allocator),
+     access_column_items_(allocator),
+     index_access_column_items_(allocator),
+     prefix_filters_(allocator),
+     pushdown_prefix_filters_(allocator),
+     ss_postfix_range_filters_(allocator),
+     postfix_filters_(allocator),
+     table_filters_(allocator),
+     real_range_exprs_(allocator),
+     precise_range_filters_(allocator),
+     unprecise_range_filters_(allocator),
+     functional_lookup_exprs_(allocator),
+     access_columns_(allocator),
      table_metas_(NULL),
      sel_ctx_(NULL),
      est_method_(EST_INVALID),
@@ -254,6 +277,8 @@ struct ObCostTableScanInfo
      use_column_store_(false),
      at_most_one_range_(false),
      index_back_with_column_store_(false),
+     index_scan_column_group_infos_(allocator),
+     index_back_column_group_infos_(allocator),
      rescan_left_server_list_(NULL),
      rescan_server_list_(NULL),
      limit_rows_(-1.0),
@@ -291,26 +316,25 @@ struct ObCostTableScanInfo
   bool is_das_scan_;
   bool is_rescan_;
   bool is_batch_rescan_;
-  ObRangesArray ranges_;  // all the ranges
+  ObRangesSqlArray ranges_;  // all the ranges
   int64_t total_range_cnt_;
-  ObRangesArray ss_ranges_;  // skip scan ranges
-  common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> range_columns_; // all the range columns
-  common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> access_column_items_; // all the access columns
-  common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> index_access_column_items_; // all the access columns
+  ObRangesSqlArray ss_ranges_;  // skip scan ranges
+  ObSqlArray<ColumnItem> range_columns_; // all the range columns
+  ObSqlArray<ColumnItem> access_column_items_; // all the access columns
+  ObSqlArray<ColumnItem> index_access_column_items_; // all the access columns
 
   //这几个filter的分类参考ObJoinOrder::fill_filters()
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> prefix_filters_; // filters match index prefix
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> pushdown_prefix_filters_; // filters match index prefix along pushed down filter
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> ss_postfix_range_filters_;  // range conditions extract postfix range for skip scan
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> postfix_filters_; // filters evaluated before index back, but not index prefix
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> table_filters_;  // filters evaluated after index back
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> real_range_exprs_; // range conditions constructed by query range, only valid when unprecise_range_filters_ not empty
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> precise_range_filters_; // precise range filters in origin filters
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> unprecise_range_filters_; // unprecise range filters in origin filters
-  // domain index query exprs calculated by functional lookup
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> functional_lookup_exprs_;
+  ObSqlArray<ObRawExpr *> prefix_filters_; // filters match index prefix
+  ObSqlArray<ObRawExpr *> pushdown_prefix_filters_; // filters match index prefix along pushed down filter
+  ObSqlArray<ObRawExpr *> ss_postfix_range_filters_;  // range conditions extract postfix range for skip scan
+  ObSqlArray<ObRawExpr *> postfix_filters_; // filters evaluated before index back, but not index prefix
+  ObSqlArray<ObRawExpr *> table_filters_;  // filters evaluated after index back
+  ObSqlArray<ObRawExpr *> real_range_exprs_; // range conditions constructed by query range, only valid when unprecise_range_filters_ not empty
+  ObSqlArray<ObRawExpr *> precise_range_filters_; // precise range filters in origin filters
+  ObSqlArray<ObRawExpr *> unprecise_range_filters_; // unprecise range filters in origin filters
+  ObSqlArray<ObRawExpr *> functional_lookup_exprs_; // domain index query exprs calculated by functional lookup
 
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> access_columns_;
+  ObSqlArray<uint64_t> access_columns_;
 
   OptTableMetas *table_metas_;
   OptSelectivityCtx *sel_ctx_;
@@ -332,8 +356,8 @@ struct ObCostTableScanInfo
   bool use_column_store_;
   bool at_most_one_range_;
   bool index_back_with_column_store_;
-  common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> index_scan_column_group_infos_;
-  common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> index_back_column_group_infos_;
+  ObSqlArray<ObCostColumnGroupInfo> index_scan_column_group_infos_;
+  ObSqlArray<ObCostColumnGroupInfo> index_back_column_group_infos_;
   const common::ObIArray<common::ObAddr> *rescan_left_server_list_;
   const common::ObIArray<common::ObAddr> *rescan_server_list_;
 
@@ -471,7 +495,7 @@ struct ObCostHashJoinInfo : public ObCostBaseJoinInfo
                      const common::ObIArray<ObRawExpr *> &equal_join_conditions,
                      const common::ObIArray<ObRawExpr *> &other_join_conditions,
                      const common::ObIArray<ObRawExpr *> &filters,
-                     const ObIArray<JoinFilterInfo> &join_filter_infos,
+                     const ObIArray<JoinFilterInfo*> &join_filter_infos,
                      double equal_cond_sel, double other_cond_sel,
                      OptTableMetas *table_metas, OptSelectivityCtx *sel_ctx)
    : ObCostBaseJoinInfo(left_rows, left_width,
@@ -488,7 +512,7 @@ struct ObCostHashJoinInfo : public ObCostBaseJoinInfo
                K_(left_ids), K_(right_ids), K_(join_type),
                K_(equal_join_conditions), K_(other_join_conditions), K_(filters));
   virtual ~ObCostHashJoinInfo() { };
-  const ObIArray<JoinFilterInfo> &join_filter_infos_;
+  const ObIArray<JoinFilterInfo*> &join_filter_infos_;
   double equal_cond_sel_;
   double other_cond_sel_;
 private:

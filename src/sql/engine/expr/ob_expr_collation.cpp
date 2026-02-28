@@ -405,5 +405,130 @@ int ObExprCmpMeta::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   return OB_SUCCESS;
 }
 
+
+static const char *COLLATION_TYPE_TO_STR_FALLBACK = "NONE";
+
+ObExprCollationTypeToCharset::ObExprCollationTypeToCharset(ObIAllocator &alloc)
+    : ObStringExprOperator(alloc, T_FUN_SYS_INNER_COLLATION_TYPE_TO_CHARSET,
+                          "collation_type_to_charset", 1, NOT_VALID_FOR_GENERATED_COL,
+                          INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
+{}
+
+ObExprCollationTypeToCharset::~ObExprCollationTypeToCharset()
+{}
+
+int ObExprCollationTypeToCharset::calc_result_type1(ObExprResType &type,
+                                                   ObExprResType &type1,
+                                                   ObExprTypeCtx &type_ctx) const
+{
+  UNUSED(type_ctx);
+  int ret = OB_SUCCESS;
+  type.set_varchar();
+  type.set_default_collation_type();
+  type.set_collation_level(CS_LEVEL_COERCIBLE);
+  type.set_length(MAX_CHARSET_LENGTH);
+  type1.set_calc_type(ObIntType);
+  return ret;
+}
+
+int ObExprCollationTypeToCharset::eval_collation_type_to_charset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *arg = NULL;
+  if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
+    LOG_WARN("eval arg failed", K(ret));
+  } else if (arg->is_null()) {
+    res_datum.set_null();
+  } else {
+    int64_t coll_type_int = arg->get_int();
+    ObCollationType coll_type = static_cast<ObCollationType>(coll_type_int);
+    const char *name = NULL;
+    if (!ObCharset::is_valid_collation(coll_type_int)) {
+      name = COLLATION_TYPE_TO_STR_FALLBACK;
+    } else {
+      name = ObCharset::charset_name(coll_type);
+      if (OB_ISNULL(name)) {
+        name = COLLATION_TYPE_TO_STR_FALLBACK;
+      }
+    }
+    res_datum.set_string(ObString::make_string(name));
+    ObExprStrResAlloc res_alloc(expr, ctx);
+    ObString res;
+    OZ(deep_copy_ob_string(res_alloc, res_datum.get_string(), res));
+    res_datum.set_string(res);
+  }
+  return ret;
+}
+
+int ObExprCollationTypeToCharset::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                                          ObExpr &rt_expr) const
+{
+  UNUSED(expr_cg_ctx);
+  UNUSED(raw_expr);
+  rt_expr.eval_func_ = eval_collation_type_to_charset;
+  return OB_SUCCESS;
+}
+
+ObExprCollationTypeToCollation::ObExprCollationTypeToCollation(ObIAllocator &alloc)
+    : ObStringExprOperator(alloc, T_FUN_SYS_INNER_COLLATION_TYPE_TO_COLLATION,
+                           "collation_type_to_collation", 1, NOT_VALID_FOR_GENERATED_COL,
+                           INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
+{}
+
+ObExprCollationTypeToCollation::~ObExprCollationTypeToCollation()
+{}
+
+int ObExprCollationTypeToCollation::calc_result_type1(ObExprResType &type,
+                                                     ObExprResType &type1,
+                                                     ObExprTypeCtx &type_ctx) const
+{
+  UNUSED(type_ctx);
+  int ret = OB_SUCCESS;
+  type.set_varchar();
+  type.set_default_collation_type();
+  type.set_collation_level(CS_LEVEL_COERCIBLE);
+  type.set_length(MAX_COLLATION_LENGTH);
+  type1.set_calc_type(ObIntType);
+  return ret;
+}
+
+int ObExprCollationTypeToCollation::eval_collation_type_to_collation(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *arg = NULL;
+  if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
+    LOG_WARN("eval arg failed", K(ret));
+  } else if (arg->is_null()) {
+    res_datum.set_null();
+  } else {
+    int64_t coll_type_int = arg->get_int();
+    ObCollationType coll_type = static_cast<ObCollationType>(coll_type_int);
+    const char *name = NULL;
+    if (!ObCharset::is_valid_collation(coll_type_int)) {
+      name = COLLATION_TYPE_TO_STR_FALLBACK;
+    } else {
+      name = ObCharset::collation_name(coll_type);
+      if (OB_ISNULL(name)) {
+        name = COLLATION_TYPE_TO_STR_FALLBACK;
+      }
+    }
+    res_datum.set_string(ObString::make_string(name));
+    ObExprStrResAlloc res_alloc(expr, ctx);
+    ObString res;
+    OZ(deep_copy_ob_string(res_alloc, res_datum.get_string(), res));
+    res_datum.set_string(res);
+  }
+  return ret;
+}
+
+int ObExprCollationTypeToCollation::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                                            ObExpr &rt_expr) const
+{
+  UNUSED(expr_cg_ctx);
+  UNUSED(raw_expr);
+  rt_expr.eval_func_ = eval_collation_type_to_collation;
+  return OB_SUCCESS;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

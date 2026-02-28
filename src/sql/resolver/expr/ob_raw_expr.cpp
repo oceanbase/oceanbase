@@ -1218,6 +1218,7 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_CUR_DATE == type_
           || T_FUN_SYS_CUR_TIME == type_
           || T_FUN_SYS_CUR_TIMESTAMP == type_
+          || T_FUN_SYS_TO_UNIX_TIMESTAMP == type_
           || T_FUN_SYS_UNIX_TIMESTAMP == type_
           || T_FUN_SYS_UTC_TIME == type_
           || T_FUN_SYS_UTC_TIMESTAMP == type_
@@ -1840,7 +1841,6 @@ int ObQueryRefRawExpr::assign(const ObRawExpr &other)
         is_cursor_ = tmp.is_cursor_;
         has_nl_param_ = tmp.has_nl_param_;
         is_multiset_ = tmp.is_multiset_;
-        column_types_ = tmp.column_types_;
       }
     }
   }
@@ -2225,6 +2225,20 @@ void ObColumnRefRawExpr::set_column_attr(const ObString &table_name,
   column_name_.assign_ptr(column_name.ptr(), column_name.length());
 }
 
+void ObColumnRefRawExpr::set_table_item_info(const TableItem &table_item)
+{
+  set_table_id(table_item.table_id_);
+  set_table_name(table_item.get_table_name());
+  set_database_name(table_item.database_name_);
+  if (table_item.alias_name_.empty()) {
+    set_synonym_db_name(table_item.synonym_db_name_);
+    set_synonym_name(table_item.synonym_name_);
+  } else {
+    set_from_alias_table(true);
+    set_table_alias_name();
+  }
+}
+
 uint64_t ObColumnRefRawExpr::hash_internal(uint64_t seed) const
 {
   seed = common::do_hash(table_id_, seed);
@@ -2390,7 +2404,7 @@ int ObColumnRefRawExpr::get_name_internal(char *buf, const int64_t buf_len, int6
   return ret;
 }
 
-const ObRawExpr *ObAliasRefRawExpr::get_ref_expr() const
+const ObRawExpr *ObAliasRefRawExpr::get_ref_select_expr() const
 {
   const ObRawExpr *ret = NULL;
   if (project_index_ == OB_INVALID_INDEX) {
@@ -2409,7 +2423,7 @@ const ObRawExpr *ObAliasRefRawExpr::get_ref_expr() const
   return ret;
 }
 
-ObRawExpr *ObAliasRefRawExpr::get_ref_expr()
+ObRawExpr *ObAliasRefRawExpr::get_ref_select_expr()
 {
   ObRawExpr *ret = NULL;
   if (project_index_ == OB_INVALID_INDEX) {
@@ -2516,8 +2530,21 @@ int ObAliasRefRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64
   if (OB_ISNULL(ref_expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Ref expr is NULL", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF("project_ref("))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
   } else if (OB_FAIL(ref_expr_->get_name(buf, buf_len, pos, type))) {
-  } else { }//do nothing
+    LOG_WARN("fail to get_name", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF(",%ld)", project_index_ + 1))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
+  } else if (EXPLAIN_EXTENDED == type) {
+    if (OB_FAIL(BUF_PRINTF("("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("%p", this))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(")"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -2530,7 +2557,7 @@ bool ObAliasRefRawExpr::inner_same_as(const ObRawExpr &expr,
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "ref_expr_ is null");
   } else if (expr.get_expr_type() == get_expr_type()) {
     const ObAliasRefRawExpr &alias_ref = static_cast<const ObAliasRefRawExpr&>(expr);
-    bret = (alias_ref.get_ref_expr() == get_ref_expr());
+    bret = (alias_ref.get_ref_select_expr() == get_ref_select_expr());
   }
   return bret;
 }
@@ -2538,7 +2565,7 @@ bool ObAliasRefRawExpr::inner_same_as(const ObRawExpr &expr,
 void ObAliasRefRawExpr::inner_calc_hash()
 {
   expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
-  expr_hash_ = common::do_hash(get_ref_expr(), expr_hash_);
+  expr_hash_ = common::do_hash(get_ref_select_expr(), expr_hash_);
 }
 
 ////////////////////////////////////////////////////////////////
@@ -4111,6 +4138,7 @@ int ObAggFunRawExpr::assign(const ObRawExpr &other)
         udf_meta_.assign(tmp.udf_meta_);
         is_need_deserialize_row_ = tmp.is_need_deserialize_row_;
         keep_sum_precision_ = tmp.keep_sum_precision_;
+        is_ignore_null_ = tmp.is_ignore_null_;
       }
     }
   }
@@ -4189,6 +4217,8 @@ bool ObAggFunRawExpr::inner_same_as(
       //do nothing.
     } else if (keep_sum_precision_ != a_expr->keep_sum_precision_) {
       // do nothing
+    } else if (is_ignore_null_ != a_expr->is_ignore_null_) {
+      // do nothing
     } else if (distinct_ == a_expr->is_param_distinct()) {
       if ((NULL == separator_param_expr_ && NULL == a_expr->separator_param_expr_)
           || (NULL != separator_param_expr_ && NULL != a_expr->separator_param_expr_
@@ -4254,6 +4284,7 @@ void ObAggFunRawExpr::inner_calc_hash()
   }
   expr_hash_ = common::do_hash(is_need_deserialize_row_, expr_hash_);
   expr_hash_ = common::do_hash(keep_sum_precision_, expr_hash_);
+  expr_hash_ = common::do_hash(is_ignore_null_, expr_hash_);
   if (NULL != pl_agg_udf_expr_) {
     expr_hash_ = common::do_hash(pl_agg_udf_expr_->get_expr_hash(), expr_hash_);
   }
@@ -4361,6 +4392,13 @@ int ObAggFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
       } else if (OB_FAIL(get_real_param_exprs().at(0)->get_name(buf, buf_len, pos, type))) {
           LOG_WARN("fail to get_name", K(i), K(ret));
       } else {}
+    } else if (T_FUN_CK_GROUPCONCAT == get_expr_type()) {
+      if (0 == get_real_param_count() || 2 < get_real_param_count()) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("invalid number of arguments", K(ret), K(get_expr_type()));
+      } else if (OB_FAIL(get_real_param_exprs().at(0)->get_name(buf, buf_len, pos, type))) {
+        LOG_WARN("fail to get_name", K(i), K(ret));
+      } else {}
     } else {
       for (; OB_SUCC(ret) && i < get_real_param_count() - 1; ++i) {
         if (OB_ISNULL(get_real_param_exprs().at(i))) {
@@ -4391,6 +4429,7 @@ int ObAggFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
     }
     if (OB_SUCCESS == ret &&
         (T_FUN_GROUP_CONCAT == get_expr_type() ||
+         T_FUN_CK_GROUPCONCAT == get_expr_type() ||
          T_FUN_GROUP_RANK == get_expr_type() ||
          T_FUN_GROUP_DENSE_RANK == get_expr_type() ||
          T_FUN_GROUP_PERCENT_RANK == get_expr_type() ||
@@ -4402,6 +4441,15 @@ int ObAggFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
          T_FUN_KEEP_SUM == get_expr_type() ||
          T_FUN_KEEP_COUNT == get_expr_type() ||
          T_FUN_KEEP_WM_CONCAT == get_expr_type())) {
+      if (T_FUN_CK_GROUPCONCAT == get_expr_type() && get_real_param_count() > 1) {
+        if (OB_FAIL(BUF_PRINTF(" limit("))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (OB_FAIL(get_real_param_exprs().at(1)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(ret));
+        } else if (OB_FAIL(BUF_PRINTF(")"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else {}
+      }
       if (order_items_.count() > 0) {
         if (OB_FAIL(BUF_PRINTF(" order_items("))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
@@ -5634,32 +5682,39 @@ int ObUDFRawExpr::assign(const ObRawExpr &other)
     } else {
       const ObUDFRawExpr &tmp =
           static_cast<const ObUDFRawExpr &>(other);
-      udf_id_ = tmp.udf_id_;
-      pkg_id_ = tmp.pkg_id_;
-      type_id_ = tmp.type_id_;
-      subprogram_path_ = tmp.subprogram_path_;
-      udf_schema_version_ = tmp.udf_schema_version_;
-      pkg_schema_version_ = tmp.pkg_schema_version_;
-      pls_type_ = tmp.pls_type_;
-      params_type_ = tmp.params_type_;
-      database_name_ = tmp.database_name_;
-      package_name_ = tmp.package_name_;
-      is_parallel_enable_ = tmp.is_parallel_enable_;
-      is_result_cache_ = tmp.is_result_cache_;
-      is_udt_udf_ = tmp.is_udt_udf_;
-      is_pkg_body_udf_ = tmp.is_pkg_body_udf_;
-      is_return_sys_cursor_ = tmp.is_return_sys_cursor_;
-      is_aggregate_udf_ = tmp.is_aggregate_udf_;
-      is_aggr_udf_distinct_ = tmp.is_aggr_udf_distinct_;
-      nocopy_params_ = tmp.nocopy_params_;
-      loc_ = tmp.loc_;
-      is_udt_cons_ = tmp.is_udt_cons_;
-      params_name_ = tmp.params_name_;
-      params_desc_v2_ = tmp.params_desc_v2_;
-      dblink_name_ = tmp.dblink_name_;
-      dblink_id_ = tmp.dblink_id_;
-      external_routine_type_ = tmp.external_routine_type_;
-      is_mysql_udtf_ = tmp.is_mysql_udtf_;
+      if (OB_FAIL(subprogram_path_.assign(tmp.subprogram_path_))) {
+        LOG_WARN("failed to assign subprogram path", K(ret));
+      } else if (OB_FAIL(params_type_.assign(tmp.params_type_))) {
+        LOG_WARN("failed to assign params type", K(ret));
+      } else if (OB_FAIL(nocopy_params_.assign(tmp.nocopy_params_))) {
+        LOG_WARN("failed to assign nocopy params", K(ret));
+      } else if (OB_FAIL(params_name_.assign(tmp.params_name_))) {
+        LOG_WARN("failed to assign params name", K(ret));
+      } else if (OB_FAIL(params_desc_v2_.assign(tmp.params_desc_v2_))) {
+        LOG_WARN("failed to assign params desc v2", K(ret));
+      } else {
+        udf_id_ = tmp.udf_id_;
+        pkg_id_ = tmp.pkg_id_;
+        type_id_ = tmp.type_id_;
+        udf_schema_version_ = tmp.udf_schema_version_;
+        pkg_schema_version_ = tmp.pkg_schema_version_;
+        pls_type_ = tmp.pls_type_;
+        database_name_ = tmp.database_name_;
+        package_name_ = tmp.package_name_;
+        is_parallel_enable_ = tmp.is_parallel_enable_;
+        is_result_cache_ = tmp.is_result_cache_;
+        is_udt_udf_ = tmp.is_udt_udf_;
+        is_pkg_body_udf_ = tmp.is_pkg_body_udf_;
+        is_return_sys_cursor_ = tmp.is_return_sys_cursor_;
+        is_aggregate_udf_ = tmp.is_aggregate_udf_;
+        is_aggr_udf_distinct_ = tmp.is_aggr_udf_distinct_;
+        loc_ = tmp.loc_;
+        is_udt_cons_ = tmp.is_udt_cons_;
+        dblink_name_ = tmp.dblink_name_;
+        dblink_id_ = tmp.dblink_id_;
+        external_routine_type_ = tmp.external_routine_type_;
+        is_mysql_udtf_ = tmp.is_mysql_udtf_;
+      }
     }
   }
   return ret;
@@ -6449,7 +6504,9 @@ bool ObWinFunRawExpr::inner_same_as(const ObRawExpr &expr,
       bret = false;
     //对于lead和lag两个函数也需要检查is_ignore_null_这个字段
     } else if ((T_WIN_FUN_LAG == other_ma.get_func_type()
-        || T_WIN_FUN_LEAD == other_ma.get_func_type())
+        || T_WIN_FUN_LEAD == other_ma.get_func_type()
+        || T_WIN_FUN_LAG_IN_FRAME == other_ma.get_func_type()
+        || T_WIN_FUN_LEAD_IN_FRAME == other_ma.get_func_type())
         && other_ma.is_ignore_null_ != is_ignore_null_) {
       bret = false;
     //如果是聚集函数的窗口函数，需要比较聚集函数。
@@ -6504,7 +6561,7 @@ void ObWinFunRawExpr::inner_calc_hash()
   if (T_WIN_FUN_NTH_VALUE == get_func_type()) {
     expr_hash_ = common::do_hash(is_from_first_, expr_hash_);
     expr_hash_ = common::do_hash(is_ignore_null_, expr_hash_);
-  } else if (T_WIN_FUN_LAG == get_func_type() || T_WIN_FUN_LEAD == get_func_type()) {
+  } else if (T_WIN_FUN_LAG == get_func_type() || T_WIN_FUN_LEAD == get_func_type() || T_WIN_FUN_LEAD_IN_FRAME == get_func_type() || T_WIN_FUN_LAG_IN_FRAME == get_func_type()) {
     expr_hash_ = common::do_hash(is_ignore_null_, expr_hash_);
   } else if (agg_expr_ != NULL) {
     expr_hash_ = common::do_hash(agg_expr_->get_expr_hash(), expr_hash_);

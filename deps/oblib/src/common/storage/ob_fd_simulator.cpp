@@ -166,7 +166,7 @@ int try_get_fd_inner(ObFdSimulator::FirstArray* first_array, int32_t second_arra
 For object device, the fd(fd_id_) is used to locate the ctx,
 the fd(slot_version_) is used to record the version(validate the fd)
 */
-int ObFdSimulator::get_fd(void* ctx, const int device_type, const int flag, ObIOFd &fd)
+int ObFdSimulator::get_fd(void* ctx, const int device_type, const ObStorageAccessType op_type, ObIOFd &fd)
 {
   int ret = OB_SUCCESS;
   common::ObSpinLockGuard guard(lock_);
@@ -194,7 +194,7 @@ int ObFdSimulator::get_fd(void* ctx, const int device_type, const int flag, ObIO
     //format some info into first fd
     OB_LOG(DEBUG, "success get fd!", K(fd), K(ctx));
     set_fd_device_type(fd, device_type);
-    set_fd_flag(fd, flag);
+    set_fd_op_type(fd, op_type);
     used_fd_cnt_++;
     alloc_fd_cnt_++;
     if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) { // 10s
@@ -225,19 +225,19 @@ void ObFdSimulator::get_fd_device_type(const ObIOFd& fd, int &device_type)
   device_type = fd_sim.sim_id_.device_type_;
 }
 
-void ObFdSimulator::set_fd_flag(ObIOFd& fd, int flag)
+void ObFdSimulator::set_fd_op_type(ObIOFd& fd, ObStorageAccessType op_type)
 {
   ob_sim_fd_id fd_sim;
   fd_sim.fd_id_ = fd.fd_id_;
-  fd_sim.sim_id_.op_type_ = flag;
+  fd_sim.sim_id_.op_type_ = static_cast<uint8_t>(op_type);
   fd.fd_id_ = fd_sim.fd_id_;
 }
 
-void ObFdSimulator::get_fd_flag(const ObIOFd& fd, int &flag)
+void ObFdSimulator::get_fd_op_type(const ObIOFd& fd, ObStorageAccessType &op_type)
 {
   ob_sim_fd_id fd_sim;
   fd_sim.fd_id_ = fd.fd_id_;
-  flag = fd_sim.sim_id_.op_type_;
+  op_type = static_cast<ObStorageAccessType>(fd_sim.sim_id_.op_type_);
 }
 
 void ObFdSimulator::get_fd_slot_id(const ObIOFd& fd, int64_t& first_id, int64_t& second_id)

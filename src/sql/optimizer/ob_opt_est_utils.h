@@ -28,16 +28,6 @@ namespace sql
 class ObLogPlan;
 class ObSQLSessionInfo;
 class ObOptimizerContext;
-struct RangeExprs
-{
-  RangeExprs()
-      : column_expr_(NULL),
-        range_exprs_()
-  { }
-  TO_STRING_KV(K_(column_expr), K_(range_exprs));
-  ObColumnRefRawExpr *column_expr_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> range_exprs_;
-};
 
 class ObOptEstUtils
 {
@@ -64,15 +54,6 @@ public:
                                                 common::ObIArray<const ObColumnRefRawExpr*> &column_exprs,
                                                 bool &only_monotonic_op,
                                                 const int64_t level = 0);
-
-  //@brief according different column, generate one or more range_exprs, push them into column_exprs_array.
-  //@brief the item in range_exprs mush be is_range_expr() -> see notes below.
-  //@param qual the expr need be dealed with
-  //@param out can_be_extracted, if the expr can be extracted range here
-  //@param out column_exprs_array, if generate new range_expr, pushed it into this array
-  static int extract_simple_cond_filters(ObRawExpr &qual,
-                                         bool &can_be_extracted,
-                                         common::ObIArray<RangeExprs> &column_exprs_array);
 
   //is_calculable_expr:is PARAM with param idx[0, param_count) or const value, or calculable
   static bool is_calculable_expr(const ObRawExpr &expr, const int64_t param_count);

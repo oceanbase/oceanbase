@@ -52,7 +52,7 @@ int ObBackupCleanScheduler::init(
     obrpc::ObSrvRpcProxy &rpc_proxy,
     schema::ObMultiVersionSchemaService &schema_service,
     ObBackupTaskScheduler &task_scheduler,
-    ObBackupCleanService &backup_service)
+    ObBackupMgrService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -70,7 +70,7 @@ int ObBackupCleanScheduler::init(
   return ret;
 }
 
-int ObBackupCleanScheduler::force_cancel(const uint64_t &tenant_id)
+int ObBackupCleanScheduler::force_cancel(const uint64_t tenant_id)
 {
   // Backup clean tasks do not need to update external file, this interface is not implemented
   return OB_SUCCESS;
@@ -1033,7 +1033,7 @@ int ObIBackupDeleteMgr::init(
     obrpc::ObSrvRpcProxy &rpc_proxy,
     ObBackupTaskScheduler &task_scheduler,
     schema::ObMultiVersionSchemaService &schema_service,
-    ObBackupCleanService &backup_service)
+    ObBackupMgrService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -1155,7 +1155,7 @@ int ObUserTenantBackupDeleteMgr::check_data_backup_dest_validity_()
     // do nothing
   } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA, backup_dest_str, *sql_proxy_))) {
     LOG_WARN("failed to init dest manager", K(ret), K(job_attr_), K(backup_dest_str));
-  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
+  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, false/*need_check_permission*/))) {
     LOG_WARN("failed to check backup dest validity", K(ret), K(job_attr_), K(backup_dest_str));
   }
   return ret;
@@ -1184,7 +1184,7 @@ int ObUserTenantBackupDeleteMgr::check_log_archive_dest_validity_()
         LOG_WARN("failed to get archive path", K(ret));
       } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG, archive_dest_str,  *sql_proxy_))) {
         LOG_WARN("failed to init dest manager", K(ret), K(job_attr_), K(archive_dest_str));
-      } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
+      } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, false/*need_check_permission*/))) {
         LOG_WARN("failed to check archive dest validity", K(ret), K(job_attr_), K(archive_dest_str));
       }
     }
@@ -2303,7 +2303,7 @@ int ObSysTenantBackupDeleteMgr::do_handle_user_tenant_backup_delete_(const uint6
       LOG_WARN("rootserver rpc proxy or rs mgr must not be NULL", K(ret), K(GCTX));
     } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
       LOG_WARN("failed to get rootservice address", K(ret));
-    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).backup_delete(backup_delete_arg))) {
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).by(tenant_id).backup_delete(backup_delete_arg))) {
       LOG_WARN("backup clean rpc failed", K(ret), K(backup_delete_arg));
     } else {
       LOG_INFO("succeed handle user backup delete tenant", K(backup_delete_arg));
@@ -2461,7 +2461,7 @@ int ObBackupAutoObsoleteDeleteTrigger::init(
     obrpc::ObSrvRpcProxy &rpc_proxy,
     schema::ObMultiVersionSchemaService &schema_service,
     ObBackupTaskScheduler &task_scheduler,
-    ObBackupCleanService &backup_service)
+    ObBackupMgrService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {

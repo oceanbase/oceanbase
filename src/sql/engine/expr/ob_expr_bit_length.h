@@ -30,6 +30,10 @@ public:
                       ObExpr &rt_expr) const override;
   static int calc_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int calc_bit_length(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_null_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int calc_bit_length_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  template<typename ArgVec, typename ResVec, bool isNull>
+  static int vector_bit_length(VECTOR_EVAL_FUNC_ARG_DECL);
   private:
     DISALLOW_COPY_AND_ASSIGN(ObExprBitLength);                         
 };

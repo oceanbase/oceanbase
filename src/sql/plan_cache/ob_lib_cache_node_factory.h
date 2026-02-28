@@ -25,9 +25,9 @@ class ObPlanCache;
 class ObLCNodeFactory
 {
 public:
-  ObLCNodeFactory() : lib_cache_(NULL) {}
+  ObLCNodeFactory() : lib_cache_(NULL), next_cache_node_id_(0) {}
   ObLCNodeFactory(ObPlanCache *lib_cache)
-    : lib_cache_(lib_cache)
+    : lib_cache_(lib_cache), next_cache_node_id_(0)
   {
   }
   void set_lib_cache(ObPlanCache *lib_cache) { lib_cache_ = lib_cache; }
@@ -41,6 +41,7 @@ public:
 
 private:
   ObPlanCache *lib_cache_;
+  uint64_t next_cache_node_id_;
 };
 
 template<typename ClassT>

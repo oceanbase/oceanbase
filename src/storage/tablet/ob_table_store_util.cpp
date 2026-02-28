@@ -303,7 +303,6 @@ int64_t ObSSTableArray::get_serialize_size(const uint64_t data_version) const
 int ObSSTableArray::serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  int64_t old_pos = pos;
 
   if (OB_UNLIKELY(NULL == buf || buf_len <= 0 || pos < 0)) {
     ret = OB_INVALID_ARGUMENT;

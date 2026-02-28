@@ -92,18 +92,7 @@ public:
   bool need_check_fts_;
 };
 
-
-struct ObBasicMergeProgress
-{
-public:
-  ObBasicMergeProgress() {}
-  virtual ~ObBasicMergeProgress() {}
-  virtual bool is_merge_finished() const = 0;
-  virtual bool is_merge_abnomal() const = 0;
-  virtual int64_t to_string(char *buf, const int64_t buf_len) const = 0;
-};
-
-struct ObMergeProgress : public ObBasicMergeProgress
+struct ObMergeProgress
 {
 public:
   ObMergeProgress()
@@ -124,7 +113,7 @@ public:
     total_table_cnt_ = 0;
     MEMSET(table_cnt_, 0, sizeof(int64_t) * RECORD_TABLE_TYPE_CNT);
   }
-  virtual bool is_merge_finished() const override
+  bool is_merge_finished() const
   {
     return total_table_cnt_ > 0 && merge_finish_
     && (total_table_cnt_ == get_finish_verified_table_cnt());
@@ -133,7 +122,7 @@ public:
   {
     return table_cnt_[ObTableCompactionInfo::INITIAL] > 0;
   }
-  virtual bool is_merge_abnomal() const override
+  bool is_merge_abnomal() const
   {
     return total_table_cnt_ > 0 && merge_finish_
     && (total_table_cnt_ != get_finish_verified_table_cnt());
@@ -166,7 +155,7 @@ public:
     table_cnt_[ObTableCompactionInfo::COMPACTED] = 0;
     table_cnt_[ObTableCompactionInfo::INDEX_CKM_VERIFIED] = 0;
   }
-  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
   int64_t get_finish_verified_table_cnt() const
   {

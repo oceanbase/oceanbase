@@ -398,8 +398,9 @@ int ObTableLoadService::check_support_direct_load(
     const ObDirectLoadInsertMode::Type insert_mode,
     const ObDirectLoadMode::Type load_mode,
     const ObDirectLoadLevel::Type load_level,
+    const ObLoadDupActionType dup_action,
     const ObIArray<uint64_t> &column_ids,
-    bool enable_inc_major)
+    const bool enable_inc_major)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -413,7 +414,7 @@ int ObTableLoadService::check_support_direct_load(
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
     } else {
-      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode, load_level, column_ids, enable_inc_major);
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode, load_level, dup_action, column_ids, enable_inc_major);
     }
   }
   return ret;
@@ -425,8 +426,9 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                                                   const ObDirectLoadInsertMode::Type insert_mode,
                                                   const ObDirectLoadMode::Type load_mode,
                                                   const ObDirectLoadLevel::Type load_level,
+                                                  const ObLoadDupActionType dup_action,
                                                   const ObIArray<uint64_t> &column_ids,
-                                                  bool enable_inc_major)
+                                                  const bool enable_inc_major)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -441,7 +443,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table schema is null", KR(ret));
     } else {
-      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode, load_level, column_ids, enable_inc_major);
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode, load_level, dup_action, column_ids, enable_inc_major);
     }
   }
   return ret;
@@ -455,8 +457,9 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                                                   const ObDirectLoadInsertMode::Type insert_mode,
                                                   const ObDirectLoadMode::Type load_mode,
                                                   const ObDirectLoadLevel::Type load_level,
+                                                  const ObLoadDupActionType dup_action,
                                                   const ObIArray<uint64_t> &column_ids,
-                                                  bool enable_inc_major)
+                                                  const bool enable_inc_major)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == table_schema ||
@@ -464,10 +467,11 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                   !ObDirectLoadInsertMode::is_type_valid(insert_mode) ||
                   !ObDirectLoadMode::is_type_valid(load_mode) ||
                   !ObDirectLoadLevel::is_type_valid(load_level) ||
+                  ObLoadDupActionType::LOAD_INVALID_MODE == dup_action ||
                   column_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(table_schema), K(method), K(insert_mode), K(load_mode),
-             K(load_level), K(column_ids));
+             K(load_level), K(dup_action), K(column_ids));
   } else {
     const uint64_t tenant_id = MTL_ID();
     uint64_t compat_version = 0;
@@ -484,7 +488,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
 
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
       LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-    } else if (!table_schema->is_user_table()) {
+    } else if (!table_schema->is_user_table() && !table_schema->is_mysql_tmp_table()) {
       ret = OB_NOT_SUPPORTED;
       if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
         LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
@@ -552,6 +556,10 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     else if (OB_FAIL(check_support_direct_load_for_default_value(table_schema, column_ids))) {
       LOG_WARN("fail to check support direct load for default value", KR(ret), K(column_ids));
     }
+    // check for append_only merge engine
+    else if (OB_FAIL(check_support_direct_load_for_append_only(schema_guard, *table_schema, dup_action))) {
+      LOG_WARN("fail to check support direct load for append_only merge engine", KR(ret));
+    }
     // check for partition level
     else if (ObDirectLoadLevel::PARTITION == load_level
              && OB_FAIL(check_support_direct_load_for_partition_level(schema_guard,
@@ -580,12 +588,12 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       } else if (OB_FAIL(ObTableLoadSchema::check_has_delete_insert_engine_index(
                    schema_guard, table_schema, has_delete_insert_engine_index))) {
         LOG_WARN("fail to check has delete insert engine index", KR(ret));
-      } else if (has_delete_insert_engine_index) {
+      } else if (has_delete_insert_engine_index && compat_version < DATA_VERSION_4_5_1_0) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("incremental direct-load does not support table with delete insert engine index",
+          LOG_WARN("version lower than 4.5.1.0 does not support table with delete insert engine index",
                    KR(ret));
           FORWARD_USER_ERROR_MSG(
-            ret, "incremental direct-load does not support table with delete insert engine index");
+            ret, "version lower than 4.5.1.0 does not support table with delete insert engine index");
       } else if (compat_version < DATA_VERSION_4_4_0_0 &&
                table_schema->is_delete_insert_merge_engine() &&
                ObDirectLoadInsertMode::INC_REPLACE == insert_mode) {
@@ -647,6 +655,10 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with check constraints", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with check constraints");
+      } else if (enable_inc_major && table_schema->has_ttl_definition()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("incremental major direct-load does not support table with ttl definition", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "incremental major direct-load does not support table with ttl definition");
       }
     }
     // full direct-load
@@ -813,6 +825,31 @@ int ObTableLoadService::check_support_direct_load_for_fts_index(
     LOG_WARN("only share-nothing full insert into select direct-load support table has full-text search index",
               KR(ret), K(method), K(load_mode));
     FORWARD_USER_ERROR_MSG(ret, "only share-nothing full insert into select direct-load support table has full-text search index");
+  }
+  return ret;
+}
+
+int ObTableLoadService::check_support_direct_load_for_append_only(ObSchemaGetterGuard &schema_guard,
+                                                                  const ObTableSchema &table_schema,
+                                                                  const sql::ObLoadDupActionType dup_action)
+{
+  int ret = OB_SUCCESS;
+  bool has_unique_index = false;
+  if (!table_schema.is_append_only_merge_engine()) {
+    // do nothing
+  } else if (OB_UNLIKELY(ObLoadDupActionType::LOAD_INVALID_MODE == dup_action)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid dup action", KR(ret), K(dup_action), K(table_schema));
+  } else if (ObLoadDupActionType::LOAD_REPLACE == dup_action) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("direct-load does not support append_only merge engine with replace dup action", KR(ret), K(dup_action), K(table_schema));
+    FORWARD_USER_ERROR_MSG(ret, "direct-load does not support append_only merge engine with replace dup action");
+  } else if (OB_FAIL(table_schema.check_has_unique_index(schema_guard, has_unique_index))) {
+    LOG_WARN("fail to check has unique index", KR(ret));
+  } else if (ObLoadDupActionType::LOAD_IGNORE == dup_action && has_unique_index) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("direct-load does not support append_only merge engine with ignore dup action", KR(ret), K(dup_action), K(table_schema));
+    FORWARD_USER_ERROR_MSG(ret, "direct-load does not support append_only merge engine with ignore dup action");
   }
   return ret;
 }

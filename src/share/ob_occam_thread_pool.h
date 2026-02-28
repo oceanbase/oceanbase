@@ -185,7 +185,7 @@ inline void CallWithTupleUnpack(seq<S...>,
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(promise.set(func(std::get<S>(tpl) ...)))) {
-    OCCAM_LOG(ERROR, "set promise failed", K(ret));
+    OCCAM_LOG(WARN, "set promise failed", K(ret));
   }
 }
 

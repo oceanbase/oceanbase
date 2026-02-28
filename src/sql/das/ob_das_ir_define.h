@@ -64,6 +64,7 @@ public:
       search_text_(nullptr),
       inv_scan_domain_id_col_(nullptr),
       inv_scan_doc_length_col_(nullptr),
+      inv_scan_pos_list_col_(nullptr),
       match_filter_(nullptr),
       relevance_expr_(nullptr),
       relevance_proj_col_(nullptr),
@@ -177,6 +178,7 @@ public:
   ObExpr *search_text_;
   ObExpr *inv_scan_domain_id_col_;
   ObExpr *inv_scan_doc_length_col_;
+  ObExpr *inv_scan_pos_list_col_;
   ObExpr *match_filter_;
   ObExpr *relevance_expr_;
   ObExpr *relevance_proj_col_;
@@ -198,7 +200,8 @@ public:
       uint8_t has_fwd_agg_:1;
       uint8_t has_block_max_scan_:1;
       uint8_t has_avg_doc_len_est_:1;
-      uint8_t reserved_:3;
+      uint8_t use_scalar_scan_def_:1;
+      uint8_t reserved_:2;
     };
   };
   ObExpr *field_boost_expr_;

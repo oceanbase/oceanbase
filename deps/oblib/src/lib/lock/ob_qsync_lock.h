@@ -23,7 +23,7 @@ namespace common
 class ObQSyncLock
 {
 public:
-  ObQSyncLock() : write_flag_(0) {}
+  ObQSyncLock(const uint32_t latch_id) : latch_id_(latch_id), write_flag_(0) {}
   ~ObQSyncLock() {}
   int init(const lib::ObMemAttr &mem_attr);
   bool is_inited() const { return true; }
@@ -38,6 +38,7 @@ private:
   static const int64_t TRY_SYNC_COUNT = 16;
   static const int64_t MAX_REF_CNT = 48;
 private:
+  uint32_t latch_id_;
   int64_t write_flag_ CACHE_ALIGNED;
   common::ObQSyncWrapper<MAX_REF_CNT> qsync_;
 };

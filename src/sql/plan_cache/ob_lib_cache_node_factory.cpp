@@ -51,6 +51,8 @@ int ObLCNodeFactory::create_cache_node(ObLibCacheNameSpace ns,
     WITH_CONTEXT(entity) {
       if (OB_FAIL(LC_CN_ALLOC[ns](entity, node, lib_cache_))) {
         LOG_WARN("failed to create lib cache node", K(ret), K(ns));
+      } else {
+        node->id_ = __sync_add_and_fetch(&next_cache_node_id_, 1);
       }
     }
   }

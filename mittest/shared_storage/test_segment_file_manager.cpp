@@ -32,6 +32,11 @@
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #include "storage/tmp_file/ob_tmp_file_global.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
+#include "lib/time/ob_time_utility.h"
+#include "lib/allocator/ob_small_allocator.h"
+#include "lib/allocator/ob_malloc.h"
+#include "lib/alloc/alloc_func.h"
+#include "lib/container/ob_array.h"
 
 #undef private
 #undef protected
@@ -356,6 +361,55 @@ TEST_F(TestSegmentFileManager, test_read_callback_cleanup_on_conflict)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(file_id));
 
   LOG_INFO("Read callback cleanup test passed: callback not wrapped when conflict detected");
+}
+
+// Check that TmpFileConflictInfo under small_allocator (block-based) has bounded per-object memory.
+// Assert bytes_per_obj_small <= K * sizeof(TmpFileConflictInfo) so the test is environment-independent.
+// Test N = 10000, 100000, 1000000 respectively.
+TEST_F(TestSegmentFileManager, test_conflict_info_memory_under_concurrent_reads)
+{
+  LOG_INFO("TEST_CASE: start test_conflict_info_memory_under_concurrent_reads");
+
+  constexpr int64_t OBJ_SIZE = sizeof(TmpFileConflictInfo);
+  constexpr double MAX_BYTES_PER_OBJ_FACTOR = 2.0;  // empirical: observed ~1.92x, 2x leaves margin
+  const int64_t N_COUNTS[3] = {10000, 100000, 1000000};
+  const int64_t N_SIZE = sizeof(N_COUNTS) / sizeof(N_COUNTS[0]);
+
+  for (int64_t n_idx = 0; n_idx < N_SIZE; ++n_idx) {
+    const int64_t N = N_COUNTS[n_idx];
+
+    int64_t mem_small_allocator_bytes = 0;
+    {
+      ObSegmentFileManager mock_seg_mgr;
+      ASSERT_EQ(OB_SUCCESS, mock_seg_mgr.init(MTL(ObTenantFileManager *)));
+      common::ObArray<TmpFileConflictInfoHandle> handles;
+      ASSERT_EQ(OB_SUCCESS, handles.reserve(N));
+      for (int64_t i = 0; i < N; ++i) {
+        TmpFileConflictInfoHandle h;
+        ASSERT_EQ(OB_SUCCESS, mock_seg_mgr.allocate_conflict_info_handle(false, 0, h));
+        ASSERT_EQ(OB_SUCCESS, handles.push_back(h));
+      }
+      mem_small_allocator_bytes = mock_seg_mgr.conflict_info_allocator_.block_alloc_.hold();
+      for (int64_t i = 0; i < handles.count(); ++i) {
+        handles.at(i).reset();
+      }
+      handles.reset();
+      mock_seg_mgr.destroy();
+    }
+
+    double bytes_per_obj_small = static_cast<double>(mem_small_allocator_bytes) / static_cast<double>(N);
+    double max_bytes_per_obj = MAX_BYTES_PER_OBJ_FACTOR * static_cast<double>(OBJ_SIZE);
+    LOG_INFO("Conflict info memory: per-object upper bound (N conflict infos)",
+             K(N),
+             "mem_small_allocator_bytes", mem_small_allocator_bytes,
+             "bytes_per_obj_small", bytes_per_obj_small,
+             "obj_size", OBJ_SIZE,
+             "max_bytes_per_obj", max_bytes_per_obj);
+
+    EXPECT_LE(bytes_per_obj_small, max_bytes_per_obj);
+  }
+
+  LOG_INFO("TEST_CASE: finish test_conflict_info_memory_under_concurrent_reads");
 }
 
 } // namespace storage

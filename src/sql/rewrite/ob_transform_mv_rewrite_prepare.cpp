@@ -12,8 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_mv_rewrite_prepare.h"
-#include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/rewrite/ob_transform_mv_rewrite.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
+#include "sql/resolver/mv/ob_mv_provider.h"
 
 namespace oceanbase
 {
@@ -91,7 +92,7 @@ int ObTransformMVRewritePrepare::check_table_has_mv(const ObDMLStmt *stmt,
     if (OB_ISNULL(table = stmt->get_table_item(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is null", K(ret), K(i), K(stmt->get_table_size()));
-    } else if (!table->is_basic_table()) {
+    } else if (!ObTransformMVRewrite::is_mv_rewrite_supported_table(*table)) {
       // do nothing
     } else if (OB_FAIL(ctx_->schema_checker_->get_table_schema(ctx_->session_info_->get_effective_tenant_id(),
                                                                table->ref_id_,
@@ -286,8 +287,11 @@ int ObTransformMVRewritePrepare::get_all_base_table_id(const ObDMLStmt *stmt,
     if (OB_ISNULL(table = stmt->get_table_item(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(i));
-    } else if (!table->is_basic_table()) {
+    } else if (!ObTransformMVRewrite::is_mv_rewrite_supported_table(*table)) {
       // do nothing
+    } else if (OB_UNLIKELY(common::OB_INVALID_ID == table->ref_id_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected invalid ref id", K(ret), KPC(table));
     } else if (OB_FAIL(table_ids.push_back(table->ref_id_))) {
       LOG_WARN("failed to push back table id", K(ret));
     }

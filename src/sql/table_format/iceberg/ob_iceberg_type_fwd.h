@@ -77,7 +77,7 @@ class DataFile;
 enum class DataFileContent;
 enum class DataFileFormat
 {
-  INVALID = 0,
+  INVALID = -1,
   AVRO,
   ORC,
   PARQUET,
@@ -86,6 +86,26 @@ enum class DataFileFormat
 
 
 class FileScanTask;
+
+
+class BinaryType;
+class BooleanType;
+class IntType;
+class LongType;
+class ListType;
+class MapType;
+class NestedType;
+class PrimitiveType;
+class SchemaField;
+class StringType;
+class StructType;
+class Type;
+
+template<typename T>
+class DataFileWriter;
+class ObAvroOutputStream;
+class ObManifestWriter;
+class ObSnapshotProducer;
 
 } // namespace iceberg
 } // namespace sql

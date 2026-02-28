@@ -25,6 +25,10 @@ ob_set_subtarget(ob_rootserver backup
   backup/ob_backup_data_ls_task_mgr.cpp
   backup/ob_backup_table_list_mgr.cpp
   backup/ob_backup_param_operator.cpp
+  backup/ob_backup_validate_scheduler.cpp
+  backup/ob_backup_validate_info_collector.cpp
+  backup/ob_backup_validate_task_mgr.cpp
+  backup/ob_backup_validate_ls_task_mgr.cpp
 )
 
 ob_set_subtarget(ob_rootserver common
@@ -178,6 +182,7 @@ ob_set_subtarget(ob_rootserver parallel_ddl
   parallel_ddl/ob_ddl_helper.cpp
   parallel_ddl/ob_create_table_helper.cpp
   parallel_ddl/ob_create_view_helper.cpp
+  parallel_ddl/ob_create_materialized_view_helper.cpp
   parallel_ddl/ob_index_name_checker.cpp
   parallel_ddl/ob_tablet_balance_allocator.cpp
   parallel_ddl/ob_set_comment_helper.cpp
@@ -188,6 +193,8 @@ ob_set_subtarget(ob_rootserver parallel_ddl
   parallel_ddl/ob_set_kv_attribute_helper.cpp
   parallel_ddl/ob_create_tablegroup_helper.cpp
   parallel_ddl/ob_drop_tablegroup_helper.cpp
+  parallel_ddl/ob_table_helper.cpp
+  parallel_ddl/ob_create_table_like_helper.cpp
 )
 
 ob_set_subtarget(ob_rootserver freeze
@@ -208,6 +215,8 @@ ob_set_subtarget(ob_rootserver freeze
   freeze/ob_major_freeze_util.cpp
   freeze/ob_major_merge_progress_util.cpp
   freeze/ob_fts_checksum_validate_util.cpp
+  freeze/window/ob_window_compaction_helper.cpp
+  freeze/window/ob_window_compaction_rpc_define.cpp
 )
 
 ob_set_subtarget(ob_rootserver restore
@@ -268,6 +277,8 @@ ob_set_subtarget(ob_rootserver standby
 
 ob_set_subtarget(ob_rootserver truncate_info
   truncate_info/ob_truncate_info_service.cpp
+  compaction_ttl/ob_compaction_ttl_service.cpp
+  compaction_ttl/ob_tenant_compaction_ttl_scheduler.cpp
 )
 
 ob_set_subtarget(ob_rootserver pl_ddl

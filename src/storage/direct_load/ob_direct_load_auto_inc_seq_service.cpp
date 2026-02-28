@@ -60,7 +60,7 @@ int ObDirectLoadAutoIncSeqService::inner_get_start_seq(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is nullptr", KR(ret), K(ls_id), K(ls_handle));
   } else {
-    lib::ObMutexGuard guard(init_node_mutexs_[tablet_id.id() % INIT_NODE_MUTEX_NUM]);
+    lib::ObMutexGuard guard(init_node_mutexs_[tablet_id.id() % INIT_NODE_MUTEX_NUM].mutex_);
     ObTabletHandle tablet_handle;
     if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
       LOG_WARN("fail to get tablet", KR(ret), K(tablet_id));

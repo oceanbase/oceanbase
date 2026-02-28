@@ -51,7 +51,7 @@ ObSrvNetworkFrame::ObSrvNetworkFrame(ObGlobalContext &gctx)
       mysql_transport_(NULL),
       batch_rpc_transport_(NULL),
       last_ssl_info_hash_(UINT64_MAX),
-      lock_(),
+      lock_(common::ObLatchIds::OB_SRV_NETWORK_FRAME_LOCK),
       standby_fetchlog_bw_limit_(0),
       standby_fetchlog_bytes_(0),
       standby_fetchlog_time_(0)

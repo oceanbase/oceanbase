@@ -363,6 +363,9 @@ OB_INLINE int ObTableUpdateOp::update_row_to_das()
       if (OB_FAIL(ObDMLService::process_update_row(upd_ctdef, upd_rtdef, is_skipped, *this))) {
         LOG_WARN("process update row failed", K(ret));
       } else if (OB_UNLIKELY(is_skipped)) {
+        if (upd_ctdef.dupd_ctdef_.is_ignore_) {
+          ++upd_rtdef.found_rows_;
+        }
         //this row has been skipped, so can not write to DAS buffer(include its global index)
         //so need to break this loop
         break;

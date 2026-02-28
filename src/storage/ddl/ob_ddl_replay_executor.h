@@ -258,8 +258,10 @@ protected:
   // @return other error codes, failed to replay.
   int do_replay_(ObTabletHandle &handle) override;
 private:
-  int update_tablet_meta_for_cs_replica_(ObTabletHandle &tablet_handle);
-  int update_storage_schema_to_tablet(ObTabletHandle &tablet_handle);
+  int update_tablet_meta_for_cs_replica_(ObTabletHandle &tablet_handle,
+                                         ObCSReplicaDDLReplayStatus &updated_ddl_replay_status);
+  int update_storage_schema_to_tablet(ObTabletHandle &tablet_handle,
+                                      const ObCSReplicaDDLReplayStatus &ddl_replay_status);
 
 private:
   common::ObTabletID tablet_id_;

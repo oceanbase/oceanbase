@@ -138,6 +138,13 @@ public:
   virtual bool need_truncate_filter() const = 0;
   virtual bool is_valid() const = 0;
   virtual void reset() = 0;
+
+  virtual bool has_ttl_definition() const
+  {
+    OB_ASSERT_MSG(false, "ObITableReadInfo dose not promise ttl definition");
+    return false;
+  }
+
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -154,6 +161,7 @@ public:
       is_cs_replica_compat_(false),
       is_delete_insert_table_(false),
       is_mv_major_refresh_tablet_(false),
+      has_ttl_definition_(false),
       reserved_(0),
       schema_rowkey_cnt_(0),
       rowkey_cnt_(0),
@@ -237,6 +245,7 @@ public:
     OB_ASSERT_MSG(false, "ObReadInfoStruct dose not promise need truncate filter");
     return false;
   }
+  virtual bool has_ttl_definition() const override { return has_ttl_definition_; }
   OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
   OB_INLINE bool is_delete_insert_table() const { return is_delete_insert_table_; }
   OB_INLINE bool is_mv_major_refresh_tablet() const { return is_mv_major_refresh_tablet_; }
@@ -253,7 +262,8 @@ public:
                        const bool is_delete_insert_table,
                        const bool is_global_index_table,
                        const int64_t micro_block_format_version,
-                       const bool is_mv_major_refresh_tablet);
+                       const bool is_mv_major_refresh_tablet,
+                       const bool has_ttl_definition);
   int prepare_arrays(common::ObIAllocator &allocator,
                      const common::ObIArray<ObColDesc> &cols_desc,
                      const int64_t col_cnt);
@@ -266,15 +276,16 @@ protected:
   static const int64_t READ_INFO_VERSION_V4 = 4;
   static const int64_t READ_INFO_VERSION_V5 = 5; // after V4.3.5 bp3
   static const int64_t READ_INFO_VERSION_V6 = 6; // after V4.4.1
-  static const int64_t READ_INFO_VERSION_LATEST = READ_INFO_VERSION_V6;
+  static const int64_t READ_INFO_VERSION_V7 = 7; // after COMPACTION_TTL_CMP_DATA_VERSION
+  static const int64_t READ_INFO_VERSION_LATEST = READ_INFO_VERSION_V7;
   static const int32_t READ_INFO_ONE_BIT = 1;
-  static const int32_t READ_INFO_RESERVED_BITS = 12;
+  static const int32_t READ_INFO_RESERVED_BITS = 11;
 
   bool is_inited_;
   bool is_oracle_mode_;
   ObIAllocator *allocator_;
   // distinguish schema changed by schema column count
-  union {
+  union { //FARM COMPAT WHITELIST
     uint64_t info_;
     struct {
       uint32_t schema_column_count_;
@@ -283,6 +294,7 @@ protected:
       uint16_t is_delete_insert_table_ : READ_INFO_ONE_BIT;
       uint16_t is_global_index_table_  : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
       uint16_t is_mv_major_refresh_tablet_  : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
+      uint16_t has_ttl_definition_     : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
       uint16_t reserved_               : READ_INFO_RESERVED_BITS;
     };
   };
@@ -323,7 +335,8 @@ public:
       const bool is_cg_sstable = false,
       const bool need_truncate_filter = false,
       const bool is_delete_insert_table = false,
-      const int64_t micro_block_format_version = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION);
+      const int64_t micro_block_format_version = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION,
+      const bool has_ttl_definition = false);
   int mock_for_sstable_query(
     common::ObIAllocator &allocator,
     const int64_t schema_column_count,
@@ -438,7 +451,8 @@ public:
       const bool is_delete_insert_table = false,
       const bool is_global_index = false,
       const int64_t micro_block_format_version = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION,
-      const bool is_mv_major_refresh_tablet = false);
+      const bool is_mv_major_refresh_tablet = false,
+      const bool has_ttl_definition = false);
   OB_INLINE virtual int64_t get_seq_read_column_count() const override
   { return get_request_count(); }
   OB_INLINE virtual int64_t get_trans_col_index() const override
@@ -448,6 +462,7 @@ public:
   virtual int64_t get_request_count() const override;
   OB_INLINE bool is_access_rowkey_only() const override
   { return false; }
+  OB_INLINE bool is_ttl_definition_valid() const { return compat_version_ >= READ_INFO_VERSION_V7; }
   OB_INLINE bool is_global_index_valid() const { return compat_version_ >= READ_INFO_VERSION_V5; }
    // accurate when is_global_index_valid() = true
   OB_INLINE bool is_global_index_table() const { return is_global_index_table_; }

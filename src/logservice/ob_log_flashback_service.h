@@ -243,6 +243,7 @@ private:
   public:
     ExecuteFlashbackOperator()
         : BaseLSOperator(),
+          lock_(common::ObLatchIds::OB_LOG_EXECUTE_FLASHBACK_OPERATOR_LOCK),
           mode_version_(palf::INVALID_PROPOSAL_ID),
           has_get_member_list_(false),
           member_list_(),
@@ -252,6 +253,7 @@ private:
     ExecuteFlashbackOperator(const ChangeAccessModeOperator &op)
       : BaseLSOperator(op.tenant_id_, op.ls_id_, op.self_, op.flashback_scn_,
         op.location_adapter_, op.rpc_proxy_),
+        lock_(common::ObLatchIds::OB_LOG_EXECUTE_FLASHBACK_OPERATOR_LOCK),
         mode_version_(op.mode_version_),
         has_get_member_list_(false),
         member_list_(),
@@ -275,7 +277,8 @@ private:
       flashbacked_learnerlist_ = op.flashbacked_learnerlist_;
       return *this;
     }
-    ExecuteFlashbackOperator(const ExecuteFlashbackOperator &op)
+    ExecuteFlashbackOperator(const ExecuteFlashbackOperator &op):
+      lock_(common::ObLatchIds::OB_LOG_EXECUTE_FLASHBACK_OPERATOR_LOCK)
     {
       *this = op;
     }

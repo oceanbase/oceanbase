@@ -274,23 +274,24 @@ public:
   {
     return is_part_table_;
   }
-  int get_file_total_row_count(int64_t &count);
-  int get_file_total_size(int64_t &size);
-  int get_split_count(int64_t &count);
-  int get_session_id(ObIAllocator &alloc, ObString &sid);
-  int get_serilize_session(ObIAllocator &alloc, ObString &session_str);
+  int fetch_storage_file_total_row_count(int64_t &count);
+  int fetch_storage_file_total_size(int64_t &size);
+  int fetch_storage_split_count(int64_t &count);
+  int fetch_serilize_session(ObIAllocator &alloc, ObString &session_str);
   int init_empty_require_column();
   int init_part_spec(const ObString& part_spec);
   int construct_predicate_using_white_filter(const ObDASScanCtDef &das_ctdef,
                                              ObDASScanRtDef *das_rtdef,
                                              ObExecContext &exec_ctx);
-  int fetch_partition_row_count(const ObString &part_spec, int64_t &row_count);
+  int fetch_partition_row_count_via_tunnel(const ObString &part_spec, int64_t &row_count);
+  int fetch_partition_row_count_via_tunnel(const ObString &part_spec, const ObString &session_id, int64_t &row_count);
+  int fetch_odps_tunnel_session_id(ObIAllocator &alloc, ObString &sid);
   int fetch_partition_size(const ObString &part_spec, int64_t &row_count);
   int pull_partition_info();
 
 private:
   int init_all_columns_name_as_odps_params();
-  int init_data_tunnel_reader_params(int64_t start, int64_t step, const ObString &part_spec);
+  int init_data_tunnel_reader_params(int64_t start, int64_t step, const ObString& part_spec, const ObString& session_id);
   int init_data_storage_reader_params(int64_t start_split, int64_t end_split, int64_t start_rows, int64_t row_count,
       const ObString &session_str, int64_t capacity);
   int inner_get_next_row();
@@ -315,7 +316,7 @@ private:
   int next_task_tunnel_without_data_getter(const int64_t capacity);
   int next_task_tunnel(const int64_t capacity);
   int build_tunnel_partition_task_state(
-      int64_t task_idx, int64_t part_id, const ObString &part_spec, int64_t start, int64_t step, int64_t capacity);
+      int64_t task_idx, int64_t part_id, const ObString &part_spec, int64_t start, int64_t step, int64_t capacity, const ObString& session_id);
   int fill_column_offheaptable(
       ObEvalCtx &ctx, const ObExpr &expr, const MirrorOdpsJniColumn &odps_column, int64_t num_rows, int32_t column_idx);
   int fill_column_arrow(ObEvalCtx &ctx, const ObExpr &expr, const std::shared_ptr<arrow::Array> &array,
@@ -423,57 +424,31 @@ private:
 
 class ObOdpsPartitionJNIDownloaderMgr {
 public:
-  ObOdpsPartitionJNIDownloaderMgr() : inited_(false), ref_(0)
-  {}
-  static int init_odps_driver(const bool get_part_table_size, ObSQLSessionInfo *session, const ObString &properties, ObODPSJNITableRowIterator &odps_driver);
+  ObOdpsPartitionJNIDownloaderMgr() {};
+  ~ObOdpsPartitionJNIDownloaderMgr() = default;
+public:
+  static int init_odps_driver(ObOdpsJniConnector::OdpsFetchType fetch_type, ObSQLSessionInfo *session, const ObString &properties, ObODPSJNITableRowIterator &odps_driver);
 
-  static int fetch_row_count(const ObString &part_spec,
-                             const bool get_part_table_size,
-                             ObODPSJNITableRowIterator &odps_driver,
-                             int64_t &row_count);
+  static int fetch_odps_partition_size(const ObString &part_spec,
+                        ObODPSJNITableRowIterator &odps_driver,
+                        int64_t &size);
+  static int fetch_odps_partition_row_count(
+    ObODPSJNITableRowIterator &odps_driver, const ObString &part_spec,
+    int64_t &row_count);
+
+  static int fetch_odps_partition_row_count_and_session_id(ObODPSJNITableRowIterator &odps_driver,
+                                 const ObString &part_spec, int64_t &row_count, ObIAllocator &allocator, ObString &session_id);
 
   static int fetch_storage_row_count(ObSQLSessionInfo *session,
     const ObString part_spec, const ObString &properties, int64_t &row_count);
 
-  static int fetch_storage_api_total_task(ObExecContext &exec_ctx, const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str,
+  static int fetch_storage_api_split_by_byte(ObExecContext &exec_ctx, const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str,
       const ObDASScanCtDef &das_ctdef, ObDASScanRtDef *das_rtdef, int64_t parallel, ObString &session_str, int64_t &split_count,
       ObIAllocator &range_allocator);
   static int fetch_storage_api_split_by_row(ObExecContext &exec_ctx, const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str,
       const ObDASScanCtDef &das_ctdef, ObDASScanRtDef *das_rtdef, int64_t parallel, ObString &session_str, int64_t &total_row_count,
       ObIAllocator &range_allocator);
 
-public:
-  int init_map(const int64_t bucket_size)
-  {
-    int ret = OB_SUCCESS;
-    inited_ = true;
-    return ret;
-  }
-
-  ObIAllocator &get_allocator()
-  {
-    return arena_alloc_;
-  }
-
-public:
-  int reset();
-  inline bool is_jni_scanner_mgr_inited()
-  {
-    return inited_;
-  }
-  inline int64_t inc_ref()
-  {
-    return ATOMIC_FAA(&ref_, 1);
-  }
-  inline int64_t dec_ref()
-  {
-    return ATOMIC_SAF(&ref_, 1);
-  }
-
-private:
-  bool inited_;
-  common::ObArenaAllocator arena_alloc_;
-  int64_t ref_;
 };
 
 class ObOdpsPartitionJNIUploaderMgr {
@@ -492,7 +467,8 @@ public:
         init_parallel_(0),
         need_commit_(true),
         write_arena_alloc_("IntoOdps", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-        session_holder_ptr_(nullptr)
+        session_holder_ptr_(nullptr),
+        lock_(common::ObLatchIds::OB_ODPS_PARTITION_JNI_UPLOADER_MGR_LOCK)
   {}
 
   ~ObOdpsPartitionJNIUploaderMgr()

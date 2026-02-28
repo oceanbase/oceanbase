@@ -14,6 +14,8 @@
 
 
 #include "ob_tablet_split_mds_helper.h"
+#include "share/ob_partition_split_query.h"
+#include "storage/ddl/ob_tablet_split_cache.h"
 #include "storage/tablet/ob_tablet_split_replay_executor.h"
 #include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -713,13 +715,28 @@ int ObTabletSplitMdsHelper::calc_split_dst_lob(
 int ObTabletSplitMdsHelper::get_split_info_with_cache(const ObTablet &tablet, ObIAllocator &allocator, ObTabletSplitTscInfo &split_info)
 {
   int ret = OB_SUCCESS;
+  ObDeepCopySplitInfoOp deep_copy_op(allocator, split_info);
+  if (OB_FAIL(for_split_dst_info(tablet, deep_copy_op))) {
+    LOG_WARN("failed to for split dst info", K(ret), K(tablet.get_tablet_meta().tablet_id_));
+  }
+  return ret;
+}
+
+// splitted tablets may have split info because of cache
+template<typename F>
+int ObTabletSplitMdsHelper::for_split_dst_info(const ObTablet &tablet, F &op)
+{
+  int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   const uint8_t bucket_id = get_itid() & 0xF;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const ObTabletSplitCacheKey cache_key(tenant_id, tablet_id, bucket_id);
   ObTabletSplitCacheValueHandle cache_handle;
   if (OB_FAIL(ObStorageCacheSuite::get_instance().get_tablet_split_cache().get_split_cache(cache_key, cache_handle))) {
+    ObArenaAllocator allocator;
+    ObTabletSplitTscInfo split_info;
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get row from fuse row cache", K(ret), K(cache_key));
     } else if (OB_FAIL(get_split_info(tablet, allocator, split_info))) {
@@ -727,8 +744,10 @@ int ObTabletSplitMdsHelper::get_split_info_with_cache(const ObTablet &tablet, Ob
     } else if (split_info.is_split_dst_with_partkey() || split_info.is_split_dst_without_partkey()) {
       int tmp_ret = OB_SUCCESS;
       ObTabletSplitCacheValue cache_value;
-      if (OB_TMP_FAIL(cache_value.init(split_info))) {
+      if (OB_FAIL(cache_value.init(split_info))) {
         LOG_WARN("fail to init cache value", K(tmp_ret));
+      } else if (OB_FAIL(op(cache_value))) {
+        LOG_WARN("failed to op cache value", K(ret), K(tablet_id), K(cache_value));
       } else if (OB_TMP_FAIL(ObStorageCacheSuite::get_instance().get_tablet_split_cache().put_split_cache(cache_key, cache_value))) {
         LOG_WARN("fail to put cache", K(tmp_ret));
       } else {
@@ -736,8 +755,8 @@ int ObTabletSplitMdsHelper::get_split_info_with_cache(const ObTablet &tablet, Ob
       }
     }
   } else {
-    if (OB_FAIL(cache_handle.row_value_->deep_copy(split_info, allocator))) {
-      LOG_WARN("failed to deep copy", K(ret), K(cache_handle));
+    if (OB_FAIL(op(*cache_handle.row_value_))) {
+      LOG_WARN("failed to operate cache value", K(ret), K(tablet_id), KPC(cache_handle.row_value_));
     }
   }
   return ret;
@@ -769,6 +788,30 @@ int ObTabletSplitMdsHelper::get_split_info(const ObTablet &tablet, ObIAllocator 
     }
   } else {
     LOG_INFO("not split dst", K(ret), K(tablet_meta), K(data));
+  }
+  return ret;
+}
+
+int ObTabletSplitMdsHelper::check_split_filter_params(
+    const ObTablet &tablet,
+    sql::ObPushdownOperator *op,
+    const uint64_t filter_type,
+    sql::ExprFixedArray *filter_params)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
+  if (!tablet_id.is_valid() || !ls_id.is_valid() || OB_ISNULL(op) || OB_INVALID_ID == filter_type || OB_ISNULL(filter_params)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tablet_id), K(ls_id), KP(op), K(filter_type), KP(filter_params));
+  } else if (OB_FAIL(filter_params->count() <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("auto split filter params is zero", K(ret));
+  } else {
+    ObCheckSplitFilterParamsOp check_op(op->get_eval_ctx(), filter_type, filter_params);
+    if (OB_FAIL(ObTabletSplitMdsHelper::for_split_dst_info<ObCheckSplitFilterParamsOp>(tablet, check_op))) {
+      LOG_WARN("fail to get tablet split info", K(ret), K(ls_id), K(tablet_id));
+    }
   }
   return ret;
 }
@@ -1294,6 +1337,31 @@ int ObTabletSplitMdsHelper::set_tablet_status(
       if (OB_FAIL(ls.get_tablet_svr()->replay_set_tablet_status(tablet_id, replay_scn, user_data, user_ctx))) {
         LOG_WARN("failed to set user data", K(ret), K(user_data), KPC(tablet));
       }
+    }
+  }
+  return ret;
+}
+
+int ObDeepCopySplitInfoOp::operator()(const ObTabletSplitCacheValue &split_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(split_info.deep_copy(split_info_, allocator_))) {
+    LOG_WARN("failed to deep copy", K(ret), K(split_info));
+  }
+  return ret;
+}
+
+int ObCheckSplitFilterParamsOp::operator()(const ObTabletSplitCacheValue &split_info)
+{
+  int ret = OB_SUCCESS;
+  if (split_info.get_start_partkey().is_valid() && split_info.get_end_partkey().is_valid() && !split_info.get_partkey_is_rowkey_prefix()) {
+    if (filter_type_ == static_cast<uint64_t>(ObTabletSplitType::RANGE)) {
+      if (OB_FAIL(ObPartitionSplitQuery::fill_range_filter_param(split_info.get_start_partkey(), split_info.get_end_partkey(), true/*check_only*/, eval_ctx_, filter_params_))) {
+        LOG_WARN("fail to fill range filter param", K(ret), K(split_info));
+      }
+    } else if (filter_type_ == static_cast<uint64_t>(ObTabletSplitType::MAX_TYPE)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("filter type is not expected", K(ret), K(filter_type_));
     }
   }
   return ret;

@@ -155,7 +155,7 @@ class ObSplitTaskCache
 public:
   ObSplitTaskCache()
     : inited_(false), total_tasks_(0), tenant_id_(OB_INVALID_TENANT_ID),
-      host_tenant_id_(OB_INVALID_TENANT_ID), lock_()
+      host_tenant_id_(OB_INVALID_TENANT_ID), lock_(common::ObLatchIds::OB_SPLIT_TASK_CACHE_LOCK)
     {}
   virtual ~ObSplitTaskCache() {}
   virtual int pop_tasks(const int64_t num_tasks_to_pop, ObIArray<ObSplitTask*> &task_array, ObIAllocator &allocator) = 0;
@@ -240,7 +240,7 @@ public:
   {}
   virtual ~ObTabletSplitTaskCache() override { destroy(); }
   int init(const int64_t capacity, const uint64_t tenant_id, const uint64_t host_tenant_id);
-  void destroy() {};
+  void destroy();
   virtual int pop_tasks(const int64_t num_tasks_to_pop, ObIArray<ObSplitTask*> &task_array, ObIAllocator &allocator) override;
   virtual int push_tasks(const ObIArray<const ObSplitTask*> &task_array) override;
   static int mtl_init(ObTabletSplitTaskCache *&task_cache);
@@ -279,7 +279,7 @@ class ObSplitTaskPollingMgr
   };
 public:
   ObSplitTaskPollingMgr(const bool is_root_server, const ObSplitCacheType cache_type)
-    : is_root_server_(is_root_server), cache_type_(cache_type), inited_(false), total_tasks_(0)
+    : is_root_server_(is_root_server), cache_type_(cache_type), inited_(false), total_tasks_(0), lock_(common::ObLatchIds::OB_SPLIT_TASK_POLLING_MGR_LOCK)
     {}
   ~ObSplitTaskPollingMgr() { reset(); }
   int init();
@@ -479,7 +479,7 @@ private:
   ~ObServerAutoSplitScheduler () {}
   int batch_send_split_request(const ObIArray<ObSEArray<ObSplitTask*, 10>> &tenant_task_arrays);
   int check_and_fetch_tablet_split_info(const storage::ObTabletHandle &teblet_handle, storage::ObLS &ls, bool &can_split, ObAutoSplitTask &task);
-  int check_sstable_limit(const storage::ObTablet &tablet, bool &exceed_limit);
+  int check_sstable_limit(const ObTabletHandle &tablet_handle, bool &can_split);
 private:
   bool inited_;
   const static int64_t MAX_SPLIT_RPC_IN_BATCH = 20;

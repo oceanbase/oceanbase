@@ -24,7 +24,7 @@ int64_t stress_time= 1; // 100ms
 char log_level[20] = "INFO";
 uint32_t time_slice = 1000;
 uint32_t sleep_slice = 2 * time_slice;
-const int64_t CHECK_TIMEOUT = 20 * 1000 * 1000; // larger than SCHEDULER_WAIT_TIME_MS and ADAPT_WORK_THREAD_INTERVAL
+const int64_t CHECK_TIMEOUT = 20 * 1000LL * 1000LL; // larger than SCHEDULER_WAIT_TIME_MS and ADAPT_WORK_THREAD_INTERVAL
 
 #define CHECK_EQ_UTIL_TIMEOUT(expected, expr) \
   { \
@@ -1544,7 +1544,8 @@ TEST_F(TestDagScheduler, test_batch_freeze_tablets_dag)
   param1.ls_id_ = ObLSID(1);
   param1.compaction_scn_ = 100;
   param1.loop_cnt_ = 1;
-  ObTabletSchedulePair tablet_pair(ObTabletID(1001), 100, ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE);
+  ObCOMajorMergeStrategy strategy;
+  ObTabletSchedulePair tablet_pair(ObTabletID(1001), 100, strategy);
   EXPECT_EQ(OB_SUCCESS, param1.tablet_info_array_.push_back(tablet_pair));
   EXPECT_EQ(OB_SUCCESS, batch_freeze_dag1->init_by_param(&param1));
 

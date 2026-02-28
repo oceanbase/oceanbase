@@ -265,6 +265,7 @@ int ObExprTimestamp::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
     CK(ObNullType == type || ObDateTimeType == type || ObMySQLDateTimeType == type);
     if (OB_SUCC(ret)) {
       rt_expr.eval_func_ = ObExprTimestamp::calc_timestamp1;
+      rt_expr.eval_vector_func_ = ObExprTimestamp::calc_timestamp1_vector;
     }
   } else if (2 == rt_expr.arg_cnt_) {
     ObObjType type1 = rt_expr.args_[0]->datum_meta_.type_;
@@ -291,6 +292,59 @@ int ObExprTimestamp::calc_timestamp1(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     result.set_null();
   } else {
     result.set_datetime(param->get_datetime());
+  }
+  return ret;
+}
+
+int ObExprTimestamp::calc_timestamp1_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval timestamp param", K(ret));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+
+    if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {
+      ret = do_calc_timestamp1_vector<DateTimeFixedVec, DateTimeFixedVec>(expr, ctx, skip, bound);
+    } else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {
+      ret = do_calc_timestamp1_vector<DateTimeFixedVec, DateTimeUniVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {
+      ret = do_calc_timestamp1_vector<DateTimeUniVec, DateTimeFixedVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+      ret = do_calc_timestamp1_vector<DateTimeUniVec, DateTimeUniVec>(expr, ctx, skip, bound);
+    } else {
+      ret = do_calc_timestamp1_vector<ObVectorBase, ObVectorBase>(expr, ctx, skip, bound);
+    }
+  }
+  return ret;
+}
+
+template <typename ArgVec, typename ResVec>
+int ObExprTimestamp::do_calc_timestamp1_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  bool no_skip_no_null = bound.get_all_rows_active() && !arg_vec->has_null()
+    && eval_flags.accumulate_bit_cnt(bound) == 0;
+  if (no_skip_no_null) {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      res_vec->set_datetime(idx, arg_vec->get_datetime(idx));
+    }
+  } else {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+        continue;
+      }
+      if (arg_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+      } else {
+        int64_t datetime_val = arg_vec->get_datetime(idx);
+        res_vec->set_datetime(idx, datetime_val);
+      }
+    }
   }
   return ret;
 }

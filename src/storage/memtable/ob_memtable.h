@@ -404,7 +404,6 @@ public:
   static int batch_remove_unused_callback_for_uncommited_txn(
     const share::ObLSID ls_id,
     const memtable::ObMemtableSet *memtable_set);
-
   /* freeze */
   virtual int flush(share::ObLSID ls_id) override;
 
@@ -428,6 +427,7 @@ public:
     ATOMIC_STORE(&transfer_freeze_flag_, true);
   }
   inline bool is_transfer_freeze() const { return ATOMIC_LOAD(&transfer_freeze_flag_); }
+  inline share::SCN get_transfer_freeze_scn() const { return recommend_snapshot_version_; }
   virtual void set_delete_insert_flag(const bool rhs) override { is_delete_insert_table_ = rhs; }
   inline bool is_delete_insert_table() const { return is_delete_insert_table_; }
   virtual void set_micro_block_format_version(const int64_t rhs) override { micro_block_format_version_ = rhs; }
@@ -568,6 +568,9 @@ private:
   void mvcc_undo_(ObMvccWriteResults &res);
 
   void mvcc_undo_(ObMvccWriteResult &res);
+
+  void wakeup_waiters_if_inserted_(ObStoreCtx &ctx, ObMvccWriteResults &results);
+  void wakeup_waiters_if_inserted_(ObStoreCtx &ctx, ObMvccWriteResult &result);
   int check_set_row_with_nop_col_(const ObMemtableSetArg &memtable_set_arg) const;
 
 protected:

@@ -122,7 +122,7 @@ int ObIOptLakeTableFile::create_opt_lake_table_file_by_type(ObIAllocator &alloca
   int ret = OB_SUCCESS;
   file = nullptr;
   if (type == LakeFileType::ICEBERG) {
-    file = OB_NEWx(ObOptIcebergFile, &allocator);
+    file = OB_NEWx(ObOptIcebergFile, &allocator, allocator);
   } else if (type == LakeFileType::HIVE) {
     file = OB_NEWx(ObOptHiveFile, &allocator);
   } else {
@@ -269,6 +269,19 @@ int ObHiveScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
       file_size_ = opt_hive_file.file_size_;
       modification_time_ = opt_hive_file.modification_time_;
       part_id_ = opt_hive_file.part_id_;
+    }
+  }
+  return ret;
+}
+
+int ObExtTableScanTask::init_parallel_parse_csv_info(ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(parallel_parse_csv_info_)) {
+    parallel_parse_csv_info_ = OB_NEWx(ObCsvParallelInfo, (&allocator));
+    if (OB_ISNULL(parallel_parse_csv_info_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObCsvParallelInfo", K(ret));
     }
   }
   return ret;

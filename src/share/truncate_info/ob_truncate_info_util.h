@@ -42,7 +42,8 @@ private:
     return (schema::PARTITION_FUNC_TYPE_RANGE == input_part_type
       || schema::PARTITION_FUNC_TYPE_RANGE_COLUMNS == input_part_type
       || schema::PARTITION_FUNC_TYPE_LIST == input_part_type
-      || schema::PARTITION_FUNC_TYPE_LIST_COLUMNS == input_part_type);
+      || schema::PARTITION_FUNC_TYPE_LIST_COLUMNS == input_part_type
+      || schema::PARTITION_FUNC_TYPE_INTERVAL == input_part_type);
   }
 };
 

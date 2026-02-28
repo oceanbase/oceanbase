@@ -518,7 +518,7 @@ int ObLSRestoreTaskMgr::check_task_exist_(
     if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KP(scheduler));
-    } else if (OB_FAIL(scheduler->check_dag_net_exist(task_id, is_exist))) {
+    } else if (OB_FAIL(scheduler->check_dag_net_exist(task_id, is_exist, INT64_MAX/*abs_timeout_us*/))) {
       LOG_WARN("failed to check dag net exist", K(ret), K(task_id));
     }
   }

@@ -34,6 +34,7 @@ static ObDetectorUserReportInfo user_report_info;
 // 用户自定义的operation操作
 class TestOperation {
 public:
+  TestOperation() : hash_(0) {};
   TestOperation(uint64_t hash) : hash_(hash) {
     ATOMIC_AAF(&alive_count, 1);
     ObSharedGuard<char> ptr;
@@ -43,6 +44,7 @@ public:
     user_report_info.set_visitor(ptr);
     ptr.assign((char*)"b", [](char*){});
     user_report_info.set_resource(ptr);
+    DETECT_LOG(INFO, "TestOperation(uint64_t hash)", K(alive_count), KP(this));
   }
   TestOperation(const TestOperation &rhs) : hash_(rhs.hash_), key_(rhs.key_) {
     ATOMIC_AAF(&alive_count, 1);
@@ -53,8 +55,10 @@ public:
     user_report_info.set_visitor(ptr);
     ptr.assign((char*)"b", [](char*){});
     user_report_info.set_resource(ptr);
+    DETECT_LOG(INFO, "TestOperation(const TestOperation &rhs)", K(alive_count), KP(this));
   }
   TestOperation(const ObDeadLockTestIntKey &key) :
+  hash_(1),
   key_(key.get_value()) {
     ATOMIC_AAF(&alive_count, 1);
     ObSharedGuard<char> ptr;
@@ -64,8 +68,20 @@ public:
     user_report_info.set_visitor(ptr);
     ptr.assign((char*)"a", [](char*){});
     user_report_info.set_resource(ptr);
+    DETECT_LOG(INFO, "TestOperation(const ObDeadLockTestIntKey &key)", K(alive_count), KP(this));
   }
-  ~TestOperation() { ATOMIC_AAF(&alive_count, -1); }
+  TestOperation &operator=(const TestOperation &rhs) {
+    this->~TestOperation();
+    new (this) TestOperation(rhs);
+    DETECT_LOG(INFO, "operator=(const TestOperation &rhs", K(alive_count), KP(this));
+    return *this;
+  }
+  ~TestOperation() {
+    if (hash_ != 0) {
+      ATOMIC_AAF(&alive_count, -1);
+      DETECT_LOG(INFO, "TestOperation destroy", K(alive_count), KP(this));
+    }
+  }
   TO_STRING_KV(K(key_));
   uint64_t hash_;
 public:
@@ -99,7 +115,7 @@ public:
 };
 
 // 真实使用过程中注册和搭建依赖关系的时间点是随机的，通过随机休眠模拟使用场景
-auto collect_callback = [](ObDetectorUserReportInfo& arg){ return arg.assign(user_report_info); };
+auto collect_callback = [](const ObDependencyHolder &, ObDetectorUserReportInfo& arg){ return arg.assign(user_report_info); };
 
 #define JUDGE_RECORDER(v1,v2,v3,v4,v5,v6,v7,v8)\
 ASSERT_EQ(recorder.function_default_construct_time, v1);\
@@ -222,7 +238,7 @@ TEST_F(TestObDeadLockDetector, register_ungister_key) {
   // 由外层来构造自己的operation对象
   TestOperation* op = new TestOperation(7710038271457258879UL);
   ASSERT_EQ(1, TestOperation::alive_count);// 用户创建了一个operation对象
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(1), *op, collect_callback, 1));// 注册key
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(1), *op, collect_callback, share::detector::DummyFillCallBack(), 0, 1));// 注册key
   //JUDGE_RECORDER()
   auto call_back = get_detector_ptr(ObDeadLockTestIntKey(1));
   ASSERT_EQ(1, MTL(ObDeadLockDetectorMgr*)->get_detector_create_count());// 预期同步创建出了一个detector对象
@@ -242,15 +258,15 @@ TEST_F(TestObDeadLockDetector, register_ungister_key) {
 TEST_F(TestObDeadLockDetector, register_ungister_in_wrong_way) {
   // do not use rpc, will core dump
   TestOperation *op = new TestOperation(7710038271457258879UL);
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(12), *op, collect_callback, 1));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(12), *op, collect_callback, share::detector::DummyFillCallBack(), 0, 1));
   //auto &call_back = ((ObLCLNode*)(get_detector_ptr(ObDeadLockTestIntKey(12))))->get_detect_callback_();
   //TestOperation &op_cp = static_cast<ObFunction<int(const common::ObIArray<ObDetectorInnerReportInfo> &, const int64_t)>::Derived<TestOperation>*>(call_back.get_func_ptr())->func_;
   DETECT_LOG(INFO, "1");
-  ASSERT_NE(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(12), *op, collect_callback, 1));// 2，同一类型的重复的key的注册应当失败
+  ASSERT_NE(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(12), *op, collect_callback, share::detector::DummyFillCallBack(), 0, 1));// 2，同一类型的重复的key的注册应当失败
   DETECT_LOG(INFO, "2");
   ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->unregister_key(ObDeadLockTestIntKey(12)));
   DETECT_LOG(INFO, "3");
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(12), *op, collect_callback, 1));// 3，一个key在注册并且注销后，应当可以重新注册
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(12), *op, collect_callback, share::detector::DummyFillCallBack(), 0, 1));// 3，一个key在注册并且注销后，应当可以重新注册
   DETECT_LOG(INFO, "4");
   ASSERT_NE(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->unregister_key(ObDeadLockTestIntKey(13)));// 4，一个key在未注册的情况下，注销操作应当失败
   DETECT_LOG(INFO, "5");
@@ -259,7 +275,7 @@ TEST_F(TestObDeadLockDetector, register_ungister_in_wrong_way) {
   ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->unregister_key(ObDeadLockTestIntKey(12)));
   DETECT_LOG(INFO, "6");
   ASSERT_NE(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->unregister_key(ObDeadLockTestIntKey(12)));// 5，一个已经注册的key在已经注销的情况下，二次注销应当失败
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(12), *op, collect_callback, 1));// 6, 在ObDeadLockDetectorMgr销毁的时候，还存在detector没有销毁，预期Mgr销毁后，所有创建的detector都销毁
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(12), *op, collect_callback, share::detector::DummyFillCallBack(), 0, 1));// 6, 在ObDeadLockDetectorMgr销毁的时候，还存在detector没有销毁，预期Mgr销毁后，所有创建的detector都销毁
   std::this_thread::sleep_for(chrono::microseconds(PERIOD * 2));
   delete op;
 }
@@ -277,13 +293,13 @@ TEST_F(TestObDeadLockDetector, register_ungister_in_wrong_way) {
 TEST_F(TestObDeadLockDetector, block_and_activate) {
   TestOperation *op = new TestOperation(7710038271457258879UL);
   // 注册第一个key
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(1), *op, collect_callback, 1));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(1), *op, collect_callback, share::detector::DummyFillCallBack(), 0, 1));
   // 注册第二个key
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(2), *op, collect_callback, 1));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(2), *op, collect_callback, share::detector::DummyFillCallBack(), 0, 1));
   // 注册第三个key
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestDoubleKey(3.0), *op, collect_callback, 1));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestDoubleKey(3.0), *op, collect_callback, share::detector::DummyFillCallBack(), 0, 1));
   // 注册第四个key
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestDoubleKey(4.0), *op, collect_callback, 1));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestDoubleKey(4.0), *op, collect_callback, share::detector::DummyFillCallBack(), 0, 1));
   // 为两个key搭建依赖关系
   ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->block(ObDeadLockTestIntKey(1), ObDeadLockTestIntKey(2)));// 1，block某个已经存在的key可以成功
   ASSERT_NE(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->block(ObDeadLockTestIntKey(1), ObDeadLockTestIntKey(2)));// 2，block一个已经block过的key返回失败
@@ -311,16 +327,16 @@ TEST_F(TestObDeadLockDetector, dead_lock) {
     // ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(index + 1), *op1, collect_callback, 1, std::rand() % 100));
     // 注册第二个key
     TestOperation *op2 = new TestOperation(ObDeadLockTestIntKey(index + 2));
-    ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(index + 2), *op2, collect_callback, 1, std::rand() % 100));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(index + 2), *op2, collect_callback, share::detector::DummyFillCallBack(), 0, 1, std::rand() % 100));
     // 注册第三个key
     TestOperation *op3 = new TestOperation(ObDeadLockTestIntKey(index + 3));
-    ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(index + 3), *op3, collect_callback, 1, std::rand() % 100));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(index + 3), *op3, collect_callback, share::detector::DummyFillCallBack(), 0, 1, std::rand() % 100));
     // 注册第四个key
     TestOperation *op4 = new TestOperation(ObDeadLockTestIntKey(index + 4));
-    ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(index + 4), *op4, collect_callback, 1, std::rand() % 100));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(index + 4), *op4, collect_callback, share::detector::DummyFillCallBack(), 0, 1, std::rand() % 100));
     // 注册第五个key
     TestOperation *op5 = new TestOperation(ObDeadLockTestIntKey(index + 5));
-    ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(index + 5), *op5, collect_callback, 1, std::rand() % 100));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(index + 5), *op5, collect_callback, share::detector::DummyFillCallBack(), 0, 1, std::rand() % 100));
     // 为两个key搭建依赖关系
     // ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->block(ObDeadLockTestIntKey(index + 1), ObDeadLockTestIntKey(index + 2)));
     ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->add_parent(ObDeadLockTestIntKey(index + 2), GCTX.self_addr(), ObDeadLockTestIntKey(index + 1)));
@@ -352,7 +368,7 @@ public:
   DeadLockBlockCallBack(uint64_t hash) : hash_(hash) {
     TRANS_LOG(INFO, "hash value when created", K(hash), K(hash_));
   }
-  int operator()(ObDependencyResource &resource, bool &need_remove) {
+  int operator()(ObDependencyHolder &resource, bool &need_remove) {
     UNUSED(resource);
     UNUSED(need_remove);
     std::cout<<"hash_:"<<hash_<<std::endl;
@@ -365,16 +381,16 @@ private:
 
 TEST_F(TestObDeadLockDetector, block_call_back) {
   DeadLockBlockCallBack deadlock_block_call_back(7710038271457258879UL);
-  ObFunction<int(ObDependencyResource &,bool &)> func = deadlock_block_call_back;
-  ObDependencyResource re;
+  ObFunction<int(ObDependencyHolder &,bool &)> func = deadlock_block_call_back;
+  ObDependencyHolder re;
   bool n;
   func(re, n);
 }
 
 TEST_F(TestObDeadLockDetector, test_timeout) {
   TestOperation *op2 = new TestOperation(ObDeadLockTestIntKey(1));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(1), *op2, collect_callback, 1, std::rand() % 100));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(2), *op2, collect_callback, 1, std::rand() % 100));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(1), *op2, collect_callback, share::detector::DummyFillCallBack(), 0, 1, std::rand() % 100));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(2), *op2, collect_callback, share::detector::DummyFillCallBack(), 0, 1, std::rand() % 100));
   MTL(ObDeadLockDetectorMgr*)->set_timeout(ObDeadLockTestIntKey(1), 1000);
   std::this_thread::sleep_for(chrono::seconds(1));
   delete op2;
@@ -388,19 +404,19 @@ TEST_F(TestObDeadLockDetector, small_cycle_in_big_cycle_bad_case) {
   int loop_times = 5;
   // 注册第一个key
   TestOperation *op1 = new TestOperation(ObDeadLockTestIntKey(1));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(1), *op1, collect_callback, 9));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(1), *op1, collect_callback, share::detector::DummyFillCallBack(), 0, 9));
   // 注册第二个key
   TestOperation *op2 = new TestOperation(ObDeadLockTestIntKey(2));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(2), *op2, collect_callback, 0));// should kill this node
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(2), *op2, collect_callback, share::detector::DummyFillCallBack(), 0, 0));// should kill this node
   // 注册第三个key
   TestOperation *op3 = new TestOperation(ObDeadLockTestIntKey(3));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(3), *op3, collect_callback, 9));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(3), *op3, collect_callback, share::detector::DummyFillCallBack(), 0, 9));
   // 注册第四个key
   TestOperation *op4 = new TestOperation(ObDeadLockTestIntKey(4));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(4), *op4, collect_callback, 9));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(4), *op4, collect_callback, share::detector::DummyFillCallBack(), 0, 9));
   // 注册第五个key
   TestOperation *op5 = new TestOperation(ObDeadLockTestIntKey(5));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(5), *op5, collect_callback, 1));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->register_key(ObDeadLockTestIntKey(5), *op5, collect_callback, share::detector::DummyFillCallBack(), 0, 1));
   // 为两个key搭建依赖关系
   // ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->block(ObDeadLockTestIntKey(index + 1), ObDeadLockTestIntKey(index + 2)));
   ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->block(ObDeadLockTestIntKey(1), ObDeadLockTestIntKey(5)));

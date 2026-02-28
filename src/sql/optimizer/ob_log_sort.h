@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SQL_OB_LOG_SORT_H
 #define OCEANBASE_SQL_OB_LOG_SORT_H
 #include "lib/container/ob_array.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_logical_operator.h"
 
 namespace oceanbase
@@ -21,6 +22,8 @@ namespace sql
 {
 class ObRawExpr;
 class ObLogSort;
+template<typename R, typename C>
+class PlanVisitor;
 
 struct ObTopNFilterInfo
 {
@@ -53,8 +56,8 @@ public:
   ObLogSort(ObLogPlan &plan)
       : ObLogicalOperator(plan),
         hash_sortkey_(),
-        sort_keys_(),
-        encode_sortkeys_(),
+        sort_keys_(plan.get_allocator()),
+        encode_sortkeys_(plan.get_allocator()),
         topn_expr_(NULL),
         minimum_row_count_(0),
         topk_precision_(0),
@@ -82,7 +85,10 @@ public:
   int get_sort_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
   int create_encode_sortkey_expr(const common::ObIArray<OrderItem> &order_keys);
   int get_sort_exprs(common::ObIArray<ObRawExpr*> &sort_exprs);
-
+  inline bool is_topn_op()
+  {
+    return topn_expr_ != NULL;
+  }
   inline void set_topn_expr(ObRawExpr *expr) { topn_expr_ = expr; }
   inline void set_prefix_pos(int64_t prefix_pos) { prefix_pos_ = prefix_pos; }
   inline void set_local_merge_sort(bool is_local_merge_sort) { is_local_merge_sort_ = is_local_merge_sort; }
@@ -149,13 +155,13 @@ protected:
 private:
   int get_candidate_pushdown_sort_keys(
       uint64_t &table_id,
-      common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> &candidate_sk_exprs);
+      common::ObIArray<ObRawExpr *> &candidate_sk_exprs);
   int check_expr_can_pushdown(ObRawExpr *expr, uint64_t &table_id, bool &can_push_down);
   int is_expr_in_pushdown_whitelist(ObRawExpr *expr, bool &in_pushdown_whitelist);
 private:
   OrderItem hash_sortkey_;
-  common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
-  common::ObSEArray<OrderItem, 1, common::ModulePageAllocator, true> encode_sortkeys_;
+  ObSqlArray<OrderItem> sort_keys_;
+  ObSqlArray<OrderItem> encode_sortkeys_;
   ObRawExpr *topn_expr_;
   int64_t minimum_row_count_;
   int64_t topk_precision_;

@@ -147,7 +147,10 @@ int ObTimer::schedule(ObTimerTask &task, const int64_t delay, const bool repeate
     OB_LOG(WARN, "timer is not yet initialized", K(ret), K(task));
   } else if (is_stopped_) {
     ret = OB_CANCELED;
-      OB_LOG(WARN, "schedule task on stopped timer", K(ret), K(task));
+    OB_LOG(WARN, "schedule task on stopped timer", K(ret), K(task));
+  } else if (is_cancelling_all_) {
+    ret = OB_CANCELED;
+    OB_LOG(WARN, "schedule task rejected, timer is cancelling all tasks", K(ret), K(task));
   } else if (nullptr == timer_service_) {
     ret = OB_ERR_NULL_VALUE;
     OB_LOG(WARN, "timer_service is NULL", K(ret), K(task));
@@ -218,10 +221,14 @@ void ObTimer::cancel_all()
   } else if (nullptr == timer_service_) {
     ret = OB_ERR_NULL_VALUE;
     OB_LOG(WARN, "timer_service is NULL", K(ret));
-  } else if (OB_FAIL(timer_service_->cancel_task(this, nullptr))) {
-    OB_LOG(WARN, "timer_service_.cancel_task failed", K(ret));
   } else {
-    wait();
+    is_cancelling_all_ = true;
+    if (OB_FAIL(timer_service_->cancel_task(this, nullptr))) {
+      OB_LOG(WARN, "timer_service_.cancel_task failed", K(ret));
+    } else {
+      wait();
+    }
+    is_cancelling_all_ = false;
   }
 }
 

@@ -42,7 +42,7 @@ public:
   // tenant_id -> ObLeakCheckTenantObjVec;
   using ObLeakCheckAllMap = std::unordered_map<uint64_t, ObLeakCheckTenantObjVec>;
 
-  ObObjLeakChecker() : key_token_(0) {
+  ObObjLeakChecker() : lock_(common::ObLatchIds::OBJ_LEAK_CHECKER_SPIN_LOCK), key_token_(0) {
   }
   ~ObObjLeakChecker() {}
 

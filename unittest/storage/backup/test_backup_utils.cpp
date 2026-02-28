@@ -63,7 +63,7 @@ private:
 };
 
 ObFakeBackupTabletProvider::ObFakeBackupTabletProvider()
-    : is_inited_(false), mutex_(), task_id_(-1), supplied_item_count_(0), total_item_count_(0)
+    : is_inited_(false), mutex_(common::ObLatchIds::OB_TEST_BACKUP_FAKE_TABLET_PROVIDER_MUTEX), task_id_(-1), supplied_item_count_(0), total_item_count_(0)
 {}
 
 ObFakeBackupTabletProvider::~ObFakeBackupTabletProvider()

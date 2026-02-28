@@ -226,7 +226,7 @@ int ObTableEstimator::estimate_sstable_scan_row_count(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid get arguments", K(ret), K(base_input.table_id_), K(key_range));
   } else {
-    const ObIndexSSTableEstimateContext context(base_input.tablet_handle_, base_input.query_flag_);
+    const ObIndexSSTableEstimateContext context(base_input.tablet_handle_, base_input.query_flag_, base_input.base_version_);
     ObIndexBlockScanEstimator scan_estimator(context);
     if (OB_FAIL(scan_estimator.estimate_row_count(*sstable, key_range, part_est))) {
       LOG_WARN("Fail to estimate cost of scan.", K(ret), K(base_input.table_id_));

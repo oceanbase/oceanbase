@@ -73,7 +73,13 @@ public:
                              const ObVersionRange &trans_version_range,
                              const bool is_schema_changed_in_medium_info,
                              ObTabletMergeCtx &merge_context);
+  int prepare_partition_minor_merge_iter(ObMergeParameter &merge_param,
+                                 common::ObIAllocator &allocator,
+                                 const ObITableReadInfo *read_info,
+                                 const int iter_idx,
+                                 ObPartitionMergeIter *&merge_iter);
   ObTabletMergeExecuteDag merge_dag_;
+  ObCompactionFilterHandle filter_handle_;
 };
 
 void ObMajorRowsMergerTest::SetUpTestCase()
@@ -82,16 +88,7 @@ void ObMajorRowsMergerTest::SetUpTestCase()
   // mock sequence no
   ObClockGenerator::init();
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
-  share::schema::ObTableSchema table_schema;
-  uint64_t table_id = 12345;
-  ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema, table_id));
-  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_));
+  TestMergeBasic::create_tablet();
 }
 
 void ObMajorRowsMergerTest::TearDownTestCase()
@@ -119,23 +116,32 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
                                                   const bool is_schema_changed_in_medium_info,
                                                   ObTabletMergeCtx &merge_context)
 {
-  merge_context.merge_dag_ = &merge_dag_;
-  TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
-  if (is_schema_changed_in_medium_info && merge_context.static_param_.merge_sstable_status_array_.count() > 0) {
-    merge_context.static_param_.merge_sstable_status_array_.at(0).is_schema_changed_ = true;
+  TestMergeBasic::prepare_merge_context(
+      merge_type, is_full_merge, trans_version_range, &merge_dag_, merge_context, false/*is_delete_insert_merge*/);
+  if (is_schema_changed_in_medium_info && merge_context.static_param_.major_merge_sstable_status_array_.count() > 0) {
+    merge_context.static_param_.major_merge_sstable_status_array_.at(0).is_schema_changed_ = true;
   }
-
-  ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
-  ASSERT_EQ(OB_SUCCESS, merge_context.static_param_.init_static_info(merge_context.tablet_handle_));
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_static_desc());
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_read_info());
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_tablet_merge_info());
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_sstable_builder());
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.sstable_builder_.data_store_desc_.assign(index_desc_.get_desc()));
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder());
 }
 
+int ObMajorRowsMergerTest::prepare_partition_minor_merge_iter(ObMergeParameter &merge_param,
+                                 common::ObIAllocator &allocator,
+                                 const ObITableReadInfo *read_info,
+                                 const int iter_idx,
+                                 ObPartitionMergeIter *&merge_iter)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  if (OB_ISNULL(buf = allocator.alloc(sizeof(ObPartitionMinorMacroMergeIter)))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+  } else {
+    merge_iter = new (buf) ObPartitionMinorMacroMergeIter(allocator, filter_handle_);
+    if (OB_FAIL(merge_iter->init(merge_param, iter_idx, read_info))) {
+      STORAGE_LOG(WARN, "failed to init merge iter", K(ret));
+    }
+  }
+  return ret;
+}
 
 TEST_F(ObMajorRowsMergerTest, test_compare_func)
 {
@@ -207,8 +213,8 @@ TEST_F(ObMajorRowsMergerTest, test_compare_func)
   ObPartitionMergeIter *iter_0 = nullptr;
   ObPartitionMergeIter *iter_1 = nullptr;
   const ObITableReadInfo &read_info = merge_context.tablet_handle_.get_obj()->get_rowkey_read_info();
-  prepare_partition_merge_iter<ObPartitionMinorMacroMergeIter>(merge_param, allocator_, &read_info, 0, iter_0);
-  prepare_partition_merge_iter<ObPartitionMinorMacroMergeIter>(merge_param, allocator_, &read_info, 1, iter_1);
+  prepare_partition_minor_merge_iter(merge_param, allocator_, &read_info, 0, iter_0);
+  prepare_partition_minor_merge_iter(merge_param, allocator_, &read_info, 1, iter_1);
   OK(iter_0->next());
   OK(iter_1->next());
 

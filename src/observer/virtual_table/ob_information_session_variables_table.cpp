@@ -13,6 +13,10 @@
 #include "ob_information_session_variables_table.h"
 
 #include "sql/session/ob_sql_session_info.h"
+#include "observer/omt/ob_tenant_config.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
+#include "share/ob_cluster_version.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {

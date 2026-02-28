@@ -31,7 +31,7 @@ int ObTableSchema::get_vec_index_column_id(uint64_t &with_cascaded_info_column_i
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
-    } else if (column_schema->is_vec_hnsw_vector_column() || column_schema->is_vec_ivf_center_id_column()) {
+    } else if (column_schema->is_vec_hnsw_vector_column() || column_schema->is_vec_ivf_center_id_column() || column_schema->is_hybrid_vec_index_chunk_column()) {
       with_cascaded_info_column_id = column_schema->get_column_id();
     }
   }

@@ -22,12 +22,14 @@ namespace sql
 class ObDMLStmt;
 class ObLogInsert;
 class ObInsertStmt;
-typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>, 1, common::ModulePageAllocator, true> RowParamMap;
 class ObInsertLogPlan: public ObDelUpdLogPlan
 {
 public:
   ObInsertLogPlan(ObOptimizerContext &ctx, const ObInsertStmt *insert_stmt)
       : ObDelUpdLogPlan(ctx, insert_stmt),
+        replace_del_index_del_infos_(allocator_),
+        insert_up_index_upd_infos_(allocator_),
+        uk_constraint_infos_(allocator_),
         is_insertup_opt_for_column_store_(false)
   { }
   virtual ~ObInsertLogPlan()
@@ -51,7 +53,7 @@ public:
   { return insert_up_index_upd_infos_; }
   const common::ObIArray<IndexDMLInfo *> &get_insert_up_index_upd_infos() const
   { return insert_up_index_upd_infos_; }
-  common::ObIArray<ObUniqueConstraintInfo> &get_uk_constraint_infos()
+  common::ObIArray<ObUniqueConstraintInfo*> &get_uk_constraint_infos()
   { return uk_constraint_infos_; }
 
   virtual int perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt)override;
@@ -140,9 +142,9 @@ private:
   int check_insertup_opt_for_column_store();
   DISALLOW_COPY_AND_ASSIGN(ObInsertLogPlan);
 private:
-  common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> replace_del_index_del_infos_;
-  common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> insert_up_index_upd_infos_;
-  common::ObSEArray<ObUniqueConstraintInfo, 8, common::ModulePageAllocator, true> uk_constraint_infos_;
+  ObSqlArray<IndexDMLInfo *> replace_del_index_del_infos_;
+  ObSqlArray<IndexDMLInfo *> insert_up_index_upd_infos_;
+  ObSqlArray<ObUniqueConstraintInfo*> uk_constraint_infos_;
   bool is_insertup_opt_for_column_store_;
 };
 }

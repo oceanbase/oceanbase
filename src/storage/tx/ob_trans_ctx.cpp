@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX TRANS
 #include "ob_trans_ctx.h"
 #include "ob_trans_service.h"
+#include "share/deadlock/ob_deadlock_detector_mgr.h"
+#include "storage/tx/ob_trans_deadlock_adapter.h"
 
 namespace oceanbase
 {
@@ -150,8 +152,20 @@ void ObTransCtx::print_trace_log_if_necessary_()
 void ObTransCtx::set_exiting_()
 {
   int tmp_ret = OB_SUCCESS;
-
   if (!is_exiting_) {
+    bool is_detector_exist = false;
+    if (!share::detector::ObDeadLockDetectorMgr::is_deadlock_enabled()) {
+      // do nothing
+    } else if (OB_ISNULL(MTL(share::detector::ObDeadLockDetectorMgr*))) {
+      tmp_ret = OB_BAD_NULL_ERROR;
+      DETECT_LOG_RET(WARN, OB_SUCCESS, "MTL ObDeadLockDetectorMgr is NULL", K(tmp_ret), K_(trans_id));
+    } else if (OB_TMP_FAIL(MTL(share::detector::ObDeadLockDetectorMgr*)->
+                               check_detector_exist(trans_id_, is_detector_exist))) {
+    } else if (is_detector_exist) {
+      DETECT_LOG_RET(INFO, OB_SUCCESS, "destroy detector in set_exiting_()", K(tmp_ret), K(trans_id_));
+      ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(trans_id_,
+                                      ObTransDeadlockDetectorAdapter::UnregisterPath::DO_END_TRANS);
+    }
     is_exiting_ = true;
     print_trace_log_if_necessary_();
     ls_tx_ctx_mgr_->dec_active_tx_count();

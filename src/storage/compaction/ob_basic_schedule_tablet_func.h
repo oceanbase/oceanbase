@@ -52,7 +52,7 @@ protected:
     const int64_t schedule_scn,
     const ObTabletStatusCache &tablet_status,
     bool &can_merge,
-    const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE);
+    const ObCOMajorMergeStrategy &co_major_merge_strategy = ObCOMajorMergeStrategy());
   int check_need_force_freeze(
     const storage::ObTablet &tablet,
     const int64_t schedule_scn,
@@ -62,7 +62,7 @@ protected:
     const ObTablet &tablet,
     const ObMergeType merge_type,
     const int64_t schedule_scn,
-    const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type,
+    const ObCOMajorMergeStrategy &co_major_merge_strategy,
     const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason) = 0;
 protected:
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
@@ -74,6 +74,7 @@ protected:
   ObBatchFreezeTabletsParam freeze_param_;
   bool ls_could_schedule_new_round_;
   bool ls_could_schedule_merge_;  // suspend merge OR during restore inner_table
+  bool is_window_compaction_active_;
   int64_t loop_cnt_;
 };
 

@@ -31,32 +31,58 @@ class ObJoinOrder;
  */
 struct JoinInfo
 {
-  JoinInfo() :
+  JoinInfo(common::ObIAllocator &allocator) :
       table_set_(),
-      on_conditions_(),
-      where_conditions_(),
-      equal_join_conditions_(),
+      on_conditions_(allocator),
+      where_conditions_(allocator),
+      equal_join_conditions_(allocator),
       join_type_(UNKNOWN_JOIN)
       {}
 
-  JoinInfo(ObJoinType join_type) :
+  JoinInfo(ObJoinType join_type, common::ObIAllocator &allocator) :
       table_set_(),
-      on_conditions_(),
-      where_conditions_(),
-      equal_join_conditions_(),
+      on_conditions_(allocator),
+      where_conditions_(allocator),
+      equal_join_conditions_(allocator),
       join_type_(join_type)
       {}
 
   virtual ~JoinInfo() {};
+  void reuse()
+  {
+    table_set_.reuse();
+    on_conditions_.reuse();
+    where_conditions_.reuse();
+    equal_join_conditions_.reuse();
+    join_type_ = UNKNOWN_JOIN;
+  }
+  int assign(const JoinInfo &other)
+  {
+    int ret = OB_SUCCESS;
+    table_set_.reuse();
+    if (OB_FAIL(table_set_.add_members(other.table_set_))) {
+      SQL_LOG(WARN, "failed to add members", K(ret));
+    } else if (OB_FAIL(on_conditions_.assign(other.on_conditions_))) {
+      SQL_LOG(WARN, "failed to assign", K(ret));
+    } else if (OB_FAIL(where_conditions_.assign(other.where_conditions_))) {
+      SQL_LOG(WARN, "failed to assign", K(ret));
+    } else if (OB_FAIL(equal_join_conditions_.assign(other.equal_join_conditions_))) {
+      SQL_LOG(WARN, "failed to assign", K(ret));
+    } else {
+      join_type_ = other.join_type_;
+    }
+    return ret;
+  }
+  DISABLE_COPY_ASSIGN(JoinInfo);
   TO_STRING_KV(K_(join_type),
                 K_(table_set),
                 K_(on_conditions),
                 K_(where_conditions),
                 K_(equal_join_conditions));
   ObRelIds table_set_; //要连接的表集合（即包含在join_qual_中的，除自己之外的所有表）
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> on_conditions_; //来自on的条件，如果是outer/semi join
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> where_conditions_; //来自where的条件，如果是outer/semi join，则是join filter，如果是inner join，则是join condition
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> equal_join_conditions_; //是连接条件（outer/semi的on condition，inner join的where condition）的子集，仅简单等值，在预测未来的merge join所需的序的时候使用
+  ObSqlArray<ObRawExpr*> on_conditions_; //来自on的条件，如果是outer/semi join
+  ObSqlArray<ObRawExpr*> where_conditions_; //来自where的条件，如果是outer/semi join，则是join filter，如果是inner join，则是join condition
+  ObSqlArray<ObRawExpr*> equal_join_conditions_; //是连接条件（outer/semi的on condition，inner join的where condition）的子集，仅简单等值，在预测未来的merge join所需的序的时候使用
   ObJoinType join_type_;
 };
 
@@ -64,11 +90,11 @@ class ObConflictDetector
 {
   friend class ObConflictDetectorGenerator;
 public:
-  ObConflictDetector() :
-    join_info_(),
-    CR_(),
-    cross_product_rule_(),
-    delay_cross_product_rule_(),
+  ObConflictDetector(common::ObIAllocator &allocator) :
+    join_info_(allocator),
+    CR_(allocator),
+    cross_product_rule_(allocator),
+    delay_cross_product_rule_(allocator),
     L_TES_(),
     R_TES_(),
     L_DS_(),
@@ -111,12 +137,12 @@ public:
                                        const ObConflictDetector &right,
                                        bool &is_satisfy);
 
-  static int choose_detectors(ObRelIds &left_tables,
-                              ObRelIds &right_tables,
-                              ObIArray<ObConflictDetector*> &left_used_detectors,
-                              ObIArray<ObConflictDetector*> &right_used_detectors,
-                              ObIArray<TableDependInfo> &table_depend_infos,
-                              ObIArray<ObConflictDetector*> &all_detectors,
+  static int choose_detectors(const ObRelIds &left_tables,
+                              const ObRelIds &right_tables,
+                              const ObIArray<ObConflictDetector*> &left_used_detectors,
+                              const ObIArray<ObConflictDetector*> &right_used_detectors,
+                              const ObIArray<TableDependInfo> &table_depend_infos,
+                              const ObIArray<ObConflictDetector*> &all_detectors,
                               ObIArray<ObConflictDetector*> &valid_detectors,
                               bool delay_cross_product,
                               bool &is_strict_order);
@@ -132,7 +158,7 @@ public:
                        const ObRelIds &right_set,
                        const ObRelIds &combined_set,
                        bool delay_cross_product,
-                       ObIArray<TableDependInfo> &table_depend_infos,
+                       const ObIArray<TableDependInfo> &table_depend_infos,
                        bool &legal);
 
 
@@ -140,9 +166,9 @@ private:
   //table set包含的是当前join condition所引用的所有表，也就是SES
   JoinInfo join_info_;
   //conflict rules: R1 -> R2
-  common::ObSEArray<std::pair<ObRelIds, ObRelIds> , 4, common::ModulePageAllocator, true> CR_;
-  common::ObSEArray<std::pair<ObRelIds, ObRelIds> , 4, common::ModulePageAllocator, true> cross_product_rule_;
-  common::ObSEArray<std::pair<ObRelIds, ObRelIds> , 4, common::ModulePageAllocator, true> delay_cross_product_rule_;
+  ObSqlArray<std::pair<ObRelIds, ObRelIds>> CR_;
+  ObSqlArray<std::pair<ObRelIds, ObRelIds>> cross_product_rule_;
+  ObSqlArray<std::pair<ObRelIds, ObRelIds>> delay_cross_product_rule_;
   //left total eligibility set
   ObRelIds L_TES_;
   //right total eligibility set

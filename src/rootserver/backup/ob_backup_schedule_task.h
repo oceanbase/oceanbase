@@ -281,6 +281,7 @@ public:
       const share::ObLSReplica &replica,
       char *buf,
       const int64_t size,
+      int64_t &pos,
       bool &can_do_backup);
   int get_backup_dest_id(const uint64_t tenant_id, int64_t &dest_id) const;
 private:
@@ -425,6 +426,38 @@ private:
   share::ObBackupPathString backup_path_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanLSTask); 
+};
+
+class ObBackupValidateLSTask : public ObBackupScheduleTask
+{
+public:
+  ObBackupValidateLSTask();
+  virtual ~ObBackupValidateLSTask();
+public:
+  virtual int clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const override;
+  virtual int64_t get_deep_copy_size() const override;
+  // interfaces related to execution
+  virtual bool can_execute_on_any_server() const override;
+  virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
+  virtual int cancel(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
+private:
+  virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) final override;
+  int set_optional_servers_();
+public:
+  int build(const share::ObBackupValidateTaskAttr &task_attr, const share::ObBackupValidateLSTaskAttr &ls_attr);
+  INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(job_id), K_(incarnation_id), K_(validate_id), K_(round_id),
+               K_(task_type), K_(ls_id), K_(validate_path));
+private:
+  int64_t job_id_;
+  uint64_t incarnation_id_;
+  int64_t validate_id_;
+  uint64_t round_id_;
+  share::ObBackupValidateLevel validate_level_;
+  share::ObBackupValidateType task_type_;
+  share::ObLSID ls_id_;
+  share::ObBackupPathString validate_path_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupValidateLSTask);
 };
 
 }  // namespace rootserver

@@ -199,6 +199,33 @@ public:
   static int get_location(const IntoFileLocation &file_location, const char *&location);
 };
 
+// 异常处理宏定义，用于 Parquet 相关操作
+#define BEGIN_CATCH_EXCEPTIONS try {
+#define END_CATCH_EXCEPTIONS                                                                       \
+  } catch (const ObErrorCodeException &ob_error) {                                                 \
+    if (OB_SUCC(ret)) {                                                                            \
+      ret = ob_error.get_error_code();                                                             \
+      LOG_WARN("fail to read file", K(ret));                                                       \
+    }                                                                                              \
+  } catch (const ::parquet::ParquetStatusException &e) {                                           \
+    if (OB_SUCC(ret)) {                                                                            \
+      status = e.status();                                                                         \
+      ret = OB_INVALID_EXTERNAL_FILE;                                                              \
+      LOG_WARN("unexpected error", K(ret), "Info", e.what());                                      \
+    }                                                                                              \
+  } catch (const ::parquet::ParquetException &e) {                                                 \
+    if (OB_SUCC(ret)) {                                                                            \
+      ret = OB_INVALID_EXTERNAL_FILE;                                                              \
+      LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE, e.what());                                          \
+      LOG_WARN("unexpected error", K(ret), "Info", e.what());                                      \
+    }                                                                                              \
+  } catch (...) {                                                                                  \
+    if (OB_SUCC(ret)) {                                                                            \
+      ret = OB_ERR_UNEXPECTED;                                                                     \
+      LOG_WARN("unexpected error", K(ret));                                                        \
+    }                                                                                              \
+  }
+
 } // end of sql namespace
 } // end of oceanbase namespace
 

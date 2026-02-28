@@ -184,6 +184,13 @@ protected:
                                  common::ObIArray<ObRawExpr*> &rollup_exprs,
                                  common::ObIArray<OrderItem> &order_items,
                                  bool &has_explicit_dir);
+  int init_stmt_group_clause_capacity(const ParseNode *node);
+  int resolve_group_by_element_num(const ParseNode *node,
+                                   bool ignore_empty_group_by,
+                                   int64_t &group_num,
+                                   int64_t &rollup_num,
+                                   int64_t &cube_num,
+                                   int64_t &grouping_num);
   int resolve_for_update_clause(const ParseNode *node);
   int resolve_for_update_clause_oracle(const ParseNode &node);
   int get_cursor_for_update_table(ObSelectStmt *select_stmt, int64_t &for_update_cnt, TableItem *&add_rowid_table_item, uint64_t &base_table_id);
@@ -212,6 +219,7 @@ protected:
   int resolve_file_partition_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_outfile_without_format(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_outfile_with_format(const ParseNode *node, ObSelectIntoItem &into_item);
+  int resolve_into_file_name_node(const ParseNode *node, ObObj &obj);
   // resolve_star related functions
   int resolve_star_for_table_groups(ObStarExpansionInfo &star_expansion_info);
   int find_joined_table_group_for_table(const uint64_t table_id, int64_t &jt_idx);

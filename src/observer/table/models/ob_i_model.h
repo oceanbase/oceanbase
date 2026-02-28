@@ -147,7 +147,8 @@ public:
   }
   virtual int work(ObTableExecCtx &ctx,
                    const ObTableQueryAsyncRequest &req,
-                   ObTableQueryAsyncResult &res);
+                   ObTableQueryAsyncResult &res,
+                   ObTableExecCtx &arg_ctx);
   virtual int work(ObTableExecCtx &ctx,
                    const ObRedisRpcRequest &req,
                    ObRedisResult &res)

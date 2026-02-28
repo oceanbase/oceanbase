@@ -263,7 +263,8 @@ public:
                K_(tablegroup_name),
                K_(partition_status),
                K_(partition_schema_version),
-               K_(sharding));
+               K_(sharding),
+               K_(scope));
   virtual void reset();
   bool is_valid() const;
   inline int64_t get_convert_size() const;
@@ -279,7 +280,10 @@ public:
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
   inline int set_sharding(const common::ObString &sharding)
   { return deep_copy_str(sharding, sharding_); }
+  inline int set_scope(const common::ObString &scope)
+  { return deep_copy_str(scope, scope_); }
   inline const common::ObString &get_sharding() const { return sharding_; }
+  inline const common::ObString &get_scope() const { return scope_; }
   inline ObTenantTablegroupId get_tenant_tablegroup_id() const
   { return ObTenantTablegroupId(tenant_id_, tablegroup_id_); }
 
@@ -308,6 +312,7 @@ private:
   ObPartitionStatus partition_status_;
   int64_t partition_schema_version_;
   common::ObString sharding_;
+  common::ObString scope_;
 };
 
 template<class K, class V>
@@ -607,6 +612,7 @@ public:
       const ObSimpleTableSchemaV2 *&table_schema) const;
   int get_hidden_table_schema(const uint64_t tenant_id,
                               const uint64_t database_id,
+                              const uint64_t session_id,
                               const common::ObString &table_name,
                               const ObSimpleTableSchemaV2 *&table_schema) const;
   int get_index_schema(
@@ -807,6 +813,9 @@ public:
       const uint64_t tenant_id,
       common::ObIArray<const ObSimpleTableSchemaV2 *> &schema_array) const;
   #undef GET_TABLE_SCHEMAS_IN_DST_SCHEMA_FUNC_DECLARE
+  int get_vector_index_schemas_in_tenant(
+      const uint64_t tenant_id,
+      common::ObIArray<const ObSimpleTableSchemaV2 *> &schema_array) const;
   int get_primary_table_schema_in_tablegroup(
       const uint64_t tenant_id,
       const uint64_t tablegroup_id,
@@ -851,6 +860,9 @@ private:
   inline bool check_inner_stat() const;
 
   int remove_aux_table(const ObSimpleTableSchemaV2 &schema_to_del, const bool is_aux_vp);
+  int collect_aux_schemas_by_data_table_id(const TableInfos &infos,
+                                           const ObTenantTableId &tenant_data_table_id,
+                                           common::ObIArray<const ObSimpleTableSchemaV2 *> &aux_schemas) const;
 
   int add_foreign_keys_in_table(const common::ObIArray<ObSimpleForeignKeyInfo> &fk_info_array,
                                 const int over_write);
@@ -981,6 +993,7 @@ private:
   TablegroupInfos tablegroup_infos_;
   TableInfos table_infos_;
   TableInfos index_infos_;
+  TableInfos vec_index_infos_;
   TableInfos aux_vp_infos_;
   TableInfos lob_meta_infos_;
   TableInfos lob_piece_infos_;

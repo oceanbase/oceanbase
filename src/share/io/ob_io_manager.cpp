@@ -287,7 +287,8 @@ int ObTrafficControl::ObSharedDeviceControlV2::update_limit(const obrpc::ObShare
   }
   return ret;
 }
-ObTrafficControl::ObTrafficControl()
+ObTrafficControl::ObTrafficControl() :
+    rw_lock_(common::ObLatchIds::OB_TRAFFIC_CONTROL_DRW_LOCK)
 {
   int ret = OB_SUCCESS;
   set_device_bandwidth(observer::ObServer::DEFAULT_ETHERNET_SPEED);
@@ -1051,7 +1052,6 @@ int ObIOManager::pread(ObIOInfo &info, int64_t &read_size)
     LOG_WARN("invalid argument", K(ret), K(info));
   } else {
     info.flag_.set_read();
-    info.flag_.set_sync();
     info.timeout_us_ = MAX_IO_WAIT_TIME_MS * 1000;
     ObIOHandle handle;
     if (OB_FAIL(tenant_aio(info, handle))) {
@@ -1090,7 +1090,6 @@ int ObIOManager::pwrite(ObIOInfo &info, int64_t &write_size)
     LOG_WARN("invalid argument", K(ret), K(info));
   } else {
     info.flag_.set_write();
-    info.flag_.set_sync();
     info.timeout_us_ = MAX_IO_WAIT_TIME_MS * 1000;
     ObIOHandle handle;
     if (OB_FAIL(tenant_aio(info, handle))) {
@@ -1244,7 +1243,6 @@ int ObIOManager::add_device_channel(ObIODevice *device_handle,
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  /* object device async channel count allow set 0 */
   } else if (OB_ISNULL(device_handle) || async_channel_thread_count < 0 || sync_channel_thread_count < 0 || max_io_depth <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(device_handle), K(async_channel_thread_count), K(sync_channel_thread_count), K(max_io_depth));
@@ -1261,7 +1259,7 @@ int ObIOManager::add_device_channel(ObIODevice *device_handle,
   } else if (OB_FAIL(channel_map_.set_refactored(reinterpret_cast<int64_t>(device_handle), device_channel))) {
     LOG_WARN("set channel map failed", K(ret), KP(device_handle));
   } else {
-    LOG_INFO("add io device channel succ", KP(device_handle));
+    LOG_INFO("add io device channel succ", KP(device_handle), K(async_channel_thread_count), K(sync_channel_thread_count), K(max_io_depth));
     device_channel = nullptr;
   }
   if (OB_UNLIKELY(nullptr != device_channel)) {
@@ -1510,6 +1508,267 @@ int64_t ObIOManager::get_object_storage_io_timeout_ms(const uint64_t tenant_id) 
   return timeout_ms;
 }
 
+int ObIOManager::exist(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.user_data_buf_ = (char*)&exist;
+  info.offset_ = 0;
+  info.size_ = sizeof(bool);
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::EXIST);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+int ObIOManager::adaptive_exist(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.user_data_buf_ = (char*)&exist;
+  info.offset_ = 0;
+  info.size_ = sizeof(bool);
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::ADAPTIVE_EXIST);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+
+int ObIOManager::stat(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri, ObIODFileStat &statbuf)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.user_data_buf_ = (char*)&statbuf;
+  info.offset_ = 0;
+  info.size_ = sizeof(ObIODFileStat);
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::STAT);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+
+int ObIOManager::adaptive_stat(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri, ObIODFileStat &statbuf)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.user_data_buf_ = (char*)&statbuf;
+  info.offset_ = 0;
+  info.size_ = sizeof(ObIODFileStat);
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::ADAPTIVE_STAT);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+
+int ObIOManager::unlink(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::UNLINK);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+
+int ObIOManager::adaptive_unlink(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::ADAPTIVE_UNLINK);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+
+int ObIOManager::mkdir(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::MKDIR);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+int ObIOManager::rmdir(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::RMDIR);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+int ObIOManager::is_tagging(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri, bool &is_tagging)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.user_data_buf_ = (char*)&is_tagging;
+  info.offset_ = 0;
+  info.size_ = sizeof(bool);
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::IS_TAGGING);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+int ObIOManager::complete(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::COMPLETE);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+int ObIOManager::abort(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::ABORT);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+int ObIOManager::seal_file(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri)
+{
+  int ret = OB_SUCCESS;
+  ObIOHandle handle;
+  ObIOInfo info;
+  info.tenant_id_ = tenant_id;
+  info.fd_ = fd;
+  info.uri_ = uri;
+  info.timeout_us_ = get_object_storage_io_timeout_ms(tenant_id) * 1000L;
+  info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  info.flag_.set_read(ObIOReadMode::SEAL_FILE);
+  if (OB_FAIL(read(info, handle))) {
+    LOG_WARN("io read failed", K(ret), K(info));
+  }
+  return ret;
+}
+int ObIOManager::scan_dir(const ObString &uri, ObIODevice *device_handle, ObBaseDirEntryOperator &op)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == device_handle) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(device_handle->scan_dir(uri.ptr(), op))) {
+    LOG_WARN("fail to batch del files!", K(ret), KP(device_handle));
+  }
+  return ret;
+}
+int ObIOManager::adaptive_scan_dir(const ObString &uri, ObIODevice *device_handle, ObBaseDirEntryOperator &op)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == device_handle) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(device_handle->scan_dir(uri.ptr(), op))) {
+    LOG_WARN("fail to batch del files!", K(ret), KP(device_handle));
+  }
+  return ret;
+}
+
+int ObIOManager::batch_del_files(ObIODevice *device_handle,
+    ObIArray<ObString> &files_to_delete,
+    ObIArray<int64_t> &failed_files_idx)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == device_handle) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(device_handle->batch_del_files(files_to_delete, failed_files_idx))) {
+    LOG_WARN("fail to batch del files!", K(ret), KP(device_handle));
+  }
+  return ret;
+}
+
 /******************             TenantIOManager              **********************/
 
 int ObTenantIOManager::mtl_new(ObTenantIOManager *&io_service)
@@ -1590,6 +1849,8 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   const uint8_t IO_MODE_CNT = static_cast<uint8_t>(ObIOMode::MAX_MODE) + 1;
+  tenant_id_ = tenant_id;
+  io_scheduler_ = io_scheduler;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
@@ -1612,7 +1873,7 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
     LOG_WARN("init io usage failed", K(ret), K(io_mem_stats_), K(SYS_MODULE_CNT), K(io_config.group_configs_.count()));
   } else if (OB_FAIL(io_clock_.init(tenant_id , io_config, &io_usage_))) {
     LOG_WARN("init io clock failed", K(ret), K(io_config));
-  } else if (OB_FAIL(io_scheduler->init_group_queues(tenant_id, io_config.group_configs_.count(), &io_allocator_))) {
+  } else if (OB_FAIL(io_scheduler_->init_group_queues(tenant_id, io_config.group_configs_.count(), &io_allocator_))) {
     LOG_WARN("init io map failed", K(ret), K(tenant_id), K(io_allocator_));
   } else if (OB_FAIL(init_group_index_map(tenant_id, io_config))) {
     LOG_WARN("init group map failed", K(ret));
@@ -1624,8 +1885,6 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
   } else if (OB_FAIL(qsched_.init(tenant_id, io_config))) {
     LOG_WARN("init qsched failed", K(ret), K(io_config));
   } else {
-    tenant_id_ = tenant_id;
-    io_scheduler_ = io_scheduler;
     local_iops_util_ = 0;
     inc_ref();
     is_inited_ = true;
@@ -1644,7 +1903,7 @@ void ObTenantIOManager::destroy()
   if (is_inited_) {
     while (1 != get_ref_cnt()) {
       if (REACH_TIME_INTERVAL(1000L * 1000L)) { //1s
-        LOG_INFO("wait tenant io manager quit", K(MTL_ID()), K(start_ts), K(get_ref_cnt()));
+        LOG_INFO("wait tenant io manager quit", K(tenant_id_), K(start_ts), K(get_ref_cnt()));
       }
       ob_usleep((useconds_t)10L * 1000L); //10ms
     }
@@ -1653,8 +1912,8 @@ void ObTenantIOManager::destroy()
   }
 
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(io_scheduler_) && OB_FAIL(io_scheduler_->remove_phyqueues(MTL_ID()))) {
-    LOG_WARN("remove phy_queues from map failed", K(ret), K(MTL_ID()));
+  if (OB_NOT_NULL(io_scheduler_) && OB_FAIL(io_scheduler_->remove_phyqueues(tenant_id_))) {
+    LOG_WARN("remove phy_queues from map failed", K(ret), K(tenant_id_));
   }
 
   io_clock_.destroy();

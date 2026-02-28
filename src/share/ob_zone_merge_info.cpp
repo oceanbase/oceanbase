@@ -221,7 +221,8 @@ bool ObZoneMergeInfo::is_valid() const
   INIT_VAL_ITEM(error_type, 0, false),                           \
   INIT_VAL_ITEM(suspend_merging, 0, false),                      \
   INIT_VAL_ITEM(merge_start_time, 0, false),                     \
-  INIT_VAL_ITEM(last_merged_time, 0, false)
+  INIT_VAL_ITEM(last_merged_time, 0, false),                     \
+  INIT_VAL_ITEM(merge_mode, 0, false)
 
 ObGlobalMergeInfo::ObGlobalMergeInfo()
   : tenant_id_(OB_INVALID_TENANT_ID),
@@ -273,13 +274,27 @@ bool ObGlobalMergeInfo::is_in_verifying_status() const
   return (ObZoneMergeInfo::MERGE_STATUS_VERIFYING == merge_status_.get_value());
 }
 
+bool ObGlobalMergeInfo::is_idle_status() const
+{
+  return (ObZoneMergeInfo::MERGE_STATUS_IDLE == merge_status_.get_value());
+}
+
+bool ObGlobalMergeInfo::is_window_merge_mode() const
+{
+  return (ObGlobalMergeInfo::MERGE_MODE_WINDOW == merge_mode_.get_value());
+}
+
 bool ObGlobalMergeInfo::is_valid() const
 {
   bool is_valid = true;
   if ((OB_INVALID_TENANT_ID == tenant_id_)
       || (!frozen_scn_.is_valid())
       || (!global_broadcast_scn_.is_valid())
-      || (!last_merged_scn_.is_valid())) {
+      || (!last_merged_scn_.is_valid())
+      || (merge_status_.get_value() < ObZoneMergeInfo::MERGE_STATUS_IDLE)
+      || (merge_status_.get_value() >= ObZoneMergeInfo::MERGE_STATUS_MAX)
+      || (merge_mode_.get_value() < ObGlobalMergeInfo::MERGE_MODE_TENANT)
+      || (merge_mode_.get_value() >= ObGlobalMergeInfo::MERGE_MODE_MAX)) {
     is_valid = false;
   }
   return is_valid;

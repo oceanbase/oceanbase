@@ -55,11 +55,14 @@ void TestConstDecoder::batch_decode_to_vector_no_exc_test(const VectorFormat vec
     rows[i].deep_copy(row, test_allocator);
   }
 
-  char *buf = NULL;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder_.data_buffer_.data();
+  const int64_t size = encoder_.data_buffer_.size();
+
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
 
   ObArenaAllocator frame_allocator;
@@ -117,12 +120,14 @@ TEST_F(TestConstDecoder, no_exception_nu_nn)
     ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
   }
 
-  char *buf = NULL;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder_.data_buffer_.data();
+  const int64_t size = encoder_.data_buffer_.size();
 
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
   sql::ObPushdownWhiteFilterNode white_filter(allocator_);
   ObMalloc mallocer;
@@ -161,12 +166,15 @@ TEST_F(TestConstDecoder, no_exception_other)
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed_2, row));
     ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
   }
-  char *buf = NULL;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder_.data_buffer_.data();
+  const int64_t size = encoder_.data_buffer_.size();
+
   // Dedcode and filter_push_down
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
 
   for (int64_t i = 0; i < full_column_cnt_; ++i) {
@@ -258,11 +266,14 @@ TEST_F(TestConstDecoder, filter_push_down_nu_nn_eq_ne)
   int64_t seed2_count = 2;
   int64_t null_count = 1;
 
-  char* buf = NULL;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder_.data_buffer_.data();
+  const int64_t size = encoder_.data_buffer_.size();
+
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
   sql::ObPushdownWhiteFilterNode white_filter(allocator_);
 
@@ -390,12 +401,14 @@ TEST_F(TestConstDecoder, filter_push_down_gt_lt_ge_le)
   int64_t seed2_count = 1;
   int64_t null_count = 1;
 
-  char *buf = NULL;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder_.data_buffer_.data();
+  const int64_t size = encoder_.data_buffer_.size();
 
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
 
   for (int64_t i = 0; i < full_column_cnt_ - 1; ++i) {
@@ -570,12 +583,14 @@ TEST_F(TestConstDecoder, filter_push_down_bt)
   int64_t seed2_count = 4;
   int64_t seed3_count = 1;
 
-  char *buf = NULL;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder_.data_buffer_.data();
+  const int64_t size = encoder_.data_buffer_.size();
 
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
 
   for (int64_t i = 0; i < full_column_cnt_; ++i) {
@@ -679,12 +694,14 @@ TEST_F(TestConstDecoder, filter_push_down_in)
   int64_t null_count = 1;
   int64_t seed5_count = 0;
 
-  char *buf = NULL;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder_.data_buffer_.data();
+  const int64_t size = encoder_.data_buffer_.size();
 
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
 
   for (int64_t i = 0; i < full_column_cnt_; ++i) {
@@ -767,11 +784,14 @@ TEST_F(TestConstDecoder, batch_decode_to_datum_test_without_expection)
     rows[i].deep_copy(row, allocator_);
   }
 
-  char *buf = NULL;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder_.data_buffer_.data();
+  const int64_t size = encoder_.data_buffer_.size();
+
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
   const ObRowHeader *row_header = nullptr;
   int64_t row_len = 0;
@@ -849,11 +869,14 @@ TEST_F(TestConstDecoder, cell_decode_to_datum_test_without_expection)
     rows[i].deep_copy(row, allocator_);
   }
 
-  char *buf = NULL;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder_.data_buffer_.data();
+  const int64_t size = encoder_.data_buffer_.size();
+
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
   int64_t row_len = 0;
   const char *row_data = nullptr;

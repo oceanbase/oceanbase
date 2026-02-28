@@ -29,6 +29,7 @@ public:
       : is_inited_(false),
         allocator_("TbObjPoolMgr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         sess_pool_(nullptr),
+        lock_(common::ObLatchIds::OB_TABLE_OBJECT_POOL_LOCK),
         ls_op_pool_(MTL_ID(), "LsOpPool", static_cast<omt::ObTenant *>(MTL_CTX())->max_worker_cnt(), REQUESE_RESULT_RETIRE_TIME),
         ls_res_pool_(MTL_ID(), "LsOpPool", static_cast<omt::ObTenant *>(MTL_CTX())->max_worker_cnt(), REQUESE_RESULT_RETIRE_TIME)
   {

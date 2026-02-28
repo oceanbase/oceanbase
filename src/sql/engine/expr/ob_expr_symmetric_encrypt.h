@@ -50,6 +50,39 @@ public:
                           const share::ObCipherOpMode op_mode,
                           const ObString &func_name,
                           ObDatum &res);
+  template <typename SrcVec, typename KeyVec, typename IvVec, typename ResVec>
+  static int eval_decrypt_vector(VECTOR_EVAL_FUNC_ARG_DECL,
+                                const share::ObCipherOpMode op_mode,
+                                const ObString &func_name);
+private:
+  OB_INLINE static int eval_decrypt_inner(const ObString &src_str,
+                                          const ObString &key_str,
+                                          const ObString &iv_str,
+                                          const share::ObCipherOpMode op_mode,
+                                          ObIAllocator &alloc,
+                                          char *&buf,
+                                          int64_t &out_len,
+                                          bool &is_null_result)
+  {
+    int ret = OB_SUCCESS;
+    const int64_t buf_len = src_str.length() + 1;
+    is_null_result = false;
+    buf = NULL;
+    if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_ENG_LOG(WARN, "alloc mem failed", K(ret), K(buf_len));
+    } else if (OB_FAIL(share::ObBlockCipher::decrypt(key_str.ptr(), key_str.length(),
+                                                     src_str.ptr(), src_str.length(), buf_len,
+                                                     iv_str.ptr(), iv_str.length(), NULL, 0, NULL, 0,
+                                                     op_mode, buf, out_len))) {
+      SQL_ENG_LOG(WARN, "failed to decrypt", K(ret));
+    }
+    if (OB_ERR_AES_DECRYPT == ret) {
+      is_null_result = true;
+      ret = OB_SUCCESS;
+    }
+    return ret;
+  }
 };
 
 class ObExprAesEncrypt : public ObExprBaseEncrypt
@@ -76,6 +109,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_aes_decrypt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  static int eval_aes_decrypt_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprAesDecrypt);
 };

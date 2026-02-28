@@ -30,7 +30,17 @@ int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
 {
   int ret = OB_SUCCESS;
   bool has_file_format = false;
-  if (OB_FAIL(format.csv_format_.init_format(ObDataInFileStruct(),
+  ObDataInFileStruct data_in_file_struct;
+  bool default_csv_escape_char_is_none = true;
+  OZ(params.session_info_->check_feature_enable(
+                      ObCompatFeatureType::DEFAULT_CSV_ESCAPE_CHAR_IS_NONE,
+                      default_csv_escape_char_is_none));
+  // feature version >= 4.5.1.0, default escaped char is none in external table and url table
+  if (OB_SUCC(ret) && default_csv_escape_char_is_none) {
+    data_in_file_struct.field_escaped_char_ = INT64_MAX;
+    data_in_file_struct.field_escaped_str_ = "";
+  }
+  if (OB_SUCC(ret) && OB_FAIL(format.csv_format_.init_format(data_in_file_struct,
                                             OB_MAX_COLUMN_NUMBER,
                                             CS_TYPE_UTF8MB4_BIN))) {
     LOG_WARN("failed to init csv format", K(ret));
@@ -67,18 +77,33 @@ int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
   }
   // resolve other format value
   ff_ctx.reset();
-  for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
-    if (OB_ISNULL(format_node->children_[i])) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(format_node->num_child_));
-    } else if (OB_FAIL(ObResolverUtils::resolve_file_format(format_node->children_[i], format, params, ff_ctx))) {
-      LOG_WARN("fail to resolve file format", K(ret));
+  if (OB_SUCC(ret)) {
+    if (ObExternalFileFormat::KAFKA_FORMAT == format.format_type_) {
+      for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
+        if (OB_ISNULL(format_node->children_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed. get unexpected NULL ptr", KR(ret), K(format_node->num_child_));
+        } else if (OB_FAIL(ObResolverUtils::resolve_kafka_format(format_node->children_[i], format, params))) {
+          LOG_WARN("fail to resolve file format", KR(ret));
+        }
+      }
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
+        if (OB_ISNULL(format_node->children_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(format_node->num_child_));
+        } else if (OB_FAIL(ObResolverUtils::resolve_file_format(format_node->children_[i], format, params, ff_ctx))) {
+          LOG_WARN("fail to resolve file format", K(ret));
+        }
+      }
     }
   }
   if (OB_SUCC(ret)) {
     bool is_valid = true;
     if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ && OB_FAIL(format.odps_format_.encrypt())) {
       LOG_WARN("failed to encrypt odps format", K(ret));
+    } else if (ObExternalFileFormat::KAFKA_FORMAT == format.format_type_ && OB_FAIL(format.kafka_format_.encrypt(*params.allocator_))) {
+      LOG_WARN("failed to encrypt kafka format", K(ret));
     } else if (OB_FAIL(ObDDLResolver::check_format_valid(format, is_valid))) {
       LOG_WARN("check format valid failed", K(ret));
     } else if (!is_valid) {

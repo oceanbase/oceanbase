@@ -16,6 +16,7 @@
 #include "share/transfer/ob_transfer_info.h"
 #include "share/ob_ls_id.h"
 #include "common/ob_member_list.h"
+#include "common/ob_learner_list.h"
 #include "ob_transfer_lock_info_operator.h"
 #include "storage/ls/ob_ls.h"
 
@@ -24,15 +25,18 @@ namespace storage {
 
 class ObMemberListLockUtils {
 public:
-  /* member list*/
-  static int batch_lock_ls_member_list(const uint64_t tenant_id, const int64_t task_id,
+  /* member list and learner list */
+  static int batch_lock_ls_member_and_learner_list(const uint64_t tenant_id, const int64_t task_id,
       const common::ObArray<share::ObLSID> &lock_ls_list, const common::ObMemberList &member_list,
-      const ObTransferLockStatus &status, const int32_t group_id, const share::ObLSID &unlock_check_ls_id, common::ObMySQLProxy &sql_proxy);
-  static int lock_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
-      const common::ObMemberList &member_list, const ObTransferLockStatus &status, const int32_t group_id,
+      const common::GlobalLearnerList &learner_list, const ObTransferLockStatus &status,
+      const int32_t group_id, const share::ObLSID &unlock_check_ls_id, common::ObMySQLProxy &sql_proxy);
+  static int lock_ls_member_and_learner_list(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
+      const common::ObMemberList &member_list, const common::GlobalLearnerList &learner_list,
+      const ObTransferLockStatus &status, const int32_t group_id,
       const share::ObLSID &unlock_check_ls_id, common::ObMySQLProxy &sql_proxy);
-  static int unlock_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
-      const common::ObMemberList &member_list, const ObTransferLockStatus &status, const int32_t group_id,
+  static int unlock_ls_member_and_learner_list(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
+      const common::ObMemberList &member_list, const common::GlobalLearnerList &learner_list,
+      const ObTransferLockStatus &status, const int32_t group_id,
       const bool need_check_palf_leader, const share::ObLSID &need_check_palf_leader_ls_id, common::ObMySQLProxy &sql_proxy);
   static int unlock_for_ob_admin(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t lock_id);
 

@@ -665,7 +665,9 @@ int ObLS::stop_()
 
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
-      ls_prewarm_handler_.stop();
+      if (FAILEDx(ls_prewarm_handler_.stop())) {
+        LOG_WARN("fail to stop ls prewarm handler", KR(ret));
+      }
       primary_sswriter_ls_handler_.stop();
       restore_sswriter_ls_handler_.stop();
     }
@@ -1224,7 +1226,7 @@ int ObLS::register_sys_service()
   if (ls_id.is_sys_ls()) {
     REGISTER_TO_LOGSERVICE(BACKUP_TASK_SCHEDULER_LOG_BASE_TYPE, MTL(ObBackupTaskScheduler *));
     REGISTER_TO_LOGSERVICE(BACKUP_DATA_SERVICE_LOG_BASE_TYPE, MTL(ObBackupDataService *));
-    REGISTER_TO_LOGSERVICE(BACKUP_CLEAN_SERVICE_LOG_BASE_TYPE, MTL(ObBackupCleanService *));
+    REGISTER_TO_LOGSERVICE(BACKUP_CLEAN_SERVICE_LOG_BASE_TYPE, MTL(ObBackupMgrService *));
     REGISTER_TO_LOGSERVICE(BACKUP_ARCHIVE_SERVICE_LOG_BASE_TYPE, MTL(ObArchiveSchedulerService *));
     REGISTER_TO_LOGSERVICE(COMMON_LS_SERVICE_LOG_BASE_TYPE, MTL(ObCommonLSService *));
     REGISTER_TO_LOGSERVICE(DISASTER_RECOVERY_SERVICE_LOG_BASE_TYPE, MTL(ObDRService *));
@@ -1292,13 +1294,13 @@ int ObLS::register_user_service()
     REGISTER_TO_LOGSERVICE(VEC_INDEX_SERVICE_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
   }
 
-  if (ls_id.is_user_ls()) {
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
-        LOG_WARN("fail to init tablet ttl manager", KR(ret));
-      } else {
-        REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
-        // reuse ttl timer
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
+      LOG_WARN("fail to init tablet ttl manager", KR(ret));
+    } else {
+      REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
+      // reuse ttl timer
+      if (ls_id.is_user_ls()) {
         REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
       }
     }
@@ -1412,7 +1414,7 @@ void ObLS::unregister_sys_service_()
     UNREGISTER_FROM_LOGSERVICE(BACKUP_TASK_SCHEDULER_LOG_BASE_TYPE, backup_task_scheduler);
     ObBackupDataService* backup_data_service = MTL(ObBackupDataService*);
     UNREGISTER_FROM_LOGSERVICE(BACKUP_DATA_SERVICE_LOG_BASE_TYPE, backup_data_service);
-    ObBackupCleanService* backup_clean_service = MTL(ObBackupCleanService*);
+    ObBackupMgrService* backup_clean_service = MTL(ObBackupMgrService*);
     UNREGISTER_FROM_LOGSERVICE(BACKUP_CLEAN_SERVICE_LOG_BASE_TYPE, backup_clean_service);
     ObArchiveSchedulerService* backup_archive_service = MTL(ObArchiveSchedulerService*);
     UNREGISTER_FROM_LOGSERVICE(BACKUP_ARCHIVE_SERVICE_LOG_BASE_TYPE, backup_archive_service);
@@ -1486,9 +1488,9 @@ void ObLS::unregister_user_service_()
   }
   if (ls_meta_.ls_id_.is_user_ls()) {
     UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
-    UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
-    tablet_ttl_mgr_.destroy();
   }
+  UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
+  tablet_ttl_mgr_.destroy();
 }
 
 void ObLS::unregister_from_service_()

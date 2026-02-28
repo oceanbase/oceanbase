@@ -129,9 +129,9 @@ int ObMacroBlockRewriteSeqGenerator::generate_next_sequence(uint64_t &blk_seq) {
  */
 ObBlockManager::ObBlockManager()
     : bucket_lock_(), block_map_(), super_block_fd_(), default_block_size_(0),
-      marker_status_(), marker_lock_(), is_mark_sweep_enabled_(false),
-      sweep_lock_(), mark_block_task_(*this), inspect_bad_block_task_(*this),
-      timer_(), bad_block_lock_(), io_device_(NULL), blk_seq_generator_(),
+      marker_status_(), marker_lock_(common::ObLatchIds::OB_BLOCK_MANAGER_MARKER_LOCK), is_mark_sweep_enabled_(false),
+      sweep_lock_(common::ObLatchIds::OB_BLOCK_MANAGER_SWEEP_LOCK), mark_block_task_(*this), inspect_bad_block_task_(*this),
+      timer_(), bad_block_lock_(common::ObLatchIds::OB_BLOCK_MANAGER_BAD_BLOCK_LOCK), io_device_(NULL), blk_seq_generator_(),
       alloc_num_(0), group_id_(0), is_inited_(false), is_started_(false),
       pending_free_count_(0) {}
 
@@ -152,7 +152,7 @@ int ObBlockManager::init(ObIODevice *io_device, const int64_t block_size) {
   } else if (OB_FAIL(timer_.init("BlkMgr"))) {
     LOG_WARN("fail to init timer", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT,
-                                       ObLatchIds::BLOCK_MANAGER_LOCK))) {
+                                       ObLatchIds::OB_BLOCK_MANAGER_BUCKET_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else if (OB_FAIL(block_map_.init(SET_USE_UNEXPECTED_500(
                  ObMemAttr(OB_SERVER_TENANT_ID, "BlockMap"))))) {
@@ -257,25 +257,30 @@ int ObBlockManager::alloc_object(ObStorageObjectHandle &object_handle) {
   ObIODOpts opts;
   uint64_t write_seq = 0;
   ObIODOpt opt_array[1];
+  bool need_retry = true;
 
   if (IS_NOT_INIT || !is_started()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBlockManager not init", K(ret));
-  } else if (OB_FAIL(io_device_->alloc_block(&opts, io_fd))) {
-    if (ret != OB_SERVER_OUTOF_DISK_SPACE) {
-      LOG_WARN("Failed to alloc block from io device", K(ret));
+    need_retry = false;
     }
-  }
-  // try alloc block
-  if (ret == OB_SERVER_OUTOF_DISK_SPACE) {
-    if (OB_FAIL(extend_file_size_if_need())) { // block to get disk
-      ret = OB_SERVER_OUTOF_DISK_SPACE;        // reuse last ret code
-      LOG_ERROR("The data file disk space is exhausted. Please expand the capacity by resizing datafile!!!", K(ret));
-    } else if (OB_FAIL(io_device_->alloc_block(&opts, io_fd))) {
+
+  while (need_retry) {
+    ret = io_device_->alloc_block(&opts, io_fd);
       if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
-        LOG_ERROR("The data file disk space is exhausted. Please expand the capacity by resizing datafile!!!", K(ret));
+      const int tmp_ret = extend_file_size_if_need();
+      if (OB_SUCCESS == tmp_ret || OB_EAGAIN == tmp_ret) {
+        // need to retry
       } else {
-        LOG_ERROR("Failed to alloc block from io device", K(ret));
+        ret = OB_SERVER_OUTOF_DISK_SPACE;
+        need_retry = false;
+        LOG_ERROR("The data file disk space is exhausted. Please expand the capacity by resizing datafile!!!",
+                  K(ret), K(tmp_ret));
+      }
+    } else {
+      need_retry = false;
+      if (OB_FAIL(ret) && ret != OB_SERVER_OUTOF_DISK_SPACE) {
+        LOG_WARN("Failed to alloc block from io device", K(ret));
       }
     }
   }
@@ -1425,10 +1430,9 @@ int ObBlockManager::mark_tablet_block(
                   ->is_empty_shell()) { // empty shell may don't have macro info
     ObArenaAllocator allocator("MarkTabletBlock");
     ObTabletMacroInfo *macro_info = nullptr;
-    bool in_memory = true;
     ObMacroInfoIterator macro_iter;
     if (OB_FAIL(tablet->load_macro_info(0 /* ls_epoch in shared_storage */,
-                                        allocator, macro_info, in_memory))) {
+                                        allocator, macro_info))) {
       LOG_WARN("fail to load macro info", K(ret));
     } else if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, *macro_info))) {
       LOG_WARN("fail to init macro iterator", K(ret), KPC(macro_info));
@@ -1448,7 +1452,7 @@ int ObBlockManager::mark_tablet_block(
         LOG_WARN("fail to mark macro id", K(ret), K(block_info));
       }
     }
-    if (OB_NOT_NULL(macro_info) && !in_memory) {
+    if (OB_NOT_NULL(macro_info)) {
       macro_info->reset();
     }
   }
@@ -1813,14 +1817,15 @@ int ObBlockManager::extend_file_size_if_need() {
 
       int64_t suggest_extend_size = 0;
       int64_t datafile_disk_percentage = 0;
+      int64_t cur_datafile_size = 0;
 
       if (OB_FAIL(observer::ObServerUtils::calc_auto_extend_size(
-              suggest_extend_size))) {
+              cur_datafile_size, suggest_extend_size))) {
         LOG_DEBUG("calc auto extend size error, maybe ssblock file has reach "
                   "it's max size",
                   K(ret));
       } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.resize_local_device(
-                     suggest_extend_size, datafile_disk_percentage,
+                     cur_datafile_size, suggest_extend_size, datafile_disk_percentage,
                      reserved_size))) {
         LOG_WARN("Fail to resize file in auto extend", K(ret),
                  K(suggest_extend_size));

@@ -89,6 +89,7 @@ private:
   int resolve_repeat_interval(const ObString &repeat_interval);
   //计算 calendar 表达式不需要开始时间
   int calc_expr(int64_t start_date, int64_t &next_date, int64_t base_date, int64_t return_date_after);
+  int freq_interval_to_ts(int64_t &repeat_interval_ts);
 
   bool find_second();
   bool find_minute();
@@ -99,6 +100,7 @@ private:
   bool find_weekno();
   bool find_month();
 
+  bool should_continue_loop(int &loop_count, int &ret, time_t find_time);
 
   int hand_yearly();
   int hand_monthly();

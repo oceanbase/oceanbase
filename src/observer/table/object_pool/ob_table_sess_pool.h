@@ -41,6 +41,7 @@ public:
   explicit ObTableApiSessPool()
       : allocator_(MTL_ID()),
         is_inited_(false),
+        retired_nodes_lock_(common::ObLatchIds::OB_TABLE_SESS_POOL_RETIRED_NODES_LOCK),
         last_update_ts_(0)
   {}
   ~ObTableApiSessPool() { destroy(); };

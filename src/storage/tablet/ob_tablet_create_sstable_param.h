@@ -108,7 +108,7 @@ public:
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_split(const ObTabletID &dst_tablet_id,
-                     const ObITable::TableKey &src_table_key,
+                     const blocksstable::ObSSTable &src_sstable,
                      const blocksstable::ObSSTableBasicMeta &basic_meta,
                      const int64_t schema_version,
                      const ObIArray<blocksstable::MacroBlockId> &split_point_macros_id,
@@ -228,7 +228,8 @@ public:
       K_(co_base_snapshot_version),
       K_(uncommit_tx_info),
       K_(rec_scn),
-      K_(upper_trans_version));
+      K_(upper_trans_version),
+      K_(min_merged_trans_version));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
@@ -296,6 +297,7 @@ public:
   compaction::ObMemUncommitTxInfo uncommit_tx_info_;
   share::SCN rec_scn_;
   int64_t upper_trans_version_;
+  int64_t min_merged_trans_version_;
 };
 
 } // namespace storage

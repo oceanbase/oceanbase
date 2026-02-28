@@ -20,6 +20,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <stdio.h>
+#include <s2/base/casts.h>
 
 using namespace oceanbase;
 using namespace oceanbase::share;

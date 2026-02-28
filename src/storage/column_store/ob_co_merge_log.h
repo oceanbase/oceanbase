@@ -38,6 +38,9 @@ public:
     DELETE_RANGE, // filtered by compaction_filter
     INVALID
   };
+  const static char *OpTypeStr[];
+  const static char *get_op_type_str(const int64_t idx);
+  static bool is_valid_op_type(const OpType op_type) { return op_type >= INSERT && op_type < INVALID; }
   ObMergeLog()
     : op_(INVALID),
       major_idx_(-1),
@@ -62,8 +65,8 @@ public:
   }
   bool is_valid() const { return OpType::INVALID > op_ && 0 < op_; }
   bool is_continuous(const ObMergeLog &pre)
-  {
-    return REPLAY == op_ &&
+  { // same op & major_idx
+    return is_range_mergelog() &&
            (!pre.is_valid() ||
            (op_ == pre.op_ && major_idx_ == pre.major_idx_ && row_id_ >= pre.row_id_));
   }
@@ -77,7 +80,9 @@ public:
     major_idx_ = other.major_idx_;
     row_id_ = other.row_id_;
   }
-  TO_STRING_KV(K_(op), K_(major_idx), K_(row_id))
+  bool is_range_mergelog() const { return REPLAY == op_ || DELETE_RANGE == op_; }
+  bool is_delete_mergelog() const { return DELETE == op_ || DELETE_RANGE == op_; }
+  TO_STRING_KV("op", get_op_type_str(op_), K_(major_idx), K_(row_id))
   OpType op_;
   int32_t major_idx_;
   int64_t row_id_;
@@ -463,7 +468,8 @@ public:
       row_file_count_(0),
       log_file_(),
       row_files_(nullptr),
-      allocator_("LogFileMgr")
+      allocator_("LogFileMgr"),
+      release_lock_(common::ObLatchIds::OB_CO_TABLET_MERGE_CTX_MUTEX)
   {}
   virtual ~ObCOMergeLogFileMgr() { reset(); }
   int init(
@@ -472,7 +478,7 @@ public:
       const bool skip_base_cg = false);
   void reset();
   int close_part(const int64_t start_cg_idx, const int64_t end_cg_idx);
-  int check_could_release(bool &could_release);
+  int try_release();
 
   int get_row_file(const int64_t idx, ObCOMergeLogFile *&file);
   int get_log_file(ObCOMergeLogFile *&file);
@@ -492,6 +498,7 @@ private:
   ObCOMergeLogFile log_file_;
   ObCOMergeLogFile **row_files_;
   ObLocalArena allocator_;
+  lib::ObMutex release_lock_;
 };
 }
 }

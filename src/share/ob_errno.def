@@ -481,6 +481,9 @@ DEFINE_ERROR(OB_MIGRATE_TX_DATA_NOT_CONTINUES, -4408, -1, "HY000", "migrate tx d
 DEFINE_ERROR(OB_INVALID_ZERO_DATE, -4409, -1, "HY000", "invalid zero date in no_zero_date mode");
 DEFINE_ERROR(OB_LS_NOT_IN_LEARNER_LIST, -4410, -1, "HY000", "ls not in learner list");
 DEFINE_ERROR(OB_MEMORY_LEAK, -4411, -1, "HY000", "observer has memory leak");
+DEFINE_ERROR(OB_OUT_OF_MAX_EXECUTION_TIME, -4412, ER_QUERY_TIMEOUT, "HY000", "Query execution was interrupted, maximum statement execution time exceeded. maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again");
+DEFINE_ERROR(OB_ERR_MAX_EXECUTION_TIME_TRUNCATED, -4413, WARN_DATA_TRUNCATED, "01000", "Max execution time is truncated to the range [0, 4294967295]");
+DEFINE_ERROR(OB_NON_RO_SELECT_DISABLE_TIMER, -4414, ER_NON_RO_SELECT_DISABLE_TIMER, "HY000", "Select is not a read only statement, disabling timer");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // 通用错误码值域[-4000, -4500)，含sstable等
@@ -1846,7 +1849,10 @@ DEFINE_ERROR(INCORRECT_ARGUMENTS_TO_URL_DECODE, -6286, ER_WRONG_ARGUMENTS, "HY00
 
 // for tx pending log
 DEFINE_ERROR(OB_TX_PENDING_LOG_OVERFLOW, -6288, -1, "HY000", "too many pending log in the trx");
+
+// for hostspot group commit
 DEFINE_ERROR(OB_TX_NOT_SUPPORT_AGGREGATION, -6289, -1, "HY000", "This transaction is not eligible for aggregation");
+DEFINE_ERROR(OB_ROLLBACK_ON_NO_AFFECTED_ROWS, -6290, -1, "HY000", "Transaction rollbacked as no rows were affected")
 
 // for clog
 DEFINE_ERROR(OB_LOG_ID_NOT_FOUND, -6301, -1, "HY000", "log id not found");
@@ -2387,6 +2393,8 @@ DEFINE_ERROR_EXT(OB_BACKUP_CLEAN_CAN_NOT_START, -9151, -1, "HY000", "backup clea
 DEFINE_ERROR_EXT_DEP(OB_BACKUP_DEVICE_NOT_MOUNTED, -9152, -1, "HY000", "backup device may be not mounted", "backup device may be not mounted, %s did not read any data written by %s");
 DEFINE_ERROR_EXT_DEP(OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT, -9153, -1, "HY000", "backup device is not read & write strongly consistent", "backup device is not read and write strongly consistent. %s did not read the latest data written by %s.");
 DEFINE_ERROR(OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT, -9154, -1, "HY000", "ls archive max scn less than checkpoint scn");
+DEFINE_ERROR_DEP(OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE, -9155, -1, "HY000", "micro block is too large and rejected from micro cache");
+DEFINE_ERROR_DEP(OB_SS_LS_IN_GC_STATUS, -9156, -1, "HY000", "ss ls is in gc status");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////

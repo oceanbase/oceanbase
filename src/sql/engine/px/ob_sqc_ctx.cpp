@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/ob_sqc_ctx.h"
+#include "sql/table_format/iceberg/spec/manifest.h"
 
 using namespace oceanbase::sql;
 
@@ -40,7 +41,9 @@ ObSqcCtx::ObSqcCtx(ObPxRpcInitSqcArgs &sqc_arg) : msg_loop_(),
       join_filter_count_row_whole_msg_proc_(msg_proc_),
       arena_allocator_(),
       direct_load_mgr_handles_(nullptr),
-      lob_direct_load_mgr_handles_(nullptr)
+      lob_direct_load_mgr_handles_(nullptr),
+      iceberg_data_files_(),
+      iceberg_data_file_lock_(common::ObLatchIds::SQC_CTX_ICEBERG_DATA_FILES_LOCK)
 {
   arena_allocator_.set_attr(ObMemAttr(MTL_ID(),"DDL_DLM"));
 }

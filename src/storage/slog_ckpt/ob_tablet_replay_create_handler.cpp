@@ -198,7 +198,8 @@ int ObTabletReplayCreateHandler::concurrent_replay(ObStartupAccelTaskHandler* st
 #define ADD_ITEM_RANGE_TO_TASK(                                                        \
     startup_accel_handler, start_item_idx, end_item_idx, only_support_discrete)        \
   ObTabletReplayItemRange range(start_item_idx, end_item_idx);                         \
-  if (only_support_discrete) {                                                         \
+  if (OB_FAIL(ret)) {                                                                  \
+  } else if (only_support_discrete) {                                                  \
     if (OB_FAIL(add_item_range_to_task_(startup_accel_handler,                         \
         ObTabletReplayCreateTask::DISCRETE, range, discrete_task_))) {                 \
       LOG_WARN("fail to add_item_range_to_task_", K(ret), KPC(discrete_task_));        \
@@ -223,7 +224,13 @@ int ObTabletReplayCreateHandler::concurrent_replay(ObStartupAccelTaskHandler* st
       startup_accel_handler->get_task_allocator().free(task);                          \
       task = nullptr;                                                                  \
     }                                                                                  \
-  }
+  } else if (OB_NOT_NULL(task)) {                                                      \
+    LOG_WARN("some error happened, destroy task", K(ret), KPC(task),                   \
+      K(inflight_task_cnt_));                                                          \
+    task->~ObTabletReplayCreateTask();                                                 \
+    startup_accel_handler->get_task_allocator().free(task);                            \
+    task = nullptr;                                                                    \
+  }                                                                                    \
 
   int ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::current_time();
@@ -626,12 +633,10 @@ int ObTabletReplayCreateHandler::record_ls_transfer_info_(
     LOG_WARN("failed to get ls restore status", K(ret), KPC(ls));
   } else if (ls_restore_status.is_before_restore_to_consistent_scn()) {
     LOG_INFO("the log stream in restore is before restore to consistent scn, no need to record transfer info", "ls_id", ls->get_ls_id(), K(ls_restore_status));
-  }else if (!tablet_transfer_info.has_transfer_table()) {
+  } else if (!tablet_transfer_info.has_transfer_table()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should have transfer table", K(ret), "ls_id", ls->get_ls_id(), K(tablet_id), K(tablet_transfer_info));
-  }
-
-  if (OB_SUCC(ret)) {
+  } else {
     bool need_init = true;
     const ObLSID ls_id = ls->get_ls_id();
     // rlock scope

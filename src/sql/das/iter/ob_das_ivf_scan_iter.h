@@ -355,7 +355,11 @@ public:
         search_param_(),
         similarity_threshold_(0),
         scan_tablet_size_(1),
-        max_scan_vectors_(0)
+        max_scan_vectors_(0),
+        hgraph_iter_ctx_(nullptr),
+        hgraph_vsag_alloc_(nullptr),
+        hgraph_has_next_center_(true),
+        has_used_hgraph_(false)
   {
     dis_type_ = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
     saved_rowkeys_.set_attr(ObMemAttr(MTL_ID(), "VecIdxKeyRanges"));
@@ -384,18 +388,19 @@ protected:
   virtual int inner_init(ObDASIterParam &param) override;
   virtual int inner_reuse() override;
   virtual int inner_release() override;
+  void reset_memory_context(); // Reset memory context and clean up associated resources
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
   virtual int process_ivf_scan(bool is_vectorized);
   int do_ivf_scan(bool is_vectorized);
   virtual int process_ivf_scan_post(bool is_vectorized) = 0;
   virtual int process_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorized) = 0;
+  int init_hgraph_search_alloc();
 protected:
   int do_table_full_scan(bool is_vectorized,
                         const ObDASScanCtDef *ctdef,
                         ObDASScanRtDef *rtdef,
                         ObDASScanIter *iter,
-                        int64_t pri_key_cnt,
                         ObTabletID &tablet_id,
                         bool &first_scan,
                         ObTableScanParam &scan_param);
@@ -405,7 +410,6 @@ protected:
                         ObDASScanRtDef *rtdef,
                         ObDASScanIter *iter,
                         ObTabletID &tablet_id);
-  int do_rowkey_cid_table_scan();
 
   int build_cid_vec_query_range(const ObString &cid, int64_t rowkey_cnt, ObNewRange &cid_rowkey_range);
   int build_cid_vec_query_rowkey(const ObString &cid, bool is_min, int64_t rowkey_cnt, common::ObRowkey &rowkey);
@@ -429,9 +433,9 @@ protected:
   template <typename T>
   int generate_nearest_cid_heap(bool is_vectorized,
                                 T &nearest_cid_heap,
-                                bool save_center_vec = false);
-  int parse_centroid_datum(const ObDASScanCtDef *cid_vec_ctdef, ObIAllocator &allocator,
-                           blocksstable::ObDatumRow *datum_row, ObString &cid, ObString &cid_vec);
+                                bool save_center_vec = false,
+                                ObIvfCentCache *cent_cache = nullptr,
+                                bool is_cache_usable = false);
   int get_main_rowkey_from_cid_vec_datum(ObIAllocator &allocator, const ObDASScanCtDef *cid_vec_ctdef,
                                          const int64_t rowkey_cnt, ObRowkey &main_rowkey, bool need_alloc = true);
   int get_pre_filter_rowkey_batch(ObIAllocator &allocator,
@@ -491,19 +495,13 @@ protected:
   int check_pre_filter_need_retry();
   int updata_vec_exec_ctx(ObPlanStat* plan_stat);
   inline double get_default_selectivity_rate() const { return ObVecIdxExtraInfo::get_default_selectivity_rate(vec_index_param_.type_); }
+  bool has_next_center(); // check if there are more centers available
 
 protected:
   static const int64_t CENTROID_PRI_KEY_CNT = 1;
-  static const int64_t CENTROID_ALL_KEY_CNT = 2;
-
   static const int64_t CID_VEC_COM_KEY_CNT = 1;        // Only the vec column is a common column
   static const int64_t CID_VEC_FIXED_PRI_KEY_CNT = 1;  // center_id is FIXED PRI KEY
-  static const int64_t ROWKEY_CID_PRI_KEY_CNT = 1;
-
-  static const int64_t SQ_MEAT_PRI_KEY_CNT = 1;
-  static const int64_t SQ_MEAT_ALL_KEY_CNT = 2;
   static const int64_t POST_ENLARGEMENT_FACTOR = 2;
-  static const int64_t PRE_ENLARGEMENT_FACTOR = 2;
   // in centroid table
   static const int64_t CID_IDX = 0;
   static const int64_t CID_VECTOR_IDX = 1;
@@ -586,6 +584,10 @@ protected:
   float similarity_threshold_;
   uint64_t scan_tablet_size_;
   int64_t max_scan_vectors_;
+  void *hgraph_iter_ctx_;  // HGraph iterative search context
+  ObVsagSearchAlloc *hgraph_vsag_alloc_;  // VSAG allocator for HGraph, same lifecycle as hgraph_iter_ctx_
+  bool hgraph_has_next_center_;  // Whether HGraph has more centers available for iterative filtering
+  bool has_used_hgraph_;  // Flag to track if HGraph was used in initial search
 };
 
 class ObDASIvfScanIter : public ObDASIvfBaseScanIter
@@ -605,6 +607,13 @@ protected:
 
 protected:
   int get_nearest_probe_center_ids(bool is_vectorized);
+  int get_next_center_ids(bool is_vectorized, int64_t next_nprobe); // get next batch of center IDs
+  int get_next_probe_centers_ids_by_hgraph(bool is_vectorized, int64_t next_nprobe);
+  int get_nearest_probe_center_ids_with_hgraph(bool is_vectorized,
+                                               ObIvfCentCache *hgraph_cache,
+                                               bool need_vectors = true,
+                                               bool need_distances = true,
+                                               int64_t incremental_nprobes = -1);
 
   template <typename T>
   int get_rowkeys_to_heap(const ObString &cid_str, int64_t cid_vec_pri_key_cnt, int64_t cid_vec_column_count,
@@ -625,9 +634,6 @@ protected:
   int do_ivf_scan_post(bool is_vectorized, T *search_vec);
   virtual int process_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorized);
   int check_cid_exist(const ObString &src_cid, bool &src_cid_exist);
-  int get_cid_from_rowkey_cid_table(ObString &cid);
-  int filter_pre_rowkey_batch(bool is_vectorized, int64_t batch_row_count);
-  int filter_rowkey_by_cid(bool is_vectorized, int64_t batch_row_count, int &push_count);
   virtual int process_ivf_scan_post(bool is_vectorized);
   int parse_cid_vec_datum(
     ObIAllocator& allocator,
@@ -669,8 +675,6 @@ protected:
 
   int process_ivf_scan_post(bool is_vectorized) override;
   int process_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorized) override;
-  int filter_pre_rowkey_batch(bool is_vectorized, int64_t batch_row_count, IvfRowkeyHeap &rowkey_heap);
-  int filter_rowkey_by_cid(bool is_vectorized, int64_t batch_row_count, IvfRowkeyHeap &rowkey_heap, int &push_count);
   int parse_pq_ids_vec_datum(
     ObIAllocator &allocator,
     int64_t cid_vec_column_count,
@@ -695,16 +699,16 @@ protected:
       int64_t batch_row_count,
       float &distance);
   int get_nearest_probe_centers(bool is_vectorized);
-  int get_cid_from_pq_rowkey_cid_table(ObIAllocator &allocator, ObString &cid, ObString &pq_cids);
+  int get_next_centers(bool is_vectorized, int64_t next_nprobe); // get next batch of centers with vectors and distances
+  int get_next_probe_centers_by_hgraph(bool is_vectorized, int64_t next_nprobe);
+  int get_nearest_probe_centers_with_hgraph(
+      bool is_vectorized,
+      ObIvfCentCache *hgraph_cache,
+      bool need_vectors = true,
+      bool need_distances = true,
+      int64_t incremental_nprobes = -1);
+
   int check_cid_exist(const ObString &src_cid, float *&center_vec, bool &src_cid_exist);
-  int calc_adc_distance(
-    bool is_vectorized,
-    const ObString &cid,
-    const ObString &pq_center_ids,
-    IvfRowkeyHeap &rowkey_heap,
-    ObArray<float *> &splited_residual,
-    float *residual,
-    int &push_count);
   int calc_distance_between_pq_ids(
     bool is_vectorized,
     const ObString &pq_center_ids,
@@ -729,7 +733,6 @@ protected:
     const float* search_vec,
     float* dis_table,
     bool is_vectorized);
-  int process_ivf_scan_brute_inner(bool is_vectorized);
   int calc_distance_with_precompute(
     ObEvalCtx::BatchInfoScopeGuard &guard,
     int64_t scan_row_cnt,

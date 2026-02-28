@@ -79,6 +79,7 @@
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard_))) {
     LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
   }
+  std::unordered_set<uint64_t> tablet_set; // only used to dedupe tablet_ids and used in sql audit partition_cnt
   for (int i = 0; OB_SUCC(ret) && i < arg_.cf_rows_.count(); ++i) {
     const ObSimpleTableSchemaV2 *simple_schema = nullptr;
     ObLSID cur_ls_id(ObLSID::INVALID_LS_ID);
@@ -106,6 +107,7 @@
                                                                                     schema_guard_))) {
       LOG_WARN("fail to init schema cache guard", K(ret));
     } else {
+      same_cf_rows.set_tablet_set(&tablet_set);
       same_cf_rows.set_table_schema(simple_schema);
       ObTablePartCalculator part_calc(sess_guard_,
                                       schema_cache_guard_,
@@ -128,12 +130,32 @@
       }
     }
   } // end for
+  // record partition count
+  audit_ctx_.partition_cnt_ = tablet_set.size();
   return ret;
  }
 
  ObTableProccessType ObHbaseExecuteP::get_stat_process_type()
  {
-  return ObTableProccessType::TABLE_API_HBASE_PUT;
+  ObTableProccessType process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
+  bool is_hbase_op_valid = OHOperationType::INVALID != arg_.hbase_op_type_;
+  if (is_hbase_op_valid) {
+    switch(arg_.hbase_op_type_) {
+      case OHOperationType::PUT:
+        process_type = ObTableProccessType::TABLE_API_HBASE_PUT;
+        break;
+      case OHOperationType::PUT_LIST:
+      case OHOperationType::BATCH:
+      case OHOperationType::BATCH_CALLBACK:
+        process_type = ObTableProccessType::TABLE_API_HBASE_BATCH_PUT;
+        break;
+      default:
+        break;
+    }
+  } else {
+    process_type = ObTableProccessType::TABLE_API_HBASE_PUT;
+  }
+  return process_type;
  }
 
  int ObHbaseExecuteP::try_process()
@@ -145,6 +167,8 @@
   ObTabletID route_tablet_id(ObTabletID::INVALID_TABLET_ID);
   if (OB_FAIL(init_schema_and_calc_part(ls_id))) {
     LOG_WARN("fail to init schema and calc part", K(ret));
+  } else if (OB_FAIL(check_mode_defense())) {
+    LOG_WARN("fail to check mode defense", K(ret));
   } else if (FALSE_IT(route_tablet_id = arg_.cf_rows_.at(0).get_cf_row(0).get_cell(0).get_tablet_id())) {
   } else if (!route_tablet_id.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
@@ -173,6 +197,8 @@
           LOG_WARN("fail to put", K(ret), K(arg_.cf_rows_.at(i)), K(i));
         }
       }
+      // record ob rows
+      stat_row_count_ += arg_.cf_rows_.at(i).cell_count_;
     }
   }
   result_.set_err(ret);
@@ -256,6 +282,37 @@ int ObHbaseExecuteP::decide_use_which_table_operation(ObTableCtx &tb_ctx)
   } else {
     tb_ctx.set_operation_type(ObTableOperationType::PUT);
     tb_ctx.set_client_use_put(true);
+  }
+  return ret;
+}
+
+int ObHbaseExecuteP::check_mode_defense()
+{
+  int ret = OB_SUCCESS;
+  bool is_multi_cf_req = arg_.cf_rows_.count() > 1;
+  bool is_series_mode = schema_cache_guard_.get_hbase_mode_type() == ObHbaseModeType::OB_HBASE_SERIES_TYPE;
+  if (is_series_mode) {
+    if (is_multi_cf_req) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("for timeseries table, multi-family hbase put does not support", K(ret), K(arg_.cf_rows_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "multi-family hbase put for timeseries table");
+    } else {
+      // defense put TTL for timeseries table
+      if (arg_.cf_rows_.count() != 0 && arg_.cf_rows_.at(0).count() != 0) {
+        const ObHCfRow &cf_row = arg_.cf_rows_.at(0).get_cf_row(0);
+        if (!cf_row.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid ObHCfRow", K(ret), K(cf_row));
+        } else {
+          const ObHCell &cell = cf_row.get_cell(0);
+          if (cell.get_properties_count() > 1) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("for timeseries table, hbase put does not support set TTL", K(ret), K(cell));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase put set TTL for timeseries table");
+          }
+        }
+      }
+    }
   }
   return ret;
 }

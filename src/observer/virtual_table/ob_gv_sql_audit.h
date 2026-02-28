@@ -53,6 +53,8 @@ public:
   int check_ip_and_port(bool &is_valid);
   void use_index_scan() { is_use_index_ = true; }
   bool is_index_scan() const { return is_use_index_; }
+  virtual bool enable_pd_filter() { return enable_filter_pushdown_; }
+  virtual int fill_full_columns(common::ObNewRow *&row);
 
 private:
   bool is_perf_event_dep_field(uint64_t col_id);
@@ -62,6 +64,7 @@ private:
                           int64_t &start_id,
                           int64_t &end_id,
                           bool &is_valid);
+
 private:
   enum WAIT_COLUMN
   {
@@ -187,6 +190,8 @@ private:
     COMMIT_TIME,
     TX_TABLE_READ_CNT,
     OUTROW_LOB_CNT,
+    SS_OBJECT_STORAGE_READS,
+    PARENT_TRACE_ID,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;
@@ -214,6 +219,7 @@ private:
   char user_client_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char trace_id_[128];
   char pl_trace_id_[128];
+  char parent_trace_id_[128];
 
   //max wait event columns
   bool is_first_get_;
@@ -225,6 +231,8 @@ private:
   share::ObTenantSpaceFetcher *with_tenant_ctx_;
   bool is_sys_tenant_;
   bool enable_sql_audit_query_sql_;
+  bool enable_filter_pushdown_;
+  obmysql::ObMySQLRequestRecord *cur_record_;
 };
 }
 }

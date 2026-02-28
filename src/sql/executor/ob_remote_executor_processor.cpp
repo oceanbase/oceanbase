@@ -399,6 +399,17 @@ int ObRemoteBaseExecuteP<T>::auto_end_phy_trans(bool is_rollback)
   // 所以依据内部的trans_state_来判断即可
   if (trans_state_.is_start_stmt_executed() &&
       trans_state_.is_start_stmt_success()) {
+    transaction::ObTxExecResult tx_result;
+    // save tx result to avoid end trans clear it
+    int get_ret = MTL(transaction::ObTransService*)
+      ->get_tx_exec_result(*my_session->get_tx_desc(), tx_result);
+    if (OB_SUCCESS != get_ret) {
+      LOG_WARN_RET(get_ret, "failed to get trans result",
+               K(get_ret),
+               "scanner_trans_result", my_session->get_trans_result(),
+               "tx_desc", *my_session->get_tx_desc());
+      ret = (OB_SUCCESS == ret) ? get_ret : ret;
+    }
     if (OB_SUCCESS != (end_ret = ObSqlTransControl::end_stmt(
                 exec_ctx_, is_rollback || OB_SUCCESS != ret, true))) {
       ret = (OB_SUCCESS == ret) ? end_ret : ret;
@@ -411,6 +422,7 @@ int ObRemoteBaseExecuteP<T>::auto_end_phy_trans(bool is_rollback)
       ret = (OB_SUCCESS == ret) ? end_ret : ret;
       LOG_WARN("fail end implicit trans", K(is_rollback), K(ret), K_(exec_ctx));
     }
+    my_session->get_trans_result().assign(tx_result);
   }
   trans_state_.reset();
   return ret;
@@ -523,8 +535,8 @@ bool ObRemoteBaseExecuteP<T>::query_can_retry_in_remote(int &last_err,
   if (is_execute_remote_plan()) {
     bret = false;  // remote execute using remote_phy_plan, should not retry
   } else {
-    if (ObSqlTransUtil::is_remote_trans(ac, in_trans, OB_PHY_PLAN_REMOTE) && retry_times <= 100) {
-      //暂时拍脑袋决定重试100次不成功就直接返回，不要让控制端等太久的时间
+    if (ObSqlTransUtil::is_remote_trans(ac, in_trans, OB_PHY_PLAN_REMOTE) && retry_times <= 3) {
+      //暂时拍脑袋决定重试3次不成功就直接返回，不要让控制端等太久的时间
       if (is_try_lock_row_err(err)) {
         bret = true;
       } else if (is_transaction_set_violation_err(err) || is_snapshot_discarded_err(err)) {
@@ -657,6 +669,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
     LOG_ERROR("sql engine is NULL", K(ret), K(gctx_.sql_engine_));
   } else if (OB_FAIL(schema_guard_.get_schema_version(session->get_effective_tenant_id(), local_tenant_schema_version))) {
     LOG_WARN("get schema version from schema_guard failed", K(ret));
+  } else if (FALSE_IT(schema_guard_.set_session_id(session->get_sessid_for_table()))) {
   } else {
     enable_sql_audit = enable_sql_audit && session->get_local_ob_enable_sql_audit();
   }
@@ -764,6 +777,20 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
                NULL, session->get_effective_tenant_id())) {
           ret = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
         }
+        if (OB_NOT_NULL(session)
+            && session->get_route_to_column_replica()
+            && OB_NO_REPLICA_VALID == ret) {
+          bool ap_query_replica_fallback = true;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(session->get_sys_variable(share::SYS_VAR_AP_QUERY_REPLICA_FALLBACK,
+                                                    ap_query_replica_fallback))) {
+            LOG_WARN("failed to get ap_query_replica_fallback", K(tmp_ret));
+          } else if (ap_query_replica_fallback) {
+            ret = OB_NO_READABLE_REPLICA;
+            session->set_route_to_column_replica(false);
+            LOG_WARN("retry for no valid column replica", K(ret));
+          }
+        }
         DAS_CTX(exec_ctx_).get_location_router().refresh_location_cache_by_errno(true, ret);
       }
       //监控项统计结束
@@ -818,23 +845,32 @@ template<typename T>
 int ObRemoteBaseExecuteP<T>::base_before_response(common::ObScanner &scanner)
 {
   ObSQLSessionInfo *session = exec_ctx_.get_my_session();
+  int ret = OB_SUCCESS;
   // if ac=1 remote plan, transaction started on remote node
-  // has terminated when arrive here, the tx_desc should be NULL
+  // has terminated when arrive here, the tx_desc can be reused and not NULL
   if (OB_NOT_NULL(session) && OB_NOT_NULL(session->get_tx_desc())) {
-    int get_ret = MTL(transaction::ObTransService*)
-      ->get_tx_exec_result(*session->get_tx_desc(), scanner.get_trans_result());
-    if (OB_SUCCESS != get_ret) {
-      LOG_WARN_RET(get_ret, "failed to get trans result",
-               K(get_ret),
-               "scanner_trans_result", scanner.get_trans_result(),
-               "tx_desc", *session->get_tx_desc());
-      exec_errcode_ = (OB_SUCCESS == exec_errcode_) ? get_ret : exec_errcode_;
+    int tmp_ret = OB_SUCCESS;
+    if (session->has_start_stmt()) {
+      // transaction prepared on original node
+      tmp_ret = MTL(transaction::ObTransService*)
+        ->get_tx_exec_result(*session->get_tx_desc(), scanner.get_trans_result());
+    } else {
+      // ac=1 remote execution
+      tmp_ret = scanner.get_trans_result().assign(session->get_trans_result());
+    }
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN_RET(tmp_ret, "failed to get trans result",
+                   "cur_stmt", session->get_current_query_string(),
+                   "scanner_trans_result", scanner.get_trans_result(),
+                   "tx_desc", *session->get_tx_desc());
+      exec_errcode_ = (OB_SUCCESS == exec_errcode_) ? tmp_ret : exec_errcode_;
     } else {
       LOG_TRACE("get trans_result",
                 "cur_stmt", session->get_current_query_string(),
                 "scanner_trans_result", scanner.get_trans_result(),
                 "tx_desc", *session->get_tx_desc());
     }
+    session->get_trans_result().reset();
   }
   if (OB_SUCCESS == exec_errcode_ && is_execute_remote_plan()) {
     ObExecFeedbackInfo &fb_info = scanner.get_feedback_info();

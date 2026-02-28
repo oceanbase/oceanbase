@@ -39,6 +39,7 @@ class MdsCtx;
 namespace rootserver
 {
 struct ObTruncateTabletArg;
+struct ObTTLFilterInfoArg;
 }
 
 namespace logservice
@@ -135,6 +136,11 @@ protected:
   int replay_to_mds_table_(
       storage::ObTabletHandle &tablet_handle,
       const rootserver::ObTruncateTabletArg &mds,
+      storage::mds::MdsCtx &ctx,
+      const share::SCN &scn);
+  int replay_to_mds_table_(
+      storage::ObTabletHandle &tablet_handle,
+      const rootserver::ObTTLFilterInfoArg &mds,
       storage::mds::MdsCtx &ctx,
       const share::SCN &scn);
   template <typename K, typename V>

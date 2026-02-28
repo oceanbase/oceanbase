@@ -223,9 +223,27 @@ int ObGroupByChecker::check_group_by(const ParamStore *param_store,
                                    ref_stmt->has_cube() ||
                                    has_having_self_column ||
                                    has_group_by_clause))) {
-    ObSEArray<ObGroupbyExpr, 4> all_grouping_sets_exprs;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObSqlArray<ObGroupbyExpr, true> all_grouping_sets_exprs(allocator);
     ObSEArray<ObRawExpr*, 4> all_rollup_exprs;
     ObSEArray<ObRawExpr*, 4> all_cube_exprs;
+    int64_t total_grouping_sets_expr_num = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ref_stmt->get_grouping_sets_items_size(); ++i) {
+      ObIArray<ObRollupItem> &rollup_items =
+                                    ref_stmt->get_grouping_sets_items().at(i).rollup_items_;
+      ObIArray<ObCubeItem> &cube_items = ref_stmt->get_grouping_sets_items().at(i).cube_items_;
+      total_grouping_sets_expr_num += ref_stmt->get_grouping_sets_items().at(i).grouping_sets_exprs_.count();
+      for (int64_t j = 0; OB_SUCC(ret) && j < rollup_items.count(); ++j) {
+        total_grouping_sets_expr_num += rollup_items.at(j).rollup_list_exprs_.count();
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < cube_items.count(); ++j) {
+        total_grouping_sets_expr_num += cube_items.at(j).cube_list_exprs_.count();
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(all_grouping_sets_exprs.reserve(total_grouping_sets_expr_num))) {
+      LOG_WARN("failed to reserve exprs", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < ref_stmt->get_grouping_sets_items_size(); ++i) {
       ObIArray<ObGroupbyExpr> &groupby_exprs =
                                     ref_stmt->get_grouping_sets_items().at(i).grouping_sets_exprs_;

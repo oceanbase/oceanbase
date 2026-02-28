@@ -22,6 +22,7 @@
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::obrpc;
@@ -111,7 +112,8 @@ int ObDropTableHelper::lock_tables_()
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", KR(ret));
-      } else if (!table_schema->has_tablet()) {
+      } else if (!table_schema->has_tablet() && !table_schema->is_oracle_tmp_table_v2() &&
+          !table_schema->is_oracle_tmp_table_v2_index_table()) {
         // skip
       } else if (OB_FAIL(sorted_table_ids.push_back(table_schema->get_table_id()))) {
         LOG_WARN("fail to push back table id", KR(ret), K(table_schema->get_table_id()));
@@ -151,9 +153,6 @@ int ObDropTableHelper::check_legitimacy_()
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("unsupport table type for parallel drop table", KR(ret), K(table_schema->get_table_type()));
         LOG_USER_WARN(OB_NOT_SUPPORTED, "For this table type, parallel drop table");
-      } else if (!arg_.force_drop_ && table_schema->is_in_recyclebin()) {
-        ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
-        LOG_WARN("can not drop table in recyclebin, use purge instead", KR(ret), K(table_schema));
       } else if (!table_schema->check_can_do_ddl()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("offline ddl is being executed, other ddl operations are not allowed", KR(ret), KPC(table_schema));
@@ -315,6 +314,8 @@ int ObDropTableHelper::generate_schemas_()
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", KR(ret));
+      } else if (OB_FAIL(storage::ObSessionTabletGCHelper::is_table_has_active_session(table_schema))) { // The Oracle mode does not support dropping multiple tables at once.
+        LOG_WARN("table has active session or error checking", KR(ret), KPC(table_schema));
       } else {
         // 1. gen mock fk parent tables when dropped table has mock parent table
         if (table_schema->get_foreign_key_real_count() > 0) {
@@ -384,7 +385,7 @@ int ObDropTableHelper::generate_schemas_()
                 // return OB_ERR_TABLE_IS_REFERENCED
                 const ObTableSchema *child_table_schema = NULL;
                 const uint64_t child_table_id = violated_fk_info.child_table_id_;
-                if (OB_FAIL(latest_schema_guard_.get_table_schema(child_table_id, child_table_schema))) {
+                if (OB_FAIL(schema_guard_wrapper_.get_table_schema(child_table_id, child_table_schema))) {
                   LOG_WARN("fail to get child table schema", KR(ret), K(child_table_id));
                 } else if (OB_ISNULL(child_table_schema)) {
                   ret = OB_ERR_UNEXPECTED;
@@ -567,7 +568,10 @@ int ObDropTableHelper::lock_databases_by_name_()
       if (OB_FAIL(check_database_legitimacy_(database_name, database_id))) {
         LOG_WARN("fail to check database legitimacy", KR(ret), K(database_name));
       }
-      if (OB_SUCC(ret) || OB_ERR_BAD_DATABASE == ret) {
+      if (OB_SUCC(ret)
+          || OB_ERR_BAD_DATABASE == ret
+          || (OB_RECYCLEBIN_SCHEMA_ID != database_id
+              && OB_ERR_OPERATION_ON_RECYCLE_OBJECT == ret)) {
         // OB_INVALID_ID == database_id indicates bad database
         if (OB_FAIL(database_ids_.push_back(database_id))) { // overwrite ret
           LOG_WARN("fail to push back database id", KR(ret));
@@ -589,7 +593,17 @@ int ObDropTableHelper::lock_tables_by_name_()
     for (int64_t i = 0; OB_SUCC(ret) && i < table_items_.count(); i++) {
       const ObString &database_name = table_items_.at(i).database_name_;
       const ObString &table_name = table_items_.at(i).table_name_;
-      if (OB_FAIL(add_lock_object_by_name_(database_name, table_name, TABLE_SCHEMA, EXCLUSIVE))) {
+      if (TMP_TABLE == arg_.table_type_) {
+        // direct drop temp table can only lock table name with session id
+        if (OB_FAIL(add_lock_object_by_name_(database_name, table_name, TABLE_SCHEMA, EXCLUSIVE, arg_.session_id_))) {
+          LOG_WARN("fail to lock object by table name", KR(ret), K_(tenant_id), K(database_name), K(table_name));
+        }
+      } else if (USER_TABLE == arg_.table_type_) {
+        // drop user table may drop normal table or temp table
+        if (OB_FAIL(add_lock_table_by_name_with_session_id_zero_(database_name, table_name, EXCLUSIVE, arg_.session_id_))) {
+          LOG_WARN("fail to lock object by table name", KR(ret), K_(tenant_id), K(database_name), K(table_name));
+        }
+      } else if (OB_FAIL(add_lock_object_by_name_(database_name, table_name, TABLE_SCHEMA, EXCLUSIVE))) {
         LOG_WARN("fail to lock object by table name", KR(ret), K_(tenant_id), K(database_name), K(table_name));
       }
     }
@@ -653,7 +667,7 @@ int ObDropTableHelper::prefetch_table_schemas_()
         if (OB_FAIL(log_table_not_exist_msg_(table_items_.at(i)))) {
           LOG_WARN("fail to log table not exsit msg", KR(ret));
         }
-      } else if (OB_FAIL(latest_schema_guard_.get_table_id(database_id, session_id, table_name, table_id, table_type, schema_version))) {
+      } else if (OB_FAIL(schema_guard_wrapper_.get_table_id(database_id, session_id, table_name, table_id, table_type, schema_version))) {
         LOG_WARN("fail to get table id", KR(ret), K_(tenant_id), K(database_id), K(session_id), K(table_name));
       } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
         // skip
@@ -666,13 +680,18 @@ int ObDropTableHelper::prefetch_table_schemas_()
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("this type of table is not allowed for parallel drop table", KR(ret), K(table_type));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "parallel drop sys table is");
+      } else if (TMP_TABLE == arg_.table_type_ && TMP_TABLE != table_type) {
+        LOG_WARN("table does not exist", KR(ret), K(table_name), K(session_id));
+        if (OB_FAIL(log_table_not_exist_msg_(table_items_.at(i)))) {
+          LOG_WARN("fail to log table not exsit msg", KR(ret));
+        }
       } else if (!ObSchemaUtils::is_support_parallel_drop(table_type)) {
         // skip
         LOG_WARN("this type of table should be invisable for drop table", KR(ret), KPC(table_schema));
         if (OB_FAIL(log_table_not_exist_msg_(table_items_.at(i)))) {
           LOG_WARN("fail to log table not exsit msg", KR(ret));
         }
-      } else if (OB_FAIL(latest_schema_guard_.get_table_schema(table_id, table_schema))) {
+      } else if (OB_FAIL(schema_guard_wrapper_.get_table_schema(table_id, table_schema))) {
         LOG_WARN("fail to get table schema", KR(ret), K(table_id));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -791,12 +810,12 @@ int ObDropTableHelper::lock_objects_by_id_()
         if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table schema is null", KR(ret));
-        } else if (OB_FAIL(latest_schema_guard_.get_table_id(table_schema->get_database_id(),
-                                                             session_id,
-                                                             table_schema->get_table_name(),
-                                                             table_id_after_lock,
-                                                             table_type_after_lock,
-                                                             schema_version_after_lock))) {
+        } else if (OB_FAIL(schema_guard_wrapper_.get_table_id(table_schema->get_database_id(),
+                                                     session_id,
+                                                     table_schema->get_table_name(),
+                                                     table_id_after_lock,
+                                                     table_type_after_lock,
+                                                     schema_version_after_lock))) {
           LOG_WARN("fail to get table id", KR(ret), K(table_schema->get_database_id()), K(session_id), K(table_schema->get_table_name()));
         } else if (OB_UNLIKELY(table_id_after_lock != table_schema->get_table_id()
                                || table_type_after_lock != table_schema->get_table_type()
@@ -863,7 +882,7 @@ int ObDropTableHelper::gen_mock_fk_parent_tables_for_drop_fks_(
           ObMockFKParentTableSchema new_mock_fk_parent_table_schema;
           // old_mock_fk_parent_table_schema_ptr contains all fk infos
           const ObMockFKParentTableSchema *old_mock_fk_parent_table_schema_ptr = NULL;
-          if (OB_FAIL(latest_schema_guard_.get_mock_fk_parent_table_schema(fk_info->parent_table_id_, old_mock_fk_parent_table_schema_ptr))) {
+          if (OB_FAIL(schema_guard_wrapper_.get_mock_fk_parent_table_schema(fk_info->parent_table_id_, old_mock_fk_parent_table_schema_ptr))) {
             LOG_WARN("fail to get old mock fk parent table schema", KR(ret));
           } else if (OB_ISNULL(old_mock_fk_parent_table_schema_ptr)) {
             ret = OB_ERR_UNEXPECTED;
@@ -976,7 +995,7 @@ int ObDropTableHelper::gen_mock_fk_parent_table_for_drop_table_(
   const uint64_t child_table_id = violated_fk_info.child_table_id_;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(latest_schema_guard_.get_table_schema(child_table_id, child_table_schema))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_table_schema(child_table_id, child_table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(child_table_id));
   } else if (OB_ISNULL(child_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1073,7 +1092,7 @@ int ObDropTableHelper::collect_aux_table_schemas_(
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
       const ObTableSchema *aux_table_schema = NULL;
       const uint64_t table_id = simple_index_infos.at(i).table_id_;
-      if (OB_FAIL(latest_schema_guard_.get_table_schema(table_id, aux_table_schema))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_table_schema(table_id, aux_table_schema))) {
         LOG_WARN("get table schema failed", KR(ret), K(table_id));
       } else if (OB_ISNULL(aux_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1097,7 +1116,7 @@ int ObDropTableHelper::collect_aux_table_schemas_(
       for (int64_t i = 0; OB_SUCC(ret) && i < aux_table_ids.count(); i++) {
         const ObTableSchema *aux_table_schema = NULL;
         const uint64_t table_id = aux_table_ids.at(i);
-        if (OB_FAIL(latest_schema_guard_.get_table_schema(table_id, aux_table_schema))) {
+        if (OB_FAIL(schema_guard_wrapper_.get_table_schema(table_id, aux_table_schema))) {
           LOG_WARN("get table schema failed", KR(ret), K(table_id));
         } else if (OB_ISNULL(aux_table_schema)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1152,7 +1171,7 @@ int ObDropTableHelper::calc_schema_version_cnt_for_table_(
     if (!to_recyclebin) {
       // obj priv
       ObArray<ObObjPriv> obj_privs;
-      if (OB_FAIL(latest_schema_guard_.get_obj_privs(table_id, ObObjectType::TABLE, obj_privs))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_obj_privs(table_id, ObObjectType::TABLE, obj_privs))) {
         LOG_WARN("fail to get obj privs", KR(ret), K(table_id));
       }
       schema_version_cnt_ += obj_privs.count();
@@ -1177,7 +1196,7 @@ int ObDropTableHelper::calc_schema_version_cnt_for_table_(
       // audit
       if (OB_SUCC(ret) && (table_schema.is_user_table() || table_schema.is_external_table())) {
         ObArray<ObSAuditSchema> audits;
-        if (OB_FAIL(latest_schema_guard_.get_audit_schemas_in_owner(AUDIT_TABLE, table_id, audits))) {
+        if (OB_FAIL(schema_guard_wrapper_.get_audit_schemas_in_owner(AUDIT_TABLE, table_id, audits))) {
           LOG_WARN("fail to get audit schemas in owner", KR(ret), K(table_id));
         }
         schema_version_cnt_ += audits.count();
@@ -1190,7 +1209,7 @@ int ObDropTableHelper::calc_schema_version_cnt_for_table_(
 
       // sensitive rule
       if (OB_SUCC(ret)) {
-        ObArray<ObSensitiveRuleSchema *> sensitive_rules;
+        ObArray<const ObSensitiveRuleSchema *> sensitive_rules;
         if (OB_FAIL(get_sensitive_rule_schemas_by_table_(table_schema, sensitive_rules))) {
           LOG_WARN("fail to get sensitive rule schemas by table", KR(ret), K(table_schema));
         } else {
@@ -1217,7 +1236,7 @@ int ObDropTableHelper::calc_schema_version_cnt_for_dep_objs_() {
         if (OB_SUCC(ret) && ObObjectType::VIEW == dep_objs_.at(i).at(j).second) {
           const ObTableSchema *view_schema = NULL;
           const uint64_t view_id = dep_objs_.at(i).at(j).first;
-          if (OB_FAIL(latest_schema_guard_.get_table_schema(view_id, view_schema))) {
+          if (OB_FAIL(schema_guard_wrapper_.get_table_schema(view_id, view_schema))) {
             LOG_WARN("fail to get view schema", KR(ret), K(view_id));
           } else if (OB_ISNULL(view_schema)) {
             ret = OB_ERR_UNEXPECTED;
@@ -1240,7 +1259,7 @@ int ObDropTableHelper::calc_schema_version_cnt_for_sequence_(
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else {
-    if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table()) {
+    if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
       for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
            OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
         ObColumnSchemaV2 &column_schema = (**iter);
@@ -1255,14 +1274,14 @@ int ObDropTableHelper::calc_schema_version_cnt_for_sequence_(
 
             // obj priv
             ObArray<ObObjPriv> obj_privs;
-            if (OB_FAIL(latest_schema_guard_.get_obj_privs(sequence_id, ObObjectType::SEQUENCE, obj_privs))) {
+            if (OB_FAIL(schema_guard_wrapper_.get_obj_privs(sequence_id, ObObjectType::SEQUENCE, obj_privs))) {
               LOG_WARN("fail to get obj privs", KR(ret), K(sequence_id));
             }
             schema_version_cnt_ += obj_privs.count();
 
             // audit
             ObArray<ObSAuditSchema> audits;
-            if (FAILEDx(latest_schema_guard_.get_audit_schemas_in_owner(AUDIT_SEQUENCE, sequence_id, audits))) {
+            if (FAILEDx(schema_guard_wrapper_.get_audit_schemas_in_owner(AUDIT_SEQUENCE, sequence_id, audits))) {
               LOG_WARN("fail to get audit schemas in owner", KR(ret), K(sequence_id));
             }
             schema_version_cnt_ += audits.count();
@@ -1360,7 +1379,7 @@ int ObDropTableHelper::lock_sequences_by_id_(const ObTableSchema &table_schema)
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table()) {
+  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
         OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
       ObColumnSchemaV2 &column_schema = (**iter);
@@ -1370,7 +1389,7 @@ int ObDropTableHelper::lock_sequences_by_id_(const ObTableSchema &table_schema)
           LOG_WARN("fail to lock sequence id", KR(ret), K(sequence_id));
         } else {
           ObArray<ObSAuditSchema> audits;
-          if (OB_FAIL(latest_schema_guard_.get_audit_schemas_in_owner(AUDIT_SEQUENCE, sequence_id, audits))) {
+          if (OB_FAIL(schema_guard_wrapper_.get_audit_schemas_in_owner(AUDIT_SEQUENCE, sequence_id, audits))) {
             LOG_WARN("fail to get audit schemas in owner", KR(ret), K(sequence_id));
           }
           for (int64_t i = 0; OB_SUCC(ret) && i < audits.count(); i++) {
@@ -1429,7 +1448,7 @@ int ObDropTableHelper::lock_audits_by_id_(const ObTableSchema &table_schema)
   } else if ((table_schema.is_user_table() || table_schema.is_external_table())) {
     const uint64_t table_id = table_schema.get_table_id();
     ObArray<ObSAuditSchema> audits;
-    if (OB_FAIL(latest_schema_guard_.get_audit_schemas_in_owner(AUDIT_TABLE, table_id, audits))) {
+    if (OB_FAIL(schema_guard_wrapper_.get_audit_schemas_in_owner(AUDIT_TABLE, table_id, audits))) {
       LOG_WARN("fail to get audit schemas in owner", KR(ret), K(table_id));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < audits.count(); i++) {
@@ -1449,12 +1468,12 @@ int ObDropTableHelper::lock_sensitive_rules_by_id_(const ObTableSchema &table_sc
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else {
-    ObArray<ObSensitiveRuleSchema *> sensitive_rules;
+    ObArray<const ObSensitiveRuleSchema *> sensitive_rules;
     if (OB_FAIL(get_sensitive_rule_schemas_by_table_(table_schema, sensitive_rules))) {
       LOG_WARN("fail to get sensitive rule schemas by table", KR(ret), K(table_schema));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < sensitive_rules.count(); i++) {
-      ObSensitiveRuleSchema *sensitive_rule = sensitive_rules.at(i);
+      const ObSensitiveRuleSchema *sensitive_rule = sensitive_rules.at(i);
       if (OB_ISNULL(sensitive_rule)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid sensitive rule", KR(ret), K(sensitive_rule));
@@ -1481,7 +1500,7 @@ int ObDropTableHelper::add_table_to_tablet_autoinc_cleaner_(const ObTableSchema 
     const uint64_t lob_meta_tid = table_schema.get_aux_lob_meta_tid();
     if (OB_INVALID_ID != lob_meta_tid) {
       const ObTableSchema *lob_meta_table_schema = nullptr;
-      if (OB_FAIL(latest_schema_guard_.get_table_schema(lob_meta_tid, lob_meta_table_schema))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_table_schema(lob_meta_tid, lob_meta_table_schema))) {
         LOG_WARN("failed to get aux table schema", KR(ret), K(lob_meta_tid));
       } else if (OB_ISNULL(lob_meta_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1567,7 +1586,7 @@ int ObDropTableHelper::drop_table_(const ObTableSchema &table_schema, const ObSt
     // delete audit
     if (OB_SUCC(ret) && (table_schema.is_user_table() || table_schema.is_external_table())) {
       ObArray<ObSAuditSchema> audit_schemas;
-      if (OB_FAIL(latest_schema_guard_.get_audit_schemas_in_owner(AUDIT_TABLE, table_schema.get_table_id(), audit_schemas))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_audit_schemas_in_owner(AUDIT_TABLE, table_schema.get_table_id(), audit_schemas))) {
         LOG_WARN("fail to get audit schemas in owner", KR(ret), K(table_schema.get_table_id()));
       } else {
         ObSqlString public_sql_string;
@@ -1590,7 +1609,7 @@ int ObDropTableHelper::drop_table_(const ObTableSchema &table_schema, const ObSt
     }
 
     if (OB_SUCC(ret)) {
-      if (table_schema.is_aux_table() && !is_inner_table(table_schema.get_table_id())) {
+      if (table_schema.is_aux_table() && !is_inner_table(table_schema.get_table_id()) && !table_schema.is_oracle_tmp_table_v2_index_table()) {
         ObSnapshotInfoManager snapshot_mgr;
         ObArray<ObTabletID> tablet_ids;
         SCN invalid_scn;
@@ -1645,7 +1664,7 @@ int ObDropTableHelper::drop_table_to_recyclebin_(const ObTableSchema &table_sche
   } else if (OB_ISNULL(schema_service_impl = schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service impl is null", KR(ret));
-  } else if (OB_FAIL(latest_schema_guard_.get_database_schema(OB_RECYCLEBIN_SCHEMA_ID, recyclebin_database_schema))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_database_schema(OB_RECYCLEBIN_SCHEMA_ID, recyclebin_database_schema))) {
     LOG_WARN("fail to get recyclebin database schema", KR(ret));
   } else if (OB_ISNULL(recyclebin_database_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1705,14 +1724,11 @@ int ObDropTableHelper::drop_triggers_(const ObTableSchema &table_schema)
     for (int64_t i = 0; OB_SUCC(ret) && i < trigger_ids.count(); i++) {
       const uint64_t trigger_id = trigger_ids.at(i);
       const ObTriggerInfo *trigger_info = NULL;
-      if (OB_FAIL(latest_schema_guard_.get_trigger_info(trigger_id, trigger_info))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_trigger_info(trigger_id, trigger_info))) {
         LOG_WARN("fail to get trigger info", KR(ret), K(trigger_id));
       } else if (OB_ISNULL(trigger_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("trigger info is null", KR(ret));
-      } else if (trigger_info->is_in_recyclebin()) {
-        ret= OB_ERR_UNEXPECTED;
-        LOG_WARN("trigger is in recyclebin", KR(ret), K(trigger_id));
       } else {
         if (is_to_recyclebin_(table_schema)) {
           if (OB_FAIL(drop_trigger_to_recyclebin_(*trigger_info))) {
@@ -1763,7 +1779,7 @@ int ObDropTableHelper::drop_trigger_to_recyclebin_(const ObTriggerInfo &trigger_
   } else if (OB_ISNULL(schema_service_impl = schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service impl is null", KR(ret));
-  } else if (OB_FAIL(latest_schema_guard_.get_database_schema(OB_RECYCLEBIN_SCHEMA_ID, recyclebin_database_schema))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_database_schema(OB_RECYCLEBIN_SCHEMA_ID, recyclebin_database_schema))) {
     LOG_WARN("fail to get recyclebin schema", KR(ret));
   } else if (OB_ISNULL(recyclebin_database_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1773,7 +1789,7 @@ int ObDropTableHelper::drop_trigger_to_recyclebin_(const ObTriggerInfo &trigger_
   } else if (OB_FAIL(new_trigger_info.assign(trigger_info))) {
     LOG_WARN("fail to assign trigger info", KR(ret), K(trigger_info));
   } else if (FALSE_IT(new_trigger_info.set_schema_version(new_schema_version))) {
-  } else if (OB_FAIL(latest_schema_guard_.get_table_schema(trigger_info.get_base_object_id(), base_table_schema))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_table_schema(trigger_info.get_base_object_id(), base_table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(trigger_info.get_base_object_id()));
   } else if (OB_ISNULL(base_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1815,7 +1831,7 @@ int ObDropTableHelper::drop_obj_privs_(const uint64_t obj_id, const ObObjectType
   } else if (OB_ISNULL(schema_service_impl = schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service impl is null", KR(ret));
-  } else if (OB_FAIL(latest_schema_guard_.get_obj_privs(obj_id, obj_type, obj_privs))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_obj_privs(obj_id, obj_type, obj_privs))) {
     LOG_WARN("fail to get obj privs", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < obj_privs.count(); i++) {
@@ -1842,7 +1858,7 @@ int ObDropTableHelper::drop_sequences_(const ObTableSchema &table_schema)
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table()) {
+  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin(); OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
       ObColumnSchemaV2 &column_schema = (**iter);
       if (OB_FAIL(drop_sequence_(column_schema))) {
@@ -1864,7 +1880,7 @@ int ObDropTableHelper::drop_rls_object_(const ObTableSchema &table_schema)
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_rls_policy_ids().count(); i++) {
       const ObRlsPolicySchema *policy_schema = NULL;
       uint64_t policy_id = table_schema.get_rls_policy_ids().at(i);
-      if (OB_FAIL(latest_schema_guard_.get_rls_policys(policy_id, policy_schema))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_rls_policys(policy_id, policy_schema))) {
         LOG_WARN("fail to get rls policy schema", KR(ret), K(policy_id));
       } else if (OB_ISNULL(policy_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1881,7 +1897,7 @@ int ObDropTableHelper::drop_rls_object_(const ObTableSchema &table_schema)
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_rls_group_ids().count(); i++) {
       const ObRlsGroupSchema *group_schema = NULL;
       uint64_t group_id = table_schema.get_rls_group_ids().at(i);
-      if (OB_FAIL(latest_schema_guard_.get_rls_groups(group_id, group_schema))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_rls_groups(group_id, group_schema))) {
         LOG_WARN("fail to get rls group schema", KR(ret), K(group_id));
       } else if (OB_ISNULL(group_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1898,7 +1914,7 @@ int ObDropTableHelper::drop_rls_object_(const ObTableSchema &table_schema)
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_rls_context_ids().count(); i++) {
       const ObRlsContextSchema *context_schema = NULL;
       uint64_t context_id = table_schema.get_rls_context_ids().at(i);
-      if (OB_FAIL(latest_schema_guard_.get_rls_contexts(context_id, context_schema))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_rls_contexts(context_id, context_schema))) {
         LOG_WARN("fail to get rls context schema", KR(ret), K(context_id));
       } else if (OB_ISNULL(context_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1919,7 +1935,7 @@ int ObDropTableHelper::drop_rls_object_(const ObTableSchema &table_schema)
 int ObDropTableHelper::drop_sensitive_column_(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObSensitiveRuleSchema *> sensitive_rules;
+  ObArray<const ObSensitiveRuleSchema *> sensitive_rules;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(get_sensitive_rule_schemas_by_table_(table_schema, sensitive_rules))) {
@@ -1948,7 +1964,7 @@ int ObDropTableHelper::drop_sequence_(const ObColumnSchemaV2 &column_schema)
     LOG_WARN("schema service impl is null", KR(ret));
   } else if (column_schema.is_identity_column()) {
     const ObSequenceSchema *sequence_schema = NULL;
-    if (OB_FAIL(latest_schema_guard_.get_sequence_schema(column_schema.get_sequence_id(), sequence_schema))) {
+    if (OB_FAIL(schema_guard_wrapper_.get_sequence_schema(column_schema.get_sequence_id(), sequence_schema))) {
       LOG_WARN("get sequence schema fail", KR(ret), K(column_schema));
       if (ret == OB_ERR_UNEXPECTED) {
         // sequence has been deleted externally.
@@ -1971,7 +1987,7 @@ int ObDropTableHelper::drop_sequence_(const ObColumnSchemaV2 &column_schema)
     // delete sequence audit
     if (OB_SUCC(ret)) {
       ObArray<ObSAuditSchema> audit_schemas;
-      if (OB_FAIL(latest_schema_guard_.get_audit_schemas_in_owner(AUDIT_SEQUENCE, sequence_schema->get_sequence_id(), audit_schemas))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_audit_schemas_in_owner(AUDIT_SEQUENCE, sequence_schema->get_sequence_id(), audit_schemas))) {
         LOG_WARN("fail to get audit schemas in owner", KR(ret), K(sequence_schema->get_sequence_id()));
       } else {
         ObSqlString public_sql_string;
@@ -2017,7 +2033,7 @@ int ObDropTableHelper::modify_dep_obj_status_(const int64_t idx)
         const ObTableSchema* view_schema = nullptr;
         int64_t new_schema_version = OB_INVALID_VERSION;
 
-        if (OB_FAIL(latest_schema_guard_.get_table_schema(obj_id, view_schema))) {
+        if (OB_FAIL(schema_guard_wrapper_.get_table_schema(obj_id, view_schema))) {
           LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(obj_id));
         } else if (OB_ISNULL(view_schema)) {
           ret = OB_ERR_PARALLEL_DDL_CONFLICT;
@@ -2195,7 +2211,7 @@ int ObDropTableHelper::sync_version_for_cascade_mock_fk_parent_table_(const ObIA
       const uint64_t mock_fk_parent_table_id = mock_fk_parent_table_ids.at(i);
       const ObMockFKParentTableSchema *mock_fk_parent_table_schema = NULL;
       ObMockFKParentTableSchema tmp_mock_fk_parent_table_schema;
-      if (OB_FAIL(latest_schema_guard_.get_mock_fk_parent_table_schema(mock_fk_parent_table_id, mock_fk_parent_table_schema))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_mock_fk_parent_table_schema(mock_fk_parent_table_id, mock_fk_parent_table_schema))) {
         LOG_WARN("fail to get mock fk parent table schema", KR(ret), K(mock_fk_parent_table_id));
       } else if (OB_ISNULL(mock_fk_parent_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -2249,7 +2265,7 @@ int ObDropTableHelper::log_table_not_exist_msg_(const obrpc::ObTableItem &table_
 }
 
 int ObDropTableHelper::get_sensitive_rule_schemas_by_table_(const ObTableSchema &table_schema,
-                                                            ObIArray<ObSensitiveRuleSchema *> &sensitive_rules)
+                                                            ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules)
 {
   int ret = OB_SUCCESS;
   uint64_t compat_version = 0;
@@ -2266,7 +2282,7 @@ int ObDropTableHelper::get_sensitive_rule_schemas_by_table_(const ObTableSchema 
              || (is_oracle_mode && !((compat_version >= MOCK_DATA_VERSION_4_4_2_0 && compat_version < DATA_VERSION_4_5_0_0) ||
                                      (compat_version >= DATA_VERSION_4_5_1_0)))) {
     // not supported sensitive rule yet, do nothing
-  } else if (OB_FAIL(latest_schema_guard_.get_sensitive_rule_schemas_by_table(table_schema, sensitive_rules))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_sensitive_rule_schemas_by_table(table_schema, sensitive_rules))) {
     LOG_WARN("get sensitive rule schemas failed", KR(ret), K(table_schema));
   }
   return ret;

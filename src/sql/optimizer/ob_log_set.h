@@ -14,12 +14,15 @@
 #define OCEANBASE_SQL_OB_LOG_SET_H
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "ob_select_log_plan.h"
 namespace oceanbase
 {
 namespace sql
 {
 struct ObBasicCostInfo;
+template<typename R, typename C>
+class PlanVisitor;
 
 class ObLogSet : public ObLogicalOperator
 {
@@ -34,7 +37,13 @@ public:
       set_dist_algo_(DIST_INVALID_METHOD),
       random_none_idx_(OB_INVALID_INDEX),
       set_op_(ObSelectStmt::NONE),
-      set_directions_(),
+      set_directions_(plan.get_allocator()),
+      map_array_(plan.get_allocator()),
+      search_ordering_(plan.get_allocator()),
+      cycle_items_(plan.get_allocator()),
+      child_ndv_(plan.get_allocator()),
+      set_exprs_(plan.get_allocator()),
+      pure_set_exprs_(plan.get_allocator()),
       identify_seq_expr_(nullptr)
   {
   }
@@ -146,15 +155,15 @@ private:
   DistAlgo set_dist_algo_;
   int64_t random_none_idx_;
   ObSelectStmt::SetOperator set_op_;
-  common::ObSEArray<ObOrderDirection, 8, common::ModulePageAllocator, true> set_directions_;
-  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> map_array_;
+  ObSqlArray<ObOrderDirection> set_directions_;
+  ObSqlArray<int64_t> map_array_;
   //for cte search clause
-  common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true>  search_ordering_;
-  common::ObSEArray<ColumnItem, 8, common::ModulePageAllocator, true>  cycle_items_;
-  common::ObSEArray<double, 4, common::ModulePageAllocator, true>  child_ndv_;
+  ObSqlArray<OrderItem>  search_ordering_;
+  ObSqlArray<ColumnItem>  cycle_items_;
+  ObSqlArray<double>  child_ndv_;
 
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> set_exprs_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pure_set_exprs_;
+  ObSqlArray<ObRawExpr*> set_exprs_;
+  ObSqlArray<ObRawExpr*> pure_set_exprs_;
   //for batch search recursive cte
   ObRawExpr *identify_seq_expr_;
 

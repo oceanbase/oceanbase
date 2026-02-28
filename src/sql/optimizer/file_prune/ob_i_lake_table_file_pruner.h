@@ -133,9 +133,7 @@ public:
   {
   }
 
-  virtual ~ObLakeTablePushDownFilter()
-  {
-  }
+  virtual ~ObLakeTablePushDownFilter();
 
   static int generate_pd_filter_spec(ObIAllocator &allocator,
                                      ObExecContext &exec_ctx,

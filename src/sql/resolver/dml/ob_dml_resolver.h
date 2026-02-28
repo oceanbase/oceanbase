@@ -69,18 +69,18 @@ struct ResolverJoinInfo {
 
 struct ObDmlJtColDef
 {
-  ObDmlJtColDef()
+  ObDmlJtColDef(common::ObIAllocator &allocator)
     : col_base_info_(),
       table_id_(common::OB_INVALID_ID),
-      regular_cols_(),
-      nested_cols_(),
+      regular_cols_(allocator),
+      nested_cols_(allocator),
       error_expr_(nullptr),
       empty_expr_(nullptr) {}
 
   ObJtColBaseInfo col_base_info_;
   int64_t table_id_;
-  common::ObSEArray<ObDmlJtColDef*, 4, common::ModulePageAllocator, true> regular_cols_;
-  common::ObSEArray<ObDmlJtColDef*, 4, common::ModulePageAllocator, true> nested_cols_;
+  ObSqlArray<ObDmlJtColDef*> regular_cols_;
+  ObSqlArray<ObDmlJtColDef*> nested_cols_;
   ObRawExpr* error_expr_;
   ObRawExpr* empty_expr_;
   TO_STRING_KV(K_(col_base_info));
@@ -214,6 +214,7 @@ public:
   int resolve_rb_iterate_item(const ParseNode &table_node,
                               TableItem *&table_item);
   int resolve_unnest_item(const ParseNode &table_node, TableItem *&table_item);
+  int resolve_ai_split_document_item(const ParseNode &table_node, TableItem *&table_item);
   int create_rb_iterate_table_item(TableItem *&table_item, ObString alias_name = NULL);
   int create_unnest_table_item(TableItem *&table_item, ObItemType item_type, ObString table_name);
   int rb_iterate_table_add_column(TableItem *&table_item, ColumnItem *&col_item, int64_t col_id = 1);
@@ -438,7 +439,6 @@ protected:
                                    ObSQLSessionInfo *session_info,
                                    int64_t &timestamp_ms);
   int check_flashback_expr_validity(ObRawExpr *expr, bool &has_column);
-  int set_flashback_info_for_view(ObSelectStmt *select_stmt, TableItem *table_item);
   int resolve_table_drop_oracle_temp_table(TableItem *&table_item);
   int resolve_base_or_alias_table_item_normal(const uint64_t tenant_id,
                                               const uint64_t catalog_id,
@@ -540,13 +540,6 @@ protected:
     const ObTableSchema *table_schema,
     bool need_dist_algo_expr,
     ObRawExpr *&expr,
-    ObDMLStmt *stmt = NULL);
-  int fill_embedded_vec_expr_param(
-    const uint64_t table_id,
-    const uint64_t index_tid,
-    const uint64_t column_id,
-    const ObTableSchema *table_schema,
-    ObRawExpr *&vec_id_expr,
     ObDMLStmt *stmt = NULL);
   int build_partid_expr(ObRawExpr *&expr, const uint64_t table_id);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
@@ -852,6 +845,7 @@ protected:
   int resolve_basic_table_with_cte(const ParseNode &parse_tree, TableItem *&table_item);
   int check_is_table_supported_for_mview(const TableItem &table_item, const ObTableSchema &table_schema);
   int check_is_table_supported_for_mview(const ObItemType table_node_type);
+  int check_is_mview_refresh_sql(const ObTableSchema &dml_table_schema);
   int resolve_cte_table(const ParseNode &parse_tree, const TableItem *CTE_table_item, TableItem *&table_item);
   int resolve_recursive_cte_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_with_clause_opt_alias_colnames(const ParseNode *parse_tree, TableItem *&table_item);
@@ -1088,6 +1082,14 @@ public:
                                          const common::ObIArray<ObString> &part_col_names);
 
   static int set_basic_column_properties(ObColumnSchemaV2 &column_schema, const common::ObString &mock_gen_column_str);
+  static int build_collection_column_schema_for_parquet(const parquet::schema::Node* node, bool &is_arry, ObStringBuffer &buf);
+  static int get_type_name_from_primitive_node(const parquet::schema::PrimitiveNode *primitive_node,
+                                               ObStringBuffer &buf);
+  static int setup_column_schema_from_parquet_type(parquet::Type::type phy_type,
+                                                   const parquet::LogicalType *logical_type,
+                                                   int64_t type_len, int32_t precision,
+                                                   int32_t scale, ObColumnSchemaV2 &column_schema);
+
 private:
   int resolve_table_check_constraint_items(const TableItem *table_item,
                                            const ObTableSchema *table_schema);
@@ -1139,10 +1141,11 @@ private:
   bool is_update_for_mv_fast_refresh(const ObDMLStmt &stmt);
   int resolve_px_node_addrs(const ParseNode &hint_node, ObIArray<ObAddr> &addrs);
   int resolve_disable_rich_format_op_list(const ParseNode &hint_node, ObIArray<common::ObString> &op_list);
+  int build_collection_column_schema_for_orc(const orc::Type* type, ObStringBuffer &buf);
+
   int build_column_schemas_for_orc(const orc::Type* type,
                                   const ColumnIndexType column_index_type,
                                   ObTableSchema& table_schema);
-  int check_array_column_schema_for_parquet(const parquet::schema::Node* node, bool &is_arry, ObStringBuffer &buf);
   int build_column_schemas_for_parquet(const parquet::SchemaDescriptor* schema,
                                       const ColumnIndexType column_index_type,
                                       ObTableSchema& table_schema);
@@ -1151,6 +1154,9 @@ private:
                                   ObTableSchema &table_schema,
                                   common::ObIAllocator &allocator,
                                   uint64_t new_table_id);
+  int build_column_schemas_for_kafka(const ObExternalFileFormat &format,
+                                     ObTableSchema &table_schema,
+                                     common::ObIAllocator &allocator);
   int build_column_schemas(ObTableSchema& table_schema,
                                       ObExternalFileFormat &format,
                                       uint64_t new_table_id,
@@ -1216,9 +1222,6 @@ protected:
       const ObDMLStmt &stmt,
       bool &is_ddl,
       ObIndexType &index_type);
-  int check_need_fill_embedded_vec_expr_param(const ObDMLStmt &stmt,
-                                              const ObColumnSchemaV2 &column_schema,
-                                              bool &need_fill);
 
 protected:
   ObStmtScope current_scope_;
@@ -1254,27 +1257,27 @@ protected:
   int32_t current_view_level_;
   uint64_t view_ref_id_;
   bool is_resolving_view_;
-  common::ObSEArray<ResolverJoinInfo, 1, common::ModulePageAllocator, true> join_infos_;
+  common::ObSEArray<ResolverJoinInfo, 1> join_infos_;
   //store parent cte tables
-  common::ObSEArray<TableItem *, 4, common::ModulePageAllocator, true> parent_cte_tables_;
+  common::ObSEArray<TableItem *, 4> parent_cte_tables_;
   //store cte tables of current level
-  common::ObSEArray<TableItem *, 4, common::ModulePageAllocator, true> current_cte_tables_;
+  common::ObSEArray<TableItem *, 4> current_cte_tables_;
 
   ObSharedExprResolver expr_resv_ctx_;
   /*these member is only for with clause*/
   ObCteResolverCtx cte_ctx_;
 
   //store json table column info
-  common::ObSEArray<ObDmlJtColDef *, 1, common::ModulePageAllocator, true> json_table_infos_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pseudo_external_file_col_exprs_;
+  common::ObSEArray<ObDmlJtColDef *, 1> json_table_infos_;
+  common::ObSEArray<ObRawExpr*, 4> pseudo_external_file_col_exprs_;
   //for validity check for on-condition with (+)
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> ansi_join_outer_table_id_;
+  common::ObSEArray<uint64_t, 4> ansi_join_outer_table_id_;
 
   //for values table used to insert stmt:insert into table values row()....
   ObInsertResolver *upper_insert_resolver_;
   bool can_resolve_pseudo_column_ref_with_empty_tablename_ = false;
   // mapped table id and column id
-  common::ObSEArray<std::pair<uint64_t, int64_t>, 4, common::ModulePageAllocator, true> mapped_ids_;
+  common::ObSEArray<std::pair<uint64_t, int64_t>, 4> mapped_ids_;
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObDMLResolver);
 };

@@ -285,7 +285,6 @@ private:
                                  int64_t prefix_pos,
                                  ObIArray<OrderItem> &sort_keys,
                                  const DistAlgo algo);
-
   /**
    *  @brief  GENERATE the PLAN tree FOR "SET" operator (UNION/INTERSECT/EXCEPT)
    *  Warning:
@@ -345,9 +344,9 @@ private:
 
   int allocate_set_distinct_as_top(ObLogicalOperator *&top);
 
-  int candi_allocate_recursive_union_all(const ObIArray<ObSelectLogPlan*> &child_plans);
+  int candi_allocate_recursive_union(const ObIArray<ObSelectLogPlan*> &child_plans);
 
-  int create_recursive_union_all_plan(ObIArray<CandidatePlan> &left_best_plans,
+  int create_recursive_union_plan(ObIArray<CandidatePlan> &left_best_plans,
                                       ObIArray<CandidatePlan> &right_best_plans,
                                       const ObIArray<OrderItem> &order_items,
                                       const bool ignore_hint,
@@ -356,13 +355,13 @@ private:
                                                 ObLogicalOperator *right_child,
                                                 const bool ignore_hint,
                                                 DistAlgo &dist_set_method);
-  int create_recursive_union_all_plan(ObLogicalOperator *left_child,
-                                      ObLogicalOperator *right_child,
-                                      const ObIArray<OrderItem> &candi_order_items,
-                                      DistAlgo dist_set_method,
-                                      ObLogicalOperator *&top);
+  int create_recursive_union_plan(ObLogicalOperator *left_child,
+                                  ObLogicalOperator *right_child,
+                                  const ObIArray<OrderItem> &candi_order_items,
+                                  DistAlgo dist_set_method,
+                                  ObLogicalOperator *&top);
 
-  int allocate_recursive_union_all_as_top(ObLogicalOperator *left_child,
+  int allocate_recursive_union_as_top(ObLogicalOperator *left_child,
                                           ObLogicalOperator *right_child,
                                           DistAlgo dist_set_method,
                                           ObLogicalOperator *&top);
@@ -1104,6 +1103,7 @@ int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
   int contain_enum_set_rowkeys(const ObLogTableScan &table_scan, bool &contain);
   int candi_allocate_order_by_if_losted(ObIArray<OrderItem> &order_items);
   int check_aggr_with_keep(const ObIArray<ObAggFunRawExpr*>& aggr_items, bool &has_keep_aggr);
+  int check_expr_contains_rollup_expr(const ObRawExpr *expr, const ObIArray<ObRawExpr*> &rollup_exprs, bool &contains_rollup);
 
   DISALLOW_COPY_AND_ASSIGN(ObSelectLogPlan);
 };

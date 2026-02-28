@@ -31,6 +31,9 @@
 #include "logservice/ob_log_handler_base.h"
 #include "ob_remote_log_source.h"          // ObRemoteSource
 #include "ob_remote_fetch_context.h"       // ObRemoteFetchContext
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "logservice/ob_log_submit_log_rate_limiter.h"
+#endif // OB_BUILD_SHARED_LOG_SERVICE
 namespace oceanbase
 {
 namespace common
@@ -198,7 +201,11 @@ public:
   ~ObLogRestoreHandler();
 
 public:
-  int init(const int64_t id, ipalf::IPalfEnv *palf_env);
+  int init(const int64_t id, ipalf::IPalfEnv *palf_env
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+           , ObLogLSSubmitLogRateLimiter *shared_log_submit_log_rate_limiter
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+           );
   int stop();
   void destroy();
   // @brief switch log_restore_handle role, to LEADER or FOLLOWER
@@ -357,6 +364,9 @@ private:
   int64_t last_delay_count_;
   ObRemoteFetchStat cur_stat_info_;
   ObRemoteFetchStat last_stat_info_;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  ObLogLSSubmitLogRateLimiter *shared_log_submit_log_rate_limiter_;
+#endif // OB_BUILD_SHARED_LOG_SERVICE
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreHandler);
 };

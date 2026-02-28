@@ -44,56 +44,45 @@ struct ObIndexSSTableEstimateContext
 public:
   ObIndexSSTableEstimateContext(
       const ObTabletHandle &tablet_handle,
-      const common::ObQueryFlag &query_flag)
+      const common::ObQueryFlag &query_flag,
+      const int64_t base_version = -1)
       : index_read_info_(tablet_handle.get_obj()->get_rowkey_read_info()),
-      tablet_handle_(&tablet_handle),
-      query_flag_(query_flag)
-      {
-      }
-  ObIndexSSTableEstimateContext(
-      const ObITableReadInfo &index_read_info,
-      const common::ObQueryFlag &query_flag)
-      : index_read_info_(index_read_info),
-      tablet_handle_(nullptr),
-      query_flag_(query_flag)
-      {}
-  ~ObIndexSSTableEstimateContext() {}
-  OB_INLINE bool is_valid() const
+      tablet_handle_(tablet_handle),
+      query_flag_(query_flag),
+      base_version_(base_version)
   {
-    return tablet_handle_ == nullptr || tablet_handle_->is_valid();
   }
+
+  ~ObIndexSSTableEstimateContext() = default;
 
   TO_STRING_KV(K_(tablet_handle), K_(query_flag));
   const ObITableReadInfo &index_read_info_;
-  const ObTabletHandle *tablet_handle_;
+  const ObTabletHandle &tablet_handle_;
   const common::ObQueryFlag &query_flag_;
+  const int64_t base_version_;
 };
 
 struct ObEstimatedResult
 {
   ObEstimatedResult(const bool only_block = false)
-    : total_row_count_(0), total_row_count_delta_(0),
-    excluded_row_count_(0), excluded_row_count_delta_(0), macro_block_cnt_(0), micro_block_cnt_(0),
+    : total_row_count_(0), total_row_count_delta_(0), macro_block_cnt_(0), micro_block_cnt_(0),
     only_block_(only_block)
   {
   }
   int64_t total_row_count_;
   int64_t total_row_count_delta_;
-  int64_t excluded_row_count_;
-  int64_t excluded_row_count_delta_;
   uint64_t macro_block_cnt_;
   uint64_t micro_block_cnt_;
   bool only_block_;
-  TO_STRING_KV(K_(total_row_count), K_(total_row_count_delta), K_(excluded_row_count),
-      K_(excluded_row_count_delta), K_(macro_block_cnt), K_(micro_block_cnt), K_(only_block));
+  TO_STRING_KV(K_(total_row_count), K_(total_row_count_delta), K_(macro_block_cnt), K_(micro_block_cnt), K_(only_block));
 };
 
 class ObIndexBlockScanEstimator
 {
 public:
   ObIndexBlockScanEstimator(const ObIndexSSTableEstimateContext &context);
-  ~ObIndexBlockScanEstimator();
-  void reuse();
+  ~ObIndexBlockScanEstimator() = default;
+  void reuse() {}
   int estimate_row_count(blocksstable::ObSSTable &sstable,
                          const blocksstable::ObDatumRange &datum_range,
                          ObPartitionEst &part_est);
@@ -102,47 +91,16 @@ public:
                            int64_t &macro_block_cnt,
                            int64_t &micro_block_cnt);
 private:
-  int init_index_scanner(blocksstable::ObSSTable &sstable);
   int cal_total_estimate_result(blocksstable::ObSSTable &sstable,
       const blocksstable::ObDatumRange &datum_range,
       ObEstimatedResult &result);
-  int estimate_excluded_border_result(const bool is_multi_version_minor,
-      const bool is_major,
-      const blocksstable::ObDatumRange &datum_range,
-      const bool is_left,
-      ObEstimatedResult &result);
-  int goto_next_level(
-      const blocksstable::ObDatumRange &range,
-      const blocksstable::ObMicroIndexInfo &micro_index_info,
-      const bool is_multi_version_minor,
-      ObEstimatedResult &result);
-  int prefetch_index_block_data(
-      const blocksstable::ObMicroIndexInfo &micro_index_info,
-      ObMicroBlockDataHandle &micro_handle);
   int estimate_data_block_row_count(
       const blocksstable::ObDatumRange &range,
       ObMicroBlockDataHandle &micro_handle,
       bool consider_multi_version,
        ObPartitionEst &est);
-  int cal_total_estimate_result_for_ddl(
-      blocksstable::ObSSTable &sstable,
-      const blocksstable::ObDatumRange &datum_range,
-      ObEstimatedResult &result);
-  ObMicroBlockDataHandle &get_read_handle()
-  {
-    return micro_handles_[level_++ % DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
-  }
-  static const int64_t DEFAULT_GET_MICRO_DATA_HANDLE_CNT = 2;
-  static const int64_t RANGE_ROWS_IN_AND_BORDER_RATIO_THRESHOLD = 1000;
   uint64_t tenant_id_;
-  blocksstable::ObMicroBlockData root_index_block_;
-  blocksstable::ObIndexBlockRowScanner index_block_row_scanner_;
-  blocksstable::ObMacroBlockReader macro_reader_;
-  int64_t level_;
-  ObMicroBlockDataHandle micro_handles_[DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
-  blocksstable::ObMicroBlockData index_block_data_;
   const ObIndexSSTableEstimateContext &context_;
-  ObArenaAllocator allocator_;
 };
 
 }

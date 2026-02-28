@@ -61,7 +61,8 @@ public:
      return can_blockscan() &&
             !access_ctx_->is_mview_query() &&
             iter_param_->vectorized_enabled_ &&
-            iter_param_->enable_pd_filter();
+            iter_param_->enable_pd_filter() &&
+            support_pd_rowscn_filter_if_contain(*table_, block_row_store_);
   }
   virtual int get_next_rows() override;
   virtual int get_next_rowkey(int64_t &curr_scan_index,
@@ -75,6 +76,7 @@ public:
                K_(is_new_group),
                K_(reverse_scan),
                K_(is_limit_end),
+               K_(use_row_store_projector),
                K_(state),
                K_(blockscan_state),
                K_(group_by_project_idx),
@@ -186,13 +188,31 @@ private:
   {
     return T_PSEUDO_GROUP_ID == e->type_;
   }
+  OB_INLINE bool has_rows_filter() const
+  {
+    // switch context maybe make rows_filter_ is not nullptr, but filter_ is nullptr
+    return rows_filter_ != nullptr && rows_filter_->filter_ != nullptr;
+  }
+
+  static OB_INLINE bool is_support_locate_cs_range(const ObITable &table)
+  {
+    return table.is_co_sstable() && !table.is_ddl_merge_sstable();
+  }
+
+  static OB_INLINE bool support_pd_rowscn_filter_if_contain(const ObITable &table, ObBlockRowStore *block_row_store)
+  {
+    return (block_row_store != nullptr && block_row_store->get_pd_filter_info().contain_rowscn_)
+               ? is_support_locate_cs_range(table)
+               : true;
+  }
+
 protected:
   ObSSTableRowScanner<ObCOPrefetcher> *row_scanner_;
   int32_t range_idx_;
 private:
   int init_group_by_info(ObTableAccessContext &context);
   int push_group_by_processor(ObICGIterator *cg_iterator);
-  bool use_row_store_projector(const ObTableIterParam& row_param, const ObTableAccessContext& context, const ObCOSSTableV2& co_sstable) const;
+  bool use_row_store_projector(const ObTableIterParam& row_param, const ObTableAccessContext& context, const ObCOSSTableV2& co_sstable);
 
   // use row store projector
   // when projected column count is larger than this
@@ -201,6 +221,7 @@ private:
   bool is_new_group_;
   bool reverse_scan_;
   bool is_limit_end_;
+  mutable bool use_row_store_projector_;
   ScanState state_;
   BlockScanState blockscan_state_;
   int32_t group_by_project_idx_;

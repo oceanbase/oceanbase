@@ -98,6 +98,8 @@ public:
                              int64_t &size);
     int32_t rows() const { return cnt_; }
     int get_store_row(int64_t &cur_pos, const ObCompactRow *&sr);
+    int get_store_rows(int64_t &cur_pos, const ObCompactRow **stored_rows, const int64_t max_rows,
+                       int64_t &read_rows);
     int get_row(const int64_t row_id, const ObCompactRow *&sr) const;
 
   private:

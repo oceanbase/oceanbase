@@ -325,7 +325,7 @@ int ObLoadInnerTableSchemaExecutor::call_next_arg_(ObLoadTenantTableSchemaProxy&
   return ret;
 }
 
-int ObLoadInnerTableSchemaExecutor::load_core_schema_version(
+int ObLoadInnerTableSchemaExecutor::load_schema_version(
     const uint64_t tenant_id,
     common::ObISQLClient &client)
 {
@@ -333,6 +333,8 @@ int ObLoadInnerTableSchemaExecutor::load_core_schema_version(
   share::ObGlobalStatProxy proxy(client, tenant_id);
   if (OB_FAIL(proxy.set_core_schema_version(share::INNER_TABLE_CORE_SCHEMA_VERSION))) {
     LOG_WARN("failed to set core_schema_version", KR(ret));
+  } else if (OB_FAIL(proxy.set_sys_schema_version(share::INNER_TABLE_SYS_SCHEMA_VERSION))) {
+    LOG_WARN("failed to set sys_schema_version", KR(ret));
   }
   return ret;
 }

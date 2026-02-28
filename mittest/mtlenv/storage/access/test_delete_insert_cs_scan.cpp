@@ -73,43 +73,6 @@ using namespace palf;
 namespace storage
 {
 
-ObSEArray<ObTxData, 8> TX_DATA_ARR;
-
-int ObTxTable::insert(ObTxData *&tx_data)
-{
-  int ret = OB_SUCCESS;
-  ret = TX_DATA_ARR.push_back(*tx_data);
-  return ret;
-}
-
-int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn)
-{
-  int ret = OB_SUCCESS;
-  for (int i = 0; i < TX_DATA_ARR.count(); i++)
-  {
-    if (read_tx_data_arg.tx_id_ == TX_DATA_ARR.at(i).tx_id_) {
-      if (TX_DATA_ARR.at(i).state_ == ObTxData::RUNNING) {
-        SCN tmp_scn;
-        tmp_scn.convert_from_ts(30);
-        ObTxCCCtx tmp_ctx(ObTxState::PREPARE, tmp_scn);
-        ret = fn(TX_DATA_ARR[i], &tmp_ctx);
-      } else {
-        ret = fn(TX_DATA_ARR[i]);
-      }
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "check with tx data failed", KR(ret), K(read_tx_data_arg), K(TX_DATA_ARR.at(i)));
-      }
-      break;
-    }
-  }
-  return ret;
-}
-
-void clear_tx_data()
-{
-  TX_DATA_ARR.reset();
-};
-
 class ObMockWhiteFilterExecutor : public ObWhiteFilterExecutor
 {
 public:
@@ -488,10 +451,9 @@ public:
   }
 };
 
-class TestDeleteInsertCSScan : public TestMergeBasic
+class TestDeleteInsertCSScan : public TestMergeBasic, public ::testing::WithParamInterface<bool>
 {
 public:
-  static const int64_t MAX_PARALLEL_DEGREE = 10;
   TestDeleteInsertCSScan();
   virtual ~TestDeleteInsertCSScan() {}
 
@@ -510,9 +472,6 @@ public:
                              const ObITableReadInfo &read_info,
                              ObPushdownFilterExecutor *&pushdown_filter);
   void prepare_txn(ObStoreCtx *store_ctx, const int64_t prepare_version);
-
-  void fake_freeze_info();
-  void get_tx_table_guard(ObTxTableGuard &tx_table_guard);
   int convert_to_co_sstable(ObTableHandleV2 &row_store, ObTableHandleV2 &co_store);
   void test_keep_order_blockscan(
       const char **major_data,
@@ -591,25 +550,10 @@ TestDeleteInsertCSScan::TestDeleteInsertCSScan()
 
 void TestDeleteInsertCSScan::SetUp()
 {
+  // toggle row store type by parameter: false -> FLAT_ROW_STORE, true -> CS_ENCODING_ROW_STORE
+  const bool use_cs_encoding = GetParam();
+  row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
   ObMultiVersionSSTableTest::SetUp();
-}
-
-void TestDeleteInsertCSScan::fake_freeze_info()
-{
-  share::ObFreezeInfoList &info_list = MTL(ObTenantFreezeInfoMgr *)->freeze_info_mgr_.freeze_info_;
-  info_list.reset();
-
-  share::SCN frozen_val;
-  frozen_val.val_ = 1;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 100;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 200;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 400;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-
-  info_list.latest_snapshot_gc_scn_.val_ = 500;
 }
 
 void TestDeleteInsertCSScan::TearDown()
@@ -720,6 +664,8 @@ void TestDeleteInsertCSScan::prepare_scan_param(
   access_param_.iter_param_.pd_storage_flag_.pd_blockscan_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
   access_param_.iter_param_.is_delete_insert_ = true;
+  access_param_.iter_param_.filter_canbe_handle_in_di_ = true;
+  access_param_.iter_param_.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
   access_param_.iter_param_.set_use_column_store();
 
   prepare_output_expr(output_cols_project_, tmp_col_descs);
@@ -823,7 +769,29 @@ int TestDeleteInsertCSScan::create_pushdown_filter(
                      *white_node, op_);
     column_exprs = &(white_node->column_exprs_);
     white_node->op_type_ = op_type;
-    pushdown_filter = filter;
+
+    void* expr_buf = nullptr;
+    sql::ObExpr* expr = nullptr;
+    sql::ObExpr** args = nullptr;
+
+    if (OB_ISNULL(expr_buf = query_allocator_.alloc(3 * sizeof(sql::ObExpr)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Failed to alloc memory for expr", KR(ret));
+    } else if (OB_ISNULL(args = static_cast<ObExpr**>(query_allocator_.alloc(2 * sizeof(sql::ObExpr*))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Failed to alloc memory for expr", KR(ret));
+    } else {
+      expr = static_cast<sql::ObExpr *>(expr_buf);
+      expr->arg_cnt_ = 2;
+      expr->args_ = args;
+      expr->args_[0] = expr + 1;
+      expr->args_[1] = expr + 2;
+      expr->args_[0]->type_ = T_REF_COLUMN;
+      expr->args_[1]->type_ = T_INT;
+      expr->args_[1]->obj_meta_.set_int();
+      white_node->expr_ = expr;
+      pushdown_filter = filter;
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -855,16 +823,6 @@ int TestDeleteInsertCSScan::create_pushdown_filter(
   return ret;
 }
 
-void TestDeleteInsertCSScan::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
-{
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_table_guard(tx_table_guard));
-}
-
 int create_cg_sstables(ObCOTabletMergeCtx &ctx, const int64_t start_cg_idx, const int64_t end_cg_idx)
 {
   int ret = OB_SUCCESS;
@@ -894,7 +852,7 @@ int TestDeleteInsertCSScan::convert_to_co_sstable(ObTableHandleV2 &row_store, Ob
   trans_version_range.base_version_ = 1;
   //prepare merge_ctx
   TestMergeBasic::prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
-  merge_context.static_param_.co_static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::USE_RS_BUILD_SCHEMA_MATCH_MERGE;
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, true/*only_use_row_store*/);
   merge_context.static_param_.data_version_ = DATA_VERSION_4_3_0_0;
   merge_context.static_param_.dag_param_.merge_version_ = trans_version_range.snapshot_version_;
   int32_t base_cg_idx = -1;
@@ -915,8 +873,8 @@ int TestDeleteInsertCSScan::convert_to_co_sstable(ObTableHandleV2 &row_store, Ob
     STORAGE_LOG(WARN, "Fail to prepare index builder", K(ret));
   } else if (OB_FAIL(merge_context.get_schema()->get_base_rowkey_column_group_index(base_cg_idx))) {
     STORAGE_LOG(WARN, "Fail to get base rowkey column group index", K(ret));
-  } else if (OB_FAIL(merge_context.static_param_.init_co_merge_flags())) {
-    STORAGE_LOG(WARN, "Fail to init co merge flags", K(ret));
+  } else if (OB_FAIL(merge_context.init_major_sstable_status())) {
+    STORAGE_LOG(WARN, "Fail to init major sstable status", K(ret));
   } else {
     merge_context.base_rowkey_cg_idx_ = base_cg_idx;
     ObCOMergeDagParam *dag_param = static_cast<ObCOMergeDagParam *>(&merge_context.static_param_.dag_param_);
@@ -1067,7 +1025,7 @@ void TestDeleteInsertCSScan::test_keep_order_blockscan(
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_co_scan)
+TEST_P(TestDeleteInsertCSScan, test_co_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1183,7 +1141,7 @@ TEST_F(TestDeleteInsertCSScan, test_co_scan)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_co_scan_with_reverted_delete_row)
+TEST_P(TestDeleteInsertCSScan, test_co_scan_with_reverted_delete_row)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1296,7 +1254,7 @@ TEST_F(TestDeleteInsertCSScan, test_co_scan_with_reverted_delete_row)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_co_filter)
+TEST_P(TestDeleteInsertCSScan, test_co_filter)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1392,7 +1350,7 @@ TEST_F(TestDeleteInsertCSScan, test_co_filter)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_multi_version_row_filter)
+TEST_P(TestDeleteInsertCSScan, test_multi_version_row_filter)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1588,7 +1546,7 @@ TEST_F(TestDeleteInsertCSScan, test_multi_version_row_filter)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_multi_co_scan)
+TEST_P(TestDeleteInsertCSScan, test_multi_co_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1703,7 +1661,7 @@ TEST_F(TestDeleteInsertCSScan, test_multi_co_scan)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_minor_major_version_overlap)
+TEST_P(TestDeleteInsertCSScan, test_minor_major_version_overlap)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1810,7 +1768,7 @@ TEST_F(TestDeleteInsertCSScan, test_minor_major_version_overlap)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_minor_major_version_overlap2)
+TEST_P(TestDeleteInsertCSScan, test_minor_major_version_overlap2)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1919,7 +1877,7 @@ TEST_F(TestDeleteInsertCSScan, test_minor_major_version_overlap2)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_multi_minor_major_version_overlap)
+TEST_P(TestDeleteInsertCSScan, test_multi_minor_major_version_overlap)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2038,7 +1996,7 @@ TEST_F(TestDeleteInsertCSScan, test_multi_minor_major_version_overlap)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_co_filter_with_uncommit)
+TEST_P(TestDeleteInsertCSScan, test_co_filter_with_uncommit)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2195,7 +2153,7 @@ TEST_F(TestDeleteInsertCSScan, test_co_filter_with_uncommit)
   clear_tx_data();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_refresh_table)
+TEST_P(TestDeleteInsertCSScan, test_refresh_table)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2339,7 +2297,7 @@ TEST_F(TestDeleteInsertCSScan, test_refresh_table)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_basic)
+TEST_P(TestDeleteInsertCSScan, keep_order_blockscan_basic)
 {
   const char *major_data[1];
   major_data[0] =
@@ -2380,7 +2338,7 @@ TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_basic)
   test_keep_order_blockscan(major_data, inc_data, expected, 10, {{1, 4}, {5, 10}});
 }
 
-TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_simple)
+TEST_P(TestDeleteInsertCSScan, keep_order_blockscan_simple)
 {
   const char *major_data[1];
   major_data[0] =
@@ -2421,7 +2379,7 @@ TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_simple)
   test_keep_order_blockscan(major_data, inc_data, expected, 10, {{5, 10}, {1, 4}});
 }
 
-TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_first_range_major_empty)
+TEST_P(TestDeleteInsertCSScan, keep_order_blockscan_first_range_major_empty)
 {
   const char *major_data[1];
   major_data[0] =
@@ -2464,7 +2422,7 @@ TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_first_range_major_empty)
       major_data, inc_data, expected, 11, {{10, 11}, {1, 9}});
 }
 
-TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_second_range_major_empty)
+TEST_P(TestDeleteInsertCSScan, keep_order_blockscan_second_range_major_empty)
 {
   const char *major_data[1];
   major_data[0] =
@@ -2508,6 +2466,11 @@ TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_second_range_major_empty)
   test_keep_order_blockscan(
       major_data, inc_data, expected, 11, {{10, 11}, {1, 9}});
 }
+
+INSTANTIATE_TEST_CASE_P(
+  FlatAndCSEncoding,
+  TestDeleteInsertCSScan,
+  ::testing::Values(false, true));
 
 }
 }

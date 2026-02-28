@@ -82,8 +82,7 @@ int ObDagMicroBlockIterator::open(const char *macro_block_buf,
     ObMicroBlockData index_block;
     if (OB_FAIL(get_index_block(index_block, true))) {
       STORAGE_LOG(WARN, "Fail to get index block", K(ret), K(index_block));
-    } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(
-        simplified_macro_header_.row_store_type_)))) {
+    } else if (OB_FAIL(set_reader(*index_block.get_micro_header()))) {
       STORAGE_LOG(WARN, "Fail to set reader for index block", K(ret));
     } else if (OB_ISNULL(reader_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -128,8 +127,7 @@ int ObDagMicroBlockIterator::get_index_block(ObMicroBlockData &micro_block, cons
         micro_buf,
         micro_buf_size,
         false,
-        micro_block.get_buf(),
-        micro_block.get_buf_size(),
+        micro_block,
         is_compressed))) {
       STORAGE_LOG(WARN, "Fail to decrypt and decompress micro block data", K(ret), K_(simplified_macro_header));
     }

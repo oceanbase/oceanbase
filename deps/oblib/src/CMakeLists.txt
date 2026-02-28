@@ -261,7 +261,7 @@ target_link_libraries(oblib_base_without_pass
   $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEP_DIR}/lib/libunwind.a>
   ${DEP_DIR}/lib/libz.a
   ${DEP_DIR}/lib/libicui18n.a
-  ${DEP_DIR}/lib/libicustubdata.a
+  ${DEP_DIR}/lib/libicudata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
   ${DEP_DIR}/lib/libthrift.a
@@ -273,6 +273,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/krb5/libcom_err.a
   ${DEP_DIR}/lib64/libarrow.a
   ${DEP_DIR}/lib64/libparquet.a
+  ${DEP_DIR}/lib64/librdkafka.a
   ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
   ${DEP_DIR}/lib64/liborc.a
   ${DEP_DIR}/lib64/libsnappy.a
@@ -306,7 +307,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libroaring.a
   ${DEP_DIR}/lib/libz.a
   ${DEP_DIR}/lib/libicui18n.a
-  ${DEP_DIR}/lib/libicustubdata.a
+  ${DEP_DIR}/lib/libicudata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
   ${DEP_DIR}/lib/libthrift.a
@@ -318,6 +319,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/krb5/libcom_err.a
   ${DEP_DIR}/lib64/libarrow.a
   ${DEP_DIR}/lib64/libparquet.a
+  ${DEP_DIR}/lib64/librdkafka.a
   ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
   ${DEP_DIR}/lib64/liborc.a
   ${DEP_DIR}/lib64/libsnappy.a

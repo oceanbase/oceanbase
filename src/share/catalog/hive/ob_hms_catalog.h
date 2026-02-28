@@ -34,7 +34,10 @@ public:
   }
 
   ~ObHMSCatalog();
-
+  ObCatalogProperties::CatalogType get_catalog_type() const override
+  {
+    return ObCatalogProperties::CatalogType::HMS_TYPE;
+  }
   virtual int list_namespace_names(common::ObIArray<common::ObString> &ns_names) override;
   virtual int list_table_names(const common::ObString &ns_name,
                                const ObNameCaseMode case_mode,
@@ -50,7 +53,10 @@ public:
                                         const common::ObString &tbl_name,
                                         const ObNameCaseMode case_mode,
                                         ObILakeTableMetadata *&table_metadata) override;
-
+  int fetch_latest_table(const common::ObString &ns_name,
+                         const common::ObString &tbl_name,
+                         const ObNameCaseMode case_mode,
+                         ApacheHive::Table &original_table);
   int fetch_table_statistics(ObIAllocator &allocator,
                              sql::ObSqlSchemaGuard &sql_schema_guard,
                              const ObILakeTableMetadata *table_metadata,
@@ -82,7 +88,12 @@ public:
                                      ObOptExternalTableStat *&external_table_stat,
                                      ObIArray<ObOptExternalColumnStat *> &external_table_column_stats);
 
+  int alter_table_with_lock(const ObString &db_name,
+                            const ObString &tb_name,
+                            const ObNameCaseMode case_mode,
+                            const ApacheHive::Table &new_table);
   static constexpr const char *ICEBERG_METADATA_LOCATION = "metadata_location";
+  static constexpr const char *TABLE_TYPE = "table_type";
 
 
   int get_cache_refresh_interval_sec(int64_t &sec);

@@ -482,6 +482,76 @@ int ObSchemaMgrCache::get_slot_info(common::ObIAllocator &allocator, common::ObI
   return ret;
 }
 
+int ObSchemaMgrCache::find_dst_item_for_put(const uint64_t tenant_id,
+                                             ObSchemaMgrItem *&dst_item,
+                                             int64_t &target_pos)
+{
+  int ret = OB_SUCCESS;
+  bool is_stop = false;
+  int64_t max_schema_slot_num = max_cached_num_;
+  dst_item = NULL;
+  target_pos = -1;
+  if (!ObSchemaService::g_liboblog_mode_) {
+    omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
+    if (tenant_config.is_valid()) {
+      max_schema_slot_num = tenant_config->_max_schema_slot_num;
+    }
+  }
+  // 1. In order to avoid the repeated adjustment of the configuration item _max_schema_slot_num that may cause problems
+  //  that may be caused by the invisible version in the history, max_cached_num_ can only be increased during
+  //  the operation of the observer. The memory release frequency of the schema mgr is controlled by _max_schema_slot_num.
+  //  The user can reduce the _max_schema_slot_num to speed up the release of the schema mgr memory.
+  // 2. Because liboblog and agentserver cannot perceive ob configuration items, they still use startup
+  //  settings to control the number of schema slots.
+  // 3. The fallback mode has fewer usage scenarios in the OB and has nothing to do with the number of concurrent users,
+  //  and the schema_mgr memory management strategy is different from the schema refresh scenario.
+  //  In order to reduce unnecessary memory usage, a fixed number of 16 slots is also used.
+  if (!ObSchemaService::g_liboblog_mode_ && FALLBACK != mode_) {
+    max_cached_num_ = max(max_cached_num_, max_schema_slot_num);
+  }
+  for (int64_t i = 0; i < max_cached_num_ && !is_stop; ++i) {
+    ObSchemaMgrItem &schema_mgr_item = schema_mgr_items_[i];
+    ObSchemaMgr *tmp_schema_mgr = schema_mgr_item.schema_mgr_;
+    if (NULL == tmp_schema_mgr) {
+      dst_item = &schema_mgr_item;
+      target_pos = i;
+      is_stop = true;
+    } else if (ATOMIC_LOAD(&schema_mgr_item.ref_cnt_) > 0) {
+      // do-nothing
+    } else {
+      if (NULL == dst_item ||
+          tmp_schema_mgr->get_schema_version() < dst_item->schema_mgr_->get_schema_version()) {
+        dst_item = &schema_mgr_item;
+        target_pos = i;
+      }
+    }
+  }
+  if (NULL == dst_item) {
+    ret = OB_EAGAIN;
+    LOG_WARN("need retry", K(ret));
+    for (int64_t i = 0; i < max_cached_num_; ++i) {
+      const ObSchemaMgrItem &schema_mgr_item = schema_mgr_items_[i];
+      const ObSchemaMgr *schema_mgr = schema_mgr_item.schema_mgr_;
+      if (OB_NOT_NULL(schema_mgr)) {
+        uint64_t slot_tenant_id = schema_mgr->get_tenant_id();
+        uint64_t schema_version = schema_mgr->get_schema_version();
+        LOG_INFO("schema_mgr_item", "i", i, K(ret), K(slot_tenant_id),
+                 K(schema_version), K(schema_mgr),
+                 "ref_cnt", schema_mgr_item.ref_cnt_,
+                 "mod_ref_cnt", ObArrayWrap<int64_t>(schema_mgr_item.mod_ref_cnt_,
+                                                     ObSchemaMgrItem::MOD_MAX));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_SCHEMA_SLOT_FULL_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("errsim check schema slot available", KR(ret));
+    }
+  }
+  return ret;
+}
+
 // in:
 //   schema_mgr : mgr that will put
 //   eli_schema_mgr : Eliminate the mgr
@@ -509,63 +579,15 @@ int ObSchemaMgrCache::put(ObSchemaMgr *schema_mgr,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), "tenant_id", schema_mgr->get_tenant_id());
   } else {
-    ObSchemaMgrItem *dst_item = NULL;
-    bool is_stop = false;
-    const uint64_t tenant_id = schema_mgr->get_tenant_id();
-    int64_t max_schema_slot_num = max_cached_num_;
-    if (!ObSchemaService::g_liboblog_mode_) {
-      omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
-      if (tenant_config.is_valid()) {
-        max_schema_slot_num = tenant_config->_max_schema_slot_num;
-      }
-    }
     TCWLockGuard guard(lock_);
-    // 1. In order to avoid the repeated adjustment of the configuration item _max_schema_slot_num that may cause problems
-    //  that may be caused by the invisible version in the history, max_cached_num_ can only be increased during
-    //  the operation of the observer. The memory release frequency of the schema mgr is controlled by _max_schema_slot_num.
-    //  The user can reduce the _max_schema_slot_num to speed up the release of the schema mgr memory.
-    // 2. Because liboblog and agentserver cannot perceive ob configuration items, they still use startup
-    //  settings to control the number of schema slots.
-    // 3. The fallback mode has fewer usage scenarios in the OB and has nothing to do with the number of concurrent users,
-    //  and the schema_mgr memory management strategy is different from the schema refresh scenario.
-    //  In order to reduce unnecessary memory usage, a fixed number of 16 slots is also used.
-    if (!ObSchemaService::g_liboblog_mode_ && FALLBACK != mode_) {
-      max_cached_num_ = max(max_cached_num_, max_schema_slot_num);
-    }
+    const uint64_t tenant_id = schema_mgr->get_tenant_id();
+    ObSchemaMgrItem *dst_item = NULL;
     int64_t target_pos = -1;
-    for (int64_t i = 0; i < max_cached_num_ && !is_stop; ++i) {
-      ObSchemaMgrItem &schema_mgr_item = schema_mgr_items_[i];
-      ObSchemaMgr *tmp_schema_mgr = schema_mgr_item.schema_mgr_;
-      if (NULL == tmp_schema_mgr) {
-        dst_item = &schema_mgr_item;
-        target_pos = i;
-        is_stop = true;
-      } else if (ATOMIC_LOAD(&schema_mgr_item.ref_cnt_) > 0) {
-        // do-nothing
-      } else {
-        if (NULL == dst_item ||
-            tmp_schema_mgr->get_schema_version() < dst_item->schema_mgr_->get_schema_version()) {
-          dst_item = &schema_mgr_item;
-          target_pos = i;
-        }
-      }
-    }
-    if (NULL == dst_item) {
-      ret = OB_EAGAIN;
-      LOG_WARN("need retry", K(ret));
-      for (int64_t i = 0; i < max_cached_num_; ++i) {
-        const ObSchemaMgrItem &schema_mgr_item = schema_mgr_items_[i];
-        const ObSchemaMgr *schema_mgr = schema_mgr_item.schema_mgr_;
-        if (OB_NOT_NULL(schema_mgr)) {
-          uint64_t tenant_id = schema_mgr->get_tenant_id();
-          uint64_t schema_version = schema_mgr->get_schema_version();
-          LOG_INFO("schema_mgr_item", "i", i, K(ret), K(tenant_id),
-                   K(schema_version), K(schema_mgr),
-                   "ref_cnt", schema_mgr_item.ref_cnt_,
-                   "mod_ref_cnt", ObArrayWrap<int64_t>(schema_mgr_item.mod_ref_cnt_,
-                                                       ObSchemaMgrItem::MOD_MAX));
-        }
-      }
+    if (OB_FAIL(find_dst_item_for_put(tenant_id, dst_item, target_pos))){
+      LOG_WARN("fail to find dst item for put", KR(ret), K(dst_item));
+    } else if (OB_ISNULL(dst_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dst item is nullptr", KR(ret));
     } else {
       eli_schema_mgr = dst_item->schema_mgr_;
       schema_mgr->set_timestamp_in_slot(ObClockGenerator::getClock());

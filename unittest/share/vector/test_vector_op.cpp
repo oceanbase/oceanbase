@@ -228,10 +228,12 @@ void test_fixed_length_cmp(const ObObjMeta &l_meta, const ObObjMeta &r_meta, std
     l_meta.get_scale(), false, false);
   sql::NullSafeRowCmpFunc null_first_row_cmp = nullptr;
   sql::NullSafeRowCmpFunc null_last_row_cmp = nullptr;
+  ObPrecision l_prec = wide::ObDecimalIntConstValue::get_max_precision_by_int_bytes(sizeof(LType));
+  ObPrecision r_prec = wide::ObDecimalIntConstValue::get_max_precision_by_int_bytes(sizeof(RType));
   const sql::ObDatumMeta l_d_meta(l_meta.get_type(), l_meta.get_collation_type(),
-                                  l_meta.get_scale());
+                                  l_meta.get_scale(), l_prec);
   const sql::ObDatumMeta r_d_meta(r_meta.get_type(), r_meta.get_collation_type(),
-                                  r_meta.get_scale());
+                                  r_meta.get_scale(), r_prec);
   VectorCmpExprFuncsHelper::get_cmp_set(l_d_meta, r_d_meta, null_first_row_cmp, null_last_row_cmp);
   int datum_cmp_ret = 0, row_cmp_ret = 0;
   for (int i = 0; i < test_cases; i++) {
@@ -263,6 +265,22 @@ void test_fixed_length_cmp(const ObObjMeta &l_meta, const ObObjMeta &r_meta, std
                 << ", R_NULL: " << r_null << '\n';
       ASSERT_EQ(datum_cmp_ret, row_cmp_ret);
     }
+  }
+
+  // BUGFIX: DIMA-2026011300113428038
+  if (case_name == "dec512-dec512") {
+    int512_t l_v = -7287090717381220630;
+    int512_t r_v = 8915510793597406650;
+    bool l_null = false;
+    bool r_null = false;
+    ObDatum l_datum = get_datum(l_v, l_null);
+    ObDatum r_datum = get_datum(r_v, r_null);
+    int ret = null_first_datum_cmp(l_datum, r_datum, datum_cmp_ret);
+    ASSERT_EQ(ret, 0);
+    ret = null_first_row_cmp(l_meta, r_meta, &l_v, sizeof(LType), l_null, &r_v, sizeof(RType),
+                             r_null, row_cmp_ret);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(datum_cmp_ret, row_cmp_ret);
   }
 }
 

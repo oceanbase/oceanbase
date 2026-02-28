@@ -341,6 +341,7 @@ GLOBAL_ERRSIM_POINT_DEF(406, EN_SQL_MEMORY_LABEL_LOW64, "");
 GLOBAL_ERRSIM_POINT_DEF(407, EN_SQL_MEMORY_DYNAMIC_LEAK_SIZE, "");
 GLOBAL_ERRSIM_POINT_DEF(408, EN_ENABLE_TENANT_CONFIG_CACHED, "");
 GLOBAL_ERRSIM_POINT_DEF(409, EN_SQL_SELECT_INTO_OP_RETRY, "");
+GLOBAL_ERRSIM_POINT_DEF(410, EN_PARALLEL_PARSE_CSV_GAMBLING_FAILED, "");
 
 // DDL related 500-550
 GLOBAL_ERRSIM_POINT_DEF(501, EN_DATA_CHECKSUM_DDL_TASK, "");
@@ -392,8 +393,10 @@ GLOBAL_ERRSIM_POINT_DEF(544, FTS_INDEX_SUBTASK_FAILED, "");
 GLOBAL_ERRSIM_POINT_DEF(545, FTS_INDEX_SUBTASK_BUILD_SSTABLE_FAILED, "");
 GLOBAL_ERRSIM_POINT_DEF(546, EN_FTS_INDEX_BUILD_PREPARE_FAILED, "");
 GLOBAL_ERRSIM_POINT_DEF(547, EN_CLUSTERING_KEY_BIOLD_SSTABLE_FAILED, "");
+GLOBAL_ERRSIM_POINT_DEF(548, EN_SCHEMA_SLOT_FULL_ERR, "");
 // vec index
 GLOBAL_ERRSIM_POINT_DEF(550, EN_POST_VEC_INDEX_BUILD_ROWKEY_VID_TBL_ERR, "");
+
 // SQL Optimizer related 551-599
 GLOBAL_ERRSIM_POINT_DEF(551, EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE, "Used to enable outline validity check for explain query");
 GLOBAL_ERRSIM_POINT_DEF(552, EN_ENABLE_AUTO_DOP_FORCE_PARALLEL_PLAN, "Used to generate parallel plan with random dop");
@@ -412,6 +415,8 @@ GLOBAL_ERRSIM_POINT_DEF(564, EN_SQL_HUNG_DETECT, "Whether enable sql hung detect
 GLOBAL_ERRSIM_POINT_DEF(565, EN_CHECK_EXPR_FORMALIZE, "Reporting error when expr not formalized after transform");
 GLOBAL_ERRSIM_POINT_DEF(566, EN_COST_MODEL_TEST, "test cost model for mysqltest case");
 GLOBAL_ERRSIM_POINT_DEF(567, EN_CHECK_STMT_VALID, "Reporting error when stmt not valid after transform");
+GLOBAL_ERRSIM_POINT_DEF(568, EN_SET_CONFIG_WAIT_SYNC_TIMEOUT, "timeout in seconds for waiting config sync when set config");
+GLOBAL_ERRSIM_POINT_DEF(569, EN_MVIEW_DEFENSIVE_CHECK, "Whether allow to do some defensive checks for materialized mview");
 // 600-700 For PX use
 GLOBAL_ERRSIM_POINT_DEF(600, EN_PX_SQC_EXECUTE_FAILED, "");
 GLOBAL_ERRSIM_POINT_DEF(601, EN_PX_SQC_INIT_FAILED, "Used to simulate the scenario of failure to init sub query coordinator");
@@ -594,6 +599,12 @@ GLOBAL_ERRSIM_POINT_DEF(1199, EN_DISABLE_ENCODESORTKEY_OPT, "Used for disable en
 GLOBAL_ERRSIM_POINT_DEF(1200, EN_ENABLE_NEWSORT_FORCE, "");
 GLOBAL_ERRSIM_POINT_DEF(1201, EN_DISABLE_NEWSORT_FIXED_KEY_OPT, "Used to control whether to turn off the newsort fixed key opt when use encode sortkey");
 
+GLOBAL_ERRSIM_POINT_DEF(1210, EN_OB_PLAN_CACHE_POST_ADDITION_CHECK, "Used to control whether to turn off the post-addition cache hit verification in plan cache");
+
+// vector index 1300 - 1399
+GLOBAL_ERRSIM_POINT_DEF(1300, EN_VEC_INDEX_IVF_ROWKEY_CID_BUILD_ERR, "");
+GLOBAL_ERRSIM_POINT_DEF(1301, EN_VEC_INDEX_IVF_PQ_BUILD_ERR, "");
+
 // Transaction // 2001 - 2100
 // Transaction free route
 GLOBAL_ERRSIM_POINT_DEF(2001, EN_TX_FREE_ROUTE_UPDATE_STATE_ERROR, "");
@@ -636,6 +647,8 @@ GLOBAL_ERRSIM_POINT_DEF(2305, EN_TRACEPOINT_TEST, "For testing new versions of t
 GLOBAL_ERRSIM_POINT_DEF(2306, EN_DISABLE_VEC_MERGE_DISTINCT, "Used to control whether to turn off the vectorization 2.0 merge distinct operator. It is turned on by default.");
 GLOBAL_ERRSIM_POINT_DEF(2307, EN_SQLSTAT_MGR_MEM, "For testing evict of sqlstat");
 GLOBAL_ERRSIM_POINT_DEF(2308, EN_DAS_RECORD_SQLSTAT, "For testing das record sqlstat");
+GLOBAL_ERRSIM_POINT_DEF(2309, EN_SQL_AUDIT_NOASYNC_COMMIT_TIME, "For disable sql audit async commit time recording");
+GLOBAL_ERRSIM_POINT_DEF(2310, EN_COMMIT_TIME_DELAY_US, "For simulate async committing delay");
 // force dump
 GLOBAL_ERRSIM_POINT_DEF(2400, EN_SQL_FORCE_DUMP, "For testing force dump once");
 GLOBAL_ERRSIM_POINT_DEF(2401, EN_TEST_FOR_HASH_UNION, "Used to control whether to turn off the vectorization 2.0 hash set operator. It is turned on by default.");
@@ -675,8 +688,15 @@ GLOBAL_ERRSIM_POINT_DEF(2625, EN_DELETE_HTABLE_SKIP_CF_ERR, "delete htable table
 // DDL begin 2651 - 2700
 GLOBAL_ERRSIM_POINT_DEF(2651, EN_AUTO_SPLIT_SCHEDULER_ERR, "inject error in auto split schedule step");
 GLOBAL_ERRSIM_POINT_DEF(2652, EN_DDL_SCAN_TASK_PERIOD, "ddl scan task timer thread schedule period");
+GLOBAL_ERRSIM_POINT_DEF(2653, EN_PART_SPLIT_AT_DECIDE_RANGES, "partition split at decide tablet split ranges");
+
+// Rescan op 2701 - 2710
+GLOBAL_ERRSIM_POINT_DEF(2701, EN_ENABLE_RESCAN_OP, "enable rescan op");
 
 // DDL end
 GLOBAL_ERRSIM_POINT_DEF(2701, EN_DUMP_THREAD_LEVEL_MEM_CTX, "Whether enable dump thread-level memory context");
 GLOBAL_ERRSIM_POINT_DEF(2703, EN_ENABLE_OPERATOR_DUMMY_MEM_CHECK, "Used to track whether the operator has been closed && destroyed in test mode");
+GLOBAL_ERRSIM_POINT_DEF(2704, EN_VSLICE_ALLOC_INIT_MEM, "Used to enable ObVSliceAlloc block memory initialization");
+GLOBAL_ERRSIM_POINT_DEF(2705, EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY, "Whether to generate skip index adaptively for row store delta sstable");
+GLOBAL_ERRSIM_POINT_DEF(2706, EN_DISABLE_INC_SKIP_INDEX_SCAN, "Whether disable skip index scan in inc table");
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

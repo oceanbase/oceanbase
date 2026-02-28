@@ -80,7 +80,6 @@ int ObExprFormatBytes::eval_format_bytes_batch(const ObExpr &expr,
       } else {
         // do nothing
       }
-      eval_flags.set(i);
     }
   }
   return ret;

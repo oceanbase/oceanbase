@@ -768,8 +768,8 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args, bool check_task_exis
   return ret;
 }
 
-int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
-{
+int ObGranulePump::init_external_odps_table_downloader(
+    ObGranulePumpArgs &args) {
   int ret = OB_SUCCESS;
   const ObTableScanSpec *tsc = NULL;
   bool is_odps_external_table = false;
@@ -777,25 +777,30 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
   if (scan_ops.count() == 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty scan_ops", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
-                                                   is_odps_external_table))) {
+  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(
+                 scan_ops.at(0)
+                     ->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+                 is_odps_external_table))) {
     LOG_WARN("failed to check is odps external table or not", K(ret));
-  } else if (!args.external_table_files_.empty() &&
-      is_odps_external_table) {
+  } else if (!args.external_table_files_.empty() && is_odps_external_table) {
     if (scan_ops.empty()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid scan ops and gi task array result", K(ret), K(scan_ops.count()));
+      LOG_WARN("invalid scan ops and gi task array result", K(ret),
+               K(scan_ops.count()));
     } else if (OB_ISNULL(tsc = scan_ops.at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret));
     }
     if (OB_SUCC(ret)) {
       if (!GCONF._use_odps_jni_connector) {
-#if defined (OB_BUILD_CPP_ODPS)
-        if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(args.external_table_files_.count()))) {
-          LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret), K(args.external_table_files_.count()));
+#if defined(OB_BUILD_CPP_ODPS)
+        if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(
+                args.external_table_files_.count()))) {
+          LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret),
+                   K(args.external_table_files_.count()));
         } else {
-          LOG_TRACE("succ to init odps table partition downloader", K(ret), K(is_odps_downloader_inited()));
+          LOG_TRACE("succ to init odps table partition downloader", K(ret),
+                    K(is_odps_downloader_inited()));
         }
 #else
         ret = OB_NOT_SUPPORTED;
@@ -803,11 +808,7 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
 #endif
       } else {
 #if defined(OB_BUILD_JNI_ODPS)
-        if (OB_FAIL(odps_partition_jni_scanner_mgr_.init_map(
-                args.external_table_files_.count()))) {
-          LOG_WARN("init odps_partition_jni_scanner_mgr_ failed", K(ret),
-                   K(args.external_table_files_.count()));
-        }
+        // do nothing
 #else
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support odps jni external table", K(ret));
@@ -815,6 +816,89 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
       }
     }
   }
+  return ret;
+}
+
+void ObGranulePump::find_external_task_runner(
+    int64_t tsc_op_id, GITaskGenRunner *&runner) {
+  runner = NULL;
+  for (int64_t i = 0; i < external_task_runners_.count(); ++i) {
+    if (external_task_runners_.at(i)->get_tsc_op_id() == tsc_op_id) {
+      runner = external_task_runners_.at(i);
+      break;
+    }
+  }
+}
+
+int ObGranulePump::create_and_add_runner(
+    int64_t tsc_op_id,
+    ObExecContext &exec_ctx,
+    GITaskGenRunner *&runner) {
+  int ret = OB_SUCCESS;
+  runner = NULL;
+  GITaskGenRunner *new_runner =
+      OB_NEWx(GITaskGenRunner, (&exec_ctx.get_allocator()), tsc_op_id, exec_ctx);
+  if (OB_ISNULL(new_runner)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate GIOdpsParallelTaskGen", K(ret));
+  } else if (OB_FAIL(external_task_runners_.push_back(new_runner))) {
+    LOG_WARN("failed to push back odps external task runner", K(ret));
+  } else {
+    runner = new_runner;
+  }
+  // 失败时统一清理
+  if (OB_FAIL(ret) && OB_NOT_NULL(new_runner)) {
+    OB_DELETEx(GITaskGenRunner, &exec_ctx.get_allocator(), new_runner);
+    new_runner = NULL;
+  }
+  return ret;
+}
+
+int ObGranulePump::refill_pump_with_new_gen_tasks(
+    int64_t tsc_op_id, uint64_t gi_attri_flag, GIExternalTaskArgs &task_args) {
+  int ret = OB_SUCCESS;
+  ObLockGuard<ObSpinLock> lock_guard(lock_);
+  if (gi_task_array_map_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("gi_task_array_map is empty", K(ret));
+  } else {
+    // find task array item by tsc_op_id
+    int64_t task_idx = OB_INVALID_INDEX;
+    for (int64_t i = 0; i < gi_task_array_map_.count() && OB_SUCC(ret); ++i) {
+      GITaskArrayItem &item = gi_task_array_map_.at(i);
+      if (item.tsc_op_id_ == tsc_op_id) {
+        task_idx = i;
+        break;
+      }
+    }
+    if (OB_INVALID_INDEX == task_idx) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("task idx is invalid", K(ret), K(tsc_op_id), K(task_idx));
+    } else {
+      ObGITaskSet new_taskset;
+      ObSEArray<ObNewRange, 16> empty_ranges;
+      ObSEArray<ObNewRange, 16> empty_ss_ranges;
+      GITaskArrayItem &task_array_item = gi_task_array_map_.at(task_idx);
+      if (OB_FAIL(new_taskset.construct_taskset(
+              task_args.taskset_tablets_, empty_ranges, empty_ss_ranges,
+              task_args.taskset_idxs_, task_args.scan_tasks_,
+              sql::ObGITaskSet::GI_RANDOM_NONE))) {
+        LOG_WARN("failed to construct taskset", K(ret));
+      } else if (OB_FAIL(
+                    new_taskset.set_block_order(gi_attri_flag))) {
+        LOG_WARN("failed to set block order", K(ret));
+      } else {
+        ObGITaskArray &taskset_array = task_array_item.taskset_array_;
+        taskset_array.reuse();
+        if (OB_FAIL(taskset_array.push_back(new_taskset))) {
+          LOG_WARN("failed to push back taskset", K(ret));
+        } else {
+          task_array_item.no_more_task_from_shared_pool_ = false;
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -862,17 +946,21 @@ int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_random
 void ObGranulePump::destroy()
 {
   gi_task_array_map_.reset();
+  // no pump_version added rescan no sample scan
+  for (int64_t i = 0; i < external_task_runners_.count(); ++i) {
+    OB_DELETEx(GITaskGenRunner, &external_task_runners_.at(i)->get_exec_ctx().get_allocator(), external_task_runners_.at(i));
+  }
+  external_task_runners_.reset();
   if (!GCONF._use_odps_jni_connector) {
 #if defined (OB_BUILD_CPP_ODPS)
-    int ret = 0;
     if (is_odps_downloader_inited()) {
+      int ret = OB_SUCCESS;
       LOG_TRACE("destroy odps_partition_downloader_mgr_", K(ret), KP(this), KP(&odps_partition_downloader_mgr_));
       odps_partition_downloader_mgr_.reset();
     }
 #endif
   } else {
 #if defined (OB_BUILD_JNI_ODPS)
-    odps_partition_jni_scanner_mgr_.reset();
 #endif
   }
   pump_args_.reset();
@@ -897,6 +985,17 @@ int ObGranulePump::get_first_tsc_range_cnt(int64_t &cnt)
     } else {
       cnt = taskset_array.at(0).gi_task_set_.count();
     }
+  }
+  return ret;
+}
+
+int ObGranulePump::get_first_tsc_op_id(int64_t &op_id) {
+  int ret = OB_SUCCESS;
+  if (gi_task_array_map_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error happen, empty task array", K(ret));
+  } else {
+    op_id = gi_task_array_map_.at(0).tsc_op_id_;
   }
   return ret;
 }
@@ -953,12 +1052,10 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the task has an empty range", K(ret), K(ranges));
   } else if (tsc->tsc_ctdef_.scan_ctdef_.is_ob_external_table()) {
-    ret = ObGranuleUtil::split_granule_for_external_table(args.ctx_->get_allocator(),
+    ret = ObGranuleUtil::split_granule_for_external_table(args,
                                                           tsc,
                                                           ranges,
                                                           tablets,
-                                                          args.external_table_files_,
-                                                          args.parallelism_,
                                                           taskset_tablets,
                                                           scan_tasks,
                                                           taskset_idxs);
@@ -2078,23 +2175,20 @@ int ObGranulePump::split_granule(ObGranuleIteratorOp *gi_op, int64_t scan_op_id,
 int ObGranulePump::reset_gi_task()
 {
   int ret = common::OB_SUCCESS;
+  ObLockGuard<ObSpinLock> lock_guard(lock_);
   if (is_taskset_reset_) {
+    /*do nothing*/
   } else {
-    ObLockGuard<ObSpinLock> lock_guard(lock_);
-    if (is_taskset_reset_) {
-      /*do nothing*/
-    } else {
-      is_taskset_reset_ = true;
-      set_fetch_task_ret(OB_SUCCESS);
-      for (int64_t i = 0; i < gi_task_array_map_.count() && OB_SUCC(ret); ++i) {
-        GITaskArrayItem &item = gi_task_array_map_.at(i);
-        item.no_more_task_from_shared_pool_ = false;
-        for(int64_t j = 0; j < item.taskset_array_.count() && OB_SUCC(ret); ++j) {
-          ObGITaskSet &taskset = item.taskset_array_.at(j);
-          taskset.cur_pos_ = 0;
-        }
+    for (int64_t i = 0; i < gi_task_array_map_.count() && OB_SUCC(ret); ++i) {
+      GITaskArrayItem &item = gi_task_array_map_.at(i);
+      item.no_more_task_from_shared_pool_ = false;
+      for(int64_t j = 0; j < item.taskset_array_.count() && OB_SUCC(ret); ++j) {
+        ObGITaskSet &taskset = item.taskset_array_.at(j);
+        taskset.cur_pos_ = 0;
       }
     }
+    is_taskset_reset_ = true;
+    set_fetch_task_ret(OB_SUCCESS);
   }
   return ret;
 }

@@ -152,7 +152,6 @@ private:
 
 private:
   ObMicroBlockEncodingCtx ctx_;
-  ObMicroBlockHeader *header_;
   ObArenaAllocator encoding_meta_allocator_;
   ObMicroBufferWriter data_buffer_;
   ObConstDatumRowArray datum_rows_;

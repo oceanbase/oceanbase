@@ -28,6 +28,9 @@ namespace oceanbase
 namespace share
 {
 
+class ObIvfCentCache;
+class ObIvfCacheMgrGuard;
+
 enum VecColType {
   IVF_CENTER_ID_COL = 0,
   IVF_CENTER_VECTOR_COL,
@@ -161,7 +164,7 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
 {
   static constexpr float DEFAULT_REFINE_K = 4.0;
   static constexpr int DEFAULT_BQ_BITS_QUERY = 32;
-  static constexpr int DEFAULT_WINDOW_SIZE = 100000;
+  static constexpr int DEFAULT_WINDOW_SIZE = 60000;
 
   ObVectorIndexParam() :
     type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0),
@@ -280,6 +283,8 @@ static constexpr double DEFAULT_SINDI_SELECTIVITY_RATE = 0.1;
 static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY = 1000000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_IDX = 300000;
+static constexpr uint64_t IVF_CENTERS_HGRAPH_THRESHOLD = 5000;  // minimum centers count to build hgraph index
+static constexpr uint64_t IVF_BUILD_HGRAPH_THRESHOLD = 3000;
 static constexpr double DEFAULT_IVFPQ_SELECTIVITY_RATE = 0.9;
 static const uint64_t MAX_IVF_BRUTE_FORCE_SIZE = 10000;
 
@@ -306,7 +311,7 @@ static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
   inline void set_row_count(int64_t row_count) { row_count_ = row_count;}
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
-  // TODO(ningxin.ning): add ipivf here?
+
   inline bool is_hnsw_vec_scan() const
   {
     return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
@@ -315,6 +320,13 @@ static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
   }
   inline bool is_hnsw_bq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
+
+  inline bool is_ipivf_scan() const
+  {
+    return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF ||
+           vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ;
+  }
+
   inline bool is_hybrid_index() const { return strlen(vector_index_param_.endpoint_) > 0; }
 
   inline bool is_ivf_vec_scan() const
@@ -509,9 +521,6 @@ public:
       const ObString &new_add_param,
       ObIAllocator &allocator,
       ObString &current_index_param);
-  static int get_index_name_prefix(
-      const schema::ObTableSchema &index_schema,
-      ObString &prefix);
   static int check_ivf_lob_inrow_threshold(
     const int64_t tenant_id,
     const ObString &database_name,
@@ -527,6 +536,23 @@ public:
       const ObTableSchema &data_table_schema,
       ObSchemaGetterGuard &schema_guard,
       bool &has_vec_index);
+  static int check_vector_index_column_id_match(
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      const int64_t col_id,
+      bool &is_match);
+  static int check_vector_index_match(
+      const ObTableSchema &data_table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      uint64_t vec_index_tid,
+      sql::ObRawExpr *vector_expr,
+      const uint64_t table_id,
+      bool &is_match);
+  static int check_has_multi_valid_vector_index(
+      const ObTableSchema &data_table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      const int64_t col_id,
+      bool &has_multi_index);
   static int check_column_has_vector_index(
       const ObTableSchema &data_table_schema,
       ObSchemaGetterGuard &schema_guard,
@@ -541,19 +567,18 @@ public:
       ObSchemaGetterGuard &schema_guard,
       const schema::ObTableSchema &table_schema,
       bool &is_all_deleted);
-  static int check_vector_index_by_column_name(
+  static int check_vector_index_by_index_prefix(
       ObSchemaGetterGuard &schema_guard,
       const schema::ObTableSchema &table_schema,
-      const ObString &index_column_name,
+      const ObString &index_prefix,
       bool &is_valid);
   static int get_vector_index_column_name(
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema,
       ObIArray<ObString> &col_names);
-  static bool is_match_index_column_name(
-      const schema::ObTableSchema &table_schema,
+  static bool is_match_index_prefix(
       const schema::ObTableSchema &index_schema,
-      const ObString &index_column_name);
+      const ObString &index_prefix);
   static int get_vector_index_column_id(
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema,
@@ -598,6 +623,12 @@ public:
       const int64_t base_col_id,
       const ObColumnSchemaV2 *column_schema,
       uint64_t &tid);
+  static int get_matched_vector_index_tid(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema &data_table_schema,
+      const int64_t col_id,
+      const ObItemType expr_type,
+      uint64_t &tid);
   static int get_vector_index_tid(
       share::schema::ObSchemaGetterGuard *schema_guard,
       const ObTableSchema &data_table_schema,
@@ -614,10 +645,10 @@ public:
     uint64_t &cid_rowkey_tid,
     uint64_t &rowkey_cid_tid,
     uint64_t &extra_tid);
-  static int get_latest_avaliable_index_tids_for_hnsw(
+  static int get_index_tids_for_hnsw_by_prefix(
     share::schema::ObSchemaGetterGuard *schema_guard,
     const ObTableSchema &data_table_schema,
-    const int64_t col_id,
+    const uint64_t index_tid,
     uint64_t &inc_tid,
     uint64_t &vbitmap_tid,
     uint64_t &snapshot_tid,
@@ -645,12 +676,6 @@ public:
   static int check_index_table_has_hybrid_vec_column(
       const ObTableSchema &index_table_schema,
       bool &res);
-  static int get_vector_index_tids(
-      share::schema::ObSchemaGetterGuard *schema_guard,
-      const ObTableSchema &data_table_schema,
-      const ObIndexType index_type,
-      const int64_t col_id,
-      ObIArray<IvfIndexTableInfo> &tids);
   static int get_vec_dis_type_from_dis_algorithm(
       ObVectorIndexDistAlgorithm dis_Algorithm,
       int64_t &vec_dis_type);
@@ -667,6 +692,11 @@ public:
       int64_t data_table_id,
       ObVectorIndexType index_type,
       ObVectorIndexParam &param);
+  static int get_vector_index_param(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema &index_schema,
+      ObVectorIndexParam &param,
+      bool &param_filled);
   static int get_vector_index_type(
       sql::ObRawExpr *&raw_expr,
       const ObVectorIndexParam &param,
@@ -722,6 +752,21 @@ public:
       ObTableSchema &new_index_schema,
       const ObColumnSchemaV2 *old_column_ptr,
       const ObColumnSchemaV2 *&new_column_ptr);
+  static int get_new_column_name_from_arg(
+      const obrpc::ObCreateIndexArg &create_index_arg,
+      const ObColumnSchemaV2 &col_schema,
+      ObString &new_column_name);
+  static int construct_new_column_schema_from_arg(
+      const obrpc::ObCreateIndexArg &create_index_arg,
+      const ObColumnSchemaV2 *old_column_ptr,
+      ObColumnSchemaV2 &new_column,
+      uint64_t &available_col_id);
+  static int reconstruct_new_vec_index_schema_in_rebuild(
+      rootserver::ObDDLSQLTransaction &trans,
+      rootserver::ObDDLService &ddl_service,
+      const obrpc::ObCreateIndexArg &create_index_arg,
+      const ObTableSchema &data_table_schema,
+      ObTableSchema &new_index_schema);
   static int reconstruct_ivf_index_schema_in_rebuild(
       rootserver::ObDDLSQLTransaction &trans,
       rootserver::ObDDLService &ddl_service,
@@ -761,7 +806,8 @@ public:
 
   static int add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
                                   const uint64_t vidx_table_id,
-                                  const common::ObString &exec_env);
+                                  const common::ObString &exec_env,
+                                  const uint64_t paralellism);
   static int remove_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
                                      const uint64_t vidx_table_id);
   static int get_dbms_vector_job_info(common::ObISQLClient &sql_client,
@@ -779,7 +825,9 @@ public:
   static int calc_residual_vector(
       ObIAllocator &alloc,
       int dim,
-      ObIArray<float *> &centers,
+      float *centers_data,
+      int64_t centers_count,
+      int64_t centers_dim,
       float *vector,
       ObVectorNormalizeInfo *norm_info,
       float *&residual);
@@ -796,6 +844,14 @@ public:
     const float *center_vec,
     float *residual
   );
+  static int calc_residual_vector_by_use_hgraph(
+    ObIAllocator &allocator,
+    int dim,
+    const float *vector,
+    ObVectorNormalizeInfo *norm_info,
+    share::ObIvfCentCache *cent_cache,
+    float *&residual_vec
+  );
   static int calc_location_ids(sql::ObEvalCtx &eval_ctx,
                                sql::ObExpr *table_id_expr,
                                sql::ObExpr *part_id_expr,
@@ -804,12 +860,14 @@ public:
   static int eval_ivf_centers_common(ObIAllocator &allocator,
                                     const sql::ObExpr &expr,
                                     sql::ObEvalCtx &eval_ctx,
-                                    ObIArray<float*> &centers,
                                     ObTableID &table_id,
                                     ObTabletID &tablet_id,
                                     ObVectorIndexDistAlgorithm &dis_algo,
                                     bool &contain_null,
                                     ObIArrayType *&arr);
+  static int get_nearest_center_with_hgraph(const float *vector,
+                                            share::ObIvfCentCache *hgraph_cache,
+                                            int64_t &center_idx);
   static int estimate_hnsw_memory(
       uint64_t num_vectors,
       const ObVectorIndexParam &param,
@@ -819,7 +877,8 @@ public:
   static int estimate_sparse_memory(
       uint64_t num_vectors,
       const ObVectorIndexParam &param,
-      uint64_t &est_mem
+      uint64_t &est_mem,
+      uint32_t avg_sparse_length = 120
   );
   static int estimate_ivf_memory(uint64_t num_vectors,
                                  const ObVectorIndexParam &param,
@@ -841,7 +900,13 @@ public:
                                     common::ObIAllocator &allocator,
                                     ObIArray<float*> &centers,
                                     int64_t m = 0); // Number of PQ subspaces, 0 means using default value
-
+  static int get_ivf_centers_cache(bool is_vectorized,
+                                    bool is_pq_centers,
+                                    share::ObIvfCacheMgrGuard &cache_guard,
+                                    share::ObIvfCentCache *&cent_cache,
+                                    const ObTableID &table_id,
+                                    const ObTabletID &centroid_tablet_id,
+                                    bool &is_cache_usable);
   static int split_vector(ObIAllocator &alloc, int pq_m, int dim, float *vector, ObIArray<float *> &splited_arrs);
   static int split_vector(int pq_m, int dim, float *vector, ObIArray<float *> &splited_arrs);
   static int set_extra_info_actual_size_param(ObIAllocator *allocator, const ObString &old_param, int64_t actual_size,
@@ -869,14 +934,26 @@ public:
            type == ObVectorIndexAlgorithmType::VIAT_IVF_PQ;
   }
 
+  static bool is_ipivf_index_type(ObVectorIndexAlgorithmType type) {
+    return type == ObVectorIndexAlgorithmType::VIAT_IPIVF ||
+           type == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ;
+  }
+
   static bool check_vector_index_memory(
       ObSchemaGetterGuard &schema_guard,
       const ObTableSchema &index_schema,
       const common::ObAddr &addr,
       const uint64_t tenant_id,
       const int64_t row_count);
-  static int get_tenant_vector_memory_used_by_inner_sql(const uint64_t tenant_id, const common::ObAddr &addr, int64_t &memory_used);static bool check_ivf_vector_index_memory(ObSchemaGetterGuard &schema_guard, const uint64_t tenant_id, const ObTableSchema &index_schema, const int64_t row_count);
-  static bool check_ivf_vector_index_memory(ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const common::ObAddr &addr, const uint64_t tenant_id, const int64_t row_count, const int64_t pre_construct_mem, uint64_t &current_construct_mem);
+  static int get_tenant_vector_memory_used_by_inner_sql(const uint64_t tenant_id, const common::ObAddr &addr, int64_t &memory_used);
+  static bool check_ivf_vector_index_memory(ObSchemaGetterGuard &schema_guard,
+                                            const ObTableSchema &index_schema,
+                                            const common::ObAddr &addr,
+                                            const uint64_t tenant_id,
+                                            const int64_t row_count,
+                                            const int64_t pre_construct_mem,
+                                            uint64_t &current_construct_mem,
+                                            const int64_t remaining_partition_cnt = 0);
   static int estimate_vector_memory_used(
       ObSchemaGetterGuard &schema_guard,
       const ObTableSchema &index_schema,
@@ -887,6 +964,10 @@ public:
       ObSchemaGetterGuard &schema_guard,
       const schema::ObTableSchema &table_schema,
       const schema::ObTableSchema &index_schema);
+
+  static int estimate_hgraph_memory_for_ivf_centers(
+      const ObVectorIndexParam &param,
+      int64_t &estimated_memory);
   static int alter_vec_aux_column_schema(const ObTableSchema &aux_table_schema,
                                          const ObColumnSchemaV2 &new_column_schema,
                                          ObColumnSchemaV2 &new_aux_column_schema);
@@ -936,6 +1017,8 @@ public:
             (type == ObVectorIndexAlgorithmType::VIAT_IVF_PQ &&
               index_type == INDEX_TYPE_VEC_IVFPQ_CENTROID_LOCAL));
   }
+
+  static int get_part_key_num(const schema::ObTableSchema &data_schema, int8_t &part_key_num);
 
 private:
   static void save_column_schema(
@@ -995,6 +1078,29 @@ private:
 };
 
 // For vector index snapshot write data
+struct ObVecIdxSnapshotBlockData
+{
+  ObVecIdxSnapshotBlockData():
+    is_meta_(false), data_()
+  {}
+
+  ObVecIdxSnapshotBlockData(const bool is_meta, const ObString &data):
+    is_meta_(is_meta), data_(data)
+  {}
+
+  bool is_meta_block() const { return is_meta_; }
+  int get_key(const ObVectorIndexAlgorithmType index_type, const ObTabletID &tablet_id,
+      const int64_t snapshot_version, const int64_t row_id, ObIAllocator &allocator, ObString &key) const;
+  const ObString& get_data() const { return data_; }
+  ObString& get_data() { return data_; }
+
+  TO_STRING_KV(K_(is_meta), "data_length", data_.length(), KP(data_.ptr()));
+
+private:
+  bool is_meta_;
+  ObString data_;
+};
+
 class ObVecIdxSnapshotDataWriteCtx final
 {
 public:
@@ -1011,15 +1117,22 @@ public:
   const ObTabletID& get_lob_meta_tablet_id() const { return lob_meta_tablet_id_; }
   ObTabletID& get_lob_piece_tablet_id() { return lob_piece_tablet_id_; }
   const ObTabletID& get_lob_piece_tablet_id() const { return lob_piece_tablet_id_; }
-  ObIArray<ObString>& get_vals() { return vals_; }
+  ObTabletID& get_snap_tablet_id() { return snap_tablet_id_; }
+  const ObTabletID& get_snap_tablet_id() const { return snap_tablet_id_; }
+  ObIArray<ObVecIdxSnapshotBlockData>& get_vals() { return vals_; }
   void reset();
-  TO_STRING_KV(K(ls_id_), K(data_tablet_id_), K(lob_meta_tablet_id_), K(lob_piece_tablet_id_), K(vals_));
+  int get_key_and_data(
+      const ObVectorIndexAlgorithmType index_type, const ObTabletID &tablet_id,
+      const int64_t snapshot_version, const int64_t row_id, ObIAllocator &allocator,
+      ObString &key, ObString &data);
+  TO_STRING_KV(K(ls_id_), K(data_tablet_id_), K(lob_meta_tablet_id_), K(lob_piece_tablet_id_), K_(snap_tablet_id), K(vals_));
 public:
   ObLSID ls_id_;
   ObTabletID data_tablet_id_;
   ObTabletID lob_meta_tablet_id_;
   ObTabletID lob_piece_tablet_id_;
-  ObArray<ObString> vals_;
+  ObArray<ObVecIdxSnapshotBlockData> vals_;
+  ObTabletID snap_tablet_id_;
 };
 
 typedef struct ObExtraInfoIdxType {
@@ -1221,6 +1334,10 @@ public:
                const schema::ObTableSchema *rowkey_domain_schema,
                int64_t result_output_count,
                bool has_trans_info_expr);
+  int generate_ivf_info(const schema::ObTableSchema *data_schema,
+                        const schema::ObTableSchema *rowkey_domain_schema,
+                        int64_t result_output_count,
+                        bool has_trans_info_expr);
 
   TO_STRING_KV(K_(is_emb_vec_tbl), K_(use_rowkey_vid_tbl), K_(part_key_num), K_(sync_interval_type));
 

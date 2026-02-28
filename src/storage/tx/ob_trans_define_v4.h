@@ -39,7 +39,9 @@ namespace transaction
 
 class ObTxSchedulerStat;
 
-struct ObTransIDAndAddr { // deadlock needed
+
+struct ObTransIDAndAddr { // deadlock needed in some old version
+                          // but for compat reason, cannot be moved, (use ObRowConflictInfo instead)
   OB_UNIS_VERSION(1);
 public:
   ObTransIDAndAddr() = default;
@@ -284,7 +286,7 @@ public:
   bool elr_; // whether allowed read elr
   bool force_strongly_read_;
 public:
-  TO_STRING_KV(K_(version), K_(tx_id), K_(scn));
+  TO_STRING_KV(K_(version), K_(tx_id), K_(scn), K_(force_strongly_read));
   ObTxSnapshot();
   ObTxSnapshot(const share::SCN &version);
   ~ObTxSnapshot();
@@ -297,6 +299,8 @@ public:
   const ObTxSEQ &tx_seq() const { return scn_; }
   void set_elr(const bool elr) { elr_ = elr; }
   bool is_elr() const { return elr_; }
+  void set_force_strongly_read(const bool force_read) { force_strongly_read_ = force_read; }
+  bool is_force_strongly_read() const { return force_strongly_read_; }
   OB_UNIS_VERSION(1);
 };
 
@@ -349,6 +353,8 @@ public:
   int assign(const ObTxReadSnapshot &);
   void try_set_read_elr();
   bool read_elr() const { return core_.is_elr(); }
+  void set_force_strongly_read() { core_.set_force_strongly_read(true); }
+  bool is_force_strongly_read() const { return core_.is_force_strongly_read(); }
   /**
    * only used for lob, other situation DONOT use
    *
@@ -476,26 +482,28 @@ public:
   ObTxExecResult();
   ~ObTxExecResult();
   void reset();
-  TO_STRING_KV(K_(incomplete), K_(parts), K_(touched_ls_list), K_(conflict_txs));
+  TO_STRING_KV(K_(incomplete), K_(parts), K_(touched_ls_list), K_(conflict_txs), K_(conflict_info_array));
   void set_incomplete() {
     TRANS_LOG(TRACE, "tx result incomplete:", KP(this));
     incomplete_ = true;
   }
-  int merge_cflict_txs(const common::ObIArray<ObTransIDAndAddr> &txs);
+  void merge_conflict_info_array(const common::ObIArray<storage::ObRowConflictInfo> &array,
+                                 const common::ObIArray<ObTransIDAndAddr> &array_old);
+  void conver_conflict_info_to_old_version_if_need();
   bool is_incomplete() const { return incomplete_; }
   int add_touched_ls(const share::ObLSID ls);
   int add_touched_ls(const ObIArray<share::ObLSID> &ls_list);
   const share::ObLSArray &get_touched_ls() const { return touched_ls_list_; }
   int merge_result(const ObTxExecResult &r);
   int assign(const ObTxExecResult &r);
-  const ObSArray<ObTransIDAndAddr> &get_conflict_txs() const { return conflict_txs_; }
+  const ObSArray<storage::ObRowConflictInfo> &get_conflict_info_array() const { return conflict_info_array_; }
   DISABLE_COPY_ASSIGN(ObTxExecResult);
 };
 
 class RollbackMaskSet
 {
 public:
-  RollbackMaskSet() : rollback_parts_(NULL) {}
+  RollbackMaskSet() : lock_(common::ObLatchIds::OB_ROLLBACK_MASK_SET_LOCK), rollback_parts_(NULL) {}
   int init(share::ObCommonID tx_msg_id, ObTxRollbackParts &parts) {
     ObSpinLockGuard guard(lock_);
     tx_msg_id_ = tx_msg_id;
@@ -552,6 +560,7 @@ public:
 private:
   static constexpr const char *OP_LABEL = "TX_DESC_VALUE";
   static constexpr int64_t MAX_RESERVED_CONFLICT_TX_NUM = 30;
+  static constexpr int64_t MAX_RESERVED_CONFLICT_INFO_NUM = 30;
   friend class ObTransService;
   friend class ObTxDescMgr;
   friend class ObPartTransCtx;
@@ -709,6 +718,16 @@ private:
 
   ObTxTimeoutTask commit_task_;     // commit retry task
   ObXACtx *xa_ctx_;                 // xa context
+  // this is for deadlock detection, this count shows sql retry policy: wether waited in lock_wait_mgr queue or not
+  // (deadlock detection in/out lock wait mgr is much different, must be telled through this count status,
+  //  and sql layer's status like retry_type is can't be depended on,
+  //  one simple reason is that PL just retry in local thread ignore retry_type)
+  // this status no need be serialized/deserialized, and no need consider about persisted, just maintain in memory,
+  // when desc constructed: continuous_lock_conflict_cnt_ inited to 0
+  // when end_stmt() with -6005: continuous_lock_conflict_cnt_ inc by 1
+  // when end_stmt() with other err-code(including OB_SUCCESS): continuous_lock_conflict_cnt_ resetted to 0
+  // when end_stmt() with -6005 and continuous_lock_conflict_cnt_ greater than a threshold value: start detect deadlock.
+  int64_t continuous_lock_conflict_cnt_;
   ObTransTraceLog tlog_;
 #ifdef ENABLE_DEBUG_LOG
   struct DLink {
@@ -750,8 +769,9 @@ private:
   bool execute_commit_cb();
 private:
   int update_part_(ObTxPart &p, const bool append = true, const bool check_only_if_exist = false);
-  int add_conflict_tx_(const ObTransIDAndAddr &conflict_tx);
-  int merge_conflict_txs_(const ObIArray<ObTransIDAndAddr> &conflict_ids);
+  int add_conflict_info_(const storage::ObRowConflictInfo &conflict_info);
+  int merge_conflict_info_array_(const ObIArray<storage::ObRowConflictInfo> &conflict_info_array,
+                                 const ObIArray<ObTransIDAndAddr> &conflict_info_array_old);
   int update_parts_(const ObTxPartList &list);
   void post_rb_savepoint_(ObTxPartRefList &parts, const ObTxSEQ &savepoint);
   void implicit_start_tx_();
@@ -802,6 +822,7 @@ public:
                K_(flags_.BLOCK),
                K_(flags_.REPLICA),
                K_(conflict_txs),
+               K_(conflict_info_array),
                K_(abort_cause),
                K_(commit_expire_ts),
                K(commit_task_.is_registered()),
@@ -814,12 +835,15 @@ public:
   static int branch_id_offset() { return MAX_CALLBACK_LIST_COUNT; }
   static bool is_alloced_branch_id(int branch_id) { return branch_id >= branch_id_offset(); }
   int alloc_branch_id(const int64_t count, int16_t &branch_id);
-  int fetch_conflict_txs(ObIArray<ObTransIDAndAddr> &array);
-  void reset_conflict_txs()
-  { ObSpinLockGuard guard(lock_); conflict_txs_.reset(); }
-  int add_conflict_tx(const ObTransIDAndAddr conflict_tx);
-  int merge_conflict_txs(const ObIArray<ObTransIDAndAddr> &conflict_ids);
-  bool has_conflict_txs() const { return conflict_txs_.count() > 0; }
+  void reset_conflict_info_array() { conflict_info_array_.reset(); }
+  int fetch_conflict_info_array(ObIArray<storage::ObRowConflictInfo> &array);
+  int fetch_conflict_txs_array(ObIArray<ObTransIDAndAddr> &array);
+  ObSArray<storage::ObRowConflictInfo> &get_conflict_info_array() { return conflict_info_array_; }
+  int add_conflict_info(const storage::ObRowConflictInfo &conflict_info);
+  int add_conflict_info_(const ObTransIDAndAddr &conflict_tx);// this is for compat reason
+  int merge_conflict_info_array(const ObIArray<storage::ObRowConflictInfo> &array_new,
+                                const ObIArray<ObTransIDAndAddr> &array_old/*compat reason*/);
+  bool has_conflict_infos() const { return conflict_info_array_.count() > 0; }
   bool contain(const ObTransID &trans_id) const { return tx_id_ == trans_id; } /*used by TransHashMap*/
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_cluster_id(uint64_t cluster_id) { cluster_id_ = cluster_id; }
@@ -969,11 +993,15 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   ObTxSEQ get_min_tx_seq() const;
   int clear_state_for_autocommit_retry();
   int64_t get_seq_base() const { return seq_base_; }
+  int64_t inc_and_get_continuous_lock_conflict_cnt() { return ATOMIC_AAF(&continuous_lock_conflict_cnt_, 1); }
+  void reset_continuous_lock_conflict_cnt() { return ATOMIC_STORE(&continuous_lock_conflict_cnt_, 0); }
   int add_modified_tables(const ObIArray<uint64_t> &tables);
   bool has_modify_table(const uint64_t table_id) const;
   DISABLE_COPY_ASSIGN(ObTxDesc);
   bool is_all_parts_clean() const;
   bool is_all_parts_without_valid_write() const;
+  int64_t get_commit_start_time() const { return commit_ts_; }
+  int64_t get_trans_commit_time() const { return finish_ts_ - commit_ts_; }
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;
@@ -1012,7 +1040,7 @@ public:
   public:
     ObTxDescAlloc(): alloc_cnt_(0)
 #ifdef ENABLE_DEBUG_LOG
-                   , lk_()
+                   , lk_(common::ObLatchIds::OB_TX_DESC_ALLOC_LOCK)
                    , list_()
 #endif
    {}

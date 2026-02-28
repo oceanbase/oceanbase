@@ -41,8 +41,8 @@ private:
                                        ObAnalyzeStmt &analyze_stmt);
   int resolve_table_info(const ParseNode *table_node,
                          ObAnalyzeStmt &analyze_stmt);
-  int recursive_resolve_table_info(const ParseNode *table_list_node,
-                                  ObAnalyzeStmt &analyze_stmt);
+  int resolve_table_infos(const ParseNode *table_list_node,
+                          ObAnalyzeStmt &analyze_stmt);
   int resolve_partition_info(const ParseNode *part_node,
                              ObAnalyzeStmt &analyze_stmt);
   int inner_resolve_partition_info(const ParseNode *part_node,

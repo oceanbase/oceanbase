@@ -341,7 +341,6 @@ int ObExprToPinyin::eval_to_pinyin_batch(
           continue;
         } else if (datum_array[j].is_null()) {
           results[j].set_null();
-          eval_flags.set(j);
         } else {
           ObString input_str = datum_array[j].get_string();
           int64_t off = 0;
@@ -349,7 +348,6 @@ int ObExprToPinyin::eval_to_pinyin_batch(
           size_t buf_len = cs->mbmaxlen*input_str.length();
           if (0 == buf_len) {
             results[j].set_null();
-            eval_flags.set(j);
           } else if (OB_ISNULL(buf = static_cast<char *>(calc_alloc.alloc(buf_len)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to alloc buf", K(ret), K(buf_len), K(input_str));
@@ -370,7 +368,6 @@ int ObExprToPinyin::eval_to_pinyin_batch(
               LOG_WARN("deep copy str failed", K(ret), K(converted_result));
             } else {
               results[j].set_string(converted_result);
-              eval_flags.set(j);
             }
           }
         }
@@ -415,7 +412,6 @@ int ObExprToPinyin::to_pinyin_vector(VECTOR_EVAL_FUNC_ARG_DECL)
         continue;
       } else if (arg0_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         ObString input_str = arg0_vec->get_string(idx);
         int64_t off = 0;
@@ -423,7 +419,6 @@ int ObExprToPinyin::to_pinyin_vector(VECTOR_EVAL_FUNC_ARG_DECL)
         size_t buf_len = cs->mbmaxlen * input_str.length();
         if (0 == buf_len) {
           res_vec->set_null(idx);
-          eval_flags.set(idx);
         } else if (OB_ISNULL(buf = static_cast<char *>(calc_alloc.alloc(buf_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc buf", K(ret), K(buf_len), K(input_str));
@@ -444,7 +439,6 @@ int ObExprToPinyin::to_pinyin_vector(VECTOR_EVAL_FUNC_ARG_DECL)
             LOG_WARN("deep copy str failed", K(ret), K(converted_result));
           } else {
             res_vec->set_string(idx, converted_result);
-            eval_flags.set(idx);
           }
         }
       }

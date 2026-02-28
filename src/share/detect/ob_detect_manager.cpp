@@ -61,7 +61,7 @@ int ObDMMultiDlist::init(int64_t tenant_id, int64_t bucket_num)
     LIB_LOG(WARN, "[DM] failed to init buckets_");
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < bucket_num_; ++i) {
-    ObLockWrapper *lock = OB_NEWx(ObLockWrapper, &allocator_);
+    ObLockWrapper *lock = OB_NEWx(ObLockWrapper, &allocator_, common::ObLatchIds::OB_DM_MULTI_DLIST_LOCK);
     ObDList<ObDetectableIdDNode> *dlist = OB_NEWx(ObDList<ObDetectableIdDNode>, &allocator_);
     if (OB_ISNULL(lock) || OB_ISNULL(dlist)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

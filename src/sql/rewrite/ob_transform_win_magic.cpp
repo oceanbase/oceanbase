@@ -718,7 +718,7 @@ int ObTransformWinMagic::check_stmt_and_view(ObDMLStmt *stmt,
   ObSEArray<ObRawExpr *, 4> column_exprs;
   ObSEArray<ObRawExpr *, 4> view_group_exprs;
   ObSEArray<int64_t, 4> expr_map;
-  EqualSets dummy_set;
+  TemporaryEqualSets dummy_set;
   ObSelectStmt *rewrite_view = NULL;
   int64_t match_count = 0;
   QueryRelation relation;
@@ -826,7 +826,7 @@ int ObTransformWinMagic::check_view_and_view(ObDMLStmt *main_stmt,
   ObSqlBitSet<> matched_cond;
   int64_t match_count = 0;
   QueryRelation relation;
-  EqualSets dummy_set;
+  TemporaryEqualSets dummy_set;
   if (OB_ISNULL(main_stmt) || OB_ISNULL(drill_down_table) || OB_ISNULL(roll_up_table) 
       || OB_ISNULL(drill_down_view = drill_down_table->ref_query_) 
       || OB_ISNULL(roll_up_view = roll_up_table->ref_query_)) {
@@ -974,7 +974,7 @@ int ObTransformWinMagic::check_outer_stmt_conditions(ObDMLStmt *stmt,
                                                      bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  EqualSets equal_sets;
+  TemporaryEqualSets equal_sets;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer is null", K(ret));
@@ -1785,7 +1785,7 @@ int ObTransformWinMagic::check_join_push_down(ObDMLStmt *main_stmt,
   int ret = OB_SUCCESS;
   int64_t view_table_idx = -1;
   int64_t push_down_table_idx = -1;
-  EqualSets dummy_set;
+  TemporaryEqualSets dummy_set;
   if (OB_ISNULL(main_stmt) || OB_ISNULL(view_table) || OB_ISNULL(view_table->ref_query_) ||
       OB_ISNULL(push_down_table)) {
     ret = OB_ERR_UNEXPECTED;

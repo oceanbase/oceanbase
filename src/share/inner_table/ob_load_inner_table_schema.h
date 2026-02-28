@@ -52,6 +52,7 @@ private:
   const uint64_t *row_checksum_;
   int64_t row_count_;
 };
+extern const int64_t INNER_TABLE_SYS_SCHEMA_VERSION;
 extern const int64_t INNER_TABLE_CORE_SCHEMA_VERSION;
 extern const ObLoadInnerTableSchemaInfo ALL_CORE_TABLE_LOAD_INFO;
 extern const ObLoadInnerTableSchemaInfo ALL_TABLE_LOAD_INFO;

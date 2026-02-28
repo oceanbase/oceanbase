@@ -15,6 +15,7 @@
 
 #include "logservice/ob_log_handler.h"
 #include "common/ob_member.h"
+#include "common/ob_member_list.h"
 #include "storage/ob_storage_async_rpc.h"
 
 namespace oceanbase
@@ -47,6 +48,10 @@ public:
   int replace_member_with_learner(const common::ObMember &added_member,
                                   const common::ObMember &removed_member,
                                   const int64_t timeout);
+  int replace_learners(const common::ObMemberList &added_learners,
+                       const common::ObMemberList &removed_learners,
+                       const bool need_check_transfer_scn,
+                       const int64_t timeout);
   int get_max_tablet_transfer_scn(share::SCN &transfer_scn);
 
 private:

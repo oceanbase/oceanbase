@@ -96,7 +96,7 @@ private:
       idx_row_ = nullptr;
       iter_end_ = false;
     }
-    TO_STRING_KV(KP_(idx_scanner));
+    TO_STRING_KV(KP_(idx_scanner), K_(iter_end));
   private:
     ObSSTableIndexScanner *idx_scanner_;
     const ObSSTableIndexRow *idx_row_;
@@ -130,6 +130,35 @@ private:
     bool iter_end_;
   };
 private:
+  struct ObBlockStatKeyItem
+  {
+    ObBlockStatKeyItem() : iter_idx_(-1), endkey_(nullptr), equal_with_next_(false) {}
+    ~ObBlockStatKeyItem() = default;
+    ObBlockStatKeyItem(int64_t iter_idx, const ObDatumRowkey *endkey) : iter_idx_(iter_idx), endkey_(endkey), equal_with_next_(false) {}
+    TO_STRING_KV(K_(iter_idx), KPC_(endkey), K_(equal_with_next));
+
+    int64_t iter_idx_;
+    const ObDatumRowkey *endkey_;
+    bool equal_with_next_;
+  };
+
+  struct ObBlockStatKeyCmp
+  {
+    ObBlockStatKeyCmp() : datum_utils_(nullptr), cmp_cnt_(0), is_inited_(false) {}
+    ~ObBlockStatKeyCmp() = default;
+    int init(const blocksstable::ObStorageDatumUtils &datum_utils, const int64_t cmp_cnt);
+    int cmp(const ObBlockStatKeyItem &l, const ObBlockStatKeyItem &r, int64_t &cmp_ret);
+    OB_INLINE void reset() { datum_utils_ = nullptr; cmp_cnt_ = 0; is_inited_ = false; }
+    OB_INLINE bool is_valid() const { return is_inited_; }
+  private:
+    const blocksstable::ObStorageDatumUtils *datum_utils_;
+    int64_t cmp_cnt_;
+    bool is_inited_;
+  };
+  typedef ObSimpleRowsMerger<ObBlockStatKeyItem, ObBlockStatKeyCmp> ObBSSimpleMerger;
+  typedef ObMergeLoserTree<ObBlockStatKeyItem, ObBlockStatKeyCmp> ObBSLoserTree;
+  typedef common::ObRowsMerger<ObBlockStatKeyItem, ObBlockStatKeyCmp> OBSMergeHeap;
+
   int init_scan_range(const ObTabletHandle &tablet_handle, ObBlockStatScanParam &scan_param);
   int init_memtable_access_param(const ObTabletHandle &tablet_handle, ObTableScanParam &scan_param);
   int refresh_scan_table_on_demand();
@@ -137,8 +166,13 @@ private:
   int prepare_scan_tables();
   int construct_iters();
   void reset_iters();
-  int next_baseline_range(bool &beyond_range);
+  int build_merge_heap(const ObITableReadInfo *rowkey_read_info);
+  int release_merge_heap();
+  int fill_merge_heap();
   int collect_sstable_idx_rows(const bool drain_all_iters);
+  int next_range(bool &beyond_range);
+  int next_baseline_range(bool &beyond_range);
+  int next_merged_range(bool &beyond_range);
   int collect_memtable_scan_rows(const bool drain_all_iters);
   int advance_sstable_iters(const ObDatumRowkey &advance_key, const bool inclusive);
   int advance_memtable_iters(const ObDatumRowkey &advance_key, const bool inclusive);
@@ -147,9 +181,13 @@ private:
   int shrink_scan_range(const ObDatumRowkey &start_key);
   SSTableIter &get_baseline_block_iter() { return sstable_iters_.at(0); }
   bool is_all_iter_end() const;
+  bool is_all_sstable_iters_end() const;
+  bool use_merged_range() const;
 private:
+  static const int64_t MIN_SSTABLE_CNT_USE_MERGED_RANGE = 2;
   const ObBlockStatScanParam *scan_param_;
   ObArenaAllocator allocator_;
+  ObArenaAllocator merged_endkey_allocator_;
   ObBlockStatCollector stat_collector_;
   ObTableScanRange scan_range_;
   ObGetTableParam get_table_param_;
@@ -161,11 +199,16 @@ private:
   common::ObSEArray<ObITable *, 4> scan_tables_;
   common::ObSEArray<MemTableIter, 4> memtable_iters_;
   common::ObSEArray<SSTableIter, 4>sstable_iters_;
+  ObBlockStatKeyCmp key_cmp_;
+  OBSMergeHeap *merge_heap_;
+  common::ObSEArray<int64_t, 4> iter_idxs_;
   const ObITableReadInfo *rowkey_read_info_;
   const ObDatumRowkey *curr_endkey_;
+  ObDatumRowkey curr_merged_endkey_;
   ObDatumRange curr_scan_range_;
   ObDatumRowkey curr_scan_start_key_;
   ObIAllocator *iter_allocator_;
+  bool is_baseline_merged_endkey_;
   bool iter_end_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObBlockStatIterator);

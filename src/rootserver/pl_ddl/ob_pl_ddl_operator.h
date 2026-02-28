@@ -112,7 +112,8 @@ public:
                    share::schema::ObErrorInfo &error_info,
                    const common::ObString *ddl_stmt_str/*=NULL*/);
   //----End of functions for managing package----
-  int create_trigger(share::schema::ObTriggerInfo &trigger_info,
+  int create_trigger(share::schema::ObSchemaGetterGuard &schema_guard,
+                     share::schema::ObTriggerInfo &trigger_info,
                      common::ObMySQLTransaction &trans,
                      share::schema::ObErrorInfo &error_info,
                      ObIArray<ObDependencyInfo> &dep_infos,

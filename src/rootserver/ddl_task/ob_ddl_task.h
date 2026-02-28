@@ -137,6 +137,7 @@ public:
 public:
   static const int64_t AUTOINC_RANGE_INTERVAL = 10000;
   common::Ob2DArray<sql::ObPxTabletRange> part_ranges_;
+  common::Ob2DArray<sql::ObPxTabletRange> inverted_part_ranges_;  // inverted ranges for FTS
   int64_t autoinc_range_interval_;
 };
 
@@ -707,7 +708,7 @@ class ObDDLTask : public common::ObDLinkBase<ObDDLTask>
 {
 public:
   explicit ObDDLTask(const share::ObDDLType task_type)
-    : lock_(), ddl_tracing_(this), is_inited_(false), need_retry_(true), is_running_(false), is_abort_(false),
+    : lock_(common::ObLatchIds::OB_DDL_TASK_LOCK), ddl_tracing_(this), is_inited_(false), need_retry_(true), is_running_(false), is_abort_(false),
       task_type_(task_type), trace_id_(), sub_task_trace_id_(0), tenant_id_(0), dst_tenant_id_(0), object_id_(0), schema_version_(0), dst_schema_version_(0),
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),

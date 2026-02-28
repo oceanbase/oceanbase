@@ -67,6 +67,7 @@ public:
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool is_disabled() const { return disabled_; }
   OB_INLINE void disable() { disabled_ = true; }
+  OB_INLINE void enable() { disabled_ = false; }
   OB_INLINE virtual bool can_refresh() const { return !is_aggregated_in_prefetch_; }
   OB_INLINE void set_aggregated_in_prefetch() { is_aggregated_in_prefetch_ = true; }
   // for blockscan

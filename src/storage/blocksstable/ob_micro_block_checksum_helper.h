@@ -41,6 +41,7 @@ public:
   inline int64_t get_row_checksum() const { return micro_block_row_checksum_; }
   inline bool is_local_buf() const { return integer_col_buf_ == local_integer_col_buf_; }
   inline bool is_local_idx() const { return integer_col_idx_ == local_integer_col_idx_; }
+  template <typename Iter> int cal_row_checksum(Iter begin, Iter end);
   template<typename T>
   int cal_row_checksum(
       const T* datums,
@@ -102,26 +103,39 @@ int ObMicroBlockChecksumHelper::cal_row_checksum(
   if (OB_ISNULL(datums)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), KP(datums));
-  } else if (OB_ISNULL(integer_col_buf_) || OB_ISNULL(integer_col_idx_)) {
-    for (int64_t i = 0; i < row_col_cnt; ++i) {
-      micro_block_row_checksum_ = datums[i].checksum(micro_block_row_checksum_);
-    }
-  } else if (OB_ISNULL(col_descs_) || row_col_cnt != col_descs_->count()) { // defense
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpect error", K(ret), KPC(col_descs_), K_(integer_col_cnt), K(row_col_cnt));
   } else {
-    for (int64_t i = 0, idx = 0; i < row_col_cnt; ++i) {
-      if (idx < integer_col_cnt_ && integer_col_idx_[idx] == i) {
-        if (datums[i].is_nop()) {
+    const T* begin = datums, *end = begin + row_col_cnt;
+    ret = cal_row_checksum(begin, end);
+  }
+  return ret;
+}
+
+template <typename Iter>
+int ObMicroBlockChecksumHelper::cal_row_checksum(Iter begin, Iter end) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(integer_col_buf_) || OB_ISNULL(integer_col_idx_)) {
+    for (Iter iter = begin; iter < end; ++iter) {
+      const ObDatum& datum = *iter;
+      micro_block_row_checksum_ = datum.checksum(micro_block_row_checksum_);
+    }
+  } else if (OB_ISNULL(col_descs_) || end - begin != col_descs_->count()) { // defense
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpect error", K(ret), KPC(col_descs_), K_(integer_col_cnt), K(end - begin));
+  } else {
+    int64_t idx = 0;
+    for (Iter iter = begin; iter < end; ++iter) {
+      const ObDatum& datum = *iter;
+      if (idx < integer_col_cnt_ && integer_col_idx_[idx] == iter - begin) {
+        if (datum.is_nop()) {
           integer_col_buf_[idx] = MAGIC_NOP_NUMBER;
-        } else if (datums[i].is_null()) {
+        } else if (datum.is_null()) {
           integer_col_buf_[idx] = MAGIC_NULL_NUMBER;
         } else {
-          integer_col_buf_[idx] = datums[i].get_int();
+          integer_col_buf_[idx] = datum.get_int();
         }
         ++idx;
       } else {
-        micro_block_row_checksum_ = datums[i].checksum(micro_block_row_checksum_);
+        micro_block_row_checksum_ = datum.checksum(micro_block_row_checksum_);
       }
     }
     micro_block_row_checksum_ = ob_crc64_sse42(micro_block_row_checksum_,

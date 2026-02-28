@@ -195,6 +195,12 @@ int ObLogGroupBy::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   } else if (NULL != rollup_adaptive_info_.rollup_id_expr_ &&
              OB_FAIL(all_exprs.push_back(rollup_adaptive_info_.rollup_id_expr_))) {
     LOG_WARN("failed to add rollup id expr", K(ret));
+  } else if (is_gby_with_ordered_grouping_id() && OB_FAIL(all_exprs.push_back(grouping_id_))) {
+    LOG_WARN("failed to push back grouping id", K(ret));
+  } else if (NULL != limit_expr_ && OB_FAIL(all_exprs.push_back(limit_expr_))) {
+    LOG_WARN("failed to push back limit expr", K(ret));
+  } else if (first_stage_hash_val_expr_ != nullptr && OB_FAIL(all_exprs.push_back(first_stage_hash_val_expr_))) {
+    LOG_WARN("failed to push back first stage hash val expr", K(ret));
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to get op exprs", K(ret));
   } else { /*do nothing*/ }
@@ -263,6 +269,19 @@ int ObLogGroupBy::get_plan_item_info(PlanText &plan_text,
     } else {
       const ObIArray<ObRawExpr *> &agg_func = get_aggr_funcs();
       EXPLAIN_PRINT_EXPRS(agg_func, type);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (NULL != limit_expr_) {
+      if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else {
+        ObRawExpr *limit = limit_expr_;
+        EXPLAIN_PRINT_EXPR(limit, type);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (is_gby_with_ordered_grouping_id()) {
+      ret = BUF_PRINTF(", order by AGGR_CODE desc");
     }
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item.special_predicates_len_);
@@ -544,6 +563,14 @@ int ObLogGroupBy::inner_replace_op_exprs(ObRawExprReplacer &replacer)
             LOG_WARN("failed to replace distinct expr", K(ret));
           }
         }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && is_three_stage_expand_aggr()) {
+    // replace group_distinct_exprs
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_distinct_exprs_.count(); ++i) {
+      if (OB_FAIL(replace_exprs_action(replacer, group_distinct_exprs_.at(i)))) {
+        LOG_WARN("failed to replace group distinct exprs", K(ret));
       }
     }
   }

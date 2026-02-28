@@ -39,6 +39,20 @@ int ObTempRowStoreBase<false>::RowBlock::get_store_row(int64_t &cur_pos, const O
   return ret;
 }
 
+template <>
+int ObTempRowStoreBase<false>::RowBlock::get_store_rows(int64_t &cur_pos,
+                                                        const ObCompactRow **stored_rows,
+                                                        const int64_t max_rows, int64_t &read_rows)
+{
+  int ret = OB_SUCCESS;
+  read_rows = std::min(max_rows, static_cast<int64_t>(rows()));
+  for (int64_t i = 0; i < read_rows; i++) {
+    stored_rows[i] = reinterpret_cast<const ObCompactRow *>(&payload_[cur_pos]);
+    cur_pos += stored_rows[i]->get_row_size();
+  }
+  return ret;
+}
+
 template<bool RA>
 int ObTempRowStoreBase<RA>::RowBlock::add_row(
     ShrinkBuffer &buf,
@@ -398,7 +412,7 @@ int ObTempRowStoreBase<RA>::ReaderBase::get_next_batch(const ObExprPtrIArray &ex
   for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); i++) {
     ObExpr *e = exprs.at(i);
     ObIVector *vec = NULL;
-    if (OB_FAIL(e->init_vector_default(ctx, max_rows))) {
+    if (!e->is_const_expr() && OB_FAIL(e->init_vector_default(ctx, max_rows))) {
       LOG_WARN("fail to init vector", K(ret));
     } else {
       vec = e->get_vector(ctx);
@@ -514,14 +528,15 @@ int ObTempRowStoreBase<false>::Iterator::attach_rows(const ObExprPtrIArray &expr
 {
   int ret = OB_SUCCESS;
   for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < exprs.count(); col_idx ++) {
+    if (exprs.at(col_idx)->is_const_expr()) {
+      continue;
+    }
     if (OB_FAIL(exprs.at(col_idx)->init_vector_default(ctx, read_rows))) {
       LOG_WARN("fail to init vector", K(ret));
     } else {
       ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
-      if (VEC_UNIFORM_CONST != vec->get_format()) {
-        ret = vec->from_rows(row_meta, srows, read_rows, col_idx);
-        exprs.at(col_idx)->set_evaluated_projected(ctx);
-      }
+      ret = vec->from_rows(row_meta, srows, read_rows, col_idx);
+      exprs.at(col_idx)->set_evaluated_projected(ctx);
     }
   }
   return ret;

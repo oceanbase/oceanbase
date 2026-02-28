@@ -30,7 +30,7 @@ public:
   BRQueue() :
       inited_(false),
       queue_(),
-      cond_(),
+      cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT),
       dml_br_count_(0),
       ddl_br_count_(0),
       part_trans_task_count_(0)

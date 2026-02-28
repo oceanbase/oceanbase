@@ -62,7 +62,7 @@ class ObPxSubAdmission
 public:
   ObPxSubAdmission() = default;
   ~ObPxSubAdmission() = default;
-  static void acquire(int64_t max, int64_t min, int64_t &acquired_cnt);
+  static void acquire(int64_t max, int64_t min, int64_t tenant_min_cpu, uint64_t tenant_id, int64_t &acquired_cnt);
   static void release(int64_t acquired_cnt);
 private:
   /* variables */

@@ -24,7 +24,7 @@ namespace sql
 class ObInsertStmt : public ObDelUpdStmt
 {
 public:
-  ObInsertStmt();
+  ObInsertStmt(ObIAllocator &allocator);
   virtual ~ObInsertStmt();
   int deep_copy_stmt_struct(ObIAllocator &allocator,
                             ObRawExprCopier &expr_copier,

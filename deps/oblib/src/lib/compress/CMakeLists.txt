@@ -10,6 +10,7 @@ oblib_add_library(compress
   none/ob_none_compressor.h
   snappy/ob_snappy_compressor.cpp
   snappy/ob_snappy_compressor.h
+  snappy_1_2_2/ob_snappy_compressor_1_2_2.cpp
   zlib/ob_zlib_compressor.cpp
   zlib/ob_zlib_compressor.h
   zstd/ob_zstd_compressor.cpp

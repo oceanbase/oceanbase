@@ -583,7 +583,7 @@ STAT_EVENT_ADD_DEF(HBASEAPI_BATCH_GET_TIME, "hbase batch get time", ObStatClassI
 STAT_EVENT_ADD_DEF(HBASEAPI_BATCH_GET_ROW, "hbase batch get row count", ObStatClassIds::TABLEAPI, 191039, true, true, true, "Number of OceanBase data rows involved in OBKV-HBase Batch Get operations. Each time a Batch Get operation is performed, the number of OceanBase data rows involved is accumulated.")
 STAT_EVENT_ADD_DEF(TABLEAPI_FAILED_OP_COUNT, "obkv failed operation count", ObStatClassIds::TABLEAPI, 191040, true, true, true, "Number of failed OBKV operations. Each time a OBKV operation has failed, this count is incremented by 1.")
 STAT_EVENT_ADD_DEF(TABLEAPI_FAILED_OP_TIME, "obkv failed operation time", ObStatClassIds::TABLEAPI, 191041, true, true, true, "Total time spent (in microseconds) executing OBKV failed operations. Each time a OBKV operation has failed, the execution time is added to this count.")
-STAT_EVENT_ADD_DEF(TABLEAPI_FAILED_OP_ROW, "obkv failed operation row count", ObStatClassIds::TABLEAPI, 191042, true, true, true, "Number of OceanBase data rows involved in OBKV failed operations. Each time a OBKV operation has failed, the number of OceanBase data rows involved is accumulated.")
+STAT_EVENT_ADD_DEF(TABLEAPI_FAILED_OP_ROW, "obkv failed operation row count", ObStatClassIds::TABLEAPI, 191042, true, true, false, "Number of OceanBase data rows involved in OBKV failed operations. Each time a OBKV operation has failed, the number of OceanBase data rows involved is accumulated.")
 
 // -- table increment 1911xx
 STAT_EVENT_ADD_DEF(TABLEAPI_INCREMENT_COUNT, "single increment execute count", ObStatClassIds::TABLEAPI, 191101, true, true, true, "Number of OBKV-TABLE Increment operations. Each time an Increment operation is performed, this count is incremented by 1.")
@@ -921,6 +921,7 @@ STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_WAIT_ENQUEUE_COUNT, "The total enqueue count 
 STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_WAIT_DEQUEUE_COUNT, "The total dequeue count of sslog notify wait queue", ObStatClassIds::STORAGE, 240138, false, true, true, "")
 STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_READY_ENQUEUE_COUNT, "The total enqueue count of sslog notify eady queue", ObStatClassIds::STORAGE, 240139, false, true, true, "")
 STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_READY_DEQUEUE_COUNT, "The total dequeue count of sslog notify ready queue", ObStatClassIds::STORAGE, 240140, false, true, true, "")
+STAT_EVENT_ADD_DEF(SS_READ_OBJECT_STORAGE_COUNT, "The total read from object storage count", ObStatClassIds::STORAGE, 240141, false, true, true, "")
 
 // external table cache(2402xx)
 STAT_EVENT_ADD_DEF(OPT_EXTERNAL_TABLE_STAT_CACHE_HIT, "opt external table stat cache hit", ObStatClassIds::CACHE, 240201, false, true, true, "")

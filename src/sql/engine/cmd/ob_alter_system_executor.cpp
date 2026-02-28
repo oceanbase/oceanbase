@@ -175,6 +175,19 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
           LOG_WARN("failed to schedule tablet major freeze", K(ret), K(param));
         }
       }
+    } else if (stmt.get_table_id() > 0) { // table major freeze
+      if (OB_UNLIKELY(1 != stmt.get_tenant_ids().count())) { // only support one tenant
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support schedule table major freeze for several tenant", K(ret), K(stmt));
+      } else {
+        rootserver::ObTableMajorFreezeArg param;
+        param.tenant_id_ = stmt.get_tenant_ids().at(0);
+        param.table_id_ = stmt.get_table_id();
+        param.is_rebuild_column_group_ = stmt.is_rebuild_column_group();
+        if (OB_FAIL(rootserver::ObMajorFreezeHelper::table_major_freeze(param))) {
+          LOG_WARN("failed to schedule table major freeze", K(ret), K(param));
+        }
+      }
     } else { // tenant major freeze
       rootserver::ObMajorFreezeParam param;
       param.freeze_all_ = stmt.is_freeze_all();
@@ -1531,6 +1544,82 @@ int ObSetConfigExecutor::execute(ObExecContext &ctx, ObSetConfigStmt &stmt)
     } else {
       LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
     }
+  } else if (OB_FAIL(wait_config_sync(stmt.get_rpc_arg()))) {
+    LOG_WARN("wait config sync failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
+  }
+  return ret;
+}
+
+int ObSetConfigExecutor::wait_config_sync(const obrpc::ObAdminSetConfigArg &arg)
+{
+  int ret = OB_SUCCESS;
+  bool all_sync = false;
+  bool is_sys_config_sync = false;
+  int64_t sys_config_version = 0;
+  ObArray<omt::ObTenantID> all_tenant;
+  ObSEArray<std::pair<uint64_t, int64_t>, 4> tenant_versions;
+
+  int wait_timeout_sec = OB_E(EventTable::EN_SET_CONFIG_WAIT_SYNC_TIMEOUT) 0;
+  int64_t wait_timeout_us = std::abs(wait_timeout_sec) * 1000 * 1000L;
+  const int64_t SLEEP_INTERVAL_US = 2 * 1000 * 1000L;
+  const int64_t start_time = ObTimeUtility::current_time();
+
+  if (0 == wait_timeout_us) {
+    all_sync = true;
+  } else if (OB_ISNULL(GCTX.config_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("config mgr is null", KR(ret));
+  } else if (OB_FAIL(OTC_MGR.get_all_tenant_id(all_tenant))) {
+    LOG_WARN("failed to get all tenant id", KR(ret));
+  } else {
+    sys_config_version = GCTX.config_mgr_->get_version();
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_tenant.count(); ++i) {
+      uint64_t tenant_id = all_tenant.at(i).tenant_id_;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (!tenant_config.is_valid()) {
+        // do nothing
+        LOG_TRACE("tenant config is not valid", K(ret), K(tenant_id));
+      } else if (OB_FAIL(tenant_versions.push_back(std::make_pair(tenant_id, tenant_config->version_)))) {
+        LOG_WARN("failed to push back tenant version", KR(ret), K(tenant_id));
+      }
+    }
+  }
+
+  while (OB_SUCC(ret) && !all_sync) {
+    ObSEArray<std::pair<uint64_t, int64_t>, 4> current_versions;
+    if (ObTimeUtility::current_time() - start_time > wait_timeout_us) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("use too much time", K(ret), "cost_us", ObTimeUtility::current_time() - start_time);
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "wait config sync timeout");
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_versions.count(); ++i) {
+      uint64_t tenant_id = tenant_versions.at(i).first;
+      int64_t tenant_version = tenant_versions.at(i).second;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (!tenant_config.is_valid()) {
+        // do nothing
+        LOG_TRACE("tenant config is not valid", K(ret), K(tenant_id));
+      } else if (tenant_config->get_read_version() >= tenant_version) {
+        LOG_TRACE("tenant config is synced", K(tenant_id), K(tenant_version), K(tenant_config->get_read_version()));
+      } else if (OB_FAIL(current_versions.push_back(tenant_versions.at(i)))) {
+        LOG_WARN("failed to push back current version", K(ret), K(tenant_id));
+      } else {
+        LOG_INFO("tenant config is not synced", K(tenant_id), K(tenant_version), K(tenant_config->get_read_version()));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(tenant_versions.assign(current_versions))) {
+      LOG_WARN("failed to assign current versions", K(ret));
+    } else {
+      all_sync = GCTX.config_mgr_->get_read_version() >= sys_config_version && tenant_versions.empty();
+      if (all_sync) {
+        LOG_TRACE("all config is synced", K(sys_config_version), K(tenant_versions));
+      } else {
+        LOG_INFO("wait for config sync", K(tenant_versions), K(sys_config_version),
+                 "current_version", GCTX.config_mgr_->get_read_version());
+        ob_usleep(SLEEP_INTERVAL_US);
+      }
+    }
   }
   return ret;
 }
@@ -1629,10 +1718,20 @@ int ObAlterLSReplicaExecutor::execute(ObExecContext &ctx, ObAlterLSReplicaStmt &
   } else if (sys_data_version >= DATA_VERSION_4_3_5_1) {
     ObDRWorker dr_worker;
     ObNotifyTenantThreadArg arg;
-    if (OB_FAIL(dr_worker.execute_manual_dr_task(stmt.get_rpc_arg()))) {
+    uint64_t notify_tenant_id = gen_meta_tenant_id(stmt.get_rpc_arg().get_tenant_id());
+    if (stmt.get_rpc_arg().get_alter_task_type().is_replace_task()) {
+      if (is_sys_tenant(stmt.get_rpc_arg().get_tenant_id())) {
+        // already been checked in resolver
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("replace LS command is not allowed for sys tenant", KR(ret), K(stmt));
+      } else if (is_meta_tenant(stmt.get_rpc_arg().get_tenant_id())) {
+        notify_tenant_id = OB_SYS_TENANT_ID;
+      }
+      LOG_INFO("execute replace ls task", KR(ret), K(stmt), K(notify_tenant_id));
+    }
+    if (FAILEDx(dr_worker.execute_manual_dr_task(stmt.get_rpc_arg()))) {
       LOG_WARN("failed to execute manual drtask", KR(ret), K(stmt));
-    } else if (OB_FAIL(arg.init(gen_meta_tenant_id(stmt.get_rpc_arg().get_tenant_id()),
-                                obrpc::ObNotifyTenantThreadArg::DISASTER_RECOVERY_SERVICE))) {
+    } else if (OB_FAIL(arg.init(notify_tenant_id, obrpc::ObNotifyTenantThreadArg::DISASTER_RECOVERY_SERVICE))) {
       LOG_WARN("failed to init arg", KR(ret), K(stmt));
     } else if (OB_FAIL(DisasterRecoveryUtils::wakeup_tenant_service(arg))) {
       LOG_WARN("fail to wake up", KR(ret), K(stmt), K(arg));
@@ -2023,109 +2122,6 @@ int ObBootstrapExecutor::execute(ObExecContext &ctx, ObBootstrapStmt &stmt)
 		BOOTSTRAP_LOG(INFO, "STEP_0.1:alter_system execute success");
 	}
 	return ret;
-}
-
-ERRSIM_POINT_DEF(EN_LOAD_TIME_ZONE_INFO_FAILED);
-//TODO shanting, add concurrency control.
-int ObLoadTimeZoneInfoExecutor::execute(ObExecContext &ctx, ObLoadTimeZoneInfoStmt &stmt)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  char *buf = NULL;
-  common::ObMySQLProxy *sql_proxy = NULL;
-  ObSQLSessionInfo *session = NULL;
-  ObMySQLTransaction trans;
-  uint64_t tenant_id = OB_INVALID_TENANT_ID;
-  int64_t affected_rows = 0;
-  if (OB_ISNULL(session = ctx.get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session is null", K(ret));
-  } else if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy must not null", K(ret), KP(sql_proxy));
-  } else if (OB_FAIL(trans.start(sql_proxy, session->get_effective_tenant_id()))) {
-    LOG_WARN("fail to start transaction", K(ret));
-  } else {
-    tenant_id = session->get_effective_tenant_id();
-  }
-  if (OB_SUCC(ret)) {
-    // 1. truncate tables.
-    ObSqlString trunc_sql1;
-    ObSqlString trunc_sql2;
-    ObSqlString trunc_sql3;
-    ObSqlString trunc_sql4;
-    if (OB_FAIL(trunc_sql1.assign_fmt("DELETE FROM %s", OB_ALL_TENANT_TIME_ZONE_TNAME))) {
-      LOG_WARN("assign fmt failed", K(ret));
-    } else if (OB_FAIL(trunc_sql2.assign_fmt("DELETE FROM %s", OB_ALL_TENANT_TIME_ZONE_NAME_TNAME))) {
-      LOG_WARN("assign fmt failed", K(ret));
-    } else if (OB_FAIL(trunc_sql3.assign_fmt("DELETE FROM %s", OB_ALL_TENANT_TIME_ZONE_TRANSITION_TNAME))) {
-      LOG_WARN("assign fmt failed", K(ret));
-    } else if (OB_FAIL(trunc_sql4.assign_fmt("DELETE FROM %s", OB_ALL_TENANT_TIME_ZONE_TRANSITION_TYPE_TNAME))) {
-      LOG_WARN("assign fmt failed", K(ret));
-    } else if (OB_FAIL(trans.write(tenant_id, trunc_sql1.ptr(), affected_rows))) {
-      LOG_WARN("write failed", K(ret));
-    } else if (OB_FAIL(trans.write(tenant_id, trunc_sql2.ptr(), affected_rows))) {
-      LOG_WARN("write failed", K(ret));
-    } else if (OB_FAIL(trans.write(tenant_id, trunc_sql3.ptr(), affected_rows))) {
-      LOG_WARN("write failed", K(ret));
-    } else if (OB_FAIL(trans.write(tenant_id, trunc_sql4.ptr(), affected_rows))) {
-      LOG_WARN("write failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    // 2. load data
-    ObSqlString load_sql1;
-    ObSqlString load_sql2;
-    ObSqlString load_sql3;
-    ObSqlString load_sql4;
-    const char *timezone_file = "timezone.data";
-    const char *timezone_name_file = "timezone_name.data";
-    const char *timezone_transition_file = "timezone_trans.data";
-    const char *timezone_transition_type_file = "timezone_trans_type.data";
-    ObString path = stmt.get_path();
-    if (OB_FAIL(load_sql1.assign_fmt("LOAD DATA INFILE '%.*s/%s' INTO TABLE %s FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'",
-                path.length(), path.ptr(), timezone_file, OB_ALL_TENANT_TIME_ZONE_TNAME))) {
-      LOG_WARN("assign fmt failed", K(ret));
-    } else if (OB_FAIL(load_sql2.assign_fmt("LOAD DATA INFILE '%.*s/%s' INTO TABLE %s FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'",
-                path.length(), path.ptr(), timezone_name_file, OB_ALL_TENANT_TIME_ZONE_NAME_TNAME))) {
-      LOG_WARN("assign fmt failed", K(ret));
-    } else if (OB_FAIL(load_sql3.assign_fmt("LOAD DATA INFILE '%.*s/%s' INTO TABLE %s FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'",
-                path.length(), path.ptr(), timezone_transition_file, OB_ALL_TENANT_TIME_ZONE_TRANSITION_TNAME))) {
-      LOG_WARN("assign fmt failed", K(ret));
-    } else if (OB_FAIL(load_sql4.assign_fmt("LOAD DATA INFILE '%.*s/%s' INTO TABLE %s FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'",
-                path.length(), path.ptr(), timezone_transition_type_file, OB_ALL_TENANT_TIME_ZONE_TRANSITION_TYPE_TNAME))) {
-      LOG_WARN("assign fmt failed", K(ret));
-    } else if (OB_FAIL(trans.write(tenant_id, load_sql1.ptr(), affected_rows))) {
-      LOG_WARN("write failed", K(ret));
-    } else if (OB_FAIL(trans.write(tenant_id, load_sql2.ptr(), affected_rows))) {
-      LOG_WARN("write failed", K(ret));
-    } else if (OB_FAIL(EN_LOAD_TIME_ZONE_INFO_FAILED)) {
-      LOG_WARN("load time zone info failed due to trace point", K(ret));
-    } else if (OB_FAIL(trans.write(tenant_id, load_sql3.ptr(), affected_rows))) {
-      LOG_WARN("write failed", K(ret));
-    } else if (OB_FAIL(trans.write(tenant_id, load_sql4.ptr(), affected_rows))) {
-      LOG_WARN("write failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    // 3. insert version into __all_sys_stat
-    ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt("replace into %s(tenant_id, zone, data_type, name, value, info) "
-                  "values(0, '' ,5, 'current_timezone_version', 1, 'current time zone version')",
-                  OB_ALL_SYS_STAT_TNAME))) {
-      LOG_WARN("assign fmt failed", K(ret));
-    } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("write failed", K(ret));
-    }
-  }
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-  }
-  return ret;
 }
 
 int ObEnableSqlThrottleExecutor::execute(ObExecContext &ctx, ObEnableSqlThrottleStmt &stmt)
@@ -2657,6 +2653,66 @@ int ObArchiveLogExecutor::execute(ObExecContext &ctx, ObArchiveLogStmt &stmt)
       LOG_WARN("failed to assign archive tenant ids", K(ret), K(stmt));
     } else if (OB_FAIL(common_rpc_proxy->archive_log(arg))) {
       LOG_WARN("archive_tenant rpc failed", K(ret), K(arg), "dst", common_rpc_proxy->get_server());
+    }
+  }
+  return ret;
+}
+
+int ObBackupValidateExecutor::execute(ObExecContext &ctx, ObBackupValidateStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  common::ObCurTraceId::mark_user_request();
+  const int64_t SECOND = 1* 1000 * 1000; //1s
+  //rs refresh schema_version interval 5s
+  const int64_t MAX_RETRY_NUM = UPDATE_SCHEMA_ADDITIONAL_INTERVAL / SECOND + 1;
+  if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed");
+  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
+    LOG_WARN("get common rpc proxy failed", K(ret));
+  } else if (OB_ISNULL(common_rpc_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("common_rpc_proxy is null", K(ret));
+  } else {
+    FLOG_INFO("ObBackupValidateExecutor::execute", K(stmt), K(ctx));
+    obrpc::ObBackupValidateArg arg;
+    if (OB_FAIL(arg.validate_dest_.assign(stmt.get_backup_dest()))) {
+      LOG_WARN("failed to assign backup dest", K(ret));
+    } else if (OB_FAIL(arg.execute_tenant_ids_.assign(stmt.get_execute_tenant_ids()))) {
+      LOG_WARN("failed to assign backup tenant ids", K(ret));
+    } else if (OB_FAIL(arg.description_.assign(stmt.get_backup_description()))) {
+      LOG_WARN("failed to assign backup description", K(ret));
+    } else if (OB_FAIL(arg.set_or_piece_ids_.assign(stmt.get_set_or_piece_ids()))) {
+      LOG_WARN("failed to assign set or piece ids", K(ret));
+    } else {
+      arg.tenant_id_ = stmt.get_tenant_id();
+      arg.initiator_tenant_id_ = stmt.get_tenant_id();
+      arg.validate_type_.type_ = stmt.get_validate_type().type_;
+      arg.validate_level_.level_ = stmt.get_validate_level().level_;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!arg.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid args", K(ret), K(arg));
+    } else {
+      int32_t retry_cnt = 0;
+      while (retry_cnt < MAX_RETRY_NUM) {
+        ret = OB_SUCCESS;
+        if (OB_FAIL(common_rpc_proxy->backup_validate(arg))) {
+          if (OB_EAGAIN == ret) {
+            LOG_WARN("backup_validate rpc failed, need retry", KR(ret), K(arg), "dst", common_rpc_proxy->get_server(),
+                      "retry_cnt", retry_cnt);
+            ob_usleep(SECOND); //1s
+          } else {
+            LOG_WARN("backup_validate rpc failed", KR(ret), K(arg), "dst", common_rpc_proxy->get_server());
+          }
+        } else {
+          break;
+        }
+        ++retry_cnt;
+      }
     }
   }
   return ret;
@@ -3212,6 +3268,7 @@ int ObTableTTLExecutor::execute(ObExecContext& ctx, ObTableTTLStmt& stmt)
     param.ttl_all_ = stmt.is_ttl_all();
     param.transport_ = GCTX.net_frame_->get_req_transport();
     param.type_ = stmt.get_type();
+    param.trigger_type_ = TRIGGER_TYPE::USER_TRIGGER;
     for (int64_t i = 0; (i < stmt.get_tenant_ids().count()) && OB_SUCC(ret); i++) {
       uint64_t tenant_id = stmt.get_tenant_ids().at(i);
       if (OB_FAIL(param.add_ttl_info(tenant_id))) {

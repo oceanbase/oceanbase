@@ -25,6 +25,7 @@
 #include "storage/mview/ob_mview_refresh.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 
 namespace oceanbase
 {
@@ -577,19 +578,27 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
   return ret;
 }
 
-int ObMViewResolverHelper::add_hidden_cols_for_mv(
-                           ObTableSchema &table_schema,
-                           const uint64_t column_id,
-                           const SelectItem &select_item,
-                           ObCreateViewResolver &resolver)
+int ObMViewResolverHelper::add_hidden_cols_for_mv(ObTableSchema &table_schema,
+                                                  const uint64_t column_id,
+                                                  const SelectItem &select_item,
+                                                  ObCreateViewResolver &resolver)
 {
   int ret = OB_SUCCESS;
   const ObRawExpr *expr = select_item.expr_;
-  if (OB_ISNULL(expr)) {
+  if (OB_ISNULL(expr) || OB_ISNULL(resolver.schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), KP(expr));
+    LOG_WARN("unexpected null", K(ret), KP(expr), KP(resolver.schema_checker_));
   } else {
     ObColumnSchemaV2 hidden_column;
+    char buf[MAX_COLUMN_COMMENT_CHAR_LENGTH];
+    int64_t pos = 0;
+    static constexpr char comment_prefix[] = "refresh dependent: ";
+    static constexpr int64_t prefix_len = sizeof(comment_prefix) - 1;
+    MEMCPY(buf, comment_prefix, prefix_len);
+    pos = prefix_len;
+    ObRawExprPrinter expr_printer(buf, MAX_COLUMN_COMMENT_CHAR_LENGTH, &pos,
+                                  resolver.schema_checker_->get_schema_guard(),
+                                  TZ_INFO(resolver.session_info_));
     hidden_column.reset();
     hidden_column.set_column_id(column_id);
     hidden_column.set_is_hidden(true);
@@ -603,11 +612,23 @@ int ObMViewResolverHelper::add_hidden_cols_for_mv(
                                                        hidden_column,
                                                        true))) {
       LOG_WARN("failed to fill column meta infos for mv", K(ret), K(hidden_column));
+    } else if (OB_FAIL(expr_printer.do_print(const_cast<ObRawExpr*>(expr), T_FIELD_LIST_SCOPE))) {
+      if (OB_LIKELY(OB_SIZE_OVERFLOW == ret && pos > 0)) {
+        // comment may be truncated, just ignore it
+        LOG_WARN("select item expr is too long, comment may be truncated", K(ret), K(pos));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to print select item expr", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(hidden_column.set_comment(ObString(static_cast<ObString::obstr_size_t>(pos), buf)))) {
+      LOG_WARN("failed to set hidden column comment", K(ret), K(pos), K(buf));
     } else if (OB_FAIL(table_schema.add_column(hidden_column))) {
-      LOG_WARN("add column to table_schema failed", KR(ret), K(hidden_column));
+      LOG_WARN("add column to table_schema failed", K(ret), K(hidden_column));
     } else {
       // for debug
-      LOG_INFO("add hidden column", K(hidden_column));
+      LOG_TRACE("add hidden column for materialized view", K(hidden_column), K(table_schema));
     }
   }
   return ret;

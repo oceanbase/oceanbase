@@ -79,10 +79,10 @@ int ObMviewMergeParameter::init(const ObMergeParameter &merge_param)
   } else {
     database_id_ = table_schema->get_database_id();
   }
-  if (FAILEDx(refresh_scn_range_.start_scn_.convert_for_sql(merge_param.merge_version_range_.base_version_))) {
-    LOG_WARN("Failed to convert to scn", K(ret), K(merge_param.merge_version_range_));
-  } else if (OB_FAIL(refresh_scn_range_.end_scn_.convert_for_sql(merge_param.merge_version_range_.snapshot_version_))) {
-    LOG_WARN("Failed to convert to scn", K(ret), K(merge_param.merge_version_range_));
+  if (FAILEDx(refresh_scn_range_.start_scn_.convert_for_sql(merge_param.get_merge_version_range().base_version_))) {
+    LOG_WARN("Failed to convert to scn", K(ret), K(merge_param.get_merge_version_range()));
+  } else if (OB_FAIL(refresh_scn_range_.end_scn_.convert_for_sql(merge_param.get_merge_version_range().snapshot_version_))) {
+    LOG_WARN("Failed to convert to scn", K(ret), K(merge_param.get_merge_version_range()));
   } else if (OB_UNLIKELY(!refresh_scn_range_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected refresh scn range", K(ret), K_(refresh_scn_range));
@@ -310,11 +310,16 @@ int ObMviewCompactionHelper::create_inner_session(
   } else {
     session->set_inner_session();
     session->set_compatibility_mode(is_oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE);
-    session->get_ddl_info().set_major_refreshing_mview(true);
-    session->get_ddl_info().set_refreshing_mview(true);
+    InnerDDLInfo ddl_info;
+    ddl_info.set_major_refreshing_mview(true);
+    ddl_info.set_refreshing_mview(true);
     session->set_database_id(database_id);
     session->set_query_start_time(ObTimeUtil::current_time());
-    LOG_INFO("[MVIEW COMPACTION]: Succ to create inner session", K(ret), K(tenant_id), K(database_id), KP(session));
+    if (OB_FAIL(session->get_ddl_info().init(ddl_info, 0 /*session_id*/))) {
+      LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info));
+    } else {
+      LOG_INFO("[MVIEW COMPACTION]: Succ to create inner session", K(ret), K(tenant_id), K(database_id), KP(session));
+    }
   }
   if (OB_FAIL(ret)) {
     release_inner_session(free_session_ctx, session);
@@ -326,8 +331,7 @@ void ObMviewCompactionHelper::release_inner_session(sql::ObFreeSessionCtx &free_
 {
   if (nullptr != session) {
     LOG_INFO("[MVIEW COMPACTION]: Release inner session", KP(session));
-    session->get_ddl_info().set_major_refreshing_mview(false);
-    session->get_ddl_info().set_refreshing_mview(false);
+    session->get_ddl_info().reset();
     session->set_session_sleep();
     GCTX.session_mgr_->revert_session(session);
     GCTX.session_mgr_->free_session(free_session_ctx);

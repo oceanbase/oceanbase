@@ -800,7 +800,7 @@ int ObIndexBlockMacroIterator::get_cs_range(
     LOG_WARN("Fail to get get data block", K(ret), K(macro_handle));
   } else if (OB_FAIL(reader_helper.init(*allocator_))) {
     LOG_WARN("Fail to init reader helper", K(ret));
-  } else if (OB_FAIL(reader_helper.get_reader(micro_block_iter.get_row_type(), reader))) {
+  } else if (OB_FAIL(reader_helper.get_reader(*data_block.get_micro_header(), reader))) {
     LOG_WARN("Fail to get reader", K(ret));
   } else if (OB_FAIL(reader->init(data_block, rowkey_read_info))) {
     LOG_WARN("Fail to init data block reader", K(ret), K(rowkey_read_info));

@@ -9,6 +9,7 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/compaction/ob_tenant_status_cache.h"
+#include "storage/tx/ob_ts_mgr.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #include "share/ob_server_struct.h"
 
@@ -17,6 +18,7 @@ namespace oceanbase
 using namespace share;
 namespace compaction
 {
+
 /********************************************ObTenantStatusCache impl******************************************/
 bool ObTenantStatusCache::is_skip_merge_tenant() const
 {
@@ -25,6 +27,17 @@ bool ObTenantStatusCache::is_skip_merge_tenant() const
     const ObTenantRole::Role &role = MTL_GET_TENANT_ROLE_CACHE();
     // remote tenant OR finish restore inner_table tenant
     bret = is_remote_tenant_ || (during_restore_ && is_standby_tenant(role));
+  }
+  return bret;
+}
+
+bool ObTenantStatusCache::is_skip_window_compaction_tenant() const
+{
+  bool bret = true;
+  if (IS_INIT) {
+    const ObTenantRole::Role &role = MTL_GET_TENANT_ROLE_CACHE();
+    // remote tenant OR standby tenant
+    bret = is_remote_tenant_ || is_standby_tenant(role);
   }
   return bret;
 }
@@ -72,10 +85,12 @@ int ObTenantStatusCache::init_or_refresh()
 
 int ObTenantStatusCache::refresh_tenant_config(
     const bool enable_adaptive_compaction,
-    const bool enable_adaptive_merge_schedule)
+    const bool enable_adaptive_merge_schedule,
+    const bool enable_window_compaction)
 {
   ATOMIC_SET(&enable_adaptive_compaction_, enable_adaptive_compaction);
   ATOMIC_SET(&enable_adaptive_merge_schedule_, enable_adaptive_merge_schedule);
+  ATOMIC_SET(&enable_window_compaction_, enable_window_compaction);
   return init_or_refresh();
 }
 
@@ -123,6 +138,39 @@ int ObTenantStatusCache::inner_refresh_restore_status()
   return ret;
 }
 
+// See ObMediumCompactionScheduleFunc::get_valid_schema_version: some sys tables don't update schema version when doing dml,
+// so we need get the lastest schema to do window compaction in case of adding new column when upgrading.
+int ObTenantStatusCache::inner_refresh_window_schema_version()
+{
+  int ret = OB_SUCCESS;
+  int64_t current_max_schema_version = 0;
+  ObSchemaService *schema_service = nullptr;
+  const int64_t timeout_us = 10 * 1000 * 1000; /*10s*/
+  SCN gts_scn;
+  bool is_external_consistent = true;
+  ObRefreshSchemaStatus schema_status;
+  schema_status.tenant_id_ = MTL_ID();
+  if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service or sql proxy is null", K(ret));
+  } else if (OB_ISNULL(schema_service = GCTX.schema_service_->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", K(ret));
+  } else if (OB_FAIL(OB_TS_MGR.get_ts_sync(schema_status.tenant_id_, timeout_us, gts_scn, is_external_consistent))) {
+    LOG_WARN("failed to get gts sync", K(ret));
+  } else if (OB_UNLIKELY(!is_external_consistent || !gts_scn.is_valid_and_not_min())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("gts is invalid", K(ret), K(gts_scn), K(is_external_consistent));
+  } else if (FALSE_IT(schema_status.snapshot_timestamp_ = gts_scn.get_val_for_inner_table_field())) {
+  } else if (OB_FAIL(schema_service->fetch_schema_version(schema_status, *GCTX.sql_proxy_, current_max_schema_version))) {
+    LOG_WARN("failed to fetch schema version", K(ret), K(schema_status));
+  } else {
+    ATOMIC_STORE(&window_schema_version_, current_max_schema_version);
+    FLOG_INFO("[WIN-COMPACTION] Successfully refreshed window schema info", K(ret), K(gts_scn), KPC(this));
+  }
+  return ret;
+}
+
 int ObTenantStatusCache::get_min_data_version(uint64_t &min_data_version)
 {
   int ret = OB_SUCCESS;
@@ -149,6 +197,26 @@ int ObTenantStatusCache::get_min_data_version(uint64_t &min_data_version)
   return ret;
 }
 
+int ObTenantStatusCache::get_window_schema_version(int64_t &window_schema_version)
+{
+  int ret = OB_SUCCESS;
+  window_schema_version = ATOMIC_LOAD(&window_schema_version_);
+  if (OB_INVALID_VERSION == window_schema_version) {
+    uint64_t min_data_version = 0;
+    if (OB_FAIL(get_min_data_version(min_data_version))) { // promise to get valid min data version for this cache
+      LOG_WARN("failed to get min data version", KR(ret));
+    } else if (0 == min_data_version) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("min data version is 0", KR(ret), K(min_data_version));
+    } else if (OB_FAIL(inner_refresh_window_schema_version())) {
+      LOG_WARN("failed to refresh window schema version", KR(ret));
+    } else {
+      window_schema_version = ATOMIC_LOAD(&window_schema_version_);
+    }
+  }
+  return ret;
+}
+
 int ObTenantStatusCache::refresh_data_version()
 {
   int ret = OB_SUCCESS;
@@ -160,6 +228,7 @@ int ObTenantStatusCache::refresh_data_version()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data version is unexpected smaller", KR(ret), K(compat_version), K(cached_data_version));
   } else if (compat_version > cached_data_version) {
+    ATOMIC_STORE(&window_schema_version_, OB_INVALID_VERSION); // mark window schema version as invalid when min_data_version is changed
     ATOMIC_STORE(&min_data_version_, compat_version);
     LOG_INFO("cache min data version", "old_data_version", cached_data_version,
              "new_data_version", compat_version);

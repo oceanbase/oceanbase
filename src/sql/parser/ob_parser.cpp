@@ -17,6 +17,8 @@
 #include "parse_node.h"
 #include "ob_sql_parser.h"
 #include "pl/parser/ob_pl_parser.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
+#include "share/ob_define.h"
 using namespace oceanbase::pl;
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -1030,6 +1032,7 @@ int ObParser::parse_sql(const ObString &stmt,
              K(sql_mode_),
              K(parse_result.sql_mode_),
              K(parse_result.may_bool_value_),
+             K(parse_result.clickhouse_func_exposed_),
              K(ret));
 
     int32_t error_offset = parse_result.start_col_ > 0 ? (parse_result.start_col_ - 1) : 0;
@@ -1079,7 +1082,6 @@ int ObParser::parse(const ObString &query,
       --len;
     }
   }
-
   ObString stmt(len, query.ptr());
   memset(&parse_result, 0, sizeof(ParseResult));
   parse_result.is_multi_values_parser_ = (INS_MULTI_VALUES == parse_mode);
@@ -1091,6 +1093,13 @@ int ObParser::parse(const ObString &query,
                                   || FP_NO_PARAMERIZE_AND_FILTER_HINT_MODE == parse_mode);
   parse_result.is_for_trigger_ = (TRIGGER_MODE == parse_mode);
   parse_result.is_dynamic_sql_ = (DYNAMIC_SQL_MODE == parse_mode);
+  if (is_mysql_mode()) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      const ObString tmp_str(tenant_config->sql_func_extension_mode.str());
+      parse_result.clickhouse_func_exposed_ = (0 == tmp_str.case_compare("ClickHouse"));
+    }
+  }
   parse_result.is_dbms_sql_ = (DBMS_SQL_MODE == parse_mode) || is_dbms_sql;
   parse_result.is_for_udr_ = (UDR_SQL_MODE == parse_mode);
   parse_result.is_batched_multi_enabled_split_ = is_batched_multi_stmt_split_on;

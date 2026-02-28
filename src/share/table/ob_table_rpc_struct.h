@@ -290,7 +290,8 @@ public:
        tablet_id_(),
        entity_type_(ObTableEntityType::ET_DYNAMIC),
        consistency_level_(ObTableConsistencyLevel::STRONG),
-       option_flag_(OB_TABLE_OPTION_DEFAULT)
+       option_flag_(OB_TABLE_OPTION_DEFAULT),
+       hbase_op_type_(OHOperationType::INVALID)
   {}
 
   void set_server_can_retry(bool can_retry)
@@ -319,7 +320,8 @@ public:
                K_(entity_type),
                K_(consistency_level),
                K_(query),
-               K_(option_flag));
+               K_(option_flag),
+               K_(hbase_op_type));
 public:
   ObString credential_;
   ObString table_name_;
@@ -332,6 +334,7 @@ public:
   ObTableQuery query_;
   // option flag, specific option switch.
   uint8_t option_flag_;
+  OHOperationType hbase_op_type_;
 };
 
 class ObTableQueryAndMutateRequest final
@@ -341,7 +344,8 @@ public:
   ObTableQueryAndMutateRequest()
       :table_id_(common::OB_INVALID_ID),
       binlog_row_image_type_(ObBinlogRowImageType::FULL),
-      option_flag_(OB_TABLE_OPTION_DEFAULT)
+      option_flag_(OB_TABLE_OPTION_DEFAULT),
+      hbase_op_type_(OHOperationType::INVALID)
   {}
   void set_server_can_retry(bool can_retry)
   {
@@ -368,7 +372,8 @@ public:
                K_(entity_type),
                K_(query_and_mutate),
                K_(binlog_row_image_type),
-               K_(option_flag));
+               K_(option_flag),
+               K_(hbase_op_type));
 public:
   ObString credential_;
   ObString table_name_;
@@ -380,6 +385,7 @@ public:
   ObBinlogRowImageType binlog_row_image_type_;
   // option flag, specific option switch.
   uint8_t option_flag_;
+  OHOperationType hbase_op_type_;
 };
 
 class ObTableQueryAsyncRequest : public ObTableQueryRequest
@@ -518,7 +524,8 @@ public:
     : credential_(),
       entity_type_(),
       consistency_level_(),
-      ls_op_(nullptr)
+      ls_op_(nullptr),
+      hbase_op_type_(OHOperationType::INVALID)
   {
   }
   ~ObTableLSOpRequest() {}
@@ -526,7 +533,8 @@ public:
   TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
                K_(entity_type),
                K_(consistency_level),
-               KPC_(ls_op));
+               KPC_(ls_op),
+               K_(hbase_op_type));
 public:
   void reset()
   {
@@ -565,6 +573,16 @@ public:
       bret = op.get_op_type() == ObTableOperationType::SCAN;
     }
 
+    return bret;
+  }
+
+  bool is_readonly() const
+  {
+    bool bret = false;
+    if (OB_NOT_NULL(ls_op_) && ls_op_->is_same_type() && ls_op_->count() > 0 && ls_op_->at(0).count() > 0) {
+      const ObTableSingleOp &op = ls_op_->at(0).at(0);
+      bret = op.get_op_type() == ObTableOperationType::GET || op.get_op_type() == ObTableOperationType::SCAN;
+    }
     return bret;
   }
 
@@ -611,6 +629,7 @@ public:
   ObTableEntityType entity_type_;  // for optimize purpose
   ObTableConsistencyLevel consistency_level_;
   ObTableLSOp *ls_op_; // FARM COMPAT WHITELIST
+  OHOperationType hbase_op_type_;
 };
 
 using ObTableSingleOpResult = ObTableOperationResult;
@@ -771,7 +790,8 @@ class ObHbaseRpcRequest final : public ObITableRequest
 public:
   ObHbaseRpcRequest()
       : deserialize_allocator_(nullptr),
-        option_flag_(0)
+        option_flag_(0),
+        hbase_op_type_(OHOperationType::INVALID)
   {}
   ~ObHbaseRpcRequest() = default;
   void reset()
@@ -779,11 +799,12 @@ public:
     deserialize_allocator_ = nullptr;
     credential_.reset();
     op_type_ = ObTableOperationType::GET;
+    hbase_op_type_ = OHOperationType::INVALID;
     table_name_.reset();
     keys_.reset();
     cf_rows_.reset();
   }
-  TO_STRING_KV("credential", common::ObHexStringWrap(credential_), K_(table_name), K_(op_type), K_(cf_rows));
+  TO_STRING_KV("credential", common::ObHexStringWrap(credential_), K_(table_name), K_(op_type), K_(hbase_op_type), K_(cf_rows));
   virtual ObTableRequsetType get_type() const { return ObTableRequsetType::TABLE_HBASE_REQUEST; }
   bool server_can_retry() { return server_can_retry_; }
   void set_deserialize_allocator(common::ObIAllocator *allocator) { deserialize_allocator_ = allocator; }
@@ -800,6 +821,7 @@ public:
     };
   };
   ObTableOperationType::Type op_type_;
+  OHOperationType hbase_op_type_;
   common::ObString table_name_; // tablegroup_name, real_table_name in cf_rows
   common::ObFixedArray<ObObj, ObIAllocator> keys_;
   common::ObFixedArray<ObHCfRows, ObIAllocator> cf_rows_;

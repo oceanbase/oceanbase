@@ -77,6 +77,7 @@ class ObDASUpdIterator;
 namespace rootserver
 {
 struct ObTruncateTabletArg;
+struct ObTTLFilterInfoArg;
 }
 
 namespace storage
@@ -178,10 +179,9 @@ public:
       const bool need_create_empty_major_sstable,
       const share::SCN &clog_checkpoint_scn,
       const share::SCN &mds_checkpoint_scn,
-      const storage::ObTabletMdsUserDataType &create_type,
       const bool micro_index_clustered,
       const bool has_cs_replica,
-      const ObTabletID &split_src_tablet_id,
+      const share::ObSplitTabletInfo &split_info,
       const uint64_t data_format_version,
       ObTabletHandle &tablet_handle);
   int create_transfer_in_tablet(
@@ -372,6 +372,16 @@ public:
   int replay_set_truncate_info(
       const share::SCN &scn,
       const rootserver::ObTruncateTabletArg &arg,
+      mds::MdsCtx &ctx);
+  int set_ttl_filter_info(
+      const common::ObTabletID &tablet_id,
+      const rootserver::ObTTLFilterInfoArg &arg,
+      mds::MdsCtx &ctx,
+      const int64_t timeout_us);
+  int replay_set_ttl_filter_info(
+      const common::ObTabletID &tablet_id,
+      const share::SCN &scn,
+      const rootserver::ObTTLFilterInfoArg &arg,
       mds::MdsCtx &ctx);
 
   // DAS interface
@@ -1064,6 +1074,11 @@ private:
       const int64_t row_count,
       blocksstable::ObDatumRow *old_datum_rows,
       blocksstable::ObDatumRow *new_datum_rows);
+  static int expand_updated_columns_with_lob(
+    const ObColDescIArray &col_descs,
+    const ObIArray<uint64_t> &origin_updated_column_ids,
+    ObIArray<uint64_t> &updated_column_ids_buffer,
+    const ObIArray<uint64_t> *&updated_column_ids);
 
 private:
   static int get_storage_row(const blocksstable::ObDatumRow &sql_row,

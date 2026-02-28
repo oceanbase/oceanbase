@@ -155,26 +155,63 @@ struct Frame
   int64_t skip_cnt_; // skipped rows in this frame
 };
 
+
+// legacy window function will use this ctx
+// allocator is created every time batch, just like before
 struct WinExprEvalCtx
 {
   WinExprEvalCtx(RowStore &input_rows, WinFuncColExpr &win_col, const int64_t tenant_id) :
     input_rows_(input_rows), win_col_(win_col),
-    allocator_(ObModIds::OB_SQL_WINDOW_LOCAL, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id,
-               ObCtxIds::WORK_AREA)
-  {}
+    per_batch_allocator_(ObModIds::OB_SQL_WINDOW_LOCAL, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id,
+               ObCtxIds::WORK_AREA) {}
 
-  char *reserved_buf(int32_t len)
-  {
-    return (char *)allocator_.alloc(len);
+  // leagcy non-streaming mode will use this function to allocate memory within the batch
+  char *reserved_per_partition_buf(int32_t len);
+
+  char* reserved_per_batch_buf(int32_t len) {
+    return (char *)per_batch_allocator_.alloc(len);
   }
+
+  void reset_per_batch_allocator();
+
   ~WinExprEvalCtx()
   {
-    allocator_.reset();
+    per_batch_allocator_.reset();
   }
+
   RowStore &input_rows_;
   sql::WinFuncColExpr &win_col_;
-  // used for tmp memory allocating during partition process.
-  common::ObArenaAllocator allocator_;
+  common::ObArenaAllocator per_batch_allocator_;
+};
+
+// streaming window function will use this ctx
+// allocator is passed in from the caller, StreamingWindowProcessor
+struct StreamingWinExprEvalCtx
+{
+  StreamingWinExprEvalCtx(WinFuncColExpr &win_col, ObExprPtrIArray& input_exprs, ObEvalCtx& eval_ctx, const ObBatchRows& input_brs, ObArenaAllocator& per_batch_allocator) :
+    win_col_(win_col),
+    input_exprs_(input_exprs),
+    eval_ctx_(eval_ctx),
+    input_brs_(input_brs),
+    per_batch_allocator_(per_batch_allocator) {}
+
+  char* reserved_per_partition_buf(int32_t len);
+
+  char* reserved_per_batch_buf(int32_t len) {
+    return (char *)per_batch_allocator_.alloc(len);
+  }
+
+  // we used so many static cast to eliminate the overhead of calling virtual functions
+  // but this is not a good practice, it will make the code hard to maintain
+  // here we encapsulate the implementation details of specific window functions
+  // and unify the external interface to StreamingWindowProcessor
+  static int on_batch_start_with_last_row(StreamingWinExprEvalCtx &eval_ctx, const ObCompactRow *last_row, const ObBatchRows& brs);
+  static int on_batch_end(StreamingWinExprEvalCtx &eval_ctx, int64_t last_row_index);
+  sql::WinFuncColExpr &win_col_;
+  ObExprPtrIArray& input_exprs_;
+  ObEvalCtx& eval_ctx_;
+  const ObBatchRows& input_brs_;
+  common::ObArenaAllocator& per_batch_allocator_;
 };
 
 class IWinExpr
@@ -182,15 +219,29 @@ class IWinExpr
 public:
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *res, bool &is_null) = 0;
-  virtual int collect_part_results(WinExprEvalCtx &ctx, const int64_t row_start,
-                                   const int64_t row_end, const ObBitVector &skip) = 0;
+  virtual int collect_part_results(sql::WinFuncColExpr& win_col, const int64_t row_start,
+                                   const int64_t row_end, const ObBitVector &skip, bool set_evaluated_projected) = 0;
   virtual int accum_process_window(WinExprEvalCtx &ctx, const Frame &cur_frame,
                                    const Frame &prev_frame, const int64_t row_idx, char *res,
                                    bool &is_null) = 0;
+  // processing a whole partition
   virtual int process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
                                 const int64_t part_end, const int64_t row_start,
                                 const int64_t row_end, const ObBitVector &skip) = 0;
+
+  // processing streamingly in row mode
+  // compute the wf values of the rows in [start_idx, end_idx) in the same partition
+  virtual int process_rows_streaming(StreamingWinExprEvalCtx &eval_ctx, const int64_t prev_row_idx,
+      const int64_t start_idx, const int64_t end_idx, const ObBatchRows &child_brs) = 0;
+  // evaluate a single row streamingly
+  virtual int process_next_row_streaming(StreamingWinExprEvalCtx &eval_ctx,
+                                         const int64_t prev_row_idx,
+                                         const int64_t row_idx, char *res) {
+    return OB_NOT_IMPLEMENT;
+  }
+
   // used to generate extra ctx for expr evaluation
+  // changed from per-batch to per-partition
   virtual int generate_extra() = 0;
 
   virtual bool is_aggregate_expr() const = 0;
@@ -205,6 +256,9 @@ public:
   virtual int process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
                                 const int64_t part_end, const int64_t row_start,
                                 const int64_t row_end, const ObBitVector &skip) override;
+
+  virtual int process_rows_streaming(StreamingWinExprEvalCtx &eval_ctx, const int64_t prev_row_idx,
+      const int64_t start_idx, const int64_t end_idx, const ObBatchRows &child_brs) override;
   virtual int generate_extra() override
   {
     return OB_SUCCESS;
@@ -214,7 +268,6 @@ public:
     return;
   }
 protected:
-  int copy_aggr_row(WinExprEvalCtx &ctx, const char *src_row, char *dst_row);
 private:
   int update_frame(WinExprEvalCtx &ctx, const Frame &prev_frame, Frame &new_frame,
                    const int64_t idx, const int64_t row_start, bool &whole_frame,
@@ -257,29 +310,72 @@ public:
     int ret = OB_NOT_IMPLEMENT;
     return ret;
   }
+
   virtual bool is_aggregate_expr() const override final { return false; }
 
-  virtual int collect_part_results(WinExprEvalCtx &ctx, const int64_t row_start,
-                                   const int64_t row_end, const ObBitVector &skip) override final;
+  virtual int collect_part_results(sql::WinFuncColExpr& win_col, const int64_t row_start,
+                                   const int64_t row_end, const ObBitVector &skip, bool set_evaluated_projected) override final;
 };
 
+namespace rank_like_expr {
+  int init_res_with_relative_rank(const WinFuncColExpr &win_col, ObEvalCtx &eval_ctx, const ObBatchRows& brs);
+}
 template<ObItemType rank_op>
 class RankLikeExpr final: public NonAggrWinExpr
 {
 public:
-  RankLikeExpr():NonAggrWinExpr(), rank_of_prev_row_(0) {}
+  RankLikeExpr():NonAggrWinExpr(), rank_of_prev_row_(0), num_rows_equal_with_prev_row_(1), relative_rank_of_prev_row_(-1), first_row_equal_to_last_row_in_previous_batch_(false) {}
 
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                    char *res, bool &is_null) override;
+
+  virtual int process_next_row_streaming(StreamingWinExprEvalCtx &eval_ctx,
+                                         const int64_t prev_row_idx,
+                                         const int64_t row_idx,
+                                         char *res) override;
+
+  virtual int generate_extra() override
+  {
+    int ret = OB_SUCCESS;
+    rank_of_prev_row_ = 0;
+    num_rows_equal_with_prev_row_ = 1;
+    relative_rank_of_prev_row_ = -1;
+    first_row_equal_to_last_row_in_previous_batch_ = false;
+    return ret;
+  }
+
+  // called by StreamingWindowProcessor::on_batch_start()
+  int on_batch_start_with_last_row(StreamingWinExprEvalCtx &eval_ctx, const ObCompactRow *last_row, const ObBatchRows& brs);
+
 private:
   int64_t rank_of_prev_row_;
+  int64_t num_rows_equal_with_prev_row_;
+  int64_t relative_rank_of_prev_row_;
+  // the following boolean is set in on_batch_start_with_last_row() and used in process_next_row_streaming()
+  // if true, the first row of current batch is equal to the last row of previous batch
+  bool first_row_equal_to_last_row_in_previous_batch_;
 };
 
 class RowNumber final: public NonAggrWinExpr
 {
 public:
+  RowNumber(): row_nmb_(0) {}
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *res, bool &is_null) override;
+  virtual int process_next_row_streaming(StreamingWinExprEvalCtx &eval_ctx,
+                                         const int64_t prev_row_idx,
+                                         const int64_t row_idx,
+                                         char *res) override;
+
+  virtual int generate_extra() override
+  {
+    int ret = OB_SUCCESS;
+    row_nmb_ = 0;
+    return ret;
+  }
+
+  private:
+    int64_t row_nmb_;
 };
 
 class Ntile final: public NonAggrWinExpr
@@ -298,12 +394,20 @@ public:
   NthValue()
       : NonAggrWinExpr(), last_result_is_valid_(false),
         last_result_is_null_(false), last_result_(nullptr),
-        last_result_size_(-1), last_result_capacity_(-1), last_frame_(),
-        param_index_(-1), reuse_count_(0), store_count_(0) {}
+        last_result_size_(-1), last_result_capacity_(0), last_frame_(),
+        param_index_(-1), reuse_count_(0), store_count_(0), streaming_func_(nullptr) {}
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *res, bool &is_null) override;
   virtual int generate_extra() override;
   virtual void destroy() override;
+
+  virtual int process_rows_streaming(StreamingWinExprEvalCtx &eval_ctx, const int64_t prev_row_idx,
+      const int64_t start_idx, const int64_t end_idx, const ObBatchRows &child_brs) override;
+
+  // called by WinFuncColExpr::init_streaming_function()
+  // eval_ctx is used to evaluate the param (check n = 1) of nth_value
+  int set_streaming_mode(const WinFuncColExpr &win_col_expr, ObEvalCtx &eval_ctx);
+
 private:
   // -- optimize for first()/last() in half sliding window
   // fast path for reuse last result
@@ -311,20 +415,43 @@ private:
     WinExprEvalCtx &ctx, const Frame& frame, const WinFuncInfo& wf_info, int nth_val,
     bool& /* out */ may_reused, bool& /* out */ may_store);
 
-  // store current result for further usage
-  int store_result_for_reuse(WinExprEvalCtx &ctx, const char *src,
-                               int32_t len, const Frame &frame);
-  void store_null_for_reuse(const Frame& frame);
+  using NthValueStreamingFunc = int (NthValue::*)(
+    StreamingWinExprEvalCtx &ctx,
+    const int64_t start_idx,
+    const int64_t end_idx,
+    const ObBatchRows &child_brs);
 
+  template <bool is_first, bool is_ignore_nulls>
+  int streaming_func(StreamingWinExprEvalCtx &ctx,
+                                  const int64_t start_idx,
+                                  const int64_t end_idx,
+                                  const ObBatchRows &child_brs);
+
+  template <bool is_first, bool is_ignore_nulls, bool not_all_rows_active>
+  int compute_nth_value_streaming(StreamingWinExprEvalCtx &ctx,
+                                  const int64_t start_idx,
+                                  const int64_t end_idx,
+                                  const ObBatchRows &child_brs);
+
+  // store current result for further usage
+  template<typename CTX>
+  int store_result_for_reuse(CTX &ctx, const char *src,
+                               int32_t len, const Frame* frame);
+  void store_null_for_reuse(const Frame* frame);
+
+private:
   bool last_result_is_valid_;
   bool last_result_is_null_;
   char* last_result_;
   int last_result_size_;
   int last_result_capacity_;
-  Frame last_frame_;
+  Frame last_frame_; // used in non-streaming mode
   int64_t param_index_;  // column index of param[0]
   uint32_t reuse_count_;
   uint32_t store_count_;
+
+  // streaming function callback
+  NthValueStreamingFunc streaming_func_;
 };
 
 class LeadOrLag final: public NonAggrWinExpr
@@ -351,19 +478,26 @@ public:
   int accum_process_window(WinExprEvalCtx &ctx, const Frame &cur_frame, const Frame &prev_frame,
                            const int64_t row_idx, char *res, bool &is_null) override;
   bool is_aggregate_expr() const override { return true; }
-  virtual int collect_part_results(WinExprEvalCtx &ctx, const int64_t row_start,
-                                   const int64_t row_end, const ObBitVector &skip) override;
+  virtual int collect_part_results(sql::WinFuncColExpr& win_col, const int64_t row_start,
+                                   const int64_t row_end, const ObBitVector &skip, bool set_evaluated_projected) override;
   static int set_result_for_invalid_frame(WinExprEvalCtx &ctx, char *agg_row);
+
+  template<typename CTX, bool use_per_batch_allocator=true>
+  static int copy_aggr_row(CTX &ctx, const char *src_row, char *dst_row);
+
+  int streaming_on_batch_start(StreamingWinExprEvalCtx& eval_ctx);
+  int process_next_row_streaming(StreamingWinExprEvalCtx &eval_ctx,
+                                 const int64_t prev_row_idx,
+                                 const int64_t row_idx,
+                                 char *res) override;
+
+  template<typename CTX>
+  int on_batch_end(CTX &eval_ctx, int64_t last_row_index);
 
   virtual void destroy() override;
 
 private:
   int calc_pushdown_skips(WinExprEvalCtx &ctx, const int64_t batch_size, sql::ObBitVector &skip, bool &all_active);
-
-  template <typename ColumnFmt>
-  int set_payload(WinExprEvalCtx &ctx, ColumnFmt *columns, const int64_t idx,
-                  const char *payload, int32_t len);
-
 public:
   aggregate::Processor *aggr_processor_;
   Frame last_valid_frame_;

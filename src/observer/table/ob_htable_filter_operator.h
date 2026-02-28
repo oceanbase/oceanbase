@@ -287,6 +287,19 @@ protected:
 
   int add_new_row(const ObNewRow &row, ObTableQueryDListResult *&out_result);
 
+  // Get optimization methods
+  bool should_enable_get_optimization();
+  int check_and_apply_get_optimization();
+  int modify_scan_range_for_qualifier(ObIAllocator &allocator,
+                                      ObNewRange &target_range,
+                                      const ObNewRange &orig_range,
+                                      const ObString &qualifier);
+  int rescan_for_qualifier(const ObString &qualifier);
+  int rescan_for_next_qualifier_wildcard(const ObString &previous_qualifier);
+  int move_to_next_qualifier_and_rescan(bool &loop, const ObString &previous_qualifier = ObString::make_empty_string());
+  template <typename ResultType>
+  int get_next_result_internal_with_get_optimization(ResultType*& result);
+  static bool is_legal_family_name(const ObString &family_name);
 protected:
   // try record expired rowkey accord cell's timestamp
   virtual int try_record_expired_rowkey(const ObHTableCellEntity &cell);
@@ -305,6 +318,7 @@ protected:
   ObRowkey stop_row_key_;
   bool is_inited_;
   bool need_verify_cell_ttl_;
+  bool is_cur_row_expired_;  // flag to indicate if current row is expired, used by subclasses
 
 private:
   const table::ObHTableFilter &htable_filter_;
@@ -328,10 +342,13 @@ private:
   bool is_table_group_inited_;
   bool is_table_group_req_;
   ObString family_name_;
-  bool is_cur_row_expired_;
   bool allow_partial_results_;
   bool is_cache_block_;
   ScannerContext *scanner_context_;
+  // Get optimization members
+  bool enable_get_optimization_;
+  bool is_wildcard_mode_;
+  int64_t current_qualifier_idx_;
 };
 
 class ObHTableReversedRowIterator : public ObHTableRowIterator {

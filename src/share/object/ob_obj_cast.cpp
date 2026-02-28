@@ -11406,8 +11406,16 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
       } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
                  || dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
         bool is_sparse_vector = dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE;
-        if (OB_FAIL(ObArrayCastUtils::string_cast_map(temp_allocator, in_str, arr_dst, static_cast<ObCollectionMapType *>(dst_coll_info->collection_meta_), cast_mode, is_sparse_vector))) {
-          LOG_WARN("map cast failed", K(ret), K(dst_coll_info));
+        if (is_sparse_vector) {
+          // Use fast parser for sparse vector (optimized, avoids regex and JSON parsing)
+          if (OB_FAIL(ObArrayCastUtils::string_cast_sparse_vector_fast(temp_allocator, in_str, arr_dst, static_cast<ObCollectionMapType *>(dst_coll_info->collection_meta_)))) {
+            LOG_WARN("sparse vector cast failed", K(ret), K(dst_coll_info));
+          }
+        } else {
+          // Use standard parser for regular map
+          if (OB_FAIL(ObArrayCastUtils::string_cast_map(temp_allocator, in_str, arr_dst, static_cast<ObCollectionMapType *>(dst_coll_info->collection_meta_), cast_mode, false))) {
+            LOG_WARN("map cast failed", K(ret), K(dst_coll_info));
+          }
         }
       } else {
         ret = OB_ERR_UNEXPECTED;

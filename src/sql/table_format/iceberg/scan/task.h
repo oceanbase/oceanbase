@@ -14,7 +14,6 @@
 #define TASK_H
 
 #include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
-#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/spec/manifest.h"
 #include "sql/table_format/iceberg/spec/spec.h"
 

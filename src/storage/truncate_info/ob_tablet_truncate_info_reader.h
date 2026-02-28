@@ -13,36 +13,35 @@
 #ifndef OCEANBASE_STORAGE_OB_TABLET_TRUNCATE_INFO_READER
 #define OCEANBASE_STORAGE_OB_TABLET_TRUNCATE_INFO_READER
 
-#include "storage/multi_data_source/mds_table_handle.h"
-#include "storage/truncate_info/ob_truncate_info.h"
 #include "storage/tablet/ob_mds_cl_range_query_iterator.h"
-#include "storage/multi_data_source/mds_table_iterator.h"
+#include "storage/truncate_info/ob_truncate_info.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-class ObTabletTruncateInfoReader
+
+template <typename Key, typename Value>
+class ObTabletMDSInfoReader final
 {
 public:
-  ObTabletTruncateInfoReader();
-  ~ObTabletTruncateInfoReader();
+  ObTabletMDSInfoReader() : is_inited_(false), allocator_("mds_info_reader"), iter_() {}
+
 public:
-  int init(
-      const ObTablet &tablet,
-      ObTableScanParam &scan_param);
-  int get_next_truncate_info(
-      common::ObIAllocator &allocator,
-      ObTruncateInfoKey &key,
-      ObTruncateInfo &truncate_info);
-  int get_next_mds_kv(
-      common::ObIAllocator &allocator,
-      mds::MdsDumpKV *&kv);
+  int init(const ObTablet &tablet, ObTableScanParam &scan_param);
+
+  int get_next_mds_kv(ObIAllocator &allocator, Key &key, Value &value);
+
+  int get_next_mds_kv(ObIAllocator &allocator, mds::MdsDumpKV *&kv);
+
 private:
   bool is_inited_;
-  common::ObArenaAllocator allocator_;
-  ObMdsRangeQueryIterator<ObTruncateInfoKey, ObTruncateInfo> iter_;
+  ObArenaAllocator allocator_;
+  ObMdsRangeQueryIterator<Key, Value> iter_;
 };
+
+using ObTabletTruncateInfoReader = ObTabletMDSInfoReader<ObTruncateInfoKey, ObTruncateInfo>;
+
 } // namespace storage
 } // namespace oceanbase
 

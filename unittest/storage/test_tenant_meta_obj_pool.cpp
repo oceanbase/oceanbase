@@ -75,7 +75,7 @@ TestConcurrentMetaObjPool::TestConcurrentMetaObjPool(const int64_t thread_cnt,
   : thread_cnt_(thread_cnt),
     obj_pool_(meta_obj_pool),
     obj_array_(),
-    lock_()
+    lock_(common::ObLatchIds::OB_TEST_CONCURRENT_META_OBJ_POOL_LOCK)
 {
   set_thread_count(static_cast<int32_t>(thread_cnt_));
 }

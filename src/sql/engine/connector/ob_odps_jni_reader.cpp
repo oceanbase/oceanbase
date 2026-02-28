@@ -325,7 +325,7 @@ int ObOdpsJniReader::do_open() {
       LOG_WARN("failed init table scanner", K(ret));
     } else if (is_schema_scanner_) {
       // If is schema scanner, then skip executing the init methods
-      LOG_INFO("skip to init more methods for schema scanner", K(ret));
+      LOG_TRACE("skip to init more methods for schema scanner", K(ret));
     } else if (OB_FAIL(init_jni_method_(env))) {
       LOG_WARN("failed to init jni method", K(ret));
     } else if (OB_ISNULL(jni_scanner_obj_)) {
@@ -651,7 +651,7 @@ int ObOdpsJniReader::release_table(const int64_t num_rows) {
 }
 
 // --------------- public method for odps ---------------
-int ObOdpsJniReader::get_odps_partition_row_count_specs(
+int ObOdpsJniReader::get_odps_tunnel_partitions_row_counts_specs(
     ObIAllocator &allocator, ObSEArray<ObString, 4> &partition_specs) {
   int ret = OB_SUCCESS;
   partition_specs.reset();
@@ -721,7 +721,7 @@ int ObOdpsJniReader::get_odps_partition_row_count_specs(
   return ret;
 }
 
-int ObOdpsJniReader::get_odps_partition_phy_specs(
+int ObOdpsJniReader::get_odps_tunnel_partitions_sizes_specs(
     ObIAllocator &allocator, ObSEArray<ObString, 4> &partition_specs) {
   int ret = OB_SUCCESS;
   partition_specs.reset();
@@ -791,7 +791,7 @@ int ObOdpsJniReader::get_odps_partition_phy_specs(
   return ret;
 }
 
-int ObOdpsJniReader::get_file_total_row_count(int64_t& count) {
+int ObOdpsJniReader::get_storage_file_total_row_count(int64_t& count) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
   if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
@@ -823,7 +823,7 @@ int ObOdpsJniReader::get_file_total_row_count(int64_t& count) {
   return ret;
 }
 
-int ObOdpsJniReader::get_odps_partition_phy_size(
+int ObOdpsJniReader::get_odps_tunnel_partition_size(
   ObIAllocator &allocator, const ObString &partition_spec, int64_t &row_count) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
@@ -855,7 +855,7 @@ int ObOdpsJniReader::get_odps_partition_phy_size(
       LOG_WARN("faild to get the partition row count method", K(ret));
     } else {
       ObString temp_str;
-      jstring j_partition_spec;
+      jstring j_partition_spec = nullptr;
       // Note: should transfer ObString to c_style
       if (OB_ISNULL(partition_spec) || 0 == partition_spec.length()) {
         // Means current table is with empty
@@ -879,7 +879,9 @@ int ObOdpsJniReader::get_odps_partition_phy_size(
         } else {
           row_count = static_cast<int64_t>(result);
         }
-        // Note: release resource
+      }
+      // Note: release resource outside of condition to avoid memory leak
+      if (nullptr != j_partition_spec) {
         env->DeleteLocalRef(j_partition_spec);
       }
     }
@@ -887,7 +889,7 @@ int ObOdpsJniReader::get_odps_partition_phy_size(
   return ret;
 }
 
-int ObOdpsJniReader::get_file_total_size(int64_t& size) {
+int ObOdpsJniReader::get_storage_file_total_size(int64_t& size) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
   if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
@@ -919,7 +921,7 @@ int ObOdpsJniReader::get_file_total_size(int64_t& size) {
   return ret;
 }
 
-int ObOdpsJniReader::get_split_count(int64_t& size) {
+int ObOdpsJniReader::get_storage_split_count(int64_t& size) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
   if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
@@ -952,7 +954,7 @@ int ObOdpsJniReader::get_split_count(int64_t& size) {
 }
 
 
-int ObOdpsJniReader::get_session_id(ObIAllocator& alloc, ObString& id) {
+int ObOdpsJniReader::get_odps_tunnel_session_id(ObIAllocator& alloc, ObString& id) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
   if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
@@ -973,19 +975,26 @@ int ObOdpsJniReader::get_session_id(ObIAllocator& alloc, ObString& id) {
       LOG_WARN("faild to get the row count method", K(ret));
     } else {
       jstring session_id = (jstring) env->CallObjectMethod(jni_scanner_obj_, jni_scanner_get_session_id);
-      const char *str = env->GetStringUTFChars(session_id, NULL);
-      const jsize len = env->GetStringLength(session_id);
-      ObString str_temp(len, str);
-      if (nullptr == str) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("failed to get partition spec by index", K(ret));
+
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
+        LOG_WARN("failed to get session id", K(ret));
+      } else if (OB_ISNULL(session_id)) {
+	LOG_INFO("odps session id was null at calling tunnel session id");
       } else {
-        if (OB_FAIL(ob_write_string(alloc, str_temp, id, true))) {
-          LOG_WARN("failed to write string", K(ret), K(str));
+        const char *str = env->GetStringUTFChars(session_id, NULL);
+        const jsize len = env->GetStringLength(session_id);
+        ObString str_temp(len, str);
+        if (nullptr == str) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("failed to get partition spec by index", K(ret));
+        } else {
+          if (OB_FAIL(ob_write_string(alloc, str_temp, id, true))) {
+            LOG_WARN("failed to write string", K(ret), K(str));
+          }
         }
+        env->ReleaseStringUTFChars(session_id, str);
+        env->DeleteLocalRef(session_id);
       }
-      env->ReleaseStringUTFChars(session_id, str);
-      env->DeleteLocalRef(session_id);
     }
   }
   return ret;
@@ -1074,7 +1083,7 @@ int ObOdpsJniReader::get_project_timezone_info(ObIAllocator& alloc, ObString& ss
   return ret;
 }
 
-int ObOdpsJniReader::get_odps_partition_row_count(
+int ObOdpsJniReader::get_odps_tunnel_partition_row_count(
     ObIAllocator &allocator, const ObString &partition_spec, int64_t &row_count) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
@@ -1106,8 +1115,8 @@ int ObOdpsJniReader::get_odps_partition_row_count(
       LOG_WARN("faild to get the partition row count method", K(ret));
     } else {
       ObString temp_str;
-      jstring j_partition_spec;
-      jstring j_session_id;
+      jstring j_partition_spec = nullptr;
+      jstring j_session_id = nullptr;
       // Note: should transfer ObString to c_style
       if (OB_ISNULL(partition_spec) || 0 == partition_spec.length()) {
         // Means current table is with empty
@@ -1136,9 +1145,136 @@ int ObOdpsJniReader::get_odps_partition_row_count(
         } else {
           row_count = static_cast<int64_t>(result);
         }
-        // Note: release resource
+      }
+      // Note: release resource outside of condition to avoid memory leak
+      if (nullptr != j_partition_spec) {
         env->DeleteLocalRef(j_partition_spec);
+      }
+      if (nullptr != j_session_id) {
         env->DeleteLocalRef(j_session_id);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOdpsJniReader::get_odps_tunnel_partition_row_count_for_given_session_id(
+    ObIAllocator &allocator, const ObString &session_id,
+    const ObString &partition_spec, int64_t &row_count) {
+  int ret = OB_SUCCESS;
+  JNIEnv *env = nullptr;
+  if (OB_FAIL(common::ObJniConnector::get_jni_env(env))) {
+    LOG_WARN("failed to get jni env", K(ret));
+  } else if (nullptr == env) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("failed to init jni env", K(ret));
+  } else if (OB_ISNULL(jni_scanner_cls_)) {
+    ret = OB_JNI_ERROR;
+    LOG_WARN("failed to get jni scanner class", K(ret));
+  } else if (OB_ISNULL(jni_scanner_obj_)) {
+    ret = OB_JNI_ERROR;
+    LOG_WARN("failed to get jni scanner obj", K(ret));
+  } else {
+    /* do nothing */
+  }
+
+  // Get the partition specs
+  if (OB_FAIL(ret)) {
+    /* do nothing */
+  } else {
+    jmethodID mid = env->GetMethodID(jni_scanner_cls_, "getPartitionRowCount",
+                                     "(Ljava/lang/String;Ljava/lang/String;)J");
+    if (OB_FAIL(common::ObJniConnector::check_jni_exception_(env))) {
+      LOG_WARN("find method with exception", K(ret));
+    } else if (nullptr == mid) {
+      ret = OB_JNI_ERROR;
+      LOG_WARN("faild to get the partition row count method", K(ret));
+    } else {
+      ObString temp_str;
+      jstring j_partition_spec = nullptr;
+      jstring j_session_id = nullptr;
+
+      // Note: should transfer ObString to c_style
+      if (OB_ISNULL(partition_spec) || 0 == partition_spec.length()) {
+        // Means current table is with empty
+        const char *non_partition = "__NaN__";
+        j_partition_spec = env->NewStringUTF(non_partition);
+      } else if (OB_FAIL(ob_write_string(allocator, partition_spec, temp_str, true))) {
+        LOG_WARN("failed to transfer partition_spec to be c_style", K(ret));
+      } else {
+        j_partition_spec = env->NewStringUTF(temp_str.ptr());
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_ISNULL(session_id) || 0 == session_id.length()) {
+        j_session_id = nullptr;
+      } else if (OB_FAIL(ob_write_string(allocator, session_id, temp_str, true))) {
+        LOG_WARN("failed to transfer session_id to be c_style", K(ret));
+      } else {
+        j_session_id = env->NewStringUTF(temp_str.ptr());
+      }
+      if (OB_FAIL(ret)) {
+        /* do nothing */
+      } else if (nullptr == j_partition_spec) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get partition spec in jstring", K(ret), K(partition_spec));
+      } else {
+        jlong result = env->CallLongMethod(
+            jni_scanner_obj_, mid, j_partition_spec, j_session_id);
+        if (OB_FAIL(common::ObJniConnector::check_jni_exception_(env))) {
+          LOG_WARN("failed to get partition row count", K(ret));
+        } else {
+          row_count = static_cast<int64_t>(result);
+        }
+      }
+      // Note: release resource outside of condition to avoid memory leak
+      if (nullptr != j_partition_spec) {
+        env->DeleteLocalRef(j_partition_spec);
+      }
+      if (nullptr != j_session_id) {
+        env->DeleteLocalRef(j_session_id);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOdpsJniReader::get_odps_tunnel_existing_reader_row_count(
+    int64_t &row_count) {
+  int ret = OB_SUCCESS;
+  JNIEnv *env = nullptr;
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
+    LOG_WARN("failed to get jni env", K(ret));
+  } else if (nullptr == env) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("failed to init jni env", K(ret));
+  } else if (OB_ISNULL(jni_scanner_cls_)) {
+    ret = OB_JNI_ERROR;
+    LOG_WARN("failed to get jni scanner class", K(ret));
+  } else if (OB_ISNULL(jni_scanner_obj_)) {
+    ret = OB_JNI_ERROR;
+    LOG_WARN("failed to get jni scanner obj", K(ret));
+  } else {
+    /* do nothing */
+  }
+
+  // Get the partition specs
+  if (OB_FAIL(ret)) {
+    /* do nothing */
+  } else {
+    jmethodID mid =
+        env->GetMethodID(jni_scanner_cls_, "getTunnelReaderRowCount", "()J");
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
+      LOG_WARN("find method with exception", K(ret));
+    } else if (nullptr == mid) {
+      ret = OB_JNI_ERROR;
+      LOG_WARN("faild to get the partition row count method", K(ret));
+    } else {
+      jlong result = env->CallLongMethod(jni_scanner_obj_, mid);
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
+        LOG_WARN("failed to get partition row count", K(ret));
+      } else {
+        row_count = static_cast<int64_t>(result);
       }
     }
   }

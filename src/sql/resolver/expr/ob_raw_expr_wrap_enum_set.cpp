@@ -318,7 +318,9 @@ int ObRawExprWrapEnumSet::visit(ObWinFunRawExpr &expr)
   int ret = OB_SUCCESS;
   if (has_enumset_expr_need_wrap(expr) || expr.has_flag(CNT_SUB_QUERY)) {
     if (T_WIN_FUN_LEAD == expr.get_func_type() ||
-          T_WIN_FUN_LAG == expr.get_func_type()) {
+        T_WIN_FUN_LAG == expr.get_func_type() ||
+        T_WIN_FUN_LAG_IN_FRAME == expr.get_func_type() ||
+        T_WIN_FUN_LEAD_IN_FRAME == expr.get_func_type()) {
       ObIArray<ObRawExpr*> &real_parm_exprs = expr.get_func_params();
       if (OB_FAIL(wrap_param_expr(real_parm_exprs, expr.get_data_type()))) {
         LOG_WARN("failed to warp param expr", K(ret));
@@ -411,6 +413,7 @@ int ObRawExprWrapEnumSet::visit(ObAggFunRawExpr &expr)
   int ret = OB_SUCCESS;
   if ((has_enumset_expr_need_wrap(expr) || expr.has_flag(CNT_SUB_QUERY)) &&
       (T_FUN_GROUP_CONCAT == expr.get_expr_type() ||
+      T_FUN_CK_GROUPCONCAT == expr.get_expr_type() ||
       T_FUN_MAX == expr.get_expr_type() ||
       T_FUN_MIN == expr.get_expr_type() ||
       T_FUN_JSON_OBJECTAGG == expr.get_expr_type() ||
@@ -482,7 +485,7 @@ int ObRawExprWrapEnumSet::visit(ObSetOpRawExpr &expr)
 int ObRawExprWrapEnumSet::visit(ObAliasRefRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *ref_expr = expr.get_ref_expr();
+  ObRawExpr *ref_expr = expr.get_ref_select_expr();
   if (OB_ISNULL(ref_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref expr is null", K(ret));

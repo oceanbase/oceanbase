@@ -121,6 +121,8 @@ public:
       const int64_t ls_epoch,
       const ObTabletID &tablet_id,
       /*out*/ int64_t &max_meta_version);
+  /// @brief: get tenant meta within the scope of @c super_block_mutex
+  int get_tenant_meta_with_lock(omt::ObTenant &tenant, /*out*/omt::ObTenantMeta &meta);
 
 #ifdef OB_BUILD_SHARED_STORAGE
   // for shared storage gc operation
@@ -208,7 +210,7 @@ private:
   class WaitGCTabletArray final
   {
   public:
-    WaitGCTabletArray() : lock_(), wait_gc_tablet_arr_() {}
+    WaitGCTabletArray() : lock_(common::ObLatchIds::WAIT_GC_TABLET_ARRAY_MUTEX), wait_gc_tablet_arr_() {}
     ~WaitGCTabletArray() = default;
     TO_STRING_KV(K_(wait_gc_tablet_arr));
   public:

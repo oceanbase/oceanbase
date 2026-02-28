@@ -25,6 +25,7 @@
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
 #include "logservice/ob_log_service.h"
 #include "mittest/env/ob_simple_server_helper.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -151,6 +152,10 @@ int ObTransferTx::do_transfer_start_abort(uint64_t tenant_id, ObLSID dest_ls_id,
     ObTransferTaskInfo task_info;
     ObMySQLTransaction trans;
     ObTimeoutCtx timeout_ctx;
+    ObTransferLSInfo transfer_ls_info;
+    common::ObMemberList member_list;
+    common::GlobalLearnerList learner_list;
+    common::ObArray<common::ObAddr> addr_list;
     const int64_t stmt_timeout = 10_s;
     const int32_t group_id = 0;
     const share::SCN dest_max_desided_scn(share::SCN::min_scn());
@@ -165,11 +170,16 @@ int ObTransferTx::do_transfer_start_abort(uint64_t tenant_id, ObLSID dest_ls_id,
     } else if (FALSE_IT(task_info.status_ = ObTransferStatus::START)) {
     } else if (FALSE_IT(task_info.table_lock_owner_id_.id_ = 10000)) {
     } else if (OB_FAIL(task_info.tablet_list_.push_back(tablet_info))) {
+    } else if (OB_FAIL(transfer_handler->init_transfer_ls_info_(task_info))) {
+      LOG_WARN("failed to init transfer ls info", K(ret), K(task_info));
+    } else if (OB_FAIL(OB_FAIL(ObTransferUtils::get_transfer_need_check_addr_list(task_info.src_ls_id_,
+      task_info.dest_ls_id_, transfer_ls_info, member_list, learner_list, addr_list)))) {
+      LOG_WARN("failed to get transfer need check addr list", K(ret), K(task_info));
     } else if (OB_FAIL(transfer_handler->start_trans_(stmt_timeout, group_id, timeout_ctx, trans))) {
       LOG_WARN("failed to start trans", K(ret), K(task_info));
-    } else if (OB_FAIL(transfer_handler->precheck_ls_replay_scn_(task_info))) {
+    } else if (OB_FAIL(transfer_handler->precheck_ls_replay_scn_(task_info, addr_list))) {
       LOG_WARN("failed to precheck ls replay scn", K(ret), K(task_info));
-    } else if (OB_FAIL(transfer_handler->check_start_status_transfer_tablets_(task_info, timeout_ctx))) {
+    } else if (OB_FAIL(transfer_handler->check_start_status_transfer_tablets_(task_info, addr_list, timeout_ctx))) {
       LOG_WARN("failed to check start status transfer tablets", K(ret), K(task_info));
     } else if (OB_FAIL(transfer_handler->update_all_tablet_to_ls_(task_info, trans))) {
       LOG_WARN("failed to update all tablet to ls", K(ret), K(task_info));
@@ -177,7 +187,8 @@ int ObTransferTx::do_transfer_start_abort(uint64_t tenant_id, ObLSID dest_ls_id,
       LOG_WARN("failed to lock tablet on dest ls for table lock", KR(ret), K(task_info));
     } else if (OB_FAIL(transfer_handler->do_trans_transfer_start_prepare_(task_info, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer start prepare", K(ret), K(task_info));
-    } else if (OB_FAIL(transfer_handler->do_trans_transfer_start_v2_(task_info, dest_max_desided_scn, timeout_ctx, trans, is_update_transfer_meta))) {
+    } else if (OB_FAIL(transfer_handler->do_trans_transfer_start_v2_(task_info, dest_max_desided_scn, addr_list, timeout_ctx,
+        trans, is_update_transfer_meta))) {
       LOG_WARN("failed to do trans transfer start", K(ret), K(task_info));
     }
 

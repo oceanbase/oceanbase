@@ -115,6 +115,7 @@ public:
   virtual int table_rescan(
       ObVTableScanParam &vparam,
       ObNewRowIterator *result) override;
+  virtual int table_advance_scan(ObVTableScanParam &vparam, ObNewRowIterator *result) override;
   virtual int reuse_scan_iter(const bool switch_param, common::ObNewRowIterator *iter) override;
   virtual int revert_scan_iter(common::ObNewRowIterator *iter) override;
   virtual int get_multi_ranges_cost(
@@ -290,7 +291,8 @@ protected:
       const int64_t timeout,
       const share::SCN &snapshot,
       ObTabletHandle &tablet_handle,
-      ObStoreCtxGuard &ctx_guard);
+      ObStoreCtxGuard &ctx_guard,
+      ObTableType table_type);
   static int check_mlog_safe_(
       const ObTablet &tablet,
       const ObTableScanParam &scan_param);

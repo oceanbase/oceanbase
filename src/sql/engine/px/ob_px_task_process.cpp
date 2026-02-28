@@ -27,6 +27,7 @@
 #include "observer/mysql/obmp_base.h"
 #include "sql/engine/window_function/ob_window_function_vec_op.h"
 #include "sql/engine/direct_load/ob_table_direct_insert_op.h"
+#include "ob_px_target_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -39,7 +40,7 @@ ObPxTaskProcess::ObPxTaskProcess(const observer::ObGlobalContext &gctx, ObPxRpcI
     schema_guard_(share::schema::ObSchemaMgrItem::MOD_PX_TASK_PROCESSS),
     vt_iter_factory_(*gctx.vt_iter_creator_),
     enqueue_timestamp_(0), process_timestamp_(0), exec_start_timestamp_(0), exec_end_timestamp_(0),
-    is_oracle_mode_(false)
+    is_oracle_mode_(false), is_interrupted_(false)
 {
 }
 
@@ -89,27 +90,71 @@ void ObPxTaskProcess::run()
   int ret = OB_SUCCESS;
   lib::CompatModeGuard g(is_oracle_mode() ?
       lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
+  bool is_local_thread = arg_.task_.is_use_local_thread();
+  int tmp_ret = OB_SUCCESS;
 
   LOG_TRACE("Px task get sql mode", K(is_oracle_mode()));
-
+  int64_t start_time = ObTimeUtility::current_time();
+  int64_t start_cpu_time = 0;
+  bool record_cpu_time = false;
+  if (!is_local_thread) {
+    if (OB_TMP_FAIL(get_thread_cpu_time(start_cpu_time))) {
+      LOG_ERROR("get thread cpu time failed", K(tmp_ret));
+    } else {
+      record_cpu_time = true;
+    }
+  }
   LOG_TRACE("begin process task",
-            KP(this));
+            KP(this), K(start_cpu_time));
   ObPxWorkerStat stat;
+  uint64_t tenant_id = get_tenant_id();
   stat.init(get_session_id(),
-            get_tenant_id(),
+            tenant_id,
             *ObCurTraceId::get_trace_id(),
             get_qc_id(),
             get_sqc_id(),
             get_worker_id(),
             get_dfo_id(),
-            ObTimeUtility::current_time(),
+            start_time,
             GETTID());
   ObPxWorkerStatList::instance().push(stat);
+  if (!is_local_thread && OB_TMP_FAIL(OB_PX_TARGET_MGR.inc_realtime_px_task_cnt(tenant_id))) {
+    LOG_ERROR("inc realtime px task cnt failed", K(tmp_ret), K(tenant_id));
+  }
   ret = process();
+  if (!is_local_thread && OB_SUCCESS == tmp_ret
+      && OB_TMP_FAIL(OB_PX_TARGET_MGR.dec_realtime_px_task_cnt(tenant_id))) {
+    LOG_ERROR("dec realtime px task cnt failed", K(tmp_ret), K(tenant_id));
+  }
   ObPxWorkerStatList::instance().remove(stat);
+  if (record_cpu_time) {
+    int64_t end_time = ObTimeUtility::current_time();
+    int64_t end_cpu_time = 0;
+    if (OB_TMP_FAIL(get_thread_cpu_time(end_cpu_time))) {
+      LOG_ERROR("get thread cpu time failed", K(tmp_ret));
+    } else {
+      EVENT_ADD(ObStatEventIds::PX_EXECUTE_TIME, end_time - start_time);
+      EVENT_ADD(ObStatEventIds::PX_CPU_TIME, end_cpu_time - start_cpu_time);
+      EVENT_INC(ObStatEventIds::PX_TASK_CNT);
+    }
+  }
   LOG_TRACE("end process task", KP(this), K(ret));
   // Tenant Px Pool don't have any feedback, so all error should be handled by interruption.
   UNUSED(ret);
+}
+
+int ObPxTaskProcess::get_thread_cpu_time(int64_t &cpu_time_us)
+{
+  int ret = OB_SUCCESS;
+  struct timespec ts;
+  if (OB_UNLIKELY(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("clock_gettime failed", K(errno), KERRMSG);
+    cpu_time_us = 0;
+  } else {
+    cpu_time_us = ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+  }
+  return ret;
 }
 
 int ObPxTaskProcess::process()
@@ -174,7 +219,7 @@ int ObPxTaskProcess::process()
         sqlstat_record.set_is_in_retry(session->get_is_in_retry());
         session->sql_sess_record_sql_stat_start_value(sqlstat_record);
       }
-
+      session->set_retry_wait_event_begin_time();
       //监控项统计开始
       exec_start_timestamp_ = enqueue_timestamp_;
 
@@ -356,7 +401,10 @@ int ObPxTaskProcess::execute(const ObOpSpec &root_spec)
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
         LOG_WARN("failed to apply error code", K(ret), K(tmp_ret));
       }
-      if (OB_SUCCESS != (tmp_ret = ObInterruptUtil::interrupt_tasks(arg_.get_sqc_handler()->get_sqc_init_arg().sqc_,
+      is_interrupted_ = IS_INTERRUPTED();
+      if (is_interrupted_) {
+        // do nothing.
+      } else if (OB_SUCCESS != (tmp_ret = ObInterruptUtil::interrupt_tasks(arg_.get_sqc_handler()->get_sqc_init_arg().sqc_,
                                               OB_GOT_SIGNAL_ABORTING))) {
         LOG_WARN("interrupt_tasks failed", K(tmp_ret));
       }
@@ -525,7 +573,10 @@ int ObPxTaskProcess::do_process()
       }
     }
   }
-
+  if (OB_UNLIKELY(OB_ITER_END == ret)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("err code unexpected", K(ret));
+  }
   // for forward warning msg and user error msg
   (void)record_user_error_msg(ret);
   // for transaction
@@ -549,8 +600,9 @@ int ObPxTaskProcess::do_process()
     }
     if (OB_SUCC(ret)) {
       // nop
-    } else if (IS_INTERRUPTED()) {
+    } else if (is_interrupted_) {
       //当前是被QC中断的，不再向QC发送中断，退出即可。
+      ObInterruptChecker *checker = get_checker();
     } else if (arg_.get_sqc_handler()->get_sqc_init_arg().sqc_.is_ignore_vtable_error()
                && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(ret)) {
       // 忽略虚拟表错误

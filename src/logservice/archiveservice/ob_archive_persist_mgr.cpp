@@ -55,7 +55,7 @@ ObArchivePersistMgr::ObArchivePersistMgr() :
   tenant_key_(),
   dest_no_(-1),
   state_(),
-  state_rwlock_(common::ObLatchIds::ARCHIVE_PERSIST_MGR_LOCK),
+  state_rwlock_(common::ObLatchIds::OB_ARCHIVE_PERSIST_MGR_STATE_RWLOCK),
   proxy_(NULL),
   ls_svr_(NULL),
   ls_mgr_(NULL),

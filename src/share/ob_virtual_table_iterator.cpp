@@ -47,6 +47,8 @@ void ObVirtualTableIterator::reset()
   allocator_ = NULL;
   session_ = NULL;
   sql_schema_guard_.reset();
+  pd_cols_project_.reset();
+  fill_column_ids_ = &output_column_ids_;
 }
 
 void ObVirtualTableIterator::reset_convert_ctx()
@@ -337,6 +339,8 @@ int ObVirtualTableIterator::open()
       LOG_WARN("fail to init convert context", K(ret));
     } else if (OB_FAIL(inner_open())) {
       LOG_WARN("fail to inner open", K(ret));
+    } else if (OB_FAIL(init_pd_cols_project())) {
+      LOG_WARN("failed to init pushdown column ids", K(ret));
     }
   }
   return ret;
@@ -358,7 +362,7 @@ int ObVirtualTableIterator::get_all_columns_schema()
   return ret;
 }
 
-int ObVirtualTableIterator::convert_output_row(ObNewRow *&cur_row)
+int ObVirtualTableIterator::convert_output_row(ObNewRow *&cur_row, bool is_pd_filter_row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cur_row)) {
@@ -371,9 +375,11 @@ int ObVirtualTableIterator::convert_output_row(ObNewRow *&cur_row)
     if (cols_schema_.empty() && OB_FAIL(get_all_columns_schema())) {
       LOG_WARN("failed to get columns schema", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
-      const uint64_t column_id = output_column_ids_.at(i);
-      const ObColumnSchemaV2 *col_schema = cols_schema_.at(i);
+    const int64_t col_cnt = is_pd_filter_row ? pd_cols_project_.count() : output_column_ids_.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
+      const int64_t index = is_pd_filter_row ? pd_cols_project_.at(i) : i;
+      const uint64_t column_id = output_column_ids_.at(index);
+      const ObColumnSchemaV2 *col_schema = cols_schema_.at(index);
       if (cur_row->get_cell(i).is_null()
           || (cur_row->get_cell(i).is_string_type() && 0 == cur_row->get_cell(i).get_data_length())
           || ob_is_empty_lob(cur_row->get_cell(i))
@@ -392,6 +398,52 @@ int ObVirtualTableIterator::convert_output_row(ObNewRow *&cur_row)
   return ret;
 }
 
+int ObVirtualTableIterator::get_next_unfiltered_row(common::ObNewRow *&cur_row)
+{
+  int ret = OB_SUCCESS;
+  cur_row = nullptr;
+  if (!pd_cols_project_.empty()) {
+    bool filtered = false;
+    fill_column_ids_ = &scan_param_->vt_pd_colums_ids_;
+    do {
+      scan_param_->op_->clear_evaluated_flag();
+      if (OB_FAIL(inner_get_next_row(cur_row))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("failed to get next pushdown filter row", K(ret));
+        }
+      } else if (OB_ISNULL(cur_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("succ to get next pushdown filter row, but row is NULL", K(ret));
+      } else if (OB_FAIL(convert_output_row(cur_row, true))) {
+        LOG_WARN("failed to convert row", K(ret));
+      } else if (OB_FAIL(check_type_and_convert_string(cur_row, true))) {
+        LOG_WARN("failed to check type and convert string", K(ret));
+      } else if (OB_FAIL(project_pd_filter_columns(cur_row))) {
+        LOG_WARN("failed to project filter columns", K(ret));
+      } else if (OB_FAIL(ObOperator::filter_row(scan_param_->op_->get_eval_ctx(),
+                                                *scan_param_->op_filters_, filtered))) {
+        LOG_WARN("failed to filter row", K(ret));
+      } else if (filtered && OB_FAIL(try_check_status())) {
+        LOG_WARN("iterate virtual table row failed", KR(ret));
+      }
+    } while (OB_SUCC(ret) && filtered);
+    if (OB_SUCC(ret)) {
+      fill_column_ids_ = &output_column_ids_;
+      if (OB_FAIL(fill_full_columns(cur_row))) {
+        LOG_WARN("failed to fill full columns", K(ret));
+      }
+    }
+  } else {
+    fill_column_ids_ = &output_column_ids_;
+    if (OB_FAIL(inner_get_next_row(cur_row))) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("fail to inner get next row", K(ret), KPC(scan_param_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
@@ -404,9 +456,9 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
   if (ObClockGenerator::getClock() > abs_timeout_ts) {
     ret = OB_TIMEOUT;
     LOG_WARN("iterate virtual table row timeout", KR(ret), KTIME(abs_timeout_ts));
-  } else if (OB_FAIL(THIS_WORKER.check_status())) {
+  } else if (OB_FAIL(try_check_status())) {
     LOG_WARN("iterate virtual table row failed", KR(ret), KTIME(abs_timeout_ts));
-  } else if (OB_FAIL(inner_get_next_row(cur_row))) {
+  } else if (OB_FAIL(get_next_unfiltered_row(cur_row))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to inner get next row", K(ret), KPC(scan_param_));
     }
@@ -424,69 +476,12 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table schema is NULL", K(ret));
-  } else if (OB_FAIL(convert_output_row(cur_row))) {
+  } else if (OB_FAIL(convert_output_row(cur_row, false))) {
     LOG_WARN("failed to convert row", K(ret));
+  } else if (OB_FAIL(check_type_and_convert_string(cur_row, false))) {
+    LOG_WARN("failed to check type and convert string", K(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
-    const uint64_t column_id = output_column_ids_.at(i);
-    const ObColumnSchemaV2 *col_schema = table_schema_->get_column_schema(column_id);
-    if (OB_ISNULL(col_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("col_schema is NULL", K(ret), K(column_id));
-    } else if (OB_UNLIKELY(col_schema->get_data_type() != cur_row->cells_[i].get_type()
-                           && ObNullType != cur_row->cells_[i].get_type())) {
-      ret = OB_ERR_UNEXPECTED;
-      if (GCONF.in_upgrade_mode()) {
-        LOG_WARN("column type in this row is not expected type", K(ret), K(i),
-                 "table_name", table_schema_->get_table_name_str(),
-                 "column_name", col_schema->get_column_name_str(),
-                 K(column_id), K(cur_row->cells_[i]),
-                 K(col_schema->get_data_type()), K(output_column_ids_));
-      } else {
-        LOG_ERROR("column type in this row is not expected type", K(ret), K(i),
-                  "table_name", table_schema_->get_table_name_str(),
-                  "column_name", col_schema->get_column_name_str(),
-                  K(column_id), K(cur_row->cells_[i]), K(cur_row->cells_[i].get_type()),
-                  K(col_schema->get_data_type()), K(output_column_ids_));
-      }
-    }
-    if (OB_SUCC(ret)
-        && is_lob_storage(col_schema->get_data_type())
-        && !cur_row->cells_[i].has_lob_header()) { // cannot be json type;
-        ObObj &obj_convert = cur_row->cells_[i];
-      if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(obj_convert, row_calc_buf_))) {
-        LOG_WARN("fail to add lob header", KR(ret), "object", cur_row->cells_[i]);
-      }
-    }
-    if (OB_SUCC(ret) && ob_is_string_tc(col_schema->get_data_type())
-        && (col_schema->get_data_length() < cur_row->cells_[i].get_string_len()
-            // do charset convert when obj meta is different from expr meta
-            || (CS_TYPE_INVALID != cur_row->cells_[i].get_collation_type()
-                && col_schema->get_collation_type() != cur_row->cells_[i].get_collation_type()))) {
-      //Check the column schema to ensure that it meets the schema definition;
-      //But currently, only strings that exceed the length limit are processed to prevent occupying too many performance resources and causing too much interface delay
-      ObObj output_obj;
-      ObArray<ObString> *type_infos = NULL;
-      const bool is_strict = false;
-      ObRawExprResType res_type;
-      res_type.set_accuracy(col_schema->get_accuracy());
-      res_type.set_collation_type(col_schema->get_collation_type());
-      res_type.set_type(col_schema->get_data_type());
-      ObCastCtx cast_ctx = cast_ctx_;
-      cast_ctx.cast_mode_ = cast_ctx_.cast_mode_ | CM_WARN_ON_FAIL;
-      if (OB_FAIL(ObExprColumnConv::convert_skip_null_check(output_obj, cur_row->cells_[i],
-                                                            res_type, is_strict, cast_ctx,
-                                                            type_infos))) {
-        LOG_WARN("fail to convert skip null check", KR(ret), "object", cur_row->cells_[i]);
-      } else {
-        cur_row->cells_[i] = output_obj;
-        if (OB_SUCCESS != cast_ctx.warning_) {
-          LOG_WARN("invalid row result, check schema", "warning_num", cast_ctx.warning_,
-                   "object", cur_row->cells_[i], K(res_type));
-        }
-      }
-    }
-  }
+
   if (OB_SUCC(ret)) {
     row = cur_row;
   }
@@ -637,6 +632,136 @@ int ObVirtualTableIterator::init_sql_schema_guard_()
   } else if (OB_FALSE_IT(sql_schema_guard_.set_schema_guard(schema_guard_))) {
   } else if (OB_FAIL(sql_schema_guard_.recover_schema_from_external_objects(scan_param_->external_object_ctx_->get_external_objects()))) {
     LOG_WARN("recover external objects failed", K(ret));
+  }
+  return ret;
+}
+
+int ObVirtualTableIterator::init_pd_cols_project()
+{
+  int ret = OB_SUCCESS;
+  const ObVTableScanParam *scan_param = get_scan_param();
+  if (enable_pd_filter() && !scan_param->vt_pd_colums_ids_.empty()
+    && nullptr != scan_param->op_filters_) {
+    hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> col_index_map;
+    if (OB_FAIL(pd_cols_project_.reserve(scan_param->vt_pd_colums_ids_.count()))) {
+      LOG_WARN("failed to reserve", K(ret));
+    } else if (OB_FAIL(col_index_map.create(common::hash::cal_next_prime(512), ObModIds::OB_SQL_HASH_SET))) {
+      LOG_WARN("fail create hash map", K(ret));
+    } else {
+      for (int64_t index = 0; OB_SUCC(ret) && index < output_column_ids_.count(); ++index) {
+        const uint64_t column_id = output_column_ids_.at(index);
+        if (OB_FAIL(col_index_map.set_refactored(column_id, index))){
+          LOG_WARN("set refactored failed", K(ret), K(column_id), K(index), K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < scan_param->vt_pd_colums_ids_.count(); ++i) {
+        int64_t index = -1;
+        uint64_t column_id = scan_param->vt_pd_colums_ids_.at(i);
+        if (OB_FAIL(col_index_map.get_refactored(column_id, index))) {
+          LOG_WARN("failed to get refactored", K(column_id), K(ret));
+        } else if (OB_FAIL(pd_cols_project_.push_back(index))) {
+          LOG_WARN("failed to pushback", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVirtualTableIterator::check_type_and_convert_string(ObNewRow *&cur_row, bool is_pd_filter_row)
+{
+  int ret = OB_SUCCESS;
+  if (cols_schema_.empty() && OB_FAIL(get_all_columns_schema())) {
+    LOG_WARN("failed to get columns schema", K(ret));
+  } else {
+    const int64_t col_cnt = is_pd_filter_row ? pd_cols_project_.count() : output_column_ids_.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
+      const int64_t index = is_pd_filter_row ? pd_cols_project_.at(i) : i;
+      const uint64_t column_id = output_column_ids_.at(index);
+      const ObColumnSchemaV2 *col_schema = cols_schema_.at(index);
+      if (OB_ISNULL(col_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("col_schema is NULL", K(ret), K(column_id));
+      } else if (OB_UNLIKELY(col_schema->get_data_type() != cur_row->cells_[i].get_type()
+                            && ObNullType != cur_row->cells_[i].get_type())) {
+        ret = OB_ERR_UNEXPECTED;
+        if (GCONF.in_upgrade_mode()) {
+          LOG_WARN("column type in this row is not expected type", K(ret), K(i),
+                  "table_name", table_schema_->get_table_name_str(),
+                  "column_name", col_schema->get_column_name_str(),
+                  K(column_id), K(cur_row->cells_[i]),
+                  K(col_schema->get_data_type()), K(output_column_ids_));
+        } else {
+          LOG_ERROR("column type in this row is not expected type", K(ret), K(i),
+                    "table_name", table_schema_->get_table_name_str(),
+                    "column_name", col_schema->get_column_name_str(),
+                    K(column_id), K(cur_row->cells_[i]), K(cur_row->cells_[i].get_type()),
+                    K(col_schema->get_data_type()), K(output_column_ids_));
+        }
+      }
+      if (OB_SUCC(ret)
+          && is_lob_storage(col_schema->get_data_type())
+          && !cur_row->cells_[i].has_lob_header()) { // cannot be json type;
+          ObObj &obj_convert = cur_row->cells_[i];
+        if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(obj_convert, row_calc_buf_))) {
+          LOG_WARN("fail to add lob header", KR(ret), "object", cur_row->cells_[i]);
+        }
+      }
+      if (OB_SUCC(ret) && ob_is_string_tc(col_schema->get_data_type())
+          && (col_schema->get_data_length() < cur_row->cells_[i].get_string_len()
+              // do charset convert when obj meta is different from expr meta
+              || (CS_TYPE_INVALID != cur_row->cells_[i].get_collation_type()
+                  && col_schema->get_collation_type() != cur_row->cells_[i].get_collation_type()))) {
+        //Check the column schema to ensure that it meets the schema definition;
+        //But currently, only strings that exceed the length limit are processed to prevent occupying too many performance resources and causing too much interface delay
+        ObObj output_obj;
+        ObArray<ObString> *type_infos = NULL;
+        const bool is_strict = false;
+        ObRawExprResType res_type;
+        res_type.set_accuracy(col_schema->get_accuracy());
+        res_type.set_collation_type(col_schema->get_collation_type());
+        res_type.set_type(col_schema->get_data_type());
+        ObCastCtx cast_ctx = cast_ctx_;
+        cast_ctx.cast_mode_ = cast_ctx_.cast_mode_ | CM_WARN_ON_FAIL;
+        if (OB_FAIL(ObExprColumnConv::convert_skip_null_check(output_obj, cur_row->cells_[i],
+                                                              res_type, is_strict, cast_ctx,
+                                                              type_infos))) {
+          LOG_WARN("fail to convert skip null check", KR(ret), "object", cur_row->cells_[i]);
+        } else {
+          cur_row->cells_[i] = output_obj;
+          if (OB_SUCCESS != cast_ctx.warning_) {
+            LOG_WARN("invalid row result, check schema", "warning_num", cast_ctx.warning_,
+                    "object", cur_row->cells_[i], K(res_type));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVirtualTableIterator::project_pd_filter_columns(ObNewRow *&cur_row)
+{
+  int ret = OB_SUCCESS;
+  if (scan_param_->output_exprs_->count() > cur_row->count_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row count less than output exprs", K(ret), K(*cur_row),
+             "output_exprs_cnt", scan_param_->output_exprs_->count());
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < pd_cols_project_.count(); ++i) {
+      const int64_t index = pd_cols_project_.at(i);
+      ObExpr *expr = scan_param_->output_exprs_->at(index);
+      ObDatum &datum = expr->locate_datum_for_write(scan_param_->op_->get_eval_ctx());
+      if (OB_FAIL(datum.from_obj(cur_row->cells_[i], expr->obj_datum_map_))) {
+        LOG_WARN("convert ObObj to ObDatum failed", K(ret));
+      } else if (is_lob_storage(cur_row->cells_[i].get_type()) &&
+                  OB_FAIL(ob_adjust_lob_datum(cur_row->cells_[i], expr->obj_meta_,
+                                              expr->obj_datum_map_, *allocator_, datum))) {
+        LOG_WARN("adjust lob datum failed", K(ret), K(i), K(cur_row->cells_[i].get_meta()), K(expr->obj_meta_));
+      } else {
+        SANITY_CHECK_RANGE(datum.ptr_, datum.len_);
+      }
+    }
   }
   return ret;
 }

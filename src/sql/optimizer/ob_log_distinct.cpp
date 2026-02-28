@@ -38,9 +38,34 @@ int ObLogDistinct::get_plan_item_info(PlanText &plan_text,
     LOG_WARN("failed to get base plan item info", K(ret));
   } else {
     BEGIN_BUF_PRINT;
-    EXPLAIN_PRINT_EXPRS(distinct, type);
-    if (OB_SUCC(ret) && is_block_mode_) {
-      ret = BUF_PRINTF(", block");
+    if (group_distinct_exprs_.count() > 0) {
+      OX(BUF_PRINTF("group_distinct("));
+      for (int i = 0; OB_SUCC(ret) && i < group_distinct_exprs_.count(); i++) {
+        OX(BUF_PRINTF("["));
+        ObIArray<ObRawExpr *> &exprs = group_distinct_exprs_.at(i);
+        if (has_non_distinct_aggr_params_ && i == 0) {
+          // do nothing
+        } else {
+          for (int j = 0; OB_SUCC(ret) && j < exprs.count(); j++) {
+            if (OB_FAIL(exprs.at(j)->get_name(buf, buf_len, pos, type))) {
+              LOG_WARN("failed to print expr name", K(ret));
+            } else if (j < exprs.count() - 1) {
+              OX(BUF_PRINTF(", "));
+            }
+          }
+        }
+        if (i < group_distinct_exprs_.count() - 1) {
+          OX(BUF_PRINTF("], "));
+        } else {
+          OX(BUF_PRINTF("])"));
+        }
+      }
+      if (OB_SUCC(ret) && is_block_mode_) {
+        ret = BUF_PRINTF(", block");
+      }
+    } else {
+      EXPLAIN_PRINT_EXPRS(distinct, type);
+      if (OB_SUCC(ret) && is_block_mode_) { ret = BUF_PRINTF(", block"); }
     }
     if (OB_SUCC(ret) && is_push_down_) {
       ret = BUF_PRINTF(", partial");
@@ -55,8 +80,16 @@ int ObLogDistinct::get_plan_item_info(PlanText &plan_text,
 int ObLogDistinct::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if(OB_FAIL(replace_exprs_action(replacer, distinct_exprs_))) {
-    SQL_OPT_LOG(WARN, "failed to replace agg exprs in distinct op", K(ret));
+  if (group_distinct_exprs_.count() <= 0) {
+    if (OB_FAIL(replace_exprs_action(replacer, distinct_exprs_))) {
+      SQL_OPT_LOG(WARN, "failed to replace agg exprs in distinct op", K(ret));
+    }
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < group_distinct_exprs_.count(); i++) {
+      if (OB_FAIL(replace_exprs_action(replacer, group_distinct_exprs_.at(i)))) {
+        LOG_WARN("failed to replace exprs in distinct op", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -314,6 +347,8 @@ int ObLogDistinct::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   int ret = OB_SUCCESS;
   if (OB_FAIL(append(all_exprs, distinct_exprs_))) {
     LOG_WARN("failed to add exprs to ctx", K(ret));
+  } else if (group_distinct_exprs_.count() > 0 && OB_FAIL(all_exprs.push_back(grouping_id_))) {
+    LOG_WARN("failed to push back grouping id", K(ret));
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to get op exprs", K(ret));
   } else { /*do nothing*/ }

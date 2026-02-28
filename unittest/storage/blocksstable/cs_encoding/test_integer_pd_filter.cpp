@@ -34,7 +34,7 @@ TEST_F(TestIntegerPdFilter, test_integer_decoder_filter)
     bool has_null = flag;
     const int64_t null_cnt = has_null ? 20 : 0;
     const int64_t row_cnt = 100 + null_cnt;
-    ObMicroBlockCSEncoder encoder;
+    ObMicroBlockCSEncoder<> encoder;
     ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
     ObDatumRow row_arr[row_cnt];
@@ -128,7 +128,7 @@ TEST_F(TestIntegerPdFilter, test_integer_decoder_uint_type)
     const int64_t null_cnt = has_null ? 20 : 0;
     const int64_t row_cnt = 100 + null_cnt;
 
-    ObMicroBlockCSEncoder encoder;
+    ObMicroBlockCSEncoder<> encoder;
     ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
     encoder.is_all_column_force_raw_ = is_force_raw;
     ObDatumRow row_arr[row_cnt];
@@ -202,7 +202,7 @@ TEST_F(TestIntegerPdFilter, test_integer_decoder_nullbitmap_type)
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER;
 
   const int64_t row_cnt = UINT8_MAX + 2;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   encoder.is_all_column_force_raw_ = is_force_raw;
   ObDatumRow row_arr[row_cnt];
@@ -261,7 +261,7 @@ TEST_F(TestIntegerPdFilter, test_integer_decoder_float_type)
     bool has_null = flag;
     const int64_t null_cnt = has_null ? 20 : 0;
     const int64_t row_cnt = 100 + null_cnt;
-    ObMicroBlockCSEncoder encoder;
+    ObMicroBlockCSEncoder<> encoder;
     ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
     encoder.is_all_column_force_raw_ = is_force_raw;
 
@@ -349,7 +349,7 @@ TEST_F(TestIntegerPdFilter, test_integer_abnormal_filter)
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER;
 
   const int64_t row_cnt = 1000;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row_arr[row_cnt];
   for (int64_t i = 0; i < row_cnt; ++i) {
@@ -432,7 +432,7 @@ TEST_F(TestIntegerPdFilter, test_all_null_integer_decoder)
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER; // integer
 
   const int64_t row_cnt = 120;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   encoder.is_all_column_force_raw_ = is_force_raw;
   ObDatumRow row_arr[row_cnt];
@@ -509,7 +509,7 @@ TEST_F(TestIntegerPdFilter, test_exceed_range_compare_filter)
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER; // integer
 
   const int64_t row_cnt = 2;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row_arr[row_cnt];
   for (int64_t i = 0; i < row_cnt; ++i) {
@@ -568,7 +568,7 @@ TEST_F(TestIntegerPdFilter, test_singed_and_unsigned_compare_filter)
   ctx_.column_encodings_[2] = ObCSColumnHeader::Type::INTEGER; // integer
 
   const int64_t row_cnt = 2;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row_arr[row_cnt];
   for (int64_t i = 0; i < row_cnt; ++i) {

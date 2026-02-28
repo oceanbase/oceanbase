@@ -179,7 +179,7 @@ void ObWhereOptimizer::judge_filter_whether_enable_reorder(sql::ObPushdownFilter
       if (child->is_logic_op_node()) {
         enable_reorder = false;
         judge_filter_whether_enable_reorder(child);
-      } else if (child->is_sample_node()) {
+      } else if (child->is_sample_node() || child->is_mds_node()) {
         enable_reorder = false;
       }
     }

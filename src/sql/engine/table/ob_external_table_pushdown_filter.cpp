@@ -23,6 +23,94 @@ using namespace share;
 namespace sql
 {
 
+namespace {
+// if it's a white filter
+int get_datum_from_white_filter(sql::ObWhiteFilterExecutor &filter, const ObDatum ** /* out */ datum)
+{
+  const common::ObIArray<common::ObDatum> &datums = filter.get_datums();
+  if(filter.is_cmp_op_with_null_ref_value() && datums.count() != 1 &&
+      filter.get_filter_node().get_op_type() == WHITE_OP_EQ) {
+    *datum = &datums.at(0);
+  } else {
+    *datum = nullptr;
+  }
+  return OB_SUCCESS;
+}
+
+// if it's a black filter.
+// for external table we've made all the white filter black in 441
+int get_datum_from_black_filter(ObEvalCtx &ctx,
+                                sql::ObBlackFilterExecutor &executor,
+                                const ObDatum **/* out */ datum) {
+  int ret = OB_SUCCESS;
+  ExprFixedArray filter_exprs = executor.get_filter_node().filter_exprs_;
+  if (filter_exprs.count() == 1) {
+    // should be eq
+    ObExpr *filter = filter_exprs.at(0);
+    if (filter->type_ == T_OP_EQ && filter->arg_cnt_ == 2) {
+      // should have two arguments: one is a reference to a column, the other
+      // one is a constant datum
+      int column_index = -1;
+      int const_index = -1;
+      for (int i = 0; i < 2; i++) {
+        ObExpr *expr = filter->args_[i];
+        if (expr->is_const_expr()) {
+          const_index = i;
+        } else if (expr->type_ == T_REF_COLUMN) {
+          column_index = i;
+        }
+      }
+      if (column_index >= 0 && const_index >= 0) {
+        ObDatum* d = nullptr;
+        // evaluate the constant datum
+        int ret = OB_SUCCESS;
+        if (OB_FAIL(filter->args_[const_index]->eval(ctx, d))) {
+          LOG_WARN("failed to eval const", K(ret), K(const_index), K(filter->args_), K(ret));
+        } else if (OB_ISNULL(d)) {
+          ret = OB_UNEXPECT_INTERNAL_ERROR;
+          LOG_WARN("failed to get const datum from black filter", K(ret), KP(filter));
+        } else {
+          *datum = d;
+        }
+      } // if (column_index >= 0 && const_index >= 0)
+    } // if (filter->type_ == T_OP_EQ && filter->arg_cnt_ == 2)
+  } // if (filter_exprs.count() == 1)
+  return ret;
+}
+
+int get_datum_to_apply_bloom_filter(ObEvalCtx &ctx, sql::ObPushdownFilterExecutor& physical_filter, const ObDatum ** /* out */ datum)
+{
+  int ret = OB_SUCCESS;
+  if (physical_filter.is_filter_white_node()) {
+    ret = get_datum_from_white_filter(
+        static_cast<sql::ObWhiteFilterExecutor &>(physical_filter), datum);
+  } else if (!physical_filter.is_filter_black_node()) {
+    LOG_WARN("unexpected filter type", K(ret), K(physical_filter));
+    ret = OB_UNEXPECT_INTERNAL_ERROR;
+  } else {
+    ret = get_datum_from_black_filter(
+      ctx, static_cast<sql::ObBlackFilterExecutor &>(physical_filter), datum);
+  }
+  return ret;
+}
+
+int update_timezone_tz(ObEvalCtx &ctx, ObExternalTablePushdownFilter::BloomFilterParamBuilder* builder) {
+  int ret = OB_SUCCESS;
+  const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  int32_t tmp_offset = 0;
+  if (OB_NOT_NULL(session)
+      && OB_NOT_NULL(session->get_timezone_info())
+      && OB_SUCCESS == session->get_timezone_info()->get_timezone_offset(0, tmp_offset)) {
+    builder->set_tz_offset(tmp_offset);
+  } else {
+    LOG_WARN("unexpected session", K(ret), K(session));
+    ret = OB_UNEXPECT_INTERNAL_ERROR;
+  }
+  return ret;
+}
+
+} // namespace
+
 OB_SERIALIZE_MEMBER((ObColumnMeta, ObDatumMeta), max_length_, has_lob_header_, is_valid_);
 
 int ObColumnMeta::from_ob_expr(const ObExpr* expr)
@@ -103,6 +191,10 @@ int ObExternalTablePushdownFilter::init(sql::ObPushdownFilterExecutor *pd_storag
     } else if (OB_FAIL(file_filter_col_metas_.prepare_allocate(skipping_filter_nodes_.count()))) {
       LOG_WARN("fail to prepare allocate array", K(ret));
     }
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    bloom_filter_enabled_ = tenant_config.is_valid() ?
+                                       tenant_config->_enable_external_table_bloom_filter :
+                                       false;
   }
   return ret;
 }
@@ -141,6 +233,7 @@ int ObExternalTablePushdownFilter::prepare_filter_col_meta(
 
 int ObExternalTablePushdownFilter::apply_skipping_index_filter(const PushdownLevel filter_level,
                                                                MinMaxFilterParamBuilder &param_builder,
+                                                               BloomFilterParamBuilder* bloom_filter_builder,
                                                                bool &skipped,
                                                                const int64_t row_count/*= MOCK_ROW_COUNT*/)
 {
@@ -169,19 +262,135 @@ int ObExternalTablePushdownFilter::apply_skipping_index_filter(const PushdownLev
         }
       }
     }
+
+    // calculate the whole tree to generate the first result
     if (OB_SUCC(ret)) {
       ObBoolMask bm;
       if (OB_FAIL(pd_storage_filters_->execute_skipping_filter(bm))) {
         LOG_WARN("fail to execute skipping filter", K(ret));
       } else {
         skipped = bm.is_always_false();
+        // try to apply bloom filter
+        if (OB_FAIL(apply_bloom_filter(filter_level, bloom_filter_builder,
+                                       skipped))) {
+          LOG_WARN("failed to apply bloom filter", K(ret));
+        }
       }
     }
+
     // reset filters
-    for (int64_t i = 0; OB_SUCC(ret) && i < skipping_filter_nodes_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < skipping_filter_nodes_.count();
+         ++i) {
       skipping_filter_nodes_[i].filter_->set_filter_uncertain();
     }
   }
+
+  return ret;
+}
+
+int ObExternalTablePushdownFilter::apply_bloom_filter(
+    const PushdownLevel filter_level,
+    BloomFilterParamBuilder* bloom_filter_builder,
+    bool &skipped) {
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = pd_storage_filters_->get_op().get_eval_ctx();
+  if (bloom_filter_enabled_ && !skipped && bloom_filter_builder != nullptr) {
+    // all the items & filters
+    common::ObSEArray<BloomFilterItem, 1> items;
+    common::ObSEArray<sql::ObPushdownFilterExecutor *, 1> filters;
+    ObSEArray<ObSqlDatumInfo, 1> datuminfos;
+    // ext_tbl_col_id -> [array of index in items/filters]
+    common::hash::ObHashMap<int64_t, common::ObSEArray<int64_t, 1>>
+        col_id_to_index;
+
+    if (OB_FAIL(col_id_to_index.create(4, "ExtTblBloom"))) {
+      LOG_WARN("failed to init hash map when trying to apply bloom filter", K(ret));
+    } else {
+      // first run: find all the exprs that may be filter by the bloom filter
+      // and aggregate by the column id
+      for (int64_t i = 0; OB_SUCC(ret) && i < skipping_filter_nodes_.count();
+           ++i) {
+        ObSkippingFilterNode &node = skipping_filter_nodes_.at(i);
+        if (!file_filter_col_metas_.at(i).is_valid_) {
+          // pseudo columns etc.
+        } else if (!node.filter_->get_filter_bool_mask().is_uncertain()) {
+          // already filtered by min-max
+        } else {
+          bool filter_valid = true;
+          if (OB_FAIL(node.filter_->init_evaluated_datums(filter_valid))) {
+            LOG_WARN("failed to init filter", K(ret));
+          } else if (!filter_valid) {
+          } else {
+            node.filter_->get_filter_bool_mask().set_uncertain();
+            const ObDatum* datum = nullptr;
+            const int64_t ext_tbl_col_id = file_filter_col_ids_.at(i);
+            if (OB_FAIL(get_datum_to_apply_bloom_filter(eval_ctx, *node.filter_, &datum))) {
+              LOG_TRACE("failed to get datum to apply bloom filter, ignore it", K(ret), K(*node.filter_));
+              ret = OB_SUCCESS;
+            } else if (datum == nullptr || datum->is_null()) {
+              LOG_TRACE("filter is not qualified to apply bloom filter",
+                        K(ext_tbl_col_id), K(*node.filter_), KP(datum));
+            } else {
+              // group by ext_tbl_col_id
+              common::ObSEArray<int64_t, 1> *res =
+                  col_id_to_index.get(ext_tbl_col_id);
+              if (OB_ISNULL(res)) {
+                common::ObSEArray<int64_t, 1> val;
+                OZ(val.push_back(items.count()));
+                OZ(col_id_to_index.set_refactored(ext_tbl_col_id, val));
+              } else {
+                OZ(res->push_back(items.count()));
+              }
+              const ObDatumMeta &meta = file_filter_col_metas_.at(i);
+              OZ(items.push_back(
+                  BloomFilterItem(ext_tbl_col_id, &meta, datum)));
+              OZ(filters.push_back(node.filter_));
+            }
+          }
+        }
+      } // for i in skipping_filter_nodes_.count()
+
+      if (items.empty()) {
+        LOG_TRACE("found no item to apply bloom filter",
+                  K(skipping_filter_nodes_.count()));
+      } else {
+        // update timezone info from session
+        update_timezone_tz(eval_ctx, bloom_filter_builder);
+
+        // second run: loop all the bloom filter items by column
+        for (hash::ObHashMap<int64_t, common::ObSEArray<int64_t, 1>>::iterator
+                 entry = col_id_to_index.begin();
+             !skipped && OB_SUCC(ret) && entry != col_id_to_index.end();
+             ++entry) {
+          // col1 = 10 or col1 = 11
+          for (int64_t i = 0; OB_SUCC(ret) && i < entry->second.count(); ++i) {
+            int index = entry->second.at(i);
+            bool may_contain = true;
+            if (OB_FAIL(bloom_filter_builder->may_contain(
+                    filter_level, items.at(index), may_contain))) {
+              ret = OB_UNEXPECT_INTERNAL_ERROR;
+              LOG_WARN("failed to check bloom filter", K(ret), K(items.at(index)));
+            } else if (!may_contain) {
+              filters.at(index)->get_filter_bool_mask().set_always_false();
+              LOG_TRACE("applied bloom filter to skip", K(items.at(index)));
+            }
+          }
+        }
+
+        // calculate the whole tree to generate the final result
+        if (OB_SUCC(ret)) {
+          ObBoolMask bm;
+          if (OB_FAIL(pd_storage_filters_->execute_skipping_filter(bm))) {
+            LOG_WARN("fail to execute skipping filter", K(ret));
+          } else {
+            skipped = bm.is_always_false();
+          }
+        }
+
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -226,8 +435,10 @@ int ObExternalTablePushdownFilter::apply_skipping_index_filter(const PushdownLev
               ob_col_id, file_filter_col_metas_.at(i).cs_type_, node.skip_index_type_, MOCK_ROW_COUNT,
               filter_param, *node.filter_, true))) {
             LOG_WARN("failed to apply skip index", K(ret));
-          } else if (node.filter_->is_filter_always_false()) {
-            skip_info.skipped_ = true;
+          } else {
+            if (node.filter_->is_filter_always_false()) {
+              skip_info.skipped_ = true;
+            }
           }
         }
         // reset filters
@@ -447,20 +658,31 @@ int ObExternalTablePushdownFilter::build_filter_expr_rels_recursive(
       }
     }
   } else if (filter->is_filter_node()) {
-    if (OB_UNLIKELY(!filter->is_filter_black_node())) {
+    bool is_white_filter_supported = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0;
+    if (OB_UNLIKELY((!filter->is_filter_black_node() && !filter->is_filter_white_node())
+                    || (filter->is_filter_white_node() && !is_white_filter_supported))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("not supported non-black filter in external table", K(ret), K(filter));
+      LOG_WARN("not supported filter in external table", K(ret), K(filter));
     } else {
-      sql::ObBlackFilterExecutor *black_filter =
-        static_cast<sql::ObBlackFilterExecutor *>(filter);
-      const common::ObIArray<uint64_t> &col_ids = black_filter->get_col_ids();
-      const common::ObIArray<ObExpr*> *col_exprs = black_filter->get_cg_col_exprs();
-      if (OB_ISNULL(col_exprs) || col_ids.count() != col_exprs->count()) {
+      common::ObIArray<uint64_t> *col_ids = nullptr;
+      const common::ObIArray<ObExpr*> *col_exprs = nullptr;
+      if (filter->is_filter_black_node()) {
+        sql::ObBlackFilterExecutor *black_filter =
+          static_cast<sql::ObBlackFilterExecutor *>(filter);
+        col_ids = &black_filter->get_col_ids();
+        col_exprs = black_filter->get_cg_col_exprs();
+      } else {
+        sql::ObWhiteFilterExecutor *white_filter =
+          static_cast<sql::ObWhiteFilterExecutor *>(filter);
+        col_ids = &white_filter->get_col_ids();
+        col_exprs = white_filter->get_cg_col_exprs();
+      }
+      if (OB_ISNULL(col_exprs) || OB_ISNULL(col_ids) || col_ids->count() != col_exprs->count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null col exprs or col ids", K(ret));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < col_ids.count(); ++i) {
-          const uint64_t col_id = col_ids.at(i);
+        for (int64_t i = 0; OB_SUCC(ret) && i < col_ids->count(); ++i) {
+          const uint64_t col_id = col_ids->at(i);
           const ObExpr *col_expr = col_exprs->at(i);
           if (OB_FAIL(build_filter_expr_rel(col_id, col_expr, row_iter))) {
             LOG_WARN("fail to build filter expr rel", K(ret), K(i), K(col_id), KP(col_expr));
@@ -648,7 +870,6 @@ int ObExternalTablePushdownFilter::generate_lazy_exprs(const ObIArray<std::pair<
   LOG_TRACE("print lazy exprs", K(lazy_columns_), K(mapping_col_ids), K(column_sel_mask));
   return ret;
 }
-
 
 }
 }

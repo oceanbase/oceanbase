@@ -31,12 +31,17 @@
 #endif
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
+#include "sql/resolver/ob_resolver_utils.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
+#include "sql/plan_cache/ob_sql_parameterization.h"
+#include "sql/parser/ob_parser.h"
 extern "C" {
 #include "sql/parser/ob_non_reserved_keywords.h"
 }
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "observer/ob_server.h"
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::obmysql;
@@ -90,6 +95,25 @@ int ObSQLUtils::check_enable_decimalint(const ObSQLSessionInfo *session, bool &e
   } else {
     enable_decimalint = (const_cast<ObSQLSessionInfo *>(session)->is_enable_decimal_int_type()
                          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0);
+  }
+  return ret;
+}
+
+int ObSQLUtils::check_rowsets_enabled(const ObSQLSessionInfo *session,
+                                      const ObGlobalHint &global_hint,
+                                      bool &rowsets_enabled)
+{
+  int ret = OB_SUCCESS;
+  rowsets_enabled = true;
+  if (OB_ISNULL(session)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session is null", K(ret));
+  } else {
+    rowsets_enabled = session->get_rowsets_enabled();
+    if (OB_FAIL(global_hint.opt_params_.get_bool_opt_param(
+          ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
+      LOG_WARN("fail to get rowsets enabled hint", K(ret));
+    }
   }
   return ret;
 }
@@ -3337,9 +3361,8 @@ int ObSQLUtils::choose_best_partition_replica_addr(const ObAddr &local_addr,
         } else {/*do nothing*/}
       } else if (!candi_locality.is_active()
                  || ObServerStatus::OB_SERVER_ACTIVE != candi_locality.get_server_status()
-                 || 0 == candi_locality.get_start_service_time()
                  || 0 != candi_locality.get_server_stop_time()) {
-        // server may not serving
+        LOG_INFO("server may not serving", K(candi_locality));
       } else if (local_addr == candi_addr) {
         selected_addr = candi_addr;
         need_continue = false;
@@ -4904,7 +4927,7 @@ int64_t ObSqlFatalErrExtraInfoGuard::to_string(char *buf, const int64_t buf_len)
       dep_tables = &(query_ctx->global_dependency_tables_);
     }
     if (OB_NOT_NULL(exec_ctx_->get_my_session())) {
-      sys_var_values = exec_ctx_->get_my_session()->get_sys_var_in_pc_str();
+      OZ (exec_ctx_->get_my_session()->get_sys_var_in_pc_str(sys_var_values));
       OZ (exec_ctx_->get_my_session()->get_collation_connection(collation_connection));
     }
   }
@@ -4994,7 +5017,7 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
       if (OB_FAIL(req_manager->record_request(audit_record,
                                               session.enable_query_response_time_stats(),
                                               session.get_tenant_query_record_size_limit(),
-                                              is_sensitive))) {
+                                              is_sensitive, &session.get_curr_request_id()))) {
         if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
           LOG_DEBUG("cannot allocate mem for record", K(ret));
           ret = OB_SUCCESS;
@@ -5013,6 +5036,36 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
   return ret;
 }
 
+void ObSQLUtils::fixup_commit_time(ObSQLSessionInfo &session)
+{
+  if (common::EventTable::EN_SQL_AUDIT_NOASYNC_COMMIT_TIME) {
+  } else if (GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit()) {
+    ObMySQLRequestManager *req_manager = session.get_request_manager();
+    if (OB_ISNULL(req_manager)) {
+      // failed to get request manager, maybe tenant has been dropped, NOT NEED TO record;
+    } else {
+      const transaction::ObTxDesc *tx_ptr = session.get_tx_desc();
+      if (OB_NOT_NULL(tx_ptr)) {
+        int64_t tx_commit_t = tx_ptr->get_trans_commit_time();
+        if (session.get_curr_request_id() > 0 && tx_commit_t > 0) {
+          void *rec = NULL;
+          common::ObDlQueue::DlRef ref;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(req_manager->get(session.get_curr_request_id(), rec, &ref))) {
+            LOG_INFO("audit record evicted when fixup commit time", K(tmp_ret));
+          } else if (NULL != rec) {
+            ObMySQLRequestRecord *record = static_cast<ObMySQLRequestRecord*> (rec);
+            record->data_.exec_timestamp_.commit_t_ = tx_commit_t;  // fixup async commit time
+            record->data_.exec_timestamp_.elapsed_t_ += tx_commit_t;  // adding async commit time to elapsed_time
+            if (ref.is_not_null()) {
+              req_manager->revert(&ref);
+            }
+          }
+        }
+      }
+    }
+  }
+}
 
 bool ObSQLUtils::is_oracle_empty_string(const ObObjParam &param)
 {
@@ -5135,6 +5188,7 @@ bool ObExprConstraint::operator==(const ObExprConstraint &rhs) const
     bret = false;
   } else {
     bret = expect_result_ == rhs.expect_result_ &&
+           cons_extra_.extra_ == rhs.cons_extra_.extra_ &&
            pre_calc_expr_->same_as(*rhs.pre_calc_expr_);
   }
   return bret;
@@ -5184,6 +5238,8 @@ int ObPreCalcExprConstraint::assign(const ObPreCalcExprConstraint &other, common
   int ret = OB_SUCCESS;
   if (OB_FAIL(pre_calc_expr_info_.assign(other.pre_calc_expr_info_, allocator))) {
     LOG_WARN("failed to copy pre calculable expression info");
+  } else if (OB_FAIL(cons_extras_.assign(other.cons_extras_))) {
+    LOG_WARN("failed to copy constraint extra info");
   } else {
     expect_result_ = other.expect_result_;
   }
@@ -5192,6 +5248,7 @@ int ObPreCalcExprConstraint::assign(const ObPreCalcExprConstraint &other, common
 
 int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
                                             ObExecContext &exec_ctx,
+                                            ObConstraintExtra *extra,
                                             bool &is_match) const
 {
   int ret = OB_SUCCESS;
@@ -5223,10 +5280,14 @@ int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
       case PRE_CALC_NOT_PRECISE: {
         //default escape
         //@todu JueHui: make escape value can be parameterized
-        char escape = '\\';
+        char escape = '\0';
         bool is_precise = false;
         bool expect_precise = PRE_CALC_PRECISE == expect_result_;
-        if (OB_FAIL(ObQueryRange::is_precise_like_range(obj_param, escape, is_precise))) {
+        if (OB_ISNULL(extra) || extra->escape_char_ < 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid escape", K(ret), K(extra->escape_char_));
+        } else if (FALSE_IT(escape = static_cast<char>(extra->escape_char_))) {
+        } else if (OB_FAIL(ObQueryRange::is_precise_like_range(obj_param, escape, is_precise))) {
           LOG_WARN("failed to check precise constraint.", K(ret));
         } else {
           is_match = is_precise == expect_precise;
@@ -5243,6 +5304,37 @@ int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
                     OB_ISNULL(pattern_val.find('\\'));
         } else {
           is_match = true;
+        }
+      }
+      break;
+      case PRE_CALC_JSON_CONTAINS_PRECISE:
+      case PRE_CALC_JSON_CONTAINS_NOT_PRECISE: {
+        ObArenaAllocator allocator(ObModIds::JSON_PARSER);
+        ObIJsonBase *j_base = nullptr;
+        if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(obj_param,
+                                                                    &exec_ctx,
+                                                                    false,
+                                                                    &allocator,
+                                                                    j_base))) {
+          LOG_WARN("failed to refine range json value const", K(ret));
+        } else if (OB_ISNULL(j_base)) {
+          is_match = expect_result_ == PRE_CALC_JSON_CONTAINS_NOT_PRECISE;
+        } else if (j_base->is_json_scalar(j_base->json_type())) {
+          is_match = expect_result_ == PRE_CALC_JSON_CONTAINS_PRECISE;
+        } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
+          if (j_base->element_count() == 1) {
+            is_match = expect_result_ == PRE_CALC_JSON_CONTAINS_PRECISE;
+          } else {
+            is_match = expect_result_ == PRE_CALC_JSON_CONTAINS_NOT_PRECISE;
+          }
+        } else {
+          is_match = expect_result_ == PRE_CALC_JSON_CONTAINS_NOT_PRECISE;
+        }
+      }
+      break;
+      case PRE_CALC_JSON_TYPE: {
+        if (OB_FAIL(ObJsonTypeConstraint::check_is_match(obj_param, exec_ctx, extra, is_match))) {
+          LOG_WARN("failed to check json type is match", K(ret));
         }
       }
       break;
@@ -5274,6 +5366,7 @@ int ObRowidConstraint::assign(const ObPreCalcExprConstraint &other, common::ObIA
 
 int ObRowidConstraint::check_is_match(ObDatumObjParam &datum_param,
                                       ObExecContext &exec_ctx,
+                                      ObConstraintExtra *extra,
                                       bool &is_match) const
 {
   int ret = OB_SUCCESS;
@@ -5299,6 +5392,50 @@ int ObRowidConstraint::check_is_match(ObDatumObjParam &datum_param,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObJsonTypeConstraint::check_is_match(ObObjParam &obj_param,
+                                         ObExecContext &exec_ctx,
+                                         ObConstraintExtra *extra,
+                                         bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::JSON_PARSER);
+  ObIJsonBase *j_base = nullptr;
+  JsonType json_type = JSON_TYPE_SCALAR;
+  int32_t array_element_count = 0;
+  if (OB_ISNULL(extra)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected extra", K(ret));
+  } else if (OB_FALSE_IT(json_type = static_cast<JsonType>(get_json_type(extra->extra_)))) {
+  } else if (OB_FALSE_IT(array_element_count = get_element_count(extra->extra_))) {
+  } else if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(obj_param,
+                                                                     &exec_ctx,
+                                                                     false,
+                                                                     &allocator,
+                                                                     j_base))) {
+    LOG_WARN("failed to refine range json value const", K(ret));
+  } else if (OB_ISNULL(j_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get json base", K(ret));
+  } else if (json_type == JSON_TYPE_SCALAR) {
+    is_match = j_base->is_json_scalar(j_base->json_type());
+  } else if (json_type == JSON_TYPE_ARRAY) {
+    int32_t element_count = static_cast<int32_t>(j_base->element_count());
+    is_match = array_element_count == element_count;
+  } else if (json_type == JSON_TYPE_JSON_CONTAINS_NO_INDEX_MERGE) {
+    if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
+      is_match = j_base->element_count() >= array_element_count;
+    } else {
+      is_match = false;
+    }
+  } else if (json_type == JSON_TYPE_NOT_ARRAY_OR_SCALAR) {
+    is_match = !j_base->is_json_scalar(j_base->json_type()) &&
+               j_base->json_type() != common::ObJsonNodeType::J_ARRAY;
+  } else {
+    is_match = false;
   }
   return ret;
 }
@@ -5938,8 +6075,12 @@ int ObSQLUtils::check_sql_map_expected_resource_group(const ObSqlCtx &context,
               tenant_id, session_info->get_user_id(), final_choosed_group_id))) {
           LOG_WARN("get group id by user failed", K(ret));
         } else if (OB_INVALID_ID == final_choosed_group_id) {
-          // if not set consumer_group for current user, use OTHER_GROUP by default.
-          final_choosed_group_id = 0;
+          // if not set consumer_group for current user, use OBCG_DEFAULT or OBCG_LQ.
+          if (THIS_WORKER.get_group_id() == share::OBCG_LQ) {
+            final_choosed_group_id = share::OBCG_LQ;
+          } else {
+            final_choosed_group_id = share::OBCG_DEFAULT;
+          }
         }
       }
 
@@ -6923,6 +7064,137 @@ int ObSQLUtils::match_ccl_rule(const ObPlanCacheCtx *pc_ctx, ObSQLSessionInfo &s
   return ret;
 }
 
+int ObSQLUtils::parameterize_pl_sql(const ObString &raw_sql,
+  ParamStore &pl_params,
+  ObIAllocator &allocator,
+  const ObSQLSessionInfo &session,
+  ObString &parameterized_sql,
+  ObFastParserResult &fp_result,
+  bool param_byorder)
+{
+  int ret = OB_SUCCESS;
+
+  FPContext fp_ctx(session.get_charsets4parser());
+  fp_ctx.sql_mode_ = session.get_sql_mode();
+  fp_ctx.question_mark_by_order_ = param_byorder;
+
+  if (OB_UNLIKELY(raw_sql.empty())) {
+    ret = OB_ERR_EMPTY_QUERY;
+    LOG_WARN("query is empty", K(ret));
+    LOG_USER_ERROR(OB_ERR_EMPTY_QUERY);
+  } else if (OB_FAIL(ObSqlParameterization::fast_parser(allocator, fp_ctx, raw_sql, fp_result))) {
+    LOG_WARN("fast parser failed, use original sql", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, fp_result.pc_key_.name_, parameterized_sql))) {
+    LOG_WARN("failed to write parameterized sql", K(ret));
+  } else if (OB_FAIL(construct_mixed_param_store(fp_result, pl_params, allocator, session, param_byorder))) {
+    LOG_WARN("failed to construct mixed params, use original sql", K(ret));
+  }
+
+  return ret;
+}
+
+int ObSQLUtils::construct_mixed_param_store(const ObFastParserResult &fp_result,
+  ParamStore &pl_params,
+  ObIAllocator &allocator,
+  const ObSQLSessionInfo &session,
+  bool param_byorder)
+{
+  int ret = OB_SUCCESS;
+  ParamStore original_pl_params((ObWrapperAllocator(allocator)));
+  if (OB_FAIL(original_pl_params.reserve(pl_params.count()))) {
+    LOG_WARN("failed to reserve original pl params", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < pl_params.count(); ++i) {
+    if (OB_FAIL(original_pl_params.push_back(pl_params.at(i)))) {
+      LOG_WARN("failed to copy pl param", K(ret), K(i));
+    }
+  }
+
+  ObCollationType conn_collation = CS_TYPE_INVALID;
+  ObCollationType nchar_collation = CS_TYPE_INVALID;
+  ObCollationType server_collation = CS_TYPE_INVALID;
+  ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_decimal_int = false;
+  bool enable_mysql_compatible_dates = false;
+  ObString literal_prefix;
+  const bool is_paramlize = false;
+
+  if (OB_SUCC(ret)) {
+    conn_collation = static_cast<ObCollationType>(session.get_local_collation_connection());
+    nchar_collation = session.get_nls_collation_nation();
+    if (OB_FAIL(session.get_collation_server(server_collation))) {
+      LOG_WARN("fail to get server collation", K(ret));
+    } else if (OB_FAIL(session.get_compatibility_control(compat_type))) {
+      LOG_WARN("fail to get compat type", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(&session, enable_decimal_int))) {
+      LOG_WARN("fail to check enable decimal int", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session, false, enable_mysql_compatible_dates))) {
+      LOG_WARN("fail to check enable mysql compatible dates", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret) && fp_result.raw_params_.count() > 0) {
+    pl_params.reset();
+    if (OB_FAIL(pl_params.reserve(fp_result.raw_params_.count()))) {
+      LOG_WARN("failed to reserve param store", K(ret));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < fp_result.raw_params_.count(); ++i) {
+    const ObPCParam *pc_param = fp_result.raw_params_.at(i);
+    if (OB_ISNULL(pc_param) || OB_ISNULL(pc_param->node_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid pc param", K(ret), K(i), KP(pc_param));
+    } else {
+      ParseNode *node = pc_param->node_;
+      if (T_QUESTIONMARK == node->type_) {
+        int idx = node->value_;
+        if (node->value_ >= 0 && node->value_ < original_pl_params.count()) {
+          node->value_ = i;
+          if (OB_FAIL(pl_params.push_back(original_pl_params.at(idx)))) {
+            LOG_WARN("failed to push pl param", K(ret), K(node->value_), K(i), K(idx));
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid pl param index", K(ret), K(node->value_), K(original_pl_params.count()), K(i));
+        }
+      } else {
+        ObObjParam obj_param;
+        if (lib::is_oracle_mode() &&
+            (T_NUMBER == node->type_ ||
+             T_INT == node->type_ ||
+             T_FLOAT == node->type_ ||
+             T_DOUBLE == node->type_ ) &&
+            OB_FAIL(ObResolverUtils::rm_space_for_neg_num(node, allocator))) {
+          LOG_WARN("fail to remove space for neg num", K(ret));
+        } else if (OB_FAIL(ObResolverUtils::resolve_const(node,
+            stmt::T_NONE,
+            allocator,
+            conn_collation,
+            nchar_collation,
+            session.get_timezone_info(),
+            obj_param,
+            is_paramlize,
+            literal_prefix,
+            session.get_actual_nls_length_semantics(),
+            server_collation,
+            NULL,
+            session.get_sql_mode(),
+            enable_decimal_int,
+            compat_type,
+            enable_mysql_compatible_dates,
+            session.get_min_const_integer_precision(),
+            true))) {
+          LOG_WARN("failed to resolve const and fallback convert", K(ret), K(i), K(node->type_));
+        } else if (OB_FAIL(pl_params.push_back(obj_param))) {
+          LOG_WARN("failed to push constant param", K(ret), K(i));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSQLUtils::reconstruct_ps_sql(ObSqlString & reconstruct_sql, const ObString &ps_sql,
                                    const ObIArray<const common::ObObjParam *> &const_tokens)
 {
@@ -6987,5 +7259,30 @@ int ObSQLUtils::append_obj_param(ObSqlString & reconstruct_sql, const common::Ob
     }
   } while (ret == OB_SIZE_OVERFLOW);
 
+  return ret;
+}
+
+int ObSQLUtils::is_opt_hdfs_external_hive_table(const ObTableSchema *table_schema,
+                                                bool &is_hive_table)
+{
+  int ret = OB_SUCCESS;
+  ObExternalFileFormat::FormatType type = ObExternalFileFormat::FormatType::INVALID_FORMAT;
+
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+    is_hive_table = false;
+  } else if (OB_FAIL(ObSQLUtils::get_external_table_type(table_schema, type))) {
+    LOG_WARN("failed to get external table type", K(ret));
+  } else {
+    const ObString &location = table_schema->get_external_file_location();
+    // 1. 非分区表
+    // 2. 分区表，必须是自动检测分区方式的分区表
+    is_hive_table = table_schema->is_external_table()
+                    && (type == ObExternalFileFormat::FormatType::CSV_FORMAT
+                        || type == ObExternalFileFormat::FormatType::ORC_FORMAT
+                        || type == ObExternalFileFormat::FormatType::PARQUET_FORMAT)
+                    && location.prefix_match(OB_HDFS_PREFIX)
+                    && (!table_schema->is_partitioned_table()
+                        || !table_schema->is_user_specified_partition_for_external_table());
+  }
   return ret;
 }

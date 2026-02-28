@@ -30,7 +30,7 @@ namespace share
 namespace detector
 {
 class ObDetectorUserReportInfo;
-class ObDependencyResource;
+class ObDependencyHolder;
 }
 }
 
@@ -95,7 +95,8 @@ class ObTxLockPartCollectCallBack
 public:
   ObTxLockPartCollectCallBack(const ObTransLockPartID &tx_lock_part_id)
     : tx_lock_part_id_(tx_lock_part_id) {}
-  int operator()(share::detector::ObDetectorUserReportInfo &info);
+  int operator()(const share::detector::ObDependencyHolder &blocked_holder,
+                 share::detector::ObDetectorUserReportInfo &info);
 private:
   ObTransLockPartID tx_lock_part_id_;
 };
@@ -114,7 +115,7 @@ public:
   }
   // @param [out] depend_res, a dependency list.
   // @param [out] need_remove, shall the callback be removed.
-  int operator()(common::ObIArray<share::detector::ObDependencyResource> &depend_res,
+  int operator()(common::ObIArray<share::detector::ObDependencyHolder> &depend_res,
                  bool &need_remove);
   int init(const share::ObLSID &ls_id,
            const ObTableLockOp &lock_op);

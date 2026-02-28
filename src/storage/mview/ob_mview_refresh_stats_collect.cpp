@@ -108,7 +108,8 @@ int ObMViewRefreshStatsCollection::collect_before_refresh(ObMViewRefreshCtx &ref
     LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id_));
   } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    const bool enable_adaptive_refresh = false;
+    const bool enable_adaptive_refresh = tenant_config.is_valid()
+                                         && tenant_config->_mv_adaptive_complete_refresh_threshold.get() > 0;
     ObMViewTransaction &trans = *refresh_ctx.trans_;
     int64_t num_rows = 0;
     collection_level_ = refresh_ctx.refresh_stats_params_.get_collection_level();
@@ -148,7 +149,7 @@ int ObMViewRefreshStatsCollection::collect_before_refresh(ObMViewRefreshCtx &ref
                   num_rows_ins, num_rows_upd, num_rows_del))) {
               LOG_WARN("fail to get mlog dml row num", KR(tmp_ret), K(table_schema->get_mlog_tid()));
             }
-            if ((ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_)
+            if ((ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ || enable_adaptive_refresh)
                 && OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(
                                trans, tenant_id_, dep.get_ref_obj_id(), tmp_scn_range.end_scn_,
                                refresh_ctx.refresh_parallelism_,

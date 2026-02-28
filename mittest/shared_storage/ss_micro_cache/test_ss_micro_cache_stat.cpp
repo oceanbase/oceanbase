@@ -57,6 +57,11 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
   int ret = OB_SUCCESS;
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ASSERT_NE(nullptr, micro_cache);
+  const uint64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  ASSERT_EQ(true, tenant_config.is_valid());
+  tenant_config->_ss_micro_cache_max_block_size = 2 * 1024 * 1024;
+  micro_cache->micro_meta_mgr_.max_micro_blk_size_ = 2 * 1024 * 1024;
   const int64_t block_size = micro_cache->phy_blk_size_;
 
   ObSSPersistMicroDataTask &persist_data_task = micro_cache->task_runner_.persist_data_task_;

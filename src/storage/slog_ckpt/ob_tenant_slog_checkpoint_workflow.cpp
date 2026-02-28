@@ -621,11 +621,10 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::do_truncate(const bool i
         ObMemAttr mem_attr = ctx_.get_mem_attr();
 
         ObSlogCheckpointFdDispenser *fd_dispenser_ptr = GCTX.is_shared_storage_mode() ? &fd_dispenser : nullptr;
-        if (OB_NOT_NULL(fd_dispenser_ptr)) {
-          fd_dispenser_ptr->set_cur_max_file_id(last_super_block.max_file_id_);
-        }
-
-        if (OB_FAIL(ctx_.ls_service_.get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
+        if (OB_NOT_NULL(fd_dispenser_ptr)
+          && OB_FAIL(fd_dispenser_ptr->init(last_super_block.max_file_id_))) {
+          STORAGE_LOG(WARN, "failed to init fd_dispenser", K(ret));
+        } else if (OB_FAIL(ctx_.ls_service_.get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
           STORAGE_LOG(WARN, "failed to get log stream iterator", K(ret));
         } else if (OB_FAIL(ls_item_writer_.init_for_slog_ckpt(MTL_ID(), MTL_EPOCH_ID(), mem_attr, fd_dispenser_ptr))) {
           STORAGE_LOG(WARN, "failed to init log stream item writer", K(ret));
@@ -968,9 +967,10 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::apply_truncate_result_(
       super_block.copy_snapshots_from(ctx_.tenant_.get_super_block());
       if (OB_FAIL(ctx_.server_smeta_svr_.update_tenant_super_block(0, super_block))) {
         STORAGE_LOG(WARN, "failed to update tenant super block", K(ret), K(super_block));
+      } else if (OB_FAIL(fd_dispenser.assign_to(/*out*/super_block.min_file_id_,
+                                                   /*out*/super_block.max_file_id_))) {
+        STORAGE_LOG(WARN, "fd_dispenser failed to do assign", K(ret), K(fd_dispenser));
       } else {
-        super_block.min_file_id_ = fd_dispenser.get_min_file_id();
-        super_block.max_file_id_ = fd_dispenser.get_max_file_id();
         ctx_.tenant_.set_tenant_super_block(super_block);
       }
       tracer_.record_super_block_after_truncate(super_block);

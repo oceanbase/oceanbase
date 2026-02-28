@@ -15,9 +15,11 @@
 
 
 #include "share/ob_define.h"
+#include "share/ob_delegate.h"
 #include "lib/checksum/ob_crc64.h"
 #include "lib/queue/ob_link.h"
 #include "lib/lock/ob_latch.h"
+#include "common/ob_tablet_id.h"
 #include "storage/ob_i_store.h"
 #include "ob_row_latch.h"
 #include "storage/memtable/ob_memtable_data.h"
@@ -25,6 +27,14 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObRowState;
+}
+namespace common
+{
+class ObTabletID;
+}
 namespace memtable
 {
 static const uint8_t NDT_NORMAL = 0x0;
@@ -35,6 +45,7 @@ class ObIMemtableCtx;
 class ObMemtableKey;
 class ObMvccRowCallback;
 class ObMvccWriteResult;
+class ObMvccTransNode;
 
 #define ATOMIC_ADD_TAG(tag)                           \
   while (true) {                                      \
@@ -59,6 +70,65 @@ class ObMvccWriteResult;
 // nodes to data contains all columns.
 struct ObMvccTransNode
 {
+  class TransNodeFlag {
+  public:
+    static constexpr uint8_t F_INIT = 0x00;
+    static constexpr uint8_t F_WEAK_CONSISTENT_READ_BARRIER = (1 << 0);
+    static constexpr uint8_t F_STRONG_CONSISTENT_READ_BARRIER = (1 << 1);
+    static constexpr uint8_t F_COMMITTED = (1 << 2);
+    static constexpr uint8_t F_ELR = (1 << 3);
+    static constexpr uint8_t F_ABORTED = (1 << 4);
+    static constexpr uint8_t F_DELAYED_CLEANOUT = (1 << 6);
+    static constexpr uint8_t F_INCOMPLETE_STATE = (1 << 7);
+  public:
+    uint8_t flag_status_;
+    TransNodeFlag() : flag_status_(F_INIT) {}
+    void set_committed() { add_flag_(F_COMMITTED); }
+    bool is_committed() const { return (ATOMIC_LOAD(&flag_status_) & F_COMMITTED); }
+    void set_elr() { add_flag_(F_ELR); }
+    void clear_elr() { clear_flag_(F_ELR); }
+    bool is_elr() const { return (ATOMIC_LOAD(&flag_status_) & F_ELR); }
+    void set_aborted() { add_flag_(F_ABORTED); }
+    void clear_aborted() { clear_flag_(F_ABORTED); }
+    bool is_aborted() const { return (ATOMIC_LOAD(&flag_status_) & F_ABORTED); }
+    void set_delayed_cleanout() { add_flag_(F_DELAYED_CLEANOUT); }
+    bool is_delayed_cleanout() const { return (ATOMIC_LOAD(&flag_status_) & F_DELAYED_CLEANOUT); }
+    void set_safe_read_barrier(const bool is_weak_consistent_read) {
+      add_flag_(is_weak_consistent_read ?
+                F_WEAK_CONSISTENT_READ_BARRIER :
+                F_STRONG_CONSISTENT_READ_BARRIER);
+    }
+    void clear_safe_read_barrier() {
+      clear_flag_(F_WEAK_CONSISTENT_READ_BARRIER | F_STRONG_CONSISTENT_READ_BARRIER);
+    }
+    bool is_safe_read_barrier() const {
+      uint8_t flag_status = ATOMIC_LOAD(&flag_status_);
+      return ((flag_status & F_WEAK_CONSISTENT_READ_BARRIER) ||
+              (flag_status & F_STRONG_CONSISTENT_READ_BARRIER));
+    }
+    void set_incomplete() { add_flag_(F_INCOMPLETE_STATE); }
+    void set_complete() { clear_flag_(F_INCOMPLETE_STATE); }
+    bool is_incomplete() const { return ATOMIC_LOAD(&flag_status_) & F_INCOMPLETE_STATE;}
+  private:
+    void add_flag_(const uint8_t new_flag) {
+      while (true) {
+        const uint8_t flag = ATOMIC_LOAD(&flag_status_);
+        const uint8_t tmp = (flag | new_flag);
+        if (ATOMIC_BCAS(&flag_status_, flag, tmp)) {
+          break;
+        }
+      }
+    }
+    void clear_flag_(const uint8_t old_flag) {
+      while (true) {
+        const uint8_t flag = ATOMIC_LOAD(&flag_status_);
+        const uint8_t tmp = (flag & (~old_flag));
+        if (ATOMIC_BCAS(&flag_status_, flag, tmp)) {
+          break;
+        }
+      }
+    }
+  };
 public:
   ObMvccTransNode()
   : tx_id_(),
@@ -74,7 +144,7 @@ public:
     version_(0),
     snapshot_version_barrier_(0),
     type_(NDT_NORMAL),
-    flag_(0) {}
+    flag_() {}
 
   ~ObMvccTransNode() {}
 
@@ -91,7 +161,11 @@ public:
   int64_t version_;
   int64_t snapshot_version_barrier_;
   uint8_t type_;
-  uint8_t flag_;
+private:
+  // you can't access to TransNodeFlag directly, every path access to TransNodeFlag
+  // must be one of trans_commit/trans_abort/trans_rollback/trans_elr/set_delay_clenout
+  TransNodeFlag flag_; // sizeof(TransNodeFlag) = 1, zero overhead
+public:
   char buf_[0];
 
   // ===================== ObMvccTransNode Operation Interface =====================
@@ -105,83 +179,55 @@ public:
 
   // trans_commit/abort commit/abort the tx node
   // fill in the version and set committed flag
-  void trans_commit(const share::SCN commit_version, const share::SCN tx_end_scn);
-  // set aborted flag
-  void trans_abort(const share::SCN tx_end_scn);
-
-  // remove the callback
-  void remove_callback();
+  void trans_commit(const share::SCN commit_version,
+                    const share::SCN tx_end_scn) {
+    fill_trans_version(commit_version);
+    flag_.set_committed();
+    set_tx_end_scn(tx_end_scn);
+  }
+  // set aborted flag with tx_end_log_ts
+  void trans_abort(const share::SCN tx_end_scn) {
+    flag_.set_aborted();
+    set_tx_end_scn(tx_end_scn);
+  }
+  // set aborted flag without tx_end_log_ts
+  // and there must be callbacks existed
+  void trans_rollback() {
+    flag_.set_aborted();
+  }
+  void trans_elr() {
+    flag_.set_elr();
+  }
+  void clear_elr() { flag_.clear_elr(); }
+  void set_delayed_cleanout() {
+    flag_.set_delayed_cleanout();
+  }
+  TransNodeFlag get_flag() const { return flag_; }
+  void set_saved_flag(TransNodeFlag saved_flag) {
+    OB_ASSERT(flag_.flag_status_ == TransNodeFlag::F_INIT);
+    flag_ = saved_flag;
+  }
 
   // ===================== ObMvccTransNode Tx Node Meta =====================
-  // ObMvccRow records snapshot_version_barrier to detect unexpected concurrency
-  // control behaviors. The snapshot_version_barrier means the snapshot of the
-  // latest read operation, and if a commit version appears after the read
-  // operation with the commit version smaller than the snapshot version, we
-  // should report the unexpected bahavior.
-  void set_safe_read_barrier(const bool is_weak_consistent_read);
-  void clear_safe_read_barrier();
-  bool is_safe_read_barrier() const;
-  void set_snapshot_version_barrier(const share::SCN version,
-                                    const int64_t flag);
+  // ObMvccRow records safe_read_barrier and snapshot_version_barrier to detect
+  // unexpected behaviors. The safe_read_barrier means the type of the last read
+  // operation performed on the row. And the snapshot_version_barrier means the
+  // version of the read operation,
+  DELEGATE(flag_, set_safe_read_barrier);
+  DELEGATE(flag_, clear_safe_read_barrier);
+  DELEGATE(flag_, is_safe_read_barrier);
+  DELEGATE(flag_, clear_aborted);
+  DELEGATE(flag_, set_incomplete);
+  DELEGATE(flag_, set_complete);
+  void set_snapshot_version_barrier(const share::SCN version, const int64_t flag);
   void get_snapshot_version_barrier(int64_t &version, int64_t &flag);
 
   // ===================== ObMvccTransNode Flag Interface =====================
-  OB_INLINE void set_committed()
-  {
-    ATOMIC_ADD_TAG(F_COMMITTED);
-  }
-  OB_INLINE bool is_committed() const
-  {
-    return ATOMIC_LOAD(&flag_) & F_COMMITTED;
-  }
-  OB_INLINE void set_elr()
-  {
-    ATOMIC_ADD_TAG(F_ELR);
-  }
-  OB_INLINE bool is_elr() const
-  {
-    return ATOMIC_LOAD(&flag_) & F_ELR;
-  }
-  OB_INLINE void clear_elr()
-  {
-    ATOMIC_SUB_TAG(F_ELR);
-  }
-  OB_INLINE void set_aborted()
-  {
-    ATOMIC_ADD_TAG(F_ABORTED);
-  }
-  OB_INLINE void clear_aborted()
-  {
-    ATOMIC_SUB_TAG(F_ABORTED);
-  }
-  OB_INLINE bool is_aborted() const
-  {
-    return ATOMIC_LOAD(&flag_) & F_ABORTED;
-  }
-  OB_INLINE void set_delayed_cleanout(const bool delayed_cleanout)
-  {
-    if (OB_LIKELY(delayed_cleanout)) {
-      ATOMIC_ADD_TAG(F_DELAYED_CLEANOUT);
-    } else {
-      ATOMIC_SUB_TAG(F_DELAYED_CLEANOUT);
-    }
-  }
-  OB_INLINE bool is_delayed_cleanout() const
-  {
-    return ATOMIC_LOAD(&flag_) & F_DELAYED_CLEANOUT;
-  }
-  OB_INLINE void set_incomplete()
-  {
-    ATOMIC_ADD_TAG(F_INCOMPLETE_STATE);
-  }
-  OB_INLINE void set_complete()
-  {
-    ATOMIC_SUB_TAG(F_INCOMPLETE_STATE);
-  }
-  OB_INLINE bool is_incomplete() const
-  {
-    return ATOMIC_LOAD(&flag_) & F_INCOMPLETE_STATE;
-  }
+  CONST_DELEGATE(flag_, is_elr);
+  CONST_DELEGATE(flag_, is_aborted);
+  CONST_DELEGATE(flag_, is_committed);
+  CONST_DELEGATE(flag_, is_delayed_cleanout);
+  CONST_DELEGATE(flag_, is_incomplete);
 
   // ===================== ObMvccTransNode Setter/Getter =====================
   blocksstable::ObDmlFlag get_dml_flag() const;
@@ -213,7 +259,7 @@ private:
   static const uint8_t F_ELR;
   static const uint8_t F_ABORTED;
   static const uint8_t F_DELAYED_CLEANOUT;
-  static const uint8_t F_INCOMPLETE_STATE;
+  static const uint8_t F_MUTEX;
 
 public:
   // the snapshot flag of the snapshot version barrier
@@ -343,7 +389,8 @@ struct ObMvccRow
   int elr(const transaction::ObTransID &tx_id,
           const share::SCN elr_commit_version,
           const ObTabletID &tablet_id,
-          const ObMemtableKey* key);
+          const ObMemtableKey* key,
+          const bool is_non_unique_local_index_cb);
 
   // commit the tx node and update the row meta.
   // the meta neccessary for update is
@@ -354,8 +401,6 @@ struct ObMvccRow
   int trans_commit(const share::SCN commit_version,
                    ObMvccTransNode &node);
 
-  // remove_callback remove the tx node in the row
-  int remove_callback(ObMvccRowCallback &cb);
   // wakeup those blocking to acquire ownership of this row to write
   int wakeup_waiter(const ObTabletID &tablet_id, const ObMemtableKey &key);
 

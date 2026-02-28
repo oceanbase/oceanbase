@@ -441,7 +441,7 @@ int ObDASTextRetrievalIter::inner_get_next_rows(int64_t &count, int64_t capacity
       const ObBitVector *skip = NULL;
       PRINT_VECTORIZED_ROWS(SQL, DEBUG, *ctx, *inv_idx_scan_param_.output_exprs_, count, skip);
       clear_batch_wise_evaluated_flag(count);
-      if (OB_FAIL(batch_fill_token_cnt_with_doc_len(count))) {
+      if (need_fill_token_cnt() && OB_FAIL(batch_fill_token_cnt_with_doc_len(count))) {
         LOG_WARN("failed to fill batch token cnt with document length", K(ret));
       } else if (OB_FAIL(fill_token_doc_cnt())) {
         LOG_WARN("failed to get token doc cnt", K(ret));
@@ -615,10 +615,8 @@ int ObDASTextRetrievalIter::get_next_doc_token_cnt(const bool use_fwd_idx_agg)
     } else if (OB_FAIL(do_token_cnt_agg(cur_doc_id, token_cnt))) {
       LOG_WARN("failed to do token count agg on fwd index", K(ret));
     }
-  } else {
-    if (OB_FAIL(fill_token_cnt_with_doc_len())) {
-      LOG_WARN("failed to fill token cnt with document length", K(ret));
-    }
+  } else if (need_fill_token_cnt() && OB_FAIL(fill_token_cnt_with_doc_len())) {
+    LOG_WARN("failed to fill token cnt with document length", K(ret));
   }
   return ret;
 }
@@ -829,7 +827,7 @@ int ObDASTextRetrievalIter::init_calc_exprs()
       }
     }
 
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && need_fill_token_cnt()) {
       sql::ObExpr *doc_token_cnt_param_expr = relevance_expr->args_[sql::ObExprBM25::DOC_TOKEN_CNT_PARAM_IDX];
       if (T_FUN_SYS_CAST == doc_token_cnt_param_expr->type_) {
         doc_token_cnt_param_expr = doc_token_cnt_param_expr->args_[0];
@@ -843,6 +841,17 @@ int ObDASTextRetrievalIter::init_calc_exprs()
         if (max_batch_size_ > 0) {
           doc_token_cnt_expr_->locate_datums_for_update(*eval_ctx, max_batch_size_);
         }
+      }
+    }
+
+    if (OB_SUCC(ret) && !need_fill_token_cnt()) {
+      sql::ObExpr *doc_length_param_expr = relevance_expr->args_[sql::ObExprBM25::DOC_LENGTH_PARAM_IDX];
+      if (OB_UNLIKELY(nullptr == doc_length_param_expr || doc_length_param_expr->type_ != T_REF_COLUMN ||
+                      doc_length_param_expr != ir_ctdef_->inv_scan_doc_length_col_ ||
+                      doc_length_param_expr->datum_meta_.get_type() != ObUInt64Type)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected doc token cnt expr type", K(ret), KP(doc_length_param_expr), KPC(doc_length_param_expr),
+                 KP(ir_ctdef_->inv_scan_doc_length_col_));
       }
     }
   }
@@ -993,6 +1002,13 @@ int ObDASTextRetrievalIter::batch_project_relevance_expr(const int64_t &count)
   return ret;
 }
 
+bool ObDASTextRetrievalIter::need_fill_token_cnt() const
+{
+  return nullptr != ir_ctdef_
+      && nullptr != ir_ctdef_->relevance_expr_
+      && !sql::ObExprBM25::use_new_version(*ir_ctdef_->relevance_expr_);
+}
+
 ObDASTRCacheIter::ObDASTRCacheIter()
   : ObDASTextRetrievalIter(),
     cur_idx_(-1),
@@ -1129,7 +1145,7 @@ int ObDASTRCacheIter::get_next_batch_inner()
       const ObBitVector *skip = NULL;
       PRINT_VECTORIZED_ROWS(SQL, DEBUG, *ctx, *inv_idx_scan_param_.output_exprs_, count_, skip);
       clear_batch_wise_evaluated_flag(count_);
-      if (OB_FAIL(batch_fill_token_cnt_with_doc_len(count_))) {
+      if (need_fill_token_cnt() && OB_FAIL(batch_fill_token_cnt_with_doc_len(count_))) {
         LOG_WARN("failed to fill batch token cnt with document length", K(ret));
       } else if (OB_FAIL(fill_token_doc_cnt())) {
         LOG_WARN("failed to get token doc cnt", K(ret));

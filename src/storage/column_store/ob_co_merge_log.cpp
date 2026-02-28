@@ -18,6 +18,22 @@ namespace oceanbase
 {
 namespace compaction
 {
+const char *ObMergeLog::OpTypeStr[] = {
+  "INVALID",
+  "INSERT",
+  "UPDATE",
+  "DELETE",
+  "REPLAY",
+  "DELETE_RANGE",
+  "INVALID"
+};
+
+const char *ObMergeLog::get_op_type_str(const int64_t idx)
+{
+  STATIC_ASSERT(static_cast<int64_t>(INVALID) + 1 == ARRAYSIZEOF(OpTypeStr), "merge log op type string is mismatch");
+  return is_valid_op_type((OpType)idx) ? OpTypeStr[idx] : "INVALID";
+}
+
 OB_SERIALIZE_MEMBER(ObMergeLog, op_, major_idx_, row_id_);
 
 /**
@@ -163,7 +179,7 @@ int ObCOMergeLogConsumer<CallbackImpl>::consume_all_merge_log(ObCOMergeLogIterat
     }
     // TODO statistic merge progress
     if (OB_FAIL(ret)) {
-    } else if (curr_log.op_ == ObMergeLog::OpType::REPLAY) {
+    } else if (curr_log.is_range_mergelog()) {
       compact_log = curr_log;
     } else if (OB_FAIL(callback.consume(curr_log, row))) {
       LOG_WARN("failed to consume merge log", K(ret), K(curr_log), KPC(row));
@@ -700,18 +716,22 @@ int ObCOMergeLogFileMgr::close_part(const int64_t start_cg_idx, const int64_t en
   return ret;
 }
 
-int ObCOMergeLogFileMgr::check_could_release(bool &could_release)
+int ObCOMergeLogFileMgr::try_release()
 {
   int ret = OB_SUCCESS;
-  could_release = true;
+  ObMutexGuard guard(release_lock_);
   if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObCOMergeLogFileMgr not init", K(ret));
+    // do nothing
   } else {
+    bool could_release = true;
     for (int64_t i = 0; could_release && i < row_file_count_; ++i) {
       if (nullptr != row_files_[i]) {
         could_release = false;
       }
+    }
+    if (could_release) {
+      reset();
+      LOG_INFO("success to release log file mgr", K(ret));
     }
   }
   return ret;

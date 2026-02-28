@@ -29,10 +29,8 @@ public:
   virtual int deep_copy(ObIAllocator &allocator, ObPCParamConstraint *&to) = 0;
   virtual int build(const common::ParamStore &params, void *ctx) = 0; // build specific constraint based on params
   virtual int match(const common::ParamStore &params, void *ctx, bool &is_match) = 0;
-protected:
   uint64_t param_idx_;
-public:
-  TO_STRING_KV(K_(param_idx));
+  VIRTUAL_TO_STRING_KV(K_(param_idx));
 };
 
 class ObPCUnixTimestampParamConstraint : public ObPCParamConstraint
@@ -52,7 +50,7 @@ private:
   int16_t precision_;
   int16_t scale_;
 public:
-  TO_STRING_KV(K_(param_idx), K_(type), K_(precision), K_(scale));
+  INHERIT_TO_STRING_KV("ObPCUnixTimestampParamConstraint", ObPCParamConstraint, K_(param_idx), K_(type), K_(precision), K_(scale));
 };
 }
 }

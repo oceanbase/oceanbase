@@ -21,7 +21,9 @@ oblib_add_library(restore OBJECT
   ob_object_device.cpp
   hmac_signature.cpp
   ob_object_device.h
-  ob_object_storage_base.cpp)
+  ob_object_storage_base.cpp
+  ob_storage_async.cpp
+  ob_storage_async.h)
 
 add_library(oss INTERFACE)
 target_include_directories(oss

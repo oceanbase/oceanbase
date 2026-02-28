@@ -122,7 +122,7 @@ void TestRootBlockInfo::prepare_block_root()
   row.count_ = COLUMN_CNT;
   ASSERT_EQ(OB_SUCCESS, writer.append_row(row));
   ObMicroBlockDesc micro_desc;
-  ASSERT_EQ(OB_SUCCESS, writer.build_micro_block_desc(micro_desc));
+  ASSERT_EQ(OB_SUCCESS, writer.build_micro_block_desc_in_unittest(micro_desc));
 
   ObMicroBlockHeader *header = const_cast<ObMicroBlockHeader *>(micro_desc.header_);
   ASSERT_NE(nullptr, header);

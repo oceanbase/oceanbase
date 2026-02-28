@@ -55,8 +55,8 @@ public:
    * */
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const = 0;
   Dimension get_dim_type() const { return dim_type_; }
-  static int add_column_ids(common::ObIArray<uint64_t> &dst_column_ids,
-                            const common::ObIArray<uint64_t> &src_column_ids);
+  static int add_ordered_column_ids(common::ObIArray<uint64_t> &dst_column_ids,
+                                    const common::ObIArray<uint64_t> &src_column_ids);
   static int compare_columns(const common::ObIArray<uint64_t> &left_column_ids,
                              const common::ObIArray<uint64_t> &right_column_ids,
                              CompareStat &status);
@@ -70,7 +70,7 @@ class ObIndexBackDim : public ObSkylineDim
 {
 public:
   friend class ObOptimizerTraceImpl;
-  ObIndexBackDim() : ObSkylineDim(INDEX_BACK), need_index_back_(false)
+  ObIndexBackDim(common::ObIAllocator &allocator) : ObSkylineDim(INDEX_BACK), need_index_back_(false)
   {}
 
   virtual ~ObIndexBackDim() {}
@@ -94,21 +94,19 @@ class ObInterestOrderDim : public ObSkylineDim
 {
 public:
   friend class ObOptimizerTraceImpl;
-  ObInterestOrderDim() : ObSkylineDim(INTERESTING_ORDER),
-    is_interesting_order_(false)
+  ObInterestOrderDim(common::ObIAllocator &allocator) : ObSkylineDim(INTERESTING_ORDER),
+    is_interesting_order_(false),
+    column_ids_(allocator)
   { }
   virtual ~ObInterestOrderDim() {}
   void set_interesting_order(const bool interesting_order) { is_interesting_order_ = interesting_order; }
   int add_interest_prefix_ids(const common::ObIArray<uint64_t> &column_ids);
-  int add_const_column_info(const common::ObIArray<bool> &const_column_info);
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
   VIRTUAL_TO_STRING_KV(K_(is_interesting_order),
-               K_(column_ids),
-               K_(const_column_info));
+               K_(column_ids));
 private:
   bool is_interesting_order_;
-  common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> column_ids_;
-  common::ObSEArray<bool, 8, common::ModulePageAllocator, true> const_column_info_;
+  ObSqlArray<uint64_t> column_ids_;
 };
 
 //consider query range subset
@@ -122,7 +120,10 @@ class ObQueryRangeDim: public ObSkylineDim
 {
 public:
   friend class ObOptimizerTraceImpl;
-  ObQueryRangeDim() : ObSkylineDim(QUERY_RANGE),
+  ObQueryRangeDim(common::ObIAllocator &allocator) : ObSkylineDim(QUERY_RANGE),
+    range_column_ids_(allocator),
+    ss_range_column_ids_(allocator),
+    ss_offset_column_ids_(allocator),
     contain_always_false_(false),
     skip_scan_comparable_(false)
   { }
@@ -130,13 +131,13 @@ public:
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
 
   int add_range_column_ids(const common::ObIArray<uint64_t> &column_ids) {
-    return add_column_ids(range_column_ids_, column_ids);
+    return add_ordered_column_ids(range_column_ids_, column_ids);
   }
   int add_ss_range_column_ids(const common::ObIArray<uint64_t> &column_ids) {
-    return add_column_ids(ss_range_column_ids_, column_ids);
+    return add_ordered_column_ids(ss_range_column_ids_, column_ids);
   }
   int add_ss_offset_column_ids(const common::ObIArray<uint64_t> &column_ids) {
-    return add_column_ids(ss_offset_column_ids_, column_ids);
+    return add_ordered_column_ids(ss_offset_column_ids_, column_ids);
   }
   void set_contain_always_false(bool contain_always_false) { contain_always_false_ = contain_always_false; }
   void set_skip_scan_comparable(bool comparable) { skip_scan_comparable_ = comparable; }
@@ -149,9 +150,9 @@ public:
     K_(contain_always_false),
     K_(skip_scan_comparable));
 protected:
-  ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> range_column_ids_;
-  ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ss_range_column_ids_;
-  ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ss_offset_column_ids_;
+  ObSqlArray<uint64_t> range_column_ids_;
+  ObSqlArray<uint64_t> ss_range_column_ids_;
+  ObSqlArray<uint64_t> ss_offset_column_ids_;
   bool contain_always_false_;
   bool skip_scan_comparable_;
 };
@@ -160,7 +161,7 @@ class ObUniqueRangeDim: public ObSkylineDim
 {
 public:
   friend class ObOptimizerTraceImpl;
-  ObUniqueRangeDim() : ObSkylineDim(UNIQUE_RANGE),
+  ObUniqueRangeDim(common::ObIAllocator &allocator) : ObSkylineDim(UNIQUE_RANGE),
     range_cnt_(0) {}
   virtual ~ObUniqueRangeDim() {}
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
@@ -178,7 +179,7 @@ class ObShardingInfoDim: public ObSkylineDim
 {
 public:
   friend class ObOptimizerTraceImpl;
-  ObShardingInfoDim() : ObSkylineDim(SHARDING_INFO),
+  ObShardingInfoDim(common::ObIAllocator &allocator) : ObSkylineDim(SHARDING_INFO),
     sharding_info_(NULL),
     is_single_get_(false),
     is_global_index_(false),
@@ -209,13 +210,11 @@ private:
 struct KeyPrefixComp
 {
   KeyPrefixComp() : status_(ObSkylineDim::UNCOMPARABLE) {}
-  int operator()(const ObIArrayWrap<uint64_t> &left, const ObIArrayWrap<bool> &left_const,
-                 const ObIArrayWrap<uint64_t> &right, const ObIArrayWrap<bool> &right_const);
+  int operator()(const ObIArrayWrap<uint64_t> &left, const ObIArrayWrap<uint64_t> &right);
   ObSkylineDim::CompareStat get_result() { return status_; }
 private:
   static int do_compare(const ObIArrayWrap<uint64_t> &left,
                         const ObIArrayWrap<uint64_t> &right,
-                        const ObIArrayWrap<bool> &right_const,
                         ObSkylineDim::CompareStat &status);
   ObSkylineDim::CompareStat status_;
 };
@@ -238,7 +237,7 @@ private:
 class ObIndexSkylineDim
 {
 public:
-  ObIndexSkylineDim() : index_id_(common::OB_INVALID_ID),
+  ObIndexSkylineDim(common::ObIAllocator &allocator) : index_id_(common::OB_INVALID_ID),
     dim_count_(ObSkylineDim::DIM_COUNT),
     can_prunning_(true),
     is_get_(false)
@@ -316,7 +315,7 @@ int ObSkylineDimFactory::create_skyline_dim(common::ObIAllocator &allocator,
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     SQL_OPT_LOG(WARN, "allocate memory for skyline dim failed", K(ret));
   } else {
-    skyline_dim = new (ptr) SkylineDimType();
+    skyline_dim = new (ptr) SkylineDimType(allocator);
   }
   return ret;
 }

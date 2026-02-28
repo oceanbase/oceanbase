@@ -75,14 +75,16 @@ public:
       relevance_col_cnt_(0),
       is_hybrid_(false),
       all_filters_can_be_picked_out_(false),
-      use_rowkey_vid_tbl_(false) {}
+      use_rowkey_vid_tbl_(false),
+      strategy_(ObVecIdxQueryStrategy::RESPONSE_FIRST),
+      pre_filtering_timeout_(-1) {}
 
   inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_;  }
   inline bool is_vec_adaptive_scan() const { return ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN == vec_type_ && ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN != adaptive_try_path_; }
   inline bool is_post_filter() const { return ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
   inline bool is_iter_filter() const
   {
-    return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF
+    return (algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF || algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ)
                ? false
                : ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_;
   }
@@ -187,6 +189,8 @@ public:
   bool is_hybrid_;
   bool all_filters_can_be_picked_out_;
   bool use_rowkey_vid_tbl_;
+  ObVecIdxQueryStrategy strategy_;
+  int64_t pre_filtering_timeout_;
 };
 
 struct ObDASVecAuxScanRtDef : ObDASAttachRtDef

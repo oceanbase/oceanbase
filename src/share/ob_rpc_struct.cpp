@@ -2708,6 +2708,7 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
       SHARE_SCHEMA_LOG(WARN, "fail to decode sql mode", K(ret));
     }
   }
+  mview_refresh_info_.direct_dep_cnt_ = based_schema_object_infos_.count();
   LST_DO_CODE(OB_UNIS_DECODE,
               ddl_task_type_,
               compat_mode_,
@@ -2926,7 +2927,7 @@ OB_SERIALIZE_MEMBER((ObTruncateTableArg, ObDDLArg),
                     is_add_to_scheduler_,
                     compat_mode_,
                     foreign_key_checks_,
-                    table_id_)
+                    table_id_);
 
 DEF_TO_STRING(ObTruncateTableArg)
 {
@@ -3237,12 +3238,13 @@ DEF_TO_STRING(ObIndexOption)
        K_(store_format),
        K_(enable_macro_block_bloom_filter),
        K_(storage_cache_policy),
-       K_(micro_block_format_version));
+       K_(micro_block_format_version),
+       K_(fts_index_type));
   J_OBJ_END();
   return pos;
 }
 
-OB_SERIALIZE_MEMBER((ObIndexOption, ObTableOption), parser_name_, index_attributes_set_, parser_properties_);
+OB_SERIALIZE_MEMBER((ObIndexOption, ObTableOption), parser_name_, index_attributes_set_, parser_properties_, fts_index_type_);
 
 bool ObIndexArg::is_valid() const
 {
@@ -3373,7 +3375,8 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     index_key_,
                     data_version_,
                     generated_column_names_,
-                    def_index_id_);
+                    def_index_id_,
+                    is_table_restore_);
 
 OB_SERIALIZE_MEMBER((ObIndexOfflineDdlArg, ObDDLArg),
                     arg_,
@@ -4278,6 +4281,26 @@ int ObAdminAlterLSReplicaArg::init_cancel(
   } else {
     tenant_id_ = tenant_id;
     alter_task_type_ = ObAlterLSReplicaTaskType(ObAlterLSReplicaTaskType::CancelLSReplicaTask);
+  }
+  return ret;
+}
+
+int ObAdminAlterLSReplicaArg::init_replace(
+    const share::ObLSID& ls_id,
+    const common::ObAddr& server_addr,
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid()
+               || !server_addr.is_valid()
+               || !is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(server_addr), K(tenant_id));
+  } else {
+    ls_id_ = ls_id;
+    server_addr_ = server_addr;
+    tenant_id_ = tenant_id;
+    alter_task_type_ = ObAlterLSReplicaTaskType(ObAlterLSReplicaTaskType::ReplaceLSReplicaTask);
   }
   return ret;
 }
@@ -5300,7 +5323,9 @@ OB_DEF_SERIALIZE(ObSetPasswdArg)
               modify_max_connections_,
               max_connections_per_hour_,
               max_user_connections_,
-              plugin_);
+              plugin_,
+              retain_current_password_,
+              discard_old_password_);
   return ret;
 }
 
@@ -5313,6 +5338,8 @@ OB_DEF_DESERIALIZE(ObSetPasswdArg)
   x509_issuer_.reset();
   x509_subject_.reset();
   plugin_.reset();
+  retain_current_password_ = false;
+  discard_old_password_ = false;
 
   BASE_DESER((, ObDDLArg));
   LST_DO_CODE(OB_UNIS_DECODE,
@@ -5327,7 +5354,9 @@ OB_DEF_DESERIALIZE(ObSetPasswdArg)
               modify_max_connections_,
               max_connections_per_hour_,
               max_user_connections_,
-              plugin_);
+              plugin_,
+              retain_current_password_,
+              discard_old_password_);
   return ret;
 }
 
@@ -5346,7 +5375,9 @@ OB_DEF_SERIALIZE_SIZE(ObSetPasswdArg)
               modify_max_connections_,
               max_connections_per_hour_,
               max_user_connections_,
-              plugin_);
+              plugin_,
+              retain_current_password_,
+              discard_old_password_);
   return len;
 }
 
@@ -6308,7 +6339,9 @@ int ObAdminStorageArg::assign(const ObAdminStorageArg &other)
 
 OB_SERIALIZE_MEMBER(ObTriggerStorageCacheArg,
                     op_,
-                    tenant_id_);
+                    tenant_id_,
+                    tablet_id_,
+                    policy_status_);
 OB_SERIALIZE_MEMBER(ObAutoincSyncArg,
                     tenant_id_, table_id_, column_id_, table_part_num_, auto_increment_,
                     sync_value_, autoinc_is_order_);
@@ -6557,10 +6590,91 @@ int ObRootMinorFreezeArg::assign(const ObRootMinorFreezeArg &other)
   return ret;
 }
 
+void ObTableMajorFreezeResult::set_err_code(int err_code)
+{
+  if (err_code == OB_SUCCESS) { // do nothing
+  } else {
+    for (int32_t i = 0; i < MAX_FAIL_CODES; ++i) {
+      if (fail_err_codes_[i] == OB_SUCCESS) {
+        fail_err_codes_[i] = err_code;
+        break;
+      } else if (fail_err_codes_[i] == err_code) {
+        break;
+      }
+    }
+  }
+}
+
 OB_SERIALIZE_MEMBER(ObTabletMajorFreezeArg,
                     tenant_id_,
                     ls_id_,
                     tablet_id_,
+                    is_rebuild_column_group_);
+
+OB_SERIALIZE_MEMBER(ObTableMajorFreezeArg,
+                    tenant_id_,
+                    table_id_,
+                    is_rebuild_column_group_);
+
+int ObTableMajorFreezeResult::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(total_tablets_);
+  OB_UNIS_ENCODE(success_tablets_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < MAX_FAIL_CODES; ++i) {
+    OB_UNIS_ENCODE(fail_err_codes_[i]);
+  }
+  return ret;
+}
+
+int ObTableMajorFreezeResult::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(total_tablets_);
+  OB_UNIS_DECODE(success_tablets_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < MAX_FAIL_CODES; ++i) {
+    OB_UNIS_DECODE(fail_err_codes_[i]);
+  }
+  return ret;
+}
+
+int64_t ObTableMajorFreezeResult::get_serialize_size() const
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(total_tablets_);
+  OB_UNIS_ADD_LEN(success_tablets_);
+  for (int64_t i = 0; i < MAX_FAIL_CODES; ++i) {
+    OB_UNIS_ADD_LEN(fail_err_codes_[i]);
+  }
+  return len;
+}
+
+int64_t ObTableMajorFreezeResult::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(total_tablets), K_(success_tablets));
+  J_COMMA();
+  J_NAME("fail_err_codes");
+  J_COLON();
+  J_ARRAY_START();
+  bool first = true;
+  for (int32_t i = 0; i < MAX_FAIL_CODES; ++i) {
+    if (fail_err_codes_[i] != OB_SUCCESS) {
+      if (!first) { J_COMMA(); }
+      BUF_PRINTO(fail_err_codes_[i]);
+      first = false;
+    }
+  }
+  J_ARRAY_END();
+  J_OBJ_END();
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER(ObTableMajorFreezeRequest,
+                    tenant_id_,
+                    ls_id_,
+                    tablet_ids_,
                     is_rebuild_column_group_);
 
 OB_SERIALIZE_MEMBER(ObSyncPGPartitionMTFinishArg, server_, version_);
@@ -8850,6 +8964,94 @@ int ObBackupCheckTabletArg::assign(const ObBackupCheckTabletArg &arg)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObBackupValidateArg, tenant_id_, initiator_tenant_id_, initiator_job_id_, validate_type_,
+  set_or_piece_ids_, validate_level_, validate_dest_, description_, execute_tenant_ids_);
+
+ObBackupValidateArg::ObBackupValidateArg()
+  : tenant_id_(OB_INVALID_TENANT_ID),
+    initiator_tenant_id_(OB_INVALID_TENANT_ID),
+    initiator_job_id_(0),
+    validate_type_(),
+    set_or_piece_ids_(),
+    validate_level_(),
+    validate_dest_(),
+    description_(),
+    execute_tenant_ids_()
+{
+}
+
+bool ObBackupValidateArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && validate_type_.is_valid() && validate_level_.is_valid();
+}
+
+int ObBackupValidateArg::assign(const ObBackupValidateArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_FAIL(append(set_or_piece_ids_, arg.set_or_piece_ids_))) {
+    LOG_WARN("fail to append set or piece ids", K(ret));
+  } else if (OB_FAIL(validate_dest_.assign(arg.validate_dest_))) {
+    LOG_WARN("fail to assign backup dest", K(arg.validate_dest_));
+  } else if (OB_FAIL(description_.assign(arg.description_))) {
+    LOG_WARN("fail to assign description_", K(ret));
+  } else if (OB_FAIL(append(execute_tenant_ids_, arg.execute_tenant_ids_))) {
+    LOG_WARN("fail to append execute tenant ids", K(ret));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    initiator_tenant_id_ = arg.initiator_tenant_id_;
+    initiator_job_id_ = arg.initiator_job_id_;
+    validate_type_ = arg.validate_type_;
+    validate_level_ = arg.validate_level_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBackupValidateLSArg, trace_id_, job_id_, tenant_id_, incarnation_, task_id_,
+                    ls_id_, task_type_, validate_id_, dest_id_, round_id_, validate_level_,
+                    validate_path_);
+
+bool ObBackupValidateLSArg::is_valid() const
+{
+  return trace_id_.is_valid()
+        && job_id_ > 0
+        && OB_INVALID_TENANT_ID != tenant_id_
+        && task_id_ > 0
+        && ls_id_.is_valid()
+        && task_type_.is_valid()
+        && validate_id_ > 0
+        && dest_id_ > 0
+        && validate_level_.is_valid()
+        && !validate_path_.is_empty();
+}
+
+int ObBackupValidateLSArg::assign(const ObBackupValidateLSArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(validate_path_.assign(arg.validate_path_))) {
+    LOG_WARN("fail to assign validate path", KR(ret), K(arg.validate_path_));
+  } else {
+    trace_id_ = arg.trace_id_;
+    job_id_ = arg.job_id_;
+    tenant_id_ = arg.tenant_id_;
+    incarnation_ = arg.incarnation_;
+    task_id_ = arg.task_id_;
+    ls_id_ = arg.ls_id_;
+    task_type_.type_ = arg.task_type_.type_;
+    validate_id_ = arg.validate_id_;
+    dest_id_ = arg.dest_id_;
+    round_id_ = arg.round_id_;
+    validate_level_.level_ = arg.validate_level_.level_;
+    validate_path_.assign(arg.validate_path_);
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObBackupDatabaseArg, tenant_id_, initiator_tenant_id_, initiator_job_id_, backup_tenant_ids_, is_incremental_,
     is_compl_log_, backup_dest_, backup_description_, encryption_mode_, passwd_);
 
@@ -10834,7 +11036,8 @@ OB_SERIALIZE_MEMBER(ObCreateTabletInfo, tablet_ids_, data_tablet_id_, table_sche
 int ObCreateTabletExtraInfo::init(const uint64_t tenant_data_version,
                                   const bool need_create_empty_major,
                                   const bool micro_index_clustered,
-                                  const ObTabletID &split_src_tablet_id)
+                                  const ObTabletID &split_src_tablet_id,
+                                  const bool split_can_reuse_macro_block)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_data_version <= 0)) {
@@ -10847,6 +11050,7 @@ int ObCreateTabletExtraInfo::init(const uint64_t tenant_data_version,
     need_create_empty_major_ = need_create_empty_major;
     micro_index_clustered_ = micro_index_clustered;
     split_src_tablet_id_ = split_src_tablet_id;
+    split_can_reuse_macro_block_ = split_can_reuse_macro_block;
   }
   return ret;
 }
@@ -12058,6 +12262,10 @@ OB_SERIALIZE_MEMBER(ObSetSSCacheSizeRatioArg, tenant_id_, micro_cache_size_ratio
 OB_SERIALIZE_MEMBER(ObSSGCLastSuccScnArg, tenant_id_, is_for_sslog_table_);
 OB_SERIALIZE_MEMBER(ObSSGCPushLastSuccScnArg, tenant_id_, succ_scn_ns_);
 OB_SERIALIZE_MEMBER(ObSSGCLastSuccSCNsRes, last_succ_scns_);
+OB_SERIALIZE_MEMBER(ObSSGCDetectInfoArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObSSGCDetectInfoRes, detect_gc_infos_);
+OB_SERIALIZE_MEMBER(ObSSGCStartSCNArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObSSGCStartSCNRes, start_scn_items_);
 OB_SERIALIZE_MEMBER(ObDelSSTabletMacroCacheArg, tenant_id_, tablet_id_);
 OB_SERIALIZE_MEMBER(ObDelSSMacroCacheRes, ret_);
 OB_SERIALIZE_MEMBER(ObDelSSTabletMacroCacheRes, macro_read_cache_cnt_, macro_write_cache_cnt_);
@@ -13401,6 +13609,7 @@ int ObTTLRequestArg::assign(const ObTTLRequestArg &other)
   task_id_ = other.task_id_;
   tenant_id_ = other.tenant_id_;
   trigger_type_ = other.trigger_type_;
+  table_with_tablet_ = other.table_with_tablet_;
 
   return ret;
 }
@@ -14586,7 +14795,7 @@ int ObCheckBackupDestRWConsistencyArg::init(const uint64_t tenant_id, const ObSt
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObRemoteCheckBackupDestValidityArg, tenant_id_, dest_type_, backup_dest_str_, need_format_file_);
+OB_SERIALIZE_MEMBER(ObRemoteCheckBackupDestValidityArg, tenant_id_, dest_type_, backup_dest_str_, need_format_file_, need_check_permission_);
 bool ObRemoteCheckBackupDestValidityArg::is_valid() const
 {
   return is_valid_tenant_id(tenant_id_)
@@ -14605,6 +14814,7 @@ int ObRemoteCheckBackupDestValidityArg::assign(const ObRemoteCheckBackupDestVali
     dest_type_ = arg.dest_type_;
     backup_dest_str_ = arg.backup_dest_str_;
     need_format_file_ = arg.need_format_file_;
+    need_check_permission_ = arg.need_check_permission_;
   }
   return ret;
 }
@@ -14613,7 +14823,8 @@ int ObRemoteCheckBackupDestValidityArg::init(
     const uint64_t tenant_id,
     const int64_t dest_type,
     const ObString &backup_dest_str,
-    const bool need_format_file)
+    const bool need_format_file,
+    const bool need_check_permission)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(tenant_id)
@@ -14626,6 +14837,7 @@ int ObRemoteCheckBackupDestValidityArg::init(
     dest_type_ = dest_type;
     backup_dest_str_ = backup_dest_str;
     need_format_file_ = need_format_file;
+    need_check_permission_ = need_check_permission;
   }
   return ret;
 }
@@ -14776,6 +14988,43 @@ OB_SERIALIZE_MEMBER((ObSensitiveRuleDDLArg, ObDDLArg),
                      user_id_);
 
 OB_SERIALIZE_MEMBER(ObGetRefreshedSchemaVersionsRes, refreshed_schema_versions_);
+
+OB_SERIALIZE_MEMBER(ObBatchDetectSessionAliveArg, session_id_array_);
+
+int ObBatchDetectSessionAliveArg::assign(const ObBatchDetectSessionAliveArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(session_id_array_.assign(other.session_id_array_))) {
+    LOG_WARN("fail to assign session_id_array", KR(ret), K(other));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBatchDetectSessionAliveResult, session_alive_array_);
+
+int ObBatchDetectSessionAliveResult::assign(const ObBatchDetectSessionAliveResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(session_alive_array_.assign(other.session_alive_array_))) {
+    LOG_WARN("fail to assign session_alive_array", KR(ret), K(other));
+  }
+  return ret;
+}
+
+int ObBatchDetectSessionAliveResult::init(int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(session_alive_array_.reserve(count))) {
+    LOG_WARN("fail to init session_alive_array", KR(ret), K(count));
+  } else {
+    for (int64_t i = 0; i < count; i++) {
+      session_alive_array_.push_back(false);
+    }
+  }
+  return ret;
+}
 
 }//end namespace obrpc
 }//end namespace oceanbase

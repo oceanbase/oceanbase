@@ -119,36 +119,37 @@ int ObIndexBlockDataTransformer::transform(
   ObDatumRow row;
   char *block_buf = nullptr; // transformed block buf
   int64_t pos = 0;
+  int64_t deserialize_pos = 0;
   ObIMicroBlockReader *micro_reader = nullptr;
+  ObMicroBlockHeader micro_block_header;
   ObMicroBlockHeader *new_micro_header = nullptr;
-  const ObMicroBlockHeader *micro_block_header =
-      reinterpret_cast<const ObMicroBlockHeader *>(block_data.get_buf());
-  const int64_t col_cnt = micro_block_header->column_count_;
-  const int64_t row_cnt = micro_block_header->row_count_;
+  int64_t col_cnt = 0;
+  int64_t row_cnt = 0;
   int64_t mem_limit = 0;
-  if (OB_UNLIKELY(nullptr != table_read_info && col_cnt - 1 > table_read_info->get_rowkey_count())) {
+  if (OB_FAIL(micro_block_header.deserialize(block_data.get_buf(), block_data.get_buf_size(), deserialize_pos))) {
+    LOG_WARN("failed to deserialize micro block header", KR(ret), KP(block_data.get_buf()), K(block_data.get_buf_size()), K(block_data));
+  } else if (FALSE_IT(col_cnt = micro_block_header.column_count_)) {
+  } else if (FALSE_IT(row_cnt = micro_block_header.row_count_)) {
+  } else if (OB_UNLIKELY(nullptr != table_read_info && col_cnt - 1 > table_read_info->get_rowkey_count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected rowkey count", K(ret), K(col_cnt), KPC(table_read_info));
-  } else if (OB_UNLIKELY(!block_data.is_valid() || !micro_block_header->is_valid())) {
+  } else if (OB_UNLIKELY(!block_data.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(block_data), KPC(micro_block_header));
-  } else if (OB_FAIL(get_reader(block_data.get_store_type(), micro_reader))) {
+    LOG_WARN("Invalid argument", K(ret), K(block_data));
+  } else if (OB_FAIL(get_reader(*block_data.get_micro_header(), micro_reader))) {
     LOG_WARN("Fail to set micro block reader", K(ret));
   } else if (OB_FAIL(micro_reader->init(block_data, nullptr))) {
     LOG_WARN("Fail to init micro block reader", K(ret), K(block_data));
   } else if (OB_FAIL(row.init(allocator, col_cnt))) {
     LOG_WARN("Failed to init datum row", K(ret), K(col_cnt));
-  } else if (OB_FAIL(get_transformed_upper_mem_size(table_read_info, block_data.get_buf(), mem_limit))) {
+  } else if (OB_FAIL(get_transformed_upper_mem_size(micro_block_header, table_read_info, block_data.get_buf(), mem_limit))) {
     LOG_WARN("Failed to get upper bound of transformed block size", K(ret), K(block_data));
-    } else if (OB_ISNULL(block_buf = static_cast<char *>(allocator.alloc(mem_limit)))) {
+  } else if (OB_ISNULL(block_buf = static_cast<char *>(allocator.alloc(mem_limit)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to allocate memory for transformed block buf", K(ret), K(mem_limit));
-  } else if (OB_FAIL(micro_block_header->deep_copy(block_buf, mem_limit, pos, new_micro_header))) {
+  } else if (OB_FAIL(micro_block_header.deep_copy(block_buf, mem_limit, pos, new_micro_header))) {
     LOG_WARN("Failed to serialize micro block header to transformed buf",
-        K(ret), KPC(micro_block_header), K(pos));
-  } else if (OB_UNLIKELY(!new_micro_header->is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid copied micro block header", K(ret), KPC(new_micro_header));
+        K(ret), K(micro_block_header), K(pos));
   } else {
     const int64_t micro_header_size = pos;
     ObIndexBlockDataHeader *idx_header = new (block_buf + pos) ObIndexBlockDataHeader();
@@ -215,7 +216,7 @@ int ObIndexBlockDataTransformer::transform(
 
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to transform index block to in_memory format", K(ret),
-        KPC(micro_block_header), KPC(new_micro_header), K(block_data));
+        K(micro_block_header), K(block_data));
     if (nullptr != block_buf) {
       allocator.free(block_buf);
     }
@@ -233,12 +234,11 @@ int ObIndexBlockDataTransformer::fix_micro_header_and_transform(
   ObArenaAllocator tmp_allocator; // tmp allocator to fix micro header
   ObDatumRow row;
   ObIMicroBlockReader *micro_reader = nullptr;
-  const ObMicroBlockHeader *micro_block_header =
-      reinterpret_cast<const ObMicroBlockHeader *>(raw_data.get_buf());
-  if (OB_UNLIKELY(!raw_data.is_valid() || !micro_block_header->is_valid())) {
+  const ObMicroBlockHeader *micro_block_header = raw_data.get_micro_header();
+  if (OB_UNLIKELY(!raw_data.is_valid() || nullptr == micro_block_header)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(raw_data), KPC(micro_block_header));
-  } else if (OB_FAIL(get_reader(raw_data.get_store_type(), micro_reader))) {
+    LOG_WARN("Invalid argument", K(ret), K(raw_data), K(micro_block_header));
+  } else if (OB_FAIL(get_reader(*raw_data.get_micro_header(), micro_reader))) {
     LOG_WARN("Fail to set micro block reader", K(ret));
   } else if (OB_FAIL(micro_reader->init(raw_data, nullptr))) {
     LOG_WARN("Fail to init micro block reader", K(ret), K(raw_data));
@@ -259,7 +259,6 @@ int ObIndexBlockDataTransformer::fix_micro_header_and_transform(
         }
       }
     }
-    ObMicroBlockHeader new_micro_header;
     char *new_data_buf = nullptr;
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(new_data_buf = static_cast<char *>(tmp_allocator.alloc(raw_data.get_buf_size())))) {
@@ -269,16 +268,18 @@ int ObIndexBlockDataTransformer::fix_micro_header_and_transform(
       MEMCPY(new_data_buf, raw_data.get_buf(), raw_data.get_buf_size());
       int64_t copy_pos = 0;
       ObMicroBlockHeader *copied_header = nullptr;
+      ObMicroBlockData copied_micro_data;
       if (OB_FAIL(raw_data.get_micro_header()->deep_copy(new_data_buf, raw_data.get_buf_size(), copy_pos, copied_header))) {
         LOG_WARN("Failed to deep copy micro header", K(ret), K(raw_data), KPC(raw_data.get_micro_header()));
       } else {
         copied_header->data_length_ = raw_data.get_buf_size() - copy_pos;
         copied_header->data_zlength_ = copied_header->data_length_;
         copied_header->original_length_ = raw_data_size;
-        ObMicroBlockData copied_micro_data(new_data_buf, raw_data.get_buf_size());
-        if (OB_FAIL(transform(copied_micro_data, transformed_data, allocator, allocated_buf))) {
+        if (OB_FAIL(copied_micro_data.init_with_prepare_micro_header(new_data_buf, raw_data.get_buf_size()))) {
+          LOG_WARN("Failed to init micro data", K(ret), K(raw_data), KPC(raw_data.get_micro_header()));
+        } else if (OB_FAIL(transform(copied_micro_data, transformed_data, allocator, allocated_buf))) {
           LOG_WARN("Failed to transform with copied micro data", K(ret),
-              KPC(micro_block_header), K(new_micro_header), KPC(copied_header));
+              KPC(micro_block_header), K(copied_micro_data), KPC(copied_header));
         }
       }
     }
@@ -287,31 +288,30 @@ int ObIndexBlockDataTransformer::fix_micro_header_and_transform(
 }
 
 int ObIndexBlockDataTransformer::get_transformed_upper_mem_size(
+    const ObMicroBlockHeader &micro_header,
     const ObITableReadInfo *table_read_info,
     const char *raw_block_data,
     int64_t &mem_limit)
 {
   int ret = OB_SUCCESS;
   mem_limit = 0;
-  const ObMicroBlockHeader *micro_header =
-      reinterpret_cast<const ObMicroBlockHeader *>(raw_block_data);
-  if (OB_ISNULL(raw_block_data) || OB_UNLIKELY(!micro_header->is_valid())) {
+  if (OB_ISNULL(raw_block_data)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), KP(raw_block_data), KPC(micro_header));
+    LOG_WARN("Invalid argument", K(ret), KP(raw_block_data), K(micro_header));
   } else {
     int64_t rowkey_vector_size = 0;
-    mem_limit += micro_header->get_serialize_size();
+    mem_limit += micro_header.get_serialize_size();
     mem_limit += sizeof(ObIndexBlockDataHeader);
-    mem_limit += micro_header->row_count_ * sizeof(ObStorageDatum);
-    mem_limit += micro_header->row_count_ * sizeof(common::ObPointerSwizzleNode);
-    if (OB_FAIL(ObRowkeyVector::get_occupied_size(micro_header->row_count_,
-                                                  micro_header->column_count_ - 1,
+    mem_limit += micro_header.row_count_ * sizeof(ObStorageDatum);
+    mem_limit += micro_header.row_count_ * sizeof(common::ObPointerSwizzleNode);
+    if (OB_FAIL(ObRowkeyVector::get_occupied_size(micro_header.row_count_,
+                                                  micro_header.column_count_ - 1,
                                                   table_read_info,
                                                   rowkey_vector_size))) {
       LOG_WARN("Failed to get occupied size of rowkey vector", K(ret));
     } else {
       mem_limit += rowkey_vector_size;
-      mem_limit += micro_header->original_length_;
+      mem_limit += micro_header.original_length_;
       mem_limit += ObMicroBlockData::ALIGN_REDUNDANCY_SIZE;
     }
   }
@@ -319,14 +319,14 @@ int ObIndexBlockDataTransformer::get_transformed_upper_mem_size(
 }
 
 int ObIndexBlockDataTransformer::get_reader(
-    const ObRowStoreType store_type,
+    const ObMicroBlockHeader &header,
     ObIMicroBlockReader *&micro_reader)
 {
   int ret = OB_SUCCESS;
   if (!micro_reader_helper_.is_inited() && OB_FAIL(micro_reader_helper_.init(allocator_))) {
     LOG_WARN("Fail to init micro reader helper", K(ret));
-  } else if (OB_FAIL(micro_reader_helper_.get_reader(store_type, micro_reader))) {
-    LOG_WARN("Fail to get micro reader", K(ret), K(store_type));
+  } else if (OB_FAIL(micro_reader_helper_.get_reader(header, micro_reader))) {
+    LOG_WARN("Fail to get micro reader", K(ret), "header", header);
   }
   return ret;
 }
@@ -467,8 +467,8 @@ int ObRAWIndexBlockRowIterator::init(const ObMicroBlockData &idx_block_data,
     LOG_WARN("invalid arguement", K(ret), KP(allocator), KPC(datum_utils));
   } else if (!micro_reader_helper_.is_inited() && OB_FAIL(micro_reader_helper_.init(*allocator))) {
     LOG_WARN("Fail to init micro reader helper", K(ret), KP(allocator));
-  } else if (OB_FAIL(micro_reader_helper_.get_reader(idx_block_data.get_store_type(), micro_reader_))) {
-    LOG_WARN("Fail to get micro block reader", K(ret), K(idx_block_data), K(idx_block_data.get_store_type()));
+  } else if (OB_FAIL(micro_reader_helper_.get_reader(*idx_block_data.get_micro_header(), micro_reader_))) {
+    LOG_WARN("Fail to get micro block reader", K(ret), K(idx_block_data), "header", *idx_block_data.get_micro_header());
   } else if (OB_FAIL(micro_reader_->init(idx_block_data, datum_utils))) {
     LOG_WARN("Fail to init micro reader", K(ret), K(idx_block_data));
   } else if (OB_FAIL(init_datum_row(*datum_utils, allocator))) {
@@ -1754,7 +1754,7 @@ int ObIndexBlockRowScanner::get_next(
     ObMicroIndexInfo &idx_block_row,
     const bool is_multi_check,
     const bool is_sorted_multi_get,
-    storage::ObIndexSkipScanner *skip_scanner)
+    storage::ObISkipScanner *skip_scanner)
 {
   int ret = OB_SUCCESS;
   idx_block_row.reset();

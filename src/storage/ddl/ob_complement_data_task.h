@@ -59,6 +59,11 @@ class ObChunk;
 class ObComplementDataDag;
 class ObComplementFailCallback : public ObDDLFailCallback
 {
+private:
+  bool is_white_list_ret(int ret_code)
+  {
+    return OB_EAGAIN == ret_code;
+  }
 public:
   ObComplementFailCallback():dag_(nullptr) {};
   virtual ~ObComplementFailCallback() {};
@@ -508,7 +513,7 @@ public:
   virtual int get_next_row(const blocksstable::ObDatumRow *&tmp_row) override;
   int get_origin_table_checksum(ObArray<int64_t> &report_col_checksums, ObArray<int64_t> &report_col_ids) override;
 private:
-  int prepare_iter(const ObSqlString &sql_string, common::ObCommonSqlProxy *sql_proxy);
+  int prepare_iter(const ObSqlString &sql_string, const ObSessionParam &session_param, common::ObCommonSqlProxy *sql_proxy);
   int generate_build_select_sql(ObSqlString &sql_string);
   // to fetch partiton/subpartition name for select sql.
   int generate_range_condition(const ObDatumRange &datum_range,

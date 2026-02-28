@@ -36,6 +36,7 @@ EVENT_INFO(SCHEDULE_TIME, schedule_time)
 EVENT_INFO(NETWORK_WAIT_TIME, network_wait_time)
 EVENT_INFO(TX_TABLE_READ_CNT, tx_table_read_cnt)
 EVENT_INFO(OUTROW_LOB_CNT, outrow_lob_cnt)
+EVENT_INFO(SS_READ_OBJECT_STORAGE_COUNT, ss_read_object_storage_count)
 #endif
 
 #ifndef OCEANBASE_SQL_OB_EXEC_STAT_H
@@ -112,6 +113,7 @@ struct ObExecRecord
       network_wait_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::NETWORK_WAIT_TIME);                   \
       tx_table_read_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::TX_TABLE_READ_CNT);                   \
       outrow_lob_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::OUTROW_LOB_CNT);                   \
+      ss_read_object_storage_count_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SS_READ_OBJECT_STORAGE_COUNT); \
     } \
   } while(0);
 
@@ -155,6 +157,7 @@ struct ObExecRecord
     UPDATE_EVENT(network_wait_time);
     UPDATE_EVENT(tx_table_read_cnt);
     UPDATE_EVENT(outrow_lob_cnt);
+    UPDATE_EVENT(ss_read_object_storage_count);
   }
 
   uint64_t get_cur_memstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {
@@ -241,12 +244,13 @@ struct ObExecTimestamp {
   int64_t decode_t_;
   int64_t get_plan_t_;
   int64_t executor_t_;
+  int64_t commit_t_;
 
   TO_STRING_KV(K(exec_type_), K(rpc_send_ts_), K(receive_ts_), K(enter_queue_ts_),
                K(run_ts_), K(before_process_ts_), K(single_process_ts_),
                K(process_executor_ts_), K(executor_end_ts_), K(multistmt_start_ts_),
                K(elapsed_t_), K(net_t_), K(net_wait_t_), K(queue_t_),
-               K(decode_t_), K(get_plan_t_), K(executor_t_));
+               K(decode_t_), K(get_plan_t_), K(executor_t_), K_(commit_t));
 
   //出现重试时时间累加
   void update_stage_time() {
@@ -336,12 +340,14 @@ struct ObAuditRecordData {
     partition_hit_ = true;
     is_perf_event_closed_ = false;
     pl_trace_id_.reset();
+    parent_trace_id_.reset();
     stmt_type_ = sql::stmt::T_NONE;
     sql_memory_used_ = nullptr;
     trans_status_ = INVALID_STATUS;
     ccl_rule_id_ = 0;
     ccl_match_time_ = 0;
     cursor_elapsed_ = 0;
+    request_id_ = 0;
   }
 
   int64_t get_elapsed_time() const
@@ -463,6 +469,7 @@ struct ObAuditRecordData {
   char flt_trace_id_[OB_MAX_UUID_STR_LENGTH + 1];
   char snapshot_source_[OB_MAX_SNAPSHOT_SOURCE_LENGTH + 1];
   ObCurTraceId::TraceId pl_trace_id_;
+  ObCurTraceId::TraceId parent_trace_id_;
   int64_t plsql_exec_time_;
   char format_sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   stmt::StmtType stmt_type_;

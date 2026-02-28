@@ -24,7 +24,7 @@ namespace storage
 ObLSMemberListService::ObLSMemberListService()
   : is_inited_(false),
     ls_(NULL),
-    transfer_scn_iter_lock_(),
+    transfer_scn_iter_lock_(common::ObLatchIds::LS_MEMBER_LIST_SERVICE_LOCK),
     log_handler_(NULL)
 {
 }
@@ -163,6 +163,30 @@ int ObLSMemberListService::switch_learner_to_acceptor(
     STORAGE_LOG(WARN, "failed to switch learner to acceptor", K(ret));
   } else {
     STORAGE_LOG(INFO, "switch learner to acceptor success", K(ret), K(learner), K(paxos_replica_num), K(leader_config_version));
+  }
+  return ret;
+}
+
+int ObLSMemberListService::replace_learners(
+    const common::ObMemberList &added_learners,
+    const common::ObMemberList &removed_learners,
+    const bool need_check_transfer_scn,
+    const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  palf::LogConfigVersion config_version;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ls is not inited", K(ret));
+  } else if (need_check_transfer_scn && OB_FAIL(check_ls_transfer_scn_validity_(config_version))) {
+    STORAGE_LOG(WARN, "failed to check ls transfer scn validity", K(ret));
+  } else if (OB_FAIL(log_handler_->replace_learners(added_learners,
+                                                    removed_learners,
+                                                    timeout))) {
+    STORAGE_LOG(WARN, "failed to replace learners", K(ret), K(added_learners), K(removed_learners));
+  } else {
+    STORAGE_LOG(INFO, "replace learners success", K(ret), K(added_learners), K(removed_learners),
+        K(need_check_transfer_scn), K(config_version));
   }
   return ret;
 }

@@ -12,13 +12,19 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_parquet_table_row_iter.h"
-#include "sql/engine/basic/ob_arrow_basic.h"
+
+#include "lib/udt/ob_array_type.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "sql/engine/basic/ob_arrow_basic.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include <parquet/api/reader.h>
 #include "sql/engine/table/ob_external_table_pushdown_filter.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
-#include "lib/udt/ob_array_type.h"
+#include "sql/resolver/dml/ob_dml_resolver.h"
+#include "storage/blocksstable/encoding/ob_encoding_util.h"
+#include "storage/direct_load/ob_direct_load_vector_utils.h"
+
+#include <parquet/api/reader.h>
 
 namespace oceanbase
 {
@@ -50,6 +56,10 @@ ObParquetTableRowIterator::~ObParquetTableRowIterator()
     malloc_allocator_.free(rg_bitmap_);
     rg_bitmap_ = nullptr;
   }
+  if (nullptr != dict_filter_pushdown_) {
+    dict_filter_pushdown_->~ObParquetDictFilterPushdown();
+    dict_filter_pushdown_ = nullptr;
+  }
   malloc_allocator_.reset();
   reader_profile_.dump_metrics();
   reader_profile_.update_profile();
@@ -75,6 +85,28 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
                                           scan_param->ext_tbl_filter_pd_level_,
                                           scan_param->column_ids_,
                                           eval_ctx));
+
+  // 初始化字典优化模块
+  if (OB_SUCC(ret) && nullptr == dict_filter_pushdown_ && file_column_exprs_.count() > 0) {
+    dict_filter_pushdown_ = OB_NEWx(ObParquetDictFilterPushdown, &allocator_);
+    if (OB_ISNULL(dict_filter_pushdown_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory for dict filter pushdown", K(ret));
+    } else if (OB_FAIL(dict_filter_pushdown_->init(file_column_exprs_.count()))) {
+      LOG_WARN("fail to init dict filter pushdown", K(ret));
+    } else {
+      common::ObSEArray<ObExpr *, 16> decode_exprs;
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
+        if (OB_FAIL(decode_exprs.push_back(get_column_expr_by_id(i)))) {
+          LOG_WARN("fail to push back expr", K(ret), K(i));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(dict_filter_pushdown_->init_decode_exprs(decode_exprs))) {
+        LOG_WARN("fail to init decode exprs for dict filter pushdown", K(ret));
+      }
+    }
+  }
+
   OZ(reader_profile_.register_metrics(&reader_metrics_, READER_METRICS_LABEL));
   OZ(data_access_driver_.register_io_metrics(reader_profile_, IO_METRICS_LABEL));
   OZ(file_prebuffer_.register_metrics(reader_profile_, PREBUFFER_METRICS_LABEL));
@@ -105,15 +137,27 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       }
     } else if (FALSE_IT(lib::ob_sort(lazy_columns_.begin(), lazy_columns_.end()))) {
     }
+
+    if (OB_SUCC(ret)) {
+      if (scan_param_->ext_enable_late_materialization_
+          && scan_param->pd_storage_filters_ != nullptr) {
+        // build filter expr rels for late materialization
+        OZ(build_filter_expr_rels(scan_param->pd_storage_filters_, this));
+      }
+    }
+
     OZ (state_.init(file_column_exprs_.count(), get_eager_count(), allocator_));
     if (file_column_exprs_.count() > 0) {
       OZ (column_indexs_.allocate_array(allocator_, file_column_exprs_.count()));
       OZ (column_readers_.allocate_array(allocator_, file_column_exprs_.count()));
       OZ (record_readers_.allocate_array(allocator_, file_column_exprs_.count()));
+      OZ (coll_column_indexs_.allocate_array(allocator_, file_column_exprs_.count()));
+      OZ (coll_record_readers_.allocate_array(allocator_, file_column_exprs_.count()));
       OZ (load_funcs_.allocate_array(allocator_, file_column_exprs_.count()));
       if (get_eager_count() > 0) {
         OZ (eager_column_readers_.allocate_array(allocator_, get_eager_count()));
         OZ (eager_record_readers_.allocate_array(allocator_, get_eager_count()));
+        OZ (eager_coll_record_readers_.allocate_array(allocator_, get_eager_count()));
       }
     }
     int64_t err_sim = OB_E(EventTable::EN_DISK_ERROR) 0;
@@ -241,34 +285,68 @@ bool ObParquetTableRowIterator::is_contain_field_id(std::shared_ptr<parquet::Fil
   }
   return contains_id;
 }
+
+static void print_type_mismatch_error(const int ret, ObDatumMeta &meta,
+                                                      const parquet::ColumnDescriptor *col_desc,
+                                                      ObIAllocator &allocator, ObEvalCtx &eval_ctx)
+{
+  std::string log_type = col_desc->logical_type()->ToString();
+  std::string phy_type = TypeToString(col_desc->physical_type());
+  int64_t pos = 0;
+  ObArrayWrap<char> buf;
+  const char *ob_type = ob_obj_type_str(meta.type_);
+  bool is_collection = ob_is_collection_sql_type(meta.type_);
+  if (OB_SUCCESS == buf.allocate_array(allocator, 100)) {
+    ObArray<ObString> extended_type_info;
+    if (is_collection) {
+      int tmp_ret = OB_SUCCESS;
+      uint16_t subschema_id = meta.get_subschema_id();
+      const ObSqlCollectionInfo *coll_info = NULL;
+      ObSubSchemaValue value;
+      if (OB_SUCCESS
+          != (tmp_ret = eval_ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+        LOG_WARN("failed to get subschema ctx", K(tmp_ret));
+      } else if (FALSE_IT(coll_info =
+                            reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
+      } else if (OB_SUCCESS
+                 != (tmp_ret = extended_type_info.push_back(coll_info->get_def_string()))) {
+        LOG_WARN("failed to push back to array", K(tmp_ret), KPC(coll_info));
+      }
+    }
+    ob_sql_type_str(buf.get_data(), buf.count(), pos, meta.type_, OB_MAX_VARCHAR_LENGTH,
+                    meta.precision_, meta.scale_, meta.cs_type_,
+                    extended_type_info);
+    if (pos < buf.count()) {
+      buf.at(pos++) = '\0';
+      ob_type = buf.get_data();
+    }
+  }
+  ObStringBuffer coll_buf(&allocator);
+  int64_t max_repetition_level = col_desc->max_repetition_level();
+  is_collection = max_repetition_level > 0;
+  if (is_collection) {
+    bool is_legal_collection = false;
+    const ::parquet::schema::Node* node = col_desc->schema_node().get();
+    for (int64_t i = 0; i < max_repetition_level; ++i) {
+      if (OB_NOT_NULL(node) && OB_NOT_NULL(node->parent())) {
+        node = node->parent()->parent();
+      }
+    }
+    int tmp_ret = ObDMLResolver::build_collection_column_schema_for_parquet(
+      node, is_legal_collection, coll_buf);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to build collection column schema", K(tmp_ret));
+    }
+  }
+  LOG_WARN("not supported type", K(ret), K(meta),
+           K(ObString(log_type.length(), log_type.data())), K(col_desc->physical_type()),
+           "rep_level", col_desc->max_repetition_level());
+  LOG_USER_ERROR(OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH, is_collection ? coll_buf.string().ptr() :
+             (!col_desc->logical_type()->is_none() ? log_type.c_str() : phy_type.c_str()), ob_type);
+}
+
 int ObParquetTableRowIterator::next_file()
 {
-#define BEGIN_CATCH_EXCEPTIONS try {
-#define END_CATCH_EXCEPTIONS                                                                       \
-  } catch (const ObErrorCodeException &ob_error) {                                                 \
-    if (OB_SUCC(ret)) {                                                                            \
-      ret = ob_error.get_error_code();                                                             \
-      LOG_WARN("fail to read file", K(ret));                                                       \
-    }                                                                                              \
-  } catch (const ::parquet::ParquetStatusException &e) {                                           \
-    if (OB_SUCC(ret)) {                                                                            \
-      status = e.status();                                                                         \
-      ret = OB_INVALID_EXTERNAL_FILE;                                                              \
-      LOG_WARN("unexpected error", K(ret), "Info", e.what());                                      \
-    }                                                                                              \
-  } catch (const ::parquet::ParquetException &e) {                                                 \
-    if (OB_SUCC(ret)) {                                                                            \
-      ret = OB_INVALID_EXTERNAL_FILE;                                                              \
-      LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE, e.what());                                          \
-      LOG_WARN("unexpected error", K(ret), "Info", e.what());                                      \
-    }                                                                                              \
-  } catch (...) {                                                                                  \
-    if (OB_SUCC(ret)) {                                                                            \
-      ret = OB_ERR_UNEXPECTED;                                                                     \
-      LOG_WARN("unexpected error", K(ret));                                                        \
-    }                                                                                              \
-  }                                                                                                \
-
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   ObString location = scan_param_->external_file_location_;
@@ -305,7 +383,7 @@ int ObParquetTableRowIterator::next_file()
       }
 
       if (OB_FAIL(ret)) {
-      } else if (!is_abs_url(state_.cur_file_url_)) {
+      } else if (!share::ObExternalTableUtils::is_abs_url(state_.cur_file_url_)) {
         const char *split_char = "/";
         OZ(url_.append_fmt(
             "%.*s%s%.*s",
@@ -386,10 +464,12 @@ int ObParquetTableRowIterator::next_file()
     state_.cur_file_id_ = scan_task->file_id_;
     state_.cur_row_group_idx_ = scan_task->first_lineno_;
     state_.end_row_group_idx_ = scan_task->last_lineno_;
+    ObHashMap<int64_t, int> node_to_column_idx;
     if (scan_task->record_count_ > 0 && is_count_aggr) {
       state_.end_row_group_idx_ = scan_task->first_lineno_;
     } else {
       OX (state_.end_row_group_idx_ = std::min((int64_t)(file_meta_->num_row_groups()), state_.end_row_group_idx_));
+      OZ (node_to_column_idx.create(file_meta_->schema()->num_columns(), ObMemAttr(common::OB_SERVER_TENANT_ID, "NodeToColumnIdx")));
     }
 
     BEGIN_CATCH_EXCEPTIONS
@@ -451,39 +531,27 @@ int ObParquetTableRowIterator::next_file()
             } else if (OB_ISNULL(col_desc)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("null column desc", K(ret), K(column_index));
+            } else if (node->is_group()) {
+              if (ob_is_collection_sql_type(file_column_exprs_.at(i)->datum_meta_.type_)) {
+                OZ(coll_column_indexs_.at(i).allocate_array(allocator_, 10));
+                int col_cnt = 0;
+                if (OB_SUCC(ret)) {
+                  load_funcs_.at(i) = DataLoader::select_load_function_for_group(
+                    file_column_exprs_.at(i)->datum_meta_, file_meta_, column_index, type_id,
+                    coll_column_indexs_.at(i), col_cnt, node_to_column_idx);
+                  OZ(coll_record_readers_.at(i).allocate_array(allocator_, col_cnt));
+                }
+              } else {
+                load_funcs_.at(i) = NULL;
+              }
             } else {
-              load_funcs_.at(i) = DataLoader::select_load_function(file_column_exprs_.at(i)->datum_meta_, col_desc, node, type_id);
+              load_funcs_.at(i) = DataLoader::select_load_function(file_column_exprs_.at(i)->datum_meta_, col_desc);
             }
             if (OB_SUCC(ret)) {
               if (OB_ISNULL(load_funcs_.at(i))) {
                 ret = OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH;
-                std::string log_type = col_desc->logical_type()->ToString();
-                std::string phy_type = TypeToString(col_desc->physical_type());
-                int64_t pos = 0;
-                ObArrayWrap<char> buf;
-                const char *ob_type = ob_obj_type_str(file_column_exprs_.at(i)->datum_meta_.type_);
-                if (OB_SUCCESS == buf.allocate_array(allocator_, 100)) {
-                  ObArray<ObString> extended_type_info;
-                  if (ob_is_collection_sql_type(meta.type_)) {
-                    int tmp_ret = OB_SUCCESS;
-                    if (OB_SUCCESS != (tmp_ret = extended_type_info.push_back(coll_info->get_def_string()))) {
-                      LOG_WARN("failed to push back to array", K(tmp_ret), KPC(coll_info));
-                    }
-                  }
-                  ob_sql_type_str(buf.get_data(), buf.count(), pos, meta.type_,
-                                  OB_MAX_VARCHAR_LENGTH, meta.precision_, meta.scale_, meta.cs_type_, extended_type_info);
-                  if (pos < buf.count()) {
-                    buf.at(pos++) = '\0';
-                    ob_type = buf.get_data();
-                  }
-                }
-                LOG_WARN("not supported type", K(ret), K(file_column_exprs_.at(i)->datum_meta_),
-                        K(ObString(log_type.length(), log_type.data())),
-                        K(col_desc->physical_type()),
-                        "rep_level", col_desc->max_repetition_level());
-                LOG_USER_ERROR(OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH,
-                               !col_desc->logical_type()->is_none() ? log_type.c_str() : phy_type.c_str(),
-                               ob_type);
+                print_type_mismatch_error(ret, file_column_exprs_.at(i)->datum_meta_, col_desc,
+                                          allocator_, eval_ctx);
               } else {
                 column_indexs_.at(i) = column_index;
                 LOG_DEBUG("mapped ob type", K(column_index), "column type",
@@ -567,7 +635,11 @@ int ObParquetTableRowIterator::next_row_group()
         std::shared_ptr<parquet::RowGroupReader> eager_rg_reader = eager_file_reader_->RowGroup(cur_row_group);
         ObEvalCtx::TempAllocGuard alloc_guard(scan_param_->op_->get_eval_ctx());
         ParquetMinMaxFilterParamBuilder param_builder(this, rg_reader, file_meta_, alloc_guard.get_allocator());
-        if (OB_FAIL(ObExternalTablePushdownFilter::apply_skipping_index_filter(PushdownLevel::ROW_GROUP, param_builder, can_skip))) {
+        ParquetBloomFilterParamBuilder bf_builder(
+          rg_reader,
+          file_reader_->GetBloomFilterReader().RowGroup(cur_row_group),
+          file_meta_, &reader_metrics_, -1);
+        if (OB_FAIL(ObExternalTablePushdownFilter::apply_skipping_index_filter(PushdownLevel::ROW_GROUP, param_builder, &bf_builder, can_skip))) {
           LOG_WARN("failed to apply skip index", K(ret));
         } else if (0 == rg_reader->metadata()->num_rows() || can_skip) {
           ++reader_metrics_.skipped_row_group_count_;
@@ -577,12 +649,28 @@ int ObParquetTableRowIterator::next_row_group()
           ++reader_metrics_.selected_row_group_count_;
           sector_iter_.reset();
           find_row_group = true;
-          if (is_iceberg_lake_table() && !state_.is_delete_file_loaded_) {
-            if (OB_FAIL(build_delete_bitmap(state_.cur_file_url_, state_.file_idx_ - 1))) {
-              LOG_WARN("failed to read position delete", K(ret));
-            } else {
-              state_.is_delete_file_loaded_ = true;
-            }
+
+          if (OB_NOT_NULL(dict_filter_pushdown_)) {
+              dict_filter_pushdown_->reset();
+              if (OB_FAIL(
+                      dict_filter_pushdown_->init_row_group_dict_encoding_check(rg_reader,
+                                                                                column_indexs_,
+                                                                                eager_columns_))) {
+                LOG_WARN("fail to init row group dict encoding check", K(ret));
+              } else if (OB_FAIL(update_load_funcs_for_dict_optimization())) {
+                LOG_WARN("fail to update load funcs for dict optimization", K(ret));
+              } else if (OB_FAIL(collect_dict_filter_executors(scan_param_->pd_storage_filters_))) {
+                LOG_WARN("fail to collect dict filter executors", K(ret));
+              }
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (is_iceberg_lake_table() && !state_.is_delete_file_loaded_) {
+              if (OB_FAIL(build_delete_bitmap(state_.cur_file_url_, state_.file_idx_ - 1))) {
+                LOG_WARN("failed to read position delete", K(ret));
+              } else {
+                state_.is_delete_file_loaded_ = true;
+              }
           }
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(prepare_rg_bitmap(rg_reader))) {
@@ -596,6 +684,63 @@ int ObParquetTableRowIterator::next_row_group()
       }
     }
   }
+  return ret;
+}
+
+int ObParquetTableRowIterator::collect_dict_filter_executors(ObPushdownFilterExecutor *filter)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(filter)) {
+    // do nothing
+  } else if (filter->is_filter_node()) {
+    // 检查当前filter是否可以使用字典优化
+    int32_t file_col_idx = -1;
+    ObParquetDictColumnData *dict_data = nullptr;
+    ObIArray<uint64_t> *col_ids = nullptr;
+    bool has_dict_data = false;
+
+    if (filter->is_filter_black_node()) {
+      ObBlackFilterExecutor *black_filter = static_cast<ObBlackFilterExecutor *>(filter);
+      col_ids = &black_filter->get_col_ids();
+    } else if (filter->is_filter_white_node()) {
+      ObWhiteFilterExecutor *white_filter = static_cast<ObWhiteFilterExecutor *>(filter);
+      col_ids = &white_filter->get_col_ids();
+    }
+
+    // 只处理单列filter
+    if (OB_NOT_NULL(col_ids) && col_ids->count() == 1) {
+      uint64_t ob_col_id = col_ids->at(0);
+
+      // 从 OB 列 ID 映射到 file_column_exprs_ 索引
+      for (int64_t i = 0; i < mapping_column_ids_.count(); ++i) {
+        if (mapping_column_ids_.at(i).first == ob_col_id) {
+          file_col_idx = i;
+          break;
+        }
+      }
+
+      if (file_col_idx < 0) {
+        // do nothing
+        // file column expr和ob_col_id不是一一映射，不采用字典优化
+      } else if (ObParquetDictFilterPushdown::is_operator_supported_for_dict_filter(filter)
+                 && is_dict_load_func(file_col_idx)) {
+        if (OB_FAIL(dict_filter_pushdown_->collect_dict_filter_executor(filter))) {
+          LOG_WARN("fail to push back dict filter executor", K(ret));
+        } else {
+          LOG_DEBUG("dict filter executor collected", KP(filter), K(file_col_idx));
+        }
+      }
+    }
+  } else if (filter->is_logic_op_node()) {
+    sql::ObPushdownFilterExecutor **children = filter->get_childs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter->get_child_count(); ++i) {
+      if (OB_FAIL(collect_dict_filter_executors(children[i]))) {
+        LOG_WARN("fail to collect dict filter executors from child", K(ret), K(i));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -664,15 +809,39 @@ int ObParquetTableRowIterator::DataLoader::load_data_for_col(LOAD_FUNC &func)
   return (this->*func)();
 }
 
-bool ObParquetTableRowIterator::DataLoader::check_array_column_schema(const ::parquet::schema::Node* node) {
+int ObParquetTableRowIterator::DataLoader::get_column_idx_by_node(
+  std::shared_ptr<parquet::FileMetaData> file_metadata, const ::parquet::schema::Node *node,
+  ObHashMap<int64_t, int> &node_to_column_idx)
+{
+  int ret = OB_SUCCESS;
+  int column_idx = -1;
+  if (node_to_column_idx.empty()) {
+    for (int i = 0; OB_SUCC(ret) && i < file_metadata->num_columns(); i++) {
+      const ::parquet::schema::Node *root_node =
+        file_metadata->schema()->Column(i)->schema_node().get();
+      OZ(node_to_column_idx.set_refactored(reinterpret_cast<int64_t>(root_node), i));
+    }
+  }
+  if (OB_SUCC(ret)
+      && OB_FAIL(node_to_column_idx.get_refactored(reinterpret_cast<int64_t>(node), column_idx))) {
+    column_idx = -1;
+    LOG_WARN("failed to get column index by node", K(ret));
+  }
+  return column_idx;
+}
+
+bool ObParquetTableRowIterator::DataLoader::check_array_column_schema(
+  std::shared_ptr<parquet::FileMetaData> file_metadata, const ::parquet::schema::Node *node,
+  common::ObArrayWrap<int> &coll_column_index, int &col_idx,
+  ObHashMap<int64_t, int> &node_to_column_idx)
+{
   // 1st level.
   // <list-repetition> group <name> (LIST)
-  int ret = OB_SUCCESS;
   bool bret = false;
   if (!OB_ISNULL(node) && node->is_group() && node->logical_type()->is_list()) {
     const ::parquet::schema::GroupNode *group_node =
                                   reinterpret_cast<const ::parquet::schema::GroupNode *>(node);
-    if (group_node->field_count() == 1) {
+    if (group_node->field_count() == 1 && group_node->field(0)->is_group()) {
       // 2nd level.
       // repeated group list {
       const ::parquet::schema::NodePtr list_node = group_node->field(0);
@@ -683,11 +852,58 @@ bool ObParquetTableRowIterator::DataLoader::check_array_column_schema(const ::pa
         // <list-repetition> group <name> (LIST)
         const ::parquet::schema::NodePtr child_node = list_group_node->field(0);
         if (child_node->is_primitive()) {
+          coll_column_index.at(col_idx) =
+            get_column_idx_by_node(file_metadata, child_node.get(), node_to_column_idx);
+          col_idx++;
           bret = true;
         } else {
-          bret = check_array_column_schema(child_node.get());
-          if (!bret) {
-            LOG_WARN("check array column schema failed", K(bret));
+          bret = check_array_column_schema(file_metadata, child_node.get(), coll_column_index,
+                                           col_idx, node_to_column_idx);
+        }
+      }
+    }
+  }
+  return bret;
+}
+
+bool ObParquetTableRowIterator::DataLoader::check_map_column_schema(
+  std::shared_ptr<parquet::FileMetaData> file_metadata, const ::parquet::schema::Node *node,
+  common::ObArrayWrap<int> &coll_column_index, int &col_idx,
+  ObHashMap<int64_t, int> &node_to_column_idx)
+{
+  // 1st level.
+  // <map-repetition> group <name> (MAP) {
+  bool bret = false;
+  if (!OB_ISNULL(node) && node->is_group() && node->logical_type()->is_map()) {
+    const ::parquet::schema::GroupNode *group_node =
+                                  reinterpret_cast<const ::parquet::schema::GroupNode *>(node);
+    if (group_node->field_count() == 1 && group_node->field(0)->is_group()) {
+      // 2nd level.
+      // repeated group key_value {
+      const ::parquet::schema::NodePtr kv_node = group_node->field(0);
+      std::shared_ptr<parquet::schema::GroupNode> kv_group_node =
+                                  std::static_pointer_cast<::parquet::schema::GroupNode>(kv_node);
+      if (kv_group_node->field_count() == 2) {
+        // 3rd level.
+        // required <key-type> key;
+        // <value-repetition> <value-type> value;
+        const ::parquet::schema::NodePtr key_node = kv_group_node->field(0);
+        const ::parquet::schema::NodePtr value_node = kv_group_node->field(1);
+        if (key_node->is_primitive()) {
+          coll_column_index.at(col_idx) =
+            get_column_idx_by_node(file_metadata, key_node.get(), node_to_column_idx);
+          col_idx++;
+          if (value_node->logical_type()->is_list()) {
+            bret = check_array_column_schema(file_metadata, value_node.get(), coll_column_index,
+                                             col_idx, node_to_column_idx);
+          } else if (value_node->logical_type()->is_map()) {
+            bret = check_map_column_schema(file_metadata, value_node.get(), coll_column_index,
+                                           col_idx, node_to_column_idx);
+          } else if (value_node->is_primitive()) {
+            coll_column_index.at(col_idx) =
+              get_column_idx_by_node(file_metadata, value_node.get(), node_to_column_idx);
+            col_idx++;
+            bret = true;
           }
         }
       }
@@ -696,17 +912,41 @@ bool ObParquetTableRowIterator::DataLoader::check_array_column_schema(const ::pa
   return bret;
 }
 
-ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::DataLoader::select_load_function(
-    const ObDatumMeta &datum_type, const parquet::ColumnDescriptor *col_desc, const ::parquet::schema::Node* node, const uint16_t type_id)
+ObParquetTableRowIterator::DataLoader::LOAD_FUNC
+ObParquetTableRowIterator::DataLoader::select_load_function_for_group(
+  const ObDatumMeta &datum_type, std::shared_ptr<parquet::FileMetaData> file_metadata,
+  const int64_t column_index, const uint16_t type_id, common::ObArrayWrap<int> &coll_column_index,
+  int &col_cnt, ObHashMap<int64_t, int> &node_to_column_idx)
+{
+  LOAD_FUNC func = NULL;
+  const parquet::ColumnDescriptor *col_desc = file_metadata->schema()->Column(column_index);
+  const ::parquet::schema::Node* node = file_metadata->schema()->GetColumnRoot(column_index);
+  const parquet::LogicalType* log_type = col_desc->logical_type().get();
+  parquet::Type::type phy_type = col_desc->physical_type();
+  bool no_log_type = log_type->is_none();
+  if (ob_is_collection_sql_type(datum_type.type_)) {
+    if (type_id == ObNestedType::OB_ARRAY_TYPE
+        && check_array_column_schema(file_metadata, node, coll_column_index, col_cnt,
+                                     node_to_column_idx)) {
+      func = &DataLoader::load_list_to_array;
+    } else if (type_id == ObNestedType::OB_MAP_TYPE
+               && check_map_column_schema(file_metadata, node, coll_column_index, col_cnt,
+                                          node_to_column_idx)) {
+      func = &DataLoader::load_map;
+    }
+  }
+  return func;
+}
+
+ObParquetTableRowIterator::DataLoader::LOAD_FUNC
+ObParquetTableRowIterator::DataLoader::select_load_function(
+  const ObDatumMeta &datum_type, const parquet::ColumnDescriptor *col_desc)
 {
   LOAD_FUNC func = NULL;
   const parquet::LogicalType* log_type = col_desc->logical_type().get();
   parquet::Type::type phy_type = col_desc->physical_type();
   bool no_log_type = log_type->is_none();
-  if (ob_is_collection_sql_type(datum_type.type_) && type_id == ObNestedType::OB_ARRAY_TYPE
-      && check_array_column_schema(node)) {
-    func = &DataLoader::load_list_to_array;
-  } else if (no_log_type && parquet::Type::BOOLEAN == phy_type) {
+  if (no_log_type && parquet::Type::BOOLEAN == phy_type) {
     if (ob_is_number_or_decimal_int_tc(datum_type.type_)) {
       func = &DataLoader::load_decimal_any_col;
     } else if (ob_is_integer_type(datum_type.type_)) {
@@ -735,8 +975,9 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
                     : static_cast<const parquet::IntLogicalType*>(log_type)->bit_width() > temp_obj.get_tight_data_len() * 8) {
       func = NULL;
     }
-  } else if ((no_log_type || log_type->is_string() || log_type->is_enum())
-             && (ob_is_string_type(datum_type.type_) || ObRawType == datum_type.type_ || ob_is_large_text(datum_type.type_))) {
+  } else if ((no_log_type || log_type->is_string() || log_type->is_enum() || log_type->is_JSON())
+             && (ob_is_string_type(datum_type.type_) || ObRawType == datum_type.type_
+               || ob_is_large_text(datum_type.type_) || (lib::is_mysql_mode() && ob_is_json(datum_type.type_)))) {
     //convert parquet enum/string to string vector
     if (parquet::Type::BYTE_ARRAY == phy_type) {
       func = &DataLoader::load_string_col;
@@ -856,8 +1097,6 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
     }
   } else if (no_log_type && parquet::Type::DOUBLE == phy_type && ob_is_double_tc(datum_type.type_)) {
     func = &DataLoader::load_double;
-  } else if (log_type->is_interval() || log_type->is_map() || log_type->is_JSON()) {
-    func = NULL;
   }
   return func;
 }
@@ -1029,65 +1268,65 @@ int ObParquetTableRowIterator::DataLoader::to_numeric(
 }
 
 int ObParquetTableRowIterator::DataLoader::to_numeric_hive(
-    const int64_t idx,
-    const char *str,
-    const int32_t length,
-    char *buf,
-    const int64_t data_len)
+  const int64_t idx,
+  const char *str,
+  const int32_t length,
+  char *buf,
+  const int64_t data_len)
 {
-  int ret = OB_SUCCESS;
-  ObDecimalInt *decint = NULL;
-  int32_t val_len = 0;
-  if (OB_UNLIKELY(length > data_len)) {
-    ret = OB_DECIMAL_PRECISION_OVERFLOW;
-    LOG_WARN("overflow", K(length), K(data_len));
+int ret = OB_SUCCESS;
+ObDecimalInt *decint = NULL;
+int32_t val_len = 0;
+if (OB_UNLIKELY(length > data_len)) {
+  ret = OB_DECIMAL_PRECISION_OVERFLOW;
+  LOG_WARN("overflow", K(length), K(data_len));
+} else {
+  //to little endian
+  // fill 1 when the input value is negetive, otherwise fill 0
+  MEMSET(buf, (static_cast<unsigned char>(*str) & 0x80) ? 0xFF : 0x00, data_len);
+  if (data_len <= 4) {
+    //for precision <= 9
+    MEMCPY(buf + 4 - length, str, length);
+    uint32_t *res = pointer_cast<uint32_t*>(buf);
+    uint32_t temp_v = *res;
+    *res = ntohl(temp_v);
   } else {
-    //to little endian
-    // fill 1 when the input value is negetive, otherwise fill 0
-    MEMSET(buf, (static_cast<unsigned char>(*str) & 0x80) ? 0xFF : 0x00, data_len);
-    if (data_len <= 4) {
-      //for precision <= 9
-      MEMCPY(buf + 4 - length, str, length);
-      uint32_t *res = pointer_cast<uint32_t*>(buf);
-      uint32_t temp_v = *res;
-      *res = ntohl(temp_v);
-    } else {
-      int64_t pos = 0;
-      int64_t temp_len = length;
-      while (temp_len >= 8) {
-        uint64_t temp_v = *(pointer_cast<const uint64_t*>(str + temp_len - 8));
-        *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
-        pos+=8;
-        temp_len-=8;
-      }
-      if (temp_len > 0) {
-        MEMCPY(buf + pos + 8 - temp_len, str, temp_len);
-        uint64_t temp_v = *(pointer_cast<uint64_t*>(buf + pos));
-        *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
-      }
+    int64_t pos = 0;
+    int64_t temp_len = length;
+    while (temp_len >= 8) {
+      uint64_t temp_v = *(pointer_cast<const uint64_t*>(str + temp_len - 8));
+      *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
+      pos+=8;
+      temp_len-=8;
     }
-    decint = pointer_cast<ObDecimalInt *>(buf);
-    val_len = static_cast<int32_t>(data_len);
-    if (ObDecimalIntType == file_col_expr_->datum_meta_.type_) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
-      vec->set_decimal_int(idx, decint, val_len);
-    } else if (ObNumberType == file_col_expr_->datum_meta_.type_
-               || ObUNumberType == file_col_expr_->datum_meta_.type_) {
-      ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
-      ObDiscreteBase *vec = static_cast<ObDiscreteBase *>(file_col_expr_->get_vector(eval_ctx_));
-      number::ObNumber res_nmb;
-      if (OB_FAIL(wide::to_number(decint, val_len, file_col_expr_->datum_meta_.scale_,
-                                  tmp_alloc_g.get_allocator(), res_nmb))) {
-        LOG_WARN("fail to from", K(ret));
-      } else {
-        vec->set_number(idx, res_nmb);
-      }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("not supported type", K(file_col_expr_->datum_meta_));
+    if (temp_len > 0) {
+      MEMCPY(buf + pos + 8 - temp_len, str, temp_len);
+      uint64_t temp_v = *(pointer_cast<uint64_t*>(buf + pos));
+      *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
     }
   }
-  return ret;
+  decint = pointer_cast<ObDecimalInt *>(buf);
+  val_len = static_cast<int32_t>(data_len);
+  if (ObDecimalIntType == file_col_expr_->datum_meta_.type_) {
+    ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
+    vec->set_decimal_int(idx, decint, val_len);
+  } else if (ObNumberType == file_col_expr_->datum_meta_.type_
+             || ObUNumberType == file_col_expr_->datum_meta_.type_) {
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+    ObDiscreteBase *vec = static_cast<ObDiscreteBase *>(file_col_expr_->get_vector(eval_ctx_));
+    number::ObNumber res_nmb;
+    if (OB_FAIL(wide::to_number(decint, val_len, file_col_expr_->datum_meta_.scale_,
+                                tmp_alloc_g.get_allocator(), res_nmb))) {
+      LOG_WARN("fail to from", K(ret));
+    } else {
+      vec->set_number(idx, res_nmb);
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not supported type", K(file_col_expr_->datum_meta_));
+  }
+}
+return ret;
 }
 
 int ObParquetTableRowIterator::to_numeric_hive(
@@ -1377,15 +1616,14 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
       if (OB_LIKELY(is_fast_path)) {
         for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
           parquet::ByteArray &cur_v = values_data[i];
-          if (OB_UNLIKELY(cur_v.len > max_length)) {
-            if (OB_UNLIKELY(!is_byte_length
-                            && ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
-                                                      pointer_cast<const char *>(cur_v.ptr),
-                                                      cur_v.len)
-                                   > max_length)) {
-              ret = OB_ERR_DATA_TOO_LONG;
-              LOG_WARN("data too long", K(max_length), K(cur_v.len), K(ret));
-            }
+          if (OB_UNLIKELY(cur_v.len > max_length
+                          && (is_byte_length
+                              || ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
+                                                        pointer_cast<const char *>(cur_v.ptr),
+                                                        cur_v.len)
+                                     > max_length))) {
+            ret = OB_ERR_DATA_TOO_LONG;
+            LOG_WARN("data too long", K(max_length), K(cur_v.len), K(ret));
           } else {
             text_vec->set_string(i + row_offset, pointer_cast<const char *>(cur_v.ptr), cur_v.len);
           }
@@ -1432,6 +1670,118 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
                 text_vec->set_string(i + row_offset,
                                      pointer_cast<const char *>(res_ptr),
                                      cur_v.len);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::load_string_col_dict()
+{
+  int ret = OB_SUCCESS;
+
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+  int16_t max_def_level = reader_->descr()->max_definition_level();
+  StrDiscVec *text_vec = static_cast<StrDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
+
+  CK(VEC_DISCRETE == text_vec->get_format());
+  CK(OB_NOT_NULL(dict_filter_pushdown_));
+
+  ObArrayWrap<int32_t> indices;
+  const parquet::ByteArray *dict_values = nullptr;
+  int32_t dict_len = 0;
+  int64_t indices_cnt = 0;
+  OZ(indices.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+
+  const bool is_oracle_mode = lib::is_oracle_mode();
+  const bool is_byte_length
+      = is_oracle_byte_length(is_oracle_mode, file_col_expr_->datum_meta_.length_semantics_);
+  const int64_t max_length = file_col_expr_->max_length_;
+  const bool is_large_text = ob_is_large_text(file_col_expr_->datum_meta_.type_);
+
+  if (OB_SUCC(ret)) {
+    parquet::ByteArrayReader *byte_array_reader = static_cast<parquet::ByteArrayReader *>(reader_);
+    row_count_ = byte_array_reader->ReadBatchWithDictionary(batch_size_,
+                                                            def_levels_buf_.get_data(),
+                                                            rep_levels_buf_.get_data(),
+                                                            indices.get_data(),
+                                                            &indices_cnt,
+                                                            &dict_values,
+                                                            &dict_len);
+
+    read_progress_ += row_count_;
+    if (OB_FAIL(dict_filter_pushdown_->save_dict_column_data(col_idx_,
+                                                              indices.get_data(),
+                                                              indices_cnt,
+                                                              dict_values,
+                                                              dict_len,
+                                                              parquet::Type::BYTE_ARRAY,
+                                                              first_batch_,
+                                                              row_count_,
+                                                              eval_ctx_.max_batch_size_,
+                                                              !(IS_PARQUET_COL_NOT_NULL),
+                                                              def_levels_buf_.get_data(),
+                                                              max_def_level,
+                                                              file_col_expr_))) {
+      LOG_WARN("fail to save dict column data", K(ret), K(col_idx_));
+    } else {
+      LOG_DEBUG("dict column data saved", K(col_idx_), K(dict_len), K(row_count_));
+    }
+
+    // decode when project_lazy_columns
+    if (OB_FAIL(ret)) {
+    } else if (need_decode_) {
+      ObParquetDictColumnData *saved_dict_data = nullptr;
+      bool has_saved_dict = false;
+      if (OB_FAIL(
+              dict_filter_pushdown_->get_dict_data(col_idx_, saved_dict_data, has_saved_dict))) {
+        LOG_WARN("fail to get saved dict data", K(ret), K(col_idx_));
+      } else if (!has_saved_dict || OB_ISNULL(saved_dict_data)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("saved dict data not found or invalid", K(ret), K(col_idx_), K(has_saved_dict));
+      } else {
+        common::StrDiscVec *dict_vec = saved_dict_data->dict_values_;
+
+        // 特殊情况：字典为空（全为 null）
+        if (OB_ISNULL(dict_vec) || saved_dict_data->dict_len_ <= 0) {
+          // 全为 null 的字典列，直接将所有行设置为 null
+          for (int i = 0; i < row_count_; i++) {
+            text_vec->set_null(i + row_offset_);
+          }
+        } else {
+          char **dict_ptrs = dict_vec->get_ptrs();
+          int32_t *dict_lens = dict_vec->get_lens();
+
+          int16_t *def_levels = def_levels_buf_.get_data();
+          int32_t *indices_data = indices.get_data();
+          const bool has_null = !(IS_PARQUET_COL_NOT_NULL && indices_cnt == row_count_);
+
+          const bool is_fast_path = !is_oracle_mode && !has_null;
+
+          if (OB_LIKELY(is_fast_path)) {
+            for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
+              text_vec->set_string(i + row_offset_,
+                                   dict_ptrs[indices_data[i]],
+                                   dict_lens[indices_data[i]]);
+            }
+          } else {
+            int j = 0;
+            for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
+              if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels[i])) {
+                text_vec->set_null(i + row_offset_);
+              } else if (OB_UNLIKELY(dict_vec->is_null(indices_data[j]))) {
+                text_vec->set_null(i + row_offset_);
+                j++;
+              } else {
+                text_vec->set_string(i + row_offset_,
+                                     dict_ptrs[indices_data[j]],
+                                     dict_lens[indices_data[j]]);
+                j++;
               }
             }
           }
@@ -2016,7 +2366,6 @@ int ObParquetTableRowIterator::DataLoader::load_float_to_double()
 }
 
 int ObParquetTableRowIterator::DataLoader::get_offset_nulls_from_levels(
-  const ObArrayWrap<int16_t> &def_levels_buf, const ObArrayWrap<int16_t> &rep_levels_buf,
   const int64_t parent_def_level, const int64_t max_rep_level, const int64_t max_def_level,
   const int64_t levels_count, uint32_t *offsets, uint8_t *nulls)
 {
@@ -2025,19 +2374,20 @@ int ObParquetTableRowIterator::DataLoader::get_offset_nulls_from_levels(
   bool skip_null = false;
   for (int i = 0; i < levels_count; ++i) {
     // belong to parent level, do not need to deal in this level, skip it
-    if (def_levels_buf.at(i) <= parent_def_level || rep_levels_buf.at(i) > max_rep_level) {
-      if (rep_levels_buf.at(i) == 0) {
+    if (coll_def_levels_buf_.at(i) <= parent_def_level
+        || coll_rep_levels_buf_.at(i) > max_rep_level) {
+      if (coll_rep_levels_buf_.at(i) == 0) {
         skip_null = true;
       }
       continue;
     }
 
-    int def_offset = (def_levels_buf.at(i) > max_def_level) ? 1 : 0;
-    if (rep_levels_buf.at(i) == 0) { // Line separation point, rep_level = 0
+    int def_offset = (coll_def_levels_buf_.at(i) > max_def_level) ? 1 : 0;
+    if (coll_rep_levels_buf_.at(i) == 0) { // Line separation point, rep_level = 0
       offset_idx++;
       offsets[offset_idx] = def_offset;
       skip_null = false;
-    } else if (rep_levels_buf.at(i) == max_rep_level) {
+    } else if (coll_rep_levels_buf_.at(i) == max_rep_level) {
       offsets[offset_idx] += def_offset;
     } else { // Line break points
       offset_idx++;
@@ -2046,7 +2396,7 @@ int ObParquetTableRowIterator::DataLoader::get_offset_nulls_from_levels(
     }
     if ((offsets[offset_idx] == 0
          || (offset_idx > 0 && offsets[offset_idx] - offsets[offset_idx - 1] == 0))
-        && def_levels_buf.at(i) < max_def_level) {
+        && coll_def_levels_buf_.at(i) < max_def_level) {
       nulls[offset_idx] = 1;
     } else {
       nulls[offset_idx] = 0;
@@ -2056,7 +2406,7 @@ int ObParquetTableRowIterator::DataLoader::get_offset_nulls_from_levels(
 }
 
 int ObParquetTableRowIterator::DataLoader::set_data_attr_vector_payload_for_varchar_array(
-  const uint32_t attrs_idx, common::ObIArrayWrap<uint32_t> &parent_offsets, uint8_t *nulls,
+  common::ObArrayWrap<uint32_t> &parent_offsets, int32_t &attrs_idx, uint8_t *nulls,
   uint32_t *offsets, const ObLength &max_accuracy_len)
 {
   int ret = OB_SUCCESS;
@@ -2104,7 +2454,7 @@ int ObParquetTableRowIterator::DataLoader::set_data_attr_vector_payload_for_varc
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (row_str_length != 0 && OB_ISNULL(res_ptr = str_res_mem_.alloc(row_str_length))) {
+        } else if (row_str_length > 0 && OB_ISNULL(res_ptr = str_res_mem_.alloc(row_str_length))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to allocate memory", K(row_str_length));
         } else {
@@ -2118,17 +2468,16 @@ int ObParquetTableRowIterator::DataLoader::set_data_attr_vector_payload_for_varc
       }
     }
   }
+  attrs_idx += 1;
   return ret;
 }
 
 template <typename T>
 int ObParquetTableRowIterator::DataLoader::set_attr_vector_payload(
-  const uint32_t attrs_idx, common::ObIArrayWrap<uint32_t> &parent_offsets, uint8_t *nulls,
-  T *values)
+  common::ObArrayWrap<uint32_t> &parent_offsets, const int32_t attrs_idx, uint8_t *nulls, T *values)
 {
   int ret = OB_SUCCESS;
   int64_t offset_idx = 0;
-  int64_t max_rep_level = reader_->descr()->max_repetition_level();
   ObExpr **attrs = file_col_expr_->attrs_;
   if (attrs_idx + 1 >= file_col_expr_->attrs_cnt_) {
     ret = OB_ERR_UNEXPECTED;
@@ -2149,183 +2498,196 @@ int ObParquetTableRowIterator::DataLoader::set_attr_vector_payload(
 }
 
 template <typename SrcType, typename DstType>
-int ObParquetTableRowIterator::DataLoader::decode_list_to_array(
-  const ObArrayWrap<int16_t> &def_levels_buf, const ObArrayWrap<int16_t> &rep_levels_buf,
-  const ::parquet::schema::Node *&node, ObArrayWrap<uint32_t> &parent_offsets, ObExpr **attrs,
-  uint32_t &attrs_idx, int64_t &parent_def_level, int64_t &max_rep_level, int64_t &max_def_level,
-  const ObLength &max_accuracy_len)
+int ObParquetTableRowIterator::DataLoader::recursively_load_parquet_col_to_attr(
+  const ObLength &max_accuracy_len, common::ObArrayWrap<uint32_t> &parent_offsets,
+  int32_t &attrs_idx, int64_t max_rep_level, int64_t max_def_level,
+  const ::parquet::schema::Node *&node)
 {
   int ret = OB_SUCCESS;
+  ObExpr **attrs = file_col_expr_->attrs_;
+  attrs_idx += 2;
   const int64_t levels_count = record_reader_->levels_position();
-  const ::parquet::schema::GroupNode *group_node =
-    reinterpret_cast<const ::parquet::schema::GroupNode *>(node);
-  std::shared_ptr<parquet::schema::GroupNode> list_group_node =
-    std::static_pointer_cast<::parquet::schema::GroupNode>(group_node->field(0));
-  node = list_group_node->field(0).get();
-
-  max_rep_level += 1;
-  parent_def_level = max_def_level;
+  int64_t parent_def_level = max_def_level;
   max_def_level += node->is_optional() ? 2 : 1;
-  bool set_innermost_value = max_def_level == record_reader_->descr()->max_definition_level();
+  max_rep_level += 1;
   int64_t values_size = std::max(sizeof(DstType), sizeof(uint32_t)) * levels_count;
-  uint8_t* nulls = reinterpret_cast<uint8_t *>(
-                    attrs[attrs_idx]->get_str_res_mem(eval_ctx_, sizeof(uint8_t) * levels_count));
-  uint32_t *values = reinterpret_cast<uint32_t *>(
-                    attrs[attrs_idx + 1]->get_str_res_mem(eval_ctx_, values_size));
-  if (OB_ISNULL(nulls) || OB_ISNULL(values)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory", K(levels_count));
-  } else if (OB_FAIL(get_offset_nulls_from_levels(def_levels_buf, rep_levels_buf, parent_def_level,
-                                    max_rep_level, max_def_level, levels_count, values, nulls))) {
-    LOG_WARN("fail to get offset nulls from levels", K(ret));
-  } else if (set_innermost_value) {
-    if constexpr (std::is_same_v<SrcType, parquet::ByteArray>) {
-      if (OB_FAIL(set_data_attr_vector_payload_for_varchar_array(attrs_idx, parent_offsets, nulls,
-                                                                 values, max_accuracy_len))) {
-        LOG_WARN("fail to set attr vector payload", K(ret));
-      }
-    } else {
-      if (sizeof(SrcType) == sizeof(DstType)) {
-        MEMCPY(values, record_reader_->values(), sizeof(DstType) * record_reader_->values_written());
+  if (attrs_idx + 1 >= file_col_expr_->attrs_cnt_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("attrs_idx out of range", K(attrs_idx), K(file_col_expr_->attrs_cnt_));
+  } else {
+    uint8_t* nulls = reinterpret_cast<uint8_t *>(
+                      attrs[attrs_idx]->get_str_res_mem(eval_ctx_, sizeof(uint8_t) * levels_count));
+    uint32_t *values = reinterpret_cast<uint32_t *>(
+                      attrs[attrs_idx + 1]->get_str_res_mem(eval_ctx_, values_size));
+
+    bool set_innermost_value = max_def_level == record_reader_->descr()->max_definition_level();
+    if (OB_ISNULL(nulls) || OB_ISNULL(values)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(levels_count));
+    } else if (OB_FAIL(get_offset_nulls_from_levels(parent_def_level, max_rep_level, max_def_level,
+                                                    levels_count, values, nulls))) {
+      LOG_WARN("fail to get offset nulls from levels", K(ret));
+    } else if (set_innermost_value) {
+      if constexpr (std::is_same_v<SrcType, parquet::ByteArray>) {
+        if (OB_FAIL(set_data_attr_vector_payload_for_varchar_array(parent_offsets, attrs_idx, nulls, values,
+                                                                  max_accuracy_len))) {
+          LOG_WARN("fail to set attr vector payload", K(ret));
+        }
       } else {
         SrcType *src_values = reinterpret_cast<SrcType *>(record_reader_->values());
         for (int i = 0; i < record_reader_->values_written(); i++) {
-          reinterpret_cast<DstType *>(values)[i] = static_cast<DstType>(src_values[i]);
+          if (nulls[i] == 0) {
+            reinterpret_cast<DstType *>(values)[i] = static_cast<DstType>(src_values[i]);
+          } else {
+            reinterpret_cast<DstType *>(values)[i] = 0;
+          }
+        }
+        if (OB_FAIL(set_attr_vector_payload<DstType>(parent_offsets, attrs_idx, nulls,
+                                                    reinterpret_cast<DstType *>(values)))) {
+          LOG_WARN("fail to set attr vector payload", K(ret));
         }
       }
-      if (OB_FAIL(set_attr_vector_payload<DstType>(attrs_idx, parent_offsets, nulls,
-                                                   reinterpret_cast<DstType *>(values)))) {
-        LOG_WARN("fail to set attr vector payload", K(ret));
-      }
-    }
-  } else if (OB_FAIL(set_attr_vector_payload(attrs_idx, parent_offsets, nulls, values))) {
-    LOG_WARN("fail to set attr vector payload", K(ret));
-  }
-  attrs_idx += 2;
-  return ret;
-}
-
-template <typename SrcType, typename DstType>
-int ObParquetTableRowIterator::DataLoader::load_list_to_array_dispatch_type(
-                                                                  const ObLength &max_accuracy_len)
-{
-  int ret = OB_SUCCESS;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
-  ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
-  ObArrayWrap<uint32_t> parent_offsets;
-  ObArrayWrap<int16_t> def_levels_buf;
-  ObArrayWrap<int16_t> rep_levels_buf;
-  ObExpr **attrs = file_col_expr_->attrs_;
-  CollDiscVec *array_vec = static_cast<CollDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
-  ObFixedLengthBase *vec0 = static_cast<ObFixedLengthBase *>(attrs[0]->get_vector(eval_ctx_));
-
-  record_reader_->Reset();
-  row_count_ = record_reader_->ReadRecords(batch_size_);
-  int64_t levels_count = record_reader_->levels_position();
-  OZ(def_levels_buf.allocate_array(allocator, levels_count));
-  OZ(rep_levels_buf.allocate_array(allocator, levels_count));
-  OZ (parent_offsets.allocate_array(allocator, row_count_));
-  if (OB_SUCC(ret)) {
-    MEMCPY(def_levels_buf.get_data(), record_reader_->def_levels(), sizeof(int16_t) * levels_count);
-    MEMCPY(rep_levels_buf.get_data(), record_reader_->rep_levels(), sizeof(int16_t) * levels_count);
-  }
-
-  const ::parquet::schema::Node* node = record_reader_->descr()->schema_node().get();
-  for (int i = 0; i < record_reader_->descr()->max_repetition_level(); ++i) {
-    node = node->parent()->parent();
-  }
-  uint32_t attrs_idx = 1;
-  int64_t max_rep_level = 1;
-  int64_t parent_def_level = -1;
-  int64_t max_def_level = node->is_optional() ? 1 : 0;
-
-  // Set the outermost size
-  uint8_t *nulls = reinterpret_cast<uint8_t *>(
-                attrs[attrs_idx]->get_str_res_mem(eval_ctx_, sizeof(uint8_t) * levels_count));
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(nulls)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory", K(levels_count));
-  } else if (OB_FAIL(get_offset_nulls_from_levels(def_levels_buf, rep_levels_buf, parent_def_level,
-                                                  max_rep_level, max_def_level, levels_count,
-                                                  parent_offsets.get_data(), nulls))) {
-    LOG_WARN("fail to get offset nulls from levels", K(ret));
-  }
-  for (int i = 0; OB_SUCC(ret) && i < row_count_; ++i) {
-    vec0->set_int(i + row_offset_, parent_offsets.at(i));
-    if (nulls[i] == 1) {
-      array_vec->set_null(i + row_offset_);
-    }
-  }
-
-  // Set the nulls and offsets of each layer in the middle of the multidimensional array
-  while (OB_SUCC(ret) && max_def_level < record_reader_->descr()->max_definition_level()) {
-    if (OB_FAIL((decode_list_to_array<SrcType, DstType>(def_levels_buf, rep_levels_buf, node,
-                                                      parent_offsets, attrs, attrs_idx,
-                                                      parent_def_level, max_rep_level,
-                                                      max_def_level, max_accuracy_len)))) {
-      LOG_WARN("fail to decode list to array", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObParquetTableRowIterator::DataLoader::load_list_to_array()
-{
-  int ret = OB_SUCCESS;
-  parquet::Type::type phy_type = record_reader_->descr()->physical_type();
-  CollDiscVec *array_vec = static_cast<CollDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
-  CK(VEC_DISCRETE == array_vec->get_format());
-
-  const parquet::LogicalType* log_type = record_reader_->descr()->logical_type().get();
-  bool no_log_type = log_type->is_none();
-  if (OB_ISNULL(arr_type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("arr_type_ is null", K(ret));
-  } else {
-    uint32_t depth = 0;
-    const ObDataType &basic_meta = arr_type_->get_basic_meta(depth);
-    const ObLength max_accuracy_len = basic_meta.get_accuracy().get_length();
-    ObObjType obj_type = basic_meta.get_obj_type();
-    ObCollationType cs_type = basic_meta.get_collation_type();
-
-    if (depth != record_reader_->descr()->max_repetition_level()) {
-      ret = OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH;
-      LOG_WARN("not supported type", K(depth), K(record_reader_->descr()->max_repetition_level()), K(ret));
-    } else if ((no_log_type || log_type->is_int()) && ob_is_integer_type(obj_type)) {
-      //sign and width
-      ObObj temp_obj;
-      temp_obj.set_int(obj_type, 0);
-      if (((no_log_type || static_cast<const parquet::IntLogicalType *>(log_type)->is_signed())
-           != temp_obj.is_signed_integer())
-          || (no_log_type ?
-                (temp_obj.get_tight_data_len() != (parquet::Type::INT32 == phy_type ? 4 : 8)) :
-                static_cast<const parquet::IntLogicalType *>(log_type)->bit_width()
-                  > temp_obj.get_tight_data_len() * 8)) {
-        ret = OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH;
-        LOG_WARN("not supported type", K(phy_type), K(obj_type), K(ret));
-      } else if (parquet::Type::INT64 == phy_type) {
-        ret = load_list_to_array_dispatch_type<int64_t, int64_t>(0);
-      } else if (parquet::Type::INT32 == phy_type) {
-        if (obj_type == ObTinyIntType || obj_type == ObUTinyIntType) {
-          ret = load_list_to_array_dispatch_type<int32_t, int8_t>(0);
-        } else if (obj_type == ObSmallIntType || obj_type == ObUSmallIntType) {
-          ret = load_list_to_array_dispatch_type<int32_t, int16_t>(0);
-        } else {
-          ret = load_list_to_array_dispatch_type<int32_t, int32_t>(0);
-        }
-      }
-    } else if (phy_type == parquet::Type::FLOAT && ob_is_float_tc(obj_type)) {
-      ret = load_list_to_array_dispatch_type<float, float>(0);
-    } else if (phy_type == parquet::Type::DOUBLE && ob_is_double_tc(obj_type)) {
-      ret = load_list_to_array_dispatch_type<double, double>(0);
-    } else if (phy_type == parquet::Type::BYTE_ARRAY && ob_is_varchar_or_char(obj_type, cs_type)) {
-      ret = load_list_to_array_dispatch_type<parquet::ByteArray, int64_t>(max_accuracy_len);
     } else {
-      ret = OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH;
-      LOG_WARN("not supported type", K(phy_type), K(obj_type), K(ret));
+      if (OB_FAIL(set_attr_vector_payload(parent_offsets, attrs_idx, nulls, values))) {
+        LOG_WARN("fail to set attr vector payload", K(ret));
+      } else if (node->logical_type()->is_map()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected logical type", K(ret), K(node->logical_type()->is_map()));
+      } else if (node->logical_type()->is_list()) {
+        const ::parquet::schema::GroupNode *group_node =
+          reinterpret_cast<const ::parquet::schema::GroupNode *>(node);
+        std::shared_ptr<parquet::schema::GroupNode> list_group_node =
+          std::static_pointer_cast<::parquet::schema::GroupNode>(group_node->field(0));
+        node = list_group_node->field(0).get();
+        if (OB_FAIL((recursively_load_parquet_col_to_attr<SrcType, DstType>(
+                    max_accuracy_len, parent_offsets, attrs_idx, max_rep_level, max_def_level, node)))) {
+          LOG_WARN("fail to load list to array", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected logical type", K(ret), K(node->logical_type()->is_list()));
+      }
     }
   }
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::read_record_levels(
+  parquet::internal::RecordReader *reader, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  reader->Reset();
+  row_count_ = reader->ReadRecords(batch_size_);
+  int64_t levels_count = reader->levels_position();
+  OZ(coll_def_levels_buf_.allocate_array(allocator, levels_count));
+  OZ(coll_rep_levels_buf_.allocate_array(allocator, levels_count));
+  if (OB_SUCC(ret)) {
+    MEMCPY(coll_def_levels_buf_.get_data(), reader->def_levels(), sizeof(int16_t) * levels_count);
+    MEMCPY(coll_rep_levels_buf_.get_data(), reader->rep_levels(), sizeof(int16_t) * levels_count);
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::load_list_to_array_dispatch_type(
+  ObIAllocator &allocator, common::ObArrayWrap<uint32_t> &parent_offsets,
+  const ::parquet::schema::Node *&node, const ObDataType &basic_meta,
+  const int64_t depth, int32_t &attrs_idx, int64_t max_rep_level, int64_t max_def_level)
+{
+  int ret = OB_SUCCESS;
+  ObObjType obj_type = basic_meta.get_obj_type();
+  const ObLength max_accuracy_len = basic_meta.get_accuracy().get_length();
+  ObCollationType cs_type = basic_meta.get_collation_type();
+  ObDatumMeta value_meta(basic_meta.get_obj_type(), basic_meta.get_collation_type(),
+                            basic_meta.get_scale(), basic_meta.get_precision());
+  parquet::Type::type phy_type = record_reader_->descr()->physical_type();
+  LOAD_FUNC func = select_load_function(value_meta, record_reader_->descr());
+
+  if (depth != record_reader_->descr()->max_repetition_level() || OB_ISNULL(func)) {
+    ret = OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH;
+    print_type_mismatch_error(ret, file_col_expr_->datum_meta_, record_reader_->descr(),
+                              allocator, eval_ctx_);
+  } else {
+    #define LOAD_LIST_INIT_ARG max_accuracy_len, parent_offsets, attrs_idx, max_rep_level, max_def_level, node
+    // Helper macro to dispatch integer type conversion
+    #define DISPATCH_INTEGER_TYPE(SrcType) \
+      do { \
+        if (obj_type == ObIntType || obj_type == ObUInt64Type) { \
+          ret = recursively_load_parquet_col_to_attr<SrcType, int64_t>(LOAD_LIST_INIT_ARG); \
+        } else if (obj_type == ObTinyIntType || obj_type == ObUTinyIntType) { \
+          ret = recursively_load_parquet_col_to_attr<SrcType, int8_t>(LOAD_LIST_INIT_ARG); \
+        } else if (obj_type == ObSmallIntType || obj_type == ObUSmallIntType) { \
+          ret = recursively_load_parquet_col_to_attr<SrcType, int16_t>(LOAD_LIST_INIT_ARG); \
+        } else { \
+          ret = recursively_load_parquet_col_to_attr<SrcType, int32_t>(LOAD_LIST_INIT_ARG); \
+        } \
+      } while(0)
+
+    if (parquet::Type::BOOLEAN == phy_type && ob_is_integer_type(obj_type)) {
+      DISPATCH_INTEGER_TYPE(bool);
+    } else if (parquet::Type::INT64 == phy_type) {
+      DISPATCH_INTEGER_TYPE(int64_t);
+    } else if (parquet::Type::INT32 == phy_type) {
+      DISPATCH_INTEGER_TYPE(int32_t);
+    } else if (phy_type == parquet::Type::FLOAT) {
+      if (ob_is_float_tc(obj_type)) {
+        ret = recursively_load_parquet_col_to_attr<float, float>(LOAD_LIST_INIT_ARG);
+      } else if (ob_is_double_tc(obj_type)) {
+        ret = recursively_load_parquet_col_to_attr<float, double>(LOAD_LIST_INIT_ARG);
+      }
+    } else if (phy_type == parquet::Type::DOUBLE && ob_is_double_tc(obj_type)) {
+      ret = recursively_load_parquet_col_to_attr<double, double>(LOAD_LIST_INIT_ARG);
+    } else if (phy_type == parquet::Type::BYTE_ARRAY && ob_is_varchar_or_char(obj_type, cs_type)) {
+      ret = recursively_load_parquet_col_to_attr<parquet::ByteArray, int64_t>(LOAD_LIST_INIT_ARG);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected phy type", K(ret), K(phy_type), K(obj_type));
+    }
+    #undef DISPATCH_INTEGER_TYPE
+    #undef LOAD_LIST_INIT_ARG
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::set_collection_size_and_nulls(
+  common::ObArrayWrap<uint32_t> &parent_offsets, int64_t max_def_level, ObIAllocator &allocator) {
+  int ret = OB_SUCCESS;
+  ObArrayWrap<uint8_t> nulls;
+  CollDiscVec *array_vec = static_cast<CollDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
+
+  CK (0 < file_col_expr_->attrs_cnt_);
+  OZ (read_record_levels(record_reader_, allocator));
+  int64_t levels_count = record_reader_->levels_position();
+  OZ (nulls.allocate_array(allocator, levels_count));
+  OZ (parent_offsets.allocate_array(allocator, row_count_));
+
+  if (OB_SUCC(ret)) {
+    ObExpr **attrs = file_col_expr_->attrs_;
+    ObFixedLengthBase *size_vec = static_cast<ObFixedLengthBase *>(attrs[0]->get_vector(eval_ctx_));
+    CK (VEC_FIXED == size_vec->get_format());
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(get_offset_nulls_from_levels(-1, 1, max_def_level, levels_count,
+                                                    parent_offsets.get_data(), nulls.get_data()))) {
+      LOG_WARN("fail to get offset nulls from levels", K(ret));
+    }
+
+    for (int i = 0; OB_SUCC(ret) && i < row_count_; ++i) {
+      size_vec->set_int(i + row_offset_, parent_offsets.at(i));
+      if (nulls.at(i) == 1) {
+        array_vec->set_null(i + row_offset_);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::convert_collection_vector_to_compact_fmt()
+{
+  int ret = OB_SUCCESS;
+  CollDiscVec *array_vec = static_cast<CollDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
+  const ObBitVector *tmp_skip = NULL;
+  CK (VEC_DISCRETE == array_vec->get_format());
+
   for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
     if (!array_vec->is_null(i + row_offset_)) {
       ObCollectionExprCell cell;
@@ -2336,13 +2698,148 @@ int ObParquetTableRowIterator::DataLoader::load_list_to_array()
       array_vec->set_payload(i + row_offset_, &cell, sizeof(cell));
     }
   }
-  const ObBitVector *tmp_skip = NULL;
+
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to load list to array", K(ret));
   } else if (OB_FAIL(ObCollectionExprUtil::cast_vector2compact_fmt(
-               static_cast<ObDiscreteFormat *>(array_vec), row_offset_, row_offset_ + row_count_,
-               tmp_skip))) {
+              static_cast<ObDiscreteFormat *>(array_vec), row_offset_, row_offset_ + row_count_,
+              tmp_skip))) {
     LOG_WARN("fail to cast vector to compact fmt", K(ret));
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::load_list_to_array()
+{
+  int ret = OB_SUCCESS;
+  CollDiscVec *array_vec = static_cast<CollDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+  ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
+  ObArrayWrap<uint32_t> parent_offsets;
+
+  CK (VEC_DISCRETE == array_vec->get_format());
+  CK (OB_NOT_NULL(arr_type_));
+  CK (0 < collection_readers_->count());
+
+  if (OB_SUCC(ret)) {
+
+    record_reader_ = collection_readers_->at(0).get();
+    const ::parquet::schema::Node* node = record_reader_->descr()->schema_node().get();
+    CK (OB_NOT_NULL(node));
+    for (int i = 0; OB_SUCC(ret) && i < record_reader_->descr()->max_repetition_level(); ++i) {
+      CK (OB_NOT_NULL(node->parent()) && OB_NOT_NULL(node->parent()->parent()));
+      node = node->parent()->parent();
+    }
+    if (OB_SUCC(ret)) {
+      int64_t max_def_level = node->is_optional() ? 1 : 0;
+
+      uint32_t depth = 0;
+      int32_t attrs_idx = -1;
+      const ObDataType &basic_meta = arr_type_->get_basic_meta(depth);
+      const ::parquet::schema::GroupNode *group_node =
+        reinterpret_cast<const ::parquet::schema::GroupNode *>(node);
+      CK(group_node->field_count() == 1
+        && std::static_pointer_cast<::parquet::schema::GroupNode>(group_node->field(0))->field_count()
+             == 1);
+      if (OB_SUCC(ret)) {
+        std::shared_ptr<parquet::schema::GroupNode> list_group_node =
+          std::static_pointer_cast<::parquet::schema::GroupNode>(group_node->field(0));
+        node = list_group_node->field(0).get();
+        if (OB_FAIL(set_collection_size_and_nulls(parent_offsets, max_def_level, allocator))) {
+          LOG_WARN("fail to set collection size and nulls", K(ret));
+        } else if (OB_FAIL(load_list_to_array_dispatch_type(allocator, parent_offsets, node, basic_meta,
+                                                            depth, attrs_idx, 1, max_def_level))) {
+          LOG_WARN("fail to recursively load parquet col to attr", K(ret));
+        } else if (OB_FAIL(convert_collection_vector_to_compact_fmt())) {
+          LOG_WARN("fail to convert collection vector to compact fmt", K(ret));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::load_map_key_value(
+  common::ObArrayWrap<uint32_t> &k_offsets, const ::parquet::schema::Node *&node,
+  ObIAllocator &allocator, const int reader_idx, int32_t &attrs_idx, int64_t max_rep_level,
+  int64_t max_def_level)
+{
+  int ret = OB_SUCCESS;
+  ObArrayWrap<uint32_t> v_offsets;
+  const ::parquet::schema::GroupNode *group_node =
+    reinterpret_cast<const ::parquet::schema::GroupNode *>(node);
+
+  CK (OB_NOT_NULL(arr_type_));
+  CK(group_node->field_count() == 1
+     && std::static_pointer_cast<::parquet::schema::GroupNode>(group_node->field(0))->field_count()
+          == 2);
+  CK (reader_idx + 1 < collection_readers_->count());
+  OZ (v_offsets.allocate_array(allocator, row_count_));
+
+  if (OB_SUCC(ret)) {
+    attrs_idx -= 1;
+    uint32_t k_depth = 0;
+    uint32_t v_depth = 0;
+    MEMCPY(v_offsets.get_data(), k_offsets.get_data(), sizeof(uint32_t) * row_count_);
+    std::shared_ptr<parquet::schema::GroupNode> kv_group_node =
+      std::static_pointer_cast<::parquet::schema::GroupNode>(group_node->field(0));
+    const ::parquet::schema::Node* k_node = kv_group_node->field(0).get();
+    const ::parquet::schema::Node* v_node = kv_group_node->field(1).get();
+    const ObDataType &k_meta = static_cast<ObCollectionMapType *>(arr_type_)->get_key_meta(k_depth);
+    const ObDataType &v_meta = arr_type_->get_basic_meta(v_depth);
+    if (OB_FAIL(load_list_to_array_dispatch_type(allocator, k_offsets, k_node, k_meta, k_depth,
+                                                     attrs_idx, max_rep_level, max_def_level))) {
+      LOG_WARN("fail to recursively load parquet col to attr", K(ret));
+    } else {
+      record_reader_ = collection_readers_->at(reader_idx + 1).get();
+      if (OB_FAIL(read_record_levels(record_reader_, allocator))) {
+        LOG_WARN("fail to read record levels", K(ret));
+      } else if (OB_FAIL(load_list_to_array_dispatch_type(allocator, v_offsets, v_node, v_meta,
+                                                          v_depth, attrs_idx, max_rep_level,
+                                                          max_def_level))) {
+        LOG_WARN("fail to recursively load parquet col to attr", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::load_map()
+{
+  int ret = OB_SUCCESS;
+  CollDiscVec *array_vec = static_cast<CollDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+  ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
+  ObArrayWrap<uint32_t> key_offsets;
+
+  CK (0 < collection_readers_->count());
+  CK (VEC_DISCRETE == array_vec->get_format());
+
+  if (OB_SUCC(ret)) {
+    record_reader_ = collection_readers_->at(0).get();
+    const ::parquet::schema::Node* node = record_reader_->descr()->schema_node().get();
+    CK (OB_NOT_NULL(node) && OB_NOT_NULL(node->parent()) && OB_NOT_NULL(node->parent()->parent()));
+    if (OB_SUCC(ret)) {
+      node = node->parent()->parent();
+      int32_t attrs_idx = 0;
+      int64_t max_def_level = node->is_optional() ? 1 : 0;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(set_collection_size_and_nulls(key_offsets, max_def_level, allocator))) {
+        LOG_WARN("fail to set collection size and nulls", K(ret));
+      } else if (OB_FAIL(load_map_key_value(key_offsets, node, allocator, 0, attrs_idx, 1,
+                                            max_def_level))) {
+        LOG_WARN("fail to load map key value", K(ret));
+      } else if (OB_FAIL(convert_collection_vector_to_compact_fmt())) {
+        LOG_WARN("fail to convert collection vector to compact fmt", K(ret));
+      } else if (OB_FAIL(ObArrayExprUtils::canonicalize_map_compact_payload(
+                    allocator, eval_ctx_, *file_col_expr_,
+                    *static_cast<ObIVector *>(array_vec),
+                    row_offset_, row_offset_ + row_count_))) {
+        LOG_WARN("canonicalize parquet map compact payload failed", K(ret), K(row_offset_), K(row_count_));
+      }
+    }
   }
   return ret;
 }
@@ -2363,19 +2860,24 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     }
   } else if (OB_FAIL(calc_file_meta_column(read_count, eval_ctx))) {
     LOG_WARN("failed to calc file meta column", K(ret));
-  } else if (OB_FAIL(calc_column_convert(read_count, false, eval_ctx))) {
-    LOG_WARN("failed to calc column convert", K(ret));
   } else if (OB_FAIL(calc_exprs_for_rowid(read_count, state_))) {
     LOG_WARN("failed to calc rowid", K(ret));
-  } else if (is_lazy_calc()
-             && scan_param_->ext_enable_late_materialization_
+  } else if (is_lazy_calc() && scan_param_->ext_enable_late_materialization_
              && nullptr != scan_param_->pd_storage_filters_) {
-    if (OB_FAIL(calc_filters(read_count, scan_param_->pd_storage_filters_, nullptr))) {
+    if (OB_FAIL(apply_dict_code_filters(read_count, scan_param_->pd_storage_filters_))) {
+      LOG_WARN("failed to apply dict code filters", K(ret));
+    } else if (OB_FAIL(calc_column_convert(read_count, false, eval_ctx))) {
+      // 在字典解码后调用，确保 column_exprs_ 拿到正确数据
+      LOG_WARN("failed to calc column convert", K(ret));
+    } else if (OB_FAIL(calc_filters(read_count, scan_param_->pd_storage_filters_, nullptr))) {
       LOG_WARN("failed to calc lazy filters", K(ret));
     } else if (OB_FAIL(reorder_output(*scan_param_->pd_storage_filters_->get_result(),
-                                      eval_ctx, read_count))) {
+                                      eval_ctx,
+                                      read_count))) {
       LOG_WARN("failed to reorder", K(ret));
     }
+  } else if (OB_FAIL(calc_column_convert(read_count, false, eval_ctx))) {
+    LOG_WARN("failed to calc column convert", K(ret));
   }
   if (OB_SUCC(ret)) {
     count = read_count;
@@ -2643,6 +3145,173 @@ int ObParquetTableRowIterator::convert_timestamp_datum(const ObDatumMeta &datum_
   return ret;
 }
 
+int ObParquetTableRowIterator::ParquetBloomFilterParamBuilder::hash(
+  const BloomFilterItem& item, const parquet::Type::type& parquet_type, uint64_t& hash_val) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(bloom_filter_)) {
+    ret = OB_UNEXPECT_INTERNAL_ERROR;
+    LOG_WARN("unexepcted bloom filter", K(ret), K(item));
+  } else if (OB_ISNULL(item.datum_)) {
+    ret = OB_UNEXPECT_INTERNAL_ERROR;
+    LOG_WARN("unexepcted item", K(ret), K(item));
+  } else {
+    switch (parquet_type) {
+    case parquet::Type::INT32: {
+      switch (item.datum_meta_->type_) {
+      case ObTinyIntType:
+        hash_val = bloom_filter_->Hash(item.datum_->get_tinyint());
+        break;
+      case ObSmallIntType:
+        hash_val = bloom_filter_->Hash(item.datum_->get_smallint());
+        break;
+      case ObInt32Type:
+        hash_val = bloom_filter_->Hash(item.datum_->get_int32());
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mismatch type", K(ret), K(parquet_type), K(item));
+      }
+      break;
+    }
+    case parquet::Type::INT64: {
+      hash_val = bloom_filter_->Hash(item.datum_->get_int());
+      break;
+    }
+    case parquet::Type::DOUBLE: {
+      hash_val = bloom_filter_->Hash(item.datum_->get_double());
+      break;
+    }
+    case parquet::Type::FLOAT: {
+      hash_val = bloom_filter_->Hash(item.datum_->get_float());
+      break;
+    }
+    case parquet::Type::BYTE_ARRAY: {
+      // TODO(decimal)
+      parquet::ByteArray bytearray(
+          static_cast<uint32_t>(item.datum_->get_string().length()),
+          reinterpret_cast<const uint8_t *>(item.datum_->get_string().ptr()));
+      hash_val = bloom_filter_->Hash(&bytearray);
+      break;
+    }
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected type", K(ret), K(parquet_type), K(item));
+    }
+  }
+  return ret;
+}
+
+bool ObParquetTableRowIterator::ParquetBloomFilterParamBuilder::
+    check_load_overhead_adaptively(const BloomFilterItem &item,
+                                   int64_t bloom_filter_size,
+                                   int64_t total_compressed_size) {
+  // bloom filter has relatively high IO overhead
+  // check if the size of the bloom filter is suitable before loading it
+  int64_t expect_max_bloom_filter_size =
+      total_compressed_size * bloom_filter_percent_threshold_ / 100;
+  bool may_apply_bf = bloom_filter_size <= expect_max_bloom_filter_size;
+  if (!may_apply_bf) {
+    LOG_TRACE("skipped loading oversize bloom filter", K(item),
+              K(bloom_filter_size), K(expect_max_bloom_filter_size),
+              K(total_compressed_size));
+    metrics_->skip_load_bloom_filter_count_++;
+  }
+  return may_apply_bf;
+}
+
+int ObParquetTableRowIterator::ParquetBloomFilterParamBuilder::may_contain(
+    const PushdownLevel filter_level, const BloomFilterItem &item,
+    bool &is_contain) {
+  int ret = OB_SUCCESS;
+  is_contain = true; // it may contain on default
+
+  // 1. check pushdown level
+  // parquet maintains bloom filter in row group level only
+  if (filter_level != PushdownLevel::ROW_GROUP) {
+  } else {
+    // 2. check if type supported
+    parquet::Type::type parquet_type =
+        file_meta_->schema()->Column(item.ext_tbl_col_id_)->physical_type();
+    if (!type_supported(parquet_type, *item.datum_meta_)) {
+      LOG_TRACE("skipped load bloom filter for unsupoorted type", K(item));
+    } else {
+      // 3. read metadata and check if has bloom filter
+      std::unique_ptr<parquet::ColumnChunkMetaData> metadata =
+          rg_reader_->metadata()->ColumnChunk(item.ext_tbl_col_id_);
+      if (OB_ISNULL(metadata)) {
+        ret = OB_UNEXPECT_INTERNAL_ERROR;
+        LOG_WARN("failed to read metadata", K(ret), K(item));
+      } else if (!metadata->bloom_filter_offset().has_value()) {
+        // bloom filter is not set
+        // return ret;
+      } else if (bloom_filter_percent_threshold_ > 0 &&
+          metadata->bloom_filter_length().has_value() &&
+          !check_load_overhead_adaptively(item, metadata->bloom_filter_length().value(), metadata->total_compressed_size())) {
+        // 4. check if load overhead is not accepted
+      } else {
+        // 5. all set, ready to load bloom filter if necessary.
+        // we'll reuse bloom filter when applied to the same column
+        if (item.ext_tbl_col_id_ != ext_tbl_col_id_) {
+          bloom_filter_ =
+              rg_bf_reader_->GetColumnBloomFilter(item.ext_tbl_col_id_);
+          ext_tbl_col_id_ = item.ext_tbl_col_id_;
+          metrics_->load_bloom_filter_count_++;
+        };
+
+        if (OB_ISNULL(bloom_filter_)) {
+          ret = OB_UNEXPECT_INTERNAL_ERROR;
+          LOG_WARN("unexepcted bloom filter", K(ret), K(item));
+        } else {
+          // 6. calculate hash value
+          uint64_t hash_val;
+          ret = hash(item, parquet_type, hash_val);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("failed to check bloom filter", K(ret), K(item));
+          } else {
+            // 7. find hash in blomm filter
+            is_contain = bloom_filter_->FindHash(hash_val);
+            if (!is_contain) {
+              metrics_->skip_bloom_filter_count_++;
+            }
+          }
+        } // !OB_ISNULL(bloom_filter_)
+      }
+    } // 3. read metadata and check if has bloom filter
+  } // 2. check if type supported
+
+  return ret;
+}
+
+bool ObParquetTableRowIterator::ParquetBloomFilterParamBuilder::type_supported(const parquet::Type::type& parquet_type, const ObDatumMeta &datum_type)
+{
+  bool ret = false;
+  ObObjType type = datum_type.type_;
+  switch (parquet_type) {
+  case parquet::Type::INT32:
+    ret = (type == ObTinyIntType || type == ObSmallIntType || type == ObInt32Type);
+    break;
+  case parquet::Type::INT64:
+    ret = (type == ObIntType);
+    break;
+  case parquet::Type::DOUBLE:
+    ret = (type == ObDoubleType);
+    break;
+  case parquet::Type::FLOAT:
+    ret = (type == ObFloatType);
+    break;
+  case parquet::Type::BYTE_ARRAY:
+    // TODO: decimal
+    // TODO: check cs?
+    ret = (ob_is_text_tc(type) || ob_is_binary(type, datum_type.cs_type_));
+    break;
+  default:
+    ret = false;
+    break;
+  }
+  return ret;
+}
+
 int ObParquetTableRowIterator::ParquetMinMaxFilterParamBuilder::build(const int32_t ext_col_id,
                                                                       const ObColumnMeta &column_meta,
                                                                       blocksstable::ObMinMaxFilterParam &param)
@@ -2791,6 +3460,7 @@ int ObParquetTableRowIterator::pre_buffer(std::shared_ptr<parquet::RowGroupReade
       }
     }
   }
+
   int64_t eager_column_cnt = 0;
   for (int i = 0; OB_SUCC(ret) && i < column_indexs_.count(); i++) {
     // 清除上一个 RowGroup 的 ColumnRangeSlices
@@ -2818,8 +3488,17 @@ int ObParquetTableRowIterator::pre_buffer(std::shared_ptr<parquet::RowGroupReade
         }
         int64_t col_length
             = rg_reader->metadata()->ColumnChunk(column_indexs_.at(i))->total_compressed_size();
-        OZ(column_range_slices_.at(i)->range_list_.push_back(
-            ObFilePreBuffer::ReadRange(col_start, col_length)));
+        int64_t current_offset = col_start;
+        int64_t remaining = col_length;
+        const int64_t range_size_limit = options_.cache_options_.range_size_limit_;
+
+        while (remaining > 0) {
+          int64_t range_size = std::min(remaining, range_size_limit);
+          column_range_slices_.at(i)->range_list_.push_back(
+              ObFilePreBuffer::ReadRange(current_offset, range_size));
+          current_offset += range_size;
+          remaining -= range_size;
+        }
       }
       OZ (column_range_slice_list.push_back(column_range_slices_.at(i)));
       if (has_eager_columns() && eager_column_cnt < get_eager_count()
@@ -2842,10 +3521,16 @@ void ObParquetTableRowIterator::reset_column_readers()
   for (int i = 0; i < column_readers_.count(); i++) {
     column_readers_.at(i) = NULL;
     record_readers_.at(i) = NULL;
+    for (int j = 0; j < coll_record_readers_.at(i).count(); j++) {
+      coll_record_readers_.at(i).at(j) = NULL;
+    }
   }
   for (int i = 0; i < eager_column_readers_.count(); ++i) {
     eager_column_readers_.at(i) = NULL;
     eager_record_readers_.at(i) = NULL;
+    for (int j = 0; j < eager_coll_record_readers_.at(i).count(); j++) {
+      eager_coll_record_readers_.at(i).at(j) = NULL;
+    }
   }
 }
 
@@ -2880,6 +3565,7 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
           OZ (ObArrayExprUtils::get_array_type_by_subschema_id(eval_ctx,
                                             column_expr->datum_meta_.get_subschema_id(), arr_type));
         }
+        bool first_batch = true;
         while (OB_SUCC(ret) && load_row_count < capacity &&
               ((eager_col_reader == nullptr && load_row_count < state_.cur_row_group_row_count_) ||
               (eager_col_reader != nullptr && eager_col_reader->HasNext()))) {
@@ -2896,15 +3582,18 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
           DataLoader loader(eval_ctx, column_expr, arr_type,
                             eager_column_readers_.at(i).get(),
                             eager_record_readers_.at(i).get(),
+                            eager_coll_record_readers_.at(i),
                             def_levels_buf_, rep_levels_buf_, str_res_mem_,
                             requested_batch_size, load_row_count,
                             temp_row_count, state_.cur_row_group_row_count_,
                             default_value, state_.eager_read_row_counts_[i],
-                            cross_page, stat_);
+                            cross_page, stat_, cur_col_id_, first_batch,
+                            dict_filter_pushdown_, false);
           MEMSET(def_levels_buf_.get_data(), 0, sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           MEMSET(rep_levels_buf_.get_data(), 0, sizeof(rep_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
           load_row_count += temp_row_count;
+          first_batch = false;
         }
         if (OB_SUCC(ret)) {
           if (0 == read_count) {
@@ -2939,15 +3628,61 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
     }
   }
 
-  if (OB_SUCC(ret) && read_count > 0) {
+  if (OB_SUCC(ret)) {
+    state_.logical_eager_read_row_count_ += read_count;
+    count = read_count;
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::calc_eager_column_convert(const int64_t read_count)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+  if (read_count > 0) {
     scan_param_->op_->clear_evaluated_flag();
     if (OB_FAIL(calc_column_convert(read_count, true, eval_ctx))) {
       LOG_WARN("failed to calc column convert", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    state_.logical_eager_read_row_count_ += read_count;
-    count = read_count;
+  return ret;
+}
+
+int ObParquetTableRowIterator::apply_dict_code_filters(const int64_t count,
+                                                       ObPushdownFilterExecutor *curr_filter)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(curr_filter) && OB_NOT_NULL(dict_filter_pushdown_)
+      && dict_filter_pushdown_->has_dict_columns()) {
+    dict_filter_pushdown_->clear_filter_arrays();
+    ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+    bool applied_dict_filter = false;
+
+    // ====== 【阶段1】根节点：应用字典优化 ======
+    if (OB_FAIL(dict_filter_pushdown_->apply_single_column_dict_filters(curr_filter,
+                                                                        nullptr,
+                                                                        eval_ctx,
+                                                                        count,
+                                                                        mapping_column_ids_,
+                                                                        column_indexs_,
+                                                                        applied_dict_filter))) {
+      LOG_WARN("fail to apply single column dict filters", K(ret));
+      // ====== 【阶段2】解码字典列 ======
+    } else {
+      if (applied_dict_filter && OB_FAIL(curr_filter->prepare_skip_filter(false))) {
+        LOG_WARN("Failed to check parent skip filter", K(ret));
+      } else if (OB_FAIL(dict_filter_pushdown_->decode_filtered_rows_to_exprs(curr_filter,
+                                                                              eval_ctx,
+                                                                              mapping_column_ids_,
+                                                                              is_dup_project_,
+                                                                              is_eager_calc(),
+                                                                              column_need_conv_))) {
+        LOG_WARN("fail to decode dict columns", K(ret));
+      } else {
+        LOG_DEBUG("dict columns decoded for all rows (has non-dict filters)");
+      }
+    }
   }
   return ret;
 }
@@ -2957,58 +3692,99 @@ int ObParquetTableRowIterator::calc_filters(const int64_t count,
                                             ObPushdownFilterExecutor *parent_filter)
 {
   int ret = OB_SUCCESS;
-  if (nullptr != curr_filter) {
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(curr_filter)) {
     common::ObBitmap *result = nullptr;
     bool filter_valid = true;
-    if (OB_FAIL(curr_filter->init_evaluated_datums(filter_valid))) {
-      LOG_WARN("failed to init eval datum", K(ret));
-    } else if (!filter_valid) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
-    } else if (OB_FAIL(curr_filter->init_bitmap(count, result))) {
-      LOG_WARN("Failed to get filter bitmap", K(ret));
-    } else if (nullptr != parent_filter && OB_FAIL(parent_filter->prepare_skip_filter(false))) {
-      LOG_WARN("Failed to check parent skip filter", K(ret));
-    } else if (curr_filter->is_filter_node()) {
-      if ((OB_FAIL((static_cast<ObBlackFilterExecutor*>(curr_filter))->filter_batch(parent_filter,
-          0, count, *result)))) {
-        LOG_WARN("failed to filter batch", K(ret));
+
+    if (curr_filter->is_filter_node()) {
+      // 检查filter是否已被字典优化处理
+      if (OB_NOT_NULL(dict_filter_pushdown_)
+          && dict_filter_pushdown_->is_filter_processed_by_dict(curr_filter)
+          && !dict_filter_pushdown_->is_failed_dict_filter(curr_filter)) {
+        // do nothing
+      } else {
+        if (OB_FAIL(curr_filter->init_bitmap(count, result))) {
+          LOG_WARN("Failed to init filter bitmap", K(ret));
+        } else if (nullptr != parent_filter && OB_FAIL(parent_filter->prepare_skip_filter(false))) {
+          LOG_WARN("Failed to check parent skip filter", K(ret));
+        } else if (curr_filter->is_filter_black_node()) {
+          ObBlackFilterExecutor *black_filter = static_cast<ObBlackFilterExecutor *>(curr_filter);
+          if (OB_FAIL(curr_filter->init_evaluated_datums(filter_valid))) {
+            LOG_WARN("failed to init eval datum", K(ret));
+          } else if (!filter_valid) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
+          } else if (OB_FAIL(black_filter->filter_batch(parent_filter, 0, count, *result))) {
+            LOG_WARN("failed to filter batch", K(ret));
+          }
+        } else if (curr_filter->is_filter_white_node()) {
+          ObWhiteFilterExecutor *white_filter = static_cast<ObWhiteFilterExecutor *>(curr_filter);
+          ObWhiteFilterOperatorType op_type = white_filter->get_op_type();
+          if (WHITE_OP_IN == op_type) {
+            if (OB_FAIL(white_filter->init_in_eval_datums(filter_valid))) {
+              LOG_WARN("failed to init eval datum", K(ret));
+            }
+          } else if (OB_FAIL(white_filter->init_compare_eval_datums(filter_valid))) {
+            LOG_WARN("failed to init eval datum", K(ret));
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (!filter_valid) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
+          } else if (OB_FAIL(white_filter->filter_batch(parent_filter, 0, count, *result))) {
+            LOG_WARN("failed to filter batch", K(ret));
+          }
+        }
       }
     } else if (curr_filter->is_logic_op_node()) {
-      sql::ObPushdownFilterExecutor **children = curr_filter->get_childs();
-      if (parent_filter != nullptr
-          && parent_filter->is_logic_and_node()
-          && curr_filter->is_logic_and_node()) {
-        MEMCPY(result->get_data(), parent_filter->get_result()->get_data(), count);
-      }
-      for (uint32_t i = 0; OB_SUCC(ret) && i < curr_filter->get_child_count(); i++) {
-        const common::ObBitmap *child_result = nullptr;
-        if (OB_ISNULL(children[i])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected null child filter", K(ret));
-        } else if (OB_FAIL(calc_filters(count, children[i], curr_filter))) {
-          LOG_WARN("Failed to filter micro block", K(ret), K(i), KP(children[i]));
-        } else if (OB_ISNULL(child_result = children[i]->get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected get null filter bitmap", K(ret));
-        } else {
-          if (curr_filter->is_logic_and_node()) {
-            if (OB_FAIL(result->bit_and(*child_result))) {
-              LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
-            } else if (result->is_all_false()) {
-              break;
-            }
-          } else  {
-            if (OB_FAIL(result->bit_or(*child_result))) {
-              LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
-            } else if (result->is_all_true()) {
-              break;
+      // 处理逻辑节点（AND/OR）
+      // 逻辑节点需要初始化bitmap来合并子filter的结果
+      if (OB_NOT_NULL(dict_filter_pushdown_)
+          && dict_filter_pushdown_->is_processed_dict_op_filter(curr_filter)) {
+        // do nothing
+      } else if (OB_FAIL(curr_filter->init_bitmap(count, result))) {
+        LOG_WARN("Failed to init filter bitmap", K(ret));
+      } else {
+        sql::ObPushdownFilterExecutor **children = curr_filter->get_childs();
+
+        // AND节点优化：继承父节点的result作为初始值
+        if (OB_NOT_NULL(parent_filter) && parent_filter->is_logic_and_node()
+            && curr_filter->is_logic_and_node()) {
+          MEMCPY(result->get_data(), parent_filter->get_result()->get_data(), count);
+        }
+
+        for (uint32_t i = 0; OB_SUCC(ret) && i < curr_filter->get_child_count(); i++) {
+          const common::ObBitmap *child_result = nullptr;
+          if (OB_ISNULL(children[i])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Unexpected null child filter", K(ret));
+          } else if (OB_FAIL(calc_filters(count, children[i], curr_filter))) {
+            LOG_WARN("Failed to filter micro block", K(ret), K(i), KP(children[i]));
+          } else if (OB_ISNULL(child_result = children[i]->get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Unexpected get null filter bitmap", K(ret));
+          } else {
+            if (curr_filter->is_logic_and_node()) {
+              if (OB_FAIL(result->bit_and(*child_result))) {
+                LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
+              } else if (result->is_all_false()) {
+                break;
+              }
+            } else {
+              if (OB_FAIL(result->bit_or(*child_result))) {
+                LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
+              } else if (result->is_all_true()) {
+                break;
+              }
             }
           }
         }
       }
     }
   }
+
   return ret;
 }
 
@@ -3059,26 +3835,31 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
                                               true, state_.read_row_counts_[cur_col_id_],
                                               column_readers_.at(cur_col_id_).get(),
                                               record_readers_.at(cur_col_id_).get(),
+                                              coll_record_readers_.at(cur_col_id_),
                                               ob_is_collection_sql_type(column_expr->datum_meta_.type_));
         tmp_logical_read += skip_range.at(j);
         int64_t temp_row_count = 0;
         int64_t orig_load_row_count = load_row_count;
+        bool first_batch = true;
         while (OB_SUCC(ret) && orig_load_row_count + read_range.at(j) > load_row_count) {
           int64_t requested_batch_size = orig_load_row_count + read_range.at(j) - load_row_count;
 
           DataLoader loader(eval_ctx, column_expr, arr_type,
                             column_readers_.at(cur_col_id_).get(),
                             record_readers_.at(cur_col_id_).get(),
+                            coll_record_readers_.at(cur_col_id_),
                             def_levels_buf_, rep_levels_buf_, str_res_mem_,
                             requested_batch_size, load_row_count,
                             temp_row_count, state_.cur_row_group_row_count_,
                             default_value, state_.read_row_counts_[cur_col_id_],
-                            cross_page, stat_);
+                            cross_page, stat_, cur_col_id_, first_batch, dict_filter_pushdown_,
+                            is_eager_calc());
           MEMSET(def_levels_buf_.get_data(), 0, sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           MEMSET(rep_levels_buf_.get_data(), 0, sizeof(rep_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
           load_row_count += temp_row_count;
           tmp_logical_read += temp_row_count;
+          first_batch = false;
         }
       }
       if (OB_SUCC(ret)) {
@@ -3161,6 +3942,7 @@ void ObParquetTableRowIterator::increase_read_rows(const int64_t rows, const boo
       if (!only_eager) {
         SkipRowsInColumn( i, rows, state_.logical_read_row_count_, true, state_.read_row_counts_[i],
                   column_readers_.at(i).get(), record_readers_.at(i).get(),
+                  coll_record_readers_.at(i),
                   ob_is_collection_sql_type(file_column_exprs_.at(i)->datum_meta_.type_));
       }
       if (has_eager_columns() && eager_column_id < get_eager_count()
@@ -3170,6 +3952,7 @@ void ObParquetTableRowIterator::increase_read_rows(const int64_t rows, const boo
                   state_.eager_read_row_counts_[eager_column_id],
                   eager_column_readers_.at(eager_column_id).get(),
                   eager_record_readers_.at(eager_column_id).get(),
+                  eager_coll_record_readers_.at(eager_column_id),
                   ob_is_collection_sql_type(file_column_exprs_.at(eager_column_id)->datum_meta_.type_));
         ++eager_column_id;
       }
@@ -3189,6 +3972,9 @@ int ObParquetTableRowIterator::ParquetSectorIterator::prepare_next(const int64_t
 {
   int ret = OB_SUCCESS;
   int64_t capacity = std::min(capacity_, group_remain_count);
+  if (OB_NOT_NULL(iter_->dict_filter_pushdown_)) {
+    iter_->dict_filter_pushdown_->clear_filter_arrays();
+  }
   if (is_end()) {
     if (!bitmap_.is_inited()) {
       OZ (bitmap_.init(capacity_));
@@ -3218,10 +4004,15 @@ int ObParquetTableRowIterator::ParquetSectorIterator::prepare_next(const int64_t
           if (0 == real_batch_size) {
           } else if (OB_FAIL(iter_->project_eager_columns(read_count, real_batch_size))) {
             LOG_WARN("failed to project eager column", K(ret));
+          } else if (OB_FAIL(iter_->apply_dict_code_filters(read_count, real_filter))) {
+            LOG_WARN("failed to apply dict code filters", K(ret));
+          } else if (OB_FAIL(iter_->calc_eager_column_convert(read_count))) {
+            // 在字典解码后调用，确保 column_exprs_ 拿到正确数据
+            LOG_WARN("failed to calc eager column convert", K(ret));
           } else if (OB_FAIL(iter_->calc_filters(read_count, real_filter, nullptr))) {
             LOG_WARN("failed to calc eager filters", K(ret));
           } else if (nullptr != real_filter
-                      && OB_FAIL(bitmap_.append(size_, *real_filter->get_result(), 0, read_count))) {
+                     && OB_FAIL(bitmap_.append(size_, *real_filter->get_result(), 0, read_count))) {
             LOG_WARN("failed to copy bitmap", K(ret));
           } else {
             size_ += read_count;
@@ -3537,13 +4328,16 @@ int64_t ObParquetTableRowIterator::SkipRowsInColumn(const int64_t column_id,
                                                     int64_t &curr_idx,
                                                     parquet::ColumnReader* reader,
                                                     parquet::internal::RecordReader* record_reader,
+                                                    common::ObArrayWrap<std::shared_ptr<parquet::internal::RecordReader>> &coll_readers,
                                                     bool is_collection_column) {
   int64_t num_skipped = 0;
   int64_t need_skip_cnt = get_real_skip_count(logical_idx, num_rows_to_skip, column_id);
   if (OB_ISNULL(reader) || OB_ISNULL(record_reader)) {
     num_skipped = need_skip_cnt;
   } else if (is_collection_column) {
-    num_skipped = record_reader->SkipRecords(need_skip_cnt);
+    for (int64_t i = 0; i < coll_readers.count(); ++i) {
+      num_skipped = coll_readers.at(i)->SkipRecords(need_skip_cnt);
+    }
   } else {
     switch (reader->type()) {
       case parquet::Type::BOOLEAN:
@@ -3843,6 +4637,11 @@ int ObParquetTableRowIterator::prepare_page_index(const int64_t cur_row_group,
                                     std::move(page_reader),
                                     &arrow_alloc_);
             record_readers_.at(i) = rg_reader->RecordReader(column_indexs_.at(i));
+            if (rg_reader->metadata()->schema()->GetColumnRoot(column_indexs_.at(i))->is_group()) {
+              for (int j = 0; j < coll_record_readers_.at(i).count(); j++) {
+                coll_record_readers_.at(i).at(j) = rg_reader->RecordReader(coll_column_indexs_.at(i).at(j));
+              }
+            }
             if (has_eager_columns() && eager_column_cnt < get_eager_count()
                                     && eager_columns_.at(eager_column_cnt) == i) {
               eager_column_readers_.at(eager_column_cnt) = parquet::ColumnReader::Make(
@@ -3850,6 +4649,14 @@ int ObParquetTableRowIterator::prepare_page_index(const int64_t cur_row_group,
                                     std::move(eager_page_reader),
                                     &arrow_alloc_);
               eager_record_readers_.at(eager_column_cnt) = eager_rg_reader->RecordReader(column_indexs_.at(i));
+              if (rg_reader->metadata()->schema()->GetColumnRoot(column_indexs_.at(i))->is_group()) {
+                OZ(eager_coll_record_readers_.at(eager_column_cnt)
+                     .allocate_array(allocator_, coll_record_readers_.at(i).count()));
+                for (int j = 0; OB_SUCC(ret) && j < eager_coll_record_readers_.at(eager_column_cnt).count(); j++) {
+                  eager_coll_record_readers_.at(eager_column_cnt).at(j) =
+                    eager_rg_reader->RecordReader(coll_column_indexs_.at(i).at(j));
+                }
+              }
               eager_column_cnt++;
             }
           } else {
@@ -3858,6 +4665,9 @@ int ObParquetTableRowIterator::prepare_page_index(const int64_t cur_row_group,
                                     && eager_columns_.at(eager_column_cnt) == i) {
               eager_column_readers_.at(eager_column_cnt) = nullptr;
               eager_record_readers_.at(eager_column_cnt) = nullptr;
+              for (int j = 0; j < eager_coll_record_readers_.at(eager_column_cnt).count(); j++) {
+                eager_coll_record_readers_.at(eager_column_cnt).at(j) = nullptr;
+              }
               eager_column_cnt++;
             }
           }
@@ -3924,6 +4734,32 @@ int ObParquetTableRowIterator::calc_file_meta_column(const int64_t read_count,
     }
     meta_expr->set_evaluated_projected(eval_ctx);
   }
+  return ret;
+}
+
+int ObParquetTableRowIterator::update_load_funcs_for_dict_optimization()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(dict_filter_pushdown_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dict filter pushdown is null", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < eager_columns_.count(); ++i) {
+    uint64_t col_idx = eager_columns_.at(i);
+    if (load_funcs_.at(col_idx) == &DataLoader::load_string_col
+        || load_funcs_.at(col_idx) == &DataLoader::load_string_col_dict) {
+      bool encoded = false;
+      if (OB_FAIL(dict_filter_pushdown_->is_column_all_pages_dict_encoded(col_idx, encoded))) {
+        LOG_WARN("fail to check is column all pages dict encoded", K(ret), K(col_idx));
+      } else {
+        load_funcs_.at(col_idx)
+            = encoded ? &DataLoader::load_string_col_dict : &DataLoader::load_string_col;
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -4038,15 +4874,9 @@ DEF_TO_STRING(ObParquetIteratorState)
   J_COLON();
   pos += ObExternalIteratorState::to_string(buf + pos, buf_len - pos);
   J_COMMA();
-  J_KV(K_(row_group_idx),
-       K_(cur_row_group_idx),
-       K_(end_row_group_idx),
-       K_(cur_row_group_row_count));
+  J_KV(K_(row_group_idx), K_(cur_row_group_idx), K_(end_row_group_idx), K_(cur_row_group_row_count));
   J_OBJ_END();
   return pos;
 }
-
-#undef BEGIN_CATCH_EXCEPTIONS
-#undef END_CATCH_EXCEPTIONS
 }
 }

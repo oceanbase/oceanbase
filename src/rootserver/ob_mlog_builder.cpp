@@ -16,6 +16,7 @@
 #include "rootserver/ob_root_service.h"
 #include "storage/ddl/ob_ddl_lock.h"
 #include "share/ob_heap_organized_table_util.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -50,34 +51,22 @@ int ObMLogBuilder::MLogColumnUtils::check_column_type(
     const ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
-  /* if (column_schema.get_meta_type().is_lob()) {
+  if (OB_UNLIKELY(column_schema.get_column_id() >= OB_MIN_MLOG_SPECIAL_COLUMN_ID)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "create materialized view log on lob columns is");
-    LOG_WARN("create materialized view log on lob columns is not supported",
-        KR(ret), K(column_schema.get_column_name_str()));
-  } else */ if (column_schema.is_generated_column()) {
+    LOG_WARN("column id larger than OB_MIN_MLOG_SPECIAL_COLUMN_ID can not be used as mlog column", KR(ret), K(column_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on table with too many columns is");
+  } else if (OB_UNLIKELY(column_schema.is_generated_column())) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
                    "create materialized view log on generated columns is");
     LOG_WARN("create materialized view log on generated columns is not supported",
         KR(ret), K(column_schema.get_column_name_str()));
-  } else if (column_schema.is_xmltype()) {
+  } else if (OB_UNLIKELY(column_schema.is_xmltype())) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on xmltype columns is");
     LOG_WARN("create materialized view log on xmltype columns is not supported",
         KR(ret), K(column_schema.get_column_name_str()));
-  // } else if (column_schema.is_json()) {
-  //   ret = OB_NOT_SUPPORTED;
-  //   LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on json columns is");
-  //   LOG_WARN("create materialized view log on json columns is not supported",
-  //       KR(ret), K(column_schema.get_column_name_str()));
-  // } else if (column_schema.is_geometry()) {
-  //   ret = OB_NOT_SUPPORTED;
-  //   LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on geometry columns is");
-  //   LOG_WARN("create materialized view log on geometry columns is not supported",
-  //       KR(ret), K(column_schema.get_column_name_str()));
-  } else if (column_schema.is_udt_related_column(lib::is_oracle_mode())) {
+  } else if (OB_UNLIKELY(column_schema.is_udt_related_column(lib::is_oracle_mode()))) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on udt columns is");
     LOG_WARN("create materialized view log on udt columns is not supported",
@@ -187,52 +176,46 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> column_ids;
-  uint64_t hidden_clustering_key_column_id = OB_INVALID_ID;
-  if (OB_FAIL(base_table_schema.get_logic_pk_column_ids(&schema_guard, column_ids))) {
+  ObArray<uint64_t> logic_pk_ids;
+  if (OB_FAIL(base_table_schema.get_rowkey_column_ids(column_ids))) {
     LOG_WARN("failed to get rowkey column ids", KR(ret));
-  } else if (base_table_schema.is_table_with_clustering_key() &&
-     OB_FAIL(share::ObHeapTableUtil::get_hidden_clustering_key_column_id(base_table_schema, hidden_clustering_key_column_id))) {
-    LOG_WARN("failed to get hidden clustering key column id", KR(ret));
-  } else if (base_table_schema.is_table_with_clustering_key() && OB_FAIL(column_ids.push_back(hidden_clustering_key_column_id))) {
-    LOG_WARN("failed to push back column id", KR(ret));
-  } else if (base_table_schema.is_table_without_pk() &&
-             OB_FAIL(column_ids.push_back(OB_HIDDEN_PK_INCREMENT_COLUMN_ID))) {
+  } else if (OB_FAIL(base_table_schema.get_logic_pk_column_ids(&schema_guard, logic_pk_ids))) {
     LOG_WARN("failed to get rowkey column ids", KR(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && (i < column_ids.count()); ++i) {
-      const ObColumnSchemaV2 *rowkey_column = nullptr;
-      ObColumnSchemaV2 *ref_column = nullptr;
-      if (OB_FAIL(alloc_column(ref_column))) {
-        LOG_WARN("failed to alloc column", KR(ret));
-      } else if (OB_ISNULL(rowkey_column =
-          base_table_schema.get_column_schema(column_ids.at(i)))) {
-        ret = OB_ERR_COLUMN_NOT_FOUND;
-        LOG_WARN("column not exist", KR(ret));
-      } else if (OB_FAIL(row_desc.add_column_desc(rowkey_column->get_table_id(),
-                                          rowkey_column->get_column_id()))) {
-        LOG_WARN("failed to add column desc to row desc", KR(ret),
-            K(rowkey_column->get_table_id()), K(rowkey_column->get_column_id()));
-      } else if (OB_FAIL(ref_column->assign(*rowkey_column))) {
-        LOG_WARN("failed to assign rowkey_column to ref_column",
-            KR(ret), KPC(rowkey_column));
-      } else {
-        // preserve the rowkey position of the column
-        ref_column->set_autoincrement(false);
-        ref_column->set_is_hidden(false);
-        ref_column->set_rowkey_position(++rowkey_count_);
-        ref_column->set_index_position(0);
-        ref_column->set_prev_column_id(UINT64_MAX);
-        ref_column->set_next_column_id(UINT64_MAX);
-        ref_column->set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
-                                                rowkey_column->get_column_id()));
-        if ((OB_HIDDEN_PK_INCREMENT_COLUMN_ID == rowkey_column->get_column_id() ||
-            rowkey_column->is_hidden_clustering_key_column())
-            && OB_FAIL(ref_column->set_column_name(OB_MLOG_ROWID_COLUMN_NAME))) {
-          LOG_WARN("failed to set column name", KR(ret));
-        } else if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
-          LOG_WARN("failed to push back column to mlog table column array",
-              KR(ret), KP(ref_column));
-        }
+  } else if (OB_FAIL(append_array_no_dup(column_ids, logic_pk_ids))) {
+    LOG_WARN("failed to append array", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+    const ObColumnSchemaV2 *rowkey_column = nullptr;
+    ObColumnSchemaV2 *ref_column = nullptr;
+    if (OB_FAIL(alloc_column(ref_column))) {
+      LOG_WARN("failed to alloc column", KR(ret));
+    } else if (OB_ISNULL(rowkey_column =
+        base_table_schema.get_column_schema(column_ids.at(i)))) {
+      ret = OB_ERR_COLUMN_NOT_FOUND;
+      LOG_WARN("column not exist", KR(ret));
+    } else if (OB_FAIL(check_column_type(*rowkey_column))) {
+      LOG_WARN("failed to check column type", KR(ret), KPC(rowkey_column));
+    } else if (OB_FAIL(row_desc.add_column_desc(rowkey_column->get_table_id(),
+                                        rowkey_column->get_column_id()))) {
+      LOG_WARN("failed to add column desc to row desc", KR(ret),
+          K(rowkey_column->get_table_id()), K(rowkey_column->get_column_id()));
+    } else if (OB_FAIL(ref_column->assign(*rowkey_column))) {
+      LOG_WARN("failed to assign rowkey_column to ref_column", KR(ret), KPC(rowkey_column));
+    } else {
+      // preserve the rowkey position of the column
+      ref_column->set_autoincrement(false);
+      ref_column->set_is_hidden(false);
+      ref_column->set_rowkey_position(++rowkey_count_);
+      ref_column->set_index_position(0);
+      ref_column->set_prev_column_id(UINT64_MAX);
+      ref_column->set_next_column_id(UINT64_MAX);
+      ref_column->set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
+                                  rowkey_column->get_column_id()));
+      if (OB_MLOG_ROWID_COLUMN_ID == ref_column->get_column_id()
+          && OB_FAIL(ref_column->set_column_name(OB_MLOG_ROWID_COLUMN_NAME))) {
+        LOG_WARN("failed to set column name", KR(ret));
+      } else if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
+        LOG_WARN("failed to push back column to mlog table column array", KR(ret), KP(ref_column));
       }
     }
   }
@@ -256,11 +239,9 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_columns(
       LOG_WARN("failed to get column schema", KR(ret), K(column_name));
     } else if (OB_FAIL(check_column_type(*data_column))) {
       LOG_WARN("failed to check column type", KR(ret), KPC(data_column));
-    } else if (OB_INVALID_INDEX != row_desc.get_idx(
-        data_column->get_table_id(),
-        data_column->get_column_id())) {
-      ret = OB_ERR_COLUMN_DUPLICATE;
-      LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
+    } else if (OB_INVALID_INDEX != row_desc.get_idx(data_column->get_table_id(),
+                                                    data_column->get_column_id())) {
+      // do nothing, column already exists in row desc
     } else if (OB_FAIL(row_desc.add_column_desc(data_column->get_table_id(),
                                         data_column->get_column_id()))) {
       LOG_WARN("failed to add column desc to row desc", KR(ret),
@@ -463,6 +444,8 @@ int ObMLogBuilder::create_or_replace_mlog(share::schema::ObSchemaGetterGuard &sc
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObCompactionTTLUtil::check_create_mlog_for_ttl_valid(*base_table_schema))) {
+    LOG_WARN("failed to check create mlog for ttl valid", KR(ret), K(*base_table_schema));
   } else {
     bool is_create_mlog = false;
     if (!create_mlog_arg.replace_if_exists_) {

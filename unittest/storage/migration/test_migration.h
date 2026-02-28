@@ -540,7 +540,7 @@ static int get_checkpoint_policy(
     const ObMigrationOpArg &arg,
     const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
-    ObStorageHASrcProvider::ChooseSourcePolicy &policy,
+    ObMigrationChooseSourcePolicy &policy,
     bool &use_c_replica_policy)
 {
   int ret = OB_SUCCESS;
@@ -558,7 +558,7 @@ static int get_recommand_policy(
     const ObMigrationOpArg &arg,
     const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
-    ObStorageHASrcProvider::ChooseSourcePolicy &policy,
+    ObMigrationChooseSourcePolicy &policy,
     bool &use_c_replica_policy)
 {
   int ret = OB_SUCCESS;
@@ -575,7 +575,7 @@ static int get_idc_policy(
     const ObMigrationOpArg &arg,
     const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
-    ObStorageHASrcProvider::ChooseSourcePolicy &policy,
+    ObMigrationChooseSourcePolicy &policy,
     bool &use_c_replica_policy)
 {
   int ret = OB_SUCCESS;
@@ -592,7 +592,7 @@ static int get_region_policy(
     const ObMigrationOpArg &arg,
     const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
-    ObStorageHASrcProvider::ChooseSourcePolicy &policy,
+    ObMigrationChooseSourcePolicy &policy,
     bool &use_c_replica_policy)
 {
   int ret = OB_SUCCESS;

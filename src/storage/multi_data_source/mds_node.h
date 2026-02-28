@@ -89,7 +89,7 @@ struct MdsUnitBase
 template <typename K, typename V>
 struct MdsRowBase
 {
-  MdsRowBase() : p_mds_unit_(nullptr), key_(nullptr) {}
+  MdsRowBase() : p_mds_unit_(nullptr), key_(nullptr), lock_(common::ObLatchIds::OB_MDS_ROW_BASE_LOCK) {}
   virtual ~MdsRowBase() { p_mds_unit_ = nullptr; key_ = nullptr; }
   // if a node aborted, delete it immediately.
   virtual void node_abort_callback_(ListNodeBase *node) = 0;

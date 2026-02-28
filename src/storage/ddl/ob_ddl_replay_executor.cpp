@@ -1755,6 +1755,7 @@ int ObDDLIncMajorStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
   bool need_replay = true;
+  ObCSReplicaDDLReplayStatus ddl_replay_status = CS_REPLICA_REPLAY_MAX;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLIncMajorStartReplayExecutor has not been inited", K(ret));
@@ -1768,17 +1769,20 @@ int ObDDLIncMajorStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
   } else if (!need_replay) {
     // do nothing
     FLOG_INFO("no need to replay ddl inc major start log", K(ls_->get_ls_id()), K(scn_), K(tablet_id_));
-  } else if (has_cs_replica_ && OB_FAIL(update_tablet_meta_for_cs_replica_(tablet_handle))) {
-    LOG_WARN("failed to update tablet meta for cs replica", K(ret));
-  } else if (!is_lob_ && OB_FAIL(update_storage_schema_to_tablet(tablet_handle))) {
-    LOG_WARN("failed to update storage schema to tablet", KR(ret), K(tablet_handle));
+  } else if (OB_FALSE_IT(ddl_replay_status = tablet_handle.get_obj()->get_tablet_meta().ddl_replay_status_)) {
+  } else if (has_cs_replica_ && OB_FAIL(update_tablet_meta_for_cs_replica_(tablet_handle, ddl_replay_status))) {
+    LOG_WARN("failed to update tablet meta for cs replica", K(ret), K_(tablet_id));
+  } else if (!is_lob_ && OB_FAIL(update_storage_schema_to_tablet(tablet_handle, ddl_replay_status))) {
+    LOG_WARN("failed to update storage schema to tablet", KR(ret), K_(tablet_id), K(ddl_replay_status));
   }
   FLOG_INFO("replay inc major start log", K(ret), K(ls_->get_ls_id()),
       K_(scn), K_(tablet_id), K_(has_cs_replica), K_(is_lob), K(need_replay), KPC_(storage_schema));
   return ret;
 }
 
-int ObDDLIncMajorStartReplayExecutor::update_tablet_meta_for_cs_replica_(ObTabletHandle &tablet_handle)
+int ObDDLIncMajorStartReplayExecutor::update_tablet_meta_for_cs_replica_(
+    ObTabletHandle &tablet_handle,
+    ObCSReplicaDDLReplayStatus &updated_ddl_replay_status)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!tablet_handle.is_valid() || !has_cs_replica_)) {
@@ -1788,6 +1792,7 @@ int ObDDLIncMajorStartReplayExecutor::update_tablet_meta_for_cs_replica_(ObTable
     const ObCSReplicaDDLReplayStatus &ddl_replay_status = tablet_handle.get_obj()->get_tablet_meta().ddl_replay_status_;
     const bool ls_is_cs_replica = ls_->is_cs_replica();
     ObCSReplicaDDLReplayStatus new_ddl_replay_status = ddl_replay_status;
+    updated_ddl_replay_status = ddl_replay_status;
 
     if (CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN == ddl_replay_status ||
         CS_REPLICA_VISIBLE_AND_REPLAY_ROW == ddl_replay_status) {
@@ -1799,13 +1804,17 @@ int ObDDLIncMajorStartReplayExecutor::update_tablet_meta_for_cs_replica_(ObTable
                             : CS_REPLICA_VISIBLE_AND_REPLAY_ROW;
       if (OB_FAIL(ls_->get_tablet_svr()->update_tablet_ddl_replay_status_for_cs_replica(tablet_id_, new_ddl_replay_status))) {
         LOG_WARN("failed to update talbet ddl replay status", K(ret), K(tablet_id_), K(new_ddl_replay_status), K(ddl_replay_status), K(ls_is_cs_replica));
+      } else {
+        updated_ddl_replay_status = new_ddl_replay_status;
       }
     }
   }
   return ret;
 }
 
-int ObDDLIncMajorStartReplayExecutor::update_storage_schema_to_tablet(ObTabletHandle &tablet_handle)
+int ObDDLIncMajorStartReplayExecutor::update_storage_schema_to_tablet(
+    ObTabletHandle &tablet_handle,
+    const ObCSReplicaDDLReplayStatus &ddl_replay_status)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -1819,7 +1828,6 @@ int ObDDLIncMajorStartReplayExecutor::update_storage_schema_to_tablet(ObTabletHa
     LOG_WARN("unexpected lob tablet", KR(ret), K(ls_->get_ls_id()), K_(tablet_id), K_(is_lob));
   } else {
     bool storage_schema_transformed_to_columnar = false;
-    const ObCSReplicaDDLReplayStatus &ddl_replay_status = tablet_handle.get_obj()->get_tablet_meta().ddl_replay_status_;
     if (storage_schema_->is_row_store() && (CS_REPLICA_VISIBLE_AND_REPLAY_ROW != ddl_replay_status)) {
       ObArenaAllocator arena("IncMajorStart", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       ObStorageSchema *old_storage_schema = nullptr;

@@ -29,7 +29,7 @@ ObStorageHADiagService::ObStorageHADiagService()
     op_(),
     sql_proxy_(nullptr),
     task_keys_(),
-    lock_(),
+    lock_(common::ObLatchIds::OB_STORAGE_HA_DIAGNOSE_SERVICE_LOCK),
     err_diag_end_timestamp_(0),
     perf_diag_end_timestamp_(0),
     idle_interval_ms_(0)

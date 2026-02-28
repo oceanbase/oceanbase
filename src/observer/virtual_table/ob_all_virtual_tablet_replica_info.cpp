@@ -30,7 +30,7 @@ ObTabletReplicaInfoCacheMgr::ObTabletReplicaInfoCacheMgr()
   : is_inited_(false),
     tenant_id_(OB_INVALID_ID),
     cache_(),
-    lock_(),
+    lock_(common::ObLatchIds::TABLET_REPLICA_INFO_CACHE_LOCK),
     status_(UNAVAILABLE),
     ref_cnt_(0),
     last_build_time_(0)
@@ -608,7 +608,9 @@ int ObAllVirtualTabletReplicaInfo::prepare_tablet_to_table_map_()
           } else if (table->has_tablet()) {
             share::schema::ObPartitionSchemaIter iter(*table, ObCheckPartitionMode::CHECK_PARTITION_MODE_NORMAL);
             while (OB_SUCC(ret) && OB_SUCC(iter.next_tablet_id(tablet_id))) {
-              if (OB_FAIL(tablet_to_table_map_.set_refactored(tablet_id, table->get_table_id()))) {
+              if (OB_UNLIKELY(0 == tablet_id.id())) {
+                // skip, oracle global tmp table may have tablet id 0
+              } else if (OB_FAIL(tablet_to_table_map_.set_refactored(tablet_id, table->get_table_id()))) {
                 SERVER_LOG(WARN, "fail to set tablet-table map", KR(ret), K(tenant_id), K(tablet_id), KPC(table));
               }
             } // end while

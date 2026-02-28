@@ -294,7 +294,7 @@ int ObSensitiveRuleDDLOperator::drop_sensitive_column_in_drop_table(const ObTabl
 // for parallel drop table
 int ObSensitiveRuleDDLOperator::drop_sensitive_column_in_drop_table(const ObTableSchema &table_schema,
                                                                     ObMySQLTransaction &trans,
-                                                                    ObIArray<ObSensitiveRuleSchema *> &sensitive_rules)
+                                                                    ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = table_schema.get_tenant_id();

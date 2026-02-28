@@ -18,6 +18,8 @@
 #include "ob_row_data.h"
 #include "ob_mvcc_row.h"
 #include "ob_mvcc.h"
+#include "share/rc/ob_tenant_base.h"
+#include "storage/memtable/hash_holder/ob_row_hash_holder_map.h"
 #include "storage/memtable/ob_memtable_key.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/memtable/mvcc/ob_tx_callback_list.h"
@@ -278,7 +280,9 @@ public:
   void inc_flushed_log_size(const int64_t size);
   void clear_pending_log_size() { ATOMIC_STORE(&pending_log_size_, 0); }
   int64_t get_pending_log_size() const;
-  bool pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no, const int64_t limit);
+  int64_t get_branch_pending_log_size(const int16_t branch) const;
+  int16_t get_pending_log_size_too_large_list(const int64_t limit) const;
+  bool pending_log_size_too_large(const int16_t branch_id, const int64_t limit);
   int64_t get_flushed_log_size() const;
   int get_log_guard(const transaction::ObTxSEQ &write_seq,
                     ObCallbackListLogGuard &log_guard,
@@ -319,6 +323,7 @@ public:
   { return  callback_lists_ ? MAX_CALLBACK_LIST_COUNT : 1; }
   int get_logging_list_count() const;
   ObTxCallbackList *get_callback_list_(const int16_t index, const bool nullable);
+  const ObTxCallbackList *get_callback_list_(const int16_t index, const bool nullable) const;
   bool is_serial_final() const { return is_serial_final_(); }
   bool is_callback_list_append_only(const int idx) const
   {
@@ -495,11 +500,12 @@ public:
   transaction::ObTxSEQ get_seq_no() const { return seq_no_; }
   int get_trans_id(transaction::ObTransID &trans_id) const;
   int get_cluster_version(uint64_t &cluster_version) const override;
-  transaction::ObTransCtx *get_trans_ctx() const;
+  transaction::ObPartTransCtx *get_trans_ctx() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
   virtual int before_append(const bool is_replay) override;
   virtual int log_submitted(const share::SCN scn, storage::ObIMemtable *&last_mt) override;
   virtual void after_append_fail(const bool is_replay) override;
+  virtual int get_holder_info(RowHolderInfo &holder_info) const override final;
   virtual int64_t get_old_row_data_size() override
   {
     return old_row_.size_;
@@ -537,6 +543,7 @@ private:
   void inc_unsubmitted_cnt_();
   int dec_unsubmitted_cnt_();
   int wakeup_row_waiter_if_need_();
+  void commit_trans_node_();
 private:
   ObIMvccCtx &ctx_;
   ObMemtableKey key_;

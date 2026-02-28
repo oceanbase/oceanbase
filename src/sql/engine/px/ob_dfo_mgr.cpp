@@ -22,6 +22,9 @@
 #include "sql/engine/px/ob_px_coord_op.h"
 #include "sql/engine/basic/ob_material_vec_op.h"
 #include "sql/engine/basic/ob_select_into_op.h"
+#include "sql/engine/basic/ob_rescan_op.h"
+#include "sql/engine/dml/ob_table_lock_op.h"
+#include "sql/engine/dml/ob_table_insert_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -365,7 +368,7 @@ int ObDfoWorkerAssignment::get_dfos_worker_count(const ObIArray<ObDfo*> &dfos,
       LOG_WARN("dfo edges expect to have parent", KPC(parent), KPC(child), K(ret));
     } else {
       int64_t child_assigned = get_minimal ? 1 : child->get_assigned_worker_count();
-      int64_t parent_assigned = get_minimal ? 1 : parent->get_assigned_worker_count();
+      int64_t parent_assigned = parent->is_root_dfo() ? 0 : (get_minimal ? 1 : parent->get_assigned_worker_count());
       int64_t assigned = parent_assigned + child_assigned;
       // 局部右深树的场景，depend_sibling 和当前 child dfo 都会被调度
       /* Why need extra flag has_depend_sibling_? Why not use NULL != depend_sibling_?
@@ -394,7 +397,7 @@ int ObDfoWorkerAssignment::get_dfos_worker_count(const ObIArray<ObDfo*> &dfos,
       assigned += max_depend_sibling_assigned_worker;
       if (assigned > total_assigned) {
         total_assigned = assigned;
-        LOG_TRACE("update total assigned", K(idx), K(get_minimal), K(parent_assigned),
+        LOG_TRACE("update total assigned", KPC(parent), K(idx), K(get_minimal), K(parent_assigned),
                 K(child_assigned), K(max_depend_sibling_assigned_worker), K(total_assigned));
       }
     }
@@ -454,6 +457,26 @@ int ObDfoMgr::init(ObExecContext &exec_ctx,
     LOG_WARN("fail assign worker to dfos", K(ret), K(px_expected), K(px_minimal), K(px_admited));
   } else {
     inited_ = true;
+    const ObOpSpec *spec = &root_op_spec;
+    if (has_pdml_op_) {
+      while (NULL != spec) {
+        const ObPhyOperatorType op_type = spec->get_type();
+        if (op_type == PHY_INSERT_ON_DUP
+           || op_type == PHY_REPLACE
+           || (op_type == PHY_LOCK && static_cast<const ObTableLockSpec*>(spec)->is_multi_table_skip_locked_)
+           || (op_type == PHY_INSERT && static_cast<const ObTableInsertSpec*>(spec)->is_ignore_)) {
+          int16_t branch_id = 0;
+          if (OB_FAIL(ObSqlTransControl::alloc_branch_id(exec_ctx, 1, branch_id))) {
+            LOG_WARN("alloc branch id failed", K(ret));
+          } else {
+            exec_ctx.set_branch_id(branch_id);
+            LOG_TRACE("alloc branch id for upper success", K(branch_id), KPC(spec));
+          }
+          break;
+        }
+        spec = spec->get_parent();
+      }
+    }
   }
   return ret;
 }
@@ -464,7 +487,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
                        const ObOpSpec *phy_op,
                        ObDfo *&parent_dfo,
                        const ObDfoInterruptIdGen &dfo_int_gen,
-                       ObPxCoordInfo &px_coord_info) const
+                       ObPxCoordInfo &px_coord_info)
 {
   int ret = OB_SUCCESS;
   bool partition_random_affinitize = true;
@@ -508,6 +531,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
         if (OB_ISNULL(table_loc = DAS_CTX(exec_ctx).get_table_loc_by_id(
               tsc_op->get_table_loc_id(), tsc_op->get_loc_ref_table_id()))) {
           OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(exec_ctx).get_location_router(),
+                                                        *exec_ctx.get_my_session(),
                                                         exec_ctx.get_allocator(),
                                                         exec_ctx.get_my_session()->get_effective_tenant_id(),
                                                         tsc_op->get_table_loc_id(),
@@ -533,6 +557,8 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
         }
       }
     }
+  } else if (phy_op->is_dml_operator() && FALSE_IT(has_pdml_op_ = true)) {
+    // do nothing.
   } else if (phy_op->is_dml_operator() && NULL != parent_dfo) {
     // 当前op是一个dml算子，需要设置dfo的属性
     if (ObPXServerAddrUtil::check_build_dfo_with_dml(*phy_op)) {
@@ -542,7 +568,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     LOG_TRACE("set DFO need_branch_id", K(op_type));
     parent_dfo->set_need_branch_id_op(op_type == PHY_INSERT_ON_DUP
                                       || op_type == PHY_REPLACE
-                                      || op_type == PHY_LOCK);
+                                      || (op_type == PHY_LOCK && static_cast<const ObTableLockSpec*>(phy_op)->is_multi_table_skip_locked_));
   } else if (phy_op->get_type() == PHY_TEMP_TABLE_ACCESS && NULL != parent_dfo) {
     parent_dfo->set_temp_table_scan(true);
     const ObTempTableAccessOpSpec *access = static_cast<const ObTempTableAccessOpSpec*>(phy_op);
@@ -704,6 +730,10 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
         if (transmit->is_slave_mapping()) {
           dfo->set_out_slave_mapping_type(transmit->get_slave_mapping_type());
           parent_dfo->set_in_slave_mapping_type(transmit->get_slave_mapping_type());
+        }
+        if (ObPQDistributeMethod::PARTITION_HASH == transmit->dist_method_) {
+          const ObPxTransmitSpec *px_transmit = reinterpret_cast<const ObPxTransmitSpec *>(transmit);
+          dfo->set_use_scatter_channel_for_pkey_hash(px_transmit->use_scatter_channel_for_pkey_hash_);
         }
         dfo->set_pkey_table_loc_id(
           (reinterpret_cast<const ObPxTransmitSpec *>(transmit))->repartition_table_id_);

@@ -748,10 +748,9 @@ int ObHTableUtils::match_hbase_series_mode(const ObTableSchema &table_schema, bo
     ret = OB_ERR_UNEXPECTED;
     LOG_USER_ERROR(OB_ERR_UNEXPECTED, "series table value column type must be json");
     LOG_WARN("series table value column type must be json", K(ret), K(value_column->get_data_type()));
-  } else if (OB_NOT_NULL(add_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_TTL)) &&
-                ObHTableConstants::TTL_CNAME_STR.case_compare(add_schema->get_column_name()) == 0) {
+  } else if (OB_NOT_NULL(add_schema = table_schema.get_column_schema(ObHTableConstants::TTL_CNAME_STR))) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "series table not support cell ttl");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "series table cell ttl");
     LOG_WARN("series table not support cell ttl", K(ret));
   } else {
     matched = true;
@@ -1436,5 +1435,41 @@ int ObHTableUtils::adjust_htable_timestamps_for_retry(common::ObIArray<ObTableOp
     // These timestamps should not be modified as they are user-defined
   }
 
+  return ret;
+}
+
+int ObHTableUtils::check_ddl_alter_partition(const share::schema::ObTableSchema &table_schema, const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *index_schema = nullptr;
+  if (!table_schema.get_kv_attributes().empty()) {
+    ObKVAttr kv_attr;
+    if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tenant_id, table_schema.get_kv_attributes(), kv_attr))) {
+      LOG_WARN("failed to parse kv attributes", K(ret));
+    } else if (OB_FAIL(ObTTLUtil::check_kv_attributes(kv_attr, table_schema, index_schema/* nullptr*/, PARTITION_LEVEL_TWO))) {
+      LOG_WARN("fail to check kv attributes", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::check_ddl_add_column(const share::schema::ObTableSchema &table_schema, const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!table_schema.get_kv_attributes().empty()) {
+    ObKVAttr kv_attr;
+    if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tenant_id, table_schema.get_kv_attributes(), kv_attr))) {
+      LOG_WARN("failed to parse kv attributes", K(ret));
+    } else if (kv_attr.is_kv_hbase_table()) {
+      table::ObHbaseModeType mode_type = table::ObHbaseModeType::OB_INVALID_MODE_TYPE;
+      if (OB_FAIL(table::ObHTableUtils::get_mode_type(table_schema, mode_type))) {
+        LOG_WARN("fail to get mode type", K(ret));
+      } else if (mode_type == table::ObHbaseModeType::OB_HBASE_SERIES_TYPE) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("alter timeseries hbase table add column is not supported", K(ret), K(table_schema.get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter timeseries hbase table add column");
+      }
+    }
+  }
   return ret;
 }

@@ -105,7 +105,7 @@ class ObTenantMdsService;
   class ObLobManager;
   class ObTransferService;
   class ObRebuildService;
-  class ObTenantRestoreInfoMgr;
+  class ObTenantBackupDestInfoMgr;
   class ObTableScanIterator;
   class ObTenantSnapshotService;
   class ObTenantCGReadInfoMgr;
@@ -197,7 +197,7 @@ namespace compaction
   class ObTenantLSMergeScheduler;
   class ObTenantLSMergeChecker;
 }
-namespace memtable
+namespace lockwaitmgr
 {
   class ObLockWaitMgr;
 }
@@ -219,7 +219,7 @@ namespace rootserver
   class ObBalanceTaskExecuteService;
   class ObBackupTaskScheduler;
   class ObBackupDataService;
-  class ObBackupCleanService;
+  class ObBackupMgrService;
   class ObArchiveSchedulerService;
   class ObArbitrationService;
   class ObDBMSSchedService;
@@ -244,6 +244,7 @@ namespace observer
   class ObTableSessIDService;
   class ObTenantTabletCleanupService;
   class ObTabletReplicaInfoCacheMgr;
+  class ObSessionTmpTableCleaner;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -285,7 +286,9 @@ class ObResourceLimitCalculator;
 class ObWorkloadRepositoryContext;
 class ObPluginVectorIndexService;
 class ObAutoSplitTaskCache;
-class ObHMSClientPoolMgr;
+class ObCurlRestClient;
+class ObHiveMetastoreClient;
+template<typename T> class ObCatalogClientPoolMgr;
 #ifdef OB_BUILD_SHARED_STORAGE
 class ObTabletSplitTaskCache;
 #endif
@@ -366,6 +369,8 @@ namespace detector
 // 使用MTL接口可以获取实例。
 using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTransCtx>;
 using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
+using ObCurlRestClientPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::ObCurlRestClient>;
+using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::ObHiveMetastoreClient>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
       common::ObDiagnosticInfoContainer*,            \
@@ -400,7 +405,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       compaction::ObTenantCompactionProgressMgr*,    \
       compaction::ObServerCompactionEventHistory*,   \
       storage::ObTenantTabletStatMgr*,               \
-      memtable::ObLockWaitMgr*,                      \
+      lockwaitmgr::ObLockWaitMgr*,                      \
       transaction::tablelock::ObTableLockService*,   \
       rootserver::ObPrimaryMajorFreezeService*,      \
       rootserver::ObRestoreMajorFreezeService*,      \
@@ -420,7 +425,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObTenantBalanceService*,           \
       rootserver::ObBackupTaskScheduler*,            \
       rootserver::ObBackupDataService*,              \
-      rootserver::ObBackupCleanService*,             \
+      rootserver::ObBackupMgrService*,             \
       rootserver::ObArchiveSchedulerService*,        \
       rootserver::ObDRService*,                      \
       rootserver::ObDRSSLOGService*,                 \
@@ -518,7 +523,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObGlobalIteratorPool*,                \
       common::ObRbMemMgr*,                           \
       share::ObPluginVectorIndexService*,            \
-      storage::ObTenantRestoreInfoMgr*,              \
+      storage::ObTenantBackupDestInfoMgr*,              \
       share::ObAutoSplitTaskCache*    ,              \
       sql::ObAuditLogger*,                           \
       sql::ObAuditLogUpdater*,                       \
@@ -535,13 +540,15 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObInnerTabletAccessService*,          \
       storage::ObTabletReorgInfoTableService*,       \
       observer::ObTableSessIDService*,                \
+      observer::ObSessionTmpTableCleaner*,            \
       omt::ObTenantAiService*,                       \
       sql::ObSQLCCLRuleManager*,                     \
       share::ObBackupDestIOPermissionMgr*,           \
-      share::ObHMSClientPoolMgr*,                     \
+      ObHMSClientUnifyPoolMgr*,                      \
       share::schema::ObAddIntervalPartitionController*, \
       observer::ObTenantTabletCleanupService*,        \
-      observer::ObTabletReplicaInfoCacheMgr*          \
+      observer::ObTabletReplicaInfoCacheMgr*  ,       \
+      ObCurlRestClientPoolMgr*                       \
   )
 
 

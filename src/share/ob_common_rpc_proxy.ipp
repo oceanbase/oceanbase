@@ -52,6 +52,7 @@
   RPC_S(PRD flashback_index, obrpc::OB_FLASHBACK_INDEX, (ObFlashBackIndexArg));
   RPC_S(PRD purge_index, obrpc::OB_PURGE_INDEX, (ObPurgeIndexArg));
   RPC_S(PRD create_table_like, obrpc::OB_CREATE_TABLE_LIKE, (ObCreateTableLikeArg));
+  RPC_S(PRD parallel_create_table_like, obrpc::OB_PARALLEL_CREATE_TABLE_LIKE, (ObCreateTableLikeArg), ObCreateTableRes);
   RPC_S(PRD flashback_table_from_recyclebin, obrpc::OB_FLASHBACK_TABLE_FROM_RECYCLEBIN, (ObFlashBackTableFromRecyclebinArg));
   RPC_S(PRD flashback_table_to_time_point, obrpc::OB_FLASHBACK_TABLE_TO_SCN, (ObFlashBackTableToScnArg));
   RPC_S(PRD purge_table, obrpc::OB_PURGE_TABLE, (ObPurgeTableArg));
@@ -268,6 +269,7 @@
   RPC_S(PR5 backup_delete, obrpc::OB_BACKUP_CLEAN, (obrpc::ObBackupCleanArg));
   RPC_S(PR5 delete_policy, obrpc::OB_DELETE_POLICY, (obrpc::ObDeletePolicyArg));
   RPC_S(PR5 recover_table, obrpc::OB_RECOVER_TABLE, (obrpc::ObRecoverTableArg));
+  RPC_S(PR5 backup_validate, obrpc::OB_VALIDATE_BACKUP, (obrpc::ObBackupValidateArg));
   //RPC_S(PRD standby_upgrade_virtual_schema, obrpc::OB_UPGRADE_STANDBY_SCHEMA,
   //          (ObDDLNopOpreatorArg)); // use ddl thread
   RPC_S(PR5 check_backup_scheduler_working, obrpc::OB_CHECK_BACKUP_SCHEDULER_WORKING, Bool);
@@ -345,5 +347,8 @@
   //----Definitions for sensitive rule----
   RPC_S(PRD handle_sensitive_rule_ddl, obrpc::OB_HANDLE_SENSITIVE_RULE_DDL, (ObSensitiveRuleDDLArg));
   //----End of definitions for sensitive rule----
+  //----Functions for managing table non atomic in database----
+  RPC_AP(PRD non_atomic_drop_table_in_database, obrpc::OB_NON_ATOMIC_DROP_TABLE_IN_DATABASE, (ObDropTableArg), ObDropTableRes);
+  //----End of functions for managing table non atomic in database----
 
   RPC_S(PR5 get_refreshed_schema_versions, obrpc::OB_GET_REFRESHED_SCHEMA_VERSIONS, obrpc::ObGetRefreshedSchemaVersionsRes);

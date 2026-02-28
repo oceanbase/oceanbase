@@ -35,6 +35,7 @@ ObCOSSTableRowScanner::ObCOSSTableRowScanner()
     is_new_group_(false),
     reverse_scan_(false),
     is_limit_end_(false),
+    use_row_store_projector_(false),
     state_(BEGIN),
     blockscan_state_(MAX_STATE),
     group_by_project_idx_(0),
@@ -82,7 +83,8 @@ int ObCOSSTableRowScanner::init(
     LOG_WARN("Fail to init row scanner", K(ret), K(param), KPC(row_sstable));
   } else if (OB_FAIL(init_cg_param_pool(context))) {
     LOG_WARN("Fail to init cg param pool", K(ret));
-  } else if (param.vectorized_enabled_ && param.enable_pd_blockscan() && param.enable_pd_filter()) {
+  } else if (param.vectorized_enabled_ && param.enable_pd_blockscan() && param.enable_pd_filter()
+             && support_pd_rowscn_filter_if_contain(*table, context.block_row_store_)) {
     if (OB_FAIL(init_rows_filter(param, context, table))) {
       LOG_WARN("Fail to init rows filter", K(ret));
     } else if (OB_FAIL(init_project_iter(param, context, table))) {
@@ -144,6 +146,7 @@ void ObCOSSTableRowScanner::reset()
   is_limit_end_ = false;
   pending_end_row_id_ = OB_INVALID_CS_ROW_ID;
   column_group_cnt_ = -1;
+  use_row_store_projector_ = false;
   getter_projector_.reset();
 }
 
@@ -330,13 +333,15 @@ int ObCOSSTableRowScanner::init_rows_filter(
   if (OB_UNLIKELY(!context.block_row_store_->filter_pushdown())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument, filter is not pushdown", K(ret));
-  } else if (!context.block_row_store_->filter_is_null()) {
+  } else {
     if (nullptr == rows_filter_) {
-      if (OB_ISNULL(rows_filter_ = OB_NEWx(ObCOSSTableRowsFilter, context.stmt_allocator_))) {
-        ret = common::OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Fail to alloc rows filter", K(ret));
-      } else if (OB_FAIL(rows_filter_->init(row_param, context, table))) {
-        LOG_WARN("Fail to init rows filter", K(ret), K(row_param), KPC(table));
+      if (!context.block_row_store_->filter_is_null() || context.has_mds_filter()) {
+        if (OB_ISNULL(rows_filter_ = OB_NEWx(ObCOSSTableRowsFilter, context.stmt_allocator_))) {
+          ret = common::OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("Fail to alloc rows filter", K(ret));
+        } else if (OB_FAIL(rows_filter_->init(row_param, context, table))) {
+          LOG_WARN("Fail to init rows filter", K(ret), K(row_param), KPC(table));
+        }
       }
     } else if (OB_FAIL(rows_filter_->switch_context(row_param, context, table,
         column_group_cnt_ != static_cast<ObCOSSTableV2*>(table)->get_cs_meta().get_column_group_count()))) {
@@ -384,7 +389,7 @@ int ObCOSSTableRowScanner::init_project_iter(
           if (ObICGIterator::OB_CG_ROW_SCANNER == cg_scanner->get_type() ||
               ObICGIterator::OB_CG_GROUP_BY_SCANNER == cg_scanner->get_type()) {
             static_cast<ObCGRowScanner *>(cg_scanner)
-                ->set_project_type(nullptr == rows_filter_);
+                ->set_project_type(!has_rows_filter());
           }
         }
       } else if (OB_ISNULL(project_iter_ = OB_NEWx(ObCGTileScanner,
@@ -394,7 +399,7 @@ int ObCOSSTableRowScanner::init_project_iter(
       } else if (OB_FAIL(static_cast<ObCGTileScanner *>(project_iter_)
                              ->init(iter_params,
                                     false,
-                                    nullptr == rows_filter_,
+                                    !has_rows_filter(),
                                     context,
                                     co_sstable))) {
         LOG_WARN("Fail to init cg tile scanner", K(ret), K(iter_params));
@@ -402,7 +407,7 @@ int ObCOSSTableRowScanner::init_project_iter(
     } else if (OB_FAIL(ObCOSSTableRowsFilter::switch_context_for_cg_iter(
                    true,
                    false,
-                   nullptr == rows_filter_,
+                   !has_rows_filter(),
                    co_sstable,
                    context,
                    iter_params,
@@ -732,7 +737,7 @@ int ObCOSSTableRowScanner::filter_rows_without_limit(BlockScanState &blockscan_s
       if (OB_UNLIKELY(group_size_ <= 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected pending range", K(ret), K(pending_end_row_id_), K(current_));
-      } else if (nullptr != rows_filter_ && OB_ISNULL(result_bitmap = rows_filter_->get_result_bitmap())) {
+      } else if (has_rows_filter() && OB_ISNULL(result_bitmap = rows_filter_->get_result_bitmap())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected result bitmap", K(ret), KPC(rows_filter_));
       } else if (nullptr != result_bitmap && result_bitmap->is_all_false()) {
@@ -805,7 +810,7 @@ int ObCOSSTableRowScanner::inner_filter(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected row count to do filter", K(ret), K(group_size));
   } else if (FALSE_IT(begin = reverse_scan_ ? begin - group_size + 1 : begin)) {
-  } else if (nullptr != rows_filter_) {
+  } else if (has_rows_filter()) {
     if (OB_FAIL(rows_filter_->apply(ObCSRange(begin, group_size)))) {
       LOG_WARN("Fail to apply rows filter", K(ret), K(begin), K(group_size));
     } else if (OB_ISNULL(result_bitmap = rows_filter_->get_result_bitmap())) {
@@ -819,7 +824,7 @@ int ObCOSSTableRowScanner::inner_filter(
   }
   if (OB_SUCC(ret)) {
     LOG_TRACE("[COLUMNSTORE] COSSTableRowScanner inner filter", K(ret), "begin", begin, "count", group_size,
-              "filtered", nullptr == rows_filter_ ? 0 : 1, "popcnt", nullptr == result_bitmap ? group_size : result_bitmap->popcnt(),
+              "filtered", has_rows_filter() ? 1 : 0, "popcnt", nullptr == result_bitmap ? group_size : result_bitmap->popcnt(),
               "filter_constant_type", nullptr == result_bitmap ? sql::ObBoolMaskType::ALWAYS_TRUE : result_bitmap->get_filter_constant_type(),
               "filter_constant_id", nullptr == result_bitmap ? (begin + group_size - 1) : result_bitmap->get_filter_constant_id());
   }
@@ -846,7 +851,7 @@ int ObCOSSTableRowScanner::update_continuous_range(
       group_is_true = result_bitmap->is_all_true();
     }
     bool filter_tree_can_continuous =
-        rows_filter_ == nullptr ? true : rows_filter_->can_continuous_filter();
+        has_rows_filter() ? rows_filter_->can_continuous_filter() : true;
     if (group_is_true && filter_tree_can_continuous) {
       // current group is true, continue do filter if not reach end
       sql::ObBoolMask filter_constant_type;
@@ -923,7 +928,7 @@ int ObCOSSTableRowScanner::fetch_output_rows()
       if (count > 0) {
         int64_t group_idx = 0;
         access_ctx_->out_cnt_ += count;
-        if (OB_ISNULL(rows_filter_)) {
+        if (!has_rows_filter()) {
           access_ctx_->table_store_stat_.blockscan_row_cnt_ += count;
           access_ctx_->table_store_stat_.major_sstable_read_row_cnt_ += count;
         }
@@ -1082,7 +1087,7 @@ int ObCOSSTableRowScanner::filter_group_by_rows()
       LOG_WARN("Failed to locate", K(ret));
     } else if (OB_FAIL(group_by_processor->decide_group_size(group_size_))) {
       LOG_WARN("Failed to decide group size", K(ret));
-    } else if (nullptr != rows_filter_) {
+    } else if (has_rows_filter()) {
       if (OB_FAIL(rows_filter_->apply(ObCSRange(current_, group_size_)))) {
         LOG_WARN("Fail to apply rows filter", K(ret), K(current_), K(group_size_));
       } else if (OB_ISNULL(result_bitmap = rows_filter_->get_result_bitmap())) {
@@ -1216,7 +1221,7 @@ int ObCOSSTableRowScanner::do_group_by()
           }
         }
       }
-      if (OB_SUCC(ret) && OB_ISNULL(rows_filter_)) {
+      if (OB_SUCC(ret) && !has_rows_filter()) {
         access_ctx_->table_store_stat_.blockscan_row_cnt_ += group_by_cell_->get_ref_cnt();
         access_ctx_->table_store_stat_.major_sstable_read_row_cnt_ += group_by_cell_->get_ref_cnt();
       }
@@ -1288,16 +1293,21 @@ int ObCOSSTableRowScanner::push_group_by_processor(ObICGIterator *cg_iterator)
 
 ERRSIM_POINT_DEF(ERRSIM_CO_SCAN_USE_ROW_PROJ)
 
-bool ObCOSSTableRowScanner::use_row_store_projector(const ObTableIterParam& row_param, const ObTableAccessContext& context, const ObCOSSTableV2& co_sstable) const
+bool ObCOSSTableRowScanner::use_row_store_projector(const ObTableIterParam& row_param, const ObTableAccessContext& context, const ObCOSSTableV2& co_sstable)
 {
   bool b_ret = false;
-  if (!co_sstable.is_all_cg_base() || co_sstable.is_ddl_sstable()) {
+  if (!co_sstable.is_all_cg_base() || !is_support_locate_cs_range(co_sstable)) {
   } else if (row_param.enable_pd_aggregate()) {
   } else if (row_param.enable_pd_group_by()) {
   } else if (OB_SUCCESS != ERRSIM_CO_SCAN_USE_ROW_PROJ) {
     b_ret = true;
   } else {
     b_ret = !context.block_row_store_->filter_is_null() && row_param.output_exprs_->count() >= ROW_STORE_PROJECTION_THRESHOLD;
+  }
+  if (OB_UNLIKELY(b_ret != use_row_store_projector_)) {
+    // If we switch-context between row projector and column projector, we need to free the project_iter_ now and reinit it later
+    FREE_PTR_FROM_CONTEXT(access_ctx_, project_iter_, ObICGIterator);
+    use_row_store_projector_ = b_ret;
   }
   return b_ret;
 }

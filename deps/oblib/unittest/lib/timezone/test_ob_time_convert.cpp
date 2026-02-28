@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 #include "lib/timezone/ob_timezone_info.h"
+#include "lib/worker.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -184,6 +185,9 @@ TEST(ObTimeConvertTest, str_to_datetime)
 
 TEST(ObTimeConvertTest, str_to_otimestamp)
 {
+  // Save current mode and set to Oracle mode for this test
+  lib::Worker::CompatMode saved_mode = lib::get_compat_mode();
+  lib::set_compat_mode(lib::Worker::CompatMode::ORACLE);
 //  ObTimezoneUtils zone;
   ObTimeZoneInfo tz_info;
   char buf[50] = {0};
@@ -320,6 +324,8 @@ TEST(ObTimeConvertTest, str_to_otimestamp)
   str.assign(buf, static_cast<int32_t>(strlen(buf)));
   EXPECT_EQ(OB_SUCCESS, ObTimeConverter::str_to_datetime(str, cvrt_ctx, value, nullptr, 0));
   EXPECT_EQ(value, 253402300799 * static_cast<int64_t>(USECS_PER_SEC));
+  // Restore original mode
+  lib::set_compat_mode(saved_mode);
 }
 
 #define STR_TO_DATE_SUCC(str, day) \

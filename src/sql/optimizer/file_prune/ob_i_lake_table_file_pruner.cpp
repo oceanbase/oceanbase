@@ -330,6 +330,14 @@ int ObLakeTablePushDownFilterSpec::deep_copy(ObIAllocator &allocator,
   return ret;
 }
 
+ObLakeTablePushDownFilter::~ObLakeTablePushDownFilter()
+{
+  if (nullptr != pushdown_filter_) {
+    pushdown_filter_->clear();
+    pushdown_filter_ = nullptr;
+  }
+}
+
 int ObLakeTablePushDownFilter::generate_pd_filter_spec(
     ObIAllocator &allocator,
     ObExecContext &exec_ctx,

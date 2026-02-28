@@ -74,6 +74,8 @@ const int64_t OB_BACKUP_LS_DIR_NAME_LENGTH = 64;
 const int64_t OB_MAX_BACKUP_SRC_INFO_LENGTH = 128;
 const int64_t OB_BACKUP_NO_SWITCH_PIECE_ID = 0;
 const int64_t OB_BACKUP_INVALID_PIECE_ID = -1;
+const int64_t OB_INVALID_JOB_ID = -1;
+
 const int64_t OB_BACKUP_SWITCH_BASE_PIECE_ID = 1;
 const int64_t OB_MIN_LAG_TARGET = 1 * 1000LL * 1000LL;// 1s
 const int64_t OB_MAX_LAG_TARGET = 60 * 60 * 1000LL * 1000LL; // 1h
@@ -81,6 +83,7 @@ const int64_t OB_MIN_LOG_ARCHIVE_PIECE_SWITH_INTERVAL = 60 * 1000LL * 1000LL;// 
 const int64_t OB_DEFAULT_PIECE_SWITCH_INTERVAL = 24 * 3600 * 1000LL * 1000LL;// 1d, unit:us
 const int64_t OB_DEFAULT_LAG_TARGET = 120 * 1000LL * 1000LL;// 2min, unit:us
 const int64_t OB_BACKUP_MAX_RETRY_TIMES = 64;
+const int64_t OB_BACKUP_VALIDATE_MAX_RETRY_TIMES = 64;
 const int64_t OB_BACKUP_RETRY_TIME_INTERVAL = 5 * 1000LL * 1000LL;
 const int64_t OB_BACKUP_DIR_PREFIX_LENGTH = 64;
 const int64_t OB_BACKUP_DELETE_POLICY_NAME_LENGTH = 64;
@@ -103,9 +106,15 @@ const int64_t OB_MAX_RESTORE_USER_AND_TENANT_LEN = OB_MAX_ORIGINAL_NANE_LENGTH +
 const int64_t OB_MAX_RESTORE_TYPE_LEN = 8; // LOCATION/SERVICE/RAWPATH
 const int64_t OB_MAX_BACKUP_SET_NUM = 1000000;
 const int64_t OB_MAX_BACKUP_DEST_COUNT = 256;
+const int64_t OB_BACKUP_MAX_FILE_NAME_LENGTH = 256;
 const int64_t OB_MAX_BACKUP_PIECE_NUM = 1000000;
 const int64_t OB_MAX_BACKUP_DELETE_IDS_COUNT = 32;
+const int64_t OB_MAX_FILES_PER_VALIDATE_GROUP = 20;  // Maximum files per validation group for basic validate
+const int64_t OB_MAX_TABLETS_PER_VALIDATE_GROUP = 50;  // Maximum tablets per validation group for physical validate
 const int64_t MIN_LAG_TARGET_FOR_S3 = 60 * 1000 * 1000UL/*60s*/;
+const int64_t OB_MAX_VALIDATE_RUNNING_GROUP_COUNT = 1024;
+const int64_t OB_MAX_MACRO_BLOCK_NUMBER_PER_TASK = 128;
+const int64_t OB_BACKUP_DEFAULT_MAX_FILE_SIZE = 64L * 1024L * 1024L; // 64MB
 
 static constexpr const int64_t MAX_FAKE_PROVIDE_ITEM_COUNT = 128;
 static constexpr const int64_t DEFAULT_FAKE_BATCH_COUNT = 32;
@@ -206,6 +215,7 @@ const char *const OB_STR_SUCCESS_TASK_COUNT = "success_task_count";
 const char *const OB_STR_BACKUP_PATH = "path";
 const char *const OB_STR_TOTAL_LS_COUNT = "total_ls_count";
 const char *const OB_STR_MIN_RESTORE_SCN = "min_restore_scn";
+const char *const OB_STR_FILE_LIST="file_list";
 
 const char *const OB_STR_LOG_ARCHIVE_STATUS = "log_archive_status";
 const char *const OB_STR_DATA_BACKUP_DEST = "data_backup_dest";
@@ -336,6 +346,8 @@ const char *const OB_STR_MINOR_BLOCK_BYTES = "minor_block_bytes";
 const char *const OB_STR_FINISH_MINOR_BLOCK_BYTES = "finish_minor_block_bytes";
 const char *const OB_STR_LOG_FILE_COUNT = "log_file_count";
 const char *const OB_STR_FINISH_LOG_FILE_COUNT = "finish_log_file_count";
+const char *const OB_STR_TOTAL_OBJECT_COUNT = "total_object_count";
+const char *const OB_STR_FINISH_OBJECT_COUNT = "finish_object_count";
 
 const char *const OB_STR_START_REPLAY_LSN = "start_replay_lsn";
 const char *const OB_STR_LAST_REPLAY_LSN = "last_replay_lsn";
@@ -357,6 +369,7 @@ const char *const OB_STR_BASE_PIECE_ID = "base_piece_id";
 const char *const OB_STR_USED_PIECE_ID = "used_piece_id";
 const char *const OB_STR_BASE_PIECE_SCN = "base_piece_scn";
 const char *const OB_STR_BASE_SCN = "base_scn";
+const char *const OB_STR_FILE_INFO = "file_info";
 
 const char *const OB_STR_FROZEN_INPUT_BYTES = "frozen_input_bytes";
 const char *const OB_STR_FROZEN_OUTPUT_BYTES = "frozen_output_bytes";
@@ -454,6 +467,14 @@ const char *const OB_STR_MAX_IOPS_AND_MAX_BANDWIDTH = "max_iops, max_bandwidth";
 const char *const OB_STR_TABLE_LIST = "table_list";
 const char *const OB_STR_TABLE_LIST_META_INFO = "table_list_meta_info";
 const char *const OB_STR_MAJOR_COMPACTION_MVIEW_DEP_TABLET_LIST = "major_compaction_mview_dep_tablet_list";
+const char *const OB_STR_VALIDATE_TYPE = "type";
+const char *const OB_STR_PATH_TYPE = "path_type";
+const char *const OB_STR_TYPE = "type";
+const char *const OB_STR_VALIDATE_LEVEL = "validate_level";
+const char *const OB_STR_INITIATOR_TASK_ID = "initiator_task_id";
+const char *const OB_STR_VALIDATED_BYTES = "validated_bytes";
+const char *const OB_STR_BACKUP_FILE_LIST = "backup_file_list";
+
 
 enum ObBackupFileType
 {
@@ -500,9 +521,11 @@ enum ObBackupFileType
   BACKUP_MVIEW_DEP_TABLET_LIST_FILE = 40,
   BACKUP_PARAMETERS_INFO = 41,
   BACKUP_LS_ID_LIST_INFO = 42,
+  SS_BACKUP_BLOCK_FILE = 46,
   // type <=255 is write header struct to disk directly
   // type > 255 is use serialization to disk
   BACKUP_MAX_DIRECT_WRITE_TYPE = 255,
+  BACKUP_ARCHIVE_FILE_LIST = 0x4141,
   BACKUP_ARCHIVE_BLOCK_META = 0x4142, // 16706
   BACKUP_ARCHIVE_INDEX_FILE = 0x4149, // 16713 AI means ARCHIVE INDEX
   BACKUP_ARCHIVE_KEY_FILE = 0x414B, // 16713 AK means ARCHIVE  KEY
@@ -641,14 +664,14 @@ public:
   int64_t last_access_time_;
 };
 
-struct ObRestoreBackupSetBriefInfo final
+struct ObBackupSetBriefInfo final
 {
 public:
-  ObRestoreBackupSetBriefInfo(): backup_set_path_(), backup_set_desc_(){}
-  ~ObRestoreBackupSetBriefInfo() {}
+  ObBackupSetBriefInfo(): backup_set_path_(), backup_set_desc_(){}
+  ~ObBackupSetBriefInfo() {}
   void reset() { backup_set_path_.reset(); }
   bool is_valid() const { return !backup_set_path_.is_empty(); }
-  int assign(const ObRestoreBackupSetBriefInfo &that);
+  int assign(const ObBackupSetBriefInfo &that);
   int get_restore_backup_set_brief_info_str(common::ObIAllocator &allocator, common::ObString &str) const;
   int get_backup_set_path_str(common::ObIAllocator &allocator, ObString &str) const; // no aksk
   TO_STRING_KV(K_(backup_set_path), K_(backup_set_desc));
@@ -682,7 +705,7 @@ public:
   virtual ~ObPhysicalRestoreBackupDestList();
 
   int assign(const ObPhysicalRestoreBackupDestList &list);
-  int set(const common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
+  int set(const common::ObIArray<share::ObBackupSetBriefInfo> &backup_set_list,
       const common::ObIArray<share::ObBackupPiecePath> &backup_piece_list,
       const common::ObIArray<share::ObBackupPathString> &log_path_list);
   void reset();
@@ -721,7 +744,7 @@ public:
       common::ObIAllocator &allocator,
       common::ObString &str) const;
 
-  int get_backup_set_brief_info_list(common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
+  int get_backup_set_brief_info_list(common::ObIArray<share::ObBackupSetBriefInfo> &backup_set_list);
   common::ObSArray<share::ObBackupSetPath> &get_backup_set_path_list() { return backup_set_path_list_; }
   common::ObSArray<share::ObBackupPiecePath> &get_backup_piece_path_list() { return backup_piece_path_list_; }
   common::ObSArray<share::ObBackupPathString> &get_log_path_list() { return log_path_list_; }
@@ -1025,9 +1048,11 @@ public:
       const char *extension,
       const int64_t dest_id);
   int set(const char *root_path, const char *storage_info);
-  int set(const char *root_path, const ObBackupStorageInfo *storage_info);
+  int set(const char *path, const ObBackupStorageInfo *storage_info);
   int set_without_decryption(const common::ObString &backup_dest);
+
   int set_storage_path(const common::ObString &storage_path_str);
+  int set_root_path(const common::ObString &storage_path_str);
   void reset();
   int reset_access_id_and_access_key(
       const char *access_id, const char *access_key);
@@ -1043,6 +1068,7 @@ public:
   int get_backup_dest_str(char *buf, const int64_t buf_size) const;
   int get_backup_dest_str_with_primary_attr(char *buf, const int64_t buf_size) const;
   int get_backup_path_str(char *buf, const int64_t buf_size) const;
+  int get_dest_id(int64_t &dest_id) const;
   common::ObString get_root_path() const { return root_path_;}
   share::ObBackupStorageInfo *get_storage_info() const { return storage_info_;}
   bool operator ==(const ObBackupDest &backup_dest) const;
@@ -1156,6 +1182,7 @@ public:
   static int check_tenant_data_version_match(const uint64_t tenant_id, const uint64_t data_version);
   static int get_full_replica_num(const uint64_t tenant_id, int64_t &replica_num);
   static int backup_scn_to_str(const uint64_t tenant_id, const share::SCN &scn, char *buf, int64_t buf_len);
+  static int get_raw_path(const char *path, char *raw_path, const int64_t raw_path_size);
   static int get_tenant_sys_time_zone_wrap(const uint64_t tenant_id,
                                            ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> &time_zone,
                                            ObTimeZoneInfoWrap &time_zone_info_wrap);
@@ -1511,6 +1538,7 @@ public:
     RESTORE_CLOG,
     BACKUP_DATA,
     BACKUP_CLEAN,
+    BACKUP_VALIDATE,
     MAX_FAILED_TYPE
   };
   ObHAResultInfo(const FailedType &type, const ObLSID &ls_id, const ObAddr &addr, const ObTaskId &trace_id,
@@ -1628,6 +1656,12 @@ struct ObBackupDataTaskType final
     return BACKUP_META == type_ || BACKUP_USER_DATA == type_;
   }
   bool is_backup_user() const { return Type::BACKUP_USER_DATA == type_; }
+  bool is_backup_fuse_meta_info() const { return Type::BACKUP_FUSE_TABLET_META == type_; }
+  // For backup meta, user data, and fuse meta phases, there is logic to write to different directories
+  // based on turn and retry, so the file list needs to be generated before updating the ls task status.
+  bool is_need_add_file_list() const {
+    return is_backup_meta() || is_backup_user() || is_backup_fuse_meta_info();
+  }
   bool is_backup_index() const { return Type::BACKUP_BUILD_INDEX == type_; }
   void set_backup_user() { type_ = Type::BACKUP_USER_DATA; }
   int get_backup_data_type(share::ObBackupDataType &backup_data_type) const;
@@ -2041,6 +2075,7 @@ struct ObBackupDestType final
     DEST_TYPE_BACKUP_KEY = 2,
     DEST_TYPE_RESTORE_DATA = 3,
     DEST_TYPE_RESTORE_LOG = 4,
+    DEST_TYPE_BACKUP_VALIDATE = 5,
     DEST_TYPE_MAX
   };
   static const char *get_str(const TYPE &type);
@@ -2049,6 +2084,29 @@ struct ObBackupDestType final
 
   static OB_INLINE bool is_clean_valid(const TYPE &type) { return DEST_TYPE_BACKUP_DATA == type || DEST_TYPE_ARCHIVE_LOG == type; }
 };
+
+struct ObBackupTurnRetryInfo
+{
+  ObBackupTurnRetryInfo(): turn_id_(-1), retry_id_(-1) {}
+  ~ObBackupTurnRetryInfo() {}
+  void reset();
+  bool is_valid() const;
+  TO_STRING_KV(K_(turn_id), K_(retry_id));
+  int64_t turn_id_;
+  int64_t retry_id_;
+};
+
+struct ObBackupIOInfo final
+{
+  ObBackupIOInfo() : max_iops_(-1), max_bandwidth_(-1) {}
+  ~ObBackupIOInfo() {}
+  bool is_valid() const { return max_iops_ >= 0 || max_bandwidth_ >= 0; }
+  void reset() { max_iops_ = -1; max_bandwidth_ = -1; }
+  TO_STRING_KV(K_(max_iops), K_(max_bandwidth));
+  int64_t max_iops_;
+  int64_t max_bandwidth_;
+};
+
 }//share
 }//oceanbase
 

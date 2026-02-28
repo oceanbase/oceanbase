@@ -175,10 +175,12 @@ int ObStorageHdfsBase::get_or_create_write_file(const ObString &uri, const bool 
       hdfs_write_file_ = obHdfsOpenFile(hdfs_fs, path_buf_, O_WRONLY, 0, 0, 0);
       if (OB_ISNULL(hdfs_write_file_)) {
         ret = OB_HDFS_OPEN_FILE_ERROR;
-        OB_LOG(WARN, "failed to open hdfs writable file", K(ret), K_(path_buf));
+        char *ex = obHdfsGetLastExceptionRootCause();
+        OB_LOG(WARN, "failed to open hdfs writable file", K(ret), K_(path_buf), K(ex));
       } else if (0 == obHdfsFileIsOpenForWrite(hdfs_write_file_)) {
         ret = OB_HDFS_OPEN_FILE_ERROR;
-        OB_LOG(WARN, "failed to get the opened hdfs writable file", K(ret), K_(path_buf));
+        char *ex = obHdfsGetLastExceptionRootCause();
+        OB_LOG(WARN, "failed to get the opened hdfs writable file", K(ret), K_(path_buf), K(ex));
       }
     }
   }
@@ -634,6 +636,9 @@ int ObStorageHdfsJniUtil::list_directories(
                 static_cast<int64_t>(obj_name_len - uri.length()));
 
             MEMCPY(entry.d_name, file_name.ptr(), file_name.length());
+            ObFileExtraInfo extra_info;
+            extra_info.last_modified_time_ms_ = file_info.mLastMod * 1000;
+            op.set_extra_info(extra_info);
             entry.d_name[file_name.length()] = '\0'; // set str end
             if (OB_FAIL(op.func(&entry))) {
               OB_LOG(WARN, "fail to list hdfs files", K(ret));

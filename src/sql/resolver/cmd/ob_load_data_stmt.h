@@ -248,25 +248,27 @@ private:
   ObString hint_str_;
 };
 
+struct FieldOrVarStruct
+{
+  FieldOrVarStruct() : field_or_var_name_(),
+                        column_id_(OB_INVALID_ID),
+                        column_type_(common::ObMaxType),
+                        is_table_column_(true) { }
+  TO_STRING_KV(K_(field_or_var_name), K_(column_id), K_(column_type), K_(is_table_column));
+  ObString field_or_var_name_;
+  uint64_t column_id_;
+  common::ColumnType column_type_;
+  bool is_table_column_;  //false: is a user variable
+};
+
 class ObLoadDataStmt : public ObCMDStmt
 {
 public:
   static const int MAX_DELIMIT_STR_LEN = 50;
-  struct FieldOrVarStruct
-  {
-    FieldOrVarStruct() : field_or_var_name_(),
-                         column_id_(OB_INVALID_ID),
-                         column_type_(common::ObMaxType),
-                         is_table_column_(true) { }
-    TO_STRING_KV(K_(field_or_var_name), K_(column_id), K_(column_type), K_(is_table_column));
-    ObString field_or_var_name_;
-    uint64_t column_id_;
-    common::ColumnType column_type_;
-    bool is_table_column_;  //false: is a user variable
-  };
 
-  ObLoadDataStmt() :
-    ObCMDStmt(stmt::T_LOAD_DATA), optimizer_ctx_(nullptr), is_default_table_columns_(false)
+  ObLoadDataStmt(common::ObIAllocator &allocator) :
+    ObCMDStmt(stmt::T_LOAD_DATA), optimizer_ctx_(nullptr),
+    assignments_(allocator), is_default_table_columns_(false)
   {
   }
   virtual ~ObLoadDataStmt()
@@ -291,6 +293,7 @@ public:
   int set_part_ids(common::ObIArray<ObObjectID> &part_ids);
   int set_part_names(common::ObIArray<ObString> &part_names);
   const common::ObIArray<ObObjectID> &get_part_ids() const { return part_ids_; }
+  common::ObIArray<ObObjectID> &get_part_ids() { return part_ids_; }
   common::ObIArray<ObString> &get_part_names() { return part_names_; }
   bool is_load_data_url() const { return is_load_data_url_; }
   void set_is_load_data_url(bool is_load_data_url) { is_load_data_url_ = is_load_data_url; }

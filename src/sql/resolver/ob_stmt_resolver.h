@@ -99,7 +99,11 @@ public:
    *
    */
   static int resolve_ref_factor(const ParseNode *node, ObSQLSessionInfo *session_info, common::ObString &table_name, common::ObString &db_name);
-  static int resolve_dblink_name(const ParseNode *table_node, uint64_t tenant_id, ObString &dblink_name, bool &is_reverse_link, bool &has_dblink_node);
+  int resolve_dblink_name(const ParseNode *table_node, uint64_t tenant_id, ObString &dblink_name, bool &is_reverse_link, bool &has_dblink_node);
+  int resolve_dblink_name(const ParseNode *dblink_node, common::ObString &dblink_name, bool &is_reverse_link);
+  static int resolve_domain_names_list(const ParseNode *domain_names_list, ObSqlString &dblink_name_str);
+  static int resolve_connection_qualifier(const ParseNode *opt_connection_qualifier, ObSqlString &dblink_name_str);
+  static bool check_database_name_valid(const ObString &dblink_name_str);
   int resolve_database_factor(const ParseNode *node,
                               const uint64_t tenant_id,
                               const uint64_t catalog_id,
@@ -121,6 +125,10 @@ public:
   }
   inline uint64_t generate_cte_table_id() { return params_.new_cte_tid_++;}
   inline uint64_t generate_cte_column_base_id() { return common::OB_APP_MIN_COLUMN_ID;}
+  // is_creating_mview: in the process of creating a materialized view
+  inline bool is_creating_mview() const { return params_.is_mview_definition_sql_ && params_.is_from_create_view_; }
+  // is_from_existing_mview: the definition of an already created materialized view, resolving it for MV rewrite or real-time MV.
+  inline bool is_from_existing_mview() const { return params_.is_mview_definition_sql_ && !params_.is_from_create_view_; }
   template<class T>
   T *create_stmt()
   {
@@ -175,7 +183,7 @@ protected:
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObStmtResolver);
-  bool is_catalog_supported_stmt_();
+  bool is_catalog_supported_stmt_(share::ObCatalogProperties::CatalogType catalog_type);
 public:
   // data members
   common::ObIAllocator *allocator_;

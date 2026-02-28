@@ -126,6 +126,9 @@ int ObExprIfNull::calc_result_type2(ObExprResType &type,
       type1.set_calc_accuracy(type.get_accuracy());
       type2.set_calc_meta(type.get_obj_meta());
       type2.set_calc_accuracy(type.get_accuracy());
+    if (type1.has_result_flag(NOT_NULL_FLAG) || type2.has_result_flag(NOT_NULL_FLAG)) {
+        type.set_result_flag(NOT_NULL_FLAG);
+      }
     }
   }
 

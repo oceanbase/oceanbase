@@ -358,6 +358,9 @@ int ObDirectLoadOriginTableAccessor::init_table_access_param()
   for (int64_t i = 0; OB_SUCC(ret) && i < schema_param_.get_columns().count(); ++i) {
     if (schema_param_.get_columns().at(i)->is_virtual_gen_col()) {
       // skip
+    } else if (schema_param_.get_columns().at(i)->get_column_id() == OB_HIDDEN_TRANS_VERSION_COLUMN_ID ||
+               schema_param_.get_columns().at(i)->get_column_id() == OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID) {
+      // skip
     } else if (OB_FAIL(col_ids_.push_back(i))) {
       LOG_WARN("fail to push back col id", KR(ret), K(i));
     }
@@ -551,8 +554,7 @@ int ObDirectLoadOriginTableScanner::reinit_open()
     blocksstable::ObDatumRowkey datum_row_key(datum_row_.storage_datums_,
                                               origin_table->get_meta().rowkey_column_num_);
 
-    if (OB_FAIL(
-          ObTableLoadUtils::deep_copy(datum_row_key, query_range.start_key_, tmp_allocator))) {
+    if (OB_FAIL(datum_row_key.deep_copy(query_range.start_key_, tmp_allocator))) {
       LOG_WARN("fail to deep copy datum row key", KR(ret));
     } else {
       query_range.set_left_open();

@@ -175,7 +175,7 @@ int TableItem::deep_copy_json_table_def(const ObJsonTableDef& jt_def, ObIRawExpr
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory json table define strunct failed.", K(ret));
   } else {
-    tmp_jt_def = new (tmp_jt_def) ObJsonTableDef();
+    tmp_jt_def = new (tmp_jt_def) ObJsonTableDef(*allocator);
     if (OB_FAIL(tmp_jt_def->deep_copy(jt_def, expr_copier, allocator))) {
       LOG_WARN("deep copy json table define failed.", K(ret));
     } else {
@@ -313,7 +313,7 @@ int JoinedTable::deep_copy(ObIAllocator &allocator,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for joined table", K(ret));
     } else {
-      tmp_left = new (ptr) JoinedTable();
+      tmp_left = new (ptr) JoinedTable(allocator);
       if (OB_FAIL(SMART_CALL(tmp_left->deep_copy(allocator,
                                       expr_copier,
                                       static_cast<JoinedTable &>(*left_table_))))) {
@@ -330,7 +330,7 @@ int JoinedTable::deep_copy(ObIAllocator &allocator,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for joined table", K(ret));
     } else {
-      tmp_right = new (ptr) JoinedTable();
+      tmp_right = new (ptr) JoinedTable(allocator);
       if (OB_FAIL(SMART_CALL(tmp_right->deep_copy(allocator,
                                        expr_copier,
                                        static_cast<JoinedTable &>(*right_table_))))) {
@@ -358,38 +358,41 @@ int PartExprItem::deep_copy(ObIRawExprCopier &expr_copier,
   return ret;
 }
 
-ObDMLStmt::ObDMLStmt(stmt::StmtType type)
+ObDMLStmt::ObDMLStmt(stmt::StmtType type, ObIAllocator &allocator)
     : ObStmt(type),
-      order_items_(),
+      order_items_(allocator),
       limit_count_expr_(NULL),
       limit_offset_expr_(NULL),
       limit_percent_expr_(NULL),
       has_fetch_(false),
       is_fetch_with_ties_(false),
-      from_items_(),
-      part_expr_items_(),
-      joined_tables_(),
-      stmt_hint_(),
-      semi_infos_(),
-      autoinc_params_(),
+      from_items_(allocator),
+      part_expr_items_(allocator),
+      joined_tables_(allocator),
+      stmt_hint_(allocator),
+      semi_infos_(allocator),
+      autoinc_params_(allocator),
       is_calc_found_rows_(false),
       has_top_limit_(false),
       is_contains_assignment_(false),
       affected_last_insert_id_(false),
       has_part_key_sequence_(false),
-      table_items_(),
-      column_items_(),
-      condition_exprs_(),
-      pseudo_column_like_exprs_(),
+      nextval_sequence_ids_(allocator),
+      currval_sequence_ids_(allocator),
+      table_items_(allocator),
+      column_items_(allocator),
+      condition_exprs_(allocator),
+      pseudo_column_like_exprs_(allocator),
       tables_hash_(),
-      subquery_exprs_(),
+      subquery_exprs_(allocator),
       unpivot_item_(NULL),
-      user_var_exprs_(),
-      check_constraint_items_(),
+      user_var_exprs_(allocator),
+      check_constraint_items_(allocator),
+      cte_definitions_(allocator),
       dblink_id_(OB_INVALID_ID),
       is_reverse_link_(false),
       has_vec_approx_(false),
-      match_exprs_()
+      match_exprs_(allocator)
 {
 }
 
@@ -581,7 +584,7 @@ int deep_copy_stmt_tableItem(ObIAllocator &allocator,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_RESV_LOG(WARN, "failed to allocate memory", K(ret), K(lbt()));
       } else {
-        new_obj = new (ptr) TableItem();
+        new_obj = new (ptr) TableItem(allocator);
         if (OB_FAIL(new_obj->deep_copy(expr_copier, *obj, &allocator))) {
           SQL_RESV_LOG(WARN, "failed to deep copy obj", K(ret));
         }
@@ -650,7 +653,8 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
   } else if (OB_FAIL(expr_copier.copy(other.match_exprs_,
                                       match_exprs_))) {
     LOG_WARN("deep copy user var exprs failed", K(ret));
-  } else if (OB_FAIL(deep_copy_stmt_objects<CheckConstraintItem>(expr_copier,
+  } else if (OB_FAIL(deep_copy_stmt_objects<CheckConstraintItem>(allocator,
+                                                                 expr_copier,
                                                                  other.check_constraint_items_,
                                                                  check_constraint_items_))) {
     LOG_WARN("failed to deep copy related part expr arrays", K(ret));
@@ -832,10 +836,13 @@ int ObDMLStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     } else { /*do nothing*/ }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < check_constraint_items_.count(); i++) {
-    if (OB_FAIL(visitor.visit(check_constraint_items_.at(i).check_constraint_exprs_,
-                              SCOPE_BASIC_TABLE))) {
+    if (OB_ISNULL(check_constraint_items_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("check constraint item is null", K(ret));
+    } else if (OB_FAIL(visitor.visit(check_constraint_items_.at(i)->check_constraint_exprs_,
+                                     SCOPE_BASIC_TABLE))) {
       LOG_WARN("failed to visit check constraint exprs", K(ret));
-    } else { /*+do nothing*/ }
+    } else { /*do nothing*/ }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); i++) {
     ObColumnRefRawExpr *&expr = column_items_.at(i).expr_;
@@ -1001,7 +1008,7 @@ int ObDMLStmt::deep_copy_join_tables(ObIAllocator &allocator,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("falied to allocate memory", K(ret), K(ptr));
     } else {
-      table = new (ptr) JoinedTable();
+      table = new (ptr) JoinedTable(allocator);
       if (OB_FAIL(table->deep_copy(allocator, expr_copier, *other.joined_tables_.at(i)))) {
         LOG_WARN("faield to deep copy joined table", K(ret));
       } else if (OB_FAIL(construct_join_table(other, *other.joined_tables_.at(i), *table))) {
@@ -1078,7 +1085,7 @@ int ObDMLStmt::construct_join_table(const ObDMLStmt &other_stmt,
  * for or-expansion transformation
  * todo: do not update semi id in semi info now
  */
-int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &other)
+int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &other, bool need_update_qb_name)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(other.table_items_.count() != table_items_.count())) {
@@ -1106,14 +1113,14 @@ int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &ot
                NULL != table_items_.at(i)->ref_query_ &&
                NULL != other.table_items_.at(i)->ref_query_ &&
                OB_FAIL(table_items_.at(i)->ref_query_->update_stmt_table_id(allocator,
-                       *other.table_items_.at(i)->ref_query_))) {
+                       *other.table_items_.at(i)->ref_query_, need_update_qb_name))) {
       LOG_WARN("failed to update table id for generated table", K(ret));
     } else if (table_items_.at(i)->is_lateral_table() &&
                other.table_items_.at(i)->is_lateral_table() &&
                NULL != table_items_.at(i)->ref_query_ &&
                NULL != other.table_items_.at(i)->ref_query_ &&
                OB_FAIL(table_items_.at(i)->ref_query_->update_stmt_table_id(allocator,
-                       *other.table_items_.at(i)->ref_query_))) {
+                       *other.table_items_.at(i)->ref_query_, need_update_qb_name))) {
       LOG_WARN("failed to update table id for generated table", K(ret));
     } else { /*do nothing*/ }
   }
@@ -1128,7 +1135,7 @@ int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &ot
           K(subquery_exprs_.at(i)->get_ref_stmt()), K(other.subquery_exprs_.at(i)->get_ref_stmt()),
           K(ret));
     } else if (OB_FAIL(subquery_exprs_.at(i)->get_ref_stmt()->update_stmt_table_id(allocator,
-                       *other.subquery_exprs_.at(i)->get_ref_stmt()))) {
+                       *other.subquery_exprs_.at(i)->get_ref_stmt(), need_update_qb_name))) {
       LOG_WARN("failed to update table id for subquery exprs", K(ret));
     } else { /*do nothing*/ }
   }
@@ -1157,7 +1164,8 @@ int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &ot
                                             *other.table_items_.at(i),
                                             true,
                                             *table_items_.at(i),
-                                            allocator))) {
+                                            allocator,
+                                            need_update_qb_name))) {
       LOG_WARN("failed to update table id for table item", K(ret));
     } else { /*do nothing*/ }
   }
@@ -1170,7 +1178,8 @@ int ObDMLStmt::update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &ot
           K(joined_tables_.at(i)), K(ret));
     } else if (OB_FAIL(update_table_item_id_for_joined_table(other,
                                                              *other.joined_tables_.at(i),
-                                                             *joined_tables_.at(i)))) {
+                                                             *joined_tables_.at(i),
+                                                             need_update_qb_name))) {
       LOG_WARN("failed to update table id for joined table", K(ret));
     } else { /*do nothing*/ }
   }
@@ -1268,6 +1277,27 @@ int ObDMLStmt::recursive_adjust_statement_id(ObIAllocator *allocator,
   return ret;
 }
 
+int ObDMLStmt::recursive_set_statement_id()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  if (OB_FAIL(set_stmt_id())) {
+    LOG_WARN("failed to set stmt id", K(ret));
+  } else if (OB_FAIL(get_child_stmts(child_stmts))) {
+    LOG_WARN("get child stmt failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_ISNULL(child_stmts.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sub stmt is null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(child_stmts.at(i)->recursive_set_statement_id()))) {
+        LOG_WARN("fail to adjust statement id", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::get_stmt_by_stmt_id(int64_t stmt_id, ObDMLStmt *&stmt)
 {
   int ret = OB_SUCCESS;
@@ -1308,7 +1338,8 @@ int ObDMLStmt::get_stmt_by_stmt_id(int64_t stmt_id, ObDMLStmt *&stmt)
 
 int ObDMLStmt::update_table_item_id_for_joined_table(const ObDMLStmt &other_stmt,
                                                      const JoinedTable &other,
-                                                     JoinedTable &current)
+                                                     JoinedTable &current,
+                                                     bool need_update_qb_name)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(other.left_table_) || OB_ISNULL(other.right_table_) ||
@@ -1316,19 +1347,21 @@ int ObDMLStmt::update_table_item_id_for_joined_table(const ObDMLStmt &other_stmt
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null table item", K(other.left_table_), K(other.right_table_),
         K(current.left_table_), K(current.right_table_), K(ret));
-  } else if (OB_FAIL(update_table_item_id(other_stmt, other, false, current, NULL))) {
+  } else if (OB_FAIL(update_table_item_id(other_stmt, other, false, current, NULL, need_update_qb_name))) {
     LOG_WARN("failed to update table id", K(ret));
   } else if (other.left_table_->is_joined_table() &&
              current.left_table_->is_joined_table() &&
              OB_FAIL(SMART_CALL(update_table_item_id_for_joined_table(other_stmt,
                                                            static_cast<JoinedTable&>(*other.left_table_),
-                                                           static_cast<JoinedTable&>(*current.left_table_))))) {
+                                                           static_cast<JoinedTable&>(*current.left_table_),
+                                                           need_update_qb_name)))) {
     LOG_WARN("failed to update table id", K(ret));
   } else if (other.right_table_->is_joined_table() &&
              current.right_table_->is_joined_table() &&
              OB_FAIL(SMART_CALL(update_table_item_id_for_joined_table(other_stmt,
                                                            static_cast<JoinedTable&>(*other.right_table_),
-                                                           static_cast<JoinedTable&>(*current.right_table_))))) {
+                                                           static_cast<JoinedTable&>(*current.right_table_),
+                                                           need_update_qb_name)))) {
     LOG_WARN("failed to update table id", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -1338,7 +1371,8 @@ int ObDMLStmt::update_table_item_id(const ObDMLStmt &other,
                                     const TableItem &old_item,
                                     const bool has_bit_index,
                                     TableItem &new_item,
-                                    ObIAllocator *allocator)
+                                    ObIAllocator *allocator,
+                                    bool need_update_qb_name)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(query_ctx_)) {
@@ -1355,7 +1389,7 @@ int ObDMLStmt::update_table_item_id(const ObDMLStmt &other,
       if (OB_ISNULL(allocator)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(ret), K(allocator));
-      } else if (OB_FAIL(get_qb_name(new_item.qb_name_))) {
+      } else if (need_update_qb_name && OB_FAIL(get_qb_name(new_item.qb_name_))) {
         LOG_WARN("fail to get qb_name", K(ret), K(get_stmt_id()));
       } else if (OB_FAIL(adjust_duplicated_table_name(*allocator, new_item, adjusted))) {
         LOG_WARN("fail to update dup table name", K(ret), K(new_item));
@@ -2424,7 +2458,10 @@ int ObDMLStmt::is_referred_by_partitioning_expr(const ObRawExpr *expr,
       } else { /*do nothing*/ }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < check_constraint_items_.count(); i++) {
-      if (OB_FAIL(append(part_exprs, check_constraint_items_.at(i).check_constraint_exprs_))) {
+      if (OB_ISNULL(check_constraint_items_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("check constraint item is null", K(ret));
+      } else if (OB_FAIL(append(part_exprs, check_constraint_items_.at(i)->check_constraint_exprs_))) {
         LOG_WARN("failed to append exprs", K(ret));
       } else {/*do nothing*/}
     }
@@ -2774,7 +2811,7 @@ TableItem *ObDMLStmt::create_table_item(ObIAllocator &allocator)
   if (NULL == (ptr = allocator.alloc(sizeof(TableItem)))) {
     LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "alloc table item failed");
   } else {
-    table_item = new(ptr) TableItem();
+    table_item = new(ptr) TableItem(allocator);
   }
   return table_item;
 }
@@ -2786,7 +2823,7 @@ JoinedTable *ObDMLStmt::create_joined_table(ObIAllocator &allocator)
   if (NULL == (ptr = allocator.alloc(sizeof(JoinedTable)))) {
     LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "alloc joined table failed");
   } else {
-    table_item = new(ptr) JoinedTable();
+    table_item = new(ptr) JoinedTable(allocator);
     table_item->type_ = TableItem::JOINED_TABLE;
   }
   return table_item;
@@ -3409,6 +3446,23 @@ int ObDMLStmt::get_table_rel_ids(const TableItem &target,
 
 int ObDMLStmt::get_table_rel_ids(const ObIArray<uint64_t> &table_ids,
                                  ObSqlBitSet<> &table_set) const
+{
+  int ret = OB_SUCCESS;
+  int32_t idx = OB_INVALID_INDEX;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
+    idx = get_table_bit_index(table_ids.at(i));
+    if (OB_UNLIKELY(OB_INVALID_INDEX == idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect idx", K(ret));
+    } else if (OB_FAIL(table_set.add_member(idx))) {
+      LOG_WARN("failed to add members", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_rel_ids(const ObIArray<uint64_t> &table_ids,
+                                 ObRelIds &table_set) const
 {
   int ret = OB_SUCCESS;
   int32_t idx = OB_INVALID_INDEX;
@@ -5049,20 +5103,27 @@ int CheckConstraintItem::assign(const CheckConstraintItem &other)
   return ret;
 }
 
-int ObDMLStmt::set_check_constraint_item(CheckConstraintItem &check_constraint_item)
+int ObDMLStmt::set_check_constraint_item(CheckConstraintItem *item)
 {
   int ret = OB_SUCCESS;
   bool found = false;
-  for (int64_t i = 0; !found && i < check_constraint_items_.count(); i ++) {
-    if (check_constraint_item.table_id_ == check_constraint_items_.at(i).table_id_
-        && check_constraint_item.ref_table_id_ == check_constraint_items_.at(i).ref_table_id_) {
-      found = true;
+  if (NULL == item) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; !found && i < check_constraint_items_.count(); i ++) {
+      if (OB_ISNULL(check_constraint_items_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("check constraint item is null", K(ret));
+      } else if (item->table_id_ == check_constraint_items_.at(i)->table_id_
+          && item->ref_table_id_ == check_constraint_items_.at(i)->ref_table_id_) {
+        found = true;
+      }
     }
-  }
-  if (found) {
-    LOG_TRACE("check constraint item exists", K(check_constraint_item), K(check_constraint_items_));
-  } else if (OB_FAIL(check_constraint_items_.push_back(check_constraint_item))) {
-    LOG_WARN("failed to push back", K(ret));
+    if (found) {
+      LOG_TRACE("check constraint item exists", KPC(item), K(check_constraint_items_));
+    } else if (OB_FAIL(check_constraint_items_.push_back(item))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
   }
   return ret;
 }
@@ -5071,7 +5132,10 @@ int ObDMLStmt::remove_check_constraint_item(const uint64_t table_id)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = check_constraint_items_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-    if (table_id == check_constraint_items_.at(i).table_id_) {
+    if (OB_ISNULL(check_constraint_items_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("check constraint item is null", K(ret));
+    } else if (table_id == check_constraint_items_.at(i)->table_id_) {
       if (OB_FAIL(check_constraint_items_.remove(i))) {
         LOG_WARN("failed to remove check constraint item", K(ret), K(table_id));
       }
@@ -5081,16 +5145,16 @@ int ObDMLStmt::remove_check_constraint_item(const uint64_t table_id)
 }
 
 int ObDMLStmt::get_check_constraint_items(const uint64_t table_id,
-                                          CheckConstraintItem &check_constraint_item)
+                                          CheckConstraintItem *&check_constraint_item)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < check_constraint_items_.count(); ++i) {
-    if (table_id != check_constraint_items_.at(i).table_id_) {
-      // do nothing
-    } else if (OB_FAIL(check_constraint_item.assign(check_constraint_items_.at(i)))) {
-      LOG_WARN("failed to assign check constraint item", K(ret));
-    } else {
-      break;
+  check_constraint_item = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == check_constraint_item && i < check_constraint_items_.count(); ++i) {
+    if (OB_ISNULL(check_constraint_items_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("check constraint item is null", K(ret));
+    } else if (table_id == check_constraint_items_.at(i)->table_id_) {
+      check_constraint_item = check_constraint_items_.at(i);
     }
   }
   return ret;
@@ -5839,7 +5903,7 @@ int TableItem::deep_copy_values_table_def(const ObValuesTableDef& table_def,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory table define strunct failed.", K(ret));
   } else {
-    values_table_def_ = new (tmp) ObValuesTableDef();
+    values_table_def_ = new (tmp) ObValuesTableDef(*allocator);
     if (OB_FAIL(values_table_def_->deep_copy(table_def, expr_copier, allocator))) {
       LOG_WARN("deep copy json table define failed.", K(ret));
     }

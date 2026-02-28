@@ -29,7 +29,6 @@ int _eval_arg_vec_cast(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &sk
       continue;                                                                                    \
     } else {                                                                                       \
       static_cast<out_vec_type *>(output_vector)->set_null(i);                                     \
-      eval_flags.set(i);                                                                           \
     }                                                                                              \
   }
   int ret = OB_SUCCESS;

@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_OB_LOG_JOIN_H
 #include "ob_log_operator_factory.h"
 #include "ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "ob_join_order.h"
 #include "sql/engine/join/ob_join_filter_material_control_info.h"
 
@@ -22,32 +23,36 @@ namespace oceanbase
 namespace sql
 {
   class ObLogicalOperator;
+  template<typename R, typename C>
+  class PlanVisitor;
   class ObLogJoin : public ObLogicalOperator
   {
   public:
     ObLogJoin(ObLogPlan &plan)
       : ObLogicalOperator(plan),
-        join_conditions_(),
-        join_filters_(),
+        join_conditions_(plan.get_allocator()),
+        join_filters_(plan.get_allocator()),
         join_type_(UNKNOWN_JOIN),
         join_algo_(INVALID_JOIN_ALGO),
         join_dist_algo_(DistAlgo::DIST_INVALID_METHOD),
         late_mat_(false),
-        merge_directions_(),
-        nl_params_(),
-        connect_by_pseudo_columns_(),
-        connect_by_prior_exprs_(),
-        prior_exprs_(),
-        connect_by_root_exprs_(),
-        sys_connect_by_path_exprs_(),
+        merge_directions_(plan.get_allocator()),
+        nl_params_(plan.get_allocator()),
+        connect_by_pseudo_columns_(plan.get_allocator()),
+        connect_by_prior_exprs_(plan.get_allocator()),
+        prior_exprs_(plan.get_allocator()),
+        connect_by_root_exprs_(plan.get_allocator()),
+        sys_connect_by_path_exprs_(plan.get_allocator()),
         partition_id_expr_(nullptr),
-        connect_by_extra_exprs_(),
+        connect_by_extra_exprs_(plan.get_allocator()),
         enable_px_batch_rescan_(false),
+        join_filter_infos_(plan.get_allocator()),
         can_use_batch_nlj_(false),
-        join_path_(nullptr)
+        join_path_(nullptr),
+        above_pushdown_left_params_(plan.get_allocator()),
+        above_pushdown_right_params_(plan.get_allocator())
     { }
     virtual ~ObLogJoin() {}
-
     inline void set_join_type(const ObJoinType join_type) { join_type_ = join_type; }
     inline ObJoinType get_join_type() const { return join_type_; }
     inline bool is_right_semi_or_anti_join() const { return join_type_ == RIGHT_SEMI_JOIN ||
@@ -64,6 +69,19 @@ namespace sql
     inline bool is_shared_hash_join() const
     { return HASH_JOIN == join_algo_ && DIST_BC2HOST_NONE == join_dist_algo_; }
     int is_left_unique(bool &left_unique) const;
+    inline bool is_left_join()
+    {
+      return join_type_ == LEFT_OUTER_JOIN ||
+             join_type_ == LEFT_ANTI_JOIN ||
+             join_type_ == LEFT_SEMI_JOIN;
+    }
+
+    inline bool is_right_join()
+    {
+      return join_type_ == RIGHT_OUTER_JOIN ||
+             join_type_ == RIGHT_ANTI_JOIN ||
+             join_type_ == RIGHT_SEMI_JOIN;
+    }
     inline int add_join_condition(ObRawExpr *expr) { return join_conditions_.push_back(expr); }
     inline int add_join_filter(ObRawExpr *expr) { return join_filters_.push_back(expr); }
     const common::ObIArray<ObRawExpr *> &get_equal_join_conditions() const { return join_conditions_; }
@@ -148,9 +166,10 @@ namespace sql
     inline bool enable_px_batch_rescan() { return enable_px_batch_rescan_; }
     inline void set_px_batch_rescan(bool flag) { enable_px_batch_rescan_ = flag; }
 
-    int set_join_filter_infos(const common::ObIArray<JoinFilterInfo> &infos) { return join_filter_infos_.assign(infos); }
-    const common::ObIArray<JoinFilterInfo> &get_join_filter_infos() const { return join_filter_infos_; }
-
+    int set_join_filter_infos(const common::ObIArray<JoinFilterInfo*> &infos) { return join_filter_infos_.assign(infos); }
+    int append_join_filter_infos(const common::ObIArray<JoinFilterInfo*> &infos) { return append(join_filter_infos_, infos); }
+    const common::ObIArray<JoinFilterInfo*> &get_join_filter_infos() const { return join_filter_infos_; }
+    common::ObIArray<JoinFilterInfo*> &get_join_filter_infos() { return join_filter_infos_; }
     inline bool can_use_batch_nlj() const { return can_use_batch_nlj_; }
     void set_can_use_batch_nlj(bool can_use) { can_use_batch_nlj_ = can_use; }
     void set_join_path(JoinPath *path) { join_path_ = path; }
@@ -203,10 +222,10 @@ namespace sql
     virtual int print_outline_data(PlanText &plan_text) override;
     virtual int print_used_hint(PlanText &plan_text) override;
     int add_used_leading_hint(ObIArray<const ObHint*> &used_hints);
-    int check_used_leading(const ObIArray<LeadingInfo> &leading_infos,
+    int check_used_leading(const ObIArray<LeadingInfo *> &leading_infos,
                            const ObLogicalOperator *op,
                            bool &used_hint);
-    bool find_leading_info(const ObIArray<LeadingInfo> &leading_infos,
+    bool find_leading_info(const ObIArray<LeadingInfo *> &leading_infos,
                            const ObRelIds &l_set,
                            const ObRelIds &r_set);
     const ObLogicalOperator *find_child_join(const ObLogicalOperator *input_op);
@@ -235,31 +254,31 @@ namespace sql
     virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
   private:
     // all join predicates
-    common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_conditions_; //equal join condition, for merge-join
-    common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_filters_; //join filter, all conditions are here for nested loop join.
+    ObSqlArray<ObRawExpr *> join_conditions_; //equal join condition, for merge-join
+    ObSqlArray<ObRawExpr *> join_filters_; //join filter, all conditions are here for nested loop join.
     ObJoinType join_type_;
     JoinAlgo join_algo_;
     DistAlgo join_dist_algo_;
     bool late_mat_;
-    common::ObSEArray<ObOrderDirection, 8, common::ModulePageAllocator, true> merge_directions_;
-    common::ObSEArray<ObExecParamRawExpr *, 8, common::ModulePageAllocator, true> nl_params_;
-    common::ObSEArray<ObRawExpr*, 3, common::ModulePageAllocator, true> connect_by_pseudo_columns_;
-    common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_prior_exprs_;
-    common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> prior_exprs_;
-    common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_root_exprs_;
-    common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> sys_connect_by_path_exprs_;
+    ObSqlArray<ObOrderDirection> merge_directions_;
+    ObSqlArray<ObExecParamRawExpr *> nl_params_;
+    ObSqlArray<ObRawExpr*> connect_by_pseudo_columns_;
+    ObSqlArray<ObRawExpr*> connect_by_prior_exprs_;
+    ObSqlArray<ObRawExpr*> prior_exprs_;
+    ObSqlArray<ObRawExpr*> connect_by_root_exprs_;
+    ObSqlArray<ObRawExpr*> sys_connect_by_path_exprs_;
     // NLJ 模式下右侧接 GI 时，通知 GI 过滤掉不可能命中的分区，以提升 rescan 性能
     // NLJ 模式下记录左侧 pkey exchange 生成的 partition id 列
     // 用于在 CG 阶段定位 part id 列位置，然后生成行下标
     ObOpPseudoColumnRawExpr *partition_id_expr_;
-    ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> connect_by_extra_exprs_;
+    ObSqlArray<ObRawExpr *> connect_by_extra_exprs_;
     // for nestloop join
     bool enable_px_batch_rescan_;
-    common::ObSEArray<JoinFilterInfo, 4, common::ModulePageAllocator, true> join_filter_infos_;
+    ObSqlArray<JoinFilterInfo*> join_filter_infos_;
     bool can_use_batch_nlj_;
     JoinPath *join_path_;
-    common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
-    common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
+    ObSqlArray<ObExecParamRawExpr *> above_pushdown_left_params_;
+    ObSqlArray<ObExecParamRawExpr *> above_pushdown_right_params_;
     ObJoinFilterMaterialControlInfo jf_material_control_info_;
     DISALLOW_COPY_AND_ASSIGN(ObLogJoin);
   };

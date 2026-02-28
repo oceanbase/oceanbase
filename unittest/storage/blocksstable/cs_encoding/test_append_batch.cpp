@@ -69,7 +69,7 @@ TEST_F(TestAppendBatch, test_integer_append)
 
   const int64_t row_cnt = 400;
   const int64_t batch_size = 100;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
   ObDatumRow row_arr[row_cnt];
@@ -159,7 +159,7 @@ TEST_F(TestAppendBatch, test_integer_append)
   }
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   LOG_INFO("finish build_micro_block_desc", K(micro_block_desc));
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
 }
@@ -187,7 +187,7 @@ TEST_F(TestAppendBatch, test_string_append)
   ASSERT_EQ(OB_SUCCESS, vec_formats.push_back(VectorFormat::VEC_UNIFORM));
   ASSERT_EQ(OB_SUCCESS, vec_formats.push_back(VectorFormat::VEC_UNIFORM_CONST));
 
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   const int64_t row_cnt = 400;
   ObDatumRow row_arr[row_cnt];
@@ -284,7 +284,7 @@ TEST_F(TestAppendBatch, test_string_append)
   }
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   LOG_INFO("finish build_micro_block_desc", K(micro_block_desc));
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
 }

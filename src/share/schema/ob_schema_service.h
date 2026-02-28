@@ -402,6 +402,11 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_ALTER_AI_MODEL, )                                   \
   ACT(OB_DDL_DROP_AI_MODEL, )                                    \
   ACT(OB_DDL_AI_MODEL_OPERATION_END, = 2163)                     \
+  ACT(OB_DDL_JAVA_POLICY_OPERATION_BEGIN, = 2164)                \
+  ACT(OB_DDL_CREATE_JAVA_POLICY,)                                \
+  ACT(OB_DDL_DROP_JAVA_POLICY,)                                  \
+  ACT(OB_DDL_MODIFY_JAVA_POLICY,)                                \
+  ACT(OB_DDL_JAVA_POLICY_OPERATION_END, )                  \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -1062,6 +1067,10 @@ public:
   virtual int get_core_version(common::ObISQLClient &sql_client,
                                const ObRefreshSchemaStatus &schema_status,
                                int64_t &core_schema_version) = 0;
+  virtual int get_core_and_sys_version(common::ObISQLClient &sql_client,
+                               const uint64_t &tenant_id,
+                               int64_t &core_schema_version,
+                               int64_t &sys_schema_version) = 0;
   virtual int get_baseline_schema_version(common::ObISQLClient &sql_client,
                                           const ObRefreshSchemaStatus &schema_status,
                                           int64_t &baseline_schema_version) = 0;
@@ -1477,7 +1486,10 @@ public:
               common::ObIArray<ObString> &table_names,
               common::ObIArray<uint64_t> &table_ids) = 0;
   /*----------- interfaces for latest schema end -------------*/
-
+  static bool in_parallel_ddl_thread()
+  {
+    return 0 == STRCASECMP(PARALLEL_DDL_THREAD_NAME, ob_get_origin_thread_name());
+  }
 };
 }//namespace schema
 }//namespace share

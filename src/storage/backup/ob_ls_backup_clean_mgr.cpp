@@ -509,7 +509,7 @@ int ObLSBackupCleanTask::post_rpc_result_(const int64_t result)
   } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
         cluster_id, meta_tenant_id, ObLSID(ObLSID::SYS_LS_ID), leader_addr))) {
     LOG_WARN("failed to get leader address", K(ret));
-  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).report_backup_clean_over(clean_ls_res))) {
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).by(tenant_id_).report_backup_clean_over(clean_ls_res))) {
     LOG_WARN("failed to post backup ls data res", K(ret), K(clean_ls_res));
   } else {
     LOG_INFO("[BACKUP_CLEAN] success finish task post rpc result", K(clean_ls_res));
@@ -934,23 +934,6 @@ int ObLSBackupCleanTask::delete_meta_info_(const ObBackupPath &path)
   return ret;
 }
 
-int ObLSBackupCleanTask::delete_log_stream_dir_(const share::ObBackupPath &ls_path)
-{
-  int ret = OB_SUCCESS;
-  common::ObArenaAllocator allocator(ObModIds::BACKUP);
-  ObArray<common::ObString> file_names;
-  ObBackupIoAdapter util;
-  ObFileListArrayOp file_name_op(file_names, allocator);
-  if (OB_FAIL(util.list_files(ls_path.get_ptr(), backup_dest_.get_storage_info(), file_name_op))) {
-    LOG_WARN("failed to list files", K(ret), K(ls_path));
-  } else if (0 != file_names.count()) {
-    // do nothing
-  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir(ls_path, backup_dest_.get_storage_info()))) {
-    LOG_WARN("failed to delete backup dir", K(ret));
-  }
-  return ret;
-}
-
 int ObLSBackupCleanTask::delete_backup_set_ls_files_(const ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -969,13 +952,8 @@ int ObLSBackupCleanTask::delete_backup_set_ls_files_(const ObBackupPath &path)
     LOG_WARN("failed to delete user data", K(ret));
   } else if (OB_FAIL(delete_meta_info_(path))) {
     LOG_WARN("failed to delete meta info", K(ret)); 
-  } else if (OB_FAIL(delete_log_stream_dir_(path))) {
-    if (OB_DIR_NOT_EXIST == ret) {
-      LOG_INFO("dir is not exist", K(ret), K(path), K(*this));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to delete backup log stream dir", K(ret), K(path));
-    }
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup logstream dir", K(ret), K(path));
   } else {
     LOG_INFO("[BACKUP_CLEAN]success finish delete backup set files", K(path)); 
   }

@@ -34,7 +34,7 @@ ObTenantStorageMetaService::ObTenantStorageMetaService()
     slogger_(),
     shared_object_rwriter_(),
     shared_object_raw_rwriter_(),
-    wait_gc_map_lock_(),
+    wait_gc_map_lock_(common::ObLatchIds::OB_TENANT_STORAGE_META_SERVICE_WAIT_GC_MAP_LOCK),
     wait_gc_tablet_arr_map_()
 {}
 
@@ -676,12 +676,11 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("talbet is invalid", K(ret), K(tablet), K(tablet_addr));
   } else {
-    bool in_memory = true;
     ObTabletMacroInfo *macro_info = nullptr;
     storage::ObMacroInfoIterator macro_iter;
     storage::ObTabletBlockInfo block_info;
 
-    if (OB_FAIL(tablet.load_macro_info(ls_epoch, allocator, macro_info, in_memory))) {
+    if (OB_FAIL(tablet.load_macro_info(ls_epoch, allocator, macro_info))) {
       LOG_WARN("fail to load macro info", K(ret));
     } else if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, *macro_info))) {
       LOG_WARN("fail to init macro iterator", K(ret), KPC(macro_info));
@@ -722,7 +721,7 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
           tmp_print_arr.reuse();
         }
       }
-      if (OB_NOT_NULL(macro_info) && !in_memory) {
+      if (OB_NOT_NULL(macro_info)) {
         macro_info->reset();
       }
     }
@@ -1511,5 +1510,17 @@ int ObTenantStorageMetaService::get_max_meta_version_from_wait_gc_map(
   return ret;
 }
 
+int ObTenantStorageMetaService::get_tenant_meta_with_lock(omt::ObTenant &tenant, /*out*/omt::ObTenantMeta &meta)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ckpt_slog_handler_.get_tenant_meta_with_lock(tenant, /*out*/meta))) {
+    LOG_WARN("fail to get tenant meta with lock", K(ret));
+  }
+  return ret;
+}
 } // namespace storage
 } // namespace oceanbase

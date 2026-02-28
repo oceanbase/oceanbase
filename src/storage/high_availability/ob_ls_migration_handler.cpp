@@ -162,14 +162,16 @@ ObLSMigrationHandler::ObLSMigrationHandler()
     start_ts_(0),
     finish_ts_(0),
     task_list_(),
-    lock_(),
+    lock_(common::ObLatchIds::OB_LS_MIGRATION_HANDLER_LOCK),
     status_(ObLSMigrationHandlerStatus::INIT),
     result_(OB_SUCCESS),
     is_stop_(false),
     is_cancel_(false),
     chosen_src_(),
     is_complete_(false),
-    is_dag_net_cleared_(true) // default is true, set to false before generate dag net
+    is_dag_net_cleared_(true), // default is true, set to false before generate dag net
+    last_advance_checkpoint_ts_(0),
+    advance_checkpoint_scn_(share::SCN::min_scn())
 #ifdef OB_BUILD_SHARED_STORAGE
     , switch_leader_cond_()
     , switch_leader_cnt_(0)
@@ -340,7 +342,7 @@ int ObLSMigrationHandler::check_task_exist_(bool &is_exist)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KPC(ls_));
-  } else if (OB_FAIL(scheduler->check_dag_net_exist(ls_migration_task.task_id_, is_exist))) {
+  } else if (OB_FAIL(scheduler->check_dag_net_exist(ls_migration_task.task_id_, is_exist, INT64_MAX/*abs_timeout_us*/))) {
     LOG_WARN("failed to check dag net exist", K(ret));
   }
 
@@ -505,6 +507,80 @@ int ObLSMigrationHandler::get_migration_task_and_handler_status(
   return ret;
 }
 
+int ObLSMigrationHandler::update_advance_ls_checkpoint_scn(const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    advance_checkpoint_scn_ = MAX(advance_checkpoint_scn_, scn);
+  }
+  return ret;
+}
+
+void ObLSMigrationHandler::get_advance_checkpoint_info_(int64_t &last_ts, share::SCN &scn)
+{
+  common::SpinRLockGuard guard(lock_);
+  last_ts = last_advance_checkpoint_ts_;
+  scn = advance_checkpoint_scn_;
+}
+
+void ObLSMigrationHandler::update_last_advance_checkpoint_ts_()
+{
+  common::SpinWLockGuard guard(lock_);
+  last_advance_checkpoint_ts_ = ObTimeUtil::current_time();
+}
+
+int ObLSMigrationHandler::advance_ls_checkpoint()
+{
+  int ret = OB_SUCCESS;
+  const int64_t ADVANCE_CHECKPOINT_INTERVAL = 10LL * 60LL * 1000LL * 1000LL; // 10 minutes
+  int64_t last_advance_ts = 0;
+  share::SCN advance_scn;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  } else if (OB_ISNULL(ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls_));
+  } else if (FALSE_IT(get_advance_checkpoint_info_(last_advance_ts, advance_scn))) {
+  } else if (ObTimeUtil::current_time() - last_advance_ts < ADVANCE_CHECKPOINT_INTERVAL) {
+    // time interval is not enough, no need to advance
+  } else if (ls_->get_clog_checkpoint_scn() >= advance_scn) {
+    // local ls clog checkpoint scn is larger, no need to advance
+  } else {
+    if (OB_FAIL(ls_->advance_checkpoint_by_flush(advance_scn,
+                                                 INT64_MAX /* abs_timeout_ts */,
+                                                 false /* is_tenant_freeze */,
+                                                 ObFreezeSourceFlag::MIGRATION))) {
+      if (OB_NO_NEED_UPDATE == ret || OB_EAGAIN == ret) {
+        LOG_INFO("no need to advance ls checkpoint now", K(ret), KPC(ls_));
+      } else {
+        LOG_WARN("failed to advance ls checkpoint", K(ret), KPC(ls_));
+      }
+    } else {
+      LOG_INFO("success to advance ls checkpoint", K(ret), KPC(ls_));
+    }
+
+    update_last_advance_checkpoint_ts_();
+
+    SERVER_EVENT_ADD("storage_ha", "advance_src_ls_checkpoint",
+      "tenant_id", ls_->get_tenant_id(),
+      "ls_id", ls_->get_ls_id().id(),
+      "scn", advance_scn,
+      "ret", ret);
+
+    if (OB_NO_NEED_UPDATE == ret || OB_EAGAIN == ret) {
+      // overwrite ret
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
 void ObLSMigrationHandler::destroy()
 {
   if (is_inited_) {
@@ -583,6 +659,11 @@ int ObLSMigrationHandler::process()
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid cur status for fail", K(ret), K(status));
     }
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(advance_ls_checkpoint())) {
+      LOG_WARN("failed to advance ls checkpoint", K(tmp_ret), KPC(ls_));
     }
   }
   return ret;

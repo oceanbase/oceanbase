@@ -37,6 +37,29 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprStrToDate);
 };
 
+// ObExprToDate is for mysql compatible to_date function
+class ObExprToDate : public ObFuncExprOperator
+{
+public:
+  explicit ObExprToDate(common::ObIAllocator &alloc);
+  virtual ~ObExprToDate() {};
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types_array,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  virtual bool need_rt_ctx() const override { return true; }
+  static int calc_to_date_with_format(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &res_datum);
+  static int calc_to_date_with_format_vector(const ObExpr &expr, ObEvalCtx &ctx,
+    const ObBitVector &skip, const EvalBound &bound);
+  DECLARE_SET_LOCAL_SESSION_VARS;
+private:
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObExprToDate);
+};
+
 class ObExprOracleToDate : public ObExprToTemporalBase
 {
 public:

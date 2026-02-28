@@ -153,8 +153,9 @@ PCVSchemaObj::~PCVSchemaObj()
   reset();
 }
 
-ObPlanCacheValue::ObPlanCacheValue()
-  : pcv_set_(NULL),
+ObPlanCacheValue::ObPlanCacheValue(uint64_t id)
+  : id_(id),
+    pcv_set_(NULL),
     pc_alloc_(NULL),
     last_plan_id_(OB_INVALID_ID),
     //use_global_location_cache_(true),
@@ -173,7 +174,8 @@ ObPlanCacheValue::ObPlanCacheValue()
     stmt_type_(stmt::T_MAX),
     enable_rich_vector_format_(false),
     switchover_epoch_(OB_INVALID_VERSION),
-    force_miss_match_(false)
+    force_miss_match_(false),
+    next_plan_set_id_(0)
 {
   MEMSET(sql_id_, 0, sizeof(sql_id_));
   MEMSET(format_sql_id_, 0, sizeof(format_sql_id_));
@@ -279,10 +281,11 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
       LOG_WARN("failed to add bitset members", K(ret));
     } else if (OB_FAIL(fmt_int_or_ch_decint_idx_.add_members2(pc_ctx.fmt_int_or_ch_decint_idx_))) {
       LOG_WARN("failed to add bitset members", K(ret));
-    } else if (OB_FAIL(check_need_force_miss_match(*plan))) {
+    } else if (OB_FAIL(check_need_force_miss_match(pc_ctx, *plan))) {
       LOG_WARN("failed to check need force miss match", K(ret));
-    } else if (!force_miss_match_ && OB_FAIL(set_stored_schema_objs(plan->get_dependency_table(),
-                                                                    pc_ctx.sql_ctx_.schema_guard_))) {
+    } else if (!ObPlanCache::is_contains_external_object(plan->get_dependency_table())
+               && OB_FAIL(set_stored_schema_objs(plan->get_dependency_table(),
+                                                 pc_ctx.sql_ctx_.schema_guard_))) {
       LOG_WARN("failed to set stored schema objs",
                K(ret), K(plan->get_dependency_table()), K(pc_ctx.sql_ctx_.schema_guard_));
     } else if (OB_FAIL(assign_udr_infos(pc_ctx))) {
@@ -374,7 +377,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
         if (is_contain_tmp_tbl()) {
           //临时表的行为取决于用户创建的session，而对于远程执行而言，远程的session id是一个临时的session_id
           //因此这里统一应该使用master session id，来保证匹配计划一直使用的是用户session
-          sessid_ = pc_ctx.sql_ctx_.session_info_->get_sid();
+          sessid_ = pc_ctx.sql_ctx_.session_info_->get_sessid_for_table();
           sess_create_time_ = pc_ctx.sql_ctx_.session_info_->get_sess_create_time();
           // 获取临时表的表名
           pc_ctx.tmp_table_names_.reset();
@@ -397,6 +400,7 @@ int ObPlanCacheValue::match_all_params_info(ObPlanSet *batch_plan_set,
                                             int64_t outline_param_idx,
                                             bool &is_same)
 {
+  MATCH_GUARD(id_, pc_ctx);
   int ret = OB_SUCCESS;
   is_same = true;
   bool is_batched_multi_stmt = pc_ctx.sql_ctx_.is_batch_params_execute();
@@ -472,8 +476,10 @@ int ObPlanCacheValue::match_all_params_info(ObPlanSet *batch_plan_set,
 
 int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
                                   const ObIArray<PCVSchemaObj> &schema_array,
+                                  const bool check_schema,
                                   ObPlanCacheObject *&plan_out)
 {
+  MATCH_GUARD(id_, pc_ctx);
   int ret = OB_SUCCESS;
   bool is_old_version = false;
   plan_out = NULL;
@@ -485,8 +491,8 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   //如果不为最新的,在plan cache层会删除该value，并重新add plan
   //TODO shengle 此处拷贝需要想办法处理掉
   int64_t spm_mode = 0;
-  bool need_check_schema = (schema_array.count() != 0);
   int64_t new_switchover_epoch = MTL_GET_SWITCHOVER_EPOCH();
+  bool need_check_schema = 0 == schema_array.count() ? false : check_schema;
   if (schema_array.count() == 0 && stored_schema_objs_.count() == 0) {
     need_check_schema = true;
   }
@@ -535,6 +541,9 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   } else if (true == is_old_version) {
     ret = OB_OLD_SCHEMA_VERSION;
     SQL_PC_LOG(TRACE, "view or table is old version", K(ret));
+    RECORD_CACHE_MISS(OLD_SCHEMA_VERSION, pc_ctx,
+                      "Old schema version",
+                      K(schema_array));
   }
   if (OB_FAIL(ret)) {
     //do nothing
@@ -764,8 +773,30 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
   if (OB_ISNULL(session) || OB_ISNULL(phy_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret), KP(session), KP(phy_ctx));
-  } else if (obj_params == NULL || PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+  } else if (obj_params == NULL || PC_PS_MODE == pc_ctx.mode_) {
     /* do nothing */
+  } else if (PC_PL_MODE == pc_ctx.mode_) {
+    // For PL mode, perform parameter constraint checks
+    CHECK_COMPATIBILITY_MODE(session);
+    ObCollationType collation_connection = static_cast<ObCollationType>(session->get_local_collation_connection());
+    ParseNode *raw_param = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < raw_param_cnt; i++) {
+      if (not_param_index.has_member(i)) {
+        continue;
+        SQL_PC_LOG(TRACE, "not_param", K(i), K(raw_param->type_), K(raw_param->value_),
+        "str_value", ObString(raw_param->str_len_, raw_param->str_value_));
+      } else if (OB_ISNULL(raw_param = raw_params.at(i)->node_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      } else if (OB_FAIL(ObResolverUtils::recheck_parameter_for_pl(pc_ctx, pc_ctx.allocator_, stmt_type, raw_param, i,
+                      phy_ctx->get_param_store_for_update(), fmt_int_or_ch_decint_idx.has_member(i),
+                      value, session->get_min_const_integer_precision(), enable_decimal_int))) {
+          SQL_PC_LOG(WARN, "failed to check parameter constraints", K(ret), K(i));
+      } else if (OB_FAIL(ObResolverUtils::check_must_be_positive(pc_ctx, pc_ctx.allocator_, stmt_type, raw_param, i,
+                      phy_ctx->get_param_store_for_update(), must_be_positive_idx, value))) {
+        SQL_PC_LOG(WARN, "fail to check must be positive", K(ret));
+      }
+    }
   } else if (OB_UNLIKELY(raw_param_cnt != param_charset_type.count())) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "raw_params and param_charset_type count is different", K(ret),
@@ -849,7 +880,8 @@ int ObPlanCacheValue::resolve_multi_stmt_params(ObPlanCacheCtx &pc_ctx)
     // check whether all the values are the same
     // 1、创建param_store指针
     if (!not_param_info_.empty() &&
-        OB_FAIL(check_multi_stmt_not_param_value(pc_ctx.multi_stmt_fp_results_,
+        OB_FAIL(check_multi_stmt_not_param_value(pc_ctx,
+                                                 pc_ctx.multi_stmt_fp_results_,
                                                  not_param_info_,
                                                  is_valid))) {
       LOG_WARN("failed to check multi stmt not param value", K(ret));
@@ -1019,6 +1051,7 @@ int ObPlanCacheValue::check_multi_stmt_param_type(ObPlanCacheCtx &pc_ctx,
 }
 
 int ObPlanCacheValue::check_multi_stmt_not_param_value(
+                              ObPlanCacheCtx &pc_ctx,
                               const ObIArray<ObFastParserResult> &multi_stmt_fp_results,
                               const ObIArray<NotParamInfo> &not_param_info,
                               bool &is_same)
@@ -1026,7 +1059,8 @@ int ObPlanCacheValue::check_multi_stmt_not_param_value(
   int ret = OB_SUCCESS;
   is_same = true;
   for (int64_t i = 0; OB_SUCC(ret) && is_same && i < multi_stmt_fp_results.count(); i++) {
-    if (OB_FAIL(check_not_param_value(multi_stmt_fp_results.at(i),
+    if (OB_FAIL(check_not_param_value(pc_ctx,
+                                      multi_stmt_fp_results.at(i),
                                       not_param_info,
                                       is_same))) {
       LOG_WARN("failed to check not param value", K(ret));
@@ -1044,7 +1078,8 @@ int ObPlanCacheValue::check_insert_multi_values_param(ObPlanCacheCtx &pc_ctx, bo
     if (OB_ISNULL(raw_params = pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret));
-    } else if (OB_FAIL(check_not_param_value(*raw_params,
+    } else if (OB_FAIL(check_not_param_value(pc_ctx,
+                                             *raw_params,
                                              pc_ctx.not_param_info_,
                                              is_same))) {
       LOG_WARN("failed to check not param value", K(ret));
@@ -1053,7 +1088,8 @@ int ObPlanCacheValue::check_insert_multi_values_param(ObPlanCacheCtx &pc_ctx, bo
   return ret;
 }
 
-int ObPlanCacheValue::check_not_param_value(const ObIArray<ObPCParam *> &raw_params,
+int ObPlanCacheValue::check_not_param_value(ObPlanCacheCtx &pc_ctx,
+                                            const ObIArray<ObPCParam *> &raw_params,
                                             const ObIArray<NotParamInfo> &not_param_info,
                                             bool &is_same)
 {
@@ -1073,9 +1109,15 @@ int ObPlanCacheValue::check_not_param_value(const ObIArray<ObPCParam *> &raw_par
     } else if (0 != not_param_info.at(i).raw_text_.compare(
         ObString(raw_param->text_len_, raw_param->raw_text_))) {
       is_same = false;
+      ObString raw_value(raw_param->text_len_, raw_param->raw_text_);
+      const ObString &cached_value = not_param_info.at(i).raw_text_;
       LOG_TRACE("can't match not param info",
-                "raw value", ObString(raw_param->text_len_, raw_param->raw_text_),
-                "cached special value", not_param_info.at(i).raw_text_);
+                "raw value", raw_value,
+                "cached special value", cached_value);
+      RECORD_CACHE_MISS(NON_PARAMETERIZED_CONST_NOT_MATCH, pc_ctx,
+                        "Non-parameterized param is different", K(i),
+                        K(raw_value),
+                        K(cached_value));
     } else {
       LOG_TRACE("match not param info success",
                 "raw value", ObString(raw_param->text_len_, raw_param->raw_text_),
@@ -1085,7 +1127,8 @@ int ObPlanCacheValue::check_not_param_value(const ObIArray<ObPCParam *> &raw_par
   return ret;
 }
 
-int ObPlanCacheValue::check_not_param_value(const ObFastParserResult &fp_result,
+int ObPlanCacheValue::check_not_param_value(ObPlanCacheCtx &pc_ctx,
+                                            const ObFastParserResult &fp_result,
                                             const ObIArray<NotParamInfo> &not_param_info,
                                             bool &is_same)
 {
@@ -1105,9 +1148,15 @@ int ObPlanCacheValue::check_not_param_value(const ObFastParserResult &fp_result,
     } else if (0 != not_param_info.at(i).raw_text_.compare(
         ObString(raw_param->text_len_, raw_param->raw_text_))) {
       is_same = false;
+      ObString raw_value(raw_param->text_len_, raw_param->raw_text_);
+      const ObString &cached_value = not_param_info.at(i).raw_text_;
       LOG_TRACE("match not param info",
-                "raw value", ObString(raw_param->text_len_, raw_param->raw_text_),
-                "cached special value", not_param_info.at(i).raw_text_);
+                "raw value", raw_value,
+                "cached special value", cached_value);
+      RECORD_CACHE_MISS(NON_PARAMETERIZED_CONST_NOT_MATCH, pc_ctx,
+                        "Non-parameterized param is different", K(i),
+                        K(raw_value),
+                        K(cached_value));
     } else {
       LOG_TRACE("match param info",
                 "raw value", ObString(raw_param->text_len_, raw_param->raw_text_),
@@ -1141,7 +1190,8 @@ int ObPlanCacheValue::cmp_not_param_info(const NotParamInfoList &l_param_info_li
   return ret;
 }
 
-int ObPlanCacheValue::check_tpl_sql_const_cons(const ObFastParserResult &fp_result,
+int ObPlanCacheValue::check_tpl_sql_const_cons(ObPlanCacheCtx &pc_ctx,
+                                               const ObFastParserResult &fp_result,
                                                const TplSqlConstCons &tpl_cst_cons_list,
                                                bool &is_same)
 {
@@ -1150,7 +1200,7 @@ int ObPlanCacheValue::check_tpl_sql_const_cons(const ObFastParserResult &fp_resu
   bool is_match_tpl_cst_cons = false;
   for (int64_t i = 0; OB_SUCC(ret) && !is_match_tpl_cst_cons && i < tpl_cst_cons_list.count(); ++i) {
     const NotParamInfoList &not_param_list = tpl_cst_cons_list.at(i);
-    if (OB_FAIL(check_not_param_value(fp_result, not_param_list, is_match_tpl_cst_cons))) {
+    if (OB_FAIL(check_not_param_value(pc_ctx, fp_result, not_param_list, is_match_tpl_cst_cons))) {
       LOG_WARN("failed to check not param value", K(ret));
     } else if (is_match_tpl_cst_cons
       && OB_FAIL(cmp_not_param_info(not_param_list, not_param_info_, is_same))) {
@@ -1158,7 +1208,7 @@ int ObPlanCacheValue::check_tpl_sql_const_cons(const ObFastParserResult &fp_resu
     }
   }
   if (OB_SUCC(ret) && !is_match_tpl_cst_cons && !is_same) {
-    if (OB_FAIL(check_not_param_value(fp_result, not_param_info_, is_same))) {
+    if (OB_FAIL(check_not_param_value(pc_ctx, fp_result, not_param_info_, is_same))) {
       LOG_WARN("failed to check not param value", K(ret));
     }
   }
@@ -1401,6 +1451,10 @@ int ObPlanCacheValue::add_to_plan_set(ObPlanCacheCtx &pc_ctx,
   int ret = OB_SUCCESS;
   int add_plan_ret = OB_SUCCESS;
   bool need_new_planset = true;
+    if (plan.get_ns() == NS_CRSR) {
+      static_cast<ObPhysicalPlan &>(plan).pcv_id_ = id_;
+      static_cast<ObPhysicalPlan &>(plan).cache_node_id_ = pcv_set_->id_;
+    }
   DLIST_FOREACH(cur_plan_set, plan_sets_) {
     bool is_same = false;
     if (OB_FAIL(cur_plan_set->match_params_info(plan.get_params_info(),
@@ -1776,6 +1830,7 @@ int ObPlanCacheValue::match(ObPlanCacheCtx &pc_ctx,
                             const ObIArray<PCVSchemaObj> &schema_array,
                             bool &is_same)
 {
+  MATCH_GUARD(id_, pc_ctx);
   int ret = OB_SUCCESS;
   is_same = true;
   //compare not param
@@ -1794,40 +1849,62 @@ int ObPlanCacheValue::match(ObPlanCacheCtx &pc_ctx,
              has_dynamic_values_table_ != pc_ctx.exec_ctx_.has_dynamic_values_table()) {
     // the plan of batch execute sql can't match with the plan of general sql
     is_same = false;
+    RECORD_CACHE_MISS(BATCH_STMT_DIFF_FROM_GEN_STMT, pc_ctx,
+                      "the plan of batch execute sql can't match with the plan "
+                      "of general sql",
+                      K(is_batch_execute_), K(has_dynamic_values_table_),
+                      K(pc_ctx.sql_ctx_.is_batch_params_execute()),
+                      K(pc_ctx.exec_ctx_.has_dynamic_values_table()));
   } else if (!need_param_) {
     // not needs to param, compare raw_sql
     is_same = (pc_ctx.raw_sql_==raw_sql_);
+    if (!is_same) {
+      RECORD_CACHE_MISS(NON_PARAMETERIZED_SQL_NOT_MATCH, pc_ctx,
+                      "Non-parameterized sql not match", K(need_param_));
+    }
   } else if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
     const ObObjParam *ps_param = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && is_same && i < not_param_var_.count(); ++i) {
       ps_param = NULL;
       if (OB_FAIL(pc_ctx.fp_result_.parameterized_params_.at(not_param_var_[i].idx_, ps_param))) {
-        LOG_WARN("fail to get ps param", K(not_param_info_[i].idx_), K(ret));
+        LOG_WARN("fail to get ps param", K(ret), K(not_param_var_[i].idx_),
+                                         K(not_param_var_.count()),
+                                         K(pc_ctx.fp_result_.parameterized_params_.count()));
       } else if (OB_ISNULL(ps_param)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ps_param));
       } else if (ps_param->is_pl_extend() || not_param_var_[i].ps_param_.is_pl_extend()
                   || !not_param_var_[i].ps_param_.can_compare(*ps_param)) {
         is_same = false;
-        LOG_WARN("can not compare", K(not_param_var_[i].ps_param_), K(*ps_param), K(i));
+        LOG_WARN("can not compare", K(i), K(not_param_var_[i].ps_param_), K(*ps_param));
+        RECORD_CACHE_MISS(NON_PARAMETERIZED_PARAM_CANNOT_COMP, pc_ctx,
+                      "PL extend type or non-parameterized param is not camparable",
+                      K(i), K(ps_param->is_pl_extend()), K(not_param_var_[i].ps_param_.is_pl_extend()));
       } else if (not_param_var_[i].ps_param_.is_string_type()
           && not_param_var_[i].ps_param_.get_collation_type() != ps_param->get_collation_type()) {
         is_same = false;
-        LOG_WARN("can not compare", K(not_param_var_[i].ps_param_), K(*ps_param), K(i));
+        LOG_WARN("can not compare", K(i), K(not_param_var_[i].ps_param_), K(*ps_param));
+        RECORD_CACHE_MISS(NON_PARAMETERIZED_PARAM_COLLATION_NOT_MATCH, pc_ctx,
+                          "Collation of non-parameterized param is different",
+                          K(not_param_var_[i].ps_param_.get_collation_type()),
+                          K(ps_param->get_collation_type()));
       } else if (0 != not_param_var_[i].ps_param_.compare(*ps_param)) {
         is_same = false;
         LOG_WARN("match not param var", K(not_param_var_[i]), K(ps_param), K(i));
+        RECORD_CACHE_MISS(NON_PARAMETERIZED_CONST_NOT_MATCH, pc_ctx,
+                          "Non-parameterized param is different", K(i),
+                          K(not_param_var_[i]), K(ps_param));
       }
       LOG_DEBUG("match", K(not_param_var_[i].idx_), K(not_param_var_[i].ps_param_), KPC(ps_param));
     }
   } else {
-     if (OB_FAIL(check_tpl_sql_const_cons(pc_ctx.fp_result_,
+     if (OB_FAIL(check_tpl_sql_const_cons(pc_ctx,
+                                          pc_ctx.fp_result_,
                                           tpl_sql_const_cons_,
                                           is_same))) {
       LOG_WARN("failed to check tpl sql const cons", K(ret));
     }
   }
-
   // check for temp tables and same table
   if (OB_SUCC(ret) && is_same && schema_array.count() != 0) {
     if (OB_FAIL(match_dep_schema(pc_ctx, schema_array, is_same))) {
@@ -1919,7 +1996,7 @@ int ObPlanCacheValue::create_new_plan_set(const ObPlanSetType plan_set_type,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for ObPlanSet", K(ret));
   } else {
-    new_plan_set = new(buff)ObSqlPlanSet();
+    new_plan_set = new(buff)ObSqlPlanSet(get_next_plan_set_id());
   }
 
   if (OB_SUCC(ret)) {
@@ -2084,14 +2161,40 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
                                          bool &need_check_schema,
                                          ObIArray<PCVSchemaObj> &schema_array)
 {
+  MATCH_GUARD(id_, pc_ctx);
   int ret = OB_SUCCESS;
   need_check_schema = false;
   schema_array.reset();
-  if (OB_FAIL(need_check_schema_version(pc_ctx,
+  bool has_mysql_tmp_table;
+  /*
+  session1 :
+       create temporary table t1(c1 int, c2 int);
+  session2 :
+       create table t1(c1 int);
+       insert into t1 values(1);
+       select * from t1;
+  session1 :
+       select * from t1;   ->The plan match is wrong, the entity table t1 is queried, and one row is returned
+
+    First create a temporary table and then create a normal table,
+    and then add the plan of the normal table to the plan cache. In
+    this case, it is impossible to predict whether there is a
+    temporary table with the same name in the current session.
+    Therefore, if there is a temporary table, you need to recheck the schema .
+  */
+  if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", KR(ret));
+  } else if (OB_FAIL(pc_ctx.sql_ctx_.session_info_->get_session_temp_table_used(has_mysql_tmp_table))) {
+    LOG_WARN("fail to get seesion_temp_table_uesd", KR(ret));
+  } else if (FALSE_IT(has_mysql_tmp_table = !lib::is_oracle_mode() &&
+                                            (has_mysql_tmp_table ? has_mysql_tmp_table
+                                                                 : pc_ctx.sql_ctx_.session_info_->get_has_temp_table_flag()))) {
+  } else if (OB_FAIL(need_check_schema_version(pc_ctx,
                                         new_schema_version,
                                         need_check_schema))) {
     LOG_WARN("failed to get need_check_schema flag", K(ret));
-  } else if (!need_check_schema) {
+  } else if (!need_check_schema && !has_mysql_tmp_table) {
     // do nothing
   } else if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2107,7 +2210,7 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
       if (OB_ISNULL(pcv_schema)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("got unexpected null", K(ret));
-      } else if (TABLE_SCHEMA != pcv_schema->schema_type_) {
+      } else if (need_check_schema && TABLE_SCHEMA != pcv_schema->schema_type_) {
         // if no table schema, get schema version is enough
         int64_t new_version = 0;
         if (PACKAGE_SCHEMA == stored_schema_objs_.at(i)->schema_type_
@@ -2130,6 +2233,9 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
             ret = OB_OLD_SCHEMA_VERSION;
             LOG_INFO("exist object which name as current synonym", K(ret), K(synonym_database_id),
               K(pcv_schema->table_name_));
+            RECORD_CACHE_MISS(SYN_SAME_NAME_WITH_OBJ, pc_ctx,
+                              "exist object which name as current synonym",
+                              K(synonym_database_id), K(pcv_schema->table_name_));
           } else if (OB_FAIL(schema_guard.get_synonym_info(
                        tenant_id, synonym_database_id, pcv_schema->table_name_, synonym_schema))) {
             LOG_WARN("failed to get private synonym", K(ret));
@@ -2215,6 +2321,8 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
       } else if (nullptr == table_schema) {
         ret = OB_OLD_SCHEMA_VERSION;
         LOG_TRACE("table not exist", K(ret), K(*pcv_schema), K(table_schema));
+        RECORD_CACHE_MISS(TABLE_SCHEMA_NOT_EXISTS, pc_ctx,
+                          "table not exist ", KPC(pcv_schema), K(table_schema));
       } else if (OB_FAIL(tmp_schema_obj.init_without_copy_name(table_schema))) {
         LOG_WARN("failed to init pcv schema obj", K(ret));
       } else if (OB_FAIL(schema_array.push_back(tmp_schema_obj))) {
@@ -2265,10 +2373,11 @@ int ObPlanCacheValue::remove_mv_schema(const common::ObIArray<PCVSchemaObj> &sch
 
 // 对于计划所依赖的schema进行比较，注意这里不比较table schema的version信息
 // table schema的version信息用于淘汰pcv set，在check_value_version时进行比较
-int ObPlanCacheValue::match_dep_schema(const ObPlanCacheCtx &pc_ctx,
+int ObPlanCacheValue::match_dep_schema(ObPlanCacheCtx &pc_ctx,
                                        const ObIArray<PCVSchemaObj> &schema_array,
                                        bool &is_same)
 {
+  MATCH_GUARD(id_, pc_ctx);
   int ret = OB_SUCCESS;
   is_same = true;
   ObSQLSessionInfo *session_info = pc_ctx.sql_ctx_.session_info_;
@@ -2303,14 +2412,29 @@ int ObPlanCacheValue::match_dep_schema(const ObPlanCacheCtx &pc_ctx,
         //所以这里必须使用get_sessid_for_table()规则去判断
         is_same = ((session_info->get_sessid_for_table() == sessid_) &&
                    (session_info->get_sess_create_time() == sess_create_time_));
+        if (!is_same) {
+          RECORD_CACHE_MISS(DIFF_TMP_TABLE, pc_ctx,
+                            "Different temp table can not share same plan",
+                            K(sessid_), K(sess_create_time_), K(session_info->get_sessid_for_table()),
+                            K(session_info->get_sess_create_time()));
+        }
       } else if (lib::is_oracle_mode()
                  && TABLE_SCHEMA == check_stored_schema.at(i)->schema_type_
                  && !check_stored_schema.at(i)->match_compare(schema_array.at(i))) {
         // 检查oracle模式下普通表是否与系统表同名
         is_same = false;
+        RECORD_CACHE_MISS(DIFF_TABLE_SCHEMA, pc_ctx,
+                      "Different table schema can not share same plan",
+                      K(sessid_), K(session_info->get_sessid_for_table()),
+                      K(i), K(schema_array.at(i)), KP(check_stored_schema.at(i)));
       } else if (lib::is_oracle_mode()
                  && SYNONYM_SCHEMA == check_stored_schema.at(i)->schema_type_) {
         is_same = (check_stored_schema.at(i)->database_id_ == schema_array.at(i).database_id_);
+        if (!is_same) {
+          RECORD_CACHE_MISS(DIFF_SYNONYM_SCHEMA, pc_ctx,
+                      "Different synonym", K(i),
+                      K(check_stored_schema.at(i)->database_id_ ), K(schema_array.at(i).database_id_));
+        }
       } else {
         // do nothing
       }
@@ -2394,22 +2518,6 @@ int ObPlanCacheValue::need_check_schema_version(ObPlanCacheCtx &pc_ctx,
     LOG_WARN("failed to get tenant schema version", K(ret));
   } else {
     int64_t cached_tenant_schema_version = ATOMIC_LOAD(&tenant_schema_version_);
-    /*
-      session1 :
-           create temporary table t1(c1 int, c2 int);
-      session2 :
-           create table t1(c1 int);
-           insert into t1 values(1);
-           select * from t1;
-      session1 :
-           select * from t1;   ->The plan match is wrong, the entity table t1 is queried, and one row is returned
-
-        First create a temporary table and then create a normal table,
-        and then add the plan of the normal table to the plan cache. In
-        this case, it is impossible to predict whether there is a
-        temporary table with the same name in the current session.
-        Therefore, if there is a temporary table, you need to recheck the schema .
-     */
     need_check = ((new_schema_version != cached_tenant_schema_version)
                   || is_contain_tmp_tbl()
                   || is_contain_sys_pl_object()
@@ -2468,10 +2576,20 @@ int ObPlanCacheValue::get_evolving_evolution_task(EvolutionPlanList &evo_task_li
 }
 #endif
 
-int ObPlanCacheValue::check_need_force_miss_match(const ObPlanCacheObject &plan)
+int ObPlanCacheValue::check_need_force_miss_match(const ObPlanCacheCtx &pc_ctx,
+                                                  const ObPlanCacheObject &plan)
 {
   int ret = OB_SUCCESS;
+  const ObQueryCtx *query_ctx = NULL;
+  force_miss_match_ = false;
   if (ObPlanCache::is_contains_external_object(plan.get_dependency_table())) {
+    force_miss_match_ = true;
+  } else if (OB_ISNULL(pc_ctx.sql_ctx_.cur_stmt_)
+             || OB_ISNULL(query_ctx = pc_ctx.sql_ctx_.cur_stmt_->get_query_ctx())) {
+    // just add the plan into plan cache, do not need throw error
+    LOG_DEBUG("failed to get query ctx", K(ret), K(pc_ctx.sql_ctx_.cur_stmt_), K(query_ctx));
+  } else if (query_ctx->is_mview_refresh_sql()
+             && OB_USE_PLAN_CACHE_INVALID == query_ctx->get_global_hint().plan_cache_policy_) {
     force_miss_match_ = true;
   }
   return ret;

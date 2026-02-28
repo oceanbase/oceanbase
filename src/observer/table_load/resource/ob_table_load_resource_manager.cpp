@@ -58,6 +58,7 @@ void ObTableLoadResourceManager::ObInitResourceTask::runTimerTask()
 ObTableLoadResourceManager::ObTableLoadResourceManager()
   : init_resource_task_(*this),
     refresh_and_check_task_(*this),
+    mutex_(common::ObLatchIds::OB_TABLE_LOAD_RESOURCE_MANAGER_MUTEX),
     is_stop_(false),
     resource_inited_(false),
     is_inited_(false)

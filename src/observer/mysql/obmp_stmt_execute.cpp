@@ -32,6 +32,7 @@
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "sql/ob_sql_mock_schema_utils.h"
 
+void __attribute__((weak)) request_finish_callback();
 namespace oceanbase
 {
 
@@ -623,14 +624,15 @@ int ObMPStmtExecute::after_process(int error_code)
 
 int ObMPStmtExecute::store_params_value_to_str(ObIAllocator &alloc, sql::ObSQLSessionInfo &session)
 {
-  return store_params_value_to_str(alloc, session, params_, params_value_, params_value_len_);
+  return store_params_value_to_str(alloc, session, params_, params_value_, params_value_len_, true);
 }
 
 int ObMPStmtExecute::store_params_value_to_str(ObIAllocator &alloc,
                                                sql::ObSQLSessionInfo &session,
                                                ParamStore *params,
                                                char *&params_value,
-                                               int64_t &params_value_len)
+                                               int64_t &params_value_len,
+                                               bool print_sql_audit)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -645,11 +647,13 @@ int ObMPStmtExecute::store_params_value_to_str(ObIAllocator &alloc,
       params_value = NULL;
       params_value_len = 0;
       break;
+    } else if (OB_UNLIKELY(print_sql_audit && param.is_lob_storage())) {
+      OZ (param.print_varchar_literal(params_value, length, pos, alloc, TZ_INFO(&session)));
     } else {
       OZ (param.print_sql_literal(params_value, length, pos, alloc, TZ_INFO(&session)));
-      if (i != params->count() - 1) {
-        OZ (databuff_printf(params_value, length, pos, alloc, ","));
-      }
+    }
+    if (i != params->count() - 1) {
+      OZ (databuff_printf(params_value, length, pos, alloc, ","));
     }
   }
   if (OB_FAIL(ret)) {
@@ -1260,6 +1264,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         sqlstat_record.set_is_in_retry(session.get_is_in_retry());
         session.sql_sess_record_sql_stat_start_value(sqlstat_record);
       }
+      session.set_retry_wait_event_begin_time();
       result.set_has_more_result(has_more_result);
       result.set_ps_protocol();
       ObTaskExecutorCtx *task_ctx = result.get_exec_context().get_task_executor_ctx();
@@ -1330,7 +1335,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
       // some statistics must be recorded for plan stat, even though sql audit disabled
       bool first_record = (1 == audit_record.try_cnt_);
-      ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+      ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_, async_resp_used);
       audit_record.exec_timestamp_.update_stage_time();
 
       if (enable_perf_event && !THIS_THWORKER.need_retry()
@@ -1621,7 +1626,6 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
   ObReqTimeGuard req_timeinfo_guard;
   // 每次执行不同sql都需要更新
   ctx_.self_add_plan_ = false;
-  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
   do {
     // 每次都必须设置为OB_SCCESS, 否则可能会因为没有调用do_process()造成死循环
     ret = OB_SUCCESS;
@@ -2047,6 +2051,13 @@ int ObMPStmtExecute::process()
       if (OB_SUCCESS != (tmp_ret = sess->get_query_lock().unlock())) {
         LOG_WARN("unlock session failed", K(ret), K(tmp_ret));
       }
+    }
+    // clear thread-local variables used for queue waiting
+    // to prevent async callbacks from finishing before
+    // request_finish_callback, which may free the request.
+    // this operation should be protected by the session lock.
+    if (async_resp_used) {
+      request_finish_callback();
     }
   }
 

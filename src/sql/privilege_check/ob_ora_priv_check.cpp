@@ -2406,6 +2406,10 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
         break;
       }
+      case stmt::T_BACKUP_VALIDATE: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
       case stmt::T_KILL: {
         DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
         break;
@@ -2455,10 +2459,6 @@ int ObOraSysChecker::check_ora_ddl_priv(
       case stmt::T_ALTER_CATALOG:
       case stmt::T_DROP_CATALOG: {
         DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_CATALOG);
-        break;
-      }
-      case stmt::T_LOAD_TIME_ZONE_INFO: {
-        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
         break;
       }
       case stmt::T_CREATE_LOCATION:

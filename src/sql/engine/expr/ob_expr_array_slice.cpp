@@ -188,7 +188,6 @@ int ObExprArraySlice::eval_array_slice_batch(const ObExpr &expr,
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (arr_array.at(j)->is_null() || offset_array.at(j)->is_null() ||
           (expr.arg_cnt_ > 2 && len_array.at(j)->is_null())) {
         res_datum.at(j)->set_null();
@@ -275,7 +274,6 @@ int ObExprArraySlice::eval_array_slice_vector(const ObExpr &expr,
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (arr_vec->is_null(j) || offset_vec->is_null(j) ||
           (expr.arg_cnt_ > 2 && len_vec->is_null(j))) {
         is_null_res = true;

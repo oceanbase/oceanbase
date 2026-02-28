@@ -17,6 +17,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/ob_mview_refresh_helper.h"
 #include "storage/mview/ob_mview_mds.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
 
@@ -30,25 +31,37 @@ using namespace share::schema;
 using namespace sql;
 
 ObMLogPurger::ObMLogPurger()
-  : ctx_(nullptr), is_oracle_mode_(false), need_purge_(false), is_inited_(false)
+  : ctx_(nullptr), is_oracle_mode_(false), need_purge_(false), purge_data_by_sql_(true), is_inited_(false)
 {
 }
 
 ObMLogPurger::~ObMLogPurger() {}
 
-int ObMLogPurger::init(ObExecContext &ctx, const ObMLogPurgeParam &purge_param)
+int ObMLogPurger::init(ObExecContext &ctx,
+                       const ObMLogPurgeParam &purge_param,
+                       const bool purge_data_by_sql)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  uint64_t tenant_id = purge_param.tenant_id_;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObMLogPurger init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(nullptr == ctx.get_my_session() || nullptr == ctx.get_sql_proxy() ||
+  } else if (OB_UNLIKELY(nullptr == ctx.get_my_session() ||nullptr == ctx.get_sql_proxy() ||
                          !purge_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(ctx), K(purge_param));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
   } else {
     ctx_ = &ctx;
     purge_param_ = purge_param;
+    if (data_version < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) { // TODO:: use 442 data vesion check
+      // data version below 442, use sql to purge mlog
+      purge_data_by_sql_ = true;
+    } else {
+      purge_data_by_sql_ = purge_data_by_sql;
+    }
     is_inited_ = true;
   }
   return ret;
@@ -226,12 +239,13 @@ int ObMLogPurger::prepare_for_purge()
       need_purge_ = true;
     }
   }
-  if (OB_SUCC(ret) && need_purge_) {
+  if (OB_SUCC(ret) && need_purge_ && purge_data_by_sql_) {
     if (OB_FAIL(ObMViewRefreshHelper::generate_purge_mlog_sql(
           schema_guard, tenant_id, mlog_table_id, purge_scn_, purge_param_.purge_log_parallel_, purge_sql_))) {
       LOG_WARN("fail to generate purge mlog sql", KR(ret), K(mlog_table_id), K(purge_scn_));
     }
   }
+  LOG_INFO("generate purge mlog sql", K(purge_sql_), K(need_purge_), K(purge_data_by_sql_));
   return ret;
 }
 
@@ -242,7 +256,7 @@ int ObMLogPurger::do_purge()
   // 1. execute purge sql
   const int64_t start_time = ObTimeUtil::current_time();
   int64_t affected_rows = 0;
-  if (OB_FAIL(trans_.write(tenant_id, purge_sql_.ptr(), affected_rows))) {
+  if (purge_data_by_sql_ && OB_FAIL(trans_.write(tenant_id, purge_sql_.ptr(), affected_rows))) {
     LOG_WARN("fail to execute sql", KR(ret), K(purge_sql_));
   }
   const int64_t end_time = ObTimeUtil::current_time();
@@ -256,6 +270,7 @@ int ObMLogPurger::do_purge()
       mlog_info_.set_last_purge_date(start_time);
       mlog_info_.set_last_purge_time((end_time - start_time) / 1000 / 1000);
       mlog_info_.set_last_purge_rows(affected_rows);
+      mlog_info_.set_last_purge_method(purge_data_by_sql_ ? ObMLogPurgeMethod::SQL : ObMLogPurgeMethod::COMPACTION);
       if (OB_FAIL(mlog_info_.set_last_purge_trace_id(ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
         LOG_WARN("fail to set last purge trace id", KR(ret));
       } else if (OB_FAIL(ObMLogInfo::update_mlog_last_purge_info(trans_, mlog_info_))) {

@@ -16,12 +16,13 @@
 #include "lib/file/ob_string_util.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/utility/utility.h"
 #include "ob_hive_metastore.h"
-#include "ob_hms_client_pool.h"
 #include "share/catalog/hive/ob_kerberos.h"
 #include "share/catalog/hive/thrift/transport/ob_t_sasl_client_transport.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_hdfs_storage_info.h"
+#include "share/catalog/rest/client/ob_catalog_client_pool.h"
 
 namespace oceanbase
 {
@@ -198,14 +199,16 @@ void GetLatestPartitionDdlTimeOperation::execute_impl(ThriftHiveMetastoreClient 
     format_qualified_db_name(f_db_name, cat_name_, db_name_);
     client->get_partitions(partitions, f_db_name, tb_name_, max_parts_);
   }
-  int64_t tmp_ddl_time;
+  int64_t tmp_ddl_time = 0;
   std::map<String, String>::iterator params_iter;
 
   for (Partitions::iterator iter = partitions.begin(); OB_SUCC(ret) && iter != partitions.end();
        iter++) {
     params_iter = iter->parameters.find(LAST_DDL_TIME);
     if (OB_UNLIKELY(params_iter != iter->parameters.end())) {
-      tmp_ddl_time = ::obsys::ObStringUtil::str_to_int(params_iter->second.c_str(), 0);
+      if (OB_SUCCESS != ob_atoll(params_iter->second.c_str(), tmp_ddl_time)) {
+        tmp_ddl_time = 0;
+      }
       if (OB_LIKELY(latest_ddl_time_ < tmp_ddl_time)) {
         latest_ddl_time_ = tmp_ddl_time;
       }
@@ -322,9 +325,9 @@ void GetPartitionsByNamesOperation::execute_impl(ThriftHiveMetastoreClient *clie
 
 /* --------------------- end of Hive Client Operations ---------------------*/
 /* --------------------- start of ObHiveMetastoreClient ---------------------*/
-ObHiveMetastoreClient::ObHiveMetastoreClient()
-    : allocator_(nullptr), socket_(), transport_(), protocol_(), hive_metastore_client_(),
-      properties_(), hms_keytab_(), hms_principal_(), hms_krb5conf_(), hms_default_catalog_(),
+ObHiveMetastoreClient::ObHiveMetastoreClient(ObIAllocator *allocator)
+    : allocator_(allocator), socket_(), transport_(), protocol_(), hive_metastore_client_(),
+      hms_keytab_(), hms_principal_(), hms_krb5conf_(), hms_default_catalog_(),
       service_(), server_FQDN_(), state_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
       conn_lock_(ObLatchIds::OBJECT_DEVICE_LOCK), kerberos_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
       is_inited_(false), is_opened_(false), last_kinit_ts_(0), client_id_(0), client_pool_(nullptr),
@@ -333,7 +336,7 @@ ObHiveMetastoreClient::ObHiveMetastoreClient()
 {
 }
 
-int ObHiveMetastoreClient::init(const int64_t &socket_timeout, ObIAllocator *allocator)
+int ObHiveMetastoreClient::init(const ObHMSCatalogProperties &properties)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(state_lock_);
@@ -342,100 +345,85 @@ int ObHiveMetastoreClient::init(const int64_t &socket_timeout, ObIAllocator *all
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObHiveMetastoreClient init twice", K(ret));
-  } else if (OB_ISNULL(allocator)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid allocator", K(ret), KP(allocator));
   } else {
-    allocator_ = allocator;
     is_inited_ = true;
     // Use current time as client id.
     client_id_ = ObTimeUtility::current_time();
-    socket_timeout_ = socket_timeout;
-  }
-  return ret;
-}
-
-int ObHiveMetastoreClient::setup_hive_metastore_client(const ObString &uri,
-                                                       const ObString &properties)
-{
-  int ret = OB_SUCCESS;
-
-  ObHMSCatalogProperties hive_catalog_properties;
-  // Using temp_allocator to avoid the memory leak when the properties is too long.
-  ObArenaAllocator temp_allocator;
-  if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("hive metastore client already setup and opened", K(ret));
-  } else if (OB_ISNULL(uri) || OB_LIKELY(0 == uri.length())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invald meta uri str", K(ret), K(uri));
-  } else if (OB_FAIL(ob_write_string(*allocator_, properties, properties_, true))) {
-    LOG_WARN("failed to write properties", K(ret), K(properties));
-  } else if (OB_FAIL(parse_uri_list(uri))) {
-    LOG_WARN("failed to parse uri list", K(ret), K(uri));
-  } else if (OB_FAIL(hive_catalog_properties.load_from_string(properties_, temp_allocator))) {
-    LOG_WARN("failed to init hive catalog properties", K(ret));
-  } else if (OB_FAIL(ob_write_string(*allocator_,
-                                     hive_catalog_properties.principal_,
-                                     hms_principal_,
-                                     true))) {
-    LOG_WARN("failed to write principal", K(ret));
-  } else if (OB_FAIL(ob_write_string(*allocator_,
-                                     hive_catalog_properties.keytab_,
-                                     hms_keytab_,
-                                     true))) {
-    LOG_WARN("failed to write keytab", K(ret));
-  } else if (OB_FAIL(ob_write_string(*allocator_,
-                                     hive_catalog_properties.krb5conf_,
-                                     hms_krb5conf_,
-                                     true))) {
-    LOG_WARN("failed to write krb5conf", K(ret));
-  } else if (OB_ISNULL(hive_catalog_properties.hms_catalog_name_)
-             || hive_catalog_properties.hms_catalog_name_.empty()) {
-    // do nothing
-  } else if (OB_FAIL(ob_write_string(*allocator_,
-                                     hive_catalog_properties.hms_catalog_name_,
-                                     hms_default_catalog_,
-                                     true))) {
-    LOG_WARN("failed to write default catalog", K(ret));
+    socket_timeout_ = properties.socket_timeout_;
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(uri_list_.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("uri list is empty after parse", K(ret));
-  } else if (!hms_keytab_.empty() && !hms_principal_.empty()) {
-    // Extract service and server_FQDN from principal (only once during setup).
-    ObString temp_princ;
-    ObArenaAllocator temp_allocator;
-    if (OB_FAIL(ob_write_string(temp_allocator, hms_principal_, temp_princ, true))) {
-      LOG_WARN("failed to copy the hms principal", K(ret), K_(hms_principal));
-    } else {
-      // service and server_FQDN can seperate by principal.
-      // Because the GSSAPI would assembly by service and server_FQDN to be the principal.
-      // Such as service "hive" and server_FQDN "hadoop" -> "hive/hadoop@EXAMPLE.COM".
-      // TODO(bitao): this principal may be not same as "hive/hadoop@EXAMPLE.COM" in the
-      // kerberos config.
-      ObString tmp_service = temp_princ.split_on('/').trim_space_only();
-      ObString tmp_server_FQDN = temp_princ.split_on('@').trim_space_only();
-      if (OB_FAIL(ob_write_string(*allocator_, tmp_service, service_, true))) {
-        LOG_WARN("failed to write service value", K(ret), K(tmp_service));
-      } else if (OB_FAIL(ob_write_string(*allocator_, tmp_server_FQDN, server_FQDN_, true))) {
-        LOG_WARN("failed to write service_FQDN value", K(ret), K(tmp_server_FQDN));
-      } else if (OB_UNLIKELY(service_.empty())) {
-        ret = OB_INVALID_HMS_SERVICE;
-        LOG_WARN("service should not be empty", K(ret), K(temp_princ), K_(hms_principal), K_(service));
-      } else if (OB_UNLIKELY(server_FQDN_.empty())) {
-        ret = OB_INVALID_HMS_SERVICE_FQDN;
-        LOG_WARN("service_FQDN should not be empty", K(ret), K_(hms_principal), K_(server_FQDN));
+  } else {
+    if (OB_UNLIKELY(is_opened_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("hive metastore client already setup and opened", K(ret));
+    } else if (OB_ISNULL(properties.uri_) || OB_LIKELY(0 == properties.uri_.length())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invald meta uri str", K(ret), K(properties.uri_));
+    } else if (OB_FAIL(parse_uri_list(properties.uri_))) {
+      LOG_WARN("failed to parse uri list", K(ret), K(properties.uri_));
+    } else if (OB_FAIL(ob_write_string(*allocator_,
+                                      properties.principal_,
+                                      hms_principal_,
+                                      true))) {
+      LOG_WARN("failed to write principal", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator_,
+                                      properties.keytab_,
+                                      hms_keytab_,
+                                      true))) {
+      LOG_WARN("failed to write keytab", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator_,
+                                      properties.krb5conf_,
+                                      hms_krb5conf_,
+                                      true))) {
+      LOG_WARN("failed to write krb5conf", K(ret));
+    } else if (OB_ISNULL(properties.hms_catalog_name_)
+              || properties.hms_catalog_name_.empty()) {
+      // do nothing
+    } else if (OB_FAIL(ob_write_string(*allocator_,
+                                      properties.hms_catalog_name_,
+                                      hms_default_catalog_,
+                                      true))) {
+      LOG_WARN("failed to write default catalog", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(uri_list_.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("uri list is empty after parse", K(ret));
+    } else if (!hms_keytab_.empty() && !hms_principal_.empty()) {
+      // Extract service and server_FQDN from principal (only once during setup).
+      ObString temp_princ;
+      ObArenaAllocator temp_allocator;
+      if (OB_FAIL(ob_write_string(temp_allocator, hms_principal_, temp_princ, true))) {
+        LOG_WARN("failed to copy the hms principal", K(ret), K_(hms_principal));
+      } else {
+        // service and server_FQDN can seperate by principal.
+        // Because the GSSAPI would assembly by service and server_FQDN to be the principal.
+        // Such as service "hive" and server_FQDN "hadoop" -> "hive/hadoop@EXAMPLE.COM".
+        // TODO(bitao): this principal may be not same as "hive/hadoop@EXAMPLE.COM" in the
+        // kerberos config.
+        ObString tmp_service = temp_princ.split_on('/').trim_space_only();
+        ObString tmp_server_FQDN = temp_princ.split_on('@').trim_space_only();
+        if (OB_FAIL(ob_write_string(*allocator_, tmp_service, service_, true))) {
+          LOG_WARN("failed to write service value", K(ret), K(tmp_service));
+        } else if (OB_FAIL(ob_write_string(*allocator_, tmp_server_FQDN, server_FQDN_, true))) {
+          LOG_WARN("failed to write service_FQDN value", K(ret), K(tmp_server_FQDN));
+        } else if (OB_UNLIKELY(service_.empty())) {
+          ret = OB_INVALID_HMS_SERVICE;
+          LOG_WARN("service should not be empty", K(ret), K(temp_princ), K_(hms_principal), K_(service));
+        } else if (OB_UNLIKELY(server_FQDN_.empty())) {
+          ret = OB_INVALID_HMS_SERVICE_FQDN;
+          LOG_WARN("service_FQDN should not be empty", K(ret), K_(hms_principal), K_(server_FQDN));
+        }
       }
     }
-  }
 
-  // Connect with failover support.
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(connect_with_failover())) {
-    LOG_WARN("failed to connect with failover", K(ret));
+    // Connect with failover support.
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(connect_with_failover())) {
+      LOG_WARN("failed to connect with failover", K(ret));
+    }
   }
   return ret;
 }
@@ -498,17 +486,13 @@ int ObHiveMetastoreClient::release()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("client is not inited, cannot release", K(ret), K(hold_client_id));
-  } else if (!is_in_use_) {
-    // Check if not in use to prevent double release
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("client is not in use, cannot release", K(ret), K(hold_client_id));
   }
 
   // Return to pool if pool pointer is set.
   if (OB_FAIL(ret)) {
   } else if (OB_NOT_NULL(client_pool_)) {
     ObHiveMetastoreClient *client = this;
-    ObHMSClientPool *pool = this->client_pool_;
+    ObCatalogClientPool<ObHiveMetastoreClient> *pool = this->client_pool_;
     const uint64_t tenant_id = pool->get_tenant_id();
     const uint64_t catalog_id = pool->get_catalog_id();
 
@@ -521,10 +505,9 @@ int ObHiveMetastoreClient::release()
     } else if (OB_NOT_NULL(client)) {
       // Return the client pointer to the pool and it would be released in the pool.
       // Mark as not in use only after successful return
-      is_in_use_ = false;
       LOG_TRACE("client released back to pool", K(ret), K(hold_client_id));
     } else {
-      LOG_WARN("client is null which would be released in the pool",
+      LOG_TRACE("client is null which would be released in the pool",
                K(ret),
                K(tenant_id),
                K(catalog_id),
@@ -564,9 +547,6 @@ ObHiveMetastoreClient::~ObHiveMetastoreClient()
     if (!hms_default_catalog_.empty()) {
       allocator_->free(hms_default_catalog_.ptr());
     }
-    if (!properties_.empty()) {
-      allocator_->free(properties_.ptr());
-    }
     if (!service_.empty()) {
       allocator_->free(service_.ptr());
     }
@@ -592,7 +572,6 @@ ObHiveMetastoreClient::~ObHiveMetastoreClient()
   allocator_ = nullptr;
   // Ensure pool pointer and use state are cleared
   client_pool_ = nullptr;
-  is_in_use_ = false;
 }
 
 int ObHiveMetastoreClient::extract_host_and_port(const ObString &uri, char *host, int &port)
@@ -678,10 +657,8 @@ int ObHiveMetastoreClient::extract_host_and_port(const ObString &uri, char *host
 int64_t ObHiveMetastoreClient::handle_ddl_time(String &time_str)
 {
   int64_t ddl_time = 0;
-  if (!::obsys::ObStringUtil::is_int(time_str.c_str())) {
-    // DO NOTHING
-  } else {
-    ddl_time = ::obsys::ObStringUtil::str_to_int(time_str.c_str(), 0);
+   if (OB_SUCCESS != ob_atoll(time_str.c_str(), ddl_time)) {
+    ddl_time = 0;
   }
   return ddl_time;
 }
@@ -726,18 +703,24 @@ void ObHiveMetastoreClient::extract_basic_stats_from_parameters(const std::map<s
   basic_stats.reset();
 
   std::map<std::string, std::string>::const_iterator it = parameters.find("numFiles");
-  if (it != parameters.end() && ::obsys::ObStringUtil::is_int(it->second.c_str())) {
-    basic_stats.num_files_ = ::obsys::ObStringUtil::str_to_int(it->second.c_str(), 0);
+  if (it != parameters.end()) {
+    if (OB_SUCCESS != ob_atoll(it->second.c_str(), basic_stats.num_files_)) {
+      basic_stats.num_files_ = 0;
+    }
   }
 
   it = parameters.find("numRows");
-  if (it != parameters.end() && ::obsys::ObStringUtil::is_int(it->second.c_str())) {
-    basic_stats.num_rows_ = ::obsys::ObStringUtil::str_to_int(it->second.c_str(), 0);
+  if (it != parameters.end()) {
+    if (OB_SUCCESS != ob_atoll(it->second.c_str(), basic_stats.num_rows_)) {
+      basic_stats.num_rows_ = 0;
+    }
   }
 
   it = parameters.find("totalSize");
-  if (it != parameters.end() && ::obsys::ObStringUtil::is_int(it->second.c_str())) {
-    basic_stats.total_size_ = ::obsys::ObStringUtil::str_to_int(it->second.c_str(), 0);
+  if (it != parameters.end()) {
+    if (OB_SUCCESS != ob_atoll(it->second.c_str(), basic_stats.total_size_)) {
+      basic_stats.total_size_ = 0;
+    }
   }
 
   LOG_TRACE("extracted basic stats from parameters", K(basic_stats));

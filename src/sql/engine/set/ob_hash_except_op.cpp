@@ -38,7 +38,7 @@ int ObHashExceptOp::inner_open()
   if (OB_FAIL(ObHashSetOp::inner_open())) {
     LOG_WARN("failed to open in ObHashExceptVecOp", K(ret));
   } else if (OB_ISNULL(store_rows_ = static_cast<const ObChunkDatumStore::StoredRow **> (ctx_.get_allocator().
-        alloc(MY_SPEC.max_batch_size_ * sizeof(ObChunkDatumStore::StoredRow *))))) {
+        alloc(max(MY_SPEC.max_batch_size_, 1) * sizeof(ObChunkDatumStore::StoredRow *))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc store rows", K(ret));
   }

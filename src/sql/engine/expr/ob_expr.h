@@ -746,6 +746,12 @@ public:
   OB_INLINE int eval_vector_param_value(ObEvalCtx &ctx, const ObBitVector &skip,
                                        const EvalBound bound) const;
 
+  template <typename ...TS>
+  OB_INLINE int eval_vector_param_value_null_short_circuit(ObEvalCtx &ctx,
+                                                           const ObBitVector &skip,
+                                                           const EvalBound bound,
+                                                           TS &...args) const;
+
   OB_INLINE int deep_copy_self_datum(ObEvalCtx &ctx) const;
 
   // deep copy %datum to reserve buffer or new allocated buffer if reserved buffer is not enough.
@@ -821,6 +827,14 @@ public:
     if (!is_uniform_format(get_format(ctx))) {
       get_nulls(ctx).reset(size);
     }
+  }
+
+  OB_INLINE bool eager_evaluation() const
+  {
+    return (arg_cnt_ <= 1
+            && type_ != T_OP_EXISTS
+            && type_ != T_OP_NOT_EXISTS)
+           || eager_evaluation_;
   }
 
   TO_STRING_KV("type", get_type_name(type_),
@@ -1373,6 +1387,43 @@ OB_INLINE int ObExpr::eval_vector_param_value(ObEvalCtx &ctx, const ObBitVector 
   for (int param_index = 0; OB_SUCC(ret) && param_index < arg_cnt_; param_index++) {
     if (OB_FAIL(args_[param_index]->eval_vector(ctx, skip, bound))) {
       SQL_LOG(WARN, "evaluate parameter failed", K(ret), K(param_index));
+    }
+  }
+  return ret;
+}
+
+template <typename ...TS>
+OB_INLINE int ObExpr::eval_vector_param_value_null_short_circuit(ObEvalCtx &ctx, const ObBitVector &skip,
+                                        const EvalBound bound, TS &...args) const
+{
+  int ret = common::OB_SUCCESS;
+  ObIVector **params[] = { &args...};
+  ObBitVector &pvt_skip = get_pvt_skip(ctx);
+  EvalBound new_bound = bound;
+  pvt_skip.deep_copy(skip, new_bound.start(), new_bound.end());
+  for (int param_index = 0; OB_SUCC(ret) && param_index < arg_cnt_; param_index++) {
+    ObIVector *vec = nullptr;
+    if (OB_FAIL(args_[param_index]->eval_vector(ctx, pvt_skip, new_bound))) {
+      SQL_LOG(WARN, "evaluate parameter failed", K(ret), K(param_index));
+    } else if (FALSE_IT(vec = args_[param_index]->get_vector(ctx))) {
+    } else if (param_index < ARRAYSIZEOF(params)) {
+      *params[param_index] = vec;
+    }
+    if (OB_SUCC(ret)) {
+      if (vec->has_null() && param_index < arg_cnt_ - 1) {
+        new_bound.set_all_row_active(false);
+        if (vec->get_format() != VEC_UNIFORM
+            && vec->get_format() != VEC_UNIFORM_CONST
+            && vec->get_format() != VEC_INVALID) {
+          pvt_skip.bit_or(*static_cast<ObBitmapNullVectorBase *>(vec)->get_nulls(), new_bound);
+        } else {
+          for (int i = new_bound.start(); i < new_bound.end(); i++) {
+            if (!pvt_skip.at(i) && vec->is_null(i)) {
+              pvt_skip.set(i);
+            }
+          }
+        }
+      }
     }
   }
   return ret;

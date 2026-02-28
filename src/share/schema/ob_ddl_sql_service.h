@@ -25,6 +25,7 @@ class ObISQLClient;
 }
 namespace share
 {
+class ObDMLSqlSplicer;
 namespace schema
 {
 
@@ -46,6 +47,21 @@ protected:
                             common::ObISQLClient &sql_client,
                             int64_t sql_exec_tenant_id = OB_INVALID_TENANT_ID,
                             common::ObSqlString *public_sql_string = NULL);
+  int log_operation_dml(
+      const ObSchemaOperation &ddl_operation,
+      share::ObDMLSqlSplicer &ddl_operation_dml,
+      share::ObDMLSqlSplicer &ddl_id_dml,
+      const int64_t sql_tenant_id = OB_SYS_TENANT_ID);
+  int gen_ddl_operation_dml(
+      const ObSchemaOperation &ddl_operation,
+      const uint64_t exec_tenant_id,
+      const uint64_t sql_tenant_id,
+      share::ObDMLSqlSplicer &ddl_operation_dml);
+  int gen_ddl_id_dml(
+      const ObSchemaOperation &ddl_operation,
+      const uint64_t exec_tenant_id,
+      const ObString *ddl_id_str,
+      share::ObDMLSqlSplicer &ddl_id_dml);
 private:
   uint64_t fill_schema_id(const uint64_t exec_tenant_id, const uint64_t schema_id);
 

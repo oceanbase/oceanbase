@@ -31,6 +31,7 @@ public:
         max_num_(max_num),
         attr_(tenant_id, pool_name),
         retire_time_(retire_time),
+        lock_(common::ObLatchIds::OB_TABLE_OBJECT_POOL_COMMON_LOCK),
         obj_label_("TbObjVal")
   {}
   virtual ~ObTableObjectPool() { destroy(); }

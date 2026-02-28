@@ -449,7 +449,6 @@ int ObMPStmtPrexecute::prepare_sql_with_params(ObSQLSessionInfo &session, const 
 int ObMPStmtPrexecute::resolve_sql_with_params(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
   do {
     ret = OB_SUCCESS;  // reset `ret` explicitly before local retry
     SMART_VAR(ObMySQLResultSet, result, session, THIS_WORKER.get_allocator())
@@ -1386,10 +1385,16 @@ int ObMPStmtPrexecute::send_prepare_packet(uint32_t statement_id,
   extend_flag.IS_PS_OUT = is_ps_out ? 1 : 0;
   prexecute_packet.set_extend_flag(extend_flag);
 
-  if (OB_SUCC(ret) && OB_FAIL(response_packet(prexecute_packet, NULL))) {
-    LOG_WARN("response packet failed", K(ret));
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(response_packet(prexecute_packet, NULL))) {
+    LOG_WARN("prexec response prepare packet failed");
+    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+      LOG_WARN("prepare packet oom, disconnect connection");
+      force_disconnect();
+    }
   }
-  LOG_DEBUG("send prepare packet in prepare-execute protocol.", K(statement_id),
+  LOG_DEBUG("send prepare packet in prepare-execute protocol.", K(ret),
+                                                                K(statement_id),
                                                                 K(column_num),
                                                                 K(param_num),
                                                                 K(warning_count),

@@ -265,6 +265,12 @@ int ObPushdownAggContext::init_agg_infos(const ObTableAccessParam &param)
       } else {
         agg_info.real_aggr_type_ = agg_expr->type_;
         agg_info.expr_ = agg_expr;
+        if (param.iter_param_.pd_storage_flag_.is_enable_dbms_stats_option() &&
+            agg_expr->arg_cnt_ > 0 &&
+            OB_NOT_NULL(agg_expr->args_[0])) {
+          agg_info.is_statistic_agg_ = is_lob_storage(agg_expr->args_[0]->obj_meta_.get_type()) &&
+                                        agg_expr->args_[0]->obj_meta_.has_lob_header();
+        }
         if (agg_expr->arg_cnt_ > 1) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected aggr expr", K(ret), KPC(agg_expr));

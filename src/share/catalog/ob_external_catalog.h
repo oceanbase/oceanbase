@@ -88,6 +88,7 @@ public:
            const uint64_t catalog_id,
            const common::ObString &properties,
            const ObCatalogLocationSchemaProvider *location_schema_provider = NULL);
+  virtual ObCatalogProperties::CatalogType get_catalog_type() const = 0;
   virtual int list_namespace_names(common::ObIArray<common::ObString> &ns_names) = 0;
   virtual int list_table_names(const common::ObString &db_name,
                                const ObNameCaseMode case_mode,

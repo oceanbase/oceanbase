@@ -417,7 +417,8 @@ int ObIndexBlockTreeCursor::init(
     }
     }
 
-    if (OB_FAIL(ret)) {
+    if (FAILEDx(curr_path_item_->block_data_.prepare_micro_header())) {
+      LOG_WARN("failed to prepare micro header", K(ret), K(curr_path_item_->block_data_.micro_header_));
     } else if (FALSE_IT(root_row_store_type = curr_path_item_->block_data_.get_store_type())) {
     } else if (FALSE_IT(curr_path_item_->row_store_type_ = root_row_store_type)) {
     } else if (OB_FAIL(row_.init(allocator, rowkey_column_cnt_ + 1))) {
@@ -426,7 +427,7 @@ int ObIndexBlockTreeCursor::init(
        STORAGE_LOG(WARN, "Failed to init curr endkey", K(ret));
     } else if (nullptr != curr_path_item_->block_data_.get_extra_buf()) {
       curr_path_item_->is_block_transformed_ = true;
-    } else if (OB_FAIL(set_reader(root_row_store_type))) {
+    } else if (OB_FAIL(micro_reader_helper_.get_reader(*curr_path_item_->block_data_.get_micro_header(), reader_))) {
       LOG_WARN("Fail to set micro block reader", K(ret));
     } else if (OB_FAIL(reader_->init(curr_path_item_->block_data_, &(read_info_->get_datum_utils())))) {
       LOG_WARN("Fail to init micro block reader", K(ret));
@@ -606,7 +607,7 @@ int ObIndexBlockTreeCursor::drill_down()
       LOG_WARN("Fail to get micro block data handle", K(ret), KPC(idx_row_header), K(curr_row_offset));
     } else if (curr_path_item_->is_block_transformed_) {
       // No need to init micro reader
-    } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(new_row_store_type)))) {
+    } else if (OB_FAIL(micro_reader_helper_.get_reader(*curr_path_item_->block_data_.get_micro_header(), reader_))) {
       LOG_WARN("Fail to set row reader", K(ret), K(new_row_store_type));
     } else if (OB_FAIL(reader_->init(
         curr_path_item_->block_data_, &(read_info_->get_datum_utils())))) {
@@ -793,7 +794,7 @@ int ObIndexBlockTreeCursor::pull_up(const bool cascade, const bool is_reverse_sc
     if (OB_FAIL(read_next_level_row(curr_path_item_->curr_row_idx_))) {
       LOG_WARN("Fail to read next level row", K(ret), KPC(curr_path_item_));
     }
-  } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(curr_path_item_->row_store_type_)))) {
+  } else if (OB_FAIL(micro_reader_helper_.get_reader(*curr_path_item_->block_data_.get_micro_header(), reader_))) {
     LOG_WARN("Fail to set row reader", K(ret));
   } else if (OB_FAIL(reader_->init(
       curr_path_item_->block_data_, &(read_info_->get_datum_utils())))) {
@@ -817,7 +818,7 @@ int ObIndexBlockTreeCursor::pull_up_to_root()
     }
   }
   if (OB_FAIL(ret) || curr_path_item_->is_block_transformed_) {
-  } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(curr_path_item_->row_store_type_)))) {
+  } else if (OB_FAIL(micro_reader_helper_.get_reader(*curr_path_item_->block_data_.get_micro_header(), reader_))) {
     LOG_WARN("Fail to set reader");
   } else if (OB_FAIL(reader_->init(
       curr_path_item_->block_data_, &(read_info_->get_datum_utils())))) {
@@ -1397,15 +1398,6 @@ int ObIndexBlockTreeCursor::estimate_boundary_macro_and_micro_count(const ObDatu
   return ret;
 }
 
-int ObIndexBlockTreeCursor::set_reader(const ObRowStoreType store_type)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(micro_reader_helper_.get_reader(store_type, reader_))) {
-    LOG_WARN("Fail to get micro block reader", K(ret), K(store_type));
-  }
-  return ret;
-}
-
 int ObIndexBlockTreeCursor::get_next_level_block(
     const MacroBlockId &macro_block_id,
     const ObIndexBlockRowHeader &idx_row_header,
@@ -1490,7 +1482,7 @@ int ObIndexBlockTreeCursor::load_micro_block_data(const MacroBlockId &macro_bloc
       } else if (ObStoreFormat::is_row_store_type_with_cs_encoding(static_cast<ObRowStoreType>(header.row_store_type_))) {
         if (OB_FAIL(macro_reader.decrypt_and_full_transform_data(
             header, block_des_meta, src_block_buf, src_buf_size,
-            curr_path_item_->block_data_.get_buf(), curr_path_item_->block_data_.get_buf_size(),
+            curr_path_item_->block_data_,
             cursor_path_.get_allocator()))) {
           LOG_WARN("fail to decrypt_and_full_transform_data", K(ret), K(header), K(block_des_meta));
         } else {
@@ -1501,8 +1493,7 @@ int ObIndexBlockTreeCursor::load_micro_block_data(const MacroBlockId &macro_bloc
         if (OB_FAIL(macro_reader.do_decrypt_and_decompress_data(
             header, block_des_meta,
             src_block_buf, src_buf_size,
-            curr_path_item_->block_data_.get_buf(),
-            curr_path_item_->block_data_.get_buf_size(),
+            curr_path_item_->block_data_,
             is_compressed,
             true, /* need deep copy */
             cursor_path_.get_allocator()))) {

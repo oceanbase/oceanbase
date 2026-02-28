@@ -158,6 +158,7 @@ public:
       bool &enable_parallel_migration);
   static int check_member_list_for_single_replica(
       const common::ObMemberList &member_list,
+      const bool check_same_zone,
       bool &pass_check);
   static int get_all_meta_tenant_ids(
       ObIArray<uint64_t> &meta_tenant_ids);

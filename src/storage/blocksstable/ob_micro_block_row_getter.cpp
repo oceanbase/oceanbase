@@ -98,15 +98,15 @@ int ObIMicroBlockRowFetcher::switch_context(
   return ret;
 }
 
-int ObIMicroBlockRowFetcher::prepare_reader(const ObRowStoreType store_type)
+int ObIMicroBlockRowFetcher::prepare_reader(const ObMicroBlockHeader &header)
 {
   int ret = OB_SUCCESS;
 
-  if (ObStoreFormat::is_row_store_type_with_encoding(store_type) && OB_UNLIKELY(sstable_->is_multi_version_minor_sstable())) {
+  if (sstable_->is_multi_version_minor_sstable() && !ObStoreFormat::is_minor_row_store_type_valid(static_cast<ObRowStoreType>(header.row_store_type_))) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported multi version encode store type", K(ret), K(store_type));
-  } else if (OB_FAIL(reader_helper_.get_reader(store_type, reader_))) {
-    LOG_WARN("Fail to get micro block reader", K(ret), K(store_type));
+    LOG_WARN("not supported multi version encode store type", K(ret), K(header.row_store_type_));
+  } else if (OB_FAIL(reader_helper_.get_reader(header, reader_))) {
+    LOG_WARN("Fail to get micro block reader", K(ret), K(header));
   }
 
   return ret;
@@ -345,13 +345,12 @@ int ObMicroBlockRowGetter::inner_get_row(
   } else if (OB_UNLIKELY(nullptr == read_info_ || !read_info_->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid read_info", K(ret), KPC_(read_info));
-  } else if (OB_FAIL(prepare_reader(block_data.get_store_type()))) {
-    LOG_WARN("failed to prepare reader", K(ret), K(block_addr));
+  } else if (OB_FAIL(prepare_reader(*block_data.get_micro_header()))) {
+    LOG_WARN("failed to prepare reader", K(ret), "header", *block_data.get_micro_header());
   } else if (OB_FAIL(row_.reserve(read_info_->get_request_count()))) {
     LOG_WARN("fail to reserve memory for datum row", K(ret), K(read_info_->get_request_count()));
   } else if (OB_UNLIKELY(sstable_->is_minor_sstable() &&
-                         sstable_->get_start_scn().get_val_for_tx() <= context_->trans_version_range_.base_version_)) {
-    // TODO: zhanghuidong.zhd, check min_merged_trans_version instead
+                         sstable_->get_min_merged_trans_version() <= context_->trans_version_range_.base_version_)) {
     if (OB_FAIL(reader_->get_row_and_trans_version(block_addr, block_data, rowkey, *read_info_, row_, trans_version))) {
       if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
         LOG_WARN("Fail to get row", K(ret), K(rowkey), K(block_data), KPC_(read_info), KPC_(param), KPC_(context), K(block_addr));
@@ -530,8 +529,8 @@ int ObMicroBlockCGRowGetter::get_block_row(
 
   if (OB_FAIL(read_handle.get_block_data(block_reader, block_data))) {
     LOG_WARN("Fail to get block data", K(ret), K(read_handle));
-  } else if (OB_FAIL(prepare_reader(block_data.get_store_type()))) {
-    LOG_WARN("Failed to prepare reader", K(ret), K(block_addr));
+  } else if (OB_FAIL(prepare_reader(*block_data.get_micro_header()))) {
+    LOG_WARN("Failed to prepare reader", K(ret), "header", *block_data.get_micro_header());
   } else if (OB_FAIL(row_.reserve(read_info_->get_request_count()))) {
     LOG_WARN("Fail to reserve memory for datum row", K(ret), K(read_info_->get_request_count()));
   } else if (OB_FAIL(reader_->get_row(block_addr, block_data, *read_info_, row_idx, row_))) {

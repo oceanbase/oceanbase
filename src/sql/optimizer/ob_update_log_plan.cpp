@@ -96,6 +96,17 @@ int ObUpdateLogPlan::generate_normal_raw_plan()
             K(candidates_.candidate_plans_.count()));
       }
     }
+    if (OB_SUCC(ret)) {
+      ObSEArray<ObRawExpr *, 4> view_check_exprs;
+      if (OB_FAIL(update_stmt->get_view_check_exprs(view_check_exprs))) {
+        LOG_WARN("get view check exprs", K(ret));
+      } else if (OB_FAIL(candi_allocate_subplan_filter(view_check_exprs))) {
+        LOG_WARN("failed to allocate subplan filter for view check exprs", K(ret));
+      } else if (!view_check_exprs.empty()) {
+        LOG_TRACE("succeed to allocate subplan filter for where statement",
+            K(candidates_.candidate_plans_.count()), K(view_check_exprs.count()));
+      }
+    }
     // step. allocate 'count' for rownum if needed, Oracle mode only
     if(OB_SUCC(ret)) {
       bool has_rownum = false;
@@ -372,8 +383,6 @@ int ObUpdateLogPlan::allocate_update_as_top(ObLogicalOperator *&top,
     }
     if (update_stmt->is_error_logging() && OB_FAIL(update_op->extract_err_log_info())) {
       LOG_WARN("failed to extract error log info", K(ret));
-    } else if (OB_FAIL(update_stmt->get_view_check_exprs(update_op->get_view_check_exprs()))) {
-      LOG_WARN("failed to get view check exprs", K(ret));
     } else if (OB_FAIL(update_op->compute_property())) {
       LOG_WARN("failed to compute property", K(ret));
     } else {
@@ -576,8 +585,8 @@ int ObUpdateLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
                                             update_info.table_id_ != update_info.loc_table_id_,
                                             index_update))) {
         LOG_WARN("failed to check index update", K(ret), K(update_info));
-      } else if (!index_update) {
-          // do nothing
+      } else if (!index_update && !index_dml_info->is_compaction_scn_ttl_di_table_) {
+        // do nothing
       } else if (OB_FAIL(generate_index_column_exprs(update_info.table_id_,
                                                      *index_schema,
                                                      update_info.assignments_,

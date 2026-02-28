@@ -182,20 +182,31 @@ int ObOpProfile<MetricType>::pretty_print(ObIAllocator *alloc, const char *&resu
                                           const ObString &suffix,
                                           const ObString &child_prefix,
                                           metric::Level display_level) const
-
 {
   int ret = OB_SUCCESS;
   int64_t buf_len = 8 * 1024;
   int64_t pos = 0;
-  char *buf = static_cast<char *>(alloc->alloc(buf_len));
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc buf");
-  } else if (OB_FAIL(pretty_print_name(buf, buf_len, pos, prefix, suffix))) {
-    LOG_WARN("failed to pretty print");
-  } else if (OB_FAIL(pretty_print_metrics(buf, buf_len, pos, child_prefix, display_level))) {
-    LOG_WARN("failed to pretty print");
-  } else {
+  char *buf = nullptr;
+  int64_t retry_count = 0;
+  do {
+    if (OB_ISNULL(buf = static_cast<char *>(alloc->alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc buf");
+    } else if (OB_FAIL(pretty_print_name(buf, buf_len, pos, prefix, suffix))) {
+      LOG_WARN("failed to pretty print");
+    } else if (OB_FAIL(pretty_print_metrics(buf, buf_len, pos, child_prefix, display_level))) {
+      LOG_WARN("failed to pretty print");
+    }
+    if (OB_SIZE_OVERFLOW == ret) {
+      LOG_WARN("profile too long, retry with double size buf", K(retry_count), K(buf_len));
+      alloc->free(buf);
+      buf_len = buf_len * 2;
+      pos = 0;
+      ++retry_count;
+    }
+  } while (ret == OB_SIZE_OVERFLOW && retry_count <= 5) ;
+
+  if (OB_SUCC(ret)) {
     result = buf;
   }
   return ret;

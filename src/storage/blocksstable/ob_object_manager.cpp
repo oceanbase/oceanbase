@@ -63,10 +63,10 @@ ObObjectManager::ObObjectManager()
   : is_inited_(false),
     is_shared_storage_(false),
     macro_object_size_(0),
-    lock_(),
+    lock_(common::ObLatchIds::OB_OBJECT_MANAGER_LOCK),
     super_block_(),
     super_block_buf_holder_(),
-    resize_file_lock_()
+    resize_file_lock_(common::ObLatchIds::OB_OBJECT_MANAGER_RESIZE_FILE_LOCK)
 {
 }
 
@@ -276,6 +276,7 @@ int ObObjectManager::dec_ref(const MacroBlockId &object_id) const
 }
 
 int ObObjectManager::resize_local_device(
+    const int64_t expected_current_size,
     const int64_t new_device_size,
     const int64_t new_device_disk_percentage,
     const int64_t reserved_size)
@@ -288,9 +289,14 @@ int ObObjectManager::resize_local_device(
     LOG_WARN("not init", K(ret));
   } else if (!is_shared_storage_) {
     SpinWLockGuard guard(lock_);
+    const int64_t current_size = get_total_macro_block_count() * get_macro_block_size();
+    if (expected_current_size != current_size) {
+      ret = OB_EAGAIN;
+    }
     HEAP_VAR(ObServerSuperBlock, tmp_super_block) {
       tmp_super_block = super_block_;
-      if (OB_FAIL(OB_SERVER_BLOCK_MGR.resize_file(
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.resize_file(
           new_device_size, new_device_disk_percentage, reserved_size, tmp_super_block))) {
         LOG_WARN("fail to resize file", K(ret), K(new_device_size), K(new_device_disk_percentage), K(reserved_size));
       } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.write_super_block(tmp_super_block, super_block_buf_holder_))) {
@@ -356,11 +362,12 @@ int ObObjectManager::update_super_block(
       tmp_super_block.body_.replay_start_point_ = replay_start_point;
       tmp_super_block.body_.tenant_meta_entry_ = tenant_meta_entry;
       tmp_super_block.construct_header();
-      tmp_super_block.min_file_id_ = fd_dispenser.get_min_file_id();
-      tmp_super_block.max_file_id_ = fd_dispenser.get_max_file_id();
       if (is_shared_storage_) {
 #ifdef OB_BUILD_SHARED_STORAGE
-        if (OB_FAIL(ss_write_super_block_(tmp_super_block))) {
+        if (OB_FAIL(fd_dispenser.assign_to(/*out*/tmp_super_block.min_file_id_,
+                                           /*out*/tmp_super_block.max_file_id_))) {
+          LOG_WARN("fd_dispenser fail to do assign", K(ret), K(fd_dispenser));
+        } else if (OB_FAIL(ss_write_super_block_(tmp_super_block))) {
           LOG_WARN("fail to ss write super block", K(ret));
         }
 #endif

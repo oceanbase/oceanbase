@@ -602,7 +602,9 @@ int ObTableInsertUpOp::do_insert_up_cache()
       } else if (OB_FAIL(record_stmt_last_update_id())) {
         LOG_WARN("fail to record stmt last update id", K(ret));
       } else if (is_ignore_) {
-        if (OB_FAIL(do_update_with_ignore())) {
+        if (is_skipped) {
+          // view check or constraint check failed, skip this row in ignore mode
+        } else if (OB_FAIL(do_update_with_ignore())) {
           LOG_WARN("do update with ignore failed", K(ret));
         } else if (upd_rtdef.is_row_changed_) {
           insert_rows++;
@@ -1398,7 +1400,9 @@ int ObTableInsertUpOp::do_conflict_update_row(const ObConflictValue &constraint_
   } else if (OB_FAIL(ObDMLService::process_update_row(upd_ctdef, upd_rtdef, is_skipped, *this))) {
     LOG_WARN("process update failed", K(ret), K(upd_ctdef));
   } else if (is_ignore_) {
-    if (OB_FAIL(do_update_with_ignore())) {
+    if (is_skipped) {
+      // view check or constraint check failed, skip this row in ignore mode
+    } else if (OB_FAIL(do_update_with_ignore())) {
       LOG_WARN("do update with ignore failed", K(ret));
     } else if (upd_rtdef.is_row_changed_) {
       insert_rows++;

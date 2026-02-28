@@ -59,7 +59,11 @@ int ObVectorRefreshIdxTransaction::ObSessionParamSaved::save(ObSQLSessionInfo *s
       autocommit_ = autocommit;
       session_info->set_inner_session();
       session_info->set_autocommit(false);
-      session_info->get_ddl_info().set_is_dummy_ddl_for_inner_visibility(true);
+      InnerDDLInfo ddl_info;
+      ddl_info.set_is_dummy_ddl_for_inner_visibility(true);
+      if (OB_FAIL(session_info->get_ddl_info().init(ddl_info, 0 /*session_id*/))) {
+        LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info));
+      }
     }
   }
   return ret;
@@ -75,7 +79,7 @@ int ObVectorRefreshIdxTransaction::ObSessionParamSaved::restore()
       session_info_->set_user_session();
     }
     session_info_->set_autocommit(autocommit_);
-    session_info_->get_ddl_info().set_is_dummy_ddl_for_inner_visibility(false);
+    session_info_->get_ddl_info().reset();
     session_info_ = nullptr;
   }
   return ret;

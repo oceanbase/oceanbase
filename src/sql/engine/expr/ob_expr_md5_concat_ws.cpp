@@ -185,7 +185,6 @@ int ObExprMd5ConcatWs::vector_md5_concat_ws(
       continue;
     } else if (is_result_all_null) {
       res_vec->set_null(bound_idx);
-      eval_flags.set(bound_idx);
     } else {
       ObSEArray<ObString, 32> words;
       // get all strs from vector
@@ -215,7 +214,6 @@ int ObExprMd5ConcatWs::vector_md5_concat_ws(
         }
         LOG_DEBUG("gen vectro result", K(bound_idx), K(res_str), KP(res_str.ptr()), K(res_vec->get_string(bound_idx)));
       }
-      eval_flags.set(bound_idx);
     }
   }
   return ret;

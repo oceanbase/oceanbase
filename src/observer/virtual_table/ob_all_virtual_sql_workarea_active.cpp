@@ -234,6 +234,13 @@ int ObSqlWorkareaActive::fill_row(
         cells[cell_idx].set_int(wa_active.database_id_);
         break;
       }
+      case TRACE_ID: {
+        int len = wa_active.trace_id_.to_string(trace_id_, sizeof(trace_id_));
+        cells[cell_idx].set_varchar(trace_id_, len);
+        cells[cell_idx].set_collation_type(
+          ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected column id", K(col_id));

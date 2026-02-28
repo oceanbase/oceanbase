@@ -146,6 +146,10 @@ void TestSSReaderWriter::SetUpTestCase()
   MTL(tmp_file::ObTenantTmpFileManager *)->wait();
   MTL(tmp_file::ObTenantTmpFileManager *)->destroy();
   ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  // disable persist disk space task to avoid interfere with belowing tests
+  file_manager->persist_disk_space_task_.is_inited_ = false;
 }
 
 void TestSSReaderWriter::TearDownTestCase()
@@ -159,6 +163,7 @@ void TestSSReaderWriter::TearDownTestCase()
 
 void TestSSReaderWriter::SetUp()
 {
+  const uint64_t tenant_id = MTL_ID();
   // construct write info
   write_buf_[0] = '\0';
   const int64_t mid_offset = WRITE_IO_SIZE / 2;
@@ -169,7 +174,7 @@ void TestSSReaderWriter::SetUp()
   write_info_.offset_ = 0;
   write_info_.size_ = WRITE_IO_SIZE;
   write_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
-  write_info_.mtl_tenant_id_ = MTL_ID();
+  write_info_.mtl_tenant_id_ = tenant_id;
 
   // construct read info
   read_buf_[0] = '\0';
@@ -178,7 +183,15 @@ void TestSSReaderWriter::SetUp()
   read_info_.offset_ = 0;
   read_info_.size_ = WRITE_IO_SIZE;
   read_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
-  read_info_.mtl_tenant_id_ = MTL_ID();
+  read_info_.mtl_tenant_id_ = tenant_id;
+
+  // set max_micro_block_size to 2MB
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  ASSERT_TRUE(tenant_config.is_valid());
+  tenant_config->_ss_micro_cache_max_block_size = 2 * 1024 * 1024; // 2MB
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  ATOMIC_STORE(&micro_cache->micro_meta_mgr_.max_micro_blk_size_, 2 * 1024 * 1024);
 }
 
 void TestSSReaderWriter::TearDown()
@@ -398,9 +411,7 @@ void check_object_type_stat(const MacroBlockId &macro_id,
 {
   ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
   ObSSObjectTypeStat type_stat;
-  ObIOFlag flag;
-  object_handle.get_io_handle().get_io_flag(flag);
-  bool is_remote = flag.is_sync();
+  bool is_remote = object_handle.is_limit_net_bandwidth_req();
   ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), is_remote, type_stat));
   ObSSBaseStat stat;
   type_stat.get_stat(ObSSObjectTypeStatType::READ, stat);
@@ -1959,9 +1970,13 @@ TEST_F(TestSSReaderWriter, test_read_callback_destructor_cleanup)
 {
   int ret = OB_SUCCESS;
 
-  // Create conflict info
+  ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  ObSegmentFileManager &seg_file_mgr = tenant_file_mgr->get_segment_file_mgr();
+
+  // Create conflict info via ObSegmentFileManager
   TmpFileConflictInfoHandle conflict_info_handle;
-  ASSERT_EQ(OB_SUCCESS, conflict_info_handle.set_tmpfile_conflict_info(false, 0));
+  ASSERT_EQ(OB_SUCCESS, seg_file_mgr.allocate_conflict_info_handle(false/*is_writing*/, 0/*active_readers_count*/, conflict_info_handle/*conflict_info_handle*/));
 
   // Acquire read access
   ASSERT_EQ(OB_SUCCESS, conflict_info_handle.try_acquire_read_access());
@@ -1979,10 +1994,8 @@ TEST_F(TestSSReaderWriter, test_read_callback_destructor_cleanup)
   read_callback = new (read_callback) ObSSTmpFileReadCallback(&allocator, nullptr, nullptr);
 
   TmpFileSegId seg_id(60009, 0);
-  // Create a mock segment file manager for testing
-  ObSegmentFileManager mock_seg_mgr;
   ASSERT_EQ(OB_SUCCESS, read_callback->set_ss_tmpfile_read_callback(
-      seg_id, &mock_seg_mgr, &allocator, conflict_info_handle));
+      seg_id, &seg_file_mgr, &allocator, conflict_info_handle));
 
   // Verify read access is still held
   ASSERT_EQ(1, conflict_info_handle.get_conflict_info()->active_readers_count_);
@@ -1993,6 +2006,9 @@ TEST_F(TestSSReaderWriter, test_read_callback_destructor_cleanup)
 
   // Verify read access was properly released
   ASSERT_EQ(0, conflict_info_handle.get_conflict_info()->active_readers_count_);
+
+  // Clean up
+  conflict_info_handle.reset();
 
   LOG_INFO("test_read_callback_destructor_cleanup passed - read access properly released");
 }
@@ -2009,9 +2025,13 @@ TEST_F(TestSSReaderWriter, test_concurrent_read_write_operations)
   std::atomic<int> write_conflicts(0);
   std::atomic<int> other_errors(0);
 
-  // Create shared conflict info
+  ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  ObSegmentFileManager &seg_file_mgr = tenant_file_mgr->get_segment_file_mgr();
+
+  // Create shared conflict info via ObSegmentFileManager
   TmpFileConflictInfoHandle shared_conflict_info;
-  ASSERT_EQ(OB_SUCCESS, shared_conflict_info.set_tmpfile_conflict_info(false, 0));
+  ASSERT_EQ(OB_SUCCESS, seg_file_mgr.allocate_conflict_info_handle(false/*is_writing*/, 0/*active_readers_count*/, shared_conflict_info/*conflict_info_handle*/));
 
   std::vector<std::thread> threads;
 
@@ -2081,6 +2101,9 @@ TEST_F(TestSSReaderWriter, test_concurrent_read_write_operations)
   // Verify we had some successful operations
   ASSERT_GT(successful_reads.load() + successful_writes.load(), 0);
 
+  // Clean up
+  shared_conflict_info.reset();
+
   LOG_INFO("test_concurrent_read_write_operations passed - no resource leaks detected");
 }
 
@@ -2089,9 +2112,13 @@ TEST_F(TestSSReaderWriter, test_write_callback_destructor_cleanup)
 {
   int ret = OB_SUCCESS;
 
-  // Create conflict info
+  ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  ObSegmentFileManager &seg_file_mgr = tenant_file_mgr->get_segment_file_mgr();
+
+  // Create conflict info via ObSegmentFileManager
   TmpFileConflictInfoHandle conflict_info_handle;
-  ASSERT_EQ(OB_SUCCESS, conflict_info_handle.set_tmpfile_conflict_info(false, 0));
+  ASSERT_EQ(OB_SUCCESS, seg_file_mgr.allocate_conflict_info_handle(false/*is_writing*/, 0/*active_readers_count*/, conflict_info_handle/*conflict_info_handle*/));
 
   // Acquire write access
   ASSERT_EQ(OB_SUCCESS, conflict_info_handle.try_acquire_write_access());
@@ -2125,6 +2152,9 @@ TEST_F(TestSSReaderWriter, test_write_callback_destructor_cleanup)
 
   // Verify write access was properly released
   ASSERT_FALSE(conflict_info_handle.get_conflict_info()->is_writing_);
+
+  // Clean up
+  conflict_info_handle.reset();
 
   LOG_INFO("test_write_callback_destructor_cleanup passed - write access properly released");
 }

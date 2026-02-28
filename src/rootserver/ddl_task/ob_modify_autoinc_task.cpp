@@ -89,12 +89,15 @@ int ObUpdateAutoincSequenceTask::process()
         common::ObCommonSqlProxy *user_sql_proxy = GCTX.ddl_sql_proxy_;
         ObSessionParam session_param;
         session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
-        session_param.ddl_info_.set_is_ddl(true);
+        InnerDDLInfo ddl_info;
+        ddl_info.set_is_ddl(true);
         // if data_table_id != dest_table_id, meaning this is happening in ddl double write
-        session_param.ddl_info_.set_source_table_hidden(data_table_id_ != dest_table_id_);
+        ddl_info.set_source_table_hidden(data_table_id_ != dest_table_id_);
         ObObj obj;
         const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
-        if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+        if (OB_FAIL(session_param.ddl_info_.init(ddl_info, table_schema->get_session_id()))) {
+          LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(table_schema->get_session_id()));
+        } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
           LOG_WARN("set trx timeout failed", K(ret));
         } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
           LOG_WARN("set timeout failed", K(ret));
@@ -158,7 +161,7 @@ ObAsyncTask *ObUpdateAutoincSequenceTask::deep_copy(char *buf, const int64_t buf
 }
 
 ObModifyAutoincTask::ObModifyAutoincTask()
-  : ObDDLTask(ObDDLType::DDL_INVALID), lock_(), alter_table_arg_(),
+  : ObDDLTask(ObDDLType::DDL_INVALID), lock_(common::ObLatchIds::OB_MODIFY_AUTOINC_TASK_LOCK), alter_table_arg_(),
     update_autoinc_job_ret_code_(INT64_MAX), update_autoinc_job_time_(0)
 {
 }

@@ -124,13 +124,6 @@ private:
       int64_t &num_distinct, int64_t &avg_length);
 
   /**
-   * @brief Merge multiple partition statistics into aggregated statistics
-   */
-  int merge_partition_basic_stats(
-      const std::vector<ObHiveBasicStats> &partition_basic_stats,
-      ObHiveBasicStats &merged_stats);
-
-  /**
    * @brief Merge single Hive column statistics into external column stat
    * builder
    */

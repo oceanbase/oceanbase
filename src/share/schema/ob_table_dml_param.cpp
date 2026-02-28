@@ -17,6 +17,7 @@
 #include "object/ob_object.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "lib/udt/ob_collection_type.h"
 
 namespace oceanbase
 {
@@ -42,6 +43,7 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     index_name_(),
     fts_parser_name_(),
     fts_parser_properties_(),
+    fts_index_type_(OB_FTS_INDEX_TYPE_INVALID),
     columns_(allocator),
     col_map_(allocator),
     pk_name_(),
@@ -58,13 +60,14 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     vec_vector_col_id_(OB_INVALID_ID),
     mv_mode_(),
     is_delete_insert_(false),
+    is_rowscn_ttl_table_(false),
     merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN),
     inc_pk_doc_id_col_id_(OB_INVALID_ID),
     vec_chunk_col_id_(OB_INVALID_ID),
     vec_embedded_col_id_(OB_INVALID_ID),
     search_idx_included_cids_(allocator),
     search_idx_included_cid_idxes_(allocator),
-    search_idx_included_extended_type_infos_(allocator)
+    search_idx_arr_types_(allocator)
 {
 }
 
@@ -89,6 +92,7 @@ void ObTableSchemaParam::reset()
   index_name_.reset();
   fts_parser_name_.reset();
   fts_parser_properties_.reset();
+  fts_index_type_ = OB_FTS_INDEX_TYPE_MATCH;
   columns_.reset();
   col_map_.clear();
   pk_name_.reset();
@@ -107,11 +111,12 @@ void ObTableSchemaParam::reset()
   vec_vector_col_id_ = OB_INVALID_ID;
   mv_mode_.reset();
   is_delete_insert_ = false;
+  is_rowscn_ttl_table_ = false;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
   inc_pk_doc_id_col_id_ = OB_INVALID_ID;
   search_idx_included_cids_.reset();
   search_idx_included_cid_idxes_.reset();
-  search_idx_included_extended_type_infos_.reset();
+  search_idx_arr_types_.reset();
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -135,6 +140,8 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     table_type_ = schema->get_table_type();
     lob_inrow_threshold_ = schema->get_lob_inrow_threshold();
     is_delete_insert_ = schema->is_delete_insert_merge_engine();
+    is_rowscn_ttl_table_ = schema->get_ttl_flag().ttl_column_type_ == ObTTLFlag::TTLColumnType::ROWSCN;
+    merge_engine_type_ = schema->get_merge_engine_type();
     if (OB_FAIL(schema->get_is_row_store(use_cs))) {
       LOG_WARN("fail to get is row store", K(ret));
     } else {
@@ -281,8 +288,9 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
   }
 
   bool need_truncate_filter = !use_cs && nullptr != schema && schema->is_global_index_table();
+  bool has_ttl_definition = nullptr != schema && schema->get_ttl_flag().was_compaction_ttl_;
   if (OB_FAIL(ret)) {
-  } else if (need_truncate_filter) {
+  } else if (need_truncate_filter || has_ttl_definition) {
     if (OB_FAIL(schema->get_mulit_version_rowkey_column_ids(all_column_ids))) {
       LOG_WARN("fail to get multi version rokwey column", K(ret));
     } else if (OB_FAIL(schema->get_column_ids_without_rowkey(all_column_ids, false))) {
@@ -316,8 +324,10 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
       col_index = -1;
       virtual_cols_cnt++;
     } else {
-      col_index = need_truncate_filter ? i - virtual_cols_cnt - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() :
-                                         i - virtual_cols_cnt;
+      col_index = (need_truncate_filter || has_ttl_definition)
+                      ? i - virtual_cols_cnt
+                            - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()
+                      : i - virtual_cols_cnt;
     }
 
     if (FAILEDx(tmp_cols.push_back(column))) {
@@ -352,7 +362,9 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
                 true/*has_all_column_group*/,
                 false/*is_cg_sstable*/,
                 need_truncate_filter,
-                is_delete_insert_))) {
+                is_delete_insert(),
+                schema->get_micro_block_format_version(),
+                has_ttl_definition))) {
       LOG_WARN("Fail to init read info", K(ret));
     } else if (!col_map_.is_inited()) {
       if (OB_FAIL(col_map_.init(tmp_cols))) {
@@ -587,6 +599,17 @@ int ObTableSchemaParam::get_typed_doc_id_col_id(uint64_t &doc_id_col_id, ObDocID
   return ret;
 }
 
+ObDocIDType ObTableSchemaParam::get_multivalue_doc_id_type() const
+{
+  ObDocIDType type = ObDocIDType::INVALID;
+  if (doc_id_col_id_ != OB_INVALID_ID) {
+    type = ObDocIDType::TABLET_SEQUENCE;
+  } else {
+    type = ObDocIDType::HIDDEN_INC_PK;
+  }
+  return type;
+}
+
 int64_t ObTableSchemaParam::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -679,7 +702,22 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(vec_embedded_col_id_);
   OB_UNIS_ENCODE(search_idx_included_cids_);
   OB_UNIS_ENCODE(search_idx_included_cid_idxes_);
-  OB_UNIS_ENCODE(search_idx_included_extended_type_infos_);
+  // serialize search_idx_arr_types_
+  {
+    int64_t arr_types_count = search_idx_arr_types_.count();
+    OB_UNIS_ENCODE(arr_types_count);
+    for (int64_t i = 0; OB_SUCC(ret) && i < arr_types_count; ++i) {
+      bool has_type = (search_idx_arr_types_.at(i) != nullptr);
+      OB_UNIS_ENCODE(has_type);
+      if (OB_SUCC(ret) && has_type) {
+        if (OB_FAIL(search_idx_arr_types_.at(i)->serialize(buf, buf_len, pos))) {
+          LOG_WARN("failed to serialize arr type", K(ret), K(i));
+        }
+      }
+    }
+  }
+  OB_UNIS_ENCODE(fts_index_type_);
+  OB_UNIS_ENCODE(is_rowscn_ttl_table_);
   return ret;
 }
 
@@ -840,26 +878,47 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   }
   OB_UNIS_DECODE(is_delete_insert_);
   OB_UNIS_DECODE(merge_engine_type_);
+  // If the merge_engine_type is unknown, it means it's upgrade from a old version which doesn't have this field. (before 4.4.1)
+  // At this time, the valid merge_engine is only delete-insert or partial-update.
+  if (OB_SUCC(ret) && merge_engine_type_ == ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN) {
+    merge_engine_type_ = is_delete_insert_ ? ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT
+                                           : ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  }
+
   OB_UNIS_DECODE(inc_pk_doc_id_col_id_);
   OB_UNIS_DECODE(vec_chunk_col_id_);
   OB_UNIS_DECODE(vec_embedded_col_id_);
   OB_UNIS_DECODE(search_idx_included_cids_);
   OB_UNIS_DECODE(search_idx_included_cid_idxes_);
-  OB_UNIS_DECODE(search_idx_included_extended_type_infos_);
-  if (OB_SUCC(ret) && search_idx_included_extended_type_infos_.count() > 0) {
-    // ObString decoded from buffer points to rpc buffer, deep copy to allocator_ to avoid dangling pointer
-    for (int64_t i = 0; OB_SUCC(ret) && i < search_idx_included_extended_type_infos_.count(); ++i) {
-      const ObString &src = search_idx_included_extended_type_infos_.at(i);
-      if (!src.empty()) {
-        ObString dst;
-        if (OB_FAIL(ob_write_string(allocator_, src, dst))) {
-          LOG_WARN("failed to deep copy extended type info after deserialize", K(ret), K(i), K(src));
+  // deserialize search_idx_arr_types_
+  {
+    int64_t arr_types_count = 0;
+    OB_UNIS_DECODE(arr_types_count);
+    if (OB_SUCC(ret) && arr_types_count > 0) {
+      if (OB_FAIL(search_idx_arr_types_.prepare_allocate(arr_types_count))) {
+        LOG_WARN("failed to allocate arr types", K(ret), K(arr_types_count));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < arr_types_count; ++i) {
+        bool has_type = false;
+        OB_UNIS_DECODE(has_type);
+        if (OB_SUCC(ret) && has_type) {
+          ObCollectionArrayType *arr_type = OB_NEWx(ObCollectionArrayType, &allocator_, allocator_);
+          if (OB_ISNULL(arr_type)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate ObCollectionArrayType", K(ret), K(i));
+          } else if (OB_FAIL(arr_type->deserialize(buf, data_len, pos))) {
+            LOG_WARN("failed to deserialize arr type", K(ret), K(i));
+          } else {
+            search_idx_arr_types_.at(i) = arr_type;
+          }
         } else {
-          search_idx_included_extended_type_infos_.at(i) = dst;
+          search_idx_arr_types_.at(i) = nullptr;
         }
       }
     }
   }
+  OB_UNIS_DECODE(fts_index_type_);
+  OB_UNIS_DECODE(is_rowscn_ttl_table_);
   return ret;
 }
 
@@ -919,7 +978,20 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(vec_embedded_col_id_);
   OB_UNIS_ADD_LEN(search_idx_included_cids_);
   OB_UNIS_ADD_LEN(search_idx_included_cid_idxes_);
-  OB_UNIS_ADD_LEN(search_idx_included_extended_type_infos_);
+  // search_idx_arr_types_ serialize size
+  {
+    int64_t arr_count = search_idx_arr_types_.count();
+    OB_UNIS_ADD_LEN(arr_count);
+    for (int64_t i = 0; i < arr_count; ++i) {
+      bool has_type = (search_idx_arr_types_.at(i) != nullptr);
+      OB_UNIS_ADD_LEN(has_type);
+      if (has_type) {
+        len += search_idx_arr_types_.at(i)->get_serialize_size();
+      }
+    }
+  }
+  OB_UNIS_ADD_LEN(fts_index_type_);
+  OB_UNIS_ADD_LEN(is_rowscn_ttl_table_);
   return len;
 }
 

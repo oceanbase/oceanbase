@@ -151,7 +151,9 @@ ObServerSuperBlock::ObServerSuperBlock() : header_(), body_(), min_file_id_(0), 
 
 bool ObServerSuperBlock::is_valid() const
 {
-  return header_.is_valid() && body_.is_valid();
+  return header_.is_valid()
+         && body_.is_valid()
+         && max_file_id_ >= min_file_id_;
 }
 
 int64_t ObServerSuperBlock::get_serialize_size() const
@@ -373,7 +375,8 @@ bool ObTenantSuperBlock::is_valid() const
                   && (is_old_version() || IS_EMPTY_BLOCK_LIST(tablet_meta_entry_))
                   && snapshot_cnt_ >= 0
                   && auto_inc_ls_epoch_ >= 0
-                  && ls_cnt_ >= 0;
+                  && ls_cnt_ >= 0
+                  && max_file_id_ >= min_file_id_;
   return is_valid;
 }
 

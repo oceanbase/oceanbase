@@ -24,6 +24,15 @@
 #include <charconv>
 #include <s2/base/casts.h>
 
+#include <avro/NodeImpl.hh>
+
+#include "sql/table_format/iceberg/avro_schema_util.h"
+#include "sql/table_format/iceberg/spec/type.h"
+#include "sql/table_format/iceberg/spec/spec.h"
+#include "sql/table_format/iceberg/spec/schema_field.h"
+#include "lib/string/ob_string.h"
+#include "share/ob_define.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -886,6 +895,229 @@ AvroUtils::decode_primitive_array(const avro::NodePtr &avro_node,
   }
   return ret;
 }
+
+ToAvroNodeVisitor::ToAvroNodeVisitor(const ObString& root_node_name)
+    : root_node_name_(root_node_name) {}
+
+int ToAvroNodeVisitor::visit(const StructType& type, ::avro::NodePtr& node)
+{
+  int ret = OB_SUCCESS;
+  node = std::make_shared<::avro::NodeRecord>();
+  if (field_ids_.empty()) {
+    node->setName(::avro::Name(std::string(root_node_name_.ptr(), root_node_name_.length())));
+  } else {
+    node->setName(::avro::Name("r" + std::to_string(field_ids_.at(field_ids_.size() - 1))));
+  }
+  for (int i = 0; OB_SUCC(ret) && i < type.fields_count(); ++i) {
+    ::avro::NodePtr field_node;
+    const SchemaField* field = type.fields()[i];
+    if (OB_ISNULL(field)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("field is null", K(ret));
+    } else if (OB_FAIL(visit(*field, field_node))) {
+      LOG_WARN("fail to visit field", K(ret));
+    } else {
+      node->addName(std::string(field->name().ptr(), field->name().length()));
+      node->addLeaf(field_node);
+      ::avro::CustomAttributes attributes;
+      attributes.addAttribute(std::string(FIELD_ID_PROP),
+                              std::to_string(field->field_id()),
+                              /*addQuotes=*/false);
+      if (field->doc().length() > 0) { // todo: avro cpp not support print doc of union
+        attributes.addAttribute("doc",
+                                std::string(field->doc().ptr(), field->doc().length()),
+                                /*addQuotes=*/true);
+      }
+      if (field->optional()) {
+        attributes.addAttribute("default",
+                                "null",
+                                /*addQuotes=*/false);
+      }
+      node->addCustomAttributesForField(attributes);
+    }
+  }
+  return ret;
+}
+
+int ToAvroNodeVisitor::visit(const ListType& type, ::avro::NodePtr& node)
+{
+  int ret = OB_SUCCESS;
+  node = std::make_shared<::avro::NodeArray>();
+  const SchemaField* element_field = type.element();
+  ::avro::CustomAttributes attributes;
+  ::avro::NodePtr element_node;
+  if (OB_ISNULL(element_field)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("list element is null", K(ret));
+  } else {
+    attributes.addAttribute(std::string(ELEMENT_ID_PROP),
+                            std::to_string(element_field->field_id()),
+                            /*addQuotes=*/false);
+    OZ(visit(*element_field, element_node));
+    OX(node->addLeaf(element_node));
+    OX(node->addCustomAttributesForField(attributes));
+  }
+  return ret;
+}
+
+int ToAvroNodeVisitor::visit(const MapType &type, ::avro::NodePtr& node)
+{
+  int ret = OB_SUCCESS;
+  const SchemaField* key_field = type.key();
+  const SchemaField* value_field = type.value();
+  if (OB_ISNULL(key_field) || OB_ISNULL(value_field) || OB_ISNULL(key_field->type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("map key or value is null", K(ret));
+  } else if (key_field->optional()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("map key must be required", K(ret));
+  } else if (key_field->type()->type_id() == TypeId::kString) {
+    ::avro::CustomAttributes attributes;
+    attributes.addAttribute(std::string(KEY_ID_PROP),
+                            std::to_string(key_field->field_id()),
+                            /*addQuotes=*/false);
+    attributes.addAttribute(std::string(VALUE_ID_PROP),
+                            std::to_string(value_field->field_id()),
+                            /*addQuotes=*/false);
+    ::avro::NodePtr value_node;
+    if (OB_FAIL(visit(*value_field, value_node))) {
+      LOG_WARN("fail to visit value field", K(ret));
+    } else {
+      node = std::make_shared<::avro::NodeMap>();
+      node->addLeaf(value_node);
+      node->addCustomAttributesForField(attributes);
+    }
+  } else {
+    ::avro::NodePtr struct_node = std::make_shared<::avro::NodeRecord>();
+    struct_node->setName(::avro::Name("k"+ std::to_string(key_field->field_id())
+                                    + "_v" + std::to_string(value_field->field_id())));
+    ::avro::NodePtr key_node;
+    ::avro::NodePtr value_node;
+    if (OB_FAIL(visit(*key_field, key_node))) {
+      LOG_WARN("fail to visit key field", K(ret));
+    } else {
+      struct_node->addName("key");
+      struct_node->addLeaf(key_node);
+      ::avro::CustomAttributes attributes;
+      attributes.addAttribute(std::string(FIELD_ID_PROP),
+                              std::to_string(key_field->field_id()),
+                              /*addQuotes=*/false);
+      struct_node->addCustomAttributesForField(attributes);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(visit(*value_field, value_node))) {
+      LOG_WARN("fail to visit value field", K(ret));
+    } else {
+      struct_node->addName("value");
+      struct_node->addLeaf(value_node);
+      ::avro::CustomAttributes attributes;
+      attributes.addAttribute(std::string(FIELD_ID_PROP),
+                              std::to_string(value_field->field_id()),
+                              /*addQuotes=*/false);
+      struct_node->addCustomAttributesForField(attributes);
+    }
+    if (OB_SUCC(ret)) {
+      node = std::make_shared<::avro::NodeArray>();
+      node->addLeaf(struct_node);
+      std::shared_ptr<::avro::CustomLogicalType> map_logical_type =
+          std::make_shared<::avro::CustomLogicalType>("map");
+      node->setLogicalType(::avro::LogicalType(map_logical_type));
+    }
+  }
+  return ret;
+}
+
+int ToAvroNodeVisitor::visit(const StringType &type, ::avro::NodePtr& node)
+{
+  int ret = OB_SUCCESS;
+  node = std::make_shared<::avro::NodePrimitive>(::avro::AVRO_STRING);
+  return ret;
+}
+
+int ToAvroNodeVisitor::visit(const BinaryType &type, ::avro::NodePtr& node)
+{
+  int ret = OB_SUCCESS;
+  node = std::make_shared<::avro::NodePrimitive>(::avro::AVRO_BYTES);
+  return ret;
+}
+
+int ToAvroNodeVisitor::visit(const BooleanType &type, ::avro::NodePtr& node)
+{
+  int ret = OB_SUCCESS;
+  node = std::make_shared<::avro::NodePrimitive>(::avro::AVRO_BOOL);
+  return ret;
+}
+
+int ToAvroNodeVisitor::visit(const IntType &type, ::avro::NodePtr& node)
+{
+  int ret = OB_SUCCESS;
+  node = std::make_shared<::avro::NodePrimitive>(::avro::AVRO_INT);
+  return ret;
+}
+
+int ToAvroNodeVisitor::visit(const LongType &type, ::avro::NodePtr& node)
+{
+  int ret = OB_SUCCESS;
+  node = std::make_shared<::avro::NodePrimitive>(::avro::AVRO_LONG);
+  return ret;
+}
+
+int ToAvroNodeVisitor::visit(const SchemaField& field, ::avro::NodePtr& node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(field.type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("field type is null", K(ret));
+  } else if (OB_FAIL(field_ids_.push_back(field.field_id()))) {
+    LOG_WARN("fail to push back field id", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    switch (field.type()->type_id()) {
+      case TypeId::kStruct:
+        OZ(visit(static_cast<const StructType&>(*field.type()), node));
+        break;
+      case TypeId::kList:
+        OZ(visit(static_cast<const ListType&>(*field.type()), node));
+        break;
+      case TypeId::kMap:
+        OZ(visit(static_cast<const MapType&>(*field.type()), node));
+        break;
+      case TypeId::kString:
+        OZ(visit(static_cast<const StringType&>(*field.type()), node));
+        break;
+      case TypeId::kBinary:
+        OZ(visit(static_cast<const BinaryType&>(*field.type()), node));
+        break;
+      case TypeId::kBoolean:
+        OZ(visit(static_cast<const BooleanType&>(*field.type()), node));
+        break;
+      case TypeId::kInt:
+        OZ(visit(static_cast<const IntType&>(*field.type()), node));
+        break;
+      case TypeId::kLong:
+        OZ(visit(static_cast<const LongType&>(*field.type()), node));
+        break;
+      default:
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported type", K(ret), K(field.type()->type_id()));
+        break;
+    }
+  }
+  if (OB_SUCC(ret) && field.optional()) {
+    ::avro::MultiLeaves union_types;
+    union_types.add(std::make_shared<::avro::NodePrimitive>(::avro::AVRO_NULL));
+    union_types.add(std::move(node));
+    node = std::make_shared<::avro::NodeUnion>(union_types);
+  }
+  if (OB_SUCC(ret)) {
+    field_ids_.pop_back();
+    // if (field.doc().length() > 0) {
+      // node->setDoc(std::string(field.doc().ptr(), field.doc().length()));
+    // }
+  }
+  return ret;
+}
+
 
 } // namespace iceberg
 } // namespace sql

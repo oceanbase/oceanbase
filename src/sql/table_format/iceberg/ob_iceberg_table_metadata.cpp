@@ -36,8 +36,13 @@ share::ObLakeTableFormat ObIcebergTableMetadata::get_format_type() const
 
 int ObIcebergTableMetadata::assign(const ObIcebergTableMetadata &other)
 {
-  // todo
-  return OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    OZ(ObILakeTableMetadata::assign(other));
+    OZ(ob_write_string(allocator_, other.access_info_, access_info_));
+    OZ(table_metadata_.assign(other.table_metadata_));
+  }
+  return ret;
 }
 
 int64_t ObIcebergTableMetadata::get_convert_size() const
@@ -52,18 +57,32 @@ int ObIcebergTableMetadata::set_access_info(const ObString &access_info)
   return ret;
 }
 
-int ObIcebergTableMetadata::load_by_table_location(const ObString &table_location)
+void ObIcebergTableMetadata::set_location_object_id(int64_t location_object_id)
+{
+  location_object_id_ = location_object_id;
+}
+
+int ObIcebergTableMetadata::set_location_object_sub_path(const ObString &location_object_sub_path)
+{
+  int ret = OB_SUCCESS;
+  OZ (ob_write_string(allocator_, location_object_sub_path, location_object_sub_path_, true));
+  return ret;
+}
+
+int ObIcebergTableMetadata::get_current_version(ObIAllocator &allocator,
+                                                const ObString &table_location,
+                                                int64_t &version_number) const
 {
   int ret = OB_SUCCESS;
   ObSqlString temp_sql_string;
   char *version_hint_buf = NULL;
   int64_t version_hint_buf_len = 0;
-  int64_t version_number = -1;
+  version_number = -1;
   if (OB_FAIL(temp_sql_string.append_fmt("%.*s/metadata/version-hint.text",
                                          table_location.length(),
                                          table_location.ptr()))) {
     LOG_WARN("build path failed", K(ret));
-  } else if (OB_FAIL(iceberg::ObIcebergFileIOUtils::read(allocator_,
+  } else if (OB_FAIL(iceberg::ObIcebergFileIOUtils::read(allocator,
                                                          temp_sql_string.string(),
                                                          access_info_,
                                                          version_hint_buf,
@@ -89,7 +108,14 @@ int ObIcebergTableMetadata::load_by_table_location(const ObString &table_locatio
       LOG_WARN("invalid version number", K(ret), K(version_number_str));
     }
   }
+  return ret;
+}
 
+int ObIcebergTableMetadata::load_by_table_location(const ObString &table_location)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString temp_sql_string;
+  int64_t version_number = -1;
   bool metadata_exists = false;
   ObString existed_metadata_path;
 
@@ -97,6 +123,11 @@ int ObIcebergTableMetadata::load_by_table_location(const ObString &table_locatio
   const char *try_metadata_paths[] = {"%.*s/metadata/v%d.metadata.json",
                                       "%.*s/metadata/v%d.gz.metadata.json",
                                       "%.*s/metadata/v%d.metadata.json.gz"};
+
+  if (OB_FAIL(get_current_version(allocator_, table_location, version_number))) {
+    LOG_WARN("get current version failed", K(ret), K(table_location));
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && !metadata_exists
                       && i < sizeof(try_metadata_paths) / sizeof(try_metadata_paths[0]);
        i++) {
@@ -153,7 +184,9 @@ int ObIcebergTableMetadata::load_by_metadata_location(const ObString &metadata_l
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid json value", K(ret));
   } else if (OB_FAIL(table_metadata_.init_from_json(*down_cast<ObJsonObject *>(json_node)))) {
-    LOG_WARN("fail to init TableMetadata", K(ret));
+    LOG_WARN("failed to init TableMetadata", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator_, metadata_location, table_metadata_.metadata_file_location, true))) {
+    LOG_WARN("failed to set metadata file location", K(ret));
   } else {
     lake_table_metadata_version_ = table_metadata_.current_snapshot_id;
   }
@@ -220,8 +253,24 @@ int ObIcebergTableMetadata::do_build_table_schema(std::optional<int32_t> schema_
     } else if (OB_FAIL(
                    iceberg_table_schema->set_external_file_location(table_metadata_.location))) {
       LOG_WARN("failed to set external file location", K(ret));
-    } else if (OB_FAIL(iceberg_table_schema->set_external_file_location_access_info(access_info_))) {
-      LOG_WARN("failed to set external file location access info", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (location_object_id_ != OB_INVALID_ID) {
+      if (OB_FALSE_IT(iceberg_table_schema->set_external_location_id(location_object_id_))) {         // 改为location_id和sub_path
+
+      } else if (OB_FAIL(iceberg_table_schema->set_external_sub_path(location_object_sub_path_))) {
+        LOG_WARN("failed to set external sub path", K(ret));
+      }
+    } else {
+      if (OB_FAIL(iceberg_table_schema->set_external_file_location_access_info(access_info_))) {       // rest catalog支持vended credential, 此时没有location_id和sub_path
+        LOG_WARN("failed to set external file location access info", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else {
       FOREACH_CNT_X(it, current_schema->fields, OB_SUCC(ret))
       {

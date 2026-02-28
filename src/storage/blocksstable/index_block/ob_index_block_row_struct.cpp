@@ -56,6 +56,7 @@ ObIndexBlockRowDesc::ObIndexBlockRowDesc()
     has_lob_out_row_(false),
     is_last_row_last_flag_(false),
     is_first_row_first_flag_(false),
+    single_version_rows_(false),
     is_serialized_agg_row_(false),
     is_clustered_index_(false),
     has_macro_block_bloom_filter_(false)
@@ -94,6 +95,7 @@ ObIndexBlockRowDesc::ObIndexBlockRowDesc(const ObDataStoreDesc &data_store_desc)
     has_lob_out_row_(false),
     is_last_row_last_flag_(false),
     is_first_row_first_flag_(false),
+    single_version_rows_(false),
     is_serialized_agg_row_(false),
     is_clustered_index_(false),
     has_macro_block_bloom_filter_(false)
@@ -151,11 +153,17 @@ int ObIndexBlockRowDesc::init(const ObDataStoreDesc &data_store_desc,
     set_major_working_cluster_version(data_store_desc.get_major_working_cluster_version());
     set_row_store_type(index_row_header->get_row_store_type());
     set_compressor_type(index_row_header->get_compressor_type());
-    set_master_key_id(index_row_header->get_encrypt_id());
+    set_master_key_id(data_store_desc.get_master_key_id());
     set_encrypt_id(index_row_header->get_encrypt_id());
     set_encrypt_key(index_row_header->get_encrypt_key());
     set_schema_version(index_row_header->get_schema_version());
 
+    is_data_block_ = index_row_header->is_data_block();
+    is_clustered_index_ = index_row_header->is_clustered_node();
+    has_macro_block_bloom_filter_ = index_row_header->has_macro_block_bloom_filter();
+    logic_micro_id_ = index_row_header->get_logic_micro_id();
+    data_checksum_ = index_row_header->get_data_checksum();
+    shared_data_macro_id_ = index_row_header->get_shared_data_macro_id();
     is_secondary_meta_ = false;
     is_macro_node_ = true;
     macro_id_ = index_row_header->get_macro_id();
@@ -172,6 +180,7 @@ int ObIndexBlockRowDesc::init(const ObDataStoreDesc &data_store_desc,
     is_serialized_agg_row_ = false;
     is_last_row_last_flag_ = index_row_header->is_last_row_last_flag_;
     is_first_row_first_flag_ = index_row_header->is_first_row_first_flag_;
+    single_version_rows_ = index_row_header->single_version_rows_;
 
     const char *agg_row_buf = nullptr;
     int64_t agg_buf_size = 0;
@@ -179,10 +188,14 @@ int ObIndexBlockRowDesc::init(const ObDataStoreDesc &data_store_desc,
       STORAGE_LOG(WARN, "fail to parse minor meta and agg row", K(ret), K(idx_row_parser));
     } else {
       if (nullptr != index_row_meta) {
-        max_merged_trans_version_ = index_row_meta->max_merged_trans_version_;
-        row_count_delta_ = index_row_meta->row_count_delta_;
+        if (OB_FAIL(set_end_scn_by_snapshot_version(index_row_meta->snapshot_version_))) {
+          STORAGE_LOG(WARN, "fail to set end scn by snapshot version", K(ret), K(index_row_meta->snapshot_version_));
+        } else {
+          max_merged_trans_version_ = index_row_meta->max_merged_trans_version_;
+          row_count_delta_ = index_row_meta->row_count_delta_;
+        }
       }
-      if (nullptr != agg_row_buf) {
+      if (OB_SUCC(ret) && nullptr != agg_row_buf) {
         serialized_agg_row_buf_ = agg_row_buf;
         is_serialized_agg_row_ = true;
       }
@@ -401,7 +414,7 @@ int ObIndexBlockRowBuilder::calc_data_size(
       size += sizeof(int64_t); // add row offset for major sstable
     }
   } else {
-    if (desc.get_major_working_cluster_version() >= DATA_VERSION_4_4_1_0 || !desc.is_major_or_meta_merge_type()) {
+    if (desc.get_major_working_cluster_version() >= DATA_VERSION_4_5_0_0 || !desc.is_major_or_meta_merge_type()) {
       size = sizeof(ObIndexBlockRowHeader) + sizeof(ObIndexBlockRowMinorMetaInfo);
     } else {
       size = sizeof(ObIndexBlockRowHeader);
@@ -435,7 +448,7 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
   } else {
     header_ = reinterpret_cast<ObIndexBlockRowHeader *>(data_buf_);
     header_->version_ =
-      desc.get_major_working_cluster_version() >= DATA_VERSION_4_4_1_0 ? ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V3 : ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V2;
+      desc.get_major_working_cluster_version() >= DATA_VERSION_4_5_0_0 ? ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V3 : ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V2;
     header_->row_store_type_ = static_cast<uint8_t>(desc.get_row_store_type());
     header_->compressor_type_ = static_cast<uint8_t>(desc.get_compressor_type());
     // This micro block is a index tree micro block or a meta tree micro block
@@ -465,6 +478,7 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
     header_->row_count_ = desc.row_count_;
     header_->is_last_row_last_flag_ = desc.is_last_row_last_flag_;
     header_->is_first_row_first_flag_ = desc.is_first_row_first_flag_;
+    header_->single_version_rows_ = desc.single_version_rows_;
     write_pos_ += sizeof(ObIndexBlockRowHeader);
 
     // Set macro id to special value (DEFAULT_IDX_ROW_MACRO_ID) for index micro

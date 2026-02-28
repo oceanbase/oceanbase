@@ -210,7 +210,7 @@ public:
 class ObAllIDMeta
 {
 public:
-  ObAllIDMeta() : count_(ObIDService::MAX_SERVICE_TYPE) {}
+  ObAllIDMeta() : lock_(common::ObLatchIds::OB_ALL_ID_META_LOCK), count_(ObIDService::MAX_SERVICE_TYPE) {}
   ~ObAllIDMeta() {}
   void update_all_id_meta(const ObAllIDMeta &all_id_meta,
                           bool &updated);

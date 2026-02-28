@@ -27,6 +27,8 @@ ObAllVirtualTabletCompactionHistory::ObAllVirtualTabletCompactionHistory()
       macro_id_list_(),
       other_info_(),
       comment_(),
+      kept_snapshot_info_(),
+      co_major_merge_strategy_info_(),
       merge_history_(),
       major_merge_info_iter_(),
       minor_merge_info_iter_(),
@@ -264,16 +266,18 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     case BASE_MAJOR_STATUS:
-      if (is_valid_co_major_sstable_status(static_info.base_major_status_)) {
-        cells[i].set_varchar(co_major_sstable_status_to_str(static_info.base_major_status_));
+      if (is_valid_major_sstable_status(static_info.base_major_status_)) {
+        cells[i].set_varchar(major_sstable_status_to_str(static_info.base_major_status_));
       } else {
         cells[i].set_varchar("");
       }
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     case CO_MERGE_TYPE:
-      if (ObCOMajorMergePolicy::is_valid_major_merge_type(static_info.co_major_merge_type_)) {
-        cells[i].set_varchar(ObCOMajorMergePolicy::co_major_merge_type_to_str(static_info.co_major_merge_type_));
+      if (static_info.co_major_merge_strategy_.is_valid()) {
+        MEMSET(co_major_merge_strategy_info_, '\0', sizeof(co_major_merge_strategy_info_));
+        static_info.co_major_merge_strategy_.to_string(co_major_merge_strategy_info_, sizeof(co_major_merge_strategy_info_));
+        cells[i].set_varchar(co_major_merge_strategy_info_);
       } else {
         cells[i].set_varchar("");
       }
@@ -287,7 +291,7 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
       cells[i].set_int(running_info.execute_time_);
       break;
     case FILTER_ROW_COUNT:
-      cells[i].set_int(0);
+      cells[i].set_int(block_info.filter_row_count_);
       break;
     default:
       ret = OB_ERR_UNEXPECTED;

@@ -15,6 +15,7 @@
 
 #include "share/datum/ob_datum.h"
 #include "common/ob_version_def.h"
+#include "common/ob_store_format.h"
 
 namespace oceanbase
 {
@@ -90,7 +91,6 @@ struct ObSkipIndexColMeta
   }
 
   static int append_skip_index_meta(
-      const bool is_major,
       const share::schema::ObSkipIndexColumnAttr &skip_idx_attr,
       const int64_t col_idx,
       common::ObIArray<ObSkipIndexColMeta> &skip_idx_metas);
@@ -219,12 +219,25 @@ OB_INLINE static int get_sum_store_size(const ObObjType &obj_type, uint32_t &sum
   return ret;
 }
 
-OB_INLINE static bool non_baseline_enabled_agg_type(const ObSkipIndexColType &col_type)
+/* priority of skip index column type, the smaller the prio, the higher the priority */
+OB_INLINE static int64_t get_col_type_skip_index_priority(const ObObjType &obj_type)
 {
-  return ObSkipIndexColType::SK_IDX_BM25_MAX_SCORE_TOKEN_FREQ == col_type
-      || ObSkipIndexColType::SK_IDX_BM25_MAX_SCORE_DOC_LEN == col_type
-      || ObSkipIndexColType::SK_IDX_MIN == col_type
-      || ObSkipIndexColType::SK_IDX_MAX == col_type;
+  int64_t prio = INT64_MAX;
+  if (ob_is_datetime_tc(obj_type) || ob_is_date_tc(obj_type) || ob_is_time_tc(obj_type) || ob_is_year_tc(obj_type) ||
+      ob_is_mysql_datetime_tc(obj_type) || ob_is_mysql_date_tc(obj_type) || ob_is_otimestampe_tc(obj_type)) {
+    prio = 0;
+  } else if (ob_is_int_tc(obj_type) || ob_is_uint_tc(obj_type)) {
+    prio = 1;
+  } else if (ob_is_float_tc(obj_type) || ob_is_double_tc(obj_type)) {
+    prio = 2;
+  } else if (ob_is_number_tc(obj_type) || ob_is_decimal_int_tc(obj_type)) {
+    prio = 3;
+  } else if (ob_is_string_tc(obj_type) || ob_is_text_tc(obj_type)) {
+    prio = 4;
+  } else {
+    prio = 5;
+  }
+  return prio;
 }
 
 OB_INLINE static bool enable_skip_index_min_max_prefix(const int64_t data_version)

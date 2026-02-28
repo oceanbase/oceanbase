@@ -18,6 +18,7 @@
 
 #include "sql/parser/ob_sql_parser.h"
 #include "sql/parser/parse_malloc.h"
+#include "ob_charset.h"
 
 extern "C"
 {
@@ -254,6 +255,62 @@ void test_sql_parser()
   }
 }
 
+void test_sql_parser_oracle()
+{
+  ParseResult parse_result;
+  int tmp_ptr = 1;
+  memset(&parse_result, 0, sizeof(parse_result));
+  parse_result.is_fp_ = true;
+  parse_result.is_multi_query_ = false;
+  parse_result.malloc_pool_ = &tmp_ptr; // 为了parse_malloc内部的检查，malloc_pool在正常情况下绝对不能为空
+  parse_result.is_ignore_hint_ = false;
+  parse_result.need_parameterize_ = true;
+  parse_result.pl_parse_info_.is_pl_parse_ = false;
+  parse_result.minus_ctx_.has_minus_ = false;
+  parse_result.minus_ctx_.pos_ = -1;
+  parse_result.minus_ctx_.raw_sql_offset_ = -1;
+  parse_result.is_for_trigger_ = false;
+  parse_result.is_dynamic_sql_ = false;
+  parse_result.is_batched_multi_enabled_split_ = false;
+
+  char input_sql[1024];
+
+  const int64_t test_sql_cnt = 3;
+  const char *test_sqls[test_sql_cnt] = {
+      "select 1 from dual",
+      "select /*t1*/ a#, b from t1 where (b='?')",
+      "select /*t2*/ a#, b from t2 where (b='?')"
+  };
+  const char* expected_sql_ids[test_sql_cnt] = {
+    "B2FD215564A613E27B321C64B690F933",
+    "E52104CEA1BCA2FFF5461EB2AB4274B6",
+    "4B1AD8278AE1046B018544BDBE50ADD9"
+  };
+  for (int i = 0; i < test_sql_cnt; i++) {
+    const char *input_sql = test_sqls[i];
+
+    int64_t new_length = std::strlen(input_sql) + 1;
+    char *buf = (char *)parse_malloc(new_length, parse_result.malloc_pool_);
+
+    parse_result.param_nodes_ = NULL;
+    parse_result.tail_param_node_ = NULL;
+    parse_result.no_param_sql_ = buf;
+    parse_result.no_param_sql_buf_len_ = new_length;
+
+    const int64_t SQL_ID_LENGTH = 32;
+    ObSQLParser sql_parser(*(ObIAllocator *)(parse_result.malloc_pool_),
+                           SMO_ORACLE, 45); // 45: CS_TYPE_UTF8MB4_GENERAL_CI
+    char sql_id[SQL_ID_LENGTH + 1];
+    int ret = sql_parser.parse_and_gen_sqlid(&tmp_ptr, input_sql,
+                                             std::strlen(input_sql),
+                                             sizeof(sql_id), sql_id);
+    sql_id[SQL_ID_LENGTH] = '\0';
+    fprintf(stdout, "compare sql id, index:%d, sql_id:%s, expected_sql_id:%s\n", i, sql_id, expected_sql_ids[i]);
+    ASSERT_EQ(0, ret);
+    ASSERT_EQ(0, std::strncmp(sql_id, expected_sql_ids[i], strlen(expected_sql_ids[i])));
+  }
+}
+
 void setup_parse_result(ParseResult &parse_result, int &tmp_ptr)
 {
   memset(&parse_result, 0, sizeof(parse_result));
@@ -283,8 +340,9 @@ void start_test_token_offset(const char *test_sqls[],
     ParseResult parse_result;
     int tmp_ptr = 1;
     setup_parse_result(parse_result, tmp_ptr);
-    if (2151678466 == sql_mode) {
-      parse_result.connection_collation_ = 45;
+    if ((DEFAULT_ORACLE_MODE | SMO_ORACLE) == sql_mode) {
+      parse_result.connection_collation_ = ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI;
+      parse_result.charset_info_ = ObCharset::get_charset(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
     }
     parse_result.sql_mode_ = sql_mode;
     const char *input_sql = test_sqls[i];
@@ -370,6 +428,7 @@ TEST_F(TestFastSqlParser, linker_test)
   test_sql_parser();
   test_fast_parser();
   test_token_pos();
+  test_sql_parser_oracle();
 }
 int main(int argc, char **argv)
 {

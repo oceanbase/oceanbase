@@ -493,7 +493,7 @@ int ObDelUpdLogPlan::calculate_table_location_and_sharding(const ObDelUpdStmt &s
   } else {
     const ObArray<ObRawExpr*> empty_filters;
     const ObIArray<ObRawExpr*> &real_filters = get_optimizer_context().is_online_ddl() ? empty_filters : filters;
-    sharding_info = new(sharding_info) ObShardingInfo();
+    sharding_info = new(sharding_info) ObShardingInfo(allocator_);
     table_partition_info = new(table_partition_info) ObTablePartitionInfo(allocator_);
     ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
     ObAddr &server = get_optimizer_context().get_local_server_addr();
@@ -569,7 +569,6 @@ int ObDelUpdLogPlan::calculate_table_location(const ObDelUpdStmt &stmt,
   }
   return ret;
 }
-
 int ObDelUpdLogPlan::compute_exchange_info_for_pdml_del_upd(const ObShardingInfo &source_sharding,
                                                             const ObTablePartitionInfo &target_table_partition,
                                                             const IndexDMLInfo &index_dml_info,
@@ -608,17 +607,27 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_del_upd(const ObShardingInfo
     }
     bool can_use_random = !get_stmt()->is_merge_stmt() && !need_duplicate_date &&
           get_optimizer_context().is_pdml_heap_table() && !is_index_maintenance;
+    share::schema::ObPartitionFuncType part_func_type = source_sharding.get_part_func_type();
+    bool use_scatter_channel_for_pkey_hash = !(share::schema::PARTITION_FUNC_TYPE_HASH == part_func_type
+                            || share::schema::PARTITION_FUNC_TYPE_KEY == part_func_type
+                            || share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_func_type);
     if (share::schema::PARTITION_LEVEL_ONE == part_level) {
       exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_ONE_LEVEL;
-      exch_info.dist_method_ = can_use_random
-                                ? ObPQDistributeMethod::PARTITION_RANDOM
-                                : ObPQDistributeMethod::PARTITION_HASH;
+      if (can_use_random)
+        exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_RANDOM;
+      else {
+        exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
+        exch_info.use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
+      }
       LOG_TRACE("partition level is one, use pkey reshuffle method");
     } else if (share::schema::PARTITION_LEVEL_TWO == part_level) {
       exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_TWO_LEVEL;
-      exch_info.dist_method_ = can_use_random
-                                ? ObPQDistributeMethod::PARTITION_RANDOM
-                                : ObPQDistributeMethod::PARTITION_HASH;
+      if (can_use_random)
+        exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_RANDOM;
+      else {
+        exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
+        exch_info.use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
+      }
       LOG_TRACE("partition level is two, use pkey reshuffle method");
     } else if (share::schema::PARTITION_LEVEL_ZERO == part_level) {
       exch_info.repartition_type_ = OB_REPARTITION_NO_REPARTITION;
@@ -723,8 +732,12 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_insert(const ObShardingInfo 
       exch_info.repartition_table_name_ = index_dml_info.index_name_;
       exch_info.slice_count_ = target_sharding.get_part_cnt();
     }
+    share::schema::ObPartitionFuncType part_func_type = target_sharding.get_part_func_type();
+    bool use_scatter_channel_for_pkey_hash = !(share::schema::PARTITION_FUNC_TYPE_HASH == part_func_type
+                            || share::schema::PARTITION_FUNC_TYPE_KEY == part_func_type
+                            || share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_func_type);
+
     if (share::schema::PARTITION_LEVEL_ONE == part_level) {
-      // pdml op对应的表是分区表，分区内并行处理，使用pkey random shuffle方式
       exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_ONE_LEVEL;
       if ((!get_stmt()->is_merge_stmt() || 
            !static_cast<const ObMergeStmt*>(get_stmt())->has_update_clause()) &&
@@ -735,9 +748,9 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_insert(const ObShardingInfo 
         exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_RANGE;
       } else {
         exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
+        exch_info.use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
       }
     } else if (share::schema::PARTITION_LEVEL_TWO == part_level) {
-      // pdml op对应的表是分区表，分区内并行处理，使用pkey random shuffle方式
       exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_TWO_LEVEL;
       if ((!get_stmt()->is_merge_stmt() || 
            !static_cast<const ObMergeStmt*>(get_stmt())->has_update_clause()) &&
@@ -748,9 +761,9 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_insert(const ObShardingInfo 
         exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_RANGE;
       } else {
         exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
+        exch_info.use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
       }
     } else if (share::schema::PARTITION_LEVEL_ZERO == part_level) {
-      // pdml op对应的表是非分区表，分区内并行处理，使用random shuffle方式
       exch_info.repartition_type_ = OB_REPARTITION_NO_REPARTITION;
       if ((!get_stmt()->is_merge_stmt() || 
            !static_cast<const ObMergeStmt*>(get_stmt())->has_update_clause()) &&
@@ -1631,17 +1644,10 @@ int ObDelUpdLogPlan::allocate_pdml_insert_as_top(ObLogicalOperator *&top,
       if (insert_stmt->is_insert_up() && OB_FAIL(insert_op->get_insert_up_index_dml_infos().assign(
             static_cast<ObInsertLogPlan *>(this)->get_insert_up_index_upd_infos()))) {
         LOG_WARN("assign insert up index upd infos failed", K(ret));
-      } else if (OB_FAIL(insert_stmt->get_view_check_exprs(insert_op->get_view_check_exprs()))) {
-        LOG_WARN("failed to get view check exprs", K(ret));
       }
     } else if (get_stmt()->is_update_stmt()) {
       const ObUpdateStmt *update_stmt = static_cast<const ObUpdateStmt*>(get_stmt());
       insert_op->set_table_location_uncertain(true);
-      if (!is_index_maintenance) {
-        if (OB_FAIL(update_stmt->get_view_check_exprs(insert_op->get_view_check_exprs()))) {
-          LOG_WARN("failed to get view check exprs", K(ret));
-        }
-      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -1779,11 +1785,6 @@ int ObDelUpdLogPlan::allocate_pdml_update_as_top(ObLogicalOperator *&top,
     update_op->set_ignore(update_stmt->is_ignore());
     update_op->set_table_partition_info(table_partition_info);
     update_op->set_need_allocate_partition_id_expr(need_partition_id);
-    if (!is_index_maintenance) {
-      if (OB_FAIL(update_stmt->get_view_check_exprs(update_op->get_view_check_exprs()))) {
-        LOG_WARN("failed to get view check exprs", K(ret));
-      }
-    }
     if (FAILEDx(update_op->compute_property())) {
       LOG_WARN("failed to compute property", K(ret));
     } else {
@@ -1798,7 +1799,8 @@ int ObDelUpdLogPlan::split_update_index_dml_info(const IndexDMLInfo &upd_dml_inf
                                                  IndexDMLInfo *&ins_dml_info)
 {
   int ret = OB_SUCCESS;
-  IndexDMLInfo tmp_dml_info;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  IndexDMLInfo tmp_dml_info(allocator);
   if (OB_FAIL(tmp_dml_info.assign_basic(upd_dml_info))) {
     LOG_WARN("assign tmp dml info failed", K(ret));
   } else if (OB_FAIL(tmp_dml_info.init_column_convert_expr(upd_dml_info.assignments_))) {
@@ -1823,11 +1825,11 @@ int ObDelUpdLogPlan::create_index_dml_info(const IndexDMLInfo &orgi_dml_info,
 {
   int ret = OB_SUCCESS;
   void *ptr= NULL;
-  if (OB_ISNULL(ptr = get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo)))) {
+  if (OB_ISNULL(ptr = get_allocator().alloc(sizeof(IndexDMLInfo)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
-    opt_dml_info = new (ptr) IndexDMLInfo();
+    opt_dml_info = new (ptr) IndexDMLInfo(get_allocator());
     if (OB_FAIL(opt_dml_info->assign_basic(orgi_dml_info))) {
       LOG_WARN("failed to assign dml info", K(ret));
     } else if (OB_FAIL(prune_virtual_column(*opt_dml_info))) {
@@ -1998,6 +2000,12 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
         if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(index_schema->get_table_id()))) {
           LOG_WARN("add related index ids failed", K(ret));
         }
+      } else if (index_schema->is_compaction_rowscn_ttl_di_table()) {
+        // if index schema is TTL table & delete insert merge engine, need to add all the related index ids
+        // because there is an rowscn-column-update
+        if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(index_schema->get_table_id()))) {
+          LOG_WARN("add related index ids failed", K(ret));
+        }
       } else {
         bool found_col = false;
         //in update clause, need to check this local index whether been updated
@@ -2058,23 +2066,24 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
   int ret = OB_SUCCESS;
   void *ptr= NULL;
   IndexDMLInfo* index_dml_info = NULL;
+  ObSqlSchemaGuard* sql_schema_guard = optimizer_context_.get_sql_schema_guard();
   ObSchemaGetterGuard* schema_guard = optimizer_context_.get_schema_guard();
   ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
   const ObTableSchema* index_schema = NULL;
-  if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+  if (OB_ISNULL(sql_schema_guard) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null",K(ret), K(schema_guard), K(session_info));
-  } else if (OB_ISNULL(ptr = get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo)))) {
+    LOG_WARN("get unexpected null",K(ret), K(sql_schema_guard), K(session_info));
+  } else if (OB_ISNULL(ptr = get_allocator().alloc(sizeof(IndexDMLInfo)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
-    table_dml_info = new (ptr) IndexDMLInfo();
+    table_dml_info = new (ptr) IndexDMLInfo(get_allocator());
     if (OB_FAIL(table_dml_info->assign(table_info))) {
       LOG_WARN("failed to assign table info", K(ret));
     } else if (has_tg) {
       table_dml_info->is_primary_index_ = true;
-    } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
-                                                      table_info.ref_table_id_, index_schema))) {
+    } else if (OB_FAIL(sql_schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                          table_info.ref_table_id_, index_schema))) {
       LOG_WARN("failed to get table schema", K(ret));
     } else if (OB_ISNULL(index_schema)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2082,6 +2091,7 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
     } else {
       table_dml_info->rowkey_cnt_ = index_schema->get_rowkey_column_num();
       table_dml_info->is_primary_index_ = true;
+      table_dml_info->is_compaction_scn_ttl_di_table_ = index_schema->is_compaction_rowscn_ttl_di_table();
       ObExecContext *exec_ctx = get_optimizer_context().get_exec_ctx();
       if (OB_ISNULL(exec_ctx)) {
         ret = OB_ERR_UNEXPECTED;
@@ -2133,11 +2143,11 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
       } else if ((index_schema->is_fts_index() || index_schema->is_multivalue_index())&& OB_FAIL(check_dml_table_write_dependency(
           table_info.ref_table_id_, *index_schema))) {
         LOG_WARN("failed to check dml table write dependency", K(ret));
-      } else if (OB_ISNULL(ptr = get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo)))) {
+      } else if (OB_ISNULL(ptr = get_allocator().alloc(sizeof(IndexDMLInfo)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret));
       } else {
-        index_dml_info = new (ptr) IndexDMLInfo();
+        index_dml_info = new (ptr) IndexDMLInfo(get_allocator());
         if (OB_FAIL(index_schema->get_index_name(index_dml_info->index_name_))) {
           LOG_WARN("failed to get index name", K(ret));
         } else {
@@ -2148,6 +2158,7 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
           index_dml_info->spk_cnt_ = index_schema->get_shadow_rowkey_column_num();
           // Trans_info_expr_ on the main table is recorded in all index_dml_info
           index_dml_info->trans_info_expr_ = table_dml_info->trans_info_expr_;
+          index_dml_info->is_compaction_scn_ttl_di_table_ = index_schema->is_compaction_rowscn_ttl_di_table();
           ObSchemaObjVersion table_version;
           table_version.object_id_ = index_tid[i];
           table_version.object_type_ = DEPENDENCY_TABLE;
@@ -2363,7 +2374,7 @@ int ObDelUpdLogPlan::generate_index_rowkey_exprs(uint64_t table_id,
   return ret;
 }
 
-int ObDelUpdLogPlan::check_index_update(ObAssignments assigns,
+int ObDelUpdLogPlan::check_index_update(const ObAssignments &assigns,
                                         const ObTableSchema& index_schema,
                                         const bool is_update_view,
                                         bool& need_update)
@@ -2612,7 +2623,7 @@ int ObDelUpdLogPlan::replace_alias_ref_expr(ObRawExpr *&expr, bool &replace_happ
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid alias expr", K(ret), K(*alias));
     } else {
-      expr = alias->get_ref_expr();
+      expr = alias->get_ref_select_expr();
       replace_happened = true;
     }
   } else {
@@ -2630,10 +2641,12 @@ int ObDelUpdLogPlan::candi_allocate_subplan_filter_for_assignments(ObIArray<ObRa
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> normal_query_refs;
   ObSEArray<ObRawExpr*, 4> alias_query_refs;
+  ObSEArray<ObAliasRefRawExpr*, 4> project_ref_exprs;
   for (int64_t i = 0; OB_SUCC(ret) && i < assign_exprs.count(); ++i) {
     if (OB_FAIL(extract_assignment_subqueries(assign_exprs.at(i),
                                               normal_query_refs,
-                                              alias_query_refs))) {
+                                              alias_query_refs,
+                                              project_ref_exprs))) {
       LOG_WARN("failed to replace alias ref expr", K(ret));
     }
   }
@@ -2643,19 +2656,20 @@ int ObDelUpdLogPlan::candi_allocate_subplan_filter_for_assignments(ObIArray<ObRa
     // step. allocate subplan filter for "dml .. set c1 = (select)"
     LOG_WARN("failed to allocate subplan", K(ret));
   } else if (!alias_query_refs.empty() &&
-              OB_FAIL(candi_allocate_subplan_filter(alias_query_refs, NULL, true))) {
+              OB_FAIL(candi_allocate_subplan_filter(alias_query_refs, NULL, true, false, &project_ref_exprs))) {
     // step. allocate subplan filter for "dml .. set (a,b)=(select..), (c,d)=(select..)"
     LOG_WARN("failed to allocate subplan filter", K(ret));
   } else {
     LOG_TRACE("succeed to allocate subplan filter for assignment", K(ret),
-                          K(normal_query_refs.count()), K(alias_query_refs.count()));
+                          K(normal_query_refs.count()), K(alias_query_refs.count()), K(project_ref_exprs.count()));
   }
   return ret;
 }
 
 int ObDelUpdLogPlan::extract_assignment_subqueries(ObRawExpr *expr,
                                                    ObIArray<ObRawExpr*> &normal_query_refs,
-                                                   ObIArray<ObRawExpr*> &alias_query_refs)
+                                                   ObIArray<ObRawExpr*> &alias_query_refs,
+                                                   ObIArray<ObAliasRefRawExpr*> &project_ref_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
@@ -2677,12 +2691,15 @@ int ObDelUpdLogPlan::extract_assignment_subqueries(ObRawExpr *expr,
       LOG_WARN("invalid alias expr", K(ret), K(*alias));
     } else if (OB_FAIL(add_var_to_array_no_dup(alias_query_refs, alias->get_param_expr(0)))) {
       LOG_WARN("failed to add var to array with out duplicate", K(ret));
+    } else if (OB_FAIL(add_var_to_array_no_dup(project_ref_exprs, alias))) {
+      LOG_WARN("failed to add var to array with out duplicate", K(ret));
     }
   } else if (expr->has_flag(CNT_SUB_QUERY)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(SMART_CALL(extract_assignment_subqueries(expr->get_param_expr(i),
                                                            normal_query_refs,
-                                                           alias_query_refs)))) {
+                                                           alias_query_refs,
+                                                           project_ref_exprs)))) {
         LOG_WARN("failed to extract query ref expr", K(ret));
       }
     }

@@ -145,6 +145,7 @@
 #include "sql/resolver/cmd/ob_transfer_partition_resolver.h"
 #include "sql/resolver/ddl/ob_create_ccl_rule_resolver.h"
 #include "sql/resolver/ddl/ob_drop_ccl_rule_resolver.h"
+#include "sql/resolver/backup/ob_backup_validate_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
 #include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"
@@ -165,6 +166,7 @@
 #include "sql/resolver/cmd/ob_trigger_storage_cache_resolver.h"
 #endif
 #include "sql/resolver/cmd/ob_sys_dispatch_call_resolver.h"
+#include "sql/resolver/cmd/ob_routine_load_resolver.h"
 
 namespace oceanbase
 {
@@ -618,6 +620,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(CancelLSReplicaTask);
         break;
       }
+      case T_REPLACE_LS: {
+        REGISTER_STMT_RESOLVER(ReplaceLS);
+        break;
+      }
       case T_ADD_ARBITRATION_SERVICE: {
         REGISTER_STMT_RESOLVER(AddArbitrationService);
         break;
@@ -1004,10 +1010,6 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(DropPackage);
         break;
       }
-      case T_LOAD_TIME_ZONE_INFO: {
-        REGISTER_STMT_RESOLVER(LoadTimeZoneInfo);
-        break;
-      }
       case T_ENABLE_SQL_THROTTLE: {
         REGISTER_STMT_RESOLVER(EnableSqlThrottle);
         break;
@@ -1190,6 +1192,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_BACKUP_DATABASE: {
         REGISTER_STMT_RESOLVER(BackupDatabase);
+        break;
+      }
+      case T_BACKUP_VALIDATE: {
+        REGISTER_STMT_RESOLVER(BackupValidate);
         break;
       }
       case T_CANCEL_RESTORE: {
@@ -1457,6 +1463,22 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_DROP_CCL_RULE: {
         REGISTER_STMT_RESOLVER(DropCCLRule);
+        break;
+      }
+      case T_CREATE_ROUTINE_LOAD: {
+        REGISTER_STMT_RESOLVER(CreateRoutineLoad);
+        break;
+      }
+      case T_PAUSE_ROUTINE_LOAD: {
+        REGISTER_STMT_RESOLVER(PauseRoutineLoad);
+        break;
+      }
+      case T_RESUME_ROUTINE_LOAD: {
+        REGISTER_STMT_RESOLVER(ResumeRoutineLoad);
+        break;
+      }
+      case T_STOP_ROUTINE_LOAD: {
+        REGISTER_STMT_RESOLVER(StopRoutineLoad);
         break;
       }
       default: {

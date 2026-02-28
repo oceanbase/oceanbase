@@ -1394,11 +1394,20 @@ int ObTransformOrExpansion::check_upd_del_stmt_validity(const ObDelUpdStmt &stmt
   is_valid = true;
   ObQueryCtx *query_ctx = stmt.get_query_ctx();
   ObSEArray<ObDmlTableInfo*, 2> table_infos;
+  bool changed_table_on_null_side = false;
   if (OB_FAIL(const_cast<ObDelUpdStmt&>(stmt).get_dml_table_infos(table_infos))) {
     LOG_WARN("failed to get dml table infos", K(ret));
   } else if (1 != table_infos.count()) {
     is_valid = false;
     OPT_TRACE("multi dml table not support or expansion");
+  } else if (OB_ISNULL(table_infos.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null table info", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(&stmt, table_infos.at(0)->table_id_, changed_table_on_null_side))) {
+    LOG_WARN("failed to check changed table on null side", K(ret));
+  } else if (changed_table_on_null_side) {
+    is_valid = false;
+    OPT_TRACE("change table on null side, or expansion not supported");
   }
   return ret;
 }
@@ -2921,7 +2930,7 @@ int ObTransformOrExpansion::is_expected_multi_index_plan(ObLogicalOperator* op,
   ObSEArray<ObRawExpr*, 4> range_exprs;
   ObSEArray<ObRawExpr*, 4> candi_exprs;
   ObSEArray<ObRawExpr*, 4> result_exprs;
-  EqualSets deduced_index_expr_equal_sets;
+  TemporaryEqualSets deduced_index_expr_equal_sets;
   if (OB_ISNULL(op) || OB_ISNULL(op->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(op));

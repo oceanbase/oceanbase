@@ -14,6 +14,8 @@
 #include "ob_physical_plan_ctx.h"
 #include "src/sql/engine/ob_des_exec_context.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
+#include "sql/table_format/iceberg/spec/manifest.h"
 
 namespace oceanbase
 {
@@ -155,32 +157,35 @@ int ObPhysicalPlanCtx::reserve_param_space(int64_t param_count)
 int ObPhysicalPlanCtx::init_datum_param_store()
 {
   int ret = OB_SUCCESS;
-  datum_param_store_.reuse();
-  param_frame_ptrs_.reuse();
-  param_frame_capacity_ = 0;
-  if (OB_FAIL(datum_param_store_.prepare_allocate(param_store_.count()))) {
-    LOG_WARN("fail to prepare allocate", K(ret), K(param_store_.count()));
-  }
-  // 通过param_store, 生成datum_param_store
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); i++) {
-    ObDatumObjParam &datum_param = datum_param_store_.at(i);
-    if (OB_FAIL(datum_param.alloc_datum_reserved_buff(param_store_.at(i).meta_,
-                                                      param_store_.at(i).get_precision(),
-                                                      allocator_))) {
-      LOG_WARN("alloc datum reserved buffer failed", K(ret));
-    } else if (OB_FAIL(datum_param.from_objparam(param_store_.at(i), &allocator_))) {
-      LOG_WARN("fail to convert obj param", K(ret), K(param_store_.at(i)));
+  // datum_param_store_ and param_frame_ptrs_ are only used for origin_params
+  // dynamic_params do not require the following initialization.
+  if (original_param_cnt_ > 0) {
+    datum_param_store_.reuse();
+    param_frame_ptrs_.reuse();
+    param_frame_capacity_ = 0;
+    if (OB_FAIL(datum_param_store_.prepare_allocate(original_param_cnt_))) {
+      LOG_WARN("fail to prepare allocate", K(ret), K(original_param_cnt_));
+    }
+    // 通过param_store, 生成datum_param_store
+    for (int64_t i = 0; OB_SUCC(ret) && i < original_param_cnt_; i++) {
+      ObDatumObjParam &datum_param = datum_param_store_.at(i);
+      if (OB_FAIL(datum_param.alloc_datum_reserved_buff(param_store_.at(i).meta_,
+                                                        param_store_.at(i).get_precision(),
+                                                        allocator_))) {
+        LOG_WARN("alloc datum reserved buffer failed", K(ret));
+      } else if (OB_FAIL(datum_param.from_objparam(param_store_.at(i), &allocator_))) {
+        LOG_WARN("fail to convert obj param", K(ret), K(param_store_.at(i)));
+      }
+    }
+    // 分配param frame内存, 并设置param datum
+    if (OB_SUCC(ret)) {
+      const int64_t old_size = 0;
+      if (OB_FAIL(extend_param_frame(old_size))) {
+        LOG_WARN("failed to extend param frame", K(ret));
+      }
     }
   }
-  // 分配param frame内存, 并设置param datum
-  if (OB_SUCC(ret)) {
-    const int64_t old_size = 0;
-    if (OB_FAIL(extend_param_frame(old_size))) {
-      LOG_WARN("failed to extend param frame", K(ret));
-    }
-  }
-  LOG_DEBUG("inited datum param store", K(datum_param_store_), K(param_store_));
-
+  LOG_DEBUG("inited datum param store", K(original_param_cnt_), K(datum_param_store_), K(param_store_));
   return ret;
 }
 
@@ -1543,6 +1548,48 @@ uint64_t ObPhysicalPlanCtx::get_last_refresh_scn(uint64_t mview_id) const
     }
   }
   return last_refresh_scn;
+}
+
+int ObPhysicalPlanCtx::set_iceberg_data_files(const common::ObIArray<iceberg::ObSerializableDataFile> &data_files)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < data_files.count(); ++i) {
+    iceberg::DataFile* data_file = OB_NEWx(iceberg::DataFile, &allocator_, allocator_);
+    if (OB_ISNULL(data_file)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for data file", K(ret));
+    } else {
+      OZ(data_file->assign(data_files.at(i)));
+      OZ(iceberg_data_files_.push_back(data_file));
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalPlanCtx::set_lake_table_metadata(const share::ObILakeTableMetadata* lake_table_metadata)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(lake_table_metadata)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(lake_table_metadata));
+  } else if (share::ObLakeTableFormat::ICEBERG == lake_table_metadata->get_format_type()) {
+    iceberg::ObIcebergTableMetadata *iceberg_table_metadata = NULL;
+    if (OB_ISNULL(iceberg_table_metadata
+                  = OB_NEWx(iceberg::ObIcebergTableMetadata, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate iceberg table metadata", K(ret));
+    } else if (OB_FAIL(iceberg_table_metadata->assign(
+                    *static_cast<const iceberg::ObIcebergTableMetadata *>(lake_table_metadata)))) {
+      LOG_WARN("failed to assign iceberg table metadata", K(ret));
+    } else {
+      lake_table_metadata_ = iceberg_table_metadata;
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this format type");
+    LOG_WARN("not supported format type", K(lake_table_metadata->get_format_type()));
+  }
+  return ret;
 }
 
 } //sql

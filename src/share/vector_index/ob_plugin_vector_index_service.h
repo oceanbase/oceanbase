@@ -128,7 +128,7 @@ public:
       complete_index_adpt_map_(),
       partial_index_adpt_map_(),
       ivf_index_helper_map_(),
-      adapter_map_rwlock_(),
+      adapter_map_rwlock_(ObLatchIds::VECTOR_ADAPTER_MAP_LOCK),
       ls_tablet_task_ctx_(),
       tenant_id_(tenant_id),
       interval_factor_(0),
@@ -394,7 +394,7 @@ public:
   int switch_to_follower_gracefully();
   int resume_leader() { return switch_to_leader(); }
   int alloc_tenant_vec_async_task_sched();
-  ObFIFOAllocator &get_allocator() { return allocator_; }
+  ObFIFOAllocator &get_adaptor_allocator() { return adaptor_allocator_; }
 
   // feature interfaces
   int get_kmeans_tg_id() { return kmeans_tg_id_; }
@@ -455,6 +455,13 @@ public:
       const ObTabletID tablet_id,
       ObIAllocator &allocator,
       ObIArray<float*> &aux_info);
+  int get_ivf_aux_info(
+      const uint64_t table_id,
+      const ObTabletID tablet_id,
+      const int64_t dim,
+      ObIAllocator &allocator,
+      float* &aux_info,
+      int64_t &count);
   int get_ivf_aux_info_from_cache(
       const uint64_t table_id,
       const ObTabletID tablet_id,
@@ -499,7 +506,8 @@ private:
                                 int64_t m);
   int process_centroid_cache(ObIvfCentCache *cent_cache,
                             ObIArray<float*> &aux_info,
-                            ObExprVecIvfCenterIdCache *expr_cache);
+                            ObExprVecIvfCenterIdCache *expr_cache,
+                            ObIAllocator &allocator);
 private:
   static const int64_t BASIC_TIMER_INTERVAL = 30 * 1000 * 1000; // 30s
   static const int64_t VEC_INDEX_LOAD_TIME_TASKER_THRESHOLD = 30 * 1000 * 1000; // 30s
@@ -513,7 +521,10 @@ private:
   share::schema::ObMultiVersionSchemaService *schema_service_;
   storage::ObLSService *ls_service_;
   common::ObMySQLProxy *sql_proxy_;
-  ObFIFOAllocator allocator_;
+  ObFIFOAllocator ivf_allocator_;
+  ObFIFOAllocator index_mgr_allocator_;
+  ObFIFOAllocator adaptor_allocator_;
+  ObFIFOAllocator tmp_info_allocator_;
   // do not use this memory context directly
   // use wrapped memory context in ob_tenant_vector_allocator.h and init by this memory context
   lib::MemoryContext memory_context_;
@@ -550,15 +561,18 @@ int ObPluginVectorIndexService::process_ivf_aux_info(
   } else if (OB_FAIL(generate_get_aux_info_sql(table_id, tablet_id, is_hidden_table, sql_string))) {
     OB_LOG(WARN, "failed to generate sql", K(ret), K(table_id));
   } else {
+    InnerDDLInfo ddl_info;
     ObSessionParam session_param;
     session_param.sql_mode_ = nullptr;
     session_param.tz_info_wrap_ = nullptr;
-    session_param.ddl_info_.set_is_dummy_ddl_for_inner_visibility(true);
-    session_param.ddl_info_.set_source_table_hidden(is_hidden_table);
-    session_param.ddl_info_.set_dest_table_hidden(false);
+    ddl_info.set_is_dummy_ddl_for_inner_visibility(true);
+    ddl_info.set_source_table_hidden(is_hidden_table);
+    ddl_info.set_dest_table_hidden(false);
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_proxy_->read(res, tenant_id_, sql_string.ptr(), &session_param))) {
+      if (OB_FAIL(session_param.ddl_info_.init(ddl_info, 0 /*session id*/))) {
+        OB_LOG(WARN, "fail to init ddl info", KR(ret), K(ddl_info));
+      } else if (OB_FAIL(sql_proxy_->read(res, tenant_id_, sql_string.ptr(), &session_param))) {
         OB_LOG(WARN, "failed to execute sql", K(ret), K(sql_string));
       } else if (NULL == (result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;

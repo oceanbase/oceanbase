@@ -18,7 +18,7 @@
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
@@ -752,8 +752,8 @@ int ObSQLSessionMgr::kill_session(ObSQLSessionInfo &session)
   }
 
   {
-    memtable::ObLockWaitMgr *mgr = nullptr;
-    if (OB_ISNULL(mgr = MTL(memtable::ObLockWaitMgr *))) {
+    lockwaitmgr::ObLockWaitMgr *mgr = nullptr;
+    if (OB_ISNULL(mgr = MTL(lockwaitmgr::ObLockWaitMgr *))) {
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN("can't get lock wait mgr", K(session.get_server_sid()));
     } else {

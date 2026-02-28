@@ -203,6 +203,16 @@ public:
 using ObBitVector = ObBitVectorImpl<uint64_t>;
 using ObTinyBitVector = ObBitVectorImpl<uint8_t>;
 
+// Functor for bit operation: l | (~r)
+// Used as replacement for lambda in bit_calculate and bit_op_zero calls
+struct BitOrNotOp
+{
+  OB_INLINE uint64_t operator()(const uint64_t l, const uint64_t r) const
+  {
+    return (l | (~r));
+  }
+};
+
 inline ObBitVector *to_bit_vector(void *mem)
 {
   return static_cast<ObBitVector *>(mem);

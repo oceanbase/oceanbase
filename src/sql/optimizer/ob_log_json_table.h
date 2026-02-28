@@ -14,23 +14,28 @@
 #ifndef _OB_LOG_JSON_TABLE_H
 #define _OB_LOG_JSON_TABLE_H
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogJsonTable : public ObLogicalOperator
 {
 public:
   ObLogJsonTable(ObLogPlan &plan)
       : ObLogicalOperator(plan),
         table_id_(OB_INVALID_ID),
-        value_exprs_(),
+        value_exprs_(plan.get_allocator()),
         table_name_(),
-        access_exprs_(),
-        all_cols_def_(),
+        access_exprs_(plan.get_allocator()),
+        all_cols_def_(plan.get_allocator()),
         table_type_(MulModeTableType::INVALID_TABLE_TYPE),
-        namespace_arr_() {}
+        namespace_arr_(plan.get_allocator()),
+        column_param_default_exprs_(plan.get_allocator())
+  {}
 
   virtual ~ObLogJsonTable() {}
   int add_values_expr(ObIArray<ObRawExpr*> &exprs) { return append(value_exprs_, exprs); }
@@ -62,17 +67,17 @@ public:
   ObColumnDefault* get_column_param_default_val(int64_t index);
 private:
   uint64_t table_id_;
-  common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> value_exprs_;
+  ObSqlArray<ObRawExpr*> value_exprs_;
   common::ObString table_name_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> access_exprs_;
+  ObSqlArray<ObRawExpr*> access_exprs_;
 
-  common::ObSEArray<ObJtColBaseInfo*, 4, common::ModulePageAllocator, true> all_cols_def_;
+  ObSqlArray<ObJtColBaseInfo*> all_cols_def_;
   // table func type
   MulModeTableType table_type_;
   // xml table param
-  common::ObSEArray<ObString, 16, common::ModulePageAllocator, true> namespace_arr_;
+  ObSqlArray<ObString> namespace_arr_;
   // default value array
-  common::ObSEArray<ObColumnDefault, 1, common::ModulePageAllocator, true> column_param_default_exprs_;
+  ObSqlArray<ObColumnDefault> column_param_default_exprs_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLogJsonTable);
 };

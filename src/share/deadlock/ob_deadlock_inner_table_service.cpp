@@ -29,7 +29,7 @@ using namespace common;
   '%.*s', '%.*s', '%.*s',\
   '%.*s', '%.*s', '%.*s', '%.*s', '%.*s', '%.*s')"
 
-#define LIMIT_VARCHAR_LEN 128
+#define LIMIT_VARCHAR_LEN (int)2_KB
 
 static const char* extra_info_if_exist(const ObIArray<ObString> &extra_info, int64_t idx)
 {
@@ -158,28 +158,28 @@ int ObDeadLockInnerTableService::insert(ObDeadLockInnerConnHelper &conn_helper,
   } else if (CLICK() && false == inner_info.get_addr().ip_to_string(ip_buffer, MAX_IP_ADDR_LENGTH)) {
     DETECT_LOG(WARN, "ip to string failed");
   } else if (CLICK() && OB_FAIL(sql.assign_fmt(INSERT_DEADLOCK_EVENT_SQL,
-                                      OB_ALL_DEADLOCK_EVENT_HISTORY_TNAME,
-                                      tenant_id,
-                                      inner_info.get_event_id(),
-                                      int(MAX_IP_ADDR_LENGTH), ip_buffer,
-                                      inner_info.get_addr().get_port(),
-                                      inner_info.get_detector_id(),
-                                      ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(current_ts),
-                                      idx, size,
-                                      LIMIT_VARCHAR_LEN, inner_info.get_role().ptr(),
-                                      LIMIT_VARCHAR_LEN, inner_info.get_priority().get_range_str(),
-                                      inner_info.get_priority().get_value(),
-                                      ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(inner_info.get_created_time()),
-                                      inner_info.get_start_delay(),
-                                      LIMIT_VARCHAR_LEN, user_info.get_module_name().ptr(),
-                                      LIMIT_VARCHAR_LEN, user_info.get_resource_visitor().ptr(),
-                                      LIMIT_VARCHAR_LEN, user_info.get_required_resource().ptr(),
-                                      LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_names, 0),
-                                      LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_values, 0),
-                                      LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_names, 1),
-                                      LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_values, 1),
-                                      LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_names, 2),
-                                      LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_values, 2)))) {
+                                               OB_ALL_DEADLOCK_EVENT_HISTORY_TNAME,
+                                               tenant_id,
+                                               inner_info.get_event_id(),
+                                               int(MAX_IP_ADDR_LENGTH), ip_buffer,
+                                               inner_info.get_addr().get_port(),
+                                               inner_info.get_detector_id(),
+                                               ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(current_ts),
+                                               idx, size,
+                                               LIMIT_VARCHAR_LEN, inner_info.get_role().ptr(),
+                                               LIMIT_VARCHAR_LEN, inner_info.get_priority().get_range_str(),
+                                               inner_info.get_priority().get_value(),
+                                               ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(inner_info.get_created_time()),
+                                               inner_info.get_start_delay(),
+                                               LIMIT_VARCHAR_LEN, user_info.get_module_name().ptr(),
+                                               LIMIT_VARCHAR_LEN, user_info.get_resource_visitor().ptr(),
+                                               LIMIT_VARCHAR_LEN, user_info.get_required_resource().ptr(),
+                                               LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_names, 0),
+                                               LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_values, 0),
+                                               LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_names, 1),
+                                               LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_values, 1),
+                                               LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_names, 2),
+                                               LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_values, 2)))) {
     DETECT_LOG(WARN, "format sql fail", KR(ret), K(sql));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -276,6 +276,8 @@ ObDeadLockInnerTableService::ObDeadLockEventHistoryTableOperator
   static ObDeadLockInnerTableService::ObDeadLockEventHistoryTableOperator op;
   return op;
 }
+
+#undef LIMIT_VARCHAR_LEN
 
 }// namespace detector
 }// namespace share

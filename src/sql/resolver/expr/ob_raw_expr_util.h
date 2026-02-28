@@ -179,7 +179,7 @@ private:
   int build_and_add_attr_exprs(ObRawExpr *raw_expr);
   DISALLOW_COPY_AND_ASSIGN(ObRawExprUniqueSet);
 private:
-  ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> expr_array_;
+  ObSEArray<ObRawExpr *, 16> expr_array_;
   bool need_unique_;
   ObRawExprFactory *expr_factory_;
   ObSQLSessionInfo *session_info_;
@@ -1133,7 +1133,14 @@ public:
                                  const ObSQLSessionInfo &session_info,
                                  ObRawExpr *&out);
   static int build_grouping_id(ObRawExprFactory &factory, const ObSQLSessionInfo &session_info,
-                               ObOpPseudoColumnRawExpr *&out);
+                               ObOpPseudoColumnRawExpr *&out, bool is_three_stage_grouping_id = false);
+
+  static int build_encoded_dup(ObRawExprFactory &factory, const ObSQLSessionInfo &session_info,
+                               const ObRawExprResType &res_type, ObOpPseudoColumnRawExpr *&out);
+
+  static int build_hash_val_expr(ObRawExprFactory &factory, const ObSQLSessionInfo &session_info,
+                                 ObOpPseudoColumnRawExpr *&out);
+
   static bool is_pseudo_column_like_expr(const ObRawExpr &expr);
   static bool is_sharable_expr(const ObRawExpr &expr);
 
@@ -1364,6 +1371,7 @@ public:
                              ObRawExpr *related_token_cnt,
                              ObRawExpr *total_doc_cnt,
                              ObRawExpr *doc_token_cnt,
+                             ObRawExpr *doc_length,
                              ObRawExpr *avg_doc_token_cnt,
                              ObOpRawExpr *&bm25,
                              const bool use_avg_doc_token_cnt_pseudo_column,
@@ -1395,7 +1403,6 @@ public:
   */
   static int create_null_safe_equal_expr(ObRawExprFactory &expr_factory,
                                          const ObSQLSessionInfo *session_info,
-                                         const bool is_mysql_mode,
                                          ObRawExpr *left_expr,
                                          ObRawExpr *right_expr,
                                          ObRawExpr *&expr);
@@ -1432,6 +1439,11 @@ public:
                                 ObIArray<ObRawExpr *> &param_exprs,
                                 ObRawExpr *&unpivot_expr,
                                 bool is_label_expr);
+  static int build_greatest_or_least_expr(ObRawExprFactory &expr_factory,
+                                          const ObSQLSessionInfo *session_info,
+                                          bool is_greatest,
+                                          ObIArray<ObRawExpr *> &param_exprs,
+                                          ObRawExpr *&func_expr);
   static bool is_auxiliary_generated_column(const ObColumnRefRawExpr &col_ref);
   static int resolve_identifier(ObIAllocator &allocator,
       sql::ObSQLSessionInfo &session,
@@ -1447,6 +1459,21 @@ public:
       common::ObIArray<sql::ObQualifiedName> &q_name,
       bool nullable);
   static bool is_invalid_type_for_compare(const ObRawExprResType &type);
+  static int build_json_member_of_expr(ObRawExprFactory &expr_factory,
+                                       const ObSQLSessionInfo &session,
+                                       ObRawExpr *json_val,
+                                       ObRawExpr *json_array,
+                                       ObRawExpr *&expr);
+  static int build_json_contains_expr(ObRawExprFactory &expr_factory,
+                                     const ObSQLSessionInfo &session,
+                                     ObRawExpr *json_target,
+                                     ObRawExpr *json_candidate,
+                                     ObRawExpr *&expr);
+  static int build_json_extract_expr(ObRawExprFactory &expr_factory,
+                                     const ObSQLSessionInfo &session,
+                                     ObRawExpr *json_val,
+                                     const ObString &json_path,
+                                     ObRawExpr *&expr);
 private:
   static int need_extra_cast_for_enumset(const ObRawExprResType &src_type,
                                          const ObRawExprResType &dst_type,

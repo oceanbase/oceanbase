@@ -58,6 +58,7 @@ namespace drtask
   const static char * const TYPE_TRANSFORM_DUE_TO_MIGRATE_SSLOG_REPLICA = "type transform due to migrate sslog replica";
   const static char * const TYPE_TRANSFORM_DUE_TO_REMOVE_SSLOG_PAXOS_REPLICA = "type transform due to remove sslog paxos replica";
   const static char * const MIGRATE_REPLICA_DUE_TO_UNIT_NOT_MATCH = "migrate replica due to unit not match";
+  const static char * const ALTER_SYSTEM_COMMAND_REPLACE_LS = "replace ls by manual";
   const static char * const ALTER_SYSTEM_COMMAND_ADD_REPLICA = "add replica by manual";
   const static char * const ALTER_SYSTEM_COMMAND_REMOVE_REPLICA = "remove replica by manual";
   const static char * const ALTER_SYSTEM_COMMAND_MODIFY_REPLICA_TYPE = "modify replica type by manual";

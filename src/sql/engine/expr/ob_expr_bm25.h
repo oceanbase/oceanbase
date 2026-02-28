@@ -64,12 +64,24 @@ public:
   }
   static double doc_token_weight(const int64_t token_freq, const double norm_len);
   static double query_token_weight(const int64_t doc_freq, const int64_t doc_cnt);
+  static bool use_new_version(const ObExpr &expr)
+  {
+    return 6 == expr.arg_cnt_;
+  }
 public:
   static constexpr int TOKEN_DOC_CNT_PARAM_IDX = 0;
   static constexpr int TOTAL_DOC_CNT_PARAM_IDX = 1;
+
+  // Old version (5 params, < CLUSTER_VERSION_4_5_1_0)
   static constexpr int DOC_TOKEN_CNT_PARAM_IDX = 2;
-  static constexpr int AVG_DOC_CNT_PARAM_IDX = 3;
-  static constexpr int RELATED_TOKEN_CNT_PARAM_IDX = 4;
+  static constexpr int AVG_DOC_CNT_PARAM_IDX_OLD = 3;
+  static constexpr int RELATED_TOKEN_CNT_PARAM_IDX_OLD = 4;
+
+  // New version (6 params, >= CLUSTER_VERSION_4_5_1_0)
+  static constexpr int DOC_LENGTH_PARAM_IDX = 2;
+  static constexpr int TOKEN_WEIGHT_PARAM_IDX = 3;
+  static constexpr int AVG_DOC_CNT_PARAM_IDX = 4;
+  static constexpr int RELATED_TOKEN_CNT_PARAM_IDX = 5;
   static constexpr double DEFAULT_AVG_DOC_TOKEN_CNT = 10.0;
 private:
   static constexpr double p_k1 = 1.2;

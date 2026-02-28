@@ -732,7 +732,7 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
 int ObAdminDumpBackupDataExecutor::do_restore_preview_()
 {
   int ret = OB_SUCCESS;
-  ObArray<ObRestoreBackupSetBriefInfo> backup_set_list;
+  ObArray<ObBackupSetBriefInfo> backup_set_list;
   ObArray<ObRestoreLogPieceBriefInfo> backup_piece_list;
   ObArray<ObString> backup_path_array;
 
@@ -759,7 +759,7 @@ int ObAdminDumpBackupDataExecutor::do_restore_preview_()
 
 int ObAdminDumpBackupDataExecutor::do_tenant_level_restore_preview_(
       const ObIArray<ObString> &backup_path_array,
-      ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
+      ObIArray<ObBackupSetBriefInfo> &backup_set_list,
       ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list)
 {
   int ret = OB_SUCCESS;
@@ -794,7 +794,7 @@ int ObAdminDumpBackupDataExecutor::do_tenant_level_restore_preview_(
 
 int ObAdminDumpBackupDataExecutor::do_print_restore_preview_(
       ObIAllocator &allocator,
-      ObArray<ObRestoreBackupSetBriefInfo> backup_set_list,
+      ObArray<ObBackupSetBriefInfo> backup_set_list,
       ObArray<ObRestoreLogPieceBriefInfo> backup_piece_list)
 {
   int ret = OB_SUCCESS;
@@ -807,7 +807,7 @@ int ObAdminDumpBackupDataExecutor::do_print_restore_preview_(
       order++;
       ObString path_str;
       ObString desc_str;
-      const ObRestoreBackupSetBriefInfo &backup_set = backup_set_list.at(i);
+      const ObBackupSetBriefInfo &backup_set = backup_set_list.at(i);
       char buf[OB_MAX_TEXT_LENGTH] = { 0 };
       int64_t pos = 0;
 

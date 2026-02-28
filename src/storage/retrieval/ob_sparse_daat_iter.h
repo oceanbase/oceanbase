@@ -27,12 +27,13 @@ namespace storage
 
 struct ObSRMergeItem
 {
-  ObSRMergeItem() : relevance_(0.0), iter_idx_(-1) {}
+  ObSRMergeItem() : relevance_(0.0), iter_idx_(-1), equal_with_next_(false) {}
   ~ObSRMergeItem() = default;
-  TO_STRING_KV(K_(iter_idx), K_(relevance));
+  TO_STRING_KV(K_(iter_idx), K_(relevance), K_(equal_with_next));
 
   double relevance_;
   int64_t iter_idx_;
+  bool equal_with_next_;
 };
 
 struct ObSRMergeCmp
@@ -57,7 +58,9 @@ private:
   bool is_inited_;
 };
 
-typedef ObMergeLoserTree<ObSRMergeItem, ObSRMergeCmp> ObSRMergeLoserTree;
+typedef ObSimpleRowsMerger<ObSRMergeItem, ObSRMergeCmp> ObSRSimpleMerger;
+typedef ObMergeLoserTree<ObSRMergeItem, ObSRMergeCmp> ObSRLoserTree;
+typedef common::ObRowsMerger<ObSRMergeItem, ObSRMergeCmp> ObSRMergeHeap;
 
 // implementation of basic DaaT query processing algorithm primitives
 class ObSRDaaTIterImpl : public ObISparseRetrievalMergeIter
@@ -87,12 +90,13 @@ protected:
   virtual int filter_on_demand(const int64_t count, const double relevance, bool &need_project);
   virtual int cache_result(int64_t &count, const ObDatum &id_datum, const double relevance);
   virtual int project_results(const int64_t count);
+  int init_merge_heap(const int64_t count);
 protected:
   ObIAllocator *iter_allocator_;
   ObSparseRetrievalMergeParam *iter_param_;
   ObIArray<ObISRDaaTDimIter *> *dim_iters_;
   ObSRMergeCmp merge_cmp_;
-  ObSRMergeLoserTree *merge_heap_;
+  ObSRMergeHeap *merge_heap_;
   ObSRDaaTRelevanceCollector *relevance_collector_;
   ObFixedArray<const ObDatum *, ObIAllocator> iter_domain_ids_; // record every dim iter's output domain id, one (ObDatum *) for one dim iter
   ObFixedArray<ObDocIdExt, ObIAllocator> buffered_domain_ids_; // cache for output

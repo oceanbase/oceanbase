@@ -19,6 +19,8 @@ namespace oceanbase
 namespace sql
 {
 class ObUpdateStmt;
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogUpdate : public ObLogDelUpd
 {
 public:

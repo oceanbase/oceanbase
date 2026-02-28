@@ -17,6 +17,14 @@ CREATE OR REPLACE PACKAGE dbms_vector AUTHID CURRENT_USER
     IN     idx_parameters          LONGTEXT DEFAULT NULL,
     IN     idx_parallel_creation   INT DEFAULT 1);
 
+  PROCEDURE flush_index(
+    IN     table_name             VARCHAR(65535),
+    IN     idx_name               VARCHAR(65535));
+
+  PROCEDURE compact_index(
+    IN     table_name             VARCHAR(65535),
+    IN     idx_name               VARCHAR(65535));
+
   PROCEDURE refresh_index_inner(
     IN     idx_table_id           BIGINT,
     IN     refresh_threshold      INT DEFAULT 10000,
@@ -45,5 +53,26 @@ CREATE OR REPLACE PACKAGE dbms_vector AUTHID CURRENT_USER
     IN     idx_type          VARCHAR(65535),
     IN     idx_parameters    LONGTEXT DEFAULT NULL)
   RETURN VARCHAR(65535);
+
+  PROCEDURE set_attribute(
+    IN     idx_name                VARCHAR(65535),
+    IN     table_name              VARCHAR(65535),
+    IN     item                    VARCHAR(65535),
+    IN     value                   VARCHAR(65535));
+
+  FUNCTION query_recall (
+    IN     sql_query         LONGTEXT)
+  RETURN FLOAT;
+
+  FUNCTION index_recall (
+    IN     table_name        VARCHAR(65535),
+    IN     index_name        VARCHAR(65535),
+    IN     vectors           LONGTEXT DEFAULT NULL,
+    IN     num_vectors       INT DEFAULT 25,
+    IN     top_k             INT DEFAULT 10,
+    IN     filter            LONGTEXT DEFAULT NULL,
+    IN     parallel          INT DEFAULT 1,
+    IN     parameters        VARCHAR(65535) DEFAULT NULL)
+  RETURN FLOAT;
 
 END dbms_vector;

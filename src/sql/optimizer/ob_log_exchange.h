@@ -14,15 +14,17 @@
 #define OCEANBASE_SQL_OB_LOG_EXCHANGE_H
 #include "lib/allocator/page_arena.h"
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "sql/engine/px/ob_px_basic_info.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogExchange : public ObLogicalOperator
 {
-  typedef common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> RepartColumnExprs;
 public:
   ObLogExchange(ObLogPlan &plan)
       : ObLogicalOperator(plan),
@@ -38,20 +40,25 @@ public:
       is_rollup_hybrid_(false),
       is_wf_hybrid_(false),
       wf_hybrid_aggr_status_expr_(NULL),
-      sort_keys_(),
+      wf_hybrid_pby_exprs_cnt_array_(plan.get_allocator()),
+      sort_keys_(plan.get_allocator()),
       slice_count_(1),
       repartition_type_(OB_REPARTITION_NO_REPARTITION),
       repartition_ref_table_id_(OB_INVALID_ID),
       repartition_table_id_(OB_INVALID_ID),
       repartition_table_name_(),
-      repartition_keys_(),
-      repartition_sub_keys_(),
-      repartition_func_exprs_(),
+      repart_all_tablet_ids_(plan.get_allocator()),
+      repartition_keys_(plan.get_allocator()),
+      repartition_sub_keys_(plan.get_allocator()),
+      repartition_func_exprs_(plan.get_allocator()),
       calc_part_id_expr_(NULL),
+      hash_dist_exprs_(plan.get_allocator()),
+      popular_values_(plan.get_allocator()),
       dist_method_(ObPQDistributeMethod::LOCAL), // pull to local
       unmatch_row_dist_method_(ObPQDistributeMethod::LOCAL),
       null_row_dist_method_(ObNullDistributeMethod::NONE),
       slave_mapping_type_(SlaveMappingType::SM_NONE),
+      use_scatter_channel_for_pkey_hash_(false),
       gi_info_(),
       px_batch_op_(NULL),
       px_batch_op_id_(OB_INVALID_ID),
@@ -59,11 +66,17 @@ public:
       partition_id_expr_(NULL),
       ddl_slice_id_expr_(NULL),
       random_expr_(NULL),
+      table_locations_(plan.get_allocator()),
+      filter_id_array_(plan.get_allocator()),
       need_null_aware_shuffle_(false),
       is_old_unblock_mode_(true),
       sample_type_(NOT_INIT_SAMPLE_TYPE),
       in_server_cnt_(0),
       px_info_(NULL),
+      ordered_aggr_code_(NULL),
+      max_ordered_aggr_code_(0),
+      encoded_dup_expr_(NULL),
+      dup_expr_list_(plan.get_allocator()),
       hidden_pk_expr_(NULL)
   {
     repartition_table_id_ = 0;
@@ -155,6 +168,11 @@ public:
 
   void set_wf_hybrid(bool is_wf_hybrid) { is_wf_hybrid_ = is_wf_hybrid; }
   bool is_wf_hybrid() { return is_wf_hybrid_; }
+  void set_use_scatter_channel_for_pkey_hash(bool use_scatter_channel_for_pkey_hash)
+  {
+    use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
+  }
+  bool use_scatter_channel_for_pkey_hash() const { return use_scatter_channel_for_pkey_hash_; }
   void set_wf_hybrid_aggr_status_expr(ObRawExpr *wf_hybrid_aggr_status_expr)
   {
     wf_hybrid_aggr_status_expr_ = wf_hybrid_aggr_status_expr;
@@ -204,6 +222,17 @@ public:
   virtual int close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG) override;
   void set_px_info(ObPxResourceAnalyzer::PxInfo *px_info) { px_info_ = px_info; }
   ObPxResourceAnalyzer::PxInfo *get_px_info() { return px_info_; }
+  void set_ordered_aggr_code(ObRawExpr *ordered_aggr_code) { ordered_aggr_code_ = ordered_aggr_code; }
+  ObRawExpr *get_ordered_aggr_code() { return ordered_aggr_code_; }
+  int32_t get_max_ordered_aggr_code() { return max_ordered_aggr_code_; }
+  void set_max_ordered_aggr_code(int32_t max_ordered_aggr_code) { max_ordered_aggr_code_ = max_ordered_aggr_code; }
+  void set_encoded_dup_expr(ObRawExpr *encoded_dup_expr) { encoded_dup_expr_ = encoded_dup_expr; }
+  const ObRawExpr *get_encoded_dup_expr() const { return encoded_dup_expr_; }
+
+  int generate_final_shuffle_exprs(common::ObIArray<ObRawExpr *> &real_shuffle_exprs);
+
+  int set_dup_expr_list(const common::ObIArray<ObRawExpr *> &dup_expr_list) { return dup_expr_list_.assign(dup_expr_list); }
+  const common::ObIArray<ObRawExpr *> &get_dup_expr_list() const { return dup_expr_list_; }
 private:
   int prepare_px_pruning_param(ObLogicalOperator *op, int64_t &count,
       common::ObIArray<const ObDMLStmt *> &stmts, common::ObIArray<int64_t> &drop_expr_idxs);
@@ -240,26 +269,27 @@ private:
   bool is_rollup_hybrid_;  // for adaptive rollup pushdown
   bool is_wf_hybrid_;  // for adaptive window function pushdown
   ObRawExpr *wf_hybrid_aggr_status_expr_;
-  common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> wf_hybrid_pby_exprs_cnt_array_;
-  common::ObSEArray<OrderItem, 4, common::ModulePageAllocator, true> sort_keys_;
+  ObSqlArray<int64_t> wf_hybrid_pby_exprs_cnt_array_;
+  ObSqlArray<OrderItem> sort_keys_;
 
   int64_t slice_count_;//对于重分发之外的exchange, slice_count均为1
   ObRepartitionType repartition_type_;
   int64_t repartition_ref_table_id_;
   int64_t repartition_table_id_;
   ObString repartition_table_name_; //just for print plan
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> repart_all_tablet_ids_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> repartition_keys_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> repartition_sub_keys_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> repartition_func_exprs_;
+  ObSqlArray<uint64_t> repart_all_tablet_ids_;
+  ObSqlArray<ObRawExpr *> repartition_keys_;
+  ObSqlArray<ObRawExpr *> repartition_sub_keys_;
+  ObSqlArray<ObRawExpr *> repartition_func_exprs_;
   ObRawExpr *calc_part_id_expr_;
-  common::ObSEArray<ObExchangeInfo::HashExpr, 4, common::ModulePageAllocator, true> hash_dist_exprs_;
-  common::ObSEArray<ObObj, 20, common::ModulePageAllocator, true> popular_values_; // for hybrid hash distr
+  ObSqlArray<ObExchangeInfo::HashExpr> hash_dist_exprs_;
+  ObSqlArray<ObObj> popular_values_; // for hybrid hash distr
 
   ObPQDistributeMethod::Type dist_method_;
   ObPQDistributeMethod::Type unmatch_row_dist_method_;
   ObNullDistributeMethod::Type null_row_dist_method_;
   SlaveMappingType slave_mapping_type_;
+  bool use_scatter_channel_for_pkey_hash_;
 
   //granule info
   ObAllocGIInfo gi_info_;
@@ -273,8 +303,8 @@ private:
   // produce random number, added in %sort_keys_ of range distribution to splitting big range.
   ObRawExpr *random_expr_;
 
-  common::ObSEArray<ObTableLocation, 4, common::ModulePageAllocator, true> table_locations_;
-  common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> filter_id_array_;
+  ObSqlArray<ObTableLocation> table_locations_;
+  ObSqlArray<int64_t> filter_id_array_;
   // new shuffle method for non-preserved side in naaj
   // broadcast 1st line && null join key
   bool need_null_aware_shuffle_;
@@ -284,6 +314,10 @@ private:
   // -end pkey range/range
   int64_t in_server_cnt_; // for producer, need use exchange in server cnt to compute cost
   ObPxResourceAnalyzer::PxInfo *px_info_;
+  ObRawExpr *ordered_aggr_code_;
+  int32_t max_ordered_aggr_code_;
+  ObRawExpr *encoded_dup_expr_;
+  ObSqlArray<ObRawExpr *> dup_expr_list_;
   // Hidden primary key expression for PDML heap table insert scenario.
   // Needs to be passed through exchange but not used for hash calculation.
   ObRawExpr *hidden_pk_expr_;

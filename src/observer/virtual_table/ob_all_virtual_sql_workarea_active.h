@@ -75,6 +75,7 @@ private:
     TENAND_ID,         // OB_APP_MIN_COLUMN_ID + 15
     POLICY,
     DB_ID,
+    TRACE_ID,
   };
   int fill_row(
     uint64_t tenant_id,
@@ -85,6 +86,7 @@ private:
   common::ObString ipstr_;
   int32_t port_;
   ObSqlWorkareaActiveIterator iter_;
+  char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
 };
 
 } /* namespace observer */

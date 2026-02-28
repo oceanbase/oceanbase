@@ -122,6 +122,8 @@ int ObDailyMajorFreezeLauncher::try_launch_major_freeze()
     LOG_WARN("tenant config is not valid", KR(ret), K_(tenant_id));
   } else if (tenant_config->major_freeze_duty_time.disable()) {
     LOG_INFO("major_freeze_duty_time is disabled, can not launch major freeze by duty", K_(tenant_id));
+  } else if (tenant_config->enable_window_compaction) {
+    LOG_INFO("window compaction is enabled, can not launch major freeze by duty", K_(tenant_id));
   } else {
     const int hour = tenant_config->major_freeze_duty_time.hour();
     const int minute = tenant_config->major_freeze_duty_time.minute();

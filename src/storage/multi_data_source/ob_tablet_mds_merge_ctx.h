@@ -39,6 +39,11 @@ class ObTabletMdsMinorMergeCtx : public compaction::ObTabletExeMergeCtx
 public:
   ObTabletMdsMinorMergeCtx(compaction::ObTabletMergeDagParam &param, common::ObArenaAllocator &allocator);
   virtual ~ObTabletMdsMinorMergeCtx() { free_schema(); }
+
+  virtual int prepare_compaction_filter() override
+  {
+    return prepare_compaction_filter(mem_ctx_.get_allocator(), *get_tablet(), static_param_.get_ls_id(), filter_ctx_.compaction_filter_);
+  }
   static int prepare_compaction_filter(ObIAllocator &allocator, ObTablet &tablet, const share::ObLSID &ls_id, compaction::ObICompactionFilter *&filter);
 protected:
   virtual int prepare_schema() override;

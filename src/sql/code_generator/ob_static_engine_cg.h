@@ -38,7 +38,7 @@ class ObMergeSetSpec;
 class ObMergeUnionSpec;
 class ObMergeIntersectSpec;
 class ObMergeExceptSpec;
-class ObRecursiveUnionAllSpec;
+class ObRecursiveUnionSpec;
 class ObHashSetSpec;
 class ObHashSetVecSpec;
 class ObHashUnionSpec;
@@ -157,6 +157,7 @@ class ObNestedLoopJoinVecSpec;
 class ObTableDirectInsertSpec;
 
 class EnableOpRichFormat;
+class ObRescanSpec;
 
 typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>,
@@ -333,14 +334,14 @@ private:
   int generate_spec(ObLogSet &op, ObMergeUnionSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSet &op, ObMergeIntersectSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSet &op, ObMergeExceptSpec &spec, const bool in_root_job);
-  int generate_cte_pseudo_column_row_desc(ObLogSet &op, ObRecursiveUnionAllSpec &phy_set_op);
-  int generate_spec(ObLogSet &op, ObRecursiveUnionAllSpec &spec, const bool in_root_job);
+  int generate_cte_pseudo_column_row_desc(ObLogSet &op, ObRecursiveUnionSpec &phy_set_op);
+  int generate_spec(ObLogSet &op, ObRecursiveUnionSpec &spec, const bool in_root_job);
   int generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec);
   int generate_spec(ObLogSet &op, ObMergeUnionVecSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSet &op, ObMergeIntersectVecSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSet &op, ObMergeExceptVecSpec &spec, const bool in_root_job);
   int generate_merge_set_spec(ObLogSet &op, ObMergeSetVecSpec &spec);
-  int generate_recursive_union_all_spec(ObLogSet &op, ObRecursiveUnionAllSpec &spec);
+  int generate_recursive_union_spec(ObLogSet &op, ObRecursiveUnionSpec &spec);
 
   int generate_spec(ObLogMaterial &op, ObMaterialSpec &spec, const bool in_root_job);
 
@@ -458,6 +459,9 @@ private:
 
   int generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec, const bool in_root_job);
 
+  // rescan op
+  int generate_spec(ObLogRescan &op, ObRescanSpec &spec, const bool in_root_job);
+
   // px code gen
   int generate_spec(ObLogStatCollector &op, ObStatCollectorSpec &spec, const bool in_root_job);
   int generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorSpec &spec, const bool in_root_job);
@@ -554,6 +558,7 @@ private:
   int fill_aggr_info(ObAggFunRawExpr &raw_expr, ObExpr &expr, ObAggrInfo &aggr_info,
                     common::ObIArray<ObExpr *> *group_exprs/*NULL*/,
                     common::ObIArray<ObExpr *> *rollup_exprs/*NULL*/,
+                    const bool enable_rich_format,
                     const ObHashRollupInfo *hash_rollup_info = nullptr,
                     const ObGroupingSetInfo *grouping_set_info = nullptr);
   int generate_hash_rollup_info(const ObHashRollupInfo &rollup_info, HashRollupRTInfo *&rt_info);
@@ -580,7 +585,7 @@ private:
   int generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpec &spec);
 
   int fill_wf_info(ObIArray<ObExpr *> &all_expr, ObWinFunRawExpr &win_expr,
-                   WinFuncInfo &wf_info, const bool can_push_down);
+                   WinFuncInfo &wf_info, const bool can_push_down, const bool enable_rich_format);
   int fil_sort_info(const ObIArray<OrderItem> &sort_keys,
                     ObIArray<ObExpr *> &all_exprs,
                     ObIArray<ObExpr *> *sort_exprs,
@@ -627,11 +632,17 @@ private:
   int check_has_global_unique_index(ObLogPlan *log_plan, const uint64_t table_id, bool &has_unique_index);
   int check_has_global_partiton_index(ObLogPlan *log_plan, const uint64_t table_id, bool &has_global_partition_index);
   bool is_simple_aggr_expr(const ObItemType &expr_type,
-                           const bool enable_rich_format) { return T_FUN_COUNT == expr_type
-                                                                   || T_FUN_SUM == expr_type
-                                                                   || T_FUN_MAX == expr_type
-                                                                   || T_FUN_MIN == expr_type
-                                                                   || (enable_rich_format && T_FUN_COUNT_SUM == expr_type); }
+                           const bool enable_rich_format)
+  {
+    return T_FUN_COUNT == expr_type
+           || T_FUN_SUM == expr_type
+           || T_FUN_MAX == expr_type
+           || T_FUN_MIN == expr_type
+           || (enable_rich_format && T_FUN_COUNT_SUM == expr_type)
+           || (enable_rich_format
+               && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0
+               && T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == expr_type);
+  }
   int check_fk_nested_dup_del(const uint64_t table_id,
                               const uint64_t root_table_id,
                               DASTableIdList &parent_tables,
@@ -672,6 +683,7 @@ private:
   int generate_disable_rich_format_flags(int64_t &flags);
   int set_das_ctdef_false_range_flag(ObDASBaseCtDef &ctdef,
                                      bool enable_new_false_range);
+  int generate_backup_exprs(ObMergeGroupBySpec &spec);
 private:
   struct BatchExecParamCache {
     BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)

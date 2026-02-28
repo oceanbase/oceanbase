@@ -64,7 +64,7 @@ PartTransDispatcher::PartTransDispatcher(const char *tls_id_str,
     created_trans_count_(0),
     last_created_trans_count_(0),
     last_stat_time_(get_timestamp()),
-    dispatch_lock_()
+    dispatch_lock_(common::ObLatchIds::OB_CDC_COMMON_LOCK)
 {}
 
 PartTransDispatcher::~PartTransDispatcher()

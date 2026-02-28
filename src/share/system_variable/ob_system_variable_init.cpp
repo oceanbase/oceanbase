@@ -30,6 +30,80 @@ static int64_t ObSysVarsIdToArrayIdx[ObSysVarFactory::OB_MAX_SYS_VAR_ID];
 // 如果大于OB_MAX_SYS_VAR_ID表示存在无效的SysVarsId
 static bool HasInvalidSysVar = false;
 
+// Auto-generated ESSENTIAL_SYS_VARS array for inner session initialization
+// These variables are frequently used in session initialization, tenant processing, schema setting and other critical processes
+const ObSysVarClassType ESSENTIAL_SYS_VARS[] = {
+  // compatibility mode related vars - affect SQL parsing and execution behavior
+  SYS_VAR_AUTOCOMMIT,
+  SYS_VAR_CHARACTER_SET_CONNECTION,
+  SYS_VAR_COLLATION_CONNECTION,
+  SYS_VAR_SQL_MODE,
+  SYS_VAR_WAIT_TIMEOUT,
+  SYS_VAR_DEBUG_SYNC,
+  SYS_VAR_LOWER_CASE_TABLE_NAMES,
+  SYS_VAR_OB_LOG_LEVEL,
+  SYS_VAR_OB_READ_CONSISTENCY,
+  SYS_VAR_OB_GLOBAL_DEBUG_SYNC,
+  SYS_VAR_OB_COMPATIBILITY_MODE,
+  SYS_VAR_OB_CHECK_SYS_VARIABLE,
+  SYS_VAR_OB_COMPATIBILITY_VERSION,
+
+  // all system vars with INFLUENCE_PLAN flag - affect execution plan generation
+  SYS_VAR_CHARACTER_SET_RESULTS,        // character_set_results
+  SYS_VAR_TIME_ZONE,        // time_zone
+  SYS_VAR_BINLOG_ROW_IMAGE,        // binlog_row_image
+  SYS_VAR_DIV_PRECISION_INCREMENT,        // div_precision_increment
+  SYS_VAR_EXPLICIT_DEFAULTS_FOR_TIMESTAMP,        // explicit_defaults_for_timestamp
+  SYS_VAR_READ_ONLY,        // read_only
+  SYS_VAR_SQL_AUTO_IS_NULL,        // sql_auto_is_null
+  SYS_VAR_OB_ENABLE_TRANSFORMATION,        // ob_enable_transformation
+  SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT,        // ob_enable_index_direct_select
+  SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN,        // ob_enable_aggregation_pushdown
+  SYS_VAR_OB_BNL_JOIN_CACHE_SIZE,        // ob_bnl_join_cache_size
+  SYS_VAR_OB_ROUTE_POLICY,        // ob_route_policy
+  SYS_VAR_OB_ENABLE_JIT,        // ob_enable_jit
+  SYS_VAR_NLS_DATE_FORMAT,        // nls_date_format
+  SYS_VAR_NLS_TIMESTAMP_FORMAT,        // nls_timestamp_format
+  SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT,        // nls_timestamp_tz_format
+  SYS_VAR_NLS_SORT,        // nls_sort
+  SYS_VAR_NLS_COMP,        // nls_comp
+  SYS_VAR_NLS_CHARACTERSET,        // nls_characterset
+  SYS_VAR_NLS_NCHAR_CHARACTERSET,        // nls_nchar_characterset
+  SYS_VAR_NLS_LENGTH_SEMANTICS,        // nls_length_semantics
+  SYS_VAR_NLS_NCHAR_CONV_EXCP,        // nls_nchar_conv_excp
+  SYS_VAR__NLJ_BATCHING_ENABLED,        // _nlj_batching_enabled
+  SYS_VAR__PX_BROADCAST_FUDGE_FACTOR,        // _px_broadcast_fudge_factor
+  SYS_VAR__PX_PARTITION_SCAN_THRESHOLD,        // _px_partition_scan_threshold
+  SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD,        // _ob_px_slave_mapping_threshold
+  SYS_VAR__ENABLE_PARALLEL_DML,        // _enable_parallel_dml
+  SYS_VAR__PX_MIN_GRANULES_PER_SLAVE,        // _px_min_granules_per_slave
+  SYS_VAR_SECURE_FILE_PRIV,        // secure_file_priv
+  SYS_VAR__ENABLE_PARALLEL_QUERY,        // _enable_parallel_query
+  SYS_VAR__FORCE_PARALLEL_QUERY_DOP,        // _force_parallel_query_dop
+  SYS_VAR__FORCE_PARALLEL_DML_DOP,        // _force_parallel_dml_dop
+  SYS_VAR__ENABLE_PARALLEL_DDL,        // _enable_parallel_ddl
+  SYS_VAR__FORCE_PARALLEL_DDL_DOP,        // _force_parallel_ddl_dop
+  SYS_VAR__FORCE_ORDER_PRESERVE_SET,        // _force_order_preserve_set
+  SYS_VAR_PARALLEL_DEGREE_POLICY,        // parallel_degree_policy
+  SYS_VAR_PARALLEL_DEGREE_LIMIT,        // parallel_degree_limit
+  SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD,        // parallel_min_scan_time_threshold
+  SYS_VAR_RUNTIME_FILTER_TYPE,        // runtime_filter_type
+  SYS_VAR__ENABLE_RICH_VECTOR_FORMAT,        // _enable_rich_vector_format
+  SYS_VAR_OB_SECURITY_VERSION,        // ob_security_version
+  SYS_VAR_CARDINALITY_ESTIMATION_MODEL,        // cardinality_estimation_model
+  SYS_VAR_QUERY_REWRITE_ENABLED,        // query_rewrite_enabled
+  SYS_VAR_QUERY_REWRITE_INTEGRITY,        // query_rewrite_integrity
+  SYS_VAR_DEFAULT_COLLATION_FOR_UTF8MB4,        // default_collation_for_utf8mb4
+  SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION,        // _enable_old_charset_aggregation
+  SYS_VAR_ENABLE_SQL_PLAN_MONITOR,        // enable_sql_plan_monitor
+  SYS_VAR_OB_TABLE_ACCESS_POLICY,        // ob_table_access_policy
+  SYS_VAR__PUSH_JOIN_PREDICATE,        // _push_join_predicate
+  SYS_VAR_SQL_TRANSPILER,        // sql_transpiler
+};
+
+const int64_t ESSENTIAL_SYS_VARS_COUNT = sizeof(ESSENTIAL_SYS_VARS) / sizeof(ESSENTIAL_SYS_VARS[0]);
+
+
 static struct VarsInit{
   VarsInit(){
     // 保存当前系统变量的最大的id
@@ -3307,7 +3381,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[234].default_value_ = "4.5.0.0" ;
+      ObSysVars[234].default_value_ = "4.6.0.0" ;
       ObSysVars[234].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
       ObSysVars[234].name_ = "optimizer_features_enable" ;
       ObSysVars[234].data_type_ = ObVarcharType ;
@@ -11486,7 +11560,7 @@ static struct VarsInit{
       ObSysVars[838].name_ = "sql_transpiler" ;
       ObSysVars[838].data_type_ = ObIntType ;
       ObSysVars[838].enum_names_ = "[u'OFF', u'ON', u'BASIC']" ;
-      ObSysVars[838].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[838].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::INFLUENCE_PL ;
       ObSysVars[838].id_ = SYS_VAR_SQL_TRANSPILER ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_TRANSPILER)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_SQL_TRANSPILER] = 838 ;
@@ -11495,7 +11569,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[839].default_value_ = "1" ;
+      ObSysVars[839].default_value_ = "0" ;
       ObSysVars[839].info_ = "Whether can transform the PL/SQL select into from dual statement to an assignment statement" ;
       ObSysVars[839].name_ = "plsql_can_transform_sql_to_assign" ;
       ObSysVars[839].data_type_ = ObIntType ;
@@ -11508,32 +11582,111 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[840].default_value_ = "0" ;
-      ObSysVars[840].info_ = "Whether the PL/SQL async response is used" ;
-      ObSysVars[840].name_ = "ob_enable_pl_async_commit" ;
-      ObSysVars[840].data_type_ = ObIntType ;
-      ObSysVars[840].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[840].id_ = SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT] = 840 ;
-      ObSysVars[840].base_value_ = "0" ;
-    ObSysVars[840].alias_ = "OB_SV_ENABLE_PL_ASYNC_COMMIT" ;
+      ObSysVars[840].default_value_ = "10" ;
+      ObSysVars[840].info_ = "Control the algorithm selection for join order enumeration in query optimization" ;
+      ObSysVars[840].name_ = "_join_order_enum_threshold" ;
+      ObSysVars[840].data_type_ = ObUInt64Type ;
+      ObSysVars[840].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[840].id_ = SYS_VAR__JOIN_ORDER_ENUM_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__JOIN_ORDER_ENUM_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__JOIN_ORDER_ENUM_THRESHOLD] = 840 ;
+      ObSysVars[840].base_value_ = "10" ;
+    ObSysVars[840].alias_ = "OB_SV__JOIN_ORDER_ENUM_THRESHOLD" ;
     }();
 
     [&] (){
-      ObSysVars[841].default_value_ = "5000" ;
-      ObSysVars[841].info_ = "Number of SHA256 iterations for password hash stored to disk" ;
-      ObSysVars[841].name_ = "caching_sha2_password_digest_rounds" ;
-      ObSysVars[841].data_type_ = ObIntType ;
-      ObSysVars[841].min_val_ = "5000" ;
-      ObSysVars[841].max_val_ = "4095000" ;
-      ObSysVars[841].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[841].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
-      ObSysVars[841].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
+      ObSysVars[841].default_value_ = "2000" ;
+      ObSysVars[841].info_ = "Optimizer maximum join permutations per enumeration" ;
+      ObSysVars[841].name_ = "_optimizer_max_permutations" ;
+      ObSysVars[841].data_type_ = ObUInt64Type ;
+      ObSysVars[841].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[841].id_ = SYS_VAR__OPTIMIZER_MAX_PERMUTATIONS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OPTIMIZER_MAX_PERMUTATIONS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OPTIMIZER_MAX_PERMUTATIONS] = 841 ;
+      ObSysVars[841].base_value_ = "2000" ;
+    ObSysVars[841].alias_ = "OB_SV__OPTIMIZER_MAX_PERMUTATIONS" ;
+    }();
+
+    [&] (){
+      ObSysVars[842].default_value_ = "5000" ;
+      ObSysVars[842].info_ = "When the total number of enumerated join paths exceeds this threshold, the IDP algorithm will automatically reduce its step size to limit the enumeration space and improve optimization efficiency." ;
+      ObSysVars[842].name_ = "_idp_step_reduction_threshold" ;
+      ObSysVars[842].data_type_ = ObUInt64Type ;
+      ObSysVars[842].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[842].id_ = SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD] = 842 ;
+      ObSysVars[842].base_value_ = "5000" ;
+    ObSysVars[842].alias_ = "OB_SV__IDP_STEP_REDUCTION_THRESHOLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[843].default_value_ = "0" ;
+      ObSysVars[843].info_ = "Whether the PL/SQL async response is used" ;
+      ObSysVars[843].name_ = "ob_enable_pl_async_commit" ;
+      ObSysVars[843].data_type_ = ObIntType ;
+      ObSysVars[843].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[843].id_ = SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT] = 843 ;
+      ObSysVars[843].base_value_ = "0" ;
+    ObSysVars[843].alias_ = "OB_SV_ENABLE_PL_ASYNC_COMMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[844].default_value_ = "5000" ;
+      ObSysVars[844].info_ = "Number of SHA256 iterations for password hash stored to disk" ;
+      ObSysVars[844].name_ = "caching_sha2_password_digest_rounds" ;
+      ObSysVars[844].data_type_ = ObIntType ;
+      ObSysVars[844].min_val_ = "5000" ;
+      ObSysVars[844].max_val_ = "4095000" ;
+      ObSysVars[844].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[844].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
+      ObSysVars[844].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 841 ;
-      ObSysVars[841].base_value_ = "5000" ;
-    ObSysVars[841].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 844 ;
+      ObSysVars[844].base_value_ = "5000" ;
+    ObSysVars[844].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
+    }();
+
+    [&] (){
+      ObSysVars[845].default_value_ = "1" ;
+      ObSysVars[845].info_ = "Controls adaptive route policy for ap query. OFF: disabled, AUTO: automatically choose column replica based on query characteristics and cost analysis, FORCE: force to choose column replica." ;
+      ObSysVars[845].name_ = "ap_query_route_policy" ;
+      ObSysVars[845].data_type_ = ObIntType ;
+      ObSysVars[845].enum_names_ = "[u'OFF', u'AUTO', u'FORCE']" ;
+      ObSysVars[845].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[845].id_ = SYS_VAR_AP_QUERY_ROUTE_POLICY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AP_QUERY_ROUTE_POLICY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_ROUTE_POLICY] = 845 ;
+      ObSysVars[845].base_value_ = "1" ;
+    ObSysVars[845].alias_ = "OB_SV_AP_QUERY_ROUTE_POLICY" ;
+    }();
+
+    [&] (){
+      ObSysVars[846].default_value_ = "200000" ;
+      ObSysVars[846].info_ = "Cost threshold for selecting column store replica." ;
+      ObSysVars[846].name_ = "ap_query_cost_threshold" ;
+      ObSysVars[846].data_type_ = ObUInt64Type ;
+      ObSysVars[846].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[846].id_ = SYS_VAR_AP_QUERY_COST_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AP_QUERY_COST_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_COST_THRESHOLD] = 846 ;
+      ObSysVars[846].base_value_ = "200000" ;
+    ObSysVars[846].alias_ = "OB_SV_AP_QUERY_COST_THRESHOLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[847].default_value_ = "1" ;
+      ObSysVars[847].info_ = "When ap_query_route_policy is AUTO or FORCE, controls whether query will fallback to non-column replica when there is no available column replica" ;
+      ObSysVars[847].name_ = "ap_query_replica_fallback" ;
+      ObSysVars[847].data_type_ = ObIntType ;
+      ObSysVars[847].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[847].id_ = SYS_VAR_AP_QUERY_REPLICA_FALLBACK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AP_QUERY_REPLICA_FALLBACK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_REPLICA_FALLBACK] = 847 ;
+      ObSysVars[847].base_value_ = "1" ;
+    ObSysVars[847].alias_ = "OB_SV_AP_QUERY_REPLICA_FALLBACK" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -11542,7 +11695,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 842;
+static int64_t var_amount = 848;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

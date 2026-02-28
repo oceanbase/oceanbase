@@ -42,7 +42,7 @@ int ObBackupCleanLSTaskMgr::init(
     ObBackupCleanLSTaskAttr &ls_attr,
     ObBackupTaskScheduler &task_scheduler,
     common::ObISQLClient &sql_proxy,
-    ObBackupCleanService &backup_service)
+    ObBackupMgrService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -135,7 +135,7 @@ int ObBackupCleanLSTaskMgr::add_task_()
 }
 
 int ObBackupCleanLSTaskMgr::advance_ls_task_status(
-    ObBackupCleanService &backup_service,
+    ObBackupMgrService &backup_service,
     common::ObISQLClient &sql_proxy, 
     const ObBackupCleanLSTaskAttr &ls_attr, 
     const ObBackupTaskStatus &next_status, 
@@ -155,7 +155,7 @@ int ObBackupCleanLSTaskMgr::advance_ls_task_status(
 }
 
 int ObBackupCleanLSTaskMgr::redo_ls_task(
-    ObBackupCleanService &backup_service,
+    ObBackupMgrService &backup_service,
     common::ObISQLClient &sql_proxy, 
     const ObBackupCleanLSTaskAttr &ls_attr,
     const int64_t retry_id)
@@ -196,7 +196,7 @@ int ObBackupCleanLSTaskMgr::finish_(int64_t &finish_cnt)
 }
 
 int ObBackupCleanLSTaskMgr::statistic_info(
-    ObBackupCleanService &backup_service,
+    ObBackupMgrService &backup_service,
     common::ObISQLClient &sql_proxy, 
     const ObBackupCleanLSTaskAttr &ls_attr)
 {

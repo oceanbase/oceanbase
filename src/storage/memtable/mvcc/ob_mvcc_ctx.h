@@ -90,7 +90,6 @@ public: // for mvcc engine invoke
   virtual common::ObIAllocator &get_query_allocator() = 0;
   virtual void set_conflict_trans_id(const uint32_t descriptor)
   { UNUSED(descriptor); }
-  virtual int add_conflict_trans_id(const transaction::ObTransID conflict_trans_id) = 0;
   virtual int read_lock_yield() { return common::OB_SUCCESS; }
   virtual int write_lock_yield() { return common::OB_SUCCESS; }
   virtual int append_callback(ObITransCallback *cb) = 0;

@@ -1,0 +1,12 @@
+| class | sizeof(class) |
+| --- | --- |
+| ObJoinOrder | 1200 |
+| Path | 600 |
+| AccessPath | 3008 |
+| JoinPath | 936 |
+| SubQueryPath | 616 |
+| FunctionTablePath | 616 |
+| JsonTablePath | 688 |
+| TempTablePath | 624 |
+| CteTablePath | 616 |
+| ValuesTablePath | 616 |

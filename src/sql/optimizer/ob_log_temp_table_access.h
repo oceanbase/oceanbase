@@ -21,6 +21,8 @@ namespace oceanbase
 {
 namespace sql
 {
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogTempTableAccess : public ObLogicalOperator
 {
 public:
@@ -55,7 +57,7 @@ private:
   common::ObString temp_table_name_;
   common::ObString access_name_;
   // base columns to scan
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> access_exprs_;
+  ObSqlArray<ObRawExpr *> access_exprs_;
 };
 
 }

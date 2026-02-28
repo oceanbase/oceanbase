@@ -38,7 +38,6 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
     ObStorageSchema *storage_schema = with_cs_replica ?
                                       tablet_param.cs_replica_storage_schema_ :
                                       tablet_param.storage_schema_;
-    const bool is_inc_major = is_incremental_major_direct_load(param.direct_load_type_);
     if (OB_UNLIKELY(nullptr == storage_schema || storage_schema->is_row_store())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected storage schema", K(ret), K(storage_schema));
@@ -107,7 +106,7 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
                                           tablet_param.is_micro_index_clustered_,
                                           tablet_param.tablet_transfer_seq_,
                                           0/*concurrent_cnt*/,
-                                          SCN::min_scn()/*reorganization_scn : only for ss*/,
+                                          (is_inc_major || is_inc_minor) ? tablet_param.reorganization_scn_ : SCN::min_scn(),
                                           SCN::min_scn(),
                                           &cg_schema,
                                           param.cg_idx_,

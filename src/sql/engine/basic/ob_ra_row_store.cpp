@@ -399,6 +399,15 @@ int ObRARowStore::switch_block(const int64_t min_size)
   } else if (min_size < 0 || OB_ISNULL(blkbuf_.blk_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(min_size));
+  } else if (blkbuf_.blk_->rows_ == 0) {
+    //empty block, free memory and alloc new block
+    free_blk_mem(blkbuf_.buf_.data(), blkbuf_.buf_.capacity());
+    blkbuf_.reset();
+    if (min_size > 0) {
+      if (OB_FAIL(alloc_block(blkbuf_, min_size))) {
+        LOG_WARN("alloc block failed after empty block", K(ret), K(min_size));
+      }
+    }
   } else if (OB_FAIL(blkbuf_.blk_->compact(blkbuf_.buf_))) {
     LOG_WARN("block compact failed", K(ret));
   } else {

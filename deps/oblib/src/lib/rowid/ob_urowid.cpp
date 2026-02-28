@@ -783,6 +783,7 @@ int ObURowIDData::inner_set_pk_value<ObURowIDType>(const ObObj &pk_val, uint8_t 
     OB_ASSERT(pos + needed_size <= buf_len && pos >= 0);                               \
     OB_ASSERT(obj_type == pk_val.get_type());                                          \
     buffer[pos++] = static_cast<uint8_t>(obj_type);                                    \
+    /* oracle donnot use collation larger than 255 */                                  \
     buffer[pos++] = static_cast<uint8_t>(pk_val.get_collation_type());                 \
     *(reinterpret_cast<int32_t *>(buffer + pos)) = pk_val.get_string_len();            \
     pos += 4;                                                                          \

@@ -142,7 +142,7 @@ public:
                                         int64_t length, int64_t &differ_at, int64_t cache_ends)>;
   CmpByteFunc get_fast_cmp_func()
   {
-    return blocksstable::is_avx512_valid() ? fast_compare_simd : fast_cmp_normal;
+    return common::is_arch_supported(ObTargetArch::AVX512) ? fast_compare_simd : fast_cmp_normal;
   }
   CmpByteFunc cmp_byte_func = get_fast_cmp_func();
 

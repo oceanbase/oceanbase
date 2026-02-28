@@ -24,6 +24,29 @@ namespace oceanbase
 namespace sql
 {
 
+#define EPOCH_WDAY    4       // 1970-1-1 is thursday.
+#define CHECK_SKIP_NULL(idx) {                    \
+  if (skip.at(idx) || eval_flags.at(idx)) {    \
+    continue;                                  \
+  } else if (arg_vec->is_null(idx)) {          \
+    res_vec->set_null(idx);                    \
+    continue;                                  \
+  }                                            \
+}
+
+#define BATCH_CALC(BODY) {                                                 \
+  if (OB_LIKELY(no_skip_no_null)) {                                               \
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) { \
+      BODY;                                                                       \
+    }                                                                             \
+  } else {                                                                        \
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) { \
+      CHECK_SKIP_NULL(idx);                                                       \
+      BODY;                                                                       \
+    }                                                                             \
+  }                                                                               \
+}
+
 ObExprDayOfMonth::ObExprDayOfMonth(ObIAllocator &alloc)
     : ObExprTimeBase(alloc, DT_MDAY, T_FUN_SYS_DAY_OF_MONTH, N_DAY_OF_MONTH, VALID_FOR_GENERATED_COL) {};
 
@@ -173,8 +196,11 @@ int ObExprSecToTime::cg_expr(ObExprCGCtx &op_cg_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children of sectotime expr is null", K(ret), K(rt_expr.args_));
   } else {
-      CK(ObNumberType == rt_expr.args_[0]->datum_meta_.type_);
+      CK(ObNumberType == rt_expr.args_[0]->datum_meta_.type_ || ObIntType == rt_expr.args_[0]->datum_meta_.type_);
       rt_expr.eval_func_ = ObExprSecToTime::calc_sectotime;
+      if (ObIntType == rt_expr.args_[0]->datum_meta_.type_) {
+        rt_expr.eval_vector_func_ = ObExprSecToTime::calc_sectotime_vector;
+      }
   }
   return ret;
 }
@@ -196,47 +222,81 @@ int ObExprSecToTime::calc_sectotime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
   } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
     LOG_WARN("get sql mode failed", K(ret));
   } else {
-    number::ObNumber num_usec;
-    number::ObNumber num_sec;
-    number::ObNumber million;
-    int64_t int_usec = 0;
-    char local_buff[number::ObNumber::MAX_BYTE_LEN * 3];
-    ObDataBuffer local_alloc(local_buff, number::ObNumber::MAX_BYTE_LEN * 3);
-    if (OB_FAIL(num_sec.from(param_datum->get_number(), local_alloc))) {
-      LOG_WARN("failed to create number", K(ret), K(number::ObNumber(param_datum->get_number())));
-    } else if (OB_FAIL(million.from(static_cast<int64_t>(1000000), local_alloc))) {
-      LOG_WARN("failed to create number million", K(ret));
-    } else if (OB_FAIL(num_sec.mul(million, num_usec, local_alloc))) {
-      LOG_WARN("failed to mul number", K(ret), K(num_sec), K(million));
-    } else if (OB_FAIL(num_usec.round(0))) {
-      LOG_WARN("failed to round number", K(ret), K(num_usec));
-    } else if (!num_usec.is_valid_int64(int_usec)) {
-      int_usec = num_usec.is_negative() ? -INT64_MAX : INT64_MAX;
-    }
-    if (OB_SUCC(ret)) {
-      if (num_usec.is_negative()) {
-        int_usec = -int_usec;
+    if (ObIntType == expr.args_[0]->datum_meta_.type_) {
+      int64_t int_sec = param_datum->get_int();
+      if (int_sec > ObExprSecToTime::MAX_SECOND_INPUT_VALUE) {
+        int_sec = ObExprSecToTime::MAX_SECOND_INPUT_VALUE;
+      } else if (int_sec < ObExprSecToTime::MIN_SECOND_INPUT_VALUE) {
+        int_sec = ObExprSecToTime::MIN_SECOND_INPUT_VALUE;
       }
-      if (OB_FAIL(ObTimeConverter::time_overflow_trunc(int_usec))) {
-        uint64_t cast_mode = 0;
-        ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-                                          session->is_ignore_stmt(),
-                                          sql_mode, cast_mode);
-        if (CM_IS_WARN_ON_FAIL(cast_mode)) {
-          ret = OB_SUCCESS;
-          expr_datum.set_null();
-        } else {
-          LOG_WARN("time value is out of range", K(ret), K(int_usec));
+      expr_datum.set_time(int_sec * ObExprSecToTime::USEC_PER_SECOND);
+    } else if (ObNumberType == expr.args_[0]->datum_meta_.type_) {
+      number::ObNumber num_usec;
+      number::ObNumber num_sec;
+      number::ObNumber million;
+      int64_t int_usec = 0;
+      char local_buff[number::ObNumber::MAX_BYTE_LEN * 3];
+      ObDataBuffer local_alloc(local_buff, number::ObNumber::MAX_BYTE_LEN * 3);
+      if (OB_FAIL(num_sec.from(param_datum->get_number(), local_alloc))) {
+        LOG_WARN("failed to create number", K(ret), K(number::ObNumber(param_datum->get_number())));
+      } else if (OB_FAIL(million.from(static_cast<int64_t>(1000000), local_alloc))) {
+        LOG_WARN("failed to create number million", K(ret));
+      } else if (OB_FAIL(num_sec.mul(million, num_usec, local_alloc))) {
+        LOG_WARN("failed to mul number", K(ret), K(num_sec), K(million));
+      } else if (OB_FAIL(num_usec.round(0))) {
+        LOG_WARN("failed to round number", K(ret), K(num_usec));
+      } else if (!num_usec.is_valid_int64(int_usec)) {
+        int_usec = num_usec.is_negative() ? -INT64_MAX : INT64_MAX;
+      }
+      if (OB_SUCC(ret)) {
+        if (num_usec.is_negative()) {
+          int_usec = -int_usec;
+        }
+        if (OB_FAIL(ObTimeConverter::time_overflow_trunc(int_usec))) {
+          uint64_t cast_mode = 0;
+          ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                            session->is_ignore_stmt(),
+                                            sql_mode, cast_mode);
+          if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+            ret = OB_SUCCESS;
+            expr_datum.set_null();
+          } else {
+            LOG_WARN("time value is out of range", K(ret), K(int_usec));
+          }
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (num_usec.is_negative()) {
-        int_usec = -int_usec;
+      if (OB_SUCC(ret)) {
+        if (num_usec.is_negative()) {
+          int_usec = -int_usec;
+        }
+        expr_datum.set_time(int_usec);
       }
-      expr_datum.set_time(int_usec);
     }
   }
+  return ret;
+}
+
+template <typename ArgVec, typename ResVec>
+int sectotime_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  DateType days = 0;
+  UsecType usec = 0;
+  bool no_skip_no_null = bound.get_all_rows_active() && !arg_vec->has_null()
+                          && eval_flags.accumulate_bit_cnt(bound) == 0;
+  ObTime ob_time;
+  BATCH_CALC({
+    int64_t int_sec = arg_vec->get_int(idx);
+    if (int_sec > ObExprSecToTime::MAX_SECOND_INPUT_VALUE) {
+      int_sec = ObExprSecToTime::MAX_SECOND_INPUT_VALUE;
+    } else if (int_sec < ObExprSecToTime::MIN_SECOND_INPUT_VALUE) {
+      int_sec = ObExprSecToTime::MIN_SECOND_INPUT_VALUE;
+    }
+    res_vec->set_time(idx, int_sec * ObExprSecToTime::USEC_PER_SECOND);
+  });
   return ret;
 }
 
@@ -245,6 +305,28 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprSecToTime, raw_expr) {
   if (is_mysql_mode()) {
     SET_LOCAL_SYSVAR_CAPACITY(1);
     EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
+  }
+  return ret;
+}
+
+int ObExprSecToTime::calc_sectotime_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval date_format param", K(ret));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
+
+    if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {
+      ret = sectotime_vector<IntegerFixedVec, IntegerFixedVec>(expr, ctx, skip, bound);
+    } else {
+      ret = sectotime_vector<ObVectorBase, ObVectorBase>(expr, ctx, skip, bound);
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("expr calculation failed", K(ret));
+    }
   }
   return ret;
 }
@@ -745,31 +827,6 @@ int ObExprDayName::calc_result_type1(ObExprResType &type,
   return OB_SUCCESS;
 }
 
-#define EPOCH_WDAY    4       // 1970-1-1 is thursday.
-#define CHECK_SKIP_NULL(idx) {                    \
-  if (skip.at(idx) || eval_flags.at(idx)) {    \
-    continue;                                  \
-  } else if (arg_vec->is_null(idx)) {          \
-    res_vec->set_null(idx);                    \
-    eval_flags.set(idx);                       \
-    continue;                                  \
-  }                                            \
-}
-
-#define BATCH_CALC(BODY) {                                                 \
-  if (OB_LIKELY(no_skip_no_null)) {                                               \
-    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) { \
-      BODY;                                                                       \
-    }                                                                             \
-  } else {                                                                        \
-    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) { \
-      CHECK_SKIP_NULL(idx);                                                       \
-      BODY;                                                                       \
-    }                                                                             \
-  }                                                                               \
-}
-
-
 template <typename ArgVec, typename ResVec, typename IN_TYPE>
 int vector_dayofyear(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
 {
@@ -804,7 +861,8 @@ int vector_dayofyear(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip
         if (std::is_same<IN_TYPE, ObMySQLDate>::value || std::is_same<IN_TYPE, ObMySQLDateTime>::value) {
           if (OB_FAIL(ObTimeConverter::parse_ob_time<IN_TYPE>(in_val, ob_time))) {
             LOG_WARN("parse_ob_time fail", K(ret));
-          } else if (OB_FAIL(ObTimeConverter::validate_datetime(ob_time, date_sql_mode))) {
+          } else if (!ObTimeConverter::validate_datetime_fast(ob_time) &&
+              OB_FAIL(ObTimeConverter::validate_datetime(ob_time, date_sql_mode))) {
             ret = OB_SUCCESS;
             res_vec->set_null(idx);
           } else {
@@ -827,7 +885,6 @@ int vector_dayofyear(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip
             res_vec->set_int(idx, dt_yday);
           }
         }
-        eval_flags.set(idx);
       });
     }
   }
@@ -873,8 +930,11 @@ int ObExprDayOfYear::calc_dayofyear_vector(const ObExpr &expr, ObEvalCtx &ctx, c
       DISPATCH_DAY_OF_EXPR_VECTOR(vector_dayofyear, Date);
     } else if (ObDateTimeTC == ob_obj_type_class(arg_type)) {
       DISPATCH_DAY_OF_EXPR_VECTOR(vector_dayofyear, DateTime);
+    } else if (ObStringTC == ob_obj_type_class(arg_type)) {
+      DISPATCH_STRING_CALC_EXPR_VECTOR(ObExprTimeBase::calc_for_string_vector, DT_YDAY, true);
+    } else if (ob_is_int_uint_tc(arg_type)) {
+      DISPATCH_INTEGER_CALC_EXPR_VECTOR(ObExprTimeBase::calc_for_integer_vector, DT_YDAY);
     }
-
     if (OB_FAIL(ret)) {
       LOG_WARN("expr calculation failed", K(ret));
     }
@@ -929,7 +989,6 @@ int vector_dayofmonth(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &ski
           }
         }
         res_vec->set_int(idx, dt_mday);
-        eval_flags.set(idx);
       });
     }
   }
@@ -952,8 +1011,11 @@ int ObExprDayOfMonth::calc_dayofmonth_vector(const ObExpr &expr, ObEvalCtx &ctx,
       DISPATCH_DAY_OF_EXPR_VECTOR(vector_dayofmonth, Date);
     } else if (ObDateTimeTC == ob_obj_type_class(arg_type)) {
       DISPATCH_DAY_OF_EXPR_VECTOR(vector_dayofmonth, DateTime);
+    } else if (ObStringTC == ob_obj_type_class(arg_type)) {
+      DISPATCH_STRING_CALC_EXPR_VECTOR(ObExprTimeBase::calc_for_string_vector, DT_MDAY, false);
+    } else if (ob_is_int_uint_tc(arg_type)) {
+      DISPATCH_INTEGER_CALC_EXPR_VECTOR(ObExprTimeBase::calc_for_integer_vector, DT_MDAY);
     }
-
     if (OB_FAIL(ret)) {
       LOG_WARN("expr calculation failed", K(ret));
     }
@@ -995,7 +1057,6 @@ int vector_dayofweek(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip
           int64_t dayofweek = days % 7 + 1;  // start from sun. copy from calc_dayofweek
           res_vec->set_int(idx, dayofweek);
         }
-        eval_flags.set(idx);
       });
     }
   }
@@ -1018,6 +1079,10 @@ int ObExprDayOfWeek::calc_dayofweek_vector(const ObExpr &expr, ObEvalCtx &ctx, c
       DISPATCH_DAY_OF_EXPR_VECTOR(vector_dayofweek, Date);
     } else if (ObDateTimeTC == ob_obj_type_class(arg_type)) {
       DISPATCH_DAY_OF_EXPR_VECTOR(vector_dayofweek, DateTime);
+    } else if (ObStringTC == ob_obj_type_class(arg_type)) {
+      DISPATCH_STRING_CALC_EXPR_VECTOR(ObExprTimeBase::calc_for_string_vector, DT_WDAY, true);
+    } else if (ob_is_int_uint_tc(arg_type)) {
+      DISPATCH_INTEGER_CALC_EXPR_VECTOR(ObExprTimeBase::calc_for_integer_vector, DT_WDAY);
     }
 
     if (OB_FAIL(ret)) {
@@ -1076,7 +1141,6 @@ int vector_dayname(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, 
           size_t len = strlen(day_name[dt_wday-1]);
           res_vec->set_string(idx, ObString(len, day_name[dt_wday-1]));
         }
-        eval_flags.set(idx);
       });
     }
   }
@@ -1127,6 +1191,10 @@ int ObExprDayName::calc_dayname_vector(const ObExpr &expr, ObEvalCtx &ctx, const
       DISPATCH_DAYNAME_EXPR_VECTOR(Date);
     } else if (ObDateTimeTC == ob_obj_type_class(arg_type)) {
       DISPATCH_DAYNAME_EXPR_VECTOR(DateTime);
+    } else if (ObStringTC == ob_obj_type_class(arg_type)) {
+      DISPATCH_STRING_NAME_EXPR_VECTOR(ObExprTimeBase::calc_name_for_string_vector, DT_WDAY);
+    } else if (ob_is_int_uint_tc(arg_type)) {
+      DISPATCH_INTEGER_NAME_EXPR_VECTOR(ObExprTimeBase::calc_name_for_integer_vector, DT_WDAY);
     }
 
     if (OB_FAIL(ret)) {

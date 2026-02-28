@@ -36,6 +36,10 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_timediff_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
+  template <typename ArgVec1, typename ArgVec2, typename ResVec>
+  static int calc_timediff_for_string_vector(const ObExpr &expr, ObEvalCtx &ctx,
+    const ObBitVector &skip, const EvalBound &bound);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
@@ -46,7 +50,8 @@ private:
   static int get_diff_value_with_ob_time(common::ObTime &ot1,
                                          common::ObTime &ot2,
                                          const common::ObTimeZoneInfo *tz_info,
-                                         int64_t &diff);
+                                         int64_t &diff,
+                                         ObTimeZoneInfoPos *literal_tz_info);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTimeDiff);
 

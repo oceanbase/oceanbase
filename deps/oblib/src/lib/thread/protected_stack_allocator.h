@@ -60,7 +60,7 @@ public:
   public:
     Guard(StackMgr& mgr) : mgr_(mgr), cur_(nullptr)
     {
-      mgr_.rwlock_.rdlock(common::ObLatchIds::DEFAULT_SPIN_RWLOCK);
+      mgr_.rwlock_.rdlock(common::ObLatchIds::STACK_MGR_LOCK);
       cur_ = mgr_.dummy_.next_;
     }
     ~Guard() { mgr_.rwlock_.unlock(); }

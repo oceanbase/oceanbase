@@ -84,6 +84,7 @@ int ObSSTableRowLockChecker::check_row_locked(
     const bool check_exist,
     const share::SCN &snapshot_version,
     const int64_t base_version,
+    const SCN &inc_major_trans_version,
     ObStoreRowLockState &lock_state)
 {
   int ret = OB_SUCCESS;
@@ -98,6 +99,7 @@ int ObSSTableRowLockChecker::check_row_locked(
     row_lock_checker->set_lock_state(&lock_state);
     row_lock_checker->set_snapshot_version(snapshot_version);
     row_lock_checker->set_base_version(base_version);
+    row_lock_checker->set_inc_major_trans_version(inc_major_trans_version);
     row_lock_checker->set_check_exist(check_exist);
     if (OB_FAIL(ObSSTableRowScanner::inner_get_next_row(store_row))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -147,7 +149,8 @@ int ObSSTableRowLockMultiChecker::init(
 int ObSSTableRowLockMultiChecker::check_row_locked(
     const bool check_exist,
     const share::SCN &snapshot_version,
-    const int64_t base_version)
+    const int64_t base_version,
+    const SCN &inc_major_trans_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_opened_)) {
@@ -159,6 +162,7 @@ int ObSSTableRowLockMultiChecker::check_row_locked(
     auto *row_lock_checker = static_cast<ObMicroBlockRowLockMultiChecker *>(micro_scanner_);
     row_lock_checker->set_snapshot_version(snapshot_version);
     row_lock_checker->set_base_version(base_version);
+    row_lock_checker->set_inc_major_trans_version(inc_major_trans_version);
     row_lock_checker->set_check_exist(check_exist);
 
     while(OB_SUCC(ret)) {
@@ -210,7 +214,6 @@ int ObSSTableRowLockMultiChecker::fetch_row(ObSSTableReadHandle &read_handle)
       LOG_DEBUG("all prefetched blocks checked", K(ret), K(read_handle),
           K(prefetcher_.cur_micro_data_fetch_idx_), K(prefetcher_.is_prefetch_end_));
       if (prefetcher_.is_prefetch_end_) {
-        multi_checker->inc_empty_read(read_handle);
         ++prefetcher_.cur_range_fetch_idx_;
       }
     }
@@ -223,6 +226,8 @@ int ObSSTableRowLockMultiChecker::fetch_row(ObSSTableReadHandle &read_handle)
       if (OB_FAIL(multi_checker->get_next_row(unused_row))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Failed to get next row", K(ret));
+        } else {
+          multi_checker->inc_empty_read(read_handle);
         }
       }
       LOG_DEBUG("one block checked", K(ret), K(read_handle),
@@ -264,7 +269,6 @@ int ObSSTableRowLockMultiChecker::open_cur_data_block(ObSSTableReadHandle &read_
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K_(prefetcher), K(read_handle));
   } else {
-    micro_block_multi_checker->inc_empty_read(read_handle);
     micro_block_multi_checker->reuse();
     blocksstable::ObMicroIndexInfo &micro_info = prefetcher_.current_micro_info();
     ObMicroBlockDataHandle &micro_handle = prefetcher_.current_micro_handle();

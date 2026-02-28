@@ -55,6 +55,34 @@ TEST(ObMicroBlockHeader, normal)
   ASSERT_STRNE(NULL, out);
 }
 
+TEST(ObMicroBlockHeader, oldVersionCompat)
+{
+  ObArenaAllocator tmp_allocator;
+  int64_t buf_len = 2 * 1024, pos = 0, read_pos = 0;
+  char *buf = static_cast<char *>(tmp_allocator.alloc(buf_len));
+
+  ObMicroBlockHeader header;
+  ObMicroBlockHeader des_header;
+  header.magic_ = MICRO_BLOCK_HEADER_MAGIC;
+  header.version_ = ObMicroBlockHeader::MICRO_BLOCK_HEADER_VERSION_LATEST;
+  header.row_store_type_ = 1;
+  header.column_count_ = 10;
+  header.rowkey_column_count_ = 3;
+  header.has_column_checksum_ = true;
+  header.column_checksums_ = reinterpret_cast<int64_t *>(buf + ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET);
+  for (int64_t idx = 0; idx < header.column_count_; ++idx) {
+    header.column_checksums_[idx] = idx + 100;
+  }
+  header.header_size_ = header.get_serialize_size();
+
+  ASSERT_EQ(OB_SUCCESS, header.serialize(buf, buf_len, pos));
+  ASSERT_EQ(OB_SUCCESS, des_header.deserialize(buf, pos, read_pos));
+  for (int64_t idx = 0; idx < header.column_count_; ++idx) {
+    ASSERT_EQ(des_header.column_checksums_[idx], header.column_checksums_[idx]);
+  }
+  COMMON_LOG(INFO, "print", K(header), K(des_header));
+}
+
 TEST(ObMacroBlockCommonHeader, normal)
 {
   //check() test

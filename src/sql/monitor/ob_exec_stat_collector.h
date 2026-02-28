@@ -87,7 +87,8 @@ public:
   template <class T>
       OB_INLINE static void record_exec_timestamp(const T &process,
                                         bool is_first,  //是否是第一次执行时记录，而不是retry
-                                        ObExecTimestamp &exec_timestamp)
+                                        ObExecTimestamp &exec_timestamp,
+                                        bool async_resp_used = false)
       {
         exec_timestamp.rpc_send_ts_ = process.get_send_timestamp();
         exec_timestamp.receive_ts_ = process.get_receive_timestamp();
@@ -96,7 +97,11 @@ public:
         exec_timestamp.before_process_ts_ = process.get_process_timestamp();
         exec_timestamp.single_process_ts_ = process.get_single_process_timestamp();
         exec_timestamp.process_executor_ts_ = process.get_exec_start_timestamp();
-        exec_timestamp.executor_end_ts_ = process.get_exec_end_timestamp();
+        if (!async_resp_used || exec_timestamp.executor_end_ts_ == 0) {
+          exec_timestamp.executor_end_ts_ = process.get_exec_end_timestamp();
+        } else {
+          // For async commiting. The executor_end_ts_ is updated in end_trans
+        }
 
         if (is_first) {
           /* packet 遇见的事件顺序：

@@ -245,7 +245,7 @@ class ObLocalSafeArena final : public ObLocalArena
 {
 public:
   ObLocalSafeArena(const lib::ObLabel &label, const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE)
-    : ObLocalArena(label, page_size), lock_() {}
+    : ObLocalArena(label, page_size), lock_(common::ObLatchIds::OB_COMPACTION_MEMORY_CONTEXT_LOCK) {}
   virtual ~ObLocalSafeArena() {}
   virtual void *alloc(const int64_t sz) override
   {

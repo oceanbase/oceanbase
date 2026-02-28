@@ -17,6 +17,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/hash_func/murmur_hash.h"
 #include "lib/hash/ob_hashutils.h"
+#include "lib/utility/ob_macro_utils.h"
 #include "share/ob_define.h"
 
 namespace oceanbase
@@ -1225,6 +1226,47 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigDefaultMicroBlockFormatVersionChecker);
 };
 
+class ObConfigUseDistinctWithExpansionChecker : public ObConfigChecker
+{
+public:
+  ObConfigUseDistinctWithExpansionChecker() {}
+  virtual ~ObConfigUseDistinctWithExpansionChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigUseDistinctWithExpansionChecker);
+};
+
+class ObConfigObDALChecker: public ObConfigChecker
+{
+public:
+  ObConfigObDALChecker() {}
+  virtual ~ObConfigObDALChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigObDALChecker);
+};
+
+class ObConfigObjectStorageAsyncIOChecker: public ObConfigChecker
+{
+public:
+  ObConfigObjectStorageAsyncIOChecker() {}
+  virtual ~ObConfigObjectStorageAsyncIOChecker() {}
+  virtual bool check(const ObConfigItem &t) const override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigObjectStorageAsyncIOChecker);
+};
+
+class ObSQLFuncExtensionChecker
+  : public ObConfigChecker
+{
+public:
+  ObSQLFuncExtensionChecker() {}
+  virtual ~ObSQLFuncExtensionChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSQLFuncExtensionChecker);
+};
+
 class ObConfigDefaultDeltaFormatChecker : public ObConfigChecker
 {
 public:
@@ -1232,6 +1274,7 @@ public:
   virtual ~ObConfigDefaultDeltaFormatChecker() = default;
   bool check(const ObConfigItem &t) const;
   DISABLE_COPY_ASSIGN(ObConfigDefaultDeltaFormatChecker);
+
 };
 
 

@@ -192,6 +192,8 @@ ObDtlBasicChannel::ObDtlBasicChannel(
           peer_id_(id ^ 1),
           write_buffer_(nullptr),
           process_buffer_(nullptr),
+          send_sem_(common::ObWaitEventIds::DTL_PROCESS_BUFFER_SEND_WAIT),
+          recv_sem_(common::ObWaitEventIds::DTL_PROCESS_BUFFER_RECEIVE_WAIT),
           alloc_new_buf_(false),
           seq_no_(0),
           send_buffer_cnt_(0),
@@ -240,8 +242,14 @@ int ObDtlBasicChannel::wait_response()
 {
   int ret = OB_SUCCESS;
   if (msg_response_.is_in_process()) {
+    if (belong_to_transmit_data()) {
+      channel_loop_->begin_wait_time_counting();
+    }
     if (OB_FAIL(msg_response_.wait(get_channel_type()))) {
       LOG_WARN("send previous message fail", K(ret));
+    }
+    if (belong_to_transmit_data()) {
+      channel_loop_->end_wait_time_counting();
     }
     if (OB_HASH_NOT_EXIST == ret) {
       if (is_drain()) {
@@ -668,9 +676,9 @@ int ObDtlBasicChannel::process1(
         mock_buffer.set_data_msg(true);
         ObDtlMsgType type = ObDtlMsgType::PX_DATUM_ROW;
         if (OB_ISNULL(result_info) || !result_info->is_rich_format()) {
-          mock_buffer.set_buf(reinterpret_cast<char *>(&datum_iter_));
+          mock_buffer.set_buf(reinterpret_cast<char *>(&datum_iter_), sizeof(datum_iter_));
         } else {
-          mock_buffer.set_buf(reinterpret_cast<char *>(&row_iter_));
+          mock_buffer.set_buf(reinterpret_cast<char *>(&row_iter_), sizeof(row_iter_));
           mock_buffer.set_row_meta(result_info->get_row_store()->get_row_meta());
           type = ObDtlMsgType::PX_VECTOR_ROW;
         }

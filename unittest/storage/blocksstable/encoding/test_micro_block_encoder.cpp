@@ -210,11 +210,13 @@ TEST_F(TestDictLargeVarchar, test_dict_large_varchar)
 
   ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
 
-  char *buf = nullptr;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder.data_buffer_.data();
+  const int64_t size = encoder.data_buffer_.length();
 
-  ObMicroBlockData micro_data(buf, size);
+  ObMicroBlockData micro_data;
+  ASSERT_EQ(OB_SUCCESS, micro_data.init_with_prepare_micro_header(buf, size));
   ObMicroBlockDecoder decoder;
   ObDatumRow read_row;
   ASSERT_EQ(OB_SUCCESS, read_row.init(full_column_cnt_));
@@ -274,6 +276,7 @@ TEST_F(TestColumnEqualExceptionList, test_column_equal_ext_offset_overflow)
     row.storage_datums_[1].set_string(fixed_varchar, fixed_varchar_len);
     row.storage_datums_[2].set_string(fixed_varchar, fixed_varchar_len);
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+    STORAGE_LOG(INFO, "write row", K(i), K(row));
     ++row_cnt;
   }
 
@@ -284,24 +287,26 @@ TEST_F(TestColumnEqualExceptionList, test_column_equal_ext_offset_overflow)
     row.storage_datums_[1].set_string(diff_varchar1, diff_varchar_len - i);
     row.storage_datums_[2].set_string(diff_varchar2, diff_varchar_len - i);
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+    STORAGE_LOG(INFO, "write row", K(i + 200), K(row));
     ++row_cnt;
   }
 
   ASSERT_EQ(row_cnt, encoder.get_row_count());
+
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder.data_buffer_.data();
+  const int64_t size = encoder.data_buffer_.length();
   const int64_t encoder_checksum = encoder.get_micro_block_checksum();
 
-  STORAGE_LOG(INFO, "before build block", K(encoder_checksum), K(row_cnt), K(encoder.get_row_count()));
-
-  char *buf = nullptr;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, size));
   STORAGE_LOG(INFO, "after build block", KPC(encoder.encoders_[0]), KPC(encoder.encoders_[1]), KPC(encoder.encoders_[2]));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObColumnHeader::COLUMN_EQUAL);
   ObColumnEqualEncoder *ce_encoder = static_cast<ObColumnEqualEncoder *>(encoder.encoders_[1]);
   ASSERT_EQ(true, ce_encoder->base_meta_writer_.meta_.is_var_exc());
 
   // decode and checksum
-  ObMicroBlockData micro_data(buf, size);
+  ObMicroBlockData micro_data;
+  ASSERT_EQ(OB_SUCCESS, micro_data.init_with_prepare_micro_header(buf, size));
   ObMicroBlockDecoder decoder;
   ObDatumRow read_row;
   ASSERT_EQ(OB_SUCCESS, read_row.init(column_cnt_));
@@ -311,7 +316,7 @@ TEST_F(TestColumnEqualExceptionList, test_column_equal_ext_offset_overflow)
 
   for (int64_t i = 0; i < row_cnt; ++i) {
     ASSERT_EQ(OB_SUCCESS, decoder.get_row(i, read_row));
-    STORAGE_LOG(DEBUG, "read row", K(read_row));
+    STORAGE_LOG(INFO, "read row", K(i), K(read_row));
     for (int64_t j = 0; j < column_cnt_; ++j) {
       const bool is_invalid_datum = (read_row.storage_datums_[j].is_null() && read_row.storage_datums_[j].len_ != 0);
       ASSERT_EQ(false, is_invalid_datum);
@@ -320,8 +325,6 @@ TEST_F(TestColumnEqualExceptionList, test_column_equal_ext_offset_overflow)
         read_row.storage_datums_, read_row.get_column_count()));
   }
   ASSERT_EQ(checksum_helper.get_row_checksum(), encoder_checksum);
-
-
 }
 
 static ObObjType test_string_diff[2] = {ObIntType, ObVarcharType};
@@ -386,13 +389,15 @@ TEST_F(TestStringDiffNullLength, test_string_diff_null_length)
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
 
-  char *buf = nullptr;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, size));
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, encoder.build_micro_block_desc_in_unittest(micro_block_desc));
+  const char *buf = encoder.data_buffer_.data();
+  const int64_t size = encoder.data_buffer_.length();
 
-  LOG_INFO("show sizes", K(encoder.length_), K(size));
+  LOG_INFO("show sizes", K(encoder.length_), K(size), K(encoder.micro_header_));
 
-  ObMicroBlockData micro_data(buf, size);
+  ObMicroBlockData micro_data;
+  ASSERT_EQ(OB_SUCCESS, micro_data.init_with_prepare_micro_header(buf, size));
   ObMicroBlockDecoder decoder;
   ObDatumRow read_row;
   ASSERT_EQ(OB_SUCCESS, read_row.init(2));

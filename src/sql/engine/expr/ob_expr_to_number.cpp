@@ -242,7 +242,6 @@ int ObExprToNumber::calc_tonumber_expr_batch(
           continue;
         } else if (datum_array[j].is_null()) {
           results[j].set_null();
-          eval_flags.set(j);
         } else if (1 == expr.arg_cnt_) {
           ObNumStackOnceAlloc tmp_alloc;
           ObPrecision res_precision = -1;
@@ -262,7 +261,6 @@ int ObExprToNumber::calc_tonumber_expr_batch(
             LOG_WARN("to_number failed", K(ret));
           } else {
             results[j].set_number(res_nmb);
-            eval_flags.set(j);
           }
         } else {
           ObNFMToNumber nfm;
@@ -273,7 +271,6 @@ int ObExprToNumber::calc_tonumber_expr_batch(
                      K(ret), K(datum_array[j].get_string()), K(fmt_datum->get_string()));
           } else {
             results[j].set_number(res_nmb);
-            eval_flags.set(j);
           }
         }
       }

@@ -247,6 +247,92 @@ inline int ob_charset_char_len<CHARSET_GB18030>(const unsigned char *s, const un
   return mb_len;
 }
 
+// charpos functions
+
+// Inline charset character position function.
+//
+// The return value is the byte offset of the first byte of the length-th character processed.
+// Note: This value may exceed the actual string length when length is greater than the string character count,
+// so use with caution!
+//
+// This generic template works for most charsets. For better performance on specific charsets,
+// you may further specialize this function.
+template<ObCharsetType cs_type>
+inline size_t ob_charset_char_pos(const unsigned char *s, const unsigned char *e, size_t length) {
+  const unsigned char *start = s;
+  while (length && s < e) {
+    int mb_len = ob_charset_char_len<cs_type>(s, e);
+    if (mb_len <= 0) {
+      mb_len = 1; // Handle error cases, at least skip 1 byte
+    }
+    s += mb_len;
+    length--;
+  }
+  return (size_t)(s - start);
+}
+
+//UTF16 - Need special handling, at least skip 2 bytes when error occurs
+template<>
+inline size_t ob_charset_char_pos<CHARSET_UTF16>(const unsigned char *s, const unsigned char *e, size_t length) {
+  const unsigned char *start = s;
+  while (length && s < e) {
+    int mb_len = ob_charset_char_len<CHARSET_UTF16>(s, e);
+    if (mb_len <= 0) {
+      mb_len = 2;
+    }
+    s += mb_len;
+    length--;
+  }
+  return (size_t)(s - start);
+}
+
+//UTF16LE - Need special handling, at least skip 2 bytes when error occurs
+template<>
+inline size_t ob_charset_char_pos<CHARSET_UTF16LE>(const unsigned char *s, const unsigned char *e, size_t length) {
+  const unsigned char *start = s;
+  while (length && s < e) {
+    int mb_len = ob_charset_char_len<CHARSET_UTF16LE>(s, e);
+    if (mb_len <= 0) {
+      mb_len = 2;
+    }
+    s += mb_len;
+    length--;
+  }
+  return (size_t)(s - start);
+}
+
+// strlen char functions
+
+//inlined charset strlen char functions
+// This general template can handle most charsets.
+// For single-byte charsets, it will use the specialized version below.
+// If there are still performance issues, you can further specialize separately.
+template<ObCharsetType cs_type>
+inline size_t ob_charset_strlen_char(const unsigned char *s, const unsigned char *e) {
+  size_t count = 0;
+  while (s < e) {
+    int mb_len = ob_charset_char_len<cs_type>(s, e);
+    if (mb_len <= 0) {
+      mb_len = 1; // Handle error cases, at least skip 1 byte
+    }
+    s += mb_len;
+    count++;
+  }
+  return count;
+}
+
+// Single-byte charsets: BINARY, ASCII, etc.
+// For these charsets, character count equals byte count
+template<>
+inline size_t ob_charset_strlen_char<CHARSET_BINARY>(const unsigned char *s, const unsigned char *e) {
+  return (size_t)(e - s);
+}
+
+template<>
+inline size_t ob_charset_strlen_char<CHARSET_ASCII>(const unsigned char *s, const unsigned char *e) {
+  return (size_t)(e - s);
+}
+
 //inlined charset decode functions
 template<ObCharsetType cs_type>
 inline int ob_charset_decode_unicode(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
@@ -1344,6 +1430,512 @@ public:
     return ret;
   }
 };
+
+class ObCharsetStringHelper {
+public:
+  OB_INLINE static bool is_ascii_less_8(const char *str, int64_t len)
+  {
+      bool is_not_ascii = true;
+      const uint8_t *val = reinterpret_cast<const uint8_t *>(str);
+      switch (len) {
+      case 0:
+        is_not_ascii = false;
+          break;
+      case 1:
+          is_not_ascii = (0x80 & val[0]);
+          break;
+      case 2:
+          is_not_ascii = 0x8080 & *((const uint16_t *)val);
+          break;
+      case 3:
+          is_not_ascii = (0x8080 & *(const uint16_t *)val) | (0x80 & val[2]);
+          break;
+      case 4:
+          is_not_ascii = (0x80808080U & *((const uint32_t *)val));
+          break;
+      case 5:
+          is_not_ascii = (0x80808080U & *((const uint32_t *)val)) | (0x80 & val[4]);
+          break;
+      case 6:
+          is_not_ascii = (0x80808080U & *(const uint32_t *)val) | (0x8080 & *(const uint16_t *)(val + 4));
+          break;
+      case 7:
+          is_not_ascii = (0x80808080U & *(const uint32_t *)val) | (0x80808080U & *(const uint32_t *)(val + 3));
+          break;
+      }
+      return !is_not_ascii;
+  }
+
+  OB_INLINE static bool is_ascii_str(const char *str, const int64_t len)
+  {
+    bool bret = true;
+    if (len >= 8) {
+      const int64_t length = len / 8;
+      const uint64_t *vals = reinterpret_cast<const uint64_t *>(str);
+      for (int64_t i = 0; bret && i < length; i++) {
+        if (vals[i] & 0x8080808080808080UL) {
+          bret = false;
+        }
+      }
+      bret = bret && is_ascii_less_8(str + len / 8 * 8, len % 8);
+    } else {
+      bret = is_ascii_less_8(str, len);
+    }
+    return bret;
+  }
+
+  OB_INLINE static bool can_do_ascii_optimize(common::ObCollationType cs_type)
+  {
+    return is_utf8_gbk_charset(cs_type);
+  }
+
+  // Currently, optimizations are only applied to these commonly used collations.
+  OB_INLINE static bool is_utf8_gbk_charset(common::ObCollationType cs_type)
+  {
+    return common::CS_TYPE_UTF8MB4_GENERAL_CI == cs_type
+        || common::CS_TYPE_UTF8MB4_BIN == cs_type
+        || common::CS_TYPE_UTF8MB4_UNICODE_CI == cs_type
+        || common::CS_TYPE_GBK_CHINESE_CI == cs_type
+        || common::CS_TYPE_GBK_BIN == cs_type;
+  }
+
+  // strlen_char for optimized charsets (UTF8MB4 and GBK)
+  // Uses template specialization for better performance
+  OB_INLINE static size_t strlen_char_optimized(ObCollationType coll_type,
+                                                const char *str,
+                                                int64_t str_len)
+  {
+    size_t ret = 0;
+    // Directly check the 5 common collation types
+    if (coll_type == CS_TYPE_UTF8MB4_GENERAL_CI ||
+        coll_type == CS_TYPE_UTF8MB4_BIN ||
+        coll_type == CS_TYPE_UTF8MB4_UNICODE_CI) {
+      ret = ob_charset_strlen_char<CHARSET_UTF8MB4>(
+          reinterpret_cast<const unsigned char *>(str),
+          reinterpret_cast<const unsigned char *>(str + str_len));
+    } else if (coll_type == CS_TYPE_GBK_CHINESE_CI ||
+               coll_type == CS_TYPE_GBK_BIN) {
+      ret = ob_charset_strlen_char<CHARSET_GBK>(
+          reinterpret_cast<const unsigned char *>(str),
+          reinterpret_cast<const unsigned char *>(str + str_len));
+    } else {
+       // If not one of the 5 common collation types, fall back to general version
+      ret = strlen_char_general(coll_type, str, str_len);
+    }
+    return ret;
+  }
+
+  // strlen_char for other charsets
+  // Gets charset type and switches to corresponding template specialization
+  static size_t strlen_char_general(ObCollationType coll_type,
+                                              const char *str,
+                                              int64_t str_len)
+  {
+    ObCharsetType cs_type = ObCharset::charset_type_by_coll(coll_type);
+    const unsigned char *s = reinterpret_cast<const unsigned char *>(str);
+    const unsigned char *e = reinterpret_cast<const unsigned char *>(str + str_len);
+    size_t ret = 0;
+
+    switch (cs_type) {
+      case CHARSET_UTF8MB4:
+        ret = ob_charset_strlen_char<CHARSET_UTF8MB4>(s, e);
+      case CHARSET_GBK:
+        ret = ob_charset_strlen_char<CHARSET_GBK>(s, e);
+      case CHARSET_SJIS:
+        ret = ob_charset_strlen_char<CHARSET_SJIS>(s, e);
+      case CHARSET_BIG5:
+        ret = ob_charset_strlen_char<CHARSET_BIG5>(s, e);
+      case CHARSET_HKSCS:
+        ret = ob_charset_strlen_char<CHARSET_HKSCS>(s, e);
+      case CHARSET_GB2312:
+        ret = ob_charset_strlen_char<CHARSET_GB2312>(s, e);
+      case CHARSET_HKSCS31:
+        ret = ob_charset_strlen_char<CHARSET_HKSCS31>(s, e);
+      case CHARSET_UJIS:
+        ret = ob_charset_strlen_char<CHARSET_UJIS>(s, e);
+      case CHARSET_EUCKR:
+        ret = ob_charset_strlen_char<CHARSET_EUCKR>(s, e);
+      case CHARSET_CP932:
+        ret = ob_charset_strlen_char<CHARSET_CP932>(s, e);
+      case CHARSET_EUCJPMS:
+        ret = ob_charset_strlen_char<CHARSET_EUCJPMS>(s, e);
+      case CHARSET_UTF16:
+        ret = ob_charset_strlen_char<CHARSET_UTF16>(s, e);
+      case CHARSET_UTF16LE:
+        ret = ob_charset_strlen_char<CHARSET_UTF16LE>(s, e);
+      case CHARSET_GB18030:
+        ret = ob_charset_strlen_char<CHARSET_GB18030>(s, e);
+      case CHARSET_BINARY:
+        ret = ob_charset_strlen_char<CHARSET_BINARY>(s, e);
+      case CHARSET_ASCII:
+        ret = ob_charset_strlen_char<CHARSET_ASCII>(s, e);
+      default:
+        // Fall back to standard ObCharset function for unsupported charsets
+        ret = ObCharset::strlen_char(coll_type, str, str_len);
+    }
+    return ret;
+  }
+
+  // charpos for optimized charsets (UTF8MB4 and GBK)
+  // Uses template specialization for better performance.
+  //
+  // The return value is the byte offset of the first byte of the length-th character processed.
+  // Note: This value may exceed the actual string length when length is greater than the string character count,
+  // so use with caution!
+  OB_INLINE static size_t charpos_optimized(ObCollationType coll_type,
+                                            const char *str,
+                                            int64_t str_len,
+                                            int64_t length)
+  {
+    size_t ret = 0;
+    // Directly check the 5 common collation types
+    if (coll_type == CS_TYPE_UTF8MB4_GENERAL_CI ||
+        coll_type == CS_TYPE_UTF8MB4_BIN ||
+        coll_type == CS_TYPE_UTF8MB4_UNICODE_CI) {
+      ret = ob_charset_char_pos<CHARSET_UTF8MB4>(
+          reinterpret_cast<const unsigned char *>(str),
+          reinterpret_cast<const unsigned char *>(str + str_len),
+          length);
+    } else if (coll_type == CS_TYPE_GBK_CHINESE_CI ||
+               coll_type == CS_TYPE_GBK_BIN) {
+      ret = ob_charset_char_pos<CHARSET_GBK>(
+          reinterpret_cast<const unsigned char *>(str),
+          reinterpret_cast<const unsigned char *>(str + str_len),
+          length);
+    } else {
+      // If not one of the 5 common collation types, fall back to general version
+      ret = charpos_general(coll_type, str, str_len, length);
+    }
+    return ret;
+  }
+
+  // charpos for other charsets
+  // Gets charset type and switches to corresponding template specialization
+  //
+  // The return value is the byte offset of the first byte of the length-th character processed.
+  // Note: This value may exceed the actual string length when length is greater than the string character count,
+  // so use with caution!
+  static size_t charpos_general(ObCollationType coll_type,
+                                          const char *str,
+                                          int64_t str_len,
+                                          int64_t length)
+  {
+    ObCharsetType cs_type = ObCharset::charset_type_by_coll(coll_type);
+    const unsigned char *s = reinterpret_cast<const unsigned char *>(str);
+    const unsigned char *e = reinterpret_cast<const unsigned char *>(str + str_len);
+    size_t ret = 0;
+    switch (cs_type) {
+      case CHARSET_UTF8MB4:
+        ret = ob_charset_char_pos<CHARSET_UTF8MB4>(s, e, length);
+      case CHARSET_GBK:
+        ret = ob_charset_char_pos<CHARSET_GBK>(s, e, length);
+      case CHARSET_SJIS:
+        ret = ob_charset_char_pos<CHARSET_SJIS>(s, e, length);
+      case CHARSET_BIG5:
+        ret = ob_charset_char_pos<CHARSET_BIG5>(s, e, length);
+      case CHARSET_HKSCS:
+        ret = ob_charset_char_pos<CHARSET_HKSCS>(s, e, length);
+      case CHARSET_GB2312:
+        ret = ob_charset_char_pos<CHARSET_GB2312>(s, e, length);
+      case CHARSET_HKSCS31:
+        ret = ob_charset_char_pos<CHARSET_HKSCS31>(s, e, length);
+      case CHARSET_UJIS:
+        ret = ob_charset_char_pos<CHARSET_UJIS>(s, e, length);
+      case CHARSET_EUCKR:
+        ret = ob_charset_char_pos<CHARSET_EUCKR>(s, e, length);
+      case CHARSET_CP932:
+        ret = ob_charset_char_pos<CHARSET_CP932>(s, e, length);
+      case CHARSET_EUCJPMS:
+        ret = ob_charset_char_pos<CHARSET_EUCJPMS>(s, e, length);
+      case CHARSET_UTF16:
+        ret = ob_charset_char_pos<CHARSET_UTF16>(s, e, length);
+      case CHARSET_UTF16LE:
+        ret = ob_charset_char_pos<CHARSET_UTF16LE>(s, e, length);
+      case CHARSET_GB18030:
+        ret = ob_charset_char_pos<CHARSET_GB18030>(s, e, length);
+      case CHARSET_BINARY:
+        ret = ob_charset_char_pos<CHARSET_BINARY>(s, e, length);
+      case CHARSET_ASCII:
+        ret = ob_charset_char_pos<CHARSET_ASCII>(s, e, length);
+      default:
+        // Fall back to standard ObCharset function for unsupported charsets
+        ret = ObCharset::charpos(coll_type, str, str_len, length);
+    }
+    return ret;
+  }
+
+  OB_INLINE static int fast_strlen_char(const ObCollationType coll_type,
+                                        const ObString &str,
+                                        bool is_ascii)
+  {
+    if (is_ascii) {
+      return str.length();
+    } else if (can_do_ascii_optimize(coll_type)) {
+      if (is_ascii_str(str.ptr(), str.length())) {
+        return str.length();
+      } else {
+        return strlen_char_optimized(coll_type, str.ptr(), str.length());
+      }
+    } else {
+      return strlen_char_general(coll_type, str.ptr(), str.length());
+    }
+  }
+
+  template <bool is_ascii, bool can_do_ascii_optimize>
+  OB_INLINE static int32_t fast_strlen_char(const ObCollationType coll_type, const ObString &str)
+  {
+    if constexpr (is_ascii) {
+      return str.length();
+    } else if constexpr (can_do_ascii_optimize) {
+      if (is_ascii_str(str.ptr(), str.length())) {
+        return str.length();
+      } else {
+        return strlen_char_optimized(coll_type, str.ptr(), str.length());
+      }
+    } else {
+      return strlen_char_general(coll_type, str.ptr(), str.length());
+    }
+  }
+
+  // The return value is the byte offset of the first byte of the length-th character processed.
+  // Note: This value may exceed the actual string length when length is greater than the string character count,
+  // so use with caution!
+  OB_INLINE static int fast_charpos(const ObCollationType coll_type,
+                                    const ObString &str,
+                                    int64_t length,
+                                    bool is_ascii)
+  {
+    if (is_ascii) {
+      return length;
+    } else if (can_do_ascii_optimize(coll_type)) {
+      if (is_ascii_str(str.ptr(), std::min<int64_t>(length, str.length()))) {
+        return length;
+      } else {
+        return charpos_optimized(coll_type, str.ptr(), str.length(), length);
+      }
+    } else {
+      return charpos_general(coll_type, str.ptr(), str.length(), length);
+    }
+  }
+
+  // The return value is the byte offset of the first byte of the length-th character processed.
+  // Note: This value may exceed the actual string length when length is greater than the string character count,
+  // so use with caution!
+  template <bool is_ascii, bool can_do_ascii_optimize>
+  OB_INLINE static int32_t fast_charpos(const ObCollationType coll_type, const ObString &str, int32_t length)
+  {
+    if constexpr (is_ascii) {
+      return length;
+    } else if constexpr (can_do_ascii_optimize) {
+      if (is_ascii_str(str.ptr(), std::min<int64_t>(length, str.length()))) {
+        return length;
+      } else {
+        return charpos_optimized(coll_type, str.ptr(), str.length(), length);
+      }
+    } else {
+      return charpos_general(coll_type, str.ptr(), str.length(), length);
+    }
+  }
+
+  OB_INLINE static int fast_display_len(const ObCollationType coll_type,
+                                        const ObString &str,
+                                        bool is_ascii,
+                                        int64_t &width)
+  {
+    int ret = OB_SUCCESS;
+    if (is_ascii || (can_do_ascii_optimize(coll_type) && is_ascii_str(str.ptr(), str.length()))) {
+      width = str.length();
+    } else {
+      ret = ObCharset::display_len(coll_type, str, width);
+    }
+    return ret;
+  }
+
+  template <bool is_ascii, bool can_do_ascii_optimize>
+  OB_INLINE static int fast_display_len(const ObCollationType coll_type, const ObString &str, int64_t &width)
+  {
+    int ret = OB_SUCCESS;
+    if constexpr (is_ascii) {
+      width = str.length();
+    } else if constexpr (can_do_ascii_optimize) {
+      if (is_ascii_str(str.ptr(), str.length())) {
+        width = str.length();
+      } else {
+        ret = ObCharset::display_len(coll_type, str, width);
+      }
+    } else {
+      ret = ObCharset::display_len(coll_type, str, width);
+    }
+    return ret;
+  }
+
+  // max_width should be less then str.length()
+  OB_INLINE static int fast_display_charpos(const ObCollationType coll_type,
+                                            const char *str,
+                                            int64_t str_length,
+                                            int64_t max_width,
+                                            bool is_ascii,
+                                            int64_t &char_pos,
+                                            int64_t &total_width)
+  {
+    int ret = OB_SUCCESS;
+    if (is_ascii || (can_do_ascii_optimize(coll_type) && is_ascii_str(str, std::min<int64_t>(max_width, str_length)))) {
+      char_pos = total_width = max_width;
+    } else {
+      ret = ObCharset::max_display_width_charpos(
+          coll_type, str, str_length, max_width, char_pos, &total_width);
+    }
+    return ret;
+  }
+
+  // max_width should be less then str.length()
+  template <bool is_ascii, bool can_do_ascii_optimize>
+  OB_INLINE static int fast_display_charpos(const ObCollationType coll_type,
+                                            const ObString &str,
+                                            int64_t max_width,
+                                            int64_t &char_pos,
+                                            int64_t &total_width)
+  {
+    int ret = OB_SUCCESS;
+    if constexpr (is_ascii) {
+      char_pos = total_width = max_width;
+    } else if constexpr (can_do_ascii_optimize) {
+      if (is_ascii_str(str.ptr(), std::min<int64_t>(max_width, str.length()))) {
+        char_pos = total_width = max_width;
+      } else {
+        ret = ObCharset::max_display_width_charpos(coll_type, str.ptr(), str.length(), max_width, char_pos, &total_width);
+      }
+    } else {
+      ret = ObCharset::max_display_width_charpos(
+          coll_type, str.ptr(), str.length(), max_width, char_pos, &total_width);
+    }
+    return ret;
+  }
+
+  // char_len for optimized charsets (UTF8MB4 and GBK)
+  // Uses template specialization for better performance.
+  OB_INLINE static size_t charlen_optimized(ObCollationType coll_type,
+                                             const char *str,
+                                             int64_t str_len)
+  {
+    size_t ret = 0;
+    // Directly check the 5 common collation types
+    if (CS_TYPE_UTF8MB4_GENERAL_CI == coll_type ||
+        CS_TYPE_UTF8MB4_BIN == coll_type ||
+        CS_TYPE_UTF8MB4_UNICODE_CI == coll_type) {
+      ret = ob_charset_char_len<CHARSET_UTF8MB4>(reinterpret_cast<const unsigned char *>(str),
+                                                  reinterpret_cast<const unsigned char *>(str + str_len));
+    } else if (CS_TYPE_GBK_CHINESE_CI == coll_type ||
+               CS_TYPE_GBK_BIN == coll_type) {
+      ret = ob_charset_char_len<CHARSET_GBK>(reinterpret_cast<const unsigned char *>(str),
+                                              reinterpret_cast<const unsigned char *>(str + str_len));
+    } else {
+      ret = char_len_general(coll_type, str, str_len);
+    }
+    return ret;
+  }
+
+  static size_t char_len_general(ObCollationType coll_type,
+                                 const char *str,
+                                 int64_t str_len)
+  {
+    ObCharsetType cs_type = ObCharset::charset_type_by_coll(coll_type);
+    const unsigned char *s = reinterpret_cast<const unsigned char *>(str);
+    const unsigned char *e = reinterpret_cast<const unsigned char *>(str + str_len);
+    size_t ret = 0;
+    switch (cs_type) {
+      case CHARSET_UTF8MB4:
+        ret = ob_charset_char_len<CHARSET_UTF8MB4>(s, e);
+      case CHARSET_GBK:
+        ret = ob_charset_char_len<CHARSET_GBK>(s, e);
+      case CHARSET_SJIS:
+        ret = ob_charset_char_len<CHARSET_SJIS>(s, e);
+      case CHARSET_BIG5:
+        ret = ob_charset_char_len<CHARSET_BIG5>(s, e);
+      case CHARSET_HKSCS:
+        ret = ob_charset_char_len<CHARSET_HKSCS>(s, e);
+      case CHARSET_GB2312:
+        ret = ob_charset_char_len<CHARSET_GB2312>(s, e);
+      case CHARSET_HKSCS31:
+        ret = ob_charset_char_len<CHARSET_HKSCS31>(s, e);
+      case CHARSET_UJIS:
+        ret = ob_charset_char_len<CHARSET_UJIS>(s, e);
+      case CHARSET_EUCKR:
+        ret = ob_charset_char_len<CHARSET_EUCKR>(s, e);
+      case CHARSET_CP932:
+        ret = ob_charset_char_len<CHARSET_CP932>(s, e);
+      case CHARSET_EUCJPMS:
+        ret = ob_charset_char_len<CHARSET_EUCJPMS>(s, e);
+      case CHARSET_UTF16:
+        ret = ob_charset_char_len<CHARSET_UTF16>(s, e);
+      case CHARSET_UTF16LE:
+        ret = ob_charset_char_len<CHARSET_UTF16LE>(s, e);
+      case CHARSET_GB18030:
+        ret = ob_charset_char_len<CHARSET_GB18030>(s, e);
+      case CHARSET_BINARY:
+        ret = ob_charset_char_len<CHARSET_BINARY>(s, e);
+      case CHARSET_ASCII:
+        ret = ob_charset_char_len<CHARSET_ASCII>(s, e);
+      default:{
+        // Fall back to standard ObCharset function for unsupported charsets
+        int64_t char_len = 0;
+        ObCharset::first_valid_char(coll_type, str, str_len, char_len);
+        ret = char_len;
+      }
+    }
+    return ret;
+  }
+  OB_INLINE static const char* ascii_locate(const char* phaystack, int64_t haylen, const char* pneedle, int64_t neelen)
+  {
+    const unsigned char* haystack = (const unsigned char*)phaystack;
+    const unsigned char* hayend = (const unsigned char*)phaystack + haylen;
+    const unsigned char* needlestart = (const unsigned char*)pneedle;
+    const unsigned char* needle = (const unsigned char*)pneedle;
+    const unsigned char* needleend = (const unsigned char*)pneedle + neelen;
+    const char* ret = nullptr;
+    for (; haystack < hayend; ++haystack) {
+      unsigned char hay = *haystack;
+      unsigned char nee = *needle;
+      if (hay == nee) {
+        if (++needle == needleend) {
+          ret = (const char*)(haystack + 1 - neelen);
+          break;
+        }
+      } else if (needle != needlestart) {
+        // must back up haystack in case a prefix matched (find "aab" in "aaab")
+        haystack -= needle - needlestart; // for loop will advance one more
+        needle = needlestart;
+      }
+    }
+    return ret;
+  }
+
+  OB_INLINE static uint32_t locate_optimized(ObCollationType collation_type,
+                                                              const char *str1,
+                                                              int64_t str1_len,
+                                                              const char *str2,
+                                                              int64_t str2_len,
+                                                              int64_t pos)
+  {
+    uint32_t result = 0;
+    int64_t start0 = pos - 1;
+    if (OB_UNLIKELY(pos <= 0 || pos > str1_len)) {
+      result = 0;
+    } else {
+      int64_t start_offset= ObCharsetStringHelper::charpos_optimized(collation_type, str1, str1_len, start0);
+      const char* start_ptr = str1 + start_offset;
+      if (start_offset + str2_len > str1_len) {
+        result = 0;
+      } else if (0 == str2_len) {
+        result = static_cast<uint32_t>(start_offset) + 1;
+      } else {
+        const char* res_ptr = ascii_locate(start_ptr, str1_len - start_offset, str2, str2_len);
+        result = res_ptr ? ObCharsetStringHelper::strlen_char_optimized(collation_type, start_ptr, res_ptr - start_ptr) + pos : 0;
+      }
+    }
+    return result;
+  }
+}; // ObCharsetStringHelper
 
 
 }

@@ -15,6 +15,7 @@
 #include "ob_lob_location.h"
 #include "observer/ob_server.h"
 #include "sql/das/ob_das_utils.h"
+#include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
 
 namespace oceanbase
 {
@@ -90,6 +91,14 @@ int ObLobLocationUtil::is_remote(ObLobAccessParam& param, bool& is_remote, commo
         LOG_WARN("fail to get retry info", K(ret), KPC(lob_locator));
       } else {
         dst_addr = retry_info->addr_;
+        // defend cross-cluster: retry_info addr should belong to current cluster
+        bool is_exist = false;
+        if (OB_FAIL(SVR_TRACER.is_server_exist(dst_addr, is_exist))) {
+          LOG_WARN("check server exist in current cluster failed", K(ret), K(dst_addr));
+        } else if (!is_exist) {
+          ret = OB_PACKET_CLUSTER_ID_NOT_MATCH;
+          LOG_WARN("lob retry dst_addr not in current cluster", K(ret), K(dst_addr), K(self_addr), KPC(lob_locator));
+        }
       }
     } else {
       if (OB_FAIL(get_ls_leader(param, tenant_id, param.ls_id_, dst_addr))) {
@@ -127,6 +136,14 @@ int ObLobLocationUtil::lob_check_tablet_not_exist(ObLobAccessParam &param, uint6
     //table could be dropped
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist, fast fail das task", K(table_id));
+  } else if (table_schema->is_oracle_tmp_table_v2() || table_schema->is_oracle_tmp_table_v2_index_table()) {
+    if (OB_FAIL(ObTabletToGlobalTmpTableOperator::check_tablet_exist(*GCTX.sql_proxy_, param.tenant_id_,
+                                        table_id, param.tablet_id_, tablet_exist))) {
+      LOG_WARN("failed to check if tablet exists", K(ret), K(param), K(table_id));
+    } else if (!tablet_exist) {
+      ret = OB_PARTITION_NOT_EXIST;
+      LOG_WARN("partition not exist, maybe dropped by DDL", K(ret), K(param), K(table_id));
+    }
   } else if (OB_FAIL(table_schema->check_if_tablet_exists(param.tablet_id_, tablet_exist))) {
     LOG_WARN("check if tablet exists failed", K(ret), K(param), K(table_id));
   } else if (!tablet_exist) {

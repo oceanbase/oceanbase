@@ -12,6 +12,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "observer/ob_server_event_history_table_operator.h"
 namespace oceanbase
 {
 using namespace share;
@@ -34,33 +35,32 @@ int ObBatchFreezeTabletsDag::inner_init()
   return ret;
 }
 
-int64_t ObBatchFreezeTabletsParam::to_string(char *buf, const int64_t buf_len) const
+int64_t ObBatchFreezeTabletsParam::to_string(
+  char *buf, const int64_t buf_len,
+  const int64_t start_idx, const int64_t end_idx) const
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(param_type), K_(ls_id), K_(compaction_scn), K_(batch_size), K_(loop_cnt));
-  if (tablet_info_array_.count() > 0) {
+  J_KV(K_(param_type), K_(ls_id), K_(compaction_scn), K_(batch_size), K_(loop_cnt), K(tablet_info_array_.count()), K(start_idx), K(end_idx));
+  if (tablet_info_array_.count() > 0 && start_idx >= 0 && start_idx <= end_idx && end_idx <= tablet_info_array_.count()) {
     J_COMMA();
     J_NAME("tablet_info_array");
     J_COLON();
     J_ARRAY_START();
     int64_t last_schedule_merge_scn = -1;
-    int64_t last_co_major_merge_type = -1;
-    for (int64_t i = 0; i < tablet_info_array_.count(); ++i) {
+    for (int64_t i = start_idx; i < end_idx; ++i) {
       const ObTabletSchedulePair &tablet_pair = tablet_info_array_.at(i);
       if (i != 0) {
         J_COMMA();
       }
       J_OBJ_START();
       J_KV("tablet_id", tablet_pair.tablet_id_);
-      // check schedule_merge_scn and co_major_merge_type is same with last one
-      if (tablet_pair.schedule_merge_scn_ != last_schedule_merge_scn &&
-          tablet_pair.co_major_merge_type_ != last_co_major_merge_type) {
-        // if different, print full schedule_merge_scn and co_major_merge_type
+      // check schedule_merge_scn and co_major_merge_strategy is same with last one
+      if (tablet_pair.schedule_merge_scn_ != last_schedule_merge_scn) {
+        // if different, print full schedule_merge_scn and co_major_merge_strategy
         J_COMMA();
-        J_KV("schedule_merge_scn", tablet_pair.schedule_merge_scn_, "co_major_merge_type", tablet_pair.co_major_merge_type_);
+        J_KV("schedule_merge_scn", tablet_pair.schedule_merge_scn_, "co_major_merge_strategy", tablet_pair.co_major_merge_strategy_);
         last_schedule_merge_scn = tablet_pair.schedule_merge_scn_;
-        last_co_major_merge_type = tablet_pair.co_major_merge_type_;
       }
       // else only print tablet_id
       J_OBJ_END();
@@ -70,6 +70,7 @@ int64_t ObBatchFreezeTabletsParam::to_string(char *buf, const int64_t buf_len) c
   J_OBJ_END();
   return pos;
 }
+
 bool ObBatchFreezeTabletsDag::operator == (const ObIDag &other) const
 {
   bool is_same = true;
@@ -93,7 +94,8 @@ bool ObBatchFreezeTabletsDag::operator == (const ObIDag &other) const
  *  ----------------------------------------ObBatchFreezeTabletsTask--------------------------------------------
  */
 ObBatchFreezeTabletsTask::ObBatchFreezeTabletsTask()
-  : ObBatchExecTask(ObITask::TASK_TYPE_BATCH_FREEZE_TABLETS)
+  : ObBatchExecTask(ObITask::TASK_TYPE_BATCH_FREEZE_TABLETS),
+    schedule_major_dag_cnt_(0)
 {
 }
 
@@ -160,9 +162,13 @@ int ObBatchFreezeTabletsTask::inner_process()
   } // end for
 
   cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
-  FLOG_INFO("batch freeze tablets finished", KR(ret), K(param), K(start_idx), K(end_idx),
-    K_(cnt), K(cost_ts));
-
+  FLOG_INFO("batch freeze tablets finished", KR(ret), K_(cnt), K_(schedule_major_dag_cnt), K(cost_ts),
+    "param_in_task", ObPrintBatchFreezeTabletsParam(param, start_idx, end_idx), K(start_idx), K(end_idx));
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("merge_errsim", "batch_freeze",
+    "schedule_major_dag_cnt", schedule_major_dag_cnt_,
+    "cnt", cnt_);
+#endif
   return ret;
 }
 
@@ -188,10 +194,13 @@ int ObBatchFreezeTabletsTask::schedule_tablet_major_after_freeze(
     // no need to schedule merge
   } else if (OB_FAIL(ObTenantTabletScheduler::schedule_merge_dag(
                  ls.get_ls_id(), *tablet, MEDIUM_MERGE,
-                 cur_pair.schedule_merge_scn_, EXEC_MODE_LOCAL, nullptr/*dag_net_id*/, cur_pair.co_major_merge_type_))) {
+                 cur_pair.schedule_merge_scn_, EXEC_MODE_LOCAL, nullptr/*dag_net_id*/, cur_pair.co_major_merge_strategy_))) {
     if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
       LOG_WARN("failed to schedule medium merge dag", K(ret), "ls_id", ls.get_ls_id(), K(cur_pair));
     }
+  } else {
+    ++schedule_major_dag_cnt_;
+    LOG_DEBUG("schedule medium merge dag success", K(ret), "ls_id", ls.get_ls_id(), K(cur_pair));
   }
   return ret;
 }

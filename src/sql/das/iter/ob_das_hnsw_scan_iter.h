@@ -350,7 +350,7 @@ private:
   int build_rowkey_vid_range();
   int init_rel_map(ObPluginVectorIndexAdaptor* adaptor);
   bool is_hnsw_bq() const { return OB_NOT_NULL(vec_aux_ctdef_) && vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;}
-  bool is_ipivf() const { return OB_NOT_NULL(vec_aux_ctdef_) && vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF;}
+  bool is_ipivf() const { return OB_NOT_NULL(vec_aux_ctdef_) && (vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF || vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ);}
   bool need_save_distance_result() {
     return is_hybrid_ ? distance_calc_ != nullptr : (distance_calc_ != nullptr && !is_hnsw_bq());
   }
@@ -445,9 +445,9 @@ private:
   int init_sort(const ObDASVecAuxScanCtDef *ir_ctdef, ObDASVecAuxScanRtDef *ir_rtdef);
   int set_vec_index_param(ObString vec_index_param) { return ob_write_string(vec_op_alloc_, vec_index_param, vec_index_param_); }
   int get_extra_info_by_vids(ObPluginVectorIndexAdaptor *adaptor, const ObSimpleMaxHeap &heap,
-                             ObVecExtraInfoPtr &extra_info_ptr);
+                            ObVecIdxQueryResult &dist_result, ObVecExtraInfoPtr &extra_info_ptr);
   int do_get_extra_info_by_vids(ObPluginVectorIndexAdaptor *adaptor, const ObSimpleMaxHeap &heap, int64_t *vids_idx,
-                                int64_t *vids, bool get_snap, ObVecExtraInfoPtr &extra_info_ptr);
+                                int64_t *vids, ObVectorIndexSegment *segment, ObVecExtraInfoPtr &extra_info_ptr);
 
   int get_extra_idx_in_outexprs(ObIArray<int64_t> &extra_in_rowkey_idxs);
   bool can_be_last_search(int64_t old_ef, int64_t need_cnt_next, float select_ratio);
@@ -611,14 +611,6 @@ private:
     BruteForceContext() : limit(0) {}
   };
 
-  struct DistanceResult {
-    const float* distances_inc;
-    const float* distances_snap;
-    int brute_cnt;
-
-    DistanceResult() : distances_inc(nullptr), distances_snap(nullptr), brute_cnt(0) {}
-  };
-
   int init_brute_force_params(ObVectorQueryAdaptorResultContext *ada_ctx,
                               ObPluginVectorIndexAdaptor* adaptor,
                               BruteForceContext& ctx);
@@ -627,9 +619,9 @@ private:
                                   const ObString& search_vec,
                                   int64_t* brute_vids,
                                   int brute_cnt,
-                                  DistanceResult& dist_result);
+                                  ObVecIdxQueryResult& dist_result);
 
-  int merge_and_sort_brute_force_results_bq(const DistanceResult& dist_result,
+  int merge_and_sort_brute_force_results_bq(const ObVecIdxQueryResult& dist_result,
                                             int64_t* brute_vids,
                                             int brute_cnt,
                                             ObSimpleMaxHeap& snap_heap,
@@ -640,10 +632,11 @@ private:
   int build_brute_force_result_iterator_bq(ObPluginVectorIndexAdaptor* adaptor,
                                            const ObSimpleMaxHeap& snap_heap,
                                            const ObSimpleMaxHeap& incr_heap,
+                                           ObVecIdxQueryResult &dist_result,
                                            ObVectorQueryVidIterator*& result_iter);
 
   void release_brute_force_distance_memory(ObPluginVectorIndexAdaptor* adaptor,
-                                          const DistanceResult& dist_result);
+                                          const ObVecIdxQueryResult& dist_result);
   inline void swap_vid_iter () {
     tmp_adaptor_vid_iter_ = adaptor_vid_iter_;
     adaptor_vid_iter_ = nullptr;
@@ -663,21 +656,20 @@ public:
   ~ObSimpleMaxHeap() {}
   int init();
   int release();
-  // is_snap true: vid is geted by snap in adapter
-  //         false: vid is geted by inc in adapter
-  void push(int64_t vid, double distiance, bool is_snap);
+
+  void push(int64_t vid, double distiance, const ObVectorIndexSegment *segment);
   void max_heap_sort();
   int64_t at(uint64_t idx) const;
   double value_at(uint64_t idx) const;
-  bool is_snap(uint64_t idx) const;
+  ObVectorIndexSegment* segment_at(uint64_t idx) const;
   uint64_t get_size() const { return size_; }
 
 private:
   struct ObSortItem {
     int64_t vid_;
     double distance_;
-    bool is_snap_;
-    ObSortItem(int64_t vid, double distance, bool is_snap) : vid_(vid), distance_(distance), is_snap_(is_snap) {}
+    const ObVectorIndexSegment *segment_;
+    ObSortItem(int64_t vid, double distance, const ObVectorIndexSegment *segment) : vid_(vid), distance_(distance), segment_(segment) {}
 
     bool operator<(const ObSortItem& other) const {
         return distance_ < other.distance_;

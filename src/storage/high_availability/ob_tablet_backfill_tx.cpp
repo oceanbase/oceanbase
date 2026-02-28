@@ -35,7 +35,7 @@ ObBackfillTXCtx::ObBackfillTXCtx()
   : task_id_(),
     ls_id_(),
     backfill_scn_(SCN::min_scn()),
-    lock_(),
+    lock_(common::ObLatchIds::OB_TABLET_BACKFILL_TX_LOCK),
     tablet_info_index_(0),
     tablet_info_array_()
 {
@@ -1193,8 +1193,8 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
               break;
             }
           } else if (!memtable->is_can_flush()) {
-            is_memtable_ready = false;
-          }
+              is_memtable_ready = false;
+            }
         }
 
         if (OB_SUCC(ret)) {
@@ -1620,6 +1620,7 @@ int ObTabletTableFinishBackfillTXTask::prepare_merge_ctx_()
   param_.tablet_id_ = tablet_info_.tablet_id_;
   param_.skip_get_tablet_ = true;
   param_.merge_type_ = table_handle_.get_table()->is_memtable() ? compaction::ObMergeType::MINI_MERGE : compaction::ObMergeType::MINOR_MERGE;
+
   bool unused_finish_flag = false;
   int64_t local_rebuild_seq = 0;
   ObTabletBackfillTXDag *dag = static_cast<ObTabletBackfillTXDag *>(get_dag());
@@ -1723,7 +1724,7 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_for_ss_()
     const int64_t rebuild_seq = tablet_merge_ctx_.get_ls_rebuild_seq();
     const int64_t transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
     const share::SCN end_scn = sstable->get_end_scn();
-    const bool has_truncate_info = tablet->has_truncate_info();
+    const bool has_merged_with_mds_info = tablet->has_merged_with_mds_info();
     const bool need_check_sstable = compaction::is_minor_merge(tablet_merge_ctx_.get_merge_type()) || compaction::is_history_minor_merge(tablet_merge_ctx_.get_merge_type());
 
     ObUpdateTableStoreParam param(snapshot_version,
@@ -1736,7 +1737,7 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_for_ss_()
     ObCompactionTableStoreParam compaction_param(compaction::ObMergeType::MINI_MERGE,
                                                  end_scn,
                                                  false/*need_report*/,
-                                                 has_truncate_info);
+                                                 has_merged_with_mds_info);
 
     if (OB_FAIL(param.init_with_ha_info(ha_param))) {
       LOG_WARN("failed to init param with ha info", K(ret), K(param));
@@ -2197,7 +2198,9 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_table_merge_ctx_(
     static_param.private_transfer_epoch_ = private_transfer_epoch;
     tablet_merge_ctx.static_desc_.private_transfer_epoch_ = private_transfer_epoch;
 
-    if (OB_FAIL(tablet_merge_ctx.init_tablet_merge_info())) {
+    if (OB_FAIL(static_param.init_merge_version_range(static_param.version_range_))) {
+      LOG_WARN("failed to init merge version_range", K(ret), K(static_param));
+    } else if (OB_FAIL(tablet_merge_ctx.init_tablet_merge_info())) {
       LOG_WARN("failed to init tablet merge info", K(ret), K(ls_id_), K(tablet_info_), K(tablet_merge_ctx));
     } else if (OB_FAIL(tablet->get_mds_table_rec_scn(static_param.rec_scn_))) {
       LOG_WARN("fail to get mds table rec scn", K(ret), KPC(tablet));
@@ -2350,6 +2353,8 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_sstable_merge_ctx_(
 
     if (OB_FAIL(tablet_merge_ctx.prepare_merge_tables(mds_sstable_array))) {
       LOG_WARN("failed to prepare merge tables", K(ret), K(mds_sstable_array));
+    } else if (OB_FAIL(static_param.init_merge_version_range(static_param.version_range_))) {
+      LOG_WARN("failed to init merge version_range", K(ret), K(static_param));
     } else if (OB_FAIL(tablet_merge_ctx.prepare_schema())) {
       LOG_WARN("failed to prepare schema", K(ret), K(tablet_merge_ctx));
     } else if (OB_FAIL(tablet_merge_ctx.build_ctx_after_init(unused_finish_flag))) {
@@ -2620,8 +2625,7 @@ int ObTabletBackfillMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge
       // backfill use the rec scn of origin sstable
       get_merge_table_result.rec_scn_ = backfill_table_handle_.get_table()->get_rec_scn();
       get_merge_table_result.merge_version_ = ObVersionRange::MIN_VERSION;
-      get_merge_table_result.is_backfill_ = true;
-      get_merge_table_result.backfill_scn_ = backfill_scn_;
+      get_merge_table_result.fill_tx_info_.set_special_fill_tx_type(ObFillTxType::FILL_TX_TYPE_BACKFILL, backfill_scn_);
       get_merge_table_result.error_location_= nullptr;
       get_merge_table_result.schedule_major_ = false;
       get_merge_table_result.update_tablet_directly_ = false; //only for mini, local sstable version range already contains mini will update tablet directly

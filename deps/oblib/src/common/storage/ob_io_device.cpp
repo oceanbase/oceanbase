@@ -21,9 +21,10 @@ namespace common {
  */
 ObIOFd::ObIOFd(ObIODevice *device_handle, const int64_t first_id,
     const int64_t second_id, const int64_t third_id,
-    const int64_t fd_id, const int64_t slot_version)
+    const int64_t fd_id, const int64_t slot_version,
+    const bool is_object_storage_async_io)
   : first_id_(first_id), second_id_(second_id), third_id_(third_id),
-    fd_id_(fd_id), slot_version_(slot_version), device_handle_(device_handle)
+    fd_id_(fd_id), slot_version_(slot_version), is_object_storage_async_io_(is_object_storage_async_io), device_handle_(device_handle)
 {
 }
 
@@ -34,6 +35,7 @@ void ObIOFd::reset()
   third_id_ = -1;
   fd_id_ = -1;
   slot_version_ = -1;
+  is_object_storage_async_io_ = false;
   device_handle_ = nullptr;
 }
 uint64_t ObIOFd::hash() const
@@ -44,6 +46,7 @@ uint64_t ObIOFd::hash() const
   hash_val = murmurhash(&third_id_, sizeof(third_id_), hash_val);
   hash_val = murmurhash(&fd_id_, sizeof(fd_id_), hash_val);
   hash_val = murmurhash(&slot_version_, sizeof(slot_version_), hash_val);
+  hash_val = murmurhash(&is_object_storage_async_io_, sizeof(is_object_storage_async_io_), hash_val);
   return hash_val;
 }
 
@@ -201,6 +204,19 @@ int ObIODevice::get_device_name(char *buf, int32_t len)
   } else {
     snprintf(buf, len, "DeviceType:%d/MediaID:%ld", device_type_, media_id_);
   }
+  return ret;
+}
+
+int ObIODevice::io_prepare_upload_part(
+    const ObIOFd &fd,
+    void *buf,
+    size_t count,
+    int64_t part_id,
+    ObIOCB *iocb,
+    void *callback)
+{
+  int ret = OB_NOT_SUPPORTED;
+  OB_LOG(WARN, "not supported io_prepare_upload_part", KR(ret), K(fd), KP(buf), K(count), K(part_id), KP(iocb), KP(callback));
   return ret;
 }
 

@@ -72,8 +72,10 @@ int ObCachedTransStateMgr::get_trans_state(
     uint64_t idx = cal_idx(key);
     if (array_[idx].key_ == key && array_[idx].is_valid()) {
       trans_state = array_[cal_idx(key)];
+      ++hit_cnt_;
     } else {
       ret = OB_HASH_NOT_EXIST;
+      ++miss_cnt_;
     }
   }
   return ret;

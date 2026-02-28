@@ -47,7 +47,7 @@ int ObUpdateIndexStatusHelper::lock_objects_()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(lock_database_by_obj_name_())) {
     LOG_WARN("fail to lock databse by obj name", KR(ret));
-  } else if (OB_FAIL(latest_schema_guard_.get_database_id(arg_.database_name_, database_id_))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_database_id(arg_.database_name_, database_id_))) {
     LOG_WARN("fail to get database id", KR(ret), K_(tenant_id), K_(arg_.database_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == database_id_)) {
     ret = OB_ERR_PARALLEL_DDL_CONFLICT;
@@ -90,7 +90,7 @@ int ObUpdateIndexStatusHelper::generate_schemas_()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (INDEX_STATUS_INDEX_ERROR == new_status_ && arg_.convert_status_) {
     const ObTenantSchema *tenant_schema = nullptr;
-    if (OB_FAIL(latest_schema_guard_.get_tenant_schema(tenant_id_, tenant_schema))) {
+    if (OB_FAIL(schema_guard_wrapper_.get_tenant_schema(tenant_id_, tenant_schema))) {
       LOG_WARN("fail to get tenant schema", KR(ret));
     } else if (OB_ISNULL(tenant_schema)) {
       ret = OB_TENANT_NOT_EXIST;
@@ -101,7 +101,7 @@ int ObUpdateIndexStatusHelper::generate_schemas_()
     }
   }
   const ObDatabaseSchema *database_schema = NULL;
-  if (FAILEDx(latest_schema_guard_.get_table_schema(arg_.index_table_id_, orig_index_table_schema_))) {
+  if (FAILEDx(schema_guard_wrapper_.get_table_schema(arg_.index_table_id_, orig_index_table_schema_))) {
     LOG_WARN("fail to get index table schema", KR(ret), K_(arg_.index_table_id));
   } else if (OB_ISNULL(orig_index_table_schema_)) {
     ret = OB_ERR_OBJECT_NOT_EXIST;
@@ -111,7 +111,7 @@ int ObUpdateIndexStatusHelper::generate_schemas_()
     ret = OB_ERR_PARALLEL_DDL_CONFLICT;
     LOG_WARN("databse_id_ is not euqal to index_table's database_id",
              KR(ret), K_(database_id), K(orig_index_table_schema_->get_database_id()));
-  } else if (OB_FAIL(latest_schema_guard_.get_database_schema(database_id_, database_schema))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_database_schema(database_id_, database_schema))) {
     LOG_WARN("fail to get database schema", KR(ret), K_(tenant_id), K_(database_id));
   } else if (OB_ISNULL(database_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -123,7 +123,7 @@ int ObUpdateIndexStatusHelper::generate_schemas_()
   } else if (is_available_index_status(new_status_) && !orig_index_table_schema_->is_unavailable_index()) {
     ret = OB_EAGAIN;
     LOG_WARN("set index status to available, but previous status is not unavailable, which is not expected", KR(ret));
-  } else if (OB_FAIL(latest_schema_guard_.get_table_schema(arg_.data_table_id_, orig_data_table_schema))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_table_schema(arg_.data_table_id_, orig_data_table_schema))) {
     LOG_WARN("fail to get data table schema", KR(ret), K_(arg_.data_table_id));
   } else if (OB_ISNULL(orig_data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -193,7 +193,7 @@ int ObUpdateIndexStatusHelper::operate_schemas_()
           LOG_WARN("data_table_schema is null", KR(ret));
         } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                        arg_.task_id_))) {
-          LOG_WARN("failed to get owner id", K(ret), K_(arg_.task_id));
+          LOG_WARN("failed to get owner id", KR(ret), K_(arg_.task_id));
         } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*new_data_table_schema_,
                                                                 orig_index_table_schema_->get_table_id(),
                                                                 orig_index_table_schema_->is_global_index_table(),

@@ -85,7 +85,8 @@ private:
   int open_inner_conn_();
   int close_inner_conn_();
   static void register_for_deadlock_(sql::ObSQLSessionInfo &session_info,
-                                     const transaction::ObTransID &parent_tx_id);
+                                     const transaction::ObTransID &parent_tx_id,
+                                     const int64_t parent_tx_start_ts);
   static int implicit_end_trans_(sql::ObSQLSessionInfo &session,
                                  sql::ObExecContext &ctx,
                                  bool is_rollback,

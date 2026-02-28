@@ -14,6 +14,13 @@ PROCEDURE delete_plan (
 );
 pragma interface (C, DELETE_PLAN_INNER);
 
+PROCEDURE copy_plan (
+  source_plan VARCHAR(65535),
+  target_plan VARCHAR(65535),
+  comment VARCHAR(65535) DEFAULT ''
+);
+pragma interface (C, COPY_PLAN_INNER);
+
 PROCEDURE create_consumer_group (
   consumer_group  VARCHAR(65535),
   comment         VARCHAR(65535)  DEFAULT NULL

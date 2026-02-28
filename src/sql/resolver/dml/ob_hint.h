@@ -19,6 +19,7 @@
 #include "common/ob_version_def.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
+#include "sql/resolver/ob_sql_array.h"
 
 namespace oceanbase
 {
@@ -46,6 +47,13 @@ enum ObPlanCachePolicy
   OB_USE_PLAN_CACHE_INVALID = 0,//policy not set
   OB_USE_PLAN_CACHE_NONE,//do not use plan cache
   OB_USE_PLAN_CACHE_DEFAULT,//use plan cache
+};
+
+enum VecFilterType
+{
+  PRE_FILTER = 0,
+  POST_FILTER,
+  ADAPTIVE
 };
 
 enum class ObPxNodePolicy
@@ -168,7 +176,11 @@ public:
 
 struct ObOptParamHint
 {
-  ObOptParamHint() {};
+  ObOptParamHint(common::ObIAllocator &allocator)
+    : param_types_(allocator),
+      param_vals_(allocator)
+  {
+  }
 
   #define OPT_PARAM_TYPE_DEF(DEF)                   \
     DEF(INVALID_OPT_PARAM_TYPE, = 0)                \
@@ -236,11 +248,17 @@ struct ObOptParamHint
     DEF(EXTENDED_SQL_PLAN_MONITOR_METRICS, )        \
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
     DEF(ENABLE_DELETE_INSERT_SCAN,)                 \
+    DEF(INDEX_MERGE_THRESHOLD_FOR_MULTIVALUE,)      \
+    DEF(PARTITION_ORDERED,)                         \
+    DEF(USE_DISTINCT_WITH_EXPANSION,)               \
     DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
+    DEF(ENABLE_WINDOW_FUNCTION_STREAMING_PROCESS,)  \
     DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
+    DEF(AP_QUERY_ROUTE_POLICY,)                     \
     DEF(ENABLE_MERGE_INTO,)                         \
-
-
+    DEF(JOIN_ORDER_ENUM_THRESHOLD,)                 \
+    DEF(OPTIMIZER_MAX_PERMUTATIONS,)                \
+    DEF(IDP_STEP_REDUCTION_THRESHOLD,)              \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
@@ -249,8 +267,9 @@ struct ObOptParamHint
   int merge_opt_param_hint(const ObOptParamHint &other);
   int add_opt_param_hint(const ObString &param_name, const ObObj &val)
   { return add_opt_param_hint(get_opt_param_value(param_name), val);  }
-  int add_opt_param_hint(const OptParamType param_type, const ObObj &val);
-  int get_opt_param(const OptParamType param_type, ObObj &val) const;
+  int add_opt_param_hint(const OptParamType param_type, const ObObj &val, bool overwrite = false);
+  int remove_opt_param(const OptParamType param_type);
+  int get_opt_param(const OptParamType param_type, ObObj &val, int64_t *idx_ptr = nullptr) const;
   int has_enable_opt_param(const OptParamType param_type, bool &enabled) const;
   int print_opt_param_hint(PlanText &plan_text) const;
   int get_bool_opt_param(const OptParamType param_type, bool &val, bool &is_exists) const;
@@ -258,11 +277,14 @@ struct ObOptParamHint
   int get_bool_opt_param(const OptParamType param_type, bool &val) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val, bool &is_exists) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
+  int get_integer_opt_param(const OptParamType param_type, uint64_t &val) const;
   int get_opt_param_runtime_filter_type(int64_t &rf_type) const;
   int get_hash_rollup_param(ObObj &val, bool &has_opt_param) const;
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
   int get_disable_op_rich_format_flags(int64_t &disable_op_flags) const;
+  int get_distinct_with_expansion_param(ObString &policy, bool &has_opt_param) const;
+  int enable_window_function_streaming_process_param(bool &enabled, bool &has_opt_param) const;
 
   template<typename T>
   using GET_PARAM_FUNC = int (ObOptParamHint::*)(const OptParamType, T&) const;
@@ -278,6 +300,10 @@ struct ObOptParamHint
   int get_sys_var(const OptParamType param_type,
                   const ObSQLSessionInfo *session,
                   const share::ObSysVarClassType sys_var_id,
+                  uint64_t &val) const;
+  int get_sys_var(const OptParamType param_type,
+                  const ObSQLSessionInfo *session,
+                  const share::ObSysVarClassType sys_var_id,
                   bool &val) const;
   int get_enum_sys_var(const OptParamType param_type,
                        const ObSQLSessionInfo *session,
@@ -287,11 +313,59 @@ struct ObOptParamHint
   int check_and_get_bool_opt_param(const OptParamType param_type, bool &has_opt_param, bool &val) const;
   void reset();
   TO_STRING_KV(K_(param_types), K_(param_vals));
-  common::ObSEArray<OptParamType, 1, common::ModulePageAllocator, true> param_types_;
-  common::ObSEArray<ObObj, 1, common::ModulePageAllocator, true> param_vals_;
+  ObSqlArray<OptParamType> param_types_;
+  ObSqlArray<ObObj> param_vals_;
 };
 
-class ObDDLSchemaVersionHint;
+struct ObTableInHint
+{
+  ObTableInHint() {}
+  ObTableInHint(const common::ObString &qb_name,
+                const common::ObString &db_name,
+                const common::ObString &table_name)
+      : qb_name_(qb_name), db_name_(db_name), table_name_(table_name)
+  { }
+  ObTableInHint(const TableItem& table)
+  { set_table(table); }
+  int assign(const ObTableInHint &other);
+  bool is_match_table_item(ObCollationType cs_type, const TableItem &table_item) const;
+  bool is_match_physical_table_item(ObCollationType cs_type, const TableItem &table_item) const;
+  static bool is_match_table_item(ObCollationType cs_type,
+                                  const ObIArray<ObTableInHint> &tables,
+                                  const TableItem &table_item);
+  static bool is_match_table_items(ObCollationType cs_type,
+                                  const ObIArray<ObTableInHint> &tables,
+                                  ObIArray<TableItem *> &table_items);
+  static bool is_match_table_items(ObCollationType cs_type,
+                                   const ObIArray<ObTableInHint> &tables,
+                                   ObIArray<TableItem *> &table_items,
+                                   bool &is_all_not_match);
+  int print_table_in_hint(PlanText &plan_text, bool ignore_qb_name = false) const;
+  static int print_join_tables_in_hint(PlanText &plan_text,
+                                       const ObIArray<ObTableInHint> &tables,
+                                       bool ignore_qb_name = false);
+
+  void reset() { qb_name_.reset(); db_name_.reset(); table_name_.reset(); }
+  void set_table(const TableItem& table);
+
+  bool equal(const ObTableInHint& other) const;
+
+  DECLARE_TO_STRING;
+
+  common::ObString qb_name_;
+  common::ObString catalog_name_;
+  common::ObString db_name_;
+  common::ObString table_name_;
+};
+
+struct ObDDLSchemaVersionHint
+{
+  ObDDLSchemaVersionHint() : schema_version_(0) {}
+
+  TO_STRING_KV(K_(table), K_(schema_version));
+  ObTableInHint table_;
+  int64_t schema_version_;
+};
 
 struct ObDBLinkHit {
   ObDBLinkHit() { reset(); }
@@ -341,7 +415,7 @@ struct ObPxNodeHint {
 
 struct DisableOpRichFormatHint
 {
-  DisableOpRichFormatHint(): op_list_(), op_flags_(0) {}
+  DisableOpRichFormatHint(common::ObIAllocator &allocator): op_list_(allocator), op_flags_(0) {}
   int merge_op_list(const common::ObIArray<common::ObString> &op_list);
   int merge_hint(const DisableOpRichFormatHint &other_hint)
   {
@@ -355,13 +429,13 @@ struct DisableOpRichFormatHint
     op_flags_ = 0;
   }
   TO_STRING_KV(K_(op_list), K_(op_flags));
-  common::ObSEArray<common::ObString, 8> op_list_;
+  ObSqlArray<common::ObString> op_list_;
   int64_t op_flags_;
 };
 
 struct TriggerHint
 {
-  TriggerHint(): disable_all_(false), trigger_hints_() {}
+  TriggerHint(common::ObIAllocator &allocator): disable_all_(false), trigger_hints_(allocator) {}
   void set_disable_all(bool disable) { disable_all_ = disable; }
   bool get_disable_all() const { return disable_all_; }
 
@@ -377,11 +451,11 @@ struct TriggerHint
   TO_STRING_KV(K_(disable_all),
                K_(trigger_hints));
   bool disable_all_;
-  common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> trigger_hints_; // holds table hints whose triggers to disable
+  ObSqlArray<common::ObString> trigger_hints_; // holds table hints whose triggers to disable
 };
 
 struct ObGlobalHint {
-  ObGlobalHint() { reset(); }
+  ObGlobalHint(common::ObIAllocator &allocator);
   void reset();
   int assign(const ObGlobalHint &other);
 
@@ -420,8 +494,11 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_4_0      (oceanbase::common::cal_version(4, 4, 0, 0))
 #define COMPAT_VERSION_4_4_1      (oceanbase::common::cal_version(4, 4, 1, 0))
 #define COMPAT_VERSION_4_4_2      (oceanbase::common::cal_version(4, 4, 2, 0))
+#define COMPAT_VERSION_4_4_2_BP1  (oceanbase::common::cal_version(4, 4, 2, 1))
 #define COMPAT_VERSION_4_5_0      (oceanbase::common::cal_version(4, 5, 0, 0))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_5_0
+#define COMPAT_VERSION_4_5_1      (oceanbase::common::cal_version(4, 5, 1, 0))
+#define COMPAT_VERSION_4_6_0      (oceanbase::common::cal_version(4, 6, 0, 0))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_6_0
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && (LASTED_COMPAT_VERSION >= version || CLUSTER_CURRENT_VERSION >= version); }
 
@@ -576,18 +653,18 @@ struct ObGlobalHint {
   bool monitor_;
   ObPDMLOption pdml_option_;
   ObParamOption param_option_;
-  common::ObSArray<ObDopHint> dops_;
+  ObSqlArray<ObDopHint> dops_;
   uint64_t opt_features_version_;
   bool disable_transform_;
   bool disable_cost_based_transform_;
   ObOptParamHint opt_params_;
-  common::ObSArray<ObDDLSchemaVersionHint> ob_ddl_schema_versions_;
+  ObSqlArray<ObDDLSchemaVersionHint> ob_ddl_schema_versions_;
   ObOptimizerStatisticsGatheringHint osg_hint_;
   bool has_dbms_stats_hint_;
   bool flashback_read_tx_uncommitted_;
   ObParallelDASOption parallel_das_dml_option_;
   int64_t dynamic_sampling_;
-  common::ObSArray<ObAllocOpHint> alloc_op_hints_;
+  ObSqlArray<ObAllocOpHint> alloc_op_hints_;
   ObDirectLoadHint direct_load_hint_;
   ObDBLinkHit dblink_hints_;
   common::ObString resource_group_;
@@ -646,47 +723,7 @@ public:
   int64_t parallel_;
   bool monitor_;
   int64_t table_lock_mode_;
-};
-
-struct ObTableInHint
-{
-  ObTableInHint() {}
-  ObTableInHint(const common::ObString &qb_name,
-                const common::ObString &db_name,
-                const common::ObString &table_name)
-      : qb_name_(qb_name), db_name_(db_name), table_name_(table_name)
-  { }
-  ObTableInHint(const TableItem& table)
-  { set_table(table); }
-  int assign(const ObTableInHint &other);
-  bool is_match_table_item(ObCollationType cs_type, const TableItem &table_item) const;
-  bool is_match_physical_table_item(ObCollationType cs_type, const TableItem &table_item) const;
-  static bool is_match_table_item(ObCollationType cs_type,
-                                  const ObIArray<ObTableInHint> &tables,
-                                  const TableItem &table_item);
-  static bool is_match_table_items(ObCollationType cs_type,
-                                  const ObIArray<ObTableInHint> &tables,
-                                  ObIArray<TableItem *> &table_items);
-  static bool is_match_table_items(ObCollationType cs_type,
-                                   const ObIArray<ObTableInHint> &tables,
-                                   ObIArray<TableItem *> &table_items,
-                                   bool &is_all_not_match);
-  int print_table_in_hint(PlanText &plan_text, bool ignore_qb_name = false) const;
-  static int print_join_tables_in_hint(PlanText &plan_text,
-                                       const ObIArray<ObTableInHint> &tables,
-                                       bool ignore_qb_name = false);
-
-  void reset() { qb_name_.reset(); db_name_.reset(); table_name_.reset(); }
-  void set_table(const TableItem& table);
-
-  bool equal(const ObTableInHint& other) const;
-
-  DECLARE_TO_STRING;
-
-  common::ObString qb_name_;
-  common::ObString catalog_name_;
-  common::ObString db_name_;
-  common::ObString table_name_;
+  int64_t max_execution_time_;
 };
 
 struct ObLeadingTable {
@@ -709,6 +746,7 @@ struct ObLeadingTable {
 };
 
 struct QbNameList {
+  QbNameList(ObIAllocator &allocator) : qb_names_(allocator) {}
   int assign(const QbNameList& other);
   bool has_qb_name(const ObDMLStmt *stmt) const;
   bool has_qb_name(const ObString &qb_name) const;
@@ -719,7 +757,7 @@ struct QbNameList {
   bool empty() const { return qb_names_.empty(); }
   int print_qb_names(PlanText &plan_text, const bool print_quote) const;
   TO_STRING_KV(K_(qb_names));
-  common::ObSEArray<ObString, 4, common::ModulePageAllocator, true> qb_names_;
+  ObSqlArray<ObString> qb_names_;
 };
 
 class ObHint
@@ -759,7 +797,7 @@ public:
 
   // basic/generated table: size = 1
   // joined table: size > 1
-  typedef ObSEArray<ObTableInHint, 4, common::ModulePageAllocator, true> TablesInHint;
+  typedef ObSqlArray<ObTableInHint> TablesInHint;
 
   ObHint(ObItemType hint_type = T_INVALID)
     : hint_class_(HINT_INVALID_CLASS),
@@ -931,9 +969,9 @@ private:
 class ObCountToExistsHint : public ObTransHint
 {
 public:
-  ObCountToExistsHint(ObItemType hint_type)
+  ObCountToExistsHint(ObIAllocator &allocator, ObItemType hint_type)
     : ObTransHint(hint_type),
-      qb_names_()
+      qb_names_(allocator)
   {
     set_hint_class(HINT_COUNT_TO_EXISTS);
   }
@@ -955,9 +993,9 @@ private:
 class ObLeftToAntiHint : public ObTransHint
 {
 public:
-  ObLeftToAntiHint(ObItemType hint_type)
+  ObLeftToAntiHint(ObIAllocator &allocator, ObItemType hint_type)
     : ObTransHint(hint_type),
-      table_list_()
+      table_list_(allocator)
   {
     set_hint_class(HINT_LEFT_TO_ANTI);
   }
@@ -973,14 +1011,14 @@ public:
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table_list));
 
 private:
-  common::ObSEArray<TablesInHint, 4, common::ModulePageAllocator, true> table_list_;
+  ObSqlArray<TablesInHint, true> table_list_;
 };
 class ObEliminateJoinHint : public ObTransHint
 {
 public:
-  ObEliminateJoinHint(ObItemType hint_type)
+  ObEliminateJoinHint(ObIAllocator &allocator, ObItemType hint_type)
     : ObTransHint(hint_type),
-      table_list_()
+      table_list_(allocator)
   {
     set_hint_class(HINT_ELIMINATE_JOIN);
   }
@@ -996,15 +1034,15 @@ public:
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table_list));
 
 private:
-  common::ObSEArray<TablesInHint, 4, common::ModulePageAllocator, true> table_list_;
+  ObSqlArray<TablesInHint, true> table_list_;
 };
 
 class ObGroupByPlacementHint : public ObTransHint
 {
 public:
-  ObGroupByPlacementHint(ObItemType hint_type)
+  ObGroupByPlacementHint(ObIAllocator &allocator, ObItemType hint_type)
     : ObTransHint(hint_type),
-      table_list_()
+      table_list_(allocator)
   {
     set_hint_class(HINT_GROUPBY_PLACEMENT);
   }
@@ -1024,7 +1062,7 @@ public:
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table_list));
 
 private:
-  common::ObSEArray<TablesInHint, 4, common::ModulePageAllocator, true> table_list_;
+  ObSqlArray<TablesInHint, true> table_list_;
 };
 class ObCoalesceAggrHint : public ObTransHint
 {
@@ -1053,9 +1091,9 @@ class ObWinMagicHint : public ObTransHint
 {
 public:
   
-  ObWinMagicHint(ObItemType hint_type)
+  ObWinMagicHint(ObIAllocator &allocator, ObItemType hint_type)
     : ObTransHint(hint_type),
-      table_list_()
+      table_list_(allocator)
   {
     set_hint_class(HINT_WIN_MAGIC);
   }
@@ -1070,15 +1108,15 @@ public:
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table_list));
 
 private:
-  common::ObSEArray<ObTableInHint, 4, common::ModulePageAllocator, true> table_list_;
+  ObSqlArray<ObTableInHint> table_list_;
 };
 
 class ObMaterializeHint :  public ObTransHint
 {
 public:
-  ObMaterializeHint(ObItemType hint_type)
+  ObMaterializeHint(ObIAllocator &allocator, ObItemType hint_type)
     : ObTransHint(hint_type),
-      qb_name_list_()
+      qb_name_list_(allocator)
   {
     set_hint_class(HINT_MATERIALIZE);
   }
@@ -1098,14 +1136,15 @@ public:
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(qb_name_list));
 
 private:
-  common::ObSEArray<QbNameList, 2, common::ModulePageAllocator, true> qb_name_list_;
+  ObSqlArray<QbNameList, true> qb_name_list_;
 };
 
 class ObSemiToInnerHint : public ObTransHint
 {
   public:
-  ObSemiToInnerHint(ObItemType hint_type)
-    : ObTransHint(hint_type)
+  ObSemiToInnerHint(ObIAllocator &allocator, ObItemType hint_type)
+    : ObTransHint(hint_type),
+      tables_(allocator)
   {
     set_hint_class(HINT_SEMI_TO_INNER);
   }
@@ -1122,16 +1161,16 @@ class ObSemiToInnerHint : public ObTransHint
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables));
 
 private:
-  common::ObSEArray<ObTableInHint, 2, common::ModulePageAllocator, true> tables_;
+  ObSqlArray<ObTableInHint> tables_;
 };
 
 
 class ObCoalesceSqHint : public ObTransHint
 {
   public:
-  ObCoalesceSqHint(ObItemType hint_type)
+  ObCoalesceSqHint(ObIAllocator &allocator, ObItemType hint_type)
     : ObTransHint(hint_type),
-      qb_name_list_()
+      qb_name_list_(allocator)
   {
     set_hint_class(HINT_COALESCE_SQ);
   }
@@ -1150,15 +1189,15 @@ class ObCoalesceSqHint : public ObTransHint
 
 private:
   bool has_qb_name_list(const ObIArray<ObString> & qb_names) const;
-  common::ObSEArray<QbNameList, 2, common::ModulePageAllocator, true> qb_name_list_;
+  ObSqlArray<QbNameList, true> qb_name_list_;
 };
 
 class ObMVRewriteHint : public ObTransHint
 {
 public:
-  ObMVRewriteHint(ObItemType hint_type)
+  ObMVRewriteHint(ObIAllocator &allocator, ObItemType hint_type)
     : ObTransHint(hint_type),
-      mv_list_()
+      mv_list_(allocator)
   {
     set_hint_class(HINT_MV_REWRITE);
   }
@@ -1176,7 +1215,7 @@ public:
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(mv_list));
 
 private:
-  common::ObSEArray<ObTableInHint, 1, common::ModulePageAllocator, true> mv_list_;
+  ObSqlArray<ObTableInHint> mv_list_;
 };
 
 class ObIndexHint : public ObOptHint
@@ -1184,7 +1223,8 @@ class ObIndexHint : public ObOptHint
 public:
   ObIndexHint(ObItemType hint_type)
     : ObOptHint(hint_type),
-      index_prefix_(-1)
+      index_prefix_(-1),
+      filter_type_(VecFilterType::ADAPTIVE)
   {
     set_hint_class(HINT_ACCESS_PATH);
   }
@@ -1201,6 +1241,8 @@ public:
   const ObString &get_index_name() const { return index_name_; }
   int64_t &get_index_prefix() { return index_prefix_; }
   const int64_t &get_index_prefix() const { return index_prefix_; }
+  VecFilterType &get_filter_type() { return filter_type_; }
+  const VecFilterType &get_filter_type() const { return filter_type_; }
   bool is_use_index_hint()  const { return T_NO_INDEX_HINT != get_hint_type(); }
   bool use_skip_scan()  const { return T_INDEX_SS_HINT == get_hint_type() ||
                                        T_INDEX_SS_ASC_HINT == get_hint_type() ||
@@ -1231,13 +1273,15 @@ private:
   ObTableInHint table_;
   common::ObString index_name_;
   int64_t index_prefix_;
+  VecFilterType filter_type_;
 };
 
 class ObIndexMergeHint : public ObOptHint
 {
 public:
-  ObIndexMergeHint(ObItemType hint_type = T_INDEX_MERGE_HINT)
-    : ObOptHint(hint_type)
+  ObIndexMergeHint(ObIAllocator &allocator, ObItemType hint_type = T_INDEX_MERGE_HINT)
+    : ObOptHint(hint_type),
+      index_name_list_(allocator)
   {
     set_hint_class(HINT_INDEX_MERGE);
   }
@@ -1253,7 +1297,7 @@ public:
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name_list));
 private:
   ObTableInHint table_;
-  common::ObSEArray<common::ObString, 2, common::ModulePageAllocator, true> index_name_list_;
+  ObSqlArray<common::ObString> index_name_list_;
 };
 
 class ObTableParallelHint : public ObOptHint
@@ -1282,8 +1326,9 @@ private:
 class ObJoinHint : public ObOptHint
 {
 public:
-  ObJoinHint(ObItemType hint_type = T_INVALID)
+  ObJoinHint(ObIAllocator &allocator, ObItemType hint_type = T_INVALID)
     : ObOptHint(hint_type),
+      tables_(allocator),
       dist_algo_(DistAlgo::DIST_INVALID_METHOD),
       parallel_(ObGlobalHint::UNSET_PARALLEL)
   {
@@ -1310,16 +1355,20 @@ public:
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables), K_(dist_algo), K_(parallel));
 
 private:
-  common::ObSEArray<ObTableInHint, 4, common::ModulePageAllocator, true> tables_;
+  ObSqlArray<ObTableInHint> tables_;
   DistAlgo dist_algo_;
   int64_t parallel_;
 };
 
+// PX_JOIN_FILTER ( [ @qb_name ] filter_table)
+// PX_JOIN_FILTER ( [ @qb_name ] filter_table left_tables)
+// PX_JOIN_FILTER ( [ @qb_name ] filter_table left_tables pushdown_filter_table_)
 class ObJoinFilterHint : public ObOptHint
 {
 public:
-  ObJoinFilterHint(ObItemType hint_type = T_INVALID)
-    : ObOptHint(hint_type)
+  ObJoinFilterHint(ObIAllocator &allocator, ObItemType hint_type = T_INVALID)
+    : ObOptHint(hint_type),
+      left_tables_(allocator)
   {
     set_hint_class(HINT_JOIN_FILTER);
   }
@@ -1338,20 +1387,20 @@ public:
   bool has_left_tables() const { return !left_tables_.empty(); }
   bool has_pushdown_filter_table() const { return !pushdown_filter_table_.table_name_.empty(); }
 
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(filter_table), K_(left_tables));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(pushdown_filter_table), K_(filter_table), K_(left_tables));
 
 private:
   ObTableInHint filter_table_;
-  common::ObSEArray<ObTableInHint, 1, common::ModulePageAllocator, true> left_tables_;
+  ObSqlArray<ObTableInHint> left_tables_;
   ObTableInHint pushdown_filter_table_;
 };
 
 class ObPQSetHint : public ObOptHint
 {
   public:
-  ObPQSetHint(ObItemType hint_type = T_PQ_SET)
+  ObPQSetHint(ObIAllocator &allocator, ObItemType hint_type = T_PQ_SET)
     : ObOptHint(hint_type),
-      dist_methods_(),
+      dist_methods_(allocator),
       left_branch_()
   {
     set_hint_class(HINT_PQ_SET);
@@ -1376,17 +1425,17 @@ class ObPQSetHint : public ObOptHint
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_methods), K_(left_branch));
 
 private:
-  common::ObSEArray<ObItemType, 2, common::ModulePageAllocator, true> dist_methods_;
+  ObSqlArray<ObItemType> dist_methods_;
   common::ObString left_branch_;  // qb_name for first branch of set, used for union distinct / intersect
 };
 
 class ObPQSubqueryHint : public ObOptHint
 {
   public:
-  ObPQSubqueryHint(ObItemType hint_type = T_PQ_SUBQUERY)
+  ObPQSubqueryHint(ObIAllocator &allocator, ObItemType hint_type = T_PQ_SUBQUERY)
     : ObOptHint(hint_type),
       dist_algo_(DistAlgo::DIST_INVALID_METHOD),
-      sub_qb_names_()
+      sub_qb_names_(allocator)
   {}
   int assign(const ObPQSubqueryHint &other);
   virtual ~ObPQSubqueryHint() {}
@@ -1462,25 +1511,29 @@ private:
 
 class ObWindowDistHint : public ObOptHint {
 public:
-  explicit ObWindowDistHint(ObItemType hint_type = T_PQ_DISTRIBUTE_WINDOW)
-      : ObOptHint(hint_type)
+  explicit ObWindowDistHint(ObIAllocator &allocator, ObItemType hint_type = T_PQ_DISTRIBUTE_WINDOW)
+      : ObOptHint(hint_type),
+        win_dist_options_(allocator)
   {
   }
   struct WinDistOption {
-    WinDistOption() { reset();  }
+    WinDistOption(common::ObIAllocator &allocator)
+      : win_func_idxs_(allocator)
+    { reset();  }
     int assign(const WinDistOption& other);
     void reset();
     bool is_valid() const;
     int print_win_dist_option(PlanText &plan_text) const;
 
     WinDistAlgo algo_;
-    common::ObSEArray<int64_t, 2, common::ModulePageAllocator, true> win_func_idxs_;
+    ObSqlArray<int64_t> win_func_idxs_;
     bool use_hash_sort_;  // use hash sort for none/hash dist method
     bool is_push_down_;  // push down window function for hash dist method
     bool use_topn_sort_;  // use part topn sort for none/hash dist method
     TO_STRING_KV(K_(algo), K_(win_func_idxs), K_(use_hash_sort), K_(is_push_down), K_(use_topn_sort));
   };
 
+  int init_win_dist_options(const int64_t count) { return win_dist_options_.reserve(count); }
   const ObIArray<WinDistOption> &get_win_dist_options() const { return win_dist_options_; }
   int set_win_dist_options(const ObIArray<WinDistOption> &win_dist_options) { return win_dist_options_.assign(win_dist_options); }
   int add_win_dist_option(const ObIArray<ObWinFunRawExpr*> &all_win_funcs,
@@ -1500,7 +1553,7 @@ public:
 
   INHERIT_TO_STRING_KV("hint", ObHint, K_(win_dist_options));
 private:
-  common::ObSEArray<WinDistOption, 2, common::ModulePageAllocator, true> win_dist_options_;
+  ObSqlArray<WinDistOption, true> win_dist_options_;
 };
 
 class ObAggHint : public ObOptHint
@@ -1528,14 +1581,6 @@ private:
   bool use_partition_sort_;
 };
 
-struct ObDDLSchemaVersionHint
-{
-  ObDDLSchemaVersionHint() : schema_version_(0) {}
-
-  TO_STRING_KV(K_(table), K_(schema_version));
-  ObTableInHint table_;
-  int64_t schema_version_;
-};
 class ObTableDynamicSamplingHint : public ObOptHint
 {
 public:

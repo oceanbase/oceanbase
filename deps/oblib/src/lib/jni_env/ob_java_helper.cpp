@@ -85,7 +85,7 @@ JVMFunctionHelper &JVMFunctionHelper::getInstance() {
   return helper;
 }
 
-JVMFunctionHelper::JVMFunctionHelper():load_lib_lock_(common::ObLatchIds::JAVA_HELPER_LOCK), error_msg_(nullptr) {
+JVMFunctionHelper::JVMFunctionHelper(): lock_(common::ObLatchIds::JVM_FUNCTION_HELPER_MUTEX), load_lib_lock_(common::ObLatchIds::JAVA_HELPER_LOCK), error_msg_(nullptr) {
     int ret = OB_SUCCESS;
     if (init_result_ != OB_NOT_INIT) {
       // do nothing
@@ -228,7 +228,11 @@ int JVMFunctionHelper::get_lib_path(char *path, uint64_t length, const char* lib
     } else if (0 == STRCMP(lib_name, "libjvm.so")) {
       const char *java_home = std::getenv("JAVA_HOME");
       // libjvm.so relative path options and higher jdk version options are "/lib/server/".
+#if defined(__aarch64__)
+      const char *jdk8_opt = "/jre/lib/aarch64/server/";
+#else
       const char *jdk8_opt = "/jre/lib/amd64/server/";
+#endif
       const char *jdk_higher_version_opt = "/lib/server/";
 
       if (OB_ISNULL(java_home)) {
@@ -523,13 +527,18 @@ int JVMFunctionHelper::init_jni_env() {
   } else if (OB_FAIL(load_lib(java_env_ctx_, hdfs_env_ctx_))) {
     LOG_WARN("failed to load dynamic library", K(ret));
   } else if (nullptr == jni_env_) {
-    jni_env_ = getJNIEnv();
-    if (nullptr == jni_env_) {
+    if (OB_ISNULL(getJNIEnv)) {
       ret = OB_JNI_ENV_ERROR;
-      if (nullptr == error_msg_) {
-        error_msg_ = "could not get a JNIEnv please check jvm opts";
+      LOG_WARN("getJNIEnv is null", K(ret));
+    } else {
+      jni_env_ = getJNIEnv();
+      if (nullptr == jni_env_) {
+        ret = OB_JNI_ENV_ERROR;
+        if (nullptr == error_msg_) {
+          error_msg_ = "could not get a JNIEnv please check jvm opts";
+        }
+        LOG_WARN("could not get a JNIEnv please check jvm opts", K(ret), K(lbt()));
       }
-      LOG_WARN("could not get a JNIEnv please check jvm opts", K(ret), K(lbt()));
     }
   }
   return ret;

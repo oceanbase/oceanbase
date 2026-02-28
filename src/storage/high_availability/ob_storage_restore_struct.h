@@ -27,7 +27,7 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/backup/ob_backup_sstable_sec_meta_iterator.h"
-
+#include "storage/backup/ob_backup_data_store.h"
 namespace oceanbase
 {
 namespace storage
@@ -42,7 +42,7 @@ struct ObRestoreBaseInfo
   void reset();
   int assign(const ObRestoreBaseInfo &restore_base_info);
   int copy_from(const ObTenantRestoreCtx &restore_arg);
-  int get_restore_backup_set_dest(const int64_t backup_set_id, share::ObRestoreBackupSetBriefInfo &backup_set_dest) const;
+  int get_restore_backup_set_dest(const int64_t backup_set_id, share::ObBackupSetBriefInfo &backup_set_dest) const;
   int get_restore_data_dest_id(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
@@ -67,7 +67,7 @@ struct ObRestoreBaseInfo
   uint64_t backup_data_version_;
   share::ObBackupSetFileDesc::Compatible backup_compatible_;
   share::ObBackupDest backup_dest_;
-  common::ObArray<share::ObRestoreBackupSetBriefInfo> backup_set_list_;
+  common::ObArray<share::ObBackupSetBriefInfo> backup_set_list_;
 };
 
 struct ObTabletRestoreAction
@@ -227,11 +227,21 @@ class ObRestoreMacroBlockIdMgr
 public:
   ObRestoreMacroBlockIdMgr();
   virtual ~ObRestoreMacroBlockIdMgr();
+  // for restore
   int init(
       const common::ObTabletID &tablet_id,
       const ObTabletHandle &tablet_handle,
       const ObITable::TableKey &table_key,
       const ObRestoreBaseInfo &restore_base_info,
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
+      backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store);
+  // for backup validate (without restore base info and tablet handle)
+  int init(
+      const common::ObTabletID &tablet_id,
+      const storage::ObITableReadInfo &read_info,
+      const ObITable::TableKey &table_key,
+      const ObExternBackupSetInfoDesc &backup_set_info,
+      const ObBackupDest &backup_dest,
       backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
       backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store);
   int get_macro_block_id(
@@ -248,21 +258,25 @@ public:
       int64_t &block_id_index);
   int get_restore_macro_block_id_array(
       common::ObIArray<ObRestoreMacroBlockId> &block_id_array);
+  int64_t get_macro_block_count() const {return block_id_array_.count();}
 
 private:
   // for version smaller than 4.3.2
   int inner_init_v1_(
       const common::ObTabletID &tablet_id,
       const ObITable::TableKey &table_key,
-      const ObRestoreBaseInfo &restore_base_info,
+      const int64_t dest_id,
+      const ObBackupDest &backup_dest,
       backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
       backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store);
   int sort_block_id_array(common::ObIArray<blocksstable::ObLogicMacroBlockId> &logic_id_list);
   int inner_init_v2_(
       const common::ObTabletID &tablet_id,
-      const ObTabletHandle &tablet_handle,
+      const storage::ObITableReadInfo &read_info,
       const ObITable::TableKey &table_key,
-      const ObRestoreBaseInfo &restore_base_info,
+      const int64_t dest_id,
+      const ObBackupDest &backup_dest,
+      const share::ObBackupSetDesc &backup_set_desc,
       backup::ObBackupMetaIndexStoreWrapper &meta_index_store);
 
 private:

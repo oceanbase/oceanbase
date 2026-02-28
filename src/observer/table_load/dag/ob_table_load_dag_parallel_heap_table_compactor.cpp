@@ -66,6 +66,7 @@ bool ObTableLoadDagHeapTableCompare::operator()(const ObDirectLoadTableHandle lh
 ObTableLoadDagParallelHeapTableCompactor::ObTableLoadDagParallelHeapTableCompactor()
   : store_ctx_(nullptr),
     op_ctx_(nullptr),
+    mutex_(common::ObLatchIds::OB_TABLE_LOAD_DAG_PARALLEL_HEAP_TABLE_COMPACTOR_MUTEX),
     is_inited_(false)
 {
 }

@@ -93,15 +93,6 @@ private:
   share::schema::ObStmtNeedPrivs::NeedPrivs view_need_privs_;
   common::ObSArray<obrpc::ObCreateIndexArg> index_arg_list_;
   common::ObString masked_sql_;
-  //common::ObSEArray<ObRawExpr *, OB_DEFAULT_ARRAY_SIZE, common::ModulePageAllocator, true> partition_fun_expr_; // for range fun expr
-  //common::ObSEArray<ObRawExpr *, OB_DEFAULT_ARRAY_SIZE, common::ModulePageAllocator, true> range_values_exprs_; //range partition expr
-  // for future use: create table xxx as select ......
-  //ObSelectStmt                *select_clause;inline int64_t ObCreateTableStmt::get_block_size() const
-  //{
-  //  return create_table_arg_.schema_.get_block_size();
-  //  }
-  //
-  // create table xxx as already_exist_table, pay attention to whether data are need
 protected:
   ObSelectStmt *sub_select_stmt_; //create table  ... as select...
   ObSelectStmt *view_define_;

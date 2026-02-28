@@ -151,7 +151,7 @@ int ObTabletMediumCompactionInfoRecorder::init(
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     is_inited_ = true;
-    LOG_INFO("success to init medium clog recorder", K(ret), K_(ls_id), K_(tablet_id), K(max_saved_version));
+    LOG_DEBUG("success to init medium clog recorder", K(ret), K_(ls_id), K_(tablet_id), K(max_saved_version));
   }
   return ret;
 }
@@ -766,7 +766,7 @@ int ObMediumCompactionInfoList::get_next_schedule_info(
     const bool is_mv_refresh_or_restore_remote_tablet,
     ObMediumCompactionInfo::ObCompactionType &compaction_type,
     int64_t &schedule_scn,
-    ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type,
+    ObCOMajorMergeStrategy &co_major_merge_strategy,
     ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason) const
 {
   int ret = OB_SUCCESS;
@@ -779,7 +779,12 @@ int ObMediumCompactionInfoList::get_next_schedule_info(
           || is_mv_refresh_or_restore_remote_tablet) {
         schedule_scn = info->medium_snapshot_;
         compaction_type = (ObMediumCompactionInfo::ObCompactionType)info->compaction_type_;
-        co_major_merge_type = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(info->co_major_merge_type_);
+        if (info->storage_schema_.is_row_store()) {
+          co_major_merge_strategy.reset();
+        } else {
+          // co_major_merge_strategy will be decided later based on current sstable format
+          info->get_co_major_merge_strategy(co_major_merge_strategy);
+        }
         merge_reason = (ObAdaptiveMergePolicy::AdaptiveMergeReason)info->medium_merge_reason_;
       }
       break; // found one unfinish medium info, loop end

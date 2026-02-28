@@ -44,7 +44,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
   ctx_.column_encodings_[6] = ObCSColumnHeader::Type::STR_DICT;
   int64_t row_cnt = 1000;
   const int64_t distinct_cnt = 100;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
   void *row_arr_buf = allocator_.alloc(sizeof(ObDatumRow) * row_cnt);
@@ -471,7 +471,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_const_decoder)
   ctx_.column_encodings_[2] = ObCSColumnHeader::Type::INT_DICT;
   ctx_.column_encodings_[3] = ObCSColumnHeader::Type::STR_DICT;
   int64_t row_cnt = 1000;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
   void *row_arr_buf = allocator_.alloc(sizeof(ObDatumRow) * row_cnt);

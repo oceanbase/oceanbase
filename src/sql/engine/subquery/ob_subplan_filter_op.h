@@ -244,6 +244,7 @@ private:
   int prepare_onetime_exprs();
   int prepare_onetime_exprs_inner();
   int handle_update_set();
+  int handle_update_set_with_alias_ref();
   bool continue_fetching(uint64_t left_rows_total_cnt, bool stop, bool use_group = false)
   {
     return use_group?

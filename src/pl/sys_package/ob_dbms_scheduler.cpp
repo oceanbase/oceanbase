@@ -20,6 +20,7 @@
 #include "share/ob_scheduled_manage_dynamic_partition.h"
 #include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 #include "observer/dbms_scheduler/ob_dbms_sched_time_utils.h"
+#include "share/compaction/ob_schedule_daily_maintenance_window.h"
 
 namespace oceanbase
 {
@@ -449,6 +450,7 @@ int ObDBMSScheduler::set_job_attribute(
     bool is_stat_window_attr = false;
     bool is_trigger_balance_attr = false;
     bool is_dynamic_partition_attr = false;
+    bool is_daily_maintenance_attr = false;
     ObDMLSqlSplicer dml;
     const int64_t now = ObTimeUtility::current_time();
     if (job_info.is_stats_maintenance_job()) {
@@ -456,7 +458,7 @@ int ObDBMSScheduler::set_job_attribute(
       OZ (dml.add_pk_column("tenant_id",
         share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
       OZ (dml.add_pk_column("job_name", ObHexEscapeSqlStr(job_name)));
-      if (OB_FAIL(ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(
+      if (FAILEDx(ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(
                                                                             ctx,
                                                                             job_name,
                                                                             attr_name,
@@ -497,7 +499,7 @@ int ObDBMSScheduler::set_job_attribute(
       OZ (dml.add_pk_column("tenant_id",
         share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
       OZ (dml.add_pk_column("job_name", ObHexEscapeSqlStr(job_name)));
-      if (OB_FAIL(ObScheduledManageDynamicPartition::set_attribute(ctx.get_my_session(),
+      if (FAILEDx(ObScheduledManageDynamicPartition::set_attribute(ctx.get_my_session(),
                                                                    job_name,
                                                                    attr_name,
                                                                    attr_val,
@@ -512,11 +514,30 @@ int ObDBMSScheduler::set_job_attribute(
         OZ (execute_sql(ctx, sql, affected_rows));
         CK (1 == affected_rows || 2 == affected_rows);
       }
+    } else if (job_info.is_daily_maintenance_job()) {
+      OZ(dml.add_gmt_modified(now));
+      OZ(dml.add_pk_column("tenant_id",
+        share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
+      OZ(dml.add_pk_column("job_name", ObHexEscapeSqlStr(job_name)));
+      if (FAILEDx(ObScheduleDailyMaintenanceWindow::set_attribute(ctx,
+                                                                  job_name,
+                                                                  attr_name,
+                                                                  attr_val,
+                                                                  is_daily_maintenance_attr,
+                                                                  dml))) {
+        LOG_WARN("failed to set attribute for daily maintenance window", KR(ret), K(tenant_id), K(job_name), K(attr_name), K(attr_val));
+      } else if (is_daily_maintenance_attr) {
+        ObSqlString sql;
+        int64_t affected_rows = 0;
+        OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
+        OZ (execute_sql(ctx, sql, affected_rows));
+        CK (1 == affected_rows || 2 == affected_rows);
+      }
     }
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (is_stat_window_attr || is_trigger_balance_attr || is_dynamic_partition_attr) {
+    } else if (is_stat_window_attr || is_trigger_balance_attr || is_dynamic_partition_attr || is_daily_maintenance_attr) {
       // do nothing
     } else {
       ObObj attr_val_obj;
@@ -547,6 +568,7 @@ int ObDBMSScheduler::disable(
   OZ (ObCharset::charset_convert(ctx.get_allocator(), params.at(0).get_string(), params.at(0).get_collation_type(), ObCharset::get_system_collation(), job_name));
   OZ (job_priv_check_impl(ctx, job_name, allocator, job_info));
   OZ (ObScheduledTriggerPartitionBalance::check_disable_trigger_job(job_info.get_tenant_id(), job_name));
+  OZ (ObScheduleDailyMaintenanceWindow::check_disable_trigger_job(job_info.get_tenant_id(), job_name));
   OZ (ObDBMSSchedJobUtils::update_dbms_sched_job_info(*ctx.get_sql_proxy(), job_info, ObString("enabled"), obj));
   LOG_INFO("disable job", K(ret), K(ObHexEscapeSqlStr(job_name)), K(job_info.get_tenant_id()));
   return ret;
@@ -675,6 +697,7 @@ int ObDBMSScheduler::enable(
   OZ (ObCharset::charset_convert(ctx.get_allocator(), params.at(0).get_string(), params.at(0).get_collation_type(), ObCharset::get_system_collation(), job_name));
   OZ (job_priv_check_impl(ctx, job_name, allocator, job_info));
   OZ (ObScheduledTriggerPartitionBalance::check_enable_trigger_job(job_info.get_tenant_id(), job_name));
+  OZ (ObScheduleDailyMaintenanceWindow::check_enable_trigger_job(job_info.get_tenant_id(), job_name));
   OZ (ObDBMSSchedJobUtils::update_dbms_sched_job_info(*ctx.get_sql_proxy(), job_info, ObString("enabled"), obj));
   return ret;
 }

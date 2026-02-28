@@ -23,13 +23,14 @@ using namespace oceanbase::sql::log_op_def;
 
 const char *ObLogSet::get_name() const
 {
-  static const char *set_op_all[ObSelectStmt::SET_OP_NUM] =
+  static const char *set_op_all[ObSelectStmt::SET_OP_NUM + 1] =
   {
     "NONE",
     "UNION ALL",
     "INTERSECT ALL",
     "EXCEPT ALL",
     "RECURSIVE UNION ALL",
+    "RECURSIVE UNION DISTINCT",
   };
   static const char *merge_set_op_distinct[ObSelectStmt::SET_OP_NUM] =
   {
@@ -51,7 +52,7 @@ const char *ObLogSet::get_name() const
     ret_char = !is_distinct_ ? set_op_all[set_op_] :
                (HASH_SET == set_algo_ ? hash_set_op_distinct[set_op_] : merge_set_op_distinct[set_op_]);
     if (is_recursive_union_) {
-      ret_char = set_op_all[ObSelectStmt::SetOperator::RECURSIVE];
+      ret_char = is_distinct_ ? set_op_all[ObSelectStmt::SetOperator::RECURSIVE + 1] : set_op_all[ObSelectStmt::SetOperator::RECURSIVE];
     }
   } else { /* Do nothing */ }
   return ret_char;
@@ -109,7 +110,7 @@ int ObLogSet::compute_equal_set()
 {
   int ret = OB_SUCCESS;
   EqualSets *ordering_esets = NULL;
-  EqualSets temp_ordering_esets;
+  TemporaryEqualSets temp_ordering_esets;
   ObSEArray<ObRawExpr*, 8> ordering_eset_conditions;
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
@@ -481,6 +482,7 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
       }
       child_cost += cur_child_cost;
     } else {
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : get_set_op();
       double cur_child_ndv = child_ndv_.at(i);
       if (need_scale_ndv) {
         cur_child_ndv = std::min(
@@ -490,7 +492,7 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
       if (0 == i) {
         card = cur_child_ndv;
       } else {
-        card = ObOptSelectivity::get_set_stmt_output_count(card, cur_child_ndv, get_set_op());
+        card = ObOptSelectivity::get_set_stmt_output_count(card, cur_child_ndv, set_type);
       }
       child_cost += cur_child_cost;
     }
@@ -829,7 +831,8 @@ int ObLogSet::print_outline_data(PlanText &plan_text)
   int64_t &pos = plan_text.pos_;
   const ObDMLStmt *stmt = NULL;
   ObString qb_name;
-  ObPQSetHint hint;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObPQSetHint hint(allocator);
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt));
@@ -898,7 +901,8 @@ int ObLogSet::get_used_pq_set_hint(const ObPQSetHint *&used_hint)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()));
   } else if (NULL != (stmt_pq_set = get_plan()->get_log_plan_hint().get_normal_hint(T_PQ_SET))) {
-    ObPQSetHint hint;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObPQSetHint hint(allocator);
     used_hint = static_cast<const ObPQSetHint*>(stmt_pq_set);
     const ObIArray<ObItemType> &dist_methods = used_hint->get_dist_methods();
     if (OB_FAIL(construct_pq_set_hint(hint))) {
@@ -1044,7 +1048,12 @@ int ObLogSet::get_card_without_filter(double &card)
     } else if (0 == i) {
       card = child_ndv_.at(i);
     } else {
-      card = ObOptSelectivity::get_set_stmt_output_count(card, child_ndv_.at(i), get_set_op());
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : get_set_op();
+      if (0 == i) {
+        card = child_ndv_.at(i);
+      } else {
+        card = ObOptSelectivity::get_set_stmt_output_count(card, child_ndv_.at(i), set_type);
+      }
     }
   }
   return ret;

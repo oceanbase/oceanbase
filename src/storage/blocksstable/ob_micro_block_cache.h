@@ -103,7 +103,7 @@ class ObMicroBlockCacheValue : public common::ObIKVCacheValue
 {
 public:
   ObMicroBlockCacheValue();
-  ObMicroBlockCacheValue(
+  int init(
       const char *buf,
       const int64_t size,
       const char *extra_buf = NULL,
@@ -523,7 +523,8 @@ public:
 private:
   int64_t calc_value_size(const int64_t data_length, const ObRowStoreType &type, bool &need_decoder);
   int write_extra_buf(
-      const ObRowStoreType row_store_type,
+      const ObRowStoreType &row_store_type,
+      const ObMicroBlockHeader &micro_header,
       const char *block_buf,
       const int64_t block_size,
       char *extra_buf,

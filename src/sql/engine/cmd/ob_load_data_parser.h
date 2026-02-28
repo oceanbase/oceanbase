@@ -70,8 +70,6 @@ struct ObODPSGeneralFormat {
   int deep_copy_str(const ObString &src,
                     ObString &dest);
   int deep_copy(const ObODPSGeneralFormat &src);
-  int encrypt_str(common::ObString &src, common::ObString &dst);
-  int decrypt_str(common::ObString &src, common::ObString &dst);
   int encrypt();
   int decrypt();
   static constexpr const char *OPTION_NAMES[] = {
@@ -134,7 +132,10 @@ struct ObCSVGeneralFormat {
     file_extension_(DEFAULT_FILE_EXTENSION),
     parse_header_(false),
     binary_format_(ObCSVBinaryFormat::DEFAULT),
-    ignore_last_empty_col_(true)
+    ignore_last_empty_col_(true),
+    parallel_parse_on_single_file_(true),
+    parallel_parse_file_size_threshold_(DEFAULT_CSV_LARGE_FILE_SIZE_THRESHOLD),
+    max_row_length_(DEFAULT_MAX_CSV_ROW_LENGTH)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "LINE_DELIMITER",
@@ -223,6 +224,11 @@ struct ObCSVGeneralFormat {
   bool parse_header_;
   ObCSVBinaryFormat binary_format_;
   bool ignore_last_empty_col_;
+  bool parallel_parse_on_single_file_;
+  int64_t parallel_parse_file_size_threshold_;
+  int64_t max_row_length_;
+  static constexpr int64_t DEFAULT_CSV_LARGE_FILE_SIZE_THRESHOLD = 256 * 1024 * 1024; // 256MB
+  static constexpr int64_t DEFAULT_MAX_CSV_ROW_LENGTH = 2 * 1024 * 1024; // 2MB
 
   int init_format(const ObDataInFileStruct &format,
                   int64_t file_column_nums,
@@ -232,7 +238,8 @@ struct ObCSVGeneralFormat {
 
   TO_STRING_KV(K(cs_type_), K(file_column_nums_), K(line_start_str_), K(field_enclosed_char_),
                K(is_optional_), K(field_escaped_char_), K(field_term_str_), K(line_term_str_),
-               K(compression_algorithm_), K(file_extension_), K(binary_format_), K(skip_blank_lines_), K(ignore_extra_fields_));
+               K(compression_algorithm_), K(file_extension_), K(binary_format_), K(skip_blank_lines_), K(ignore_extra_fields_),
+               K(parallel_parse_on_single_file_), K(parallel_parse_file_size_threshold_), K(max_row_length_));
   OB_UNIS_VERSION(1);
 };
 
@@ -321,6 +328,96 @@ struct ObOrcGeneralFormat {
                K(column_use_bloom_filter_),
                K(column_index_type_),
                K(column_name_case_sensitive_));
+  OB_UNIS_VERSION(1);
+};
+
+struct ObKAFKAGeneralFormat {
+  ObKAFKAGeneralFormat() :
+    topic_(),
+    partitions_(),
+    offsets_(),
+    max_batch_interval_(60 * 1000 * 1000), //60s
+    max_batch_rows_(10000000),
+    max_batch_size_(1024 * 1024 * 1024), //1GB
+    job_id_(OB_INVALID_ID),
+    insert_table_id_(OB_INVALID_ID),
+    column_ids_(),
+    custom_properties_()
+  {
+  }
+
+  static constexpr const char *KAFKA_BROKER_LIST = "bootstrap.servers";
+  static constexpr const char *KAFKA_TOPIC = "kafka_topic";
+  static constexpr const char *KAFKA_PARTITIONS = "kafka_partitions";
+  static constexpr const char *KAFKA_OFFSETS = "kafka_offsets";
+  static constexpr const char *MAX_BATCH_INTERVAL = "max_batch_interval";
+  static constexpr const char *MAX_BATCH_ROWS = "max_batch_rows";
+  static constexpr const char *MAX_BATCH_SIZE = "max_batch_size";
+  static constexpr const char *JOB_ID = "job_id";
+  static constexpr const char *TABLE_ID = "table_id";
+  static constexpr const char *COLUMN_LIST = "column_list";
+  static constexpr const char *OTHER_PROPERTY_LIST = "other_property_list";
+
+  // Security and authentication parameters collection
+  // All Kafka security/authentication parameter names
+  static constexpr const char *SECURITY_AUTH_PARAMS[] = {
+    // SASL authentication
+    "security.protocol",
+    "sasl.mechanism",
+    "sasl.username",
+    "sasl.password",
+    "sasl.jaas.config",
+    // SASL Kerberos
+    "sasl.kerberos.service.name",
+    "sasl.kerberos.kinit.cmd",
+    "sasl.kerberos.min.time.before.relogin",
+    "sasl.kerberos.ticket.renew.window.factor",
+    "sasl.kerberos.ticket.renew.jitter",
+    "sasl.kerberos.principal",
+    // SSL/TLS
+    "ssl.ca.location",
+    "ssl.certificate.location",
+    "ssl.key.location",
+    "ssl.key.password",
+    "ssl.keystore.location",
+    "ssl.keystore.password",
+    "ssl.truststore.location",
+    "ssl.truststore.password",
+    "ssl.cipher.suites",
+    "ssl.curves.list",
+    "ssl.sigalgs.list",
+    "ssl.endpoint.identification.algorithm",
+    "ssl.crl.location",
+    // SASL OAuthBearer
+    "sasl.oauthbearer.config",
+    "sasl.oauthbearer.token.endpoint.url",
+    "sasl.oauthbearer.scope.claim.name",
+    "sasl.oauthbearer.sub.claim.name"
+  };
+
+  // Check if a parameter name is a security/authentication parameter
+  static bool is_security_auth_param(const common::ObString &param_name);
+
+  common::ObString topic_;
+  common::ObString partitions_;
+  common::ObString offsets_;
+  int64_t max_batch_interval_;
+  int64_t max_batch_rows_;
+  int64_t max_batch_size_;
+  int64_t job_id_;
+  uint64_t insert_table_id_;
+  //TODO: ObWrapArray
+  common::ObSEArray<uint64_t, 16> column_ids_;
+  common::ObSEArray<std::pair<common::ObString, common::ObString>, 16> custom_properties_;
+  common::ObArenaAllocator arena_alloc_;
+  int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
+  int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
+  int encrypt(ObIAllocator &allocator);
+  int decrypt(ObIAllocator &allocator, ObIArray<std::pair<common::ObString, common::ObString>> &custom_properties) const;
+  TO_STRING_KV(K_(topic), K_(partitions), K_(offsets),
+               K_(max_batch_interval), K_(max_batch_rows),
+               K_(max_batch_size), K_(job_id), K_(insert_table_id),
+               K_(column_ids), K_(custom_properties));
   OB_UNIS_VERSION(1);
 };
 
@@ -545,7 +642,18 @@ public:
           gen_new_field(false, ori_field_begin, str, field_begin, str, field_idx);
         }
       } else {
-        find_new_line = false;
+        // Don't set find_new_line = false here.
+
+        // Reason: scan_utf8_ex is only used when is_line_term_by_counting_field_ is false,
+        // so we should always set find_new_line to true, when we found line_term.
+
+        // the behaviour of scan_proto is:
+        /*
+          if (is_line_term
+              && (!opt_param_.is_line_term_by_counting_field_ || field_idx == format_.file_column_nums_)) {
+            find_new_line = true;
+          }
+        */
       }
     }
     str++;
@@ -1184,6 +1292,10 @@ struct ObExternalFileFormat
 
   static int parse_format_type(const common::ObString &str, common::ObIAllocator &allocator, FormatType &format_type);
 
+  static int encrypt_str(ObIAllocator &allocator, const common::ObString &src, common::ObString &dst);
+  static int deep_copy_str(ObIAllocator &allocator, const common::ObString &src, common::ObString &dst);
+  static int decrypt_str(ObIAllocator &allocator, const common::ObString &src, common::ObString &dst);
+
   ObOriginFileFormat origin_file_format_str_;
   FormatType format_type_;
   sql::ObCSVGeneralFormat csv_format_;
@@ -1191,6 +1303,7 @@ struct ObExternalFileFormat
   sql::ObODPSGeneralFormat odps_format_;
   sql::ObOrcGeneralFormat orc_format_;
   plugin::ObPluginFormat plugin_format_;
+  sql::ObKAFKAGeneralFormat kafka_format_;
   uint64_t options_;
   static const char *FORMAT_TYPE_STR[];
 

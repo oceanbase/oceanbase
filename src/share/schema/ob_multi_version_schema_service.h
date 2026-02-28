@@ -113,7 +113,8 @@ class ObSchemaGetterController
 {
 public:
   ObSchemaGetterController()
-    : inited_(false) {}
+    : inited_(false),
+      lock_(common::ObLatchIds::OB_SCHEMA_GETTER_LOCK) {}
   ~ObSchemaGetterController() {}
   int init(share::schema::ObMultiVersionSchemaService *schema_service);
   int get_schema(const ObSchemaMgr *mgr,
@@ -537,6 +538,8 @@ private:
                                   const uint64_t &database_id,
                                   int64_t &cal_database_timeout,
                                   int64_t &total_purge_count);
+  virtual int check_schema_slot_available(const uint64_t tenant_id) override;
+
 
 private:
   static const int64_t MAX_VERSION_COUNT = 64;

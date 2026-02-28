@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "lib/container/ob_fixed_array.h"
 #include "lib/container/ob_se_array.h"
+#include "sql/resolver/ob_sql_array.h"
 
 namespace oceanbase
 {
@@ -26,9 +27,13 @@ typedef common::ObFixedArray<ObRawExpr*, common::ObIAllocator> ObRawExprSet;
 // NOTE: do not reuse on ObRawExprSets
 // reuse will not de-construct existed ObFixedArray
 // A ObFixedArray can not be reused because its size can not be adjusted.
-typedef common::ObSEArray<ObRawExprSet*, 8, common::ModulePageAllocator, true> ObRawExprSets;
+typedef common::ObIArray<ObRawExprSet*> ObIRawExprSets;
 typedef ObRawExprSet EqualSet;
-typedef ObRawExprSets EqualSets;
+typedef ObIRawExprSets EqualSets;
+
+typedef common::ObSEArray<ObRawExprSet*, 8> TemporaryEqualSets; // used as local variable
+typedef common::ObFixedArray<ObRawExprSet*, common::ObIAllocator> EmptyEqualSets; // used as static empty set
+typedef ObSqlArray<ObRawExprSet*> PersistentEqualSets; // used as member variable
 
 class ObRawExprSetUtils
 {
@@ -40,7 +45,7 @@ public:
 
   static int add_expr_set(common::ObIAllocator *allocator,
                           const common::ObIArray<ObRawExpr *> &exprs,
-                          ObRawExprSets &expr_sets);
+                          EqualSets &expr_sets);
 };
 
 

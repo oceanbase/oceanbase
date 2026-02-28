@@ -141,6 +141,7 @@ public:
   void set_is_dblink_reverse_conn(bool v) { is_dblink_revers_conn_ = v; }
   bool is_dblink_reverse_conn() const { return is_dblink_revers_conn_; }
   void handler_dblink_error(int &ret, bool is_connect, char *errmsg);
+  bool is_dblink_or_reverse_conn() const { return OB_INVALID_ID != get_dblink_id() || is_dblink_reverse_conn(); }
 private:
   int switch_tenant(const uint64_t tenant_id);
   int reset_read_consistency();
@@ -207,7 +208,7 @@ int ObMySQLConnection::create_statement(T &stmt, const uint64_t tenant_id, const
   int ret = OB_SUCCESS;
   if (OB_FAIL(switch_tenant(tenant_id))) {
     _OB_LOG(WARN, "switch tenant failed, tenant_id=%ld, ret=%d", tenant_id, ret);
-  } else if (OB_FAIL(reset_read_consistency())) {
+  } else if (!is_dblink_or_reverse_conn() && OB_FAIL(reset_read_consistency())) {
     _OB_LOG(WARN, "fail to set read consistency, ret=%d", ret);
   } else if (OB_FAIL(stmt.init(*this, sql, param_count))) {
     _OB_LOG(WARN, "fail to init statement, ret=%d", ret);

@@ -320,7 +320,7 @@ public:
    *   only support inner stmt savepoint, and can not been used to cross stmt rollback
    */
   static int create_anonymous_savepoint(ObExecContext &exec_ctx, transaction::ObTxSEQ &savepoint);
-  static int create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint);
+  static int create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint, int16_t branch_id = 0);
   /*
    * rollback to savepoint
    *
@@ -361,7 +361,13 @@ public:
   static transaction::ObTxCleanPolicy
   decide_stmt_rollback_tx_clean_policy_(const int error_code, const bool will_retry);
   static int set_audit_tx_id_(ObSQLSessionInfo *session);
-  static int process_pl_async_commit(ObSQLSessionInfo *session, ObPhysicalPlanCtx *plan_ctx, const int64_t expire_ts, ObEndTransAsyncCallback *callback);
+  static int before_submit_pl_async_commit(ObSQLSessionInfo *session,
+                                           ObPhysicalPlanCtx *plan_ctx,
+                                           const int64_t expire_ts,
+                                           ObEndTransAsyncCallback *callback);
+  static void after_submit_pl_async_commit(int ret,
+                                           ObSQLSessionInfo *session,
+                                           bool reset_trans_variable);
 };
 
 inline int ObSqlTransControl::get_trans_expire_ts(const ObSQLSessionInfo &my_session,

@@ -133,21 +133,6 @@ private:
 };
 static_assert(sizeof(ObTxSEQ) == sizeof(int64_t), "ObTxSEQ should sizeof(int64_t)");
 
-inline int64_t ObTxSEQ::to_string(char* buf, const int64_t buf_len) const
-{
-  int64_t pos = 0;
-  if (raw_val_ == INT64_MAX) {
-    BUF_PRINTF("MAX");
-  } else if (_sign_ == 0 && n_format_) {
-    J_OBJ_START();
-    J_KV(K_(branch), "seq", seq_);
-    J_OBJ_END();
-  } else {
-    BUF_PRINTF("%lu", raw_val_);
-  }
-  return pos;
-}
-
 inline OB_DEF_SERIALIZE_SIMPLE(ObTxSEQ)
 {
   return serialization::encode_vi64(buf, buf_len, pos, raw_val_);

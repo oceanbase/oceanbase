@@ -125,7 +125,7 @@ void TestIndependentDag::alloc_and_add_priority_task(
 class ObTestIndependentBaseDag : public ObIndependentDag
 {
 public:
-  ObTestIndependentBaseDag() : ObIndependentDag(ObDagType::DAG_TYPE_DDL) {}
+  ObTestIndependentBaseDag() : ObIndependentDag(ObDagType::DAG_TYPE_DDL_INDEPENDENT) {}
   ~ObTestIndependentBaseDag() {}
 public:
   virtual uint64_t hash() const override { return 0; }

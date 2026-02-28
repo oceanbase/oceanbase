@@ -15,6 +15,7 @@
 
 #include "storage/memtable/mvcc/ob_tx_callback_functor.h"
 #include "storage/memtable/ob_memtable_util.h"
+#include "ob_tx_callback_hash_holder_helper.h"
 namespace oceanbase
 {
 namespace memtable
@@ -183,6 +184,7 @@ public:
   {
     return log_latch_.try_lock() ? &log_latch_ : NULL;
   }
+  bool is_logging_locked() const { return log_latch_.is_locked(); }
   bool empty() const { return head_.get_next() == &head_; }
   int64_t get_appended() const { return appended_; }
   int64_t get_length() const { return length_; }
@@ -204,14 +206,14 @@ public:
   transaction::ObPartTransCtx *get_trans_ctx() const;
   bool pending_log_too_large(const int64_t limit) const
   {
-    return ATOMIC_LOAD(&data_size_) - ATOMIC_LOAD(&logged_data_size_) > limit;
+    return ATOMIC_LOAD(&data_size_) - ATOMIC_LOAD(&logged_data_size_) - ATOMIC_LOAD(&unlogged_and_rollbacked_data_size_) > limit;
   }
   // *NOTICE* this _only_ account MvccRowCallback on memtable
   bool has_pending_log() const {
-    return ATOMIC_LOAD(&data_size_) - ATOMIC_LOAD(&logged_data_size_) > 0;
+    return ATOMIC_LOAD(&data_size_) - ATOMIC_LOAD(&logged_data_size_) - ATOMIC_LOAD(&unlogged_and_rollbacked_data_size_) > 0;
   }
   int64_t get_pending_log_size() const {
-    return data_size_ - logged_data_size_;
+    return ATOMIC_LOAD(&data_size_) - ATOMIC_LOAD(&logged_data_size_) - ATOMIC_LOAD(&unlogged_and_rollbacked_data_size_);
   }
   int64_t get_logged_data_size() const {
     return logged_data_size_;
@@ -236,6 +238,7 @@ private:
   int64_t branch_removed_;
   int64_t data_size_;
   int64_t logged_data_size_;
+  int64_t unlogged_and_rollbacked_data_size_;
   // the max scn of synced callback
   // fast commit remove callback should not cross this
   share::SCN sync_scn_;

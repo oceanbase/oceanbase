@@ -25,7 +25,11 @@ class ObEstSelInfo;
 class ObRawExprPrinter;
 class ObExecContext;
 class OptTableMeta;
+class ObSQLSessionInfo;
 }  // end of namespace sql
+namespace transaction {
+class ObTxDesc;
+}  // end of namespace transaction
 namespace common {
 class ObServerConfig;
 class ObMySQLProxy;
@@ -37,6 +41,52 @@ struct ObDSFailTabInfo
   ObSEArray<int64_t, 1, common::ModulePageAllocator, true> part_ids_;
   TO_STRING_KV(K(table_id_),
                K(part_ids_));
+};
+
+struct ObDSSessionSavedData
+{
+  ObDSSessionSavedData() :
+    session_value_(NULL),
+    nested_count_(-1),
+    is_no_backslash_escapes_(false),
+    tx_desc_(NULL),
+    is_sess_in_retry_(false),
+    last_query_retry_err_(OB_SUCCESS),
+    session_query_timeout_(0),
+    route_to_column_replica_(false)
+  {}
+
+  void reset()
+  {
+    session_value_ = NULL;
+    nested_count_ = -1;
+    is_no_backslash_escapes_ = false;
+    tx_desc_ = NULL;
+    is_sess_in_retry_ = false;
+    last_query_retry_err_ = OB_SUCCESS;
+    session_query_timeout_ = 0;
+    route_to_column_replica_ = false;
+  }
+
+  TO_STRING_KV(KP(session_value_),
+               K(nested_count_),
+               K(is_no_backslash_escapes_),
+               K(tx_desc_),
+               K(is_sess_in_retry_),
+               K(last_query_retry_err_),
+               K(session_query_timeout_),
+               K(route_to_column_replica_));
+
+  sql::ObSQLSessionInfo::StmtSavedValue *session_value_;
+  int64_t nested_count_;
+  bool is_no_backslash_escapes_;
+  transaction::ObTxDesc *tx_desc_;
+  bool is_sess_in_retry_;
+  int last_query_retry_err_;
+  int64_t session_query_timeout_;
+  bool route_to_column_replica_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObDSSessionSavedData);
 };
 
 struct ObDSTableParam
@@ -72,7 +122,7 @@ struct ObDSTableParam
   int64_t max_ds_timeout_;
   int64_t degree_;
   bool need_specify_partition_;
-  ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> partition_infos_;
+  ObSEArray<PartInfo, 4> partition_infos_;
   bool force_use_kv_cache_;
 
   TO_STRING_KV(K(tenant_id_),
@@ -357,22 +407,10 @@ private:
   int get_ds_stat_items(const ObDSTableParam &param,
                         ObIArray<ObDSResultItem> &ds_result_items);
   int prepare_and_store_session(ObSQLSessionInfo *session,
-                                sql::ObSQLSessionInfo::StmtSavedValue *&session_value,
-                                int64_t &nested_count,
-                                bool &is_no_backslash_escapes,
-                                transaction::ObTxDesc *&tx_desc,
-                                bool &is_sess_in_retry,
-                                int &last_query_retry_err,
                                 int64_t ds_query_timeout,
-                                int64_t &session_query_timeout);
+                                ObDSSessionSavedData &saved_data);
   int restore_session(ObSQLSessionInfo *session,
-                      sql::ObSQLSessionInfo::StmtSavedValue *session_value,
-                      int64_t nested_count,
-                      bool is_no_backslash_escapes,
-                      transaction::ObTxDesc *tx_desc,
-                      bool &is_sess_in_retry,
-                      int &last_query_retry_err,
-                      int64_t session_query_timeout);
+                      ObDSSessionSavedData &saved_data);
   int add_table_clause(ObSqlString &table_str);
   bool allow_cache_ds_result_to_sql_ctx () const;
 
@@ -392,8 +430,8 @@ private:
   ObString sample_block_;
   ObString basic_hints_;
   ObString where_conditions_;
-  ObSEArray<ObDSStatItem *, 4, common::ModulePageAllocator, true> ds_stat_items_;
-  ObSEArray<ObObj, 4, common::ModulePageAllocator, true> results_;
+  ObSEArray<ObDSStatItem *, 4> ds_stat_items_;
+  ObSEArray<ObObj, 4> results_;
   bool is_big_table_;
   int64_t sample_big_table_rown_cnt_;
   ObString table_clause_;

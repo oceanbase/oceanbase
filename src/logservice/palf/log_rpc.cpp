@@ -18,7 +18,7 @@ using namespace obrpc;
 namespace palf
 {
 LogRpc::LogRpc() : rpc_proxy_(NULL),
-                   opt_lock_(),
+                   opt_lock_(common::ObLatchIds::OB_PALF_LOG_RPC_OPT_LOCK),
                    options_(),
                    tenant_id_(0),
                    cluster_id_(0),

@@ -41,6 +41,32 @@ public:
   static int calc_odps_size(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                        ObExpr &rt_expr) const override;
+
+  template <typename T, typename U>
+  static int fetch_size_or_row_count_wrapper(
+      const ObString &part_spec, const ObString &properties,
+      ObOdpsJniConnector::OdpsFetchType fetch_type, int64_t &row_count,
+      ObIAllocator &allocator, ObString &session_id) {
+    int ret = OB_SUCCESS;
+    T odps_driver;
+    if (OB_FAIL(U::init_odps_driver(fetch_type, THIS_WORKER.get_session(),
+                                    properties, odps_driver))) {
+      LOG_WARN("failed to init odps driver", K(ret));
+    } else if (fetch_type ==
+               ObOdpsJniConnector::OdpsFetchType::GET_ODPS_TABLE_SIZE) {
+      if (OB_FAIL(U::fetch_odps_partition_size(part_spec, odps_driver,
+                                               row_count))) {
+        LOG_WARN("failed to fetch size", K(ret));
+      }
+    } else {
+      if (OB_FAIL(U::fetch_odps_partition_row_count_and_session_id(
+              odps_driver, part_spec, row_count, allocator, session_id))) {
+        LOG_WARN("failed to fetch row count", K(ret));
+      }
+    }
+    return ret;
+  }
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCalcOdpsSize) const;
 };

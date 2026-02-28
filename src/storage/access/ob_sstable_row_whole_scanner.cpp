@@ -72,8 +72,6 @@ void ObSSTableRowWholeScanner::reset()
   }
   allocator_.reset();
   is_inited_ = false;
-  last_micro_block_recycled_ = false;
-  last_mvcc_row_already_output_ = false;
 }
 
 void ObSSTableRowWholeScanner::reuse()
@@ -97,8 +95,6 @@ void ObSSTableRowWholeScanner::reuse()
   }
   allocator_.reuse();
   is_inited_ = false;
-  last_micro_block_recycled_ = false;
-  last_mvcc_row_already_output_ = false;
 }
 
 int ObSSTableRowWholeScanner::init_micro_scanner(const ObDatumRange *range)
@@ -200,7 +196,6 @@ int ObSSTableRowWholeScanner::inner_open(
     sstable_ = static_cast<ObSSTable *>(table);
     prefetch_macro_cursor_ = 0;
     cur_macro_cursor_ = 0;
-    last_mvcc_row_already_output_ = true;
     const ObITableReadInfo *rowkey_read_info = nullptr;
 
     if (table->is_normal_cg_sstable()) {
@@ -253,8 +248,7 @@ int ObSSTableRowWholeScanner::open(
     ObTableAccessContext &access_ctx,
     const ObDatumRange &query_range,
     const ObMacroBlockDesc &macro_desc,
-    ObSSTable &sstable,
-    const bool last_mvcc_row_already_output)
+    ObSSTable &sstable)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -269,7 +263,6 @@ int ObSSTableRowWholeScanner::open(
     sstable_ = &sstable;
     prefetch_macro_cursor_ = 0;
     cur_macro_cursor_ = 0;
-    last_mvcc_row_already_output_ = last_mvcc_row_already_output;
     MacroScanHandle &scan_handle = scan_handles_[0];
     scan_handle.reset();
 
@@ -382,9 +375,6 @@ int ObSSTableRowWholeScanner::open_next_valid_micro_block()
           LOG_WARN("failed to open macro block", K(ret), K_(cur_macro_cursor), K_(prefetch_macro_cursor));
         }
       }
-    } else if (OB_UNLIKELY(last_micro_block_recycled_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected micro block status", K(ret), K_(cur_macro_cursor), KPC(this));
     } else {
       break;
     }
@@ -457,24 +447,6 @@ int ObSSTableRowWholeScanner::prefetch()
   return ret;
 }
 
-int ObSSTableRowWholeScanner::check_macro_block_recycle(const ObMacroBlockDesc &macro_desc, bool &can_recycle)
-{
-  int ret = OB_SUCCESS;
-  can_recycle = false;
-  if (!access_ctx_->query_flag_.is_multi_version_minor_merge()) {
-  } else if (OB_UNLIKELY(!macro_desc.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid block data", K(ret), K(macro_desc));
-  } else if (!macro_desc.contain_uncommitted_row_ &&
-             macro_desc.max_merged_trans_version_ <= access_ctx_->trans_version_range_.base_version_ &&
-             (last_micro_block_recycled_ || last_mvcc_row_already_output_)) {
-    can_recycle = true;
-  }
-  // TODO: @dengzhi.ldz enable recycle after making adaptor for migration
-  can_recycle = false;
-  return ret;
-}
-
 int ObSSTableRowWholeScanner::open_macro_block()
 {
   int ret = OB_SUCCESS;
@@ -484,26 +456,17 @@ int ObSSTableRowWholeScanner::open_macro_block()
     } else if (cur_macro_cursor_ >= prefetch_macro_cursor_) {
       ret = OB_ITER_END;
     } else {
-      bool can_recycle = false;
       MacroScanHandle &scan_handle = scan_handles_[cur_macro_cursor_ % PREFETCH_DEPTH];
       ObDatumRange range;
       const bool is_need_trans_range = sstable_->is_normal_cg_sstable() && 0 != scan_handle.start_row_offset_;
       scan_handle.is_right_border_ = (cur_macro_cursor_ == prefetch_macro_cursor_ - 1);
       const ObITableReadInfo *rowkey_read_info = nullptr;
       micro_block_iter_.reset();
-
       if (OB_FAIL(iter_param_->get_index_read_info(sstable_->is_normal_cg_sstable(), rowkey_read_info))) {
         STORAGE_LOG(WARN, "unexpected null index read info", K(ret), K(sstable_->is_normal_cg_sstable()));
       } else if (is_need_trans_range && OB_FAIL(rowkey_helper_.trans_to_cg_range(scan_handle.start_row_offset_, query_range_))) {
         LOG_WARN("failed to trans cg range", K(ret), K(query_range_), K(scan_handle.start_row_offset_));
       } else if (FALSE_IT(range = is_need_trans_range ? rowkey_helper_.get_result_range() : query_range_)) {
-      } else  if (access_ctx_->query_flag_.is_multi_version_minor_merge() &&
-          OB_FAIL(check_macro_block_recycle(scan_handle.macro_block_desc_, can_recycle))) {
-        LOG_WARN("failed to check macro block recycle", K(ret), K(cur_macro_cursor_));
-      } else if (can_recycle) {
-        last_micro_block_recycled_ = true;
-        cur_macro_cursor_++;
-        FLOG_INFO("macro block recycled", K(scan_handle.macro_block_desc_.macro_block_id_));
       } else if (OB_FAIL(scan_handle.macro_io_handle_.wait())) {
         LOG_WARN("failed to read macro block from io", K(ret));
       } else if (OB_FAIL(micro_block_iter_.open(
@@ -525,23 +488,6 @@ int ObSSTableRowWholeScanner::open_macro_block()
   return ret;
 }
 
-int ObSSTableRowWholeScanner::check_micro_block_recycle(const ObMicroBlockHeader &micro_header, bool &can_recycle)
-{
-  int ret = OB_SUCCESS;
-  can_recycle = false;
-  if (!access_ctx_->query_flag_.is_multi_version_minor_merge()) {
-  } else {
-    if (!micro_header.contain_uncommitted_rows() &&
-        micro_header.max_merged_trans_version_ <= access_ctx_->trans_version_range_.base_version_ &&
-        (last_micro_block_recycled_ || last_mvcc_row_already_output_)) {
-      can_recycle = true;
-    }
-  }
-  // TODO: @dengzhi.ldz enable recycle after making adaptor for migration
-  can_recycle = false;
-  return ret;
-}
-
 int ObSSTableRowWholeScanner::open_micro_block()
 {
   int ret = OB_SUCCESS;
@@ -552,7 +498,6 @@ int ObSSTableRowWholeScanner::open_micro_block()
     }
   } else {
     ObMicroBlockData block_data;
-    bool can_recycle = false;
     while (OB_SUCC(ret)) {
     MacroScanHandle &scan_handle = scan_handles_[cur_macro_cursor_ % PREFETCH_DEPTH];
     bool is_left_border = scan_handle.is_left_border_ && micro_block_iter_.is_left_border();
@@ -565,13 +510,6 @@ int ObSSTableRowWholeScanner::open_micro_block()
     } else if (OB_ISNULL(micro_header = block_data.get_micro_header()))  {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpceted null micro header", K(ret), K(micro_header));
-    } else if (access_ctx_->query_flag_.is_multi_version_minor_merge() &&
-        OB_FAIL(check_micro_block_recycle(*micro_header, can_recycle))) {
-      LOG_WARN("failed to check micro block recycle", K(ret));
-    } else if (can_recycle) {
-      last_micro_block_recycled_ = true;
-      last_mvcc_row_already_output_ = micro_header->is_last_row_last_flag();
-      FLOG_INFO("micro block recycled", KPC(micro_header));
     } else if (OB_FAIL(micro_scanner_->open(
             scan_handle.macro_io_handle_.get_macro_id(),
             block_data,
@@ -580,55 +518,9 @@ int ObSSTableRowWholeScanner::open_micro_block()
       LOG_WARN("failed to open micro scanner", K(ret),
           K_(cur_macro_cursor), K(scan_handle.macro_io_handle_));
     } else {
-      if (last_micro_block_recycled_ && !last_mvcc_row_already_output_) {
-        if (OB_FAIL(recycle_last_rowkey_in_micro_block())) {
-          LOG_WARN("Fail to recycle left rows of last macro", K(ret),  "macor_id", scan_handle.macro_io_handle_.get_macro_id());
-        }
-      }
-      last_micro_block_recycled_ = false;
-      last_mvcc_row_already_output_ = micro_header->is_last_row_last_flag();
       break;
     }
   }
-  }
-  return ret;
-}
-
-int ObSSTableRowWholeScanner::recycle_last_rowkey_in_micro_block()
-{
-  int ret = OB_SUCCESS;
-  bool is_rowkey_first_row = false;
-  bool is_rowkey_first_shadow_row = false;
-  if (OB_UNLIKELY(!access_ctx_->query_flag_.is_multi_version_minor_merge())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid block data", K(ret), KPC_(access_ctx));
-  } else if (OB_FAIL(reinterpret_cast<ObMultiVersionMicroBlockMinorMergeRowScanner *>(micro_scanner_)->
-                     get_first_row_mvcc_info(is_rowkey_first_row, is_rowkey_first_shadow_row))) {
-    LOG_WARN("Fail to get row header info", K(ret));
-  } else if (OB_UNLIKELY(is_rowkey_first_row)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpceted first row flag", K(ret));
-  } else {
-    // recycle left rows of the last rowkey in current micro block
-    const blocksstable::ObDatumRow *row = nullptr;
-    int64_t trans_col_index = iter_param_->get_schema_rowkey_count();
-    int64_t recycle_version = access_ctx_->trans_version_range_.base_version_;
-    while(OB_SUCC(ret)) {
-      if (OB_FAIL(micro_scanner_->get_next_row(row))) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("Failed to get next row", K(ret), K(cur_macro_cursor_));
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpceted meet end of the micro scanner", K(ret));
-        }
-      } else if (OB_UNLIKELY(row->is_uncommitted_row() ||
-                             -row->storage_datums_[trans_col_index].get_int() > recycle_version)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected trans version in row", K(ret), K(recycle_version), KPC(row));
-      } else if (row->is_last_multi_version_row()) {
-        break;
-      }
-    }
   }
   return ret;
 }

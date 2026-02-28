@@ -136,6 +136,7 @@ void ObSchemaConstructTask::wait(const int64_t version)
     LOG_WARN_RET(OB_SUCCESS, "task: waiting", K(version), K(count()));
   }
   int rc = 0;
+  ObWaitEventGuard guard(ObWaitEventIds::SCHEMA_CONSTRUCT_TASK_WAIT, 0, version);
   do {
     rc = ob_pthread_cond_timedwait(&schema_cond_, &schema_mutex_, &ts);
   } while (0);
@@ -206,7 +207,7 @@ int ObSchemaGetterController::init(ObMultiVersionSchemaService *schema_service)
     LOG_WARN("failed to create constructing keys set", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < COND_SLOT_NUM; i++) {
-      if (OB_FAIL(cond_slot_[i].init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+      if (OB_FAIL(cond_slot_[i].init(ObWaitEventIds::SCHEMA_GETTER_COND_WAIT))) {
         LOG_WARN("init cond fail", KR(ret));
       }
     }
@@ -5139,7 +5140,7 @@ int ObMultiVersionSchemaService::cal_purge_table_timeout_(
       cal_table_timeout += GCONF.rpc_timeout;
     }
     // has sequence
-    if (OB_SUCC(ret) && (orig_table_schema->is_user_table() || orig_table_schema->is_oracle_tmp_table())) {
+    if (OB_SUCC(ret) && (orig_table_schema->is_user_table() || orig_table_schema->is_oracle_tmp_table() || orig_table_schema->is_oracle_tmp_table_v2())) {
       for (ObTableSchema::const_column_iterator iter = orig_table_schema->column_begin();
           OB_SUCC(ret) && iter != orig_table_schema->column_end(); ++iter) {
         ObColumnSchemaV2 *column_schema = *iter;
@@ -5453,6 +5454,24 @@ int ObMultiVersionSchemaService::get_dropped_tenant_ids(
   return ret;
 }
 
+int ObMultiVersionSchemaService::check_schema_slot_available(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaStore *schema_store = nullptr;
+  ObSchemaMgrCache *schema_mgr_cache = nullptr;
+  ObSchemaMgrItem *dst_item = NULL;
+  int64_t target_pos = -1;
+  if (OB_ISNULL(schema_store = schema_store_map_.get(tenant_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_store is null", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(schema_mgr_cache = &schema_store->schema_mgr_cache_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_mgr_cache is null", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_mgr_cache->find_dst_item_for_put(tenant_id, dst_item, target_pos))){
+    LOG_WARN("fail to find dst item for put", KR(ret), K(dst_item));
+  }
+  return ret;
+}
 }//end of namespace schema
 }//end of namespace share
 }//end of namespace oceanbase

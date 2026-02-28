@@ -11,6 +11,7 @@
 #define OB_STORAGE_COMPACTION_MDS_FILTER_INFO_H_
 #include "lib/utility/ob_macro_utils.h"
 #include "storage/truncate_info/ob_truncate_info.h"
+#include "storage/compaction_ttl/ob_ttl_filter_info.h"
 #include "lib/oblog/ob_log_module.h"
 #include "storage/compaction_ttl/ob_ttl_filter_info.h"
 namespace oceanbase
@@ -21,18 +22,22 @@ class ObIAllocator;
 template <class T>
 class ObIArray;
 }
+namespace storage
+{
+class ObMdsInfoDistinctMgr;
+}
 namespace compaction
 {
 
 struct ObMdsFilterInfo final
 {
 public:
-  enum MdsFilterInfoType : uint8_t
+  enum MdsFilterInfoType : uint8_t // FARM COMPAT WHITELIST
   {
     TRUNCATE_INFO = 0,
     TTL_FILTER_INFO = 1,
     // add new mds filter type here
-    MDS_FILTER_TYPE_MAX
+    MDS_FILTER_TYPE_MAX = 2
   };
   static bool is_valid_filter_info_type(const MdsFilterInfoType type)
   { return type >= TRUNCATE_INFO && type < MDS_FILTER_TYPE_MAX; }
@@ -93,13 +98,48 @@ public:
   {}
   ~ObMdsFilterInfo() {}
   void destroy(common::ObIAllocator &allocator);
-  bool is_empty() const { return !has_truncate_info(); }
+  bool is_empty() const { return !has_truncate_info() && !has_ttl_filter_info() && !has_mlog_purge_scn(); }
   bool has_truncate_info() const { return truncate_info_keys_.count() > 0; }
-  bool is_valid() const { return truncate_info_keys_.is_valid(); }
-  int init_truncate_keys(common::ObIAllocator &allocator, common::ObIArray<storage::ObTruncateInfoKey> &input_array)
+  bool has_ttl_filter_info() const { return ttl_filter_info_keys_.count() > 0; }
+  bool has_mlog_purge_scn() const { return mlog_purge_scn_ > 0; }
+  bool is_valid() const
+  {
+    bool is_valid_result = true;
+    if (!truncate_info_keys_.is_valid()) {
+      is_valid_result = false;
+    } else {
+      if (version_ < MDS_FILTER_INFO_VERSION_V2) {
+        // V1 version: TTL filter info and mlog purge SCN are not allowed
+        is_valid_result = !has_ttl_filter_info() && (0 == mlog_purge_scn_);
+      } else if (mlog_purge_scn_ > 0) {
+        // If mlog purge SCN exists, truncate and TTL filter info are not allowed
+        is_valid_result = !has_truncate_info() && !has_ttl_filter_info();
+      } else {
+        is_valid_result = truncate_info_keys_.is_valid() && ttl_filter_info_keys_.is_valid();
+      }
+    }
+    return is_valid_result;
+  }
+
+  int init(
+    ObIAllocator &allocator,
+    const uint64_t tenant_data_version,
+    const storage::ObMdsInfoDistinctMgr &mds_info_mgr);
+  int init(
+    const uint64_t tenant_data_version,
+    const int64_t mlog_purge_scn); // for mlog
+  int init_keys(common::ObIAllocator &allocator, common::ObIArray<storage::ObTruncateInfoKey> &input_array)
   { return truncate_info_keys_.init(allocator, input_array); }
-  const ObTruncateInfoKeyArray &get_truncate_keys() const { return truncate_info_keys_; }
-  int assign(common::ObIAllocator &allocator, const ObMdsFilterInfo &medium_info);
+  int init_keys(common::ObIAllocator &allocator, common::ObIArray<storage::ObTTLFilterInfoKey> &input_array)
+  { return ttl_filter_info_keys_.init(allocator, input_array); }
+
+  template <typename T, typename std::enable_if_t<std::is_same_v<T, storage::ObTruncateInfo>, int> = 0>
+  const ObTruncateInfoKeyArray &get_keys() const { return truncate_info_keys_; }
+  template <typename T, typename std::enable_if_t<std::is_same_v<T, storage::ObTTLFilterInfo>, int> = 0>
+  const ObTTLFilterInfoKeyArray &get_keys() const { return ttl_filter_info_keys_; }
+  int64_t get_mlog_purge_scn() const { return mlog_purge_scn_; }
+
+  int assign(common::ObIAllocator &allocator, const ObMdsFilterInfo &mds_filter_info);
   bool operator ==(const ObMdsFilterInfo &other) const = delete;
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
@@ -110,7 +150,15 @@ public:
   int64_t get_serialize_size() const;
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const
   {
-    truncate_info_keys_.gene_info(buf, buf_len, pos);
+    if (truncate_info_keys_.count() > 0) {
+      truncate_info_keys_.gene_info(buf, buf_len, pos);
+    }
+    if (ttl_filter_info_keys_.count() > 0) {
+      ttl_filter_info_keys_.gene_info(buf, buf_len, pos);
+    }
+    if (has_mlog_purge_scn()) {
+      J_KV("mlog_purge_scn", mlog_purge_scn_);
+    }
   }
   TO_STRING_KV(K_(version), K_(truncate_info_keys), K_(ttl_filter_info_keys), K_(mlog_purge_scn));
 private:

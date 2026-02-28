@@ -14,6 +14,7 @@
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
 #include "share/ob_time_utility2.h"
+#include "share/catalog/ob_catalog_properties.h"
 #include "sql/resolver/dml/ob_aggr_expr_push_up_analyzer.h"
 #include "sql/resolver/dml/ob_group_by_checker.h"
 #include "sql/resolver/dml/ob_insert_resolver.h"
@@ -25,6 +26,7 @@
 #include "sql/parser/ob_parser_utils.h"
 #include "sql/resolver/mv/ob_major_refresh_mjv_printer.h"
 #include "sql/privilege_check/ob_privilege_check.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 #include "sql/executor/ob_memory_tracker.h"
 namespace oceanbase
@@ -328,8 +330,15 @@ int ObSelectResolver::do_resolve_set_query_in_recursive_cte(const ParseNode &par
     } else if (is_oracle_mode && OB_FAIL(check_cte_set_types(*select_stmt->get_set_query(0),
                                                              *select_stmt->get_set_query(1)))) {
       LOG_WARN("check cte set types", K(ret));
-    } else if (select_stmt->is_set_distinct() || ObSelectStmt::UNION != select_stmt->get_set_op()) {
-      // 必须是union all
+    } else if ((select_stmt->is_set_distinct() || ObSelectStmt::UNION != select_stmt->get_set_op())
+               && (lib::is_oracle_mode()
+                || GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_3_0
+                || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
+                    && GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_3_5_5)
+                || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_0_0
+                    && GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_4_2_0)
+                || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_0_0
+                    && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0))) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "recursive WITH clause using operation not union all");
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "recursive WITH clause using union (distinct) operation");
@@ -2511,7 +2520,7 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
                    && OB_FAIL(add_alias_from_dot_notation(sel_expr, select_item))) {  // deal dot notation without alias
           LOG_WARN("fail to resolve alias in dot notation", K(ret));
         } else {
-          if (params_.is_prepare_protocol_
+          if ((params_.is_prepare_protocol_ && !params_.is_from_pl_)
               || (!session_info_->get_local_ob_enable_plan_cache()
                   && !session_info_->force_enable_plan_tracing())
               || 0 == node.children_[i]->is_val_paramed_item_idx_) {
@@ -4670,6 +4679,7 @@ int ObSelectResolver::resolve_group_by_element(const ParseNode *node,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid resolver arguments", K(ret), K(node), K(select_stmt));
   } else {
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
     switch (node->type_) {
       case T_NULL: {
         /*compatible oracle: select c1 from t1 group by c1, (); do nothing, just skip*/
@@ -4692,7 +4702,7 @@ int ObSelectResolver::resolve_group_by_element(const ParseNode *node,
         break;
       }
       case T_ROLLUP_LIST: {
-        ObRollupItem rollup_item;
+        ObRollupItem rollup_item(allocator);
         if (OB_FAIL(resolve_rollup_list(node, rollup_item))) {
           LOG_WARN("failed to resolve rollup list", K(ret));
         } else if (OB_FAIL(select_stmt->add_rollup_item(rollup_item))) {
@@ -4701,7 +4711,7 @@ int ObSelectResolver::resolve_group_by_element(const ParseNode *node,
         break;
       }
       case T_CUBE_LIST: {
-        ObCubeItem cube_item;
+        ObCubeItem cube_item(allocator);
         if (OB_FAIL(resolve_cube_list(node, cube_item))) {
           LOG_WARN("failed to resolve cube list", K(ret));
         } else if (OB_FAIL(select_stmt->add_cube_item(cube_item))) {
@@ -4710,13 +4720,12 @@ int ObSelectResolver::resolve_group_by_element(const ParseNode *node,
         break;
       }
       case T_GROUPING_SETS_LIST: {
-        HEAP_VAR(ObGroupingSetsItem, grouping_sets_item) {
-          if (OB_FAIL(resolve_grouping_sets_list(node, grouping_sets_item))) {
-            LOG_WARN("failed to resolve grouping sets list", K(ret));
-          } else if (OB_FAIL(select_stmt->add_grouping_sets_item(grouping_sets_item))) {
-            LOG_WARN("failed to add grouping sets item", K(ret));
-          } else {/*do nothing*/}
-        }
+        ObGroupingSetsItem grouping_sets_item(allocator);
+        if (OB_FAIL(resolve_grouping_sets_list(node, grouping_sets_item))) {
+          LOG_WARN("failed to resolve grouping sets list", K(ret));
+        } else if (OB_FAIL(select_stmt->add_grouping_sets_item(grouping_sets_item))) {
+          LOG_WARN("failed to add grouping sets item", K(ret));
+        } else {/*do nothing*/}
         break;
       }
       default: {
@@ -4743,6 +4752,8 @@ int ObSelectResolver::resolve_group_by_list(const ParseNode *node,
       OB_UNLIKELY(T_GROUPBY_CLAUSE != node->type_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid resolver arguments", K(ret), K(node), K(select_stmt));
+  } else if (OB_FAIL(init_stmt_group_clause_capacity(node))) {
+    LOG_WARN("failed to init stmt group clause capacity", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
       const ParseNode *child_node = node->children_[i];
@@ -4786,7 +4797,8 @@ int ObSelectResolver::resolve_groupby_node_for_rollup_cube(const ParseNode *grou
   int ret = OB_SUCCESS;
   const ParseNode *group_expr_node = NULL;
   bool dummy_has_explicit_dir = false;
-  ObGroupbyExpr item;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObGroupbyExpr item(allocator);
   if (OB_ISNULL(group_key_node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid resolver arguments", K(ret), K(group_key_node));
@@ -4821,11 +4833,12 @@ int ObSelectResolver::resolve_rollup_list(const ParseNode *node, ObRollupItem &r
   if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ != T_ROLLUP_LIST)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(node));
+  } else if (OB_FAIL(rollup_item.rollup_list_exprs_.reserve(node->num_child_))) {
+    LOG_WARN("failed to reserve", K(ret));
   } else {
     ObSEArray<ObRawExpr*, 4> dummy_groupby_exprs;
     ObSEArray<OrderItem, 4> dummy_order_items;
     for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
-      ObGroupbyExpr item;
       const ParseNode *group_key_node = node->children_[i];
       if (OB_ISNULL(group_key_node)) {
         ret = OB_INVALID_ARGUMENT;
@@ -4853,14 +4866,32 @@ int ObSelectResolver::resolve_grouping_sets_list(const ParseNode *node,
   } else {
     ObSEArray<ObRawExpr*, 4> dummy_rollup_exprs;
     ObSEArray<OrderItem, 4> dummy_order_items;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
     bool dummy_has_explicit_dir = false;
+    int64_t group_num = 0;
+    int64_t rollup_num = 0;
+    int64_t cube_num = 0;
+    int64_t grouping_num = 0;
+    if (OB_FAIL(resolve_group_by_element_num(node,
+                                             false,
+                                             group_num,
+                                             rollup_num,
+                                             cube_num,
+                                             grouping_num))) {
+      LOG_WARN("failed to resolve group by element num", K(ret));
+    } else if (OB_FAIL(grouping_sets_item.grouping_sets_exprs_.reserve(group_num))) {
+      LOG_WARN("failed to reserve grouping sets exprs", K(ret));
+    } else if (OB_FAIL(grouping_sets_item.rollup_items_.reserve(rollup_num))) {
+      LOG_WARN("failed to reserve rollup items", K(ret));
+    } else if (OB_FAIL(grouping_sets_item.cube_items_.reserve(cube_num))) {
+      LOG_WARN("failed to reserve cube items", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
       const ParseNode *child_node = node->children_[i];
       if (OB_ISNULL(child_node)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(child_node));
       } else {
-        ObGroupbyExpr item;
         switch (child_node->type_) {
           case T_NULL: {
             //for grouping sets may occur this situation:
@@ -4868,13 +4899,14 @@ int ObSelectResolver::resolve_grouping_sets_list(const ParseNode *node,
             // <==>
             //  select count(c1) from t1 group by c1 union all select count(c1) from t1;
             //we should consider it to compatible oracle better.
+            ObGroupbyExpr item(allocator);
             if (OB_FAIL(grouping_sets_item.grouping_sets_exprs_.push_back(item))) {
               LOG_WARN("failed to push back into gs exprs.", K(ret));
             }
             break;
           }
           case T_GROUPBY_KEY: {
-            ObGroupbyExpr item;
+            ObGroupbyExpr item(allocator);
             if (OB_ISNULL(child_node->children_) || OB_UNLIKELY(child_node->num_child_ != 1)) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("invalid resolver arguments", K(ret), K(child_node));
@@ -4893,7 +4925,7 @@ int ObSelectResolver::resolve_grouping_sets_list(const ParseNode *node,
             break;
           }
           case T_ROLLUP_LIST: {
-            ObRollupItem rollup_item;
+            ObRollupItem rollup_item(allocator);
             if (OB_FAIL(resolve_rollup_list(child_node, rollup_item))) {
               LOG_WARN("failed to resolve rollup list", K(ret));
             } else if (OB_FAIL(grouping_sets_item.rollup_items_.push_back(rollup_item))) {
@@ -4902,7 +4934,7 @@ int ObSelectResolver::resolve_grouping_sets_list(const ParseNode *node,
             break;
           }
           case T_CUBE_LIST: {
-            ObCubeItem cube_item;
+            ObCubeItem cube_item(allocator);
             if (OB_FAIL(resolve_cube_list(child_node, cube_item))) {
               LOG_WARN("failed to resolve cube list", K(ret));
             } else if (OB_FAIL(grouping_sets_item.cube_items_.push_back(cube_item))) {
@@ -4929,11 +4961,12 @@ int ObSelectResolver::resolve_cube_list(const ParseNode *node, ObCubeItem &cube_
   if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ != T_CUBE_LIST)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(node));
+  } else if (OB_FAIL(cube_item.cube_list_exprs_.reserve(node->num_child_))) {
+    LOG_WARN("failed to reserve", K(ret));
   } else {
     ObSEArray<ObRawExpr*, 4> dummy_groupby_exprs;
     ObSEArray<OrderItem, 4> dummy_order_items;
     for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
-      ObGroupbyExpr item;
       const ParseNode *group_key_node = node->children_[i];
       if (OB_ISNULL(group_key_node)) {
         ret = OB_INVALID_ARGUMENT;
@@ -4975,6 +5008,10 @@ int ObSelectResolver::resolve_with_rollup_clause(const ParseNode *node,
         has_rollup = true;
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(init_stmt_group_clause_capacity(sort_list_node))) {
+      LOG_WARN("failed to init stmt group clause capacity", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < sort_list_node->num_child_; ++i) {
       const ParseNode *sort_node = sort_list_node->children_[i];
       if (OB_ISNULL(sort_node)) {
@@ -5001,6 +5038,88 @@ int ObSelectResolver::resolve_with_rollup_clause(const ParseNode *node,
                                                   has_explicit_dir))) {
         LOG_WARN("failed to resolve group node.", K(ret));
       } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::init_stmt_group_clause_capacity(const ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  int64_t group_num = 0;
+  int64_t rollup_num = 0;
+  int64_t cube_num = 0;
+  int64_t grouping_num = 0;
+  if (OB_ISNULL(node) || OB_ISNULL(get_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (1 == node->num_child_ && T_WITH_ROLLUP_CLAUSE == node->children_[0]->type_) {
+    // do nothing, the with rollup clause will be resolved later
+  } else if (OB_FAIL(resolve_group_by_element_num(node,
+                                                  true,
+                                                  group_num,
+                                                  rollup_num,
+                                                  cube_num,
+                                                  grouping_num))) {
+    LOG_WARN("failed to resolve group by element num", K(ret));
+  } else if (OB_FAIL(get_select_stmt()->init_group_clause_capacity(rollup_num, cube_num, grouping_num))) {
+    LOG_WARN("failed to init group clause capacity", K(ret));
+  }
+  return ret;
+}
+
+int ObSelectResolver::resolve_group_by_element_num(const ParseNode *node,
+                                                   const bool ignore_empty_group_by,
+                                                   int64_t &group_num,
+                                                   int64_t &rollup_num,
+                                                   int64_t &cube_num,
+                                                   int64_t &grouping_num)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid resolver arguments", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+    const ParseNode *child_node = node->children_[i];
+    switch (child_node->type_) {
+      case T_NULL: {
+        // Q1: group by c1, ();
+        // Q2: group by grouping sets(c1, ());
+        // the empty group by element can not be ignored in Q2
+        if (!ignore_empty_group_by) {
+          ++group_num;
+        }
+        break;
+      }
+      case T_SORT_KEY:
+      case T_GROUPBY_KEY: {
+        ++group_num;
+        break;
+      }
+      case T_ROLLUP_LIST: {
+        ++rollup_num;
+        break;
+      }
+      case T_CUBE_LIST: {
+        ++cube_num;
+        break;
+      }
+      case T_GROUPING_SETS_LIST: {
+        ++grouping_num;
+        int64_t dummy_group_num = 0;
+        int64_t dummy_grouping_num = 0;
+        if (OB_FAIL(resolve_group_by_element_num(child_node, false, dummy_group_num,
+                                                 rollup_num, cube_num, dummy_grouping_num))) {
+          LOG_WARN("failed to resolve group by element num", K(ret));
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected group by type", K(ret), K(get_type_name(child_node->type_)));
+        break;
+      }
     }
   }
   return ret;
@@ -5714,6 +5833,50 @@ int ObSelectResolver::resolve_into_file_node(const ParseNode *list_node, ObSelec
   return ret;
 }
 
+int ObSelectResolver::resolve_into_file_name_node(const ParseNode *node, ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node is null", K(ret));
+  } else if (T_LOCATION_OBJECT == node->type_) {
+    if (2 != node->num_child_ || OB_ISNULL(node->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node", K(ret));
+    } else {
+      const ParseNode *location_node = node->children_[0];
+      const ParseNode *sub_path_node = node->children_[1];
+      ObString location_name(location_node->str_len_, location_node->str_value_);
+      ObString sub_path;
+      if (OB_NOT_NULL(sub_path_node)) {
+        sub_path = ObString(sub_path_node->str_len_, sub_path_node->str_value_);
+      }
+
+      share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+      ObString full_path_str;
+      if (OB_ISNULL(schema_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema guard is null", K(ret));
+      } else if (OB_FAIL(ObExternalTableUtils::resolve_location_for_load_and_select_into(
+                                *schema_guard, *session_info_, *allocator_,
+                                location_name, sub_path, full_path_str))) {
+        LOG_WARN("failed to resolve location object", K(ret), K(location_name), K(sub_path));
+      } else {
+        obj.set_varchar(full_path_str);
+        obj.set_collation_type(session_info_->get_local_collation_connection());
+      }
+    }
+  } else if (T_EXTERNAL_FILE_LOCATION == node->type_) {
+    if (1 != node->num_child_ || OB_ISNULL(node->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node", "child", node->children_[0]);
+    } else if (OB_FAIL(resolve_into_const_node(node->children_[0], obj))) {
+      LOG_WARN("failed to resolve into const node", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSelectResolver::resolve_file_partition_node(const ParseNode *node, ObSelectIntoItem &into_item)
 {
   int ret = OB_SUCCESS;
@@ -5760,7 +5923,7 @@ int ObSelectResolver::resolve_into_outfile_with_format(const ParseNode *node, Ob
   ParseNode* format_node = NULL;
   ParseNode* option_node = NULL;
   if (node->num_child_ > 0
-      && OB_FAIL(resolve_into_const_node(node->children_[0], into_item.outfile_name_))) { // name
+      && OB_FAIL(resolve_into_file_name_node(node->children_[0], into_item.outfile_name_))) { // name
     LOG_WARN("resolve into outfile name failed", K(ret));
   }
   if (OB_SUCC(ret) && node->num_child_ > 1 && NULL != node->children_[1]) { // partition by
@@ -5847,7 +6010,7 @@ int ObSelectResolver::resolve_into_outfile_without_format(const ParseNode *node,
 {
   int ret = OB_SUCCESS;
   if (node->num_child_ > 0
-      && OB_FAIL(resolve_into_const_node(node->children_[0], into_item.outfile_name_))) { // name
+      && OB_FAIL(resolve_into_file_name_node(node->children_[0], into_item.outfile_name_))) { // name
     LOG_WARN("resolve into outfile name failed", K(ret));
   }
   if (OB_SUCC(ret) && node->num_child_ > 1 && NULL != node->children_[1]) { // partition by
@@ -5928,7 +6091,7 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
       ret = OB_ERR_VIEW_SELECT_CONTAIN_INTO;
       LOG_WARN("View's SELECT contains a 'INTO' clause.", K(ret));
     } else {
-      new(into_item) ObSelectIntoItem();
+      new(into_item) ObSelectIntoItem(*allocator_);
       into_item->into_type_ = node->type_;
       if (T_INTO_OUTFILE == node->type_) { // into outfile
         if (is_in_set_query()) {
@@ -6454,7 +6617,7 @@ int ObSelectResolver::create_joined_table_item(JoinedTable *&joined_table)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SQL_RESV_LOG(ERROR, "alloc memory for JoinedTable failed", "size", sizeof(JoinedTable));
   } else {
-    joined_table = new (ptr) JoinedTable();
+    joined_table = new (ptr) JoinedTable(*allocator_);
   }
   return ret;
 }
@@ -7366,13 +7529,27 @@ int ObSelectResolver::check_recursive_cte_usage(const ObSelectStmt &select_stmt)
     }
   }
   if (cte_ctx_.invalid_recursive_union() && fake_cte_table_count >= 1) {
-    if (lib::is_mysql_mode()) {
+    if (lib::is_mysql_mode()
+     && (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_3_0
+        || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
+            && GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_3_5_5)
+        || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_0_0
+            && GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_4_2_0)
+        || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_0_0
+            && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0))) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "recursive UNION DISTINCT in Recursive Common Table Expression");
-    } else {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                     "recursive UNION DISTINCT in Recursive Common Table Expression");
+      LOG_WARN("recursive union distinct is not supported in this cluster version "
+               "(min_cluster_version < 4.2.3 "
+               "or [4.3.0, 4.3.5.5) "
+               "or [4.4.0, 4.4.2) "
+               "or [4.5.0, 4.5.1))",
+               K(ret), "min_cluster_version", GET_MIN_CLUSTER_VERSION());
+    } else if (lib::is_oracle_mode()) {
       ret = OB_ERR_NEED_UNION_ALL_IN_RECURSIVE_CTE;
+      LOG_WARN("recursive WITH clause must use a UNION ALL operation", K(ret));
     }
-    LOG_WARN("recursive WITH clause must use a UNION ALL operation", K(ret));
   } else if (fake_cte_table_count > 1) {
     ret = OB_ERR_CTE_RECURSIVE_QUERY_NAME_REFERENCED_MORE_THAN_ONCE;
     LOG_WARN("Recursive query name referenced more than once in recursive branch of recursive WITH clause element", K(ret), K(fake_cte_table_count));
@@ -8261,7 +8438,7 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("sub_query or table_buf is null", K(ret), KP(table_buf));
   } else {
-    table_def = new (table_buf) ObValuesTableDef();
+    table_def = new (table_buf) ObValuesTableDef(*allocator_);
     table_def->row_cnt_ = leaf_nodes.count();
     table_def->access_type_ = ObValuesTableDef::ACCESS_EXPR;
     table_def->is_const_ = true;
@@ -8269,6 +8446,7 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
   int64_t column_cnt = 0;
   ObInsertStmt *insert_stmt = NULL;
   ObInsertTableInfo *insert_table_info = NULL;
+  bool is_target_iceberg_table = false;
   if (OB_FAIL(ret)) {
   } else if (NULL == upper_insert_resolver_) {
   } else if (OB_ISNULL(insert_stmt = upper_insert_resolver_->get_insert_stmt())) {
@@ -8277,6 +8455,20 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
   } else if (OB_ISNULL(insert_table_info = &insert_stmt->get_insert_table_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null insert table info", K(ret));
+  } else {
+    const TableItem *table_item = insert_stmt->get_table_item_by_id(insert_table_info->table_id_);
+    const share::schema::ObTableSchema *table_schema = NULL;
+    if (OB_NOT_NULL(table_item) && OB_NOT_NULL(schema_checker_) && OB_NOT_NULL(params_.session_info_)) {
+      if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                    table_item->ref_id_, table_schema))) {
+        LOG_WARN("get table schema failed", K(ret));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", K(ret));
+      } else if (table_schema->is_external_table()) {
+        is_target_iceberg_table = (table_schema->get_lake_table_format() == share::ObLakeTableFormat::ICEBERG);
+      }
+    }
   }
   /* first set, need resolve select_item name*/
   if (OB_SUCC(ret)) {
@@ -8303,7 +8495,8 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
         if (insert_table_info != NULL
             && insert_table_info->values_desc_.at(i) != NULL
             && insert_table_info->values_desc_.at(i)->is_generated_column()
-            && select_item.expr_->get_expr_type() != T_DEFAULT) {
+            && select_item.expr_->get_expr_type() != T_DEFAULT
+            && !is_target_iceberg_table) {
           // should not insert non-default value to a generated column
           ret = OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN;
           LOG_WARN("non-default value for generated column is not allowed", K(ret));

@@ -188,6 +188,7 @@ class ObLogDeliver : public rpc::frame::ObReqDeliver, public lib::TGTaskHandler,
 public:
 	ObLogDeliver()
       : rpc::frame::ObReqDeliver(),
+        lock_(common::ObLatchIds::TEST_LATCH_LOCK),
         log_server_(NULL),
         tg_id_(0),
         is_stopped_(true) {}
@@ -347,7 +348,8 @@ public:
       handler_(deliver_),
       transport_(NULL),
       batch_rpc_transport_(NULL),
-      high_prio_rpc_transport_(NULL)
+      high_prio_rpc_transport_(NULL),
+      log_disk_lock_(common::ObLatchIds::TEST_LATCH_LOCK)
   {
   }
   ~ObSimpleLogServer()

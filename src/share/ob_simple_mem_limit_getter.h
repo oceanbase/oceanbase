@@ -24,7 +24,7 @@ namespace common
 class ObSimpleMemLimitGetter : public ObITenantMemLimitGetter
 {
 public:
-  ObSimpleMemLimitGetter() : lock_(ObLatchIds::DEFAULT_SPIN_RWLOCK) {}
+  ObSimpleMemLimitGetter() : lock_(ObLatchIds::SIMPLE_MEM_LIMIT_GETTER_LOCK) {}
   virtual ~ObSimpleMemLimitGetter() {}
   int add_tenant(const uint64_t tenant_id,
                  const int64_t lower_limit,

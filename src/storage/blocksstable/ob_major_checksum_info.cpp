@@ -273,10 +273,10 @@ int ObCOMajorChecksumInfo::init_from_merge_result(
     data_checksum_ += res.data_checksum_;
   }
 
-  const bool is_build_row_store_merge = ctx.static_param_.is_build_row_store();
-  const int64_t loop_cnt = is_build_row_store_merge ? column_ckm_struct_.count_ : cg_schema.get_column_count();
+  const bool is_build_all_cg_only = ctx.is_build_all_cg_only();
+  const int64_t loop_cnt = is_build_all_cg_only ? column_ckm_struct_.count_ : cg_schema.get_column_count();
   for (int64_t j = 0; OB_SUCC(ret) && j < loop_cnt; ++j) {
-    const uint16_t column_idx = is_build_row_store_merge ? j : cg_schema.get_column_idx(j);
+    const uint16_t column_idx = is_build_all_cg_only ? j : cg_schema.get_column_idx(j);
     if (OB_UNLIKELY(column_idx >= column_ckm_struct_.count_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected column idx", K(ret), K(column_idx), KPC(this));

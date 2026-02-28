@@ -435,7 +435,6 @@ int ObExprNlsInitCap::calc_nls_initcap_batch(const ObExpr &expr, ObEvalCtx &ctx,
           continue;
         } else if (is_result_all_null || datum_array[i].is_null()) {
           results[i].set_null();
-          eval_flags.set(i);
         } else if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, datum_array[i].len_ * case_multiply, i))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed", K(ret));
@@ -450,10 +449,8 @@ int ObExprNlsInitCap::calc_nls_initcap_batch(const ObExpr &expr, ObEvalCtx &ctx,
           } else if (0 == res_str.length()) {
             // nls_initcap is only for oracle mode. set res be null when string length is 0.
             results[i].set_null();
-            eval_flags.set(i);
           } else {
             results[i].set_string(res_str);
-            eval_flags.set(i);
           }
         }
       }

@@ -52,6 +52,8 @@ int ObTruncateInfoKey::mds_deserialize(const char *buf, const int64_t buf_len,
   } else {
     magic_number = buf[pos++];
     if (magic_number != MAGIC_NUMBER) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("magic number mismatch", K(magic_number), K(MAGIC_NUMBER));
       ob_abort(); // compat case, just abort for fast fail
     } else if (OB_FAIL(ObMdsSerializeUtil::mds_key_deserialize(buf, buf_len, pos, tmp))) {
       LOG_WARN("failed to serialize tx_id", KR(ret));
@@ -597,7 +599,7 @@ int ObTruncatePartition::init_list_part(
 int ObTruncatePartition::assign(ObIAllocator &allocator, const ObTruncatePartition &other)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(!other.is_valid())) {
+  if (OB_UNLIKELY(!other.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(other));
   } else if (OB_FAIL(part_key_idxs_.assign(allocator, other.part_key_idxs_))) {
@@ -706,7 +708,7 @@ int64_t ObTruncatePartition::get_deep_copy_size() const
   } else if (is_list_part(part_type_)) {
     size += list_row_values_.get_deep_copy_size();
   } else {
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected part type", KR(ret), K(part_type_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected part type", K(part_type_));
   }
   return size;
 }
@@ -879,7 +881,7 @@ bool ObTruncateInfo::is_valid() const
 int ObTruncateInfo::assign(ObIAllocator &allocator, const ObTruncateInfo &other)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(!other.is_valid())) {
+  if (OB_UNLIKELY(!other.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(other));
   } else if (FALSE_IT(allocator_ = &allocator)) {

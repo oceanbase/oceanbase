@@ -35,6 +35,10 @@ DEF_RESP_TIME_SQL_TYPE(hbase_check_and_put_sql)
 DEF_RESP_TIME_SQL_TYPE(hbase_check_and_mutate_sql)
 DEF_RESP_TIME_SQL_TYPE(hbase_check_and_delete_sql)
 DEF_RESP_TIME_SQL_TYPE(hbase_hybrid_batch_sql)
+DEF_RESP_TIME_SQL_TYPE(hbase_get_sql)
+DEF_RESP_TIME_SQL_TYPE(hbase_batch_put_sql)
+DEF_RESP_TIME_SQL_TYPE(hbase_batch_delete_sql)
+DEF_RESP_TIME_SQL_TYPE(hbase_batch_get_sql)
 DEF_RESP_TIME_SQL_TYPE(redis_lindex)
 DEF_RESP_TIME_SQL_TYPE(redis_lset)
 DEF_RESP_TIME_SQL_TYPE(redis_lrange)
@@ -221,7 +225,7 @@ private:
 
 class ObTenantQueryRespTimeCollector {
 public:
-  ObTenantQueryRespTimeCollector(): multi_collector_(),rwlock_(),flush_config_version_(0),multi_ways_count_(64), is_inited_(false) {};
+  ObTenantQueryRespTimeCollector(): multi_collector_(),rwlock_(common::ObLatchIds::OB_TENANT_QUERY_RESP_TIME_COLLECTOR_RWLOCK),flush_config_version_(0),multi_ways_count_(64), is_inited_(false) {};
   ~ObTenantQueryRespTimeCollector() {};
   int init();
   void destroy();

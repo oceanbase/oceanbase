@@ -17,6 +17,7 @@
 #include "storage/multi_data_source/mds_node.h"
 #include "storage/tablet/ob_mds_scan_param_helper.h"
 #include "lib/oblog/ob_log.h"
+#include "common/ob_range.h"
 
 namespace oceanbase
 {
@@ -106,8 +107,9 @@ public:
     MDS_LOG(TRACE, "use filter to filter mds row", KR(ret), KPC_(collector), K(node), K_(read_version_range));
     return ret;
   }
+  TO_STRING_KV(K_(read_version_range), KPC_(collector));
 private:
-  const common::ObVersionRange read_version_range_;
+  common::ObVersionRange read_version_range_;
   ObMdsReadInfoCollector *collector_;
 };
 

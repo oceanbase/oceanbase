@@ -97,6 +97,7 @@ ObDirectLoadInsertTabletContext::ObDirectLoadInsertTabletContext()
     tablet_id_(),
     pk_tablet_id_(),
     lob_tablet_ctx_(nullptr),
+    mutex_(common::ObLatchIds::OB_DIRECT_LOAD_INSERT_TABLET_CONTEXT_MUTEX),
     slice_idx_(0),
     start_seq_(),
     pk_cache_(),

@@ -23,6 +23,7 @@
 #include "sql/resolver/ob_stmt_type.h"
 #include "share/schema/ob_dependency_info.h"      // ObReferenceObjTable
 #include "lib/allocator/ob_pooled_allocator.h"
+#include "share/catalog/ob_catalog_properties.h"
 namespace oceanbase
 {
 namespace sql
@@ -75,9 +76,6 @@ typedef common::ObPooledAllocator<common::hash::HashMapTypes<uint64_t, int64_t>:
 /// the base class of all statements
 class ObStmt
 {
-public:
-    typedef common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ObSynonymIds;
-
 public:
   ObStmt()
       : stmt_type_(stmt::T_NONE),
@@ -551,10 +549,13 @@ public:
         || stmt_type == stmt::T_DROP_CATALOG);
   }
 
-  static inline bool is_catalog_supported_dml_stmt(stmt::StmtType stmt_type)
+  static inline bool is_catalog_supported_dml_stmt(stmt::StmtType stmt_type,
+                                                   share::ObCatalogProperties::CatalogType catalog_type)
   {
+    bool is_insert_supported = (catalog_type == share::ObCatalogProperties::CatalogType::HMS_TYPE
+                                || catalog_type == share::ObCatalogProperties::CatalogType::FILESYSTEM_TYPE);
     return stmt_type == stmt::T_SELECT
-           // || stmt_type == stmt::T_INSERT
+           || (stmt_type == stmt::T_INSERT && is_insert_supported)
            // || stmt_type == stmt::T_INSERT_ALL
            // || stmt_type == stmt::T_REPLACE
            // || stmt_type == stmt::T_MERGE
@@ -812,8 +813,20 @@ public:
   }
   ~ObStmtFactory() { destory(); }
 
-  template <typename StmtType>
+  template <typename StmtType, typename std::enable_if<std::is_default_constructible<StmtType>::value, bool>::type = true>
   inline int create_stmt(StmtType *&stmt)
+  {
+    return inner_create_stmt<StmtType>(stmt);
+  }
+
+  template <typename StmtType, typename std::enable_if<!std::is_default_constructible<StmtType>::value, bool>::type = true>
+  inline int create_stmt(StmtType *&stmt)
+  {
+    return inner_create_stmt<StmtType>(stmt, allocator_);
+  }
+
+  template <typename StmtType, typename ...Args>
+  inline int inner_create_stmt(StmtType *&stmt, Args &...args)
   {
     int ret = common::OB_SUCCESS;
     void *ptr = allocator_.alloc(sizeof(StmtType));
@@ -823,7 +836,7 @@ public:
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       SQL_RESV_LOG(ERROR, "no more memory to stmt");
     } else {
-      stmt = new(ptr) StmtType();
+      stmt = new(ptr) StmtType(args...);
       if (OB_FAIL(stmt_store_.store_obj(stmt))) {
         SQL_RESV_LOG(WARN, "store stmt failed", K(ret));
         stmt->~StmtType();

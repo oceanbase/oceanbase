@@ -59,6 +59,7 @@ public:
   int publish_special_config_after_dump();
   virtual uint64_t get_tenant_id() const override { return tenant_id_; }
   int64_t get_current_version() const { return current_version_; }
+  int64_t get_read_version() const { return system_config_.get_version(); }
   int64_t get_create_timestamp() const { return create_timestamp_; }
   int got_version(int64_t version, const bool remove_repeat, bool &need_update);
   int update_local(int64_t expected_version, common::ObMySQLProxy::MySQLResult &result);

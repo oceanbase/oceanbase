@@ -15,15 +15,9 @@
 
 #include "common/ob_target_specific.h"
 #include "sql/engine/expr/ob_expr_operator.h"
-
+#include "sql/engine/expr/ob_expr_string_searcher.h"
 namespace oceanbase
 {
-namespace common
-{
-OB_DECLARE_AVX2_SPECIFIC_CODE(
-  class StringSearcher;
-)
-}
 
 namespace sql
 {
@@ -40,7 +34,7 @@ enum INSTR_MODE
 class ObExprLike : public ObFuncExprOperator
 {
 #if OB_USE_MULTITARGET_CODE
-  using StringSearcher = common::specific::avx2::StringSearcher;
+  using StringSearcher = common::specific::avx2::ObStringSearcher;
 #endif
   struct InstrInfo
   {

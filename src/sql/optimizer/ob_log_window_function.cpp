@@ -176,6 +176,12 @@ int ObLogWindowFunction::get_plan_item_info(PlanText &plan_text,
         PRINT_BOUND(lower, win_expr->get_lower());
       }
     }
+    // streaming only print in extended mode
+    if (OB_FAIL(ret) || !use_streaming_ || (plan_text.type_ != EXPLAIN_EXTENDED && plan_text.type_ != EXPLAIN_EXTENDED_NOADDR)) {
+    } else if (OB_FAIL(BUF_PRINTF("\n      streaming=true"))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    }
+
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item.special_predicates_len_);
   }
@@ -552,16 +558,18 @@ int ObLogWindowFunction::compute_sharding_info()
 bool ObLogWindowFunction::is_block_op() const
 {
   bool is_block_op = false;
-  // 对于window function算子, 在没有partition by以及完整窗口情况下,
-  // 所有数据作为一个窗口, 认为是block算子
-  // 在其他情况下, 认为是非block算子
-  ObWinFunRawExpr *win_expr = NULL;
-  for (int64_t i = 0; i < win_exprs_.count(); ++i) {
-    if (OB_ISNULL(win_expr = win_exprs_.at(i))) {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "win expr is null");
-    } else if (win_expr->get_partition_exprs().count() == 0) {
-      is_block_op = true;
-      break;
+  if (!use_streaming_) {
+    // 对于window function算子, 在没有partition by以及完整窗口情况下,
+    // 所有数据作为一个窗口, 认为是block算子
+    // 在其他情况下, 认为是非block算子
+    ObWinFunRawExpr *win_expr = NULL;
+    for (int64_t i = 0; i < win_exprs_.count(); ++i) {
+      if (OB_ISNULL(win_expr = win_exprs_.at(i))) {
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "win expr is null");
+      } else if (win_expr->get_partition_exprs().count() == 0) {
+        is_block_op = true;
+        break;
+      }
     }
   }
   return is_block_op;
@@ -581,9 +589,12 @@ int ObLogWindowFunction::print_outline_data(PlanText &plan_text)
     LOG_WARN("get qb name failed", K(ret));
   } else {
     get_plan()->set_added_win_dist();
-    ObWindowDistHint win_dist_hint;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObWindowDistHint win_dist_hint(allocator);
     win_dist_hint.set_qb_name(qb_name);
-    if (OB_FAIL(add_win_dist_options(this, stmt->get_window_func_exprs(), win_dist_hint))) {
+    if (OB_FAIL(win_dist_hint.init_win_dist_options(stmt->get_window_func_exprs().count()))) {
+      LOG_WARN("failed to init win dist options", K(ret));
+    } else if (OB_FAIL(add_win_dist_options(this, stmt->get_window_func_exprs(), win_dist_hint))) {
       LOG_WARN("failed to add win dist options", K(ret));
     } else if (OB_FAIL(win_dist_hint.print_hint(plan_text))) {
       LOG_WARN("print hint failed", K(ret));
@@ -640,8 +651,11 @@ int ObLogWindowFunction::print_used_hint(PlanText &plan_text)
     /* do nothing */
   } else {
     get_plan()->set_added_win_dist();
-    ObWindowDistHint outline_hint;
-    if (OB_FAIL(add_win_dist_options(this, stmt->get_window_func_exprs(), outline_hint))) {
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObWindowDistHint outline_hint(allocator);
+    if (OB_FAIL(outline_hint.init_win_dist_options(stmt->get_window_func_exprs().count()))) {
+      LOG_WARN("failed to init win dist options", K(ret));
+    } else if (OB_FAIL(add_win_dist_options(this, stmt->get_window_func_exprs(), outline_hint))) {
       LOG_WARN("failed to add win dist options", K(ret));
     } else if (win_dist_hint->get_win_dist_options().count() > outline_hint.get_win_dist_options().count()) {
       /* do nothing */
@@ -746,6 +760,276 @@ int ObLogWindowFunction::compute_op_parallel_and_server_info()
       set_parallel(reduce_parallel);
       need_re_est_child_cost_ = true;
     }
+  }
+  return ret;
+}
+
+// determine if the window function operator can execute in streaming mode in compile time
+// based on the window functions definition and the enable_streaming flag
+namespace {
+  bool is_unbounded_preceding_and_current_row(ObWinFunRawExpr *win_func_expr)
+  {
+    return win_func_expr->get_window_type() == WINDOW_ROWS && win_func_expr->get_upper().type_ == BOUND_UNBOUNDED && win_func_expr->get_lower().type_ == BOUND_CURRENT_ROW;
+  }
+
+  bool is_current_and_unbounded_following_row(ObWinFunRawExpr *win_func_expr)
+  {
+    return win_func_expr->get_window_type() == WINDOW_ROWS && win_func_expr->get_upper().type_ == BOUND_CURRENT_ROW && win_func_expr->get_lower().type_ == BOUND_UNBOUNDED;
+  }
+
+  // refers to ob_transform_utils.cpp:ObTransformUtils::get_expr_int_value
+  // requirement: win_func_expr is not null and is nth_value()
+  // return true if the expression is nth_value(expr, 1)
+  int if_nth_value_n_1(ObWinFunRawExpr *win_func_expr, ObOptimizerContext &opt_ctx, bool& is_nth_value_n_1) {
+    int ret = OB_SUCCESS;
+    ObRawExpr* expr = nullptr;
+    if (win_func_expr->get_func_params().count() <= 1
+               || OB_ISNULL(expr = win_func_expr->get_func_params().at(1))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid nth_value", K(ret), K(win_func_expr), K(expr));
+    } else if (T_INT == expr->get_expr_type()) {
+      // fast path for first_value(expr) and last_value(expr) which will be rewritten to nth_value(expr, 1)
+      int64_t value = static_cast<const ObConstRawExpr *>(expr)->get_value().get_int();
+      is_nth_value_n_1 = (value == 1);
+      LOG_TRACE("expr is int value", K(expr), K(value), K(is_nth_value_n_1));
+    } else {
+      ObObj obj_value;
+      bool got_result = false;
+      ObExecContext *exec_ctx = opt_ctx.get_exec_ctx();
+      ObIAllocator *allocator = &opt_ctx.get_allocator();
+      if (OB_ISNULL(exec_ctx) || OB_ISNULL(allocator)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(expr), K(exec_ctx), K(allocator));
+      } else if ((expr->is_static_scalar_const_expr()) &&
+                 (expr->get_result_type().is_integer_type() ||
+                  expr->get_result_type().is_number())) {
+        if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(
+                exec_ctx, expr, obj_value, got_result, *allocator, false))) {
+          LOG_WARN("failed to calc const or calculable expr", K(ret), K(expr), K(obj_value), K(got_result));
+        } else {
+          number::ObNumber number;
+          if (obj_value.is_integer_type()) {
+            is_nth_value_n_1 = (obj_value.get_int() == 1);
+            LOG_TRACE("const expr is int value", K(expr), K(obj_value), K(is_nth_value_n_1));
+          } else if (obj_value.is_null() || obj_value.is_null_oracle()) {
+            is_nth_value_n_1 = false;
+            LOG_TRACE("const expr is null", K(expr), K(obj_value));
+          } else if (OB_FAIL(obj_value.get_number(number))) {
+            LOG_WARN("unexpected value type", K(ret), K(obj_value));
+          } else {
+            int64_t value;
+            is_nth_value_n_1 = (number.is_valid_int64(value) && value == 1);
+            LOG_TRACE("const expr is number value", K(expr), K(number), K(value), K(is_nth_value_n_1));
+          }
+        }
+      } else {
+        is_nth_value_n_1 = false;
+        LOG_TRACE("unsupported expr type", K(*expr));
+      }
+    }
+    return ret;
+  }
+
+  // this function is used to check if the nth_value is supported in streaming mode
+  int is_nth_value_supported_in_streaming(ObWinFunRawExpr *win_func_expr, ObOptimizerContext &opt_ctx, bool &is_streaming_supported)
+  {
+    int ret = OB_SUCCESS;
+    is_streaming_supported = false;
+    bool is_nth_value_n_1 = false;
+    if (OB_UNLIKELY(win_func_expr == NULL || win_func_expr->get_func_type() != T_WIN_FUN_NTH_VALUE)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected params", K(ret), K(win_func_expr));
+    } else if (OB_FAIL(if_nth_value_n_1(win_func_expr, opt_ctx, is_nth_value_n_1))) {
+      LOG_WARN("failed to check if nth_value is n_1", K(ret), K(*win_func_expr));
+    } else if (!is_nth_value_n_1) {
+      // nth_value(expr, n) is not supported streaming window functions
+      LOG_TRACE("unsuported window function in nth_value(expr, n)", K(*win_func_expr), K(is_nth_value_n_1));
+    } else if (is_unbounded_preceding_and_current_row(win_func_expr) ||
+               (is_current_and_unbounded_following_row(win_func_expr) &&
+                !win_func_expr->is_ignore_null() &&
+                win_func_expr->is_from_first())) {
+      // nth_value(expr, 1) over rows + (unbounded, current)
+      // or nth_value(expr, 1) respect nulls from first over rows + (current, unbounded)
+      // are supported streaming window functions
+      is_streaming_supported = true;
+    } else {
+      LOG_TRACE("unsuported window type in nth_value(expr, n)", K(*win_func_expr));
+    }
+    return ret;
+  }
+
+  bool is_non_distinct_aggr(ObWinFunRawExpr *win_func_expr)
+  {
+    ObAggFunRawExpr *agg_expr = win_func_expr->get_agg_expr();
+    return agg_expr != NULL && !agg_expr->is_param_distinct();
+  }
+
+  int all_functions_are_streaming(ObOptimizerContext &opt_ctx, const ObIArray<ObWinFunRawExpr*> &win_exprs, bool &all_functions_are_streaming)
+  {
+    int ret = OB_SUCCESS;
+    all_functions_are_streaming = true;
+    for (int64_t i = 0; OB_SUCC(ret) && all_functions_are_streaming && i < win_exprs.count(); i++) {
+      ObWinFunRawExpr *win_func_expr = win_exprs.at(i);
+      if (OB_ISNULL(win_func_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("window function expr is null", K(ret), K(win_exprs), K(i));
+      } else if (is_non_distinct_aggr(win_func_expr)) {
+        // only non_distinct_aggr over rows + (unbounded, current) is supported streaming window functions
+        if (!is_unbounded_preceding_and_current_row(win_func_expr)) {
+          all_functions_are_streaming = false;
+          LOG_TRACE("unsuported window function in non_distinct_aggr", K(*win_func_expr), K(i));
+        }
+      } else {
+        switch (win_func_expr->get_func_type()) {
+          case T_WIN_FUN_ROW_NUMBER:
+          case T_WIN_FUN_RANK:
+          case T_WIN_FUN_DENSE_RANK:
+            // row_number, rank, dense_rank are supported streaming window functions
+            // regardless of the window type
+            break;
+          case T_WIN_FUN_LAST_VALUE: {
+            // only last_value(respect nulls) over rows + (current, unbounded) is supported streaming window functions
+            if (!is_current_and_unbounded_following_row(win_func_expr)) {
+              all_functions_are_streaming = false;
+              LOG_TRACE("unsuported window function in last_value()", K(*win_func_expr), K(i));
+            }
+            break;
+          }
+          case T_WIN_FUN_FIRST_VALUE: {
+            if (is_unbounded_preceding_and_current_row(win_func_expr)) {
+              // first_value(respect nulls) over rows + (unbounded, current) is supported streaming window functions
+            } else if (is_current_and_unbounded_following_row(win_func_expr) &&
+                       !win_func_expr->is_ignore_null()) {
+              // current row and unbounded following
+              // first_value(respect nulls) over rows + (current, unbounded)
+              // ==> last_value(respect nulls) over rows + (unbounded, current)
+              // won't rewrite expr here, just adjust when execution, see
+              // win_expr.cpp:NthValue::set_streaming_mode()
+            } else {
+              all_functions_are_streaming = false;
+              LOG_TRACE("unsuported window function in first_value()", K(*win_func_expr), K(i));
+            }
+            break;
+          }
+          case T_WIN_FUN_NTH_VALUE: {
+            bool supported_streaming = false;
+            if (OB_FAIL(is_nth_value_supported_in_streaming(win_func_expr, opt_ctx, supported_streaming))) {
+              LOG_WARN("failed to check if nth_value is supported in streaming mode", K(ret), K(*win_func_expr));
+            } else if (!supported_streaming) {
+              all_functions_are_streaming = false;
+              LOG_TRACE("unsuported window function in nth_value(expr, n)", K(*win_func_expr), K(i));
+            }
+            break;
+          }
+          default: {
+            all_functions_are_streaming = false;
+            LOG_TRACE("unsuported window function", K(*win_func_expr), K(i));
+            break;
+          }
+        } // switch(win_func_expr->get_func_type())
+      }
+    } // for each window function
+    return ret;
+  }
+
+  // refers to ob_transform_utils.cpp:ObTransformUtils::add_const_param_constraints
+  int add_const_param_constraints(ObWinFunRawExpr *win_func_expr,
+                                  ObOptimizerContext &opt_ctx) {
+    int ret = OB_SUCCESS;
+    // the second parameter of nth_value might be a complex expression, we need
+    // to extract its params
+    ObSEArray<ObRawExpr *, 4> params;
+    if (OB_ISNULL(win_func_expr) ||
+        win_func_expr->get_func_params().count() <= 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid expr", K(ret), K(*win_func_expr));
+    } else if (OB_FAIL(ObRawExprUtils::extract_params(
+                   win_func_expr->get_func_params().at(1), params))) {
+      LOG_WARN("failed to extract params", K(ret), K(*win_func_expr));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); i++) {
+        ObRawExpr *expr = params.at(i);
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param is null", K(ret), K(params), K(i));
+        } else if (expr->get_expr_type() != T_QUESTIONMARK) {
+          // for instance: first_value(expr) and last_value(expr) will be
+          // rewritten to nth_value(expr, 1) in this case, the number 1 is a
+          // integer literal, not a question mark, and won't be added to const
+          // constraints and won't be used as a template parameter in the query
+          // cache
+          LOG_TRACE("won't add const constraints for non-question mark expr",
+                    K(ret), K(*expr));
+        } else {
+          ObPCConstParamInfo param_info;
+          ObIArray<ObPCConstParamInfo> &const_param_constraints =
+              opt_ctx.get_query_ctx()->all_plan_const_param_constraints_;
+          const ParamStore *param_store = opt_ctx.get_params();
+          ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(expr);
+          int64_t param_idx = const_expr->get_value().get_unknown();
+          if (OB_UNLIKELY(param_idx < 0 || param_idx >= param_store->count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected error", K(ret), K(param_idx),
+                     K(param_store->count()));
+          } else if (OB_FAIL(param_info.const_idx_.push_back(param_idx))) {
+            LOG_WARN("failed to push back param idx", K(ret));
+          } else if (OB_FAIL(param_info.const_params_.push_back(
+                         param_store->at(param_idx)))) {
+            LOG_WARN("failed to push back value", K(ret));
+          } else if (OB_FAIL(const_param_constraints.push_back(param_info))) {
+            LOG_WARN("failed to push back param info", K(ret));
+          } else {
+            LOG_TRACE("added const constraints", K(ret), K(param_info),
+                      K(*expr));
+          }
+        }
+      }
+    }
+    return ret;
+  }
+
+  // if frame & window function are quilified for streaming, we need to add constraints for nth_value(expr, n)
+  // case 1:
+  // the first query is nth_value(expr, 1) and the second query is nth_value(expr, 2)
+  // => we need to add constraints for nth_value(expr, 1) for the first query
+  // case 2:
+  // the first query is nth_value(expr, 2) and the second query is nth_value(expr, 1)
+  // => we won't add constraints for nth_value(expr, 2) for the first query, even thought it will make the second
+  // query hit the cache and execute in none-streaming mode
+  int add_nth_value_constraint(ObOptimizerContext &opt_ctx,
+                               const ObIArray<ObWinFunRawExpr *> &win_exprs) {
+    int ret = OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < win_exprs.count(); i++) {
+      ObWinFunRawExpr *win_func_expr = win_exprs.at(i);
+      bool is_streaming_supported = false;
+      if (OB_ISNULL(win_func_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null expr", K(ret), K(win_exprs), K(i));
+      } else if (win_func_expr->get_func_type() != T_WIN_FUN_NTH_VALUE) {
+        LOG_TRACE("won't add const constraints", K(ret), K(*win_func_expr), K(i));
+      } else if (OB_FAIL(is_nth_value_supported_in_streaming(win_func_expr, opt_ctx, is_streaming_supported))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to check if nth_value is supported in streaming mode", K(ret), K(*win_func_expr), K(i));
+      } else if (!is_streaming_supported) {
+        LOG_TRACE("won't add const constraints for nth_value() in non-streaming mode", K(ret), K(*win_func_expr), K(i));
+      } else if (OB_FAIL(add_const_param_constraints(win_func_expr, opt_ctx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add const constraints", K(ret), K(*win_func_expr), K(i));
+      }
+    } // for each window function
+    return ret;
+  }
+} // namespace
+
+int ObLogWindowFunction::determine_use_streaming()
+{
+  int ret = OB_SUCCESS;
+  use_streaming_ = false;
+  ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+  if (OB_FAIL(all_functions_are_streaming(opt_ctx, win_exprs_, use_streaming_))) {
+    LOG_WARN("failed to check all functions are streaming", K(ret));
+  } else if (use_streaming_ && OB_FAIL(add_nth_value_constraint(opt_ctx, win_exprs_))) {
+    LOG_WARN("failed to add nth_value_1 constraint", K(ret));
   }
   return ret;
 }

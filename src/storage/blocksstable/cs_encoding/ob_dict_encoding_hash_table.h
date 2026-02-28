@@ -137,7 +137,7 @@ private:
 class ObDictEncodingHashTableBuilder : public ObDictEncodingHashTable
 {
 public:
-  int build(const ObColDatums &col_datums, const ObColDesc &col_desc);
+  int build(const ObColDatums &col_datums, const ObObjTypeStoreClass store_class);
 };
 
 class ObDictEncodingHashTableFactory

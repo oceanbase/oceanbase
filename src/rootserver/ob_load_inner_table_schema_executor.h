@@ -30,7 +30,7 @@ class ObLoadInnerTableSchemaExecutor
 {
 public:
   static int load_inner_table_schema(const obrpc::ObLoadTenantTableSchemaArg &arg);
-  static int load_core_schema_version(const uint64_t tenant_id, common::ObISQLClient &client);
+  static int load_schema_version(const uint64_t tenant_id, common::ObISQLClient &client);
 private:
   static int load_inner_table_schema(const obrpc::ObLoadTenantTableSchemaArg &arg,
       const share::ObLoadInnerTableSchemaInfo &info);

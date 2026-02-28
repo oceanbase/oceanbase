@@ -445,6 +445,7 @@ constexpr int OB_SSLOG_LS_NOT_EXIST = -9146;
 constexpr int OB_CANNOT_ACCESS_BACKUP_SET = -9147;
 constexpr int OB_BACKUP_DEVICE_NOT_MOUNTED = -9152;
 constexpr int OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT = -9153;
+constexpr int OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE = -9155;
 constexpr int OB_ERR_XML_PARSE = -9549;
 constexpr int OB_ERR_XSLT_PARSE = -9574;
 constexpr int OB_PYTHON_ENV_ERROR = -9826;

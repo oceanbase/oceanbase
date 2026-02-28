@@ -14,6 +14,7 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/allocator/ob_allocator.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "storage/access/ob_table_read_info.h"
 
 namespace oceanbase
 {
@@ -51,6 +52,8 @@ private:
       const common::ObIArray<sql::ObExpr*> &output_exprs,
       ObTableIterParam &cg_param,
       const common::ObIArray<sql::ObExpr*> *agg_exprs);
+  int build_read_info_for_rowkey_cg(const ObTableIterParam &row_param,
+                                    const ObITableReadInfo *&rowkey_cg_read_info);
   int fill_virtual_cg_iter_param(
       const ObTableIterParam &row_param,
       const int32_t cg_idx,

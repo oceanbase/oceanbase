@@ -76,15 +76,17 @@ int ObDropDbLinkResolver::resolve(const ParseNode &parse_tree)
   }
   if (OB_SUCC(ret)) {
     ObString dblink_name;
+    bool is_reverse_link = false;  // nouse
     ParseNode *name_node = node->children_[DBLINK_NAME];
     if (OB_ISNULL(name_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
-    } else if (name_node->str_len_ > OB_MAX_DBLINK_NAME_LENGTH) {
+    } else if (OB_FAIL(resolve_dblink_name(name_node, dblink_name, is_reverse_link))) {
+      LOG_WARN("failed to resolve dblink name", K(ret));
+    } else if (dblink_name.length() > OB_MAX_DBLINK_NAME_LENGTH) {
       ret = OB_ERR_TOO_LONG_IDENT;
-      LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, static_cast<int32_t>(name_node->str_len_), name_node->str_value_);
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, static_cast<int32_t>(dblink_name.length()), dblink_name.ptr());
     } else {
-      dblink_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_));
       drop_dblink_stmt->set_dblink_name(dblink_name);
     }
   }

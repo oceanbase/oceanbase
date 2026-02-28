@@ -52,7 +52,7 @@ struct ObStorageSnapshotInfo
   };
   ObStorageSnapshotInfo();
   ~ObStorageSnapshotInfo() { reset(); }
-  OB_INLINE void reset() {
+OB_INLINE void reset() {
     snapshot_type_ = SNAPSHOT_MAX;
     snapshot_ = 0;
   }
@@ -164,7 +164,6 @@ private:
     int init();
     virtual void runTimerTask();
     int refresh_merge_info();
-
   private:
     bool inited_;
     bool check_tenant_status_;

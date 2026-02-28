@@ -181,16 +181,16 @@ struct ObTransformerCtx
   ObPhysicalPlan *phy_plan_;
 
   int64_t merged_version_;
-  ObSEArray<ObExprConstraint, 4, common::ModulePageAllocator, true> expr_constraints_;
-  ObSEArray<ObPCConstParamInfo, 4, common::ModulePageAllocator, true> plan_const_param_constraints_;
-  ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
+  ObSEArray<ObExprConstraint, 4> expr_constraints_;
+  ObSEArray<ObPCConstParamInfo, 4> plan_const_param_constraints_;
+  ObSEArray<ObPCParamEqualInfo, 4> equal_param_constraints_;
   bool is_set_stmt_oversize_;
   // record cost based transformers
   uint64_t happened_cost_based_trans_;
-  EqualSets equal_sets_;
+  TemporaryEqualSets equal_sets_;
   //记录semi to inner改写中，代价竞争失败的semi info，避免下一轮迭代重复检查代价
-  ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ignore_semi_infos_;
-  ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> temp_table_ignore_stmts_;
+  ObSEArray<uint64_t, 8> ignore_semi_infos_;
+  ObSEArray<ObSelectStmt*, 8> temp_table_ignore_stmts_;
   bool eval_cost_;  // mark whether the context is in the process of cost evaluation.
   /* used for hint and outline below */
   int64_t trans_list_loc_;  // outline mode, used to keep transform happened ordering in query_hint.trans_list_
@@ -207,17 +207,17 @@ struct ObTransformerCtx
   bool is_force_materialize_;
 
   bool is_spm_outline_;
-  ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> push_down_filters_;
+  ObSEArray<ObRawExpr*, 8> push_down_filters_;
   uint64_t iteration_level_;
-  ObSEArray<MvInfo, 4, common::ModulePageAllocator, true> mv_infos_; // used to perform mv rewrite
+  ObSEArray<MvInfo, 4> mv_infos_; // used to perform mv rewrite
   int64_t mv_stmt_gen_count_;
   // used for cost based query transformation control
   TransPolicy cbqt_policy_;
   int64_t complex_cbqt_table_num_;
   int64_t max_table_num_;
   /* used for CTE inline && materialize */
-  ObSEArray<ObString, 8, common::ModulePageAllocator, true> inline_blacklist_;
-  ObSEArray<ObString, 8, common::ModulePageAllocator, true> materialize_blacklist_;
+  ObSEArray<ObString, 8> inline_blacklist_;
+  ObSEArray<ObString, 8> materialize_blacklist_;
 
   bool disable_gtt_session_isolation_; //debug GTT, do not add session filters in transformer preprocessing for all GTTs
   /* used to control subquery unnest behavior */
@@ -319,7 +319,7 @@ struct ObTryTransHelper
   int64_t qb_name_sel_start_id_;
   int64_t qb_name_set_start_id_;
   int64_t qb_name_other_start_id_;
-  ObSEArray<int64_t, 4, common::ModulePageAllocator, true> qb_name_counts_;
+  ObSEArray<int64_t, 4> qb_name_counts_;
   StmtUniqueKeyProvider *unique_key_provider_;
 };
 

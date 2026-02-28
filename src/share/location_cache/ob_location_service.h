@@ -97,7 +97,7 @@ public:
   //
   // @param [out] location: include all replicas' addresses of a log stream
   // @return OB_LS_LOCATION_NOT_EXIST if no records in sys table.
-  int nonblock_get(
+  virtual int nonblock_get(
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
@@ -141,7 +141,7 @@ public:
   // Noblock way to get the mapping between the tablet and log stream.
   //
   // @return OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST if no records in sys table.
-  int nonblock_get(
+  virtual int nonblock_get(
       const uint64_t tenant_id,
       const ObTabletID &tablet_id,
       ObLSID &ls_id);

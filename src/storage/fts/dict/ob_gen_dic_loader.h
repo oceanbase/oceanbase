@@ -79,15 +79,18 @@ public:
     return ins;
   }
   int init();
+
+  static int parser_name_without_version(const ObString &parser_name, ObString &no_version_parser_name);
+
   int get_dic_loader(const uint64_t tenant_id,
-                     const ObString &parser_name,
+                     const ObString &parser_name_without_version,
                      const ObCharsetType charset,
                      ObTenantDicLoaderHandle &loader_handle);
   int destroy_dic_loader_for_tenant();
 
 private:
   ObGenDicLoader()
-      : is_inited_(false), lock_(), dic_loader_map_() { }
+      : is_inited_(false), lock_(common::ObLatchIds::OB_GEN_DIC_LOADER_LOCK), dic_loader_map_() { }
   ~ObGenDicLoader() { dic_loader_map_.destroy(); }
   int gen_dic_loader(const ObGenDicLoaderKey &dic_loader_key,
                      ObTenantDicLoader *&dic_loader);

@@ -19,6 +19,7 @@
 #include "ob_cs_micro_block_transformer.h"
 #include "ob_icolumn_cs_decoder.h"
 #include "ob_new_column_cs_decoder.h"
+#include "storage/blocksstable/ob_datum_row.h"
 #include "storage/ob_i_store.h"
 #include "storage/blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_encoding_util.h"
 
@@ -29,6 +30,7 @@ namespace blocksstable
 struct ObBlockCachedCSDecoderHeader;
 struct ObCSDecoderCtxArray;
 class ObIColumnCSDecoder;
+class ObCSRowHeader;
 
 struct ObColumnCSDecoder final
 {
@@ -95,25 +97,93 @@ public:
   bool reserve_memory_;
 };
 
-class ObICSEncodeBlockReader
+template <bool IS_MULTI_VERSION = false>
+class ObCSEncodeBlockGetReader final : public ObIMicroBlockGetReader
 {
 public:
-  ObICSEncodeBlockReader();
-  virtual ~ObICSEncodeBlockReader();
+  ObCSEncodeBlockGetReader();
+  virtual ~ObCSEncodeBlockGetReader();
   void reset();
   void reuse();
+  virtual int get_row(const ObMicroBlockAddr &block_addr, const ObMicroBlockData &block_data,
+      const ObDatumRowkey &rowkey, const ObITableReadInfo &read_info, ObDatumRow &row) final;
+  virtual int get_row_and_trans_version(
+      const ObMicroBlockAddr &block_addr,
+      const ObMicroBlockData &block_data,
+      const ObDatumRowkey &rowkey,
+      const ObITableReadInfo &read_info,
+      ObDatumRow &row,
+      int64_t &trans_version) override final;
+  virtual int exist_row(const ObMicroBlockData &block_data, const ObDatumRowkey &rowkey,
+    const ObITableReadInfo &read_info, bool &exist, bool &found);
+  virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
+      const ObMicroBlockData &block_data,
+      const ObITableReadInfo &read_info,
+      const uint32_t row_idx,
+      ObDatumRow &row) final;
+  int get_row_id(
+      const ObMicroBlockAddr &block_addr,
+      const ObMicroBlockData &block_data,
+      const ObDatumRowkey &rowkey,
+      const ObITableReadInfo &read_info,
+      int64_t &row_id) final;
+  int compare(const ObStorageDatumUtils &datum_utils, const ObDatumRowkey &lhs, const int64_t rhs, int& cmp_ret);
 
 protected:
+  int get_all_columns(const int64_t row_id, ObDatumRow &row);
+  int get_multi_version_info(const int64_t row_id, MultiVersionInfo& multi_version_info);
+
+private:
+  int init(const ObMicroBlockAddr &block_addr, const ObMicroBlockData &block_data, const ObITableReadInfo &read_info);
+  int init_if_need(const ObMicroBlockAddr &block_addr, const ObMicroBlockData &block_data, const ObITableReadInfo &read_info);
+  int init(const ObMicroBlockData &block_data, const int64_t schema_rowkey_cnt,
+           const ObColDescIArray &cols_desc, const int64_t request_cnt);
+  int locate_row(const ObDatumRowkey &rowkey, const ObStorageDatumUtils &datum_utils,
+    int64_t &row_id, bool &found);
   int prepare(const int64_t column_cnt);
   int do_init(const ObMicroBlockData &block_data, const int64_t request_cnt);
   int init_decoders();
   int add_decoder(const int64_t store_idx, const ObObjMeta &obj_meta, int64_t &decoders_buf_pos, ObColumnCSDecoder &dest);
+  int add_decoder_for_row_header(int64_t &decoders_buf_pos);
   int acquire(const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnCSDecoder *&decoder);
   int alloc_decoders_buf(int64_t &decoders_buf_pos);
   int init_semistruct_decoder(const ObIColumnCSDecoder *decoder, ObColumnCSDecoderCtx &decoder_ctx);
+  int32_t get_decoder_count() const
+  {
+    int32_t decoder_count = request_cnt_;
+    if constexpr (IS_MULTI_VERSION) {
+      // for row header column
+      decoder_count += 1;
+      if (read_info_not_contain_trans_ver_col_) {
+        // for trans version column
+        decoder_count += 1;
+      }
+    }
+    return decoder_count;
+  }
+  int32_t get_ctx_count() const
+  {
+    int32_t ctx_count = MAX(request_cnt_, column_count_);
+    if constexpr (IS_MULTI_VERSION) {
+      ctx_count += 1;
+    }
+    return ctx_count;
+  }
+  int32_t get_trx_ver_decoder_idx() const
+  {
+    constexpr int32_t multi_version_cols_cnt =
+        storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    return read_info_not_contain_trans_ver_col_
+               ? request_cnt_
+               : transform_helper_.get_micro_block_header()
+                         ->rowkey_column_count_ -
+                     multi_version_cols_cnt;
+  }
 
-protected:
   static const int64_t DEFAULT_DECODER_CNT = 16;
+  // only used in `get_row_and_trans_version`
+  bool read_info_not_contain_trans_ver_col_;
   ObMicroBlockAddr block_addr_;
   int64_t request_cnt_;  // request column count
   const ObBlockCachedCSDecoderHeader *cached_decoder_;
@@ -140,49 +210,12 @@ protected:
   static ObColumnCSDecoderCtx none_exist_column_decoder_ctx_;
 };
 
-class ObCSEncodeBlockGetReader : public ObIMicroBlockGetReader, public ObICSEncodeBlockReader
-{
-public:
-  void reuse();
-  ObCSEncodeBlockGetReader() = default;
-  virtual ~ObCSEncodeBlockGetReader() = default;
-  virtual int get_row(const ObMicroBlockAddr &block_addr, const ObMicroBlockData &block_data,
-      const ObDatumRowkey &rowkey, const ObITableReadInfo &read_info, ObDatumRow &row) final;
-  virtual int get_row_and_trans_version(
-      const ObMicroBlockAddr &block_addr,
-      const ObMicroBlockData &block_data,
-      const ObDatumRowkey &rowkey,
-      const ObITableReadInfo &read_info,
-      ObDatumRow &row,
-      int64_t &trans_version) final { return OB_NOT_SUPPORTED; }
-  virtual int exist_row(const ObMicroBlockData &block_data, const ObDatumRowkey &rowkey,
-    const ObITableReadInfo &read_info, bool &exist, bool &found);
-  virtual int get_row(
-      const ObMicroBlockAddr &block_addr,
-      const ObMicroBlockData &block_data,
-      const ObITableReadInfo &read_info,
-      const uint32_t row_idx,
-      ObDatumRow &row) final;
-  virtual int get_row_id(
-      const ObMicroBlockAddr &block_addr,
-      const ObMicroBlockData &block_data,
-      const ObDatumRowkey &rowkey,
-      const ObITableReadInfo &read_info,
-      int64_t &row_id) final;
-
-protected:
-  int get_all_columns(const int64_t row_id, ObDatumRow &row);
-
-private:
-  int init(const ObMicroBlockAddr &block_addr, const ObMicroBlockData &block_data, const ObITableReadInfo &read_info);
-  int init_if_need(const ObMicroBlockAddr &block_addr, const ObMicroBlockData &block_data, const ObITableReadInfo &read_info);
-  int init(const ObMicroBlockData &block_data, const int64_t schema_rowkey_cnt,
-           const ObColDescIArray &cols_desc, const int64_t request_cnt);
-  int locate_row(const ObDatumRowkey &rowkey, const ObStorageDatumUtils &datum_utils,
-    int64_t &row_id, bool &found);
-};
-
-class ObMicroBlockCSDecoder : public ObIMicroBlockDecoder
+// IS_MULTI_VERSION means whether the block has multi version data fileds(row_flag, mvcc_flag, trans_id)
+// multi version data fileds are stored in row header column
+// row header column is a hidden column which means it is not included in ObMicroBlockHeader::column_count_
+// it is stored in the last column
+template<bool IS_MULTI_VERSION = false>
+class ObMicroBlockCSDecoder final : public ObIMicroBlockDecoder
 {
 public:
   static const int64_t MAX_CACHED_DECODER_BUF_SIZE = 1L << 10;
@@ -190,18 +223,24 @@ public:
   ObMicroBlockCSDecoder();
   virtual ~ObMicroBlockCSDecoder();
 
-  static int get_decoder_cache_size(const char *block, const int64_t block_size, int64_t &size);
-  static int cache_decoders(char *buf, const int64_t size, const char *block, const int64_t block_size);
+  static int get_decoder_cache_size(
+    const ObMicroBlockHeader &micro_header,
+    const char *block, const int64_t block_size, int64_t &size);
+  static int cache_decoders(
+    const ObMicroBlockHeader &micro_header,
+    char *buf, const int64_t size, const char *block, const int64_t block_size);
 
   virtual void reset();
   virtual int init(const ObMicroBlockData &block_data, const ObITableReadInfo &read_info) override;
   //TODO @fenggu support cs decoder without read info
   virtual int init(const ObMicroBlockData &block_data, const ObStorageDatumUtils *datum_utils) override;
   virtual int get_row(const int64_t index, ObDatumRow &row) override;
-  virtual int get_row_header(const int64_t row_idx, const ObRowHeader *&row_header) override;
   virtual int get_row_count(int64_t &row_count) override;
-  virtual int get_multi_version_info(const int64_t row_idx, const int64_t schema_rowkey_cnt,
-      const ObRowHeader *&row_header,int64_t &trans_version, int64_t &sql_sequence);
+  virtual int get_multi_version_info(const int64_t row_idx,
+                                     const int64_t schema_rowkey_cnt,
+                                     MultiVersionInfo& multi_version_info,
+                                     int64_t &trans_version,
+                                     int64_t &sql_sequence) override;
   virtual int compare_rowkey(
     const ObDatumRowkey &rowkey, const int64_t index, int32_t &compare_result) override;
   virtual int compare_rowkey(const ObDatumRange &range, const int64_t index,
@@ -220,6 +259,12 @@ public:
   virtual int filter_black_filter_batch(const sql::ObPushdownFilterExecutor *parent,
     sql::ObBlackFilterExecutor &filter, sql::PushdownFilterInfo &pd_filter_info,
     common::ObBitmap &result_bitmap, bool &filter_applied) override;
+  virtual int filter_pushdown_ttl_filter(const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap) override;
+  virtual int filter_pushdown_base_version_filter(const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap) override;
   virtual int filter_pushdown_truncate_filter(const sql::ObPushdownFilterExecutor *parent,
     sql::ObPushdownFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
     common::ObBitmap &result_bitmap) override;
@@ -310,6 +355,9 @@ public:
       const bool need_init_vector) override;
   virtual bool has_lob_out_row() const override final
   { return transform_helper_.get_micro_block_header()->has_lob_out_row(); }
+  virtual int find_bound_through_linear_search(const ObDatumRowkey &rowkey,
+                                               const int64_t begin_idx,
+                                               int64_t &row_idx) override;
 
 private:
   // use inner_reset to reuse the decoder buffer
@@ -323,11 +371,14 @@ private:
       const ObColumnParam *col_param,
       int64_t &decoders_buf_pos,
       ObColumnCSDecoder &dest);
+  int add_decoder_for_row_header(int64_t &decoders_buf_pos);
+  int add_decoders_for_multi_version_cols(int64_t &decoders_buf_pos);
   int init_semistruct_decoder(const ObIColumnCSDecoder *decoder, ObColumnCSDecoderCtx &decoder_ctx);
   int free_decoders();
   int get_stream_data_buf(const int64_t stream_idx, const char *&buf);
   int decode_cells(
     const uint64_t row_id, const int64_t col_begin, const int64_t col_end, ObStorageDatum *datums);
+  int get_multi_version_info(const int64_t row_id, MultiVersionInfo &multi_verion_info);
   int get_row_impl(int64_t index, ObDatumRow &row);
   bool can_pushdown_decoder(
       const ObColumnCSDecoderCtx &ctx,
@@ -353,8 +404,68 @@ private:
     ObStorageDatum &decoded_datum, common::ObBitmap &result_bitmap);
   int get_col_datums(int32_t col_id, const int32_t *row_ids, const int64_t row_cap, common::ObDatum *col_datums);
   int get_col_data(int32_t col_id, ObVectorDecodeCtx &ctx);
+  virtual const ObMicroBlockHeader* get_micro_header() const override final
+  {
+    return transform_helper_.get_micro_block_header();
+  }
+  bool read_info_not_contain_multi_version_cols() const
+  {
+    return read_info_not_contain_multi_version_cols_;
+  }
+  int32_t get_decoder_count() const
+  {
+    int32_t decoder_count =
+        nullptr == read_info_ ? column_count_ : request_cnt_;
+    if constexpr (IS_MULTI_VERSION) {
+      // for row header column
+      decoder_count += 1;
+      if (read_info_not_contain_multi_version_cols()) {
+        // for multi version columns
+        decoder_count += ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+      }
+    }
+    return decoder_count;
+  }
+  int32_t get_ctx_count() const
+  {
+    int32_t ctx_count;
+    if (nullptr == read_info_) {
+      ctx_count = column_count_;
+    } else {
+      constexpr int32_t multi_version_cols_cnt =
+          storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+      ctx_count = MAX(column_count_, read_info_->get_schema_column_count() +
+                                         multi_version_cols_cnt);
+    }
+    if constexpr (IS_MULTI_VERSION) {
+      /* for row header column */
+      ctx_count += 1;
+    }
+    return ctx_count;
+  }
+  int32_t get_trx_ver_decoder_idx() const
+  {
+    constexpr int32_t multi_version_cols_cnt =
+        storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    return read_info_not_contain_multi_version_cols_
+               ? request_cnt_
+               : transform_helper_.get_micro_block_header()
+                         ->rowkey_column_count_ -
+                     multi_version_cols_cnt;
+  }
+
+  int filter_pushdown_single_column_mds_filter(const sql::ObPushdownFilterExecutor *parent,
+                                               sql::ObPushdownFilterExecutor &filter,
+                                               const sql::PushdownFilterInfo &pd_filter_info,
+                                               common::ObBitmap &result_bitmap);
 
 private:
+  // When the data is multi version data
+  // and read info does not contain multi version columns (trx_ver, sql_seq)
+  // we need to add decoders for the two multi version columns.
+  //
+  // See add_decoders_for_multi_version_cols for more details
+  bool read_info_not_contain_multi_version_cols_;
   int32_t request_cnt_;  // request column count
   const ObBlockCachedCSDecoderHeader *cached_decoder_;
   ObColumnCSDecoder *decoders_;

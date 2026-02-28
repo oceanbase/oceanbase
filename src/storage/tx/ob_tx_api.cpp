@@ -397,7 +397,7 @@ int ObTransService::rollback_tx(ObTxDesc &tx)
     abort_participants_(tx);
   case ObTxDesc::State::IDLE:
     tx.state_ = ObTxDesc::State::ROLLED_BACK;
-    tx.finish_ts_ = ObClockGenerator::getClock();
+    tx.finish_ts_ = ObTimeUtility::current_time();
     tx_post_terminate_(tx);
     break;
   default:
@@ -515,7 +515,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
   {
     ObSpinLockGuard guard(tx.lock_);
     if (tx.commit_ts_ <= 0) {
-      tx.commit_ts_ = ObClockGenerator::getClock();
+      tx.commit_ts_ = ObTimeUtility::current_time();
     }
     tx.inc_op_sn();
     switch(tx.state_) {
@@ -923,6 +923,7 @@ int ObTransService::release_snapshot(ObTxDesc &tx)
 int ObTransService::register_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
 {
   int ret = OB_SUCCESS;
+  bool registered = false;
   const ObTransID &tx_id = snapshot.core_.tx_id_;
   if (tx_id.is_valid()) {
     ObTxDesc *tx = NULL;
@@ -933,10 +934,13 @@ int ObTransService::register_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
       if (OB_FAIL(tx_sanity_check_(*tx))) {
       } else if (OB_FAIL(tx->savepoints_.push_back(sp))) {
         TRANS_LOG(WARN, "push back snapshot fail", K(ret), K(snapshot), KPC(tx));
+      } else {
+        registered = true;
       }
       ObTransTraceLog &tlog = tx->get_tlog();
       REC_TRANS_TRACE_EXT(&tlog, register_snapshot, OB_Y(ret),
                           OB_ID(arg), (void*)&snapshot,
+                          OB_ID(tag1), registered,
                           OB_ID(snapshot_version), snapshot.core_.version_,
                           OB_ID(snapshot_scn), snapshot.core_.scn_.cast_to_int(),
                           OB_ID(ref), tx->get_ref(),
@@ -950,7 +954,7 @@ int ObTransService::register_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
       tx_desc_mgr_.revert(*tx);
     }
   }
-  TRANS_LOG(TRACE, "register snapshot", K(ret), K(snapshot));
+  TRANS_LOG(TRACE, "register snapshot", K(ret), K(snapshot), K(registered));
   return ret;
 }
 

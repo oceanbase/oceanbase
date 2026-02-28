@@ -35,13 +35,14 @@ public:
 	ObSQLMode sql_mode_;
 	QuestionMarkDefNameCtx *def_name_ctx_;
   bool is_format_;
-
+  bool question_mark_by_order_;
 	FPContext()
 		: enable_batched_multi_stmt_(false),
 			is_udr_mode_(false),
 			sql_mode_(0),
 			def_name_ctx_(nullptr),
-      is_format_(false)
+      is_format_(false),
+      question_mark_by_order_(false)
 	{}
 	FPContext(ObCharsets4Parser charsets4parser)
 		: enable_batched_multi_stmt_(false),
@@ -49,7 +50,8 @@ public:
 			charsets4parser_(charsets4parser),
 			sql_mode_(0),
 			def_name_ctx_(nullptr),
-      is_format_(false)
+      is_format_(false),
+      question_mark_by_order_(false)
 	{}
 };
 

@@ -33,6 +33,7 @@ public:
     const bool check_exist,
     const share::SCN &snapshot_version,
     const int64_t base_version,
+    const share::SCN &inc_major_trans_version,
     ObStoreRowLockState &lock_state);
   inline void set_iter_type(bool check_exist)
   {
@@ -68,7 +69,8 @@ public:
   int check_row_locked(
       const bool check_exist,
       const share::SCN &snapshot_version,
-      const int64_t base_version);
+      const int64_t base_version,
+      const share::SCN &inc_major_trans_version);
 protected:
    int fetch_row(ObSSTableReadHandle &read_handle);
 private:

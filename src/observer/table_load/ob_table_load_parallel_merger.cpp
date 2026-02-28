@@ -30,6 +30,7 @@ namespace observer
 ObTableLoadParallelMerger::ObTableLoadParallelMerger()
   : store_ctx_(nullptr),
     op_(nullptr),
+    mutex_(common::ObLatchIds::OB_TABLE_LOAD_PARALLEL_MERGER_MUTEX),
     running_thread_cnt_(0),
     has_error_(false),
     is_stop_(false),

@@ -26,10 +26,20 @@ class ObArenaAllocator;
 class ObRowkey;
 class ObTabletID;
 struct ObVersionRange;
+class ObMySQLProxy;
+namespace sqlclient
+{
+class ObISQLConnection;
+}
 }
 namespace share
 {
 class ObLSID;
+namespace schema
+{
+class ObSchemaGetterGuard;
+class ObTableSchema;
+}
 }
 namespace storage
 {
@@ -102,6 +112,12 @@ public:
     common::ObArenaAllocator &allocator,
     const char *key_data,
     storage::ObTruncateInfoArray &truncate_info_array);
+
+  static int get_table_schema(
+    const uint64_t tenant_id,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const int64_t table_id,
+    const share::schema::ObTableSchema *&table_schema);
 };
 
 } // storage

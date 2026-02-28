@@ -284,6 +284,7 @@ int ObRawExprPartExprChecker::visit(ObSysFunRawExpr &expr)
    //need or timestamp args
    //time_of_usec is  like unix_timestamp, with different precision
    case T_FUN_SYS_TIME_TO_USEC:
+   case T_FUN_SYS_TO_UNIX_TIMESTAMP:
    case T_FUN_SYS_UNIX_TIMESTAMP: {
      if (OB_FAIL(has_timestamp_args(expr))) {
        LOG_WARN("check_args_of_unix_timestamp failed", K(ret));

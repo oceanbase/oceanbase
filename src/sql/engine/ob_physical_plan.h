@@ -49,6 +49,7 @@ namespace transaction
 }
 namespace sql
 {
+
 class ObTablePartitionInfo;
 class ObPhyOperatorMonnitorInfo;
 struct ObAuditRecordData;
@@ -293,6 +294,8 @@ public:
   bool has_nested_sql() const { return has_nested_sql_; }
   void set_session_id(uint64_t v) { session_id_ = v; }
   uint64_t get_session_id() const { return session_id_; }
+  inline void set_is_gtt_temp_table_v2(bool is_gtt_temp_table_v2) { is_gtt_temp_table_v2_ = is_gtt_temp_table_v2; }
+  inline bool is_gtt_temp_table_v2() const { return is_gtt_temp_table_v2_; }
   common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
   common::ObIArray<uint64_t> &get_immediate_refresh_external_table_ids() { return immediate_refresh_external_table_ids_; }
@@ -610,6 +613,8 @@ public:
   bool extend_sql_plan_monitor_metrics() const { return extend_sql_plan_monitor_metrics_; }
   bool px_worker_share_plan_enabled() const { return px_worker_share_plan_enabled_; }
   void set_px_worker_share_plan_enabled(bool v) { px_worker_share_plan_enabled_ = v; }
+  inline void set_is_route_to_column_replica(bool v) { route_to_column_replica_ = v; }
+  bool is_route_to_column_replica() const { return route_to_column_replica_; }
 
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
@@ -822,6 +827,12 @@ private:
   bool extend_sql_plan_monitor_metrics_;
   uint64_t optimizer_features_enable_version_;
   bool route_to_column_replica_;
+  bool is_gtt_temp_table_v2_;
+public:
+  ObLibCacheMissReason create_reason_;
+  uint64_t cache_node_id_; // indicate this plan belong to which Cache Node
+  uint64_t pcv_id_; // indicate this plan belong to which Plan Cache Value
+  uint64_t plan_set_id_; // indicate this plan belong to which Plan Set
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

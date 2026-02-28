@@ -271,6 +271,8 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
         }
       } else if (share::schema::ObTableType::EXTERNAL_TABLE == stat_param.ref_table_type_) {
         // not allow gather external table in schema scope
+      } else if (share::schema::ObTableType::TMP_TABLE == stat_param.ref_table_type_) {
+        // not allow gather mysql tmp table in schema scope
       } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, stat_param, running_monitor))) {
         LOG_WARN("failed to gather table stats", K(ret));
       } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(),
@@ -3480,9 +3482,8 @@ int ObDbmsStats::update_stat_cache(const uint64_t tenant_id,
       timeout = std::min(MAX_OPT_STATS_PROCESS_RPC_TIMEOUT, THIS_WORKER.get_timeout_remain());
       if (!all_server_arr.at(i).is_active()
           || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
-          || 0 == all_server_arr.at(i).get_start_service_time()
           || 0 != all_server_arr.at(i).get_server_stop_time()) {
-      //server may not serving
+        LOG_INFO("server may not serving", K(all_server_arr.at(i)));
       } else if (0 >=(timeout)) {
         ret = OB_TIMEOUT;
         LOG_WARN("query timeout is reached", K(ret), K(timeout));
@@ -3822,7 +3823,11 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       }
       if (lib::is_mysql_mode() &&
           col->get_meta_type().get_type_class() == ColumnTypeClass::ObTextTC) {
-        col_param.set_is_text_column();
+        if (col->is_string_lob() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0) {
+          col_param.set_is_string_column();
+        } else {
+          col_param.set_is_text_column();
+        }
       }
       if (OB_SUCC(ret) && OB_FAIL(column_params.push_back(col_param))) {
         LOG_WARN("failed to push back column param", K(ret));
@@ -7171,9 +7176,8 @@ int ObDbmsStats::update_system_stats_cache(const uint64_t rpc_tenant_id,
   for (int64_t i = 0; OB_SUCC(ret) && i < all_server_arr.count(); i++) {
     if (!all_server_arr.at(i).is_active()
         || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
-        || 0 == all_server_arr.at(i).get_start_service_time()
         || 0 != all_server_arr.at(i).get_server_stop_time()) {
-    //server may not serving
+      LOG_INFO("server may not serving", K(all_server_arr.at(i)));
     } else if (0 >= (timeout = THIS_WORKER.get_timeout_remain())) {
       ret = OB_TIMEOUT;
       LOG_WARN("query timeout is reached", K(ret), K(timeout));

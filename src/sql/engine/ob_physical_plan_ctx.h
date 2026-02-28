@@ -30,6 +30,21 @@
 
 namespace oceanbase
 {
+
+namespace sql
+{
+namespace iceberg
+{
+class DataFile;
+class ObSerializableDataFile;
+}
+}
+
+namespace share
+{
+class ObILakeTableMetadata;
+}
+
 namespace sql
 {
 class ObResultSet;
@@ -572,6 +587,16 @@ public:
                             ObDatum *&datum,
                             ObEvalInfo *&eval_info,
                             VectorHeader *&vec_header);
+  inline const ObArray<iceberg::DataFile*>& get_iceberg_data_files() const
+  {
+    return iceberg_data_files_;
+  }
+  int set_iceberg_data_files(const common::ObIArray<iceberg::ObSerializableDataFile>& data_files);
+  inline const share::ObILakeTableMetadata* get_lake_table_metadata() const
+  {
+    return lake_table_metadata_;
+  }
+  int set_lake_table_metadata(const share::ObILakeTableMetadata* lake_table_metadata);
 private:
   int init_param_store_after_deserialize();
   void reset_datum_frame(char *frame, int64_t expr_cnt);
@@ -726,6 +751,10 @@ private:
   bool is_direct_insert_plan_; // for direct load: insert into/overwrite select
   bool check_pdml_affected_rows_; // now only worked for pdml checking affected_rows
   bool enable_adaptive_pc_;
+
+  // for iceberg table dml
+  ObArray<iceberg::DataFile*> iceberg_data_files_;
+  const share::ObILakeTableMetadata* lake_table_metadata_;
 };
 
 }

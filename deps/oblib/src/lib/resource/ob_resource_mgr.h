@@ -130,6 +130,10 @@ public:
   // will create resource mgr if not exist
   int get_tenant_resource_mgr(const uint64_t tenant_id, ObTenantResourceMgrHandle &handle);
 private:
+  struct LockWrapper {
+    common::SpinRWLock lock_;
+    LockWrapper() : lock_(common::ObLatchIds::TENANT_RES_MGR_LIST_LOCK) {}
+  };
   static const int64_t MAX_TENANT_COUNT = 12289;  // prime number
   void inc_ref(ObTenantResourceMgr *tenant_resource_mgr);
   void dec_ref(ObTenantResourceMgr *tenant_resource_mgr);
@@ -139,7 +143,7 @@ private:
 
   bool inited_;
   ObICacheWasher *cache_washer_;
-  common::SpinRWLock locks_[MAX_TENANT_COUNT];
+  LockWrapper locks_[MAX_TENANT_COUNT];
   ObTenantResourceMgr *tenant_resource_mgrs_[MAX_TENANT_COUNT];
 };
 

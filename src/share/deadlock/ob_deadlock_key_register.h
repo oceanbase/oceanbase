@@ -47,5 +47,6 @@ REGISTER(oceanbase::transaction::ObTransID, 1)
 REGISTER(oceanbase::unittest::ObDeadLockTestIntKey, 65535)
 REGISTER(oceanbase::unittest::ObDeadLockTestDoubleKey, 65536)
 REGISTER(oceanbase::transaction::tablelock::ObTransLockPartID, 65537)
+REGISTER(oceanbase::transaction::ObTransDeadlockDetectorKey, 65538)
 #undef REGISTER
 #endif

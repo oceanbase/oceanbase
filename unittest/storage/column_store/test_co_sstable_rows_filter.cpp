@@ -46,7 +46,7 @@ public:
     } else if (OB_UNLIKELY(depth < 1)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected depth", K(ret), K(depth), KPC_(filter));
-    } else if (OB_FAIL(init_bitmap_buffer(depth))) {
+    } else if (OB_FAIL(extend_bitmap_buffer(depth))) {
       LOG_WARN("Failed to init bitmap buffer", K(ret), K(depth));
     }
     return ret;
@@ -200,6 +200,7 @@ void TestCOSSTableRowsFilter::init_table_access_context()
   context_.stmt_allocator_ = &allocator_;
   context_.block_row_store_ = vector_store_;
   co_sstable_.key_.table_type_ = ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
+  context_.is_inited_ = true;
 }
 
 void TestCOSSTableRowsFilter::init_filter_param()

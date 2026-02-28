@@ -12,6 +12,7 @@
  #define USING_LOG_PREFIX SQL_ENG
 #include "ob_orc_table_row_iter.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -133,7 +134,7 @@ int ObOrcTableRowIterator::build_iceberg_id_to_type_map(const orc::Type* type)
   return ret;
 }
 
-int ObOrcTableRowIterator::prepare_read_orc_file()
+int ObOrcTableRowIterator::prepare_read_orc_file(ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
@@ -171,7 +172,7 @@ int ObOrcTableRowIterator::prepare_read_orc_file()
       bool need_init_project_loader = true;
       if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
         OrcRowReader &eager_reader = sector_reader_->get_eager_reader();
-        if (OB_FAIL(init_data_loader(i, orc_col_id, type, eager_reader, default_value))) {
+        if (OB_FAIL(init_data_loader(i, orc_col_id, type, eager_reader, default_value, eval_ctx))) {
           LOG_WARN("fail to init data loader", K(ret), K(i));
         } else if (!is_dup_project_.at(i)) {
           // the column only in eager reader, no need to init project loader
@@ -179,7 +180,8 @@ int ObOrcTableRowIterator::prepare_read_orc_file()
         }
       }
       if (OB_SUCC(ret) && need_init_project_loader) {
-        if (OB_FAIL(init_data_loader(i, orc_col_id, type, project_reader_, default_value))) {
+        if (OB_FAIL(
+              init_data_loader(i, orc_col_id, type, project_reader_, default_value, eval_ctx))) {
           LOG_WARN("fail to init data loader", K(ret), K(i));
         }
       }
@@ -214,15 +216,55 @@ int ObOrcTableRowIterator::prepare_read_orc_file()
   return ret;
 }
 
+static void print_type_mismatch_error(const int ret, ObDatumMeta &meta,
+                                                      const orc::Type *orc_type,
+                                                      ObIAllocator &allocator, ObEvalCtx &eval_ctx)
+{
+  std::string p_type = orc_type == nullptr ? "INVALID ORC TYPE" : orc_type->toString();
+  int64_t pos = 0;
+  ObArrayWrap<char> buf;
+  ObArray<ObString> extended_type_info;
+  const char *ob_type = ob_obj_type_str(meta.type_);
+  if (OB_SUCCESS == buf.allocate_array(allocator, 100)) {
+    if (ob_is_collection_sql_type(meta.type_)) {
+      int tmp_ret = OB_SUCCESS;
+      uint16_t subschema_id = meta.get_subschema_id();
+      const ObSqlCollectionInfo *coll_info = NULL;
+      ObSubSchemaValue value;
+      if (OB_SUCCESS
+          != (tmp_ret =
+                eval_ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+        LOG_WARN("failed to get subschema ctx", K(tmp_ret));
+      } else if (FALSE_IT(coll_info =
+                            reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
+      } else if (OB_SUCCESS
+                 != (tmp_ret = extended_type_info.push_back(coll_info->get_def_string()))) {
+        LOG_WARN("failed to push back to array", K(tmp_ret), KPC(coll_info));
+      }
+    }
+    ob_sql_type_str(buf.get_data(), buf.count(), pos, meta.type_, OB_MAX_VARCHAR_LENGTH,
+                    meta.precision_, meta.scale_, meta.cs_type_, extended_type_info);
+    if (pos < buf.count()) {
+      buf.at(pos++) = '\0';
+      ob_type = buf.get_data();
+    }
+  }
+  LOG_WARN("not supported type", K(ret), K(meta),
+           K(ObString(p_type.length(), p_type.data())));
+  LOG_USER_ERROR(OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH, p_type.c_str(), ob_type);
+}
+
 int ObOrcTableRowIterator::init_data_loader(int64_t i, int64_t orc_col_id, const orc::Type *type,
-                                            OrcRowReader &reader, ObColumnDefaultValue *default_value)
+                                            OrcRowReader &reader,
+                                            ObColumnDefaultValue *default_value,
+                                            ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
   orc::ColumnVectorBatch *batch = nullptr;
   ObExpr* column_expr = get_column_expr_by_id(i);
   if (type == nullptr && is_lake_table()) {
     // init data loader for iceberg table with default value
-    if (OB_FAIL(reader.data_loaders_.at(i).init(column_expr, default_value))) {
+    if (OB_FAIL(reader.data_loaders_.at(i).init(column_expr, default_value, eval_ctx))) {
       LOG_WARN("fail to init data loader", K(ret), K(i));
     } else {
       CK (reader.data_loaders_.at(i).has_load_func());
@@ -233,7 +275,7 @@ int ObOrcTableRowIterator::init_data_loader(int64_t i, int64_t orc_col_id, const
   } else if (OB_FAIL(get_data_column_batch(&reader.row_reader_->getSelectedType(),
       dynamic_cast<const orc::StructVectorBatch *>(reader.orc_batch_.get()), orc_col_id, batch))) {
     LOG_WARN("fail to get data column batch", K(ret), K(i));
-  } else if (OB_FAIL(reader.data_loaders_.at(i).init(column_expr, batch, type))) {
+  } else if (OB_FAIL(reader.data_loaders_.at(i).init(column_expr, batch, type, eval_ctx))) {
     LOG_WARN("fail to init data loader", K(ret), K(i));
   } else if (!reader.data_loaders_.at(i).has_load_func()) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -243,25 +285,8 @@ int ObOrcTableRowIterator::init_data_loader(int64_t i, int64_t orc_col_id, const
       const char *ob_type = ob_obj_type_str(column_expr->datum_meta_.type_);
       LOG_USER_ERROR(OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH, "", ob_type);
     } else {
-      std::string p_type = reader.row_reader_->getSelectedType().getSubtype(i) == nullptr ?
-              "INVALID ORC TYPE" : reader.row_reader_->getSelectedType().getSubtype(i)->toString();
-      int64_t pos = 0;
-      ObArrayWrap<char> buf;
-      ObArray<ObString> extended_type_info;
-      ObDatumMeta &meta = column_expr->datum_meta_;
-      const char *ob_type = ob_obj_type_str(column_expr->datum_meta_.type_);
-      if (OB_SUCCESS == buf.allocate_array(allocator_, 100)) {
-        ob_sql_type_str(buf.get_data(), buf.count(), pos, meta.type_,
-                        OB_MAX_VARCHAR_LENGTH, meta.precision_, meta.scale_, meta.cs_type_,
-                        extended_type_info);
-        if (pos < buf.count()) {
-          buf.at(pos++) = '\0';
-          ob_type = buf.get_data();
-        }
-      }
-      LOG_WARN("not supported type", K(ret), K(column_expr->datum_meta_),
-                K(ObString(p_type.length(), p_type.data())));
-      LOG_USER_ERROR(OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH, p_type.c_str(), ob_type);
+      print_type_mismatch_error(ret, column_expr->datum_meta_,
+                        reader.row_reader_->getSelectedType().getSubtype(i), allocator_, eval_ctx);
     }
   }
   return ret;
@@ -628,7 +653,7 @@ int ObOrcTableRowIterator::select_row_ranges_by_pushdown_filter(
   if (OB_UNLIKELY(!stripe_stat)) {
     // no stripe statistics, do nothing
     build_whole_stripe_range = true;
-  } else if (OB_FAIL(filter_by_statistic(STRIPE_LEVEL, stripe_stat.get(), is_stripe_filtered))) {
+  } else if (OB_FAIL(filter_by_statistic(STRIPE_LEVEL, stripe_stat.get(), nullptr, is_stripe_filtered))) {
     LOG_WARN("fail to apply skipping index filter", K(ret), K(stripe_idx));
   } else if (!is_stripe_filtered) {
     if (need_pre_buffer_index_ && OB_FAIL(pre_buffer(true /* row index */))) {
@@ -664,8 +689,8 @@ int ObOrcTableRowIterator::select_row_ranges_by_pushdown_filter(
           for (int64_t idx = 0; OB_SUCC(ret) && idx < groups_in_stripe; ++idx) {
             bool is_filtered = false;
             row_index_stat_wrapper.set_row_index(idx);
-            if (OB_FAIL(filter_by_statistic(ROW_INDEX_LEVEL, &row_index_stat_wrapper,
-                is_filtered))) {
+            OrcBloomFilterParamBuilder builder(&reader_adapter_, stripe_idx, idx, &reader_metrics_, -1);
+            if (OB_FAIL(filter_by_statistic(ROW_INDEX_LEVEL, &row_index_stat_wrapper, &builder, is_filtered))) {
               LOG_WARN("fail to apply skipping index filter", K(ret), K(idx));
             } else if (is_filtered) {
               ++groups_filtered;
@@ -767,7 +792,7 @@ int ObOrcTableRowIterator::next_file()
         }
 
         if (OB_FAIL(ret)) {
-        } else if (!is_abs_url(state_.cur_file_url_)) {
+        } else if (!share::ObExternalTableUtils::is_abs_url(state_.cur_file_url_)) {
           OZ(url_.append_fmt(
               "%.*s%s%.*s",
               location.length(),
@@ -908,7 +933,7 @@ int ObOrcTableRowIterator::next_file()
           }
 
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(prepare_read_orc_file())) {
+          } else if (OB_FAIL(prepare_read_orc_file(eval_ctx))) {
             LOG_WARN("fail to prepare read orc file", K(ret));
           } else if (OB_FAIL(filter_file(task_idx))) {
             LOG_WARN("fail to filter file and stripes", K(ret));
@@ -1171,7 +1196,7 @@ int ObOrcTableRowIterator::filter_file(const int64_t task_idx)
     std::unique_ptr<orc::Statistics> orc_col_stat = reader_->getStatistics();
     if (!orc_col_stat) {
       // no column statistics, do nothing
-    } else if (OB_FAIL(filter_by_statistic(PushdownLevel::FILE, orc_col_stat.get(), file_skipped))) {
+    } else if (OB_FAIL(filter_by_statistic(PushdownLevel::FILE, orc_col_stat.get(), nullptr, file_skipped))) {
       LOG_WARN("fail to apply skipping index filter", K(ret));
     }
   }
@@ -1214,11 +1239,12 @@ int ObOrcTableRowIterator::filter_file(const int64_t task_idx)
 
 int ObOrcTableRowIterator::filter_by_statistic(const PushdownLevel filter_level,
                                                const orc::Statistics *orc_stat,
+                                               OrcBloomFilterParamBuilder* builder,
                                                bool &skipped)
 {
   int ret = OB_SUCCESS;
   OrcMinMaxFilterParamBuilder param_builder(this, orc_stat);
-  if (OB_FAIL(apply_skipping_index_filter(filter_level, param_builder, skipped))) {
+  if (OB_FAIL(apply_skipping_index_filter(filter_level, param_builder, builder, skipped))) {
     LOG_WARN("fail to apply skipping index filter", K(ret));
   }
   // free temp allocator after filtered
@@ -1334,6 +1360,363 @@ int ObOrcTableRowIterator::init_column_range_slices()
       }
     }
   }
+  return ret;
+}
+
+int ObOrcTableRowIterator::ObOrcTableRowIteratorAdapter::getType(
+  const int64_t ext_tbl_col_id, const orc::Type*& r) {
+  int ret = iter_->column_index_type_ == sql::ColumnIndexType::ID
+            ? iter_->iceberg_id_to_type_.get_refactored(ext_tbl_col_id, r)
+            : iter_->id_to_type_.get_refactored(ext_tbl_col_id, r);
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to get type", K(ret), K(ext_tbl_col_id), K(iter_->column_index_type_));
+    r = nullptr;
+  }
+  return ret;
+}
+
+int ObOrcTableRowIterator::OrcBloomFilterParamBuilder::
+    stream_index_for_bloom_filter(const int64_t ext_tbl_col_id,
+                                  int64_t &stream_index) {
+  int ret = OB_SUCCESS;
+  stream_index = -1;
+  if (OB_ISNULL(reader_adapter_->getReaderPtr()) || OB_ISNULL(reader_adapter_->getReaderPtr()->getStripe(strip_index_))) {
+    ret = OB_UNEXPECT_INTERNAL_ERROR;
+    LOG_WARN("failed to find strip", K(ret), K(strip_index_));
+  } else {
+    std::unique_ptr<orc::StripeInformation> strip_info =
+        reader_adapter_->getReaderPtr()->getStripe(strip_index_);
+    uint64_t non_bloom_filter_size = 0;
+    uint64_t bloom_filter_size = 0;
+    uint64_t res = -1;
+    int64_t num_streams = strip_info->getNumberOfStreams();
+    for (uint64_t i = 0; OB_SUCC(ret) && i < num_streams; ++i) {
+      std::unique_ptr<orc::StreamInformation> stream_info =
+          strip_info->getStreamInformation(i);
+      if (OB_ISNULL(stream_info)) {
+        ret = OB_UNEXPECT_INTERNAL_ERROR;
+        LOG_WARN("failed to find stream info", K(ret), K(strip_index_), K(num_streams), K(i));
+      } else if (stream_info->getColumnId() != ext_tbl_col_id) {
+        // not my column
+      } else {
+        switch (stream_info->getKind()) {
+        case orc::StreamKind::StreamKind_DATA:
+        case orc::StreamKind::StreamKind_LENGTH:
+        case orc::StreamKind::StreamKind_DICTIONARY_DATA:
+        case orc::StreamKind::StreamKind_DICTIONARY_COUNT:
+        case orc::StreamKind::StreamKind_PRESENT:
+        case orc::StreamKind::StreamKind_SECONDARY:
+          non_bloom_filter_size += stream_info->getLength();
+          break;
+        case orc::StreamKind::StreamKind_BLOOM_FILTER_UTF8:
+          bloom_filter_size += stream_info->getLength();
+          if (stream_index >= 0) {
+            ret = OB_UNEXPECT_INTERNAL_ERROR;
+            LOG_WARN("unexpectely found two bloom filters", K(ret), K(strip_index_),
+                     K(ext_tbl_col_id), K(stream_index), K(i));
+          } else {
+            stream_index = i;
+          }
+          break;
+        case orc::StreamKind::StreamKind_ROW_INDEX:
+           break;
+        default:
+          ret = OB_UNEXPECT_INTERNAL_ERROR;
+          LOG_WARN("unexpected stream kind", K(ret), K(stream_info->getKind()));
+        }
+      }
+    } // for i in num_streams
+
+    // check io overhead
+    if (OB_SUCC(ret) && stream_index >= 0 &&
+        bloom_filter_percent_threshold_ > 0) {
+      if (bloom_filter_size >
+          (non_bloom_filter_size * bloom_filter_percent_threshold_ / 100)) {
+        LOG_TRACE("skipped load bloom filter because oversize", K(stream_index),
+                  K(strip_index_), K(ext_tbl_col_id), K(bloom_filter_size),
+                  K(non_bloom_filter_size));
+        metrics_->skip_load_bloom_filter_count_++;
+        stream_index = -1;
+      }
+    }
+  }
+
+  return ret;
+}
+
+bool ObOrcTableRowIterator::OrcBloomFilterParamBuilder::type_supported(
+    const orc::Type *orc_type, const BloomFilterItem &item) {
+  int ret = false;
+  if (OB_ISNULL(orc_type)) {
+    // checked outside
+  } else {
+    ObObjType ob_type = item.datum_meta_->type_;
+    const orc::TypeKind type_kind = orc_type->getKind();
+    switch (type_kind) {
+    case orc::TypeKind::BYTE: {
+      ret = (ob_type == ObTinyIntType);
+      break;
+    }
+    case orc::TypeKind::SHORT: {
+      ret = (ob_type == ObSmallIntType);
+      break;
+    }
+    case orc::TypeKind::INT: {
+      ret = (ob_type == ObInt32Type);
+      break;
+    }
+    case orc::TypeKind::LONG: {
+      ret = (ob_type == ObIntType);
+      break;
+    }
+    case orc::TypeKind::FLOAT: {
+      ret = (ob_type == ObFloatType);
+      break;
+    }
+    case orc::TypeKind::DOUBLE: {
+      ret = (ob_type == ObDoubleType);
+      break;
+    }
+    case orc::TypeKind::STRING:
+    case orc::TypeKind::BINARY: {
+      // TODO: other string
+      ret = (ob_is_text_tc(ob_type) ||
+             ob_is_binary(ob_type, item.datum_meta_->cs_type_));
+      break;
+    }
+    case orc::TypeKind::DECIMAL: {
+      // TODO: other decimal
+      ret = (ob_is_decimal_int_tc(ob_type) &&
+             get_decimalint_type(item.datum_meta_->precision_) <=
+                 DECIMAL_INT_128);
+      break;
+    }
+    case orc::TypeKind::DATE: {
+      // TODO: other date
+      ret = (ob_type == ObMySQLDateType);
+      break;
+    }
+    case orc::TypeKind::TIMESTAMP: {
+      // TODO: other timestamp/tz
+      ret = (ob_type == ObTimestampType);
+      break;
+    }
+    default:
+      ret =  false;
+    }
+  }
+  return ret;
+}
+
+int ObOrcTableRowIterator::OrcReaderAdapter::get_bloom_filter(
+    const uint64_t strip_index, const uint64_t row_index, const uint32_t col_id,
+    ObLakeTableORCReaderMetrics *metrics,
+    std::shared_ptr<orc::BloomFilter> & /* out */ bloom_filter) {
+  int ret = OB_SUCCESS;
+  bool load = false;
+  bloom_filter = nullptr;
+  try {
+    if (strip_index != strip_index_) {
+      strip_index_ = strip_index;
+      col_ids_ = std::set<uint32_t>{col_id};
+      bloom_filters_ = getReaderPtr()->getBloomFilters(strip_index_, col_ids_);
+      load = true;
+    } else if (col_ids_.find(col_id) == col_ids_.end()) {
+      col_ids_.insert(col_id);
+      // read new column
+      std::set<uint32_t> cols{col_id};
+      std::map<uint32_t, orc::BloomFilterIndex> bloom_filters =
+          getReaderPtr()->getBloomFilters(strip_index_, cols);
+      load = true;
+      // merge to one
+      bloom_filters_.insert(bloom_filters.begin(), bloom_filters.end());
+    }
+    std::map<uint32_t, orc::BloomFilterIndex>::iterator iter =
+        bloom_filters_.find(col_id);
+    if (iter == bloom_filters_.end()) {
+    } else {
+      std::vector<std::shared_ptr<orc::BloomFilter>> &bf_vec =
+          iter->second.entries;
+      if (load) {
+        metrics->load_bloom_filter_count_ += 1;
+        metrics->load_bloom_filter_index_count_ += bf_vec.size();
+      }
+      if (bf_vec.size() > row_index) {
+        metrics->use_bloom_filter_index_count_ += 1;
+        bloom_filter = bf_vec[row_index];
+      }
+    }
+  } catch (const std::exception &e) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), "Info", e.what());
+  } catch (...) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  }
+
+  if (OB_ISNULL(bloom_filter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get bloom filter", K(ret), K(load));
+  }
+
+  return ret;
+}
+
+int ObOrcTableRowIterator::OrcBloomFilterParamBuilder::may_contain(
+    const orc::Type *type, const BloomFilterItem &item, bool & /* out */ is_contain) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(bloom_filter_)) {
+    ret = OB_UNEXPECT_INTERNAL_ERROR;
+    LOG_WARN("unexepcted bloom filter", K(ret), K(item));
+  } else if (OB_ISNULL(item.datum_)) {
+    ret = OB_UNEXPECT_INTERNAL_ERROR;
+    LOG_WARN("unexepcted item", K(ret), K(item));
+  } else {
+    const orc::TypeKind type_kind = type->getKind();
+    const ObDatum &datum = *item.datum_;
+    switch (type_kind) {
+    case orc::TypeKind::BYTE: {
+      is_contain = bloom_filter_->testLong(datum.get_int8());
+      break;
+    }
+    case orc::TypeKind::SHORT: {
+      is_contain = bloom_filter_->testLong(datum.get_smallint());
+      break;
+    }
+    case orc::TypeKind::INT: {
+      is_contain = bloom_filter_->testLong(datum.get_int32());
+      break;
+    }
+    case orc::TypeKind::LONG: {
+      is_contain = bloom_filter_->testLong(datum.get_int());
+      break;
+    }
+    case orc::TypeKind::FLOAT: {
+      is_contain = bloom_filter_->testDouble(datum.get_float());
+      break;
+    }
+    case orc::TypeKind::DOUBLE: {
+      is_contain = bloom_filter_->testDouble(datum.get_double());
+      break;
+    }
+    case orc::TypeKind::STRING:
+    case orc::TypeKind::BINARY: {
+      is_contain = bloom_filter_->testBytes(datum.get_string().ptr(),
+                                           datum.get_string().length());
+      break;
+    }
+    case orc::TypeKind::DATE: {
+      int32_t epoch_days = 0;
+      ObMySQLDate mysql_date = datum.get_mysql_date();
+      ObTime ob_time(DT_TYPE_DATE);
+      if (OB_FAIL(ObTimeConverter::mdate_to_ob_time(mysql_date, ob_time))) {
+        ret = OB_UNEXPECT_INTERNAL_ERROR;
+        LOG_WARN("unexpected date type", K(ret), K(type_kind), K(item));
+        break;
+      }
+      epoch_days = ObTimeConverter::ob_time_to_date(ob_time);
+      is_contain = bloom_filter_->testLong(epoch_days);
+      break;
+    }
+    case orc::TypeKind::TIMESTAMP: {
+      int64_t epoch_ms = datum.get_timestamp() / 1000L + tz_offset_sec_ * 1000L;
+      is_contain = bloom_filter_->testLong(epoch_ms);
+      LOG_TRACE("adjusted timezone.", K(epoch_ms), K(datum.get_timestamp()),
+                K(is_contain), K(tz_offset_sec_));
+      break;
+    }
+    case orc::TypeKind::DECIMAL: {
+      int8_t scale = item.datum_meta_->scale_;
+      ObDecimalIntWideType decimal_type =
+          get_decimalint_type(item.datum_meta_->precision_);
+      orc::Decimal decimal;
+      switch (decimal_type) {
+      case DECIMAL_INT_32: {
+        decimal = orc::Decimal(datum.get_decimal_int32(), scale);
+        break;
+      }
+      case DECIMAL_INT_64: {
+        decimal = orc::Decimal(datum.get_decimal_int64(), scale);
+        break;
+      }
+      case DECIMAL_INT_128: {
+        int128_t value = datum.get_decimal_int128();
+        int64_t low_64 = static_cast<int64_t>(value.items_[0]);
+        int64_t high_64 = static_cast<int64_t>(value.items_[1]);
+        decimal = orc::Decimal(orc::Int128(high_64, low_64), scale);
+        break;
+      }
+      default: {
+        ret = OB_UNEXPECT_INTERNAL_ERROR;
+        LOG_WARN("unexpected type", K(ret), K(type_kind), K(item));
+      }
+      }
+      if (OB_SUCC(ret)) {
+        std::string str = decimal.toString(true);
+        is_contain = bloom_filter_->testBytes(str.c_str(), str.size());
+        break;
+      }
+    } //  case orc::TypeKind::DECIMAL
+
+    default:
+      ret = OB_UNEXPECT_INTERNAL_ERROR;
+      LOG_WARN("unexpected type", K(ret), K(type_kind), K(item));
+      break;
+    }
+  }
+  return ret;
+
+}
+
+int ObOrcTableRowIterator::OrcBloomFilterParamBuilder::may_contain(
+    const PushdownLevel filter_level, const BloomFilterItem &item,
+    bool & /* out */ is_contain) {
+  int ret = OB_SUCCESS;
+  is_contain = true; // it may contain on default
+
+  if (filter_level != ROW_INDEX_LEVEL) {
+    // 1. check pushdown level
+    // orc maintains bloom filter in row index level only
+  } else {
+    // 2. check if type supported
+    const orc::Type *type;
+    if (OB_FAIL(reader_adapter_->getType(item.ext_tbl_col_id_, type))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get type", K(ret), K(item));
+    } else if (!type_supported(type, item)) {
+      LOG_TRACE("ignore unsupported type", K(item));
+    } else {
+      // 3. read stream and check if has bloom filter + check load overhead
+      int64_t stream_index;
+      if (OB_FAIL(stream_index_for_bloom_filter(item.ext_tbl_col_id_,
+                                                stream_index))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to parse stream", K(ret));
+      } else if (stream_index < 0) {
+        // bloom filter is not set
+        LOG_TRACE("bloom filter does not exists", K(item));
+      } else {
+        // 4. all set, ready to load bloom filter if necessary.
+        // we'll reuse bloom filter when applied to the same column
+        if (item.ext_tbl_col_id_ != ext_tbl_col_id_) {
+          if (OB_FAIL(reader_adapter_->get_bloom_filter(
+              strip_index_, row_index_, item.ext_tbl_col_id_, metrics_, bloom_filter_))) {
+              LOG_WARN("failed to get bloom filter", K(ret), K(item), K(ret));
+          } else {
+            ext_tbl_col_id_ = item.ext_tbl_col_id_;
+          }
+        }
+
+        // 5. find hash in blomm filter
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(may_contain(type, item, is_contain))) {
+          LOG_WARN("failed to check bloom filter", K(ret), K(item), K(stream_index));
+        } else if (!is_contain) {
+          metrics_->skip_bloom_filter_count_ += 1;
+        }
+      } // 3. read stream and check if has bloom filter + check load overhead
+    }  // 2. check if type supported
+  } // 1. check pushdown level
   return ret;
 }
 
@@ -1919,15 +2302,22 @@ int ObOrcTableRowIterator::convert_orc_statistics(const orc::ColumnStatistics *o
 
 int ObOrcTableRowIterator::DataLoader::init(ObExpr *file_col_expr,
                                             const orc::ColumnVectorBatch *batch,
-                                            const orc::Type *col_type)
+                                            const orc::Type *col_type,
+                                            ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
+  ObCollectionTypeBase *collection_type = nullptr;
   if (OB_ISNULL(file_col_expr) || OB_ISNULL(batch) || OB_ISNULL(col_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(file_col_expr), K(batch), K(col_type));
+  } else if (ob_is_collection_sql_type(file_col_expr->datum_meta_.type_)
+      && OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(
+        &eval_ctx.exec_ctx_, file_col_expr->datum_meta_.get_subschema_id(), collection_type))) {
+    LOG_WARN("fail to get array type by subschema id", K(ret));
   } else {
     reset();
     file_col_expr_ = file_col_expr;
+    collection_type_ = collection_type;
     batch_ = batch;
     col_type_ = col_type;
     col_def_ = nullptr;
@@ -1937,15 +2327,22 @@ int ObOrcTableRowIterator::DataLoader::init(ObExpr *file_col_expr,
 }
 
 int ObOrcTableRowIterator::DataLoader::init(ObExpr *file_col_expr,
-                                            const ObColumnDefaultValue *col_def)
+                                            const ObColumnDefaultValue *col_def,
+                                            ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
+  ObCollectionTypeBase *collection_type = nullptr;
   if (OB_ISNULL(file_col_expr) || OB_ISNULL(col_def)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(file_col_expr), K(col_def));
+  } else if (ob_is_collection_sql_type(file_col_expr->datum_meta_.type_)
+             && OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(
+               &eval_ctx.exec_ctx_, file_col_expr->datum_meta_.get_subschema_id(), collection_type))) {
+    LOG_WARN("fail to get array type by subschema id", K(ret));
   } else {
     reset();
     file_col_expr_ = file_col_expr;
+    collection_type_ = collection_type;
     col_def_ = col_def;
     load_func_ = &DataLoader::load_default;
   }
@@ -2139,6 +2536,12 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
     }
   } else if (orc::TypeKind::DOUBLE == type_kind && ObDoubleType == datum_type.type_) {
     func = &DataLoader::load_double;
+  } else if (ob_is_collection_sql_type(datum_type.type_)) {
+    if (orc::TypeKind::LIST == type_kind) {
+      func = &DataLoader::load_list_to_array;
+    } else if (orc::TypeKind::MAP == type_kind) {
+      func = &DataLoader::load_map;
+    }
   }
   return func;
 }
@@ -2999,6 +3402,404 @@ int ObOrcTableRowIterator::DataLoader::load_double(ObEvalCtx &eval_ctx)
             double_vec->set_null(i);
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename ORC_COL_TYPE>
+int ObOrcTableRowIterator::DataLoader::load_nulls_and_offsets(const ORC_COL_TYPE *orcCol,
+                                                              uint8_t *nulls, uint32_t *offsets,
+                                                              ObArrayWrap<int64_t> &parent_offsets)
+{
+  int ret = OB_SUCCESS;
+  int64_t offset = 0;
+  if (!orcCol->hasNulls) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < parent_offsets.count(); i++) {
+      int64_t line_head_offset = orcCol->offsets[offset];
+      for (int64_t j = offset; j < offset + parent_offsets.at(i); j++) {
+        offsets[j] = orcCol->offsets[j + 1] - line_head_offset;
+      }
+      offset += parent_offsets.at(i);
+    }
+    MEMSET(nulls, 0, sizeof(uint8_t) * offset);
+  } else {
+    CK (OB_NOT_NULL(orcCol->notNull.data()));
+    for (int64_t i = 0; OB_SUCC(ret) && i < parent_offsets.count(); i++) {
+      int64_t line_head_offset = orcCol->offsets[offset];
+      for (int64_t j = offset; j < offset + parent_offsets.at(i); j++) {
+        nulls[j] = (orcCol->notNull.data()[j] == 0);
+        offsets[j] = orcCol->offsets[j + 1] - line_head_offset;
+      }
+      offset += parent_offsets.at(i);
+    }
+  }
+  return ret;
+}
+
+
+template <typename ORC_COL_TYPE, typename DST_TYPE>
+int ObOrcTableRowIterator::DataLoader::load_nulls_and_values(const ORC_COL_TYPE *orcCol,
+                                                                 uint8_t *nulls, DST_TYPE *values)
+{
+  int ret = OB_SUCCESS;
+  if (!orcCol->hasNulls) {
+    if (sizeof(DST_TYPE) == sizeof(int64_t)) {
+      MEMCPY(values, orcCol->data.data(), sizeof(DST_TYPE) * orcCol->numElements);
+    } else {
+      for (int i = 0; i < orcCol->numElements; i++) {
+        values[i] = orcCol->data[i];
+      }
+    }
+    MEMSET(nulls, 0, sizeof(uint8_t) * orcCol->numElements);
+  } else {
+    CK (OB_NOT_NULL(orcCol->notNull.data()));
+    for (int64_t i = 0; OB_SUCC(ret) && i < orcCol->numElements; i++) {
+      const char not_null = orcCol->notNull.data()[i];
+      if (not_null == 1) {
+        nulls[i] = 0;
+        values[i] = orcCol->data[i];
+      } else {
+        nulls[i] = 1;
+        values[i] = 0;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOrcTableRowIterator::DataLoader::set_values_for_varchar_array(
+  int attr_idx, ObEvalCtx &eval_ctx, const orc::ColumnVectorBatch *batch,
+  ObArrayWrap<int64_t> &parent_offsets, const ObLength max_accuracy_len)
+{
+  int ret = OB_SUCCESS;
+  const orc::StringVectorBatch *string_batch =
+    dynamic_cast<const orc::StringVectorBatch *>(batch);
+  CK (OB_NOT_NULL(string_batch));
+  CK (OB_NOT_NULL(string_batch->data.data()));
+  CK (OB_NOT_NULL(string_batch->length.data()));
+  CK (attr_idx + 2 < file_col_expr_->attrs_cnt_);
+  ObExpr **attrs = file_col_expr_->attrs_;
+
+  if (OB_SUCC(ret)) {
+    StrDiscVec *vec0 = static_cast<StrDiscVec *>(attrs[attr_idx]->get_vector(eval_ctx));
+    StrDiscVec *vec1 = static_cast<StrDiscVec *>(attrs[attr_idx + 1]->get_vector(eval_ctx));
+    StrDiscVec *vec2 = static_cast<StrDiscVec *>(attrs[attr_idx + 2]->get_vector(eval_ctx));
+    uint8_t *nulls = reinterpret_cast<uint8_t *>(
+      attrs[attr_idx]->get_str_res_mem(eval_ctx, sizeof(uint8_t) * string_batch->numElements));
+    uint32_t *offsets = reinterpret_cast<uint32_t *>(
+      attrs[attr_idx + 1]->get_str_res_mem(eval_ctx, sizeof(uint32_t) * string_batch->numElements));
+    CK(OB_NOT_NULL(nulls));
+    CK(OB_NOT_NULL(offsets));
+
+    if (OB_SUCC(ret)) {
+      int64_t offset = 0;
+      for (int i = 0; OB_SUCC(ret) && i < parent_offsets.count(); i++) {
+        int64_t row_str_length = 0;
+        for (int j = offset; OB_SUCC(ret) && j < offset + parent_offsets.at(i); j++) {
+          ObLength length = string_batch->length[j];
+          const char *data = string_batch->data[j];
+          if (string_batch->hasNulls && string_batch->notNull.data()[j] == 0) {
+            nulls[j] = 1;
+          } else if (OB_UNLIKELY(length > max_accuracy_len
+                          && ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN, data, length)
+                               > max_accuracy_len)) {
+            ret = OB_ERR_DATA_TOO_LONG;
+            LOG_WARN("data too long", K(ret), K(length), K(max_accuracy_len));
+          } else {
+            nulls[j] = 0;
+            row_str_length += length;
+          }
+          offsets[j] = row_str_length;
+        }
+        char *res_data = attrs[attr_idx + 2]->get_str_res_mem(eval_ctx, row_str_length, i);
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(res_data)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory", K(ret), K(row_str_length));
+        } else {
+          int temp_offset = 0;
+          for (int j = offset; j < offset + parent_offsets.at(i); j++) {
+            const int64_t length = string_batch->length[j];
+            if (nulls[j] == 0 && length > 0) {
+              MEMCPY(res_data + temp_offset, string_batch->data[j], length);
+              temp_offset += length;
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          vec0->set_string(i, reinterpret_cast<char *>(&nulls[offset]),
+                          sizeof(uint8_t) * (parent_offsets.at(i)));
+          vec1->set_string(i, reinterpret_cast<char *>(&offsets[offset]),
+                          sizeof(uint32_t) * (parent_offsets.at(i)));
+          vec2->set_string(i, res_data, row_str_length);
+          offset += parent_offsets.at(i);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename ORC_COL_TYPE, typename DST_TYPE>
+int ObOrcTableRowIterator::DataLoader::set_array_values(int attr_idx, ObEvalCtx &eval_ctx,
+                                                        const orc::ColumnVectorBatch *batch,
+                                                        ObArrayWrap<int64_t> &parent_offsets)
+{
+  int ret = OB_SUCCESS;
+  const ORC_COL_TYPE *orcCol = dynamic_cast<const ORC_COL_TYPE *>(batch);
+  bool set_offsets = std::is_same_v<ORC_COL_TYPE, orc::ListVectorBatch>;
+  CK (OB_NOT_NULL(orcCol));
+  CK (attr_idx + 1 < file_col_expr_->attrs_cnt_);
+  ObExpr **attrs = file_col_expr_->attrs_;
+  if (OB_SUCC(ret)) {
+    StrDiscVec *vec1 = static_cast<StrDiscVec *>(attrs[attr_idx]->get_vector(eval_ctx));
+    StrDiscVec *vec2 = static_cast<StrDiscVec *>(attrs[attr_idx + 1]->get_vector(eval_ctx));
+    int64_t values_size = (set_offsets ? sizeof(uint32_t) : sizeof(DST_TYPE)) * orcCol->numElements;
+    uint8_t* nulls = reinterpret_cast<uint8_t *>(
+      attrs[attr_idx]->get_str_res_mem(eval_ctx, sizeof(uint8_t) * orcCol->numElements));
+    DST_TYPE *values =
+      reinterpret_cast<DST_TYPE *>(attrs[attr_idx + 1]->get_str_res_mem(eval_ctx, values_size));
+
+    CK (OB_NOT_NULL(nulls));
+    CK (OB_NOT_NULL(values));
+    if (OB_FAIL(ret)) {
+    } else if constexpr (std::is_same_v<ORC_COL_TYPE, orc::ListVectorBatch>) {
+      if (OB_FAIL(load_nulls_and_offsets(orcCol, nulls, reinterpret_cast<uint32_t *>(values),
+                                         parent_offsets))) {
+        LOG_WARN("fail to get nulls and offsets", K(ret));
+      }
+    } else if (OB_FAIL(load_nulls_and_values(orcCol, nulls, values))) {
+      LOG_WARN("fail to get nulls and values", K(ret));
+    }
+    int64_t offset = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < parent_offsets.count(); i++) {
+      vec1->set_string(i, reinterpret_cast<char *>(&nulls[offset]),
+                       sizeof(uint8_t) * (parent_offsets.at(i)));
+      vec2->set_string(i, reinterpret_cast<char *>(&values[offset]),
+                       sizeof(DST_TYPE) * (parent_offsets.at(i)));
+      offset += parent_offsets.at(i);
+      parent_offsets.at(i) = parent_offsets.at(i) == 0 ? 0 : values[offset - 1];
+    }
+  }
+  return ret;
+}
+
+int ObOrcTableRowIterator::DataLoader::recursively_load_orc_col_to_attr(
+  ObEvalCtx &eval_ctx, int &attr_idx, const orc::ColumnVectorBatch *batch,
+  ObArrayWrap<int64_t> &parent_offsets, const orc::Type *col_type, uint32_t depth,
+  ObDatumMeta &value_meta, ObIAllocator &allocator, const ObLength max_accuracy_len)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(col_type));
+  CK (OB_NOT_NULL(batch));
+  if (OB_FAIL(ret)) {
+  } else if (const orc::ListVectorBatch* listCol = dynamic_cast<const orc::ListVectorBatch*>(batch)) {
+    attr_idx += 2;
+    if (depth <= 0) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      print_type_mismatch_error(ret, file_col_expr_->datum_meta_, col_type_, allocator, eval_ctx);
+    } else if (col_type->getSubtypeCount() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected sub type count", K(ret), K(col_type->getSubtypeCount()));
+    } else if (OB_FAIL((set_array_values<orc::ListVectorBatch, uint32_t>(attr_idx - 2, eval_ctx,
+                                                                         batch, parent_offsets)))) {
+      LOG_WARN("fail to load array values", K(ret));
+    } else if (OB_FAIL(recursively_load_orc_col_to_attr(
+                 eval_ctx, attr_idx, listCol->elements.get(), parent_offsets,
+                 col_type->getSubtype(0), depth - 1, value_meta, allocator, max_accuracy_len))) {
+      LOG_WARN("fail to recursively load list to array", K(ret));
+    }
+  } else {
+    ObObjType obj_type = value_meta.type_;
+    LOAD_FUNC func = select_load_function(value_meta, *col_type);
+    if (depth != 0 || OB_ISNULL(func)) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      print_type_mismatch_error(ret, file_col_expr_->datum_meta_, col_type_, allocator, eval_ctx);
+    } else {
+      switch (obj_type) {
+        case ObTinyIntType:
+          ret = set_array_values<orc::LongVectorBatch, int8_t>(attr_idx, eval_ctx, batch,
+                                                               parent_offsets);
+          break;
+        case ObSmallIntType:
+          ret = set_array_values<orc::LongVectorBatch, int16_t>(attr_idx, eval_ctx, batch,
+                                                                parent_offsets);
+          break;
+        case ObInt32Type:
+          ret = set_array_values<orc::LongVectorBatch, int32_t>(attr_idx, eval_ctx, batch,
+                                                                parent_offsets);
+          break;
+        case ObIntType:
+          ret = set_array_values<orc::LongVectorBatch, int64_t>(attr_idx, eval_ctx, batch,
+                                                                parent_offsets);
+          break;
+        case ObFloatType:
+          ret = set_array_values<orc::DoubleVectorBatch, float>(attr_idx, eval_ctx, batch,
+                                                               parent_offsets);
+          break;
+        case ObDoubleType:
+          ret = set_array_values<orc::DoubleVectorBatch, double>(attr_idx, eval_ctx, batch,
+                                                                 parent_offsets);
+          break;
+        case ObVarcharType:
+          ret = set_values_for_varchar_array(attr_idx, eval_ctx, batch, parent_offsets, max_accuracy_len);
+          attr_idx += 1;
+          break;
+        default: ret = OB_ERR_UNEXPECTED;
+        }
+        if (OB_FAIL(ret)) {
+          LOG_WARN("fail to load array values", K(obj_type), K(col_type->getKind()), K(ret));
+        }
+    }
+    attr_idx += 2;
+  }
+  return ret;
+}
+
+int ObOrcTableRowIterator::DataLoader::load_list_to_array(ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx);
+  CK (OB_NOT_NULL(file_col_expr_));
+  CK (OB_NOT_NULL(collection_type_));
+  CK (OB_NOT_NULL(col_type_));
+
+  if (OB_FAIL(ret)) {
+  } else if (col_type_->getSubtypeCount() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected sub type count", K(ret), K(col_type_->getSubtypeCount()));
+  } else {
+    uint32_t depth = 0;
+    const ObDataType &basic_meta = collection_type_->get_basic_meta(depth);
+    const ObLength max_accuracy_len = basic_meta.get_accuracy().get_length();
+    ObDatumMeta value_meta(basic_meta.get_obj_type(), basic_meta.get_collation_type(),
+                           basic_meta.get_scale(), basic_meta.get_precision());
+
+    CollDiscVec *array_vec = static_cast<CollDiscVec *>(file_col_expr_->get_vector(eval_ctx));
+    CK (OB_NOT_NULL(array_vec));
+    CK (VEC_DISCRETE == array_vec->get_format());
+    const orc::ListVectorBatch *list_batch = dynamic_cast<const orc::ListVectorBatch *>(batch_);
+    ObExpr **attrs = file_col_expr_->attrs_;
+    int attr_idx = 1;
+    CK (OB_NOT_NULL(attrs));
+    CK (OB_NOT_NULL(list_batch));
+    if (OB_SUCC(ret)) {
+      ObFixedLengthBase *size_vec = static_cast<ObFixedLengthBase *>(attrs[0]->get_vector(eval_ctx));
+      int64_t offset = 0;
+      ObArrayWrap<int64_t> parent_offsets;
+      OZ(parent_offsets.allocate_array(tmp_alloc_g.get_allocator(), list_batch->numElements));
+      for (int64_t i = 0; OB_SUCC(ret) && i < list_batch->numElements; i++) {
+        offset = list_batch->offsets[i + 1] - list_batch->offsets[i];
+        size_vec->set_int(i, offset);
+        parent_offsets.at(i) = offset;
+        if (list_batch->hasNulls && list_batch->notNull.data()[i] == 0) {
+          array_vec->set_null(i);
+        } else {
+          ObCollectionExprCell cell;
+          cell.row_idx_ = i;
+          cell.expr_ = file_col_expr_;
+          cell.eval_ctx_ = &eval_ctx;
+          cell.format_ = ObCollectionExprCell::COLLECTION_VEC_FORMAT;
+          array_vec->set_payload(i, &cell, sizeof(cell));
+        }
+      }
+      const ObBitVector *tmp_skip = NULL;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(recursively_load_orc_col_to_attr(
+                   eval_ctx, attr_idx, list_batch->elements.get(), parent_offsets,
+                   col_type_->getSubtype(0), depth - 1, value_meta, tmp_alloc_g.get_allocator(),
+                   max_accuracy_len))) {
+        LOG_WARN("fail to recursively load list to array", K(ret));
+      } else if (OB_FAIL(ObCollectionExprUtil::cast_vector2compact_fmt(
+                   static_cast<ObDiscreteFormat *>(array_vec), 0, list_batch->numElements,
+                   tmp_skip))) {
+        LOG_WARN("fail to cast vector to compact fmt", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOrcTableRowIterator::DataLoader::load_map(ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx);
+  CK (OB_NOT_NULL(file_col_expr_));
+  CK (OB_NOT_NULL(collection_type_));
+  CK (OB_NOT_NULL(col_type_));
+
+  if (OB_FAIL(ret)) {
+  } else if (col_type_->getSubtypeCount() != 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected sub type count", K(ret), K(col_type_->getSubtypeCount()));
+  } else {
+    uint32_t value_depth = 0;
+    uint32_t key_depth = 0;
+
+    const ObDataType &key_basic_meta =
+      static_cast<ObCollectionMapType *>(collection_type_)->get_key_meta(key_depth);
+    const ObLength key_max_accuracy_len = key_basic_meta.get_accuracy().get_length();
+    ObDatumMeta key_meta(key_basic_meta.get_obj_type(), key_basic_meta.get_collation_type(),
+                         key_basic_meta.get_scale(), key_basic_meta.get_precision());
+
+    const ObDataType &val_basic_meta = collection_type_->get_basic_meta(value_depth);
+    const ObLength val_max_accuracy_len = val_basic_meta.get_accuracy().get_length();
+    ObDatumMeta value_meta(val_basic_meta.get_obj_type(), val_basic_meta.get_collation_type(),
+                           val_basic_meta.get_scale(), val_basic_meta.get_precision());
+
+    CollDiscVec *map_vec = static_cast<CollDiscVec *>(file_col_expr_->get_vector(eval_ctx));
+    CK (OB_NOT_NULL(map_vec));
+    CK (VEC_DISCRETE == map_vec->get_format());
+    const orc::MapVectorBatch *map_batch = dynamic_cast<const orc::MapVectorBatch *>(batch_);
+    ObExpr **attrs = file_col_expr_->attrs_;
+    int attr_idx = 1;
+    CK (OB_NOT_NULL(attrs));
+    CK (OB_NOT_NULL(map_batch));
+    if (OB_SUCC(ret)) {
+      ObFixedLengthBase *size_vec = static_cast<ObFixedLengthBase *>(attrs[0]->get_vector(eval_ctx));
+      int64_t offset = 0;
+      ObArrayWrap<int64_t> key_offsets;
+      ObArrayWrap<int64_t> value_offsets;
+      OZ(key_offsets.allocate_array(tmp_alloc_g.get_allocator(), map_batch->numElements));
+      OZ(value_offsets.allocate_array(tmp_alloc_g.get_allocator(), map_batch->numElements));
+      for (int64_t i = 0; OB_SUCC(ret) && i < map_batch->numElements; i++) {
+        offset = map_batch->offsets[i + 1] - map_batch->offsets[i];
+        size_vec->set_int(i, offset);
+        key_offsets.at(i) = offset;
+        value_offsets.at(i) = offset;
+        if (map_batch->hasNulls && map_batch->notNull.data()[i] == 0) {
+          map_vec->set_null(i);
+        } else {
+          ObCollectionExprCell cell;
+          cell.row_idx_ = i;
+          cell.expr_ = file_col_expr_;
+          cell.eval_ctx_ = &eval_ctx;
+          cell.format_ = ObCollectionExprCell::COLLECTION_VEC_FORMAT;
+          map_vec->set_payload(i, &cell, sizeof(cell));
+        }
+      }
+
+      const ObBitVector *tmp_skip = NULL;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(recursively_load_orc_col_to_attr(
+                   eval_ctx, attr_idx, map_batch->keys.get(), key_offsets, col_type_->getSubtype(0),
+                   key_depth - 1, key_meta, tmp_alloc_g.get_allocator(), key_max_accuracy_len))) {
+        LOG_WARN("fail to recursively load list to array for keys", K(ret));
+      } else if (OB_FAIL(recursively_load_orc_col_to_attr(
+                   eval_ctx, attr_idx, map_batch->elements.get(), value_offsets,
+                   col_type_->getSubtype(1), value_depth - 1, value_meta,
+                   tmp_alloc_g.get_allocator(), val_max_accuracy_len))) {
+        LOG_WARN("fail to recursively load list to array for values", K(ret));
+      } else if (OB_FAIL(ObCollectionExprUtil::cast_vector2compact_fmt(
+                   static_cast<ObDiscreteFormat *>(map_vec), 0, map_batch->numElements,
+                   tmp_skip))) {
+        LOG_WARN("fail to cast vector to compact fmt", K(ret));
+      } else if (OB_FAIL(ObArrayExprUtils::canonicalize_map_compact_payload(
+                   tmp_alloc_g.get_allocator(), eval_ctx, *file_col_expr_,
+                   *static_cast<ObIVector *>(map_vec), 0, map_batch->numElements))) {
+        LOG_WARN("canonicalize orc map compact payload failed", K(ret), K(map_batch->numElements));
       }
     }
   }

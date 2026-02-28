@@ -33,7 +33,7 @@ namespace rootserver
 {
 class ObIBackupDeleteMgr;
 class ObBackupTaskScheduler;
-class ObBackupCleanService;
+class ObBackupMgrService;
 class ObServerManager;
 
 
@@ -44,7 +44,7 @@ public:
   virtual ~ObBackupCleanScheduler() {};
 public:
   virtual int process() override;
-  virtual int force_cancel(const uint64_t &tenant_id) override; // for lease 
+  virtual int force_cancel(const uint64_t tenant_id) override; // for lease
   virtual int handle_execute_over(
       const ObBackupScheduleTask *task,
       const share::ObHAResultInfo &result_info,
@@ -57,7 +57,7 @@ public:
       obrpc::ObSrvRpcProxy &rpc_proxy,
       share::schema::ObMultiVersionSchemaService &schema_service,
       ObBackupTaskScheduler &task_scheduler,
-      ObBackupCleanService &backup_service);
+      ObBackupMgrService &backup_service);
   int start_schedule_backup_clean(const obrpc::ObBackupCleanArg &in_arg);
   int cancel_backup_clean_job(const obrpc::ObBackupCleanArg &in_arg);
   int add_delete_policy(const obrpc::ObDeletePolicyArg &in_arg);
@@ -117,7 +117,7 @@ private:
   obrpc::ObSrvRpcProxy                       *rpc_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
   ObBackupTaskScheduler                      *task_scheduler_;
-  ObBackupCleanService                            *backup_service_;
+  ObBackupMgrService                            *backup_service_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanScheduler);        
 };
@@ -137,7 +137,7 @@ public:
       obrpc::ObSrvRpcProxy &rpc_proxy,
       ObBackupTaskScheduler &task_scheduler,
       share::schema::ObMultiVersionSchemaService &schema_service_,
-      ObBackupCleanService &backup_service);
+      ObBackupMgrService &backup_service);
   void reset();
   uint64_t get_tenant_id() const { return tenant_id_; }
   bool is_can_retry(const int err) const;
@@ -149,7 +149,7 @@ protected:
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObBackupTaskScheduler *task_scheduler_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
-  ObBackupCleanService *backup_service_;
+  ObBackupMgrService *backup_service_;
   DISALLOW_COPY_AND_ASSIGN(ObIBackupDeleteMgr);
 };
 
@@ -286,7 +286,7 @@ public:
       obrpc::ObSrvRpcProxy &rpc_proxy,
       share::schema::ObMultiVersionSchemaService &schema_service,
       ObBackupTaskScheduler &task_scheduler,
-      ObBackupCleanService &backup_service);
+      ObBackupMgrService &backup_service);
 private:
   int start_auto_delete_obsolete_data_();
 private:
@@ -296,7 +296,7 @@ private:
   obrpc::ObSrvRpcProxy                       *rpc_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
   ObBackupTaskScheduler                      *task_scheduler_;
-  ObBackupCleanService                            *backup_service_;
+  ObBackupMgrService                            *backup_service_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupAutoObsoleteDeleteTrigger); 
 };
 

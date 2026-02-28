@@ -63,6 +63,7 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_space.cpp
   sys_package/ob_dbms_mview_mysql.cpp
   sys_package/ob_dbms_mview_stats_mysql.cpp
+  sys_package/ob_dbms_routine_load_mysql.cpp
   sys_package/ob_dbms_workload_repository.cpp
   sys_package/ob_pl_dbms_resource_manager.cpp
   sys_package/ob_pl_dbms_trusted_certificate_manager.cpp
@@ -76,6 +77,8 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_ai_service.cpp
   sys_package/ob_dbms_data_dict.cpp
   sys_package/ob_dbms_python.cpp
+  sys_package/ob_dbms_lob_manager.cpp
+  sys_package/ob_dbms_daily_maintenance.cpp
 )
 
 ob_set_subtarget(ob_pl pl_recompile

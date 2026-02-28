@@ -13,9 +13,11 @@
 #ifndef OCEANBASE_BLOCKSSTABLE_OB_MICRO_BLOCK_READER_HELPER_H_
 #define OCEANBASE_BLOCKSSTABLE_OB_MICRO_BLOCK_READER_HELPER_H_
 
-#include "cs_encoding/ob_micro_block_cs_decoder.h"
-#include "encoding/ob_micro_block_decoder.h"
-#include "ob_micro_block_reader.h"
+#include "lib/allocator/ob_allocator.h"
+#include "storage/blocksstable/cs_encoding/ob_micro_block_cs_decoder.h"
+#include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
+#include "storage/blocksstable/ob_micro_block_header.h"
+#include "storage/blocksstable/ob_micro_block_reader.h"
 
 namespace oceanbase
 {
@@ -25,13 +27,14 @@ template <typename BaseReaderType,
           typename FlatReaderType,
           typename NewFlatReaderType,
           typename DecoderType,
-          typename CSDecoderType>
+          typename CSDecoderType,
+          typename MultiVersionCSDecoderType>
 class ObMicroBlockReaderHelperBase final
 {
 public:
   ObMicroBlockReaderHelperBase()
       : allocator_(nullptr), flat_reader_(nullptr), new_flat_reader_(nullptr), decoder_(nullptr),
-        cs_decoder_(nullptr)
+        cs_decoder_(nullptr), mv_cs_decoder_(nullptr)
   {
   }
 
@@ -76,17 +79,22 @@ public:
         allocator_->free(cs_decoder_);
         cs_decoder_ = nullptr;
       }
+      if (nullptr != mv_cs_decoder_) {
+        mv_cs_decoder_->~MultiVersionCSDecoderType();
+        allocator_->free(mv_cs_decoder_);
+        mv_cs_decoder_ = nullptr;
+      }
       allocator_ = nullptr;
     }
   }
 
   OB_INLINE bool is_inited() { return nullptr != allocator_; };
 
-  OB_INLINE int get_reader(const ObRowStoreType store_type, BaseReaderType *&reader)
+  OB_INLINE int get_reader(const ObMicroBlockHeader& header, BaseReaderType *&reader)
   {
     int ret = OB_SUCCESS;
     reader = nullptr;
-    switch (store_type) {
+    switch (header.row_store_type_) {
     case FLAT_ROW_STORE: {
       if (OB_FAIL(init_reader(flat_reader_, reader))) {
         STORAGE_LOG(WARN, "Fail to initialize flat micro block reader", K(ret));
@@ -107,14 +115,22 @@ public:
       break;
     }
     case CS_ENCODING_ROW_STORE: {
-      if (OB_FAIL(init_reader(cs_decoder_, reader))) {
-        STORAGE_LOG(WARN, "Fail to initialize micro block cs decoder", K(ret));
+      if (header.has_row_header_) {
+        if (OB_FAIL(init_reader(mv_cs_decoder_, reader))) {
+          STORAGE_LOG(
+              WARN, "Fail to initialize micro block cs decoder", K(ret));
+        }
+      } else {
+        if (OB_FAIL(init_reader(cs_decoder_, reader))) {
+          STORAGE_LOG(
+              WARN, "Fail to initialize micro block cs decoder", K(ret));
+        }
       }
       break;
     }
     default: {
       ret = OB_NOT_SUPPORTED;
-      STORAGE_LOG(WARN, "Not supported row store type", K(ret), K(store_type));
+      STORAGE_LOG(WARN, "Not supported row store type", K(ret), K(header));
       break;
     }
     }
@@ -145,6 +161,7 @@ private:
   NewFlatReaderType *new_flat_reader_;
   DecoderType *decoder_;
   CSDecoderType *cs_decoder_;
+  MultiVersionCSDecoderType *mv_cs_decoder_;
 };
 
 using ObMicroBlockReaderHelper
@@ -152,14 +169,16 @@ using ObMicroBlockReaderHelper
                                    ObMicroBlockReader</* enable new flat reader */ false>,
                                    ObMicroBlockReader</* enable new flat reader */ true>,
                                    ObMicroBlockDecoder,
-                                   ObMicroBlockCSDecoder>;
+                                   ObMicroBlockCSDecoder</* IS_MULTI_VERSION */ false>,
+                                   ObMicroBlockCSDecoder</* IS_MULTI_VERSION */ true>>;
 
 using ObMicroBlockGetReaderHelper
     = ObMicroBlockReaderHelperBase<ObIMicroBlockGetReader,
                                    ObMicroBlockGetReader</* enable new flat reader */ false>,
                                    ObMicroBlockGetReader</* enable new flat reader */ true>,
                                    ObEncodeBlockGetReader,
-                                   ObCSEncodeBlockGetReader>;
+                                   ObCSEncodeBlockGetReader</* IS_MULTI_VERSION */ false>,
+                                   ObCSEncodeBlockGetReader</* IS_MULTI_VERSION */ true>>;
 
 } // end namespace blocksstable
 } // end namespace oceanbase

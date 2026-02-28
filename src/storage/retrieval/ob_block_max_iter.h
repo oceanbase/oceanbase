@@ -206,7 +206,7 @@ private:
   CalcMaxScoreFunc calc_max_score_;
   ObStorageDatum scan_dim_datum_;
   bool first_tuple_iterated_;
-  bool has_been_advanced_;
+  bool has_advance_doc_id_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObBlockMaxScoreIterator);
 };

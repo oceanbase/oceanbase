@@ -75,7 +75,7 @@ int ObMicroBlockEncoder::try_encoder(ObIColumnEncoder *&encoder, const int64_t c
 }
 
 #define MICRO_BLOCK_PAGE_ALLOCATOR ModulePageAllocator(common::ObModIds::OB_ENCODER_ALLOCATOR, MTL_ID())
-ObMicroBlockEncoder::ObMicroBlockEncoder() : ctx_(), header_(NULL),
+ObMicroBlockEncoder::ObMicroBlockEncoder() : ObIMicroBlockWriter(), ctx_(),
     encoding_meta_allocator_(),
     data_buffer_(),
     datum_rows_(OB_MALLOC_NORMAL_BLOCK_SIZE, MICRO_BLOCK_PAGE_ALLOCATOR),
@@ -142,6 +142,14 @@ int ObMicroBlockEncoder::init(const ObMicroBlockEncodingCtx &ctx)
     LOG_WARN("reserve array failed", K(ret), "size", ctx.column_cnt_);
   } else if (OB_FAIL(init_all_col_values(ctx))) {
     LOG_WARN("init all_col_values failed", K(ret), K(ctx));
+  } else if (OB_FAIL(micro_header_.init(
+      ctx.major_working_cluster_version_,
+      ctx.column_cnt_,
+      ctx.rowkey_column_cnt_,
+      ctx.row_store_type_,
+      ctx.need_calc_column_chksum_/*has_column_checksum*/))) {
+    LOG_WARN("failed to init micro header", KR(ret), K(ctx.major_working_cluster_version_),
+      K(ctx.column_cnt_), K(ctx.rowkey_column_cnt_), K(ctx.row_store_type_));
   } else if (OB_FAIL(checksum_helper_.init(ctx.col_descs_, true/*need_opt_row_checksum*/))) {
     LOG_WARN("fail to init checksum_helper", K(ret), K(ctx));
   } else {
@@ -174,8 +182,11 @@ int ObMicroBlockEncoder::inner_init()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected invalid ctx", K(ret), K_(ctx));
     } else if (!data_buffer_.is_inited()) {
+      const int64_t col_checksum_buf_len = micro_header_.get_column_checksum_buf_len();
       if (OB_FAIL(data_buffer_.init(DEFAULT_DATA_BUFFER_SIZE))) {
         STORAGE_LOG(WARN, "fail to init data buffer", K(ret));
+      } else if (ctx_.need_calc_column_chksum_ && OB_FAIL(column_checksum_buffer_.init(col_checksum_buf_len, col_checksum_buf_len))) {
+        STORAGE_LOG(WARN, "fail to init column checksum buffer", K(ret), K_(micro_header));
       } else if (OB_FAIL(row_buf_holder_.init(2 * DEFAULT_DATA_BUFFER_SIZE))) {
         STORAGE_LOG(WARN, "fail to init row_buf_holder", K(ret));
       }
@@ -358,8 +369,7 @@ void ObMicroBlockEncoder::update_estimate_size_limit(const ObMicroBlockEncodingC
         K_(expand_pct), K(ctx.estimate_block_size_), K(ctx.real_block_size_));
   }
 
-  header_size_ =
-      ObMicroBlockHeader::get_serialize_size(ctx.column_cnt_, ctx.need_calc_column_chksum_)
+  header_size_ = micro_header_.get_serialize_size()
       + (sizeof(ObColumnHeader)) * ctx.column_cnt_;
   int64_t data_size_limit = (2 * ctx.micro_block_size_ - header_size_) > 0
                                   ? (2 * ctx.micro_block_size_ - header_size_)
@@ -409,7 +419,6 @@ int ObMicroBlockEncoder::append_row(const ObDatumRow &row)
   if (OB_SUCC(ret)) {
     int64_t store_size = 0;
     ObConstDatumRow datum_row;
-    ObMicroBlockHeader *header = get_header(data_buffer_);
     uint64_t row_count = (uint64_t)(datum_rows_.count());
     if (OB_UNLIKELY(row_count >= MAX_MICRO_BLOCK_ROW_CNT || row_count > ctx_.encoding_granularity_)) {
       ret = OB_BUF_NOT_ENOUGH;
@@ -421,8 +430,8 @@ int ObMicroBlockEncoder::append_row(const ObDatumRow &row)
       if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
         LOG_WARN("copy and append row failed", K(ret));
       }
-    } else if (header->has_column_checksum_ && OB_FAIL(checksum_helper_.cal_column_checksum(
-        row, header->column_checksums_))) {
+    } else if (micro_header_.has_column_checksum_ && OB_FAIL(checksum_helper_.cal_column_checksum(
+        row, micro_header_.column_checksums_))) {
       LOG_WARN("cal column checksum failed", K(ret), K(row));
     } else {
       if (need_cal_row_checksum()
@@ -478,24 +487,12 @@ int ObMicroBlockEncoder::reserve_header(const ObMicroBlockEncodingCtx &ctx)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column_count was invalid", K(ret), K(ctx));
   } else {
-    int32_t header_size = ObMicroBlockHeader::get_serialize_size(
-        ctx.column_cnt_, ctx.need_calc_column_chksum_);
-    if (OB_FAIL(data_buffer_.write_nop(header_size, true))) {
-      LOG_WARN("data buffer fail to advance header size.", K(ret), K(header_size));
-    } else {
-      ObMicroBlockHeader *header = get_header(data_buffer_);
-      header->magic_ = MICRO_BLOCK_HEADER_MAGIC;
-      header->version_ = MICRO_BLOCK_HEADER_VERSION;
-      header->header_size_ = header_size;
-      header->row_store_type_ = ctx.row_store_type_;
-      header->column_count_ = ctx.column_cnt_;
-      header->rowkey_column_count_ = ctx.rowkey_column_cnt_;
-      header->has_column_checksum_ = ctx.need_calc_column_chksum_;
-      if (header->has_column_checksum_) {
-        header->column_checksums_ = reinterpret_cast<int64_t *>(
-            data_buffer_.data() + ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET);
-      }
-    }
+    micro_header_.reuse();
+    if (ctx.need_calc_column_chksum_ && OB_FAIL(ObIMicroBlockWriter::reserve_micro_header_col_ckm_buffer())) {
+      STORAGE_LOG(WARN, "column checksum buffer fail to advance header size.", K(ret), K_(micro_header));
+    } else if (OB_FAIL(data_buffer_.write_nop(micro_header_.get_serialize_size(), true/*is_zero*/))) {
+      STORAGE_LOG(WARN, "data buffer fail to advance header size.", K(ret), K_(micro_header));
+    } // careful! serialize_size may changed if micro header has column checksum array
   }
   return ret;
 }
@@ -506,21 +503,20 @@ int ObMicroBlockEncoder::store_encoding_meta_and_fix_cols(ObBufferWriter &buf_wr
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    ObMicroBlockHeader *header = get_header(data_buffer_);
     // detect extend value bit
-    header->extend_value_bit_ = 0;
+    micro_header_.extend_value_bit_ = 0;
     FOREACH(e, encoders_) {
       ObIColumnEncoder::EncoderDesc &desc = (*e)->get_desc();
       if (desc.has_null_ || desc.has_nope_) {
-        header->extend_value_bit_ = 1;
+        micro_header_.extend_value_bit_ = 1;
         if (desc.has_nope_) {
-          header->extend_value_bit_ = 2;
+          micro_header_.extend_value_bit_ = 2;
           break;
         }
       }
     }
     FOREACH(e, encoders_) {
-      ((*e))->set_extend_value_bit(header->extend_value_bit_);
+      ((*e))->set_extend_value_bit(micro_header_.extend_value_bit_);
     }
 
     const int64_t header_size = data_buffer_.length();
@@ -556,7 +552,7 @@ int ObMicroBlockEncoder::store_encoding_meta_and_fix_cols(ObBufferWriter &buf_wr
     }
 
     if (OB_SUCC(ret)) {
-      get_header(data_buffer_)->row_data_offset_ = static_cast<int32_t>(encoding_meta_offset + buf_writer.length());
+      micro_header_.row_data_offset_ = static_cast<int32_t>(encoding_meta_offset + buf_writer.length());
     }
   }
   return ret;
@@ -594,7 +590,7 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
     STORAGE_LOG(WARN, "fail to alloc fix header buf", K(ret), K(encoders_need_size));
   } else {
     STORAGE_LOG(DEBUG, "[debug] build micro block", K_(estimate_size), K_(header_size), K_(expand_pct),
-        K(datum_rows_.count()), K(ctx_));
+        K(datum_rows_.count()), K(ctx_), K(data_buffer_.data()), K(data_buffer_.size()));
 
     // <1> store encoding metas and fix cols data in encoding_meta_buffer
     int64_t encoding_meta_offset = 0;
@@ -613,7 +609,7 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
       if (OB_FAIL(set_row_data_pos(fix_data_size))) {
         LOG_WARN("set row data position failed", K(ret));
       } else {
-        get_header(data_buffer_)->var_column_count_ = static_cast<uint16_t>(var_data_encoders_.count());
+        micro_header_.var_column_count_ = static_cast<uint16_t>(var_data_encoders_.count());
       }
     }
 
@@ -627,19 +623,19 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
     // <4> fill row index
     if (OB_SUCC(ret)) {
       if (var_data_encoders_.empty()) {
-        get_header(data_buffer_)->row_index_byte_ = 0;
+        micro_header_.row_index_byte_ = 0;
       } else {
-        get_header(data_buffer_)->row_index_byte_ = 2;
+        micro_header_.row_index_byte_ = 2;
         if (row_indexs_.at(row_indexs_.count() - 1) > UINT16_MAX) {
-          get_header(data_buffer_)->row_index_byte_ = 4;
+          micro_header_.row_index_byte_ = 4;
         }
         ObIntegerArrayGenerator gen;
-        const int64_t row_index_size = row_indexs_.count() * get_header(data_buffer_)->row_index_byte_;
+        const int64_t row_index_size = row_indexs_.count() * micro_header_.row_index_byte_;
         if (OB_FAIL(data_buffer_.ensure_space(row_index_size))) {
           STORAGE_LOG(WARN, "fail to ensure space", K(ret), K(row_index_size), K(data_buffer_));
-        } else if (OB_FAIL(gen.init(data_buffer_.data() + data_buffer_.length(), get_header(data_buffer_)->row_index_byte_))) {
+        } else if (OB_FAIL(gen.init(data_buffer_.data() + data_buffer_.length(), micro_header_.row_index_byte_))) {
           LOG_WARN("init integer array generator failed",
-              K(ret), "byte", get_header(data_buffer_)->row_index_byte_);
+              K(ret), "byte", micro_header_.row_index_byte_);
         } else if (OB_FAIL(data_buffer_.write_nop(row_index_size))) {
           LOG_WARN("advance data buffer failed", K(ret), K(row_index_size));
         } else {
@@ -652,11 +648,11 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
 
     // <5> fill header, encoding_meta and fix cols data
     if (OB_SUCC(ret)) {
-      get_header(data_buffer_)->row_count_ = static_cast<uint32_t>(datum_rows_.count());
-      get_header(data_buffer_)->has_string_out_row_ = has_string_out_row_;
-      get_header(data_buffer_)->all_lob_in_row_ = !has_lob_out_row_;
-      get_header(data_buffer_)->max_merged_trans_version_ = max_merged_trans_version_;
-      const int64_t header_size = get_header(data_buffer_)->header_size_;
+      micro_header_.row_count_ = static_cast<uint32_t>(datum_rows_.count());
+      micro_header_.has_string_out_row_ = has_string_out_row_;
+      micro_header_.all_lob_in_row_ = !has_lob_out_row_;
+      micro_header_.max_merged_trans_version_ = max_merged_trans_version_;
+      const int64_t header_size = micro_header_.header_size_;
       char *data = data_buffer_.data() + header_size;
       FOREACH(e, encoders_) {
         MEMCPY(data, &(*e)->get_column_header(), sizeof(ObColumnHeader));
@@ -737,7 +733,6 @@ int ObMicroBlockEncoder::set_row_data_pos(int64_t &fix_data_size)
 
     // detect extend value bit size and dispatch encoders.
     int64_t ext_bit_size = 0;
-    ObMicroBlockHeader *header = get_header(data_buffer_);
     FOREACH_X(e, encoders_, OB_SUCC(ret)) {
       ObIColumnEncoder::EncoderDesc &desc = (*e)->get_desc();
       if (desc.need_data_store_ && desc.is_var_data_) {
@@ -745,7 +740,7 @@ int ObMicroBlockEncoder::set_row_data_pos(int64_t &fix_data_size)
           LOG_WARN("add encoder to array failed", K(ret));
         } else if (desc.need_extend_value_bit_store_) {
           (*e)->get_column_header().extend_value_index_ = static_cast<int16_t>(ext_bit_size);
-          ext_bit_size += header->extend_value_bit_;
+          ext_bit_size += micro_header_.extend_value_bit_;
         }
       }
     }
@@ -830,7 +825,7 @@ int ObMicroBlockEncoder::fill_row_data(const int64_t fix_data_size)
   } else if (OB_FAIL(row_indexs_.push_back(0))) {
     LOG_WARN("add row index failed", K(ret));
   } else {
-    const int64_t row_data_offset = get_header(data_buffer_)->row_data_offset_;
+    const int64_t row_data_offset = micro_header_.row_data_offset_;
     for (int64_t i = 0; OB_SUCC(ret) && i < var_data_encoders_.count(); ++i) {
       if (OB_FAIL(var_lengths.push_back(0))) {
         LOG_WARN("add var data length failed", K(ret));
@@ -1906,7 +1901,7 @@ int ObMicroBlockEncoder::force_raw_encoding(const int64_t column_idx,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("find raw encoder not suitable", K(ret));
       } else {
-        e->set_extend_value_bit(get_header(data_buffer_)->extend_value_bit_);
+        e->set_extend_value_bit(micro_header_.extend_value_bit_);
       }
     }
 

@@ -24,6 +24,8 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObHashPartInfrasVecMgr;
+class ObHashPartInfrastructureVecImpl;
 
 class ObHashDistinctVecSpec : public ObOpSpec
 {
@@ -35,8 +37,10 @@ public:
                        K_(distinct_exprs),
                        K_(is_block_mode),
                        K_(by_pass_enabled),
-                       K_(is_push_down));
-
+                       K_(is_push_down),
+                       K_(grouping_id),
+                       K_(has_non_distinct_aggr_params));
+  bool is_ordered_group_output() const { return !is_block_mode_ && group_distinct_exprs_.count() > 0; }
   // data members
   common::ObFixedArray<ObExpr*, common::ObIAllocator> distinct_exprs_;
   ObSortCollations sort_collations_;
@@ -62,6 +66,10 @@ public:
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   virtual void destroy() override;
 
+  static int process_state(const int64_t probe_cnt, const int64_t extend_bkt_num_push_down,
+                           ObAdaptiveByPassCtrl &bypass_ctrl,
+                           ObHashPartInfrastructureVecImpl &hp_infras, bool &can_insert);
+
 private:
   typedef int (ObHashDistinctVecOp::*Build_distinct_data_batch_func)(const int64_t batch_size, bool is_block);
   void reset();
@@ -72,8 +80,55 @@ private:
   int build_distinct_data_for_batch(const int64_t batch_size, bool is_block);
   int build_distinct_data_for_batch_by_pass(const int64_t batch_size, bool is_block);
   int by_pass_get_next_batch(const int64_t batch_size);
-  int process_state(int64_t probe_cnt, bool &can_insert);
   int init_mem_context();
+
+  int do_group_distinct_for_batch(const int64_t batch_size);
+
+  int build_group_distinct_data_for_batch(const int64_t batch_size);
+
+  int init_group_hp_infras();
+
+  template <typename ColumnFmt>
+  int group_child_input(const ObBatchRows &child_brs, ObIVector *grouping_id_vec,
+                        int64_t &min_group, int64_t &max_group);
+
+  int insert_group_distinct_data(const ObBatchRows &child_brs, const int64_t group_start, const int64_t group_end);
+
+  int insert_group_distinct_data_from_dump_part(ObHashPartInfrastructureVecImpl *hp_infras);
+
+  int read_group_distinct_data(int64_t batch_size);
+
+  int read_group_distinct_data(const int64_t max_row_cnt, ObHashPartInfrastructureVecImpl *hp_infras);
+
+  int setup_null_expr_and_grouping_id(const int64_t read_rows);
+
+  int64_t get_hash_bucket_num() const;
+
+  int read_non_distinct_aggr_params_data(const int64_t max_row_cnt);
+
+  bool need_dump_non_distinct_store();
+
+  int process_non_distinct_store_dump();
+private:
+  friend struct NonDistinctStoreDumpCheckOp;
+private:
+  struct NonDistinctStoreDumpCheckOp
+  {
+    NonDistinctStoreDumpCheckOp(ObHashDistinctVecOp &op) : op_(op) {}
+    bool operator()(int64_t cur_cnt) const
+    {
+      return op_.need_dump_non_distinct_store();
+    }
+  private:
+    ObHashDistinctVecOp &op_;
+  };
+private:
+  enum class GroupDistinctState {
+    OPEN_HASH_PART,
+    READ_ROWS,
+    ITER_END
+  };
+
 private:
   typedef int (ObHashDistinctVecOp::*GetNextRowBatchFunc)(const int64_t batch_size);
   static const int64_t MIN_BUCKET_COUNT = 1L << 14;  //16384;
@@ -95,6 +150,15 @@ private:
   Build_distinct_data_batch_func build_distinct_data_batch_func_;
   ObAdaptiveByPassCtrl bypass_ctrl_;
   lib::MemoryContext mem_context_;
+  ObHashPartInfrasVecMgr *hp_infras_mgr_;
+  ObFixedArray<ObHashPartInfrastructureVecImpl *, common::ObIAllocator> hp_infras_arr_;
+  ObFixedArray<char *, common::ObIAllocator> group_selector_arr_;
+  int64_t group_iter_idx_;
+  int64_t min_stored_group_idx_;
+  GroupDistinctState group_distinct_state_;
+  ObTempColumnStore *non_distinct_aggr_params_store_;
+  ObTempColumnStore::Iterator *non_distinct_aggr_params_iter_;
+  int64_t group_distinct_bucket_cnt_;
 };
 
 } // end namespace sql

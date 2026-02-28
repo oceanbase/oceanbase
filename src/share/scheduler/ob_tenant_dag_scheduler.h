@@ -337,6 +337,14 @@ public:
     TASK_TYPE_COMPLEMENT_REPORT_REPLICA_TASK = 175,
     TASK_TYPE_LOB_CHECK_TASK = 176,
     TASK_TYPE_ATTACH_MAJOR_SSTABLE = 177,
+    TASK_TYPE_SSTABLE_SPLIT_PREPARE = 178,
+    TASK_TYPE_SSTABLE_SPLIT_WRITE = 179,
+    TASK_TYPE_SSTABLE_SPLIT_MERGE = 180,
+    TASK_TYPE_BACKUP_VALIDATE_PREPARE = 181,
+    TASK_TYPE_BACKUP_VALIDATE_FINISH = 182,
+    TASK_TYPE_BACKUP_VALIDATE_BASIC = 183,
+    TASK_TYPE_BACKUP_VALIDATE_BACKUPSET_PHYSICAL = 184,
+    TASK_TYPE_BACKUP_VALIDATE_ARCHIVE_PIECE_PHYSICAL = 185,
     TASK_TYPE_MAX,
   };
 
@@ -1016,7 +1024,7 @@ public:
   int loop_finished_dag_net_list();
   int loop_blocking_dag_net_list();
   int check_dag_net_exist(
-    const ObDagId &dag_id, bool &exist);
+    const ObDagId &dag_id, bool &exist, const int64_t abs_timeout_us);
   int cancel_dag_net(const ObDagId &dag_id);
   int get_first_dag_net(ObIDagNet *&dag_net);
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
@@ -1186,6 +1194,7 @@ public:
   int64_t get_running_task_cnt();
   int set_thread_score(const int64_t score, int64_t &old_val, int64_t &new_val);
   bool try_switch(ObTenantDagWorker &worker);
+  void adapt_window_thread_cnt(); // only for DAG_PRIO_COMPACTION_LOW
 private:
   OB_INLINE bool is_waiting_dag_type(ObDagType::ObDagTypeEnum dag_type)
   { // will add into waiting dag list in add_dag() func
@@ -1403,7 +1412,7 @@ public:
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
   int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
   int check_dag_net_exist(
-      const ObDagId &dag_id, bool &exist);
+      const ObDagId &dag_id, bool &exist, const int64_t abs_timeout_us);
   int cancel_dag_net(const ObDagId &dag_id);
   int deal_with_finish_task(ObITask *&task, ObTenantDagWorker &worker, int error_code);
   bool try_switch(ObTenantDagWorker &worker);
@@ -1467,6 +1476,7 @@ private:
   common::ObIAllocator &get_allocator(const bool is_ha);
   int init_allocator(const uint64_t tenant_id, const lib::ObLabel &label, lib::MemoryContext &mem_context);
   void inner_reload_config();
+  void adapt_window_thread_cnt() { (void) prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_LOW].adapt_window_thread_cnt(); }
 #ifdef OB_BUILD_SHARED_STORAGE
   #include "share/scheduler/ob_tenant_ss_dag_scheduler.h"
 #endif

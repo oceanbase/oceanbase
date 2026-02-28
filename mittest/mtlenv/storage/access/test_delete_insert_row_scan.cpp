@@ -70,44 +70,6 @@ using namespace palf;
 
 namespace storage
 {
-
-ObSEArray<ObTxData, 8> TX_DATA_ARR;
-
-int ObTxTable::insert(ObTxData *&tx_data)
-{
-  int ret = OB_SUCCESS;
-  ret = TX_DATA_ARR.push_back(*tx_data);
-  return ret;
-}
-
-int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn)
-{
-  int ret = OB_SUCCESS;
-  for (int i = 0; i < TX_DATA_ARR.count(); i++)
-  {
-    if (read_tx_data_arg.tx_id_ == TX_DATA_ARR.at(i).tx_id_) {
-      if (TX_DATA_ARR.at(i).state_ == ObTxData::RUNNING) {
-        SCN tmp_scn;
-        tmp_scn.convert_from_ts(30);
-        ObTxCCCtx tmp_ctx(ObTxState::PREPARE, tmp_scn);
-        ret = fn(TX_DATA_ARR[i], &tmp_ctx);
-      } else {
-        ret = fn(TX_DATA_ARR[i]);
-      }
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "check with tx data failed", KR(ret), K(read_tx_data_arg), K(TX_DATA_ARR.at(i)));
-      }
-      break;
-    }
-  }
-  return ret;
-}
-
-void clear_tx_data()
-{
-  TX_DATA_ARR.reset();
-};
-
 class ObMockWhiteFilterExecutor : public ObWhiteFilterExecutor
 {
 public:
@@ -486,7 +448,7 @@ public:
   }
 };
 
-class TestDeleteInsertRowScan : public TestMergeBasic
+class TestDeleteInsertRowScan : public TestMergeBasic, public ::testing::WithParamInterface<bool>
 {
 public:
   static const int64_t MAX_PARALLEL_DEGREE = 10;
@@ -582,6 +544,9 @@ TestDeleteInsertRowScan::TestDeleteInsertRowScan()
 
 void TestDeleteInsertRowScan::SetUp()
 {
+  // toggle row store type by parameter: false -> FLAT_ROW_STORE, true -> CS_ENCODING_ROW_STORE
+  const bool use_cs_encoding = GetParam();
+  row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
   ObMultiVersionSSTableTest::SetUp();
 }
 
@@ -711,6 +676,8 @@ void TestDeleteInsertRowScan::prepare_scan_param(
   access_param_.iter_param_.pd_storage_flag_.pd_blockscan_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
   access_param_.iter_param_.is_delete_insert_ = true;
+  access_param_.iter_param_.filter_canbe_handle_in_di_ = true;
+  access_param_.iter_param_.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
 
   prepare_output_expr(output_cols_project_, tmp_col_descs);
   access_param_.iter_param_.out_cols_project_ = &output_cols_project_;
@@ -813,7 +780,29 @@ int TestDeleteInsertRowScan::create_pushdown_filter(
                      *white_node, op_);
     column_exprs = &(white_node->column_exprs_);
     white_node->op_type_ = op_type;
-    pushdown_filter = filter;
+
+    void* expr_buf = nullptr;
+    sql::ObExpr* expr = nullptr;
+    sql::ObExpr** args = nullptr;
+
+    if (OB_ISNULL(expr_buf = query_allocator_.alloc(3 * sizeof(sql::ObExpr)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Failed to alloc memory for expr", KR(ret));
+    } else if (OB_ISNULL(args = static_cast<ObExpr**>(query_allocator_.alloc(2 * sizeof(sql::ObExpr*))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Failed to alloc memory for expr", KR(ret));
+    } else {
+      expr = new (expr_buf) ObExpr();
+      expr->arg_cnt_ = 2;
+      expr->args_ = args;
+      expr->args_[0] = new (expr + 1) ObExpr();
+      expr->args_[1] = new (expr + 2) ObExpr();
+      expr->args_[0]->type_ = T_REF_COLUMN;
+      expr->args_[1]->type_ = T_INT;
+      expr->args_[1]->obj_meta_.set_int();
+      white_node->expr_ = expr;
+      pushdown_filter = filter;
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -855,7 +844,7 @@ void TestDeleteInsertRowScan::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_table_guard(tx_table_guard));
 }
 
-TEST_F(TestDeleteInsertRowScan, test_row_scan)
+TEST_P(TestDeleteInsertRowScan, test_row_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -966,7 +955,7 @@ TEST_F(TestDeleteInsertRowScan, test_row_scan)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_border_key)
+TEST_P(TestDeleteInsertRowScan, test_border_key)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1081,7 +1070,7 @@ TEST_F(TestDeleteInsertRowScan, test_border_key)
   handle1.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_border_key_reverse)
+TEST_P(TestDeleteInsertRowScan, test_border_key_reverse)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1197,7 +1186,7 @@ TEST_F(TestDeleteInsertRowScan, test_border_key_reverse)
   handle1.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_border_key_not_equal)
+TEST_P(TestDeleteInsertRowScan, test_border_key_not_equal)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1320,7 +1309,7 @@ TEST_F(TestDeleteInsertRowScan, test_border_key_not_equal)
   handle1.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_row_filter)
+TEST_P(TestDeleteInsertRowScan, test_row_filter)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1413,7 +1402,7 @@ TEST_F(TestDeleteInsertRowScan, test_row_filter)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_multi_version_row_filter)
+TEST_P(TestDeleteInsertRowScan, test_multi_version_row_filter)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1608,7 +1597,7 @@ TEST_F(TestDeleteInsertRowScan, test_multi_version_row_filter)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_delete_scan)
+TEST_P(TestDeleteInsertRowScan, test_delete_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1714,7 +1703,7 @@ TEST_F(TestDeleteInsertRowScan, test_delete_scan)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_complex_update)
+TEST_P(TestDeleteInsertRowScan, test_complex_update)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1869,7 +1858,7 @@ TEST_F(TestDeleteInsertRowScan, test_complex_update)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_delete_only)
+TEST_P(TestDeleteInsertRowScan, test_delete_only)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1977,7 +1966,7 @@ TEST_F(TestDeleteInsertRowScan, test_delete_only)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_rowkey_cross_mb)
+TEST_P(TestDeleteInsertRowScan, test_rowkey_cross_mb)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2136,7 +2125,7 @@ TEST_F(TestDeleteInsertRowScan, test_rowkey_cross_mb)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_one_mb_all_normal_rows)
+TEST_P(TestDeleteInsertRowScan, test_one_mb_all_normal_rows)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2263,7 +2252,7 @@ TEST_F(TestDeleteInsertRowScan, test_one_mb_all_normal_rows)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_cross_version_filter)
+TEST_P(TestDeleteInsertRowScan, test_cross_version_filter)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2485,7 +2474,7 @@ TEST_F(TestDeleteInsertRowScan, test_cross_version_filter)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_cross_version_partial_filter)
+TEST_P(TestDeleteInsertRowScan, test_cross_version_partial_filter)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2626,7 +2615,7 @@ TEST_F(TestDeleteInsertRowScan, test_cross_version_partial_filter)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_cross_version_without_filter)
+TEST_P(TestDeleteInsertRowScan, test_cross_version_without_filter)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2828,7 +2817,7 @@ TEST_F(TestDeleteInsertRowScan, test_cross_version_without_filter)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_multi_sstables_cross_version)
+TEST_P(TestDeleteInsertRowScan, test_multi_sstables_cross_version)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -3011,7 +3000,7 @@ TEST_F(TestDeleteInsertRowScan, test_multi_sstables_cross_version)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_crossed_minor_and_major)
+TEST_P(TestDeleteInsertRowScan, test_crossed_minor_and_major)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -3130,7 +3119,7 @@ TEST_F(TestDeleteInsertRowScan, test_crossed_minor_and_major)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_filtered_row_and_blockscan)
+TEST_P(TestDeleteInsertRowScan, test_filtered_row_and_blockscan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -3240,7 +3229,7 @@ TEST_F(TestDeleteInsertRowScan, test_filtered_row_and_blockscan)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertRowScan, test_constant_filter)
+TEST_P(TestDeleteInsertRowScan, test_constant_filter)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -3331,6 +3320,111 @@ TEST_F(TestDeleteInsertRowScan, test_constant_filter)
   handle1.reset();
   scan_merge.reset();
 }
+
+TEST_P(TestDeleteInsertRowScan, test_minor_delete_out_of_range)
+{
+  int ret = OB_SUCCESS;
+  ObTableStoreIterator table_store_iter;
+
+  ObTableHandleV2 handle1;
+  const char *micro_data1[1];
+  micro_data1[0] =
+      "bigint   bigint  bigint      bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "2        -50      DI_VERSION    9       9    INSERT    NORMAL      CLF\n"
+      "3        -50      DI_VERSION    9       9    INSERT    NORMAL      CLF\n"
+      "4        -50      DI_VERSION    9       9    INSERT    NORMAL      CLF\n";
+  int schema_rowkey_cnt = 1;
+  int64_t snapshot_version = 50;
+  ObScnRange scn_range;
+  scn_range.start_scn_.convert_for_tx(0);
+  scn_range.end_scn_.convert_for_tx(50);
+  prepare_table_schema(micro_data1, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data1, 1);
+  prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);
+  table_store_iter.add_table(handle1.get_table());
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObTableHandleV2 handle2;
+  const char *micro_data2[1];
+  micro_data2[0] =
+      "bigint   bigint  bigint      bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "2        -100     DI_VERSION    19     19    INSERT    NORMAL      CF\n"
+      "2        -100     0             9      9     DELETE    NORMAL      CL\n"
+      "3        -100     DI_VERSION    19     19    INSERT    NORMAL      CF\n"
+      "3        -100     0             9      9     DELETE    NORMAL      CL\n"
+      "4        -100     DI_VERSION    19     19    INSERT    NORMAL      CF\n"
+      "4        -100     0             9      9     DELETE    NORMAL      CL\n"
+      "5        -100     0             9      9     DELETE    NORMAL      CLF\n"
+      "6        -100     DI_VERSION    9      9     INSERT    NORMAL      CLF\n"
+      "7        -100     0             9      9     DELETE    NORMAL      CLF\n";
+  snapshot_version = 100;
+  scn_range.start_scn_.convert_for_tx(50);
+  scn_range.end_scn_.convert_for_tx(100);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data2, 1);
+  prepare_data_end(handle2);
+  table_store_iter.add_table(handle2.get_table());
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObDatumRange range;
+  range.set_whole_range();
+  ObVersionRange trans_version_range;
+  trans_version_range.base_version_ = 50;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = 110;
+  prepare_scan_param(trans_version_range, table_store_iter);
+  // Set batch_size to 2 before init scan_merge
+  expr_spec_.max_batch_size_ = 2;
+  ObMockMultipleScanMerge scan_merge;
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
+  scan_merge.disable_padding();
+  scan_merge.disable_fill_virtual_column();
+
+  const char *result1 =
+      "bigint   bigint bigint  flag     flag_type\n"
+      "2         19      19    INSERT    NORMAL\n"
+      "3         19      19    INSERT    NORMAL\n"
+      "4         19      19    INSERT    NORMAL\n"
+      "6         9       9     INSERT    NORMAL\n";
+
+  ret = OB_SUCCESS;
+  int64_t count = 0;
+  int64_t total_count = 0;
+  ObMockIterator res_iter;
+  res_iter.reset();
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  while (OB_SUCC(ret)) {
+    ret = scan_merge.get_next_rows(count, 1);
+    if (ret != OB_SUCCESS && ret != OB_ITER_END) {
+      STORAGE_LOG(ERROR, "error return value", K(ret), K(count));
+      ASSERT_EQ(1, 0);
+    }
+    if (count > 0) {
+      ObMockScanMergeIterator merge_iter(count);
+      ASSERT_EQ(OB_SUCCESS, merge_iter.init(reinterpret_cast<ObVectorStore *>(scan_merge.block_row_store_),
+                                            query_allocator_, *access_param_.iter_param_.get_read_info()));
+      bool is_equal = res_iter.equals<ObMockScanMergeIterator, ObStoreRow>(merge_iter, false, false, false, true);
+      ASSERT_TRUE(is_equal);
+
+      total_count += count;
+      STORAGE_LOG(INFO, "get next rows", K(count), K(total_count));
+    } else {
+      break;
+    }
+  }
+  ASSERT_EQ(4, total_count);
+
+  handle1.reset();
+  handle2.reset();
+  scan_merge.reset();
+}
+
+INSTANTIATE_TEST_CASE_P(
+  FlatAndCSEncoding,
+  TestDeleteInsertRowScan,
+  ::testing::Values(false, true));
 
 }
 }

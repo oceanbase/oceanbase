@@ -38,6 +38,7 @@ ObTableLoadDagParallelCompactTabletCtx::ObTableLoadDagParallelCompactTabletCtx()
   : merge_sstable_count_(0),
     range_count_(0),
     range_sstable_count_(0),
+    mutex_(common::ObLatchIds::OB_TABLE_LOAD_DAG_PARALLEL_COMPACT_TABLET_CTX_MUTEX),
     range_allocator_("TLD_ParalMerge")
 {
   range_allocator_.set_tenant_id(MTL_ID());

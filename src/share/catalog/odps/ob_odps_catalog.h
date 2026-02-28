@@ -31,6 +31,10 @@ class ObOdpsCatalog final : public ObIExternalCatalog
 public:
   explicit ObOdpsCatalog(common::ObIAllocator &allocator) : allocator_(allocator) {}
   ~ObOdpsCatalog() = default;
+  ObCatalogProperties::CatalogType get_catalog_type() const override
+  {
+    return ObCatalogProperties::CatalogType::ODPS_TYPE;
+  }
   int list_namespace_names(common::ObIArray<common::ObString> &ns_names) override;
   int list_table_names(const common::ObString &ns_name,
                        const ObNameCaseMode case_mode,

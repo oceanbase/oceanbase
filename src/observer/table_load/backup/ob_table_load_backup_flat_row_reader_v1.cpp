@@ -121,7 +121,7 @@ int ObFlatRowReaderV1::read_text_store(
         }
       } else if (lob_scale.is_out_row()) {
         if (backup_version_ == ObTableLoadBackupVersion::V_1_4) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_NOT_SUPPORTED;
           LOG_WARN("unexpected lob_scale", KR(ret), K(lob_scale));
         } else {
           int64_t tmp_pos = pos_;
@@ -149,6 +149,10 @@ int ObFlatRowReaderV1::read_text_store(
   return ret;
 }
 
+/*
+   this function is used to import data from 2.x or 3.x so
+   we don't need to consider those collation types larger than 255
+*/
 int ObFlatRowReaderV1::read_column_no_meta(
     const ObObjMeta &src_meta,
     ObIAllocator &allocator,

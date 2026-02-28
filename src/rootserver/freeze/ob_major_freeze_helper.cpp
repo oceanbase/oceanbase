@@ -14,8 +14,14 @@
 
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/ob_freeze_info_proxy.h"
+#include "share/ob_global_merge_table_operator.h"
+#include "share/ob_global_stat_proxy.h"
+#include "share/ob_zone_merge_info.h"
+#include "lib/string/ob_sql_string.h"
 #include "share/location_cache/ob_location_service.h"
+#include "share/schema/ob_multi_version_schema_service.h"
 #include "src/observer/ob_srv_network_frame.h"
+#include "share/ob_errno.h"
 
 namespace oceanbase
 {
@@ -129,6 +135,203 @@ int ObMajorFreezeHelper::tablet_major_freeze(const ObTabletMajorFreezeParam &par
     }
     const int64_t cost_time = ObTimeUtility::current_time() - start_time;
     LOG_INFO("do tenant major freeze", KR(ret), K(tenant_id), K(leader), K(param), K(cost_time));
+  }
+  return ret;
+}
+
+int ObMajorFreezeHelper::send_tablets_major_freeze_by_ls(
+  const obrpc::ObTableMajorFreezeRpcProxy &proxy,
+  const uint64_t tenant_id,
+  const int64_t ls_id,
+  const common::ObIArray<uint64_t> &tablet_ids,
+  const bool is_rebuild_column_group,
+  obrpc::ObTableMajorFreezeResult &result)
+{
+  int ret = OB_SUCCESS;
+  result.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || ls_id <= 0 || tablet_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for send tablets major freeze by ls", KR(ret), K(tenant_id), K(ls_id), K(tablet_ids.count()));
+  } else if (OB_UNLIKELY(nullptr == GCTX.location_service_ )) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, location service or net frame is nullptr", KR(ret), KP(GCTX.location_service_));
+  } else {
+    const int64_t start_time = ObTimeUtility::fast_current_time();
+    ObAddr leader;
+    obrpc::ObTableMajorFreezeRequest req(tenant_id, ls_id, tablet_ids, is_rebuild_column_group);
+    share::ObLSID ls_id_obj(ls_id);
+    for (int64_t i = 0; (OB_SUCC(ret) || OB_EAGAIN == ret || OB_LEADER_NOT_EXIST == ret || ret == OB_TIMEOUT) && (i <  MAX_RETRY_COUNT); ++i) {
+      const int64_t LEADER_WAIT_TIMEOUT = 1000 * 1000; // 1s
+      if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id, tenant_id, ls_id_obj, leader, LEADER_WAIT_TIMEOUT))) {
+        LOG_WARN("fail to get ls locaiton leader", KR(ret), K(tenant_id), K(ls_id_obj));
+      } else if (OB_FAIL(proxy.to(leader)
+                              .trace_time(true)
+                              .max_process_handler_time(MAX_PROCESS_TIME_US)
+                              .by(tenant_id)
+                              .dst_cluster_id(GCONF.cluster_id)
+                              .table_major_freeze(req, result))) {
+        LOG_WARN("failed to send table major freeze command",  KR(ret), K(tenant_id), K(ls_id_obj), "ori_leader", leader, K(req), K(i), K(result));
+        if (OB_LEADER_NOT_EXIST == ret || OB_EAGAIN == ret) {
+          const int64_t idle_time = 200 * 1000 * (i + 1);
+          USLEEP(idle_time);
+        }
+      } else {
+        break;
+      }
+    } // end for
+    const int64_t cost_time = ObTimeUtility::current_time() - start_time;
+    LOG_INFO("send tablets major freeze by ls finished", KR(ret), K(tenant_id), K(ls_id), K(tablet_ids), K(is_rebuild_column_group), K(cost_time), K(result));
+  }
+  return ret;
+}
+
+int ObMajorFreezeHelper::get_next_batch_schedule_tablets(
+  common::sqlclient::ObMySQLResult &result,
+  bool & no_need_call_next,
+  int64_t & cur_ls_id,
+  common::ObArray<uint64_t> &batch_schedule_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  int64_t ls_id = 0;
+  int64_t tablet_id = 0;
+  batch_schedule_tablet_ids.reuse();
+  while (OB_SUCC(ret)) {
+    if (no_need_call_next) { // no need call next, skip
+    } else if (OB_SUCC(result.next())) {
+    } else if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+      break;
+    } else {
+      LOG_WARN("failed to get next row", KR(ret));
+    }
+    if (OB_SUCC(ret)) {
+      EXTRACT_INT_FIELD_MYSQL(result, "ls_id", ls_id, int64_t);
+      EXTRACT_INT_FIELD_MYSQL(result, "tablet_id", tablet_id, int64_t);
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to extract field", KR(ret), K(ls_id), K(tablet_id));
+      } else {
+        if (no_need_call_next || cur_ls_id == 0) { // set cur_ls_id when no need call next or cur_ls_id is 0
+          no_need_call_next = false;
+          cur_ls_id = ls_id;
+        }
+        if (ls_id == cur_ls_id && batch_schedule_tablet_ids.count() < BATCH_SCHEDULE_TABLET_COUNT) {
+          if (OB_FAIL(batch_schedule_tablet_ids.push_back(static_cast<uint64_t>(tablet_id)))) {
+            LOG_WARN("failed to push tablet_id to batch schedule tablet ids", KR(ret), K(static_cast<uint64_t>(tablet_id)));
+          }
+        } else { // batch reach limit, no need call next when next loop, break
+          no_need_call_next = true;
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMajorFreezeHelper::get_ls_tablets_result_by_sql(
+  const uint64_t tenant_id,
+  const uint64_t table_id,
+  ObMySQLProxy::MySQLResult &res,
+  common::sqlclient::ObMySQLResult *&result)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, sql proxy is nullptr", KR(ret));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT distinct ls_id, tablet_id FROM oceanbase.__all_tablet_to_ls WHERE table_id = %ld order by ls_id asc;", table_id))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(table_id));
+  } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, sql.ptr()))) {
+    LOG_WARN("failed to read sql", KR(ret), K(sql), K(tenant_id));
+  } else if (OB_ISNULL(result = res.get_result())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null result for table major freeze", KR(ret), K(sql), K(tenant_id));
+  }
+  return ret;
+}
+
+// Utility function to format table freeze error detail
+int ObMajorFreezeHelper::format_table_freeze_error_detail(
+  const obrpc::ObTableMajorFreezeResult &result,
+  common::ObSqlString &detail)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(detail.append_fmt("Table major freeze partially failed, total_count = %ld, success_count = %ld ",
+          result.total_tablets_, result.success_tablets_))) {
+    LOG_WARN("failed to append basic info", K(ret), K(result));
+  }
+  bool first_err_code = false;
+  for (int64_t idx = 0; idx < obrpc::ObTableMajorFreezeResult::MAX_FAIL_CODES && OB_SUCC(ret); ++idx) {
+    if (result.fail_err_codes_[idx] == OB_SUCCESS) { // do nothing
+    } else { // append error code
+      const char *err_name = ob_error_name(result.fail_err_codes_[idx]);
+      if (!first_err_code) { // append prefix
+        if (OB_FAIL(detail.append_fmt(", fail_err_codes = %s", err_name))) {
+          LOG_WARN("failed to append fail_err_codes prefix", K(ret));
+        }
+        first_err_code = true; // set flag
+      } else if (OB_FAIL(detail.append(", "))) {
+        LOG_WARN("failed to append comma", K(ret));
+      } else if (OB_FAIL(detail.append_fmt("%s", err_name))) { // append error name
+        LOG_WARN("failed to append error name", K(ret), K(idx), K(err_name));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMajorFreezeHelper::table_major_freeze(
+  const ObTableMajorFreezeArg &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for table major freeze", KR(ret), K(param));
+  } else if (OB_ISNULL(GCTX.net_frame_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, net frame is nullptr", KR(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = nullptr;
+      ObTableMajorFreezeRpcProxy proxy;
+      if (OB_FAIL(proxy.init(GCTX.net_frame_->get_req_transport()))) {
+        LOG_WARN("failed to init proxy for send tablets major freeze by ls", K(ret));
+      } else if (OB_FAIL(get_ls_tablets_result_by_sql(param.tenant_id_, param.table_id_, res, result))) {
+        LOG_WARN("failed to get ls tablets result by sql", KR(ret), K(param));
+      } else {
+        int64_t cur_ls_id = 0;
+        bool no_need_call_next = false;
+        // aggregated result for all tablets of table
+        obrpc::ObTableMajorFreezeResult aggregated_result;
+        ObArray<uint64_t> batch_schedule_tablet_ids;
+        while (OB_SUCC(ret)) {
+          obrpc::ObTableMajorFreezeResult response;
+          if (OB_FAIL(get_next_batch_schedule_tablets(*result, no_need_call_next, cur_ls_id, batch_schedule_tablet_ids))) {
+            LOG_WARN("failed to get next batch schedule tablets", KR(ret), K(cur_ls_id), K(batch_schedule_tablet_ids));
+          } else if (batch_schedule_tablet_ids.empty()) {
+            break;
+          } else if (OB_FAIL(send_tablets_major_freeze_by_ls(proxy, param.tenant_id_, cur_ls_id, batch_schedule_tablet_ids, param.is_rebuild_column_group_, response))) {
+            LOG_WARN("failed to send tablets major freeze by ls", KR(ret), K(param), K(cur_ls_id), K(batch_schedule_tablet_ids), K(batch_schedule_tablet_ids.count()), K(result));
+          }
+          aggregated_result.total_tablets_ += batch_schedule_tablet_ids.count();
+          aggregated_result.success_tablets_ += response.success_tablets_;
+          for (int64_t idx = 0; idx < ObTableMajorFreezeResult::MAX_FAIL_CODES; ++idx) {
+            aggregated_result.set_err_code(response.fail_err_codes_[idx]);
+          }
+        }
+        if (OB_SUCC(ret) && aggregated_result.success_tablets_ != aggregated_result.total_tablets_) {
+          ret = OB_PARTIAL_FAILED;
+          LOG_WARN("[TableMajorFreeze] tablets of table do major freeze partially failed", KR(ret), K(param), K(cur_ls_id), K(aggregated_result));
+          common::ObSqlString detail;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(format_table_freeze_error_detail(aggregated_result, detail))) {
+            LOG_WARN("failed to format table freeze error detail", KR(tmp_ret), K(aggregated_result));
+          } else {
+            LOG_USER_ERROR(OB_PARTIAL_FAILED, detail.ptr());
+          }
+        }
+      }
+    }
   }
   return ret;
 }
@@ -556,19 +759,46 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
 
 int ObMajorFreezeHelper::get_frozen_status(
     const int64_t tenant_id,
-    const SCN &frozen_scn,
+    const share::SCN &frozen_scn,
     share::ObFreezeInfo &frozen_status)
+{
+  return get_frozen_status(tenant_id, frozen_scn, frozen_status, GCTX.sql_proxy_);
+}
+
+int ObMajorFreezeHelper::get_frozen_status(
+    const int64_t tenant_id,
+    const SCN &frozen_scn,
+    share::ObFreezeInfo &frozen_status,
+    ObISQLClient *proxy)
 {
   int ret = OB_SUCCESS;
   share::ObFreezeInfoProxy freeze_info_proxy(tenant_id);
 
-  if (OB_ISNULL(GCTX.sql_proxy_)) {
+  if (OB_ISNULL(proxy) || !is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid GCTX", KR(ret));
-  } else if (OB_FAIL(freeze_info_proxy.get_freeze_info(*GCTX.sql_proxy_, frozen_scn, frozen_status))) {
+  } else if (OB_FAIL(freeze_info_proxy.get_freeze_info(*proxy, frozen_scn, frozen_status))) {
     if (OB_ITER_END != ret && OB_TABLE_NOT_EXIST != ret) {
       LOG_WARN("fail to get freeze info", KR(ret), K(frozen_scn), K(tenant_id));
     }
+  }
+
+  return ret;
+}
+
+int ObMajorFreezeHelper::get_frozen_scn(
+    const int64_t tenant_id,
+    SCN &frozen_scn,
+    ObISQLClient *proxy)
+{
+  int ret = OB_SUCCESS;
+  share::ObFreezeInfo frozen_status;
+
+  // use min_scn to get frozen_status, means get one with biggest frozen_scn
+  if (OB_FAIL(get_frozen_status(tenant_id, SCN::min_scn(), frozen_status, proxy))) {
+    LOG_WARN("fail to get frozen info", KR(ret));
+  } else {
+    frozen_scn = frozen_status.frozen_scn_;
   }
 
   return ret;
@@ -613,6 +843,106 @@ int ObMajorFreezeHelper::add_user_warning(
   }
   return ret;
 }
+
+int ObGlobalCompactionSchemaHelper::get_global_safe_recycle_schema_version(
+    const int64_t tenant_id,
+    common::ObMySQLProxy &sql_proxy,
+    share::schema::ObMultiVersionSchemaService &schema_service,
+    int64_t &safe_recycle_schema_version)
+{
+  int ret = OB_SUCCESS;
+  safe_recycle_schema_version = OB_INVALID_VERSION;
+  ObGlobalMergeInfo global_info;
+  // system tenant's schema history recycle is handled separately
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || OB_SYS_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(sql_proxy, tenant_id, global_info))) {
+    LOG_WARN("fail to load global merge info", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!global_info.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid global merge info", KR(ret), K(tenant_id), K(global_info));
+  } else if (global_info.last_merged_scn() <= SCN::base_scn()) {
+    // For tenant never do major compaction, its last_merged_scn is base_scn. In this case, we should take snapshot_gc_ts as a reference.
+    LOG_INFO("[SCHEMA_RECYCLE] tenant never do major compaction, use snapshot_gc_ts as reference", KR(ret), K(tenant_id), K(global_info));
+  } else if (OB_FAIL(get_safe_recycle_schema_version_by_freeze_info(tenant_id, sql_proxy, global_info.last_merged_scn(), safe_recycle_schema_version))) {
+    LOG_WARN("fail to get safe recycle schema version by freeze info", KR(ret), K(tenant_id), K(global_info));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_INVALID_VERSION != safe_recycle_schema_version) {
+  } else if (OB_FAIL(get_safe_recycle_schema_version_by_timestamp(tenant_id, sql_proxy, safe_recycle_schema_version))) {
+    LOG_WARN("fail to get safe recycle schema version by timestamp", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObGlobalCompactionSchemaHelper::get_safe_recycle_schema_version_by_freeze_info(
+    const int64_t tenant_id,
+    common::ObMySQLProxy &sql_proxy,
+    const share::SCN &last_merged_scn,
+    int64_t &safe_recycle_schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObFreezeInfoProxy freeze_info_proxy(tenant_id);
+  TenantIdAndSchemaVersion schema_version;
+  if (OB_FAIL(freeze_info_proxy.get_freeze_schema_info(sql_proxy, tenant_id, last_merged_scn, schema_version))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // All freeze info is recycled and no newer major freeze is executed.
+      // We should use snapshot_gc_ts as a reference.
+      ret = OB_SUCCESS;
+      LOG_INFO("[SCHEMA_RECYCLE] all freeze info is recycled and no newer major freeze is executed", KR(ret), K(tenant_id), K(last_merged_scn));
+    } else {
+      LOG_WARN("fail to get freeze schema info", KR(ret), K(tenant_id), K(last_merged_scn));
+    }
+  } else if (OB_UNLIKELY(!schema_version.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema version from freeze info", KR(ret), K(tenant_id), K(last_merged_scn), K(schema_version));
+  } else {
+    safe_recycle_schema_version = schema_version.schema_version_;
+    LOG_INFO("[SCHEMA_RECYCLE] get safe recycle schema version by last_merged_scn",
+             KR(ret), K(tenant_id), K(last_merged_scn), K(safe_recycle_schema_version));
+  }
+  return ret;
+}
+
+int ObGlobalCompactionSchemaHelper::get_safe_recycle_schema_version_by_timestamp(
+    const int64_t tenant_id,
+    common::ObMySQLProxy &sql_proxy,
+    int64_t &safe_recycle_schema_version)
+{
+  int ret = OB_SUCCESS;
+  safe_recycle_schema_version = OB_INVALID_VERSION;
+  SCN snapshot_gc_scn;
+  int64_t recycle_timestamp = 0;
+  int64_t boundary_schema_version = OB_INVALID_VERSION;
+  ObRefreshSchemaStatus schema_status;
+  schema_status.tenant_id_ = tenant_id;
+  if (OB_FAIL(ObGlobalStatProxy::get_snapshot_gc_scn(sql_proxy, tenant_id, snapshot_gc_scn))) {
+    LOG_WARN("fail to get snapshot_gc_scn", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!snapshot_gc_scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid snapshot_gc_scn", KR(ret), K(tenant_id), K(snapshot_gc_scn));
+  } else if (snapshot_gc_scn.is_min()) { // for special cases, such as newly created tenant
+    recycle_timestamp = ObTimeUtility::current_time_us() - MAX_RESERVED_SCHEMA_VERSION_US;
+  } else {
+    recycle_timestamp = snapshot_gc_scn.convert_to_ts() - MAX_RESERVED_SCHEMA_VERSION_US;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(recycle_timestamp < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid timestamp", KR(ret), K(tenant_id), K(snapshot_gc_scn), K(recycle_timestamp));
+  } else if (OB_FAIL(GCTX.schema_service_->get_schema_version_by_timestamp(schema_status, tenant_id, recycle_timestamp, boundary_schema_version))) {
+    LOG_WARN("fail to get schema version by timestamp", KR(ret), K(tenant_id), K(schema_status), K(recycle_timestamp));
+  } else {
+    safe_recycle_schema_version = boundary_schema_version;
+    LOG_INFO("[SCHEMA_RECYCLE] get safe recycle schema version by snapshot_gc_ts",
+             KR(ret), K(tenant_id), K(schema_status), K(recycle_timestamp), K(safe_recycle_schema_version));
+  }
+  return ret;
+}
+
 
 } // namespace rootserver
 } // namespace oceanbase

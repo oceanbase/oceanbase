@@ -79,7 +79,7 @@ private:
   class ObjAllocator
   {
   public:
-    ObjAllocator(const ObMemAttr &attr) : attr_(attr) {}
+    ObjAllocator(const ObMemAttr &attr) : attr_(attr), mutex_(common::ObLatchIds::OBJ_ALLOCATOR_MUTEX) {}
     ~ObjAllocator() { OB_ASSERT(used_list_.is_empty()); }
     int acquire(Value *&value)
     {

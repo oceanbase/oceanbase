@@ -535,20 +535,24 @@ TEST_F(TestRangeSpliter, test_multi_sstable_split)
               spliter.build_range_array(
                   ranges, 3, *index_read_info, sstables, allocator_, multi_range_split_array));
 
+    LOG_INFO("multi_range_split_array", K(multi_range_split_array));
+
     const char *rowkey_data1 = "bigint   var   bigint  bigint flag    multi_version_row_flag\n"
                               "1        var1   -9    MIN      EXIST   CLF\n"
-                              "8        var1   -9    MIN      EXIST   CLF\n";
+                              "7        var1   -9    MIN      EXIST   CLF\n";
     build_query_range(ranges, rowkey_data1);
     ASSERT_EQ(true, loop_equal_ranges(ranges, multi_range_split_array.at(0)));
 
     const char *rowkey_data2 = "bigint   var   bigint  bigint flag    multi_version_row_flag\n"
+                              "7        var1   -9    MIN      EXIST   CLF\n"
+                              "8        var1   -9    MIN      EXIST   CLF\n"
                               "10       var1   -9    MIN      EXIST   CLF\n"
-                              "16       var1   -9    MIN      EXIST   CLF\n";
+                              "14       var1   -9    MIN      EXIST   CLF\n";
     build_query_range(ranges, rowkey_data2);
     ASSERT_EQ(true, loop_equal_ranges(ranges, multi_range_split_array.at(1)));
 
     const char *rowkey_data3 = "bigint   var   bigint  bigint flag    multi_version_row_flag\n"
-                              "16       var1   -9    MIN      EXIST   CLF\n"
+                              "14       var1   -9    MIN      EXIST   CLF\n"
                               "19       var1   -9    MIN      EXIST   CLF\n"
                               "23       var1   -9    MIN      EXIST   CLF\n"
                               "26       var1   -9    MIN      EXIST   CLF\n";
@@ -579,6 +583,8 @@ TEST_F(TestRangeSpliter, test_micro_level_split)
     ASSERT_EQ(OB_SUCCESS,
               spliter.build_range_array(
                   ranges, 4, *index_read_info, sstables, allocator_, multi_range_split_array));
+
+    LOG_INFO("multi_range_split_array", K(multi_range_split_array));
 
     const char *rowkey_data1 = "bigint   var   bigint  bigint flag    multi_version_row_flag\n"
                                "MIN      MIN    -9    MIN      EXIST   CLF\n"
@@ -662,6 +668,8 @@ TEST_F(TestRangeSpliter, test_mulit_basic)
     ASSERT_EQ(OB_SUCCESS,
               spliter.build_range_array(
                   ranges, 3, *index_read_info, sstables, allocator_, multi_range_split_array));
+
+    LOG_INFO("multi_range_split_array", K(multi_range_split_array));
 
     ASSERT_EQ(3, multi_range_split_array.count());
     const char *rowkey_data1 = "bigint   var   bigint  bigint flag    multi_version_row_flag\n"

@@ -20,6 +20,7 @@
 #include "lib/string/ob_sensitive_string.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/backup/ob_backup_helper.h"
+#include "share/backup/ob_backup_io_adapter.h"
 
 
 using namespace oceanbase;
@@ -65,7 +66,7 @@ int ObPhysicalRestoreBackupDestList::assign(const ObPhysicalRestoreBackupDestLis
 }
 
 int ObPhysicalRestoreBackupDestList::set(
-    const common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
+    const common::ObIArray<share::ObBackupSetBriefInfo> &backup_set_list,
     const common::ObIArray<share::ObBackupPiecePath> &backup_piece_list,
     const common::ObIArray<share::ObBackupPathString> &log_path_list)
 {
@@ -76,7 +77,7 @@ int ObPhysicalRestoreBackupDestList::set(
     LOG_WARN("failed to assign", KR(ret));
   } else {
     ARRAY_FOREACH_X(backup_set_list, i, cnt, OB_SUCC(ret)) {
-      const share::ObRestoreBackupSetBriefInfo &info = backup_set_list.at(i);
+      const share::ObBackupSetBriefInfo &info = backup_set_list.at(i);
       if (OB_FAIL(backup_set_path_list_.push_back(info.backup_set_path_))) {
         LOG_WARN("fail to push back backup set path", K(ret));
       } else if (OB_FAIL(backup_set_desc_list_.push_back(info.backup_set_desc_))) {
@@ -92,7 +93,7 @@ void ObPhysicalRestoreBackupDestList::reset()
 }
 
 int ObPhysicalRestoreBackupDestList::get_backup_set_brief_info_list(
-    common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list)
+    common::ObIArray<share::ObBackupSetBriefInfo> &backup_set_list)
 {
   int ret = OB_SUCCESS;
   backup_set_list.reset();
@@ -101,7 +102,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_set_brief_info_list(
     LOG_WARN("backup set desc list is mismatched with backup set path list", K(ret),
         K(backup_set_desc_list_), K(backup_set_path_list_));
   } else {
-    share::ObRestoreBackupSetBriefInfo tmp_info;
+    share::ObBackupSetBriefInfo tmp_info;
     int64_t cnt = backup_set_desc_list_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < cnt; i++) {
       tmp_info.reset();
@@ -1744,25 +1745,35 @@ int ObBackupDest::set(const char *root_path, const char *storage_info)
   return ret;
 }
 
-int ObBackupDest::set(const char *root_path, const ObBackupStorageInfo *storage_info)
+int ObBackupDest::set(const char *path, const ObBackupStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
   reset();
   if (is_valid()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot init twice", K(ret), K(*this));
-  } else if (OB_ISNULL(root_path) || OB_ISNULL(storage_info) || !storage_info->is_valid()) {
+  } else if (OB_ISNULL(path) || OB_ISNULL(storage_info) || !storage_info->is_valid()) {
     ret = OB_INVALID_BACKUP_DEST;
-    LOG_WARN("invalid args", K(ret), K(root_path), K(storage_info));
+    LOG_WARN("invalid args", K(ret), K(path), K(storage_info));
   } else if (OB_FAIL(alloc_and_init())) {
     LOG_WARN("failed to alloc and init backup dest", K(ret));
-  } else if (OB_FAIL(databuff_printf(root_path_, OB_MAX_BACKUP_PATH_LENGTH, "%s", root_path))) {
-    LOG_WARN("failed to set root path", K(ret), K(root_path));
-  } else if (OB_FAIL(storage_info_->assign(*storage_info))) {
-    LOG_WARN("failed to set storage info", K(ret));
   } else {
-    root_path_trim_();
+    int64_t pos = 0;
+    while (path[pos] != '\0') {
+      if ('?' == path[pos]) {
+        break;
+      }
+      ++pos;
+    }
+    if (OB_FAIL(databuff_printf(root_path_, OB_MAX_BACKUP_PATH_LENGTH, "%.*s", static_cast<int>(pos), path))) {
+      LOG_WARN("failed to set root path", K(ret), K(path), K(pos));
+    } else if (OB_FAIL(storage_info_->assign(*storage_info))) {
+      LOG_WARN("failed to set storage info", K(ret));
+    } else {
+      root_path_trim_();
+    }
   }
+
   return ret;
 }
 
@@ -1790,7 +1801,7 @@ int ObBackupDest::set_without_decryption(const common::ObString &backup_dest) {
 }
 
 // oss://backup_dir/?host=xxx.com -> root_path=oss://backup_dir  endpoint=host=xxx.com
-// file:///root_backup_dir" -> root_path=file:///root_backup_dir
+// file:///root_backup_dir -> root_path=file:///root_backup_dir
 int ObBackupDest::set_storage_path(const common::ObString &storage_path_str)
 {
   int ret = OB_SUCCESS;
@@ -1906,6 +1917,21 @@ int ObBackupDest::get_backup_path_str(char *buf, const int64_t buf_size) const
     }
   }
   LOG_INFO("[backup]get_backup_path_str ret", K(ret), K(buf), K(buf_size));
+  return ret;
+}
+
+// dest_id may be invalid before insert backup dest/archive dest/restore dest into __all_backup_storage_info table
+// need to check dest_id not equal to OB_INVALID_DEST_ID and not less than OB_START_DEST_ID
+// OB_START_DEST_ID is the min value of dest_id in __all_backup_storage_info table
+int ObBackupDest::get_dest_id(int64_t &dest_id) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup dest is not init", K(ret), K(*this));
+  } else {
+    dest_id = storage_info_->get_dest_id();
+  }
   return ret;
 }
 
@@ -2335,6 +2361,8 @@ bool ObBackupUtils::is_need_retry_error(const int err)
     case OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE:
     case OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM:
     case OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH:
+    case OB_BACKUP_FILE_NOT_EXIST:
+    case OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT:
       bret = false;
       break;
     default:
@@ -2404,6 +2432,27 @@ int ObBackupUtils::get_backup_scn(const uint64_t &tenant_id, share::SCN &scn)
     }
   }
   LOG_INFO("get tenant gts", KR(ret), K(tenant_id), K(scn));
+  return ret;
+}
+
+int ObBackupUtils::get_raw_path(const char *path, char *raw_path, const int64_t raw_path_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(path) || OB_ISNULL(raw_path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(path), KP(raw_path));
+  } else {
+    int64_t pos = 0;
+    while (path[pos] != '\0') {
+      if ('?' == path[pos]) {
+        break;
+      }
+      ++pos;
+    }
+    if (OB_FAIL(databuff_printf(raw_path, raw_path_size, "%.*s", pos, path))) {
+      LOG_WARN("failed to printf", K(ret), K(path));
+    }
+  }
   return ret;
 }
 
@@ -3630,7 +3679,7 @@ const char *ObHAResultInfo::get_failed_type_str() const
     "RESTORE_CLOG",
     "BACKUP_DATA",
     "BACKUP_CLEAN",
-    "RECOVER_TABLE"
+    "BACKUP_VALIDATE"
   };
   if (type_ < ROOT_SERVICE || type_ >= MAX_FAILED_TYPE) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid failed type", K(type_));
@@ -4847,7 +4896,7 @@ int share::backup_scn_to_time_tag(const SCN &scn, char *buf, const int64_t buf_l
   return ret;
 }
 
-int ObRestoreBackupSetBriefInfo::get_restore_backup_set_brief_info_str(
+int ObBackupSetBriefInfo::get_restore_backup_set_brief_info_str(
     common::ObIAllocator &allocator, common::ObString &str) const
 {
   int ret = OB_SUCCESS;
@@ -4893,7 +4942,7 @@ int ObRestoreBackupSetBriefInfo::get_restore_backup_set_brief_info_str(
   return ret;
 }
 
-int ObRestoreBackupSetBriefInfo::get_backup_set_path_str(common::ObIAllocator &allocator, ObString &str) const
+int ObBackupSetBriefInfo::get_backup_set_path_str(common::ObIAllocator &allocator, ObString &str) const
 {
   int ret = OB_SUCCESS;
   str.reset();
@@ -4919,7 +4968,7 @@ int ObRestoreBackupSetBriefInfo::get_backup_set_path_str(common::ObIAllocator &a
   return ret;
 }
 
-int ObRestoreBackupSetBriefInfo::assign(const ObRestoreBackupSetBriefInfo &that)
+int ObBackupSetBriefInfo::assign(const ObBackupSetBriefInfo &that)
 {
   int ret = OB_SUCCESS;
   if (!that.is_valid()) {
@@ -5476,6 +5525,7 @@ static const char *type_strs[] = {
     "backup_key",
     "restore_data",
     "restore_log",
+    "backup_validate",
 };
 
 const char *ObBackupDestType::get_str(const TYPE &type)
@@ -5552,4 +5602,15 @@ int ObBackupSrcInfo::check_locality_info_valid(const ObRegion &region, const ObI
     }
   }
   return ret;
+}
+
+void ObBackupTurnRetryInfo::reset()
+{
+  turn_id_ = -1;
+  retry_id_ = -1;
+}
+
+bool ObBackupTurnRetryInfo::is_valid() const
+{
+  return turn_id_ > 0 && retry_id_ >= 0;
 }

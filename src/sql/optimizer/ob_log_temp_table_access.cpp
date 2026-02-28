@@ -24,7 +24,7 @@ ObLogTempTableAccess::ObLogTempTableAccess(ObLogPlan &plan)
   : ObLogicalOperator(plan),
     table_id_(0),
     temp_table_id_(OB_INVALID_ID),
-    access_exprs_()
+    access_exprs_(plan.get_allocator())
 {
 }
 
@@ -110,9 +110,12 @@ int ObLogTempTableAccess::do_re_est_cost(EstimateCostInfo &param, double &card, 
     }
     //bloom filter selectivity
     for (int64_t i = 0; i < param.join_filter_infos_.count(); ++i) {
-      const JoinFilterInfo &info = param.join_filter_infos_.at(i);
-      if (info.table_id_ == table_id_) {
-        card *= info.join_filter_selectivity_;
+      const JoinFilterInfo *info = param.join_filter_infos_.at(i);
+      if (OB_ISNULL(info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("join filter info is null", K(ret));
+      } else if (info->table_id_ == table_id_) {
+        card *= info->join_filter_selectivity_;
       }
     }
     //refine row count

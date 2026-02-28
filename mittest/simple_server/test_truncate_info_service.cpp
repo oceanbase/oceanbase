@@ -14,15 +14,15 @@
 #include <gtest/gtest.h>
 #define protected public
 #define private public
-#include "mittest/env/ob_simple_server_helper.h"
 #include "env/ob_simple_cluster_test_base.h"
 #include "unittest/storage/ob_truncate_info_helper.h"
-#include "share/schema/ob_tenant_schema_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "share/ob_ls_id.h"
+#include "share/schema/ob_tenant_schema_service.h"
 #include "storage/truncate_info/ob_truncate_info_array.h"
 #include "share/truncate_info/ob_truncate_info_util.h"
 #include "storage/truncate_info/ob_mds_info_distinct_mgr.h"
+#include "simple_server/compaction_basic_func.h"
 
 namespace oceanbase
 {
@@ -33,6 +33,11 @@ namespace unittest
 
 class ObTruncateInfoServiceTest : public ObSimpleClusterTestBase
 {
+protected:
+  virtual void SetUp() override {
+    ObSimpleClusterTestBase::SetUp();
+    oceanbase::palf::election::MAX_TST = 500 * 1000;
+  }
 public:
   ObTruncateInfoServiceTest()
     : ObSimpleClusterTestBase("test_truncate_info_service"),
@@ -46,31 +51,15 @@ public:
     sql_proxy.write("create database test", affected_rows);
     sql_proxy.write("use test", affected_rows);
   }
-  int get_table_schema(
-    schema::ObSchemaGetterGuard &schema_guard,
-    const int64_t table_id,
-    const ObTableSchema *&table_schema);
-  int get_table_id(
-    sqlclient::ObISQLConnection &conn,
-    const char *table_name,
-    const bool is_index,
-    int64_t &table_id);
-  int get_tablet_and_ls_id(
-    sqlclient::ObISQLConnection &conn,
-    const int64_t table_id,
-    ObTabletID &tablet_id,
-    ObLSID &ls_id);
   void check_tablet_cache(
     const ObLSID &ls_id,
     const ObTabletID &tablet_id,
     const bool is_valid,
-    const int64_t newest_commit_version = 0,
-    const int64_t newest_schema_version = 0);
+    const int64_t newest_commit_version = 0);
   void check_kv_cache(
     ObTablet &tablet,
     const int64_t info_cnt,
-    const int64_t newest_commit_version,
-    const int64_t newest_schema_version);
+    const int64_t newest_commit_version);
   int wait_mds_flush(
     const ObLSID &ls_id,
     const ObTabletID &tablet_id);
@@ -78,73 +67,11 @@ public:
   ObArenaAllocator allocator_;
 };
 
-int ObTruncateInfoServiceTest::get_table_schema(
-    schema::ObSchemaGetterGuard &schema_guard,
-    const int64_t table_id,
-    const ObTableSchema *&table_schema)
-{
-  int ret = OB_SUCCESS;
-  ObMultiVersionSchemaService *schema_service = nullptr;
-  table_schema = nullptr;
-  int64_t schema_version = 0;
-  if (OB_ISNULL(schema_service = MTL(ObTenantSchemaService *)->get_schema_service())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get schema service from MTL", K(ret));
-  } else if (OB_FAIL(schema_service->get_tenant_refreshed_schema_version(
-                    tenant_id_, schema_version))) {
-    LOG_WARN("fail to get tenant local schema version", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(schema_service->retry_get_schema_guard(tenant_id_,
-                                                          schema_version,
-                                                          table_id,
-                                                          schema_guard,
-                                                          schema_version))) {
-    LOG_WARN("failed to get schema guard", KR(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema))) {
-    LOG_WARN("Fail to get table schema", K(ret), K(table_id));
-  }
-  return ret;
-}
-
-int ObTruncateInfoServiceTest::get_table_id(
-    sqlclient::ObISQLConnection &conn,
-    const char *table_name,
-    const bool is_index,
-    int64_t &table_id)
-{
-  table_id = 0;
-  ObSqlString sql;
-  sql.assign_fmt("select table_id as val from oceanbase.__all_virtual_table where table_name like '%c%s%s%c' limit 1", '%', table_name, is_index ? "_idx" : "", '%');
-  return SimpleServerHelper::select_int64(&conn, sql.ptr(), table_id);
-}
-
-int ObTruncateInfoServiceTest::get_tablet_and_ls_id(
-    sqlclient::ObISQLConnection &conn,
-    const int64_t table_id,
-    ObTabletID &tablet_id,
-    ObLSID &ls_id)
-{
-  int ret = OB_SUCCESS;
-  int64_t tmp_tablet_id = 0;
-  int64_t tmp_ls_id = 0;
-  ObSqlString sql;
-  sql.assign_fmt("select tablet_id as val from oceanbase.__all_virtual_tablet_to_ls where table_id = %ld limit 1", table_id);
-  if (OB_SUCC(SimpleServerHelper::select_int64(&conn, sql.ptr(), tmp_tablet_id))) {
-    sql.reuse();
-    sql.assign_fmt("select ls_id as val from oceanbase.__all_virtual_tablet_to_ls where table_id = %ld and tablet_id = %ld limit 1", table_id, tmp_tablet_id);
-    if (OB_SUCC(SimpleServerHelper::select_int64(&conn, sql.ptr(), tmp_ls_id))) {
-      tablet_id = ObTabletID(tmp_tablet_id);
-      ls_id = ObLSID(tmp_ls_id);
-    }
-  }
-  return ret;
-}
-
 void ObTruncateInfoServiceTest::check_tablet_cache(
   const ObLSID &ls_id,
   const ObTabletID &tablet_id,
   const bool is_valid,
-  const int64_t newest_commit_version,
-  const int64_t newest_schema_version)
+  const int64_t newest_commit_version)
 {
   LOG_INFO("read_truncate_info_array check_tablet_cache", K(ls_id), K(tablet_id), K(is_valid));
   ObTabletHandle tablet_handle;
@@ -156,7 +83,6 @@ void ObTruncateInfoServiceTest::check_tablet_cache(
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_truncate_info_newest_version(read_commit_version, count));
   if (is_valid) {
     ASSERT_EQ(newest_commit_version, truncate_info_cache.newest_commit_version_);
-    ASSERT_EQ(newest_schema_version, truncate_info_cache.newest_schema_version_);
     ASSERT_EQ(newest_commit_version, read_commit_version);
   }
 }
@@ -164,18 +90,16 @@ void ObTruncateInfoServiceTest::check_tablet_cache(
 void ObTruncateInfoServiceTest::check_kv_cache(
     ObTablet &tablet,
     const int64_t info_cnt,
-    const int64_t newest_commit_version,
-    const int64_t newest_schema_version)
+    const int64_t newest_commit_version)
 {
-  ObTruncateInfoCacheKey cache_key(tenant_id_, tablet.get_tablet_id(), newest_schema_version, tablet.get_last_major_snapshot_version());
+  ObTruncateInfoCacheKey cache_key(tenant_id_, tablet.get_tablet_id(), newest_commit_version, tablet.get_last_major_snapshot_version());
   ObTruncateInfoArray array;
-  int ret = ObTruncateInfoKVCacheUtil::get_truncate_info_array(
+  int ret = ObTruncateInfoKVCacheUtil::get_mds_info_array(
                             allocator_, cache_key, array);
   LOG_INFO("read_truncate_info_array check_kv_cache", K(tablet.get_tablet_id()), K(ret));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(info_cnt, array.count());
   ASSERT_EQ(newest_commit_version, array.at(array.count() - 1)->commit_version_);
-  ASSERT_EQ(newest_schema_version, array.at(array.count() - 1)->schema_version_);
 }
 
 int ObTruncateInfoServiceTest::wait_mds_flush(
@@ -254,12 +178,12 @@ TEST_F(ObTruncateInfoServiceTest, truncate_range_part)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create index t_range1_idx on t_range1(c2) global", affected_rows));
 
   int64_t data_table_id = 0, index_table_id = 0;
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_range1", false/*is_index*/, data_table_id));
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_range1", true/*is_index*/, index_table_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_range1", false/*is_index*/, data_table_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_range1", true/*is_index*/, index_table_id));
 
   schema::ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
-  ASSERT_EQ(OB_SUCCESS, get_table_schema(schema_guard, data_table_id, table_schema));
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::get_table_schema(tenant_id_, schema_guard, data_table_id, table_schema));
   ObObj range_end_obj;
   ObRowkey range_end_rowkey(&range_end_obj, 1);
   const ObPartition *part = nullptr;
@@ -335,9 +259,8 @@ TEST_F(ObTruncateInfoServiceTest, truncate_range_part)
     ObLSID ls_id;
     ObTabletHandle tablet_handle;
     int64_t newest_commit_version = 0;
-    int64_t newest_schema_version = 0;
     int64_t read_commit_version = 0;
-    ASSERT_EQ(OB_SUCCESS, get_tablet_and_ls_id(*conn, index_table_id, tablet_id, ls_id));
+    ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_tablet_and_ls_id(*conn, index_table_id, tablet_id, ls_id));
     ASSERT_EQ(OB_SUCCESS, wait_mds_flush(ls_id, tablet_id));
     ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::get_tablet(ls_id, tablet_id, tablet_handle));
     // before first read_truncate_info_array, cache is invalid
@@ -360,11 +283,10 @@ TEST_F(ObTruncateInfoServiceTest, truncate_range_part)
       ASSERT_EQ(OB_SUCCESS, truncate_part.compare(truncate_info_array.at(0)->truncate_part_, equal));
       ASSERT_TRUE(equal);
       newest_commit_version = truncate_info_array.at(0)->commit_version_;
-      newest_schema_version = truncate_info_array.at(0)->schema_version_;
 
-      check_tablet_cache(ls_id, tablet_id, true/*is_valid*/, newest_commit_version, newest_schema_version);
-      check_kv_cache(*tablet_handle.get_obj(), 1/*info_cnt*/, newest_commit_version, newest_schema_version);
-      LOG_INFO("read_truncate_info_array success to check tablet cache 1", KR(ret), K(tablet_id), K(newest_commit_version), K(newest_schema_version));
+      check_tablet_cache(ls_id, tablet_id, true/*is_valid*/, newest_commit_version);
+      check_kv_cache(*tablet_handle.get_obj(), 1/*info_cnt*/, newest_commit_version);
+      LOG_INFO("read_truncate_info_array success to check tablet cache 1", KR(ret), K(tablet_id), K(newest_commit_version));
     }
 
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_range1 truncate subpartition p1sp2", affected_rows));
@@ -386,15 +308,14 @@ TEST_F(ObTruncateInfoServiceTest, truncate_range_part)
       ASSERT_EQ(OB_SUCCESS, truncate_part.compare(truncate_info_array.at(0)->truncate_subpart_, equal));
       ASSERT_TRUE(equal);
       newest_commit_version = truncate_info_array.at(0)->commit_version_;
-      newest_schema_version = truncate_info_array.at(0)->schema_version_;
     }
     ASSERT_EQ(OB_SUCCESS,
               TruncateInfoHelper::read_distinct_truncate_info_array(
                   allocator_, ls_id, tablet_id,
                   ObVersionRange(0, EXIST_READ_SNAPSHOT_VERSION), truncate_info_array));
-    check_tablet_cache(ls_id, tablet_id, true/*is_valid*/, newest_commit_version, newest_schema_version);
-    check_kv_cache(*tablet_handle.get_obj(), 2/*info_cnt*/, newest_commit_version, newest_schema_version);
-    LOG_INFO("read_truncate_info_array success to check tablet cache 2", KR(ret), K(tablet_id), K(newest_commit_version), K(newest_schema_version));
+    check_tablet_cache(ls_id, tablet_id, true/*is_valid*/, newest_commit_version);
+    check_kv_cache(*tablet_handle.get_obj(), 2/*info_cnt*/, newest_commit_version);
+    LOG_INFO("read_truncate_info_array success to check tablet cache 2", KR(ret), K(tablet_id), K(newest_commit_version));
   }
 #undef CHECK_PREV_PART_HIGH_BOUND
 #undef CHECK_SUBPART_HIGH_BOUND
@@ -440,12 +361,12 @@ TEST_F(ObTruncateInfoServiceTest, truncate_range_columns_part)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create index t_range2_idx on t_range2(c2) global", affected_rows));
 
   int64_t data_table_id = 0, index_table_id = 0;
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_range2", false/*is_index*/, data_table_id));
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_range2", true/*is_index*/, index_table_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_range2", false/*is_index*/, data_table_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_range2", true/*is_index*/, index_table_id));
 
   schema::ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
-  ASSERT_EQ(OB_SUCCESS, get_table_schema(schema_guard, data_table_id, table_schema));
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::get_table_schema(tenant_id_, schema_guard, data_table_id, table_schema));
   ObObj range_start_obj[2], range_end_obj[2];
   ObRowkey range_start_rowkey(range_start_obj, 2);
   ObRowkey range_end_rowkey(range_end_obj, 2);
@@ -461,8 +382,7 @@ TEST_F(ObTruncateInfoServiceTest, truncate_range_columns_part)
     ObLSID ls_id;
     ObTabletHandle tablet_handle;
     int64_t newest_commit_version = 0;
-    int64_t newest_schema_version = 0;
-    ASSERT_EQ(OB_SUCCESS, get_tablet_and_ls_id(*conn, index_table_id, tablet_id, ls_id));
+    ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_tablet_and_ls_id(*conn, index_table_id, tablet_id, ls_id));
     ASSERT_EQ(OB_SUCCESS, wait_mds_flush(ls_id, tablet_id));
     ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::get_tablet(ls_id, tablet_id, tablet_handle));
     // before first read_truncate_info_array, cache is invalid
@@ -488,9 +408,8 @@ TEST_F(ObTruncateInfoServiceTest, truncate_range_columns_part)
       ASSERT_EQ(OB_SUCCESS, truncate_part.compare(truncate_info_array.at(0)->truncate_part_, equal));
       ASSERT_TRUE(equal);
       newest_commit_version = truncate_info_array.at(0)->commit_version_;
-      newest_schema_version = truncate_info_array.at(0)->schema_version_;
-      check_tablet_cache(ls_id, tablet_id, true/*is_valid*/, newest_commit_version, newest_schema_version);
-      check_kv_cache(*tablet_handle.get_obj(), 1/*info_cnt*/, newest_commit_version, newest_schema_version);
+      check_tablet_cache(ls_id, tablet_id, true/*is_valid*/, newest_commit_version);
+      check_kv_cache(*tablet_handle.get_obj(), 1/*info_cnt*/, newest_commit_version);
     }
 
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_range2 truncate subpartition p1sp2", affected_rows));
@@ -504,7 +423,6 @@ TEST_F(ObTruncateInfoServiceTest, truncate_range_columns_part)
     if (OB_NOT_NULL(truncate_info_array.at(0))) {
       ObTruncateInfo *cmp_info = truncate_info_array.at(0);
       newest_commit_version = cmp_info->commit_version_;
-      newest_schema_version = cmp_info->schema_version_;
       ASSERT_TRUE(cmp_info->is_sub_part_);
       LOG_INFO("print222", KPC(cmp_info), K(truncate_part));
       ASSERT_EQ(OB_SUCCESS, truncate_part.compare(cmp_info->truncate_part_, equal));
@@ -521,8 +439,8 @@ TEST_F(ObTruncateInfoServiceTest, truncate_range_columns_part)
               TruncateInfoHelper::read_distinct_truncate_info_array(
                   allocator_, ls_id, tablet_id,
                   ObVersionRange(0, EXIST_READ_SNAPSHOT_VERSION), truncate_info_array));
-    check_tablet_cache(ls_id, tablet_id, true/*is_valid*/, newest_commit_version, newest_schema_version);
-    check_kv_cache(*tablet_handle.get_obj(), 2/*info_cnt*/, newest_commit_version, newest_schema_version);
+    check_tablet_cache(ls_id, tablet_id, true/*is_valid*/, newest_commit_version);
+    check_kv_cache(*tablet_handle.get_obj(), 2/*info_cnt*/, newest_commit_version);
   }
 #undef GENERATE_START_RANGE
 #undef GENERATE_END_RANGE
@@ -567,12 +485,12 @@ TEST_F(ObTruncateInfoServiceTest, truncate_list_part)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create index t_list1_idx on t_list1(c2) global", affected_rows));
 
   int64_t data_table_id = 0, index_table_id = 0;
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_list1", false/*is_index*/, data_table_id));
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_list1", true/*is_index*/, index_table_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_list1", false/*is_index*/, data_table_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_list1", true/*is_index*/, index_table_id));
 
   schema::ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
-  ASSERT_EQ(OB_SUCCESS, get_table_schema(schema_guard, data_table_id, table_schema));
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::get_table_schema(tenant_id_, schema_guard, data_table_id, table_schema));
   ObObj range_end_obj;
   ObRowkey range_end_rowkey(&range_end_obj, 1);
   const ObPartition *part = nullptr;
@@ -618,7 +536,7 @@ TEST_F(ObTruncateInfoServiceTest, truncate_list_part)
     ObTabletHandle tablet_handle;
     int64_t last_commit_version = 0;
     bool equal = false;
-    ASSERT_EQ(OB_SUCCESS, get_tablet_and_ls_id(*conn, index_table_id, tablet_id, ls_id));
+    ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_tablet_and_ls_id(*conn, index_table_id, tablet_id, ls_id));
     ASSERT_EQ(OB_SUCCESS, wait_mds_flush(ls_id, tablet_id));
     ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::get_tablet(ls_id, tablet_id, tablet_handle));
     ObTruncateInfoArray truncate_info_array;
@@ -697,14 +615,14 @@ TEST_F(ObTruncateInfoServiceTest, truncate_with_expr_part_key)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create index t_expr1_idx on t_expr1(c2) global", affected_rows));
 
   int64_t index_table_id = 0;
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_expr1", true/*is_index*/, index_table_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_expr1", true/*is_index*/, index_table_id));
   schema::ObSchemaGetterGuard schema_guard;
   const ObTableSchema *index_table_schema = nullptr;
-  ASSERT_EQ(OB_SUCCESS, get_table_schema(schema_guard, index_table_id, index_table_schema));
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::get_table_schema(tenant_id_, schema_guard, index_table_id, index_table_schema));
   int64_t index_table_id_after_truncate = 0;
 
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr1 truncate partition p0", affected_rows));
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_expr1", true/*is_index*/, index_table_id_after_truncate));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_expr1", true/*is_index*/, index_table_id_after_truncate));
   ASSERT_TRUE(index_table_id != index_table_id_after_truncate);
 
 /*
@@ -737,15 +655,15 @@ TEST_F(ObTruncateInfoServiceTest, truncate_with_expr_part_key)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create index t_expr2_idx on t_expr2(c2) global", affected_rows));
 
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_expr2", true/*is_index*/, index_table_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_expr2", true/*is_index*/, index_table_id));
 
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr2 truncate partition p0", affected_rows));
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_expr2", true/*is_index*/, index_table_id_after_truncate));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_expr2", true/*is_index*/, index_table_id_after_truncate));
   ASSERT_TRUE(index_table_id != index_table_id_after_truncate);
   index_table_id = index_table_id_after_truncate;
 
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr2 truncate subpartition p2sp0", affected_rows));
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_expr2", true/*is_index*/, index_table_id_after_truncate));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_expr2", true/*is_index*/, index_table_id_after_truncate));
   ASSERT_TRUE(index_table_id != index_table_id_after_truncate);
 /*
 * create t_expr3
@@ -777,10 +695,10 @@ TEST_F(ObTruncateInfoServiceTest, truncate_with_expr_part_key)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create index t_expr3_idx on t_expr3(c2) global", affected_rows));
 
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_expr3", true/*is_index*/, index_table_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_expr3", true/*is_index*/, index_table_id));
 
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr3 truncate subpartition p2sp0", affected_rows));
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_expr3", true/*is_index*/, index_table_id_after_truncate));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_expr3", true/*is_index*/, index_table_id_after_truncate));
   ASSERT_TRUE(index_table_id != index_table_id_after_truncate);
   index_table_id = index_table_id_after_truncate;
 
@@ -788,13 +706,13 @@ TEST_F(ObTruncateInfoServiceTest, truncate_with_expr_part_key)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr3 truncate partition p2", affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr3 truncate partition p2", affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr3 truncate partition p2", affected_rows));
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_expr3", true/*is_index*/, index_table_id_after_truncate));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_expr3", true/*is_index*/, index_table_id_after_truncate));
   ASSERT_EQ(index_table_id, index_table_id_after_truncate);
   ObTruncateInfoArray truncate_info_array;
   ObTabletID tablet_id;
   ObLSID ls_id;
   ObTabletHandle tablet_handle;
-  ASSERT_EQ(OB_SUCCESS, get_tablet_and_ls_id(*conn, index_table_id, tablet_id, ls_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_tablet_and_ls_id(*conn, index_table_id, tablet_id, ls_id));
   ASSERT_EQ(OB_SUCCESS, wait_mds_flush(ls_id, tablet_id));
   ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::get_tablet(ls_id, tablet_id, tablet_handle));
   ASSERT_EQ(OB_SUCCESS,
@@ -822,21 +740,21 @@ TEST_F(ObTruncateInfoServiceTest, truncate_default_part)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create index t_list_default_idx on t_list_default(c2) global", affected_rows));
 
   int64_t index_table_id = 0;
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_list_default", true/*is_index*/, index_table_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_list_default", true/*is_index*/, index_table_id));
   schema::ObSchemaGetterGuard schema_guard;
   const ObTableSchema *index_table_schema = nullptr;
-  ASSERT_EQ(OB_SUCCESS, get_table_schema(schema_guard, index_table_id, index_table_schema));
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::get_table_schema(tenant_id_, schema_guard, index_table_id, index_table_schema));
   int64_t index_table_id_after_truncate = 0;
 
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_list_default truncate partition p0", affected_rows));
-  ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_list_default", true/*is_index*/, index_table_id_after_truncate));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_table_id(*conn, "t_list_default", true/*is_index*/, index_table_id_after_truncate));
   ASSERT_TRUE(index_table_id == index_table_id_after_truncate);
 
   ObTruncateInfoArray truncate_info_array;
   ObTabletID tablet_id;
   ObLSID ls_id;
   ObTabletHandle tablet_handle;
-  ASSERT_EQ(OB_SUCCESS, get_tablet_and_ls_id(*conn, index_table_id, tablet_id, ls_id));
+  ASSERT_EQ(OB_SUCCESS, CompactionBasicFunc::get_tablet_and_ls_id(*conn, index_table_id, tablet_id, ls_id));
   ASSERT_EQ(OB_SUCCESS, wait_mds_flush(ls_id, tablet_id));
   ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::get_tablet(ls_id, tablet_id, tablet_handle));
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->read_truncate_info_array(

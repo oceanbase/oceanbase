@@ -15,6 +15,7 @@
 #include "ob_px_row_store.h"
 #include "sql/dtl/ob_dtl.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/px/exchange/ob_px_receive_op.h"
 
 
 using namespace oceanbase::common;
@@ -373,14 +374,10 @@ int ObReceiveRowReader::get_next_compact_rows(ObTempRowStore::RowBlock *blk,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid param", K(ret), KP(blk), KP(srows));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && cur_iter_rows_ < blk->rows() && i < max_rows; ++i) {
-      const ObCompactRow *srow = NULL;
-      if (OB_FAIL(blk->get_store_row(cur_iter_pos_, srow))) {
-        LOG_WARN("failed to get store row", K(ret));
-      } else {
-        srows[read_rows++] = srow;
-        ++cur_iter_rows_;
-      }
+    if (OB_FAIL(blk->get_store_rows(cur_iter_pos_, srows, MIN(max_rows, blk->rows() - cur_iter_rows_), read_rows))) {
+      LOG_WARN("get store rows failed", K(ret));
+    } else {
+      cur_iter_rows_ += read_rows;
     }
   }
   return ret;
@@ -807,6 +804,10 @@ int ObReceiveRowReader::get_next_batch_vec(const ObIArray<ObExpr*> &exprs,
         }
       }
     }
+  }
+  if (OB_FAIL(ret) || read_rows <= 0 || OB_ISNULL(recv_op_)) {
+  } else if (OB_FAIL(recv_op_->do_project_recv_exprs(read_rows, srows, exprs, eval_ctx))) {
+    LOG_WARN("do project recv exprs failed", K(ret));
   }
   return ret;
 }

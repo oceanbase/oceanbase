@@ -23,6 +23,7 @@
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "mittest/simple_server/env/ob_simple_cluster_test_base.h"
 #include "mittest/shared_storage/test_ss_common_util.h"
+#include "mittest/shared_storage/test_ss_compaction_util.h"
 #include "storage/shared_storage/prewarm/ob_storage_cache_policy_prewarmer.h"
 #include "storage/shared_storage/storage_cache_policy/ob_storage_cache_tablet_scheduler.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
@@ -64,13 +65,17 @@ public:
   {
     if (!scp_tenant_created) {
       ObSimpleClusterTestBase::SetUp();
-      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8));
+      oceanbase::palf::election::MAX_TST = 500 * 1000;  // 500ms, lease interval = 4 * 500ms = 2s
+      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8, "3G"));
       OK(get_tenant_id(run_ctx_.tenant_id_));
       ASSERT_NE(0, run_ctx_.tenant_id_);
       OK(get_curr_simple_server().init_sql_proxy2());
       scp_tenant_created = true;
     }
-    storage::ObSSBasePrewarmer::OB_SS_PREWARM_CACHE_THRESHOLD = 0;
+    // Note: MTL_ID() returns sys tenant in SetUp context, use run_ctx_.tenant_id_ instead
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(run_ctx_.tenant_id_));
+    ASSERT_TRUE(tenant_config.is_valid());
+    tenant_config->_ss_micro_cache_max_block_size = 1;
   }
 
   static void TearDownTestCase()
@@ -79,9 +84,6 @@ public:
     ObSimpleClusterTestBase::TearDownTestCase();
   }
 
-  int exe_sql(const char *sql_str);
-  int sys_exe_sql(const char *sql_str);
-  int medium_compact(const int64_t tablet_id);
   void wait_major_finish();
   void wait_minor_finish();
   void wait_ss_minor_compaction_finish();
@@ -94,7 +96,7 @@ public:
 
 };
 
-int ObStorageCachePolicyPrewarmerTest::exe_sql(const char *sql_str)
+static int exe_sql(const char *sql_str)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -104,13 +106,13 @@ int ObStorageCachePolicyPrewarmerTest::exe_sql(const char *sql_str)
     LOG_WARN("sql str is null", KR(ret), KP(sql_str));
   } else if (OB_FAIL(sql.assign(sql_str))) {
     LOG_WARN("fail to assign sql", KR(ret), K(sql_str));
-  } else if (OB_FAIL(get_curr_simple_server().get_sql_proxy2().write(sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(ObStorageCachePolicyPrewarmerTest::get_curr_simple_server().get_sql_proxy2().write(sql.ptr(), affected_rows))) {
     LOG_WARN("fail to write sql", KR(ret), K(sql_str), K(sql));
   }
   return ret;
 }
 
-int ObStorageCachePolicyPrewarmerTest::sys_exe_sql(const char *sql_str)
+static int sys_exe_sql(const char *sql_str)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -120,78 +122,12 @@ int ObStorageCachePolicyPrewarmerTest::sys_exe_sql(const char *sql_str)
     LOG_WARN("sql str is null", KR(ret), KP(sql_str));
   } else if (OB_FAIL(sql.assign(sql_str))) {
     LOG_WARN("fail to assign sql", KR(ret), K(sql_str));
-  } else if (OB_FAIL(get_curr_simple_server().get_sql_proxy().write(sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(ObStorageCachePolicyPrewarmerTest::get_curr_simple_server().get_sql_proxy().write(sql.ptr(), affected_rows))) {
     LOG_WARN("fail to write sql", KR(ret), K(sql_str), K(sql));
   }
   return ret;
 }
 
-int ObStorageCachePolicyPrewarmerTest::medium_compact(const int64_t tablet_id)
-{
-  int ret = OB_SUCCESS;
-  int64_t last_major_snapshot = 0;
-  int64_t finish_count = 0;
-  ObSqlString sql1;
-  ObSqlString sql2;
-  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
-
-  if(OB_FAIL(sql1.assign_fmt("select ifnull(max(end_log_scn),0) as mx from oceanbase.__all_virtual_table_mgr"
-                     " where tenant_id = %lu and tablet_id = %lu and ls_id = %lu"
-                     " and table_type = 10;",run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), run_ctx_.ls_id_.id()))) {
-    LOG_WARN("[TEST] fail to select last_major_snapshot", KR(ret), K(tablet_id), K(sql1), K(run_ctx_));
-  } else {
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      if(OB_FAIL(sql_proxy.read(res, sql1.ptr()))) {
-        LOG_WARN("[TEST] fail to read sql result", KR(ret), K(sql1));
-      } else {
-        sqlclient::ObMySQLResult *result = res.get_result();
-        if (OB_ISNULL(result)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("[TEST] fail to get result", KR(ret), K(sql1));
-        } else if (OB_FAIL(result->next())) {
-          LOG_WARN("[TEST] fail to get next result", KR(ret), K(sql1));
-        } else if (OB_FAIL(result->get_int("mx", last_major_snapshot))) {
-          LOG_WARN("[TEST] fail to get int result", KR(ret), K(sql1));
-        }
-      }
-    }
-  }
-  FLOG_INFO("[TEST] start medium compact", K(run_ctx_), K(sql1));
-  sleep(20);
-  std::string medium_compact_str = "alter system major freeze tenant tt1 tablet_id=";
-  medium_compact_str += std::to_string(tablet_id);
-  if(OB_FAIL(sys_exe_sql(medium_compact_str.c_str()))) {
-    LOG_WARN("[TEST] fail to exe sys sql", KR(ret), K(medium_compact_str.c_str()));
-  }
-  FLOG_INFO("[TEST] wait medium compact finished", K(run_ctx_), K(medium_compact_str.c_str()));
-
-  do {
-    if(OB_FAIL(sql2.assign_fmt("select count(*) as count from oceanbase.__all_virtual_table_mgr"
-                    " where tenant_id = %lu and tablet_id = %lu and ls_id = %lu"
-                    " and table_type = 10 and end_log_scn > %lu;", run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(),
-                    run_ctx_.ls_id_.id(), last_major_snapshot))) {
-      LOG_WARN("[TEST] fail to select last_major_snapshot", KR(ret), K(tablet_id), K(sql1), K(run_ctx_), K(last_major_snapshot));
-    } else {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res2) {
-        if(OB_FAIL(sql_proxy.read(res2, sql2.ptr()))) {
-          LOG_WARN("[TEST] fail to read sql result", KR(ret), K(sql2));
-        } else {
-          sqlclient::ObMySQLResult *result = res2.get_result();
-          if (OB_ISNULL(result)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("[TEST] fail to get result", KR(ret), K(sql2));
-          } else if (OB_FAIL(result->next())) {
-            LOG_WARN("[TEST] fail to get next result", KR(ret), K(sql2));
-          } else if (OB_FAIL(result->get_int("count", finish_count))) {
-            LOG_WARN("[TEST] fail to get int result", KR(ret), K(sql2));
-          }
-        }
-      }
-    }
-  } while (finish_count == 0);
-  FLOG_INFO("[TEST] medium compact finished", K(run_ctx_), K(sql2));
-  return ret;
-}
 void ObStorageCachePolicyPrewarmerTest::wait_major_finish()
 {
   int ret = OB_SUCCESS;
@@ -376,20 +312,24 @@ void ObStorageCachePolicyPrewarmerTest::check_macro_cache_exist()
   OK(get_macro_blocks(run_ctx_.ls_id_, run_ctx_.tablet_id_, data_block_ids, meta_block_ids));
   FLOG_INFO("[TEST] current info", K(run_ctx_), K(data_block_ids), K(meta_block_ids));
 
-  ObSSMacroCacheMgr *ss_cache_mgr = MTL(ObSSMacroCacheMgr*);
-  ASSERT_NE(nullptr, ss_cache_mgr);
-  bool is_exist = false;
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr*);
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache*);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+  ASSERT_NE(nullptr, mem_macro_cache);
+  bool is_exsit_in_macro_cache = false;
+  bool is_exist_in_mem_macro_cache = false;
   int64_t retry_times = 0;
   wait_task_finished(run_ctx_.tablet_id_.id());
   for (int i = 0; i < data_block_ids.count(); i++) {
-    is_exist = false;
+    is_exsit_in_macro_cache = false;
     FLOG_INFO("[TEST] macro id", K(data_block_ids.at(i)), K(i));
-    if (data_block_ids.at(i).is_data()) {
-      OK(ss_cache_mgr->exist(data_block_ids.at(i), is_exist));
-      if (!is_exist) {
+    if (data_block_ids.at(i).is_data() && data_block_ids.at(i).is_shared_data_or_meta()) {
+      OK(macro_cache_mgr->exist(data_block_ids.at(i), is_exsit_in_macro_cache));
+      OK(mem_macro_cache->check_exist(data_block_ids.at(i), is_exist_in_mem_macro_cache));
+      if (!is_exsit_in_macro_cache && !is_exist_in_mem_macro_cache) {
         FLOG_INFO("macro is not exist", K(i), K(run_ctx_), K(data_block_ids.at(i)));
       }
-      ASSERT_TRUE(is_exist);
+      ASSERT_TRUE(is_exsit_in_macro_cache || is_exist_in_mem_macro_cache);
     }
   }
   LOG_INFO("[TEST] finish to check macro cache exist", K(run_ctx_));
@@ -405,6 +345,7 @@ void ObStorageCachePolicyPrewarmerTest::exe_prepare_sql()
   OK(sys_exe_sql("alter system set merger_check_interval = '10s' tenant tt1;"));
   OK(sys_exe_sql("alter system set minor_compact_trigger = 2 tenant tt1;"));
   OK(sys_exe_sql("alter system set _ss_major_compaction_prewarm_level = 0 tenant tt1;"));
+  OK(sys_exe_sql("alter system set_tp tp_name = EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP, error_code = 4016, frequency = 1;"));
   FLOG_INFO("set _ss_major_compaction_prewarm_level = 0");
 }
 

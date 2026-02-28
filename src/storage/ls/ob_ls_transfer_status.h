@@ -24,7 +24,7 @@ namespace storage
 class ObLSTransferStatus
 {
 public:
-  ObLSTransferStatus() { reset(); }
+  ObLSTransferStatus() : lock_(common::ObLatchIds::OB_LS_TRANSFER_STATUS_LOCK) { reset(); }
   ~ObLSTransferStatus() { reset(); }
   int init(ObLS *ls);
   void reset();

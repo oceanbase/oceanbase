@@ -699,7 +699,7 @@ int ObTabletReorgInfoTable::init_tablet_for_compat()
 }
 
 ObTabletReorgInfoTable::RecycleSCNCache::RecycleSCNCache()
-  : lock_(),
+  : lock_(common::ObLatchIds::OB_TABLET_REORG_INFO_TABLE_SPIN_RW_LOCK),
     already_recycled_scn_(share::SCN::min_scn()),
     can_recycle_scn_(share::SCN::min_scn()),
     update_ts_(0)

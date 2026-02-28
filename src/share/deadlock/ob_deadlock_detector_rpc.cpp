@@ -163,7 +163,7 @@ int ObDeadLockDetectorRpc::post_collect_info_message(const ObAddr &dest_addr,
   } else {
     if (OB_FAIL(proxy_->to(dest_addr)
                       .by(MTL_ID())
-                      .timeout(OB_DETECTOR_RPC_TIMEOUT)
+                      .timeout(GCONF.internal_sql_execute_timeout)
                       .post_collect_info_message(msg, &collect_msg_cb_))) {
       DETECT_LOG(WARN, "post collect info msg failed",
                 KR(ret), K(dest_addr), K(OB_DETECTOR_RPC_TIMEOUT), K(msg));

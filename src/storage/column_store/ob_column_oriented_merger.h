@@ -57,6 +57,9 @@ public:
   VIRTUAL_TO_STRING_KV(KP_(cmp), K_(need_replay_base_cg), KP_(base_writer));
 private:
   int inner_init();
+  int inner_get_next_log(
+    ObMergeLog &mergelog,
+    const blocksstable::ObDatumRow *&row);
   int init_majors_merge_helper();
   int handle_single_iter_end(
       ObMergeLog &mergelog,
@@ -66,7 +69,15 @@ private:
       ObPartitionMergeIter *row_store_iter,
       const blocksstable::ObDatumRow *row,
       ObMergeLog &mergelog,
-      const bool replay_to_end = false);
+      const bool replay_to_end);
+  int check_with_filter(
+      ObPartitionMergeIter *row_store_iter,
+      const blocksstable::ObDatumRow *row,
+      ObMergeLog::OpType &op_type,
+      const bool replay_to_end);
+  int check_range_with_filter(
+      ObPartitionMergeIter *row_store_iter,
+      ObMergeLog::OpType &op_type);
   int alloc_base_writer(ObIArray<ObITable*> &tables);
   int replay_base_cg(const ObMergeLog &merge_log, const blocksstable::ObDatumRow *&row, ObMergeIter *iter);
   int compare(const blocksstable::ObDatumRow &left, ObPartitionMergeIter &row_store_iter, int64_t &cmp_ret);
@@ -98,9 +109,14 @@ public:
       curr_row_(nullptr),
       minimum_iters_()
   {}
-  virtual ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const int64_t iter_idx, const ObITable *table) override
+  virtual ~ObCOMinorSSTableMergeIter() {}
+  virtual ObPartitionMergeIter *alloc_merge_iter(
+    const ObMergeParameter &merge_param,
+    const int64_t iter_idx,
+    const ObITable *table,
+    ObCompactionFilterHandle &filter_handle) override
   {
-    UNUSEDx(merge_param, iter_idx, table);
+    UNUSEDx(merge_param, iter_idx, table, filter_handle);
     return alloc_helper<ObPartitionRowMergeIter> (allocator_, allocator_);
   }
   virtual OB_INLINE bool is_co_major_helper() const { return true; }

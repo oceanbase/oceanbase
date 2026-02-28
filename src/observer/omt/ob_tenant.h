@@ -66,7 +66,8 @@ public:
       group_id_(0),
       is_inited_(false),
       concurrency_(0),
-      active_threads_(0)
+      active_threads_(0),
+      recycle_lock_(common::ObLatchIds::OB_PX_POOL_RECYCLE_LOCK)
   {}
   virtual void stop();
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
@@ -151,7 +152,7 @@ public:
     pools = nullptr;
   }
 public:
-  ObPxPools() : tenant_id_(common::OB_INVALID_ID)
+  ObPxPools() : tenant_id_(common::OB_INVALID_ID), lock_(common::ObLatchIds::OB_PX_POOLS_LOCK)
   {}
   ~ObPxPools()
   {
@@ -467,8 +468,11 @@ public:
   void handle_retry_req(bool need_clear = false);
   void check_worker_count(ObThWorker &w);
   void update_queue_size();
+  // 切换worker到大查询组(0→OBCG_LQ)
+  int switch_worker_to_large_query_group(ObThWorker* worker);
 
   int timeup();
+  void update_lq_cpu_limit();
   int get_default_group_throttled_time(int64_t &default_group_throttled_time);
   void print_throttled_time();
   void regist_threads_to_cgroup();
@@ -502,8 +506,6 @@ public:
 
   int mark_group_deleted(uint64_t group_id);
 
-  void lq_end(ObThWorker &w);
-  // called each checkpoint for worker of this tenant.
   void lq_wait(ObThWorker &w);
   int lq_yield(ObThWorker &w);
 
@@ -648,6 +650,8 @@ public:
   // idle time between two checkpoints
   int64_t worker_us_;
   int64_t default_group_throttled_time_us_;
+  int64_t last_check_ts_;
+  double last_lq_cpu_;
   int64_t cpu_time_us_ CACHE_ALIGNED;
 }; // end of class ObTenant
 
@@ -680,6 +684,8 @@ OB_INLINE int64_t ObResourceGroup::max_worker_cnt() const
     cnt = 2;
   } else if (OB_UNLIKELY(share::OBCG_HB_SERVICE == group_id_)) {
     cnt = 1;
+  } else if (OB_UNLIKELY(share::OBCG_LQ == group_id_)) {
+    cnt = std::max(min_worker_cnt(), tenant_->max_worker_cnt() / 2);
   } else {
     cnt = tenant_->max_worker_cnt();
   }

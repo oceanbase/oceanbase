@@ -76,6 +76,7 @@ public:
   void set_is_oracle_mode(bool oracle_mode) { is_oracle_mode_ = oracle_mode; }
   bool is_oracle_mode() const { return is_oracle_mode_; }
   ObPxSqcHandler *get_sqc_handler() { return arg_.sqc_handler_; }
+  int get_thread_cpu_time(int64_t &cpu_time_us);
 public:
   // 以下一组时间，是为了便于 sql audit 查看 worker 执行时间消耗在哪里
   void set_enqueue_timestamp(int64_t v) { enqueue_timestamp_ = v; }
@@ -125,6 +126,7 @@ private:
 
   /* record oracle mode */
   bool is_oracle_mode_;
+  bool is_interrupted_;
   DISALLOW_COPY_AND_ASSIGN(ObPxTaskProcess);
 };
 }

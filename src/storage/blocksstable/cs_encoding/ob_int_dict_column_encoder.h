@@ -32,7 +32,7 @@ public:
   virtual ~ObIntDictColumnEncoder() {}
 
   int init(
-    const ObColumnCSEncodingCtx &ctx, const int64_t column_index, const int64_t row_count) override;
+    const ObColumnCSEncodingCtx &ctx, const int64_t column_index, const ObObjMeta col_type, const int64_t row_count) override;
   void reuse() override;
   int store_column(ObMicroBufferWriter &buf_writer) override;
   int store_column_meta(ObMicroBufferWriter &buf_writer) override;

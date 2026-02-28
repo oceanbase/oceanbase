@@ -13,12 +13,12 @@
 
 #include "ob_hive_metastore.h"
 #include "ob_hms_catalog.h"
-#include "ob_hms_client_pool.h"
 #include "share/catalog/ob_catalog_location_schema_provider.h"
 #include "sql/table_format/hive/ob_hive_table_metadata.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "ob_hive_catalog_stat_helper.h"
 #include "ob_iceberg_catalog_stat_helper.h"
+#include "share/catalog/rest/client/ob_catalog_client_pool.h"
 
 namespace oceanbase
 {
@@ -36,26 +36,25 @@ ObHMSCatalog::~ObHMSCatalog()
 int ObHMSCatalog::do_init(const common::ObString &properties)
 {
   int ret = OB_SUCCESS;
-  ObHMSCatalogProperties hms_properties_;
+  ObHMSCatalogProperties hms_properties;
   if (OB_FAIL(ob_write_string(allocator_, properties, properties_, true /*c_style*/))) {
     LOG_WARN("failed to write properties", K(ret), K(properties));
-  } else if (OB_FAIL(hms_properties_.load_from_string(properties_, allocator_))) {
+  } else if (OB_FAIL(hms_properties.load_from_string(properties_, allocator_))) {
     LOG_WARN("fail to init hive properties", K(ret), K_(properties));
-  } else if (OB_FAIL(hms_properties_.decrypt(allocator_))) {
+  } else if (OB_FAIL(hms_properties.decrypt(allocator_))) {
     LOG_WARN("failed to decrypt", K(ret));
-  } else if (OB_FAIL(ob_write_string(allocator_, hms_properties_.uri_, uri_, true /*c_style*/))) {
-    LOG_WARN("failed to write metastore uri", K(ret), K(hms_properties_.uri_));
+  } else if (OB_FAIL(ob_write_string(allocator_, hms_properties.uri_, uri_, true /*c_style*/))) {
+    LOG_WARN("failed to write metastore uri", K(ret), K(hms_properties.uri_));
   }
   LOG_TRACE(" ObHMSCatalog do_init end", K(ret), K_(properties));
 
   if (OB_FAIL(ret)) {
   } else {
-    ObHMSClientPoolMgr *hms_client_pool_mgr = MTL(ObHMSClientPoolMgr *);
-    if (OB_ISNULL(hms_client_pool_mgr)) {
+    ObCatalogClientPoolMgr<ObHiveMetastoreClient> *client_pool_mgr = MTL(ObCatalogClientPoolMgr<ObHiveMetastoreClient> *);
+    if (OB_ISNULL(client_pool_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("hms client pool mgr is null", K(ret));
-    } else if (OB_FAIL(hms_client_pool_mgr
-                           ->get_client(MTL_ID(), catalog_id_, uri_, properties_, client_))) {
+    } else if (OB_FAIL(client_pool_mgr->get_client(MTL_ID(), catalog_id_, properties_, client_))) {
       LOG_WARN("failed to get client from pool", K(ret), K_(catalog_id), K_(uri));
     }
   }
@@ -111,21 +110,12 @@ int ObHMSCatalog::fetch_namespace_schema(const uint64_t database_id,
   return ret;
 }
 
-int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
-                                            const uint64_t database_id,
-                                            const uint64_t table_id,
-                                            const common::ObString &ns_name,
-                                            const common::ObString &tbl_name,
-                                            const ObNameCaseMode case_mode,
-                                            ObILakeTableMetadata *&table_metadata)
+int ObHMSCatalog::fetch_latest_table(const common::ObString &ns_name,
+                                     const common::ObString &tbl_name,
+                                     const ObNameCaseMode case_mode,
+                                     ApacheHive::Table &original_table)
 {
   int ret = OB_SUCCESS;
-  ObLakeTableFormat table_format = ObLakeTableFormat::INVALID;
-  ObArenaAllocator tmp_allocator;
-  // hive 表返回表的 location, iceberg 表返回 metadata 的 location
-  ObString table_location;
-  ObString storage_access_info;
-  Apache::Hadoop::Hive::Table original_table;
 
   if (OB_ISNULL(client_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -146,8 +136,29 @@ int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
       }
     }
   }
+  return ret;
+}
 
-  if (OB_FAIL(ret)) {
+int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
+                                            const uint64_t database_id,
+                                            const uint64_t table_id,
+                                            const common::ObString &ns_name,
+                                            const common::ObString &tbl_name,
+                                            const ObNameCaseMode case_mode,
+                                            ObILakeTableMetadata *&table_metadata)
+{
+  int ret = OB_SUCCESS;
+  ObLakeTableFormat table_format = ObLakeTableFormat::INVALID;
+  ObArenaAllocator tmp_allocator;
+  // hive 表返回表的 location, iceberg 表返回 metadata 的 location
+  ObString table_location;
+  ObString storage_access_info;
+  uint64_t location_object_id = OB_INVALID_ID;
+  ObString location_object_sub_path;
+  Apache::Hadoop::Hive::Table original_table;
+
+  if (OB_FAIL(fetch_latest_table(ns_name, tbl_name, case_mode, original_table))) {
+    LOG_WARN("failed to fetch latest table", K(ret), K(ns_name), K(tbl_name));
   } else if (OB_FAIL(deduce_lake_table_format(tmp_allocator,
                                               original_table,
                                               table_format,
@@ -160,15 +171,15 @@ int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
     if (OB_FAIL(location_schema_provider_->get_access_info_by_path(allocator_,
                                                                    tenant_id_,
                                                                    table_location,
-                                                                   storage_access_info))) {
+                                                                   storage_access_info,
+                                                                   location_object_id,
+                                                                   location_object_sub_path))) {
       LOG_WARN("failed to get storage access info", K(ret));
     }
   }
 
   if (OB_FAIL(ret)) {
   } else if (ObLakeTableFormat::HIVE == table_format) {
-    Strings partition_names;
-    PartitionValuesRows part_values_rows;
     hive::ObHiveTableMetadata *hive_table_metadata = NULL;
     if (OB_ISNULL(hive_table_metadata
                   = OB_NEWx(hive::ObHiveTableMetadata, &allocator, allocator))) {
@@ -188,7 +199,8 @@ int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
                                                              original_table,
                                                              properties_,
                                                              uri_,
-                                                             storage_access_info))) {
+                                                             location_object_id,
+                                                             location_object_sub_path))) {
       LOG_WARN("failed to setup table schema in hive table metadata", K(ret));
     } else {
       table_metadata = hive_table_metadata;
@@ -207,8 +219,12 @@ int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
                                                     tbl_name,
                                                     case_mode))) {
       LOG_WARN("failed to init iceberg table metadata", K(ret));
-    } else if (OB_FAIL(iceberg_table_metadata->set_access_info(storage_access_info))) {
+    } else if (OB_FAIL(iceberg_table_metadata->set_access_info(storage_access_info))) {                    // used for read iceberg metadata.json
       LOG_WARN("failed to set access info", K(ret));
+    } else if (OB_FALSE_IT(iceberg_table_metadata->set_location_object_id(location_object_id))) {          // used for set ObTableSchema
+      LOG_WARN("failed to set location id", K(ret));
+    } else if (OB_FAIL(iceberg_table_metadata->set_location_object_sub_path(location_object_sub_path))) {  // used for set ObTableSchema
+      LOG_WARN("failed to set sub path", K(ret));
     } else if (OB_FAIL(iceberg_table_metadata->load_by_metadata_location(table_location))) {
       LOG_WARN("failed to load iceberg metadata.json", K(ret));
     } else {
@@ -392,7 +408,20 @@ int ObHMSCatalog::fetch_iceberg_table_statistics(
   return ret;
 }
 
-
+int ObHMSCatalog::alter_table_with_lock(const ObString &db_name,
+                                        const ObString &tbl_name,
+                                        const ObNameCaseMode case_mode,
+                                        const ApacheHive::Table &new_table)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(client_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("hive metastore client is null", K(ret));
+  } else if (OB_FAIL(client_->alter_table_with_lock(db_name, tbl_name, new_table, case_mode))) {
+    LOG_WARN("failed to alter table", K(ret));
+  }
+  return ret;
+}
 
 
 } // namespace share

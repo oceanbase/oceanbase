@@ -324,8 +324,8 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
         LOG_WARN("failed to add flag IS_ASSIGN_EXPR", K(ret));
       }
     } else if (T_OP_IS == expr.get_expr_type()) {
-      if (OB_FAIL(expr.add_flag(IS_IS_EXPR))) {
-        LOG_WARN("failed to add flag IS_IS_EXPR", K(ret));
+      if (OB_FAIL(expr.add_flag(CNT_IS_EXPR))) {
+        LOG_WARN("failed to add flag CNT_IS_EXPR", K(ret));
       }
     }
   } else if (3 == expr.get_param_count()) {
@@ -614,7 +614,8 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
           || T_FUN_SYS_LOCALTIMESTAMP == expr.get_expr_type()
           || (T_FUN_SYS_SYSDATE == expr.get_expr_type() && lib::is_oracle_mode())
           || T_FUN_SYS_SYSTIMESTAMP == expr.get_expr_type()
-          || (T_FUN_SYS_UNIX_TIMESTAMP == expr.get_expr_type()
+          || ((T_FUN_SYS_UNIX_TIMESTAMP == expr.get_expr_type()
+               || T_FUN_SYS_TO_UNIX_TIMESTAMP == expr.get_expr_type())
               && 0 == expr.get_param_exprs().count())) { // check if has argument
         if (OB_FAIL(expr.add_flag(IS_CUR_TIME))) { //需要在plan执行前取系统当前时间
           LOG_WARN("failed to add flag IS_CUR_TIME", K(ret));
@@ -629,6 +630,13 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         }
       } else {}
     }
+    if (OB_SUCC(ret) &&
+      (expr.get_expr_type() == T_FUN_PL_COLLECTION_CONSTRUCT ||
+       expr.get_expr_type() == T_FUN_PL_OBJECT_CONSTRUCT)) {
+    if (OB_FAIL(expr.add_flag(CNT_PL_UDT_CONSTRUCT))) {
+      LOG_WARN("failed to add flag IS_OR", K(ret));
+    }
+  }
   }
   if (OB_SUCC(ret) && OB_FAIL(pull_info(expr))) {
     LOG_WARN("fail to add pull info", K(ret));
@@ -654,17 +662,17 @@ int ObRawExprInfoExtractor::visit(ObAliasRefRawExpr &expr)
     LOG_WARN("fail to clear info", K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_ALIAS))) {
     LOG_WARN("failed to add flag", K(ret));
-  } else if (OB_ISNULL(expr.get_ref_expr())) {
+  } else if (OB_ISNULL(expr.get_query_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref expr is null");
   } else if (expr.is_ref_query_output()) {
     if (OB_FAIL(expr.add_flag(CNT_SUB_QUERY))) {
       LOG_WARN("failed to add expr flag", K(ret));
     }
-  } else if (OB_FAIL(expr.add_child_flags(expr.get_ref_expr()->get_expr_info()))) {
+  } else if (OB_FAIL(expr.add_child_flags(expr.get_query_ref_expr()->get_expr_info()))) {
     LOG_WARN("add child flags to expr failed", K(ret));
   } else {
-    expr.set_is_deterministic(expr.get_ref_expr()->is_deterministic());
+    expr.set_is_deterministic(expr.get_query_ref_expr()->is_deterministic());
   }
   return ret;
 }

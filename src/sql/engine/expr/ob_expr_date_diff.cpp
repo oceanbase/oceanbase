@@ -165,7 +165,6 @@ int ObExprMonthsBetween::eval_months_between(const ObExpr &expr,
     continue;                                                               \
   } else if (left_arg_vec->is_null(idx) || right_arg_vec->is_null(idx)) {   \
     res_vec->set_null(idx);                                                 \
-    eval_flags.set(idx);                                                    \
     continue;                                                               \
   }                                                                         \
 }
@@ -212,7 +211,6 @@ int vector_date_diff(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip
       int64_t datediff = left_date - right_date;
       res_vec->set_int(idx, datediff);
     }
-    eval_flags.set(idx);
   });
   return ret;
 }

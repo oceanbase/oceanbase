@@ -126,6 +126,8 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
                    index_table_schema->get_data_table_id(), data_table_schema))) {
           LOG_WARN("fail to get data table schema", K(ret), K(index_name));
         } else {
+          obrpc::ObDropIndexArg &drop_index_arg = drop_index_stmt->get_drop_index_arg();
+          drop_index_arg.is_oracle_tmp_table_v2_index_table_ = index_table_schema->is_oracle_tmp_table_v2_index_table();
           ObString table_name; // related issue :
           if (OB_FAIL(deep_copy_str(data_table_schema->get_table_name_str(), table_name))) {
             LOG_WARN("failed to deep copy new_db_name", K(ret));
@@ -234,6 +236,23 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
           }
         }
         // 外键列对删除索引的影响至此检查结束
+        if (OB_SUCC(ret)) {
+          ObString kv_attributes = table_schema->get_kv_attributes();
+          uint64_t tenant_id = session_info_->get_effective_tenant_id();
+          if (!kv_attributes.empty()) {
+            ObKVAttr kv_attr;
+            if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tenant_id, kv_attributes, kv_attr))) {
+              LOG_WARN("failed to parse kv attributes", K(ret));
+            } else if (!ObTTLUtil::is_default_scan_index(kv_attr.ttl_scan_index_) &&
+                       ObTTLUtil::is_index_name_match(tenant_id,
+                                                      table_schema->get_name_case_mode(),
+                                                      kv_attr.ttl_scan_index_, index_name)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("drop index when kv_atrributes has specified it is not supported", K(ret), K(index_name), K(kv_attr));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop index when kv_atrributes has specified it");
+            }
+          }
+        }
         if (OB_SUCC(ret)) {
           drop_index_stmt->set_index_name(index_name);
           obrpc::ObDropIndexArg &drop_index_arg = drop_index_stmt->get_drop_index_arg();

@@ -15,7 +15,7 @@
 namespace oceanbase {
 namespace storage {
 
-class TestIncMajorGet : public TestScanBasic
+class TestIncMajorGet : public TestScanBasic, public ::testing::WithParamInterface<bool>
 {
 public:
   TestIncMajorGet();
@@ -40,14 +40,18 @@ void TestIncMajorGet::TearDownTestCase()
 TestIncMajorGet::TestIncMajorGet()
     : TestScanBasic("test_inc_major_delete_insert_scan") {}
 
-void TestIncMajorGet::SetUp() { TestScanBasic::SetUp(); }
+void TestIncMajorGet::SetUp() {
+  const bool use_cs_encoding = GetParam();
+  row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
+  TestScanBasic::SetUp();
+}
 
 void TestIncMajorGet::TearDown()
 {
   TestScanBasic::TearDown();
 }
 
-TEST_F(TestIncMajorGet, test_crossed_version_minor_get)
+TEST_P(TestIncMajorGet, test_crossed_version_minor_get)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -155,7 +159,7 @@ TEST_F(TestIncMajorGet, test_crossed_version_minor_get)
   single_merge.reset();
 }
 
-TEST_F(TestIncMajorGet, test_crossed_version_minor_get_not_filter)
+TEST_P(TestIncMajorGet, test_crossed_version_minor_get_not_filter)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -256,7 +260,7 @@ TEST_F(TestIncMajorGet, test_crossed_version_minor_get_not_filter)
   single_merge.reset();
 }
 
-TEST_F(TestIncMajorGet, test_old_version_mini_single_merge)
+TEST_P(TestIncMajorGet, test_old_version_mini_single_merge)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -343,6 +347,11 @@ TEST_F(TestIncMajorGet, test_old_version_mini_single_merge)
   handle3.reset();
   single_merge.reset();
 }
+
+INSTANTIATE_TEST_CASE_P(
+  FlatAndCSEncoding,
+  TestIncMajorGet,
+  ::testing::Values(false, true));
 
 } // namespace storage
 } // namespace oceanbase

@@ -96,6 +96,11 @@ public:
   static bool has_invalid_sys_var_id();
 };
 
+// Auto-generated ESSENTIAL_SYS_VARS array for inner session initialization
+// These variables are frequently used in session initialization, tenant processing, schema setting and other critical processes
+extern const ObSysVarClassType ESSENTIAL_SYS_VARS[];
+extern const int64_t ESSENTIAL_SYS_VARS_COUNT;
+
 } // end namespace share
 } // end namespace oceanbase
 

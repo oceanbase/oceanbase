@@ -15,6 +15,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
+#include "sql/resolver/ob_sql_array.h"
 #include "sql/ob_sql_context.h"
 namespace oceanbase
 {
@@ -38,7 +39,7 @@ namespace sql
 class ObUpdateStmt : public ObDelUpdStmt
 {
 public:
-  ObUpdateStmt();
+  ObUpdateStmt(ObIAllocator &allocator);
   virtual ~ObUpdateStmt();
   int deep_copy_stmt_struct(ObIAllocator &allocator,
                             ObRawExprCopier &expr_copier,
@@ -78,7 +79,7 @@ public:
       N_QUERY_CTX, query_ctx_);
 
 private:
-  common::ObSEArray<ObUpdateTableInfo*, 2, common::ModulePageAllocator, true> table_info_;
+  ObSqlArray<ObUpdateTableInfo*> table_info_;
 };
 } //namespace sql
 }//namespace oceanbase

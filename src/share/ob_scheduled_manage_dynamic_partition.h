@@ -46,7 +46,10 @@ public:
     const common::ObString &attr_val_str,
     bool &is_scheduled_manage_dynamic_partition_daily_attr,
     share::ObDMLSqlSplicer &dml);
-
+  static int parse_next_date(
+    const sql::ObSQLSessionInfo *session,
+    const common::ObString &next_date_str,
+    int64_t &next_date_ts);
 private:
   static int create_daily_job_(
     const schema::ObSysVariableSchema &sys_variable,
@@ -66,10 +69,6 @@ private:
     const ObString &repeat_interval,
     const ObString &job_action,
     ObMySQLTransaction &trans);
-  static int parse_next_date_(
-    const sql::ObSQLSessionInfo *session,
-    const common::ObString &next_date_str,
-    int64_t &next_date_ts);
   static int get_today_zero_hour_timestamp_(const int32_t offset_sec, int64_t &timestamp);
   static bool is_daily_job_(const common::ObString &job_name);
 };

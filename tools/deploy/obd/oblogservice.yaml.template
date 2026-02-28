@@ -1,6 +1,7 @@
 
 oblogservice:
 {{%% OBLOG_SERVERS %%}}
+  include: obd/oblogservice.include.yaml
   global:
     cluster_id: {{%% OBLOG_SERVERS_ID %%}}
     object_store_url: {{%% OBJECT_STORE_URL %%}}

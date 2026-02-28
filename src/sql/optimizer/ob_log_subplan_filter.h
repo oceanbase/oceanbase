@@ -14,24 +14,31 @@
 #define OCEANBASE_SQL_OB_LOG_SUBPLAN_FILTER_H_
 
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 struct ObBasicCostInfo;
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogSubPlanFilter : public ObLogicalOperator
 {
 public:
   ObLogSubPlanFilter(ObLogPlan &plan)
       : ObLogicalOperator(plan),
         dist_algo_(DIST_INVALID_METHOD),
-        subquery_exprs_(),
-        exec_params_(),
-        onetime_exprs_(),
+        subquery_exprs_(plan.get_allocator()),
+        exec_params_(plan.get_allocator()),
+        onetime_exprs_(plan.get_allocator()),
         init_plan_idxs_(),
         one_time_idxs_(),
         update_set_(false),
+        enable_px_batch_rescans_(plan.get_allocator()),
+        project_ref_exprs_(plan.get_allocator()),
+        above_pushdown_left_params_(plan.get_allocator()),
+        above_pushdown_right_params_(plan.get_allocator()),
         enable_das_group_rescan_(false)
   {}
   ~ObLogSubPlanFilter() {}
@@ -44,6 +51,11 @@ public:
   inline int add_subquery_exprs(const ObIArray<ObQueryRefRawExpr *> &query_exprs)
   {
     return append(subquery_exprs_, query_exprs);
+  }
+
+  inline int add_project_ref_exprs(const ObIArray<ObAliasRefRawExpr *> &project_ref_exprs)
+  {
+    return append(project_ref_exprs_, project_ref_exprs);
   }
 
   inline int add_exec_params(const ObIArray<ObExecParamRawExpr *> &exec_params)
@@ -158,19 +170,20 @@ private:
 
 protected:
   DistAlgo dist_algo_;
-  common::ObSEArray<ObQueryRefRawExpr *, 8, common::ModulePageAllocator, true> subquery_exprs_;
-  common::ObSEArray<ObExecParamRawExpr *, 8, common::ModulePageAllocator, true> exec_params_;
-  common::ObSEArray<ObExecParamRawExpr *, 8, common::ModulePageAllocator, true> onetime_exprs_;
+  ObSqlArray<ObQueryRefRawExpr *> subquery_exprs_;
+  ObSqlArray<ObExecParamRawExpr *> exec_params_;
+  ObSqlArray<ObExecParamRawExpr *> onetime_exprs_;
 
   //InitPlan idxs，InitPlan只算一次，需要存储结果
   common::ObBitSet<> init_plan_idxs_;
   //One-Time idxs，One-Time只算一次，不用存储结果
   common::ObBitSet<> one_time_idxs_;
   bool update_set_;
-  common::ObSEArray<bool , 8, common::ModulePageAllocator, true> enable_px_batch_rescans_;
+  ObSqlArray<bool > enable_px_batch_rescans_;
 
-  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
-  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
+  ObSqlArray<ObAliasRefRawExpr *> project_ref_exprs_;
+  ObSqlArray<ObExecParamRawExpr *> above_pushdown_left_params_;
+  ObSqlArray<ObExecParamRawExpr *> above_pushdown_right_params_;
   bool enable_das_group_rescan_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogSubPlanFilter);

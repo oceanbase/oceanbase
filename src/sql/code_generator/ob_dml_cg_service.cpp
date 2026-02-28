@@ -16,6 +16,7 @@
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/optimizer/ob_log_for_update.h"
+#include "sql/optimizer/ob_log_insert.h"
 #include "sql/optimizer/ob_log_merge.h"
 #include "sql/optimizer/ob_log_update.h"
 #include "sql/optimizer/ob_insert_log_plan.h"
@@ -963,7 +964,7 @@ int ObDmlCgService::generate_constraint_infos(ObLogInsert &op,
 {
   int ret = OB_SUCCESS;
   ObDMLCtDefAllocator<ObRowkeyCstCtdef> cst_ctdef_allocator(cg_.phy_plan_->get_allocator());
-  const ObIArray<ObUniqueConstraintInfo> *log_constraint_infos = op.get_constraint_infos();
+  const ObIArray<ObUniqueConstraintInfo*> *log_constraint_infos = op.get_constraint_infos();
   if (OB_ISNULL(log_constraint_infos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log_constraint_info is null", K(ret));
@@ -974,25 +975,27 @@ int ObDmlCgService::generate_constraint_infos(ObLogInsert &op,
     ObRowkeyCstCtdef *rowkey_cst_ctdef = NULL;
     ObSEArray<ObRawExpr *, 4> constraint_dep_exprs;
     ObSEArray<ObRawExpr *, 8> constraint_raw_exprs;
-    const ObIArray<ObColumnRefRawExpr*> &constraint_columns =
-                                               log_constraint_infos->at(i).constraint_columns_;
-    if (OB_ISNULL(rowkey_cst_ctdef = cst_ctdef_allocator.alloc())) {
+    ObUniqueConstraintInfo *info = log_constraint_infos->at(i);
+    if (OB_ISNULL(info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("info is null", K(ret));
+    } else if (OB_ISNULL(rowkey_cst_ctdef = cst_ctdef_allocator.alloc())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rowkey_cst_ctdef is null", K(ret));
     } else if (OB_FAIL(ob_write_string(cg_.phy_plan_->get_allocator(),
-                                       log_constraint_infos->at(i).constraint_name_,
+                                       info->constraint_name_,
                                        rowkey_cst_ctdef->constraint_name_))) {
       LOG_WARN("fail to write string", K(ret), K(i),
-               "name", log_constraint_infos->at(i).constraint_name_);
-    } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_expr_.init(constraint_columns.count()))) {
-      LOG_WARN("init rowkey failed", K(ret), K(constraint_columns.count()));
-    } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_accuracys_.init(constraint_columns.count()))) {
+               "name", info->constraint_name_);
+    } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_expr_.init(info->constraint_columns_.count()))) {
+      LOG_WARN("init rowkey failed", K(ret), K(info->constraint_columns_.count()));
+    } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_accuracys_.init(info->constraint_columns_.count()))) {
       LOG_WARN("init rowkey accuracy failed", K(ret));
     }
 
-    for (int64_t j = 0; OB_SUCC(ret) && j < constraint_columns.count(); ++j) {
+    for (int64_t j = 0; OB_SUCC(ret) && j < info->constraint_columns_.count(); ++j) {
       ObExpr *expr = NULL;
-      ObColumnRefRawExpr *col_expr = constraint_columns.at(j);
+      ObColumnRefRawExpr *col_expr = info->constraint_columns_.at(j);
       if (OB_ISNULL(col_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("col_expr is null", K(ret));
@@ -1206,10 +1209,15 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
         int64_t pd_level = tenant_config.is_valid() ? tenant_config->_pushdown_storage_level : 0;
         bool pd_blockscan = false;
         bool pd_filter = false;
-        bool enable_skip_index = tenant_config.is_valid() ? tenant_config->_enable_skip_index : false;
+        bool enable_base_skip_index = tenant_config.is_valid() ? tenant_config->_enable_skip_index : false;
+        bool enable_inc_skip_index = tenant_config.is_valid() ? tenant_config->_enable_skip_index : false;
         bool enable_prefetch_limit = tenant_config.is_valid() ? tenant_config->_enable_prefetch_limiting : false;
         bool enable_column_store = true; // in filter was generated only use column store
         bool enable_filter_reordering = tenant_config.is_valid() ? tenant_config->_enable_filter_reordering : false;
+        int tmp_ret = OB_E(EventTable::EN_DISABLE_INC_SKIP_INDEX_SCAN) OB_SUCCESS;
+        if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+          enable_inc_skip_index = false;
+        }
         if (OB_FAIL(op.get_plan()->get_optimizer_context().get_global_hint().opt_params_.
               get_integer_opt_param(ObOptParamHint::PUSHDOWN_STORAGE_LEVEL, pd_level))) {
           LOG_WARN("failed to get pushdown storage level hint", K(ret));
@@ -1217,7 +1225,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
           pd_blockscan = ObPushdownFilterUtils::is_blockscan_pushdown_enabled(pd_level);
           pd_filter = ObPushdownFilterUtils::is_filter_pushdown_enabled(pd_level);
           scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_flags(
-            pd_blockscan, pd_filter, enable_skip_index, enable_column_store, enable_prefetch_limit, enable_filter_reordering);
+              pd_blockscan, pd_filter, enable_base_skip_index, enable_column_store,
+              enable_prefetch_limit, enable_filter_reordering, enable_inc_skip_index);
           scan_ctdef.table_scan_opt_.storage_rowsets_size_ = tenant_config.is_valid() ? tenant_config->storage_rowsets_size : 0;
           if (pd_blockscan && pd_filter) {
             scan_ctdef.has_local_dynamic_filter_ = true;
@@ -2711,7 +2720,7 @@ int ObDmlCgService::generate_related_upd_ctdef(ObLogDelUpd &op,
                                                           related_ctdef->updated_column_ids_,
                                                           *related_ctdef))) {
       LOG_WARN("fail to check is update uk", K(ret), K(related_tid));
-    } else if (related_ctdef->updated_column_ids_.empty()) {
+    } else if (related_ctdef->updated_column_ids_.empty() && !index_dml_info.is_compaction_scn_ttl_di_table_) {
       //ignore invalid update ctdef
     } else if (OB_FAIL(upd_ctdefs.push_back(related_ctdef))) {
       LOG_WARN("store related ctdef failed", K(ret));
@@ -3729,7 +3738,7 @@ int ObDmlCgService::convert_check_constraint(ObLogDelUpd &log_op,
           log_op.get_type() == log_op_def::LOG_MERGE) {
         // insert all/merge into views not allowed, do nothing
       } else {
-        OZ(cg_.generate_rt_exprs(log_op.get_view_check_exprs(), dml_base_ctdef.view_check_exprs_));
+        OZ(cg_.generate_rt_exprs(index_dml_info.view_ck_exprs_, dml_base_ctdef.view_check_exprs_));
       }
     }
   }
@@ -4903,9 +4912,10 @@ int ObDmlCgService::generate_rowkey_domain_ctdef(
                                                                       *scan_ctdef,
                                                                       nullptr))) {
       LOG_WARN("fail to generate das result output", K(ret));
-    } else if (rowkey_domain_schema->is_hybrid_vec_index_embedded_type() &&
-               OB_FAIL(semantic_index_info.generate(data_schema,
-                                                    rowkey_domain_schema,
+    } else if ((rowkey_domain_schema->is_hybrid_vec_index_embedded_type() ||
+                rowkey_domain_schema->is_vec_ivfpq_rowkey_cid_index() ||
+                rowkey_domain_schema->is_vec_ivfflat_rowkey_cid_index()) &&
+               OB_FAIL(semantic_index_info.generate(data_schema, rowkey_domain_schema,
                                                     scan_ctdef->result_output_.count(),
                                                     OB_NOT_NULL(scan_ctdef->trans_info_expr_)))) {
       LOG_WARN("fail to generate semantic index info", K(ret));

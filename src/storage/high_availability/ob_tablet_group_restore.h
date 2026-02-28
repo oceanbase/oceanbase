@@ -106,7 +106,6 @@ public:
   ObStorageHATableInfoMgr *ha_table_info_mgr_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
-  ObMacroBlockReuseMgr macro_block_reuse_mgr_;
   ObCopyTabletRecordExtraInfo extra_info_;
   // the size of data that still reside on backup
   int64_t backup_size_;

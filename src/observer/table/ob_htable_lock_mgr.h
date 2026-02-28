@@ -151,7 +151,7 @@ class ObHTableLockMgr
 {
 public:
   typedef common::ObLinearHashMap<ObHTableLockKey *, ObHTableLock *, UniqueMemMgrTag> ObHTableLockMap;
-  ObHTableLockMgr() : is_inited_(false), spin_lock_(), lock_map_(), allocator_(MTL_ID()) {}
+  ObHTableLockMgr() : is_inited_(false), spin_lock_(common::ObLatchIds::OB_HTABLE_LOCK_MGR_SPIN_LOCK), lock_map_(), allocator_(MTL_ID()) {}
   ~ObHTableLockMgr() {}
   /**
    * acquire_handle - acquire htable lock handle

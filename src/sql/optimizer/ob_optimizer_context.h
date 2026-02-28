@@ -81,11 +81,11 @@ typedef common::ObArray<common::ObString, common::ObIAllocator &> ObPlanNotes;
 //and related_table_id is the local index table_id that needs to be maintained synchronously
 struct TableLocRelInfo
 {
-  TableLocRelInfo()
+  TableLocRelInfo(common::ObIAllocator &allocator)
     : table_loc_id_(common::OB_INVALID_ID),
       ref_table_id_(common::OB_INVALID_ID),
-      related_ids_(),
-      table_part_infos_()
+      related_ids_(allocator),
+      table_part_infos_(allocator)
   { }
   int assign(const TableLocRelInfo &other)
   {
@@ -103,8 +103,8 @@ struct TableLocRelInfo
                K_(related_ids));
   common::ObTableID table_loc_id_;
   common::ObTableID ref_table_id_; //the data table object id
-  common::ObArray<common::ObTableID, common::ModulePageAllocator, true> related_ids_;
-  common::ObArray<ObTablePartitionInfo*, common::ModulePageAllocator, true> table_part_infos_;
+  ObSqlArray<common::ObTableID> related_ids_;
+  ObSqlArray<ObTablePartitionInfo*> table_part_infos_;
 };
 
 struct AutoDOPParams {
@@ -263,9 +263,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     exchange_allocated_(false),
     phy_plan_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
     location_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
-    local_sharding_(ObTableLocationType::OB_TBL_LOCATION_LOCAL),
-    distributed_sharding_(ObTableLocationType::OB_TBL_LOCATION_DISTRIBUTED),
-    match_all_sharding_(ObTableLocationType::OB_TBL_LOCATION_ALL),
+    local_sharding_(ObTableLocationType::OB_TBL_LOCATION_LOCAL, allocator),
+    distributed_sharding_(ObTableLocationType::OB_TBL_LOCATION_DISTRIBUTED, allocator),
+    match_all_sharding_(ObTableLocationType::OB_TBL_LOCATION_ALL, allocator),
     is_packed_(false),
     is_ps_protocol_(is_ps_protocol),
     expected_worker_count_(0),
@@ -296,7 +296,6 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     is_skip_scan_enabled_(false),
     enable_better_inlist_costing_(false),
     correlation_type_(ObEstCorrelationType::MAX),
-    use_column_store_replica_(false),
     push_join_pred_into_view_enabled_(true),
     table_access_policy_(ObTableAccessPolicy::AUTO),
     enable_new_query_range_(false),
@@ -307,6 +306,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     px_node_selection_mode_(ObPxNodeSelectionMode::DEFAULT),
     enable_distributed_das_scan_(true),
     enable_topn_runtime_filter_(true),
+    rtf_creator_max_row_count_(-1),
+    rtf_user_min_partition_count_(-1),
     enable_partial_group_by_pushdown_(true),
     enable_partial_limit_pushdown_(true),
     enable_storage_aggr_push_down_(false),
@@ -318,7 +319,13 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     rowsets_enabled_(false),
     extend_sql_plan_monitor_metrics_(false),
     enable_delete_insert_scan_(false),
-    min_cluster_version_(GET_MIN_CLUSTER_VERSION())
+    is_weak_read_(false),
+    min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
+    next_op_id_(0),
+    enable_hash_groupby_limit_pushdown_(true),
+    join_order_enum_threshold_(10),
+    max_permutation_(2000),
+    idp_reduction_threshold_(5000)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -328,6 +335,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     expected_worker_map_.destroy();
     minimal_worker_map_.destroy();
     log_plan_factory_.destroy();
+    fd_item_factory_.destory();
   }
   inline const ObSQLSessionInfo *get_session_info() const { return session_info_; }
   inline ObSQLSessionInfo *get_session_info() { return session_info_; }
@@ -568,7 +576,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   void set_use_default_stat() { force_default_stat_ = true; }
   void set_cost_evaluation() { eval_plan_cost_ = true; }
   bool is_cost_evaluation() { return eval_plan_cost_; }
-  bool enable_runtime_filter() {
+  bool enable_runtime_filter() const {
     if (0 > runtime_filter_type_) {
       get_runtime_filter_type();
     }
@@ -592,15 +600,12 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     }
     return 0 != (runtime_filter_type_ & (1 << RuntimeFilterType::IN));
   }
-  void get_runtime_filter_type() {
-    runtime_filter_type_ = session_info_->get_runtime_filter_type();
-    if (OB_ISNULL(query_ctx_)) {
-      // do nothing
-    } else {
-      query_ctx_->get_global_hint().opt_params_.get_opt_param_runtime_filter_type(runtime_filter_type_);
-    }
+  inline void set_runtime_filter_type(int64_t runtime_filter_type) {
+    runtime_filter_type_ = runtime_filter_type;
   }
-
+  inline int64_t get_runtime_filter_type() const {
+    return runtime_filter_type_;
+  }
   int64_t get_batch_size() const { return batch_size_; }
   void set_batch_size(const int64_t v) { batch_size_ = v; }
   inline ObDMLStmt* get_root_stmt() { return root_stmt_; }
@@ -728,14 +733,15 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline uint64_t get_aggregation_optimization_settings() const
   { return aggregation_optimization_settings_; }
   inline bool force_push_down() const { return FORCE_GPD & aggregation_optimization_settings_; }
-  common::ObIArray<TableLocRelInfo> &get_loc_rel_infos() { return loc_rel_infos_; }
+  common::ObIArray<TableLocRelInfo*> &get_loc_rel_infos() { return loc_rel_infos_; }
   TableLocRelInfo *get_loc_rel_info_by_id(uint64_t table_loc_id, uint64_t ref_table_id)
   {
     TableLocRelInfo *rel_info = nullptr;
     for (int64_t i = 0; OB_ISNULL(rel_info) && i < loc_rel_infos_.count(); ++i) {
-      if (loc_rel_infos_.at(i).table_loc_id_ == table_loc_id
-          && loc_rel_infos_.at(i).ref_table_id_ == ref_table_id) {
-        rel_info = &(loc_rel_infos_.at(i));
+      if (NULL != loc_rel_infos_.at(i)
+          && loc_rel_infos_.at(i)->table_loc_id_ == table_loc_id
+          && loc_rel_infos_.at(i)->ref_table_id_ == ref_table_id) {
+        rel_info = loc_rel_infos_.at(i);
       }
     }
     return rel_info;
@@ -787,8 +793,6 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_is_skip_scan_enabled(bool v) { is_skip_scan_enabled_ = v; }
   inline bool get_enable_better_inlist_costing() const { return enable_better_inlist_costing_; }
   inline void set_enable_better_inlist_costing(bool v) { enable_better_inlist_costing_ = v; }
-  inline bool use_column_store_replica() const { return use_column_store_replica_; }
-  inline void set_use_column_store_replica(bool use) { use_column_store_replica_ = use; }
 
   inline void set_correlation_type(ObEstCorrelationType type) { correlation_type_ = type; }
   inline ObEstCorrelationType get_correlation_type() const { return correlation_type_; }
@@ -811,6 +815,10 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_enable_distributed_das_scan(bool enabled) { enable_distributed_das_scan_ = enabled; }
   inline bool enable_topn_runtime_filter() const { return enable_topn_runtime_filter_; }
   inline void set_enable_topn_runtime_filter(bool enabled) { enable_topn_runtime_filter_ = enabled; }
+  inline void set_rtf_creator_max_row_count(int64_t max_row_count) { rtf_creator_max_row_count_ = max_row_count; }
+  inline int64_t get_rtf_creator_max_row_count() { return rtf_creator_max_row_count_; }
+  inline void set_rtf_user_min_partition_count(int64_t min_partition_count) { rtf_user_min_partition_count_ = min_partition_count; }
+  inline int64_t get_rtf_user_min_partition_count() { return rtf_user_min_partition_count_; }
   inline bool enable_partial_group_by_pushdown() const { return enable_partial_group_by_pushdown_; }
   inline void set_enable_partial_group_by_pushdown(bool enabled) { enable_partial_group_by_pushdown_ = enabled; }
   inline bool enable_partial_limit_pushdown() const { return enable_partial_limit_pushdown_; }
@@ -832,14 +840,25 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
   inline bool enable_delete_insert_scan() const { return enable_delete_insert_scan_; }
   inline void set_enable_delete_insert_scan(bool enabled) { enable_delete_insert_scan_ = enabled; }
+  inline int64_t get_next_op_id() { return next_op_id_++; }
+  inline bool enable_hash_groupby_limit_pushdown() const { return enable_hash_groupby_limit_pushdown_; }
+  inline void set_enable_hash_groupby_limit_pushdown(bool enabled) { enable_hash_groupby_limit_pushdown_= enabled; }
+  inline uint64_t get_join_order_enum_threshold() const { return join_order_enum_threshold_; }
+  inline void set_join_order_enum_threshold(uint64_t threshold) { join_order_enum_threshold_ = threshold; }
+  inline uint64_t get_max_permutation() const { return max_permutation_; }
+  inline void set_max_permutation(uint64_t max_permutation) { max_permutation_ = max_permutation; }
+  inline uint64_t get_idp_reduction_threshold() const { return idp_reduction_threshold_; }
+  inline void set_idp_reduction_threshold(uint64_t threshold) { idp_reduction_threshold_ = threshold; }
+  inline bool get_is_weak_read() const { return is_weak_read_; }
+  inline void set_is_weak_read(bool is_weak_read) { is_weak_read_ = is_weak_read; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
   ObSqlSchemaGuard *sql_schema_guard_;
   common::ObOptStatManager *opt_stat_manager_;
   common::ObIAllocator &allocator_;
-  common::ObArray<ObTableLocation, common::ModulePageAllocator, true> table_location_list_;
-  common::ObSEArray<ObTablePartitionInfo *, 1, common::ModulePageAllocator, true> table_partition_infos_;
+  common::ObArray<ObTableLocation> table_location_list_;
+  common::ObSEArray<ObTablePartitionInfo *, 1> table_partition_infos_;
   common::ObAddr server_;
   obrpc::ObSrvRpcProxy *srv_proxy_;
   const ParamStore *params_;
@@ -889,8 +908,8 @@ private:
       int64_t enable_startup_filter_ : 1;            // enable batch rescan when startup filter contains exec param
     };
   };
-  common::ObSEArray<ColumnUsageArg, 16, common::ModulePageAllocator, true> column_usage_infos_;
-  common::ObSEArray<ObSqlTempTableInfo*, 1, common::ModulePageAllocator, true> temp_table_infos_;
+  common::ObSEArray<ColumnUsageArg, 16> column_usage_infos_;
+  common::ObSEArray<ObSqlTempTableInfo*, 1> temp_table_infos_;
   bool exchange_allocated_;
   ObPhyPlanType phy_plan_type_;
   ObPhyPlanType location_type_;
@@ -911,8 +930,8 @@ private:
   ObQueryCtx *query_ctx_;
   //to record the related info about data table and local index id,
   //because the locations of data table and local index table are always bound together
-  common::ObSEArray<TableLocRelInfo, 1, common::ModulePageAllocator, true> loc_rel_infos_;
-  common::ObArray<DeducedExprInfo, common::ModulePageAllocator, true> deduced_exprs_info_;
+  common::ObSEArray<TableLocRelInfo*, 1> loc_rel_infos_;
+  common::ObArray<DeducedExprInfo> deduced_exprs_info_;
   union {
     //contain_nested_sql_: whether contain trigger, foreign key, PL UDF
     //or this sql is triggered by these object
@@ -931,7 +950,7 @@ private:
   bool has_var_assign_;
   bool is_var_assign_only_in_root_stmt_;
   //record the dynamic sampling falied table list, avoid repeated dynamic sampling.
-  common::ObSEArray<ObDSFailTabInfo, 1, common::ModulePageAllocator, true> failed_ds_tab_list_;
+  common::ObSEArray<ObDSFailTabInfo, 1> failed_ds_tab_list_;
   bool has_multiple_link_stmt_;
   bool hash_join_enabled_;
   bool optimizer_sortmerge_join_enabled_;
@@ -945,7 +964,6 @@ private:
   bool is_skip_scan_enabled_;
   bool enable_better_inlist_costing_;
   ObEstCorrelationType correlation_type_;
-  bool use_column_store_replica_;
   bool push_join_pred_into_view_enabled_;
   ObTableAccessPolicy table_access_policy_;
   bool enable_new_query_range_;
@@ -956,6 +974,8 @@ private:
   ObPxNodeSelectionMode px_node_selection_mode_;
   bool enable_distributed_das_scan_;
   bool enable_topn_runtime_filter_;
+  int64_t rtf_creator_max_row_count_;
+  int64_t rtf_user_min_partition_count_;
   bool enable_partial_group_by_pushdown_;
   bool enable_partial_limit_pushdown_;
   bool enable_storage_aggr_push_down_;
@@ -967,7 +987,13 @@ private:
   bool rowsets_enabled_;
   bool extend_sql_plan_monitor_metrics_;
   bool enable_delete_insert_scan_;
+  bool is_weak_read_;
   uint64_t min_cluster_version_; // Record the unified cluster version during the optimizer phase
+  int64_t next_op_id_;
+  bool enable_hash_groupby_limit_pushdown_;
+  uint64_t join_order_enum_threshold_;
+  uint64_t max_permutation_;
+  uint64_t idp_reduction_threshold_;
 };
 }
 }

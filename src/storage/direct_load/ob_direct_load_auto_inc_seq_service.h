@@ -41,7 +41,11 @@ private:
                           const int64_t step_size,
                           ObDirectLoadAutoIncSeqData &start_seq);
 private:
-  lib::ObMutex init_node_mutexs_[INIT_NODE_MUTEX_NUM];
+    struct InitNodeMutexWrapper {
+      lib::ObMutex mutex_;
+      InitNodeMutexWrapper() : mutex_(common::ObLatchIds::OB_DIRECT_LOAD_AUTO_INC_SEQ_SERVICE_LOCK) {}
+    };
+    InitNodeMutexWrapper init_node_mutexs_[INIT_NODE_MUTEX_NUM];
 };
 
 } // namespace storage

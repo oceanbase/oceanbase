@@ -10,10 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_tx_data_functor.h"
+#include "storage/tx/ob_tx_data_functor.h"
+#include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/tx/ob_trans_service.h"
 #include "observer/virtual_table/ob_all_virtual_tx_data.h"
 #include "storage/high_availability/ob_tablet_group_restore.h"
+#include "storage/memtable/mvcc/ob_mvcc_row.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {

@@ -16,6 +16,7 @@
 #include "storage/vector_index/ob_vector_index_refresh.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
+#include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 
 namespace oceanbase {
 namespace storage {
@@ -43,6 +44,18 @@ int ObVectorIndexRefresher::init(sql::ObExecContext &ctx,
     LOG_WARN("invalid args", KR(ret), K(ctx), K(refresh_ctx));
   } else {
     ctx_ = &ctx;
+    refresh_ctx_ = &refresh_ctx;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObVectorIndexRefresher::init(ObVectorRefreshIndexCtx &refresh_ctx) {
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObVectorIndexRefresher init twice", KR(ret), KP(this));
+  } else {
     refresh_ctx_ = &refresh_ctx;
     is_inited_ = true;
   }
@@ -170,7 +183,7 @@ int ObVectorIndexRefresher::get_table_row_count(const ObString &db_name,
         LOG_WARN("fail to get count", KR(ret));
       } else {
         EXTRACT_INT_FIELD_MYSQL(*result, "CNT", row_cnt, int64_t);
-        LOG_DEBUG("############# DBMS_VECTOR ############### get table row cnt ",
+        LOG_INFO("############# DBMS_VECTOR ############### get table row cnt ",
                   K(table_name), K(row_cnt));
       }
     }
@@ -312,8 +325,6 @@ int ObVectorIndexRefresher::do_refresh() {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is null", K(ret));
   } else if (OB_FALSE_IT(tenant_id = refresh_ctx_->tenant_id_)) {
-  } else if (OB_FAIL(lock_domain_table_for_refresh())) {
-    LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret));
   } else if (OB_ISNULL(session_info = ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null session info", KR(ret), KPC(ctx_));
@@ -384,6 +395,8 @@ int ObVectorIndexRefresher::do_refresh() {
              K(domain_table_schema->get_table_name_str()));
   } else if (domain_table_row_cnt < refresh_ctx_->refresh_threshold_) {
     // refreshing is not triggered.
+  } else if (OB_FAIL(lock_domain_table_for_refresh())) { // lock table 3
+    LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret));
   } else if (OB_FAIL(
                timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
     LOG_WARN("set trx timeout failed", K(ret));
@@ -393,26 +406,11 @@ int ObVectorIndexRefresher::do_refresh() {
     // do refresh
     if (OB_SUCC(ret)) {
       int64_t affected_rows = 0;
+      refresh_ctx_->need_major_merge_ = (domain_table_schema->get_table_mode_flag() != share::schema::TABLE_MODE_QUEUING_EXTREME);
       // 1. insert into index_id_table select ... from delta_buf_table
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         common::sqlclient::ObMySQLResult *result = nullptr;
         ObSqlString insert_sel_sql;
-#ifdef DBMS_VECTOR_MOCK_TEST
-        if (OB_FAIL(insert_sel_sql.append_fmt(
-                "INSERT INTO `%.*s`.`%.*s` SELECT * FROM `%.*s`.`%.*s` WHERE "
-                "ora_rowscn <= %lu",
-                static_cast<int>(db_schema->get_database_name_str().length()),
-                db_schema->get_database_name_str().ptr(),
-                static_cast<int>(
-                    index_id_tb_schema->get_table_name_str().length()),
-                index_id_tb_schema->get_table_name_str().ptr(),
-                static_cast<int>(db_schema->get_database_name_str().length()),
-                db_schema->get_database_name_str().ptr(),
-                static_cast<int>(
-                    domain_table_schema->get_table_name_str().length()),
-                domain_table_schema->get_table_name_str().ptr(),
-                refresh_ctx_->scn_.get_val_for_sql())))
-#else
         if (OB_FAIL(get_vector_index_col_names(domain_table_schema,
                                                     true,
                                                     col_ids,
@@ -443,7 +441,6 @@ int ObVectorIndexRefresher::do_refresh() {
                     domain_table_schema->get_table_name_str().length()),
                 domain_table_schema->get_table_name_str().ptr(),
                 refresh_ctx_->scn_.get_val_for_sql())))
-#endif
         {
           LOG_WARN("fail to assign sql", KR(ret));
         } else if (OB_FAIL(refresh_ctx_->trans_->write(
@@ -472,67 +469,6 @@ int ObVectorIndexRefresher::do_refresh() {
                        tenant_id, delete_sql.ptr(), affected_rows))) {
           LOG_WARN("fail to execute insert into select sql", KR(ret),
                    K(tenant_id), K(delete_sql));
-        }
-      }
-    }
-
-    // freeze major tablet
-    ObArray<uint64_t> tablet_ids;
-    if (OB_SUCC(ret)) {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        common::sqlclient::ObMySQLResult *result = nullptr;
-        ObSqlString select_sql;
-        if (OB_FAIL(select_sql.append_fmt(
-                "select tablet_id from oceanbase.DBA_OB_TABLE_LOCATIONS where table_id = %lu",
-                domain_table_schema->get_table_id()))) {
-          LOG_WARN("fail to assign sql", KR(ret));
-        } else if (OB_FAIL(refresh_ctx_->trans_->read(
-                       res, domain_table_schema->get_tenant_id(), select_sql.ptr()))) {
-          LOG_WARN("fail to execute select sql", KR(ret),
-                   K(tenant_id), K(delete_sql));
-        } else if (OB_ISNULL(result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("result is NULL", K(ret));
-        } else {
-          while (OB_SUCC(ret)) {
-            uint64_t tablet_id = 0;
-            if (OB_FAIL(result->next())) {
-              if (OB_ITER_END != ret) {
-                LOG_WARN("next failed", K(ret));
-              }
-            } else {
-              EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", tablet_id, uint64_t);
-              if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
-                LOG_WARN("failed to store tablet id", K(ret));
-              }
-            }
-          }
-
-          if (OB_ITER_END == ret) {
-            ret = OB_SUCCESS;
-          }
-        }
-      }
-    }
-
-    if (OB_SUCC(ret) && tablet_ids.count() > 0) {
-      FLOG_INFO("get freeze tablet id", K(tablet_ids));
-      for (int i = 0 ; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-        int64_t affected_rows = 0;
-        uint64_t tablet_id = tablet_ids.at(i);
-        SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-          common::sqlclient::ObMySQLResult *result = nullptr;
-          ObSqlString freeze_sql;
-          if (OB_FAIL(freeze_sql.append_fmt(
-                "alter system major freeze tablet_id = %lu", tablet_id))) {
-            LOG_WARN("fail to assign sql", KR(ret));
-          } else if (OB_FAIL(refresh_ctx_->trans_->write(tenant_id, freeze_sql.ptr(), affected_rows))) {
-            ret = OB_SUCCESS;
-            LOG_WARN("fail to execute major freeze sql, continue other tablet id", K(tablet_id),
-                      K(tenant_id), K(freeze_sql));
-          } else {
-            LOG_INFO("execute major freeze success", K(tablet_id), K(affected_rows));
-          }
         }
       }
     }
@@ -565,6 +501,7 @@ int ObVectorIndexRefresher::do_rebuild() {
   bool is_hybrid_vector = false;
   bool need_embedding_when_rebuild = false;
   // refresh_ctx_->delta_rate_threshold_ = 0; // yjl, for test
+  dbms_scheduler::ObDBMSSchedJobInfo job_info;
   if (OB_ISNULL(refresh_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("refresh_ctx is null", K(ret));
@@ -575,8 +512,6 @@ int ObVectorIndexRefresher::do_rebuild() {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is null", K(ret));
   } else if (OB_FALSE_IT(tenant_id = refresh_ctx_->tenant_id_)) {
-  } else if (OB_FAIL(lock_domain_table_for_refresh())) {
-    LOG_WARN("fail to lock domain for refresh", KR(ret));
   } else if (OB_ISNULL(session_info = ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null session info", KR(ret), KPC(ctx_));
@@ -650,6 +585,25 @@ int ObVectorIndexRefresher::do_rebuild() {
       LOG_WARN("fail to construct rebuild index params", K(ret), K(refresh_ctx_->idx_parameters_));
     }
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (domain_table_schema->is_vec_delta_buffer_type() &&          // only hnsw index here, because ivf not support refresh
+             OB_FAIL(ObVectorIndexUtil::get_dbms_vector_job_info(*GCTX.sql_proxy_, tenant_id,
+                                                                 domain_table_schema->get_table_id(),
+                                                                 refresh_ctx_->allocator_,
+                                                                 schema_guard,
+                                                                 job_info))) {
+    LOG_WARN("fail to get dbms_vector job info", K(ret), K(tenant_id), K(domain_table_schema->get_table_id()));
+  } else {
+    if (OB_FAIL(ob_write_string(refresh_ctx_->allocator_, domain_table_schema->get_table_name_str(), refresh_ctx_->domain_index_name_))) {
+      LOG_WARN("fail to write string", K(ret), K(domain_table_schema->get_table_name_str()));
+    } else {
+      refresh_ctx_->tmp_repeat_interval_ = job_info.get_repeat_interval();
+      refresh_ctx_->database_id_ = domain_table_schema->get_database_id();
+      LOG_WARN("get last repeat interval and database_id", K(ret), K(*refresh_ctx_));
+    }
+  }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,
                                                       domain_table_schema->get_database_id(),
@@ -684,13 +638,12 @@ int ObVectorIndexRefresher::do_rebuild() {
                                          refresh_ctx_->scn_,
                                          index_id_table_row_cnt))) {
     LOG_WARN("fail to get index_id_table row count", KR(ret), K(index_id_tb_schema->get_table_name_str()));
-  } else if (0 != base_table_row_cnt &&
-             (index_id_table_row_cnt + domain_table_row_cnt) * 1.0 /
-                     base_table_row_cnt <
-                 refresh_ctx_->delta_rate_threshold_) {
+  } else if (0 != base_table_row_cnt && (index_id_table_row_cnt + domain_table_row_cnt) * 1.0 / base_table_row_cnt < refresh_ctx_->delta_rate_threshold_) {
     // rebuilding is not triggered.
     triggered = false;
-    LOG_WARN("no need to start rebuild", K(base_table_row_cnt));
+    LOG_WARN("no need to start rebuild", K(base_table_row_cnt), K(index_id_table_row_cnt), K(domain_table_row_cnt), K(refresh_ctx_->delta_rate_threshold_));
+  } else if (OB_FAIL(lock_domain_table_for_refresh())) { // lock table 3
+    LOG_WARN("fail to lock domain for rebuild", KR(ret));
   }
 
   if (OB_FAIL(ret)) {
@@ -775,6 +728,458 @@ int ObVectorIndexRefresher::do_rebuild() {
       }
     }
   }
+  return ret;
+}
+
+static void release_inner_session(sql::ObFreeSessionCtx &free_session_ctx, sql::ObSQLSessionInfo *&session)
+{
+  if (nullptr != session) {
+    LOG_INFO("[VECTOR INDEX]: Release inner session", KP(session));
+    session->get_ddl_info().set_major_refreshing_mview(false);
+    session->get_ddl_info().set_refreshing_mview(false);
+    session->set_session_sleep();
+    GCTX.session_mgr_->revert_session(session);
+    GCTX.session_mgr_->free_session(free_session_ctx);
+    GCTX.session_mgr_->mark_sessid_unused(free_session_ctx.sessid_);
+    session = nullptr;
+  }
+}
+
+static int create_inner_session(
+    const uint64_t tenant_id,
+    const bool is_oracle_mode,
+    sql::ObFreeSessionCtx &free_session_ctx,
+    sql::ObSQLSessionInfo *&session)
+{
+  int ret = OB_SUCCESS;
+  session = nullptr;
+  uint32_t sid = sql::ObSQLSessionInfo::INVALID_SESSID;
+  uint64_t proxy_sid = 0;
+  const schema::ObTenantSchema *tenant_info = nullptr;
+  const ObDatabaseSchema *database_schema = nullptr;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_FAIL(GCTX.session_mgr_->create_sessid(sid))) {
+    LOG_WARN("Failed to create sess id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(GCTX.session_mgr_->create_session(
+             tenant_id, sid, proxy_sid, ObTimeUtility::current_time(), session))) {
+    GCTX.session_mgr_->mark_sessid_unused(sid);
+    session = nullptr;
+    LOG_WARN("Failed to create session", K(ret), K(sid), K(tenant_id));
+  } else {
+    free_session_ctx.sessid_ = sid;
+    free_session_ctx.proxy_sessid_ = proxy_sid;
+  }
+  if (FAILEDx(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("Failed to get tenant schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
+    LOG_WARN("Failed to get tenant info", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null tenant schema", K(ret), K(tenant_id));
+  } else if (OB_FAIL(session->load_default_sys_variable(false, false))) {
+    LOG_WARN("Failed to load default sys variable", K(ret), K(tenant_id));
+  } else if (OB_FAIL(session->load_default_configs_in_pc())) {
+    LOG_WARN("Failed to load default configs in pc", K(ret), K(tenant_id));
+  } else if (OB_FAIL(session->init_tenant(tenant_info->get_tenant_name(), tenant_id))) {
+     LOG_WARN("Failed to init tenant in session", K(ret), K(tenant_id));
+  } else if (OB_FAIL(session->set_default_database(OB_SYS_DATABASE_NAME))) {
+    LOG_WARN("Failed to set default database", K(ret), K(tenant_id));
+  } else {
+    session->set_inner_session();
+    session->set_compatibility_mode(is_oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE);
+    session->set_database_id(OB_SYS_DATABASE_ID);
+    session->set_query_start_time(ObTimeUtil::current_time());
+    LOG_INFO("[VECTOR INDEX]: Succ to create inner session", K(ret), K(tenant_id), KP(session));
+  }
+  if (OB_FAIL(ret)) {
+    release_inner_session(free_session_ctx, session);
+  }
+  return ret;
+}
+
+int ObVectorIndexRefresher::tablet_fast_refresh(share::ObPluginVectorIndexAdaptor *adaptor, const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  sql::ObSQLSessionInfo *session = nullptr;
+  sql::ObFreeSessionCtx free_session_ctx;
+  ObVectorRefreshIndexCtx refresh_ctx;
+  refresh_ctx.tenant_id_ = adaptor->get_tenant_id();
+  refresh_ctx.base_tb_id_ = adaptor->get_data_table_id();
+  refresh_ctx.domain_tb_id_ = adaptor->get_inc_table_id();
+  refresh_ctx.index_id_tb_id_ = adaptor->get_vbitmap_table_id();
+  refresh_ctx.refresh_method_ = ObVectorRefreshMethod::REFRESH_DELTA;
+  refresh_ctx.is_tablet_level_ = true;
+  refresh_ctx.domain_tablet_id_ = adaptor->get_inc_tablet_id();
+  refresh_ctx.scn_ = scn;
+  ObVectorIndexRefresher refresher;
+  ObVectorRefreshIdxTransaction trans;
+  if (OB_FAIL(create_inner_session(refresh_ctx.tenant_id_, false, free_session_ctx, session))) {
+    LOG_WARN("create_inner_session fail", K(ret));
+  } else if (OB_FAIL(trans.start(session, GCTX.sql_proxy_))) {
+    LOG_WARN("fail to start trans", KR(ret));
+  } else if (FALSE_IT(refresh_ctx.trans_ = &trans)) {
+  } else if (OB_FAIL(refresher.init(refresh_ctx))) {
+    LOG_WARN("fail to init refresher", KR(ret), K(refresh_ctx));
+  } else if (OB_FAIL(refresher.tablet_fast_refresh())) {
+    LOG_WARN("fail to do refresh", KR(ret), K(refresh_ctx));
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  release_inner_session(free_session_ctx, session);
+  return ret;
+}
+
+int ObVectorIndexRefresher::lock_domain_table_for_tablet_refresh() {
+  int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(refresh_ctx_));
+  CK(OB_NOT_NULL(refresh_ctx_->trans_));
+  if (OB_SUCC(ret)) {
+    const uint64_t tenant_id = refresh_ctx_->tenant_id_;
+    const uint64_t domain_tb_id = refresh_ctx_->domain_tb_id_;
+    int64_t retries = 0;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(ObVectorIndexRefresher::lock_domain_tb(
+              *(refresh_ctx_->trans_), tenant_id, domain_tb_id, true))) {
+        if (OB_UNLIKELY(OB_TRY_LOCK_ROW_CONFLICT != ret)) {
+          LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret),
+            K(tenant_id), K(domain_tb_id));
+        // } else if (my_session_->is_terminate(ret)){
+        //   LOG_WARN("execution was terminated", K(ret));
+        } else if (IS_INTERRUPTED()) {
+          ObInterruptCode &ic = GET_INTERRUPT_CODE();
+          ret = ic.code_;
+          LOG_WARN("px execution was interrupted", K(ic), K(ret));
+        } else if (lib::Worker::WS_OUT_OF_THROTTLE == THIS_WORKER.check_wait()) {
+          ret = OB_KILLED_BY_THROTTLING;
+        } else {
+          ret = OB_SUCCESS;
+          ++retries;
+          if (retries % 10 == 0) {
+            LOG_WARN("retry too many times", K(retries), K(tenant_id),
+                    K(domain_tb_id));
+          }
+          ob_usleep(100LL * 1000);
+        }
+      } else {
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVectorIndexRefresher::tablet_fast_refresh()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = refresh_ctx_->tenant_id_;
+  ObArenaAllocator allocator(common::ObMemAttr(tenant_id, "RefreshVecIdx"));
+  ObSQLSessionInfo *session_info = nullptr;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *domain_table_schema = nullptr;
+  const ObTableSchema *index_id_tb_schema = nullptr;
+  const ObDatabaseSchema *db_schema = nullptr;
+  int64_t domain_table_row_cnt = 0;
+  ObSqlString index_id_tb_col_names;
+  ObSqlString domain_tb_col_names;
+  ObString partition_names;
+  ObArray<uint64_t> col_ids;
+  if (OB_ISNULL(refresh_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("refresh_ctx is null", K(ret));
+  } else if (! refresh_ctx_->is_tablet_level_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not tablet level argument", K(ret));
+  } else if (! refresh_ctx_->domain_tablet_id_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet id is invalid", K(ret), K(refresh_ctx_->domain_tablet_id_));
+  } else if (! refresh_ctx_->scn_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("refresh scn is invalid", K(ret), K(refresh_ctx_->scn_));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
+                 tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  }
+  // get delta_buf_table row count
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                 refresh_ctx_->domain_tb_id_,
+                                                 domain_table_schema))) {
+    LOG_WARN("fail to get delta buf table schema", KR(ret), K(tenant_id),
+             K(refresh_ctx_->domain_tb_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(
+                 tenant_id, refresh_ctx_->index_id_tb_id_,
+                 index_id_tb_schema))) {
+    LOG_WARN("fail to get index id table schema", KR(ret), K(tenant_id),
+             K(refresh_ctx_->index_id_tb_id_));
+  } else if (OB_ISNULL(domain_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST; // table may be removed, handle in scheduler routine
+    LOG_WARN("delta_buf_table not exist", KR(ret), K(tenant_id),
+             K(refresh_ctx_->domain_tb_id_));
+  } else if (OB_ISNULL(index_id_tb_schema)) {
+    ret = OB_TABLE_NOT_EXIST; // table may be removed, handle in scheduler routine
+    LOG_WARN("index_id_table not exist", KR(ret), K(tenant_id),
+             K(refresh_ctx_->index_id_tb_id_));
+  } else if (OB_UNLIKELY(INDEX_STATUS_AVAILABLE != domain_table_schema->get_index_status() ||
+                         INDEX_STATUS_AVAILABLE != index_id_tb_schema->get_index_status())) {
+    if ((INDEX_STATUS_AVAILABLE == domain_table_schema->get_index_status() ||
+         INDEX_STATUS_UNAVAILABLE == domain_table_schema->get_index_status()) &&
+        (INDEX_STATUS_AVAILABLE == index_id_tb_schema->get_index_status() ||
+         INDEX_STATUS_UNAVAILABLE == index_id_tb_schema->get_index_status())) {
+      // Return OB_EAGAIN for dbms_vector.refresh_index_inner to do inner retry.
+      // For dbms_vector.refresh_index, the error code will return to user.
+      ret = OB_EAGAIN;
+      LOG_WARN("delta buffer table or index id table is not available", K(ret), K(domain_table_schema->get_index_status()),
+              K(index_id_tb_schema->get_index_status()));
+    } else {
+      ret = OB_ERR_INDEX_UNAVAILABLE;
+    }
+  } else if (OB_FAIL(schema_guard.get_database_schema(
+                 tenant_id, domain_table_schema->get_database_id(),
+                 db_schema))) {
+    LOG_WARN("fail to get db schema", KR(ret), K(tenant_id),
+             K(domain_table_schema->get_database_id()));
+  } else if (OB_ISNULL(db_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database not exist", KR(ret));
+  } else if (OB_UNLIKELY(db_schema->is_in_recyclebin() ||
+                         domain_table_schema->is_in_recyclebin() ||
+                         index_id_tb_schema->is_in_recyclebin())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("table is in recyclebin", KR(ret), KPC(db_schema), KPC(domain_table_schema), KPC(index_id_tb_schema));
+  } else if (OB_FAIL(get_table_row_count(
+      db_schema->get_database_name_str(),
+      domain_table_schema->get_table_name_str(), refresh_ctx_->scn_,
+      domain_table_row_cnt))) {
+    LOG_WARN("fail to get delta_buf_table row count", KR(ret),
+      K(domain_table_schema->get_table_name_str()));
+  } else if (domain_table_row_cnt <= 0) {
+    LOG_INFO("there is no new row, so no need refresh", K(domain_table_row_cnt), K(tenant_id),
+      K(refresh_ctx_->scn_), K(refresh_ctx_->domain_tb_id_), K(refresh_ctx_->domain_tablet_id_));
+  } else if (domain_table_schema->is_vec_delta_buffer_type()) {
+    if (OB_SUCC(ret)) {
+      int64_t affected_rows = 0;
+      // 1. insert into index_id_table select ... from delta_buf_table
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        common::sqlclient::ObMySQLResult *result = nullptr;
+        ObSqlString insert_sel_sql;
+        if (OB_FAIL(get_vector_index_col_names(domain_table_schema,
+                                                    true,
+                                                    col_ids,
+                                                    domain_tb_col_names))) {
+          LOG_WARN("fail to get vid & type col names", KR(ret),
+                  K(domain_table_schema->get_table_name_str()));
+        } else if (OB_FAIL(get_vector_index_col_names(index_id_tb_schema,
+                                                      false,
+                                                      col_ids,
+                                                      index_id_tb_col_names))) {
+          LOG_WARN("fail to get vid & type col names", KR(ret),
+                  K(index_id_tb_schema->get_table_name_str()));
+        } else if (domain_table_schema->is_partitioned_table() && OB_FAIL(get_partition_name(
+              tenant_id, refresh_ctx_->base_tb_id_, refresh_ctx_->domain_tb_id_, refresh_ctx_->domain_tablet_id_,
+              allocator, partition_names))) {
+          LOG_WARN("get_partition_name fail", K(ret));
+        } else if (domain_table_schema->is_partitioned_table() && OB_FAIL(insert_sel_sql.append_fmt(
+                "INSERT INTO `%.*s`.`%.*s` (%.*s) SELECT ora_rowscn, %.*s FROM "
+                "`%.*s`.`%.*s` %.*s WHERE ora_rowscn <= %lu",
+                static_cast<int>(db_schema->get_database_name_str().length()),
+                db_schema->get_database_name_str().ptr(),
+                static_cast<int>(
+                    index_id_tb_schema->get_table_name_str().length()),
+                index_id_tb_schema->get_table_name_str().ptr(),
+                static_cast<int>(index_id_tb_col_names.length()),
+                index_id_tb_col_names.ptr(),
+                static_cast<int>(domain_tb_col_names.length()),
+                domain_tb_col_names.ptr(),
+                static_cast<int>(db_schema->get_database_name_str().length()),
+                db_schema->get_database_name_str().ptr(),
+                static_cast<int>(
+                    domain_table_schema->get_table_name_str().length()),
+                domain_table_schema->get_table_name_str().ptr(),
+                static_cast<int>(partition_names.length()),
+                partition_names.ptr(),
+                refresh_ctx_->scn_.get_val_for_sql())))
+        {
+          LOG_WARN("fail to assign sql", KR(ret));
+        } else if (! domain_table_schema->is_partitioned_table() && OB_FAIL(insert_sel_sql.append_fmt(
+          "INSERT INTO `%.*s`.`%.*s` (%.*s) SELECT ora_rowscn, %.*s FROM "
+          "`%.*s`.`%.*s` WHERE ora_rowscn <= %lu",
+          static_cast<int>(db_schema->get_database_name_str().length()),
+          db_schema->get_database_name_str().ptr(),
+          static_cast<int>(
+              index_id_tb_schema->get_table_name_str().length()),
+          index_id_tb_schema->get_table_name_str().ptr(),
+          static_cast<int>(index_id_tb_col_names.length()),
+          index_id_tb_col_names.ptr(),
+          static_cast<int>(domain_tb_col_names.length()),
+          domain_tb_col_names.ptr(),
+          static_cast<int>(db_schema->get_database_name_str().length()),
+          db_schema->get_database_name_str().ptr(),
+          static_cast<int>(
+              domain_table_schema->get_table_name_str().length()),
+          domain_table_schema->get_table_name_str().ptr(),
+          refresh_ctx_->scn_.get_val_for_sql())))
+        {
+          LOG_WARN("fail to assign sql", KR(ret));
+        } else if (OB_FAIL(refresh_ctx_->trans_->write(
+                       tenant_id, insert_sel_sql.ptr(), affected_rows))) {
+          LOG_WARN("fail to execute insert into select sql", KR(ret),
+                   K(tenant_id), K(insert_sel_sql));
+        } else {
+          LOG_INFO("execute insert into select sql", K(tenant_id), K(affected_rows), K(domain_table_row_cnt), K(insert_sel_sql));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int64_t affected_rows = 0;
+      // 2. delete from delta_buf_table
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        common::sqlclient::ObMySQLResult *result = nullptr;
+        ObSqlString delete_sql;
+        if (domain_table_schema->is_partitioned_table() && OB_FAIL(delete_sql.append_fmt(
+                "DELETE FROM `%.*s`.`%.*s` %.*s WHERE ora_rowscn <= %lu",
+                static_cast<int>(db_schema->get_database_name_str().length()),
+                db_schema->get_database_name_str().ptr(),
+                static_cast<int>(
+                    domain_table_schema->get_table_name_str().length()),
+                domain_table_schema->get_table_name_str().ptr(),
+                static_cast<int>(partition_names.length()),
+                partition_names.ptr(),
+                refresh_ctx_->scn_.get_val_for_sql()))) {
+          LOG_WARN("fail to assign sql", KR(ret));
+        } else if (! domain_table_schema->is_partitioned_table() && OB_FAIL(delete_sql.append_fmt(
+            "DELETE FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu",
+            static_cast<int>(db_schema->get_database_name_str().length()),
+            db_schema->get_database_name_str().ptr(),
+            static_cast<int>(
+                domain_table_schema->get_table_name_str().length()),
+            domain_table_schema->get_table_name_str().ptr(),
+            refresh_ctx_->scn_.get_val_for_sql()))) {
+          LOG_WARN("fail to assign sql", KR(ret));
+        } else if (OB_FAIL(refresh_ctx_->trans_->write(
+                       tenant_id, delete_sql.ptr(), affected_rows))) {
+          LOG_WARN("fail to execute insert into select sql", KR(ret),
+                   K(tenant_id), K(delete_sql));
+        } else {
+          LOG_INFO("execute delete sql success", K(tenant_id), K(affected_rows), K(domain_table_row_cnt), K(delete_sql));
+        }
+      }
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support tablet level refresh for curruent table type", KPC(domain_table_schema));
+  }
+  return ret;
+}
+
+int ObVectorIndexRefresher::get_partition_name(
+    const uint64_t tenant_id,
+    const int64_t data_table_id, const int64_t index_table_id, const ObTabletID &tablet_id,
+    common::ObIAllocator &allocator, ObString &partition_names)
+{
+  int ret = OB_SUCCESS;
+  const bool is_oracle_mode = false;
+  ObArray<ObTabletID> tablet_ids; // only one item
+  ObArray<ObString> batch_partition_names;
+  if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
+    LOG_WARN("fail to push back tablet id", K(ret), K(tablet_id));
+  } else if (OB_FAIL(ObDDLUtil::get_index_table_batch_partition_names(tenant_id, data_table_id, index_table_id, tablet_ids, allocator, batch_partition_names))) {
+    LOG_WARN("fail to get index table batch partition names", K(ret), K(tenant_id), K(data_table_id), K(index_table_id), K(tablet_ids), K(batch_partition_names));
+  } else if (OB_FAIL(ObDDLUtil::generate_partition_names(batch_partition_names, is_oracle_mode, allocator, partition_names))) {
+    LOG_WARN("fail to generate partition names", K(ret), K(batch_partition_names), K(is_oracle_mode), K(partition_names));
+  } else if (partition_names.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty partition of partition table", K(ret), K(tenant_id), K(tablet_id), K(index_table_id), K(data_table_id));
+  }
+  return ret;
+}
+
+int ObVectorIndexRefresher::trigger_major_freeze(const uint64_t tenant_id, ObIArray<uint64_t> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("get freeze tablet id", K(tablet_ids));
+  sql::ObSQLSessionInfo *session = nullptr;
+  sql::ObFreeSessionCtx free_session_ctx;
+  ObVectorRefreshIdxTransaction trans;
+  if (OB_FAIL(create_inner_session(tenant_id, false, free_session_ctx, session))) {
+    LOG_WARN("create_inner_session fail", K(ret));
+  } else if (OB_FAIL(trans.start(session, GCTX.sql_proxy_))) {
+    LOG_WARN("fail to start trans", KR(ret));
+  }
+  for (int i = 0 ; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+    int64_t affected_rows = 0;
+    uint64_t tablet_id = tablet_ids.at(i);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = nullptr;
+      ObSqlString freeze_sql;
+      if (OB_FAIL(freeze_sql.append_fmt(
+            "alter system major freeze tablet_id = %lu", tablet_id))) {
+        LOG_WARN("fail to assign sql", KR(ret));
+      } else if (OB_FAIL(trans.write(tenant_id, freeze_sql.ptr(), affected_rows))) {
+        ret = OB_SUCCESS;
+        LOG_WARN("fail to execute major freeze sql, continue other tablet id", K(tablet_id),
+                  K(tenant_id), K(freeze_sql));
+      } else {
+        LOG_INFO("execute major freeze success", K(tablet_id), K(affected_rows), K(freeze_sql));
+      }
+    }
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  release_inner_session(free_session_ctx, session);
+  return ret;
+}
+
+int ObVectorIndexRefresher::trigger_minor_freeze(const uint64_t tenant_id, ObIArray<uint64_t> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("get freeze tablet id", K(tablet_ids));
+  sql::ObSQLSessionInfo *session = nullptr;
+  sql::ObFreeSessionCtx free_session_ctx;
+  ObVectorRefreshIdxTransaction trans;
+  if (OB_FAIL(create_inner_session(tenant_id, false, free_session_ctx, session))) {
+    LOG_WARN("create_inner_session fail", K(ret));
+  } else if (OB_FAIL(trans.start(session, GCTX.sql_proxy_))) {
+    LOG_WARN("fail to start trans", KR(ret));
+  }
+  for (int i = 0 ; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+    int64_t affected_rows = 0;
+    uint64_t tablet_id = tablet_ids.at(i);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = nullptr;
+      ObSqlString freeze_sql;
+      if (OB_FAIL(freeze_sql.append_fmt(
+            "alter system minor freeze tablet_id = %lu", tablet_id))) {
+        LOG_WARN("fail to assign sql", KR(ret));
+      } else if (OB_FAIL(trans.write(tenant_id, freeze_sql.ptr(), affected_rows))) {
+        ret = OB_SUCCESS;
+        LOG_WARN("fail to execute minor freeze sql, continue other tablet id", K(tablet_id),
+                  K(tenant_id), K(freeze_sql));
+      } else {
+        LOG_INFO("execute minor freeze success", K(tablet_id), K(affected_rows), K(freeze_sql));
+      }
+    }
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  release_inner_session(free_session_ctx, session);
   return ret;
 }
 

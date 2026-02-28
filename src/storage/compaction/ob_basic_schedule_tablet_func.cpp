@@ -30,6 +30,7 @@ ObBasicScheduleTabletFunc::ObBasicScheduleTabletFunc(
     freeze_param_(),
     ls_could_schedule_new_round_(false),
     ls_could_schedule_merge_(false),
+    is_window_compaction_active_(false),
     loop_cnt_(loop_cnt)
 {
 }
@@ -69,13 +70,14 @@ int ObBasicScheduleTabletFunc::post_process_ls()
 
 void ObBasicScheduleTabletFunc::update_tenant_cached_status()
 {
-  const ObBasicMergeScheduler * scheduler = ObBasicMergeScheduler::get_merge_scheduler();
+  const ObTenantTabletScheduler * scheduler = MTL(ObTenantTabletScheduler *);
   if (OB_NOT_NULL(scheduler)) {
     tenant_status_snapshot_ = scheduler->get_tenant_status();
     ls_could_schedule_merge_ = scheduler->could_major_merge_start() && ls_status_.can_merge();
 
     // can only schedule new round on ls leader
     ls_could_schedule_new_round_ = ls_could_schedule_merge_ && ls_status_.is_leader_;
+    is_window_compaction_active_ = scheduler->need_do_window_compaction();
 
     if (!ls_status_.can_merge() && REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("should not schedule major merge for ls", K_(ls_status),
@@ -130,7 +132,7 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
   const int64_t schedule_scn,
   const ObTabletStatusCache &tablet_status,
   bool &can_merge,
-  const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type)
+  const ObCOMajorMergeStrategy &co_major_merge_strategy)
 {
   const ObLSID &ls_id = ls_status_.ls_id_;
   can_merge = false;
@@ -159,7 +161,7 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
     } else if (need_force_freeze) {
       tablet_cnt_.force_freeze_cnt_++;
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(freeze_param_.tablet_info_array_.push_back(ObTabletSchedulePair(tablet_id, schedule_scn, co_major_merge_type)))) {
+      if (OB_TMP_FAIL(freeze_param_.tablet_info_array_.push_back(ObTabletSchedulePair(tablet_id, schedule_scn, co_major_merge_strategy)))) {
         LOG_WARN("failed to push back tablet_id for batch_freeze", KR(tmp_ret), K(tablet_id));
       }
     }

@@ -33,6 +33,7 @@ public:
   explicit ObPersistentLobApator(const uint64_t tenant_id):
     tenant_id_(tenant_id),
     allocator_(lib::ObMemAttr(tenant_id, "LobPersist", ObCtxIds::LOB_CTX_ID)),
+    lock_(common::ObLatchIds::OB_LOB_PERSISTENT_ADAPTOR_LOCK),
     table_param_inited_(false),
     meta_table_param_(nullptr),
     meta_table_dml_param_(nullptr)
@@ -85,10 +86,10 @@ public:
   int prepare_scan_param_schema_version(
       ObLobAccessParam &param,
       ObTableScanParam &scan_param);
-
-private:
   int get_meta_table_param(const ObTableParam *&table_param);
   int get_meta_table_dml_param(const ObTableDMLParam *&table_param);
+
+private:
   // get schema from schema service 
   int get_lob_tablet_schema(
       uint64_t tenant_id,

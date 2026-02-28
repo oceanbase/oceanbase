@@ -249,7 +249,6 @@ public:
   void return_exist_iter(ObStoreRowIterator *exist_iter);
   void reuse_scan_mem_allocator() { scan_mem_allocator_.reuse(); }
   ObTableAccessContext &get_access_context() { return exist_helper_.table_access_context_; }
-  ObTruncatePartitionFilter *get_truncate_part_filter() { return exist_helper_.table_access_context_.get_truncate_part_filter(); }
   TO_STRING_KV(K_(rowkeys), K_(permutation), K_(delete_count), K_(conflict_rowkey_idx), K_(error_code),
                K_(exist_helper), K_(need_find_all_duplicate_key), K_(is_sorted));
 public:
@@ -263,8 +262,7 @@ public:
         ObStoreCtx &store_ctx,
         const ObITableReadInfo &rowkey_read_info,
         ObStorageReserveAllocator &stmt_allocator,
-        ObStorageReserveAllocator &allocator,
-        ObTruncatePartitionFilter *truncate_part_filter);
+        ObStorageReserveAllocator &allocator);
     OB_INLINE bool is_valid() const { return is_inited_; }
     TO_STRING_KV(K_(table_iter_param), K_(table_access_context));
     ObTableIterParam table_iter_param_;

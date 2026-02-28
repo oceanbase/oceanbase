@@ -54,6 +54,7 @@
 #endif
 #include "storage/column_store/ob_column_store_replica_util.h"
 #include "share/backup/ob_backup_config.h"
+#include "storage/backup/ob_backup_validate_dag_scheduler.h"
 
 namespace oceanbase
 {
@@ -867,7 +868,7 @@ int ObService::check_backup_task_exist(const ObBackupCheckTaskArg &arg, bool &re
       if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, dag scheduler must not be nullptr", K(ret));
-      } else if (OB_FAIL(dag_scheduler->check_dag_net_exist(arg.trace_id_, res))) {
+      } else if (OB_FAIL(dag_scheduler->check_dag_net_exist(arg.trace_id_, res, THIS_WORKER.get_timeout_ts()))) {
         LOG_WARN("failed to check dag net exist", K(ret), K(arg));
       }
     }
@@ -896,6 +897,25 @@ int ObService::delete_backup_ls_task(const obrpc::ObLSBackupCleanArg &arg)
     LOG_WARN("failed to schedule backup clean dag", K(ret), K(arg));
   } else {
     LOG_INFO("success receive delete backup ls task rpc", K(arg));
+  }
+
+  return ret;
+}
+
+int ObService::validate_backup_ls_task(const obrpc::ObBackupValidateLSArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("receive validate backup ls task request", K(arg));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObService not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(ObLSBackupValidateScheduler::schedule_backup_validate_dag(arg))) {
+    LOG_WARN("failed to schedule backup validate dag", KR(ret), K(arg));
+  } else {
+    LOG_INFO("success receive validate backup ls task rpc", K(arg));
   }
 
   return ret;
@@ -1143,6 +1163,43 @@ int ObService::tablet_major_freeze(const obrpc::ObTabletMajorFreezeArg &arg,
   result = ret;
   const int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
   LOG_INFO("finish tablet major freeze request", K(ret), K(arg), K(cost_ts));
+  return ret;
+}
+
+int ObService::table_major_freeze(const obrpc::ObTableMajorFreezeRequest &arg,
+                           obrpc::ObTableMajorFreezeResult &result)
+{
+  int ret = OB_SUCCESS;
+  result.reset();
+  const int64_t start_ts = ObTimeUtility::fast_current_time();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("observer not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table major freeze arg", K(ret), K(arg));
+  } else {
+    MTL_SWITCH(arg.tenant_id_) {
+      int tmp_ret = OB_SUCCESS;
+      result.total_tablets_ = arg.tablet_ids_.count();
+      for (int64_t i = 0; i < result.total_tablets_; ++i) {
+        const ObLSID ls_id(arg.ls_id_);
+        const ObTabletID tablet_id(arg.tablet_ids_.at(i));
+        if (OB_TMP_FAIL(MTL(compaction::ObTenantTabletScheduler *)->user_request_schedule_medium_merge(
+          ls_id, tablet_id, arg.is_rebuild_column_group_))) {
+          result.set_err_code(tmp_ret);
+          LOG_WARN("failed to try schedule tablet major freeze", K(tmp_ret), K(arg), K(i), K(tablet_id));
+        } else {
+          result.success_tablets_++;
+        }
+      }
+      if (result.success_tablets_ != result.total_tablets_) {
+        LOG_WARN("[TableMajorFreeze] some tablets failed to schedule major freeze", K(OB_PARTIAL_FAILED), K(ret), K(arg), K(result));
+      }
+    }
+  }
+  const int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
+  LOG_INFO("finish table major freeze request", K(ret), K(arg), K(cost_ts), K(result));
   return ret;
 }
 
@@ -3472,6 +3529,31 @@ int ObService::report_backup_clean_over(const obrpc::ObBackupTaskRes &res)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("backup task scheduler can't be nullptr", K(ret));
       } else if (OB_FAIL(task.build_from_res(res, BackupJobType::BACKUP_CLEAN_JOB))) {
+        LOG_WARN("failed to build task from res rpc", K(ret), K(res));
+      } else if (OB_FAIL(task_scheduler->execute_over(task, result_info))) {
+        LOG_WARN("failed to remove task from scheduler", K(ret), K(res), K(task));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObService::report_backup_validate_over(const obrpc::ObBackupTaskRes &res)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("report backup validate over", K(res));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    ObBackupValidateLSTask task;
+    ObBackupTaskScheduler *task_scheduler = nullptr;
+    ObHAResultInfo result_info(ObHAResultInfo::BACKUP_VALIDATE, res.ls_id_, res.src_server_, res.dag_id_, res.result_);
+    MTL_SWITCH(gen_meta_tenant_id(res.tenant_id_)) {
+      if (OB_ISNULL(task_scheduler = MTL(ObBackupTaskScheduler *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("backup task scheduler can't be nullptr", K(ret));
+      } else if (OB_FAIL(task.build_from_res(res, BackupJobType::VALIDATE_JOB))) {
         LOG_WARN("failed to build task from res rpc", K(ret), K(res));
       } else if (OB_FAIL(task_scheduler->execute_over(task, result_info))) {
         LOG_WARN("failed to remove task from scheduler", K(ret), K(res), K(task));

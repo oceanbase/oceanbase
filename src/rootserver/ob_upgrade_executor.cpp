@@ -201,7 +201,7 @@ int ObUpgradeBeginDataVersionProcessorExecutor::run_upgrade_processor(share::ObB
 }
 
 ObUpgradeExecutor::ObUpgradeExecutor()
-    : inited_(false), stopped_(false), execute_(false), rwlock_(ObLatchIds::DEFAULT_SPIN_RWLOCK),
+    : inited_(false), stopped_(false), execute_(false), rwlock_(ObLatchIds::UPGRADE_EXECUTOR_LOCK),
       sql_proxy_(NULL), rpc_proxy_(NULL), common_rpc_proxy_(NULL),
       schema_service_(NULL), root_inspection_(NULL),
       upgrade_processors_()

@@ -121,6 +121,10 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
           } else {
             max_batch_size = compute_max_batch_size(raw_exprs.at(i));
           }
+          // load file expr has its own limit
+          if (T_FUN_SYS_LOAD_FILE == raw_exprs.at(i)->get_expr_type()) {
+            max_batch_size = std::min(max_batch_size, static_cast<int64_t>(ObExprBatchSize::small));
+          }
           batch_size = std::min(batch_size, max_batch_size);
         }
       }
@@ -136,12 +140,16 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
       } else {
         auto expr_cnt = vectorized_exprs.count();
         bool has_large_data = false;
+        bool has_load_file_expr = false;
         for (int i = 0; i < expr_cnt; i++) {
           ObRawExpr *raw_expr = vectorized_exprs.at(i);
           const ObRawExprResType &result_type = raw_expr->get_result_type();
           row_size += reserve_data_consume(result_type.get_type(), result_type.get_precision()) +
                       get_expr_datum_fixed_header_size();
           has_large_data = is_large_data(vectorized_exprs.at(i)->get_data_type());
+          if (!has_load_file_expr && T_FUN_SYS_LOAD_FILE == vectorized_exprs.at(i)->get_expr_type()) {
+            has_load_file_expr = true;
+          }
         }
         batch_size = config_target_maxsize / row_size;
         LOG_TRACE("detect_batch_size", K(row_size), K(batch_size), K(expr_cnt), K(has_large_data), K(lob_rowsets_max_rows));
@@ -152,6 +160,9 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
         batch_size = next_pow2(batch_size);
         if (has_large_data) {
           batch_size = std::min(lob_rowsets_max_rows, batch_size);
+        }
+        if (has_load_file_expr) {
+          batch_size = std::min(static_cast<int64_t>(ObExprBatchSize::small), batch_size);
         }
         // range limit check
         if (batch_size < MIN_ROWSIZE) {
@@ -312,6 +323,10 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
     rt_expr->is_boolean_ = raw_expr->is_bool_expr();
     rt_expr->nullable_ = !(raw_expr->is_column_ref_expr()
                             && (static_cast<ObColumnRefRawExpr *> (raw_expr))->get_result_type().has_result_flag(NOT_NULL_FLAG));
+    if (raw_expr->is_sys_func_expr() || raw_expr->is_op_expr()) {
+      ObExprOperator *op = static_cast<ObNonTerminalRawExpr *> (raw_expr)->get_op();
+      rt_expr->eager_evaluation_ = nullptr == op ? false : op->eager_evaluation();
+    }
     rt_expr->is_hidden_clustering_key_column_ = raw_expr->is_column_ref_expr() && (static_cast<ObColumnRefRawExpr *> (raw_expr))->is_hidden_clustering_key_column();
 
     if (T_OP_ROW != raw_expr->get_expr_type()) {
@@ -597,6 +612,9 @@ int ObStaticEngineExprCG::cg_expr_by_operator(const ObIArray<ObRawExpr *> &raw_e
           LOG_DEBUG("external file col expr", K(ret), "path", data_access_info->data_access_path_);
         }
       }
+    } else if (T_REF_ALIAS_COLUMN == raw_expr->get_expr_type()) {
+      ObAliasRefRawExpr *alias_ref_expr = static_cast<ObAliasRefRawExpr*>(raw_expr);
+      rt_expr->extra_ = alias_ref_expr->get_project_index();
     } else if (!IS_EXPR_OP(rt_expr->type_) || IS_AGGR_FUN(rt_expr->type_)) {
       // do nothing
     } else if (OB_FAIL(expr_cg_impl.generate_expr_operator(*raw_expr, expr_op_fetcher))) {

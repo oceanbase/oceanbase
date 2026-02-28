@@ -1886,7 +1886,7 @@ int ObPLDDLService::create_trigger_in_trans(share::schema::ObTriggerInfo &trigge
     if (OB_SUCC(ret) && !in_second_stage) {
         OZ (adjust_trigger_action_order(schema_guard, trans, pl_operator, trigger_info, true));
     }
-    OZ (pl_operator.create_trigger(trigger_info, trans, error_info, dep_infos, table_schema_version, ddl_stmt_str));
+    OZ (pl_operator.create_trigger(schema_guard, trigger_info, trans, error_info, dep_infos, table_schema_version, ddl_stmt_str));
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -2046,7 +2046,8 @@ int ObPLDDLService::create_trigger_for_truncate_table(share::schema::ObSchemaGet
         if (OB_SUCC(ret)) {
           ObSEArray<ObDependencyInfo, 1> dep_infos;
           int64_t table_schema_version = OB_INVALID_VERSION;
-          if (OB_FAIL(pl_operator.create_trigger(new_trigger_info,
+          if (OB_FAIL(pl_operator.create_trigger(schema_guard,
+                                                 new_trigger_info,
                                                  trans,
                                                  error_info,
                                                  dep_infos,
@@ -2390,7 +2391,7 @@ int ObPLDDLService::rebuild_triggers_on_hidden_table(
     if (OB_SUCC(ret) && need_rebuild) {
       ObSEArray<ObDependencyInfo, 1> dep_infos;
       int64_t table_schema_version = OB_INVALID_VERSION;
-      OZ (pl_operator.create_trigger(new_trigger_info, trans, error_info, dep_infos,
+      OZ (pl_operator.create_trigger(dst_tenant_schema_guard, new_trigger_info, trans, error_info, dep_infos,
         table_schema_version, nullptr, false/*is_update_table_schema_version*/));
     }
   }

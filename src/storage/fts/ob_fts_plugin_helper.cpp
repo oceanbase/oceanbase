@@ -16,6 +16,7 @@
 #include "storage/fts/ob_fts_plugin_helper.h"
 
 #include "lib/json_type/ob_json_tree.h"
+#include "lib/worker.h"
 #include "plugin/interface/ob_plugin_ftparser_intf.h"
 #include "plugin/sys/ob_plugin_helper.h"
 #include "share/ob_force_print_log.h"
@@ -263,6 +264,8 @@ int ObFTParseHelper::segment(
       int64_t word_len = 0;
       int64_t char_cnt = 0;
       int64_t word_freq = 0;
+      int64_t token_interval_cnt = 0;
+      constexpr int64_t FTS_SEGMENT_CHECK_STATUS_TOKEN_INTERVAL_CNT = 100;
       while (OB_SUCC(ret)) {
         if (OB_FAIL(iter->get_next_token(word, word_len, char_cnt, word_freq))) {
           if (OB_ITER_END != ret) {
@@ -270,6 +273,12 @@ int ObFTParseHelper::segment(
           }
         } else if (OB_FAIL(add_word.process_word(word, word_len, char_cnt, word_freq))) {
           LOG_WARN("fail to process one word", K(ret), KP(word), K(word_len), K(char_cnt), K(word_freq));
+        } else if (++token_interval_cnt >= FTS_SEGMENT_CHECK_STATUS_TOKEN_INTERVAL_CNT) {
+          if (OB_FAIL(THIS_WORKER.check_status())) {
+            LOG_WARN("worker interrupt during fulltext segment", K(ret));
+          } else {
+            token_interval_cnt = 0;
+          }
         }
       }
       if (OB_ITER_END == ret) {

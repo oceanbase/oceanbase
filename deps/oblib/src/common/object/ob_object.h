@@ -461,7 +461,12 @@ public:
     return (is_user_defined_sql_type() || is_collection_sql_type() || is_decimal_int()) ? CS_TYPE_BINARY:
               static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4));
   }
-
+  OB_INLINE ObCollationType get_collation_type() const {
+    // ObUserDefinedSQLType reused cs_type as part of sub schema id,
+    // ObDecimalIntType reuse cs_type as precision, therefore always return CS_TYPE_BINARY.
+    return (is_user_defined_sql_type() || is_collection_sql_type() || is_decimal_int()) ? CS_TYPE_BINARY :
+                static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4) );
+  }
   OB_INLINE void set_default_collation_type() { set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())); }
   OB_INLINE ObCollationLevel get_collation_level() const {
     // ObUserDefinedSQLType and ObCollectionSQLType reused cs_level as part of sub schema id,
@@ -469,12 +474,7 @@ public:
     return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_LEVEL_EXPLICIT:
               static_cast<ObCollationLevel>(cs_level_ & 0x0F);
   }
-  OB_INLINE ObCollationType get_collation_type() const {
-    // ObUserDefinedSQLType reused cs_type as part of sub schema id,
-    // ObDecimalIntType reuse cs_type as precision, therefore always return CS_TYPE_BINARY.
-    return (is_user_defined_sql_type() || is_collection_sql_type() || is_decimal_int()) ? CS_TYPE_BINARY :
-                static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4) );
-  }
+
   OB_INLINE ObCharsetType get_charset_type() const {
     return ObCharset::charset_type_by_coll(get_collation_type());
   }
@@ -598,6 +598,11 @@ struct ObLobId
   bool operator !=(const ObLobId &other) const;
   bool operator <(const ObLobId &other) const;
   bool operator >(const ObLobId &other) const;
+  OB_INLINE void assign(const ObLobId &other)
+  {
+    tablet_id_ = other.tablet_id_;
+    lob_id_ = other.lob_id_;
+  }
   TO_STRING_KV(K_(tablet_id), K_(lob_id));
   void reset();
   inline bool is_valid() const {return tablet_id_ != 0 && lob_id_ != 0;}
@@ -2241,6 +2246,9 @@ public:
                         const ObObjPrintParams &params = ObObjPrintParams()) const;
   /// print as SQL VARCHAR literal
   int print_varchar_literal(char *buffer, int64_t length, int64_t &pos, const ObObjPrintParams &params = ObObjPrintParams()) const;
+  int print_varchar_literal(char *&buffer, int64_t &length,
+                            int64_t &pos, ObIAllocator &alloc,
+                            const ObObjPrintParams &params = ObObjPrintParams()) const;
   //used for enum and set
   int print_varchar_literal(const ObIArray<ObString> &type_infos, char *buffer, int64_t length, int64_t &pos) const;
   /// print as plain string
@@ -4274,11 +4282,12 @@ struct ParamFlag
                 is_boolean_(false),
                 is_batch_parameter_(0),
                 ignore_scale_check_(false),
+                need_strict_type_match_(false),
                 reserved_(0)
   { }
   TO_STRING_KV(K_(need_to_check_type), K_(need_to_check_bool_value),
                K_(expected_bool_value), K_(is_pl_mock_default_param), K_(need_to_check_extend_type), K_(is_batch_parameter),
-               K_(ignore_scale_check));
+               K_(ignore_scale_check), K_(need_strict_type_match));
   void reset();
 
   static uint32_t flag_offset_bits() { return offsetof(ParamFlag, flag_) * 8; }
@@ -4303,7 +4312,8 @@ struct ParamFlag
     uint8_t extend_flag_;
     struct {
       uint8_t ignore_scale_check_ : 1; //TRUE if plan cache can reuse by different scale numbers, FALSE otherwise
-      uint8_t reserved_ : 7;
+      uint8_t need_strict_type_match_ : 1; //TRUE if need strict type match (for pl null param)
+      uint8_t reserved_ : 6;
     };
   };
   OB_UNIS_VERSION_V(1);
@@ -4369,6 +4379,8 @@ public:
 
   OB_INLINE void set_ignore_scale_check(bool flag) { flag_.ignore_scale_check_ = flag; }
   OB_INLINE bool ignore_scale_check() const { return flag_.ignore_scale_check_; }
+  OB_INLINE void set_need_strict_type_match(bool flag) { flag_.need_strict_type_match_ = flag; }
+  OB_INLINE bool need_strict_type_match() const { return flag_.need_strict_type_match_; }
 
   OB_INLINE void set_raw_text_info(int32_t pos, int32_t len)
   {

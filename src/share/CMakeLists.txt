@@ -38,6 +38,11 @@ ob_set_subtarget(ob_share_extra ALONE
   aggregate/hybrid_hist.cpp
   aggregate/wm_concat.cpp
   aggregate/str_prefix_max.cpp
+  aggregate/single_row_approx_cnt_synopsis.cpp
+  aggregate/any.cpp
+  aggregate/var_samp.cpp
+  aggregate/stddev_samp.cpp
+
 
   vector/expr_cmp_func.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_0.cpp
@@ -150,6 +155,9 @@ ob_set_subtarget(ob_share backup
   backup/ob_log_restore_config.cpp
   backup/ob_log_restore_struct.cpp
   backup/ob_archive_checkpoint_mgr.cpp
+  backup/ob_backup_validate_struct.cpp
+  backup/ob_backup_validate_table_operator.cpp
+  backup/ob_backup_util.cpp
 )
 
 ob_set_subtarget(ob_share cache
@@ -225,6 +233,7 @@ ob_set_subtarget(ob_share common
   ob_ls_id.cpp
   ob_table_range.cpp
   ob_max_id_fetcher.cpp
+  ob_max_id_cache.cpp
   ob_occam_time_guard.cpp
   ob_order_perserving_encoder.cpp
   ob_partition_modify.cpp
@@ -299,6 +308,7 @@ ob_set_subtarget(ob_share common
   ob_dynamic_partition_manager.cpp
   ob_scheduled_manage_dynamic_partition.cpp
   ob_batch_selector.cpp
+  ob_lob_check_job_scheduler.cpp
   ob_timezone_importer.cpp
   ob_srs_importer.cpp
   ob_compute_property.cpp
@@ -413,6 +423,8 @@ ob_set_subtarget(ob_share common_mixed
   compaction/ob_compaction_timer_task_mgr.cpp
   compaction/ob_batch_exec_dag.cpp
   compaction/ob_new_micro_info.cpp
+  compaction/ob_schedule_daily_maintenance_window.cpp
+  compaction/ob_compaction_resource_manager.cpp
   storage/ob_i_pre_warmer.cpp
   storage_cache_policy/ob_storage_cache_common.cpp
   storage_cache_policy/ob_storage_cache_partition_sql_helper.cpp
@@ -628,6 +640,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_ccl_schema_struct.cpp
   schema/ob_ccl_rule_mgr.cpp
   schema/ob_ccl_rule_sql_service.cpp
+  schema/ob_schema_guard_wrapper.cpp
 
   schema/ob_sensitive_rule_mgr.cpp
   schema/ob_sensitive_rule_schema_struct.cpp
@@ -714,11 +727,16 @@ ob_set_subtarget(ob_share catalog
   catalog/hive/thrift/transport/ob_t_sasl_transport.cpp
   catalog/hive/thrift/transport/ob_t_sasl.cpp
   catalog/hive/ob_kerberos.cpp
-  catalog/hive/ob_hms_client_pool.cpp
   catalog/hive/ob_hms_catalog.cpp
   catalog/hive/ob_hive_metastore.cpp
   catalog/hive/ob_iceberg_catalog_stat_helper.cpp
   catalog/hive/ob_hive_catalog_stat_helper.cpp
+  catalog/rest/ob_rest_catalog.cpp
+  catalog/rest/client/ob_base_rest_client.cpp
+  catalog/rest/client/ob_curl_rest_client.cpp
+  catalog/rest/requests/ob_rest_http_request.cpp
+  catalog/rest/responses/ob_rest_http_response.cpp
+  catalog/rest/auth/ob_rest_auth_mgr.cpp
 )
 
 ob_set_subtarget(ob_share io
@@ -813,6 +831,11 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_vector_embedding_handler.cpp
   vector_index/ob_json_helper.cpp
   vector_index/ob_hybrid_vector_refresh_task.cpp
+  vector_index/ob_vector_index_segment.cpp
+  vector_index/ob_vector_index_freeze_task.cpp
+  vector_index/ob_vector_index_merge_task.cpp
+  vector_index/ob_vector_index_aux_table_handler.cpp
+  vector_index/ob_vector_recall_calc_util.cpp
 )
 
 ob_set_subtarget(ob_share vector_type
@@ -849,6 +872,9 @@ ob_set_subtarget(ob_share semistruct
 
 ob_set_subtarget(ob_share lob
   lob/ob_lob_ext_info_log_allocator.cpp
+  lob/lob_consistency_check/ob_lob_check_task.cpp
+  lob/lob_consistency_check/ob_lob_consistency_util.cpp
+  lob/lob_consistency_check/ob_lob_consistency_scheduler.cpp
 )
 
 if (NOT OB_BUILD_STANDALONE)
@@ -861,6 +887,10 @@ ob_set_subtarget(ob_share ai_service
   ai_service/ob_ai_service_struct.cpp
   ai_service/ob_ai_service_proxy.cpp
   ai_service/ob_ai_service_executor.cpp
+)
+
+ob_set_subtarget(ob_share compaction_ttl
+  compaction_ttl/ob_compaction_ttl_util.cpp
 )
 
 ob_add_new_object_target(ob_share ob_share)

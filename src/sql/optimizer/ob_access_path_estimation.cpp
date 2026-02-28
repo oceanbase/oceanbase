@@ -732,8 +732,9 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
     ObBatchEstTasks *task = NULL;
     EstResultHelper *result_helper = NULL;
     RangePartitionHelper calc_range_partition_helper;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
     chosen_scan_ranges.reuse();
-    SMART_VAR(ObTablePartitionInfo, tmp_part_info) {
+    SMART_VAR(ObTablePartitionInfo, tmp_part_info, allocator) {
       const ObTablePartitionInfo *table_part_info = NULL;
       ObTablePartitionInfo* valid_part_info = NULL;
       if (OB_ISNULL(ap = paths.at(i)) || OB_ISNULL(ap->parent_) || OB_ISNULL(ap->parent_->get_plan()) ||
@@ -874,7 +875,8 @@ int ObAccessPathEstimation::add_storage_estimation_task(ObOptimizerContext &ctx,
   int ret = OB_SUCCESS;
   OPT_TRACE("Choose partitions and ranges for index", ap.index_id_, "to estimate rowcount");
   ObSEArray<common::ObNewRange, 4> chosen_scan_ranges;
-  ObCandiTabletLocSEArray chosen_partitions;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObCandiTabletLocArray chosen_partitions(allocator);
   const ObTableMetaInfo *table_meta = NULL;
   if (OB_ISNULL(table_meta = ap.est_cost_info_.table_meta_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -939,93 +941,96 @@ int ObAccessPathEstimation::add_storage_estimation_task_by_ranges(ObOptimizerCon
   ObSEArray<ObTabletID, 10> tablet_ids;
   ObSEArray<common::ObNewRange, 4> chosen_scan_ranges;
   ObSEArray<common::ObNewRange, 1> chosen_range;
-  SMART_VARS_2((ObCandiTabletLocSEArray, valid_partitions_for_range),
-               (ObCandiTabletLocSEArray, chosen_partitions)) {
-    result_helper.different_parts_ = true;
-    const ObTableMetaInfo *table_meta = NULL;
-    if (OB_ISNULL(table_meta = ap.est_cost_info_.table_meta_info_) ||
-        OB_UNLIKELY(ori_partitions.count() != index_partitions.count()) ||
-        OB_UNLIKELY(ori_partitions.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected param", K(ret), K(table_meta), K(ori_partitions), K(index_partitions));
-    } else if (OB_FAIL(choose_storage_estimation_ranges(range_limit,
-                                                        ap.est_cost_info_.ranges_,
-                                                        ap.est_cost_info_.index_meta_info_.is_geo_index_,
-                                                        chosen_scan_ranges))) {
-      LOG_WARN("failed to choose scan ranges", K(ret));
-    } else if (OB_FAIL(result_helper.range_result_.prepare_allocate(chosen_scan_ranges.count()))) {
-      LOG_WARN("failed to prepare allocate", K(ret));
-    } else {
-      result_helper.est_scan_range_count_ = chosen_scan_ranges.count();
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObCandiTabletLocArray valid_partitions_for_range(allocator);
+  ObCandiTabletLocArray chosen_partitions(allocator);
+  result_helper.different_parts_ = true;
+  const ObTableMetaInfo *table_meta = NULL;
+  if (OB_ISNULL(table_meta = ap.est_cost_info_.table_meta_info_) ||
+      OB_UNLIKELY(ori_partitions.count() != index_partitions.count()) ||
+      OB_UNLIKELY(ori_partitions.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(ret), K(table_meta), K(ori_partitions), K(index_partitions));
+  } else if (OB_FAIL(choose_storage_estimation_ranges(range_limit,
+                                                      ap.est_cost_info_.ranges_,
+                                                      ap.est_cost_info_.index_meta_info_.is_geo_index_,
+                                                      chosen_scan_ranges))) {
+    LOG_WARN("failed to choose scan ranges", K(ret));
+  } else if (OB_FAIL(result_helper.range_result_.prepare_allocate(chosen_scan_ranges.count()))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
+  } else {
+    result_helper.est_scan_range_count_ = chosen_scan_ranges.count();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < chosen_scan_ranges.count(); i ++) {
+    valid_partitions_for_range.reuse();
+    chosen_range.reuse();
+    chosen_partitions.reuse();
+    tablet_ids.reuse();
+    if (OB_FAIL(chosen_range.push_back(chosen_scan_ranges.at(i)))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(calc_range_partition_helper.get_scan_range_partitions(exec_ctx,
+                                                                            chosen_scan_ranges.at(i),
+                                                                            tablet_ids))) {
+      LOG_WARN("failed to get scan range partitions", K(chosen_scan_ranges.at(i)));
+    } else if (!tablet_ids.empty()) {
+      if (OB_FAIL(valid_partitions_for_range.reserve(tablet_ids.count()))) {
+        LOG_WARN("failed to reserve", K(ret));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < ori_partitions.count(); j ++) {
+        if (ObOptimizerUtil::find_item(tablet_ids,
+                        ori_partitions.at(j).get_partition_location().get_tablet_id()) &&
+            OB_FAIL(valid_partitions_for_range.push_back(index_partitions.at(j)))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < chosen_scan_ranges.count(); i ++) {
-      valid_partitions_for_range.reuse();
-      chosen_range.reuse();
-      chosen_partitions.reuse();
-      tablet_ids.reuse();
-      if (OB_FAIL(chosen_range.push_back(chosen_scan_ranges.at(i)))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else if (OB_FAIL(calc_range_partition_helper.get_scan_range_partitions(exec_ctx,
-                                                                              chosen_scan_ranges.at(i),
-                                                                              tablet_ids))) {
-        LOG_WARN("failed to get scan range partitions", K(chosen_scan_ranges.at(i)));
-      } else if (!tablet_ids.empty()) {
-        for (int64_t j = 0; OB_SUCC(ret) && j < ori_partitions.count(); j ++) {
-          if (ObOptimizerUtil::find_item(tablet_ids,
-                          ori_partitions.at(j).get_partition_location().get_tablet_id()) &&
-              OB_FAIL(valid_partitions_for_range.push_back(index_partitions.at(j)))) {
-            LOG_WARN("failed to push back", K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (!valid_partitions_for_range.empty()) {
-          if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
-                                                          ctx.get_schema_guard(),
-                                                          ap.index_id_,
-                                                          valid_partitions_for_range,
-                                                          chosen_partitions))) {
-            LOG_WARN("failed to choose partitions", K(ret));
-          } else {
-            result_helper.range_result_.at(i).valid_partition_count_ = valid_partitions_for_range.count();
-          }
+    if (OB_SUCC(ret)) {
+      if (!valid_partitions_for_range.empty()) {
+        if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
+                                                        ctx.get_schema_guard(),
+                                                        ap.index_id_,
+                                                        valid_partitions_for_range,
+                                                        chosen_partitions))) {
+          LOG_WARN("failed to choose partitions", K(ret));
         } else {
-          // no valid partitions, choose random partitions from all partitions
-          if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
-                                                          ctx.get_schema_guard(),
-                                                          ap.index_id_,
-                                                          index_partitions,
-                                                          chosen_partitions))) {
-            LOG_WARN("failed to choose partitions", K(ret));
-          } else {
-            result_helper.range_result_.at(i).valid_partition_count_ = index_partitions.count();
-          }
+          result_helper.range_result_.at(i).valid_partition_count_ = valid_partitions_for_range.count();
+        }
+      } else {
+        // no valid partitions, choose random partitions from all partitions
+        if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
+                                                        ctx.get_schema_guard(),
+                                                        ap.index_id_,
+                                                        index_partitions,
+                                                        chosen_partitions))) {
+          LOG_WARN("failed to choose partitions", K(ret));
+        } else {
+          result_helper.range_result_.at(i).valid_partition_count_ = index_partitions.count();
         }
       }
-      if (OB_SUCC(ret)) {
-        OPT_TRACE("Range", chosen_scan_ranges.at(i), "has valid tablets:", tablet_ids);
-        OPT_TRACE_BEGIN_SECTION;
-        OPT_TRACE("Choose partitions", chosen_partitions);
-        OPT_TRACE_END_SECTION;
-        LOG_TRACE("choose range and partitions to estimate rowcount",
-            K(ap.index_id_), K(chosen_scan_ranges.at(i)), K(chosen_partitions), K(valid_partitions_for_range), K(tablet_ids));
-      }
-      for (int64_t j = 0; OB_SUCC(ret) && j < chosen_partitions.count(); j ++) {
-        EstimatedPartition best_index_part;
-        ObBatchEstTasks *task = NULL;
-        if (OB_FAIL(get_storage_estimation_task(ctx,
-                                                arena,
-                                                chosen_partitions.at(j),
-                                                *table_meta,
-                                                prefer_addrs,
-                                                tasks,
-                                                best_index_part,
-                                                task))) {
-          LOG_WARN("failed to get task", K(ret));
-        } else if (NULL != task) {
-          if (OB_FAIL(add_index_info(ctx, arena, task, best_index_part, ap, chosen_range, i))) {
-            LOG_WARN("failed to add task info", K(ret));
-          }
+    }
+    if (OB_SUCC(ret)) {
+      OPT_TRACE("Range", chosen_scan_ranges.at(i), "has valid tablets:", tablet_ids);
+      OPT_TRACE_BEGIN_SECTION;
+      OPT_TRACE("Choose partitions", chosen_partitions);
+      OPT_TRACE_END_SECTION;
+      LOG_TRACE("choose range and partitions to estimate rowcount",
+          K(ap.index_id_), K(chosen_scan_ranges.at(i)), K(chosen_partitions), K(valid_partitions_for_range), K(tablet_ids));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < chosen_partitions.count(); j ++) {
+      EstimatedPartition best_index_part;
+      ObBatchEstTasks *task = NULL;
+      if (OB_FAIL(get_storage_estimation_task(ctx,
+                                              arena,
+                                              chosen_partitions.at(j),
+                                              *table_meta,
+                                              prefer_addrs,
+                                              tasks,
+                                              best_index_part,
+                                              task))) {
+        LOG_WARN("failed to get task", K(ret));
+      } else if (NULL != task) {
+        if (OB_FAIL(add_index_info(ctx, arena, task, best_index_part, ap, chosen_range, i))) {
+          LOG_WARN("failed to add task info", K(ret));
         }
       }
     }
@@ -1283,6 +1288,7 @@ int ObAccessPathEstimation::do_storage_estimation(ObOptimizerContext &ctx,
       LOG_WARN("OPT:[REMOTE STORAGE EST FAILED]", K(ret));
     }
   }
+  LOG_INFO("OPT:[STORAGE ESTIMATION RESULT]", K(ret), K(result));
   return ret;
 }
 
@@ -1629,6 +1635,7 @@ int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
     const ObCandiTabletLocIArray &all_partitions = table_loc.get_phy_part_loc_info_list();
     ObCandiTableLoc &valid_table_loc = valid_partition_info.get_phy_tbl_location_info_for_update();
     ObCandiTabletLocIArray &valid_partitions = valid_table_loc.get_phy_part_loc_info_list_for_update();
+    int64_t valid_partition_count = 0;
     OPT_TRACE("partition_index_dive_limit is less than the count of partitions, "\
               "check whether there are empty partitions in table", table_partition_info.get_ref_table_id());
     OPT_TRACE_BEGIN_SECTION;
@@ -1652,6 +1659,15 @@ int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
                                                           all_part_ids,
                                                           part_stats))) {
       LOG_WARN("failed to get table stats", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_stats.count(); i ++) {
+      const ObOptTableStat &stat = part_stats.at(i);
+      if (stat.get_last_analyzed() <= 0 || stat.get_row_count() > 0) {
+        ++valid_partition_count;
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(valid_partitions.reserve(valid_partition_count))) {
+      LOG_WARN("failed to reserve valid partitions", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < part_stats.count(); i ++) {
       const ObOptTableStat &stat = part_stats.at(i);
@@ -1791,7 +1807,8 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
     LOG_WARN("get unexpected null",  K(ret), K(join_order), K(log_plan), K(table_meta_info));
   } else {
     // generate temporary update table metas use prefix range conditions
-    SMART_VAR(OptTableMetas, tmp_metas) {
+    ObArenaAllocator arena("CardEstimation");
+    SMART_VAR(OptTableMetas, tmp_metas, arena) {
       ObSEArray<ObRawExpr*, 4> prefix_exprs;
       const double prefix_range_row_count = ap.est_cost_info_.logical_query_range_row_count_;
       const EqualSets *temp_equal_sets = log_plan->get_selectivity_ctx().get_equal_sets();
@@ -2230,9 +2247,10 @@ int ObAccessPathEstimation::storage_estimate_range_rowcount(ObOptimizerContext &
   ObArenaAllocator arena("CardEstimation");
   ObArray<ObBatchEstTasks *> tasks;
   ObArray<ObAddr> prefer_addrs;
-  ObCandiTabletLocSEArray chosen_partitions;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObCandiTabletLocArray chosen_partitions(allocator);
   ObSEArray<ObNewRange, 4> chosen_scan_ranges;
-  ObRangesArray whole_range;
+  ObRangesSEArray whole_range;
   bool need_fallback = false;
   int64_t partition_limit = 0;
   int64_t range_limit = 0;

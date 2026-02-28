@@ -351,7 +351,8 @@ private:
   int init_parquet_env();
   int get_parquet_logical_type(
       std::shared_ptr<const parquet::LogicalType> &logical_type,
-      const ObObjType &obj_type, const int32_t precision, const int32_t scale);
+      const ObObjType &obj_type, const int32_t precision, const int32_t scale,
+      const ObCollationType cs_type);
   int get_parquet_physical_type(parquet::Type::type &physical_type, const ObObjType &obj_type);
   int calc_parquet_decimal_length(int precision);
   int setup_parquet_schema();
@@ -437,7 +438,7 @@ private:
   common::ObCollationType cs_type_;
   ObString basic_url_; // url without partition expr
   common::ObObjectStorageInfo *access_info_;
-  share::ObBackupStorageInfo backup_info_;
+  share::ObExternalTableStorageInfo backup_info_;
   share::ObHDFSStorageInfo hdfs_info_;
   IntoFileLocation file_location_;
   int64_t write_offset_;

@@ -137,27 +137,34 @@ int ObJniConnector::is_valid_loaded_jars_() {
     OX(cur_version = cal_version(major_version, minor_version, major_patch_version, minor_patch_version));
   }
   if (OB_FAIL(ret)) {
+  } else if (OB_LIKELY(cur_version >= CLUSTER_CURRENT_VERSION ||
+                       cur_version == MOCK_CLUSTER_VERSION_4_4_2_0)) {
+    if (OB_LIKELY(JAR_VERSION_103 <= real_jar_version)) {
+      is_valid = true;
+    } else {
+      LOG_WARN("current major jar version is not 1.0.3", K(ret), K(real_jar_version), K(JAR_VERSION_103));
+    }
   } else if (OB_LIKELY(cur_version >= CLUSTER_VERSION_4_4_1_0)) {
-    if (OB_LIKELY(JAR_VERSION_102 <= real_jar_version)) {
+    if (OB_LIKELY(JAR_VERSION_102 == real_jar_version)) {
       is_valid = true;
     } else {
       LOG_WARN("current major jar version is not 1.0.2", K(ret), K(real_jar_version), K(JAR_VERSION_102));
     }
-  } else if (OB_LIKELY(cur_version >= CLUSTER_VERSION_4_4_0_0 || cur_version >= MOCK_CLUSTER_VERSION_4_3_5_3)) {
-    if (OB_LIKELY(JAR_VERSION_101 <= real_jar_version && real_jar_version < JAR_VERSION_102)) {
+  } else if (OB_LIKELY(cur_version >= CLUSTER_VERSION_4_4_0_0 ||
+                       cur_version >= MOCK_CLUSTER_VERSION_4_3_5_3)) {
+    if (OB_LIKELY(JAR_VERSION_101 == real_jar_version)) {
       is_valid = true;
     } else {
       LOG_WARN("current major jar version is not 1.0.1", K(ret), K(real_jar_version), K(JAR_VERSION_101));
     }
   } else if (OB_LIKELY(cur_version >= CLUSTER_VERSION_4_3_5_1)) {
-    if (OB_LIKELY(JAR_VERSION_100 <= real_jar_version && real_jar_version < JAR_VERSION_101)) {
+    if (OB_LIKELY(JAR_VERSION_100 == real_jar_version)) {
       is_valid = true;
     } else {
       LOG_WARN("current major jar version is not 1.0.0", K(ret), K(real_jar_version), K(JAR_VERSION_100));
     }
   }
-  LOG_TRACE("check jar version in detail", K(ret), K(real_jar_version),
-            K(build_version), K(is_valid));
+  LOG_INFO("check jar version in detail", K(ret), K(real_jar_version), K(build_version), K(is_valid));
   if (OB_SUCC(ret)) {
     if (is_valid) {
       ret = OB_SUCCESS;
@@ -178,7 +185,7 @@ int ObJniConnector::get_jni_env(JNIEnv *&env) {
     JVMFunctionHelper &helper = JVMFunctionHelper::getInstance();
     if (OB_FAIL(helper.init_result())) {
       // Means helper is not ready.
-      LOG_ERROR("failed to init jni env", K(ret), K(helper.get_error_msg()), K(ObJavaEnv::getInstance().jh_), K(ObJavaEnv::getInstance().ld_));
+      LOG_ERROR("failed to init jni env", K(ret), K(helper.get_error_msg()), K(ObJavaEnv::getInstance().jh_), K(ObJavaEnv::getInstance().ld_), K(ObJavaEnv::getInstance().cp_));
       if (helper.get_error_msg() != nullptr) {
         LOG_USER_ERROR(OB_JNI_ENV_SETUP_ERROR, STRLEN(helper.get_error_msg()), helper.get_error_msg());
       } else {
@@ -206,28 +213,6 @@ int ObJniConnector::check_jni_exception_(JNIEnv *env) {
       ret = OB_JNI_JAVA_EXCEPTION_ERROR;
       jclass throwableClass = env->GetObjectClass(thr);
 
-      jmethodID getMessageMethod = env->GetMethodID(
-          throwableClass,
-          "getMessage",
-          "()Ljava/lang/String;"
-      );
-
-      if (OB_NOT_NULL(getMessageMethod)) {
-          jstring jmsg = (jstring)env->CallObjectMethod(thr, getMessageMethod);
-          if (env->ExceptionCheck()) {
-              env->ExceptionClear(); // 防止调用过程中产生新异常
-          }
-
-          if (OB_NOT_NULL(jmsg)) {
-              const char* cmsg = env->GetStringUTFChars(jmsg, nullptr);
-              int64_t len = env->GetStringUTFLength(jmsg);
-              LOG_WARN("Exception Message: ", K(cmsg), K(ret));
-              LOG_USER_ERROR(OB_JNI_JAVA_EXCEPTION_ERROR, len, cmsg);
-              env->ReleaseStringUTFChars(jmsg, cmsg);
-              env->DeleteLocalRef(jmsg);
-          }
-      }
-
       // 创建StringWriter和PrintWriter
       jclass stringWriterClass = env->FindClass("java/io/StringWriter");
       jmethodID stringWriterCtor = env->GetMethodID(stringWriterClass, "<init>", "()V");
@@ -254,11 +239,18 @@ int ObJniConnector::check_jni_exception_(JNIEnv *env) {
       jstring stackTrace = (jstring)env->CallObjectMethod(stringWriter, toStringMethod);
 
       // 转换为C字符串
-      const char* cStackTrace = env->GetStringUTFChars(stackTrace, nullptr);
-      LOG_WARN("Exception Stack Trace: ", K(cStackTrace));
+      if (OB_NOT_NULL(stackTrace)) {
+        const char* cStackTrace = env->GetStringUTFChars(stackTrace, nullptr);
+        LOG_WARN("Exception Stack Trace: ", K(cStackTrace));
+        LOG_USER_ERROR(OB_JNI_JAVA_EXCEPTION_ERROR, strlen(cStackTrace), cStackTrace);
+        env->ReleaseStringUTFChars(stackTrace, cStackTrace);
+      } else {
+        ObString error_msg = "Exception Stack Trace is null";
+        LOG_WARN("Exception Stack Trace is null", K(ret), K(error_msg));
+        LOG_USER_ERROR(OB_JNI_JAVA_EXCEPTION_ERROR, error_msg.length(), error_msg.ptr());
+      }
 
       // 释放资源
-      env->ReleaseStringUTFChars(stackTrace, cStackTrace);
       env->DeleteLocalRef(stackTrace);
       env->DeleteLocalRef(printWriter);
       env->DeleteLocalRef(stringWriter);
@@ -273,7 +265,6 @@ int ObJniConnector::check_jni_exception_(JNIEnv *env) {
   }
   return ret;
 }
-
 
 }
 }

@@ -227,6 +227,7 @@ question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_COMMIT], str_value_=[], value=[0]
+		|--[1],[T_VARCHAR], str_value_=[comment transaction commit], value=[9223372036854775807]
 
 **************   Case 21   ***************
 commit work comment 'comment txn commit work';
@@ -234,6 +235,7 @@ question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_COMMIT], str_value_=[], value=[0]
+		|--[1],[T_VARCHAR], str_value_=[comment txn commit work], value=[9223372036854775807]
 
 **************   Case 22   ***************
 commit/*hint+commit tx hint*/ comment 'comment + hint';
@@ -242,6 +244,7 @@ question_mask_size: 0
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_COMMIT], str_value_=[], value=[0]
 		|--[0],[T_HINT], str_value_=[commit tx hint], value=[9223372036854775807]
+		|--[1],[T_VARCHAR], str_value_=[comment + hint], value=[9223372036854775807]
 
 **************   Case 23   ***************
 commit/*hint+commit tx work hint*/ work comment 'comment + hint';
@@ -250,6 +253,7 @@ question_mask_size: 0
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_COMMIT], str_value_=[], value=[0]
 		|--[0],[T_HINT], str_value_=[commit tx work hint], value=[9223372036854775807]
+		|--[1],[T_VARCHAR], str_value_=[comment + hint], value=[9223372036854775807]
 
 **************   Case 24   ***************
 rollback;
@@ -4462,12 +4466,13 @@ question_mask_size: 0
 	|--[0],[T_SELECT], str_value_=[], value=[0]
 		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_PROJECT_STRING], str_value_=[('prefix_' || column_name) || '_suffix'], value=[9223372036854775807]
-				|--[0],[T_OP_CNN], str_value_=[], value=[4]
-					|--[0],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
-						|--[1],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
-					|--[1],[T_COLUMN_REF], str_value_=[column_name], value=[9223372036854775807]
-						|--[2],[T_IDENT], str_value_=[column_name], value=[9223372036854775807]
-					|--[2],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[2]
+					|--[0],[T_OP_CNN], str_value_=[], value=[2]
+						|--[0],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+							|--[1],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+						|--[1],[T_COLUMN_REF], str_value_=[column_name], value=[9223372036854775807]
+							|--[2],[T_IDENT], str_value_=[column_name], value=[9223372036854775807]
+					|--[1],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
 						|--[1],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
 		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]

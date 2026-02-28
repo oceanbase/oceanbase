@@ -1306,6 +1306,7 @@ int ObTenantSqlMemoryManager::get_all_active_workarea(
         profile_info.set_sql_id(profile->get_sql_id());
         profile_info.session_id_ = profile->get_session_id();
         profile_info.database_id_ = profile->get_db_id();
+        profile_info.trace_id_ = profile->get_trace_id();
         if (OB_FAIL(wa_actives.push_back(profile_info))) {
           LOG_WARN("failed to push back profile", K(ret));
         }
@@ -1352,6 +1353,7 @@ ObSqlProfileExecInfo::ObSqlProfileExecInfo(ObExecContext *exec_ctx)
   my_session_ = exec_ctx->get_my_session();
   if (OB_NOT_NULL(my_session_)) {
     db_id_ = my_session_->get_database_id();
+    trace_id_ = my_session_->get_current_trace_id();
   }
 }
 

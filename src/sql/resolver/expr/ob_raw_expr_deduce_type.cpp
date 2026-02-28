@@ -1631,7 +1631,8 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       case T_FUN_COUNT_SUM:
       case T_FUN_APPROX_COUNT_DISTINCT:
       case T_FUN_KEEP_COUNT:
-      case T_FUN_SUM_OPNSIZE: {
+      case T_FUN_SUM_OPNSIZE:
+      case T_FUN_SYS_COUNT_INROW: {
         if (lib::is_oracle_mode()) {
           result_type.set_number();
           result_type.set_scale(0);
@@ -1714,7 +1715,8 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         }
         break;
       }
-      case T_FUN_GROUP_CONCAT: {
+      case T_FUN_GROUP_CONCAT:
+      case T_FUN_CK_GROUPCONCAT: {
         need_add_cast = true;
         if (OB_FAIL(set_agg_group_concat_result_type(expr, result_type))) {
           LOG_WARN("set agg group concat result type failed", K(ret));
@@ -1796,6 +1798,39 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
               need_add_cast = true;
             }
           }
+        } else if (T_FUN_VAR_SAMP == expr.get_expr_type() || T_FUN_STDDEV_SAMP == expr.get_expr_type()) {
+          // mysql mode
+          result_type = child_expr->get_result_type();
+          ObObjType obj_type = result_type.get_type();
+          if (OB_UNLIKELY(ob_is_collection_sql_type(child_expr->get_data_type()))) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("Incorrect collection arguments", K(child_expr->get_data_type()), K(ret));
+          } else if (OB_UNLIKELY(ob_is_user_defined_sql_type(child_expr->get_data_type()))) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("Incorrect udt arguments", K(child_expr->get_data_type()), K(ret));
+          } else {
+            bool need_wrap_to_double = false;
+            ObObjType from_type = child_expr->get_result_type().get_type();
+            const ObObjType to_type = (ob_is_double_type(from_type) ? from_type : ObDoubleType);
+            result_type.set_type(to_type);
+            result_type.set_scale(ObAccuracy(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET).get_scale());
+            result_type.set_precision(
+                              ObAccuracy(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET).get_precision());
+            result_type.set_calc_type(to_type);
+            result_type.set_calc_accuracy(result_type.get_accuracy());
+            result_type.unset_result_flag(ZEROFILL_FLAG);
+            expr.set_result_type(result_type);
+            ObObjTypeClass from_tc = expr.get_param_expr(0)->get_type_class();
+            //use fast path
+            if (ObIntTC == from_tc || ObUIntTC == from_tc
+                || ObFloatTC == from_tc || ObDoubleTC == from_tc
+                || (ObDecimalIntTC == from_tc
+                    && child_expr->get_result_type().get_precision() <= MAX_PRECISION_DECIMAL_INT_128)) {
+              need_add_cast = false;
+            } else {
+              need_add_cast = true;
+            }
+          }
         } else { //mysql mode
           result_type = child_expr->get_result_type();
           ObObjType obj_type = result_type.get_type();
@@ -1824,9 +1859,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           } else if (T_FUN_VARIANCE == expr.get_expr_type() ||
                      T_FUN_STDDEV == expr.get_expr_type() ||
                      T_FUN_STDDEV_POP == expr.get_expr_type() ||
-                     T_FUN_STDDEV_SAMP == expr.get_expr_type() ||
-                     T_FUN_VAR_POP == expr.get_expr_type() ||
-                     T_FUN_VAR_SAMP == expr.get_expr_type()) {
+                     T_FUN_VAR_POP == expr.get_expr_type()) {
             //mysql模式返回类型为double
             ObObjType from_type = child_expr->get_result_type().get_type();
             const ObObjType to_type = (ob_is_double_type(from_type) ? from_type : ObDoubleType);
@@ -2436,6 +2469,7 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                && T_FUN_TOP_FRE_HIST != expr.get_expr_type()
                && T_FUN_HYBRID_HIST != expr.get_expr_type()
                && T_FUN_SUM_OPNSIZE != expr.get_expr_type()
+               && T_FUN_SYS_COUNT_INROW != expr.get_expr_type()
                && 1 != get_expr_output_column(*param_expr)) {
       ret = OB_ERR_INVALID_COLUMN_NUM;
       LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, (int64_t)1);
@@ -2807,7 +2841,7 @@ int ObRawExprDeduceType::visit(ObSetOpRawExpr &expr)
 int ObRawExprDeduceType::visit(ObAliasRefRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *ref_expr = expr.get_ref_expr();
+  ObRawExpr *ref_expr = expr.get_ref_select_expr();
   if (OB_ISNULL(ref_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref expr is null");
@@ -2965,7 +2999,9 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
       }
     }
   } else if (T_WIN_FUN_LEAD == expr.get_func_type()
-             || T_WIN_FUN_LAG == expr.get_func_type()) {
+             || T_WIN_FUN_LAG == expr.get_func_type()
+             || T_WIN_FUN_LEAD_IN_FRAME == expr.get_func_type()
+             || T_WIN_FUN_LAG_IN_FRAME == expr.get_func_type()) {
     if (is_mysql_mode() && func_params.count() == 3) { //compatiable with mysql
       ObExprResType res_type;
       ObSEArray<ObExprResType, 2> types;
@@ -3946,7 +3982,8 @@ bool ObRawExprDeduceType::skip_cast_expr(const ObRawExpr &parent,
       T_OP_NOT_EXISTS == parent_expr_type ||
       (T_FUN_SYS_CAST == parent_expr_type && !CM_IS_EXPLICIT_CAST(parent.get_cast_mode())) ||
       (T_FUN_ARG_MAX == parent_expr_type && child_idx > 0) ||
-      (T_FUN_ARG_MIN == parent_expr_type && child_idx > 0)) {
+      (T_FUN_ARG_MIN == parent_expr_type && child_idx > 0) ||
+      (T_FUN_CK_GROUPCONCAT == parent_expr_type && child_idx > 0)) {
     bret = true;
   }
   return bret;
@@ -4164,9 +4201,7 @@ int ObRawExprDeduceType::add_implicit_cast(ObAggFunRawExpr &parent,
                  (T_FUN_VARIANCE == parent.get_expr_type() ||
                   T_FUN_STDDEV == parent.get_expr_type() ||
                   T_FUN_STDDEV_POP == parent.get_expr_type() ||
-                  T_FUN_STDDEV_SAMP == parent.get_expr_type() ||
-                  T_FUN_VAR_POP == parent.get_expr_type() ||
-                  T_FUN_VAR_SAMP == parent.get_expr_type()))) {
+                  T_FUN_VAR_POP == parent.get_expr_type()))) {
       //do nothing
     } else if (parent.get_expr_type() == T_FUN_WM_CONCAT ||
                parent.get_expr_type() == T_FUN_KEEP_WM_CONCAT ||

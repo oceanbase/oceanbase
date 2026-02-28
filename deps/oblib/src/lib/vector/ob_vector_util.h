@@ -56,10 +56,10 @@ int create_index(obvsag::VectorIndexPtr& index_handler, int index_type,
                  int max_degree, int ef_construction, int ef_search,
                  void* allocator = NULL, int extra_info_size = 0,
                  int16_t refine_type = 0, int16_t bq_bits_query = 32,
-                 bool bq_use_fht = false);
+                 bool bq_use_fht = false, bool store_raw_vector = false);
 
 int create_index(obvsag::VectorIndexPtr &index_handler, int index_type, const char *dtype, const char *metric,
-    bool use_reorder, float doc_prune_ratio, int window_size, void *allocator = NULL, int extra_info_size = 0);
+    bool use_reorder, float doc_prune_ratio, int window_size, void *allocator = NULL, int extra_info_size = 0, uint32_t avg_doc_term_length = 120);
 
 int build_index(obvsag::VectorIndexPtr index_handler, float* vector_list, int64_t* ids, int dim, int size, char *extra_info = nullptr);
 
@@ -84,6 +84,12 @@ int cal_distance_by_id(obvsag::VectorIndexPtr index_handler,
                        const int64_t *ids,
                        int64_t count,
                        const float *&distances);
+int get_raw_vector_by_ids(obvsag::VectorIndexPtr &index_handler,
+                         const int64_t *ids,
+                         int64_t count,
+                         float *&vectors,
+                         void *allocator = nullptr,
+                         int64_t dim = 0);
 int get_extra_info_by_ids(obvsag::VectorIndexPtr& index_handler,
                           const int64_t* ids,
                           int64_t count,
@@ -128,7 +134,8 @@ int knn_search(obvsag::VectorIndexPtr index_handler,
 int knn_search(obvsag::VectorIndexPtr index_handler, uint32_t len, uint32_t *dims, float *vals, int64_t topk,
     const float *&result_dist, const int64_t *&result_ids, const char *&extra_info, int64_t &result_size, float query_prune_ratio, int64_t n_candidate,
     void *invalid = nullptr, bool reverse_filter = false,
-    bool is_extra_info_filter = false, float valid_ratio = 1.0, void *allocator = nullptr, bool need_extra_info = false);
+    bool is_extra_info_filter = false, float valid_ratio = 1.0, void *allocator = nullptr, bool need_extra_info = false,
+    int64_t *valid_vids = nullptr, int64_t valid_vids_count = 0);
 
 int fserialize(obvsag::VectorIndexPtr index_handler, std::ostream& out_stream);
 

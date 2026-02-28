@@ -67,6 +67,11 @@ public:
   };
 
   int set_freeze_info(const ObMajorFreezeReason freeze_reason);
+  int set_window_compaction_info(
+      const ObWindowCompactionParam &param,
+      const int64_t expected_epoch);
+  int finish_window_compaction(
+      const int64_t expected_epoch);
   int get_freeze_info(const share::SCN &frozen_scn,
                       share::ObFreezeInfo &frozen_status);
 

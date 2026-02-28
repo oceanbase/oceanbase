@@ -99,6 +99,7 @@ public:
   common::ObStorageType get_storage_type() { return data_access_driver_.get_storage_type(); }
 
   ObExternalDataAccessDriver &get_data_access_driver() { return data_access_driver_; }
+  void advance(int64_t offset) { file_offset_ = offset; }
 
 private:
   int read_from_driver(char *buf, int64_t buf_len, int64_t &read_size);
@@ -120,6 +121,7 @@ private:
 
   ObDecompressor *decompressor_ = nullptr;
   char *  compressed_data_      = nullptr; /// compressed data buffer
+  int64_t compressed_data_capacity_ = 0;   /// the capacity of compressed data buffer
   int64_t compress_data_size_   = 0;       /// the valid data size in compressed data buffer
   int64_t consumed_data_size_   = 0;       /// handled buffer size in the compressed data buffer
   int64_t uncompressed_size_    = 0;       /// decompressed size from compressed data
@@ -130,7 +132,7 @@ private:
   ObCSVGeneralFormat::ObCSVCompression compression_format_ = ObCSVGeneralFormat::ObCSVCompression::NONE;
 
   static const char * MEMORY_LABEL;
-  static const int64_t COMPRESSED_DATA_BUFFER_SIZE;
+  static const int64_t DEFAULT_COMPRESSED_DATA_BUFFER_SIZE;
 };
 
 class ObExternalIteratorState
@@ -305,20 +307,6 @@ protected:
   OB_INLINE bool is_lake_table() const
   {
     return is_iceberg_lake_table() || is_hive_lake_table();
-  }
-  bool is_abs_url(ObString url)
-  {
-    ObString dst("://");
-    if (0
-        == ObCharset::instr(ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                            url.ptr(),
-                            url.length(),
-                            dst.ptr(),
-                            dst.length())) {
-      return false;
-    } else {
-      return true;
-    }
   }
 
   int init_for_iceberg(ObExternalTableAccessOptions *options);

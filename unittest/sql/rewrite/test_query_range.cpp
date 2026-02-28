@@ -313,7 +313,8 @@ ObQueryRangeTest::ObQueryRangeTest()
       column_id3_(18),
       allocator_(ObModIds::TEST),
       expr_factory_(allocator_),
-      ref_col_(table_id_, column_id1_, T_REF_COLUMN)
+      ref_col_(table_id_, column_id1_, T_REF_COLUMN),
+      query_ctx_(allocator_)
 {
 }
 
@@ -1148,7 +1149,6 @@ TEST_F(ObQueryRangeTest, single_key_cost_time)
   }
   int64_t time_used = ObTimeUtility::current_time() - get_time_start;
   OB_LOG(INFO, "system current time cost", K(time_used), K(ti));
-  OK(ObClockGenerator::init());
   get_time_start = ObTimeUtility::current_time();
   for (int64_t i = 0; i < REPEAT_TIMES; ++i) {
     ti = ObClockGenerator::getClock();

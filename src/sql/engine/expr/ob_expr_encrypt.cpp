@@ -147,7 +147,6 @@ int ObExprDesEncrypt::eval_des_encrypt_batch_with_default(const ObExpr &expr, Ob
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (src_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else {
@@ -245,7 +244,6 @@ int ObExprDesEncrypt::eval_des_encrypt_batch_with_key(const ObExpr &expr, ObEval
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (src_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (key_array.at(j)->is_null()) {
@@ -480,7 +478,6 @@ int ObExprDesDecrypt::eval_des_decrypt_batch(const ObExpr &expr, ObEvalCtx &ctx,
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       //get key and check if res should be null or empty
       if (src_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
@@ -698,7 +695,6 @@ int ObExprEncrypt::eval_encrypt_batch(const ObExpr &expr, ObEvalCtx &ctx, const 
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       bool need_encrypt = false;
       char tmp_res[14];
       if (src_array.at(j)->is_null()) {
@@ -851,7 +847,6 @@ int ObExprEncode::eval_encode_batch(const ObExpr &expr, ObEvalCtx &ctx, const Ob
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (key.is_null() || src_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (src_array.at(j)->get_string().empty()) {
@@ -874,7 +869,6 @@ int ObExprEncode::eval_encode_batch(const ObExpr &expr, ObEvalCtx &ctx, const Ob
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (key_array.at(j)->is_null() || src_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (src_array.at(j)->get_string().empty()) {
@@ -993,7 +987,6 @@ int ObExprDecode::eval_decode_batch(const ObExpr &expr, ObEvalCtx &ctx, const Ob
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (key.is_null() || src_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (src_array.at(j)->get_string().empty()) {
@@ -1016,7 +1009,6 @@ int ObExprDecode::eval_decode_batch(const ObExpr &expr, ObEvalCtx &ctx, const Ob
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (key_array.at(j)->is_null() || src_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (src_array.at(j)->get_string().empty()) {

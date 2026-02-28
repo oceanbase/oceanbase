@@ -208,7 +208,7 @@ public:                                                                         
   }                                                                                                \
   OB_INLINE int64_t get_time(const int64_t idx) const                                              \
   {                                                                                                \
-    return get<int32_t>(idx);                                                                      \
+    return get_int(idx);                                                                      \
   }                                                                                                \
   OB_INLINE uint8_t get_year(const int64_t idx) const                                              \
   {                                                                                                \

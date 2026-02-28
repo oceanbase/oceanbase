@@ -244,29 +244,6 @@ int get_view_owner_id(
   return ret;
 }
 
-int mock_table_item(
-    const ObSqlCtx &ctx,
-    const TableItem* table_item,
-    TableItem &new_table_item)
-{
-  int ret = OB_SUCCESS;
-  uint64_t view_id;
-  CK (table_item != NULL);
-  CK (ctx.schema_guard_ != NULL);
-  CK (ctx.session_info_ != NULL);
-
-  new_table_item = *table_item;
-  new_table_item.alias_name_ = ObString("");
-  OZ (ctx.schema_guard_->get_table_id(ctx.session_info_->get_login_tenant_id(),
-                                      table_item->database_name_,
-                                      table_item->table_name_,
-                                      false,
-                                      share::schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES,
-                                      view_id));
-  OX (new_table_item.table_id_ = view_id);
-  return ret;
-}
-
 #ifdef OB_BUILD_TDE_SECURITY
 template <typename T>
 int add_plainaccess_priv_to_need_priv(ObIArray<T> &need_privs,
@@ -761,56 +738,49 @@ int set_privs_by_table_item_recursively(
         OZ (add_col_id_array_to_need_priv(basic_stmt, ctx, *table_item, need_priv, need_privs));
       }
     } else if (table_item->is_view_table_) {
-      if (!table_item->alias_name_.empty()) {
-        TableItem new_table_item;
-        OZ (mock_table_item(ctx, table_item, new_table_item));
-        OZ (set_privs_by_table_item_recursively(user_id, ctx, &new_table_item,
-            packed_privs, need_privs, check_flag, basic_stmt));
+      bool need_check = true;
+      if (is_sys_view(table_item->ref_id_)) {
+        /* oracle的字典视图(dba_*)需要做检查，其他系统视图(all_*, user_*, 性能视图(v$)不做权限检查 */
+        need_check = table_item->is_oracle_dba_sys_view() || (OB_PROXY_USERS_TID == table_item->ref_id_);
       } else {
-        bool need_check = true;
-        if (is_sys_view(table_item->ref_id_)) {
-          /* oracle的字典视图(dba_*)需要做检查，其他系统视图(all_*, user_*, 性能视图(v$)不做权限检查 */
-          need_check = table_item->is_oracle_dba_sys_view() || (OB_PROXY_USERS_TID == table_item->ref_id_);
-        } else {
-          need_check = true;
+        need_check = true;
+      }
+      if (OB_SUCC(ret) && need_check) {
+        uint64_t view_owner_id;
+
+        /* 1. 对于视图，先记录视图id */
+        need_priv.db_name_ = table_item->database_name_;
+        need_priv.grantee_id_ = user_id;
+        need_priv.obj_id_ = table_item->ref_id_;
+        need_priv.obj_level_ = OBJ_LEVEL_FOR_TAB_PRIV;
+        need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::VIEW);
+        need_priv.obj_privs_ = packed_privs;
+        need_priv.check_flag_ = check_flag;
+
+        OZ (get_view_owner_id(ctx, table_item, view_owner_id));
+        OX (need_priv.owner_id_ = view_owner_id);
+        OZ (add_need_priv(need_privs, need_priv));
+
+        /* 2.1 对于insert，update，delete视图，
+              需要记录view的owner对基表的权限 */
+        if (table_item->view_base_item_ != NULL) {
+          OZ (set_privs_by_table_item_recursively(view_owner_id,
+                                                  ctx,
+                                                  table_item->view_base_item_,
+                                                  packed_privs,
+                                                  need_privs,
+                                                  check_flag,
+                                                  basic_stmt));
         }
-        if (OB_SUCC(ret) && need_check) {
-          uint64_t view_owner_id;
-
-          /* 1. 对于视图，先记录视图id */
-          need_priv.db_name_ = table_item->database_name_;
-          need_priv.grantee_id_ = user_id;
-          need_priv.obj_id_ = table_item->ref_id_;
-          need_priv.obj_level_ = OBJ_LEVEL_FOR_TAB_PRIV;
-          need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::VIEW);
-          need_priv.obj_privs_ = packed_privs;
-          need_priv.check_flag_ = check_flag;
-
-          OZ (get_view_owner_id(ctx, table_item, view_owner_id));
-          OX (need_priv.owner_id_ = view_owner_id);
-          OZ (add_need_priv(need_privs, need_priv));
-
-          /* 2.1 对于insert，update，delete视图，
-                需要记录view的owner对基表的权限 */
-          if (table_item->view_base_item_ != NULL) {
-            OZ (set_privs_by_table_item_recursively(view_owner_id,
-                                                    ctx,
-                                                    table_item->view_base_item_,
-                                                    packed_privs,
-                                                    need_privs,
-                                                    check_flag,
-                                                    basic_stmt));
-          }
-          /* 2.2 对于select语句，
-                需要记录view的owner对视图定义里面的所有表，视图的权限 */
-          if (table_item->ref_query_ != NULL && basic_stmt != NULL 
-              && stmt::T_SELECT == basic_stmt->get_stmt_type()) {
-            OZ (ObPrivilegeCheck::get_stmt_ora_need_privs(view_owner_id,
-                                                          ctx,
-                                                          table_item->ref_query_,
-                                                          need_privs,
-                                                          check_flag));
-          }
+        /* 2.2 对于select语句，
+              需要记录view的owner对视图定义里面的所有表，视图的权限 */
+        if (table_item->ref_query_ != NULL && basic_stmt != NULL
+            && stmt::T_SELECT == basic_stmt->get_stmt_type()) {
+          OZ (ObPrivilegeCheck::get_stmt_ora_need_privs(view_owner_id,
+                                                        ctx,
+                                                        table_item->ref_query_,
+                                                        need_privs,
+                                                        check_flag));
         }
       }
     }
@@ -3225,13 +3195,13 @@ int get_sys_tenant_alter_system_priv(
              stmt::T_TABLE_TTL != basic_stmt->get_stmt_type() &&
              stmt::T_ALTER_SYSTEM_RESET_PARAMETER != basic_stmt->get_stmt_type() &&
              stmt::T_TRANSFER_PARTITION != basic_stmt->get_stmt_type() &&
-             stmt::T_LOAD_TIME_ZONE_INFO != basic_stmt->get_stmt_type() &&
              stmt::T_SERVICE_NAME != basic_stmt->get_stmt_type() &&
              stmt::T_ALTER_LS != basic_stmt->get_stmt_type() &&
              stmt::T_ALTER_LS_REPLICA != basic_stmt->get_stmt_type() &&
              stmt::T_REPLACE_TENANT != basic_stmt->get_stmt_type() &&
              stmt::T_TRIGGER_STORAGE_CACHE != basic_stmt->get_stmt_type() &&
-             stmt::T_FLASHBACK_STANDBY_LOG != basic_stmt->get_stmt_type()) {
+             stmt::T_FLASHBACK_STANDBY_LOG != basic_stmt->get_stmt_type() &&
+             stmt::T_BACKUP_VALIDATE != basic_stmt->get_stmt_type()) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("Only sys tenant can do this operation",
              K(ret), "stmt type", basic_stmt->get_stmt_type());

@@ -39,6 +39,7 @@ int IndexDMLInfo::deep_copy(ObIRawExprCopier &expr_copier, const IndexDMLInfo &o
   is_update_part_key_ = other.is_update_part_key_;
   is_update_primary_key_ = other.is_update_primary_key_;
   is_vec_hnsw_index_vid_opt_ = other.is_vec_hnsw_index_vid_opt_;
+  is_compaction_scn_ttl_di_table_ = other.is_compaction_scn_ttl_di_table_;
   assignments_.reset();
   if (OB_FAIL(expr_copier.copy(other.column_exprs_, column_exprs_))) {
     LOG_WARN("failed to assign column exprs", K(ret));
@@ -84,6 +85,7 @@ int IndexDMLInfo::assign_basic(const IndexDMLInfo &other)
   is_update_primary_key_ = other.is_update_primary_key_;
   trans_info_expr_ = other.trans_info_expr_;
   is_vec_hnsw_index_vid_opt_ = other.is_vec_hnsw_index_vid_opt_;
+  is_compaction_scn_ttl_di_table_ = other.is_compaction_scn_ttl_di_table_;
   if (OB_FAIL(column_exprs_.assign(other.column_exprs_))) {
     LOG_WARN("failed to assign column exprs", K(ret));
   } else if (OB_FAIL(column_convert_exprs_.assign(other.column_convert_exprs_))) {
@@ -94,6 +96,8 @@ int IndexDMLInfo::assign_basic(const IndexDMLInfo &other)
     LOG_WARN("failed to assign assignments array", K(ret));
   } else if (OB_FAIL(ck_cst_exprs_.assign(other.ck_cst_exprs_))) {
     LOG_WARN("failed to assign check constraint exprs", K(ret));
+  } else if (OB_FAIL(view_ck_exprs_.assign(other.view_ck_exprs_))) {
+    LOG_WARN("failed to assign view check exprs", K(ret));
   } else if (OB_FAIL(part_ids_.assign(other.part_ids_))) {
     LOG_WARN("failed to assign part ids", K(ret));
   }
@@ -112,6 +116,8 @@ int IndexDMLInfo::assign(const ObDmlTableInfo &info)
     LOG_WARN("failed to assign column exprs", K(ret));
   } else if (OB_FAIL(ck_cst_exprs_.assign(info.check_constraint_exprs_))) {
     LOG_WARN("failed to assign expr", K(ret));
+  } else if (OB_FAIL(view_ck_exprs_.assign(info.view_check_exprs_))) {
+    LOG_WARN("failed to assign view check exprs", K(ret));
   } else if (OB_FAIL(part_ids_.assign(info.part_ids_))) {
     LOG_WARN("failed to assign part ids", K(ret));
   }
@@ -279,6 +285,7 @@ int IndexDMLInfo::is_new_row_expr(const ObRawExpr *expr, bool &bret) const
   } else {
     bret = ObOptimizerUtil::find_item(column_convert_exprs_, expr)
         || ObOptimizerUtil::find_item(ck_cst_exprs_, expr)
+        || ObOptimizerUtil::find_item(view_ck_exprs_, expr)
         || lookup_part_id_expr_ == expr
         || new_part_id_expr_ == expr
         || new_rowid_expr_ == expr;
@@ -292,7 +299,8 @@ int IndexDMLInfo::is_new_row_expr(const ObRawExpr *expr, bool &bret) const
 ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
   : ObLogicalOperator(plan),
     my_dml_plan_(plan),
-    view_check_exprs_(NULL),
+    index_dml_infos_(plan.get_allocator()),
+    loc_table_list_(plan.get_allocator()),
     table_partition_info_(NULL),
     stmt_id_expr_(nullptr),
     lock_row_flag_expr_(NULL),
@@ -310,10 +318,10 @@ ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
     pdml_partition_id_expr_(NULL),
     ddl_slice_id_expr_(NULL),
     pdml_is_returning_(false),
-    err_log_define_(),
+    err_log_define_(plan.get_allocator()),
     need_alloc_part_id_expr_(false),
     has_instead_of_trigger_(false),
-    produced_trans_exprs_()
+    produced_trans_exprs_(plan.get_allocator())
 {
 }
 
@@ -690,8 +698,6 @@ int ObLogDelUpd::inner_get_op_exprs(ObIArray<ObRawExpr*> &all_exprs, bool need_c
     LOG_WARN("failed to generate part expr for foreign key", K(ret));
   } else if (NULL != lock_row_flag_expr_ && OB_FAIL(all_exprs.push_back(lock_row_flag_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
-  } else if (OB_FAIL(append(all_exprs, view_check_exprs_))) {
-    LOG_WARN("failed to append exprs", K(ret));
   } else if (NULL != pdml_partition_id_expr_ && OB_FAIL(all_exprs.push_back(pdml_partition_id_expr_))) {
     LOG_WARN("failed to push back exprs", K(ret));
   } else if (NULL != ddl_slice_id_expr_ && OB_FAIL(all_exprs.push_back(ddl_slice_id_expr_))) {
@@ -752,6 +758,8 @@ int ObLogDelUpd::get_table_columns_exprs(const ObIArray<IndexDMLInfo *> &index_d
       LOG_WARN("failed to add update all_exprs to context", K(ret));
     } else if (OB_FAIL(append_array_no_dup(all_exprs, index_dml_info->ck_cst_exprs_))) {
       LOG_WARN("failed to append check constraint all_exprs", K(ret));
+    } else if (OB_FAIL(append_array_no_dup(all_exprs, index_dml_info->view_ck_exprs_))) {
+      LOG_WARN("failed to append view check all_exprs", K(ret));
     } else if (NULL != index_dml_infos.at(i)->old_part_id_expr_ &&
                OB_FAIL(all_exprs.push_back(index_dml_info->old_part_id_expr_))) {
       LOG_WARN("failed to push back old partition id expr", K(ret));
@@ -1633,8 +1641,6 @@ int ObLogDelUpd::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   int ret = OB_SUCCESS;
   if (OB_FAIL(replace_dml_info_exprs(replacer, get_index_dml_infos()))) {
     LOG_WARN("failed to replace dml info exprs", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(replacer, view_check_exprs_))) {
-    LOG_WARN("failed to replace view check exprs", K(ret));
   } else if (OB_FAIL(replace_exprs_action(replacer, produced_trans_exprs_))) {
     LOG_WARN("failed to replace produced trans exprs", K(ret));
   } else if (NULL != pdml_partition_id_expr_ &&
@@ -1695,6 +1701,9 @@ int ObLogDelUpd::replace_dml_info_exprs(
     } else if (OB_FAIL(replace_exprs_action(replacer,
                                             index_dml_info->ck_cst_exprs_))) {
       LOG_WARN("failed to replace exprs", K(ret));
+    } else if (OB_FAIL(replace_exprs_action(replacer,
+                                            index_dml_info->view_ck_exprs_))) {
+      LOG_WARN("failed to replace view check exprs", K(ret));
     } else if (NULL != index_dml_info->new_part_id_expr_ &&
             OB_FAIL(replace_expr_action(replacer, index_dml_info->new_part_id_expr_))) {
       LOG_WARN("failed to replace new parititon id expr", K(ret));

@@ -449,7 +449,6 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_BEGIN_COMMIT_OPT_DISABLE)
 int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
                                    ObSMConnection *conn,
                                    ObSQLSessionInfo &session,
@@ -459,8 +458,74 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
                                    bool &need_disconnect)
 {
   int ret = OB_SUCCESS;
+  const bool enable_mem_perf = session.is_user_session() && session.get_optimizer_tracer().enable_mem_perf();
+  if (!enable_mem_perf) {
+    ret = do_process_single_stmt(multi_stmt_item,
+                                 conn,
+                                 session,
+                                 has_more_result,
+                                 force_sync_resp,
+                                 async_resp_used,
+                                 need_disconnect);
+  } else {
+    ret = process_with_mem_perf(multi_stmt_item,
+                                conn,
+                                session,
+                                has_more_result,
+                                force_sync_resp,
+                                async_resp_used,
+                                need_disconnect);
+  }
+  return ret;
+}
+
+int ObMPQuery::process_with_mem_perf(const ObMultiStmtItem &multi_stmt_item,
+                                     ObSMConnection *conn,
+                                     ObSQLSessionInfo &session,
+                                     bool has_more_result,
+                                     bool force_sync_resp,
+                                     bool &async_resp_used,
+                                     bool &need_disconnect)
+{
+  int ret = OB_SUCCESS;
+  int64_t last_mem_usage = session.get_raw_audit_record().request_memory_used_;
+  observer::ObMemPerfCallback mpcb(session.get_optimizer_tracer());
+  ObSQLSessionInfo *session_info = &session;
+  BEGIN_MEM_PERF(session_info);
+  {
+    lib::ObMallocCallbackGuard guard(mpcb);
+    int tmp_ret = OB_SUCCESS;
+
+    ret = do_process_single_stmt(multi_stmt_item,
+                                 conn,
+                                 session,
+                                 has_more_result,
+                                 force_sync_resp,
+                                 async_resp_used,
+                                 need_disconnect);
+    MEM_TRACE("memory stat", K(last_mem_usage),
+                             "cur_mem_usage", session.get_raw_audit_record().request_memory_used_,
+                             K(mpcb.cur_used_), K(mpcb.max_used_),
+                             K(mpcb.total_used_), K(mpcb.total_freed_));
+    MEM_TRACE("malloc_callback", (void*)malloc_callback, "mpcb", (void*)(&mpcb));
+  }
+  END_MEM_PERF(session_info);
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_BEGIN_COMMIT_OPT_DISABLE)
+int ObMPQuery::do_process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
+                                      ObSMConnection *conn,
+                                      ObSQLSessionInfo &session,
+                                      bool has_more_result,
+                                      bool force_sync_resp,
+                                      bool &async_resp_used,
+                                      bool &need_disconnect)
+{
+  int ret = OB_SUCCESS;
   FLTSpanGuard(mpquery_single_stmt);
   ObReqTimeGuard req_timeinfo_guard;
+  ObMemPerfGuard mem_perf_guard("mpquery_single_stmt");
   ctx_.spm_ctx_.reset();
   bool need_response_error = true;
   session.get_raw_audit_record().request_memory_used_ = 0;
@@ -502,7 +567,6 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
       //每次执行不同sql都需要更新
       ctx_.self_add_plan_ = false;
       retry_ctrl_.reset_retry_times();//每个statement单独记录retry times
-      oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
       do {
         ret = OB_SUCCESS; //当发生本地重试的时候，需要重置错误码，不然无法推进重试
         need_disconnect = true;
@@ -761,6 +825,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
       sqlstat_record.set_is_in_retry(false);
       session.sql_sess_record_sql_stat_start_value(sqlstat_record);
     }
+    session.set_retry_wait_event_begin_time();
     ctx_.enable_sql_resource_manage_ = true;
     if (OB_FAIL(set_session_active(sql, session, single_process_timestamp_))) {
       LOG_WARN("fail to set session active", K(ret));
@@ -777,6 +842,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
 
       // exec cmd
       FLTSpanGuard(sql_execute);
+      ObMemPerfGuard mem_perf_guard("sql_execute");
       if (OB_FAIL(process_trans_ctrl_cmd(session,
                                          need_disconnect,
                                          async_resp_used,
@@ -821,7 +887,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
 
     // some statistics must be recorded for plan stat, even though sql audit disabled
     bool first_record = (1 == audit_record.try_cnt_);
-    ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+    ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_, async_resp_used);
     audit_record.exec_timestamp_.update_stage_time();
 
     // store the warning message from the most recent statement in the current session
@@ -1068,6 +1134,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         sqlstat_record.set_is_in_retry(session.get_is_in_retry());
         session.sql_sess_record_sql_stat_start_value(sqlstat_record);
       }
+      session.set_retry_wait_event_begin_time();
       result.set_has_more_result(has_more_result);
       ObTaskExecutorCtx &task_ctx = result.get_exec_context().get_task_exec_ctx();
       task_ctx.schema_service_ = gctx_.schema_service_;
@@ -1181,7 +1248,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 
       // some statistics must be recorded for plan stat, even though sql audit disabled
       bool first_record = (1 == audit_record.try_cnt_);
-      ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+      ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_, async_resp_used);
       audit_record.exec_timestamp_.update_stage_time();
 
       if (enable_perf_event && !THIS_THWORKER.need_retry()
@@ -1427,11 +1494,13 @@ int ObMPQuery::store_params_value_to_str(ObIAllocator &allocator,
       params_value_ = NULL;
       params_value_len_ = 0;
       break;
-    } else {
+    } else if (OB_LIKELY(!param.is_lob_storage())) {
       OZ (param.print_sql_literal(params_value_, length, pos, allocator, TZ_INFO(&session)));
-      if (i != params.count() - 1) {
-        OZ (databuff_printf(params_value_, length, pos, allocator, ","));
-      }
+    } else {
+      OZ (param.print_varchar_literal(params_value_, length, pos, allocator, TZ_INFO(&session)));
+    }
+    if (i != params.count() - 1) {
+      OZ (databuff_printf(params_value_, length, pos, allocator, ","));
     }
   }
   if (OB_FAIL(ret)) {
@@ -1615,6 +1684,7 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(sql_execute);
+  ObMemPerfGuard mem_perf_guard("sql_execute");
   //ac = 1时线程新启事务进行oracle临时表数据清理会和clog回调形成死锁, 这里改成同步方式
   ObSQLSessionInfo &session = result.get_session();
   CHECK_COMPATIBILITY_MODE(&session);
@@ -1731,6 +1801,8 @@ inline void ObMPQuery::record_stat(const stmt::StmtType type,
               EVENT_INC(SQL_FAIL_COUNT);
             }
           }
+        } else {
+          LOG_WARN_RET(OB_SUCCESS, "unexpected stmt type for T_END_TRANS", K(session));
         }
         break;
 
@@ -1784,7 +1856,7 @@ int ObMPQuery::deserialize_com_field_list()
     const int64_t str2_len = strlen(str2);
     const int pre_size = str1_len + str2_len;
     //寻找client传过来的table_name和filed wildcard之间的分隔符（table_name [NULL] filed wildcard）
-    for (; static_cast<int>(str[i]) != 0 && i < length; ++i) {}
+    for (; i < length && static_cast<int>(str[i]) != 0; ++i) {}
     char *dest_str = static_cast<char *>(alloc->alloc(length + pre_size));
     if (OB_ISNULL(dest_str)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

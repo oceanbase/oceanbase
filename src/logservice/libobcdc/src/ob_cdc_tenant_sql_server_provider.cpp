@@ -32,7 +32,7 @@ ObCDCTenantSQLServerProvider::ObCDCTenantSQLServerProvider()
     server_list_(ObModIds::OB_LOG_SERVER_PROVIDER ,OB_MALLOC_NORMAL_BLOCK_SIZE),
     tenant_server_map_(),
     server_blacklist_(),
-    refresh_server_lock_()
+    refresh_server_lock_(common::ObLatchIds::OB_CDC_TENANT_REFRESH_SERVER_LOCK)
 {}
 
 int ObCDCTenantSQLServerProvider::init(IObLogSysTableHelper &systable_helper)

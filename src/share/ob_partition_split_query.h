@@ -33,6 +33,7 @@ namespace storage
 class ObTabletHandle;
 class ObLSHandle;
 struct ObTabletSplitTscInfo;
+class ObTabletSplitCacheValue;
 }
 namespace share
 {
@@ -98,12 +99,29 @@ public:
       const blocksstable::ObStorageDatumUtils *datum_utils,
       bool &is_included);
 
-private:
-  int fill_range_filter_param(
-      const storage::ObTabletSplitTscInfo &split_info,
-      sql::ObEvalCtx &eval_ctx,
+  static int print_filter_params(sql::ObEvalCtx &eval_ctx, sql::ExprFixedArray &filter_params);
+  static int check_split_prepare_read_tables(const ObTableIterParam &iter_param, ObTablet &tablet);
+  static int check_split_filter_params(
+      const ObTablet &tablet,
+      sql::ObPushdownOperator *op,
+      const uint64_t filter_type,
       sql::ExprFixedArray *filter_params);
 
+  static int fill_range_filter_param(
+      const blocksstable::ObDatumRowkey &lower_bound,
+      const blocksstable::ObDatumRowkey &upper_bound,
+      const bool check_only,
+      sql::ObEvalCtx &eval_ctx,
+      sql::ExprFixedArray *filter_params);
+  static int fill_range_filter_param(
+      const blocksstable::ObDatumRowkey &bound,
+      const int64_t col_idx,
+      const bool check_only,
+      sql::ObEvalCtx &eval_ctx,
+      sql::ObExpr &expr,
+      ObDatum &expr_datum);
+
+private:
   int set_split_info(const storage::ObTabletSplitTscInfo &split_info);
 
   int copy_split_key(

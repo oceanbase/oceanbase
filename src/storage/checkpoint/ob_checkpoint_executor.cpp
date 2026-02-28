@@ -30,6 +30,7 @@ ObCheckpointExecutor::ObCheckpointExecutor()
     : ls_(nullptr),
       loghandler_(nullptr),
       rwlock_(common::ObLatchIds::CLOG_CKPT_RWLOCK),
+      rwlock_for_update_clog_checkpoint_(common::ObLatchIds::CLOG_CKPT_RWLOCK),
       update_checkpoint_enabled_(false),
       reuse_recycle_scn_times_(0),
       prev_clog_checkpoint_lsn_(),

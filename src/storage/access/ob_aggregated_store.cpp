@@ -36,7 +36,8 @@ int ObCGAggCells::can_use_index_info(const blocksstable::ObMicroIndexInfo &index
 {
   UNUSED(col_index);
   int ret = OB_SUCCESS;
-  can_agg = true;
+  // in column store, it must be major sstable
+  can_agg = true; /* index_info.is_macro_node() */
   for (int i = 0; OB_SUCC(ret) && can_agg && i < agg_cells_.count(); ++i) {
     if (OB_FAIL(agg_cells_.at(i)->can_use_index_info(index_info, true, can_agg))) {
       LOG_WARN("fail to check can use index info", K(i), KPC(agg_cells_.at(i)), K(index_info));

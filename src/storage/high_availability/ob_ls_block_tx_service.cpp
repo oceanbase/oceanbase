@@ -21,7 +21,7 @@ namespace storage
 
 ObLSBlockTxService::ObLSBlockTxService()
   : is_inited_(false),
-    mutex_(),
+    mutex_(common::ObLatchIds::LS_BLOCK_TX_SERVICE_MUTEX),
     cur_seq_(SCN::min_scn()),
     ls_(NULL)
 {

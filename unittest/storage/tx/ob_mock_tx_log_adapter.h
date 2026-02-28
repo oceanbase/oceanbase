@@ -53,7 +53,10 @@ private:
 class MockTxLogAdapter : public ObITxLogAdapter, public ObSimpleThreadPool 
 {
 public:
-  MockTxLogAdapter():is_running_(false),max_allocated_log_ts_(0),lsn_(0),task_ptr_(nullptr),CB_CNT_(0) {}
+  MockTxLogAdapter():is_running_(false),
+                     log_file_lock_(common::ObLatchIds::OB_TEST_TX_LOG_ADAPTER),
+                     cbs_lock_(common::ObLatchIds::OB_TEST_TX_LOG_ADAPTER),
+                     max_allocated_log_ts_(0),lsn_(0),task_ptr_(nullptr),CB_CNT_(0) {}
   int init(ObITxLogParam *param);
   int start();
   void stop();

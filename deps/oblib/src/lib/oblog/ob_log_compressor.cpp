@@ -43,7 +43,7 @@ int ObLogCompressor::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("the ObLogCompressor has been inited", K(ret));
-  } else if (OB_FAIL(log_compress_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+  } else if (OB_FAIL(log_compress_cond_.init(ObWaitEventIds::LOG_COMPRESSOR_COND_WAIT))) {
     ret = OB_ERR_SYS;
     LOG_ERROR("failed to init ObThreadCond", K(ret));
   } else {

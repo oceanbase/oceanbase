@@ -21,6 +21,8 @@
 #include "storage/tx/ob_xa_ctx.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
 #include "src/sql/ob_sql_ccl_rule_manager.h"
+#include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
+#include "sql/table_format/iceberg/write/ob_snapshot_producer.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -221,7 +223,7 @@ int ObResultSet::open_result()
       ObPhysicalPlanCtx *plan_ctx = NULL;
       if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("physical plan ctx is null");
+        LOG_WARN("physical plan ctx is null", K(ret));
       } else if (plan_ctx->get_is_direct_insert_plan()) {
         // for insert /*+ append */ into select clause
         if (OB_FAIL(ObTableDirectInsertService::commit_direct_insert(get_exec_context(), *physical_plan_))) {
@@ -637,12 +639,17 @@ int ObResultSet::set_mysql_info()
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = get_exec_context().get_physical_plan_ctx();
   int64_t pos = 0;
+  int64_t warning_cnt = warning_count_;
+  ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
+  if (OB_NOT_NULL(buffer)) {
+    warning_cnt = buffer->get_readable_warning_count();
+  }
   if (OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_LOG(WARN, "fail to get physical plan ctx");
   } else if (stmt::T_UPDATE == get_stmt_type()) {
     int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_UPDATE_MSG_FMT, plan_ctx->get_row_matched_count(),
-                              plan_ctx->get_row_duplicated_count(), warning_count_);
+                              plan_ctx->get_row_duplicated_count(), warning_cnt);
     if (OB_UNLIKELY(result_len < 0) || OB_UNLIKELY(result_len >= MSG_SIZE - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to snprintf to buff", K(ret));
@@ -653,15 +660,13 @@ int ObResultSet::set_mysql_info()
       //nothing to do
     } else {
       int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_INSERT_MSG_FMT, plan_ctx->get_row_matched_count(),
-                                plan_ctx->get_row_duplicated_count(), warning_count_);
+                                plan_ctx->get_row_duplicated_count(), warning_cnt);
       if (OB_UNLIKELY(result_len < 0) || OB_UNLIKELY(result_len >= MSG_SIZE - pos)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to snprintf to buff", K(ret));
       }
     }
   } else if (stmt::T_LOAD_DATA == get_stmt_type()) {
-    int64_t warning_cnt = warning_count_;
-    ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
     if (OB_NOT_NULL(buffer)) {
       warning_cnt = buffer->get_total_warning_count();
     }
@@ -897,6 +902,20 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
         LOG_WARN("fail to finish direct insert", KR(tmp_ret));
       }
     }
+
+    if (plan_ctx->get_lake_table_metadata() != NULL
+        && plan_ctx->get_iceberg_data_files().count() > 0
+        && OB_SUCCESS == close_ret
+        && (OB_SUCCESS == errcode || OB_ITER_END == errcode)) {
+      const iceberg::ObIcebergTableMetadata& iceberg_table_metadata =
+        *static_cast<const iceberg::ObIcebergTableMetadata*>(plan_ctx->get_lake_table_metadata());
+      ObArenaAllocator tmp_allocator;
+      iceberg::ObSnapshotProducer snapshot_producer(iceberg_table_metadata,
+                                                    tmp_allocator,
+                                                    plan_ctx->get_iceberg_data_files());
+      OZ(snapshot_producer.init());
+      OZ(snapshot_producer.commit());
+    }
 //    // 必须要在executor_.execute_plan运行之后再调用exec_result_的一系列函数。
 //    if (OB_FAIL(exec_result_.close(ctx))) {
 //      SQL_LOG(WARN, "fail close main query", K(ret));
@@ -945,6 +964,7 @@ int ObResultSet::do_close(int *client_ret)
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
 
   FLTSpanGuard(close);
+  ObMemPerfGuard mem_perf_guard("close");
   const bool is_tx_active = my_session_.is_in_transaction();
   int do_close_plan_ret = OB_SUCCESS;
   ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
@@ -1316,7 +1336,9 @@ int ObResultSet::init_cmd_exec_context(ObExecContext &exec_ctx)
     exec_ctx.set_output_row(new(buf)ObNewRow());
     exec_ctx.set_field_columns(&field_columns_);
     int64_t plan_timeout = 0;
-    if (OB_FAIL(my_session_.get_query_timeout(plan_timeout))) {
+    if (is_pl_stmt(stmt_type_)) {
+      // skip here, will set in ObPLContext::init
+    } else if (OB_FAIL(my_session_.get_query_timeout(plan_timeout))) {
       LOG_WARN("fail to get query timeout", K(ret));
     } else {
       int64_t start_time = my_session_.get_query_start_time();
@@ -1509,6 +1531,26 @@ int ObResultSet::ExternalRetrieveInfo::recount_dynamic_param_info(
 
 // Check if the statement is a simple SELECT INTO FROM DUAL statement
 // that can be optimized (no WHERE, GROUP BY, HAVING, aggregation, window functions, etc.)
+static bool has_query_ref_expr(const ObRawExpr *expr)
+{
+  bool has_subquery = false;
+  if (OB_ISNULL(expr)) {
+    // do nothing
+  } else if (T_FUN_SUBQUERY == expr->get_expr_type()
+            || T_REF_QUERY == expr->get_expr_type()
+            || T_OP_ARG_CASE == expr->get_expr_type() // can not cg expr
+            || IS_AGGR_FUN(expr->get_expr_type())
+            || (T_FUN_SYS_ORA_DECODE == expr->get_expr_type() && oceanbase::lib::is_oracle_mode())) { // not support in pl
+    // found subquery or agg func
+    has_subquery = true;
+  } else {
+    for (int64_t i = 0; !has_subquery && i < expr->get_param_count(); ++i) {
+      has_subquery = has_query_ref_expr(expr->get_param_expr(i));
+    }
+  }
+  return has_subquery;
+}
+
 static bool is_simple_select_into_from_dual(const ObSelectStmt &select_stmt,
                                              int64_t into_exprs_count,
                                              const ObFixedArray<ObRawExpr*, ObIAllocator> &into_exprs)
@@ -1526,6 +1568,15 @@ static bool is_simple_select_into_from_dual(const ObSelectStmt &select_stmt,
         && !select_stmt.has_having()                                // No HAVING
         && !select_stmt.has_window_function()                      // No window functions
         && !select_stmt.is_set_stmt();                             // No UNION/INTERSECT/EXCEPT
+    // Check if any select expression contains subquery
+    if (can_transform) {
+      for (int64_t i = 0; can_transform && i < select_stmt.get_select_items().count(); ++i) {
+        const ObRawExpr *expr = select_stmt.get_select_item(i).expr_;
+        if (has_query_ref_expr(expr)) {
+          can_transform = false;
+        }
+      }
+    }
   }
   return can_transform;
 }

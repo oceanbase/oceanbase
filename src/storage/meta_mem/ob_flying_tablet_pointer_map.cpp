@@ -41,7 +41,7 @@ int ObFlyingTabletPointerMap::init(const uint64_t tenant_id)
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else if (OB_FAIL(map_.create(bucket_num, "FlyTabletPtrMap", "FlyTabletPtrMap", tenant_id))) {
     LOG_WARN("fail to initialize external tablet cnt map");
-  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::DEFAULT_BUCKET_LOCK, ObMemAttr(tenant_id, "FlyTabletMapLk")))) {
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::FLYING_TABLET_POINTER_MAP_LOCK, ObMemAttr(tenant_id, "FlyTabletMapLk")))) {
     LOG_WARN("fail to init bucket lock", K(ret), K(bucket_num));
   } else {
     is_inited_ = true;

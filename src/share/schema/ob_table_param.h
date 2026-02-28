@@ -355,6 +355,7 @@ public:
   { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
   inline bool is_safe_filter_with_di() const { return is_safe_filter_with_di_; }
   inline int8_t get_access_virtual_col_cnt() const { return access_virtual_col_cnt_; }
+  inline ObMergeEngineType get_merge_engine_type() const { return merge_engine_type_; }
   DECLARE_TO_STRING;
 
   static int convert_column_schema_to_param(const ObColumnSchemaV2 &column_schema,
@@ -367,6 +368,7 @@ public:
   static int alloc_column(common::ObIAllocator &allocator, ObColumnParam *& col_ptr);
   int check_is_safe_filter_with_di(common::ObIArray<sql::ObRawExpr *> &exprs,
                                    sql::ObPushdownFilterNode &pushdown_filters);
+  inline ObTableType get_table_type() const { return table_type_; }
 private:
   int construct_columns_and_projector(const ObTableSchema &table_schema,
                                       const common::ObIArray<uint64_t> &output_column_ids,
@@ -447,6 +449,7 @@ private:
   common::ObFixedArray<ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
   // whether the whole plan use rich format, table scan may not use new format, but the whole plan uses new format
   bool plan_enable_rich_format_;
+  ObTableType table_type_;
   ObMergeEngineType merge_engine_type_;
 };
 } //namespace schema

@@ -67,6 +67,8 @@
   RPC_S(PR5 get_partition_count, OB_GET_PARTITION_COUNT,
         ObGetPartitionCountResult);
   RPC_AP(PR5 switch_schema, OB_SWITCH_SCHEMA, (ObSwitchSchemaArg), obrpc::ObSwitchSchemaResult);
+  RPC_AP(PR5 batch_detect_session_alive, OB_BATCH_DETECT_SESSION_ALIVE, (obrpc::ObBatchDetectSessionAliveArg), obrpc::ObBatchDetectSessionAliveResult);
+  RPC_AP(PR5 detect_client_session_alive, OB_DETECT_CLIENT_SESSION_ALIVE, (obrpc::UInt64), obrpc::Bool);
   RPC_S(PR5 refresh_memory_stat, OB_REFRESH_MEMORY_STAT);
   RPC_S(PR5 wash_memory_fragmentation, OB_WASH_MEMORY_FRAGMENTATION);
   RPC_S(PR5 bootstrap, OB_BOOTSTRAP, (ObBootstrapArg));
@@ -225,6 +227,8 @@
   RPC_S(PR5 push_ss_gc_last_succ_scn, OB_PUSH_SS_GC_LAST_SUCC_SCN, (obrpc::ObSSGCPushLastSuccScnArg));
   RPC_S(PR5 del_ss_macro_cache, OB_DEL_SS_MACRO_CACHE, (obrpc::ObGetSSMacroBlockArg), obrpc::ObDelSSMacroCacheRes);
   RPC_S(PR5 del_ss_tablet_macro_cache, OB_DEL_SS_TABLET_MACRO_CACHE, (obrpc::ObDelSSTabletMacroCacheArg), obrpc::ObDelSSTabletMacroCacheRes);
+  RPC_S(PR5 get_ss_gc_detect_infos, OB_GET_SS_GC_DETECT_INFOS, (obrpc::ObSSGCDetectInfoArg), obrpc::ObSSGCDetectInfoRes);
+  RPC_S(PR5 get_ss_gc_start_scn_items, OB_GET_SS_GC_START_SCN_ITEMS, (obrpc::ObSSGCStartSCNArg), obrpc::ObSSGCStartSCNRes);
   #endif
   RPC_S(PR5 remote_write_ddl_inc_commit_log, OB_REMOTE_WRITE_DDL_INC_COMMIT_LOG, (obrpc::ObRpcRemoteWriteDDLIncCommitLogArg), ObRpcRemoteWriteDDLIncCommitLogRes);
   RPC_S(PR5 check_ls_can_offline, OB_CHECK_LS_CAN_OFFLINE, (obrpc::ObCheckLSCanOfflineArg));
@@ -273,6 +277,7 @@
   RPC_S(PR5 notify_tenant_thread, OB_NOTIFY_TENANT_THREAD, (obrpc::ObNotifyTenantThreadArg));
   RPC_S(PR5 admin_alter_ls, OB_ADMIN_ALTER_LS, (share::ObAlterLSArg), share::ObAlterLSRes);
   RPC_AP(PR5 tablet_major_freeze, OB_TABLET_MAJOR_FREEZE, (ObTabletMajorFreezeArg), obrpc::Int64);
+  RPC_AP(PR5 table_major_freeze, OB_TABLE_MAJOR_FREEZE, (ObTableMajorFreezeRequest), obrpc::ObTableMajorFreezeResult);
   RPC_AP(PR5 shared_storage_net_throt_predict, OB_SHARED_STORAGE_NET_THROT_PREDICT, (obrpc::ObSSNTEndpointArg), obrpc::ObSharedDeviceResourceArray);
   RPC_AP(PR5 shared_storage_net_throt_set, OB_SHARED_STORAGE_NET_THROT_SET, (obrpc::ObSharedDeviceResourceArray), obrpc::ObSSNTSetRes);
   RPC_AP(PR5 kill_client_session, OB_KILL_CLIENT_SESSION, (ObKillClientSessionArg), ObKillClientSessionRes);
@@ -310,3 +315,5 @@
   RPC_AP(PR5 check_backup_dest_rw_consistency, OB_CHECK_BACKUP_DEST_RW_CONSISTENCY, (obrpc::ObCheckBackupDestRWConsistencyArg), obrpc::Int64);
   RPC_S(PR5 check_backup_dest_validity, OB_CHECK_BACKUP_DEST_VALIDITY, (obrpc::ObRemoteCheckBackupDestValidityArg));
   RPC_S(PR5 write_backup_dest_format_file, OB_WRITE_BACKUP_DEST_FORMAT_FILE, (obrpc::ObRemoteCheckBackupDestValidityArg));
+  RPC_S(PR5 validate_backup_ls_task, OB_VALIDATE_BACKUP_LS_TASK, (ObBackupValidateLSArg));
+  RPC_S(PR5 report_backup_validate_over, OB_VALIDATE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));

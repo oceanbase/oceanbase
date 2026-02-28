@@ -45,27 +45,29 @@ ObTxFinishTransfer::ObTxFinishTransfer()
       tenant_id_(OB_INVALID_ID),
       src_ls_id_(),
       dest_ls_id_(),
-      mutex_(),
+      mutex_(common::ObLatchIds::TRANSFER_FINISH_TRANSFER_MUTEX),
       cond_(),
       sql_proxy_(NULL),
       round_(0),
       diagnose_result_msg_(share::ObStorageHACostItemName::MAX_NAME),
-      data_version_(0)
+      data_version_(0),
+      ls_transfer_info_(nullptr)
 {}
 
 ObTxFinishTransfer::~ObTxFinishTransfer()
 {}
 
 int ObTxFinishTransfer::init(const ObTransferTaskID &task_id, const uint64_t tenant_id, const share::ObLSID &src_ls_id,
-    const share::ObLSID &dest_ls_id, common::ObMySQLProxy &sql_proxy)
+    const share::ObLSID &dest_ls_id, common::ObMySQLProxy &sql_proxy, ObTransferLSInfo *transfer_ls_info)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("finish transfer do not init", K(ret));
-  } else if (!task_id.is_valid() || OB_INVALID_ID == tenant_id || !src_ls_id.is_valid() || !dest_ls_id.is_valid()) {
+  } else if (!task_id.is_valid() || OB_INVALID_ID == tenant_id || !src_ls_id.is_valid() || !dest_ls_id.is_valid()
+      || OB_ISNULL(transfer_ls_info)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(task_id), K(tenant_id), K(src_ls_id), K(dest_ls_id));
+    LOG_WARN("get invalid args", K(ret), K(task_id), K(tenant_id), K(src_ls_id), K(dest_ls_id), KP(transfer_ls_info));
   } else if (OB_FAIL(cond_.init(ObWaitEventIds::STORAGE_HA_FINISH_TRANSFER))) {
     LOG_WARN("failed to init condition", K(ret));
   } else {
@@ -74,6 +76,7 @@ int ObTxFinishTransfer::init(const ObTransferTaskID &task_id, const uint64_t ten
     src_ls_id_ = src_ls_id;
     dest_ls_id_ = dest_ls_id;
     sql_proxy_ = &sql_proxy;
+    ls_transfer_info_ = transfer_ls_info;
     is_inited_ = true;
   }
   return ret;
@@ -101,7 +104,7 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   ObMySQLTransaction trans;
   ObArray<ObTransferTabletInfo> tablet_list;
   ObMemberList member_list;
-  int64_t quorum = 0;
+  common::GlobalLearnerList learner_list;
   observer::ObInnerSQLConnection *conn = NULL;
   SCN start_scn;
   SCN finish_scn;
@@ -109,7 +112,7 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   share::ObRsMgr *rs_mgr = GCTX.rs_mgr_;
   obrpc::ObSrvRpcProxy *svr_rpc_proxy = GCTX.srv_rpc_proxy_;
   int64_t result = OB_SUCCESS;
-  common::ObArray<common::ObAddr> member_addr_list;
+  common::ObArray<common::ObAddr> addr_list;
   bool majority_backfilled = false;
   ObLSLocation ls_location;
   bool is_leader = false;
@@ -139,30 +142,27 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   } else if (!is_leader) {
     ret = OB_IS_CHANGING_LEADER;
     LOG_WARN("self is not leader of dest ls", K(ret), K(dest_ls_id));
-  } else if (OB_FAIL(get_ls_member_list_(tenant_id, dest_ls_id, member_list))) {
-    LOG_WARN("failed to get ls member list", K(ret), K(tenant_id), K(dest_ls_id));
+  } else if (OB_FAIL(ObTransferUtils::get_transfer_need_check_addr_list(src_ls_id, dest_ls_id, *ls_transfer_info_,
+    member_list, learner_list, addr_list))) {
+    LOG_WARN("failed to get transfer need check addr list", K(ret), K(src_ls_id), K(dest_ls_id));
   }  // TODO(yangyi.yyy): get member list and check self is leader together
   // 1. Release the locking relationship of the member list of dest_ls and src_ls
   // (the interface for binding and releasing the locking relationship needs to have the ability to re-entrant)
-  else if (OB_FAIL(unlock_src_and_dest_ls_member_list_(tenant_id, src_ls_id, dest_ls_id, member_list))) {
-    LOG_WARN("failed to unlock src and dest ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
+  else if (OB_FAIL(unlock_src_and_dest_ls_member_and_learner_list_(tenant_id, src_ls_id, dest_ls_id, member_list, learner_list))) {
+    LOG_WARN("failed to unlock src and dest ls member and learner list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
   }
   // get tablet info list from inner table
   else if (OB_FAIL(get_transfer_tablet_info_from_inner_table_(
                task_id, tenant_id, tablet_list, start_scn, table_lock_tablet_list, lock_owner_id))) {
     LOG_WARN("failed to get transfer tablet list", K(ret), K(task_id), K(tenant_id));
-  } else if (OB_FAIL(get_transfer_quorum_(member_list, quorum))) {
-    LOG_WARN("failed to get transfer quorum", K(ret), K(member_list));
   }
   // precheck if majority ls logical table replaced
-  else if (OB_FAIL(check_ls_logical_table_replaced(
-               tenant_id, dest_ls_id, member_list, tablet_list, quorum, is_ready))) {
+  else if (OB_FAIL(check_ls_logical_table_replaced(tenant_id, dest_ls_id, addr_list, tablet_list, is_ready))) {
     LOG_WARN("wait all ls replica logical table replaced failed",
         K(ret),
         K(tenant_id),
         K(dest_ls_id),
-        K(member_list),
-        K(quorum));
+        K(addr_list));
   } else if (!is_ready) {
     LOG_INFO("transfer in tablet not ready", K(ret), K(tenant_id), K(dest_ls_id));
     transfer_service->wakeup();
@@ -183,6 +183,7 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
     SERVER_EVENT_SYNC_ADD("TRANSFER", "AFTER_TRANSFER_DOING_START_TRANS");
 #endif
       DEBUG_SYNC(SWITCH_LEADER_AFTER_TRANSFER_DOING_START_TRANS);
+      bool is_match = false;
       if (FAILEDx(select_transfer_task_for_update_(task_id, trans))) {
         LOG_WARN("failed to select for update", K(ret), K(task_id));
       }
@@ -196,16 +197,26 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
       //       the conditions. After unlocking the member list, a copy is migrated in. This copy replaces one of the
       //       majority, resulting in a majority If the dispatch does not meet the conditions, the following chapters on
       //       transfer and migration will discuss
-      else if (OB_FAIL(lock_ls_member_list_(tenant_id, dest_ls_id, member_list, lock_status))) {
-        LOG_WARN("failed to lock ls member list", K(ret), K(tenant_id), K(dest_ls_id), K(member_list));
+      else if (OB_FAIL(lock_ls_member_and_learner_list_(tenant_id, dest_ls_id, member_list, learner_list, lock_status))) {
+        LOG_WARN("failed to lock ls member and learner list", K(ret), K(tenant_id), K(dest_ls_id), K(member_list));
+      // get addr list again after locking member and learner list
+      } else if (OB_FAIL(ObTransferUtils::get_transfer_need_check_addr_list(src_ls_id, dest_ls_id, *ls_transfer_info_,
+        member_list, learner_list, addr_list))) {
+        LOG_WARN("failed to get ls addr list", K(ret), K(tenant_id), K(dest_ls_id));
+      } else if (OB_FAIL(check_addr_list_is_match_(member_list, learner_list, is_match))) {
+        LOG_WARN("failed to check addr list is match", K(ret), K(tenant_id), K(dest_ls_id), K(addr_list));
+      } else if (!is_match) {
+        ret = OB_EAGAIN;
+        LOG_WARN("src member list is not match with dest member list, need retry",
+          K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
+        transfer_service->wakeup();
       } else if (OB_FAIL(check_ls_logical_table_replaced(
-                    tenant_id, dest_ls_id, member_list, tablet_list, quorum, is_ready))) {
+                    tenant_id, dest_ls_id, addr_list, tablet_list, is_ready))) {
         LOG_WARN("wait all ls replica logical table replaced failed",
             K(ret),
             K(tenant_id),
             K(dest_ls_id),
-            K(member_list),
-            K(quorum));
+            K(addr_list));
       } else if (!is_ready) {
         LOG_INFO("transfer in tablet not ready", K(ret), K(tenant_id), K(dest_ls_id));
         transfer_service->wakeup();
@@ -251,15 +262,13 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
         // incremented (in TX_START_TRASNFER_IN)
         if (FAILEDx(wait_transfer_tablet_status_normal_(tenant_id, dest_ls_id, tablet_list, start_scn, timeout_ctx, finish_scn))) {
           LOG_WARN("failed to wait tablet status normal", K(ret), K(tenant_id), K(dest_ls_id), K(tablet_list));
-        } else if (OB_FAIL(member_list.get_addr_array(member_addr_list))) {
-          LOG_WARN("failed to get addr array", K(ret), K(member_list));
         } else if (OB_FAIL(wait_all_ls_replica_replay_scn_(task_id, tenant_id, dest_ls_id,
-            member_addr_list, finish_scn, quorum, timeout_ctx, is_majority_passed))) {
+            addr_list, finish_scn, timeout_ctx, is_majority_passed))) {
           LOG_WARN("failed to check ls replica replay scn",
               K(ret),
               K(tenant_id),
               K(dest_ls_id),
-              K(member_addr_list),
+              K(addr_list),
               K(finish_scn));
         } else if (!is_majority_passed) {
           ret = OB_TIMEOUT;
@@ -297,10 +306,10 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
         else {
           process_perf_diagnose_info_(ObStorageHACostItemName::UNLOCK_TABLET_FOR_LOCK,
               0/*start_ts*/, tablet_list.count(), round_, false/*is_report*/);
-          if (OB_FAIL(
-                      unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, lock_status, true/*need_check_palf_leader*/, dest_ls_id, CONFIG_CHANGE_TIMEOUT))) {
+          if (OB_FAIL(unlock_ls_member_and_learner_list_(tenant_id, dest_ls_id, member_list, learner_list, lock_status,
+              true/*need_check_palf_leader*/, dest_ls_id, CONFIG_CHANGE_TIMEOUT))) {
             diagnose_result_msg_ = share::ObStorageHACostItemName::UNLOCK_LS_MEMBER_LIST;
-            LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(dest_ls_id), K(member_list));
+            LOG_WARN("failed to unlock ls member and learner list", K(ret), K(tenant_id), K(dest_ls_id), K(member_list));
           } else {
             process_perf_diagnose_info_(ObStorageHACostItemName::UNLOCK_LS_MEMBER_LIST,
                 0/*start_ts*/, tablet_list.count(), round_, false/*is_report*/);
@@ -365,11 +374,10 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   return ret;
 }
 
-int ObTxFinishTransfer::unlock_src_and_dest_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &src_ls_id,
-    const share::ObLSID &dest_ls_id, common::ObMemberList &member_list)
+int ObTxFinishTransfer::unlock_src_and_dest_ls_member_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &src_ls_id,
+    const share::ObLSID &dest_ls_id, common::ObMemberList &member_list, common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
-  bool is_same = false;
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
   const int64_t lock_timeout = CONFIG_CHANGE_TIMEOUT;
   bool same_member_list = true;
@@ -378,13 +386,13 @@ int ObTxFinishTransfer::unlock_src_and_dest_ls_member_list_(const uint64_t tenan
   if (!src_ls_id.is_valid() || !dest_ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, src_ls_id, member_list, start_status, false/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
+  } else if (OB_FAIL(unlock_ls_member_and_learner_list_(tenant_id, src_ls_id, member_list, learner_list, start_status, false/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
     // this will unlock the *lock* obtained in start status, so no need to check palf leader
-    LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, start_status, true/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
-    LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, doing_status, true/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
-    LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
+    LOG_WARN("failed to unlock ls member and learner list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
+  } else if (OB_FAIL(unlock_ls_member_and_learner_list_(tenant_id, dest_ls_id, member_list, learner_list, start_status, true/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
+    LOG_WARN("failed to unlock ls member and learner list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
+  } else if (OB_FAIL(unlock_ls_member_and_learner_list_(tenant_id, dest_ls_id, member_list, learner_list, doing_status, true/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
+    LOG_WARN("failed to unlock ls member and learner list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
   } else {
     LOG_INFO(
         "[TRANSFER] unlock src and dest ls member list", K(tenant_id), K(src_ls_id), K(dest_ls_id), K(member_list));
@@ -537,28 +545,23 @@ int ObTxFinishTransfer::check_transfer_tablet_status_normal_(
   return ret;
 }
 
-int ObTxFinishTransfer::check_ls_logical_table_replaced(const uint64_t tenant_id,
-    const share::ObLSID &dest_ls_id, const common::ObMemberList &member_list,
-    const common::ObArray<ObTransferTabletInfo> &tablet_list, const int64_t quorum, bool &all_backfilled)
+int ObTxFinishTransfer::check_ls_logical_table_replaced(const uint64_t tenant_id, const share::ObLSID &dest_ls_id,
+    const common::ObIArray<common::ObAddr> &addr_list,
+    const common::ObArray<ObTransferTabletInfo> &tablet_list, bool &all_backfilled)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   bool is_leader = false;
-  const int64_t cluster_id = GCONF.cluster_id;
-  ObLSLocation ls_location;
-  ObArray<ObAddr> addr_array;
   if (OB_FAIL(check_self_ls_leader_(dest_ls_id, is_leader))) {
     LOG_WARN("failed to check self ls leader", K(ret), K(dest_ls_id));
   } else if (!is_leader) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("self is not leader", K(ret), K(dest_ls_id));
-  } else if (OB_FAIL(member_list.get_addr_array(addr_array))) {
-    LOG_WARN("failed to get addr array", K(ret), K(member_list));
   } else if (OB_FAIL(inner_check_ls_logical_table_replaced_(
-                 tenant_id, dest_ls_id, addr_array, tablet_list, quorum, all_backfilled))) {
-    LOG_WARN("failed to inner check majority backfilled", K(ret), K(tenant_id), K(dest_ls_id), K(addr_array));
+                 tenant_id, dest_ls_id, addr_list, tablet_list, all_backfilled))) {
+    LOG_WARN("failed to inner check majority backfilled", K(ret), K(tenant_id), K(dest_ls_id), K(addr_list));
   } else {
-    LOG_INFO("check ls logical table replace", K(tenant_id), K(dest_ls_id), K(addr_array), K(tablet_list), K(quorum), K(all_backfilled));
+    LOG_INFO("check ls logical table replace", K(tenant_id), K(dest_ls_id), K(addr_list), K(tablet_list), K(all_backfilled));
   }
   if (OB_SUCC(ret)) {
     process_perf_diagnose_info_(ObStorageHACostItemName::CHECK_LS_LOGICAL_TABLE_REPLACED, 0/*start_ts*/, tablet_list.count(), round_, false/*is_report*/);
@@ -569,8 +572,8 @@ int ObTxFinishTransfer::check_ls_logical_table_replaced(const uint64_t tenant_id
 }
 
 int ObTxFinishTransfer::inner_check_ls_logical_table_replaced_(const uint64_t tenant_id,
-    const share::ObLSID &dest_ls_id, const common::ObArray<common::ObAddr> &member_addr_list,
-    const common::ObArray<ObTransferTabletInfo> &tablet_list, const int64_t quorum, bool &all_backfilled)
+    const share::ObLSID &dest_ls_id, const common::ObIArray<common::ObAddr> &addr_list,
+    const common::ObArray<ObTransferTabletInfo> &tablet_list, bool &all_backfilled)
 {
   int ret = OB_SUCCESS;
   all_backfilled = true;
@@ -585,8 +588,8 @@ int ObTxFinishTransfer::inner_check_ls_logical_table_replaced_(const uint64_t te
   arg.ls_id_ = dest_ls_id;
   if (OB_FAIL(arg.tablet_list_.assign(tablet_list))) {
     LOG_WARN("failed to assign tablet array", K(ret), K(tablet_list));
-  } else if (OB_FAIL(async_rpc_arg.set_ha_async_arg(tenant_id, group_id, rpc_timeout, member_addr_list))) {
-    LOG_WARN("failed to set ha async arg", K(ret), K(tenant_id), K(group_id), K(rpc_timeout), K(member_addr_list));
+  } else if (OB_FAIL(async_rpc_arg.set_ha_async_arg(tenant_id, group_id, rpc_timeout, addr_list))) {
+    LOG_WARN("failed to set ha async arg", K(ret), K(tenant_id), K(group_id), K(rpc_timeout), K(addr_list));
   } else if (OB_FAIL(ObHAAsyncRpc::send_async_rpc(async_rpc_arg, arg, batch_rpc_proxy, responses))) {
     LOG_WARN("failed to send async rpc", K(ret), K(async_rpc_arg), K(arg));
   } else {
@@ -594,7 +597,7 @@ int ObTxFinishTransfer::inner_check_ls_logical_table_replaced_(const uint64_t te
       const obrpc::ObCheckTransferTabletBackfillRes &res = responses.at(i);
       if (!res.backfill_finished_) {
         all_backfilled = false;
-        LOG_INFO("server has not finished backfill", K(i), K(member_addr_list));
+        LOG_INFO("server has not finished backfill", K(i), K(addr_list));
         break;
       }
     }
@@ -710,8 +713,8 @@ int ObTxFinishTransfer::do_tx_finish_transfer_out_(const ObTransferTaskID &task_
 }
 
 int ObTxFinishTransfer::wait_all_ls_replica_replay_scn_(const ObTransferTaskID &task_id, const uint64_t tenant_id,
-    const share::ObLSID &ls_id, const common::ObArray<common::ObAddr> &member_addr_list, const share::SCN &finish_scn,
-    const int64_t quorum, ObTimeoutCtx &timeout_ctx, bool &check_passed)
+    const share::ObLSID &ls_id, const common::ObArray<common::ObAddr> &addr_list, const share::SCN &finish_scn,
+    ObTimeoutCtx &timeout_ctx, bool &check_passed)
 {
   int ret = OB_SUCCESS;
   common::ObArray<common::ObAddr> finished_addr_list;
@@ -722,14 +725,13 @@ int ObTxFinishTransfer::wait_all_ls_replica_replay_scn_(const ObTransferTaskID &
       ret = OB_TIMEOUT;
       LOG_WARN("some ls replay not finished", K(ret), K(tenant_id), K(ls_id));
     } else if (OB_FAIL(check_all_ls_replica_replay_scn_(
-            task_id, tenant_id, ls_id, member_addr_list, finish_scn, timeout_ctx, finished_addr_list))) {
+            task_id, tenant_id, ls_id, addr_list, finish_scn, timeout_ctx, finished_addr_list))) {
       LOG_WARN("failed to check all ls replica replay scn",
           K(ret),
           K(tenant_id),
-          K(member_addr_list),
-          K(ls_id),
-          K(quorum));
-    } else if (finished_addr_list.count() == member_addr_list.count()) {
+          K(addr_list),
+          K(ls_id));
+    } else if (finished_addr_list.count() == addr_list.count()) {
       check_passed = true;
       LOG_INFO("all ls has passed ls replica replay scn", K(tenant_id), K(ls_id));
       break;
@@ -792,8 +794,8 @@ int ObTxFinishTransfer::get_ls_handle_(
   return ret;
 }
 
-int ObTxFinishTransfer::get_ls_member_list_(
-    const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObMemberList &member_list)
+int ObTxFinishTransfer::get_ls_member_and_learner_list_(
+    const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObMemberList &member_list, common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
   storage::ObLS *ls = NULL;
@@ -810,15 +812,15 @@ int ObTxFinishTransfer::get_ls_member_list_(
   } else if (!is_leader) {
     ret = OB_IS_CHANGING_LEADER;
     LOG_WARN("self is not leader", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls->get_paxos_member_list(member_list, quorum, true/*filter_logonly_replica*/))) {
-    LOG_WARN("failed to get paxos member list", K(ret));
+  } else if (OB_FAIL(ls->get_paxos_member_list_and_learner_list(member_list, quorum, learner_list, true/*filter_logonly_replica*/))) {
+    LOG_WARN("failed to get paxos member list and learner list", K(ret));
   } else if (OB_FAIL(check_self_ls_leader_(ls_id, is_leader))) {
     LOG_WARN("failed to check self ls leader", K(ret), K(ls_id));
   } else if (!is_leader) {
     ret = OB_IS_CHANGING_LEADER;
     LOG_WARN("self is not leader", K(ret), K(ls_id));
   } else {
-    LOG_INFO("get ls member list", K(tenant_id), K(ls_id), K(member_list));
+    LOG_INFO("get ls member list", K(tenant_id), K(ls_id), K(member_list), K(learner_list));
   }
   return ret;
 }
@@ -833,26 +835,27 @@ int ObTxFinishTransfer::check_same_member_list_(
   return ret;
 }
 
-int ObTxFinishTransfer::unlock_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObMemberList &member_list, const ObTransferLockStatus &status,
-    const bool need_check_palf_leader, const share::ObLSID &need_check_palf_leader_ls_id, const int64_t lock_timeout)
+int ObTxFinishTransfer::unlock_ls_member_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const common::ObMemberList &member_list, const common::GlobalLearnerList &learner_list,
+    const ObTransferLockStatus &status, const bool need_check_palf_leader,
+    const share::ObLSID &need_check_palf_leader_ls_id, const int64_t lock_timeout)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObMemberListLockUtils::unlock_ls_member_list(
-      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE,
+  if (OB_FAIL(ObMemberListLockUtils::unlock_ls_member_and_learner_list(
+      tenant_id, ls_id, task_id_.id(), member_list, learner_list, status, share::OBCG_STORAGE,
       need_check_palf_leader, need_check_palf_leader_ls_id, *sql_proxy_))) {
-    LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(ls_id), K_(task_id), K(status));
+    LOG_WARN("failed to unlock ls member and learner list", K(ret), K(tenant_id), K(ls_id), K_(task_id), K(status));
   }
   return ret;
 }
 
-int ObTxFinishTransfer::lock_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObMemberList &member_list, const ObTransferLockStatus &status)
+int ObTxFinishTransfer::lock_ls_member_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const common::ObMemberList &member_list, const common::GlobalLearnerList &learner_list, const ObTransferLockStatus &status)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObMemberListLockUtils::lock_ls_member_list(
-      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE, ls_id, *sql_proxy_))) {
-    LOG_WARN("failed to unlock ls member list", K(ret), K(ls_id), K(member_list));
+  if (OB_FAIL(ObMemberListLockUtils::lock_ls_member_and_learner_list(
+      tenant_id, ls_id, task_id_.id(), member_list, learner_list, status, share::OBCG_STORAGE, ls_id, *sql_proxy_))) {
+    LOG_WARN("failed to lock ls member and learner list", K(ret), K(ls_id), K(member_list));
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
@@ -1059,19 +1062,6 @@ int ObTxFinishTransfer::commit_trans_(const bool is_commit, ObMySQLTransaction &
   return ret;
 }
 
-int ObTxFinishTransfer::get_transfer_quorum_(const ObMemberList &member_list, int64_t &quorum)
-{
-  int ret = OB_SUCCESS;
-  if (!member_list.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(member_list));
-  } else {
-    quorum = member_list.get_member_number();
-    LOG_INFO("get transfer quorum", K(member_list), K(quorum));
-  }
-  return ret;
-}
-
 int ObTxFinishTransfer::select_transfer_task_for_update_(const ObTransferTaskID &task_id, ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -1205,6 +1195,52 @@ void ObTxFinishTransfer::process_perf_diagnose_info_(
   process_perf_diagnose_info_(name,
       0/*start_ts*/, 0/*tablet_count*/, round_, false/*is_report*/);
 }
+
+int ObTxFinishTransfer::check_addr_list_is_match_(
+    const common::ObMemberList &member_list,
+    const common::GlobalLearnerList &learner_list,
+    bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = true;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  common::ObMemberList dest_member_list;
+  common::GlobalLearnerList dest_learner_list;
+  int64_t quorum = 0;
+
+  if (!ls_transfer_info_->must_get_learner_list_from_src_ls()) {
+    // only check when get addr list from src ls
+    is_match = true;
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(dest_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(dest_ls_id_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(ret), K(dest_ls_id_));
+  } else if (OB_FAIL(ls->get_paxos_member_list_and_learner_list(dest_member_list, quorum, dest_learner_list, true /*filter_logonly_replica*/))) {
+    LOG_WARN("failed to get ls member list and learner list", K(ret), K(dest_ls_id_));
+  } else if (member_list.get_member_number() != dest_member_list.get_member_number()) {
+    is_match = false;
+    LOG_INFO("member list count not match", K(member_list), K(dest_member_list));
+  } else if (OB_FAIL(ObTransferUtils::check_list_is_same(member_list, dest_member_list, is_match))) {
+    LOG_WARN("failed to check member list is same", K(ret), K(member_list), K(dest_member_list));
+  } else if (!is_match) {
+    LOG_INFO("member list is not match", K(member_list), K(dest_member_list));
+  } else {
+    ObMember learner;
+    for (int64_t i = 0; OB_SUCC(ret) && is_match && i < learner_list.get_member_number(); ++i) {
+      if (OB_FAIL(learner_list.get_member_by_index(i, learner))) {
+        LOG_WARN("failed to get learner by index", K(ret), K(i));
+      } else if (learner.is_columnstore() && !dest_learner_list.contains(learner.get_server())) {
+        is_match = false;
+        LOG_INFO("learner is not match", K(learner_list), K(dest_learner_list));
+      }
+    }
+  }
+
+  return ret;
+}
+
 
 }  // namespace storage
 }  // namespace oceanbase

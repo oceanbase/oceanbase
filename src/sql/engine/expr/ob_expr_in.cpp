@@ -1169,10 +1169,6 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
               results[idx].set_int(is_equal);
             }
           }
-          // To prevent passing idx=0 as a param to memset() and triggering an error.
-          if (idx > 0) {
-            eval_flags.set_all(idx);
-          }
         }
         if (!can_cmp_mem) {
           for (; OB_SUCC(ret) && idx < batch_size; ++idx) {
@@ -1197,7 +1193,6 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
             if (OB_SUCC(ret)) {
               set_datum_result(T_OP_IN == expr.type_,
                               is_equal, cnt_null | left->is_null(), results[idx]);
-              eval_flags.set(idx);
             }
           }
         }
@@ -1294,6 +1289,7 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
     if (input_left_vec->is_null(idx)) {
       my_skip.set(idx);
       res_vec->set_null(idx);
+      //The eval_flags keyword simulates the null skip functionality; other expressions should not imitate this usage!
       eval_flags.set(idx);
     } else {
       left_all_null = false;
@@ -1357,9 +1353,6 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
             }
           }
         }
-        if (idx > bound.start()) {
-          eval_flags.set_all(bound.start(), idx);
-        }
       }
       if (!can_cmp_mem) {
         const char *l_payload = nullptr;
@@ -1422,7 +1415,6 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
             }
             if (OB_SUCC(ret)) {
               set_vector_result<ResVec>(T_OP_IN == expr.type_, left_hit, right_has_null, res_vec, idx);
-              eval_flags.set(idx);
             }
           }
         }
@@ -1852,7 +1844,6 @@ int ObExprInOrNotIn::eval_batch_in_without_row(const ObExpr &expr,
           } else {
             set_datum_result(T_OP_IN == expr.type_, is_exist, false, results[left_idx]);
           }
-          eval_flags.set(left_idx);
         }
       }
       if (fallback) {
@@ -1911,6 +1902,7 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row(const ObExpr &expr,
     for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
       if (input_left_vec->is_null(idx)) {
         res_vec->set_null(idx);
+        //The eval_flags keyword simulates the null skip functionality; other expressions should not imitate this usage!
         eval_flags.set(idx);
       } else {
         left_all_null = false;
@@ -1959,6 +1951,7 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row(const ObExpr &expr,
             for (int64_t left_idx = bound.start(); left_idx < bound.end(); ++left_idx) {
               if (skip.at(left_idx) || eval_flags.at(left_idx)) { continue; }
               res_vec->set_null(left_idx);
+              //The eval_flags keyword simulates the null skip functionality; other expressions should not imitate this usage!
               eval_flags.set(left_idx);
             }
             right_all_null = true;
@@ -2002,7 +1995,6 @@ inline int ObExprInOrNotIn::probe_item(bool is_op_in,
   bool is_exist = colht.exists(in_ctx->hash_vals[idx], key);
   set_vector_result(is_op_in, is_exist,
                     in_ctx->ctx_hash_null_, res_vec, idx);
-  eval_flags.set(idx);
   return ret;
 }
 
@@ -2075,7 +2067,6 @@ inline int ObExprInOrNotIn::probe_col(const ObExpr &expr,
                                                         res_vec))) {
           LOG_WARN("failed to search in hashset", K(ret));
         }
-        eval_flags.set_all(begin, end);
       } else if (ItemKT::KT_INT8B == get_key_type(vec_tc)) {
         ret = probe_fixed_col<LeftVec, ResVec, normal_inkey_t>(skip, bound,
                                                                eval_flags, input_left_vec,
@@ -2140,7 +2131,6 @@ inline int ObExprInOrNotIn::probe_col(const ObExpr &expr,
                                 in_ctx->ctx_hash_null_,
                                 res_vec,
                                 left_idx);
-              eval_flags.set(left_idx);
             }
           }
         }

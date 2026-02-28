@@ -123,6 +123,7 @@ struct ObMergeStaticInfo
   void shallow_copy(const ObMergeStaticInfo &other);
   int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t MDS_FILTER_INFO_LENGTH = 256;
+  static const int64_t WINDOW_DECISION_LOG_INFO_LENGTH = 256;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   ObMergeType merge_type_;
@@ -134,11 +135,13 @@ struct ObMergeStaticInfo
   storage::ObStorageSnapshotInfo kept_snapshot_info_;
   PartTableInfo participant_table_info_;
   char mds_filter_info_str_[MDS_FILTER_INFO_LENGTH];
+  char window_decision_log_info_str_[WINDOW_DECISION_LOG_INFO_LENGTH];
   ObMergeLevel merge_level_;
   ObExecMode exec_mode_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
-  ObCOMajorSSTableStatus base_major_status_;
-  ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type_;
+  ObMajorSSTableStatus base_major_status_;
+  ObCOMajorMergeStrategy co_major_merge_strategy_;
+  ObWindowCompactionDecisionLogInfo window_decision_log_info_;
   bool is_full_merge_;
 };
 
@@ -207,14 +210,14 @@ public:
   ~ObMergeBlockInfo() {}
   void reset();
   bool is_valid() const;
-  bool is_empty() const { return 0 == macro_block_count_ && 0 == total_row_count_; }
+  bool is_empty() const { return 0 == macro_block_count_ && 0 == total_row_count_ && 0 == filter_row_count_; }
   void shallow_copy(const ObMergeBlockInfo &other);
   void add(const ObMergeBlockInfo &block_info);
   void add_without_row_cnt(const ObMergeBlockInfo &block_info);
   void add_index_block_info(const ObMergeBlockInfo &block_info);
   TO_STRING_KV(K_(occupy_size), K_(original_size), K_(compressed_size), K_(macro_block_count), K_(multiplexed_macro_block_count),
     K_(new_micro_count_in_new_macro), K_(multiplexed_micro_count_in_new_macro),
-    K_(total_row_count), K_(incremental_row_count), K_(new_micro_info), K_(block_io_us));
+    K_(total_row_count), K_(incremental_row_count), K_(filter_row_count), K_(new_micro_info), K_(block_io_us));
 
   int64_t occupy_size_; // including lob_macro
   int64_t original_size_;
@@ -225,6 +228,7 @@ public:
   int64_t multiplexed_micro_count_in_new_macro_;
   int64_t total_row_count_;
   int64_t incremental_row_count_;
+  int64_t filter_row_count_;
   int64_t new_flush_data_rate_; // KB per second
   ObNewMicroInfo new_micro_info_;
   int64_t block_io_us_;

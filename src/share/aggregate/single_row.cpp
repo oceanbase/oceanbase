@@ -36,8 +36,10 @@ extern int init_single_row_max_aggregate(RuntimeContext &agg_ctx, const int col_
 extern int init_single_row_min_aggregate(RuntimeContext &agg_ctx, const int col_id, ObIAllocator &allocator,
                                               IAggregate *&agg);
 
-int init_single_row_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
-                               ObIArray<IAggregate *> &aggregates)
+extern int init_single_row_approx_cnt_synopsis_aggregate(RuntimeContext &agg_ctx, const int col_id,
+                                                         ObIAllocator &allocator, IAggregate *&agg);
+
+int init_single_row_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator, ObIArray<IAggregate *> &aggregates)
 {
   int ret = OB_SUCCESS;
   IAggregate *agg= nullptr;
@@ -58,7 +60,7 @@ int init_single_row_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
       if (OB_FAIL(ret)) {
         LOG_WARN("init single row aggregate failed", K(ret));
       }
-    } else if (aggr_info.is_implicit_first_aggr()) {// do nothing
+    } else if (aggr_info.is_implicit_first_aggr() || !aggr_info.enable_fast_bypass_) {// do nothing
     } else {
       ObDatumMeta &res_meta = aggr_info.expr_->datum_meta_;
       ObDatumMeta &child_meta = aggr_info.param_exprs_.at(0)->datum_meta_;
@@ -87,9 +89,12 @@ int init_single_row_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         ret = init_single_row_max_aggregate(agg_ctx, i, allocator, agg);
         break;
       }
+      case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS: {
+        ret = init_single_row_approx_cnt_synopsis_aggregate(agg_ctx, i, allocator, agg);
+        break;
+      }
       default: {
-        ret = OB_NOT_SUPPORTED;
-        SQL_LOG(WARN, "not supported aggregate operation", K(ret), K(*aggr_info.expr_));
+        // do nothing
         break;
       }
       }

@@ -286,7 +286,8 @@ private:
       ObTaskExecutorCtx &task_exec_ctx,
       int64_t tenant_id,
       uint64_t ref_table_id,
-      ObTabletIdxMap &idx_map);
+      ObTabletIdxMap &idx_map,
+      int64_t &local_tenant_version_latest);
   static int reorder_all_partitions(
       int64_t location_key, int64_t ref_table_id, const DASTabletLocList &src_locations,
       DASTabletLocIArray &tsc_locations, bool asc, ObExecContext &exec_ctx,
@@ -638,8 +639,8 @@ private:
 
 
   // ----------------- for pdml -------------------------------------
-  // for child with ObPQDistributeMethod::Type::PARTITION_RANDOM
-  static int build_pkey_random_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+  // for PARTITION_RANDOM and PARTITION_HASH with likely_data_skew_
+  static int build_pkey_scatter_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
 
   // for child with ObPQDistributeMethod::Type::PARTITION_HASH or PARTITION_RANGE
   static int build_pkey_affinitized_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);

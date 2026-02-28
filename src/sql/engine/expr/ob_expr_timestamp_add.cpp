@@ -265,6 +265,9 @@ int ObExprTimeStampAdd::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_e
   if (ob_is_date_or_mysql_date(rt_expr.args_[2]->datum_meta_.type_)
       || ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[2]->datum_meta_.type_)) {
     rt_expr.eval_vector_func_ = calc_timestamp_add_vector;
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0 &&
+            ob_is_string_tc(rt_expr.args_[2]->datum_meta_.type_)) {
+    rt_expr.eval_vector_func_ = calc_timestamp_add_vector;
   }
   return ret;
 }
@@ -279,7 +282,7 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprTimeStampAdd, raw_expr) {
 
 
 template <typename ArgVec, typename UnitVec, typename IntervalVec, typename ResVec, typename IN_TYPE>
-int vector_timestamp_add(
+int vector_timestamp_add_for_date(
     const ObExpr &expr, ObEvalCtx &ctx,
     const ObBitVector &skip, const EvalBound &bound,  ObSQLMode sql_mode)
 {
@@ -297,9 +300,10 @@ int vector_timestamp_add(
   int64_t tmp = 0;  // unused
   int64_t tz_offset = 0;
   ObString nls_format;
+  ObTimeZoneInfoPos literal_tz_info;
   if (lib::is_oracle_mode() && OB_FAIL(common_get_nls_format(
-                                    session, ctx, &expr, ObDateTimeType, false, nls_format))) {
-      LOG_WARN("common_get_nls_format failed", K(ret));
+      session, ctx, &expr, ObDateTimeType, false, nls_format))) {
+    LOG_WARN("common_get_nls_format failed", K(ret));
   } else if (eval_flags.accumulate_bit_cnt(bound) == bound.range_size()) {
   } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
     LOG_WARN("get sql mode failed", K(ret));
@@ -323,7 +327,6 @@ int vector_timestamp_add(
         continue;
       } else if (arg_vec->is_null(idx) || unit_type_vec->is_null(idx) || interval_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
         continue;
       }
       char *buf = NULL;
@@ -337,7 +340,7 @@ int vector_timestamp_add(
           LOG_WARN("parse_ob_time fail", K(ret));
         } else {
           ot.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ot);
-          if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ot, cvrt_ctx, ts))) {
+          if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ot, cvrt_ctx, ts, literal_tz_info))) {
             LOG_WARN("ob_time_to_datetime fail", K(ret));
           }
         }
@@ -347,7 +350,7 @@ int vector_timestamp_add(
         LOG_WARN("failed to convert date part to obtime", K(ret), K(date));
       } else if (OB_FAIL(ObTimeConverter::time_to_ob_time(usec, ot))) {
         LOG_WARN("failed to convert time part to obtime", K(ret), K(usec));
-      } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ot, cvrt_ctx, ts))) {
+      } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ot, cvrt_ctx, ts, literal_tz_info))) {
         LOG_WARN("ob time to datetime failed", K(ret));
       }
       if (OB_SUCC(ret)) {
@@ -359,13 +362,12 @@ int vector_timestamp_add(
         } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len, idx))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed", K(ret), K(buf_len));
-        } else if(OB_FAIL(ObTimeConverter::datetime_to_str(res, null_tz_info, nls_format, in_scale,
-                                                            buf, buf_len, out_len))) {
+        } else if(OB_FAIL(ObTimeConverter::datetime_to_str_for_batch(res, null_tz_info, nls_format, in_scale,
+                                                            buf, buf_len, out_len, ot))) {
           LOG_WARN("failed to convert datetime to string",
                     K(ret), K(res), K(nls_format), K(in_scale), K(buf), K(out_len));
         } else {
           res_vec->set_string(idx, ObString(out_len, buf));
-          eval_flags.set(idx);
         }
       }
       if (OB_FAIL(ret)) {
@@ -373,61 +375,206 @@ int vector_timestamp_add(
           ret = OB_SUCCESS;
         }
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       }
     }
   }
   return ret;
 }
 
-#define DEF_TIMESTAMP_ADD_VECTOR(arg_type, res_type, IN_TYPE)\
+template <typename ArgVec, typename UnitVec, typename IntervalVec, typename ResVec, typename IN_TYPE>
+int vector_timestamp_add_for_string(
+    const ObExpr &expr, ObEvalCtx &ctx,
+    const ObBitVector &skip, const EvalBound &bound,  ObSQLMode sql_mode)
+{
+  int ret = OB_SUCCESS;
+  UnitVec *unit_type_vec = static_cast<UnitVec *>(expr.args_[0]->get_vector(ctx));
+  IntervalVec *interval_vec = static_cast<IntervalVec *>(expr.args_[1]->get_vector(ctx));
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[2]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  const ObObjType arg_type = expr.args_[2]->datum_meta_.type_;
+  ObObjTypeClass arg_tc = ob_obj_type_class(arg_type);
+  const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  const common::ObTimeZoneInfo *tz_info = NULL;
+  ObSolidifiedVarsGetter helper(expr, ctx, session);
+  int64_t tmp = 0;  // unused
+  int64_t tz_offset = 0;
+  ObString nls_format;
+  ObTimeZoneInfoPos literal_tz_info;
+  if (lib::is_oracle_mode() && OB_FAIL(common_get_nls_format(
+                                    session, ctx, &expr, ObDateTimeType, false, nls_format))) {
+      LOG_WARN("common_get_nls_format failed", K(ret));
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get tz info failed", K(ret));
+  } else if (OB_FAIL(get_tz_offset(tz_info, tz_offset))) {
+    LOG_WARN("failed to get offset between utc and local", K(ret));
+  } else {
+    ObTimeConvertCtx cvrt_ctx(tz_info, false);
+    tz_offset = (ObTimestampType == arg_type) ? tz_offset : 0;
+    DateType date = 0;
+    UsecType usec = 0;
+    ObScale in_scale = expr.args_[2]->datum_meta_.scale_;
+    ObCastMode cast_mode = CM_NONE;
+    ObSQLUtils::get_default_cast_mode(
+        session->get_stmt_type(), session->is_ignore_stmt(), sql_mode, cast_mode);
+    int64_t last_first_8digits = INT64_MAX;
+    bool use_quick_parser = !lib::is_oracle_mode();
+    int quick_parser_failed_count = 0;
+    ObTime ob_time;
+    ObScale res_scale = -1;
+    ObTimeConverter::ObTimeDigits digits[DATETIME_PART_CNT];
+    ObTimeConverter::QuickParserType last_quick_parser_type = ObTimeConverter::QuickParserType::QuickParserUnused;
+
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+      } else if (arg_vec->is_null(idx) || unit_type_vec->is_null(idx) || interval_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+      } else {
+        ObString in_val = arg_vec->get_string(idx); // String
+        bool datetime_valid = false;
+        bool is_match_format = false;
+        int64_t ts = 0;
+        if (use_quick_parser) {
+          ObTimeConverter::string_to_obtime_quick(in_val.ptr(),
+                    in_val.length(),
+                    ob_time,
+                    datetime_valid,
+                    is_match_format,
+                    last_first_8digits,
+                    last_quick_parser_type,
+                    false);
+        }
+        if (datetime_valid && is_match_format) {
+          ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+          if (ob_time.parts_[DT_DATE] == ObTimeConverter::ZERO_DATE) {
+            ts = ObTimeConverter::ZERO_DATETIME;
+          } else {
+            // quick in_val has not tz_info, just use local_tz_offset_usec_
+            ts = ob_time.parts_[DT_DATE] * USECS_PER_DAY
+              + ObTimeConverter::ob_time_to_time(ob_time) - tz_offset;
+          }
+        } else {
+          last_quick_parser_type = ObTimeConverter::QuickParserType::QuickParserUnused;
+          if (use_quick_parser) {
+            quick_parser_failed_count++;
+            if (quick_parser_failed_count % 32 == 0) {
+              if (quick_parser_failed_count * 2 > idx) {
+                use_quick_parser = false;
+              }
+            }
+          }
+          if (OB_FAIL(ObTimeConverter::str_to_ob_time_with_date(in_val, ob_time,
+              &res_scale, 0, false, digits))) {
+            LOG_WARN("cast to ob time with date failed", K(ret), K(in_val));
+          } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, cvrt_ctx, ts, literal_tz_info))) {
+            LOG_WARN("ob time to datetime failed", K(ret));
+          }
+        }
+        char *buf = NULL;
+        int64_t buf_len = OB_CAST_TO_VARCHAR_MAX_LENGTH;
+        int64_t out_len = 0;
+        if (OB_SUCC(ret)) {
+          int64_t res = 0;
+          const ObTimeZoneInfo *null_tz_info = NULL;  // refer to calc_timestampadd_expr()
+          if (OB_FAIL(ObExprTimeStampAdd::calc(unit_type_vec->get_int(idx), ob_time, ts, cvrt_ctx,
+                                                interval_vec->get_int(idx), res))) {
+            LOG_WARN("calculate ts after adding interval failed", K(ret), K(ts));
+          } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len, idx))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret), K(buf_len));
+          } else if(OB_FAIL(ObTimeConverter::datetime_to_str_for_batch(res, null_tz_info, nls_format, in_scale,
+                                                              buf, buf_len, out_len, ob_time))) {
+            LOG_WARN("failed to convert datetime to string",
+                      K(ret), K(res), K(nls_format), K(in_scale), K(buf), K(out_len));
+          } else {
+            res_vec->set_string(idx, ObString(out_len, buf));
+          }
+        }
+        if (OB_FAIL(ret)) {
+          if(CM_IS_WARN_ON_FAIL(cast_mode)) {
+            ret = OB_SUCCESS;
+          }
+          res_vec->set_null(idx);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+#define DEF_TIMESTAMP_ADD_VECTOR(func, arg_type, res_type, IN_TYPE)\
   if (VEC_FIXED == unit_format && VEC_FIXED == interval_format) {\
-    ret = vector_timestamp_add<arg_type, IntegerFixedVec, IntegerFixedVec, res_type, IN_TYPE>\
+    ret = func<arg_type, IntegerFixedVec, IntegerFixedVec, res_type, IN_TYPE>\
               (expr, ctx, skip, bound, sql_mode);\
   } else if (VEC_FIXED == unit_format && VEC_UNIFORM == interval_format) {\
-    ret = vector_timestamp_add<arg_type, IntegerFixedVec, IntegerUniVec, res_type, IN_TYPE>\
+    ret = func<arg_type, IntegerFixedVec, IntegerUniVec, res_type, IN_TYPE>\
               (expr, ctx, skip, bound, sql_mode);\
   } else if (VEC_FIXED == unit_format && VEC_UNIFORM_CONST == interval_format) {\
-    ret = vector_timestamp_add<arg_type, IntegerFixedVec, IntegerUniCVec, res_type, IN_TYPE>\
+    ret = func<arg_type, IntegerFixedVec, IntegerUniCVec, res_type, IN_TYPE>\
               (expr, ctx, skip, bound, sql_mode);\
   } else if (VEC_UNIFORM == unit_format && VEC_UNIFORM == interval_format) {\
-    ret = vector_timestamp_add<arg_type, IntegerUniVec, IntegerUniVec, res_type, IN_TYPE>\
+    ret = func<arg_type, IntegerUniVec, IntegerUniVec, res_type, IN_TYPE>\
               (expr, ctx, skip, bound, sql_mode);\
   } else if (VEC_UNIFORM == unit_format && VEC_UNIFORM_CONST == interval_format) {\
-    ret = vector_timestamp_add<arg_type, IntegerUniVec, IntegerUniCVec, res_type, IN_TYPE>\
+    ret = func<arg_type, IntegerUniVec, IntegerUniCVec, res_type, IN_TYPE>\
               (expr, ctx, skip, bound, sql_mode);\
   } else if (VEC_UNIFORM == unit_format && VEC_FIXED == interval_format) {\
-    ret = vector_timestamp_add<arg_type, IntegerUniVec, IntegerFixedVec, res_type, IN_TYPE>\
+    ret = func<arg_type, IntegerUniVec, IntegerFixedVec, res_type, IN_TYPE>\
               (expr, ctx, skip, bound, sql_mode);\
   } else if (VEC_UNIFORM_CONST == unit_format && VEC_UNIFORM_CONST == interval_format) {\
-    ret = vector_timestamp_add<arg_type, IntegerUniCVec, IntegerUniCVec, res_type, IN_TYPE>\
+    ret = func<arg_type, IntegerUniCVec, IntegerUniCVec, res_type, IN_TYPE>\
               (expr, ctx, skip, bound, sql_mode);\
   } else if (VEC_UNIFORM_CONST == unit_format && VEC_UNIFORM == interval_format) {\
-    ret = vector_timestamp_add<arg_type, IntegerUniCVec, IntegerUniVec, res_type, IN_TYPE>\
+    ret = func<arg_type, IntegerUniCVec, IntegerUniVec, res_type, IN_TYPE>\
               (expr, ctx, skip, bound, sql_mode);\
   } else if (VEC_UNIFORM_CONST == unit_format && VEC_FIXED == interval_format) {\
-    ret = vector_timestamp_add<arg_type, IntegerUniCVec, IntegerFixedVec, res_type, IN_TYPE>\
+    ret = func<arg_type, IntegerUniCVec, IntegerFixedVec, res_type, IN_TYPE>\
               (expr, ctx, skip, bound, sql_mode);\
   } else {\
-    ret = vector_timestamp_add<ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase, IN_TYPE>\
+    ret = func<ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase, IN_TYPE>\
               (expr, ctx, skip, bound, sql_mode);\
   }
 
-#define DISPATCH_TIMESTAMP_ADD_IN_TYPE(TYPE)\
+#define DISPATCH_TIMESTAMP_ADD_FOR_DATE(func, TYPE)\
   if (VEC_FIXED == arg_format && VEC_DISCRETE == res_format) {\
-    DEF_TIMESTAMP_ADD_VECTOR(CONCAT(TYPE,FixedVec), StrDiscVec, CONCAT(TYPE,Type));\
+    DEF_TIMESTAMP_ADD_VECTOR(func, CONCAT(TYPE,FixedVec), StrDiscVec, CONCAT(TYPE,Type));\
   } else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {\
-    DEF_TIMESTAMP_ADD_VECTOR(CONCAT(TYPE,FixedVec), StrUniVec, CONCAT(TYPE,Type));\
+    DEF_TIMESTAMP_ADD_VECTOR(func, CONCAT(TYPE,FixedVec), StrUniVec, CONCAT(TYPE,Type));\
   } else if (VEC_FIXED == arg_format && VEC_CONTINUOUS == res_format) {\
-    DEF_TIMESTAMP_ADD_VECTOR(CONCAT(TYPE,FixedVec), StrContVec, CONCAT(TYPE,Type));\
+    DEF_TIMESTAMP_ADD_VECTOR(func, CONCAT(TYPE,FixedVec), StrContVec, CONCAT(TYPE,Type));\
   } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {\
-    DEF_TIMESTAMP_ADD_VECTOR(CONCAT(TYPE,UniVec), StrDiscVec, CONCAT(TYPE,Type));\
+    DEF_TIMESTAMP_ADD_VECTOR(func, CONCAT(TYPE,UniVec), StrDiscVec, CONCAT(TYPE,Type));\
   } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {\
-    DEF_TIMESTAMP_ADD_VECTOR(CONCAT(TYPE,UniVec), StrUniVec, CONCAT(TYPE,Type));\
+    DEF_TIMESTAMP_ADD_VECTOR(func, CONCAT(TYPE,UniVec), StrUniVec, CONCAT(TYPE,Type));\
   } else if (VEC_UNIFORM == arg_format && VEC_CONTINUOUS == res_format) {\
-    DEF_TIMESTAMP_ADD_VECTOR(CONCAT(TYPE,UniVec), StrContVec, CONCAT(TYPE,Type));\
+    DEF_TIMESTAMP_ADD_VECTOR(func, CONCAT(TYPE,UniVec), StrContVec, CONCAT(TYPE,Type));\
   } else {\
-    ret = vector_timestamp_add<ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase, CONCAT(TYPE,Type)>(expr, ctx, skip, bound, sql_mode);\
+    ret = func<ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase, CONCAT(TYPE,Type)>(expr, ctx, skip, bound, sql_mode);\
+  }
+
+#define DISPATCH_TIMESTAMP_ADD_FOR_STRING(func, TYPE)\
+  if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {\
+    DEF_TIMESTAMP_ADD_VECTOR(func, StrContVec, StrDiscVec, TYPE);\
+  } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {\
+    DEF_TIMESTAMP_ADD_VECTOR(func, StrContVec, StrUniVec, TYPE);\
+  } else if (VEC_CONTINUOUS == arg_format && VEC_CONTINUOUS == res_format) {\
+    DEF_TIMESTAMP_ADD_VECTOR(func, StrContVec, StrContVec, TYPE);\
+  } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {\
+    DEF_TIMESTAMP_ADD_VECTOR(func, StrUniVec, StrDiscVec, TYPE);\
+  } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {\
+    DEF_TIMESTAMP_ADD_VECTOR(func, StrUniVec, StrUniVec, TYPE);\
+  } else if (VEC_UNIFORM == arg_format && VEC_CONTINUOUS == res_format) {\
+    DEF_TIMESTAMP_ADD_VECTOR(func, StrUniVec, StrContVec, TYPE);\
+  } else if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {\
+    DEF_TIMESTAMP_ADD_VECTOR(func, StrDiscVec, StrDiscVec, TYPE);\
+  } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {\
+    DEF_TIMESTAMP_ADD_VECTOR(func, StrDiscVec, StrUniVec, TYPE);\
+  } else if (VEC_DISCRETE == arg_format && VEC_CONTINUOUS == res_format) {\
+    DEF_TIMESTAMP_ADD_VECTOR(func, StrDiscVec, StrContVec, TYPE);\
+  } else {\
+    ret = func<ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase, TYPE>(expr, ctx, skip, bound, sql_mode);\
   }
 
 int ObExprTimeStampAdd::calc_timestamp_add_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
@@ -450,13 +597,15 @@ int ObExprTimeStampAdd::calc_timestamp_add_vector(const ObExpr &expr, ObEvalCtx 
     ObObjTypeClass arg_tc = ob_obj_type_class(expr.args_[2]->datum_meta_.type_);
 
     if (ObMySQLDateTC == arg_tc) {
-      DISPATCH_TIMESTAMP_ADD_IN_TYPE(MySQLDate);
+      DISPATCH_TIMESTAMP_ADD_FOR_DATE(vector_timestamp_add_for_date, MySQLDate);
     } else if (ObMySQLDateTimeTC == arg_tc) {
-      DISPATCH_TIMESTAMP_ADD_IN_TYPE(MySQLDateTime);
+      DISPATCH_TIMESTAMP_ADD_FOR_DATE(vector_timestamp_add_for_date, MySQLDateTime);
     } else if (ObDateTC == arg_tc) {
-      DISPATCH_TIMESTAMP_ADD_IN_TYPE(Date);
+      DISPATCH_TIMESTAMP_ADD_FOR_DATE(vector_timestamp_add_for_date, Date);
     } else if (ObDateTimeTC == arg_tc) {
-      DISPATCH_TIMESTAMP_ADD_IN_TYPE(DateTime);
+      DISPATCH_TIMESTAMP_ADD_FOR_DATE(vector_timestamp_add_for_date, DateTime);
+    } else if (ObStringTC == arg_tc) {
+      DISPATCH_TIMESTAMP_ADD_FOR_STRING(vector_timestamp_add_for_string, ObString);
     }
 
     if (OB_FAIL(ret)) {
@@ -466,7 +615,8 @@ int ObExprTimeStampAdd::calc_timestamp_add_vector(const ObExpr &expr, ObEvalCtx 
   return ret;
 }
 
-#undef DISPATCH_TIMESTAMP_ADD_IN_TYPE
+#undef DISPATCH_TIMESTAMP_ADD_FOR_DATE
+#undef DISPATCH_TIMESTAMP_ADD_FOR_STRING
 #undef DEF_TIMESTAMP_ADD_VECTOR
 
 } //namespace sql

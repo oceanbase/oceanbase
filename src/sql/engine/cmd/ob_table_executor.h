@@ -66,15 +66,18 @@ class ObCreateTableExecutor
       schema_guard_(schema_guard),
       print_params_(print_params),
       param_store_(param_store),
-      do_osg_(do_osg)
+      do_osg_(do_osg),
+      is_direct_load_(false)
       {}
     virtual int inner_print(char *buf, int64_t buf_len, int64_t &res_len) override;
+    bool is_direct_load() const { return is_direct_load_; }
   private:
     ObCreateTableStmt *stmt_;
     ObSchemaGetterGuard *schema_guard_;
     ObObjPrintParams print_params_;
     const ParamStore *param_store_;
     bool do_osg_;
+    bool is_direct_load_;
   };
 public:
   ObCreateTableExecutor();
@@ -83,12 +86,16 @@ public:
   int set_index_arg_list(ObExecContext &ctx, ObCreateTableStmt &stmt);
   int execute_ctas(ObExecContext &ctx, ObCreateTableStmt &stmt, obrpc::ObCommonRpcProxy *common_rpc_proxy);
 private:
-  int prepare_stmt(ObCreateTableStmt &stmt, const ObSQLSessionInfo &my_session, ObString &create_table_name);
+  int prepare_stmt(ObCreateTableStmt &stmt,
+                   const ObSQLSessionInfo &my_session,
+                   ObSchemaGetterGuard *schema_guard,
+                   ObString &create_table_name);
   int prepare_ins_arg(ObCreateTableStmt &stmt,
                       const ObSQLSessionInfo *my_session,
                       ObSchemaGetterGuard *schema_guard,
                       const ParamStore *param_store,
-                      ObSqlString &ins_sql);
+                      ObSqlString &ins_sql,
+                      bool &is_direct_load);
   int prepare_alter_arg(ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, const ObString &create_table_name, obrpc::ObAlterTableArg &alter_table_arg);
   int prepare_drop_arg(const ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, obrpc::ObTableItem &table_item, obrpc::ObDropTableArg &drop_table_arg);
 };
@@ -242,6 +249,13 @@ public:
   int execute(ObExecContext &ctx, ObTruncateTableStmt &stmt);
 private:
   int check_use_parallel_truncate(const obrpc::ObTruncateTableArg &arg, bool &use_parallel_truncate);
+  int truncate_oracle_temp_table_v2(
+      sql::ObSQLSessionInfo &my_session,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &table_schema,
+      const int64_t sequence,
+      const uint64_t session_id,
+      common::ObMySQLTransaction &trans);
 
 };
 

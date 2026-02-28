@@ -63,6 +63,37 @@ public:
 };
 typedef ObPodFix2dArray<ObVecBatchInfo, 1 << 20, common::OB_MALLOC_NORMAL_BLOCK_SIZE> ObVecBatchInfoArr;
 
+struct ObCSRowHeader
+{
+  static ObObjMeta TYPE;
+  static ObObjMeta make_type() { ObObjMeta type; type.set_binary(); return type; }
+  static constexpr uint8_t VERSION_1 = 0;
+  static constexpr uint8_t CURRENT_VERSION = VERSION_1;
+  uint8_t version_;
+  uint8_t row_flag_;
+  uint8_t mvcc_flag_;
+  uint64_t trans_id_;
+  uint8_t reserved_[5];
+
+  ObCSRowHeader()
+    : version_(CURRENT_VERSION),
+      row_flag_(),
+      mvcc_flag_(),
+      trans_id_()
+  {}
+  ObCSRowHeader(const ObDatumRow &row)
+    : version_(CURRENT_VERSION),
+      row_flag_(row.row_flag_.get_serialize_flag()),
+      mvcc_flag_(row.mvcc_row_flag_.flag_),
+      trans_id_(row.trans_id_.get_id())
+  {}
+} __attribute__((packed));
+
+// IS_MULTI_VERSION controls whether to store multi version data fileds(row_flag, mvcc_flag, trans_id)
+// multi version data fileds are stored in row header column
+// row header column is a hidden column which means it is not included in ObMicroBlockHeader::column_count_
+// it is stored in the last column
+template<bool IS_MULTI_VERSION = false>
 class ObMicroBlockCSEncoder : public ObIMicroBlockWriter
 {
 public:
@@ -118,6 +149,36 @@ private:
     STR_UNIFORM_CONST,
     MAX
   };
+  // helper class to calculate row checksum
+  class RowDatumIterator {
+  public:
+    RowDatumIterator(const ObMicroBlockCSEncoder &encoder,
+                     const ObDatumRow &row)
+        : encoder_(encoder), row_(row), current_(0) {}
+    const ObDatum &operator*() const {
+      assert(current_ >= 0 && current_ < encoder_.ctx_.column_cnt_);
+      return encoder_.get_column_datum(row_, current_);
+    }
+    int64_t operator-(const RowDatumIterator &other) const {
+      return current_ - other.current_;
+    }
+    RowDatumIterator &operator+=(int64_t step) {
+      current_ += step;
+      return *this;
+    }
+    RowDatumIterator &operator++() {
+      current_ += 1;
+      return *this;
+    }
+    bool operator<(const RowDatumIterator &other) const {
+      return current_ < other.current_;
+    }
+
+  private:
+    const ObMicroBlockCSEncoder &encoder_;
+    const ObDatumRow &row_;
+    int64_t current_;
+  };
 
   int inner_init_();
   int reserve_header_(const ObMicroBlockEncodingCtx &ctx);
@@ -126,11 +187,12 @@ private:
   // only deep copy the cell part
   int process_out_row_columns_();
   int copy_and_append_row_(const ObDatumRow &src, int64_t &store_size);
+  const ObStorageDatum& get_column_datum(const ObDatumRow &row, const int64_t column_idx) const;
   int copy_and_append_batch_(const ObBatchDatumRows &vec_batch,
                              const int64_t start,
                              const int64_t row_count,
                              int64_t &store_size);
-  int copy_cell_(const ObColDesc &col_desc, const ObStorageDatum &src,
+  int copy_cell_(const ObObjMeta column_type, const ObStorageDatum &src,
     ObDatum &dest, int64_t &store_size, bool &is_row_holder_not_enough);
   int copy_vector_(const ObIVector *vector,
                    const int64_t start,
@@ -197,6 +259,13 @@ private:
   template <typename T>
   int do_encode_stream_offsets_(ObIntegerStreamEncoderCtx enc_ctx);
   bool is_semistruct_encoding_enable_(const ObObjTypeStoreClass sc, const int64_t column_idx);
+  int64_t get_stored_column_count_() const {
+    if constexpr (IS_MULTI_VERSION) {
+      return ctx_.column_cnt_ + 1;
+    } else {
+      return ctx_.column_cnt_;
+    }
+  }
 
   static OB_INLINE bool is_integer_store_(const ObObjTypeStoreClass sc, const bool is_wide_int)
   {
@@ -212,7 +281,6 @@ private:
     return enable_semistruct && ObJsonSC == sc;
   }
 
-private:
   static ObObj NOP;
 
   compaction::ObLocalArena allocator_;
@@ -221,6 +289,7 @@ private:
   ObMicroBufferWriter data_buffer_;
   ObMicroBufferWriter all_string_data_buffer_;
 
+  common::ObArray<ObObjMeta> column_types_;
   common::ObArray<ObColDatums *> all_col_datums_;
   ObArenaAllocator pivot_allocator_;
   common::ObSEArray<uint32_t, 128> datum_row_offset_arr_;
@@ -237,6 +306,7 @@ private:
   common::ObArray<ObDictEncodingHashTable *> hashtables_;
   ObDictEncodingHashTableFactory hashtable_factory_;
   common::ObArray<ObColumnCSEncodingCtx> col_ctxs_;
+  ObStorageDatum current_row_header_;
   int64_t length_;
   bool is_inited_;
   bool need_block_level_compression_;
@@ -249,8 +319,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockCSEncoder);
 };
 
+template<bool IS_MULTI_VERSION>
 template<typename T>
-int ObMicroBlockCSEncoder::do_encode_stream_offsets_(ObIntegerStreamEncoderCtx enc_ctx)
+int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::do_encode_stream_offsets_(ObIntegerStreamEncoderCtx enc_ctx)
 {
   int ret = OB_SUCCESS;
   const int32_t stream_cnt = stream_offsets_.count();

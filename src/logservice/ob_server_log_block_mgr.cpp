@@ -62,7 +62,10 @@ int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, boo
 }
 
 ObServerLogBlockMgr::ObServerLogBlockMgr()
-    : log_pool_meta_serialize_buf_(NULL),
+    : log_pool_meta_lock_(common::ObLatchIds::OB_SERVER_LOG_BLOCK_MGR_SPIN_LOCK),
+      resize_lock_(common::ObLatchIds::OB_SERVER_LOG_BLOCK_MGR_RESIZE_LOCK),
+      block_id_range_lock_(common::ObLatchIds::OB_SERVER_LOG_BLOCK_MGR_RWLOCK),
+      log_pool_meta_serialize_buf_(NULL),
       dir_fd_(-1),
       meta_fd_(-1),
       log_pool_meta_(),

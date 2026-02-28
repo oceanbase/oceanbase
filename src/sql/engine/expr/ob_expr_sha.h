@@ -32,9 +32,12 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_sha(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int eval_sha_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
+  template <typename ArgVec, typename ResVec>
+  static int sha_string_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DISALLOW_COPY_AND_ASSIGN(ObExprSha);
 };
 
@@ -52,9 +55,14 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_sha2(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int eval_sha2_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
+  template <typename ArgVec1, typename ArgVec2, typename ResVec>
+  static int sha2_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  template <typename ArgVec1, typename ResVec>
+  static int sha2_vector_with_hash_algo(VECTOR_EVAL_FUNC_ARG_DECL, share::ObHashAlgorithm hash_algo);
   DISALLOW_COPY_AND_ASSIGN(ObExprSha2);
 };
 

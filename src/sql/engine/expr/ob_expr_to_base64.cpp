@@ -196,7 +196,6 @@ int ObExprToBase64::eval_to_base64_batch(const ObExpr &expr,
           }
         }
       }
-      eval_flags.set(j);
     } // end for batch
   }
   return ret;

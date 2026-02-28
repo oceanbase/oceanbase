@@ -60,6 +60,7 @@ struct SqlInfo: public ParameterizationHashValue
     parse_infos_ = that.parse_infos_;
     need_check_fp_ = that.need_check_fp_;
     fmt_int_or_ch_decint_idx_ = that.fmt_int_or_ch_decint_idx_;
+    enable_pl_sql_parameterize_ = that.enable_pl_sql_parameterize_;
     return *this;
   }
   void destroy() {}
@@ -93,6 +94,8 @@ struct SqlInfo: public ParameterizationHashValue
   common::ObSEArray<ObPCParseInfo, 4> parse_infos_;
   bool need_check_fp_;
   common::ObSEArray<ObPCParamConstraint *, 4> params_constraint_;
+  int32_t origin_pl_param_count_;
+  bool enable_pl_sql_parameterize_;
 
   SqlInfo();
 };
@@ -227,7 +230,7 @@ private:
   static bool is_udr_not_param(TransformTreeCtx &ctx);
   static int transform_tree(TransformTreeCtx &ctx, const ObSQLSessionInfo &session_info);
   static int add_param_flag(const ParseNode *node, SqlInfo &sql_info);
-  static int add_not_param_flag(const ParseNode *node, SqlInfo &sql_info);
+  static int add_not_param_flag(const ParseNode *node, SqlInfo &sql_info, SQL_EXECUTION_MODE mode);
   static int add_varchar_charset(const ParseNode *node, SqlInfo &sql_info);
   static int mark_args(ParseNode *arg_tree,
                        const bool *mark_arr,
@@ -243,11 +246,15 @@ private:
   static int parameterize_fields(SelectItemTraverseCtx &ctx);
 
   static int resolve_paramed_const(SelectItemTraverseCtx &ctx);
-  static int transform_minus_op(ObIAllocator &, ParseNode *, bool is_from_pl=false);
+  static int transform_minus_op(ObIAllocator &, ParseNode *, bool is_from_pl=false, bool enable_pl_sql_parameterize=false);
 
   static int find_leftest_const_node(ParseNode &cur_node, ParseNode *&const_node);
   static bool need_fast_parser(const ObString &sql);
   static bool is_vector_index_query(const ParseNode *tree);
+  static int mark_special_hidden_const_node(ParseNode &root);
+  static int mark_array_hidden_const_node(ParseNode *root);
+  static int get_cast_array_basic_type(const ParseNode *root, const ParseNode *&basic_type_node);
+  static int add_varchar_charset_and_fp_check(const ParseNode *node, SqlInfo &sql_info);
 };
 
 }

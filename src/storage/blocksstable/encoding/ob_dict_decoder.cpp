@@ -177,7 +177,7 @@ bool init_dict_cmp_ref_funcs()
   res = ObNDArrayIniter<DictCmpRefArrayInit, 3, 6>::apply();
   // Dispatch simd version cmp funcs
 #if defined ( __x86_64__ )
-  if (is_avx512_valid()) {
+  if (common::is_arch_supported(ObTargetArch::AVX512)) {
     res = init_dict_cmp_ref_simd_funcs();
   }
 #elif defined ( __aarch64__ ) && defined ( __ARM_NEON )

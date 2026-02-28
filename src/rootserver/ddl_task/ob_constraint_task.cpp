@@ -64,6 +64,9 @@ int ObCheckConstraintValidationTask::process()
     LOG_WARN("table schema not exist", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, VALIDATE_CONSTRAINT_OR_FOREIGN_KEY_TASK_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+  } else if (table_schema->is_oracle_tmp_table_v2_index_table() || table_schema->is_oracle_tmp_table_v2()) {
+    ret = OB_SUCCESS;
+    LOG_INFO("oracle tmp table v2 index table or oracle trx tmp table v2, skip check constraint validation", K(ret), K(table_schema->get_table_id()));
   } else if (!check_table_empty_ && OB_ISNULL(constraint = table_schema->get_constraint(constraint_id_))) {
     ret = OB_ERR_CONTRAINT_NOT_FOUND;
     LOG_WARN("error unexpected, can not get constraint", K(ret));
@@ -83,15 +86,18 @@ int ObCheckConstraintValidationTask::process()
     ObSessionParam session_param;
     session_param.sql_mode_ = nullptr;
     session_param.tz_info_wrap_ = nullptr;
-    session_param.ddl_info_.set_is_ddl(true);
-    session_param.ddl_info_.set_source_table_hidden(table_schema->is_user_hidden_table());
-    session_param.ddl_info_.set_dest_table_hidden(false);
+    InnerDDLInfo ddl_info;
+    ddl_info.set_is_ddl(true);
+    ddl_info.set_source_table_hidden(table_schema->is_user_hidden_table());
+    ddl_info.set_dest_table_hidden(false);
     ObTimeoutCtx timeout_ctx;
     const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
       ObSqlString ddl_schema_hint_str;
-      if (check_expr_str.empty()) {
+      if (OB_FAIL(session_param.ddl_info_.init(ddl_info, table_schema->get_session_id()))) {
+        LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(table_schema->get_session_id()));
+      } else if (check_expr_str.empty()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("check_expr_str is empty", K(ret));
       } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
@@ -350,6 +356,8 @@ int ObForeignKeyConstraintValidationTask::check_fk_constraint_data_valid(
   ObArray<ObString> child_column_names;
   ObArray<ObString> parent_column_names;
   ObSqlString sql_string;
+  const uint64_t child_table_session_id = child_table_schema.get_session_id();
+  const uint64_t parent_table_seesion_id = parent_table_schema.get_session_id();
   if (OB_UNLIKELY(!child_table_schema.is_valid() || !child_database_schema.is_valid() || !parent_table_schema.is_valid() || !parent_database_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(child_table_schema), K(child_database_schema), K(parent_table_schema), K(parent_database_schema));
@@ -357,16 +365,28 @@ int ObForeignKeyConstraintValidationTask::check_fk_constraint_data_valid(
     LOG_WARN("get column names failed", K(ret));
   } else if (OB_FAIL(get_column_names(parent_table_schema, fk_info.parent_column_ids_, parent_column_names))) {
     LOG_WARN("get column names failed", K(ret));
-  } else {
+  // in case of child_table and parent_table with different valid session_id
+  // a table with a valid session_id should not see a another table with different session_id
+  } else if ((child_table_session_id != parent_table_seesion_id)
+             && 0 != child_table_session_id
+             && 0 != parent_table_seesion_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table session id of child table and parent table", KR(ret), K(child_table_session_id),
+                                                                            K(parent_table_seesion_id));
+  } {
     ObTabletID unused_tablet_id;
     int tmp_ret = OB_SUCCESS;
     ObSessionParam session_param;
     ObTimeoutCtx timeout_ctx;
     session_param.sql_mode_ = nullptr;
     session_param.tz_info_wrap_ = nullptr;
-    session_param.ddl_info_.set_is_ddl(true);
-    session_param.ddl_info_.set_source_table_hidden(child_table_schema.is_user_hidden_table());
-    session_param.ddl_info_.set_dest_table_hidden(parent_table_schema.is_user_hidden_table());
+    InnerDDLInfo ddl_info;
+    ddl_info.set_is_ddl(true);
+    ddl_info.set_source_table_hidden(child_table_schema.is_user_hidden_table());
+    ddl_info.set_dest_table_hidden(parent_table_schema.is_user_hidden_table());
+    // ctas with foreign key doing direct load need to set session id.
+    uint64_t table_session_id = 0 == parent_table_seesion_id ?
+                                     child_table_session_id : parent_table_seesion_id;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       int64_t i = 0;
       common::sqlclient::ObMySQLResult *result = NULL;
@@ -374,7 +394,9 @@ int ObForeignKeyConstraintValidationTask::check_fk_constraint_data_valid(
       ObSqlString parent_ddl_schema_hint_str;
       const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
       // print str like "select c1, c2 from db.t2 where c1 is not null and c2 is not null minus select c3, c4 from db.t1"
-      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+      if (OB_FAIL(session_param.ddl_info_.init(ddl_info, table_session_id))) {
+        LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(table_session_id));
+      } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set trx timeout failed", K(ret));
       } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set timeout failed", K(ret));
@@ -513,7 +535,7 @@ ObAsyncTask *ObForeignKeyConstraintValidationTask::deep_copy(char *buf, const in
 }
 
 ObConstraintTask::ObConstraintTask()
-  : ObDDLTask(ObDDLType::DDL_INVALID), lock_(),
+  : ObDDLTask(ObDDLType::DDL_INVALID), lock_(common::ObLatchIds::OB_CONSTRAINT_TASK_LOCK),
     alter_table_arg_(), root_service_(nullptr), check_job_ret_code_(INT64_MAX), check_replica_request_time_(0)
 {
 }
@@ -655,6 +677,10 @@ int ObConstraintTask::hold_snapshot(
     LOG_WARN("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(table_schema));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
     LOG_WARN("failed to get tablet snapshots", K(ret));
+  } else if (0 == tablet_ids.count()) {
+    ret = OB_SUCCESS;
+    snapshot_version_ = share::SCN::base_scn().get_val_for_tx();
+    LOG_INFO("no tablet to hold snapshot", K(ret), K(object_id_), K(target_object_id_), K(snapshot_version_));
   } else if (table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
              OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
     LOG_WARN("failed to get data lob meta table snapshot", K(ret));
@@ -699,6 +725,9 @@ int ObConstraintTask::release_snapshot(const int64_t snapshot_version)
     } else {
       LOG_WARN("failed to get tablet snapshots", K(ret));
     }
+  } else if (0 == tablet_ids.count()) {
+    ret = OB_SUCCESS;
+    LOG_INFO("no tablet to release snapshot", K(ret), K(object_id_), K(target_object_id_), K(snapshot_version));
   } else if (table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
              OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
     LOG_WARN("failed to get data lob meta table snapshot", K(ret));

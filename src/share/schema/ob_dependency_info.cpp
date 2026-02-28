@@ -437,50 +437,55 @@ int ObDependencyInfo::collect_dep_infos(const ObIArray<ObSchemaObjVersion> &sche
   return ret;
 }
 
-int ObDependencyInfo::collect_dep_infos(ObReferenceObjTable &ref_objs,
-                                        ObIArray<ObDependencyInfo> &deps,
-                                        ObObjectType dep_obj_type,
-                                        uint64_t dep_obj_id,
-                                        int64_t &max_version)
+int ObDependencyInfo::collect_dep_infos_for_view(const ObReferenceObjTable &ref_objs,
+                                                 const bool need_nested_dep,
+                                                 ObIArray<ObDependencyInfo> &deps)
 {
   int ret = OB_SUCCESS;
-  int64_t order = 0;
-  max_version = OB_INVALID_VERSION;
-  auto &ref_obj_map = ref_objs.get_ref_obj_table();
-  for (auto it = ref_obj_map.begin(); OB_SUCC(ret) && it != ref_obj_map.end(); ++it) {
-    ObDependencyInfo dep;
-    uint64_t curr_dep_obj_id = it->first.dep_obj_id_;
-    // create view path, only record directly dependency
-    if (curr_dep_obj_id == dep_obj_id) {
-      bool exist = false;
-      for (int64_t i = 0; OB_SUCC(ret) && i < it->second->ref_obj_versions_.count(); ++i) {
-        exist = false;
-        for (int j = 0; j < deps.count(); j++) {
-          const ObDependencyInfo& tmp_dep = deps.at(j);
-          if (tmp_dep.get_dep_obj_type() == it->first.dep_obj_type_
-              && tmp_dep.get_ref_obj_id() == it->second->ref_obj_versions_.at(i).object_id_
-              && tmp_dep.get_ref_timestamp() == it->second->ref_obj_versions_.at(i).version_
-              && tmp_dep.get_ref_obj_type()
-                 == ObSchemaObjVersion::get_schema_object_type(it->second->ref_obj_versions_.at(i).object_type_)) {
-            exist = true;
-            break;
-          }
-        }
-        if (exist) {
-          continue;
-        }
-        ObDependencyInfo dep;
-        max_version = std::max(it->second->ref_obj_versions_.at(i).version_, max_version);
-        dep.set_dep_obj_id(OB_INVALID_ID);
-        dep.set_dep_obj_type(it->first.dep_obj_type_);
-        dep.set_dep_obj_owner_id(it->first.dep_db_id_);
-        dep.set_ref_obj_id(it->second->ref_obj_versions_.at(i).object_id_);
-        dep.set_ref_obj_type(ObSchemaObjVersion::get_schema_object_type(it->second->ref_obj_versions_.at(i).object_type_));
-        dep.set_order(order);
-        ++order;
-        dep.set_dep_timestamp(-1);
-        dep.set_ref_timestamp(it->second->ref_obj_versions_.at(i).version_);
-        OZ (deps.push_back(dep));
+  const ObString dummy_str;
+  const ObReferenceObjTable::RefObjVersionMap &ref_obj_map = ref_objs.get_ref_obj_table();
+  // record directly dependency
+  for (ObReferenceObjTable::RefObjVersionMap::const_iterator it = ref_obj_map.begin(); OB_SUCC(ret) && it != ref_obj_map.end(); ++it) {
+    const ObReferenceObjTable::ObDependencyObjKey &dep_obj_key = it->first;
+    for (int64_t i = 0; OB_SUCC(ret) && i < it->second->ref_obj_versions_.count(); ++i) {
+      const ObSchemaObjVersion &schema_obj_version = it->second->ref_obj_versions_.at(i);
+      if (OB_INVALID_ID != dep_obj_key.dep_obj_id_) {
+        /* skip nested dependency */
+      } else if (OB_FAIL(add_dependency_if_not_duplicate(deps,
+                                                         dep_obj_key.dep_obj_type_,
+                                                         schema_obj_version.object_id_,
+                                                         schema_obj_version.version_,
+                                                         ObSchemaObjVersion::get_schema_object_type(schema_obj_version.object_type_),
+                                                         0,
+                                                         dummy_str,
+                                                         dummy_str,
+                                                         OB_INVALID_ID, /* tenant_id */
+                                                         dep_obj_key.dep_obj_id_,
+                                                         dep_obj_key.dep_db_id_))) {
+        LOG_WARN("failed to try add direct dep", K(ret), K(dep_obj_key.dep_obj_id_));
+      }
+    }
+  }
+
+  // for create mview view, record nested dependency
+  for (ObReferenceObjTable::RefObjVersionMap::const_iterator it = ref_obj_map.begin(); need_nested_dep && OB_SUCC(ret) && it != ref_obj_map.end(); ++it) {
+    const ObReferenceObjTable::ObDependencyObjKey &dep_obj_key = it->first;
+    for (int64_t i = 0; OB_SUCC(ret) && i < it->second->ref_obj_versions_.count(); ++i) {
+      const ObSchemaObjVersion &schema_obj_version = it->second->ref_obj_versions_.at(i);
+      if (OB_INVALID_ID == it->first.dep_obj_id_) {
+        /* skip directly dependency */
+      } else if (OB_FAIL(add_dependency_if_not_duplicate(deps,
+                                                         dep_obj_key.dep_obj_type_,
+                                                         schema_obj_version.object_id_,
+                                                         schema_obj_version.version_,
+                                                         ObSchemaObjVersion::get_schema_object_type(schema_obj_version.object_type_),
+                                                         0,
+                                                         dummy_str,
+                                                         dummy_str,
+                                                         OB_INVALID_ID,  /* tenant_id */
+                                                         dep_obj_key.dep_obj_id_,
+                                                         dep_obj_key.dep_db_id_))) {
+        LOG_WARN("failed to try add direct dep", K(ret), K(dep_obj_key.dep_obj_id_));
       }
     }
   }
@@ -488,6 +493,8 @@ int ObDependencyInfo::collect_dep_infos(ObReferenceObjTable &ref_objs,
   return ret;
 }
 
+// construct deps from based_schema_object_infos for mview.
+//  there is no duplicate dep obj in based_schema_object_infos
 int ObDependencyInfo::collect_dep_infos(
     const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
     ObIArray<ObDependencyInfo> &deps,
@@ -526,6 +533,10 @@ int ObDependencyInfo::collect_dep_infos(
         ++order;
       }
     }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(based_schema_object_infos.count() != deps.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected based schema object infos", KR(ret), K(based_schema_object_infos));
   }
   return ret;
 }
@@ -627,10 +638,21 @@ int ObDependencyInfo::collect_all_dep_objs(uint64_t tenant_id,
                                            common::ObISQLClient &sql_proxy,
                                            common::ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs)
 {
-  return collect_all_dep_objs_inner(tenant_id, ref_obj_id, ref_obj_id, sql_proxy, objs);
+  if (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_3_0
+      || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
+          && GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_3_5_5)
+      || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_0_0
+          && GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_4_2_0)
+      || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_0_0
+          && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0)) {
+    // not support rcte union distinct
+    return collect_all_dep_objs_inner_recursive(tenant_id, ref_obj_id, ref_obj_id, sql_proxy, objs);
+  } else {
+    return collect_all_dep_objs_inner_rcte(tenant_id, ref_obj_id, ref_obj_id, sql_proxy, objs);
+  }
 }
 
-int ObDependencyInfo::collect_all_dep_objs_inner(uint64_t tenant_id,
+int ObDependencyInfo::collect_all_dep_objs_inner_recursive(uint64_t tenant_id,
                                                  uint64_t root_obj_id,
                                                  uint64_t ref_obj_id,
                                                  common::ObISQLClient &sql_proxy,
@@ -654,7 +676,7 @@ int ObDependencyInfo::collect_all_dep_objs_inner(uint64_t tenant_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret));
       } else {
-        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+        while (OB_SUCC(result->next())) {
           int64_t tmp_obj_id = OB_INVALID_ID;
           int64_t tmp_type = static_cast<int64_t> (share::schema::ObObjectType::INVALID);
           EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_id", tmp_obj_id, int64_t);
@@ -690,8 +712,64 @@ int ObDependencyInfo::collect_all_dep_objs_inner(uint64_t tenant_id,
     LOG_WARN("too deep recusive", K(ret));
   } else {
     for (int64_t i = init_count; OB_SUCC(ret) && i < objs.count(); ++i) {
-      if (OB_FAIL(collect_all_dep_objs_inner(tenant_id, root_obj_id, objs.at(i).first, sql_proxy, objs))) {
+      if (OB_FAIL(collect_all_dep_objs_inner_recursive(tenant_id, root_obj_id, objs.at(i).first, sql_proxy, objs))) {
         LOG_WARN("failed to collect all dep objs", K(ret), K(objs.count()), K(init_count), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDependencyInfo::collect_all_dep_objs_inner_rcte(uint64_t tenant_id,
+                                                 uint64_t root_obj_id,
+                                                 uint64_t ref_obj_id,
+                                                 common::ObISQLClient &sql_proxy,
+                                                 common::ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  const int64_t init_count = objs.count();
+  {
+    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("WITH RECURSIVE cte AS "
+                                "(SELECT /*+index(__all_tenant_dependency idx_dependency_ref_obj)*/ dep_obj_id, dep_obj_type FROM %s WHERE tenant_id = %lu AND ref_obj_id = %lu "
+                                "UNION SELECT /*+use_nl(t2) leading(cte t2) index(t2 idx_dependency_ref_obj)*/ t2.dep_obj_id, t2.dep_obj_type FROM %s t2 "
+                                "INNER JOIN cte ON t2.ref_obj_id = cte.dep_obj_id ) SELECT * FROM cte",
+                                        OB_ALL_TENANT_DEPENDENCY_TNAME,
+                                        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                                        ref_obj_id,
+                                        OB_ALL_TENANT_DEPENDENCY_TNAME))) {
+        LOG_WARN("failed to assign sql", K(ret));
+      } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret));
+      } else {
+        while (OB_SUCC(result->next())) {
+          int64_t tmp_obj_id = OB_INVALID_ID;
+          int64_t tmp_type = static_cast<int64_t> (share::schema::ObObjectType::INVALID);
+          EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_id", tmp_obj_id, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_type", tmp_type, int64_t);
+          if (OB_FAIL(ret)) {
+          } else if (tmp_type <= static_cast<int64_t> (share::schema::ObObjectType::INVALID)
+                      || tmp_type >= static_cast<int64_t> (share::schema::ObObjectType::MAX_TYPE)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get wrong obj type", K(ret));
+          } else if (ref_obj_id == tmp_obj_id || root_obj_id == tmp_obj_id) {
+            // skip
+          } else if (OB_FAIL(objs.push_back({static_cast<uint64_t> (tmp_obj_id), static_cast<share::schema::ObObjectType> (tmp_type)}))) {
+            LOG_WARN("failed to push back obj", K(ret));
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED : ret;
+          LOG_WARN("read dependency info failed", K(ret));
+        }
       }
     }
   }

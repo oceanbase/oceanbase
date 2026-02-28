@@ -267,7 +267,7 @@ public:
   void set_scn_range(share::ObScnRange scn_range) { key_.scn_range_ = scn_range; }
   void set_table_type(ObITable::TableType table_type) { key_.table_type_ = table_type; }
   void set_snapshot_version(int64_t version) { key_.version_range_.snapshot_version_ = version; }
-  ObITable::TableType get_table_type() { return key_.table_type_; }
+  ObITable::TableType get_table_type() const { return key_.table_type_; }
 
   virtual int scan(
       const ObTableIterParam &param,
@@ -302,6 +302,7 @@ public:
   virtual int64_t get_snapshot_version() const { return key_.get_snapshot_version(); }
   virtual int64_t get_upper_trans_version() const { return get_snapshot_version(); }
   virtual int64_t get_max_merged_trans_version() const { return get_snapshot_version(); }
+  virtual int64_t get_min_merged_trans_version() const { return 0; }
   virtual int get_frozen_schema_version(int64_t &schema_version) const = 0;
   OB_INLINE uint16_t get_column_group_id() const { return key_.get_column_group_id(); }
   OB_INLINE uint16_t get_slice_idx() const { return key_.get_slice_idx(); }

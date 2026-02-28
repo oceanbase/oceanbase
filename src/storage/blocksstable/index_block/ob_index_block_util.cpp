@@ -21,7 +21,6 @@ namespace blocksstable
 {
 
 int ObSkipIndexColMeta::append_skip_index_meta(
-    const bool is_major,
     const share::schema::ObSkipIndexColumnAttr &skip_idx_attr,
     const int64_t col_idx,
     common::ObIArray<ObSkipIndexColMeta> &skip_idx_metas)
@@ -32,7 +31,7 @@ int ObSkipIndexColMeta::append_skip_index_meta(
   if (OB_UNLIKELY(!skip_idx_attr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid skip index attribute", K(ret), K(skip_idx_attr));
-  } else if (skip_idx_attr.has_min_max() && is_major) {
+  } else if (skip_idx_attr.has_min_max()) {
     if (OB_FAIL(skip_idx_metas.push_back(ObSkipIndexColMeta(col_idx, ObSkipIndexColType::SK_IDX_MIN)))) {
       STORAGE_LOG(WARN, "failed to push min skip idx meta", K(ret));
     } else if (OB_FAIL(skip_idx_metas.push_back(ObSkipIndexColMeta(col_idx, ObSkipIndexColType::SK_IDX_MAX)))) {
@@ -55,7 +54,7 @@ int ObSkipIndexColMeta::append_skip_index_meta(
     }
   }
 
-  if (OB_SUCC(ret) && skip_idx_attr.has_sum() && is_major) {
+  if (OB_SUCC(ret) && skip_idx_attr.has_sum()) {
     if (!has_null_count_column
         && OB_FAIL(skip_idx_metas.push_back(ObSkipIndexColMeta(col_idx, ObSkipIndexColType::SK_IDX_NULL_COUNT)))) {
       STORAGE_LOG(WARN, "failed to push null count skip index meta", K(ret));

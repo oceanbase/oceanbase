@@ -42,7 +42,6 @@
 #include "storage/memtable/utils_mock_row.h"
 #include "storage/tx/ob_mock_tx_ctx.h"
 #include "storage/init_basic_struct.h"
-#include "storage/test_tablet_helper.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_trans_ctx_mgr_v4.h"
@@ -67,48 +66,9 @@ using namespace palf;
 namespace storage
 {
 
-ObSEArray<ObTxData, 8> TX_DATA_ARR;
-
-int ObTxTable::insert(ObTxData *&tx_data)
-{
-  int ret = OB_SUCCESS;
-  ret = TX_DATA_ARR.push_back(*tx_data);
-  return ret;
-}
-
-int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn)
-{
-  int ret = OB_SUCCESS;
-  for (int i = 0; i < TX_DATA_ARR.count(); i++)
-  {
-    if (read_tx_data_arg.tx_id_ == TX_DATA_ARR.at(i).tx_id_) {
-      if (TX_DATA_ARR.at(i).state_ == ObTxData::RUNNING) {
-        SCN tmp_scn;
-        tmp_scn.convert_from_ts(30);
-        ObTxCCCtx tmp_ctx(ObTxState::PREPARE, tmp_scn);
-        ret = fn(TX_DATA_ARR[i], &tmp_ctx);
-      } else {
-        ret = fn(TX_DATA_ARR[i]);
-      }
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "check with tx data failed", KR(ret), K(read_tx_data_arg), K(TX_DATA_ARR.at(i)));
-      }
-      break;
-    }
-  }
-  return ret;
-}
-
-void clear_tx_data()
-{
-  TX_DATA_ARR.reset();
-};
-
-
-class TestMultiVersionDIMerge : public TestMergeBasic
+class TestMultiVersionDIMerge : public TestMergeBasic, public ::testing::WithParamInterface<bool>
 {
 public:
-  static const int64_t MAX_PARALLEL_DEGREE = 10;
   TestMultiVersionDIMerge();
   virtual ~TestMultiVersionDIMerge() {}
 
@@ -116,19 +76,18 @@ public:
   void TearDown();
   static void SetUpTestCase();
   static void TearDownTestCase();
-  void prepare_query_param(const ObVersionRange &version_range);
-
   void prepare_merge_context(const ObMergeType &merge_type,
                              const bool is_full_merge,
                              const ObVersionRange &trans_version_range,
-                             ObTabletMergeCtx &merge_context);
-  void build_sstable(
-      ObTabletMergeCtx &ctx,
-      ObSSTable *&merged_sstable);
-  void fake_freeze_info();
+                             ObTabletMergeCtx &merge_context)
+  {
+    return TestMergeBasic::prepare_merge_context(
+      merge_type, is_full_merge, trans_version_range, &merge_dag_, merge_context, true/*is_delete_insert_merge*/);
+  }
+  void prepare_query_param(const ObVersionRange &version_range);
+  void build_sstable(ObTabletMergeCtx &ctx, ObSSTable *&merged_sstable);
   void get_tx_table_guard(ObTxTableGuard &tx_table_guard);
 public:
-  ObStoreCtx store_ctx_;
   ObTabletMergeExecuteDag merge_dag_;
 };
 
@@ -137,19 +96,7 @@ void TestMultiVersionDIMerge::SetUpTestCase()
   ObMultiVersionSSTableTest::SetUpTestCase();
   // mock sequence no
   ObClockGenerator::init();
-
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-  MERGE_SCHEDULER_PTR->resume_major_merge();
-
-  // create tablet
-  share::schema::ObTableSchema table_schema;
-  uint64_t table_id = 12345;
-  ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema, table_id));
-  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_));
+  TestMergeBasic::create_tablet();
 }
 
 void TestMultiVersionDIMerge::TearDownTestCase()
@@ -166,25 +113,10 @@ TestMultiVersionDIMerge::TestMultiVersionDIMerge()
 
 void TestMultiVersionDIMerge::SetUp()
 {
+  // toggle row store type by parameter: false -> FLAT_ROW_STORE, true -> CS_ENCODING_ROW_STORE
+  const bool use_cs_encoding = GetParam();
+  row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
   ObMultiVersionSSTableTest::SetUp();
-}
-
-void TestMultiVersionDIMerge::fake_freeze_info()
-{
-  share::ObFreezeInfoList &info_list = MTL(ObTenantFreezeInfoMgr *)->freeze_info_mgr_.freeze_info_;
-  info_list.reset();
-
-  share::SCN frozen_val;
-  frozen_val.val_ = 1;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 100;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 200;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 400;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-
-  info_list.latest_snapshot_gc_scn_.val_ = 500;
 }
 
 void TestMultiVersionDIMerge::TearDown()
@@ -230,27 +162,6 @@ void TestMultiVersionDIMerge::prepare_query_param(const ObVersionRange &version_
   context_.limit_param_ = nullptr;
 }
 
-void TestMultiVersionDIMerge::prepare_merge_context(const ObMergeType &merge_type,
-                                                  const bool is_full_merge,
-                                                  const ObVersionRange &trans_version_range,
-                                                  ObTabletMergeCtx &merge_context)
-{
-  TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
-  merge_context.merge_dag_ = &merge_dag_;
-  merge_context.static_param_.for_unittest_ = true;
-  merge_context.static_param_.is_delete_insert_merge_ = true;
-  merge_context.static_param_.data_version_ = DATA_VERSION_4_3_5_2;
-  ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
-  ASSERT_EQ(OB_SUCCESS, merge_context.static_param_.init_static_info(merge_context.tablet_handle_));
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_static_desc());
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_read_info());
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_tablet_merge_info());
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_sstable_builder());
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.sstable_builder_.data_store_desc_.init(merge_context.static_desc_, table_merge_schema_));
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder());
-}
-
 void TestMultiVersionDIMerge::build_sstable(
     ObTabletMergeCtx &ctx,
     ObSSTable *&merged_sstable)
@@ -270,7 +181,7 @@ void TestMultiVersionDIMerge::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_table_guard(tx_table_guard));
 }
 
-TEST_F(TestMultiVersionDIMerge, rowkey_cross_two_macro_and_second_macro_is_filtered)
+TEST_P(TestMultiVersionDIMerge, rowkey_cross_two_macro_and_second_macro_is_filtered)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -378,7 +289,7 @@ TEST_F(TestMultiVersionDIMerge, rowkey_cross_two_macro_and_second_macro_is_filte
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, rowkey_cross_three_macro_inc_merge)
+TEST_P(TestMultiVersionDIMerge, rowkey_cross_three_macro_inc_merge)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -502,7 +413,7 @@ TEST_F(TestMultiVersionDIMerge, rowkey_cross_three_macro_inc_merge)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_committed_in_minor)
+TEST_P(TestMultiVersionDIMerge, uncommit_rowkey_committed_in_minor)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -635,7 +546,7 @@ TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_committed_in_minor)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_is_last)
+TEST_P(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_is_last)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -737,7 +648,7 @@ TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_is_last)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_following_last)
+TEST_P(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_following_last)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -865,7 +776,7 @@ TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_following
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_following_shadow)
+TEST_P(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_following_shadow)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -999,7 +910,7 @@ TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_following
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, rowkey_cross_three_macro_full_merge)
+TEST_P(TestMultiVersionDIMerge, rowkey_cross_three_macro_full_merge)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1123,7 +1034,7 @@ TEST_F(TestMultiVersionDIMerge, rowkey_cross_three_macro_full_merge)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans)
+TEST_P(TestMultiVersionDIMerge, test_merge_with_multi_trans)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1158,8 +1069,8 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans)
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[1], 1, true);
+  prepare_one_macro(&micro_data[2], 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -1183,7 +1094,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans)
   scn_range.end_scn_.convert_for_tx(20);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -1292,7 +1203,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_compact)
+TEST_P(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_compact)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1333,7 +1244,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_compact)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 1);
-  prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[2], 1, true);
   prepare_one_macro(&micro_data[3], 1);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
@@ -1375,11 +1286,11 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_compact)
   scn_range.end_scn_.convert_for_tx(60);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data2[1], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data2[2], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data2[3], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data2[4], 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
+  prepare_one_macro(&micro_data2[1], 1, true);
+  prepare_one_macro(&micro_data2[2], 1, true);
+  prepare_one_macro(&micro_data2[3], 1, true);
+  prepare_one_macro(&micro_data2[4], 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -1467,7 +1378,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_compact)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_not_compact)
+TEST_P(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_not_compact)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1513,10 +1424,10 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_not_compact)
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[3], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[4], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[1], 1, true);
+  prepare_one_macro(&micro_data[2], 1, true);
+  prepare_one_macro(&micro_data[3], 1, true);
+  prepare_one_macro(&micro_data[4], 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -1544,7 +1455,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_not_compact)
   scn_range.end_scn_.convert_for_tx(20);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -1656,7 +1567,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_not_compact)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_merge_with_macro_reused_with_shadow)
+TEST_P(TestMultiVersionDIMerge, test_merge_with_macro_reused_with_shadow)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1780,7 +1691,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_macro_reused_with_shadow)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_merge_with_macro_reused_without_shadow)
+TEST_P(TestMultiVersionDIMerge, test_merge_with_macro_reused_without_shadow)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1821,7 +1732,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_macro_reused_without_shadow)
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[1], 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -1921,7 +1832,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_macro_reused_without_shadow)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_merge_with_greater_multi_version)
+TEST_P(TestMultiVersionDIMerge, test_merge_with_greater_multi_version)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2011,7 +1922,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_greater_multi_version)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_merge_with_greater_multi_version_and_uncommit)
+TEST_P(TestMultiVersionDIMerge, test_merge_with_greater_multi_version_and_uncommit)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2037,7 +1948,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_greater_multi_version_and_uncomm
   scn_range.end_scn_.convert_for_tx(30);
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data, 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -2124,7 +2035,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_greater_multi_version_and_uncomm
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_merge_with_ghost_row)
+TEST_P(TestMultiVersionDIMerge, test_merge_with_ghost_row)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2149,7 +2060,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_ghost_row)
   scn_range.end_scn_.convert_for_tx(10);
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data, 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -2168,7 +2079,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_ghost_row)
   scn_range.end_scn_.convert_for_tx(20);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -2188,7 +2099,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_ghost_row)
   scn_range.end_scn_.convert_for_tx(50);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data3, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data3, 1, true);
   prepare_data_end(handle3);
   merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
@@ -2262,7 +2173,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_ghost_row)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, compare_dml_flag)
+TEST_P(TestMultiVersionDIMerge, compare_dml_flag)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2350,7 +2261,7 @@ TEST_F(TestMultiVersionDIMerge, compare_dml_flag)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, get_last_after_reuse)
+TEST_P(TestMultiVersionDIMerge, get_last_after_reuse)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2461,7 +2372,7 @@ TEST_F(TestMultiVersionDIMerge, get_last_after_reuse)
   handle2.reset();
   merger.reset();
 }
-TEST_F(TestMultiVersionDIMerge, rowkey_cross_two_macro_with_commit_scn_less_multi_version_start)
+TEST_P(TestMultiVersionDIMerge, rowkey_cross_two_macro_with_commit_scn_less_multi_version_start)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2559,7 +2470,7 @@ TEST_F(TestMultiVersionDIMerge, rowkey_cross_two_macro_with_commit_scn_less_mult
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, rowkey_cross_macro_with_last_shadow_version_less_than_multi_version)
+TEST_P(TestMultiVersionDIMerge, rowkey_cross_macro_with_last_shadow_version_less_than_multi_version)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2688,7 +2599,7 @@ TEST_F(TestMultiVersionDIMerge, rowkey_cross_macro_with_last_shadow_version_less
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, shadow_row_is_last_in_macro)
+TEST_P(TestMultiVersionDIMerge, shadow_row_is_last_in_macro)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2802,7 +2713,7 @@ TEST_F(TestMultiVersionDIMerge, shadow_row_is_last_in_macro)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, rowkey_cross_macro_without_open_next_macro)
+TEST_P(TestMultiVersionDIMerge, rowkey_cross_macro_without_open_next_macro)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2929,7 +2840,7 @@ TEST_F(TestMultiVersionDIMerge, rowkey_cross_macro_without_open_next_macro)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, range_cross_macro)
+TEST_P(TestMultiVersionDIMerge, range_cross_macro)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3048,7 +2959,7 @@ TEST_F(TestMultiVersionDIMerge, range_cross_macro)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_merge_base_iter_have_ghost_row)
+TEST_P(TestMultiVersionDIMerge, test_merge_base_iter_have_ghost_row)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3077,8 +2988,8 @@ TEST_F(TestMultiVersionDIMerge, test_merge_base_iter_have_ghost_row)
   scn_range.end_scn_.convert_for_tx(10);
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
+  prepare_one_macro(micro_data, 1, true);
+  prepare_one_macro(&micro_data[1], 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -3099,7 +3010,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_base_iter_have_ghost_row)
   scn_range.end_scn_.convert_for_tx(20);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -3119,7 +3030,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_base_iter_have_ghost_row)
   scn_range.end_scn_.convert_for_tx(50);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data3, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data3, 1, true);
   prepare_data_end(handle3);
   merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
@@ -3196,7 +3107,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_base_iter_have_ghost_row)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_trans_cross_macro_with_ghost_row)
+TEST_P(TestMultiVersionDIMerge, test_trans_cross_macro_with_ghost_row)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3317,7 +3228,7 @@ TEST_F(TestMultiVersionDIMerge, test_trans_cross_macro_with_ghost_row)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_trans_cross_macro_with_ghost_row2)
+TEST_P(TestMultiVersionDIMerge, test_trans_cross_macro_with_ghost_row2)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3446,7 +3357,7 @@ TEST_F(TestMultiVersionDIMerge, test_trans_cross_macro_with_ghost_row2)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, test_running_trans_cross_macro_with_abort_sql_seq)
+TEST_P(TestMultiVersionDIMerge, test_running_trans_cross_macro_with_abort_sql_seq)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3570,7 +3481,7 @@ TEST_F(TestMultiVersionDIMerge, test_running_trans_cross_macro_with_abort_sql_se
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, check_shadow_row_fuse)
+TEST_P(TestMultiVersionDIMerge, check_shadow_row_fuse)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3683,7 +3594,7 @@ TEST_F(TestMultiVersionDIMerge, check_shadow_row_fuse)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_shadow_multi_sstables)
+TEST_P(TestMultiVersionDIMerge, check_mv_start_compact_shadow_multi_sstables)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3799,7 +3710,7 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_shadow_multi_sstables)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_committing_multi_sstables)
+TEST_P(TestMultiVersionDIMerge, check_mv_start_compact_committing_multi_sstables)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3909,7 +3820,7 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_committing_multi_sstables
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_complex_env)
+TEST_P(TestMultiVersionDIMerge, check_mv_start_compact_complex_env)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -4043,7 +3954,7 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_complex_env)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, check_mv_start_with_base_version)
+TEST_P(TestMultiVersionDIMerge, check_mv_start_with_base_version)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -4144,7 +4055,7 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_with_base_version)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, uncommit_row_sql_sequence_check_order_error)
+TEST_P(TestMultiVersionDIMerge, uncommit_row_sql_sequence_check_order_error)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -4244,7 +4155,7 @@ TEST_F(TestMultiVersionDIMerge, uncommit_row_sql_sequence_check_order_error)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, crossed_range_checkorder_error)
+TEST_P(TestMultiVersionDIMerge, crossed_range_checkorder_error)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -4365,7 +4276,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_checkorder_error)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
+TEST_P(TestMultiVersionDIMerge, crossed_range_sstable_merge)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -4624,7 +4535,7 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, compact_old_row_check_order_error)
+TEST_P(TestMultiVersionDIMerge, compact_old_row_check_order_error)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -4708,7 +4619,7 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_check_order_error)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, compact_old_row_with_base_version)
+TEST_P(TestMultiVersionDIMerge, compact_old_row_with_base_version)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -4857,7 +4768,7 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_with_base_version)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, single_trans_replayed_in_multi_sst)
+TEST_P(TestMultiVersionDIMerge, single_trans_replayed_in_multi_sst)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -4903,10 +4814,10 @@ TEST_F(TestMultiVersionDIMerge, single_trans_replayed_in_multi_sst)
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[3], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[4], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[1], 1, true);
+  prepare_one_macro(&micro_data[2], 1, true);
+  prepare_one_macro(&micro_data[3], 1, true);
+  prepare_one_macro(&micro_data[4], 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -4934,7 +4845,7 @@ TEST_F(TestMultiVersionDIMerge, single_trans_replayed_in_multi_sst)
   scn_range.end_scn_.convert_for_tx(20);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -5048,7 +4959,7 @@ TEST_F(TestMultiVersionDIMerge, single_trans_replayed_in_multi_sst)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionDIMerge, lock_row_replayed_in_multi_sst)
+TEST_P(TestMultiVersionDIMerge, lock_row_replayed_in_multi_sst)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -5097,10 +5008,10 @@ TEST_F(TestMultiVersionDIMerge, lock_row_replayed_in_multi_sst)
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[3], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[4], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[1], 1, true);
+  prepare_one_macro(&micro_data[2], 1, true);
+  prepare_one_macro(&micro_data[3], 1, true);
+  prepare_one_macro(&micro_data[4], 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -5128,7 +5039,7 @@ TEST_F(TestMultiVersionDIMerge, lock_row_replayed_in_multi_sst)
   scn_range.end_scn_.convert_for_tx(20);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -5244,6 +5155,11 @@ TEST_F(TestMultiVersionDIMerge, lock_row_replayed_in_multi_sst)
   handle2.reset();
   merger.reset();
 }
+
+INSTANTIATE_TEST_CASE_P(
+  FlatAndCSEncoding,
+  TestMultiVersionDIMerge,
+  ::testing::Values(false, true));
 
 } // namespace storage
 } // namespace oceanbase

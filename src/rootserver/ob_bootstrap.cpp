@@ -841,7 +841,7 @@ int ObBootstrap::load_all_schema(
     LOG_WARN("failed to init executor", KR(ret));
   } else if (OB_FAIL(executor.execute())) {
     LOG_WARN("failed to execute load all schema", KR(ret));
-  } else if (OB_FAIL(ObLoadInnerTableSchemaExecutor::load_core_schema_version(
+  } else if (OB_FAIL(ObLoadInnerTableSchemaExecutor::load_schema_version(
           OB_SYS_TENANT_ID, ddl_service.get_sql_proxy()))) {
       LOG_WARN("failed to load core schema version", KR(ret));
   }
@@ -1389,7 +1389,7 @@ int ObBootstrap::init_global_stat()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema_status_proxy is null", KR(ret));
     } else if (OB_FAIL(global_stat_proxy.set_init_value(
-               OB_CORE_SCHEMA_VERSION, baseline_schema_version,
+               OB_CORE_SCHEMA_VERSION, OB_CORE_SCHEMA_VERSION, baseline_schema_version,
                rootservice_epoch, snapshot_gc_scn, snapshot_gc_timestamp, ddl_epoch,
                DATA_CURRENT_VERSION, DATA_CURRENT_VERSION, DATA_CURRENT_VERSION))) {
       LOG_WARN("set_init_value failed", KR(ret), "schema_version", OB_CORE_SCHEMA_VERSION,

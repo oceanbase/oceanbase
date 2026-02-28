@@ -524,29 +524,75 @@ struct ToDatetimeCastImpl
         class StringToDatetimeFn : public CastFnBase {
         public:
           StringToDatetimeFn(CAST_ARG_LIST_DECL, ArgVec* arg_vec, ResVec* res_vec,
-                          ObDateSqlMode date_sql_mode, ObTimeConvertCtx cvrt_ctx)
+                          ObDateSqlMode date_sql_mode, ObTimeConvertCtx cvrt_ctx,
+                          int64_t local_tz_offset_usec, ObTimeZoneInfoPos *literal_tz_info)
               : CastFnBase(CAST_ARG_DECL), arg_vec_(arg_vec), res_vec_(res_vec),
-                date_sql_mode_(date_sql_mode), cvrt_ctx_(cvrt_ctx) {}
+                date_sql_mode_(date_sql_mode), cvrt_ctx_(cvrt_ctx), ob_time_(DT_TYPE_DATETIME),
+                local_tz_offset_usec_(local_tz_offset_usec), literal_tz_info_(literal_tz_info) {}
 
           OB_INLINE int operator() (const ObExpr &expr, int idx)
           {
             int ret = OB_SUCCESS;
             int warning = OB_SUCCESS;
             int64_t out_val = 0;
-            ObString in_str(arg_vec_->get_string(idx));
+            ObString in_val(arg_vec_->get_string(idx));
             if (lib::is_oracle_mode()) {
-              if (CAST_FAIL(ObTimeConverter::str_to_date_oracle(in_str, cvrt_ctx_, out_val))) {
+              if (CAST_FAIL(ObTimeConverter::str_to_date_oracle(in_val, cvrt_ctx_, out_val))) {
                 SQL_LOG(WARN, "str_to_date_oracle failed", K(ret));
               }
             } else { // mysql
-              if (CAST_FAIL(ObTimeConverter::str_to_datetime(
-                                in_str, cvrt_ctx_, out_val, NULL, date_sql_mode_))) {
-                SQL_LOG(WARN, "str_to_datetime failed", K(ret), K(in_str));
-              } else if (CM_IS_ERROR_ON_SCALE_OVER(expr.extra_)
-                        &&  (out_val == ObTimeConverter::ZERO_DATE
-                             || out_val == ObTimeConverter::ZERO_DATETIME)) {
-                ret = OB_INVALID_DATE_VALUE;
-                LOG_USER_ERROR(OB_INVALID_DATE_VALUE, in_str.length(), in_str.ptr(), "");
+              bool datetime_valid = false;
+              bool is_match_format = false;
+              if (use_quick_parser_) {
+                // try quick parser
+                ObTimeConverter::string_to_obtime_quick(in_val.ptr(),
+                  in_val.length(),
+                  ob_time_,
+                  datetime_valid,
+                  is_match_format,
+                  last_first_8digits_,
+                  last_quick_parser_type_);
+              }
+              if (datetime_valid && is_match_format) {
+                ob_time_.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time_);
+                if (ob_time_.parts_[DT_DATE] == ObTimeConverter::ZERO_DATE) {
+                  out_val = ObTimeConverter::ZERO_DATETIME;
+                } else {
+                  // quick in_val has not tz_info, just use local_tz_offset_usec_
+                  out_val = ob_time_.parts_[DT_DATE] * USECS_PER_DAY
+                    + ObTimeConverter::ob_time_to_time(ob_time_) - local_tz_offset_usec_;
+                }
+              } else {
+                // go common parser
+                last_quick_parser_type_ = ObTimeConverter::QuickParserType::QuickParserUnused;
+                if (use_quick_parser_) {
+                  quick_parser_failed_count_++;
+                  if (quick_parser_failed_count_ % 32 == 0) {
+                    if (quick_parser_failed_count_ * 2 > idx) {
+                      use_quick_parser_ = false;
+                    }
+                  }
+                }
+                if (CAST_FAIL(ObTimeConverter::str_to_ob_time_with_date(in_val, ob_time_, NULL, date_sql_mode_, cvrt_ctx_.need_truncate_, digits_))) {
+                  SQL_LOG(WARN, "failed to convert string to datetime", K(ret));
+                } else if (CM_IS_ERROR_ON_SCALE_OVER(expr.extra_)
+                          &&  (out_val == ObTimeConverter::ZERO_DATE
+                              || out_val == ObTimeConverter::ZERO_DATETIME)) {
+                  ret = OB_INVALID_DATE_VALUE;
+                  LOG_USER_ERROR(OB_INVALID_DATE_VALUE, in_val.length(), in_val.ptr(), "");
+                } else if (!cvrt_ctx_.is_timestamp_ && ob_time_.is_tz_name_valid_) {
+                  //only enable time zone data type can has tz name and tz addr
+                  SQL_LOG(WARN, "DATETIME should not has time zone attr", K(ret));
+                  //for MySql non-strict sql_mode: still do the convert but without tz info
+                  ob_time_.is_tz_name_valid_ = false;
+                  if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time_, cvrt_ctx_, out_val, *literal_tz_info_))) {
+                    SQL_LOG(WARN, "failed to convert datetime to seconds", K(ret), K(ob_time_), K(out_val));
+                  } else {
+                    ret = OB_ERR_UNEXPECTED_TZ_TRANSITION;
+                  }
+                } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time_, cvrt_ctx_, out_val, *literal_tz_info_))) {
+                  SQL_LOG(WARN, "failed to convert ob time to datetime", K(ret));
+                }
               }
             }
             if (OB_SUCC(ret)) {
@@ -559,6 +605,14 @@ struct ToDatetimeCastImpl
           ResVec *res_vec_;
           ObDateSqlMode date_sql_mode_;
           ObTimeConvertCtx cvrt_ctx_;
+          int64_t last_first_8digits_ = INT64_MAX;
+          int quick_parser_failed_count_ = 0;
+          bool use_quick_parser_ = true;
+          ObTime ob_time_;
+          int64_t local_tz_offset_usec_ = 0;
+          ObTimeConverter::ObTimeDigits digits_[DATETIME_PART_CNT];
+          ObTimeConverter::QuickParserType last_quick_parser_type_ = ObTimeConverter::QuickParserType::QuickParserUnused;
+          ObTimeZoneInfoPos *literal_tz_info_;
         };
 
         ObDateSqlMode date_sql_mode;
@@ -566,22 +620,42 @@ struct ToDatetimeCastImpl
         bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode)
                             ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
         ObTimeConvertCtx cvrt_ctx(tz_info_local, ObTimestampType == out_type, need_truncate);
+        ObTimeZoneInfoPos literal_tz_info;
         if (lib::is_oracle_mode()) {
           if (OB_FAIL(common_get_nls_format(session, ctx, &expr, out_type,
                                             CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(cast_mode),
                                             cvrt_ctx.oracle_nls_format_))) {
             SQL_LOG(WARN, "common_get_nls_format failed", K(ret));
+          } else {
+            StringToDatetimeFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, date_sql_mode,
+              cvrt_ctx, 0, NULL);
+            if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                              skip, bound, is_diagnosis, diagnosis_manager))) {
+              SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
+            }
           }
         } else {
           date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(cast_mode);
           date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(cast_mode);
-          date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
-        }
-        if (OB_SUCC(ret)) {
-          StringToDatetimeFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, date_sql_mode, cvrt_ctx);
-          if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
-                                            skip, bound, is_diagnosis, diagnosis_manager))) {
-            SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
+          date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(expr.extra_);
+          const ObTimeZoneInfo *tz_info = cvrt_ctx.tz_info_;
+          int64_t local_tz_offset_usec = 0;
+          if (tz_info != NULL) {
+            if (cvrt_ctx.is_timestamp_) {
+              if (tz_info->get_tz_id() > 0) {
+                ret = OB_NOT_SUPPORTED;
+              }
+              local_tz_offset_usec = SEC_TO_USEC(tz_info->get_offset());
+              date_sql_mode.allow_invalid_dates_ = false;
+            }
+          }
+          if (OB_SUCC(ret)) {
+            StringToDatetimeFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, date_sql_mode,
+              cvrt_ctx, local_tz_offset_usec, &literal_tz_info);
+            if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                              skip, bound, is_diagnosis, diagnosis_manager))) {
+              SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
+            }
           }
         }
       }

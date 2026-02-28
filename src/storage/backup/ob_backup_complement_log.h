@@ -50,6 +50,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/backup/ob_backup_task.h"
+#include "storage/backup/ob_backup_block_file_reader_writer.h"
 #include <algorithm>
 
 namespace oceanbase {
@@ -60,12 +61,15 @@ struct ObBackupPieceFile {
   void reset();
   int set(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id,
       const int64_t file_id, const share::SCN &start_scn, const share::SCN &checkpoint_scn, const ObBackupPathString &path);
-  TO_STRING_KV(K_(dest_id), K_(round_id), K_(piece_id), K_(ls_id), K_(file_id), K_(start_scn), K_(checkpoint_scn), K_(path));
+  int set_file_size(const int64_t file_size);
+  TO_STRING_KV(K_(dest_id), K_(round_id), K_(piece_id), K_(ls_id), K_(file_id), K_(file_size), K_(start_scn),
+                  K_(checkpoint_scn), K_(path));
   int64_t dest_id_;
   int64_t round_id_;
   int64_t piece_id_;
   share::ObLSID ls_id_;
   int64_t file_id_;
+  int64_t file_size_;
   share::SCN start_scn_;
   share::SCN checkpoint_scn_;
   ObBackupPathString path_;
@@ -84,6 +88,10 @@ struct ObBackupComplementLogCtx final {
   int64_t retry_id_;
   ObBackupReportCtx report_ctx_;
   bool is_only_calc_stat_;
+  ObBackupComplementLogCtx() : mutex_(common::ObLatchIds::OB_BACKUP_COMPLEMENT_LOG_CTX_MUTEX)
+  {
+  }
+
 
   bool is_valid() const;
   bool operator==(const ObBackupComplementLogCtx &other) const;
@@ -314,6 +322,7 @@ private:
   int64_t last_active_time_;
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   share::ObBackupDest archive_dest_;
+  int64_t file_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupLSLogFileTask);
 };
 
@@ -326,9 +335,10 @@ public:
       ObBackupComplementLogCtx *ctx);
   virtual int process() override;
   int check_is_iter_end(bool &is_iter_end);
-  int get_copy_file_info(ObBackupPieceFile &piece_file);
-
+  int get_copy_file_info(ObBackupPieceFile &piece_file, int64_t &idx);
+  int record_file_size(const int64_t idx, const int64_t file_size);
 private:
+  int generate_log_file_list_();
   int report_task_result_();
   int record_server_event_();
 

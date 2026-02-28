@@ -129,6 +129,11 @@ public:
       ObVersionRange &result_version_range,
       ObStorageSnapshotInfo &snapshot_info);
 
+  static int check_need_gc_tx_data(
+      const storage::ObTablet &tablet,
+      ObLS &ls,
+      storage::ObGetMergeTablesResult &result);
+
   static int add_table_with_check(storage::ObGetMergeTablesResult &result, storage::ObTableHandleV2 &table_handle);
   static int get_result_by_snapshot(
       storage::ObLS &ls,
@@ -166,16 +171,21 @@ private:
       const ObGetMergeTablesParam &param,
       const ObTablet &tablet,
       const int64_t minor_compact_trigger,
+      ObLS &ls,
       ObTablesHandleArray &tables,
       ObGetMergeTablesResult &result);
   static int refine_minor_merge_result(
+      const ObTablet &tablet,
       const compaction::ObMergeType merge_type,
       const int64_t minor_compact_trigger,
-      const bool is_tablet_referenced_by_collect_mv,
+      ObLS &ls,
       storage::ObGetMergeTablesResult &result);
   static int deal_with_minor_result(
       const compaction::ObMergeType &merge_type,
       storage::ObLS &ls,
+      const storage::ObTablet &tablet,
+      storage::ObGetMergeTablesResult &result);
+  static int get_recycle_version_for_minor(
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
   static int64_t cal_hist_minor_merge_threshold(const bool is_tablet_referenced_by_collect_mv = false);
@@ -264,7 +274,7 @@ struct ObMinorExecuteRangeMgr
 class ObAdaptiveMergePolicy
 {
 public:
-  enum AdaptiveMergeReason : uint8_t {
+  enum AdaptiveMergeReason : uint8_t { // FARM COMPAT WHITELIST
     NONE = 0,
     LOAD_DATA_SCENE = 1,
     TOMBSTONE_SCENE = 2,
@@ -278,8 +288,9 @@ public:
     NO_INC_DATA = 9,
     // no major sstable / table schema is hidden or invalid index
     DURING_DDL = 10,
-    RECYCLE_TRUNCATE_INFO = 11,
+    RECYCLE_MDS_INFO = 11,
     TOO_MANY_INC_MAJOR = 12,
+    WINDOW_COMPACTION = 13,
     INVALID_REASON
   };
 
@@ -291,9 +302,8 @@ public:
   };
 
   enum AdaptiveCompactionEvent : uint8_t {
-    SCHEDULE_MEDIUM = 0,
-    SCHEDULE_META = 1,
-    SCHEDULE_AFTER_MINI = 2,
+    SCHEDULE_META = 0,
+    SCHEDULE_AFTER_MINI = 1,
     INVALID_EVENT
   };
 
@@ -301,7 +311,8 @@ public:
   static bool is_valid_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_user_request_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_skip_merge_reason(const AdaptiveMergeReason &reason);
-  static bool is_recycle_truncate_info_merge_reason(const AdaptiveMergeReason &reason);
+  static bool is_recycle_mds_info_merge_reason(const AdaptiveMergeReason &reason);
+  static bool is_window_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy);
   static bool is_schedule_medium(const share::schema::ObTableModeFlag &mode);
   static bool is_schedule_meta(const share::schema::ObTableModeFlag &mode);
@@ -316,7 +327,6 @@ public:
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-
   static int get_adaptive_merge_reason(
       storage::ObTablet &tablet,
       AdaptiveMergeReason &reason,
@@ -336,11 +346,14 @@ public:
   static int check_tombstone_reason(
       const storage::ObTablet &tablet,
       AdaptiveMergeReason &reason);
-private:
+  static int check_mds_info_reason(
+      storage::ObTablet &tablet,
+      AdaptiveMergeReason &reason,
+      int64_t &least_medium_snapshot);
   static int find_adaptive_merge_tables(
-        const ObMergeType &merge_type,
-        const storage::ObTablet &tablet,
-        storage::ObGetMergeTablesResult &result);
+      const ObMergeType &merge_type,
+      const storage::ObTablet &tablet,
+      storage::ObGetMergeTablesResult &result);
 private:
   static int check_load_data_situation(
       const storage::ObTabletStatAnalyzer &analyzer,
@@ -364,29 +377,15 @@ public:
   static constexpr float INC_ROW_COUNT_PERCENTAGE_THRESHOLD = 0.5;
   static constexpr int64_t TRANS_STATE_DETERM_ROW_CNT_THRESHOLD = 10000L; // 10k
   static constexpr int64_t MEDIUM_COOLING_TIME_THRESHOLD_NS = 600_s * 1000; // 1000: set precision from us to ns
-  static const int64_t RECYCLE_TRUNCATE_INFO_THRESHOLD = 5;
+  static const int64_t RECYCLE_MDS_INFO_THRESHOLD = 5;
 };
 
-/*
-  SCHEMA_TYPE
-  1) ALL+EACH
-  ALL+EACH --(BUILD_ROW_STORE_MERGE)--> ALL --(USE_RS_BUILD_SCHEMA_MATCH_MERGE)--> ALL+EACH
-  ALL+EACH --(BUILD_COLUMN_STORE_MERGE)--> ALL+EACH
-  EACH --(BUILD_REDUNDANT_ROW_STORE_MERGE)--> ALL+EACH
-  2) EACH
-  EACH --(BUILD_ROW_STORE_MERGE)--> ALL --(USE_RS_BUILD_SCHEMA_MATCH_MERGE)--> EACH
-  EACH --(BUILD_COLUMN_STORE_MERGE)--> EACH
-
-  BUILD_COLUMN_STORE_MERGE vs. USE_RS_BUILD_SCHEMA_MATCH_MERGE
-  SAME : output a major sstable match schema
-  DIFF : BUILD_COLUMN_STORE_MERGE could reuse CG macro from old major, USE_RS_BUILD_SCHEMA_MATCH_MERGE can't reuse macro
-*/
-
+struct ObCOMajorMergeStrategy;
 class ObCOMajorMergePolicy
 {
 public:
   enum ObCOMajorMergeType : uint8_t
-  {
+  { // abondoned, only for compatibility
     INVALID_CO_MAJOR_MERGE_TYPE = 0,
     BUILD_COLUMN_STORE_MERGE = 1,
     BUILD_ROW_STORE_MERGE = 2,
@@ -394,58 +393,42 @@ public:
     BUILD_REDUNDANT_ROW_STORE_MERGE = 4, // only for cs replica now
     MAX_CO_MAJOR_MERGE_TYPE = 5
   };
-  static const char *co_major_merge_type_to_str(const ObCOMajorMergeType co_merge_type);
-  static inline bool is_valid_major_merge_type(const ObCOMajorMergeType &major_merge_type)
+  // Decide current major sstable status
+  static int64_t get_cg_merge_batch_cnt(const int64_t column_group_cnt)
   {
-    return major_merge_type > INVALID_CO_MAJOR_MERGE_TYPE && major_merge_type < MAX_CO_MAJOR_MERGE_TYPE;
+    return (column_group_cnt < ALL_CG_IN_ONE_BATCH_CNT) ? 1 : (column_group_cnt / DEFAULT_CG_MERGE_BATCH_SIZE);
   }
-  static inline bool is_build_column_store_merge(const ObCOMajorMergeType &major_merge_type)
-  {
-    return BUILD_COLUMN_STORE_MERGE == major_merge_type;
-  }
-  static inline bool is_build_row_store_merge(const ObCOMajorMergeType &major_merge_type)
-  {
-    return BUILD_ROW_STORE_MERGE == major_merge_type;
-  }
-  static inline bool is_use_rs_build_schema_match_merge(const ObCOMajorMergeType &major_merge_type)
-  {
-    return USE_RS_BUILD_SCHEMA_MATCH_MERGE == major_merge_type;
-  }
-  static inline bool is_build_redundent_row_store_merge(const ObCOMajorMergeType &major_merge_type)
-  {
-    return BUILD_REDUNDANT_ROW_STORE_MERGE == major_merge_type;
-  }
-  static int decide_co_major_sstable_status(
-      const ObCOSSTableV2 &co_sstable,
-      const ObStorageSchema &storage_schema,
-      ObCOMajorSSTableStatus &major_sstable_status);
+  static int decide_major_sstable_status(
+      const blocksstable::ObSSTable &sstable,
+      ObMajorSSTableStatus &status);
+  // Decide merge strategy for this major merge
+  static int decide_merge_strategy(
+      const ObMajorSSTableStatus current_status,
+      const ObStorageSchema &target_schema,
+      const ObIArray<ObITable *> &tables,
+      ObCOMajorMergeStrategy &strategy);
+  // Check if current status matches target schema
+  static bool is_status_match_schema(
+      const ObMajorSSTableStatus status,
+      const ObStorageSchema &schema);
   static bool whether_to_build_row_store(
-      const int64_t &estimate_row_cnt,
-      const int64_t &column_cnt);
+      const int64_t estimate_row_cnt,
+      const int64_t column_cnt);
   static bool whether_to_rebuild_column_store(
-      const ObCOMajorSSTableStatus &major_sstable_status,
-      const int64_t &estimate_row_cnt,
-      const int64_t &column_cnt);
+      const ObMajorSSTableStatus current_status,
+      const int64_t estimate_row_cnt,
+      const int64_t column_cnt);
   static int accumulate_physical_row_cnt(
       const ObIArray<ObITable *> &tables,
       int64_t &physical_row_cnt);
-  static int decide_co_major_merge_type(
-      const ObCOSSTableV2 &co_sstable,
-      const ObIArray<ObITable *> &tables,
-      const ObStorageSchema &storage_schema,
-      ObCOMajorMergeType &major_merge_type);
-
 private:
-  // Thresholds for swtiching major sstable
-  // build row store
+  // Thresholds for switching major sstable format
   static const int64_t ROW_CNT_THRESHOLD_BUILD_ROW_STORE = 10000;
   static const int64_t COL_CNT_THRESHOLD_BUILD_ROW_STORE = 3;
-  // rebuild column store
   static const int64_t ROW_CNT_THRESHOLD_REBUILD_COLUMN_STORE = 20000;
   static const int64_t ROW_CNT_THRESHOLD_REBUILD_ROWKEY_STORE = 16000;
   static const int64_t COL_CNT_THRESHOLD_REBUILD_COLUMN_STORE = 5;
 };
-
 
 // Describes the strategy for this major merge
 struct ObCOMajorMergeStrategy
@@ -467,8 +450,10 @@ public:
   inline bool is_valid() const { return is_valid_; }
   inline bool is_build_all_cg_only() const { return build_all_cg_only_; }
   inline bool only_use_row_store() const { return only_use_row_store_; }
-  void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const {}
-  int64_t to_string(char *buf, const int64_t buf_len) const { return 0; }
+  void convert_from_type(const ObCOMajorMergePolicy::ObCOMajorMergeType &type);
+  ObCOMajorMergePolicy::ObCOMajorMergeType convert_to_type() const;
+  void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
   ObCOMajorMergeStrategy &operator=(const ObCOMajorMergeStrategy &other) {
     is_valid_ = other.is_valid_;
     build_all_cg_only_ = other.build_all_cg_only_;
@@ -502,19 +487,23 @@ public:
       const blocksstable::ObSSTable *sstable,
       transaction::ObTransID &trans_id,
       transaction::ObTxSEQ &seq_no);
+  static int get_trans_id_and_seq_no(
+      const blocksstable::ObSSTable &sstable,
+      transaction::ObTransID &trans_id,
+      transaction::ObTxSEQ &seq_no);
 
   static int check_can_access(ObTableAccessContext &context,
                               const transaction::ObTransID &trans_id,
                               const transaction::ObTxSEQ &seq_no,
-                              const share::SCN &max_scn,
-                              bool &can_access);
-  static int check_can_access(ObTableAccessContext &context,
-                              const ObUncommitTxDesc &tx_desc,
-                              const share::SCN &max_scn,
-                              bool &can_access);
+                              bool &can_access,
+                              share::SCN &commit_version);
   static int check_can_access(ObTableAccessContext &context,
                               const blocksstable::ObSSTable &sstable,
                               bool &can_access);
+  static int check_can_access_for_update(ObTableAccessContext &context,
+                                         const blocksstable::ObSSTable &sstable,
+                                         bool &can_access,
+                                         share::SCN &commit_version);
 
   static int check_inc_major_table_status(
       const compaction::ObMediumCompactionInfo &medium_info,
@@ -561,8 +550,6 @@ private:
       const ObIArray<ObITable *> &sstables,
       const ObMediumCompactionInfo &medium_info);
 };
-
-
 
 } /* namespace compaction */
 } /* namespace oceanbase */

@@ -49,9 +49,9 @@ int ObBucketQSyncLock::init(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SHARE_LOG(WARN, "Fail to allocate memory, ", K(bucket_cnt_), K(ret));
     } else {
-      locks_ = new (buf) ObQSyncLock[bucket_cnt_];
-
+      locks_ = reinterpret_cast<ObQSyncLock*>(buf);
       for (int64_t i = 0; OB_SUCC(ret) && i < bucket_cnt_; ++i) {
+        new (locks_ + i) ObQSyncLock(common::ObLatchIds::OB_BUCKET_QSYNC_LOCK_LOCK);
         if (OB_FAIL(locks_[i].init(mem_attr))) {
           SHARE_LOG(WARN, "Fail to init qsync lock", K(ret), K(bucket_cnt_), K(i));
         }

@@ -339,7 +339,7 @@ int ObExprRepeat::repeat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
     const Arg0Vec *arg0_vec = static_cast<const Arg0Vec *>(expr.args_[0]->get_vector(ctx));
     const Arg1Vec *arg1_vec = static_cast<const Arg1Vec *>(expr.args_[1]->get_vector(ctx));
 
-    // the count may be a variable number, repeat expr support the
+    // "count" can be different for each row, so repeat supports row-wise processing in vectorized mode.
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     batch_info_guard.set_batch_size(bound.batch_size());
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
@@ -350,7 +350,6 @@ int ObExprRepeat::repeat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       batch_info_guard.set_batch_idx(idx);
       if (arg0_vec->is_null(idx) || arg1_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         // prepare & init needed params
         ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
@@ -385,7 +384,6 @@ int ObExprRepeat::repeat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
             res_vec->set_string(idx, output);
           }
         }
-        eval_flags.set(idx);
       }
     }
   }

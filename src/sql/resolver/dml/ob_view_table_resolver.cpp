@@ -30,7 +30,7 @@ int ObViewTableResolver::do_resolve_set_query(const ParseNode &parse_tree,
   child_resolver.set_current_level(current_level_);
   child_resolver.set_current_view_level(current_view_level_);
   child_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
-  child_resolver.set_current_view_item(current_view_item);
+  child_resolver.set_current_view_item(current_view_item_);
   child_resolver.set_parent_view_resolver(parent_view_resolver_);
   child_resolver.set_calc_found_rows(is_left_child && has_calc_found_rows_);
   child_resolver.set_is_top_stmt(is_top_stmt());
@@ -149,10 +149,10 @@ int ObViewTableResolver::check_view_circular_reference(const TableItem &view_ite
     // 虽然现在加了前面这个检测逻辑，在创建视图v时检查定义展开后没有出现v可以避免出现相互引用，
     // 但是原来的检测逻辑也要保留。如果升级前创建了存在循环的视图，升级后select from这个视图，在下面报错。
     do {
-      if (OB_UNLIKELY(view_item.ref_id_ == cur_resolver->current_view_item.ref_id_)) {
+      if (OB_UNLIKELY(view_item.ref_id_ == cur_resolver->current_view_item_.ref_id_)) {
         ret = OB_ERR_VIEW_RECURSIVE;
-        const ObString &db_name = cur_resolver->current_view_item.database_name_;
-        const ObString &tbl_name = cur_resolver->current_view_item.table_name_;
+        const ObString &db_name = cur_resolver->current_view_item_.database_name_;
+        const ObString &tbl_name = cur_resolver->current_view_item_.table_name_;
         LOG_USER_ERROR(OB_ERR_VIEW_RECURSIVE, db_name.length(), db_name.ptr(),
                        tbl_name.length(), tbl_name.ptr());
       } else {
@@ -172,7 +172,7 @@ int ObViewTableResolver::resolve_generate_table(const ParseNode &table_node, con
   view_table_resolver.set_current_view_level(current_view_level_);
   view_table_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
   view_table_resolver.set_parent_view_resolver(parent_view_resolver_);
-  view_table_resolver.set_current_view_item(current_view_item);
+  view_table_resolver.set_current_view_item(current_view_item_);
   if (OB_FAIL(view_table_resolver.set_cte_ctx(cte_ctx_, true, true))) {
     LOG_WARN("set cte ctx to child resolver failed", K(ret));
   } else if (OB_FAIL(add_cte_table_to_children(view_table_resolver))) {
@@ -201,7 +201,7 @@ int ObViewTableResolver::check_need_use_sys_tenant(bool &use_sys_tenant) const
 
   // 若当前stmt不是系统视图展开的, 则忽略
   if (OB_SUCC(ret) && use_sys_tenant) {
-    if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), current_view_item.ref_id_, table_schema))) {
+    if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), current_view_item_.ref_id_, table_schema))) {
       LOG_WARN("fail to get table_schema", K(ret));
     } else if (NULL == table_schema) {
       ret = OB_INVALID_ARGUMENT;
@@ -217,7 +217,7 @@ int ObViewTableResolver::check_need_use_sys_tenant(bool &use_sys_tenant) const
 int ObViewTableResolver::check_in_sysview(bool &in_sysview) const
 {
   int ret = OB_SUCCESS;
-  in_sysview = is_sys_view(current_view_item.ref_id_);
+  in_sysview = is_sys_view(current_view_item_.ref_id_);
   return ret;
 }
 
@@ -265,7 +265,7 @@ int ObViewTableResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &s
     subquery_resolver.set_current_view_level(current_view_level_);
     subquery_resolver.set_parent_namespace_resolver(this);
     subquery_resolver.set_parent_view_resolver(parent_view_resolver_);
-    subquery_resolver.set_current_view_item(current_view_item);
+    subquery_resolver.set_current_view_item(current_view_item_);
     subquery_resolver.set_in_exists_subquery(info.parents_expr_info_.has_member(IS_EXISTS));
     if (info.parents_expr_info_.has_member(IS_WITH_ANY)
         || info.parents_expr_info_.has_member(IS_WITH_ALL)) {

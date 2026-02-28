@@ -54,14 +54,14 @@ public:
   void destroy();
   void run1();
 public:
-  int cache_msg(const ObDependencyResource &key, const ObLCLMessage &lcl_msg);
+  int cache_msg(const ObDependencyHolder &key, const ObLCLMessage &lcl_msg);
   TO_STRING_KV(KP(this), K_(is_inited), K_(is_running), K_(total_record_time), K_(over_night_times));
 private:
   class RemoveIfOp
   {
   public:
     RemoveIfOp(common::ObArray<ObLCLMessage> &list) : lcl_message_list_(list) {}
-    bool operator()(const ObDependencyResource &, ObLCLMessage &);
+    bool operator()(const ObDependencyHolder &, ObLCLMessage &);
   private:
     common::ObArray<ObLCLMessage> &lcl_message_list_;
   };
@@ -69,12 +69,12 @@ private:
   {
   public:
     MergeOp(const ObLCLMessage &lcl_message) : lcl_message_(lcl_message) {}
-    bool operator()(const ObDependencyResource &, ObLCLMessage &);
+    bool operator()(const ObDependencyHolder &, ObLCLMessage &);
   private:
     const ObLCLMessage &lcl_message_;
   };
 private:
-  int insert_or_merge_(const ObDependencyResource &key,
+  int insert_or_merge_(const ObDependencyHolder &key,
                        const ObLCLMessage &lcl_message,
                        const bool can_insert);
   int64_t update_and_get_lcl_op_interval_();
@@ -87,7 +87,7 @@ private:
   int64_t total_busy_time_;
   int64_t over_night_times_;
   ObDeadLockDetectorMgr* mgr_;
-  common::ObLinearHashMap<ObDependencyResource, ObLCLMessage> lcl_msg_map_;
+  common::ObLinearHashMap<ObDependencyHolder, ObLCLMessage> lcl_msg_map_;
   RandomGenerator random_generator_;
   RandomDistribution distribution_;
 };

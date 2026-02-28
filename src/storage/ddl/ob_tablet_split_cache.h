@@ -54,6 +54,9 @@ public:
   int init(const ObTabletSplitTscInfo &split_info);
   int deep_copy(ObTabletSplitTscInfo &split_info, ObIAllocator &allocator) const;
   bool is_valid() const;
+  const blocksstable::ObDatumRowkey &get_start_partkey() const { return start_partkey_; }
+  const blocksstable::ObDatumRowkey &get_end_partkey() const { return end_partkey_; }
+  bool get_partkey_is_rowkey_prefix() const { return partkey_is_rowkey_prefix_; }
   virtual int64_t size() const override { return sizeof(*this) + deep_copy_size_; };
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const;
   TO_STRING_KV(K_(deep_copy_size), K_(split_cnt), K_(split_type), K_(partkey_is_rowkey_prefix), K_(start_partkey), K_(end_partkey));

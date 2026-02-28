@@ -356,7 +356,7 @@ public:
     // Lock: Keeping read and write operations atomic
      mutable common::ObByteLock  lock_;
 
-    LSProgress() { reset(); }
+    LSProgress() : lock_(common::ObLatchIds::OB_CDC_COMMON_LOCK) { reset(); }
     ~LSProgress() { reset(); }
 
     TO_STRING_KV(K_(next_lsn),

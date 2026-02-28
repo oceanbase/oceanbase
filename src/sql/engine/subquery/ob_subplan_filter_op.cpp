@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_subplan_filter_op.h"
+#include "sql/engine/expr/ob_expr_subquery_ref.h"
 
 namespace oceanbase
 {
@@ -756,6 +757,47 @@ int ObSubPlanFilterOp::inner_open()
       LOG_WARN("init brs_holder_ failed", K(ret));
     }
   }
+
+  // check for alias ref
+  for (int64_t j = 0; OB_SUCC(ret) && j < MY_SPEC.output_.count(); ++j) {
+    ObExpr *expr = MY_SPEC.output_.at(j);
+    ObExpr *subquery_expr = NULL;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret), K(j));
+    } else if (expr->type_ != T_REF_ALIAS_COLUMN) {
+      // do nothing
+    } else if (OB_UNLIKELY(expr->arg_cnt_ != 1) || OB_ISNULL(expr->args_)
+               || OB_ISNULL(subquery_expr = expr->args_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected alias_ref arguments", K(ret), K(expr->arg_cnt_), KP(expr->args_));
+    } else {
+      bool found = false;
+      Iterator *alias_iter = NULL;
+      int64_t project_idx = expr->extra_;
+      const ObExprSubQueryRef::Extra &extra = ObExprSubQueryRef::Extra::get_info(*subquery_expr);
+      if (OB_FAIL(ObExprSubQueryRef::get_subquery_iter(eval_ctx_, extra, alias_iter))) {
+        LOG_WARN("failed to get subquery iterator for alias_ref", K(ret), K(j));
+      } else if (OB_ISNULL(alias_iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("alias_iter is null for alias_ref", K(ret), K(j));
+      } else if (OB_UNLIKELY(project_idx < 0 || project_idx >= alias_iter->get_output().count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("alias_ref project_idx out of range", K(ret), K(project_idx), K(alias_iter->get_output().count()));
+      }
+      // try to find alias_iter in subplan_iters_
+      for (int64_t i = 0; OB_SUCC(ret) && !found && i < subplan_iters_.count(); ++i) {
+        if (subplan_iters_.at(i) == alias_iter) {
+          found = true;
+        }
+      }
+      if (OB_SUCC(ret) && OB_UNLIKELY(!found)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("alias_ref iterator not found in subplan_iters_", K(ret), K(j), KP(alias_iter));
+      }
+    }
+  }
+  // check for alias ref end
   return ret;
 }
 
@@ -775,14 +817,20 @@ int ObSubPlanFilterOp::inner_get_next_row()
   int ret = OB_SUCCESS;
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(handle_next_row())) {
+    if (OB_FAIL(handle_next_row()) && OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to get left next row", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
     if (!MY_SPEC.update_set_.empty()) {
-      OZ(handle_update_set());
+      // TODO tuliwei.tlw: 这里放开会暴露一个core，暂时封上，等core修好了恢复回来
+      // TODO tuliwei.tlw change to new version
+      // if (MY_SPEC.get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_4_1_0) {
+      //   OZ(handle_update_set_with_alias_ref());
+      // } else {
+        OZ(handle_update_set());
+      // }
     }
   }
   if (OB_ITER_END == ret) {
@@ -1460,6 +1508,75 @@ int ObSubPlanFilterOp::handle_update_set()
       if (OB_SUCC(ret) && OB_FAIL(row_val.store_row_->to_expr(MY_SPEC.update_set_, eval_ctx_))) {
         LOG_WARN("failed to get expr from chunk datum store. ", K(ret));
       }
+    }
+  }
+
+  return ret;
+}
+
+int ObSubPlanFilterOp::handle_update_set_with_alias_ref()
+{
+  int ret = OB_SUCCESS;
+  Iterator *iter = NULL;
+  subplan_iters_to_check_.reset();
+  int64_t update_set_pos = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < subplan_iters_.count(); ++i) {
+    bool set_null = false;
+    if (OB_ISNULL(iter = subplan_iters_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null iterator", K(ret));
+    } else if (OB_FAIL(iter->rewind())) {
+      LOG_WARN("fail to rewind", K(ret));
+    } else if (OB_SUCC(iter->get_next_row())) {
+      if (OB_FAIL(subplan_iters_to_check_.push_back(iter))) {
+        LOG_WARN("fail to push back. ", K(ret));
+      }
+    } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("failed to get next row. ", K(ret));
+    } else {  // set null for no row subplan iterator
+      ret = OB_SUCCESS;
+      set_null = true;
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < MY_SPEC.output_.count(); ++j) {
+      ObExpr *expr = MY_SPEC.output_.at(j);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected expr", K(ret));
+      } else if (expr->type_ == T_REF_ALIAS_COLUMN) {
+        ObExpr *subquery_expr = expr->args_[0];
+        Iterator *alias_iter = NULL;
+        const ObExprSubQueryRef::Extra &extra = ObExprSubQueryRef::Extra::get_info(*subquery_expr);
+        if (OB_FAIL(ObExprSubQueryRef::get_subquery_iter(eval_ctx_, extra, alias_iter))) {
+          LOG_WARN("failed to get subquery iterator", K(ret));
+        } else if (alias_iter != iter) {
+          // do nothing
+        } else if (set_null) {
+          expr->locate_expr_datum(eval_ctx_).set_null();
+          expr->set_evaluated_projected(eval_ctx_);
+        } else {
+          int64_t project_idx = expr->extra_;
+          ObExpr *output_expr = alias_iter->get_output().at(project_idx);
+          ObDatum *datum = NULL;
+          if (OB_FAIL(output_expr->eval(eval_ctx_, datum))) {
+            LOG_WARN("failed to evaluate subquery output expr", K(ret));
+          } else if (OB_FAIL(expr->deep_copy_datum(eval_ctx_, *datum))) {
+            LOG_WARN("deep copy datum failed", K(ret), K(datum));
+          } else {
+            expr->set_evaluated_projected(eval_ctx_);
+          }
+        }
+      }
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < subplan_iters_to_check_.count(); ++i) {
+    if (OB_UNLIKELY(OB_SUCCESS == (ret = subplan_iters_to_check_.at(i)->get_next_row()))) {
+      ret = OB_ERR_MORE_THAN_ONE_ROW;
+      LOG_WARN("subquery too many rows", K(ret));
+    } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("failed to get next row. ", K(ret));
+    } else {
+      ret = OB_SUCCESS;
     }
   }
 

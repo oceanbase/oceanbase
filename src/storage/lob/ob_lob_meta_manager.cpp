@@ -22,7 +22,11 @@ namespace storage
 int ObLobMetaManager::write(ObLobAccessParam& param, ObLobMetaInfo& in_row)
 {
   int ret = OB_SUCCESS;
-  if (param.is_remote()) {
+  ret = OB_E(EventTable::EN_LOB_META_DML_FAILED, param.get_inrow_threshold()) OB_SUCCESS;
+  if (OB_FAIL(ret) && param.tablet_id_.is_user_tablet()) {
+    LOG_ERROR("due to error injection, lob meta not being inserted into the auxiliary table", K(ret), K(param));
+    ret = OB_SUCCESS;
+  } else if (param.is_remote()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("remote write not support", K(ret), K(param));
   } else if (OB_FAIL(persistent_lob_adapter_.write_lob_meta(param, in_row))) {
@@ -46,7 +50,11 @@ int ObLobMetaManager::batch_insert(ObLobAccessParam& param, blocksstable::ObDatu
 int ObLobMetaManager::batch_delete(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter)
 {
   int ret = OB_SUCCESS;
-  if (param.is_remote()) {
+  ret = OB_E(EventTable::EN_LOB_META_DML_FAILED, param.get_inrow_threshold()) OB_SUCCESS;
+  if (OB_FAIL(ret) && param.tablet_id_.is_user_tablet()) {
+    LOG_ERROR("due to error injection, lob meta not being deleted from the auxiliary table", KR(ret), K(param.tablet_id_));
+    ret = OB_SUCCESS;
+  } else if (param.is_remote()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("remote delete not support", K(ret), K(param));
   } else if (OB_FAIL(persistent_lob_adapter_.erase_lob_meta(param, iter))) {
@@ -93,6 +101,15 @@ int ObLobMetaManager::scan(ObLobAccessParam& param, ObLobMetaScanIter &iter)
   return ret;
 }
 
+int ObLobMetaManager::scan(ObLobAccessParam& param, ObLobMetaIterator *&iter)
+{
+  return persistent_lob_adapter_.scan_lob_meta(param, iter);
+}
+
+int ObLobMetaManager::revert_scan_iter(ObLobMetaIterator *iter)
+{
+  return persistent_lob_adapter_.revert_scan_iter(iter);
+}
 
 int ObLobMetaManager::local_scan(ObLobAccessParam& param, ObLobMetaScanIter &iter)
 {
@@ -130,7 +147,11 @@ int ObLobMetaManager::open(ObLobAccessParam &param, ObLobMetaSingleGetter* gette
 int ObLobMetaManager::erase(ObLobAccessParam& param, ObLobMetaInfo& in_row)
 {
   int ret = OB_SUCCESS;
-  if (param.is_remote()) {
+  ret = OB_E(EventTable::EN_LOB_META_DML_FAILED, param.get_inrow_threshold()) OB_SUCCESS;
+  if (OB_FAIL(ret) && param.tablet_id_.is_user_tablet()) {
+    LOG_ERROR("due to error injection, lob meta not being erased from the auxiliary table", K(ret), K(param));
+    ret = OB_SUCCESS;
+  } else if (param.is_remote()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("remote erase not support", K(ret), K(param));
   } else if (OB_FAIL(persistent_lob_adapter_.erase_lob_meta(param, in_row))) {
@@ -255,6 +276,23 @@ int ObLobMetaManager::getlength_remote(ObLobAccessParam &param, uint64_t &char_l
   return ret;
 }
 
+int ObLobMetaManager::get_table_param(const ObTableParam *&table_param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(persistent_lob_adapter_.get_meta_table_param(table_param))) {
+    LOG_WARN("get table param fail", K(ret));
+  }
+  return ret;
+}
+
+int ObLobMetaManager::get_table_dml_param(const ObTableDMLParam *&table_dml_param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(persistent_lob_adapter_.get_meta_table_dml_param(table_dml_param))) {
+    LOG_WARN("get table dml param fail", K(ret));
+  }
+  return ret;
+}
 
 } // storage
 } // oceanbase

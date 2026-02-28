@@ -14,6 +14,7 @@
 #define SRC_SQL_OPTIMIZER_OB_LOG_SELECT_INTO_H_
 
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "objit/common/ob_item_type.h"
 
@@ -21,6 +22,9 @@ namespace oceanbase
 {
 namespace sql
 {
+
+template<typename R, typename C>
+class PlanVisitor;
 
 class ObLogSelectInto : public ObLogicalOperator
 {
@@ -31,7 +35,8 @@ public:
         outfile_name_(),
         field_str_(),
         line_str_(),
-        user_vars_(),
+        select_exprs_(plan.get_allocator()),
+        user_vars_(plan.get_allocator()),
         closed_cht_(),
         is_optional_(true),
         is_single_(true),
@@ -43,7 +48,9 @@ public:
         is_overwrite_(false),
         external_properties_(),
         external_partition_(),
-        alias_names_()
+        alias_names_(plan.get_allocator()),
+        field_ids_(plan.get_allocator()),
+        lake_table_metadata_(NULL)
   {
   }
   virtual ~ObLogSelectInto() {}
@@ -125,6 +132,19 @@ public:
       }
     }
   }
+  inline void set_field_ids(common::ObIArray<uint64_t> &field_ids)
+  {
+    int ret = common::OB_SUCCESS;
+    for (int i = 0; OB_SUCC(ret) && i < field_ids.count() ; ++i) {
+      if (OB_FAIL(field_ids_.push_back(field_ids.at(i)))) {
+        SQL_OPT_LOG(WARN, "push back failed", K(ret));
+      }
+    }
+  }
+  inline void set_lake_table_metadata(const share::ObILakeTableMetadata *lake_table_metadata)
+  {
+    lake_table_metadata_ = lake_table_metadata;
+  }
   inline ObItemType get_into_type() const
   {
     return into_type_;
@@ -197,6 +217,18 @@ public:
   {
     return alias_names_;
   }
+  inline const common::ObIArray<uint64_t> &get_field_ids() const
+  {
+    return field_ids_;
+  }
+  inline common::ObIArray<uint64_t> &get_field_ids()
+  {
+    return field_ids_;
+  }
+  inline const share::ObILakeTableMetadata* get_lake_table_metadata() const
+  {
+    return lake_table_metadata_;
+  }
   const common::ObIArray<ObRawExpr*> &get_select_exprs() const { return select_exprs_; }
   common::ObIArray<ObRawExpr*> &get_select_exprs() { return select_exprs_; }
   virtual int est_cost() override;
@@ -210,8 +242,8 @@ private:
   common::ObObj outfile_name_;
   common::ObObj field_str_;
   common::ObObj line_str_;
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> select_exprs_;
-  common::ObSEArray<common::ObString, 16, common::ModulePageAllocator, true> user_vars_;
+  ObSqlArray<ObRawExpr*> select_exprs_;
+  ObSqlArray<common::ObString> user_vars_;
   common::ObObj closed_cht_;
   bool is_optional_;
   bool is_single_;
@@ -223,7 +255,9 @@ private:
   bool is_overwrite_;
   common::ObString external_properties_;
   common::ObString external_partition_;
-  common::ObSEArray<common::ObString, 8, common::ModulePageAllocator, true> alias_names_;
+  ObSqlArray<common::ObString> alias_names_;
+  ObSqlArray<uint64_t> field_ids_;
+  const share::ObILakeTableMetadata *lake_table_metadata_;
 };
 }
 }

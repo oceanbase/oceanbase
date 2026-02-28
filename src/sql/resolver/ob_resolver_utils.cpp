@@ -1581,8 +1581,13 @@ int ObResolverUtils::pick_routine(const pl::ObPLResolveCtx &resolve_ctx,
   }
   if (OB_FAIL(ret)) {
   } else if (0 == match_infos.count()) { // 没有匹配的routine直接报错
-    ret = OB_ERR_SP_WRONG_ARG_NUM;
-    // ret = OB_ERR_CALL_WRONG_ARG;
+    if (lib::is_oracle_mode() && routine_infos.count() > 0 && OB_NOT_NULL(routine_infos.at(0))) {
+      const ObString &routine_name = routine_infos.at(0)->get_routine_name();
+      ret = OB_ERR_CALL_WRONG_ARG;
+      LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, routine_name.length(), routine_name.ptr());
+    } else {
+      ret = OB_ERR_SP_WRONG_ARG_NUM;
+    }
     LOG_WARN("PLS-00306: wrong number or types of arguments in call to 'string'",
              K(ret), KPC(routine_info), K(expr_params), K(routine_infos));
   } else if (1 == match_infos.count()) { // 恰好有一个, 直接返回
@@ -1817,7 +1822,7 @@ int ObResolverUtils::get_routine(const pl::ObPLResolveCtx &resolve_ctx,
   ObSchemaChecker schema_checker;
   routine = NULL;
   uint64_t udt_id = OB_INVALID_ID;
-  OZ (schema_checker.init(resolve_ctx.schema_guard_, resolve_ctx.session_info_.get_server_sid()));
+  OZ (schema_checker.init(resolve_ctx.schema_guard_));
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_candidate_routines(schema_checker,
                                      tenant_id,
@@ -2116,7 +2121,8 @@ int ObResolverUtils::resolve_sp_name(ObSQLSessionInfo &session_info,
                                      const ParseNode &sp_name_node,
                                      ObString &db_name,
                                      ObString &sp_name,
-                                     bool need_db_name)
+                                     bool need_db_name,
+                                     const ObString *default_db_name)
 {
   int ret = OB_SUCCESS;
   const ParseNode *sp_node = NULL;
@@ -2154,9 +2160,13 @@ int ObResolverUtils::resolve_sp_name(ObSQLSessionInfo &session_info,
       if (!need_db_name && lib::is_oracle_mode()) {
         // do nothing ...
       } else if (session_info.get_database_name().empty()) {
-        ret = OB_ERR_NO_DB_SELECTED;
-        LOG_USER_ERROR(OB_ERR_NO_DB_SELECTED);
-        LOG_WARN("No Database Selected", K(ret));
+        if (OB_NOT_NULL(default_db_name)) {
+          db_name = *default_db_name;
+        } else {
+          ret = OB_ERR_NO_DB_SELECTED;
+          LOG_USER_ERROR(OB_ERR_NO_DB_SELECTED);
+          LOG_WARN("No Database Selected", K(ret));
+        }
       } else {
         db_name = session_info.get_database_name();
       }
@@ -2642,6 +2652,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                                    const ObCompatType compat_type,
                                    const bool enable_mysql_compatible_dates,
                                    int8_t min_const_integer_precision,
+                                   uint64_t exec_min_cluster_version,
                                    bool is_from_pl /* false */,
                                    bool fmt_int_or_ch_decint /* false */)
 {
@@ -2944,26 +2955,10 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           val.set_uint64(static_cast<uint64_t>(node->value_));
         }
         val.set_scale(0);
-        int16_t formalized_prec = static_cast<int16_t>(node->str_len_);
-        // for constant integers, reset precision to 4/8/16/20
-        if (!is_from_pl && lib::is_mysql_mode() && enable_decimal_int_type
-            && !(ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type))) {
-          int16_t node_prec = static_cast<int16_t>(node->str_len_);
-          if (fmt_int_or_ch_decint) {
-            if (node_prec <= 4) {
-              formalized_prec = 4;
-            } else if (node_prec <= 8) {
-              formalized_prec = 8;
-            } else if (node_prec <= 16) {
-              formalized_prec = 16;
-            } else {
-              formalized_prec = 20;
-            }
-            formalized_prec = MAX(min_const_integer_precision, formalized_prec);
-          } else {
-            formalized_prec = 20;
-          }
-        }
+        int16_t formalized_prec = is_from_pl ? static_cast<int16_t>(node->str_len_) :
+                                      calc_decint_precision_for_int_type(node->str_len_,
+                                      enable_decimal_int_type, stmt_type,
+                                      fmt_int_or_ch_decint, min_const_integer_precision);
         val.set_precision(formalized_prec);
         val.set_length(static_cast<int16_t>(node->str_len_));
         val.set_param_meta(val.get_meta());
@@ -2983,51 +2978,28 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
       int tmp_ret = OB_E(EventTable::EN_ENABLE_ORA_DECINT_CONST) OB_SUCCESS;
 
       if (enable_decimal_int_type && !is_from_pl && OB_SUCC(tmp_ret)) {
-        // 如果开启decimal int类型，T_NUMBER解析成decimal int
-        int32_t val_len = 0;
-        ret = wide::from_string(node->str_value_, node->str_len_, allocator, scale, precision,
-                                val_len, decint);
-        len = static_cast<int16_t>(val_len);
-        // in oracle mode
-        // +.12e-3 will parse as decimal, with scale = 5, precision = 2
-        // in this case, ObNumber is used.
-        use_decimalint_as_result = (precision <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
-                                    && scale <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
-                                    && scale >= 0
-                                    && precision >= scale);
-        if (lib::is_oracle_mode()
-            && (ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type)
-                || precision > OB_MAX_NUMBER_PRECISION || !fmt_int_or_ch_decint)) {
-          use_decimalint_as_result = false;
-        }
+        ret = use_decimalint(node, val, allocator, decint, len, precision, scale,
+                              stmt_type, fmt_int_or_ch_decint, use_decimalint_as_result);
       }
-      if (use_decimalint_as_result) {
-        // do nothing, result type is decimal int
-      } else if (NULL != tmp_string.find('e') || NULL != tmp_string.find('E')) {
-        ret = nmb.from_sci(node->str_value_, static_cast<int32_t>(node->str_len_), allocator, &precision, &scale);
-        len = static_cast<int16_t>(node->str_len_);
-        if (lib::is_oracle_mode()) {
-          literal_prefix.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
-        }
-      } else {
-        ret = nmb.from(node->str_value_, static_cast<int32_t>(node->str_len_), allocator, &precision, &scale);
-        len = static_cast<int16_t>(node->str_len_);
-      }
-      if (OB_FAIL(ret)) {
-        if (OB_INTEGER_PRECISION_OVERFLOW == ret) {
-          LOG_WARN("integer presision overflow", K(ret));
-        } else if (OB_NUMERIC_OVERFLOW == ret) {
-          LOG_WARN("numeric overflow");
+      if (!use_decimalint_as_result) {
+        if (NULL != tmp_string.find('e') || NULL != tmp_string.find('E')) {
+          ret = nmb.from_sci(node->str_value_, static_cast<int32_t>(node->str_len_), allocator, &precision, &scale);
+          len = static_cast<int16_t>(node->str_len_);
+          if (lib::is_oracle_mode()) {
+            literal_prefix.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
+          }
         } else {
-          LOG_WARN("unexpected error", K(ret));
+          ret = nmb.from(node->str_value_, static_cast<int32_t>(node->str_len_), allocator, &precision, &scale);
+          len = static_cast<int16_t>(node->str_len_);
         }
-      } else {
-        if (use_decimalint_as_result) {
-          val.set_decimal_int(len, scale, decint);
-          val.set_precision(precision);
-          val.set_scale(scale);
-          val.set_length(len);
-          LOG_DEBUG("finish parse decimal int from str", K(literal_prefix), K(precision), K(scale));
+        if (OB_FAIL(ret)) {
+          if (OB_INTEGER_PRECISION_OVERFLOW == ret) {
+            LOG_WARN("integer presision overflow", K(ret));
+          } else if (OB_NUMERIC_OVERFLOW == ret) {
+            LOG_WARN("numeric overflow");
+          } else {
+            LOG_WARN("unexpected error", K(ret));
+          }
         } else {
           if (lib::is_oracle_mode()) {
             precision = PRECISION_UNKNOWN_YET;
@@ -3037,11 +3009,11 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           val.set_precision(precision);
           val.set_scale(scale);
           val.set_length(len);
+          val.set_param_meta(val.get_meta());
           LOG_DEBUG("finish parse number from str", K(literal_prefix), K(nmb), K(precision),
                     K(scale));
         }
       }
-      val.set_param_meta(val.get_meta());
       break;
     }
     case T_NUMBER_FLOAT: {
@@ -3161,7 +3133,8 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
       ObTimeConvertCtx cvrt_ctx(tz_info, false);
       if (FALSE_IT(date_sql_mode.init(sql_mode))) {
       } else if (FALSE_IT(date_sql_mode.allow_invalid_dates_ = false)) {
-      } else if (enable_mysql_compatible_dates) {
+      } else if (exec_min_cluster_version >= CLUSTER_VERSION_4_3_5_2
+                 && enable_mysql_compatible_dates) {
         ObMySQLDateTime mdt;
         if( OB_FAIL(ObTimeConverter::str_to_mdatetime(time_str, cvrt_ctx, mdt, &scale, date_sql_mode))) {
           ret = OB_ERR_WRONG_VALUE;
@@ -5032,6 +5005,8 @@ int ObResolverUtils::calc_file_column_idx(const ObString &column_name, uint64_t 
       PREFIX_LEN = str_length(N_EXTERNAL_FILE_POS);
     } else if (column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)) {
       PREFIX_LEN = str_length(N_EXTERNAL_TABLE_COLUMN_ID);
+    } else if (column_name.prefix_match_ci(N_EXTERNAL_KAFKA_COLUMN_PREFIX)) {
+      PREFIX_LEN = str_length(N_EXTERNAL_KAFKA_COLUMN_PREFIX);
     }
 
     if (column_name.length() <= PREFIX_LEN) {
@@ -5195,6 +5170,19 @@ int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_fa
           LOG_WARN("fail to build external table file column expr", K(ret));
         }
       }
+    } else if (ObExternalFileFormat::KAFKA_FORMAT == format_type) {
+      if (OB_FAIL(ObResolverUtils::calc_file_column_idx(q_name.col_name_, file_column_idx))) {
+        LOG_WARN("fail to calc file column idx", KR(ret));
+      } else if (nullptr == (file_column_expr = ObResolverUtils::find_file_column_expr(
+                               real_exprs, OB_INVALID_ID, file_column_idx, q_name.col_name_))) {
+        ObExternalFileFormat temp_format;
+        temp_format.csv_format_.init_format(ObDataInFileStruct(), 0, CS_TYPE_UTF8MB4_BIN);
+        if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_kafka(expr_factory, session_info,
+                                      OB_INVALID_ID, ObString(), q_name.col_name_, file_column_idx,
+                                      gen_col_schema, file_column_expr, temp_format))) {
+          LOG_WARN("fail to build external table file column expr", KR(ret));
+        }
+      }
     } else {
       if (OB_FAIL(ObResolverUtils::build_file_row_expr_for_parquet_orc(expr_factory,
                                                                        session_info,
@@ -5228,7 +5216,8 @@ bool ObResolverUtils::is_external_pseudo_column_name(const ObString &name)
          || name.prefix_match_ci(N_EXTERNAL_FILE_COLUMN_PREFIX)
          || name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_PREFIX)
          || name.prefix_match_ci(N_EXTERNAL_FILE_POS)
-         || name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID);
+         || name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)
+         || name.prefix_match_ci(N_EXTERNAL_KAFKA_COLUMN_PREFIX);
 }
 
 bool ObResolverUtils::check_external_pseudo_column_is_valid(
@@ -5251,6 +5240,8 @@ bool ObResolverUtils::check_external_pseudo_column_is_valid(
   } else if (column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)) {
     is_valid = ObExternalFileFormat::PARQUET_FORMAT == format_type
                || ObExternalFileFormat::ORC_FORMAT == format_type;
+  } else if (column_name.prefix_match_ci(N_EXTERNAL_KAFKA_COLUMN_PREFIX)) {
+    is_valid = ObExternalFileFormat::KAFKA_FORMAT == format_type;
   }
   return is_valid;
 }
@@ -5266,6 +5257,8 @@ ObResolverUtils::deduce_external_file_format_from_pseudo_column_name(const commo
   } else if (0 == name.case_compare(N_EXTERNAL_FILE_ROW)
              || name.prefix_match_ci(N_EXTERNAL_FILE_POS)) {
     type = ObExternalFileFormat::PARQUET_FORMAT;
+  } else if (name.prefix_match_ci(N_EXTERNAL_KAFKA_COLUMN_PREFIX)) {
+    type = ObExternalFileFormat::KAFKA_FORMAT;
   }
   return type;
 }
@@ -5397,6 +5390,9 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
           if (ob_is_enum_or_set_type(column_expr->get_data_type())) {
             file_column_expr->set_data_type(ObCharType);
             file_column_expr->set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
+          }
+          if (ob_is_json(column_expr->get_data_type()) && is_mysql_mode()) {
+            file_column_expr->set_data_type(ObVarcharType);
           }
         }
       } else {
@@ -5546,6 +5542,52 @@ int ObResolverUtils::build_file_column_expr_for_odps(ObRawExprFactory &expr_fact
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(file_column_expr->formalize(&session_info))) {
+      LOG_WARN("failed to extract info", K(ret));
+    } else {
+      expr = file_column_expr;
+    }
+  }
+
+  return ret;
+}
+
+int ObResolverUtils::build_file_column_expr_for_kafka(ObRawExprFactory &expr_factory,
+                                                      const ObSQLSessionInfo &session_info,
+                                                      const uint64_t table_id,
+                                                      const common::ObString &table_name,
+                                                      const common::ObString &column_name,
+                                                      int64_t column_idx,
+                                                      const ObColumnSchemaV2 *column_schema,
+                                                      ObRawExpr *&expr,
+                                                      const ObExternalFileFormat &format)
+{
+  int ret = OB_SUCCESS;
+  ObPseudoColumnRawExpr *file_column_expr = nullptr;
+  ObItemType type = T_PSEUDO_EXTERNAL_FILE_COL;
+  if (OB_ISNULL(column_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", K(ret));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(type, file_column_expr))) {
+    LOG_WARN("create nextval failed", K(ret));
+  } else if (OB_ISNULL(file_column_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else {
+    file_column_expr->set_expr_name(column_name);
+    file_column_expr->set_table_name(table_name);
+    file_column_expr->set_table_id(table_id);
+    file_column_expr->set_explicited_reference();
+    file_column_expr->set_column_idx(column_idx);
+    //ObVarcharType
+    file_column_expr->set_data_type(column_schema->get_data_type());
+    file_column_expr->set_collation_type(ObCharset::get_default_collation(format.csv_format_.cs_type_));
+    file_column_expr->set_collation_level(CS_LEVEL_IMPLICIT);
+    file_column_expr->set_length(column_schema->get_data_length());
+    if (lib::is_oracle_mode()) {
+      file_column_expr->set_length_semantics(LS_BYTE);
+    }
+
+    if (OB_FAIL(file_column_expr->formalize(&session_info))) {
       LOG_WARN("failed to extract info", K(ret));
     } else {
       expr = file_column_expr;
@@ -8673,6 +8715,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
       } else if (NULL != ns) {
         pl_resolver.get_current_namespace() = *ns;
       }
+      OX (pl_resolver.get_params().secondary_namespace_ = ns);
       if (OB_NOT_NULL(query_ctx)) {
         OX (pl_resolver.get_resolve_ctx().forbid_pl_sql_transpiler_ = query_ctx->forbid_pl_sql_transpiler_);
         OZ (pl_resolver.get_resolve_ctx().pl_sql_transpiled_exprs_.assign(query_ctx->pl_sql_transpiled_exprs_));
@@ -8859,6 +8902,29 @@ int ObResolverUtils::uv_check_basic(ObSelectStmt &stmt, const bool is_insert)
           || stmt.has_limit()) {
         ret = is_insert ? OB_ERR_NON_INSERTABLE_TABLE : OB_ERR_NON_UPDATABLE_TABLE;
         LOG_WARN("not updatable", K(ret));
+      } else if (OB_UNLIKELY(stmt.get_table_items().count() != 1)) {
+        // do nothing.
+      } else if (OB_ISNULL(stmt.get_table_item(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null", K(ret));
+      } else {
+        int64_t target_table_id = stmt.get_table_item(0)->ref_id_;
+        FOREACH_CNT_X(expr, stmt.get_condition_exprs(), OB_SUCC(ret)) {
+          if (OB_ISNULL(*expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expr is NULL", K(ret));
+          } else if (OB_UNLIKELY((*expr)->has_flag(CNT_SUB_QUERY))) {
+            bool table_found = false;
+            if (is_oracle_mode()) {
+              // do nothing.
+            } else if (OB_FAIL(recursive_search_table_in_ref_query(**expr, target_table_id, table_found))) {
+              LOG_WARN("recursive search table in ref query failed", K(ret));
+            } else if (table_found) {
+              ret = OB_ERR_CHECK_OPTION_ON_NONUPDATABLE_VIEW;
+              LOG_WARN("view with subquery in conditions with check option not allowed", K(ret));
+            }
+          }
+        }
       }
     //oracle mode下，含有fetch的insert/update/delete统一报错，兼容oracle行为
     } else if (stmt.has_fetch()) {
@@ -9097,7 +9163,7 @@ int ObResolverUtils::uv_check_dup_base_col(const TableItem &table_item,
       }
       ObRawExpr *expr = si->expr_;
       if (T_REF_ALIAS_COLUMN == expr->get_expr_type()) {
-        expr = static_cast<ObAliasRefRawExpr*>(expr)->get_ref_expr();
+        expr = static_cast<ObAliasRefRawExpr*>(expr)->get_ref_select_expr();
       }
       if (T_REF_COLUMN != expr->get_expr_type()) {
         has_non_col_ref = true;
@@ -9120,6 +9186,7 @@ int ObResolverUtils::uv_check_dup_base_col(const TableItem &table_item,
         }
       }
     }
+    LOG_TRACE("uv check dup base col", K(table_item), KPC(table_item.ref_query_), K(has_dup), K(has_non_col_ref));
   }
   return ret;
 }
@@ -9242,14 +9309,14 @@ int ObResolverUtils::uv_check_oracle_distinct(const TableItem &table_item,
 }
 
 // 1. need to be updatable view in mysql mode.
-// 2. no subquery in conditions.
-// 3. only one basic table.
+// 2. only one basic table.
 int ObResolverUtils::view_with_check_option_allowed(const ObSelectStmt *stmt,
                                                     bool &with_check_option)
 {
   int ret = OB_SUCCESS;
   const ObSelectStmt *select_stmt = stmt;
   const TableItem *table_item = NULL;
+  uint64_t data_version = 0;
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref query is null", K(ret));
@@ -9262,8 +9329,12 @@ int ObResolverUtils::view_with_check_option_allowed(const ObSelectStmt *stmt,
     } else if (OB_UNLIKELY(select_stmt->get_table_items().count() > 1)) {
       ret = OB_OP_NOT_ALLOW;
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "join view with check option");
-      LOG_WARN("view on joined table with check option not allowed", K(ret));
-    } else {
+      LOG_WARN("view on joined table with check option not allowed", K(ret),
+               K(select_stmt->get_table_items()));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+      LOG_WARN("get min data version failed", K(ret));
+    } else if ((data_version >= DATA_VERSION_4_4_0_0 && data_version < MOCK_DATA_VERSION_4_4_2_0)
+	       || (data_version >= DATA_VERSION_4_5_0_0 && data_version < DATA_VERSION_4_5_1_0)) {
       FOREACH_CNT_X(expr, select_stmt->get_condition_exprs(), OB_SUCC(ret)) {
         if (OB_ISNULL(*expr)) {
           ret = OB_ERR_UNEXPECTED;
@@ -9303,6 +9374,60 @@ int ObResolverUtils::view_with_check_option_allowed(const ObSelectStmt *stmt,
           } else {
             with_check_option |= sub_with_check_option;
           }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::recursive_search_table_in_ref_query(const ObRawExpr &expr, int64_t table_id, bool &found)
+{
+  int ret = OB_SUCCESS;
+  if (expr.is_query_ref_expr()) {
+    const ObSelectStmt *ref_stmt = static_cast<const ObQueryRefRawExpr &>(expr).get_ref_stmt();
+    if (OB_FAIL(recursive_search_table_in_ref_query(ref_stmt, table_id, found))) {
+      LOG_WARN("recursive search table in ref query failed", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; i < expr.get_param_count() && OB_SUCC(ret) && !found; i++) {
+      const ObRawExpr *child = expr.get_param_expr(i);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child expr is null", K(ret));
+      } else if (child->has_flag(CNT_SUB_QUERY) &&
+                OB_FAIL(SMART_CALL(recursive_search_table_in_ref_query(*child, table_id, found)))) {
+        LOG_WARN("recursive search table in ref query failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::recursive_search_table_in_ref_query(const ObSelectStmt *stmt, int64_t table_id, bool &found)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size() && !found; ++i) {
+    const TableItem *table_item = stmt->get_table_item(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_item is null", K(i));
+    } else if (table_item->ref_id_ == table_id) {
+      found = true;
+    }
+  }
+  if (OB_SUCC(ret) && !found) {
+    ObArray<ObSelectStmt *> child_stmts;
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count() && !found; ++i) {
+        if (OB_FAIL(SMART_CALL(recursive_search_table_in_ref_query(child_stmts.at(i), table_id, found)))) {
+          LOG_WARN("recursive search table in ref query failed", K(ret));
         }
       }
     }
@@ -10157,6 +10282,138 @@ int ObResolverUtils::resolve_column_index_type(const ParseNode* node, ObExternal
   return ret;
 }
 
+int ObResolverUtils::resolve_kafka_format(
+    const ParseNode *node,
+    ObExternalFileFormat &format,
+    ObResolverParams &params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node) || node->num_child_ < 1 || OB_ISNULL(node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node", KR(ret));
+  } else {
+    switch (node->type_) {
+      case T_EXTERNAL_FILE_FORMAT_TYPE: {
+        //do nothing
+        break;
+      }
+      case T_EXTERNAL_FILE_FORMAT: {
+        ObResolverUtils::FileFormatContext ff_ctx;
+        for (int i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+          if (OB_ISNULL(node->children_[i])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get unexpected NULL ptr", K(ret), K(node->num_child_));
+          } else if (T_EXTERNAL_FILE_FORMAT_TYPE == node->children_[i]->type_) {
+            //do nothing
+            //TODO: 检查是否为"csv"
+          } else if (OB_FAIL(ObResolverUtils::resolve_file_format(node->children_[i], format, params, ff_ctx))) {
+            LOG_WARN("fail to resolve file format", KR(ret));
+          }
+        }
+        break;
+      }
+      case T_KAFKA_CUSTOM_PROPERTY: {
+        //TODO: 传入字符串大小写敏感
+        if (OB_UNLIKELY(2 != node->num_child_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected node num child for kafka custom property", KR(ret), K(node->num_child_));
+        } else {
+          ObString key = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+          ObString value = ObString(node->children_[1]->str_len_, node->children_[1]->str_value_).trim_space_only();
+          if (0 == key.compare(ObKAFKAGeneralFormat::KAFKA_TOPIC)) {
+            format.kafka_format_.topic_ = value;
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::KAFKA_PARTITIONS)) {
+            format.kafka_format_.partitions_ = value;
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::KAFKA_OFFSETS)) {
+            format.kafka_format_.offsets_ = value;
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::MAX_BATCH_INTERVAL)) {
+            bool valid = false;
+            int64_t integer_value = ObFastAtoi<int64_t>::atoi(value.ptr(), value.ptr() + value.length(), valid);
+            if (!valid) {
+              ret = OB_INVALID_DATA;
+              LOG_WARN("fail to convert max_batch_interval string to int", KR(ret), K(value), K(integer_value));
+            } else {
+              format.kafka_format_.max_batch_interval_ = integer_value * 1000 * 1000L; //s -> us
+            }
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::MAX_BATCH_ROWS)) {
+            bool valid = false;
+            int64_t integer_value = ObFastAtoi<int64_t>::atoi(value.ptr(), value.ptr() + value.length(), valid);
+            if (!valid) {
+              ret = OB_INVALID_DATA;
+              LOG_WARN("fail to convert max_batch_rows string to int", KR(ret), K(value), K(integer_value));
+            } else if (integer_value < 200000) {
+              ret = OB_OP_NOT_ALLOW;
+              LOG_WARN("max_batch_rows is too small", KR(ret), K(integer_value));
+            } else {
+              format.kafka_format_.max_batch_rows_ = integer_value;
+            }
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::MAX_BATCH_SIZE)) {
+            bool valid = false;
+            int64_t integer_value = ObFastAtoi<int64_t>::atoi(value.ptr(), value.ptr() + value.length(), valid);
+            if (!valid) {
+              ret = OB_INVALID_DATA;
+              LOG_WARN("fail to convert max_batch_size string to int", KR(ret), K(value), K(integer_value));
+            } else if (integer_value < 100 * 1024 * 1024) {
+              ret = OB_OP_NOT_ALLOW;
+              LOG_WARN("max_batch_size is too small", KR(ret), K(integer_value));
+            } else {
+              format.kafka_format_.max_batch_size_ = integer_value;
+            }
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::JOB_ID)) {
+            bool valid = false;
+            int64_t integer_value = ObFastAtoi<int64_t>::atoi(value.ptr(), value.ptr() + value.length(), valid);
+            if (!valid) {
+              ret = OB_INVALID_DATA;
+              LOG_WARN("fail to convert job_id string to int", KR(ret), K(value), K(integer_value));
+            } else {
+              format.kafka_format_.job_id_ = integer_value;
+            }
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::TABLE_ID)) {
+            bool valid = false;
+            int64_t integer_value = ObFastAtoi<int64_t>::atoi(value.ptr(), value.ptr() + value.length(), valid);
+            if (!valid) {
+              ret = OB_INVALID_DATA;
+              LOG_WARN("fail to convert table_id string to int", KR(ret), K(value), K(integer_value));
+            } else {
+              format.kafka_format_.insert_table_id_ = integer_value;
+            }
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::COLUMN_LIST)) {
+            ObString remain_str = value;
+            ObString item_str;
+            while (OB_SUCC(ret) && !remain_str.empty()) {
+              item_str = remain_str.split_on(',').trim_space_only();
+              if (item_str.empty()) {
+                item_str = remain_str.trim_space_only();
+                remain_str.reset();
+              }
+              if (OB_SUCC(ret)) {
+                bool valid = false;
+                uint64_t integer_value = ObFastAtoi<uint64_t>::atoi(item_str.ptr(), item_str.ptr() + item_str.length(), valid);
+                if (!valid) {
+                  ret = OB_INVALID_DATA;
+                  LOG_WARN("fail to convert column_list string to int", KR(ret), K(item_str), K(integer_value));
+                } else if (OB_FAIL(format.kafka_format_.column_ids_.push_back(integer_value))) {
+                  LOG_WARN("fail to push back to array", KR(ret), K(integer_value));
+                }
+              }
+            }
+          } else {
+            if (OB_FAIL(format.kafka_format_.custom_properties_.push_back(std::make_pair(key, value)))) {
+              LOG_WARN("failed to push back custom property", KR(ret));
+            }
+          }
+        }
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid file format option", KR(ret), K(node->type_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFormat &format, ObResolverParams &params, FileFormatContext &ff_ctx)
 {
   int ret = OB_SUCCESS;
@@ -10569,6 +10826,54 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         }
         break;
       }
+      case T_PARALLEL_PARSE_ON_SINGLE_FILE: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.5.1.0, parallel_parse_on_single_file");
+        } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT) {
+          format.csv_format_.parallel_parse_on_single_file_ = node->children_[0]->value_;
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid file format option", K(ret), K(node->type_));
+        }
+        break;
+      }
+      case T_PARALLEL_PARSE_FILE_SIZE_THRESHOLD: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.5.1.0, parallel_parse_file_size_threshold");
+        } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT) {
+          if (OB_FAIL(resolve_file_size_node(node, format.csv_format_.parallel_parse_file_size_threshold_))) {
+            LOG_WARN("failed to resolve file size node", K(ret));
+          } else if (format.csv_format_.parallel_parse_file_size_threshold_ <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("parallel_parse_file_size_threshold must be greater than 0", K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parallel_parse_file_size_threshold must be greater than 0");
+          }
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid file format option", K(ret), K(node->type_));
+        }
+        break;
+      }
+      case T_MAX_ROW_LENGTH: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.5.1.0, max_row_length");
+        } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT) {
+          if (OB_FAIL(resolve_file_size_node(node, format.csv_format_.max_row_length_))) {
+            LOG_WARN("failed to resolve file size node", K(ret));
+          } else if (format.csv_format_.max_row_length_ <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("max_row_length must be greater than 0", K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "max_row_length must be greater than 0");
+          }
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid file format option", K(ret), K(node->type_));
+        }
+        break;
+      }
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid file format option", K(ret), K(node->type_));
@@ -10903,35 +11208,17 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                        compat_type,
                        enable_mysql_compatible_dates,
                        session.get_min_const_integer_precision(),
+                       session.get_exec_min_cluster_version(),
                        false, /* is_from_pl */
                        fmt_int_or_ch_decint_idx.has_member(param_idx)))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (FALSE_IT(obj_param.set_raw_text_info(static_cast<int32_t>(raw_param->raw_sql_offset_),
                                                     static_cast<int32_t>(raw_param->text_len_)))) {
       /* nothing */
-    } else if (ob_is_numeric_type(obj_param.get_type())) {
-      // -0 is also counted as negative
-      bool is_neg = false, is_zero = false;
-      if (must_be_positive_idx.has_member(param_idx)) {
-        if (obj_param.is_boolean()) {
-          // boolean will skip this check
-        } else if (lib::is_oracle_mode()) {
-          if (OB_FAIL(is_negative_ora_nmb(obj_param, is_neg, is_zero))) {
-            LOG_WARN("check oracle negative number failed", K(ret));
-          } else if (is_neg || (is_zero && '-' == raw_param->str_value_[0])) {
-            ret = OB_ERR_UNEXPECTED;
-            pc_ctx.should_add_plan_ = false; // 内部主动抛出not supported时候需要设置这个标志，以免新计划add plan导致锁冲突
-            LOG_TRACE("param must be positive", K(ret), K(param_idx), K(obj_param));
-          }
-        } else if (lib::is_mysql_mode()) {
-          if (obj_param.is_integer_type() &&
-              (obj_param.get_int() < 0 || (0 == obj_param.get_int() && '-' == raw_param->str_value_[0]))) {
-            ret = OB_ERR_UNEXPECTED;
-            pc_ctx.should_add_plan_ = false;
-            LOG_TRACE("param must be positive", K(ret), K(param_idx), K(obj_param));
-          }
-        }
-      }
+    } else if (OB_FAIL(ObResolverUtils::check_must_be_positive(pc_ctx, pc_ctx.allocator_, stmt_type, raw_param, param_idx,
+                                                                     phy_ctx_params, must_be_positive_idx,
+                                                                     obj_param))) {
+      SQL_PC_LOG(WARN, "fail to check must be positive", K(ret));
     }
     is_param = true;
     LOG_DEBUG("is_param", K(param_idx), K(obj_param), K(raw_param->type_), K(raw_param->value_),
@@ -10952,6 +11239,179 @@ int ObResolverUtils::is_negative_ora_nmb(const ObObjParam &obj_param, bool &is_n
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected obj type", K(obj_param));
+  }
+  return ret;
+}
+
+int ObResolverUtils::check_must_be_positive(ObPlanCacheCtx &pc_ctx,
+                                            ObIAllocator &allocator,
+                                            const stmt::StmtType stmt_type,
+                                            const ParseNode *node,
+                                            const int64_t param_idx,
+                                            const ParamStore &phy_ctx_params,
+                                            const ObBitSet<> &must_be_positive_idx,
+                                            ObObjParam &obj_param)
+{
+  int ret = OB_SUCCESS;
+  // Check if parameter must be positive for numeric types
+  if (ob_is_numeric_type(obj_param.get_type())) {
+    // -0 is also counted as negative
+    bool is_neg = false, is_zero = false;
+    if (must_be_positive_idx.has_member(param_idx)) {
+      if (obj_param.is_boolean()) {
+        // boolean will skip this check
+      } else if (lib::is_oracle_mode()) {
+        if (OB_FAIL(is_negative_ora_nmb(obj_param, is_neg, is_zero))) {
+          LOG_WARN("check oracle negative number failed", K(ret));
+        } else if (is_neg || (is_zero && '-' == node->str_value_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          pc_ctx.should_add_plan_ = false; // 内部主动抛出not supported时候需要设置这个标志，以免新计划add plan导致锁冲突
+          LOG_TRACE("param must be positive", K(ret), K(param_idx), K(obj_param));
+        }
+      } else if (lib::is_mysql_mode()) {
+        if (obj_param.is_integer_type() &&
+            (obj_param.get_int() < 0 || (0 == obj_param.get_int() && '-' == node->str_value_[0]))) {
+          ret = OB_ERR_UNEXPECTED;
+          pc_ctx.should_add_plan_ = false;
+          LOG_TRACE("param must be positive", K(ret), K(param_idx), K(obj_param));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// recheck T_QUESTIONMARK node and check parameter for Decimal Int
+int ObResolverUtils::recheck_parameter_for_pl(ObPlanCacheCtx &pc_ctx,
+                                                ObIAllocator &allocator,
+                                                const stmt::StmtType stmt_type,
+                                                const ParseNode *node,
+                                                const int64_t param_idx,
+                                                const ParamStore &phy_ctx_params,
+                                                const bool fmt_int_or_ch_decint,
+                                                ObObjParam &obj_param,
+                                                int8_t min_const_integer_precision,
+                                                bool enable_decimal_int_type)
+{
+  int ret = OB_SUCCESS;
+  if (T_QUESTIONMARK == node->type_) {
+    int64_t idx = node->value_;
+    if (OB_SUCC(ret) && (idx < 0 || idx >= phy_ctx_params.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid idx", K(ret), K(idx), K(phy_ctx_params.count()));
+    } else {
+      obj_param.set_is_boolean(phy_ctx_params.at(idx).is_boolean());
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    // guarantee use fmt_int_or_ch_decint (from fmt_int_or_ch_decint_idx)
+    // to set decimal int or number
+    int16_t precision = PRECISION_UNKNOWN_YET;
+    int16_t scale = SCALE_UNKNOWN_YET;
+    switch (node->type_) {
+      case T_UINT64:
+      case T_INT: {
+        int16_t formalized_prec = calc_decint_precision_for_int_type(node->str_len_,
+          enable_decimal_int_type, stmt_type,
+          fmt_int_or_ch_decint, min_const_integer_precision);
+        obj_param.set_precision(formalized_prec);
+        break;
+      }
+      case T_NUMBER: {
+        number::ObNumber nmb;
+        ObDecimalInt *decint = nullptr;
+        int16_t len = 0;
+        ObString tmp_string(static_cast<int32_t>(node->str_len_), node->str_value_);
+        bool use_decimalint_as_result = false;
+        int tmp_ret = OB_E(EventTable::EN_ENABLE_ORA_DECINT_CONST) OB_SUCCESS;
+        if (enable_decimal_int_type && OB_SUCC(tmp_ret)
+            && OB_FAIL(use_decimalint(node, obj_param, allocator,
+                        decint, len, precision, scale,
+                        stmt_type, fmt_int_or_ch_decint, use_decimalint_as_result))) {
+          LOG_WARN("fail to use decimalint", K(ret));
+        }
+        break;
+      }
+      default:
+        /* do nothing */
+        break;
+    }
+  }
+  return ret;
+}
+// T_UINT64 & T_INT
+int16_t ObResolverUtils::calc_decint_precision_for_int_type(int64_t strlen,
+                                              bool enable_decimal_int_type,
+                                              const stmt::StmtType stmt_type,
+                                              bool fmt_int_or_ch_decint,
+                                              int8_t min_const_integer_precision)
+{
+  int16_t formalized_prec = static_cast<int16_t>(strlen);
+  // for constant integers, reset precision to 4/8/16/20
+  if (lib::is_mysql_mode() && enable_decimal_int_type
+      && !(ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type))) {
+    int16_t node_prec = static_cast<int16_t>(strlen);
+    if (fmt_int_or_ch_decint) {
+      if (node_prec <= 4) {
+        formalized_prec = 4;
+      } else if (node_prec <= 8) {
+        formalized_prec = 8;
+      } else if (node_prec <= 16) {
+        formalized_prec = 16;
+      } else {
+        formalized_prec = 20;
+      }
+      formalized_prec = MAX(min_const_integer_precision, formalized_prec);
+    } else {
+      formalized_prec = 20;
+    }
+  }
+  return formalized_prec;
+}
+
+int ObResolverUtils::use_decimalint(const ParseNode *node, ObObjParam &val,
+                                      ObIAllocator &allocator,
+                                      ObDecimalInt *&decint, int16_t &len,
+                                      int16_t &precision, int16_t &scale,
+                                      const stmt::StmtType stmt_type,
+                                      bool fmt_int_or_ch_decint,
+                                      bool &use_decimalint_as_result)
+{
+  int ret = OB_SUCCESS;
+  // 如果开启decimal int类型，T_NUMBER解析成decimal int
+  int32_t val_len = 0;
+  ret = wide::from_string(node->str_value_, node->str_len_, allocator, scale, precision,
+                          val_len, decint);
+  len = static_cast<int16_t>(val_len);
+  // in oracle mode
+  // +.12e-3 will parse as decimal, with scale = 5, precision = 2
+  // in this case, ObNumber is used.
+  use_decimalint_as_result = (precision <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
+                              && scale <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
+                              && scale >= 0
+                              && precision >= scale);
+  if (lib::is_oracle_mode()
+      && (ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type)
+          || precision > OB_MAX_NUMBER_PRECISION || !fmt_int_or_ch_decint)) {
+    use_decimalint_as_result = false;
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_INTEGER_PRECISION_OVERFLOW == ret) {
+      LOG_WARN("integer presision overflow", K(ret));
+    } else if (OB_NUMERIC_OVERFLOW == ret) {
+      LOG_WARN("numeric overflow");
+    } else {
+      LOG_WARN("unexpected error", K(ret));
+    }
+  } else if (use_decimalint_as_result) {
+    val.set_decimal_int(len, scale, decint);
+    val.set_precision(precision);
+    val.set_scale(scale);
+    val.set_length(len);
+    val.set_param_meta(val.get_meta());
+    LOG_DEBUG("finish parse decimal int from str", K(precision), K(scale));
   }
   return ret;
 }
@@ -11619,6 +12079,58 @@ int ObResolverUtils::collect_trigger_func_ref_column(ObPLFunction *func,
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+// According to Oracle's settings, for subqueries or views, if a table already
+// has a related flashback property, it will retain its original value.
+// If there is no related flashback property, it will be set to the flashback
+// property specified by the outer view or subquery.
+// For example:
+// select * from ((select * from t1 as of timestamp time1, t2) as of timestamp time2);
+// In this case, table t1 keeps its own flashback timestamp time1, while table t2
+// will be set to the outer flashback timestamp time2.
+int ObResolverUtils::set_flashback_info_for_view(ObDMLStmt *stmt,
+                                                 ObRawExpr* const flashback_query_expr,
+                                                 const TableItem::FlashBackQueryType flashback_query_type)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  bool is_stack_overflow = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(flashback_query_expr)
+      || OB_UNLIKELY(TableItem::NOT_USING == flashback_query_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected input", K(ret), K(stmt), K(flashback_query_expr), K(flashback_query_type));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (OB_UNLIKELY(is_stack_overflow)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("stack is overflow", K(ret));
+  } else if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret));
+  } else {
+    // 1. First, set the flashback property for the tables in the current level statement
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
+      TableItem *cur_table = stmt->get_table_item(i);
+      if (OB_ISNULL(cur_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(cur_table), K(i), KPC(stmt));
+      } else if (TableItem::NOT_USING != cur_table->flashback_query_type_) {
+        // do nothing
+      } else if (cur_table->is_basic_table()) {
+        cur_table->flashback_query_expr_ = flashback_query_expr;
+        cur_table->flashback_query_type_ = flashback_query_type;
+      } else { /* do nothing */ }
+    }
+    // 2. Then, recursively set the flashback property for the tables in the child statements
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(set_flashback_info_for_view(child_stmts.at(i),
+                                                         flashback_query_expr,
+                                                         flashback_query_type)))) {
+        LOG_WARN("failed to set flashback info for view", K(ret), K(i), KPC(stmt));
+      } else { /* do nothing */ }
     }
   }
   return ret;

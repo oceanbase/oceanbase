@@ -69,7 +69,7 @@ HazardDomain::HazardDomain()
       hazptr_attr_(OB_SERVER_TENANT_ID, "CACHE_HAZPTR"),
       hazptr_allocator_(hazptr_attr_),
       bit_set_(),
-      bit_set_mu_(),
+      bit_set_mu_(common::ObLatchIds::KV_CACHE_HAZARD_DOMAIN_MUTEX),
       retire_list_(nullptr),
       retired_memory_size_(0)
 {

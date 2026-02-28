@@ -458,7 +458,7 @@ inline int reverse_trans_version_val(common::ObDatum &datum)
   return ret;
 }
 int reverse_trans_version_val(common::ObDatum *datums, const int64_t count);
-int reverse_trans_version_val(ObIVector *vector, const int64_t count);
+int reverse_trans_version_val(ObIVector *vector, const int64_t count, const int64_t vec_offset = 0);
 
 enum class StorageScanType : int8_t
 {

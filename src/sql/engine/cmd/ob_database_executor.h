@@ -14,6 +14,7 @@
 #define OCEANBASE_SRC_SQL_ENGINE_CMD_OB_DATABASE_EXECUTOR_H_
 #include "share/ob_define.h"
 #include "share/schema/ob_schema_getter_guard.h"
+#include "rootserver/ob_rs_async_rpc_proxy.h"
 
 namespace oceanbase
 {
@@ -92,6 +93,56 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPurgeDatabaseExecutor);
 };
+
+class ObDropTableBatchScheduler
+{
+public:
+  ObDropTableBatchScheduler();
+  ~ObDropTableBatchScheduler();
+  int init(const uint64_t tenant_id,
+           obrpc::ObCommonRpcProxy &rpc_proxy,
+           const ObString &database_name,
+           const common::ObIArray<ObString> &table_names);
+  int execute();
+public:
+  static const int64_t MAX_TABLES_PER_RPC = 1;
+private:
+  struct ProxyCtx
+  {
+  public:
+    ProxyCtx();
+    ~ProxyCtx();
+    int init(obrpc::ObCommonRpcProxy &base_rpc_proxy, const uint64_t tenant_id);
+    void reset_round();
+  public:
+    ObArenaAllocator allocator_;
+    rootserver::ObNonAtomicDropTableInDBProxy *proxy_;
+    TO_STRING_KV(KP(proxy_));
+  private:
+    void reset();
+    DISALLOW_COPY_AND_ASSIGN(ProxyCtx);
+  };
+private:
+  int wait_proxy(ProxyCtx &ctx);
+  int send_one_rpc(ProxyCtx &ctx);
+  int cleanup_pending_proxy();
+  bool has_pending_proxy() const;
+  bool has_pending_rpc(const ProxyCtx &ctx) const;
+  bool has_sent_rpc(const ProxyCtx &ctx) const;
+  bool has_finished_rpc(const ProxyCtx &ctx) const;
+private:
+  uint64_t tenant_id_;
+  int64_t table_count_;
+  int64_t next_table_idx_;
+  ObString database_name_;
+  common::ObArray<ObString> table_names_;
+  obrpc::ObCommonRpcProxy *rpc_proxy_;
+  common::ObArray<ProxyCtx *> proxy_ctxs_;
+  ObArenaAllocator allocator_;
+  DISABLE_COPY_ASSIGN(ObDropTableBatchScheduler);
+};
+
+int non_atomic_drop_table_in_database(const uint64_t tenant_id, const ObString &database_name, obrpc::ObCommonRpcProxy &common_rpc_proxy);
 
 }  // namespace sql
 }  // namespace oceanbase

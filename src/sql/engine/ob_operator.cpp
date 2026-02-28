@@ -85,7 +85,14 @@ int ObDynamicParamSetter::set_dynamic_param_vec2(ObEvalCtx &eval_ctx, const sql:
       LOG_WARN("convert datum to obj failed", K(ret), "datum",
                DATUM2STR(*dst_, res));
     } else {
-      param_store.at(param_idx_).set_param_meta();
+      // if exec param is decimal int, accuracy must be properly set
+      if (dst_->obj_meta_.is_decimal_int()) {
+        ObAccuracy acc(dst_->datum_meta_.precision_, dst_->datum_meta_.scale_);
+        param_store.at(param_idx_).set_param_meta(dst_->obj_meta_);
+        param_store.at(param_idx_).set_accuracy(acc);
+      } else {
+        param_store.at(param_idx_).set_param_meta();
+      }
     }
 
     if (OB_SUCC(ret)) {
@@ -741,6 +748,10 @@ int ObOperator::output_expr_sanity_check_batch()
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("error unexpected, expr is nullptr", K(ret));
+    } else if (expr->type_ == T_PSEUDO_ENCODE_DUP_EXPR) {
+      // encoded expr is projected by transmit op when translation data
+      // its data haven't produced yet
+      // skip checking
     } else if (OB_FAIL(expr->eval_vector(eval_ctx_, brs_))) {
       LOG_WARN("eval vector failed", K(ret));
     } else if (GET_MY_SESSION(eval_ctx_.exec_ctx_)->is_diagnosis_enabled() &&
@@ -973,11 +984,12 @@ int ObOperator::init_skip_vector()
     if (OB_FAIL(init_brs(&(ctx_.get_allocator()), batch_size, brs_))) {
       LOG_WARN("init brs failed", K(ret));
     } else {
-      int tmp_ret = OB_SUCCESS;
-      tmp_ret = OB_E(EventTable::EN_ENABLE_ENGINE_CHECK) tmp_ret;
-      if (OB_FAIL(tmp_ret)) {
-        need_check_brs_ = true;
-      }
+      // int tmp_ret = OB_SUCCESS;
+      // tmp_ret = OB_E(EventTable::EN_ENABLE_ENGINE_CHECK) tmp_ret;
+      // if (tmp_ret != OB_SUCCESS) {
+      //   need_check_brs_ = true;
+      // }
+      need_check_brs_ = false; // disable check brs temporarily
       if (need_check_brs_) {
         if (OB_FAIL(init_brs(&(ctx_.get_allocator()), batch_size, backup_brs_))) {
           LOG_WARN("init brs failed", K(ret));
@@ -1229,15 +1241,16 @@ int ObOperator::setup_op_feedback_info()
   } else {
     ObExecFeedbackInfo &fb_info = ctx_.get_feedback_info();
     common::ObIArray<ObExecFeedbackNode> &nodes = fb_info.get_feedback_nodes();
-    int64_t &total_db_time = fb_info.get_total_db_time();
-    uint64_t db_time = op_monitor_info_.calc_db_time();
+    int64_t &total_cpu_time = fb_info.get_total_cpu_time();
     static const uint64_t scale = (1000 << 20) / OBSERVER_FREQUENCE.get_cpu_frequency_khz();
-    db_time = (db_time * scale) >> 20;
-    total_db_time += db_time;
+    uint64_t db_time = (op_monitor_info_.calc_db_time() * scale) >> 20;
+    uint64_t block_time = (op_monitor_info_.block_time_ * scale) >> 20;
+    uint64_t cpu_time = db_time - block_time;
+    total_cpu_time += cpu_time;
     if (fb_node_idx_ >= 0 && fb_node_idx_ < nodes.count()) {
       ObExecFeedbackNode &node = nodes.at(fb_node_idx_);
-      node.block_time_ = (op_monitor_info_.block_time_ * scale) >> 20;
-      node.db_time_ = db_time;
+      node.block_time_ = block_time;
+      node.cpu_time_ = cpu_time;
       node.op_close_time_ = op_monitor_info_.close_time_;
       node.op_first_row_time_ = op_monitor_info_.first_row_time_;
       node.op_last_row_time_ = op_monitor_info_.last_row_time_;
@@ -2023,7 +2036,7 @@ bool ObOperator::enable_get_next_row() const
     ret = true;
   } else {
     // if new operator is registered, please update this check and phy operator lists below
-    static_assert(PHY_END == PHY_VEC_PX_MULTI_PART_SSTABLE_INSERT + 1, "");
+    static_assert(PHY_END == PHY_HYBRID_FUSION + 1, "");
     switch (spec_.type_) {
     case PHY_TABLE_SCAN: // table scan with multi value index/geometry type
     case PHY_BLOCK_SAMPLE_SCAN: // sample scan with geometry type

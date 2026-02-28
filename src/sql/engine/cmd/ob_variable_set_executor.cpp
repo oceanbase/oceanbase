@@ -18,6 +18,8 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "sql/engine/cmd/ob_set_names_executor.h"
+#include "share/ob_unit_table_operator.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -746,6 +748,14 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
         LOG_WARN("fail do early lock release ", K(ret), K(early_lock_release), K(val));
       }
 #endif
+    } else if (set_var.var_name_ == OB_SV_PARALLEL_SERVERS_TARGET) {
+      // 当用户修改 parallel_servers_target 时，同步更新 px_target_workers_per_cpu 配置项
+      int64_t parallel_servers_target = 0;
+      if (OB_FAIL(val.get_int(parallel_servers_target))) {
+        LOG_WARN("fail get int", K(ret), K(val));
+      } else if (OB_FAIL(sync_update_px_target_workers_per_cpu(ctx, arg.tenant_id_, parallel_servers_target))) {
+        LOG_WARN("fail to sync update px_target_workers_per_cpu", K(ret), K(arg.tenant_id_), K(parallel_servers_target));
+      }
     }
 
     if (OB_SUCC(ret) && should_update_extra_var) {
@@ -943,7 +953,6 @@ int ObVariableSetExecutor::check_and_convert_sys_var(ObExecContext &ctx,
       LOG_USER_ERROR(OB_ERR_PARAM_VALUE_INVALID);
     }
   }
-
   return ret;
 }
 
@@ -1458,6 +1467,62 @@ int ObVariableSetExecutor::is_support(const share::ObSetVar &set_var)
   }
   return ret;
 }
+
+int ObVariableSetExecutor::sync_update_px_target_workers_per_cpu(ObExecContext &ctx,
+                                                                  uint64_t tenant_id,
+                                                                  int64_t parallel_servers_target)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  common::ObMySQLProxy *sql_proxy = NULL;
+
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is NULL", K(ret));
+  } else if (!is_user_tenant(tenant_id) && !is_sys_tenant(tenant_id)) {
+    // 只处理用户租户和系统租户
+    LOG_DEBUG("not user or sys tenant, skip sync px_target_workers_per_cpu", K(tenant_id));
+  } else {
+    // 获取租户的单元配置
+    ObArray<ObUnitConfig> unit_configs;
+    ObUnitTableOperator unit_operator;
+    double min_cpu = 0.0;
+    double px_target_workers_per_cpu = 0.0;
+    if (OB_FAIL(unit_operator.init(*sql_proxy))) {
+      LOG_WARN("fail to init unit operator", K(ret), K(tenant_id));
+    } else if (OB_FAIL(unit_operator.get_unit_configs_by_tenant(tenant_id, unit_configs))) {
+      LOG_WARN("fail to get unit configs by tenant", K(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(unit_configs.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unit config is empty", K(ret), K(tenant_id));
+    } else if (FALSE_IT(min_cpu = unit_configs.at(0).min_cpu())) {
+    } else if (OB_UNLIKELY(min_cpu < 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid min_cpu", K(ret), K(tenant_id), K(min_cpu));
+    } else {
+      // 计算 px_target_workers_per_cpu = parallel_servers_target / min_cpu
+      px_target_workers_per_cpu = static_cast<double>(parallel_servers_target) / min_cpu;
+      ObSqlString sql;
+      int64_t affected_rows = 0;
+      if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET px_target_workers_per_cpu = %.2f",
+                                 px_target_workers_per_cpu))) {
+        LOG_WARN("fail to assign sql", K(ret), K(tenant_id), K(px_target_workers_per_cpu));
+      } else if (OB_FAIL(sql_proxy->write(tenant_id, sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to execute sql", K(ret), K(tenant_id), K(sql));
+      } else {
+        LOG_INFO("sync update px_target_workers_per_cpu when setting parallel_servers_target",
+                 K(tenant_id), K(parallel_servers_target), K(min_cpu),
+                 K(px_target_workers_per_cpu), K(affected_rows));
+      }
+    }
+  }
+
+  return ret;
+}
+
 #undef DEFINE_CAST_CTX
 
 }/* ns sql*/

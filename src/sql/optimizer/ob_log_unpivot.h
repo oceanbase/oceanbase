@@ -13,20 +13,23 @@
 #ifndef _OB_LOG_UNPIVOT_H_
 #define _OB_LOG_UNPIVOT_H_
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 
 namespace oceanbase
 {
 namespace sql
 {
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogUnpivot : public ObLogicalOperator
 {
 public:
   ObLogUnpivot(ObLogPlan &plan)
   : ObLogicalOperator(plan),
-    origin_exprs_(),
-    label_exprs_(),
-    value_exprs_(),
+    origin_exprs_(plan.get_allocator()),
+    label_exprs_(plan.get_allocator()),
+    value_exprs_(plan.get_allocator()),
     is_include_null_(false)
   {}
 
@@ -60,9 +63,9 @@ public:
   VIRTUAL_TO_STRING_KV(K_(origin_exprs), K_(label_exprs), K_(value_exprs), K_(is_include_null));
 
 private:
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> origin_exprs_;
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> label_exprs_;
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> value_exprs_;
+  ObSqlArray<ObRawExpr *> origin_exprs_;
+  ObSqlArray<ObRawExpr *> label_exprs_;
+  ObSqlArray<ObRawExpr *> value_exprs_;
   bool is_include_null_;
   DISALLOW_COPY_AND_ASSIGN(ObLogUnpivot);
 };

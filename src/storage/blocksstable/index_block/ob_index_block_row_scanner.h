@@ -100,9 +100,11 @@ int fix_micro_header_and_transform(
     ObMicroBlockData &transformed_data,
     ObIAllocator &allocator,
     char *&allocated_buf);
-  static int get_transformed_upper_mem_size(const ObITableReadInfo *table_read_info, const char *raw_block_data, int64_t &mem_limit);
+  static int get_transformed_upper_mem_size(
+    const ObMicroBlockHeader &micro_block_header,
+    const ObITableReadInfo *table_read_info, const char *raw_block_data, int64_t &mem_limit);
 private:
-  int get_reader(const ObRowStoreType store_type, ObIMicroBlockReader *&micro_reader);
+  int get_reader(const ObMicroBlockHeader &header, ObIMicroBlockReader *&micro_reader);
 private:
   ObArenaAllocator allocator_;
   ObMicroBlockReaderHelper micro_reader_helper_;
@@ -396,7 +398,7 @@ public:
       ObMicroIndexInfo &idx_block_row,
       const bool is_multi_check = false,
       const bool is_sorted_multi_get = false,
-      storage::ObIndexSkipScanner *skip_scanner = nullptr);
+      storage::ObISkipScanner *skip_scanner = nullptr);
   void set_iter_param(const ObSSTable *sstable,
                       const ObTablet *tablet);
   bool end_of_block() const;

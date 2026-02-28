@@ -589,6 +589,9 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::add_batch_stored_row(
       }
     }
   }
+  if (OB_SUCC(ret) && OB_FAIL(comp_.check_sort_key_has_null(sk_stored_rows, row_size))) {
+    SQL_ENG_LOG(WARN, "failed to check sort key has null", K(ret));
+  }
   return ret;
 }
 
@@ -914,7 +917,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::attach_rows(const ObExprPtrI
 {
   int ret = OB_SUCCESS;
   for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < exprs.count(); col_idx++) {
-    if (T_FUN_SYS_ENCODE_SORTKEY == exprs.at(col_idx)->type_) {
+    if (T_FUN_SYS_ENCODE_SORTKEY == exprs.at(col_idx)->type_
+        || exprs.at(col_idx)->is_const_expr()) {
       // skip, do nothing
       continue;
     } else if (OB_FAIL(exprs.at(col_idx)->init_vector_default(ctx, read_rows))) {
@@ -922,10 +926,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::attach_rows(const ObExprPtrI
     } else {
       ObExpr *e = exprs.at(col_idx);
       ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
-      if (VEC_UNIFORM_CONST != vec->get_format()) {
-        ret = vec->from_rows(row_meta, srows, read_rows, col_idx);
-        exprs.at(col_idx)->set_evaluated_projected(ctx);
-      }
+      ret = vec->from_rows(row_meta, srows, read_rows, col_idx);
+      exprs.at(col_idx)->set_evaluated_projected(ctx);
     }
   }
   return ret;
@@ -1211,8 +1213,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::update_max_available_mem_siz
           &mem_context_->get_malloc_allocator(),
           [&](int64_t cur_cnt) { return topn_heap_->count() > cur_cnt; }, updated))) {
       SQL_ENG_LOG(WARN, "failed to get max available memory size", K(ret));
-    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
-      SQL_ENG_LOG(WARN, "failed to update used memory size", K(ret));
+    } else if (updated) {
+      sql_mem_processor_.update_used_mem_size(get_total_used_size());
     }
   }
   return ret;
@@ -1275,9 +1277,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::preprocess_dump(bool &dumped
   dumped = false;
   if (OB_FAIL(sql_mem_processor_.get_max_available_mem_size(&mem_context_->get_malloc_allocator()))) {
     SQL_ENG_LOG(WARN, "failed to get max available memory size", K(ret));
-  } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
-    SQL_ENG_LOG(WARN, "failed to update used memory size", K(ret));
   } else {
+    sql_mem_processor_.update_used_mem_size(get_total_used_size());
     dumped = need_dump();
     if (dumped) {
       if (!sql_mem_processor_.is_auto_mgr()) {
@@ -1874,8 +1875,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::before_add_row()
           &mem_context_->get_malloc_allocator(),
           [&](int64_t cur_cnt) { return rows_->count() > cur_cnt; }, updated))) {
       SQL_ENG_LOG(WARN, "failed to update max available mem size periodically", K(ret));
-    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
-      SQL_ENG_LOG(WARN, "failed to update used memory size", K(ret));
+    } else if (updated && FALSE_IT(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
     } else if (GCONF.is_sql_operator_dump_enabled()) {
       if (rows_->count() >= MAX_ROW_CNT) {
         // 最大2G，超过2G会扩容到4G，4G申请会失败

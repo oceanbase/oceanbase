@@ -143,7 +143,7 @@ public:
                          const bool with_hidden_flag,
                          bool &is_exist,
                          const bool is_built_in_index = false,
-                         const uint64_t catalog_id = OB_INTERNAL_CATALOG_ID); // to many place used this function, assign default catalog_id
+                         const uint64_t catalog_id = OB_INTERNAL_CATALOG_ID); // too many place used this function, assign default catalog_id
 
   // mock_fk_parent_table begin
   int get_mock_fk_parent_table_with_name(
@@ -183,6 +183,11 @@ public:
                                           const uint64_t column_id,
                                           bool allow_not_exist,
                                           const share::schema::ObSensitiveRuleSchema *&schema) const;
+  int get_location_id_name(const uint64_t tenant_id,
+                           common::ObString &location_name,
+                           uint64_t &location_id,
+                           ObIAllocator *allocator = NULL,
+                           bool allow_not_exist = false) const;
   //int get_local_table_id(const uint64_t tenant_id,
   //                       const uint64_t database_id,
   //                       const common::ObString &table_name,

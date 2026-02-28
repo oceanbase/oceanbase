@@ -10,6 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "logservice/replayservice/ob_log_replay_reporter.h"
+#endif // OB_BUILD_SHARED_LOG_SERVICE
 #include "ob_log_rpc_req.h"
 
 namespace oceanbase
@@ -556,5 +559,120 @@ void LogSyncBaseLSNReq::reset()
 OB_SERIALIZE_MEMBER(LogSyncBaseLSNReq, src_, ls_id_, base_lsn_);
 
 // ================= LogSyncBaseLSNReq end ================
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+// ================= LSReplicaReplayReachingMachineWrapper start ================
+LSReplicaReplayReachingMachineWrapper::LSReplicaReplayReachingMachineWrapper()
+  : ls_id_(share::ObLSID(share::ObLSID::INVALID_LS_ID)),
+    status_(LSReplicaReplayReachingStatus::REPLAY_STATUS_REACHING),
+    last_reach_to_sync_scn_(share::SCN::min_scn()),
+    is_active_follower_(false),
+    max_replayed_scn_(share::SCN::min_scn()),
+    min_unreplayed_lsn_(palf::LSN(0)),
+    election_leader_(),
+    proposal_id_(0) { }
+
+LSReplicaReplayReachingMachineWrapper::LSReplicaReplayReachingMachineWrapper(const LSReplicaReplayReachingMachine &machine)
+{
+  ls_id_ = machine.ls_id_;
+  status_ = machine.status_;
+  last_reach_to_sync_scn_ = machine.last_reach_to_sync_scn_;
+  is_active_follower_ = machine.is_active_follower_;
+  max_replayed_scn_ = machine.max_replayed_scn_;
+  min_unreplayed_lsn_ = machine.min_unreplayed_lsn_;
+  election_leader_ = machine.election_leader_;
+  proposal_id_ = machine.proposal_id_;
+}
+
+LSReplicaReplayReachingMachine LSReplicaReplayReachingMachineWrapper::unwrap() const
+{
+  return LSReplicaReplayReachingMachine(ls_id_, status_, last_reach_to_sync_scn_, is_active_follower_,
+    max_replayed_scn_, min_unreplayed_lsn_, election_leader_, proposal_id_);
+}
+
+LSReplicaReplayReachingMachineWrapper::~LSReplicaReplayReachingMachineWrapper()
+{
+  reset();
+}
+
+bool LSReplicaReplayReachingMachineWrapper::is_valid() const
+{
+  return unwrap().is_valid();
+}
+
+void LSReplicaReplayReachingMachineWrapper::reset()
+{
+  ls_id_.reset();
+  status_ = LSReplicaReplayReachingStatus::REPLAY_STATUS_REACHING;
+  last_reach_to_sync_scn_.reset();
+  is_active_follower_ = false;
+  max_replayed_scn_.reset();
+  min_unreplayed_lsn_.reset();
+  election_leader_.reset();
+  proposal_id_ = 0;
+}
+
+OB_SERIALIZE_MEMBER(LSReplicaReplayReachingMachineWrapper, ls_id_, status_, last_reach_to_sync_scn_,
+                    is_active_follower_, max_replayed_scn_, min_unreplayed_lsn_, election_leader_, proposal_id_);
+// ================= LSReplicaReplayReachingMachineWrapper end ================
+
+// ================= LogFollowerReportReplayReachingMachineReq start ================
+LogFollowerReportReplayReachingMachineReq::LogFollowerReportReplayReachingMachineReq()
+  : src_(), ls_id_(), replay_reaching_machine_() { }
+LogFollowerReportReplayReachingMachineReq::LogFollowerReportReplayReachingMachineReq(const common::ObAddr &src,
+                                                                                     const share::ObLSID &ls_id,
+                                                                                     const LSReplicaReplayReachingMachine &replay_reaching_machine)
+  : src_(src), ls_id_(ls_id), replay_reaching_machine_(replay_reaching_machine) { }
+
+LogFollowerReportReplayReachingMachineReq::~LogFollowerReportReplayReachingMachineReq()
+{
+  reset();
+}
+
+bool LogFollowerReportReplayReachingMachineReq::is_valid() const
+{
+  return src_.is_valid() && ls_id_.is_valid() && replay_reaching_machine_.is_valid();
+}
+
+void LogFollowerReportReplayReachingMachineReq::reset()
+{
+  src_.reset();
+  ls_id_.reset();
+  replay_reaching_machine_.reset();
+}
+
+
+OB_SERIALIZE_MEMBER(LogFollowerReportReplayReachingMachineReq, src_, ls_id_, replay_reaching_machine_);
+
+// ================= LogNotifyFollowerMoveOutFromRTOGroupResp start ================
+LogNotifyFollowerMoveOutFromRTOGroupResp::LogNotifyFollowerMoveOutFromRTOGroupResp()
+  : src_(), ls_id_(), replica_last_reach_to_sync_scn_() { }
+LogNotifyFollowerMoveOutFromRTOGroupResp::LogNotifyFollowerMoveOutFromRTOGroupResp(const common::ObAddr &src,
+                                                                                   const share::ObLSID &ls_id,
+                                                                                   const share::SCN &replica_last_reach_to_sync_scn)
+  : src_(src), ls_id_(ls_id), replica_last_reach_to_sync_scn_(replica_last_reach_to_sync_scn) { }
+
+LogNotifyFollowerMoveOutFromRTOGroupResp::~LogNotifyFollowerMoveOutFromRTOGroupResp()
+{
+  reset();
+}
+
+bool LogNotifyFollowerMoveOutFromRTOGroupResp::is_valid() const
+{
+  return src_.is_valid() && ls_id_.is_valid() && replica_last_reach_to_sync_scn_.is_valid();
+}
+
+void LogNotifyFollowerMoveOutFromRTOGroupResp::reset()
+{
+  src_.reset();
+  ls_id_.reset();
+  replica_last_reach_to_sync_scn_.reset();
+}
+
+OB_SERIALIZE_MEMBER(LogNotifyFollowerMoveOutFromRTOGroupResp, src_, ls_id_, replica_last_reach_to_sync_scn_);
+// ================= LogNotifyFollowerMoveOutFromRTOGroupResp end ================
+
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+
 } // end namespace logservice
 }// end namespace oceanbase

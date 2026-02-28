@@ -1,0 +1,713 @@
+***************   Case 1   ***************
+select /*+ PARALLEL(144) TPCH_Q1 */
+        l_returnflag,
+        l_linestatus,
+        sum(l_quantity) as sum_qty,
+        sum(l_extendedprice) as sum_base_price,
+        sum(l_extendedprice * (1 - l_discount)) as sum_disc_price,
+        sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge,
+        avg(l_quantity) as avg_qty,
+        avg(l_extendedprice) as avg_price,
+        avg(l_discount) as avg_disc,
+        count(*) as count_order
+from
+        lineitem
+where
+        l_shipdate <= date '1998-12-01' - interval '90' day
+group by
+        l_returnflag,
+        l_linestatus
+order by
+        l_returnflag,
+        l_linestatus;
+memory usage: parser = 23808, resolve = 356656, transform = 24088, optimize = 396424, total = 766208
+***************   Case 2   ***************
+select /*+ TPCH_Q2 PARALLEL(144) */ * from(
+select
+        s_acctbal,
+        s_name,
+        n_name,
+        p_partkey,
+        p_mfgr,
+        s_address,
+        s_phone,
+        s_comment
+from
+        part,
+        supplier,
+        partsupp,
+        nation,
+        region
+where
+        p_partkey = ps_partkey
+        and s_suppkey = ps_suppkey
+        and p_size = 30
+        and p_type like '%STEEL'
+        and s_nationkey = n_nationkey
+        and n_regionkey = r_regionkey
+        and r_name = 'ASIA'
+        and ps_supplycost = (
+                select
+                        min(ps_supplycost)
+                from
+                        partsupp,
+                        supplier,
+                        nation,
+                        region
+                where
+                        p_partkey = ps_partkey
+                        and s_suppkey = ps_suppkey
+                        and s_nationkey = n_nationkey
+                        and n_regionkey = r_regionkey
+                        and r_name = 'ASIA'
+        )
+order by
+        s_acctbal desc,
+        n_name,
+        s_name,
+        p_partkey)
+limit 100;
+memory usage: parser = 39680, resolve = 407600, transform = 889888, optimize = 4583216, total = 5878800
+***************   Case 3   ***************
+select /*+ TPCH_Q3 PARALLEL(144) */* from (
+select
+        l_orderkey,
+        sum(l_extendedprice * (1 - l_discount)) as revenue,
+        o_orderdate,
+        o_shippriority
+from
+        customer,
+        orders,
+        lineitem
+where
+        c_mktsegment = 'BUILDING'
+        and c_custkey = o_custkey
+        and l_orderkey = o_orderkey
+        and o_orderdate < date '1995-03-15'
+        and l_shipdate > date '1995-03-15'
+group by
+        l_orderkey,
+        o_orderdate,
+        o_shippriority
+order by
+        revenue desc,
+        o_orderdate
+)
+limit 10;
+memory usage: parser = 23808, resolve = 334832, transform = 166688, optimize = 1092536, total = 1584216
+***************   Case 4   ***************
+select /*+ TPCH_Q4 PARALLEL(144) */
+        o_orderpriority,
+        count(*) as order_count
+from
+        orders
+where
+        o_orderdate >= date '1993-07-01'
+        and o_orderdate < date '1993-07-01' + interval '3' month
+        and exists (
+                select
+                        *
+                from
+                        lineitem
+                where
+                        l_orderkey = o_orderkey
+                        and l_commitdate < l_receiptdate
+        )
+group by
+        o_orderpriority
+order by
+        o_orderpriority;
+memory usage: parser = 15872, resolve = 356656, transform = 414904, optimize = 829264, total = 1558120
+***************   Case 5   ***************
+select /*+  TPCH_Q5 PARALLEL(144) */
+        n_name,
+        sum(l_extendedprice * (1 - l_discount)) as revenue
+from
+        customer,
+        orders,
+        lineitem,
+        supplier,
+        nation,
+        region
+where
+        c_custkey = o_custkey
+        and l_orderkey = o_orderkey
+        and l_suppkey = s_suppkey
+        and c_nationkey = s_nationkey
+and c_nationkey = n_nationkey
+        and n_regionkey = r_regionkey
+        and r_name = 'ASIA'
+        and o_orderdate >= date '1994-01-01'
+        and o_orderdate < date '1994-01-01' + interval '1' year
+group by
+        n_name
+order by
+        revenue desc;
+memory usage: parser = 23808, resolve = 334832, transform = 198680, optimize = 2128616, total = 2627360
+***************   Case 6   ***************
+select /*+ TPCH_Q6 PARALLEL(144) */
+        sum(l_extendedprice * l_discount) as revenue
+from
+        lineitem
+where
+        l_shipdate >= date '1994-01-01'
+        and l_shipdate < date '1994-01-01' + interval '1' year
+        and l_discount between 0.06 - 0.01 and 0.06 + 0.01
+        and l_quantity < 24;
+memory usage: parser = 7936, resolve = 311024, transform = 16152, optimize = 340872, total = 649152
+***************   Case 7   ***************
+select /*+  TPCH_Q7 PARALLEL(144) */supp_nation,
+        cust_nation,
+        l_year,
+        sum(volume) as revenue
+from
+        (
+                select
+                        n1.n_name as supp_nation,
+                        n2.n_name as cust_nation,
+                        extract(year from l_shipdate) as l_year,
+                        l_extendedprice * (1 - l_discount) as volume
+                from
+                        supplier,
+                        lineitem,
+                        orders,
+                        customer,
+                        nation n1,
+                        nation n2
+                where
+                        s_suppkey = l_suppkey
+                        and o_orderkey = l_orderkey
+and c_custkey = o_custkey
+                        and s_nationkey = n1.n_nationkey
+                        and c_nationkey = n2.n_nationkey
+                        and (
+                                (n1.n_name = 'FRANCE' and n2.n_name = 'GERMANY')
+                                or (n1.n_name = 'GERMANY' and n2.n_name = 'FRANCE')
+                        )
+                        and l_shipdate between date '1995-01-01' and date '1996-12-31'
+        ) shipping
+group by
+        supp_nation,
+        cust_nation,
+        l_year
+order by
+        supp_nation,
+        cust_nation,
+        l_year
+;
+memory usage: parser = 39680, resolve = 358640, transform = 747640, optimize = 2350904, total = 3430352
+***************   Case 8   ***************
+select /*+  TPCH_Q8 PARALLEL(144) */
+        o_year,
+        sum(case
+                when nation = 'BRAZIL' then volume
+                else 0
+        end) / sum(volume) as mkt_share
+from
+        (
+                select
+                        extract(year from o_orderdate) as o_year,
+                        l_extendedprice * (1 - l_discount) as volume,
+                        n2.n_name as nation
+                from
+                        part,
+                        supplier,
+                        lineitem,
+                        orders,
+                        customer,
+                        nation n1,
+                        nation n2,
+                        region
+                where
+                        p_partkey = l_partkey
+                        and s_suppkey = l_suppkey
+                        and l_orderkey = o_orderkey
+                        and o_custkey = c_custkey
+                        and c_nationkey = n1.n_nationkey
+                        and n1.n_regionkey = r_regionkey
+                        and r_name = 'AMERICA'
+                        and s_nationkey = n2.n_nationkey
+                        and o_orderdate between date '1995-01-01' and date '1996-12-31'
+                        and p_type = 'ECONOMY ANODIZED STEEL'
+        ) all_nations
+group by
+        o_year
+order by
+        o_year;
+memory usage: parser = 39680, resolve = 358640, transform = 222240, optimize = 2759000, total = 3305112
+***************   Case 9   ***************
+select /*+ TPCH_Q9 PARALLEL(144) */
+        nation,
+        o_year,
+        sum(amount) as sum_profit
+from
+        (
+                select
+                        n_name as nation,
+                        extract(year from o_orderdate) as o_year,
+                        l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount
+                from
+                        part,
+                        supplier,
+                        lineitem,
+                        partsupp,
+                        orders,
+                        nation
+                where
+                        s_suppkey = l_suppkey
+                        and ps_suppkey = l_suppkey
+                        and ps_partkey = l_partkey
+                        and p_partkey = l_partkey
+                        and o_orderkey = l_orderkey
+and s_nationkey = n_nationkey
+                        and p_name like '%%green%%'
+        ) profit
+group by
+        nation,
+        o_year
+order by
+        nation,
+        o_year desc;
+memory usage: parser = 31744, resolve = 358640, transform = 182560, optimize = 2481240, total = 2995608
+***************   Case 10   ***************
+select */*+ TPCH_Q10 */ from (
+select /*+ PARALLEL(144) */
+        c_custkey,
+        c_name,
+        sum(l_extendedprice * (1 - l_discount)) as revenue,
+        c_acctbal,
+        n_name,
+        c_address,
+        c_phone,
+        c_comment
+from
+        customer,
+        orders,
+        lineitem,
+        nation
+where
+        c_custkey = o_custkey
+        and l_orderkey = o_orderkey
+        and o_orderdate >= date '1993-10-01'
+        and o_orderdate < date '1993-10-01' + interval '3' month
+        and l_returnflag = 'R'
+        and c_nationkey = n_nationkey
+group by
+        c_custkey,
+        c_name,
+        c_acctbal,
+        c_phone,
+        n_name,
+        c_address,
+        c_comment
+order by
+        revenue desc
+)
+limit 20;
+memory usage: parser = 31744, resolve = 367920, transform = 236440, optimize = 1236504, total = 1814032
+***************   Case 11   ***************
+SELECT /*+ TPCH_Q11 PARALLEL(144) */ ps_partkey,
+       Sum(ps_supplycost * ps_availqty) AS value
+FROM   partsupp,
+       supplier,
+       nation
+WHERE  ps_suppkey = s_suppkey
+       AND s_nationkey = n_nationkey
+       AND n_name = 'MOZAMBIQUE'
+GROUP  BY ps_partkey
+HAVING Sum(ps_supplycost * ps_availqty) > (SELECT
+       Sum(ps_supplycost * ps_availqty) * 0.0001000000
+                                           FROM   partsupp,
+                                                  supplier,
+                                                  nation
+                                           WHERE  ps_suppkey = s_suppkey
+                                                  AND s_nationkey = n_nationkey
+                                                  AND n_name = 'MOZAMBIQUE')
+ORDER  BY value DESC;
+memory usage: parser = 23808, resolve = 350704, transform = 381024, optimize = 836000, total = 1557888
+***************   Case 12   ***************
+select /*+ TPCH_Q12 PARALLEL(144)  */
+        l_shipmode,
+        sum(case
+                when o_orderpriority = '1-URGENT'
+                        or o_orderpriority = '2-HIGH'
+                        then 1
+                else 0
+        end) as high_line_count,
+        sum(case
+                when o_orderpriority <> '1-URGENT'
+                        and o_orderpriority <> '2-HIGH'
+                        then 1
+                else 0
+        end) as low_line_count
+from
+        orders,
+        lineitem
+where
+        o_orderkey = l_orderkey
+        and l_shipmode in ('MAIL','SHIP')
+        and l_commitdate < l_receiptdate
+        and l_shipdate < l_commitdate
+        and l_receiptdate >= date '1994-01-01'
+        and l_receiptdate < date '1995-09-01' + interval '1' year
+group by
+        l_shipmode
+order by
+        l_shipmode;
+memory usage: parser = 23808, resolve = 318960, transform = 206616, optimize = 836344, total = 1327152
+***************   Case 13   ***************
+select /*+ TPCH_Q13 PARALLEL(144) */
+        c_count,
+        count(*) as custdist
+from
+        (
+                select
+                        c_custkey,
+                        count(o_orderkey) as c_count
+                from
+                        customer left outer join orders on
+                                c_custkey = o_custkey
+                                and o_comment not like '%special%requests%'
+                group by
+                        c_custkey
+        ) c_orders
+group by
+        c_count
+order by
+        custdist desc,
+        c_count desc;
+memory usage: parser = 15872, resolve = 326896, transform = 119104, optimize = 702208, total = 1105504
+***************   Case 14   ***************
+select /*+ TPCH_Q14 PARALLEL(144) */
+        100.00 * sum(case
+                when p_type like 'promo%'
+                        then l_extendedprice * (1 - l_discount)
+                else 0
+        end) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue
+from
+        lineitem,
+        part
+where
+        l_partkey = p_partkey
+        and l_shipdate >= date '1995-09-01'
+        and l_shipdate < date '1995-09-01' + interval '1' month;
+memory usage: parser = 15872, resolve = 318960, transform = 8216, optimize = 693416, total = 985824
+***************   Case 15   ***************
+select /*+ TPCH_Q15 PARALLEL(144) */
+        s_suppkey,
+        s_name,
+        s_address,
+        s_phone,
+        total_revenue
+from
+        supplier,
+        revenue0
+where
+        s_suppkey = supplier_no
+        and total_revenue = (
+                select
+                        max(total_revenue)
+                from
+                        revenue0
+        )
+order by
+        s_suppkey;
+memory usage: parser = 15872, resolve = 402960, transform = 555712, optimize = 749824, total = 1657536
+***************   Case 16   ***************
+select /*+ TPCH_Q16 PARALLEL(144) */
+        p_brand,
+        p_type,
+        p_size,
+        count(distinct ps_suppkey) as supplier_cnt
+from
+        partsupp,
+        part
+where
+        p_partkey = ps_partkey
+        and p_brand <> 'Brand#45'
+        and p_type not like 'MEDIUM POLISHED%'
+        and p_size in (49, 14, 23, 45, 19, 3, 36, 9)
+        and ps_suppkey not in (
+                select
+                        s_suppkey
+                from
+                        supplier
+                where
+                        s_comment like '%Customer%Complaints%'
+        )
+group by
+        p_brand,
+        p_type,
+        p_size
+order by
+        supplier_cnt desc,
+        p_brand,
+        p_type,
+        p_size;
+memory usage: parser = 23808, resolve = 334832, transform = 71488, optimize = 1472496, total = 1844048
+***************   Case 17   ***************
+select /*+ TPCH_Q17 PARALLEL(144) */
+        sum(l_extendedprice) / 7.0 as avg_yearly
+from
+        lineitem,
+        part
+where
+        p_partkey = l_partkey
+        and p_brand = 'Brand#42'
+        and p_container = 'WRAP DRUM'
+        and l_quantity < (
+                select
+                        0.2 * avg(l_quantity)
+                from
+                        lineitem
+                where
+                        l_partkey = p_partkey
+        );
+memory usage: parser = 15872, resolve = 326896, transform = 307424, optimize = 749824, total = 1349376
+***************   Case 18   ***************
+select /*+ TPCH_Q18 PARALLEL(144)  */ * from(
+select
+        c_name,
+        c_custkey,
+        o_orderkey,
+        o_orderdate,
+        o_totalprice,
+        sum(l_quantity)
+from
+        customer,
+        orders,
+        lineitem
+where
+        o_orderkey in (
+                select
+                        l_orderkey
+                from
+                        lineitem
+                group by
+                        l_orderkey having
+                                sum(l_quantity) > 314
+        )
+        and c_custkey = o_custkey
+        and o_orderkey = l_orderkey
+group by
+        c_name,
+        c_custkey,
+        o_orderkey,
+        o_orderdate,
+        o_totalprice
+order by
+        o_totalprice desc,
+        o_orderdate)
+limit 10;
+memory usage: parser = 23808, resolve = 375856, transform = 576024, optimize = 1069584, total = 2003688
+***************   Case 19   ***************
+select /*+ TPCH_Q19 PARALLEL(144) */
+        sum(l_extendedprice* (1 - l_discount)) as revenue
+from
+        lineitem,
+        part
+where
+        (
+                p_partkey = l_partkey
+                and p_brand = 'Brand#12'
+                and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
+                and l_quantity >= 1 and l_quantity <= 1 + 10
+                and p_size between 1 and 5
+                and l_shipmode in ('AIR', 'AIR REG')
+                and l_shipinstruct = 'DELIVER IN PERSON'
+        )
+        or
+        (
+                p_partkey = l_partkey
+                and p_brand = 'Brand#23'
+                and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK')
+                and l_quantity >= 10 and l_quantity <= 10 + 10
+                and p_size between 10 and 10
+                and l_shipmode in ('AIR', 'AIR REG')
+                and l_shipinstruct = 'DELIVER IN PERSON'
+        )
+        or
+        (
+                p_partkey = l_partkey
+                and p_brand = 'Brand#34'
+                and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG')
+                and l_quantity >= 20 and l_quantity <= 20 + 10
+                and p_size between 1 and 15
+                and l_shipmode in ('AIR', 'AIR REG')
+                and l_shipinstruct = 'DELIVER IN PERSON'
+        );
+memory usage: parser = 39680, resolve = 350704, transform = 595480, optimize = 875944, total = 1795296
+***************   Case 20   ***************
+select /*+ TPCH_Q20 PARALLEL(144) */
+        s_name,
+        s_address
+from
+        supplier,
+        nation
+where
+        s_suppkey in (
+                select
+                        ps_suppkey
+                from
+                        partsupp
+                where
+                        ps_partkey in (
+                                select
+                                        p_partkey
+                                from
+                                        part
+                                where
+                                        p_name like 'royal%'
+                        )
+                        and ps_availqty > (
+                                select
+                                        0.5 * sum(l_quantity)
+                                from
+                                        lineitem
+                                where
+                                        l_partkey = ps_partkey
+                                        and l_suppkey = ps_suppkey
+                                        and l_shipdate >= date '1996-01-01'
+                                        and l_shipdate < date '1996-01-01' + interval '1' year
+                        )
+        )
+        and s_nationkey = n_nationkey
+        and n_name = 'EGYPT'
+order by
+        s_name;
+memory usage: parser = 23808, resolve = 366576, transform = 754328, optimize = 2769064, total = 3847264
+***************   Case 21   ***************
+select * from (
+select /*+ TPCH_Q21  PARALLEL(144) */
+        s_name,
+        count(*) as numwait
+from
+        supplier,
+        lineitem l1,
+        orders,
+        nation
+where
+        s_suppkey = l1.l_suppkey
+        and o_orderkey = l1.l_orderkey
+        and o_orderstatus = 'F'
+        and l1.l_receiptdate > l1.l_commitdate
+        and exists (
+                select
+                        *
+                from
+                        lineitem l2
+                where
+                        l2.l_orderkey = l1.l_orderkey
+                        and l2.l_suppkey <> l1.l_suppkey
+        )
+        and not exists (
+                select
+                        *
+from
+                        lineitem l3
+                where
+                        l3.l_orderkey = l1.l_orderkey
+                        and l3.l_suppkey <> l1.l_suppkey
+                        and l3.l_receiptdate > l3.l_commitdate
+        )
+        and s_nationkey = n_nationkey
+        and n_name = 'SAUDI ARABIA'
+group by
+        s_name
+order by
+        numwait desc,
+        s_name
+)
+limit 100;
+memory usage: parser = 39680, resolve = 465776, transform = 640440, optimize = 1990064, total = 3069448
+***************   Case 22   ***************
+select /*+ TPCH_Q22 PARALLEL(144) */
+        cntrycode,
+        count(*) as numcust,
+        sum(c_acctbal) as totacctbal
+from
+        (
+                select
+                        substr(c_phone ,1 ,2) as cntrycode,
+                        c_acctbal
+                from
+                        customer
+                where
+                        substr(c_phone ,1 ,2) in
+                                ('13', '31', '23', '30', '29', '18', '17')
+                        and c_acctbal > (
+                                select
+                                        avg(c_acctbal)
+                                from
+                                        customer
+                                where
+                                        c_acctbal > 0.00
+                                        and substr(c_phone ,1 ,2) in
+                                                ('13', '31', '23', '30', '29', '18', '17')
+                        )
+                        and not exists (
+                                select
+                                        *
+                                from
+                                        orders
+                                where
+                                        o_custkey = c_custkey
+                        )
+        ) custsale
+group by
+        cntrycode
+order by
+        cntrycode;
+memory usage: parser = 31744, resolve = 412208, transform = 125336, optimize = 1063808, total = 1549592
+
+memory usage
+| query | parser | resolve | transform | optimize | total |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 23,808 | 356,656 | 24,088 | 396,424 | 766,208 |
+| 2 | 39,680 | 407,600 | 889,888 | 4,583,216 | 5,878,800 |
+| 3 | 23,808 | 334,832 | 166,688 | 1,092,536 | 1,584,216 |
+| 4 | 15,872 | 356,656 | 414,904 | 829,264 | 1,558,120 |
+| 5 | 23,808 | 334,832 | 198,680 | 2,128,616 | 2,627,360 |
+| 6 | 7,936 | 311,024 | 16,152 | 340,872 | 649,152 |
+| 7 | 39,680 | 358,640 | 747,640 | 2,350,904 | 3,430,352 |
+| 8 | 39,680 | 358,640 | 222,240 | 2,759,000 | 3,305,112 |
+| 9 | 31,744 | 358,640 | 182,560 | 2,481,240 | 2,995,608 |
+| 10 | 31,744 | 367,920 | 236,440 | 1,236,504 | 1,814,032 |
+| 11 | 23,808 | 350,704 | 381,024 | 836,000 | 1,557,888 |
+| 12 | 23,808 | 318,960 | 206,616 | 836,344 | 1,327,152 |
+| 13 | 15,872 | 326,896 | 119,104 | 702,208 | 1,105,504 |
+| 14 | 15,872 | 318,960 | 8,216 | 693,416 | 985,824 |
+| 15 | 15,872 | 402,960 | 555,712 | 749,824 | 1,657,536 |
+| 16 | 23,808 | 334,832 | 71,488 | 1,472,496 | 1,844,048 |
+| 17 | 15,872 | 326,896 | 307,424 | 749,824 | 1,349,376 |
+| 18 | 23,808 | 375,856 | 576,024 | 1,069,584 | 2,003,688 |
+| 19 | 39,680 | 350,704 | 595,480 | 875,944 | 1,795,296 |
+| 20 | 23,808 | 366,576 | 754,328 | 2,769,064 | 3,847,264 |
+| 21 | 39,680 | 465,776 | 640,440 | 1,990,064 | 3,069,448 |
+| 22 | 31,744 | 412,208 | 125,336 | 1,063,808 | 1,549,592 |
+
+max memory usage
+| query | parser | resolve | transform | optimize | total |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 23,808 | 403,432 | 2,120,544 | 487,208 | 2,517,200 |
+| 2 | 39,680 | 458,864 | 5,388,232 | 4,681,744 | 6,035,104 |
+| 3 | 23,808 | 381,608 | 1,632,952 | 1,242,696 | 2,007,784 |
+| 4 | 15,872 | 455,552 | 2,519,576 | 971,488 | 2,908,296 |
+| 5 | 23,808 | 397,480 | 2,925,848 | 2,238,752 | 3,300,680 |
+| 6 | 7,936 | 365,736 | 2,120,824 | 495,144 | 2,455,976 |
+| 7 | 39,680 | 400,912 | 4,249,736 | 2,501,064 | 4,664,248 |
+| 8 | 39,680 | 413,352 | 2,625,976 | 2,909,160 | 3,537,976 |
+| 9 | 31,744 | 405,416 | 2,395,832 | 2,631,400 | 3,220,536 |
+| 10 | 31,744 | 403,312 | 2,317,304 | 1,386,664 | 2,733,160 |
+| 11 | 23,808 | 457,536 | 1,822,960 | 922,888 | 2,213,664 |
+| 12 | 23,808 | 373,672 | 2,287,480 | 986,504 | 2,646,440 |
+| 13 | 15,872 | 365,736 | 836,048 | 800,704 | 1,278,768 |
+| 14 | 15,872 | 373,672 | 2,104,672 | 768,696 | 2,455,696 |
+| 15 | 15,872 | 481,344 | 1,275,440 | 836,712 | 1,811,256 |
+| 16 | 23,808 | 417,856 | 137,144 | 1,582,600 | 2,028,920 |
+| 17 | 15,872 | 417,856 | 1,291,640 | 836,712 | 1,650,600 |
+| 18 | 23,808 | 427,120 | 2,634,400 | 1,219,744 | 3,050,256 |
+| 19 | 39,680 | 512,016 | 2,676,344 | 951,224 | 3,082,920 |
+| 20 | 23,808 | 481,344 | 3,160,960 | 2,867,560 | 4,020,528 |
+| 21 | 39,680 | 540,864 | 2,430,160 | 2,187,840 | 3,349,928 |
+| 22 | 31,744 | 471,424 | 2,112,608 | 1,185,552 | 2,572,752 |

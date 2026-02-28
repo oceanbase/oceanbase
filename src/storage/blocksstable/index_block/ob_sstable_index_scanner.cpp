@@ -458,11 +458,11 @@ void ObSSTableIndexScanner::reset()
   scan_param_ = nullptr;
   // reset scanners
   FOREACH(scanner, level_scanners_) {
-    if (OB_NOT_NULL(scanner)) {
+    if (OB_NOT_NULL(*scanner)) {
       (*scanner)->reset();
       (*scanner)->~ObSSTableIndexBlockLevelScanner();
       if (OB_NOT_NULL(scan_allocator_)) {
-        scan_allocator_->free(scanner);
+        scan_allocator_->free(*scanner);
       }
     }
   }
@@ -491,9 +491,10 @@ int ObSSTableIndexScanner::init(
   } else if (sstable.is_empty()) {
   } else if (OB_FAIL(block_io_allocator_.init(nullptr, OB_MALLOC_MIDDLE_BLOCK_SIZE, lib::ObMemAttr(MTL_ID(), "SSTIdxScanIO")))) {
     LOG_WARN("failed to init block io allocator", K(ret));
-  } else if (OB_FAIL(init_level_scanners(scan_range, scan_param, sstable, scan_allocator))) {
+  } else if (FALSE_IT(scan_allocator_ = &scan_allocator)) {
+  } else if (OB_FAIL(init_level_scanners(scan_range, scan_param, sstable))) {
     LOG_WARN("failed to init level scanners", K(ret));
-  } else if (OB_FAIL(init_index_row(scan_param, scan_allocator))) {
+  } else if (OB_FAIL(init_index_row(scan_param))) {
     LOG_WARN("failed to init index row", K(ret));
   }
 
@@ -585,13 +586,12 @@ int ObSSTableIndexScanner::try_prefetch()
 int ObSSTableIndexScanner::init_level_scanners(
     const ObDatumRange &scan_range,
     const ObSSTableIndexScanParam &scan_param,
-    ObSSTable &sstable,
-    ObIAllocator &scan_allocator)
+    ObSSTable &sstable)
 {
   int ret = OB_SUCCESS;
   int64_t scan_level_cnt = 0;
   ObSSTableMetaHandle sst_meta_handle;
-  level_scanners_.set_allocator(&scan_allocator);
+  level_scanners_.set_allocator(scan_allocator_);
 
   switch (scan_param.get_scan_level()) {
   case ObSSTableIndexScanParam::ScanLevel::ROOT:
@@ -619,7 +619,7 @@ int ObSSTableIndexScanner::init_level_scanners(
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < scan_level_cnt; ++i) {
-    ObSSTableIndexBlockLevelScanner *level_scanner = OB_NEWx(ObSSTableIndexBlockLevelScanner, &scan_allocator);
+    ObSSTableIndexBlockLevelScanner *level_scanner = OB_NEWx(ObSSTableIndexBlockLevelScanner, scan_allocator_);
     if (OB_ISNULL(level_scanner)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for level scanner", K(ret));
@@ -630,7 +630,7 @@ int ObSSTableIndexScanner::init_level_scanners(
         scan_range,
         sstable.get_macro_offset(),
         ObSSTableIndexBlockLevelScanner::DEFAULT_PREFETCH_DEPTH,
-        scan_allocator,
+        *scan_allocator_,
         block_io_allocator_))) {
       LOG_WARN("failed to init sstable index block level scanner", K(ret));
     } else if (FALSE_IT(level_scanners_.at(i) = level_scanner)) {
@@ -647,16 +647,15 @@ int ObSSTableIndexScanner::init_level_scanners(
 }
 
 int ObSSTableIndexScanner::init_index_row(
-    const ObSSTableIndexScanParam &scan_param,
-    ObIAllocator &scan_allocator)
+    const ObSSTableIndexScanParam &scan_param)
 {
   int ret = OB_SUCCESS;
   const int64_t rowkey_column_count = scan_param.get_index_read_info()->get_rowkey_count();
   const int64_t index_proj_column_count = scan_param.get_skip_index_projector().count();
   if (scan_param.need_project_skip_index()
-      && OB_FAIL(index_row_.skip_index_row_.init(scan_allocator, index_proj_column_count))) {
+      && OB_FAIL(index_row_.skip_index_row_.init(*scan_allocator_, index_proj_column_count))) {
     LOG_WARN("failed to init skip index row", K(ret));
-  } else if (OB_FAIL(rowkey_buf_.init(scan_allocator, rowkey_column_count))) {
+  } else if (OB_FAIL(rowkey_buf_.init(*scan_allocator_, rowkey_column_count))) {
     LOG_WARN("failed to init datum row for rowkey datum buffer", K(ret));
   } else if (OB_FAIL(endkey_.assign(rowkey_buf_.storage_datums_, rowkey_column_count))) {
     LOG_WARN("failed to assign datum to endkey", K(ret));

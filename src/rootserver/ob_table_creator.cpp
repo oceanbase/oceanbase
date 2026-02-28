@@ -466,7 +466,8 @@ int ObTableCreator::generate_create_tablet_arg_(
                      tenant_data_version,
                      need_create_empty_majors,
                      no_create_commit_versions,
-                     is_cs_replica_global_visible))) {
+                     is_cs_replica_global_visible,
+                     data_table_schema))) {
     LOG_WARN("fail to init create tablet arg", KR(ret), K(schemas), K(is_create_bind_hidden_tablets));
   } else if (OB_FAIL(tablet_creator_.add_create_tablet_arg(create_tablet_arg))) {
     LOG_WARN("fail to add create tablet arg", KR(ret), K(create_tablet_arg));

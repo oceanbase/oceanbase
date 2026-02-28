@@ -41,7 +41,7 @@ bool init_cs_dict_fast_cmp_func()
   bool bool_ret = false;
   bool_ret = ObNDArrayIniter<CSDictFastCmpArrayInit, 4, 6>::apply();
 #if defined ( __x86_64__ )
-  if (is_avx512_valid()) {
+  if (common::is_arch_supported(ObTargetArch::AVX512)) {
     bool_ret = init_cs_dict_fast_cmp_simd_func();
   }
 #elif defined ( __aarch64__ ) && defined ( __ARM_NEON )

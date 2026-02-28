@@ -52,8 +52,10 @@ public:
       const int64_t prefix_cnt,
       const int64_t suffix_cnt,
       const int64_t skip_row_idx);
+  void perpare_left_border_skip_range(const int64_t skip_row_idx);
   int get_next_row_with_skip_fiter(ObSSTableRowScanner<> &scanner, const ObDatumRow *&prow, int64_t &access_cnt);
   void test_one_case();
+  void test_one_left_border_skip_case(ObSSTableRowScanner<> &skip_scanner, const int64_t accessed_row_cnt, const int64_t cmp_row_cnt);
   bool is_whole_range_;
   bool is_false_range_;
   int64_t start_row_idx_;
@@ -574,6 +576,141 @@ TEST_F(TestIndexSkipScanner, test_border_reverse)
 
     test_one_case();
   }
+  destroy_query_param();
+}
+
+void TestIndexSkipScanner::perpare_left_border_skip_range(const int64_t skip_row_idx)
+{
+  int ret = OB_SUCCESS;
+  storage::ObColDescArray column_list;
+  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(column_list));
+  skip_row1_.reset();
+  ASSERT_EQ(OB_SUCCESS, skip_row1_.init(range_alloc_, DEFAULT_ROKEY_CNT));
+  int64_t value1;
+  int64_t tmp_value1 = skip_row_idx;
+  ObObj obj1;
+  for (int64_t i = DEFAULT_ROKEY_CNT - 1; i >=0; --i) {
+    const int64_t col_idx = i;
+    const ObObjType column_type = column_list.at(col_idx).col_type_.get_type();
+    const int64_t base = 0 == col_idx ? 1 : std::pow(10, col_idx) / 2;
+    value1 = tmp_value1 % base;
+    tmp_value1 = tmp_value1 / base;
+    if (ObIntType == column_type) {
+      obj1.set_int(value1);
+    } else if (ObVarcharType == column_type) {
+      SET_CHAR_OBJ(range_alloc_, value1, obj1);
+    }
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(OB_SUCCESS, skip_row1_.storage_datums_[i].from_obj_enhance(obj1));
+  }
+  skip_range_.set_left_closed();
+  skip_range_.start_key_.assign(skip_row1_.storage_datums_, DEFAULT_ROKEY_CNT);
+  skip_range_.end_key_.set_max_rowkey();
+  skip_range_.group_idx_ = scan_range_.group_idx_;
+}
+
+void TestIndexSkipScanner::test_one_left_border_skip_case(ObSSTableRowScanner<> &skip_scanner, const int64_t accessed_row_cnt, const int64_t cmp_row_cnt)
+{
+  const ObDatumRow *prow = nullptr;
+  const ObDatumRow *skip_prow = nullptr;
+  ObSSTableRowScanner<> scanner;
+
+
+  for (int64_t i = 0; i < accessed_row_cnt; ++i) {
+    int ret = skip_scanner.inner_get_next_row(prow);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+
+  perpare_left_border_skip_range(skip_row_idx_);
+  ASSERT_EQ(OB_SUCCESS, scanner.init(iter_param_, context_, &sstable_, &skip_range_));
+  iter_param_.is_advance_skip_scan_ = true;
+  ASSERT_EQ(OB_SUCCESS, skip_scanner.advance_scan(skip_range_));
+
+  int ret = OB_SUCCESS;
+  int cmp_ret = 0;
+  int64_t output_cnt = 0;
+  const ObStorageDatumUtils &datum_utils = read_info_.get_datum_utils();
+  const ObStoreCmpFuncs &cmp_funcs = datum_utils.get_cmp_funcs();
+  while (OB_SUCC(ret) && output_cnt < cmp_row_cnt) {
+    int skip_ret = skip_scanner.inner_get_next_row(skip_prow);
+    ret = scanner.inner_get_next_row(prow);
+    STORAGE_LOG(INFO, "check ret", K(skip_ret), K(ret), K(output_cnt), KPC(prow));
+    ASSERT_EQ(skip_ret, ret);
+    ASSERT_TRUE(OB_ITER_END == ret || OB_SUCCESS == ret);
+    if (OB_SUCCESS == ret) {
+      output_cnt++;
+      for (int64_t i = 0; i < DEFAULT_COLUMN_CNT; ++i) {
+        ASSERT_EQ(OB_SUCCESS,
+          cmp_funcs.at(i).compare(skip_prow->storage_datums_[i], prow->storage_datums_[i], cmp_ret));
+        if (0 != cmp_ret) {
+          STORAGE_LOG(INFO, "check row", KPC(skip_prow), KPC(prow), K(i));
+        }
+        ASSERT_TRUE(0 == cmp_ret);
+      }
+    }
+  }
+  STORAGE_LOG(INFO, "after get rows", K_(start_row_idx), K_(end_row_idx), K_(skip_row_idx), K(output_cnt));
+}
+
+TEST_F(TestIndexSkipScanner, test_advance_scan_basic)
+{
+  bool is_reverse_scan = false;
+  // prepare query param
+  prepare_query_param(is_reverse_scan);
+  scan_range_.set_whole_range();
+
+  ObSSTableRowScanner<> skip_scanner;
+  iter_param_.ss_rowkey_prefix_cnt_ = 0;
+  iter_param_.is_advance_skip_scan_ = false;
+  context_.alloc_skip_scan_factory();
+  ASSERT_EQ(OB_SUCCESS, skip_scanner.init(iter_param_, context_, &sstable_, &scan_range_));
+
+  skip_row_idx_ = 32000;
+  test_one_left_border_skip_case(skip_scanner, 100, 100);
+
+  destroy_query_param();
+}
+
+TEST_F(TestIndexSkipScanner, test_advance_scan_loop)
+{
+  bool is_reverse_scan = false;
+  // prepare query param
+  prepare_query_param(is_reverse_scan);
+  scan_range_.set_whole_range();
+
+  ObSSTableRowScanner<> skip_scanner;
+  iter_param_.ss_rowkey_prefix_cnt_ = 0;
+  iter_param_.is_advance_skip_scan_ = false;
+  context_.alloc_skip_scan_factory();
+  ASSERT_EQ(OB_SUCCESS, skip_scanner.init(iter_param_, context_, &sstable_, &scan_range_));
+
+  for (int64_t i = 0; i < 60; ++i) {
+    skip_row_idx_ = 100 + i * 1000 + ObRandom::rand(0, 99);
+    test_one_left_border_skip_case(skip_scanner, 100, 100);
+  }
+
+  destroy_query_param();
+}
+
+
+TEST_F(TestIndexSkipScanner, test_advance_scan_continue)
+{
+  bool is_reverse_scan = false;
+  // prepare query param
+  prepare_query_param(is_reverse_scan);
+  scan_range_.set_whole_range();
+
+  ObSSTableRowScanner<> skip_scanner;
+  iter_param_.ss_rowkey_prefix_cnt_ = 0;
+  iter_param_.is_advance_skip_scan_ = false;
+  context_.alloc_skip_scan_factory();
+  ASSERT_EQ(OB_SUCCESS, skip_scanner.init(iter_param_, context_, &sstable_, &scan_range_));
+
+  for (int64_t i = 0; i < 60; ++i) {
+    skip_row_idx_ = skip_row_idx_ + i + 100;
+    test_one_left_border_skip_case(skip_scanner, 0, 100);
+  }
+
   destroy_query_param();
 }
 

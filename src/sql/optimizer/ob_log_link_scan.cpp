@@ -23,7 +23,8 @@ namespace sql
 {
 
 ObLogLinkScan::ObLogLinkScan(ObLogPlan &plan)
-  : ObLogLink(plan)
+  : ObLogLink(plan),
+    select_exprs_(plan.get_allocator())
 {}
 
 int ObLogLinkScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)

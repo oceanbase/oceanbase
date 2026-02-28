@@ -38,6 +38,11 @@ TableMetadata::TableMetadata(ObIAllocator &allocator)
 
 int TableMetadata::assign(const TableMetadata &other)
 {
+  return assign(other, 0);
+}
+
+int TableMetadata::assign(const TableMetadata &other, int64_t extra_snapshot_capacity)
+{
   int ret = OB_SUCCESS;
   if (this != &other) {
     format_version = other.format_version;
@@ -49,12 +54,40 @@ int TableMetadata::assign(const TableMetadata &other)
     last_partition_id = other.last_partition_id;
     current_snapshot_id = other.current_snapshot_id;
 
+    OZ(ob_write_string(allocator_, other.metadata_file_location, metadata_file_location));
     OZ(ObIcebergUtils::deep_copy_optional_string(allocator_, other.table_uuid, table_uuid));
     OZ(ob_write_string(allocator_, other.location, location));
+    OZ(ob_write_string(allocator_, other.schemas_str, schemas_str));
+    OZ(ob_write_string(allocator_, other.current_schema_str, current_schema_str));
     OZ(ObIcebergUtils::deep_copy_array_object(allocator_, other.schemas, schemas));
     OZ(ObIcebergUtils::deep_copy_array_object(allocator_, other.partition_specs, partition_specs));
+    OZ(ob_write_string(allocator_, other.partition_specs_str, partition_specs_str));
     OZ(ObIcebergUtils::deep_copy_map_string(allocator_, other.properties, properties));
-    OZ(ObIcebergUtils::deep_copy_array_object(allocator_, other.snapshots, snapshots));
+
+    if (OB_SUCC(ret) && extra_snapshot_capacity > 0) {
+      int64_t total_capacity = other.snapshots.count() + extra_snapshot_capacity;
+      if (OB_FAIL(snapshots.init(total_capacity))) {
+        LOG_WARN("failed to init snapshots with extra capacity", K(ret), K(total_capacity));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < other.snapshots.count(); ++i) {
+        Snapshot *src_item = other.snapshots.at(i);
+        Snapshot *dst_item = NULL;
+        if (OB_ISNULL(src_item)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(ret));
+        } else if (OB_ISNULL(dst_item = OB_NEWx(Snapshot, &allocator_, allocator_))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory", K(ret));
+        } else if (OB_FAIL(dst_item->assign(*src_item))) {
+          LOG_WARN("fail to assign snapshot", K(ret));
+        } else if (OB_FAIL(snapshots.push_back(dst_item))) {
+          LOG_WARN("push snapshot failed", K(ret));
+        }
+      }
+    } else {
+      OZ(ObIcebergUtils::deep_copy_array_object(allocator_, other.snapshots, snapshots));
+    }
+
     OZ(ObIcebergUtils::deep_copy_array_object(allocator_, other.statistics, statistics));
     OZ(ObIcebergUtils::deep_copy_array_object(allocator_, other.refs, refs));
   }
@@ -364,11 +397,114 @@ int TableMetadata::get_table_default_write_format(DataFileFormat &data_file_form
   return ret;
 }
 
+void TableMetadata::reset()
+{
+  format_version = FormatVersion::INVALID;
+  table_uuid.reset();
+  location.reset();
+  last_sequence_number = 0;
+  last_updated_ms = 0;
+  last_column_id = 0;
+  current_schema_id = 0;
+  default_spec_id = 0;
+  last_partition_id = 0;
+  current_snapshot_id = 0;
+  snapshots.reset();
+  statistics.reset();
+  partition_specs.reset();
+  properties.reset();
+  schemas.reset();
+}
+
+int TableMetadata::add_snapshot(Snapshot *snapshot)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(snapshot)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(snapshots.push_back(snapshot))) {
+    LOG_WARN("failed to push back snapshot", K(ret));
+  } else {
+    last_sequence_number = snapshot->sequence_number;
+    last_updated_ms = snapshot->timestamp_ms;
+    current_snapshot_id = snapshot->snapshot_id;
+  }
+  return ret;
+}
+
+int TableMetadata::to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OZ(J_OBJ_START());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %d)", FORMAT_VERSION, format_version));
+  OZ(J_COMMA());
+  if (table_uuid.has_value()) {
+    OZ(databuff_printf(buf, buf_len, pos, R"("%s" : "%.*s")", TABLE_UUID, table_uuid.value().length(), table_uuid.value().ptr()));
+    OZ(J_COMMA());
+  }
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : "%.*s")", LOCATION, location.length(), location.ptr()));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %ld)", LAST_SEQUENCE_NUMBER, last_sequence_number));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %ld)", LAST_UPDATED_MS, last_updated_ms));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %d)", LAST_COLUMN_ID, last_column_id));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %d)", CURRENT_SCHEMA_ID, current_schema_id));
+  OZ(J_COMMA());
+  // todo: only handle v2 schemas now
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %.*s)", SCHEMAS,
+                     schemas_str.length(), schemas_str.ptr()));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %d)", DEFAULT_SPEC_ID, default_spec_id));
+  OZ(J_COMMA());
+  // todo: only handle v2 partition specs now
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %.*s)", PARTITION_SPECS,
+                     partition_specs_str.length(), partition_specs_str.ptr()));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %d)", LAST_PARTITION_ID, last_partition_id));
+  OZ(J_COMMA());
+  // todo handle sort orders
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %d)", DEFAULT_SORT_ORDER_ID, 0));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %s)", SORT_ORDERS, "[ {\"order-id\" : 0,\"fields\" : [ ]} ]"));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : )", PROPERTIES));
+  OZ(ObCatalogJsonUtils::map_to_json_kv_string(properties, buf, buf_len, pos));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %ld)", CURRENT_SNAPSHOT_ID, current_snapshot_id));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : [)", SNAPSHOTS));
+  for (int i = 0; i < snapshots.count(); ++i) {
+    OZ(snapshots.at(i)->to_json_kv_string(buf, buf_len, pos));
+    if (i < snapshots.count() - 1) {
+      OZ(J_COMMA());
+    }
+  }
+  OZ(databuff_printf(buf, buf_len, pos, "]"));
+  OZ(J_COMMA());
+  // todo handle snapshot-log metadata-log
+  // todo handle refs
+  // todo handle statistics
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %s)", STATISTICS, "[ ]"));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %s)", PARTITION_STATISTICS, "[ ]"));
+  OZ(J_OBJ_END());
+  return ret;
+}
+
 int TableMetadata::parse_schemas_(const ObJsonObject &json_object)
 {
   int ret = OB_SUCCESS;
   const ObJsonNode *json_schemas = json_object.get_value(SCHEMAS);
-  if (NULL != json_schemas) {
+  const ObJsonNode *json_schema = json_object.get_value(SCHEMA);
+  if (OB_FAIL(ObCatalogJsonUtils::convert_json_node_to_string(allocator_,
+                                                              (json_schemas != nullptr
+                                                                ? json_schemas
+                                                                : json_schema),
+                                                              schemas_str))) {
+    LOG_WARN("failed to convert json node to string", K(ret));
+  } else if (NULL != json_schemas) {
     // schemas existed, current_schema_id must exist
     if (OB_FAIL(
             ObCatalogJsonUtils::get_primitive(json_object, CURRENT_SCHEMA_ID, current_schema_id))) {
@@ -384,6 +520,9 @@ int TableMetadata::parse_schemas_(const ObJsonObject &json_object)
         ObIJsonBase *json_schema = NULL;
         if (OB_FAIL(json_schemas->get_array_element(i, json_schema))) {
           LOG_WARN("failed to parse schema", K(ret));
+        } else if (OB_ISNULL(json_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null json schema", K(ret));
         } else if (ObJsonNodeType::J_OBJECT != json_schema->json_type()) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid json schema", K(ret));
@@ -394,11 +533,15 @@ int TableMetadata::parse_schemas_(const ObJsonObject &json_object)
           LOG_WARN("parse schema failed", K(ret));
         } else if (OB_FAIL(schemas.push_back(schema))) {
           LOG_WARN("failed to add schema", K(ret));
+        } else {
+            OZ(ObCatalogJsonUtils::convert_json_node_to_string(allocator_,
+                                                               json_schema,
+                                                               current_schema_str));
         }
       }
     }
   } else {
-    const ObJsonNode *json_schema = json_object.get_value(SCHEMA);
+    current_schema_str = schemas_str;
     Schema *schema = NULL;
     if (FormatVersion::V1 != format_version) {
       ret = OB_INVALID_ARGUMENT;
@@ -429,7 +572,14 @@ int TableMetadata::parse_partition_specs_(const ObJsonObject &json_object)
 {
   int ret = OB_SUCCESS;
   const ObJsonNode *json_partition_specs = json_object.get_value(PARTITION_SPECS);
-  if (NULL != json_partition_specs) {
+  const ObJsonNode *json_partition_spec = json_object.get_value(PARTITION_SPEC);
+  if (OB_FAIL(ObCatalogJsonUtils::convert_json_node_to_string(allocator_,
+                                                              (json_partition_specs != nullptr
+                                                                ? json_partition_specs
+                                                                : json_partition_spec),
+                                                              partition_specs_str))) {
+    LOG_WARN("failed to convert json node to string", K(ret));
+  } else if (NULL != json_partition_specs) {
     if (ObJsonNodeType::J_ARRAY != json_partition_specs->json_type()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid partition-specs", K(ret));
@@ -461,7 +611,6 @@ int TableMetadata::parse_partition_specs_(const ObJsonObject &json_object)
     }
   } else {
     PartitionSpec *partition_spec = NULL;
-    const ObJsonNode *json_partition_spec = json_object.get_value(PARTITION_SPEC);
     if (FormatVersion::V1 != format_version) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("only v1 format is using partition-spec", K(ret));

@@ -56,7 +56,10 @@ public:
                        K_(skipped_row_group_count),
                        K_(selected_page_count),
                        K_(skipped_page_count),
-                       K_(read_rows_count));
+                       K_(read_rows_count),
+                       K_(load_bloom_filter_count),
+                       K_(skip_load_bloom_filter_count),
+                       K_(skip_bloom_filter_count));
 
   int64_t selected_file_count_ = 0;
   int64_t skipped_file_count_ = 0;
@@ -65,6 +68,14 @@ public:
   int64_t selected_page_count_ = 0;
   int64_t skipped_page_count_ = 0;
   int64_t read_rows_count_ = 0;
+  // --- METRICS ON BLOOM FILTER BEGIN ---
+  // How many times the bloom filters are loaded?
+  int64_t load_bloom_filter_count_ = 0;
+  // How many bloom filters are adaptively skipped from loading?
+  int64_t skip_load_bloom_filter_count_ = 0;
+  // How many data blocks are skipped with the help of the bloom filter?
+  int64_t skip_bloom_filter_count_ = 0;
+  // --- METRICS ON BLOOM FILTER END ---
 };
 
 struct ObLakeTableORCReaderMetrics : public ObLakeTableIMetrics
@@ -80,7 +91,12 @@ public:
                        K_(skipped_stripe_count),
                        K_(selected_row_group_count),
                        K_(skipped_row_group_count),
-                       K_(read_rows_count));
+                       K_(read_rows_count),
+                       K_(load_bloom_filter_count),
+                       K_(skip_load_bloom_filter_count),
+                       K_(skip_bloom_filter_count),
+                       K_(load_bloom_filter_index_count),
+                       K_(use_bloom_filter_index_count));
 
   int64_t selected_file_count_ = 0;
   int64_t skipped_file_count_ = 0;
@@ -89,6 +105,21 @@ public:
   int64_t selected_row_group_count_ = 0;
   int64_t skipped_row_group_count_ = 0;
   int64_t read_rows_count_ = 0;
+  // --- METRICS ON BLOOM FILTER BEGIN ---
+  // How many times the bloom filters are loaded?
+  int64_t load_bloom_filter_count_ = 0;
+  // How many bloom filters are adaptively skipped from loading?
+  int64_t skip_load_bloom_filter_count_ = 0;
+  // How many data blocks are skipped with the help of the bloom filter?
+  int64_t skip_bloom_filter_count_ = 0;
+  // How many bloom filters are loaded?
+  // For the orc files, multiple bloom filters that come from different row indexes of the same strip may load each
+  // time.
+  int64_t load_bloom_filter_index_count_ = 0;
+  // How many bloom filters are used?
+  // For the orc files, after loading all the bloom filter of the same stripes at once, only some of them may be used.
+  int64_t use_bloom_filter_index_count_ = 0;
+  // --- METRICS ON BLOOM FILTER END ---
 };
 
 struct ObLakeTablePreBufferMetrics : public ObLakeTableIMetrics

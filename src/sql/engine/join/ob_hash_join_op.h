@@ -30,6 +30,7 @@ namespace sql
 
 struct ObHashTableSharedTableInfo
 {
+  ObHashTableSharedTableInfo() : lock_(common::ObLatchIds::OB_HASH_TABLE_SHARED_TABLE_INFO_LOCK), cond_(common::ObWaitEventIds::OB_HASH_TABLE_SHARED_TABLE_INFO_COND) {}
   int64_t sqc_thread_count_;
 
   ObSpinLock lock_;

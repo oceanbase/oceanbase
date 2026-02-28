@@ -17,6 +17,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/incremental/atomic_protocol/ob_atomic_sstablelist_define.h"
@@ -35,6 +36,25 @@ class ObLSHandle;
 namespace storage
 {
 class ObSSDataSplitHelper;
+
+template <typename T>
+void destroy_split_object(common::ObIAllocator &alloc, T *&obj)
+{
+  if (nullptr != obj) {
+    obj->~T();
+    alloc.free(obj);
+    obj = nullptr;
+  }
+}
+
+template <typename T>
+void destroy_split_array(common::ObIAllocator &alloc, ObIArray<T *> &arr)
+{
+  for (int64_t i = 0; i < arr.count(); i++) {
+    destroy_split_object(alloc, arr.at(i));
+  }
+  arr.reset();
+}
 
 enum class ObSplitTabletInfoStatus : uint8_t
 {
@@ -76,6 +96,20 @@ static bool is_valid_tablet_split_info_status(const ObSplitTabletInfoStatus &typ
 struct ObTabletSplitUtil final
 {
 public:
+  // TODO, to move it to ObSpecialSplitWriteHelper
+  static int check_need_fill_empty_sstable(
+      ObLSHandle &ls_handle,
+      const bool is_minor_sstable,
+      const ObITable::TableKey &table_key,
+      const ObTabletID &dst_tablet_id,
+      bool &need_fill_empty_sstable,
+      SCN &end_scn);
+  static int get_clipped_storage_schema_on_demand(
+      ObIAllocator &allocator,
+      const ObTabletID &src_tablet_id,
+      const ObSSTable &src_sstable,
+      const ObStorageSchema &split_mds_storage_schema,
+      const ObStorageSchema *&storage_schema);
   static int check_split_minors_can_be_accepted(
       const ObSSTableArray &old_store_minors,
       const ObIArray<ObITable *> &tables_array,
@@ -92,6 +126,7 @@ public:
       const ObTableStoreIterator &table_store_iterator,
       const bool is_table_restore,
       const ObIArray<ObITable::TableKey> &skipped_table_keys,
+      const bool filter_normal_cg_sstables,
       ObIArray<ObITable *> &participants);
   static int split_task_ranges(
       ObIAllocator &allocator,
@@ -161,15 +196,17 @@ public:
       const ObTabletHandle &source_tablet_handle,
       bool &is_tablet_status_need_to_split);
   static int build_mds_sstable(
-      common::ObArenaAllocator &allocator,
       const ObLSHandle &ls_handle,
       const ObTabletHandle &source_tablet_handle,
+      const int64_t dest_tablet_index,
       const ObTabletID &dest_tablet_id,
       const share::SCN &reorganization_scn,
     #ifdef OB_BUILD_SHARED_STORAGE
       const ObSSDataSplitHelper &mds_ss_split_helper,
     #endif
-      ObTableHandleV2 &mds_table_handle);
+      ObMdsTableMiniMerger &mds_mini_merger,
+      compaction::ObTabletMergeCtx &tablet_merge_ctx,
+      bool &has_mds_row);
   static int check_sstables_skip_data_split(
       const ObLSHandle &ls_handle,
       const ObTableStoreIterator &source_table_store_iter,
@@ -264,7 +301,7 @@ public:
       const share::SCN &split_scn,
       const int64_t parallel_cnt_of_each_sstable,
       const int64_t sstables_cnt_of_each_tablet,
-      const ObTabletID &dst_tablet_id);
+      const ObIArray<ObTabletID> &dest_tablets_id);
   int finish_add_op(
       const int64_t dest_tablet_index,
       const bool need_finish);

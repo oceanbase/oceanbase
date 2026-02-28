@@ -32,6 +32,8 @@ namespace oceanbase
 namespace common
 {
 
+int64_t get_io_depth(const int64_t io_size);
+
 struct ObIOConfig final
 {
 public:
@@ -242,7 +244,7 @@ typedef ObSEArray<int64_t, GROUP_START_NUM> ObIOGroupThrottledTimeArray;
 class ObIOUsage final
 {
 public:
-  ObIOUsage() : info_(), failed_req_info_(), group_throttled_time_us_(), lock_() {}
+  ObIOUsage() : info_(), failed_req_info_(), group_throttled_time_us_(), lock_(common::ObLatchIds::OB_IO_USAGE_LOCK) {}
   ~ObIOUsage();
   int init(const uint64_t tenant_id, const int64_t group_num);
   int refresh_group_num (const int64_t group_num);

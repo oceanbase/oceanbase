@@ -2597,9 +2597,9 @@ PartTransTask::PartTransTask() :
     local_schema_version_(OB_INVALID_VERSION),
     stmt_list_(),
     ddl_lob_aux_stmt_list_(),
-    data_ready_lock_(),
+    data_ready_lock_(common::ObLatchIds::OB_CDC_COMMON_LOCK),
     is_data_ready_(false),
-    wait_data_ready_cond_(),
+    wait_data_ready_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT),
     wait_formatted_cond_(NULL),
     output_br_count_by_turn_(0),
     tic_update_infos_()

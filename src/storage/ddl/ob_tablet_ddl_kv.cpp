@@ -18,6 +18,7 @@
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/ddl/ob_tablet_ddl_kv_multi_version_row_iterator.h"
 #include "storage/access/ob_sstable_multi_version_row_iterator.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #include "storage/tx/ob_trans_define.h"
@@ -29,6 +30,7 @@ using namespace oceanbase::clog;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::transaction;
+using namespace oceanbase::compaction;
 
 
 /******************             ObBlockMetaTree              **********************/
@@ -191,7 +193,8 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
     tree_value = new (buf) ObBlockMetaTreeValue(insert_meta, rowkey);
 
     tree_value->co_sstable_row_offset_ = co_sstable_row_offset;
-    tree_value->header_.version_ = ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V3;
+    tree_value->header_.version_ = data_desc_.get_desc().get_major_working_cluster_version() >= DATA_VERSION_4_5_0_0 ?
+      ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V3 : ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V2;
     tree_value->header_.row_store_type_ = static_cast<uint8_t>(insert_meta->val_.row_store_type_);
     tree_value->header_.compressor_type_ = static_cast<uint8_t>(insert_meta->val_.compressor_type_);
     tree_value->header_.is_data_index_ = true;
@@ -820,7 +823,7 @@ int ObDDLMemtable::init_ddl_index_iterator(const blocksstable::ObStorageDatumUti
 }
 
 ObDDLKV::ObDDLKV()
-  : is_inited_(false), is_closed_(false), is_independent_freezed_(false), lock_(),
+  : is_inited_(false), is_closed_(false), is_independent_freezed_(false), lock_(common::ObLatchIds::OB_TABLET_DDL_KV_LOCK),
     arena_allocator_("DDL_CONTAINER", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     ddl_memtable_allocator_(),
     tablet_id_(), ddl_start_scn_(SCN::min_scn()), ddl_snapshot_version_(0), data_format_version_(0), trans_id_(), seq_no_(),
@@ -1249,10 +1252,8 @@ int ObDDLKV::set_macro_block(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (DDL_MB_SS_EMPTY_DATA_TYPE == macro_block.block_type_) {
-        /* skip, emtpy type do not have data macro*/
       } else if (OB_FAIL(ddl_memtable->insert_block_meta_tree(macro_block.block_handle_, data_macro_meta, macro_block.end_row_id_))) {
-        LOG_WARN("insert block meta tree faield", K(ret));
+        LOG_WARN("insert block meta tree failed", K(ret));
       } else {
         // FIXME : @suzhi.yt support incremental direct load in ss mode
         if (is_inc_minor_ddl_kv()) {
@@ -2001,27 +2002,16 @@ int ObDDLKV::check_can_access(ObTableAccessContext &context, bool &can_access)
   int ret = OB_SUCCESS;
   transaction::ObTransID trans_id;
   transaction::ObTxSEQ seq_no;
-  SCN max_scn;
-  SCN trans_version;
   {
     TCRLockGuard guard(lock_);
     trans_id = trans_id_;
     seq_no = seq_no_;
-    max_scn = max_scn_;
   }
   can_access = true;
-  if (seq_no.is_valid()) {
-    memtable::ObMvccAccessCtx &mvcc_acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
-    storage::ObTxTableGuards &tx_table_guards = mvcc_acc_ctx.get_tx_table_guards();
-    transaction::ObLockForReadArg lock_for_read_arg(mvcc_acc_ctx,
-                                                    trans_id,
-                                                    seq_no,
-                                                    context.query_flag_.read_latest_,
-                                                    context.query_flag_.iter_uncommitted_row_,
-                                                    max_scn);
-    if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg, can_access, trans_version))) {
-      LOG_WARN("fail to lock for read", KR(ret), K(lock_for_read_arg));
-    }
+  SCN commit_scn;
+  if (seq_no.is_valid() &&
+      OB_FAIL(ObIncMajorTxHelper::check_can_access(context, trans_id, seq_no, can_access, commit_scn))) {
+    LOG_WARN("fail to check can access", KR(ret), K(context), K(trans_id), K(seq_no));
   }
   return ret;
 }

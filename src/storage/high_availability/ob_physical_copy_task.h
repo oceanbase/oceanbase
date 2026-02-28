@@ -83,6 +83,7 @@ private:
   int build_copy_macro_block_reader_init_param_(
       ObCopyMacroBlockReaderInitParam &init_param);
   int build_data_version_for_macro_block_reuse_(ObCopyMacroBlockReaderInitParam &init_param);
+  int build_copy_sstable_macro_info_for_macro_block_reuse_(ObCopyMacroBlockReaderInitParam &init_param);
   int record_server_event_();
 private:
   // For rebuilder can not retry, define MAX_RETRY_TIMES as 1.
@@ -92,7 +93,7 @@ private:
   ObPhysicalCopyCtx *copy_ctx_;
   ObSSTableCopyFinishTask *finish_task_;
   ObITable::TableKey copy_table_key_;
-  const ObCopyMacroRangeInfo *copy_macro_range_info_;
+  const ObCopyMacroRangeIdInfo *copy_macro_range_id_info_;
   int64_t task_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTask);
 };

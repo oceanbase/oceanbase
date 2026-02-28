@@ -153,8 +153,7 @@ int ObMicroBlockBareIterator::open_for_whole_range(
     ObMicroBlockData index_block;
     if (OB_FAIL(get_index_block(index_block, true))) {
       LOG_WARN("Fail to get index block", K(ret), K(index_block));
-    } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(
-        macro_block_header_.fixed_header_.row_store_type_)))) {
+    } else if (OB_FAIL(set_reader(*index_block.get_micro_header()))) {
       LOG_WARN("Fail to set reader for index block", K(ret));
     } else if (OB_ISNULL(reader_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -211,8 +210,7 @@ int ObMicroBlockBareIterator::open(
     ObMicroBlockData index_block;
     if (OB_FAIL(get_index_block(index_block, true))) {
       LOG_WARN("Fail to get index block", K(ret), K(index_block));
-    } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(
-        macro_block_header_.fixed_header_.row_store_type_)))) {
+    } else if (OB_FAIL(set_reader(*index_block.get_micro_header()))) {
       LOG_WARN("Fail to set reader for index block", K(ret));
     } else if (OB_ISNULL(reader_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -261,8 +259,7 @@ int ObMicroBlockBareIterator::get_next_micro_block_data_and_offset(ObMicroBlockD
         micro_buf,
         micro_buf_size,
         false,
-        micro_block.get_buf(),
-        micro_block.get_buf_size(),
+        micro_block,
         is_compressed))) {
       LOG_WARN("Fail to decrypt and decompress micro block data", K(ret), K(macro_block_header_));
     }
@@ -334,6 +331,7 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
     micro_block_desc.max_merged_trans_version_ = header->max_merged_trans_version_; // do not get from index
     micro_block_desc.is_last_row_last_flag_ = header->is_last_row_last_flag_;
     micro_block_desc.is_first_row_first_flag_ = header->is_first_row_first_flag_;
+    micro_block_desc.single_version_rows_ = header->single_version_rows_;
     micro_block_desc.original_size_ = header->original_length_;
     micro_index_data.endkey_.set_compact_rowkey(&micro_block_desc.last_rowkey_);
     micro_block_desc.has_string_out_row_ = micro_index_data.has_string_out_row();
@@ -384,8 +382,7 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
         micro_buf,
         micro_buf_size,
         false,
-        micro_block.get_buf(),
-        micro_block.get_buf_size(),
+        micro_block,
         is_compressed))) {
       LOG_WARN("Fail to decrypt and decompress micro block data", K(ret), K(macro_block_header_));
     } else if (OB_FAIL(last_row.init(allocator, column_cnt_ + 1))) {
@@ -393,9 +390,9 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
     } else if (OB_UNLIKELY(!micro_block.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "invalid micro block data", K(ret), K(micro_block));
-    } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(micro_block.get_store_type())))) {
+    } else if (OB_FAIL(set_reader(*micro_block.get_micro_header()))) {
       STORAGE_LOG(WARN, "Fail to set micro reader by store type",
-        K(ret), K(micro_block.get_store_type()));
+        K(ret), "header", *micro_block.get_micro_header());
     } else if (OB_FAIL(reader_->init(micro_block, nullptr))) {
       STORAGE_LOG(WARN, "Fail to init micro reader", K(ret));
     } else if (OB_FAIL(reader_->get_row(header->row_count_ - 1, last_row))) {
@@ -452,6 +449,7 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
       micro_block_desc.original_size_ = header->original_length_;
       micro_block_desc.is_last_row_last_flag_ = header->is_last_row_last_flag();
       micro_block_desc.is_first_row_first_flag_ = header->is_first_row_first_flag();
+      micro_block_desc.single_version_rows_ = header->single_version_rows_;
       //micro_block_desc.aggregated_row_ = nullptr;
       ++iter_idx_;
       read_pos_ += micro_buf_size;
@@ -563,8 +561,7 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
         micro_buf,
         micro_buf_size,
         true,
-        micro_block.get_buf(),
-        micro_block.get_buf_size(),
+        micro_block,
         is_compressed))) {
       LOG_WARN("Fail to decrypt and decompress micro block data", K(ret), K(macro_block_header_));
     } else if (OB_FAIL(last_row.init(allocator, column_cnt_ + 1))) {
@@ -572,9 +569,9 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
     } else if (OB_UNLIKELY(!micro_block.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "invalid micro block data", K(ret), K(micro_block));
-    } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(micro_block.get_store_type())))) {
+    } else if (OB_FAIL(set_reader(*micro_block.get_micro_header()))) {
       STORAGE_LOG(WARN, "Fail to set micro reader by store type",
-        K(ret), K(micro_block.get_store_type()));
+        K(ret), KPC(micro_block.get_micro_header()));
     } else if (OB_FAIL(reader_->init(micro_block, nullptr))) {
       STORAGE_LOG(WARN, "Fail to init micro reader", K(ret));
     } else if (OB_FAIL(reader_->get_row(header->row_count_ - 1, last_row))) {
@@ -653,13 +650,12 @@ int ObMicroBlockBareIterator::get_macro_meta(ObDataMacroBlockMeta *&macro_meta, 
                                                              meta_block_buf,
                                                              meta_block_buf_size,
                                                              false/*need deep copy*/,
-                                                             meta_block.get_buf(),
-                                                             meta_block.get_buf_size(),
+                                                             meta_block,
                                                              is_compressed))) {
     LOG_WARN("decrypt and decompress meta block fail", K(ret));
   } else if (OB_FAIL(micro_reader_helper.init(allocator))) {
     LOG_WARN("init micro block reader helper fail", K(ret));
-  } else if (OB_FAIL(micro_reader_helper.get_reader(meta_block.get_store_type(), micro_reader))) {
+  } else if (OB_FAIL(micro_reader_helper.get_reader(*meta_block.get_micro_header(), micro_reader))) {
     LOG_WARN("get micro block reader fail", K(ret));
   } else if (OB_FAIL(micro_reader->init(meta_block, NULL))) {
     LOG_WARN("micro block reader init fail", K(ret));
@@ -716,15 +712,15 @@ int ObMicroBlockBareIterator::get_index_block(ObMicroBlockData &micro_block,
     } else if (OB_FAIL(header.check_record(micro_buf, micro_buf_size, MICRO_BLOCK_HEADER_MAGIC))) {
       LOG_WARN("Fail to check record header", K(ret), K(header));
     } else if (!need_deserialize_ && !force_deserialize) {
-      micro_block.get_buf() = micro_buf;
-      micro_block.get_buf_size() = micro_buf_size;
+      if (OB_FAIL(micro_block.init_with_prepare_micro_header(micro_buf, micro_buf_size))) {
+        LOG_WARN("Fail to init micro data", K(ret), K(micro_buf), K(micro_buf_size));
+      }
     } else if (OB_FAIL(index_reader_.decrypt_and_decompress_data(
         macro_block_header_,
         micro_buf,
         micro_buf_size,
         false,
-        micro_block.get_buf(),
-        micro_block.get_buf_size(),
+        micro_block,
         is_compressed))) {
       LOG_WARN("Fail to decrypt and decompress micro block data", K(ret), K_(macro_block_header));
     }
@@ -823,8 +819,7 @@ int ObMicroBlockBareIterator::locate_range(
   ObMicroBlockData index_block;
   if (OB_FAIL(get_index_block(index_block, false))) {
     LOG_WARN("Fail to get index block", K(ret), K(index_block));
-  } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(
-      macro_block_header_.fixed_header_.row_store_type_)))) {
+  } else if (OB_FAIL(set_reader(*index_block.get_micro_header()))) {
     LOG_WARN("Fail to set reader for index block", K(ret));
   } else if (OB_ISNULL(reader_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -858,13 +853,13 @@ int ObMicroBlockBareIterator::locate_range(
   return ret;
 }
 
-int ObMicroBlockBareIterator::set_reader(const ObRowStoreType store_type)
+int ObMicroBlockBareIterator::set_reader(const ObMicroBlockHeader& header)
 {
   int ret = OB_SUCCESS;
   if (!micro_reader_helper_.is_inited() && OB_FAIL(micro_reader_helper_.init(allocator_))) {
     LOG_WARN("Fail to init micro reader helper", K(ret));
-  } else if (OB_FAIL(micro_reader_helper_.get_reader(store_type, reader_))) {
-    LOG_WARN("Fail to get micro reader", K(ret), K(store_type));
+  } else if (OB_FAIL(micro_reader_helper_.get_reader(header, reader_))) {
+    LOG_WARN("Fail to get micro reader", K(ret), K(header));
   }
   return ret;
 }
@@ -939,17 +934,9 @@ int ObMacroBlockRowBareIterator::open(
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(reader_helper_.init(*allocator_))) {
-    LOG_WARN("Fail to init micro block reader helper", K(ret), K(macro_header));
-  } else if (OB_FAIL(reader_helper_.get_reader(
-                 static_cast<ObRowStoreType>(macro_header.fixed_header_.row_store_type_),
-                 micro_reader_))) {
-    LOG_WARN("Fail to init micro block reader", K(ret), K(macro_header));
-  } else {
-    is_inited_ = true;
-    if (OB_FAIL(open_next_micro_block())) {
-      LOG_WARN("Fail to open the first micro block", K(ret));
-    }
+  } else if (FALSE_IT(is_inited_ = true)) {
+  } else if (OB_FAIL(open_next_micro_block())) {
+    LOG_WARN("Fail to open the first micro block", K(ret));
   }
 
   if (IS_NOT_INIT) {
@@ -1006,6 +993,10 @@ int ObMacroBlockRowBareIterator::open_leaf_index_micro_block(const bool is_macro
     LOG_WARN("Read an invalid micro block header", K(ret));
   } else if (OB_FAIL(row_.reserve(header.column_count_))) {
     LOG_WARN("Fail to reserve datum row", K(ret));
+  } else if (OB_FAIL(reader_helper_.get_reader(
+                 *curr_micro_block_data_.get_micro_header(),
+                 micro_reader_))) {
+    LOG_WARN("Fail to init micro block reader", K(ret));
   } else if (OB_FAIL(micro_reader_->init(curr_micro_block_data_, nullptr))) {
     LOG_WARN("Fail to init micro block reader", K(ret), K_(curr_micro_block_data));
   } else if (OB_FAIL(micro_reader_->get_row_count(curr_block_row_cnt_))) {
@@ -1029,6 +1020,12 @@ int ObMacroBlockRowBareIterator::open_next_micro_block()
   } else if (OB_UNLIKELY(!curr_micro_block_data_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Read an invalid micro block data", K(ret));
+  } else if (OB_FAIL(reader_helper_.init(*allocator_))) {
+    LOG_WARN("Fail to init micro block reader helper", K(ret));
+  } else if (OB_FAIL(reader_helper_.get_reader(
+                 *curr_micro_block_data_.get_micro_header(),
+                 micro_reader_))) {
+    LOG_WARN("Fail to init micro block reader", K(ret));
   } else if (OB_FAIL(micro_reader_->init(curr_micro_block_data_, nullptr))) {
     LOG_WARN("Fail to init micro block reader", K(ret), K_(curr_micro_block_data));
   } else if (OB_FAIL(micro_reader_->get_row_count(curr_block_row_cnt_))) {

@@ -18,6 +18,7 @@
 #include "lib/container/ob_array_array.h"
 #include "observer/ob_server_struct.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
+#include "storage/compaction/ob_window_compaction_utils.h"
 #include "storage/multi_data_source/mds_key_serialize_util.h"
 #include "storage/compaction/ob_mds_filter_info.h"
 
@@ -176,6 +177,40 @@ public:
   IncMajorInfo *info_list_;
 };
 
+// Window compaction decision info synced via medium clog
+struct ObWindowCompactionDecisionLogInfo final
+{
+public:
+  ObWindowCompactionDecisionLogInfo()
+    : info_(0),
+      score_(0),
+      base_inc_row_cnt_(0),
+      dynamic_info_()
+  {}
+  ~ObWindowCompactionDecisionLogInfo() = default;
+  void reset();
+  void init(const ObTabletCompactionScore &candidate);
+  bool is_inited() const { return is_inited_; }
+  int assign(const ObWindowCompactionDecisionLogInfo &other);
+  void gen_info(char* buf, const int64_t buf_len, int64_t &pos) const;
+  TO_STRING_KV(K_(score), K_(base_inc_row_cnt), K_(dynamic_info), K_(is_inited), K_(compat_version));
+  OB_UNIS_VERSION(1);
+public:
+  static constexpr uint32_t MAX_TABLET_SCORE = UINT32_MAX;
+  static constexpr uint32_t MAX_INC_ROW_CNT = UINT32_MAX;
+public:
+  union {
+    uint8_t info_;
+    struct {
+      uint8_t compat_version_ : 4;
+      uint8_t is_inited_      : 1;
+      uint8_t reserved_       : 3;
+    };
+  };
+  uint32_t score_;
+  uint32_t base_inc_row_cnt_;
+  ObTabletCompactionScoreDynamicInfo dynamic_info_;
+};
 
 struct ObMediumCompactionInfoKey final
 {
@@ -304,6 +339,9 @@ public:
   int64_t get_serialize_size() const;
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
+  void set_co_major_merge_strategy(const ObCOMajorMergeStrategy &strategy);
+  void get_co_major_merge_strategy(ObCOMajorMergeStrategy &strategy) const;
+  void set_contain_noinc_storage_schema();
 private:
   bool contain_storage_schema() const;
 public:
@@ -313,10 +351,12 @@ public:
   static const int64_t MEDIUM_COMPAT_VERSION_V3 = 3; // for stanby tenant, not throw medium info
   static const int64_t MEDIUM_COMPAT_VERSION_V4 = 4; // after this version, use is_schema_changed on medium info
   static const int64_t MEDIUM_COMPAT_VERSION_V5 = 5; // after this version, use encoding row limit
-  static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V5;
+  // < V6: co_major_merge_type_, >= V6: co_major_merge_strategy_ to record merge strategy / support window decision info in medium info
+  static const int64_t MEDIUM_COMPAT_VERSION_V6 = 6;
+  static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V6;
 private:
   static const int32_t SCS_ONE_BIT = 1;
-  static const int32_t SCS_RESERVED_BITS = 25;
+  static const int32_t SCS_RESERVED_BITS = 23;
 
 public:
   union {
@@ -328,10 +368,12 @@ public:
       uint64_t medium_merge_reason_             : 8;
       uint64_t is_schema_changed_               : SCS_ONE_BIT;
       uint64_t tenant_id_                       : 16; // record tenant_id of ls primary_leader, just for throw medium
-      uint64_t co_major_merge_type_             : 4;
+      uint64_t co_major_merge_type_             : 4; // abandoned after MEDIUM_COMPAT_VERSION_V6
       uint64_t is_skip_tenant_major_            : SCS_ONE_BIT;
       uint64_t contain_mds_filter_info_         : SCS_ONE_BIT;
       uint64_t contain_inc_major_info_          : SCS_ONE_BIT;
+      uint64_t contain_window_decision_log_info_: SCS_ONE_BIT;
+      uint64_t contain_noinc_storage_schema_    : SCS_ONE_BIT;
       uint64_t reserved_                        : SCS_RESERVED_BITS;
     };
   };
@@ -346,6 +388,7 @@ public:
   ObMdsFilterInfo mds_filter_info_;
   ObIncMajorSSTableInfo inc_major_info_; // store inc major sstable checksum and end scn
   ObCOMajorMergeStrategy co_major_merge_strategy_;
+  ObWindowCompactionDecisionLogInfo window_decision_log_info_; // store score and other dynamic info for window compaction decision
   ObIAllocator *allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMediumCompactionInfo);

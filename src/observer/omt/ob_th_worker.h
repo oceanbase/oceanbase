@@ -97,8 +97,6 @@ public:
   OB_INLINE int64_t get_query_start_time() const { return query_start_time_; }
   OB_INLINE int64_t get_query_enqueue_time() const { return query_enqueue_time_; }
   OB_INLINE ObTenant* get_tenant() { return tenant_; }
-  OB_INLINE bool is_lq_yield() const { return is_lq_yield_; }
-  OB_INLINE void set_lq_yield(bool v=true) { is_lq_yield_ = v; }
   OB_INLINE int64_t get_last_wakeup_ts() { return last_wakeup_ts_; }
   OB_INLINE void set_last_wakeup_ts(int64_t last_wakeup_ts) { last_wakeup_ts_ = last_wakeup_ts; }
   OB_INLINE int64_t blocking_ts() const { return OB_NOT_NULL(blocking_ts_) ? (*blocking_ts_) : 0; }
@@ -124,7 +122,6 @@ private:
   bool pause_flag_;
   bool large_query_;
   uint8_t priority_limit_;
-  bool is_lq_yield_;
 
   int64_t query_start_time_;
   int64_t query_enqueue_time_;

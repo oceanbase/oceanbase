@@ -34,6 +34,7 @@ ERRSIM_POINT_DEF(EN_COMPACTION_PERSIST_GENERATE_NEXT_FAILED);
 ERRSIM_POINT_DEF(EN_COMPACTION_REPLAY_FAILED);
 ERRSIM_POINT_DEF(EN_COMPACTION_UPDATE_TABLET_FAILED);
 ERRSIM_POINT_DEF(EN_COMPACTION_GENERATE_NEXT_FAILED);
+ERRSIM_POINT_DEF(EN_COMPACTION_RANDOM_BATCH_SIZE);
 ObCOMergeDagParam::ObCOMergeDagParam()
   : ObTabletMergeDagParam(),
     compat_mode_(lib::Worker::CompatMode::INVALID),
@@ -383,7 +384,7 @@ ObCOMergeExeDag::ObCOMergeExeDag()
     merge_batch_size_(DEFAULT_CG_MERGE_BATCH_SIZE),
     range_status_(nullptr),
     cg_merge_status_(nullptr),
-    exe_lock_(),
+    exe_lock_(common::ObLatchIds::OB_CO_MERGE_EXE_DAG_LOCK),
     merge_progress_(nullptr)
 {}
 
@@ -474,10 +475,8 @@ int ObCOMergeExeDag::init_merge_batch_size(const bool is_using_column_tmp_file)
   int ret = OB_SUCCESS;
   if (is_using_column_tmp_file) {
     merge_batch_size_ = 1;
-  } else if (cg_count_ < ALL_CG_IN_ONE_BATCH_CNT) {
-    merge_batch_size_ = cg_count_;
   } else {
-    const int64_t batch_cnt = cg_count_ / DEFAULT_CG_MERGE_BATCH_SIZE;
+    const int64_t batch_cnt = ObCOMajorMergePolicy::get_cg_merge_batch_cnt(cg_count_);
     merge_batch_size_ = cg_count_ / batch_cnt;
   }
   return ret;
@@ -501,7 +500,12 @@ void ObCOMergeExeDag::try_update_merge_batch_size()
       merge_batch_size_ = MIN(merge_batch_size_ * 2, cg_count_);
       need_update_batch_size_ = false;
     }
-
+#ifdef ERRSIM
+    if (EN_COMPACTION_RANDOM_BATCH_SIZE) {
+      merge_batch_size_ = ObRandom::rand(merge_batch_size_ - 1, merge_batch_size_);
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "random_merge_batch_size", "merge_batch_size", merge_batch_size_);
+    }
+#endif
     FLOG_INFO("[ADAPTIVE_SCHED] update co merge batch size", K(merge_thread),
         K(mem_allow_used), K(batch_mem_allow_per_thread), K(mem_allow_batch_size), K(merge_batch_size_));
   }
@@ -658,7 +662,7 @@ int ObCOMergeExeDag::get_next_replay_cg_pair(
   } else if (!ctx.is_using_column_tmp_file()
       && ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_merge_schedule()
       && FALSE_IT(try_update_merge_batch_size())) {
-  } else if (ctx.is_build_row_store()) {
+  } else if (ctx.is_build_all_cg_only()) {
     const CGMergeStatus &cg_merge_status = cg_merge_status_[range_idx * cg_count_ + ctx.base_rowkey_cg_idx_];
     inner_set_cg_merge_status(range_idx, 0, ctx.base_rowkey_cg_idx_, CGMergeStatus::CG_SSTABLE_CREATED);
     inner_set_cg_merge_status(range_idx, ctx.base_rowkey_cg_idx_ + 1, cg_count_, CGMergeStatus::CG_SSTABLE_CREATED);
@@ -670,11 +674,17 @@ int ObCOMergeExeDag::get_next_replay_cg_pair(
       ret = OB_ITER_END;
     }
   } else {
+    bool only_check_batch_size = false;
+#ifdef ERRSIM
+    if (EN_COMPACTION_RANDOM_BATCH_SIZE) {
+      only_check_batch_size = true;
+    }
+#endif
     while (OB_SUCC(ret) && end_cg_idx < cg_count_ && OB_NOT_NULL(cg_merge_status_)) {
       const CGMergeStatus &cg_merge_status = cg_merge_status_[range_idx * cg_count_ + end_cg_idx];
       if (cg_merge_status == CG_NEED_REPLAY) {
         end_cg_idx++;
-        if (cg_count_ - end_cg_idx < merge_batch_size_) { // the last batch
+        if (!only_check_batch_size && cg_count_ - end_cg_idx < merge_batch_size_) { // the last batch
         } else if (start_cg_idx + merge_batch_size_ <= end_cg_idx) {
           break;
         }
@@ -783,7 +793,7 @@ int ObCOMergeExeDag::generate_next_task(
         break;
       }
     }
-    // only when is_build_row_store() + replay directly in persist task + persist task generate next task
+    // only when is_build_all_cg_only() + replay directly in persist task + persist task generate next task
     // then the finish task will be the persist task's child
     if (OB_SUCC(ret) && !need_persist_task && !need_replay_task) {
       need_finish_task = inner_check_replay_finished();
@@ -1159,7 +1169,7 @@ int ObCOMergeLogReplayTask::process()
     LOG_WARN("failed to alloc memory for persister", K(ret));
   } else if (FALSE_IT(replayer_ = new (buf) ObCOMergeLogReplayer(allocator_,
       ctx->static_param_, start_cg_idx_, end_cg_idx_,
-      ctx->prefer_reuse_macro_block_ ? false : ctx->get_is_rebuild_column_store()))) {
+      ctx->prefer_reuse_macro_block_ ? false :ctx->only_use_row_store()))) {
   } else if (OB_FAIL(replayer_->init(*ctx, range_idx_))) {
     LOG_WARN("failed to init replayer", K(ret));
   } else if (OB_FAIL(replayer_->replay_merge_log())) {
@@ -1240,7 +1250,8 @@ int ObCOMergeFinishTask::process()
     LOG_WARN("failed to create sstable and update tablet", K(ret));
   } else {
     ctx->destroy_merge_info_array(0, ctx->array_count_, true);
-    if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_unfinish_tablet(ctx->get_merge_version()))) {
+    if (ctx->get_is_tenant_major_merge()
+        && OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_unfinish_tablet(ctx->get_merge_version()))) {
       LOG_WARN("failed to update unfinish tablet", K(tmp_ret), K(ctx->get_merge_version()));
     }
     // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
@@ -1525,8 +1536,8 @@ bool ObCOMergeDagNet::operator ==(const ObIDagNet &other) const
   if (get_type() == other.get_type()) {
     const ObCOMergeDagNet &other_dag_net = static_cast<const ObCOMergeDagNet&>(other);
     if (merge_type_ == other_dag_net.merge_type_
-        || ls_id_ == other_dag_net.ls_id_
-        || tablet_id_ == other_dag_net.tablet_id_) {
+        && ls_id_ == other_dag_net.ls_id_
+        && tablet_id_ == other_dag_net.tablet_id_) {
       bret = true;
     }
   }

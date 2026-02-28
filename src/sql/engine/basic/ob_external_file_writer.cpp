@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "ob_external_file_writer.h"
-#include "ob_select_into_basic.h"
+#include "sql/engine/basic/ob_external_file_writer.h"
 
 namespace oceanbase
 {
@@ -616,8 +615,34 @@ int ObParquetFileWriter::close_file()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("caught exception when close parquet file", K(ret), K(url_));
   }
-  if (OB_SUCC(ret) && OB_FAIL(ObExternalFileWriter::close_file())) {
-    LOG_WARN("failed to close file", K(ret));
+  if (OB_SUCC(ret) && share::ObLakeTableFormat::ICEBERG == lake_table_format_) {
+    OZ(get_datafile_generator().generate_datafile(storage_appender_,
+                                                  url_,
+                                                  record_count_,
+                                                  iceberg::DataFileFormat::PARQUET));
+  }
+  OX(reset_record_count());
+  OZ(ObExternalFileWriter::close_file());
+  return ret;
+}
+
+int ObIcebergDataGenerator::generate_datafile(const ObStorageAppender& storage_appender,
+                                              const ObString& url,
+                                              int record_count,
+                                              iceberg::DataFileFormat file_format)
+{
+  int ret = OB_SUCCESS;
+  iceberg::DataFile* data_file = OB_NEWx(iceberg::DataFile, &datafile_allocator_, datafile_allocator_);
+  if (OB_ISNULL(data_file)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for data file", K(ret));
+  } else {
+    data_file->content = iceberg::DataFileContent::DATA;
+    data_file->file_format = file_format;
+    data_file->record_count = record_count;
+    data_file->file_size_in_bytes = storage_appender.offset_; // iceberg不写server disk
+    OZ(ob_write_string(datafile_allocator_, url, data_file->file_path, true));
+    OZ(data_files_.push_back(data_file));
   }
   return ret;
 }
@@ -719,9 +744,14 @@ int ObOrcFileWriter::close_file()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("caught exception when close parquet file", K(ret), K(url_));
   }
-  if (OB_SUCC(ret) && OB_FAIL(ObExternalFileWriter::close_file())) {
-    LOG_WARN("failed to close file", K(ret));
+  if (share::ObLakeTableFormat::ICEBERG == lake_table_format_) {
+    OZ(get_datafile_generator().generate_datafile(storage_appender_,
+                                                  url_,
+                                                  record_count_,
+                                                  iceberg::DataFileFormat::ORC));
   }
+  OX(reset_record_count());
+  OZ(ObExternalFileWriter::close_file());
   return ret;
 }
 

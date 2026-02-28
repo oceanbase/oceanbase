@@ -515,7 +515,8 @@ double ObExprUtil::trunc_double(double val, int64_t dec)
   return res;
 }
 
-int ObExprUtil::set_expr_asscii_result(const ObExpr &expr, ObEvalCtx &ctx,
+
+int ObExprUtil::set_expr_ascii_result(const ObExpr &expr, ObEvalCtx &ctx,
                                           ObTextStringDatumResult &out_res,
                                           const ObString &ascii, const int64_t datum_idx,
                                           const bool is_ascii,

@@ -233,7 +233,8 @@ int ObTransformAggrSubquery::check_need_spj(ObDMLStmt *stmt, bool &is_valid)
     is_valid = false;
   } else {
     bool exist_valid_subquery = false;
-    ObSEArray<TransformParam, 4> transform_params;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObSEArray<TransformParam*, 4> transform_params;
     for (int64_t i = 0; OB_SUCC(ret) && !exist_valid_subquery && i < sel_stmt->get_having_exprs().count(); i++) {
       transform_params.reuse();
       ObRawExpr *expr = sel_stmt->get_having_exprs().at(i);
@@ -241,7 +242,7 @@ int ObTransformAggrSubquery::check_need_spj(ObDMLStmt *stmt, bool &is_valid)
         ret = OB_ERR_UNEXPECTED;
       } else if (!expr->has_flag(CNT_SUB_QUERY)) {
         //do nothing
-      } else if (OB_FAIL(gather_transform_params(*stmt, expr, expr, AGGR_FIRST, false, transform_params))) {
+      } else if (OB_FAIL(gather_transform_params(*stmt, expr, expr, AGGR_FIRST, false, allocator, transform_params))) {
         LOG_WARN("gather transform param failed", K(ret));
       } else if (transform_params.count() > 0) {
         exist_valid_subquery = true;
@@ -264,7 +265,8 @@ int ObTransformAggrSubquery::do_aggr_first_transform(ObDMLStmt *&stmt,
                                                      bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<TransformParam, 4> transform_params;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSEArray<TransformParam*, 4> transform_params;
   ObSEArray<ObRawExpr *, 4> filters;
   bool is_select_item_expr = false;
   const ObQueryHint* query_hint = nullptr;
@@ -275,45 +277,46 @@ int ObTransformAggrSubquery::do_aggr_first_transform(ObDMLStmt *&stmt,
   } else if (stmt->is_select_stmt() && FALSE_IT(is_select_item_expr = 
               static_cast<ObSelectStmt*>(stmt)->check_is_select_item_expr(expr))) {
     // never reach
-  } else if (OB_FAIL(gather_transform_params(*stmt, expr, expr, AGGR_FIRST, is_select_item_expr, transform_params))) {
+  } else if (OB_FAIL(gather_transform_params(*stmt, expr, expr, AGGR_FIRST, is_select_item_expr, allocator, transform_params))) {
     LOG_WARN("failed to check the condition is valid for transformation", K(ret));
   } else if (OB_FAIL(get_filters(*stmt, expr, filters))) {
     LOG_WARN("failed to get filters for the expr", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < transform_params.count(); ++i) {
-    TransformParam &trans_param = transform_params.at(i);
+    TransformParam *trans_param = transform_params.at(i);
     ObQueryRefRawExpr *query_ref = NULL;
     ObSelectStmt *subquery = NULL;
     ObSelectStmt *origin_subquery = NULL;
-    if (OB_ISNULL(query_ref = trans_param.ja_query_ref_) ||
-        OB_ISNULL(subquery = trans_param.ja_query_ref_->get_ref_stmt()) ||
+    if (OB_ISNULL(trans_param) ||
+        OB_ISNULL(query_ref = trans_param->ja_query_ref_) ||
+        OB_ISNULL(subquery = trans_param->ja_query_ref_->get_ref_stmt()) ||
         OB_ISNULL(origin_subquery = subquery)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid transform params", K(ret), K(trans_param.ja_query_ref_));
+      LOG_WARN("invalid transform params", K(ret), K(trans_param->ja_query_ref_));
     } else if (!ObOptimizerUtil::find_item(stmt->get_subquery_exprs(), query_ref)) {
       // skip, the subquery has been pullup
-    } else if (OB_FAIL(choose_pullup_method(filters, trans_param))) {
+    } else if (OB_FAIL(choose_pullup_method(filters, *trans_param))) {
       LOG_WARN("failed to choose pullup method", K(ret));
-    } else if (use_outer_join(trans_param.pullup_flag_) && stmt->get_table_size() == 0) {
+    } else if (use_outer_join(trans_param->pullup_flag_) && stmt->get_table_size() == 0) {
       // skip
-    } else if (trans_param.upper_filters_.count() > 0 && use_outer_join(trans_param.pullup_flag_)) {
+    } else if (trans_param->upper_filters_.count() > 0 && use_outer_join(trans_param->pullup_flag_)) {
       // skip
-    } else if (trans_param.exists_to_aggr_ && trans_param.nested_conditions_.empty()) {
+    } else if (trans_param->exists_to_aggr_ && trans_param->nested_conditions_.empty()) {
       // skip
-    } else if (trans_param.limit_to_aggr_ &&
-               OB_FAIL(convert_limit_as_aggr(subquery, trans_param))) {
+    } else if (trans_param->limit_to_aggr_ &&
+               OB_FAIL(convert_limit_as_aggr(subquery, *trans_param))) {
       LOG_WARN("failed to transform subquery with limit");
-    } else if (trans_param.exists_to_aggr_ &&
-               OB_FAIL(convert_exists_as_scalar_subquery(stmt, query_ref, subquery, trans_param))) {
+    } else if (trans_param->exists_to_aggr_ &&
+               OB_FAIL(convert_exists_as_scalar_subquery(stmt, query_ref, subquery, *trans_param))) {
        LOG_WARN("failed to convert exists as scalar subquery", K(ret));
-    } else if (trans_param.any_all_to_aggr_ &&
-               OB_FAIL(convert_any_all_as_scalar_subquery(stmt, query_ref, subquery, trans_param))) {
+    } else if (trans_param->any_all_to_aggr_ &&
+               OB_FAIL(convert_any_all_as_scalar_subquery(stmt, query_ref, subquery, *trans_param))) {
       LOG_WARN("failed to convert exists as scalar subquery", K(ret));
-    } else if (OB_FAIL(fill_query_refs(stmt, expr->has_flag(CNT_ALIAS), trans_param))) {
+    } else if (OB_FAIL(fill_query_refs(stmt, expr->has_flag(CNT_ALIAS), *trans_param))) {
       LOG_WARN("failed to fill query refs", K(ret));
-    } else if (OB_FAIL(transform_child_stmt(stmt, *subquery, trans_param))) {
+    } else if (OB_FAIL(transform_child_stmt(stmt, *subquery, *trans_param))) {
       LOG_WARN("failed to transform subquery", K(ret));
-    } else if (OB_FAIL(transform_upper_stmt(*stmt, trans_param))) {
+    } else if (OB_FAIL(transform_upper_stmt(*stmt, *trans_param))) {
       LOG_WARN("failed to transform upper stmt", K(ret));
     } else if (OB_FAIL(add_trans_stmt_info(*origin_subquery, AGGR_FIRST))) {
       LOG_WARN("failed add trans stmt info", K(ret));
@@ -333,7 +336,8 @@ int ObTransformAggrSubquery::gather_transform_params(ObDMLStmt &stmt,
                                                      ObRawExpr *child_expr,
                                                      int64_t pullup_strategy,
                                                      const bool is_select_item_expr,
-                                                     ObIArray<TransformParam> &transform_params)
+                                                     common::ObIAllocator &allocator,
+                                                     ObIArray<TransformParam*> &transform_params)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(child_expr) || OB_ISNULL(root_expr)) {
@@ -342,16 +346,20 @@ int ObTransformAggrSubquery::gather_transform_params(ObDMLStmt &stmt,
   } else if (!child_expr->has_flag(CNT_SUB_QUERY)) {
      // do nothing
   } else if (child_expr->is_query_ref_expr()) {
-    TransformParam trans_param(pullup_strategy);
-    trans_param.ja_query_ref_ = static_cast<ObQueryRefRawExpr*>(child_expr);
-    ObSelectStmt *subquery = trans_param.ja_query_ref_->get_ref_stmt();
+    TransformParam *trans_param = NULL;
+    ObQueryRefRawExpr *ja_query_ref = static_cast<ObQueryRefRawExpr*>(child_expr);
+    ObSelectStmt *subquery = ja_query_ref->get_ref_stmt();
     bool is_valid = false;
     bool ja_query_ref_valid = false;
     bool hint_allowed = false;
     int64_t limit_value = 0;
     OPT_TRACE("try to pullup JA subquery", child_expr);
     // check ja query ref's exec param
-    if (OB_FAIL(check_ja_query_ref_param_validity(*trans_param.ja_query_ref_, ja_query_ref_valid))) {
+    if (OB_ISNULL(trans_param = OB_NEWx(TransformParam, &allocator, allocator, pullup_strategy))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate transform param", K(ret));
+    } else if (OB_FALSE_IT(trans_param->ja_query_ref_ = ja_query_ref)) {
+    } else if (OB_FAIL(check_ja_query_ref_param_validity(*trans_param->ja_query_ref_, ja_query_ref_valid))) {
       LOG_WARN("failed to check ja query ref param validity", K(ret));
     } else if (!ja_query_ref_valid) {
       OPT_TRACE("exec param expr of ja query ref is not valid, can not transform");
@@ -367,50 +375,50 @@ int ObTransformAggrSubquery::gather_transform_params(ObDMLStmt &stmt,
       OPT_TRACE("hint reject transform");
     } else if (aggr_first(pullup_strategy)) {
       OPT_TRACE("try aggregation first transform");
-      if (OB_FAIL(ObTransformUtils::find_parent_expr(root_expr, child_expr, trans_param.parent_expr_of_query_ref))) {
+      if (OB_FAIL(ObTransformUtils::find_parent_expr(root_expr, child_expr, trans_param->parent_expr_of_query_ref_))) {
         LOG_WARN("failed to find parent expr of subquery expr", K(ret));
-      } else if (OB_ISNULL(trans_param.parent_expr_of_query_ref)) {
+      } else if (OB_ISNULL(trans_param->parent_expr_of_query_ref_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("find no parent expr of subquery expr", K(ret));
       } else if (OB_FAIL(check_aggr_first_validity(stmt,
-                                                  *trans_param.ja_query_ref_,
+                                                  *trans_param->ja_query_ref_,
                                                   root_expr->has_flag(CNT_ALIAS),
                                                   root_expr,
-                                                  *trans_param.parent_expr_of_query_ref,
-                                                  trans_param.nested_conditions_,
-                                                  trans_param.upper_filters_,
+                                                  *trans_param->parent_expr_of_query_ref_,
+                                                  trans_param->nested_conditions_,
+                                                  trans_param->upper_filters_,
                                                   is_select_item_expr,
                                                   is_valid,
                                                   limit_value,
-                                                  trans_param.limit_to_aggr_,
-                                                  trans_param.any_all_to_aggr_,
-                                                  trans_param.exists_to_aggr_,
-                                                  trans_param.equal_param_info_))) {
+                                                  trans_param->limit_to_aggr_,
+                                                  trans_param->any_all_to_aggr_,
+                                                  trans_param->exists_to_aggr_,
+                                                  trans_param->equal_param_info_))) {
         LOG_WARN("failed to check subquery validity for aggr first", K(ret));
       } else {
-        trans_param.limit_for_exists_ = false;
-        trans_param.limit_value_ = limit_value;
+        trans_param->limit_for_exists_ = false;
+        trans_param->limit_value_ = limit_value;
       }
-    } else if (join_first(pullup_strategy) && trans_param.ja_query_ref_->has_exec_param()) {
+    } else if (join_first(pullup_strategy) && trans_param->ja_query_ref_->has_exec_param()) {
       OPT_TRACE("try join first transform");
-      if (OB_FAIL(ObTransformUtils::find_parent_expr(root_expr, child_expr, trans_param.parent_expr_of_query_ref))) {
+      if (OB_FAIL(ObTransformUtils::find_parent_expr(root_expr, child_expr, trans_param->parent_expr_of_query_ref_))) {
         LOG_WARN("failed to find parent expr of subquery expr", K(ret));
-      } else if (OB_ISNULL(trans_param.parent_expr_of_query_ref)) {
+      } else if (OB_ISNULL(trans_param->parent_expr_of_query_ref_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("find no parent expr of subquery expr", K(ret));
-      } else if (OB_FAIL(check_join_first_validity(*trans_param.ja_query_ref_,
+      } else if (OB_FAIL(check_join_first_validity(*trans_param->ja_query_ref_,
                                             root_expr->has_flag(CNT_ALIAS),
                                             is_exists_op(root_expr->get_expr_type()),
-                                            *trans_param.parent_expr_of_query_ref,
-                                            IS_SUBQUERY_COMPARISON_OP(trans_param.parent_expr_of_query_ref->get_expr_type()),
-                                            trans_param.not_null_const_,
-                                            trans_param.limit_for_exists_,
+                                            *trans_param->parent_expr_of_query_ref_,
+                                            IS_SUBQUERY_COMPARISON_OP(trans_param->parent_expr_of_query_ref_->get_expr_type()),
+                                            trans_param->not_null_const_,
+                                            trans_param->limit_for_exists_,
                                             limit_value,
                                             is_valid,
-                                            trans_param.equal_param_info_))) {
+                                            trans_param->equal_param_info_))) {
         LOG_WARN("failed to check subquery validity for join first", K(ret));
       } else {
-        trans_param.limit_value_ = limit_value;
+        trans_param->limit_value_ = limit_value;
       }
     }
     if (OB_SUCC(ret) && is_valid) {
@@ -430,6 +438,7 @@ int ObTransformAggrSubquery::gather_transform_params(ObDMLStmt &stmt,
                                                        child_expr->get_param_expr(i),
                                                        pullup_strategy,
                                                        is_select_item_expr,
+                                                       allocator,
                                                        transform_params)))) {
           LOG_WARN("failed to gather transform params", K(ret));
         }
@@ -615,6 +624,9 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObDMLStmt &stmt,
   } else if (!is_valid) {
     LOG_TRACE("order by item is invalid", K(is_valid));
     OPT_TRACE("subquery order by item contain correlated subquery");
+  } else if (parent_expr.has_flag(CNT_WINDOW_FUNC)) {
+    is_valid = false;
+    OPT_TRACE("window function in subquery comparison is not supported");
   }
   return ret;
 }
@@ -1129,10 +1141,10 @@ int ObTransformAggrSubquery::transform_upper_stmt(ObDMLStmt &stmt, TransformPara
       if (OB_FAIL(deduce_query_values_for_exists(*ctx_,
                                                  stmt,
                                                  param.not_null_expr_,
-                                                 param.parent_expr_of_query_ref,
+                                                 param.parent_expr_of_query_ref_,
                                                  real_parent_value))) {
         LOG_WARN("failed to deduce query values for exists", K(ret));
-      } else if (OB_FAIL(from_exprs.push_back(param.parent_expr_of_query_ref))) {
+      } else if (OB_FAIL(from_exprs.push_back(param.parent_expr_of_query_ref_))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else if (OB_FAIL(to_exprs.push_back(real_parent_value))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -1241,7 +1253,8 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
     query_num = stmt->get_subquery_expr_size();
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < query_num; ++i) {
-    TransformParam param;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    TransformParam param(allocator);
     ObSelectStmt *view_stmt = NULL;
     ObRawExpr *root_expr = NULL;
     bool post_group_by = false;
@@ -1333,7 +1346,7 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
                                              bool &post_group_by)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<TransformParam, 4> params;
+  ObSEArray<TransformParam*, 4> params;
   ObSEArray<ObRawExpr *, 4> pre_group_by_exprs;  // where, group exprs
   ObSEArray<ObRawExpr *, 4> post_group_by_exprs; // having, select, assign values exprs
   ObSEArray<ObRawExpr *, 4> invalid_list;
@@ -1375,12 +1388,14 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
     post_group_by = (i >= pre_count);
     ObRawExpr *expr = !post_group_by ? pre_group_by_exprs.at(i) :
                                        post_group_by_exprs.at(i - pre_count);
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
     ObSEArray<ObRawExpr *, 4> filters;
     bool is_filter = check_is_filter(stmt, expr);
     if (is_exists_op(expr->get_expr_type()) && !is_filter) {
       // only rewrite [not] exists in where or having
     } else if (OB_FAIL(gather_transform_params(stmt, expr, expr, JOIN_FIRST, 
                                                false, // is_select_item_expr, for aggr first only
+                                               allocator,
                                                params))) {
       LOG_WARN("failed to gather transform params", K(ret));
     } else if (OB_FAIL(get_filters(stmt, expr, filters))) {
@@ -1389,11 +1404,14 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
     for (int64_t j = 0; OB_SUCC(ret) && NULL == root_expr && j < params.count(); ++j) {
       bool is_valid = true;
       bool found = false;
-      if (ObOptimizerUtil::find_item(invalid_list, params.at(j).ja_query_ref_)) {
+      if (OB_ISNULL(params.at(j))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("transform param is null", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::find_item(invalid_list, params.at(j)->ja_query_ref_))) {
         is_valid = false;
       } else if (post_groupby_only &&
                  OB_FAIL(ObTransformUtils::recursive_find_shared_expr(pre_group_by_exprs,
-                                                                      params.at(j).ja_query_ref_,
+                                                                      params.at(j)->ja_query_ref_,
                                                                       found))) {
         LOG_WARN("failed to find shared expr", K(ret));
       } else if (found) {
@@ -1401,31 +1419,33 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
         // 'post group by only' mode and can't transform
         is_valid = false;
       } else if (is_exists_op(expr->get_expr_type())) {
-        if (OB_FAIL(choose_pullup_method_for_exists(params.at(j).ja_query_ref_,
-                                                    params.at(j).pullup_flag_,
+        if (OB_FAIL(choose_pullup_method_for_exists(params.at(j)->ja_query_ref_,
+                                                    params.at(j)->pullup_flag_,
                                                     T_OP_NOT_EXISTS == expr->get_expr_type(),
                                                     is_valid))) {
           LOG_WARN("failed to choose pullup method for exists", K(ret));
         }
       } else {
-        if (OB_FAIL(choose_pullup_method(filters, params.at(j)))) {
+        if (OB_FAIL(choose_pullup_method(filters, *params.at(j)))) {
           LOG_WARN("failed to choose pullup method", K(ret));
         }
       }
-      if (OB_SUCC(ret) && is_valid && use_outer_join(params.at(j).pullup_flag_)) {
-        if (OB_FAIL(check_can_use_outer_join(params.at(j), is_valid))) {
+      if (OB_SUCC(ret) && is_valid && use_outer_join(params.at(j)->pullup_flag_)) {
+        if (OB_FAIL(check_can_use_outer_join(*params.at(j), is_valid))) {
           LOG_WARN("failed to check use outer join", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
         if (!is_valid) {
-          if (OB_FAIL(invalid_list.push_back(params.at(j).ja_query_ref_))) {
+          if (OB_FAIL(invalid_list.push_back(params.at(j)->ja_query_ref_))) {
             LOG_WARN("failed to push back invalid subquery", K(ret));
           }
         } else {
           root_expr = expr;
           post_group_by = (i >= pre_count);
-          param = params.at(j);
+          if (OB_FAIL(param.assign(*params.at(j)))) {
+            LOG_WARN("failed to assign transform param", K(ret));
+          }
         }
       }
     }
@@ -1561,6 +1581,9 @@ int ObTransformAggrSubquery::check_join_first_validity(ObQueryRefRawExpr &query_
     is_valid = false;
     LOG_TRACE("invalid subquery", K(is_valid), K(*subquery));
     OPT_TRACE("subquery has rollup/win_func/sequence");
+  } else if (parent_expr.has_flag(CNT_WINDOW_FUNC)) {
+    is_valid = false;
+    OPT_TRACE("window function in subquery comparison is not supported");
   } else if (in_exists) {
     if (!subquery->has_having()) {
       is_valid = false;
@@ -1794,13 +1817,13 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
   ObQueryRefRawExpr *query_ref_expr = NULL;
   ObSelectStmt *subquery = NULL;
   ObRawExprFactory *expr_factory = NULL;
-  ObRawExpr *parent_expr_of_query_ref = NULL;
+  ObRawExpr *parent_expr_of_query_ref_ = NULL;
   ObRawExpr* vec_cmp_expr = NULL;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(root_expr)
       || OB_ISNULL(expr_factory = ctx_->expr_factory_)
       || OB_ISNULL(query_ref_expr = trans_param.ja_query_ref_)
       || OB_ISNULL(subquery = trans_param.ja_query_ref_->get_ref_stmt())
-      || OB_ISNULL(parent_expr_of_query_ref = trans_param.parent_expr_of_query_ref)) {
+      || OB_ISNULL(parent_expr_of_query_ref_ = trans_param.parent_expr_of_query_ref_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(ctx_), K(root_expr), K(query_ref_expr), K(subquery));
   } else if (OB_FAIL(get_unique_keys(select_stmt, select_stmt.get_group_exprs(), is_first_trans))) {
@@ -1839,7 +1862,7 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
       } else if (OB_FAIL(modify_vector_comparison_expr_if_necessary(select_stmt,
                                                                     expr_factory,
                                                                     select_exprs,
-                                                                    parent_expr_of_query_ref,
+                                                                    parent_expr_of_query_ref_,
                                                                     vec_cmp_expr))) {
         LOG_WARN("failed to modify vector comparison expr", K(ret));
       } else if (OB_FAIL(select_stmt.replace_relation_exprs(trans_param.query_refs_,
@@ -1893,14 +1916,14 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
  */
 int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(ObSelectStmt &select_stmt,
                                                                         ObRawExprFactory *expr_factory,
-                                                                        ObSEArray<ObRawExpr*, 4> &select_exprs,
-                                                                        ObRawExpr *parent_expr_of_query_ref,
+                                                                        ObIArray<ObRawExpr*> &select_exprs,
+                                                                        ObRawExpr *parent_expr_of_query_ref_,
                                                                         ObRawExpr *&vec_cmp_expr) {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_factory) || OB_ISNULL(parent_expr_of_query_ref) || select_exprs.count() == 0) {
+  if (OB_ISNULL(expr_factory) || OB_ISNULL(parent_expr_of_query_ref_) || select_exprs.count() == 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(ret), K(expr_factory), K(parent_expr_of_query_ref), K(select_exprs));
-  } else if (IS_SUBQUERY_COMPARISON_OP(parent_expr_of_query_ref->get_expr_type())) {
+    LOG_WARN("invalid argument", K(ret), K(expr_factory), K(parent_expr_of_query_ref_), K(select_exprs));
+  } else if (IS_SUBQUERY_COMPARISON_OP(parent_expr_of_query_ref_->get_expr_type())) {
     // construct a T_OP_ROW expr through vector projection term of subquery
     if (select_exprs.count() > 1) {
       ObOpRawExpr* op_row_expr;
@@ -1915,7 +1938,7 @@ int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(ObSelect
     }
     // replace parent_expr_of_query_ref with subquery comparison operator to the one of common comparison operator
     ObItemType value_cmp_type = T_INVALID;
-    if (FAILEDx(ObTransformUtils::query_cmp_to_value_cmp(parent_expr_of_query_ref->get_expr_type(), value_cmp_type))) {
+    if (FAILEDx(ObTransformUtils::query_cmp_to_value_cmp(parent_expr_of_query_ref_->get_expr_type(), value_cmp_type))) {
       LOG_WARN("unexpected root_expr type", K(ret), K(value_cmp_type));
     } else {
       ObOpRawExpr *new_parent_expr = NULL;
@@ -1924,16 +1947,16 @@ int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(ObSelect
 
       if (OB_FAIL(expr_factory->create_raw_expr(value_cmp_type, new_parent_expr))) {
         LOG_WARN("failed to build expr", K(ret), K(new_parent_expr));
-      } else if (OB_FAIL(new_parent_expr->init_param_exprs(parent_expr_of_query_ref->get_param_count()))) {
+      } else if (OB_FAIL(new_parent_expr->init_param_exprs(parent_expr_of_query_ref_->get_param_count()))) {
         LOG_WARN("failed to init param exprs", K(ret));
       } else {
-        for (int64_t i=0; i < parent_expr_of_query_ref->get_param_count(); i++) {
-          if (OB_FAIL(new_parent_expr->add_param_expr(parent_expr_of_query_ref->get_param_expr(i)))) {
+        for (int64_t i=0; i < parent_expr_of_query_ref_->get_param_count(); i++) {
+          if (OB_FAIL(new_parent_expr->add_param_expr(parent_expr_of_query_ref_->get_param_expr(i)))) {
             LOG_WARN("failed to add param expr", K(ret));
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(old_exprs.push_back(parent_expr_of_query_ref)) ||
+        } else if (OB_FAIL(old_exprs.push_back(parent_expr_of_query_ref_)) ||
                    OB_FAIL(new_exprs.push_back(new_parent_expr))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to push back expr", K(ret));
@@ -2938,7 +2961,7 @@ int ObTransformAggrSubquery::convert_exists_as_scalar_subquery(ObDMLStmt *stmt,
   ObSEArray<ObRawExpr*, 2> to_exprs;
   if (OB_ISNULL(query_ref) || OB_ISNULL(subquery) || OB_ISNULL(ctx_) ||
       OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(stmt) ||
-      OB_ISNULL(parent_expr = trans_param.parent_expr_of_query_ref) ||
+      OB_ISNULL(parent_expr = trans_param.parent_expr_of_query_ref_) ||
       (parent_expr->get_expr_type() != T_OP_EXISTS && parent_expr->get_expr_type() != T_OP_NOT_EXISTS)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret));
@@ -2994,7 +3017,7 @@ int ObTransformAggrSubquery::convert_exists_as_scalar_subquery(ObDMLStmt *stmt,
   } else if (OB_FAIL(stmt->replace_relation_exprs(from_exprs, to_exprs))) {
     LOG_WARN("failed to replace inner stmt expr", K(ret));
   } else {
-    trans_param.parent_expr_of_query_ref = cmp_expr;
+    trans_param.parent_expr_of_query_ref_ = cmp_expr;
   }
 
   if (OB_SUCC(ret) &&
@@ -3010,7 +3033,7 @@ int ObTransformAggrSubquery::convert_any_all_as_scalar_subquery(ObDMLStmt *stmt,
                                                                 TransformParam &trans_param)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *parent_expr = trans_param.parent_expr_of_query_ref;
+  ObRawExpr *parent_expr = trans_param.parent_expr_of_query_ref_;
   bool trans_happened = false;
   ObSEArray<ObRawExpr*, 2> from_exprs;
   ObSEArray<ObRawExpr*, 2> to_exprs;
@@ -3037,13 +3060,13 @@ int ObTransformAggrSubquery::convert_any_all_as_scalar_subquery(ObDMLStmt *stmt,
                                                                  subquery->get_condition_exprs(),
                                                                  trans_param.nested_conditions_))) {
     LOG_WARN("failed to get correlated conditions", K(ret));
-  } else if (OB_FAIL(from_exprs.push_back(trans_param.parent_expr_of_query_ref))) {
+  } else if (OB_FAIL(from_exprs.push_back(trans_param.parent_expr_of_query_ref_))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else if (OB_FAIL(to_exprs.push_back(parent_expr))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else if (OB_FAIL(stmt->replace_relation_exprs(from_exprs, to_exprs))) {
     LOG_WARN("failed to replace inner stmt expr", K(ret));
-  } else if (OB_FALSE_IT(trans_param.parent_expr_of_query_ref = parent_expr)) {
+  } else if (OB_FALSE_IT(trans_param.parent_expr_of_query_ref_ = parent_expr)) {
   } else if (OB_FAIL(convert_exists_as_scalar_subquery(stmt,
                                                       query_ref,
                                                       subquery,
@@ -3061,24 +3084,24 @@ int ObTransformAggrSubquery::convert_any_all_as_scalar_subquery(ObDMLStmt *stmt,
 int ObTransformAggrSubquery::deduce_query_values_for_exists(ObTransformerCtx &ctx,
                                                             ObDMLStmt &stmt,
                                                             ObRawExpr *not_null_expr,
-                                                            ObRawExpr *parent_expr_of_query_ref,
+                                                            ObRawExpr *parent_expr_of_query_ref_,
                                                             ObRawExpr *&real_parent_value)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *left_side = NULL;
   ObRawExpr *right_side = NULL;
   ObItemType cmp_type = T_INVALID;
-  if (OB_ISNULL(not_null_expr) || OB_ISNULL(parent_expr_of_query_ref) ||
+  if (OB_ISNULL(not_null_expr) || OB_ISNULL(parent_expr_of_query_ref_) ||
       OB_ISNULL(ctx.session_info_) || OB_ISNULL(ctx.expr_factory_) ||
-      (parent_expr_of_query_ref->get_expr_type() != T_OP_GT &&
-       parent_expr_of_query_ref->get_expr_type() != T_OP_LE) ||
-      parent_expr_of_query_ref->get_param_count() != 2 ||
-      OB_ISNULL(left_side = parent_expr_of_query_ref->get_param_expr(0)) ||
-      OB_ISNULL(right_side = parent_expr_of_query_ref->get_param_expr(1)) ||
+      (parent_expr_of_query_ref_->get_expr_type() != T_OP_GT &&
+       parent_expr_of_query_ref_->get_expr_type() != T_OP_LE) ||
+      parent_expr_of_query_ref_->get_param_count() != 2 ||
+      OB_ISNULL(left_side = parent_expr_of_query_ref_->get_param_expr(0)) ||
+      OB_ISNULL(right_side = parent_expr_of_query_ref_->get_param_expr(1)) ||
       !left_side->is_query_ref_expr() || !right_side->is_static_const_expr()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret), K(not_null_expr));
-  } else if (OB_FALSE_IT(cmp_type = parent_expr_of_query_ref->get_expr_type())) {
+  } else if (OB_FALSE_IT(cmp_type = parent_expr_of_query_ref_->get_expr_type())) {
   } else if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*ctx.expr_factory_,
                                                             not_null_expr,
                                                             cmp_type == T_OP_GT,
@@ -3168,6 +3191,34 @@ int ObTransformAggrSubquery::check_rule_bypass(const ObDMLStmt &stmt, bool &reje
     reject = true;
   } else if (stmt.get_subquery_expr_size() < 1) {
     reject = true;
+  }
+  return ret;
+}
+
+int ObTransformAggrSubquery::TransformParam::assign(const TransformParam &other)
+{
+  int ret = OB_SUCCESS;
+  ja_query_ref_ = other.ja_query_ref_;
+  pullup_flag_ = other.pullup_flag_;
+  not_null_expr_ = other.not_null_expr_;
+  parent_expr_of_query_ref_ = other.parent_expr_of_query_ref_;
+  limit_for_exists_ = other.limit_for_exists_;
+  limit_value_ = other.limit_value_;
+  limit_to_aggr_ = other.limit_to_aggr_;
+  any_all_to_aggr_ = other.any_all_to_aggr_;
+  exists_to_aggr_ = other.exists_to_aggr_;
+  if (OB_FAIL(query_refs_.assign(other.query_refs_))) {
+    LOG_WARN("failed to assign query refs", K(ret));
+  } else if (OB_FAIL(nested_conditions_.assign(other.nested_conditions_))) {
+    LOG_WARN("failed to assign nested conditions", K(ret));
+  } else if (OB_FAIL(is_null_prop_.assign(other.is_null_prop_))) {
+    LOG_WARN("failed to assign is null prop", K(ret));
+  } else if (OB_FAIL(not_null_const_.assign(other.not_null_const_))) {
+    LOG_WARN("failed to assign not null const", K(ret));
+  } else if (OB_FAIL(equal_param_info_.assign(other.equal_param_info_))) {
+    LOG_WARN("failed to assign equal param info", K(ret));
+  } else if (OB_FAIL(upper_filters_.assign(other.upper_filters_))) {
+    LOG_WARN("failed to assign upper filters", K(ret));
   }
   return ret;
 }

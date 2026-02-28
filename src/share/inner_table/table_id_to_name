@@ -416,13 +416,22 @@
 # 560: __all_sensitive_rule_privilege
 # 561: __all_sensitive_rule_privilege_history
 # 561: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
+# 563: __all_backup_validate_job
+# 564: __all_backup_validate_job_history
+# 565: __all_backup_validate_task
+# 566: __all_backup_validate_task_history
+# 567: __all_backup_validate_ls_task
+# 568: __all_backup_validate_ls_task_history
 # 569: __all_tenant_ss_storage_stat
 # 570: __all_ai_model
 # 571: __all_ai_model_history
 # 571: __all_ai_model  # BASE_TABLE_NAME
 # 572: __all_ai_model_endpoint
 # 573: __wr_active_session_history_v2
+# 577: __all_tablet_to_global_temporary_table
 # 579: __wr_sqlstat_v2
+# 580: __all_lob_check_exception_result
+# 583: __all_routine_load_job
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1228,6 +1237,7 @@
 # 12487: __all_virtual_nic_info
 # 12488: __all_virtual_scheduler_job_run_detail_v2
 # 12488: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
+# 12489: __all_virtual_deadlock_detector_stat
 # 12490: __all_virtual_spatial_reference_systems
 # 12490: __all_spatial_reference_systems  # BASE_TABLE_NAME
 # 12491: __all_virtual_log_transport_dest_stat
@@ -1335,6 +1345,18 @@
 # 12560: __all_virtual_sensitive_rule_privilege_history
 # 12560: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
 # 12560: __all_sensitive_rule_privilege_history  # BASE_TABLE_NAME1
+# 12563: __all_virtual_backup_validate_job
+# 12563: __all_backup_validate_job  # BASE_TABLE_NAME
+# 12564: __all_virtual_backup_validate_job_history
+# 12564: __all_backup_validate_job_history  # BASE_TABLE_NAME
+# 12565: __all_virtual_backup_validate_task
+# 12565: __all_backup_validate_task  # BASE_TABLE_NAME
+# 12566: __all_virtual_backup_validate_task_history
+# 12566: __all_backup_validate_task_history  # BASE_TABLE_NAME
+# 12567: __all_virtual_backup_validate_ls_task
+# 12567: __all_backup_validate_ls_task  # BASE_TABLE_NAME
+# 12568: __all_virtual_backup_validate_ls_task_history
+# 12568: __all_backup_validate_ls_task_history  # BASE_TABLE_NAME
 # 12569: __all_virtual_tenant_ss_storage_stat
 # 12569: __all_tenant_ss_storage_stat  # BASE_TABLE_NAME
 # 12570: __all_virtual_hms_client_pool_stat
@@ -1349,9 +1371,18 @@
 # 12575: __all_virtual_ss_object_type_io_stat
 # 12576: __all_virtual_wr_active_session_history_v2
 # 12576: __wr_active_session_history_v2  # BASE_TABLE_NAME
+# 12580: __all_virtual_tablet_to_global_temporary_table
+# 12580: __all_tablet_to_global_temporary_table  # BASE_TABLE_NAME
+# 12581: __all_virtual_external_catalog_client_pool_stat
 # 12582: __all_virtual_wr_sqlstat_v2
 # 12582: __wr_sqlstat_v2  # BASE_TABLE_NAME
+# 12583: __all_virtual_lob_check_exception_result
+# 12583: __all_lob_check_exception_result  # BASE_TABLE_NAME
+# 12586: __all_virtual_tablet_window_loop_info
 # 12587: __all_virtual_tablet_replica_info
+# 12588: __all_virtual_routine_load_job
+# 12588: __all_routine_load_job  # BASE_TABLE_NAME
+# 12592: __all_virtual_vector_segment_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1759,6 +1790,12 @@
 # 15261: __all_virtual_apply_stat  # BASE_TABLE_NAME
 # 15262: ALL_VIRTUAL_ARCHIVE_STAT
 # 15262: __all_virtual_archive_stat  # BASE_TABLE_NAME
+# 15263: ALL_VIRTUAL_KV_TTL_TASK
+# 15263: __all_kv_ttl_task  # BASE_TABLE_NAME
+# 15263: __all_virtual_kv_ttl_task  # BASE_TABLE_NAME1
+# 15264: ALL_VIRTUAL_KV_TTL_TASK_HISTORY
+# 15264: __all_kv_ttl_task_history  # BASE_TABLE_NAME
+# 15264: __all_virtual_kv_ttl_task_history  # BASE_TABLE_NAME1
 # 15266: ALL_VIRTUAL_LS_STATUS
 # 15266: __all_ls_status  # BASE_TABLE_NAME
 # 15266: __all_virtual_ls_status  # BASE_TABLE_NAME1
@@ -2082,6 +2119,18 @@
 # 15523: __all_virtual_ss_existing_sstable_mgr  # BASE_TABLE_NAME
 # 15524: ALL_VIRTUAL_UNIT_SYS_AGENT
 # 15524: __all_unit  # BASE_TABLE_NAME
+# 15527: ALL_VIRTUAL_BACKUP_VALIDATE_JOB
+# 15527: __all_backup_validate_job  # BASE_TABLE_NAME
+# 15527: __all_virtual_backup_validate_job  # BASE_TABLE_NAME1
+# 15528: ALL_VIRTUAL_BACKUP_VALIDATE_JOB_HISTORY
+# 15528: __all_backup_validate_job_history  # BASE_TABLE_NAME
+# 15528: __all_virtual_backup_validate_job_history  # BASE_TABLE_NAME1
+# 15529: ALL_VIRTUAL_BACKUP_VALIDATE_TASK
+# 15529: __all_backup_validate_task  # BASE_TABLE_NAME
+# 15529: __all_virtual_backup_validate_task  # BASE_TABLE_NAME1
+# 15530: ALL_VIRTUAL_BACKUP_VALIDATE_TASK_HISTORY
+# 15530: __all_backup_validate_task_history  # BASE_TABLE_NAME
+# 15530: __all_virtual_backup_validate_task_history  # BASE_TABLE_NAME1
 # 15531: ALL_VIRTUAL_TENANT_SS_STORAGE_STAT
 # 15531: __all_tenant_ss_storage_stat  # BASE_TABLE_NAME
 # 15531: __all_virtual_tenant_ss_storage_stat  # BASE_TABLE_NAME1
@@ -2097,10 +2146,17 @@
 # 15536: ALL_VIRTUAL_WR_SQLSTAT_V2
 # 15536: __wr_sqlstat_v2  # BASE_TABLE_NAME
 # 15536: __all_virtual_wr_sqlstat_v2  # BASE_TABLE_NAME1
+# 15537: ALL_VIRTUAL_LOB_CHECK_EXCEPTION_RESULT
+# 15537: __all_lob_check_exception_result  # BASE_TABLE_NAME
+# 15537: __all_virtual_lob_check_exception_result  # BASE_TABLE_NAME1
 # 15538: ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
 # 15538: __all_sensitive_rule  # BASE_TABLE_NAME
 # 15539: ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT
 # 15539: __all_sensitive_column  # BASE_TABLE_NAME
+# 15542: ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO
+# 15542: __all_virtual_tablet_window_loop_info  # BASE_TABLE_NAME
+# 15546: ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT
+# 15546: __all_routine_load_job  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2662,6 +2718,14 @@
 # 21666: CDB_OB_SENSITIVE_COLUMNS
 # 21667: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
 # 21668: CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS
+# 21673: CDB_OB_BACKUP_VALIDATE_JOBS
+# 21674: CDB_OB_BACKUP_VALIDATE_JOB_HISTORY
+# 21675: CDB_OB_BACKUP_VALIDATE_TASKS
+# 21676: CDB_OB_BACKUP_VALIDATE_TASK_HISTORY
+# 21677: DBA_OB_BACKUP_VALIDATE_JOBS
+# 21678: DBA_OB_BACKUP_VALIDATE_JOB_HISTORY
+# 21679: DBA_OB_BACKUP_VALIDATE_TASKS
+# 21680: DBA_OB_BACKUP_VALIDATE_TASK_HISTORY
 # 21681: GV$OB_HNSW_INDEX_INFO
 # 21682: V$OB_HNSW_INDEX_INFO
 # 21683: GV$OB_IVF_INDEX_INFO
@@ -2676,9 +2740,23 @@
 # 21692: CDB_OB_AI_MODEL_ENDPOINTS
 # 21693: GV$OB_SS_OBJECT_TYPE_IO_STAT
 # 21694: V$OB_SS_OBJECT_TYPE_IO_STAT
+# 21695: GV$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
+# 21696: V$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
 # 21697: DBA_TABLES
+# 21698: DBA_OB_LOB_CHECK_TASKS
+# 21699: CDB_OB_LOB_CHECK_TASKS
+# 21700: DBA_OB_LOB_CHECK_EXCEPTION_RESULT
+# 21701: CDB_OB_LOB_CHECK_EXCEPTION_RESULT
+# 21702: DBA_OB_TTL_TASKS
+# 21703: DBA_OB_TTL_TASK_HISTORY
+# 21704: CDB_OB_TTL_TASKS
+# 21705: CDB_OB_TTL_TASK_HISTORY
 # 21708: GV$OB_TABLET_REPLICA_INFO
 # 21709: V$OB_TABLET_REPLICA_INFO
+# 21710: DBA_OB_ROUTINE_LOAD_JOBS
+# 21711: CDB_OB_ROUTINE_LOAD_JOBS
+# 21716: GV$OB_HNSW_INDEX_SEGMENT_INFO
+# 21717: V$OB_HNSW_INDEX_SEGMENT_INFO
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -2971,6 +3049,10 @@
 # 25308: DBA_MVIEW_RUNNING_JOBS
 # 25309: DBA_MVIEW_DEPS
 # 25310: DBA_OB_DYNAMIC_PARTITION_TABLES
+# 25311: DBA_OB_BACKUP_VALIDATE_JOBS
+# 25312: DBA_OB_BACKUP_VALIDATE_JOB_HISTORY
+# 25313: DBA_OB_BACKUP_VALIDATE_TASKS
+# 25314: DBA_OB_BACKUP_VALIDATE_TASK_HISTORY
 # 25315: DBA_OB_SS_SPACE_USAGE
 # 25316: DBA_OB_SOURCE
 # 25317: ALL_OB_SOURCE
@@ -3213,9 +3295,14 @@
 # 28279: DBA_OB_PL_OBJ_CACHE_STATUS
 # 28283: GV$OB_HMS_CLIENT_POOL_STAT
 # 28284: V$OB_HMS_CLIENT_POOL_STAT
+# 28285: DBA_OB_LOB_CHECK_TASKS
+# 28287: DBA_OB_LOB_CHECK_EXCEPTION_RESULT
 # 28289: DBA_OB_SENSITIVE_RULES
 # 28290: DBA_OB_SENSITIVE_COLUMNS
 # 28291: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
+# 28292: DBA_OB_TTL_TASKS
+# 28293: DBA_OB_TTL_TASK_HISTORY
+# 28295: DBA_OB_ROUTINE_LOAD_JOBS
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME
@@ -3685,6 +3772,15 @@
 # 101121: __idx_572_idx_ai_model_name
 # 101121: idx_ai_model_name  # INDEX_NAME
 # 101121: __all_ai_model_endpoint  # DATA_BASE_TABLE_NAME
+# 101122: __idx_577_idx_temp_table_id_session_id
+# 101122: idx_temp_table_id_session_id  # INDEX_NAME
+# 101122: __all_tablet_to_global_temporary_table  # DATA_BASE_TABLE_NAME
+# 101123: __idx_577_idx_temp_session_id_table_id
+# 101123: idx_temp_session_id_table_id  # INDEX_NAME
+# 101123: __all_tablet_to_global_temporary_table  # DATA_BASE_TABLE_NAME
+# 101124: __idx_583_idx_routine_load_job_name
+# 101124: idx_routine_load_job_name  # INDEX_NAME
+# 101124: __all_routine_load_job  # DATA_BASE_TABLE_NAME
 # 101104: __idx_482_idx_tablet_his_table_id_dest
 # 101104: idx_tablet_his_table_id_dest  # INDEX_NAME
 # 101104: __all_tablet_reorganize_history  # DATA_BASE_TABLE_NAME

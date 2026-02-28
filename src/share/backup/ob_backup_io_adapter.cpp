@@ -75,16 +75,18 @@ struct DeviceGuard : public ObObjectStorageTenantGuard
              OB_IO_MANAGER.get_object_storage_io_timeout_ms(ObBackupIoAdapter::get_tenant_id()) * 1000LL),
          allocator_(OB_STORAGE_IO_ADAPTER),
          device_handle_(nullptr),
+         fd_(),
          uri_cstr_(nullptr)
   {}
 
   virtual ~DeviceGuard()
   {
     int ret = OB_SUCCESS;
-    if (OB_NOT_NULL(device_handle_) && OB_FAIL(release_device(device_handle_))) {
-      OB_LOG(WARN, "fail to release device", KR(ret), KP(device_handle_), K(uri_cstr_));
+    if (OB_NOT_NULL(device_handle_) && OB_FAIL(ObBackupIoAdapter::close_device_and_fd(device_handle_, fd_))) {
+      OB_LOG(WARN, "fail to release device", KR(ret), KP(device_handle_), K(fd_), K(uri_cstr_));
     }
     allocator_.reset();
+    fd_.reset();
     uri_cstr_ = nullptr;
     device_handle_ = nullptr;
   }
@@ -92,7 +94,8 @@ struct DeviceGuard : public ObObjectStorageTenantGuard
   int init(
       const ObString &uri,
       const common::ObObjectStorageInfo *storage_info,
-      const ObStorageIdMod &storage_id_mod)
+      const ObStorageIdMod &storage_id_mod,
+      const ObStorageAccessType access_type = OB_STORAGE_ACCESS_UTIL)
   {
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(uri.empty()) || OB_NOT_NULL(uri.find('\0'))) {
@@ -101,17 +104,17 @@ struct DeviceGuard : public ObObjectStorageTenantGuard
           KR(ret), K(uri), KPC(storage_info), K(storage_id_mod));
     } else if (OB_FAIL(ob_dup_cstring(allocator_, uri, uri_cstr_))) {
       OB_LOG(WARN, "fail to copy url", KR(ret), K(uri), KPC(storage_info), K(storage_id_mod));
-    } else if (OB_FAIL(ObBackupIoAdapter::get_and_init_device(
-        device_handle_, storage_info, uri_cstr_, storage_id_mod))) {
-      OB_LOG(WARN, "fail to get device!", KR(ret), K(uri), KPC(storage_info), K(storage_id_mod));
+    } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(device_handle_, fd_, storage_info, uri_cstr_, access_type, storage_id_mod))) {
+      OB_LOG(WARN, "fail to open with access type!", KR(ret), K(uri), KPC(storage_info), K(storage_id_mod), K(access_type));
     }
     return ret;
   }
 
-  TO_STRING_KV(KP(device_handle_), K(uri_cstr_));
+  TO_STRING_KV(KP(device_handle_), K(uri_cstr_), K(fd_));
 
   ObArenaAllocator allocator_;
   ObIODevice *device_handle_;
+  ObIOFd fd_;
   char *uri_cstr_;
 };
 
@@ -257,7 +260,7 @@ int ObBackupIoAdapter::is_exist(const common::ObString &uri, const common::ObObj
   DeviceGuard device_guard;
   if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
     OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
-  } else if (OB_FAIL(device_guard.device_handle_->exist(device_guard.uri_cstr_, exist))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.exist(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_, exist))) {
     OB_LOG(WARN, "fail to check exist!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
   return ret;
@@ -270,7 +273,7 @@ int ObBackupIoAdapter::adaptively_is_exist(const common::ObString &uri, const co
   DeviceGuard device_guard;
   if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
     OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
-  } else if (OB_FAIL(device_guard.device_handle_->adaptive_exist(device_guard.uri_cstr_, exist))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.adaptive_exist(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_, exist))) {
     OB_LOG(WARN, "fail to check adaptive exist!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
   return ret;
@@ -284,7 +287,7 @@ int ObBackupIoAdapter::get_file_length(const common::ObString &uri, const common
   DeviceGuard device_guard;
   if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
     OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
-  } else if (OB_FAIL(device_guard.device_handle_->stat(device_guard.uri_cstr_, statbuf))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.stat(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_, statbuf))) {
     OB_LOG(WARN, "fail to get file length!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   } else {
     file_length = statbuf.size_;
@@ -300,7 +303,7 @@ int ObBackupIoAdapter::adaptively_get_file_length(const common::ObString &uri, c
   DeviceGuard device_guard;
   if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
     OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
-  } else if (OB_FAIL(device_guard.device_handle_->adaptive_stat(device_guard.uri_cstr_, statbuf))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.adaptive_stat(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_, statbuf))) {
     OB_LOG(WARN, "fail to get adaptive file length!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   } else {
     file_length = statbuf.size_;
@@ -317,7 +320,7 @@ int ObBackupIoAdapter::get_file_modify_time(const common::ObString &uri,
   DeviceGuard device_guard;
   if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
     OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
-  } else if (OB_FAIL(device_guard.device_handle_->stat(device_guard.uri_cstr_, statbuf))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.stat(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_, statbuf))) {
     OB_LOG(WARN, "fail to get file stat!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   } else {
     modify_time_s = statbuf.mtime_s_;
@@ -366,7 +369,7 @@ int ObBackupIoAdapter::del_file(const common::ObString &uri, const common::ObObj
   DeviceGuard device_guard;
   if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
     OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
-  } else if (OB_FAIL(device_guard.device_handle_->unlink(device_guard.uri_cstr_))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.unlink(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_))) {
     OB_LOG(WARN, "fail to del file!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
   return ret;
@@ -400,7 +403,7 @@ int ObBackupIoAdapter::adaptively_del_file(const common::ObString &uri, const co
   DeviceGuard device_guard;
   if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
     OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
-  } else if (OB_FAIL(device_guard.device_handle_->adaptive_unlink(device_guard.uri_cstr_))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.adaptive_unlink(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_))) {
     OB_LOG(WARN, "fail to del adaptive file!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
   return ret;
@@ -424,7 +427,7 @@ int ObBackupIoAdapter::mkdir(const common::ObString &uri, const common::ObObject
   DeviceGuard device_guard;
   if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
     OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
-  } else if (OB_FAIL(device_guard.device_handle_->mkdir(device_guard.uri_cstr_, 0))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.mkdir(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_))) {
     OB_LOG(WARN, "fail to mkdir!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
   return ret;
@@ -627,22 +630,14 @@ int ObBackupIoAdapter::seal_file(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObIOFd fd;
-  ObIODevice *device_handle = nullptr;
-  ObObjectStorageTenantGuard object_storage_tenant_guard(
-    get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
-  if (OB_FAIL(open_with_access_type(device_handle, fd,
-      storage_info, uri, ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER, storage_id_mod))) {
-    OB_LOG(WARN, "fail to get device and open file !", K(uri), K(storage_info), KR(ret));
-  } else if (FALSE_IT(fd.device_handle_ = device_handle)) {
-  } else if (OB_FAIL(device_handle->seal_file(fd))) {
-    STORAGE_LOG(WARN, "fail to seal file", KR(ret), K(uri), K(storage_info), K(fd));
+  DeviceGuard device_guard;
+
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod(), ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(OB_IO_MANAGER.seal_file(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_))) {
+    STORAGE_LOG(WARN, "fail to seal file", KR(ret), K(uri), K(storage_info), K(device_guard));
   }
 
-  if (OB_TMP_FAIL(close_device_and_fd(device_handle, fd))) {
-    ret = COVER_SUCC(tmp_ret);
-    STORAGE_LOG(WARN, "failed to close device and fd", KR(ret), K(tmp_ret));
-  }
   return ret;
 }
 
@@ -656,16 +651,16 @@ int ObBackupIoAdapter::pwrite(
     const bool is_can_seal)
 {
   int ret = OB_SUCCESS;
-  int flag = -1;
-  ObFdSimulator::get_fd_flag(fd, flag);
-  if ((ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER != flag)
-      && (ObStorageAccessType::OB_STORAGE_ACCESS_MULTIPART_WRITER != flag)) {
+  ObStorageAccessType op_type = ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE;
+  ObFdSimulator::get_fd_op_type(fd, op_type);
+  if ((ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER != op_type)
+      && (ObStorageAccessType::OB_STORAGE_ACCESS_MULTIPART_WRITER != op_type)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid storage access type", K(ret), K(flag));
+    STORAGE_LOG(WARN, "invalid storage access type", K(ret), K(op_type));
   } else if (FALSE_IT(fd.device_handle_ = (&device_handle))) {
   } else if (OB_FAIL(io_manager_write(buf, offset, size, fd, write_size))) {
     STORAGE_LOG(WARN, "fail to io manager write", K(ret), K(offset), K(size), K(fd));
-  } else if (ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER == flag
+  } else if (ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER == op_type
              && is_can_seal
              && OB_FAIL(device_handle.seal_file(fd))) {
     STORAGE_LOG(WARN, "fail to seal file", K(ret), K(offset), K(size), K(fd));
@@ -683,12 +678,12 @@ int ObBackupIoAdapter::async_upload_data(
     const uint64_t sys_module_id)
 {
   int ret = OB_SUCCESS;
-  int flag = -1;
-  ObFdSimulator::get_fd_flag(fd, flag);
-  if ((ObStorageAccessType::OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER != flag)
-      && (ObStorageAccessType::OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER != flag)) {
+  ObStorageAccessType op_type = ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE;
+  ObFdSimulator::get_fd_op_type(fd, op_type);
+  if ((ObStorageAccessType::OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER != op_type)
+      && (ObStorageAccessType::OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER != op_type)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid storage access type", KR(ret), K(flag));
+    OB_LOG(WARN, "invalid storage access type", KR(ret), K(op_type));
   } else if (FALSE_IT(fd.device_handle_ = (&device_handle))) {
   } else if (OB_FAIL(async_io_manager_upload(buf, offset, size, fd, io_handle, false/*is_complete_mode*/ , sys_module_id))) {
     OB_LOG(WARN, "fail to async io manager upload", KR(ret), KP(buf), K(offset), K(size), K(fd));
@@ -702,15 +697,15 @@ int ObBackupIoAdapter::complete(common::ObIODevice &device_handle, common::ObIOF
   int ret = OB_SUCCESS;
   ObObjectStorageTenantGuard object_storage_tenant_guard(
       get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
-  int flag = -1;
-  ObFdSimulator::get_fd_flag(fd, flag);
+  ObStorageAccessType op_type = ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE;
+  ObFdSimulator::get_fd_op_type(fd, op_type);
   fd.device_handle_ = &device_handle;
   ObIOHandle io_handle;
-  if ((ObStorageAccessType::OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER != flag)
-      && (ObStorageAccessType::OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER != flag)) {
+  if ((ObStorageAccessType::OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER != op_type)
+      && (ObStorageAccessType::OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER != op_type)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid storage access type", KR(ret), K(flag));
-  } else if (ObStorageAccessType::OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER == flag) {
+    OB_LOG(WARN, "invalid storage access type", KR(ret), K(op_type));
+  } else if (ObStorageAccessType::OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER == op_type) {
     if (OB_FAIL(async_io_manager_upload("\0", 0, 0, fd, io_handle, true/*is_complete_mode*/))) {
       OB_LOG(WARN, "fail to async io manager upload", KR(ret), K(fd));
     } else if (OB_FAIL(io_handle.wait())) {
@@ -718,7 +713,7 @@ int ObBackupIoAdapter::complete(common::ObIODevice &device_handle, common::ObIOF
     }
   }
 
-  if (FAILEDx(device_handle.complete(fd))) {
+  if (FAILEDx(OB_IO_MANAGER.complete(get_tenant_id(), fd, nullptr/*uri*/))) {
     OB_LOG(WARN, "fail to complete", KR(ret), K(fd));
   }
 
@@ -730,13 +725,13 @@ int ObBackupIoAdapter::abort(common::ObIODevice &device_handle, common::ObIOFd &
   int ret = OB_SUCCESS;
   ObObjectStorageTenantGuard object_storage_tenant_guard(
       get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
-  int flag = -1;
-  ObFdSimulator::get_fd_flag(fd, flag);
-  if ((ObStorageAccessType::OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER != flag)
-      && (ObStorageAccessType::OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER != flag)) {
+  ObStorageAccessType op_type = ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE;
+  ObFdSimulator::get_fd_op_type(fd, op_type);
+  if ((ObStorageAccessType::OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER != op_type)
+      && (ObStorageAccessType::OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER != op_type)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid storage access type", KR(ret), K(flag));
-  } else if (OB_FAIL(device_handle.abort(fd))) {
+    OB_LOG(WARN, "invalid storage access type", KR(ret), K(op_type));
+  } else if (OB_FAIL(OB_IO_MANAGER.abort(get_tenant_id(), fd, nullptr/*uri*/))) {
     OB_LOG(WARN, "fail to abort", KR(ret), K(fd));
   }
   return ret;
@@ -886,7 +881,7 @@ int ObBackupIoAdapter::is_tagging(const common::ObString &uri, const common::ObO
   DeviceGuard device_guard;
   if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
     OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
-  } else if (OB_FAIL(device_guard.device_handle_->is_tagging(device_guard.uri_cstr_, is_tagging))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.is_tagging(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_, is_tagging))) {
     OB_LOG(WARN, "fail to check is tagging!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
   return ret;
@@ -982,13 +977,13 @@ int ObBackupIoAdapter::async_pread(
     const uint64_t sys_module_id)
 {
   int ret = OB_SUCCESS;
-  int flag = -1;
-  ObFdSimulator::get_fd_flag(fd, flag);
-  if ((ObStorageAccessType::OB_STORAGE_ACCESS_READER != flag)
-      && ObStorageAccessType::OB_STORAGE_ACCESS_NOHEAD_READER != flag
-      && (ObStorageAccessType::OB_STORAGE_ACCESS_ADAPTIVE_READER != flag)) {
+  ObStorageAccessType op_type = ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE;
+  ObFdSimulator::get_fd_op_type(fd, op_type);
+  if ((ObStorageAccessType::OB_STORAGE_ACCESS_READER != op_type)
+      && ObStorageAccessType::OB_STORAGE_ACCESS_NOHEAD_READER != op_type
+      && (ObStorageAccessType::OB_STORAGE_ACCESS_ADAPTIVE_READER != op_type)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid storage access type", K(ret), K(flag));
+    OB_LOG(WARN, "invalid storage access type", K(ret), K(op_type));
   } else if (FALSE_IT(fd.device_handle_ = (&device_handle))) {
   } else if (OB_FAIL(async_io_manager_read(buf, offset, size, fd, io_handle, sys_module_id))) {
     OB_LOG(WARN, "fail to async io manager read", KP(buf), K(offset), K(size), K(fd));
@@ -999,24 +994,24 @@ int ObBackupIoAdapter::async_pread(
 int ObBackupIoAdapter::get_file_size(ObIODevice *device_handle, const ObIOFd &fd, int64_t &file_length)
 {
   int ret = OB_SUCCESS;
-  int flag = -1;
+  ObStorageAccessType op_type = ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE;
   void* ctx = NULL;
 
   file_length = -1;
-  ObFdSimulator::get_fd_flag(fd, flag);
+  ObFdSimulator::get_fd_op_type(fd, op_type);
   ObObjectDevice* obj_device_handle = (ObObjectDevice*)device_handle;
-  if (OB_STORAGE_ACCESS_READER != flag
-             && OB_STORAGE_ACCESS_ADAPTIVE_READER != flag
-             && OB_STORAGE_ACCESS_APPENDER != flag ) {
+  if (OB_STORAGE_ACCESS_READER != op_type
+             && OB_STORAGE_ACCESS_ADAPTIVE_READER != op_type
+             && OB_STORAGE_ACCESS_APPENDER != op_type ) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "Invaild access type, object device only support reader and appender get file size!", K(flag));
+    OB_LOG(WARN, "Invaild access type, object device only support reader and appender get file size!", K(op_type));
   } else if (OB_FAIL(obj_device_handle->get_fd_mng().fd_to_ctx(fd, ctx))) {
     OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret));
   } else {
-    if (OB_STORAGE_ACCESS_READER == flag) {
+    if (OB_STORAGE_ACCESS_READER == op_type) {
       ObStorageReader *reader = static_cast<ObStorageReader*>(ctx);
       file_length = reader->get_length();
-    } else if (OB_STORAGE_ACCESS_ADAPTIVE_READER == flag) {
+    } else if (OB_STORAGE_ACCESS_ADAPTIVE_READER == op_type) {
       ObStorageAdaptiveReader *adaptive_reader = static_cast<ObStorageAdaptiveReader*>(ctx);
       file_length = adaptive_reader->get_length();
     } else {
@@ -1573,7 +1568,6 @@ int ObBackupIoAdapter::async_io_manager_read(
   io_info.fd_ = fd;
   const int64_t real_timeout_ms = OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_info.tenant_id_);
   io_info.timeout_us_ = real_timeout_ms * 1000L;
-  io_info.flag_.set_sync();
   io_info.flag_.set_sys_module_id(sys_module_id);
   io_info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
   io_info.flag_.set_read();
@@ -1602,7 +1596,6 @@ int ObBackupIoAdapter::basic_init_read_info(
   io_info.fd_ = fd;
   const int64_t real_timeout_ms = OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_info.tenant_id_);
   io_info.timeout_us_ = real_timeout_ms * 1000L;
-  io_info.flag_.set_sync();
   io_info.flag_.set_sys_module_id(sys_module_id);
   io_info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
   io_info.flag_.set_read();
@@ -1614,15 +1607,15 @@ int ObBackupIoAdapter::async_pread_with_io_info(
     common::ObIOHandle &io_handle)
 {
   int ret = OB_SUCCESS;
-  int flag = -1;
-  ObFdSimulator::get_fd_flag(io_info.fd_, flag);
-  if ((ObStorageAccessType::OB_STORAGE_ACCESS_READER != flag)
-      && ObStorageAccessType::OB_STORAGE_ACCESS_NOHEAD_READER != flag
-      && (ObStorageAccessType::OB_STORAGE_ACCESS_ADAPTIVE_READER != flag)) {
+  ObStorageAccessType op_type = ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE;
+  ObFdSimulator::get_fd_op_type(io_info.fd_, op_type);
+  if ((ObStorageAccessType::OB_STORAGE_ACCESS_READER != op_type)
+      && ObStorageAccessType::OB_STORAGE_ACCESS_NOHEAD_READER != op_type
+      && (ObStorageAccessType::OB_STORAGE_ACCESS_ADAPTIVE_READER != op_type)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid storage access type", KR(ret), K(flag), K(io_info));
+    OB_LOG(WARN, "invalid storage access type", KR(ret), K(op_type), K(io_info));
   } else if (OB_FAIL(ObIOManager::get_instance().aio_read(io_info, io_handle))) {
-    OB_LOG(WARN, "fail to aio read", KR(ret), K(flag), K(io_info));
+    OB_LOG(WARN, "fail to aio read", KR(ret), K(op_type), K(io_info));
   }
   return ret;
 }
@@ -1643,7 +1636,6 @@ int ObBackupIoAdapter::io_manager_write(
   io_info.fd_ = fd;
   const int64_t real_timeout_ms = OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_info.tenant_id_);
   io_info.timeout_us_ = real_timeout_ms * 1000L;
-  io_info.flag_.set_sync();
   // io_info.flag_.set_sys_module_id(OB_INVALID_ID);
   io_info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_WRITE);
   io_info.flag_.set_write();
@@ -1676,16 +1668,16 @@ int ObBackupIoAdapter::async_io_manager_upload(
   io_info.fd_ = fd;
   const int64_t real_timeout_ms = OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_info.tenant_id_);
   io_info.timeout_us_ = real_timeout_ms * 1000L;
-  io_info.flag_.set_sync();
   io_info.flag_.set_sys_module_id(sys_module_id);
   io_info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_WRITE);
   io_info.flag_.set_write();
+  io_info.flag_.set_upload_part();
 
-  int flag = -1;
+  ObStorageAccessType op_type;
   bool is_full = false;
   bool is_exist = false;
-  ObFdSimulator::get_fd_flag(fd, flag);
-  if (ObStorageAccessType::OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER == flag) {
+  ObFdSimulator::get_fd_op_type(fd, op_type);
+  if (ObStorageAccessType::OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER == op_type) {
     if (is_complete_mode) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "in complete mode, DIRECT_MULTIPART_WRITER should not do extra upload", KR(ret));
@@ -1695,7 +1687,7 @@ int ObBackupIoAdapter::async_io_manager_upload(
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "DIRECT_MULTIPART_WRITER should not fail to acquire the part id", KR(ret));
     }
-  } else if (ObStorageAccessType::OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER == flag) {
+  } else if (ObStorageAccessType::OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER == op_type) {
     if (!is_complete_mode) {
       if (OB_FAIL(fd.device_handle_->buf_append_part(fd, buf, size, io_info.tenant_id_, is_full))) {
         OB_LOG(WARN, "fail to append part buf", KR(ret), K(io_info));
@@ -1714,7 +1706,7 @@ int ObBackupIoAdapter::async_io_manager_upload(
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid storage access type", KR(ret), K(flag));
+    OB_LOG(WARN, "invalid storage access type", KR(ret), K(op_type));
   }
 
   if (OB_FAIL(ret)) {

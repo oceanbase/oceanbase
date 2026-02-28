@@ -175,7 +175,7 @@ int ObTxRedoSubmitter::parallel_submit(const ObTxSEQ &write_seq_no)
   }
   if (do_submit) {
     ret = _submit_redo_pipeline_(false);
-    ret = save_ret != OB_SUCCESS ? save_ret : ret;
+    ret = COVER_SUCC(save_ret);
   }
   return ret;
 }

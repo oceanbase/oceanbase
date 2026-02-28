@@ -44,7 +44,8 @@ OB_SERIALIZE_MEMBER(ObPhyPlanHint,
                     log_level_,
                     parallel_,
                     monitor_,
-                    table_lock_mode_);
+                    table_lock_mode_,
+		    max_execution_time_);
 
 int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator)
 {
@@ -80,6 +81,17 @@ int ObDBLinkHit::print(char *buf, int64_t &buf_len, int64_t &pos, const char* ou
     }
   }
   return 0;
+}
+
+ObGlobalHint::ObGlobalHint(common::ObIAllocator &allocator)
+  : dops_(allocator),
+    opt_params_(allocator),
+    ob_ddl_schema_versions_(allocator),
+    alloc_op_hints_(allocator),
+    disable_op_rich_format_hint_(allocator),
+    trigger_hint_(allocator)
+{
+  reset();
 }
 
 int ObGlobalHint::merge_alloc_op_hints(const ObIArray<ObAllocOpHint> &alloc_op_hints)
@@ -848,19 +860,48 @@ int ObOptParamHint::merge_opt_param_hint(const ObOptParamHint &other)
   return ret;
 }
 
-int ObOptParamHint::add_opt_param_hint(const OptParamType param_type, const ObObj &val)
+int ObOptParamHint::add_opt_param_hint(const OptParamType param_type, const ObObj &val, bool overwrite)
 {
   int ret = OB_SUCCESS;
   ObObj cur_value;
+  int64_t idx = OB_INVALID_INDEX;
   if (!is_param_val_valid(param_type, val)) {
     /* do nothing */
-  } else if (OB_FAIL(get_opt_param(param_type, cur_value))) {
+  } else if (OB_FAIL(get_opt_param(param_type, cur_value, &idx))) {
     LOG_WARN("failed to get opt param", K(ret), K(param_type));
   } else if (!cur_value.is_nop_value()) {
-    /* exists opt param hint for this type, use the first opt param hint */
+    if (overwrite) {
+      param_vals_.at(idx) = val;
+    } else {
+      /* exists opt param hint for this type, use the first opt param hint */
+    }
   } else if (OB_FAIL(param_types_.push_back(param_type))
              || OB_FAIL(param_vals_.push_back(val))) {
     LOG_WARN("failed to push back", K(ret), K(param_type), K(val));
+  }
+  return ret;
+}
+
+int ObOptParamHint::remove_opt_param(const OptParamType param_type)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = OB_INVALID_INDEX;
+  if (OB_UNLIKELY(param_types_.count() != param_vals_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected opt param hint", K(ret), K(param_types_.count()), K(param_vals_.count()));
+  } else {
+    for (int64_t i = 0; OB_INVALID_INDEX == idx && i < param_types_.count(); ++i) {
+      if (param_type == param_types_.at(i)) {
+        idx = i;
+      }
+    }
+    if (OB_INVALID_INDEX == idx) {
+      // param not found, do nothing
+    } else if (OB_FAIL(param_types_.remove(idx))) {
+      LOG_WARN("failed to remove opt param type", K(ret), K(param_type), K(idx));
+    } else if (OB_FAIL(param_vals_.remove(idx))) {
+      LOG_WARN("failed to remove opt param value", K(ret), K(param_type), K(idx));
+    }
   }
   return ret;
 }
@@ -890,6 +931,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case ENABLE_SPF_BATCH_RESCAN:
     case NLJ_BATCHING_ENABLED:
     case ENABLE_PX_ORDERED_COORD:
+    case ENABLE_WINDOW_FUNCTION_STREAMING_PROCESS:
     case ENABLE_TOPN_RUNTIME_FILTER:
     case DISABLE_GTT_SESSION_ISOLATION:
     case ENABLE_PARTIAL_GROUP_BY_PUSHDOWN:
@@ -929,8 +971,12 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && (0 < val.get_int());
       break;
     }
+    case INDEX_MERGE_THRESHOLD_FOR_MULTIVALUE: {
+      is_valid = val.is_int() && (0 <= val.get_int());
+      break;
+    }
     case WORKAREA_SIZE_POLICY: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("MANULE"));
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("MANUAL"));
       break;
     }
     case SPILL_COMPRESSION_CODEC: {
@@ -1070,6 +1116,36 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                  && val.get_int() <= 16;
       break;
     }
+    case AP_QUERY_ROUTE_POLICY: {
+      if (val.is_int()) {
+        is_valid = 0 <= val.get_int() && val.get_int() < static_cast<int64_t>(APQueryRoutePolicy::MAX);
+      } else if (val.is_varchar()) {
+        int64_t type = OB_INVALID_ID;
+        ObSysVarApQueryRoutePolicy sv;
+        is_valid = (OB_SUCCESS == sv.find_type(val.get_varchar(), type));
+      }
+      break;
+    }
+    case PARTITION_ORDERED: {
+      is_valid = val.is_varchar()
+                 && (0 == val.get_varchar().case_compare("asc")
+                     || 0 == val.get_varchar().case_compare("desc"));
+      break;
+    }
+    case USE_DISTINCT_WITH_EXPANSION: {
+      is_valid = val.is_varchar()
+                 && (0 == val.get_varchar().case_compare("disabled")
+                     || 0 == val.get_varchar().case_compare("normal")
+                     || 0 == val.get_varchar().case_compare("ordered")
+                     || 0 == val.get_varchar().case_compare("auto"));
+      break;
+    }
+    case JOIN_ORDER_ENUM_THRESHOLD:
+    case OPTIMIZER_MAX_PERMUTATIONS:
+    case IDP_STEP_REDUCTION_THRESHOLD: {
+      is_valid = val.is_int() && (0 <= val.get_int());
+      break;
+    }
     default: {
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
@@ -1078,7 +1154,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
   return is_valid;
 }
 
-int ObOptParamHint::get_opt_param(const OptParamType param_type, ObObj &val) const
+int ObOptParamHint::get_opt_param(const OptParamType param_type, ObObj &val, int64_t *idx_ptr) const
 {
   int ret = OB_SUCCESS;
   int64_t idx = OB_INVALID_INDEX;
@@ -1087,6 +1163,9 @@ int ObOptParamHint::get_opt_param(const OptParamType param_type, ObObj &val) con
     if (param_type == param_types_.at(i)) {
       idx = i;
     }
+  }
+  if (nullptr != idx_ptr) {
+    *idx_ptr = idx;
   }
   if (OB_INVALID_INDEX == idx) {
     /* do nothing */
@@ -1163,6 +1242,15 @@ int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, int64_t
   return get_integer_opt_param(param_type, val, is_exists);
 }
 
+int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, uint64_t &val) const
+{
+  bool is_exists = false;
+  int64_t int_val = 0;
+  int ret = get_integer_opt_param(param_type, int_val, is_exists);
+  val = static_cast<uint64_t>(int_val);
+  return ret;
+}
+
 int ObOptParamHint::get_opt_param_runtime_filter_type(int64_t &rf_type) const
 {
   int ret = OB_SUCCESS;
@@ -1197,6 +1285,31 @@ int ObOptParamHint::get_hash_rollup_param(ObObj &val, bool &has_param) const
   return ret;
 }
 
+
+int ObOptParamHint::get_distinct_with_expansion_param(ObString &policy, bool &has_param) const
+{
+  int ret = OB_SUCCESS;
+  ObObj obj;
+  has_param = false;
+  if (OB_FAIL(has_opt_param(USE_DISTINCT_WITH_EXPANSION, has_param))) {
+    LOG_WARN("failed to check param", K(ret));
+  } else if (has_param) {
+    if (OB_FAIL(get_opt_param(OptParamType::USE_DISTINCT_WITH_EXPANSION, obj))) {
+      LOG_WARN("failed to get opt param", K(ret));
+    } else if (FALSE_IT(has_param = is_param_val_valid(USE_DISTINCT_WITH_EXPANSION, obj))) {
+    } else if (has_param) {
+      policy = obj.get_string();
+    }
+  }
+  return ret;
+}
+
+int ObOptParamHint::enable_window_function_streaming_process_param(bool &enabled, bool &has_param) const
+{
+  int ret = OB_SUCCESS;
+  return get_bool_opt_param(ENABLE_WINDOW_FUNCTION_STREAMING_PROCESS, enabled, has_param);
+}
+
 int ObOptParamHint::get_enum_opt_param(const OptParamType param_type, int64_t &val) const
 {
   int ret = OB_SUCCESS;
@@ -1226,6 +1339,13 @@ int ObOptParamHint::get_enum_opt_param(const OptParamType param_type, int64_t &v
       }
       case ENABLE_OPTIMIZER_ROWGOAL: {
         ObSysVarEnableOptimizerRowgoal sv;
+        if (OB_FAIL(sv.find_type(obj.get_varchar(), val))) {
+          LOG_WARN("param obj is invalid", K(ret), K(obj));
+        }
+        break;
+      }
+      case AP_QUERY_ROUTE_POLICY: {
+        ObSysVarApQueryRoutePolicy sv;
         if (OB_FAIL(sv.find_type(obj.get_varchar(), val))) {
           LOG_WARN("param obj is invalid", K(ret), K(obj));
         }
@@ -1289,6 +1409,15 @@ int ObOptParamHint::inner_get_sys_var(const OptParamType param_type,
     LOG_WARN("failed to get sys variable", K(ret));
   }
   return ret;
+}
+
+int ObOptParamHint::get_sys_var(const OptParamType param_type,
+                                const ObSQLSessionInfo *session,
+                                const share::ObSysVarClassType sys_var_id,
+                                uint64_t &val) const
+{
+  return inner_get_sys_var<uint64_t, &ObOptParamHint::get_integer_opt_param>
+            (param_type, session, sys_var_id, val);
 }
 
 int ObOptParamHint::get_sys_var(const OptParamType param_type,
@@ -1466,6 +1595,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_PUSH_SUBQ:         return is_enable_hint ? "PUSH_SUBQ" : "NO_PUSH_SUBQ";
     case T_DISABLE_TRIGGER_HINT: return "DISABLE_TRIGGER";
     case T_TABLE_LOCK_MODE_HINT: return "TABLE_LOCK_MODE";
+    case T_VECTOR_INDEX_HINT: return "VECTOR_INDEX";
     default:                    return NULL;
   }
 }
@@ -2469,6 +2599,16 @@ int ObIndexHint::print_hint_desc(PlanText &plan_text) const
     /* do nothing */
   } else if (OB_FAIL(BUF_PRINTF(" \"%.*s\"", index_name_.length(), index_name_.ptr()))) {
     LOG_WARN("fail to print index name", K(ret));
+  } else if (T_VECTOR_INDEX_HINT == hint_type_) {
+    if (filter_type_ == VecFilterType::PRE_FILTER) {
+      if (OB_FAIL(BUF_PRINTF(" PRE_FILTER"))) {
+        LOG_WARN("fail to print index filter type", K(ret));
+      }
+    } else if (filter_type_ == VecFilterType::POST_FILTER) {
+      if (OB_FAIL(BUF_PRINTF(" POST_FILTER"))) {
+        LOG_WARN("fail to print index filter type", K(ret));
+      }
+    }
   } else if ((T_INDEX_HINT != hint_type_ && T_INDEX_ASC_HINT != hint_type_ && T_INDEX_DESC_HINT != hint_type_)
              || index_prefix_ < 0) {
     //do nothing
@@ -3477,8 +3617,15 @@ bool ObWindowDistHint::WinDistOption::is_valid() const
     bret = false;
   } else if (WinDistAlgo::WIN_DIST_HASH != algo_ &&
              WinDistAlgo::WIN_DIST_NONE != algo_ &&
-             WinDistAlgo::WIN_DIST_HASH_LOCAL != algo_
-            && (use_hash_sort_ || use_topn_sort_)) {
+             WinDistAlgo::WIN_DIST_HASH_LOCAL != algo_ &&
+             use_hash_sort_) {
+    bret = false;
+  } else if (WinDistAlgo::WIN_DIST_HASH != algo_ &&
+             WinDistAlgo::WIN_DIST_NONE != algo_ &&
+             WinDistAlgo::WIN_DIST_HASH_LOCAL != algo_ &&
+             WinDistAlgo::WIN_DIST_RANGE != algo_ &&
+             WinDistAlgo::WIN_DIST_LIST != algo_ &&
+            use_topn_sort_) {
     bret = false;
   } else {
     for (int64_t i = 0; bret && i < win_func_idxs_.count(); ++i) {

@@ -62,7 +62,7 @@ void ObTabletCopyFinishTaskParam::reset()
 ObTabletCopyFinishTask::ObTabletCopyFinishTask()
   : ObITask(TASK_TYPE_MIGRATE_FINISH_PHYSICAL),
     is_inited_(false),
-    lock_(common::ObLatchIds::BACKUP_LOCK),
+    lock_(common::ObLatchIds::OB_TABLET_COPY_FINISH_TASK_SPIN_RW_LOCK),
     ha_dag_(nullptr),
     arena_allocator_("TabCopyFinish"),
     minor_tables_handle_(),
@@ -80,8 +80,7 @@ ObTabletCopyFinishTask::~ObTabletCopyFinishTask()
 {
 }
 
-int ObTabletCopyFinishTask::init(
-    const ObTabletCopyFinishTaskParam &param)
+int ObTabletCopyFinishTask::init(const ObTabletCopyFinishTaskParam &param)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -484,6 +483,43 @@ int ObTabletCopyFinishTask::get_tablet_status(ObCopyTabletStatus::STATUS &status
   return ret;
 }
 
+int ObTabletCopyFinishTask::get_latest_major_sstable(
+  const ObITable::TableKey &table_key,
+  ObTableHandleV2 &table_handle)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet copy finish task do not init", K(ret));
+  } else {
+    common::SpinRLockGuard guard(lock_);
+    // find the latest major sstable, read from major_tables_handles_ backwards
+    for (int64_t idx = major_tables_handle_.get_count() - 1; OB_SUCC(ret) && idx >= 0; --idx) {
+      ObTableHandleV2 tmp_table_handle;
+      ObITable::TableKey tmp_table_key;
+
+      if (OB_FAIL(major_tables_handle_.get_table(idx, tmp_table_handle))) {
+        LOG_WARN("failed to get table", K(ret), K(idx), K(major_tables_handle_));
+      } else if (!tmp_table_handle.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table handle should not be NULL", K(ret), K(tmp_table_handle));
+      } else if (FALSE_IT(tmp_table_key = tmp_table_handle.get_table()->get_key())) {
+      } else if (tmp_table_key.table_type_ == table_key.table_type_
+          && tmp_table_key.tablet_id_ == table_key.tablet_id_
+          && tmp_table_key.column_group_idx_ == table_key.column_group_idx_) {
+        table_handle = tmp_table_handle;
+        break;
+      }
+    }
+
+    if (OB_SUCC(ret) && !table_handle.is_valid()) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("failed to find latest major sstable", K(ret), K(table_key), K(major_tables_handle_));
+    }
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(EN_COPY_COLUMN_STORE_MAJOR_FAILED);
 int ObTabletCopyFinishTask::deal_with_major_sstables_()
 {
@@ -513,7 +549,7 @@ int ObTabletCopyFinishTask::deal_with_major_sstables_()
     }
     ObBuildMajorSSTablesParam major_sstables_param(
       param_.src_tablet_meta_->storage_schema_,
-      param_.src_tablet_meta_->has_truncate_info_);
+      param_.src_tablet_meta_->has_merged_with_mds_info_);
 
     if (FAILEDx(ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(param_.ls_,
                                                                              param_.tablet_id_,

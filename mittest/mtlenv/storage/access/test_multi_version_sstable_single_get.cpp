@@ -26,7 +26,7 @@ using namespace share::schema;
 namespace storage
 {
 
-class TestMultiVersionSSTableSingleGet : public ObMultiVersionSSTableTest
+class TestMultiVersionSSTableSingleGet : public ObMultiVersionSSTableTest, public ::testing::WithParamInterface<bool>
 {
 public:
   TestMultiVersionSSTableSingleGet();
@@ -70,6 +70,9 @@ TestMultiVersionSSTableSingleGet::TestMultiVersionSSTableSingleGet()
 
 void TestMultiVersionSSTableSingleGet::SetUp()
 {
+  // toggle row store type by parameter: false -> FLAT_ROW_STORE, true -> CS_ENCODING_ROW_STORE
+  const bool use_cs_encoding = GetParam();
+  row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
   ObMultiVersionSSTableTest::SetUp();
 }
 
@@ -116,7 +119,7 @@ void TestMultiVersionSSTableSingleGet::prepare_query_param(
   context_.limit_param_ = nullptr;
 }
 
-TEST_F(TestMultiVersionSSTableSingleGet, exist)
+TEST_P(TestMultiVersionSSTableSingleGet, exist)
 {
   ObTableHandleV2 handle;
   const int64_t schema_rowkey_cnt = 2;
@@ -300,6 +303,11 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   ASSERT_EQ(false, is_exist);
   ASSERT_EQ(false, is_found);
 }
+
+INSTANTIATE_TEST_CASE_P(
+  FlatAndCSEncoding,
+  TestMultiVersionSSTableSingleGet,
+  ::testing::Values(false, true));
 
 } // end namespace oceanbase
 } // end namspace oceanbase

@@ -236,7 +236,7 @@ void ObTableStoreStatMgr::ReportTask::runTimerTask()
 
 ObTableStoreStatMgr::ObTableStoreStatMgr()
   : is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::OB_TABLE_STORE_STAT_MGR_LOCK),
     quick_map_(),
     cur_cnt_(0),
     limit_cnt_(0),

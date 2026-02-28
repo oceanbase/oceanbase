@@ -130,6 +130,8 @@ public:
 
   static int tablet_major_freeze(const ObTabletMajorFreezeParam &param);
 
+  static int table_major_freeze(const obrpc::ObTableMajorFreezeArg &param);
+
   static int suspend_merge(const ObTenantAdminMergeParam &param);
 
   static int resume_merge(const ObTenantAdminMergeParam &param);
@@ -139,7 +141,12 @@ public:
   static int get_frozen_status(const int64_t tenant_id,
                                const share::SCN &frozen_scn,
                                share::ObFreezeInfo &frozen_status);
+  static int get_frozen_status(const int64_t tenant_id,
+                               const share::SCN &frozen_scn,
+                               share::ObFreezeInfo &frozen_status,
+                               ObISQLClient *proxy);
   static int get_frozen_scn(const int64_t tenant_id, share::SCN &frozen_scn);
+  static int get_frozen_scn(const int64_t tenant_id, share::SCN &frozen_scn, ObISQLClient *proxy);
 
 private:
   static int get_freeze_info(
@@ -176,7 +183,54 @@ private:
       const char *buf);
 
 private:
+  static int get_ls_tablets_result_by_sql(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      ObMySQLProxy::MySQLResult &res,
+      common::sqlclient::ObMySQLResult *&result);
+  static int get_next_batch_schedule_tablets(
+      common::sqlclient::ObMySQLResult &result,
+      bool & need_call_next,
+      int64_t & cur_ls_id,
+      common::ObArray<uint64_t> &batch_schedule_tablet_ids);
+  static int send_tablets_major_freeze_by_ls(
+      const obrpc::ObTableMajorFreezeRpcProxy &proxy,
+      const uint64_t tenant_id,
+      const int64_t ls_id,
+      const common::ObIArray<uint64_t> &tablet_ids,
+      const bool is_rebuild_column_group,
+      obrpc::ObTableMajorFreezeResult &result);
+  static int format_table_freeze_error_detail(
+      const obrpc::ObTableMajorFreezeResult &result,
+      common::ObSqlString &detail);
   static const int64_t MAX_PROCESS_TIME_US = 10 * 1000 * 1000L;
+  static const int64_t BATCH_SCHEDULE_TABLET_COUNT = 100;
+  static const int64_t MAX_RETRY_COUNT = 5;
+};
+
+class ObGlobalCompactionSchemaHelper final
+{
+public:
+  ObGlobalCompactionSchemaHelper() = default;
+  ~ObGlobalCompactionSchemaHelper() = default;
+  static int get_global_safe_recycle_schema_version(
+      const int64_t tenant_id,
+      common::ObMySQLProxy &sql_proxy,
+      share::schema::ObMultiVersionSchemaService &schema_service,
+      int64_t &safe_recycle_schema_version);
+private:
+  static const int64_t MAX_RESERVED_SCHEMA_VERSION_US = 3L * 24L * 3600L * 1000L * 1000L; // 3 days
+private:
+  static int get_safe_recycle_schema_version_by_freeze_info(
+      const int64_t tenant_id,
+      common::ObMySQLProxy &sql_proxy,
+      const share::SCN &last_merged_scn,
+      int64_t &safe_recycle_schema_version);
+  static int get_safe_recycle_schema_version_by_timestamp(
+      const int64_t tenant_id,
+      common::ObMySQLProxy &sql_proxy,
+      int64_t &safe_recycle_schema_version);
+  DISALLOW_COPY_AND_ASSIGN(ObGlobalCompactionSchemaHelper);
 };
 
 } // namespace rootserver

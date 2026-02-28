@@ -12,6 +12,7 @@
 #ifndef OCEANBSE_SHARE_AGGREGATE_SINGLE_ROW_H_
 #define OCEANBSE_SHARE_AGGREGATE_SINGLE_ROW_H_
 #include "iaggregate.h"
+#include "src/sql/engine/expr/ob_expr_estimate_ndv.h"
 
 #include <type_traits>
 
@@ -21,6 +22,8 @@ namespace share
 {
 namespace aggregate
 {
+int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size);
+
 template <ObExprOperatorType agg_func, VecValueTypeClass in_tc, VecValueTypeClass out_tc>
 class SingleRowAggregate final : public BatchAggregateWrapper<SingleRowAggregate<agg_func, in_tc, out_tc>>
 {
@@ -223,6 +226,203 @@ public:
   TO_STRING_KV("aggregate", "single_row", K(in_tc), K(out_tc), K(is_first_row_), K(agg_func));
 private:
   bool is_first_row_;
+};
+
+template<VecValueTypeClass in_tc>
+class SingleRowApproxCntSynopsis final: public BatchAggregateWrapper<SingleRowApproxCntSynopsis<in_tc>>
+{
+public:
+  static const constexpr VecValueTypeClass IN_TC = in_tc;
+  static const constexpr VecValueTypeClass OUT_TC = VEC_TC_STRING;
+public:
+  SingleRowApproxCntSynopsis() {}
+  virtual int init(RuntimeContext &agg_ctx, const int64_t agg_col_id, ObIAllocator &allocator) override
+  {
+    int ret = OB_SUCCESS;
+    ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(agg_col_id);
+    llc_num_buckets_ = ObAggrInfo::get_approx_cnt_llc_buck_num(aggr_info.expr_->extra_);
+    if (OB_UNLIKELY(!ObExprEstimateNdv::llc_is_num_buckets_valid(llc_num_buckets_))) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "invalid llc buckets number", K(ret), K(llc_num_buckets_), KP(aggr_info.expr_));
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt>
+  inline int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                     const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
+  {
+    int ret = OB_SUCCESS;
+    AggrRowPtr agg_row = agg_ctx.agg_rows_.at(row_num);
+    NotNullBitVector &notnulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
+    const char *payload = nullptr;
+    int32_t len = 0;
+    columns.get_payload(row_num, payload, len);
+    char *cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
+    uint64_t hash_val = 0;
+    ObExprHashFuncType hash_func = agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_.at(0)->basic_funcs_->murmur_hash_;
+    if (OB_FAIL(inner_calc_hash(hash_func, payload, len, hash_val))) {
+      SQL_LOG(WARN, "calculate hash value failed", K(ret));
+    } else {
+      *reinterpret_cast<uint64_t *>(cell) = hash_val;
+      notnulls.set(agg_col_id);
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt>
+  inline int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                              const int32_t agg_col_id, char *agg_cell, void *tmp_res,
+                              int64_t &calc_info)
+  {
+    int ret = OB_SUCCESS;
+    if (columns.is_null(row_num)) {
+      // do nothing
+    } else {
+      ret = add_row(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info);
+    }
+    return ret;
+  }
+
+  int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
+                         const bool is_null, const char *data, const int32_t data_len,
+                         int32_t agg_col_idx, char *agg_cell) override
+  {
+    int ret = OB_SUCCESS;
+    AggrRowPtr agg_row = agg_ctx.agg_rows_.at(batch_idx);
+    NotNullBitVector &notnulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
+    if (OB_LIKELY(!is_null)) {
+      char *cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, agg_row);
+      ObExprHashFuncType hash_func = agg_ctx.aggr_infos_.at(agg_col_idx).param_exprs_.at(0)->basic_funcs_->murmur_hash_;
+      uint64_t hash_val = 0;
+      if (OB_FAIL(inner_calc_hash(hash_func, data, data_len, hash_val))) {
+        SQL_LOG(WARN, "calculate hash value failed", K(ret));
+      } else {
+        *reinterpret_cast<uint64_t *>(cell) = hash_val;
+        notnulls.set(agg_col_idx);
+      }
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt>
+  inline int add_param_batch(RuntimeContext &agg_ctx, const ObBitVector &skip, ObBitVector &pvt_skip,
+                             const EvalBound &bound, const RowSelector &row_sel, const int32_t agg_col_id,
+                             const int32_t param_id, ColumnFmt &param_vec, char *aggr_cell)
+  {
+    int ret = OB_SUCCESS;
+    AggrRowPtr agg_row = nullptr;
+    if (row_sel.is_empty()) {
+      for (int i = bound.start(); i < bound.end(); i++) {
+        if (pvt_skip.at(i)) { continue; }
+        if (param_vec.is_null(i)) { pvt_skip.set(i); }
+      }
+    } else {
+      for (int i = 0; i < row_sel.size(); i++) {
+        if (param_vec.is_null(row_sel.index(i))) { pvt_skip.set(row_sel.index(i)); }
+      }
+    }
+    if (param_id == agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_.count() - 1) {
+      // last param expr
+      if (row_sel.is_empty()) {
+        for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+          if (skip.at(i)) { continue; }
+          agg_row = agg_ctx.agg_rows_.at(i);
+          NotNullBitVector &notnulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
+          char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
+          if (!pvt_skip.at(i)) {
+            notnulls.set(agg_col_id);
+            uint64_t hash_val = 0;
+            if (OB_FAIL(inner_calc_params_hash(agg_ctx.aggr_infos_.at(agg_col_id),
+                                               agg_ctx.eval_ctx_, i, hash_val))) {
+              SQL_LOG(WARN, "calculate hash value failed", K(ret));
+            } else {
+              *reinterpret_cast<uint64_t *>(agg_cell) = hash_val;
+            }
+          }
+        }
+      } else {
+        for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
+          agg_row = agg_ctx.agg_rows_.at(row_sel.index(i));
+          NotNullBitVector &notnulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
+          char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
+          if (!pvt_skip.at(row_sel.index(i))) {
+            notnulls.set(agg_col_id);
+            uint64_t hash_val = 0;
+            if (OB_FAIL(inner_calc_params_hash(agg_ctx.aggr_infos_.at(agg_col_id),
+                                               agg_ctx.eval_ctx_, row_sel.index(i), hash_val))) {
+              SQL_LOG(WARN, "calculate hash value failed", K(ret));
+            } else {
+              *reinterpret_cast<uint64_t *>(agg_cell) = hash_val;
+            }
+          }
+        }
+      }
+    }
+    return ret;
+  }
+
+  template<typename ResultFmt>
+  inline int collect_group_result(RuntimeContext &agg_ctx, const sql::ObExpr &agg_expr,
+                                  const int32_t agg_col_id, const char *agg_cell,
+                                  const int32_t agg_cell_len)
+  {
+    int ret = OB_SUCCESS;
+    const NotNullBitVector &notnulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
+    int64_t output_idx = agg_ctx.eval_ctx_.get_batch_idx();
+    ResultFmt *res_vec = static_cast<ResultFmt *>(agg_expr.get_vector(agg_ctx.eval_ctx_));
+    uint64_t hash_val = *reinterpret_cast<const uint64_t *>(agg_cell);
+    char *hash_val_buf = nullptr;
+    if (OB_ISNULL(hash_val_buf = agg_expr.get_str_res_mem(agg_ctx.eval_ctx_, sizeof(uint64_t)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_LOG(WARN, "allocate memory failed", K(ret));
+    } else if (FALSE_IT(*reinterpret_cast<uint64_t *>(hash_val_buf) = hash_val)) {
+    } else if (FALSE_IT(res_vec->set_payload_shallow(output_idx, hash_val_buf, sizeof(uint64_t)))) {
+    }
+    return ret;
+  }
+
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    return OB_NOT_IMPLEMENT;
+  }
+
+  TO_STRING_KV("aggregate", "single_row_approx_cnt_syn", K(in_tc), K(in_tc));
+
+private:
+  int inner_calc_hash(ObExprHashFuncType hash_func, const char *data, const int32_t data_len,
+                      uint64_t &hash_val) const
+  {
+    int ret = OB_SUCCESS;
+    ObDatum tmp_datum;
+    tmp_datum.ptr_ = data;
+    tmp_datum.pack_ = data_len;
+    if (OB_FAIL(hash_func(tmp_datum, hash_val, hash_val))) {
+      SQL_LOG(WARN, "calculate hash value failed", K(ret));
+    }
+    return ret;
+  }
+
+  int inner_calc_params_hash(ObAggrInfo &aggr_info, ObEvalCtx &eval_ctx, const int32_t row_num, uint64_t &hash_val) const
+  {
+    int ret = OB_SUCCESS;
+    const char *param_data = nullptr;
+    int32_t param_len = 0;
+    for (int j = 0; OB_SUCC(ret) && j < aggr_info.param_exprs_.count(); j++) {
+      ObExpr *param_expr = aggr_info.param_exprs_.at(j);
+      ObExprHashFuncType hash_func = param_expr->basic_funcs_->murmur_hash_;
+      param_expr->get_vector(eval_ctx)->get_payload(row_num, param_data, param_len);
+      if (OB_FAIL(inner_calc_hash(hash_func, param_data, param_len, hash_val))) {
+        SQL_LOG(WARN, "calculate hash value failed", K(ret));
+      }
+    }
+    return ret;
+  }
+private:
+  int64_t llc_num_buckets_;
 };
 
 namespace helper

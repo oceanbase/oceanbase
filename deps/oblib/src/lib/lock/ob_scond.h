@@ -25,7 +25,7 @@ namespace common
 struct SimpleCond
 {
 public:
-  SimpleCond(): n_waiters_(0), event_no_(ObWaitEventIds::DEFAULT_COND_WAIT) {}
+// [[deprecated]]SimpleCond(): n_waiters_(0), event_no_(ObWaitEventIds::DEFAULT_COND_WAIT) {}
   SimpleCond(int32_t event_no): n_waiters_(0), event_no_(event_no) {}
   ~SimpleCond() {}
 
@@ -36,16 +36,10 @@ public:
   int wait(uint32_t key, int64_t timeout) {
     int ret = OB_SUCCESS;
     if (timeout > 0 && get_key() == key) {
-      if (ObWaitEventIds::DEFAULT_COND_WAIT != event_no_) {
-        ObWaitEventGuard guard(event_no_, timeout / 1000, reinterpret_cast<int64_t>(this), 0, 0, true);
-        ATOMIC_FAA(&n_waiters_, 1);
-        ret = futex_.wait(key, timeout);
-        ATOMIC_FAA(&n_waiters_, -1);
-      } else {
-        ATOMIC_FAA(&n_waiters_, 1);
-        ret = futex_.wait(key, timeout);
-        ATOMIC_FAA(&n_waiters_, -1);
-      }
+      ObWaitEventGuard guard(event_no_, timeout / 1000, reinterpret_cast<int64_t>(this), 0, 0, true);
+      ATOMIC_FAA(&n_waiters_, 1);
+      ret = futex_.wait(key, timeout);
+      ATOMIC_FAA(&n_waiters_, -1);
     }
 
     return ret;
@@ -136,10 +130,17 @@ public:
   typedef SCondCounter Counter;
   typedef SCondSimpleIdGen IdGen;
   enum { CPU_COUNT = OB_MAX_CPU_NUM, COND_COUNT = CPU_COUNT, LOOP_LIMIT = 8 };
+  SCondTemp(int32_t event_no) {
+    for (int i = 0; i < COND_COUNT; i++) {
+      for (int p = 0; p < PRIO; p++) {
+        conds_[i][p].cond_.init(event_no);
+      }
+    }
+  }
   void signal(uint32_t x = 1, int prio=0) {
     uint32_t icpu_id = id_gen_.get();
     for (int p = PRIO-1; p >= prio && x > 0; p--) {
-      x -= conds_[icpu_id % COND_COUNT][p].signal(x);
+      x -= conds_[icpu_id % COND_COUNT][p].cond_.signal(x);
     }
     if (x > 0) {
       n2wakeup_.add(x, icpu_id);
@@ -170,9 +171,9 @@ public:
     return wait((uint32_t)(wait_key>>32), (uint32_t)wait_key, timeout);
   }
 protected:
-  uint32_t get_key(int prio, uint32_t& id) { return conds_[id = (id_gen_.next() % COND_COUNT)][prio].get_key(); }
+  uint32_t get_key(int prio, uint32_t& id) { return conds_[id = (id_gen_.next() % COND_COUNT)][prio].cond_.get_key(); }
   int wait(uint32_t id, uint32_t key, int64_t timeout) {
-    return conds_[((uint16_t)id) % COND_COUNT][id >> 16].wait(key, timeout);
+    return conds_[((uint16_t)id) % COND_COUNT][id >> 16].cond_.wait(key, timeout);
   }
 private:
   static uint64_t& get_wait_key() {
@@ -186,13 +187,17 @@ private:
       //    }
     for (int p = PRIO - 1; n2wakeup > 0 && p >= 0; p--) {
       for(int i = 0; n2wakeup > 0 && i < COND_COUNT; i++) {
-        n2wakeup -= conds_[i][p].signal(n2wakeup);
+        n2wakeup -= conds_[i][p].cond_.signal(n2wakeup);
       }
     }
   }
 private:
+  struct SCondWrapper {
+    CondPerCpu cond_;
+    SCondWrapper() : cond_(common::ObWaitEventIds::SCOND_TEMP_WRAPPER_WAIT) {}
+  };
   Lock lock_ CACHE_ALIGNED;
-  CondPerCpu conds_[COND_COUNT][PRIO];
+  SCondWrapper conds_[COND_COUNT][PRIO];
   Counter n2wakeup_;
   IdGen id_gen_;
 };

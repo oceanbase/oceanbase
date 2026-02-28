@@ -171,6 +171,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
         sqlstat_record.set_is_in_retry(session.get_is_in_retry());
         session.sql_sess_record_sql_stat_start_value(sqlstat_record);
       }
+      session.set_retry_wait_event_begin_time();
       if (OB_ISNULL(gctx_.sql_engine_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid sql engine", K(ret), K(gctx_));

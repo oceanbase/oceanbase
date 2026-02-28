@@ -405,6 +405,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_lack_phy_blk)
   blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.shared_blk_cnt_;
   blk_cnt_info.data_blk_.hold_cnt_ += extra_blk_cnt;
   blk_cnt_info.meta_blk_.used_cnt_ = blk_cnt_info.meta_blk_.hold_cnt_ - 1;
+  ASSERT_EQ(true, blk_cnt_info.has_free_blk(ObSSPhyBlockType::SS_MICRO_META_BLK));
 
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.gen_checkpoint());

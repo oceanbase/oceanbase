@@ -549,16 +549,10 @@ int ObDynamicSampling::estimate_rowcount(int64_t max_ds_timeout,
   ObSqlString sample_str;
   ObSqlString basic_hint_str;
   ObSqlString table_str;
-  bool is_no_backslash_escapes = false;
-  int64_t nested_count = -1;
-  sql::ObSQLSessionInfo::StmtSavedValue *session_value = NULL;
+  ObDSSessionSavedData saved_data;
   int64_t start_time = ObTimeUtility::current_time();
   ObSQLSessionInfo *session_info = ctx_->get_session_info();
   bool need_restore_session = false;
-  transaction::ObTxDesc *tx_desc = NULL;
-  bool is_sess_in_retry = false;
-  int last_query_retry_err = OB_SUCCESS;
-  int64_t session_query_timeout = 0;
   if (!is_big_table_ && OB_FAIL(add_block_sample_info(sample_block_ratio_, seed_, sample_str))) {
     LOG_WARN("failed to add block sample info", K(ret));
   } else if (OB_FAIL(add_basic_hint_info(basic_hint_str, max_ds_timeout, is_big_table_ ? 1 : degree))) {
@@ -567,12 +561,7 @@ int ObDynamicSampling::estimate_rowcount(int64_t max_ds_timeout,
     LOG_WARN("failed to add table clause", K(ret));
   } else if (OB_FAIL(pack(raw_sql_str))) {
     LOG_WARN("failed to pack dynamic sampling", K(ret));
-  } else if (OB_FAIL(prepare_and_store_session(session_info, session_value,
-                                               nested_count, is_no_backslash_escapes, tx_desc,
-                                               is_sess_in_retry,
-                                               last_query_retry_err,
-                                               max_ds_timeout,
-                                               session_query_timeout))) {
+  } else if (OB_FAIL(prepare_and_store_session(session_info, max_ds_timeout, saved_data))) {
     throw_ds_error = true;//here we must throw error, because the session may be unavailable.
     LOG_WARN("failed to prepare and store session", K(ret));
   } else {
@@ -589,17 +578,13 @@ int ObDynamicSampling::estimate_rowcount(int64_t max_ds_timeout,
   //regardless of whether the above behavior is successful or not, we need to restore session.
   if (need_restore_session) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = restore_session(session_info, session_value,
-                                                 nested_count, is_no_backslash_escapes, tx_desc,
-                                                 is_sess_in_retry,
-                                                 last_query_retry_err,
-                                                 session_query_timeout))) {
+    if (OB_SUCCESS != (tmp_ret = restore_session(session_info, saved_data))) {
       throw_ds_error = true;//here we must throw error, because the session may be unavailable.
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("failed to restore session", K(tmp_ret));
     }
-    if (OB_NOT_NULL(session_value)) {
-      session_value->reset();
+    if (OB_NOT_NULL(saved_data.session_value_)) {
+      saved_data.session_value_->reset();
     }
   }
   LOG_TRACE("go to dynamic sample one time", K(sample_block_ratio_), K(ret),
@@ -788,7 +773,11 @@ int ObDynamicSampling::add_basic_hint_info(ObSqlString &basic_hint_str,
                                            int64_t degree)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(basic_hint_str.append("/*+ NO_REWRITE"))) {//hint begin
+  const ObSQLSessionInfo *session_info = nullptr;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(session_info = ctx_->get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ctx_), K(session_info));
+  } else if (OB_FAIL(basic_hint_str.append("/*+ NO_REWRITE"))) {//hint begin
     LOG_WARN("failed to append", K(ret));
   //add suite degree
   } else if (degree <= 1 && OB_FAIL(basic_hint_str.append(" NO_PARALLEL "))) {
@@ -804,6 +793,15 @@ int ObDynamicSampling::add_basic_hint_info(ObSqlString &basic_hint_str,
   } else if (OB_FAIL(basic_hint_str.append(" OPT_PARAM(\'USE_DEFAULT_OPT_STAT\',\'TRUE\') "))) {
     LOG_WARN("failed to append", K(ret));
   } else if (OB_FAIL(basic_hint_str.append(" OPT_PARAM('APPROX_COUNT_DISTINCT_PRECISION', 10) "))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (ctx_->get_is_weak_read() && WEAK != session_info->get_consistency_level() &&
+             OB_FAIL(basic_hint_str.append(" READ_CONSISTENCY(WEAK) "))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (!ctx_->get_is_weak_read() && STRONG != session_info->get_consistency_level() &&
+             OB_FAIL(basic_hint_str.append(" READ_CONSISTENCY(STRONG) "))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (session_info->get_route_to_column_replica() &&
+             OB_FAIL(basic_hint_str.append(" OPT_PARAM('AP_QUERY_ROUTE_POLICY', 'FORCE') "))) {
     LOG_WARN("failed to append", K(ret));
   } else if (OB_FAIL(basic_hint_str.append("*/"))) {//hint end
     LOG_WARN("failed to append", K(ret));
@@ -1178,14 +1176,8 @@ int ObDynamicSampling::do_estimate_rowcount(ObSQLSessionInfo *session_info,
 }
 
 int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
-                                                 sql::ObSQLSessionInfo::StmtSavedValue *&session_value,
-                                                 int64_t &nested_count,
-                                                 bool &is_no_backslash_escapes,
-                                                 transaction::ObTxDesc *&tx_desc,
-                                                 bool &is_sess_in_retry,
-                                                 int &last_query_retry_err,
                                                  int64_t ds_query_timeout,
-                                                 int64_t &session_query_timeout)
+                                                 ObDSSessionSavedData &saved_data)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
@@ -1196,30 +1188,31 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for saved session value", K(ret));
   } else {
-    session_value = new(ptr)sql::ObSQLSessionInfo::StmtSavedValue();
-    if (OB_FAIL(session->save_session(*session_value))) {
+    saved_data.session_value_ = new(ptr)sql::ObSQLSessionInfo::StmtSavedValue();
+    if (OB_FAIL(session->save_session(*saved_data.session_value_))) {
       LOG_WARN("failed to save session", K(ret));
     } else if (session->is_in_external_catalog()
                && OB_FAIL(session->set_internal_catalog_db())) {
       LOG_WARN("failed to set catalog", K(ret));
     } else {
       ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
-      is_sess_in_retry = session->get_is_in_retry();
-      last_query_retry_err = session->get_retry_info().get_last_query_retry_err();
-      nested_count = session->get_nested_count();
-      IS_NO_BACKSLASH_ESCAPES(session->get_sql_mode(), is_no_backslash_escapes);
+      saved_data.is_sess_in_retry_ = session->get_is_in_retry();
+      saved_data.last_query_retry_err_ = session->get_retry_info().get_last_query_retry_err();
+      saved_data.nested_count_ = session->get_nested_count();
+      saved_data.route_to_column_replica_ = session->get_route_to_column_replica();
+      IS_NO_BACKSLASH_ESCAPES(session->get_sql_mode(), saved_data.is_no_backslash_escapes_);
       session->set_sql_mode(session->get_sql_mode() & ~SMO_NO_BACKSLASH_ESCAPES);
       session->set_query_start_time(ObTimeUtility::current_time());
       session->set_inner_session();
       session->set_nested_count(-1);
       //bug:
-      session->set_autocommit(session_value->inc_autocommit_);
+      session->set_autocommit(saved_data.session_value_->inc_autocommit_);
       //ac is true, dynamic sampling select query no need tx desc.
-      if (session_value->inc_autocommit_ && session->get_tx_desc() != NULL) {
-        tx_desc = session->get_tx_desc();
+      if (saved_data.session_value_->inc_autocommit_ && session->get_tx_desc() != NULL) {
+        saved_data.tx_desc_ = session->get_tx_desc();
         session->get_tx_desc() = NULL;
       }
-      if (OB_FAIL(session->get_query_timeout(session_query_timeout))) {
+      if (OB_FAIL(session->get_query_timeout(saved_data.session_query_timeout_))) {
         LOG_WARN("failed to get query timeout", K(ret));
       } else {
         ObObj val;
@@ -1234,28 +1227,23 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
 }
 
 int ObDynamicSampling::restore_session(ObSQLSessionInfo *session,
-                                       sql::ObSQLSessionInfo::StmtSavedValue *session_value,
-                                       int64_t nested_count,
-                                       bool is_no_backslash_escapes,
-                                       transaction::ObTxDesc *tx_desc,
-                                       bool &is_sess_in_retry,
-                                       int &last_query_retry_err,
-                                       int64_t session_query_timeout)
+                                       ObDSSessionSavedData &saved_data)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(session) || OB_ISNULL(session_value)) {
+  if (OB_ISNULL(session) || OB_ISNULL(saved_data.session_value_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(session), K(session_value));
-  } else if (OB_FAIL(session->restore_session(*session_value))) {
+    LOG_WARN("get unexpected error", K(ret), K(session), K(saved_data.session_value_));
+  } else if (OB_FAIL(session->restore_session(*saved_data.session_value_))) {
     LOG_WARN("failed to restore session", K(ret));
-  } else if (OB_FALSE_IT(session->set_session_in_retry(is_sess_in_retry, last_query_retry_err))) {
+  } else if (OB_FALSE_IT(session->set_session_in_retry(saved_data.is_sess_in_retry_, saved_data.last_query_retry_err_))) {
   } else {
     ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
-    session->set_nested_count(nested_count);
-    if (is_no_backslash_escapes) {
+    session->set_nested_count(saved_data.nested_count_);
+    session->set_route_to_column_replica(saved_data.route_to_column_replica_);
+    if (saved_data.is_no_backslash_escapes_) {
       session->set_sql_mode(session->get_sql_mode() | SMO_NO_BACKSLASH_ESCAPES);
     }
-    if (tx_desc != NULL) {//reset origin tx desc.
+    if (saved_data.tx_desc_ != NULL) {//reset origin tx desc.
       // release curr
       if (OB_NOT_NULL(session->get_tx_desc())) {
         auto txs = MTL(transaction::ObTransService*);
@@ -1267,11 +1255,11 @@ int ObDynamicSampling::restore_session(ObSQLSessionInfo *session,
           txs->release_tx(*session->get_tx_desc());
         }
       }
-      session->get_tx_desc() = tx_desc;
+      session->get_tx_desc() = saved_data.tx_desc_;
     }
     if (OB_SUCC(ret)) {
       ObObj val;
-      val.set_int(session_query_timeout);
+      val.set_int(saved_data.session_query_timeout_);
       if (OB_FAIL(session->update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, val))) {
         LOG_WARN("set sys variable failed", K(ret), K(OB_SV_QUERY_TIMEOUT), K(val));
       }

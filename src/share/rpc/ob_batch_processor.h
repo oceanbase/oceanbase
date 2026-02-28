@@ -32,6 +32,7 @@ protected:
   int handle_tx_req(int type, const char* buf, int32_t size);
   int handle_sql_req(common::ObAddr& sender, int type, const char* buf, int32_t size);
   int handle_log_req(const common::ObAddr& sender, int type, const share::ObLSID &ls_id, const char* buf, int32_t size);
+  int handle_lock_wait_mgr_req(int type, const char* buf, int32_t size);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchP);
 };

@@ -50,7 +50,6 @@ struct _eval_arg_impl
           }
         }
       }
-      eval_flags.set_all(bound.start(), bound.end());
     } else {
       for (int i = bound.start(); i < bound.end(); i++) {
         if(eval_flags.at(i) || skip.at(i)) {
@@ -61,7 +60,6 @@ struct _eval_arg_impl
           input_vector->get_payload(i, src, src_len);
           output_vector->set_payload_shallow(i, src, src_len);
         }
-        eval_flags.set(i);
       }
     }
     return ret;

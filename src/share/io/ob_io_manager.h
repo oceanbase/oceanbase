@@ -349,7 +349,6 @@ public:
   int pwrite(ObIOInfo &info, int64_t &write_size);
 
   int detect_read(const ObIOInfo &info, ObIOHandle &handle);
-
   // config related, thread safe
   int set_io_config(const ObIOConfig &conf);
   const ObIOConfig &get_io_config() const;
@@ -389,6 +388,39 @@ public:
   void print_channel_status();
   void print_status();
   int64_t get_object_storage_io_timeout_ms(const uint64_t tenant_id) const;
+
+  // util request
+  int exist(const int64_t tenant_id, const ObIOFd &fd,
+      const ObString &uri, bool &exist);
+  int adaptive_exist(const int64_t tenant_id, const ObIOFd &fd,
+      const ObString &uri, bool &exist);
+  int stat(const int64_t tenant_id, const ObIOFd &fd,
+      const ObString &uri, ObIODFileStat &statbuf);
+  int adaptive_stat(const int64_t tenant_id, const ObIOFd &fd,
+      const ObString &uri, ObIODFileStat &statbuf);
+  int unlink(const int64_t tenant_id, const ObIOFd &fd,
+      const ObString &uri);
+  int adaptive_unlink(const int64_t tenant_id, const ObIOFd &fd,
+      const ObString &uri);
+  int mkdir(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri);
+  int rmdir(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri);
+  int is_tagging(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri, bool &is_tagging);
+  int complete(const int64_t tenant_id, const ObIOFd &fd,
+      const ObString &uri);
+  int abort(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri);
+  int seal_file(const int64_t tenant_id, const ObIOFd &fd,
+    const ObString &uri);
+
+  int scan_dir(const ObString &uri, ObIODevice *device_handle, ObBaseDirEntryOperator &op);
+  int adaptive_scan_dir(const ObString &uri, ObIODevice *device_handle, ObBaseDirEntryOperator &op);
+  int batch_del_files(ObIODevice *device_handle,
+    ObIArray<ObString> &files_to_delete,
+    ObIArray<int64_t> &failed_files_idx);
+
 
 private:
   friend class ObTenantIOManager;

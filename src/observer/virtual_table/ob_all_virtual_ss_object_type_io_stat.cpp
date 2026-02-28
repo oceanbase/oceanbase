@@ -231,6 +231,22 @@ int ObAllVirtualSSObjectTypeIoStat::process_curr_tenant(common::ObNewRow *&row)
         cells[i].set_int(ss_object_type_cached_stat.get_iops(ObSSObjectTypeStatType::DELETE));
         break;
       }
+      case READ_BANDWIDTH: {
+        cells[i].set_int(ss_object_type_cached_stat.get_bandwidth(ObSSObjectTypeStatType::READ));
+        break;
+      }
+      case READ_DELAY_US: {
+        cells[i].set_int(ss_object_type_cached_stat.get_delay_us(ObSSObjectTypeStatType::READ));
+        break;
+      }
+      case WRITE_BANDWIDTH: {
+        cells[i].set_int(ss_object_type_cached_stat.get_bandwidth(ObSSObjectTypeStatType::WRITE));
+        break;
+      }
+      case WRITE_DELAY_US: {
+        cells[i].set_int(ss_object_type_cached_stat.get_delay_us(ObSSObjectTypeStatType::WRITE));
+        break;
+      }
       } // end switch
     } // end for
     if (OB_SUCC(ret)) {

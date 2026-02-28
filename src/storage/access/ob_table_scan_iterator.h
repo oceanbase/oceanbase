@@ -32,6 +32,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "ob_table_scan_range.h"
 #include "ob_global_iterator_pool.h"
+#include "ob_level_order_scan_merge.h"
 
 namespace oceanbase
 {
@@ -57,6 +58,7 @@ public:
   virtual int get_next_row() override { blocksstable::ObDatumRow *r = nullptr; return get_next_row(r); }
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
   int rescan(ObTableScanParam &scan_param);
+  int advance_scan(ObTableScanParam &scan_param);
   void reuse();
   void reset_for_switch();
   virtual void reset();
@@ -67,6 +69,18 @@ public:
   int check_ls_offline_after_read();
   bool need_trace() const;
   ObStorageCheckID get_check_id() const { return ObStorageCheckID::STORAGE_ITER; }
+
+  static int tables_are_cross(const int64_t snapshot_version,
+                              const ObTableScanParam &scan_param,
+                              ObGetTableParam &get_table_param,
+                              bool &are_cross);
+
+  static int calc_query_iter_type(const ObTableScanRange &table_scan_range,
+                                  const int64_t snapshot_version,
+                                  const ObTableScanParam &scan_param,
+                                  ObGetTableParam &get_table_param,
+                                  ObQRIterType &type);
+
 public:
   static constexpr int64_t RP_MAX_FREE_LIST_NUM = 1024;
   static constexpr const char LABEL[] = "RPTableScanIter";
@@ -83,7 +97,7 @@ private:
   void reuse_row_iters();
   int rescan_for_iter();
   int switch_param_for_iter();
-  int open_iter();
+  int open_iter(const ObQRIterType iter_type);
 
   // if need retire to row sample, sample_memtable_ranges must not be null
   int can_retire_to_memtable_row_sample_(bool &retire, ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);
@@ -94,12 +108,16 @@ private:
   // check txn status after read rows to ensure read result is correct
   int check_txn_status_if_read_uncommitted_();
   int init_and_open_get_merge_iter_();
-  int init_and_open_scan_merge_iter_();
+  int init_and_open_scan_merge_iter_(const ObQRIterType iter_type);
   int init_and_open_block_sample_iter_();
   int init_and_open_row_sample_iter_();
   int init_and_open_memtable_row_sample_iter_(const ObIArray<blocksstable::ObDatumRange> &scan_ranges);
   int sort_sample_ranges();
   int set_skip_scan_range();
+  int check_advance_scan_supported();
+  // use context & param to calc query iter type
+  // may be not same as current_iter_type_
+  int inner_calc_query_iter_type(const ObTableScanParam &scan_param, ObQRIterType &type);
 
 private:
   bool is_inited_;
@@ -107,6 +125,8 @@ private:
   ObSingleMerge *single_merge_;
   ObMultipleGetMerge *get_merge_;
   ObMultipleScanMerge *scan_merge_;
+  ObLevelOrderScanMerge *level_order_scan_merge_;
+  ObLevelOrderMultiScanMerge *level_order_multi_scan_merge_;
   ObMultipleMultiScanMerge *multi_scan_merge_;
   ObMemtableRowSampleIterator *memtable_row_sample_iterator_;
   ObRowSampleIterator *row_sample_iterator_;

@@ -225,7 +225,7 @@ int ObMemoryDump::check_sql_memory_leak()
   int ret = OB_SUCCESS;
   ObMemoryCheckContext memory_check_ctx;
   ObThreadCond &cond = memory_check_ctx.cond_;
-  if (OB_FAIL(cond.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+  if (OB_FAIL(cond.init(ObWaitEventIds::MEMORY_DUMP_COND_WAIT))) {
     LOG_WARN("thread cond init failed", K(ret));
   } else if (OB_FAIL(generate_mod_stat_task(&memory_check_ctx))) {
     LOG_WARN("generate mod stat task", K(ret));

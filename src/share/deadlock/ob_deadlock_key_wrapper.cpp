@@ -14,6 +14,7 @@
 #define NEED_DEFINE
 #include "ob_deadlock_key_register.h"
 #undef NEED_DEFINE
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 
 namespace oceanbase
 {
@@ -26,39 +27,8 @@ extern const char * MEMORY_LABEL;
 
 using namespace common;
 
-uint64_t UserBinaryKey::BufferFactory::malloc_times = 0;
-uint64_t UserBinaryKey::BufferFactory::free_times = 0;
-
-int UserBinaryKey::BufferFactory::get_buffer(uint64_t buffer_length, char *&p_buffer)
-{
-  int ret = OB_SUCCESS;
-
-  if (nullptr != p_buffer) {
-    ret = OB_INVALID_ARGUMENT;
-    DETECT_LOG(WARN, "p_buffer is not null", KP(p_buffer));
-  } else if (nullptr == (p_buffer = (char*)common::ob_malloc(buffer_length, MEMORY_LABEL))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    DETECT_LOG(WARN, "malloc memory failed", KP(p_buffer));
-  } else {
-    ATOMIC_AAF(&malloc_times, 1);
-  }
-
-  return ret;
-}
-
-void UserBinaryKey::BufferFactory::revert_buffer(char *&p_buffer)
-{
-  ob_free(p_buffer);
-  p_buffer = nullptr;
-  ATOMIC_AAF(&free_times, 1);
-}
-
 void UserBinaryKey::reset()
 {
-  // if (nullptr != key_binary_code_buffer_) {
-  //   BufferFactory::revert_buffer(key_binary_code_buffer_);
-  //   key_binary_code_buffer_ = nullptr;
-  // }
   key_type_id_ = INVALID_VALUE;
   key_binary_code_buffer_length_ = 0;
 }
@@ -278,6 +248,11 @@ uint64_t UserBinaryKey::hash() const
   }
 
   return hash_val;
+}
+
+bool is_need_wait_remote_lock()
+{
+  return lockwaitmgr::ObLockWaitMgr::is_need_wait_remote_lock();
 }
 
 }// namespace detector

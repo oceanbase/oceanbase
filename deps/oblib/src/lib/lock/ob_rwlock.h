@@ -75,7 +75,7 @@ template <LockMode lockMode = NO_PRIORITY>
 class ObRWLock
 {
 public:
-  ObRWLock(uint32_t latch_id = common::ObLatchIds::DEFAULT_RWLOCK)
+  ObRWLock(uint32_t latch_id)
   : rlock_(&rwlock_, latch_id),
     wlock_(&rwlock_, latch_id) {}
   ~ObRWLock() {}
@@ -91,7 +91,7 @@ private:
 template<>
 class ObRWLock<WRITE_PRIORITY> {
   public:
-  ObRWLock(uint32_t latch_id = common::ObLatchIds::DEFAULT_RWLOCK)
+  ObRWLock(uint32_t latch_id)
   : rlock_(&rwlock_, latch_id),
     wlock_(&rwlock_, latch_id)
   {

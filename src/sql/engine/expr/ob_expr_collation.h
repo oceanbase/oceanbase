@@ -140,6 +140,40 @@ private:
   // data members
 };
 
+/// Maps collation_type (int) to charset name. Used by INFORMATION_SCHEMA.VIEWS etc. to avoid virtual table lookup.
+/// collation_type_to_charset(collation_type_int) -> varchar
+class ObExprCollationTypeToCharset : public ObStringExprOperator
+{
+public:
+  explicit ObExprCollationTypeToCharset(common::ObIAllocator &alloc);
+  virtual ~ObExprCollationTypeToCharset();
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const;
+  static int eval_collation_type_to_charset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprCollationTypeToCharset);
+};
+
+/// Maps collation_type (int) to collation name. Used by INFORMATION_SCHEMA.VIEWS etc. to avoid virtual table lookup.
+/// collation_type_to_collation(collation_type_int) -> varchar
+class ObExprCollationTypeToCollation : public ObStringExprOperator
+{
+public:
+  explicit ObExprCollationTypeToCollation(common::ObIAllocator &alloc);
+  virtual ~ObExprCollationTypeToCollation();
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const;
+  static int eval_collation_type_to_collation(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprCollationTypeToCollation);
+};
+
 } // end namespace sql
 } // end namespace oceanbase
 

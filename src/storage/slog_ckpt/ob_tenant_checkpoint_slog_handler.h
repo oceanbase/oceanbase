@@ -144,6 +144,7 @@ public:
   int read_empty_shell_file(const ObMetaDiskAddr &phy_addr, common::ObArenaAllocator &allocator, char *&buf, int64_t &buf_len);
   int update_hidden_sys_tenant_super_block_to_real(omt::ObTenant &sys_tenant);
   int update_real_sys_tenant_super_block_to_hidden(omt::ObTenant &sys_tenant);
+  int get_tenant_meta_with_lock(omt::ObTenant &tenant, /*out*/omt::ObTenantMeta &meta);
 
 private:
   friend class ObTenantSlogCheckpointWorkflow;
@@ -221,6 +222,8 @@ private:
       const char *buf,
       const int64_t buf_len,
       bool allow_override /* allow to overwrite the map's element or not */);
+private:
+  static bool need_recover_file_id_range_by_list_(const ObTenantSuperBlock &super_block);
 
 private:
   const static int64_t BUCKET_NUM = 109;

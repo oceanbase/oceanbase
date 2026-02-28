@@ -211,8 +211,9 @@ ObSqlCtx::ObSqlCtx()
     flags_(0),
     ccl_rule_id_(0),
     ccl_match_time_(0),
+    origin_pl_param_count_(0),
+    enable_pl_sql_parameterize_(false),
     reroute_info_(nullptr)
-
 {
   sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
@@ -283,6 +284,8 @@ void ObSqlCtx::reset()
   ccl_match_time_ = 0;
   matched_ccl_rule_level_values_.reset();
   matched_ccl_format_sqlid_level_values_.reset();
+  origin_pl_param_count_ = 0;
+  enable_pl_sql_parameterize_ = false;
 }
 
 //release dynamic allocated memory
@@ -931,7 +934,7 @@ int ObSqlSchemaGuard::get_lake_table_metadata(
   int ret = OB_SUCCESS;
   lake_table_metadata = NULL;
   for (int64_t i = 0; NULL == lake_table_metadata && i < lake_table_metadatas_.count(); i++) {
-    if (table_id == lake_table_metadatas_[i]->table_id_) {
+    if (OB_NOT_NULL(lake_table_metadatas_[i]) && table_id == lake_table_metadatas_[i]->table_id_) {
       lake_table_metadata = lake_table_metadatas_[i];
     }
   }

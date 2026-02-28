@@ -235,10 +235,10 @@ obrpc::ObNotifyTenantThreadArg::TenantThreadType ObBackupDataService::get_tenant
   return obrpc::ObNotifyTenantThreadArg::BACKUP_SERVICE;
 }
 /*
-*----------------------------- ObBackupCleanService -----------------------------
+*----------------------------- ObBackupMgrService -----------------------------
 */
 
-int ObBackupCleanService::sub_init(
+int ObBackupMgrService::sub_init(
     common::ObMySQLProxy &sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     schema::ObMultiVersionSchemaService &schema_service,
@@ -258,17 +258,22 @@ int ObBackupCleanService::sub_init(
   } else if (OB_FAIL(backup_auto_obsolete_delete_trigger_.init(tenant_id,
       sql_proxy, rpc_proxy, schema_service, task_scheduler, *this))) {
     LOG_WARN("fail to init backup data scheduler", K(ret));
+  } else if (OB_FAIL(backup_validate_scheduler_.init(tenant_id, sql_proxy, rpc_proxy, schema_service,
+                                                        task_scheduler, *this))) {
+    LOG_WARN("failed to init backup validate scheduler", K(ret));
+  } else if (OB_FAIL(register_job_(&backup_validate_scheduler_))) {
+    LOG_WARN("fail to regist job", K(ret), "job_type", backup_validate_scheduler_.get_job_type());
   } else if (OB_FAIL(register_trigger_(&backup_auto_obsolete_delete_trigger_))) {
     LOG_WARN("fail to regist job", K(ret), "job_type", backup_auto_obsolete_delete_trigger_.get_trigger_type());
-  } else if (OB_FAIL(create("BackupCleanSrv", *this, ObWaitEventIds::BACKUP_CLEAN_SERVICE_COND_WAIT))) {
+  } else if (OB_FAIL(create("BackupMgrSrv", *this, ObWaitEventIds::BACKUP_CLEAN_SERVICE_COND_WAIT))) {
     LOG_WARN("create BackupService thread failed", K(ret));
   } else {
-    LOG_INFO("ObBackupCleanService init", K(tenant_id));
+    LOG_INFO("ObBackupMgrService init", K(tenant_id));
   }
   return ret;
 }
 
-int ObBackupCleanService::process(int64_t &last_schedule_ts)
+int ObBackupMgrService::process(int64_t &last_schedule_ts)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -281,7 +286,7 @@ int ObBackupCleanService::process(int64_t &last_schedule_ts)
   return ret;
 }
 
-ObIBackupJobScheduler *ObBackupCleanService::get_scheduler(const BackupJobType &type)
+ObIBackupJobScheduler *ObBackupMgrService::get_scheduler(const BackupJobType &type)
 {
   ObIBackupJobScheduler *ptr = nullptr;
   int ret = OB_SUCCESS;
@@ -296,7 +301,7 @@ ObIBackupJobScheduler *ObBackupCleanService::get_scheduler(const BackupJobType &
   return ptr;
 }
 
-int ObBackupCleanService::do_reload_task(
+int ObBackupMgrService::do_reload_task(
     common::ObIAllocator &allocator, ObBackupTaskSchedulerQueue &queue)
 {
   int ret = OB_SUCCESS;
@@ -312,7 +317,7 @@ int ObBackupCleanService::do_reload_task(
   return ret;
 }
 
-int ObBackupCleanService::handle_backup_delete(const obrpc::ObBackupCleanArg &arg)
+int ObBackupMgrService::handle_backup_delete(const obrpc::ObBackupCleanArg &arg)
 {
   int ret = OB_SUCCESS;
 
@@ -350,8 +355,37 @@ int ObBackupCleanService::handle_backup_delete(const obrpc::ObBackupCleanArg &ar
   return ret;
 }
 
+int ObBackupMgrService::handle_backup_validate(const obrpc::ObBackupValidateArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(backup_validate_scheduler_.start_schedule_backup_validate(arg))) {
+    LOG_WARN("failed to start schedule backup validate", K(ret), K(arg));
+  } else {
+    FLOG_INFO("success to call start backup validate", K(arg));
+  }
+  return ret;
+}
 
-int ObBackupCleanService::handle_delete_policy(const obrpc::ObDeletePolicyArg &arg)
+int ObBackupMgrService::handle_backup_validate_cancel(
+  const uint64_t tenant_id,
+  const ObIArray<uint64_t> &managed_tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(backup_validate_scheduler_.cancel_backup_validate_job(tenant_id, managed_tenant_ids))) {
+    LOG_WARN("failed to cancel backup validate", K(ret), K(tenant_id), K(managed_tenant_ids));
+  } else {
+    FLOG_INFO("success to call cancel backup validate", K(tenant_id), K(managed_tenant_ids));
+  }
+  return ret;
+}
+
+int ObBackupMgrService::handle_delete_policy(const obrpc::ObDeletePolicyArg &arg)
 {
   int ret = OB_SUCCESS;
 
@@ -391,7 +425,7 @@ int ObBackupCleanService::handle_delete_policy(const obrpc::ObDeletePolicyArg &a
   return ret;
 }
 
-int ObBackupCleanService::handle_backup_delete_(const obrpc::ObBackupCleanArg &arg)
+int ObBackupMgrService::handle_backup_delete_(const obrpc::ObBackupCleanArg &arg)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -410,7 +444,7 @@ int ObBackupCleanService::handle_backup_delete_(const obrpc::ObBackupCleanArg &a
 }
 
 
-int ObBackupCleanService::register_job_(ObIBackupJobScheduler *new_job)
+int ObBackupMgrService::register_job_(ObIBackupJobScheduler *new_job)
 {
   int ret = OB_SUCCESS;
   if (nullptr == new_job) {
@@ -425,7 +459,7 @@ int ObBackupCleanService::register_job_(ObIBackupJobScheduler *new_job)
   return ret;
 }
 
-int ObBackupCleanService::register_trigger_(ObIBackupTrigger *new_trigger)
+int ObBackupMgrService::register_trigger_(ObIBackupTrigger *new_trigger)
 {
   int ret = OB_SUCCESS;
   if (nullptr == new_trigger) {
@@ -440,7 +474,7 @@ int ObBackupCleanService::register_trigger_(ObIBackupTrigger *new_trigger)
   return ret;
 }
 
-void ObBackupCleanService::process_trigger_(int64_t &last_trigger_ts)
+void ObBackupMgrService::process_trigger_(int64_t &last_trigger_ts)
 {
   int tmp_ret = OB_SUCCESS;
   const int64_t now_ts = ObTimeUtility::current_time();
@@ -465,7 +499,7 @@ void ObBackupCleanService::process_trigger_(int64_t &last_trigger_ts)
   }
 }
 
-void ObBackupCleanService::process_scheduler_()
+void ObBackupMgrService::process_scheduler_()
 {
   int tmp_ret = OB_SUCCESS;
   for (int64_t i = 0; i < jobs_.count(); ++i) {
@@ -476,7 +510,7 @@ void ObBackupCleanService::process_scheduler_()
   }
 }
 
-obrpc::ObNotifyTenantThreadArg::TenantThreadType ObBackupCleanService::get_tenant_thread_type_() const
+obrpc::ObNotifyTenantThreadArg::TenantThreadType ObBackupMgrService::get_tenant_thread_type_() const
 {
   return obrpc::ObNotifyTenantThreadArg::BACKUP_CLEAN_SERVICE;
 }

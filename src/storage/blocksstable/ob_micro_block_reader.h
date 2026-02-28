@@ -18,6 +18,7 @@
 #include "ob_row_reader.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/basic/ob_truncate_filter_struct.h"
+#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {
@@ -28,20 +29,6 @@ struct PushdownFilterInfo;
 }
 namespace blocksstable
 {
-
-class ObIMicroBlockFlatReaderBase : public ObIMicroBlockReader
-{
-public:
-    ObIMicroBlockFlatReaderBase() = default;
-    virtual ~ObIMicroBlockFlatReaderBase() = default;
-
-    virtual bool single_version_rows() = 0;
-    virtual bool committed_single_version_rows() = 0;
-
-    virtual int get_logical_row_cnt(const int64_t last,
-                                    int64_t &row_idx,
-                                    int64_t &row_cnt) const = 0;
-};
 
 template<bool EnableNewFlatFormat>
 class ObIMicroBlockFlatReader
@@ -58,9 +45,15 @@ protected:
                   const ObStorageDatumUtils &datum_utils,
                   int64_t &row_idx,
                   bool &equal);
-  OB_INLINE int init(const ObMicroBlockData &block_data);
+  OB_INLINE int init(const ObMicroBlockData &block_data, const ObMicroBlockHeader *&micro_header);
+  OB_INLINE int read_column(const int64_t row_idx, const int64_t col_idx, ObStorageDatum &datum);
+  OB_INLINE int read_row(const int64_t row_idx, const ObITableReadInfo *read_info, ObDatumRow &row);
+  OB_INLINE int read_row_header(const int64_t row_idx, const ObRowHeader *&row_header);
+  OB_INLINE int compare_meta_rowkey(const ObDatumRowkey &rowkey,
+                                     const ObStorageDatumUtils &datum_utils,
+                                     const int64_t row_idx,
+                                     int32_t &compare_result);
 protected:
-  const ObMicroBlockHeader *header_;
   const char *data_begin_;
   const char *data_end_;
   const int32_t *index_data_;
@@ -70,10 +63,9 @@ protected:
 };
 
 template<bool EnableNewFlatFormat = true>
-class ObMicroBlockReader : public ObIMicroBlockFlatReader<EnableNewFlatFormat>, public ObIMicroBlockFlatReaderBase
+class ObMicroBlockReader : public ObIMicroBlockFlatReader<EnableNewFlatFormat>, public ObIMicroBlockReader
 {
 public:
-  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::header_;
   using ObIMicroBlockFlatReader<EnableNewFlatFormat>::data_begin_;
   using ObIMicroBlockFlatReader<EnableNewFlatFormat>::data_end_;
   using ObIMicroBlockFlatReader<EnableNewFlatFormat>::index_data_;
@@ -98,22 +90,28 @@ public:
       const ObMicroBlockData &block_data,
 	  const ObStorageDatumUtils *datum_utils) override;
   virtual int get_row(const int64_t index, ObDatumRow &row) override;
-  virtual int get_row_header(
-      const int64_t row_idx,
-      const ObRowHeader *&row_header) override;
-  int get_logical_row_cnt(
-      const int64_t last,
-      int64_t &row_idx,
-      int64_t &row_cnt) const override;
   virtual int get_row_count(int64_t &row_count) override;
   virtual int get_multi_version_info(
       const int64_t row_idx,
+      MultiVersionInfo& multi_version_info) override final;
+  virtual int get_multi_version_info(
+      const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
-      const ObRowHeader *&row_header,
+      MultiVersionInfo& multi_version_info,
       int64_t &trans_version,
-      int64_t &sql_sequence);
+      int64_t &sql_sequence) override final;
   // Filter interface for filter pushdown
   int filter_pushdown_filter(
+      const sql::ObPushdownFilterExecutor *parent,
+      sql::ObPushdownFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
+      common::ObBitmap &result_bitmap);
+  int filter_pushdown_ttl_filter(
+      const sql::ObPushdownFilterExecutor *parent,
+      sql::ObPushdownFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
+      common::ObBitmap &result_bitmap) override;
+  int filter_pushdown_base_version_filter(
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor &filter,
       const sql::PushdownFilterInfo &pd_filter_info,
@@ -144,8 +142,7 @@ public:
       int64_t &count) override final;
   virtual int64_t get_column_count() const override
   {
-    OB_ASSERT(nullptr != header_);
-    return header_->column_count_;
+    return micro_header_->column_count_;
   }
   virtual int get_aggregate_result(
       const ObTableIterParam &iter_param,
@@ -181,8 +178,6 @@ public:
       const ObDatumRowkey &rowkey,
       const int64_t begin_idx,
       int64_t &row_idx) override;
-  OB_INLINE bool single_version_rows() override { return nullptr != header_ && header_->single_version_rows_; }
-  OB_INLINE bool committed_single_version_rows() override { return single_version_rows() && !header_->contain_uncommitted_rows(); }
 
   // For column store
   virtual int find_bound(
@@ -207,9 +202,16 @@ public:
       sql::ObEvalCtx &eval_ctx,
       const bool need_init_vector) override;
   virtual bool has_lob_out_row() const override final
-  { return nullptr != header_ && header_->has_lob_out_row(); }
+  { return micro_header_->has_lob_out_row(); }
+  virtual const ObMicroBlockHeader *get_micro_header() const override final
+  { return micro_header_; }
 
 protected:
+  int filter_pushdown_single_column_mds_filter(const sql::ObPushdownFilterExecutor *parent,
+                                               sql::ObPushdownFilterExecutor &filter,
+                                               const sql::PushdownFilterInfo &pd_filter_info,
+                                               common::ObBitmap &result_bitmap);
+
   virtual int find_bound(
       const ObDatumRange &range,
       const int64_t begin_idx,
@@ -223,7 +225,6 @@ template<bool EnableNewFlatFormat = true>
 class ObMicroBlockGetReader : public ObIMicroBlockFlatReader<EnableNewFlatFormat>, public ObIMicroBlockGetReader
 {
 public:
-  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::header_;
   using ObIMicroBlockFlatReader<EnableNewFlatFormat>::data_begin_;
   using ObIMicroBlockFlatReader<EnableNewFlatFormat>::data_end_;
   using ObIMicroBlockFlatReader<EnableNewFlatFormat>::index_data_;

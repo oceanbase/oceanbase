@@ -84,7 +84,11 @@ int ObMViewTransaction::ObSessionParamSaved::save(
         database_id_ = session_info->get_database_id();
         session_info->set_inner_session();
         session_info->set_autocommit(false);
-        session_info_->get_ddl_info().set_refreshing_mview(true);
+        InnerDDLInfo ddl_info;
+        ddl_info.set_refreshing_mview(true);
+        if (OB_FAIL(session_info->get_ddl_info().init(ddl_info, 0 /*session_id*/))) {
+          LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info));
+        }
       }
       if (OB_SUCC(ret) && nullptr != mv_solidified_session_var) {
         ObSEArray<const ObSessionSysVar*, 8> mv_solidified_diff_vars;

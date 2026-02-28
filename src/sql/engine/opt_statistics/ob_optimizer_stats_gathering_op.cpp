@@ -622,6 +622,14 @@ int ObOptimizerStatsGatheringOp::generate_stat_param(ObTableStatParam &param)
         LOG_WARN("can't get column schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_), K(col_param.column_id_));
       } else {
         col_param.cs_type_ = col_schema->get_collation_type();
+        if (lib::is_mysql_mode() &&
+            col_schema->get_meta_type().get_type_class() == ColumnTypeClass::ObTextTC) {
+          if (col_schema->is_string_lob()) {
+            col_param.set_is_string_column();
+          } else {
+            col_param.set_is_text_column();
+          }
+        }
       }
       if (OB_SUCC(ret) && OB_FAIL(param.column_params_.push_back(col_param))) {
         LOG_WARN("fail to push back column param", K(ret));

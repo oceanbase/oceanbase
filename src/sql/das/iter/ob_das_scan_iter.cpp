@@ -109,6 +109,18 @@ int ObDASScanIter::rescan()
   return ret;
 }
 
+int ObDASScanIter::advance_scan()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scan_param_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr scan param", K(ret));
+  } else if (OB_FAIL(tsc_service_->table_advance_scan(*scan_param_, result_))) {
+    LOG_WARN("failed to advance scan tablet", K(scan_param_->tablet_id_), K(ret));
+  }
+  return ret;
+}
+
 int ObDASScanIter::inner_get_next_row()
 {
   int ret = OB_SUCCESS;

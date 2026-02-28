@@ -79,7 +79,9 @@ ObTableLoadTaskThreadPoolScheduler::ObTableLoadTaskThreadPoolScheduler(int64_t t
     thread_pool_(this),
     worker_ctx_array_(nullptr),
     state_(STATE_ZERO),
-    is_inited_(false)
+    is_inited_(false),
+    state_mutex_(common::ObLatchIds::TABLE_LOAD_THREAD_POOL_SCHEDULER_STATE_MUTEX),
+    wb_mutex_(common::ObLatchIds::TABLE_LOAD_THREAD_POOL_SCHEDULER_WB_MUTEX)
 {
   allocator_.set_tenant_id(MTL_ID());
   snprintf(name_, OB_THREAD_NAME_BUF_LEN, "TLD_%03ld_%s", table_id % 1000, label);

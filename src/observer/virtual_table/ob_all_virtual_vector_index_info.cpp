@@ -98,6 +98,51 @@ int ObVectorIndexInfoIterator::get_next_info(ObVectorIndexInfo &info)
   return ret;
 }
 
+int ObVectorIndexInfoIterator::get_next_index_all_segments(ObLSID &ls_id, ObTabletID &tablet_id, common::ObIArray<ObVectorSegmentInfo> &segment_infos)
+{
+  int ret = OB_SUCCESS;
+  segment_infos.reset();
+  if (!is_opened_) {
+    ret = OB_NOT_INIT;
+    SERVER_LOG(WARN, "not init", K(ret));
+  } else if (index_idx_ >= complete_tablet_ids_.count() + partial_tablet_ids_.count() &&
+          cache_idx_ >= cache_tablet_ids_.count()) {
+    ret = OB_ITER_END;
+  } else if (cache_idx_ < cache_tablet_ids_.count()) {
+    // TODO: IVF is not supported yet, so skip
+    cache_idx_++;
+  } else { // fill vector index info
+    if (index_idx_ < complete_tablet_ids_.count()) {
+      ls_id = complete_tablet_ids_.at(index_idx_).ls_id_;
+      tablet_id = complete_tablet_ids_.at(index_idx_).tablet_id_;
+    } else if (index_idx_ < complete_tablet_ids_.count() + partial_tablet_ids_.count()) {
+      ls_id = partial_tablet_ids_.at(index_idx_ - complete_tablet_ids_.count()).ls_id_;
+      tablet_id = partial_tablet_ids_.at(index_idx_ - complete_tablet_ids_.count()).tablet_id_;
+    }
+    ObPluginVectorIndexAdapterGuard adapter_guard;
+    if (OB_FAIL(MTL(ObPluginVectorIndexService*)->get_adapter_inst_guard(ls_id, tablet_id, adapter_guard))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        SERVER_LOG(WARN, "failed to get adapter inst guard", K(ls_id), K(tablet_id), KR(ret));
+      }
+    } else if (OB_HASH_EXIST == (ret = ptr_set_.exist_refactored(reinterpret_cast<int64_t>(adapter_guard.get_adatper())))) {
+      ret = OB_HASH_NOT_EXIST; // set OB_HASH_NOT_EXIST to ignore this adapter
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(ptr_set_.set_refactored(reinterpret_cast<int64_t>(adapter_guard.get_adatper())))) {
+        SERVER_LOG(WARN, "failed to set adapter check set", K(ret));
+      } else if (OB_FAIL(adapter_guard.get_adatper()->fill_vector_index_all_segments(segment_infos))) {
+        SERVER_LOG(WARN, "failed to fill vector index segments info", K(ret), K(ls_id), K(tablet_id));
+      } else {
+        // do nothing
+      }
+    } else {
+      SERVER_LOG(WARN, "failed to check adapter ptr", K(ret));
+    }
+    index_idx_++;
+  }
+  return ret;
+}
+
 void ObVectorIndexInfoIterator::reset()
 {
   index_idx_ = 0;

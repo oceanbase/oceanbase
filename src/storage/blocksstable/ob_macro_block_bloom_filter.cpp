@@ -128,7 +128,6 @@ int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
   int ret = OB_SUCCESS;
 
   ObMicroBlockData decompressed_data;
-  ObMicroBlockData micro_block_data(micro_block.data_.get_buf(), micro_block.data_.get_buf_size());
   ObMicroIndexData micro_index_data(*micro_block.micro_index_info_);
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -142,23 +141,24 @@ int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
     LOG_WARN("fail to insert micro block, unexpected internal status", K(ret), KPC(this));
   } else {
     compaction::ObLocalArena temp_allocator("MaBlkBFReuse");
-    ObMicroBlockHeader header;
-    header = micro_block.header_;
+    const ObMicroBlockHeader &header = micro_block.header_;
     ObMicroBlockData decompressed_data;
-    ObMicroBlockData micro_data(micro_block.data_.get_buf(), micro_block.data_.get_buf_size());
+    ObMicroBlockData micro_data;
     ObRowStoreType row_store_type = static_cast<ObRowStoreType>(header.row_store_type_);
     ObMicroBlockReaderHelper reader_helper;
     ObIMicroBlockReader *reader = nullptr;
     int64_t row_count = 0;
     ObDatumRow row;
-    if (OB_FAIL(decrypt_and_decompress_micro_data(header,
+    if (OB_FAIL(micro_data.init_with_prepare_micro_header(micro_block.data_.get_buf(), micro_block.data_.get_buf_size()))) {
+      LOG_WARN("fail to init micro data", K(ret), K(micro_block));
+    } else if (OB_FAIL(decrypt_and_decompress_micro_data(header,
                                                   micro_data,
                                                   micro_index_data,
                                                   decompressed_data))) {
       LOG_WARN("fail to decrypt and decompress micro data", K(ret), K(micro_block));
     } else if (OB_FAIL(reader_helper.init(temp_allocator))) {
       LOG_WARN("fail to init micro reader helper", K(ret));
-    } else if (OB_FAIL(reader_helper.get_reader(row_store_type, reader))) {
+    } else if (OB_FAIL(reader_helper.get_reader(*decompressed_data.get_micro_header(), reader))) {
       LOG_WARN("fail to get reader", K(ret), K(micro_block));
     } else if (OB_ISNULL(reader)) {
       ret = OB_ERR_UNEXPECTED;
@@ -208,20 +208,24 @@ int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_bl
     compaction::ObLocalArena temp_allocator("MaBlkBFReuse");
     const ObMicroBlockHeader *header = micro_block_desc.header_;
     ObMicroBlockData decompressed_data;
-    ObMicroBlockData micro_data(micro_block_desc.get_block_buf(), micro_block_desc.get_block_size());
+    ObMicroBlockData micro_data;
+    micro_data.buf_ = micro_block_desc.get_block_buf();
+    micro_data.get_buf_size() = micro_block_desc.get_block_size();
     ObRowStoreType row_store_type = static_cast<ObRowStoreType>(header->row_store_type_);
     ObMicroBlockReaderHelper reader_helper;
     ObIMicroBlockReader *reader = nullptr;
     int64_t row_count = 0;
     ObDatumRow row;
-    if (OB_FAIL(decrypt_and_decompress_micro_data(*header,
+    if (OB_FAIL(micro_data.init_with_prepare_micro_header(micro_block_desc.get_block_buf(), micro_block_desc.get_block_size()))) {
+      LOG_WARN("failed to init micro data", K(ret), K(micro_block_desc));
+    } else if (OB_FAIL(decrypt_and_decompress_micro_data(*header,
                                                   micro_data,
                                                   micro_index_data,
                                                   decompressed_data))) {
       LOG_WARN("fail to decrypt and decompress micro data", K(ret), K(micro_block_desc), K(micro_index_data));
     } else if (OB_FAIL(reader_helper.init(temp_allocator))) {
       LOG_WARN("fail to init micro reader helper", K(ret));
-    } else if (OB_FAIL(reader_helper.get_reader(row_store_type, reader))) {
+    } else if (OB_FAIL(reader_helper.get_reader(*decompressed_data.get_micro_header(), reader))) {
       LOG_WARN("fail to get reader", K(ret), K(micro_block_desc), K(micro_index_data));
     } else if (OB_ISNULL(reader)) {
       ret = OB_ERR_UNEXPECTED;
@@ -269,8 +273,7 @@ int ObMicroBlockBloomFilter::decrypt_and_decompress_micro_data(const ObMicroBloc
   } else if (OB_FAIL(macro_reader_.decrypt_and_decompress_data(micro_des_meta,
                                                                micro_data.get_buf(),
                                                                micro_data.get_buf_size(),
-                                                               decompressed_data.get_buf(),
-                                                               decompressed_data.get_buf_size(),
+                                                               decompressed_data,
                                                                is_compressed))) {
     LOG_WARN("fail to decrypt and decompress data", K(ret), K(micro_des_meta), K(micro_data));
   }

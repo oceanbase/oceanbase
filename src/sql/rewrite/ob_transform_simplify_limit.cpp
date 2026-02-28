@@ -186,7 +186,8 @@ int ObTransformSimplifyLimit::check_pushdown_limit_offset_validity(ObSelectStmt 
              || upper_stmt->has_window_function()
              || upper_stmt->has_distinct()
              || upper_stmt->has_sequence()
-             || upper_stmt->has_order_by()) {
+             || upper_stmt->has_order_by()
+             || upper_stmt->is_calc_found_rows()) {
     is_valid = false;
   } else {
     is_valid = true;
@@ -295,7 +296,8 @@ int ObTransformSimplifyLimit::check_can_pushdown_limit_order(ObSelectStmt& upper
   } else if (view_stmt->has_limit() ||
              NULL == upper_stmt.get_limit_expr() ||
              NULL != upper_stmt.get_limit_percent_expr() ||
-             upper_stmt.has_fetch()) {
+             upper_stmt.has_fetch() ||
+             view_stmt->is_recursive_union()) {
     can_push = false;
   } else if (0 < upper_stmt.get_condition_size() ||
              upper_stmt.has_group_by() ||
@@ -303,7 +305,8 @@ int ObTransformSimplifyLimit::check_can_pushdown_limit_order(ObSelectStmt& upper
              upper_stmt.has_grouping_sets() ||
              upper_stmt.has_window_function() ||
              upper_stmt.has_distinct() ||
-             upper_stmt.has_sequence()) {
+             upper_stmt.has_sequence() ||
+             upper_stmt.is_calc_found_rows()) {
     can_push = false;
   } else {
     // only push down generated table column in order by

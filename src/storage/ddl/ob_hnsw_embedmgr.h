@@ -157,7 +157,7 @@ public:
 class ObTaskSlotRing
 {
 public:
-  ObTaskSlotRing() : lock_(), capacity_(0), slots_(), next_idx_(0), head_idx_(0) {}
+  ObTaskSlotRing() : lock_(common::ObLatchIds::OB_TASK_SLOT_RING_LOCK), capacity_(0), slots_(), next_idx_(0), head_idx_(0) {}
   ~ObTaskSlotRing();
 
   int init(const int64_t capacity);
@@ -218,8 +218,8 @@ private:
 class ObEmbeddingIOCallbackHandle
 {
 public:
-  ObEmbeddingIOCallbackHandle() : ref_cnt_(0), disabled_(false), cb_(nullptr) {}
-  explicit ObEmbeddingIOCallbackHandle(ObEmbeddingIOCallback *cb) : ref_cnt_(0), disabled_(false), cb_(cb) {}
+  ObEmbeddingIOCallbackHandle() : ref_cnt_(0), disabled_(false), cb_(nullptr), lock_(common::ObLatchIds::OB_EMBEDDING_IO_CALLBACK_HANDLE_LOCK) {}
+  explicit ObEmbeddingIOCallbackHandle(ObEmbeddingIOCallback *cb) : ref_cnt_(0), disabled_(false), cb_(cb), lock_(common::ObLatchIds::OB_EMBEDDING_IO_CALLBACK_HANDLE_LOCK) {}
   static ObEmbeddingIOCallbackHandle *create(ObEmbeddingIOCallback *cb);
   void retain();
   void disable();

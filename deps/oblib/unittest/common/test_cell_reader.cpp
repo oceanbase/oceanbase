@@ -12,8 +12,34 @@
 
 #include <gtest/gtest.h>
 #include "common/cell/ob_cell_reader.h"
+#include "share/ob_cluster_version.h"
+#include "common/ob_version_def.h"
+
 namespace oceanbase
 {
+namespace common
+{
+ObClusterVersion::ObClusterVersion() : is_inited_(false), config_(NULL), tenant_config_mgr_(NULL),
+    cluster_version_(CLUSTER_CURRENT_VERSION), data_version_(DATA_CURRENT_VERSION) {}
+void ObClusterVersion::destroy() {}
+int64_t ObClusterVersion::to_string(char *buf, const int64_t buf_len) const { UNUSED(buf); UNUSED(buf_len); return 0; }
+int ObClusterVersion::init(const common::ObServerConfig *config, const omt::ObTenantConfigMgr *tenant_config_mgr) { UNUSED(config); UNUSED(tenant_config_mgr); return OB_SUCCESS; }
+int ObClusterVersion::init(const uint64_t cluster_version) { cluster_version_ = cluster_version; return OB_SUCCESS; }
+int ObClusterVersion::refresh_cluster_version(const char *verstr) { UNUSED(verstr); return OB_SUCCESS; }
+int ObClusterVersion::reload_config() { return OB_SUCCESS; }
+void ObClusterVersion::update_cluster_version(const uint64_t cluster_version) { cluster_version_ = cluster_version; }
+int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version) { UNUSED(tenant_id); data_version = DATA_CURRENT_VERSION; return OB_SUCCESS; }
+int ObClusterVersion::tenant_need_upgrade(const uint64_t tenant_id, bool &need_upgrade) { UNUSED(tenant_id); need_upgrade = false; return OB_SUCCESS; }
+void ObClusterVersion::update_data_version(const uint64_t data_version) { data_version_ = data_version; }
+ObClusterVersion &ObClusterVersion::get_instance() { static ObClusterVersion instance; return instance; }
+int ObClusterVersion::is_valid(const char *verstr) { UNUSED(verstr); return OB_SUCCESS; }
+int ObClusterVersion::get_version(const char *verstr, uint64_t &version) { UNUSED(verstr); UNUSED(version); return OB_SUCCESS; }
+int ObClusterVersion::get_version(const common::ObString &verstr, uint64_t &version) { UNUSED(verstr); UNUSED(version); return OB_SUCCESS; }
+int64_t ObClusterVersion::print_vsn(char *buf, const int64_t buf_len, uint64_t version) { UNUSED(buf); UNUSED(buf_len); UNUSED(version); return 0; }
+int64_t ObClusterVersion::print_version_str(char *buf, const int64_t buf_len, uint64_t version) { UNUSED(buf); UNUSED(buf_len); UNUSED(version); return 0; }
+bool ObClusterVersion::check_version_valid_(const uint64_t version) { UNUSED(version); return true; }
+} // end of namespace common
+
 using namespace common;
 using namespace number;
 namespace unittest

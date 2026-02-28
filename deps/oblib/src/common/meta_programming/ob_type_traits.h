@@ -161,7 +161,7 @@ typename std::enable_if<!OB_TRAIT_IS_THREAD_LIKE(CLASS), bool>::type = true
 
 // define to_string trait and enable_if macro
 #define OB_TRAIT_HAS_TO_STRING(CLASS) \
-::oceanbase::common::meta::has_to_string<DECAY(CLASS), int(char*, const int64_t)>::value
+::oceanbase::common::meta::has_to_string<DECAY(CLASS), int64_t(char*, const int64_t)>::value
 #define ENABLE_IF_HAS_TO_STRING(CLASS) \
 typename std::enable_if<OB_TRAIT_HAS_TO_STRING(CLASS), bool>::type = true
 #define ENABLE_IF_NOT_HAS_TO_STRING(CLASS) \

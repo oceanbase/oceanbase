@@ -75,6 +75,7 @@ public:
   int compress_encrypt_micro_block(ObMicroBlockDesc &micro_block_desc, const int64_t macro_seq, const int64_t micro_offset);
   int dump_micro_block_writer_buffer(const char *buf, const int64_t size);
   void reset();
+  int64_t get_micro_block_merge_verify_level() const { return micro_block_merge_verify_level_; }
 private:
   int prepare_micro_block_reader(
       const char *buf,
@@ -118,13 +119,14 @@ struct ObMicroCompressionInfo{
 public:
   ObMicroBlockAdaptiveSplitter();
   ~ObMicroBlockAdaptiveSplitter();
-  int init(const int64_t macro_store_size, const int64_t min_micro_row_count, const bool is_use_adaptive);
+  int init(const ObDataStoreDesc &store_desc, const int64_t min_micro_row_count);
   void reset();
   int check_need_split(const int64_t micro_size,
                        const int64_t micro_row_count,
                        const int64_t split_size,
                        const int64_t current_macro_size,
                        const bool is_keep_space,
+                       const bool is_last_row_last_flag,
                        bool &check_need_split) const;
 int update_compression_info(const int64_t micro_row_count, const int64_t original_size, const int64_t compressed_size);
 private:
@@ -135,6 +137,7 @@ private:
   int64_t macro_store_size_;
   int64_t min_micro_row_count_;
   bool is_use_adaptive_;
+  bool need_reduce_cross_mb_multi_version_rows_;
   ObMicroCompressionInfo compression_infos_[DEFAULT_MICRO_ROW_COUNT + 1]; //compression_infos_[0] for total compression info
 };
 
@@ -375,7 +378,7 @@ private:
   ObSSTablePrivateObjectCleaner *object_cleaner_;
   char *io_buf_;
   ObIMacroBlockValidator *validator_;
-  bool is_cs_encoding_writer_;
+  bool can_append_batch_;
   ObDefaultMacroBlockFlusher default_macro_flusher_;
   ObSmallSStableMacroBlockFlusher small_sstable_macro_flusher_;
 };

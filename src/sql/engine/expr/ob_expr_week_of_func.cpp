@@ -23,6 +23,28 @@ namespace oceanbase
 namespace sql
 {
 
+#define CHECK_SKIP_NULL(idx) {                 \
+  if (skip.at(idx) || eval_flags.at(idx)) {    \
+    continue;                                  \
+  } else if (arg_vec->is_null(idx)) {          \
+    res_vec->set_null(idx);                    \
+    continue;                                  \
+  }                                            \
+}
+
+#define BATCH_CALC(BODY) {                                                        \
+  if (OB_LIKELY(no_skip_no_null)) {                                               \
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) { \
+      BODY;                                                                       \
+    }                                                                             \
+  } else {                                                                        \
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) { \
+      CHECK_SKIP_NULL(idx);                                                       \
+      BODY;                                                                       \
+    }                                                                             \
+  }                                                                               \
+}
+
 ObExprWeekOfYear::ObExprWeekOfYear(ObIAllocator& alloc)
     : ObFuncExprOperator(alloc,
                          T_FUN_SYS_WEEK_OF_YEAR,
@@ -48,7 +70,9 @@ int ObExprWeekOfYear::cg_expr(ObExprCGCtx &op_cg_ctx,
     rt_expr.eval_func_ = ObExprWeekOfYear::calc_weekofyear;
     // The vectorization of other types for the expression not completed yet.
     if (ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_)
-        || ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)) {
+        || ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)
+        || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0 &&
+            ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_))) {
       rt_expr.eval_vector_func_ = ObExprWeekOfYear::calc_weekofyear_vector;
     }
   }
@@ -135,6 +159,9 @@ int ObExprWeekDay::cg_expr(ObExprCGCtx &op_cg_ctx,
     LOG_WARN("children of weekday expr is null", K(ret), K(rt_expr.args_));
   } else {
     rt_expr.eval_func_ = ObExprWeekDay::calc_weekday;
+    if (ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_)) {
+      rt_expr.eval_vector_func_ = ObExprWeekDay::calc_weekday_vector;
+    }
   }
   return ret;
 }
@@ -182,6 +209,141 @@ int ObExprWeekDay::calc_weekday(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
   } else {
     int64_t weekday = ot.parts_[DT_WDAY] - 1;
     expr_datum.set_int(weekday);
+  }
+  return ret;
+}
+
+
+template <typename ArgVec, typename ResVec, bool is_weekyear>
+int calc_weekdayoryear_for_string_vector(const ObExpr &expr, ObEvalCtx &ctx,
+  const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  bool no_skip_no_null = bound.get_all_rows_active() && !arg_vec->has_null()
+                          && eval_flags.accumulate_bit_cnt(bound) == 0;
+  const ObSQLSessionInfo *session = NULL;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSQLMode sql_mode = 0;
+  ObDateSqlMode date_sql_mode;
+  int64_t week = 0;
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else {
+    int64_t last_first_8digits = INT64_MAX;
+    bool with_date = true;
+    bool is_time_type = N_FALSE;
+    bool use_quick_parser = true;
+    int quick_parser_failed_count = 0;
+    ObTime ob_time;
+    ObScale res_scale = -1;
+    ObTimeConverter::ObTimeDigits digits[DATETIME_PART_CNT];
+    ObTimeConverter::QuickParserType last_quick_parser_type = ObTimeConverter::QuickParserType::QuickParserUnused;
+    date_sql_mode.init(sql_mode);
+    BATCH_CALC({
+      ObString in_val = arg_vec->get_string(idx); // String
+      bool datetime_valid = false;
+      bool is_match_format = false;
+      if (use_quick_parser) {
+        ObTimeConverter::string_to_obtime_quick(in_val.ptr(),
+                  in_val.length(),
+                  ob_time,
+                  datetime_valid,
+                  is_match_format,
+                  last_first_8digits,
+                  last_quick_parser_type,
+                  is_time_type);
+      }
+      if (datetime_valid && is_match_format) {
+        ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+        if (ob_time.parts_[DT_YEAR] <= 0) {
+          res_vec->set_null(idx);
+        } else if (is_weekyear) {
+          week = ObTimeConverter::ob_time_to_week(ob_time, DT_WEEK_GE_4_BEGIN);
+          res_vec->set_int(idx, week);
+        } else {
+          res_vec->set_int(idx, ob_time.parts_[DT_WDAY] - 1);
+        }
+      } else {
+        last_quick_parser_type = ObTimeConverter::QuickParserType::QuickParserUnused;
+        if (use_quick_parser) {
+          quick_parser_failed_count++;
+          if (quick_parser_failed_count % 32 == 0) {
+            if (quick_parser_failed_count * 2 > idx) {
+              use_quick_parser = false;
+            }
+          }
+        }
+        if (OB_FAIL(ObTimeConverter::str_to_ob_time_with_date(in_val, ob_time,
+            &res_scale, date_sql_mode, false, digits))) {
+          LOG_WARN("cast to ob time with date failed", K(ret), K(in_val));
+          LOG_USER_WARN(OB_ERR_CAST_VARCHAR_TO_TIME);
+          uint64_t cast_mode = 0;
+          ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                            session->is_ignore_stmt(),
+                                            sql_mode,
+                                            cast_mode);
+          if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+            ret = OB_SUCCESS;
+            res_vec->set_null(idx);
+          }
+        } else if (ob_time.parts_[DT_YEAR] <= 0) {
+          res_vec->set_null(idx);
+        } else if (is_weekyear) {
+          week = ObTimeConverter::ob_time_to_week(ob_time, DT_WEEK_GE_4_BEGIN);
+          res_vec->set_int(idx, week);
+        } else {
+          res_vec->set_int(idx, ob_time.parts_[DT_WDAY] - 1);
+        }
+      }
+    });
+  }
+  return ret;
+}
+
+#define DISPATCH_WEEKDAY_STRING_EXPR_VECTOR()\
+if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, DiscVec), CONCAT(Str, DiscVec), false>(expr, ctx, skip, bound);\
+} else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, DiscVec), CONCAT(Str, UniVec), false>(expr, ctx, skip, bound);\
+} else if (VEC_DISCRETE == arg_format && VEC_CONTINUOUS == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, DiscVec), CONCAT(Str, ContVec), false>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, UniVec),  CONCAT(Str, DiscVec), false>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, UniVec), CONCAT(Str, UniVec), false>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_CONTINUOUS == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, UniVec), CONCAT(Str, ContVec), false>(expr, ctx, skip, bound);\
+} else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, ContVec),  CONCAT(Str, DiscVec), false>(expr, ctx, skip, bound);\
+} else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, ContVec), CONCAT(Str, UniVec), false>(expr, ctx, skip, bound);\
+} else if (VEC_CONTINUOUS == arg_format && VEC_CONTINUOUS == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, ContVec), CONCAT(Str, ContVec), false>(expr, ctx, skip, bound);\
+} else { \
+  ret = calc_weekdayoryear_for_string_vector<ObVectorBase, ObVectorBase, false>(expr, ctx, skip, bound);\
+}
+
+int ObExprWeekDay::calc_weekday_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval date_format param", K(ret));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
+    if (ObStringTC == ob_obj_type_class(arg_type)) {
+      DISPATCH_WEEKDAY_STRING_EXPR_VECTOR();
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("expr calculation failed", K(ret));
+    }
   }
   return ret;
 }
@@ -441,6 +603,7 @@ int ObExprWeek::cg_expr(ObExprCGCtx &op_cg_ctx,
     // The vectorization of other types for the expression not completed yet.
     if ((ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)
          || ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_))
+        //  || ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_))
         && ((2 == rt_expr.arg_cnt_ && ObIntType == rt_expr.args_[1]->datum_meta_.type_)
             || 1 == rt_expr.arg_cnt_)) {
       rt_expr.eval_vector_func_ = ObExprWeek::calc_week_vector;
@@ -534,7 +697,6 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprWeek, raw_expr) {
         continue;                                                                 \
       } else if (arg_vec->is_null(idx) || mode_vec->is_null(idx)) {               \
         res_vec->set_null(idx);                                                   \
-        eval_flags.set(idx);                                                      \
         continue;                                                                 \
       }                                                                           \
       BODY;                                                                       \
@@ -553,7 +715,6 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprWeek, raw_expr) {
         continue;                                                                 \
       } else if (arg_vec->is_null(idx)) {                                         \
         res_vec->set_null(idx);                                                   \
-        eval_flags.set(idx);                                                      \
         continue;                                                                 \
       }                                                                           \
       BODY;                                                                       \
@@ -612,7 +773,6 @@ int vector_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &ski
             ObTimeConverter::to_week(DT_WEEK_GE_4_BEGIN, year, dt_yday, wday, week, delta);
             res_vec->set_int(idx, week);
           }
-          eval_flags.set(idx);
         }
       });
     }
@@ -641,6 +801,30 @@ if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {\
 } else {\
   ret = vector_weekofyear<ObVectorBase, ObVectorBase, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
 }
+
+#define DISPATCH_WEEKOFYEAR_STRING_EXPR_VECTOR()\
+if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, DiscVec), CONCAT(Str, DiscVec), true>(expr, ctx, skip, bound);\
+} else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, DiscVec), CONCAT(Str, UniVec), true>(expr, ctx, skip, bound);\
+} else if (VEC_DISCRETE == arg_format && VEC_CONTINUOUS == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, DiscVec), CONCAT(Str, ContVec), true>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, UniVec),  CONCAT(Str, DiscVec), true>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, UniVec), CONCAT(Str, UniVec), true>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_CONTINUOUS == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, UniVec), CONCAT(Str, ContVec), true>(expr, ctx, skip, bound);\
+} else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, ContVec),  CONCAT(Str, DiscVec), true>(expr, ctx, skip, bound);\
+} else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, ContVec), CONCAT(Str, UniVec), true>(expr, ctx, skip, bound);\
+} else if (VEC_CONTINUOUS == arg_format && VEC_CONTINUOUS == res_format) {\
+  ret = calc_weekdayoryear_for_string_vector<CONCAT(Str, ContVec), CONCAT(Str, ContVec), true>(expr, ctx, skip, bound);\
+} else { \
+  ret = calc_weekdayoryear_for_string_vector<ObVectorBase, ObVectorBase, true>(expr, ctx, skip, bound);\
+}
+
 int ObExprWeekOfYear::calc_weekofyear_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
@@ -662,6 +846,8 @@ int ObExprWeekOfYear::calc_weekofyear_vector(const ObExpr &expr, ObEvalCtx &ctx,
       DISPATCH_WEEK_OF_YEAR_TYPE(Date);
     } else if (ObDateTimeTC == ob_obj_type_class(expr.args_[0]->datum_meta_.type_)) {
       DISPATCH_WEEK_OF_YEAR_TYPE(DateTime);
+    } else if (ObStringTC == ob_obj_type_class(expr.args_[0]->datum_meta_.type_)) {
+      DISPATCH_WEEKOFYEAR_STRING_EXPR_VECTOR();
     }
 
     if (OB_FAIL(ret)) {
@@ -776,7 +962,6 @@ int ObExprWeek::vector_week(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVecto
               }
             }
           }
-          eval_flags.set(idx);
         });
       } else {  // 1 == expr.arg_cnt_
         BATCH_CALC_WITHOUT_MODE({
@@ -804,9 +989,7 @@ int ObExprWeek::vector_week(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVecto
               ObTimeConverter::to_week(DT_WEEK_ZERO_BEGIN + DT_WEEK_SUN_BEGIN, year, dt_yday, wday, week, /*unused*/delta);
               res_vec->set_int(idx, week);
             }
-            eval_flags.set(idx);
           }
-          eval_flags.set(idx);
         });
       }
     }

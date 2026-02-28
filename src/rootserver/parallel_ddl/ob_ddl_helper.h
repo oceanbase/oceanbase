@@ -15,6 +15,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "rootserver/ob_ddl_service.h"           // ObDDLTransController
 #include "share/schema/ob_latest_schema_guard.h" // ObLatestSchemaGuard
+#include "share/schema/ob_schema_guard_wrapper.h"// ObSchemaGuardWrapper
 
 namespace oceanbase
 {
@@ -30,6 +31,7 @@ namespace schema
 class ObMultiVersionSchemaService;
 class ObDDLTransController;
 class ObLatestSchemaGuard;
+class ObSchemaGuardWrapper;
 }
 }
 namespace rootserver
@@ -46,9 +48,11 @@ public:
   static int write_1503_ddl_operation(share::schema::ObMultiVersionSchemaService *schema_service,
                                       const uint64_t tenant_id,
                                       ObDDLSQLTransaction &trans);
-  static int wait_ddl_trans(share::schema::ObDDLTransController *controller,
+  static int wait_ddl_trans(share::schema::ObMultiVersionSchemaService *schema_service,
+                            share::schema::ObDDLTransController *controller,
                             const uint64_t tenant_id,
-                            const int64_t task_id);
+                            const int64_t task_id,
+                            ObDDLSQLTransaction &trans);
   static int end_ddl_trans(share::schema::ObMultiVersionSchemaService *schema_service,
                            share::schema::ObDDLTransController *ddl_trans_controller,
                            const uint64_t tenant_id,
@@ -92,7 +96,8 @@ public:
     share::schema::ObMultiVersionSchemaService *schema_service,
     const uint64_t tenant_id,
     const char* parallel_ddl_type,
-    ObDDLSQLTransaction *external_trans = nullptr);
+    ObDDLSQLTransaction *external_trans = nullptr,
+    bool enable_ddl_parallel  = true);
   virtual ~ObDDLHelper();
 
   int init(ObDDLService &ddl_service);
@@ -147,12 +152,31 @@ protected:
       const ObString &database_name,
       const transaction::tablelock::ObTableLockMode lock_mode);
   int lock_databases_by_name_();
+
+  /*--------------------------------*/
   // lock object name
+  // MySQL temporary tables introduce parallel scenarios with objects of the same name,
+  // therefore session_id need to be considered when lock table by name
+
+  // add_lock_object_by_name_ is used to lock object by name, session id is 0 by default,
+  // with default session id 0 means no need to consider temp table.
+
+  // add_lock_table_by_name_with_session_id_zero_ is used to lock table by name, must pass session id,
+  // it will lock both session_id and session_id 0.
+
   int add_lock_object_by_name_(
       const ObString &database_name,
       const ObString &object_name,
       const share::schema::ObSchemaType schema_type,
-      const transaction::tablelock::ObTableLockMode lock_mode);
+      const transaction::tablelock::ObTableLockMode lock_mode,
+      const uint64_t session_id = 0);
+
+  int add_lock_table_by_name_with_session_id_zero_(
+      const ObString &database_name,
+      const ObString &object_name,
+      const transaction::tablelock::ObTableLockMode lock_mode,
+      const uint64_t session_id);
+  /*--------------------------------*/
   int lock_existed_objects_by_name_();
   // lock object id
   int add_lock_object_by_id_(
@@ -182,6 +206,7 @@ protected:
   int add_lock_object_by_tablegroup_name_(
       const ObString &tablegroup_name,
       const transaction::tablelock::ObTableLockMode lock_mode);
+  int get_current_version_(int64_t &version);
 private:
   int add_lock_object_to_map_(
       const uint64_t lock_obj_id,
@@ -223,10 +248,11 @@ protected:
   ObjectLockMap lock_object_name_map_;
   // used to lock objects by id
   ObjectLockMap lock_object_id_map_;
-  // should use this guard after related objects are locked
-  share::schema::ObLatestSchemaGuard latest_schema_guard_;
   common::ObArenaAllocator allocator_;
   const char* parallel_ddl_type_;
+  // should use this guard after related objects are locked
+  share::schema::ObSchemaGuardWrapper schema_guard_wrapper_;
+  bool enable_ddl_parallel_;
 private:
   ObDDLSQLTransaction trans_;
 private:

@@ -194,51 +194,111 @@ int ObExprBaseDecrypt::eval_decrypt(const ObExpr &expr,
     }
     const ObString &src_str = expr.locate_param_datum(ctx, 0).get_string();
     const ObString &key_str = expr.locate_param_datum(ctx, 1).get_string();
+    ObString iv_str;
     const int64_t buf_len = src_str.length() + 1;
     char *buf = NULL;
     int64_t out_len = 0;
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-    ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-    if (OB_ISNULL(buf = static_cast<char *>(calc_alloc.alloc(buf_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc mem failed", K(ret), K(buf_len));
-    } else if (is_ecb) {
-      if (OB_FAIL(ObBlockCipher::decrypt(key_str.ptr(), key_str.length(),
-                                         src_str.ptr(), src_str.length(), buf_len, NULL, 0, NULL, 0,
-                                         NULL, 0, op_mode, buf, out_len))) {
-        LOG_WARN("failed to decrypt", K(ret));
-      }
-    } else {
-      ObString iv_str = expr.locate_param_datum(ctx, 2).get_string();
+    if (!is_ecb) {
+      iv_str = expr.locate_param_datum(ctx, 2).get_string();
       if (OB_UNLIKELY(iv_str.length() < ObBlockCipher::OB_DEFAULT_IV_LENGTH)) {
         ret = OB_ERR_AES_IV_LENGTH;
         LOG_USER_ERROR(OB_ERR_AES_IV_LENGTH);
-      } else if (FALSE_IT(iv_str.assign(iv_str.ptr(), ObBlockCipher::OB_DEFAULT_IV_LENGTH))) {
-      } else if (OB_FAIL(ObBlockCipher::decrypt(key_str.ptr(), key_str.length(),
-                                                src_str.ptr(), src_str.length(), buf_len,
-                                                iv_str.ptr(), iv_str.length(), NULL, 0, NULL, 0,
-                                                op_mode, buf, out_len))) {
-        LOG_WARN("failed to decrypt", K(ret));
+      } else {
+        iv_str.assign(iv_str.ptr(), ObBlockCipher::OB_DEFAULT_IV_LENGTH);
       }
     }
-    if (OB_ERR_AES_DECRYPT == ret) {
-      is_null = true;
-      ret = OB_SUCCESS;
-    }
     if (OB_SUCC(ret)) {
-      ObExprStrResAlloc res_alloc(expr, ctx);
-      char *res_buf = NULL;
-      if (is_null) {
-        res.set_null();
-      } else if (OB_ISNULL(res_buf = static_cast<char*>(res_alloc.alloc(out_len)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc memory failed", K(ret), K(out_len));
+      if (OB_FAIL(eval_decrypt_inner(src_str, key_str, iv_str, op_mode,
+                                     alloc_guard.get_allocator(), buf,
+                                     out_len, is_null))) {
+        LOG_WARN("failed to decrypt", K(ret));
       } else {
-        MEMCPY(res_buf, buf, out_len);
-        res.set_string(res_buf, out_len);
+        ObExprStrResAlloc res_alloc(expr, ctx);
+        char *res_buf = NULL;
+        if (is_null) {
+          res.set_null();
+        } else if (OB_ISNULL(res_buf = static_cast<char*>(res_alloc.alloc(out_len)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc memory failed", K(ret), K(out_len));
+        } else {
+          MEMCPY(res_buf, buf, out_len);
+          res.set_string(res_buf, out_len);
+        }
       }
     }
   }
+  return ret;
+}
+
+template <typename SrcVec, typename KeyVec, typename IvVec, typename ResVec>
+int ObExprBaseDecrypt::eval_decrypt_vector(VECTOR_EVAL_FUNC_ARG_DECL,
+                                          const share::ObCipherOpMode op_mode,
+                                          const ObString &func_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(2 != expr.arg_cnt_ && 3 != expr.arg_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(expr.arg_cnt_));
+  } else {
+    SrcVec *src_vec = static_cast<SrcVec *>(expr.args_[0]->get_vector(ctx));
+    KeyVec *key_vec = static_cast<KeyVec *>(expr.args_[1]->get_vector(ctx));
+    IvVec *iv_vec = expr.arg_cnt_ == 3 ? static_cast<IvVec *>(expr.args_[2]->get_vector(ctx)) : NULL;
+    ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    bool is_ecb = ObEncryptionUtil::is_ecb_mode(op_mode);
+    if (!is_ecb && expr.arg_cnt_ != 3) {
+      ret = OB_ERR_PARAM_SIZE;
+      LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name.length(), func_name.ptr());
+    } else if (is_ecb && expr.arg_cnt_ == 3) {
+      LOG_USER_WARN(OB_ERR_INVALID_INPUT_STRING, "iv"); // just user warn, not set ret error.
+    }
+
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+        continue;
+      } else if (src_vec->is_null(idx) || key_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+      } else {
+        bool is_null_result = false;
+        const ObString &src_str = src_vec->get_string(idx);
+        const ObString &key_str = key_vec->get_string(idx);
+        ObString iv_str;
+        const int64_t buf_len = src_str.length() + 1;
+        char *buf = NULL;
+        int64_t out_len = 0;
+        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+        if (!is_ecb) {
+          iv_str = iv_vec->get_string(idx);
+          if (OB_UNLIKELY(iv_str.length() < ObBlockCipher::OB_DEFAULT_IV_LENGTH)) {
+            ret = OB_ERR_AES_IV_LENGTH;
+            LOG_USER_ERROR(OB_ERR_AES_IV_LENGTH);
+          } else {
+            iv_str.assign(iv_str.ptr(), ObBlockCipher::OB_DEFAULT_IV_LENGTH);
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(eval_decrypt_inner(src_str, key_str, iv_str, op_mode,
+                                         alloc_guard.get_allocator(), buf,
+                                         out_len, is_null_result))) {
+            LOG_WARN("failed to decrypt", K(ret));
+          } else {
+            char *res_buf = NULL;
+            if (is_null_result) {
+              res_vec->set_null(idx);
+            } else if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, out_len, idx))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc memory failed", K(ret), K(out_len));
+            } else {
+              MEMCPY(res_buf, buf, out_len);
+              res_vec->set_string(idx, ObString(out_len, res_buf));
+            }
+          }
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -287,6 +347,7 @@ int ObExprAesDecrypt::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = eval_aes_decrypt;
+  rt_expr.eval_vector_func_ = eval_aes_decrypt_vector;
   return ret;
 }
 
@@ -303,6 +364,172 @@ int ObExprAesDecrypt::eval_aes_decrypt(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else if (OB_FAIL(eval_decrypt(expr, ctx, op_mode, func_name, res))) {
     LOG_WARN("failed to eval aes decrypt", K(ret));
   } else { /* do nothing */ }
+  return ret;
+}
+
+// ==================== Vector Evaluation Implementation ====================
+
+int ObExprAesDecrypt::eval_aes_decrypt_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  ObCipherOpMode op_mode = ObCipherOpMode::ob_invalid_mode;
+  ObString func_name(strlen(N_AES_DECRYPT), N_AES_DECRYPT);
+
+  if (OB_FAIL(ObEncryptionUtil::get_cipher_op_mode(op_mode, ctx.exec_ctx_.get_my_session()))) {
+    LOG_WARN("fail to get cipher mode", K(ret));
+  } else if (!ObEncryptionUtil::is_aes_encryption(op_mode)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "using aes_decrypt with not aes block_encryption_mode");
+  } else if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("evaluate vector parameter failed", K(ret));
+  } else if (OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("evaluate vector parameter failed", K(ret));
+  } else if (expr.arg_cnt_ == 3 && OB_FAIL(expr.args_[2]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("evaluate vector parameter failed", K(ret));
+  } else {
+    VectorFormat src_format = expr.args_[0]->get_format(ctx);
+    VectorFormat key_format = expr.args_[1]->get_format(ctx);
+    VectorFormat iv_format = expr.arg_cnt_ == 3 ? expr.args_[2]->get_format(ctx) : VEC_INVALID;
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_INVALID != iv_format) {
+      if (VEC_UNIFORM == src_format) {
+        if (VEC_UNIFORM == key_format) {
+          if (VEC_UNIFORM == iv_format) {
+            if (VEC_UNIFORM == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrUniVec, StrUniVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else if (VEC_DISCRETE == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrUniVec, StrUniVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrUniVec, StrUniVec, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            }
+          } else if (VEC_DISCRETE == iv_format) {
+            if (VEC_UNIFORM == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrUniVec, StrDiscVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else if (VEC_DISCRETE == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrUniVec, StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrUniVec, StrDiscVec, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            }
+          } else {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrUniVec, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          }
+        } else if (VEC_DISCRETE == key_format) {
+          if (VEC_UNIFORM == iv_format) {
+            if (VEC_UNIFORM == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrDiscVec, StrUniVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else if (VEC_DISCRETE == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrDiscVec, StrUniVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrDiscVec, StrUniVec, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            }
+          } else if (VEC_DISCRETE == iv_format) {
+            if (VEC_UNIFORM == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrDiscVec, StrDiscVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else if (VEC_DISCRETE == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrDiscVec, StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrDiscVec, StrDiscVec, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            }
+          } else {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrDiscVec, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          }
+        } else {
+          ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+        }
+      } else if (VEC_DISCRETE == src_format) {
+        if (VEC_UNIFORM == key_format) {
+          if (VEC_UNIFORM == iv_format) {
+            if (VEC_UNIFORM == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrUniVec, StrUniVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else if (VEC_DISCRETE == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrUniVec, StrUniVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrUniVec, StrUniVec, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            }
+          } else if (VEC_DISCRETE == iv_format) {
+            if (VEC_UNIFORM == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrUniVec, StrDiscVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else if (VEC_DISCRETE == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrUniVec, StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrUniVec, StrDiscVec, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            }
+          } else {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrUniVec, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          }
+        } else if (VEC_DISCRETE == key_format) {
+          if (VEC_UNIFORM == iv_format) {
+            if (VEC_UNIFORM == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrDiscVec, StrUniVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else if (VEC_DISCRETE == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrDiscVec, StrUniVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrDiscVec, StrUniVec, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            }
+          } else if (VEC_DISCRETE == iv_format) {
+            if (VEC_UNIFORM == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrDiscVec, StrDiscVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else if (VEC_DISCRETE == res_format) {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrDiscVec, StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            } else {
+              ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrDiscVec, StrDiscVec, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+            }
+          } else {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrDiscVec, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          }
+        } else {
+          ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+        }
+      } else {
+        ret = ObExprBaseDecrypt::eval_decrypt_vector<ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+      }
+    } else {
+      if (VEC_UNIFORM == src_format) {
+        if (VEC_UNIFORM == key_format) {
+          if (VEC_UNIFORM == res_format) {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrUniVec, ObVectorBase, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          } else if (VEC_DISCRETE == res_format) {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrUniVec, ObVectorBase, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          } else {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrUniVec, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          }
+        } else if (VEC_DISCRETE == key_format) {
+          if (VEC_UNIFORM == res_format) {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrDiscVec, ObVectorBase, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          } else if (VEC_DISCRETE == res_format) {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrDiscVec, ObVectorBase, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          } else {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, StrDiscVec, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          }
+        } else {
+          ret = ObExprBaseDecrypt::eval_decrypt_vector<StrUniVec, ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+        }
+      } else if (VEC_DISCRETE == src_format) {
+        if (VEC_UNIFORM == key_format) {
+          if (VEC_UNIFORM == res_format) {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrUniVec, ObVectorBase, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          } else if (VEC_DISCRETE == res_format) {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrUniVec, ObVectorBase, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          } else {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrUniVec, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          }
+        } else if (VEC_DISCRETE == key_format) {
+          if (VEC_UNIFORM == res_format) {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrDiscVec, ObVectorBase, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          } else if (VEC_DISCRETE == res_format) {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrDiscVec, ObVectorBase, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          } else {
+            ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, StrDiscVec, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+          }
+        } else {
+          ret = ObExprBaseDecrypt::eval_decrypt_vector<StrDiscVec, ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+        }
+      } else {
+        ret = ObExprBaseDecrypt::eval_decrypt_vector<ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, op_mode, func_name);
+      }
+    }
+  }
+
   return ret;
 }
 

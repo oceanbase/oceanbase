@@ -14,6 +14,7 @@
 #include "compaction/ob_tablet_merge_ctx.h"
 #include "access/ob_multiple_scan_merge.h"
 #include "blocksstable/ob_micro_block_row_scanner.h"
+#include "storage/access/ob_index_block_tree_traverser.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -26,547 +27,6 @@ using namespace blocksstable;
 using namespace compaction;
 namespace storage
 {
-
-int ObIndexBlockTreeTraverser::init(ObSSTable &sstable, const ObITableReadInfo &index_read_info)
-{
-  int ret = OB_SUCCESS;
-
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("Init twice for index block tree traverser", KR(ret));
-  } else if (OB_UNLIKELY(!sstable.is_valid() || !index_read_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument for index block tree traverser",
-             KR(ret),
-             K(sstable),
-             K(index_read_info));
-  } else {
-    sstable_ = &sstable;
-    read_info_ = &index_read_info;
-    context_ = nullptr;
-    visited_node_count_ = 0;
-    visited_macro_node_count_ = 0;
-    avg_range_visited_node_cnt_ = 0;
-    remain_can_visited_node_cnt_ = 0;
-    is_inited_ = true;
-  }
-
-  return ret;
-}
-
-void ObIndexBlockTreeTraverser::reuse()
-{
-  allocator_.reuse();
-  visited_node_count_ = 0;
-  visited_macro_node_count_ = 0;
-  avg_range_visited_node_cnt_ = 0;
-  remain_can_visited_node_cnt_ = 0;
-}
-
-int ObIndexBlockTreeTraverser::handle_overflow_ranges()
-{
-  int ret = OB_SUCCESS;
-
-  // overflow ranges are out of index block tree, just call next range
-  while (OB_SUCC(ret) && !context_->is_ended()) {
-    if (OB_FAIL(context_->next_range())) {
-      if (ret != OB_ITER_END) {
-        LOG_WARN("Fail to go to next range", KR(ret), KPC(context_));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::traverse(ObIMultiRangeEstimateContext &context,
-                                        const int64_t open_index_micro_block_limit)
-{
-  int ret = OB_SUCCESS;
-
-  ObMicroBlockData root_index_block;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Not init traverser", KR(ret));
-  } else if (OB_UNLIKELY(!context.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid context", KR(ret), K(context));
-  } else if (FALSE_IT(context_ = &context)) {
-  } else if (FALSE_IT(avg_range_visited_node_cnt_ = 1.0 * open_index_micro_block_limit / context.get_ranges_count())) {
-  } else if (FALSE_IT(remain_can_visited_node_cnt_ = 0)) {
-  } else if (sstable_->is_empty()) {
-    // skip
-  } else if (OB_FAIL(sstable_->get_index_tree_root(root_index_block))) {
-    LOG_WARN("Fail to get index tree root", KR(ret), KPC(context_));
-  } else if (OB_FAIL(path_caches_.load_root(root_index_block, *this))) {
-    LOG_WARN("Fail to load root node to path caches", KR(ret));
-  } else if (OB_FAIL(inner_node_traverse(nullptr, PathInfo(), 0, avg_range_visited_node_cnt_))) {
-    LOG_WARN("Fail to traverse index block tree", KR(ret), K(root_index_block), KPC(context_));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(handle_overflow_ranges())) {
-    LOG_WARN("Fail to handle overflow ranges", KR(ret), KPC(context_));
-  }
-
-  LOG_TRACE("Traverse index block tree, stats:", K(visited_node_count_), K(visited_macro_node_count_));
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::is_range_cover_node_end_key(const ObDatumRange &range,
-                                                           const ObMicroIndexInfo &micro_index_info,
-                                                           bool &is_over)
-{
-  int ret = OB_SUCCESS;
-
-  int endkey_cmp_ret = 0;
-
-  // Don't compare multi version column
-  // cmp_ret < 0         cmp_ret == 0 && range.is_right_closed()
-  // node:  (.., 50]     (..., 100]
-  // range: (0, 100)     (0  , 100]
-  if (OB_FAIL(micro_index_info.endkey_.compare(range.get_end_key(),
-                                               read_info_->get_datum_utils(),
-                                               endkey_cmp_ret,
-                                               /* compare_datum_cnt */ false))) {
-    LOG_WARN("Fail to compare endkey", KR(ret), K(range), KPC(read_info_));
-  } else {
-    is_over = endkey_cmp_ret < 0 || (endkey_cmp_ret == 0 && range.is_right_closed());
-  }
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::goto_next_level_node(const ObMicroIndexInfo &micro_index_info,
-                                                    const PathInfo &path_info,
-                                                    const int64_t level,
-                                                    double open_index_micro_block_limit)
-{
-  int ret = OB_SUCCESS;
-
-  bool borrow_from_parent = false;
-  bool should_estimate = false;
-  bool is_in_cache = false;
-
-  // in SS mode, get one index micro block maybe need 10ms, which is too slow
-  // so we won't open the leaf node in index-block-tree, unless there is only one macro_block (in range)
-  // TODO(menglan): must need prefetch for perf
-  if (GCTX.is_shared_storage_mode() && micro_index_info.is_leaf_block() && path_info.path_count_ > 1) {
-    should_estimate = true;
-  } else if (micro_index_info.is_data_block() && micro_index_info.get_row_count() <= OPEN_DATA_MICRO_BLOCK_ROW_LIMIT) {
-    should_estimate = true;
-  } else {
-    if (OB_FAIL(path_caches_.find(level, &micro_index_info, is_in_cache))) {
-      if (ret != OB_NOT_SUPPORTED) {
-        LOG_WARN("Fail to find node in path caches", KR(ret), K(micro_index_info));
-      } else {
-        ret = OB_SUCCESS;
-        should_estimate = true;
-      }
-    } else if (!is_in_cache) {
-      should_estimate = (remain_can_visited_node_cnt_ < 1);
-      if (should_estimate && remain_can_visited_node_cnt_ + open_index_micro_block_limit >= 1) {
-        borrow_from_parent = true;
-        should_estimate = false;
-        open_index_micro_block_limit = remain_can_visited_node_cnt_ + open_index_micro_block_limit - 1;
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (should_estimate) {
-    if (OB_FAIL(context_->on_node_estimate(micro_index_info, path_info.in_middle_))) {
-      LOG_WARN("Fail to do context on leaf node estimate", KR(ret), K(micro_index_info));
-    } else {
-      remain_can_visited_node_cnt_ += open_index_micro_block_limit;
-    }
-  } else {
-    if (!is_in_cache) {
-      borrow_from_parent ? remain_can_visited_node_cnt_ = 0 : remain_can_visited_node_cnt_--;
-    }
-
-    if (micro_index_info.is_leaf_block()) {
-      visited_macro_node_count_++;
-    }
-    visited_node_count_++;
-
-    if (OB_FAIL(micro_index_info.is_data_block()
-                    ? leaf_node_traverse(micro_index_info, path_info, level)
-                    : inner_node_traverse(&micro_index_info, path_info, level, open_index_micro_block_limit))) {
-      LOG_WARN("Fail to traverse next level node", KR(ret));
-    }
-  }
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::leaf_node_traverse(const ObMicroIndexInfo &micro_index_info,
-                                                  const PathInfo &path_info,
-                                                  const int64_t level)
-{
-  int ret = OB_SUCCESS;
-
-  PathNodeCaches::CacheNode *cache_node = nullptr;
-  bool is_in_cache = false;
-  ObMicroBlockRowScanner scanner(allocator_);
-  const ObDatumRange &range = context_->get_curr_range();
-  ObPartitionEst est;
-
-  if (OB_FAIL(path_caches_.get(level, &micro_index_info, *this, cache_node, is_in_cache))) {
-    LOG_WARN("Fail to get node in path caches", KR(ret), K(micro_index_info));
-  } else if (OB_FAIL(scanner.estimate_row_count(*read_info_, cache_node->micro_data_, range, false, est))) {
-    LOG_WARN("Fail to estimate row count", KR(ret), K(cache_node->micro_data_), KPC(context_));
-  } else if (OB_FAIL(context_->on_leaf_node(micro_index_info, est))) {
-    LOG_WARN("Fail to do context on leaf node", KR(ret), K(micro_index_info), KPC(context_));
-  }
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::inner_node_traverse(const ObMicroIndexInfo *micro_index_info,
-                                                   const PathInfo &path_info,
-                                                   const int64_t level,
-                                                   const double open_index_micro_block_limit)
-{
-  // open_index_micro_block_limit is the number of index micro blocks that can be opened in current subtree
-
-  int ret = OB_SUCCESS;
-
-  PathNodeCaches::CacheNode *cache_node = nullptr;
-  TreeNodeContext *node = nullptr;
-  ObMicroIndexInfo index_row;
-  bool is_in_cache = false;
-
-  if (OB_FAIL(path_caches_.get(level, micro_index_info, *this, cache_node, is_in_cache))) {
-    LOG_WARN("Fail to get node in path caches", KR(ret), KPC(micro_index_info));
-  } else {
-    node = &cache_node->context_;
-  }
-
-  while (OB_SUCC(ret) && !context_->is_ended()) {
-    const ObDatumRange &range = context_->get_curr_range();
-    const int64_t curr_range_idx = context_->get_curr_range_idx();
-    int64_t index_row_count = 0;
-
-    // step 1. locate range in multi index row
-    if (OB_FAIL(node->locate_range(range, index_row_count))) {
-      if (ret != OB_BEYOND_THE_RANGE) {
-        LOG_WARN("Fail to locate range", KR(ret));
-      } else {
-        // beyond the range, the remain ranges are all larger than node
-        ret = OB_SUCCESS;
-        break;
-      }
-    }
-
-    // The path_info indicates which child of the parent node the current node is in (within the
-    // interval being traverse). It could be the leftmost child, a middle child, or the rightmost
-    // child. See the figure below.
-    //                              start_key end_key
-    //  C: coverd                       │       │
-    //  N: partial coverage             ▼       ▼
-    //                                  ─────────
-    //                                 ┌─┬─┬─┬─┬─┐
-    //                                 │N│C│C│C│N│
-    //                                 │ │ │ │ │ │
-    //                                 └┬┴─┴┬┴─┴┬┘
-    //             ┌────────────────────┘   │   └──────────────────┐
-    // left_most◄──┤                        ├──►in_middle          ├──►right_most
-    //          ┌─┬┴┬─┐                  ┌─┬┴┬─┐                ┌─┬┴┬─┐
-    //          │ │N│C│                  │C│C│C│                │C│C│N│
-    //          │ │ │ ├──┐               │ │ │ │                │ │ │ │
-    //          └─┴─┴─┘  │               └─┴─┴─┘                └─┴─┴─┘
-    //             ───   │                                    i: 0 1 2
-    //                   ▼
-    //                still_estimating
-
-    // step 2. iterate the index row to sum row count
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_row_count; i++) {
-      if (OB_FAIL(node->get_next_index_row(index_row))) {
-        LOG_WARN("Fail to get next index row", KR(ret), K(i), K(index_row_count));
-      }
-
-      // we can combine path_info information and compare endkey to check whether current range is
-      // coverd the index row.
-      bool is_coverd_by_range = false;
-      PathInfo next_level_node_path_info(index_row_count, i, path_info);
-      if (OB_FAIL(ret)) {
-      } else if (next_level_node_path_info.in_middle_) {
-        is_coverd_by_range = true;
-      } else if (next_level_node_path_info.left_most_ && !next_level_node_path_info.right_most_) {
-        is_coverd_by_range = range.get_start_key().is_min_rowkey();
-      } else if (next_level_node_path_info.right_most_ && !next_level_node_path_info.left_most_) {
-        if (range.get_end_key().is_max_rowkey()) {
-          is_coverd_by_range = true;
-        } else if (OB_FAIL(is_range_cover_node_end_key(range, index_row, is_coverd_by_range))) {
-          LOG_WARN("Fail to compare range endkey and index row", KR(ret));
-        }
-      } else if (next_level_node_path_info.right_most_ && next_level_node_path_info.left_most_) {
-        // locate range only hit node
-        // is_coverd_by_range = false;
-      }
-
-      ObIMultiRangeEstimateContext::ObTraverserOperationType operation;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(context_->on_inner_node(index_row, is_coverd_by_range, operation))) {
-        LOG_WARN("Fail to do on inner node", KR(ret), K(is_coverd_by_range), K(index_row), KPC(context_));
-      } else {
-        switch (operation) {
-        case ObIMultiRangeEstimateContext::GOTO_NEXT_LEVEL:
-          if (OB_FAIL(goto_next_level_node(index_row, PathInfo(index_row_count, i, path_info), level + 1, 1.0 * open_index_micro_block_limit / index_row_count))) {
-            LOG_WARN("Fail to goto next level", KR(ret), K(index_row));
-          }
-          break;
-        case ObIMultiRangeEstimateContext::NOTHING:
-          // we averagly allocate open_index_micro_block_limit for current node's children
-          remain_can_visited_node_cnt_ += 1.0 * open_index_micro_block_limit / index_row_count;
-          break;
-        };
-      }
-    }
-
-    // step 3. continue to traverse next range
-    if (OB_FAIL(ret)) {
-    } else if (micro_index_info != nullptr) {
-      // only root node can call next range
-      break;
-    } else if (OB_FAIL(context_->next_range())) {
-      if (ret != OB_ITER_END) {
-        LOG_WARN("Fail to advance context", KR(ret), KPC(context_));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    } else {
-      remain_can_visited_node_cnt_
-          += avg_range_visited_node_cnt_ * (context_->get_curr_range_idx() - curr_range_idx);
-    }
-  }
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::PathNodeCaches::load_root(const ObMicroBlockData &block_data,
-                                                         ObIndexBlockTreeTraverser &traverser)
-{
-  int ret = OB_SUCCESS;
-
-  if (caches_[0].is_inited_) {
-    // is inited, skip
-  } else if (FALSE_IT(caches_[0].micro_data_ = block_data)) {
-  } else if (OB_FAIL(caches_[0].context_.init(block_data, nullptr, traverser))) {
-    LOG_WARN("Fail to init root node context", KR(ret), K(block_data));
-  } else {
-    caches_[0].is_inited_ = true;
-  }
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::PathNodeCaches::find(const int64_t level,
-                                                    const ObMicroIndexInfo *micro_index_info,
-                                                    bool &is_in_cache)
-{
-  int ret = OB_SUCCESS;
-
-  is_in_cache = false;
-
-  if (OB_UNLIKELY(level >= MAX_CACHE_LEVEL)) {
-    ret = OB_NOT_SUPPORTED;
-  } else if (!caches_[level].is_inited_) {
-    is_in_cache = false;
-  } else if (micro_index_info == nullptr) {
-    // root node
-    is_in_cache = caches_[0].is_inited_;
-  } else {
-    ObMicroBlockCacheKey key(MTL_ID(), *micro_index_info);
-    is_in_cache = (key == caches_[level].key_);
-  }
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::PathNodeCaches::get(const int64_t level,
-                                                   const ObMicroIndexInfo *micro_index_info,
-                                                   ObIndexBlockTreeTraverser &traverser,
-                                                   CacheNode *&cache_node,
-                                                   bool &is_in_cache)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(find(level, micro_index_info, is_in_cache))) {
-    LOG_WARN("Fail to find node in cache", KR(ret), KPC(micro_index_info));
-  } else if (is_in_cache) {
-    cache_node = &caches_[level];
-  } else {
-    // not in cache, should load it
-    cache_node = &caches_[level];
-
-    if (micro_index_info == nullptr) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Must load root node at first", KR(ret), K(level));
-    } else if (cache_node->is_inited_) {
-      cache_node->reuse();
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(prefetch(*micro_index_info, cache_node->micro_handle_))) {
-      LOG_WARN("Fail to prefetch next level micro block data", KR(ret), K(micro_index_info));
-    } else if (OB_FAIL(cache_node->micro_handle_.get_micro_block_data(
-                  &cache_node->macro_block_reader_, cache_node->micro_data_, micro_index_info->is_data_block()))) {
-      LOG_WARN("Fail to get index block data", KR(ret), K(cache_node->micro_data_));
-    } else if (!micro_index_info->is_data_block()
-               && OB_FAIL(
-                   cache_node->is_inited_
-                       ? cache_node->context_.open(cache_node->micro_data_, micro_index_info)
-                       : cache_node->context_.init(cache_node->micro_data_, micro_index_info, traverser))) {
-      LOG_WARN("Fail to init root node context", KR(ret), K(cache_node->micro_data_));
-    } else if (OB_FAIL(
-                   cache_node->key_.assign(ObMicroBlockCacheKey(MTL_ID(), *micro_index_info)))) {
-      LOG_WARN("Fail to assign cache key", KR(ret), KPC(micro_index_info));
-    } else {
-      cache_node->is_inited_ = true;
-    }
-  }
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::PathNodeCaches::prefetch(const ObMicroIndexInfo &micro_index_info,
-                                                        ObMicroBlockDataHandle &micro_handle)
-{
-  int ret = OB_SUCCESS;
-
-  bool found = false;
-  micro_handle.reset();
-  micro_handle.allocator_ = &allocator_;
-
-  ObMicroBlockCacheKey key(MTL_ID(), micro_index_info);
-  ObIMicroBlockCache *cache
-      = micro_index_info.is_data_block()
-            ? &blocksstable::ObStorageCacheSuite::get_instance().get_block_cache()
-            : &blocksstable::ObStorageCacheSuite::get_instance().get_index_block_cache();
-
-  if (OB_ISNULL(cache)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Fail to get block cache because of null", KR(ret), KP(cache));
-  } else if (OB_FAIL(cache->get_cache_block(key, micro_handle.cache_handle_))) {
-    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-      LOG_WARN("Fail to get cache block", KR(ret));
-    } else {
-      ret = OB_SUCCESS;
-    }
-  } else {
-    found = true;
-    micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
-  }
-
-  if (OB_SUCC(ret) && !found) {
-    if (OB_FAIL(micro_index_info.row_header_->fill_micro_des_meta(true /* deep_copy_key */,
-                                                                  micro_handle.des_meta_))) {
-      LOG_WARN("Fail to fill micro block deserialize meta", KR(ret));
-    } else if (OB_FAIL(cache->prefetch(MTL_ID(),
-                                       micro_index_info.get_macro_id(),
-                                       micro_index_info,
-                                       /* use_cache */ true,
-                                       ObTabletID(ObTabletID::INVALID_TABLET_ID),
-                                       micro_handle.io_handle_,
-                                       &allocator_))) {
-      LOG_WARN("Fail to prefetch data micro block", KR(ret), K(micro_index_info));
-    } else if (ObSSTableMicroBlockState::UNKNOWN_STATE == micro_handle.block_state_) {
-      micro_handle.tenant_id_ = MTL_ID();
-      micro_handle.macro_block_id_ = micro_index_info.get_macro_id();
-      micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
-      micro_handle.micro_info_.set(micro_index_info.get_block_offset(),
-                                   micro_index_info.get_block_size(),
-                                   micro_index_info.get_logic_micro_id(),
-                                   micro_index_info.get_data_checksum());
-    }
-  }
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::TreeNodeContext::init(const ObMicroBlockData &block_data,
-                                                     const ObMicroIndexInfo *micro_index_info,
-                                                     ObIndexBlockTreeTraverser &traverser)
-{
-  int ret = OB_SUCCESS;
-
-  ObQueryFlag query_flag(ObQueryFlag::Forward,
-                         false,  /* is daily merge scan*/
-                         false,  /* is read multiple macro block*/
-                         false,  /* sys task scan, read one macro block in single io*/
-                         false,  /* is full row scan*/
-                         false,  /* index back */
-                         false); /* query stat */
-
-  if (OB_UNLIKELY(!traverser.is_inited())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Invalid traverser", KR(ret));
-  } else if (OB_FAIL(scanner_.init(traverser.get_read_info()->get_datum_utils(),
-                                   allocator_,
-                                   query_flag,
-                                   traverser.get_sstable()->get_macro_offset()))) {
-    LOG_WARN("Fail to init scanner", KR(ret), K(traverser));
-  } else if (OB_FAIL(open(block_data, micro_index_info))) {
-    LOG_WARN("Fail to open index block", KR(ret), K(scanner_));
-  }
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::TreeNodeContext::open(const ObMicroBlockData &block_data,
-                                                     const ObMicroIndexInfo *micro_index_info)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(scanner_.open(micro_index_info == nullptr
-                                ? ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID
-                                : micro_index_info->get_macro_id(),
-                            block_data))) {
-    LOG_WARN("Fail to open index block", KR(ret), K(scanner_));
-  }
-
-  return ret;
-}
-
-void ObIndexBlockTreeTraverser::TreeNodeContext::reuse()
-{
-  scanner_.reuse();
-}
-
-int ObIndexBlockTreeTraverser::TreeNodeContext::locate_range(const ObDatumRange &range,
-                                                             int64_t &index_row_count)
-{
-  int ret = OB_SUCCESS;
-
-  index_row_count = 0;
-
-  if (OB_FAIL(scanner_.locate_range(range, true, true))) {
-    if (ret != OB_BEYOND_THE_RANGE) {
-      LOG_WARN("Fail to locate range", KR(ret), K(range));
-    }
-  } else if (OB_FAIL(scanner_.get_index_row_count(index_row_count))) {
-    LOG_WARN("Fail to get index row count", KR(ret), K(scanner_));
-  }
-
-  return ret;
-}
-
-int ObIndexBlockTreeTraverser::TreeNodeContext::get_next_index_row(ObMicroIndexInfo &idx_block_row)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(scanner_.get_next(idx_block_row))) {
-    LOG_WARN("Fail to get next index row", KR(ret), K(scanner_));
-  }
-
-  return ret;
-}
 
 template <typename Range>
 int ObRangeCompartor::is_sorted(const ObIArray<Range> &ranges, ObRangeCompartor &compartor, bool &is_sorted)
@@ -677,7 +137,7 @@ int ObMultiRangeRowEstimateContext::on_inner_node(const ObMicroIndexInfo &index_
     ranges_.at(curr_range_idx_).macro_block_count_ += max(1ll, index_row.get_macro_block_count() >> 1);
     operation = NOTHING;
   } else {
-    operation = ObTraverserOperationType::GOTO_NEXT_LEVEL;
+    operation = GOTO_NEXT_LEVEL;
   }
 
   return ret;
@@ -791,7 +251,7 @@ int ObMultiRangeInfoEstimateContext::on_inner_node(const ObMicroIndexInfo &index
       avg_micro_block_size_ = index_row.get_macro_block_count() * OB_DEFAULT_MACRO_BLOCK_SIZE
                               / index_row.get_micro_block_count();
     }
-    operation = ObTraverserOperationType::GOTO_NEXT_LEVEL;
+    operation = GOTO_NEXT_LEVEL;
   }
 
   // adapt now sql implement, macro level is enough
@@ -822,7 +282,7 @@ int ObMultiRangeSplitContext::init(const ObIArray<ObPairStoreAndDatumRange> &ran
     LOG_WARN("Fail to init base context", KR(ret));
   } else {
     split_row_limit_ = split_row_limit;
-    split_row_upper_limit_ = split_row_limit * SPLIT_ROW_UPPER_RATIO;
+    split_row_upper_limit_ = range_precision.calc_row_count_upper_limit(split_row_limit);
     allocator_ = &allocator;
     range_infos_ = &range_infos;
     split_ranges_ = &split_ranges;
@@ -932,9 +392,6 @@ int ObMultiRangeSplitContext::on_inner_node(const ObMicroIndexInfo &index_row,
   if (is_coverd_by_range) {
     inc_row_count = index_row.get_row_count();
     operation = curr_row_count + inc_row_count > split_row_upper_limit_ ? GOTO_NEXT_LEVEL : NOTHING;
-  } else if (index_row.get_row_count() < (curr_row_count / SHOULD_ESTIMATE_RATIO)) {
-    inc_row_count = index_row.get_row_count() >> 1;
-    operation = NOTHING;
   } else {
     operation = GOTO_NEXT_LEVEL;
   }
@@ -1351,7 +808,6 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_row_and_split(
     ObIAllocator &allocator,
     ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
     int64_t &estimate_rows_sum,
-    const int64_t max_time,
     const ObRangePrecision &range_precision)
 {
   int ret = OB_SUCCESS;
@@ -1375,14 +831,9 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_row_and_split(
     ObITable *table = tables.at(i);
     if (table->is_sstable()) {
       ObSSTable *sstable = static_cast<ObSSTable *>(table);
-      int64_t open_index_block_limit
-          = max(1,
-                INDEX_BLOCK_PER_TIME * max_time * sstable->get_data_macro_block_count()
-                    / max(1, total_macro_block_cnt));
       if (OB_FAIL(split_ranges_for_sstable(sorted_ranges,
                                            read_info,
                                            expected_task_count,
-                                           open_index_block_limit,
                                            *sstable,
                                            allocator,
                                            heap_element_iters,
@@ -1411,7 +862,6 @@ int ObPartitionMultiRangeSpliter::split_ranges_for_sstable(
     const ObIArray<ObPairStoreAndDatumRange> &sorted_ranges,
     const ObITableReadInfo &read_info,
     const int64_t expected_task_count,
-    const int64_t open_index_block_limit,
     ObSSTable &sstable,
     ObIAllocator &allocator,
     ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
@@ -1434,15 +884,15 @@ int ObPartitionMultiRangeSpliter::split_ranges_for_sstable(
     LOG_WARN("Fail to init row estimate context", KR(ret));
   } else if (OB_FAIL(traverser.init(sstable, read_info))) {
     LOG_WARN("Fail to init row estimate traverser", KR(ret));
-  } else if (OB_FAIL(traverser.traverse(row_estimate_context, open_index_block_limit))) {
+  } else if (OB_FAIL(traverser.traverse(row_estimate_context))) {
     LOG_WARN("Fail to traverse sstable index block tree", KR(ret));
-  } else if (row_estimate_context.get_macro_block_count_sum() < expected_task_count * SPLIT_RANGE_FACTOR) {
+  } else if (row_estimate_context.get_macro_block_count_sum() < expected_task_count) {
     can_goto_micro_level = true;
     row_estimate_context.reuse();
     row_estimate_context.set_can_goto_micro_level(true);
     traverser.reuse();
 
-    if (OB_FAIL(traverser.traverse(row_estimate_context, open_index_block_limit))) {
+    if (OB_FAIL(traverser.traverse(row_estimate_context))) {
       LOG_WARN("Fail to traverse sstable index block tree", KR(ret));
     }
   }
@@ -1463,7 +913,7 @@ int ObPartitionMultiRangeSpliter::split_ranges_for_sstable(
                                     can_goto_micro_level))) {
     LOG_WARN("Fail to init split context", KR(ret));
   } else if (FALSE_IT(traverser.reuse())) {
-  } else if (OB_FAIL(traverser.traverse(split_context, open_index_block_limit))) {
+  } else if (OB_FAIL(traverser.traverse(split_context))) {
     LOG_WARN("Fail to traverse sstable index block tree", KR(ret));
   }
 
@@ -1635,12 +1085,13 @@ int ObPartitionMultiRangeSpliter::do_task_split_algorithm(
       if (OB_FAIL(helper.construct_and_push_range(
               start_key, end_key, flag, for_compaction, one_task_ranges))) {
         LOG_WARN("Fail to construct store range", KR(ret));
-      } else if (OB_FAIL(multi_range_split_array.push_back(one_task_ranges))) {
+      } else if (!one_task_ranges.empty() && OB_FAIL(multi_range_split_array.push_back(one_task_ranges))) {
+        // if there are lots of multi-version same rowkey, the one_task_ranges may be empty
         LOG_WARN("Fail to push back one task ranges", KR(ret));
       } else {
         total_row_count -= curr_task_rows_sum;
 
-        pushed_task_count++;
+        pushed_task_count++; // only used for calculate avg_row_count, don't care about the actual task count
         one_task_ranges.reset();
         curr_task_rows_sum = 0;
         start_key = end_key;
@@ -1727,7 +1178,6 @@ int ObPartitionMultiRangeSpliter::build_range_array(const ObIArray<ObStoreRange>
                                                     ObIAllocator &allocator,
                                                     ObArrayArray<ObRange> &multi_range_split_array,
                                                     const bool for_compaction,
-                                                    const int64_t max_time,
                                                     const ObRangePrecision &range_precision)
 {
   int ret = OB_SUCCESS;
@@ -1749,7 +1199,6 @@ int ObPartitionMultiRangeSpliter::build_range_array(const ObIArray<ObStoreRange>
                                                    tmp_allocator,
                                                    heap_element_iters,
                                                    estimate_rows_sum,
-                                                   max_time,
                                                    range_precision))) {
     LOG_WARN("Fail to estimate row and split", KR(ret));
   } else if (OB_FAIL(build_heap(heap_element_iters, heap))) {
@@ -1786,7 +1235,7 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRan
                                                        const ObITableReadInfo &index_read_info,
                                                        const ObIArray<ObITable *> &tables,
                                                        int64_t &total_size,
-                                                       const int64_t max_time,
+                                                       const int64_t row_count_precision,
                                                        const int64_t range_precision)
 {
   int ret = OB_SUCCESS;
@@ -1794,15 +1243,15 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRan
   total_size = 0;
   int64_t unused_total_row_count = 0;
   int64_t unused_total_macro_block_count = 0;
-  ObRangePrecision recalc_range_precision(range_precision);
+  ObRangePrecision recalc_range_precision(range_precision, row_count_precision);
 
-  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid() || max_time <= 0)) {
+  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to get multi range size",
              KR(ret),
              K(index_read_info),
              K(range_precision),
-             K(max_time));
+             K(row_count_precision));
   } else if (ranges.empty()) {
     // do nothing
   } else if (tables.empty()) {
@@ -1815,7 +1264,6 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRan
                                           total_size,
                                           unused_total_row_count,
                                           unused_total_macro_block_count,
-                                          max_time,
                                           recalc_range_precision))) {
     LOG_WARN("Fail to build range array", KR(ret));
   }
@@ -1828,26 +1276,25 @@ int ObPartitionMultiRangeSpliter::get_multi_ranges_row_count(const ObIArray<ObSt
                                                             ObTableStoreIterator &table_iter,
                                                             int64_t &row_count,
                                                             int64_t &macro_block_count,
-                                                            const int64_t max_time,
+                                                            const int64_t row_count_precision,
                                                             const int64_t range_precision)
 {
   int ret = OB_SUCCESS;
 
-  ObRangePrecision recalc_range_precision(range_precision);
+  ObRangePrecision recalc_range_precision(range_precision, row_count_precision);
   int64_t unused_total_size = 0;
   row_count = 0;
   macro_block_count = 0;
 
   ObSEArray<ObITable *, 8> tables;
 
-  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid() || max_time <= 0
-                  || !table_iter.is_valid())) {
+  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid() || !table_iter.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to get multi ranges row count",
              KR(ret),
              K(index_read_info),
              K(range_precision),
-             K(max_time),
+             K(row_count_precision),
              K(table_iter));
   } else if (OB_FAIL(get_tables(table_iter, tables))) {
     LOG_WARN("Fail to get split tables", KR(ret), K(table_iter));
@@ -1865,7 +1312,6 @@ int ObPartitionMultiRangeSpliter::get_multi_ranges_row_count(const ObIArray<ObSt
                                           unused_total_size,
                                           row_count,
                                           macro_block_count,
-                                          max_time,
                                           recalc_range_precision))) {
     LOG_WARN("Fail to estimate ranges size", KR(ret));
   }
@@ -1877,7 +1323,7 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRan
                                                        const ObITableReadInfo &index_read_info,
                                                        ObTableStoreIterator &table_iter,
                                                        int64_t &total_size,
-                                                       const int64_t max_time,
+                                                       const int64_t row_count_precision,
                                                        const int64_t range_precision)
 {
   int ret = OB_SUCCESS;
@@ -1886,22 +1332,16 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRan
 
   ObSEArray<ObITable *, 8> tables;
 
-  if (OB_UNLIKELY(!index_read_info.is_valid() || max_time <= 0 || !table_iter.is_valid())) {
+  if (OB_UNLIKELY(!index_read_info.is_valid() || !table_iter.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument to get multi ranges size",
-             KR(ret),
-             K(index_read_info),
-             K(range_precision),
-             K(max_time),
-             K(table_iter));
+    LOG_WARN("Invalid argument to get multi ranges size", KR(ret), K(index_read_info), K(range_precision), K(table_iter));
   } else if (OB_FAIL(get_tables(table_iter, tables))) {
     LOG_WARN("Fail to get split tables", KR(ret), K(table_iter));
   } else if (ranges.empty()) {
     // do nothing
   } else if (tables.empty()) {
     // only small tables
-  } else if (OB_FAIL(get_multi_range_size(
-                 ranges, index_read_info, tables, total_size, max_time, range_precision))) {
+  } else if (OB_FAIL(get_multi_range_size(ranges, index_read_info, tables, total_size, row_count_precision, range_precision))) {
     LOG_WARN("Fail to get multi range size", KR(ret));
   }
 
@@ -1914,7 +1354,6 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
                                                        int64_t &total_size,
                                                        int64_t &total_row_count,
                                                        int64_t &total_macro_block_count,
-                                                       const int64_t max_time,
                                                        const ObRangePrecision &range_precision)
 {
   int ret = OB_SUCCESS;
@@ -1966,11 +1405,7 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
           LOG_WARN("Fail to init info estimate context", KR(ret));
         } else if (OB_FAIL(traverser.init(*sstable, read_info))) {
           LOG_WARN("Fail to init info estimate traverser", KR(ret));
-        } else if (OB_FAIL(traverser.traverse(
-                       info_estimate_context,
-                       max(1,
-                           INDEX_BLOCK_PER_TIME * max_time * sstable->get_data_macro_block_count()
-                               / sstable_total_macro_block_count)))) {
+        } else if (OB_FAIL(traverser.traverse(info_estimate_context))) {
           LOG_WARN("Fail to traverse sstable index block tree", KR(ret));
         } else {
           total_size += info_estimate_context.get_total_size();
@@ -2026,6 +1461,8 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
     }
 
     LOG_TRACE("Finish estimate ranges info",
+              K(ranges),
+              K(tables),
               K(total_size),
               K(total_row_count),
               K(total_macro_block_count),
@@ -2044,7 +1481,7 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
     ObIAllocator &allocator,
     ObArrayArray<ObRange> &multi_range_split_array,
     const bool for_compaction,
-    const int64_t max_time,
+    const int64_t row_count_precision,
     const int64_t range_precision)
 {
   int ret = OB_SUCCESS;
@@ -2053,15 +1490,11 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
   multi_range_split_array.reset();
 
   int64_t fast_split_range_task_count = 0;
-  ObRangePrecision recalc_range_precision(range_precision);
+  ObRangePrecision recalc_range_precision(range_precision, row_count_precision);
 
-  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid() || max_time <= 0 || expected_task_count <= 0)) {
+  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid() || expected_task_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument to get split multi ranges",
-             KR(ret),
-             K(expected_task_count),
-             K(range_precision),
-             K(max_time));
+    LOG_WARN("Invalid argument to get split multi ranges", KR(ret), K(expected_task_count), K(range_precision), K(row_count_precision));
   } else if (ranges.empty()) {
     // do nothing
   } else if (OB_FAIL(recalc_range_precision.recalc_range_precision(ranges.count()))) {
@@ -2090,7 +1523,6 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
                                        allocator,
                                        multi_range_split_array,
                                        for_compaction,
-                                       max_time,
                                        recalc_range_precision))) {
     LOG_WARN("Fail to build range array", KR(ret));
   }
@@ -2099,6 +1531,8 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
   LOG_TRACE("Finish split multi ranges",
             KR(ret),
             K(end_time_ms - start_time_ms),
+            K(ranges),
+            K(tables),
             K(expected_task_count),
             K(multi_range_split_array));
   return ret;
@@ -2113,7 +1547,7 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
     ObIAllocator &allocator,
     ObArrayArray<ObRange> &multi_range_split_array,
     const bool for_compaction,
-    const int64_t max_time,
+    const int64_t row_count_precision,
     const int64_t range_precision)
 {
   int ret = OB_SUCCESS;
@@ -2122,7 +1556,7 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
 
   multi_range_split_array.reset();
 
-  if (OB_UNLIKELY(!table_iter.is_valid() || !index_read_info.is_valid() || max_time <= 0)) {
+  if (OB_UNLIKELY(!table_iter.is_valid() || !index_read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to get split multi ranges", KR(ret), K(table_iter));
   } else if (ranges.empty()) {
@@ -2136,7 +1570,7 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
                                             allocator,
                                             multi_range_split_array,
                                             for_compaction,
-                                            max_time,
+                                            row_count_precision,
                                             range_precision))) {
     LOG_WARN("Fail to split multi ranges", KR(ret), K(table_iter));
   }
@@ -2406,8 +1840,7 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_table_acc
   } else if (OB_FAIL(tbl_xs_param_.init_merge_param(merge_ctx_.get_tablet_id().id(),
                                                     merge_ctx_.get_tablet_id(),
                                                     tbl_read_info_,
-                                                    false/*is_multi_version_minor_merge*/,
-                                                    false/*is_delete_insert*/))) {
+                                                    false/*is_multi_version_minor_merge*/))) {
     STORAGE_LOG(WARN, "Failed to init table access param", KR(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_col_ids_.count(); i++) {

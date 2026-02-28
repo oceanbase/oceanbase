@@ -67,7 +67,7 @@ int ObBackupDataScheduler::init(
   return ret;
 }
 
-int ObBackupDataScheduler::force_cancel(const uint64_t &tenant_id)
+int ObBackupDataScheduler::force_cancel(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObSArray<uint64_t> empty_tenant_array;
@@ -1239,7 +1239,7 @@ int ObUserTenantBackupJobMgr::check_dest_validity_()
     LOG_WARN("fail to get backup dest str", K(ret));
   } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA, backup_dest_str, *sql_proxy_))) {
     LOG_WARN("fail to init dest manager", K(ret), KPC(job_attr_));
-  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
+  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, true/*need_check_permission*/))) {
     LOG_WARN("fail to check backup dest validity", K(ret), KPC(job_attr_));
   }
   return ret;
@@ -1813,7 +1813,7 @@ int ObSysTenantBackupJobMgr::do_handle_user_tenant_backupdatabase_(const uint64_
       LOG_WARN("rootserver rpc proxy or rs mgr must not be NULL", K(ret), K(GCTX));
     } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
       LOG_WARN("failed to get rootservice address", K(ret));
-    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).backup_database(backup_database_arg))) {
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).by(tenant_id).backup_database(backup_database_arg))) {
       LOG_WARN("failed to post backup ls data res", K(ret), K(backup_database_arg));
     } else {
       LOG_INFO("succeed handle user backup tenant", K(backup_database_arg));

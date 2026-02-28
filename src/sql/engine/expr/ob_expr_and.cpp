@@ -158,7 +158,6 @@ int ObExprAnd::eval_and_batch_exprN(const ObExpr &expr, ObEvalCtx &ctx,
         } else {
           results[j].set_bool(true);
         }
-        eval_flags.set(j);
       }
     } else {
       ObDatum *curr_datum = &expr.args_[0]->locate_expr_datum(ctx);
@@ -175,7 +174,6 @@ int ObExprAnd::eval_and_batch_exprN(const ObExpr &expr, ObEvalCtx &ctx,
         } else {
           results[j].set_bool(true);
         }
-        eval_flags.set(j);
       }
     }
 
@@ -366,13 +364,6 @@ int ObExprAnd::eval_and_vector(const ObExpr &expr,
       LOG_WARN("failed to dispatch eval vector and", K(ret),
       K(expr), K(ctx), K(my_bound), K(arg_idx), K(skip_cnt));
     }
-  }
-
-  // It would be more reasonable for eval_flags to be set after the calculation is completed
-  // rather than setting it to 1 before the calculation.
-  if (OB_SUCC(ret)) {
-    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-    eval_flags.bit_not(skip, my_bound);
   }
 
   return ret;

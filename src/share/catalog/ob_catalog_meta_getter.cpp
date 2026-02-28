@@ -17,6 +17,7 @@
 #include "share/catalog/filesystem/ob_filesystem_catalog.h"
 #include "share/catalog/hive/ob_hms_catalog.h"
 #include "share/catalog/odps/ob_odps_catalog.h"
+#include "share/catalog/rest/ob_rest_catalog.h"
 
 namespace oceanbase
 {
@@ -39,7 +40,7 @@ int ObCatalogMetaGetter::list_namespace_names(const uint64_t tenant_id,
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_external_catalog_id(catalog_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(catalog_id));
-  } else if (OB_FAIL(get_catalog_(tenant_id, catalog_id, catalog))) {
+  } else if (OB_FAIL(get_catalog(tenant_id, catalog_id, catalog))) {
     LOG_WARN("failed to get catalog", K(ret), K(tenant_id), K(catalog_id));
   } else if (OB_ISNULL(catalog)) {
     ret = OB_ERR_UNEXPECTED;
@@ -62,7 +63,7 @@ int ObCatalogMetaGetter::list_table_names(const uint64_t tenant_id,
                   || ns_name.empty() || OB_NAME_CASE_INVALID == case_mode)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid case mode", K(ret), K(tenant_id), K(catalog_id), K(ns_name), K(case_mode));
-  } else if (OB_FAIL(get_catalog_(tenant_id, catalog_id, catalog))) {
+  } else if (OB_FAIL(get_catalog(tenant_id, catalog_id, catalog))) {
     LOG_WARN("failed to get catalog", K(ret), K(tenant_id), K(catalog_id));
   } else if (OB_ISNULL(catalog)) {
     ret = OB_ERR_UNEXPECTED;
@@ -94,7 +95,7 @@ int ObCatalogMetaGetter::fetch_namespace_schema(const uint64_t tenant_id,
              K(database_id),
              K(ns_name),
              K(case_mode));
-  } else if (OB_FAIL(get_catalog_(tenant_id, catalog_id, catalog))) {
+  } else if (OB_FAIL(get_catalog(tenant_id, catalog_id, catalog))) {
     LOG_WARN("failed to get catalog", K(ret));
   } else if (OB_ISNULL(catalog)) {
     ret = OB_ERR_UNEXPECTED;
@@ -138,7 +139,7 @@ int ObCatalogMetaGetter::fetch_lake_table_metadata(ObIAllocator &allocator,
              K(ns_name),
              K(tbl_name),
              K(case_mode));
-  } else if (OB_FAIL(get_catalog_(tenant_id, catalog_id, catalog))) {
+  } else if (OB_FAIL(get_catalog(tenant_id, catalog_id, catalog))) {
     LOG_WARN("failed to get catalog", K(ret));
   } else if (OB_ISNULL(catalog)) {
     ret = OB_ERR_UNEXPECTED;
@@ -174,7 +175,7 @@ int ObCatalogMetaGetter::fetch_latest_table_schema_version(const uint64_t tenant
              K(ns_name),
              K(tbl_name),
              K(case_mode));
-  } else if (OB_FAIL(get_catalog_(tenant_id, catalog_id, catalog))) {
+  } else if (OB_FAIL(get_catalog(tenant_id, catalog_id, catalog))) {
     LOG_WARN("failed to get catalog", K(ret));
   } else if (OB_ISNULL(catalog)) {
     ret = OB_ERR_UNEXPECTED;
@@ -203,7 +204,7 @@ int ObCatalogMetaGetter::fetch_table_statistics(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(
-                 get_catalog_(table_metadata->tenant_id_, table_metadata->catalog_id_, catalog))) {
+                 get_catalog(table_metadata->tenant_id_, table_metadata->catalog_id_, catalog))) {
     LOG_WARN("failed to get catalog", K(ret));
   } else if (OB_ISNULL(catalog)) {
     ret = OB_ERR_UNEXPECTED;
@@ -230,7 +231,7 @@ int ObCatalogMetaGetter::fetch_partitions(ObIAllocator &allocator,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(
-                 get_catalog_(table_metadata->tenant_id_, table_metadata->catalog_id_, catalog))) {
+                 get_catalog(table_metadata->tenant_id_, table_metadata->catalog_id_, catalog))) {
     LOG_WARN("failed to get catalog", K(ret));
   } else if (OB_ISNULL(catalog)) {
     ret = OB_ERR_UNEXPECTED;
@@ -249,8 +250,7 @@ int ObCatalogMetaGetter::get_cache_refresh_interval_sec(const ObILakeTableMetada
   if (OB_ISNULL(table_metadata)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
-  } else if (OB_FAIL(
-                 get_catalog_(table_metadata->tenant_id_, table_metadata->catalog_id_, catalog))) {
+  } else if (OB_FAIL(get_catalog(table_metadata->tenant_id_, table_metadata->catalog_id_, catalog))) {
     LOG_WARN("failed to get catalog", K(ret));
   } else if (OB_ISNULL(catalog)) {
     ret = OB_ERR_UNEXPECTED;
@@ -261,9 +261,9 @@ int ObCatalogMetaGetter::get_cache_refresh_interval_sec(const ObILakeTableMetada
   return ret;
 }
 
-int ObCatalogMetaGetter::get_catalog_(const uint64_t tenant_id,
-                                      const uint64_t catalog_id,
-                                      ObIExternalCatalog *&catalog)
+int ObCatalogMetaGetter::get_catalog(const uint64_t tenant_id,
+                                     const uint64_t catalog_id,
+                                     ObIExternalCatalog *&catalog)
 {
   int ret = OB_SUCCESS;
   catalog = NULL;
@@ -282,7 +282,7 @@ int ObCatalogMetaGetter::get_catalog_(const uint64_t tenant_id,
       LOG_WARN("failed to get catalog schema", K(ret), K(tenant_id), K(catalog_id));
     } else if (OB_ISNULL(schema)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("schema is nullptr", K(ret));
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "current session's catalog is not existed");
     } else if (OB_FAIL(ObCatalogProperties::parse_catalog_type(schema->get_catalog_properties_str(),
                                                                catalog_type))) {
       LOG_WARN("failed to parse catalog type", K(ret));
@@ -328,6 +328,19 @@ int ObCatalogMetaGetter::get_catalog_(const uint64_t tenant_id,
                                            schema->get_catalog_properties(),
                                            &location_schema_provider_))) {
             LOG_WARN("failed to init hive catalog", K(ret));
+          }
+          break;
+        }
+        case ObCatalogProperties::CatalogType::REST_TYPE: {
+          catalog = OB_NEWx(ObRestCatalog, &allocator_, allocator_);
+          if (OB_ISNULL(catalog)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("rest catalog alloc failed", K(ret));
+          } else if (OB_FAIL(catalog->init(schema->get_tenant_id(),
+                                           schema->get_catalog_id(),
+                                           schema->get_catalog_properties(),
+                                           &location_schema_provider_))) {
+            LOG_WARN("failed to init rest catalog", K(ret));
           }
           break;
         }

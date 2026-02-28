@@ -10,7 +10,7 @@ arch=aarch64
 repo=http://mirrors.aliyun.com/oceanbase/community/stable/al/8/aarch64/
 
 [deps]
-obdal-0.2.2-302025082510.al8.aarch64.rpm target=community
+obdal-0.2.2-502026012617.al8.aarch64.rpm target=community
 devdeps-gtest-1.8.0-192024092714.al8.aarch64.rpm
 devdeps-isa-l-static-2.22.0-52024092714.al8.aarch64.rpm
 devdeps-libcurl-static-8.12.1-132025040210.al8.aarch64.rpm
@@ -29,13 +29,13 @@ devdeps-ncurses-static-6.5-62025040314.al8.aarch64.rpm
 devdeps-boost-1.74.0-72024092811.al8.aarch64.rpm
 devdeps-abseil-cpp-20211102.0-62024122014.al8.aarch64.rpm
 devdeps-s2geometry-0.10.0-122024122617.al8.aarch64.rpm
-devdeps-icu-69.1-232024120517.al8.aarch64.rpm
+devdeps-icu-69.1-342025121913.al8.aarch64.rpm
 devdeps-s3-cpp-sdk-1.11.156-222024100811.al8.aarch64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.al8.aarch64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-92024092815.al8.aarch64.rpm
-devdeps-apache-arrow-20.0.0-42025082815.al8.aarch64.rpm
-devdeps-vsag-1.1.0-882025110711.al8.aarch64.rpm
-devdeps-apache-orc-2.1.1-82025081116.al8.aarch64.rpm
+devdeps-apache-arrow-20.0.0-342025122309.al8.aarch64.rpm
+devdeps-vsag-1.2.0-12026012917.al8.aarch64.rpm
+devdeps-apache-orc-2.1.1-92025111409.al8.aarch64.rpm
 devdeps-fast-float-6.1.3-42024112122.al8.aarch64.rpm
 devdeps-hdfs-sdk-3.3.6-112024123116.al8.aarch64.rpm
 devdeps-apache-avro-cpp-1.12.0-72025062510.al8.aarch64.rpm
@@ -43,6 +43,7 @@ devdeps-apache-thrift-0.16.0-132025070909.al8.aarch64.rpm
 devdeps-mit-krb5-1.21.3-212025063015.al8.aarch64.rpm
 devdeps-cyrus-sasl-2.1.28-102025070115.al8.aarch64.rpm
 devdeps-python3-3.13.3-132025070111.al8.aarch64.rpm
+devdeps-kafka-2.12.1-52026012814.al8.aarch64.rpm
 
 [tools]
 obdevtools-binutils-2.30-82024092619.al8.aarch64.rpm
@@ -54,7 +55,7 @@ obdevtools-gcc-12.3.0-32024122017.al8.aarch64.rpm
 obdevtools-llvm-17.0.6-72025060300.al8.aarch64.rpm
 
 [tools-deps]
-devdeps-oblogmsg-1.1-122024093010.al8.aarch64.rpm
+devdeps-oblogmsg-1.1-162025123118.al8.aarch64.rpm
 obdevtools-obstack-2.0.4-42024101017.al8.aarch64.rpm
 devdeps-rocksdb-6.22.1-32024123015.al8.aarch64.rpm
 obshell-4.3.2.0-52025092411.al8.aarch64.rpm target=community

@@ -306,6 +306,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   OZ (ob_write_string(allocator, other.job_type_, job_type_));
   OZ (ob_write_string(allocator, other.this_exec_addr_, this_exec_addr_));
   OZ (ob_write_string(allocator, other.this_exec_trace_id_, this_exec_trace_id_));
+  OZ (ob_write_string(allocator, other.job_config_, job_config_));
   //处理存在兼容性问题的列
   //job style
   OZ (ob_write_string(allocator, "REGULAR", job_style_));
@@ -616,6 +617,9 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
           if ( DATA_VERSION_4_3_5_1 <= data_version) {
             OZ (dml.add_column("func_type", static_cast<uint64_t>(job_info.func_type_)));
           }
+          if (DATA_VERSION_SUPPORT_JOB_CONFIG(data_version)) {
+            OZ (dml.add_column("job_config", ObHexEscapeSqlStr(job_info.job_config_)));
+          }
           OZ (dml.finish_row());
         }
         OZ(dml.splice_batch_insert_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
@@ -705,9 +709,9 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
       LOG_WARN("add interval_ts column failed", KR(ret), K(job_info.interval_ts_));
     }
   } else if (0 == job_attribute_name.case_compare("job_action") && !from_pl_set_attr) {
-    if (OB_FAIL(dml.add_column("job_action", job_attribute_value.get_string()))) {
+    if (OB_FAIL(dml.add_column("job_action", ObHexEscapeSqlStr(job_attribute_value.get_string())))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
-    } else if (OB_FAIL(dml.add_column("what", job_attribute_value.get_string()))) {
+    } else if (OB_FAIL(dml.add_column("what", ObHexEscapeSqlStr(job_attribute_value.get_string())))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
     }
   } else if (0 == job_attribute_name.case_compare("max_run_duration") || 0 == job_attribute_name.case_compare("duration")) {
@@ -877,7 +881,7 @@ int ObDBMSSchedJobUtils::calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &j
     }
   } else {
     ObDBMSSchedTimeUtil calendar;
-    OZ(calendar.calc_repeat_interval_next_date(job_info.repeat_interval_, job_info.start_date_, next_run_time, is_first_time ? now : job_info.next_date_, now, is_first_time));
+    OZ(calendar.calc_repeat_interval_next_date(job_info.repeat_interval_, job_info.start_date_, next_run_time, is_first_time ? job_info.start_date_ : job_info.next_date_, now, is_first_time));
   }
   return ret;
 }

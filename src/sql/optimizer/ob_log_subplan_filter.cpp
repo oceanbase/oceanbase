@@ -25,6 +25,8 @@ int ObLogSubPlanFilter::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to get vector expr", K(ret));
   } else if (OB_FAIL(append(all_exprs, subquery_exprs_))) {
     LOG_WARN("failed to append subquery exprs", K(ret));
+  } else if (OB_FAIL(append(all_exprs, project_ref_exprs_))) {
+    LOG_WARN("failed to append project ref exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, onetime_exprs_))) {
     LOG_WARN("failed to append onetime exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, exec_params_))) {
@@ -712,7 +714,7 @@ int ObLogSubPlanFilter::get_repart_sharding_info(ObLogicalOperator* child_op,
   ObSEArray<ObRawExpr*, 4> src_keys;
   ObSEArray<ObRawExpr*, 4> target_keys;
   ObSEArray<bool, 4> null_safe_info;
-  EqualSets input_esets;
+  TemporaryEqualSets input_esets;
 
   for (int64_t i = 1; OB_SUCC(ret) && i < get_num_of_child(); i++) {
     if (OB_ISNULL(child = get_child(i))) {
@@ -803,7 +805,7 @@ int ObLogSubPlanFilter::rebuild_repart_sharding_info(const ObShardingInfo *input
                        get_plan()->get_allocator().alloc(sizeof(ObShardingInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
-  } else if (OB_FALSE_IT(out_sharding = new(out_sharding) ObShardingInfo())) {
+  } else if (OB_FALSE_IT(out_sharding = new(out_sharding) ObShardingInfo(get_plan()->get_allocator()))) {
   } else if (OB_FAIL(out_sharding->copy_without_part_keys(*input_sharding))) {
     LOG_WARN("failed to assign sharding info", K(ret));
   } else {
@@ -888,7 +890,8 @@ int ObLogSubPlanFilter::compute_op_parallel_and_server_info()
 int ObLogSubPlanFilter::print_outline_data(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;
-  ObPQSubqueryHint hint;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObPQSubqueryHint hint(allocator);
   const ObDMLStmt *stmt = NULL;
   ObString qb_name;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {

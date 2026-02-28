@@ -97,6 +97,7 @@ int ObIvfAsyncTask::write_cache(ObPluginVectorIndexService &vector_index_service
                  vector_index_service,
                  aux_table_info->centroid_table_id_,
                  aux_table_info->centroid_tablet_ids_[0],
+                 vec_param,
                  *cent_cache))) {
     LOG_WARN("fail to scan and write ivf cent cache", K(ret), KPC(aux_table_info));
   } else if (aux_table_info->type_ == VIAT_IVF_PQ
@@ -109,6 +110,7 @@ int ObIvfAsyncTask::write_cache(ObPluginVectorIndexService &vector_index_service
                    vector_index_service,
                    aux_table_info->pq_centroid_table_id_,
                    aux_table_info->pq_centroid_tablet_ids_[0],
+                   vec_param,
                    *pq_cent_cache))) {
       LOG_WARN("fail to scan and write ivf cent cache", K(ret), K(aux_table_info));
     }
@@ -147,7 +149,6 @@ int ObIvfAsyncTask::do_work()
   if (OB_NOT_NULL(ctx_)) {
     common::ObSpinLockGuard ctx_guard(ctx_->lock_);
     ctx_->task_status_.ret_code_ = ret;
-    ctx_->in_thread_pool_ = false;
   }
   LOG_INFO("end ivf do_work", K(ret), K(ctx_->task_status_.tablet_id_));
   return ret;

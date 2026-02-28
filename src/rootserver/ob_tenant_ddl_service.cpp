@@ -32,6 +32,9 @@
 #include "share/ob_schema_status_proxy.h"
 #include "share/backup/ob_log_restore_config.h"//ObLogRestoreSourceServiceConfigParser
 #include "storage/tx/ob_ts_mgr.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_shared_meta_service.h"
+#endif
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -858,6 +861,22 @@ int ObTenantDDLService::create_tenant(const ObCreateTenantArg &arg,
       } else if (OB_FAIL(ObShareUtil::check_replica_type_in_locality(user_tenant_schema))) {
         LOG_WARN("fail to check replica type in locality", KR(ret), K(user_tenant_schema));
       } else if (FALSE_IT(user_tenant_id = user_tenant_schema.get_tenant_id())) {
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode()) {
+        MTL_SWITCH(OB_SYS_TENANT_ID) {
+          storage::ObSSMetaService *ss_meta_service = MTL(storage::ObSSMetaService *);
+          if (OB_ISNULL(ss_meta_service)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ObSSMetaService is null", KR(ret), K(user_tenant_id), K(ss_meta_service), K(MTL_ID()));
+          } else if (OB_FAIL(ss_meta_service->add_tenant_id(user_tenant_id))) {
+            LOG_WARN("fail to add tenant id to sslog", KR(ret), K(user_tenant_id));
+          }
+        } else {
+          LOG_WARN("switch to sys tenant failed", KR(ret), K(user_tenant_id));
+        }
+      }
+      if (OB_FAIL(ret)) {
+#endif
       } else if (OB_FAIL(init_schema_status(
               user_tenant_schema.get_tenant_id(), tenant_role))) {
         LOG_WARN("fail to init schema status", KR(ret), K(user_tenant_id));
@@ -2142,7 +2161,7 @@ int ObTenantDDLService::init_tenant_schema(
       } else if (CLICK_FAIL(ddl_operator.init_tenant_schemas(tenant_schema, sys_variable, trans))) {
         LOG_WARN("init tenant env failed", KR(ret), K(tenant_schema), K(sys_variable));
       } else if (GCONF._enable_parallel_tenant_creation &&
-          CLICK_FAIL(ObLoadInnerTableSchemaExecutor::load_core_schema_version(tenant_id, trans))) {
+          CLICK_FAIL(ObLoadInnerTableSchemaExecutor::load_schema_version(tenant_id, trans))) {
         LOG_WARN("failed to load core schema version", KR(ret), K(tenant_id));
       }
     }
@@ -2290,8 +2309,6 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_enable_mlog_auto_maintenance("true");
   ObString config_name_prexec_prepare_with_params("_prexec_prepare_with_params");
   ObString config_value_prexec_prepare_with_params("true");
-  ObString config_name_enable_streaming_cursor_prefetch("_enable_streaming_cursor_prefetch");
-  ObString config_value_enable_streaming_cursor_prefetch("true");
   ObString config_name_append_update_global_indexes_for_dynamic_partition("_append_update_global_indexes_for_dynamic_partition");
   ObString config_value_append_update_global_indexes_for_dynamic_partition("AUTO");
 
@@ -2328,8 +2345,6 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_enable_mlog_auto_maintenance), K(config_value_enable_mlog_auto_maintenance));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_prexec_prepare_with_params, config_value_prexec_prepare_with_params))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_prexec_prepare_with_params), K(config_value_prexec_prepare_with_params));
-      } else if (OB_FAIL(tenant_init_config.add_config(config_name_enable_streaming_cursor_prefetch, config_value_enable_streaming_cursor_prefetch))) {
-        LOG_WARN("fail to add config", KR(ret), K(config_name_enable_streaming_cursor_prefetch), K(config_value_enable_streaming_cursor_prefetch));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_append_update_global_indexes_for_dynamic_partition, config_value_append_update_global_indexes_for_dynamic_partition))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_append_update_global_indexes_for_dynamic_partition), K(config_value_append_update_global_indexes_for_dynamic_partition));
       }
@@ -6032,6 +6047,7 @@ int ObTenantDDLService::init_tenant_global_stat_(
     LOG_WARN("failed to check_inner_stat", KR(ret));
   } else {
     const int64_t core_schema_version = OB_CORE_SCHEMA_VERSION + 1;
+    const int64_t sys_schema_version = OB_CORE_SCHEMA_VERSION + 1;
     const int64_t baseline_schema_version = OB_INVALID_VERSION;
     const int64_t ddl_epoch = 0;
     const SCN snapshot_gc_scn  = SCN::min_scn();
@@ -6058,7 +6074,7 @@ int ObTenantDDLService::init_tenant_global_stat_(
         ret = OB_ENTRY_NOT_EXIST;
         LOG_WARN("compatible version not defined", KR(ret), K(tenant_id), K(init_configs));
       } else if (OB_FAIL(global_stat_proxy.set_tenant_init_global_stat(
-              core_schema_version, baseline_schema_version,
+              core_schema_version, sys_schema_version, baseline_schema_version,
               snapshot_gc_scn, ddl_epoch, data_version, data_version, data_version))) {
         LOG_WARN("fail to set tenant init global stat", KR(ret), K(tenant_id),
             K(core_schema_version), K(baseline_schema_version),

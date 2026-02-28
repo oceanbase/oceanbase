@@ -41,6 +41,7 @@ class ObVTableScanParam;
 class ObVirtualTableIterator : public ObNewRowIterator
 {
   static const int64_t VT_COLUMN_COUNT = 64;
+  static const uint64_t CHECK_STATUS_TRY_TIMES = 1024;
 public:
   ObVirtualTableIterator()
     : allocator_(NULL),
@@ -53,11 +54,13 @@ public:
       session_(NULL),
       row_calc_buf_("VTITER_CALC_BUF"),
       effective_tenant_id_(common::OB_INVALID_TENANT_ID),
+      fill_column_ids_(&output_column_ids_),
       convert_alloc_(),
       cast_ctx_(),
       convert_row_(),
       need_convert_(false),
-      scan_param_(NULL)
+      scan_param_(NULL),
+      try_check_tick_(0)
     {}
   virtual ~ObVirtualTableIterator() {}
   virtual void reset();
@@ -73,6 +76,8 @@ public:
   virtual int open();
   virtual int inner_open() { return common::OB_SUCCESS; };
   virtual int get_next_row(common::ObNewRow *&row);
+  virtual bool enable_pd_filter() { return false; }
+  virtual int fill_full_columns(common::ObNewRow *&row) { return common::OB_ERR_UNEXPECTED; }
   virtual int inner_get_next_row(common::ObNewRow *&row) = 0;
   virtual int get_next_row() override; // interface for static typing engine.
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
@@ -90,6 +95,7 @@ public:
                          const ObString &table_name, int64_t tenant_id, bool &passed);
   void set_scan_flag(const common::ObQueryFlag &scan_flag) { scan_flag_ = scan_flag; }
   bool is_reverse_scan() const { return common::ObQueryFlag::Reverse == scan_flag_.scan_order_; }
+  int get_next_unfiltered_row(common::ObNewRow *&row);
   VIRTUAL_TO_STRING_KV(K_(output_column_ids));
 private:
   int init_convert_ctx();
@@ -102,9 +108,13 @@ private:
                   ObBorderFlag &border_flag);
   int free_convert_ctx();
   void reset_convert_ctx();
-  int convert_output_row(ObNewRow *&cur_row);
   int get_all_columns_schema();
   int init_sql_schema_guard_();
+  int init_pd_cols_project();
+  int try_check_status();
+  int convert_output_row(ObNewRow *&cur_row, bool is_pd_filter_row);
+  int check_type_and_convert_string(ObNewRow *&cur_row, bool is_pd_filter_row);
+  int project_pd_filter_columns(ObNewRow *&cur_row);
 protected:
   common::ObIAllocator *allocator_;
   common::ObSEArray<uint64_t, VT_COLUMN_COUNT> output_column_ids_;
@@ -120,6 +130,9 @@ protected:
   common::ObSEArray<common::ObNewRange, 16> saved_key_ranges_;
   common::ObArenaAllocator row_calc_buf_;
   uint64_t effective_tenant_id_;
+  // the position of the pushdown column in the output list
+  common::ObSEArray<int64_t, 16> pd_cols_project_;
+  const common::ObIArray<uint64_t> *fill_column_ids_;
 private:
   common::ObArenaAllocator convert_alloc_;
   common::ObCastCtx cast_ctx_;
@@ -127,6 +140,7 @@ private:
   bool need_convert_;
   common::ObSEArray<const share::schema::ObColumnSchemaV2 *, 16> cols_schema_;
   const ObVTableScanParam *scan_param_;
+  uint64_t try_check_tick_; //for check status
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVirtualTableIterator);
 };
@@ -168,6 +182,13 @@ void ObVirtualTableIterator::set_table_schema(const share::schema::ObTableSchema
 void ObVirtualTableIterator::set_index_schema(const share::schema::ObTableSchema *index_schema)
 {
   index_schema_ = index_schema;
+}
+
+OB_INLINE int ObVirtualTableIterator::try_check_status()
+{
+  return ((++try_check_tick_) % CHECK_STATUS_TRY_TIMES == 0)
+      ? THIS_WORKER.check_status()
+      : common::OB_SUCCESS;
 }
 
 }//common

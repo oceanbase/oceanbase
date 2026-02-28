@@ -32,7 +32,7 @@ public:
       int64_t tenant_id = OB_SERVER_TENANT_ID,
       int64_t ctx_id = 0) :
       arena_(label, page_size, tenant_id, ctx_id),
-      lock_() {}
+      lock_(common::ObLatchIds::OB_CDC_COMMON_LOCK) {}
 
   ObCdcSafeArena(
     ObIAllocator &base_allocator,
@@ -40,7 +40,8 @@ public:
     int64_t tenant_id = OB_SERVER_TENANT_ID,
     const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
     int64_t ctx_id = 0) :
-    arena_(base_allocator, page_size)
+    arena_(base_allocator, page_size),
+    lock_(common::ObLatchIds::OB_CDC_COMMON_LOCK)
   {
     ObMemAttr attr(tenant_id, label, ctx_id);
     arena_.set_attr(attr);

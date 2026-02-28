@@ -148,11 +148,9 @@ public:
              common::ObString &dep_attrs,
              common::ObString &dep_reason,
              bool is_pl = true);
-  static int collect_dep_infos(ObReferenceObjTable &ref_objs,
-                               common::ObIArray<ObDependencyInfo> &deps,
-                               ObObjectType dep_obj_type,
-                               uint64_t dep_obj_id,
-                               int64_t &max_version);
+  static int collect_dep_infos_for_view(const ObReferenceObjTable &ref_objs,
+                                        const bool need_nested_dep,
+                                        common::ObIArray<ObDependencyInfo> &deps);
   static int collect_dep_infos(
     const common::ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
     common::ObIArray<ObDependencyInfo> &deps,
@@ -184,7 +182,12 @@ public:
                                   uint64_t ref_obj_id,
                                   common::ObISQLClient &sql_proxy,
                                   common::ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs);
-  static int collect_all_dep_objs_inner(uint64_t tenant_id,
+  static int collect_all_dep_objs_inner_rcte(uint64_t tenant_id,
+                                        uint64_t root_obj_id,
+                                        uint64_t ref_obj_id,
+                                        common::ObISQLClient &sql_proxy,
+                                        common::ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs);
+  static int collect_all_dep_objs_inner_recursive(uint64_t tenant_id,
                                         uint64_t root_obj_id,
                                         uint64_t ref_obj_id,
                                         common::ObISQLClient &sql_proxy,

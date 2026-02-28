@@ -258,7 +258,8 @@ int ObSqlPlan::get_plan_used_hint_info_one_line(PlanText &plan_text,
 int ObSqlPlan::get_global_hint_outline(PlanText &plan_text, ObLogPlan &plan)
 {
   int ret = OB_SUCCESS;
-  ObGlobalHint outline_global_hint;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObGlobalHint outline_global_hint(allocator);
   if (OB_FAIL(outline_global_hint.assign(plan.get_optimizer_context().get_global_hint()))) {
     LOG_WARN("failed to assign global hint", K(ret));
   } else if (OB_FAIL(construct_outline_global_hint(plan, outline_global_hint))) {
@@ -278,9 +279,11 @@ int ObSqlPlan::construct_outline_global_hint(ObLogPlan &plan, ObGlobalHint &outl
   outline_global_hint.dml_parallel_ = ObGlobalHint::UNSET_PARALLEL;
   outline_global_hint.parallel_das_dml_option_ = ObParallelDASOption::NOT_SPECIFIED;
   const ObQueryCtx *query_ctx = NULL;
-  if (OB_ISNULL(query_ctx = plan.get_optimizer_context().get_query_ctx())) {
+  const ObSQLSessionInfo *session_info = NULL;
+  if (OB_ISNULL(query_ctx = plan.get_optimizer_context().get_query_ctx()) ||
+      OB_ISNULL(session_info = plan.get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), K(query_ctx));
+    LOG_WARN("unexpected NULL", K(ret), K(query_ctx), K(session_info));
   } else {
     outline_global_hint.opt_features_version_ = query_ctx->optimizer_features_enable_version_;
     if (NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(&plan))) {
@@ -298,6 +301,20 @@ int ObSqlPlan::construct_outline_global_hint(ObLogPlan &plan, ObGlobalHint &outl
       outline_global_hint.merge_parallel_hint(plan.get_optimizer_context().get_max_parallel());
     } else if (plan.get_optimizer_context().get_max_parallel() > ObGlobalHint::DEFAULT_PARALLEL) {
       outline_global_hint.merge_parallel_hint(plan.get_optimizer_context().get_max_parallel());
+    }
+
+    if (session_info->get_route_to_column_replica()) {
+      ObObj force_val;
+      force_val.set_varchar(ObString::make_string("FORCE"));
+      if (OB_FAIL(outline_global_hint.opt_params_.add_opt_param_hint(
+                  ObOptParamHint::AP_QUERY_ROUTE_POLICY, force_val, /* overwrite */ true))) {
+        LOG_WARN("failed to add or update opt param hint for AP_QUERY_ROUTE_POLICY", K(ret));
+      }
+    } else {
+      if (OB_FAIL(outline_global_hint.opt_params_.remove_opt_param(
+                  ObOptParamHint::AP_QUERY_ROUTE_POLICY))) {
+        LOG_WARN("failed to remove AP_QUERY_ROUTE_POLICY opt param", K(ret));
+      }
     }
   }
   LOG_TRACE("after construct_outline_global_hint", K(outline_global_hint.parallel_das_dml_option_),
@@ -1069,12 +1086,87 @@ int ObSqlPlan::print_constraint_info(char *buf,
       ret = BUF_PRINTF("NOT_PRECISE");
     } else if (PRE_CALC_ROWID == info.expect_result_) {
       ret = BUF_PRINTF("ROWID");
+    } else if (PRE_CALC_JSON_TYPE == info.expect_result_) {
+      int32_t json_type = ObJsonTypeConstraint::get_json_type(info.cons_extra_.extra_);
+      int32_t element_count = ObJsonTypeConstraint::get_element_count(info.cons_extra_.extra_);
+      if (json_type == ObJsonTypeConstraint::JSON_TYPE_SCALAR) {
+        ret = BUF_PRINTF("JSON_TYPE_SCALAR");
+      } else if (json_type == ObJsonTypeConstraint::JSON_TYPE_ARRAY) {
+        ret = BUF_PRINTF("JSON_TYPE_ARRAY_%d_ELEMENT", element_count);
+      } else if (json_type == ObJsonTypeConstraint::JSON_TYPE_JSON_CONTAINS_NO_INDEX_MERGE) {
+        ret = BUF_PRINTF("JSON_TYPE_ARRAY_GREATER_%d_ELEMENT", element_count);
+      } else if (json_type == ObJsonTypeConstraint::JSON_TYPE_NOT_ARRAY_OR_SCALAR) {
+        ret = BUF_PRINTF("JSON_TYPE_NOT_ARRAY_OR_SCALAR");
+      }
+    } else if (PRE_CALC_JSON_CONTAINS_PRECISE == info.expect_result_) {
+      ret = BUF_PRINTF("JSON_CONTAINS_PRECISE");
+    } else if (PRE_CALC_JSON_CONTAINS_NOT_PRECISE == info.expect_result_) {
+      ret = BUF_PRINTF("JSON_CONTAINS_NOT_PRECISE");
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
     } else { /* Do nothing */ }
   }
   return ret;
+}
+
+void ObSqlPlan::filter_rescan_op(ObIArray<ObSqlPlanItem*> &sql_plan_infos)
+{
+  int64_t rescan_idx = -1;
+  ObSqlPlanItem *rescan_item = NULL;
+  for (int i = 0; i < sql_plan_infos.count(); i++) {
+    ObSqlPlanItem *plan_item = sql_plan_infos.at(i);
+    if (0 == MEMCMP(log_op_def::get_op_name(log_op_def::LOG_RESCAN), plan_item->operation_, plan_item->operation_len_)) {
+      rescan_item = plan_item;
+      rescan_idx = i;
+
+      // change the child_node's parent_id
+      if (i + 1 < sql_plan_infos.count()) {
+        ObSqlPlanItem *child = sql_plan_infos.at(i+1);
+        // used hint
+        if (OB_ISNULL(child->other_tag_)) {
+          child->other_tag_ = rescan_item->other_tag_;
+          child->other_tag_len_ = rescan_item->other_tag_len_;
+        }
+        // qb_name trace
+        if (OB_ISNULL(child->remarks_)) {
+          child->remarks_ = rescan_item->remarks_;
+          child->remarks_len_ = rescan_item->remarks_len_;
+        }
+        // outline
+        if (OB_ISNULL(child->other_xml_)) {
+          child->other_xml_ = rescan_item->other_xml_;
+          child->other_xml_len_ = rescan_item->other_xml_len_;
+        }
+        // plan note / parameters / constrains
+        if (OB_ISNULL(child->other_)) {
+          child->other_ = rescan_item->other_;
+          child->other_len_ = rescan_item->other_len_;
+        }
+      }
+      for (int j = i + 1; j < sql_plan_infos.count(); j++) {
+        ObSqlPlanItem *item = sql_plan_infos.at(j);
+        if (item->parent_id_ >= rescan_item->id_) {
+          item->parent_id_--;
+        }
+        if (item->id_ >= rescan_item->id_) {
+          item->id_--;
+        }
+      }
+
+      // change depth of rescan child ops
+      for (int j = i + 1; j < sql_plan_infos.count(); j++) {
+        ObSqlPlanItem *child_plan_item = sql_plan_infos.at(j);
+        if (child_plan_item->depth_ <= rescan_item->depth_) {
+          break;
+        }
+        child_plan_item->depth_--;
+      }
+      // in case rescan_op -> rescan_op
+      sql_plan_infos.remove(rescan_idx);
+      i--;
+    }
+  }
 }
 
 int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
@@ -1090,6 +1182,10 @@ int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
   } else if (sql_plan_infos.empty()) {
     //do nothing
   } else {
+    // filter the rescan op if not explain extended
+    if (EXPLAIN_EXTENDED != type && EXPLAIN_EXTENDED_NOADDR != type) {
+      filter_rescan_op(sql_plan_infos);
+    }
     if (EXPLAIN_PLAN_TABLE == type) {
       if (OB_FAIL(format_plan_table(sql_plan_infos, false, option, plan_text))) {
         LOG_WARN("failed to print plan", K(ret));

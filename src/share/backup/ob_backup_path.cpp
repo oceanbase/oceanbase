@@ -653,6 +653,48 @@ int ObBackupPath::join_major_compaction_mview_dep_tablet_list_file()
   return ret;
 }
 
+int ObBackupPath::join_backup_file_list(const int64_t file_id)
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                                     sizeof(file_name),
+                                     "%s.%ld",
+                                     OB_STR_BACKUP_FILE_LIST,
+                                     file_id))) {
+    LOG_WARN("failed to join table list tmp file", K(ret), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_file_list(const int64_t file_id, const ObBackupFileSuffix &type)
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                                     sizeof(file_name),
+                                     "%s.%ld",
+                                     OB_STR_FILE_LIST,
+                                     file_id))) {
+    LOG_WARN("failed to join table list tmp file", K(ret), K(*this));
+  } else if (OB_FAIL(join(file_name, type))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
 // param case: entry_d_name -> 'checkpoint_info.1678226622262333112.obarc', file_name -> 'checkpoint_info', type -> ARCHIVE
 // result : checkpoint -> 1678226622262333112
 int ObBackupPath::parse_checkpoint(const char *entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint)
@@ -783,6 +825,40 @@ int ObBackupPath::parse_table_list_meta_file_name(const char *entry_d_name, shar
 common::ObString ObBackupPath::get_obstr() const
 {
   return ObString(cur_pos_, path_);
+}
+
+int ObBackupPath::get_basename(ObBackupPathString &basename) const
+{
+  int ret = OB_SUCCESS;
+  basename.reset();
+
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else {
+    const int64_t OB_INVALID_POS = -1;
+    int64_t last_slash_pos = OB_INVALID_POS;
+    int64_t pos = cur_pos_ - 1;
+    if ('/' == path_[pos]) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("path ends with '/'", K(ret), K(*this), K(pos));
+    }
+    for (; OB_SUCC(ret) && pos >= 0; --pos) {
+      if ('/' == path_[pos]) {
+        last_slash_pos = pos;
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_INVALID_POS == last_slash_pos || last_slash_pos == cur_pos_ - 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("no slash found", K(ret), K(*this), K(last_slash_pos));
+    } else if (OB_FAIL(basename.assign(path_ + last_slash_pos + 1))) {
+      LOG_WARN("failed to assign basename", K(ret), K(*this), K(last_slash_pos), K(basename));
+    }
+  }
+
+  return ret;
 }
 
 ObBackupPath &ObBackupPath::operator =(const ObBackupPath &path)
@@ -1728,15 +1804,17 @@ int ObBackupPathUtil::construct_backup_complement_log_dest(const share::ObBackup
   return ret;
 }
 
-int ObBackupPathUtil::construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest, share::ObBackupDest &backup_set_dest)
+int ObBackupPathUtil::construct_backup_complement_log_dest(
+    const share::ObBackupDest &backup_set_dest,
+    share::ObBackupDest &complement_log_dest)
 {
   int ret = OB_SUCCESS;
   share::ObBackupPath path;
-  backup_set_dest.reset();
-  if (!backup_tenant_dest.is_valid()) {
+  complement_log_dest.reset();
+  if (!backup_set_dest.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argumnet", K(ret), K(backup_set_dest));
-  } else if (OB_FAIL(path.init(backup_tenant_dest.get_root_path()))) {
+  } else if (OB_FAIL(path.init(backup_set_dest.get_root_path()))) {
     LOG_WARN("fail to init path", K(ret), K(backup_set_dest));
   } else if (OB_FAIL(path.join_complement_log())) {
     LOG_WARN("fail to join complement log", K(ret));
@@ -1745,14 +1823,29 @@ int ObBackupPathUtil::construct_backup_complement_log_dest(const share::ObBackup
   const ObBackupStorageInfo *storage_info = nullptr;
   char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(storage_info = backup_tenant_dest.get_storage_info())) {
+  } else if (OB_ISNULL(storage_info = backup_set_dest.get_storage_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("storage info must not be nullptr", K(ret));
   } else if (OB_FAIL(storage_info->get_storage_info_str(
         storage_info_buf, OB_MAX_BACKUP_STORAGE_INFO_LENGTH))) {
     LOG_WARN("fail to get storage info", K(ret));
-  } else if (OB_FAIL(backup_set_dest.set(path.get_ptr(), storage_info_buf))) {
+  } else if (OB_FAIL(complement_log_dest.set(path.get_ptr(), storage_info_buf))) {
     LOG_WARN("fail to set backup set dest", K(ret), K(path), K(storage_info_buf));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1
+// file:///obbackup/backup_set_1_full/log_stream_1/fused_meta_info_turn_1
+int ObBackupPathUtil::get_meta_info_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id,
+    const bool is_final_fuse, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_backup_dir_path(backup_set_dest, ls_id, path))) {
+    LOG_WARN("failed to get ls info dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_meta_info_turn_and_retry(turn_id, retry_id, is_final_fuse))) {
+    LOG_WARN("failed to join info retry", K(ret), K(retry_id));
   }
   return ret;
 }

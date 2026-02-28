@@ -44,7 +44,7 @@ namespace rootserver
 {
 
 ObDDLTaskQueue::ObDDLTaskQueue()
-  : task_list_(), task_map_(), lock_(), stop_(true), is_inited_(false)
+  : task_list_(), task_map_(), lock_(common::ObLatchIds::OB_DDL_TASK_QUEUE_LOCK), stop_(true), is_inited_(false)
 {
 }
 
@@ -434,7 +434,7 @@ int ObDDLTaskHeartBeatMananger::init()
     LOG_WARN("ObManagerRegisterHeartBeatTask inited twice", K(ret));
   } else if (OB_FAIL(register_task_time_.create(BUCKET_LOCK_BUCKET_CNT, "register_task", "register_task"))) {
     LOG_WARN("failed to create register_task_time map", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(BUCKET_LOCK_BUCKET_CNT))) {
+  } else if (OB_FAIL(bucket_lock_.init(BUCKET_LOCK_BUCKET_CNT, common::ObLatchIds::DDL_TASK_HEART_BEAT_MGR_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else {
     is_inited_ = true;
@@ -1331,7 +1331,8 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                     create_index_arg,
                                                     param.tenant_data_version_,
                                                     *param.allocator_,
-                                                    task_record))) {
+                                                    task_record,
+                                                    param.ddl_need_retry_at_executor_))) {
           LOG_WARN("fail to create build vec ivf index task", K(ret), K(param.type_));
         }
         break;
@@ -2165,9 +2166,6 @@ int ObDDLScheduler::create_build_fts_index_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
           KPC(data_table_schema), KPC(index_schema), K(tenant_data_version), KP(GCTX.sql_proxy_));
-    } else if (OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(
-                   data_table_schema, index_schema, parent_task_id, *create_index_arg, snapshot_version))) {
-      LOG_WARN("fail to update domain index share table snapshot", K(ret));
     } else if (OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(data_table_schema, create_index_arg))) {
       LOG_WARN("fail to check supportability for building index", K(ret));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, data_table_schema->get_tenant_id(), task_id))) {
@@ -2208,7 +2206,8 @@ int ObDDLScheduler::create_build_vec_ivf_index_task(
     const obrpc::ObCreateIndexArg *create_index_arg,
     const uint64_t tenant_data_version,
     ObIAllocator &allocator,
-    ObDDLTaskRecord &task_record)
+    ObDDLTaskRecord &task_record,
+    const bool ddl_need_retry_at_executor)
 {
   int ret = OB_SUCCESS;
   int64_t task_id = 0;
@@ -2236,14 +2235,17 @@ int ObDDLScheduler::create_build_vec_ivf_index_task(
                                        task_type,
                                        *create_index_arg,
                                        tenant_data_version,
-                                       parent_task_id))) {
+                                       parent_task_id,
+                                       share::ObDDLTaskStatus::PREPARE /* task_status */,
+                                       0 /* snapshot_version */,
+                                       !ddl_need_retry_at_executor))) {
       LOG_WARN("init vec ivf index task failed", K(ret), K(data_table_schema), K(index_schema));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
       LOG_WARN("set trace id failed", K(ret));
     } else if (OB_FAIL(insert_task_record(proxy, index_task, allocator, task_record))) {
       LOG_WARN("fail to insert task record", K(ret));
     }
-    LOG_INFO("ddl_scheduler create build vec ivf index task finished", K(ret), K(index_task));
+    LOG_INFO("ddl_scheduler create build vec ivf index task finished", K(ret), K(index_task), K(task_record));
   }
   return ret;
 }
@@ -2275,9 +2277,6 @@ int ObDDLScheduler::create_build_vec_index_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
           KPC(data_table_schema), KPC(index_schema));
-    } else if (OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(
-                   data_table_schema, index_schema, parent_task_id, *create_index_arg, snapshot_version))) {
-      LOG_WARN("fail to update domain index share table snapshot", K(ret));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, data_table_schema->get_tenant_id(), task_id))) {
       LOG_WARN("fetch new task id failed", K(ret));
     } else if (OB_FAIL(index_task.init(data_table_schema->get_tenant_id(),
@@ -2325,7 +2324,7 @@ int ObDDLScheduler::create_build_index_task(
   int64_t task_id = 0;
 
   share::ObDDLTaskStatus task_status =
-    (index_schema->is_rowkey_doc_id() || index_schema->is_vec_rowkey_vid_type()) && !create_index_arg->is_offline_rebuild_ ?
+    (index_schema->is_rowkey_doc_id() || index_schema->is_vec_rowkey_vid_type()) && !create_index_arg->is_offline_or_restore() ?
     share::ObDDLTaskStatus::REDEFINITION : share::ObDDLTaskStatus::PREPARE;
 
   SMART_VAR(ObIndexBuildTask, index_task) {

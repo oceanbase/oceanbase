@@ -69,6 +69,8 @@
 #include "pl/sys_package/ob_utl_smtp.h"
 #include "pl/sys_package/ob_utl_http.h"
 #include "pl/sys_package/ob_dbms_plsql_code_coverage.h"
+#include "pl/sys_package/ob_dbms_routine_load.h"
+#include "pl/sys_package/ob_dbms_lob_manager.h"
 #endif
 #include "pl/sys_package/ob_dbms_xplan.h"
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
@@ -90,6 +92,9 @@
 #include "pl/sys_package/ob_dbms_xprofile.h"
 #include "pl/sys_package/ob_dbms_data_dict.h"
 #include "pl/sys_package/ob_dbms_python.h"
+#include "pl/sys_package/ob_dbms_routine_load_mysql.h"
+#include "pl/sys_package/ob_dbms_lob_manager.h"
+#include "pl/sys_package/ob_dbms_daily_maintenance.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -319,6 +324,7 @@
   //start of resource manager
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_CREATE_PLAN, "CREATE_PLAN_INNER", (ObPlDBMSResourceManager::create_plan))
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_DELETE_PLAN, "DELETE_PLAN_INNER", (ObPlDBMSResourceManager::delete_plan))
+  INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_COPY_PLAN, "COPY_PLAN_INNER", (ObPlDBMSResourceManager::copy_plan))
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_CREATE_CONSUMER_GROUP, "CREATE_CONSUMER_GROUP_INNER", (ObPlDBMSResourceManager::create_consumer_group))
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_DELETE_CONSUMER_GROUP, "DELETE_CONSUMER_GROUP_INNER", (ObPlDBMSResourceManager::delete_consumer_group))
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_CREATE_PLAN_DIRECTIVE, "CREATE_PLAN_DIRECTIVE_INNER", (ObPlDBMSResourceManager::create_plan_directive))
@@ -385,6 +391,8 @@
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISPLAY_CURSOR, "DISPLAY_CURSOR", (ObDbmsXplan::display_cursor))
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISPLAY_SQL_PLAN_BASELINE, "DISPLAY_SQL_PLAN_BASELINE", (ObDbmsXplan::display_sql_plan_baseline))
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISPLAY_ACTIVE_SESSION_PLAN, "DISPLAY_ACTIVE_SESSION_PLAN", (ObDbmsXplan::display_active_session_plan))
+  INTERFACE_DEF(INTERFACE_DBMS_XPLAN_ENABLE_MEM_PERF, "ENABLE_MEM_PERF", (ObDbmsXplan::enable_mem_perf))
+  INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISABLE_MEM_PERF, "DISABLE_MEM_PERF", (ObDbmsXplan::disable_mem_perf))
   //end of dbms xplan
 
   //start of dbms xprofile
@@ -875,10 +883,15 @@
 
   DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REFRESH_INDEX, ObDBMSVectorMySql::refresh_index)
   DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REBUILD_INDEX, ObDBMSVectorMySql::rebuild_index)
+  DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_FLUSH_INDEX, ObDBMSVectorMySql::flush_index)
+  DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_COMPACT_INDEX, ObDBMSVectorMySql::compact_index)
   DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REFRESH_INDEX_INNER, ObDBMSVectorMySql::refresh_index_inner)
   DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REBUILD_INDEX_INNER, ObDBMSVectorMySql::rebuild_index_inner)
   DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_INDEX_VECTOR_MEMORY_ADVISOR, ObDBMSVectorMySql::index_vector_memory_advisor)
   DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_INDEX_VECTOR_MEMORY_ESTIMATE, ObDBMSVectorMySql::index_vector_memory_estimate)
+  DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_QUERY_RECALL, ObDBMSVectorMySql::query_recall)
+  DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_INDEX_RECALL, ObDBMSVectorMySql::index_recall)
+  DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_SET_ATTRIBUTE, ObDBMSVectorMySql::set_attribute)
 
 #undef DEFINE_DBMS_VECTOR_MYSQL_INTERFACE
   // end of dbms_vector_mysql
@@ -952,6 +965,16 @@
   INTERFACE_DEF(INTERFACE_DBMS_PYTHON_DROPPYTHON_MYSQL, "DBMS_PYTHON_DROPPYTHON_MYSQL", (ObDBMSPython::droppython_mysql))
   // end of dbms_python
 
+  // start of DBMS_LOB_MANAGER
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_CHECK_LOB, "DBMS_LOB_MANAGER_CHECK_LOB", (ObDbmsLobManager::check_lob))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_CANCEL_JOB, "DBMS_LOB_MANAGER_CANCEL_JOB", (ObDbmsLobManager::cancel_job))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_SUSPEND_JOB, "DBMS_LOB_MANAGER_SUSPEND_JOB", (ObDbmsLobManager::suspend_job))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_RESUME_JOB, "DBMS_LOB_MANAGER_RESUME_JOB", (ObDbmsLobManager::resume_job))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_REPAIR_LOB, "DBMS_LOB_MANAGER_REPAIR_LOB", (ObDbmsLobManager::repair_lob))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_CHECK_LOB_INNER, "DBMS_LOB_MANAGER_CHECK_LOB_INNER", (ObDbmsLobManager::check_lob_inner))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_RESCHEDULE_JOB, "DBMS_LOB_MANAGER_RESCHEDULE_JOB", (ObDbmsLobManager::reschedule_job))
+  // end of DBMS_LOB_MANAGER
+
   // start of dbms_hybrid_search
 #define DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(symbol, func) \
 INTERFACE_DEF(INTERFACE_##symbol, #symbol, (func))
@@ -961,6 +984,16 @@ DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(DBMS_HYBRID_VECTOR_MYSQL_GET_SQL, ObDB
 
 #undef DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE
   // end of dbms_hybrid_search
+
+  INTERFACE_DEF(INTERFACE_DBMS_ROUTINE_LOAD_MYSQL_CONSUME_KAFKA, "DBMS_ROUTINE_LOAD_MYSQL_CONSUME_KAFKA", (ObDBMSRoutineLoadMysql::consume_kafka))
+#ifdef OB_BUILD_ORACLE_PL
+  INTERFACE_DEF(INTERFACE_DBMS_ROUTINE_LOAD_ORACLE_CONSUME_KAFKA, "DBMS_ROUTINE_LOAD_ORACLE_CONSUME_KAFKA", (ObDBMSRoutineLoad::consume_kafka))
+#endif
+
+  // start of dbms_daily_maintenance
+  INTERFACE_DEF(INTERFACE_DBMS_DAILY_MAINTENANCE_TRIGGER_WINDOW_COMPACTION, "DBMS_DAILY_MAINTENANCE_TRIGGER_WINDOW_COMPACTION", (ObDBMSDailyMaintenance::trigger_window_compaction_proc))
+  INTERFACE_DEF(INTERFACE_DBMS_DAILY_MAINTENANCE_SET_THREAD_CNT, "DBMS_DAILY_MAINTENANCE_SET_THREAD_COUNT", (ObDBMSDailyMaintenance::set_thread_count))
+  // end of dbms_daily_maintenance
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

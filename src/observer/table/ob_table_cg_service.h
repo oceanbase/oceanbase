@@ -292,7 +292,8 @@ private:
                                              const uint64_t table_id,
                                              sql::ObUniqueConstraintInfo &constraint_info);
   static int generate_constraint_infos(ObTableCtx &ctx,
-                                       common::ObIArray<sql::ObUniqueConstraintInfo> &cst_infos);
+                                       ObIAllocator &allocator,
+                                       common::ObIArray<sql::ObUniqueConstraintInfo*> &cst_infos);
   static int generate_constraint_ctdefs(ObTableCtx &ctx,
                                         ObIAllocator &allocator,
                                         sql::ObRowkeyCstCtdefArray &cst_ctdefs);

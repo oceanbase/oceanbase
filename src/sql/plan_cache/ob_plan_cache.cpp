@@ -470,7 +470,7 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
   bool need_late_compilation = false;
   ObJITEnableMode jit_mode = ObJITEnableMode::OFF;
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
-
+  MATCH_GUARD(cache_obj == NULL ? -1 : cache_obj->get_object_id(), ctx);
   if (cache_obj != NULL && ObLibCacheNameSpace::NS_CRSR == cache_obj->get_ns()) {
     plan = static_cast<ObPhysicalPlan *>(cache_obj);
   }
@@ -484,7 +484,9 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
       enable_udr = pc_ctx.sql_ctx_.session_info_->enable_udr();
     }
   }
+
   if (OB_SUCC(ret) && plan != NULL) {
+
     bool is_exists = false;
     uint64_t pattern_digest = 0;
     sql::ObUDRMgr *rule_mgr = MTL(sql::ObUDRMgr*);
@@ -501,6 +503,8 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
         LOG_TRACE("Obsolete user-defined rewrite rules require eviction plan", K(ret),
         K(is_exists), K(pc_ctx.raw_sql_), K(plan->is_enable_udr()), K(enable_udr),
         K(plan->is_rewrite_sql()), K(plan->get_rule_version()), K(rule_mgr->get_rule_version()));
+        RECORD_CACHE_MISS(EXPIRED_PHY_PLAN, ctx, "Obsolete user-defined rewrite rules require eviction plan", K(is_exists),
+                          K(plan->is_rewrite_sql()), K(plan->get_rule_version()), K(rule_mgr->get_rule_version()));
       } else {
         plan->set_rule_version(rule_mgr->get_rule_version());
         plan->set_is_enable_udr(enable_udr);
@@ -527,6 +531,8 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
   } else if (plan != NULL && plan->is_expired()) {
     if (pc_ctx.regenerating_expired_plan_) {
       ret = OB_SQL_PC_NOT_EXIST;
+      RECORD_CACHE_MISS(EXPIRED_PHY_PLAN, ctx, "Physical plan is expired",
+                          K(pc_ctx.regenerating_expired_plan_), K(plan->stat_.is_expired_));
     }
     LOG_INFO("the statistics of table is stale and evict plan.", K(plan->stat_.is_expired_),
                                         K(pc_ctx.regenerating_expired_plan_), K(plan->stat_));
@@ -576,6 +582,7 @@ int ObPlanCache::get_plan(common::ObIAllocator &allocator,
   int ret = OB_SUCCESS;
 
   FLTSpanGuard(pc_get_plan);
+  ObMemPerfGuard mem_perf_guard("pc_get_plan");
   ObGlobalReqTimeService::check_req_timeinfo();
   pc_ctx.handle_id_ = guard.ref_handle_;
   if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)
@@ -1060,6 +1067,7 @@ int ObPlanCache::add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pc_add_plan);
+  ObMemPerfGuard mem_perf_guard("pc_add_plan");
   ObGlobalReqTimeService::check_req_timeinfo();
   if (OB_ISNULL(plan)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1068,7 +1076,7 @@ int ObPlanCache::add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx)
     ret = OB_REACH_MEMORY_LIMIT;
     if (REACH_TIME_INTERVAL(1000000)) { //1s, 当内存达到上限时, 该日志打印会比较频繁, 所以以1s为间隔打印
       SQL_PC_LOG(WARN, "plan cache memory used reach limit",
-                        K_(tenant_id), K(get_mem_hold()), K(get_mem_limit()), K(ret));
+                        K_(tenant_id), K(get_mem_used()), K(get_mem_hold()), K(get_mem_limit()), K(ret));
     }
   } else if (plan->get_mem_size() >= get_mem_high()) {
     // plan mem is too big, do not add plan
@@ -1082,6 +1090,24 @@ int ObPlanCache::add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx)
     }
   } else {
     (void)inc_mem_used(plan->get_mem_size());
+    int tmp_ret = OB_E(EventTable::EN_OB_PLAN_CACHE_POST_ADDITION_CHECK) OB_SUCCESS;
+    if (tmp_ret != OB_SUCCESS) {
+      ObCacheObjGuard guard(PC_DIAG_HANDLE);
+      pc_ctx.try_get_plan_ = true;
+      pc_ctx.compare_plan_ = plan;
+      if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+        ObPsStmtId stmt_id = pc_ctx.fp_result_.pc_key_.key_id_;
+        if (OB_FAIL(try_get_ps_plan(guard, stmt_id, pc_ctx))) {
+          LOG_WARN("fail to try get ps plan", K(ret));
+        }
+      } else if (OB_FAIL(try_get_plan(pc_ctx.allocator_, pc_ctx, guard))) {
+        LOG_WARN("fail to try get plan", K(ret));
+      }
+      if (OB_SUCC(ret) && guard.cache_obj_ != plan) {
+        ret = OB_SQL_PC_NOT_EXIST;
+        LOG_WARN("There are some bugs in plan cache", K(ret), KP(plan));
+      }
+    }
   }
 
   return ret;
@@ -1278,6 +1304,7 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
   ObILibCacheObject *cache_obj = NULL;
   // get the read lock and increase reference count
   ObLibCacheRlockAndRef r_ref_lock(LC_NODE_RD_HANDLE, ctx.get_lock_timeout());
+  MATCH_GUARD(-1, ctx);
   if (OB_ISNULL(key)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid null argument", K(ret), K(key));
@@ -1286,15 +1313,19 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
   } else if (OB_UNLIKELY(NULL == cache_node)) {
     ret = OB_SQL_PC_NOT_EXIST;
     SQL_PC_LOG(DEBUG, "cache obj does not exist!", K(key));
+    RECORD_CACHE_MISS(KEY_NOT_MATCH, ctx, "Cache node not exists", K(cache_node));
   } else {
     LOG_DEBUG("inner_get_cache_obj", K(key), K(cache_node));
     if (cache_node->is_invalid()) {
       ret = OB_SQL_PC_NOT_EXIST;
+      RECORD_CACHE_MISS(KEY_NOT_MATCH, ctx, "Cache node is invalid", KPC(cache_node));
     } else if (OB_FAIL(cache_node->update_node_stat(ctx))) {
       SQL_PC_LOG(WARN, "failed to update node stat",  K(ret));
+      RECORD_CACHE_MISS(KEY_NOT_MATCH, ctx, "Some error happened during update node stat", K(ret));
     } else if (OB_FAIL(cache_node->get_cache_obj(ctx, key, cache_obj))) {
       if (OB_SQL_PC_NOT_EXIST != ret) {
         LOG_DEBUG("cache_node fail to get cache obj", K(ret));
+        RECORD_CACHE_MISS(KEY_NOT_MATCH, ctx, "Some error happened during get cache obj", K(ret));
       }
     } else {
       if (OB_SUCC(ret) && cache_obj != NULL && ObLibCacheNameSpace::NS_CRSR == cache_obj->get_ns()
@@ -1519,6 +1550,7 @@ int ObPlanCache::cache_evict()
   ObGlobalReqTimeService::check_req_timeinfo();
   SQL_PC_LOG(INFO, "start lib cache evict",
              K_(tenant_id),
+             "mem_used", get_mem_used(),
              "mem_hold", get_mem_hold(),
              "mem_limit", get_mem_limit(),
              "cache_obj_num", get_cache_obj_size(),
@@ -1536,6 +1568,7 @@ int ObPlanCache::cache_evict()
   SQL_PC_LOG(INFO, "end lib cache evict",
              K_(tenant_id),
              "cache_evict_num", cache_evict_num,
+             "mem_used", get_mem_used(),
              "mem_hold", get_mem_hold(),
              "mem_limit", get_mem_limit(),
              "cache_obj_num", get_cache_obj_size(),
@@ -1558,6 +1591,7 @@ int ObPlanCache::cache_evict_by_glitch_node()
       int64_t mem_to_free = traverse_op.get_total_mem_used() / 2;
       SQL_PC_LOG(INFO, "cache evict plan by glitch node start",
              K_(tenant_id),
+             "mem_used", get_mem_used(),
              "mem_hold", get_mem_hold(),
              "mem_high", get_mem_high(),
              "mem_to_free", mem_to_free,
@@ -1586,6 +1620,7 @@ int ObPlanCache::cache_evict_by_glitch_node()
       SQL_PC_LOG(INFO, "cache evict plan by glitch node end",
              K_(tenant_id),
              "cache_evict_num", cache_evict_num,
+             "mem_used", get_mem_used(),
              "mem_hold", get_mem_hold(),
              "mem_high", get_mem_high(),
              "mem_low", get_mem_low(),
@@ -2299,7 +2334,7 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   session.get_database_id(database_id);
   pc_key.db_id_ = (database_id == OB_INVALID_ID) ? OB_MOCK_DEFAULT_DATABASE_ID : database_id;
   pc_key.namespace_ = ns;
-  pc_key.sys_vars_str_ = session.get_sys_var_in_pc_str();
+  OZ (session.get_sys_var_in_pc_str(pc_key.sys_vars_str_));
   pc_key.config_str_ = session.get_config_in_pc_str();
   // here we use `initial_use_rich_format` instead of `use_rich_format` as part of key
   // consider scenario of binding outline:
@@ -2313,7 +2348,7 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   // if `use_rich_format()` is used as part of key, added plan's key will be `false + other_info`.
   pc_key.use_rich_vector_format_ = session.initial_use_rich_format();
   pc_key.config_use_rich_format_ = session.config_use_rich_format();
-  pc_key.sys_var_config_hash_val_ = session.get_sys_var_config_hash_val();
+  OZ (session.get_sys_var_config_hash_val(pc_key.sys_var_config_hash_val_));
   pc_key.is_weak_read_ = is_weak;
   pc_key.enable_mysql_compatible_dates_ = session.enable_mysql_compatible_dates();
   OZ (session.get_collation_connection(pc_key.collation_connection_));

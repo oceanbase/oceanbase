@@ -63,7 +63,7 @@ int ObPLDependencyUtil::get_synonym_object(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObSchemaChecker schema_checker;
   ObSynonymChecker synonym_checker;
-  OZ (schema_checker.init(schema_guard, session_info.get_server_sid()));
+  OZ (schema_checker.init(schema_guard, session_info.get_sessid_for_table()));
   OZ (ObResolverUtils::resolve_synonym_object_recursively(
     schema_checker, synonym_checker,
     tenant_id, owner_id, object_name, owner_id, object_name, exist));

@@ -420,6 +420,7 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
         sqlstat_record.set_is_in_retry(session.get_is_in_retry());
         session.sql_sess_record_sql_stat_start_value(sqlstat_record);
       }
+      session.set_retry_wait_event_begin_time();
       result.set_has_more_result(has_more_result);
       ObTaskExecutorCtx *task_ctx = result.get_exec_context().get_task_executor_ctx();
       int64_t execution_id = 0;
@@ -597,6 +598,12 @@ int ObMPStmtPrepare::response_result(
     LOG_WARN("send param packet failed", K(ret));
   } else if (OB_FAIL(send_column_packet(session, result))) {
     LOG_WARN("send column packet failed", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    int sret = OB_SUCCESS;
+    if (OB_SUCCESS != (sret = send_error_packet(ret, NULL))) {
+      LOG_WARN("send error packet fail", K(sret), K(ret));
+    }
   }
   return ret;
 }

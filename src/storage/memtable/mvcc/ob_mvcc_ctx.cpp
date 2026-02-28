@@ -11,11 +11,14 @@
  */
 
 #include "ob_mvcc_ctx.h"
+#include "share/deadlock/ob_deadlock_detector_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "share/inner_table/ob_sslog_table_schema.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
 #endif
+
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 
 namespace oceanbase
 {
@@ -24,6 +27,7 @@ using namespace share;
 using namespace storage;
 using namespace transaction::tablelock;
 using namespace blocksstable;
+using namespace lockwaitmgr;
 namespace memtable
 {
 
@@ -100,14 +104,32 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
       }
 #endif
 
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(append_callback(cb))) {
-        TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+      if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && !is_non_unique_local_index) {
+        ACTIVE_SESSION_FLAG_SETTER_GUARD(in_deadlock_row_register);
+        MTL(ObLockWaitMgr*)->insert_hash_holder(
+          LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
+          cb->get_hash_holder_linker(),
+          false);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(append_callback(cb))) {
+          TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+          MTL(ObLockWaitMgr*)->erase_hash_holder_record(
+            LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
+            cb->get_hash_holder_linker(),
+            false);
+        }
+      } else {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(append_callback(cb))) {
+            TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+        }
       }
 
       if (OB_FAIL(ret)) {
         free_mvcc_row_callback(cb);
         TRANS_LOG(WARN, "append callback failed", K(ret));
+      } else {
+
       }
     }
   }
@@ -175,6 +197,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
           tail->set_next(cb);
           tail = cb;
         }
+        res.tx_callback_ = cb;
         length++;
 
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -191,11 +214,43 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(append_callback(head, tail, length))) {
-      TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+    if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && !is_non_unique_local_index) {
+      ACTIVE_SESSION_FLAG_SETTER_GUARD(in_deadlock_row_register);
+      for (int64_t i = 0; i < mvcc_results.count(); ++i) {
+        ObMvccWriteResult &res = mvcc_results[i];
+        if (res.has_insert()) {
+          const ObMemtableKey *stored_key = &res.mtk_;
+          ObMvccTransNode *node = res.tx_node_;
+          MTL(ObLockWaitMgr*)->insert_hash_holder(
+            LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
+            res.tx_callback_->get_hash_holder_linker(),
+            false);
+        }
+      }
+      if (OB_FAIL(append_callback(head, tail, length))) {
+        TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+        for (int64_t i = 0; i < mvcc_results.count(); ++i) {
+          ObMvccWriteResult &res = mvcc_results[i];
+          if (res.has_insert()) {
+            const ObMemtableKey *stored_key = &res.mtk_;
+            ObMvccTransNode *node = res.tx_node_;
+            MTL(ObLockWaitMgr*)->erase_hash_holder_record(
+              LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
+              res.tx_callback_->get_hash_holder_linker(),
+              false);
+          }
+        }
+      } else {
+        TRANS_LOG(DEBUG, "register callback succeed", K(*this), K(ret),
+                  KPC(head), KPC(tail), K(length), K(mvcc_results));
+      }
     } else {
-      TRANS_LOG(DEBUG, "register callback succeed", K(*this), K(ret),
-                KPC(head), KPC(tail), K(length), K(mvcc_results));
+      if (OB_FAIL(append_callback(head, tail, length))) {
+        TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+      } else {
+        TRANS_LOG(DEBUG, "register callback succeed", K(*this), K(ret),
+                  KPC(head), KPC(tail), K(length), K(mvcc_results));
+      }
     }
   }
 
@@ -266,9 +321,30 @@ int ObIMvccCtx::register_row_replay_cb(
       }
     }
 #endif
-
-    if (FAILEDx(append_callback(cb))) {
-      TRANS_LOG(WARN, "append callback failed", K(ret));
+    if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && OB_NOT_NULL(MTL(ObLockWaitMgr*))) {
+      MTL(ObLockWaitMgr*)->insert_hash_holder(LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *key),
+                                              cb->get_hash_holder_linker(),
+                                              false);
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(append_callback(cb))) {
+        {
+          ObRowLatchGuard guard(value->latch_);
+          cb->unlink_trans_node();
+        }
+        TRANS_LOG(WARN, "append callback failed", K(ret));
+        MTL(ObLockWaitMgr*)->erase_hash_holder_record(LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *key),
+                                                      cb->get_hash_holder_linker(),
+                                                      false);
+      }
+    } else {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(append_callback(cb))) {
+        {
+          ObRowLatchGuard guard(value->latch_);
+          cb->unlink_trans_node();
+        }
+        TRANS_LOG(WARN, "append callback failed", K(ret));
+      }
     }
 
     if (OB_FAIL(ret)) {

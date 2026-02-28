@@ -16,9 +16,15 @@
 #include "ob_schema_struct.h"
 #include "ob_table_schema.h"
 #include "share/schema/ob_table_param.h"
+#include "share/schema/ob_schema_struct_fts.h"
 
 namespace oceanbase
 {
+namespace common
+{
+class ObCollectionArrayType;
+}
+
 namespace share
 {
 namespace schema
@@ -34,7 +40,7 @@ public:
   typedef common::ObFixedArray<int32_t, common::ObIAllocator> ColumnsIndex;
   typedef common::ObFixedArray<ObColDesc, common::ObIAllocator> ObColDescArray;
   typedef common::ObFixedArray<uint64_t, common::ObIAllocator> ColumnIdArray;
-  typedef common::ObFixedArray<ObString, common::ObIAllocator> ExtendedTypeInfos;
+  typedef common::ObFixedArray<common::ObCollectionArrayType*, common::ObIAllocator> ArrayTypeArray;
 
   explicit ObTableSchemaParam(common::ObIAllocator &allocator);
   virtual ~ObTableSchemaParam();
@@ -56,6 +62,7 @@ public:
   OB_INLINE void set_data_table_rowkey_column_num(int64_t cnt) { data_table_rowkey_column_num_ = cnt; }
   OB_INLINE int64_t get_doc_id_col_id() const { return doc_id_col_id_; }
   int get_typed_doc_id_col_id(uint64_t &doc_id_col_id, ObDocIDType &type) const;
+  ObDocIDType get_multivalue_doc_id_type() const;
   OB_INLINE int64_t get_fulltext_col_id() const { return fulltext_col_id_; }
   OB_INLINE const common::ObString &get_fts_parser_name() const { return fts_parser_name_; }
   OB_INLINE const common::ObString &get_fts_parser_property() const { return fts_parser_properties_; }
@@ -115,7 +122,9 @@ public:
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
   OB_INLINE ObMvMode get_mv_mode() const { return mv_mode_; }
-  OB_INLINE bool is_delete_insert() const { return is_delete_insert_; }
+  OB_INLINE bool is_delete_insert() const { return static_cast<ObMergeEngineType>(merge_engine_type_) == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT; }
+  OB_INLINE bool is_append_only() const { return static_cast<ObMergeEngineType>(merge_engine_type_) == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY; }
+  OB_INLINE bool is_rowscn_ttl_table() const { return is_rowscn_ttl_table_; }
   OB_INLINE const common::ObString &get_index_name() const { return index_name_; }
 
   const ObColumnParam * get_column(const uint64_t column_id) const;
@@ -154,6 +163,7 @@ private:
   common::ObString index_name_;
   common::ObString fts_parser_name_;
   common::ObString fts_parser_properties_;
+  ObFTSIndexType fts_index_type_;
   //generated storage param from columns_ids_ in ObTableModify, for performance improvement
   Columns columns_;
   ColumnMap col_map_;
@@ -172,13 +182,14 @@ private:
   uint64_t vec_vector_col_id_;
   ObMvMode mv_mode_;
   bool is_delete_insert_;
+  bool is_rowscn_ttl_table_;
   ObMergeEngineType merge_engine_type_;
   uint64_t inc_pk_doc_id_col_id_;
   uint64_t vec_chunk_col_id_;
   uint64_t vec_embedded_col_id_;
   ColumnIdArray search_idx_included_cids_;
   Projector search_idx_included_cid_idxes_;
-  ExtendedTypeInfos search_idx_included_extended_type_infos_;
+  ArrayTypeArray search_idx_arr_types_;
 };
 
 class ObTableDMLParam

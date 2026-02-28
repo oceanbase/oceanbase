@@ -51,10 +51,6 @@ const int64_t BF_MICRO_BLOCK_HEADER_MAGIC = 1015;
 const int64_t SERVER_SUPER_BLOCK_MAGIC = 1018;
 const int64_t LINKED_MACRO_BLOCK_HEADER_MAGIC = 1019;
 
-const int64_t MICRO_BLOCK_HEADER_VERSION_1 = 1;
-const int64_t MICRO_BLOCK_HEADER_VERSION_2 = 2;
-const int64_t MICRO_BLOCK_HEADER_VERSION_3 = 3;
-const int64_t MICRO_BLOCK_HEADER_VERSION = MICRO_BLOCK_HEADER_VERSION_3;
 const int64_t LINKED_MACRO_BLOCK_HEADER_VERSION = 1;
 const int64_t BF_MACRO_BLOCK_HEADER_VERSION = 1;
 const int64_t BF_MICRO_BLOCK_HEADER_VERSION = 1;
@@ -172,6 +168,8 @@ struct ObMicroBlockId
   {
     return macro_id_ == other.macro_id_ && offset_ == other.offset_ && size_ == other.size_;
   }
+  uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return common::OB_SUCCESS; }
   TO_STRING_KV(K_(macro_id), K_(offset), K_(size));
   MacroBlockId macro_id_;
   int32_t offset_;
@@ -445,9 +443,11 @@ struct ObPreviousEncodingArray<1>
 struct ObMicroBlockEncodingCtx
 {
   static const int64_t MAX_PREV_ENCODING_COUNT = 2;
+  static const int64_t MULTI_VERSION_COLUMN_CNT = 3;
+
   int64_t macro_block_size_;
   int64_t micro_block_size_;
-  int64_t rowkey_column_cnt_;
+  int64_t rowkey_column_cnt_; // include multi version cols
   int64_t column_cnt_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   ObMicroBlockEncoderOpt encoder_opt_;
@@ -467,6 +467,7 @@ struct ObMicroBlockEncodingCtx
   uint64_t encoding_granularity_;
   uint64_t minimum_rows_;
   share::ObSemistructProperties semistruct_properties_;
+  ObDatumRow *default_row_;
 
   ObMicroBlockEncodingCtx() : macro_block_size_(0), micro_block_size_(0),
     rowkey_column_cnt_(0), column_cnt_(0), col_descs_(nullptr),
@@ -476,8 +477,7 @@ struct ObMicroBlockEncodingCtx
     column_encodings_(nullptr), major_working_cluster_version_(0),
     row_store_type_(ENCODING_ROW_STORE), need_calc_column_chksum_(false),
     compressor_type_(INVALID_COMPRESSOR), encoding_granularity_(UINT64_MAX),
-    minimum_rows_(1),
-    semistruct_properties_()
+    minimum_rows_(1), semistruct_properties_(), default_row_(nullptr)
   {
     previous_encodings_.set_attr(ObMemAttr(MTL_ID(), "MicroEncodeCtx"));
   }
@@ -487,7 +487,8 @@ struct ObMicroBlockEncodingCtx
       K_(column_cnt), KP_(col_descs), K_(estimate_block_size), K_(real_block_size),
       K_(micro_block_cnt), K_(encoder_opt), K_(previous_encodings), KP_(column_encodings),
       K_(major_working_cluster_version), K_(row_store_type), K_(need_calc_column_chksum),
-      K_(compressor_type), K_(encoding_granularity), K_(minimum_rows), K_(semistruct_properties));
+      K_(compressor_type), K_(encoding_granularity), K_(minimum_rows),
+      K_(semistruct_properties), KPC_(default_row));
 };
 
 template <typename T, int64_t MAX_COUNT, int64_t BLOCK_SIZE>
@@ -848,6 +849,7 @@ public:
   int64_t master_key_id_;
   const char *encrypt_key_;
 };
+
 }//end namespace blocksstable
 }//end namespace oceanbase
 #endif

@@ -290,6 +290,7 @@ void TestCOSSTableRowScanner::prepare_test_case(int level_cnt)
     prepare_cg_data();
   } else {
     prepare_data(MICRO_BLOCK_SIZE);
+    sstable_.key_.table_type_ = ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
   }
   ASSERT_EQ(max_row_cnt_, row_cnt_);
 }

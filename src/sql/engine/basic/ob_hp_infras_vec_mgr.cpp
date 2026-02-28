@@ -68,7 +68,8 @@ int ObHashPartInfrasVecGroup::init(uint64_t tenant_id, bool enable_sql_dumped,
 
 int ObHashPartInfrasVecGroup::init_one_hp_infras(
   HashPartInfrasVec *&hp_infras, const common::ObIArray<ObExpr *> &exprs,
-  const common::ObIArray<ObSortFieldCollation> *sort_collations, bool need_rewind)
+  const common::ObIArray<ObSortFieldCollation> *sort_collations, bool need_rewind,
+  const bool use_all_mem_bound /*false*/)
 {
   int ret = OB_SUCCESS;
   int64_t est_bucket_num = 0;
@@ -83,9 +84,9 @@ int ObHashPartInfrasVecGroup::init_one_hp_infras(
     SQL_ENG_LOG(TRACE, "calc total mem used", K(total_mem_used));
     return total_mem_used;
   };
-  auto slice_cnt_func = [this]() -> int64_t {
+  auto slice_cnt_func = [this, use_all_mem_bound]() -> int64_t {
     int64_t slice_cnt = hp_infras_list_.get_size();
-    return slice_cnt > initial_hp_size_ ? slice_cnt : initial_hp_size_;
+    return use_all_mem_bound ? 1 : (slice_cnt > initial_hp_size_ ? slice_cnt : initial_hp_size_);
   };
   if (need_rewind && 2 == ways_) {
     ret = OB_NOT_SUPPORTED;
@@ -125,6 +126,10 @@ int ObHashPartInfrasVecGroup::init_one_hp_infras(
     hp_infras->set_io_event_observer(io_event_observer_);
     SQL_ENG_LOG(TRACE, "trace info", K(hp_infras_list_.get_size()),
                 K(hp_infras_free_list_.get_size()));
+  }
+  if (OB_FAIL(ret) && hp_infras != nullptr && hp_infras->is_inited()) {
+    hp_infras->destroy();
+    hp_infras = nullptr;
   }
   return ret;
 }
@@ -167,7 +172,7 @@ int ObHashPartInfrasVecGroup::try_get_hp_infras_from_free_list(
   return ret;
 }
 
-int ObHashPartInfrasVecGroup::free_one_hp_infras(HashPartInfrasVec *&hp_infras)
+int ObHashPartInfrasVecGroup::free_one_hp_infras(HashPartInfrasVec *&hp_infras, bool force_destroy /* false */)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(hp_infras)) {
@@ -176,7 +181,7 @@ int ObHashPartInfrasVecGroup::free_one_hp_infras(HashPartInfrasVec *&hp_infras)
   } else if (FALSE_IT(hp_infras_list_.remove(hp_infras))) {
   } else {
     if (!hp_infras->is_inited()) {
-    } else if (hp_infras->get_bucket_num() > est_bucket_num_ * RATIO) {
+    } else if (hp_infras->get_bucket_num() > est_bucket_num_ * RATIO || force_destroy) {
       hp_infras->destroy();
     } else {
       hp_infras->reuse();
@@ -230,10 +235,10 @@ int ObHashPartInfrasVecMgr::init(uint64_t tenant_id, bool enable_sql_dumped, con
   return ret;
 }
 
-int ObHashPartInfrasVecMgr::free_one_hp_infras(HashPartInfrasVec *&hp_infras)
+int ObHashPartInfrasVecMgr::free_one_hp_infras(HashPartInfrasVec *&hp_infras, bool force_destroy /* false */)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(hp_infras_group_.free_one_hp_infras(hp_infras))) {
+  if (OB_FAIL(hp_infras_group_.free_one_hp_infras(hp_infras, force_destroy))) {
     SQL_ENG_LOG(WARN, "failed to free one hp infras", K(ret));
   }
   return ret;
@@ -242,7 +247,7 @@ int ObHashPartInfrasVecMgr::free_one_hp_infras(HashPartInfrasVec *&hp_infras)
 int ObHashPartInfrasVecMgr::init_one_hp_infras(const bool need_rewind,
                                                const ObSortCollations *sort_collations,
                                                const common::ObIArray<ObExpr *> &exprs,
-                                               HashPartInfrasVec *&hp_infras)
+                                               HashPartInfrasVec *&hp_infras, bool use_all_mem_bound)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -252,7 +257,7 @@ int ObHashPartInfrasVecMgr::init_one_hp_infras(const bool need_rewind,
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "unexpected status: func is null", K(ret));
   } else if (OB_FAIL(hp_infras_group_.init_one_hp_infras(hp_infras, exprs, sort_collations,
-                                                         need_rewind))) {
+                                                         need_rewind, use_all_mem_bound))) {
     SQL_ENG_LOG(WARN, "failed to create one hash partition infrastructure", K(ret));
   }
   return ret;

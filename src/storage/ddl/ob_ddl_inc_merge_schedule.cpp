@@ -421,6 +421,7 @@ int ObDDLMergeScheduler::schedule_ss_update_inc_major_and_gc_inc_major(
   return ret;
 }
 
+ERRSIM_POINT_DEF(DISABLE_GC_SS_INC_MAJOR_DDL_DUMP);
 int ObDDLMergeScheduler::schedule_ss_gc_inc_major_ddl_dump(
     ObLS *ls,
     ObTabletHandle &tablet_handle)
@@ -433,7 +434,10 @@ int ObDDLMergeScheduler::schedule_ss_gc_inc_major_ddl_dump(
   UpdateUpperTransParam upper_trans_param;
   upper_trans_param.gc_inc_major_ddl_scns_ = &gc_inc_major_ddl_scns;
 
-  if (OB_UNLIKELY(nullptr == ls || !tablet_handle.is_valid())) {
+  if (OB_UNLIKELY(DISABLE_GC_SS_INC_MAJOR_DDL_DUMP)) {
+    ret = DISABLE_GC_SS_INC_MAJOR_DDL_DUMP;
+    LOG_WARN("set DISABLE_GC_SS_INC_MAJOR_DDL_DUMP", KR(ret));
+  } else if (OB_UNLIKELY(nullptr == ls || !tablet_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected ls handle or tablet handle", KR(ret));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_ddl_sstables(sstable_iter))) {

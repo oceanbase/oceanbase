@@ -73,7 +73,8 @@ public:
     NORMAL = 2
   };
   static const int SSTABLE_META_CACHE_VERSION_1 = 1;
-  static const int SSTABLE_META_CACHE_VERSION = 2;
+  static const int SSTABLE_META_CACHE_VERSION_V2 = 2;
+  static const int SSTABLE_META_CACHE_VERSION_V3 = 3; // add min_merged_trans_version_/length
   ObSSTableMetaCache();
   ~ObSSTableMetaCache() = default;
   void reset();
@@ -81,14 +82,13 @@ public:
   void set_upper_trans_version(const int64_t upper_trans_version);
   void set_filled_tx_scn(const share::SCN &filled_tx_scn);
   bool is_valid() const { return version_ >= SSTABLE_META_CACHE_VERSION_1; }
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int serialize(const int64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_for_compat(const bool has_multi_version_row, const char *buf, const int64_t data_len, int64_t &pos);
-  int64_t get_serialize_size() const;
-
+  int64_t get_serialize_size(const int64_t data_version) const;
   TO_STRING_KV(K_(version), K_(has_multi_version_row), K_(status), K_(data_macro_block_count), K_(nested_size), K_(nested_offset),
         K_(total_macro_block_count), K_(total_use_old_macro_block_count), K_(row_count), K_(occupy_size), K_(data_checksum),
-        K_(max_merged_trans_version), K_(upper_trans_version), K_(filled_tx_scn), K_(contain_uncommitted_row));
+        K_(max_merged_trans_version), K_(min_merged_trans_version), K_(upper_trans_version), K_(filled_tx_scn), K_(contain_uncommitted_row));
 public:
   union {
     uint32_t header_;
@@ -99,7 +99,6 @@ public:
       uint32_t reserved_                  : 21;
     };
   };
-
   int32_t data_macro_block_count_;
   int32_t nested_size_;
   int32_t nested_offset_;
@@ -115,6 +114,9 @@ public:
   share::SCN filled_tx_scn_;
   bool contain_uncommitted_row_;
   share::SCN rec_scn_;
+  int32_t length_; //serialize length after SSTABLE_META_CACHE_VERSION_V3
+  int64_t min_merged_trans_version_;
+  // add new variables here, no need to inc version
 };
 
 
@@ -216,6 +218,10 @@ public:
   {
     return meta_cache_.max_merged_trans_version_;
   }
+  virtual int64_t get_min_merged_trans_version() const override
+  {
+    return meta_cache_.min_merged_trans_version_;
+  }
   OB_INLINE bool contain_uncommitted_row() const
   {
     return meta_cache_.contain_uncommitted_row_;
@@ -244,10 +250,6 @@ public:
   virtual bool is_ddl_merge_empty_sstable() const override
   {
     return is_empty() && is_ddl_merge_sstable();
-  }
-  OB_INLINE bool need_check_inc_major_can_access() const
-  {
-    return is_inc_major_type_sstable() || is_inc_major_ddl_sstable() || is_inc_major_ddl_aggregate_co_sstable();
   }
   int set_addr(const ObMetaDiskAddr &addr);
   OB_INLINE const ObMetaDiskAddr &get_addr() const { return addr_; }
@@ -379,10 +381,10 @@ protected:
       const ObTabletCreateSSTableParam &param,
       common::ObArenaAllocator *allocator);
   int get_last_rowkey(const ObDatumRowkey *&sstable_endkey);
-  int serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int serialize_fixed_struct(const int64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_fixed_struct(const char *buf, const int64_t data_len, int64_t &pos);
-  int64_t get_sstable_fix_serialize_size() const;
-  int64_t get_sstable_fix_serialize_payload_size() const;
+  int64_t get_sstable_fix_serialize_size(const int64_t data_version) const;
+  int64_t get_sstable_fix_serialize_payload_size(const int64_t data_version) const;
   int inner_deep_copy_and_inc_macro_ref(common::ObIAllocator &allocator, ObSSTable *&sstable) const;
 protected:
   static const int64_t SSTABLE_VERSION = 1;

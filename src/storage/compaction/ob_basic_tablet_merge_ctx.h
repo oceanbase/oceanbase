@@ -23,22 +23,21 @@ class ObSSTable;
 }
 namespace compaction
 {
-// for major merge now // TODO: used for both major and minor merge in the future
-struct ObMergeSSTableStatus final
+struct ObMajorMergeSSTableStatus final
 {
-  ObMergeSSTableStatus()
+  ObMajorMergeSSTableStatus()
     : is_schema_changed_(false),
       need_full_merge_(false),
       merge_level_(MICRO_BLOCK_MERGE_LEVEL),
-      co_major_sstable_status_()
+      co_major_sstable_status_(ObMajorSSTableStatus::MAJOR_SSTABLE_STATUS_INVALID)
   {}
-  ~ObMergeSSTableStatus() = default;
+  ~ObMajorMergeSSTableStatus() = default;
   void reset()
   {
     is_schema_changed_ = false;
     need_full_merge_ = false;
     merge_level_ = MICRO_BLOCK_MERGE_LEVEL;
-    co_major_sstable_status_ = ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS;
+    co_major_sstable_status_ = ObMajorSSTableStatus::MAJOR_SSTABLE_STATUS_INVALID;
   }
 
   bool is_schema_changed_;
@@ -46,39 +45,51 @@ struct ObMergeSSTableStatus final
   bool need_full_merge_;
   ObMergeLevel merge_level_;
   // The type of co major sstable, may mismatch with table schema (such as no normal col cg)
-  ObCOMajorSSTableStatus co_major_sstable_status_; // only for column store major sstable
+  ObMajorSSTableStatus co_major_sstable_status_; // only for column store major sstable
   TO_STRING_KV(K_(is_schema_changed), K_(need_full_merge), K_(merge_level), K_(co_major_sstable_status));
+};
+
+struct ObMergeSSTableOp final
+{
+  enum ObMergeSSTableOpEnum : uint8_t
+  {
+    SSTABLE_OP_NORMAL = 0,
+    SSTABLE_OP_FILTER = 1,
+    SSTABLE_OP_EMPTY = 2,
+    SSTABLE_OP_MAX = 3,
+  };
+  const static char *ObMergeSSTableOpStr[];
+  const static char *get_merge_sstable_op_str(const ObMergeSSTableOpEnum status);
+  static bool is_valid_merge_sstable_op(const ObMergeSSTableOpEnum status);
+  ObMergeSSTableOp() : sstable_op_(SSTABLE_OP_NORMAL) {}
+  ~ObMergeSSTableOp() {}
+  void reset() { sstable_op_ = SSTABLE_OP_NORMAL; }
+  void set_sstable_op(const ObMergeSSTableOpEnum op) { sstable_op_ = op; }
+  bool is_filter_or_empty() const { return sstable_op_ == SSTABLE_OP_FILTER || sstable_op_ == SSTABLE_OP_EMPTY; }
+  TO_STRING_KV("sstable_op", get_merge_sstable_op_str(sstable_op_));
+  ObMergeSSTableOpEnum sstable_op_;
 };
 
 struct ObCOStaticMergeParam final
 {
   ObCOStaticMergeParam()
-    : is_rebuild_column_store_(false),
-      is_cs_replica_(false),
-      is_build_row_store_from_rowkey_cg_(false),
-      is_build_redundent_row_store_from_rowkey_cg_(false),
-      contain_rowkey_base_co_sstable_(false),
+    : is_cs_replica_(false),
+      is_cs_replica_force_full_merge_(false),
+      contain_each_cg_sstable_(false),
       co_base_snapshot_version_(0),
-      co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE)
+      co_major_merge_strategy_()
   {}
   ~ObCOStaticMergeParam() = default;
   void reset();
   bool is_valid() const;
-  int init_co_merge_flags(const ObIArray<ObMergeSSTableStatus> &merge_sstable_status_array);
 
-  bool is_rebuild_column_store_; // use row_store to rebuild column_store
   bool is_cs_replica_;
-  bool is_build_row_store_from_rowkey_cg_;
-  bool is_build_redundent_row_store_from_rowkey_cg_;
-  bool contain_rowkey_base_co_sstable_;
+  bool is_cs_replica_force_full_merge_;
+  bool contain_each_cg_sstable_;
   int64_t co_base_snapshot_version_; // only used for column store replica, and firstly set in convert co merge
-  ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type_;
+  ObCOMajorMergeStrategy co_major_merge_strategy_;
 
-  TO_STRING_KV(K_(is_rebuild_column_store),
-      K_(is_cs_replica), K_(is_build_row_store_from_rowkey_cg),
-      K_(is_build_redundent_row_store_from_rowkey_cg),
-      K_(contain_rowkey_base_co_sstable), K_(co_base_snapshot_version),
-      "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(co_major_merge_type_));
+  TO_STRING_KV(K_(contain_each_cg_sstable), K_(co_base_snapshot_version), K_(co_major_merge_strategy));
   DISALLOW_COPY_AND_ASSIGN(ObCOStaticMergeParam);
 };
 
@@ -89,7 +100,6 @@ struct ObStaticMergeParam final
   bool is_valid() const;
   void reset();
   int init_static_info(ObTabletHandle &tablet_handle);
-  int init_co_merge_flags();
   int init_sstable_logic_seq();
   int init_sstable_schema_changed(
       const int64_t sstable_idx,
@@ -97,9 +107,9 @@ struct ObStaticMergeParam final
       const ObSSTableMeta &sstable_meta);
   int init_sstable_need_full_merge(
       const int64_t sstable_idx,
-      const ObSSTable &sstable,
-      const bool need_calc_progressive_merge);
+      const ObSSTable &sstable);
   int get_basic_info_from_result(const ObGetMergeTablesResult &get_merge_table_result);
+  int init_merge_version_range(const ObVersionRange &version_range);
   int64_t get_compaction_scn() const {
     return is_multi_version_merge(get_merge_type()) ?
       scn_range_.end_scn_.get_val_for_tx() : version_range_.snapshot_version_;
@@ -108,12 +118,15 @@ struct ObStaticMergeParam final
   OB_INLINE const ObLSID &get_ls_id() const { return dag_param_.ls_id_; }
   OB_INLINE const ObTabletID &get_tablet_id() const { return dag_param_.tablet_id_; }
   OB_INLINE ObExecMode get_exec_mode() const { return dag_param_.exec_mode_; }
-  OB_INLINE int64_t get_major_sstable_count() const { return merge_sstable_status_array_.count(); }
+
+  OB_INLINE bool is_build_all_cg_only() const { return co_static_param_.co_major_merge_strategy_.is_build_all_cg_only(); }
+  OB_INLINE bool only_use_row_store() const { return co_static_param_.co_major_merge_strategy_.only_use_row_store(); }
+  OB_INLINE int64_t get_major_sstable_count() const { return major_merge_sstable_status_array_.count(); }
   int cal_minor_merge_param(const bool has_compaction_filter);
   int cal_major_merge_param(const bool force_full_merge, const ObTablet &tablet, ObProgressiveMergeMgr &progressive_mgr);
   int init_progressive_mgr_and_check(const ObSSTableBasicMeta &base_meta, const ObTablet &tablet, ObProgressiveMergeMgr &progressive_mgr);
   int init_co_base_snapshot_version(const ObSSTable &sstable, const ObSSTableMeta &sstable_meta);
-  bool is_build_row_store() const;
+  int init_major_sstable_count();
 
   OB_INLINE void set_full_merge_and_level(bool is_full_merge)
   {
@@ -121,26 +134,34 @@ struct ObStaticMergeParam final
     is_full_merge_ = is_full_merge;
     merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
   }
+  OB_INLINE ObMergeSSTableOp get_merge_sstable_op(const int64_t index) const
+  {
+    ObMergeSSTableOp ret_op;
+    if (index >= 0 && index < merge_sstable_op_array_.count()) {
+      ret_op = merge_sstable_op_array_.at(index);
+    } else {
+      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected index", K(index), K(merge_sstable_op_array_.count()), K(lbt()));
+    }
+    return ret_op;
+  }
   OB_INLINE bool is_force_single_writer() const { return merge_reason_ == ObAdaptiveMergePolicy::AdaptiveMergeReason::REBUILD_COLUMN_GROUP; }
-  ObMergeLevel get_merge_level_for_sstable(const ObSSTable &sstable) const; // unused
-  int get_co_major_sstable_status(const int64_t index, ObCOMajorSSTableStatus &status) const;
+  int get_co_major_sstable_status(const int64_t index, ObMajorSSTableStatus &status) const;
   int get_sstable_merge_level(const int64_t index, ObMergeLevel &level) const;
   int get_sstable_need_full_merge(const int64_t index, bool &need_full_merge) const;
 
 private:
   int init_multi_version_column_descs();
-  int init_major_sstable_count();
 public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
-
+public:
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // global full merge or increment merge
   bool need_parallel_minor_merge_;
   bool is_tenant_major_merge_;
-  bool is_backfill_;
   bool is_delete_insert_merge_;
   bool is_ha_compeleted_; // only used for delete insert minor merge to control multi version row recycle logic, inited from tablet meta
   bool for_unittest_;
+  ObFillTxType fill_tx_type_;
   ObMergeLevel merge_level_; // TODO: keep it for minor/mini merge now
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
   int16_t sstable_logic_seq_;
@@ -149,24 +170,26 @@ public:
   int64_t concurrent_cnt_;
   uint64_t data_version_; // for major, get from medium_info
   int64_t ls_rebuild_seq_;
-  int64_t read_base_version_; // use for major merge
   int64_t create_snapshot_version_;
   int64_t start_time_;
   uint64_t encoding_granularity_;
   share::SCN merge_scn_;
   ObVersionRange version_range_;
+  ObVersionRange merge_version_range_; // modify for different merge_type
   share::ObScnRange scn_range_;
   const ObRowkeyReadInfo *rowkey_read_info_;
   const ObStorageSchema *schema_;
   ObStorageSnapshotInfo snapshot_info_;
-  int64_t tx_id_;
   common::ObSEArray<share::schema::ObColDesc, 2 * OB_ROW_DEFAULT_COLUMNS_COUNT> multi_version_column_descs_;
   share::ObPreWarmerParam pre_warm_param_;
   storage::ObCSReplicaStorageSchemaGuard tablet_schema_guard_; // original storage schema on tablet, used only in cs replcia
   int32_t private_transfer_epoch_; // only used in shared_storage mode, used to init statis_desc;
   share::SCN rec_scn_;
+  common::ObSEArray<ObMergeSSTableOp, 16> merge_sstable_op_array_;
+  common::ObSEArray<ObMajorMergeSSTableStatus, 16> major_merge_sstable_status_array_;
   ObCOStaticMergeParam co_static_param_;
-  common::ObSEArray<ObMergeSSTableStatus, 64> merge_sstable_status_array_;
+  ObWindowCompactionDecisionLogInfo window_decision_log_info_;
+
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
 };
 
@@ -199,7 +222,7 @@ public:
   ObMergeFilterCtx()
     : compaction_filter_(nullptr),
       mds_filter_info_(),
-      lock_(),
+      lock_(common::ObLatchIds::OB_MERGE_FILTER_CTX_LOCK),
       filter_statistics_()
   {}
   void destroy(ObCompactionMemoryContext &merge_ctx);
@@ -207,7 +230,7 @@ public:
   TO_STRING_KV(KPC_(compaction_filter), K_(mds_filter_info), K_(filter_statistics));
   ObICompactionFilter *compaction_filter_;
   ObMdsFilterInfo mds_filter_info_;
-  lib::ObMutex lock_;
+  lib::ObMutex lock_; // to protect statistics
   ObICompactionFilter::ObFilterStatistics filter_statistics_;
 };
 
@@ -248,6 +271,11 @@ public:
     ObStorageSchema &schema);
   int init_uncommit_tx_info();
   void destroy_uncommit_txinfo();
+  int init_sstable_op();
+  int check_sstable_filtered(
+    const ObSSTable &sstable,
+    ObICompactionFilter &compaction_filter,
+    ObMergeSSTableOp &sstable_op);
 
   /* EXECUTE SECTION */
   void time_guard_click(const uint16_t event)
@@ -256,6 +284,8 @@ public:
   }
   int get_merge_range(int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);
   bool has_filter() const { return nullptr != filter_ctx_.compaction_filter_; }
+  ObICompactionFilter *get_compaction_filter() const { return filter_ctx_.compaction_filter_; }
+  virtual int64_t get_recycle_version() const { return 0; }
   void collect_filter_statistics(const ObICompactionFilter::ObFilterStatistics &filter_statistics)
   {
     if (has_filter()) {
@@ -267,14 +297,6 @@ public:
     return progressive_merge_mgr_.is_inited()
          ? progressive_merge_mgr_.get_result_progressive_merge_step(get_tablet_id(), column_group_idx)
          : 0;
-  }
-  OB_INLINE int filter(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret)
-  {
-    int ret = OB_SUCCESS;
-    if (has_filter()) {
-      ret = filter_ctx_.compaction_filter_->filter(row, filter_ret);
-    }
-    return ret;
   }
   virtual int generate_macro_seq_info(const int64_t task_idx, int64_t &macro_start_seq);
   virtual int64_t get_start_task_idx() const { return 0; }
@@ -288,6 +310,7 @@ public:
     const bool is_main_table) const;
 
   void collect_tnode_dml_stat(const ObTransNodeDMLStat tnode_stat);
+  virtual ObSSTableMergeHistory &get_merge_history() = 0;
   void add_sstable_merge_info(ObSSTableMergeHistory &merge_history,
                               const share::ObDagId &dag_id,
                               const int64_t hash,
@@ -298,7 +321,10 @@ public:
                               const int64_t end_cg_idx = 0);
   int generate_participant_table_info(PartTableInfo &info) const;
   int generate_macro_id_list(char *buf, const int64_t buf_len, const blocksstable::ObSSTable *&sstable) const;
-  void generator_mds_filter_info(ObMergeStaticInfo &static_info) const;
+  void generator_mds_filter_info(
+    ObMergeStaticInfo &static_info,
+    ObMergeBlockInfo &block_info) const;
+  void generator_window_decision_log_info(ObMergeStaticInfo &static_info) const;
   virtual int get_macro_seq_by_stage(const ObGetMacroSeqStage stage, int64_t &macro_start_seq) const;
   int integrate_uncommit_tx_info(ObMemUncommitTxInfo &dest_uncommit_tx_info) const;
 
@@ -322,14 +348,13 @@ public:
   STATIC_PARAM_FUNC(bool, is_tenant_major_merge);
   STATIC_PARAM_FUNC(bool, is_full_merge);
   STATIC_PARAM_FUNC(bool, need_parallel_minor_merge);
-  STATIC_PARAM_FUNC(int64_t, read_base_version);
+  STATIC_PARAM_FUNC(bool, is_ha_compeleted);
   STATIC_PARAM_FUNC(int64_t, ls_rebuild_seq);
   STATIC_PARAM_FUNC(const storage::ObTablesHandleArray &, tables_handle);
   STATIC_PARAM_FUNC(const ObTabletMergeDagParam &, dag_param);
   STATIC_PARAM_FUNC(const SCN &, merge_scn);
   STATIC_PARAM_FUNC(const SCN &, rec_scn);
-  CO_STATIC_PARAM_FUNC(const ObCOMajorMergePolicy::ObCOMajorMergeType &, co_major_merge_type);
-  CO_STATIC_PARAM_FUNC(bool, is_rebuild_column_store);
+  CO_STATIC_PARAM_FUNC(const ObCOMajorMergeStrategy &, co_major_merge_strategy);
   PROGRESSIVE_FUNC(progressive_merge_round);
   PROGRESSIVE_FUNC(progressive_merge_num);
   PROGRESSIVE_FUNC(progressive_merge_step);
@@ -346,6 +371,9 @@ public:
   OB_INLINE int64_t get_snapshot() const { return static_param_.version_range_.snapshot_version_; }
   OB_INLINE int64_t get_major_sstable_count() const { return static_param_.get_major_sstable_count(); }
   virtual const share::ObPreWarmerParam &get_pre_warm_param() const { return static_param_.pre_warm_param_; }
+  int64_t get_read_base_version() const { return static_param_.merge_version_range_.base_version_; } // meaningful in major
+  OB_INLINE bool is_build_all_cg_only() const { return static_param_.is_build_all_cg_only(); }
+  OB_INLINE bool only_use_row_store() const { return static_param_.only_use_row_store(); }
   int get_storage_schema(ObStorageSchema *&schema);
 
   /* SS ONLY */
@@ -353,6 +381,7 @@ public:
 
   /* UTILITY FUNC */
   int swap_tablet();
+  int update_storage_schema_if_needed(ObStorageSchema &new_schema);
   static bool need_swap_tablet(
     ObProtectedMemtableMgrHandle &memtable_mgr_handle,
     const int64_t row_count,
@@ -364,11 +393,6 @@ public:
   virtual int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
-  OB_INLINE int get_schema_info_from_tables(
-    const ObTablesHandleArray &merge_tables_handle,
-    const int64_t column_cnt_in_schema,
-    int64_t &max_column_cnt_in_memtable,
-    int64_t &max_schema_version_in_memtable);
   int cal_major_merge_param(const bool force_full_merge,
                             ObProgressiveMergeMgr &progressive_mgr);
   int init_parallel_merge_ctx();
@@ -402,12 +426,14 @@ protected:
   int prepare_from_medium_compaction_info(const ObMediumCompactionInfo *medium_info); // for major
   int get_meta_compaction_info(); // for meta major
   int get_convert_compaction_info(); // for convert co major merge
+  int check_need_create_compaction_filter(const int64_t filter_max_version, bool &need_flag);
   int swap_tablet(ObGetMergeTablesResult &get_merge_table_result); // for major
   int check_medium_info(
     const ObMediumCompactionInfo &next_medium_info,
     const int64_t last_major_snapshot,
     const bool force_check);
-
+  int try_update_storage_schema(ObStorageSchema &new_schema);
+  int get_table_schema(const uint64_t schema_version, const ObTableSchema *&table_schema, ObSchemaGetterGuard &schema_guard);
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
 public:

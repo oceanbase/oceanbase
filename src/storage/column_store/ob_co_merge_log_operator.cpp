@@ -195,7 +195,7 @@ int ObCOMergeLogFileWriter::write_merge_log(const ObMergeLog &log, const blockss
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid merge log", K(ret), K(log));
   } else {
-    for (int64_t i = 0; ObMergeLog::REPLAY != log.op_ && OB_SUCC(ret) && i < cg_count_; i++) {
+    for (int64_t i = 0; !log.is_range_mergelog() && OB_SUCC(ret) && i < cg_count_; i++) {
       if (OB_ISNULL(full_row)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("full row is null", K(ret));
@@ -360,7 +360,7 @@ int ObCOMergeLogFileReader::get_next_log(ObMergeLog &mergelog, const blocksstabl
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid merge log", K(ret), K(merge_log_));
   } else if (FALSE_IT(mergelog = merge_log_)) {
-  } else if (ObMergeLog::REPLAY != merge_log_.op_) {
+  } else if (!merge_log_.is_range_mergelog()) {
     if (OB_FAIL(inner_row_read(row_log_id))) {
       LOG_WARN("failed to read row", K(ret));
     } else if (row_log_id != log_id) {

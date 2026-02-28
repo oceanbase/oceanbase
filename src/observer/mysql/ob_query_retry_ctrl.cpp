@@ -14,7 +14,7 @@
 
 #include "ob_query_retry_ctrl.h"
 #include "pl/ob_pl.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "observer/mysql/obmp_query.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
@@ -84,6 +84,7 @@ void ObRetryPolicy::sleep_before_local_retry(ObRetryParam &v,
       sleep_us = remain_us;
     }
     if (sleep_us > 0) {
+      oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
       LOG_INFO("will sleep", K(sleep_us), K(remain_us), K(base_sleep_us),
                K(retry_sleep_type), K(v.stmt_retry_times_), K(v.err_), K(timeout_timestamp));
       THIS_WORKER.sched_wait();
@@ -303,7 +304,8 @@ public:
       v.no_more_test_ = true;
     } else if (is_direct_load(v) && !is_load_local(v)) {
       if (is_direct_load_retry_err(err)) {
-        if (OB_SQL_RETRY_SPM == err) {
+        if (OB_SQL_RETRY_SPM == err ||
+            OB_AP_QUERY_NEED_RETRY == err) {
           v.retry_type_ = RETRY_TYPE_LOCAL;
         } else {
           try_packet_retry(v);
@@ -405,6 +407,14 @@ public:
           v.retry_type_ = RETRY_TYPE_NONE;
           v.no_more_test_ = true;
         }
+        LOG_WARN("schema error, check retry", K(v.retry_type_), K(v.err_),
+                 K(global_tenant_version_start),
+                 K(local_tenant_version_latest),
+                 K(local_tenant_version_start),
+                 K(global_sys_version_start),
+                 K(local_sys_version_latest),
+                 K(local_sys_version_start),
+                 K(local_schema_not_full));
       }
     }
   }
@@ -486,9 +496,25 @@ public:
   ~ObLockRowConflictRetryPolicy() = default;
   virtual void test(ObRetryParam &v) const override
   {
+    // handle lock conflict info
+    bool is_wait_lock_timeout = false;
+    lockwaitmgr::ObLockWaitMgr *lock_wait_mgr = MTL(lockwaitmgr::ObLockWaitMgr*);
+    if (OB_ISNULL(lock_wait_mgr)) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "lock wait mgr should not be NULL");
+    } else {
+      lock_wait_mgr->handle_lock_conflict(v.result_.get_exec_context(),
+                                          v.err_,
+                                          v.session_,
+                                          is_wait_lock_timeout);
+    }
     // sql which in pl will local retry first. see ObInnerSQLConnection::process_retry.
     // sql which not in pl use the same strategy to avoid never getting the lock.
-    if (v.is_from_pl_) {
+    if (is_wait_lock_timeout) {
+      // wait lock timeout, no need to retry
+      v.no_more_test_ = true;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.client_ret_ = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+    } else if (v.is_from_pl_) {
       if (v.local_retry_times_ <= 1 ||
           !v.session_.get_pl_can_retry() ||
           ObSQLUtils::is_in_autonomous_block(v.session_.get_cur_exec_ctx())) {
@@ -614,9 +640,25 @@ public:
   ~ObInnerLockRowConflictRetryPolicy() = default;
   virtual void test(ObRetryParam &v) const override
   {
+    // handle lock conflict info
+    bool is_wait_lock_timeout = false;
+    lockwaitmgr::ObLockWaitMgr *lock_wait_mgr = MTL(lockwaitmgr::ObLockWaitMgr*);
+    if (OB_ISNULL(lock_wait_mgr)) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "lock wait mgr should not be NULL");
+    } else {
+      lock_wait_mgr->handle_lock_conflict(v.result_.get_exec_context(),
+                                          v.err_,
+                                          v.session_,
+                                          is_wait_lock_timeout);
+    }
     // sql which in pl will local retry first. see ObInnerSQLConnection::process_retry.
     // sql which not in pl use the same strategy to avoid never getting the lock.
-    if (v.is_from_pl_) {
+    if (is_wait_lock_timeout) {
+      // wait lock timeout, no need to retry
+      v.no_more_test_ = true;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.client_ret_ = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+    } else if (v.is_from_pl_) {
       if (v.local_retry_times_ <= 1 ||
           !v.session_.get_pl_can_retry() ||
           ObSQLUtils::is_in_autonomous_block(v.session_.get_cur_exec_ctx())) {
@@ -807,6 +849,27 @@ void ObQueryRetryCtrl::location_error_nothing_readable_proc(ObRetryParam &v)
   location_error_proc(v);
   if (can_start_retry_wait_event(v.retry_type_)) {
     start_location_error_retry_wait_event(v.session_ ,v.err_);
+  }
+}
+
+void ObQueryRetryCtrl::no_replica_valid_proc(ObRetryParam &v)
+{
+  int ret = OB_SUCCESS;
+  bool ap_query_replica_fallback = true;
+  // Only retry when route_to_column_replica is set and ap_query_replica_fallback is true
+  if (!v.session_.get_route_to_column_replica()) {
+    empty_proc(v);
+  } else if (OB_FAIL(v.session_.get_sys_variable(share::SYS_VAR_AP_QUERY_REPLICA_FALLBACK,
+                                                 ap_query_replica_fallback))) {
+    LOG_WARN("failed to get ap_query_replica_fallback", K(ret));
+    empty_proc(v);
+  } else if (!ap_query_replica_fallback) {
+    empty_proc(v);
+  } else {
+    // Set route_to_column_replica to false before retry
+    v.session_.set_route_to_column_replica(false);
+    // Use the same retry logic as OB_NO_READABLE_REPLICA
+    location_error_nothing_readable_proc(v);
   }
 }
 
@@ -1095,7 +1158,7 @@ void ObQueryRetryCtrl::after_func(ObRetryParam &v)
   }
   // bug fix, reset lock_wait_mgr node before doing local retry
   if (RETRY_TYPE_LOCAL == v.retry_type_) {
-    rpc::ObLockWaitNode* node = MTL(memtable::ObLockWaitMgr*)->get_thread_node();
+    rpc::ObLockWaitNode* node = MTL(lockwaitmgr::ObLockWaitMgr*)->get_thread_node();
     if (NULL != node) {
       node->reset_need_wait();
     }
@@ -1159,6 +1222,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("LOCATION", OB_LOCATION_LEADER_NOT_EXIST,       location_error_nothing_readable_proc, inner_location_error_nothing_readable_proc, ObDASRetryCtrl::tablet_location_retry_proc);
   ERR_RETRY_FUNC("LOCATION", OB_LS_LOCATION_LEADER_NOT_EXIST,    location_error_nothing_readable_proc, inner_location_error_nothing_readable_proc, ObDASRetryCtrl::tablet_location_retry_proc);
   ERR_RETRY_FUNC("LOCATION", OB_NO_READABLE_REPLICA,             location_error_nothing_readable_proc, inner_location_error_nothing_readable_proc, ObDASRetryCtrl::tablet_location_retry_proc);
+  ERR_RETRY_FUNC("LOCATION", OB_NO_REPLICA_VALID,                no_replica_valid_proc,               empty_proc,                                  nullptr);
   ERR_RETRY_FUNC("LOCATION", OB_NOT_MASTER,                      location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
   ERR_RETRY_FUNC("LOCATION", OB_RS_NOT_MASTER,                   location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
   ERR_RETRY_FUNC("LOCATION", OB_RS_SHUTDOWN,                     location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
@@ -1207,6 +1271,7 @@ int ObQueryRetryCtrl::init()
 
   /* sql */
   ERR_RETRY_FUNC("SQL",      OB_ERR_INSUFFICIENT_PX_WORKER,      px_thread_not_enough_proc,  short_wait_retry_proc,                                nullptr);
+  ERR_RETRY_FUNC("SQL",      OB_AP_QUERY_NEED_RETRY,             force_local_retry_proc,     force_local_retry_proc,                               nullptr);
   // create a new interval part when inserting a row which has no matched part,
   // wait and retry, will see new part
   ERR_RETRY_FUNC("SQL",      OB_NO_PARTITION_FOR_INTERVAL_PART,  short_wait_retry_proc,             short_wait_retry_proc,                         nullptr);

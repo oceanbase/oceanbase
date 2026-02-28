@@ -14,6 +14,7 @@
 #include "ob_px_rpc_processor.h"
 #include "ob_px_sqc_handler.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "sql/engine/px/ob_px_target_mgr.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "share/detect/ob_detect_manager_utils.h"
@@ -654,10 +655,31 @@ int ObPxTenantTargetMonitorP::process()
   bool is_leader;
   uint64_t leader_version;
   result_.set_tenant_id(tenant_id);
-  if (OB_FAIL(OB_PX_TARGET_MGR.is_leader(tenant_id, is_leader))) {
+  bool enable_px_dop_dynamic_scaling = false;
+  if (OB_FAIL(OB_PX_TARGET_MGR.get_enable_px_dop_dynamic_scaling(tenant_id_, enable_px_dop_dynamic_scaling))) {
+    LOG_WARN("get tenant enable_px_dop_dynamic_scaling failed", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(OB_PX_TARGET_MGR.is_leader(tenant_id, is_leader))) {
     LOG_ERROR("get is_leader failed", K(ret), K(tenant_id));
   } else if (!is_leader) {
     result_.set_status(MONITOR_NOT_MASTER);
+  } else if (enable_px_dop_dynamic_scaling) {
+    // follower report absolute target_used instead of increment, so no need check
+    // need_refresh_all_/prev_leader_server_index/version which are pointing to consistent base value.
+    result_.set_status(MONITOR_READY);
+    if (OB_UNLIKELY(arg_.addr_target_array_.count() != 1)) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected addr target array count", K(arg_.addr_target_array_));
+    } else {
+      ObAddr &server = arg_.addr_target_array_.at(0).addr_;
+      int64_t peer_used = arg_.addr_target_array_.at(0).target_;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(OB_PX_TARGET_MGR.set_peer_realtime_target_used(tenant_id, server, peer_used))) {
+        LOG_WARN("set thread count failed", K(tmp_ret), K(tenant_id), K(server), K(peer_used));
+      }
+    }
+    ObPxGlobalResGather gather(result_);
+    if (OB_FAIL(OB_PX_TARGET_MGR.gather_global_target_usage(tenant_id, gather))) {
+      LOG_WARN("get global thread count failed", K(ret), K(tenant_id));
+    }
   } else if (arg_.need_refresh_all_ || prev_leader_server_index != leader_server_index) {
     if (OB_FAIL(OB_PX_TARGET_MGR.reset_leader_statistics(tenant_id))) {
       LOG_ERROR("reset leader statistics failed", K(ret));
@@ -680,7 +702,8 @@ int ObPxTenantTargetMonitorP::process()
       for (int i = 0; OB_SUCC(ret) && i < arg_.addr_target_array_.count(); i++) {
         ObAddr &server = arg_.addr_target_array_.at(i).addr_;
         int64_t peer_used_inc = arg_.addr_target_array_.at(i).target_;
-        if (OB_FAIL(OB_PX_TARGET_MGR.update_peer_target_used(tenant_id, server, peer_used_inc, leader_version))) {
+        if (OB_FAIL(OB_PX_TARGET_MGR.update_peer_target_used(tenant_id, server,
+                                                             peer_used_inc, leader_version))) {
           LOG_WARN("set thread count failed", K(ret), K(tenant_id), K(server), K(peer_used_inc));
         }
       }

@@ -230,6 +230,7 @@ public:
   // check macro block id valid
   virtual bool is_valid(const MacroBlockId &file_id) const { return false; }
   virtual bool has_effective_tablet_id() const { return false; }
+  virtual bool is_shared_tablet_sub_meta() const { return is_shared() && is_tablet_meta(); }
 #ifdef OB_BUILD_SHARED_STORAGE
   // path format reverse, macro id to local path
   virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
@@ -430,6 +431,7 @@ int ObStorageObjectTypeBase::get_macro_cache_type(const uint64_t effective_table
     LOG_WARN("invalid object type", KR(ret), K(type_));
   } else {
     switch (type_) {
+      // SHARED_TABLET_SUB_META is always treated as ObSSMacroCacheType::MACRO_BLOCK because it needs to be evicted
       case ObStorageObjectType::PRIVATE_TABLET_META: {
         macro_cache_type = ObSSMacroCacheType::META_FILE;
         break;
@@ -444,9 +446,10 @@ int ObStorageObjectTypeBase::get_macro_cache_type(const uint64_t effective_table
       }
     }
   }
-  if (macro_cache_type == ObSSMacroCacheType::MACRO_BLOCK) {
+  if ((macro_cache_type == ObSSMacroCacheType::MACRO_BLOCK) && !is_shared_tablet_sub_meta()) {
       // treat macro_cache_type as ObSSMacroCacheType::MACRO_BLOCK in default.
       // e.g., PRIVATE_DATA_MACRO, SHARED_MINI_DATA_MACRO, SHARED_MDS_MINI_DATA_MACRO, SHARED_MAJOR_DATA_MACRO...
+      // SHARED_TABLET_SUB_META is always treated as ObSSMacroCacheType::MACRO_BLOCK
     if (OB_UNLIKELY(use_effective_tablet_id && ObTabletID::INVALID_TABLET_ID == effective_tablet_id)) {
       // ObIndexBlockScanEstimator and ObSSTableSecMetaIterator do not fill effective_tablet_id.
       // preread io triggered by these routes has no effective_tablet_id.
@@ -520,51 +523,31 @@ int ObStorageObjectTypeBase::aio_read(
     if (OB_FAIL(local_cache_reader.aio_read(read_info, object_handle))) {
       LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
     }
+  } else if ((is_shared() && is_macro()) || is_shared_tablet_sub_meta()) {
+    ObSSShareMacroReader share_macro_reader;
+    if (OB_FAIL(share_macro_reader.aio_read(read_info, object_handle))) {
+      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
+    }
+  } else if (is_private() && is_macro()) {
+    ObSSPrivateMacroReader private_macro_reader;
+    if (OB_FAIL(private_macro_reader.aio_read(read_info, object_handle))) {
+      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
+    }
+  } else if (is_private() && is_tablet_meta()) {
+    ObSSPrivateTabletMetaReader private_tablet_meta_reader;
+    if (OB_FAIL(private_tablet_meta_reader.aio_read(read_info, object_handle))) {
+      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
+    }
+  } else if (is_tmp_file()) {
+    ObSSTmpFileReader tmp_file_reader;
+    if (OB_FAIL(tmp_file_reader.aio_read(read_info, object_handle))) {
+      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
+    }
   } else {
     switch (type_) {
-      case ObStorageObjectType::PRIVATE_DATA_MACRO:
-      case ObStorageObjectType::PRIVATE_META_MACRO: {
-        ObSSPrivateMacroReader private_macro_reader;
-        if (OB_FAIL(private_macro_reader.aio_read(read_info, object_handle))) {
-          LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-        }
-        break;
-      }
-      case ObStorageObjectType::PRIVATE_TABLET_META: {
-        ObSSPrivateTabletMetaReader private_tablet_meta_reader;
-        if (OB_FAIL(private_tablet_meta_reader.aio_read(read_info, object_handle))) {
-          LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-        }
-        break;
-      }
       case ObStorageObjectType::PRIVATE_SLOG_FILE: {
         ObSSPrivateSlogReader private_slog_reader;
         if (OB_FAIL(private_slog_reader.aio_read(read_info, object_handle))) {
-          LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-        }
-        break;
-      }
-      case ObStorageObjectType::SHARED_MINI_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MINI_META_MACRO:
-      case ObStorageObjectType::SHARED_MINOR_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MINOR_META_MACRO:
-      case ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MDS_MINI_META_MACRO:
-      case ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO:
-      case ObStorageObjectType::SHARED_MAJOR_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MAJOR_META_MACRO:
-      case ObStorageObjectType::SHARED_INC_MAJOR_DATA_MACRO:
-      case ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO: {
-        ObSSShareMacroReader share_macro_reader;
-        if (OB_FAIL(share_macro_reader.aio_read(read_info, object_handle))) {
-          LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-        }
-        break;
-      }
-      case ObStorageObjectType::TMP_FILE: {
-        ObSSTmpFileReader tmp_file_reader;
-        if (OB_FAIL(tmp_file_reader.aio_read(read_info, object_handle))) {
           LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
         }
         break;
@@ -605,55 +588,32 @@ int ObStorageObjectTypeBase::aio_write(
         LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
       }
     }
+  } else if ((is_shared() && is_macro()) || is_shared_tablet_sub_meta()) {
+    ObSSShareMacroWriter share_macro_writer;
+    if (OB_FAIL(share_macro_writer.aio_write(write_info, object_handle))) {
+      LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
+    }
+  } else if (is_private() && is_macro()) {
+    ObSSPrivateMacroWriter private_macro_writer;
+    if (OB_FAIL(private_macro_writer.aio_write(write_info, object_handle))) {
+      LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
+    }
+  } else if (is_private() && is_tablet_meta()) {
+    ObSSPrivateTabletMetaWriter private_tablet_meta_writer;
+    if (OB_FAIL(private_tablet_meta_writer.aio_write(write_info, object_handle))) {
+      LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
+    }
+  } else if (is_private() && is_tmp_file()) {
+    ObSSTmpFileWriter tmp_file_writer;
+    if (OB_FAIL(tmp_file_writer.aio_write(write_info, object_handle))) {
+      LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
+    }
   } else {
+    ObSSPrivateSlogWriter private_slog_writer;
     switch (type_) {
-      case ObStorageObjectType::PRIVATE_DATA_MACRO:
-      case ObStorageObjectType::PRIVATE_META_MACRO: {
-        ObSSPrivateMacroWriter private_macro_writer;
-        if (OB_FAIL(private_macro_writer.aio_write(write_info, object_handle))) {
-          if (OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
-            LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-          }
-        }
-        break;
-      }
-      case ObStorageObjectType::PRIVATE_TABLET_META: {
-        ObSSPrivateTabletMetaWriter private_tablet_meta_writer;
-        if (OB_FAIL(private_tablet_meta_writer.aio_write(write_info, object_handle))) {
-          LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-        }
-        break;
-      }
       case ObStorageObjectType::PRIVATE_SLOG_FILE: {
         ObSSPrivateSlogWriter private_slog_writer;
         if (OB_FAIL(private_slog_writer.aio_write(write_info, object_handle))) {
-          if (OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
-            LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-          }
-        }
-        break;
-      }
-      case ObStorageObjectType::SHARED_MINI_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MINI_META_MACRO:
-      case ObStorageObjectType::SHARED_MINOR_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MINOR_META_MACRO:
-      case ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MDS_MINI_META_MACRO:
-      case ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO:
-      case ObStorageObjectType::SHARED_MAJOR_DATA_MACRO:
-      case ObStorageObjectType::SHARED_MAJOR_META_MACRO:
-      case ObStorageObjectType::SHARED_INC_MAJOR_DATA_MACRO:
-      case ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO: {
-        ObSSShareMacroWriter share_macro_writer;
-        if (OB_FAIL(share_macro_writer.aio_write(write_info, object_handle))) {
-          LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-        }
-        break;
-      }
-      case ObStorageObjectType::TMP_FILE: {
-        ObSSTmpFileWriter tmp_file_writer;
-        if (OB_FAIL(tmp_file_writer.aio_write(write_info, object_handle))) {
           if (OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
             LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
           }
@@ -907,6 +867,7 @@ def generate_class_implementations():
         if cfg.get('is_valid') and cfg['is_valid'] != 'OB_NOT_SUPPORTED':
             cpp_f.write(f'\nbool {class_name}::is_valid(const MacroBlockId &file_id) const\n')
             cpp_f.write(extract_function_body(cfg['is_valid']))
+            cpp_f.write('\n')  # Add blank line after function
 
         # Collect shared storage function implementations to group them under one macro
         shared_storage_impls = []
@@ -925,7 +886,7 @@ def generate_class_implementations():
             shared_storage_impls.append(impl)
 
         if cfg.get('remote_path_to_macro_id') and cfg['remote_path_to_macro_id'] != 'OB_NOT_SUPPORTED':
-            impl = f'\nint {class_name}::remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const\n'
+            impl = f'int {class_name}::remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const\n'
             impl += extract_function_body(cfg['remote_path_to_macro_id'])
             shared_storage_impls.append(impl)
 
@@ -956,18 +917,23 @@ def generate_class_implementations():
         # Write shared storage implementations under one macro
         if shared_storage_impls:
             cpp_f.write('\n#ifdef OB_BUILD_SHARED_STORAGE')
-            for impl in shared_storage_impls:
+            for i, impl in enumerate(shared_storage_impls):
                 cpp_f.write('\n' + impl)
+                # Add blank line between functions within the #ifdef block
+                if i < len(shared_storage_impls) - 1:
+                    cpp_f.write('\n')
             cpp_f.write('\n#endif\n')
 
         if cfg.get('opt_to_string') and cfg['opt_to_string'] != 'OB_NOT_SUPPORTED':
             cpp_f.write(f'\nint {class_name}::opt_to_string(char *buf, const int64_t buf_len, int64_t &pos,\n')
             cpp_f.write('  const ObStorageObjectOpt &opt) const\n')
             cpp_f.write(extract_function_body(cfg['opt_to_string']))
+            cpp_f.write('\n')  # Add blank line after function
 
         if cfg.get('get_object_id') and cfg['get_object_id'] != 'OB_NOT_SUPPORTED':
             cpp_f.write(f'\nint {class_name}::get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const\n')
             cpp_f.write(extract_function_body(cfg['get_object_id']))
+            cpp_f.write('\n')  # Add blank line after function
     cpp_f.write('\n')
 
 def generate_get_instance_method():

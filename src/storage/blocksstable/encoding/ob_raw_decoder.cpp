@@ -229,7 +229,7 @@ bool init_raw_fix_fast_filter_funcs() {
   res = ObNDArrayIniter<RawFixFilterArrayInit, 2, 4, 6>::apply();
   // Dispatch simd version cmp funcs
 #if defined ( __x86_64__ )
-  if (is_avx512_valid()) {
+  if (common::is_arch_supported(ObTargetArch::AVX512)) {
     res = init_raw_fix_simd_filter_funcs();
   }
 #elif defined ( __aarch64__ ) && defined ( __ARM_NEON )

@@ -177,19 +177,23 @@ int ObSqlMemMgrProcessor::update_cache_size(ObIAllocator *allocator, int64_t cac
 
 // 更新operator使用的memory size
 // 这里只关注终态，即申请了多少，后续每次调用，则更新，最后一次需要减为0
-int ObSqlMemMgrProcessor::update_used_mem_size(int64_t used_size)
+void ObSqlMemMgrProcessor::update_used_mem_size(int64_t used_size)
 {
-  int ret = OB_SUCCESS;
   int64_t delta_size = used_size - profile_.mem_used_;
   if (OB_NOT_NULL(op_monitor_info_)) {
     op_monitor_info_->update_memory(delta_size);
   }
-  if (delta_size > 0) {
-    if (OB_NOT_NULL(sql_mem_mgr_) && OB_NOT_NULL(mem_callback_)) {
-      mem_callback_->alloc(delta_size);
+  if (OB_NOT_NULL(sql_mem_mgr_) && OB_NOT_NULL(mem_callback_)) {
+    total_alloc_size_ += delta_size;
+    if (OB_UNLIKELY(total_alloc_size_ < 0)) {
+      int64_t ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("total_alloc_size_ is less than 0",
+                K(total_alloc_size_), "free_size", delta_size, K(used_size),
+                "profile_mem_used", profile_.mem_used_);
     }
-  } else {
-    if (OB_NOT_NULL(sql_mem_mgr_) && OB_NOT_NULL(mem_callback_)) {
+    if (delta_size > 0) {
+      mem_callback_->alloc(delta_size);
+    } else {
       mem_callback_->free(-delta_size);
     }
   }
@@ -200,7 +204,6 @@ int ObSqlMemMgrProcessor::update_used_mem_size(int64_t used_size)
   profile_.data_size_ += profile_.delta_size_;
   profile_.pre_mem_used_ = profile_.mem_used_;
   reset_delta_size();
-  return ret;
 }
 
 // 当auto模式打开，但由于"under-estimate"导致没有采用auto管理，内存设置了一个固定大小
@@ -212,21 +215,15 @@ int ObSqlMemMgrProcessor::try_upgrade_auto_mgr(ObIAllocator *allocator, int64_t 
     int64_t max_area_size = max(default_available_mem_size_, MAX_SQL_MEM_SIZE);
     if (sql_mem_mgr_->enable_auto_memory_mgr()
         && sql_mem_mgr_->get_global_bound_size() < max_area_size) {
-    } else if (OB_FAIL(update_used_mem_size(0))) {
-      LOG_WARN("failed to update used mem size", K(ret));
-    } else if (OB_FAIL(init(allocator, tenant_id_,
-                            max_area_size * (EXTEND_RATIO + 100) /100,
-                            profile_.get_operator_type(),
-                            profile_.get_operator_id(), profile_.get_exec_info()))) {
-      LOG_WARN("failed to upgrade sql memory manager", K(ret));
-    } else if (is_auto_mgr()) {
-      // 由于之前未注册，所以对内存统计不会反应到sql mem manager中，但现在注册了，则需要重新更新下内存值
-      if (OB_FAIL(update_used_mem_size(mem_used))) {
-        LOG_WARN("failed to update used mem_size", K(ret));
+    } else {
+      update_used_mem_size(0);
+      if (OB_FAIL(init(allocator, tenant_id_,
+                              max_area_size * (EXTEND_RATIO + 100) /100,
+                              profile_.get_operator_type(),
+                              profile_.get_operator_id(), profile_.get_exec_info()))) {
+        LOG_WARN("failed to upgrade sql memory manager", K(ret));
       }
-      LOG_TRACE("trace upgrade auto manager", K(profile_), K(mem_used), K(max_area_size));
-    } else if (OB_FAIL(update_used_mem_size(mem_used))) {
-      LOG_WARN("failed to update used mem_size", K(ret));
+      update_used_mem_size(mem_used);
     }
   }
   return ret;

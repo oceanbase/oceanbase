@@ -14,16 +14,22 @@
 #define OCEANBASE_SQL_OPTIMITZER_OB_LOG_DISTINCT_
 #include "lib/container/ob_se_array.h"
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogDistinct : public ObLogicalOperator
 {
 public:
+  using GroupDistintctExprs = ObSqlArray<ObRawExpr *>;
+public:
   ObLogDistinct(ObLogPlan &plan)
       : ObLogicalOperator(plan),
+        distinct_exprs_(plan.get_allocator()),
         algo_(AGGREGATE_UNINITIALIZED),
         step_(SINGLE),
         is_block_mode_(false),
@@ -31,7 +37,10 @@ public:
         total_ndv_(-1.0),
         force_push_down_(false),
         input_sorted_(false),
-        has_push_down_(false)
+        has_push_down_(false),
+        group_distinct_exprs_(plan.get_allocator()),
+        grouping_id_(nullptr),
+        has_non_distinct_aggr_params_(false)
   { }
   virtual ~ObLogDistinct()
   { }
@@ -62,7 +71,7 @@ public:
   virtual int est_width() override;
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   int inner_est_cost(const int64_t parallel, double child_card, double &child_ndv, double &op_cost);
-  virtual bool is_block_op() const override { return false; }
+  virtual bool is_block_op() const override { return group_distinct_exprs_.count() > 0 ? is_block_mode_ : false; }
   virtual int compute_fd_item_set() override;
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
   virtual int allocate_granule_pre(AllocGIContext &ctx) override;
@@ -90,8 +99,24 @@ public:
   {
     has_push_down_ = has_push_down;
   }
+  int set_group_distinct_exprs(const common::ObIArray<GroupDistintctExprs> &group_distinct_exprs)
+  {
+    return group_distinct_exprs_.assign(group_distinct_exprs);
+  }
+  ObIArray<GroupDistintctExprs>& get_group_distinct_exprs()
+  {
+    return group_distinct_exprs_;
+  }
+  ObRawExpr *get_grouping_id() const { return grouping_id_; }
+  void set_grouping_id(ObRawExpr *grouping_id) { grouping_id_ = grouping_id; }
+
+  void set_has_non_distinct_aggr_params(bool has_non_distinct_aggr_params)
+  {
+    has_non_distinct_aggr_params_ = has_non_distinct_aggr_params;
+  }
+  bool get_has_non_distinct_aggr_params() const { return has_non_distinct_aggr_params_; }
 private:
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> distinct_exprs_;
+  ObSqlArray<ObRawExpr*> distinct_exprs_;
   AggregateAlgo algo_;
 
   AggregatePathType step_;
@@ -102,6 +127,9 @@ private:
   bool is_partition_gi_;
   bool input_sorted_;
   bool has_push_down_;
+  ObSqlArray<GroupDistintctExprs, true> group_distinct_exprs_;
+  ObRawExpr *grouping_id_;
+  bool has_non_distinct_aggr_params_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogDistinct);
 };

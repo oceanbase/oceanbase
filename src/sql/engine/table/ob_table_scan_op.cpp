@@ -156,6 +156,8 @@ int ObTableScanCtDef::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
   if (is_new_query_range) {
     OB_UNIS_ENCODE(pre_range_graph_);
   }
+  OB_UNIS_ENCODE(hint_enabled_caches_);
+  OB_UNIS_ENCODE(hint_disabled_caches_);
   return ret;
 }
 
@@ -194,6 +196,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   if (is_new_query_range) {
     OB_UNIS_ADD_LEN(pre_range_graph_);
   }
+  OB_UNIS_ADD_LEN(hint_enabled_caches_);
+  OB_UNIS_ADD_LEN(hint_disabled_caches_);
   return len;
 }
 
@@ -276,6 +280,8 @@ int ObTableScanCtDef::deserialize(const char *buf, const int64_t data_len, int64
       if (is_new_query_range) {
         OB_UNIS_DECODE(pre_range_graph_);
       }
+      OB_UNIS_DECODE(hint_enabled_caches_);
+      OB_UNIS_DECODE(hint_disabled_caches_);
     }
 
     pos = pos_orig + len;
@@ -667,7 +673,9 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     est_cost_simple_info_(),
     pseudo_column_exprs_(alloc),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
-    lake_table_format_(share::ObLakeTableFormat::INVALID)
+    lake_table_format_(share::ObLakeTableFormat::INVALID),
+    ft_doc_id_expr_idx_(-1),
+    fts_index_type_(share::schema::OB_FTS_INDEX_TYPE_INVALID)
 {
 }
 
@@ -697,7 +705,9 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     parser_properties_,
                     pseudo_column_exprs_,
                     lob_inrow_threshold_,
-                    lake_table_format_);
+                    lake_table_format_,
+                    ft_doc_id_expr_idx_,
+                    fts_index_type_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {
@@ -726,7 +736,8 @@ DEF_TO_STRING(ObTableScanSpec)
        K_(parser_name),
        K_(parser_properties),
        K_(lob_inrow_threshold),
-       K_(lake_table_format));
+       K_(lake_table_format),
+       K_(ft_doc_id_expr_idx));
   J_OBJ_END();
   return pos;
 }
@@ -1423,12 +1434,19 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   if (OB_SUCC(ret)) {
     if (OB_FAIL(tsc_ctdef.flashback_item_.set_flashback_query_info(eval_ctx_, das_rtdef))) {
       LOG_WARN("failed to set flashback query snapshot version", K(ret));
-    } else if (share::is_oracle_mapping_real_virtual_table(MY_SPEC.ref_table_id_)
-              && das_ctdef.ref_table_id_ < OB_MIN_SYS_TABLE_INDEX_ID) {
-      //not index scan, keep need_scn_
-    } else if (MY_SPEC.ref_table_id_ != das_ctdef.ref_table_id_) {
-      //only data table scan need to set row scn flag
-      das_rtdef.need_scn_ = false;
+    }
+    // das_rtdef.need_scn_ could be set to das_ctdef.need_scn_ [which can be pre-calculated in ctdef]
+    // Issue: In older versions, the serialized need_scn_ was always false.
+    // Analysis:
+    // 1. If tsc_ctdef.flashback_item_.need_scn_ is true, the value of das_rtdef.need_scn_ might be incorrect.
+    // 2. If tsc_ctdef.flashback_item_.need_scn_ is false, the value of das_rtdef.need_scn_ is guaranteed to be correct.
+    // Solution:
+    // Traverse column_ids_ again when the flashback item's need_scn_ is true.
+    // Result:
+    // Avoids using the unreliable need_scn_ information and eliminates version compatibility issues,
+    // though it requires iterating through column_ids_ during every DAS initialization in certain scenarios.
+    if (tsc_ctdef.flashback_item_.need_scn_) {
+      das_rtdef.need_scn_ = das_ctdef.check_need_fill_scn();
     }
   }
   if (OB_SUCC(ret)) {
@@ -1982,9 +2000,7 @@ int ObTableScanOp::inner_open()
       if (PHY_TABLE_SCAN == MY_SPEC.get_type()) {
         // heap table ddl doesn't have sample scan, report checksum directly
         report_checksum_ = true;
-      } else if (PHY_BLOCK_SAMPLE_SCAN == MY_SPEC.get_type() ||
-                 PHY_ROW_SAMPLE_SCAN == MY_SPEC.get_type() ||
-                 PHY_DDL_BLOCK_SAMPLE_SCAN == MY_SPEC.get_type()) {
+      } else if (IS_SAMPLE_SCAN(MY_SPEC.get_type())) {
         // normal ddl need sample scan first, report_cheksum_ will be marked as true when rescan
         report_checksum_ = false;
       }
@@ -3890,7 +3906,9 @@ int ObTableScanOp::transform_physical_rowid_rowkey(ObIAllocator &allocator,
 int ObTableScanOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(MY_SPEC.is_spatial_ddl())) {
+  if (OB_UNLIKELY(EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM)) {
+    ret = EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM;
+  } else if (OB_UNLIKELY(MY_SPEC.is_spatial_ddl())) {
     if (OB_FAIL(inner_get_next_spatial_index_row())) {
       if (ret != OB_ITER_END) {
         LOG_WARN("spatial index ddl : get next spatial index row failed", K(ret));

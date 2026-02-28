@@ -273,7 +273,7 @@ int fast_compare_normal(const unsigned char *s, const unsigned char *t,
 
 CompareByteFunc get_fast_compare_func()
 {
-  return blocksstable::is_avx512_valid()
+  return common::is_arch_supported(ObTargetArch::AVX512)
       ? fast_compare_simd
       : fast_compare_normal;
 }
@@ -1066,9 +1066,8 @@ int ObSortOpImpl::preprocess_dump(bool &dumped)
   if (OB_FAIL(sql_mem_processor_.get_max_available_mem_size(
       &mem_context_->get_malloc_allocator()))) {
     LOG_WARN("failed to get max available memory size", K(ret));
-  } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
-    LOG_WARN("failed to update used memory size", K(ret));
   } else {
+    sql_mem_processor_.update_used_mem_size(get_total_used_size());
     dumped = need_dump();
     if (dumped) {
       if (!sql_mem_processor_.is_auto_mgr()) {
@@ -1147,8 +1146,7 @@ int ObSortOpImpl::before_add_row()
       [&](int64_t cur_cnt){ return rows_->count() > cur_cnt; },
       updated))) {
       LOG_WARN("failed to update max available mem size periodically", K(ret));
-    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
-      LOG_WARN("failed to update used memory size", K(ret));
+    } else if (updated && FALSE_IT(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
     } else if (GCONF.is_sql_operator_dump_enabled()) {
       if (rows_->count() >= MAX_ROW_CNT) {
         // 最大2G，超过2G会扩容到4G，4G申请会失败
@@ -2408,8 +2406,8 @@ int ObSortOpImpl::add_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
                                 [&](int64_t cur_cnt){ return topn_heap_->heap_.count() > cur_cnt; },
                                 updated))) {
         LOG_WARN("failed to get max available memory size", K(ret));
-    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
-      LOG_WARN("failed to update used memory size", K(ret));
+    } else if (updated) {
+      sql_mem_processor_.update_used_mem_size(get_total_used_size());
     }
   }
 

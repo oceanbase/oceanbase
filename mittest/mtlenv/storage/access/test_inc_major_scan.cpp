@@ -15,7 +15,7 @@
 namespace oceanbase {
 namespace storage {
 
-class TestIncMajorScan : public TestScanBasic
+class TestIncMajorScan : public TestScanBasic, public ::testing::WithParamInterface<bool>
 {
 public:
   TestIncMajorScan();
@@ -40,14 +40,18 @@ void TestIncMajorScan::TearDownTestCase()
 TestIncMajorScan::TestIncMajorScan()
     : TestScanBasic("test_inc_major_scan") {}
 
-void TestIncMajorScan::SetUp() { TestScanBasic::SetUp(); }
+void TestIncMajorScan::SetUp() {
+  const bool use_cs_encoding = GetParam();
+  row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
+  TestScanBasic::SetUp();
+}
 
 void TestIncMajorScan::TearDown()
 {
   TestScanBasic::TearDown();
 }
 
-TEST_F(TestIncMajorScan, test_basic_multi_sst_scan)
+TEST_P(TestIncMajorScan, test_basic_multi_sst_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -271,7 +275,7 @@ TEST_F(TestIncMajorScan, test_basic_multi_sst_scan)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorScan, test_out_of_version_inc_major)
+TEST_P(TestIncMajorScan, test_out_of_version_inc_major)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -446,7 +450,7 @@ TEST_F(TestIncMajorScan, test_out_of_version_inc_major)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorScan, test_out_of_version_minor)
+TEST_P(TestIncMajorScan, test_out_of_version_minor)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -597,7 +601,7 @@ TEST_F(TestIncMajorScan, test_out_of_version_minor)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorScan, test_mixed_inc_major_scan)
+TEST_P(TestIncMajorScan, test_mixed_inc_major_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -823,7 +827,7 @@ TEST_F(TestIncMajorScan, test_mixed_inc_major_scan)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorScan, test_fresh_table_empty_range)
+TEST_P(TestIncMajorScan, test_fresh_table_empty_range)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -914,7 +918,7 @@ TEST_F(TestIncMajorScan, test_fresh_table_empty_range)
   multi_scan_merge.reset();
 }
 
-// TEST_F(TestIncMajorScan, test_multi_inc_refresh_table)
+// TEST_P(TestIncMajorScan, test_multi_inc_refresh_table)
 // {
 //   int ret = OB_SUCCESS;
 //   ObTableStoreIterator table_store_iter;
@@ -1082,6 +1086,11 @@ TEST_F(TestIncMajorScan, test_fresh_table_empty_range)
 //   handle4.reset();
 //   scan_merge.reset();
 // }
+
+INSTANTIATE_TEST_CASE_P(
+  FlatAndCSEncoding,
+  TestIncMajorScan,
+  ::testing::Values(false, true));
 
 } // namespace storage
 } // namespace oceanbase

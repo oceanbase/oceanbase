@@ -343,8 +343,8 @@ private:
       if (OB_FAIL(sql_mem_processor_.update_max_available_mem_size_periodically(
             &mem_context_->get_malloc_allocator(), checker, updated))) {
         SQL_ENG_LOG(WARN, "failed to get max available memory size", K(ret));
-      } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(mem_context_->used()))) {
-        SQL_ENG_LOG(WARN, "failed to update used memory size", K(ret));
+      } else if (updated) {
+        sql_mem_processor_.update_used_mem_size(mem_context_->used());
       }
     }
     return ret;
@@ -435,19 +435,16 @@ private:
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(buckets)) {
-      BucketArray *array_ptr = nullptr;
       void *buckets_buf = nullptr;
       if (OB_ISNULL(buckets_buf = allocator_.alloc(sizeof(BucketArray)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_ENG_LOG(WARN, "failed to allocate memory", K(ret));
-      } else if (FALSE_IT(array_ptr = new (buckets_buf) BucketArray(
+      } else if (FALSE_IT(buckets = new (buckets_buf) BucketArray(
                           *reinterpret_cast<common::ModulePageAllocator *>(page_allocator_)))) {
-      } else if (OB_FAIL(array_ptr->init(bucket_num))) {
-        allocator_.free(buckets_buf);
+      } else if (OB_FAIL(buckets->init(bucket_num))) {
         SQL_ENG_LOG(WARN, "failed to init bucket", K(ret), K(bucket_num));
       } else {
-        array_ptr->set_all(nullptr);
-        buckets = array_ptr;
+        buckets->set_all(nullptr);
       }
     } else {
       buckets->reuse();

@@ -45,18 +45,23 @@ public:
   {
     base_version_ = base_version;
   }
+  inline void set_inc_major_trans_version(const share::SCN &inc_major_trans_version)
+  {
+    inc_major_trans_version_ = inc_major_trans_version;
+  }
   void inc_empty_read(ObSSTableReadHandle &read_handle);
 protected:
   virtual int inner_get_next_row(
       int64_t &current,
       ObStoreRowLockState *&lock_state);
   virtual int check_row(
-      const transaction::ObTransID &trans_id,
-      const ObRowHeader *row_header,
-      ObStoreRowLockState &lock_state,
+      const ObDmlRowFlag row_flag,
+      const ObMultiVersionRowFlag mvcc_row_flag,
+      const transaction::ObTransID trans_id,
+      ObStoreRowLockState& lock_state,
       bool &need_stop);
   virtual void check_row_in_major_sstable(bool &need_stop);
-  int check_truncate_part_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered);
+  int check_mds_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered);
   inline void check_base_version(const int64_t trans_version, bool &is_filtered);
 protected:
   bool check_exist_;
@@ -64,6 +69,7 @@ protected:
   ObStoreRowLockState *lock_state_;
   ObStoreRowLockState tmp_lock_state_;
   int64_t base_version_;
+  share::SCN inc_major_trans_version_;
 };
 
 class ObMicroBlockRowLockMultiChecker : public ObMicroBlockRowLockChecker {
@@ -82,9 +88,10 @@ protected:
       int64_t &current,
       ObStoreRowLockState *&lock_state);
   virtual int check_row(
-      const transaction::ObTransID &trans_id,
-      const ObRowHeader *row_header,
-      ObStoreRowLockState &lock_state,
+      const ObDmlRowFlag row_flag,
+      const ObMultiVersionRowFlag mvcc_row_flag,
+      const transaction::ObTransID trans_id,
+      ObStoreRowLockState& lock_state,
       bool &need_stop);
   virtual void check_row_in_major_sstable(bool &need_stop);
   int seek_forward();

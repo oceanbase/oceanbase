@@ -67,8 +67,8 @@ struct ObNotNullContext
   ObNotNullContext(ObExecContext *exec_ctx,
                    ObIAllocator *allocator,
                    const ObDMLStmt *stmt,
-                   bool is_for_ctas = false) 
-    : exec_ctx_(exec_ctx), allocator_(allocator), 
+                   bool is_for_ctas = false)
+    : exec_ctx_(exec_ctx), allocator_(allocator),
       is_for_ctas_(is_for_ctas), stmt_(stmt)
   {}
   
@@ -103,7 +103,6 @@ public:
   // params
   ObExecContext *exec_ctx_;
   ObIAllocator *allocator_;
-  
   // for CTAS in oracle mode
   bool is_for_ctas_;
   
@@ -141,9 +140,9 @@ class ObTransformUtils
 
     ObRelIds table_set_;
     ObSEArray<ObRawExpr *, 4> const_exprs_;
-    EqualSets equal_sets_;
-    ObFdItemSet fd_sets_;
-    ObFdItemSet candi_fd_sets_;
+    TemporaryEqualSets equal_sets_;
+    ObFdItemLocal fd_sets_;
+    ObFdItemLocal candi_fd_sets_;
     ObSEArray<ObRawExpr *, 4> not_null_;
 
     int assign(const UniqueCheckInfo &other);
@@ -286,6 +285,24 @@ public:
                                     ObDMLStmt *stmt,
                                     ObColumnRefRawExpr *&new_expr);
 
+  static int create_new_column_expr(ObNotNullContext *ctx,
+                                    ObRawExprFactory *expr_factory,
+                                    ObSQLSessionInfo *session_info,
+                                    const TableItem &table_item,
+                                    const int64_t column_id,
+                                    const SelectItem &select_item,
+                                    ObDMLStmt *stmt,
+                                    ObColumnRefRawExpr *&new_expr);
+
+  static int create_new_column_expr(ObRawExprFactory *expr_factory,
+                                    ObSQLSessionInfo *session_info,
+                                    const TableItem &table_item,
+                                    const int64_t column_id,
+                                    const bool is_not_null,
+                                    const SelectItem &select_item,
+                                    ObDMLStmt *stmt,
+                                    ObColumnRefRawExpr *&new_expr);
+
   static int create_columns_for_view(ObTransformerCtx *ctx,
                                      TableItem &view_table_item,
                                      ObDMLStmt *stmt,
@@ -298,6 +315,17 @@ public:
                                      ObIArray<ObRawExpr *> &new_column_list,
                                      bool ignore_dup_select_expr = true,
                                      bool repeated_select = false);
+
+  static int create_columns_for_view(ObNotNullContext *ctx,
+                                     ObRawExprFactory *expr_factory,
+                                     ObSQLSessionInfo *session_info,
+                                     TableItem &view_table_item,
+                                     ObDMLStmt *stmt,
+                                     ObIArray<ObRawExpr *> &new_select_list,
+                                     ObIArray<ObRawExpr *> &new_column_list,
+                                     bool ignore_dup_select_expr = true,
+                                     bool repeated_select = false);
+
 
   static int create_select_item(ObIAllocator &allocator,
                                 ObRawExpr *select_expr,
@@ -368,10 +396,10 @@ public:
                                            const uint64_t new_table_id,
                                            common::ObIArray<PartExprItem> &part_items);
   static int update_table_id_for_check_constraint_items(
-             const common::ObIArray<CheckConstraintItem> &other_check_constraint_items,
+             const common::ObIArray<CheckConstraintItem*> &other_check_constraint_items,
              const uint64_t old_table_id,
              const uint64_t new_table_id,
-             common::ObIArray<CheckConstraintItem> &check_constraint_items);
+             common::ObIArray<CheckConstraintItem*> &check_constraint_items);
   static int update_table_id_for_semi_info(const ObIArray<SemiInfo*> &other_semi_infos,
                                            const uint64_t old_table_id,
                                            const uint64_t new_table_id,
@@ -440,7 +468,6 @@ public:
                                 ObRawExpr *&not_null_expr,
                                 bool &is_valid,
                                 ObTransformerCtx *ctx);
-  
   static int is_expr_not_null(ObTransformerCtx *ctx,
                               const ObDMLStmt *stmt,
                               const ObRawExpr *expr,
@@ -1857,8 +1884,19 @@ public:
                           ObIArray<ObRawExpr *> &common_exprs);
 
   static int extract_shared_exprs(ObDMLStmt *parent,
-                                  ObIArray<ObRawExpr *> &relation_exprs,
+                                  const ObIArray<ObRawExpr *> &relation_exprs,
                                   ObIArray<ObRawExpr *> &common_exprs);
+  static int extract_shared_exprs(const ObIArray<ObRawExpr *> &source_exprs,
+                                  const ObIArray<ObRawExpr *> &searched_exprs,
+                                  ObIArray<ObRawExpr *> &common_exprs);
+  static int extract_view_check_shared_exprs(const ObIArray<ObRawExpr *> &condition_exprs,
+                                             ObDMLStmt *parent_stmt,
+                                             TableItem &table,
+                                             ObSelectStmt *view_stmt,
+                                             ObNotNullContext &ctx,
+                                             ObRawExprFactory *expr_factory,
+                                             ObSQLSessionInfo *session_info,
+                                             ObIArray<ObRawExpr *> &view_check_exprs);
   static int check_is_index_part_key(ObTransformerCtx &ctx, ObDMLStmt &stmt, ObRawExpr *check_expr, bool &is_valid);
 
   static int check_stmt_is_only_full_group_by(const ObSelectStmt *stmt,
@@ -1894,7 +1932,8 @@ public:
   static int check_can_replace(ObRawExpr *expr,
                                ObIArray<ObRawExpr *> &parent_exprs,
                                bool used_in_compare,
-                               bool &can_replace);
+                               bool &can_replace,
+                               bool for_const_propagate = false);
 
   static int check_pushdown_into_set_valid(const ObSelectStmt* child_stmt,
                                            ObRawExpr *expr,
@@ -1939,11 +1978,10 @@ public:
                                                  ObIArray<ColumnItem> &uppper_col_items,
                                                  ObIArray<SelectItem> &view_sel_items,
                                                  uint64_t mv_table_id);
-
   static int generate_view_stmt_from_query_string(const ObString &expand_view,
                                                   ObTransformerCtx *ctx,
                                                   ObSelectStmt *&view_stmt);
-  static int set_expand_mview_flag(ObSelectStmt *view_stmt);
+  static int set_expand_mview_flag(ObSelectStmt *view_stmt, bool is_major_refresh_mview);
 
   static int is_where_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                           const ObSelectStmt &subquery,
@@ -2172,7 +2210,8 @@ private:
 
   static int check_convert_string_safely(const ObRawExpr *expr,
                                          const ObRawExpr *src_expr,
-                                         bool &is_safe);
+                                         bool &is_safe,
+                                         bool check_like_validity_for_const_propagate);
 
   static int get_idx_from_table_ids(const ObIArray<uint64_t> &src_table_ids,
                                     const ObIArray<TableItem *> &target_tables,

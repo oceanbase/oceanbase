@@ -244,6 +244,13 @@ private:
   int find_similar_expr(ObRawExpr *pred,
                         ObIArray<ObRawExpr *> &general_preds,
                         ObIArray<ObRawExpr *> &first_params);
+  int is_similar_expr(ObRawExpr *pred,
+                      ObRawExpr *general_pred,
+                      bool &is_similar);
+
+  int find_exclusive_expr(ObRawExpr *pred,
+                          ObIArray<ObRawExpr *> &general_preds,
+                          ObIArray<ObRawExpr *> &first_params);
 
   int check_aggr_validity(ObRawExpr *expr,
                           ObRawExpr *&param_expr,

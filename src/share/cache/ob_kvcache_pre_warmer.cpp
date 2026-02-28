@@ -262,9 +262,14 @@ int ObIndexBlockCachePreWarmer::do_reserve_kvpair(
 {
   int ret = OB_SUCCESS;
   allocator_.reuse();
-  blocksstable::ObMicroBlockData micro_data(micro_block_desc.get_block_buf(), micro_block_desc.get_block_size());
+  blocksstable::ObMicroBlockData micro_data;
   char *allocated_buf = nullptr;
-  if (OB_FAIL(idx_transformer_.transform(micro_data, value_.get_block_data(), allocator_, allocated_buf, table_read_info_))) {
+  if (OB_UNLIKELY(nullptr == micro_block_desc.header_ || !micro_block_desc.header_->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "invalid micro header", K(ret), K(micro_block_desc));
+  } else if (OB_FAIL(micro_data.init_with_prepare_micro_header(micro_block_desc.get_block_buf(), micro_block_desc.get_block_size()))) {
+    COMMON_LOG(WARN, "failed to init micro data", K(ret), K(micro_block_desc));
+  } else if (OB_FAIL(idx_transformer_.transform(micro_data, value_.get_block_data(), allocator_, allocated_buf, table_read_info_))) {
     COMMON_LOG(WARN, "Fail to transform index block to memory format", K(ret));
   } else {
     kvpair_size = sizeof(blocksstable::ObMicroBlockCacheKey) + value_.size();

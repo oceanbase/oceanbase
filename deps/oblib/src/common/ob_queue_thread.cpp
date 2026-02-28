@@ -21,7 +21,7 @@ namespace oceanbase
 {
 namespace common
 {
-ObCond::ObCond(const int64_t spin_wait_num) : spin_wait_num_(spin_wait_num),
+ObCond::ObCond(const int64_t spin_wait_num, const int64_t event_no) : event_no_(event_no), spin_wait_num_(spin_wait_num),
                                               bcond_(false),
                                               last_waked_time_(0)
 {
@@ -64,7 +64,7 @@ int ObCond::wait()
   if (need_wait) {
     pthread_mutex_lock(&mutex_);
     oceanbase::common::ObWaitEventGuard
-      wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_COND_WAIT, 0, reinterpret_cast<uint64_t>(this));
+      wait_guard(event_no_, 0, reinterpret_cast<uint64_t>(this));
     while (OB_SUCC(ret) && false == ATOMIC_CAS(&bcond_, true, false)) {
       int tmp_ret = ob_pthread_cond_wait(&cond_, &mutex_);
       if (ETIMEDOUT == tmp_ret) {
@@ -98,7 +98,7 @@ int ObCond::timedwait(const int64_t time_us)
     ts.tv_sec = abs_time / 1000000;
     ts.tv_nsec = (abs_time % 1000000) * 1000;
     oceanbase::common::ObWaitEventGuard
-      wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_COND_WAIT, 0, reinterpret_cast<uint64_t>(this));
+      wait_guard(event_no_, 0, reinterpret_cast<uint64_t>(this));
     pthread_mutex_lock(&mutex_);
     while (OB_SUCC(ret) && false == ATOMIC_CAS(&bcond_, true, false)) {
       int tmp_ret = ob_pthread_cond_timedwait(&cond_, &mutex_, &ts);
@@ -119,7 +119,7 @@ int ObCond::timedwait(const int64_t time_us)
 
 S2MQueueThread::S2MQueueThread() : thread_num_(0),
                                    thread_conf_iter_(0),
-                                   thread_conf_lock_(ObLatchIds::DEFAULT_DRW_LOCK),
+                                   thread_conf_lock_(ObLatchIds::S2M_QUEUE_THREAD_LOCK),
                                    queued_num_(),
                                    queue_rebalance_(false)
 {
@@ -536,7 +536,7 @@ const int64_t M2SQueueThread::QUEUE_WAIT_TIME = 100 * 1000;
 M2SQueueThread::M2SQueueThread() : inited_(false),
                                    pd_(nullptr),
                                    run_flag_(true),
-                                   queue_cond_(),
+                                   queue_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::S2M_QUEUE_THREAD_COND_WAIT),
                                    task_queue_(),
                                    idle_interval_(INT64_MAX),
                                    last_idle_time_(0)

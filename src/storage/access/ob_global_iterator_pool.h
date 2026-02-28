@@ -78,7 +78,7 @@ public:
     return is_valid() &&
            table_cnt <= ITER_POOL_MAX_TABLE_CNT_LIMIT &&
            col_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() <= ITER_POOL_MAX_COL_CNT_LIMIT &&
-           iter_type <= ITER_POOL_MAX_CACHED_ITER_TYPE;
+           iter_type > T_INVALID_ITER_TYPE && iter_type <= ITER_POOL_MAX_CACHED_ITER_TYPE;
   }
   OB_INLINE bool is_valid() const
   {
@@ -126,15 +126,15 @@ private:
   static const int64_t ITER_POOL_WASH_HIGH_THRESHOLD = 96;
   static const int64_t ITER_POOL_WASH_LOW_THRESHOLD = 90;
 
-  static const int64_t ITER_POOL_MAX_CACHED_ITER_TYPE = T_SINGLE_SCAN;
+  static const int64_t ITER_POOL_MAX_CACHED_ITER_TYPE = T_LEVEL_ORDER_SCAN;
   static_assert(ITER_POOL_MAX_CACHED_ITER_TYPE > T_INVALID_ITER_TYPE && ITER_POOL_MAX_CACHED_ITER_TYPE < T_MAX_ITER_TYPE
-                 && 2 == ITER_POOL_MAX_CACHED_ITER_TYPE, "[Global Iterator Pool] invalid iter type");
+                 && 3 == ITER_POOL_MAX_CACHED_ITER_TYPE, "[Global Iterator Pool] invalid iter type");
 
   static constexpr int64_t ITER_TYPE_POOL_MEM_LIMITS[1 + ITER_POOL_MAX_CACHED_ITER_TYPE] =
-      {256L << 10/*SINGLE_GET*/, 500L << 10/*MULTI_GET*/, 400L << 10/*SINGLE_SCAN*/};
+      {256L << 10/*SINGLE_GET*/, 500L << 10/*MULTI_GET*/, 400L << 10/*SINGLE_SCAN*/, 100L << 10/*LEVEL_ORDER_SCAN*/};
 
   static constexpr int64_t ALL_ITER_TYPES_MEM_LIMIT =
-      ITER_TYPE_POOL_MEM_LIMITS[0] + ITER_TYPE_POOL_MEM_LIMITS[1] + ITER_TYPE_POOL_MEM_LIMITS[2];
+      ITER_TYPE_POOL_MEM_LIMITS[0] + ITER_TYPE_POOL_MEM_LIMITS[1] + ITER_TYPE_POOL_MEM_LIMITS[2] + ITER_TYPE_POOL_MEM_LIMITS[3];
   bool is_inited_;
   bool is_washing_;
   bool is_disabled_;

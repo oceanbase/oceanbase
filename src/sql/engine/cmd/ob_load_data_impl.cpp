@@ -808,7 +808,7 @@ int ObLoadDataSPImpl::gen_load_table_column_desc(ObExecContext &ctx,
 
   //step 1
   for (int64_t i = 0; OB_SUCC(ret) && i < load_stmt.get_field_or_var_list().count(); ++i) {
-    ObLoadDataStmt::FieldOrVarStruct &item = load_stmt.get_field_or_var_list().at(i);
+    FieldOrVarStruct &item = load_stmt.get_field_or_var_list().at(i);
     if (item.is_table_column_) {
       ObLoadTableColumnDesc tmp_info;
       tmp_info.is_set_values_ = false;
@@ -3303,10 +3303,10 @@ int ObLoadDataURLImpl::construct_sql(ObLoadDataStmt &load_stmt, ObSqlString &sql
   }
 
   // 获取字段列表
-  const ObIArray<ObLoadDataStmt::FieldOrVarStruct> &field_list = load_stmt.get_field_or_var_list();
+  const ObIArray<FieldOrVarStruct> &field_list = load_stmt.get_field_or_var_list();
   // 检查是否存在非table column
   for (int64_t i = 0; OB_SUCC(ret) && i < field_list.count(); ++i) {
-    const ObLoadDataStmt::FieldOrVarStruct &field = field_list.at(i);
+    const FieldOrVarStruct &field = field_list.at(i);
     if (OB_UNLIKELY(!field.is_table_column_)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("var is not supported", KR(ret), K(field), K(i), K(field_list));
@@ -3319,7 +3319,7 @@ int ObLoadDataURLImpl::construct_sql(ObLoadDataStmt &load_stmt, ObSqlString &sql
       OZ (sql.append("("));
       bool first = true;
       for (int64_t i = 0; OB_SUCC(ret) && i < field_list.count(); ++i) {
-        const ObLoadDataStmt::FieldOrVarStruct &field = field_list.at(i);
+        const FieldOrVarStruct &field = field_list.at(i);
         if (!first) {
           OZ (sql.append(","));
         }

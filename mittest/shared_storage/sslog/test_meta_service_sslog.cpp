@@ -372,7 +372,7 @@ int ObTestSSLogMetaService::build_update_table_store_param_(ObArenaAllocator &al
                       merge_type,
                       clog_checkpoint_scn,
                       false /*need_report*/,
-                      tablet_handle.get_obj()->has_truncate_info())))) {
+                      tablet_handle.get_obj()->has_merged_with_mds_info())))) {
       LOG_WARN("failed to init with compaction info", KR(ret));
     } else {
       LOG_INFO("success to init ObUpdateTableStoreParam", KR(ret), K(param), KPC(param.sstable_));
@@ -805,7 +805,8 @@ TEST_F(ObTestSSLogMetaService, test_update_tablet_table_store_update)
     schema,
     ls_handle,
     orig_tablet_handle,
-    compaction::ObMergeType::MDS_MINOR_MERGE,
+    // Keep this test on non-MDS merge path; mock sstable has no tablet-status MDS row.
+    compaction::ObMergeType::MAJOR_MERGE,
     table_handle,
     update_param);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -814,7 +815,7 @@ TEST_F(ObTestSSLogMetaService, test_update_tablet_table_store_update)
       ls_id_,
       cur_tablet_id,
       orig_tablet_handle.get_obj()->get_reorganization_scn(),
-      ObMetaUpdateReason::TABLET_COMPACT_ADD_MDS_MINOR_SSTABLE,
+      ObMetaUpdateReason::TABLET_COMPACT_ADD_DATA_MAJOR_SSTABLE,
       100,
       update_param);
   ASSERT_EQ(OB_SUCCESS, ret);

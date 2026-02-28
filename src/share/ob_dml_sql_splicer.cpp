@@ -15,6 +15,7 @@
 #include "share/ob_dml_sql_splicer.h"
 #include "lib/container/ob_se_array_iterator.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "deps/oblib/src/lib/literals/ob_literals.h"
 
 namespace oceanbase
 {
@@ -30,6 +31,8 @@ void ObDMLSqlSplicer::reset()
   columns_.reset();
   extra_condition_.reset();
   rows_end_pos_.reset();
+  default_column_header_.reset();
+  default_column_value_.reset();
 }
 
 int ObDMLSqlSplicer::append_uint64_value(const uint64_t value, bool &is_null)
@@ -396,10 +399,14 @@ int ObDMLSqlSplicer::splice_insert(const char *table_name, const char *head,
       LOG_WARN("assign sql failed", K(ret));
     } else if (OB_FAIL(splice_column(", ", ColSet::ALL, ValSet::ONLY_COL_NAME, sql))) {
       LOG_WARN("add column name failed", K(ret));
+    } else if (!default_column_header_.empty() && OB_FAIL(sql.append_fmt(", %s", default_column_header_.ptr()))) {
+      LOG_WARN("failed to append default_column_header_", KR(ret), K(default_column_header_));
     } else if (OB_FAIL(sql.append(") VALUES ("))) {
       LOG_WARN("append sql failed", K(ret));
     } else if (OB_FAIL(splice_column(", ", ColSet::ALL, ValSet::ONLY_VALUE, sql))) {
       LOG_WARN("add values failed", K(ret));
+    } else if (!default_column_value_.empty() && OB_FAIL(sql.append_fmt(", %s", default_column_value_.ptr()))) {
+      LOG_WARN("failed to append default_column_value_", KR(ret), K(default_column_value_));
     } else if (OB_FAIL(sql.append(")"))) {
       LOG_WARN("append sql failed", K(ret));
     }
@@ -850,7 +857,7 @@ int ObDMLSqlSplicer::finish_row()
 int ObDMLSqlSplicer::build_rows_matrix(ObIArray<ObString> &all_names, ObIArray<int64_t> &rows_matrix) const
 {
   int ret = OB_SUCCESS;
-  hash::ObHashMap<ObString, int64_t> name_idx_map;
+  hash::ObHashMap<ObString, int64_t, hash::NoPthreadDefendMode> name_idx_map;
   if (OB_SUCC(ret)) {
     if (OB_FAIL(name_idx_map.create(512, ObModIds::OB_HASH_BUCKET))) {
       LOG_WARN("failed to init hashmap", K(ret));
@@ -887,15 +894,14 @@ int ObDMLSqlSplicer::build_rows_matrix(ObIArray<ObString> &all_names, ObIArray<i
       }
     }
   } // end for
-  // invert index
-  hash::ObHashMap<int64_t, int64_t> name_idx_to_pos;
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(name_idx_to_pos.create(512, ObModIds::OB_HASH_BUCKET))) {
-      LOG_WARN("failed to init hashmap", K(ret));
-    }
+  ObArray<int64_t> name_idx_to_pos;
+  int64_t row_count = rows_end_pos_.count();
+  if (FAILEDx(name_idx_to_pos.prepare_allocate(all_names.count()))) {
+    LOG_WARN("failed to prepare_allocate", KR(ret), K(all_names.count()));
+  } else if (OB_FAIL(rows_matrix.reserve(row_count * all_names.count()))) {
+    LOG_WARN("failed to reserve rows_matrix", KR(ret), K(row_count), K(all_names.count()));
   }
   int64_t last_pos = 0;
-  int64_t row_count = rows_end_pos_.count();
   for (int64_t i = 0; OB_SUCCESS == ret && i < row_count; ++i)   // for each row
   {
     int64_t row_end_pos = rows_end_pos_.at(i);
@@ -903,33 +909,29 @@ int ObDMLSqlSplicer::build_rows_matrix(ObIArray<ObString> &all_names, ObIArray<i
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("index out of range", K(ret), K(row_end_pos), "count", columns_.count());
     }
-    name_idx_to_pos.reuse();
+    for (int64_t j = 0; j < name_idx_to_pos.count(); j++) {
+      name_idx_to_pos[j] = -1;
+    }
     for (int64_t pos = last_pos; OB_SUCCESS == ret && pos <= row_end_pos; ++pos) {
       // build map: name_idx -> pos
-      if (OB_FAIL(name_idx_to_pos.set_refactored(name_idx_array.at(pos), pos))) {
-        LOG_WARN("failed to insert map", K(ret), K(pos), K(last_pos), K(row_end_pos));
+      if (OB_UNLIKELY(pos >= name_idx_array.count() || name_idx_array[pos] >= name_idx_to_pos.count()
+          || name_idx_array[pos] < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index out of range", KR(ret), K(pos));
+      } else {
+        name_idx_to_pos[name_idx_array[pos]] = pos;
       }
     }
     last_pos = row_end_pos + 1;
     // build row
     int64_t column_count = all_names.count();
-    int64_t pos = -1;
-    for (int64_t i = 0; OB_SUCCESS == ret && i < column_count; ++i)
+    for (int64_t j = 0; OB_SUCCESS == ret && j < column_count; ++j)
     {
-      if (OB_FAIL(name_idx_to_pos.get_refactored(i, pos))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-          pos = -1;
-        } else {
-          LOG_WARN("failed to get pos", K(ret));
-        }
-      } else {
-        // this row has the column specified
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(rows_matrix.push_back(pos))) {
-          LOG_WARN("failed to push back to rows matrix", K(ret));
-        }
+      if (OB_UNLIKELY(j >= name_idx_to_pos.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index out of range", KR(ret), K(j), "count", name_idx_to_pos.count(), K(column_count));
+      } else if (OB_FAIL(rows_matrix.push_back(name_idx_to_pos[j]))) {
+        LOG_WARN("failed to push back to rows matrix", K(ret));
       }
     } // end for
   } // end for
@@ -985,78 +987,161 @@ static int join_strings(const ObString &sep, const ObIArray<ObString> &names, Ob
   return ret;
 }
 
-// (1,2,3), (4,5,6)
-int ObDMLSqlSplicer::splice_rows_matrix(const ObArray<ObString> &all_names, const ObArray<int64_t> &rows_matrix, ObSqlString &sql) const
+// add single row to sql
+// (1, 2, 3)
+int ObDMLSqlSplicer::construct_insert_row(const common::ObArray<common::ObString> &all_names,
+    const int64_t row_id, const common::ObArray<int64_t> &rows_matrix, ObSqlString &sql) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t column_count = all_names.count();
+  const int64_t matrix_size = rows_matrix.count();
+  const int64_t begin_idx = row_id * column_count;
+  if (begin_idx >= matrix_size || begin_idx + column_count > matrix_size || begin_idx < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index out of bound", KR(ret), K(begin_idx), K(column_count), K(matrix_size));
+  } else if (OB_FAIL(sql.append("("))) {
+    LOG_WARN("failed to append", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_count; i++) {
+      int64_t cell_pos = rows_matrix.at(i + begin_idx);
+      if (i != 0 && OB_FAIL(sql.append(", "))) {
+        LOG_WARN("failed to append", KR(ret));
+      } else if (cell_pos != -1) {
+        if (cell_pos >= columns_.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("cell pos out of range", K(cell_pos));
+        } else if (all_names.at(i) != ObString::make_string(columns_.at(cell_pos).name_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("cell name not match", K(row_id), K(i), K(cell_pos));
+        } else {
+          const Column &col = columns_.at(cell_pos);
+          int64_t start_pos = 0;
+          if (cell_pos >= 1) {
+            start_pos = columns_.at(cell_pos - 1).value_end_pos_;
+          }
+          if (col.is_null_) {
+            if (OB_FAIL(sql.append("NULL"))) {
+              LOG_WARN("failed to append NULL", KR(ret));
+            }
+          } else {
+            if (OB_FAIL(sql.append(ObString(col.value_end_pos_ - start_pos, values_.ptr() + start_pos)))) {
+              LOG_WARN("failed to append value", KR(ret));
+            }
+          }
+        }
+      } else if (OB_FAIL(sql.append("NULL"))) {
+        LOG_WARN("failed to append NULL", KR(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!default_column_value_.empty() && OB_FAIL(sql.append_fmt(", %s", default_column_value_.ptr()))) {
+      LOG_WARN("failed to append default_column_value_", KR(ret), K(default_column_value_));
+    } else if (OB_FAIL(sql.append(")"))) {
+      LOG_WARN("failed to append", KR(ret));
+    }
+  }
+  return ret;
+}
+
+// [(1,2,3), (4,5,6)], [(7,8,9), (10,11,12)], [(13,14,15)]
+int ObDMLSqlSplicer::splice_rows_matrix_in_array(const common::ObArray<common::ObString> &all_names,
+    const common::ObArray<int64_t> &rows_matrix, const int64_t rows_in_sql,
+    const int64_t max_sql_length, const ObSqlString &header, ObIArray<common::ObSqlString> &sqls) const
 {
   int ret = OB_SUCCESS;
   const int64_t column_count = all_names.count();
   const int64_t row_count = rows_end_pos_.count();
   const int64_t matrix_size = rows_matrix.count();
+  sqls.reset();
   if (matrix_size != row_count * column_count) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wrong matrix size", K(matrix_size), K(column_count), K(row_count));
   } else {
-    for (int64_t i = 0; OB_SUCCESS == ret && i < row_count; ++i)
-    {
-      if (0 != i) {
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(sql.append(", "))) {
-            LOG_WARN("append sql failed", K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        // start of row
-        if (OB_FAIL(sql.append("("))) {
-          LOG_WARN("append sql failed", K(ret));
-        }
-      }
-      for (int64_t j = 0; OB_SUCCESS == ret && j < column_count; ++j)
-      {
-        if (0 != j) {
-          if (OB_FAIL(sql.append(","))) {
-            LOG_WARN("append sql failed", K(ret));
-          }
-        }
-        int64_t cell_pos = rows_matrix.at(j+i*column_count);
-        if (OB_FAIL(ret)) {
-        } else if (-1 != cell_pos) {
-          if (cell_pos >= columns_.count()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("cell pos out of range", K(cell_pos));
-          } else if (all_names.at(j) != ObString::make_string(columns_.at(cell_pos).name_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("cell name not match", K(i), K(j), K(cell_pos));
+    ObSqlString sql;
+    ObSqlString tmp_sql;
+    int64_t current_row_count = 0;
+    for (int64_t i = 0; i < row_count && OB_SUCC(ret); i++) {
+      tmp_sql.reuse();
+      if (0 == current_row_count && OB_FAIL(sql.assign(header))) {
+        LOG_WARN("failed to assign header", KR(ret), K(header));
+      } else if (OB_FAIL(construct_insert_row(all_names, i, rows_matrix, tmp_sql))) {
+        LOG_WARN("failed to construct_insert_row", KR(ret), K(i));
+      } else {
+        int64_t next_sql_length = tmp_sql.length() + 1 /*length of ","*/ + sql.length();
+        if (next_sql_length <= 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sql length overflow", KR(ret), K(next_sql_length), K(tmp_sql), K(sql));
+        } else if (current_row_count != 0 && next_sql_length > max_sql_length) {
+          // sql length exceed, append sql to sqls and reset
+          if (OB_FAIL(sqls.push_back(sql))) {
+            LOG_WARN("failed to push_back sql", KR(ret));
+          } else if (OB_FAIL(sql.assign(header))) {
+            LOG_WARN("failed to assign header", KR(ret), K(header));
           } else {
-            const Column &col = columns_.at(cell_pos);
-            int64_t start_pos = 0;
-            if (cell_pos >= 1) {
-              start_pos = columns_.at(cell_pos-1).value_end_pos_;
-            }
-            if (col.is_null_) {
-              ret = sql.append("NULL");
+            current_row_count = 0;
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (current_row_count != 0 && OB_FAIL(sql.append(","))) {
+          LOG_WARN("append sql failed", K(ret));
+        } else if (OB_FAIL(sql.append(tmp_sql.string()))) {
+          LOG_WARN("failed to append tmp_sql", KR(ret), K(tmp_sql));
+        } else {
+          current_row_count++;
+          if (current_row_count == rows_in_sql) {
+            if (OB_FAIL(sqls.push_back(sql))) {
+              LOG_WARN("failed to push_back sql", KR(ret));
             } else {
-              ret = sql.append(ObString(col.value_end_pos_ - start_pos, values_.ptr() + start_pos));
+              current_row_count = 0;
             }
           }
-        } else {
-          ret = sql.append("NULL");
-        }
-      } // end for
-      if (OB_SUCC(ret)) {
-        // end of row
-        if (OB_FAIL(sql.append(")"))) {
-          LOG_WARN("append sql failed", K(ret));
         }
       }
-    } // end for
+    }
+    if (current_row_count != 0) {
+      if (FAILEDx(sqls.push_back(sql))) {
+        LOG_WARN("failed to push_back sql", KR(ret));
+      }
+    }
   }
-
   return ret;
 }
 
-int ObDMLSqlSplicer::splice_batch_insert(const char *table_name, const char *head, ObSqlString &sql,
-                                         ObArray<ObString> &all_names, ObArray<int64_t> &rows_matrix) const
+// (1,2,3), (4,5,6)
+int ObDMLSqlSplicer::splice_rows_matrix(const ObArray<ObString> &all_names,
+    const common::ObSqlString &sql_header,
+    const ObArray<int64_t> &rows_matrix,
+    ObSqlString &sql) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObSqlString> sqls;
+  const int64_t row_count = rows_end_pos_.count();
+  if (OB_FAIL(splice_rows_matrix_in_array(all_names, rows_matrix, row_count,
+          INT64_MAX/*max_sql_length*/, sql_header, sqls))) {
+    LOG_WARN("failed to splice rows matrix in array", KR(ret), K(all_names), K(row_count),
+        K(sql_header), K(rows_matrix));
+  } else if (sqls.count() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sqls count not match", KR(ret), K(sqls.count()));
+  } else if (OB_FAIL(sql.assign(sqls.at(0).string()))) {
+    LOG_WARN("failed to assign sql", KR(ret));
+  }
+  return ret;
+}
+
+int ObDMLSqlSplicer::set_default_columns(const char *header, const char *value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(default_column_header_.assign(header))) {
+    LOG_WARN("failed to assign default column header", KR(ret), K(header));
+  } else if (OB_FAIL(default_column_value_.assign(value))) {
+    LOG_WARN("failed to assign default column value", KR(ret), K(value));
+  }
+  return ret;
+}
+
+int ObDMLSqlSplicer::splice_batch_insert_header(const char *table_name, const char *head,
+    const ObArray<ObString> &all_names, ObSqlString &sql_header) const
 {
   int ret = OB_SUCCESS;
   if (NULL == table_name || NULL == head) {
@@ -1065,18 +1150,55 @@ int ObDMLSqlSplicer::splice_batch_insert(const char *table_name, const char *hea
   } else if (columns_.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column_count is invalid", K(ret), "column_count", columns_.count());
+  } else if (OB_FAIL(sql_header.assign_fmt("%s INTO %s (", head, table_name))) {
+    LOG_WARN("assign sql_header failed", K(ret));
+  } else if (OB_FAIL(join_strings(", ", all_names, sql_header))) {
+    LOG_WARN("add column name failed", K(ret));
+  } else if (!default_column_header_.empty() && OB_FAIL(sql_header.append_fmt(", %s", default_column_header_.ptr()))) {
+    LOG_WARN("failed to append default_column_header_", KR(ret), K(default_column_header_));
+  } else if (OB_FAIL(sql_header.append(") VALUES "))) {
+    LOG_WARN("append sql_header failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLSqlSplicer::splice_batch_insert(const char *table_name, const char *head, ObSqlString &sql,
+                                         ObArray<ObString> &all_names, ObArray<int64_t> &rows_matrix) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_header;
+  if (NULL == table_name || NULL == head) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(table_name), KP(head));
+  } else if (columns_.count() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column_count is invalid", K(ret), "column_count", columns_.count());
   } else if (OB_FAIL(build_rows_matrix(all_names, rows_matrix))) {
     LOG_WARN("failed to build matrix", K(ret));
-  } else {
-    if (OB_FAIL(sql.assign_fmt("%s INTO %s (", head, table_name))) {
-      LOG_WARN("assign sql failed", K(ret));
-    } else if (OB_FAIL(join_strings(", ", all_names, sql))) {
-      LOG_WARN("add column name failed", K(ret));
-    } else if (OB_FAIL(sql.append(") VALUES "))) {
-      LOG_WARN("append sql failed", K(ret));
-    } else if (OB_FAIL(splice_rows_matrix(all_names, rows_matrix, sql))) {
-      LOG_WARN("failed to splice row matrix", K(ret));
-    }
+  } else if (OB_FAIL(splice_batch_insert_header(table_name, head, all_names, sql_header))) {
+    LOG_WARN("failed to splice batch insert header", KR(ret), K(table_name), K(head));
+  } else if (OB_FAIL(splice_rows_matrix(all_names, sql_header, rows_matrix, sql))) {
+    LOG_WARN("failed to splice row matrix", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLSqlSplicer::splice_batch_insert_in_array(const char *table_name,
+    common::ObIArray<common::ObSqlString> &sqls, const char *insert_header) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObString> all_names;
+  ObArray<int64_t> rows_matrix;
+  ObSqlString header;
+  if (OB_ISNULL(table_name)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", KR(ret), KP(table_name));
+  } else if (OB_FAIL(build_rows_matrix(all_names, rows_matrix))) {
+    LOG_WARN("failed to build rows matrix", KR(ret));
+  } else if (OB_FAIL(splice_batch_insert_header(table_name, insert_header, all_names, header))) {
+    LOG_WARN("failed to splice batch insert header", KR(ret), KP(table_name));
+  } else if (OB_FAIL(splice_rows_matrix_in_array(all_names, rows_matrix, get_max_dml_num(), OB_MAX_SQL_LENGTH, header, sqls))) {
+    LOG_WARN("failed to splice rows matrix in array", KR(ret), K(all_names), K(header));
   }
   return ret;
 }
@@ -1217,14 +1339,17 @@ int ObDMLSqlSplicer::splice_batch_predicates(const ObArray<ObString> &all_names,
     }
   }  // end for
   if (OB_SUCC(ret)) {
+    ObSqlString sql_result;
     if (OB_FAIL(sql.append(") IN ("))) {
       LOG_WARN("append sql failed", K(ret));
     }
     // part2: (1, 2, 3), (4, 5, 6)
-    else if (OB_FAIL(splice_rows_matrix(all_names, rows_matrix, sql))) {
+    else if (OB_FAIL(splice_rows_matrix(all_names, sql, rows_matrix, sql_result))) {
       LOG_WARN("failed to splice row matrix", K(ret));
-    } else if (OB_FAIL(sql.append(")"))) {
+    } else if (OB_FAIL(sql_result.append(")"))) {
       LOG_WARN("append sql failed", K(ret));
+    } else if (OB_FAIL(sql.assign(sql_result))) {
+      LOG_WARN("failed to assign sql_result", KR(ret), K(sql_result), K(sql));
     }
   }
   return ret;
@@ -1297,6 +1422,30 @@ DEF_DML_EXECUTE(replace);
 DEF_DML_EXECUTE(insert_update);
 
 #undef DEF_DML_EXECUTE
+
+int ObDMLExecHelper::exec_batch_insert(const char *table_name,
+      const ObDMLSqlSplicer &splicer, int64_t &affected_rows, const char *insert_header)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObSqlString> sqls;
+  affected_rows = 0;
+  if (NULL == table_name) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(table_name));
+  } else if (OB_FAIL(splicer.splice_batch_insert_in_array(table_name, sqls, insert_header))) {
+    LOG_WARN("splice sql failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < sqls.count(); i++) {
+      int64_t tmp_affected_rows = 0;
+      if (OB_FAIL(sql_client_.write(tenant_id_, sqls.at(i).ptr(), tmp_affected_rows))) {
+        LOG_WARN("execute sql failed", K(ret), K(sqls.at(i)));
+      } else {
+        affected_rows += tmp_affected_rows;
+      }
+    }
+  }
+  return ret;
+}
 
 int ObDMLExecHelper::exec_insert_ignore(const char *table_name,
     const ObDMLSqlSplicer &splicer, int64_t &affected_rows)

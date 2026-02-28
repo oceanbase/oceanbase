@@ -55,9 +55,11 @@ ObLogService::ObLogService() :
   restore_service_(),
   flashback_service_(),
   monitor_(),
+  update_palf_opts_lock_(common::ObLatchIds::OB_LOG_SERVICE_SPIN_LOCK),
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   shared_gc_(),
   configured_log_disk_size_(0),
+  shared_log_rto_keeper_(),
 #endif
   locality_adapter_()
 {}
@@ -221,6 +223,7 @@ void ObLogService::destroy()
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   if (enable_logservice_) {
     shared_gc_.stop();
+    shared_log_rto_keeper_.destroy();
   }
   configured_log_disk_size_ = 0;
 #endif
@@ -357,16 +360,16 @@ int ObLogService::init(const PalfOptions &options,
     CLOG_LOG(ERROR, "failed to create palf env", K(ret));
   } else if (OB_FAIL(ls_adapter_.init(ls_service))) {
     CLOG_LOG(ERROR, "failed to init ls_adapter", K(ret));
+  } else if (OB_FAIL(rpc_proxy_.init(transport))) {
+    CLOG_LOG(WARN, "LogServiceRpcProxy init failed", K(ret));
   } else if (OB_FAIL(apply_service_.init(palf_env_, &ls_adapter_))) {
     CLOG_LOG(WARN, "failed to init apply_service", K(ret));
-  } else if (OB_FAIL(replay_service_.init(palf_env_, &ls_adapter_, alloc_mgr))) {
+  } else if (OB_FAIL(replay_service_.init(palf_env_, &rpc_proxy_, &ls_adapter_, alloc_mgr))) {
     CLOG_LOG(WARN, "failed to init replay_service", K(ret));
   } else if (OB_FAIL(role_change_service_.init(ls_service, &apply_service_, &replay_service_))) {
     CLOG_LOG(WARN, "failed to init role_change_service_", K(ret));
   } else if (OB_FAIL(location_adapter_.init(location_service))) {
     CLOG_LOG(WARN, "failed to init location_adapter_", K(ret));
-  } else if (OB_FAIL(rpc_proxy_.init(transport))) {
-    CLOG_LOG(WARN, "LogServiceRpcProxy init failed", K(ret));
   } else if (OB_FAIL(reporter_.init(reporter))) {
     CLOG_LOG(WARN, "ReporterAdapter init failed", K(ret));
   } else if (OB_FAIL(cdc_service_.init(tenant_id, ls_service))) {
@@ -382,6 +385,8 @@ int ObLogService::init(const PalfOptions &options,
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   } else if (enable_logservice_ && (OB_FAIL(shared_gc_.init(static_cast<libpalf::LibPalfEnv*>(palf_env_), sql_proxy)))) {
     CLOG_LOG(WARN, "failed to init shared garbage collector", KP(palf_env_), KP(sql_proxy));
+  } else if (enable_logservice_ && OB_FAIL(shared_log_rto_keeper_.init(&rpc_proxy_))) {
+    CLOG_LOG(WARN, "failed to init shared log rto keeper", K(ret));
 #endif
   } else if (OB_FAIL(flashback_service_.init(self, &location_adapter_, &rpc_proxy_, sql_proxy))) {
     CLOG_LOG(WARN, "failed to init flashback_service_", K(ret));
@@ -472,6 +477,11 @@ int ObLogService::remove_ls(const ObLSID &id,
     // In abnormal case(create ls failed, need remove ls directlly), there is no possibility for dead lock.
     log_handler.stop();
     restore_handler.stop();
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    if (enable_logservice_ && OB_FAIL(shared_log_rto_keeper_.remove_ls(id))) {
+      CLOG_LOG(WARN, "failed to remove from shared_log_rto_keeper", K(ret), K(id));
+    } else
+#endif // OB_BUILD_SHARED_LOG_SERVICE
     if (OB_FAIL(palf_env_->remove(id.id()))) {
       CLOG_LOG(WARN, "failed to remove from palf_env_", K(ret), K(id));
     } else {
@@ -514,6 +524,9 @@ int ObLogService::add_ls(const ObLSID &id,
   PalfRoleChangeCb *rc_cb = &role_change_service_;
   PalfLocationCacheCb *loc_cache_cb = &location_adapter_;
   ipalf::IPalfHandle *palf_handle = nullptr;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  ObLogLSSubmitLogRateLimiter *ls_submit_log_rate_limiter = nullptr;
+#endif // OB_BUILD_SHARED_LOG_SERVICE
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "log_service is not inited", K(ret), K(id));
@@ -523,13 +536,27 @@ int ObLogService::add_ls(const ObLSID &id,
     CLOG_LOG(WARN, "failed to add_ls for apply_service", K(ret), K(id));
   } else if (OB_FAIL(replay_service_.add_ls(id))) {
     CLOG_LOG(WARN, "failed to add_ls for replay_service", K(ret), K(id));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (enable_logservice_ && OB_FAIL(shared_log_rto_keeper_.add_ls(id, palf_env_))) {
+    CLOG_LOG(WARN, "failed to add_ls for shared_log_rto_keeper", K(ret), K(id));
+  } else if (enable_logservice_ && OB_FAIL(shared_log_rto_keeper_.get_ls_submit_log_rate_limiter(id, ls_submit_log_rate_limiter))) {
+    CLOG_LOG(WARN, "failed to get ls_submit_log_rate_limiter", K(ret), K(id));
+#endif // OB_BUILD_SHARED_LOG_SERVICE
   } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
-          &role_change_service_, palf_env_, loc_cache_cb, &rpc_proxy_, alloc_mgr_))) {
+          &role_change_service_, palf_env_, loc_cache_cb,
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+          ls_submit_log_rate_limiter,
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+          &rpc_proxy_, alloc_mgr_))) {
     CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), K(id), KP(palf_env_));
   } else if (OB_ISNULL(log_handler_palf_handle)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "ObLogHandler init failed, log_handler_palf_handle is nullptr");
-  } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
+  } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+                                            , ls_submit_log_rate_limiter
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+                                            ))) {
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
   } else if (OB_FAIL(log_handler_palf_handle->register_role_change_cb(rc_cb))) {
     CLOG_LOG(WARN, "register_role_change_cb failed", K(ret));
@@ -826,6 +853,9 @@ int ObLogService::create_ls_(const share::ObLSID &id,
   const bool is_arb_replica = (replica_type == REPLICA_TYPE_ARBITRATION);
   ipalf::IPalfHandle *&log_handler_palf_handle = log_handler.palf_handle_;
   bool palf_exist = false;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  ObLogLSSubmitLogRateLimiter *ls_submit_log_rate_limiter = nullptr;
+#endif // OB_BUILD_SHARED_LOG_SERVICE
   if (false == id.is_valid() ||
       INVALID_TENANT_ROLE == tenant_role ||
       false == palf_base_info.is_valid()) {
@@ -846,13 +876,27 @@ int ObLogService::create_ls_(const share::ObLSID &id,
       CLOG_LOG(WARN, "failed to add_ls for apply engine", K(ret), K(id));
     } else if (OB_FAIL(replay_service_.add_ls(id))) {
       CLOG_LOG(WARN, "failed to add_ls", K(ret), K(id));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    } else if (enable_logservice_ && OB_FAIL(shared_log_rto_keeper_.add_ls(id, palf_env_))) {
+      CLOG_LOG(WARN, "failed to add_ls for shared_log_rto_keeper", K(ret), K(id));
+    } else if (enable_logservice_ && OB_FAIL(shared_log_rto_keeper_.get_ls_submit_log_rate_limiter(id, ls_submit_log_rate_limiter))) {
+      CLOG_LOG(WARN, "failed to get ls_submit_log_rate_limiter", K(ret), K(id));
+#endif // OB_BUILD_SHARED_LOG_SERVICE
     } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
-          &role_change_service_, palf_env_, loc_cache_cb, &rpc_proxy_, alloc_mgr_))) {
+          &role_change_service_, palf_env_, loc_cache_cb,
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+          ls_submit_log_rate_limiter,
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+          &rpc_proxy_, alloc_mgr_))) {
       CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), KP(palf_env_), K(palf_handle));
     } else if (OB_ISNULL(log_handler_palf_handle)) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(WARN, "ObLogHandler init failed, log_handler_palf_handle is nullptr");
-    } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
+    } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+                                            , ls_submit_log_rate_limiter
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+                                            ))) {
       CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
     } else if (OB_FAIL(log_handler_palf_handle->register_role_change_cb(rc_cb))) {
       CLOG_LOG(WARN, "register_role_change_cb failed", K(ret), K(id));

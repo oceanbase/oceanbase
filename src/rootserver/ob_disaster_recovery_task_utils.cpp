@@ -816,6 +816,7 @@ int DisasterRecoveryUtils::get_tenant_zone_list(
 
 int DisasterRecoveryUtils::check_member_list_for_single_replica(
     const common::ObMemberList &member_list,
+    const bool check_same_zone,
     bool &pass_check)
 {
   int ret = OB_SUCCESS;
@@ -835,6 +836,8 @@ int DisasterRecoveryUtils::check_member_list_for_single_replica(
       } else if (server_info.is_alive()) {
         pass_check = false;
         LOG_INFO("has member alived, skip", K(server));
+      } else if (!check_same_zone) {
+        LOG_TRACE("skip check same zone");
       } else if (first_server_zone.is_empty()) {
         if (OB_FAIL(first_server_zone.assign(server_info.get_zone()))) {
           LOG_WARN("failed to get server zone", KR(ret), K(server_info));

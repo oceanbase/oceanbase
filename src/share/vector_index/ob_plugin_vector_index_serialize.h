@@ -16,6 +16,7 @@
 #include "lib/allocator/page_arena.h"
 #include "common/row/ob_row_iterator.h"
 #include "share/ob_lob_access_utils.h"
+#include "share/vector_index/ob_vector_index_common_define.h"
 #include "share/vector_index/ob_plugin_vector_index_util.h"
 #include "ob_vector_index_util.h"
 
@@ -23,7 +24,10 @@ namespace oceanbase
 {
 namespace share
 {
-
+class ObVectorIndexSegment;
+class ObVectorIndexSegmentHandle;
+class ObVectorIndexMeta;
+class ObVectorIndexSegmentMeta;
 
 class ObStreamBuf : public std::streambuf
 {
@@ -117,14 +121,18 @@ public:
   struct CbParam : public ObIStreamBuf::CbParam {
     CbParam(ObNewRowIterator *iter, ObIAllocator *allocator)
       : iter_(iter), allocator_(allocator), str_iter_(nullptr),
-        is_vec_tablet_rebuild_(false), is_need_unvisible_row_(false)
+        is_vec_tablet_rebuild_(false), is_need_unvisible_row_(false),
+        seg_meta_(nullptr), index_type_(VIAT_MAX), start_key_(), end_key_()
     {}
     CbParam()
       : iter_(nullptr),
         allocator_(nullptr),
         str_iter_(nullptr),
         is_vec_tablet_rebuild_(false),
-        is_need_unvisible_row_(false)
+        is_need_unvisible_row_(false),
+        seg_meta_(nullptr),
+        index_type_(VIAT_MAX),
+        start_key_(), end_key_()
     {}
     virtual ~CbParam() {
       if (str_iter_ != nullptr) {
@@ -145,13 +153,19 @@ public:
     ObTextStringIter *str_iter_;
     bool is_vec_tablet_rebuild_;
     bool is_need_unvisible_row_;
+    ObVectorIndexSegmentMeta *seg_meta_;
+    ObVectorIndexAlgorithmType index_type_;
+    char start_key_buf_[OB_VECTOR_INDEX_SNAPSHOT_KEY_LENGTH] = {0};
+    char end_key_buf_[OB_VECTOR_INDEX_SNAPSHOT_KEY_LENGTH] = {0};
+    ObString start_key_;
+    ObString end_key_;
   };
 public:
   ObHNSWDeserializeCallback(void *adp) : index_type_(VIAT_MAX), adp_(adp)
   {}
-  ObVectorIndexAlgorithmType get_serialize_index_type() { return index_type_; }
+
   int operator()(char *&data, const int64_t data_size, int64_t &read_size, share::ObIStreamBuf::CbParam &cb_param);
-private:
+public:
   ObVectorIndexAlgorithmType index_type_;
   void *adp_;
 };
@@ -161,7 +175,8 @@ public:
   struct CbParam : public ObOStreamBuf::CbParam {
     CbParam()
       : vctx_(nullptr), allocator_(nullptr), tmp_allocator_(nullptr), tx_desc_(nullptr), snapshot_(nullptr),
-        timeout_(0), lob_inrow_threshold_(0)
+        timeout_(0), lob_inrow_threshold_(0), tablet_id_(), snapshot_version_(), need_serde_meta_(false),
+        is_vec_tablet_rebuild_(false)
     {}
     virtual ~CbParam() {}
     bool is_valid() const
@@ -169,8 +184,15 @@ public:
       return nullptr != vctx_
              && nullptr != allocator_
              && nullptr != tx_desc_
-             && nullptr != snapshot_;
+             && nullptr != snapshot_
+             && tablet_id_.is_valid()
+             && snapshot_version_ > 0;
     }
+
+    TO_STRING_KV(KP_(vctx), KP_(allocator), KP_(tmp_allocator), KP_(tx_desc),
+        KP_(snapshot), K_(timeout), K_(lob_inrow_threshold), K_(tablet_id),
+        K_(snapshot_version), K_(need_serde_meta), K_(is_vec_tablet_rebuild));
+
     void *vctx_; // ObVecIdxSnapshotDataWriteCtx
     ObIAllocator *allocator_;
     ObIAllocator *tmp_allocator_;
@@ -178,6 +200,10 @@ public:
     void *snapshot_; // transaction::ObTxReadSnapshot
     int64_t timeout_;
     int64_t lob_inrow_threshold_;
+    ObTabletID tablet_id_;
+    int64_t snapshot_version_;
+    bool need_serde_meta_;
+    bool is_vec_tablet_rebuild_;
   };
 public:
   ObHNSWSerializeCallback()
@@ -193,8 +219,10 @@ public:
     : allocator_(allocator)
   {}
 
-  int serialize(void *index, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb, uint64_t tenant_id, const int64_t capacity = DEFAULT_OUTBUF_CAPACITY);
-  int deserialize(void *&index, ObIStreamBuf::CbParam &cb_param, ObIStreamBuf::Callback &cb, uint64_t tenant_id);
+  int serialize_meta(ObVectorIndexSegment *segment, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb);
+  int serialize(ObVectorIndexSegment *index, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb, uint64_t tenant_id, const int64_t capacity = DEFAULT_OUTBUF_CAPACITY);
+  int deserialize(ObVectorIndexSegmentHandle &segment_handle, ObIStreamBuf::CbParam &cb_param, ObIStreamBuf::Callback &cb, uint64_t tenant_id);
+  int deserialize(ObVectorIndexMeta& meta, ObIStreamBuf::CbParam &cb_param, ObHNSWDeserializeCallback &callback, uint64_t tenant_id);
 private:
   static const int64_t DEFAULT_OUTBUF_CAPACITY = 2LL * 1024LL * 1024LL; // 2MB
 

@@ -687,6 +687,7 @@ int ObStatsEstimator::copy_basic_col_stats(const int64_t cur_row_cnt,
         int64_t num_not_null = src_col_stats.at(i)->get_num_not_null();
         int64_t num_null = src_col_stats.at(i)->get_num_null();
         int64_t num_distinct = src_col_stats.at(i)->get_num_distinct();
+        int64_t lob_inrow_count = src_col_stats.at(i)->get_lob_inrow_count();
         ObNdvScaleAlgo ndv_scale_algo = column_params.at(i).ndv_scale_algo_;
         if (sample_value_ >= 0.000001 && sample_value_ < 100.0) {
           num_not_null = static_cast<int64_t>(num_not_null * 100 / sample_value_);
@@ -696,9 +697,15 @@ int ObStatsEstimator::copy_basic_col_stats(const int64_t cur_row_cnt,
           } else if (ndv_scale_algo == NDV_SCALE_ALGO_LINEAR && is_block_sample_) {
             num_distinct = static_cast<int64_t>(num_distinct * 100 / sample_value_);
             num_distinct = std::min(num_distinct, total_row_cnt);
+          } else if (lob_inrow_count > 0 && (column_params.at(i).is_string_column() ||
+                                             column_params.at(i).is_text_column())) {
+            num_distinct = ObOptSelectivity::scale_distinct(num_not_null, lob_inrow_count, num_distinct);
           } else {
             num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, cur_row_cnt, num_distinct);
           }
+        } else if (lob_inrow_count > 0 && (column_params.at(i).is_string_column() ||
+                                           column_params.at(i).is_text_column())) {
+          num_distinct = ObOptSelectivity::scale_distinct(num_not_null, lob_inrow_count, num_distinct);
         }
         dst_col_stats.at(i)->set_max_value(src_col_stats.at(i)->get_max_value());
         dst_col_stats.at(i)->set_min_value(src_col_stats.at(i)->get_min_value());
@@ -707,6 +714,7 @@ int ObStatsEstimator::copy_basic_col_stats(const int64_t cur_row_cnt,
         dst_col_stats.at(i)->set_num_null(num_null);
         dst_col_stats.at(i)->set_num_distinct(num_distinct);
         dst_col_stats.at(i)->set_avg_len(src_col_stats.at(i)->get_avg_len());
+        dst_col_stats.at(i)->set_lob_inrow_count(lob_inrow_count);
         if (OB_ISNULL(dst_col_stats.at(i)->get_llc_bitmap()) ||
             OB_ISNULL(src_col_stats.at(i)->get_llc_bitmap()) ||
             OB_UNLIKELY(src_col_stats.at(i)->get_llc_bitmap_size() >

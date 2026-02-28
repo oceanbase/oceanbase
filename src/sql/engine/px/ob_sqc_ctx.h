@@ -41,6 +41,10 @@ namespace storage
 }
 namespace sql
 {
+namespace iceberg
+{
+class DataFile;
+}
 
 // SQC 状态
 class ObSqcCtx
@@ -130,6 +134,8 @@ public:
   ObArenaAllocator arena_allocator_;
   ObIArray<ObTabletDirectLoadMgrHandle>* direct_load_mgr_handles_;
   ObIArray<ObTabletDirectLoadMgrHandle>* lob_direct_load_mgr_handles_;
+  common::ObArray<iceberg::DataFile*> iceberg_data_files_;
+  common::ObSpinLock iceberg_data_file_lock_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqcCtx);
 };

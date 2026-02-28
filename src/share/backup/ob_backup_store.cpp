@@ -244,6 +244,26 @@ int ObBackupStore::get_format_file_path(ObBackupPathString &path) const
   return ret;
 }
 
+// oss://path/single_backup_set_info.obbak
+int ObBackupStore::get_single_backup_set_info_path(ObBackupPathString &path) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath set_info_path;
+  int64_t pos = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupStore not init", KR(ret));
+  } else if (OB_FAIL(set_info_path.init(backup_dest_.get_root_path()))) {
+    LOG_WARN("failed to init set info path", KR(ret));
+  } else if (OB_FAIL(set_info_path.join(OB_STR_SINGLE_BACKUP_SET_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join single backup set info file", KR(ret), K(set_info_path));
+  } else if (OB_FAIL(databuff_printf(path.ptr(), path.capacity(), pos, "%s", set_info_path.get_obstr().ptr()))) {
+    LOG_WARN("failed to databuff printf", KR(ret), K(path));
+  }
+  return ret;
+}
+
+
 int ObBackupStore::is_format_file_exist(bool &is_exist) const
 {
   int ret = OB_SUCCESS;
@@ -260,6 +280,48 @@ int ObBackupStore::is_format_file_exist(bool &is_exist) const
     LOG_WARN("failed to check format file exist.", K(ret), K(full_path));
   } 
 
+  return ret;
+}
+
+int ObBackupStore::is_single_backup_set_info_exist(bool &is_exist) const
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  ObBackupIoAdapter util;
+  ObBackupPathString full_path;
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup store is not init", K(ret));
+  } else if (OB_FAIL(get_single_backup_set_info_path(full_path))) {
+    LOG_WARN("failed to get single backup set info path", KR(ret));
+  } else if (OB_FAIL(util.is_exist(full_path.ptr(), storage_info, is_exist))) {
+    LOG_WARN("failed to check single backup set info exist.", KR(ret), K(full_path));
+  }
+  return ret;
+}
+
+int ObBackupStore::is_file_list_file_exist(
+    const ObBackupPath &path,
+    const ObBackupFileSuffix &suffix,
+    bool &is_exist) const
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  ObBackupIoAdapter util;
+  ObBackupPath full_path;
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+  const int64_t file_id = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupStore not init", K(ret));
+  } else if (OB_FAIL(full_path.init(path.get_obstr()))) {
+    LOG_WARN("failed to init full path", K(ret), K(path));
+  } else if (OB_FAIL(full_path.join_file_list(file_id, suffix))) {
+    LOG_WARN("failed to join full path", K(ret), K(path));
+  } else if (OB_FAIL(util.adaptively_is_exist(full_path.get_obstr(), storage_info, is_exist))) {
+    LOG_WARN("failed to check file list file exist", K(ret), K(full_path));
+  }
   return ret;
 }
 
@@ -498,7 +560,7 @@ int ObBackupDestMgr::check_dest_connectivity(obrpc::ObSrvRpcProxy &rpc_proxy)
   return ret;
 }
 
-int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file)
+int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file, const bool need_check_permission)
 {
   int ret = OB_SUCCESS;
   share::ObBackupStore store;
@@ -511,6 +573,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
     LOG_WARN("ObBackupDestMgr not init", K(ret));
   } else if (OB_FAIL(remote_execute_if_need_(rpc_proxy,
                                              need_format_file,
+                                             need_check_permission,
                                              RemoteExecuteType::CHECK_DEST_VALIDITY,
                                              need_remote_execute))) {
     LOG_WARN("fail to remote execute if need", K(ret));
@@ -519,7 +582,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
     LOG_WARN("fail to init store", K(ret), K_(backup_dest));
   } else if (OB_FAIL(store.dest_is_empty_directory(is_empty))) {
     LOG_WARN("fail to check dest is empty dirctory", K(ret), K_(backup_dest));
-  } else if (OB_FAIL(check_dest_connectivity(rpc_proxy))) {
+  } else if (need_check_permission && OB_FAIL(check_dest_connectivity(rpc_proxy))) {
     LOG_WARN("fail to check dest connectivity", K(ret), K_(backup_dest));
   } else if (!is_empty) {
     if (OB_FAIL(store.is_format_file_exist(is_exist))) {
@@ -572,6 +635,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
 
 int ObBackupDestMgr::remote_execute_if_need_(obrpc::ObSrvRpcProxy &rpc_proxy,
                                              const bool need_format_file,
+                                             const bool need_check_permission,
                                              const RemoteExecuteType type,
                                              bool &need_remote_execute)
 {
@@ -589,9 +653,10 @@ int ObBackupDestMgr::remote_execute_if_need_(obrpc::ObSrvRpcProxy &rpc_proxy,
   } else if (OB_FALSE_IT(need_remote_execute = !is_self_tenant_server)) {
   } else if (need_remote_execute) {  // then forward request to a tenant server
     if (is_remote_execute_) { // but reciever can not foward this request again
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("self not in tenant alive servers is unexpected, should not remote execute again",
+      ret = OB_EAGAIN;
+      LOG_WARN("self not in tenant alive servers, locality of tenant may have changed, try again",
                KR(ret),
+               K_(tenant_id),
                K(is_self_tenant_server),
                K(server_list));
     } else {
@@ -601,7 +666,7 @@ int ObBackupDestMgr::remote_execute_if_need_(obrpc::ObSrvRpcProxy &rpc_proxy,
       common::ObAddr dest;
       if (OB_FAIL(backup_dest_.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)))) {
         LOG_WARN("fail to get backup dest str", K(ret), K_(backup_dest));
-      } else if (OB_FAIL(args.init(tenant_id_, dest_type_, ObString(backup_dest_str), need_format_file))) {
+      } else if (OB_FAIL(args.init(tenant_id_, dest_type_, ObString(backup_dest_str), need_format_file, need_check_permission))) {
         LOG_WARN("fail to init ObRemoteCheckBackupDestValidityArg", K(ret));
       } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
           GCONF.cluster_id, gen_meta_tenant_id(tenant_id_), ObLSID(ObLSID::SYS_LS_ID), dest))) {
@@ -716,11 +781,15 @@ int ObBackupDestMgr::write_format_file()
   int64_t dest_id = 0;
   common::ObArray<ObAddr> server_list;
   bool need_remote_execute = false;
+  ObBackupIOInfo io_info;
+  io_info.max_iops_ = max_iops_;
+  io_info.max_bandwidth_ = max_bandwidth_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDestMgr not init", K(ret));
   } else if (OB_FAIL(remote_execute_if_need_(*GCTX.srv_rpc_proxy_,
                                               false /*unused*/,
+                                              true /*need_check_permission*/,
                                               RemoteExecuteType::WRITE_FORMAT_FILE,
                                               need_remote_execute))) {
     LOG_WARN("fail to remote execute if need", K(ret));
@@ -740,7 +809,7 @@ int ObBackupDestMgr::write_format_file()
   } else if (OB_FAIL(store.write_format_file(format_desc))) {
     LOG_WARN("fail to write format file", K(ret), K(format_desc));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::insert_backup_storage_info(
-      *sql_proxy_, tenant_id_, backup_dest_, dest_type_, dest_id, max_iops_, max_bandwidth_))) {
+      *sql_proxy_, tenant_id_, backup_dest_, dest_type_, dest_id, io_info, true/*can_update*/))) {
     LOG_WARN("fail to insert backup storage info", K(ret), K(backup_dest_)); 
   }
   return ret;

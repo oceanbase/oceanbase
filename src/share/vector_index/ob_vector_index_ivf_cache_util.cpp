@@ -35,6 +35,7 @@ int ObIvfCacheUtil::ObIvfWriteCacheFunc::operator()(int64_t dim, float *data)
 int ObIvfCacheUtil::scan_and_write_ivf_cent_cache(ObPluginVectorIndexService &service,
                                                   const ObTableID &table_id,
                                                   const ObTabletID &tablet_id,
+                                                  const ObVectorIndexParam &vec_param,
                                                   ObIvfCentCache &cent_cache)
 {
   int ret = OB_SUCCESS;
@@ -45,11 +46,18 @@ int ObIvfCacheUtil::scan_and_write_ivf_cent_cache(ObPluginVectorIndexService &se
     if (OB_FAIL(service.process_ivf_aux_info(table_id, tablet_id, tmp_allocator, write_func))) {
       LOG_WARN("failed to get centers", K(ret));
       cent_cache.reuse();
+    } else if (!cent_cache.is_full_cache()) {
+      cent_cache.reuse();
     } else {
-      if (cent_cache.is_full_cache()) {
+      if (cent_cache.get_cache_type() != IvfCacheType::IVF_CENTROID_CACHE) {
         cent_cache.set_completed();
-      } else {
+      } else if (cent_cache.get_count() < ObVecIdxExtraInfo::IVF_CENTERS_HGRAPH_THRESHOLD) {
+        cent_cache.set_completed();
+      } else if (OB_FAIL(cent_cache.build_hgraph_and_release_centers(vec_param))) {
+        LOG_WARN("fail to build hgraph index after cache load", K(ret), K(table_id), K(tablet_id));
         cent_cache.reuse();
+      } else {
+        cent_cache.set_completed();
       }
     }
   }

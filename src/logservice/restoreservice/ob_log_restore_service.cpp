@@ -41,8 +41,8 @@ ObLogRestoreService::ObLogRestoreService() :
   common_event_schedule_ts_(OB_INVALID_TIMESTAMP),
   allocator_(),
   scheduler_(),
-  cond_(),
-  lock_(),
+  cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::LOG_RESTORE_SERVICE_COND_WAIT),
+  lock_(common::ObLatchIds::OB_LOG_RESTORE_SERVICE_LOCK),
   init_transport_(NULL),
   init_ls_svr_(NULL),
   init_log_service_(NULL)

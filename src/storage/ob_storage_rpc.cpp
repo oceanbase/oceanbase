@@ -167,7 +167,8 @@ ObCopyMacroBlockRangeArg::ObCopyMacroBlockRangeArg()
     backfill_tx_scn_(SCN::min_scn()),
     copy_macro_range_info_(),
     need_check_seq_(false),
-    ls_rebuild_seq_(-1)
+    ls_rebuild_seq_(-1),
+    copy_macro_block_infos_()
 {
 }
 
@@ -181,6 +182,7 @@ void ObCopyMacroBlockRangeArg::reset()
   copy_macro_range_info_.reset();
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
+  copy_macro_block_infos_.reset();
 }
 
 bool ObCopyMacroBlockRangeArg::is_valid() const
@@ -202,6 +204,8 @@ int ObCopyMacroBlockRangeArg::assign(const ObCopyMacroBlockRangeArg &arg)
     LOG_WARN("assign copy macro block range arg get invalid argument", K(ret), K(arg));
   } else if (OB_FAIL(copy_macro_range_info_.assign(arg.copy_macro_range_info_))) {
     LOG_WARN("failed to assign copy macro range info", K(ret), K(arg));
+  } else if (OB_FAIL(copy_macro_block_infos_.assign(arg.copy_macro_block_infos_))) {
+    LOG_WARN("failed to assign copy macro block infos", K(ret), K(arg));
   } else {
     tenant_id_ = arg.tenant_id_;
     ls_id_ = arg.ls_id_;
@@ -666,6 +670,9 @@ bool ObCopySSTableMacroRangeInfoHeader::is_valid() const
       && macro_range_count_ >= 0;
 }
 
+OB_SERIALIZE_MEMBER(ObCopySSTableMacroRangeInfoHeader,
+  copy_table_key_, macro_range_count_);
+
 ObCopySSTableMacroIdInfoHeader::ObCopySSTableMacroIdInfoHeader()
   : block_type_(CopyMacroBlockType::BLOCK_TYPE_MAX),
     id_type_(CopyMacroBlockIdType::BLOCK_ID_TYPE_MAX),
@@ -689,10 +696,6 @@ void ObCopySSTableMacroIdInfoHeader::reset()
 
 OB_SERIALIZE_MEMBER(ObCopySSTableMacroIdInfoHeader,
   block_type_, id_type_, block_count_);
-
-
-OB_SERIALIZE_MEMBER(ObCopySSTableMacroRangeInfoHeader,
-    copy_table_key_, macro_range_count_);
 
 ObCopyTabletSSTableHeader::ObCopyTabletSSTableHeader()
   : tablet_id_(),
@@ -1325,7 +1328,7 @@ int ObUpdateTransferMetaInfoArg::assign(const ObUpdateTransferMetaInfoArg &other
 
 OB_SERIALIZE_MEMBER(ObUpdateTransferMetaInfoArg, tenant_id_, dest_ls_id_, transfer_meta_info_);
 
-ObCopySSTableMacroIdInfoArg::ObCopySSTableMacroIdInfoArg()
+ObCopySSTableMacroLogicIdInfoArg::ObCopySSTableMacroLogicIdInfoArg()
   : tenant_id_(OB_INVALID_ID),
     ls_id_(),
     table_key_(),
@@ -1336,7 +1339,7 @@ ObCopySSTableMacroIdInfoArg::ObCopySSTableMacroIdInfoArg()
 {
 }
 
-void ObCopySSTableMacroIdInfoArg::reset()
+void ObCopySSTableMacroLogicIdInfoArg::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   ls_id_.reset();
@@ -1347,7 +1350,7 @@ void ObCopySSTableMacroIdInfoArg::reset()
   ls_rebuild_seq_ = -1;
 }
 
-bool ObCopySSTableMacroIdInfoArg::is_valid() const
+bool ObCopySSTableMacroLogicIdInfoArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_
       && ls_id_.is_valid()
@@ -1357,7 +1360,7 @@ bool ObCopySSTableMacroIdInfoArg::is_valid() const
       && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_);
 }
 
-OB_SERIALIZE_MEMBER(ObCopySSTableMacroIdInfoArg, tenant_id_, ls_id_, table_key_, version_, filled_tx_scn_, need_check_seq_, ls_rebuild_seq_);
+OB_SERIALIZE_MEMBER(ObCopySSTableMacroLogicIdInfoArg, tenant_id_, ls_id_, table_key_, version_, filled_tx_scn_, need_check_seq_, ls_rebuild_seq_);
 
 ObRebuildTabletSSTableInfoArg::ObRebuildTabletSSTableInfoArg()
   : tenant_id_(OB_INVALID_ID),
@@ -1392,6 +1395,31 @@ bool ObRebuildTabletSSTableInfoArg::is_valid() const
 
 OB_SERIALIZE_MEMBER(ObRebuildTabletSSTableInfoArg,
     tenant_id_, ls_id_, tablet_id_, dest_major_sstable_snapshot_, version_);
+
+ObAdvanceSrcLSCheckpointArg::ObAdvanceSrcLSCheckpointArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_(),
+    recycle_scn_()
+{
+}
+
+ObAdvanceSrcLSCheckpointArg::~ObAdvanceSrcLSCheckpointArg()
+{
+}
+
+bool ObAdvanceSrcLSCheckpointArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && recycle_scn_.is_valid();
+}
+
+void ObAdvanceSrcLSCheckpointArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  recycle_scn_.reset();
+}
+
+OB_SERIALIZE_MEMBER(ObAdvanceSrcLSCheckpointArg, tenant_id_, ls_id_, recycle_scn_);
 
 template <ObRpcPacketCode RPC_CODE>
 ObStorageStreamRpcP<RPC_CODE>::ObStorageStreamRpcP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
@@ -1868,7 +1896,7 @@ int ObHAFetchMacroBlockP::process()
         if (OB_FAIL(arg.assign(arg_))) {
           LOG_WARN("failed to assign copy macro block range arg", K(ret), K(arg_));
         } else if (OB_FAIL(producer.init(arg.tenant_id_, arg.ls_id_, arg.table_key_, arg.copy_macro_range_info_,
-            arg.data_version_, arg.backfill_tx_scn_))) {
+            arg.data_version_, arg.backfill_tx_scn_, arg.copy_macro_block_infos_))) {
           LOG_WARN("failed to init macro block producer", K(ret), K(arg));
         } else {
           while (OB_SUCC(ret)) {
@@ -2726,20 +2754,19 @@ void ObFetchSSTableMacroInfoP::free_sstable_macro_range_producer_(ObICopySSTable
   }
 }
 
-
-ObFetchSSTableMacroIdInfoP::ObFetchSSTableMacroIdInfoP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
+ObFetchSSTableMacroLogicIdInfoP::ObFetchSSTableMacroLogicIdInfoP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
     : ObStorageStreamRpcP(bandwidth_throttle)
 {
 }
 
-int ObFetchSSTableMacroIdInfoP::process()
+int ObFetchSSTableMacroLogicIdInfoP::process()
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObLSService *ls_service = nullptr;
   ObLS *ls = nullptr;
   char *buf = nullptr;
-  ObMigrationStatus migration_status;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   const int64_t start_ts = ObTimeUtil::current_time();
   const int64_t first_receive_ts = this->get_receive_timestamp();
   LOG_INFO("start to fetch sstable macro info", K(arg_));
@@ -2774,133 +2801,57 @@ int ObFetchSSTableMacroIdInfoP::process()
     STORAGE_LOG(WARN, "src migrate status do not allow migrate out", KR(ret), K(migration_status));
   } else if (arg_.need_check_seq_ && OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
     LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
-  } else if (OB_FAIL(fetch_sstable_macro_id_info_())) {
-    LOG_WARN("failed to fetch sstable macro id info", KR(ret), K(arg_));
+  } else if (OB_FAIL(fetch_sstable_macro_logic_id_info_())) {
+    LOG_WARN("failed to fetch sstable macro logic id info", KR(ret), K(arg_));
   } else if (arg_.need_check_seq_ && OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
     LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
   }
 
-  LOG_INFO("finish fetch sstable macro info", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts,
+  LOG_INFO("finish fetch sstable macro logic id info", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts,
       "in rpc queue time", start_ts - first_receive_ts);
 
   return ret;
 }
 
-int ObFetchSSTableMacroIdInfoP::fetch_sstable_macro_id_info_()
+int ObFetchSSTableMacroLogicIdInfoP::fetch_sstable_macro_logic_id_info_()
 {
   int ret = OB_SUCCESS;
-  const bool is_shared_storage_mode = GCTX.is_shared_storage_mode();
-  if (is_shared_storage_mode) {
-    if (OB_FAIL(fetch_sstable_macro_id_info_for_ss_())) {
-      LOG_WARN("failed to fetch sstbale macro id info for ss", K(ret));
-    }
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("fetch sstable macro id info do not support share nothing struct", K(ret));
-  }
-  return ret;
-}
 
-int ObFetchSSTableMacroIdInfoP::fetch_sstable_macro_id_info_for_ss_()
-{
-  int ret = OB_SUCCESS;
-  SMART_VAR(ObCopyPhysicalMacroBlockIdObProducer, producer) {
+  SMART_VAR(ObCopyLogicMacroBlockIdInfoObProducer, producer) {
     if (OB_FAIL(producer.init(arg_.tenant_id_, arg_.ls_id_, arg_.table_key_, arg_.filled_tx_scn_))) {
-      LOG_WARN("failed to init copy macro block id info producer", K(ret), K(arg_));
-    } else if (OB_FAIL(fetch_physical_data_id_info_(&producer))) {
-      LOG_WARN("failed to fetch physical data id info", K(arg_));
-    } else if (OB_FAIL(fetch_physical_other_id_info_(&producer))) {
-      LOG_WARN("failed to fetch physical other id info", K(ret), K(arg_));
-    }
-  }
-  return ret;
-}
+      LOG_WARN("failed to init copy logic macro block id info producer", K(ret), K(arg_));
+    } else {
+      ObLogicMacroBlockId logic_id;
+      int64_t block_count = 0;
 
-int ObFetchSSTableMacroIdInfoP::fetch_physical_data_id_info_(ObCopyPhysicalMacroBlockIdObProducer *producer)
-{
-  int ret = OB_SUCCESS;
-  ObCopySSTableMacroIdInfoHeader header;
-  header.block_type_ = ObCopySSTableMacroIdInfoHeader::CopyMacroBlockType::DATA_BLOCK;
-  header.id_type_ = ObCopySSTableMacroIdInfoHeader::CopyMacroBlockIdType::PHYSICAL_ID;
-
-  if (OB_ISNULL(producer)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fetch physical data id info get invalid argument", K(ret), KP(producer));
-  } else if (OB_FAIL(producer->get_data_block_count(header.block_count_))) {
-    LOG_WARN("failed to get data macro block count", K(ret), K(arg_));
-  } else if (OB_FAIL(fill_data(header))) {
-    LOG_WARN("failed to fill header", K(ret), K(header));
-  } else {
-    MacroBlockId physical_id;
-    int64_t block_count = 0;
-    while (OB_SUCC(ret)) {
-      physical_id.reset();
-      if (OB_FAIL(producer->get_next_data_block_id(physical_id))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          LOG_INFO("finish to fill macro block physical id", K(header));
-          break;
+      while (OB_SUCC(ret)) {
+        logic_id.reset();
+        if (OB_FAIL(producer.get_next_logic_id(logic_id))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            LOG_INFO("finish to fill logic macro block ids", K(block_count));
+            break;
+          } else {
+            LOG_WARN("failed to get next logic macro block ids", K(ret), K(arg_));
+          }
+        } else if (OB_FAIL(fill_data(logic_id))) {
+          LOG_WARN("failed to fill logic macro block ids", K(ret), K(logic_id));
         } else {
-          LOG_WARN("failed to get next macro block id info", K(ret), K(arg_));
+          block_count++;
+          LOG_DEBUG("success to fill logic macro block id", K(logic_id), K(block_count));
         }
-      } else if (OB_FAIL(fill_data(physical_id))) {
-        LOG_WARN("failed to fill macro block physical id", K(ret), K(physical_id));
-      } else {
-        block_count += 1;
       }
-    }
 
-    if (OB_SUCC(ret)) {
-      if (block_count != header.block_count_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("data block count not match", K(ret), K(block_count), K(header));
+      if (OB_SUCC(ret)) {
+        if (arg_.need_check_seq_) {
+          if (OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
+            LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
+          }
+        }
       }
     }
   }
-  return ret;
-}
 
-int ObFetchSSTableMacroIdInfoP::fetch_physical_other_id_info_(ObCopyPhysicalMacroBlockIdObProducer *producer)
-{
-  int ret = OB_SUCCESS;
-  ObCopySSTableMacroIdInfoHeader header;
-  header.block_type_ = ObCopySSTableMacroIdInfoHeader::CopyMacroBlockType::OTHER_BLOCK;
-  header.id_type_ = ObCopySSTableMacroIdInfoHeader::CopyMacroBlockIdType::PHYSICAL_ID;
-
-  if (OB_ISNULL(producer)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fetch physical data id info get invalid argument", K(ret), KP(producer));
-  } else if (OB_FAIL(producer->get_other_block_count(header.block_count_))) {
-    LOG_WARN("failed to get data macro block count", K(ret), K(arg_));
-  } else if (OB_FAIL(fill_data(header))) {
-    LOG_WARN("failed to fill header", K(ret), K(header));
-  } else {
-    MacroBlockId physical_id;
-    int64_t block_count = 0;
-    while (OB_SUCC(ret)) {
-      physical_id.reset();
-      if (OB_FAIL(producer->get_next_other_block_id(physical_id))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          LOG_INFO("finish to fill macro block physical id", K(header));
-          break;
-        } else {
-          LOG_WARN("failed to get next macro block id info", K(ret), K(arg_));
-        }
-      } else if (OB_FAIL(fill_data(physical_id))) {
-        LOG_WARN("failed to fill macro block physical id", K(ret), K(physical_id));
-      } else {
-        block_count += 1;
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (block_count != header.block_count_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("other block count not match", K(ret), K(block_count), K(header));
-      }
-    }
-  }
   return ret;
 }
 
@@ -3143,7 +3094,14 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_tablets_()
           K(tablet_info));
       } else if (tablet->get_tablet_meta().transfer_info_.transfer_seq_ > tablet_info.transfer_seq_ + 1) {
         ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
-        LOG_WARN("tablet is in empty shell but transfer seq not match", K(ret), KPC(tablet), K(tablet_info));
+        LOG_WARN("tablet transfer seq is not match", K(ret), KPC(tablet), K(tablet_info));
+      } else {
+        //TODO(muwei.ym) now cannot cover empty shell because cover empty shell will delete empty shell first
+        //It make restart cannot find right filter condition
+        //Now disable cover empty shell
+        ret = OB_EAGAIN;
+        LOG_WARN("This tablet should not exist, need wait finish gc", K(ret), KPC(tablet),
+          K(tablet_info));
       }
     }
   }
@@ -5253,6 +5211,34 @@ int ObRebuildTabletSSTableInfoP::build_sstable_info_(ObLS *ls)
   return ret;
 }
 
+int ObAdvanceSrcLSCheckpointP::process()
+{
+  int ret = OB_SUCCESS;
+
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObLSHandle ls_handle;
+    ObLSService *ls_service = nullptr;
+    ObLS *ls = nullptr;
+    ObLSMigrationHandler *ls_migration_handler = nullptr;
+    if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls service should not be null", KR(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("failed to get log stream", KR(ret), K(arg_));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls migration handler should not be NULL", KR(ret), K(arg_), KP(ls_migration_handler));
+    } else if (OB_FAIL(ls_migration_handler->update_advance_ls_checkpoint_scn(arg_.recycle_scn_))) {
+      LOG_WARN("failed to check and update need advance ls checkpoint", K(ret), K(arg_));
+    }
+  }
+
+  return ret;
+}
+
 } //namespace obrpc
 
 namespace storage
@@ -5784,6 +5770,36 @@ int ObStorageRpc::fetch_ls_member_and_learner_list(
       .group_id(share::OBCG_STORAGE)
       .fetch_ls_member_and_learner_list(arg, member_info))) {
     LOG_WARN("fail to check ls is valid member", K(ret), K(tenant_id), K(ls_id));
+  }
+  return ret;
+}
+
+int ObStorageRpc::advance_src_ls_checkpoint(
+    const uint64_t tenant_id,
+    const ObStorageHASrcInfo &src_info,
+    const share::ObLSID &ls_id,
+    const share::SCN &recycle_scn)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObAdvanceSrcLSCheckpointArg arg;
+  obrpc::Int64 res = 0;
+  arg.tenant_id_ = tenant_id;
+  arg.ls_id_ = ls_id;
+  arg.recycle_scn_ = recycle_scn;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || !src_info.is_valid() || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
+  } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
+        .by(tenant_id)
+        .group_id(share::OBCG_STORAGE)
+        .advance_src_ls_checkpoint(arg, res))) {
+    LOG_WARN("fail to advance src ls checkpoint", K(ret), K(tenant_id), K(ls_id), K(src_info));
+  } else {
+    LOG_INFO("succeed to advance src ls checkpoint", K(ret), K(tenant_id), K(ls_id), K(src_info));
   }
   return ret;
 }

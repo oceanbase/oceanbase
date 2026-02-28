@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/ob_errno.h"
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_table_resolver.h"
 #include "share/ob_fts_index_builder_util.h"
@@ -23,6 +24,7 @@
 #include "share/ob_vec_index_builder_util.h"
 #include "share/ob_heap_organized_table_util.h"
 #include "share/ob_license_utils.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 
 namespace oceanbase
@@ -41,6 +43,7 @@ ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
       column_name_set_(),
       if_not_exist_(false),
       is_oracle_temp_table_(false),
+      is_old_oracle_temp_table_(false),
       is_temp_table_pk_added_(false),
       index_arg_(),
       current_index_name_set_(),
@@ -289,19 +292,32 @@ int ObCreateTableResolver::add_udt_hidden_column(ObTableSchema &table_schema,
 int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, ParseNode *commit_option_node)
 {
   int ret = OB_SUCCESS;
-  session_info_->set_has_temp_table_flag();
-  if (OB_FAIL(set_table_name(table_name_))) {
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", KR(ret));
+  } else if (FALSE_IT(session_info_->set_has_temp_table_flag())) {
+  } else if (OB_FAIL(session_info_->set_session_temp_table_used(true))) {
+    LOG_WARN("fail to set session temp table used", KR(ret));
+  } else if (OB_FAIL(set_table_name(table_name_))) {
       LOG_WARN("failed to set table name", K(ret), K(table_name_));
   } else if (session_info_->is_obproxy_mode() && 0 == session_info_->get_sess_create_time()) {
     ret = OB_NOT_SUPPORTED;
     SQL_RESV_LOG(WARN, "can't create temporary table via obproxy, upgrade obproxy first", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "obproxy version is too old, create temporary table");
+  } else if (!is_oracle_mode()
+             && (!((session_info_->is_client_sessid_support()
+                  || !session_info_->is_obproxy_mode())
+                && session_info_->get_client_sid() != INVALID_SESSID))) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_RESV_LOG(WARN, "can't create temporary table via obproxy, upgrade obproxy first", KR(ret), K(session_info_->is_client_sessid_support()),
+                                                                                          K(session_info_->is_obproxy_mode()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "obproxy version is too old or config not right, create temporary table");
   } else {
     if (is_oracle_mode()) {
       if (OB_ISNULL(commit_option_node) || T_TRANSACTION == commit_option_node->type_) {
-        table_schema.set_table_type(TMP_TABLE_ORA_TRX);
+        table_schema.set_table_type(is_old_oracle_temp_table_ ? TMP_TABLE_ORA_TRX : TMP_TABLE_ORA_TRX_V2);
       } else {
-        table_schema.set_table_type(TMP_TABLE_ORA_SESS);
+        table_schema.set_table_type(is_old_oracle_temp_table_ ? TMP_TABLE_ORA_SESS : TMP_TABLE_ORA_SESS_V2);
       }
     } else {
       table_schema.set_table_type(TMP_TABLE);
@@ -320,7 +336,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 column;
   ObColumnResolveStat stat;
-  if (is_oracle_temp_table_) {
+  if (is_old_oracle_temp_table_) {
     ObObjMeta meta_int;
     meta_int.set_int();
     meta_int.set_collation_level(CS_LEVEL_NONE);
@@ -360,7 +376,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
 int ObCreateTableResolver::add_new_indexkey_for_oracle_temp_table(const int32_t org_key_len)
 {
   int ret = OB_SUCCESS;
-  if (is_oracle_temp_table_) {
+  if (is_old_oracle_temp_table_) {
     if (org_key_len + 1 > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
       ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
       LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
@@ -385,7 +401,7 @@ int ObCreateTableResolver::add_pk_key_for_oracle_temp_table(ObArray<ObColumnReso
                                                             int64_t &pk_data_length)
 {
   int ret = OB_SUCCESS;
-  if (is_oracle_temp_table_) {
+  if (is_old_oracle_temp_table_) {
     ObString key_name(OB_HIDDEN_SESSION_ID_COLUMN_NAME);
     if (OB_FAIL(add_primary_key_part(key_name, stats, pk_data_length))) {
       SQL_RESV_LOG(WARN, "add primary key part failed", K(ret), K(key_name));
@@ -399,7 +415,7 @@ int ObCreateTableResolver::add_pk_key_for_oracle_temp_table(ObArray<ObColumnReso
 int ObCreateTableResolver::set_partition_info_for_oracle_temp_table(share::schema::ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  if (is_oracle_temp_table_) {
+  if (is_old_oracle_temp_table_) {
     ObString partition_expr;
     common::ObSEArray<ObString, 2> partition_keys;
     char expr_str_buf[64] = {'\0'};
@@ -448,9 +464,14 @@ int ObCreateTableResolver::set_default_micro_index_clustered_(share::schema::ObT
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SET_ENABLE_MACRO_BLOOM_FILTER);
 int ObCreateTableResolver::set_default_enable_macro_block_bloom_filter_(share::schema::ObTableSchema &table_schema)
 {
-  table_schema.set_enable_macro_block_bloom_filter(false);
+  if (ERRSIM_SET_ENABLE_MACRO_BLOOM_FILTER) {
+    table_schema.set_enable_macro_block_bloom_filter(true);
+  } else {
+    table_schema.set_enable_macro_block_bloom_filter(false);
+  }
   return OB_SUCCESS;
 }
 
@@ -500,6 +521,61 @@ int ObCreateTableResolver::set_default_merge_engine_type_(share::schema::ObTable
   return ret;
 }
 
+int ObCreateTableResolver::set_default_delta_format_(share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (!table_schema.is_user_table()) {
+    table_schema.set_minor_row_store_type(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session_info_ is null!", KR(ret), KP_(session_info));
+  } else {
+    uint64_t tenant_id = session_info_->get_effective_tenant_id(), tenant_version;
+    ObRowStoreType row_store_type = ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+      LOG_WARN("failed to get data version", K(ret));
+    } else if (tenant_version < DATA_VERSION_4_5_1_0) {
+    } else {
+      ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (OB_LIKELY(tenant_config.is_valid())) {
+        ObString delta_format = tenant_config->default_delta_format.get_value_string();
+        OZ(ObStoreFormat::resolve_delta_row_store_type(delta_format, row_store_type));
+      } else {
+        LOG_WARN("invalid tenant config, delta format is set to flat", K(tenant_id));
+      }
+    }
+    OX(table_schema.set_minor_row_store_type(row_store_type));
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::set_default_skip_index_level_(share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (!table_schema.is_user_table()) {
+    table_schema.set_skip_index_level(ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session_info_ is null!", KR(ret), KP_(session_info));
+  } else {
+    uint64_t tenant_id = session_info_->get_effective_tenant_id(), tenant_version;
+    ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+      LOG_WARN("failed to get data version", K(ret));
+    } else if (tenant_version < DATA_VERSION_4_5_1_0 || !tenant_config.is_valid()) {
+      table_schema.set_skip_index_level(ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY);
+    } else if (0 == tenant_config->default_skip_index_level) {
+      table_schema.set_skip_index_level(ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY);
+    } else if (1 == tenant_config->default_skip_index_level) {
+      table_schema.set_skip_index_level(ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_AND_DELTA_SSTABLE);
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("skip index level is not supported", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -525,9 +601,13 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
     ObSEArray<ObString, 8> pk_columns_name;
     bool is_create_as_sel = (CREATE_TABLE_AS_SEL_NUM_CHILD == create_table_node->num_child_);
     const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    uint64_t data_version = 0;
     if (OB_ISNULL(create_table_stmt = create_stmt<ObCreateTableStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SQL_RESV_LOG(ERROR, "failed to create select stmt", K(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("Fail to get data version", KR(ret));
     } else {
       create_table_stmt->set_allocator(*allocator_);
       stmt_ = create_table_stmt;
@@ -536,17 +616,29 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
     if (OB_SUCC(ret)) {
       if (NULL != create_table_node->children_[0]) {
           switch (create_table_node->children_[0]->type_) {
-            case T_TEMPORARY:
+            case T_TEMPORARY: {
+              uint64_t tenant_version = 0;
               if (create_table_node->children_[5] != NULL) { //临时表不支持分区
                 ret = OB_ERR_TEMPORARY_TABLE_WITH_PARTITION;
-              } else if (lib::is_mysql_mode()) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "MySQL compatible temporary table");
               } else {
                 is_temporary_table = true;
                 is_oracle_temp_table_ = (is_mysql_mode == false);
+                bool enable_new_oracle_temp_table = false;
+                if (((data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+                      || data_version >= DATA_VERSION_4_5_1_0)
+                    && is_oracle_mode()) {
+                  ParseNode *commit_option_node = create_table_node->children_[7];
+                  enable_new_oracle_temp_table = tenant_config.is_valid() ? tenant_config->_enable_new_oracle_temporary_table : false;
+                  if (enable_new_oracle_temp_table && (OB_ISNULL(commit_option_node) || T_TRANSACTION == commit_option_node->type_)) {
+                    enable_new_oracle_temp_table = tenant_config->_enable_new_oracle_trx_temporary_table;
+                  }
+                }
+                if (OB_SUCC(ret)) {
+                  is_old_oracle_temp_table_ = !enable_new_oracle_temp_table && is_oracle_temp_table_;
+                }
               }
               break;
+            }
             case T_EXTERNAL: {
               uint64_t tenant_version = 0;
               if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
@@ -677,7 +769,6 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           SQL_RESV_LOG(WARN, "resolve_table_id_pre failed", K(ret));
         }
 
-        ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
         uint64_t data_version = 0;
         bool has_clustering_key = false;
         int64_t clustering_key_index = -1;
@@ -747,7 +838,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               table_mode_.pk_exists_ = 0 == get_primary_key_size() ? TOM_TABLE_WITHOUT_PK : TOM_TABLE_WITH_PK;
               table_mode_.pk_mode_ = TPKM_TABLET_SEQ_PK;
             }
-            if (is_oracle_temp_table_) {
+            if (is_old_oracle_temp_table_) {
               //oracle global temp table default table mode is queuing
               table_mode_.mode_flag_ = TABLE_MODE_QUEUING;
             }
@@ -777,8 +868,16 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               SQL_RESV_LOG(WARN, "set table options (micro_block_format_version) failed", K(ret));
             } else if (OB_FAIL(set_default_merge_engine_type_(table_schema))) {
               SQL_RESV_LOG(WARN, "set default merge engine type failed", K(ret));
+            } else if (OB_FAIL(set_default_delta_format_(table_schema))) {
+              SQL_RESV_LOG(WARN, "set default delta format failed", K(ret));
+            } else if (OB_FAIL(set_default_skip_index_level_(table_schema))) {
+              SQL_RESV_LOG(WARN, "set default skip index level failed", K(ret));
             } else if (OB_FAIL(resolve_table_options(create_table_node->children_[4], false))) {
               SQL_RESV_LOG(WARN, "resolve table options failed", K(ret));
+            } else if (is_oracle_temp_table_ && !is_old_oracle_temp_table_ && !tablegroup_name_.trim().empty()) {
+              // 禁止临时表指定 TABLEGROUP
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Specifying tablegroup on temporary table");
             } else if (OB_FAIL(set_table_option_to_schema(table_schema))) {
               SQL_RESV_LOG(WARN, "set table option to schema failed", K(ret));
             } else if (OB_FAIL(check_max_row_data_length(table_schema))) {
@@ -1009,9 +1108,24 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 
     if (OB_SUCC(ret)) {
       ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+      const ObSArray<obrpc::ObCreateIndexArg> &index_arg_list = create_table_stmt->get_index_arg_list();
       if (!table_schema.get_kv_attributes().empty() &&
-          OB_FAIL(ObTTLUtil::check_kv_attributes(table_schema, params_.is_htable_))) {
-        LOG_WARN("fail to check kv attributes", K(ret));
+          OB_FAIL(ObTTLUtil::check_kv_attributes(table_schema, index_arg_list, params_.is_htable_))) {
+        LOG_WARN("failed to check kv attributes", K(ret));
+      }
+    }
+
+
+    if (OB_SUCC(ret)) {
+      ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+      if (OB_ISNULL(schema_checker_) || OB_ISNULL(schema_checker_->get_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "schema_checker_ or schema guard is null.", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_create_append_only_engine_valid(table_schema, tenant_id))) {
+        LOG_WARN("fail to check append_only engine valid", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_create_ttl_schema_valid(
+                     table_schema, tenant_id))) {
+        LOG_WARN("fail to check ttl schema valid", K(ret));
       }
     }
   }
@@ -1123,10 +1237,10 @@ int ObCreateTableResolver::resolve_partition_option(
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObCreateTableResolverBase::resolve_partition_option(node, table_schema, is_partition_option_node_with_opt))) {
     LOG_WARN("fail to resolve partition option", KR(ret));
-  } else if (is_oracle_temp_table_ && OB_FAIL(set_partition_info_for_oracle_temp_table(table_schema))) {
+  } else if (is_old_oracle_temp_table_ && OB_FAIL(set_partition_info_for_oracle_temp_table(table_schema))) {
     SQL_RESV_LOG(WARN, "set __sess_id as partition key failed", KR(ret));
   }
-  if (OB_SUCC(ret) && (OB_NOT_NULL(node) || table_schema.is_external_table() || is_oracle_temp_table_)) {
+  if (OB_SUCC(ret) && (OB_NOT_NULL(node) || table_schema.is_external_table() || is_old_oracle_temp_table_)) {
     ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
     if (OB_ISNULL(schema_guard)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2252,7 +2366,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
         }
       }
       // oracle临时表会在subquery的基础上默认添加两列隐藏列
-      const int64_t hidden_column_num = is_oracle_temp_table_ ? 2 : 0;
+      const int64_t hidden_column_num = is_old_oracle_temp_table_ ? 2 : 0;
       if (OB_SUCC(ret) && lib::is_oracle_mode()) {
         if (create_table_column_count > 0) {
           if (create_table_column_count != select_items.count() + hidden_column_num) {
@@ -2656,12 +2770,16 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
             LOG_WARN("tenant is not user tenant vector index not supported ", K(ret), K(tenant_id));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.3, not user tenant create vector index is");
           } else {
-#ifndef OB_BUILD_SYS_VEC_IDX
+            #ifndef OB_BUILD_SYS_VEC_IDX
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("sys tenant vector index not supported ", K(ret), K(tenant_id));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant create vector index is");
-#endif
+            #endif
           }
+        } else if (table_schema.is_mysql_tmp_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql temp table not support vector index", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create vector index is");
         }
         if (OB_SUCC(ret)) {
           type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL; // 需要考虑ivf、hnsw、spiv这三种模式，其中ivf索引又分成ivfflat，ivfsq8，ivfpq三类
@@ -2675,6 +2793,10 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support global fts index now", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "global fulltext index is");
+        } else if (table_schema.is_mysql_tmp_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql temp table not support fulltext index", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create fulltext index is");
         } else {
           // set type to fts_doc_rowkey first, append other fts arg later
           type = INDEX_TYPE_FTS_INDEX_LOCAL;
@@ -2687,6 +2809,10 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
         } else if (global_) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support global fts index now", K(ret));
+        } else if (table_schema.is_mysql_tmp_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql temp table not support multivalue index", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create multivalue index is");
         } else {
           type = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
         }
@@ -2698,6 +2824,10 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
         } else if (global_) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support global multivalue index now", K(ret));
+        } else if (table_schema.is_mysql_tmp_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql temp table not support multivalue index", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create multivalue index is");
         } else {
           type = INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
         }
@@ -3144,12 +3274,26 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
             if (OB_FAIL(ret)) {
             } else if (is_vec_index) {
               vec_index_col_id = column_schema->get_column_id();
-              if (ObVectorIndexUtil::has_multi_index_on_same_column(vec_index_col_ids_, vec_index_col_id)) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("more than one vector index on same column is not supported", K(ret), K(vec_index_col_id), K(vec_index_col_ids_));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one vector index on same column is");
+              uint64_t tenant_data_version = 0;
+              if (OB_ISNULL(session_info_)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null", K(ret));
+              } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+                LOG_WARN("get tenant data version failed", K(ret));
               } else if (OB_FAIL(set_vec_column_name(column_schema->get_column_name()))) {
                 LOG_WARN("fail to set vec column name", K(ret));
+              } else if (ObVectorIndexUtil::has_multi_index_on_same_column(vec_index_col_ids_, vec_index_col_id)) {
+                ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+                const bool is_create_semantic_index = ob_is_varchar_type(column_schema->get_data_type(), column_schema->get_collation_type());
+                if (!tenant_config.is_valid()) {
+                  ret = OB_EAGAIN;
+                  LOG_WARN("tenant_config has not been loaded", KR(ret));
+                } else if (tenant_data_version < DATA_VERSION_4_5_1_0 || !is_create_semantic_index || !tenant_config->_enable_multiple_semantic_indexes_on_column) {
+                  // only support create multi semantic index for now.
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("more than one vector index on same column is not supported", K(ret), K(vec_index_col_id), K(vec_index_col_ids_));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one vector index on same column is");
+                }
               }
             }
             if (OB_SUCC(ret)) {
@@ -3860,7 +4004,7 @@ int ObCreateTableResolver::resolve_auto_partition(const ParseNode *partition_nod
 
 int ObCreateTableResolver::add_inner_index_for_heap_gtt() {
   int ret = OB_SUCCESS;
-  if (is_oracle_temp_table_) {
+  if (is_old_oracle_temp_table_) {
     if (OB_ISNULL(stmt_) || OB_ISNULL(allocator_)) {
       ret = OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(WARN, "stmt is NULL", K(stmt_), K(ret));
@@ -4007,6 +4151,7 @@ int ObCreateTableResolver::check_building_domain_index_legal()
   }
   return ret;
 }
+
 
 int ObCreateTableResolver::resolve_primary_key_node_in_heap_table(const ParseNode *element, common::ObArray<ObColumnResolveStat> &stats,
                                                                   ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols)

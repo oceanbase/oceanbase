@@ -25,7 +25,7 @@ ObLogForUpdate::ObLogForUpdate(ObLogPlan &plan)
     gi_charged_(false),
     wait_ts_(-1),
     lock_rownum_(NULL),
-    index_dml_info_()
+    index_dml_info_(plan.get_allocator())
 {}
 
 const char* ObLogForUpdate::get_name() const
@@ -131,6 +131,17 @@ int ObLogForUpdate::compute_sharding_info()
         get_sharding()->is_distributed() &&
         NULL != get_sharding()->get_phy_table_location_info();
   }
+  return ret;
+}
+
+int ObLogForUpdate::compute_plan_type()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::compute_plan_type())) {
+    LOG_WARN("failed to compute plan type", K(ret));
+  } else if (is_multi_part_dml()) {
+    location_type_ = ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN;
+  } else { /*do nothing*/ }
   return ret;
 }
 

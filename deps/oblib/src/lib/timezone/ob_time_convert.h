@@ -21,6 +21,7 @@
 #include "common/sql_mode/ob_sql_mode.h"
 #include "common/ob_accuracy.h"
 //#include "lib/container/ob_bit_set.h"
+#include "sql/engine/ob_bit_vector.h"
 
 namespace oceanbase
 {
@@ -101,6 +102,7 @@ typedef uint64_t ObDTMode;
 
 #define DT_MON_NAME       11  // monthname doesn't contains real data by using month directly
                               // put it after DT_OFFSET_MIN will be fine
+#define DT_QUARTER        12  // quarter doesn't contains real data, calculated from month: (month + 2) / 3
 
 extern const int64_t DT_PART_BASE[DATETIME_PART_CNT];
 extern const int64_t DT_PART_MIN[DATETIME_PART_CNT];
@@ -166,6 +168,10 @@ extern const int64_t USECS_PER_MIN;
 
 #define EPOCH_WDAY    4
 #define WEEK_MODE_CNT   8
+#define QUICK_PARSE_YYYYMMDD_LENGTH 8
+#define QUICK_PARSE_YYYY_MM_DD_LENGTH 10
+#define QUICK_PARSE_YYYY_MM_DD_hh_mm_ss_LENGTH 19
+#define QUICK_PARSE_YYYY_MM_DD_hh_mm_ss_SSSSSS_LENGTH 26
 extern const bool INNER_IS_LEAP_YEAR[10000];
 #define IS_LEAP_YEAR(y) ((y >= 0 && y < 10000) ? INNER_IS_LEAP_YEAR[y] : (y == 0 ? 0 : ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0)))
 extern const int32_t DAYS_UNTIL_MON[2][12 + 1];
@@ -177,9 +183,13 @@ struct ObIntervalIndex {
   int32_t end_;
   int32_t count_;
   bool calc_with_usecond_;
+  // Conversion factor: positive for multiply, negative for divide
+  int32_t scale_factor_;
   // in some cases we can trans the inteval to usecond exactly,
   // in other cases we calc with ob_time, like month, or quarter, or year, because we are not sure
   // how many days should be added exactly in simple way.
+  // scale_factor_ is used to convert unit to its base unit (e.g., WEEK->DAY: 7, QUARTER->MONTH: 3)
+  // positive value: multiply by scale_factor_, negative value: divide by abs(scale_factor_)
 };
 extern const ObIntervalIndex INTERVAL_INDEX[DATE_UNIT_MAX];
 extern const ObTimeConstStr MON_NAMES[12 + 1];
@@ -479,6 +489,23 @@ private:
     int32_t weekday_value_;
   };
 public:
+  struct ObTimeDigits {
+    ObTimeDigits()
+      : ptr_(NULL), len_(0), value_(0)
+    {}
+    VIRTUAL_TO_STRING_KV("ptr_", common::ObLenString(ptr_, len_), K(len_), K(value_));
+    const char *ptr_;
+    int32_t len_;
+    int64_t value_;
+  };
+  enum QuickParserType
+  {
+    QuickParserUnused,
+    QuickParserTime8,
+    QuickParserTime10,
+    QuickParserTime19,
+    QuickParserTime26
+  };
   // int / double / string -> datetime(timestamp) / interval / date / time / year.
   static int int_to_datetime(int64_t int_part, int64_t dec_part, const ObTimeConvertCtx &cvrt_ctx,
                              int64_t &value, const ObDateSqlMode date_sql_mode);
@@ -555,6 +582,9 @@ public:
   static int mdatetime_to_double(ObMySQLDateTime value, double &dbl);
   static int datetime_to_str(int64_t value, const ObTimeZoneInfo *tz_info, const ObString &nls_format,
                              int16_t scale, char *buf, int64_t buf_len, int64_t &pos, bool with_delim = true);
+  static int datetime_to_str_for_batch(int64_t value, const ObTimeZoneInfo *tz_info,
+    const ObString &nls_format, int16_t scale, char *buf, int64_t buf_len, int64_t &pos,
+    ObTime &ob_time, bool with_delim = true);
   static int mdatetime_to_str(ObMySQLDateTime value, const ObTimeZoneInfo *tz_info,
                               const ObString &nls_format, int16_t scale, char *buf, int64_t buf_len,
                               int64_t &pos, bool with_delim = true);
@@ -622,12 +652,18 @@ public:
                          const ObDateSqlMode date_sql_mode);
   static int date_adjust(const ObString &base_str, const ObString &interval_str,
                          ObDateUnitType unit_type, int64_t &value, bool is_add);
+  static int date_adjust(const int64_t base_value, const int64_t interval_value,
+                         ObDateUnitType unit_type, int64_t &value, bool is_add,
+                         const ObDateSqlMode date_sql_mode);
   static bool is_valid_datetime(const int64_t usec);
   static bool is_valid_mdatetime(const ObMySQLDateTime usec);
   static bool is_valid_otimestamp(const int64_t time_us, const int32_t tail_nsec);
   static void calc_oracle_temporal_minus(const ObOTimestampData &v1, const ObOTimestampData &v2, ObIntervalDSValue &result);
   static int date_add_nmonth(const int64_t ori_date_value, const int64_t nmonth,
                              int64_t &result_date_value, bool auto_adjust_mday = false);
+  static int date_add_nmonth_for_oracle(ObTime &ob_time, const int64_t nmonth,
+                                        bool auto_adjust_mday = true, bool need_dt_date = true);
+  static int date_add_nmonth_for_mysql(ObTime &ob_time, const int64_t nmonth, bool need_dt_date = false);
   static int date_add_nsecond(const int64_t ori_date_value, const int64_t nsecond,
                               const int32_t fractional_second, int64_t &result_date_value);
   static int otimestamp_add_nmonth(const ObObjType type, const ObOTimestampData ori_value, const ObTimeZoneInfo *tz_info,
@@ -650,8 +686,42 @@ public:
   static int int_to_ob_time_without_date(int64_t time_second, ObTime &ob_time, int64_t nano_second = 0);
   static int str_to_ob_time_with_date(const ObString &str, ObTime &ob_time, int16_t *scale,
                                       const ObDateSqlMode date_sql_mode,
-                                      const bool &need_truncate = false);
-  static int str_to_ob_time_without_date(const ObString &str, ObTime &ob_time, int16_t *scale = NULL, const bool &need_truncate = false);
+                                      const bool &need_truncate = false,
+                                      ObTimeDigits *digits = nullptr);
+  static int str_to_ob_time_with_date_helper(const ObString &str, ObTime &ob_time, int16_t *scale,
+                                      const ObDateSqlMode date_sql_mode,
+                                      const bool &need_truncate = false,
+                                      ObTimeDigits *digits = nullptr);
+  static int str_to_ob_time_without_date(const ObString &str, ObTime &ob_time, int16_t *scale = NULL,
+                                      const bool &need_truncate = false,
+                                      ObTimeDigits *digits = nullptr);
+  static void string_to_obtime_quick(const char *ptr_date,
+                              int length,
+                              ObTime &obtime,
+                              bool &datetime_valid,
+                              bool &string_match_format,
+                              int64_t &last_first_8digits,
+                              QuickParserType &last_quick_parser_type,
+                              bool is_time_type = false);
+  template<bool HAS_MICROSECOND = false>
+  static void string_to_obtime_quick_19(const char *ptr_date,
+                              int length,
+                              ObTime &obtime,
+                              bool &datetime_valid,
+                              bool &string_match_format,
+                              int64_t &last_first_8digits);
+  static void string_to_obtime_quick_10(const char *ptr_date,
+                              int length,
+                              ObTime &obtime,
+                              bool &datetime_valid,
+                              bool &string_match_format,
+                              int64_t &last_first_8digits);
+  static void string_to_obtime_quick_8(const char *ptr_date,
+                              int length,
+                              ObTime &obtime,
+                              bool &datetime_valid,
+                              bool &string_match_format,
+                              int64_t &last_first_8digits);
   static int str_to_ob_time_format(const ObString &str, const ObString &fmt, ObTime &ob_time,
                                    int16_t *scale, const ObDateSqlMode date_sql_mode);
   static int str_to_ob_time_oracle_dfm(const ObString &str, const ObTimeConvertCtx &cvrt_ctx,
@@ -666,6 +736,7 @@ public:
   static int calc_date_with_year_week_wday(const ObYearWeekWdayElems &elements, ObTime &ot);
   static int handle_year_week_wday(const ObYearWeekWdayElems &elements, ObTime &ot);
   static int str_to_ob_interval(const ObString &str, ObDateUnitType unit_type, ObInterval &ob_interval);
+  static int int_to_ob_interval(int64_t value, ObDateUnitType unit_type, ObInterval &ob_interval);
   static int usec_to_ob_time(int64_t usecs, ObTime &ob_time);
   static int datetime_to_ob_time(int64_t value, const ObTimeZoneInfo *tz_info, ObTime &ob_time);
   template <bool calc_date = false>
@@ -695,6 +766,7 @@ public:
                                    char *buf, int64_t buf_len, int64_t &pos, bool &res_null,
                                    const ObString &locale_name);
   static int ob_time_to_datetime(ObTime &ob_time, const ObTimeConvertCtx &cvrt_ctx, int64_t &value);
+  static int ob_time_to_datetime(ObTime &ob_time, const ObTimeConvertCtx &cvrt_ctx, int64_t &value, ObTimeZoneInfoPos &literal_tz_info_);
   static int ob_time_to_mdatetime(ObTime &ob_time, ObMySQLDateTime &value);
   static int ob_time_to_otimestamp(ObTime &ob_time, ObOTimestampData &value);
   static int32_t ob_time_to_date(ObTime &ob_time);
@@ -802,22 +874,15 @@ public:
                                     const ObCollationType format_coll_type,
                                     const bool need_tz, bool &complete);
   static int32_t get_days_of_month(int32_t year, int32_t month);
-  struct ObTimeDigits {
-    ObTimeDigits()
-      : ptr_(NULL), len_(0), value_(0)
-    {}
-    VIRTUAL_TO_STRING_KV("ptr_", common::ObLenString(ptr_, len_), K(len_), K(value_));
-    const char *ptr_;
-    int32_t len_;
-    int64_t value_;
-  };
+
   struct ObTimeDelims {
     ObTimeDelims()
-      : ptr_(NULL), len_(0)
+      : ptr_(NULL), len_(0), has_space_(0)
     {}
     VIRTUAL_TO_STRING_KV("ptr_", common::ObLenString(ptr_, len_), K(len_));
     const char *ptr_;
     int32_t len_;
+    int32_t has_space_;
   };
   enum ObHourFlag
   {
@@ -845,29 +910,42 @@ public:
   }
   */
 public:
+  inline static bool validate_datetime_fast(ObTime &ob_time)
+  {
+    return !(ob_time.parts_[DT_YEAR] <= 0 || 9999 < ob_time.parts_[DT_YEAR] || ob_time.parts_[DT_MON] <= 0
+          || 12 < ob_time.parts_[DT_MON] || ob_time.parts_[DT_MDAY] <= 0 || 28 < ob_time.parts_[DT_MDAY]
+          || 23 < ob_time.parts_[DT_HOUR] || 59 < ob_time.parts_[DT_MIN] || 59 < ob_time.parts_[DT_SEC]
+          || ob_time.parts_[DT_USEC] > 1000000);
+  }
   static int validate_datetime(ObTime &ob_time, const ObDateSqlMode date_sql_mode);
 
 private:
   // date add / sub / diff.
-  static int merge_date_interval(int64_t base_value, const ObString &interval_str,
+  // Unified merge function: accepts ObInterval for both simple and complex units
+  static int merge_date_interval(int64_t base_value, const ObInterval &ob_interval,
                                  ObDateUnitType unit_type, int64_t &value, bool is_add);
-  static int merge_date_interval(/*const*/ ObTime &base_time, const ObString &interval_str,
+  static int merge_date_interval(const ObTime &base_time, const ObInterval &ob_interval,
                                  ObDateUnitType unit_type, int64_t &value, bool is_add,
                                  const ObDateSqlMode date_sql_mode);
   // other utility functions.
   static int validate_year(int64_t year);
   static int validate_oracle_timestamp(const ObTime &ob_time);
   static int validate_basic_part_of_ob_time_oracle(const ObTime &ob_time);
+  static int validate_basic_part_of_ob_time_mysql(const ObTime &ob_time);
   static int validate_tz_part_of_ob_time_oracle(const ObTime &ob_time);
   static int check_leading_precision(const ObTimeDigits &digits);
   template<typename ValType = int32_t>
   static int get_datetime_digits(const char *&str, const char *end, int32_t max_len, ObTimeDigits &digits);
+  static int get_datetime_digits_fast(const char *&str, const char *end, int32_t max_len, ObTimeDigits &digits);
   static int get_datetime_delims(const char *&str, const char *end, ObTimeDelims &delims);
   static int get_datetime_digits_delims(const char *&str, const char *end,
+                                        int32_t max_len, ObTimeDigits &digits, ObTimeDelims &delims);
+  static int get_datetime_digits_delims_fast(const char *&str, const char *end,
                                         int32_t max_len, ObTimeDigits &digits, ObTimeDelims &delims);
   static int str_to_digit_with_date(const ObString &str, ObTimeDigits *digits, ObTime &obtime,
                                     const bool &need_truncate = false,
                                     const bool implicit_first_century_year = false);
+
   static int get_time_zone(const ObTimeDelims *delims, ObTime &ob_time, const char *end_ptr);
   static void skip_delims(const char *&str, const char *end);
   static bool is_year4(int64_t first_token_len);
@@ -1241,6 +1319,193 @@ OB_INLINE int ObTimeConverter::parse_ob_time(ObMySQLDateTime value, ObTime &ob_t
     ret = mdatetime_to_ob_time<false>(value, ob_time);
   }
   return ret;
+}
+
+template<>
+OB_INLINE int ObTimeConverter::parse_ob_time(DateType value, ObTime &ob_time, bool calc_date){
+  int ret = OB_SUCCESS;
+  if (calc_date) {
+    ret = date_to_ob_time(value, ob_time);
+  } else {
+    ret = date_to_ob_time(value, ob_time);
+  }
+  return ret;
+}
+
+template<>
+OB_INLINE int ObTimeConverter::parse_ob_time(DateTimeType value, ObTime &ob_time, bool calc_date){
+  int ret = OB_SUCCESS;
+  if (calc_date) {
+    ret = datetime_to_ob_time(value, NULL, ob_time);
+  } else {
+    ret = datetime_to_ob_time(value, NULL, ob_time);
+  }
+  return ret;
+}
+
+OB_INLINE static bool extract_digit(const char in_str, uint8_t &value)
+{
+  value = in_str - '0';
+  if (value < 0 || value > 9) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+//dayofmonth函数需要容忍月、日为0的错误
+OB_INLINE int ObTimeConverter::str_to_ob_time_with_date(const ObString &str, ObTime &ob_time, int16_t *scale,
+                                              const ObDateSqlMode date_sql_mode,
+                                              const bool &need_truncate,
+                                              ObTimeDigits *digits)
+{
+  int ret = OB_SUCCESS;
+  if (digits == NULL) {
+    ObTimeDigits digits[DATETIME_PART_CNT];
+    ret = str_to_ob_time_with_date_helper(str, ob_time, scale,
+      date_sql_mode, need_truncate, digits);
+  } else {
+    ret = str_to_ob_time_with_date_helper(str, ob_time, scale,
+      date_sql_mode, need_truncate, digits);
+  }
+  return ret;
+}
+
+OB_INLINE void ObTimeConverter::string_to_obtime_quick(const char *ptr_date,
+                              int length,
+                              ObTime &ob_time,
+                              bool &datetime_valid,
+                              bool &string_match_format,
+                              int64_t &last_first_8digits,
+                              QuickParserType &last_quick_parser_type,
+                              bool is_time_type)
+{
+  if (length == QUICK_PARSE_YYYYMMDD_LENGTH) { // only for 'YYYYMMDD'
+    if (!is_time_type) {
+      if (last_quick_parser_type != ObTimeConverter::QuickParserType::QuickParserTime8) {
+        ob_time = ObTime(ob_time.mode_); // reset ob_time
+        last_first_8digits = INT64_MAX;
+      }
+      ObTimeConverter::string_to_obtime_quick_8(ptr_date, length,
+        ob_time, datetime_valid, string_match_format, last_first_8digits);
+      last_quick_parser_type = ObTimeConverter::QuickParserType::QuickParserTime8;
+    }
+  } else if (length == QUICK_PARSE_YYYY_MM_DD_LENGTH) { // only for 'YYYY-MM-DD'
+    if (!is_time_type) {
+      // hour('0012:11:23') = 12, year('0012:11:23') = 12
+      if (last_quick_parser_type != ObTimeConverter::QuickParserType::QuickParserTime10) {
+        ob_time = ObTime(ob_time.mode_); // reset ob_time
+        last_first_8digits = INT64_MAX;
+      }
+      ObTimeConverter::string_to_obtime_quick_10(ptr_date, length,
+        ob_time, datetime_valid, string_match_format, last_first_8digits);
+      last_quick_parser_type = ObTimeConverter::QuickParserType::QuickParserTime10;
+    }
+  } else if (length == QUICK_PARSE_YYYY_MM_DD_hh_mm_ss_LENGTH) {
+    if (last_quick_parser_type != ObTimeConverter::QuickParserType::QuickParserTime19) {
+      ob_time = ObTime(ob_time.mode_); // reset ob_time
+      last_first_8digits = INT64_MAX;
+    }
+    ObTimeConverter::string_to_obtime_quick_19<false>(ptr_date, length,
+      ob_time, datetime_valid, string_match_format, last_first_8digits);
+    last_quick_parser_type = ObTimeConverter::QuickParserType::QuickParserTime19;
+  } else if (length > QUICK_PARSE_YYYY_MM_DD_hh_mm_ss_LENGTH
+          && length <= QUICK_PARSE_YYYY_MM_DD_hh_mm_ss_SSSSSS_LENGTH) {
+    if (last_quick_parser_type != ObTimeConverter::QuickParserType::QuickParserTime26) {
+      ob_time = ObTime(ob_time.mode_); // reset ob_time
+      last_first_8digits = INT64_MAX;
+    }
+    ObTimeConverter::string_to_obtime_quick_19<true>(ptr_date, length,
+      ob_time, datetime_valid, string_match_format, last_first_8digits);
+    last_quick_parser_type = ObTimeConverter::QuickParserType::QuickParserTime26;
+  }
+}
+
+template<bool HAS_MICROSECOND>
+void ObTimeConverter::string_to_obtime_quick_19(const char *ptr_date,
+                                      int length,
+                                      ObTime &obtime,
+                                      bool &datetime_valid,
+                                      bool &string_match_format,
+                                      int64_t &last_first_8digits)
+{
+  uint8_t year1 = 0;
+  uint8_t year2 = 0;
+  uint8_t year3 = 0;
+  uint8_t year4 = 0;
+  uint8_t month1 = 0;
+  uint8_t month2 = 0;
+  uint8_t day1 = 0;
+  uint8_t day2 = 0;
+
+  uint8_t hour1 = 0;
+  uint8_t hour2 = 0;
+  uint8_t minute1 = 0;
+  uint8_t minute2 = 0;
+  uint8_t second1 = 0;
+  uint8_t second2 = 0;
+  uint64_t t1 = *reinterpret_cast<const uint64_t*>(ptr_date);
+  string_match_format = true;
+  datetime_valid = true;
+  if (last_first_8digits == INT64_MAX || t1 != last_first_8digits) {
+    if (extract_digit(ptr_date[0], year1) || extract_digit(ptr_date[1], year2)
+      || extract_digit(ptr_date[2], year3) || extract_digit(ptr_date[3], year4)
+      || isdigit(ptr_date[4]) || isspace(ptr_date[4])
+      || extract_digit(ptr_date[5], month1)
+      || extract_digit(ptr_date[6], month2)
+      || isdigit(ptr_date[7]) || isspace(ptr_date[7])) {
+      string_match_format = false;
+    } else {
+      obtime.parts_[DT_YEAR] = year1 * 1000 + year2 * 100 + year3 * 10 + year4;
+      obtime.parts_[DT_MON] = month1 * 10 + month2;
+      if (obtime.parts_[DT_YEAR] <= 0 || obtime.parts_[DT_MON] <= 0
+        || 12 < obtime.parts_[DT_MON]) {
+        datetime_valid = false;
+      }
+    }
+  }
+  if (string_match_format && datetime_valid) {
+    if (extract_digit(ptr_date[8], day1) || extract_digit(ptr_date[9], day2)
+        || extract_digit(ptr_date[11], hour1) || extract_digit(ptr_date[12], hour2)
+        || isdigit(ptr_date[13]) || extract_digit(ptr_date[14], minute1)
+        || extract_digit(ptr_date[15], minute2) || isdigit(ptr_date[16])
+        || extract_digit(ptr_date[17], second1) || extract_digit(ptr_date[18], second2)) {
+      // 从这里返回说明不是标准的格式，需要返回false
+      string_match_format = false;
+    } else {
+      obtime.parts_[DT_MDAY] = day1 * 10 + day2;
+      obtime.parts_[DT_HOUR] = hour1 * 10 + hour2;
+      obtime.parts_[DT_MIN] = minute1 * 10 + minute2;
+      obtime.parts_[DT_SEC] = second1 * 10 + second2;
+      if (obtime.parts_[DT_MDAY] <= 0 || 28 < obtime.parts_[DT_MDAY]
+        || obtime.parts_[DT_HOUR] > 23 || 5 < minute1 || 5 < second1) {
+      //进入这里说明datetime不是valid的，一般是格式正确但是日期的范围可能不正确
+        datetime_valid = false;
+      }
+    }
+    if (HAS_MICROSECOND) {
+      if (ptr_date[19] != '.') {
+        string_match_format = false;
+      } else {
+        uint64_t microsecond = 0;
+        for (int i = 20; i < 26 && string_match_format; ++i) {
+          if (i >= length) {
+            microsecond *= 10;
+          } else if (!isdigit(ptr_date[i])) {
+            string_match_format = false;
+          } else {
+            microsecond = microsecond * 10 + ptr_date[i] - '0';
+          }
+        }
+        obtime.parts_[DT_USEC] = microsecond;
+      }
+    }
+  }
+  if (string_match_format && datetime_valid) {
+    last_first_8digits = t1;
+  } else {
+    last_first_8digits = INT64_MAX;
+  }
 }
 
 }// end of common

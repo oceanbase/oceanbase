@@ -51,8 +51,8 @@ public:
            common::ObCompressorType compressor_type);
   int init_one_hp_infras(HashPartInfrasVec *&hp_infras, const common::ObIArray<ObExpr *> &exprs,
                          const common::ObIArray<ObSortFieldCollation> *sort_collations,
-                         bool need_rewind);
-  int free_one_hp_infras(HashPartInfrasVec *&hp_infras);
+                         bool need_rewind, const bool use_all_mem_bound = false);
+  int free_one_hp_infras(HashPartInfrasVec *&hp_infras, bool force_destroy = false);
   OB_INLINE uint64_t get_tenant_id()
   { return tenant_id_; }
   OB_INLINE ObSqlMemMgrProcessor *get_sql_mem_mgr_processor()
@@ -169,8 +169,8 @@ public:
   { return hp_infras_group_.reserve(capacity); }
   int init_one_hp_infras(const bool need_rewind, const ObSortCollations *sort_collations,
                          const common::ObIArray<ObExpr *> &exprs,
-                         HashPartInfrasVec *&hp_infras);
-  int free_one_hp_infras(HashPartInfrasVec *&hp_infras);
+                         HashPartInfrasVec *&hp_infras, bool use_all_mem_bound = false);
+  int free_one_hp_infras(HashPartInfrasVec *&hp_infras, bool force_destroy = false);
 
   OB_INLINE bool is_inited() const { return inited_; }
   void destroy()

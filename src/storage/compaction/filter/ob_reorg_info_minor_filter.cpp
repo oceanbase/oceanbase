@@ -44,7 +44,7 @@ int ObReorgInfoMinorFilter::init(const SCN &filter_val)
 
 int ObReorgInfoMinorFilter::filter(
     const blocksstable::ObDatumRow &row,
-    ObFilterRet &filter_ret)
+    ObFilterRet &filter_ret) const
 {
   int ret = OB_SUCCESS;
   filter_ret = FILTER_RET_MAX;
@@ -58,7 +58,7 @@ int ObReorgInfoMinorFilter::filter(
     LOG_WARN("uncommitted row in trans state table or multi version row", K(ret), K(row));
   } else if (row.is_uncommitted_row()) {
     // not filter uncommitted row
-    filter_ret = FILTER_RET_NOT_CHANGE;
+    filter_ret = FILTER_RET_KEEP;
   } else {
     const int64_t commit_version = -row.storage_datums_[filter_col_idx_].get_int();
     SCN commit_scn;
@@ -66,10 +66,9 @@ int ObReorgInfoMinorFilter::filter(
       LOG_WARN("failed to convert for tx", K(ret), K(commit_version));
     } else if (commit_scn <= filter_val_) {
       filter_ret = FILTER_RET_REMOVE;
-      max_filtered_commit_scn_ = SCN::max(max_filtered_commit_scn_, commit_scn);
       LOG_DEBUG("filter row", K(ret), K(row), K(filter_val_), K(commit_version));
     } else {
-      filter_ret = FILTER_RET_NOT_CHANGE;
+      filter_ret = FILTER_RET_KEEP;
     }
   }
   return ret;

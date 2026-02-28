@@ -53,4 +53,10 @@ CREATE OR REPLACE PACKAGE dbms_xplan  AUTHID CURRENT_USER
                 )
     return text;
 
+    PROCEDURE enable_mem_perf(
+        identifier      VARCHAR(20)  DEFAULT DEFAULT_INENTIFIER
+    );
+
+    PROCEDURE disable_mem_perf();
+
 END dbms_xplan;

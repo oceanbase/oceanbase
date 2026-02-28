@@ -140,7 +140,12 @@ int ObVertialPartitionBuilder::set_basic_infos(
   aux_vp_table_schema.set_pctfree(data_schema.get_pctfree());
   aux_vp_table_schema.set_storage_format_version(data_schema.get_storage_format_version());
   aux_vp_table_schema.set_progressive_merge_round(data_schema.get_progressive_merge_round());
-  if (OB_FAIL(aux_vp_table_schema.set_compress_func_name(data_schema.get_compress_func_name()))) {
+  aux_vp_table_schema.set_merge_engine_type(data_schema.get_merge_engine_type());
+  if (OB_FAIL(aux_vp_table_schema.set_ttl_definition(
+      data_schema.get_ttl_definition(),
+      data_schema.get_ttl_flag()))) {
+    LOG_WARN("set ttl definition failed", K(ret));
+  } else if (OB_FAIL(aux_vp_table_schema.set_compress_func_name(data_schema.get_compress_func_name()))) {
     LOG_WARN("set_compress_func_name failed", K(data_schema));
   }
 

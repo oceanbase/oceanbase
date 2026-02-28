@@ -66,6 +66,7 @@ protected:
   int add_based_udt_info(const share::schema::ObTableSchema &tbl_schema);
 private:
   bool is_oracle_temp_table_; //是否创建oracle的临时表上索引
+  bool is_old_oracle_temp_table_; //是否创建oracle的旧版本临时表上索引
   bool is_spec_block_size; //是否指定block size
   DISALLOW_COPY_AND_ASSIGN(ObCreateIndexResolver);
 };

@@ -49,17 +49,17 @@ public:
 
   static int64_t get_default_table_row_count();
 
-  int check_opt_stat_validity(sql::ObExecContext &ctx,
+  virtual int check_opt_stat_validity(sql::ObExecContext &ctx,
                               const uint64_t tenant_id,
                               const uint64_t table_ref_id,
                               const ObIArray<int64_t> &part_ids,
                               bool &is_opt_stat_valid);
 
-  int check_system_stat_validity(sql::ObExecContext *ctx,
+  virtual int check_system_stat_validity(sql::ObExecContext *ctx,
                                  const uint64_t tenant_id,
                                  bool &is_valid);
 
-  int check_opt_stat_validity(sql::ObExecContext &ctx,
+  virtual int check_opt_stat_validity(sql::ObExecContext &ctx,
                               const uint64_t tenant_id,
                               const uint64_t tab_ref_id,
                               const int64_t global_part_id,
@@ -74,16 +74,16 @@ public:
                         sqlclient::ObISQLConnection *conn,
                         const ObIArray<ObOptTableStat*> &table_stats,
                         const bool is_index_stat);
-  int batch_get_column_stats(const uint64_t tenant_id,
-                             const uint64_t table_id,
-                             const ObIArray<int64_t> &part_ids,
-                             const ObIArray<uint64_t> &column_ids,
-                             const int64_t row_cnt,
-                             const double scale_ratio,
-                             ObIArray<ObGlobalColumnStat> &stat,
-                             ObIAllocator *alloc);
+  virtual int batch_get_column_stats(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     const ObIArray<int64_t> &part_ids,
+                                     const ObIArray<uint64_t> &column_ids,
+                                     const int64_t row_cnt,
+                                     const double scale_ratio,
+                                     ObIArray<ObGlobalColumnStat> &stat,
+                                     ObIAllocator *alloc);
 
-  int get_column_stat(const uint64_t tenant_id,
+  virtual int get_column_stat(const uint64_t tenant_id,
                       const uint64_t table_id,
                       const ObIArray<int64_t> &part_ids,
                       const uint64_t column_id,
@@ -98,28 +98,28 @@ public:
                       const ObIArray<uint64_t> &column_ids,
                       ObIArray<ObOptColumnStatHandle> &handles);
 
-  int get_column_stat(const uint64_t tenant_id,
-                      const uint64_t ref_id,
-                      const int64_t part_id,
-                      const uint64_t col_id,
-                      ObOptColumnStatHandle &handle);
+  virtual int get_column_stat(const uint64_t tenant_id,
+                              const uint64_t ref_id,
+                              const int64_t part_id,
+                              const uint64_t col_id,
+                              ObOptColumnStatHandle &handle);
 
-  int get_table_stat(const uint64_t tenant_id,
-                     const uint64_t table_ref_id,
-                     const int64_t part_id,
-                     const double scale_ratio,
-                     ObGlobalTableStat &stat);
+  virtual int get_table_stat(const uint64_t tenant_id,
+                             const uint64_t table_ref_id,
+                             const int64_t part_id,
+                             const double scale_ratio,
+                             ObGlobalTableStat &stat);
 
-  int get_table_stat(const uint64_t tenant_id,
-                     const uint64_t tab_ref_id,
-                     const ObIArray<int64_t> &part_ids,
-                     const double scale_ratio,
-                     ObGlobalTableStat &stat);
+  virtual int get_table_stat(const uint64_t tenant_id,
+                             const uint64_t tab_ref_id,
+                             const ObIArray<int64_t> &part_ids,
+                             const double scale_ratio,
+                             ObGlobalTableStat &stat);
 
-  int get_table_stat(const uint64_t tenant_id,
-                     const uint64_t table_id,
-                     const ObIArray<int64_t> &part_ids,
-                     ObIArray<ObOptTableStat> &tstats);
+  virtual int get_table_stat(const uint64_t tenant_id,
+                             const uint64_t table_id,
+                             const ObIArray<int64_t> &part_ids,
+                             ObIArray<ObOptTableStat> &tstats);
 
   int get_table_stat(const uint64_t tenant_id,
                      const uint64_t table_id,
@@ -131,15 +131,15 @@ public:
    *          可以获取统计信息。这样的方式是由ObKVCache的底层实现决定的。如果返回的handle的指针非空，
    *          那么handle对象保证在自身析构前其统计信息指针总是有效的。
    */
-  virtual int get_column_stat(const uint64_t tenant_id,
-                              const ObOptColumnStat::Key &key,
-                              ObOptColumnStatHandle &handle);
-  virtual int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
-                                 const uint64_t tenant_id,
-                                 sqlclient::ObISQLConnection *conn,
-                                 const common::ObIArray<ObOptColumnStat *> &column_stats,
-                                 bool only_update_col_stat = false,
-                                 const ObObjPrintParams &print_params = ObObjPrintParams());
+  int get_column_stat(const uint64_t tenant_id,
+                      const ObOptColumnStat::Key &key,
+                      ObOptColumnStatHandle &handle);
+  int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
+                         const uint64_t tenant_id,
+                         sqlclient::ObISQLConnection *conn,
+                         const common::ObIArray<ObOptColumnStat *> &column_stats,
+                         bool only_update_col_stat = false,
+                         const ObObjPrintParams &print_params = ObObjPrintParams());
 
   int delete_table_stat(const uint64_t tenant_id,
                         const uint64_t ref_id,
@@ -181,10 +181,10 @@ public:
                   const ObObjPrintParams &print_params);
 
   /**  @brief  外部获取行统计信息的接口 */
-  virtual int get_table_stat(const uint64_t tenant_id,
-                             const ObOptTableStat::Key &key,
-                             ObOptTableStat &tstat);
-  virtual int add_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &analyze_arg);
+  int get_table_stat(const uint64_t tenant_id,
+                     const ObOptTableStat::Key &key,
+                     ObOptTableStat &tstat);
+  int add_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &analyze_arg);
 
   int invalidate_plan(const uint64_t tenant_id, const uint64_t table_id);
 

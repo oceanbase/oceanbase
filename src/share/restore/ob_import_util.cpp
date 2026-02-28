@@ -45,6 +45,7 @@ bool ObImportTableUtil::can_retrieable_err(const int err_code)
     case OB_ERR_TABLE_EXIST:
     case OB_STANDBY_READ_ONLY:
     case OB_RESTORE_TENANT_FAILED:
+    case OB_SCHEMA_ERROR:
       bret = false;
       break;
     default:

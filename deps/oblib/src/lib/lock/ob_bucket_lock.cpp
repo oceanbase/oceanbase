@@ -23,7 +23,7 @@ ObBucketLock::ObBucketLock()
     : bucket_cnt_(0),
       latch_cnt_(0),
       latches_(NULL),
-      latch_id_(ObLatchIds::DEFAULT_BUCKET_LOCK),
+      latch_id_(ObLatchIds::LATCH_WAIT_QUEUE_LOCK),
       is_inited_(false)
 {
 }
@@ -91,7 +91,7 @@ void ObBucketLock::destroy()
   }
   latch_cnt_ = 0;
   bucket_cnt_ = 0;
-  latch_id_ = ObLatchIds::DEFAULT_BUCKET_LOCK;
+  latch_id_ = ObLatchIds::LATCH_WAIT_QUEUE_LOCK;
 }
 
 int ObBucketLock::try_rdlock(const uint64_t bucket_idx)

@@ -241,7 +241,8 @@ bool ObDASIterUtils::is_vec_hnsw_scan(const ObDASBaseCtDef *attach_ctdef, ObDASB
     || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ
     || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ
     || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH
-    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
+    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF
+    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ) {
       bret = true;
     }
   }
@@ -2366,7 +2367,8 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
   }
 
   // check exprs
-  if (func_lookup_ctdef->has_doc_id_lookup()) {
+  if (OB_FAIL(ret)) {
+  } else if (func_lookup_ctdef->has_doc_id_lookup()) {
     docid_lookup_rowkey_exprs =  &static_cast<const ObDASScanCtDef *>(func_lookup_ctdef->get_doc_id_lookup_scan_ctdef())->rowkey_exprs_;
     bool find = false;
     for (int i = 0; OB_SUCC(ret) && i < docid_lookup_rowkey_exprs->count(); i++) {
@@ -2426,7 +2428,7 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
       }
     } else if (OB_UNLIKELY(rowkey_scan_output_expr != func_lookup_ctdef->lookup_domain_id_expr_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, rowkey scan output expr not equal to lookup doc id expr", K(ret));
+      LOG_WARN("unexpected error, rowkey scan output expr not equal to lookup doc id expr", K(ret), KP(rowkey_scan_output_expr), KP(func_lookup_ctdef->lookup_domain_id_expr_));
     } else if (func_lookup_ctdef->has_main_table_lookup()) {
       main_lookup_rowkey_exprs = &static_cast<const ObDASScanCtDef *>(func_lookup_ctdef->get_main_lookup_scan_ctdef())->rowkey_exprs_;
       if (OB_UNLIKELY(1 != main_lookup_rowkey_exprs->count() || rowkey_scan_output_expr != main_lookup_rowkey_exprs->at(0))) {
@@ -2439,8 +2441,9 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
   ObDASIter *func_lookup_result = nullptr;
   ObDASCacheLookupIter *root_lookup_iter = nullptr;
   common::ObFixedArray<ObExpr *, common::ObIAllocator> rowkey_exprs(alloc, 1);
-  rowkey_exprs.push_back(func_lookup_ctdef->lookup_domain_id_expr_);
-  if (FAILEDx(create_functional_lookup_sub_tree(
+  if (FAILEDx(rowkey_exprs.push_back(func_lookup_ctdef->lookup_domain_id_expr_))) {
+    LOG_WARN("failed to push back lookup domain id expr to rowkey exprs", K(ret), K(rowkey_exprs.count()));
+  } else if (OB_FAIL(create_functional_lookup_sub_tree(
       scan_param,
       scan_param.ls_id_,
       alloc,
@@ -4705,7 +4708,8 @@ int ObDASIterUtils::create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
     bool is_pre_filter = vec_aux_ctdef->is_pre_filter();
     bool need_pre_lookup = (is_pre_filter || can_use_adaptive_path)
                            && !data_table_ctdef->pd_expr_spec_.pushdown_filters_.empty()
-                           && !is_primary_index;
+                           && !is_primary_index
+                           && !vec_aux_ctdef->all_filters_can_be_picked_out_;
 
     if (OB_SUCC(ret)) {
       ObDASIter *inv_idx_scan_iter_sub_tree = nullptr;

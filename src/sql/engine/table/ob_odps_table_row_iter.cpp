@@ -166,7 +166,7 @@ int ObODPSTableRowIterator::init_tunnel(const sql::ObODPSGeneralFormat &odps_for
     } else if (need_decrypt && OB_FAIL(odps_format_.decrypt())) {
       LOG_WARN("failed to decrypt odps format", K(ret));
     } else {
-      LOG_TRACE("init tunnel format", K(ret));
+      LOG_TRACE("init odps tunnel format", K(ret));
       if (0 == odps_format_.access_type_.case_compare("aliyun") ||
           odps_format_.access_type_.empty()) {
         account_ = apsara::odps::sdk::Account(std::string(apsara::odps::sdk::ACCOUNT_ALIYUN),
@@ -265,7 +265,7 @@ int ObODPSTableRowIterator::init_tunnel(const sql::ObODPSGeneralFormat &odps_for
   return ret;
 }
 
-int ObODPSTableRowIterator::create_downloader(const ObString &part_spec, apsara::odps::sdk::IDownloadPtr &downloader, const ObString &session_id)
+int ObODPSTableRowIterator::create_downloader(const ObString &part_spec, const ObString &session_id, apsara::odps::sdk::IDownloadPtr &downloader)
 {
   int ret = OB_SUCCESS;
   try {
@@ -351,101 +351,58 @@ int ObODPSTableRowIterator::next_task()
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   int64_t task_idx = state_.task_idx_;
-  LOG_TRACE("going to get new task", K(ret), K(batch_size_), K(state_), K(total_count_), K(task_idx), K(scan_param_->scan_tasks_.count()));
-  int64_t start = 0;
-  int64_t step = 0;
+  LOG_TRACE("going to get new odps task", K(ret), K(batch_size_), K(state_), K(total_count_), K(task_idx), K(scan_param_->scan_tasks_.count()));
+
   if (++task_idx >= scan_param_->scan_tasks_.count()) {
     ret = OB_ITER_END;
     LOG_WARN("odps table iter end", K(total_count_), K(state_), K(task_idx), K(ret));
   } else {
     ObEvalCtx &ctx = scan_param_->op_->get_eval_ctx();
-    ObPxSqcHandler *sqc = ctx.exec_ctx_.get_sqc_handler();// if sqc is not NULL, odps read is in px plan
+    // if sqc is not NULL, odps read is in px plan, otherwise, odps read is in das plan
+    ObPxSqcHandler *sqc = ctx.exec_ctx_.get_sqc_handler();
     ObIExtTblScanTask *scan_task = scan_param_->scan_tasks_.at(task_idx);
     const ObOdpsScanTask *odps_scan_task = static_cast<const ObOdpsScanTask *>(scan_task);
+    int64_t start = 0;
+    int64_t step = 0;
     if (OB_ISNULL(odps_scan_task)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexcepted null ptr", K(ret), K(scan_task));
     } else if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
       LOG_WARN("failed to resolve range in external table", K(ret));
+    } else if (step == 0) {
+      // 原来这条路径是不会走的空分区step是INT64_MAX，现在step是0，需要处理
+      state_.task_idx_ = task_idx;
+      state_.start_ = start;
+      state_.step_ = step;
+      state_.count_ = 0;
     } else {
       try {
         const ObString &part_spec = odps_scan_task->file_url_;
         int64_t part_id = odps_scan_task->part_id_;
         bool is_part_table = scan_param_->table_param_->is_partition_table();
         bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
+        const ObString &session_id_obstr = odps_scan_task->session_id_;
         if (part_spec.compare(ObExternalTableUtils::dummy_file_name()) == 0) {
           ret = OB_ITER_END;
           LOG_WARN("empty file", K(ret));
         } else {
           if (OB_ISNULL(sqc) || !sqc->get_sqc_ctx().gi_pump_.is_odps_downloader_inited()) {
+            // create downloader handle without GI das 路径
             std::string project(odps_format_.project_.ptr(), odps_format_.project_.length());
             std::string table(odps_format_.table_.ptr(), odps_format_.table_.length());
             std::string std_part_spec(part_spec.ptr(), part_spec.length());
-            std::string download_id("");
+            std::string session_id(session_id_obstr.ptr(), session_id_obstr.length());
             std::string schema(odps_format_.schema_.ptr(), odps_format_.schema_.length());
-            state_.download_handle_ = tunnel_.CreateDownload(project,
-                                                             table,
-                                                             std_part_spec,
-                                                             download_id,
-                                                             schema);
+            state_.download_handle_ = tunnel_.CreateDownload(
+                project, table, std_part_spec, session_id, schema);
             state_.is_from_gi_pump_ = false;
             LOG_TRACE("succ to create downloader handle without GI", K(ret), K(part_id), KP(sqc), K(state_.is_from_gi_pump_));
           } else {
-            ObOdpsPartitionDownloaderMgr::OdpsMgrMap& odps_map = sqc->get_sqc_ctx().gi_pump_.get_odps_map();
+            // main path: create downloader handle with GI
             state_.is_from_gi_pump_ = true;
-            if (OB_FAIL(sqc->get_sqc_ctx().gi_pump_.get_odps_downloader(part_id, state_.download_handle_))) {
-              if (OB_HASH_NOT_EXIST == ret) {
-                ret = OB_SUCCESS;
-                ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader *temp_downloader = NULL;
-                ObIAllocator &allocator = sqc->get_sqc_ctx().gi_pump_.get_odps_downloader_mgr().get_allocator();
-                if (sqc->get_sqc_ctx().gi_pump_.get_pump_args().empty()) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("unexpected empty gi pump args", K(ret));
-                } else if (OB_ISNULL(temp_downloader = static_cast<ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader *>(
-                              allocator.alloc(sizeof(ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader))))) {
-                  ret = OB_ALLOCATE_MEMORY_FAILED;
-                  LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader)));
-                } else if (FALSE_IT(new(temp_downloader)ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader())) {
-                } else if (OB_FAIL(temp_downloader->tunnel_ready_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
-                  LOG_WARN("failed to init tunnel condition variable", K(ret));
-                } else if (OB_FAIL(odps_map.set_refactored(part_id, reinterpret_cast<int64_t>(temp_downloader), 0/*flag*/, 0/*broadcast*/, 0/*overwrite_key*/))) {
-                  if (OB_HASH_EXIST == ret) {
-                    ret = OB_SUCCESS;
-                    if (OB_FAIL(sqc->get_sqc_ctx().gi_pump_.get_odps_downloader(part_id, state_.download_handle_))) {
-                      LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
-                    } else {
-                      LOG_TRACE("succ to get downloader handle from GI", K(ret), K(part_id), K(state_.is_from_gi_pump_));
-                    }
-                  } else {
-                    LOG_WARN("fail to set refactored", K(ret));
-                  }
-                  // other thread has create downloader, free current downloader
-                  temp_downloader->~OdpsPartitionDownloader();
-                  allocator.free(temp_downloader);
-                  temp_downloader = NULL;
-                } else {
-                  if (OB_FAIL(temp_downloader->odps_driver_.init_tunnel(odps_format_, false))) {
-                    LOG_WARN("failed to init tunnel", K(ret), K(part_id));
-                  } else if (OB_FAIL(temp_downloader->odps_driver_.create_downloader(part_spec,
-                      temp_downloader->odps_partition_downloader_, common::ObString::make_empty_string()))) {
-                    LOG_WARN("failed create odps partition downloader", K(ret), K(part_id));
-                  }
-                  temp_downloader->tunnel_ready_cond_.lock();
-                  if (OB_FAIL(ret)) {
-                    temp_downloader->downloader_init_status_ = -1; // -1 is temp_downloader failed to initialize temp_downloader
-                  } else {
-                    state_.download_handle_ = temp_downloader->odps_partition_downloader_;
-                    temp_downloader->downloader_init_status_ = 1; // 1 is temp_downloader was initialized successfully
-                    LOG_TRACE("succ to create downloader handle and set it to GI", K(ret), K(part_id), K(state_.is_from_gi_pump_), KP(temp_downloader));
-                  }
-                  temp_downloader->tunnel_ready_cond_.broadcast(); // wake other threads that temp_downloader has finished initializing. The initialization result may be failure or success.
-                  temp_downloader->tunnel_ready_cond_.unlock();
-                }
-              } else {
-                LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
-              }
-            } else {
-              LOG_TRACE("succ to get downloader handle from GI", K(ret), K(part_id), K(state_.is_from_gi_pump_));
+            if (OB_FAIL(sqc->get_sqc_ctx().gi_pump_.get_odps_downloader_mgr().get_or_create_odps_downloader(
+                part_id, part_spec, session_id_obstr, odps_format_, false, state_.download_handle_))) {
+              LOG_WARN("failed to get or create odps downloader", K(ret), K(part_id));
             }
           }
         }
@@ -492,7 +449,7 @@ int ObODPSTableRowIterator::next_task()
             state_.count_ = 0;
             state_.download_id_ = state_.download_handle_->GetDownloadId();
             // what if error occur after this line, how to close state_.record_reader_handle_?
-            LOG_TRACE("succ to get a new task", K(ret),
+            LOG_TRACE("succ to get a new task:", K(ret),
                                                 K(batch_size_),
                                                 K(state_),
                                                 K(real_time_partition_row_count),
@@ -907,15 +864,12 @@ int ObODPSTableRowIterator::pull_partition_info()
     if (is_part_table_) {
       for (std::vector<std::string>::iterator part_spec = part_specs.begin(); OB_SUCC(ret) && part_spec != part_specs.end(); part_spec++) {
         int64_t record_count = -1;
-        //apsara::odps::sdk::IODPSPartitionPtr partition = table_handle_->GetPartition(*part_spec);
-        //record_count = partition->GetPartitionSize();
         if (OB_FAIL(partition_list_.push_back(OdpsPartition(*part_spec, record_count)))){
           LOG_WARN("failed to push back partition_list_", K(ret));
         }
       }
     } else {
       int64_t record_count = -1;
-      //record_count = table_handle_->GetSize();
       if (OB_FAIL(partition_list_.push_back(OdpsPartition("", record_count)))){
         LOG_WARN("failed to push back partition_list_", K(ret));
       }
@@ -1355,9 +1309,16 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
       LOG_TRACE("get next task end", K(ret), K(state_));
     }
     count = 0;
+  } else if (state_.step_ == 0) {
+    // do nothing
+    count = 0;
   } else {
     int64_t returned_row_cnt = 0;
     try {
+      if (OB_ISNULL(state_.record_reader_handle_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexcepted null ptr", K(ret));
+      }
       while(returned_row_cnt < capacity && OB_SUCC(ret)) {
         if (!(state_.record_reader_handle_->Read(*records_[returned_row_cnt]))) {
           break;
@@ -2826,7 +2787,7 @@ int ObOdpsPartitionDownloaderMgr::init_downloader(int64_t bucket_size) {
   return ret;
 }
 
-int ObOdpsPartitionDownloaderMgr::init_odps_driver(const bool get_part_table_size, ObSQLSessionInfo *session, const ObString &properties, ObODPSTableRowIterator &odps_driver)
+int ObOdpsPartitionDownloaderMgr::init_odps_driver(ObOdpsJniConnector::OdpsFetchType driver_type, ObSQLSessionInfo *session, const ObString &properties, ObODPSTableRowIterator &odps_driver)
 {
   int ret = OB_SUCCESS;
   sql::ObExternalFileFormat external_odps_format;
@@ -2839,69 +2800,116 @@ int ObOdpsPartitionDownloaderMgr::init_odps_driver(const bool get_part_table_siz
   return ret;
 }
 
-int ObOdpsPartitionDownloaderMgr::fetch_row_count(const ObString &part_spec,
-                                                  const bool get_part_table_size,
-                                                  ObODPSTableRowIterator &odps_driver,
-                                                  int64_t &row_count)
+int ObOdpsPartitionDownloaderMgr::fetch_odps_partition_size(const ObString &part_spec,
+                                             ObODPSTableRowIterator &odps_driver,
+                                             int64_t &size)
 {
   int ret = OB_SUCCESS;
-  sql::ObExternalFileFormat external_odps_format;
-  row_count = 0;
-  if (get_part_table_size) {
-    apsara::odps::sdk::IODPSTablePtr table_handle = odps_driver.get_table_handle();
-    if (OB_ISNULL(table_handle)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table handle is null", K(ret));
-    } else {
-      try {
-        if (part_spec.empty()) {
-          // ODPSQz non partition part_spec is empty
-          row_count = table_handle->GetSize();
+  size = 0;
+  apsara::odps::sdk::IODPSTablePtr table_handle = odps_driver.get_table_handle();
+  if (OB_ISNULL(table_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table handle is null", K(ret));
+  } else {
+    try {
+      if (part_spec.empty()) {
+        // ODPSQz non partition part_spec is empty
+        size = table_handle->GetSize();
+      } else {
+        std::string str_part_spec(part_spec.ptr(), part_spec.length());
+        apsara::odps::sdk::IODPSPartitionPtr partition_ptr = table_handle->GetPartition(str_part_spec);
+        if (OB_ISNULL(partition_ptr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("partition is null", K(ret));
         } else {
-          std::string str_part_spec(part_spec.ptr(), part_spec.length());
-          apsara::odps::sdk::IODPSPartitionPtr partition_ptr = table_handle->GetPartition(str_part_spec);
-          if (OB_ISNULL(partition_ptr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("partition is null", K(ret));
-          } else {
-            row_count = partition_ptr->GetPartitionSize();
-          }
-        }
-      } catch (apsara::odps::sdk::OdpsException& ex) {
-        if (OB_SUCC(ret)) {
-          ret = OB_ODPS_ERROR;
-          LOG_WARN("caught exception when fetch record count", K(ret), K(ex.what()));
-          LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+          size = partition_ptr->GetPartitionSize();
         }
       }
+    } catch (apsara::odps::sdk::OdpsException& ex) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when fetch record count", K(ret), K(ex.what()));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
     }
+  }
+  return ret;
+}
+
+int ObOdpsPartitionDownloaderMgr::fetch_odps_partition_row_count(
+    ObODPSTableRowIterator &odps_driver, const ObString &part_spec,
+    int64_t &row_count) {
+  int ret = OB_SUCCESS;
+  row_count = 0;
+
+  apsara::odps::sdk::IDownloadPtr odps_partition_downloader = NULL;
+  // ODPSQz create downloader accpect part spec empty
+  if (OB_FAIL(odps_driver.create_downloader(
+          part_spec, common::ObString::make_empty_string(),
+          odps_partition_downloader))) {
+    LOG_WARN("failed create odps partition downloader", K(ret), K(part_spec));
   } else {
-    apsara::odps::sdk::IDownloadPtr odps_partition_downloader = NULL;
-    // ODPSQz create downloader accpect part spec empty
-    if (OB_FAIL(odps_driver.create_downloader(part_spec,
-        odps_partition_downloader, common::ObString::make_empty_string()))) {
-      LOG_WARN("failed create odps partition downloader", K(ret), K(part_spec));
-    } else {
-      try {
-        row_count = odps_partition_downloader->GetRecordCount();
-        odps_partition_downloader->Complete();
-      } catch (apsara::odps::sdk::OdpsException& ex) {
-        if (OB_SUCC(ret)) {
-          ret = OB_ODPS_ERROR;
-          LOG_WARN("caught exception when fetch record count", K(ret), K(ex.what()));
-          LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
-        }
-      } catch (const std::exception& ex) {
-        if (OB_SUCC(ret)) {
-          ret = OB_ODPS_ERROR;
-          LOG_WARN("caught exception when fetch record count", K(ret), K(ex.what()));
-          LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
-        }
-      } catch (...) {
-        if (OB_SUCC(ret)) {
-          ret = OB_ODPS_ERROR;
-          LOG_WARN("caught exception when fetch record count", K(ret));
-        }
+    try {
+      row_count = odps_partition_downloader->GetRecordCount();
+      odps_partition_downloader->Complete();
+    } catch (apsara::odps::sdk::OdpsException &ex) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when fetch record count", K(ret),
+                 K(ex.what()));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    } catch (const std::exception &ex) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when fetch record count", K(ret),
+                 K(ex.what()));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    } catch (...) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when fetch record count", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOdpsPartitionDownloaderMgr::fetch_odps_partition_row_count_and_session_id(
+    ObODPSTableRowIterator &odps_driver, const ObString &part_spec,
+    int64_t &row_count, ObIAllocator &allocator, ObString &session_id)
+{
+  int ret = OB_SUCCESS;
+  row_count = 0;
+
+  apsara::odps::sdk::IDownloadPtr odps_partition_downloader = NULL;
+  // ODPSQz create downloader accpect part spec empty
+  if (OB_FAIL(odps_driver.create_downloader(part_spec, common::ObString::make_empty_string(),
+      odps_partition_downloader))) {
+    LOG_WARN("failed create odps partition downloader", K(ret), K(part_spec));
+  } else {
+    try {
+      row_count = odps_partition_downloader->GetRecordCount();
+      std::string download_id = odps_partition_downloader->GetDownloadId();
+      ObString download_id_ob(download_id.length(), download_id.c_str());
+      OZ(ob_write_string(allocator, download_id_ob, session_id));
+    } catch (apsara::odps::sdk::OdpsException& ex) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when fetch record count", K(ret), K(ex.what()));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    } catch (const std::exception& ex) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when fetch record count", K(ret), K(ex.what()));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    } catch (...) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when fetch record count", K(ret));
       }
     }
   }
@@ -3036,48 +3044,116 @@ int ObOdpsPartitionUploaderMgr::create_upload_session(const sql::ObODPSGeneralFo
   return ret;
 }
 
-int ObOdpsPartitionDownloaderMgr::get_odps_downloader(int64_t part_id, apsara::odps::sdk::IDownloadPtr &downloader)
+int ObOdpsPartitionDownloaderMgr::get_or_create_odps_downloader(
+    int64_t part_id,
+    const ObString &part_spec,
+    const ObString &session_id,
+    const sql::ObODPSGeneralFormat &odps_format,
+    bool need_decrypt,
+    apsara::odps::sdk::IDownloadPtr &download_handle)
 {
   int ret = OB_SUCCESS;
   int64_t value = 0;
-  OdpsPartitionDownloader *odps_downloader = NULL;
+  OdpsPartitionDownloader *temp_downloader = NULL;
+  // 先尝试从 map 中获取
   if (OB_FAIL(odps_mgr_map_.get_refactored(part_id, value))) {
-    if (OB_UNLIKELY(ret != OB_HASH_NOT_EXIST)) {
-      LOG_WARN("failed to get downloader", K(ret), K(part_id));
-    }
-  } else if (OB_ISNULL(odps_downloader = reinterpret_cast<OdpsPartitionDownloader *>(value))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected value", K(ret), K(part_id), K(value));
-  } else { // wait tunnel to be ready
-    int64_t wait_times = 0;
-    while (OB_SUCC(ret) && 0 == odps_downloader->downloader_init_status_) { // wait odps_downloader to finish initialization
-      odps_downloader->tunnel_ready_cond_.lock();
-      if (0 == odps_downloader->downloader_init_status_) {
-        odps_downloader->tunnel_ready_cond_.wait_us(1 * 1000 * 1000); // wait 1s every loop
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      // map 中不存在，需要创建
+      if (OB_ISNULL(temp_downloader = OB_NEWx(OdpsPartitionDownloader, &fifo_alloc_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory", K(ret), K(sizeof(OdpsPartitionDownloader)));
+      } else if (OB_FAIL(temp_downloader->tunnel_ready_cond_.init(ObWaitEventIds::ODPS_PARTITION_DOWNLOADER_COND_WAIT))) {
+        LOG_WARN("failed to init tunnel condition variable", K(ret));
+      } else if (OB_FAIL(odps_mgr_map_.set_refactored(part_id, reinterpret_cast<int64_t>(temp_downloader), 0/*flag*/, 0/*broadcast*/, 0/*overwrite_key*/))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+          // 其他线程已创建，获取已存在的 downloader
+          int64_t existing_value = 0;
+          if (OB_FAIL(odps_mgr_map_.get_refactored(part_id, existing_value))) {
+            LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
+          } else {
+            OdpsPartitionDownloader *existing_downloader = reinterpret_cast<OdpsPartitionDownloader *>(existing_value);
+            // 等待初始化完成
+            int64_t wait_times = 0;
+            while (OB_SUCC(ret) && 0 == existing_downloader->downloader_init_status_) {
+              existing_downloader->tunnel_ready_cond_.lock();
+              if (0 == existing_downloader->downloader_init_status_) {
+                existing_downloader->tunnel_ready_cond_.wait_us(1 * 1000 * 1000);
+              }
+              existing_downloader->tunnel_ready_cond_.unlock();
+              if (OB_FAIL(THIS_WORKER.check_status())) {
+                LOG_WARN("failed to check status", K(part_id));
+              } else if (0 == ++wait_times % 10) {
+                LOG_INFO("waiting existing_downloader to initialize", K(wait_times), K(part_id));
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (existing_downloader->downloader_init_status_ < 0) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("existing_downloader was failed to initialize", K(ret), K(part_id));
+              } else {
+                download_handle = existing_downloader->odps_partition_downloader_;
+                LOG_TRACE("succ to get downloader handle from GI", K(ret), K(part_id));
+              }
+            }
+          }
+        } else {
+          LOG_WARN("fail to set refactored", K(ret));
+        }
+        // 其他线程已创建，释放当前 downloader
+        OB_DELETEx(OdpsPartitionDownloader, &fifo_alloc_, temp_downloader);
+        temp_downloader = NULL;
+      } else {
+        // 成功插入 map，初始化创建 tunnel
+        if (OB_FAIL(temp_downloader->odps_driver_.init_tunnel(odps_format, need_decrypt))) {
+          LOG_WARN("failed to init tunnel", K(ret), K(part_id));
+        } else if (OB_FAIL(temp_downloader->odps_driver_.create_downloader(part_spec, session_id,
+            temp_downloader->odps_partition_downloader_))) {
+          LOG_WARN("failed create odps partition downloader", K(ret), K(part_id));
+        }
+        temp_downloader->tunnel_ready_cond_.lock();
+        if (OB_FAIL(ret)) {
+          temp_downloader->downloader_init_status_ = -1;
+        } else {
+          download_handle = temp_downloader->odps_partition_downloader_;
+          temp_downloader->downloader_init_status_ = 1;
+          LOG_TRACE("succ to create downloader handle and set it to GI", K(ret), K(part_id), KP(temp_downloader));
+        }
+        temp_downloader->tunnel_ready_cond_.broadcast();
+        temp_downloader->tunnel_ready_cond_.unlock();
       }
-      odps_downloader->tunnel_ready_cond_.unlock();
+    } else { // ret != HASH_NOT_EXIST
+      LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
+    }
+  } else {
+    // map 中已存在，等待初始化完成
+    OdpsPartitionDownloader *existing_downloader = reinterpret_cast<OdpsPartitionDownloader *>(value);
+    int64_t wait_times = 0;
+    while (OB_SUCC(ret) && 0 == existing_downloader->downloader_init_status_) {
+      existing_downloader->tunnel_ready_cond_.lock();
+      if (0 == existing_downloader->downloader_init_status_) {
+        existing_downloader->tunnel_ready_cond_.wait_us(1 * 1000 * 1000);
+      }
+      existing_downloader->tunnel_ready_cond_.unlock();
       if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("failed to check status", K(part_id));
-      } else if (0 == ++wait_times % 10) { // print every 10s
-        LOG_INFO("waiting odps_downloader to initialize", K(wait_times), K(part_id), KP(odps_downloader));
+      } else if (0 == ++wait_times % 10) {
+        LOG_INFO("waiting existing_downloader to initialize", K(wait_times), K(part_id));
       }
     }
-    if (OB_SUCC(ret) && odps_downloader->downloader_init_status_ < 0) { // odps_downloader failed to initialize
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("odps_downloader was failed to initialize", K(ret), K(part_id), K(value), KP(odps_downloader));
+    if (OB_SUCC(ret)) {
+      if (existing_downloader->downloader_init_status_ < 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("existing_downloader was failed to initialize", K(ret), K(part_id));
+      } else {
+        download_handle = existing_downloader->odps_partition_downloader_;
+        LOG_TRACE("succ to get downloader handle from GI", K(ret), K(part_id));
+      }
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(odps_downloader->odps_partition_downloader_.get())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected value", K(ret), K(part_id), K(value));
-  } else {
-    downloader = odps_downloader->odps_partition_downloader_;
-    LOG_TRACE("succ to get odps_downloader from map", K(ret), K(part_id));
   }
   return ret;
 }
-
 
 int ObOdpsPartitionDownloaderMgr::reset()
 {
@@ -3113,12 +3189,12 @@ int ObOdpsPartitionDownloaderMgr::DeleteDownloaderFunc::operator()(common::hash:
     err_ = (err_ == ErrType::SUCCESS) ? ErrType::DOWNLOADER_IS_NULL : err_;
     LOG_WARN("unexpected error in DeleteDownloaderFunc", K(ret), K(value), K(part_id), K(err_));// ret is still OB_SUCCESS
   } else {
-    downloader->~OdpsPartitionDownloader();
     if (OB_ISNULL(downloader_alloc_)) {
       err_ = (err_ == ErrType::SUCCESS) ? ErrType::ALLOC_IS_NULL : err_;
       LOG_WARN("unexpected error in DeleteDownloaderFunc", K(ret), K(value), K(part_id), K(err_));// ret is still OB_SUCCESS
     } else {
-      downloader_alloc_->free(downloader);
+      OB_DELETEx(OdpsPartitionDownloader, downloader_alloc_, downloader);
+      downloader = NULL;
     }
   }
   return ret;

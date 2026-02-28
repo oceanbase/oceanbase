@@ -93,9 +93,12 @@ public:
       const ObIArray<uint64_t> &global_index_table_ids,
       ObMySQLTransaction &trans);
 
-  static int lock_for_modify_truncate_info_in_trans(
+  static int lock_for_sync_mds_in_trans(
       const uint64_t tenant_id,
-      const uint64_t global_index_table_id,
+      const uint64_t table_id,
+      ObMySQLTransaction &trans);
+  static int lock_for_ttl_in_trans(
+      const ObTableSchema &table_schema,
       ObMySQLTransaction &trans);
 
   static int lock_for_add_lob_in_trans(
@@ -226,7 +229,7 @@ public:
   static int lock_for_transfer_in_trans(
       const uint64_t tenant_id,
       const uint64_t table_id,
-      const ObTabletID &tablet_id,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
       const int64_t timeout_us,
       ObMySQLTransaction &trans);
 
@@ -240,7 +243,7 @@ public:
   static int lock_for_transfer(
       const uint64_t tenant_id,
       const uint64_t table_id,
-      const ObTabletID &tablet_id,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
       const int64_t timeout_us,
       ObMySQLTransaction &trans);
@@ -256,7 +259,7 @@ public:
   static int unlock_for_transfer(
       const uint64_t tenant_id,
       const uint64_t table_id,
-      const ObTabletID &tablet_id,
+      const ObIArray<ObTabletID> &tablet_ids,
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
       const int64_t timeout_us,
       ObMySQLTransaction &trans);

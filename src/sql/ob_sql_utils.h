@@ -43,6 +43,7 @@ class ObHDFSStorageInfo;
 }
 namespace sql
 {
+struct ObFastParserResult;
 class RowDesc;
 class ObSQLSessionInfo;
 class ObRawExpr;
@@ -172,6 +173,9 @@ public:
   static bool is_trans_commit_need_disconnect_err(int err);
 
   static int check_enable_decimalint(const sql::ObSQLSessionInfo *session, bool &enable_decimalint);
+  static int check_rowsets_enabled(const sql::ObSQLSessionInfo *session,
+                                   const ObGlobalHint &global_hint,
+                                   bool &rowsets_enabled);
 
   static void check_if_need_disconnect_after_end_trans(const int end_trans_err,
                                                        const bool is_rollback,
@@ -437,6 +441,7 @@ public:
   static int reconstruct_ps_sql(ObSqlString &reconstruct_sql, const ObString &ps_sql,
                                 const ObIArray<const common::ObObjParam *> &const_tokens);
   static int append_obj_param(ObSqlString &reconstruct_sql, const common::ObObjParam & obj_param);
+  static int is_opt_hdfs_external_hive_table(const ObTableSchema *table_schema, bool &is_hive_table);
   static int print_sql(char *buf,
                        int64_t buf_len,
                        int64_t &pos,
@@ -601,6 +606,7 @@ public:
                                  const ObExecuteMode exec_mode,
                                  ObSQLSessionInfo &session,
                                  bool is_sensitive = false);
+  static void fixup_commit_time(ObSQLSessionInfo &session);
   static int64_t get_query_record_size_limit(uint64_t tenant_id)
   {
     int64_t thredhold = OB_MAX_SQL_LENGTH;
@@ -827,6 +833,18 @@ public:
 
   static int match_ccl_rule(const ObPlanCacheCtx *pc_ctx, ObSQLSessionInfo &session, bool is_ps_mode,
                             const DependenyTableStore &dependency_table_store);
+  static int parameterize_pl_sql(const ObString &raw_sql,
+    ParamStore &pl_params,
+    ObIAllocator &allocator,
+    const ObSQLSessionInfo &session,
+    ObString &parameterized_sql,
+    ObFastParserResult &fp_result,
+    bool param_byorder);
+  static int construct_mixed_param_store(const ObFastParserResult &fp_result,
+    ParamStore &pl_params,
+    ObIAllocator &allocator,
+    const ObSQLSessionInfo &session,
+    bool param_byorder);
 
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
@@ -1278,23 +1296,48 @@ enum PreCalcExprExpectResult {
   PRE_CALC_JSON_TYPE,
 };
 
+union ObConstraintExtra{
+  ObConstraintExtra() : extra_(-1) {}
+  int64_t extra_;
+  struct {
+    int64_t escape_char_  :   8;
+    int64_t reserved_     :   56;
+  };
+  TO_STRING_KV(K_(extra), K_(escape_char));
+};
+
 struct ObExprConstraint
 {
   ObExprConstraint() :
       pre_calc_expr_(NULL),
       expect_result_(PRE_CALC_RESULT_NONE),
-      ignore_const_check_(false) {}
+      ignore_const_check_(false),
+      cons_extra_() {}
   ObExprConstraint(ObRawExpr *expr, PreCalcExprExpectResult expect_result) :
       pre_calc_expr_(expr),
       expect_result_(expect_result),
-      ignore_const_check_(false) {}
+      ignore_const_check_(false),
+      cons_extra_() {}
+  ObExprConstraint(ObRawExpr *expr, PreCalcExprExpectResult expect_result, ObConstraintExtra extra) :
+      pre_calc_expr_(expr),
+      expect_result_(expect_result),
+      ignore_const_check_(false),
+      cons_extra_(extra) {}
   bool operator==(const ObExprConstraint &rhs) const;
+  static bool has_extra(PreCalcExprExpectResult expect_result)
+  {
+    return PRE_CALC_PRECISE == expect_result ||
+           PRE_CALC_NOT_PRECISE == expect_result ||
+           PRE_CALC_JSON_TYPE;
+  }
   ObRawExpr *pre_calc_expr_;
   PreCalcExprExpectResult expect_result_;
   bool ignore_const_check_;
+  ObConstraintExtra cons_extra_;
   TO_STRING_KV(KP_(pre_calc_expr),
                K_(expect_result),
-               K_(ignore_const_check));
+               K_(ignore_const_check),
+               K_(cons_extra));
 };
 
 struct ObPreCalcExprConstraint : public common::ObDLinkBase<ObPreCalcExprConstraint>
@@ -1302,16 +1345,19 @@ struct ObPreCalcExprConstraint : public common::ObDLinkBase<ObPreCalcExprConstra
   public:
     ObPreCalcExprConstraint(common::ObIAllocator &allocator):
       pre_calc_expr_info_(allocator),
-      expect_result_(PRE_CALC_RESULT_NONE)
+      expect_result_(PRE_CALC_RESULT_NONE),
+      cons_extras_(allocator)
     {
     }
     virtual int assign(const ObPreCalcExprConstraint &other, common::ObIAllocator &allocator);
     virtual int check_is_match(ObDatumObjParam &datum_param,
                                ObExecContext &exec_ctx,
+                               ObConstraintExtra *extra,
                                bool &is_match) const;
     TO_STRING_KV(K(expect_result_));
     ObPreCalcExprFrameInfo pre_calc_expr_info_;
     PreCalcExprExpectResult expect_result_;
+    ObFixedArray<ObConstraintExtra, common::ObIAllocator> cons_extras_;
 };
 
 struct ObRowidConstraint : public ObPreCalcExprConstraint
@@ -1327,9 +1373,37 @@ struct ObRowidConstraint : public ObPreCalcExprConstraint
                        common::ObIAllocator &allocator) override;
     virtual int check_is_match(ObDatumObjParam &datum_param,
                                ObExecContext &exec_ctx,
+                               ObConstraintExtra *extra,
                                bool &is_match) const override;
     uint8_t rowid_version_;
     ObFixedArray<ObObjType, common::ObIAllocator> rowid_type_array_;
+};
+
+struct ObJsonTypeConstraint
+{
+  public:
+    enum JsonType {
+      JSON_TYPE_SCALAR,
+      JSON_TYPE_ARRAY,
+      JSON_TYPE_JSON_CONTAINS_NO_INDEX_MERGE,
+      JSON_TYPE_NOT_ARRAY_OR_SCALAR,
+    };
+    static int check_is_match(ObObjParam &obj_param,
+                              ObExecContext &exec_ctx,
+                              ObConstraintExtra *extra,
+                              bool &is_match);
+    static int64_t make_extra(int32_t json_type, int32_t element_count)
+    {
+      return (static_cast<int64_t>(json_type) << 32) | (static_cast<uint32_t>(element_count));
+    }
+    static int32_t get_json_type(int64_t extra)
+    {
+      return static_cast<int32_t>(extra >> 32);
+    }
+    static int32_t get_element_count(int64_t extra)
+    {
+      return static_cast<int32_t>(extra & 0xFFFFFFFF);
+    }
 };
 
 //this guard use to link the exec context and session

@@ -113,6 +113,7 @@ int ObMergeResolver::resolve_merge_constraint()
  * @brief ObMergeResolver::check_stmt_validity
  * 1. merge stmt should not have rownum
  * 2. merge into does not support trigger when the delete clause contains subquery
+ * 3. merge into does not support append_only table
  * @return
  */
 int ObMergeResolver::check_stmt_validity()
@@ -144,6 +145,17 @@ int ObMergeResolver::check_stmt_validity()
     // merge into can be enabled by hint /*+ opt_param('ENABLE_MERGE_INTO', 'true') */
     LOG_WARN("The MERGE INTO syntax in mysql mode not supported");
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "The MERGE INTO syntax in mysql mode");
+  } else if (OB_FAIL(schema_guard->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                    merge_stmt->get_merge_table_info().ref_table_id_,
+                                                    table_schema))) {
+    LOG_WARN("failed to get target table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null target table schema", K(ret), K(merge_stmt->get_target_table_id()));
+  } else if (table_schema->is_append_only_merge_engine()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("merge into append_only table is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "merge into append_only table is");
   } else if (merge_stmt->get_subquery_exprs().empty()) {
     /*do nothing*/
   } else if (OB_FAIL(ObOptimizerUtil::check_expr_contain_subquery(merge_stmt->get_delete_condition_exprs(),
@@ -151,13 +163,6 @@ int ObMergeResolver::check_stmt_validity()
     LOG_WARN("failed to check if expr contain subquery", K(ret));
   } else if (!delete_has_subquery) {
     /*do nothing*/
-  } else if (OB_FAIL(schema_guard->get_table_schema(
-             session_info_->get_effective_tenant_id(),
-             merge_stmt->get_merge_table_info().ref_table_id_, table_schema))) {
-    LOG_WARN("failed to get table schema", K(table_schema), K(ret));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get null table schema", K(ret), K(merge_stmt->get_merge_table_info().ref_table_id_));
   } else if (OB_FAIL(table_schema->has_before_update_row_trigger(*schema_guard,
                                                                  trigger_exists))) {
     LOG_WARN("failed to check if has before update row trigger", K(ret));
@@ -388,8 +393,12 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
         OZ (resolve_unnest_item(*table_node, table_item));
         break;
       }
-      case T_HYBRID_SEARCH_EXPRESSION: {
+      case T_HYBRID_SEARCH: {
         OZ (resolve_hybrid_search_item(*table_node, table_item));
+        break;
+      }
+      case T_AI_SPLIT_DOCUMENT_EXPRESSION: {
+        OZ (resolve_ai_split_document_item(*table_node, table_item));
         break;
       }
       default: {
@@ -399,7 +408,7 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
       }
     }
   }
-  if (OB_ISNULL(table_item) || session_info_->is_inner()) {
+  if (OB_ISNULL(table_item) || (session_info_->is_inner() && OB_ISNULL(session_info_->get_job_info()))) {
   } else if (OB_UNLIKELY(table_item->is_system_table_ && table_item->table_name_.case_compare(OB_ALL_LICENSE_TNAME) == 0)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("modify license table is not allowed", KR(ret), K(table_item->table_name_), K(table_item->is_system_table_));

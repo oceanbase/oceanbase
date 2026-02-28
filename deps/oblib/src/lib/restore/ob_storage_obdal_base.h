@@ -36,6 +36,7 @@ static constexpr int POOL_MAX_IDLE_PER_HOST = 32;         // the max idle http c
 static constexpr int POOL_MAX_IDLE_TIME_S = 45;          // the max time of idle http client (unit s)
 static constexpr int CONNECT_TIMEOUT_S = 10;             // the max time of connect timeout (unit s)
 static constexpr int OBDAL_MALLOC_BIG_SIZE = 512 * 1024; // 512k
+static constexpr int64_t BLOCK_THREAD_KEEP_ALIVE_TIME_S = 10; // 10s
 
 static constexpr int MAX_OBDAL_REGION_LENGTH = 128;
 static constexpr int MAX_OBDAL_ENDPOINT_LENGTH = 256;
@@ -43,6 +44,49 @@ static constexpr int MAX_OBDAL_ACCESS_ID_LENGTH = 256;
 static constexpr int MAX_OBDAL_SECRET_KEY_LENGTH = 256;
 static constexpr char OB_STORAGE_OBDAL_ALLOCATOR[] = "StorageObDal";
 static constexpr char OB_DAL_SDK[] = "OBDALSDK";
+
+static constexpr int64_t INVALID_WORK_THREAD_CNT = -1;
+extern int64_t ob_admin_config_work_thread_cnt;
+
+static constexpr int64_t INVALID_BLOCKING_THREAD_MAX_CNT = -1;
+extern int64_t ob_admin_config_blocking_thread_max_cnt;
+
+
+int parse_obdal_scheme_from_storage_type(const ObStorageType storage_type, const char *&scheme);
+
+// please look enum class ObStorageObjectType
+static const char* OBJECT_STORAGE_IF_MATCH_WHITELIST[] =
+{
+  ".T14", // MAJOR_PREWARM_DATA_INDEX
+  ".T16"  // MAJOR_PREWARM_META_INDEX
+};
+
+bool is_in_object_storage_if_match_whitelist(const ObString &uri);
+
+// @brief: ObDalMemoryManager is a singleton class that manages obdal memory.
+// System tenant's memory is allocated from this manager, while user tenant's memory is allocated
+// from ob_malloc. This is manager is no longer used due to memory fragment issues that casued
+// system tenant's memory always reach the limit.
+class ObDalMemoryManager
+{
+public:
+  static ObDalMemoryManager &get_instance();
+  int init();
+  void *allocate(std::size_t size, std::size_t align);
+  void free(void *ptr);
+
+public:
+  ObDalMemoryManager();
+  ~ObDalMemoryManager();
+
+private:
+  static constexpr int64_t N_WAY = 32;
+  static constexpr int64_t DEFAULT_BLOCK_SIZE = 128 * 1024;
+  ObMemAttr attr_;
+  ObBlockAllocMgr mem_limiter_;
+  ObVSliceAlloc allocator_;
+  DISALLOW_COPY_AND_ASSIGN(ObDalMemoryManager);
+};
 
 class ObDalEnvIniter
 {
@@ -65,9 +109,10 @@ public:
   virtual void reset() override;
   virtual bool is_valid() const override { return is_valid_; }
   virtual int assign(const ObObjectStorageInfo *storage_info) override;
-  INHERIT_TO_STRING_KV("ObStorageAccount", ObStorageAccount, K(region_), K(addressing_model_));
+  INHERIT_TO_STRING_KV("ObStorageAccount", ObStorageAccount, K(region_), K(addressing_model_), K(enable_worm_));
 
   char region_[MAX_OBDAL_REGION_LENGTH];
+  bool enable_worm_;
   ObStorageAddressingModel addressing_model_;
 };
 
@@ -85,6 +130,8 @@ public:
   virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info);
   virtual int inner_open(const ObString &uri, ObObjectStorageInfo *storage_info);
   virtual bool is_inited() { return is_inited_; }
+  const ObString &get_bucket() const { return bucket_; }
+  const ObString &get_object() const { return object_; }
 public:
   int get_file_meta(ObDalObjectMeta &meta);
 
@@ -99,7 +146,7 @@ protected:
   common::ObString object_;
   ObDalAccount obdal_account_;
   ObStorageChecksumType checksum_type_;
-  opendal_operator_options *options_;
+  opendal_operator_config *config_;
   opendal_operator *op_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageObDalBase);
 };
@@ -117,6 +164,11 @@ public:
   virtual int close() override;
   virtual int64_t get_length() const override { return file_length_;}
   virtual bool is_opened() const override {return is_opened_;}
+
+protected:
+  int write_with_if_match_(const char *pathname, const char *buf, const int64_t size);
+  // write path when WORM should be adapted: if locked, verify md5 equals and treat as success
+  int write_with_worm_check_(const char *pathname, const char *buf, const int64_t size);
 
 protected:
   bool is_opened_;
@@ -176,7 +228,7 @@ private:
   common::ObObjectStorageInfo *storage_info_;
 };
 
-class ObStorageObDalAppendWriter : public ObStorageObDalBase, public ObIStorageWriter
+class ObStorageObDalAppendWriter : public ObStorageObDalWriter
 {
 public:
   ObStorageObDalAppendWriter();
@@ -189,9 +241,8 @@ public:
   virtual int64_t get_length() const override;
   virtual bool is_opened() const override { return is_opened_; }
 private:
-  bool is_opened_;
-  ObObjectStorageInfo *storage_info_;
-  int64_t file_length_;
+  bool is_use_obdal_append_writer_() const;
+private:
   opendal_writer *writer_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageObDalAppendWriter);

@@ -14,6 +14,7 @@
 
 #include "ob_unit_resource.h"
 #include "share/ob_server_struct.h"
+#include "lib/utility/ob_tracepoint.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
@@ -23,6 +24,13 @@ namespace oceanbase
 using namespace common;
 namespace share
 {
+
+// Trace point for injecting meta tenant memory ratio
+// Usage: TP_SET_EVENT(EN_META_TENANT_MEMORY_RATIO, ratio, 1, 1, tenant_id)
+//   where ratio is the percentage (1-100), tenant_id is the condition
+//   Example: TP_SET_EVENT(EN_META_TENANT_MEMORY_RATIO, 15, 1, 1, 1001)
+//     means tenant 1001 will use 15% instead of default 10%
+ERRSIM_POINT_DEF(EN_META_TENANT_MEMORY_RATIO, "Inject meta tenant memory ratio for specific tenant")
 
 #define CALCULATE_CONFIG(l, op, r, result) \
   do { \
@@ -1009,7 +1017,39 @@ bool ObUnitResource::has_shrunk_resource_than(const ObUnitResource &other) const
   return b_ret;
 }
 
-int ObUnitResource::divide_meta_tenant(ObUnitResource &meta_resource)
+int64_t ObUnitResource::gen_meta_tenant_memory(const int64_t unit_memory, const uint64_t tenant_id)
+{
+  int64_t meta_tenant_memory = 0;
+  int64_t memory_percentage = META_TENANT_MEMORY_PERCENTAGE;
+  const int64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+
+  // Check if there's an injected ratio for this tenant via trace point
+  // Trace point usage: TP_SET_EVENT(EN_META_TENANT_MEMORY_RATIO, ratio, 1, 1, tenant_id)
+  //   where ratio is the percentage (1-100), stored in error_code_
+  //   tenant_id is the condition, stored in cond_
+  // Note: .test() returns error_code_ if cond_ matches tenant_id or if cond_ is 0 (unset)
+  //   So we need to check if the return value is valid (1-100) to ensure it's a real match
+  if (OB_INVALID_TENANT_ID != meta_tenant_id) {
+    int test_result = -EN_META_TENANT_MEMORY_RATIO.test(meta_tenant_id);
+    // Only use the value if it's a valid ratio (1-100), which indicates a real match
+    // If cond_ is 0 (unset), test() may return error_code_ but it's likely not a valid ratio
+    SHARE_LOG(INFO, "use injected meta memory ratio via trace point", K(meta_tenant_id), K(test_result));
+    if (test_result > 0 && test_result <= 100) {
+      memory_percentage = test_result;
+      SHARE_LOG(INFO, "use injected meta memory ratio via trace point", K(meta_tenant_id), K(memory_percentage));
+    }
+  }
+
+  if (unit_memory < UNIT_SAFE_MIN_MEMORY) {
+    meta_tenant_memory = META_TENANT_MIN_MEMORY;
+  } else {
+    const int64_t meta_memory_by_percent = unit_memory * memory_percentage / 100;
+    meta_tenant_memory = max(meta_memory_by_percent, META_TENANT_SAFE_MIN_MEMORY);
+  }
+  return meta_tenant_memory;
+}
+
+int ObUnitResource::divide_meta_tenant(ObUnitResource &meta_resource, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(! is_valid_for_unit())) {
@@ -1028,7 +1068,8 @@ int ObUnitResource::divide_meta_tenant(ObUnitResource &meta_resource)
     const double u_max_cpu = max_cpu_;
 
     ///////////////////// MEMORY ///////////////////
-    const int64_t m_memory_size = gen_meta_tenant_memory(memory_size_);
+    // Use injected ratio if available for this tenant
+    const int64_t m_memory_size = gen_meta_tenant_memory(memory_size_, tenant_id);
     const int64_t u_memory_size = memory_size_ - m_memory_size;
 
     ///////////////////// LOG_DISK ///////////////////

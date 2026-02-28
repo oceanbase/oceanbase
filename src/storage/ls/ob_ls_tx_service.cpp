@@ -14,6 +14,7 @@
 
 #include "ob_ls_tx_service.h"
 #include "share/throttle/ob_throttle_unit.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_tx_replay_executor.h"
 #include "storage/tx/ob_trans_part_ctx.h"
@@ -90,8 +91,10 @@ int ObLSTxService::get_tx_ctx_with_timeout(const transaction::ObTransID &tx_id,
   return ret;
 }
 
-int ObLSTxService::get_tx_scheduler(const transaction::ObTransID &tx_id,
-                                    ObAddr &scheduler) const
+int ObLSTxService::get_tx_scheduler_and_sess_id(const transaction::ObTransID &tx_id,
+                                                ObAddr &scheduler,
+                                                uint32_t &sess_id,
+                                                uint32_t &assco_sess_id) const
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -107,6 +110,8 @@ int ObLSTxService::get_tx_scheduler(const transaction::ObTransID &tx_id,
       TRANS_LOG(WARN, "get ctx is null", K(ret), K(tx_id));
     } else {
       scheduler = ctx->get_scheduler();
+      sess_id = ctx->get_session_id();
+      assco_sess_id = ctx->get_associated_session_id();
       if (OB_SUCCESS != (tmp_ret = mgr_->revert_tx_ctx(ctx))) {
         TRANS_LOG(ERROR, "fail to revert tx", K(ret), K(tmp_ret), K(tx_id), KPC(ctx));
       }
@@ -118,7 +123,10 @@ int ObLSTxService::get_tx_scheduler(const transaction::ObTransID &tx_id,
   return ret;
 }
 
-int ObLSTxService::get_tx_start_session_id(const transaction::ObTransID &tx_id, uint32_t &session_id) const
+int ObLSTxService::get_tx_start_session_id_and_ts(
+  const transaction::ObTransID &tx_id,
+  uint32_t &session_id,
+  int64_t &trans_start_ts) const
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -142,6 +150,7 @@ int ObLSTxService::get_tx_start_session_id(const transaction::ObTransID &tx_id, 
           (sql::ObSQLSessionInfo::INVALID_SESSID == ctx->get_client_sid())
               ? ctx->get_session_id()
               : ctx->get_client_sid();
+      trans_start_ts = ctx->get_trans_start_time();
       if (OB_TMP_FAIL(mgr_->revert_tx_ctx(ctx))) {
         TRANS_LOG(ERROR, "fail to revert tx", K(ret), K(tmp_ret), K(tx_id), KPC(ctx));
       }
@@ -546,6 +555,16 @@ void ObLSTxService::switch_to_follower_forcedly()
   } else if (OB_FAIL(mgr_->switch_to_follower_forcedly())) {
     TRANS_LOG(ERROR, "switch to follower forcedly failed", KR(ret), K(ls_id_));
   }
+
+  lockwaitmgr::ObLockWaitMgr* lwm = NULL;
+  if (OB_ISNULL(lwm = MTL(lockwaitmgr::ObLockWaitMgr*))) {
+    // overwrite ret
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "MTL(LockWaitMgr) is null", KR(ret), K(ls_id_));
+  } else {
+    lwm->ls_switch_to_follower(ls_id_);
+  }
+
   // TRANS_LOG(INFO, "[ObLSTxService] switch_to_follower_forcedly", KR(ret), K(ls_id_));
   return;
 }
@@ -571,6 +590,15 @@ int ObLSTxService::switch_to_follower_gracefully()
     TRANS_LOG(WARN, "not init", KR(ret), K(ls_id_));
   } else if (OB_FAIL(mgr_->switch_to_follower_gracefully())) {
     TRANS_LOG(WARN, "switch to follower gracefully failed", KR(ret), K(ls_id_));
+  }
+
+  lockwaitmgr::ObLockWaitMgr* lwm = NULL;
+  if (OB_ISNULL(lwm = MTL(lockwaitmgr::ObLockWaitMgr*))) {
+    // overwrite ret
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "MTL(LockWaitMgr) is null", KR(ret), K(ls_id_));
+  } else {
+    lwm->ls_switch_to_follower(ls_id_);
   }
   // TRANS_LOG(INFO, "[ObLSTxService] switch_to_follower_gracefully", KR(ret), K(ls_id_));
   return ret;

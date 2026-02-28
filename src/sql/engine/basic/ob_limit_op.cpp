@@ -522,6 +522,5 @@ int ObLimitOp::convert_limit_percent()
   return ret;
 }
 
-
 } // end namespace sql
 } // end namespace oceanbase

@@ -110,7 +110,7 @@
                                                               "histogram_type," \
                                                               "global_stats," \
                                                               "user_stats,"\
-                                                              "spare1%s%s%s) VALUES "
+                                                              "spare1%s%s%s%s) VALUES "
 
 
 #define INSERT_HISTOGRAM_STAT_SQL "INSERT INTO __all_histogram_stat(tenant_id," \
@@ -130,82 +130,6 @@
 #define DELETE_COL_STAT_SQL "DELETE /*+%.*s*/ FROM __all_column_stat WHERE %.*s"
 #define DELETE_TAB_STAT_SQL "DELETE /*+%.*s*/ FROM __all_table_stat WHERE %.*s"
 #define UPDATE_HISTOGRAM_TYPE_SQL "UPDATE /*+%.*s*/ __all_column_stat SET histogram_type = 0, bucket_cnt = 0 WHERE %.*s"
-
-// not used yet.
-#define INSERT_ONLINE_TABLE_STAT_SQL "INSERT INTO oceanbase.__all_table_stat(tenant_id," \
-                                                               "table_id," \
-                                                               "partition_id," \
-                                                               "index_type," \
-                                                               "object_type," \
-                                                               "last_analyzed," \
-                                                               "sstable_row_cnt," \
-                                                               "sstable_avg_row_len," \
-                                                               "macro_blk_cnt," \
-                                                               "micro_blk_cnt," \
-                                                               "memtable_row_cnt," \
-                                                               "memtable_avg_row_len," \
-                                                               "row_cnt," \
-                                                               "avg_row_len," \
-                                                               "global_stats," \
-                                                               "user_stats," \
-                                                               "stattype_locked," \
-                                                               "stale_stats) VALUES " \
-
-#define INSERT_ONLINE_TABLE_STAT_DUPLICATE "ON DUPLICATE KEY UPDATE " \
-                                           "index_type = index_type," \
-                                           "object_type = object_type," \
-                                           "last_analyzed = VALUES(last_analyzed)," \
-                                           "sstable_row_cnt = VALUES(sstable_row_cnt)," \
-                                           "sstable_avg_row_len = VALUES(sstable_avg_row_len)," \
-                                           "macro_blk_cnt = VALUES(macro_blk_cnt)," \
-                                           "micro_blk_cnt = VALUES(micro_blk_cnt)," \
-                                           "memtable_row_cnt = VALUES(memtable_row_cnt)," \
-                                           "memtable_avg_row_len = VALUES(memtable_avg_row_len)," \
-                                           "row_cnt = row_cnt + VALUES(row_cnt)," \
-                                           "avg_row_len = (avg_row_len*row_cnt + VALUES(avg_row_len)*VALUES(row_cnt)) / (row_cnt+ VALUES(row_cnt))," \
-                                           "global_stats = VALUES(global_stats)," \
-                                           "user_stats = VALUES(user_stats)," \
-                                           "stattype_locked = VALUES(stattype_locked)," \
-                                           "stale_stats = VALUES(stale_stats)"
-//TODO DAISI, MICRO/MACRO/MEMTABLE/SSTABLE
-//TODO DAISI, check lock.
-
-#define INSERT_ONLINE_COL_STAT_SQL "INSERT INTO __all_column_stat(tenant_id," \
-                                                                  "table_id," \
-                                                                  "partition_id," \
-                                                                  "column_id," \
-                                                                  "object_type," \
-                                                                  "last_analyzed," \
-                                                                  "distinct_cnt," \
-                                                                  "null_cnt," \
-                                                                  "max_value," \
-                                                                  "b_max_value," \
-                                                                  "min_value," \
-                                                                  "b_min_value," \
-                                                                  "avg_len," \
-                                                                  "distinct_cnt_synopsis," \
-                                                                  "distinct_cnt_synopsis_size," \
-                                                                  "sample_size,"\
-                                                                  "density,"\
-                                                                  "bucket_cnt," \
-                                                                  "histogram_type," \
-                                                                  "global_stats," \
-                                                                  "user_stats) VALUES "
-
-#define INSERT_ONLINE_COL_STAT_DUPLICATE "ON DUPLICATE KEY UPDATE " \
-                                         "object_type = object_type," \
-                                         "last_analyzed = VALUES(last_analyzed)," \
-                                         "distinct_cnt = VALUES(distinct_cnt) + distinct_cnt," \
-                                         "distinct_cnt_synopsis = VALUES(distinct_cnt_synopsis)," \
-                                         "distinct_cnt_synopsis_size = VALUES(distinct_cnt_synopsis_size)," \
-                                         "null_cnt = VALUES(null_cnt)," \
-                                         "max_value = VALUES(max_value)," \
-                                         "b_max_value = VALUES(b_max_value)," \
-                                         "min_value = VALUES(min_value)," \
-                                         "b_min_value = VALUES(b_min_value)," \
-                                         "global_stats = VALUES(global_stats)," \
-                                         "user_stats = VALUES(user_stats);"
-// TODO DAISI, add a sys_func to merge NDV by llc.
 
 #define INSERT_TASK_OPT_STAT_GATHER_SQL "INSERT INTO %s(tenant_id," \
                                                         "task_id," \
@@ -253,7 +177,7 @@
                                             "col_stat.bucket_cnt as bucket_cnt,"     \
                                             "col_stat.density as density,"        \
                                             "col_stat.last_analyzed as last_analyzed,"\
-                                            "col_stat.spare1 as compress_type,%s%s%s"\
+                                            "col_stat.spare1 as compress_type,%s%s%s%s"\
                                             "hist_stat.endpoint_num as endpoint_num, "    \
                                             "hist_stat.b_endpoint_value as b_endpoint_value," \
                                             "hist_stat.endpoint_repeat_cnt as endpoint_repeat_cnt "\
@@ -287,7 +211,7 @@ namespace common
 {
 
 ObOptStatSqlService::ObOptStatSqlService()
-    : inited_(false), mysql_proxy_(nullptr), mutex_(ObLatchIds::DEFAULT_MUTEX), config_(nullptr)
+    : inited_(false), mysql_proxy_(nullptr), mutex_(ObLatchIds::OPT_STAT_SQL_SERVICE_LOCK), config_(nullptr)
 {
 }
 
@@ -685,7 +609,8 @@ int ObOptStatSqlService::construct_column_stat_sql(share::schema::ObSchemaGetter
                OB_FAIL(column_stats_sql.append_fmt(REPLACE_COL_STAT_SQL,
                                                    data_version < DATA_VERSION_4_3_0_0 ? " " : ", cg_macro_blk_cnt, cg_micro_blk_cnt",
                                                    data_version < DATA_VERSION_4_3_5_2 ? " " : ", cg_skip_rate",
-                                                   data_version < DATA_VERSION_4_4_1_0 ? " " : ", internal_stat"))) {
+                                                   data_version < DATA_VERSION_4_4_1_0 ? " " : ", internal_stat",
+                                                   GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0 ? " " : ", spare2"))) {
       LOG_WARN("failed to append sql", K(ret));
     } else if (OB_FAIL(get_column_stat_sql(tenant_id, allocator,
                                            *column_stats.at(i), current_time,
@@ -1173,7 +1098,9 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
         (data_version >= DATA_VERSION_4_3_5_2 &&
          OB_FAIL(dml_splicer.add_long_double_column("cg_skip_rate", stat.get_cg_skip_rate()))) ||
         (data_version >= DATA_VERSION_4_4_1_0 &&
-         OB_FAIL(dml_splicer.add_column("internal_stat", stat.is_internal())))) {
+         OB_FAIL(dml_splicer.add_column("internal_stat", stat.is_internal()))) ||
+        (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0 &&
+         OB_FAIL(dml_splicer.add_column("spare2", stat.get_lob_inrow_count())))) {
       LOG_WARN("failed to add dml splicer column", K(ret));
     } else if (OB_FAIL(dml_splicer.splice_values(sql_string))) {
       LOG_WARN("failed to get sql string", K(ret));
@@ -1393,6 +1320,7 @@ int ObOptStatSqlService::fetch_column_stat(const uint64_t tenant_id,
                                         data_version < DATA_VERSION_4_3_0_0 ? " " : "col_stat.cg_macro_blk_cnt as cg_macro_blk_cnt,",
                                         data_version < DATA_VERSION_4_3_0_0 ? " " : "col_stat.cg_micro_blk_cnt as cg_micro_blk_cnt,",
                                         data_version < DATA_VERSION_4_3_5_2 ? " " :  "col_stat.cg_skip_rate as cg_skip_rate,",
+                                        GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0 ? " " : "col_stat.spare2 as lob_inrow_count,",
                                         share::OB_ALL_COLUMN_STAT_TNAME,
                                         share::OB_ALL_HISTOGRAM_STAT_TNAME,
                                         data_version < DATA_VERSION_4_4_1_0 || fetch_internal_stat ? "1=1" : "(col_stat.internal_stat is false or col_stat.internal_stat is null)",
@@ -1616,6 +1544,9 @@ int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
             if (OB_SUCC(ret) && need_cg_skip_rate) {
               EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
                   result, cg_skip_rate, *stat, double, true, true, 0);
+            }
+            if (OB_SUCC(ret) && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0) {
+              EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, lob_inrow_count, *stat, int64_t, true, true, -1);
             }
           }
         }
@@ -2585,10 +2516,6 @@ int ObOptStatSqlService::delete_system_stats(const uint64_t tenant_id)
 #undef DELETE_COL_STAT_SQL
 #undef DELETE_TAB_STAT_SQL
 #undef UPDATE_HISTOGRAM_TYPE_SQL
-#undef INSERT_ONLINE_TABLE_STAT_SQL
-#undef INSERT_ONLINE_TABLE_STAT_DUPLICATE
-#undef INSERT_ONLINE_COL_STAT_SQL
-#undef INSERT_ONLINE_COL_STAT_DUPLICATE
 #undef INERT_SYSTEM_STAT_SQL
 #undef DELETE_SYSTEM_STAT_SQL
 #undef CHECK_HISTOGRAM_STAT_SQL

@@ -806,6 +806,19 @@ int ObTabletPointerMap::compare_and_swap_addr_and_object(
         STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(key), KPC(t_ptr), K(update_pointer_param));
       }
 
+      // copy truncate and ttl filter mds cache from old tablet to new tablet
+      // now we have bucket W lock
+      // - the replay thread can't run (get_tablet -> mds_replay -> cache.reset) because it also need bucket W lock
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(new_guard.get_obj()->copy_mds_info_cache_from(*old_guard.get_obj()))) {
+        STORAGE_LOG(WARN, "failed to copy mds info cache from old tablet to new tablet", K(ret), K(key), K(old_guard), K(new_guard));
+      }
+      // After mds cache copy, the query thread maybe read mds data and update mds cache,
+      // which will makes the new tablet mds cache not the newest. However, there won't be a bug.
+      // if query thread will read mds data and update mds cache, we can say the mds info must be replayed a little time before.
+      // Then, the mds cache in the old tablet must be invalid(reset), we copy it to the new tablet.
+      // when query new tablet, the query thread will reread mds info from mds table, and then update mds cache
+
       if (OB_SUCC(ret)) {
         t_ptr->set_addr_with_reset_obj(new_addr);
         t_ptr->set_obj(new_guard);

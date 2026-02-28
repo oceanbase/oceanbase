@@ -18,6 +18,7 @@
 #include "storage/backup/ob_backup_extern_info_mgr.h"
 #include "storage/ls/ob_ls_meta_package.h"
 #include "storage/tablet/ob_tablet_meta.h"
+#include "storage/backup/ob_backup_block_file_reader_writer.h"
 
 namespace oceanbase
 {
@@ -446,12 +447,14 @@ public:
   // write and read backup set info
   int write_backup_set_info(const ObExternBackupSetInfoDesc &backup_set_info);
   int read_backup_set_info(ObExternBackupSetInfoDesc &backup_set_info);
+  int read_backup_set_info_by_desc(const share::ObBackupSetDesc &desc, ObExternBackupSetInfoDesc &backup_set_info);
   int is_backup_set_info_file_exist(bool &is_exist) const;
   int get_backup_set_array(const bool check_passwd, const common::ObString &passwd_array, const share::SCN &restore_scn,
-      share::SCN &restore_start_scn, common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
+      share::SCN &restore_start_scn, common::ObIArray<share::ObBackupSetBriefInfo> &backup_set_list);
   int get_max_backup_set_file_info(const common::ObString &passwd_array, ObBackupSetFileDesc &output_desc);
   int get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap & time_zone_wrap);
   int get_single_backup_set_sys_time_zone_wrap(common::ObTimeZoneInfoWrap & time_zone_wrap);
+  int get_backup_set_list(ObArray<share::ObBackupSetDesc> &set_list);
   int get_max_sys_ls_retry_id(
       const share::ObBackupPath &backup_path, const share::ObLSID &ls_id, const int64_t turn_id, int64_t &retry_id);
   int write_root_key_info(const uint64_t tenant_id);
@@ -471,6 +474,18 @@ public:
   // mview dep tablet list
   int write_major_compaction_mview_dep_tablet_list(const ObBackupMajorCompactionMViewDepTabletListDesc &desc);
   int read_major_compaction_mview_dep_tablet_list(ObBackupMajorCompactionMViewDepTabletListDesc &desc);
+  // write file list when path contains only one file
+  int write_backup_meta_file_list(const share::ObBackupLSTaskAttr &ls_attr);
+  int write_backup_data_file_list(const share::ObBackupLSTaskAttr &ls_attr);
+  int write_backup_fuse_meta_info_file_list(const share::ObBackupLSTaskAttr &ls_attr);
+  int list_and_generate_file_list_(
+    const ObBackupPath &path,
+    const ObBackupFileSuffix &suffix,
+    backup::ObBackupFileListInfo &file_list_info);
+  int write_file_list(
+      const ObBackupPath &dir_path,
+      const ObBackupPathString &file_name,
+      const ObIBackupSerializeProvider &serializer);
   TO_STRING_KV(K_(backup_desc));
 
 public:
@@ -499,7 +514,7 @@ private:
       const common::ObString &passwd_array,
       const share::SCN &restore_scn,
       const ObBackupSetFilter &op,
-      common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list,
+      common::ObIArray<share::ObBackupSetBriefInfo> &tmp_backup_set_list,
       int64_t &cur_max_backup_set_id, share::SCN &restore_start_scn);
   int get_backup_set_placeholder_path_(const bool is_inner, const bool is_start, const bool is_succeed, 
       const share::SCN &replay_scn, const share::SCN &min_restore_scn, share::ObBackupPath &path);

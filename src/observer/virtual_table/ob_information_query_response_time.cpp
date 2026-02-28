@@ -175,6 +175,10 @@ static inline const char *sql_type_to_string(RespTimeSqlType type)
     case(RespTimeSqlType::hbase_check_and_mutate_sql): return "HBASE CHECK AND MUTATE";
     case(RespTimeSqlType::hbase_check_and_delete_sql): return "HBASE CHECK AND DELETE";
     case(RespTimeSqlType::hbase_hybrid_batch_sql): return "HBASE HYBRID BATCH";
+    case(RespTimeSqlType::hbase_get_sql): return "HBASE GET";
+    case(RespTimeSqlType::hbase_batch_put_sql): return "HBASE BATCH PUT";
+    case(RespTimeSqlType::hbase_batch_delete_sql): return "HBASE BATCH DELETE";
+    case(RespTimeSqlType::hbase_batch_get_sql): return "HBASE BATCH GET";
     case(RespTimeSqlType::inner_sql): return "INNER SQL";
     case(RespTimeSqlType::redis_lindex): return "REDIS LINDEX";
     case(RespTimeSqlType::redis_lset): return "REDIS LSET";

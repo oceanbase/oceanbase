@@ -524,6 +524,7 @@ public:
     out_slave_mapping_type_(SlaveMappingType::SM_NONE),
     part_ch_map_(),
     dist_method_(ObPQDistributeMethod::NONE),
+    use_scatter_channel_for_pkey_hash_(false),
     total_task_cnt_(0),
     pkey_table_loc_id_(0),
     tsc_op_cnt_(0),
@@ -594,6 +595,11 @@ public:
   inline SlaveMappingType get_out_slave_mapping_type() { return out_slave_mapping_type_; }
   inline bool is_in_slave_mapping() { return SlaveMappingType::SM_NONE != in_slave_mapping_type_; }
   inline bool is_out_slave_mapping() { return SlaveMappingType::SM_NONE != out_slave_mapping_type_; }
+  inline void set_use_scatter_channel_for_pkey_hash(bool use_scatter_channel_for_pkey_hash)
+  {
+    use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
+  }
+  inline bool use_scatter_channel_for_pkey_hash() const { return use_scatter_channel_for_pkey_hash_; }
 
   ObPxPartChMapArray &get_part_ch_map() { return part_ch_map_; }
 
@@ -812,6 +818,7 @@ private:
   SlaveMappingType out_slave_mapping_type_;
   ObPxPartChMapArray part_ch_map_;
   ObPQDistributeMethod::Type dist_method_;
+  bool use_scatter_channel_for_pkey_hash_;
   int64_t total_task_cnt_;      // the task total count of dfo start worker
   int64_t pkey_table_loc_id_; // record pkey table loc id for child dfo
   int64_t tsc_op_cnt_;

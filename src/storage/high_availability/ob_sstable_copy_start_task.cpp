@@ -65,14 +65,11 @@ int ObSSTableCopyStartTask::process()
   } else if (OB_ISNULL(sstable_param = finish_task_->get_sstable_param())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable param should not be NULL", K(ret), KPC(copy_ctx_));
-  } else if (finish_task_->get_sstable_param()->basic_meta_.table_shared_flag_.is_shared_macro_blocks()
-      || finish_task_->get_sstable_param()->basic_meta_.table_backup_flag_.is_shared_sstable()) {
-    if (OB_FAIL(do_with_shared_sstable_())) {
-      LOG_WARN("failed to do with shared sstable", K(ret));
-    }
-  } else {
+  } else if (sstable_param->basic_meta_.table_shared_flag_.is_shared_macro_blocks()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Only Shared SSTable need build physical macro block id", K(ret), KPC(sstable_param));
+    LOG_WARN("shared sstable should not be processed here", K(ret), KPC(sstable_param));
+  } else if (OB_FAIL(build_sstable_reuse_info_if_needed_())) {
+    LOG_WARN("failed to do with local sstable", K(ret));
   }
 
   if (OB_FAIL(ret)) {
@@ -85,43 +82,66 @@ int ObSSTableCopyStartTask::process()
   return ret;
 }
 
-int ObSSTableCopyStartTask::do_with_shared_sstable_()
+int ObSSTableCopyStartTask::build_sstable_reuse_info_if_needed_()
 {
   int ret = OB_SUCCESS;
+
+  bool is_major_sstable = ObITable::is_major_sstable(copy_ctx_->table_key_.table_type_);
+  bool is_small_sstable = finish_task_->get_sstable_param()->is_small_sstable_;
+  bool is_restore = copy_ctx_->is_leader_restore_;
+  bool is_restore_replace_remote = ObTabletRestoreAction::is_restore_replace_remote_sstable(copy_ctx_->restore_action_);
   bool is_rpc_not_support = false;
-  if (OB_FAIL(prepare_sstable_macro_range_info_(is_rpc_not_support))) {
+
+  if (!is_major_sstable || is_small_sstable || (is_restore && !is_restore_replace_remote)) {
+    // skip build reuse info
+    LOG_INFO("skip build reuse info for this sstable",
+              "is_major_sstable", is_major_sstable,
+              "is_small_sstable", is_small_sstable,
+              "is_restore", is_restore,
+              "is_restore_replace_remote", is_restore_replace_remote,
+              KPC_(copy_ctx));
+  } else if (OB_FAIL(prepare_sstable_macro_range_info_(is_rpc_not_support))) {
     LOG_WARN("failed to prepare sstable macro range info", K(ret));
   } else if (is_rpc_not_support) {
     // skip build reuse info (for compatibility)
     LOG_INFO("rpc not support, skip build reuse info", K(ret));
+  } else if (OB_FAIL(build_sstable_reuse_info_())) {
+    LOG_WARN("failed to build sstable reuse info", K(ret));
   }
+
   return ret;
 }
 
 int ObSSTableCopyStartTask::prepare_sstable_macro_range_info_(bool &is_rpc_not_support)
 {
   int ret = OB_SUCCESS;
-  ObCopySSTableMacroIdInfo macro_block_id_info;
+  common::ObArray<ObLogicMacroBlockId> logic_id_array;
   is_rpc_not_support = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("sstable copy start task do not init", K(ret));
-  } else if (OB_FAIL(fetch_sstable_macro_id_info_(macro_block_id_info, is_rpc_not_support))) {
-    LOG_WARN("failed to fetch sstable logic macro info", K(ret), KPC(copy_ctx_));
+  } else if (OB_FAIL(fetch_sstable_macro_logic_id_info_(logic_id_array, is_rpc_not_support))) {
+    LOG_WARN("failed to fetch sstable logic macro info", K(ret));
   } else if (is_rpc_not_support) {
     // skip
-  } else if (OB_FAIL(finish_task_->add_macro_block_id_info(macro_block_id_info))) {
-    LOG_WARN("failed to add logic macro info for range", K(ret), KPC(copy_ctx_));
+  } else if (logic_id_array.empty()) {
+    // skip
+    LOG_INFO("sstable logical block id info is empty, skip prepare sstable macro range info", K(logic_id_array));
+  } else if (OB_FAIL(finish_task_->add_logic_macro_info_for_range(logic_id_array))) {
+    LOG_WARN("failed to add logic macro info for range", K(ret));
+  } else {
+    LOG_INFO("succeed prepare sstable macro range info");
   }
+
   return ret;
 }
 
-int ObSSTableCopyStartTask::fetch_sstable_macro_id_info_(ObCopySSTableMacroIdInfo &macro_block_id_info, bool &is_rpc_not_support)
+int ObSSTableCopyStartTask::fetch_sstable_macro_logic_id_info_(common::ObIArray<ObLogicMacroBlockId> &logic_id_array, bool &is_rpc_not_support)
 {
   int ret = OB_SUCCESS;
   ObICopySSTableMacroIdInfoReader *reader = nullptr;
-  macro_block_id_info.reset();
+  logic_id_array.reset();
   is_rpc_not_support = false;
 
   if (IS_NOT_INIT) {
@@ -139,14 +159,30 @@ int ObSSTableCopyStartTask::fetch_sstable_macro_id_info_(ObCopySSTableMacroIdInf
   } else if (OB_ISNULL(reader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("macro id info reader is null", K(ret));
-  } else if (OB_FAIL(reader->get_sstable_macro_id_info(macro_block_id_info))) {
+  } else if (OB_FAIL(reader->get_sstable_macro_logic_ids(logic_id_array))) {
     LOG_WARN("failed to get logic macro block ids", K(ret));
   } else {
-    LOG_INFO("succeed fetch sstable logic macro block ids", K(macro_block_id_info));
+    LOG_INFO("succeed fetch sstable logic macro block ids", K(logic_id_array));
   }
 
   if (nullptr != reader) {
     free_macro_id_info_reader_(reader);
+  }
+
+  return ret;
+}
+
+int ObSSTableCopyStartTask::build_sstable_reuse_info_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(finish_task_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sstable copy finish task is null", K(ret));
+  } else if (OB_FAIL(finish_task_->build_sstable_reuse_info())) {
+    LOG_WARN("failed to build sstable reuse info", K(ret));
+  } else {
+    LOG_INFO("succeed build sstable reuse info");
   }
 
   return ret;
@@ -163,6 +199,10 @@ int ObSSTableCopyStartTask::get_macro_id_info_reader_(ObICopySSTableMacroIdInfoR
     LOG_WARN("sstable copy start task do not init", K(ret));
   } else if (OB_FAIL(build_macro_id_info_reader_init_param_(init_param))) {
     LOG_WARN("failed to build macro id info reader init param", K(ret));
+  } else if (copy_ctx_->is_leader_restore_) {
+    if (OB_FAIL(get_macro_id_info_restore_reader_(init_param, reader))) {
+      LOG_WARN("failed to get macro block restore reader", K(ret));
+    }
   } else {
     if (OB_FAIL(get_macro_id_info_ob_reader_(init_param, reader))) {
       if (OB_NOT_SUPPORTED == ret) {
@@ -193,9 +233,15 @@ int ObSSTableCopyStartTask::build_macro_id_info_reader_init_param_(ObCopySSTable
     init_param.tenant_id_ = copy_ctx_->tenant_id_;
     init_param.ls_id_ = copy_ctx_->ls_id_;
     init_param.table_key_ = copy_ctx_->table_key_;
+    init_param.is_leader_restore_ = copy_ctx_->is_leader_restore_;
+    init_param.restore_action_ = copy_ctx_->restore_action_;
     init_param.src_info_ = copy_ctx_->src_info_;
     init_param.bandwidth_throttle_ = copy_ctx_->bandwidth_throttle_;
     init_param.svr_rpc_proxy_ = copy_ctx_->svr_rpc_proxy_;
+    init_param.restore_base_info_ = copy_ctx_->restore_base_info_;
+    init_param.meta_index_store_ = copy_ctx_->meta_index_store_;
+    init_param.second_meta_index_store_ = copy_ctx_->second_meta_index_store_;
+    init_param.restore_macro_block_id_mgr_ = copy_ctx_->restore_macro_block_id_mgr_;
     init_param.need_check_seq_ = copy_ctx_->need_check_seq_;
     init_param.ls_rebuild_seq_ = copy_ctx_->ls_rebuild_seq_;
     init_param.filled_tx_scn_ = finish_task_->get_sstable_param()->basic_meta_.filled_tx_scn_;
@@ -231,6 +277,41 @@ int ObSSTableCopyStartTask::get_macro_id_info_ob_reader_(
 
     if (nullptr != tmp_reader) {
       tmp_reader->~ObCopySSTableMacroIdInfoObReader();
+      mtl_free(tmp_reader);
+      tmp_reader = nullptr;
+    }
+  }
+
+  return ret;
+}
+
+int ObSSTableCopyStartTask::get_macro_id_info_restore_reader_(
+    const ObCopySSTableMacroIdInfoReaderInitParam &init_param,
+    ObICopySSTableMacroIdInfoReader *&reader)
+{
+  int ret = OB_SUCCESS;
+  ObCopySSTableMacroIdInfoRestoreReader *tmp_reader = nullptr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sstable copy start task do not init", K(ret));
+  } else if (!copy_ctx_->is_leader_restore_ || !init_param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get macro block restore reader get invalid argument", K(ret), KPC(copy_ctx_), K(init_param));
+  } else {
+    void *buf = mtl_malloc(sizeof(ObCopySSTableMacroIdInfoRestoreReader), "MbIdRestoreRdr");
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (FALSE_IT(tmp_reader = new(buf) ObCopySSTableMacroIdInfoRestoreReader())) {
+    } else if (OB_FAIL(tmp_reader->init(init_param))) {
+      LOG_WARN("failed to init ob reader", K(ret));
+    } else {
+      reader = tmp_reader;
+      tmp_reader = nullptr;
+    }
+
+    if (nullptr != tmp_reader) {
+      tmp_reader->~ObCopySSTableMacroIdInfoRestoreReader();
       mtl_free(tmp_reader);
       tmp_reader = nullptr;
     }

@@ -96,7 +96,7 @@ TEST_F(TestSharedMacroBlk, test_rebuild_sstable)
   ObSSTable sstable;
 
   // rebuild sstable
-  tablet_handle.get_obj()->tablet_meta_.snapshot_version_ = 12;
+  tablet_handle.get_obj()->tablet_meta_.snapshot_version_ = 19;
   int ret = shared_blk_mgr->rebuild_sstable(allocator,
       *(tablet_handle.get_obj()), sstable_, 0, *sstable_index_builder, *index_block_rebuilder, sstable);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -173,7 +173,7 @@ TEST_F(TestSharedMacroBlk, test_invalid_write)
 int main(int argc, char **argv)
 {
   system("rm -f test_shared_macro_block.log*");
-  OB_LOGGER.set_file_name("test_shared_macro_block.log");
+  OB_LOGGER.set_file_name("test_shared_macro_block.log", true, true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   oceanbase::common::ObClusterVersion::get_instance().init(CLUSTER_VERSION_4_1_0_0);
   testing::InitGoogleTest(&argc, argv);

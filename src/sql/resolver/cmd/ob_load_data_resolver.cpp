@@ -15,6 +15,7 @@
 #include "src/sql/resolver/dml/ob_del_upd_resolver.h"
 #include "lib/json/ob_json_print_utils.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include <glob.h>
 #include "share/schema/ob_part_mgr_util.h"
@@ -352,13 +353,17 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
     /* 8. opt_field_or_var_spec */
     const ParseNode *child_node = node->children_[ENUM_OPT_FIELD_OR_VAR];
     if (NULL == child_node) { //default insert into all columns
-      if (OB_FAIL(resolve_empty_field_or_var_list_node(*load_stmt))) {
-        LOG_WARN("resolve empty field var list failed", K(ret));
+      if (OB_FAIL(resolve_empty_field_or_var_list_node(load_stmt->get_load_arguments().table_id_,
+                                          load_stmt->get_field_or_var_list()))) {
+        LOG_WARN("resolve empty field var list failed", KR(ret), K(load_stmt));
       } else {
         load_stmt->set_default_table_columns();
       }
     } else {
-      if (OB_FAIL(resolve_field_or_var_list_node(*child_node, case_mode, *load_stmt))) {
+      if (OB_FAIL(resolve_field_or_var_list_node(*child_node, case_mode,
+                        load_stmt->get_load_arguments().database_name_,
+                        load_stmt->get_load_arguments().table_id_,
+                        load_stmt->get_field_or_var_list()))) {
         LOG_WARN("failed to resolve field or var list_node", K(ret), K(child_node));
       }
     }
@@ -391,8 +396,9 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
     /*13. partition */
     const ParseNode *child_node = node->children_[ENUM_OPT_USE_PARTITION];
     if (OB_NOT_NULL(child_node)) {
-      if (OB_FAIL(resolve_partitions(*child_node, *load_stmt))) {
-        LOG_WARN("fail to resolve partition");
+      if (OB_FAIL(resolve_partitions(*child_node, load_stmt->get_load_arguments().table_id_,
+                                load_stmt->get_part_ids(), load_stmt->get_part_names()))) {
+        LOG_WARN("fail to resolve partition", KR(ret), K(load_stmt));
       }
     }
   }
@@ -868,10 +874,10 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
   ObLoadArgument &load_args = load_stmt->get_load_arguments();
   ParseNode *file_name_node = node->children_[ENUM_FILE_NAME];
   if (OB_ISNULL(file_name_node)
-      || OB_UNLIKELY(T_VARCHAR != file_name_node->type_ && T_CHAR != file_name_node->type_)) {
+      || OB_UNLIKELY(T_LOCATION_OBJECT != file_name_node->type_ && T_EXTERNAL_FILE_LOCATION != file_name_node->type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid node", "child", file_name_node);
-  } else {
+  } else if (T_EXTERNAL_FILE_LOCATION == file_name_node->type_) {  // old path
     ObString file_name(file_name_node->str_len_, file_name_node->str_value_);
     ObArray<ObString> file_name_array;
     if (OB_FAIL(split_file_name_by_brace(file_name, file_name_array))) {
@@ -887,6 +893,10 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
       if (OB_FAIL(resolve_multi_files(load_args, file_name, file_name_array))) {
         LOG_WARN("failed to resolve multi files", K(ret), K(file_name_array));
       }
+    }
+  } else {
+    if (OB_FAIL(resolve_location_object(load_stmt, file_name_node))) {  // explicitly use location object
+      LOG_WARN("failed to resolve location object", K(ret));
     }
   }
   return ret;
@@ -937,8 +947,9 @@ int ObLoadDataResolver::resolve_single_file(ObLoadArgument &load_args, const ObS
                                 false))) {
         LOG_WARN("get location schema failed", K(ret), K(session_info_->get_effective_tenant_id()), K(actual_file_name));
       } else if (OB_ISNULL(schema_ptr)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("match location object failed", K(ret), K(session_info_->get_effective_tenant_id()), K(actual_file_name));
+        if (OB_FAIL(load_args.access_info_.set(actual_file_name.ptr(), ""))) {  // 可能不需要access_info
+          LOG_WARN("failed to set empty access info", K(ret), K(actual_file_name));
+        }
       } else if (OB_FAIL(load_args.access_info_.set(actual_file_name.ptr(), schema_ptr->get_location_access_info()))) {
         LOG_WARN("failed to set access info", K(ret), K(actual_file_name), K(schema_ptr->get_location_access_info()));
       }
@@ -997,6 +1008,43 @@ int ObLoadDataResolver::resolve_multi_files(ObLoadArgument &load_args, const ObS
     }
     LOG_INFO("resolve filename result", K(ret), K(load_args.file_name_), K(load_args.load_file_storage_));
   }
+  return ret;
+}
+
+int ObLoadDataResolver::resolve_location_object(ObLoadDataStmt *load_stmt, ParseNode *file_name_node)
+{
+  int ret = OB_SUCCESS;
+  ObLoadArgument &load_args = load_stmt->get_load_arguments();
+
+  if (2 != file_name_node->num_child_ || OB_ISNULL(file_name_node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid node", K(file_name_node));
+  } else {
+    ObString location_name(file_name_node->children_[0]->str_len_,
+                           file_name_node->children_[0]->str_value_);
+    ObString sub_path;
+    if (OB_NOT_NULL(file_name_node->children_[1])) {
+      sub_path = ObString(file_name_node->children_[1]->str_len_,
+                          file_name_node->children_[1]->str_value_);
+    }
+
+    share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+    ObString access_info;
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else if (OB_FAIL(ObExternalTableUtils::resolve_location_for_load_and_select_into(
+                              *schema_guard, *session_info_, *allocator_,
+                              location_name, sub_path, load_args.file_name_,
+                              &access_info, true/*check_oss_prefix*/))) {
+      LOG_WARN("failed to resolve location object", K(ret), K(location_name), K(sub_path));
+    } else if (OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), access_info.ptr()))) {
+      LOG_WARN("failed to set access info", K(ret), K(load_args.file_name_), K(access_info));
+    } else if (OB_FAIL(resolve_filename_oss(load_args, load_args.file_name_))) {
+      LOG_WARN("failed to resolve oss file name", K(ret));
+    }
+  }
+
   return ret;
 }
 
@@ -1087,7 +1135,7 @@ int ObLoadDataResolver::validate_stmt(ObLoadDataStmt* stmt)
 }
 
 
-bool is_dup_field(ObIArray<ObLoadDataStmt::FieldOrVarStruct> &fields, ObLoadDataStmt::FieldOrVarStruct &new_field) {
+bool is_dup_field(ObIArray<FieldOrVarStruct> &fields, FieldOrVarStruct &new_field) {
   bool is_dup = false;
   for (int i = 0; i < fields.count(); i++) {
     if ((fields.at(i).is_table_column_ && new_field.is_table_column_
@@ -1100,167 +1148,6 @@ bool is_dup_field(ObIArray<ObLoadDataStmt::FieldOrVarStruct> &fields, ObLoadData
   }
   return is_dup;
 }
-
-int ObLoadDataResolver::resolve_field_node(const ParseNode &node, const ObNameCaseMode case_mode,
-    ObLoadDataStmt &load_stmt)
-{
-  int ret = OB_SUCCESS;
-  ObQualifiedName q_name;
-  const ObColumnSchemaV2 *col_schema = NULL;
-  ObString &database_name = load_stmt.get_load_arguments().database_name_;
-  uint64_t table_id = load_stmt.get_load_arguments().table_id_;
-  if (OB_UNLIKELY(T_COLUMN_REF != node.type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node type is not T_COLUMN_LIST", K(ret), K(node.type_));
-  } else if (OB_FAIL(ObResolverUtils::resolve_column_ref(&node, case_mode, q_name))) {
-    LOG_WARN("failed to resolve column def", K(ret));
-  } else if ((q_name.database_name_.length() > 0
-                 && q_name.database_name_.case_compare(database_name) != 0)
-             || (q_name.tbl_name_.length() > 0
-                 && q_name.tbl_name_.case_compare(database_name) != 0)) {
-     //TODO wjh: check error return code
-     ret = OB_ERR_BAD_FIELD_ERROR;
-     ObString column_name = concat_qualified_name(q_name.database_name_,
-                                                  q_name.tbl_name_,
-                                                  q_name.col_name_);
-     LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(), (int)strlen("field list"), "field list");
-     LOG_WARN("unknown column in field list", K(column_name));
-   } else if (OB_FAIL(get_column_schema(table_id,
-                                        q_name.col_name_,
-                                        col_schema,
-                                        false))) {
-     LOG_WARN("get column schema failed", K(ret), K(q_name.tbl_name_), K(q_name.col_name_));
-   } else if (OB_ISNULL(col_schema)) {
-     ret = OB_ERR_UNEXPECTED;
-     LOG_WARN("column schema is null");
-   } else {
-    ObIArray<ObLoadDataStmt::FieldOrVarStruct> &field_or_var_list = load_stmt.get_field_or_var_list();
-    ObLoadDataStmt::FieldOrVarStruct tmp_struct;
-    tmp_struct.is_table_column_ = true;
-    tmp_struct.field_or_var_name_ = q_name.col_name_;
-    tmp_struct.column_id_ = col_schema->get_column_id();
-    tmp_struct.column_type_ = col_schema->get_data_type();
-    if (is_dup_field(field_or_var_list, tmp_struct)) {
-      ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-      ObCStringHelper helper;
-      LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, helper.convert(tmp_struct.field_or_var_name_));
-    } else if (OB_FAIL(field_or_var_list.push_back(tmp_struct))) {
-      LOG_WARN("failed to push back item", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLoadDataResolver::resolve_user_vars_node(const ParseNode &node, ObLoadDataStmt &load_stmt)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(T_USER_VARIABLE_IDENTIFIER != node.type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node type is not T_USER_VARIABLE_IDENTIFIER", K(ret), K(node.type_));
-  } else if (OB_UNLIKELY(1 != node.num_child_)
-             || OB_ISNULL(node.children_)
-             || OB_ISNULL(node.children_[0])) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid node", K(node.num_child_), K(node.children_), K(ret));
-  } else {
-    ObIArray<ObLoadDataStmt::FieldOrVarStruct> &field_or_var_list = load_stmt.get_field_or_var_list();
-    ObString user_var;
-    user_var.assign_ptr(const_cast<char*>(node.children_[0]->str_value_),
-                        static_cast<int32_t>(node.children_[0]->str_len_));
-    ObLoadDataStmt::FieldOrVarStruct tmp_struct;
-    tmp_struct.is_table_column_ = false;
-    tmp_struct.field_or_var_name_.assign_ptr(const_cast<char*>(node.children_[0]->str_value_),
-                                             static_cast<int32_t>(node.children_[0]->str_len_));
-    tmp_struct.column_type_ = ColumnType::ObMaxType;  //unknown type
-    tmp_struct.column_id_ = OB_INVALID_ID;
-    if (OB_FAIL(field_or_var_list.push_back(tmp_struct))) {
-      LOG_WARN("failed to push back item", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLoadDataResolver::resolve_empty_field_or_var_list_node(ObLoadDataStmt &load_stmt)
-{
-  int ret = OB_SUCCESS;
-  ObIArray<ObLoadDataStmt::FieldOrVarStruct> &field_or_var_list = load_stmt.get_field_or_var_list();
-  uint64_t table_id = load_stmt.get_load_arguments().table_id_;
-  const ObTableSchema *table_schema = NULL;
-  if (OB_ISNULL(session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session_info_ is null", K(ret));
-  } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table_id, table_schema))) {
-    LOG_WARN("get table schema failed", K(ret));
-  } else {
-    ObColumnIterByPrevNextID iter(*table_schema);
-    const ObColumnSchemaV2 *column_schema = NULL;
-    while (OB_SUCC(ret) && OB_SUCC(iter.next(column_schema))) {
-      if (OB_ISNULL(column_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("The column is null", K(ret));
-      } else if (!column_schema->is_hidden()
-                 && !column_schema->is_invisible_column()) {
-        ObLoadDataStmt::FieldOrVarStruct tmp_struct;
-        if (column_schema->is_virtual_generated_column()) {
-          tmp_struct.is_table_column_ = false;
-          tmp_struct.field_or_var_name_ = "";
-          tmp_struct.column_type_ = ColumnType::ObMaxType;  //unknown type
-          tmp_struct.column_id_ = OB_INVALID_ID;
-        } else {
-          tmp_struct.is_table_column_ = true;
-          tmp_struct.field_or_var_name_ = column_schema->get_column_name_str();
-          tmp_struct.column_id_ = column_schema->get_column_id();
-          tmp_struct.column_type_ = column_schema->get_data_type();
-        }
-        if (OB_FAIL(field_or_var_list.push_back(tmp_struct))) {
-          LOG_WARN("failed to push back item", K(ret));
-        }
-      }
-    }
-    if (ret != OB_ITER_END) {
-      LOG_WARN("Failed to iterate all table columns. iter quit. ", K(ret));
-    } else {
-      ret = OB_SUCCESS;
-    }
-  }
-  return ret;
-}
-
-
-int ObLoadDataResolver::resolve_field_or_var_list_node(const ParseNode &node,
-    const ObNameCaseMode case_mode, ObLoadDataStmt &load_stmt)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(T_COLUMN_LIST != node.type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node type is not T_COLUMN_LIST", K(ret), K(node.type_));
-  } else if (OB_UNLIKELY(node.num_child_ <= 0) || OB_ISNULL(node.children_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid child node", K(node.num_child_), K(ret));
-  } else {
-    const ParseNode *child_node = NULL;
-    for (int32_t i = 0 ; i < node.num_child_ && OB_SUCC(ret); ++i) {
-      if (OB_ISNULL(child_node = node.children_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid grand child node", K(child_node), K(i), K(ret));
-      } else if (T_COLUMN_REF == child_node->type_) {
-        if (OB_FAIL(resolve_field_node(*child_node, case_mode, load_stmt))) {
-          LOG_WARN("failed to resolve field node", K(ret));
-        }
-      } else if (T_USER_VARIABLE_IDENTIFIER == child_node->type_) {
-        if (OB_FAIL(resolve_user_vars_node(*child_node, load_stmt))) {
-          LOG_WARN("failed to resolve user vars node", K(ret));
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("resolve field var list failed", K(ret), K(child_node));
-      }
-    }//end of for
-    LOG_DEBUG("check field var list", K(load_stmt.get_field_or_var_list()));
-  }
-  return ret;
-}
-
 
 int ObLoadDataResolver::resolve_set_clause(const ParseNode &node, const ObNameCaseMode case_mode, ObLoadDataStmt &load_stmt)
 {
@@ -1831,7 +1718,32 @@ int ObLoadDataResolver::local_infile_enabled(bool &enabled) const
   return ret;
 }
 
-int ObLoadDataResolver::check_trigger_constraint(const ObTableSchema *table_schema)
+int ObLoadDataResolver::check_collection_sql_type(const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)
+      || OB_ISNULL(schema_checker_)
+      || OB_ISNULL(session_info_)
+      || OB_ISNULL(schema_checker_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("object is null", K(ret), K(table_schema), K(schema_checker_),
+             K(session_info_), K(schema_checker_->get_schema_guard()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_column_count(); i++) {
+      const ObColumnSchemaV2 *col_schema = nullptr;
+      if (OB_ISNULL(col_schema = table_schema->get_column_schema_by_idx(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(i), KPC(table_schema));
+      } else if (col_schema->get_meta_type().is_collection_sql_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support load data if table has array/vector column", K(ret), KPC(col_schema));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLoadBaseResolver::check_trigger_constraint(const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_schema)
@@ -1867,10 +1779,178 @@ int ObLoadDataResolver::check_trigger_constraint(const ObTableSchema *table_sche
   return ret;
 }
 
-int ObLoadDataResolver::resolve_partitions(const ParseNode &node, ObLoadDataStmt &load_stmt)
+int ObLoadBaseResolver::resolve_field_or_var_list_node(
+    const ParseNode &node,
+    const common::ObNameCaseMode case_mode,
+    const ObString &database_name,
+    const uint64_t table_id,
+    ObIArray<FieldOrVarStruct> &field_or_var_list)
 {
   int ret = OB_SUCCESS;
-  uint64_t table_id = load_stmt.get_load_arguments().table_id_;
+  if (OB_UNLIKELY(T_COLUMN_LIST != node.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node type is not T_COLUMN_LIST", KR(ret), K(node.type_));
+  } else if (OB_UNLIKELY(node.num_child_ <= 0) || OB_ISNULL(node.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid child node", KR(ret), K(node.num_child_), KP(node.children_));
+  } else {
+    const ParseNode *child_node = NULL;
+    for (int32_t i = 0 ; i < node.num_child_ && OB_SUCC(ret); ++i) {
+      if (OB_ISNULL(child_node = node.children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid grand child node", K(child_node), K(i), KR(ret));
+      } else if (T_COLUMN_REF == child_node->type_) {
+        if (OB_FAIL(resolve_field_node(*child_node, case_mode, database_name, table_id, field_or_var_list))) {
+          LOG_WARN("failed to resolve field node", KR(ret), KP(child_node), K(case_mode), K(database_name), K(table_id));
+        }
+      } else if (T_USER_VARIABLE_IDENTIFIER == child_node->type_) {
+        if (OB_FAIL(resolve_user_vars_node(*child_node, field_or_var_list))) {
+          LOG_WARN("failed to resolve user vars node", KR(ret), KP(child_node));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("resolve field var list failed", KR(ret), K(child_node));
+      }
+    }//end of for
+    LOG_DEBUG("check field var list", K(field_or_var_list));
+  }
+  return ret;
+}
+
+int ObLoadBaseResolver::resolve_field_node(
+    const ParseNode &node,
+    const common::ObNameCaseMode case_mode,
+    const ObString &database_name,
+    const uint64_t table_id,
+    ObIArray<FieldOrVarStruct> &field_or_var_list)
+{
+  int ret = OB_SUCCESS;
+  ObQualifiedName q_name;
+  const ObColumnSchemaV2 *col_schema = NULL;
+  if (OB_UNLIKELY(T_COLUMN_REF != node.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node type is not T_COLUMN_LIST", K(ret), K(node.type_));
+  } else if (OB_FAIL(ObResolverUtils::resolve_column_ref(&node, case_mode, q_name))) {
+    LOG_WARN("failed to resolve column def", K(ret));
+  } else if ((q_name.database_name_.length() > 0
+                 && q_name.database_name_.case_compare(database_name) != 0)
+             || (q_name.tbl_name_.length() > 0
+                 && q_name.tbl_name_.case_compare(database_name) != 0)) {
+     //TODO wjh: check error return code
+     ret = OB_ERR_BAD_FIELD_ERROR;
+     ObString column_name = concat_qualified_name(q_name.database_name_,
+                                                  q_name.tbl_name_,
+                                                  q_name.col_name_);
+     LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(), (int)strlen("field list"), "field list");
+     LOG_WARN("unknown column in field list", K(column_name));
+   } else if (OB_FAIL(get_column_schema(table_id,
+                                        q_name.col_name_,
+                                        col_schema,
+                                        false))) {
+     LOG_WARN("get column schema failed", K(ret), K(q_name.tbl_name_), K(q_name.col_name_));
+   } else if (OB_ISNULL(col_schema)) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_WARN("column schema is null");
+   } else {
+    FieldOrVarStruct tmp_struct;
+    tmp_struct.is_table_column_ = true;
+    tmp_struct.field_or_var_name_ = q_name.col_name_;
+    tmp_struct.column_id_ = col_schema->get_column_id();
+    tmp_struct.column_type_ = col_schema->get_data_type();
+    if (is_dup_field(field_or_var_list, tmp_struct)) {
+      ret = OB_ERR_FIELD_SPECIFIED_TWICE;
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, helper.convert(tmp_struct.field_or_var_name_));
+    } else if (OB_FAIL(field_or_var_list.push_back(tmp_struct))) {
+      LOG_WARN("failed to push back item", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLoadBaseResolver::resolve_user_vars_node(
+    const ParseNode &node,
+    ObIArray<FieldOrVarStruct> &field_or_var_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_USER_VARIABLE_IDENTIFIER != node.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node type is not T_USER_VARIABLE_IDENTIFIER", K(ret), K(node.type_));
+  } else if (OB_UNLIKELY(1 != node.num_child_)
+             || OB_ISNULL(node.children_)
+             || OB_ISNULL(node.children_[0])) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid node", K(node.num_child_), K(node.children_), K(ret));
+  } else {
+    ObString user_var;
+    user_var.assign_ptr(const_cast<char*>(node.children_[0]->str_value_),
+                        static_cast<int32_t>(node.children_[0]->str_len_));
+    FieldOrVarStruct tmp_struct;
+    tmp_struct.is_table_column_ = false;
+    tmp_struct.field_or_var_name_.assign_ptr(const_cast<char*>(node.children_[0]->str_value_),
+                                             static_cast<int32_t>(node.children_[0]->str_len_));
+    tmp_struct.column_type_ = ColumnType::ObMaxType;  //unknown type
+    tmp_struct.column_id_ = OB_INVALID_ID;
+    if (OB_FAIL(field_or_var_list.push_back(tmp_struct))) {
+      LOG_WARN("failed to push back item", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLoadBaseResolver::resolve_empty_field_or_var_list_node(
+    const uint64_t table_id,
+    ObIArray<FieldOrVarStruct> &field_or_var_list)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = NULL;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_info_ is null", K(ret));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret));
+  } else {
+    ObColumnIterByPrevNextID iter(*table_schema);
+    const ObColumnSchemaV2 *column_schema = NULL;
+    while (OB_SUCC(ret) && OB_SUCC(iter.next(column_schema))) {
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("The column is null", K(ret));
+      } else if (!column_schema->is_hidden()
+                 && !column_schema->is_invisible_column()) {
+        FieldOrVarStruct tmp_struct;
+        if (column_schema->is_virtual_generated_column()) {
+          tmp_struct.is_table_column_ = false;
+          tmp_struct.field_or_var_name_ = "";
+          tmp_struct.column_type_ = ColumnType::ObMaxType;  //unknown type
+          tmp_struct.column_id_ = OB_INVALID_ID;
+        } else {
+          tmp_struct.is_table_column_ = true;
+          tmp_struct.field_or_var_name_ = column_schema->get_column_name_str();
+          tmp_struct.column_id_ = column_schema->get_column_id();
+          tmp_struct.column_type_ = column_schema->get_data_type();
+        }
+        if (OB_FAIL(field_or_var_list.push_back(tmp_struct))) {
+          LOG_WARN("failed to push back item", K(ret));
+        }
+      }
+    }
+    if (ret != OB_ITER_END) {
+      LOG_WARN("Failed to iterate all table columns. iter quit. ", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObLoadBaseResolver::resolve_partitions(
+    const ParseNode &node,
+    const uint64_t table_id,
+    ObIArray<ObObjectID> &part_ids,
+    ObIArray<ObString> &part_names)
+{
+  int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1882,8 +1962,8 @@ int ObLoadDataResolver::resolve_partitions(const ParseNode &node, ObLoadDataStmt
   if (OB_SUCC(ret) && OB_NOT_NULL(node.children_[0]) && T_NAME_LIST == node.children_[0]->type_) {
     const ParseNode *name_list = node.children_[0];
     ObString partition_name;
-    ObArray<ObObjectID> part_ids;
-    ObArray<ObString> part_names;
+    ObArray<ObObjectID> tmp_part_ids;
+    ObArray<ObString> tmp_part_names;
     for (int i = 0; OB_SUCC(ret) && i < name_list->num_child_; i++) {
       ObArray<ObObjectID> partition_ids;
       partition_name.assign_ptr(name_list->children_[i]->str_value_,
@@ -1904,43 +1984,18 @@ int ObLoadDataResolver::resolve_partitions(const ParseNode &node, ObLoadDataStmt
         LOG_WARN("fail to get subpart ids", K(ret), K(partition_name));
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(append_array_no_dup(part_ids, partition_ids))) {
+        if (OB_FAIL(append_array_no_dup(tmp_part_ids, partition_ids))) {
           LOG_WARN("Push partition id error", K(ret));
-        } else if (OB_FAIL(part_names.push_back(partition_name))) {
+        } else if (OB_FAIL(tmp_part_names.push_back(partition_name))) {
           LOG_WARN("Push partition name error", K(ret));
         }
       }
     } // end of for
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(load_stmt.set_part_ids(part_ids))) {
-        LOG_WARN("fail to set partition ids", KR(ret));
-      } else if (OB_FAIL(load_stmt.set_part_names(part_names))) {
-        LOG_WARN("fail to set partition names", KR(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLoadDataResolver::check_collection_sql_type(const ObTableSchema *table_schema)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(table_schema)
-      || OB_ISNULL(schema_checker_)
-      || OB_ISNULL(session_info_)
-      || OB_ISNULL(schema_checker_->get_schema_guard())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("object is null", K(ret), K(table_schema), K(schema_checker_),
-             K(session_info_), K(schema_checker_->get_schema_guard()));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_column_count(); i++) {
-      const ObColumnSchemaV2 *col_schema = nullptr;
-      if (OB_ISNULL(col_schema = table_schema->get_column_schema_by_idx(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(i), KPC(table_schema));
-      } else if (col_schema->get_meta_type().is_collection_sql_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support load data if table has array/vector column", K(ret), KPC(col_schema));
+      if (OB_FAIL(part_ids.assign(tmp_part_ids))) {
+        LOG_WARN("fail to assign partition ids", KR(ret));
+      } else if (OB_FAIL(part_names.assign(tmp_part_names))) {
+        LOG_WARN("fail to assign partition names", KR(ret));
       }
     }
   }

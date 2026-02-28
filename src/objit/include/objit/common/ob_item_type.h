@@ -91,6 +91,8 @@ typedef enum ObItemType
   T_VAR_INT = 65,
 
   T_EXEC_VAR = 66,
+  T_JSON_NUMBER = 67,
+  T_JSON_STRING = 68,
 
   T_REF_ALIAS_COLUMN = 88,
   T_REF_COLUMN = 89,
@@ -516,6 +518,10 @@ typedef enum ObItemType
   T_FUN_SYS_MYSQL_TO_CHAR = 783,
   T_FUN_INNER_TYPE_TO_ENUMSET = 784,
   T_FUN_SYS_MONTHS_ADD = 785,
+  T_FUN_SYS_CBRT = 786,
+  T_FUN_SYS_BTRIM = 787,
+  T_FUN_SYS_E = 788,
+  T_FUN_SYS_COUNT_SUBSTRINGS = 789,
 
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
@@ -987,8 +993,14 @@ typedef enum ObItemType
   T_FUN_CK_RAND_CANONICAL = 1940,
   T_FUN_SYS_LOAD_FILE = 1941,
   T_FUN_SYS_AI_PARSE_DOCUMENT = 1942,
-  T_FUN_SYS_SEARCH_INDEX_INNER_TYPE = 1943,
+  T_FUN_SYS_SEARCH_INDEX_INNER_PATH = 1943,
   T_FUN_SYS_SEARCH_INDEX_INNER_VALUE = 1944,
+  T_FUN_CK_TO_TYPE_NAME = 1945,
+  T_FUN_SYS_TO_FLOAT64_OR_NULL = 1946,
+  T_FUN_SYS_NEW_TIME = 1947,
+  T_FUN_SYS_NLS_CHARSET_ID = 1948,
+  T_FUN_SYS_AUDIT_LOG_ENCRYPTION_PASSWORD_SET = 1949,
+  T_FUN_SYS_AUDIT_LOG_ENCRYPTION_PASSWORD_GET = 1950,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -1082,6 +1094,12 @@ typedef enum ObItemType
   T_FUN_SYS_VOID = 2096,
   T_FUN_COLLECT_FILE_LIST = 2097,
   T_FUN_SYS_PARSE_DATE_TIME = 2098,
+  T_FUN_SYS_COUNT_INROW = 2099,
+  T_FUN_WINDOW_FUNNEL = 2100,
+  T_FUN_SYS_EXT_MIN = 2101,
+  T_FUN_SYS_EXT_MAX = 2102,
+  T_FUN_SYS_INNER_COLLATION_TYPE_TO_CHARSET = 2103,
+  T_FUN_SYS_INNER_COLLATION_TYPE_TO_COLLATION = 2104,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -1105,6 +1123,8 @@ typedef enum ObItemType
   T_PSEUDO_EXTERNAL_FILE_URL = 3043,
   T_PSEUDO_DDL_SLICE_ID = 3044,
   T_PSEUDO_HIDDEN_CLUSTERING_KEY = 3045,
+  T_PSEUDO_WINDOW_FUNNEL_TIME = 3046,
+  T_PSEUDO_WINDOW_FUNNEL_EVENT_IDX = 3047,
   T_WINDOW_FUNCTION = 3151,
   T_WIN_GENERALIZED_WINDOW = 3152,
   T_WIN_NEW_GENERALIZED_WINDOW = 3153,
@@ -2975,7 +2995,7 @@ typedef enum ObItemType
   T_TRANSITION = 4912,
   T_FUN_ES_SCORE = 4913, // fulltext index for ES SQL
   T_FUN_ES_MATCH = 4914, // fulltext index for ES SQL
-  T_HYBRID_SEARCH_EXPRESSION = 4915,
+  T_HYBRID_SEARCH = 4915, // FARM COMPAT WHITELIST
   T_RESCAN = 4916, // rescan_op
   T_HMS_CATALOG_NAME = 4917, // FARM COMPAT WHITELIST for hive metastore side default catalog
   T_TABLE_VERSION_QUERY = 4918,
@@ -3031,7 +3051,18 @@ typedef enum ObItemType
   T_PRE_FILTER = 4963,
   T_POST_FILTER = 4964,
   T_INDEX_DATA_GEN_EXPRESSION = 4965,
+  T_TABLEGROUP_SCOPE = 4966,
+  T_GROUP_COMMIT = 4967,
 
+  T_ALTER_VIEW_COMPILE = 4968,
+
+  T_MAX_EXECUTION_TIME = 4969,    // for max_execution_time hint
+
+  // for cache hint
+  T_CACHE_HINT = 4970,
+  T_NOCACHE_HINT = 4971,
+
+  T_DOMAIN_LIST = 4972, // for dblink yacc grammar
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -3204,8 +3235,16 @@ extern const char *get_type_name(int type);
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR) || \
                          (op) == T_FUN_INNER_PREFIX_MAX || \
                          (op) == T_FUN_INNER_PREFIX_MIN || \
+                         (op) == T_FUN_STDDEV_SAMP || \
                          ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX) || \
-                         ((op) >= T_FUN_CK_GROUPCONCAT) && ((op) <= T_FUN_CK_UNIQ))
+                         (op) == T_FUN_ANY || \
+                         (op) == T_FUN_ARBITRARY || \
+                         (op) == T_FUN_SYS_COUNT_INROW || \
+                         ((op) >= T_FUN_CK_GROUPCONCAT && (op) <= T_FUN_CK_UNIQ) || \
+                         (op) == T_FUN_WINDOW_FUNNEL || \
+                         (op) == T_FUN_SYS_EXT_MIN || \
+                         (op) == T_FUN_SYS_EXT_MAX)
+
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
   ((op) == T_LEVEL || (op) == T_CONNECT_BY_ISLEAF || (op) == T_CONNECT_BY_ISCYCLE || (op) == T_ORA_ROWSCN)

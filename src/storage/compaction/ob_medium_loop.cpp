@@ -7,6 +7,7 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
+#include "ob_schedule_tablet_func.h"
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_medium_loop.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
@@ -64,6 +65,46 @@ int ObMediumLoop::init(const int64_t batch_size)
   return ret;
 }
 
+class ObScheduleTabletFuncGuard final
+{
+public:
+  ObScheduleTabletFuncGuard(const int64_t merge_version, int64_t &loop_cnt) {
+    func_ = NULL;
+#ifdef OB_BUILD_SHARED_STORAGE
+    ss_func_ = NULL;
+    if (GCTX.is_shared_storage_mode()) {
+      ss_func_ = MTL_NEW(ObSSScheduleTabletFunc, "SS_ScheTablet", merge_version, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, true, loop_cnt);
+      func_ = ss_func_;
+    } else {
+      func_ = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt);
+    }
+  #else
+    func_ = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt);
+  #endif
+  }
+  ObScheduleTabletFunc *get_func() const { return func_; }
+  ~ObScheduleTabletFuncGuard() {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (ss_func_) {
+      ss_func_->~ObSSScheduleTabletFunc();
+      mtl_free(ss_func_);
+      ss_func_ = nullptr;
+      func_ = nullptr;
+    }
+#endif
+    if (func_) {
+      func_->~ObScheduleTabletFunc();
+      mtl_free(func_);
+      func_ = nullptr;
+    }
+  }
+private:
+  ObScheduleTabletFunc *func_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSScheduleTabletFunc *ss_func_;
+#endif
+};
+
 int ObMediumLoop::loop()
 {
   int ret = OB_SUCCESS;
@@ -71,18 +112,10 @@ int ObMediumLoop::loop()
 
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ObScheduleTabletFunc *func = nullptr;
   // merge_version_ may be larger than loop_version_ by other thread,
   // keep using merge_version_ can make the medium loop faster
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (GCTX.is_shared_storage_mode()) {
-    func = MTL_NEW(ObSSScheduleTabletFunc, "SS_ScheTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, true, loop_cnt_);
-  } else {
-    func = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt_);
-  }
-#else
-  func = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt_);
-#endif
+  ObScheduleTabletFuncGuard func_guard(merge_version_, loop_cnt_);
+  ObScheduleTabletFunc *func = func_guard.get_func();
   if (OB_ISNULL(func)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc SchedTabletFunc fail", K(ret));
@@ -120,18 +153,8 @@ int ObMediumLoop::loop()
     }
   } // while
   LOG_TRACE("finish schedule ls medium merge", K(tmp_ret), K(ret), K_(ls_tablet_iter), K(ls_id));
-  if (func) {
+  if (OB_NOT_NULL(func)) {
     add_event_and_diagnose(*func);
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      ((ObSSScheduleTabletFunc*)func)->~ObSSScheduleTabletFunc();
-    } else {
-      func->~ObScheduleTabletFunc();
-    }
-#else
-    func->~ObScheduleTabletFunc();
-#endif
-    mtl_free(func);
   }
   return ret;
 }
@@ -171,7 +194,7 @@ int ObMediumLoop::loop_in_ls(
       } else if (FALSE_IT(tablet_id = tablet->get_tablet_id())) {
       } else if (tablet_id.is_ls_inner_tablet()) {
         // do nothing
-      } else if (OB_TMP_FAIL(func.schedule_tablet(tablet_handle, tablet_merge_finish))) {
+      } else if (OB_TMP_FAIL(func.switch_and_schedule_tablet(tablet_handle, tablet_merge_finish))) {
         if (OB_STATE_NOT_MATCH != tmp_ret) {
           LOG_WARN("failed to schedule tablet", KR(tmp_ret), K(ls_id), K(tablet_id));
         }
@@ -275,42 +298,27 @@ int ObMediumLoop::update_report_scn_as_ls_leader(ObLS &ls, const ObScheduleTable
 }
 
 /********************************************ObScheduleNewMediumLoop impl******************************************/
+struct ObTabletCheckInfoProcessor
+{
+  int operator()(ObScheduleTabletFunc &func, const ObTabletCheckInfo &tablet_check_info, ObTabletHandle &tablet_handle) {
+    UNUSED(tablet_check_info);
+    return func.request_schedule_new_round(tablet_handle, false/*user_request*/, false/*need_load_tablet_status*/);
+  }
+};
+
 int ObScheduleNewMediumLoop::loop()
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
+  ObLSSortedIterator<ObTabletCheckInfo> iter;
+  ObTabletCheckInfoProcessor processor;
   const int64_t frozen_version = ObBasicMergeScheduler::get_merge_scheduler()->get_frozen_version();
   ObScheduleTabletFunc func(frozen_version);
   // sort tablet ls info
   if (OB_FAIL(sort_tablet_ls_info())) {
     LOG_WARN("failed to sort", KR(ret));
+  } else if (OB_FAIL(iter.iterate(func, tablet_ls_infos_, processor, true /*skip_follower*/))) {
+    LOG_WARN("failed to iterate tablet check info", KR(ret));
   }
-  for (int64_t i = 0, idx = 0; i < tablet_ls_infos_.count(); ++i) { // ignore OB_FAIL
-    const ObLSID &ls_id = tablet_ls_infos_.at(i).get_ls_id();
-    const ObTabletID &tablet_id = tablet_ls_infos_.at(i).get_tablet_id();
-    ObTabletHandle tablet_handle;
-    if (func.get_ls_status().ls_id_ == ls_id) {
-      // do nothing, use old ls_handle
-    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::COMPACT_MODE))) {
-      LOG_WARN("failed to get ls", K(ret), K(ls_id));
-    } else if (OB_FAIL(func.switch_ls(ls_handle))) {
-      if (OB_STATE_NOT_MATCH != ret) {
-        LOG_WARN("failed to switch ls", KR(ret), K(ls_id), K(ls_id));
-      } else {
-        LOG_WARN("not support schedule medium for ls", K(ret), K(ls_id), K(tablet_id), K(func));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (!func.get_ls_status().is_leader_) {
-      // not leader, can't schedule
-      LOG_TRACE("not ls leader, can't schedule medium", K(ret), K(ls_id), K(tablet_id), K(func));
-    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
-                 tablet_id, tablet_handle, 0 /*timeout_us*/))) {
-      LOG_WARN("get tablet failed", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(func.request_schedule_new_round(tablet_handle, false/*user_request*/))) {
-      LOG_WARN("get tablet failed", K(ret), K(ls_id), K(tablet_id));
-    }
-  } // end of for
   ret = OB_SUCCESS;
   LOG_INFO("end of ObScheduleNewMediumLoop", KR(ret), K(func));
   return ret;

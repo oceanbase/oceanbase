@@ -28,12 +28,13 @@ int init_approx_count_distinct_synopsis_aggregate(RuntimeContext &agg_ctx, const
   case (vec_tc): {                                                                                 \
     ret = init_agg_func<                                                                           \
       ApproxCountDistinct<T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, vec_tc, VEC_TC_STRING>>(           \
-      agg_ctx, agg_col_id, has_distinct, allocator, agg);                                          \
+      agg_ctx, agg_col_id, has_distinct, allocator, agg, false, is_statistic_agg);                 \
   } break
 
   int ret = OB_SUCCESS;
   ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
   bool has_distinct = aggr_info.has_distinct_;
+  bool is_statistic_agg = aggr_info.is_statistic_agg_;
   if (T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == aggr_info.get_expr_type()) {
     VecValueTypeClass vec_tc =
       get_vec_value_tc(aggr_info.get_first_child_type(), aggr_info.get_first_child_datum_scale(),

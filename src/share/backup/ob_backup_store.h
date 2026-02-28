@@ -16,6 +16,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_backup_serialize_provider.h"
 #include "share/ob_srv_rpc_proxy.h"
+#include "share/backup/ob_backup_path.h"
 
 namespace oceanbase
 {
@@ -142,7 +143,9 @@ public:
 
   // oss://backup_dest/format
   int get_format_file_path(ObBackupPathString &path) const;
+  int get_single_backup_set_info_path(ObBackupPathString &path) const;
   int is_format_file_exist(bool &is_exist) const;
+  int is_single_backup_set_info_exist(bool &is_exist) const;
   int dest_is_empty_directory(bool &is_empty) const;
   int read_format_file(ObBackupFormatDesc &desc) const;
   int write_format_file(const ObBackupFormatDesc &desc) const;
@@ -150,6 +153,7 @@ public:
   int read_check_file(const ObBackupPathString &full_path, ObBackupCheckDesc &desc) const;
   int write_rw_consistency_check_file(const ObBackupPathString &full_path, const ObBackupConsistencyCheckDesc &desc) const;
   int read_rw_consistency_check_file(const ObBackupPathString &full_path, ObBackupConsistencyCheckDesc &desc);
+  int is_file_list_file_exist(const ObBackupPath &path, const ObBackupFileSuffix &suffix, bool &is_exist) const;
   TO_STRING_KV(K_(is_inited), K_(backup_dest));
 
 protected:
@@ -186,7 +190,7 @@ public:
       const share::ObBackupPathString &backup_dest_str,
       common::ObISQLClient &sql_proxy);
   int check_dest_connectivity(obrpc::ObSrvRpcProxy &rpc_proxy);
-  int check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file);
+  int check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file, const bool need_check_permission);
   int write_format_file();
   void reset();
   bool is_valid_type(const RemoteExecuteType type) const { return CHECK_DEST_VALIDITY <= type && type < MAX; }
@@ -198,6 +202,7 @@ private:
   int updata_backup_file_status_();
   int remote_execute_if_need_(obrpc::ObSrvRpcProxy &rpc_proxy,
                               const bool need_format_file,
+                              const bool need_check_permission,
                               const RemoteExecuteType type,
                               bool &need_remote_execute);
 private:

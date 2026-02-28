@@ -74,6 +74,11 @@ public:
       ObTableAccessContext &context,
       ObITable *table,
       const void *query_range);
+  virtual int advance_scan(const blocksstable::ObDatumRange &range)
+  {
+    UNUSED(range);
+    return OB_NOT_SUPPORTED;
+  }
   virtual bool is_sstable_iter() const { return is_sstable_iter_; }
   virtual int refresh_blockscan_checker(const blocksstable::ObDatumRowkey &rowkey)
   {
@@ -173,7 +178,9 @@ enum ObQRIterType
   T_SINGLE_GET,
   T_MULTI_GET,
   T_SINGLE_SCAN,
+  T_LEVEL_ORDER_SCAN,
   T_MULTI_SCAN,
+  T_LEVEL_ORDER_MULTI_SCAN,
   T_MAX_ITER_TYPE,
 };
 
@@ -198,6 +205,11 @@ public:
   {
     OB_ASSERT_MSG(false, "ObQueryRowIterator dose not impl reclaim");
   }
+  virtual int advance_scan(const blocksstable::ObDatumRange &range)
+  {
+    UNUSED(range);
+    return OB_NOT_SUPPORTED;
+  }
   // Iterate row interface for vectorized engine.
   virtual int get_next_rows(int64_t &count, int64_t capacity)
   {
@@ -220,7 +232,8 @@ public:
   VIRTUAL_TO_STRING_KV(K_(type));
 public:
   ObQRIterType get_type() const { return type_; }
-  bool is_scan() const { return type_ == T_SINGLE_SCAN || type_ == T_MULTI_SCAN; }
+  bool is_scan() const { return type_ == T_SINGLE_SCAN || type_ == T_MULTI_SCAN || type_ == T_LEVEL_ORDER_SCAN || type_ == T_LEVEL_ORDER_MULTI_SCAN; }
+  bool is_level_order_scan() const { return type_ == T_LEVEL_ORDER_SCAN || type_ == T_LEVEL_ORDER_MULTI_SCAN; }
 protected:
   ObQRIterType type_;
 

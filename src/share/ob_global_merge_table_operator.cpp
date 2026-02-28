@@ -31,9 +31,12 @@ int ObGlobalMergeTableOperator::load_global_merge_info(
     const bool print_sql)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
   if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else {
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     ObSqlString sql;
@@ -63,12 +66,21 @@ int ObGlobalMergeTableOperator::load_global_merge_info(
           EXTRACT_INT_FIELD_MYSQL(*result, "suspend_merging", info.suspend_merging_.value_, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "merge_start_time", info.merge_start_time_.value_, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "last_merged_time", info.last_merged_time_.value_, int64_t);
+          if (data_version >= DATA_VERSION_4_5_1_0) { // merge_mode is supported since 4.5.1.0
+            EXTRACT_INT_FIELD_MYSQL(*result, "merge_mode", info.merge_mode_.value_, int64_t);
+          }
           if (FAILEDx(info.frozen_scn_.set_scn(frozen_scn_val))) {
             LOG_WARN("fail to set frozen scn val", KR(ret), K(frozen_scn_val));
           } else if (OB_FAIL(info.global_broadcast_scn_.set_scn(global_broadcast_scn_val))) {
             LOG_WARN("fail to set global broadcast scn val", KR(ret), K(global_broadcast_scn_val));
           } else if (OB_FAIL(info.last_merged_scn_.set_scn(last_merged_scn_val))) {
             LOG_WARN("fail to set last merged scn val", KR(ret), K(last_merged_scn_val));
+          } else if (OB_UNLIKELY(info.merge_status_.value_ < ObZoneMergeInfo::MERGE_STATUS_IDLE
+                              || info.merge_status_.value_ >= ObZoneMergeInfo::MERGE_STATUS_MAX
+                              || info.merge_mode_.value_ < ObGlobalMergeInfo::MERGE_MODE_TENANT
+                              || info.merge_mode_.value_ >= ObGlobalMergeInfo::MERGE_MODE_MAX)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid merge status or merge mode", KR(ret), K(tenant_id), K(info));
           } else {
             exist = true;
           }
@@ -165,6 +177,15 @@ int ObGlobalMergeTableOperator::update_partial_global_merge_info(
             } else {
               if (OB_FAIL(dml.add_uint64_column(it->name_, it->value_))) {
                 LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(info), K(*it));
+              } else if (0 == STRCMP(it->name_, "merge_mode") && it->value_ > 0) {
+                // only update global merge info when tenant major freeze is idle
+                const char *and_str = dml.get_extra_condition().empty() ? "" : " AND ";
+                if (OB_FAIL(dml.get_extra_condition().append_fmt(" %s frozen_scn = last_merged_scn"
+                                                                 " AND last_merged_scn = global_broadcast_scn"
+                                                                 " AND merge_status = 0"
+                                                                 " AND suspend_merging = 0", and_str))) {
+                  LOG_WARN("fail to assign extra_condition", KR(ret), K(tenant_id));
+                }
               }
             }
             need_update = true;

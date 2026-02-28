@@ -514,7 +514,7 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, ObStorageListCtxB
             struct stat sb;
             if (-1 == ::stat(sub_dir_path, &sb)) {
               convert_io_error(errno, ret);
-              OB_LOG(WARN, "stat fail", K(ret), KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
+              OB_LOG(WARN, "stat fail", K(ret), K(sub_dir_path), KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
             } else if (!S_ISREG(sb.st_mode)) {
               // not a file
             } else {

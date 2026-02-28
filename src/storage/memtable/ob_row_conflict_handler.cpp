@@ -10,15 +10,18 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX TRANS
+#include "storage/tx/ob_trans_define.h"
 #include "ob_row_conflict_handler.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/access/ob_rows_info.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
+#include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase {
 using namespace common;
 using namespace memtable;
 using namespace transaction;
+using namespace lockwaitmgr;
 namespace storage {
 int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &param,
                                            storage::ObTableAccessContext &context,
@@ -261,12 +264,10 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
   int ret = OB_TRY_LOCK_ROW_CONFLICT;
   ObLockWaitMgr *lock_wait_mgr = NULL;
   ObTransID conflict_tx_id = lock_state.lock_trans_id_;
+  transaction::ObTxSEQ conflict_tx_hold_seq = lock_state.lock_data_sequence_;
   ObTxDesc *tx_desc = acc_ctx.get_tx_desc();
   int64_t current_ts = common::ObClockGenerator::getClock();
-  int64_t lock_wait_start_ts = acc_ctx.get_lock_wait_start_ts() > 0
-    ? acc_ctx.get_lock_wait_start_ts()
-    : current_ts;
-  int64_t lock_wait_expire_ts = acc_ctx.eval_lock_expire_ts(lock_wait_start_ts);
+  int64_t lock_wait_expire_ts = acc_ctx.eval_lock_expire_ts(current_ts);
   if (current_ts >= lock_wait_expire_ts) {
     ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
     TRANS_LOG(WARN, "exclusive lock conflict", K(ret), K(row_key),
@@ -278,15 +279,6 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
   } else {
     int tmp_ret = OB_SUCCESS;
     ObTransID tx_id = acc_ctx.get_tx_id();
-    ObAddr conflict_scheduler_addr;
-    // register to deadlock detector
-    if (OB_FAIL(ObTransDeadlockDetectorAdapter::
-                get_trans_scheduler_info_on_participant(conflict_tx_id, ls_id, conflict_scheduler_addr))) {
-      TRANS_LOG(WARN, "get transaction scheduler info fail", K(ret), K(conflict_tx_id), K(tx_id), K(ls_id));
-    } else {
-      ObTransIDAndAddr conflict_tx(conflict_tx_id, conflict_scheduler_addr);
-      tx_desc->add_conflict_tx(conflict_tx);
-    }
     // The addr in tx_desc is the scheduler_addr of current trans,
     // and GCTX.self_addr() will return the addr where the row is stored
     // (i.e. where the trans is executing)
@@ -298,7 +290,7 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
         ObTxSEQ lock_data_sequence = lock_state.lock_data_sequence_;
         ObTxTableGuards &tx_table_guards = acc_ctx.get_tx_table_guards();
         if (OB_FAIL(tx_table_guards.check_row_locked(
-                tx_id, conflict_tx_id, lock_data_sequence, trans_scn, lock_state))) {
+                    tx_id, conflict_tx_id, lock_data_sequence, trans_scn, lock_state))) {
           TRANS_LOG(WARN, "re-check row locked via tx_table fail", K(ret), K(tx_id), K(lock_state));
         }
       } else {
@@ -312,23 +304,26 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
       }
       return ret;
     });
+    ObRowConflictInfo cflict_info;
+    transaction::SessionIDPair sess_id_pair(tx_desc->get_session_id(), tx_desc->get_assoc_session_id());
     tmp_ret = lock_wait_mgr->post_lock(OB_TRY_LOCK_ROW_CONFLICT,
+                                       ls_id,
                                        tablet_id,
                                        row_key,
                                        lock_wait_expire_ts,
                                        remote_tx,
                                        last_compact_cnt,
                                        total_trans_node_cnt,
-                                       tx_desc->get_assoc_session_id(),
                                        tx_id,
+                                       sess_id_pair,
                                        conflict_tx_id,
-                                       ls_id,
+                                       conflict_tx_hold_seq,
+                                       cflict_info,
                                        recheck_func);
+    tx_desc->add_conflict_info(cflict_info);
     if (OB_SUCCESS != tmp_ret) {
       TRANS_LOG(WARN, "post_lock after tx conflict failed",
                 K(tmp_ret), K(tx_id), K(conflict_tx_id));
-    } else if (acc_ctx.get_lock_wait_start_ts() <= 0) {
-      acc_ctx.set_lock_wait_start_ts(lock_wait_start_ts);
     }
   }
   return ret;

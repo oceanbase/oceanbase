@@ -188,7 +188,8 @@ public:
                                        sql::ObSQLSessionInfo &session,
                                        ParamStore *params,
                                        char *&params_value,
-                                       int64_t &params_value_len);
+                                       int64_t &params_value_len,
+                                       bool print_sql_audit = false);
 
 protected:
   virtual int deserialize()  { return common::OB_SUCCESS; }

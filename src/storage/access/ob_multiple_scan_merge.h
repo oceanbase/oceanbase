@@ -44,6 +44,7 @@ public:
   virtual void reset() override;
   virtual void reuse() override;
   virtual void reclaim() override;
+  virtual int advance_scan(const blocksstable::ObDatumRange &range) override;
 
   INHERIT_TO_STRING_KV("ObMultipleMerge", ObMultipleMerge, K_(consumer_cnt),
                        K_(filt_del_count), K_(consumers), KPC_(simple_merge),
@@ -62,6 +63,10 @@ protected:
   // TODO: zhanghuidong.zhd, refactor the interfaces for building border rowkey and refresh blockscan
   int prepare_blockscan_after_construct_iters();
   int locate_blockscan_border();
+
+  virtual int build_iter(ObITable *table, const ObTableIterParam *iter_param, ObStoreRowIterator *&iter) override;
+  virtual int init_iter(ObITable *table, const ObTableIterParam *iter_param, ObStoreRowIterator *iter) override;
+
   virtual int pause(bool& do_pause) override;
   virtual int get_current_range(ObDatumRange& current_range) const;
 private:

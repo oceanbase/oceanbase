@@ -289,6 +289,34 @@ int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::check_so
 }
 
 template <typename Store_Row, bool has_addon, bool is_basic_cmp, bool is_topn_sort>
+int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::check_sort_key_has_null(
+                                                    const ObCompactRow **sk_stored_rows, const int64_t row_size)
+{
+  int ret = OB_SUCCESS;
+  bool has_null = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_size; i++) {
+    const ObCompactRow *sk_stored_row = sk_stored_rows[i];
+    for (int64_t j = 0; j < cmp_sort_collations_->count(); j++) {
+      const ObSortFieldCollation &sort_collation = cmp_sort_collations_->at(j);
+      if (sk_stored_row->is_null(sort_collation.field_idx_)) {
+        has_null = true;
+        break;
+      }
+    }
+  }
+  if (has_null) {
+    if (cmp_sort_collations_->at(0).is_ascending_) {
+      cmp_func_ = &SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::default_compare<true>;
+      topn_cmp_func_ = &SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::default_topn_compare<true>;
+    } else {
+      cmp_func_ = &SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::default_compare<false>;
+      topn_cmp_func_ = &SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::default_topn_compare<false>;
+    }
+  }
+  return ret;
+}
+
+template <typename Store_Row, bool has_addon, bool is_basic_cmp, bool is_topn_sort>
 int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::init(
   const ObIArray<ObExpr *> *cmp_sk_exprs, const RowMeta *sk_row_meta, const RowMeta *addon_row_meta,
   const ObIArray<ObSortFieldCollation> *cmp_sort_collations, ObExecContext *exec_ctx,
@@ -309,6 +337,9 @@ int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::init(
     cmp_end_ = cmp_sort_collations_->count();
     cmp_obj_meta_ = cmp_sk_exprs->at(0)->obj_meta_;
     cs_ = ObCharset::get_charset(cmp_obj_meta_.get_collation_type());
+    end_with_space_ =
+      is_calc_with_end_space(cmp_obj_meta_.get_type(), cmp_obj_meta_.get_type(), lib::is_oracle_mode(),
+                             cmp_obj_meta_.get_collation_type(), cmp_obj_meta_.get_collation_type());
     const ObDatumMeta &datum_data = cmp_sk_exprs->at(0)->datum_meta_;
   }
   if (OB_SUCC(ret) && OB_FAIL(init_cmp_func(*cmp_sk_exprs))) {
@@ -459,7 +490,7 @@ int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::not_null
         reinterpret_cast<const char *>(l) + DATA_OFFSET);
     const unsigned char *r_data = reinterpret_cast<const unsigned char *>(
         reinterpret_cast<const char *>(r) + DATA_OFFSET);
-    int cmp_ret = cs_->coll->strnncollsp(cs_, l_data, l_len, r_data, r_len, false);
+    int cmp_ret = cs_->coll->strnncollsp(cs_, l_data, l_len, r_data, r_len, end_with_space_);
     cmp = (cmp_ret > 0 ? is_ascending ? -1 : 1 : (cmp_ret < 0 ? is_ascending ? 1 : -1 : 0));
   } else {
     const unsigned char *l_data = reinterpret_cast<const unsigned char *>(
@@ -535,7 +566,7 @@ int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::not_null
   if (!is_basic_cmp) {
     const unsigned char *r_data = reinterpret_cast<const unsigned char *>(
       reinterpret_cast<const char *>(r) + DATA_OFFSET);
-    int cmp_ret = cs_->coll->strnncollsp(cs_, l_data, l_len, r_data, r_len, false);
+    int cmp_ret = cs_->coll->strnncollsp(cs_, l_data, l_len, r_data, r_len, end_with_space_);
     cmp = (cmp_ret > 0 ? is_ascending ? -1 : 1 : (cmp_ret < 0 ? is_ascending ? 1 : -1 : 0));
   } else {
     const unsigned char *r_data = reinterpret_cast<const unsigned char *>(

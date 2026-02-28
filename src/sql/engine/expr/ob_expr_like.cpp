@@ -19,246 +19,6 @@
 namespace oceanbase
 {
 using namespace common;
-namespace common
-{
-OB_DECLARE_AVX2_SPECIFIC_CODE(
-class StringSearcher {
-private:
-  static constexpr int AVX2_SIZE = sizeof(__m256i);
-
-public:
-  StringSearcher() : pattern_(nullptr), pattern_end_(nullptr), pattern_len_(0) {}
-  inline int init(const char *pattern, size_t len) {
-    int ret = OB_SUCCESS;
-    if (nullptr == pattern || 0 == len) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument. pattern is null.", K(ret), K(pattern), K(len));
-    } else {
-      pattern_ = pattern;
-      pattern_end_ = pattern_ + len;
-      pattern_len_ = len;
-
-      first_ = *pattern;
-      vfirst_ = _mm256_set1_epi8(first_);
-      if (2 <= pattern_len_) {
-        last_ = *(pattern_end_ - 1);
-        vlast_ = _mm256_set1_epi8(last_);
-      }
-    }
-    return ret;
-  }
-  inline const char *get_pattern() { return pattern_; }
-  inline const char *get_patterne_end() { return pattern_end_; }
-  inline size_t get_pattern_length() { return pattern_len_; }
-
-public:
-  // Determines if `pattern_` is a substring of `text`.
-  inline int is_substring(const char *text, const char *text_end, bool &res) const {
-    int ret = OB_SUCCESS;
-    res = false;
-    const char *text_cur = text;
-    // `pattern_` will not be null because it is prepared in `set_instr_info()`.
-    if (nullptr == pattern_ || 0 == pattern_len_) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument. pattern_ is null.", K(ret), K(pattern_), K(pattern_len_));
-    } else if (text == text_end) {
-      // `text` is NULL, so `res` will be false.
-    } else if (1 == pattern_len_) {
-      // Here is the quick path when `pattern_len_` is 1.
-      // All elements of `vfirst_`(__m128i) are first byte of `pattern_`.
-      // We will compare `text` and `vfirst_` using avx(__mm256i) in each iteration.
-      // Align the end of `text` based on `AVX2_SIZE`.
-      const char *avx_end = text + ((text_end - text) & ~(AVX2_SIZE - 1));
-      for (; text_cur < avx_end; text_cur += AVX2_SIZE) {
-        __m256i first_block = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(text_cur));
-        __m256i first_cmp = _mm256_cmpeq_epi8(first_block, vfirst_);
-        uint32_t mask = _mm256_movemask_epi8(first_cmp);
-        if (0 != mask) {
-          res = true;
-          break;
-        }
-      }
-    } else {
-      // Here is the common path when `pattern_len_` is greater than 1.
-      // First, find positions in `text` that are equal to the first and last byte of `pattern_`
-      // at same time using avx(__mm256i).
-      // Then, use func `memequal_opt` to compare middle bytes of `pattern_` and corresponding
-      // bytes of `text`.
-      // Align the end of `text` based on `AVX2_SIZE` and `pattern_len_`.
-      const char *avx_end = text + ((text_end - (text + pattern_len_ - 1)) & ~(AVX2_SIZE - 1));
-      for (; !res && text_cur < avx_end; text_cur += AVX2_SIZE) {
-        const char *last_cur = text_cur + pattern_len_ - 1;
-        __m256i first_block = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(text_cur));
-        __m256i last_block = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(last_cur));
-        __m256i first_cmp = _mm256_cmpeq_epi8(first_block, vfirst_);
-        __m256i last_cmp = _mm256_cmpeq_epi8(last_block, vlast_);
-        uint32_t mask = _mm256_movemask_epi8(_mm256_and_si256(first_cmp, last_cmp));
-        while (mask != 0) {
-          int offset = __builtin_ctz(mask);
-          // The first and the last bytes match, so we don't need to compare them again.
-          if (2 == pattern_len_ ||
-              memequal_opt(text_cur + offset + 1, pattern_ + 1, pattern_len_ - 2)) {
-            res = true;
-            break;
-          }
-          mask &= (mask - 1);
-        }
-      }
-    }
-    // Handle the tail of text.
-    if (!res && text_end - text_cur >= pattern_len_) {
-      res = NULL != MEMMEM(text_cur, text_end - text_cur, pattern_, pattern_len_);
-    }
-    return ret;
-  }
-
-  // Determines if `text` starts with `pattern_`.
-  inline int start_with(const char *text, const char *text_end, bool &res) const {
-    int ret = OB_SUCCESS;
-    // pattern_ will not be null because it is prepared in set_instr_info().
-    if (nullptr == pattern_ || 0 == pattern_len_) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument. pattern_ is null.", K(ret), K(pattern_), K(pattern_len_));
-    } else if (pattern_len_ > text_end - text) {
-      res = false;
-    } else {
-      res = memequal_opt(text, pattern_, pattern_len_);
-    }
-    return ret;
-  }
-
-  // Determines if `text` ends with `pattern_`.
-  inline int end_with(const char *text, const char *text_end, bool &res) const {
-    int ret = OB_SUCCESS;
-    // pattern_ will not be null because it is prepared in set_instr_info().
-    if (nullptr == pattern_ || 0 == pattern_len_) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument. pattern_ is null.", K(ret), K(pattern_), K(pattern_len_));
-    } else if (pattern_len_ > text_end - text) {
-      res = false;
-    } else {
-      res = memequal_opt(text_end - pattern_len_, pattern_, pattern_len_);
-    }
-    return ret;
-  }
-
-  // Determines if `text` equals with `pattern_`.
-  inline int equal(const char *text, const char *text_end, bool &res) const {
-    int ret = OB_SUCCESS;
-    // pattern_ will not be null because it is prepared in set_instr_info().
-    if (nullptr == pattern_ || 0 == pattern_len_) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument. pattern_ is null.", K(ret), K(pattern_), K(pattern_len_));
-    } else if (pattern_len_ != text_end - text) {
-      res = false;
-    } else {
-      res = memequal_opt(text, pattern_, pattern_len_);
-    }
-    return res;
-  }
-
-  inline bool memequal_opt(const char *s1, const char *s2, size_t n) const {
-    switch (n)
-    {
-    case 1:
-      return *s1 == *s2;
-    case 2:
-      return memequal_plain<int16_t>(s1, s2);
-    case 3:
-      return memequal_plain<int16_t>(s1, s2) && memequal_plain<int8_t>(s1 + 2, s2 + 2);
-    case 4:
-      return memequal_plain<int32_t>(s1, s2);
-    case 5:
-      return memequal_plain<int32_t>(s1, s2) && memequal_plain<int8_t>(s1 + 4, s2 + 4);
-    case 6:
-      return memequal_plain<int32_t>(s1, s2) && memequal_plain<int16_t>(s1 + 4, s2 + 4);
-    case 7:
-      return memequal_plain<int32_t>(s1, s2) &&
-             memequal_plain<int16_t>(s1 + 4, s2 + 4) &&
-             memequal_plain<int8_t>(s1 + 6, s2 + 6);
-    case 8:
-      return memequal_plain<int64_t>(s1, s2);
-    default:
-      break;
-    }
-    if (n <= 16) {
-      return memequal_plain<int64_t>(s1, s2) && memequal_plain<int64_t>(s1 + n - 8, s2 + n - 8);
-    }
-    while (n >= 64) {
-      if (memequal_sse<4>(s1, s2)) {
-        s1 += 64;
-        s2 += 64;
-        n -= 64;
-      } else {
-        return false;
-      }
-    }
-    switch (n / 16) {
-    case 3:
-      if (!memequal_sse<1>(s1 + 32, s2 + 32)) {
-        return false;
-      }
-    case 2:
-      if (!memequal_sse<1>(s1 + 16, s2 + 16)) {
-        return false;
-      }
-    case 1:
-      if (!memequal_sse<1>(s1, s2)) {
-        return false;
-      }
-    }
-    return memequal_sse<1>(s1 + n - 16, s2 + n - 16);
-  }
-
-  // compare the values of two int8_t, int16_t or other comparable plain types.
-  template <typename T>
-  OB_INLINE bool memequal_plain(const char *p1, const char *p2) const {
-    return *reinterpret_cast<const T *>(p1) == *reinterpret_cast<const T *>(p2);
-  }
-
-  // compare two values by sse, cnt means the count of __m128i to compare.
-  template <int cnt>
-  OB_INLINE bool memequal_sse(const char *p1, const char *p2) const {
-    if (cnt == 1) {
-      return 0xFFFF == _mm_movemask_epi8(
-          _mm_cmpeq_epi8(
-              _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1)),
-              _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2))));
-    }
-    if (cnt == 4) {
-      return 0xFFFF == _mm_movemask_epi8(
-          _mm_and_si128(
-              _mm_and_si128(
-                  _mm_cmpeq_epi8(
-                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1)),
-                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2))),
-                  _mm_cmpeq_epi8(
-                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1) + 1),
-                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2) + 1))),
-              _mm_and_si128(
-                  _mm_cmpeq_epi8(
-                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1) + 2),
-                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2) + 2)),
-                  _mm_cmpeq_epi8(
-                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1) + 3),
-                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2) + 3)))));
-    }
-  }
-
-private:
-  // string to be searched for
-  const char *pattern_;
-  const char *pattern_end_;
-  size_t pattern_len_;
-  // first or last byte of `pattern_`
-  uint8_t first_;
-  uint8_t last_;
-  // vector filled `first_` or `last_`
-  __m256i vfirst_;
-  __m256i vlast_;
-};
-)
-}
 
 namespace sql
 {
@@ -1259,7 +1019,6 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
               }
             }
           }
-          eval_flags.set(i);
         }
       }
     }
@@ -1316,7 +1075,6 @@ int ObExprLike::match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL,
                                                         pattern_val, escape_wc, ret));
         }
       }
-      eval_flags.set(i);
     }
   }
   return ret;
@@ -1343,7 +1101,6 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
     for (int64_t i = 0; i < size; i++) {
       if (!skip.contain(i)) {
         res_datums[i].set_null();
-        eval_flags.set(i);
       }
     }
     expr.get_eval_info(ctx).set_notnull(false);
@@ -1463,7 +1220,6 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
     for (int64_t i = bound.start(); i < bound.end(); i++) {
       if (!skip.at(i)) {
         res_vec->set_null(i);
-        eval_flags.set(i);
       }
     }
     expr.get_eval_info(ctx).set_notnull(false);

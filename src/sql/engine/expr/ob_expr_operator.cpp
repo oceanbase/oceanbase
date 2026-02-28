@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_operator.h"
+#include "lib/timezone/ob_time_convert.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_minus.h"
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
@@ -24,6 +25,7 @@
 
 #include "common/object/ob_object.h"
 #include "sql/engine/expr/ob_expr_multiset.h"
+#include "sql/engine/expr/ob_expr_string_searcher.h"
 
 namespace oceanbase
 {
@@ -3446,12 +3448,10 @@ int ObRelationalExprOperator::eval_batch_min_max_compare(
                  r_datum.is_outrow() || r_datum.is_ext() ) {
         if (l_datum.is_null() || r_datum.is_null()) {
           results[i].set_null();
-          eval_flags.set(i);
         } else if (OB_FAIL(get_min_max_cmp_ret(&l_datum, &r_datum, cmp_ret))) {
           LOG_WARN("fail to get min max cmp ret");
         } else {
           results[i].set_int(is_expected_cmp_ret(get_cmp_op(expr.type_), cmp_ret));
-          eval_flags.set(i);
         }
         LOG_DEBUG("current compare object(ObDatum) min max status",
           K(l_datum.is_outrow()),
@@ -3543,12 +3543,10 @@ int ObRelationalExprOperator::eval_vector_min_max_compare(
                     r_datum.is_outrow() || r_datum.is_ext() ) {
             if (l_datum.is_null() || r_datum.is_null()) {
               res_vec->set_null(i);
-              eval_flags.set(i);
             } else if (OB_FAIL(get_min_max_cmp_ret(&l_datum, &r_datum, cmp_ret))) {
               LOG_WARN("fail to get min max cmp ret");
             } else {
               res_vec->set_int(i, is_expected_cmp_ret(get_cmp_op(expr.type_), cmp_ret));
-              eval_flags.set(i);
             }
             LOG_DEBUG("current compare object(ObDatum) min max status",
               K(l_datum.is_outrow()), K(l_datum.is_ext()),
@@ -5348,8 +5346,19 @@ int ObBitwiseExprOperator::set_calc_type(ObExprResType &type)
     type.set_scale(DEFAULT_NUMBER_SCALE_FOR_INTEGER);
   } else {
     if (ObNumberType == type.get_type() || ObDecimalIntType == type.get_type()) {
-      type.set_precision(DEFAULT_NUMBER_PRECISION_FOR_INTEGER);
-      type.set_scale(DEFAULT_NUMBER_SCALE_FOR_INTEGER);
+      // 32-bit decimal integer need to cast to 64-bit
+      if (type.get_precision() <=  MAX_PRECISION_DECIMAL_INT_32 && type.get_scale() == 0) {
+        type.set_calc_type(ObIntType);
+        type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
+        type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
+      } else {
+        type.set_precision(DEFAULT_NUMBER_PRECISION_FOR_INTEGER);
+        type.set_scale(DEFAULT_NUMBER_SCALE_FOR_INTEGER);
+      }
+    } else if (ob_is_int_uint_tc(type.get_type())) { // IntTC/UIntTC does NOT need to cast
+      type.set_calc_type(type.get_type());
+      type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[type.get_type()].precision_);
+      type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[type.get_type()].scale_);
     } else {
       type.set_calc_type(ObIntType);
       type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
@@ -5697,9 +5706,39 @@ int ObBitwiseExprOperator::cg_bitwise_expr(ObExprCGCtx &expr_cg_ctx, const ObRaw
         // parts.
 
         if (lib::is_oracle_mode()) {
-          rt_expr.eval_vector_func_ = calc_bitwise_result2_oracle_vector;
+          switch (op) {
+          case ObBitwiseExprOperator::BIT_AND:
+            rt_expr.eval_vector_func_ = calc_bitwise_result2_oracle_vector;
+            break;
+          default:
+            rt_expr.eval_vector_func_ = nullptr;
+            // Oracle supports bitwise and operation only
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "bit op in oracle mode except bitand");
+            LOG_WARN("unsupported bit operator", K(ret), K(op), K(BIT_AND));
+          }
         } else {
-          rt_expr.eval_vector_func_ = calc_bitwise_result2_mysql_vector;
+          switch (op) {
+          case ObBitwiseExprOperator::BIT_AND:
+            rt_expr.eval_vector_func_ = calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_AND>;
+            break;
+          case ObBitwiseExprOperator::BIT_OR:
+            rt_expr.eval_vector_func_ = calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_OR>;
+            break;
+          case ObBitwiseExprOperator::BIT_XOR:
+            rt_expr.eval_vector_func_ = calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_XOR>;
+            break;
+          case ObBitwiseExprOperator::BIT_LEFT_SHIFT:
+            rt_expr.eval_vector_func_ = calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_LEFT_SHIFT>;
+            break;
+          case ObBitwiseExprOperator::BIT_RIGHT_SHIFT:
+            rt_expr.eval_vector_func_ = calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_RIGHT_SHIFT>;
+            break;
+          default:
+            rt_expr.eval_vector_func_ = nullptr;
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected bit operator", K(ret), K(op));
+          }
         }
       }
     } else {
@@ -5714,84 +5753,30 @@ int ObBitwiseExprOperator::cg_bitwise_expr(ObExprCGCtx &expr_cg_ctx, const ObRaw
 int ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL)
 {
   int ret = OB_SUCCESS;
-
-  const BitOperator op = static_cast<const BitOperator>(expr.extra_);
   ObCastMode cast_mode = CM_NONE;
 
-  // Oracle supports bitwise and operation only
-  if (OB_UNLIKELY(op != BIT_AND)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "bit op in oracle mode except bitand");
-    LOG_WARN("unsupported bit operator", K(ret), K(op), K(BIT_AND));
-  } else {
-    ObBitVector &tmp_skip = expr.get_pvt_skip(ctx);
-    bool skip_flag = false;
-    if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
-      LOG_WARN("failed to eval vector result", K(ret), K(0));
-    } else {
-      tmp_skip.deep_copy(skip, bound.start(), bound.end());
-      VectorFormat left_format = expr.args_[0]->get_format(ctx);
-      ObIVector *param_vec = expr.args_[0]->get_vector(ctx);
-      if (left_format == VEC_DISCRETE || left_format == VEC_CONTINUOUS
-          || left_format == VEC_FIXED) {
-        ObBitmapNullVectorBase &cur_vec = *static_cast<ObBitmapNullVectorBase *>(param_vec);
-        if (cur_vec.has_null()) {
-          tmp_skip.bit_or(*cur_vec.get_nulls(), bound);
-          skip_flag = true;
-        }
-      } else if (left_format == VEC_UNIFORM) {
-        ObUniformFormat<false> &cur_vec = *static_cast<ObUniformFormat<false> *>(param_vec);
-        for (int i = bound.start(); i < bound.end(); i++) {
-          if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
-            tmp_skip.set(i);
-            skip_flag = true;
-          }
-        }
-      } else if (left_format == VEC_UNIFORM_CONST) {
-        ObUniformFormat<true> &cur_vec = *static_cast<ObUniformFormat<true> *>(param_vec);
-        for (int i = bound.start(); i < bound.end(); i++) {
-          if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
-            tmp_skip.set(i);
-            skip_flag = true;
-          }
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_LOG(WARN, "invalid param format", K(ret), K(left_format));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (!skip_flag && OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
-        LOG_WARN("failed to eval vector result", K(ret), K(1));
-      } else if (skip_flag
-                 && OB_FAIL(expr.args_[1]->eval_vector(
-                      ctx, tmp_skip,
-                      EvalBound(bound.batch_size(), bound.start(), bound.end(), false)))) {
-        LOG_WARN("failed to eval vector result", K(ret), K(1));
-      } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, ctx.exec_ctx_.get_my_session(),
-                                                           cast_mode))) {
-        LOG_WARN("get default cast mode failed", K(ret));
-      } else if (OB_FAIL(dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode))) {
-        LOG_WARN("failed to dispatch eval vector and", K(ret), K(expr), K(ctx), K(bound));
-      }
-    }
+  if (OB_FAIL(expr.eval_vector_param_value_null_short_circuit(ctx, skip, bound))) {
+    LOG_WARN("failed to eval two param vector", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, ctx.exec_ctx_.get_my_session(),
+                                                        cast_mode))) {
+    LOG_WARN("get default cast mode failed", K(ret));
+  } else if (OB_FAIL(dispatch_calc_vector<ObBitwiseExprOperator::BIT_AND>(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode))) {
+    LOG_WARN("failed to dispatch eval vector and", K(ret), K(expr), K(ctx), K(bound));
   }
+
   return ret;
 }
 
+template<ObBitwiseExprOperator::BitOperator op>
 int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_ARG_DECL)
 {
   int ret = OB_SUCCESS;
-  const BitOperator op = static_cast<const BitOperator>(expr.extra_);
   ObCastMode cast_mode = CM_NONE;
   const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   ObSolidifiedVarsGetter helper(expr, ctx, session);
   ObSQLMode sql_mode = 0;
 
-  if (OB_UNLIKELY(op < 0 || op >= BIT_MAX)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(op));
-  } else if (OB_ISNULL(session)) {
+  if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
@@ -5799,53 +5784,10 @@ int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_AR
   } else {
     ObSQLUtils::get_default_cast_mode(false, 0, session->get_stmt_type(), session->is_ignore_stmt(),
                                       sql_mode, cast_mode);
-    ObBitVector &tmp_skip = expr.get_pvt_skip(ctx);
-    bool skip_flag = false;
-    if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
-      LOG_WARN("failed to eval vector result", K(ret), K(0));
-    } else {
-      tmp_skip.deep_copy(skip, bound.start(), bound.end());
-      VectorFormat left_format = expr.args_[0]->get_format(ctx);
-      ObIVector *param_vec = expr.args_[0]->get_vector(ctx);
-      if (left_format == VEC_DISCRETE || left_format == VEC_CONTINUOUS
-          || left_format == VEC_FIXED) {
-        ObBitmapNullVectorBase &cur_vec = *static_cast<ObBitmapNullVectorBase *>(param_vec);
-        if (cur_vec.has_null()) {
-          tmp_skip.bit_or(*cur_vec.get_nulls(), bound);
-          skip_flag = true;
-        }
-      } else if (left_format == VEC_UNIFORM) {
-        ObUniformFormat<false> &cur_vec = *static_cast<ObUniformFormat<false> *>(param_vec);
-        for (int i = bound.start(); i < bound.end(); i++) {
-          if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
-            tmp_skip.set(i);
-            skip_flag = true;
-          }
-        }
-      } else if (left_format == VEC_UNIFORM_CONST) {
-        ObUniformFormat<true> &cur_vec = *static_cast<ObUniformFormat<true> *>(param_vec);
-        for (int i = bound.start(); i < bound.end(); i++) {
-          if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
-            tmp_skip.set(i);
-            skip_flag = true;
-          }
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_LOG(WARN, "invalid param format", K(ret), K(left_format));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (!skip_flag && OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
-        LOG_WARN("failed to eval vector result", K(ret), K(1));
-      } else if (skip_flag
-                 && OB_FAIL(expr.args_[1]->eval_vector(
-                      ctx, tmp_skip,
-                      EvalBound(bound.batch_size(), bound.start(), bound.end(), false)))) {
-        LOG_WARN("failed to eval vector result", K(ret), K(1));
-      } else if (OB_FAIL(dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode))) {
-        LOG_WARN("failed to dispatch eval vector and", K(ret), K(expr), K(ctx), K(bound));
-      }
+    if (OB_FAIL(expr.eval_vector_param_value_null_short_circuit(ctx, skip, bound))) {
+      LOG_WARN("failed to eval two param vector", K(ret));
+    } else if (OB_FAIL(dispatch_calc_vector<op>(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode))) {
+      LOG_WARN("failed to dispatch eval vector and", K(ret), K(expr), K(ctx), K(bound));
     }
   }
   return ret;
@@ -5853,42 +5795,74 @@ int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_AR
 
 using Discrete = ObDiscreteFormat;
 using Uniform = ObUniformFormat<false>;
+using UniformConst = ObUniformFormat<true>;
 
 // Current VEC_MAX_FORMAT = 6, which can be welled handled by 4 bits where 2 ^ 4 = 16
 #define CALC_FORMAT(res, l, r) ((int32_t)l + (((int32_t)r) << 4) + (((int32_t)res) << 8))
 
-#define BITWISE_FORMAT_DISPATCH_BRANCH(RES, LEFT, RIGH)                                            \
-  case CALC_FORMAT(RES::FORMAT, LEFT::FORMAT, RIGH::FORMAT): {                                     \
-    ret = inner_calc_vector<RES, LEFT, RIGH>(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);                 \
-    break;                                                                                         \
+#define BITWISE_FORMAT_DISPATCH_BRANCH(RES, LEFT, RIGH)                                             \
+  case CALC_FORMAT(RES::FORMAT, LEFT::FORMAT, RIGH::FORMAT): {                                      \
+    ret = inner_calc_vector<op, RES, LEFT, RIGH>(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);                 \
+    break;                                                                                          \
   }
-
-#define INNER_FIXED_CALC(left_type, right_type)                                                    \
-  ret = inner_calc_vector<ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>,           \
+// add inner_calc_vector_int_specific
+#define INNER_FIXED_CALC(left_type, right_type)                                                     \
+  ret = can_use_optimization ?                                                                                    \
+  inner_calc_vector_int_specific<op, ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>,     \
+                          ObFixedLengthFormat<right_type>, true>(VECTOR_EVAL_FUNC_ARG_LIST)         \
+  : inner_calc_vector<op, ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>,                \
                           ObFixedLengthFormat<right_type>>(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
 
-#define RIGHT_FIXED_DISCRETE_CALC(left_type)                                                       \
-  ret =                                                                                            \
-    inner_calc_vector<ObFixedLengthFormat<uint64_t>, Discrete, ObFixedLengthFormat<left_type>>(    \
+#define RIGHT_FIXED_DISCRETE_CALC(right_type)                                                       \
+  ret = can_use_optimization ?                                                                                    \
+  inner_calc_vector_int_specific<op, ObFixedLengthFormat<uint64_t>, Discrete,                           \
+                          ObFixedLengthFormat<right_type>, false>(VECTOR_EVAL_FUNC_ARG_LIST)        \
+  : inner_calc_vector<op, ObFixedLengthFormat<uint64_t>, Discrete, ObFixedLengthFormat<right_type>>(    \
       VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
 
-#define RIGHT_FIXED_UNIFORM_CALC(left_type)                                                        \
-  ret = inner_calc_vector<ObFixedLengthFormat<uint64_t>, Uniform, ObFixedLengthFormat<left_type>>( \
+#define RIGHT_FIXED_UNIFORM_CALC(right_type)                                                        \
+  ret = can_use_optimization ?                                                                                    \
+  inner_calc_vector_int_specific<op, ObFixedLengthFormat<uint64_t>, Uniform,                            \
+                          ObFixedLengthFormat<right_type>, false>(VECTOR_EVAL_FUNC_ARG_LIST)        \
+  : inner_calc_vector<op, ObFixedLengthFormat<uint64_t>, Uniform, ObFixedLengthFormat<right_type>>(     \
+    VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+
+#define RIGHT_FIXED_UNIFORM_CONST_CALC(right_type)                                                        \
+  ret = can_use_optimization ?                                                                                    \
+  inner_calc_vector_int_specific<op, ObFixedLengthFormat<uint64_t>, UniformConst,                            \
+                          ObFixedLengthFormat<right_type>, false>(VECTOR_EVAL_FUNC_ARG_LIST)        \
+  : inner_calc_vector<op, ObFixedLengthFormat<uint64_t>, UniformConst, ObFixedLengthFormat<right_type>>(     \
     VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
 
 #define LEFT_FIXED_DISCRETE_CALC(left_type)                                                        \
-  ret =                                                                                            \
-    inner_calc_vector<ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>, Discrete>(    \
+  ret =  can_use_optimization ?                                                                                  \
+  inner_calc_vector_int_specific<op, ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>,    \
+                          Discrete, false>(VECTOR_EVAL_FUNC_ARG_LIST)                              \
+  : inner_calc_vector<op, ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>, Discrete>(    \
       VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
 
 #define LEFT_FIXED_UNIFORM_CALC(left_type)                                                         \
-  ret = inner_calc_vector<ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>, Uniform>( \
+  ret = can_use_optimization ?                                                                                   \
+  inner_calc_vector_int_specific<op, ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>,    \
+                          Uniform, false>(VECTOR_EVAL_FUNC_ARG_LIST)                               \
+  : inner_calc_vector<op, ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>, Uniform>(     \
+    VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+
+#define LEFT_FIXED_UNIFORM_CONST_CALC(left_type)                                                         \
+  ret = can_use_optimization ?                                                                                   \
+  inner_calc_vector_int_specific<op, ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>,    \
+                          UniformConst, false>(VECTOR_EVAL_FUNC_ARG_LIST)                               \
+  : inner_calc_vector<op, ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>, UniformConst>(     \
     VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
 
 void ObBitwiseExprOperator::convert_tc_size(VecValueTypeClass vec_tc, int &len)
 {
   switch (vec_tc) {
   case (VEC_TC_INTEGER): {
+    len = sizeof(int64_t);
+    break;
+  }
+  case (VEC_TC_UINTEGER): {
     len = sizeof(int64_t);
     break;
   }
@@ -5918,6 +5892,7 @@ void ObBitwiseExprOperator::convert_tc_size(VecValueTypeClass vec_tc, int &len)
   }
 }
 
+template<ObBitwiseExprOperator::BitOperator op>
 int ObBitwiseExprOperator::dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
@@ -5938,13 +5913,14 @@ int ObBitwiseExprOperator::dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCas
       BITWISE_FORMAT_DISPATCH_BRANCH(Discrete, Uniform, Uniform);
     default: {
       ret =
-        inner_calc_vector<ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+        inner_calc_vector<op, ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
       break;
     }
     }
   } else {
     const ObDatumMeta &left_meta = expr.args_[0]->datum_meta_;
     const ObDatumMeta &right_meta = expr.args_[1]->datum_meta_;
+    bool can_use_optimization = is_int_specific(left_meta) && is_int_specific(right_meta);
 
     VecValueTypeClass left_tc =
       get_vec_value_tc(left_meta.type_, left_meta.scale_, left_meta.precision_);
@@ -5958,7 +5934,7 @@ int ObBitwiseExprOperator::dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCas
     convert_tc_size(right_tc, r_len);
 
     if (res_format != VEC_FIXED) {
-      ret = inner_calc_vector<ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST,
+      ret = inner_calc_vector<op, ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST,
                                                                         cast_mode);
     } else if (left_format != VEC_FIXED && right_format != VEC_FIXED) {
       switch (cond) {
@@ -5968,13 +5944,12 @@ int ObBitwiseExprOperator::dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCas
         BITWISE_FORMAT_DISPATCH_BRANCH(ObFixedLengthFormat<uint64_t>, Uniform, Discrete);
         BITWISE_FORMAT_DISPATCH_BRANCH(ObFixedLengthFormat<uint64_t>, Uniform, Uniform);
       default: {
-        ret = inner_calc_vector<ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST,
+        ret = inner_calc_vector<op, ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST,
                                                                           cast_mode);
         break;
       }
       }
-    } else {
-      if (left_format != VEC_FIXED) {
+    } else if (left_format != VEC_FIXED) {
         switch (left_format) {
         case (VEC_DISCRETE): {
           DISPATCH_WIDTH_TASK(r_len, RIGHT_FIXED_DISCRETE_CALC);
@@ -5984,37 +5959,192 @@ int ObBitwiseExprOperator::dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCas
           DISPATCH_WIDTH_TASK(r_len, RIGHT_FIXED_UNIFORM_CALC);
           break;
         }
+        case (VEC_UNIFORM_CONST): {
+          DISPATCH_WIDTH_TASK(r_len, RIGHT_FIXED_UNIFORM_CONST_CALC);
+          break;
+        }
         default: {
-          ret = inner_calc_vector<ObVectorBase, ObVectorBase, ObVectorBase>(
+          ret = inner_calc_vector<op, ObVectorBase, ObVectorBase, ObVectorBase>(
             VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
           break;
         }
         }
-      } else if (right_format != VEC_FIXED) {
-        switch (right_format) {
-        case (VEC_DISCRETE): {
-          DISPATCH_WIDTH_TASK(l_len, LEFT_FIXED_DISCRETE_CALC);
-          break;
+    } else if (right_format != VEC_FIXED) {
+      switch (right_format) {
+      case (VEC_DISCRETE): {
+        DISPATCH_WIDTH_TASK(l_len, LEFT_FIXED_DISCRETE_CALC);
+        break;
+      }
+      case (VEC_UNIFORM): {
+        DISPATCH_WIDTH_TASK(l_len, LEFT_FIXED_UNIFORM_CALC);
+        break;
+      }
+      case (VEC_UNIFORM_CONST): {
+        DISPATCH_WIDTH_TASK(l_len, LEFT_FIXED_UNIFORM_CONST_CALC);
+        break;
+      }
+      default: {
+        ret = inner_calc_vector<op, ObVectorBase, ObVectorBase, ObVectorBase>(
+          VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+        break;
+      }
+      }
+    } else {
+      DISPATCH_INOUT_WIDTH_TASK(l_len, r_len, INNER_FIXED_CALC);
+    }
+  }
+  return ret;
+}
+
+OB_DECLARE_AVX512_SPECIFIC_CODE(
+
+template<bool IS_CONST>
+OB_INLINE __m512i process_bitwise_inputs_with_avx512(const char *group_inputs) {
+    __m512i ret;
+    if constexpr (IS_CONST) {
+        int64_t value = *reinterpret_cast<const int64_t*>(group_inputs);
+        ret = _mm512_set1_epi64(value);
+    } else {
+        ret = _mm512_loadu_si512(reinterpret_cast<const __m512i *>(group_inputs));
+    }
+    return ret;
+}
+
+
+template<ObBitwiseExprOperator::BitOperator op, bool IS_LEFT_CONST, bool IS_RIGHT_CONST>
+int calc_bitwise_op_with_avx512(const char *group_inputs_l, const char *group_inputs_r, char *group_results) {
+  int ret = OB_SUCCESS;
+
+  __m512i va = process_bitwise_inputs_with_avx512<IS_LEFT_CONST>(group_inputs_l);
+  __m512i vb = process_bitwise_inputs_with_avx512<IS_RIGHT_CONST>(group_inputs_r);
+  __m512i vr;
+  if constexpr (op == ObBitwiseExprOperator::BIT_AND) {
+    vr = _mm512_and_epi64(va, vb);
+  } else if constexpr (op == ObBitwiseExprOperator::BIT_OR) {
+    vr = _mm512_or_epi64(va, vb);
+  } else if constexpr (op == ObBitwiseExprOperator::BIT_XOR) {
+    vr = _mm512_xor_epi64(va, vb);
+  } else if constexpr (op == ObBitwiseExprOperator::BIT_LEFT_SHIFT) {
+    vr = _mm512_sllv_epi64(va, vb);
+  } else if constexpr (op == ObBitwiseExprOperator::BIT_RIGHT_SHIFT) {
+    vr = _mm512_srlv_epi64(va, vb);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to calc bitwise op with avx2", K(ret), K(op));
+  }
+  if (OB_SUCC(ret)) {
+    _mm512_storeu_si512(reinterpret_cast<__m512i *>(group_results), vr);
+  }
+  return ret;
+}
+)
+
+OB_DECLARE_AVX2_SPECIFIC_CODE(
+template<bool IS_CONST>
+__m256i process_bitwise_inputs_with_avx2(const char * group_inputs) {
+  __m256i ret;
+  if constexpr (IS_CONST) {
+    int64_t value = *reinterpret_cast<const int64_t *>(group_inputs);
+    ret = _mm256_set1_epi64x(value);
+  } else {
+    ret = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(group_inputs));
+  }
+  return ret;
+}
+
+
+template<ObBitwiseExprOperator::BitOperator op, bool IS_LEFT_CONST, bool IS_RIGHT_CONST>
+int calc_bitwise_op_with_avx2(const char *group_inputs_l, const char *group_inputs_r, char *group_results) {
+  int ret = OB_SUCCESS;
+
+  __m256i va = process_bitwise_inputs_with_avx2<IS_LEFT_CONST>(group_inputs_l);
+  __m256i vb = process_bitwise_inputs_with_avx2<IS_RIGHT_CONST>(group_inputs_r);
+  __m256i vr;
+  if constexpr (op == ObBitwiseExprOperator::BIT_AND) {
+    vr = _mm256_and_si256(va, vb);
+  } else if constexpr (op == ObBitwiseExprOperator::BIT_OR) {
+    vr = _mm256_or_si256(va, vb);
+  } else if constexpr (op == ObBitwiseExprOperator::BIT_XOR) {
+    vr = _mm256_xor_si256(va, vb);
+  } else if constexpr (op == ObBitwiseExprOperator::BIT_LEFT_SHIFT) {
+    vr = _mm256_sllv_epi64(va, vb);
+  } else if constexpr (op == ObBitwiseExprOperator::BIT_RIGHT_SHIFT) {
+    vr = _mm256_srlv_epi64(va, vb);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to calc bitwise op with avx2", K(ret), K(op));
+  }
+  if (OB_SUCC(ret)) {
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(group_results), vr);
+  }
+
+  return ret;
+}
+)
+
+
+template <ObBitwiseExprOperator::BitOperator op, typename RES_VEC, typename L_VEC, typename R_VEC, bool isFixed>
+int ObBitwiseExprOperator::inner_calc_vector_int_specific(VECTOR_EVAL_FUNC_ARG_DECL) {
+  int ret = OB_SUCCESS;
+  L_VEC *l_vec = static_cast<L_VEC *>(expr.args_[0]->get_vector(ctx));
+  R_VEC *r_vec = static_cast<R_VEC *>(expr.args_[1]->get_vector(ctx));
+  RES_VEC *res_vec = static_cast<RES_VEC *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  uint64_t uint_val;
+  size_t SIMD_BLOCKSIZE = 1;
+  uint64_t RANGE_SIZE = bound.range_size();
+  uint64_t group_cnt = 0;
+  uint64_t remaining = 0;
+  uint64_t remaining_offset = 0;
+
+  if constexpr (isFixed) {
+    #if OB_USE_MULTITARGET_CODE
+    int (*bitwise_op_simd_func)(const char *, const char *, char *) = nullptr;
+    bool use_simd = (!l_vec->has_null() && !r_vec->has_null() && bound.get_all_rows_active() && eval_flags.accumulate_bit_cnt(bound) == 0);
+    if (common::is_arch_supported(ObTargetArch::AVX512)) {
+      SIMD_BLOCKSIZE = sizeof(__m512i) / sizeof(uint64_t);
+      bitwise_op_simd_func = specific::avx512::calc_bitwise_op_with_avx512<op, std::is_same_v<L_VEC, UniformConst>, std::is_same_v<R_VEC, UniformConst>>;
+    } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
+      SIMD_BLOCKSIZE = sizeof(__m256i) / sizeof(uint64_t);
+      bitwise_op_simd_func = specific::avx2::calc_bitwise_op_with_avx2<op, std::is_same_v<L_VEC, UniformConst>, std::is_same_v<R_VEC, UniformConst>>;
+    }
+    if (use_simd && OB_NOT_NULL(bitwise_op_simd_func)) {
+      group_cnt = RANGE_SIZE / SIMD_BLOCKSIZE;
+      remaining = RANGE_SIZE % SIMD_BLOCKSIZE;
+      for (uint64_t g = 0; g < group_cnt && OB_SUCC(ret); ++g) {
+        uint64_t group_offset = bound.start() + g * SIMD_BLOCKSIZE;
+        if (OB_FAIL((*bitwise_op_simd_func)(l_vec->get_payload(group_offset),
+                                            r_vec->get_payload(group_offset),
+                                            const_cast<char *>(res_vec->get_payload(group_offset))
+                                            ))) {
+          LOG_WARN("fail to calc bitwise op with simd", K(ret), K(op), K(SIMD_BLOCKSIZE));
         }
-        case (VEC_UNIFORM): {
-          DISPATCH_WIDTH_TASK(l_len, LEFT_FIXED_UNIFORM_CALC);
-          break;
+      }
+      remaining_offset = group_cnt * SIMD_BLOCKSIZE;
+    }
+    #endif
+  }
+  if (OB_SUCC(ret)) {
+    uint64_t left = 0;
+    uint64_t right = 0;
+    uint64_t res = 0;
+    for (int i = bound.start() + remaining_offset; i < bound.end() && OB_SUCC(ret); i++) {
+      if (OB_LIKELY(!(skip.at(i) || eval_flags.at(i)))) {
+        if (OB_UNLIKELY(l_vec->is_null(i) || r_vec->is_null(i))) {
+          res_vec->set_null(i);
+        } else {
+          left = l_vec->get_uint(i);
+          right = r_vec->get_uint(i);
+          res = calc_bitwise_op<op>(left, right);
+          res_vec->set_uint(i, res);
         }
-        default: {
-          ret = inner_calc_vector<ObVectorBase, ObVectorBase, ObVectorBase>(
-            VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
-          break;
-        }
-        }
-      } else {
-        DISPATCH_INOUT_WIDTH_TASK(l_len, r_len, INNER_FIXED_CALC);
       }
     }
   }
   return ret;
 }
 
-template <typename RES_VEC, typename L_VEC, typename R_VEC>
+template <ObBitwiseExprOperator::BitOperator op, typename RES_VEC, typename L_VEC, typename R_VEC>
 int ObBitwiseExprOperator::inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
@@ -6048,7 +6178,6 @@ int ObBitwiseExprOperator::inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMo
 
         if (l_vec->is_null(i) || r_vec->is_null(i)) {
           res_vec->set_null(i);
-          eval_flags.set(i);
         } else {
           ObDatum left_datum = ObDatum(l_vec->get_payload(i), l_vec->get_length(i), false);
           ObDatum right_datum = ObDatum(r_vec->get_payload(i), r_vec->get_length(i), false);
@@ -6073,14 +6202,11 @@ int ObBitwiseExprOperator::inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMo
               LOG_WARN("get ObNumber from int64 failed", K(ret), K(res));
             } else {
               res_vec->set_number(i, tmp);
-              eval_flags.set(i);
             }
           }
         }
       }
     } else {
-      const ObBitwiseExprOperator::BitOperator op =
-        static_cast<const ObBitwiseExprOperator::BitOperator>(expr.extra_);
       for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i += 1) {
         if (skip.at(i) || eval_flags.at(i)) {
           continue;
@@ -6088,7 +6214,6 @@ int ObBitwiseExprOperator::inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMo
 
         if (l_vec->is_null(i) || r_vec->is_null(i)) {
           res_vec->set_null(i);
-          eval_flags.set(i);
         } else {
           ObDatum left_datum = ObDatum(l_vec->get_payload(i), l_vec->get_length(i), false);
           ObDatum right_datum = ObDatum(r_vec->get_payload(i), r_vec->get_length(i), false);
@@ -6108,23 +6233,8 @@ int ObBitwiseExprOperator::inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMo
           } else {
             // bit_neg and bit_count will be handled by theirs function
 
-            uint64_t res = 0;
-
-            switch (op) {
-            case ObBitwiseExprOperator::BIT_AND: res = left & right; break;
-            case ObBitwiseExprOperator::BIT_OR: res = left | right; break;
-            case ObBitwiseExprOperator::BIT_XOR: res = left ^ right; break;
-            case ObBitwiseExprOperator::BIT_LEFT_SHIFT:
-              res = right < sizeof(uint64_t) * 8 ? left << right : 0;
-              break;
-            case ObBitwiseExprOperator::BIT_RIGHT_SHIFT:
-              res = right < sizeof(uint64_t) * 8 ? left >> right : 0;
-              break;
-            default: break;
-            }
-
+            uint64_t res = calc_bitwise_op<op>(left, right);
             res_vec->set_uint(i, res);
-            eval_flags.set(i);
           }
         }
       }
@@ -6986,6 +7096,181 @@ int ObLocationExprOperator::calc_location_expr(const ObExpr &expr, ObEvalCtx &ct
   return ret;
 }
 
+int ObLocationExprOperator::handle_null_pos(bool is_oracle_mode, const ObExpr &expr, ObEvalCtx &ctx, bool &is_null, bool &is_zero)
+{
+  int ret = OB_SUCCESS;
+
+  if (is_oracle_mode) {
+    is_zero = true;
+    is_null = false;
+  } else {
+    ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+    const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+    uint64_t compat_version = 0;
+    ObCompatType compat_type = COMPAT_MYSQL57;
+    bool is_enable = false;
+    if (OB_ISNULL(session)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info is null", K(ret));
+    } else if (OB_FAIL(helper.get_compat_version(compat_version))) {
+      LOG_WARN("failed to get compat version", K(ret));
+    } else if (OB_FAIL(ObCompatControl::check_feature_enable(compat_version,
+                                                             ObCompatFeatureType::FUNC_LOCATE_NULL,
+                                                             is_enable))) {
+      LOG_WARN("failed to check feature enable", K(ret));
+    } else if (OB_FAIL(session->get_compatibility_control(compat_type))) {
+      LOG_WARN("failed to get compat type", K(ret));
+    } else if (is_enable && COMPAT_MYSQL8 == compat_type) {
+      is_null = true;
+      is_zero = false;
+    } else {
+      is_zero = true;
+      is_null = false;
+    }
+  }
+  return ret;
+}
+
+template <typename SubVec, typename OriVec, typename ResVec>
+int ObLocationExprOperator::vector_location(const ObExpr &expr,
+                                            ObEvalCtx &ctx,
+                                            const ObBitVector &skip,
+                                            const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  bool null_when_null_pos = false;
+  bool zero_when_null_pos = false;
+  const SubVec *sub_vec = static_cast<const SubVec *>(expr.args_[0]->get_vector(ctx));
+  const OriVec *ori_vec = static_cast<const OriVec *>(expr.args_[1]->get_vector(ctx));
+  const ObIVector *pos_vec = 3 == expr.arg_cnt_ ? static_cast<const ObIVector *>(expr.args_[2]->get_vector(ctx)) : NULL;
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObCollationType calc_cs_type = CS_TYPE_INVALID;
+  bool search_in_binary = false;
+  bool static_pos = true;
+  bool can_do_ascii_optimize = false;
+  int64_t pos_int = 1;
+  if (OB_ISNULL(sub_vec) || OB_ISNULL(ori_vec) || OB_ISNULL(res_vec)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null vector", K(ret), K(expr));
+  }  else if (OB_FAIL(handle_null_pos(lib::is_oracle_mode(), expr, ctx, null_when_null_pos, zero_when_null_pos))) {
+    LOG_WARN("failed to handle null pos", K(ret));
+  } else if (OB_FAIL(get_calc_cs_type(expr, calc_cs_type))) {
+    LOG_WARN("get_calc_cs_type failed", K(ret));
+  } else {
+    search_in_binary = ObCharset::is_bin_sort(calc_cs_type);
+  }
+  if (3 == expr.arg_cnt_) {
+    if (!expr.args_[2]->is_static_const_) {
+      static_pos = false;
+    } else if (!pos_vec->is_null(0)) {
+      pos_int = pos_vec->get_int(0);
+    } else {
+      // Deal with all null pos first.
+      for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+        if (skip.at(idx) || eval_flags.at(idx)) {
+          continue;
+        } else if (null_when_null_pos || ori_vec->is_null(idx) || sub_vec->is_null(idx)) {
+          res_vec->set_null(idx);
+        } else if (zero_when_null_pos) {
+          res_vec->set_int(idx, 0);
+        }
+      }
+      return ret;
+    }
+  }
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (skip.at(idx) || eval_flags.at(idx)) {
+      continue;
+    } else if (sub_vec->is_null(idx) || ori_vec->is_null(idx)) {
+      res_vec->set_null(idx);
+      continue;
+    } else if (!static_pos && pos_vec->is_null(idx)) {
+      if (null_when_null_pos) {
+        res_vec->set_null(idx);
+      } else if (zero_when_null_pos) {
+        res_vec->set_int(idx, 0);
+      }
+      continue;
+    }
+    ObString sub_str = sub_vec->get_string(idx);
+    ObString ori_str = ori_vec->get_string(idx);
+    pos_int = static_pos ? pos_int : pos_vec->get_int(idx);
+    int64_t result = 0;
+    if (search_in_binary) {
+      ret = calc_vector<true>(ctx, calc_cs_type, *expr.args_[0], *expr.args_[1], sub_str, ori_str, pos_int, result);
+    } else {
+      ret = calc_vector<false>(ctx, calc_cs_type, *expr.args_[0], *expr.args_[1], sub_str, ori_str, pos_int, result);
+    }
+    if (OB_SUCC(ret)) {
+      res_vec->set_int(idx, result);
+    } else {
+      LOG_WARN("calc_vector failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLocationExprOperator::eval_vector_param_value_for_locate(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ObBitVector &pvt_skip = expr.get_pvt_skip(ctx);
+  EvalBound new_bound = bound;
+  pvt_skip.deep_copy(skip, new_bound.start(), new_bound.end());
+  for (int param_index = 0; OB_SUCC(ret) && param_index < expr.arg_cnt_; param_index++) {
+    ObIVector *vec = nullptr;
+    if (OB_FAIL(expr.args_[param_index]->eval_vector(ctx, param_index < 2 ? skip :pvt_skip, new_bound))) {
+      SQL_LOG(WARN, "evaluate parameter failed", K(ret), K(param_index));
+    } else if (FALSE_IT(vec = expr.args_[param_index]->get_vector(ctx))) {
+    }
+    if (OB_FAIL(ret)) {
+    } else if (vec->has_null() && param_index < 2) {
+      new_bound.set_all_row_active(false);
+      if (vec->get_format() != VEC_UNIFORM
+          && vec->get_format() != VEC_UNIFORM_CONST
+          && vec->get_format() != VEC_INVALID) {
+        pvt_skip.bit_or(*static_cast<ObBitmapNullVectorBase *>(vec)->get_nulls(), new_bound);
+      } else {
+        for (int i = new_bound.start(); i < new_bound.end(); i++) {
+          if (!pvt_skip.at(i) && vec->is_null(i)) {
+            pvt_skip.set(i);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLocationExprOperator::calc_location_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  LOG_WARN("30052684 locate");
+  if (OB_UNLIKELY(2 > expr.arg_cnt_ || 3 < expr.arg_cnt_) || OB_ISNULL(expr.args_) ||
+      OB_ISNULL(expr.args_[0]) || OB_ISNULL(expr.args_[1]) || (3 == expr.arg_cnt_ && OB_ISNULL(expr.args_[2]))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid expr", K(ret), K(expr));
+  } else if (OB_FAIL(eval_vector_param_value_for_locate(expr, ctx, skip, bound))) {
+    LOG_WARN("failed to eval param value", K(ret));
+  } else {
+    VectorFormat sub_format = expr.args_[0]->get_format(ctx);
+    VectorFormat ori_format = expr.args_[1]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_DISCRETE ==sub_format && VEC_DISCRETE == ori_format && VEC_FIXED == res_format) {
+      ret = ObLocationExprOperator::vector_location<StrDiscVec, StrDiscVec, ObFixedLengthFormat<int64_t>>(expr, ctx, skip, bound);
+    } else if (VEC_DISCRETE == sub_format && VEC_UNIFORM == ori_format && VEC_FIXED == res_format) {
+      ret = ObLocationExprOperator::vector_location<StrDiscVec, StrUniVec, ObFixedLengthFormat<int64_t>>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == sub_format && VEC_DISCRETE == ori_format && VEC_FIXED == res_format) {
+      ret = ObLocationExprOperator::vector_location<StrUniVec, StrDiscVec, ObFixedLengthFormat<int64_t>>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == sub_format && VEC_UNIFORM == ori_format && VEC_FIXED == res_format) {
+      ret = ObLocationExprOperator::vector_location<StrUniVec, StrUniVec, ObFixedLengthFormat<int64_t>>(expr, ctx, skip, bound);
+    } else {
+      ret = ObLocationExprOperator::vector_location<ObVectorBase, ObVectorBase, ObVectorBase>(expr, ctx, skip, bound);
+    }
+  }
+  return ret;
+}
+
 // instr和locate的参数顺序正好相反，所以需要抽出这个函数
 // eg: locate(sub_str, ori_str): 待搜索的子串是第一个参数
 //     instr(ori_str, sub_str): 待搜索的子串时第二个参数
@@ -7104,12 +7389,93 @@ int ObLocationExprOperator::calc_(const ObExpr &expr, const ObExpr &sub_arg,
   return ret;
 }
 
+template <bool SEARCH_IN_BINARY>
+int ObLocationExprOperator::calc_vector(ObEvalCtx &ctx, const ObCollationType &calc_cs_type,
+                                        const ObExpr &sub_arg, const ObExpr &ori_arg,
+                                        const ObString &sub_str, const ObString &ori_str,
+                                        int64_t pos_int, int64_t &result)
+{
+  int ret = OB_SUCCESS;
+  uint32_t idx = 0;
+  if (!ob_is_text_tc(sub_arg.datum_meta_.type_) && !ob_is_text_tc(ori_arg.datum_meta_.type_)) {
+    if (SEARCH_IN_BINARY) {
+      idx = ObCharsetStringHelper::locate_optimized(calc_cs_type, ori_str.ptr(), ori_str.length(), sub_str.ptr(), sub_str.length(), pos_int);
+    } else {
+      idx = ObCharset::locate(calc_cs_type, ori_str.ptr(), ori_str.length(),
+                              sub_str.ptr(), sub_str.length(), pos_int);
+    }
+    result = static_cast<int64_t>(idx);
+  } else { // at least one of the inputs are text tc
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+    ObString sub_str_data;
+    ObString ori_str_data;
+    bool sub_has_lob_header = sub_arg.obj_meta_.has_lob_header();
+    bool ori_has_lob_header = ori_arg.obj_meta_.has_lob_header();
+    ObTextStringIter sub_str_iter(sub_arg.datum_meta_.type_, sub_arg.datum_meta_.cs_type_, sub_str, sub_has_lob_header);
+    ObTextStringIter ori_str_iter(ori_arg.datum_meta_.type_, ori_arg.datum_meta_.cs_type_, ori_str, ori_has_lob_header);
+    if (OB_FAIL(ori_str_iter.init(0, NULL, &calc_alloc))) {
+      LOG_WARN("Lob: init ori_str_iter failed ", K(ret), K(ori_str_iter));
+    } else if (OB_FAIL(sub_str_iter.init(0, NULL, &calc_alloc))) {
+      LOG_WARN("Lob: init sub_str_iter failed ", K(ret), K(sub_str_iter));
+    } else if (OB_FAIL(sub_str_iter.get_full_data(sub_str_data))) {
+      LOG_WARN("Lob: init lob str iter failed ", K(ret), K(sub_str_iter));
+    } else {
+      ObTextStringIterState state;
+      if (ori_str_iter.is_outrow_lob()) { // set reserved len, to avoid sub_str split between get_next_block
+        size_t sub_str_char_len = ObCharsetStringHelper::strlen_char_optimized(sub_arg.datum_meta_.cs_type_,
+                                                                               sub_str_data.ptr(),
+                                                                               sub_str_data.length());
+        ori_str_iter.set_reserved_len(sub_str_char_len - 1);
+        ori_str_iter.set_start_offset(pos_int); // start char len
+        pos_int = 1; // start pos is handled by lob mngr for out row lobs
+      }
+      while (idx == 0 && (state = ori_str_iter.get_next_block(ori_str_data)) == TEXTSTRING_ITER_NEXT) {
+        if (SEARCH_IN_BINARY) {
+          idx = ObCharsetStringHelper::locate_optimized(calc_cs_type, ori_str_data.ptr(), ori_str_data.length(),
+                                                        sub_str_data.ptr(), sub_str_data.length(), pos_int);
+        } else {
+          idx = ObCharset::locate(calc_cs_type, ori_str_data.ptr(), ori_str_data.length(),
+                                  sub_str_data.ptr(), sub_str_data.length(), pos_int);
+        }
+      }
+      if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+        ret = (ori_str_iter.get_inner_ret() != OB_SUCCESS) ?
+              ori_str_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(ori_str_iter));
+      } else {
+        if (idx != 0) {
+          // need to add length accessed by get_next_block
+          idx += ori_str_iter.get_last_accessed_len() + ori_str_iter.get_start_offset();
+          if (ori_str_iter.get_iter_count() > 1) { // minus reserved length
+            OB_ASSERT(idx > ori_str_iter.get_reserved_char_len());
+            idx -= ori_str_iter.get_reserved_char_len();
+          }
+        }
+        result = static_cast<int64_t>(idx);
+      }
+    }
+  }
+  return ret;
+}
+
+template int ObLocationExprOperator::calc_vector<true>(ObEvalCtx &ctx, const ObCollationType &calc_cs_type,
+                                                        const ObExpr &sub_arg, const ObExpr &ori_arg,
+                                                        const ObString &sub_str, const ObString &ori_str,
+                                                        int64_t pos_int, int64_t &result);
+
+template int ObLocationExprOperator::calc_vector<false>(ObEvalCtx &ctx, const ObCollationType &calc_cs_type,
+                                                        const ObExpr &sub_arg, const ObExpr &ori_arg,
+                                                        const ObString &sub_str, const ObString &ori_str,
+                                                        int64_t pos_int, int64_t &result);
+
 int ObLocationExprOperator::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
                                     ObExpr &rt_expr) const
 {
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_location_expr;
+  rt_expr.eval_vector_func_ = calc_location_expr_vector;
   return OB_SUCCESS;
 }
 
@@ -7183,55 +7549,201 @@ int ObExprTRDateFormat::trunc_new_obtime(ObTime &ob_time, const ObString &fmt,
   return ret;
 }
 
+// 模板函数实现：根据时间单位截断 ObTime（支持编译期特化）
+template <ObExprTRDateFormat::TruncTimeUnit UNIT>
+int ObExprTRDateFormat::trunc_obtime_by_unit_template(ObTime &ob_time, bool is_mysql_compat_dates)
+{
+  int ret = OB_SUCCESS;
+
+  if constexpr (UNIT == TruncTimeUnit::MICROSECONDS) {
+    // No truncation at microsecond level
+  } else if constexpr (UNIT == TruncTimeUnit::MILLISECONDS) {
+    // Truncate to millisecond level
+    ob_time.parts_[DT_USEC] = (ob_time.parts_[DT_USEC] / 1000) * 1000;
+  } else if constexpr (UNIT == TruncTimeUnit::SECOND) {
+    // Truncate to second level
+    ob_time.parts_[DT_USEC] = 0;
+  } else if constexpr (UNIT == TruncTimeUnit::MINUTE) {
+    // Truncate to minute level
+    ob_time.parts_[DT_SEC] = 0;
+    ob_time.parts_[DT_USEC] = 0;
+  } else if constexpr (UNIT == TruncTimeUnit::HOUR) {
+    // Truncate to hour level
+    ob_time.parts_[DT_MIN] = 0;
+    ob_time.parts_[DT_SEC] = 0;
+    ob_time.parts_[DT_USEC] = 0;
+  } else if constexpr (UNIT == TruncTimeUnit::DAY) {
+    // Truncate to day level
+    set_time_part_to_zero(ob_time);
+  } else if constexpr (UNIT == TruncTimeUnit::WEEK) {
+    //within a week. monday is the first day
+    set_time_part_to_zero(ob_time);
+    int32_t offset = (ob_time.parts_[DT_WDAY] - 1) % DAYS_PER_WEEK;
+    ob_time.parts_[DT_DATE] -= offset;
+    ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+  } else if constexpr (UNIT == TruncTimeUnit::MONTH) {
+    // Truncate to month level
+    set_time_part_to_zero(ob_time);
+    int32_t offset = (ob_time.parts_[DT_MDAY] - 1);
+    ob_time.parts_[DT_MDAY] = 1;
+    ob_time.parts_[DT_DATE] -= offset;
+  } else if constexpr (UNIT == TruncTimeUnit::QUARTER) {
+    // Truncate to quarter level
+    set_time_part_to_zero(ob_time);
+    int32_t quarter = (ob_time.parts_[DT_MON] + 2) / MONS_PER_QUAR;
+    ob_time.parts_[DT_MON] = (quarter - 1) * MONS_PER_QUAR + 1;
+    ob_time.parts_[DT_MDAY] = 1;
+    if (!is_mysql_compat_dates) {
+      ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+    }
+  } else if constexpr (UNIT == TruncTimeUnit::YEAR) {
+    // Truncate to year level
+    set_time_part_to_zero(ob_time);
+    int32_t offset = (ob_time.parts_[DT_YDAY] - 1);
+    ob_time.parts_[DT_MON] = 1;
+    ob_time.parts_[DT_MDAY] = 1;
+    ob_time.parts_[DT_DATE] -= offset;
+  } else if constexpr (UNIT == TruncTimeUnit::DECADE) {
+    // Truncate to decade level
+    set_time_part_to_zero(ob_time);
+    int32_t year = ob_time.parts_[DT_YEAR];
+    int32_t decade_start_year = (year / 10) * 10;
+    ob_time.parts_[DT_YEAR] = decade_start_year;
+    ob_time.parts_[DT_MON] = 1;
+    ob_time.parts_[DT_MDAY] = 1;
+    if (!is_mysql_compat_dates) {
+      ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+    }
+  } else if constexpr (UNIT == TruncTimeUnit::CENTURY) {
+    // Truncate to century level
+    set_time_part_to_zero(ob_time);
+    int32_t year = ob_time.parts_[DT_YEAR];
+    // Oracle: year/100*100+1, PostgreSQL: ((year-1)/100)*100+1
+    // 使用 Oracle 的语义以保持兼容性
+    int32_t century_start_year = (year / YEARS_PER_CENTURY) * YEARS_PER_CENTURY + 1;
+    ob_time.parts_[DT_YEAR] = century_start_year;
+    ob_time.parts_[DT_MON] = 1;
+    ob_time.parts_[DT_MDAY] = 1;
+    if (!is_mysql_compat_dates) {
+      ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+    }
+  } else if constexpr (UNIT == TruncTimeUnit::MILLENNIUM) {
+    // Truncate to millennium level
+    set_time_part_to_zero(ob_time);
+    int32_t year = ob_time.parts_[DT_YEAR];
+    int32_t millennium_start_year = ((year - 1) / 1000) * 1000 + 1;
+    ob_time.parts_[DT_YEAR] = millennium_start_year;
+    ob_time.parts_[DT_MON] = 1;
+    ob_time.parts_[DT_MDAY] = 1;
+    if (!is_mysql_compat_dates) {
+      ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected time unit", K(ret), K(static_cast<int>(UNIT)));
+  }
+
+  return ret;
+}
+
+// 显式实例化常用的模板特化（可选，用于减少编译时间）
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::MICROSECONDS>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::MILLISECONDS>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::SECOND>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::MINUTE>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::HOUR>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::DAY>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::WEEK>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::MONTH>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::QUARTER>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::YEAR>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::DECADE>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::CENTURY>(
+    ObTime &, bool);
+template int ObExprTRDateFormat::trunc_obtime_by_unit_template<ObExprTRDateFormat::TruncTimeUnit::MILLENNIUM>(
+    ObTime &, bool);
+
 int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_id,
                                                    bool is_mysql_compat_dates)
 {
   int ret = OB_SUCCESS;
   switch (fmt_id) {
+    // 年份相关格式 -> YEAR
     case SYYYY:
-      //go through
     case YYYY:
-      //go through
     case YEAR:
     case SYEAR:
-      //go through
     case YYY:
-      //go through
     case YY:
-      //go through
     case Y: {
-      set_time_part_to_zero(ob_time);
-      int32_t offset = (ob_time.parts_[DT_YDAY] - 1);
-      ob_time.parts_[DT_MON] = 1;
-      ob_time.parts_[DT_MDAY] = 1;
-      ob_time.parts_[DT_DATE] -= offset;
+      ret = trunc_obtime_by_unit_template<TruncTimeUnit::YEAR>(ob_time, is_mysql_compat_dates);
       break;
     }
+
+    // 季度 -> QUARTER
     case Q: {
-      set_time_part_to_zero(ob_time);
-      int32_t quarter = (ob_time.parts_[DT_MON] + 2) / MONS_PER_QUAR;
-      ob_time.parts_[DT_MON] = (quarter - 1) * MONS_PER_QUAR + 1;
-      ob_time.parts_[DT_MDAY] = 1;
-      if (!is_mysql_compat_dates) {
-        ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
-      }
+      ret = trunc_obtime_by_unit_template<TruncTimeUnit::QUARTER>(ob_time, is_mysql_compat_dates);
       break;
     }
+
+    // 月份相关格式 -> MONTH
     case MONTH:
-      //go through
     case MON:
-      //go through
     case MM:
-      //go through
     case RM: {
-      set_time_part_to_zero(ob_time);
-      int32_t offset = (ob_time.parts_[DT_MDAY] - 1);
-      ob_time.parts_[DT_MDAY] = 1;
-      ob_time.parts_[DT_DATE] -= offset;
+      ret = trunc_obtime_by_unit_template<TruncTimeUnit::MONTH>(ob_time, is_mysql_compat_dates);
       break;
     }
+
+    // ISO 周 -> WEEK (ISO 8601, Monday start)
+    case IW: {
+      ret = trunc_obtime_by_unit_template<TruncTimeUnit::WEEK>(ob_time, is_mysql_compat_dates);
+      break;
+    }
+
+    // 天相关格式 -> DAY
+    case DDD:
+    case DD:
+    case J: {
+      ret = trunc_obtime_by_unit_template<TruncTimeUnit::DAY>(ob_time, is_mysql_compat_dates);
+      break;
+    }
+
+    // 小时相关格式 -> HOUR
+    case HH:
+    case HH12:
+    case HH24: {
+      ret = trunc_obtime_by_unit_template<TruncTimeUnit::HOUR>(ob_time, is_mysql_compat_dates);
+      break;
+    }
+
+    // 分钟 -> MINUTE
+    case MI: {
+      ret = trunc_obtime_by_unit_template<TruncTimeUnit::MINUTE>(ob_time, is_mysql_compat_dates);
+      break;
+    }
+
+    // 世纪 -> CENTURY
+    case CC:
+    case SCC: {
+      ret = trunc_obtime_by_unit_template<TruncTimeUnit::CENTURY>(ob_time, is_mysql_compat_dates);
+      break;
+    }
+
+    // 特殊格式：保持原有实现（因为语义不同）
     case WW: {
-      //01-01 is the first day of year
+      // 01-01 is the first day of year (Oracle specific)
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_YDAY] - 1) % DAYS_PER_WEEK;
       ob_time.parts_[DT_DATE] -= offset;
@@ -7240,38 +7752,20 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       }
       break;
     }
-    case IW: {
-      //within a week. monday is the first day
-      set_time_part_to_zero(ob_time);
-      int32_t offset = (ob_time.parts_[DT_WDAY] - 1) % DAYS_PER_WEEK;
-      ob_time.parts_[DT_DATE] -= offset;
-      if (is_mysql_compat_dates) {
-        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
-      }
-      break;
-    }
+
     case W: {
-      //xx-01 is the first day
+      // xx-01 is the first day (Oracle specific: week within month)
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_MDAY] - 1) % DAYS_PER_WEEK;
       ob_time.parts_[DT_MDAY] -= offset;
       ob_time.parts_[DT_DATE] -= offset;
       break;
     }
-    case DDD:
-      //go through
-    case DD:
-      //go through
-    case J: {
-      set_time_part_to_zero(ob_time);
-      break;
-    }
+
     case DAY:
-      //go through
     case DY:
-      //go through
     case D: {
-      //within a week. sunday is the first day
+      // within a week. sunday is the first day (Oracle specific)
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_WDAY]) % DAYS_PER_WEEK;
       ob_time.parts_[DT_DATE] -= offset;
@@ -7280,39 +7774,11 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       }
       break;
     }
-    case HH:
-      //go through
-    case HH12:
-      //go through
-    case HH24: {
-      ob_time.parts_[DT_MIN] = 0;
-      ob_time.parts_[DT_SEC] = 0;
-      ob_time.parts_[DT_USEC] = 0;
-      break;
-    }
-    case MI: {
-      ob_time.parts_[DT_SEC] = 0;
-      ob_time.parts_[DT_USEC] = 0;
-      break;
-    }
-    case CC:
-      //go through
-    case SCC: {
-      set_time_part_to_zero(ob_time);
-      ob_time.parts_[DT_YEAR] = ob_time.parts_[DT_YEAR] / YEARS_PER_CENTURY * YEARS_PER_CENTURY + 1;
-      ob_time.parts_[DT_MON] = 1;
-      ob_time.parts_[DT_MDAY] = 1;
-      if (!is_mysql_compat_dates) {
-        ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
-      }
-      break;
-    }
+
     case IYYY:
-      //go through
     case IY:
-      //go through
     case I: {
-      //not used heavily. so, do not care too much about performance !
+      // ISO year (Oracle specific)
       set_time_part_to_zero(ob_time);
       ObTimeConverter::get_first_day_of_isoyear(ob_time);
       if (is_mysql_compat_dates) {
@@ -7320,6 +7786,7 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       }
       break;
     }
+
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected fmt_id", K(fmt_id), K(ret));

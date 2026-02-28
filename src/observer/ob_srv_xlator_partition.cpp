@@ -37,6 +37,7 @@
 #include "storage/ob_storage_rpc.h"
 
 #include "rootserver/freeze/ob_major_freeze_rpc_define.h"        // ObTenantMajorFreezeP
+#include "rootserver/freeze/window/ob_window_compaction_rpc_define.h"
 #include "storage/tx/ob_xa_rpc.h"
 
 #include "observer/table_load/ob_table_load_rpc_processor.h"
@@ -144,7 +145,8 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObFetchLSMemberListP);
   RPC_PROCESSOR(ObFetchSSTableMacroInfoP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObStorageFetchLSViewP, gctx_.bandwidth_throttle_);
-  RPC_PROCESSOR(ObFetchSSTableMacroIdInfoP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObFetchSSTableMacroLogicIdInfoP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObAdvanceSrcLSCheckpointP);
 
   // restore
   RPC_PROCESSOR(ObNotifyRestoreTabletsP, gctx_.bandwidth_throttle_);
@@ -277,9 +279,10 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   // Remote fetch log rpc
   RPC_PROCESSOR(ObRemoteFetchLogP);
 
-  // tenant major freeze
+  // tenant freeze rpc
   RPC_PROCESSOR(ObTenantMajorFreezeP);
   RPC_PROCESSOR(ObTenantAdminMergeP);
+  RPC_PROCESSOR(ObTenantWindowCompactionP);
 
   // checkpoint slog rpc
   RPC_PROCESSOR(ObCheckpointSlogP, gctx_);

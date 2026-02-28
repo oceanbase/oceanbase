@@ -95,6 +95,9 @@ int ObBlockRowStore::init(const ObTableAccessParam &param, common::hash::ObHashS
 
 int ObBlockRowStore::open(ObTableIterParam &iter_param)
 {
+  // TODO(optimize): Now, both sample_filter_ and mds_filter_ will create an and filter, which is redundant.
+  //                 We should combine them into one ManagerClass and combine them into one AndFilter.
+
   int ret = OB_SUCCESS;
   const bool need_padding = is_pad_char_to_full_length(context_.sql_mode_);
   bool filter_valid = true;
@@ -106,12 +109,16 @@ int ObBlockRowStore::open(ObTableIterParam &iter_param)
         nullptr == iter_param.out_cols_project_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to init store pushdown filter", K(ret), K(iter_param));
-  } else if (nullptr != context_.truncate_part_filter_
-             && context_.truncate_part_filter_->need_combined_to_pd_filter()
-             && OB_FAIL(context_.truncate_part_filter_->combine_to_filter_tree(pd_filter_info_.filter_))) {
-    LOG_WARN("Failed to combine truncate filter to filter tree", K(ret), KP_(context_.truncate_part_filter));
+  } else if (OB_FAIL(context_.combine_to_filter_tree(pd_filter_info_.filter_, iter_param.pushdown_filter_))) {
+    LOG_WARN("Failed to combine mds filter to filter tree", K(ret));
+  } else if (nullptr != context_.sample_filter_
+             && OB_FAIL(context_.sample_filter_->combine_to_filter_tree(pd_filter_info_.filter_))) {
+    LOG_WARN("Failed to combine sample filter to filter tree", K(ret), K_(pd_filter_info), KP_(context_.sample_filter));
   } else if (nullptr == pd_filter_info_.filter_) {
     // nothing to do
+  } else if (OB_FAIL(pd_filter_info_.is_filter_contain_rowscn(pd_filter_info_.filter_,
+                                                              pd_filter_info_.contain_rowscn_))) {
+    LOG_WARN("Failed to check if filter contains rowscn", K(ret));
   } else if (OB_FAIL(pd_filter_info_.filter_->init_evaluated_datums(filter_valid))) {
     LOG_WARN("Failed to init pushdown filter evaluated datums", K(ret));
   } else {
@@ -119,14 +126,14 @@ int ObBlockRowStore::open(ObTableIterParam &iter_param)
       iter_param.disable_pd_filter();
       pd_filter_info_.is_pd_filter_ = false;
     }
-    if (iter_param.is_use_column_store()) {
+    if (OB_FAIL(iter_param.build_index_filter_for_row_store(context_.allocator_, pd_filter_info_.filter_))) {
+      LOG_WARN("Failed to build skip index", K(ret));
+    } else if (iter_param.is_use_column_store()) {
       if (OB_FAIL(pd_filter_info_.filter_->init_co_filter_param(iter_param, need_padding))) {
         LOG_WARN("Failed to init pushdown filter executor", K(ret));
       }
-    } else if (OB_FAIL(iter_param.build_index_filter_for_row_store(context_.allocator_))) {
-      LOG_WARN("Failed to build skip index for row store", K(ret));
     } else if (OB_FAIL(pd_filter_info_.filter_->init_filter_param(
-            *iter_param.get_col_params(), *iter_param.out_cols_project_, need_padding))) {
+                *iter_param.get_col_params(), *iter_param.out_cols_project_, need_padding))) {
       LOG_WARN("Failed to init pushdown filter executor", K(ret));
     }
   }

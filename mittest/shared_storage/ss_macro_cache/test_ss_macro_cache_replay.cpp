@@ -341,6 +341,9 @@ TEST_F(TestSSMacroCacheReplay, replay_in_background)
     }
   }
   ori_run_cnt = file_manager->calibrate_disk_space_task_.run_cnt_;
+  // calibrate_disk_space_task_ executes at most once in interval of 'disk_space_cal_interval_us'.
+  // thus, sleep 3s (which is greater than 'disk_space_cal_interval_us') to ensure task will be executed
+  usleep(3 * 1000L * 1000L);
   file_manager->calibrate_disk_space_task_.runTimerTask();
   cur_run_cnt = file_manager->calibrate_disk_space_task_.run_cnt_;
   ASSERT_LT(ori_run_cnt, cur_run_cnt);

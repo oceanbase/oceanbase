@@ -15,6 +15,7 @@
 #include "sql/resolver/ddl/ob_explain_stmt.h"
 #include "lib/string/ob_string.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
+#include "sql/resolver/ob_sql_array.h"
 
 namespace oceanbase
 {
@@ -65,7 +66,7 @@ struct ObAssignment
                N_EXPR, expr_,
                K_(is_predicate_column));
 };
-typedef common::ObSEArray<ObAssignment, 16, common::ModulePageAllocator, true> ObAssignments;
+typedef ObSqlArray<ObAssignment> ObAssignments;
 
 enum ObDmlTableType
 {
@@ -80,16 +81,16 @@ enum ObDmlTableType
 class ObDmlTableInfo
 {
 public:
-ObDmlTableInfo(ObDmlTableType table_type)
+ObDmlTableInfo(ObDmlTableType table_type, ObIAllocator &allocator)
   : table_id_(OB_INVALID_ID),
     loc_table_id_(OB_INVALID_ID),
     ref_table_id_(OB_INVALID_ID),
     table_name_(),
     table_type_(table_type),
-    column_exprs_(),
-    check_constraint_exprs_(),
-    view_check_exprs_(),
-    part_ids_(),
+    column_exprs_(allocator),
+    check_constraint_exprs_(allocator),
+    view_check_exprs_(allocator),
+    part_ids_(allocator),
     is_link_table_(false),
     need_filter_null_(false)
   {}
@@ -132,13 +133,13 @@ ObDmlTableInfo(ObDmlTableType table_type)
   uint64_t ref_table_id_; // refer table id for the updated table
   common::ObString table_name_;
   ObDmlTableType table_type_;
-  common::ObSEArray<ObColumnRefRawExpr*, 8, common::ModulePageAllocator, true> column_exprs_;
+  ObSqlArray<ObColumnRefRawExpr*> column_exprs_;
   // check exprs for each dml table
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> check_constraint_exprs_;
+  ObSqlArray<ObRawExpr*> check_constraint_exprs_;
   // check exprs for updatable view
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> view_check_exprs_;
+  ObSqlArray<ObRawExpr*> view_check_exprs_;
   //partition used for base table
-  common::ObSEArray<ObObjectID, 1, common::ModulePageAllocator, true> part_ids_;
+  ObSqlArray<ObObjectID> part_ids_;
   bool is_link_table_;
   bool need_filter_null_;
 };
@@ -146,8 +147,8 @@ ObDmlTableInfo(ObDmlTableType table_type)
 class ObDeleteTableInfo: public ObDmlTableInfo
 {
 public:
-  ObDeleteTableInfo() :
-      ObDmlTableInfo(ObDmlTableType::DELETE_TABLE)
+  ObDeleteTableInfo(ObIAllocator &allocator) :
+      ObDmlTableInfo(ObDmlTableType::DELETE_TABLE, allocator)
   {
   }
   virtual ~ObDeleteTableInfo()
@@ -158,9 +159,9 @@ public:
 class ObUpdateTableInfo: public ObDmlTableInfo
 {
 public:
-  ObUpdateTableInfo() :
-      ObDmlTableInfo(ObDmlTableType::UPDATE_TABLE),
-      assignments_()
+  ObUpdateTableInfo(ObIAllocator &allocator) :
+      ObDmlTableInfo(ObDmlTableType::UPDATE_TABLE, allocator),
+      assignments_(allocator)
   {
   }
   virtual ~ObUpdateTableInfo()
@@ -190,30 +191,31 @@ public:
 class ObInsertTableInfo: public ObDmlTableInfo
 {
 public:
-  ObInsertTableInfo() :
-      ObDmlTableInfo(ObDmlTableType::INSERT_TABLE),
+  ObInsertTableInfo(ObIAllocator &allocator) :
+      ObDmlTableInfo(ObDmlTableType::INSERT_TABLE, allocator),
       is_replace_(false),
       is_overwrite_(false),
-      values_desc_(),
-      values_vector_(),
+      values_desc_(allocator),
+      values_vector_(allocator),
       all_values_simple_const_(false),
-      column_conv_exprs_(),
-      assignments_(),
-      column_in_values_vector_(),
+      column_conv_exprs_(allocator),
+      part_generated_col_dep_cols_(allocator),
+      assignments_(allocator),
+      column_in_values_vector_(allocator),
       is_insertup_update_assign_need_calc_(false)
   {
   }
-  ObInsertTableInfo(ObDmlTableType dml_type) :
-      ObDmlTableInfo(dml_type),
+  ObInsertTableInfo(ObDmlTableType dml_type, ObIAllocator &allocator) :
+      ObDmlTableInfo(dml_type, allocator),
       is_replace_(false),
       is_overwrite_(false),
-      values_desc_(),
-      values_vector_(),
+      values_desc_(allocator),
+      values_vector_(allocator),
       all_values_simple_const_(false),
-      column_conv_exprs_(),
-      part_generated_col_dep_cols_(),
-      assignments_(),
-      column_in_values_vector_(),
+      column_conv_exprs_(allocator),
+      part_generated_col_dep_cols_(allocator),
+      assignments_(allocator),
+      column_in_values_vector_(allocator),
       is_insertup_update_assign_need_calc_(false)
   {
   }
@@ -250,19 +252,19 @@ public:
   // 以 INSERT INTO T1 (i, j, k) VALUES (1,2,3),(4,5,6) 为例：
   //  - values_desc_ 的大小为 3，里面保存了 i, j, k 三列的 column reference expr
   //  - value_vectors_ 的大小为 6，保存的内容为 1,2,3,4,5,6 这几个表达式
-  common::ObSEArray<ObColumnRefRawExpr*, 16, common::ModulePageAllocator, true> values_desc_;
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> values_vector_;
+  ObSqlArray<ObColumnRefRawExpr*> values_desc_;
+  ObSqlArray<ObRawExpr*> values_vector_;
   // mark if all values in values_vector_ are simple const which can be ignored during relation expr iteration
   bool all_values_simple_const_;
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> column_conv_exprs_;
+  ObSqlArray<ObRawExpr*> column_conv_exprs_;
   // if generated col is partition key in heap table, we need to store all dep cols,
   // eg:
   //  create table t1(c0 int, c1 int, c2 int as (c0 + c1)) partition by hash(c2);
   //  insert into t1(c0) values(1);
   // part_generated_col_dep_cols_ store c1.
-  common::ObSEArray<ObColumnRefRawExpr*, 16, common::ModulePageAllocator, true> part_generated_col_dep_cols_;
+  ObSqlArray<ObColumnRefRawExpr*> part_generated_col_dep_cols_;
   ObAssignments assignments_;
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> column_in_values_vector_;
+  ObSqlArray<ObRawExpr*> column_in_values_vector_;
   // for insert up update, if the update assignment need to calc
   bool is_insertup_update_assign_need_calc_;
 };
@@ -270,14 +272,14 @@ public:
 class ObMergeTableInfo: public ObInsertTableInfo
 {
 public:
-  ObMergeTableInfo() :
-      ObInsertTableInfo(ObDmlTableType::MERGE_TABLE),
+  ObMergeTableInfo(ObIAllocator &allocator) :
+      ObInsertTableInfo(ObDmlTableType::MERGE_TABLE, allocator),
       source_table_id_(OB_INVALID_ID),
       target_table_id_(OB_INVALID_ID),
-      match_condition_exprs_(),
-      insert_condition_exprs_(),
-      update_condition_exprs_(),
-      delete_condition_exprs_()
+      match_condition_exprs_(allocator),
+      insert_condition_exprs_(allocator),
+      update_condition_exprs_(allocator),
+      delete_condition_exprs_(allocator)
   {
   }
   virtual ~ObMergeTableInfo()
@@ -309,19 +311,19 @@ public:
                K_(delete_condition_exprs));
   uint64_t source_table_id_;
   uint64_t target_table_id_;
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> match_condition_exprs_;
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> insert_condition_exprs_;
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> update_condition_exprs_;
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> delete_condition_exprs_;
+  ObSqlArray<ObRawExpr*> match_condition_exprs_;
+  ObSqlArray<ObRawExpr*> insert_condition_exprs_;
+  ObSqlArray<ObRawExpr*> update_condition_exprs_;
+  ObSqlArray<ObRawExpr*> delete_condition_exprs_;
 };
 
 class ObInsertAllTableInfo: public ObInsertTableInfo
 {
 public:
-  ObInsertAllTableInfo() :
-      ObInsertTableInfo(ObDmlTableType::INSERT_ALL_TABLE),
+  ObInsertAllTableInfo(ObIAllocator &allocator) :
+      ObInsertTableInfo(ObDmlTableType::INSERT_ALL_TABLE, allocator),
       when_cond_idx_(OB_INVALID_ID),
-      when_cond_exprs_()
+      when_cond_exprs_(allocator)
   {
   }
   virtual ~ObInsertAllTableInfo()
@@ -351,16 +353,16 @@ public:
                K_(when_cond_exprs));
 
   int64_t when_cond_idx_;//属于第几个条件对应的插入表
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> when_cond_exprs_;
+  ObSqlArray<ObRawExpr*> when_cond_exprs_;
 };
 
 struct ObUniqueConstraintInfo
 {
-  ObUniqueConstraintInfo()
+  ObUniqueConstraintInfo(common::ObIAllocator &allocator)
       : table_id_(common::OB_INVALID_ID),
         index_tid_(common::OB_INVALID_ID),
         constraint_name_(),
-        constraint_columns_()
+        constraint_columns_(allocator)
   {
   }
   TO_STRING_KV(K_(table_id),
@@ -380,17 +382,17 @@ struct ObUniqueConstraintInfo
   uint64_t table_id_;
   uint64_t index_tid_;
   common::ObString constraint_name_;
-  common::ObSEArray<ObColumnRefRawExpr*, 8, common::ModulePageAllocator, true> constraint_columns_;
+  ObSqlArray<ObColumnRefRawExpr*> constraint_columns_;
 };
 struct ObErrLogInfo
 {
-  ObErrLogInfo()
+  ObErrLogInfo(ObIAllocator &allocator)
     : is_error_log_(false),
       table_id_(OB_INVALID_ID),
       table_name_(),
       database_name_(),
       reject_limit_(0),
-      error_log_exprs_()
+      error_log_exprs_(allocator)
   {
   }
   int assign(const ObErrLogInfo &other);
@@ -407,22 +409,24 @@ struct ObErrLogInfo
   ObString table_name_;
   ObString database_name_;
   int64_t reject_limit_;
-  common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> error_log_exprs_;
+  ObSqlArray<ObColumnRefRawExpr*> error_log_exprs_;
 };
 
 class ObDelUpdStmt : public ObDMLStmt
 {
 public:
-  explicit ObDelUpdStmt(stmt::StmtType type)
-      : ObDMLStmt(type),
-        returning_exprs_(),
-        returning_strs_(),
-        returning_agg_items_(),
-        group_param_exprs_(),
+  explicit ObDelUpdStmt(stmt::StmtType type, ObIAllocator &allocator)
+      : ObDMLStmt(type, allocator),
+        returning_exprs_(allocator),
+        returning_into_exprs_(allocator),
+        returning_strs_(allocator),
+        returning_agg_items_(allocator),
+        group_param_exprs_(allocator),
         ignore_(false),
         has_global_index_(false),
-        error_log_info_(),
+        error_log_info_(allocator),
         has_instead_of_trigger_(false),
+        sharding_conditions_(allocator),
         ab_stmt_id_expr_(nullptr),
         dml_source_from_join_(false),
         pdml_disabled_(false)
@@ -449,7 +453,7 @@ public:
     agg_expr.set_explicited_reference();
     return returning_agg_items_.push_back(&agg_expr);
   }
-  int64_t get_returning_aggr_item_size() const { return returning_agg_items_.size(); }
+  int64_t get_returning_aggr_item_size() const { return returning_agg_items_.count(); }
   const common::ObIArray<ObAggFunRawExpr*> &get_returning_aggr_items() const
   { return returning_agg_items_; }
   common::ObIArray<ObAggFunRawExpr*> &get_returning_aggr_items()
@@ -498,17 +502,17 @@ public:
   void set_pdml_disabled() { pdml_disabled_ = true; }
   int get_modified_materialized_view_id(uint64_t &mview_id) const;
 protected:
-  common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_exprs_;
-  common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_into_exprs_;
-  common::ObSEArray<ObString, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_strs_;
-  common::ObArray<ObAggFunRawExpr*, common::ModulePageAllocator, true> returning_agg_items_;
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> group_param_exprs_;
+  ObSqlArray<ObRawExpr*> returning_exprs_;
+  ObSqlArray<ObRawExpr*> returning_into_exprs_;
+  ObSqlArray<ObString> returning_strs_;
+  ObSqlArray<ObAggFunRawExpr*> returning_agg_items_;
+  ObSqlArray<ObRawExpr*> group_param_exprs_;
   bool ignore_;
   bool has_global_index_;
   ObErrLogInfo error_log_info_;
   bool has_instead_of_trigger_; // for instead of trigger, the trigger need to fired
   // for insert and merge stmt
-  common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> sharding_conditions_;
+  ObSqlArray<ObRawExpr *> sharding_conditions_;
   ObRawExpr *ab_stmt_id_expr_; //for array binding batch execution to mark the stmt id
   bool dml_source_from_join_;
   bool pdml_disabled_;  //  pdml is disabled after some transformation like or-expansion

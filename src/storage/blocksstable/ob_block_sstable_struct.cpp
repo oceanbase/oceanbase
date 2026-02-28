@@ -63,6 +63,14 @@ ObMicroBlockId::ObMicroBlockId(
 {
 }
 
+uint64_t ObMicroBlockId::hash() const
+{
+  uint64_t hash_val = macro_id_.hash();
+  hash_val = murmurhash(&offset_, sizeof(offset_), hash_val);
+  hash_val = murmurhash(&size_, sizeof(size_), hash_val);
+  return hash_val;
+}
+
 bool ObMicroBlockEncodingCtx::is_valid() const
 {
   return macro_block_size_ > 0 && micro_block_size_ > 0 && rowkey_column_cnt_ >= 0

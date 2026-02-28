@@ -20,6 +20,13 @@ namespace oceanbase
 namespace share
 {
 
+enum ObVecIdxQueryStrategy
+{
+  RESPONSE_FIRST = 0,
+  DEEP_SEARCH = 1,
+  STRATEGY_MAX
+};
+
 struct ObVectorIndexQueryParam
 {
 public:
@@ -32,7 +39,8 @@ public:
     refine_k_(0),
     ob_sparse_drop_ratio_search_(0),
     similarity_threshold_(0),
-    ivf_nprobes_(0)
+    ivf_nprobes_(0),
+    strategy_(ObVecIdxQueryStrategy::RESPONSE_FIRST)
   {}
   virtual ~ObVectorIndexQueryParam() {}
   int assign(const ObVectorIndexQueryParam &other);
@@ -46,7 +54,8 @@ public:
       uint64_t is_set_drop_ratio_search_    : 1;
       uint64_t is_set_similarity_threshold_ : 1;
       uint64_t is_set_ivf_nprobes_          : 1;
-      uint64_t reserved_                    : 59;
+      uint64_t is_set_strategy_             : 1;
+      uint64_t reserved_                    : 58;
     };
   };
   int32_t ef_search_;
@@ -54,9 +63,10 @@ public:
   float ob_sparse_drop_ratio_search_;
   float similarity_threshold_;
   int32_t ivf_nprobes_;
+  ObVecIdxQueryStrategy strategy_; // from sql query parameter
 
   TO_STRING_KV(K_(is_set_ef_search), K_(ef_search),
-      K_(is_set_refine_k), K_(refine_k), K_(is_set_drop_ratio_search), K_(ob_sparse_drop_ratio_search), K_(is_set_similarity_threshold), K_(similarity_threshold), K_(is_set_ivf_nprobes), K_(ivf_nprobes), K_(reserved));
+      K_(is_set_refine_k), K_(refine_k), K_(is_set_drop_ratio_search), K_(ob_sparse_drop_ratio_search), K_(is_set_similarity_threshold), K_(similarity_threshold), K_(is_set_ivf_nprobes), K_(ivf_nprobes), K_(is_set_strategy), K_(strategy), K_(reserved));
 
 };
 

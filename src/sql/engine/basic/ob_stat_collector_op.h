@@ -55,6 +55,14 @@ public:
  * Type is designed for future expansion
  * */
   ObStatCollectorType type_;
+/*
+ * For FTS DDL sampling, inverted index (word, doc_id) needs a different sort key set.
+ * When these arrays are non-empty, sampler will maintain a second sorter and
+ * generate inverted ranges based on them.
+* */
+  ExprFixedArray sort_exprs_inverted_;
+  ObSortCollations sort_collations_inverted_;
+  ObSortFuncs sort_cmp_funs_inverted_;
 };
 
 class ObStatCollectorOp : public ObOperator

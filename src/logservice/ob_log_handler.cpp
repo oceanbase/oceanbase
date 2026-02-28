@@ -67,7 +67,7 @@ ObLogHandler::ObLogHandler() : self_(),
                                apply_service_(NULL),
                                replay_service_(NULL),
                                rc_service_(NULL),
-                               deps_lock_(),
+                               deps_lock_(common::ObLatchIds::OB_LOG_HANDLER_DEPS_LOCK),
                                lc_cb_(NULL),
                                rpc_proxy_(NULL),
                                append_cost_stat_("[PALF STAT APPEND COST TIME]", 1 * 1000 * 1000),
@@ -77,6 +77,7 @@ ObLogHandler::ObLogHandler() : self_(),
 #endif
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
                                libpalf_proposer_config_mgr_(),
+                               shared_log_submit_log_rate_limiter_(NULL),
 #endif
                                get_max_decided_scn_debug_time_(OB_INVALID_TIMESTAMP),
                                max_decided_scn_snapshot_()
@@ -95,6 +96,9 @@ int ObLogHandler::init(const int64_t id,
                        ObRoleChangeService *rc_service,
                        ipalf::IPalfEnv *palf_env,
                        PalfLocationCacheCb *lc_cb,
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+                       ObLogLSSubmitLogRateLimiter *shared_log_submit_log_rate_limiter,
+#endif // OB_BUILD_SHARED_LOG_SERVICE
                        obrpc::ObLogServiceRpcProxy *rpc_proxy,
                        common::ObILogAllocator *alloc_mgr)
 {
@@ -111,6 +115,12 @@ int ObLogHandler::init(const int64_t id,
              OB_ISNULL(alloc_mgr)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid arguments", K(id), KP(palf_env), KP(lc_cb), KP(rpc_proxy), KP(alloc_mgr));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (GCONF.enable_logservice && OB_ISNULL(shared_log_submit_log_rate_limiter)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "shared_log_submit_log_rate_limiter is null", K(ret), K(id));
+  } else if (GCONF.enable_logservice && FALSE_IT(shared_log_submit_log_rate_limiter_ = shared_log_submit_log_rate_limiter)) { // do nothing
+#endif // OB_BUILD_SHARED_LOG_SERVICE
   } else if (OB_FAIL(apply_service->get_apply_status(ls_id, guard))) {
     CLOG_LOG(WARN, "guard get apply status failed", K(ret), K(id));
   } else if (NULL == (apply_status_ = guard.get_apply_status())) {
@@ -125,7 +135,7 @@ int ObLogHandler::init(const int64_t id,
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   } else if (GCONF.enable_logservice && OB_FAIL(libpalf_proposer_config_mgr_.init(MTL_ID(), id, palf_handle_))) {
     CLOG_LOG(WARN, "failed to init libpalf_proposer_config_mgr_", K(id));
-#endif
+#endif // OB_BUILD_SHARED_LOG_SERVICE
   } else {
     get_max_decided_scn_debug_time_ = OB_INVALID_TIMESTAMP;
     apply_service_ = apply_service;
@@ -166,6 +176,9 @@ bool ObLogHandler::is_valid() const
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
          compressor_wrapper_.is_valid() &&
 #endif
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+         !(GCONF.enable_logservice && NULL == shared_log_submit_log_rate_limiter_) &&
+#endif // OB_BUILD_SHARED_LOG_SERVICE
          NULL != rpc_proxy_;
 }
 
@@ -178,6 +191,11 @@ int ObLogHandler::stop()
   if (IS_INIT) {
     is_in_stop_state_ = true;
     common::TCWLockGuard deps_guard(deps_lock_);
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    if (OB_NOT_NULL(shared_log_submit_log_rate_limiter_)) {
+      shared_log_submit_log_rate_limiter_ = nullptr;
+    }
+#endif // OB_BUILD_SHARED_LOG_SERVICE
     //unregister_file_size_cb不能在apply status锁内, 可能会导致死锁
     apply_status_->unregister_file_size_cb();
     tg.click("unreg cb end");
@@ -240,6 +258,9 @@ void ObLogHandler::destroy()
   replay_service_ = NULL;
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   libpalf_proposer_config_mgr_.destroy();
+  if (OB_NOT_NULL(shared_log_submit_log_rate_limiter_)) {
+    shared_log_submit_log_rate_limiter_ = NULL;
+  }
 #endif
   if (OB_NOT_NULL(palf_env_) && OB_NOT_NULL(palf_handle_) && true == palf_handle_->is_valid()) {
     palf_env_->close(palf_handle_);
@@ -1798,6 +1819,14 @@ int ObLogHandler::append_(const void *buffer,
         ret = OB_NOT_RUNNING;
       } else if (LEADER != ATOMIC_LOAD(&role_)) {
         ret = OB_NOT_MASTER;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+      } else if (enable_logservice_ && OB_FAIL(shared_log_submit_log_rate_limiter_->try_acquire(nbytes, ref_scn.get_val_for_logservice() / 1000, nbytes))) {
+        if (OB_EAGAIN == ret && REACH_TIME_INTERVAL(1*1000*1000)) {
+          CLOG_LOG(WARN, "[RTO.REPLAY] try_acquire failed, rate limit exceeded", KR(ret), KPC(this), K(ref_scn));
+        } else if (OB_EAGAIN != ret) {
+          CLOG_LOG(WARN, "try_acquire failed", KR(ret), KPC(this), K(ref_scn));
+        }
+#endif // OB_BUILD_SHARED_LOG_SERVICE
       } else if (OB_FAIL(palf_handle_->append(opts, final_buf, final_nbytes, ref_scn, lsn, scn))) {
         if (REACH_TIME_INTERVAL(1*1000*1000)) {
           CLOG_LOG(WARN, "palf_handle_ append failed", K(ret), KPC(this));
@@ -2037,6 +2066,7 @@ int ObLogHandler::get_max_decided_scn(SCN &scn)
   } else {
     scn = std::max(max_replayed_scn, max_applied_scn) > SCN::min_scn() ?
              std::max(max_replayed_scn, max_applied_scn) : SCN::min_scn();
+    max_decided_scn_snapshot_.atomic_set(scn);
     CLOG_LOG(TRACE, "get_max_decided_scn", K(ret), K(id), K(max_replayed_scn), K(max_applied_scn), K(scn));
   }
   return ret;
@@ -2375,7 +2405,7 @@ void ObLogHandler::refresh_proposer_member_info() const
   } else if (OB_UNLIKELY(is_in_stop_state_)) {
     CLOG_LOG(TRACE, "ObLogHandler is not running", K_(id));
   } else {
-    libpalf_proposer_config_mgr_.try_refresh_member_info();
+    libpalf_proposer_config_mgr_.try_refresh_member_info(libpalf::RefreshType::PERIODIC_REFRESH);
   }
 }
 
@@ -2399,7 +2429,55 @@ int ObLogHandler::set_allow_election_without_memlist(const bool allow_election_w
   }
   return ret;
 }
-#endif
+
+int ObLogHandler::report_replica_replay_process(const common::ObAddr &replica, const share::ObLSID &ls_id, const LSReplicaReplayReachingMachine &replay_reaching_machine)
+{
+  int ret = OB_SUCCESS;
+  bool leader_view_follower_is_in_sync = false;
+  share::SCN leader_end_scn;
+  share::SCN added_scn;
+  common::ObRole role = common::FOLLOWER;
+  int64_t proposal_id = palf::INVALID_PROPOSAL_ID;
+  bool is_pending_state = false;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogHandler is not init", KR(ret), K_(id));
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(WARN, "ObLogHandler is not running", KR(ret), K_(id));
+  } else if (!enable_logservice_) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "logservice is not enable, unexpected error", KR(ret), K_(id), K_(enable_logservice));
+  } else if (!replay_reaching_machine.max_replayed_scn_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "max_replayed_scn is invalid", KR(ret), K(replay_reaching_machine));
+  } else if (OB_FAIL(palf_handle_->get_role(role, proposal_id, is_pending_state))) {
+    CLOG_LOG(WARN, "get_role failed", KR(ret), K_(id));
+  } else if (common::LEADER != role || is_pending_state) {
+    ret = OB_NOT_MASTER;
+    CLOG_LOG(WARN, "not leader or in pending state", KR(ret), K_(id), K(role), K(is_pending_state));
+  } else if (replay_reaching_machine.proposal_id_ != proposal_id) {
+    ret = OB_STATE_NOT_MATCH;
+    CLOG_LOG(WARN, "proposal_id not match", KR(ret), K_(id), K(proposal_id),
+        "req_proposal_id", replay_reaching_machine.proposal_id_);
+  } else if (OB_FAIL(palf_handle_->get_end_scn(leader_end_scn))) {
+    CLOG_LOG(WARN, "failed to get leader end scn", KR(ret), K_(id));
+  } else if (!leader_end_scn.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "leader end scn is invalid", KR(ret), K_(id));
+  } else if (!(added_scn = share::SCN::plus(replay_reaching_machine.max_replayed_scn_, palf::PALF_LOG_SYNC_DELAY_THRESHOLD_US * 1000)).is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "added scn is invalid", KR(ret), K(replay_reaching_machine));
+  } else if (FALSE_IT(leader_view_follower_is_in_sync = (added_scn >= leader_end_scn))) { // do nothing
+  } else if (OB_FAIL(shared_log_submit_log_rate_limiter_->update_replica_replay_process(replica, replay_reaching_machine, leader_view_follower_is_in_sync))) {
+    CLOG_LOG(WARN, "failed to report replica replay process", KR(ret), K(replica), K(ls_id), K(replay_reaching_machine));
+  } else {
+    CLOG_LOG(INFO, "report replica replay process successfully", KR(ret), K(replica), K(ls_id), K(replay_reaching_machine));
+  }
+  return ret;
+}
+#endif // OB_BUILD_SHARED_LOG_SERVICE
 
 int ObLogHandler::advance_base_lsn_impl_(const LSN &lsn)
 {

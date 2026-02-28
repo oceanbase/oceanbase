@@ -29,6 +29,7 @@ class ObIPluginDescriptor;
 class ObIFTParserDesc;
 class ObPluginEntryHandle;
 class ObPluginParam;
+class ObPluginKmsIntf;
 class ObIExternalDescriptor;
 
 /**
@@ -39,6 +40,9 @@ class ObPluginHelper final
 public:
   static int find_ftparser(const common::ObString &parser_name, storage::ObFTParser &ftparser);
   static int find_ftparser(const common::ObString &parser_name, ObIFTParserDesc *&ftparser, ObPluginParam *&param);
+
+  static const common::ObString KMS_NAME_PREFIX;
+  static int find_kms(const common::ObString &name, ObPluginKmsIntf *&kms, ObPluginParam *&param);
 
   static int find_external_table(const common::ObString &name, ObIExternalDescriptor *&external_desc);
 
@@ -96,8 +100,9 @@ private:
   static int find_ftparser_entry(const ObString &parser_name, ObPluginEntryHandle *&entry_handle);
   static int find_plugin_entry(const ObString &name,
                                ObPluginType type,
-                               int64_t interface_current_version,
+                               ObPluginVersion current_version,
                                ObPluginEntryHandle *&entry_handle);
+
 };
 
 } // namespace plugin

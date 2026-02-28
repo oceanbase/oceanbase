@@ -46,6 +46,7 @@ int validate_uri_type(const common::ObString &uri);
 int get_storage_type_from_name(const char *type_str, ObStorageType &type);
 const char *get_storage_type_str(const ObStorageType &type);
 bool is_io_error(const int result);
+bool is_storage_type_match(const common::ObString &uri, const ObStorageType &type);
 bool is_object_storage_type(const ObStorageType &type);
 bool is_adaptive_append_mode(const ObObjectStorageInfo &storage_info);
 
@@ -170,7 +171,58 @@ private:
   ObStorageUtil &util_;
 };
 
-class ObStorageUtil
+template <typename T>
+class ObStorageRefHolder final
+{
+public:
+  explicit ObStorageRefHolder(): ptr_(nullptr) {}
+  explicit ObStorageRefHolder(T *ptr): ptr_(nullptr) { hold(ptr); }
+  ~ObStorageRefHolder() { reset(); }
+  T *get_ptr() const { return ptr_; }
+
+  void hold(T *ptr)
+  {
+    if (nullptr != ptr && ptr != ptr_) {
+      ptr->inc_ref();
+      reset(); // reset previous ptr, must after ptr->inc_ref()
+      ptr_ = ptr;
+    }
+  }
+
+  void reset()
+  {
+    if (nullptr != ptr_) {
+      ptr_->dec_ref();
+      ptr_ = nullptr;
+    }
+  }
+  TO_STRING_KV(KP_(ptr));
+private:
+  T *ptr_;
+};
+
+class ObStorageAccesser
+{
+public:
+  ObStorageAccesser();
+  virtual ~ObStorageAccesser();
+  int init(const ObIOFd &fd, ObObjectDevice *device);
+  // inc_ref when ObObjectDevice::open and ObIORequest::init
+  void inc_ref();
+  // dec_ref when ObObjectDevice::close and ObIORequest::destroy
+  void dec_ref();
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(ref_cnt), K_(device_holder), K_(fd));
+
+protected:
+  bool is_inited_;
+  int64_t ref_cnt_;
+  // in order to ensure ObObjectDevice's lifecycle is longer than ObStorageAccesser
+  ObStorageRefHolder<ObObjectDevice> device_holder_;
+  // in order to release fd when ref_cnt_ == 0
+  ObIOFd fd_;
+};
+
+class ObStorageUtil : public ObStorageAccesser
 {
 public:
   // should not use retry during physical backup
@@ -324,53 +376,6 @@ private:
   ObStorageType device_type_;
   ObStorageHandleType handle_type_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageUtil);
-};
-
-template <typename T>
-class ObStorageRefHolder final
-{
-public:
-  explicit ObStorageRefHolder(): ptr_(nullptr) {}
-  explicit ObStorageRefHolder(T *ptr): ptr_(nullptr) { hold(ptr); }
-  ~ObStorageRefHolder() { reset(); }
-  T *get_ptr() { return ptr_; }
-  void hold(T *ptr) {
-    if (nullptr != ptr && ptr != ptr_) {
-      ptr->inc_ref();
-      reset(); // reset previous ptr, must after ptr->inc_ref()
-      ptr_ = ptr;
-    }
-  }
-  void reset() {
-    if (nullptr != ptr_) {
-      ptr_->dec_ref();
-      ptr_ = nullptr;
-    }
-  }
-  TO_STRING_KV(KP_(ptr));
-private:
-  T *ptr_;
-};
-
-class ObStorageAccesser
-{
-public:
-  ObStorageAccesser();
-  virtual ~ObStorageAccesser();
-  int init(const ObIOFd &fd, ObObjectDevice *device);
-  // inc_ref when ObObjectDevice::open and ObIORequest::init
-  void inc_ref();
-  // dec_ref when ObObjectDevice::close and ObIORequest::destroy
-  void dec_ref();
-  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(ref_cnt), K_(device_holder), K_(fd));
-
-protected:
-  bool is_inited_;
-  int64_t ref_cnt_;
-  // in order to ensure ObObjectDevice's lifecycle is longer than ObStorageAccesser
-  ObStorageRefHolder<ObObjectDevice> device_holder_;
-  // in order to release fd when ref_cnt_ == 0
-  ObIOFd fd_;
 };
 
 class ObStorageReader : public ObStorageAccesser
@@ -629,6 +634,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageDirectMultiPartWriter);
 };
 
+
 // Manages parallel multipart uploads with data aggregation to meet part size requirements.
 // This class facilitates efficient object storage uploads by aggregating data into chunks that
 // satisfy the minimum size constraint for multipart uploads. Each aggregated part is assigned an
@@ -653,7 +659,6 @@ public:
     bool is_valid() const { return data_ != nullptr && size_ > 0; }
     char *data_;
     int64_t size_;
-
     TO_STRING_KV(KP_(data), K_(size));
   };
 

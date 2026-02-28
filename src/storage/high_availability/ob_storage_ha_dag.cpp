@@ -25,7 +25,7 @@ namespace storage
 
 /******************ObStorageHAResultMgr*********************/
 ObStorageHAResultMgr::ObStorageHAResultMgr()
-  : lock_(),
+  : lock_(common::ObLatchIds::OB_STORAGE_H_A_RESULT_MGR_LOCK),
     result_(OB_SUCCESS),
     retry_count_(0),
     allow_retry_(true),
@@ -514,7 +514,7 @@ int ObStorageHADagUtils::get_migration_src_info(
 {
   int ret = OB_SUCCESS;
   ObStorageHAChooseSrcHelper choose_src_helper;
-  ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::ChooseSourcePolicy::IDC;
+  ObMigrationChooseSourcePolicy policy(ObMigrationChooseSourcePolicy::IDC);
   ObStorageHAGetMemberHelper member_helper;
   bool enable_choose_source_policy = true;
   SMART_VAR(ObMigrationChooseSrcHelperInitParam, param) {
@@ -677,10 +677,66 @@ int ObStorageHADagUtils::inc_config_version_with_log_service(
 }
 #endif
 
+int ObStorageHADagUtils::deal_with_non_migrated_tablet(
+  const ObLSHandle &ls_handle,
+  const ObLogicTabletID &logic_tablet_id,
+  ObHATabletGroupCtx *tablet_group_ctx,
+  ObMigrationCtx *ctx,
+  ObTabletHandle &tablet_handle,
+  bool &need_migrate)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_svr = nullptr;
+  ObLS *ls = nullptr;
+  tablet_handle.reset();
+  ObTablet *tablet = nullptr;
+  need_migrate = true;
+
+  if (!ls_handle.is_valid() || !logic_tablet_id.is_valid()
+        || OB_ISNULL(tablet_group_ctx) || OB_ISNULL(ctx) || !ctx->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("deal with non migrated tablet get invalid argument", K(ret), K(ls_handle), K(logic_tablet_id), KP(tablet_group_ctx), KPC(ctx));
+  } else if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", KR(ret), K(ls_handle));
+  } else if (OB_FAIL(ls->ha_get_tablet(logic_tablet_id.tablet_id_, tablet_handle))) {
+    if (OB_TABLET_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      need_migrate = false;
+    } else {
+      LOG_WARN("failed to get tablet", K(ret), K(logic_tablet_id));
+    }
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle), K(logic_tablet_id));
+  } else if (logic_tablet_id.transfer_seq_ > tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("local tablet transfer seq is smaller than remote tablet transfer seq, unexpected",
+        K(ret), K(logic_tablet_id), KPC(tablet));
+  } else if (logic_tablet_id.transfer_seq_ < tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
+    need_migrate = false;
+    LOG_INFO("local tablet transfer seq is bigger than remote tablet, no need copy", K(logic_tablet_id), KPC(tablet));
+  }
+
+  if (OB_SUCC(ret) && !need_migrate) {
+    if (ls->is_cs_replica()
+          && OB_FAIL(ObHATabletGroupCOConvertCtx::update_deleted_data_tablet_status(tablet_group_ctx, logic_tablet_id.tablet_id_))) {
+      LOG_WARN("failed to update deleted tablet status", K(ret));
+    } else if (OB_FAIL(ctx->tablet_dep_mgr_.remove_tablet_dependency(logic_tablet_id.tablet_id_))) {
+      LOG_WARN("failed to remove tablet dependency", K(ret), K(logic_tablet_id));
+    }
+  }
+
+  return ret;
+}
+
 /******************ObHATabletGroupCtx*********************/
 ObHATabletGroupCtx::ObHATabletGroupCtx(const TabletGroupCtxType type)
   : is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::OB_STORAGE_HA_DAG_TABLET_GROUP_CTX_LOCK),
     tablet_id_array_(),
     index_(0),
     type_(type)
@@ -772,7 +828,7 @@ void ObHATabletGroupCtx::inner_reuse()
 /******************ObHATabletGroupCtx*********************/
 ObHATabletGroupMgr::ObHATabletGroupMgr()
   : is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::OB_STORAGE_HA_DAG_TABLET_GROUP_ARRAY_LOCK),
     allocator_("HATGMgr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     tablet_group_ctx_array_(),
     index_(0)
@@ -1137,25 +1193,39 @@ int ObStorageHATaskUtils::check_inc_major_ddl_sstable_need_copy_(
     const ObTransID &trans_id = param.uncommit_tx_info_.tx_infos_[0].tx_id_;
     const ObTxSEQ &seq_no = ObTxSEQ::cast_from_int(param.uncommit_tx_info_.tx_infos_[0].sql_seq_);
     ObTableStoreIterator inc_major_iter;
+    ObTableStoreIterator inc_major_ddl_iter;
     // inc_major_ddl_sstables / inc_major_sstables may contain multiple times of direct-load, which is identified by (trans_id, seq_no)
     // for each direct-load, the relationship between inc_major_ddl_sstables and inc_major_sstable is similar to that of ddl_sstables and major_sstable
     // therefore, once we found a direct-load's inc_major_sstable, all its inc_major_ddl_sstables can be skipped
     if (OB_FAIL(table_store_wrapper.get_member()->get_inc_major_sstables(inc_major_iter, trans_id, seq_no))) {
       LOG_WARN("failed to get inc major sstables", KR(ret), K(trans_id), K(seq_no));
+    } else if (OB_FAIL(table_store_wrapper.get_member()->get_inc_major_ddl_sstables(inc_major_ddl_iter, trans_id, seq_no))) {
+      LOG_WARN("failed to get inc major ddl sstables", KR(ret), K(trans_id), K(seq_no));
     } else if (inc_major_iter.count() > 0) {
       need_copy = false;
-    } else if (ddl_sstable_array.empty()) {
+    } else if (0 == inc_major_ddl_iter.count()) {
       need_copy = true;
     } else if (OB_FAIL(ddl_sstable_array.get_table(param.table_key_, sstable_wrapper))) {
       LOG_WARN("failed to get table", K(ret), K(param), K(ddl_sstable_array));
     } else if (nullptr == sstable_wrapper.get_sstable()) {
-      const SCN start_scn = ddl_sstable_array.get_boundary_table(false)->get_start_scn();
-      const SCN end_scn = ddl_sstable_array.get_boundary_table(true)->get_end_scn();
-      if (param.table_key_.scn_range_.start_scn_ >= start_scn
-          && param.table_key_.scn_range_.end_scn_ <= end_scn) {
-        need_copy = false;
+      ObITable *trans_first_inc_major_ddl_sstable = nullptr;
+      ObITable *trans_last_inc_major_ddl_sstable = nullptr;
+      if (OB_FAIL(inc_major_ddl_iter.get_boundary_table(false/*is_last*/, trans_first_inc_major_ddl_sstable))) {
+        LOG_WARN("failed to get boundary table", KR(ret));
+      } else if (OB_FAIL(inc_major_ddl_iter.get_boundary_table(true/*is_last*/, trans_last_inc_major_ddl_sstable))) {
+        LOG_WARN("failed to get boundary table", KR(ret));
+      } else if (OB_ISNULL(trans_first_inc_major_ddl_sstable) || OB_ISNULL(trans_last_inc_major_ddl_sstable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null inc major ddl sstable", KR(ret), KP(trans_first_inc_major_ddl_sstable), KP(trans_last_inc_major_ddl_sstable));
       } else {
-        need_copy = true;
+        const SCN start_scn = trans_first_inc_major_ddl_sstable->get_start_scn();
+        const SCN end_scn = trans_last_inc_major_ddl_sstable->get_end_scn();
+        if (param.table_key_.scn_range_.start_scn_ >= start_scn
+            && param.table_key_.scn_range_.end_scn_ <= end_scn) {
+          need_copy = false;
+        } else {
+          need_copy = true;
+        }
       }
     } else if (OB_FAIL(sstable_wrapper.get_sstable()->get_meta(sst_meta_hdl))) {
       LOG_WARN("failed to get sstable meta handle", K(ret));

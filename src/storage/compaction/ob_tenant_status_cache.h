@@ -17,13 +17,16 @@ namespace compaction
 
 struct ObTenantStatusCache final
 {
+public:
   ObTenantStatusCache()
     : is_inited_(false),
       during_restore_(false),
       is_remote_tenant_(false),
       enable_adaptive_compaction_(false),
       enable_adaptive_merge_schedule_(false),
-      min_data_version_(0)
+      enable_window_compaction_(false),
+      min_data_version_(0),
+      window_schema_version_(OB_INVALID_VERSION)
   {}
   ~ObTenantStatusCache() {}
   void reset()
@@ -33,27 +36,34 @@ struct ObTenantStatusCache final
     is_remote_tenant_ = false;
     enable_adaptive_compaction_ = false;
     enable_adaptive_merge_schedule_ = false;
+    enable_window_compaction_ = false;
     min_data_version_ = 0;
+    window_schema_version_ = OB_INVALID_VERSION;
   }
   int during_restore(bool &during_restore) const;
   bool is_inited() const { return is_inited_; }
+  bool is_skip_window_compaction_tenant() const;
   bool is_skip_merge_tenant() const;
   bool enable_adaptive_compaction() const { return enable_adaptive_compaction_; }
   bool enable_adaptive_compaction_with_cpu_load() const;
   bool enable_adaptive_merge_schedule() const { return enable_adaptive_merge_schedule_; }
+  bool enable_window_compaction() const { return enable_window_compaction_; }
   int get_min_data_version(uint64_t &min_data_version);
+  int get_window_schema_version(int64_t &window_schema_version);
 
   int init_or_refresh();
   int refresh_tenant_config(
     const bool enable_adaptive_compaction,
-    const bool enable_adaptive_merge_schedule);
+    const bool enable_adaptive_merge_schedule,
+    const bool enable_window_compaction);
 
   TO_STRING_KV(K_(is_inited), K_(during_restore), K_(is_remote_tenant),
-    K_(enable_adaptive_compaction), K_(enable_adaptive_merge_schedule), K_(min_data_version));
+    K_(enable_adaptive_compaction), K_(enable_adaptive_merge_schedule), K_(enable_window_compaction), K_(min_data_version), K_(window_schema_version));
 //private:
 public:
   int inner_refresh_restore_status();
   int inner_refresh_remote_tenant();
+  int inner_refresh_window_schema_version();
   int refresh_data_version();
   static const int64_t REFRESH_TENANT_STATUS_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
@@ -63,7 +73,9 @@ public:
   // tenant config is valid even tenant_status is not inited
   bool enable_adaptive_compaction_;
   bool enable_adaptive_merge_schedule_;
+  bool enable_window_compaction_;
   int64_t min_data_version_;
+  int64_t window_schema_version_; // only used for window loop thread to get valid schema version for sys table
 };
 
 } // namespace compaction

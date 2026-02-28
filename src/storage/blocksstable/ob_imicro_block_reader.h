@@ -24,6 +24,7 @@
 #include "ob_micro_block_header.h"
 #include "sql/engine/expr/ob_expr_add.h"
 #include "storage/column_store/ob_column_store_util.h"
+#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {
@@ -135,16 +136,12 @@ public:
   ObMicroBlockData()
     : buf_(NULL), size_(0),
       extra_buf_(0), extra_size_(0),
+      micro_header_(nullptr),
       type_(DATA_BLOCK) {}
-
-  ObMicroBlockData(const char *buf,
-                   const int64_t size,
-                   const char *extra_buf = nullptr,
-                   const int64_t extra_size = 0,
-                   const Type block_type = DATA_BLOCK)
-      : buf_(buf), size_(size),
-        extra_buf_(extra_buf), extra_size_(extra_size),
-        type_(block_type) {}
+  int init_with_prepare_micro_header(
+    const char *buf,
+    const int64_t size);
+  int prepare_micro_header();
   bool is_valid() const { return NULL != buf_ && size_ > 0 && type_ < MAX_TYPE; }
   const char *&get_buf() { return buf_; }
   const char *get_buf() const { return buf_; }
@@ -164,29 +161,23 @@ public:
   void reset() { *this = ObMicroBlockData(); }
   OB_INLINE const ObMicroBlockHeader *get_micro_header() const
   {
-    const ObMicroBlockHeader *micro_header = reinterpret_cast<const ObMicroBlockHeader *>(buf_);
-    const bool is_valid_micro_header =
-        size_ >= ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET  && micro_header->is_valid();
-    return is_valid_micro_header ? micro_header : nullptr;
+    return nullptr != micro_header_ && micro_header_->is_valid() ? micro_header_ : nullptr;
   }
   OB_INLINE ObRowStoreType get_store_type() const
   {
-    const ObMicroBlockHeader *micro_header = reinterpret_cast<const ObMicroBlockHeader *>(buf_);
-    const bool is_valid_micro_header =
-        size_ >= ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET && micro_header->is_valid();
-    return is_valid_micro_header
-      ? static_cast<ObRowStoreType>(micro_header->row_store_type_)
-      : MAX_ROW_STORE;
+    return nullptr != micro_header_ && micro_header_->is_valid() ?
+           static_cast<ObRowStoreType>(micro_header_->row_store_type_)
+           : MAX_ROW_STORE;
   }
 
-  TO_STRING_KV(KP_(buf), K_(size), KP_(extra_buf), K_(extra_size), K_(type));
+  TO_STRING_KV(KP_(buf), K_(size), KP_(extra_buf), K_(extra_size), K_(type), KP_(micro_header));
 
   const char *buf_;
   int64_t size_;
   const char *extra_buf_;
   int64_t extra_size_;
+  const ObMicroBlockHeader *micro_header_; // simple_cast from buf_, column_checksums_ is nullptr
   Type type_;
-
   static const uint64_t ALIGN_SIZE = 8;
   static const int64_t ALIGN_REDUNDANCY_SIZE = ALIGN_SIZE - 1;
 };
@@ -223,7 +214,8 @@ public:
       row_count_(-1),
       original_data_length_(0),
       read_info_(nullptr),
-	  datum_utils_(nullptr)
+      datum_utils_(nullptr),
+      micro_header_(nullptr)
   {}
   virtual ~ObIMicroBlockReaderInfo() { reset(); }
   OB_INLINE int64_t row_count() const { return row_count_; }
@@ -234,6 +226,7 @@ public:
     original_data_length_ = 0;
     read_info_ = nullptr;
     datum_utils_ = nullptr;
+    micro_header_ = nullptr;
     is_inited_ = false;
   }
 
@@ -242,6 +235,7 @@ public:
   int64_t original_data_length_;
   const ObITableReadInfo *read_info_;
   const ObStorageDatumUtils *datum_utils_;
+  const ObMicroBlockHeader *micro_header_;
 };
 
 class ObIMicroBlockGetReader : public ObIMicroBlockReaderInfo
@@ -287,11 +281,11 @@ protected:
   OB_INLINE static int init_hash_index(
       const ObMicroBlockData &block_data,
       ObMicroBlockHashIndex &hash_index,
-      const ObMicroBlockHeader *header)
+      const ObMicroBlockHeader &header)
   {
     int ret = OB_SUCCESS;
     hash_index.reset();
-    if (header->is_contain_hash_index() && OB_FAIL(hash_index.init(block_data))) {
+    if (header.is_contain_hash_index() && OB_FAIL(hash_index.init(block_data))) {
       STORAGE_LOG(WARN, "failed to init micro block hash index", K(ret), K(block_data));
     }
     return ret;
@@ -322,16 +316,19 @@ public:
   //when the incoming datum_utils is nullptr, it indicates not calling locate_range or find_bound
   virtual int init(const ObMicroBlockData &block_data, const ObStorageDatumUtils *datum_utils) {return OB_NOT_SUPPORTED; }
   virtual int get_row(const int64_t index, ObDatumRow &row) = 0;
-  virtual int get_row_header(
-      const int64_t row_idx,
-      const ObRowHeader *&row_header) { return OB_NOT_SUPPORTED; }
   virtual int get_row_count(int64_t &row_count) { return OB_NOT_SUPPORTED; }
-  virtual int get_multi_version_info(
-      const int64_t row_idx,
-      const int64_t schema_rowkey_cnt,
-      const ObRowHeader *&row_header,
-      int64_t &trans_version,
-      int64_t &sql_sequence) { return OB_NOT_SUPPORTED; }
+  virtual int get_multi_version_info(const int64_t row_idx, MultiVersionInfo &multi_version_info)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int get_multi_version_info(const int64_t row_idx,
+                                     const int64_t schema_rowkey_cnt,
+                                     MultiVersionInfo& multi_version_info,
+                                     int64_t &trans_version,
+                                     int64_t &sql_sequence)
+  {
+    return OB_NOT_SUPPORTED;
+  }
   int locate_range(
       const ObDatumRange &range,
       const bool is_left_border,
@@ -513,6 +510,9 @@ public:
   {
     return is_padding_mode && obj_meta.is_fixed_len_char_type();
   }
+  int get_logical_row_cnt(const int64_t last, int64_t &row_idx,
+                          int64_t &row_cnt);
+  virtual const ObMicroBlockHeader* get_micro_header() const = 0;
 
   virtual int get_rows(const common::ObIArray<int32_t> &cols_projector,
                        const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
@@ -566,6 +566,22 @@ public:
                                               sql::ObPushdownFilterExecutor &filter,
                                               const sql::PushdownFilterInfo &pd_filter_info,
                                               common::ObBitmap &result_bitmap)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+
+  virtual int filter_pushdown_ttl_filter(const sql::ObPushdownFilterExecutor *parent,
+                                         sql::ObPushdownFilterExecutor &filter,
+                                         const sql::PushdownFilterInfo &pd_filter_info,
+                                         common::ObBitmap &result_bitmap)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+
+  virtual int filter_pushdown_base_version_filter(const sql::ObPushdownFilterExecutor *parent,
+                                                  sql::ObPushdownFilterExecutor &filter,
+                                                  const sql::PushdownFilterInfo &pd_filter_info,
+                                                  common::ObBitmap &result_bitmap)
   {
     return OB_NOT_SUPPORTED;
   }

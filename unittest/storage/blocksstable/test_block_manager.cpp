@@ -338,16 +338,18 @@ TEST_F(TestBlockManager, test_resize_file_1)
   int used_space = OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
 
   double percentage = used_space * 1.0 / (used_space + free_space) + 1;
-  int ret = OB_STORAGE_OBJECT_MGR.resize_local_device(0, percentage, 0);
+  int ret = OB_STORAGE_OBJECT_MGR.resize_local_device(used_space, 0, percentage, 0);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   int64_t free_blk_cnt_1 = OB_SERVER_BLOCK_MGR.io_device_->get_free_block_count();
-  ret = OB_STORAGE_OBJECT_MGR.resize_local_device(used_space + free_space / 2, 99,  0);
+  int64_t new_used_space = OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
+  ret = OB_STORAGE_OBJECT_MGR.resize_local_device(new_used_space, used_space + free_space / 2, 99,  0);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   int64_t free_blk_cnt_2 = OB_SERVER_BLOCK_MGR.io_device_->get_free_block_count();
   ASSERT_TRUE(free_space > 0 ? free_blk_cnt_1 < free_blk_cnt_2 : free_blk_cnt_1 == free_blk_cnt_2);
 
-  ret = OB_STORAGE_OBJECT_MGR.resize_local_device(used_space, 99, 0);
+  new_used_space = OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
+  ret = OB_STORAGE_OBJECT_MGR.resize_local_device(new_used_space, used_space, 99, 0);
   ASSERT_EQ(common::OB_NOT_SUPPORTED, ret);
   int64_t free_blk_cnt_3 = OB_SERVER_BLOCK_MGR.io_device_->get_free_block_count();
   ASSERT_TRUE(free_blk_cnt_2 == free_blk_cnt_3);
@@ -359,12 +361,13 @@ TEST_F(TestBlockManager, test_resize_file_2)
   statvfs(util_.storage_env_.sstable_dir_, &svfs);
   int64_t free_space = svfs.f_bavail * svfs.f_bsize;
   int used_space = OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
-  int ret = OB_STORAGE_OBJECT_MGR.resize_local_device(used_space + 2 * free_space, 99, 0);
+  int ret = OB_STORAGE_OBJECT_MGR.resize_local_device(used_space, used_space + 2 * free_space, 99, 0);
   ASSERT_EQ(common::OB_SERVER_OUTOF_DISK_SPACE, ret);
 
   int64_t delta_space = free_space - 100 * 1024 * 1024 * 1024L;
   int64_t min_space = 0;
-  ret = OB_STORAGE_OBJECT_MGR.resize_local_device(used_space + std::max(delta_space, min_space), 99, 0);
+  int64_t new_used_space = OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
+  ret = OB_STORAGE_OBJECT_MGR.resize_local_device(new_used_space, used_space + std::max(delta_space, min_space), 99, 0);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 }
 

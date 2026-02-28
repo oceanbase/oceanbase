@@ -14,11 +14,14 @@
 #define OCEANBASE_SQL_OB_LOG_MATERIAL_H_
 
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+  template<typename R, typename C>
+  class PlanVisitor;
   class ObLogMaterial : public ObLogicalOperator
   {
   public:

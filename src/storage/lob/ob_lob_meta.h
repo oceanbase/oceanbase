@@ -44,6 +44,7 @@ public:
 public:
   static int transform_from_info_to_row(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey);
   static int transform_from_row_to_info(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey);
+  static int build_rowkey_from_info(ObLobMetaInfo &info, blocksstable::ObDatumRow *row);
   static int construct(
       ObLobAccessParam &param,
       const ObLobId &lob_id,

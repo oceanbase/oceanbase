@@ -1188,6 +1188,7 @@ int ObBackupTaskSchedulerQueue::get_schedule_tasks(
 ObBackupTaskScheduler::ObBackupTaskScheduler()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
+    scheduler_mtx_(common::ObLatchIds::OB_BACKUP_TASK_SCHEDULER_MUTEX),
     queue_(),
     rpc_proxy_(nullptr),
     sql_proxy_(nullptr),
@@ -1448,7 +1449,7 @@ int ObBackupTaskScheduler::check_alive_(int64_t &last_check_task_on_server_ts, b
       } else if (!server_status.is_active() || !server_status.in_service()) {
         is_exist = false;
         LOG_WARN("server status may not active or in service", K(ret), K(dst));
-      } else if (OB_FAIL(rpc_proxy_->to(dst).check_backup_task_exist(check_task_arg, res))) {
+      } else if (OB_FAIL(rpc_proxy_->to(dst).by(task->get_tenant_id()).check_backup_task_exist(check_task_arg, res))) {
         if (now - task->get_last_check_alive_time() > backup_task_keep_alive_timeout) {
           ROOTSERVICE_EVENT_ADD("backup", "backup_task_keep_alive_timeout",
                                           "job_id", task->get_job_id(),

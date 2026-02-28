@@ -167,6 +167,94 @@ TEST_F(TestSkipMicro, test_reverse_scan1)
   ASSERT_EQ(OB_ITER_END, ret);
 }
 
+TEST_F(TestSkipMicro, test_reverse_scan_with_filtered_micro)
+{
+  int ret = OB_SUCCESS;
+  ObTableHandleV2 handle;
+  const char *micro_data[2];
+
+  // 第0个微块：1行INSERT，port=30000，不匹配skip_range(40000)，会被过滤
+  micro_data[0] =
+    "bigint  bigint  varchar  bigint  bigint  bigint  flag  flag_type  multi_version_row_flag\n"
+    "1004  1  6.12.234.22  30000  -1767480554103992000  -9223372036854775807  INSERT  NORMAL  CL\n";
+
+  // 第1个微块：1行DELETE，port=40000，匹配skip_range，不会被过滤
+  micro_data[1] =
+    "bigint  bigint  varchar  bigint  bigint  bigint  flag  flag_type  multi_version_row_flag\n"
+    "1004  1  6.12.234.22  40000  -1767480554103992000  -9223372036854775807  DELETE  NORMAL  CL\n";
+
+  int schema_rowkey_cnt = 4;
+  int64_t snapshot_version = 1767480436300312000;
+  ObScnRange scn_range;
+  scn_range.start_scn_.convert_for_tx(1767480436300312000);
+  scn_range.end_scn_.convert_for_tx(1767480554103992003);
+  ObMultiVersionSSTableTest::prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 2);
+  prepare_data_end(handle, ObITable::MINI_SSTABLE);
+  ObITable *table = handle.get_table();
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 1767480554232610000;
+  trans_version_range.multi_version_start_ = 0;
+  trans_version_range.base_version_ = 0;
+  prepare_scan_param(trans_version_range);
+
+  scan_row1_.reset();
+  scan_row2_.reset();
+  scan_range_.reset();
+  skip_row1_.reset();
+  skip_row2_.reset();
+  skip_range_.reset();
+
+  ASSERT_EQ(OB_SUCCESS, scan_row1_.init(range_alloc_, schema_rowkey_cnt));
+  ASSERT_EQ(OB_SUCCESS, scan_row2_.init(range_alloc_, schema_rowkey_cnt));
+  scan_row1_.storage_datums_[0].set_int(1004);
+  scan_row2_.storage_datums_[0].set_int(1004);
+  for (int64_t i = 1; i < schema_rowkey_cnt; ++i) {
+    scan_row1_.storage_datums_[i].set_min();
+    scan_row2_.storage_datums_[i].set_max();
+  }
+  scan_range_.start_key_.assign(scan_row1_.storage_datums_, schema_rowkey_cnt);
+  scan_range_.end_key_.assign(scan_row2_.storage_datums_, schema_rowkey_cnt);
+  scan_range_.set_left_open(); scan_range_.set_right_open();
+
+  // skip_range匹配port=40000的行
+  ASSERT_EQ(OB_SUCCESS, skip_row1_.init(range_alloc_, 2));
+  ASSERT_EQ(OB_SUCCESS, skip_row2_.init(range_alloc_, 2));
+  ObString ip_str("6.12.234.22");
+  skip_row1_.storage_datums_[0].set_string(ip_str);
+  skip_row1_.storage_datums_[1].set_int(40000);
+  skip_row2_.storage_datums_[0].set_string(ip_str);
+  skip_row2_.storage_datums_[1].set_int(40000);
+  skip_range_.start_key_.assign(skip_row1_.storage_datums_, 2);
+  skip_range_.end_key_.assign(skip_row2_.storage_datums_, 2);
+  skip_range_.set_left_closed(); skip_range_.set_right_closed();
+
+  iter_param_.set_skip_scan_range(skip_range_);
+  iter_param_.ss_rowkey_prefix_cnt_ = 2;
+
+  ObSSTableRowScanner<> skip_scanner;
+  ASSERT_EQ(OB_SUCCESS, skip_scanner.init(iter_param_, context_, table, &scan_range_));
+  const ObDatumRow *skip_prow = nullptr;
+  int64_t count = 0;
+
+  // 逆序扫描：先扫描第1个微块（DELETE，port=40000，匹配skip_range），应该能读到
+  ret = skip_scanner.inner_get_next_row(skip_prow);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_NE(nullptr, skip_prow);
+  ASSERT_TRUE(skip_prow->row_flag_.is_delete());
+  ASSERT_EQ(40000, skip_prow->storage_datums_[3].get_int()); // port列
+  count++;
+
+  // 继续扫描，应该到末尾（第0个微块被过滤）
+  ret = skip_scanner.inner_get_next_row(skip_prow);
+  ASSERT_EQ(OB_ITER_END, ret);
+
+  // 验证只读到1行DELETE
+  ASSERT_EQ(1, count);
+}
+
 void TestSkipMicro::prepare_scan_param(const ObVersionRange &version_range)
 {
   context_.reset();

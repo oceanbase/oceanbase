@@ -16,6 +16,7 @@
 #include "share/ob_server_struct.h"
 #include "storage/fts/dict/ob_ik_utf8_dic_loader.h"
 #include "storage/fts/ob_fts_literal.h"
+#include "lib/alloc/alloc_struct.h"
 #define USING_LOG_PREFIX STORAGE_FTS
 
 namespace oceanbase
@@ -156,7 +157,7 @@ int ObGenDicLoader::init()
 }
 
 int ObGenDicLoader::get_dic_loader(const uint64_t tenant_id,
-                                   const ObString &parser_name,
+                                   const ObString &parser_name_without_version,
                                    const ObCharsetType charset,
                                    ObTenantDicLoaderHandle &loader_handle)
 {
@@ -167,12 +168,12 @@ int ObGenDicLoader::get_dic_loader(const uint64_t tenant_id,
     ret = OB_NOT_INIT;
     LOG_WARN("gen dic loader is not inited", K(ret));
   } else if (!is_valid_tenant_id(tenant_id)
-             || parser_name.empty()
+             || parser_name_without_version.empty()
              || charset == CHARSET_INVALID) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(parser_name), K(charset));
-  } else if (OB_FAIL(dic_loader_key.init(tenant_id, parser_name, charset))) {
-    LOG_WARN("fail to init dic loader key", K(ret), K(tenant_id), K(parser_name), K(charset));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(parser_name_without_version), K(charset));
+  } else if (OB_FAIL(dic_loader_key.init(tenant_id, parser_name_without_version, charset))) {
+    LOG_WARN("fail to init dic loader key", K(ret), K(tenant_id), K(parser_name_without_version), K(charset));
   } else {
     TCWLockGuard guard(lock_);
     if (OB_FAIL(dic_loader_map_.get_refactored(dic_loader_key, dic_loader))) {
@@ -247,6 +248,7 @@ int ObGenDicLoader::gen_dic_loader(
   }
   if (0 == parser_name.case_compare(ObFTSLiteral::PARSER_NAME_IK)) {
     ObMemAttr attr(OB_SERVER_TENANT_ID, "dic_loader");
+    SET_IGNORE_MEM_VERSION(attr);
     switch (charset)
     {
       case ObCharsetType::CHARSET_UTF8MB4: {
@@ -273,6 +275,28 @@ int ObGenDicLoader::gen_dic_loader(
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "the parser is");
     LOG_WARN("not support the parser", K(ret), K(parser_name));
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_ISNULL(dic_loader)) {
+      OB_DELETE(ObTenantDicLoader, attr, dic_loader);
+      dic_loader = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObGenDicLoader::parser_name_without_version(const ObString &parser_name, ObString &no_version_parser_name)
+{
+  int ret = OB_SUCCESS;
+  ObString tmp_parser_name = parser_name;
+  if (OB_UNLIKELY(parser_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("parser name is empty", K(ret), K(parser_name));
+  } else if (OB_UNLIKELY(nullptr != tmp_parser_name.find('.'))) {
+    no_version_parser_name = tmp_parser_name.split_on('.');
+  } else {
+    no_version_parser_name = parser_name;
   }
   return ret;
 }

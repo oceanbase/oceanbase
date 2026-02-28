@@ -997,6 +997,11 @@ private:
       const common::ObIArray<share::ObResourcePool *> &pools,
       const share::ObUnitResource &old_ur,
       const share::ObUnitResource &new_ur) const;
+
+  int check_disk_resource_for_manual_migrate_(
+      const share::ObUnitInfo &unit_info,
+      const ObAddr &dst,
+      const obrpc::ObGetServerResourceInfoResult &report_dst_server_resource_info);
   // clone tenant resource pool related
   int construct_resource_pool_to_clone_(
       const uint64_t source_tenant_id,

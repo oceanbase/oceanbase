@@ -49,26 +49,21 @@ void ObCopyTabletRecordExtraInfo::reset()
   restore_action_ = ObTabletRestoreAction::ACTION::RESTORE_NONE;
 }
 
-int ObCopyTabletRecordExtraInfo::update_max_reuse_mgr_size(ObMacroBlockReuseMgr *reuse_mgr)
+int ObCopyTabletRecordExtraInfo::update_max_reuse_mgr_size(const ObMacroBlockReuseMgr *reuse_mgr)
 {
   int ret = OB_SUCCESS;
-  int64_t count = 0;
-
   if (OB_ISNULL(reuse_mgr)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("update max reuse mgr size get invalid argument", K(ret), KP(reuse_mgr));
-  } else if (OB_FAIL(reuse_mgr->count(count))) {
-    LOG_WARN("failed to count reuse mgr", K(ret), KP(reuse_mgr));
+    LOG_WARN("invalid argument", K(ret), KP(reuse_mgr));
   } else {
-    max_reuse_mgr_size_ = MAX(count * reuse_mgr->get_item_size(), max_reuse_mgr_size_);
+    max_reuse_mgr_size_ = MAX(max_reuse_mgr_size_, reuse_mgr->get_size());
   }
-
   return ret;
 }
 
 /******************ObPhysicalCopyCtx*********************/
 ObPhysicalCopyCtx::ObPhysicalCopyCtx()
-  : lock_(),
+  : lock_(common::ObLatchIds::OB_PHYSICAL_COPY_CTX_LOCK),
     tenant_id_(OB_INVALID_ID),
     ls_id_(),
     tablet_id_(),
@@ -110,6 +105,7 @@ bool ObPhysicalCopyCtx::is_valid() const
              && OB_NOT_NULL(sstable_index_builder_)
              && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_)
              && table_key_.is_valid()
+             && OB_NOT_NULL(macro_block_reuse_mgr_)
              && total_macro_count_ >= 0
              && reuse_macro_count_ >= 0
              && OB_NOT_NULL(extra_info_);

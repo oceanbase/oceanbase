@@ -85,7 +85,7 @@ void ObDDLIncStartClogCb::try_release()
 
 ObDDLIncRedoClogCb::ObDDLIncRedoClogCb()
   : is_inited_(false), ls_id_(), redo_info_(), macro_block_id_(),
-    data_buffer_lock_(), is_data_buffer_freed_(false),
+    data_buffer_lock_(common::ObLatchIds::OB_DDL_INC_CLOG_CALLBACK_DATA_BUFFER_LOCK), is_data_buffer_freed_(false),
     direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID), with_cs_replica_(false)
 {
 }

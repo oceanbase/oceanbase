@@ -129,6 +129,30 @@ private:
 //  - minor row iter
 //    - minor macro iter
 
+// State machine for rowkey output status in minor merge
+struct ObMinorRowkeyOutputState {
+  enum State: uint8_t {
+    UNCOMMITTED_ROW_OUTPUT = 0, // Uncommitted row (U flag) has been output
+    FIRST_COMMITTED_ROW_OUTPUT,     // First committed row (F flag) has been output, but not last row (L flag)
+    RECYCLING,                // Recycling multi-version rows in the middle
+    LAST_ROW_OUTPUT,          // Last row (L flag) has been output, rowkey completed
+  };
+  ObMinorRowkeyOutputState() : state_(LAST_ROW_OUTPUT) {}
+  void reset() { state_ = LAST_ROW_OUTPUT; }
+  bool have_rowkey_output_row() const { return state_ == UNCOMMITTED_ROW_OUTPUT || state_ == FIRST_COMMITTED_ROW_OUTPUT; }
+  bool is_first_committed_row_output() const { return state_ == FIRST_COMMITTED_ROW_OUTPUT; }
+  bool is_uncommitted_row_output() const { return state_ == UNCOMMITTED_ROW_OUTPUT; }
+  bool is_recycling() const { return state_ == RECYCLING; }
+  bool is_last_row_output() const { return state_ == LAST_ROW_OUTPUT; }
+  void set_uncommitted_row_output() { state_ = UNCOMMITTED_ROW_OUTPUT; }
+  void set_first_committed_row_output() { state_ = FIRST_COMMITTED_ROW_OUTPUT; }
+  void set_recycling() { state_ = RECYCLING; }
+  void set_last_row_output() { state_ = LAST_ROW_OUTPUT; }
+  TO_STRING_KV(K_(state));
+private:
+  State state_;
+};
+
 class ObPartitionMergeIter : public ObMergeIter
 {
 public:
@@ -146,8 +170,9 @@ public:
   virtual int multi_version_compare(const ObPartitionMergeIter &other, int &cmp_ret)
   { UNUSEDx(other, cmp_ret); return OB_NOT_SUPPORTED;}
   virtual OB_INLINE const storage::ObITable *get_table() const override { return table_; }
-  virtual OB_INLINE bool is_rowkey_first_row_already_output() { return is_rowkey_first_row_already_output_; }
-  virtual OB_INLINE bool is_rowkey_shadow_row_already_output() { return is_rowkey_shadow_row_reused_; }
+  virtual OB_INLINE bool is_rowkey_first_row_already_output() {
+    return rowkey_state_.have_rowkey_output_row();
+  }
 
   OB_INLINE bool is_base_iter() const { return is_base_iter_; }
   OB_INLINE bool is_sstable_iter() const { return nullptr != table_ && table_->is_sstable(); }
@@ -220,10 +245,7 @@ protected:
 
   bool iter_end_;
   common::ObIAllocator &allocator_;
-  bool last_macro_block_reused_;
-  bool is_rowkey_first_row_already_output_;
-  bool is_rowkey_shadow_row_reused_;
-  bool is_reserve_mode_;
+  ObMinorRowkeyOutputState rowkey_state_; // only used in minor merge
   bool is_delete_insert_merge_;
   bool is_ha_compeleted_;
   // for macro range cross
@@ -339,7 +361,9 @@ private:
 class ObPartitionMinorRowMergeIter : public ObPartitionMergeIter
 {
 public:
-  ObPartitionMinorRowMergeIter(common::ObIAllocator &allocator);
+  ObPartitionMinorRowMergeIter(
+    common::ObIAllocator &allocator,
+    ObCompactionFilterHandle &filter_handle);
   virtual ~ObPartitionMinorRowMergeIter();
   virtual void reset() override;
   virtual int next() override;
@@ -349,34 +373,24 @@ public:
   virtual bool is_curr_row_commiting() const;
   virtual int collect_tnode_dml_stat(storage::ObTransNodeDMLStat &tnode_stat) const override;
   INHERIT_TO_STRING_KV("ObPartitionMinorRowMergeIter", ObPartitionMergeIter, K_(ghost_row_count),
-                       K_(check_committing_trans_compacted), K_(row_queue));
+                       K_(row_queue));
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
   virtual int common_minor_inner_init(const ObMergeParameter &merge_param);
 
-  virtual int inner_next(const bool open_macro);
+  virtual int fetch_row(const bool open_macro);
+  int fetch_row_with_filter();
   virtual int try_make_committing_trans_compacted();
   virtual int check_meet_another_trans(bool &skip_cur_row);
   virtual int check_compact_finish(bool &finish);
   virtual int compare_multi_version_col(const ObPartitionMergeIter &other,
                                         const int64_t multi_version_col,
                                         int &cmp_ret);
-  bool need_recycle_mv_row()
-  {
-    bool need_recycle = false;
-    const int64_t base_version = access_context_.trans_version_range_.base_version_;
-    const int64_t multi_version_start = access_context_.trans_version_range_.multi_version_start_;
-    if (nullptr != curr_row_ && !curr_row_->is_uncommitted_row() && !curr_row_->is_last_multi_version_row()) {
-      const int64_t commit_version = -curr_row_->storage_datums_[schema_rowkey_column_cnt_].get_int();
-      if (is_delete_insert_merge_ && (!is_ha_compeleted_ || base_version <= 0)) {
-        need_recycle = false;
-      } else if (commit_version <= multi_version_start) {
-        need_recycle = true;
-      }
-    }
-    return need_recycle;
-  }
+  bool need_recycle_mv_row() const;
+#ifdef OB_BUILD_SHARED_STORAGE
+  bool need_recycle_mv_row_for_ss() const;
+#endif
   int skip_ghost_row();
   int compact_old_row();
 private:
@@ -385,23 +399,26 @@ protected:
   common::ObArenaAllocator obj_copy_allocator_;
   storage::ObNopPos *nop_pos_[ObRowQueue::QI_MAX];
   blocksstable::ObRowQueue row_queue_;
-  bool check_committing_trans_compacted_;
   int64_t ghost_row_count_;
   blocksstable::ObDatumRow tmp_compaction_row_;
+  ObCompactionFilterHandle &filter_handle_;
 };
 
 
 class ObPartitionMinorMacroMergeIter : public ObPartitionMinorRowMergeIter
 {
 public:
-  ObPartitionMinorMacroMergeIter(common::ObIAllocator &allocator, bool reuse_uncommit_row = false);
+  ObPartitionMinorMacroMergeIter(
+    common::ObIAllocator &allocator,
+    ObCompactionFilterHandle &filter_handle,
+    bool reuse_uncommit_row = false);
   virtual ~ObPartitionMinorMacroMergeIter();
   virtual void reset() override;
   virtual int next() override;
   virtual int open_curr_range(const bool for_rewrite, const bool for_compare = false) override;
   virtual int get_curr_range(blocksstable::ObDatumRange &range) const override;
   virtual OB_INLINE bool is_macro_merge_iter() const { return true; }
-  virtual bool is_macro_block_opened() const override { return macro_block_opened_; }
+  virtual bool is_macro_block_opened() const override { return curr_block_op_.is_open(); }
   virtual int get_curr_macro_block(
       const blocksstable::ObMacroBlockDesc *&macro_desc) const override
   {
@@ -413,18 +430,15 @@ public:
       const blocksstable::ObMicroBlockData *&micro_block_data) const;
 
   INHERIT_TO_STRING_KV("ObPartitionMinorMacroMergeIter",
-                       ObPartitionMinorRowMergeIter, K_(macro_block_opened),
+                       ObPartitionMinorRowMergeIter, K_(curr_block_op),
                        K_(curr_block_desc), K_(curr_block_meta),
-                       K_(macro_block_iter), K_(last_macro_block_reused),
-                       K_(last_macro_block_recycled),
-                       K_(last_mvcc_row_already_output),
-                       K_(have_macro_output_row), K_(reuse_uncommit_row));
+                       K_(macro_block_iter), K_(reuse_uncommit_row));
 
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
-  virtual int inner_next(const bool open_macro) override;
-  virtual int next_range();
+  virtual int fetch_row(const bool open_macro) override;
+  int next_range(const bool open_macro);
   virtual int open_curr_macro_block();
   void reset_macro_block_desc()
   {
@@ -432,19 +446,15 @@ protected:
     curr_block_meta_.reset();
     curr_block_desc_.macro_meta_ = &curr_block_meta_;
   }
-  int check_need_open_curr_macro_block(bool &need);
-  int check_macro_block_recycle(const ObMacroBlockDesc &macro_desc, bool &can_recycle);
   int recycle_last_rowkey_in_macro_block(ObSSTableRowWholeScanner &iter);
+  int get_block_op(
+    const ObMacroBlockDesc &macro_desc,
+    ObBlockOp &filter_op);
 private:
-  OB_INLINE bool last_macro_block_reused() const { return 1 == last_macro_block_reused_; }
   blocksstable::ObIMacroBlockIterator *macro_block_iter_;
   blocksstable::ObMacroBlockDesc curr_block_desc_;
   blocksstable::ObDataMacroBlockMeta curr_block_meta_;
-  bool macro_block_opened_;
-  int8_t last_macro_block_reused_;
-  bool last_macro_block_recycled_;
-  bool last_mvcc_row_already_output_;
-  bool have_macro_output_row_;
+  ObBlockOp curr_block_op_;
   const bool reuse_uncommit_row_;
 };
 

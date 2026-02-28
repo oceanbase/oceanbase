@@ -24,6 +24,8 @@
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
 #include "share/vector_index/ob_ivf_async_task_executor.h"
+#include "share/vector_index/ob_vector_index_freeze_task.h"
+#include "share/vector_index/ob_vector_index_merge_task.h"
 
 namespace oceanbase
 {
@@ -38,12 +40,14 @@ static const int64_t VECTOR_INDEX_TABLET_ID_COUNT = 100;
 typedef ObSEArray<ObTabletID, VECTOR_INDEX_TABLET_ID_COUNT> ObVectorIndexTabletIDArray;
 typedef ObSEArray<uint64_t, VECTOR_INDEX_TABLET_ID_COUNT> ObVectorIndexTableIDArray;
 
-enum ObVectorTaskScheduleType
+enum ObVectorTaskScheduleType // FARM COMPAT WHITELIST
 {
   ADAPTER_MAINTENANCE = 0,
   FOLLOWER_SYNC = 1,
   HNSW_OPTIMIZE = 2,
   IVF_TASK = 3,
+  HNSW_FREEZE = 4,
+  HNSW_MERGE = 5,
   SCHEDULE_MAX,
 };
 
@@ -52,6 +56,8 @@ static const int schedule_interval[SCHEDULE_MAX] = {
   10 * 1000 * 1000,            // follower_sync_task: 10s
   10 * 1000 * 1000,            // hnsw_optimize_task: 10s
   10 * 1000 * 1000,            // ivf_task: 10s
+  10 * 1000 * 1000,            // hnsw_freeze_task: 10s
+  10 * 1000 * 1000,            // hnsw_merge_task: 10s
 };
 
 class ObVectorIndexSyncLog
@@ -184,7 +190,8 @@ struct ObPluginVectorIndexTaskCtx
       failure_times_(0),
       err_code_(OB_SUCCESS),
       in_queue_(false),
-      task_status_(ObVectorIndexTaskStatus::OB_TTL_TASK_PREPARE)
+      task_status_(ObVectorIndexTaskStatus::OB_TTL_TASK_PREPARE),
+      lock_(common::ObLatchIds::OB_PLUGIN_VECTOR_INDEX_TASK_CTX_LOCK)
   {}
   TO_STRING_KV(K_(index_table_id), K_(index_tablet_id), K_(task_start_time), K_(last_modify_time),
                K_(failure_times), K_(err_code), K_(in_queue), K_(task_status));
@@ -214,6 +221,7 @@ public:
       is_stopped_(false),
       is_logging_(false),
       need_refresh_(true),
+      logging_lock_(common::ObLatchIds::OB_PLUGIN_VECTOR_INDEX_SCHEDULER_LOGGING_LOCK),
       tenant_id_(OB_INVALID_TENANT_ID),
       ttl_tablet_timer_tg_id_(0),
       interval_factor_(1),
@@ -244,23 +252,23 @@ public:
   int check_schema_version();
   void mark_tenant_need_check();
   void mark_tenant_checked();
-  int reload_tenant_task();
-  int check_and_execute_tasks(); // was check_and_handle_event
-  int check_and_execute_adapter_maintenance_task(ObPluginVectorIndexMgr *&mgr);
+  int reload_tenant_task(bool &has_ivf_index);
+  int check_and_execute_tasks(ObIArray<uint64_t> &vec_table_id_array); // was check_and_handle_event
+  int check_and_execute_adapter_maintenance_task(ObPluginVectorIndexMgr *&mgr, ObIArray<uint64_t> &vec_table_id_array);
   int check_and_execute_memdata_sync_task(ObPluginVectorIndexMgr *mgr);
   int sync_all_dirty_task(ObIArray<ObTabletID>& dirty_tasks);
   int generate_batch_tablet_task();
 
   // core interfaces
-  int execute_adapter_maintenance();
+  int execute_adapter_maintenance(ObIArray<uint64_t> &vec_table_id_array);
   int acquire_adapter_in_maintenance(const int64_t table_id,
                                      const ObTableSchema *table_schema,
                                      ObVecIdxSharedTableInfoMap &shared_table_info_map);
   int set_shared_table_info_in_maintenance(const int64_t table_id,
-                                           const ObTableSchema *table_schema,
+                                           const ObSimpleTableSchemaV2 *table_schema,
                                            ObVecIdxSharedTableInfoMap &shared_table_info_map);
   int check_task_state(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx, bool &is_stop);
-  int check_is_vector_index_table(const ObTableSchema &table_schema,
+  int check_is_vector_index_table(const ObSimpleTableSchemaV2 &table_schema,
                                   bool &is_vector_index_table,
                                   bool &is_shared_index_table);
   void clean_deprecated_adapters();
@@ -273,6 +281,7 @@ public:
   int execute_all_memdata_sync_task(ObPluginVectorIndexMgr *mgr);
   int execute_one_memdata_sync_task(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *ctx);
   int check_ls_task_state(ObPluginVectorIndexMgr *mgr);
+  int check_has_vector_index(bool &has_ivf_index, ObIArray<uint64_t> &vec_table_id_array);
 
   // task generation interfaces
   bool can_schedule_tenant(const ObPluginVectorIndexMgr *mgr);
@@ -321,7 +330,7 @@ private:
   int submit_log_();
   void inner_switch_to_follower_();
   int init_task_executors(uint64_t tenant_id, ObLS &ls);
-  int check_and_load_task_executors();
+  int check_and_load_task_executors(bool &has_ivf_index);
   int start_task_executors();
   int resume_task_executors();
   bool can_schedule(ObVectorTaskScheduleType task_type) { return can_schedule_[task_type]; }
@@ -380,6 +389,8 @@ private:
   ObVecAsyncTaskExector async_task_exec_;
   ObIvfAsyncTaskExector ivf_task_exec_;
   ObVecEmbeddingAsyncTaskExecutor embedding_task_exec_;
+  ObVecIdxFreezeTaskExecutor freeze_exec_;
+  ObVecIdxMergeTaskExecutor merge_exec_;
 };
 
 class ObVectorIndexTask : public share::ObITask
@@ -482,6 +493,7 @@ class ObVectorIndexMemSyncInfo
 public:
   ObVectorIndexMemSyncInfo(uint64_t tenant_id) :
     processing_first_mem_sync_(true),
+    switch_lock_(ObLatchIds::VECTOR_SYNC_SWITCH_LOCK),
     first_mem_sync_map_(),
     second_mem_sync_map_(),
     first_task_allocator_(ObMemAttr(tenant_id, "VecIdxTask")),

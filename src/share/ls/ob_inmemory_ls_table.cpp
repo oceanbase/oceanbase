@@ -25,7 +25,7 @@ ObInMemoryLSTable::ObInMemoryLSTable()
   : ObLSTable(),
     inited_(false),
     ls_info_(OB_SYS_TENANT_ID, SYS_LS),
-    lock_(),
+    lock_(common::ObLatchIds::OB_INMEMORY_LS_TABLE_LOCK),
     rs_list_change_cb_(NULL)
 {
 }

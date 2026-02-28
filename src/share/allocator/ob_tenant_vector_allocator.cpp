@@ -121,6 +121,7 @@ void ObTenantVectorAllocator::destroy()
     DESTROY_CONTEXT(memory_context_);
     memory_context_ = nullptr;
   }
+  pre_alloc_mem_size_ = 0;
 }
 
 int64_t ObTenantVectorAllocator::hold()
@@ -150,6 +151,36 @@ void *ObTenantVectorAllocator::alloc(const int64_t size, const int64_t abs_expir
   UNUSED(abs_expire_time);
   return alloc(size);
 }
+
+int ObTenantVectorAllocator::pre_alloc(const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  const int64_t vector_limit = throttle_tool_->get_resource_limit<ObTenantVectorAllocator>();
+  const int64_t used_mem = used();
+  if (pre_alloc_mem_size_ + size + used_mem > vector_limit) {
+    ret = OB_BUF_NOT_ENOUGH;
+    SHARE_LOG(WARN, "pre alloc memory size exceeds vector limit",
+        K(ret), K(pre_alloc_mem_size_), K(size), K(used_mem), K(vector_limit));
+  } else {
+    ATOMIC_AAF(&pre_alloc_mem_size_, size);
+  }
+  return ret;
+}
+
+int ObTenantVectorAllocator::pre_free(const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  ATOMIC_SAF(&pre_alloc_mem_size_, size);
+  return ret;
+}
+
+int64_t ObTenantVectorAllocator::get_left_pre_alloc_size()
+{
+  const int64_t vector_limit = throttle_tool_->get_resource_limit<ObTenantVectorAllocator>();
+  const int64_t used_mem = used();
+  return vector_limit - pre_alloc_mem_size_ - used_mem;
+}
+
 
 // !!!!! NOTICE
 // This function will throw an exception when memory allocation fails,
@@ -219,12 +250,13 @@ void *ObVsagMemContext::Reallocate(void* p, size_t size)
 
 int ObVsagMemContext::init(lib::MemoryContext &parent_mem_context,
                            uint64_t *all_vsag_use_mem,
-                           uint64_t tenant_id)
+                           uint64_t tenant_id,
+                           const char *label)
 {
   INIT_SUCC(ret);
   lib::ContextParam param;
   ObSharedMemAllocMgr *share_mem_alloc_mgr = MTL(ObSharedMemAllocMgr *);
-  ObMemAttr attr(tenant_id, "VIndexVsagADP", ObCtxIds::VECTOR_CTX_ID);
+  ObMemAttr attr(tenant_id, label, ObCtxIds::VECTOR_CTX_ID);
   SET_IGNORE_MEM_VERSION(attr);
   param.set_mem_attr(attr)
     .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)

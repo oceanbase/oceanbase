@@ -61,7 +61,7 @@ public:
   bool enable_fuse_row_cache(const ObQueryFlag &query_flag, const StorageScanType scan_type = StorageScanType::NORMAL) const;
   //temp solution
   int get_cg_column_param(const share::schema::ObColumnParam *&column_param) const;
-  int build_index_filter_for_row_store(common::ObIAllocator *allocator);
+  int build_index_filter_for_row_store(common::ObIAllocator *allocator, sql::ObPushdownFilterExecutor *pd_filter);
   const ObITableReadInfo *get_read_info(const bool is_get = false) const
   {
 	  return is_get ? rowkey_read_info_ : read_info_;
@@ -124,6 +124,10 @@ public:
   {
     return (read_info_ != nullptr && read_info_ != rowkey_read_info_) ? read_info_->need_truncate_filter() : false;
   }
+  OB_INLINE bool need_ttl_filter() const
+  {
+    return (read_info_ != nullptr && read_info_ != rowkey_read_info_) ? read_info_->has_ttl_definition() : false;
+  }
   bool can_be_reused(const uint32_t cg_idx, const common::ObIArray<sql::ObExpr*> &exprs, const bool is_aggregate)
   {
     const sql::ObExprPtrIArray *inner_exprs = is_aggregate ? aggregate_exprs_ : output_exprs_;
@@ -149,8 +153,18 @@ public:
   { return get_group_idx_col_index() != common::OB_INVALID_INDEX; }
   OB_INLINE int64_t get_ss_rowkey_prefix_cnt() const
   { return ss_rowkey_prefix_cnt_; }
-  OB_INLINE bool is_skip_scan() const
+  OB_INLINE bool is_index_skip_scan() const
   { return ss_rowkey_prefix_cnt_ > 0; }
+  OB_INLINE bool is_skip_scan() const
+  { return ss_rowkey_prefix_cnt_ > 0 || is_advance_skip_scan_; }
+  OB_INLINE void set_is_advance_skip_scan()
+  {
+    is_advance_skip_scan_ = true;
+  }
+  OB_INLINE bool is_advance_skip_scan() const
+  {
+    return is_advance_skip_scan_;
+  }
   OB_INLINE void disable_blockscan()
   {
     pd_storage_flag_.set_blockscan_pushdown(false);
@@ -173,8 +187,10 @@ public:
   { return pd_storage_flag_.is_group_by_pushdown(); }
   OB_INLINE bool enable_pd_filter_reorder() const
   { return pd_storage_flag_.is_filter_reorder(); }
-  OB_INLINE bool enable_skip_index() const
-  { return pd_storage_flag_.is_apply_skip_index(); }
+  OB_INLINE bool enable_base_skip_index() const
+  { return pd_storage_flag_.is_apply_base_skip_index(); }
+  OB_INLINE bool enable_inc_skip_index() const
+  { return pd_storage_flag_.is_apply_inc_skip_index(); }
   OB_INLINE bool is_use_stmt_iter_pool() const
   { return pd_storage_flag_.is_use_stmt_iter_pool(); }
   OB_INLINE void set_use_stmt_iter_pool()
@@ -208,12 +224,47 @@ public:
   { return table_scan_opt_.io_read_gap_size_; }
   OB_INLINE int64_t get_storage_rowsets_size() const
   { return table_scan_opt_.storage_rowsets_size_; }
+  OB_INLINE bool is_delete_insert_merge_engine() const
+  { return merge_engine_type_ == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT; }
+  OB_INLINE bool is_append_only_merge_engine() const
+  { return merge_engine_type_ == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY; }
+  OB_INLINE bool is_normal_cgs_at_the_end() const
+  { return is_normal_cgs_at_the_end_; }
+
+  OB_INLINE bool can_use_delete_insert_query_path(uint64_t scan_order) const
+  {
+    return vectorized_enabled_&&
+           enable_pd_filter() &&
+           !is_get_ &&
+           filter_canbe_handle_in_di_ &&
+           !is_sample_ &&
+           !is_skip_scan() &&
+           scan_order == ObQueryFlag::NoOrder &&
+           (is_delete_insert_merge_engine() || is_append_only_merge_engine());
+  }
+
+  OB_INLINE bool is_append_only_can_blockscan() const
+  {
+    // append_only mode blockscan don't depend on no order
+    return vectorized_enabled_ &&
+           enable_pd_filter() &&
+           !is_get_ &&
+           !is_sample_ &&
+           filter_canbe_handle_in_di_ &&
+           !is_skip_scan() &&
+           is_append_only_merge_engine();
+  }
+
+  OB_INLINE bool is_memtable_can_blockscan() const
+  {
+    return is_delete_insert_ || is_append_only_can_blockscan();
+  }
+
   DECLARE_TO_STRING;
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
-  uint32_t cg_idx_;
   const ObITableReadInfo *read_info_;
   const ObITableReadInfo *rowkey_read_info_;
   const ObTabletHandle *tablet_handle_; //for ddl merge_query
@@ -232,34 +283,52 @@ public:
   const sql::ObExprPtrIArray *aggregate_exprs_;
   const common::ObIArray<bool> *output_sel_mask_;
   const blocksstable::ObDatumRange *ss_datum_range_;
-  // only used in ObMemTable
-  bool is_multi_version_minor_merge_;
-  bool need_scn_;
-  bool need_trans_info_;
-  bool is_same_schema_column_;
-  bool vectorized_enabled_;
-  bool has_virtual_columns_;
-  // use the flag to optimize blockscan for tables with text columns in mysql mode
-  // fuse row cache will be disabled when a table contains lob columns
-  // so we can generate from the request cols in readinfo without considering fuse row cache
-  bool has_lob_column_out_;
-  bool is_for_foreign_check_;
-  bool limit_prefetch_;
-  bool is_mds_query_;
-  bool is_non_unique_local_index_;
+  bool is_advance_skip_scan_;
   int64_t ss_rowkey_prefix_cnt_;
+  uint32_t cg_idx_;
   sql::ObStoragePushdownFlag pd_storage_flag_;
   ObTableScanOption table_scan_opt_;
   uint64_t auto_split_filter_type_;
   const sql::ObExpr *auto_split_filter_;
   sql::ExprFixedArray *auto_split_params_;
-  bool is_tablet_spliting_;
-  bool is_column_replica_table_;
-  bool is_delete_insert_;
-  // whether the whole plan use rich format, table scan may not use new format, but the whole plan uses new format
-  // valid after 4.4.1.0, same meaning with op->enable_rich_format before 4.4.1.0
-  bool plan_enable_rich_format_;
   const bool *need_update_tablet_param_;
+  union {
+    uint64_t flag_;
+    struct {
+      ObMergeEngineType merge_engine_type_ : 8;
+      // only used in ObMemTable
+      uint64_t is_multi_version_minor_merge_ : 1;
+      uint64_t need_scn_ : 1;
+      uint64_t need_trans_info_ : 1;
+      uint64_t is_same_schema_column_ : 1;
+      uint64_t vectorized_enabled_ : 1;
+      uint64_t has_virtual_columns_ : 1;
+      // use the flag to optimize blockscan for tables with text columns in mysql mode
+      // fuse row cache will be disabled when a table contains lob columns
+      // so we can generate from the request cols in readinfo without considering fuse row cache
+      uint64_t has_lob_column_out_ : 1;
+      uint64_t is_for_foreign_check_ : 1;
+      uint64_t limit_prefetch_ : 1;
+      uint64_t is_mds_query_ : 1;
+      uint64_t is_non_unique_local_index_ : 1;
+
+      uint64_t is_tablet_spliting_ : 1;
+      uint64_t is_column_replica_table_ : 1;
+      uint64_t is_delete_insert_ : 1;
+      // whether the whole plan use rich format, table scan may not use new format, but the whole plan uses new format
+      // valid after 4.4.1.0, same meaning with op->enable_rich_format before 4.4.1.0
+      uint64_t plan_enable_rich_format_ : 1;
+
+      uint64_t is_get_ : 1;
+      uint64_t is_sample_ : 1;
+      uint64_t filter_canbe_handle_in_di_ : 1;
+
+      // column storage tables created after v435 will place the rowkey/all cg at the start of the table schema column group array
+      uint64_t is_normal_cgs_at_the_end_ : 1;
+
+      uint64_t reserved_ : 38;
+    };
+  };
 };
 
 struct ObTableAccessParam
@@ -280,7 +349,7 @@ public:
                        const common::ObTabletID &tablet_id,
                        const ObITableReadInfo &read_info,
                        const bool is_multi_version_merge = false,
-                       const bool is_delete_insert = false);
+                       const ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_MAX);
   // used for get unique index conflict row
   int init_dml_access_param(const ObRelativeTable &table,
                             const ObITableReadInfo &rowkey_read_info,

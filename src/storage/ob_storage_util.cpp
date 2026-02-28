@@ -58,8 +58,8 @@ OB_INLINE static int pad_on_local_buf(const ObString &space_pattern,
   int ret = OB_SUCCESS;
   char *buf = nullptr;
   const int32_t pad_len = length + pad_whitespace_length * space_pattern.length();
-  const int64_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
-  if (OB_ISNULL((buf = (char*) padding_alloc.alloc(buf_len)))) {
+  const int32_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
+  if (OB_ISNULL((buf = (char*) padding_alloc.alloc(static_cast<int64_t>(buf_len))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "no memory", K(ret));
   } else {
@@ -143,8 +143,8 @@ int pad_column(const common::ObAccuracy accuracy, sql::ObEvalCtx &ctx, sql::ObEx
     if (cur_len < length) {
       char *ptr = nullptr;
       const int32_t pad_len = datum.pack_ + (length - cur_len) * space_pattern.length();
-      const int64_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
-      if (OB_ISNULL(ptr = expr.get_str_res_mem(ctx, buf_len))) {
+      const int32_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
+      if (OB_ISNULL(ptr = expr.get_str_res_mem(ctx, static_cast<int64_t>(buf_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "no memory", K(ret));
       } else {
@@ -592,7 +592,7 @@ int reverse_trans_version_val(common::ObDatum *datums, const int64_t count)
   return ret;
 }
 
-int reverse_trans_version_val(ObIVector *vector, const int64_t count)
+int reverse_trans_version_val(ObIVector *vector, const int64_t count, const int64_t vec_offset)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == vector || count < 0)) {
@@ -608,7 +608,7 @@ int reverse_trans_version_val(ObIVector *vector, const int64_t count)
       STORAGE_LOG(WARN, "Unexpected vector", K(ret), K(fixed_length_base->has_null()), K(fixed_length_base->get_length()));
     } else {
       int64_t *ver_ptr = reinterpret_cast<int64_t *>(fixed_length_base->get_data());
-      for (int64_t i = 0; i < count; ++i) {
+      for (int64_t i = vec_offset; i < vec_offset + count; ++i) {
         ver_ptr[i] = -ver_ptr[i];
       }
     }
@@ -690,6 +690,7 @@ int get_query_begin_version_for_mlog(
   int64_t end_version = -1;
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
   batch_info_guard.set_batch_size(1);
+  batch_info_guard.set_batch_idx(0);
   for (int64_t i = 0; OB_SUCC(ret) && i < op_filters.count(); ++i) {
     if (OB_ISNULL(e = op_filters.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -753,6 +754,7 @@ int build_mview_scan_info_if_need(
     ObDatum *datum = NULL;
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
     batch_info_guard.set_batch_size(1);
+    batch_info_guard.set_batch_idx(0);
     for (int64_t i = 0; OB_SUCC(ret) && i < op_filters->count(); ++i) {
       if (OB_ISNULL(e = op_filters->at(i))) {
         ret = OB_ERR_UNEXPECTED;

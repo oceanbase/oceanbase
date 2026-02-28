@@ -92,18 +92,20 @@ int ObVectorNormalizeInfo::normalize_vectors(const int64_t dim, const int64_t co
 int ObVectorClusterHelper::get_nearest_probe_centers(
     float *vector,
     const int64_t dim,
-    ObIArray<float*> &centers,
+    float *centers_data,
+    const int64_t centers_count,
+    const int64_t center_dim,
     const int64_t nprobe,
     ObIAllocator &allocator,
-    share::ObVectorNormalizeInfo *norm_info/* = nullptr*/,
+    ObVectorNormalizeInfo *norm_info/* = nullptr*/,
     int l_idx/* = 0*/,
     int r_idx/* = -1*/)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(vector) || 0 >= dim || 0 >= nprobe) {
+  if (OB_ISNULL(vector) || 0 >= dim || 0 >= nprobe || OB_ISNULL(centers_data) || centers_count <= 0 || center_dim <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(dim), K(nprobe), KP(vector));
-  } else if (centers.empty()) {
+    LOG_WARN("invalid argument", K(ret), K(dim), K(nprobe), KP(vector), KP(centers_data), K(centers_count), K(center_dim));
+  } else if (centers_count == 0) {
     // do nothing
   } else {
     float distance = FLT_MAX;
@@ -120,10 +122,12 @@ int ObVectorClusterHelper::get_nearest_probe_centers(
     }
     // get the nearest nprobe centers
     float *data = norm_vector == nullptr ? vector : norm_vector;
-    r_idx = r_idx < 0 ? centers.count() : r_idx;
+    r_idx = r_idx < 0 ? centers_count : r_idx;
     for (int64_t i = l_idx; OB_SUCC(ret) && i < r_idx; ++i) {
+      // Calculate pointer to i-th center: centers_data + i * center_dim
+      float *center_ptr = centers_data + i * center_dim;
       // cosine/inner_product use l2_normalize + l2_distance to replace
-      distance = ObVectorL2Distance<float>::l2_square_flt_func(data, centers.at(i), dim);
+      distance = ObVectorL2Distance<float>::l2_square_flt_func(data, center_ptr, dim);
       if (max_heap_.count() < nprobe) {
         if (OB_FAIL(max_heap_.push(HeapCenterItem(distance, i)))) {
           LOG_WARN("failed to push center heap", K(ret), K(i), K(distance));
@@ -354,10 +358,15 @@ int ObVectorClusterHelper::create_inner_session(
   } else {
     session->set_inner_session();
     session->set_compatibility_mode(is_oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE);
-    session->get_ddl_info().set_is_dummy_ddl_for_inner_visibility(true);
+    InnerDDLInfo ddl_info;
+    ddl_info.set_is_dummy_ddl_for_inner_visibility(true);
     session->set_database_id(OB_SYS_DATABASE_ID);
     session->set_query_start_time(ObTimeUtil::current_time());
-    LOG_INFO("[VECTOR INDEX]: Succ to create inner session", K(ret), K(tenant_id), KP(session));
+    if (OB_FAIL(session->get_ddl_info().init(ddl_info, 0 /*session_id*/))) {
+      LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info));
+    } else {
+      LOG_INFO("[VECTOR INDEX]: Succ to create inner session", K(ret), K(tenant_id), KP(session));
+    }
   }
   if (OB_FAIL(ret)) {
     release_inner_session(free_session_ctx, session);
@@ -369,7 +378,7 @@ void ObVectorClusterHelper::release_inner_session(sql::ObFreeSessionCtx &free_se
 {
   if (nullptr != session) {
     LOG_INFO("[VECTOR INDEX]: Release inner session", KP(session));
-    session->get_ddl_info().set_is_dummy_ddl_for_inner_visibility(false);
+    session->get_ddl_info().reset();
     session->set_session_sleep();
     GCTX.session_mgr_->revert_session(session);
     GCTX.session_mgr_->free_session(free_session_ctx);

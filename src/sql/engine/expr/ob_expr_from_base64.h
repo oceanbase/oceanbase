@@ -34,6 +34,9 @@ public:
   static int eval_from_base64_batch(const ObExpr &expr, ObEvalCtx &ctx,
                               const ObBitVector &skip,
                               const int64_t batch_size);
+  static int eval_from_base64_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  template<typename ArgVec, typename ResVec, bool isText>
+  static int vector_from_base64(VECTOR_EVAL_FUNC_ARG_DECL);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprFromBase64);
@@ -45,7 +48,7 @@ private:
   static const int64_t NCHAR_PER_BASE64_GROUP = 3;
   static inline ObLength base64_needed_decoded_length(ObLength length_of_encoded_data)
   {
-    return (ObLength) ceil(length_of_encoded_data * NCHAR_PER_BASE64_GROUP / NCHAR_PER_BASE64);
+    return (ObLength) ((length_of_encoded_data * NCHAR_PER_BASE64_GROUP + NCHAR_PER_BASE64 - 1 ) / NCHAR_PER_BASE64);
   }
 };
 }

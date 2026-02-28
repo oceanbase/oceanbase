@@ -674,7 +674,7 @@ int ObWhereSubQueryPullup::generate_semi_info(ObDMLStmt *stmt,
   } else if (OB_ISNULL(info = static_cast<SemiInfo *>(alloc->alloc(sizeof(SemiInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to alloc semi info", K(ret));
-  } else if (OB_FALSE_IT(info = new (info) SemiInfo())) {
+  } else if (OB_FALSE_IT(info = new (info) SemiInfo(*ctx_->allocator_))) {
   } else if (OB_FAIL(info->semi_conditions_.assign(semi_conditions))) {
     LOG_WARN("failed to assign semi condition exprs", K(ret));
   } else if (OB_FALSE_IT(info->right_table_id_ = right_table->table_id_)) {

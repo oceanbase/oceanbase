@@ -529,10 +529,6 @@ private:
       ObTabletTableStore *new_table_store,
       int64_t &total_tablet_meta_size,
       ObBlockInfoSet &block_info_set);
-  int load_storage_schema_and_fill_write_info(
-      const ObTablet &tablet,
-      common::ObArenaAllocator &allocator,
-      common::ObIArray<ObSharedObjectWriteInfo> &write_infos);
   int load_dump_kv_and_fill_write_info(
       common::ObArenaAllocator &allocator,
       const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,

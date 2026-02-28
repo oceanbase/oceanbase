@@ -76,6 +76,10 @@ int ObTableGroupHelp::add_tables_to_tablegroup(ObMySQLTransaction &trans,
         LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(table_item.database_name_),
                                            helper.convert(table_item.table_name_));
         LOG_WARN("table not exist!", KR(ret), K(tenant_id), K(database_id), K(table_item));
+      } else if (table_schema->is_oracle_tmp_table_v2()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("temporary table is not allowed to be added to tablegroup", KR(ret), K(table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "add temporary table to tablegroup");
       } else if (is_contain(table_ids, table_schema->get_table_id())) {
         // skip redundant table
       } else if (OB_FAIL(table_ids.push_back(table_schema->get_table_id()))) {
@@ -165,6 +169,10 @@ int ObTableGroupHelp::check_table_alter_tablegroup(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("table can't in tablegroup", KR(ret), K(new_table_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "add this type of table to tablegroup is");
+  } else if (orig_table_schema.is_oracle_tmp_table_v2()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("temporary table is not allowed to be added to tablegroup", KR(ret), K(orig_table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "add temporary table to tablegroup");
   } else if (!can_alter_tablegroup) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("cann't alter table's tablegroup", KR(ret),

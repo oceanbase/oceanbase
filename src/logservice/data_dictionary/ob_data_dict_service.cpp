@@ -704,7 +704,7 @@ int ObDataDictService::handle_table_metas_(
           "table_name", table_schema->get_table_name(),
           "table_type", table_schema->get_table_type());
       // ignore this table.
-    } else if (OB_FAIL(table_meta.init(*table_schema))) {
+    } else if (OB_FAIL(table_meta.init(*table_schema, schema_version))) {
       LOG_WARN("init table_meta failed", KR(ret), K(schema_version), KPC(table_schema));
     } else if (OB_FAIL(storage_.handle_dict_meta(table_meta, header))) {
       LOG_WARN("handle dict_table_meta failed", KR(ret), K(table_meta), K(header), KPC(table_schema));

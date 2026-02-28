@@ -1213,7 +1213,7 @@ void ObTxTable::disable_upper_trans_calculation()
   ATOMIC_STORE(&calc_upper_trans_is_disabled_, true);
   (void)tx_data_table_.disable_upper_trans_calculation();
   reset_ctx_min_start_scn_info_();
-  FLOG_INFO("disable upper trans version calculation", KPC(this));
+  FLOG_INFO("disable upper trans version calculation", K(ls_id_), KPC(this));
 }
 
 void ObTxTable::enable_upper_trans_calculation(const share::SCN latest_transfer_scn)
@@ -1221,7 +1221,7 @@ void ObTxTable::enable_upper_trans_calculation(const share::SCN latest_transfer_
   reset_ctx_min_start_scn_info_();
   (void)tx_data_table_.enable_upper_trans_calculation(latest_transfer_scn);
   ATOMIC_STORE(&calc_upper_trans_is_disabled_, false);
-  FLOG_INFO("enable upper trans version calculation", KPC(this));
+  FLOG_INFO("enable upper trans version calculation", K(ls_id_), KPC(this));
 }
 
 int ObTxTable::get_start_tx_scn(SCN &start_tx_scn)

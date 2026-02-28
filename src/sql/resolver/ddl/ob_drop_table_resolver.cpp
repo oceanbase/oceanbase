@@ -137,7 +137,7 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
       for (i = 0; OB_SUCC(ret) && i < max_table_num; ++i) {
         table_node = lib::is_oracle_mode() ? parse_tree.children_[TABLE_LIST_NODE]
             : parse_tree.children_[TABLE_LIST_NODE]->children_[i];
-        ObString dblink_name;
+        ObString dblink_name;  // nouse
         bool has_reverse_link = false;
         bool has_dblink_node = false;
         if (NULL == table_node) {

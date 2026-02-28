@@ -1,1 +1,2 @@
 sql_unittest(test_table_scan_ctdef_serialize_compat)
+ob_unittest(test_ob_ai_split_document)

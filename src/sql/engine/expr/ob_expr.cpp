@@ -940,6 +940,10 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
       } else {
         ret = (*eval_batch_func_)(*this, ctx, skip, size);
       }
+      if (OB_SUCC(ret) && batch_result_) {
+        get_evaluated_flags(ctx).bit_calculate(get_evaluated_flags(ctx), skip, EvalBound(size),
+                                BitOrNotOp());
+      }
       if (OB_SUCC(ret)) {
         #ifndef NDEBUG
           if (is_oracle_mode() && (ob_is_string_tc(datum_meta_.type_) || ob_is_raw(datum_meta_.type_))) {
@@ -1052,11 +1056,21 @@ int ObExpr::init_vector(ObEvalCtx &ctx,
 {
   int ret = OB_SUCCESS;
   VectorHeader &vec_header = get_vector_header(ctx);
+
+  // 1. static const expr has no eval_func, only init vector once
+  // 2. static const expr has eval_func like '1 + 1', only init vector where evaluated_ is false
+  if (OB_UNLIKELY(is_static_const_ && vec_header.format_ != VEC_INVALID
+                  && (get_eval_info(ctx).is_evaluated(ctx) || NULL == eval_func_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("const expr should not init vector twice", K(ret), K(format), KPC(this), K(lbt()));
+  }
   vec_header.set_format(format);
   char *vector_buf = vec_header.vector_buf_;
   const VecValueTypeClass value_tc = get_vec_value_tc();
   common::ObIVector *vec = NULL;
-  if (OB_UNLIKELY(!batch_result_ && format != VEC_UNIFORM_CONST)) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_UNLIKELY(!batch_result_ && format != VEC_UNIFORM_CONST)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected format", K(ret), K(format), KPC(this));
   } else if (VEC_FIXED == format) {
@@ -1333,15 +1347,15 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
   bool need_check = false;
   int tmp_ret = common::OB_SUCCESS;
   tmp_ret = OB_E(EventTable::EN_ENABLE_ENGINE_CHECK) tmp_ret;
-  if (OB_FAIL(tmp_ret)) {
+  if (tmp_ret != OB_SUCCESS && !is_const_expr()) {
     need_check = true;
   }
   if (need_check) {
     // check all_rows_active flag
     if (OB_UNLIKELY((skip.accumulate_bit_cnt(bound) != 0 && bound.get_all_rows_active()))) {
       ret = OB_ERR_UNEXPECTED;
-      SQL_LOG(WARN, "all_rows_active check failed", K(ret), K(skip.accumulate_bit_cnt(bound)),
-                                                    K(bound.get_all_rows_active()), K(BATCH_SIZE()));
+      SQL_LOG(WARN, "all_rows_active check failed", K(ret), K(skip.accumulate_bit_cnt(bound)), K(bound),
+                                                    K(bound.get_all_rows_active()), K(BATCH_SIZE()), KPC(this));
     }
   }
 
@@ -1402,7 +1416,7 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
             SQL_LOG(WARN, "has_null check failed", K(ret), K(vector->has_null()),
                     "null bitmap", ObLogPrintHex(reinterpret_cast<char *>(null_bitmap),
                                                  ObBitVector::memory_size(bound.batch_size())),
-                    K(BATCH_SIZE()));
+                    K(BATCH_SIZE()), KPC(this));
           }
         }
       }
@@ -1411,16 +1425,25 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
 
   LOG_DEBUG("need evaluate", K(need_evaluate), KP(this));
   if (OB_SUCC(ret) && need_evaluate) {
+    EvalBound single_bound = EvalBound(1);
+    const EvalBound &eval_bound = batch_result_ ? bound : single_bound;
     if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
       SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else if (OB_FAIL(
-                 (*eval_vector_func_)(*this, ctx, *rt_skip, batch_result_ ? bound : EvalBound(1)))) {
+                 (*eval_vector_func_)(*this, ctx, *rt_skip, eval_bound))) {
       if (const_dry_run) {
         ret = OB_SUCCESS;
       } else {
         set_all_null(ctx, BATCH_SIZE());
       }
     } else {
+      if (!batch_result_) {
+      } else if (eval_bound.get_all_rows_active()) {
+        get_evaluated_flags(ctx).set_all(eval_bound.start(), eval_bound.end());
+      } else {
+        get_evaluated_flags(ctx).bit_calculate(get_evaluated_flags(ctx), skip, eval_bound,
+                                BitOrNotOp());
+      }
       info.set_evaluated(true);
     }
   }
@@ -1503,13 +1526,26 @@ int expr_default_eval_vector_func(const ObExpr &expr,
                              const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
+  ObExpr::EvalBatchFunc default_batch_func = expr_default_eval_batch_func;
   if (!expr.batch_result_) {
     ObDatum *datum = NULL;
     ret = expr.eval(ctx, datum);
-  } else if (OB_LIKELY(bound.is_full_size())) {
-    ret = (*expr.eval_batch_func_)(expr, ctx, skip, bound.batch_size());
   } else {
-    ret = expr_default_eval_batch_func(expr, ctx, skip, bound);
+    if (expr.eager_evaluation()
+        && expr.eval_batch_func_ == default_batch_func) {
+      for (int param_index = 0; OB_SUCC(ret) && param_index < expr.arg_cnt_; param_index++) {
+        if (T_OP_ROW != expr.args_[param_index]->type_
+            && OB_FAIL(expr.args_[param_index]->eval_vector(ctx, skip, bound))) {
+          SQL_LOG(WARN, "evaluate parameter failed", K(ret), K(param_index));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_LIKELY(bound.is_full_size())) {
+      ret = (*expr.eval_batch_func_)(expr, ctx, skip, bound.batch_size());
+    } else {
+      ret = expr_default_eval_batch_func(expr, ctx, skip, bound);
+    }
   }
 
   return ret;

@@ -120,6 +120,7 @@ constexpr unsigned long long operator "" _TB(long double terabyte)
 
 struct ObSizeLiteralPrettyPrinter {
   constexpr ObSizeLiteralPrettyPrinter(unsigned long long val) : val_(val) {}
+  operator int64_t() const { return val_; }
   int64_t to_string(char *buf, const int64_t len) const {
     int64_t pos = 0;
     if (val_ < 1_KB) {

@@ -193,7 +193,7 @@ public:
   const common::ObIArray<share::schema::ObSchemaObjVersion> &get_ref_objects() const;
   ObString &get_route_sql();
   ObString &get_stmt_sql();
-  bool get_is_select_for_update();
+  bool get_is_select_for_update() const;
   inline bool has_hidden_rowid();
   inline uint64_t get_rowid_table_id() const;
   inline bool is_bulk();
@@ -707,7 +707,7 @@ inline ObString &ObResultSet::get_stmt_sql()
   return external_retrieve_info_.stmt_sql_;
 }
 
-inline bool ObResultSet::get_is_select_for_update()
+inline bool ObResultSet::get_is_select_for_update() const
 {
   return external_retrieve_info_.is_select_for_update_;
 }
