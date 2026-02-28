@@ -6483,6 +6483,14 @@ int ObResolverUtils::resolve_check_constraint_expr(
                      || T_FUN_SYS_USERENV == sys_func->get_expr_type())) {
         ret = OB_ERR_DATE_OR_SYS_VAR_CANNOT_IN_CHECK_CST;
         LOG_WARN("date or system variable wrongly specified in CHECK constraint", K(ret));
+      } else if (lib::is_oracle_mode()) {
+        bool is_non_pure_func = false;
+        if (OB_FAIL(sys_func->is_non_pure_sys_func_expr(is_non_pure_func))) {
+          LOG_WARN("check is non pure sys func expr failed", K(ret));
+        } else if (is_non_pure_func) {
+          ret = OB_ERR_DATE_OR_SYS_VAR_CANNOT_IN_CHECK_CST;
+          LOG_WARN("date or system variable wrongly specified in CHECK constraint", K(ret), K(sys_func->get_expr_type()));
+        }
       } else if (lib::is_mysql_mode()) {
         bool is_non_pure_func = false;
         if (OB_FAIL(sys_func->is_non_pure_sys_func_expr(is_non_pure_func))) {
