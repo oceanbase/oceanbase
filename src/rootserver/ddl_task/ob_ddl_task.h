@@ -448,6 +448,13 @@ public:
       int64_t &ret_code,
       int64_t &snapshot_version);
 
+  static int select_for_update_message(
+      common::ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      common::ObIAllocator &allocator,
+      ObString &message);
+
   static int get_ddl_task_record(
       const uint64_t tenant_id,
       const int64_t task_id,

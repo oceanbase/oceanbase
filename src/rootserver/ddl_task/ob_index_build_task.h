@@ -172,8 +172,13 @@ private:
   int check_target_cg_cnt();
   int update_mlog_last_purge_scn();
   bool is_create_partitioned_local_index();
-  int serialize_and_update_message();
-
+  int serialize_and_update_message(common::ObISQLClient &proxy);
+  int push_tablet_execution_id(const int64_t task_id,
+    const share::ObDDLType task_type,
+    const bool ddl_can_retry,
+    const int64_t data_format_version,
+    const common::ObIArray<common::ObTabletID> &tablets,
+    const uint64_t tenant_id);
 private:
   static const int64_t OB_INDEX_BUILD_TASK_VERSION = 1;
   using ObDDLTask::is_inited_;

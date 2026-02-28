@@ -1050,8 +1050,8 @@ int ObIndexBuildTask::wait_and_send_single_partition_replica_task(bool &state_fi
       LOG_WARN("fail to get next batch tablets", K(ret), K(parallelism), K(execution_id), K(tablets));
       state_finished = true;
     }
-  } else if (OB_FAIL(serialize_and_update_message())) {
-    LOG_WARN("fail to serialize and update message", K(ret));
+  } else if (OB_FAIL(ObIndexBuildTask::push_tablet_execution_id(task_id_, task_type_, is_retryable_ddl_, data_format_version_, tablets, tenant_id_))) {
+    LOG_WARN("fail to push tablet execution id", K(ret));
   } else if (OB_FAIL(send_build_single_replica_request(true, parallelism, execution_id, ls_id, leader_addr, tablets))) {
     LOG_WARN("fail to send build single partition replica request", K(ret), K(parallelism), K(execution_id), K(tablets));
   }
@@ -2201,15 +2201,12 @@ int ObIndexBuildTask::build_partitioned_local_fts_replica_build_longops_message(
   return ret;
 }
 
-int ObIndexBuildTask::serialize_and_update_message()
+int ObIndexBuildTask::serialize_and_update_message(common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else {
     int64_t serialize_size = get_serialize_param_size();
     if (serialize_size <= 0) {
@@ -2228,11 +2225,70 @@ int ObIndexBuildTask::serialize_and_update_message()
         } else {
           ObString new_message;
           new_message.assign(buf, static_cast<int32_t>(serialize_size));
-          if (OB_FAIL(ObDDLTaskRecordOperator::update_message(*GCTX.sql_proxy_, tenant_id_, task_id_, new_message))) {
+          if (OB_FAIL(ObDDLTaskRecordOperator::update_message(proxy, tenant_id_, task_id_, new_message))) {
             LOG_WARN("update message failed", K(ret), K(tenant_id_), K(task_id_), K(serialize_size));
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObIndexBuildTask::push_tablet_execution_id(const int64_t task_id,
+                                               const share::ObDDLType task_type,
+                                               const bool ddl_can_retry,
+                                               const int64_t data_format_version,
+                                               const common::ObIArray<common::ObTabletID> &tablets,
+                                               const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  ObArenaAllocator allocator("DDLMsgCopy");
+  ObString message;
+  int64_t pos = 0;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
+    LOG_WARN("start transaction failed", K(ret));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update_message(trans, tenant_id, task_id, allocator, message))) {
+    LOG_WARN("select for update message failed", K(ret), K(tenant_id), K(task_id));
+  } else if (OB_FAIL(deserialize_params_from_message(tenant_id, message.ptr(), message.length(), pos))) {
+    LOG_WARN("deserialize params from message failed", K(ret), K(tenant_id), K(task_id));
+  } else {
+    int64_t next_tablet_execution_id = -1;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablets.count(); ++i) {
+      const ObTabletID &tablet = tablets.at(i);
+      int64_t tablet_execution_id = -1;
+      if (OB_FAIL(tablet_scheduler_.get_tablet_execution_id(tablet, tablet_execution_id))) {
+        LOG_WARN("failed to get tablet execution id", K(ret), K(tablet));
+      } else if (OB_FAIL(ObDDLTask::calc_next_execution_id(tablet_execution_id, task_type, ddl_can_retry, data_format_version, next_tablet_execution_id))) {
+        LOG_WARN("calc next execution id failed", K(ret), K(tablet_execution_id), K(task_type), K(ddl_can_retry), K(data_format_version));
+      } else if (OB_FAIL(tablet_scheduler_.set_tablet_execution_id(tablet, next_tablet_execution_id))) {
+        LOG_WARN("set tablet execution id failed", K(ret), K(tablet), K(next_tablet_execution_id));
+      } else {
+        FLOG_INFO("tablet execution id set", K(tablet), K(next_tablet_execution_id));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else {
+      if (OB_FAIL(serialize_and_update_message(trans))) {
+        LOG_WARN("serialize and update message failed", K(ret), K(tenant_id), K(task_id));
+      }
+    }
+  }
+
+  //end trans
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
   return ret;

@@ -4497,6 +4497,60 @@ int ObDDLTaskRecordOperator::select_for_update(
   return ret;
 }
 
+int ObDDLTaskRecordOperator::select_for_update_message(
+    common::ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    const int64_t task_id,
+    common::ObIAllocator &allocator,
+    ObString &message)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_string;
+  message.reset();
+  if (OB_UNLIKELY(task_id <= 0 || tenant_id <= 0)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(tenant_id), K(task_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      ObString tmp_message;
+      if (OB_FAIL(sql_string.assign_fmt("SELECT UNHEX(message) as message_unhex FROM %s WHERE task_id = %lu FOR UPDATE",
+          OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
+        LOG_WARN("assign sql string failed", K(ret), K(task_id), K(tenant_id));
+      } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, TASK_STATUS_OPERATOR_SLOW))) {
+        LOG_WARN("ddl sim failure: slow inner sql", K(ret), K(tenant_id), K(task_id));
+      } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, SELECT_TASK_RECORD_FOR_UPDATE_FAILED))) {
+        LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
+      } else if (OB_FAIL(trans.read(res, tenant_id, sql_string.ptr()))) {
+        LOG_WARN("read message of ddl task record failed", K(ret), K(sql_string));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+        } else {
+          LOG_WARN("fail to get next row", K(ret));
+        }
+      } else {
+        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "message_unhex", tmp_message);
+        if (OB_SUCC(ret)) {
+          char *buf = nullptr;
+          if (tmp_message.empty()) {
+            message.reset();
+          } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(tmp_message.length())))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret), "message_len", tmp_message.length());
+          } else {
+            MEMCPY(buf, tmp_message.ptr(), tmp_message.length());
+            message.assign(buf, tmp_message.length());
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObDDLTaskRecordOperator::kill_inner_sql(
     common::ObMySQLProxy &proxy,
