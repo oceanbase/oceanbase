@@ -155,32 +155,35 @@ int ObPhysicalPlanCtx::reserve_param_space(int64_t param_count)
 int ObPhysicalPlanCtx::init_datum_param_store()
 {
   int ret = OB_SUCCESS;
-  datum_param_store_.reuse();
-  param_frame_ptrs_.reuse();
-  param_frame_capacity_ = 0;
-  if (OB_FAIL(datum_param_store_.prepare_allocate(param_store_.count()))) {
-    LOG_WARN("fail to prepare allocate", K(ret), K(param_store_.count()));
-  }
-  // 通过param_store, 生成datum_param_store
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); i++) {
-    ObDatumObjParam &datum_param = datum_param_store_.at(i);
-    if (OB_FAIL(datum_param.alloc_datum_reserved_buff(param_store_.at(i).meta_,
-                                                      param_store_.at(i).get_precision(),
-                                                      allocator_))) {
-      LOG_WARN("alloc datum reserved buffer failed", K(ret));
-    } else if (OB_FAIL(datum_param.from_objparam(param_store_.at(i), &allocator_))) {
-      LOG_WARN("fail to convert obj param", K(ret), K(param_store_.at(i)));
+  // datum_param_store_ and param_frame_ptrs_ are only used for origin_params
+  // dynamic_params do not require the following initialization.
+  if (original_param_cnt_ > 0) {
+    datum_param_store_.reuse();
+    param_frame_ptrs_.reuse();
+    param_frame_capacity_ = 0;
+    if (OB_FAIL(datum_param_store_.prepare_allocate(original_param_cnt_))) {
+      LOG_WARN("fail to prepare allocate", K(ret), K(original_param_cnt_));
+    }
+    // 通过param_store, 生成datum_param_store
+    for (int64_t i = 0; OB_SUCC(ret) && i < original_param_cnt_; i++) {
+      ObDatumObjParam &datum_param = datum_param_store_.at(i);
+      if (OB_FAIL(datum_param.alloc_datum_reserved_buff(param_store_.at(i).meta_,
+                                                        param_store_.at(i).get_precision(),
+                                                        allocator_))) {
+        LOG_WARN("alloc datum reserved buffer failed", K(ret));
+      } else if (OB_FAIL(datum_param.from_objparam(param_store_.at(i), &allocator_))) {
+        LOG_WARN("fail to convert obj param", K(ret), K(param_store_.at(i)));
+      }
+    }
+    // 分配param frame内存, 并设置param datum
+    if (OB_SUCC(ret)) {
+      const int64_t old_size = 0;
+      if (OB_FAIL(extend_param_frame(old_size))) {
+        LOG_WARN("failed to extend param frame", K(ret));
+      }
     }
   }
-  // 分配param frame内存, 并设置param datum
-  if (OB_SUCC(ret)) {
-    const int64_t old_size = 0;
-    if (OB_FAIL(extend_param_frame(old_size))) {
-      LOG_WARN("failed to extend param frame", K(ret));
-    }
-  }
-  LOG_DEBUG("inited datum param store", K(datum_param_store_), K(param_store_));
-
+  LOG_DEBUG("inited datum param store", K(original_param_cnt_), K(datum_param_store_), K(param_store_));
   return ret;
 }
 
