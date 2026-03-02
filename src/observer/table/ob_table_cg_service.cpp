@@ -673,6 +673,7 @@ int ObTableExprCgService::replace_assign_column_ref_expr(ObTableCtx &ctx, ObRawE
  * 1. 检查分区键是否为生成的列（generated column）
  * 2. 全局索引只支持 SUBSTRING 表达式作为生成列分区键
  * 3. 如果 get_part_expr_for_assign=true，优先使用赋值表达式（更新后的值）
+ * 4. 如果 ctx.is_inc_or_append()=true，则不使用assignment表达式，因为inc/append的assignment表达式是计算表达式
  */
 int ObTableExprCgService::get_part_key_column_expr(ObTableCtx &ctx,
                                                    const ObPartitionKeyInfo &partition_keys,
@@ -688,7 +689,7 @@ int ObTableExprCgService::get_part_key_column_expr(ObTableCtx &ctx,
     ObRawExpr *part_key_expr = nullptr;
     if (OB_FAIL(partition_keys.get_column_id(i, column_id))) {
       LOG_WARN("fail to get column id", K(ret), K(i));
-    } else if (get_part_expr_for_assign && OB_FAIL(ctx.get_assignment_by_column_id(column_id, assignment))) {
+    } else if (get_part_expr_for_assign && !ctx.is_inc_or_append() && OB_FAIL(ctx.get_assignment_by_column_id(column_id, assignment))) {
       LOG_WARN("fail to get assignment by column id", K(ret), K(column_id), K(i));
     } else if (OB_NOT_NULL(assignment)) { // 分区键被更新了，使用新值（赋值表达式）
       // 当 update t set c1='new_value' where ... 且 c1 是分区键时，
