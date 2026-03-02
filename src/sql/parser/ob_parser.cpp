@@ -605,14 +605,18 @@ int ObParser::split_start_with_pl(const ObString &stmt,
       }
       LOG_WARN("fail parse multi part", K(part), K(stmt), K(tmp_ret));
     } else {
-      CK(remain == parse_result.end_col_);
-      CK(nullptr != bak_allocator);
-      CK(nullptr != parse_result.result_tree_);
-      for (int64_t i = 0; OB_SUCC(ret) && i < parse_result.result_tree_->num_child_; ++i) {
-        int64_t str_len = parse_result.result_tree_->children_[i]->str_len_;
-        int64_t offset = parse_result.result_tree_->children_[i]->pos_;
-        ObString query(str_len, stmt.ptr() + offset);
-        OZ(queries.push_back(query));
+      if (remain != parse_result.end_col_) {
+        ret = OB_ERR_PARSE_SQL;
+        LOG_WARN("parse sql failed in split_start_with_pl, end_col mismatch", K(ret), K(part), K(remain), K(parse_result.end_col_));
+      } else {
+        CK(nullptr != bak_allocator);
+        CK(nullptr != parse_result.result_tree_);
+        for (int64_t i = 0; OB_SUCC(ret) && i < parse_result.result_tree_->num_child_; ++i) {
+          int64_t str_len = parse_result.result_tree_->children_[i]->str_len_;
+          int64_t offset = parse_result.result_tree_->children_[i]->pos_;
+          ObString query(str_len, stmt.ptr() + offset);
+          OZ(queries.push_back(query));
+        }
       }
     }
     allocator_ = bak_allocator;
