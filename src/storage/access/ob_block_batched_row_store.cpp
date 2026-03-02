@@ -91,6 +91,12 @@ void ObBlockBatchedRowStore::reset()
   len_array_ = nullptr;
 }
 
+void ObBlockBatchedRowStore::reuse()
+{
+  ObBlockRowStore::reuse();
+  iter_end_flag_ = IterEndState::PROCESSING;
+}
+
 int ObBlockBatchedRowStore::reuse_capacity(const int64_t capacity)
 {
   int ret = OB_SUCCESS;

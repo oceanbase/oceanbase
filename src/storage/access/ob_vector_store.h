@@ -41,6 +41,7 @@ public:
   virtual ~ObVectorStore();
   virtual int init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask = nullptr) override;
   virtual void reset() override;
+  virtual void reuse() override;
   // shallow copy
   virtual int fill_rows(
       const int64_t group_idx,
