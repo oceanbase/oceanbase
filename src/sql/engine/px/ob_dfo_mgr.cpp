@@ -588,12 +588,12 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
   } else if (phy_op->get_type() == PHY_SELECT_INTO && NULL != parent_dfo) {
     // odps只支持一台机器上的并行 只能有一个sqc ODPS写
     const ObSelectIntoSpec *select_into_spec = static_cast<const ObSelectIntoSpec*>(phy_op);
-    ObExternalFileFormat external_properties;
+    ObExternalFileFormat::FormatType format_type = ObExternalFileFormat::INVALID_FORMAT;
     if (!select_into_spec->external_properties_.str_.empty()) {
-      if (OB_FAIL(external_properties.load_from_string(select_into_spec->external_properties_.str_,
-                                                       allocator))) {
-        LOG_WARN("failed to load external properties", K(ret));
-      } else if (ObExternalFileFormat::FormatType::ODPS_FORMAT == external_properties.format_type_) {
+      if (OB_FAIL(ObExternalFileFormat::parse_format_type(
+          select_into_spec->external_properties_.str_, allocator, format_type))) {
+        LOG_WARN("failed to parse external format type", K(ret));
+      } else if (ObExternalFileFormat::FormatType::ODPS_FORMAT == format_type) {
         parent_dfo->set_into_odps(true);
       }
     }
