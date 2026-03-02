@@ -758,7 +758,6 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
   ObSqlString select_sql;
   bool is_valid = true;
   ObSEArray<int64_t, 4> monitor_modified_part_ids;
-  bool is_check_global = false;
   int64_t table_inc_modified = 0;
   bool has_part_invalid_inc = false;
   if (OB_FAIL(ObDbmsStatsUtils::check_table_read_write_valid(tenant_id, is_valid))) {
@@ -840,7 +839,6 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
           }
 
           has_part_invalid_inc |= inc_mod_count < 0;
-          is_check_global = true;
           table_inc_modified += inc_mod_count;
         }
 
@@ -858,8 +856,7 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
               LOG_WARN("failed to check partition stat state", K(ret));
             } else if (OB_FAIL(add_var_to_array_no_dup(monitor_modified_part_ids, cur_part_id))) {
               LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret));
-            } else if (is_check_global &&
-                       OB_FAIL(check_partition_stat_state(global_part_id,
+            } else if (OB_FAIL(check_partition_stat_state(global_part_id,
                                                           has_part_invalid_inc ? -1 : table_inc_modified,
                                                           stale_percent_threshold,
                                                           partition_stat_infos))) {
@@ -1600,7 +1597,7 @@ int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
           " / (m.last_inserts-m.last_deletes) END) > cast(coalesce(up.valchar, gp.spare4) as double) "\
           " AND m.table_id > %lu and m.tablet_id > %lu and m.tablet_id < %lu "\
           " )t "\
-          " order by ratio desc,table_id, tablet_id  limit %lu ",
+          " order by ratio desc,table_id desc, tablet_id  limit %lu ",
           share::OB_ALL_MONITOR_MODIFIED_TNAME,
           share::OB_ALL_OPTSTAT_USER_PREFS_TNAME,
           share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
