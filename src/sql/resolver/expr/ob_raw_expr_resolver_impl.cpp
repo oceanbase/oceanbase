@@ -1203,6 +1203,16 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         }
         break;
       }
+      case T_FUN_SYS_UID: {
+        ObSysFunRawExpr *f_expr = NULL;
+        if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_UID, f_expr))) {
+          LOG_WARN("fail to create raw expr", K(ret));
+        } else {
+          f_expr->set_func_name(ObString::make_string(N_UID));
+          expr = f_expr;
+        }
+        break;
+      }
       case T_FUN_SYS_CUR_TIME: {
         ObString err_info("current_time");
         if (OB_FAIL(process_timestamp_node(node, err_info, expr))) {
@@ -2906,7 +2916,7 @@ int ObRawExprResolverImpl::check_name_type(
     } else if (OB_FAIL(check_pl_variable(q_name, check_success))) {
       LOG_WARN("check pl variable failed", K(q_name), K(ret));
     } else if (check_success) {
-      type = q_name.is_type_method() ? TYPE_METHOD : PL_VAR;;
+      type = q_name.is_type_method() ? TYPE_METHOD : PL_VAR;
     } else {
       q_name.access_idents_.at(q_name.access_idents_.count() - 1).set_pl_udf();
       type = PL_UDF;
@@ -2943,7 +2953,8 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
       func_node.type_ == T_FUN_SYS_CUR_DATE ||
       func_node.type_ == T_FUN_SYS_SESSIONTIMEZONE ||
       func_node.type_ == T_FUN_SYS_DBTIMEZONE ||
-      func_node.type_ == T_FUN_SYS_USER)) {
+      func_node.type_ == T_FUN_SYS_USER ||
+      func_node.type_ == T_FUN_SYS_UID)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is NULL", K(func_node.num_child_), K(ret));
   } else {
@@ -2964,6 +2975,8 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
       ident_name = ObString::make_string("DBTIMEZONE");
     } else if (T_FUN_SYS_USER == func_node.type_) {
       ident_name = ObString::make_string("USER");
+    } else if (T_FUN_SYS_UID == func_node.type_) {
+      ident_name = ObString::make_string("UID");
     } else {
       ident_name = ObString(static_cast<int32_t>(
       func_node.children_[0]->str_len_), func_node.children_[0]->str_value_);
@@ -3037,7 +3050,8 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
                     || T_FUN_SYS_CUR_DATE == func_node.type_
                     || T_FUN_SYS_SESSIONTIMEZONE == func_node.type_
                     || T_FUN_SYS_DBTIMEZONE == func_node.type_
-                    || T_FUN_SYS_USER == func_node.type_) {
+                    || T_FUN_SYS_USER == func_node.type_
+                    || T_FUN_SYS_UID == func_node.type_) {
             OZ (recursive_resolve(&func_node, func_expr));
           }  else if (func_node.type_ == T_FUN_SYS_XMLPARSE) {
             OZ (process_xmlparse_node(&func_node, func_expr));
@@ -3069,7 +3083,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
                                                                  udf_node))) {
             LOG_WARN("transform fun sys to udf node failed", K(ret));
           } else if (OB_FAIL(resolve_udf_node(udf_node, access_ident.udf_info_))) {
-            LOG_WARN("process udf node failed", K(ret));
+            LOG_WARN("process udf node failed", K(ret), K(q_name));
           } else if (OB_ISNULL(udf_expr = access_ident.udf_info_.ref_expr_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid udf expr", K(ret));
@@ -3186,7 +3200,8 @@ int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNod
              || T_FUN_SYS_CUR_TIMESTAMP == left_node.type_
              || T_FUN_SYS_SESSIONTIMEZONE == left_node.type_
              || T_FUN_SYS_DBTIMEZONE == left_node.type_
-             || T_FUN_SYS_USER == left_node.type_) {
+             || T_FUN_SYS_USER == left_node.type_
+             || T_FUN_SYS_UID == left_node.type_) {
     OZ (resolve_func_node_of_obj_access_idents(left_node, q_name));
   } else if (left_node.type_ == T_LINK_NODE && left_node.value_ == 3) {
     ret = OB_ERR_PARSER_SYNTAX; // array not in object access ref : array[1]
