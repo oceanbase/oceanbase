@@ -165,6 +165,7 @@ int ObAllVirtualDMmlStats::fill_scanner(uint64_t tenant_id)
     MTL_SWITCH(tenant_id) {
       ObOptDmlStatMapGetter getter(scanner_, output_column_ids_, svr_ip_, port_, cur_row_, tenant_id);
       ObOptStatMonitorManager *optstat_monitor_mgr = MTL(ObOptStatMonitorManager*);
+      scanner_.reuse();
       if (OB_ISNULL(optstat_monitor_mgr)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "optstat monitor mgr is NULL", K(ret), K(tenant_id), K(effective_tenant_id_));
