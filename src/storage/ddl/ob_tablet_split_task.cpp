@@ -3214,7 +3214,7 @@ int ObSplitFinishTask::process()
 
 
 ObRowScan::ObRowScan() : is_inited_(false), row_iter_(nullptr), ctx_(),
-    access_ctx_(), rowkey_read_info_(nullptr), access_param_(), allocator_("SplitScanRow")
+    access_ctx_(), rowkey_read_info_(nullptr), access_param_(), allocator_("SplitScanRow", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {}
 
 ObRowScan::~ObRowScan()
@@ -3432,8 +3432,11 @@ int ObRowScan::get_next_row(const ObDatumRow *&tmp_row)
   return ret;
 }
 
-ObSnapshotRowScan::ObSnapshotRowScan() : is_inited_(false), allocator_("SplitSnapScan"), snapshot_version_(0),
-  range_(), read_info_(), write_row_(), out_cols_projector_(), access_param_(), ctx_(), access_ctx_(), get_table_param_(), scan_merge_(nullptr)
+ObSnapshotRowScan::ObSnapshotRowScan()
+  : is_inited_(false), allocator_("SplitSnapScan", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), snapshot_version_(0),
+    range_(), read_info_(), write_row_(),
+    out_cols_projector_(), access_param_(), ctx_(),
+    access_ctx_(), get_table_param_(), scan_merge_(nullptr)
 {
   reset();
 }
@@ -3652,7 +3655,9 @@ int ObSnapshotRowScan::get_next_row(const ObDatumRow *&out_row)
 }
 
 ObUncommittedRowScan::ObUncommittedRowScan()
-  : row_scan_(), row_scan_end_(false), next_row_(nullptr), major_snapshot_version_(OB_INVALID_TIMESTAMP), trans_version_col_idx_(0), row_queue_(), row_queue_allocator_(), row_queue_has_unskippable_row_(false)
+  : row_scan_(), row_scan_end_(false), next_row_(nullptr), major_snapshot_version_(OB_INVALID_TIMESTAMP),
+    trans_version_col_idx_(0), row_queue_(), row_queue_allocator_("SplitRowQueue", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    row_queue_has_unskippable_row_(false)
 {
 }
 
