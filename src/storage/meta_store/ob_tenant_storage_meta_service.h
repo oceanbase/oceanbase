@@ -116,6 +116,8 @@ public:
   ObSharedObjectReaderWriter &get_shared_object_raw_reader_writer() { return shared_object_raw_rwriter_; }
   int update_hidden_sys_tenant_super_block_to_real(omt::ObTenant &sys_tenant);
   int update_real_sys_tenant_super_block_to_hidden(omt::ObTenant &sys_tenant);
+  /// @brief: get tenant meta within the scope of @c super_block_mutex
+  int get_tenant_meta_with_lock(omt::ObTenant &tenant, /*out*/omt::ObTenantMeta &meta);
 
 #ifdef OB_BUILD_SHARED_STORAGE
   // for shared storage gc operation
