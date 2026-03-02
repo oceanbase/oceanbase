@@ -545,6 +545,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
                                       || op_type == PHY_REPLACE
                                       || op_type == PHY_LOCK);
   } else if (phy_op->get_type() == PHY_TEMP_TABLE_ACCESS && NULL != parent_dfo) {
+    px_coord_info.table_access_type_ = TableAccessType::HAS_USER_TABLE;
     parent_dfo->set_temp_table_scan(true);
     const ObTempTableAccessOpSpec *access = static_cast<const ObTempTableAccessOpSpec*>(phy_op);
     parent_dfo->set_temp_table_id(access->get_table_id());
@@ -553,6 +554,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       OZ(px_coord_info.p2p_temp_table_info_.dfos_.push_back(parent_dfo));
     }
   } else if (phy_op->get_type() == PHY_VEC_TEMP_TABLE_ACCESS && NULL != parent_dfo) {
+    px_coord_info.table_access_type_ = TableAccessType::HAS_USER_TABLE;
     parent_dfo->set_temp_table_scan(true);
     const ObTempTableAccessVecOpSpec *access = static_cast<const ObTempTableAccessVecOpSpec*>(phy_op);
     parent_dfo->set_temp_table_id(access->get_table_id());
@@ -560,6 +562,9 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       OZ(px_coord_info.p2p_temp_table_info_.temp_access_ops_.push_back(phy_op));
       OZ(px_coord_info.p2p_temp_table_info_.dfos_.push_back(parent_dfo));
     }
+  } else if (phy_op->get_type() == PHY_VEC_TEMP_TABLE_INSERT
+             || phy_op->get_type() == PHY_TEMP_TABLE_INSERT) {
+    px_coord_info.table_access_type_ = TableAccessType::HAS_USER_TABLE;
   } else if (phy_op->get_type() == PHY_SELECT_INTO && NULL != parent_dfo) {
     // odps只支持一台机器上的并行 只能有一个sqc ODPS写
     const ObSelectIntoSpec *select_into_spec = static_cast<const ObSelectIntoSpec*>(phy_op);
