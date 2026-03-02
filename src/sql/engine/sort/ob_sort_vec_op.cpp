@@ -317,7 +317,7 @@ int ObSortVecOp::get_next_batch_prescan_store(const int64_t max_rows, int64_t &r
   return ret;
 }
 
-int ObSortVecOp::scan_all_then_sort_batch()
+int __attribute__((noinline)) ObSortVecOp::scan_all_then_sort_batch()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_prescan_row_store())) {
