@@ -18052,6 +18052,7 @@ def_table_schema(
 )
 # 12597: __all_virtual_object_storage_stat
 # 12598: __all_virtual_object_storage_error_record
+# 12599: __all_virtual_audit_log_encryption_password
 
 def_table_schema(
   owner = 'jianyun.sjy',

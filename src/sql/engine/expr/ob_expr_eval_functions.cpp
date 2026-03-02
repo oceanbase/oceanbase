@@ -1503,6 +1503,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprCountSubstrings::eval_count_substrings,              /* 901 */
   ObExprCollationTypeToCharset::eval_collation_type_to_charset,       /* 902 */
   ObExprCollationTypeToCollation::eval_collation_type_to_collation,   /* 903 */
+  NULL, // ObExprAuditLogPasswordGet::eval_get_encryption_password,   /* 904 */
+  NULL, // ObExprAuditLogPasswordSet::eval_set_encryption_password,   /* 905 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
