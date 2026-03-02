@@ -493,7 +493,7 @@ int ObTenantCheckpointSlogHandler::replay_new_checkpoint(const ObTenantSuperBloc
       } else if (OB_FAIL(tfm->list_private_ckpt_file(MTL_ID(), MTL_EPOCH_ID(), file_ids))) {
         LOG_WARN("failed to list private ckpt file", K(ret));
       }
-      for (int64_t i = 0; OB_SUCC(ret) && file_ids.count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_ids.count(); ++i) {
         min_file_id = MIN(min_file_id, file_ids.at(i));
         max_file_id = MAX(max_file_id, file_ids.at(i));
       }
