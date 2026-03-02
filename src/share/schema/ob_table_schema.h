@@ -737,6 +737,7 @@ public:
   virtual inline ObIndexStatus get_index_status() const { return INDEX_STATUS_MAX; }
   virtual inline bool is_index_table() const = 0;
   virtual inline bool has_ttl_definition() const { return false; }
+  virtual inline bool was_compaction_ttl() const { return false; }
   virtual int get_is_column_store(bool &is_column_store) const { UNUSED(is_column_store); return common::OB_NOT_SUPPORTED; }
 
   virtual int get_store_column_ids(common::ObIArray<ObColDesc> &column_ids, const bool full_col) const
@@ -1751,6 +1752,7 @@ public:
   inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
   inline ObTTLFlag get_ttl_flag() const { return ttl_flag_; }
   virtual bool has_ttl_definition() const override { return !get_ttl_definition().empty(); }
+  virtual bool was_compaction_ttl() const override { return get_ttl_flag().was_compaction_ttl_; }
   inline bool is_compaction_rowscn_ttl_di_table() const
   {
     return get_ttl_flag().ttl_type_ == share::ObTTLDefinition::COMPACTION

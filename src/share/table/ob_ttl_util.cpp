@@ -1609,6 +1609,18 @@ int ObSimpleTableTTLChecker::get_ttl_expr_ts(const ObTableTTLExpr &ttl_expr, con
   return ret;
 }
 
+int ObSimpleTableTTLChecker::get_compaction_ttl_expr_ts(const ObTableTTLExpr &ttl_expr, const int64_t input_ts, int64_t &expire_ts)
+{
+  int ret = OB_SUCCESS;
+  expire_ts = input_ts;
+  if (ttl_expr.nsecond_ > 0 && OB_FAIL(ObTimeConverter::date_add_nsecond(expire_ts, -ttl_expr.nsecond_, 0, expire_ts))) {
+    LOG_WARN("fail to add nsecond", K(ret), K(input_ts), K(ttl_expr.nsecond_));
+  } else if (ttl_expr.nmonth_ > 0 && OB_FAIL(ObTimeConverter::date_add_nmonth(expire_ts, -ttl_expr.nmonth_, expire_ts, true))) {
+    LOG_WARN("fail to add month", K(ret), K(input_ts), K(ttl_expr.nmonth_));
+  }
+  return ret;
+}
+
 int ObSimpleTableTTLChecker::get_ttl_filter_us(int64_t &ttl_filter_us)
 {
   int ret = OB_SUCCESS;
@@ -1619,11 +1631,8 @@ int ObSimpleTableTTLChecker::get_ttl_filter_us(int64_t &ttl_filter_us)
   } else {
     const ObTableTTLExpr &ttl_expr = ttl_definition_.at(0);
     const int64_t input_us = ObTimeUtility::current_time(); // us
-    int64_t expire_us = 0;
-    if (OB_FAIL(get_ttl_expr_ts(ttl_expr, input_us, expire_us))) {
+    if (OB_FAIL(get_compaction_ttl_expr_ts(ttl_expr, input_us, ttl_filter_us))) {
       LOG_WARN("fail to get ttl expr ts", K(ret), K(ttl_expr), K(input_us));
-    } else {
-      ttl_filter_us = 2 * input_us - expire_us;
     }
   }
   return ret;

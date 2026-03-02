@@ -2398,6 +2398,7 @@ int ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema)
     minor_row_store_type_ = input_schema.get_minor_row_store_type();
     skip_index_level_ = input_schema.get_skip_index_level();
     has_ttl_definition_ = input_schema.has_ttl_definition();
+    was_compaction_ttl_ = input_schema.was_compaction_ttl();
   }
 
   return ret;

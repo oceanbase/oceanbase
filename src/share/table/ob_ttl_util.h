@@ -600,6 +600,7 @@ protected:
     const bool in_full_column_order,
     bool &has_datetime_col);
   int get_ttl_expr_ts(const ObTableTTLExpr &ttl_expr, const int64_t input_ts, int64_t &expire_ts);
+  int get_compaction_ttl_expr_ts(const ObTableTTLExpr &ttl_expr, const int64_t input_ts, int64_t &expire_ts);
 protected:
   common::ObSEArray<ObTableTTLExpr, 8> ttl_definition_;
   common::ObSEArray<int64_t, 8> row_cell_ids_; // cell idx scaned row for each ttl expr

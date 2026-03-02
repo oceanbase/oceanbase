@@ -1610,8 +1610,7 @@ int ObMediumCompactionScheduleFunc::fill_mds_filter_info(ObMediumCompactionInfo 
   ObVersionRange read_version_range(medium_info.last_medium_snapshot_, medium_info.medium_snapshot_);
   const bool read_mds = medium_info.storage_schema_.is_global_index_table()
     || tablet_handle_.get_obj()->has_merged_with_mds_info()
-    || medium_info.storage_schema_.has_ttl_definition()
-    || ObCompactionTTLUtil::is_compaction_ttl_merge_engine(medium_info.storage_schema_.get_merge_engine_type());
+    || medium_info.storage_schema_.was_compaction_ttl();
   if (medium_info.storage_schema_.is_mlog_table()) {
     ret = fill_mlog_purge_scn(medium_info);
   } else if (read_mds && OB_FAIL(mds_info_mgr.init(allocator_, *tablet_handle_.get_obj(), nullptr/*split_extra_tablet_handles_ptr*/, read_version_range, false/*for_access*/))) {
@@ -1702,8 +1701,7 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
   ObVersionRange read_version_range(last_major_snapshot, merge_version);
   const bool read_mds = medium_info.storage_schema_.is_global_index_table()
     || tablet_handle_.get_obj()->has_merged_with_mds_info()
-    || medium_info.storage_schema_.has_ttl_definition()
-    || ObCompactionTTLUtil::is_compaction_ttl_merge_engine(medium_info.storage_schema_.get_merge_engine_type());
+    || medium_info.storage_schema_.was_compaction_ttl();
   if (OB_FAIL(tablet.fetch_table_store(wrapper))) {
     LOG_WARN("failed to get table store wrapper", K(ret));
   } else if (OB_FAIL(check_progressive_merge(*wrapper.get_member(), medium_info.storage_schema_, is_progressive_merge))) {

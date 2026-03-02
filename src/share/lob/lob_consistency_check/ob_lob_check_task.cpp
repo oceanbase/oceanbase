@@ -195,6 +195,8 @@ int ObLobCheckTask::check_table_valid_and_return_tablet(const uint64_t tenant_id
     LOG_WARN("table schema is null", KR(ret), K(table_id));
   } else if (!table_schema->is_sys_table() && !table_schema->is_user_table() && !table_schema->is_index_table()) {
   } else if (!table_schema->has_lob_aux_table()) {
+  } else if (table_schema->is_append_only_merge_engine()) {
+    // skip append only table
   } else if (OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
     LOG_WARN("failed to get tablet ids", KR(ret), K(table_id));
   } else if (tablet_ids.count() == 0) {

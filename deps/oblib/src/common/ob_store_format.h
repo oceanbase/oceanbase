@@ -267,6 +267,17 @@ public:
            type == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY;
   }
 
+  static OB_INLINE ObMergeEngineType get_lob_aux_inherit_merge_engine_type(const ObMergeEngineType type)
+  {
+    // LOB_AUX can't inherit delete-insert merge engine because of the dependency of sql_seq in OBCDC
+    switch (type) {
+      case ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY:
+        return ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY;
+      default:
+        return ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+    }
+  }
+
   static OB_INLINE const char *get_merge_engine_type_name(const ObMergeEngineType merge_engine_type)
   {
     const int64_t merge_engine_type_idx = static_cast<int64_t>(merge_engine_type);
