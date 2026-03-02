@@ -953,13 +953,16 @@ int ObPxRpcInitTaskArgs::deep_copy_assign(ObPxRpcInitTaskArgs &src,
              || OB_ISNULL(exec_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("deserialize args not init", K(ret));
-  } else if (OB_FAIL(src.serialize(static_cast<char *>(ser_ptr), ser_arg_len, ser_pos))) {
-    LOG_WARN("fail serialzie init task arg", KP(ser_ptr), K(ser_arg_len), K(ser_pos), K(ret));
-  } else if (OB_FAIL(deserialize(static_cast<const char *>(ser_ptr), ser_pos, des_pos))) {
-    LOG_WARN("fail des task arg", KP(ser_ptr), K(ser_pos), K(des_pos), K(ret));
-  } else if (ser_pos != des_pos) {
-    ret = OB_DESERIALIZE_ERROR;
-    LOG_WARN("data_len and pos mismatch", K(ser_arg_len), K(ser_pos), K(des_pos), K(ret));
+  } else {
+    ObPhyPlanVersionGuard phy_plan_version_guard(*inner_phy_plan_);
+    if (OB_FAIL(src.serialize(static_cast<char *>(ser_ptr), ser_arg_len, ser_pos))) {
+      LOG_WARN("fail serialzie init task arg", KP(ser_ptr), K(ser_arg_len), K(ser_pos), K(ret));
+    } else if (OB_FAIL(deserialize(static_cast<const char *>(ser_ptr), ser_pos, des_pos))) {
+      LOG_WARN("fail des task arg", KP(ser_ptr), K(ser_pos), K(des_pos), K(ret));
+    } else if (ser_pos != des_pos) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("data_len and pos mismatch", K(ser_arg_len), K(ser_pos), K(des_pos), K(ret));
+    }
   }
   if (OB_SUCC(ret)) {
     if (sqc_handler_->get_sqc_init_arg().sqc_.is_fulltree()
