@@ -12562,7 +12562,7 @@ public:
   }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), KP_(tx_desc),
                K_(need_release), K_(direct_load_type), K_(trans_id), K_(seq_no),
-               K_(snapshot_version), K_(data_format_version));
+               K_(snapshot_version), K_(data_format_version), K_(is_co_sstable));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -12575,6 +12575,9 @@ public:
   transaction::ObTxSEQ seq_no_;
   int64_t snapshot_version_;
   uint64_t data_format_version_;
+  bool is_co_sstable_;
+  ObString data_inc_major_buffer_;
+  ObString lob_inc_major_buffer_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLIncCommitLogArg);
 };

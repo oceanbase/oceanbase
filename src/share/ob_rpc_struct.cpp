@@ -12365,7 +12365,15 @@ OB_DEF_SERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE, direct_load_type_, trans_id_, seq_no_, snapshot_version_, data_format_version_);
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                direct_load_type_,
+                trans_id_,
+                seq_no_,
+                snapshot_version_,
+                data_format_version_,
+                is_co_sstable_,
+                data_inc_major_buffer_,
+                lob_inc_major_buffer_);
   }
   return ret;
 }
@@ -12388,7 +12396,15 @@ OB_DEF_DESERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, direct_load_type_, trans_id_, seq_no_, snapshot_version_, data_format_version_);
+    LST_DO_CODE(OB_UNIS_DECODE,
+                direct_load_type_,
+                trans_id_,
+                seq_no_,
+                snapshot_version_,
+                data_format_version_,
+                is_co_sstable_,
+                data_inc_major_buffer_,
+                lob_inc_major_buffer_);
   }
   return ret;
 }
@@ -12400,7 +12416,15 @@ OB_DEF_SERIALIZE_SIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
   if (tx_desc_ != nullptr) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, *tx_desc_);
   }
-  LST_DO_CODE(OB_UNIS_ADD_LEN, direct_load_type_, trans_id_, seq_no_, snapshot_version_, data_format_version_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              direct_load_type_,
+              trans_id_,
+              seq_no_,
+              snapshot_version_,
+              data_format_version_,
+              is_co_sstable_,
+              data_inc_major_buffer_,
+              lob_inc_major_buffer_);
   return len;
 }
 
