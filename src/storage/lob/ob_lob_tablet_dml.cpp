@@ -269,6 +269,9 @@ int ObLobTabletDmlHelper::insert_lob_col(
         LOG_DEBUG("[STORAGE_LOB]write ob lob data.", K(lob_param), KPC(lob_param.lob_common_),
                   K(lob_param.handle_size_), K(column.col_type_.get_collation_type()));
       }
+    } else if (lob_param.byte_size_ != 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("[STORAGE_LOB]byte size is not 0", K(ret), K(lob_param));
     } else if (OB_FAIL(lob_mngr->append(lob_param, loc))) {
       LOG_WARN("[STORAGE_LOB]lob append failed.", K(ret));
     } else {
