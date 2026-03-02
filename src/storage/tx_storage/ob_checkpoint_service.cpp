@@ -697,8 +697,9 @@ private:
 
       // Check if SSLOG_TABLE size exceeds meta tenant memory limit threshold
       bool sslog_table_size_exceeded = false;
-      if (is_sys_tenant(MTL_ID()) && ls.get_ls_id().is_sslog_ls()) {
-        // the meta data of this ls will store in palf_kv, so we do not consider it here.
+      if (is_sys_tenant(MTL_ID()) || is_meta_tenant(MTL_ID())) {
+        // if disable the flush in sys or meta tenant, the size of the sslog table may not be reduced
+        // because it cannot meet the conditions required for minor compaction.
       } else {
         ObSSGarbageCollectorService *gc_service = MTL(ObSSGarbageCollectorService *);
         if (OB_NOT_NULL(gc_service)) {

@@ -3363,7 +3363,7 @@ DEF_STR_WITH_CHECKER(system_protected_tenant_parameters, OB_CLUSTER_PARAMETER, "
 DEF_BOOL(_enable_atomic_drop_database, OB_TENANT_PARAMETER, "True",
          "Enable or disable atomic drop database.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "0", "[0,)",
+DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "300", "[0,)",
         "Controls the write throttling mechanism based on the percentage of the sslog table occupying the meta tenant disk. "
         "If set to 0, write throttling caused by sslog table size is disabled; Otherwise, if the size of sslog table is "
         "larger than (meta tenant disk limit * threshold), write throttling is triggered to slow down incoming write requests."
