@@ -120,6 +120,8 @@ public:
   }
 
 private:
+  typedef common::ObIArray<common::ObAddr> MemberAddrs;
+
   int process_task_(const share::ObTransferTask::TaskStatus &task_stat);
   int process_init_task_(const share::ObTransferTaskID task_id);
   int check_ls_member_list_and_learner_list_(
@@ -127,14 +129,11 @@ private:
       const share::ObLSID &src_ls,
       const share::ObLSID &dest_ls,
       share::ObTransferTaskComment &result_comment);
-  int get_member_list_and_learner_list_by_inner_sql_(
-      common::ObISQLClient &sql_proxy,
-      const share::ObLSID &src_ls,
-      const share::ObLSID &dest_ls,
-      share::ObLSReplica::MemberList &src_ls_member_list,
-      share::ObLSReplica::MemberList &dest_ls_member_list,
-      common::GlobalLearnerList &src_ls_learner_list,
-      common::GlobalLearnerList &dest_ls_learner_list);
+  int get_member_list_and_learner_list_(
+      const share::ObLSID &ls_id,
+      MemberAddrs &all_member_list,
+      MemberAddrs &member_list_without_logonly,
+      common::GlobalLearnerList &learner_list);
   int lock_table_and_part_(
       ObMySQLTransaction &trans,
       const share::ObLSID &src_ls,
@@ -272,10 +271,11 @@ private:
       const int64_t new_tablet_cnt,
       bool &exceed_threshold);
   bool is_dup_ls_(const share::ObLSID &ls_id, const ObIArray<share::ObLSAttr> &dup_ls_attrs);
-  int construct_ls_member_list_and_learner_list_(
-      common::sqlclient::ObMySQLResult &res,
-      share::ObLSReplica::MemberList &ls_member_list,
-      common::GlobalLearnerList &ls_learner_list);
+  int get_member_list_and_learner_list_from_leader_(
+      const share::ObLSInfo &ls_info,
+      MemberAddrs &all_member_list,
+      MemberAddrs &member_list_without_logonly,
+      common::GlobalLearnerList &learner_list);
   int64_t calc_transfer_retry_interval_(
       const share::ObTransferTaskID &current_failed_task_id,
       int64_t &retry_count,
@@ -284,8 +284,14 @@ private:
   int check_if_task_is_finished_(const share::ObTransferTaskID &task_id, bool &is_finished);
   int check_replay_scn_in_member_list_(
       const share::ObLSID &ls_id,
-      const share::ObLSReplica::MemberList &ls_member_list,
+      const MemberAddrs &ls_member_list,
       bool &check_pass);
+  bool member_list_are_same_(
+      const MemberAddrs &src_member_list,
+      const MemberAddrs &dest_member_list);
+  int check_all_servers_in_member_list_are_active_(
+      const MemberAddrs &member_list,
+      bool &all_active);
 private:
   static const int64_t IDLE_TIME_US = 10 * 1000 * 1000L; // 10s
   static const int64_t BUSY_IDLE_TIME_US = 100 * 1000L; // 100ms
