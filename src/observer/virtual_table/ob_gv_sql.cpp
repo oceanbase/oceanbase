@@ -1366,13 +1366,10 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         } else {
           ObString tmp(len, tmp_buff_.buff_);
           ObString str;
-          if (OB_FAIL(ObCharset::charset_convert(*allocator_,
-                  tmp,
-                  plan->stat_.sql_cs_type_,
-                  ObCharset::get_system_collation(),
-                  str,
-                  ObCharset::COPY_STRING_ON_SAME_CHARSET | ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
-            SERVER_LOG(WARN, "convert raw_sql failed", K(ret));
+          if (OB_FAIL(ob_write_string(*allocator_,
+                                      tmp,
+                                      str))) {
+            SERVER_LOG(WARN, "copy base constraints failed", K(ret));
           } else {
             cells[i].set_lob_value(ObLongTextType, str.ptr(),
                                   static_cast<int32_t>(str.length()));
@@ -1393,13 +1390,10 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         } else {
           ObString tmp(len, tmp_buff_.buff_);
           ObString str;
-          if (OB_FAIL(ObCharset::charset_convert(*allocator_,
-                  tmp,
-                  plan->stat_.sql_cs_type_,
-                  ObCharset::get_system_collation(),
-                  str,
-                  ObCharset::COPY_STRING_ON_SAME_CHARSET | ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
-            SERVER_LOG(WARN, "convert raw_sql failed", K(ret));
+          if (OB_FAIL(ob_write_string(*allocator_,
+                                      tmp,
+                                      str))) {
+            SERVER_LOG(WARN, "copy duplicate table constraints failed", K(ret));
           } else {
             cells[i].set_lob_value(ObLongTextType, str.ptr(),
                                   static_cast<int32_t>(str.length()));
@@ -1420,13 +1414,10 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         } else {
           ObString tmp(len, tmp_buff_.buff_);
           ObString str;
-          if (OB_FAIL(ObCharset::charset_convert(*allocator_,
-                  tmp,
-                  plan->stat_.sql_cs_type_,
-                  ObCharset::get_system_collation(),
-                  str,
-                  ObCharset::COPY_STRING_ON_SAME_CHARSET | ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
-            SERVER_LOG(WARN, "convert raw_sql failed", K(ret));
+          if (OB_FAIL(ob_write_string(*allocator_,
+                                      tmp,
+                                      str))) {
+            SERVER_LOG(WARN, "copy strict location constraints failed", K(ret));
           } else {
             cells[i].set_lob_value(ObLongTextType, str.ptr(),
                                   static_cast<int32_t>(str.length()));
@@ -1447,13 +1438,10 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         } else {
           ObString tmp(len, tmp_buff_.buff_);
           ObString str;
-          if (OB_FAIL(ObCharset::charset_convert(*allocator_,
-                  tmp,
-                  plan->stat_.sql_cs_type_,
-                  ObCharset::get_system_collation(),
-                  str,
-                  ObCharset::COPY_STRING_ON_SAME_CHARSET | ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
-            SERVER_LOG(WARN, "convert raw_sql failed", K(ret));
+          if (OB_FAIL(ob_write_string(*allocator_,
+                                      tmp,
+                                      str))) {
+            SERVER_LOG(WARN, "copy non-strict constraints failed", K(ret));
           } else {
             cells[i].set_lob_value(ObLongTextType, str.ptr(),
                                   static_cast<int32_t>(str.length()));
