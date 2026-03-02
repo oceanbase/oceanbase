@@ -239,6 +239,7 @@ enum SessionSyncInfoType {
   SESSION_SYNC_SEQUENCE_CURRVAL = 9, // for sequence currval
   SESSION_SYNC_ERROR_SYS_VAR = 10, // for error scene need sync sysvar info
   SESSION_SYNC_QUERY_INFO = 11, // for query level session info
+  SESSION_SYNC_TRANS_GTT_V2_SEQUENCE = 12, // for trans gtt v2 sequence
   SESSION_SYNC_MAX_TYPE,
 };
 
@@ -422,6 +423,22 @@ class ObQueryInfoEncoder : public ObSessInfoEncoder {
 public:
   ObQueryInfoEncoder() : ObSessInfoEncoder() {}
   virtual ~ObQueryInfoEncoder() {}
+  virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
+  virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
+  virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
+  virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
+  virtual int get_fetch_sess_info_size(ObSQLSessionInfo& sess, int64_t &size) override;
+  virtual int compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                int64_t current_sess_length, const char *last_sess_buf,
+                                int64_t last_sess_length) override;
+  virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+                                int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override;
+};
+
+class ObTransGttV2SequenceEncoder : public ObSessInfoEncoder {
+public:
+  ObTransGttV2SequenceEncoder() : ObSessInfoEncoder() {}
+  virtual ~ObTransGttV2SequenceEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
   virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
@@ -1033,6 +1050,9 @@ public:
   storage::ObSessionTabletInfoMap &get_gtt_tablet_info_map() { return gtt_tablet_info_map_; }
   void gen_gtt_session_scope_unique_id();
   void gen_gtt_trans_scope_unique_id();
+  void set_trans_gtt_v2_sequence(const int64_t sequence) { trans_gtt_v2_sequence_ = sequence;  }
+  int64_t get_trans_gtt_v2_sequence() const { return trans_gtt_v2_sequence_; }
+  void update_trans_gtt_v2_sequence();
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
   common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
   int add_dblink_sequence_schema(ObSequenceSchema *schema);
@@ -2021,6 +2041,7 @@ private:
                             &sequence_currval_encoder_,
                             &error_sync_sys_var_encoder_,
                             &query_info_encoder_,
+                            &trans_gtt_v2_sequence_encoder_,
                             };
   ObSysVarEncoder sys_var_encoder_;
   //ObUserVarEncoder usr_var_encoder_;
@@ -2035,6 +2056,7 @@ private:
   ObSequenceCurrvalEncoder sequence_currval_encoder_;
   ObErrorSyncSysVarEncoder error_sync_sys_var_encoder_;
   ObQueryInfoEncoder query_info_encoder_;
+  ObTransGttV2SequenceEncoder trans_gtt_v2_sequence_encoder_;
 public:
   void post_sync_session_info();
   void prep_txn_free_route_baseline(bool reset_audit = true);
@@ -2109,6 +2131,7 @@ private:
   bool has_ccl_rule_;
   int64_t last_update_ccl_cnt_time_;
   int64_t curr_request_id_;  // mark current request id in sql audit
+  int64_t trans_gtt_v2_sequence_;
 
   private:
   pl::ObUtlHttp* ob_utl_http_info_ = NULL;
