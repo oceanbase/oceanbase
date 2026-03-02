@@ -1269,6 +1269,54 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
   return ret;
 }
 
+int ObBasicSessionInfo::init_default_value_changed_serialized_variables(const bool is_sys_tenant)
+{
+  int ret = OB_SUCCESS;
+  ObString name;
+  ObObj type;
+  ObObj value;
+  ObObj min_val;
+  ObObj max_val;
+  ObObjType var_type = ObNullType;
+  int64_t var_flag = ObSysVarFlag::NONE;
+  const int64_t var_count = ObSysVariables::get_default_value_changed_serialized_var_count();
+  ObArenaAllocator calc_buf(ObModIds::OB_SQL_SESSION);
+  for (int64_t k = 0; OB_SUCC(ret) && k < var_count; ++k) {
+    const int64_t store_idx = ObSysVariables::get_default_value_changed_serialized_var_idx(k);
+    ObSysVarClassType sys_var_id = ObSysVariables::get_sys_var_id(store_idx);
+    name.assign_ptr(const_cast<char*>(ObSysVariables::get_name(store_idx).ptr()),
+                    static_cast<ObString::obstr_size_t>(strlen(ObSysVariables::get_name(store_idx).ptr())));
+    ObBasicSysVar *sys_var = NULL;
+    if (store_idx < 0 || store_idx >= ObSysVarFactory::ALL_SYS_VARS_COUNT) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("store_idx invalid", K(store_idx));
+    } else if (OB_FAIL(create_sys_var(sys_var_id, store_idx, sys_var))) {
+      LOG_WARN("failed to create sys var", K(sys_var_id));
+    } else if (OB_ISNULL(sys_var)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null sys var", K(sys_var_id));
+    } else {
+      sys_var->clean_base_value();
+      var_type = ObSysVariables::get_type(store_idx);
+      var_flag = ObSysVariables::get_flags(store_idx);
+      value.set_varchar(ObSysVariables::get_value(store_idx));
+      value.set_collation_type(ObCharset::get_system_collation());
+      min_val.set_varchar(ObSysVariables::get_min(store_idx));
+      min_val.set_collation_type(ObCharset::get_system_collation());
+      max_val.set_varchar(ObSysVariables::get_max(store_idx));
+      max_val.set_collation_type(ObCharset::get_system_collation());
+      type.set_type(var_type);
+      if (is_sys_tenant && OB_FAIL(process_variable_for_tenant(name, value))) {
+        LOG_WARN("failed to process system variable for tenant", K(name), K(value));
+      } else if (OB_FAIL(load_sys_variable(calc_buf, name, type, value, min_val,
+                                           max_val, var_flag, false, store_idx))) {
+        LOG_WARN("failed to load sys variable", K(name), K(value));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::update_query_sensitive_system_variable(ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;

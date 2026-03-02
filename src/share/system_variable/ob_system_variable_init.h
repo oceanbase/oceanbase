@@ -87,6 +87,8 @@ public:
   static int set_base_value(const char *name, const char * new_value);
   static int set_base_value(const common::ObString &name, const common::ObString &new_value);
   static int init_default_values();
+  static int64_t get_default_value_changed_serialized_var_count();
+  static int64_t get_default_value_changed_serialized_var_idx(int64_t i);
 };
 
 class ObSysVarsToIdxMap
