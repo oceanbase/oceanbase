@@ -409,6 +409,7 @@ public:
   // 2. 其余场景下，用于获取上次错误码，来决策本地重试行为（如 remote plan 优化走不走）
   int get_last_query_retry_err() const { return last_query_retry_err_; }
   void inc_retry_cnt() { retry_cnt_++; }
+  void set_retry_cnt(int64_t retry_cnt) { retry_cnt_ = retry_cnt; }
   int64_t get_retry_cnt() const { return retry_cnt_; }
   ObQueryRetryAshInfo& get_retry_ash_info() { return query_retry_ash_info_; }
 

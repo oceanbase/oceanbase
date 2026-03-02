@@ -1137,6 +1137,7 @@ public:
     is_inner_mock_ = false;
     is_system_trigger_ = false;
     saved_pl_internal_time_split_point_ = 0;
+    saved_use_pl_inner_info_string_ = false;
     flt_sample_pct_ = 0;
     sqlcode_info_.reset();
     alloc_.reset();
