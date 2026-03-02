@@ -4077,7 +4077,8 @@ int ObTimeConverter::str_to_ob_time_oracle_dfm(const ObString &str,
                                                const ObTimeConvertCtx &cvrt_ctx,
                                                const ObObjType target_type,
                                                ObTime &ob_time,
-                                               ObScale &scale)
+                                               ObScale &scale,
+                                               const bool is_oracle_mode)
 {
   int ret = OB_SUCCESS;
   const ObString &format = cvrt_ctx.oracle_nls_format_;
@@ -4102,20 +4103,21 @@ int ObTimeConverter::str_to_ob_time_oracle_dfm(const ObString &str,
       LOG_WARN("fail to parse oracle datetime format string", K(ret), K(format));
     } else if (OB_FAIL(ObDFMUtil::check_semantic(dfm_elems, elem_flags, ob_time.mode_))) {
       LOG_WARN("check semantic of format string failed", K(ret), K(format));
-    } else if (OB_FAIL(str_to_ob_time_by_dfm_elems(str, dfm_elems, elem_flags, cvrt_ctx, target_type, ob_time, scale))) {
+    } else if (OB_FAIL(str_to_ob_time_by_dfm_elems(str, dfm_elems, elem_flags, cvrt_ctx, target_type, ob_time, scale,
+                                                   is_oracle_mode))) {
       LOG_WARN("fail to str to ob time by dfm elements", K(ret));
     }
   }
   return ret;
 }
 
-inline int dispatch_dfm_year_validate(int32_t years)
+inline int dispatch_dfm_year_validate(int32_t years, const bool is_oracle_mode)
 {
   int ret = OB_SUCCESS;
-  if (lib::is_oracle_mode() && OB_FAIL(ObDFMLimit::YEAR.validate(years))) {
-    LOG_WARN("(full) year must be between -4713 and +9999, and not be 0", K(ret), K(years));
-  } else if (lib::is_mysql_mode() && OB_FAIL(ObDFMLimit::YEAR_MYSQL.validate(years))) {
+  if (!is_oracle_mode && OB_FAIL(ObDFMLimit::YEAR_MYSQL.validate(years))) {
     LOG_WARN("(full) year must be between 0 and 9999 in mysql mode", K(ret), K(years));
+  } else if (is_oracle_mode && OB_FAIL(ObDFMLimit::YEAR.validate(years))) {
+    LOG_WARN("(full) year must be between -4713 and +9999, and not be 0", K(ret), K(years));
   }
   return ret;
 }
@@ -4126,7 +4128,8 @@ int ObTimeConverter::str_to_ob_time_by_dfm_elems(const ObString &str,
                                                  const ObTimeConvertCtx &cvrt_ctx,
                                                  const ObObjType target_type,
                                                  ObTime &ob_time,
-                                                 ObScale &scale)
+                                                 ObScale &scale,
+                                                 const bool is_oracle_mode)
 {
   int ret = OB_SUCCESS;
   const ObString &format = cvrt_ctx.oracle_nls_format_;
@@ -4164,7 +4167,7 @@ int ObTimeConverter::str_to_ob_time_by_dfm_elems(const ObString &str,
     int32_t session_tz_offset = 0;
     //2. set default value for ob_time
     if (OB_SUCC(ret)) {
-      if (lib::is_mysql_mode()) {
+      if (!is_oracle_mode) {
         MEMSET(ob_time.parts_, 0, sizeof(ob_time.parts_));
         // For performance, only initialize current year when format contains year-related flags
         // that need current year: RR/RRRR/Y/YY/YYY
@@ -4388,7 +4391,7 @@ int ObTimeConverter::str_to_ob_time_by_dfm_elems(const ObString &str,
                 LOG_WARN("failed to match usecs", K(ret), K(ctx));
               } else {
                 scale = static_cast<ObScale>(parsed_elem_len);
-                usec = static_cast<int32_t>(usec * power_of_10[(lib::is_oracle_mode() ?
+                usec = static_cast<int32_t>(usec * power_of_10[(is_oracle_mode ?
                     MAX_SCALE_FOR_ORACLE_TEMPORAL : MAX_SCALE_FOR_TEMPORAL) - parsed_elem_len]);
                 ob_time.parts_[DT_USEC] = usec;
               }
@@ -4714,7 +4717,7 @@ int ObTimeConverter::str_to_ob_time_by_dfm_elems(const ObString &str,
                 }
               }
               if (OB_SUCC(ret)) {
-                if (OB_FAIL(dispatch_dfm_year_validate(round_year))) {  //TODO wjh: negetive year number
+                if (OB_FAIL(dispatch_dfm_year_validate(round_year, is_oracle_mode))) {  //TODO wjh: negetive year number
                 } else if (OB_FAIL(set_ob_time_year_may_conflict(ob_time, julian_year_value,
                                                             conflict_check_year, round_year,
                                                             false /* overwrite */))) {
@@ -4758,7 +4761,7 @@ int ObTimeConverter::str_to_ob_time_by_dfm_elems(const ObString &str,
               int32_t years = 0;
               if (OB_FAIL(ObDFMUtil::match_int_value_with_comma(ctx, expected_elem_len, parsed_elem_len, years))) {
                 LOG_WARN("failed to match int value", K(ret));
-              } else if (OB_FAIL(dispatch_dfm_year_validate(years))) {
+              } else if (OB_FAIL(dispatch_dfm_year_validate(years, is_oracle_mode))) {
               } else if (OB_FAIL(set_ob_time_year_may_conflict(ob_time, julian_year_value,
                                                             years, years, false /* overwrite */))) {
                 LOG_WARN("set ob_time_year conflict", K(ret));
@@ -4793,7 +4796,7 @@ int ObTimeConverter::str_to_ob_time_by_dfm_elems(const ObString &str,
                   years += (ob_time.parts_[DT_YEAR] / static_cast<int32_t>(power_of_10[parsed_elem_len]))
                       * static_cast<int32_t>(power_of_10[parsed_elem_len]);
                 }
-                if (OB_FAIL(dispatch_dfm_year_validate(years))) {
+                if (OB_FAIL(dispatch_dfm_year_validate(years, is_oracle_mode))) {
                 } else if (OB_FAIL(set_ob_time_year_may_conflict(ob_time, julian_year_value,
                                                                 conflict_check_year, years,
                                                                 false /* overwrite */))) {
@@ -4912,9 +4915,9 @@ int ObTimeConverter::str_to_ob_time_by_dfm_elems(const ObString &str,
 
       //calc and validate: YDAY WDAY vs YEAR MON DAY
       if (OB_SUCC(ret)) {
-        if (lib::is_oracle_mode() && OB_FAIL(validate_oracle_date(ob_time))) {
+        if (is_oracle_mode && OB_FAIL(validate_oracle_date(ob_time))) {
           LOG_WARN("oracle date is invalid or out of range", K(ret), K(str), K(ob_time));
-        } else if (lib::is_mysql_mode() && OB_FAIL(validate_datetime(ob_time, cvrt_ctx.date_sql_mode_))) {
+        } else if (!is_oracle_mode && OB_FAIL(validate_datetime(ob_time, cvrt_ctx.date_sql_mode_))) {
           LOG_WARN("datetime is invalid or out of range", K(ret), K(str), K(ob_time));
         } else {
           //ob_time_to_date func is to calc YDAY and WDAY and return DATE

@@ -724,13 +724,22 @@ public:
                               int64_t &last_first_8digits);
   static int str_to_ob_time_format(const ObString &str, const ObString &fmt, ObTime &ob_time,
                                    int16_t *scale, const ObDateSqlMode date_sql_mode);
+  // parameter is_oracle_mode is true by default.
+  // it will be false only when convert dfm string to DATETIME type, only used in
+  // to_date function mysql mode for now.
   static int str_to_ob_time_oracle_dfm(const ObString &str, const ObTimeConvertCtx &cvrt_ctx,
-                                       const ObObjType target_type, ObTime &ob_time, ObScale &scale);
+                                       const ObObjType target_type, ObTime &ob_time, ObScale &scale,
+                                       const bool is_oracle_mode = true);
+
+  // parameter is_oracle_mode is true by default.
+  // it will be false only when convert dfm string to DATETIME type, only used in
+  // to_date function mysql mode for now.
   static int str_to_ob_time_by_dfm_elems(const ObString &str,
                                          const ObIArray<ObDFMElem> &format_elems,
                                          const ObFixedBitSet<OB_DEFAULT_BITSET_SIZE_FOR_DFM> &elem_flags,
                                          const ObTimeConvertCtx &cvrt_ctx,
-                                         const ObObjType target_type, ObTime &ob_time, ObScale &scale);
+                                         const ObObjType target_type, ObTime &ob_time, ObScale &scale,
+                                         const bool is_oracle_mode = true);
 
   static int str_to_ob_time_oracle_strict(const ObString &str, const ObTimeConvertCtx &cvrt_ctx, const bool is_timestamp_literal, ObTime &ob_time, ObScale &scale);
   static int calc_date_with_year_week_wday(const ObYearWeekWdayElems &elements, ObTime &ot);

@@ -538,7 +538,8 @@ int ObExprToDate::calc_to_date_with_format(const ObExpr &expr, ObEvalCtx &ctx,
                                                          time_cvrt_ctx,
                                                          ObDateTimeType,
                                                          ob_time,
-                                                         scale);
+                                                         scale,
+                                                         false);
       }
     } else {
       // format 不是常量，每次都需要解析
@@ -546,7 +547,8 @@ int ObExprToDate::calc_to_date_with_format(const ObExpr &expr, ObEvalCtx &ctx,
                                                      time_cvrt_ctx,
                                                      ObDateTimeType,
                                                      ob_time,
-                                                     scale);
+                                                     scale,
+                                                     false);
     }
 
     if (OB_SUCC(ret)) {
@@ -666,14 +668,16 @@ int vector_to_date_with_format(const ObExpr &expr, ObEvalCtx &ctx,
                                                             time_cvrt_ctx,
                                                             ObDateTimeType,
                                                             ob_time,
-                                                            scale);
+                                                            scale,
+                                                            false);
         } else {
           // 动态解析 format
           ret = ObTimeConverter::str_to_ob_time_oracle_dfm(input_str,
                                                           time_cvrt_ctx,
                                                           ObDateTimeType,
                                                           ob_time,
-                                                          scale);
+                                                          scale,
+                                                          false);
         }
         if (OB_SUCC(ret)) {
           // 转换为目标类型
