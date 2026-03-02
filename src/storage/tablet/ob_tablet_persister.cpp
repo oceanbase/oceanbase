@@ -2285,11 +2285,15 @@ int ObTabletPersister::copy_shared_macro_info(
     }
   }
   iter.reset();
+  ObBlockInfoSet::TabletMacroSet dummy_data_id_set;
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(macro_info.get_other_block_iter(iter))) {
     LOG_WARN("fail to get other block iterator", K(ret));
-  } else if (OB_FAIL(do_copy_ids(iter, meta_id_set, backup_id_set))) {
+  } else if (OB_FAIL(do_copy_ids(iter,
+                                 dummy_data_id_set,
+                                 meta_id_set,
+                                 backup_id_set))) {
     LOG_WARN("fail to copy other block ids", K(ret));
   }
   return ret;
@@ -2303,39 +2307,37 @@ int ObTabletPersister::copy_data_macro_ids(
   ObMacroIdIterator iter;
   MacroBlockId macro_id;
 
-  if (OB_FAIL(macro_info.get_data_block_iter(iter))) {
+  if (OB_FAIL(macro_info.get_all_block_iter(iter))) {
     LOG_WARN("fail to get data block iterator", K(ret));
-  } else if (OB_FAIL(do_copy_ids(iter, block_info_set.data_block_info_set_, block_info_set.backup_block_info_set_))) {
+  } else if (OB_FAIL(do_copy_ids(iter,
+                                 block_info_set.data_block_info_set_,
+                                 block_info_set.meta_block_info_set_,
+                                 block_info_set.backup_block_info_set_))) {
     LOG_WARN("fail to copy data block ids", K(ret), K(iter));
-  } else if (FALSE_IT(iter.reset())) {
-  } else if (OB_FAIL(macro_info.get_other_block_iter(iter))) {
-    LOG_WARN("fail to get other block iterator", K(ret));
-  } else if (OB_FAIL(do_copy_ids(iter, block_info_set.meta_block_info_set_, block_info_set.backup_block_info_set_))) {
-    LOG_WARN("fail to copy other block ids", K(ret), K(iter));
-  } else if (FALSE_IT(iter.reset())) {
-  } else if (OB_FAIL(macro_info.get_linked_block_iter(iter))) {
-    LOG_WARN("fail to get linked block iterator", K(ret));
-  } else if (OB_FAIL(do_copy_ids(iter, block_info_set.meta_block_info_set_, block_info_set.backup_block_info_set_))) {
-    LOG_WARN("fail to copy linked block ids", K(ret), K(iter));
   }
   return ret;
 }
 
 int ObTabletPersister::do_copy_ids(
     blocksstable::ObMacroIdIterator &iter,
-    ObBlockInfoSet::TabletMacroSet &id_set,
+    ObBlockInfoSet::TabletMacroSet &data_id_set,
+    ObBlockInfoSet::TabletMacroSet &meta_id_set,
     ObBlockInfoSet::TabletMacroSet &backup_id_set)
 {
   int ret = OB_SUCCESS;
   MacroBlockId macro_id;
+  ObMacroIdIterator::Type block_type = ObMacroIdIterator::Type::MAX;
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(iter.get_next_macro_id(macro_id))) {
+    if (OB_FAIL(iter.get_next_macro_id(macro_id, block_type))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to get next macro id", K(ret), K(macro_id));
       }
-    } else if (!macro_id.is_valid()) {
+    } else if (OB_UNLIKELY(!macro_id.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected block_id", K(ret), K(macro_id));
+    } else if (OB_UNLIKELY(!ObMacroIdIterator::is_block_type_valid(block_type))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected block_type", K(ret), K(macro_id), K(block_type));
     } else if (macro_id.is_backup_id()) {
       if (OB_FAIL(backup_id_set.set_refactored(macro_id, 0 /*whether to overwrite*/))) {
         if (OB_HASH_EXIST != ret) {
@@ -2345,6 +2347,7 @@ int ObTabletPersister::do_copy_ids(
         }
       }
     } else {
+      ObBlockInfoSet::TabletMacroSet &id_set = ObMacroIdIterator::is_meta_block_type(block_type) ? meta_id_set : data_id_set;
       if (OB_FAIL(id_set.set_refactored(macro_id, 0 /*whether to overwrite*/))) {
         if (OB_HASH_EXIST != ret) {
           LOG_WARN("fail to push macro id into set", K(ret), K(macro_id));

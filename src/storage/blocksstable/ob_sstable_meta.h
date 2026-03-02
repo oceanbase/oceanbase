@@ -263,9 +263,9 @@ public:
   {
     return basic_meta_.get_index_macro_block_count();
   }
-  OB_INLINE int64_t get_linked_macro_block_count() const
+  OB_INLINE int get_linked_macro_block_count(/*out*/int64_t &linked_blk_cnt) const
   {
-    return macro_info_.get_linked_block_count();
+    return macro_info_.get_linked_block_count(linked_blk_cnt);
   }
   OB_INLINE int64_t get_total_use_old_macro_block_count() const
   {

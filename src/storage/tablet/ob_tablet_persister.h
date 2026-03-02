@@ -433,7 +433,8 @@ private:
   static int inc_ref_with_macro_iter(ObTablet &tablet, ObMacroInfoIterator &macro_iter);
   static int do_copy_ids(
       blocksstable::ObMacroIdIterator &iter,
-      ObBlockInfoSet::TabletMacroSet &id_set,
+      ObBlockInfoSet::TabletMacroSet &data_id_set,
+      ObBlockInfoSet::TabletMacroSet &meta_id_set,
       ObBlockInfoSet::TabletMacroSet &backup_id_set);
   static int check_tablet_meta_ids(
       const ObIArray<blocksstable::MacroBlockId> &shared_meta_id_arr,

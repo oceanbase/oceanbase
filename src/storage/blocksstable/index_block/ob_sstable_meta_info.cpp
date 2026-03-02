@@ -581,39 +581,133 @@ int ObRootBlockInfo::deep_copy_micro_buf(
 }
 
 ObMacroIdIterator::ObMacroIdIterator()
-  : value_ptr_(nullptr),
-    pos_(0),
-    count_(0),
+  : target_type_(Type::NONE),
+    iter_elements_(),
+    element_idx_(0),
+    element_pos_(0),
+    iter_cnt_(0),
+    total_count_(0),
     is_inited_(false),
     allocator_("MacroIdIter")
 {
+  iter_elements_.set_attr(ObMemAttr(MTL_ID(), "MacroIdIter"));
 }
 
-int ObMacroIdIterator::init(const Type type, const MacroBlockId &entry_id, const int64_t pos)
+int ObMacroIdIterator::init(const Type type, const MacroBlockId &entry_id)
 {
   int ret = OB_SUCCESS;
   MacroBlockId *data_blk_ids = nullptr;
   int64_t data_blk_cnt = 0;
   MacroBlockId *other_blk_ids = nullptr;
   int64_t other_blk_cnt = 0;
+  MacroBlockId *linked_blk_ids = nullptr;
+  int64_t linked_blk_cnt = 0;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("double init", K(ret));
-  } else if (OB_UNLIKELY(type >= Type::MAX || !entry_id.is_valid() || pos < 0 || count_ < 0)) {
+  } else if (OB_UNLIKELY(type > Type::MAX || !entry_id.is_valid() || total_count_ < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(type), K(entry_id), K(pos), K(count_));
-  } else if (OB_FAIL(ObSSTableMacroInfo::read_block_ids(entry_id, allocator_, data_blk_ids,
-      data_blk_cnt, other_blk_ids, other_blk_cnt))) {
+    LOG_WARN("invalid argument", K(ret), K(type), K(entry_id), K(total_count_));
+  } else if (OB_FAIL(ObSSTableMacroInfo::read_block_ids(entry_id,
+                                                        allocator_,
+                                                        data_blk_ids, data_blk_cnt,
+                                                        other_blk_ids, other_blk_cnt,
+                                                        linked_blk_ids, linked_blk_cnt))) {
     LOG_WARN("fail to read block ids", K(ret), K(entry_id));
   } else {
-    if (Type::DATA_BLOCK == type) {
-      value_ptr_ = data_blk_ids;
-      count_ = data_blk_cnt;
-    } else if (Type::OTHER_BLOCK == type) {
-      value_ptr_ = other_blk_ids;
-      count_ = other_blk_cnt;
+    switch (type) {
+      case Type::DATA_BLOCK: {
+        if (data_blk_cnt > 0
+            && OB_FAIL(iter_elements_.push_back(IterElement(data_blk_ids, data_blk_cnt, Type::DATA_BLOCK)))) {
+          LOG_WARN("fail to push back iter element", K(ret));
+        } else {
+          total_count_ = data_blk_cnt;
+        }
+      } break;
+      case Type::OTHER_BLOCK: {
+        if (other_blk_cnt > 0
+            && OB_FAIL(iter_elements_.push_back(IterElement(other_blk_ids, other_blk_cnt, Type::OTHER_BLOCK)))) {
+          LOG_WARN("fail to push back iter element", K(ret));
+        } else {
+          total_count_ = other_blk_cnt;
+        }
+      } break;
+      case Type::LINKED_BLOCK: {
+        if (linked_blk_cnt <= 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("linked_blk_cnt <=0 is unexpected when macro info is not inlined", K(ret), K(linked_blk_cnt),
+            KP(linked_blk_ids), K(entry_id));
+        } else if (OB_ISNULL(linked_blk_ids)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unepxected null linked_blk_ids", K(ret), K(linked_blk_cnt),
+              KP(linked_blk_ids), K(entry_id));
+         } else if (OB_FAIL(iter_elements_.push_back(IterElement(linked_blk_ids, linked_blk_cnt, Type::LINKED_BLOCK)))) {
+            LOG_WARN("fail to push back iter element", K(ret));
+         } else {
+            total_count_ = linked_blk_cnt;
+         }
+      } break;
+      case Type::MAX: {
+         if (data_blk_cnt > 0
+             && OB_FAIL(iter_elements_.push_back(IterElement(data_blk_ids, data_blk_cnt, Type::DATA_BLOCK)))) {
+            LOG_WARN("fail to push back iter element", K(ret));
+         } else if (other_blk_cnt > 0
+                    && OB_FAIL(iter_elements_.push_back(IterElement(other_blk_ids, other_blk_cnt, Type::OTHER_BLOCK)))) {
+            LOG_WARN("fail to push back iter element", K(ret));
+         } else if (linked_blk_cnt <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("linked_blk_cnt <=0 is unexpected when macro info is not inlined", K(ret), K(linked_blk_cnt),
+              KP(linked_blk_ids), K(entry_id));
+         } else if (OB_ISNULL(linked_blk_ids)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unepxected null linked_blk_ids", K(ret), K(linked_blk_cnt),
+              KP(linked_blk_ids), K(entry_id));
+         } else if (OB_FAIL(iter_elements_.push_back(IterElement(linked_blk_ids, linked_blk_cnt, Type::LINKED_BLOCK)))) {
+            LOG_WARN("fail to push back iter element", K(ret));
+         } else {
+            total_count_ = data_blk_cnt + other_blk_cnt + linked_blk_cnt;
+         }
+      } break;
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid block type", K(ret), K(type));
+      }
     }
-    pos_ = pos;
+
+    if (OB_SUCC(ret)) {
+      target_type_ = type;
+      is_inited_ = true;
+    }
+  }
+  if (OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
+int ObMacroIdIterator::init(
+    const MacroBlockId *ptr,
+    const int64_t count,
+    const Type block_type)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("double init", K(ret));
+  } else if (OB_UNLIKELY(count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid count", K(ret), KP(ptr), K(count));
+  } else if (OB_UNLIKELY(!is_block_type_valid(block_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid block type", K(ret), K(block_type));
+  } else if (count > 0 && OB_ISNULL(ptr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid null ptr", K(ret), KP(ptr), K(count));
+  } else if (count > 0 && OB_FAIL(iter_elements_.push_back(IterElement(ptr, count, block_type)))) {
+    LOG_WARN("fail to push back iter element", K(ret));
+  } else {
+    target_type_ = block_type;
+    total_count_ = count;
     is_inited_ = true;
   }
   if (OB_UNLIKELY(!is_inited_)) {
@@ -622,51 +716,156 @@ int ObMacroIdIterator::init(const Type type, const MacroBlockId &entry_id, const
   return ret;
 }
 
-int ObMacroIdIterator::init(MacroBlockId *ptr, const int64_t count, const int64_t pos)
+int ObMacroIdIterator::init(
+    MacroBlockId *data_blk_ids,
+    const int64_t data_blk_cnt,
+    MacroBlockId *other_blk_ids,
+    const int64_t other_blk_cnt)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("double init", K(ret));
-  } else if (OB_UNLIKELY(pos < 0 || count < 0 || pos > count)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(ptr), K(count), K(pos));
-  } else {
-    value_ptr_ = ptr;
-    pos_ = pos;
-    count_ = count;
-    is_inited_ = true;
+  } else if (data_blk_cnt > 0) {
+    if (OB_ISNULL(data_blk_ids)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("data_blk_ids can not be nullptr if data_blk_cnt > 0", K(ret),
+        K(data_blk_cnt), KP(data_blk_ids));
+    } else if (OB_FAIL(iter_elements_.push_back(IterElement(data_blk_ids, data_blk_cnt, Type::DATA_BLOCK)))) {
+      LOG_WARN("fail to push back iter element", K(ret));
+    } else {
+      total_count_ += data_blk_cnt;
+    }
   }
-  if (OB_UNLIKELY(!is_inited_)) {
+
+  if (OB_FAIL(ret)) {
+  } else if (other_blk_cnt > 0) {
+    if (OB_ISNULL(other_blk_ids)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("other_blk_ids can not be nullptr if other_blk_cnt > 0", K(ret),
+        K(other_blk_cnt), KP(other_blk_ids));
+    } else if (OB_FAIL(iter_elements_.push_back(IterElement(other_blk_ids, other_blk_cnt, Type::OTHER_BLOCK)))) {
+      LOG_WARN("fail to push back iter element", K(ret));
+    } else {
+      total_count_ += other_blk_cnt;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
     reset();
+  } else {
+    target_type_ = Type::MAX;
+    is_inited_ = true;
   }
   return ret;
 }
 
 void ObMacroIdIterator::reset()
 {
-  value_ptr_ = nullptr;
-  pos_ = 0;
-  count_ = 0;
+  target_type_ = Type::NONE;
+  iter_elements_.reset();
+  element_idx_ = 0;
+  element_pos_ = 0;
+  iter_cnt_ = 0;
+  total_count_ = 0;
   is_inited_ = false;
   allocator_.reuse();
 }
 
-int ObMacroIdIterator::get_next_macro_id(MacroBlockId &macro_id)
+int ObMacroIdIterator::get_next_macro_id(
+    MacroBlockId &macro_id,
+    Type &block_type)
 {
   int ret = OB_SUCCESS;
+  macro_id.reset();
+  block_type = Type::MAX;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (0 == count_) {
+  } else if (iter_cnt_ == total_count_) {
     ret = OB_ITER_END;
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(this));
-  } else if (pos_ < count_) {
-    macro_id = value_ptr_[pos_++];
   } else {
-    ret = OB_ITER_END;
+    const IterElement *element_ptr = nullptr;
+    if (element_pos_ < iter_elements_.at(element_idx_).count_) {
+      element_ptr = &iter_elements_.at(element_idx_);
+    } else if (OB_FAIL(get_next_element_(element_ptr))) {
+      LOG_WARN("fail to get next element", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(element_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null element_ptr", K(ret), KPC(this));
+    } else if (OB_UNLIKELY(!element_ptr->is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected invalid element", K(ret), KPC(element_ptr));
+    } else if (OB_UNLIKELY(element_pos_ >= element_ptr->count_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("element pos out of range", K(ret), K_(element_pos), KPC(element_ptr));
+    } else {
+      macro_id = element_ptr->value_ptr_[element_pos_];
+      block_type = element_ptr->block_type_;
+      ++element_pos_;
+      ++iter_cnt_;
+    }
+  }
+  return ret;
+}
+
+int ObMacroIdIterator::get_next_macro_id(MacroBlockId &macro_id)
+{
+  Type unused_block_type = Type::MAX;
+  return get_next_macro_id(macro_id, unused_block_type);
+}
+
+int ObMacroIdIterator::get_block_count(const Type block_type, int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  count = 0;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_UNLIKELY(!is_block_type_valid(block_type)
+                         && Type::MAX != block_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid block type", K(ret), K(block_type));
+  } else if (block_type == target_type_) {
+    count = total_count_;
+  } else if (Type::MAX == target_type_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < iter_elements_.count(); ++i) {
+      const IterElement &element = iter_elements_.at(i);
+      if (OB_UNLIKELY(!element.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid element", K(ret), K(element));
+      } else if (element.block_type_ == block_type) {
+        count = element.count_;
+        break;
+      }
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("iterator doesn't contain specified block type", K(ret), K(block_type),
+      K_(target_type));
+  }
+  return ret;
+}
+
+int ObMacroIdIterator::get_next_element_(/*out*/const IterElement *&element_ptr)
+{
+  int ret = OB_SUCCESS;
+  element_ptr = nullptr;
+  ++element_idx_;
+
+  if (OB_UNLIKELY(element_idx_ >= iter_elements_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("element idx out of range", K(ret), K_(element_idx), K(iter_elements_.count()));
+  } else {
+    element_ptr = &iter_elements_.at(element_idx_);
+    element_pos_ = 0;
   }
   return ret;
 }
@@ -676,9 +875,9 @@ ObSSTableMacroInfo::ObSSTableMacroInfo()
     data_block_ids_(nullptr),
     other_block_ids_(nullptr),
     linked_block_ids_(nullptr),
-    data_block_count_(0),
-    other_block_count_(0),
-    linked_block_count_(0),
+    data_block_count_(-1),
+    other_block_count_(-1),
+    linked_block_count_(-1),
     entry_id_(),
     is_meta_root_(false),
     nested_offset_(0),
@@ -729,6 +928,7 @@ int ObSSTableMacroInfo::init_macro_info(
   if (OB_FAIL(ret)) {
     reset();
   } else {
+    linked_block_count_ = 0;
     is_meta_root_ = param.is_meta_root_;
     nested_offset_ = param.nested_offset_;
     nested_size_ = 0 == param.nested_size_ ? OB_DEFAULT_MACRO_BLOCK_SIZE : param.nested_size_;
@@ -757,21 +957,21 @@ void ObSSTableMacroInfo::reset()
     }
     data_block_ids_ = nullptr;
   }
-  data_block_count_ = 0;
+  data_block_count_ = -1;
   if (nullptr != other_block_ids_) {
     for (int64_t i = 0; i < other_block_count_; i++) {
       other_block_ids_[i].~MacroBlockId();
     }
     other_block_ids_ = nullptr;
   }
-  other_block_count_ = 0;
+  other_block_count_ = -1;
   if (nullptr != linked_block_ids_) {
     for (int64_t i = 0; i < linked_block_count_; i++) {
       linked_block_ids_[i].~MacroBlockId();
     }
     linked_block_ids_ = nullptr;
   }
-  linked_block_count_ = 0;
+  linked_block_count_ = -1;
   entry_id_.reset();
   is_meta_root_ = false;
   nested_offset_ = 0;
@@ -810,8 +1010,13 @@ int ObSSTableMacroInfo::serialize_(char *buf, const int64_t buf_len, int64_t &po
   } else if (OB_FAIL(entry_id_.serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize data block ids' entry", K(ret), K(buf_len), K(pos), K_(entry_id));
   } else if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK == entry_id_){
-    OB_UNIS_ENCODE_ARRAY(data_block_ids_, data_block_count_);
-    OB_UNIS_ENCODE_ARRAY(other_block_ids_, other_block_count_);
+    if (OB_UNLIKELY(data_block_count_ < 0 || other_block_count_ < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected block count", K(ret), K_(data_block_count), K_(other_block_count));
+    } else {
+      OB_UNIS_ENCODE_ARRAY(data_block_ids_, data_block_count_);
+      OB_UNIS_ENCODE_ARRAY(other_block_ids_, other_block_count_);
+    }
   }
   if (OB_FAIL(ret)) {
     // do nothing
@@ -873,11 +1078,19 @@ int ObSSTableMacroInfo::persist_block_ids(
   return ret;
 }
 
+/// COMMENT: this method is called right after ObSSTable::init(which will also init macro info),
+/// and there is no linked block when macro info is just inited.
+/// Maybe this method is meaningless?
 void ObSSTableMacroInfo::dec_linked_block_ref_cnt()
 {
   int ret = OB_SUCCESS;
   int64_t idx = 0;
-  if (0 == linked_block_count_) {
+  if (GCTX.is_shared_storage_mode()) {
+    // do nothing in SS mode
+  } else if (OB_UNLIKELY(linked_block_count_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected linked block count", K(ret), K(linked_block_count_));
+  } else if (0 == linked_block_count_) {
     // skip the decrease
   } else if (OB_ISNULL(linked_block_ids_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -892,34 +1105,26 @@ void ObSSTableMacroInfo::dec_linked_block_ref_cnt()
   }
 }
 
-int ObSSTableMacroInfo::inc_linked_block_ref_cnt(common::ObArenaAllocator &allocator)
+/*static*/int ObSSTableMacroInfo::save_linked_block_list_(
+    const common::ObIArray<MacroBlockId> &list,
+    common::ObArenaAllocator &allocator,
+    /*out*/MacroBlockId *&linked_block_ids,
+    /*out*/int64_t &linked_block_count)
 {
   int ret = OB_SUCCESS;
-  int64_t idx = 0;
-  if (0 == linked_block_count_) {
-    // skip the decrease
-  } else if (OB_ISNULL(linked_block_ids_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("linked_block_ids is null, but linked_block_count_ is not 0", K(linked_block_count_));
+  linked_block_ids = nullptr;
+  linked_block_count = 0;
+  const int64_t ids_cnt = list.count();
+  if (ids_cnt > 0 && OB_ISNULL(linked_block_ids = static_cast<MacroBlockId *>(allocator.alloc(
+      sizeof(MacroBlockId) * ids_cnt)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", K(ret), K(ids_cnt));
   } else {
-    for (; OB_SUCC(ret) && idx < linked_block_count_; idx++) {
-      const MacroBlockId &macro_id = linked_block_ids_[idx];
-      if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(macro_id))) {
-        LOG_ERROR("fail to increase macro block ref cnt", K(ret), K(macro_id));
-      }
+    int64_t idx = 0;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < ids_cnt; ++idx) {
+      new (linked_block_ids + idx) MacroBlockId(list.at(idx));
     }
-
-    if (OB_FAIL(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      for (int64_t i = 0; i < idx; i++) {
-        const MacroBlockId &macro_id = linked_block_ids_[idx];
-        if (OB_TMP_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id))) {
-          LOG_ERROR("fail to decrease macro block ref cnt", K(tmp_ret), K(macro_id));
-        }
-      }
-      allocator.free(linked_block_ids_);
-      linked_block_ids_ = nullptr;
-    }
+    linked_block_count = ids_cnt;
   }
   return ret;
 }
@@ -928,20 +1133,7 @@ int ObSSTableMacroInfo::save_linked_block_list(
     const common::ObIArray<MacroBlockId> &list,
     common::ObArenaAllocator &allocator)
 {
-  int ret = OB_SUCCESS;
-  const int64_t ids_cnt = list.count();
-  if (ids_cnt > 0 && OB_ISNULL(linked_block_ids_ = static_cast<MacroBlockId *>(allocator.alloc(
-      sizeof(MacroBlockId) * ids_cnt)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory", K(ret), K(ids_cnt));
-  } else {
-    int64_t idx = 0;
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < ids_cnt; ++idx) {
-      new (linked_block_ids_ + idx) MacroBlockId(list.at(idx));
-    }
-    linked_block_count_ = ids_cnt;
-  }
-  return ret;
+  return save_linked_block_list_(list, allocator, linked_block_ids_, linked_block_count_);
 }
 
 int ObSSTableMacroInfo::deserialize(
@@ -1001,26 +1193,8 @@ int ObSSTableMacroInfo::deserialize_(
   } else if (OB_FAIL(entry_id_.deserialize(buf, data_len, pos))) {
     LOG_WARN("fail to deserialize entry block macro id", K(ret), KP(buf), K(data_len), K(pos));
   } else if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK != entry_id_) {
-    ObLinkedMacroBlockItemReader block_reader;
-    ObMetaDiskAddr addr;
-    char *reader_buf = nullptr;
-    int64_t pos = 0;
-    int64_t reader_len = 0;
-    ObMemAttr mem_attr(MTL_ID(), "SSTableBlockId");
-    if (OB_FAIL(block_reader.init(entry_id_, mem_attr))) {
-      LOG_WARN("fail to initialize reader", K(ret), K(entry_id_));
-    } else if (OB_FAIL(block_reader.get_next_item(reader_buf, reader_len, addr))) {// read data ids
-      LOG_WARN("fail to get next item", K(ret), K(reader_len), K(addr));
-    } else if (OB_FAIL(serialization::decode(reader_buf, reader_len, pos, data_block_count_))) {
-      LOG_WARN("fail to deserialize data block ids", K(ret));
-    } else if (OB_FAIL(block_reader.get_next_item(reader_buf, reader_len, addr))) {// read other ids
-      LOG_WARN("fail to get next item", K(ret), K(reader_len), K(addr));
-    } else if (FALSE_IT(pos = 0)) {
-    } else if (OB_FAIL(serialization::decode(reader_buf, reader_len, pos, other_block_count_))) {
-      LOG_WARN("fail to deserialize other block ids", K(ret));
-    } else if (OB_FAIL(save_linked_block_list(block_reader.get_meta_block_list(), allocator))) {
-      LOG_WARN("fail to save linked block ids", K(ret), K_(linked_block_ids));
-    }
+    // do nothing
+    LOG_DEBUG("some of macro info members are not inlined, skip them", K(ret), K_(entry_id));
   } else {
     if (pos < data_len && OB_FAIL(deserialize_block_ids(allocator, buf, data_len, pos,
         data_block_ids_, data_block_count_))) {
@@ -1028,6 +1202,8 @@ int ObSSTableMacroInfo::deserialize_(
     } else if (pos < data_len && OB_FAIL(deserialize_block_ids(allocator, buf, data_len, pos,
         other_block_ids_, other_block_count_))) {
       LOG_WARN("fail to deserialize other block ids", K(ret), KP(buf), K(data_len), K(pos));
+    } else {
+      linked_block_count_ = 0;
     }
   }
   if (OB_FAIL(ret)) {
@@ -1039,7 +1215,6 @@ int ObSSTableMacroInfo::deserialize_(
   } else if (pos < data_len && OB_FAIL(serialization::decode_i64(buf, data_len, pos, &nested_size_))) {
     LOG_WARN("fail to deserialize nested_size_", K(ret));
   }
-
   return ret;
 }
 
@@ -1049,7 +1224,9 @@ int ObSSTableMacroInfo::read_block_ids(
     MacroBlockId *&data_blk_ids,
     int64_t &data_blk_cnt,
     MacroBlockId *&other_blk_ids,
-    int64_t &other_blk_cnt)
+    int64_t &other_blk_cnt,
+    MacroBlockId *&linked_blk_ids,
+    int64_t &linked_blk_cnt)
 {
   int ret = OB_SUCCESS;
   ObLinkedMacroBlockItemReader block_reader;
@@ -1059,8 +1236,11 @@ int ObSSTableMacroInfo::read_block_ids(
     LOG_WARN("invalid argument", K(ret), K(entry_id));
   } else if (OB_FAIL(block_reader.init(entry_id, mem_attr))) {
     LOG_WARN("fail to initialize reader", K(ret), K(entry_id));
-  } else if (OB_FAIL(read_block_ids(allocator, block_reader, data_blk_ids, data_blk_cnt,
-      other_blk_ids, other_blk_cnt))) {
+  } else if (OB_FAIL(read_block_ids(allocator,
+                                    block_reader,
+                                    data_blk_ids, data_blk_cnt,
+                                    other_blk_ids, other_blk_cnt,
+                                    linked_blk_ids, linked_blk_cnt))) {
     LOG_WARN("fail to read block ids", K(ret), K(entry_id), K(data_blk_cnt), K(other_blk_cnt));
   }
   return ret;
@@ -1072,9 +1252,13 @@ int ObSSTableMacroInfo::read_block_ids(
     MacroBlockId *&data_block_ids,
     int64_t &data_block_count,
     MacroBlockId *&other_block_ids,
-    int64_t &other_block_count)
+    int64_t &other_block_count,
+    MacroBlockId *&linked_block_ids,
+    int64_t &linked_block_count)
 {
   int ret = OB_SUCCESS;
+  data_block_ids = other_block_ids = linked_block_ids =  nullptr;
+  data_block_count = other_block_count = linked_block_count = 0;
   ObMetaDiskAddr addr;
   char *reader_buf = nullptr;
   int64_t reader_len = 0;
@@ -1090,6 +1274,11 @@ int ObSSTableMacroInfo::read_block_ids(
   } else if (OB_FAIL(deserialize_block_ids(allocator, reader_buf, reader_len, reader_pos,
       other_block_ids, other_block_count))) {
     LOG_WARN("fail to deserialize other block id array", K(ret), K(reader_len), K(reader_pos));
+  } else if (OB_FAIL(save_linked_block_list_(reader.get_meta_block_list(),
+                                             allocator,
+                                             linked_block_ids,
+                                             linked_block_count))) {
+    LOG_WARN("fail to get link block list", K(ret));
   }
   return ret;
 }
@@ -1104,15 +1293,42 @@ int64_t ObSSTableMacroInfo::get_serialize_size() const
   return len;
 }
 
+int ObSSTableMacroInfo::get_block_count(
+    /*out*/int64_t &data_blk_cnt,
+    /*out*/int64_t &other_blk_cnt,
+    /*out*/int64_t &linked_blk_cnt) const
+{
+  int ret = OB_SUCCESS;
+  data_blk_cnt = other_blk_cnt = linked_blk_cnt = -1;
+
+  if (IS_EMPTY_BLOCK_LIST(entry_id_)) {
+    if (OB_UNLIKELY(data_block_count_ < 0 || other_block_count_ < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected block count", K(ret), K_(data_block_count), K_(other_block_count));
+    } else {
+      data_blk_cnt = data_block_count_;
+      other_blk_cnt = other_block_count_;
+      linked_blk_cnt = 0;
+    }
+  } else if (OB_FAIL(load_members_by_entry_block_(entry_id_,
+                                                  /*out*/data_blk_cnt,
+                                                  /*out*/other_blk_cnt,
+                                                  /*out*/linked_blk_cnt))) {
+    LOG_WARN("fail to load block counts", K(ret), K_(entry_id));
+  }
+  return ret;
+}
+
 int ObSSTableMacroInfo::get_data_block_iter(ObMacroIdIterator &iterator) const
 {
   int ret = OB_SUCCESS;
   if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK == entry_id_) {
-    if (OB_FAIL(iterator.init(data_block_ids_, data_block_count_))) {
-      LOG_WARN("fail to init data block iterator", K(ret), K(data_block_count_));
+    if (OB_FAIL(iterator.init(data_block_ids_, data_block_count_, ObMacroIdIterator::Type::DATA_BLOCK))) {
+      LOG_WARN("fail to init data block iterator", K(ret), K_(data_block_count),
+        K_(data_block_ids));
     }
   } else if (OB_FAIL(iterator.init(ObMacroIdIterator::DATA_BLOCK, entry_id_))) {
-    LOG_WARN("fail to init data block iterator", K(ret), K(entry_id_));
+    LOG_WARN("fail to init data block iterator", K(ret), K_(entry_id));
   }
   return ret;
 }
@@ -1121,11 +1337,55 @@ int ObSSTableMacroInfo::get_other_block_iter(ObMacroIdIterator &iterator) const
 {
   int ret = OB_SUCCESS;
   if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK == entry_id_) {
-    if (OB_FAIL(iterator.init(other_block_ids_, other_block_count_))) {
-      LOG_WARN("fail to init other block iterator", K(ret), K(other_block_count_));
+    if (OB_FAIL(iterator.init(other_block_ids_, other_block_count_, ObMacroIdIterator::Type::OTHER_BLOCK))) {
+      LOG_WARN("fail to init other block iterator", K(ret), K_(other_block_count),
+        KP_(other_block_ids));
     }
   } else if (OB_FAIL(iterator.init(ObMacroIdIterator::OTHER_BLOCK, entry_id_))) {
-    LOG_WARN("fail to init other block iterator", K(ret), K(entry_id_));
+    LOG_WARN("fail to init other block iterator", K(ret), K_(entry_id));
+  }
+  return ret;
+}
+
+int ObSSTableMacroInfo::get_linked_block_iter(ObMacroIdIterator &iterator) const
+{
+  int ret = OB_SUCCESS;
+  if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK == entry_id_) {
+    // inline macro info has no linked blocks
+    if (linked_block_count_ > 0 || OB_NOT_NULL(linked_block_ids_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inline macro info has no linked blocks", K(ret), K_(linked_block_count),
+        KP_(linked_block_ids));
+    } else if (OB_FAIL(iterator.init(linked_block_ids_, linked_block_count_, ObMacroIdIterator::Type::LINKED_BLOCK))) {
+      LOG_WARN("fail to init linked block iterator", K(ret), K_(linked_block_count),
+        KP_(linked_block_ids));
+    }
+  } else if (OB_NOT_NULL(linked_block_ids_)) {
+    // this may happens when macro info has just been persisted.
+    if (OB_UNLIKELY(linked_block_count_ <= 0)) {
+      LOG_WARN("linked_block_ids_ is not nullptr but linked block count is less than 0",
+        K(ret), K_(linked_block_count), KP_(linked_block_ids));
+    } else if (OB_FAIL(iterator.init(linked_block_ids_, linked_block_count_, ObMacroIdIterator::Type::LINKED_BLOCK))) {
+      LOG_WARN("fail to init linked block iterator", K(ret), K_(linked_block_count),
+        K_(linked_block_ids));
+    }
+  } else if (OB_FAIL(iterator.init(ObMacroIdIterator::LINKED_BLOCK, entry_id_))) {
+    LOG_WARN("fail to init all block iterator", K(ret), K_(entry_id));
+  }
+  return ret;
+}
+
+int ObSSTableMacroInfo::get_all_block_iter(ObMacroIdIterator &iterator) const
+{
+  int ret = OB_SUCCESS;
+  if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK == entry_id_) {
+    if (OB_FAIL(iterator.init(data_block_ids_, data_block_count_,
+                                     other_block_ids_, other_block_count_))) {
+      LOG_WARN("fail to init all block iterator", K(ret), KP_(data_block_ids),
+        K_(data_block_count), KP_(other_block_ids), K_(other_block_count));
+    }
+  } else if (OB_FAIL(iterator.init(ObMacroIdIterator::MAX, entry_id_))) {
+    LOG_WARN("fail to init all block iterator", K(ret), K_(entry_id));
   }
   return ret;
 }
@@ -1172,7 +1432,7 @@ int ObSSTableMacroInfo::write_block_ids(
 {
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr(MTL_ID(), "SSTableBlockId");
-  if (OB_UNLIKELY(0 == data_block_count_ && 0 == other_block_count_) ||
+  if (OB_UNLIKELY(data_block_count_ <= 0 && other_block_count_ <= 0) ||
       OB_UNLIKELY((0 != data_block_count_ && OB_ISNULL(data_block_ids_)) ||
       OB_UNLIKELY((0 != other_block_count_ && OB_ISNULL(other_block_ids_)))) ||
       OB_UNLIKELY(!param.is_valid())) {
@@ -1308,5 +1568,39 @@ int ObSSTableMacroInfo::deep_copy(
   return ret;
 }
 
+/*static*/int ObSSTableMacroInfo::load_members_by_entry_block_(
+    const MacroBlockId &entry_block_id,
+    /*out*/int64_t &data_blk_cnt,
+    /*out*/int64_t &other_blk_cnt,
+    /*out*/int64_t &linked_blk_cnt)
+{
+  int ret = OB_SUCCESS;
+  data_blk_cnt = other_blk_cnt = linked_blk_cnt = -1;
+  ObLinkedMacroBlockItemReader block_reader;
+  ObMetaDiskAddr addr;
+  char *reader_buf = nullptr;
+  int64_t pos = 0;
+  int64_t reader_len = 0;
+  ObMemAttr mem_attr(MTL_ID(), "SSTableBlockId");
+
+  if (OB_UNLIKELY(!entry_block_id.is_valid() || IS_EMPTY_BLOCK_LIST(entry_block_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid entry block id", K(ret), K(entry_block_id));
+  } else if (OB_FAIL(block_reader.init(entry_block_id, mem_attr))) {
+    LOG_WARN("fail to initialize reader", K(ret), K(entry_block_id));
+  } else if (OB_FAIL(block_reader.get_next_item(reader_buf, reader_len, addr))) { // read data ids
+    LOG_WARN("fail to get next item", K(ret), K(reader_len), K(addr));
+  } else if (OB_FAIL(serialization::decode(reader_buf, reader_len, pos, data_blk_cnt))) {
+    LOG_WARN("fail to deserialize data block ids", K(ret));
+  } else if (OB_FAIL(block_reader.get_next_item(reader_buf, reader_len, addr))) { // read other ids
+    LOG_WARN("fail to get next item", K(ret), K(reader_len), K(addr));
+  } else if (FALSE_IT(pos = 0)) {
+  } else if (OB_FAIL(serialization::decode(reader_buf, reader_len, pos, other_blk_cnt))) {
+    LOG_WARN("fail to deserialize other block ids", K(ret));
+  } else {
+    linked_blk_cnt = block_reader.get_meta_block_list().count();
+  }
+  return ret;
+}
 }
 } // end namespace oceanbase

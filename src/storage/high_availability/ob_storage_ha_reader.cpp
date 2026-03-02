@@ -3408,8 +3408,8 @@ int ObCopySSTableMacroObProducer::get_next_sstable_macro_range_info_(
       macro_block_count = sstable->get_data_macro_block_count();
     } else if (OB_FAIL(sstable->get_meta(meta_handle))) {
       LOG_WARN("failed to get meta", K(ret), K(copy_table_key), KPC(sstable));
-    } else {
-      macro_block_count = meta_handle.get_sstable_meta().get_macro_info().get_other_block_count();
+    } else if (OB_FAIL(meta_handle.get_sstable_meta().get_macro_info().get_other_block_count(macro_block_count))) {
+      LOG_WARN("failed to get other block count", K(ret), "macro_info", meta_handle.get_sstable_meta().get_macro_info());
     }
 
     if (OB_FAIL(ret)) {

@@ -386,6 +386,8 @@ protected:
   int64_t get_sstable_fix_serialize_size(const int64_t data_version) const;
   int64_t get_sstable_fix_serialize_payload_size(const int64_t data_version) const;
   int inner_deep_copy_and_inc_macro_ref(common::ObIAllocator &allocator, ObSSTable *&sstable) const;
+  int inner_inc_macro_ref(bool &inc_success) const;
+  void inner_dec_macro_ref() const;
 protected:
   static const int64_t SSTABLE_VERSION = 1;
   static const int64_t SSTABLE_VERSION_V2 = 2;
