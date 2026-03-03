@@ -65,6 +65,7 @@ void free_tablet_context(ObIAllocator &allocator, ObDDLTabletContext *tablet_con
 
 ObDDLIndependentDag::~ObDDLIndependentDag()
 {
+  ObIndependentDag::clear_task_list(); // tasks may depend on ObDDLTabletContext (destructed in reuse), so clear them before reuse
   reuse();
 }
 
