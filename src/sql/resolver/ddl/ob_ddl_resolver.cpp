@@ -246,22 +246,23 @@ int ObDDLResolver::append_multivalue_args(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is null", K(ret));
   } else if (!common_aux_table_exist) {
-    ObCreateIndexArg tmp_index_arg;
-    if (OB_FAIL(tmp_index_arg.assign(index_arg))) {
-      LOG_WARN("failed to assign arg", K(ret));
-    } else if (FALSE_IT(tmp_index_arg.index_columns_.reuse())) {
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(tmp_index_arg,
-                                                                 allocator,
-                                                                 index_arg_list))) {
-      LOG_WARN("failed to append fts_rowkey_doc arg", K(ret));
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(tmp_index_arg,
-                                                                        allocator,
-                                                                        index_arg_list))) {
-      LOG_WARN("failed to append fts_doc_rowkey arg", K(ret));
-    } else if (OB_FAIL(ObMulValueIndexBuilderUtil::append_mulvalue_arg(index_arg,
-                                                                       allocator,
-                                                                       index_arg_list))) {
-      LOG_WARN("failed to append fts_index arg", K(ret));
+    SMART_VAR(ObCreateIndexArg, tmp_index_arg) {
+      if (OB_FAIL(tmp_index_arg.assign(index_arg))) {
+        LOG_WARN("failed to assign arg", K(ret));
+      } else if (FALSE_IT(tmp_index_arg.index_columns_.reuse())) {
+      } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(tmp_index_arg,
+                                                                   allocator,
+                                                                   index_arg_list))) {
+        LOG_WARN("failed to append fts_rowkey_doc arg", K(ret));
+      } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(tmp_index_arg,
+                                                                          allocator,
+                                                                          index_arg_list))) {
+        LOG_WARN("failed to append fts_doc_rowkey arg", K(ret));
+      } else if (OB_FAIL(ObMulValueIndexBuilderUtil::append_mulvalue_arg(index_arg,
+                                                                         allocator,
+                                                                         index_arg_list))) {
+        LOG_WARN("failed to append fts_index arg", K(ret));
+      }
     }
   } else {
     num_mulvalue_args = 1;

@@ -105,24 +105,25 @@ int ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(
     ObIArray<ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg fts_rowkey_doc_arg;
-  if (OB_ISNULL(allocator)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
-  } else if (!(is_fts_index(index_arg.index_type_) || 
-               is_multivalue_index(index_arg.index_type_) || 
-               is_vec_spiv_index(index_arg.index_type_))) {
-    ret = OB_ERR_UNEXPECTED; 
-    LOG_WARN("invalid index type", K(ret), K(index_arg.index_type_));
-  } else if (OB_FAIL(fts_rowkey_doc_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to fts rowkey doc arg", K(ret));
-  } else if (FALSE_IT(fts_rowkey_doc_arg.index_option_.parser_name_.reset())) {
-  } else if (FALSE_IT(fts_rowkey_doc_arg.index_option_.parser_properties_.reset())) {
-  } else if (FALSE_IT(fts_rowkey_doc_arg.index_type_ = INDEX_TYPE_ROWKEY_DOC_ID_LOCAL)) {
-  } else if (OB_FAIL(generate_fts_aux_index_name(fts_rowkey_doc_arg, allocator))) {
-    LOG_WARN("failed to generate fts aux index name", K(ret));
-  } else if (OB_FAIL(index_arg_list.push_back(fts_rowkey_doc_arg))) {
-    LOG_WARN("failed to push back fts rowkey doc arg", K(ret));
+  SMART_VAR(ObCreateIndexArg, fts_rowkey_doc_arg) {
+    if (OB_ISNULL(allocator)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+    } else if (!(is_fts_index(index_arg.index_type_) || 
+                 is_multivalue_index(index_arg.index_type_) || 
+                 is_vec_spiv_index(index_arg.index_type_))) {
+      ret = OB_ERR_UNEXPECTED; 
+      LOG_WARN("invalid index type", K(ret), K(index_arg.index_type_));
+    } else if (OB_FAIL(fts_rowkey_doc_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to fts rowkey doc arg", K(ret));
+    } else if (FALSE_IT(fts_rowkey_doc_arg.index_option_.parser_name_.reset())) {
+    } else if (FALSE_IT(fts_rowkey_doc_arg.index_option_.parser_properties_.reset())) {
+    } else if (FALSE_IT(fts_rowkey_doc_arg.index_type_ = INDEX_TYPE_ROWKEY_DOC_ID_LOCAL)) {
+    } else if (OB_FAIL(generate_fts_aux_index_name(fts_rowkey_doc_arg, allocator))) {
+      LOG_WARN("failed to generate fts aux index name", K(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(fts_rowkey_doc_arg))) {
+      LOG_WARN("failed to push back fts rowkey doc arg", K(ret));
+    }
   }
   return ret;
 }
@@ -133,36 +134,37 @@ int ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(
     ObIArray<obrpc::ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg fts_doc_rowkey_arg;
-  // NOTE index_arg.index_type_ is fts doc rowkey
-  if (OB_ISNULL(allocator)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
-  } else if (!(is_fts_index(index_arg.index_type_) ||
-               is_multivalue_index(index_arg.index_type_) ||
-               is_vec_spiv_index(index_arg.index_type_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid index type", K(ret), K(index_arg.index_type_));
-  } else if (OB_FAIL(fts_doc_rowkey_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to fts rowkey doc arg", K(ret));
-  } else {
-    fts_doc_rowkey_arg.index_option_.parser_name_.reset();
-    fts_doc_rowkey_arg.index_option_.parser_properties_.reset();
-    if (is_local_fts_index(index_arg.index_type_) || 
-        is_local_multivalue_index(index_arg.index_type_) ||
-        is_local_vec_spiv_index(index_arg.index_type_)) {
-      fts_doc_rowkey_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
-    } else if (is_global_fts_index(index_arg.index_type_)) {
-      fts_doc_rowkey_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL;
-    } else if (is_global_local_fts_index(index_arg.index_type_)) {
-      fts_doc_rowkey_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE;
+    SMART_VAR(ObCreateIndexArg, fts_doc_rowkey_arg) {
+    // NOTE index_arg.index_type_ is fts doc rowkey
+    if (OB_ISNULL(allocator)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+    } else if (!(is_fts_index(index_arg.index_type_) ||
+                 is_multivalue_index(index_arg.index_type_) ||
+                 is_vec_spiv_index(index_arg.index_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid index type", K(ret), K(index_arg.index_type_));
+    } else if (OB_FAIL(fts_doc_rowkey_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to fts rowkey doc arg", K(ret));
+    } else {
+      fts_doc_rowkey_arg.index_option_.parser_name_.reset();
+      fts_doc_rowkey_arg.index_option_.parser_properties_.reset();
+      if (is_local_fts_index(index_arg.index_type_) || 
+          is_local_multivalue_index(index_arg.index_type_) ||
+          is_local_vec_spiv_index(index_arg.index_type_)) {
+        fts_doc_rowkey_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
+      } else if (is_global_fts_index(index_arg.index_type_)) {
+        fts_doc_rowkey_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL;
+      } else if (is_global_local_fts_index(index_arg.index_type_)) {
+        fts_doc_rowkey_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE;
+      }
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(generate_fts_aux_index_name(fts_doc_rowkey_arg, allocator))) {
-    LOG_WARN("failed to generate fts aux index name", K(ret));
-  } else if (OB_FAIL(index_arg_list.push_back(fts_doc_rowkey_arg))) {
-    LOG_WARN("failed to push back fts doc rowkey arg", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(generate_fts_aux_index_name(fts_doc_rowkey_arg, allocator))) {
+      LOG_WARN("failed to generate fts aux index name", K(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(fts_doc_rowkey_arg))) {
+      LOG_WARN("failed to push back fts doc rowkey arg", K(ret));
+    }
   }
   return ret;
 }
@@ -174,29 +176,30 @@ int ObFtsIndexBuilderUtil::append_fts_index_arg(
     ObIArray<ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg fts_index_arg;
-  if (OB_ISNULL(allocator) ||
-      !share::schema::is_fts_index(index_arg.index_type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg));
-  } else if (OB_FAIL(fts_index_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to fts index arg", K(ret));
-  } else {
-    if (is_local_fts_index(index_arg.index_type_)) {
-      fts_index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
-    } else if (is_global_fts_index(index_arg.index_type_)) {
-      fts_index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_GLOBAL;
-    } else if (is_global_local_fts_index(index_arg.index_type_)) {
-      fts_index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE;
+  SMART_VAR(ObCreateIndexArg, fts_index_arg) {
+    if (OB_ISNULL(allocator) ||
+        !share::schema::is_fts_index(index_arg.index_type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg));
+    } else if (OB_FAIL(fts_index_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to fts index arg", K(ret));
+    } else {
+      if (is_local_fts_index(index_arg.index_type_)) {
+        fts_index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
+      } else if (is_global_fts_index(index_arg.index_type_)) {
+        fts_index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_GLOBAL;
+      } else if (is_global_local_fts_index(index_arg.index_type_)) {
+        fts_index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE;
+      }
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(generate_fts_parser_name_and_property(data_schema, fts_index_arg, allocator))) {
-    LOG_WARN("fail to generate fts parser name", K(ret));
-  } else if (OB_FAIL(generate_fts_aux_index_name(fts_index_arg, allocator))) {
-    LOG_WARN("failed to generate fts aux index name", K(ret));
-  } else if (OB_FAIL(index_arg_list.push_back(fts_index_arg))) {
-    LOG_WARN("failed to push back fts index arg", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(generate_fts_parser_name_and_property(data_schema, fts_index_arg, allocator))) {
+      LOG_WARN("fail to generate fts parser name", K(ret));
+    } else if (OB_FAIL(generate_fts_aux_index_name(fts_index_arg, allocator))) {
+      LOG_WARN("failed to generate fts aux index name", K(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(fts_index_arg))) {
+      LOG_WARN("failed to push back fts index arg", K(ret));
+    }
   }
   return ret;
 }
@@ -208,29 +211,30 @@ int ObFtsIndexBuilderUtil::append_fts_doc_word_arg(
     ObIArray<ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg fts_doc_word_arg;
-  if (OB_ISNULL(allocator) ||
-      !share::schema::is_fts_index(index_arg.index_type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg));
-  } else if (OB_FAIL(fts_doc_word_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to fts doc word arg", K(ret));
-  } else {
-    if (is_local_fts_index(index_arg.index_type_)) {
-      fts_doc_word_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_LOCAL;
-    } else if (is_global_fts_index(index_arg.index_type_)) {
-      fts_doc_word_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_GLOBAL;
-    } else if (is_global_local_fts_index(index_arg.index_type_)) {
-      fts_doc_word_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE;
+  SMART_VAR(ObCreateIndexArg, fts_doc_word_arg) {
+    if (OB_ISNULL(allocator) ||
+        !share::schema::is_fts_index(index_arg.index_type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg));
+    } else if (OB_FAIL(fts_doc_word_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to fts doc word arg", K(ret));
+    } else {
+      if (is_local_fts_index(index_arg.index_type_)) {
+        fts_doc_word_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_LOCAL;
+      } else if (is_global_fts_index(index_arg.index_type_)) {
+        fts_doc_word_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_GLOBAL;
+      } else if (is_global_local_fts_index(index_arg.index_type_)) {
+        fts_doc_word_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE;
+      }
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(generate_fts_parser_name_and_property(data_schema, fts_doc_word_arg, allocator))) {
-    LOG_WARN("fail to generate fts parser name", K(ret));
-  } else if (OB_FAIL(generate_fts_aux_index_name(fts_doc_word_arg, allocator))) {
-    LOG_WARN("failed to generate fts aux index name", K(ret));
-  } else if (OB_FAIL(index_arg_list.push_back(fts_doc_word_arg))) {
-    LOG_WARN("failed to push back fts doc word arg", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(generate_fts_parser_name_and_property(data_schema, fts_doc_word_arg, allocator))) {
+      LOG_WARN("fail to generate fts parser name", K(ret));
+    } else if (OB_FAIL(generate_fts_aux_index_name(fts_doc_word_arg, allocator))) {
+      LOG_WARN("failed to generate fts aux index name", K(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(fts_doc_word_arg))) {
+      LOG_WARN("failed to push back fts doc word arg", K(ret));
+    }
   }
   return ret;
 }
@@ -2503,17 +2507,18 @@ int ObMulValueIndexBuilderUtil::append_mulvalue_arg(
     ObIArray<ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg multivlaue_arg;
-  if (OB_ISNULL(allocator) ||
-      !is_multivalue_index(index_arg.index_type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
-  } else if (OB_FAIL(multivlaue_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to multivalue arg", K(ret));
-  } else if (OB_FAIL(generate_mulvalue_index_name(multivlaue_arg, allocator))) {
-    LOG_WARN("failed to generate multivalue aux index name", K(ret));
-  } else if (OB_FAIL(index_arg_list.push_back(multivlaue_arg))) {
-    LOG_WARN("failed to push back multivalue arg", K(ret));
+  SMART_VAR(ObCreateIndexArg, multivlaue_arg) {
+    if (OB_ISNULL(allocator) ||
+        !is_multivalue_index(index_arg.index_type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+    } else if (OB_FAIL(multivlaue_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to multivalue arg", K(ret));
+    } else if (OB_FAIL(generate_mulvalue_index_name(multivlaue_arg, allocator))) {
+      LOG_WARN("failed to generate multivalue aux index name", K(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(multivlaue_arg))) {
+      LOG_WARN("failed to push back multivalue arg", K(ret));
+    }
   }
   return ret;
 }

@@ -1525,10 +1525,6 @@ public:
     rootserver::ObDDLTask &task,
     obrpc::ObCreateIndexArg &create_index_arg,
     ObDDLType &ddl_type);
-  static int get_domain_index_share_table_snapshot(const ObTableSchema *table_schema,
-    const ObTableSchema *index_schema,
-    uint64_t tenant_id,
-    int64_t &fts_snapshot_version);
   static int write_defensive_and_obtain_snapshot(
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id, 

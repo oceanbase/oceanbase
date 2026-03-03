@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX COMMON
+#include "common/ob_smart_var.h"
 #include "ob_vec_index_builder_util.h"
 #include "ob_index_builder_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
@@ -333,21 +334,22 @@ int ObVecIndexBuilderUtil::append_vec_ivf_arg(
     ObIArray<ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg vec_index_arg;
-  ObString domain_index_name = index_arg.index_name_;
-  if (OB_ISNULL(allocator) || !(is_vec_index(index_type)) || !(is_vec_index(index_arg.index_type_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_), K(index_type));
-  } else if (OB_FAIL(vec_index_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to vec ivf index arg", K(ret));
-  } else if (FALSE_IT(vec_index_arg.index_type_ = index_type)) {
-  } else if (OB_FAIL(generate_vec_index_name(allocator, 
-                                             vec_index_arg.index_type_,
-                                             domain_index_name,
-                                             vec_index_arg.index_name_))) {
-    LOG_WARN("failed to generate vec ivf index name", K(ret));
-  } else if (OB_FAIL(index_arg_list.push_back(vec_index_arg))) {
-    LOG_WARN("failed to push back vec ivf index arg", K(ret));
+  SMART_VAR(ObCreateIndexArg, vec_index_arg) {
+    ObString domain_index_name = index_arg.index_name_;
+    if (OB_ISNULL(allocator) || !(is_vec_index(index_type)) || !(is_vec_index(index_arg.index_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_), K(index_type));
+    } else if (OB_FAIL(vec_index_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to vec ivf index arg", K(ret));
+    } else if (FALSE_IT(vec_index_arg.index_type_ = index_type)) {
+    } else if (OB_FAIL(generate_vec_index_name(allocator, 
+                                               vec_index_arg.index_type_,
+                                               domain_index_name,
+                                               vec_index_arg.index_name_))) {
+      LOG_WARN("failed to generate vec ivf index name", K(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(vec_index_arg))) {
+      LOG_WARN("failed to push back vec ivf index arg", K(ret));
+    }
   }
   return ret;
 }
@@ -358,21 +360,22 @@ int ObVecIndexBuilderUtil::append_vec_rowkey_vid_arg(
     ObIArray<ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg vec_rowkey_vid_arg;
-  ObString empty_domain_index_name;
-  if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
-  } else if (OB_FAIL(vec_rowkey_vid_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to vec rowkey vid arg", K(ret));
-  } else if (FALSE_IT(vec_rowkey_vid_arg.index_type_ = INDEX_TYPE_VEC_ROWKEY_VID_LOCAL)) {
-  } else if (OB_FAIL(generate_vec_index_name(allocator, 
-                                             vec_rowkey_vid_arg.index_type_,
-                                             empty_domain_index_name,
-                                             vec_rowkey_vid_arg.index_name_))) {
-    LOG_WARN("failed to generate vec index name", K(ret));
-  } else if (OB_FAIL(index_arg_list.push_back(vec_rowkey_vid_arg))) {
-    LOG_WARN("failed to push back vec rowkey vid arg", K(ret));
+  SMART_VAR(ObCreateIndexArg, vec_rowkey_vid_arg) {
+    ObString empty_domain_index_name;
+    if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+    } else if (OB_FAIL(vec_rowkey_vid_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to vec rowkey vid arg", K(ret));
+    } else if (FALSE_IT(vec_rowkey_vid_arg.index_type_ = INDEX_TYPE_VEC_ROWKEY_VID_LOCAL)) {
+    } else if (OB_FAIL(generate_vec_index_name(allocator, 
+                                               vec_rowkey_vid_arg.index_type_,
+                                               empty_domain_index_name,
+                                               vec_rowkey_vid_arg.index_name_))) {
+      LOG_WARN("failed to generate vec index name", K(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(vec_rowkey_vid_arg))) {
+      LOG_WARN("failed to push back vec rowkey vid arg", K(ret));
+    }
   }
   return ret;
 }
@@ -383,21 +386,22 @@ int ObVecIndexBuilderUtil::append_vec_vid_rowkey_arg(
     ObIArray<obrpc::ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg vec_vid_rowkey_arg;
-  ObString empty_domain_index_name;
-  if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
-  } else if (OB_FAIL(vec_vid_rowkey_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to vec vid rowkey arg", K(ret));
-  } else if (FALSE_IT(vec_vid_rowkey_arg.index_type_ = INDEX_TYPE_VEC_VID_ROWKEY_LOCAL)) {
-  } else if (OB_FAIL(generate_vec_index_name(allocator, 
-                                             vec_vid_rowkey_arg.index_type_,
-                                             empty_domain_index_name,
-                                             vec_vid_rowkey_arg.index_name_))) {
-    LOG_WARN("failed to generate vec index name", K(ret));
-  } else if (OB_FAIL(index_arg_list.push_back(vec_vid_rowkey_arg))) {
-    LOG_WARN("failed to push back vec vid rowkey arg", K(ret));
+  SMART_VAR(ObCreateIndexArg, vec_vid_rowkey_arg) {
+    ObString empty_domain_index_name;
+    if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+    } else if (OB_FAIL(vec_vid_rowkey_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to vec vid rowkey arg", K(ret));
+    } else if (FALSE_IT(vec_vid_rowkey_arg.index_type_ = INDEX_TYPE_VEC_VID_ROWKEY_LOCAL)) {
+    } else if (OB_FAIL(generate_vec_index_name(allocator, 
+                                               vec_vid_rowkey_arg.index_type_,
+                                               empty_domain_index_name,
+                                               vec_vid_rowkey_arg.index_name_))) {
+      LOG_WARN("failed to generate vec index name", K(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(vec_vid_rowkey_arg))) {
+      LOG_WARN("failed to push back vec vid rowkey arg", K(ret));
+    }
   }
   return ret;
 }
@@ -409,29 +413,30 @@ int ObVecIndexBuilderUtil::append_vec_delta_buffer_arg(
     ObIArray<obrpc::ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg vec_delta_buffer_arg;
-  char* buf = nullptr;
-  int64_t pos = 0;
-  ObString domain_index_name = index_arg.index_name_;
-  if (OB_ISNULL(allocator) || OB_ISNULL(session_info) || !(is_vec_index(index_arg.index_type_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator->alloc(sizeof(char) * OB_MAX_PROC_ENV_LENGTH)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc buffer", KR(ret), K(OB_MAX_PROC_ENV_LENGTH));
-  } else if (OB_FAIL(ObExecEnv::gen_exec_env(*session_info, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
-    LOG_WARN("fail to gen exec env", KR(ret));
-  } else if (OB_FAIL(vec_delta_buffer_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to vec delta buffer arg", K(ret));
-  } else if (FALSE_IT(vec_delta_buffer_arg.index_type_ = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL)) {
-  } else if (OB_FAIL(generate_vec_index_name(allocator, 
-                                             vec_delta_buffer_arg.index_type_,
-                                             domain_index_name, 
-                                             vec_delta_buffer_arg.index_name_))) {
-    LOG_WARN("failed to generate vec index name", K(ret));
-  } else if (FALSE_IT(vec_delta_buffer_arg.vidx_refresh_info_.exec_env_.assign_ptr(buf, pos))) {
-  } else if (OB_FAIL(index_arg_list.push_back(vec_delta_buffer_arg))) {
-    LOG_WARN("failed to push back vec delta buffer arg", K(ret));
+  SMART_VAR(ObCreateIndexArg, vec_delta_buffer_arg) {
+    char* buf = nullptr;
+    int64_t pos = 0;
+    ObString domain_index_name = index_arg.index_name_;
+    if (OB_ISNULL(allocator) || OB_ISNULL(session_info) || !(is_vec_index(index_arg.index_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+    } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator->alloc(sizeof(char) *   OB_MAX_PROC_ENV_LENGTH)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc buffer", KR(ret), K(OB_MAX_PROC_ENV_LENGTH));
+    } else if (OB_FAIL(ObExecEnv::gen_exec_env(*session_info, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
+      LOG_WARN("fail to gen exec env", KR(ret));
+    } else if (OB_FAIL(vec_delta_buffer_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to vec delta buffer arg", K(ret));
+    } else if (FALSE_IT(vec_delta_buffer_arg.index_type_ = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL)) {
+    } else if (OB_FAIL(generate_vec_index_name(allocator, 
+                                               vec_delta_buffer_arg.index_type_,
+                                               domain_index_name, 
+                                               vec_delta_buffer_arg.index_name_))) {
+      LOG_WARN("failed to generate vec index name", K(ret));
+    } else if (FALSE_IT(vec_delta_buffer_arg.vidx_refresh_info_.exec_env_.assign_ptr(buf, pos))) {
+    } else if (OB_FAIL(index_arg_list.push_back(vec_delta_buffer_arg))) {
+      LOG_WARN("failed to push back vec delta buffer arg", K(ret));
+    }
   }
   return ret;
 }
@@ -442,21 +447,22 @@ int ObVecIndexBuilderUtil::append_vec_dim_docid_value_arg(
     ObIArray<obrpc::ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg vec_dim_docid_value_arg;
-  ObString domain_index_name = index_arg.index_name_;
-  if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
-  } else if (OB_FAIL(vec_dim_docid_value_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to vec dim docid value arg", K(ret));
-  } else if (FALSE_IT(vec_dim_docid_value_arg.index_type_ = INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL)) {
-  } else if (OB_FAIL(generate_vec_index_name(allocator, 
-                                            vec_dim_docid_value_arg.index_type_,
-                                            domain_index_name, 
-                                            vec_dim_docid_value_arg.index_name_))) {
-    LOG_WARN("failed to generate vec index name", K(ret));
-  } else if (OB_FAIL(index_arg_list.push_back(vec_dim_docid_value_arg))) {
-    LOG_WARN("failed to push back vec dim docid value arg", K(ret));
+  SMART_VAR(ObCreateIndexArg, vec_dim_docid_value_arg) {
+    ObString domain_index_name = index_arg.index_name_;
+    if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+    } else if (OB_FAIL(vec_dim_docid_value_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to vec dim docid value arg", K(ret));
+    } else if (FALSE_IT(vec_dim_docid_value_arg.index_type_ = INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL)) {
+    } else if (OB_FAIL(generate_vec_index_name(allocator, 
+                                               vec_dim_docid_value_arg.index_type_,
+                                               domain_index_name, 
+                                               vec_dim_docid_value_arg.index_name_))) {
+      LOG_WARN("failed to generate vec index name", K(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(vec_dim_docid_value_arg))) {
+      LOG_WARN("failed to push back vec dim docid value arg", K(ret));
+    }
   }
   return ret;
 }
@@ -467,21 +473,22 @@ int ObVecIndexBuilderUtil::append_vec_index_id_arg(
     ObIArray<obrpc::ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg vec_index_id_arg;
-  ObString domain_index_name = index_arg.index_name_;
-  if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
-  } else if (OB_FAIL(vec_index_id_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to vec index id arg", K(ret));
-  } else if (FALSE_IT(vec_index_id_arg.index_type_ = INDEX_TYPE_VEC_INDEX_ID_LOCAL)) {
-  } else if (OB_FAIL(generate_vec_index_name(allocator,
-                                             vec_index_id_arg.index_type_,
-                                             domain_index_name,
-                                             vec_index_id_arg.index_name_))) {
-    LOG_WARN("failed to generate vec index name", K(ret));
-  } else if (OB_FAIL(index_arg_list.push_back(vec_index_id_arg))) {
-    LOG_WARN("failed to push back vec index id arg", K(ret));
+  SMART_VAR(ObCreateIndexArg, vec_index_id_arg) {
+    ObString domain_index_name = index_arg.index_name_;
+    if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+    } else if (OB_FAIL(vec_index_id_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to vec index id arg", K(ret));
+    } else if (FALSE_IT(vec_index_id_arg.index_type_ = INDEX_TYPE_VEC_INDEX_ID_LOCAL)) {
+    } else if (OB_FAIL(generate_vec_index_name(allocator,
+                                               vec_index_id_arg.index_type_,
+                                               domain_index_name,
+                                               vec_index_id_arg.index_name_))) {
+      LOG_WARN("failed to generate vec index name", K(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(vec_index_id_arg))) {
+      LOG_WARN("failed to push back vec index id arg", K(ret));
+    }
   }
   return ret;
 }
@@ -493,21 +500,22 @@ int ObVecIndexBuilderUtil::append_vec_index_snapshot_data_arg(
     ObIArray<obrpc::ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg vec_index_snapshot_data_arg;
-  ObString domain_index_name = index_arg.index_name_;
-  if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
-  } else if (OB_FAIL(vec_index_snapshot_data_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to snapshot data arg", K(ret));
-  } else if (FALSE_IT(vec_index_snapshot_data_arg.index_type_ = INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL)) {
-  } else if (OB_FAIL(generate_vec_index_name(allocator, 
-                                             vec_index_snapshot_data_arg.index_type_,
-                                             domain_index_name,
-                                             vec_index_snapshot_data_arg.index_name_))) {
-    LOG_WARN("failed to generate vec index name", K(ret));
-  } else if (OB_FAIL(index_arg_list.push_back(vec_index_snapshot_data_arg))) {
-    LOG_WARN("failed to push back vec snapshot data arg", K(ret));
+  SMART_VAR(ObCreateIndexArg, vec_index_snapshot_data_arg) {
+    ObString domain_index_name = index_arg.index_name_;
+    if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+    } else if (OB_FAIL(vec_index_snapshot_data_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to snapshot data arg", K(ret));
+    } else if (FALSE_IT(vec_index_snapshot_data_arg.index_type_ = INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL)) {
+    } else if (OB_FAIL(generate_vec_index_name(allocator, 
+                                               vec_index_snapshot_data_arg.index_type_,
+                                               domain_index_name,
+                                               vec_index_snapshot_data_arg.index_name_))) {
+      LOG_WARN("failed to generate vec index name", K(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(vec_index_snapshot_data_arg))) {
+      LOG_WARN("failed to push back vec snapshot data arg", K(ret));
+    }
   }
   return ret;
 }
