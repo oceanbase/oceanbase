@@ -938,7 +938,7 @@ int ObDASTRMergeIter::inner_reuse()
         LOG_WARN("failed to reuse block max scan param", K(ret), K(i));
       }
     }
-    for (int64_t i = 0; i < OB_SUCC(ret) && fwd_scan_params_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < fwd_scan_params_.count(); ++i) {
       if (OB_FAIL(reuse_das_iter_scan_param(ls_id_, fwd_idx_tablet_id_, *fwd_scan_params_[i]))) {
         LOG_WARN("failed to reuse fwd scan param", K(ret), K(i));
       }
