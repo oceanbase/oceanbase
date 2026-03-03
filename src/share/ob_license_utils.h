@@ -36,6 +36,7 @@ public:
   static int check_olap_allowed(const int64_t tenant_id);
   static int check_add_tenant_allowed(int current_user_tenant_num, const ObString &tenant_name);
   static int check_create_table_allowed(uint64_t tenant_id);
+  static int check_ai_allowed(const int64_t tenant_id);
 };
 
 } // namespace share

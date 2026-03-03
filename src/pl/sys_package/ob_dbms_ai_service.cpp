@@ -17,6 +17,7 @@
 #include "share/ai_service/ob_ai_service_struct.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/ob_rpc_struct.h"
+#include "share/ob_license_utils.h"
 #include "src/pl/ob_pl.h"
 #include "sql/privilege_check/ob_ai_model_priv_util.h"
 
@@ -105,6 +106,8 @@ int ObDBMSAiService::create_ai_model_endpoint(ObPLExecCtx &ctx, sql::ParamStore 
     } else {
       LOG_WARN("failed to check create ai model privilege", K(ret));
     }
+  } else if (OB_FAIL(ObLicenseUtils::check_ai_allowed(static_cast<int64_t>(MTL_ID())))) {
+    LOG_WARN("AI option is required for create ai model endpoint", KR(ret), K(MTL_ID()));
   } else if (OB_FAIL(params.at(0).get_string(endpoint_name))) {
     LOG_WARN("failed to get name string", K(ret), K(params.at(0)));
   } else if (endpoint_name.empty()) {
@@ -256,6 +259,8 @@ int ObDBMSAiService::create_ai_model(ObPLExecCtx &ctx, sql::ParamStore &params, 
     } else {
       LOG_WARN("failed to check create ai model privilege", K(ret));
     }
+  } else if (OB_FAIL(ObLicenseUtils::check_ai_allowed(static_cast<int64_t>(tenant_id)))) {
+    LOG_WARN("AI option is required for create ai model", KR(ret), K(tenant_id));
   } else if (OB_FAIL(params.at(0).get_string(model_name))) {
     LOG_WARN("failed to get name string", K(ret), K(params.at(0)));
   } else if (model_name.empty()) {

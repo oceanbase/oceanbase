@@ -55,6 +55,11 @@ int ObLicenseUtils::check_standby_allowed()
   return OB_SUCCESS;
 }
 
+int ObLicenseUtils::check_ai_allowed(const int64_t tenant_id)
+{
+  return OB_SUCCESS;
+}
+
 int ObLicenseUtils::check_for_create_tenant(int current_user_tenant_num, bool is_create_standby, const ObString &tenant_name) {
   return OB_SUCCESS;
 }

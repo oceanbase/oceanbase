@@ -122,7 +122,7 @@ const char *CORRECT_LICENSE = R"({
         "EndUser": "shaoyibo.syb",
         "LicenseID": "7d52b498-ba0d-4f0b-a057-e492c6def206",
         "LicenseCode": "BD-123456-CT-12345",
-        "LicenseType": "trial",
+        "LicenseType": "Trial",
         "ProductType": "Standalone Standard Edition",
         "ProductVersion": "v4.2.5",
         "IssuanceDate": "2025-02-19",
@@ -130,9 +130,8 @@ const char *CORRECT_LICENSE = R"({
         "CoreNum": 2,
         "NodeNum": 1,
         "Options": [
-            "a",
-            "b",
-            "c"
+            "EE",
+            "AI"
         ],
         "Version": 1
     }
@@ -194,12 +193,32 @@ TEST_F(TestLicense, ParseAndValidateLicense)
   ASSERT_EQ(license_mgr_->parse_license(LICENSE_INVALID_FORMAT_7, license), OB_INVALID_LICENSE);
   ASSERT_EQ(license_mgr_->parse_license("", license), OB_INVALID_LICENSE);
 
+  const char *LICENSE_WITH_UNKNOWN_OPTION = R"({
+      "license": {
+          "EndUser": "test",
+          "LicenseID": "test",
+          "LicenseCode": "test",
+          "LicenseType": "Commercial",
+          "ProductType": "Standalone Standard Edition",
+          "IssuanceDate": "2025-02-19",
+          "ValidityPeriod": "2099-02-19",
+          "CoreNum": 2,
+          "NodeNum": 1,
+          "Options": [
+              "EE",
+              "UNKNOWN"
+          ],
+          "Version": 1
+      }
+  })";
+  ASSERT_EQ(license_mgr_->parse_license(LICENSE_WITH_UNKNOWN_OPTION, license), OB_INVALID_LICENSE);
+
   ASSERT_EQ(license_mgr_->parse_license(CORRECT_LICENSE, license), OB_SUCCESS);
   ASSERT_TRUE(OB_NOT_NULL(license));
   ASSERT_TRUE(license->end_user_ == "shaoyibo.syb");
   ASSERT_TRUE(license->license_id_ == "7d52b498-ba0d-4f0b-a057-e492c6def206");
   ASSERT_TRUE(license->license_code_ == "BD-123456-CT-12345");
-  ASSERT_TRUE(license->license_type_ == "trial");
+  ASSERT_TRUE(license->license_type_ == "Trial");
   ASSERT_TRUE(license->product_type_ == "Standalone Standard Edition");
   // ASSERT_TRUE(license->product_version_ == "v4.2.5");
   ASSERT_TRUE(license->issuance_date_ == 1739894400000000);
@@ -207,7 +226,7 @@ TEST_F(TestLicense, ParseAndValidateLicense)
   ASSERT_TRUE(license->activation_time_ == 1739894401000000);
   ASSERT_TRUE(license->core_num_ == 2);
   ASSERT_TRUE(license->node_num_ == 1);
-  ASSERT_TRUE(license->options_ == "a,b,c");
+  ASSERT_TRUE(license->options_ == "EE,AI");
 
   ASSERT_EQ(license_mgr_->validate_license(*license), OB_SUCCESS);
 
@@ -308,6 +327,7 @@ TEST_F(TestLicense, TestLicenseUtils) {
 
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_dml_allowed());
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_olap_allowed(tenant_id));
+  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_ai_allowed(tenant_id));
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0, fake_tenant_name));
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(1, fake_tenant_name));
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_standby_allowed());
@@ -353,8 +373,10 @@ TEST_F(TestLicense, TestLicenseUtils) {
   current_license->allow_multi_tenant_ = false;
   current_license->allow_olap_ = false;
   current_license->allow_stand_by_ = false;
+  current_license->allow_ai_ = false;
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_dml_allowed());
   ASSERT_EQ(OB_LICENSE_SCOPE_EXCEEDED, ObLicenseUtils::check_olap_allowed(tenant_id));
+  ASSERT_EQ(OB_LICENSE_SCOPE_EXCEEDED, ObLicenseUtils::check_ai_allowed(tenant_id));
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0, fake_tenant_name));
   ASSERT_EQ(OB_LICENSE_SCOPE_EXCEEDED, ObLicenseUtils::check_add_tenant_allowed(1, fake_tenant_name));
   ASSERT_EQ(OB_LICENSE_SCOPE_EXCEEDED, ObLicenseUtils::check_add_tenant_allowed(1, fake_tenant_name));

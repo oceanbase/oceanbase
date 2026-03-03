@@ -8135,7 +8135,9 @@ int ObDDLResolver::resolve_vec_index_constraint(
     bool is_collection_column = ob_is_collection_sql_type(column_schema.get_data_type());
     // TODO(shancai): later support text and string type
     bool is_text_column = ob_is_varchar_type(column_schema.get_data_type(), column_schema.get_collation_type());
-    if (!is_collection_column && !is_text_column) {
+    if (OB_FAIL(ObLicenseUtils::check_ai_allowed(tenant_id))) {
+      LOG_WARN("AI option is required for vector index", KR(ret), K(tenant_id));
+    } else if (!is_collection_column && !is_text_column) {
       ret = OB_ERR_BAD_VEC_INDEX_COLUMN;
       LOG_USER_ERROR(OB_ERR_BAD_VEC_INDEX_COLUMN,
           column_schema.get_column_name_str().length(),
