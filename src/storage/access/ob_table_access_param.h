@@ -14,6 +14,7 @@
 #define OB_STORAGE_TABLE_ACCESS_PARAM_H
 
 #include "ob_common_types.h"
+#include "storage/blocksstable/ob_datum_row.h"
 #include "storage/ob_i_store.h"
 #include "storage/blocksstable/ob_datum_range.h"
 #include "ob_sstable_index_filter.h"
@@ -292,6 +293,7 @@ public:
   const sql::ObExpr *auto_split_filter_;
   sql::ExprFixedArray *auto_split_params_;
   const bool *need_update_tablet_param_;
+  const blocksstable::ObDatumRow* default_row_;
   union {
     uint64_t flag_;
     struct {

@@ -514,8 +514,7 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::append_row(const ObDatumRow &row)
   } else if (OB_UNLIKELY(!row.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(row));
-  } else if (OB_UNLIKELY((!IS_MULTI_VERSION && row.get_column_count() != ctx_.column_cnt_) ||
-                          (IS_MULTI_VERSION && row.get_column_count() > ctx_.column_cnt_))) {
+  } else if (OB_UNLIKELY((row.get_column_count() != ctx_.column_cnt_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid column count", K(ret), "ctx", ctx_, K(row));
   } else if (OB_UNLIKELY(encoder_freezed_)) {
@@ -1706,8 +1705,6 @@ const ObStorageDatum& ObMicroBlockCSEncoder<true>::get_column_datum(const ObDatu
   ObStorageDatum *datum;
   if (column_idx < row.get_column_count()) {
     datum = &row.storage_datums_[column_idx];
-  } else if (column_idx < ctx_.column_cnt_) {
-    datum = &ctx_.default_row_->storage_datums_[column_idx];
   } else {
     ObCSRowHeader row_header(row);
     datum = const_cast<ObStorageDatum*>(&current_row_header_);

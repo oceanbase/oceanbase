@@ -63,11 +63,6 @@ int TestMultiVersionCSEncoder::prepare(const ObObjType *col_types, const int64_t
   } else if (FALSE_IT(ctx_.need_calc_column_chksum_ = false)) {
   } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObDatumRow)))) {
     LOG_WARN("fail to alloc default row", K(ret));
-  } else if (FALSE_IT(ctx_.default_row_ = new (buf) ObDatumRow())) {
-  } else if (OB_FAIL(ctx_.default_row_->init(allocator_, column_cnt))) {
-    LOG_WARN("fail to init default row", K(ret));
-  } else if (OB_FAIL(row_generate_.get_next_row(96758474, *ctx_.default_row_))) {
-    LOG_WARN("fail to get next row", K(ret));
   } else if (FALSE_IT(ctx_.column_encodings_ = nullptr)) {
   } else if (OB_FAIL(encoder_.init(ctx_))) {
     LOG_WARN("fail to init encoder", K(ret));
@@ -1207,55 +1202,6 @@ TEST_F(TestMultiVersionCSEncoder, micro_header)
   ASSERT_EQ(0, header->is_last_row_last_flag_);
   ASSERT_EQ(1, header->has_row_header_);
 
-  reuse();
-}
-
-TEST_F(TestMultiVersionCSEncoder, add_column)
-{
-  const int64_t rowkey_cnt = 3;
-  const int64_t col_cnt = 5;
-  ObObjType col_types[col_cnt] = {ObIntType, ObIntType, ObIntType, ObIntType, ObIntType};
-  char *block_buf = nullptr;
-  int64_t block_size = 0;
-  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
-
-  const char *data1 =
-	"bigint	bigint	bigint	flag	  multi_version_row_flag\n"
-	"1	    -1	    1	      INSERT	CLF	                  \n"
-	"2	    -1	    1	      INSERT	CLF	                  \n"
-	"3	    -1	    1	      INSERT	CLF	                  \n"
-	"4	    -1	    1	      INSERT	CLF	                  \n"
-	"5	    -1	    1	      INSERT	CLF	                  \n";
-
-
-  const char *data2 =
-	"bigint	bigint	bigint	bigint  flag	  multi_version_row_flag\n"
-	"6	    -1	    1	      1	      INSERT	CLF	                  \n"
-	"7	    -1	    1	      1	      INSERT	CLF	                  \n"
-	"8	    -1	    1	      1	      INSERT	CLF	                  \n"
-	"9	    -1	    1	      1	      INSERT	CLF	                  \n"
-	"10	    -1	    1	      1	      INSERT	CLF	                  \n";
-
-  const char *data3 =
-	"bigint	bigint	bigint	bigint  bigint  flag	  multi_version_row_flag\n"
-	"11	    -1	    1	      1	      1	      INSERT	CLF	                  \n"
-	"12	    -1	    1	      1	      1	      INSERT	CLF	                  \n"
-	"13	    -1	    1	      1	      1	      INSERT	CLF	                  \n"
-	"14	    -1	    1	      1	      1	      INSERT	CLF	                  \n"
-	"15	    -1	    1	      1	      1	      INSERT	CLF	                  \n";
-
-  ASSERT_EQ(OB_SUCCESS, append_data(data1));
-  ASSERT_EQ(OB_SUCCESS, append_data(data2));
-  ASSERT_EQ(OB_SUCCESS, append_data(data3));
-  ASSERT_EQ(OB_SUCCESS, build_block(encoder_, block_buf, block_size));
-
-  ObMicroBlockHeader *header = reinterpret_cast<ObMicroBlockHeader *>(block_buf);
-  ASSERT_EQ(15, header->row_count_);
-  ASSERT_EQ(5, header->column_count_);
-  ASSERT_EQ(1, header->single_version_rows_);
-  ASSERT_EQ(0, header->contain_uncommitted_rows_);
-  ASSERT_EQ(1, header->is_last_row_last_flag_);
-  ASSERT_EQ(1, header->has_row_header_);
   reuse();
 }
 

@@ -51,6 +51,7 @@ ObTableIterParam::ObTableIterParam()
       auto_split_filter_(nullptr),
       auto_split_params_(nullptr),
       need_update_tablet_param_(nullptr),
+      default_row_(nullptr),
       merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
       is_multi_version_minor_merge_(false),
       need_scn_(false),
@@ -143,6 +144,7 @@ void ObTableIterParam::reset()
   plan_enable_rich_format_ = false;
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
   need_update_tablet_param_ = nullptr;
+  default_row_ = nullptr;
 }
 
 int ObTableIterParam::refresh_lob_column_out_status()

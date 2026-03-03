@@ -13,6 +13,9 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_tablet_merge_task.h"
 #include "storage/compaction/ob_partition_merger.h"
+#include "storage/blocksstable/ob_datum_row.h"
+#include "storage/lob/ob_lob_manager.h"
+#include "common/ob_version_def.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
@@ -50,7 +53,8 @@ ObMergeParameter::ObMergeParameter(
     trans_state_mgr_(nullptr),
     error_location_(nullptr),
     mview_merge_param_(nullptr),
-    allocator_(nullptr)
+    allocator_(nullptr),
+    default_row_(nullptr)
 {
 }
 
@@ -83,6 +87,11 @@ void ObMergeParameter::reset()
     mview_merge_param_->~ObMviewMergeParameter();
     allocator_->free(mview_merge_param_);
     mview_merge_param_ = nullptr;
+  }
+  if (nullptr != default_row_) {
+    default_row_->~ObDatumRow();
+    allocator_->free(default_row_);
+    default_row_ = nullptr;
   }
   allocator_ = nullptr;
 }
@@ -121,6 +130,35 @@ int ObMergeParameter::init(
       LOG_WARN("schema is null", K(ret), K(*this));;
     } else if (schema->is_mv_major_refresh_table() && is_major_merge_type(static_param_.get_merge_type()) && OB_FAIL(init_mview_merge_param(allocator))) {
       STORAGE_LOG(WARN, "failed to init mview merge param", K(ret));
+    } else if (is_mini_merge(static_param_.get_merge_type()) && nullptr != schema
+        && !schema->is_column_info_simplified()
+        && schema->get_minor_row_store_type() == common::ObRowStoreType::CS_ENCODING_ROW_STORE
+        && nullptr != allocator) {
+      // Build default_row once per merge task for mini merge; merge iters use it via iter_param.default_row_
+      const common::ObIArray<share::schema::ObColDesc> &multi_version_column_ids = static_param_.multi_version_column_descs_;
+      const uint64_t data_version = static_param_.data_version_;
+      const bool need_trim_default_row = data_version >= DATA_VERSION_4_3_1_0 || data_version < DATA_VERSION_4_3_0_0;
+      void *buf = nullptr;
+      if (OB_ISNULL(buf = allocator->alloc(sizeof(blocksstable::ObDatumRow)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "Failed to allocate memory for default row", K(ret));
+      } else {
+        default_row_ = new (buf) blocksstable::ObDatumRow();
+        if (OB_FAIL(default_row_->init(*allocator, multi_version_column_ids.count()))) {
+          STORAGE_LOG(WARN, "Failed to init default row", K(ret), K(multi_version_column_ids.count()));
+        } else if (OB_FAIL(schema->get_orig_default_row(multi_version_column_ids, need_trim_default_row, *default_row_))) {
+          STORAGE_LOG(WARN, "Failed to get default row from table schema", K(ret), K(multi_version_column_ids));
+        } else if (OB_FAIL(storage::ObLobManager::fill_lob_header(*allocator, multi_version_column_ids, *default_row_))) {
+          STORAGE_LOG(WARN, "fail to fill lob header for default row", K(ret), K(multi_version_column_ids));
+        } else {
+          STORAGE_LOG(DEBUG, "Successfully initialized default row for mini merge in merge param", KP_(default_row), K(multi_version_column_ids.count()));
+        }
+        if (OB_FAIL(ret) && nullptr != default_row_) {
+          default_row_->~ObDatumRow();
+          allocator->free(default_row_);
+          default_row_ = nullptr;
+        }
+      }
     }
   }
   if (OB_SUCC(ret)) {
