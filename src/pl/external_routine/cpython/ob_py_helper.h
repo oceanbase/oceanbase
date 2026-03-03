@@ -18,8 +18,9 @@
 
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/oblog/ob_log_module.h"
-#include "lib/allocator/page_arena.h"
+#include "lib/allocator/ob_allocator.h"
 #include "lib/lock/ob_mutex.h"
+#include "lib/lock/ob_rwlock.h"
 
 #if defined(_AIX)
   #define  LIB_OPEN_FLAGS        (RTLD_NOW | RTLD_GLOBAL | RTLD_MEMBER)
@@ -285,12 +286,11 @@ private:
   int search_dir_file(const char *path, const char *file_name, bool &found);
   void *ob_alloc_py(ObPyEnvContext &ctx, int64_t size);
   void ob_free_py(ObPyEnvContext &ctx, void *ptr);
-  int convert_to_wchar(const char *str, wchar_t *&wstr);
+  int convert_to_wchar(common::ObIAllocator &allocator, const char *str, wchar_t *&wstr);
   int load_builtins();
   int check_py_version();
 private:
   bool is_inited_;
-  common::ObArenaAllocator allocator_;
   static PyThreadState *main_state_;
   PyConfig config_;
   ObPyEnvContext py_ctx_;
