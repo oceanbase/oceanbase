@@ -141,11 +141,12 @@ int PyFunctionHelper::init_py_env()
     config_.isolated = 1;
     config_.configure_c_stdio = 0;
     wchar_t *config_home = nullptr;
+    ObArenaAllocator tmp_alloc("ob_py_init");
 
     if (OB_ISNULL(GCONF.ob_python_home) || GCONF.ob_python_home.get_value_string().empty()) {
       ret = OB_PYTHON_PARAMS_ERROR;
       LOG_USER_ERROR(OB_PYTHON_PARAMS_ERROR, "ob_python_home was not configured");
-    } else if (OB_FAIL(convert_to_wchar(GCONF.ob_python_home.get_value_string().ptr(), config_home))) {
+    } else if (OB_FAIL(convert_to_wchar(tmp_alloc,GCONF.ob_python_home.get_value_string().ptr(), config_home))) {
       LOG_WARN("failed to convert_to_wchar", K(ret));
     } else {
       PyStatus status;
@@ -477,23 +478,21 @@ void PyFunctionHelper::ob_free_py(ObPyEnvContext &ctx, void *ptr)
   }
 }
 
-int PyFunctionHelper::convert_to_wchar(const char *str, wchar_t *&wstr)
+
+int PyFunctionHelper::convert_to_wchar(ObIAllocator &allocator, const char *str, wchar_t *&wstr)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(str)) {
     size_t len = STRLEN(str) + 1;
     wstr = nullptr;
-    wstr = static_cast<wchar_t *>(allocator_.alloc(len * sizeof(wchar_t)));
+    wstr = static_cast<wchar_t *>(allocator.alloc(len * sizeof(wchar_t)));
     if (OB_ISNULL(wstr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), K(len));
-    } else {
-      if (std::mbstowcs(wstr, str, len) == static_cast<size_t>(-1)) {
-          allocator_.free(wstr);
-          wstr = nullptr;
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to convert to wchar_t", K(ret));
-      }
+    } else if (std::mbstowcs(wstr, str, len) == static_cast<size_t>(-1)) {
+      wstr = nullptr;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to convert to wchar_t", K(ret));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
