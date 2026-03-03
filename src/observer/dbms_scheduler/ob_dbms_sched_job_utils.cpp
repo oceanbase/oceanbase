@@ -285,6 +285,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   max_failures_ = other.max_failures_;
   func_type_ = other.func_type_;
   this_exec_date_ = other.this_exec_date_;
+  this_exec_sess_id_ = other.this_exec_sess_id_;
 
   OZ (ob_write_string(allocator, other.lowner_, lowner_));
   OZ (ob_write_string(allocator, other.powner_, powner_));

@@ -58,7 +58,7 @@ public:
     uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date, ObAddr execute_addr);
 
   int update_for_start_execute(
-    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info);
+    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, uint64_t session_id);
 
   int update_for_missed(ObDBMSSchedJobInfo &job_info);
   int update_for_zone_not_exist(ObDBMSSchedJobInfo &job_info);

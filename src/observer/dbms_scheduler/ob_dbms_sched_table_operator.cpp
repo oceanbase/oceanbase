@@ -96,7 +96,7 @@ int ObDBMSSchedTableOperator::update_for_start(
 }
 
 int ObDBMSSchedTableOperator::update_for_start_execute(
-  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info)
+  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, uint64_t session_id)
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
@@ -117,6 +117,9 @@ int ObDBMSSchedTableOperator::update_for_start_execute(
     OZ (dml.add_pk_column("job", job_info.job_));
     OZ (dml.add_pk_column("job_name", job_info.job_name_));
     OZ (dml.add_time_column("this_exec_date", now));
+    if (DATA_VERSION_SUPPORT_EXECUTE_SESSION_ID(data_version)) {
+      OZ (dml.add_column("this_exec_sess_id", session_id));
+    }
     OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
     OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
     job_info.this_exec_date_ = now;
@@ -164,6 +167,9 @@ int ObDBMSSchedTableOperator::_build_job_finished_dml(int64_t now, ObDBMSSchedJo
     OZ (dml.add_column(true, "this_exec_date"));
     OZ (dml.add_column(true, "this_exec_addr"));
     OZ (dml.add_column(true, "this_exec_trace_id"));
+    if (DATA_VERSION_SUPPORT_EXECUTE_SESSION_ID(data_version)) {
+      OZ (dml.add_column("this_exec_sess_id", INVALID_SESSID));
+    }
   }
   // job reach end_date before first scheduled shoule updated too
   OZ (dml.get_extra_condition().assign_fmt("(state is NULL OR state!='BROKEN') AND (last_date is null OR last_date<=usec_to_time(%ld))", job_info.last_date_));
@@ -707,6 +713,7 @@ do {                                                                  \
   //destination_name not used
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "this_exec_addr", job_info_local.this_exec_addr_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "this_exec_trace_id", job_info_local.this_exec_trace_id_);
+  EXTRACT_UINT_FIELD_MYSQL_SKIP_RET(result, "this_exec_sess_id", job_info_local.this_exec_sess_id_, uint64_t);
   OZ (job_info.deep_copy(allocator, job_info_local));
   return ret;
 }
