@@ -164,10 +164,12 @@ void ObDASScanIter::clear_evaluated_flag()
 int ObDASScanIter::try_check_vec_pre_filter_status(const int64_t row_count /* default 1 */) 
 {
   int ret = OB_SUCCESS;
+  uint64_t tmp_try_check_tick_rows = 0;
   try_check_tick_rows_ += row_count;
   ++try_check_tick_;
   bool need_check = false;
   if (try_check_tick_rows_ >= CHECK_STATUS_ROWS) {
+    tmp_try_check_tick_rows = try_check_tick_rows_;
     try_check_tick_rows_ = 0;
     need_check = true;
   }
@@ -175,7 +177,7 @@ int ObDASScanIter::try_check_vec_pre_filter_status(const int64_t row_count /* de
     need_check = true;
   }
   if (need_check && OB_FAIL(check_vec_pre_filter_status())) {
-    LOG_INFO("vector pre-filter search timeout", K(ret));
+    LOG_INFO("vector pre-filter search timeout", K(ret), K(tmp_try_check_tick_rows), K(try_check_tick_), K(row_count));
   }
   
   return ret;
@@ -192,7 +194,7 @@ int ObDASScanIter::check_vec_pre_filter_status()
     int64_t timeout_remain = timeout_ts - cur_ts;
     if (timeout_remain <= 0) {
       ret = OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY; // to trigger pre-filter -> post_iteration transition
-      LOG_INFO("vector pre-filter scan timeout", K(ret), K(timeout_remain), K(cur_ts), K(vec_start_scan_ts_us_), K(vec_pre_filtering_timeout_us_));
+      LOG_INFO("vector pre-filter scan timeout", K(ret), K(timeout_remain), K(cur_ts), K(vec_start_scan_ts_us_), K(vec_pre_filtering_timeout_us_), K(try_check_tick_));
     }
   }
   return ret;

@@ -2847,7 +2847,7 @@ DEF_BOOL(enable_mv_binlog_minimal_mode, OB_TENANT_PARAMETER, "False",
          "Switch of the minimal mode for materialized view ",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "100000", 
+DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "1000", 
         "The upper limit of ivf iter-filter search nums. Range: [0,)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 

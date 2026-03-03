@@ -25,12 +25,11 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
-  
-#define IVF_GET_NEXT_ROWS_BEGIN(iter)                                    \
+#define IVF_GET_NEXT_ROWS_BEGIN_IMPL(iter, batch_size)                   \
   bool index_end = false;                                                \
   iter->clear_evaluated_flag();                                          \
   int64_t scan_row_cnt = 0;                                              \
-  int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE; \
+  int64_t batch_row_count = batch_size;                                  \
   while (!index_end && OB_SUCC(ret)) {                                   \
     if (OB_FAIL(iter->get_next_rows(scan_row_cnt, batch_row_count))) {   \
       if (OB_ITER_END != ret) {                                          \
@@ -43,6 +42,12 @@ namespace sql
     } else if (scan_row_cnt > 0) {                                       \
       ret = OB_SUCCESS;                                                  \
     }
+
+#define IVF_GET_NEXT_ROWS_BEGIN(iter)                                    \
+  IVF_GET_NEXT_ROWS_BEGIN_IMPL(iter, ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE)
+  
+#define IVF_GET_NEXT_ROWS_BEGIN_WITH_BATCH(iter, batch_size)            \
+  IVF_GET_NEXT_ROWS_BEGIN_IMPL(iter, batch_size)
 
 #define IVF_GET_NEXT_ROWS_END(iter, scan_param, tablet_id)                             \
   }                                                                                    \
@@ -79,7 +84,8 @@ public:
         data_filter_rtdef_(nullptr),
         vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
         vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
-        is_primary_index_(false)
+        is_primary_index_(false),
+        strategy_(ObVecIdxQueryStrategy::RECALL_FIRST)
   {}
 
   virtual bool is_valid() const override
@@ -124,6 +130,7 @@ public:
   ObVecIndexType vec_index_type_;
   ObVecIdxAdaTryPath vec_idx_try_path_;
   bool is_primary_index_;
+  ObVecIdxQueryStrategy strategy_;
 
 };
 
@@ -356,7 +363,8 @@ public:
         search_param_(),
         similarity_threshold_(0),
         scan_tablet_size_(1),
-        max_scan_vectors_(0)
+        max_scan_vectors_(0),
+        strategy_(ObVecIdxQueryStrategy::RECALL_FIRST)
   {
     dis_type_ = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
     saved_rowkeys_.set_attr(ObMemAttr(MTL_ID(), "VecIdxKeyRanges"));
@@ -486,13 +494,16 @@ protected:
   inline bool is_iter_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER
                       || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER);}
   inline bool check_if_can_retry() { return is_adaptive_filter() && (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER 
-                                                                 || vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);}
+                                                                 || vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER)
+                                                                 && (strategy_ == ObVecIdxQueryStrategy::RECALL_FIRST || 
+                                                                    (strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER));}
   int reset_filter_path();
   int check_iter_filter_need_retry();
   int check_pre_filter_need_retry();
   int updata_vec_exec_ctx(ObPlanStat* plan_stat);
   inline double get_default_selectivity_rate() const { return ObVecIdxExtraInfo::get_default_selectivity_rate(vec_index_param_.type_); }
   virtual void reuse_cid_ctx();
+  int64_t get_cid_vec_batch_count();
 
 protected:
   static const int64_t CENTROID_PRI_KEY_CNT = 1;
@@ -588,6 +599,7 @@ protected:
   float similarity_threshold_;
   uint64_t scan_tablet_size_;
   int64_t max_scan_vectors_;
+  ObVecIdxQueryStrategy strategy_;
 };
 
 class ObDASIvfScanIter : public ObDASIvfBaseScanIter
