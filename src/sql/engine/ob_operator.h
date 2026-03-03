@@ -844,11 +844,8 @@ int ObOpSpec::find_target_specs(T &spec, const FILTER &f, common::ObIArray<T *> 
 
 inline void ObOperator::destroy()
 {
-  if (nullptr != dummy_allocator_ && nullptr != dummy_ptr_) {
-    dummy_allocator_->free(dummy_ptr_);
-    dummy_ptr_ = nullptr;
-    dummy_allocator_ = nullptr;
-  }
+  dummy_ptr_ = nullptr;
+  dummy_allocator_ = nullptr;
 }
 
 OB_INLINE void ObOperator::clear_evaluated_flag()
