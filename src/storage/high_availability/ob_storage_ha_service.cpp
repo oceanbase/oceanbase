@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_service.h"
-
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -128,7 +128,10 @@ void ObStorageHAService::run1()
   while (!has_set_stop()) {
     ls_id_array_.reset();
 
-    if (OB_FAIL(get_ls_id_array_())) {
+    if (!SERVER_STORAGE_META_SERVICE.is_started()) {
+      ret = OB_SERVER_IS_INIT;
+      LOG_WARN("server is not serving", K(ret), K(GCTX.status_));
+    } else if (OB_FAIL(get_ls_id_array_())) {
       LOG_WARN("failed to get ls id array", K(ret));
     } else if (OB_FAIL(scheduler_ls_ha_handler_())) {
       LOG_WARN("failed to do scheduler ls ha handler", K(ret));
