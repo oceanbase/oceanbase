@@ -1017,6 +1017,8 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   }
 
   if (OB_FAIL(ret)) {
+  } else if (!GCONF._enable_schedule_tablet_split) {
+    can_split = false;
   } else if (auto_split_tablet_size <= 0) {
     can_split = false;
   } else if (OB_FAIL(ls.get_ls_role(role))) {
@@ -1061,7 +1063,8 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   }
   LOG_TRACE("auto-split check_can_split", K(ret), K(can_split), K(ls_id),
       K(role), K(tablet_id), K(tablet_status),
-      K(auto_split_tablet_size), K(used_disk_space), K(real_auto_split_size));
+      K(auto_split_tablet_size), K(used_disk_space), K(real_auto_split_size),
+      "enable_schedule_tablet_split", GCONF._enable_schedule_tablet_split);
   return ret;
 }
 
