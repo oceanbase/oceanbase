@@ -52,13 +52,16 @@ public:
     : ObDASIter(ObDASIterType::DAS_ITER_SCAN),
       tsc_service_(nullptr),
       result_(nullptr),
-      scan_param_(nullptr)
+      scan_param_(nullptr),
+      skip_vectorized_print_(false)
   {}
   virtual ~ObDASScanIter() {}
   common::ObNewRowIterator *&get_output_result_iter() { return result_; }
 
   void set_scan_param(storage::ObTableScanParam &scan_param) { scan_param_ = &scan_param; }
   storage::ObTableScanParam &get_scan_param() { return *scan_param_; }
+  OB_INLINE void set_skip_vectorized_print() { skip_vectorized_print_ = true; }
+  OB_INLINE bool is_skip_vectorized_print() { return skip_vectorized_print_; }
 
   virtual int do_table_scan() override;
   virtual int rescan() override;
@@ -82,6 +85,7 @@ private:
   common::ObNewRowIterator *result_;
   // must ensure the lifecycle of scan param is longer than scan iter.
   storage::ObTableScanParam *scan_param_;
+  bool skip_vectorized_print_;
 };
 
 
