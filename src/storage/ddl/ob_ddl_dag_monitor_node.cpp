@@ -16,6 +16,7 @@
 #include "storage/ddl/ob_ddl_dag_monitor_entry.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/container/ob_iarray.h"
+#include "lib/container/ob_se_array.h"
 #include "lib/oblog/ob_log_module.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
@@ -231,21 +232,48 @@ void ObDDLDagMonitorNode::mark_finished()
   finish_timestamp_ = ObTimeUtility::current_time();
 }
 
-int ObDDLDagMonitorNode::get_all_infos(ObIArray<ObDDLDagMonitorInfo *> &infos) const
+int ObDDLDagMonitorNode::get_all_infos(ObIAllocator &allocator, ObIArray<ObDDLDagMonitorEntry *> &entries) const
 {
   int ret = OB_SUCCESS;
-  infos.reset();
+  entries.reset();
+  ObSEArray<ObDDLDagMonitorEntry *, 16> tmp_entries;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("monitor node not init", K(ret));
   } else {
+    // Hold the read lock for the entire copy to prevent concurrent clean_infos() from
+    // freeing infos while we are reading them.
     SpinRLockGuard guard(lock_);
-    DLIST_FOREACH_NORET(iter, info_list_) {
-      if (OB_FAIL(infos.push_back(const_cast<ObDDLDagMonitorInfo *>(iter)))) {
-        LOG_WARN("push back monitor info failed", K(ret));
-        break;
+    DLIST_FOREACH(iter, info_list_) {
+      ObDDLDagMonitorEntry *entry = OB_NEWx(ObDDLDagMonitorEntry, &allocator);
+      if (OB_ISNULL(entry)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate monitor entry", K(ret));
+      } else if (OB_FAIL(iter->convert_to_monitor_entry(*entry))) {
+        LOG_WARN("convert to monitor entry failed", K(ret));
+      } else if (OB_FAIL(tmp_entries.push_back(entry))) {
+        LOG_WARN("push back monitor entry failed", K(ret));
+      }
+      if (OB_FAIL(ret) && OB_NOT_NULL(entry)) {
+        entry->~ObDDLDagMonitorEntry();
+        allocator.free(entry);
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(entries.assign(tmp_entries))) {
+      LOG_WARN("failed to assign entries", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    for (int64_t i = 0; i < tmp_entries.count(); ++i) {
+      ObDDLDagMonitorEntry *entry = tmp_entries.at(i);
+      if (OB_NOT_NULL(entry)) {
+        entry->~ObDDLDagMonitorEntry();
+        allocator.free(entry);
+      }
+    }
+    tmp_entries.reset();
   }
   return ret;
 }

@@ -32,9 +32,8 @@ ObAllVirtualDDLDagMonitor::ObAllVirtualDDLDagMonitor()
       tenant_idx_(-1),
       nodes_(),
       node_idx_(0),
-      task_infos_(),
-      info_idx_(0),
-      entry_()
+      task_entries_(),
+      info_idx_(0)
 {
   MEMSET(ip_buf_, 0, sizeof(ip_buf_));
 }
@@ -44,8 +43,24 @@ ObAllVirtualDDLDagMonitor::~ObAllVirtualDDLDagMonitor()
   reset();
 }
 
+void ObAllVirtualDDLDagMonitor::free_task_entries()
+{
+  if (OB_NOT_NULL(allocator_) && task_entries_.count() > 0) {
+    for (int64_t i = 0; i < task_entries_.count(); ++i) {
+      ObDDLDagMonitorEntry *entry = task_entries_.at(i);
+      if (OB_NOT_NULL(entry)) {
+        entry->~ObDDLDagMonitorEntry();
+        allocator_->free(entry);
+      }
+    }
+  }
+  task_entries_.reset();
+}
+
 void ObAllVirtualDDLDagMonitor::reset()
 {
+  // Free task entries before calling parent reset() which sets allocator_ to NULL.
+  free_task_entries();
   common::ObVirtualTableScannerIterator::reset();
   addr_.reset();
   is_inited_ = false;
@@ -58,7 +73,6 @@ void ObAllVirtualDDLDagMonitor::reset()
   }
   nodes_.reset();
   node_idx_ = 0;
-  task_infos_.reset();
   info_idx_ = 0;
   MEMSET(ip_buf_, 0, sizeof(ip_buf_));
 }
@@ -125,7 +139,7 @@ int ObAllVirtualDDLDagMonitor::advance_to_next_tenant()
     }
     nodes_.reset();
     node_idx_ = -1;
-    task_infos_.reset();
+    free_task_entries();
     info_idx_ = 0;
     if (OB_FAIL(guard.switch_to(tenant_id))) {
       LOG_WARN("switch to tenant failed", K(ret), K(tenant_id));
@@ -161,13 +175,13 @@ int ObAllVirtualDDLDagMonitor::inner_get_next_row(common::ObNewRow *&row)
     LOG_WARN("allocator is null", K(ret));
   }
   while (OB_SUCC(ret) && OB_ISNULL(row)) {
-    // Nested iteration: node -> infos
+    // Nested iteration: node -> entries
     if (node_idx_ >= 0 && node_idx_ < nodes_.count()
-        && info_idx_ >= 0 && info_idx_ < task_infos_.count()) {
+        && info_idx_ >= 0 && info_idx_ < task_entries_.count()) {
       ObDDLDagMonitorNode *node = nodes_.at(node_idx_);
-      ObDDLDagMonitorInfo *task_info = task_infos_.at(info_idx_);
-      if (OB_FAIL(fill_cells(node, task_info))) {
-        LOG_WARN("failed to fill cells", K(ret), K(node_idx_), K(info_idx_), KPC(node), KPC(task_info));
+      ObDDLDagMonitorEntry *task_entry = task_entries_.at(info_idx_);
+      if (OB_FAIL(fill_cells(node, task_entry))) {
+        LOG_WARN("failed to fill cells", K(ret), K(node_idx_), K(info_idx_), KPC(node), KPC(task_entry));
       } else {
         row = &cur_row_;
         ++info_idx_;
@@ -177,16 +191,20 @@ int ObAllVirtualDDLDagMonitor::inner_get_next_row(common::ObNewRow *&row)
         ObDDLDagMonitorNode *node = nodes_.at(node_idx_);
         if (OB_ISNULL(node)) {
           // skip
-        } else if (OB_FAIL(node->get_all_infos(task_infos_))) {
-          LOG_WARN("failed to get node infos", K(ret), K(node_idx_));
-        } else if (task_infos_.count() <= 0) {
-          // skip
-        } else if (OB_FAIL(fill_cells(node, task_infos_.at(0)))) {
-          LOG_WARN("failed to fill cells", K(ret), K(node_idx_), "info_idx", 0);
         } else {
-          row = &cur_row_;
-          info_idx_ = 1;
-          break;
+          free_task_entries();
+          info_idx_ = 0;
+          if (OB_FAIL(node->get_all_infos(*allocator_, task_entries_))) {
+            LOG_WARN("failed to get node infos", K(ret), K(node_idx_));
+          } else if (task_entries_.count() <= 0) {
+            // skip
+          } else if (OB_FAIL(fill_cells(node, task_entries_.at(0)))) {
+            LOG_WARN("failed to fill cells", K(ret), K(node_idx_), "info_idx", 0);
+          } else {
+            row = &cur_row_;
+            info_idx_ = 1;
+            break;
+          }
         }
       }
       if (OB_SUCC(ret) && node_idx_ >= nodes_.count()) {
@@ -202,24 +220,21 @@ int ObAllVirtualDDLDagMonitor::inner_get_next_row(common::ObNewRow *&row)
 }
 
 int ObAllVirtualDDLDagMonitor::fill_cells(storage::ObDDLDagMonitorNode *node,
-                                                 storage::ObDDLDagMonitorInfo *task_info)
+                                                 storage::ObDDLDagMonitorEntry *task_entry)
 {
   int ret = OB_SUCCESS;
-  entry_.reuse();
-  if (OB_ISNULL(node) || OB_ISNULL(task_info) || OB_ISNULL(cur_row_.cells_)) {
+  if (OB_ISNULL(node) || OB_ISNULL(task_entry) || OB_ISNULL(cur_row_.cells_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(node), KP(task_info), KP(cur_row_.cells_));
+    LOG_WARN("invalid argument", K(ret), KP(node), KP(task_entry), KP(cur_row_.cells_));
   } else if (cur_row_.count_ < output_column_ids_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cell count is not enough", K(ret), "cell_count", cur_row_.count_, "output_col_cnt", output_column_ids_.count());
-  } else if (OB_FAIL(task_info->convert_to_monitor_entry(entry_))) {
-    LOG_WARN("convert to monitor entry failed", K(ret), KPC(node), KPC(task_info));
   } else {
     // Node-level fields should be consistent for all task rows.
-    IGNORE_RETURN entry_.set_dag_id(node->get_dag_ptr());
-    // If task-side didn't set trace_id, fill them from node.
-    if (entry_.get_trace_id().empty()) {
-      IGNORE_RETURN entry_.set_trace_id(node->get_trace_id());
+    IGNORE_RETURN task_entry->set_dag_id(node->get_dag_ptr());
+    // If task-side didn't set trace_id, fill it from node.
+    if (task_entry->get_trace_id().empty()) {
+      IGNORE_RETURN task_entry->set_trace_id(node->get_trace_id());
     }
 
     const int64_t col_count = output_column_ids_.count();
@@ -243,45 +258,45 @@ int ObAllVirtualDDLDagMonitor::fill_cells(storage::ObDDLDagMonitorNode *node,
           break;
         }
         case DAG_ID: {
-          cell.set_varchar(entry_.get_dag_id());
+          cell.set_varchar(task_entry->get_dag_id());
           cell.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case DAG_INFO: {
-          cell.set_varchar(entry_.get_dag_info());
+          cell.set_varchar(task_entry->get_dag_info());
           cell.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case TASK_ID: {
-          cell.set_varchar(entry_.get_task_id());
+          cell.set_varchar(task_entry->get_task_id());
           cell.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case TASK_INFO: {
-          cell.set_varchar(entry_.get_task_info());
+          cell.set_varchar(task_entry->get_task_info());
           cell.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case FORMAT_VERSION: {
-          cell.set_int(entry_.get_format_version());
+          cell.set_int(task_entry->get_format_version());
           break;
         }
         case TRACE_ID: {
-          cell.set_varchar(entry_.get_trace_id());
+          cell.set_varchar(task_entry->get_trace_id());
           cell.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case CREATE_TIME: {
-          cell.set_timestamp(entry_.get_create_time());
+          cell.set_timestamp(task_entry->get_create_time());
           break;
         }
         case FINISH_TIME: {
-          cell.set_timestamp(entry_.get_finish_time());
+          cell.set_timestamp(task_entry->get_finish_time());
           break;
         }
         case MESSAGE: {
           // Column `message` is defined as LONGTEXT, so we must output a lob value here.
-          const ObString &msg = entry_.get_message();
+          const ObString &msg = task_entry->get_message();
           if (msg.empty()) {
             cell.set_lob_value(ObLongTextType, "", 0);
           } else {

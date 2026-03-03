@@ -127,8 +127,10 @@ public:
   template <typename T>
   int alloc_monitor_info(share::ObITask *task, T *&info);
 
-  // Collect all infos for display (snapshot pointers).
-  int get_all_infos(common::ObIArray<ObDDLDagMonitorInfo *> &infos) const;
+  // Collect all infos as deep-copied entries under the node's read lock.
+  // Each ObDDLDagMonitorEntry is allocated from the provided allocator; caller is responsible for
+  // calling destructor and freeing the memory. Entries are safe to use after the lock is released.
+  int get_all_infos(common::ObIAllocator &allocator, common::ObIArray<ObDDLDagMonitorEntry *> &entries) const;
 
   // Clean task-side monitor infos.
   // - only_finished=true: remove finished infos

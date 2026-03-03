@@ -50,8 +50,9 @@ public:
   virtual void reset() override;
 
 private:
-  int fill_cells(storage::ObDDLDagMonitorNode *node, storage::ObDDLDagMonitorInfo *task_info);
+  int fill_cells(storage::ObDDLDagMonitorNode *node, storage::ObDDLDagMonitorEntry *task_entry);
   int advance_to_next_tenant();
+  void free_task_entries();
 
 private:
   common::ObAddr addr_;
@@ -60,10 +61,9 @@ private:
   int64_t tenant_idx_;
   common::ObSEArray<storage::ObDDLDagMonitorNode *, 64> nodes_;
   int64_t node_idx_;
-  common::ObSEArray<storage::ObDDLDagMonitorInfo *, 64> task_infos_;
+  common::ObSEArray<storage::ObDDLDagMonitorEntry *, 64> task_entries_;
   int64_t info_idx_;
   char ip_buf_[common::MAX_IP_ADDR_LENGTH];
-  storage::ObDDLDagMonitorEntry entry_;
 };
 
 } // namespace observer
