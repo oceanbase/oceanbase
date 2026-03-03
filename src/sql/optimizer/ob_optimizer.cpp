@@ -1167,7 +1167,7 @@ int ObOptimizer::init_route_policy(ObDMLStmt &dml_stmt, ObSQLSessionInfo &sessio
                                                                              can_route_to_cs))) {
       LOG_WARN("failed to check can route to columnstore replica", K(ret));
     } else if (!can_route_to_cs) {
-      // do nothing
+      LOG_INFO("sql cannot route to columnstore replica", K(ret));
     } else {
       session.set_route_to_column_replica(true);
     }

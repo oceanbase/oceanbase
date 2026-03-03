@@ -10796,6 +10796,47 @@ int ObLogPlan::add_global_table_partition_info(ObTablePartitionInfo *addr_table_
   return ret;
 }
 
+int ObLogPlan::check_has_column_store_only_route_policy(bool &has_column_store_only) const
+{
+  int ret = OB_SUCCESS;
+  has_column_store_only = false;
+  if (OB_ISNULL(root_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plan root is null", K(ret));
+  } else if (OB_FAIL(check_has_column_store_only_route_policy_rec(root_, has_column_store_only))) {
+    LOG_WARN("failed to check column store only route policy recursively", K(ret));
+  }
+  return ret;
+}
+
+int ObLogPlan::check_has_column_store_only_route_policy_rec(ObLogicalOperator *op, bool &has_column_store_only) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("logical operator is null", K(ret));
+  } else if (op->is_table_scan()) {
+    // Check current operator if it is a table scan
+    ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(op);
+    int64_t route_policy = table_scan->get_route_policy();
+    if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy)) {
+      has_column_store_only = true;
+    }
+  } else {
+    // Recursively check all child operators
+    for (int64_t i = 0; OB_SUCC(ret) && !has_column_store_only && i < op->get_num_of_child(); ++i) {
+      ObLogicalOperator *child = op->get_child(i);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child operator is null", K(ret), K(i));
+      } else if (OB_FAIL(SMART_CALL(check_has_column_store_only_route_policy_rec(child, has_column_store_only)))) {
+        LOG_WARN("failed to check child operator", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
 /**
  * 分析location_constraint中的基表约束、严格partition wise join约束、非严格partition wise join约束
  * 对于如下计划：
@@ -16773,10 +16814,10 @@ int ObLogPlan::check_if_ap_query_need_retry()
   } else if (OB_FAIL(check_user_table_replica_rec(root, ap_query_replica_fallback, has_user_table, all_table_have_creplica))) {
     LOG_WARN("failed to check user table replica", K(ret));
   } else if (ap_query_replica_fallback && !all_table_have_creplica) {
-    LOG_TRACE("skip ap query retry because of no available column store replica",
+    LOG_INFO("skip ap query retry because of no available column store replica",
       K(has_user_table), K(all_table_have_creplica));
   } else if (!has_user_table) {
-    LOG_TRACE("skip ap query retry because of no user table",
+    LOG_INFO("skip ap query retry because of no user table",
       K(has_user_table), K(all_table_have_creplica));
   } else if (APQueryRoutePolicy::FORCE == ap_query_route_policy) {
     // FORCE: directly throw ap query error without checking parallel or cost
@@ -16795,7 +16836,7 @@ int ObLogPlan::check_if_ap_query_need_retry()
     LOG_WARN("ap query will retry with column replica", K(ret), K(select_cost),
              K(is_parallel_select), K(cost_threshold));
   } else {
-    LOG_TRACE("not ap query", K(select_cost), K(is_parallel_select), K(cost_threshold));
+    LOG_INFO("not ap query", K(select_cost), K(is_parallel_select), K(cost_threshold));
   }
   if (OB_AP_QUERY_NEED_RETRY == ret) {
     session_info->set_route_to_column_replica(true);

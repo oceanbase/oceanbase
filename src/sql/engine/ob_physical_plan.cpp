@@ -967,24 +967,6 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
     }
     LOG_DEBUG("set table location", K(tl), K(tl.use_das()));
   }
-
-  // Check if any table location has COLUMN_STORE_ONLY route policy
-  if (OB_SUCC(ret)) {
-    route_to_column_replica_ = false;
-    for (int64_t i = 0; !route_to_column_replica_ && i < table_locations_.count(); ++i) {
-      const ObTableLocation &tl = table_locations_.at(i);
-      if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(tl.get_loc_meta().route_policy_)) {
-        route_to_column_replica_ = true;
-      }
-    }
-    for (int64_t i = 0; !route_to_column_replica_ && i < das_table_locations_.count(); ++i) {
-      const ObTableLocation &tl = das_table_locations_.at(i);
-      if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(tl.get_loc_meta().route_policy_)) {
-        route_to_column_replica_ = true;
-      }
-    }
-  }
-
   return ret;
 }
 

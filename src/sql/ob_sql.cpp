@@ -4294,8 +4294,13 @@ int ObSql::code_generate(
     }
     // set table location for phy_plan
     if (OB_SUCC(ret)) {
+      bool has_column_store_only = false;
       if (OB_FAIL(phy_plan->set_table_locations(tbl_part_infos, *sql_ctx.schema_guard_))) {
         LOG_WARN("fail to set table locations", K(ret));
+      } else if (OB_FAIL(logical_plan->check_has_column_store_only_route_policy(has_column_store_only))) {
+        LOG_WARN("failed to check column store only route policy", K(ret));
+      } else {
+        phy_plan->set_is_route_to_column_replica(has_column_store_only);
       }
       LOG_DEBUG("physical plan certain table location", K(tbl_part_infos));
     }
