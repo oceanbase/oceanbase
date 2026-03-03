@@ -702,6 +702,7 @@ private:
 protected:
   const ObOpSpec &spec_;
   ObExecContext &ctx_;
+  ObPLComplexTypeLazyMgr pl_complex_type_lazy_mgr_;
   ObEvalCtx eval_ctx_;
   common::ObFixedArray<ObEvalInfo *, common::ObIAllocator> eval_infos_;
   ObOpInput *input_;

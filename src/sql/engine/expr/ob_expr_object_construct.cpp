@@ -195,11 +195,14 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
   CK(expr.arg_cnt_ >= info->elem_types_.count());
   CK(OB_NOT_NULL(session = ctx.exec_ctx_.get_my_session()));
   ObObj *objs = nullptr;
-  ObIAllocator *alloc = &ctx.exec_ctx_.get_allocator();
+  ObIAllocator *alloc = nullptr;
   pl::ObPLExecCtx *pl_exec_ctx = nullptr;
+  ObPLComplexTypeMgr *pl_complex_type_mgr = nullptr;
+  OZ (ctx.get_pl_complex_type_mgr(pl_complex_type_mgr));
+  OX (alloc = &pl_complex_type_mgr->alloc_);
   // for ojbect construct in pl, use top_expr_allocator
   // we will destroy this obj in pl final interface
-  if (OB_NOT_NULL(session) &&
+  if (OB_SUCC(ret) && OB_NOT_NULL(session) &&
       OB_NOT_NULL(session->get_pl_context()) &&
       OB_NOT_NULL(pl_exec_ctx = session->get_pl_context()->get_current_ctx()) &&
       pl_exec_ctx->get_exec_ctx() == &ctx.exec_ctx_) {
@@ -271,18 +274,12 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
                       pl::PL_RECORD_TYPE, pl::ObRecordType::get_init_size(expr.arg_cnt_));
     OZ(res.from_obj(result, expr.obj_datum_map_));
     if (OB_NOT_NULL(record->get_allocator())) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_ISNULL(ctx.exec_ctx_.get_pl_ctx())) {
-        tmp_ret = ctx.exec_ctx_.init_pl_ctx();
-      }
-      if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
-        tmp_ret = ctx.exec_ctx_.get_pl_ctx()->add(result);
-      }
-      if (OB_SUCCESS != tmp_ret) {
+      int tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result);
+      if (OB_FAIL(tmp_ret)) {
         int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
         LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
   return ret;

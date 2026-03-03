@@ -308,16 +308,13 @@ int ObExprSet::calc_set(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
       if (OB_NOT_NULL(collection_allocator)) {
         int tmp_ret = OB_SUCCESS;
         auto &exec_ctx = ctx.exec_ctx_;
-        if (OB_ISNULL(exec_ctx.get_pl_ctx())) {
-          tmp_ret = exec_ctx.init_pl_ctx();
-        }
-        if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(exec_ctx.get_pl_ctx())) {
-          tmp_ret = exec_ctx.get_pl_ctx()->add(*obj);
-        }
+        sql::ObPLComplexTypeMgr *pl_complex_type_mgr = exec_ctx.get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+        tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(*obj);
         if (OB_SUCCESS != tmp_ret) {
-          LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+          int tmp = pl::ObUserDefinedType::destruct_obj(*obj, nullptr);
+          LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
         }
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
     }
   }

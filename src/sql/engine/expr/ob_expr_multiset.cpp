@@ -1080,17 +1080,13 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
       OZ(res.from_obj(result, expr.obj_datum_map_));
       //Collection constructed here must be recorded and destructed at last
       if (OB_NOT_NULL(coll) && OB_NOT_NULL(coll->get_allocator())) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_ISNULL(ctx.exec_ctx_.get_pl_ctx())) {
-          tmp_ret = ctx.exec_ctx_.init_pl_ctx();
-        }
-        if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
-          tmp_ret = ctx.exec_ctx_.get_pl_ctx()->add(result);
-        }
+        sql::ObPLComplexTypeMgr *pl_complex_type_mgr = ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+        int tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result);
         if (OB_SUCCESS != tmp_ret) {
-          LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+          int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
+          LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
         }
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
     }
   }

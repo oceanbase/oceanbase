@@ -382,12 +382,9 @@ public:
   bool need_disconnect() const { return need_disconnect_; }
   void set_need_disconnect(bool need_disconnect) { need_disconnect_ = need_disconnect; }
   inline pl::ObPL *get_pl_engine() { return GCTX.pl_engine_; }
-  inline pl::ObPLCtx *get_pl_ctx() { return pl_ctx_; }
-  inline void set_pl_ctx(pl::ObPLCtx *pl_ctx) { pl_ctx_ = pl_ctx; }
   int get_package_guard(pl::ObPLPackageGuard *&package_guard);
   inline pl::ObPLPackageGuard* get_original_package_guard() { return package_guard_; }
   inline void set_package_guard(pl::ObPLPackageGuard* v) { package_guard_ = v; }
-  int init_pl_ctx();
   inline ObIAllocator* get_pl_expr_alloc() { return pl_expr_allocator_; }
   inline void set_pl_expr_alloc(ObIAllocator *alloc) { pl_expr_allocator_ = alloc; }
 
@@ -607,6 +604,7 @@ public:
 
   void set_granule_type(ObGranuleType granule_type) { current_granule_type_ = granule_type; }
   bool is_block_granule_type() { return current_granule_type_ == OB_BLOCK_RANGE_GRANULE; }
+  ObPLComplexTypeLazyMgr &get_pl_complex_type_lazy_mgr() { return pl_complex_type_lazy_mgr_; }
 
 private:
   pl::ObPLPackageGuard* get_package_guard();
@@ -675,7 +673,6 @@ protected:
   pl::ObPLContext *pl_stack_ctx_;
   bool need_disconnect_; // 是否需要断掉与客户端的连接
   //@todo: (linlin.xll) ObPLCtx is ambiguous with ObPLContext, need to rename it
-  pl::ObPLCtx *pl_ctx_;
   pl::ObPLPackageGuard *package_guard_;
   ObIAllocator *pl_expr_allocator_;
 
@@ -820,6 +817,7 @@ protected:
 
   // Granule type for current GI task
   ObGranuleType current_granule_type_;
+  ObPLComplexTypeLazyMgr pl_complex_type_lazy_mgr_;
 
   common::ObZone first_weak_select_zone_;
   common::hash::ObHashMap<ObOdpsPartitionKey, int64_t> odps_partition_str_to_file_size_;

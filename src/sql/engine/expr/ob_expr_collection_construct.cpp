@@ -206,11 +206,14 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     }
   }
 
-  ObIAllocator *alloc = &ctx.exec_ctx_.get_allocator();
   pl::ObPLExecCtx *pl_exec_ctx = nullptr;
+  ObIAllocator *alloc = nullptr;
+  ObPLComplexTypeMgr *pl_complex_type_mgr = nullptr;
+  OZ (ctx.get_pl_complex_type_mgr(pl_complex_type_mgr));
+  OX (alloc = &pl_complex_type_mgr->alloc_);
   // for collection construct in pl, use top_expr_allocator
   // we will destroy this obj in pl final interface
-  if (OB_NOT_NULL(session) &&
+  if (OB_SUCC(ret) && OB_NOT_NULL(session) &&
       OB_NOT_NULL(session->get_pl_context()) &&
       OB_NOT_NULL(pl_exec_ctx = session->get_pl_context()->get_current_ctx()) &&
       pl_exec_ctx->get_exec_ctx() == &ctx.exec_ctx_) {
@@ -576,20 +579,14 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     ObObj result;
     result.set_extend(reinterpret_cast<int64_t>(coll), coll->get_type());
     OZ(expr_datum.from_obj(result, expr.obj_datum_map_));
+    if (OB_NOT_NULL(coll) && OB_NOT_NULL(coll->get_allocator())) {
     //Collection constructed here must be recorded and destructed at last
-    if (OB_NOT_NULL(coll->get_allocator())) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_ISNULL(exec_ctx.get_pl_ctx())) {
-        tmp_ret = exec_ctx.init_pl_ctx();
-      }
-      if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(exec_ctx.get_pl_ctx())) {
-        tmp_ret = exec_ctx.get_pl_ctx()->add(result);
-      }
+      int tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result);
       if (OB_SUCCESS != tmp_ret) {
         int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
         LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
 #endif

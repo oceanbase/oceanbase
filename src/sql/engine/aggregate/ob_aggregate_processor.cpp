@@ -7861,12 +7861,8 @@ int ObAggregateProcessor::get_pl_agg_udf_result(const ObAggrInfo &aggr_info,
       }
       if (result_obj.is_pl_extend()) {
         int tmp_ret = OB_SUCCESS;
-        if (OB_ISNULL(eval_ctx_.exec_ctx_.get_pl_ctx())) {
-          tmp_ret = eval_ctx_.exec_ctx_.init_pl_ctx();
-        }
-        if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(eval_ctx_.exec_ctx_.get_pl_ctx())) {
-          tmp_ret = eval_ctx_.exec_ctx_.get_pl_ctx()->add(result_obj);
-        }
+        sql::ObPLComplexTypeMgr *pl_complex_type_mgr = eval_ctx_.exec_ctx_.get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+        tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result_obj);
         if (OB_SUCCESS != tmp_ret) {
           LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
         }

@@ -557,7 +557,8 @@ int ObOpSpec::accept(ObOpSpecVisitor &visitor) const
 ObOperator::ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
     : spec_(spec),
     ctx_(exec_ctx),
-    eval_ctx_(exec_ctx),
+    pl_complex_type_lazy_mgr_(),
+    eval_ctx_(exec_ctx, nullptr, false, &pl_complex_type_lazy_mgr_),
     eval_infos_(exec_ctx.get_allocator()),
     input_(input),
     parent_(NULL),
@@ -1226,6 +1227,7 @@ int ObOperator::close()
     dummy_ptr_ = nullptr;
     dummy_allocator_ = nullptr;
   }
+  pl_complex_type_lazy_mgr_.reset();
   return ret;
 }
 

@@ -630,11 +630,14 @@ int ObExprUDFUtils::process_return_value(ObObj &result,
     if (tmp_result.is_pl_extend()
         && tmp_result.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) { // memory of ref cursor on session, do not copy it.
       int tmp_ret = OB_SUCCESS;
-      CK (OB_NOT_NULL(eval_ctx.exec_ctx_.get_pl_ctx()));
-      OZ (pl::ObUserDefinedType::deep_copy_obj(eval_ctx.exec_ctx_.get_allocator(), tmp_result, result, true));
+      ObIAllocator *alloc = nullptr;
+      ObPLComplexTypeMgr *pl_complex_type_mgr = nullptr;
+      OZ (eval_ctx.get_pl_complex_type_mgr(pl_complex_type_mgr));
+      OX (alloc = &pl_complex_type_mgr->alloc_);
+      OZ (pl::ObUserDefinedType::deep_copy_obj(*alloc, tmp_result, result, true));
       if (OB_SUCC(ret)) {
-        eval_ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
-        OZ (eval_ctx.exec_ctx_.get_pl_ctx()->add(result));
+        eval_ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(cur_obj_count);
+        OZ (pl_complex_type_mgr->complex_type_objects_.push_back(result));
         if (OB_FAIL(ret)) {
           if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
             LOG_WARN("failed to destruct result object", K(ret), K(tmp_ret));
@@ -648,9 +651,6 @@ int ObExprUDFUtils::process_return_value(ObObj &result,
     } else {
       // Basic result & RefCursor, shadow copy result. What if failed with pl.execute for RefCursor?
       result = tmp_result;
-      if (OB_NOT_NULL(eval_ctx.exec_ctx_.get_pl_ctx())) {
-        eval_ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
-      }
     }
   } else { // Call IN PL, shadow copy result.
     result = tmp_result;

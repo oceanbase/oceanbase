@@ -938,17 +938,11 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
                 // insert into xml_test(id,mm) select 1,xmltype('<c>123</c>') from dual;
                 if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(out_ctx->get_allocator(), tmp_result, result))) {
                   LOG_WARN("failed to deep copy pl extend obj", K(ret), K(tmp_result));
-                } else if (OB_ISNULL(out_ctx->get_pl_ctx())) {
-                  if (OB_FAIL(out_ctx->init_pl_ctx())) {
-                    LOG_WARN("failed to init pl ctx", K(ret));
+                } else {
+                  ObPLComplexTypeMgr *pl_complex_type_mgr = out_ctx->get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+                  if (OB_FAIL(pl_complex_type_mgr->complex_type_objects_.push_back(result))) {
+                    LOG_WARN("failed to push back pl obj to pl ctx", K(ret));
                   }
-                }
-                if (OB_FAIL(ret)) {
-                } else if (OB_ISNULL(out_ctx->get_pl_ctx())) {
-                  ret = OB_INVALID_ARGUMENT;
-                  LOG_WARN("pl ctx is null", K(ret));
-                } else if (OB_FAIL(out_ctx->get_pl_ctx()->add(result))) {
-                  LOG_WARN("failed to add pl obj to pl ctx", K(ret));
                 }
               } else { // shallow copy extend type
                 if (OB_FAIL(deep_copy_obj(allocator, tmp_result, result))) {

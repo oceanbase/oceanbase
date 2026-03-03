@@ -54,6 +54,9 @@ int ObFunctionTableOp::inner_rescan()
     LOG_WARN("failed to reset udtf ctx", K(ret));
   } else {
     node_idx_ = 0;
+    if (OB_NOT_NULL(value_table_) && ObExtendType != value_table_->get_element_type().get_obj_type()) {
+      pl_complex_type_lazy_mgr_.reset();
+    }
     if (MY_SPEC.has_correlated_expr_) {
       row_count_ = 0;
       col_count_ = 0;

@@ -38,8 +38,36 @@ STATIC_ASSERT(sizeof(ObPrecision) == sizeof(ObLengthSemantics),
 
 OB_SERIALIZE_MEMBER(ObDatumMeta, type_, cs_type_, scale_, precision_);
 
+ObPLComplexTypeMgr::ObPLComplexTypeMgr()
+  : alloc_("PlComplexTyMgr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    complex_type_objects_(alloc_) {}
 
-ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator, bool is_pl_expr_eval)
+void ObPLComplexTypeMgr::reset()
+{
+  for (int64_t i = 0; i < complex_type_objects_.count(); ++i) {
+    int ret = pl::ObUserDefinedType::destruct_obj(complex_type_objects_.at(i), nullptr);
+    if (OB_SUCCESS != ret) {
+      LOG_WARN("failed to destruct pl object", K(i), K(ret));
+    }
+  }
+  complex_type_objects_.reset();
+  alloc_.reset();
+}
+
+void ObPLComplexTypeMgr::reset_obj_range_to_end(int64_t index)
+{
+  int tmp_ret = OB_SUCCESS;
+  if (index < complex_type_objects_.count() && index >= 0) {
+    for (int64_t i = complex_type_objects_.count() - 1; i >= index; i--) {
+      if (OB_SUCCESS != (tmp_ret = pl::ObUserDefinedType::destruct_obj(complex_type_objects_.at(i), nullptr))) {
+        LOG_WARN_RET(tmp_ret, "failed to destruct pl object", K(i), K(tmp_ret));
+      }
+      complex_type_objects_.pop_back();
+    }
+  }
+}
+
+ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator, bool is_pl_expr_eval, ObPLComplexTypeLazyMgr *pl_complex_type_lazy_mgr)
   : frames_(exec_ctx.get_frames()),
     max_batch_size_(0),
     exec_ctx_(exec_ctx),
@@ -51,7 +79,8 @@ ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator, bool is_p
     expr_res_alloc_((dynamic_cast<ObArenaAllocator*>(allocator) != NULL) ?
                       (*(dynamic_cast<ObArenaAllocator*>(allocator))) : exec_ctx.get_eval_res_allocator()),
     pvt_skip_for_eval_row_(nullptr),
-    is_pl_expr_eval_(is_pl_expr_eval)
+    is_pl_expr_eval_(is_pl_expr_eval),
+    pl_complex_type_lazy_mgr_(nullptr == pl_complex_type_lazy_mgr ? &exec_ctx.get_pl_complex_type_lazy_mgr() : pl_complex_type_lazy_mgr)
 {
 }
 
@@ -65,8 +94,21 @@ ObEvalCtx::ObEvalCtx(ObEvalCtx &eval_ctx)
     batch_idx_(eval_ctx.get_batch_idx()),
     batch_size_(eval_ctx.get_batch_size()),
     expr_res_alloc_(eval_ctx.expr_res_alloc_),
-    pvt_skip_for_eval_row_(eval_ctx.pvt_skip_for_eval_row_)
+    pvt_skip_for_eval_row_(eval_ctx.pvt_skip_for_eval_row_),
+    pl_complex_type_lazy_mgr_(eval_ctx.pl_complex_type_lazy_mgr_)
 {
+}
+
+int ObEvalCtx::get_pl_complex_type_mgr(ObPLComplexTypeMgr *&pl_complex_type_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pl_complex_type_lazy_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pl_complex_type_lazy_mgr_ is null", K(ret));
+  } else {
+    pl_complex_type_mgr = pl_complex_type_lazy_mgr_->get_pl_complex_type_mgr();
+  }
+  return ret;
 }
 
 ObEvalCtx::~ObEvalCtx()
@@ -76,7 +118,9 @@ ObEvalCtx::~ObEvalCtx()
     datum_caster_ = NULL;
   }
   pvt_skip_for_eval_row_ = nullptr;
+  pl_complex_type_lazy_mgr_ = nullptr;
 }
+
 
 int ObEvalCtx::init_datum_caster()
 {
