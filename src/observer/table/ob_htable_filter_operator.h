@@ -318,6 +318,7 @@ protected:
   ObRowkey stop_row_key_;
   bool is_inited_;
   bool need_verify_cell_ttl_;
+  bool is_cur_row_expired_;  // flag to indicate if current row is expired, used by subclasses
 
 private:
   const table::ObHTableFilter &htable_filter_;
@@ -341,7 +342,6 @@ private:
   bool is_table_group_inited_;
   bool is_table_group_req_;
   ObString family_name_;
-  bool is_cur_row_expired_;
   bool allow_partial_results_;
   bool is_cache_block_;
   ScannerContext *scanner_context_;

@@ -645,8 +645,11 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
       scan_order_(query.get_scan_order()),
       matcher_(NULL),
       has_more_cells_(true),
+      start_row_key_(),
+      stop_row_key_(),
       is_inited_(false),
       need_verify_cell_ttl_(false),
+      is_cur_row_expired_(false),
       htable_filter_(query.get_htable_filter()),
       hfilter_(NULL),
       limit_per_row_per_cf_(htable_filter_.get_max_results_per_column_family()),
@@ -655,6 +658,8 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
       batch_size_(query.get_batch()),
       time_to_live_(0),
       max_version_(0),
+      one_hbase_row_(),
+      one_iterable_hbase_row_(),
       column_tracker_(NULL),
       column_tracker_wildcard_(),
       column_tracker_explicit_(),
@@ -665,7 +670,6 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
       is_table_group_inited_(false),
       is_table_group_req_(false),
       family_name_(),
-      is_cur_row_expired_(false),
       allow_partial_results_(false),
       is_cache_block_(true),
       scanner_context_(NULL),
@@ -825,6 +829,7 @@ int ObHTableRowIterator::get_next_result_internal(ResultType*& result)
     }
     if (OB_SUCC(ret) && matcher_->is_curr_row_empty()) {
       count_per_row_ = 0;
+      is_cur_row_expired_ = false;  // reset expired flag when switching to new rowkey
       ret = matcher_->set_to_new_row(curr_cell_);
     }
     if (OB_SUCC(ret)) {
@@ -928,6 +933,7 @@ int ObHTableRowIterator::get_next_result_internal(ResultType*& result)
           case ObHTableMatchCode::DONE:
             // done current row
             matcher_->clear_curr_row();
+            is_cur_row_expired_ = false;  // reset expired flag when rowkey changes
             loop = false;
             break;
           case ObHTableMatchCode::DONE_SCAN:
@@ -1017,8 +1023,8 @@ int ObHTableRowIterator::seek(ObHTableCell &key, int32_t &skipped_count)
         LOG_DEBUG("seek to", K(key), K_(curr_cell));
         break;
       }
+      ++skipped_count;
     }
-    ++skipped_count;
   }
   return ret;
 }
@@ -1110,6 +1116,7 @@ int ObHTableRowIterator::seek_or_skip_to_next_row(const ObHTableCell &cell)
         }
       } else if (ObHTableUtils::compare_rowkey(curr_cell_, *next_cell) != 0) {
         enter_next_key = true;  // hbase rowkey changed
+        is_cur_row_expired_ = false;  // reset expired flag when switching to new rowkey
       }
 
       if ((OB_SUCCESS == ret || OB_ITER_END == ret)) {
@@ -1320,6 +1327,8 @@ int ObHTableReversedRowIterator::next_cell()
       LOG_WARN("failed to try record expired rowkey", K(ret));
     }
   } else {
+    // rowkey changed, reset expired flag
+    is_cur_row_expired_ = false;
     if (OB_FAIL(seek_or_skip_to_next_row(cell_clone))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to seek to next row when get next cell", K(ret));
@@ -1398,6 +1407,7 @@ int ObHTableReversedRowIterator::seek_or_skip_to_next_row_inner(const ObString &
     if (OB_NOT_NULL(matcher_)) {
       matcher_->clear_curr_row();
     }
+    is_cur_row_expired_ = false;  // reset expired flag when switching to new rowkey
   }
   return ret;
 }
