@@ -1590,7 +1590,7 @@ int ObInnerTableSchema::gv_ob_sess_time_model_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SID AS SID,     gv$sesstat.CON_ID AS TENANT_ID,     SVR_IP AS SVR_IP,     SVR_PORT AS SVR_PORT,     STAT_ID AS STAT_ID,     NAME AS STAT_NAME,     VALUE AS VALUE   FROM     oceanbase.GV$SESSTAT   left join     oceanbase.v$statname   on gv$sesstat.`statistic#`=v$statname.`statistic#`   WHERE     STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006); )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     s.SID AS SID,     s.CON_ID AS TENANT_ID,     s.SVR_IP AS SVR_IP,     s.SVR_PORT AS SVR_PORT,     n.STAT_ID AS STAT_ID,     n.NAME AS STAT_NAME,     s.VALUE AS VALUE   FROM     oceanbase.GV$SESSTAT s   left join     oceanbase.V$STATNAME n   on s.`STATISTIC#` = n.`STATISTIC#`   WHERE     n.STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006); )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

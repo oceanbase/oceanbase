@@ -18012,6 +18012,31 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12589: __all_virtual_ss_macro_cache_info
 # 12590: __all_virtual_ss_local_cache_diagnose_info
 # 12591: __all_virtual_ddl_dag_monitor
+def_table_schema(
+  owner = 'jianyun.sjy',
+  table_name = '__all_virtual_ddl_dag_monitor',
+  table_id = '12591',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [],
+  normal_columns    = [
+    ('svr_ip',    'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',  'int'),
+    ('tenant_id', 'int'),
+    ('dag_id', 'varchar:64'),
+    ('dag_info', 'varchar:256'),
+    ('task_id', 'varchar:64'),
+    ('task_info', 'varchar:256'),
+    ('format_version', 'int'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
+    ('create_time', 'timestamp'),
+    ('finish_time', 'timestamp'),
+    ('message', 'longtext'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 12592: __all_virtual_vector_segment_info
 # 12593: __all_virtual_sql_group_commit_stat
 # 12594: __all_virtual_java_policy
@@ -18053,32 +18078,6 @@ def_table_schema(
 # 12597: __all_virtual_object_storage_stat
 # 12598: __all_virtual_object_storage_error_record
 # 12599: __all_virtual_audit_log_encryption_password
-
-def_table_schema(
-  owner = 'jianyun.sjy',
-  table_name = '__all_virtual_ddl_dag_monitor',
-  table_id = '12591',
-  table_type = 'VIRTUAL_TABLE',
-  in_tenant_space   = True,
-  gm_columns        = [],
-  rowkey_columns    = [],
-  normal_columns    = [
-    ('svr_ip',    'varchar:MAX_IP_ADDR_LENGTH'),
-    ('svr_port',  'int'),
-    ('tenant_id', 'int'),
-    ('dag_id', 'varchar:64'),
-    ('dag_info', 'varchar:256'),
-    ('task_id', 'varchar:64'),
-    ('task_info', 'varchar:256'),
-    ('format_version', 'int'),
-    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
-    ('create_time', 'timestamp'),
-    ('finish_time', 'timestamp'),
-    ('message', 'longtext'),
-  ],
-  partition_columns = ['svr_ip', 'svr_port'],
-  vtable_route_policy = 'distributed',
-)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -39023,20 +39022,20 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
   SELECT
-    SID AS SID,
-    gv$sesstat.CON_ID AS TENANT_ID,
-    SVR_IP AS SVR_IP,
-    SVR_PORT AS SVR_PORT,
-    STAT_ID AS STAT_ID,
-    NAME AS STAT_NAME,
-    VALUE AS VALUE
+    s.SID AS SID,
+    s.CON_ID AS TENANT_ID,
+    s.SVR_IP AS SVR_IP,
+    s.SVR_PORT AS SVR_PORT,
+    n.STAT_ID AS STAT_ID,
+    n.NAME AS STAT_NAME,
+    s.VALUE AS VALUE
   FROM
-    oceanbase.GV$SESSTAT
+    oceanbase.GV$SESSTAT s
   left join
-    oceanbase.v$statname
-  on gv$sesstat.`statistic#`=v$statname.`statistic#`
+    oceanbase.V$STATNAME n
+  on s.`STATISTIC#` = n.`STATISTIC#`
   WHERE
-    STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
+    n.STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
 """.replace("\n", " "),
 )
 

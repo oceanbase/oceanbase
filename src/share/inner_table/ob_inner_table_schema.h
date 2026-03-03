@@ -1288,8 +1288,8 @@ public:
   static int all_virtual_lob_check_exception_result_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_window_loop_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_ddl_dag_monitor_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_routine_load_job_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ddl_dag_monitor_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_vector_segment_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -4699,8 +4699,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_lob_check_exception_result_schema,
   ObInnerTableSchema::all_virtual_tablet_window_loop_info_schema,
   ObInnerTableSchema::all_virtual_tablet_replica_info_schema,
-  ObInnerTableSchema::all_virtual_ddl_dag_monitor_schema,
   ObInnerTableSchema::all_virtual_routine_load_job_schema,
+  ObInnerTableSchema::all_virtual_ddl_dag_monitor_schema,
   ObInnerTableSchema::all_virtual_vector_segment_info_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
