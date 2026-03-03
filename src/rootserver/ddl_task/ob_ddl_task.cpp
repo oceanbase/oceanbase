@@ -1198,6 +1198,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   ObDDLTaskStatus real_new_status = new_status;
   const ObDDLTaskStatus old_status = task_status_;
   const bool error_need_retry = OB_SUCCESS != ret_code && is_error_need_retry(ret_code);
+  bool is_tenant_status_normal = true;
   if (!is_partition_split_recovery_table_redefinition(task_type_) && OB_TMP_FAIL(check_ddl_task_is_cancel(trace_id_, is_cancel))) {
     LOG_WARN("check ddl task is cancel failed", K(tmp_ret), K(task_id_), K(parent_task_id_), K_(trace_id));
   }
@@ -1226,6 +1227,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(GCTX.sql_proxy_, dst_tenant_id_))) {
     if (OB_TENANT_HAS_BEEN_DROPPED == ret || OB_STANDBY_READ_ONLY == ret) {
       need_retry_ = false;
+      is_tenant_status_normal = false;
       LOG_INFO("tenant status is abnormal, exit anyway", K(ret), K_(task_id), K_(parent_task_id), K_(dst_tenant_id));
     }
   } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, dst_tenant_id_))) {
@@ -1290,7 +1292,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
       ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
     }
 
-    if (OB_CANCELED == real_ret_code || ObDDLTaskStatus::FAIL == task_status_) {
+    if (OB_CANCELED == real_ret_code || ObDDLTaskStatus::FAIL == task_status_ || !is_tenant_status_normal) {
       (void)ObDDLTaskRecordOperator::kill_task_inner_sql(*GCTX.sql_proxy_,
           trace_id_, dst_tenant_id_, task_id_, snapshot_version_, sql_exec_addrs_); // ignore return code
       LOG_WARN("ddl_task switch_status kill_task_inner_sql");
