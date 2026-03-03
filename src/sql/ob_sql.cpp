@@ -1841,6 +1841,8 @@ int ObSql::handle_pl_execute(const ObString &sql,
   ObIAllocator &allocator = result.get_mem_pool();
   ObExecContext &ectx = result.get_exec_context();
   ObPhysicalPlanCtx *pctx = NULL;
+  bool is_pl_stmt = result.get_stmt_type() == stmt::T_ANONYMOUS_BLOCK
+                        || result.get_stmt_type() == stmt::T_CALL_PROCEDURE;
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(result.init())) {
@@ -1884,8 +1886,12 @@ int ObSql::handle_pl_execute(const ObString &sql,
   } else if (OB_ISNULL(pctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguement", K(ret));
-  } else if (OB_FAIL(set_timeout_for_pl(session, cur_timeout_us))) {
-    LOG_WARN("failed to set timeout for pl", K(ret));
+  } else if (is_pl_stmt) {
+    OX (pctx->set_timeout_timestamp(THIS_WORKER.get_timeout_ts()));
+  } else {
+    OZ (set_timeout_for_pl(session, cur_timeout_us));
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(session.store_query_string(sql))) {
     LOG_WARN("store query string fail", K(ret));
   } else if (OB_FAIL(handle_sql_execute(sql, context, result, params, is_prepare_protocol ? PC_PL_MODE : PC_TEXT_MODE))) {
