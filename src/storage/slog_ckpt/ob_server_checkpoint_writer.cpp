@@ -52,13 +52,14 @@ int ObServerCheckpointWriter::write_checkpoint(const ObLogCursor &log_cursor)
   LOG_INFO("start to write server checkpoint", K(log_cursor));
 
   MacroBlockId tenant_meta_entry;
-  fd_dispenser_.set_cur_max_file_id(OB_STORAGE_OBJECT_MGR.get_server_super_block().max_file_id_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObServerCheckpointWriter not init", K(ret));
   } else if (OB_UNLIKELY(!log_cursor.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(fd_dispenser_.init(OB_STORAGE_OBJECT_MGR.get_server_super_block().max_file_id_))) {
+    LOG_WARN("fail to init fd_dispenser", K(ret));
   } else if (OB_FAIL(write_tenant_meta_checkpoint(tenant_meta_entry))) {
     LOG_WARN("fail to write tenant config checkpoint", K(ret));
   } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.update_super_block(log_cursor, tenant_meta_entry, fd_dispenser_))) {

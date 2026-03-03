@@ -174,21 +174,21 @@ private:
 class ObSlogCheckpointFdDispenser final
 {
 public:
-  ObSlogCheckpointFdDispenser() : min_file_id_(0), max_file_id_(0) {}
-  explicit ObSlogCheckpointFdDispenser(const int64_t cur_file_id)
-  {
-    min_file_id_ = max_file_id_ = cur_file_id + 1;
-  }
+  ObSlogCheckpointFdDispenser() : min_file_id_(0), next_file_id_(0), is_inited_(false) {}
   ~ObSlogCheckpointFdDispenser() = default;
-  void set_cur_max_file_id(const int64_t cur_file_id) {  min_file_id_ = max_file_id_ = cur_file_id + 1; }
-  int64_t get_min_file_id() const { return min_file_id_; }
-  int64_t get_max_file_id() const { return max_file_id_; }
-  int64_t acquire_new_file_id() { return ATOMIC_FAA(&max_file_id_, 1); }
+  int init(const int64_t cur_file_id);
+  int acquire_new_file_id(/*out*/int64_t &file_id);
+  int assign_to(/*out*/int64_t &min_file_id, /*out*/int64_t &max_file_id) const;
+  TO_STRING_KV(K_(min_file_id), K_(next_file_id), K_(is_inited));
 
-  TO_STRING_KV(K_(min_file_id), K_(max_file_id));
+private:
+  int64_t get_min_file_id_() const { return min_file_id_; }
+  int64_t get_max_file_id_() const { return next_file_id_ - 1; }
+
 private :
   int64_t min_file_id_;
-  int64_t max_file_id_;
+  int64_t next_file_id_;
+  bool is_inited_;
 
   DISALLOW_COPY_AND_ASSIGN(ObSlogCheckpointFdDispenser);
 };
