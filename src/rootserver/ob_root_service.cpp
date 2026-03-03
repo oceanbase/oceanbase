@@ -8086,12 +8086,47 @@ int ObRootService::admin_refresh_schema(const obrpc::ObAdminRefreshSchemaArg &ar
 int ObRootService::admin_set_config(obrpc::ObAdminSetConfigArg &arg)
 {
   int ret = OB_SUCCESS;
+  common::ObSArray<common::ObFixedLengthString<MAX_ROOTSERVICE_EVENT_VALUE_LENGTH + 1>> old_values;
+
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.items_.count(); ++i) {
+      const obrpc::ObAdminSetConfigItem &item = arg.items_.at(i);
+      common::ObFixedLengthString<MAX_ROOTSERVICE_EVENT_VALUE_LENGTH + 1> old_value;
+      const char *config_value = nullptr;
+
+      ObConfigItem *const *sys_ci_ptr = GCONF.get_container().get(
+          ObConfigStringKey(item.name_.ptr()));
+      if (OB_NOT_NULL(sys_ci_ptr) && OB_NOT_NULL(*sys_ci_ptr)) {
+        config_value = (*sys_ci_ptr)->str();
+      } else {
+        uint64_t tenant_id = (item.exec_tenant_id_ != OB_INVALID_TENANT_ID)
+                             ? item.exec_tenant_id_ : OB_SYS_TENANT_ID;
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+        if (tenant_config.is_valid()) {
+          ObConfigItem *const *tenant_ci_ptr = tenant_config->get_container().get(
+              ObConfigStringKey(item.name_.ptr()));
+          if (OB_NOT_NULL(tenant_ci_ptr) && OB_NOT_NULL(*tenant_ci_ptr)) {
+            config_value = (*tenant_ci_ptr)->str();
+          }
+        }
+      }
+      if (OB_NOT_NULL(config_value)) {
+        if (OB_FALSE_IT(old_value.assign(config_value))) {
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(old_values.push_back(old_value))) {
+        LOG_WARN("fail to push back old value", K(ret), K(old_value));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (arg.is_backup_config_) {
     if (OB_ISNULL(schema_service_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -8120,9 +8155,10 @@ int ObRootService::admin_set_config(obrpc::ObAdminSetConfigArg &arg)
       }
     }
   }
-  // Add event one by one if more than one parameters are set
-  for (int i = 0; i < arg.items_.count(); i++) {
-    ROOTSERVICE_EVENT_ADD_TRUNCATE("root_service", "admin_set_config", K(ret), "arg", arg.items_.at(i), "is_inner", arg.is_inner_);
+
+  for (int64_t i = 0; i < arg.items_.count(); i++) {
+    const char *old_value_str = (i < old_values.count()) ? old_values.at(i).ptr() : "";
+    ROOTSERVICE_EVENT_ADD_TRUNCATE("root_service", "admin_set_config", K(ret), "arg", arg.items_.at(i), "is_inner", arg.is_inner_, "old_value", old_value_str);
   }
   return ret;
 }
