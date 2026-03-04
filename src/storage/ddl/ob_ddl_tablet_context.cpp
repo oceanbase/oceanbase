@@ -351,7 +351,7 @@ ObDDLTabletContext::ObDDLTabletContext()
     slice_count_(0), table_slice_offset_(0), scan_task_(nullptr), mutex_(common::ObLatchIds::DDL_TABLET_CONTEXT_LOCK),
     last_lob_id_(0), last_autoinc_val_(0), bucket_count_(0),
     macro_meta_store_mgr_(nullptr), vector_index_ctx_(nullptr),
-    fts_expect_range_cnt_(0)
+    fts_expect_range_cnt_(0), fts_parallel_cnt_(0)
 {
 
 }
@@ -528,6 +528,7 @@ void ObDDLTabletContext::reset()
   fts_forward_final_range_.reset();
   fts_inverted_final_range_.reset();
   fts_expect_range_cnt_ = 0;
+  fts_parallel_cnt_ = 0;
   arena_.reset();
 }
 
@@ -696,6 +697,20 @@ int ObDDLTabletContext::set_expect_range_count(const int64_t expect_cnt)
   } else {
     lib::ObMutexGuard guard(mutex_);
     fts_expect_range_cnt_ = expect_cnt;//every thread should have a same expect range count
+  }
+  return ret;
+}
+
+
+int ObDDLTabletContext::set_parallel_cnt(const int64_t parallel_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (parallel_cnt <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parallel count", K(ret), K(parallel_cnt));
+  } else {
+    lib::ObMutexGuard guard(mutex_);
+    fts_parallel_cnt_ = parallel_cnt;
   }
   return ret;
 }

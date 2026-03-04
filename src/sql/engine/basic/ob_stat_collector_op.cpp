@@ -782,7 +782,7 @@ int ObStatCollectorOp::report_sample_ranges_to_dag(
       LOG_WARN("ddl dag not found when reporting sample ranges", K(ret));
     } else {
       const int64_t expect_sampling_count = get_one_thread_sampling_count_by_parallel(ctx_.get_expect_range_count());
-      if (OB_FAIL(dag->append_sample_ranges(is_inverted, part_ranges, expect_sampling_count))) {
+      if (OB_FAIL(dag->append_sample_ranges(is_inverted, part_ranges, expect_sampling_count, ctx_.get_expect_range_count()))) {
         LOG_WARN("append sample ranges to dag failed", K(ret), K(is_inverted));
       } else {
         FLOG_INFO("stat collector reported sample ranges to dag", K(is_inverted), "range_cnt", part_ranges.at(0).range_cut_.count(), K(expect_sampling_count), K(part_ranges));

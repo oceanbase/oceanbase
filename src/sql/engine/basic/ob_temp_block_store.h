@@ -499,6 +499,7 @@ public:
 
   int new_block(const int64_t mem_size, Block *&blk, const bool strict_mem_size);
   int truncate_file(int64_t offset);
+  bool need_dump(const int64_t extra_size);
 
 protected:
   /*
@@ -583,7 +584,6 @@ private:
   int write_file(BlockIndex &bi, void *buf, int64_t size);
   int read_file(void *buf, const int64_t size, const int64_t offset,
                 tmp_file::ObTmpFileIOHandle &handle, const bool is_async, const bool prefetch);
-  bool need_dump(const int64_t extra_size);
   int write_compressed_block(Block *blk, BlockIndex *bi);
   int dump_block(Block *blk, int64_t &dumped_size);
   int dump_index_block(IndexBlock *idx_blk, int64_t &dumped_size);

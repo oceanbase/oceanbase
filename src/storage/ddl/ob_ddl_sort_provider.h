@@ -111,13 +111,13 @@ private:
   struct SortHandle
   {
   public:
-    SortHandle() : mem_ctx_(nullptr), impl_(nullptr), compare_(nullptr), slice_decider_(nullptr), in_use_(false) {}
+    SortHandle() : mem_ctx_(nullptr), impl_(nullptr), compare_(nullptr), chunk_toolkit_(nullptr), in_use_(false) {}
     bool is_valid() const { return OB_NOT_NULL(mem_ctx_) && OB_NOT_NULL(impl_) && OB_NOT_NULL(compare_); }
     int64_t to_string(char *buf, const int64_t buf_len) const
     {
       int64_t pos = 0;
-      common::databuff_printf(buf, buf_len, pos, "SortHandle(mem_ctx=%p, impl=%p, compare=%p, slice_decider=%p, in_use=%d)",
-                              mem_ctx_.ref_context(), impl_, compare_, slice_decider_, in_use_);
+      common::databuff_printf(buf, buf_len, pos, "SortHandle(mem_ctx=%p, impl=%p, compare=%p, chunk_toolkit=%p, in_use=%d)",
+                              mem_ctx_.ref_context(), impl_, compare_, chunk_toolkit_, in_use_);
       return pos;
     }
 
@@ -125,7 +125,7 @@ private:
     lib::MemoryContext mem_ctx_;
     SortImpl *impl_;
     Compare *compare_;
-    ObSortChunkSliceDecider<Compare, StoreRow> *slice_decider_;
+    ObSortChunkToolkit<Compare, StoreRow> *chunk_toolkit_;
     bool in_use_;
   };
 
@@ -144,7 +144,7 @@ private:
 
 private:
   int build_row_meta_from_schema(const ObDDLTableSchema &ddl_schema);
-  int create_sort_handle(const bool need_slice_decider, ObDDLSortProvider::SortHandle *&handle);
+  int create_sort_handle(const bool need_chunk_toolkit, ObDDLSortProvider::SortHandle *&handle);
   void clean_sort_handle(ObDDLSortProvider::SortHandle *&handle);
   int init_sort_impl(const bool need_slice_decider, ObDDLSortProvider::SortHandle *&handle);
   int reuse_sort_impl(ObDDLSortProvider::SortHandle *handle);

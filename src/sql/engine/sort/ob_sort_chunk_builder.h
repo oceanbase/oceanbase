@@ -162,7 +162,7 @@ int ObSortChunkMultiSlicer<Store_Row, has_addon>::get_write_chunk(
 
 // Slice decider implementation based on range partitioning
 template <typename Compare, typename Store_Row>
-class ObSortChunkSliceDecider
+class ObSortChunkToolkit
 {
 public:
   // 缓存转换后的 range 边界，避免每次都浅拷贝
@@ -171,13 +171,13 @@ public:
 
 
 public:
-  ObSortChunkSliceDecider()
+  ObSortChunkToolkit()
     : last_slice_high_bound_idx_(0),
       range_bounds_(),
       is_inited_(false),
       comp_(nullptr)
     {}
-  virtual ~ObSortChunkSliceDecider() {}
+  virtual ~ObSortChunkToolkit() {}
 
   // 初始化：预处理 range_cut，将 DatumKey 浅拷贝到 ObArray
   int init(const ObPxTabletRange *slice_range, Compare *comp)
@@ -218,13 +218,13 @@ public:
     return ret;
   }
 
-  int decide(const Store_Row *sort_key_row, int64_t &slice_id)
+  int decide_chunk_slice_id(const Store_Row *sort_key_row, int64_t &slice_id)
   {
     int ret = OB_SUCCESS;
 
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
-      SQL_ENG_LOG(WARN, "slice decider not inited", K(ret));
+      SQL_ENG_LOG(WARN, "chunk toolkit not inited", K(ret));
     } else if (OB_ISNULL(sort_key_row)) {
       ret = OB_INVALID_ARGUMENT;
       SQL_ENG_LOG(WARN, "sort_key_row is null", K(ret), KP(sort_key_row));
@@ -271,7 +271,6 @@ public:
     }
     return ret;
   }
-
   void reset()
   {
     last_slice_high_bound_idx_ = 0;
@@ -293,6 +292,7 @@ private:
 template <typename Compare, typename Store_Row, bool has_addon, typename Slicer>
 class ObSortChunkBuilder
 {
+
 public:
   explicit ObSortChunkBuilder(
       ObMonitorNode &op_monitor_info, lib::MemoryContext &mem_context,
@@ -304,7 +304,7 @@ public:
       ObIOEventObserver *io_event_observer,
       ObSortResourceManager<Compare, Store_Row, has_addon>
           &sort_resource_mgr,
-      Slicer &slicer, ObSortChunkSliceDecider<Compare, Store_Row> *slice_decider)
+      Slicer &slicer, ObSortChunkToolkit<Compare, Store_Row> *chunk_toolkit)
       : op_monitor_info_(op_monitor_info), mem_context_(mem_context),
         sk_row_meta_(sk_row_meta), addon_row_meta_(addon_row_meta), max_batch_size_(max_batch_size),
         compress_type_(compress_type),
@@ -312,7 +312,7 @@ public:
         has_addon_(has_addon_flag), topn_cnt_(topn_cnt), tenant_id_(tenant_id),
         tempstore_read_alignment_size_(tempstore_read_alignment_size),
         io_event_observer_(io_event_observer),
-        sort_resource_mgr_(sort_resource_mgr), slicer_(slicer), slice_decider_(slice_decider) {}
+        sort_resource_mgr_(sort_resource_mgr), slicer_(slicer), chunk_toolkit_(chunk_toolkit) {}
 
   int init_temp_row_store(const RowMeta *row_meta,
                           const int64_t mem_limit, const int64_t batch_size,
@@ -359,13 +359,13 @@ public:
         chunk->sort_row_store_mgr_.set_addon_row_meta(addon_row_meta_);
       }
       if (OB_FAIL(init_temp_row_store(
-                   sk_row_meta_, 1, max_batch_size_, true,
+                   sk_row_meta_, max(tempstore_read_alignment_size_, ObTempBlockStore::BLOCK_SIZE), max_batch_size_, true,
                    true /*enable dump*/, Store_Row::get_extra_size(true),
                    compress_type_, chunk->get_sk_store()))) {
         SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
       } else if (has_addon_ &&
                  OB_FAIL(init_temp_row_store(
-                     addon_row_meta_, 1, max_batch_size_, true,
+                     addon_row_meta_, max(tempstore_read_alignment_size_, ObTempBlockStore::BLOCK_SIZE), max_batch_size_, true,
                      true /*enable dump*/, Store_Row::get_extra_size(false),
                      compress_type_, chunk->get_addon_store()))) {
         SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
@@ -391,8 +391,8 @@ public:
     SortVecOpChunk *chunk = nullptr;
     bool is_chunk_changed = false;
     int64_t slice_id = 0;
-    if (OB_NOT_NULL(slice_decider_)) {
-      slice_decider_->reuse();
+    if (OB_NOT_NULL(chunk_toolkit_)) {
+      chunk_toolkit_->reuse();
     }
     while (OB_SUCC(ret)) {
       if (use_heap_sort_ && !is_fetch_with_ties_ &&
@@ -405,13 +405,17 @@ public:
           ret = OB_SUCCESS;
         }
         break;
-      } else if (OB_NOT_NULL(slice_decider_) && OB_FAIL(slice_decider_->decide(sort_key_row, slice_id))) {
-        SQL_ENG_LOG(WARN, "failed to decide slice id", K(ret));
+      } else if (OB_NOT_NULL(chunk_toolkit_)) {
+        if (OB_FAIL(chunk_toolkit_->decide_chunk_slice_id(sort_key_row, slice_id))) {
+          SQL_ENG_LOG(WARN, "failed to decide slice id", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(get_write_chunk(level, slice_id, tmp_chunk, is_chunk_changed))) {
         SQL_ENG_LOG(WARN, "failed to get write chunk", K(ret));
       } else if (is_chunk_changed) {
         if (OB_NOT_NULL(chunk)) {
-          if (OB_FAIL(dump_chunk(level, curr_time, chunk, output_chunks))) {
+          if (OB_FAIL(finish_chunk(level, curr_time, chunk, output_chunks))) {
             SQL_ENG_LOG(WARN, "failed to dump chunk", K(ret));
           } else {
             curr_time = ObTimeUtility::fast_current_time();
@@ -429,10 +433,14 @@ public:
       }
 
       if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(try_extend_tmpstore_mem_size_if_need(chunk->get_sk_store(), sort_key_row->get_row_size()))) {
+        SQL_ENG_LOG(WARN, "failed to extend tmpstore mem size if need", K(ret));
       } else if (OB_FAIL(chunk->get_sk_store().add_row(
                      reinterpret_cast<const ObCompactRow *>(sort_key_row),
                      dst_sk_row))) {
         SQL_ENG_LOG(WARN, "copy row to row store failed");
+      } else if (has_addon_ && OB_FAIL(try_extend_tmpstore_mem_size_if_need(chunk->get_addon_store(), addon_field_row->get_row_size()))) {
+        SQL_ENG_LOG(WARN, "failed to extend tmpstore mem size if need", K(ret));
       } else if (has_addon_ &&
                  OB_FAIL(chunk->get_addon_store().add_row(
                      reinterpret_cast<const ObCompactRow *>(addon_field_row),
@@ -448,7 +456,7 @@ public:
       }
     }
     if (OB_SUCC(ret) && nullptr != chunk) {
-      if (OB_FAIL(dump_chunk(level, curr_time, chunk, output_chunks))) {
+      if (OB_FAIL(finish_chunk(level, curr_time, chunk, output_chunks))) {
         SQL_ENG_LOG(WARN, "failed to dump chunk", K(ret));
       } else {
         chunk = nullptr;
@@ -460,14 +468,42 @@ public:
 
     return ret;
   }
+   // Helper function to check if chunk needs dump (encapsulates the common logic)
+   OB_INLINE int check_and_decide_chunk_dump(bool &need_dump_sk, bool &need_dump_addon)
+   {
+     int ret = OB_SUCCESS;
+     need_dump_sk = true;
+     need_dump_addon = true;
+     if (OB_FAIL(sort_resource_mgr_.check_tmp_store_need_dump(tempstore_read_alignment_size_,
+                                                                          0/*preserved memory size*/,
+                                                                          need_dump_sk))) {
+       SQL_ENG_LOG(WARN, "failed to check chunk need dump", K(ret));
+     } else {
+       bool should_check_addon = !need_dump_sk;
+       if (should_check_addon &&
+           OB_FAIL(sort_resource_mgr_.check_tmp_store_need_dump(tempstore_read_alignment_size_,
+                                                            max(tempstore_read_alignment_size_, ObTempBlockStore::BLOCK_SIZE)/*preserved memory size for sk_rows*/,
+                                                            need_dump_addon))) {
+         SQL_ENG_LOG(WARN, "failed to check chunk need dump", K(ret));
+       }
+     }
+     return ret;
+   }
+
 
 private:
-  int dump_chunk(const int64_t level, const int64_t begin_time,
-                 ObSortVecOpChunk<Store_Row, has_addon> *&chunk,
-                 common::ObIArray<ObSortVecOpChunk<Store_Row, has_addon>*> &output_chunks) {
+  int finish_chunk(const int64_t level, const int64_t begin_time,
+                   ObSortVecOpChunk<Store_Row, has_addon> *&chunk,
+                   common::ObIArray<ObSortVecOpChunk<Store_Row, has_addon>*> &output_chunks) {
     int ret = OB_SUCCESS;
+    bool need_dump_sk = true;
+    bool need_dump_addon = true;
+    int64_t pre_mem_hold = chunk->get_sk_store().get_mem_hold() + chunk->get_addon_store().get_mem_hold();
+    bool force_dump = sort_resource_mgr_.need_dump_tmpstore();
     // 必须强制先dump，然后finish dump才有效
-    if (has_addon_ &&
+    if (!force_dump && OB_FAIL(check_and_decide_chunk_dump(need_dump_sk, need_dump_addon))) {
+      SQL_ENG_LOG(WARN, "failed to check chunk need dump", K(ret));
+    } else if (has_addon_ &&
         (chunk->get_sk_store().get_row_cnt() != chunk->get_addon_store().get_row_cnt())) {
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN,
@@ -475,15 +511,14 @@ private:
                   "expected to be equal",
                   K(chunk->get_sk_store().get_row_cnt()),
                   K(chunk->get_addon_store().get_row_cnt()), K(ret));
-    } else if (OB_FAIL(chunk->get_sk_store().dump(true))) {
+    } else if (need_dump_sk && OB_FAIL(chunk->get_sk_store().dump(true))) {
       SQL_ENG_LOG(WARN, "failed to dump row store", K(ret));
     } else if (OB_FAIL(
-                   chunk->get_sk_store().finish_add_row(true /*+ need dump */))) {
+                   chunk->get_sk_store().finish_add_row(need_dump_sk))) {
       SQL_ENG_LOG(WARN, "finish add row failed", K(ret));
-    } else if (has_addon_ && OB_FAIL(chunk->get_addon_store().dump(true))) {
+    } else if (has_addon_ && need_dump_addon && OB_FAIL(chunk->get_addon_store().dump(true))) {
       SQL_ENG_LOG(WARN, "failed to dump row store", K(ret));
-    } else if (has_addon_ && OB_FAIL(chunk->get_addon_store().finish_add_row(
-                                 true /*+ need dump */))) {
+    } else if (has_addon_ && OB_FAIL(chunk->get_addon_store().finish_add_row(need_dump_addon))) {
       SQL_ENG_LOG(WARN, "finish add row failed", K(ret));
     } else {
       const int64_t sort_io_time =
@@ -502,7 +537,6 @@ private:
                 chunk->get_sk_store().get_row_cnt(), "file_size", file_size,
                 "memory_hold", mem_hold, "mem_used", mem_context_->used());
     }
-
     if (OB_SUCC(ret)) {
       // Add chunk to output array instead of inserting into linked list
       if (OB_FAIL(output_chunks.push_back(chunk))) {
@@ -512,6 +546,26 @@ private:
     if (OB_FAIL(ret) && OB_NOT_NULL(chunk)) {
       free_chunk(chunk);
     }
+    return ret;
+  }
+
+  int try_extend_tmpstore_mem_size_if_need(ObTempRowStore &row_store, const int64_t row_size)
+  {
+    int ret = OB_SUCCESS;
+    const int64_t tempstore_block_size = max(tempstore_read_alignment_size_, ObTempBlockStore::BLOCK_SIZE);
+    bool need_dump = false;
+    const int64_t pre_mem_limit = row_store.get_mem_limit();
+    //TODO: ly435438 only one round extend may not enough, need to extend more times
+    if (!sort_resource_mgr_.need_dump_tmpstore()) {
+      if (row_store.need_new_block(row_size) && row_store.need_dump(row_size)) {
+        if (OB_FAIL(sort_resource_mgr_.try_extend_max_memory_size(tempstore_block_size, need_dump))) {
+          SQL_ENG_LOG(WARN, "failed to extend max memory size", K(ret));
+        } else if (!need_dump/*extend success*/) {
+          row_store.set_mem_limit(pre_mem_limit + tempstore_block_size);
+        }
+      }
+    }
+
     return ret;
   }
 
@@ -537,7 +591,7 @@ private:
   ObIOEventObserver *io_event_observer_;
   ObSortResourceManager<Compare, Store_Row, has_addon> &sort_resource_mgr_;
   Slicer &slicer_;
-  ObSortChunkSliceDecider<Compare, Store_Row> *slice_decider_; // for slice decider
+  ObSortChunkToolkit<Compare, Store_Row> *chunk_toolkit_;
 };
 
 } // end namespace sql

@@ -137,7 +137,7 @@ int ObInvertedIndexSortFlushOperator::deliver_sorted_chunks(ObDDLIndependentDag 
   if (OB_ISNULL(sort_impl) || OB_ISNULL(ddl_dag)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sort impl is null", K(ret));
-  } else if (OB_FAIL(sort_impl->sort_inmem_data(true/*need_force_dump*/))) {
+  } else if (OB_FAIL(sort_impl->sort_inmem_data(true/*need_force_build_chunk*/))) {
     LOG_WARN("failed to sort inmem data", K(ret));
   } else if (OB_FAIL(sort_impl->get_sort_chunks(sort_chunks))) {
     LOG_WARN("failed to get sort chunks", K(ret));

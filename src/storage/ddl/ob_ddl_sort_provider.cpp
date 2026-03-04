@@ -81,16 +81,16 @@ int ObDDLSortProvider::init(ObDDLIndependentDag *ddl_dag)
   return ret;
 }
 
-int ObDDLSortProvider::init_sort_impl(const bool need_slice_decider, ObDDLSortProvider::SortHandle *&handle)
+int ObDDLSortProvider::init_sort_impl(const bool need_chunk_toolkit, ObDDLSortProvider::SortHandle *&handle)
 {
   int ret = OB_SUCCESS;
   const int64_t max_batch_size = ObDDLIndependentDag::DEFAULT_ROW_BUFFER_SIZE;
   const ObCompressorType compressor_type = ddl_dag_->get_ddl_table_schema().table_item_.compress_type_;
   // Use typedef to avoid macro parsing issues with template parameters containing comma
-  using SliceDeciderType = ObSortChunkSliceDecider<Compare, StoreRow>;
+  using ChunkToolkitType = ObSortChunkToolkit<Compare, StoreRow>;
   const ObPxTabletRange * slice_range = nullptr;
   const ObIArray<std::pair<share::ObLSID, ObTabletID>> &ls_tablet_ids = ddl_dag_->get_ls_tablet_ids();
-  if (need_slice_decider) {
+  if (need_chunk_toolkit) {
     if (ls_tablet_ids.count() != 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, ls tablet ids count is not 1", K(ret), K(ls_tablet_ids.count()));
@@ -102,17 +102,17 @@ int ObDDLSortProvider::init_sort_impl(const bool need_slice_decider, ObDDLSortPr
       } else if (OB_ISNULL(tablet_context)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, tablet context is null", K(ret), K(tablet_id));
-      } else if (OB_ISNULL(handle->slice_decider_ = OB_NEWx(SliceDeciderType, &(handle->mem_ctx_)->get_malloc_allocator()))) {
+      } else if (OB_ISNULL(handle->chunk_toolkit_ = OB_NEWx(ChunkToolkitType, &(handle->mem_ctx_)->get_malloc_allocator()))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc slice decider failed", K(ret));
+        LOG_WARN("alloc chunk toolkit failed", K(ret));
       } else if (tablet_context->get_inverted_final_sample_range().range_cut_.count() > 0) {
         slice_range = &tablet_context->get_inverted_final_sample_range();
       } else {
         slice_range = nullptr;//no slice range
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(handle->slice_decider_->init(slice_range, handle->compare_))) {
-        LOG_WARN("init slice decider failed", K(ret));
+      } else if (OB_FAIL(handle->chunk_toolkit_->init(slice_range, handle->compare_))) {
+        LOG_WARN("init chunk toolkit failed", K(ret));
       }
     }
   }
@@ -127,7 +127,7 @@ int ObDDLSortProvider::init_sort_impl(const bool need_slice_decider, ObDDLSortPr
                                   tempstore_read_alignment_size_,
                                   MTL_ID(),
                                   enable_encode_sortkey_,
-                                  handle->slice_decider_ /*slice_decider*/))) {
+                                  handle->chunk_toolkit_ /*chunk_toolkit*/))) {
     LOG_WARN("sort impl init failed", K(ret));
   }
   return ret;
@@ -284,7 +284,7 @@ int ObDDLSortProvider::get_sort_impl(const int64_t slice_id, SortImpl *&sort_imp
         }
       }
 
-      if (OB_ISNULL(handle) && OB_FAIL(create_sort_handle(true/*need_slice_decider*/, handle))) {
+      if (OB_ISNULL(handle) && OB_FAIL(create_sort_handle(true/*need_chunk_toolkit*/, handle))) {
         LOG_WARN("create sort handle failed", K(ret), K(slice_id));
       } else if (OB_FAIL(slice_sort_impl_map_.set_refactored(slice_id, handle, 0 /*overwrite*/))) {
         LOG_WARN("put sort impl failed", K(ret), K(slice_id));
@@ -393,8 +393,8 @@ int ObDDLSortProvider::reuse_sort_impl(ObDDLSortProvider::SortHandle *handle)
     LOG_WARN("invalid argument", K(ret), K(handle));
   } else {
     handle->impl_->reset();
-    if (OB_NOT_NULL(handle->slice_decider_)) {
-      handle->slice_decider_->reuse();
+    if (OB_NOT_NULL(handle->chunk_toolkit_)) {
+      handle->chunk_toolkit_->reuse();
     }
     //since we can reuse slice_decider
     if (OB_FAIL(init_sort_impl(false/*need_slice_decider*/, handle))) {
@@ -411,7 +411,7 @@ int ObDDLSortProvider::reuse_sort_impl(ObDDLSortProvider::SortHandle *handle)
   return ret;
 }
 
-int ObDDLSortProvider::create_sort_handle(const bool need_slice_decider, SortHandle *&handle)
+int ObDDLSortProvider::create_sort_handle(const bool need_chunk_toolkit, SortHandle *&handle)
 {
   int ret = OB_SUCCESS;
   handle = nullptr;
@@ -450,7 +450,7 @@ int ObDDLSortProvider::create_sort_handle(const bool need_slice_decider, SortHan
       LOG_WARN("alloc sort impl failed", K(ret));
     } else {
       handle->impl_->reset();
-      if (OB_FAIL(init_sort_impl(need_slice_decider, handle))) {
+      if (OB_FAIL(init_sort_impl(need_chunk_toolkit, handle))) {
         LOG_WARN("init sort impl failed", K(ret));
       }
     }
@@ -512,10 +512,10 @@ void ObDDLSortProvider::clean_sort_handle(SortHandle *&handle)
       mem_ctx->get_malloc_allocator().free(handle->compare_);
       handle->compare_ = nullptr;
     }
-    if (nullptr != handle->slice_decider_) {
-      handle->slice_decider_->~ObSortChunkSliceDecider<Compare, StoreRow>();
-      mem_ctx->get_malloc_allocator().free(handle->slice_decider_);
-      handle->slice_decider_ = nullptr;
+    if (nullptr != handle->chunk_toolkit_) {
+      handle->chunk_toolkit_->~ObSortChunkToolkit<Compare, StoreRow>();
+      mem_ctx->get_malloc_allocator().free(handle->chunk_toolkit_);
+      handle->chunk_toolkit_ = nullptr;
     }
     handle->~SortHandle();
     mem_ctx->get_malloc_allocator().free(handle);

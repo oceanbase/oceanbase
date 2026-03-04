@@ -196,7 +196,8 @@ int ObColumnClusteredDag::process()
 
 int ObColumnClusteredDag::append_sample_ranges(const bool is_inverted,
                                                const common::Ob2DArray<sql::ObPxTabletRange> &part_ranges,
-                                               const int64_t expect_range_cnt)
+                                               const int64_t expect_range_cnt,
+                                               const int64_t parallel_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -229,6 +230,8 @@ int ObColumnClusteredDag::append_sample_ranges(const bool is_inverted,
         LOG_WARN("append sample range to tablet context failed", K(ret), K(tablet_id), K(is_inverted));
       } else if (OB_FAIL(tablet_context->set_expect_range_count(expect_range_cnt))) {
         LOG_WARN("set expect range count failed", K(ret), K(expect_range_cnt));
+      } else if (OB_FAIL(tablet_context->set_parallel_cnt(parallel_cnt))) {
+        LOG_WARN("set parallel cnt failed", K(ret), K(parallel_cnt));
       }
     }
   }

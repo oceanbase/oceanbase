@@ -960,11 +960,11 @@ TEST_F(ObStorageSortVecImplAddBatchTest, test_slice_decider_integration)
   ASSERT_EQ(OB_SUCCESS, datum_key.push_back(datum2));
   ASSERT_EQ(OB_SUCCESS, tablet_range.range_cut_.push_back(datum_key));
 
-  // 创建 slice 决策器
-  ObSortChunkSliceDecider<ObTestStorageCompareWithSlice, ObTestStorageRow> slice_decider;
-  ASSERT_EQ(OB_SUCCESS, slice_decider.init(&tablet_range, &slice_compare));
+  // 创建 chunk toolkit (用于 slice 支持)
+  ObSortChunkToolkit<ObTestStorageCompareWithSlice, ObTestStorageRow> chunk_toolkit;
+  ASSERT_EQ(OB_SUCCESS, chunk_toolkit.init(&tablet_range, &slice_compare));
 
-  // 创建新的 sort_impl 并设置 slice_decider
+  // 创建新的 sort_impl 并设置 chunk_toolkit
   ObStorageVecSortImpl<ObTestStorageCompareWithSlice, ObTestStorageRow, false> sort_impl_with_slice(ROOT_CONTEXT, monitor_node_);
 
   ObMemAttr mem_attr(OB_SYS_TENANT_ID, "SSVSlice", ObCtxIds::DEFAULT_CTX_ID);
@@ -979,7 +979,7 @@ TEST_F(ObStorageSortVecImplAddBatchTest, test_slice_decider_integration)
                                       /*tempstore_read_alignment_size*/1,
                                       /*tenant_id*/OB_SYS_TENANT_ID,
                                       /*enable_encode_sortkey*/false,
-                                      &slice_decider));
+                                      &chunk_toolkit));
 
   // 添加数据到不同的 slice
   // Slice 0 (< 100): 50, 80
@@ -1070,8 +1070,8 @@ TEST_F(ObStorageSortVecImplAddBatchTest, test_slice_decider_boundary_values)
   ASSERT_EQ(OB_SUCCESS, datum_key.push_back(datum2));
   ASSERT_EQ(OB_SUCCESS, tablet_range.range_cut_.push_back(datum_key));
 
-  ObSortChunkSliceDecider<ObTestStorageCompareWithSlice, ObTestStorageRow> slice_decider;
-  ASSERT_EQ(OB_SUCCESS, slice_decider.init(&tablet_range, &slice_compare));
+  ObSortChunkToolkit<ObTestStorageCompareWithSlice, ObTestStorageRow> chunk_toolkit;
+  ASSERT_EQ(OB_SUCCESS, chunk_toolkit.init(&tablet_range, &slice_compare));
 
   ObStorageVecSortImpl<ObTestStorageCompareWithSlice, ObTestStorageRow, false> sort_impl_with_slice(ROOT_CONTEXT, monitor_node_);
 
@@ -1087,7 +1087,7 @@ TEST_F(ObStorageSortVecImplAddBatchTest, test_slice_decider_boundary_values)
                                       1,
                                       OB_SYS_TENANT_ID,
                                       false,
-                                      &slice_decider));
+                                      &chunk_toolkit));
 
 
   // 测试边界值：99(slice0), 100(slice1), 199(slice1), 200(slice2), 201(slice2)

@@ -46,7 +46,8 @@ public:
   int set_px_finished();
   int append_sample_ranges(const bool is_inverted,
                            const common::Ob2DArray<sql::ObPxTabletRange> &part_ranges,
-                           const int64_t expect_range_cnt);
+                           const int64_t expect_range_cnt,
+                           const int64_t parallel_cnt);
   int set_sample_scan_finished();
   int update_tablet_range_count();
   void set_vec_tablet_rebuild(const bool value) { is_vec_tablet_rebuild_ = value; }

@@ -37,12 +37,14 @@ public:
   static const int64_t EXTEND_MULTIPLE = 2;
   static const int64_t MAX_ROW_CNT = 268435456; // (2G / 8)
   static constexpr int64_t MIN_MERGE_WAYS = 8;
+  static constexpr double DUMP_TMPSTORE_GLOBAL_BOUND_THRESHOLD = 0.2;
 
   explicit ObSortResourceManager(ObMonitorNode &op_monitor_info, lib::MemoryContext *mem_context, ObSqlWorkAreaType profile_type)
     : op_monitor_info_(op_monitor_info),
       mem_context_(mem_context),
       profile_(profile_type),
-      sql_mem_processor_(profile_, op_monitor_info_)
+      sql_mem_processor_(profile_, op_monitor_info_),
+      force_dump_temp_store_(true)
   {}
 
   virtual ~ObSortResourceManager()
@@ -213,14 +215,11 @@ public:
       merge_ways = (get_memory_bound() - mem_context_->ref_context()->used()) / tempstore_block_size;
       merge_ways = std::max(MIN_MERGE_WAYS, merge_ways);
       if (merge_ways < max_merge_ways) {
-        bool dumped = false;
+        bool unused_dumped = false;
         // extra extend one tempstore_block_size
         // to prevent situations where sufficient memory exists but merge_ways not equal to max_ways.
         int64_t need_size = (max_merge_ways + 1) * tempstore_block_size + mem_context_->ref_context()->used();
-        if (OB_FAIL(sql_mem_processor_.extend_max_memory_size(
-              allocator,
-              [&](int64_t max_memory_size) { return max_memory_size < need_size; }, dumped,
-              get_total_used_size()))) {
+        if (OB_FAIL(try_extend_max_memory_size(need_size, unused_dumped))) {
           SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret));
         }
         merge_ways = std::max(merge_ways, (get_memory_bound() - mem_context_->ref_context()->used()) / tempstore_block_size);
@@ -271,6 +270,55 @@ public:
     return ret;
   }
 
+  int check_tmp_store_need_dump(const int64_t tempstore_read_alignment_size, const int64_t preserved_memory_size, bool &need_dump)
+  {
+    int ret = OB_SUCCESS;
+    need_dump = need_dump_tmpstore();
+    int64_t tempstore_block_size = max(tempstore_read_alignment_size, ObTempBlockStore::BLOCK_SIZE);
+    if (OB_UNLIKELY(tempstore_read_alignment_size < 0 || preserved_memory_size < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_ENG_LOG(WARN, "invalid argument", K(ret), K(tempstore_read_alignment_size));
+    } else if (!need_dump) {
+      // this check is for the next chunk to be added
+      need_dump = (get_memory_bound() - mem_context_->ref_context()->used()) <  tempstore_read_alignment_size + preserved_memory_size;
+      if (need_dump) {
+        int64_t need_size = tempstore_block_size + preserved_memory_size;
+        if (OB_FAIL(try_extend_max_memory_size(need_size, need_dump))) {
+          SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret));
+        }
+      }
+    }
+    return ret;
+  }
+
+  bool need_dump_tmpstore() const {
+    return get_total_used_size() >= DUMP_TMPSTORE_GLOBAL_BOUND_THRESHOLD * get_profile().get_global_bound_size() || this->force_dump_temp_store_;
+  }
+
+  int try_extend_max_memory_size(const int64_t need_size, bool &need_dump)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(sql_mem_processor_.extend_max_memory_size(
+          &mem_context_->ref_context()->get_malloc_allocator(),
+          [&](int64_t max_memory_size) { return max_memory_size < need_size; }, need_dump,
+          get_total_used_size()))) {
+      SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret), K(need_size));
+    }
+    return ret;
+  }
+  void set_force_dump_temp_store(const bool force_dump_temp_store)
+  {
+    this->force_dump_temp_store_ = force_dump_temp_store;
+  }
+  bool need_force_dump_temp_store() const
+  {
+    return this->force_dump_temp_store_;
+  }
+
+  void reset_force_dump_temp_store()
+  {
+    this->force_dump_temp_store_ = true;
+  }
 protected:
   // 内存上下文和监控
   ObMonitorNode &op_monitor_info_;
@@ -279,6 +327,7 @@ protected:
   // 内存管理和性能分析
   ObSqlWorkAreaProfile profile_;
   ObSqlMemMgrProcessor sql_mem_processor_;
+  bool force_dump_temp_store_;
 };
 
 

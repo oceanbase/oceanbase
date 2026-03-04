@@ -187,6 +187,8 @@ public:
   int set_final_sample_range(const bool is_inverted, const sql::ObPxTabletRange &range);
   int set_expect_range_count(const int64_t expect_cnt);
   int64_t get_expect_range_count() const { return fts_expect_range_cnt_; }
+  int set_parallel_cnt(const int64_t parallel_cnt);
+  int64_t get_parallel_cnt() const { return fts_parallel_cnt_; }
   TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id), K_(tablet_param), K_(lob_meta_tablet_id), K_(lob_meta_tablet_param),
       K_(slice_count), K_(table_slice_offset), K_(last_lob_id), K_(last_autoinc_val), K(bucket_count_), K(slice_map_.size()), KP(macro_meta_store_mgr_));
 private:
@@ -233,6 +235,7 @@ public:
   sql::ObPxTabletRange fts_forward_final_range_;
   sql::ObPxTabletRange fts_inverted_final_range_;
   int64_t fts_expect_range_cnt_;
+  int64_t fts_parallel_cnt_;
 };
 }  // end namespace storage
 }  // end namespace oceanbase

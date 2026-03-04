@@ -53,7 +53,7 @@ public:
            int64_t tempstore_read_alignment_size,
            const uint64_t tenant_id,
            const bool enable_encode_sortkey,
-           ObSortChunkSliceDecider<Compare, Store_Row> *slice_decider);
+           ObSortChunkToolkit<Compare, Store_Row> *chunk_toolkit);
 
   void reset();
   void reset_for_merge_sort()
@@ -91,7 +91,7 @@ public:
   int get_sort_chunks_size() { return sort_chunks_.get_size(); }
   ObIAllocator *get_allocator() { return &mem_context_->get_malloc_allocator(); }
   bool is_inited() { return is_inited_; }
-  bool has_slice_decider() { return slice_decider_ != nullptr; }
+  bool has_chunk_toolkit() { return chunk_toolkit_ != nullptr; }
 private:
   int build_vector_array(const sql::RowMeta &row_meta, ObIArray<ObIVector *> *&vec_array, ObIArray<int64_t> &capacity_array);
   void release_vector_array(ObIArray<ObIVector *> *&vec_array, ObIArray<int64_t> &capacity_array);
@@ -115,7 +115,7 @@ private:
   Compare *comp_;
   const RowMeta *sk_row_meta_;
   const RowMeta *addon_row_meta_;
-  ObSortChunkSliceDecider<Compare, Store_Row> *slice_decider_;
+  ObSortChunkToolkit<Compare, Store_Row> *chunk_toolkit_;
   common::ObArray<Store_Row *> rows_;
   ObFullSortStrategy<Compare, Store_Row, has_addon> *sort_strategy_;
   ObSortVecOpChunk<Store_Row, has_addon> *in_memory_chunk_;
@@ -143,7 +143,7 @@ ObStorageVecSortImpl<Compare, Store_Row, has_addon>::ObStorageVecSortImpl(
     comp_(nullptr),
     sk_row_meta_(nullptr),
     addon_row_meta_(nullptr),
-    slice_decider_(nullptr),
+    chunk_toolkit_(nullptr),
     rows_(),
     sort_strategy_(nullptr),
     in_memory_chunk_(nullptr),
@@ -181,7 +181,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::init(Compare *comp,
                                                               int64_t tempstore_read_alignment_size,
                                                               const uint64_t tenant_id,
                                                               const bool enable_encode_sortkey,
-                                                              ObSortChunkSliceDecider<Compare, Store_Row> *slice_decider)
+                                                              ObSortChunkToolkit<Compare, Store_Row> *chunk_toolkit)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -234,7 +234,8 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::init(Compare *comp,
         max_batch_size_ = max_batch_size;
         compress_type_ = compressor_type;
         addon_row_meta_ = has_addon ? addon_row_meta : nullptr;
-        slice_decider_ = slice_decider; // can be nullptr
+        chunk_toolkit_ = chunk_toolkit; // can be nullptr
+        rows_.set_block_allocator(ModulePageAllocator(mem_context_.ref_context()->get_malloc_allocator(), "SortOpRows"));
         SQL_ENG_LOG(DEBUG, "ObStorageVecSortImpl init success", K(has_addon), K(max_batch_size));
       }
     }
@@ -269,7 +270,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::init_sort_strategy(cons
 }
 
 template <typename Compare, typename Store_Row, bool has_addon>
-int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::sort_inmem_data(const bool need_force_dump)
+int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::sort_inmem_data(const bool need_force_build_chunk)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -281,15 +282,18 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::sort_inmem_data(const b
   } else if (OB_FAIL(sort_strategy_->sort_inmem_data(0, rows_.count(), &rows_))) {
     SQL_ENG_LOG(WARN, "failed to sort in-memory data", K(ret));
   } else {
-    if (0 != sort_chunks_.get_size() || need_force_dump) {
+    if (0 != sort_chunks_.get_size() || need_force_build_chunk) {
       NormalDumpStrategy<Compare, Store_Row, has_addon> input(&rows_, nullptr, sk_row_meta_);
       ObArray<ChunkType *> output_chunks;
+      bool force_dump = (0 != sort_chunks_.get_size());
+      sort_resource_mgr_->set_force_dump_temp_store(force_dump);
       if (OB_FAIL(build_chunk(0/*level*/, input, output_chunks))) {
         SQL_ENG_LOG(WARN, "failed to build chunk", K(ret));
       } else if (OB_FAIL(add_sort_chunks(0/*level*/, output_chunks))) {
         SQL_ENG_LOG(WARN, "failed to add sort chunks", K(ret));
       } else {
         rows_.reset();
+        sort_resource_mgr_->reset_force_dump_temp_store();
         in_memory_chunk_->~ObSortVecOpChunk<Store_Row, has_addon>();
         mem_context_.ref_context()->get_malloc_allocator().free(in_memory_chunk_);
         in_memory_chunk_ = nullptr;
@@ -395,7 +399,7 @@ void ObStorageVecSortImpl<Compare, Store_Row, has_addon>::reset()
   sk_row_meta_ = nullptr;
   rows_.reset();
   comp_ = nullptr;
-  slice_decider_ = nullptr;
+  chunk_toolkit_ = nullptr;
   while (!sort_chunks_.is_empty()) {
     ObSortVecOpChunk<Store_Row, has_addon> *chunk = sort_chunks_.remove_first();
     if(OB_NOT_NULL(chunk)) {
@@ -561,7 +565,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::build_chunk(const int64
         tempstore_read_alignment_size_,
         nullptr, // TODO: add io event observer
         *sort_resource_mgr_,
-        slicer, slice_decider_);
+        slicer, chunk_toolkit_);
     if (OB_FAIL(builder.build(level, input, output_chunks))) {
       SQL_ENG_LOG(WARN, "failed to build chunk", K(ret));
     }

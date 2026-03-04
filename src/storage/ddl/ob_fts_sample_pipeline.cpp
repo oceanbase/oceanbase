@@ -208,7 +208,7 @@ int ObFtsForwardInvertSampleOperator::build_final_samples(
 {
   int ret = OB_SUCCESS;
   int64_t total_rows = 0;
-  const int64_t expect_sampling_count = tablet_ctx.get_expect_range_count();
+  const int64_t expect_sampling_count = is_inverted ? tablet_ctx.get_parallel_cnt() : tablet_ctx.get_expect_range_count();
   ObStorageVecSortImpl<Compare, sql::ObSortKeyStore<false>, false> *sort_impl = is_inverted ? sort_impl_inverted_ : sort_impl_forward_;
   if (OB_ISNULL(sort_impl)) {
     ret = OB_NOT_INIT;
