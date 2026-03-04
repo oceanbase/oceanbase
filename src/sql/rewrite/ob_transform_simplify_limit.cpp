@@ -294,7 +294,8 @@ int ObTransformSimplifyLimit::check_can_pushdown_limit_order(ObSelectStmt& upper
   } else if (view_stmt->has_limit() ||
              NULL == upper_stmt.get_limit_expr() ||
              NULL != upper_stmt.get_limit_percent_expr() ||
-             upper_stmt.has_fetch()) {
+             upper_stmt.has_fetch() ||
+             view_stmt->is_recursive_union()) {
     can_push = false;
   } else if (0 < upper_stmt.get_condition_size() ||
              upper_stmt.has_group_by() ||
