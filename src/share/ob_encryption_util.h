@@ -246,6 +246,7 @@ public:
   static bool use_external_key_id(const common::ObString &tde_method);
   static ObString extract_kms_name(const common::ObString &tde_method);
   static ObString extract_mode_name(const common::ObString &tde_method);
+  static bool is_ocp_kms(const common::ObString &kms_name);
 private:
   static bool inner_is_internal(const common::ObString &kms_name);
   static bool inner_is_kms(const common::ObString &kms_name);
