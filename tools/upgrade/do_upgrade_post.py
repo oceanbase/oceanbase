@@ -68,7 +68,7 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
     try:
       query_cur = actions.QueryCursor(cur)
       if timeout != 0:
-        set_session_timeout_for_upgrade(query_cur, timeout)
+        set_session_timeout_for_upgrade(cur, timeout)
       actions.check_server_version_by_cluster(cur)
       conn.commit()
 
