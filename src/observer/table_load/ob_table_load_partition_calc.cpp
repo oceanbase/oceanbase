@@ -95,7 +95,7 @@ int ObTableLoadPartitionCalc::init_part_key_index(const ObTableSchema *table_sch
   int ret = OB_SUCCESS;
   ObArray<ObColDesc> column_descs;
   column_descs.set_tenant_id(MTL_ID());
-  if (OB_FAIL(table_schema->get_column_ids(column_descs, false))) {
+  if (OB_FAIL(table_schema->get_column_ids(column_descs, true/*no_virtual*/))) {
     LOG_WARN("fail to get column ids", KR(ret));
   } else if (OB_UNLIKELY(column_descs.empty())) {
     ret = OB_ERR_UNEXPECTED;
