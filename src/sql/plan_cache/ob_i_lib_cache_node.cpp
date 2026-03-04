@@ -127,7 +127,7 @@ int ObILibCacheNode::add_cache_obj(ObILibCacheCtx &ctx,
       LOG_DEBUG("succ to add cache obj", KPC(obj));
     }
   }
-  if (OB_FAIL(ret) && ret != OB_SQL_PC_PLAN_DUPLICATE) {
+  if (OB_FAIL(ret) && (ret != OB_SQL_PC_PLAN_DUPLICATE && ret != OB_BATCHED_MULTI_STMT_ROLLBACK)) {
     is_invalid_ = true;
   }
   return ret;
