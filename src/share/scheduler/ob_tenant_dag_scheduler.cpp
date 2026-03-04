@@ -2518,7 +2518,6 @@ int ObDagPrioScheduler::inner_add_dag_(
     ret = OB_SIZE_OVERFLOW;
     COMMON_LOG(WARN, "ObTenantDagScheduler is full", K(ret), "dag_limit", scheduler_->get_dag_limit((ObDagPrio::ObDagPrioEnum)dag->get_priority()), KPC(dag));
   } else if (OB_FAIL(add_dag_into_list_and_map_(
-          is_waiting_dag_type(dag->get_type()) ? WAITING_DAG_LIST :
           is_rank_dag_type(dag->get_type()) ? RANK_DAG_LIST : READY_DAG_LIST, // compaction dag should add into RANK_LIST first.
           *dag))) {
     if (OB_EAGAIN != ret) {
@@ -2661,171 +2660,27 @@ int ObDagPrioScheduler::schedule_dag_(ObIDag &dag, bool &move_dag_to_waiting_lis
 }
 
 // should hold prio_lock_ before calling this func
-bool ObDagPrioScheduler::check_need_compaction_rank_() const
-{
-  bool bret = true;
-  if (!is_compaction_dag_prio()) {
-    bret = false;
-  } else if (dag_list_[RANK_DAG_LIST].is_empty()) {
-    bret = false;
-  } else if (dag_list_[READY_DAG_LIST].get_size() >= adaptive_task_limit_ * COMPACTION_DAG_RERANK_FACTOR) {
-    bret = false;
-  }
-  return bret;
-}
-
-int ObDagPrioScheduler::do_rank_compaction_dags_(
-    const int64_t batch_size,
-    common::ObSEArray<compaction::ObTabletMergeDag *, 32> &rank_dags)
-{
-  int ret = OB_SUCCESS;
-  rank_dags.reset();
-  compaction::ObCompactionDagRanker ranker;
-  common::ObSEArray<compaction::ObTabletMergeDag *, 32> need_rank_dags;
-  const int64_t cur_time = common::ObTimeUtility::current_time();
-
-  if (OB_UNLIKELY(batch_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(batch_size));
-  } else if (OB_FAIL(ranker.init(priority_, cur_time))) {
-    LOG_WARN("failed to init dag ranker", K(ret), K_(priority));
-  } else {
-    ObIDag *head = dag_list_[RANK_DAG_LIST].get_header();
-    ObIDag *cur = head->get_next();
-    compaction::ObTabletMergeDag *compaction_dag = nullptr;
-    ObIDag::ObDagStatus dag_status = ObIDag::DAG_STATUS_MAX;
-    while (OB_SUCC(ret) && NULL != cur && head != cur) {
-      const ObIDag::ObDagStatus &dag_status = cur->get_dag_status();
-      if (OB_ISNULL(compaction_dag = static_cast<compaction::ObTabletMergeDag *>(cur))) {
-        ret = OB_ERR_UNEXPECTED;
-        COMMON_LOG(WARN, "get unexpected null dag", K(ret), K_(priority), KPC(cur));
-      } else if (ObIDag::DAG_STATUS_INITING == dag_status) {
-        // do nothing
-      } else if (ObIDag::DAG_STATUS_READY != dag_status) { // dag status must be INITING or READY
-        ret = OB_ERR_UNEXPECTED;
-        COMMON_LOG(WARN, "dag in rank list must be ready", K(ret), K(dag_status), KPC(compaction_dag));
-      } else if (is_meta_major_merge(compaction_dag->get_param().merge_type_)) {
-        if (OB_FAIL(rank_dags.push_back(compaction_dag))) {
-          COMMON_LOG(WARN, "failed to add meta merge dag", K(ret), KPC(compaction_dag));
-        }
-      } else if (OB_FAIL(need_rank_dags.push_back(compaction_dag))) {
-        COMMON_LOG(WARN, "failed to add compaction dag", K(ret), KPC(compaction_dag));
-      } else {
-        ranker.update(cur_time, compaction_dag->get_param().compaction_param_);
-      }
-
-      if (OB_SUCC(ret)) {
-        cur = cur->get_next();
-        if (rank_dags.count() + need_rank_dags.count() >= batch_size) {
-          break; // reached max rank count, stop adding ready dags
-        }
-      }
-    } // end while
-
-    if (OB_SUCC(ret) && !need_rank_dags.empty() && ranker.is_valid()) {
-      if (OB_FAIL(ranker.sort(need_rank_dags))) {
-        COMMON_LOG(WARN, "failed to sort compaction dags, move dags to ready list directly",
-            K(ret), K(need_rank_dags));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < need_rank_dags.count(); ++i) {
-          if (OB_FAIL(rank_dags.push_back(need_rank_dags.at(i)))) {
-            COMMON_LOG(WARN, "failed to add rank dags", K(ret));
-          }
-        }
-      }
-    }
-  }
-
-  if (OB_FAIL(ret) && !rank_dags.empty()) {
-    rank_dags.reset();
-  }
-  return ret;
-}
-
-int ObDagPrioScheduler::batch_move_compaction_dags_(const int64_t batch_size)
-{
-  int ret = OB_SUCCESS;
-  ObIDag *head = dag_list_[RANK_DAG_LIST].get_header();
-  ObIDag *cur = head->get_next();
-  ObIDag *tmp_dag = nullptr;
-  int64_t move_cnt = 0;
-
-  while (OB_SUCC(ret) && NULL != cur && head != cur) {
-    tmp_dag = cur;
-    cur = cur->get_next();
-    if (OB_FAIL(move_dag_to_list_(*tmp_dag, RANK_DAG_LIST, READY_DAG_LIST))) {
-      COMMON_LOG(ERROR, "failed to move dag from RANK_LIST to READY_LIST", K(ret), K_(priority), KPC(tmp_dag));
-    } else if (++move_cnt >= batch_size) {
-      break;
-    }
-  }
-  return ret;
-}
-
-// should hold prio_lock_ before calling this func
 int ObDagPrioScheduler::rank_compaction_dags_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   const int64_t batch_size = adaptive_task_limit_ * COMPACTION_DAG_RERANK_FACTOR;
-  bool need_adaptive_schedule = false;
-  const compaction::ObBasicMergeScheduler *scheduler = nullptr;
+  const bool need_add_rank_dag = is_compaction_dag_prio()
+                              && !dag_list_[RANK_DAG_LIST].is_empty()
+                              && dag_list_[READY_DAG_LIST].get_size() <= batch_size;
 
-  if (OB_NOT_NULL(scheduler = ObBasicMergeScheduler::get_merge_scheduler())) {
-    need_adaptive_schedule = scheduler->enable_adaptive_merge_schedule();
-  }
-
-  if (!check_need_compaction_rank_()) {
-    // ready list has plenty of dags, no need to rank new dags
-  } else if (ObDagPrio::DAG_PRIO_COMPACTION_LOW == priority_) {
-    int64_t prepare_co_dag_cnt = 0;
-    ObIDag *head = dag_list_[READY_DAG_LIST].get_header();
-    ObIDag *cur = head->get_next();
-    while (NULL != cur && head != cur) {
-      if (ObDagType::DAG_TYPE_CO_MERGE_PREPARE == cur->get_type() ||
-          ObDagType::DAG_TYPE_CO_MERGE_SCHEDULE == cur->get_type()) {
-        ++prepare_co_dag_cnt;
-      }
-      cur = cur->get_next();
-    }
-
-    if (prepare_co_dag_cnt * 2 >= adaptive_task_limit_) {
-      // exist co prepare dags wait to schedule
-    } else if (OB_FAIL(batch_move_compaction_dags_(0 == prepare_co_dag_cnt ? batch_size : limits_))) {
-      COMMON_LOG(WARN, "failed to move co prepare dag from wait list to ready list", K(ret), K(limits_));
-    }
-
-  } else if (!need_adaptive_schedule) {
-    // not allow rerank, move all dags in rank_list to ready list directly
-    if (OB_FAIL(batch_move_compaction_dags_(dag_list_[RANK_DAG_LIST].get_size()))) {
-      COMMON_LOG(WARN, "failed to move co prepare dag from wait list to ready list", K(ret), K(limits_));
-    }
-  } else {
-    const int64_t cur_time = common::ObTimeUtility::fast_current_time();
-    ObSEArray<compaction::ObTabletMergeDag *, 32> ranked_dags;
-
-    if (OB_TMP_FAIL(do_rank_compaction_dags_(batch_size, ranked_dags))) {
-      COMMON_LOG(WARN, "failed to sort compaction dags", K(tmp_ret), K_(priority));
-    }
-
-    if (!ranked_dags.empty()) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < ranked_dags.count(); ++i) {
-        ObIDag *cur_dag = ranked_dags.at(i);
-        if (OB_FAIL(move_dag_to_list_(*cur_dag, RANK_DAG_LIST, READY_DAG_LIST))) {
-          COMMON_LOG(ERROR, "failed to move dag from RANK_LIST to READY_LIST", K(ret), KPC(cur_dag));
-        }
-      }
-    } else if (OB_FAIL(batch_move_compaction_dags_(batch_size))) {
-      COMMON_LOG(WARN, "failed to move compaction dags to ready list", K(ret), K(batch_size));
+  if (need_add_rank_dag) {
+    const int64_t cur_time = common::ObTimeUtility::current_time();
+    compaction::ObCompactionDagRanker ranker(cur_time, dag_list_[READY_DAG_LIST], dag_list_[RANK_DAG_LIST]);
+    if (OB_FAIL(ranker.process(priority_, batch_size, limits_))) {
+      COMMON_LOG(ERROR, "failed to rank compaction dags", K(ret), K_(priority));
     }
 
     // Time Statistics
-    int64_t cost_time = common::ObTimeUtility::fast_current_time() - cur_time;
+    int64_t cost_time = common::ObTimeUtility::current_time() - cur_time;
     if (REACH_THREAD_TIME_INTERVAL(DUMP_STATUS_INTERVAL)) {
-      COMMON_LOG(INFO, "[ADAPTIVE_SCHED] Ranking compaction dags costs: ", K(cost_time), K_(priority), K(ret), K(tmp_ret));
+      COMMON_LOG(INFO, "[ADAPTIVE_SCHED] Ranking compaction dags costs: ", K(cost_time), K_(priority), K(ret));
     }
   }
-
   return ret;
 }
 

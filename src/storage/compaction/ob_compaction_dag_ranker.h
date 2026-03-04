@@ -14,14 +14,20 @@
 #define STORAGE_COMPACTION_OB_COMPACTION_DAG_RANKER_H_
 
 #include "lib/container/ob_se_array.h"
+#include "lib/list/ob_dlist.h"
 #include "ob_compaction_util.h"
 
 namespace oceanbase
 {
+namespace share
+{
+class ObIDag;
+}
 
 namespace compaction
 {
 struct ObCompactionParam;
+struct ObTabletMergeDagParam;
 class ObTabletMergeDag;
 
 
@@ -55,23 +61,15 @@ public:
 };
 
 
-struct ObCompactionRankHelper
+struct ObCompactionRankCommonParam
 {
 public:
-  explicit ObCompactionRankHelper(const int64_t rank_time);
-  virtual ~ObCompactionRankHelper() = default;
-  virtual bool is_valid() const;
-  virtual bool check_need_rank() const;
-  virtual void update(
-      const int64_t current_time,
-      const ObCompactionParam &param);
-  virtual int get_rank_weighed_score(
-      common::ObSEArray<compaction::ObTabletMergeDag *, 32> &dags) const = 0;
-  VIRTUAL_TO_STRING_KV(K_(rank_time), K_(max_occupy_size), K_(min_occupy_size), K_(max_wait_time),
-                       K_(min_wait_time), K_(max_sstable_cnt), K_(min_sstable_cnt));
+  ObCompactionRankCommonParam();
+  ~ObCompactionRankCommonParam() = default;
+  void update(const ObTabletMergeDagParam &param, const int64_t rank_time);
+  TO_STRING_KV(K_(max_occupy_size), K_(min_occupy_size), K_(max_wait_time),
+               K_(min_wait_time), K_(max_sstable_cnt), K_(min_sstable_cnt));
 public:
-  // used for weight normalization
-  const uint64_t rank_time_;
   uint64_t max_occupy_size_;
   uint64_t min_occupy_size_;
   int64_t max_wait_time_;
@@ -80,21 +78,33 @@ public:
   uint16_t min_sstable_cnt_;
 };
 
+
+struct ObCompactionRankHelper
+{
+public:
+  ObCompactionRankHelper(const int64_t rank_time) : rank_time_(rank_time) {}
+  virtual ~ObCompactionRankHelper() = default;
+  virtual bool need_rank() const = 0;
+  virtual void update(const ObTabletMergeDagParam &param) = 0;
+  virtual int get_rank_weighed_score(common::ObIArray<compaction::ObTabletMergeDag *> &dags) const = 0;
+  VIRTUAL_TO_STRING_KV(K_(rank_time));
+public:
+  const uint64_t rank_time_;
+};
+
+
 struct ObMiniCompactionRankHelper : public ObCompactionRankHelper
 {
 public:
-  explicit ObMiniCompactionRankHelper(const int64_t rank_time);
+  ObMiniCompactionRankHelper(const int64_t rank_time);
   virtual ~ObMiniCompactionRankHelper() = default;
-  virtual bool is_valid() const override;
-  virtual bool check_need_rank() const override;
-  virtual void update(
-      const int64_t current_time,
-      const ObCompactionParam &param) override;
-  virtual int get_rank_weighed_score(
-      common::ObSEArray<compaction::ObTabletMergeDag *, 32> &dags) const override;
+  virtual bool need_rank() const override;
+  virtual void update(const ObTabletMergeDagParam &param) override;
+  virtual int get_rank_weighed_score(common::ObIArray<compaction::ObTabletMergeDag *> &dags) const override;
   INHERIT_TO_STRING_KV("ObMiniCompactionRankHelper", ObCompactionRankHelper,
-                       K_(max_replay_interval), K_(min_replay_interval));
+                       K_(common_param), K_(max_replay_interval), K_(min_replay_interval));
 public:
+  ObCompactionRankCommonParam common_param_;
   int64_t max_replay_interval_;
   int64_t min_replay_interval_;
 };
@@ -102,20 +112,32 @@ public:
 struct ObMinorCompactionRankHelper : public ObCompactionRankHelper
 {
 public:
-  explicit ObMinorCompactionRankHelper(const int64_t rank_time);
+  ObMinorCompactionRankHelper(const int64_t rank_time);
   virtual ~ObMinorCompactionRankHelper() = default;
-  virtual bool is_valid() const override;
-  virtual bool check_need_rank() const override;
-  virtual void update(
-      const int64_t current_time,
-      const ObCompactionParam &param) override;
-  virtual int get_rank_weighed_score(
-      common::ObSEArray<compaction::ObTabletMergeDag *, 32> &dags) const override;
+  virtual bool need_rank() const override;
+  virtual void update(const ObTabletMergeDagParam &param) override;
+  virtual int get_rank_weighed_score(common::ObIArray<compaction::ObTabletMergeDag *> &dags) const override;
   INHERIT_TO_STRING_KV("ObMinorCompactionRankHelper", ObCompactionRankHelper,
-                       K_(max_parallel_dag_cnt), K_(min_parallel_dag_cnt));
+                       K_(common_param), K_(max_parallel_dag_cnt), K_(min_parallel_dag_cnt));
 public:
+  ObCompactionRankCommonParam common_param_;
   uint64_t max_parallel_dag_cnt_;
   uint64_t min_parallel_dag_cnt_;
+};
+
+struct ObMajorCompactionRankHelper : public ObCompactionRankHelper
+{
+public:
+  ObMajorCompactionRankHelper(const int64_t rank_time);
+  virtual ~ObMajorCompactionRankHelper() = default;
+  virtual bool need_rank() const override;
+  virtual void update(const ObTabletMergeDagParam &param) override;
+  virtual int get_rank_weighed_score(common::ObIArray<compaction::ObTabletMergeDag *> &dags) const override;
+  INHERIT_TO_STRING_KV("ObMajorCompactionRankHelper", ObCompactionRankHelper,
+                       K_(max_compaction_scn), K_(min_compaction_scn));
+public:
+  int64_t max_compaction_scn_;
+  int64_t min_compaction_scn_;
 };
 
 
@@ -138,22 +160,31 @@ public:
   };
 
 public:
-  ObCompactionDagRanker();
+  ObCompactionDagRanker(
+    const int64_t rank_time,
+    common::ObDList<share::ObIDag> &ready_dag_list,
+    common::ObDList<share::ObIDag> &rank_dag_list);
   virtual ~ObCompactionDagRanker();
-  void destroy();
-  int init(const int64_t priority, const int64_t rank_time);
-  void update(const int64_t current_time, const ObCompactionParam &param);
-  bool is_valid() const { return is_inited_; }
-  int sort(common::ObSEArray<compaction::ObTabletMergeDag *, 32> &dags);
-  TO_STRING_KV(K_(rank_helper), K_(is_inited));
-private:
-  template<typename T>
-  int create_rank_helper(const int64_t rank_time, ObCompactionRankHelper *&helper);
+  // will move dags from rank dag list to ready dag list
+  int process(
+    const int64_t priority,
+    const int64_t batch_size,
+    const int64_t limits);
 
+  TO_STRING_KV(K_(rank_helper), K_(rank_dags), K_(fetch_co_dag_limit));
 private:
-  common::ObArenaAllocator allocator_;
+  int prepare_rank_dags_(const int64_t batch_size);
+  int sort_();
+  int move_dags_to_ready_dag_list_();
+private:
+  common::ObDList<share::ObIDag> &ready_dag_list_;
+  common::ObDList<share::ObIDag> &rank_dag_list_;
   ObCompactionRankHelper *rank_helper_;
-  bool is_inited_;
+  ObMiniCompactionRankHelper mini_helper_;   // about 64 bytes
+  ObMinorCompactionRankHelper minor_helper_; // about 64 bytes
+  ObMajorCompactionRankHelper major_helper_; // about 64 bytes
+  common::ObSEArray<compaction::ObTabletMergeDag *, 32> rank_dags_;
+  int64_t fetch_co_dag_limit_;
 };
 
 

@@ -223,6 +223,14 @@ private:
   DISALLOW_COPY_AND_ASSIGN(TestHALowDag);
 };
 
+class TestHAHighDag : public TestDag
+{
+public:
+  TestHAHighDag() : TestDag(ObDagType::DAG_TYPE_INITIAL_COMPLETE_MIGRATION) {}
+private:
+  DISALLOW_COPY_AND_ASSIGN(TestHAHighDag);
+};
+
 class TestCompMidDag : public TestDag
 {
 public:
@@ -895,7 +903,7 @@ TEST_F(TestDagScheduler, test_priority)
   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag2, mul_task));
   EXPECT_EQ(OB_SUCCESS, mul_task->init(1, concurrency, finish_flag[1]));
   EXPECT_EQ(OB_SUCCESS, dag2->add_task(*mul_task));
-  TestCompLowDag *dag3 = NULL;
+  TestHAHighDag *dag3 = NULL;
   EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag3));
   EXPECT_EQ(OB_SUCCESS, dag3->init(3));
   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag3, inc_task));
@@ -941,7 +949,6 @@ TEST_F(TestDagScheduler, test_priority)
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_HA_LOW));
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_DDL));
 
-  dag3->set_priority(ObDagPrio::DAG_PRIO_HA_HIGH);
   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag3));
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_HA_HIGH));
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_HA_LOW));

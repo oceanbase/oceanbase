@@ -1208,10 +1208,6 @@ public:
 
   void adapt_window_thread_cnt(); // only for DAG_PRIO_COMPACTION_LOW
 private:
-  OB_INLINE bool is_waiting_dag_type(ObDagType::ObDagTypeEnum dag_type)
-  { // will add into waiting dag list in add_dag() func
-    return false;
-  }
   OB_INLINE bool is_mini_compaction_dag(ObDagType::ObDagTypeEnum dag_type) const
   {
     return ObDagType::DAG_TYPE_MINI_MERGE == dag_type;
@@ -1224,7 +1220,8 @@ private:
   {
     return is_mini_compaction_dag(dag_type) ||
            is_minor_compaction_dag(dag_type) ||
-           ObDagType::DAG_TYPE_CO_MERGE_PREPARE == dag_type; // add co prepare dag to rank list first
+           ObDagType::DAG_TYPE_CO_MERGE_PREPARE == dag_type ||
+           ObDagType::DAG_TYPE_MAJOR_MERGE == dag_type;
   }
   OB_INLINE bool is_compaction_dag_prio() const
   {
@@ -1254,11 +1251,6 @@ private:
   int schedule_dag_(ObIDag &dag, bool &move_dag_to_waiting_list);
   int pop_task_from_ready_list_(ObITask *&task);
   int rank_compaction_dags_();
-  int batch_move_compaction_dags_(const int64_t batch_size);
-  bool check_need_compaction_rank_() const;
-  int do_rank_compaction_dags_(
-    const int64_t batch_size,
-    common::ObSEArray<compaction::ObTabletMergeDag *, 32> &rank_dags);
   int generate_next_dag_(ObIDag &dag);
   int finish_dag_(
     const ObIDag::ObDagStatus status,
