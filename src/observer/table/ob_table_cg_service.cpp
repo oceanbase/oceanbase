@@ -599,7 +599,7 @@ int ObTableExprCgService::replace_assign_column_ref_expr(ObTableCtx &ctx, ObRawE
  * 生成计算分区ID的表达式
  * @param ctx 表上下文
  * @param index_schema 索引schema
- * @param get_part_expr_for_assign 是否获取赋值表达式：
+ * @param get_part_expr_from_assign 是否获取赋值表达式：
  *                                 - true: 如果分区键被更新了，使用新值（赋值表达式）作为分区键
  *                                 - false: 使用原始列表达式作为分区键
  * @param expr 输出：计算分区ID的表达式
@@ -612,7 +612,7 @@ int ObTableExprCgService::replace_assign_column_ref_expr(ObTableCtx &ctx, ObRawE
  */
  int ObTableExprCgService::generate_calc_tablet_id_expr(ObTableCtx &ctx,
                                                         const ObTableSchema &index_schema,
-                                                        bool get_part_expr_for_assign,
+                                                        bool get_part_expr_from_assign,
                                                         ObRawExpr *&expr)
  {
   int ret = OB_SUCCESS;
@@ -627,15 +627,15 @@ int ObTableExprCgService::replace_assign_column_ref_expr(ObTableCtx &ctx, ObRawE
   } else if (part_level == ObPartitionLevel::PARTITION_LEVEL_ONE ||
              part_level == ObPartitionLevel::PARTITION_LEVEL_TWO) {
     const ObPartitionKeyInfo &partition_keys = index_schema.get_partition_key_info();
-    ObSEArray<ObRawExpr*, 4> part_keys_expr;
-    if (OB_FAIL(get_part_key_column_expr(ctx, partition_keys, get_part_expr_for_assign, part_keys_expr))) {
+    ObSEArray<std::pair<uint64_t, ObRawExpr*>, 4> part_keys_expr;
+    if (OB_FAIL(get_part_key_column_expr(ctx, partition_keys, get_part_expr_from_assign, part_keys_expr))) {
       LOG_WARN("fail to get part key column expr", K(ret));
     } else if (OB_FAIL(build_partition_expr(ctx, index_schema, part_keys_expr, false, part_expr))) {
       LOG_WARN("fail to build partition expr", K(ret));
     } else if (part_level == ObPartitionLevel::PARTITION_LEVEL_TWO) {
-      ObSEArray<ObRawExpr*, 4> subpart_keys_expr;
+      ObSEArray<std::pair<uint64_t, ObRawExpr*>, 4> subpart_keys_expr;
       const ObPartitionKeyInfo &subpartition_keys = index_schema.get_subpartition_key_info();
-      if (OB_FAIL(get_part_key_column_expr(ctx, subpartition_keys, get_part_expr_for_assign, subpart_keys_expr))) {
+      if (OB_FAIL(get_part_key_column_expr(ctx, subpartition_keys, get_part_expr_from_assign, subpart_keys_expr))) {
         LOG_WARN("fail to get sub part key column expr", K(ret));
       } else if (OB_FAIL(build_partition_expr(ctx, index_schema, subpart_keys_expr, true, subpart_expr))) {
         LOG_WARN("fail to build sub partition expr", K(ret));
@@ -662,23 +662,22 @@ int ObTableExprCgService::replace_assign_column_ref_expr(ObTableCtx &ctx, ObRawE
 }
 
 /**
- * 获取分区键列表达式
+ * 获取分区键列表达式（按 column_id 与 expr 的键值对输出，便于后续按列替换）
  * @param ctx 表上下文
  * @param partition_keys 分区键信息
- * @param get_part_expr_for_assign 是否获取赋值表达式
- * @param part_keys_expr 输出：分区键表达式数组
+ * @param get_part_expr_from_assign 是否获取赋值表达式
+ * @param part_keys_expr 输出：(column_id, ObRawExpr*) 键值对数组
  * @return 执行状态
  *
  * 关键逻辑：
  * 1. 检查分区键是否为生成的列（generated column）
  * 2. 全局索引只支持 SUBSTRING 表达式作为生成列分区键
- * 3. 如果 get_part_expr_for_assign=true，优先使用赋值表达式（更新后的值）
- * 4. 如果 ctx.is_inc_or_append()=true，则不使用assignment表达式，因为inc/append的assignment表达式是计算表达式
+ * 3. 若 get_part_expr_from_assign=true，优先使用赋值表达式（更新后的值）
  */
 int ObTableExprCgService::get_part_key_column_expr(ObTableCtx &ctx,
                                                    const ObPartitionKeyInfo &partition_keys,
-                                                   bool get_part_expr_for_assign,
-                                                   ObIArray<sql::ObRawExpr*> &part_keys_expr)
+                                                   bool get_part_expr_from_assign,
+                                                   ObIArray<std::pair<uint64_t, ObRawExpr*>> &part_keys_expr)
 {
   int ret = OB_SUCCESS;
   bool is_global_index_part_key = ctx.has_global_index();
@@ -689,7 +688,7 @@ int ObTableExprCgService::get_part_key_column_expr(ObTableCtx &ctx,
     ObRawExpr *part_key_expr = nullptr;
     if (OB_FAIL(partition_keys.get_column_id(i, column_id))) {
       LOG_WARN("fail to get column id", K(ret), K(i));
-    } else if (get_part_expr_for_assign && !ctx.is_inc_or_append() && OB_FAIL(ctx.get_assignment_by_column_id(column_id, assignment))) {
+    } else if (get_part_expr_from_assign && OB_FAIL(ctx.get_assignment_by_column_id(column_id, assignment))) {
       LOG_WARN("fail to get assignment by column id", K(ret), K(column_id), K(i));
     } else if (OB_NOT_NULL(assignment)) { // 分区键被更新了，使用新值（赋值表达式）
       // 当 update t set c1='new_value' where ... 且 c1 是分区键时，
@@ -714,6 +713,8 @@ int ObTableExprCgService::get_part_key_column_expr(ObTableCtx &ctx,
 
     if (OB_FAIL(ret)) {
       // do nothing
+    } else if (OB_NOT_NULL(assignment) && ctx.is_inc_or_append()) {
+      // do nothing, 允许inc/append的assignment表达式是计算表达式，inc 是ifnull(c1, 0) + c1_delta，append 是concat_ws('', c1, c1_delta)
     } else if (!part_key_expr->is_column_ref_expr()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("non-common column partition key is not supported", K(ret), K(column_id));
@@ -733,21 +734,21 @@ int ObTableExprCgService::get_part_key_column_expr(ObTableCtx &ctx,
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(part_keys_expr.push_back(part_key_expr))) {
-      LOG_WARN("fail to push back raw expr", K(ret));
+    } else if (OB_FAIL(part_keys_expr.push_back(std::pair<uint64_t, sql::ObRawExpr*>(column_id, part_key_expr)))) {
+      LOG_WARN("fail to push back part key expr", K(ret));
     }
   }
   return ret;
 }
 
 /*
-  generate partition expr
-  1. using ObDeleteResolver to build partition expr
-  2. replace the column ref expr in partition expr
-*/
+ * 生成分区表达式：先用 ObDeleteResolver 解析出分区表达式，再按 column_id 将其子表达式替换为 part_column_exprs 中对应的 expr。
+ * part_column_exprs 为 (column_id, ObRawExpr*) 键值对数组。
+ * 一般替换的是列引用表达式，特殊的像 Increment 和 Append 的 assignment 表达式是计算表达式，不是列引用表达式。
+ */
 int ObTableExprCgService::build_partition_expr(ObTableCtx &ctx,
                                                const ObTableSchema &table_schema,
-                                               const ObIArray<sql::ObRawExpr*> &part_column_exprs,
+                                               const ObIArray<std::pair<uint64_t, sql::ObRawExpr*>> &part_column_exprs,
                                                bool is_sub_part,
                                                sql::ObRawExpr *&partition_key_expr)
 {
@@ -803,7 +804,7 @@ int ObTableExprCgService::build_partition_expr(ObTableCtx &ctx,
     } // end smart_var
 
     if (OB_SUCC(ret)) {
-      // replace the column_ref_expr in part_expr:
+      // replace the expr in part_expr
       if (OB_FAIL(replace_column_ref_in_part_expr(part_column_exprs, partition_key_expr))) {
         LOG_WARN("fail to replace column ref in part expr", K(ret), K(part_type));
       } else if (OB_FAIL(partition_key_expr->formalize(&ctx.get_session_info()))) {
@@ -815,8 +816,12 @@ int ObTableExprCgService::build_partition_expr(ObTableCtx &ctx,
   return ret;
 }
 
-// replace the column_ref_expr in partition_key_expr with sepcified partition column_ref_expr
-int ObTableExprCgService::replace_column_ref_in_part_expr(const ObIArray<sql::ObRawExpr*> &part_column_exprs,
+/*
+ * 将 partition_key_expr 中的列引用按 column_id 替换为 part_column_exprs 中对应的表达式。
+ * part_column_exprs 为 (column_id, ObRawExpr*)；若目标为 generated column 则用 dependant_expr 替换。
+ * 这里 replace 的表达式不一定是列引用表达式，也可能是计算表达式，比如 Increment 和 Append 的 assignment 表达式。
+ */
+int ObTableExprCgService::replace_column_ref_in_part_expr(const ObIArray<std::pair<uint64_t, sql::ObRawExpr*>> &part_column_exprs,
                                                           sql::ObRawExpr *&partition_key_expr)
 {
   int ret = OB_SUCCESS;
@@ -825,64 +830,70 @@ int ObTableExprCgService::replace_column_ref_in_part_expr(const ObIArray<sql::Ob
     LOG_WARN("partition_key_expr is NULL", K(ret));
   } else if (partition_key_expr->is_column_ref_expr()) {
     ObColumnRefRawExpr *column_ref = static_cast<ObColumnRefRawExpr*>(partition_key_expr);
-    ObColumnRefRawExpr *dst_column_ref = nullptr;
-    if (part_column_exprs.count() != 1) {
+    uint64_t column_id = column_ref->get_column_id();
+    ObRawExpr *dst_expr = nullptr;
+    bool found = false;
+    for (int64_t i = 0; !found && i < part_column_exprs.count(); i++) {
+      if (part_column_exprs.at(i).first == column_id) {
+        dst_expr = part_column_exprs.at(i).second;
+        found = true;
+      }
+    }
+    if (!found || OB_ISNULL(dst_expr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("partition key count is not 1", K(ret), K(part_column_exprs.count()));
-    } else if (OB_ISNULL(part_column_exprs.at(0)) || !part_column_exprs.at(0)->is_column_ref_expr()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("part column expr is NULL or not a column ref", K(ret), K(part_column_exprs.at(0)));
-    } else if (FALSE_IT(dst_column_ref = static_cast<ObColumnRefRawExpr *>(part_column_exprs.at(0)))) {
-    } else if (column_ref->get_column_id() != dst_column_ref->get_column_id()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column id is not match", K(ret), K(column_ref->get_column_id()), K(dst_column_ref->get_column_id()));
+      LOG_WARN("part column expr not found by column_id", K(ret), K(column_id), K(part_column_exprs.count()));
     } else {
-      ObRawExpr *real_dest_col = dst_column_ref;
-      // for generated col, the calculate expr may stored in dependant_expr,
-      //  should replaced with calculate expr instead of column ref expr
-      if (OB_NOT_NULL(dst_column_ref->get_dependant_expr())
-          && dst_column_ref->is_generated_column()) {
-        real_dest_col = dst_column_ref->get_dependant_expr();
+      ObRawExpr *real_dest_col = dst_expr;
+      if (dst_expr->is_column_ref_expr()) {
+        ObColumnRefRawExpr *dst_column_ref = static_cast<ObColumnRefRawExpr *>(dst_expr);
+        if (OB_NOT_NULL(dst_column_ref->get_dependant_expr())
+            && dst_column_ref->is_generated_column()) {
+          real_dest_col = dst_column_ref->get_dependant_expr();
+        }
       }
       if (OB_FAIL(ObRawExprUtils::replace_ref_column(partition_key_expr,
-                                                      column_ref,
-                                                      real_dest_col))) {
+                                                     column_ref,
+                                                     real_dest_col))) {
         LOG_WARN("fail to replace column ref expr", K(ret));
       }
     }
   } else {
-    for (int64_t i = 0 ; OB_SUCC(ret) && i < partition_key_expr->get_param_count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_key_expr->get_param_count(); i++) {
       ObRawExpr *sub_expr = partition_key_expr->get_param_expr(i);
       if (OB_ISNULL(sub_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sub_expr should not be null", K(ret));
       } else if (sub_expr->is_column_ref_expr()) {
-        bool found = false;
         ObColumnRefRawExpr *src_column_ref = static_cast<ObColumnRefRawExpr*>(sub_expr);
-        for (int64_t j = 0; OB_SUCC(ret) && !found && j < part_column_exprs.count(); j++) {
-          ObColumnRefRawExpr *dst_column_ref = nullptr;
-          if (OB_ISNULL(part_column_exprs.at(j)) || !part_column_exprs.at(j)->is_column_ref_expr()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("part column expr is NULL or not a column ref", K(ret), KPC(part_column_exprs.at(j)));
-          } else if (FALSE_IT(dst_column_ref = static_cast<ObColumnRefRawExpr *>(part_column_exprs.at(j)))) {
-          } else if (src_column_ref->get_column_id() == dst_column_ref->get_column_id()) {
+        uint64_t column_id = src_column_ref->get_column_id();
+        ObRawExpr *dst_expr = nullptr;
+        bool found = false;
+        for (int64_t j = 0; !found && j < part_column_exprs.count(); j++) {
+          if (part_column_exprs.at(j).first == column_id) {
+            dst_expr = part_column_exprs.at(j).second;
             found = true;
-            ObRawExpr *real_dest_col = dst_column_ref;
-            // for generated col, the calculate expr may stored in dependant_expr
-            //  should replaced with calculate expr instead of column ref expr
+          }
+        }
+        if (!found || OB_ISNULL(dst_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("part column expr not found by column_id", K(ret), K(column_id), K(i));
+        } else {
+          ObRawExpr *real_dest_col = dst_expr;
+          if (dst_expr->is_column_ref_expr()) {
+            ObColumnRefRawExpr *dst_column_ref = static_cast<ObColumnRefRawExpr *>(dst_expr);
             if (OB_NOT_NULL(dst_column_ref->get_dependant_expr())
                 && dst_column_ref->is_generated_column()) {
               real_dest_col = dst_column_ref->get_dependant_expr();
             }
-            if (OB_FAIL(ObRawExprUtils::replace_ref_column(partition_key_expr,
-                                                            src_column_ref,
-                                                            real_dest_col))) {
-              LOG_WARN("fail to replace column ref expr", K(ret), K(i), K(j), K(src_column_ref->get_column_id()));
-            }
           }
-        } // end for
+          if (OB_FAIL(ObRawExprUtils::replace_ref_column(partition_key_expr,
+                                                          src_column_ref,
+                                                          real_dest_col))) {
+            LOG_WARN("fail to replace column ref expr", K(ret), K(i), K(column_id));
+          }
+        }
       }
-    } // end for
+    }
   }
   return ret;
 }

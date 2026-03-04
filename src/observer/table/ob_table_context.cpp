@@ -2203,6 +2203,10 @@ int ObTableCtx::init_index_info(const ObString &index_name, const uint64_t arg_t
               ret = OB_SCHEMA_ERROR;
               LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
             }
+          } else if (is_weak_read_) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("global index scan with weak read is not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "global index scan with weak read");
           }
         }
       }
