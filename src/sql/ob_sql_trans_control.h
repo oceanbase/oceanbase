@@ -176,6 +176,8 @@ public:
                                     bool reuse_tx_desc = false,
                                     bool active_tx_end = true,
                                     const uint64_t data_version = 0);
+
+  static void process_cursor_when_end_trans(ObSQLSessionInfo *session, int64_t tx_id);
   static int create_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int release_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int explicit_start_trans(ObExecContext &exec_ctx, const bool read_only, const ObString hint = ObString());
