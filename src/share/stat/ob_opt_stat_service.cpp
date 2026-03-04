@@ -455,7 +455,7 @@ int ObOptStatService::get_table_rowcnt(const uint64_t tenant_id,
           }
         }
         LOG_TRACE("cache stat compare", KPC(handle.stat_), K(tablet_stat));
-        if (handle.stat_->get_row_count() < tablet_stat.insert_row_cnt_ - tablet_stat.delete_row_cnt_) {
+        if ((tablet_stat.insert_row_cnt_ >= tablet_stat.delete_row_cnt_) && (handle.stat_->get_row_count() < tablet_stat.insert_row_cnt_ - tablet_stat.delete_row_cnt_)) {
           if (OB_FAIL(reload_tablet_ids.push_back(all_tablet_ids.at(i))) ||
               OB_FAIL(reload_ls_ids.push_back(all_ls_ids.at(i)))) {
             LOG_WARN("failed to push back", K(ret));
