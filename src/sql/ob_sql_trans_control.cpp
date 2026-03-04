@@ -1000,9 +1000,12 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
                                             ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
+  ObExecContext *parent_ctx = exec_ctx.get_parent_ctx();
   ObConsistencyLevel cl = plan_ctx->get_consistency_level();
   ObTxReadSnapshot &snapshot = das_ctx.get_snapshot();
   bool can_plain_insert = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  bool enable_foreign_key_gts_opt = tenant_config.is_valid() ? tenant_config->_enable_foreign_key_gts_opt : false;
   if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN
       || session->get_tx_desc()->get_tx_consistency_type()
              == ObTxConsistencyType::BOUNDED_STALENESS_READ) {
@@ -1026,6 +1029,19 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     snapshot.init_none_read();
     snapshot.core_.tx_id_ = tx_desc.get_tx_id();
     snapshot.core_.scn_ = tx_desc.get_tx_seq();
+  } else if (enable_foreign_key_gts_opt &&
+             ObSQLUtils::is_fk_nested_sql(&exec_ctx) &&
+             nullptr != parent_ctx &&
+             parent_ctx->get_das_ctx().get_snapshot().is_valid()) {
+    if (OB_ISNULL(session) || OB_ISNULL(session->get_tx_desc())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret), KP(session), KP(session->get_tx_desc()));
+    } else if (OB_FAIL(snapshot.assign(parent_ctx->get_das_ctx().get_snapshot()))) {
+      LOG_WARN("assign snapshot failed", K(ret));
+    } else {
+      snapshot.core_.scn_ = session->get_tx_desc()->get_tx_seq();
+      LOG_TRACE("assign snapshot from parent context", K(ret), K(snapshot));
+    }
   } else {
     ObTxDesc &tx_desc = *session->get_tx_desc();
     int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
@@ -1097,10 +1113,15 @@ int ObSqlTransControl::set_fk_check_snapshot(ObExecContext &exec_ctx)
   ObDASCtx &das_ctx = DAS_CTX(exec_ctx);
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx);
   const ObPhysicalPlan *plan = plan_ctx->get_phy_plan();
-  // insert stmt does not set snapshot by default, set snapshopt for foreign key check induced by insert heres
-  if (plan->is_plain_insert()) {
+  ObTxReadSnapshot &snapshot = das_ctx.get_snapshot();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  bool enable_foreign_key_gts_opt = tenant_config.is_valid() ? tenant_config->_enable_foreign_key_gts_opt : false;
+  // insert stmt does not set snapshot by default, set snapshot for foreign key check induced by insert here.
+  // 1. If snapshot is already acquired (is_none_read() is false), which means it is acquired in stmt_setup_snapshot_
+  //    (e.g. serial execution caused by foreign key) or previous fk check, we should skip acquiring it again.
+  // 2. For multiple foreign keys, snapshot is acquired only once.
+  if (plan->is_plain_insert() && (!enable_foreign_key_gts_opt || snapshot.is_none_read())) {
     ObTransService *txs = NULL;
-    ObTxReadSnapshot &snapshot = das_ctx.get_snapshot();
     ObTxDesc &tx_desc = *session->get_tx_desc();
     int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
     share::ObLSID local_ls_id;
@@ -1127,6 +1148,8 @@ int ObSqlTransControl::set_fk_check_snapshot(ObExecContext &exec_ctx)
         LOG_WARN("fail to get snapshot", K(ret), K(local_ls_id), KPC(session));
       }
     }
+  } else {
+    LOG_TRACE("skip fk check snapshot", K(plan->is_plain_insert()), K(enable_foreign_key_gts_opt), K(snapshot.is_none_read()));
   }
   return ret;
 }

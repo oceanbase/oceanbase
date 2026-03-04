@@ -3205,6 +3205,10 @@ DEF_BOOL(_enable_direct_load_hidden_table_partition_pruning, OB_TENANT_PARAMETER
         "Enable or disable hidden table partition pruning for direct load.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_foreign_key_gts_opt, OB_TENANT_PARAMETER, "False",
+        "Enable or disable foreign key gts optimization",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_nested_sql_local_optimize, OB_TENANT_PARAMETER, "False",
          "enable or disable nested sql use local plan first",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
