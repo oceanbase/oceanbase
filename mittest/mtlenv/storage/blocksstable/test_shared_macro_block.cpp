@@ -18,6 +18,7 @@
 #define protected public
 #define private public
 #include "ob_index_block_data_prepare.h"
+#include "share/ob_io_device_helper.h"
 
 namespace oceanbase
 {
@@ -159,6 +160,7 @@ TEST_F(TestSharedMacroBlk, test_invalid_write)
   read_info.offset_ = block_info.nested_offset_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   ObMacroBlockHandle read_handle;
+  ASSERT_EQ(OB_SUCCESS, THE_IO_DEVICE->fsync_block());
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::read_block(read_info, read_handle));
   MEMCMP(read_handle.get_buffer(), buf, BUF_SIZE);
 }

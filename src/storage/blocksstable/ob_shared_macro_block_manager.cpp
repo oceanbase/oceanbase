@@ -17,6 +17,8 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "share/ob_force_print_log.h"
+#include "share/ob_io_device_helper.h"
+#include "share/ob_occam_time_guard.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "share/ob_force_print_log.h"
 #include "storage/blocksstable/ob_imicro_block_writer.h"
@@ -272,6 +274,7 @@ int ObSharedMacroBlockMgr::write_block(
   const int64_t offset,
   const int64_t size)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   ObMacroBlockReadInfo read_info;
   read_info.macro_block_id_ = macro_id;
@@ -283,7 +286,9 @@ int ObSharedMacroBlockMgr::write_block(
   ObMacroBlockHandle read_handle;
   ObSSTableMacroBlockChecker macro_block_checker;
 
-  if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
+  if (CLICK_FAIL(THE_IO_DEVICE->fsync_block())) {
+    LOG_WARN("fail to fsync block before async read", K(ret), K(read_info));
+  } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
     LOG_WARN("fail to async read macro block", K(ret), K(read_info));
   } else if (OB_FAIL(read_handle.wait(io_timeout_ms))) {
     LOG_WARN("fail to wait io finish", K(ret), K(io_timeout_ms));

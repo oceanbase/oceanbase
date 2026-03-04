@@ -19,6 +19,8 @@
 #include "share/schema/ob_column_schema.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_encryption_util.h"
+#include "share/ob_io_device_helper.h"
+#include "share/ob_occam_time_guard.h"
 #include "storage/ob_storage_struct.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
@@ -864,10 +866,12 @@ int ObSSTableIndexBuilder::check_and_rewrite_sstable(ObSSTableMergeRes &res)
 
 int ObSSTableIndexBuilder::rewrite_small_sstable(ObSSTableMergeRes &res)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   ObBlockInfo block_info;
   ObMacroBlockHandle read_handle;
   const ObDataMacroBlockMeta &macro_meta = *(roots_[0]->macro_metas_->at(0));
+  ObSSTableMacroBlockHeader macro_header;
   ObMacroBlockReadInfo read_info;
   read_info.macro_block_id_ = macro_meta.val_.macro_id_;
   read_info.offset_ = 0;
@@ -876,10 +880,14 @@ int ObSSTableIndexBuilder::rewrite_small_sstable(ObSSTableMergeRes &res)
   read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
   const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
 
-  if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
+  if (CLICK_FAIL(THE_IO_DEVICE->fsync_block())) {
+    STORAGE_LOG(WARN, "fail to fsync block before async read", K(ret), K(read_info));
+  } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
     STORAGE_LOG(WARN, "fail to async read macro block", K(ret), K(read_info), K(macro_meta), K(roots_[0]->last_macro_size_));
   } else if (OB_FAIL(read_handle.wait(io_timeout_ms))) {
     STORAGE_LOG(WARN, "fail to wait io finish", K(ret), K(io_timeout_ms));
+  } else if (CLICK_FAIL(parse_macro_header(read_handle.get_buffer(), read_handle.get_data_size(), macro_header))) {
+    STORAGE_LOG(WARN, "fail to parse macro header", K(ret), K(read_info));
   } else {
     ObSharedMacroBlockMgr *shared_block_mgr = MTL(ObSharedMacroBlockMgr*);
     if (OB_FAIL(shared_block_mgr->write_block(
@@ -951,6 +959,7 @@ int ObSSTableIndexBuilder::load_single_macro_block(
     ObMacroBlockHandle &read_handle,
     ObSSTableMacroBlockHeader &macro_header)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   ObMacroBlockReadInfo read_info;
   read_info.macro_block_id_ = macro_meta.val_.macro_id_;
@@ -960,7 +969,9 @@ int ObSSTableIndexBuilder::load_single_macro_block(
   read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
   const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
 
-  if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
+  if (CLICK_FAIL(THE_IO_DEVICE->fsync_block())) {
+    STORAGE_LOG(WARN, "fail to fsync block before async read", K(ret), K(read_info));
+  } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
     STORAGE_LOG(WARN, "fail to async read macro block", K(ret), K(read_info), K(macro_meta));
   } else if (OB_FAIL(read_handle.wait(io_timeout_ms))) {
     STORAGE_LOG(WARN, "fail to wait io finish", K(ret), K(io_timeout_ms));
