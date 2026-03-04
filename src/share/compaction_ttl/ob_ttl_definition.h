@@ -98,6 +98,26 @@ public:
   {
   }
 
+  OB_INLINE int init(const uint64_t tenant_data_version,
+                     const ObTTLDefinition::ObTTLType ttl_type,
+                     const TTLColumnType ttl_column_type)
+  {
+    int ret = OB_SUCCESS;
+
+    reset();
+
+    if (tenant_data_version < DATA_VERSION_4_5_1_0) {
+      version_ = TTL_FLAG_VERSION_V1;
+    } else {
+      version_ = TTL_FLAG_VERSION_V2;
+      ttl_type_ = ttl_type;
+      ttl_column_type_ = ttl_column_type;
+      was_compaction_ttl_ = ttl_type == ObTTLDefinition::COMPACTION;
+    }
+
+    return ret;
+  }
+
   OB_INLINE bool is_valid(const uint64_t tenant_data_version = UINT64_MAX) const
   {
     bool bool_ret = true;
@@ -132,8 +152,9 @@ public:
 
   OB_INLINE void update_being_scn_ttl_time(const int64_t being_scn_ttl_time)
   {
-    version_ = MAX(version_, TTL_FLAG_VERSION_V2);
-    being_scn_ttl_time_us_ = MAX(being_scn_ttl_time_us_, being_scn_ttl_time);
+    if (version_ >= TTL_FLAG_VERSION_V2) {
+      being_scn_ttl_time_us_ = MAX(being_scn_ttl_time_us_, being_scn_ttl_time);
+    }
   }
 
   OB_INLINE void fuse(const ObTTLFlag &other)
