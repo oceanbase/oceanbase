@@ -140,6 +140,7 @@ public:
   static int eval_cast_multiset(const sql::ObExpr &expr,
                                 sql::ObEvalCtx &ctx,
                                 sql::ObDatum &res_datum);
+
   static int get_cast_type(const bool enable_decimal_int,
                            const ObExprResType &param_type2,
                            const ObCastMode cast_mode,
@@ -184,7 +185,7 @@ private:
                                   ObSubQueryIterator *subquery_iter);
   int adjust_udt_cast_type(const ObExprResType &src_type, ObExprResType &dst_type, ObExprTypeCtx &type_ctx) const;
 
-private:
+public:
   int get_cast_string_len(ObExprResType &type1,
                           ObExprResType &type2,
                           common::ObExprTypeCtx &type_ctx,
@@ -192,6 +193,7 @@ private:
                           int16_t &length_semantics,
                           common::ObCollationType conn,
                           common::ObCastMode cast_mode) const;
+private:
   int get_cast_inttc_len(ObExprResType &type1,
                          ObExprResType &type2,
                          common::ObExprTypeCtx &type_ctx,
