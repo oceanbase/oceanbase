@@ -726,11 +726,11 @@ void ObBinlogRecordPrinter::console_print_begin(IBinlogRecord *br, ObLogBR *oblo
   if (NULL != br && NULL != oblog_br) {
     int64_t delta = ObTimeUtility::current_time() - get_precise_timestamp(*br);
     double delay_sec = static_cast<double>(delta) / 1000000.0;
-    int64_t timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
+    int64_t nano_timestamp = br->getTimestamp() * 1000000000 + br->getNanoTimestamp();
     int64_t filter_rv_count = 0;
     BinlogRecordImpl *filter_rv_impl = static_cast<BinlogRecordImpl *>(br);
     const binlogBuf *filter_rv = filter_rv_impl->filterValues((unsigned int &) filter_rv_count);
-    LOG_STD("BEGIN  TM=[%ld] DELAY=[%.3lf sec] ORG_CLUSTER_ID=%u ", timestamp_usec, delay_sec, br->getThreadId());
+    LOG_STD("BEGIN  TM=[%ld] DELAY=[%.3lf sec] ORG_CLUSTER_ID=%u ", nano_timestamp, delay_sec, br->getThreadId());
     // The forth slot is major_version
     int32_t major_version;
     if (OB_FAIL(parse_major_version_(filter_rv, major_version))) {
@@ -748,9 +748,8 @@ void ObBinlogRecordPrinter::console_print_commit(IBinlogRecord *br, ObLogBR *obl
   if (NULL != br && NULL != oblog_br) {
     int64_t delta = ObTimeUtility::current_time() - get_precise_timestamp(*br);
     double delay_sec = static_cast<double>(delta) / 1000000.0;
-    int64_t timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
-
-    LOG_STD("\nCOMMIT  TM=[%ld] DELAY=[%.3lf sec]\n\n", timestamp_usec, delay_sec);
+    int64_t nano_timestamp = br->getTimestamp() * 1000000000 + br->getNanoTimestamp();
+    LOG_STD("\nCOMMIT  TM=[%ld] DELAY=[%.3lf sec]\n\n", nano_timestamp, delay_sec);
   }
 }
 
@@ -786,13 +785,13 @@ void ObBinlogRecordPrinter::console_print_statements(IBinlogRecord *br, ObLogBR 
     int64_t delta = ObTimeUtility::current_time() - get_precise_timestamp(*br);
     double delay_sec = static_cast<double>(delta) / 1000000.0;
     int64_t timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
-
+    int64_t nano_timestamp = br->getTimestamp() * 1000000000 + br->getNanoTimestamp();
     const char *padding = (EDDL == br->recordType() ? "" : "  ");
 
     LOG_STD("%s[%s] DB=[%s] TB=[%s] TM=[%ld] CHKP=[%s] DELAY=[%.3lf sec] SRC_CAT=[%s] TRACE_ID=[%.*s](%d)\n"
         "%s  UNIQUE_ID=[%.*s](%d)\n",
         padding, print_record_type(br->recordType()), br->dbname(), br->tbname(),
-        timestamp_usec, br->getCheckpoint(), delay_sec, print_src_category(br->getSrcCategory()),
+        nano_timestamp, br->getCheckpoint(), delay_sec, print_src_category(br->getSrcCategory()),
         trace_id.length(), trace_id.ptr(), trace_id.length(),
         padding, unique_id.length(), unique_id.ptr(), unique_id.length());
 

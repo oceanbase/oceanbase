@@ -184,10 +184,13 @@ int ObLogBR::init_data(const RecordType type,
     data_->setThreadId(static_cast<uint32_t>(cluster_id));
     // set trans commit timestamp (second)
     int64_t commit_version_usec = commit_version / NS_CONVERSION;
+    uint64_t commit_version_nano = commit_version % (NS_CONVERSION * _SEC_);
     data_->setTimestamp(commit_version_usec / 1000000);
     // set trans commit timestamp (microsecond)
     // note: combine getTimestamp() and getRecordUsec() as complete trans commit timestamp
     data_->setRecordUsec(static_cast<uint32_t>(commit_version_usec % 1000000));
+    // set nano_part of commit_version, and get the nano part via getNanoTiemstamp API
+    data_->setNanoTimestamp(commit_version_nano);
 
     // won't use this field
     data_->putFilterRuleVal("0", 1);
