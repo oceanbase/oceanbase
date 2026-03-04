@@ -11793,7 +11793,8 @@ OB_SERIALIZE_MEMBER(ObSequenceSchema,
                     name_,
                     option_,
                     is_system_generated_,
-                    dblink_id_);
+                    dblink_id_,
+                    remote_db_name_);
 
 ObSequenceSchema::ObSequenceSchema()
   : ObSchema()
@@ -11835,6 +11836,8 @@ int ObSequenceSchema::assign(const ObSequenceSchema &src_schema)
       LOG_WARN("fail assign option", K(src_schema));
     } else if (OB_FAIL(set_sequence_name(src_schema.name_))) {
       LOG_WARN("fail set seq name", K(src_schema));
+    } else if (OB_FAIL(set_remote_database_name(src_schema.remote_db_name_))) {
+      LOG_WARN("fail set remote db name", K(ret));
     }
   }
   return ret;
@@ -11860,6 +11863,7 @@ void ObSequenceSchema::reset()
   reset_string(name_);
   option_.reset();
   dblink_id_ = OB_INVALID_ID;
+  reset_string(remote_db_name_);
 }
 
 int64_t ObSequenceSchema::get_convert_size() const

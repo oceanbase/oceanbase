@@ -16,6 +16,7 @@
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "observer/ob_server.h"
+#include "share/schema/ob_dblink_sql_service.h"
 
 namespace oceanbase
 {
@@ -4703,7 +4704,7 @@ int ObMultiVersionSchemaService::fetch_link_table_schema(const ObDbLinkSchema *d
   if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service is NULL", K(ret));
-  } else if (OB_FAIL(schema_service_->get_link_table_schema(dblink_schema,
+  } else if (OB_FAIL(schema_service_->get_dblink_sql_service().get_link_table_schema(dblink_schema,
                                                             database_name, table_name,
                                                             allocator, table_schema,
                                                             session_info,
