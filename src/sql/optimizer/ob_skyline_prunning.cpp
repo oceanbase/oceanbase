@@ -59,8 +59,8 @@ int ObInterestOrderDim::compare(const ObSkylineDim &other, CompareStat &status) 
     const ObInterestOrderDim &tmp = static_cast<const ObInterestOrderDim &>(other);
     if (is_interesting_order_ && tmp.is_interesting_order_) {
       KeyPrefixComp comp;
-      if (OB_FAIL(comp(column_ids_, const_column_info_, column_cnt_,
-                       tmp.column_ids_, tmp.const_column_info_, tmp.column_cnt_))) {
+      if (OB_FAIL(comp(column_ids_, column_cnt_,
+                       tmp.column_ids_, tmp.column_cnt_))) {
         LOG_WARN("compare key prefix failed", K(ret), K(*this), K(other));
       } else {
         status = comp.get_result();
@@ -92,22 +92,6 @@ int ObInterestOrderDim::add_interest_prefix_ids(const common::ObIArray<uint64_t>
   return ret;
 }
 
-int ObInterestOrderDim::add_const_column_info(const common::ObIArray<bool> &const_column_info)
-{
-  int ret = OB_SUCCESS;
-  if (const_column_info.count() > OB_MAX_ROWKEY_COLUMN_NUMBER) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("too many rowkey ids", K(ret), K(const_column_info.count()));
-  } else {
-    MEMSET(const_column_info_, 0, sizeof(bool) * OB_MAX_ROWKEY_COLUMN_NUMBER);
-    for (int i= 0; OB_SUCC(ret) && i < const_column_info.count(); i++) {
-      const_column_info_[i] = const_column_info.at(i);
-    }
-    column_cnt_ = const_column_info.count();
-  }
-  return ret;
-}
-
 /*
  * 比较left 和right之间的关系, id按索引列的顺序排序
  * [16] RIGHT_DOMINATED [16, 17]
@@ -115,12 +99,12 @@ int ObInterestOrderDim::add_const_column_info(const common::ObIArray<bool> &cons
  * [16, 17] UNCOMPARABLE [17, 16]
  * [16, 18] EQUAL [16, 18]
  * */
-int KeyPrefixComp::operator()(const uint64_t *left, const bool *left_const,
-                              const int64_t left_cnt, const uint64_t *right,
-                              const bool *right_const, const int64_t right_cnt)
+int KeyPrefixComp::operator()(const uint64_t *left, const int64_t left_cnt,
+                              const uint64_t *right, const int64_t right_cnt)
 {
   int ret = OB_SUCCESS;
-  if (left_cnt < 0 || right_cnt < 0) {
+
+  if (OB_UNLIKELY(left_cnt < 0) || OB_UNLIKELY(right_cnt < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(left_cnt), K(right_cnt), K(ret));
   } else if (0 == left_cnt && 0 == right_cnt) {
@@ -132,13 +116,13 @@ int KeyPrefixComp::operator()(const uint64_t *left, const bool *left_const,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ptr should not be null", K(ret), K(left), K(right));
   } else if (left_cnt <= right_cnt) {
-    if (OB_FAIL(do_compare(left, left_cnt, right, right_const, right_cnt, status_))) {
+    if (OB_FAIL(do_compare(left, left_cnt, right, right_cnt, status_))) {
       LOG_WARN("compare key prefix failed", K(ret));
     }
   } else {
     //reverse
     ObSkylineDim::CompareStat tmp = ObSkylineDim::UNCOMPARABLE;
-    if (OB_FAIL(do_compare(right, right_cnt, left, left_const, left_cnt, tmp))) {
+    if (OB_FAIL(do_compare(right, right_cnt, left, left_cnt, tmp))) {
       LOG_WARN("compare key prefix failed", K(ret));
     } else {
       if (ObSkylineDim::RIGHT_DOMINATED == tmp) {
@@ -152,8 +136,8 @@ int KeyPrefixComp::operator()(const uint64_t *left, const bool *left_const,
 }
 
 int KeyPrefixComp::do_compare(const uint64_t *left, const int64_t left_cnt,
-                              const uint64_t *right, const bool *right_const,
-                              const int64_t right_cnt, ObSkylineDim::CompareStat &status)
+                              const uint64_t *right, const int64_t right_cnt,
+                              ObSkylineDim::CompareStat &status)
 {
   int ret = OB_SUCCESS;
   if (left_cnt > right_cnt) {
@@ -162,19 +146,15 @@ int KeyPrefixComp::do_compare(const uint64_t *left, const int64_t left_cnt,
   } else {
     status = ObSkylineDim::EQUAL;
     int i = 0;
-    int j = 0;
-    while (i < left_cnt && j < right_cnt && ObSkylineDim::EQUAL == status) {
-      if (left[i] == right[j]) {
+    while (i < left_cnt && ObSkylineDim::EQUAL == status) {
+      if (left[i] == right[i]) {
         i++;
-        j++;
-      } else if (right_const[j]) {
-        j++;
       } else {
         status = ObSkylineDim::UNCOMPARABLE;
       }
     }
     if (ObSkylineDim::EQUAL == status) {
-      if (i < left_cnt && j >= right_cnt) {
+      if (i < left_cnt) {
         status = ObSkylineDim::UNCOMPARABLE;
       } else if (left_cnt < right_cnt) {
         status = ObSkylineDim::RIGHT_DOMINATED;
@@ -492,19 +472,30 @@ int ObIndexSkylineDim::add_interesting_order_dim(const ObIArray<uint64_t> &inter
 {
   int ret = OB_SUCCESS;
   ObInterestOrderDim *dim = NULL;
-  if (OB_FAIL(ObSkylineDimFactory::get_instance().create_skyline_dim(allocator, dim))) {
+  if (OB_UNLIKELY(interest_column_ids.count() != const_column_info.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("interest_column_ids and const_column_info should have the same count",
+             K(ret), K(interest_column_ids.count()), K(const_column_info.count()));
+  } else if (OB_FAIL(ObSkylineDimFactory::get_instance().create_skyline_dim(allocator, dim))) {
     LOG_WARN("failed to create interesting_order dimension", K(ret));
   } else if (OB_ISNULL(dim)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to create dimension", K(ret));
   } else {
+    // filter out const columns before adding interest prefix ids
+    ObSEArray<uint64_t, 8> filtered_column_ids;
+    for (int64_t i = 0; OB_SUCC(ret) && i < interest_column_ids.count(); ++i) {
+      if (!const_column_info.at(i)) {
+        if (OB_FAIL(filtered_column_ids.push_back(interest_column_ids.at(i)))) {
+          LOG_WARN("failed to push back column id", K(ret));
+        }
+      }
+    }
     if (OB_SUCC(ret)) {
-      if (interest_column_ids.count() > 0) {
+      if (filtered_column_ids.count() > 0) {
         dim->set_interesting_order(true);
-        if (OB_FAIL(dim->add_interest_prefix_ids(interest_column_ids))) {
+        if (OB_FAIL(dim->add_interest_prefix_ids(filtered_column_ids))) {
           LOG_WARN("failed to add interest prefix id", K(ret));
-        } else if (OB_FAIL(dim->add_const_column_info(const_column_info))) {
-          LOG_WARN("failed to add const column info", K(ret));
         }
       } else {
         dim->set_interesting_order(false);
