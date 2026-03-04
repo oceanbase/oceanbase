@@ -1780,7 +1780,8 @@ TEST_F(TestSSMicroCache, test_parallel_clear_micro_cache)
   IGNORE_RETURN micro_cache->clear_micro_cache();//2025-05-26 15:17:15.841926
 
   // check micro meta
-  ASSERT_EQ(0, micro_cache->flying_req_cnt_);
+  ASSERT_EQ(0, micro_cache->flying_add_req_cnt_);
+  ASSERT_EQ(0, micro_cache->flying_get_req_cnt_);
   ASSERT_LE(0, micro_key_map.size());
   for (auto iter = micro_key_map.begin(); iter != micro_key_map.end(); ++iter) {
     ObSSMicroBlockMetaHandle micro_meta_handle;
@@ -1880,6 +1881,204 @@ TEST_F(TestSSMicroCache, test_parallel_clear_micro_cache)
   ASSERT_LT(0, phy_blk_mgr.get_data_block_used_cnt());
   ASSERT_EQ(false, phy_blk_mgr.free_bitmap_->is_all_true());
   FLOG_INFO("TEST_CASE: finish test_parallel_clear_micro_cache");
+}
+
+TEST_F(TestSSMicroCache, test_add_and_get_seperated_control)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_add_and_get_seperated_control");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  ObSSMicroMetaManager *micro_meta_mgr = &(micro_cache->micro_meta_mgr_);
+  ASSERT_NE(nullptr, micro_meta_mgr);
+  ObSSARCInfo &arc_info = micro_meta_mgr->arc_info_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSMicroCacheMicroStat &micro_stat = cache_stat.micro_stat_;
+
+  ASSERT_FALSE(micro_cache->is_stopped_);
+  ASSERT_TRUE(micro_cache->is_enabled_);
+  ASSERT_TRUE(micro_cache->enable_calibration_);
+  const int64_t micro_cnt = 1000;
+  const int64_t micro_size = 8 * 1024; // 8KB
+  const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(2026);
+
+  // Step 1: Enable add and get
+  ASSERT_TRUE(micro_cache->is_write_allowed());
+  ASSERT_TRUE(micro_cache->is_read_allowed());
+  ObArray<ObSSMicroBlockCacheKey> micro_key_arr;
+  // Add 1000 micro_blocks, expect return OB_SUCCESS
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    const int64_t offset = (i + 1) * 100;
+    const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    char data_buf[micro_size];
+    MEMSET(data_buf, 'c', micro_size);
+    ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(
+              micro_key, data_buf, micro_size, macro_id.second_id()/*effective_tablet_id*/,
+              ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+    ASSERT_EQ(OB_SUCCESS, micro_key_arr.push_back(micro_key));
+  }
+  ASSERT_EQ(micro_cnt, micro_key_arr.count());
+  // Read 1000 micro_blocks, expect return OB_SUCCESS and get data
+  ObArenaAllocator allocator;
+  char *read_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, read_buf);
+  ObIOInfo io_info;
+  for (int64_t i = 0; i < micro_key_arr.count(); ++i) {
+    io_info.reset();
+    set_basic_read_io_info(io_info);
+    io_info.buf_ = read_buf;
+    io_info.user_data_buf_ = read_buf;
+    io_info.callback_ = nullptr;
+    const ObSSMicroBlockCacheKey micro_key = micro_key_arr.at(i);
+    io_info.offset_ = micro_key.micro_id_.offset_;
+    io_info.size_ = micro_size;
+    io_info.effective_tablet_id_ = micro_key.get_macro_tablet_id().id();
+    ObSSMicroBlockId micro_id = ObSSMicroBlockId(micro_key.micro_id_.macro_id_, micro_key.micro_id_.offset_, micro_key.micro_id_.size_);
+    ObStorageObjectHandle obj_handle;
+    bool is_hit = false;
+    ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(micro_key, micro_id,
+              ObSSMicroCacheGetType::GET_CACHE_HIT_DATA, io_info, obj_handle,
+              ObSSMicroCacheAccessType::COMMON_IO_TYPE, is_hit));
+    ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
+    ASSERT_EQ(micro_size, obj_handle.get_data_size());
+    obj_handle.reset();
+  }
+  // Check status, expect: T1 cnt: 0, B1 cnt: 0, T2 cnt: 1000, B2 cnt: 0, total_micro_cnt: 1000, valid_micro_cnt: 1000
+  ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T1].count());
+  ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B1].count());
+  ASSERT_EQ(micro_cnt, arc_info.seg_info_arr_[SS_ARC_T2].count());
+  ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B2].count());
+  ASSERT_EQ(micro_cnt, micro_stat.total_micro_cnt_);
+  ASSERT_EQ(micro_cnt, micro_stat.valid_micro_cnt_);
+
+  // Step 2: Disable add, enable get
+  micro_cache->disable_write();
+  micro_cache->enable_read();
+  ASSERT_FALSE(micro_cache->is_write_allowed());
+  ASSERT_TRUE(micro_cache->is_read_allowed());
+  // Read 1000 new micro_blocks, expect return OB_EAGAIN, because add is disabled
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    const int64_t offset = (i + 1) * 100 + 10;
+    const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    char data_buf[micro_size];
+    MEMSET(data_buf, 'd', micro_size);
+    ASSERT_EQ(OB_EAGAIN, micro_cache->add_micro_block_cache(
+              micro_key, data_buf, micro_size, macro_id.second_id(),
+              ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+  }
+  // Read 1000 micro_blocks that are added before, expect return OB_SUCCESS and get data
+  for (int64_t i = 0; i < micro_key_arr.count(); ++i) {
+    io_info.reset();
+    set_basic_read_io_info(io_info);
+    io_info.buf_ = read_buf;
+    io_info.user_data_buf_ = read_buf;
+    io_info.callback_ = nullptr;
+    const ObSSMicroBlockCacheKey micro_key = micro_key_arr.at(i);
+    io_info.offset_ = micro_key.micro_id_.offset_;
+    io_info.size_ = micro_size;
+    io_info.effective_tablet_id_ = micro_key.get_macro_tablet_id().id();
+    ObSSMicroBlockId micro_id = ObSSMicroBlockId(micro_key.micro_id_.macro_id_, micro_key.micro_id_.offset_, micro_key.micro_id_.size_);
+    ObStorageObjectHandle obj_handle;
+    bool is_hit = false;
+    ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(micro_key, micro_id,
+              ObSSMicroCacheGetType::GET_CACHE_HIT_DATA, io_info, obj_handle,
+              ObSSMicroCacheAccessType::COMMON_IO_TYPE, is_hit));
+    ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
+    ASSERT_EQ(micro_size, obj_handle.get_data_size());
+    obj_handle.reset();
+  }
+  // Check status, expect: T1 cnt: 0, B1 cnt: 0, T2 cnt: 1000, B2 cnt: 0, total_micro_cnt: 1000, valid_micro_cnt: 1000
+  ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_T1].count());
+  ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B1].count());
+  ASSERT_EQ(micro_cnt, arc_info.seg_info_arr_[SS_ARC_T2].count());
+  ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B2].count());
+  ASSERT_EQ(micro_cnt, micro_stat.total_micro_cnt_);
+  ASSERT_EQ(micro_cnt, micro_stat.valid_micro_cnt_);
+
+  // Step 3: Enable add, disable get
+  micro_cache->enable_write();
+  micro_cache->disable_read();
+  ASSERT_TRUE(micro_cache->is_write_allowed());
+  ASSERT_FALSE(micro_cache->is_read_allowed());
+  // Add 1000 new micro_blocks, expect return OB_SUCCESS
+  ObArray<ObSSMicroBlockCacheKey> new_micro_key_arr;
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    const int64_t offset = (i + 1) * 100 + 20;
+    const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    char data_buf[micro_size];
+    MEMSET(data_buf, 'e', micro_size);
+    ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(
+              micro_key, data_buf, micro_size, macro_id.second_id()/*effective_tablet_id*/,
+              ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+    ASSERT_EQ(OB_SUCCESS, new_micro_key_arr.push_back(micro_key));
+  }
+  ASSERT_EQ(micro_cnt, new_micro_key_arr.count());
+  // Read 1000 new micro_blocks, expect return OB_EAGAIN, because read is disabled
+  for (int64_t i = 0; i < new_micro_key_arr.count(); ++i) {
+    io_info.reset();
+    set_basic_read_io_info(io_info);
+    io_info.buf_ = read_buf;
+    io_info.user_data_buf_ = read_buf;
+    io_info.callback_ = nullptr;
+    const ObSSMicroBlockCacheKey micro_key = new_micro_key_arr.at(i);
+    io_info.offset_ = micro_key.micro_id_.offset_;
+    io_info.size_ = micro_size;
+    io_info.effective_tablet_id_ = micro_key.get_macro_tablet_id().id();
+    ObSSMicroBlockId micro_id = ObSSMicroBlockId(micro_key.micro_id_.macro_id_, micro_key.micro_id_.offset_, micro_key.micro_id_.size_);
+    ObStorageObjectHandle obj_handle;
+    bool is_hit = false;
+    ASSERT_EQ(OB_EAGAIN, micro_cache->get_micro_block_cache(micro_key, micro_id,
+              ObSSMicroCacheGetType::GET_CACHE_HIT_DATA, io_info, obj_handle,
+              ObSSMicroCacheAccessType::COMMON_IO_TYPE, is_hit));
+  }
+  // Check status, expect: T1 cnt: 1000, B1 cnt: 0, T2 cnt: 1000, B2 cnt: 0, total_micro_cnt: 2000, valid_micro_cnt: 2000
+  ASSERT_EQ(micro_cnt, arc_info.seg_info_arr_[SS_ARC_T1].count()); // 1000 new micro_blocks
+  ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B1].count());
+  ASSERT_EQ(micro_cnt, arc_info.seg_info_arr_[SS_ARC_T2].count()); // 1000 old micro_blocks
+  ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B2].count());
+  ASSERT_EQ(2 * micro_cnt, micro_stat.total_micro_cnt_);
+  ASSERT_EQ(2 * micro_cnt, micro_stat.valid_micro_cnt_);
+
+  // Step 4: Disable add and get
+  micro_cache->disable_write();
+  micro_cache->disable_read();
+  ASSERT_FALSE(micro_cache->is_write_allowed());
+  ASSERT_FALSE(micro_cache->is_read_allowed());
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    const int64_t offset = (i + 1) * 100 + 30;
+    const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    char data_buf[micro_size];
+    MEMSET(data_buf, 'f', micro_size);
+    ASSERT_EQ(OB_EAGAIN, micro_cache->add_micro_block_cache(
+              micro_key, data_buf, micro_size, macro_id.second_id()/*effective_tablet_id*/,
+              ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+  }
+  for (int64_t i = 0; i < new_micro_key_arr.count(); ++i) {
+    io_info.reset();
+    set_basic_read_io_info(io_info);
+    io_info.buf_ = read_buf;
+    io_info.user_data_buf_ = read_buf;
+    io_info.callback_ = nullptr;
+    const ObSSMicroBlockCacheKey micro_key = new_micro_key_arr.at(i);
+    io_info.offset_ = micro_key.micro_id_.offset_;
+    io_info.size_ = micro_size;
+    io_info.effective_tablet_id_ = micro_key.get_macro_tablet_id().id();
+    ObSSMicroBlockId micro_id = ObSSMicroBlockId(micro_key.micro_id_.macro_id_, micro_key.micro_id_.offset_, micro_key.micro_id_.size_);
+    ObStorageObjectHandle obj_handle;
+    bool is_hit = false;
+    ASSERT_EQ(OB_EAGAIN, micro_cache->get_micro_block_cache(micro_key, micro_id,
+              ObSSMicroCacheGetType::GET_CACHE_HIT_DATA, io_info, obj_handle,
+              ObSSMicroCacheAccessType::COMMON_IO_TYPE, is_hit));
+  }
+  // Check status, expect: T1 cnt: 1000, B1 cnt: 0, T2 cnt: 1000, B2 cnt: 0, total_micro_cnt: 2000, valid_micro_cnt: 2000
+  ASSERT_EQ(micro_cnt, arc_info.seg_info_arr_[SS_ARC_T1].count());
+  ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B1].count());
+  ASSERT_EQ(micro_cnt, arc_info.seg_info_arr_[SS_ARC_T2].count());
+  ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B2].count());
+  ASSERT_EQ(2 * micro_cnt, micro_stat.total_micro_cnt_);
+  ASSERT_EQ(2 * micro_cnt, micro_stat.valid_micro_cnt_);
+
+  LOG_INFO("TEST_CASE: finish test_add_and_get_seperated_control");
 }
 
 } // namespace storage
