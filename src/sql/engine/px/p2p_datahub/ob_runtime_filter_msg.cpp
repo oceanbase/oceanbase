@@ -93,7 +93,8 @@ OB_DEF_DESERIALIZE(ObRFRangeFilterMsg)
               need_null_cmp_flags_,
               cells_size_,
               cmp_funcs_);
-  if (OB_FAIL(adjust_cell_size())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(adjust_cell_size())) {
     LOG_WARN("fail do adjust cell size", K(ret));
   }
   return ret;
