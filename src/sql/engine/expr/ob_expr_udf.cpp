@@ -771,6 +771,7 @@ int ObExprUDF::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObEx
         if (is_cursor_type || is_subprogram_routine || is_dblink_routine) {
           info->is_deterministic_ = false;
         }
+        info->is_deterministic_ = info->is_deterministic_ && info->is_called_in_sql_;
         for (int64_t i = 0; OB_SUCC(ret) && info->is_deterministic_ && i < info->params_type_.count(); ++i) {
           if (ObExtendType == info->params_type_.at(i).get_type()) {
             info->is_deterministic_ = false;
