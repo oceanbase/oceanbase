@@ -22,6 +22,9 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/direct_load/ob_inc_major_ddl_aggregate_sstable.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_ss_minor_compaction.h"
+#endif
 
 namespace oceanbase
 {
@@ -832,6 +835,11 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
         }
       } else if (OB_FAIL(cur_table_handle.get_sstable(table))) {
         LOG_WARN("failed to get sstable from handle", K(ret), K(cur_table_handle));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode() && ObTabletSSMinorMergeHelper::need_skip_for_local_minor(*table)) {
+        LOG_DEBUG("skip shared sstable in local minor merge", KPC(table));
+        continue;
+#endif
       } else if (!found_greater
                  && (table->get_upper_trans_version() <= min_snapshot_version ||
                      (1 < minor_compact_trigger && table->get_max_merged_trans_version() <= min_snapshot_version && table->get_max_merged_trans_version() != 0))) {
@@ -889,6 +897,13 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
         minor_merge_candidates = &prev_major_table_candidates;
       }
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
+      if (OB_FAIL(ObTabletSSMinorMergeHelper::process_local_minor_candidate(*minor_merge_candidates))) {
+        LOG_WARN("failed to process local minor candidates", K(ret));
+      }
+    }
+#endif
     if (FAILEDx(refine_and_get_minor_merge_result(
             param, tablet, minor_compact_trigger, ls, *minor_merge_candidates, result))) {
       if (OB_NO_NEED_MERGE != ret) {
