@@ -1056,6 +1056,7 @@ int ObTableParam::construct_columns_and_projector(
   share::schema::ObColDesc tmp_col_desc;
   share::schema::ObColExtend tmp_col_extend;
   int32_t cg_idx = 0;
+  bool is_cs_table = false;
   bool is_cs = false;
   bool has_all_column_group = false;
   bool need_truncate_filter = false;
@@ -1063,8 +1064,9 @@ int ObTableParam::construct_columns_and_projector(
   int64_t rowkey_count = 0;
   is_column_replica_table_ = false; // row store table schema does not contains cg, if true, need calculate cg idx by designed rules
 
-  if (OB_FAIL(table_schema.get_is_column_store(is_cs))) {
+  if (OB_FAIL(table_schema.get_is_column_store(is_cs_table))) {
     LOG_WARN("fail to get is table column store", K(ret), K(table_schema));
+  } else if (FALSE_IT(is_cs = is_cs_table)) {
   } else if (!is_cs && query_cs_replica) {
     is_cs = true;
     is_column_replica_table_ = true;
@@ -1131,7 +1133,7 @@ int ObTableParam::construct_columns_and_projector(
         }
       }
     }
-    if (OB_SUCC(ret) && !is_cs && table_schema.is_global_index_table()) {
+    if (OB_SUCC(ret) && !is_cs_table && table_schema.is_global_index_table()) {
       ObSEArray<ObColDesc, COMMON_COLUMN_NUM> non_rowkey_column_ids;
       if (OB_FAIL(table_schema.get_column_ids_without_rowkey(non_rowkey_column_ids, true))) {
         LOG_WARN("get column ids failed", K(ret));

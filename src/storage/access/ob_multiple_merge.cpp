@@ -1792,7 +1792,12 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
     ret = OB_SUCCESS;
   }
   if (OB_SUCC(ret)) {
-    if (has_split_extra_tables) {
+    if (OB_UNLIKELY(access_param_->iter_param_.need_truncate_filter() && tables_.count() > 0 && tables_.at(0)->is_co_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected state, do not support truncate filter in column store",
+               K(ret),
+               KPC(tables_.at(0)));
+    } else if (has_split_extra_tables) {
       if (tables_.count() > common::MAX_QUERY_TABLE_CNT) {
         ret = OB_SCHEMA_EAGAIN;
         LOG_WARN("too many tables for split src, retry on split dst", K(ret), K(memtable_cnt), K(tables_.count()), K(table_iter), K(tables_));
@@ -2236,30 +2241,23 @@ int ObMultipleMerge::prepare_mds_filter()
         .add_type_if(access_param_->iter_param_.need_ttl_filter(), ObMDSFilterFlags::MDSFilterType::TTL_FILTER)
         .add_type_if((access_param_->iter_param_.need_truncate_filter() || access_param_->iter_param_.need_ttl_filter()) && tablet->has_merged_with_mds_info(), ObMDSFilterFlags::MDSFilterType::BASE_VERSION_FILTER);
 
-    if (OB_UNLIKELY(access_param_->iter_param_.is_use_column_store() && mds_filter_flags.has_type(ObMDSFilterFlags::MDSFilterType::TRUNCATE_FILTER))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected state, do not support truncate filter in column store",
-               K(ret),
-               K(mds_filter_flags));
-    } else {
-      ObVersionRange read_version_range(major_table_version_,
-                                        access_ctx_->trans_version_range_.snapshot_version_);
-      const ObIArray<ObTabletHandle> *split_extra_tablet_handles
-          = access_param_->iter_param_.is_tablet_spliting()
-                ? get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr()
-                : nullptr;
+    ObVersionRange read_version_range(major_table_version_,
+                                      access_ctx_->trans_version_range_.snapshot_version_);
+    const ObIArray<ObTabletHandle> *split_extra_tablet_handles
+        = access_param_->iter_param_.is_tablet_spliting()
+              ? get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr()
+              : nullptr;
 
-      if (OB_FAIL(ObMDSFilterMgrFactory::build_mds_filter_mgr(
-              *tablet,
-              split_extra_tablet_handles,
-              access_param_->iter_param_.get_read_info()->get_columns_desc(),
-              access_param_->iter_param_.get_read_info()->get_columns(),
-              read_version_range,
-              access_ctx_->stmt_allocator_,
-              access_ctx_->mds_filter_mgr_,
-              mds_filter_flags))) {
-        LOG_WARN("Failed to build mds filter mgr", K(ret));
-      }
+    if (OB_FAIL(ObMDSFilterMgrFactory::build_mds_filter_mgr(
+            *tablet,
+            split_extra_tablet_handles,
+            access_param_->iter_param_.get_read_info()->get_columns_desc(),
+            access_param_->iter_param_.get_read_info()->get_columns(),
+            read_version_range,
+            access_ctx_->stmt_allocator_,
+            access_ctx_->mds_filter_mgr_,
+            mds_filter_flags))) {
+      LOG_WARN("Failed to build mds filter mgr", K(ret));
     }
   }
 
