@@ -1546,6 +1546,7 @@ public:
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
   const common::ObCurTraceId::TraceId &get_top_trace_id() const { return top_trace_id_; }
+  const common::ObCurTraceId::TraceId &get_current_sql_trace_id() const { return curr_sql_trace_id_; }
   uint64_t get_current_plan_id() const { return plan_id_; }
   void reset_current_plan_id()
   {
@@ -1577,6 +1578,11 @@ public:
     }
   }
   void set_current_trace_id(common::ObCurTraceId::TraceId *trace_id);
+  void set_current_sql_trace_id(const common::ObCurTraceId::TraceId &trace_id)
+  {
+    curr_sql_trace_id_ = trace_id;
+  }
+  void reset_current_sql_trace_id() { curr_sql_trace_id_.reset(); }
   // forbid use jit
   int get_jit_enabled_mode(ObJITEnableMode &jit_mode) const
   {
@@ -2821,6 +2827,7 @@ private:
   common::ObCurTraceId::TraceId last_trace_id_;
   common::ObCurTraceId::TraceId curr_trace_id_;
   common::ObCurTraceId::TraceId top_trace_id_;
+  common::ObCurTraceId::TraceId curr_sql_trace_id_;
   common::ObString app_trace_id_;
   uint64_t database_id_;
   ObQueryRetryInfo retry_info_;

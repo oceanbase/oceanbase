@@ -57,6 +57,8 @@ struct ObPLSPITraceIdGuard
   ~ObPLSPITraceIdGuard();
 
   ObCurTraceId::TraceId origin_trace_id_;
+  ObCurTraceId::TraceId parent_sql_trace_id_;
+  ObCurTraceId::TraceId prev_sql_trace_id_;
   const ObString sql_;
   const ObString ps_sql_;
   ObSQLSessionInfo& session_;

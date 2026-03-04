@@ -10032,7 +10032,9 @@ def_table_schema(
     ('insert_duplicate_row_count', 'int', 'true'),
     ('commit_time', 'int'),
     ('tx_table_read_cnt', 'int', 'true'),
-    ('outrow_lob_cnt', 'int', 'true')
+    ('outrow_lob_cnt', 'int', 'true'),
+    ('ss_object_storage_reads', 'int', 'true'),
+    ('parent_trace_id', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'true')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -19736,7 +19738,9 @@ def_table_schema(
                          ccl_rule_id as CCL_RULE_ID,
                          ccl_match_time as CCL_MATCH_TIME,
                          tx_table_read_cnt as TX_TABLE_READ_CNT,
-                         outrow_lob_cnt as OUTROW_LOB_CNT
+                         outrow_lob_cnt as OUTROW_LOB_CNT,
+                         ss_object_storage_reads as OBJECT_STORAGE_READS,
+                         parent_trace_id as PARENT_TRACE_ID
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -20158,7 +20162,9 @@ def_table_schema(
     CCL_RULE_ID,
     CCL_MATCH_TIME,
     TX_TABLE_READ_CNT,
-    OUTROW_LOB_CNT
+    OUTROW_LOB_CNT,
+    OBJECT_STORAGE_READS,
+    PARENT_TRACE_ID
   FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -68009,7 +68015,9 @@ def_table_schema(
                          ccl_rule_id as CCL_RULE_ID,
                          ccl_match_time as CCL_MATCH_TIME,
                          tx_table_read_cnt as TX_TABLE_READ_CNT,
-                         outrow_lob_cnt as OUTROW_LOB_CNT
+                         outrow_lob_cnt as OUTROW_LOB_CNT,
+                         ss_object_storage_reads as OBJECT_STORAGE_READS,
+                         parent_trace_id as PARENT_TRACE_ID
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -68134,7 +68142,9 @@ TRANS_STATUS,
 CCL_RULE_ID,
 CCL_MATCH_TIME,
 TX_TABLE_READ_CNT,
-OUTROW_LOB_CNT
+OUTROW_LOB_CNT,
+OBJECT_STORAGE_READS,
+PARENT_TRACE_ID
 FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )

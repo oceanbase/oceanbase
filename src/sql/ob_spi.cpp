@@ -1864,6 +1864,12 @@ ObPLSPITraceIdGuard::ObPLSPITraceIdGuard(const ObString &sql,
 {
   if (OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
     origin_trace_id_.set(*ObCurTraceId::get_trace_id());
+    prev_sql_trace_id_.set(session_.get_current_sql_trace_id());
+    if (prev_sql_trace_id_.is_valid()) {
+      parent_sql_trace_id_.set(prev_sql_trace_id_);
+    } else {
+      parent_sql_trace_id_.set(origin_trace_id_);
+    }
 
     if (!session_.get_top_trace_id().is_valid()) {
       session_.set_top_trace_id(ObCurTraceId::get_trace_id());
@@ -1884,6 +1890,7 @@ ObPLSPITraceIdGuard::ObPLSPITraceIdGuard(const ObString &sql,
 
       ObCurTraceId::get_trace_id()->set(new_trace_id);
       session_.set_current_trace_id(&new_trace_id);
+      session_.set_current_sql_trace_id(new_trace_id);
     }
   }
 }
@@ -1897,6 +1904,11 @@ ObPLSPITraceIdGuard::~ObPLSPITraceIdGuard()
     session_.set_last_trace_id(ObCurTraceId::get_trace_id());
     ObCurTraceId::get_trace_id()->set(origin_trace_id_);
     session_.set_current_trace_id(&origin_trace_id_);
+    if (prev_sql_trace_id_.is_valid()) {
+      session_.set_current_sql_trace_id(prev_sql_trace_id_);
+    } else {
+      session_.reset_current_sql_trace_id();
+    }
 
     if (origin_trace_id_ == session_.get_top_trace_id()) {
       session_.set_top_trace_id(nullptr);
