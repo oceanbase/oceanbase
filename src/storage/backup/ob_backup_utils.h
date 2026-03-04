@@ -319,10 +319,10 @@ private:
   int fetch_all_logic_macro_block_id_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, const blocksstable::ObSSTable &sstable, int64_t &total_count);
   int add_macro_block_id_item_list_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
-      const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count);
-  int add_check_tablet_item_(const common::ObTabletID &tablet_id);
-  int add_sstable_item_(const common::ObTabletID &tablet_id);
-  int add_tablet_item_(const common::ObTabletID &tablet_id);
+      const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &total_count);
+  int add_check_tablet_item_(const common::ObTabletID &tablet_id, int64_t &total_count);
+  int add_sstable_item_(const common::ObTabletID &tablet_id, int64_t &total_count);
+  int add_tablet_item_(const common::ObTabletID &tablet_id, int64_t &total_count);
   int remove_duplicates_(common::ObIArray<ObBackupProviderItem> &array);
   int check_macro_block_need_skip_(const blocksstable::ObLogicMacroBlockId &logic_id, bool &need_skip);
   int inner_check_macro_block_need_skip_(const blocksstable::ObLogicMacroBlockId &logic_id,

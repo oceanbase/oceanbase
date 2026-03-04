@@ -1785,11 +1785,10 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
   } else if (OB_FAIL(fetch_tablet_sstable_array_(
       tablet_id, tablet_ref->tablet_handle_, *table_store_wrapper.get_member(), backup_data_type, sstable_array))) {
     LOG_WARN("failed to fetch tablet sstable array", K(ret), K(tablet_id), KPC(tablet_ref), K(backup_data_type));
-  } else if (OB_FAIL(add_check_tablet_item_(tablet_id))) {
+  } else if (OB_FAIL(add_check_tablet_item_(tablet_id, total_count))) {
     LOG_WARN("failed to add check tablet item", K(ret), K(tablet_id));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
-      int64_t count = 0;
       ObITable *table_ptr = sstable_array.at(i);
       if (OB_ISNULL(table_ptr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1797,28 +1796,22 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
       } else {
         const ObITable::TableKey &table_key = table_ptr->get_key();
         ObSSTable *sstable = static_cast<ObSSTable *>(table_ptr);
-        if (OB_FAIL(fetch_all_logic_macro_block_id_(tablet_id, tablet_ref->tablet_handle_, table_key, *sstable, count))) {
+        if (OB_FAIL(fetch_all_logic_macro_block_id_(tablet_id, tablet_ref->tablet_handle_, table_key, *sstable, total_count))) {
           LOG_WARN("failed to fetch all logic macro block id", K(ret), K(tablet_id), KPC(tablet_ref), K(table_key));
-        } else {
-          total_count += count;
         }
       }
     }
     if (OB_SUCC(ret) && !sstable_array.empty()) {
-      if (OB_FAIL(add_sstable_item_(tablet_id))) {
+      if (OB_FAIL(add_sstable_item_(tablet_id, total_count))) {
         LOG_WARN("failed to add sstable item", K(ret), K(tablet_id));
-      } else {
-        total_count += 1;
       }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ls_backup_ctx_->tablet_stat_.prepare_tablet_sstables(
           tenant_id, backup_data_type, tablet_id, tablet_ref->tablet_handle_, sstable_array))) {
         LOG_WARN("failed to prepare tablet sstable", K(ret), K(backup_data_type), K(tablet_id), K(sstable_array));
-      } else if (OB_FAIL(add_tablet_item_(tablet_id))) {
+      } else if (OB_FAIL(add_tablet_item_(tablet_id, total_count))) {
         LOG_WARN("failed to add tablet item", K(ret), K(tablet_id));
-      } else {
-        total_count += 1;
       }
     }
   }
@@ -2170,7 +2163,6 @@ int ObBackupTabletProvider::fetch_all_logic_macro_block_id_(const common::ObTabl
     const blocksstable::ObSSTable &sstable, int64_t &total_count)
 {
   int ret = OB_SUCCESS;
-  total_count = 0;
   ObITabletLogicMacroIdReader *macro_id_reader = NULL;
   ObArray<ObBackupMacroBlockId> id_array;
   if (!tablet_id.is_valid()) {
@@ -2192,12 +2184,9 @@ int ObBackupTabletProvider::fetch_all_logic_macro_block_id_(const common::ObTabl
         }
       }
       if (OB_SUCC(ret)) {
-        int64_t added_count = 0;
-        if (OB_FAIL(add_macro_block_id_item_list_(tablet_id, table_key, id_array, added_count))) {
+        if (OB_FAIL(add_macro_block_id_item_list_(tablet_id, table_key, id_array, total_count))) {
           LOG_WARN("failed to add macro block id list", K(ret), K(tablet_id), K(table_key), K(id_array));
-        } else if (id_array.count() > 0) {
-          total_count += added_count;
-        } else {
+        } else if (0 == id_array.count()) {
           break;
         }
       }
@@ -2210,10 +2199,9 @@ int ObBackupTabletProvider::fetch_all_logic_macro_block_id_(const common::ObTabl
 }
 
 int ObBackupTabletProvider::add_macro_block_id_item_list_(const common::ObTabletID &tablet_id,
-    const ObITable::TableKey &table_key, const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count)
+    const ObITable::TableKey &table_key, const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &total_count)
 {
   int ret = OB_SUCCESS;
-  added_count = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < list.count(); ++i) {
     const ObBackupMacroBlockId &macro_id = list.at(i);
     ObBackupProviderItem item;
@@ -2230,14 +2218,14 @@ int ObBackupTabletProvider::add_macro_block_id_item_list_(const common::ObTablet
     } else if (OB_FAIL(external_sort_.add_item(item))) {
       LOG_WARN("failed to add item", KR(ret), K(item));
     } else {
-      added_count += 1;
+      total_count += 1;
       LOG_INFO("add macro block id", K(tablet_id), K(table_key), K(macro_id));
     }
   }
   return ret;
 }
 
-int ObBackupTabletProvider::add_check_tablet_item_(const common::ObTabletID &tablet_id)
+int ObBackupTabletProvider::add_check_tablet_item_(const common::ObTabletID &tablet_id, int64_t &total_count)
 {
   int ret = OB_SUCCESS;
   ObBackupProviderItem item;
@@ -2251,12 +2239,13 @@ int ObBackupTabletProvider::add_check_tablet_item_(const common::ObTabletID &tab
   } else if (OB_FAIL(external_sort_.add_item(item))) {
     LOG_WARN("failed to add item", KR(ret), K(item));
   } else {
+    total_count += 1;
     LOG_INFO("add check tablet item", K(tablet_id));
   }
   return ret;
 }
 
-int ObBackupTabletProvider::add_sstable_item_(const common::ObTabletID &tablet_id)
+int ObBackupTabletProvider::add_sstable_item_(const common::ObTabletID &tablet_id, int64_t &total_count)
 {
   int ret = OB_SUCCESS;
   ObBackupProviderItem item;
@@ -2268,12 +2257,13 @@ int ObBackupTabletProvider::add_sstable_item_(const common::ObTabletID &tablet_i
   } else if (OB_FAIL(external_sort_.add_item(item))) {
     LOG_WARN("failed to add item", KR(ret), K(item));
   } else {
+    total_count += 1;
     LOG_INFO("add sstable item", K(tablet_id));
   }
   return ret;
 }
 
-int ObBackupTabletProvider::add_tablet_item_(const common::ObTabletID &tablet_id)
+int ObBackupTabletProvider::add_tablet_item_(const common::ObTabletID &tablet_id, int64_t &total_count)
 {
   int ret = OB_SUCCESS;
   ObBackupProviderItem item;
@@ -2285,6 +2275,7 @@ int ObBackupTabletProvider::add_tablet_item_(const common::ObTabletID &tablet_id
   } else if (OB_FAIL(external_sort_.add_item(item))) {
     LOG_WARN("failed to add item", KR(ret), K(item));
   } else {
+    total_count += 1;
     LOG_INFO("add tablet item", K(tablet_id));
   }
   return ret;
