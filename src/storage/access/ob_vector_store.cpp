@@ -64,6 +64,12 @@ void ObVectorStore::reset()
   }
 }
 
+void ObVectorStore::reuse()
+{
+  ObBlockBatchedRowStore::reuse();
+  count_ = 0;
+}
+
 int ObVectorStore::init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask)
 {
   int ret = OB_SUCCESS;
