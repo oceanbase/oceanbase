@@ -211,7 +211,8 @@ public:
              const MonotonicTs &commit_time,
              const int64_t &expire_ts,
              const common::ObString &app_trace_info,
-             const int64_t &request_id);
+             const int64_t &request_id,
+             const common::ObString &app_trace_id);
   int abort(const int reason);
   int one_phase_commit_();
   int get_prepare_version_if_prepared(bool &is_prepared, share::SCN &prepare_version);
@@ -229,7 +230,8 @@ public:
                   const int64_t &expire_ts,
                   const common::ObString &app_trace_info,
                   const int64_t &request_id,
-                  const ObXATransID &xid);
+                  const ObXATransID &xid,
+                  const common::ObString &app_trace_id);
   int sub_end_tx(const int64_t &request_id,
                  const ObXATransID &xid,
                  const common::ObAddr &tmp_scheduler,

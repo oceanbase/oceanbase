@@ -314,7 +314,8 @@ int MockObTxCtx::handle(const ObMail<ObTxMsg>& mail)
                  MonotonicTs::current_time(),
                  msg->expire_ts_,
                  msg->app_trace_info_,
-                 msg->request_id_);
+                 msg->request_id_,
+                 msg->app_trace_id_);
     break;
   }
   case TX_2PC_PREPARE_REQ: {

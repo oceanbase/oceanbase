@@ -730,6 +730,8 @@ int ObPartTransCtx::kill(const KillTransArg &arg, ObTxCommitCallback *&cb_list)
  * @app_trace_info: application level tracing infor
  *                  will be recorded in txn CommitLog
  * @request_id:     commit request identifier
+ * @app_trace_id:   application level tracing id
+ *                  will be recorded in txn CommitLog
  *
  * Return:
  * OB_SUCCESS - request was accepted and promise result would be
@@ -744,7 +746,8 @@ int ObPartTransCtx::commit(const ObTxCommitParts &parts,
                            const MonotonicTs &commit_time,
                            const int64_t &expire_ts,
                            const common::ObString &app_trace_info,
-                           const int64_t &request_id)
+                           const int64_t &request_id,
+                           const common::ObString &app_trace_id)
 {
   register_logstream_trace(tenant_id_, ls_id_.id());
   TRANS_LOG(DEBUG, "tx.commit", K(parts), K(trans_id_), K(ls_id_));
@@ -800,6 +803,8 @@ int ObPartTransCtx::commit(const ObTxCommitParts &parts,
       TRANS_LOG(WARN, "set request id failed", K(ret), K(request_id), KPC(this));
     } else if (OB_FAIL(set_app_trace_info_(app_trace_info))) {
       TRANS_LOG(WARN, "set app trace info error", K(ret), K(app_trace_info), KPC(this));
+    } else if (OB_FAIL(set_app_trace_id_(app_trace_id))) {
+      TRANS_LOG(WARN, "set app trace id error", K(ret), K(app_trace_id), KPC(this));
     } else if (FALSE_IT(stmt_expired_time_ = expire_ts)) {
     } else {
       if (commit_time.is_valid()) {
@@ -8017,7 +8022,8 @@ int ObPartTransCtx::sub_prepare(const ObTxCommitParts &parts,
                                 const int64_t &expire_ts,
                                 const common::ObString &app_trace_info,
                                 const int64_t &request_id,
-                                const ObXATransID &xid)
+                                const ObXATransID &xid,
+                                const common::ObString &app_trace_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -8058,6 +8064,8 @@ int ObPartTransCtx::sub_prepare(const ObTxCommitParts &parts,
     TRANS_LOG(WARN, "set request id failed", K(ret), K(request_id), KPC(this));
   } else if (OB_FAIL(set_app_trace_info_(app_trace_info))) {
     TRANS_LOG(WARN, "set app trace info error", K(ret), K(app_trace_info), KPC(this));
+  } else if (OB_FAIL(set_app_trace_id_(app_trace_id))) {
+    TRANS_LOG(WARN, "set app trace id error", K(ret), K(app_trace_id), KPC(this));
   } else if (FALSE_IT(stmt_expired_time_ = expire_ts)) {
   } else {
     if (commit_time.is_valid()) {
