@@ -128,6 +128,7 @@ struct ObOptParamHint
     DEF(ENABLE_OPTIMIZER_ROWGOAL,)                  \
     DEF(DAS_BATCH_RESCAN_FLAG,)          \
     DEF(PRESERVE_ORDER_FOR_GROUPBY,)             \
+    DEF(DISABLE_SHARED_EXPR_EXTRACTION,)         \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
