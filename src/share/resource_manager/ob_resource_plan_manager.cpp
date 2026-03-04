@@ -132,6 +132,8 @@ int ObResourcePlanManager::refresh_global_background_cpu()
         background_quota_ = cpu;
       }
     }
+  } else {
+    background_quota_ = INT32_MAX;
   }
   return ret;
 }
