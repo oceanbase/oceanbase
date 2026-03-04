@@ -1190,7 +1190,7 @@ int ObVecIdxMergeTask::refresh_adaptor()
     } else if (OB_FAIL(new_adapter_->get_snap_data()->load_persist_segments(new_adapter_, allocator_, ls_id_, current_scn))) {
       LOG_WARN("load persist segments fail", K(ret));
     } else if (OB_FALSE_IT(new_adapter_->get_snap_data()->set_inited())) {
-    } else if (OB_FALSE_IT(new_adapter_->close_snap_data_rb_flag())) {
+    } else if (OB_FALSE_IT(new_adapter_->set_snap_data_has_complete())) {
     } else {
       LOG_INFO("build new adaptor success", KPC(new_adapter_), KPC(old_adapter_));
       ObPluginVectorIndexAdapterGuard latest_adpt_guard;

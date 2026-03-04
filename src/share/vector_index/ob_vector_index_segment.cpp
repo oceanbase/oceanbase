@@ -1463,7 +1463,7 @@ int ObVecIdxSnapshotData::free_segment_memory()
     ObVectorIndexSegmentMeta &seg_meta = meta_.bases_.at(i);
     seg_meta.segment_handle_.reset();
   }
-  rb_flag_ = true;
+  has_complete_ = false;
   return ret;
 }
 

@@ -445,7 +445,7 @@ int ObVecIdxFreezeTask::refresh_adaptor(ObPluginVectorIndexAdapterGuard &adpt_gu
     } else if (OB_FAIL(new_adapter->get_snap_data()->load_persist_segments(new_adapter, allocator_, ls_id_, current_scn))) {
       LOG_WARN("load persist segments fail", K(ret));
     } else if (OB_FALSE_IT(new_adapter->get_snap_data()->set_inited())) {
-    } else if (OB_FALSE_IT(new_adapter->close_snap_data_rb_flag())) {
+    } else if (OB_FALSE_IT(new_adapter->set_snap_data_has_complete())) {
     } else {
       LOG_INFO("build new adaptor success", KPC(new_adapter), KPC(adpt_guard.get_adatper()));
     }

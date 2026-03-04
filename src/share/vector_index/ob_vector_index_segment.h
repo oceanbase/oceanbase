@@ -470,8 +470,11 @@ public:
   ObVectorIndexDataBase()
     : type_(VIRT_MAX),
       is_init_(false),
+      has_complete_(false),
       ref_cnt_(0),
-      scn_() {}
+      scn_(),
+      complete_lock_(ObLatchIds::VECTOR_COMPLETE_LOCK)
+  {}
 
   bool is_inited() const { return ATOMIC_LOAD(&is_init_); }
   void set_inited() { is_init_ = true; }
@@ -491,8 +494,11 @@ public:
 public:
   ObVectorIndexRecordType type_;
   bool is_init_;
+  bool has_complete_;
   uint64_t ref_cnt_;
   SCN scn_;
+  // hold complete lock
+  TCRWLock complete_lock_;
 };
 
 template<typename T>
@@ -592,7 +598,7 @@ public:
 
   void free_memdata_resource(ObIAllocator *allocator, const uint64_t tenant_id);
 
-  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(scn), K_(ref_cnt), K_(segment_handle),
+  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(has_complete), K_(scn), K_(ref_cnt), K_(segment_handle),
       K_(last_dml_scn), K_(last_read_scn), K_(can_skip));
 
 public:
@@ -635,7 +641,7 @@ public:
 
   void free_memdata_resource(ObIAllocator *allocator, const uint64_t tenant_id);
 
-  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(scn), K_(ref_cnt), KP_(bitmap));
+  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(has_complete), K_(scn), K_(ref_cnt), KP_(bitmap));
 
 public:
   TCRWLock bitmap_rwlock_{ObLatchIds::VECTOR_BITMAP_LOCK};
@@ -769,7 +775,6 @@ struct ObVecIdxSnapshotData : public ObVectorIndexDataBase
 public:
   ObVecIdxSnapshotData()
     : ObVectorIndexDataBase(),
-      rb_flag_(true),
       is_ready_for_read_(false),
       builder_(nullptr),
       deserializer_(nullptr),
@@ -810,11 +815,10 @@ private:
       storage::ObTableScanIterator *snap_data_iter, const uint64_t tenant_id, ObVectorIndexSegmentMeta &seg_meta);
 
 public:
-  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(rb_flag), K_(is_ready_for_read), K_(scn),
+  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(has_complete), K_(is_ready_for_read), K_(scn),
     K_(ref_cnt), KPC_(builder), KPC_(deserializer), K_(meta), K_(vid_bound), K_(last_res_seg_info));
 
   TCRWLock mem_data_rwlock_{ObLatchIds::VECTOR_MEM_DATA};
-  bool rb_flag_;
   bool is_ready_for_read_;
   ObVectorIndexSegmentBuilder *builder_;
   ObVectorIndexSegmentDeserializer *deserializer_;
