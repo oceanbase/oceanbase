@@ -640,6 +640,9 @@ void ObTmpFileWaitTask::runTimerTask()
   if (OB_FAIL(mgr_.exec_wait())) {
     STORAGE_LOG(WARN, "fail to wait block", K(ret));
   }
+  if (OB_FAIL(mgr_.try_clean_dir_to_blk_map())) {
+    STORAGE_LOG(WARN, "fail to clean dir map", KR(ret));
+  }
 }
 
 ObTmpFileMemTask::ObTmpFileMemTask(ObTmpTenantMemBlockManager &mgr)
@@ -819,6 +822,7 @@ ObTmpTenantMemBlockManager::ObTmpTenantMemBlockManager(ObTmpTenantFileStore &ten
     wait_handles_map_(),
     t_mblk_map_(),
     dir_to_blk_map_(),
+    last_dir_map_clean_ts_(0),
     blk_nums_threshold_(0),
     block_cache_(NULL),
     allocator_(NULL),
@@ -881,6 +885,7 @@ int ObTmpTenantMemBlockManager::init(const uint64_t tenant_id,
   } else {
     blk_nums_threshold_ = blk_nums_threshold;
     tenant_id_ = tenant_id;
+    last_dir_map_clean_ts_ = ObTimeUtility::fast_current_time();
     allocator_ = &allocator;
     is_inited_ = true;
   }
@@ -1134,6 +1139,30 @@ bool ObTmpTenantMemBlockManager::BlockWashScoreCompare::operator() (
   return left.wash_score_ < right.wash_score_;
 }
 
+int ObTmpTenantMemBlockManager::CollectSmallestDirOp::operator()(
+    oceanbase::common::hash::HashMapPair<int64_t, int64_t> &entry)
+{
+  int ret = OB_SUCCESS;
+  DirEntry entry_item;
+  entry_item.dir_id_ = entry.first;
+  entry_item.block_id_ = entry.second;
+  if (heap_.count() < DIR_MAP_CLEAN_BATCH) {
+    if (OB_FAIL(heap_.push(entry_item))) {
+      STORAGE_LOG(WARN, "fail to push dir entry into heap", KR(ret), K(entry_item.dir_id_));
+    }
+  } else {
+    const DirEntry &top_item = heap_.top();
+    if (entry_item.dir_id_ < top_item.dir_id_) {
+      if (OB_FAIL(heap_.pop())) {
+        STORAGE_LOG(WARN, "fail to pop dir entry heap", KR(ret));
+      } else if (OB_FAIL(heap_.push(entry_item))) {
+        STORAGE_LOG(WARN, "fail to push dir entry into heap", KR(ret), K(entry_item.dir_id_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTmpTenantMemBlockManager::check_disk_usage_limit(const int64_t on_disk_block_num, const int64_t disk_usage_limit)
 {
   int ret = OB_SUCCESS;
@@ -1300,6 +1329,76 @@ int ObTmpTenantMemBlockManager::refresh_dir_to_blk_map(const int64_t dir_id,
     }
   }
 
+  return ret;
+}
+
+int ObTmpTenantMemBlockManager::clean_dir_to_blk_map()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpTenantMemBlockManager has not been inited", KR(ret));
+  } else {
+    DirEntryMaxCompare cmp;
+    DirEntryHeap min_dir_heap(cmp);
+    ObArray<DirEntry> collected_dirs;
+    CollectSmallestDirOp collect_op(min_dir_heap);
+    if (OB_FAIL(dir_to_blk_map_.foreach_refactored(collect_op))) {
+      STORAGE_LOG(WARN, "fail to scan dir_to_blk_map", KR(ret));
+    } else {
+      int64_t cleaned_cnt = 0;
+      while (OB_SUCC(ret) && min_dir_heap.count() > 0) {
+        DirEntry entry_item = min_dir_heap.top();
+        if (OB_FAIL(min_dir_heap.pop())) {
+          STORAGE_LOG(WARN, "fail to pop dir entry from heap", KR(ret));
+        } else if (OB_FAIL(collected_dirs.push_back(entry_item))) {
+          STORAGE_LOG(WARN, "fail to record dir entry", KR(ret), K(entry_item.dir_id_));
+        }
+      }
+
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < collected_dirs.count(); ++idx) {
+        const DirEntry &entry_item = collected_dirs.at(idx);
+        ObTmpMacroBlock *mblk = nullptr;
+        ret = t_mblk_map_.get_refactored(entry_item.block_id_, mblk);
+        if (OB_HASH_NOT_EXIST == ret) {
+          // dir id is not valid if corresponding block is not found
+          ret = dir_to_blk_map_.erase_refactored(entry_item.dir_id_);
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            STORAGE_LOG(WARN, "fail to erase dir id", KR(ret), K(entry_item));
+          }
+          if (OB_SUCCESS == ret) {
+            ++cleaned_cnt;
+          }
+        } else if (OB_SUCCESS != ret) {
+          STORAGE_LOG(WARN, "fail to get block from block map", KR(ret), K(entry_item));
+        }
+      }
+
+      if (cleaned_cnt > 0) {
+        STORAGE_LOG(INFO, "finished dir_to_blk_map cleanup batch",
+            "cleaned_dir_cnt", cleaned_cnt,
+            "dir_map_size", dir_to_blk_map_.size());
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTmpTenantMemBlockManager::try_clean_dir_to_blk_map()
+{
+  int ret = OB_SUCCESS;
+  const int64_t now = ObTimeUtility::fast_current_time();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (now - last_dir_map_clean_ts_ < DIR_MAP_CLEAN_INTERVAL || dir_to_blk_map_.empty()) {
+    // skip
+  } else if (OB_FAIL(clean_dir_to_blk_map())) {
+    STORAGE_LOG(WARN, "fail to clean dir_to_blk_map", K(ret));
+  } else {
+    last_dir_map_clean_ts_ = now;
+  }
   return ret;
 }
 
