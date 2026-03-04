@@ -193,7 +193,7 @@ TEST_F(TestStorageOss, test_get_file_size)
                                                  ObStorageIdMod::get_default_id_mod()));
   //open with append mode
   ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(device_handle, fd, storage_info, uri, OB_STORAGE_ACCESS_APPENDER,
-                                                   ObStorageIdMod::get_default_id_mod()));
+                                                   ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   for (int i = 0; i < max_repeat_times; i++ ) {
     ASSERT_EQ(OB_SUCCESS, device_handle->pwrite(fd, 0, content_len, test_content, write_size));
   }
@@ -208,7 +208,7 @@ TEST_F(TestStorageOss, test_get_file_size)
 
   //open with overwrite moed
   ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(device_handle, fd, storage_info, uri, OB_STORAGE_ACCESS_OVERWRITER,
-                                                   ObStorageIdMod::get_default_id_mod()));
+                                                   ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   for (int i = 0; i < max_repeat_times; i++ ) {
     ASSERT_EQ(OB_SUCCESS, device_handle->write(fd, test_content, content_len, write_size));
   }
@@ -217,7 +217,7 @@ TEST_F(TestStorageOss, test_get_file_size)
   //fd, 0, buf_size, buf, read_size
   ASSERT_EQ(OB_SUCCESS, device_handle->close(fd));
   ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(device_handle, fd_reader, storage_info, uri, OB_STORAGE_ACCESS_READER,
-                                                   ObStorageIdMod::get_default_id_mod()));
+                                                   ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   ASSERT_EQ(OB_SUCCESS, device_handle->pread(fd_reader, 0, OB_MAX_URI_LENGTH, test_read_content, read_size));
   ASSERT_EQ(read_size, content_len);
   ASSERT_EQ(OB_SUCCESS, device_handle->close(fd_reader));

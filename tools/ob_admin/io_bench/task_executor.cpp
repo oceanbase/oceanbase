@@ -569,7 +569,7 @@ int AppendWriteTaskExecutor::execute()
     const int64_t open_start_time_us = ObTimeUtility::current_time();
     if (OB_FAIL(adapter.open_with_access_type(
         device_handle, fd, storage_info_, base_uri_, access_type,
-        ObStorageIdMod::get_default_id_mod()))) {
+        ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
       OB_LOG(WARN, "failed to open device with access type",
           K(ret), K_(base_uri), KPC_(storage_info), K(access_type));
     } else if (OB_ISNULL(device_handle)) {
@@ -685,7 +685,7 @@ int MultipartWriteTaskExecutor::execute()
     const int64_t open_start_time_us = ObTimeUtility::current_time();
     if (OB_FAIL(adapter.open_with_access_type(
         device_handle, fd, storage_info_, base_uri_, access_type,
-        ObStorageIdMod::get_default_id_mod()))) {
+        ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
       OB_LOG(WARN, "failed to open device with access type",
           K(ret), K_(base_uri), KPC_(storage_info), K(access_type));
     } else if (OB_ISNULL(device_handle)) {
@@ -995,7 +995,7 @@ int NoHeadReadTaskExecutor::execute()
     ObIOHandle io_handle;
     if (OB_FAIL(adapter.open_with_access_type(
         device_handle, fd, storage_info_, base_uri_, access_type,
-        ObStorageIdMod::get_default_id_mod()))) {
+        ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
       OB_LOG(WARN, "failed to open device with access type",
           K(ret), K_(base_uri), KPC_(storage_info), K(access_type));
     } else if (OB_ISNULL(device_handle)) {

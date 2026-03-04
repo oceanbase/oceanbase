@@ -90,7 +90,7 @@ private:
 
   int prefetch_schemas_();
   int check_and_set_database_id_();
-  int check_sslog_table_exist_(
+  int check_ss_special_table_exist_(
       const uint64_t tenant_id,
       const uint64_t database_id,
       const ObString &table_name);

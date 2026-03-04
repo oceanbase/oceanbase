@@ -384,6 +384,7 @@ void ObPrereadMetaMacroTest::get_shared_blocks_for_tablet(
   int64_t last_gc_version = -1;
   uintptr_t tablet_fingerprint = 0;
   bool is_transfer_out_deleted = false;
+  bool is_set_stop = false;
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(run_ctx.ls_id_,
             run_ctx.tablet_id_, current_tablet_version, last_gc_version, current_tablet_trans_seq,
             tablet_fingerprint, is_old_version_empty, is_transfer_out_deleted));
@@ -392,7 +393,7 @@ void ObPrereadMetaMacroTest::get_shared_blocks_for_tablet(
   ObPrivateBlockGCHandler handler(run_ctx.ls_id_, run_ctx.ls_epoch_, run_ctx.tablet_id_,
                                   current_tablet_version, last_gc_version,
                                   current_tablet_trans_seq, tablet_fingerprint,
-                                  is_transfer_out_deleted);
+                                  is_set_stop, is_transfer_out_deleted);
   ASSERT_EQ(OB_SUCCESS, handler.get_blocks_for_tablet(current_tablet_version, true/*is_shared*/, block_ids));
   LOG_INFO("get shared blocks for tablet", K(block_ids));
 }

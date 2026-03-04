@@ -581,7 +581,8 @@ class ObRootUtils
 public:
   ObRootUtils() {}
   virtual ~ObRootUtils() {}
-  static int create_sslog_tablet(const uint64_t tenant_id);
+  static int create_ss_special_tablet(const uint64_t tenant_id, const uint64_t table_id);
+  static int check_tiered_metadata_tablet_exist(const common::ObAddr &server, const uint64_t tenant_id, bool &exist);
   static bool is_dr_replace_deployment_mode_match();
   static int get_rs_default_timeout_ctx(ObTimeoutCtx &ctx);
   static int get_invalid_server_list(

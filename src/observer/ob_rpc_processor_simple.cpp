@@ -84,6 +84,7 @@
 #include "rootserver/standby/ob_flashback_standby_log_command.h"
 #include "logservice/data_dictionary/ob_data_dict_service.h" // for ObDataDictService
 #include "rootserver/ob_load_inner_table_schema_executor.h"
+#include "share/inner_table/ob_tiered_metadata_store_schema.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "close_modules/arbitration/rootserver/ob_arbitration_service.h" // for ObArbitrationService
 #include "close_modules/arbitration/share/arbitration_service/ob_arbitration_service_utils.h" // for ObArbitrationServiceUtils
@@ -2138,6 +2139,52 @@ int ObDropDiskP::process()
 {
   // not support.
   return OB_NOT_SUPPORTED;
+}
+
+int ObCheckTabletExistP::process()
+{
+  int ret = OB_SUCCESS;
+  result_ = false;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.get_tenant_id()) {
+      ObLS *ls = nullptr;
+      ObLSHandle ls_handle;
+      ObTabletHandle tablet_handle;
+      ObLSService *ls_service = MTL(ObLSService *);
+      ObRole role = INVALID_ROLE;
+      if (OB_ISNULL(ls_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mtl ObLSService should not be null", KR(ret));
+      } else if (OB_FAIL(ls_service->get_ls(arg_.get_ls_id(), ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        LOG_WARN("get ls failed", KR(ret), K_(arg));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid ls", KR(ret), K_(arg));
+      } else if (OB_FAIL(ls->get_ls_role(role))) {
+        LOG_WARN("get role failed", KR(ret), K_(arg));
+      } else if (ObRole::LEADER != role) {
+        ret = OB_NOT_MASTER;
+        LOG_WARN("not leader", KR(ret), K_(arg));
+      } else if (OB_FAIL(ls->get_tablet(arg_.get_tablet_id(),
+                                        tablet_handle,
+                                        ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, // 1_s
+                                        ObMDSGetTabletMode::READ_READABLE_COMMITED))) {
+        if (OB_TABLET_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          result_ = false;
+        } else {
+          LOG_WARN("failed to get tablet", KR(ret));
+        }
+      } else {
+        result_ = true;
+      }
+    } // end of MTL_SWITCH
+  }
+  LOG_INFO("check tablet exist", KR(ret), K_(arg), K_(result));
+  return ret;
 }
 
 int ObForceSwitchILogFileP::process()

@@ -106,7 +106,7 @@ int ObLinkedMacroBlockWriter::write_block(
         break;
       }
       case WriteType::SHARED_MAJOR_MACRO_INFO: {
-        opt.set_ss_share_meta_macro_object_opt(macro_info_param_.tablet_id_.id(), macro_info_param_.start_macro_seq_++, 0);
+        opt.set_ss_share_meta_macro_object_opt(macro_info_param_.tablet_id_.id(), macro_info_param_.start_macro_seq_++, 0, macro_info_param_.reorganization_scn_);
         break;
       }
       case WriteType::SHARED_INC_MACRO_INFO : {
@@ -115,7 +115,8 @@ int ObLinkedMacroBlockWriter::write_block(
                                        macro_info_param_.op_id_,
                                        macro_info_param_.start_macro_seq_++,
                                        macro_info_param_.tablet_id_.is_ls_inner_tablet(),
-                                       macro_info_param_.reorganization_scn_);
+                                       macro_info_param_.reorganization_scn_,
+                                       true /* is_object_storage */);
         break;
       }
       case WriteType::PRIV_MACRO_INFO: {

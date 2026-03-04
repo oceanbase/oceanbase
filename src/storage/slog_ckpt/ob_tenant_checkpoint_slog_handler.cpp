@@ -22,6 +22,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/slog_ckpt/ob_tenant_meta_snapshot_handler.h"
+#include "storage/high_availability/ob_tenant_startup_status.h"
 
 namespace oceanbase
 {
@@ -143,7 +144,7 @@ void ObTenantCheckpointSlogHandler::ObWriteCheckpointTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   ObCurTraceId::init(GCONF.self_addr_);
-  if (SERVER_STORAGE_META_SERVICE.is_started()) {
+  if (TENANT_STARTUP_STATUS.is_in_service()) {
     if (OB_FAIL(handler_->write_checkpoint(ObTenantSlogCheckpointWorkflow::normal_type()))) {
       LOG_WARN("fail to write checkpoint", K(ret));
     }
@@ -717,6 +718,9 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(const ObTenantSlogCheckpoint
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantCheckpointSlogHandler not init", K(ret));
+  } else if (OB_UNLIKELY(!ObTenantSlogCheckpointWorkflow::is_workflow_type_valid(ckpt_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid workflow type", K(ret), K(ckpt_type));
   } else if (OB_ISNULL(tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null tenant", K(ret), K(tenant));
@@ -748,6 +752,48 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(const ObTenantSlogCheckpoint
   return ret;
 }
 
+int ObTenantCheckpointSlogHandler::write_checkpoint_for_single_ls(const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  omt::ObTenant *tenant = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantCheckpointSlogHandler not init", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls id", K(ret), K(ls_id));
+  } else if (OB_ISNULL(tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null tenant", K(ret), K(tenant));
+  } else if (tenant->is_hidden()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("called by hidden tenant is unexpected", K(ret), KPC(tenant));
+  } else {
+    // wait until another ckpt task finished...
+    while (!ATOMIC_BCAS(&is_writing_checkpoint_, false, true)) {
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
+        LOG_INFO("wait until last checkpoint finished");
+      }
+      ob_usleep(100 * 1000); // 100ms
+    }
+
+    if (OB_FAIL(gc_checkpoint_file())) {
+      LOG_WARN("fail to gc checkpoint file before checkpoint", K(ret));
+    } else if (OB_FAIL(ObTenantSlogCheckpointWorkflow::execute_single_ls_ckpt(ls_id, *this))) {
+      LOG_WARN("failed to execute tenant slog checkpoint workflow", K(ret));
+    }
+
+    // Regardless of success or failure, gc checkpoint file
+    if (OB_TMP_FAIL(gc_checkpoint_file())) {
+      LOG_WARN("fail to gc checkpoint file after checkpoint", K(ret), K(tmp_ret));
+    }
+
+    ATOMIC_STORE(&is_writing_checkpoint_, false);  // end up checkpoint
+  }
+  return ret;
+}
+
 int ObTenantCheckpointSlogHandler::gc_checkpoint_file()
 {
   int ret = OB_SUCCESS;
@@ -758,7 +804,7 @@ int ObTenantCheckpointSlogHandler::gc_checkpoint_file()
     // nothing to do
   } else {
     omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
-    const ObTenantSuperBlock &super_block = tenant->get_super_block();
+    const ObTenantSuperBlock super_block = tenant->get_super_block();
     if (OB_FAIL(gc_min_checkpoint_file(super_block.min_file_id_))) {
       LOG_WARN("fail to gc min checkpoint file", K(ret), K(super_block));
     } else if (OB_FAIL(gc_max_checkpoint_file(super_block.max_file_id_))) {

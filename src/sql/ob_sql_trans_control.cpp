@@ -20,6 +20,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "sql/dblink/ob_tm_service.h"
+#include "share/inner_table/ob_tiered_metadata_store_schema.h"
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "sql/engine/dml/ob_table_modify_op.h"
 
@@ -2235,7 +2236,7 @@ bool ObSqlTransControl::is_accessing_sslog(const ObPhysicalPlan *plan)
       const ObIArray<ObSchemaObjVersion> *dep_tables = &(plan->get_dependency_table());
       for (int i = 0; NULL != dep_tables && i < dep_tables->count(); ++i) {
         const ObSchemaObjVersion &schema_obj = dep_tables->at(i);
-        if (OB_ALL_SSLOG_TABLE_TID == schema_obj.get_object_id()) {
+        if (is_ss_special_table(schema_obj.get_object_id())) {
           ret_bool = true;
           break;
         }
@@ -2261,11 +2262,14 @@ int ObSqlTransControl::stmt_setup_snapshot_for_sslog_(ObSQLSessionInfo *session,
   } else {
     ObTxDesc &tx_desc = *session->get_tx_desc();
     int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
-    share::ObLSID first_ls_id = SSLOG_LS;
+    share::ObLSID first_ls_id;
+    bool is_single_tablet = false;
     bool local_single_ls_plan = false;
     const bool local_single_ls_plan_maybe = plan->is_local_plan() &&
                                             OB_PHY_PLAN_LOCAL == plan->get_location_type();
-    if (local_single_ls_plan_maybe) {
+    if (OB_FAIL(get_first_lsid(das_ctx, first_ls_id, is_single_tablet))) {
+      LOG_WARN("fail to get first ls id", K(ret));
+    } else if (local_single_ls_plan_maybe) {
       if (OB_FAIL(txs->get_ls_read_snapshot(tx_desc,
                                             session->get_tx_isolation(),
                                             first_ls_id,

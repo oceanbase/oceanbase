@@ -71,6 +71,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObInitTenantConfigP, gctx_);
   RPC_PROCESSOR(ObGetLeaderLocationsP, gctx_);
   RPC_PROCESSOR(ObBatchBroadcastSchemaP, gctx_);
+  RPC_PROCESSOR(ObCheckTabletExistP, gctx_);
   RPC_PROCESSOR(ObRpcSendHeartbeatP, gctx_);
   RPC_PROCESSOR(ObRpcNotifySwitchLeaderP, gctx_);
 
@@ -182,6 +183,7 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObSharedRpcP, gctx_);
   RPC_PROCESSOR(ObSSLogUIDP);
   RPC_PROCESSOR(ObSSPreciseGCP);
+  RPC_PROCESSOR(ObSSGCCheckLSP);
   RPC_PROCESSOR(ObSSCkptRpcP);
   RPC_PROCESSOR(ObSSTxTableRpcP);
 #endif

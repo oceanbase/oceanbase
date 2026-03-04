@@ -87,9 +87,10 @@ public:
   void set_ss_share_meta_macro_object_opt(
       const int64_t tablet_id,
       const int64_t data_seq,
-      const int64_t column_group_id)
+      const int64_t column_group_id,
+      const int64_t reorganization_scn)
   {
-    set_ss_share_object_opt(ObStorageObjectType::SHARED_MAJOR_META_MACRO, false, 0, tablet_id, data_seq, column_group_id, 0);
+    set_ss_share_object_opt(ObStorageObjectType::SHARED_MAJOR_META_MACRO, false, 0, tablet_id, data_seq, column_group_id, reorganization_scn);
   }
   void set_ss_tmp_file_object_opt()
   {
@@ -148,9 +149,10 @@ public:
     const uint32_t op_id,
     const uint32_t data_seq,
     const bool is_inner_tablet,
-    const int64_t reorganization_scn)
+    const int64_t reorganization_scn,
+    const bool is_object_storage)
   {
-    object_type_ = ObStorageObjectType::SHARED_TABLET_SUB_META;
+    object_type_ = is_object_storage ? ObStorageObjectType::SHARED_TABLET_SUB_META : ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE;
     ss_tablet_sub_meta_opt_.ls_id_ = ls_id;
     ss_tablet_sub_meta_opt_.tablet_id_ = tablet_id;
     ss_tablet_sub_meta_opt_.is_inner_tablet_ = is_inner_tablet;

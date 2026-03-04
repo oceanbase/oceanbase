@@ -28,8 +28,15 @@
 #include "storage/shared_storage/ob_ss_cluster_info.h"
 #endif
 #include "share/ncomp_dll/ob_flush_ncomp_dll_task.h"
+#include "share/ls/ob_ls_creator.h"
 #include "rootserver/ob_tenant_ddl_service.h"
+#include "rootserver/ob_root_utils.h"
+#include "rootserver/ob_tenant_thread_helper.h"
 #include "share/ob_scheduled_manage_dynamic_partition.h"
+#include "share/ob_leader_election_waiter.h"
+#include "share/inner_table/ob_tiered_metadata_store_schema.h"
+#include "share/ls/ob_ls_status_operator.h"
+#include "share/ls/ob_ls_life_manager.h"
 #include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 #include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
 #include "share/ob_unit_table_operator.h"                         // ObUnitTableOperator
@@ -2476,7 +2483,6 @@ int ObUpgradeFor4420Processor::grant_priv(const ObPrivSet user_priv_set,
 /* =========== 4420 upgrade processor end ============= */
 
 /* =========== 4510 upgrade processor start ============= */
-
 int ObUpgradeFor4510Processor::post_upgrade()
 {
   int ret = OB_SUCCESS;
@@ -2484,6 +2490,8 @@ int ObUpgradeFor4510Processor::post_upgrade()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_set_paralllel_target_())) {
     LOG_WARN("fail to post upgrade set parallel target", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_metadata_ls_())) {
+    LOG_WARN("fail to post upgrade for metadata ls", KR(ret));
   }
   return ret;
 }
@@ -2586,6 +2594,168 @@ int ObUpgradeFor4510Processor::finish_upgrade_for_daily_maintenance_window()
     END_TRANSACTION(trans);
     LOG_INFO("finish upgrade for create daily maintenance window job finished", KR(ret),  K_(tenant_id));
   }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_ERROR_WHEN_FINISH_POST_FOR_METADATA_LS)
+int ObUpgradeFor4510Processor::post_upgrade_for_metadata_ls_()
+{
+  int ret = OB_SUCCESS;
+  ObLSStatusOperator ls_status;
+  ObLSStatusInfo metadata_ls_info;
+  common::ObAddr leader;
+  if (GCTX.is_shared_storage_mode() && is_meta_tenant(tenant_id_)) {
+    // no need check tenant status
+    LOG_INFO("start to post upgrade for metadata ls", K_(tenant_id));
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(ls_status.get_ls_status_info(tenant_id_, METADATA_LS, metadata_ls_info, *GCTX.sql_proxy_))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("metadata ls not exist, no create metadata ls", KR(ret), K_(tenant_id), K(METADATA_LS));
+        if (OB_FAIL(insert_metadata_ls_status_(tenant_id_))) {
+          LOG_WARN("failed to create metadata ls", KR(ret), K_(tenant_id));
+        } else if (OB_FAIL(create_metadata_ls_(tenant_id_))) {
+          LOG_WARN("failed to create metadata ls", KR(ret), K_(tenant_id));
+        }
+      } else {
+        LOG_WARN("failed to get ls status info", KR(ret), K_(tenant_id), K(METADATA_LS));
+      }
+    } else if (metadata_ls_info.ls_is_creating() || metadata_ls_info.ls_is_created()) {
+      LOG_INFO("metadata ls is creating or created, need retry");
+      if (OB_FAIL(create_metadata_ls_(tenant_id_))) {
+        LOG_WARN("failed to create metadata ls", KR(ret), K_(tenant_id));
+      }
+    } else if (metadata_ls_info.ls_is_normal()) {
+      LOG_INFO("metadata ls is normal, skip");
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", KR(ret), K_(tenant_id), K(METADATA_LS), K(metadata_ls_info));
+    }
+    if (FAILEDx(wait_metadata_ls_leader_(leader))) {
+      LOG_WARN("failed to wait leader");
+    } else if (OB_FAIL(create_tiered_metadata_tablet_(leader))) {
+      LOG_WARN("failed to create tiered metadata tablet", KR(ret), K_(tenant_id));
+    } else if (OB_UNLIKELY(ERRSIM_ERROR_WHEN_FINISH_POST_FOR_METADATA_LS)) {
+      ret = ERRSIM_ERROR_WHEN_FINISH_POST_FOR_METADATA_LS;
+      LOG_WARN("errsim create ss special tablet", KR(ret));
+    }
+    LOG_INFO("post upgrade for metadata ls finished", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_ERROR_CREATE_NEW_LS_STATUS)
+int ObUpgradeFor4510Processor::insert_metadata_ls_status_(
+  const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSStatusInfo status_info;
+  ObTenantSchema tenant_schema;
+  ObZone primary_zone;
+  ObSqlString zone_priority;
+  ObUnitIDList unit_list; // empty unit list
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null pointer", KR(ret), KP(sql_proxy_));
+  } else if (OB_FAIL(ObTenantThreadHelper::get_tenant_schema(tenant_id, tenant_schema))) {
+    LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObTenantDDLService::get_tenant_zone_priority(tenant_schema, primary_zone, zone_priority))) {
+    LOG_WARN("failed to get tenant zone priority", KR(ret), K(tenant_schema));
+  } else if (OB_FAIL(status_info.init(tenant_id, METADATA_LS, 0/*ls_group_id*/, share::OB_LS_CREATING,
+                                 0/*unit_group_id*/, primary_zone, ObLSFlag(ObLSFlag::NORMAL_FLAG), unit_list))) {
+    LOG_WARN("failed to init ls info", KR(ret), K(tenant_id), K(primary_zone));
+  } else {
+    const SCN create_scn = SCN::base_scn();
+    share::ObLSLifeAgentManager ls_life_agent(*sql_proxy_);
+    if (OB_UNLIKELY(ERRSIM_ERROR_CREATE_NEW_LS_STATUS)) {
+      ret = ERRSIM_ERROR_CREATE_NEW_LS_STATUS;
+      LOG_WARN("errsim create ls skip create new ls", KR(ret));
+    } else if (OB_FAIL(ls_life_agent.create_new_ls(status_info,
+                                                   create_scn,
+                                                   zone_priority.string(),
+                                                   ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH))) {
+      LOG_WARN("failed to create new ls", KR(ret), K(status_info), K(create_scn), K(zone_priority));
+    }
+  }
+  return ret;
+}
+
+int ObUpgradeFor4510Processor::create_metadata_ls_(
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObTenantSchema tenant_schema;
+  LOG_INFO("start to create metadata ls", K(tenant_id));
+  uint64_t data_version = 0;
+  if (OB_FAIL(ObTenantThreadHelper::get_tenant_schema(tenant_id, tenant_schema))) {
+    LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null pointer", KR(ret), KP(sql_proxy_), KP(rpc_proxy_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get min data version", K(ret), K(tenant_id));
+  } else {
+    int64_t paxos_replica_num = OB_INVALID_ID;
+    ObArray<share::ObZoneReplicaAttrSet> locality;
+    ObArray<share::ObResourcePoolName> pool_name_list;
+    share::ObUnitTableOperator unit_op;
+    ObLSCreator ls_creator(*rpc_proxy_, tenant_id, METADATA_LS, data_version, sql_proxy_);
+    share::schema::ObSchemaGetterGuard schema_guard; // not used
+    if (OB_FAIL(tenant_schema.get_paxos_replica_num(schema_guard, paxos_replica_num))) {
+      LOG_WARN("failed to get paxos replica num", KR(ret));
+    } else if (OB_FAIL(tenant_schema.get_zone_replica_attr_array(locality))) {
+      LOG_WARN("fail to get tenant's locality", KR(ret));
+    } else if (OB_FAIL(unit_op.init(*sql_proxy_))) {
+      LOG_WARN("failed to init proxy", KR(ret));
+    } else if (OB_FAIL(unit_op.get_resource_pool_names(gen_user_tenant_id(tenant_id), pool_name_list))) {
+      LOG_WARN("failed to get resource pool names", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(ls_creator.create_metadata_ls_for_upgrade(locality,
+                                                                 pool_name_list,
+                                                                 paxos_replica_num,
+                                                                 tenant_schema.get_compatibility_mode()))) {
+      LOG_WARN("fail to create tenant sys ls", KR(ret), K(locality), K(pool_name_list), K(paxos_replica_num), K(tenant_schema));
+    }
+  }
+  LOG_INFO("create metadata ls finished", KR(ret), K(tenant_id));
+  return ret;
+}
+
+int ObUpgradeFor4510Processor::wait_metadata_ls_leader_(common::ObAddr &leader)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.lst_operator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lst operator is null", KR(ret), KP(GCTX.lst_operator_));
+  } else {
+    volatile bool stopped = false;
+    const int64_t timeout_us = 30l * 1000l * 1000l; // 30s
+    share::ObLSLeaderElectionWaiter ls_leader_waiter(*GCTX.lst_operator_, stopped);
+    if (OB_FAIL(ls_leader_waiter.wait(tenant_id_, METADATA_LS, timeout_us, leader))) {
+      LOG_WARN("fail to wait election leader", KR(ret), K_(tenant_id), K(timeout_us));
+    }
+    LOG_INFO("wait metadata ls leader finished", KR(ret), K_(tenant_id), K(leader), K(timeout_us));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4510Processor::create_tiered_metadata_tablet_(
+    const common::ObAddr &leader)
+{
+  int ret = OB_SUCCESS;
+  bool exist = false;
+  if (OB_UNLIKELY(!leader.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(leader));
+  } else if (OB_FAIL(ObRootUtils::check_tiered_metadata_tablet_exist(leader, tenant_id_, exist))) {
+    LOG_WARN("failed to check tiered metadata tablet exist", KR(ret));
+  } else if (exist) {
+    LOG_INFO("tiered metadata tablet already exist, skip", K_(tenant_id));
+  } else if (OB_FAIL(ObRootUtils::create_ss_special_tablet(tenant_id_, share::OB_ALL_TIERED_METADATA_STORE_TID))) {
+    LOG_WARN("failed to create sslog tablet", KR(ret));
+  }
+  LOG_INFO("create tiered metadata tablet finished", KR(ret), K(leader), K_(tenant_id));
   return ret;
 }
 

@@ -17,6 +17,7 @@
 #include "share/cache/ob_cache_name_define.h"
 #include "observer/ob_server_struct.h"
 #include "share/inner_table/ob_sslog_table_schema.h"
+#include "share/inner_table/ob_tiered_metadata_store_schema.h"
 #include "share/schema/ob_iceberg_table_schema.h"
 namespace oceanbase
 {
@@ -465,7 +466,6 @@ const ObTableSchema *ObSchemaCache::get_all_core_table() const
 int ObSchemaCache::init_sslog_table()
 {
   int ret = OB_SUCCESS;
-
   if (OB_FAIL(ObSSlogTableSchema::all_sslog_table_schema(sslog_table_))) {
     LOG_WARN("sslog_table_schema failed", K(ret));
   }
@@ -476,6 +476,22 @@ const ObTableSchema *ObSchemaCache::get_sslog_table() const
 {
   return &sslog_table_;
 }
+
+int ObSchemaCache::init_tiered_metadata_store_table()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTieredMetadataStoreTableSchema::all_tiered_metadata_store_schema(
+                tiered_metadata_store_table_))) {
+    LOG_WARN("tiered_metadata_store_table_schema failed", K(ret));
+  }
+  return ret;
+}
+
+const ObTableSchema *ObSchemaCache::get_tiered_metadata_store_table() const
+{
+  return &tiered_metadata_store_table_;
+}
+
 #endif
 
 int ObSchemaCache::init()
@@ -498,6 +514,9 @@ int ObSchemaCache::init()
   } else if (is_shared_storage_sslog_exist()
              && OB_FAIL(init_sslog_table())) {
     LOG_WARN("init sslog_table cache failed", K(ret));
+  } else if (GCTX.is_shared_storage_mode()
+             && OB_FAIL(init_tiered_metadata_store_table())) {
+    LOG_WARN("init tiered_metadata_store_table cache failed", KR(ret));
 #endif
   } else {
     lib::ContextParam param;

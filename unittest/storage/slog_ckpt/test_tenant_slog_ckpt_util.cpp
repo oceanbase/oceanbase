@@ -392,6 +392,37 @@ TEST_F(TestSlogCkptUtil, test_optional_var) {
   STORAGE_LOG(WARN, "log optional variable", K(block_id_val));
 }
 
+TEST_F(TestSlogCkptUtil, test_tenant_super_block_cp)
+{
+  ObTenantSuperBlock tsb;
+  {
+    ObTenantSnapshotMeta snapshot;
+    snapshot.ls_meta_entry_ = MacroBlockId(1, 0, 0);
+    snapshot.snapshot_id_ = 123;
+    ASSERT_TRUE(snapshot.is_valid());
+    ASSERT_EQ(OB_SUCCESS, tsb.add_snapshot(snapshot));
+
+    snapshot.ls_meta_entry_ = MacroBlockId(1, 1, 1);
+    snapshot.snapshot_id_ = 456;
+    ASSERT_TRUE(snapshot.is_valid());
+    ASSERT_EQ(OB_SUCCESS, tsb.add_snapshot(snapshot));
+
+    snapshot.ls_meta_entry_ = MacroBlockId(3, 12, 10);
+    snapshot.snapshot_id_ = 789;
+    ASSERT_TRUE(snapshot.is_valid());
+    ASSERT_EQ(OB_SUCCESS, tsb.add_snapshot(snapshot));
+  }
+
+  ObTenantSuperBlock copied_tsb = tsb;
+
+  ASSERT_EQ(copied_tsb.snapshot_cnt_, tsb.snapshot_cnt_);
+  for (int64_t i = 0; i < ObTenantSuperBlock::MAX_SNAPSHOT_NUM; ++i) {
+    const ObTenantSnapshotMeta &s0 = copied_tsb.tenant_snapshots_[i];
+    const ObTenantSnapshotMeta &s1 = tsb.tenant_snapshots_[i];
+    ASSERT_EQ(s0.ls_meta_entry_, s1.ls_meta_entry_);
+    ASSERT_EQ(s0.snapshot_id_, s1.snapshot_id_);
+  }
+}
 } // end namespace storage
 } // end namespace oceanbase
 

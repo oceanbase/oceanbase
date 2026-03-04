@@ -62,6 +62,8 @@ public:
 
   virtual int create_memtable(const storage::CreateMemtableArg &arg) override;
 
+  virtual int reuse() override;
+
   DECLARE_VIRTUAL_TO_STRING;
 private:
   const ObLockMemtable *get_memtable_(const int64_t pos) const;

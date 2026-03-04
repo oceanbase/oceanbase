@@ -28,7 +28,10 @@ class TestBlockGCHandler : public ::testing::Test,
 {
 public:
   TestBlockGCHandler()
-  : storage::ObBlockGCHandler(ObTabletID(1))
+  : storage::ObBlockGCHandler(
+      ObTabletID(1),
+      is_set_stop_),
+      is_set_stop_(false)
   {}
   virtual ~TestBlockGCHandler() {}
 
@@ -101,6 +104,7 @@ public:
 
   blocksstable::MacroBlockId (*macro_block_ids_)[3];
   ObArray<blocksstable::MacroBlockId> gc_blocks_;
+  bool is_set_stop_;
 };
 
 TEST_F(TestBlockGCHandler, test_block_gc)
@@ -151,7 +155,8 @@ class TestPrivateBlockGCHandler : public ::testing::Test,
 {
 public:
   TestPrivateBlockGCHandler()
-  : storage::ObPrivateBlockGCHandler(share::ObLSID(1), 1, ObTabletID(1), 1, -1, 1, 10, 20, 0)
+  : storage::ObPrivateBlockGCHandler(share::ObLSID(1), 1, ObTabletID(1), 1, -1, 1, 10, 20, 0, is_set_stop_),
+    is_set_stop_(false)
   {
     for (int i = 0; i < 30; i++) {
       macro_block_ids_[i].id_mode_ = 2; // ID_MODE_SHARE
@@ -229,6 +234,7 @@ public:
   }
 
   blocksstable::MacroBlockId macro_block_ids_[30];
+  bool is_set_stop_;
 };
 
 TEST_F(TestPrivateBlockGCHandler, test_macro_check)

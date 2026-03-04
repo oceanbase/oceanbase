@@ -44,6 +44,7 @@ public:
   int64_t finish_ts_;
   int64_t rebuild_seq_;
   ObStorageHASrcInfo chosen_src_;
+  ObLSMigrationCostStatic *cost_static_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
@@ -53,7 +54,8 @@ public:
       K_(start_ts),
       K_(finish_ts),
       K_(rebuild_seq),
-      K_(chosen_src));
+      K_(chosen_src),
+      KP_(cost_static));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSCompleteMigrationCtx);
 };
@@ -66,7 +68,7 @@ public:
   virtual bool is_valid() const override;
   void reset();
 
-  VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id), K_(result), K_(rebuild_seq), K_(chosen_src));
+  VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id), K_(result), K_(rebuild_seq), K_(chosen_src), KP_(cost_static));
   ObMigrationOpArg arg_;
   share::ObTaskId task_id_;
   int32_t result_;
@@ -74,6 +76,7 @@ public:
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   storage::ObStorageRpc *storage_rpc_;
   ObStorageHASrcInfo chosen_src_;
+  ObLSMigrationCostStatic *cost_static_;
 };
 
 class ObLSCompleteMigrationDagNet: public share::ObIDagNet

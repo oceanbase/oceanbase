@@ -13,6 +13,9 @@
 #include <sys/vfs.h>
 #include <unistd.h>
 #include "lib/restore/ob_object_device.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_table_device.h"
+#endif
 #include "ob_device_manager.h"
 #include "ob_version_def.h"
 #include "share/config/ob_server_config.h"
@@ -25,6 +28,8 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_local_cache_device.h"
 #endif
+#include "storage/blocksstable/ob_macro_block_id.h"
+#include "storage/blocksstable/ob_ss_obj_util.h"
 
 namespace oceanbase
 {
@@ -395,6 +400,12 @@ int parse_storage_info(common::ObString uri, ObIODevice*& device_handle, common:
     device_type = OB_STORAGE_HDFS;
     mem = allocator.alloc(sizeof(share::ObHDFSTableDevice));
     if (NULL != mem) {new(mem)share::ObHDFSTableDevice;}
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (uri.prefix_match(OB_TABLE_PREFIX)) {
+    device_type = OB_STORAGE_TABLE;
+    mem = allocator.alloc(sizeof(common::ObTableDevice));
+    if (NULL != mem) {new(mem)common::ObTableDevice;}
+#endif
   } else {
     ret = OB_INVALID_BACKUP_DEST;
     OB_LOG(WARN, "invaild device name info!", KR(ret), K(uri));
@@ -569,7 +580,7 @@ int ObDeviceManager::alloc_device_and_init_(
         OB_LOG(WARN, "fail to alloc device!", KR(ret),
             K(uri), KP(device_key.ptr()), K(storage_id_mod));
       } else if (dev_info->device_->is_object_device()) {
-        // only object device goes here to alloc device channel
+        // Unified handling for all object storage devices (including table_device)
         // Start a new thread under a normal tenant requires the same tenant context
         // So temporarily set expect_run_wrapper to nullptr
         lib::IRunWrapper *run_wrapper = lib::Threads::get_expect_run_wrapper();
@@ -577,8 +588,12 @@ int ObDeviceManager::alloc_device_and_init_(
         DEFER(lib::Threads::get_expect_run_wrapper() = run_wrapper);
         ObResetThreadTenantIdGuard tenant_guard;
         DISABLE_SQL_MEMLEAK_GUARD;
+        int64_t async_channel_thread_count = 1;
+        if (dev_info->device_->is_table_device()) {
+          async_channel_thread_count = 0;
+        }
         if (OB_FAIL(ObIOManager::get_instance().add_device_channel(dev_info->device_,
-                                                                   1/*async_channel_thread_count*/,
+                                                                   async_channel_thread_count,
                                                                    GCONF.sync_io_thread_count,
                                                                    max_io_depth))) {
           OB_LOG(WARN, "add device channel failed", K(ret), KP(dev_info), KP(device_key.ptr()));
@@ -764,6 +779,21 @@ int ObDeviceManager::get_device_key_(
                                        (uint64_t)storage_id_mod.storage_used_mod_,
                                        storage_id_mod.storage_id_))) {
       OB_LOG(WARN, "fail to construct device map key", K(ret), K(storage_id_mod));
+    }
+  } else if (uri.prefix_match(OB_TABLE_PREFIX)) {
+    // table:// doesn't need storage_info, similar to local://
+    // uint64_t occupies up to 20 characters.
+    // 20(storage_used_mod_) + 20(storage_id_) + 2(two '&') + 1(one '\0') = 43.
+    // reserve some free space, increase 43 to 50.
+    const int64_t alloc_size = STRLEN(OB_TABLE_PREFIX) + 50;
+    if (OB_ISNULL(device_key = static_cast<char *>(allcator.alloc(alloc_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "fail to alloc mem for device key", K(ret), K(alloc_size));
+    } else if (OB_FAIL(databuff_printf(device_key, alloc_size, "%s&%lu&%lu",
+                                       OB_TABLE_PREFIX,
+                                       (uint64_t)storage_id_mod.storage_used_mod_,
+                                       storage_id_mod.storage_id_))) {
+      OB_LOG(WARN, "fail to construct device key", K(ret));
     }
   } else if (uri.prefix_match(OB_OSS_PREFIX)
              || uri.prefix_match(OB_COS_PREFIX)

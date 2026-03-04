@@ -381,7 +381,12 @@ public:
   int advance_notify_ss_change_version(
       const ObTabletMapKey &key,
       const share::SCN &change_version);
+  int hook_tablet(
+      const ObTabletMapKey &key,
+      const char *buf,
+      const int64_t buf_len);
 #endif
+
 public:
   class ObT3MResourceLimitCalculatorHandler final : public share::ObIResourceLimitCalculatorHandler
   {

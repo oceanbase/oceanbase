@@ -75,22 +75,26 @@ int ObTxTable::init(ObLS *ls)
 int ObTxTable::start()
 {
   int ret = OB_SUCCESS;
-
+  if (is_start_) {
+    // do nothing
+  } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-  if (GCTX.is_shared_storage_mode()) {
-    if (OB_FAIL(init_and_start_timer_task_())) {
-      LOG_WARN("init and start timer task failed.", KR(ret));
-    } else if (OB_FAIL(attach_ref_scn_mgr_.start())) {
-      LOG_WARN("start attach ref scn mgr failed", KR(ret));
+    if (GCTX.is_shared_storage_mode()) {
+      if (OB_FAIL(init_and_start_timer_task_())) {
+        LOG_WARN("init and start timer task failed.", KR(ret));
+      } else if (OB_FAIL(attach_ref_scn_mgr_.start())) {
+        LOG_WARN("start attach ref scn mgr failed", KR(ret));
+      }
     }
-  }
 #endif
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(tx_data_table_.start())) {
-    LOG_WARN("start tx data table failed", KR(ret));
-  } else {
-    LOG_INFO("tx table start finish", KR(ret), KPC(this));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(tx_data_table_.start())) {
+      LOG_WARN("start tx data table failed", KR(ret));
+    } else {
+      is_start_ = true;
+      LOG_INFO("tx table start finish", KR(ret), KPC(this));
+    }
   }
   return ret;
 }
@@ -108,6 +112,7 @@ void ObTxTable::stop()
   }
 #endif
 
+  is_start_ = false;
   LOG_INFO("tx table stop finish", KPC(this));
 }
 

@@ -18,6 +18,7 @@
 #include "storage/ls/ob_ls.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "meta_store/ob_shared_storage_obj_meta.h"
+#include "storage/high_availability/ob_ss_tablet_pointer_reader.h"
 #endif
 
 namespace oceanbase
@@ -25,6 +26,32 @@ namespace oceanbase
 using namespace compaction;
 namespace storage
 {
+
+bool ObTenantStorageMetaService::TabletInfo::is_valid() const
+{
+  bool b_ret = false;
+  int tmp_ret = OB_SUCCESS;
+  b_ret = tablet_id_.is_valid() &&
+         tablet_addr_.is_valid() &&
+         last_gc_version_ >= -1;
+  if (b_ret) {
+    int64_t current_meta_version = 0;
+    MacroBlockId block_id;
+    if (tablet_addr_.is_sslog_tablet_meta()) {
+      current_meta_version = 0;
+    } else if (OB_SUCCESS != (tmp_ret = tablet_addr_.get_macro_block_id(block_id))) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "failed to get macro block id", K(tmp_ret), K(tablet_addr_));
+      b_ret = false;
+    } else {
+      current_meta_version = static_cast<int64_t>(block_id.meta_version_id());
+    }
+
+    if (b_ret) {
+      b_ret = last_gc_version_ < current_meta_version;
+    }
+  }
+  return b_ret;
+}
 
 ObTenantStorageMetaService::ObTenantStorageMetaService()
   : is_inited_(false),
@@ -174,6 +201,21 @@ int ObTenantStorageMetaService::write_checkpoint(const ObTenantSlogCheckpointWor
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(ckpt_slog_handler_.write_checkpoint(ckpt_type))) {
     LOG_WARN("fail to write checkpoint", K(ret));
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::write_checkpoint_for_single_ls(const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls id", K(ret), K(ls_id));
+  } else if (OB_FAIL(ckpt_slog_handler_.write_checkpoint_for_single_ls(ls_id))) {
+    LOG_WARN("fail to write checkpoint for single ls", K(ret), K(ls_id));
   }
   return ret;
 }
@@ -567,18 +609,30 @@ int ObTenantStorageMetaService::read_from_disk(
     int64_t &buf_len)
 {
   int ret = OB_SUCCESS;
-  char *read_buf = nullptr;
-  const int64_t read_buf_len = addr.size();
-  if (ObMetaDiskAddr::DiskType::FILE == addr.type()) {
-    if (OB_UNLIKELY(is_shared_storage_)) {
+
+  switch (addr.type()) {
+    case ObMetaDiskAddr::DiskType::FILE: {
+      if (OB_UNLIKELY(is_shared_storage_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("shared-storage not support DiskType::FILE", K(ret));
+      } else if (OB_FAIL(ckpt_slog_handler_.read_empty_shell_file(addr, allocator, buf, buf_len))) {
+        LOG_WARN("fail to read empty shell", K(ret), K(addr), KP(buf), K(buf_len));
+      }
+    } break;
+    case ObMetaDiskAddr::SSLOG_TABLET_META: {
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (OB_FAIL(read_from_sslog(addr, allocator, buf, buf_len))) {
+        LOG_WARN("fail to read from sslog", K(ret), K(addr), KP(buf), K(buf_len));
+      }
+#else
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("shared-storage not support DiskType::FILE", K(ret));
-    } else if (OB_FAIL(ckpt_slog_handler_.read_empty_shell_file(addr, allocator, buf, buf_len))) {
-      LOG_WARN("fail to read empty shell", K(ret), K(addr), K(buf), K(buf_len));
-    }
-  } else {
-    if (OB_FAIL(read_from_share_blk(addr, ls_epoch, allocator, buf, buf_len))) {
-      LOG_WARN("fail to read from share block", K(ret), K(addr), K(ls_epoch), K(buf), K(buf_len));
+      LOG_WARN("unexpected call", K(ret), K(common::lbt()));
+#endif
+    } break;
+    default: {
+      if (OB_FAIL(read_from_share_blk(addr, ls_epoch, allocator, buf, buf_len))) {
+        LOG_WARN("fail to read from share block", K(ret), K(addr), K(ls_epoch), KP(buf), K(buf_len));
+      }
     }
   }
   return ret;
@@ -651,6 +705,26 @@ int ObTenantStorageMetaService::ObLSItemIterator::get_next_ls_item(
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
+int ObTenantStorageMetaService::read_from_sslog(
+    const ObMetaDiskAddr &addr,
+    common::ObArenaAllocator &allocator,
+    char *&buf,
+    int64_t &buf_len)
+{
+  int ret = OB_SUCCESS;
+  ObSSTabletPointerReader ss_pointer_reader;
+
+  if (!addr.is_valid() || !addr.is_sslog()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "read from sslog get invalid argument", K(ret), K(addr));
+  } else if (OB_FAIL(ss_pointer_reader.init(addr))) {
+    STORAGE_LOG(WARN, "failed to init ss tablet pointer reader", K(ret), K(addr));
+  } else if (OB_FAIL(ss_pointer_reader.get_tablet_raw_buffer(allocator, buf, buf_len))) {
+    STORAGE_LOG(WARN, "failed to get tablet raw buffer", K(ret), K(addr));
+  }
+  return ret;
+}
+
 int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
     const ObMetaDiskAddr &tablet_addr,
     const int64_t ls_epoch,
@@ -700,19 +774,19 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
             }
             break;
           }
-        } else if (!block_info.macro_id_.is_private_data_or_meta() &&
-                   !block_info.macro_id_.is_shared_data_or_meta()) {
+        } else if (!block_info.macro_id().is_private_data_or_meta() &&
+                   !block_info.macro_id().is_shared_data_or_meta()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected storage_object_type detected", K(ret), K(block_info));
         } else if (!is_shared &&
-            block_info.macro_id_.is_private_data_or_meta() &&
-            OB_FAIL(block_ids.push_back(block_info.macro_id_))) {
+            block_info.macro_id().is_private_data_or_meta() &&
+            OB_FAIL(block_ids.push_back(block_info.macro_id()))) {
           LOG_WARN("fail to push private macro id", K(ret), K(block_info));
         } else if (is_shared &&
-            block_info.macro_id_.is_shared_data_or_meta() &&
-            OB_FAIL(block_ids.push_back(block_info.macro_id_))) {
+            block_info.macro_id().is_shared_data_or_meta() &&
+            OB_FAIL(block_ids.push_back(block_info.macro_id()))) {
           LOG_WARN("fail to push shared macro id", K(ret), K(block_info));
-        } else if (OB_FAIL(tmp_print_arr.push_back(block_info.macro_id_))) {
+        } else if (OB_FAIL(tmp_print_arr.push_back(block_info.macro_id()))) {
           LOG_WARN("fail to push shared macro id", K(ret), K(block_info));
         } else if (max_print_id_count == tmp_print_arr.count()) {
 #ifndef OB_BUILD_PACKAGE
@@ -1002,7 +1076,18 @@ int ObTenantStorageMetaService::write_remove_tablet_slog_for_ss(
   const ObMetaDiskAddr &tablet_addr = tablet.get_tablet_addr();
   GCTabletType gc_type = GCTabletType::TransferOut;
   WaitGCTabletArray *tablet_array = nullptr;
-  if (OB_UNLIKELY(last_gc_version < -1 || last_gc_version >= static_cast<int64_t>(tablet_addr.block_id().meta_version_id()))) {
+  MacroBlockId block_id;
+  int64_t meta_version = 0;
+  if (tablet_addr.is_sslog_tablet_meta()) {
+    meta_version = 0;
+  } else if (OB_FAIL(tablet_addr.get_macro_block_id(block_id))) {
+    LOG_WARN("failed to get macro block id", K(ret), K(tablet_addr));
+  } else {
+    meta_version = static_cast<int64_t>(block_id.meta_version_id());
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(last_gc_version < -1 || last_gc_version >= meta_version)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid last_gc_version", K(ret), K(last_gc_version), K(tablet_addr));
   } else if (OB_FAIL(tablet.get_tablet_status(share::SCN::max_scn(), data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
@@ -1038,11 +1123,11 @@ int ObTenantStorageMetaService::write_remove_tablet_slog_for_ss(
   if (OB_SUCC(ret)) {
     lib::ObMutexGuard guard(tablet_array->lock_);
     const ObPendingFreeTabletItem tablet_item(tablet_id,
-                                              tablet_addr.block_id().meta_version_id(),
+                                              meta_version,
                                               ObPendingFreeTabletStatus::WAIT_GC,
                                               ObTimeUtility::fast_current_time(),
                                               gc_type,
-                                              tablet_addr.block_id().meta_private_transfer_epoch(),
+                                              block_id.meta_private_transfer_epoch(),
                                               last_gc_version);
     ObDeleteTabletLog slog_entry(ls_id,
                                  tablet_id,
@@ -1219,12 +1304,21 @@ int ObTenantStorageMetaService::safe_batch_write_remove_tablet_slog_for_ss(
         const ObTabletID &tablet_id = tablet_info.tablet_id_;
         const ObMetaDiskAddr &tablet_addr = tablet_info.tablet_addr_;
         const int64_t last_gc_version = tablet_info.last_gc_version_;
+        int64_t current_meta_version = 0;
+        MacroBlockId block_id;
+        if (tablet_addr.is_sslog_tablet_meta()) {
+          current_meta_version = 0;
+        } else if (OB_FAIL(tablet_addr.get_macro_block_id(block_id))) {
+          LOG_WARN("failed to get macro block id", K(ret), K(tablet_addr));
+        } else {
+          current_meta_version = block_id.meta_version_id();
+        }
         const ObPendingFreeTabletItem tablet_item(tablet_id,
-                                                  tablet_addr.block_id().meta_version_id(),
+                                                  current_meta_version,
                                                   ObPendingFreeTabletStatus::WAIT_GC,
                                                   INT64_MAX /* delete_time */,
                                                   GCTabletType::DropLS,
-                                                  tablet_addr.block_id().meta_private_transfer_epoch(),
+                                                  block_id.meta_private_transfer_epoch(),
                                                   last_gc_version);
         ObDeleteTabletLog slog_entry(ls_id,
                                      tablet_id,
@@ -1235,7 +1329,9 @@ int ObTenantStorageMetaService::safe_batch_write_remove_tablet_slog_for_ss(
                                      tablet_item.gc_type_,
                                      tablet_item.tablet_private_transfer_epoch_,
                                      tablet_item.last_gc_version_);
-        if (OB_UNLIKELY(!tablet_info.is_valid())) {
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_UNLIKELY(!tablet_info.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tablet info is invalid", K(ret), K(tablet_info), K(tablet_item.tablet_meta_version_));
         } else if (has_exist_in_array(tmp_pending_free_array.items_, tablet_item)) {

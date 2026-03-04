@@ -581,7 +581,7 @@ int ObMigrationStatusHelper::check_ls_allow_gc(
   if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls_id is invalid", K(ret), K(ls_id));
-  } else if (check_migration_status_is_fail_(cur_status)) {
+  } else if (check_migration_status_is_fail(cur_status)) {
     allow_gc = true;
   // TODO(muwei.ym) check transfer meta info for compatible in 4.4.1
   //} else if (OB_FAIL(check_transfer_meta_info_compatible_(for_compatible))) {
@@ -649,7 +649,7 @@ int ObMigrationStatusHelper::check_transfer_meta_info_compatible_(
   return ret;
 }
 
-bool ObMigrationStatusHelper::check_migration_status_is_fail_(const ObMigrationStatus &cur_status)
+bool ObMigrationStatusHelper::check_migration_status_is_fail(const ObMigrationStatus &cur_status)
 {
   bool is_fail = false;
   if (OB_MIGRATION_STATUS_ADD_FAIL == cur_status
@@ -670,7 +670,7 @@ bool ObMigrationStatusHelper::need_online(const ObMigrationStatus &cur_status)
 bool ObMigrationStatusHelper::check_allow_gc_abandoned_ls(const ObMigrationStatus &cur_status)
 {
   bool allow_gc = false;
-  if (check_migration_status_is_fail_(cur_status)) {
+  if (check_migration_status_is_fail(cur_status)) {
     allow_gc = true;
   } else if (OB_MIGRATION_STATUS_GC == cur_status) {
     allow_gc = true;
@@ -1204,7 +1204,7 @@ bool ObMigrationStatusHelper::can_gc_ls_without_check_dependency(
     const ObMigrationStatus &cur_status)
 {
   bool allow_gc = false;
-  if (check_migration_status_is_fail_(cur_status)) {
+  if (check_migration_status_is_fail(cur_status)) {
     allow_gc = true;
   }
   return allow_gc;
@@ -1557,6 +1557,7 @@ bool ObMigrationUtils::is_need_retry_error(const int err)
     case OB_TRANS_CTX_NOT_EXIST:
     case OB_LS_NOT_IN_LEARNER_LIST:
     case OB_ALLOCATE_MEMORY_FAILED:
+    case OB_SS_LS_IN_GC_STATUS:
       bret = false;
       break;
     default:
@@ -2836,6 +2837,53 @@ int ObLSMemberListInfo::assign(const ObLSMemberListInfo &info)
     leader_addr_ = info.leader_addr_;
   }
   return ret;
+}
+
+ObLSMigrationCostStatic::ObLSMigrationCostStatic()
+  : clog_checkpoint_scn_(),
+    tablet_count_(0),
+    create_tablet_cost_(0),
+    migration_dag_net_cost_(0),
+    prewarm_cost_(0),
+    wait_log_sync_cost_(0),
+    wait_log_replay_cost_(0),
+    complete_dag_net_cost_(0),
+    start_ts_(0),
+    finish_ts_(0)
+{
+}
+
+void ObLSMigrationCostStatic::reset()
+{
+  clog_checkpoint_scn_.reset();
+  tablet_count_ = 0;
+  create_tablet_cost_ = 0;
+  migration_dag_net_cost_ = 0;
+  prewarm_cost_ = 0;
+  wait_log_sync_cost_ = 0;
+  wait_log_replay_cost_ = 0;
+  complete_dag_net_cost_ = 0;
+  start_ts_ = 0;
+  finish_ts_ = 0;
+}
+
+int64_t ObLSMigrationCostStatic::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  (void)databuff_printf(buf, buf_len, pos,
+                   "{total_cost=%ld,clog_checkpoint_scn=%ld,tablet_count=%ld,create_tablet_cost=%ld,"
+                   "migration_dag_net_cost=%ld,prewarm_cost=%ld,wait_log_sync_cost=%ld,"
+                   "wait_log_replay_cost=%ld,complete_dag_net_cost=%ld}",
+                   finish_ts_ - start_ts_,
+                   clog_checkpoint_scn_.is_valid() ? clog_checkpoint_scn_.get_val_for_tx() : 0,
+                   tablet_count_,
+                   create_tablet_cost_,
+                   migration_dag_net_cost_,
+                   prewarm_cost_,
+                   wait_log_sync_cost_,
+                   wait_log_replay_cost_,
+                   complete_dag_net_cost_);
+  return pos;
 }
 
 }

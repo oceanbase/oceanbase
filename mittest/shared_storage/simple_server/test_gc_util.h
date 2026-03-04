@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 #include "lib/utility/ob_test_util.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/tablet/ob_tablet_persist_common.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_object_access_util.h"
 #include "close_modules/shared_storage/storage/incremental/atomic_protocol/ob_atomic_tablet_meta_define.h"
 #include "close_modules/shared_storage/storage/incremental/atomic_protocol/ob_atomic_file.h"
@@ -89,7 +90,7 @@ static void gen_block_id(
   blocksstable::ObStorageObjectOpt opt;
   if (ObStorageObjectType::SHARED_TABLET_SUB_META == type) {
     opt.set_ss_tablet_sub_meta_opt(RunCtx.ls_id_.id(), RunCtx.tablet_id_.id(), op_id,
-        seq /* start_seq */, RunCtx.tablet_id_.is_ls_inner_tablet(), 0);
+        seq /* start_seq */, RunCtx.tablet_id_.is_ls_inner_tablet(), 0, true /* is_object_storage */);
 
   } else if (ObStorageObjectType::SHARED_MAJOR_DATA_MACRO == type) {
     opt.set_ss_share_object_opt(type, RunCtx.tablet_id_.is_ls_inner_tablet(), RunCtx.ls_id_.id(),
@@ -209,6 +210,10 @@ static void update_sslog(
     meta_value.tablet_ = ret_meta_value.tablet_;
     meta_value.data_version_ = DATA_CURRENT_VERSION;
     meta_value.macro_info_ = ret_meta_value.tablet_->macro_info_addr_.get_ptr();
+    int64_t tablet_serialize_size = 0;
+    ASSERT_EQ(OB_SUCCESS, ObTabletPersistCommon::get_tablet_persist_size(meta_value.data_version_, meta_value.macro_info_, meta_value.tablet_, tablet_serialize_size));
+    ret = ret_meta_value.tablet_->get_ss_update_tablet_log(tablet_serialize_size, meta_value.update_log_);
+    ASSERT_EQ(OB_SUCCESS, ret);
     const int64_t meta_value_size = meta_value.get_serialize_size();
     char *meta_value_buf = (char*)mtl_malloc(meta_value_size, "gc_unittest");
     pos = 0;

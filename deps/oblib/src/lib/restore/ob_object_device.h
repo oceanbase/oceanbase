@@ -310,7 +310,7 @@ protected:
   int open_for_async_writer(const char *pathname, void *&ctx);
   int open_for_async_direct_multiwriter(const char *pathname, void *&ctx);
   int open_for_async_buffered_multiwriter(const char *pathname, void *&ctx);
-  int release_res(void* ctx, const ObIOFd &fd, ObStorageAccessType access_type);
+  virtual int release_res(void* ctx, const ObIOFd &fd, ObStorageAccessType access_type);
   int inner_exist_(const char *pathname, bool &is_exist, const bool is_adaptive = false);
   int inner_stat_(const char *pathname, ObIODFileStat &statbuf, const bool is_adaptive = false);
   int inner_unlink_(const char *pathname, const bool is_adaptive = false);

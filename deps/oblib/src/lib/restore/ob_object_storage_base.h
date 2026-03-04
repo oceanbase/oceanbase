@@ -173,10 +173,13 @@ class ObObjectStorageTenantGuard
 {
 public:
   ObObjectStorageTenantGuard(const uint64_t tenant_id, const int64_t timeout_us);
+  ObObjectStorageTenantGuard(
+      const uint64_t tenant_id, const int64_t timeout_us, const uint64_t group_id);
   virtual ~ObObjectStorageTenantGuard();
 
   static uint64_t get_tenant_id();
   static int64_t get_timeout_us();
+  static uint64_t get_io_group_id();
   static int64_t get_timeout_ms();
 
 private:
@@ -185,6 +188,9 @@ private:
 
   static thread_local int64_t tl_timeout_us_;
   int64_t old_timeout_us_;
+
+  static thread_local uint64_t tl_io_group_id_;
+  uint64_t old_io_group_id_;
 };
 
 } // common

@@ -242,6 +242,61 @@ int ObLSCreator::create_sys_ls_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ERROR_UPDATE_SYS_STATUS_TO_NORMAL)
+int ObLSCreator::create_metadata_ls_for_upgrade(
+    const share::schema::ZoneLocalityIArray &zone_locality,
+    const ObIArray<share::ObResourcePoolName> &pool_list,
+    const int64_t paxos_replica_num,
+    const common::ObCompatibilityMode &compat_mode)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("start to create log stream", K_(id), K_(tenant_id));
+  const int64_t start_time = ObTimeUtility::current_time();
+  ObLSAddr addr;
+  palf::PalfBaseInfo palf_base_info; // default
+  bool create_with_palf = false; // default
+  share::ObLSStatusOperator ls_operator;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_UNLIKELY(0 >= zone_locality.count()
+                      || 0 >= pool_list.count()
+                      || 0 >= paxos_replica_num
+                      || !is_meta_tenant(tenant_id_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(zone_locality), K(paxos_replica_num), K(pool_list), K(tenant_id_));
+  } else if (OB_ISNULL(proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret), KP(proxy_));
+  } else if (OB_FAIL(alloc_sys_ls_addr(tenant_id_, pool_list, zone_locality, false/*is_duplicate_ls*/, addr))) {
+    LOG_WARN("failed to alloc user ls addr", KR(ret), K(tenant_id_), K(pool_list));
+  } else {
+    common::ObMemberList member_list;
+    share::ObLSStatusInfo status_info;
+    ObMember arbitration_service;
+    common::GlobalLearnerList learner_list;
+    const SCN create_scn = SCN::base_scn();
+    if (OB_FAIL(ls_operator.get_ls_init_member_list(tenant_id_, id_, member_list, status_info, *proxy_, arbitration_service, learner_list))) {
+      LOG_WARN("failed to get member list", KR(ret), K_(id), K(tenant_id_));
+    } else if (status_info.ls_is_created()) {
+    } else {
+      REPEAT_CREATE_LS();
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(ERRSIM_ERROR_UPDATE_SYS_STATUS_TO_NORMAL)) {
+      ret = ERRSIM_ERROR_UPDATE_SYS_STATUS_TO_NORMAL;
+      LOG_WARN("errsim error update ls status", KR(ret), K(tenant_id_), K(id_));
+    } else if (OB_FAIL(ls_operator.update_ls_status(tenant_id_, id_, share::OB_LS_CREATED,
+                share::OB_LS_NORMAL, share::NORMAL_SWITCHOVER_STATUS, *proxy_))) {
+      LOG_WARN("failed to update ls status", KR(ret), K(id_));
+    }
+  }
+  const int64_t cost = ObTimeUtility::current_time() - start_time;
+  LOG_INFO("finish to create log stream", KR(ret), K_(id), K_(tenant_id), K(cost));
+  LS_EVENT_ADD(tenant_id_, id_, "create_ls_finish", ret, paxos_replica_num, "", K(cost));
+  return ret;
+}
+
 int ObLSCreator::create_tenant_sys_ls(
     const common::ObZone &primary_zone,
     const share::schema::ZoneLocalityIArray &zone_locality,
@@ -413,6 +468,7 @@ int ObLSCreator::do_create_ls_(const ObLSAddr &addr,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ERROR_UPDATE_LS_STATUS_TO_CREATED)
 ERRSIM_POINT_DEF(ERRSIM_CREATE_LS_SKIP_UPDATE_LS_STATUS)
 ERRSIM_POINT_DEF(ERRSIM_CREATE_LS_SKIP_SET_MEMBER_LIST)
 int ObLSCreator::process_after_has_member_list_(
@@ -439,7 +495,10 @@ int ObLSCreator::process_after_has_member_list_(
     //create end
     DEBUG_SYNC(BEFORE_PROCESS_AFTER_HAS_MEMBER_LIST);
     share::ObLSStatusOperator ls_operator;
-    if (OB_FAIL(ls_operator.update_ls_status(
+    if (OB_UNLIKELY(ERRSIM_ERROR_UPDATE_LS_STATUS_TO_CREATED)) {
+      ret = ERRSIM_ERROR_UPDATE_LS_STATUS_TO_CREATED;
+      LOG_WARN("errsim error update ls status to created", KR(ret), K(tenant_id_), K(id_));
+    } else if (OB_FAIL(ls_operator.update_ls_status(
             tenant_id_, id_, share::OB_LS_CREATING, share::OB_LS_CREATED,
             share::NORMAL_SWITCHOVER_STATUS, *proxy_))) {
       LOG_WARN("failed to update ls status", KR(ret), K(id_));
@@ -493,7 +552,7 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
         const ObLSReplicaAddr &addr = addrs.at(i);
         if (OB_FAIL(arg.init(tenant_id_, id_, addr.replica_type_,
                 replica_property, tenant_info, create_scn, new_compat_mode,
-                create_with_palf, palf_base_info, major_mv_merge_info))) {
+                create_with_palf, palf_base_info, major_mv_merge_info, data_version_))) {
           LOG_WARN("failed to init create log stream arg", KR(ret), K(addr), K(create_with_palf), K(replica_property),
               K_(id), K_(tenant_id), K(tenant_info), K(create_scn), K(new_compat_mode), K(palf_base_info), K(major_mv_merge_info));
         } else if (OB_TMP_FAIL(create_ls_proxy_.call(addr.addr_, ctx.get_timeout(),
@@ -738,6 +797,7 @@ int ObLSCreator::check_create_ls_result_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ERROR_PERSIST_LS_MEMBER_LIST)
 int ObLSCreator::persist_ls_member_list_(
     const common::ObMemberList &member_list,
     const ObMember &arb_member,
@@ -754,6 +814,9 @@ int ObLSCreator::persist_ls_member_list_(
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_UNLIKELY(ERRSIM_ERROR_PERSIST_LS_MEMBER_LIST)) {
+    ret = ERRSIM_ERROR_PERSIST_LS_MEMBER_LIST;
+    LOG_WARN("errsim error persist ls member list", KR(ret));
   } else {
     share::ObLSStatusOperator ls_operator;
     const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id_);
@@ -919,6 +982,7 @@ int ObLSCreator::construct_paxos_replica_number_to_persist_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ERROR_SET_LS_MEMBER_LIST)
 int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
                                   const common::ObMember &arb_replica,
                                   const int64_t paxos_replica_num,
@@ -929,7 +993,10 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
   int tmp_ret = OB_SUCCESS;
   int64_t paxos_replica_number_to_persist = 0;
   int64_t arb_replica_count = arb_replica.is_valid() ? 1 : 0;
-  if (OB_UNLIKELY(!is_valid())) {
+  if (OB_UNLIKELY(ERRSIM_ERROR_SET_LS_MEMBER_LIST)) {
+    ret = ERRSIM_ERROR_SET_LS_MEMBER_LIST;
+    LOG_WARN("errsim error set ls member list", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
   } else if (OB_UNLIKELY(!member_list.is_valid())) {

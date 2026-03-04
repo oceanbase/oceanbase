@@ -333,6 +333,7 @@ ob_set_subtarget(ob_storage high_availability
   high_availability/ob_transfer_parallel_build_tablet_info.cpp
   high_availability/ob_ha_rebuild_tablet.cpp
   high_availability/ob_sstable_copy_start_task.cpp
+  high_availability/ob_tenant_startup_status.cpp
 )
 
 ob_set_subtarget(ob_storage restore
@@ -433,6 +434,8 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet_finish_transfer_mds_helper.cpp
   tablet/ob_tablet_abort_transfer_mds_helper.cpp
   tablet/ob_tablet_persister.cpp
+  tablet/ob_sstablet_persister.cpp
+  tablet/ob_tablet_persist_common.cpp
   tablet/ob_tablet_obj_load_helper.cpp
   tablet/ob_tablet.cpp
   tablet/ob_tablet_block_header.cpp
@@ -847,6 +850,7 @@ ob_set_subtarget(ob_storage common_mixed
   meta_mem/ob_tablet_pointer.cpp
   meta_mem/ob_tenant_meta_mem_mgr.cpp
   meta_mem/ob_tenant_meta_obj_pool.cpp
+  meta_mem/ob_update_tablet_pointer_param.cpp
   utl_file/ob_utl_file_handler.cpp
   blockstore/ob_shared_object_reader_writer.cpp
   blocksstable/ob_bloom_filter_load_task.cpp

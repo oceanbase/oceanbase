@@ -54,6 +54,7 @@ public:
   static const share::SCN INIT_CLOG_CHECKPOINT_SCN;
   static const share::SCN INVALID_CREATE_SCN;
   static const share::SCN INIT_CREATE_SCN;
+  static const share::SCN INIT_MIN_SS_TABLET_VERSION;
 
 public:
   ObTabletMeta();
@@ -125,6 +126,7 @@ public:
   bool is_cs_replica_global_visible_when_ddl() const;
   bool is_cs_replica_global_visible_and_replay_row_store() const;
   bool is_cs_replica_global_visible_and_replay_column_store() const;
+  bool is_min_ss_tablet_version_initial() const;
 public:
   static int deserialize_id(
       const char *buf,

@@ -259,6 +259,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_without_disk)
   int64_t ls_epoch = 0;
   ObLSID id_100(100);
   const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+  const uint64_t data_version = DATA_CURRENT_VERSION;
 
   LOG_INFO("ObLSBeforeRestartTest::create_unfinished_ls_without 1", K(tenant_id));
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_100, arg));
@@ -270,6 +271,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_without_disk)
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  arg.get_replica_type(),
+                                                 data_version,
                                                  ls));
   ObLSLockGuard lock_ls(ls);
   const ObLSMeta &ls_meta = ls->get_ls_meta();
@@ -291,6 +293,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_disk)
   ObLSID id_101(101);
   palf::PalfBaseInfo palf_base_info;
   const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+  const uint64_t data_version = DATA_CURRENT_VERSION;
 
   LOG_INFO("ObLSBeforeRestartTest::create_unfinished_ls_with_disk 1");
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_101, arg));
@@ -302,6 +305,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_disk)
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  arg.get_replica_type(),
+                                                 data_version,
                                                  ls));
   int64_t ls_epoch = 0;
   const bool unused_allow_log_sync = true;
@@ -330,6 +334,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_inner_tablet)
   ObLSID id_102(102);
   palf::PalfBaseInfo palf_base_info;
   const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+  const uint64_t data_version = DATA_CURRENT_VERSION;
 
   LOG_INFO("ObLSBeforeRestartTest::create_unfinished_ls_with_inner_tablet 1");
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_102, arg));
@@ -341,6 +346,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_inner_tablet)
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  arg.get_replica_type(),
+                                                 data_version,
                                                  ls));
   const bool unused_allow_log_sync = true;
   int64_t ls_epoch = 0;
@@ -371,6 +377,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
   ObLSID id_103(103);
   palf::PalfBaseInfo palf_base_info;
   const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+  const uint64_t data_version = DATA_CURRENT_VERSION;
 
   LOG_INFO("ObLSBeforeRestartTest::create_unfinished_ls_with_inner_tablet 1");
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_103, arg));
@@ -382,6 +389,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  arg.get_replica_type(),
+                                                 data_version,
                                                  ls));
   const bool unused_allow_log_sync = true;
   int64_t ls_epoch = 0;
@@ -415,6 +423,7 @@ TEST_F(ObLSBeforeRestartTest, create_restore_ls)
   palf::PalfBaseInfo palf_base_info;
   int64_t create_type = ObLSCreateType::RESTORE;
   const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+  const uint64_t data_version = DATA_CURRENT_VERSION;
 
   LOG_INFO("ObLSBeforeRestartTest::create_unfinished_ls_with_inner_tablet 1");
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_104, arg));
@@ -426,6 +435,7 @@ TEST_F(ObLSBeforeRestartTest, create_restore_ls)
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  REPLICA_TYPE_FULL,
+                                                 data_version,
                                                  ls));
   const bool unused_allow_log_sync = true;
   int64_t ls_epoch = 0;
@@ -464,6 +474,7 @@ TEST_F(ObLSBeforeRestartTest, create_rebuild_ls)
   palf::PalfBaseInfo palf_base_info;
   int64_t create_type = ObLSCreateType::NORMAL;
   const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+  const uint64_t data_version = DATA_CURRENT_VERSION;
 
   LOG_INFO("ObLSBeforeRestartTest::create_unfinished_ls_with_inner_tablet 1");
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_105, arg));
@@ -475,6 +486,7 @@ TEST_F(ObLSBeforeRestartTest, create_rebuild_ls)
                                                  major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  REPLICA_TYPE_FULL,
+                                                 data_version,
                                                  ls));
   const bool unused_allow_log_sync = true;
   int64_t ls_epoch = 0;

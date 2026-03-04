@@ -667,7 +667,7 @@ int ObBackupCheckFile::check_multipart_upload_permission_(const ObBackupDest &ba
   } else if (OB_FAIL(get_permission_check_file_path_(backup_dest, access_type, path))) {
     LOG_WARN("failed to get permission check file path", K(ret), K_(tenant_id), K(backup_dest));
   } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, backup_dest.get_storage_info(),
-             path.get_obstr(), access_type, ObStorageIdMod::get_default_id_mod()))) {
+             path.get_obstr(), access_type, ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
     LOG_WARN("fail to open device or fd", K(ret), K(backup_dest), K(path));
   } else if (OB_FAIL(databuff_printf(data, sizeof(data), "tenant(%lu) multipart writer at %ld", tenant_id_, ObTimeUtility::current_time()))) {
     LOG_WARN("fail to set data", K(ret), K(path.get_ptr()));

@@ -249,11 +249,12 @@ bool ObKeepAliveLSHandler::check_gts_()
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   const int64_t KEEPALIVE_INTERVAL = tenant_config.is_valid() ?
       tenant_config->_keepalive_interval : KEEP_ALIVE_GTS_INTERVAL;
+  const uint64_t gts_tenant_id = is_tenant_sslog_ls(MTL_ID(), ls_id_) ? get_sslog_gts_tenant_id(MTL_ID()) : MTL_ID();
   if (OB_ISNULL(log_handler_ptr_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid arguments", K(ret), KP(log_handler_ptr_));
-  } else if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), nullptr, gts))) {
-    TRANS_LOG(WARN, "get gts error", K(ret));
+  } else if (OB_FAIL(OB_TS_MGR.get_gts(gts_tenant_id, nullptr, gts))) {
+    TRANS_LOG(WARN, "get gts error", K(ret), K(ls_id_), K(gts_tenant_id));
   } else if (OB_FAIL(log_handler_ptr_->get_max_scn(max_scn))) {
     TRANS_LOG(WARN, "get max log_ts failed", K(ret));
   } else if (OB_FAIL(log_handler_ptr_->get_end_scn(end_scn))) {

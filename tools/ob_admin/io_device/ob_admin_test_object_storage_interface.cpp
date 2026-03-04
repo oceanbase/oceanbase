@@ -129,7 +129,7 @@ int ObAdminTestIODeviceExecutor::test_object_storage_interface_async_upload_(Tes
 
   if (OB_FAIL(ctx.util_.open_with_access_type(device_handle, fd, &ctx.storage_info_,
                                              ctx.upload_file_path_, access_type,
-                                             ObStorageIdMod::get_default_id_mod()))) {
+                                             ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
     STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret), K(ctx.upload_file_path_), K(access_type), K(ctx.storage_info_));
   } else if (OB_FAIL(ctx.util_.async_upload_data(*device_handle, fd, ctx.upload_file_content_,
                                                  0, ctx.UPLOAD_FILE_LENGTH, io_handle))) {
@@ -424,7 +424,7 @@ int ObAdminTestIODeviceExecutor::test_object_storage_interface_read_(TestObjectS
       STORAGE_LOG_FILTER(ERROR, "failed to allocate buf", K(ret), K(async_pread_read_size));
     } else if (OB_FAIL(ctx.util_.open_with_access_type(device_handle, fd, &ctx.storage_info_,
             ctx.appendable_file_path_, access_type,
-            ObStorageIdMod::get_default_id_mod()))) {
+            ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
       STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret), K(ctx.storage_info_), K(ctx.appendable_file_path_), K(access_type));
     } else if (OB_FAIL(ctx.util_.async_pread(*device_handle, fd, async_pread_buf,
             async_pread_read_offset, async_pread_read_size,
@@ -516,7 +516,8 @@ int ObAdminTestIODeviceExecutor::test_multi_step_write_appendable_file_(TestObje
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG_FILTER(ERROR, "arguments is invalid",
         K(ret), K(ctx.appendable_file_path_), K(ctx.appendable_file_content_), K(ctx.APPENDABLE_FILE_LENGTH), K(ctx.storage_info_));
-  } else if (OB_FAIL(ctx.util_.open_with_access_type(device_handle, fd, &ctx.storage_info_, ctx.appendable_file_path_, access_type, ObStorageIdMod::get_default_id_mod()))) {
+  } else if (OB_FAIL(ctx.util_.open_with_access_type(device_handle, fd, &ctx.storage_info_, ctx.appendable_file_path_,
+                                                     access_type, ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
     STORAGE_LOG_FILTER(ERROR, "failed to open device with access type",
         K(ret), K(ctx.appendable_file_path_), K(access_type), K(ctx.storage_info_));
   } else if (OB_ISNULL(device_handle)) {
@@ -617,7 +618,7 @@ int ObAdminTestIODeviceExecutor::test_list_before_complete_multipart_write_()
   } else if (OB_FAIL(generate_random_str_(file_content, file_length))) {
     STORAGE_LOG_FILTER(ERROR, "failed to generate content for file", K(ret), K(file_length), K(storage_info));
   } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info,
-          file_path, access_type, ObStorageIdMod::get_default_id_mod()))) {
+          file_path, access_type, ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
     STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret), K(file_path), K(access_type), K(storage_info));
   } else if (OB_ISNULL(device_handle)) {
     ret = OB_ERR_UNEXPECTED;

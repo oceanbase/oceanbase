@@ -11680,7 +11680,7 @@ int ObPartTransCtx::collect_mview_mds_op(bool &need_collect, ObMViewOpArg &arg)
 
 bool ObPartTransCtx::is_for_sslog_() const
 {
-  return is_tenant_sslog_ls(tenant_id_, ls_id_);
+  return need_sslog_trans_service(tenant_id_, ls_id_);
 }
 
 // only root participant in user tenant can use gts ahead

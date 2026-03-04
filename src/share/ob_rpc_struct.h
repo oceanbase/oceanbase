@@ -3981,7 +3981,8 @@ public:
                     compat_mode_(lib::Worker::CompatMode::INVALID),
                     create_ls_type_(EMPTY_LS),
                     palf_base_info_(),
-                    major_mv_merge_info_() {}
+                    major_mv_merge_info_(),
+                    data_version_(0) {}
   ~ObCreateLSArg() {}
   bool is_valid() const;
   void reset();
@@ -3995,7 +3996,8 @@ public:
            const lib::Worker::CompatMode &mode,
            const bool create_with_palf,
            const palf::PalfBaseInfo &palf_base_info,
-           const storage::ObMajorMVMergeInfo &major_mv_merge_info);
+           const storage::ObMajorMVMergeInfo &major_mv_merge_info,
+           const uint64_t data_version);
   int64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -4039,6 +4041,10 @@ public:
   {
     return major_mv_merge_info_;
   }
+  uint64_t get_data_version() const
+  {
+    return data_version_;
+  }
   DECLARE_TO_STRING;
 
 private:
@@ -4052,6 +4058,7 @@ private:
   CreateLSType create_ls_type_;
   palf::PalfBaseInfo palf_base_info_;
   storage::ObMajorMVMergeInfo major_mv_merge_info_;
+  uint64_t data_version_;
 private:
    DISALLOW_COPY_AND_ASSIGN(ObCreateLSArg);
 };
@@ -8833,6 +8840,34 @@ public:
   uint64_t log_id_;
   int64_t timestamp_;
   TO_STRING_KV(K_(log_id), K_(timestamp));
+};
+
+struct ObCheckTabletExistArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckTabletExistArg() : tenant_id_(OB_INVALID_TENANT_ID),
+                            ls_id_(share::ObLSID::INVALID_LS_ID),
+                            tablet_id_(common::ObTabletID::INVALID_TABLET_ID) {}
+  ~ObCheckTabletExistArg() {}
+  int init(const uint64_t tenant_id,
+           const share::ObLSID &ls_id,
+           const common::ObTabletID &tablet_id);
+  void reset();
+  bool is_valid() const { return is_valid_tenant_id(tenant_id_)
+                              && ls_id_.is_valid_with_tenant(tenant_id_)
+                              && tablet_id_.is_valid(); }
+  int assign(const ObCheckTabletExistArg &other);
+  const uint64_t &get_tenant_id() const { return tenant_id_; }
+  const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  TO_STRING_KV(K_(tenant_id),
+               K_(ls_id),
+               K_(tablet_id));
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
 };
 
 struct ObForceSwitchILogFileArg

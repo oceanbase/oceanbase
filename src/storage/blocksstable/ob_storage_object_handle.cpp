@@ -320,9 +320,19 @@ int ObStorageObjectHandle::ss_async_read(const ObStorageObjectReadInfo &read_inf
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid io argument", K(ret), K(read_info), KCSTRING(lbt()));
-  } else if (OB_FAIL(ObSSObjectAccessUtil::async_pread_file(read_info, *this))) {
-    LOG_WARN("fail to async pread file", KR(ret), K(read_info), KPC(this));
+  } else {
+    if (read_info.macro_block_id_.is_shared_tablet_meta()) {
+      CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_TIERED_METADATA);
+      if (OB_FAIL(ObSSObjectAccessUtil::async_pread_file(read_info, *this))) {
+        LOG_WARN("fail to async pread file", KR(ret), K(read_info), KPC(this));
+      }
+    } else {
+      if (OB_FAIL(ObSSObjectAccessUtil::async_pread_file(read_info, *this))) {
+        LOG_WARN("fail to async pread file", KR(ret), K(read_info), KPC(this));
+      }
+    }
   }
+
   return ret;
 }
 
@@ -337,9 +347,17 @@ int ObStorageObjectHandle::ss_async_write(const ObStorageObjectWriteInfo &write_
       LOG_WARN("fail to async append file", KR(ret), K(write_info), KPC(this));
     }
   } else {
-    if (OB_FAIL(ObSSObjectAccessUtil::async_write_file(write_info, *this))) {
-      LOG_WARN("fail to async write file", KR(ret), K(write_info), KPC(this));
+    if (macro_id_.is_shared_tablet_meta()) {
+      CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_TIERED_METADATA);
+      if (OB_FAIL(ObSSObjectAccessUtil::async_write_file(write_info, *this))) {
+        LOG_WARN("fail to async write file", KR(ret), K(write_info), KPC(this));
+      }
+    } else {
+      if (OB_FAIL(ObSSObjectAccessUtil::async_write_file(write_info, *this))) {
+        LOG_WARN("fail to async write file", KR(ret), K(write_info), KPC(this));
+      }
     }
+
   }
   return ret;
 }
@@ -550,6 +568,11 @@ int ObStorageObjectHandle::set_macro_block_id(const MacroBlockId &macro_block_id
     }
   }
   return ret;
+}
+
+void ObStorageObjectHandle::cancel()
+{
+  io_handle_.cancel();
 }
 
 } // namespace blocksstable

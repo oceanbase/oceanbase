@@ -176,6 +176,8 @@ public:
   }
 };
 
+uint64_t tenant_id = 0;
+
 #define MULTI_VERSION_READ_INIT                                         \
   ObSSLogProxyGuard guard;                                              \
   char *key_buf = (char *)mtl_malloc(meta_key1.length()+1, "MITTEST");  \
@@ -198,7 +200,6 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
 
   int ret = OB_SUCCESS;
   TRANS_LOG(INFO, "create tenant start");
-  uint64_t tenant_id = 0;
   create_test_tenant(tenant_id);
   TRANS_LOG(INFO, "create tenant end", K(tenant_id));
 
@@ -215,7 +216,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
   int64_t affected_rows = 0;
   const sslog::ObSSLogMetaType meta_type1 = sslog::ObSSLogMetaType::SSLOG_TABLET_META;
   // key format example: tenant_id;ls_id;tablet_id
-  const common::ObString meta_key1 = "1002;1001;200001";
+  const common::ObString meta_key1 = "id_1:1009;id_2:1001;id_3:200001;";
   const common::ObString meta_value1 = "qc_example1";
   const common::ObString extra_info1= "qc_extra1";
   const common::ObString meta_value1_new = "qc_example1_new";
@@ -230,7 +231,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
   // ========== Example 2 ==========
   const sslog::ObSSLogMetaType meta_type2 = sslog::ObSSLogMetaType::SSLOG_TABLET_META;
   // key format example: tenant_id;ls_id;tablet_id
-  const common::ObString meta_key2 = "1002;1001;200002";
+  const common::ObString meta_key2 = "id_1:1009;id_2:1001;id_3:200002;";
   const common::ObString meta_value2 = "qc_example2";
   const common::ObString extra_info2= "qc_extra2";
 
@@ -239,7 +240,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
   common::ObString meta_value_ret;
   common::ObString extra_info_ret;
   SCN row_scn_ret;
-  const common::ObString meta_key_prefix = "1002;1001;";
+  const common::ObString meta_key_prefix = "id_1:1009;id_2:1001;";
 
   // ========== Test 1: insert one row =========
   ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->insert_row(meta_type1,
@@ -336,6 +337,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
   // ========== Test 6: delete and read the prefix =========
   ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->delete_row(meta_type2,
                                                      meta_key2,
+                                                     false,
                                                      affected_rows));
   ASSERT_EQ(1, affected_rows);
 
@@ -539,7 +541,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
   const int64_t meta_value3_size = 1.5 * 1024 * 1024;
   char *meta_value3_buffer = (char *)ob_malloc(meta_value3_size, "qcc debug");
   memset(meta_value3_buffer, 'a', meta_value3_size);
-  const common::ObString meta_key3 = "1002;1001;200003";
+  const common::ObString meta_key3 = "id_1:1009;id_2:1001;id_3:200003;";
   common::ObString meta_value3;
   meta_value3.assign_ptr(meta_value3_buffer, meta_value3_size);
   const common::ObString extra_info3 = "qc_extra3";
@@ -634,6 +636,267 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
   }
 }
 
+TEST_F(ObTestSSLogBasic, test_sslog_batch_read_write)
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
+
+  ObSSLogProxyGuard guard;
+  ASSERT_EQ(OB_SUCCESS, sslog::get_sslog_table_guard(ObSSLogTableType::SSLOG_TABLE,
+                                                     tenant_id,
+                                                     guard));
+  sslog::ObISSLogProxy *sslog_table_proxy = guard.get_sslog_proxy();
+
+  // ========== batch insert ==========
+  ObSSLogRowList row_list;
+  int64_t affected_rows = 0;
+  const sslog::ObSSLogMetaType meta_type1 = sslog::ObSSLogMetaType::SSLOG_TABLET_STORAGE_SCHEMA;
+  const common::ObString meta_key1 = "id_1:1002;id_2:1101;id_3:200001;";
+  const common::ObString meta_value1 = "qc_example1";
+  const common::ObString extra_info1= "qc_extra1";
+  row_list.push_back(ObRawMetaRow(SCN::max_scn(), meta_type1, meta_key1, meta_value1, extra_info1));
+
+  const sslog::ObSSLogMetaType meta_type2 = sslog::ObSSLogMetaType::SSLOG_TABLET_SSTABLE;
+  const common::ObString meta_key2 = "id_1:1002;id_2:1101;id_3:200003;";
+  const common::ObString meta_value2 = "jy_example2";
+  const common::ObString extra_info2= "jy_extra2";
+  row_list.push_back(ObRawMetaRow(SCN::max_scn(), meta_type2, meta_key2, meta_value2, extra_info2));
+
+  const sslog::ObSSLogMetaType meta_type3 = sslog::ObSSLogMetaType::SSLOG_TABLET_SSTABLE;
+  const common::ObString meta_key3 = "id_1:1002;id_2:1101;id_3:200003;id_4:222;id_5:666;";
+  const common::ObString meta_value3 = "qc_example3";
+  const common::ObString extra_info3= "qc_extra3";
+  row_list.push_back(ObRawMetaRow(SCN::max_scn(), meta_type3, meta_key3, meta_value3, extra_info3));
+  // ========== Universal ==========
+  const common::ObString key_prefix = "id_1:1002;id_2:1101;id_3:200003;";
+  sslog::ObSSLogMetaType meta_type_ret;
+  common::ObString meta_key_ret;
+  common::ObString meta_value_ret;
+  common::ObString extra_info_ret;
+  SCN row_scn_ret;
+
+  // ========== Test 1: insert 3 rows =========
+  ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->batch_insert_rows(row_list, affected_rows));
+  ASSERT_EQ(3, affected_rows);
+
+  // ========== Test 2: read rows =========
+  {
+    SSLOG_TABLE_READ_INIT
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                     meta_type1,
+                                                     meta_key1,
+                                                     iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_value1, meta_value_ret);
+    ASSERT_EQ(extra_info1, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  }
+  {
+    SSLOG_TABLE_READ_INIT
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                     meta_type2,
+                                                     meta_key2,
+                                                     iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_value2, meta_value_ret);
+    ASSERT_EQ(extra_info2, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  }
+  {
+    SSLOG_TABLE_READ_INIT
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                     meta_type3,
+                                                     meta_key3,
+                                                     iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_value3, meta_value_ret);
+    ASSERT_EQ(extra_info3, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  }
+  // ========== Test 3: batch read rows =========
+  {
+    SSLOG_TABLE_READ_INIT
+    ObSSLogRawKeyArray meta_keys;
+    meta_keys.push_back(ObSSLogRawKey(meta_type1, meta_key1));
+    meta_keys.push_back(ObSSLogRawKey(meta_type2, meta_key2));
+    meta_keys.push_back(ObSSLogRawKey(meta_type2, meta_key3));
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->batch_read_rows(meta_keys, iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_type1, meta_type_ret);
+    ASSERT_EQ(meta_key1, meta_key_ret);
+    ASSERT_EQ(meta_value1, meta_value_ret);
+    ASSERT_EQ(extra_info1, extra_info_ret);
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_type2, meta_type_ret);
+    ASSERT_EQ(meta_key2, meta_key_ret);
+    ASSERT_EQ(meta_value2, meta_value_ret);
+    ASSERT_EQ(extra_info2, extra_info_ret);
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_type3, meta_type_ret);
+    ASSERT_EQ(meta_key3, meta_key_ret);
+    ASSERT_EQ(meta_value3, meta_value_ret);
+    ASSERT_EQ(extra_info3, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret));
+  }
+
+  // ========== Test 3: batch delete rows =========
+  {
+    TRANS_LOG(INFO, "jianyue batch delete row debug", K(meta_value2), K(meta_value_ret));
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->delete_row(meta_type1,
+                                                     meta_key1,
+                                                     false,
+                                                     affected_rows));
+    ASSERT_EQ(1, affected_rows);
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->delete_row(meta_type2,
+                                                     key_prefix,
+                                                     true,
+                                                     affected_rows));
+    ASSERT_EQ(2, affected_rows);
+    SSLOG_TABLE_READ_INIT
+    ObSSLogRawKeyArray meta_keys;
+    meta_keys.push_back(ObSSLogRawKey(meta_type1, meta_key1));
+    meta_keys.push_back(ObSSLogRawKey(meta_type2, meta_key2));
+    meta_keys.push_back(ObSSLogRawKey(meta_type2, meta_key3));
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->batch_read_rows(meta_keys, iter));
+    ASSERT_EQ(OB_ITER_END, iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret));
+  }
+}
+
+TEST_F(ObTestSSLogBasic, test_sslog_palf_kv_batch_write)
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(1));
+
+  ObSSLogProxyGuard guard;
+  ASSERT_EQ(OB_SUCCESS, sslog::get_sslog_table_guard(ObSSLogTableType::SSLOG_PALF_KV,
+                                                     1,
+                                                     guard));
+  sslog::ObISSLogProxy *sslog_table_proxy = guard.get_sslog_proxy();
+
+  // ========== batch insert ==========
+  ObSSLogRowList row_list;
+  int64_t affected_rows = 0;
+  const sslog::ObSSLogMetaType meta_type1 = sslog::ObSSLogMetaType::SSLOG_TABLET_STORAGE_SCHEMA;
+  const common::ObString meta_key1 = "id_1:1002;id_2:1301;id_3:200001;";
+  const common::ObString meta_value1 = "qc_example1";
+  const common::ObString extra_info1= "qc_extra1";
+  row_list.push_back(ObRawMetaRow(SCN::max_scn(), meta_type1, meta_key1, meta_value1, extra_info1));
+
+  const sslog::ObSSLogMetaType meta_type2 = sslog::ObSSLogMetaType::SSLOG_TABLET_SSTABLE;
+  const common::ObString meta_key2 = "id_1:1002;id_2:1301;id_3:200003;id_4:222;id_5:777;";
+  const common::ObString meta_value2 = "jy_example2";
+  const common::ObString extra_info2= "jy_extra2";
+  row_list.push_back(ObRawMetaRow(SCN::max_scn(), meta_type2, meta_key2, meta_value2, extra_info2));
+
+  const sslog::ObSSLogMetaType meta_type3 = sslog::ObSSLogMetaType::SSLOG_TABLET_SSTABLE;
+  const common::ObString meta_key3 = "id_1:1002;id_2:1301;id_3:200003;id_4:222;id_5:666;";
+  const common::ObString meta_value3 = "qc_example3";
+  const common::ObString extra_info3= "qc_extra3";
+  row_list.push_back(ObRawMetaRow(SCN::max_scn(), meta_type3, meta_key3, meta_value3, extra_info3));
+  // ========== Universal ==========
+  const common::ObString key_prefix = "id_1:1002;id_2:1301;id_3:200003;";
+  sslog::ObSSLogMetaType meta_type_ret;
+  common::ObString meta_key_ret;
+  common::ObString meta_value_ret;
+  common::ObString extra_info_ret;
+  SCN row_scn_ret;
+
+  // ========== Test 1: insert 3 rows =========
+  ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->batch_insert_rows(row_list, affected_rows));
+  ASSERT_EQ(3, affected_rows);
+
+  // ========== Test 2: read rows =========
+  {
+    SSLOG_TABLE_READ_INIT
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                     meta_type1,
+                                                     meta_key1,
+                                                     iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_value1, meta_value_ret);
+    ASSERT_EQ(extra_info1, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  }
+  {
+    SSLOG_TABLE_READ_INIT
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                     meta_type2,
+                                                     meta_key2,
+                                                     iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+
+    TRANS_LOG(INFO, "jianyue debug", K(meta_value2), K(meta_value_ret));
+    ASSERT_EQ(meta_value2, meta_value_ret);
+    ASSERT_EQ(extra_info2, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  }
+  {
+    SSLOG_TABLE_READ_INIT
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                     meta_type3,
+                                                     meta_key3,
+                                                     iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_value3, meta_value_ret);
+    ASSERT_EQ(extra_info3, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  }
+  // ========== Test 3: batch read rows =========
+  {
+    SSLOG_TABLE_READ_INIT
+    ObSSLogRawKeyArray meta_keys;
+    meta_keys.push_back(ObSSLogRawKey(meta_type1, meta_key1));
+    meta_keys.push_back(ObSSLogRawKey(meta_type2, meta_key2));
+    meta_keys.push_back(ObSSLogRawKey(meta_type2, meta_key3));
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->batch_read_rows(meta_keys, iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_type1, meta_type_ret);
+    ASSERT_EQ(meta_key1, meta_key_ret);
+    ASSERT_EQ(meta_value1, meta_value_ret);
+    ASSERT_EQ(extra_info1, extra_info_ret);
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_type2, meta_type_ret);
+    ASSERT_EQ(meta_key2, meta_key_ret);
+    ASSERT_EQ(meta_value2, meta_value_ret);
+    ASSERT_EQ(extra_info2, extra_info_ret);
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_type3, meta_type_ret);
+    ASSERT_EQ(meta_key3, meta_key_ret);
+    ASSERT_EQ(meta_value3, meta_value_ret);
+    ASSERT_EQ(extra_info3, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret));
+  }
+  // ========== Test 3: batch delete rows =========
+  {
+    TRANS_LOG(INFO, "jianyue palf kv delete row debug", K(meta_value2), K(meta_value_ret));
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->delete_row(meta_type1,
+                                                     meta_key1,
+                                                     false,
+                                                     affected_rows));
+    ASSERT_EQ(1, affected_rows);
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->delete_row(meta_type2,
+                                                     key_prefix,
+                                                     true,
+                                                     affected_rows));
+    ASSERT_EQ(2, affected_rows);
+    SSLOG_TABLE_READ_INIT
+    ObSSLogRawKeyArray meta_keys;
+    meta_keys.push_back(ObSSLogRawKey(meta_type1, meta_key1));
+    meta_keys.push_back(ObSSLogRawKey(meta_type2, meta_key2));
+    meta_keys.push_back(ObSSLogRawKey(meta_type2, meta_key3));
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->batch_read_rows(meta_keys, iter));
+    ASSERT_EQ(OB_ITER_END, iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret));
+  }
+}
+
 TEST_F(ObTestSSLogBasic, test_sslog_schema)
 {
   int64_t affected_rows = 0;
@@ -675,7 +938,7 @@ TEST_F(ObSSLogAfterRestartTest, test_sslog_schema)
   int64_t affected_rows = 0;
   const sslog::ObSSLogMetaType meta_type1 = sslog::ObSSLogMetaType::SSLOG_TABLET_META;
   // key format example: tenant_id;ls_id;tablet_id
-  const common::ObString meta_key1 = "1002;1001;200001";
+  const common::ObString meta_key1 = "id_1:1022;id_2:1001;id_3:200001";
   const common::ObString meta_value1 = "qc_example1";
   const common::ObString extra_info1= "qc_extra1";
   const common::ObString meta_value1_new = "qc_example1_new";
@@ -690,7 +953,7 @@ TEST_F(ObSSLogAfterRestartTest, test_sslog_schema)
   // ========== Example 2 ==========
   const sslog::ObSSLogMetaType meta_type2 = sslog::ObSSLogMetaType::SSLOG_TABLET_META;
   // key format example: tenant_id;ls_id;tablet_id
-  const common::ObString meta_key2 = "1002;1001;200002";
+  const common::ObString meta_key2 = "id_1:1022;id_2:1001;id_3:200002;";
   const common::ObString meta_value2 = "qc_example2";
   const common::ObString extra_info2= "qc_extra2";
 
@@ -700,7 +963,7 @@ TEST_F(ObSSLogAfterRestartTest, test_sslog_schema)
   common::ObString extra_info_ret;
   SCN row_scn_ret;
   sslog::ObSSLogMetaType meta_type_ret;
-  const common::ObString meta_key_prefix = "1002;1001;";
+  const common::ObString meta_key_prefix = "id_1:1022;id_2:1001;";
 
   // ============================== restart successfully ==============================
   {
@@ -808,14 +1071,14 @@ TEST_F(ObTestSSLogBasic, test_sslog_segment_query)
   // ========== 准备测试数据 ==========
   int64_t affected_rows = 0;
   const sslog::ObSSLogMetaType meta_type = sslog::ObSSLogMetaType::SSLOG_TABLET_META;
-  const common::ObString meta_key_prefix = "1002;1009;";
+  const common::ObString meta_key_prefix = "id_1:1002;id_2:1019;";
 
   // 插入多条测试数据
   for (int i = 1; i <= 10; i++) {
     char key_buf[100];
     char value_buf[100];
     char extra_buf[100];
-    snprintf(key_buf, sizeof(key_buf), "1002;1009;%d", i);
+    snprintf(key_buf, sizeof(key_buf), "id_1:1002;id_2:1019;id_3:1008;id_4:%d;", i);
     snprintf(value_buf, sizeof(value_buf), "qc_segment_test_value_%d", i);
     snprintf(extra_buf, sizeof(extra_buf), "qc_segment_test_extra_%d", i);
 
@@ -860,7 +1123,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_segment_query)
 
       // 验证列值
       ASSERT_EQ(meta_type, meta_type_ret);
-      ASSERT_TRUE(meta_key_ret.prefix_match("1002;1009;"));
+      ASSERT_TRUE(meta_key_ret.prefix_match("id_1:1002;id_2:1019;"));
       ASSERT_TRUE(meta_value_ret.prefix_match("qc_segment_test_value_"));
       ASSERT_TRUE(extra_info_ret.prefix_match("qc_segment_test_extra_"));
       ASSERT_TRUE(row_scn_ret.is_valid());
@@ -899,7 +1162,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_segment_query)
 
       // 验证列值
       ASSERT_EQ(meta_type, meta_type_ret);
-      ASSERT_TRUE(meta_key_ret.prefix_match("1002;1009;"));
+      ASSERT_TRUE(meta_key_ret.prefix_match("id_1:1002;id_2:1019;"));
       ASSERT_TRUE(meta_value_ret.prefix_match("qc_segment_test_value_"));
       ASSERT_TRUE(extra_info_ret.prefix_match("qc_segment_test_extra_"));
       ASSERT_TRUE(row_scn_ret.is_valid());
@@ -938,7 +1201,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_segment_query)
 
       // 验证列值
       ASSERT_EQ(meta_type, meta_type_ret);
-      ASSERT_TRUE(meta_key_ret.prefix_match("1002;1009;"));
+      ASSERT_TRUE(meta_key_ret.prefix_match("id_1:1002;id_2:1019;"));
       ASSERT_TRUE(meta_value_ret.prefix_match("qc_segment_test_value_"));
       ASSERT_TRUE(extra_info_ret.prefix_match("qc_segment_test_extra_"));
       ASSERT_TRUE(row_scn_ret.is_valid());

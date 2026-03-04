@@ -2753,7 +2753,7 @@ int ObDRWorker::generate_ls_single_replica_dr_tasks_(
   UnitProvider unit_provider;
   share::ObUnit dest_unit;
   const share::ObLSStatusInfo *ls_status_info = nullptr;
-  if (OB_FAIL(check_corresponding_sslog_ls_ready_(dr_ls_info.get_tenant_id(), dr_ls_info.get_ls_id(), dest_zone))) {
+  if (OB_FAIL(check_sslog_and_metadata_ls_ready_(dr_ls_info.get_tenant_id(), dr_ls_info.get_ls_id(), dest_zone))) {
     LOG_WARN("fail to check corresponding sslog ls ready", KR(ret), K(dr_ls_info), K(dest_zone));
   } else if (OB_FAIL(unit_provider.init(gen_user_tenant_id(dr_ls_info.get_tenant_id()), dr_ls_info))) {
     LOG_WARN("fail to init unit provider", KR(ret), K(dr_ls_info));
@@ -2776,7 +2776,7 @@ int ObDRWorker::generate_ls_single_replica_dr_tasks_(
   return ret;
 }
 
-int ObDRWorker::check_corresponding_sslog_ls_ready_(
+int ObDRWorker::check_ls_recovery_complete_(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const common::ObZone &dest_zone)
@@ -2791,10 +2791,8 @@ int ObDRWorker::check_corresponding_sslog_ls_ready_(
                || dest_zone.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(dest_zone));
-  } else if (OB_UNLIKELY(is_tenant_sslog_ls(tenant_id, ls_id))) {
-    LOG_INFO("sslog LS, skip check", K(tenant_id), K(ls_id));
   } else if (OB_FAIL(DisasterRecoveryUtils::get_member_info_from_log_service(meta_tenant_id,
-                                                                             SSLOG_LS,
+                                                                             ls_id,
                                                                              config_version,
                                                                              member_list,
                                                                              learner_list))) {
@@ -2818,6 +2816,37 @@ int ObDRWorker::check_corresponding_sslog_ls_ready_(
       ret = OB_EAGAIN;
       LOG_WARN("no alive member in dest_zone for sslog ls", KR(ret), K(tenant_id), K(ls_id), K(dest_zone));
     }
+  }
+  return ret;
+}
+
+int ObDRWorker::check_sslog_and_metadata_ls_ready_(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObZone &dest_zone)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+               || !ls_id.is_valid_with_tenant(tenant_id)
+               || dest_zone.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(dest_zone));
+  } else if (is_tenant_sslog_ls(tenant_id, ls_id)) {
+    // skip, no need check
+  } else if (OB_FAIL(check_ls_recovery_complete_(tenant_id, SSLOG_LS, dest_zone))) {
+    LOG_WARN("fail to check sslog ls recovery complete", KR(ret), K(tenant_id), K(ls_id), K(dest_zone));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
+  } else if (data_version < DATA_VERSION_4_5_1_0) {
+    LOG_INFO("tenant data version less than 4.5.1.0, skip check metadata ls recovery complete",
+      KR(ret), K(tenant_id), KDV(data_version));
+  } else if (is_tenant_metadata_ls(tenant_id, ls_id)) {
+    // skip, no need check
+  } else if (is_meta_tenant(tenant_id) && ls_id.is_sys_ls()) {
+    // meta tenant's sys ls no need check
+  } else if (OB_FAIL(check_ls_recovery_complete_(tenant_id, METADATA_LS, dest_zone))) {
+    LOG_WARN("fail to check metadata ls recovery complete", KR(ret), K(tenant_id), K(ls_id), K(dest_zone));
   }
   return ret;
 }

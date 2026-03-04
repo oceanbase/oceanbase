@@ -19,6 +19,7 @@
 #include "src/rootserver/ob_root_service.h" // for ObRootService
 #include "observer/ob_sql_client_decorator.h"
 #include "share/inner_table/ob_sslog_table_schema.h"
+#include "share/inner_table/ob_tiered_metadata_store_schema.h"
 #include "sql/engine/expr/ob_expr_like.h"
 
 #define COMMON_SQL              "SELECT * FROM %s"
@@ -336,6 +337,15 @@ int ObSchemaServiceSQLImpl::get_sslog_table_schema(ObTableSchema &table_schema)
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObSSlogTableSchema::all_sslog_table_schema(table_schema))) {
     LOG_WARN("sslog_table_schema failed", K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::get_tiered_metadata_store_table_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTieredMetadataStoreTableSchema::all_tiered_metadata_store_schema(table_schema))) {
+    LOG_WARN("tiered_metadata_store_table_schema failed", K(ret));
   }
   return ret;
 }
@@ -5443,12 +5453,6 @@ int ObSchemaServiceSQLImpl::fetch_tables(
                                  schema_version,
                                  fill_extract_schema_id(schema_status, OB_ALL_CORE_TABLE_TID)))) {
         LOG_WARN("append sql failed", K(ret));
-#ifdef OB_BUILD_SHARED_STORAGE
-      } else if (is_shared_storage_sslog_exist()
-                 && OB_FAIL(sql.append_fmt(" and a.table_id != %lu",
-                                 fill_extract_schema_id(schema_status, OB_ALL_SSLOG_TABLE_TID)))) {
-        LOG_WARN("append sql failed", K(ret));
-#endif
       } else if (OB_FAIL(sql.append_fmt(" ORDER BY tenant_id DESC, table_id DESC, schema_version DESC"))) {
         LOG_WARN("append sql failed", KR(ret));
       }
@@ -6676,9 +6680,12 @@ int ObSchemaServiceSQLImpl::get_table_schema(
         OB_FAIL(get_all_core_table_schema(hardcode_table_schema))) {
       LOG_WARN("get all core table schema failed", K(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
-    } else if (is_shared_storage_sslog_table(table_id) &&
-               OB_FAIL(get_sslog_table_schema(hardcode_table_schema))) {
+    } else if (is_shared_storage_sslog_table(table_id)
+            && OB_FAIL(get_sslog_table_schema(hardcode_table_schema))) {
       LOG_WARN("get sslog table schema failed", K(ret));
+    } else if (is_ss_tiered_metadata_store_table(table_id)
+            && OB_FAIL(get_tiered_metadata_store_table_schema(hardcode_table_schema))) {
+      LOG_WARN("get tiered metadata store table schema failed", K(ret));
 #endif
     } else if (OB_FAIL(alloc_table_schema(hardcode_table_schema, allocator,
                                           table_schema))) {

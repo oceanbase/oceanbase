@@ -130,11 +130,13 @@ class ObTenantMdsService;
   class ObSSGarbageCollectorService;
   class ObStorageCachePolicyService;
   class ObSSDiagnoseInfoMgr;
+  class ObTieredMetadataStore;
 #else
 #endif
   class ObGlobalIteratorPool;
   class ObInnerTabletAccessService;
   class ObTabletReorgInfoTableService;
+  class ObTenantStartupStatus;
 } // namespace storage
 
 namespace transaction {
@@ -342,6 +344,7 @@ namespace detector
 #define SSLogUIDService transaction::ObSSLogUIDService*,
 #define TabletSplitTaskCache share::ObTabletSplitTaskCache*,
 #define SSDiagnoseInfoMgr storage::ObSSDiagnoseInfoMgr*,
+#define TieredMetadataStore storage::ObTieredMetadataStore*,
 #else
 #define TenantDiskSpaceManager
 #define TenantFileManager
@@ -365,6 +368,7 @@ namespace detector
 #define SSLogUIDService
 #define TabletSplitTaskCache
 #define SSDiagnoseInfoMgr
+#define TieredMetadataStore
 #endif
 
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
@@ -519,6 +523,7 @@ using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::
       SSLogUIDService                               \
       TabletSplitTaskCache                          \
       SSDiagnoseInfoMgr                             \
+      TieredMetadataStore                           \
       share::ObStorageIOUsageRepoter*,              \
       share::ObResourceLimitCalculator*,            \
       storage::checkpoint::ObCheckpointDiagnoseMgr*, \
@@ -551,6 +556,7 @@ using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::
       ObHMSClientUnifyPoolMgr*,                      \
       share::schema::ObAddIntervalPartitionController*, \
       observer::ObTenantTabletCleanupService*,        \
+      storage::ObTenantStartupStatus*,                \
       observer::ObTabletReplicaInfoCacheMgr*  ,       \
       ObCurlRestClientPoolMgr*                       \
   )

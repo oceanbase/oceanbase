@@ -356,14 +356,6 @@ void ObTenantSuperBlock::reset()
   max_file_id_ = 0;
 }
 
-void ObTenantSuperBlock::copy_snapshots_from(const ObTenantSuperBlock &other)
-{
-  snapshot_cnt_ = other.snapshot_cnt_;
-  for (int64_t i = 0; i < snapshot_cnt_; i++) {
-    tenant_snapshots_[i] = other.tenant_snapshots_[i];
-  }
-}
-
 bool ObTenantSuperBlock::is_valid() const
 {
   bool is_valid = OB_INVALID_TENANT_ID != tenant_id_

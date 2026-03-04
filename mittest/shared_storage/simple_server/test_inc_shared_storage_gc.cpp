@@ -280,7 +280,7 @@ TEST_F(ObSharedStorageTest, test_ls_gc_)
   share::ObTenantSwitchGuard tguard;
   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(RunCtx.tenant_id_));
 
-  ASSERT_EQ(OB_SUCCESS, MTL(ObSSMetaService*)->update_ls_gc_state(RunCtx.ls_id_, logservice::LSGCState::LS_OFFLINE, share::SCN::min_scn()));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObSSMetaService*)->update_ls_gc_state(RunCtx.ls_id_, logservice::LSGCState::WAIT_GC, share::SCN::invalid_scn()));
   sleep(10);
 
   int64_t affected_rows = 0;
@@ -455,6 +455,7 @@ void ObSharedStorageTest::check_block_for_private_dir(
   int64_t last_gc_version = -1;
   uintptr_t tablet_fingerprint = 0;
   bool is_old_version_empty = false;
+  bool is_set_stop = false;
   bool is_transfer_out_deleted = false;
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(RunCtx.ls_id_,
                                                                                  RunCtx.tablet_id_,
@@ -474,6 +475,7 @@ void ObSharedStorageTest::check_block_for_private_dir(
                                   last_gc_version,
                                   current_tablet_transfer_seq,
                                   tablet_fingerprint,
+                                  is_set_stop,
                                   is_transfer_out_deleted);
   ObArray<blocksstable::MacroBlockId> block_ids_in_tablet;
   ObArray<blocksstable::MacroBlockId> unuse_block_ids;
@@ -546,6 +548,7 @@ void ObSharedStorageTest::get_tablet_version(
   int64_t current_tablet_transfer_seq = -1;
   int64_t last_gc_version = -1;
   uintptr_t tablet_fingerprint = 0;
+  bool is_set_stop = false;
   bool is_transfer_out_deleted = false;
   do {
     ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(RunCtx.ls_id_,
@@ -568,6 +571,7 @@ void ObSharedStorageTest::get_tablet_version(
                                     last_gc_version,
                                     current_tablet_transfer_seq,
                                     tablet_fingerprint,
+                                    is_set_stop,
                                     is_transfer_out_deleted);
     LOG_INFO("wait old tablet version delete", K(current_tablet_version), K(is_old_version_empty), K(RunCtx.ls_id_), K(RunCtx.ls_epoch_), K(handler));
     ASSERT_EQ(OB_SUCCESS, handler.list_tablet_meta_version(tablet_versions));

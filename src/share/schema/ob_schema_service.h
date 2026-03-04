@@ -902,6 +902,8 @@ public:
 #ifdef OB_BUILD_SHARED_STORAGE
   //get sslog table schema
   virtual int get_sslog_table_schema(ObTableSchema &table_schema) = 0;
+  //get tiered metadata store table schema
+  virtual int get_tiered_metadata_store_table_schema(ObTableSchema &table_schema) = 0;
 #endif
   //get all core table schema
   virtual int get_all_core_table_schema(ObTableSchema &table_schema) = 0;

@@ -21,6 +21,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/incremental/ob_shared_meta_service.h"
 #endif
+#include "storage/high_availability/ob_tenant_startup_status.h"
 
 namespace oceanbase
 {
@@ -50,9 +51,9 @@ void ObEmptyShellTask::runTimerTask()
 
   skip_empty_shell_task = (OB_SUCCESS != (OB_E(EventTable::EN_TABLET_EMPTY_SHELL_TASK_FAILED) OB_SUCCESS));
 
-  if (!SERVER_STORAGE_META_SERVICE.is_started()) {
+  if (!TENANT_STARTUP_STATUS.is_in_service()) {
     // do nothing
-    STORAGE_LOG(DEBUG, "ob block manager has not started");
+    STORAGE_LOG(DEBUG, "tenant startup is not in service");
   } else if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", KR(ret));

@@ -142,9 +142,13 @@ public:
       const share::SCN &create_scn,
       const ObMajorMVMergeInfo &major_mv_merge_info,
       const ObLSStoreFormat &store_format,
+      const uint64_t data_version,
       const ObReplicaType &replica_type = REPLICA_TYPE_FULL);
   int64_t get_ls_epoch() const { return ls_epoch_; }
   void set_ls_epoch(const int64_t ls_epoch) { ls_epoch_ = ls_epoch; }
+  int get_ss_restart_recover_scn(share::SCN &ss_recover_scn) const;
+  int set_ss_restart_recover_scn(const share::SCN &ss_recover_scn);
+  uint64_t get_data_version() const;
 
   ObReplicaType get_replica_type() const
   { return replica_type_; }
@@ -190,7 +194,7 @@ public:
                K_(rebuild_seq), K_(migration_status), K(gc_state_), K(offline_scn_),
                K_(restore_status), K_(replica_type), K_(replayable_point), K_(tablet_change_checkpoint_scn),
                K_(all_id_meta), K_(transfer_scn), K_(rebuild_info), K_(transfer_meta_info),
-               K_(store_format));
+               K_(store_format), K_(ls_epoch), K_(ss_restart_recover_scn));
 private:
   int check_can_update_();
 public:
@@ -240,6 +244,7 @@ protected:
   ObMajorMVMergeInfo major_mv_merge_info_;
   common::ObLSStoreFormat store_format_;    // set on initialization and then remain unchanged
   int64_t ls_epoch_;
+  share::SCN ss_restart_recover_scn_;
 };
 
 }  // namespace storage

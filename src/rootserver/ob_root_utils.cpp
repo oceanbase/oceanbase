@@ -15,10 +15,12 @@
 #include "ob_root_utils.h"
 #include "logservice/ob_log_service.h"
 #include "share/ob_primary_zone_util.h"           // ObPrimaryZoneUtil
+#include "share/ob_rpc_struct.h"
 #include "share/ob_zone_table_operation.h"
 #include "rootserver/ob_tenant_balance_service.h"    // for ObTenantBalanceService
 #include "rootserver/ob_table_creator.h"                    // for ObTableCreator
 #include "share/inner_table/ob_sslog_table_schema.h"        // for ObSSlogTableSchema
+#include "share/inner_table/ob_tiered_metadata_store_schema.h" // for ObTieredMetadataStoreTableSchema
 #include "rootserver/ob_server_zone_op_service.h"
 
 using namespace oceanbase::rootserver;
@@ -1509,11 +1511,45 @@ int ObLocalityCheckHelp::check_alter_single_zone_locality_valid(
   return ret;
 }
 
-int ObRootUtils::create_sslog_tablet(
-    const uint64_t tenant_id)
+int ObRootUtils::check_tiered_metadata_tablet_exist(
+    const ObAddr &server,
+    const uint64_t tenant_id,
+    bool &exist)
 {
   int ret = OB_SUCCESS;
-  FLOG_INFO("start creating sslog table", K(tenant_id));
+  exist = false;
+  ObCheckTabletExistArg arg;
+  LOG_INFO("check tiered metadata tablet exist", K(server), K(tenant_id));
+  obrpc::Bool is_tiered_metadata_tablet_exist(false);
+  if (OB_UNLIKELY(!server.is_valid() || !is_meta_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(server), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("srv_rpc_proxy_ is NULL", KR(ret), KP(GCTX.srv_rpc_proxy_));
+  } else if (OB_FAIL(arg.init(tenant_id, METADATA_LS, ObTabletID(OB_ALL_TIERED_METADATA_STORE_TID)))) {
+    LOG_WARN("failed to init arg", KR(ret));
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(server)
+                                         .by(tenant_id)
+                                         .timeout(GCONF.rpc_timeout)
+                                         .check_tablet_exist(arg, is_tiered_metadata_tablet_exist))) {
+    LOG_WARN("failed to check tiered metadata tablet exist", KR(ret));
+  } else if (is_tiered_metadata_tablet_exist) {
+    exist = true;
+  } else {
+    exist = false;
+  }
+  LOG_INFO("check tiered metadata tablet exist finished", KR(ret), K(server), K(tenant_id), K(arg), K(exist));
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_ERROR_CREATE_SS_SPECIAL_TABLET)
+int ObRootUtils::create_ss_special_tablet(
+    const uint64_t tenant_id,
+    const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("start creating ss special tablet", K(tenant_id), K(table_id));
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
@@ -1531,13 +1567,22 @@ int ObRootUtils::create_sslog_tablet(
       LOG_WARN("fail to start trans", KR(ret));
     } else if (OB_FAIL(table_creator.init(false))) {
       LOG_WARN("fail to init tablet creator", KR(ret));
-    } else if (OB_FAIL(ObSSlogTableSchema::all_sslog_table_schema(table_schema))) {
-      LOG_WARN("fail to get schema", KR(ret));
-    } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, table_schema))) {
+    } else if (share::OB_ALL_SSLOG_TABLE_TID == table_id) {
+      if (OB_FAIL(ObSSlogTableSchema::all_sslog_table_schema(table_schema))) {
+        LOG_WARN("fail to get schema", KR(ret));
+      } else if (OB_FAIL(ls_id_array.push_back(SSLOG_LS))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    } else if (share::OB_ALL_TIERED_METADATA_STORE_TID == table_id) {
+      if (OB_FAIL(ObTieredMetadataStoreTableSchema::all_tiered_metadata_store_schema(table_schema))) {
+        LOG_WARN("fail to get schema", KR(ret));
+      } else if (OB_FAIL(ls_id_array.push_back(METADATA_LS))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+    if (FAILEDx(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, table_schema))) {
       LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
     } else if (OB_FAIL(table_schema_ptrs.push_back(&table_schema))) {
-      LOG_WARN("fail to push back", KR(ret));
-    } else if (OB_FAIL(ls_id_array.push_back(SSLOG_LS))) {
       LOG_WARN("fail to push back", KR(ret));
     } else if (OB_FAIL(need_create_empty_majors.push_back(true))) {
       LOG_WARN("fail to push back", KR(ret));
@@ -1549,6 +1594,9 @@ int ObRootUtils::create_sslog_tablet(
       LOG_WARN("fail to add create tablet arg", KR(ret));
     } else if (OB_FAIL(table_creator.execute())) {
       LOG_WARN("execute create partition failed", K(ret));
+    } else if (OB_UNLIKELY(ERRSIM_ERROR_CREATE_SS_SPECIAL_TABLET)) {
+      ret = ERRSIM_ERROR_CREATE_SS_SPECIAL_TABLET;
+      LOG_WARN("errsim error create ss special tablet", KR(ret));
     }
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
@@ -1559,7 +1607,7 @@ int ObRootUtils::create_sslog_tablet(
       }
     }
   }
-  FLOG_INFO("finish creating sslog table", KR(ret), K(tenant_id));
+  FLOG_INFO("finish creating ss special tablet", KR(ret), K(tenant_id), K(table_id));
   return ret;
 }
 

@@ -3414,3 +3414,6 @@ DEF_INT(_large_query_cpu_quota_adjustment_step, OB_TENANT_PARAMETER, "0", "[0,10
 DEF_BOOL(_enable_pl_sql_parameterize, OB_TENANT_PARAMETER, "False",
         "enable/disable pl sql parameterize optimization",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_ss_fast_migration, OB_TENANT_PARAMETER, "True",
+         "use fast migration in shared-storage if enable",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

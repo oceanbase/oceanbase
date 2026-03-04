@@ -91,7 +91,7 @@ int ObTabletReorgInfoTableIterator::prepare_scan_iter_(
 {
   int ret = OB_SUCCESS;
   share::SCN snapshot;
-  const bool is_for_sslog = is_tenant_sslog_ls(tenant_id, ls_id);
+  const bool is_for_sslog = need_sslog_trans_service(tenant_id, ls_id);
   const uint64_t target_tenant_id = !is_for_sslog
                                     ? tenant_id : transaction::get_sslog_gts_tenant_id(tenant_id);
   if (OB_FAIL(get_local_read_scn_(target_tenant_id, abs_timeout_ts, snapshot))) {

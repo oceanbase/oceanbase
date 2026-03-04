@@ -346,6 +346,7 @@ ob_set_subtarget(ob_share common_mixed
   inner_table/ob_inner_table_schema.vt.cpp
   inner_table/ob_inner_table_schema.lob.cpp
   inner_table/ob_inner_table_schema_misc.ipp
+  inner_table/ob_tiered_metadata_store_schema.cpp
   inner_table/ob_sslog_table_schema.cpp
   object/ob_obj_cast.cpp
   parameter/ob_parameter_seed.ipp

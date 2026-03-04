@@ -1519,7 +1519,7 @@ int ObCacheSSTableHelper::load_sstable_from_cache(
     const ObStorageMetaValue::MetaType meta_type = load_co_sstable
                                           ? ObStorageMetaValue::MetaType::CO_SSTABLE
                                           : ObStorageMetaValue::MetaType::SSTABLE;
-    ret = meta_cache.get_meta_without_prefetch(meta_type, meta_key, handle, nullptr);
+    ret = meta_cache.get_meta_without_prefetch(meta_type, meta_key, handle);
     if (OB_SUCCESS != ret && OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to retrieve sstable meta from meta cache", K(ret), K(addr));
     }

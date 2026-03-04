@@ -196,6 +196,7 @@ TEST_F(TestSSLogKVProxy, basic_sslog_kv_basic)
   // ========== Test 6: delete and read the prefix =========
   ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->delete_row(meta_type2,
                                                       meta_key2,
+                                                      false,
                                                       affected_rows));
   ASSERT_EQ(1, affected_rows);
 

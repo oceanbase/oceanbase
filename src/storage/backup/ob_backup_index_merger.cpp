@@ -602,7 +602,8 @@ int ObIBackupIndexMerger::open_file_writer_(const share::ObBackupPath &path,
                                                 storage_info,
                                                 path.get_obstr(),
                                                 access_type,
-                                                mod))) {
+                                                mod,
+                                                false/*is_batch_write*/))) {
     LOG_WARN("failed to open with access type", K(ret), K(path), KP(storage_info));
   } else {
     LOG_INFO("backup index merger open file writer", K(path), KP(storage_info));

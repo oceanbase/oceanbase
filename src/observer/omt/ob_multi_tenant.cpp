@@ -119,6 +119,7 @@
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_gts_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_uid_service.h"
 #include "close_modules/shared_storage/storage/incremental/share/ob_ss_diagnose_mgr.h"
+#include "close_modules/shared_storage/storage/tiered_metadata_store/ob_tiered_metadata_store.h"
 #else
 #endif
 #include "observer/ob_server_event_history_table_operator.h"
@@ -159,6 +160,7 @@
 #include "observer/table/ob_htable_rowkey_mgr.h"
 #include "sql/ob_sql_ccl_rule_manager.h"
 #include "observer/report/ob_tenant_offline_tablet_cleanup_service.h"
+#include "storage/high_availability/ob_tenant_startup_status.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_replica_info.h"
 #include "sql/monitor/ob_sql_stat_manager.h"
 
@@ -649,6 +651,7 @@ int ObMultiTenant::init(ObAddr myaddr,
       MTL_BIND2(mtl_new_default, ObTabletSplitTaskCache::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, sslog::ObSSLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObSSDiagnoseInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObTieredMetadataStore::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     }
 #endif
     MTL_BIND2(mtl_new_default, ObResourceLimitCalculator::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
@@ -684,6 +687,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(client_pool_mgr_mtl_new<ObHiveMetastoreClient>, nullptr, nullptr, client_pool_mgr_mtl_stop<ObHiveMetastoreClient>, client_pool_mgr_mtl_wait<ObHiveMetastoreClient>, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, share::schema::ObAddIntervalPartitionController::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(ObTenantTabletCleanupService::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, ObTenantTabletCleanupService::mtl_destroy);
+    MTL_BIND2(mtl_new_default, storage::ObTenantStartupStatus::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, observer::ObTabletReplicaInfoCacheMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(client_pool_mgr_mtl_new<ObCurlRestClient>, nullptr, nullptr, client_pool_mgr_mtl_stop<ObCurlRestClient>, client_pool_mgr_mtl_wait<ObCurlRestClient>, mtl_destroy_default);
   }
@@ -1228,6 +1232,11 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   }
 #endif
 #endif
+
+  if (OB_SUCC(ret) && write_slog) {
+    ObTenantSwitchGuard guard(tenant);
+    TENANT_STARTUP_STATUS.start_service();
+  }
 
   if (OB_SUCC(ret)) {
     if (write_slog && OB_FAIL(SERVER_STORAGE_META_SERVICE.commit_create_tenant(tenant_id, tenant_epoch))) {

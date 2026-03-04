@@ -130,6 +130,7 @@ public:
 
   // for slog & checkpoint
   int write_checkpoint(const ObTenantSlogCheckpointWorkflow::Type ckpt_type);
+  int write_checkpoint_for_single_ls(const ObLSID &ls_id);
 
   virtual int replay(const ObRedoModuleReplayParam &param) override;
   virtual int replay_over() override;

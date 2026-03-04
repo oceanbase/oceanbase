@@ -18,6 +18,7 @@
 #include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/ob_super_block_struct.h"
 
 namespace oceanbase
 {
@@ -307,6 +308,67 @@ int ObTenantSlogCkptUtil::record_wait_gc_tablet(
   return ret;
 }
 
+// ==========================
+//      LSCkptInheritOp
+// ==========================
+int ObTenantSlogCkptUtil::LSCkptInheritOp::operator()(
+    const ObMetaDiskAddr &addr,
+    const char *buf,
+    const int64_t buf_len)
+{
+  OB_ASSERT(ls_id_.is_valid());
+
+  struct DummyOp final
+  {
+  public:
+    int operator()(
+      const ObMetaDiskAddr &addr,
+      const char *buf,
+      const int64_t buf_len)
+    {
+      return OB_SUCCESS;
+    }
+  };
+
+  int ret = OB_SUCCESS;
+  ObLSCkptMember ls_ckpt_member;
+  int64_t pos = 0;
+
+  if (OB_FAIL(ls_ckpt_member.deserialize(buf, buf_len, pos))) {
+    LOG_WARN("failed to deserialize ls_ckpt_member", K(ret), KP(buf), K(buf_len));
+  } else if (OB_UNLIKELY(!ls_ckpt_member.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid ls_ckpt_memeber", K(ret), K(ls_ckpt_member));
+  } else {
+    LOG_INFO("LSCkptInheritOp: processing ls_ckpt_member from old checkpoint",
+             "target_ls_id", ls_id_, K(ls_ckpt_member));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (ls_ckpt_member.ls_meta_.ls_id_ == ls_id_) {
+    ObSEArray<MacroBlockId, 2> tmp_block_list;
+    if (OB_UNLIKELY(!tablet_block_list_.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected duplicate ls ckpt members", K(ret));
+    } else if (OB_FAIL(ObTenantStorageCheckpointReader::iter_read_meta_item(ls_ckpt_member.tablet_meta_entry_,
+                                                                            DummyOp(),
+                                                                            tmp_block_list))) {
+      LOG_WARN("failed to iterator tablet block list", K(ret), K(ls_id_), K(ls_ckpt_member.tablet_meta_entry_));
+    } else if (OB_UNLIKELY(tmp_block_list.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected empty tablet block list", K(ret), K(ls_id_), K(ls_ckpt_member.tablet_meta_entry_),
+        K(tmp_block_list));
+    } else if (OB_FAIL(tablet_block_list_.reserve(tmp_block_list.count()))) {
+      LOG_WARN("failed to reserve tablet_block_list", K(ret));
+    } else if (OB_FAIL(tablet_block_list_.assign(tmp_block_list))) {
+      LOG_WARN("failed to assign tablet_block_list", K(ret), K(tmp_block_list));
+    }
+  } else if (OB_FAIL(ls_item_writer_.write_item(buf, buf_len, /*item idx*/nullptr))) {
+    LOG_WARN("failed to write ls_ckpt_member", K(ret), KP(buf), K(buf_len));
+  }
+  return ret;
+}
 
 // ================================
 //    TabletDefragmentPicker
@@ -533,7 +595,7 @@ int MetaBlockListApplier::is_valid() const
 int MetaBlockListApplier::apply_from(
     const ObIArray<MacroBlockId> &ls_block_list,
     const ObIArray<MacroBlockId> &tablet_block_list,
-    const ObIArray<MacroBlockId> &wait_gc_tablet_block_list)
+    const ObIArray<MacroBlockId> *wait_gc_tablet_block_list)
 {
   int ret = OB_SUCCESS;
 
@@ -548,7 +610,8 @@ int MetaBlockListApplier::apply_from(
           STORAGE_LOG(WARN, "failed to add ls block list", K(ret));
         } else if (OB_FAIL(tablet_block_handle_->add_macro_blocks(tablet_block_list))) {
           STORAGE_LOG(WARN, "failed to add tablet block list", K(ret));
-        } else if (OB_FAIL(wait_gc_tablet_block_handle_->add_macro_blocks(wait_gc_tablet_block_list))) {
+        } else if (nullptr != wait_gc_tablet_block_list
+                  && OB_FAIL(wait_gc_tablet_block_handle_->add_macro_blocks(*wait_gc_tablet_block_list))) {
           STORAGE_LOG(WARN, "failed to add wait gc tablet block list", K(ret));
         }
       }

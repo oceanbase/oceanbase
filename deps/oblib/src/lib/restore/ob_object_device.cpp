@@ -251,6 +251,7 @@ int ObObjectDevice::init(const ObIODOpts &opts)
 void ObObjectDevice::destroy()
 {
   /*dev env will destory in device manager*/
+  common::ObSpinLockGuard guard(lock_);
   if (is_started_) {
     util_ctx_pool_.reset();
     reader_ctx_pool_.reset();
@@ -513,7 +514,7 @@ int ObObjectDevice::open_for_async_buffered_multiwriter(const char *pathname, vo
   return open_ctx_in_pool<ObStorageAsyncBufferedMultiPartWriter>(pathname, ctx, async_buffered_multiwriter_ctx_pool_, "async_buffered_multiwriter");
 }
 
-int ObObjectDevice::release_res(void *ctx, const ObIOFd &fd, ObStorageAccessType access_type)
+int ObObjectDevice::release_res(void *ctx, const ObIOFd &fd, const ObStorageAccessType access_type)
 {
   int ret = OB_SUCCESS;
   int ret_tmp = OB_SUCCESS;
@@ -693,7 +694,7 @@ int ObObjectDevice::open(const char *pathname, const int flags, const mode_t mod
     }
   }
 
-  //handle resource free when exception happen
+  // handle resource free when exception happen
   if (OB_FAIL(ret) && !OB_ISNULL(ctx)) {
     int tmp_ret = OB_SUCCESS;
     OB_LOG(WARN, "fail to open with access type!", K(ret), KCSTRING(pathname), K(access_type), K(ctx));

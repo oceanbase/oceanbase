@@ -1529,11 +1529,14 @@ int ObSSDDLMergeHelper::write_partial_sstable(ObDDLTabletMergeDagParamV2 &dag_me
     }
   }
 
+  int32_t private_transfer_epoch = -1;
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch))) {
+    LOG_WARN("fail to get private transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
   } else {
     ObTabletPersisterParam param(dag_merge_param.ddl_task_param_.tenant_data_version_,
                                        target_tablet_id,
-                                       tablet_handle.get_obj()->get_transfer_seq(),
+                                       private_transfer_epoch,
                                        major_sstable->get_key().get_snapshot_version(),
                                        get_next_max_meta_seq(),
                                        &callback,

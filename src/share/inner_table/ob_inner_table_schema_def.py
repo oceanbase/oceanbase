@@ -23282,7 +23282,8 @@ SELECT A.TENANT_ID,
        (CASE
             WHEN STARTUP_MODE() = 'shared_storage' THEN
                 CASE
-                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1001
+                    WHEN A.TENANT_ID = 1 THEN 1001
+                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1002
                     ELSE B.MAX_LS_ID
                 END
             ELSE
@@ -65010,7 +65011,8 @@ SELECT A.TENANT_ID,
        (CASE
             WHEN (SELECT STARTUP_MODE() FROM DUAL) = 'shared_storage' THEN
                 CASE
-                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1001
+                    WHEN A.TENANT_ID = 1 THEN 1001
+                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1002
                     ELSE B.MAX_LS_ID
                 END
             ELSE

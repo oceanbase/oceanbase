@@ -428,7 +428,8 @@ int ObBackupDataCtx::open_file_writer_(const share::ObBackupPath &backup_path)
                                                 param_.backup_dest_.get_storage_info(),
                                                 backup_path.get_obstr(),
                                                 access_type,
-                                                mod))) {
+                                                mod,
+                                                false/*is_batch_write*/))) {
     LOG_WARN("failed to open with access type", K(ret), K(param_), K(backup_path));
   } else {
     LOG_INFO("open file writer", K(ret), K(backup_path));

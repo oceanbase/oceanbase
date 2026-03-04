@@ -37,7 +37,8 @@ public:
     BLOCK = 2,
     MEM = 3,
     RAW_BLOCK = 4, // refer the shared block of storage meta which has no header
-    MAX = 5,
+    SSLOG_TABLET_META = 5, // FARM COMPAT WHITELIST
+    MAX = 6,
   };
 public:
   ObMetaDiskAddr();
@@ -48,14 +49,16 @@ public:
 
   bool operator ==(const ObMetaDiskAddr &other) const;
   bool operator !=(const ObMetaDiskAddr &other) const;
+  bool operator<(const ObMetaDiskAddr &r) const;
   bool is_equal_for_persistence(const ObMetaDiskAddr &other) const;
-
   OB_INLINE bool is_block() const { return BLOCK == type_ || RAW_BLOCK == type_; }
   OB_INLINE bool is_raw_block() const { return RAW_BLOCK == type_; }
-  OB_INLINE bool is_disked() const { return BLOCK == type_ || FILE == type_ || RAW_BLOCK == type_; }
+  OB_INLINE bool is_disked() const { return BLOCK == type_ || FILE == type_ || RAW_BLOCK == type_ || is_sslog(); }
   OB_INLINE bool is_file() const { return FILE == type_; }
   OB_INLINE bool is_memory() const { return MEM == type_; }
   OB_INLINE bool is_none() const { return NONE == type_; }
+  OB_INLINE bool is_sslog() const {  return SSLOG_TABLET_META == type_; }
+  OB_INLINE bool is_sslog_tablet_meta() const { return SSLOG_TABLET_META == type_; }
   OB_INLINE void set_none_addr() { type_ = NONE; }
   OB_INLINE void set_seq(const uint64_t seq) { seq_ = seq; }
   OB_INLINE void set_size(const uint64_t size) { size_ = size; }
@@ -66,13 +69,7 @@ public:
   OB_INLINE uint64_t seq() const { return seq_; }
   OB_INLINE DiskType type() const { return static_cast<DiskType>(type_); }
   OB_INLINE void inc_seq() { seq_++; }
-  OB_INLINE blocksstable::MacroBlockId block_id() const
-  {
-    blocksstable::MacroBlockId id(first_id_, second_id_, third_id_, fifth_id_);
-    id.set_version_v2();
-    return id;
-  }
-
+  int get_macro_block_id(blocksstable::MacroBlockId &block_id) const;
   int get_block_addr(
       blocksstable::MacroBlockId &macro_id,
       int64_t &offset,
@@ -96,9 +93,29 @@ public:
   int set_mem_addr(
       const int64_t offset,
       const int64_t size);
+  int get_size_for_tablet_space_usage(
+      /*out*/ int64_t &size) const;
+#ifdef OB_BUILD_SHARED_STORAGE
+  int set_sslog_tablet_meta_addr(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const share::SCN &reorg_scn,
+      const share::SCN &row_scn,
+      const int64_t offset,
+      const int64_t tablet_serialize_size);
+  int get_sslog_tablet_meta_addr(
+      share::ObLSID &ls_id,
+      common::ObTabletID &tablet_id,
+      share::SCN &reorg_scn,
+      share::SCN &row_scn) const;
+  int get_sslog_tablet_row_scn(
+      share::SCN &row_scn) const;
+#endif
 
   // just for compatibility, the old version ObMetaDiskAddr is serialized directly by memcpy in some scenarios
   int memcpy_deserialize(const char* buf, const int64_t data_len, int64_t& pos);
+  void set_epoch(const int64_t epoch) { epoch_ = epoch; }
+  int64_t get_epoch() const { return epoch_; }
 
   OB_UNIS_VERSION(1);
 private:
@@ -108,16 +125,31 @@ private:
   static const uint64_t MAX_OFFSET = (0x1UL << FOURTH_ID_BIT_OFFSET) - 1;
   static const uint64_t MAX_SIZE = (0x1UL << FOURTH_ID_BIT_SIZE) - 1;
   static const uint64_t MAX_TYPE = (0x1UL << FOURTH_ID_BIT_TYPE) - 1;
+  static const uint64_t SIX_ID_BIT_SEQ = 32;
+  static const uint64_t SIX_ID_BIT_EPOCH = 32;
+  int get_block_addr_from_block_(
+      blocksstable::MacroBlockId &macro_id,
+      int64_t &offset,
+      int64_t &size) const;
+#ifdef OB_BUILD_SHARED_STORAGE
+  int get_block_addr_from_sslog_tablet_meta_(
+      blocksstable::MacroBlockId &macro_id,
+      int64_t &offset,
+      int64_t &size) const;
+#endif
 private:
   union {
     int64_t first_id_;
+    int64_t ls_id_;
   };
   union {
     int64_t second_id_;
     int64_t file_id_;
+    uint64_t tablet_id_;
   };
   union {
     int64_t third_id_;
+    int64_t reorg_scn_;
   };
   union {
     int64_t fourth_id_;
@@ -129,10 +161,14 @@ private:
   };
   union {
     int64_t fifth_id_;  // for the fourth_id_ of MacroBlockId
+    int64_t row_scn_;
   };
   union { // doesn't serialize
     int64_t sixth_id_;
-    uint64_t seq_;
+    struct {
+      uint64_t seq_ : SIX_ID_BIT_SEQ;
+      uint64_t epoch_ : SIX_ID_BIT_EPOCH;
+    };
   };
 };
 
@@ -376,6 +412,7 @@ void ObMetaObjGuard<T>::reset_obj()
     }
   }
 }
+
 } // end namespace storage
 } // end namespace oceanbase
 

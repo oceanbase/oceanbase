@@ -125,6 +125,9 @@ int ObServerSchemaService::init_tenant_basic_schema(const uint64_t tenant_id)
     } else if (is_shared_storage_sslog_exist()
                && OB_FAIL(fill_sslog_table_schema(tenant_id, *schema_mgr_for_cache))) {
       LOG_WARN("init add sslog table schema failed", KR(ret), K(tenant_id));
+    } else if (GCTX.is_shared_storage_mode()
+               && OB_FAIL(fill_tiered_metadata_store_table_schema(tenant_id, *schema_mgr_for_cache))) {
+      LOG_WARN("init add tiered metadata store table schema failed", KR(ret), K(tenant_id));
 #endif
     } else if (is_sys_tenant(tenant_id)) {
       // only sys tenant rely on root user schema
@@ -6470,32 +6473,34 @@ int ObServerSchemaService::fill_all_core_table_schema(
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-int ObServerSchemaService::fill_sslog_table_schema(
-    const uint64_t tenant_id,
-    ObSchemaMgr &schema_mgr_for_cache)
-{
-  int ret = OB_SUCCESS;
-  ObTableSchema sslog_table_schema;
-  ObSimpleTableSchemaV2 sslog_table_schema_simple;
 
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("inner stat error", K(ret));
-  } else if (common::is_user_tenant(tenant_id)) {
-    // do nothing
-  } else if (OB_FAIL(schema_service_->get_sslog_table_schema(sslog_table_schema))) {
-    LOG_WARN("failed to init schema service, ret=[%d]", K(ret));
-  } else if (!is_sys_tenant(tenant_id)
-             && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, sslog_table_schema))) {
-    LOG_WARN("fail to construct __all_core_table schema", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(convert_to_simple_schema(sslog_table_schema, sslog_table_schema_simple))) {
-    LOG_WARN("failed to add table schema into the schema manager, ret=[%d]", K(ret));
-  } else if (OB_FAIL(schema_mgr_for_cache.add_table(sslog_table_schema_simple))) {
-    LOG_WARN("failed to add table schema into the schema manager, ret=[%d]", K(ret));
-  }
+#define FILL_TABLE_SCHEMA_FUNC_DEFINE(TABLE_NAME)                                                                                         \
+int ObServerSchemaService::fill_##TABLE_NAME##_table_schema(                                                                              \
+    const uint64_t tenant_id,                                                                                                             \
+    ObSchemaMgr &schema_mgr_for_cache)                                                                                                    \
+{                                                                                                                                         \
+  int ret = OB_SUCCESS;                                                                                                                   \
+  ObTableSchema table_schema;                                                                                                             \
+  ObSimpleTableSchemaV2 table_schema_simple;                                                                                              \
+  if (!check_inner_stat()) {                                                                                                              \
+    ret = OB_INNER_STAT_ERROR;                                                                                                            \
+    LOG_WARN("inner stat error", K(ret));                                                                                                 \
+  } else if (common::is_user_tenant(tenant_id)) {                                                                                         \
+  } else if (OB_FAIL(schema_service_->get_##TABLE_NAME##_table_schema(table_schema))) {                                                   \
+    LOG_WARN("failed to init schema service", KR(ret));                                                                          \
+  } else if (!is_sys_tenant(tenant_id) && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, table_schema))) {           \
+    LOG_WARN("fail to construct schema", KR(ret), K(tenant_id));                                                                          \
+  } else if (OB_FAIL(convert_to_simple_schema(table_schema, table_schema_simple))) {                                                      \
+    LOG_WARN("failed to add table schema into the schema manager", KR(ret));                                                     \
+  } else if (OB_FAIL(schema_mgr_for_cache.add_table(table_schema_simple))) {                                                              \
+    LOG_WARN("failed to add table schema into the schema manager", KR(ret));                                                     \
+  }                                                                                                                                       \
+  return ret;                                                                                                                             \
+}                                                                                                                                         \
 
-  return ret;
-}
+FILL_TABLE_SCHEMA_FUNC_DEFINE(sslog)
+FILL_TABLE_SCHEMA_FUNC_DEFINE(tiered_metadata_store)
+
 #endif
 
 // new schema refresh
@@ -7982,7 +7987,8 @@ int ObServerSchemaService::get_table_ids(
     if (OB_FAIL(schema_creators[i](schema))) {
       LOG_WARN("create table schema failed", KR(ret), K(tenant_id));
 #ifdef OB_BUILD_SHARED_STORAGE
-    } else if (is_shared_storage_sslog_table(schema.get_table_id())) {
+    } else if (is_shared_storage_sslog_table(schema.get_table_id())
+            || is_ss_tiered_metadata_store_table(schema.get_table_id())) {
       // do_nothing
 #endif
     } else if (OB_FAIL(table_ids.push_back(schema.get_table_id()))) {

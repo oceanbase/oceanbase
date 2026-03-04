@@ -381,9 +381,11 @@ public:
   int64_t tmp_file_valid_length_;
   uint64_t effective_tablet_id_; // indicate effective tablet id about partition split
   bool is_write_cache_; // indicate write or read macro cache
+  bool is_batch_write_; // indicate batch write, for batch write to tiered metadata table
 
   INHERIT_TO_STRING_KV("SNIOInfo", ObSNIOInfo, K_(phy_block_handle), K_(fd_cache_handle),
-                       K_(tmp_file_valid_length), K_(effective_tablet_id), K_(is_write_cache));
+                       K_(tmp_file_valid_length), K_(effective_tablet_id), K_(is_write_cache),
+                       K_(is_batch_write));
 };
 #endif
 

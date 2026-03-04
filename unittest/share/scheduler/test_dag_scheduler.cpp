@@ -1862,6 +1862,66 @@ TEST_F(TestDagScheduler, test_large_thread_cnt_2)
   scheduler->destroy();
 }
 */
+
+TEST_F(TestDagScheduler, test_cancel_task)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
+
+  int ret = OB_SUCCESS;
+  TestDag *dag = NULL;
+  int64_t counter = 1;
+  if (OB_FAIL(scheduler->alloc_dag(dag))) {
+    COMMON_LOG(WARN, "failed to alloc dag");
+  } else if (NULL == dag) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "dag is null", K(ret));
+  } else if (OB_FAIL(dag->init(1))) {
+    COMMON_LOG(WARN, "failed to init dag", K(ret));
+  } else {
+    TestAddTask *add_task = NULL;
+    TestMulTask *mul_task = NULL;
+    if (OB_FAIL(dag->alloc_task(mul_task))) {
+      COMMON_LOG(WARN, "failed to alloc task", K(ret));
+    } else if (NULL == mul_task) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "task is null", K(ret));
+    } else {
+      if (OB_FAIL(mul_task->init(&counter, 10 * 1000 * 1000))) {
+        COMMON_LOG(WARN, "failed to init add task", K(ret));
+      } else if (OB_FAIL(dag->alloc_task(add_task))) {
+        COMMON_LOG(WARN, "failed to alloc task", K(ret));
+      } else if (NULL == add_task) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "task is null", K(ret));
+      } else {
+        if (OB_FAIL(add_task->init(&counter, 1, 0, 0))) {
+          COMMON_LOG(WARN, "failed to init add task", K(ret));
+        } else if (OB_FAIL(mul_task->add_child(*add_task))) {
+          COMMON_LOG(WARN, "failed to add child", K(ret));
+        } else if (OB_FAIL(dag->add_task(*add_task))) {
+          COMMON_LOG(WARN, "failed to add task");
+        } else if (OB_FAIL(dag->add_task(*mul_task))) {
+          COMMON_LOG(WARN, "failed to add task", K(ret));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
+      //wait mul task running
+      while (true) {
+        if (ATOMIC_LOAD(&counter) == 2) {
+          break;
+        }
+      }
+      EXPECT_EQ(OB_SUCCESS, scheduler->cancel_task(dag, ObITask::TASK_TYPE_UT));
+      EXPECT_EQ(counter, 2);
+    }
+  }
+}
+
 }
 }
 

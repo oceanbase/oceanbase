@@ -53,7 +53,7 @@ int ObMdsMinorFilter::init(
   } else {
     medium_filter_snapshot_ = last_major_snapshot;
     if (GCTX.is_shared_storage_mode()) {
-      medium_filter_snapshot_ = MIN(multi_version_start, last_major_snapshot);
+      medium_filter_snapshot_ = MIN(MAX(multi_version_start, 1) - 1, last_major_snapshot);
     }
     mds_filter_snapshot_ = MIN(multi_version_start, first_major_snapshot);
     ls_id_ = ls_id;

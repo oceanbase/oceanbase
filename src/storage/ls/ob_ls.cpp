@@ -129,7 +129,8 @@ int ObLS::init(const share::ObLSID &ls_id,
                const ObMajorMVMergeInfo &major_mv_merge_info,
                const ObLSStoreFormat &store_format,
                const ObReplicaType &replica_type,
-               observer::ObIMetaReport *reporter)
+               observer::ObIMetaReport *reporter,
+               const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -159,6 +160,7 @@ int ObLS::init(const share::ObLSID &ls_id,
                                    create_scn,
                                    major_mv_merge_info,
                                    store_format,
+                                   data_version,
                                    replica_type))) {
     LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id), K(major_mv_merge_info), K(replica_type));
   } else {
@@ -1176,6 +1178,7 @@ int ObLS::register_common_service()
       // register for ckpt
       REGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_GTS, MTL(ObSSLogGTSService *));
       REGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_UID, MTL(ObSSLogUIDService *));
+    } else if (is_tenant_metadata_ls(MTL_ID(), ls_id)) { // skip
     } else {
       REGISTER_TO_LOGSERVICE(TRANS_ID_LOG_BASE_TYPE, MTL(ObTransIDService *));
       REGISTER_TO_LOGSERVICE(TIMESTAMP_LOG_BASE_TYPE, MTL(ObTimestampService *));
@@ -1359,6 +1362,7 @@ void ObLS::unregister_common_service_()
       UNREGISTER_FROM_LOGSERVICE(SSLOG_GTS_LOG_BASE_TYPE, MTL(ObSSLogGTSService *));
       MTL(ObSSLogUIDService *)->reset_ls();
       UNREGISTER_FROM_LOGSERVICE(SSLOG_UID_LOG_BASE_TYPE, MTL(ObSSLogUIDService *));
+    } else if (is_tenant_metadata_ls(MTL_ID(), ls_meta_.ls_id_)) { // skip
     } else {
       MTL(ObTimestampService *)->reset_ls();
       UNREGISTER_FROM_LOGSERVICE(TIMESTAMP_LOG_BASE_TYPE, MTL(ObTimestampService *));
@@ -1681,6 +1685,7 @@ int ObLS::set_ls_meta(const ObLSMeta &ls_meta)
       }
     }
     if (is_tenant_sslog_ls(ls_meta_.tenant_id_, ls_meta_.ls_id_)) {
+      // attention: only sslog LS need special handling, metadata LS does not.
       ObAllIDMeta all_id_meta;
       if (OB_FAIL(ls_meta_.get_all_id_meta(all_id_meta))) {
         LOG_WARN("get all id meta failed", K(ret), K(ls_meta_));
@@ -2896,6 +2901,7 @@ int ObLS::update_ls_meta(const bool update_restore_status,
       LOG_WARN("update id service fail", K(ret), K(all_id_meta), K(*this));
     }
   } else if (is_tenant_sslog_ls(ls_meta_.tenant_id_, ls_meta_.ls_id_)) {
+    // attention: only sslog LS need special handling, metadata LS does not.
     ObAllIDMeta all_id_meta;
     if (OB_FAIL(ls_meta_.get_all_id_meta(all_id_meta))) {
       LOG_WARN("get all id meta failed", K(ret), K(ls_meta_));

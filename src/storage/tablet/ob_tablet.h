@@ -35,6 +35,11 @@
 #include "storage/tx/ob_trans_define.h"
 #include "share/scn.h"
 #include "ob_i_tablet_mds_customized_interface.h"
+#include <type_traits>
+#include "storage/meta_store/ob_startup_accelerate_info.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/share/ob_shared_tablet_extra_info.h"
+#endif
 #include "storage/truncate_info/ob_truncate_info_array.h"
 
 namespace oceanbase
@@ -107,7 +112,7 @@ class ObTruncateInfoArray;
 class ObTTLFilterInfoArray;
 class ObSSTabletTableStoreMetaInfo;
 
-struct ObTableStoreCache
+struct ObTableStoreCache final
 {
 public:
   enum ObMajorStoreType : uint8_t
@@ -124,20 +129,36 @@ public:
   void reset();
   int init(
       const ObTabletTableStore &table_store,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const int64_t max_sync_medium_scn);
   void assign(const ObTableStoreCache &other);
   inline bool is_last_major_column_store() const { return ObMajorStoreType::PURE_COLUMN_STORE == last_major_store_type_
                                                        || ObMajorStoreType::REDUNDANT_ROW_STORE == last_major_store_type_; }
   inline bool is_last_major_row_store() const { return ObMajorStoreType::ROW_STORE == last_major_store_type_; }
+  inline bool is_major_exit() const { return 0 != major_table_cnt_; }
+  int serialize(
+      const uint64_t data_version, char *buf, const int64_t len, int64_t &pos) const;
+  int deserialize(
+      const char *buf,
+      const int64_t len,
+      int64_t &pos);
+  int64_t get_serialize_size(const uint64_t data_version) const;
+  bool operator==(const ObTableStoreCache &other) const;
+  bool is_inited() const { return is_inited_; }
   inline bool is_global_index_table() const { return is_global_index_table_; }
   inline bool need_progressive_merge() const { return need_progressive_merge_; }
-  TO_STRING_KV(K_(last_major_snapshot_version), K_(major_table_cnt),
+
+  TO_STRING_KV(K_(version), K_(length), K_(last_major_snapshot_version), K_(major_table_cnt),
       K_(minor_table_cnt), K_(recycle_version), K_(last_major_column_count),
       K_(last_major_macro_block_cnt), K_(last_major_row_cnt), K_(inc_row_cnt),
       K_(is_row_store), K_(is_tablet_referenced_by_collect_mv),
       K_(is_global_index_table), K_(need_progressive_merge),
       K_(last_major_compressor_type), K_(last_major_latest_row_store_type),
-      K_(last_major_store_type), K_(unmerged_inc_major_cnt));
+      K_(last_major_store_type), K_(unmerged_inc_major_cnt), K_(min_recycle_scn),
+      K_(max_upper_trans_version), K_(mds_minor_table_cnt), K_(max_sync_medium_scn), K_(is_inited));
+private:
+  int32_t version_;
+  int32_t length_;
 private:
   static const int32_t TSC_ONE_BIT = 1;
   static const int32_t TSC_ONE_BYTE = 8;
@@ -152,7 +173,7 @@ public:
   int64_t last_major_row_cnt_;
   int64_t inc_row_cnt_;
   union {
-    uint64_t merge_info_;
+    int64_t merge_info_;
     struct {
       uint64_t is_row_store_                       : TSC_ONE_BIT;  // not only used by merge, but put here for alignment
       uint64_t is_tablet_referenced_by_collect_mv_ : TSC_ONE_BIT;  // indicate tablet referenced by collect mv
@@ -165,6 +186,15 @@ public:
       uint64_t reserved_                           : TSC_RESERVED;
     };
   };
+  share::SCN min_recycle_scn_;
+  int64_t max_upper_trans_version_;  //max upper trans version
+  int64_t mds_minor_table_cnt_;
+  int64_t max_sync_medium_scn_;
+  //no need serialize add below
+private:
+  bool is_inited_;
+private:
+  static const int32_t TABLET_STORE_CACHE_VERSION = 1;
 };
 
 struct ObSSTableTxScnMeta final
@@ -196,6 +226,8 @@ class ObTablet final : public ObITabletMdsCustomizedInterface
   template <typename, typename> friend class ObTabletMDSInfoReader;
   friend class logservice::ObTabletReplayExecutor;
   friend class ObTabletPersister;
+  friend class ObSSTabletPersister;
+  friend class ObTabletPersistCommon;
   friend class ObTabletPointerMap;
   friend class observer::ObAllVirtualMdsNodeStat;// for virtual table to show inner mds states
   friend class ObTabletTableIterator;
@@ -232,6 +264,7 @@ public:
   inline int64_t get_inc_row_cnt() const { return table_store_cache_.inc_row_cnt_; }
   inline common::ObCompressorType get_last_major_compressor_type() const { return static_cast<ObCompressorType>(table_store_cache_.last_major_compressor_type_); }
   inline common::ObRowStoreType get_last_major_latest_row_store_type() const { return static_cast<ObRowStoreType>(table_store_cache_.last_major_latest_row_store_type_); }
+  inline int64_t get_max_stored_sync_medium_scn() const { return table_store_cache_.max_sync_medium_scn_; }
   inline share::ObLSID get_ls_id() const { return tablet_meta_.ls_id_; }
   inline common::ObTabletID get_tablet_id() const { return tablet_meta_.tablet_id_; }
   inline common::ObTabletID get_data_tablet_id() const { return tablet_meta_.data_tablet_id_; }
@@ -244,6 +277,8 @@ public:
   inline bool is_user_data_table() const { return tablet_meta_.table_store_flag_.is_user_data_table(); }
   inline bool is_last_major_column_store() const { return table_store_cache_.is_last_major_column_store(); }
   inline bool is_last_major_row_store() const { return table_store_cache_.is_last_major_row_store(); }
+  inline SCN get_min_recycle_scn() const { return table_store_cache_.min_recycle_scn_; }
+  inline int64_t get_mds_minor_table_count() const { return table_store_cache_.mds_minor_table_cnt_; }
   int get_mds_table_rec_scn(share::SCN &rec_scn) const;
   int mds_table_flush(const share::SCN &decided_scn);
   int scan_mds_table_with_op(
@@ -313,6 +348,7 @@ public:
       const ObTablet &old_tablet,
       const int64_t snapshot_version,
       const ObTabletDataStatus::STATUS &data_status,
+      const share::SCN &ss_change_version,
       const bool need_generate_cs_replica_cg_array = false);
   // init for mds table mini merge
   int init_with_mds_sstable(
@@ -338,6 +374,16 @@ public:
   int init_empty_shell(
       ObArenaAllocator &allocator,
       const ObTablet &old_tablet);
+  /// @brief: init for ss tablet persist
+  /// ONLY SUPPORTED FOR SSTABLET PERSISTENCE
+  /// @param allocator: for deep copy rowkey_read_info, make sure
+  /// that tablet's life time is within the scope of @param allocator
+  int init_for_ss_perist(
+      common::ObIAllocator &allocator,
+      const ObTablet &ss_tablet,
+      const ObMetaDiskAddr &new_storage_schema_addr,
+      const ObMetaDiskAddr &new_table_store_addr,
+      const ObTabletSpaceUsage &new_space_usage);
 
   bool is_valid() const;
   // refresh memtable and update tablet_addr_ and table_store_addr_ sequence, only used by slog ckpt
@@ -616,6 +662,8 @@ public:
       ObITable::TableKey &table_key);
   int check_tablet_status_empty(bool &is_empty) const;
   int reset_tablet_status_written();
+  int check_need_gc_sstable_or_update_upper_trans_version(
+      bool &need_update);
 
 private:
   int inner_pre_process_cs_replica(
@@ -631,9 +679,11 @@ public:
   // other
 #ifdef OB_BUILD_SHARED_STORAGE
   bool is_ss_tablet() const;
+  bool is_min_ss_tablet_version_initial() const { return tablet_meta_.is_min_ss_tablet_version_initial(); }
   int update_ss_tablet_meta(const ObTabletMeta &new_meta);
-  share::SCN get_min_ss_tablet_version() const { return tablet_meta_.min_ss_tablet_version_; }
+  share::SCN get_min_ss_tablet_version() const;
   int get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_store_meta_info) const;
+  int get_ss_update_tablet_log(const int64_t tablet_serialize_size, ObSSUpdateTabletLog &update_log);
 #endif // OB_BUILD_SHARED_STORAGE
   const ObMetaDiskAddr &get_tablet_addr() const { return tablet_addr_; }
   const ObTabletMeta &get_tablet_meta() const { return tablet_meta_; }
@@ -814,6 +864,7 @@ public:
 
   static bool is_snapshot_not_advance(const ObStorageSnapshotInfo &snapshot_info,
                          const int64_t snapshot_version);
+  const storage::ObMetaDiskAddr &get_storage_schema_addr() const { return storage_schema_addr_.addr_; }
 protected:// for MDS use
   virtual bool check_is_inited_() const override final { return is_inited_; }
   virtual const ObTabletMeta &get_tablet_meta_() const override final { return tablet_meta_; }
@@ -1000,7 +1051,7 @@ private:
 
   int allow_to_read_();
 
-  int check_medium_list() const;
+  int check_medium_list(int64_t &max_sync_medium_scn) const;
   int check_sstable_column_checksum() const;
   int check_no_backup_data() const;
   int get_finish_medium_scn(int64_t &finish_medium_scn) const;
@@ -1012,9 +1063,6 @@ private:
   int validate_medium_info_list(
       const int64_t finish_medium_scn,
       const ObTabletMdsData &mds_data) const;
-  int read_medium_array(
-      common::ObArenaAllocator &allocator,
-      common::ObIArray<compaction::ObMediumCompactionInfo*> &medium_info_array) const;
   int pre_check_empty_shell(const ObTablet &old_tablet, ObTabletCreateDeleteMdsUserData &user_data);
   int build_user_data_for_aborted_tx_tablet(
     const share::SCN &flush_scn,
@@ -1132,9 +1180,22 @@ private:
       storage::ObMetaDiskAddr &addr,
       char *&buf);
   int get_kept_snapshot_for_split(int64_t &min_split_snapshot) const;
+  int get_tablet_fast_iter_attr_(ObTabletFastIterAttr &iter_attr) const;
+  int get_tablet_accelerate_info_(ObStartupTabletAccelerateInfo &accelerate_info) const;
+  int calc_space_usage_(
+      int64_t &all_sstable_data_required_size, int64_t &all_sstable_data_occupy_size,
+      int64_t &tablet_meta_size, int64_t &ss_public_sstable_occupy_size, int64_t &backup_bytes) const;
   int start_direct_load_task_for_idem(ObLSHandle &ls_handle);
   int start_direct_load_task_for_compat(ObLSHandle &ls_handle);
-
+  int calc_finish_medium_scn_(int64_t &finish_medium_scn);
+  int read_medium_array_(
+      common::ObArenaAllocator &allocator,
+      common::ObIArray<compaction::ObMediumCompactionInfo*> &medium_info_array) const;
+  int get_last_major_snapshot_(int64_t &last_major_snapshot) const;
+  static int calc_macro_info_addr_by_tablet_addr_(
+        const ObMetaDiskAddr &addr,
+        const int64_t secondary_meta_size,
+        /* out */ObMetaDiskAddr &macro_info_addr);
 public:
   static constexpr int32_t VERSION_V1 = 1;
   static constexpr int32_t VERSION_V2 = 2;

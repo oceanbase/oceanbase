@@ -3415,15 +3415,6 @@ int ObTabletTableStore::need_remove_old_table(
   } else if (multi_version_start <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(multi_version_start));
-  } else if (inc_major_tables_.count() > 0 && inc_major_tables_[0]->get_upper_trans_version() <= major_tables_[0]->get_snapshot_version()) {
-    need_remove = true;
-    LOG_INFO("need recycle unused inc major table", K(ret), KPC(inc_major_tables_[0]), KPC(major_tables_[0]));
-  } else if (minor_tables_.count() > 0 && minor_tables_[0]->get_upper_trans_version() <= major_tables_[0]->get_snapshot_version()) {
-    // at least one minor sstable is coverd by major sstable
-    // don't need to care about kept_multi_version_start here
-    // becase major_tables_[0]::snapshot_version must <= kept_multi_version_start
-    need_remove = true;
-    LOG_INFO("need recycle unused minor table", K(ret), KPC(minor_tables_[0]), KPC(major_tables_[0]));
   } else if (major_tables_.count() > 1 && major_tables_[1]->get_snapshot_version() <= multi_version_start) {
     need_remove = true;
     LOG_INFO("need recycle oldest major sstable", K(ret), K(multi_version_start), KPC(major_tables_[1]));

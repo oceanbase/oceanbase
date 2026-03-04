@@ -116,6 +116,7 @@
   RPC_S(PR5 add_disk, OB_ADD_DISK, (ObAdminAddDiskArg));
   RPC_S(PR5 drop_disk, OB_DROP_DISK, (ObAdminDropDiskArg));
   RPC_S(PR5 force_switch_ilog_file, OB_FORCE_SWITCH_ILOG_FILE, (ObForceSwitchILogFileArg));
+  RPC_S(PR5 check_tablet_exist, OB_CHECK_TABLET_EXIST, (ObCheckTabletExistArg), Bool);
   RPC_S(PR5 force_set_all_as_single_replica, OB_FORCE_SET_ALL_AS_SINGLE_REPLICA, (ObForceSetAllAsSingleReplicaArg));
   RPC_S(PR5 force_set_server_list, OB_FORCE_SET_SERVER_LIST, (ObForceSetServerListArg), obrpc::ObForceSetServerListResult);
   RPC_S(PR5 calc_column_checksum_request, OB_CALC_COLUMN_CHECKSUM_REQUEST, (ObCalcColumnChecksumRequestArg), obrpc::ObCalcColumnChecksumRequestRes);

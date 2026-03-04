@@ -10,10 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
 #include "ob_tablet_pointer_map.h"
 #include "storage/meta_store/ob_storage_meta_io_util.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
+#include "share/ob_force_print_log.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_shared_meta_service.h"
+#endif
 
 namespace oceanbase
 {
@@ -422,7 +427,7 @@ int ObTabletPointerMap::load_meta_obj(
         }
       }
       if (FAILEDx(read_from_disk(true/*is_full_load*/, meta_pointer->get_ls()->get_ls_epoch(), load_addr, arena_allocator, buf, buf_len))) {
-        STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer), K(meta_pointer->get_ls()->get_ls_epoch()));
+        STORAGE_LOG(WARN, "fail to read raw tablet", K(ret), KPC(meta_pointer), K(meta_pointer->get_ls()->get_ls_epoch()));
       } else if (OB_FAIL(t->assign_pointer_handle(tmp_ptr_hdl))) {
         STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ptr_hdl));
       } else {
@@ -496,8 +501,9 @@ int ObTabletPointerMap::load_meta_obj(
           STORAGE_LOG(INFO, "the tablet has been deleted", K(ret), K(key));
         }
       }
+
       if (FAILEDx(read_from_disk(false/*is_full_load*/, meta_pointer->get_ls()->get_ls_epoch(), load_addr, arena_allocator, buf, buf_len))) {
-        STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer), K(meta_pointer->get_ls()->get_ls_epoch()));
+        STORAGE_LOG(WARN, "fail to read raw tablet", K(ret), KPC(meta_pointer), K(meta_pointer->get_ls()->get_ls_epoch()));
       } else if (OB_FAIL(t->assign_pointer_handle(tmp_ptr_hdl))) {
         STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ptr_hdl));
       } else {
@@ -820,7 +826,9 @@ int ObTabletPointerMap::compare_and_swap_addr_and_object(
       // when query new tablet, the query thread will reread mds info from mds table, and then update mds cache
 
       if (OB_SUCC(ret)) {
-        t_ptr->set_addr_with_reset_obj(new_addr);
+        ObMetaDiskAddr addr_with_epoch = new_addr;
+        addr_with_epoch.set_epoch(t_ptr->ls_handle_.get_ls()->get_ls_epoch());
+        t_ptr->set_addr_with_reset_obj(addr_with_epoch);
         t_ptr->set_obj(new_guard);
       }
     }
@@ -863,7 +871,9 @@ int ObTabletPointerMap::compare_and_swap_address_without_object(
     } else if (OB_FAIL(t_ptr->set_tablet_attr(update_pointer_param.resident_info_.attr_))) {
       STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(key), KPC(t_ptr), K(update_pointer_param));
     } else {
-      t_ptr->set_addr_with_reset_obj(new_addr);
+      ObMetaDiskAddr addr_with_epoch = new_addr;
+      addr_with_epoch.set_epoch(t_ptr->ls_handle_.get_ls()->get_ls_epoch());
+      t_ptr->set_addr_with_reset_obj(addr_with_epoch);
       if (set_pool) {
         t_ptr->set_obj_pool(*pool);
       }
@@ -971,6 +981,77 @@ int ObTabletPointerMap::alloc_tablet_meta_version(const ObTabletMapKey &key, int
       STORAGE_LOG(WARN, "failed to alloc tablet meta version", K(ret));
     }
   }
+  return ret;
+}
+
+int ObTabletPointerMap::hook_tablet(
+    const ObTabletMapKey &key,
+    const char *buf,
+    const int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtil::current_time();
+  ObTabletPointerHandle ptr_hdl(*this);
+  bool is_in_memory = false;
+  ObTabletHandle tablet_handle;
+  ObTablet *t = nullptr;
+  ObMetaDiskAddr load_addr;
+  uint64_t hash_val = 0;
+  ObTabletPointer *meta_pointer = nullptr;
+  bool need_free_obj = false;
+
+  if (OB_UNLIKELY(!ResourceMap::is_inited_)) {
+    ret = common::OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObMetaPointerMap has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid() || OB_ISNULL(buf) || buf_len <= 0)) {
+    ret = common::OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "hook tablet get invalid argument", K(ret), K(key), KP(buf), K(buf_len));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
+    STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
+  } else if (OB_ISNULL(meta_pointer = ptr_hdl.get_tablet_pointer())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "meta pointer should not be NULL", K(ret), K(key));
+  } else if (OB_FAIL(meta_pointer->acquire_obj(t))) {
+    STORAGE_LOG(WARN, "fail to acquire object", K(ret), K(key), KPC(meta_pointer));
+  } else {
+    {
+      common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+      ObTabletPointerHandle tmp_ptr_hdl(*this);
+      if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
+        STORAGE_LOG(WARN, "fail to get tablet pointer handle", K(ret), K(key));
+      } else if (tmp_ptr_hdl.get_tablet_pointer()->is_in_memory()) {
+        need_free_obj = true;
+      } else if (OB_UNLIKELY(meta_pointer != tmp_ptr_hdl.get_tablet_pointer()
+          || meta_pointer->get_addr() != tmp_ptr_hdl.get_tablet_pointer()->get_addr())) {
+        need_free_obj = true;
+      } else {
+        load_addr = meta_pointer->get_addr();
+        if (OB_FAIL(t->assign_pointer_handle(tmp_ptr_hdl))) {
+          STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ptr_hdl));
+        } else {
+          t->tablet_addr_ = load_addr;
+          if (OB_FAIL(meta_pointer->deserialize(buf, buf_len, t))) {
+            STORAGE_LOG(WARN, "fail to deserialize object", K(ret), K(key), KPC(meta_pointer));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          meta_pointer->set_addr_with_reset_obj(load_addr);
+          if (OB_FAIL(meta_pointer->hook_obj(t, tablet_handle))) {
+            STORAGE_LOG(WARN, "fail to hook object", K(ret), K(load_addr), KP(meta_pointer));
+          }
+        }
+      }
+    }// end lock
+
+    if ((OB_FAIL(ret) && OB_NOT_NULL(t)) || need_free_obj) {
+      meta_pointer->release_obj(t);
+      t = nullptr;
+    }
+  }
+  FLOG_INFO("hook tablet", K(ret), K(key), "cost", ObTimeUtil::current_time() - start_ts);
   return ret;
 }
 

@@ -104,6 +104,7 @@ public:
   bool is_private_macro() const; // private data/meta macro block in ss mode
   bool is_private() const; // private objects in ss mode, including private tablet meta, private data/meta macro...
   bool is_macro_write_cache_ctrl_obj_type() const; // macro write cache controlled by _ss_local_cache_control in ss mode
+  bool is_shared_tablet_meta() const; // SHARED_TABLET_SUB_META or SHARED_TABLET_SUB_META_IN_TABLE
   void set_id_mode(const uint64_t id_mode) { id_mode_ = id_mode; }
   // Local mode
   int64_t block_index() const { return block_index_; }
@@ -132,6 +133,10 @@ public:
   void set_meta_ls_id(const int64_t ls_id) { meta_ls_id_ = ls_id; }
   void set_reorganization_scn(const int64_t reorganization_scn) { reorganization_scn_ = reorganization_scn; }
   int64_t reorganization_scn() const { return reorganization_scn_; }
+  bool is_shared_tablet_sub_meta_in_table() const;
+  bool is_shared_tablet_sub_meta() const;
+  int64_t get_op_id() const { return third_id_ >> 32; }
+  int64_t get_macro_seq() const { return third_id_ & 0xFFFFFFFF;  }
   void set_ss_fourth_id(
       const bool meta_is_inner_tablet,
       const int64_t ls_id,

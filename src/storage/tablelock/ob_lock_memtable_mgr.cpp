@@ -195,6 +195,16 @@ int ObLockMemtableMgr::release_head_memtable_(storage::ObIMemtable *imemtable,
   return ret;
 }
 
+int ObLockMemtableMgr::reuse()
+{
+  int ret = OB_SUCCESS;
+  ls_id_.reset();
+  freezer_ = nullptr;
+  t3m_ = nullptr;
+  is_inited_ = false;
+  return ret;
+}
+
 } // tablelock
 } // transaction
 } // oceanbase

@@ -311,7 +311,7 @@ int ObAdminTestIODeviceExecutor::test_appendable_check_file_(const char* check_f
     STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
   } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info,
                 appendable_check_file_path, access_type,
-                ObStorageIdMod::get_default_id_mod()))) {
+                ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
     STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret),
                 K(appendable_check_file_path), K(access_type));
   } else if (OB_ISNULL(device_handle)) {
@@ -384,7 +384,7 @@ int ObAdminTestIODeviceExecutor::test_multipart_upload_check_file_(const char* c
     STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
   } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info,
                 check_file_path, access_type,
-                ObStorageIdMod::get_default_id_mod()))) {
+                ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
     STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret),
                 K(check_file_path), K(access_type));
   } else if (OB_ISNULL(device_handle)) {
@@ -551,7 +551,7 @@ int ObAdminTestIODeviceExecutor::test_backup_data_()
              backup_path_, "/", data_file_name))) {
     STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
   } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info,
-             data_file_path, access_type, ObStorageIdMod::get_default_id_mod()))) {
+             data_file_path, access_type, ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
     STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret),
                 K(data_file_path), K(access_type));
   } else {
@@ -707,7 +707,7 @@ int ObAdminTestIODeviceExecutor::test_partial_clog_file_()
              backup_path_, "/", partial_log_file_name))) {
     STORAGE_LOG_FILTER(ERROR, "failed to databuff printf", K(ret));
   } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info,
-            partial_log_file_path, access_type, ObStorageIdMod::get_default_id_mod()))) {
+            partial_log_file_path, access_type, ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
     STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret),
                 K(partial_log_file_path), K(access_type));
   } else {
@@ -738,7 +738,7 @@ int ObAdminTestIODeviceExecutor::test_partial_clog_file_()
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG_FILTER(ERROR, "get appendable clog file length does not match real file length", K(ret), K(read_size), K(total_size));
       } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, &storage_info,
-                 partial_log_file_path, access_type, ObStorageIdMod::get_default_id_mod()))) {
+                 partial_log_file_path, access_type, ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
         STORAGE_LOG_FILTER(ERROR, "failed to open device with access type", K(ret),
                   K(partial_log_file_path), K(access_type));
       } else if (FALSE_IT(remain_size = CLOG_FILE_SIZE - total_size)) {

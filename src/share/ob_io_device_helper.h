@@ -23,6 +23,13 @@
 
 namespace oceanbase
 {
+#ifdef OB_BUILD_SHARED_STORAGE
+namespace common
+{
+class ObTableDevice;
+}
+#endif
+
 namespace share
 {
 

@@ -266,8 +266,10 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
     LOG_WARN("fail to notify sys tenant config", KR(ret));
   } else if (OB_FAIL(gen_sys_units(unit_array))) {
     LOG_WARN("fail to gen sys unit array", KR(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
   } else if (GCTX.is_shared_storage_mode() && OB_FAIL(create_sslog_ls_(unit_array))) {
     LOG_WARN("failed to sslog ls", KR(ret));
+#endif
   } else if (OB_FAIL(create_sys_ls(SYS_LS, unit_array))) {
     LOG_WARN("failed to sys ls", KR(ret));
   } else if (OB_FAIL(wait_elect_ls(SYS_LS, master_rs))) {
@@ -279,21 +281,6 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
                      "you may find solutions in previous error logs or seek help from official technicians.");
   } else {
     LOG_DBA_INFO_V2(OB_BOOTSTRAP_PREPARE_SUCCESS, "bootstrap prepare success.");
-  }
-  return ret;
-}
-
-int ObPreBootstrap::create_sslog_ls_(
-    const common::ObArray<share::ObUnit> &unit_array)
-{
-  int ret = OB_SUCCESS;
-  ObAddr sslog_leader; // not used
-  if (OB_FAIL(create_sys_ls(SSLOG_LS, unit_array))) {
-    LOG_WARN("failed to sslog ls", KR(ret));
-  } else if (OB_FAIL(wait_elect_ls(SSLOG_LS, sslog_leader))) {
-    LOG_WARN("failed to wait elect leader", KR(ret));
-  } else if (OB_FAIL(ObRootUtils::create_sslog_tablet(OB_SYS_TENANT_ID))) {
-    LOG_WARN("failed to create sslog tablet", KR(ret));
   }
   return ret;
 }
@@ -329,6 +316,21 @@ int ObPreBootstrap::check_and_notify_logservice_access_point()
 #endif
 
 #ifdef OB_BUILD_SHARED_STORAGE
+int ObPreBootstrap::create_sslog_ls_(
+    const common::ObArray<share::ObUnit> &unit_array)
+{
+  int ret = OB_SUCCESS;
+  ObAddr sslog_leader; // not used
+  if (OB_FAIL(create_sys_ls(SSLOG_LS, unit_array))) {
+    LOG_WARN("failed to sslog ls", KR(ret));
+  } else if (OB_FAIL(wait_elect_ls(SSLOG_LS, sslog_leader))) {
+    LOG_WARN("failed to wait elect leader", KR(ret));
+  } else if (OB_FAIL(ObRootUtils::create_ss_special_tablet(OB_SYS_TENANT_ID, share::OB_ALL_SSLOG_TABLE_TID))) {
+    LOG_WARN("failed to create sslog tablet", KR(ret));
+  }
+  return ret;
+}
+
 /*
  * Parse and check the validity of shared_storage info.
  * Check connectivity and whether ss-format file exist.
@@ -566,13 +568,16 @@ int ObPreBootstrap::create_sys_ls(
 {
   int ret = OB_SUCCESS;
   LOG_INFO("start create sys tenant LS", K(ls_id));
+  uint64_t data_version = 0;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(OB_SYS_TENANT_ID))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ls_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+    LOG_WARN("failed to get min data version", K(ret), K(OB_SYS_TENANT_ID));
   } else {
-    ObLSCreator ls_creator(rpc_proxy_, OB_SYS_TENANT_ID, ls_id);
+    ObLSCreator ls_creator(rpc_proxy_, OB_SYS_TENANT_ID, ls_id, data_version);
     if (OB_FAIL(ls_creator.create_sys_tenant_ls(
             rs_list_, unit_array))) {
       LOG_WARN("fail to create sys log stream", KR(ret));

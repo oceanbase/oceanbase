@@ -68,9 +68,16 @@ public:
       NORMAL_SN = 1, // for Shared-Nothing mode
       FORCE = 2, // for force triggered
       COMPAT_UPGRADE = 3, // for server compat upgrade
+      SINGLE_LS_CKPT = 4, // for single ls checkpoint
+      MAX_TYPE = 5
   };
 
 public:
+  static bool is_workflow_type_valid(const Type type)
+  {
+    return type >= Type::NORMAL_SS && type < Type::MAX_TYPE;
+  }
+
   /// @brief: execute ckpt workflow by specified type.
   /// @param type: type of workflow
   /// @param super_block_mutex: to make sure that supper block's write after read is atomic(provided by ObTenantCheckpointSlogHandler)
@@ -78,6 +85,10 @@ public:
   /// @param ckpt_info[optional]: should provided by ObTenantCheckpointSlogHandler if @c type is not COMPAT
   static int execute(const Type type, ObTenantCheckpointSlogHandler &ckpt_handler);
 
+  /// @brief: execute single ls checkpoint
+  static int execute_single_ls_ckpt(
+      const ObLSID &ls_id,
+      ObTenantCheckpointSlogHandler &ckpt_handler);
   static Type normal_type() { return GCTX.is_shared_storage_mode() ? Type::NORMAL_SS : Type::NORMAL_SN; }
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
@@ -156,7 +167,7 @@ private:
       attr.init(super_block);
       super_block_before_truncate_.set(attr);
     }
-    void record_super_block_after_truncate(const ObTenantSuperBlock &super_block)
+    void record_super_block_after_ckpt(const ObTenantSuperBlock &super_block)
     {
       SuperBlockAttr attr;
       attr.init(super_block);
@@ -334,11 +345,12 @@ private:
     int64_t start_time_;
     Tracer &tracer_;
   };
-  class SlogTruncateHelper final
+  class SlogCheckpointHelper final
   {
   public:
-    SlogTruncateHelper(Context &ctx, Tracer &tracer);
+    SlogCheckpointHelper(Context &ctx, Tracer &tracer);
     int do_truncate(const bool is_force);
+    int do_single_ls_ckpt(const ObLSID &ls_id);
 
   private:
     static const int64_t FAIL_WRITE_CHECKPOINT_ALERT_INTERVAL = 1000L * 1000L * 3600LL * 6;  // 6h
@@ -380,6 +392,23 @@ private:
           const MacroBlockId &wait_gc_tablet_entry,
           const ObSlogCheckpointFdDispenser &fd_dispenser);
 
+  private:
+    // For single ls checkpoint
+
+    /// @param[out] ls_item_writer: item writer to be inited.
+    /// @param[out] exclude_tablet_block_set: tablet's macro block linked list of @param ls_id
+    static int init_ls_item_writer_by_old_ckpt_(
+          const ObLSID &ls_id,
+          const ObTenantSuperBlock &old_super_block,
+          const ObMemAttr &mem_attr,
+          /*optional*/ ObSlogCheckpointFdDispenser *fd_dispenser,
+          /*out*/ ObLinkedMacroBlockItemWriter &ls_item_writer,
+          /*out*/ common::hash::ObHashSet<MacroBlockId> &exclude_tablet_block_set);
+
+    int apply_single_ls_ckpt_result_(
+          const MacroBlockId &ls_meta_entry,
+          const ObSlogCheckpointFdDispenser *fd_dispenser,
+          const common::hash::ObHashSet<MacroBlockId> &exclude_tablet_block_set);
     int alert_if_necessary_(const int64_t errcode);
 
   private:
@@ -403,6 +432,7 @@ private:
   ~ObTenantSlogCheckpointWorkflow() = default;
 
   int inner_execute_();
+  int inner_execute_single_ls_ckpt_(const ObLSID &ls_id);
 
   // disable copy and assign
   ObTenantSlogCheckpointWorkflow(const ObTenantSlogCheckpointWorkflow&) = delete;
@@ -410,7 +440,8 @@ private:
 
   bool is_valid_() const
   {
-    return context_.is_valid();
+    return is_workflow_type_valid(type_)
+           && context_.is_valid();
   }
   bool pick_all_tablets_() const
   {

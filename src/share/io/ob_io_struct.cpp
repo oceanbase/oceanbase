@@ -2631,7 +2631,9 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
 
   const int64_t timeout_us = MIN(req.get_remained_io_timeout_us(),
       OB_IO_MANAGER.get_object_storage_io_timeout_ms(req.tenant_id_) * 1000LL);
-  ObObjectStorageTenantGuard guard(req.tenant_id_, timeout_us);
+  const uint64_t group_id = OB_NOT_NULL(req.io_result_) ?
+      req.io_result_->flag_.get_resource_group_id() : USER_RESOURCE_OTHER_GROUP_ID;
+  ObObjectStorageTenantGuard guard(req.tenant_id_, timeout_us, group_id);
 
   // no need to perform io for req that has already been canceled
   if (req.is_canceled()) {
@@ -2728,9 +2730,14 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
         LOG_WARN("pwrite failed", K(ret), K(req));
       }
     } else {
+      int flag = -1;
       ObStorageAccessType op_type = ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE;
       ObFdSimulator::get_fd_op_type(req.fd_, op_type);
-      if (ObStorageAccessType::OB_STORAGE_ACCESS_OVERWRITER == op_type) {
+      if (device_handle->is_table_device()) {
+        if (OB_FAIL(device_handle->pwrite(req.fd_, io_offset, req.io_result_->size_, req.calc_io_buf(), io_size))) {
+          LOG_WARN("pwrite failed", K(ret), K(req));
+        }
+      } else if (ObStorageAccessType::OB_STORAGE_ACCESS_OVERWRITER == op_type) {
         if (0 == req.io_result_->size_) {
           char buf = '\0';
           if (OB_FAIL(device_handle->write(req.fd_, &buf, req.io_result_->size_, io_size))) {

@@ -883,7 +883,12 @@ private:
       const common::ObZone &dest_zone,
       int64_t &ls_acc_dr_task);
 
-  int check_corresponding_sslog_ls_ready_(
+  int check_ls_recovery_complete_(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const common::ObZone &dest_zone);
+
+  int check_sslog_and_metadata_ls_ready_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const common::ObZone &dest_zone);

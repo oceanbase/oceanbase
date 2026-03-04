@@ -227,6 +227,8 @@ public:
   virtual bool is_support_sn() const { return false; }
   //the ObjectType which 500 tenant can write
   virtual bool server_tenant_can_have() const { return false; }
+  // the ObjectType is store in table, true or false
+  virtual bool is_store_in_table() const { return false; }
   // check macro block id valid
   virtual bool is_valid(const MacroBlockId &file_id) const { return false; }
   virtual bool has_effective_tablet_id() const { return false; }
@@ -300,6 +302,22 @@ def end_generate_cpp():
     global cpp_f
     end = '''
 };
+static inline const char *get_ls_inner_tablet_name_(const int64_t tablet_id)
+{
+  ObTabletID id(tablet_id);
+  if (id.is_ls_tx_ctx_tablet()) {
+    return "TX_CTX";
+  } else if (id.is_ls_tx_data_tablet()) {
+    return "TX_DATA";
+  } else if (id.is_ls_lock_tablet()) {
+    return "TX_LOCK";
+  } else if (id.is_ls_reorg_info_tablet()) {
+    return "REORG_INFO";
+  } else {
+    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "unexpected tablet_id", K(tablet_id));
+    return "UNEXPECTED";
+  }
+}
 
 static int get_ls_inner_tablet_id_(const char *str, int64_t &tablet_id)
 {
@@ -543,6 +561,11 @@ int ObStorageObjectTypeBase::aio_read(
     if (OB_FAIL(tmp_file_reader.aio_read(read_info, object_handle))) {
       LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
     }
+  } else if (is_store_in_table()) {
+    ObSSTableReader table_reader;
+    if (OB_FAIL(table_reader.aio_read(read_info, object_handle))) {
+      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
+    }
   } else {
     switch (type_) {
       case ObStorageObjectType::PRIVATE_SLOG_FILE: {
@@ -606,6 +629,11 @@ int ObStorageObjectTypeBase::aio_write(
   } else if (is_private() && is_tmp_file()) {
     ObSSTmpFileWriter tmp_file_writer;
     if (OB_FAIL(tmp_file_writer.aio_write(write_info, object_handle))) {
+      LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
+    }
+  } else if (is_store_in_table()) {
+    ObSSTableWriter table_writer;
+    if (OB_FAIL(table_writer.aio_write(write_info, object_handle))) {
       LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
     }
   } else {
@@ -798,6 +826,9 @@ public:
 
         if cfg.get('is_path_include_inner_tablet'):
             h_f.write('  virtual bool is_path_include_inner_tablet() const { return true; }\n')
+
+        if cfg.get('is_store_in_table'):
+            h_f.write('  virtual bool is_store_in_table() const { return true; }\n')
 
         # generate virtual function declaration
         if cfg.get('is_valid') and cfg['is_valid'] != 'OB_NOT_SUPPORTED':

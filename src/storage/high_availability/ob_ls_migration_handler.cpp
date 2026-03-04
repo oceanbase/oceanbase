@@ -171,7 +171,8 @@ ObLSMigrationHandler::ObLSMigrationHandler()
     is_complete_(false),
     is_dag_net_cleared_(true), // default is true, set to false before generate dag net
     last_advance_checkpoint_ts_(0),
-    advance_checkpoint_scn_(share::SCN::min_scn())
+    advance_checkpoint_scn_(share::SCN::min_scn()),
+    cost_static_()
 #ifdef OB_BUILD_SHARED_STORAGE
     , switch_leader_cond_()
     , switch_leader_cnt_(0)
@@ -294,6 +295,7 @@ void ObLSMigrationHandler::reuse_()
   is_complete_ = false;
   is_dag_net_cleared_ = true;
   chosen_src_.reset();
+  cost_static_.reset();
 }
 
 void ObLSMigrationHandler::wakeup_()
@@ -738,6 +740,7 @@ int ObLSMigrationHandler::do_init_status_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls migration handler do not init", K(ret));
+  } else if (FALSE_IT(cost_static_.start_ts_ = ObTimeUtil::current_time())) {
   } else {
     // this lock make sure the ls creating is not scheduled to migrate.
     ObLSLockGuard lock_ls(ls_, true /* read lock */);
@@ -981,6 +984,8 @@ int ObLSMigrationHandler::do_finish_status_()
   int ret = OB_SUCCESS;
   int32_t result = OB_SUCCESS;
   ObLSMigrationTask task;
+  const int64_t buf_len = MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+  char buf[buf_len] = {0};
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -992,20 +997,21 @@ int ObLSMigrationHandler::do_finish_status_()
   } else if (OB_FAIL(report_result_())) {
     LOG_WARN("failed to report result", K(ret), KPC(ls_));
   } else {
-    SERVER_EVENT_ADD("storage_ha", "ls_ha_finish",
-        "tenant_id", ls_->get_tenant_id(),
-        "ls_id", ls_->get_ls_id().id(),
-        "src", task.arg_.src_.get_server(),
-        "dst", task.arg_.dst_.get_server(),
-        "task_id", task.task_id_,
-        "is_failed", result,
-        ObMigrationOpType::get_str(task.arg_.type_));
-
     if (ObMigrationOpType::REBUILD_LS_OP == task.arg_.type_ && OB_SUCCESS != result) {
       wakeup_();
     }
     finish_ts_ = ObTimeUtil::current_time();
+    cost_static_.finish_ts_ = finish_ts_;
+    cost_static_.to_string(buf, buf_len);
     FLOG_INFO("do finish ls migration task", K(task), K(result), "cost_ts", finish_ts_ - start_ts_);
+    SERVER_EVENT_ADD("storage_ha", "ls_ha_finish",
+        "tenant_id", ls_->get_tenant_id(),
+        "ls_id", ls_->get_ls_id().id(),
+        "dst", task.arg_.dst_.get_server(),
+        "op_type", ObMigrationOpType::get_str(task.arg_.type_),
+        "task_id", task.task_id_,
+        "is_failed", result,
+        buf);
     reuse_();
   }
   return ret;
@@ -1049,6 +1055,7 @@ int ObLSMigrationHandler::generate_build_ls_dag_net_()
       ObSSMigrationDagNetInitParam param;
       param.arg_ = ls_migration_task.arg_;
       param.task_id_ = ls_migration_task.task_id_;
+      param.cost_static_ = &cost_static_;
 
       if (OB_FAIL(schedule_dag_net_<ObSSMigrationDagNet>(&param, true /* check_cancel */))) {
         LOG_WARN("failed to schedule build ls dag net", K(ret), K(ls_migration_task), KPC(ls_));
@@ -1133,6 +1140,7 @@ int ObLSMigrationHandler::generate_complete_ls_dag_net_()
     param.storage_rpc_ = storage_rpc_;
     param.chosen_src_ = chosen_src_;
     param.result_ = result_;
+    param.cost_static_ = &cost_static_;
 #ifdef ERRSIM
     const int64_t errsim_migration_ls_id = GCONF.errsim_migration_ls_id;
     const ObLSID errsim_ls_id(errsim_migration_ls_id);

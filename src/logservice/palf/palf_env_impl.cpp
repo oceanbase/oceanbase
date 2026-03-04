@@ -1212,11 +1212,15 @@ int PalfEnvImpl::wait_until_reference_count_to_zero_(const int64_t palf_id)
 bool PalfEnvImpl::check_can_create_palf_handle_impl_() const
 {
   bool bool_ret = true;
-  int64_t count = palf_handle_impl_map_.count();
-  const int64_t per_palf_size = GCTX.is_shared_storage_mode() ? SHARED_STORAGE_MIN_DISK_SIZE_PER_PALF_INSTANCE : MIN_DISK_SIZE_PER_PALF_INSTANCE;
-  // NB: avoid concurrent with expand and shrink, need guard by palf_meta_lock_.
-  const PalfDiskOptions disk_opts = disk_options_wrapper_.get_disk_opts_for_recycling_blocks();
-  bool_ret = (count + 1) * per_palf_size <= disk_opts.log_disk_usage_limit_size_;
+  if (GCTX.is_shared_storage_mode()) {
+    // skip check log disk size in ss
+  } else {
+    int64_t count = palf_handle_impl_map_.count();
+    const int64_t per_palf_size = MIN_DISK_SIZE_PER_PALF_INSTANCE;
+    // NB: avoid concurrent with expand and shrink, need guard by palf_meta_lock_.
+    const PalfDiskOptions disk_opts = disk_options_wrapper_.get_disk_opts_for_recycling_blocks();
+    bool_ret = (count + 1) * per_palf_size <= disk_opts.log_disk_usage_limit_size_;
+  }
   return bool_ret;
 }
 
@@ -1438,13 +1442,17 @@ int PalfEnvImpl::init_log_io_worker_config_(const int log_writer_parallelism,
 int PalfEnvImpl::check_can_update_log_disk_options_(const PalfDiskOptions &disk_opts)
 {
   int ret = OB_SUCCESS;
-  const int64_t curr_palf_instance_num = palf_handle_impl_map_.count();
-  const int64_t per_palf_size = GCTX.is_shared_storage_mode() ? SHARED_STORAGE_MIN_DISK_SIZE_PER_PALF_INSTANCE : MIN_DISK_SIZE_PER_PALF_INSTANCE;
-  const int64_t curr_min_log_disk_size = curr_palf_instance_num * per_palf_size;
-  if (disk_opts.log_disk_usage_limit_size_ < curr_min_log_disk_size) {
-    ret = OB_NOT_SUPPORTED;
-    PALF_LOG(WARN, "can not hold current palf instance", K(curr_palf_instance_num),
-             K(curr_min_log_disk_size), K(disk_opts));
+  if (GCTX.is_shared_storage_mode()) {
+    // skip check log disk size in ss
+  } else {
+    const int64_t curr_palf_instance_num = palf_handle_impl_map_.count();
+    const int64_t per_palf_size = MIN_DISK_SIZE_PER_PALF_INSTANCE;
+    const int64_t curr_min_log_disk_size = curr_palf_instance_num * per_palf_size;
+    if (disk_opts.log_disk_usage_limit_size_ < curr_min_log_disk_size) {
+      ret = OB_NOT_SUPPORTED;
+      PALF_LOG(WARN, "can not hold current palf instance", K(curr_palf_instance_num),
+               K(curr_min_log_disk_size), K(disk_opts));
+    }
   }
   return ret;
 }

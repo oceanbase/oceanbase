@@ -16,6 +16,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "ob_storage_ha_utils.h"
+#include "storage/high_availability/ob_tenant_startup_status.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -443,9 +444,9 @@ void ObRebuildService::run1()
   lib::set_thread_name("RebuildService");
 
   while (!has_set_stop()) {
-    if (!SERVER_STORAGE_META_SERVICE.is_started()) {
+    if (!TENANT_STARTUP_STATUS.is_in_service()) {
       ret = OB_SERVER_IS_INIT;
-      LOG_WARN("server is not serving", K(ret), K(GCTX.status_));
+      LOG_WARN("tenant is not serving", K(ret), K(GCTX.status_));
 #ifdef ERRSIM
     } else if (OB_FAIL(errsim_manual_rebuild_())) {
       LOG_WARN("[ERRSIM] fail to manual rebuild", K(ret));

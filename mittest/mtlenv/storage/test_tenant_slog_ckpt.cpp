@@ -185,8 +185,10 @@ static double cal_shared_macro_block_size_amp(bool ignore_current_block)
 
           if (ignore_current_block) {
               MacroBlockId cur_block_id;
+              MacroBlockId block_id;
               MTL(ObTenantStorageMetaService*)->get_shared_object_raw_reader_writer().get_cur_shared_block(cur_block_id);
-              if (param.original_addr_.block_id() == cur_block_id) {
+              EXPECT_SUCC(param.original_addr_.get_macro_block_id(block_id));
+              if (block_id == cur_block_id) {
                   return;
               }
           }
@@ -738,6 +740,34 @@ static int check_consistency_by_replay_slog()
   return ret;
 }
 
+static void reset_tenant_slog_checkpoint()
+{
+  int ret = OB_SUCCESS;
+  ObTenantCheckpointSlogHandler &ckpt_slog_handler = MTL(ObTenantStorageMetaService *)->ckpt_slog_handler_;
+  storage::ObStorageLogger &slogger = MTL(ObTenantStorageMetaService *)->get_slogger();
+
+  common::ObLogCursor log_cursor;
+  ASSERT_SUCC(slogger.get_active_cursor(log_cursor));
+  ASSERT_TRUE(log_cursor.is_valid());
+  ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
+  ASSERT_NE(nullptr, tenant);
+
+  HEAP_VAR(ObTenantSuperBlock, super_block) {
+      lib::ObMutexGuard guard(ckpt_slog_handler.super_block_mutex_);
+      super_block = tenant->get_super_block();
+      super_block.replay_start_point_ = log_cursor;
+      super_block.ls_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
+      super_block.wait_gc_tablet_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
+      ASSERT_SUCC(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(0, super_block));
+      tenant->set_tenant_super_block(super_block);
+  }
+
+  ckpt_slog_handler.ls_block_handle_.reset();
+  ckpt_slog_handler.tablet_block_handle_.reset();
+  ckpt_slog_handler.wait_gc_tablet_block_handle_.reset();
+  ASSERT_SUCC(MTL(ObTenantStorageMetaService *)->get_slogger().remove_useless_log_file(log_cursor.file_id_, MTL_ID()));
+}
+
 
 class TabletVersionChain {
 private:
@@ -1134,6 +1164,19 @@ public:
       if (VERBOSE) {
         fprintf(VERBOSE_OUT, "size amp after update:%lf\n", cal_shared_macro_block_size_amp(true));
       }
+    }
+
+    void create_tablets_for_ls(ObLSHandle &ls_handle, const int64_t n)
+    {
+      int ret = OB_SUCCESS;
+      LOG_AND_PRINT(INFO, "start create tablets for ls...", K(ret), K(n));
+
+      static int64_t start_tablet_id = 1001;
+      ObTabletHandle tablet_handle;
+      for (int64_t i = 0; i < n; ++i) {
+        ASSERT_SUCC(create_tablet(ls_handle, ObTabletID(++start_tablet_id), tablet_handle, true));
+      }
+      LOG_AND_PRINT(INFO, "create tablets for ls finished", K(ret), K(n));
     }
 
 public:
@@ -1596,6 +1639,464 @@ TEST_F(TestTenantSlogCkpt, test_tablet_compat_upgrade) {
   ASSERT_SUCC(check_consistency_by_replay_slog());
 }
 
+/// @brief: linked item writer should start from different blocks after reopen
+TEST_F(TestTenantSlogCkpt, test_linked_item_writer_reopen)
+{
+  int ret = OB_SUCCESS;
+  const ObMemAttr mem_attr(MTL_ID(), TAG);
+  std::string buffer = "hello, world";
+
+  ObLinkedMacroBlockItemWriter linked_writer;
+  ASSERT_SUCC(linked_writer.init_for_slog_ckpt(MTL_ID(), MTL_EPOCH_ID(), mem_attr, nullptr));
+  ASSERT_SUCC(linked_writer.write_item(buffer.data(), buffer.size(), nullptr));
+  ASSERT_SUCC(linked_writer.close());
+  MacroBlockId block_before_reopen;
+  ASSERT_SUCC(linked_writer.get_entry_block(block_before_reopen));
+
+  linked_writer.reuse_for_next_round();
+  ASSERT_SUCC(linked_writer.init_for_slog_ckpt(MTL_ID(), MTL_EPOCH_ID(), mem_attr, nullptr));
+  ASSERT_SUCC(linked_writer.write_item(buffer.data(), buffer.size(), nullptr));
+  ASSERT_SUCC(linked_writer.close());
+  MacroBlockId block_after_reopen;
+  ASSERT_SUCC(linked_writer.get_entry_block(block_after_reopen));
+
+  ASSERT_EQ(2, linked_writer.get_meta_block_list().count());
+  ASSERT_NE(block_before_reopen, block_after_reopen);
+}
+
+static int build_block_list_map(
+    const MacroBlockId &ls_meta_entry,
+    std::map<int64_t, std::set<MacroBlockId>> &result)
+{
+  int ret = OB_SUCCESS;
+
+  auto ls_ckpt_parser = [&result](
+                           const ObMetaDiskAddr &addr,
+                           const char *buf,
+                           const int64_t buf_len)->int
+    {
+      int ret = OB_SUCCESS;
+      int64_t pos = 0;
+      MacroBlockId ls_block_id;
+      ObLSCkptMember ls_ckpt_member;
+      ObSArray<MacroBlockId> tablet_block_list;
+      auto dummy_op = [](
+                        const ObMetaDiskAddr &addr,
+                        const char *buf,
+                        const int64_t buf_len)->int
+        {
+          return OB_SUCCESS;
+        };
+
+      if (OB_FAIL(addr.get_macro_block_id(ls_block_id))) {
+        LOG_AND_PRINT(WARN, "failed to get macro block id", K(ret), K(addr));
+      } else if (OB_FAIL(ls_ckpt_member.deserialize(buf, buf_len, pos))) {
+        LOG_AND_PRINT(WARN, "failed to deserialize ls_ckpt_member", K(ret), KP(buf),
+          K(buf_len));
+      } else if (OB_UNLIKELY(!ls_ckpt_member.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_AND_PRINT(WARN, "unexpected invalid ls_ckpt_member", K(ret), K(ls_ckpt_member));
+      } else if (OB_FAIL(ObTenantStorageCheckpointReader::iter_read_meta_item(ls_ckpt_member.tablet_meta_entry_,
+                                                                              dummy_op,
+                                                                              tablet_block_list))) {
+        LOG_AND_PRINT(WARN, "failed to iterator tablet block list", K(ret), K(ls_ckpt_member));
+      } else {
+        for (int64_t i = 0; i < tablet_block_list.count(); ++i) {
+          result[ls_ckpt_member.ls_meta_.ls_id_.id()].insert(tablet_block_list.at(i));
+        }
+      }
+      return ret;
+    };
+
+  ObSArray<MacroBlockId> ls_block_list;
+  if (OB_FAIL(ObTenantStorageCheckpointReader::iter_read_meta_item(ls_meta_entry,
+                                                                   ls_ckpt_parser,
+                                                                   ls_block_list))) {
+    LOG_AND_PRINT(WARN, "failed to iterator ls block list", K(ret), K(ls_meta_entry));
+  }
+  return ret;
+}
+
+static void check_block_list(const MacroBlockId &ls_meta_entry)
+{
+  int ret = OB_SUCCESS;
+  ObTenantCheckpointSlogHandler &ckpt_handler = MTL(ObTenantStorageMetaService *)->ckpt_slog_handler_;
+
+  ASSERT_TRUE(ls_meta_entry.is_valid());
+
+  const common::ObIArray<MacroBlockId> &ls_block_list = ckpt_handler.ls_block_handle_.get_meta_block_list();
+  const common::ObIArray<MacroBlockId> &tablet_block_list = ckpt_handler.tablet_block_handle_.get_meta_block_list();
+
+  std::set<MacroBlockId> ls_block_set;
+  std::set<MacroBlockId> tablet_block_set;
+
+  auto block_collector = [&tablet_block_set] (
+      const ObMetaDiskAddr &addr,
+      const char *buf,
+      const int64_t buf_len)->int {
+      int ret = OB_SUCCESS;
+      int64_t pos = 0;
+      MacroBlockId block_id;
+      ObLSCkptMember ls_ckpt_member;
+      auto dummy_op = [](
+                        const ObMetaDiskAddr &addr,
+                        const char *buf,
+                        const int64_t buf_len)->int
+        {
+          return OB_SUCCESS;
+        };
+
+      if (OB_FAIL(ls_ckpt_member.deserialize(buf, buf_len, pos))) {
+        LOG_AND_PRINT(WARN, "failed to deserialize ls_ckpt_member", K(ret), KP(buf),
+          K(buf_len));
+      } else if (OB_UNLIKELY(!ls_ckpt_member.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_AND_PRINT(WARN, "unexpected invalid ls_ckpt_member", K(ret), K(ls_ckpt_member));
+      } else if (OB_FAIL(addr.get_macro_block_id(block_id))) {
+        LOG_AND_PRINT(WARN, "failed to get macro block id", K(ret), K(addr));
+      } else {
+        common::ObSEArray<MacroBlockId, 2> tablet_block_list;
+        if (OB_FAIL(ObTenantStorageCheckpointReader::iter_read_meta_item(ls_ckpt_member.tablet_meta_entry_,
+                                                                         dummy_op,
+                                                                         tablet_block_list))) {
+          LOG_AND_PRINT(WARN, "failed to iter read meta item", K(ret), K(ls_ckpt_member.tablet_meta_entry_));
+        } else {
+          for (int64_t i = 0; i < tablet_block_list.count(); ++i) {
+            const MacroBlockId &tmp_block_id = tablet_block_list.at(i);
+            tablet_block_set.insert(tmp_block_id);
+          }
+        }
+      }
+      return ret;
+    };
+
+    ObSEArray<MacroBlockId, 2> tmp_ls_block_list;
+    ASSERT_SUCC(ObTenantStorageCheckpointReader::iter_read_meta_item(ls_meta_entry, block_collector, tmp_ls_block_list));
+    for (int64_t i = 0; i < tmp_ls_block_list.count(); ++i) {
+      const MacroBlockId &tmp_block_id = tmp_ls_block_list.at(i);
+      ls_block_set.insert(tmp_block_id);
+    }
+
+    ASSERT_EQ(ls_block_set.size(), (size_t)ls_block_list.count());
+    ASSERT_EQ(tablet_block_set.size(), (size_t)tablet_block_list.count());
+
+    for (int64_t i = 0; i < ls_block_list.count(); ++i) {
+      const MacroBlockId &tmp_block_id = ls_block_list.at(i);
+      ASSERT_TRUE(ls_block_set.count(tmp_block_id) > 0);
+    }
+    for (int64_t i = 0; i < tablet_block_list.count(); ++i) {
+      const MacroBlockId &tmp_block_id = tablet_block_list.at(i);
+      ASSERT_TRUE(tablet_block_set.count(tmp_block_id) > 0);
+    }
+}
+
+TEST_F(TestTenantSlogCkpt, test_ls_ckpt_inherit_op)
+{
+  int ret = OB_SUCCESS;
+  const ObMemAttr mem_attr(MTL_ID(), TAG);
+
+  std::vector<int64_t> ls_ids;
+  /// @brief: create 3 ls and 10 tablets for per ls.
+  {
+    int64_t ls_id = -1;
+    ObLSHandle ls_handle;
+    ASSERT_SUCC(create_ls(ls_id, ls_handle));
+    create_tablets_for_ls(ls_handle, 10);
+    ls_ids.push_back(ls_id);
+  }
+  {
+    int64_t ls_id = -1;
+    ObLSHandle ls_handle;
+    ASSERT_SUCC(create_ls(ls_id, ls_handle));
+    create_tablets_for_ls(ls_handle, 10);
+    ls_ids.push_back(ls_id);
+  }
+  {
+    int64_t ls_id = -1;
+    ObLSHandle ls_handle;
+    ASSERT_SUCC(create_ls(ls_id, ls_handle));
+    create_tablets_for_ls(ls_handle, 10);
+    ls_ids.push_back(ls_id);
+  }
+
+  const int64_t last_ls_id = ls_ids.back();
+
+  // do checkpoint
+  ObTenantCheckpointSlogHandler &ckpt_slog_handler = MTL(ObTenantStorageMetaService *)->ckpt_slog_handler_;
+  ASSERT_SUCC(ObTenantSlogCheckpointWorkflow::execute(ObTenantSlogCheckpointWorkflow::FORCE, ckpt_slog_handler));
+
+
+
+  ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
+  ASSERT_NE(nullptr, tenant);
+
+  HEAP_VAR(ObTenantSuperBlock, tenant_super_block, tenant->get_super_block()) {
+
+    std::map<int64_t, std::set<MacroBlockId>> block_list_map;
+    ASSERT_SUCC(build_block_list_map(
+      tenant_super_block.ls_meta_entry_,
+      block_list_map));
+
+    common::hash::ObHashSet<MacroBlockId> exclude_tablet_block_set;
+    ObLinkedMacroBlockItemWriter ls_item_writer;
+    ASSERT_SUCC(ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::init_ls_item_writer_by_old_ckpt_(
+        ObLSID(last_ls_id),
+        tenant_super_block,
+        mem_attr,
+        /*fd_dispenser*/ nullptr,
+        ls_item_writer,
+        exclude_tablet_block_set));
+
+    ASSERT_EQ(OB_INIT_TWICE, ls_item_writer.init_for_slog_ckpt(MTL_ID(), MTL_EPOCH_ID(), mem_attr, nullptr));
+    ASSERT_SUCC(ls_item_writer.close());
+    ASSERT_EQ(block_list_map.size(), ls_ids.size());
+
+    ASSERT_TRUE(block_list_map.count(last_ls_id) > 0);
+    // exclude_tablet_block_set must equal to tablet block list of last_ls_id
+    ASSERT_EQ((size_t)exclude_tablet_block_set.size(), block_list_map[last_ls_id].size());
+    for (const MacroBlockId &block_id : block_list_map[last_ls_id]) {
+      ASSERT_EQ(OB_HASH_EXIST, exclude_tablet_block_set.exist_refactored(block_id));
+    }
+
+    struct VerifyOp final
+    {
+    public:
+      VerifyOp(
+        const std::set<int64_t> &must_contain,
+        const std::set<int64_t> &must_not_contain)
+      : must_contain_(must_contain),
+        must_not_contain_(must_not_contain)
+      {
+      }
+     int operator()(
+        const ObMetaDiskAddr &addr,
+        const char *buf,
+        const int64_t buf_len)
+      {
+        int ret = OB_SUCCESS;
+        int64_t pos = 0;
+        ObLSCkptMember ls_ckpt_member;
+
+        if (OB_FAIL(ls_ckpt_member.deserialize(buf, buf_len, pos))) {
+          LOG_AND_PRINT(WARN, "failed to deserialize ls_ckpt_member", K(ret), KP(buf), K(buf_len));
+        } else if (OB_UNLIKELY(!ls_ckpt_member.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_AND_PRINT(WARN, "unexpected invalid ls_ckpt_member", K(ret), K(ls_ckpt_member));
+        } else {
+          const int64_t ls_id = ls_ckpt_member.ls_meta_.ls_id_.id();
+          if (OB_UNLIKELY(must_contain_.count(ls_id) == 0)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_AND_PRINT(WARN, "unexpected ls_ckpt_member of ls", K(ret), K(ls_id));
+          } else if (OB_UNLIKELY(must_not_contain_.count(ls_id) > 0)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_AND_PRINT(WARN, "unexpected ls_ckpt_member of ls", K(ret), K(ls_id));
+          }
+        }
+        return ret;
+      }
+
+    public:
+      const std::set<int64_t> &must_contain_;
+      const std::set<int64_t> &must_not_contain_;
+    };
+
+    const std::set<int64_t> must_contain{ls_ids[0], ls_ids[1]};
+    const std::set<int64_t> must_not_contain{last_ls_id};
+    ObSArray<MacroBlockId> tmp_block_list;
+    VerifyOp verify_op(must_contain, must_not_contain);
+    MacroBlockId new_ls_meta_entry;
+    ASSERT_SUCC(ls_item_writer.get_entry_block(new_ls_meta_entry));
+    ASSERT_SUCC(ObTenantStorageCheckpointReader::iter_read_meta_item(new_ls_meta_entry, verify_op, tmp_block_list));
+  };
+}
+
+static void check_checkpoint_result()
+{
+  int ret = OB_SUCCESS;
+  ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
+  ASSERT_NE(nullptr, tenant);
+  HEAP_VAR(ObTenantSuperBlock, tenant_super_block, tenant->get_super_block()) {
+    const MacroBlockId &ls_meta_entry = tenant_super_block.ls_meta_entry_;
+    ASSERT_TRUE(!IS_EMPTY_BLOCK_LIST(ls_meta_entry));
+    ASSERT_TRUE(ls_meta_entry.is_valid());
+
+    LOG_AND_PRINT(INFO, "check block lists of ObTenantCheckpointSlogHandler...", K(ret), K(ls_meta_entry));
+    check_block_list(ls_meta_entry);
+
+    ob_usleep(1000);
+    LOG_AND_PRINT(INFO, "check consistency by replay slog...", K(ret));
+    ASSERT_SUCC(check_consistency_by_replay_slog());
+  };
+}
+
+TEST_F(TestTenantSlogCkpt, test_no_ckpt_before_single_ls_ckpt)
+{
+  int ret = OB_SUCCESS;
+
+  LOG_AND_PRINT(INFO, "start reset tenant slog ckpt...", K(ret));
+  reset_tenant_slog_checkpoint();
+  LOG_AND_PRINT(INFO, "reset tenant slog ckpt finished", K(ret));
+
+  const ObMemAttr mem_attr(MTL_ID(), TAG);
+
+  std::vector<int64_t> ls_ids;
+  /// @brief: create 3 ls and 10 tablets for per ls.
+  {
+    int64_t ls_id = -1;
+    ObLSHandle ls_handle;
+    ASSERT_SUCC(create_ls(ls_id, ls_handle));
+    create_tablets_for_ls(ls_handle, 100);
+    ls_ids.push_back(ls_id);
+  }
+  {
+    int64_t ls_id = -1;
+    ObLSHandle ls_handle;
+    ASSERT_SUCC(create_ls(ls_id, ls_handle));
+    create_tablets_for_ls(ls_handle, 100);
+    ls_ids.push_back(ls_id);
+  }
+  {
+    int64_t ls_id = -1;
+    ObLSHandle ls_handle;
+    ASSERT_SUCC(create_ls(ls_id, ls_handle));
+    create_tablets_for_ls(ls_handle, 100);
+    ls_ids.push_back(ls_id);
+  }
+
+  const int64_t target_ls_id = ls_ids[1];
+  const std::set<int64_t> remain_ls_ids{ls_ids[0], ls_ids[2]};
+
+  // do single ls checkpoint
+  ObTenantCheckpointSlogHandler &ckpt_slog_handler = MTL(ObTenantStorageMetaService *)->ckpt_slog_handler_;
+  ASSERT_SUCC(ObTenantSlogCheckpointWorkflow::execute_single_ls_ckpt(ObLSID(target_ls_id), ckpt_slog_handler));
+
+
+  check_checkpoint_result();
+}
+
+TEST_F(TestTenantSlogCkpt, test_has_ckpt_before_single_ls_ckpt)
+{
+  int ret = OB_SUCCESS;
+
+  LOG_AND_PRINT(INFO, "start reset tenant slog ckpt...", K(ret));
+  reset_tenant_slog_checkpoint();
+  LOG_AND_PRINT(INFO, "reset tenant slog ckpt finished", K(ret));
+
+  ObTenantCheckpointSlogHandler &ckpt_slog_handler = MTL(ObTenantStorageMetaService *)->ckpt_slog_handler_;
+  const ObMemAttr mem_attr(MTL_ID(), TAG);
+  std::vector<int64_t> ls_ids;
+
+  /// @brief: create 3 ls and 10 tablets for per ls.
+  {
+    int64_t ls_id = -1;
+    ObLSHandle ls_handle;
+    ASSERT_SUCC(create_ls(ls_id, ls_handle));
+    create_tablets_for_ls(ls_handle, 100);
+    ls_ids.push_back(ls_id);
+  }
+  {
+    int64_t ls_id = -1;
+    ObLSHandle ls_handle;
+    ASSERT_SUCC(create_ls(ls_id, ls_handle));
+    create_tablets_for_ls(ls_handle, 100);
+    ls_ids.push_back(ls_id);
+  }
+
+  LOG_AND_PRINT(INFO, "start force checkpoint...", K(ret));
+  ASSERT_SUCC(ObTenantSlogCheckpointWorkflow::execute(ObTenantSlogCheckpointWorkflow::FORCE, ckpt_slog_handler));
+  LOG_AND_PRINT(INFO, "force checkpoint finished", K(ret));
+
+  check_checkpoint_result();
+
+  {
+    // singe ls ckpt
+    int64_t ls_id = -1;
+    ObLSHandle ls_handle;
+    ASSERT_SUCC(create_ls(ls_id, ls_handle));
+    create_tablets_for_ls(ls_handle, 100);
+    ls_ids.push_back(ls_id);
+  }
+
+  const int64_t target_ls_id = ls_ids[2];
+  const std::set<int64_t> remain_ls_ids{ls_ids[0], ls_ids[1]};
+
+  // do single ls checkpoint
+  LOG_AND_PRINT(INFO, "start single ls ckpt", K(ret), K(target_ls_id));
+  ASSERT_SUCC(ObTenantSlogCheckpointWorkflow::execute_single_ls_ckpt(ObLSID(target_ls_id), ckpt_slog_handler));
+  LOG_AND_PRINT(INFO, "single ls ckpt finished", K(ret), K(target_ls_id));
+
+  check_checkpoint_result();
+
+  {
+    ObLSHandle ls_handle;
+    ASSERT_SUCC(get_ls(ls_ids[0], ls_handle));
+    create_tablets_for_ls(ls_handle, 100);
+  }
+
+  LOG_AND_PRINT(INFO, "start force checkpoint...", K(ret));
+  ASSERT_SUCC(ObTenantSlogCheckpointWorkflow::execute(ObTenantSlogCheckpointWorkflow::FORCE, ckpt_slog_handler));
+  LOG_AND_PRINT(INFO, "force checkpoint finished", K(ret));
+
+  check_checkpoint_result();
+}
+
+
+TEST_F(TestTenantSlogCkpt, test_single_ls_ckpt_eagain)
+{
+  int ret = OB_SUCCESS;
+
+  LOG_AND_PRINT(INFO, "start reset tenant slog ckpt...", K(ret));
+  reset_tenant_slog_checkpoint();
+  LOG_AND_PRINT(INFO, "reset tenant slog ckpt finished", K(ret));
+
+  ObTenantCheckpointSlogHandler &ckpt_slog_handler = MTL(ObTenantStorageMetaService *)->ckpt_slog_handler_;
+  const ObMemAttr mem_attr(MTL_ID(), TAG);
+
+
+  int64_t target_ls_id = -1;
+  ObLSHandle ls_handle;
+  ASSERT_SUCC(create_ls(target_ls_id, ls_handle));
+  create_tablets_for_ls(ls_handle, 100);
+
+  ObTenant *tenant = static_cast<ObTenant *>(share::ObTenantEnv::get_tenant());
+  ASSERT_NE(nullptr, tenant);
+  std::atomic_bool quit{false};
+  std::thread lock_hold_thread([this](ObTenant *tenant,
+                                      const int64_t target_ls_id,
+                                      std::atomic_bool &quit){
+      int ret = OB_SUCCESS;
+      ObTenantEnv::set_tenant(tenant);
+
+      ObTabletID tablet_id(123456);
+      ObLSHandle ls_handle;
+      ASSERT_SUCC(get_ls(target_ls_id, ls_handle));
+      ObLS *ls = nullptr;
+      ASSERT_NE(nullptr, ls = ls_handle.get_ls());
+      ASSERT_NE(nullptr, ls->get_tablet_svr());
+      ObBucketLock &bucket_lock = ls->get_tablet_svr()->bucket_lock_;
+
+      ObBucketHashWLockGuard lock_guard(bucket_lock, tablet_id.hash());
+
+      LOG_AND_PRINT(INFO, "thread hold ls tablet svr's lock", K(ret));
+
+      while (!quit.load(std::memory_order_acquire)) {
+        ob_usleep(100_ms);
+        if (REACH_TIME_INTERVAL(500_ms)) {
+          LOG_AND_PRINT(INFO, "thread is waiting...", K(ret));
+        }
+      }
+
+      LOG_AND_PRINT(INFO, "thread release ls tablet svr's lock", K(ret));
+    }, tenant, target_ls_id, std::ref(quit));
+
+  // do single ls checkpoint
+  LOG_AND_PRINT(INFO, "start single ls ckpt", K(ret), K(target_ls_id));
+  ASSERT_EQ(OB_EAGAIN, ObTenantSlogCheckpointWorkflow::execute_single_ls_ckpt(ObLSID(target_ls_id), ckpt_slog_handler));
+  LOG_AND_PRINT(INFO, "single ls ckpt finished", K(ret), K(target_ls_id));
+
+  quit.store(true, std::memory_order_release);
+  lock_hold_thread.join();
+}
 
 
 #undef ASSERT_SUCC

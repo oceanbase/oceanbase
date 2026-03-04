@@ -1303,7 +1303,28 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
   ObGetMergeTablesParam param;
   ObGetMergeTablesResult result;
   param.merge_type_ = merge_type;
-  if (OB_FAIL(ObPartitionMergePolicy::get_merge_tables[merge_type](
+  int64_t minor_table_cnt = 0;
+  if (is_mds_merge(merge_type)) {
+    minor_table_cnt = tablet_handle.get_obj()->get_mds_minor_table_count();
+  } else {
+    minor_table_cnt = tablet_handle.get_obj()->get_minor_table_count();
+  }
+
+  int64_t minor_compact_trigger = ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER;
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      if (is_mds_merge(merge_type)) {
+        minor_compact_trigger = tenant_config->mds_minor_compact_trigger;
+      } else {
+        minor_compact_trigger = tenant_config->minor_compact_trigger;
+      }
+    }
+  }
+
+  if (minor_table_cnt < minor_compact_trigger) {
+    LOG_DEBUG("no need scheduler minor merge", K(minor_table_cnt), K(minor_compact_trigger));
+  } else if (OB_FAIL(ObPartitionMergePolicy::get_merge_tables[merge_type](
           param,
           *ls_handle.get_ls(),
           *tablet_handle.get_obj(),
@@ -1317,18 +1338,6 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
   } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(result.private_transfer_epoch_))) {
     LOG_WARN("failed to get private transfer epoch", K(ret), K(tablet_handle));
   } else {
-    int64_t minor_compact_trigger = ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER;
-    {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-      if (tenant_config.is_valid()) {
-        if (is_mds_merge(merge_type)) {
-          minor_compact_trigger = tenant_config->mds_minor_compact_trigger;
-        } else {
-          minor_compact_trigger = tenant_config->minor_compact_trigger;
-        }
-      }
-    }
-
     ObMinorExecuteRangeMgr minor_range_mgr;
     MinorParallelResultArray parallel_results;
     if (result.handle_.get_count() < minor_compact_trigger && !result.is_gc_tx_data()) {

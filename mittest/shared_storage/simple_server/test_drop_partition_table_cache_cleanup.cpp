@@ -122,10 +122,11 @@ void ObDropPartitionTableCacheCleanupTest::get_shared_blocks_for_tablet(
   ASSERT_TRUE(is_old_version_empty);
   ASSERT_GE(last_gc_version, -1);
   ASSERT_LT(last_gc_version, current_tablet_version);
+  bool is_set_stop = false;
 
   ObPrivateBlockGCHandler handler(run_ctx_.ls_id_, run_ctx_.ls_epoch_, run_ctx_.tablet_id_,
                                   current_tablet_version, last_gc_version, current_tablet_trans_seq,
-                                  tablet_fingerprint, is_transfer_out_deleted);
+                                  tablet_fingerprint, is_set_stop, is_transfer_out_deleted);
   ASSERT_EQ(OB_SUCCESS, handler.get_blocks_for_tablet(current_tablet_version, true/*is_shared*/, block_ids));
   LOG_INFO("get shared blocks for tablet", K(block_ids));
 }

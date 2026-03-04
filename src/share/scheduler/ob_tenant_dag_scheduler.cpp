@@ -494,6 +494,8 @@ const char *ObITask::ObITaskTypeStr[] = {
   "DDL_MERGE_SORT_PREPARE_TASK",
   "DDL_MERGE_SORT_TASK",
   "DDL_MERGE_SORT_WRITE_TASK",
+  "SS_PARALLEL_CREATE_TABLETS_TASK",
+  "SS_PHYSICAL_CREATE_TABLETS_TASK",
   "MAX"
 };
 
@@ -697,6 +699,19 @@ void ObITask::prepare_check_cycle()
   } else {
     color_ = ObITaskColor::BLACK;
   }
+}
+
+int ObITask::cancel_task()
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "task is invalid", K(ret), K_(type), KP_(dag));
+  } else {
+    lib::ObMutexGuard guard(lock_);
+    reset_node();
+  }
+  return ret;
 }
 
 const char *ObITask::get_task_status_str(enum ObITaskStatus status)
@@ -1427,6 +1442,33 @@ int ObIDag::inner_add_child_without_inheritance(ObIDag &child)
     LOG_WARN("dag and child dag net not same", K(ret), KPC(dag_net_), KPC(child_dag_net));
   } else if (OB_FAIL(add_child_without_lock(child))) {
     COMMON_LOG(WARN, "failed to add child", K(ret), K(child));
+  }
+  return ret;
+}
+
+int ObIDag::cancel_task(const ObITask::ObITaskType &type)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(lock_);
+  ObITask *cur_task = task_list_.get_first();
+  const ObITask *head = task_list_.get_header();
+  while (head != cur_task && nullptr != cur_task && OB_SUCC(ret)) {
+    ObITask *task = cur_task;
+    cur_task = cur_task->get_next();
+    if ((ObITask::TASK_STATUS_WAITING == task->get_status()
+            || ObITask::TASK_STATUS_RETRY == task->get_status())
+        && task->get_type() == type) {
+      if (OB_FAIL(task->cancel_task())) {
+        LOG_WARN("failed to cancel task", K(ret), KPC(task));
+      } else if (OB_ISNULL(task_list_.remove(task))) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "failed to remove finished task from task_list", K(ret));
+      } else {
+        COMMON_LOG(INFO, "cancel task", K(type), KPC(task));
+        task->~ObITask();
+        allocator_->free(task);
+      }
+    }
   }
   return ret;
 }
@@ -3890,6 +3932,33 @@ bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
   return need_shedding;
 }
 
+int ObDagPrioScheduler::cancel_task(const ObIDag &dag, const ObITask::ObITaskType &type)
+{
+  int ret = OB_SUCCESS;
+  int hash_ret = OB_SUCCESS;
+  bool free_flag = false;
+  ObIDag *cur_dag = nullptr;
+  {
+    ObMutexGuard guard(prio_lock_);
+    if (OB_SUCCESS != (hash_ret = dag_map_.get_refactored(&dag, cur_dag))) {
+      if (OB_HASH_NOT_EXIST != hash_ret) {
+        ret = hash_ret;
+        LOG_WARN("failed to get from dag map", K(ret));
+      } else {
+        LOG_INFO("dag is not in dag_map", K(ret));
+      }
+    } else if (OB_ISNULL(cur_dag)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("dag should not be null", K(ret));
+    } else if (cur_dag->get_priority() != dag.get_priority()) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "unexpected priority value", K(ret), K(cur_dag->get_priority()), K(dag.get_priority()));
+    } else if (OB_FAIL(cur_dag->cancel_task(type))) {
+      LOG_WARN("failed to cancel task", K(ret), KPC(cur_dag), K(type));
+    }
+  }
+  return ret;
+}
 
 /***************************************ObDagNetScheduler impl********************************************/
 void ObDagNetScheduler::destroy()
@@ -5680,6 +5749,22 @@ int ObTenantDagScheduler::get_first_dag_net(ObIDagNet *&dag_net)
     COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
   } else if (OB_FAIL(dag_net_sche_.get_first_dag_net(dag_net))) {
     LOG_WARN("fail to cancel dag net", K(ret));
+  }
+  return ret;
+}
+
+int ObTenantDagScheduler::cancel_task(const ObIDag *dag, const ObITask::ObITaskType &type)
+{
+  int ret = OB_SUCCESS;
+  ObIDagNet *erase_dag_net = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
+  } else if (OB_ISNULL(dag)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", KP(dag));
+  } else if (OB_FAIL(prio_sche_[dag->get_priority()].cancel_task(*dag, type))) {
+    COMMON_LOG(WARN, "fail to cancel task", K(ret), KPC(dag));
   }
   return ret;
 }

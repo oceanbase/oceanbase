@@ -763,7 +763,7 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
   ObRole role = common::ObRole::INVALID_ROLE;
   // if txn is active use txn's isolation instead
   ObTxIsolationLevel isolation = tx.is_in_tx() ? tx.isolation_ : iso_level;
-  const bool is_for_sslog = is_tenant_sslog_ls(tenant_id_, lsid);
+  const bool is_for_sslog = need_sslog_trans_service(tenant_id_, lsid);
   if (is_RR_or_SERIAL_isolevel(isolation)) {
     ret = get_read_snapshot(tx, isolation, expire_ts, snapshot, is_for_sslog);
   } else if (!lsid.is_valid()) {

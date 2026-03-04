@@ -55,7 +55,8 @@ ObLSMeta::ObLSMeta()
     transfer_meta_info_(),
     major_mv_merge_info_(),
     store_format_(),
-    ls_epoch_(0)
+    ls_epoch_(0),
+    ss_restart_recover_scn_(SCN::min_scn())
 {
 }
 
@@ -81,7 +82,8 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
     transfer_meta_info_(ls_meta.transfer_meta_info_),
     major_mv_merge_info_(ls_meta.major_mv_merge_info_),
     store_format_(ls_meta.store_format_),
-    ls_epoch_(ls_meta.ls_epoch_)
+    ls_epoch_(ls_meta.ls_epoch_),
+    ss_restart_recover_scn_(ls_meta.ss_restart_recover_scn_)
 {
   int ret = OB_SUCCESS;
   bool unused_updated = false;
@@ -159,6 +161,7 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
     major_mv_merge_info_ = other.major_mv_merge_info_;
     store_format_ = other.store_format_;
     ls_epoch_ = other.ls_epoch_;
+    ss_restart_recover_scn_ = other.ss_restart_recover_scn_;
   }
   return *this;
 }
@@ -186,6 +189,7 @@ void ObLSMeta::reset()
   transfer_meta_info_.reset();
   major_mv_merge_info_.reset();
   store_format_.reset();
+  ss_restart_recover_scn_.reset();
 }
 
 LSN ObLSMeta::get_clog_base_lsn() const
@@ -365,6 +369,8 @@ int ObLSMeta::inc_update_transfer_scn(const share::SCN &transfer_scn)
       LOG_WARN("clog_checkpoint write slog failed", K(ret), K(*this));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
+      LOG_INFO("inc update transfer scn", K(tenant_id_), K(ls_id_),
+          "old_scn", transfer_scn_, "new_scn", transfer_scn);
       transfer_scn_ = transfer_scn;
     }
   }
@@ -804,6 +810,7 @@ int ObLSMeta::init(
     const SCN &create_scn,
     const ObMajorMVMergeInfo &major_mv_merge_info,
     const ObLSStoreFormat &store_format,
+    const uint64_t data_version,
     const ObReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
@@ -828,6 +835,7 @@ int ObLSMeta::init(
     major_mv_merge_info_ = major_mv_merge_info;
     store_format_ = store_format;
     replica_type_ = replica_type;
+    transfer_meta_info_.data_version_ = data_version;
   }
   return ret;
 }
@@ -1073,6 +1081,7 @@ int ObLSMeta::cleanup_transfer_meta_info(const share::SCN &replay_scn)
   int ret = OB_SUCCESS;
   bool need_update = true;
   ObReentrantWLockGuard update_guard(update_lock_);
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!replay_scn.is_valid()) {
@@ -1212,6 +1221,58 @@ ObLSMeta::ObReentrantRLockGuard::~ObReentrantRLockGuard()
   }
 }
 
+int ObLSMeta::get_ss_restart_recover_scn(
+    share::SCN &ss_restart_recover_scn) const
+{
+  int ret = OB_SUCCESS;
+  ObReentrantRLockGuard guard(rw_lock_);
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls meta is not valid, cannot get ss restart recover scn", K(ret), K(*this));
+  } else {
+    ss_restart_recover_scn = ss_restart_recover_scn_;
+  }
+  return ret;
+}
+
+int ObLSMeta::set_ss_restart_recover_scn(
+    const share::SCN &ss_restart_recover_scn)
+{
+  int ret = OB_SUCCESS;
+  ObReentrantWLockGuard update_guard(update_lock_);
+  if (OB_FAIL(check_can_update_())) {
+    LOG_WARN("ls meta cannot update", K(ret), K(*this));
+  } else if (!ss_restart_recover_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ss restart recover scn", K(ret), K(ss_restart_recover_scn_), K(ss_restart_recover_scn));
+  } else if (ss_restart_recover_scn <= ss_restart_recover_scn_) {
+    //do nothing
+  } else {
+    ObLSMeta tmp(*this);
+    tmp.ss_restart_recover_scn_ = ss_restart_recover_scn;
+    if (OB_FAIL(write_slog_(tmp))) {
+      LOG_WARN("ss restart recover scn write slog failed", K(ret));
+    } else {
+      ObReentrantWLockGuard guard(rw_lock_);
+      ss_restart_recover_scn_ = ss_restart_recover_scn;
+      FLOG_INFO("succeed to set ss restart recover scn", K(ls_id_), K(ss_restart_recover_scn_));
+    }
+  }
+  return ret;
+}
+
+uint64_t ObLSMeta::get_data_version() const
+{
+  int ret = OB_SUCCESS;
+  ObReentrantRLockGuard guard(rw_lock_);
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls meta is not valid, cannot get ss restart recover scn", K(ret), K(*this));
+  } else {
+    return transfer_meta_info_.data_version_;
+  }
+  return ret;
+}
 
 // add field should also consider ObLSMeta::update_ls_meta function
 OB_SERIALIZE_MEMBER(ObLSMeta,
@@ -1235,7 +1296,9 @@ OB_SERIALIZE_MEMBER(ObLSMeta,
                     transfer_meta_info_,
                     major_mv_merge_info_,
                     store_format_,
-                    ls_epoch_);
+                    ls_epoch_,
+                    ss_restart_recover_scn_   //FARM COMPAT WHITELIST
+                    );
 
 }
 }

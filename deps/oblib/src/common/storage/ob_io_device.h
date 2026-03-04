@@ -521,12 +521,18 @@ public:
            || (ObStorageType::OB_STORAGE_S3 == device_type_)
            || (ObStorageType::OB_STORAGE_FILE == device_type_)
            || (ObStorageType::OB_STORAGE_AZBLOB == device_type_)
-           || (ObStorageType::OB_STORAGE_HDFS == device_type_);
+           || (ObStorageType::OB_STORAGE_HDFS == device_type_)
+           || (ObStorageType::OB_STORAGE_TABLE == device_type_);
   }
 
   OB_INLINE bool is_local_device() const
   {
     return (ObStorageType::OB_STORAGE_LOCAL == device_type_);
+  }
+
+  OB_INLINE bool is_table_device() const
+  {
+    return (ObStorageType::OB_STORAGE_TABLE == device_type_);
   }
 
   OB_INLINE bool is_local_cache_device() const

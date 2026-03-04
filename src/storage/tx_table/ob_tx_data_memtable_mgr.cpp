@@ -528,6 +528,34 @@ int ObTxDataMemtableMgr::get_memtable_range(int64_t &memtable_head, int64_t &mem
   return ret;
 }
 
+int ObTxDataMemtableMgr::reuse()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(freezer_)) {
+    ObLSTxService *ls_tx_svr = nullptr;
+    if (OB_ISNULL(ls_tx_svr = freezer_->get_ls_tx_svr())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ls_tx_svr is null", K(ret), KP(freezer_));
+    } else if (OB_FAIL(ls_tx_svr->unregister_common_checkpoint(
+                         checkpoint::TX_DATA_MEMTABLE_TYPE, this))) {
+      STORAGE_LOG(WARN, "tx_data register_common_checkpoint failed", K(ret), K(ls_id_));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    reset_tables();
+    ls_id_.reset();
+    tablet_id_.reset();
+    t3m_ = nullptr;
+    freezer_ = nullptr;
+    tx_data_table_ = nullptr;
+    ls_tablet_svr_ = nullptr;
+    is_inited_ = false;
+  }
+  return ret;
+}
+
+
 }  // namespace storage
 
 }  // namespace oceanbase

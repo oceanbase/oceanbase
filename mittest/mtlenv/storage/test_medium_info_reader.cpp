@@ -104,7 +104,7 @@ TEST_F(TestMediumInfoReader, read_multi_medium_info_from_minor)
   ASSERT_NE(nullptr, tablet);
 
   common::ObSEArray<compaction::ObMediumCompactionInfo*, 1> medium_info_array;
-  ret = tablet->read_medium_array(allocator_, medium_info_array);
+  ret = tablet->read_medium_array_(allocator_, medium_info_array);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(3, medium_info_array.count());
   ASSERT_EQ(1718647202742212010, medium_info_array[0]->medium_snapshot_);

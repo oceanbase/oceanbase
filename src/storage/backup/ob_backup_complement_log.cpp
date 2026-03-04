@@ -2066,8 +2066,8 @@ int ObBackupLSLogFileTask::transfer_clog_file_(const ObBackupPath &src_path, con
   ObStorageIdMod mod;
   mod.storage_id_ = ctx_->dest_id_;
   mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
-  if (OB_FAIL(util.open_with_access_type(
-          device_handle, fd, ctx_->backup_dest_.get_storage_info(), dst_path.get_obstr(), OB_STORAGE_ACCESS_MULTIPART_WRITER, mod))) {
+  if (OB_FAIL(util.open_with_access_type(device_handle, fd, ctx_->backup_dest_.get_storage_info(), dst_path.get_obstr(),
+                                         OB_STORAGE_ACCESS_MULTIPART_WRITER, mod, false/*is_batch_write*/))) {
     LOG_WARN("failed to open with access type", K(ret));
   } else {
     while (OB_SUCC(ret)) {

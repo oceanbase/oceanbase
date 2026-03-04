@@ -104,7 +104,7 @@ struct DeviceGuard : public ObObjectStorageTenantGuard
           KR(ret), K(uri), KPC(storage_info), K(storage_id_mod));
     } else if (OB_FAIL(ob_dup_cstring(allocator_, uri, uri_cstr_))) {
       OB_LOG(WARN, "fail to copy url", KR(ret), K(uri), KPC(storage_info), K(storage_id_mod));
-    } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(device_handle_, fd_, storage_info, uri_cstr_, access_type, storage_id_mod))) {
+    } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(device_handle_, fd_, storage_info, uri_cstr_, access_type, storage_id_mod, false/*is_batch_write*/))) {
       OB_LOG(WARN, "fail to open with access type!", KR(ret), K(uri), KPC(storage_info), K(storage_id_mod), K(access_type));
     }
     return ret;
@@ -120,7 +120,8 @@ struct DeviceGuard : public ObObjectStorageTenantGuard
 
 int ObBackupIoAdapter::open_with_access_type(ObIODevice*& device_handle, ObIOFd &fd, 
               const common::ObObjectStorageInfo *storage_info, const common::ObString &uri,
-              ObStorageAccessType access_type, const common::ObStorageIdMod &storage_id_mod)
+              ObStorageAccessType access_type, const common::ObStorageIdMod &storage_id_mod,
+              const bool is_batch_write)
 {
   int ret = OB_SUCCESS;
   ObIODOpt iod_opt_array[2];
@@ -138,25 +139,35 @@ int ObBackupIoAdapter::open_with_access_type(ObIODevice*& device_handle, ObIOFd 
       OB_LOG(WARN, "fail to check io prohibited!", K(ret), K(storage_info));
     }
   } else {
-    iod_opts.opts_[0].set("AccessType", OB_STORAGE_ACCESS_TYPES_STR[access_type]);
-    if (access_type == OB_STORAGE_ACCESS_APPENDER)
-    {
-      iod_opts.opts_[1].set("OpenMode", "CREATE_OPEN_NOLOCK");
-      iod_opts.opt_cnt_++;
-    }
-
     ObObjectStorageTenantGuard object_storage_tenant_guard(
         get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
     ObArenaAllocator allocator(OB_STORAGE_IO_ADAPTER);
     char *uri_cstr = nullptr;
+
     if (OB_FAIL(ob_dup_cstring(allocator, uri, uri_cstr))) {
       OB_LOG(WARN, "fail to copy url", KR(ret), K(uri), KPC(storage_info), K(access_type));
     } else if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri_cstr, storage_id_mod))) {
       OB_LOG(WARN, "fail to get and init device!",
           KR(ret), K(uri), KPC(storage_info), K(access_type), K(device_handle));
-    } else if (OB_FAIL(device_handle->open(uri_cstr, -1, 0, fd, &iod_opts))) {
-      OB_LOG(WARN, "fail to open with access type!",
-          KR(ret), K(uri), KPC(storage_info), K(access_type));
+    } else {
+      if (device_handle->is_table_device()) {
+        // For table device: set is_batch_write option
+        iod_opts.opts_[0].set("is_batch_write", is_batch_write);
+        iod_opts.opt_cnt_ = 1;
+      } else {
+        // For object storage devices: set AccessType and OpenMode
+        iod_opts.opts_[0].set("AccessType", OB_STORAGE_ACCESS_TYPES_STR[access_type]);
+        if (access_type == OB_STORAGE_ACCESS_APPENDER) {
+          iod_opts.opts_[1].set("OpenMode", "CREATE_OPEN_NOLOCK");
+          iod_opts.opt_cnt_++;
+        }
+      }
+
+      const int open_flag = static_cast<int>(access_type);
+      if (OB_FAIL(device_handle->open(uri_cstr, open_flag, 0, fd, &iod_opts))) {
+        OB_LOG(WARN, "fail to open with access type!",
+            KR(ret), K(uri), KPC(storage_info), K(access_type), K(open_flag));
+      }
     }
   }
   return ret;
@@ -493,7 +504,7 @@ int ObBackupIoAdapter::write_single_file(const common::ObString &uri,
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info, 
-                      uri, OB_STORAGE_ACCESS_OVERWRITER, storage_id_mod))) {
+                      uri, OB_STORAGE_ACCESS_OVERWRITER, storage_id_mod, false/*is_batch_write*/))) {
     OB_LOG(WARN, "fail to get device and open file !", K(uri), K(ret), K(storage_info));
   } else if (FALSE_IT(fd.device_handle_ = device_handle)) {
   } else if (OB_FAIL(io_manager_write(buf, 0, size, fd, write_size))) {
@@ -607,7 +618,7 @@ int ObBackupIoAdapter::pwrite(
   if (OB_UNLIKELY(ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER != access_type)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid access type", K(ret), K(access_type));
-  } else if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info, uri, access_type, storage_id_mod))) {
+  } else if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info, uri, access_type, storage_id_mod, false/*is_batch_write*/))) {
     OB_LOG(WARN, "fail to get device and open file !", K(uri), K(storage_info), K(ret));
   } else if (FALSE_IT(fd.device_handle_ = device_handle)) {
   } else if (OB_FAIL(io_manager_write(buf, offset, size, fd, write_size))) {
@@ -629,9 +640,7 @@ int ObBackupIoAdapter::seal_file(
   const common::ObStorageIdMod &storage_id_mod)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   DeviceGuard device_guard;
-
   if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod(), ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER))) {
     OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
   } else if (OB_FAIL(OB_IO_MANAGER.seal_file(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_))) {
@@ -749,7 +758,7 @@ int ObBackupIoAdapter::read_single_file(const common::ObString &uri, const commo
   int64_t file_length = -1;
 
   if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info, 
-                      uri, OB_STORAGE_ACCESS_READER, storage_id_mod))) {
+                      uri, OB_STORAGE_ACCESS_READER, storage_id_mod, false/*is_batch_write*/))) {
     OB_LOG(WARN, "fail to get device and open file !", K(uri), K(ret));
   } else if (FALSE_IT(fd.device_handle_ = device_handle)) {
   } else if (OB_FAIL(io_manager_read(buf, 0, buf_size, fd, read_size))) {
@@ -782,7 +791,7 @@ int ObBackupIoAdapter::adaptively_read_single_file(const common::ObString &uri, 
   int64_t file_length = -1;
 
   if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info,
-                      uri, OB_STORAGE_ACCESS_ADAPTIVE_READER, storage_id_mod))) {
+                      uri, OB_STORAGE_ACCESS_ADAPTIVE_READER, storage_id_mod, false/*is_batch_write*/))) {
     OB_LOG(WARN, "fail to get device and open file !", K(uri), K(ret));
   } else if (FALSE_IT(fd.device_handle_ = device_handle)) {
   } else if (OB_FAIL(io_manager_read(buf, 0, buf_size, fd, read_size))) {
@@ -897,7 +906,7 @@ int ObBackupIoAdapter::read_part_file(const common::ObString &uri, const common:
   ObIODevice *device_handle = NULL;
 
   if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info, 
-                      uri, OB_STORAGE_ACCESS_READER, storage_id_mod))) {
+                      uri, OB_STORAGE_ACCESS_READER, storage_id_mod, false/*is_batch_write*/))) {
     OB_LOG(WARN, "fail to get device and open file !", K(uri), K(ret), KP(storage_info));
   } else if (FALSE_IT(fd.device_handle_ = device_handle)) {
   } else if (OB_FAIL(io_manager_read(buf, offset, buf_size, fd, read_size))) {
@@ -921,7 +930,7 @@ int ObBackupIoAdapter::adaptively_read_part_file(const common::ObString &uri, co
   ObIODevice*device_handle = NULL;
 
   if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info,
-                      uri, OB_STORAGE_ACCESS_ADAPTIVE_READER, storage_id_mod))) {
+                      uri, OB_STORAGE_ACCESS_ADAPTIVE_READER, storage_id_mod, false/*is_batch_write*/))) {
     OB_LOG(WARN, "fail to get device and open file !", K(uri), K(ret), KP(storage_info));
   } else if (FALSE_IT(fd.device_handle_ = device_handle)) {
   } else if (OB_FAIL(io_manager_read(buf, offset, buf_size, fd, read_size))) {
@@ -952,7 +961,7 @@ int ObBackupIoAdapter::pread(
   int64_t file_length = -1;
 
   if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info,
-                                    uri, OB_STORAGE_ACCESS_READER, storage_id_mod))) {
+                                    uri, OB_STORAGE_ACCESS_READER, storage_id_mod, false/*is_batch_write*/))) {
     OB_LOG(WARN, "fail to get device and open file !", K(uri), KR(ret));
   } else if (FALSE_IT(fd.device_handle_ = device_handle)) {
   } else if (OB_FAIL(io_manager_read(buf, offset, buf_size, fd, read_size))) {

@@ -365,7 +365,11 @@ int ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(const uint64_t tenant
   ObSqlString new_zone_priority;
   share::ObLSStatusOperator status_op;
   share::ObLSPrimaryZoneInfo sslog_primary_zone_info;
-  if (OB_UNLIKELY(is_user_tenant(tenant_id))) {
+  share::ObLSPrimaryZoneInfo metadata_primary_zone_info;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_UNLIKELY(is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("user tenant no need update sys ls primary zone", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(ERRSIM_UPDATE_SYS_LS_PRIMARY_ZONE)) {
@@ -395,11 +399,22 @@ int ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(const uint64_t tenant
     }
   }
   if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
+    ObLSStatusInfo tmp_info; // not used
     // sys and meta tenant need update sslog primary zone info
     if (OB_FAIL(status_op.get_ls_primary_zone_info(tenant_id, SSLOG_LS, sslog_primary_zone_info, *GCTX.sql_proxy_))) {
       LOG_WARN("failed to get ls primary_zone info", KR(ret), K(tenant_id));
     } else if (OB_FAIL(try_update_ls_primary_zone(sslog_primary_zone_info, new_primary_zone, new_zone_priority))) {
       LOG_WARN("failed to update ls primary zone", KR(ret), K(sslog_primary_zone_info), K(new_primary_zone), K(new_zone_priority));
+    } else if (is_sys_tenant(tenant_id)) { // skip
+    } else if (OB_FAIL(status_op.get_ls_primary_zone_info(tenant_id, METADATA_LS, metadata_primary_zone_info, *GCTX.sql_proxy_))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("metadata ls not exist, no need to update", KR(ret), K(tenant_id));
+      } else {
+        LOG_WARN("failed to get ls primary_zone info", KR(ret), K(tenant_id));
+      }
+    } else if (OB_FAIL(try_update_ls_primary_zone(metadata_primary_zone_info, new_primary_zone, new_zone_priority))) {
+      LOG_WARN("failed to update ls primary zone", KR(ret), K(metadata_primary_zone_info), K(new_primary_zone), K(new_zone_priority));
     }
   }
   return ret;

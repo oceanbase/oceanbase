@@ -826,6 +826,24 @@ TEST_F(TestFileManager, test_remote_path_to_macro_id)
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/inc_major/cg_id/meta/macro_seq_id
   check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO, file_id);
 
+  // 83. SHARED_TABLET_SUB_META_IN_TABLE
+  // inner_tablet: /ls/ls_id/tablet_name/meta/op%ldseq%lu
+  // user_tablet: /tablet/tablet_id/reorganization_scn/meta/op%ldseq%lu
+  inc_file_id.set_second_id(200001);
+  inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE, inc_file_id);
+  // inner_tablet : cluster_id/tenant_id/ls/ls_id/tablet_name/tablet_meta/data/op_id_data_seq
+  inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
+  inc_file_id.set_second_id(49401); // TX_CTX
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE, inc_file_id);
+  inc_file_id.set_second_id(49402); // TX_DATA
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE, inc_file_id);
+  inc_file_id.set_second_id(49403); // TX_LOCK
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE, inc_file_id);
 }
 
 TEST_F(TestFileManager, test_get_file_parent_dir)
