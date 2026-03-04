@@ -970,12 +970,20 @@ public:
     : ins_ctdef_(NULL),
       upd_ctdef_(NULL),
       is_upd_rowkey_(false),
+      do_opt_path_(false),
+      do_index_lookup_(false),
+      unique_key_conv_exprs_(alloc),
+      unique_index_rowkey_exprs_(alloc),
+      das_index_scan_ctdef_(NULL),
+      lookup_ctdef_for_batch_(NULL),
       enable_do_update_directly_(false),
       alloc_(alloc)
   { }
   TO_STRING_KV(KPC_(ins_ctdef),
                KPC_(upd_ctdef),
                K_(is_upd_rowkey),
+               K_(do_opt_path),
+               K_(do_index_lookup),
                K_(enable_do_update_directly))
   ObInsCtDef *ins_ctdef_;
   ObUpdCtDef *upd_ctdef_;
