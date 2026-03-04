@@ -1730,7 +1730,7 @@ int ObPLContext::del_tx_cursor_idx_from_local_state(ObSQLSessionInfo &session_in
   CK (OB_NOT_NULL(state->get_tx_cursor_idx_set()));
   CK (state->get_tx_cursor_idx_set()->created());
   OZ (state->get_tx_cursor_idx_set()->erase_refactored(cursor_index));
-  if (state->get_tx_cursor_idx_set()->empty()) {
+  if (OB_SUCC(ret) && state->get_tx_cursor_idx_set()->empty()) {
     OX (state->set_has_tx_cursor(false));
   }
   return ret;
@@ -3576,11 +3576,17 @@ int ObPLExecState::final(int ret)
           }
         } else {
           // local cursor must be closed.
-          if (!cursor->is_session_cursor() || !cursor->is_ref_by_refcursor()) {
-            if (OB_SUCCESS != ObSPIService::spi_cursor_close(&ctx_, func_.get_package_id(),
-                                                    func_.get_routine_id(), i, true)) {
-              LOG_WARN("failed to close cursor info", K(tmp_ret),
-              K(func_.get_package_id()), K(func_.get_routine_id()), K(i));
+          if (!cursor->is_session_cursor()) {
+            if (!cursor->is_ref_by_refcursor()) {
+              if (OB_SUCCESS != ObSPIService::spi_cursor_close(&ctx_, func_.get_package_id(),
+                                                      func_.get_routine_id(), i, true)) {
+                LOG_WARN("failed to close cursor info", K(tmp_ret),
+                K(func_.get_package_id()), K(func_.get_routine_id()), K(i));
+              }
+            } else { //local refcursor need to release it
+              if (OB_SUCCESS != (tmp_ret = ObSPIService::spi_add_ref_cursor_refcount(&ctx_, &param, -1))) {
+                LOG_WARN("failed to spi_add_ref_cursor_refcount", K(tmp_ret), K(func_.get_package_id()), K(func_.get_routine_id()), K(i));
+              }
             }
           }
         }
