@@ -77,6 +77,8 @@ int ObThrottleUnit<ALLOCATOR>::alloc_resource(const int64_t holding_size,
   if (enable_adaptive_limit_) {
     ALLOCATOR::adaptive_update_limit(
         tenant_id_, holding_size, config_specify_resource_limit_, resource_limit_, last_update_limit_ts_, is_updated);
+  } else if (OB_UNLIKELY(config_specify_resource_limit_ != resource_limit_)) {
+    SHARE_LOG(ERROR, "invalid resource limit", K(config_specify_resource_limit_), K(resource_limit_));
   }
 
   if (OB_LIKELY(trigger_percentage < 100)) {
