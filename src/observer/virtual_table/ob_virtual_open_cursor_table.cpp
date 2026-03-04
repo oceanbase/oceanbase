@@ -167,6 +167,8 @@ bool ObVirtualOpenCursorTable::FillScanner::operator()(sql::ObSQLSessionMgr::Key
           // ignore ret
           SERVER_LOG(WARN, "get a NULL cursor when record for v$open_cursor.");
         } else if (!cursor_info->isopen()) { //cursor does not open now, skip it
+        } else if (CURSOR_MAGIC_NUM != cursor_info->get_magic_num()) {
+          SERVER_LOG(WARN, "cursor magic num is not expected", K(cursor_info->get_magic_num()));
         } else {
           OZ (fill_cursor_cell(*sess_info, cursor_info, false));
         }
