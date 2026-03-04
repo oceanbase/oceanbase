@@ -619,7 +619,9 @@ int ObGranuleUtil::split_granule_for_external_table(ObGranulePumpArgs &args,
     const common::ObIArray<share::ObExternalFileInfo> &external_table_files =
         args.external_table_files_;
     int64_t parallelism = args.parallelism_;
-    if (OB_FAIL(ret)) {
+    if (OB_UNLIKELY(parallelism <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("the parallelism is invalid", KR(ret), K(parallelism));
     } else if (OB_FAIL(external_file_format.load_from_string(
                    tsc->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
                    args_ctx_allocator))) {
@@ -749,11 +751,22 @@ int ObGranuleUtil::split_granule_for_external_table(ObGranulePumpArgs &args,
       LOG_WARN("failed to split granule for parallel resolve csv", K(ret));
     }
   } else {
+      bool is_kafka_format = (ObExternalFileFormat::KAFKA_FORMAT == external_file_format.format_type_);
+      int64_t files_per_worker = (external_table_files.count() + parallelism - 1) / parallelism;
+
       for (int64_t i = 0; OB_SUCC(ret) && i < input_ranges.count(); ++i) {
         for (int64_t j = 0; OB_SUCC(ret) && j < external_table_files.count();
              ++j) {
           ObExtTableScanTask *scan_task = NULL;
           bool is_valid = false;
+          int64_t granule_idx_to_use = 0;
+          if (is_kafka_format) {
+            //We want to aggregate some files so that a single PX worker thread can process them.
+            granule_idx_to_use = j / files_per_worker;
+          } else {
+            granule_idx_to_use = external_table_files.at(j).file_id_;
+          }
+
           if (OB_ISNULL(scan_task = OB_NEWx(ObExtTableScanTask,
                                             (&args_ctx_allocator)))) {
             ret = OB_ERR_UNEXPECTED;
@@ -771,12 +784,14 @@ int ObGranuleUtil::split_granule_for_external_table(ObGranulePumpArgs &args,
             LOG_WARN("failed to convert external table new range", K(ret));
           } else if (is_valid &&
                      (OB_FAIL(granule_tasks.push_back(scan_task)) ||
-                      OB_FAIL(granule_idx.push_back(
-                          external_table_files.at(j).file_id_)) ||
+                      OB_FAIL(granule_idx.push_back(granule_idx_to_use)) ||
                       OB_FAIL(granule_tablets.push_back(tablet_array.at(0))))) {
             LOG_WARN("fail to push back", K(ret));
           }
         }
+      }
+      if (is_kafka_format) {
+        LOG_INFO("split granule for external table", KR(ret), K(parallelism), K(granule_idx));
       }
     }
     LOG_DEBUG("check external split ranges", K(input_ranges), K(granule_tasks),

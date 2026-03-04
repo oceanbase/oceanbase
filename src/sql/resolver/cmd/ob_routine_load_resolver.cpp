@@ -235,11 +235,16 @@ int ObCreateRoutineLoadResolver::resolve_load_properties(
       } else {
         switch (node->type_) {
           case T_PARALLEL: {
-            stmt.set_parallel(static_cast<int64_t>(node->children_[0]->value_));
-            if (stmt.get_parallel() <= 0) {
-              ret = OB_OP_NOT_ALLOW;
-              LOG_WARN("parallel is too small", KR(ret), K(stmt.get_parallel()));
-              LOG_USER_ERROR(OB_OP_NOT_ALLOW, "parallel equal to 0 is");
+            if (OB_ISNULL(node->children_[0])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("parallel node is null", KR(ret));
+            } else {
+              stmt.set_parallel(static_cast<int64_t>(node->children_[0]->value_));
+              if (stmt.get_parallel() <= 0) {
+                ret = OB_OP_NOT_ALLOW;
+                LOG_WARN("parallel is too small", KR(ret), K(stmt.get_parallel()));
+                LOG_USER_ERROR(OB_OP_NOT_ALLOW, "parallel equal to 0 is");
+              }
             }
             break;
           }

@@ -37,10 +37,6 @@ public:
       table_id_(OB_INVALID_ID),
       parallel_(0),
       max_batch_interval_s_(60),
-      // par_str_pos_(-1),
-      // off_str_pos_(-1),
-      // par_str_len_(0),
-      // off_str_len_(0),
       dupl_action_(ObLoadDupActionType::LOAD_STOP_ON_DUP),
       field_or_var_list_(),
       part_ids_(),
@@ -54,10 +50,6 @@ public:
   OB_INLINE void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
   OB_INLINE void set_parallel(const uint64_t parallel) { parallel_ = parallel; }
   OB_INLINE void set_max_batch_interval_s(const int64_t max_batch_interval_s) { max_batch_interval_s_ = max_batch_interval_s; }
-  // OB_INLINE void set_partition_str_pos(const uint32_t par_str_pos) { par_str_pos_ = par_str_pos; }
-  // OB_INLINE void set_offsets_str_pos(const uint32_t off_str_pos) { off_str_pos_ = off_str_pos; }
-  // OB_INLINE void set_partition_str_len(const uint32_t par_str_len) { par_str_len_ = par_str_len; }
-  // OB_INLINE void set_offsets_str_len(const uint32_t off_str_len) { off_str_len_ = off_str_len; }
   OB_INLINE void set_dupl_action(const ObLoadDupActionType dupl_action) { dupl_action_ = dupl_action; }
   OB_INLINE void set_job_name(const ObString &job_name) { job_name_ = job_name; }
   OB_INLINE void set_database_name(const ObString &database_name) { database_name_ = database_name; }
@@ -76,10 +68,6 @@ public:
   OB_INLINE uint64_t get_table_id() const { return table_id_; }
   OB_INLINE int64_t get_parallel() const { return parallel_; }
   OB_INLINE int64_t get_max_batch_interval_s() const { return max_batch_interval_s_; }
-  // OB_INLINE uint32_t get_partition_str_pos() const { return par_str_pos_; }
-  // OB_INLINE uint32_t get_offsets_str_pos() const { return off_str_pos_; }
-  // OB_INLINE uint32_t get_partition_str_len() const { return par_str_len_; }
-  // OB_INLINE uint32_t get_offsets_str_len() const { return off_str_len_; }
   OB_INLINE ObLoadDupActionType get_dupl_action() const { return dupl_action_; }
   OB_INLINE const ObString &get_job_name() const { return job_name_; }
   OB_INLINE const ObString &get_database_name() const { return database_name_; }
@@ -107,10 +95,6 @@ public:
                K(table_id_),
                K(parallel_),
                K(max_batch_interval_s_),
-              //  K(par_str_pos_),
-              //  K(off_str_pos_),
-              //  K(par_str_len_),
-              //  K(off_str_len_),
                K(dupl_action_),
                K(job_name_),
                K(database_name_),
@@ -135,10 +119,6 @@ private:
   uint64_t table_id_;
   int64_t parallel_;
   int64_t max_batch_interval_s_;
-  // uint32_t par_str_pos_; //the position of the substring "kafka_partitions" in the string "exec_sql"
-  // uint32_t off_str_pos_; //the position of the substring "kafka_offsets" in the string "exec_sql"
-  // uint32_t par_str_len_; //the length of the substring "kafka_partitions" in the string "exec_sql"
-  // uint32_t off_str_len_; //the length of the substring "kafka_offsets" in the string "exec_sql"
   ObLoadDupActionType dupl_action_;
   common::ObString job_name_;
   common::ObString database_name_;

@@ -607,7 +607,6 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
     ObIArray<int64_t> &partition_ids,
     sql::ObExecContext &ctx,
     const ObDASScanCtDef &das_ctdef,
-    const int64_t parallel,
     ObIArray<ObExternalFileInfo> &external_files)
 {
   int ret = OB_SUCCESS;
@@ -794,8 +793,8 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
     }
   } else if (ObExternalFileFormat::FormatType::KAFKA_FORMAT == external_table_type) { //kafka
     if (OB_FAIL(build_external_files_for_kafka(tenant_id, das_ctdef.external_file_format_str_.str_,
-                                    parallel, ctx.get_allocator(), external_files))) {
-      LOG_WARN("fail to build_external_files_for_kafka", KR(ret), K(tenant_id), K(das_ctdef.external_file_format_str_.str_), K(parallel));
+                                    ctx.get_allocator(), external_files))) {
+      LOG_WARN("fail to build_external_files_for_kafka", KR(ret), K(tenant_id), K(das_ctdef.external_file_format_str_.str_));
     }
   } else {
     ret = OB_NOT_SUPPORTED;
@@ -807,7 +806,6 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
 int ObExternalTableFileManager::build_external_files_for_kafka(
     const uint64_t tenant_id,
     const ObString &external_properties,
-    const int64_t parallel,
     ObIAllocator &ctx_allocator,
     ObIArray<ObExternalFileInfo> &external_files)
 {
@@ -835,12 +833,6 @@ int ObExternalTableFileManager::build_external_files_for_kafka(
       LOG_WARN("unexpected partition_arr or offset_arr", KR(ret), K(partition_arr), K(offset_arr));
     } else {
       const int64_t buf_len = 64;
-      const int64_t partition_count = partition_arr.count();
-      const int64_t effective_parallel = (parallel > 0) ? parallel : 1;
-      int64_t partitions_per_worker = (partition_count + effective_parallel - 1) / effective_parallel;
-      if (0 == partitions_per_worker) {
-        partitions_per_worker = 1;
-      }
       ARRAY_FOREACH_N(partition_arr, i, cnt) {
         ObExternalFileInfo file;
         char *buf = NULL;
@@ -852,15 +844,14 @@ int ObExternalTableFileManager::build_external_files_for_kafka(
           LOG_WARN("failed to printf", KR(ret), K(buf_len), K(pos));
         } else {
           file.file_url_.assign_ptr(buf, pos);
-          file.file_id_ = (i / partitions_per_worker) + 1;
+          file.file_id_ = i + 1;
           file.file_addr_ = GCTX.self_addr();
           if (OB_FAIL(external_files.push_back(file))) {
             LOG_WARN("failed to push back", KR(ret));
           }
         }
       }
-      LOG_INFO("build external files for kafka", KR(ret), K(partition_count), K(effective_parallel),
-                K(external_files));
+      LOG_INFO("build external files for kafka", KR(ret), K(external_files));
     }
   }
   return ret;
