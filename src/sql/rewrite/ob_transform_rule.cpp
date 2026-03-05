@@ -802,10 +802,11 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
   int64_t src_hash_val_cnt = -1;
   bool need_trans = false;
   const ObQueryHint *query_hint = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) ||
+  ObDMLStmt *root_stmt = parent_stmts.empty() ? stmt : parent_stmts.at(0).stmt_;
+  if (OB_ISNULL(stmt) || OB_ISNULL(root_stmt) || OB_ISNULL(ctx_) ||
       OB_ISNULL(query_hint = stmt->get_stmt_hint().query_hint_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("null point error", K(ret), K(stmt), K(ctx_), K(query_hint));
+    LOG_WARN("null point error", K(ret), K(stmt), K(root_stmt), K(ctx_), K(query_hint));
   } else if (stmt->is_select_stmt() &&
              static_cast<ObSelectStmt*>(stmt)->get_select_item_size() == 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -848,7 +849,9 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if (OB_FAIL(stmt->pull_all_expr_relation_id())) {
     LOG_WARN("failed to pull all expr relation id", K(ret));
-  } else if (OB_FAIL(stmt->formalize_implicit_distinct())) {
+  } else if (root_stmt->is_select_stmt()
+             && OB_FALSE_IT(static_cast<ObSelectStmt*>(root_stmt)->reset_implicit_distinct())) {
+  } else if (OB_FAIL(root_stmt->formalize_implicit_distinct())) {
     LOG_WARN("failed to update implicit distinct", K(ret));
   } else if (OB_FAIL(update_max_table_num(stmt))) {
       LOG_WARN("failed to update max table num", K(ret));

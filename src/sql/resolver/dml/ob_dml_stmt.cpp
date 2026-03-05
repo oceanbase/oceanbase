@@ -1958,6 +1958,9 @@ int ObDMLStmt::formalize_child_stmt_expr_reference(ObRawExprFactory *expr_factor
  *
  * 1. Check current stmt is legal for implicit distinct (only for ObSelectStmt)
  * 2. Set implicit distinct for subquery
+ *
+ * ATTENTION: formalize_implicit_distinct() will not reset the
+ *            is_implicit_distinct_ flag of the stmt itself.
  */
 int ObDMLStmt::formalize_implicit_distinct()
 {
@@ -1979,7 +1982,7 @@ int ObDMLStmt::formalize_implicit_distinct()
  */
 int ObDMLStmt::formalize_implicit_distinct_for_subquery() {
   int ret = OB_SUCCESS;
-  bool is_from_dul_insene = false;
+  bool is_from_dul_insens = false;
   ObSEArray<ObSelectStmt*, 4> all_child_stmts;
   ObSEArray<ObSelectStmt*, 4> from_table_stmts;
   ObSEArray<ObSelectStmt*, 4> semi_right_stmts;
@@ -1994,9 +1997,9 @@ int ObDMLStmt::formalize_implicit_distinct_for_subquery() {
     LOG_WARN("failed to get exists any all subquery stmts", K(ret));
   } else if (is_set_stmt()) {
     const ObSelectStmt* select_stmt = static_cast<const ObSelectStmt*>(this);
-    is_from_dul_insene = select_stmt->is_set_distinct()
+    is_from_dul_insens = select_stmt->is_set_distinct()
                          || select_stmt->is_implicit_distinct();
-  } else if (OB_FAIL(check_from_dup_insensitive(is_from_dul_insene))) {
+  } else if (OB_FAIL(check_from_dup_insensitive(is_from_dul_insens))) {
     LOG_WARN("failed to check from dup insens", K(ret));
   }
 
@@ -2013,7 +2016,7 @@ int ObDMLStmt::formalize_implicit_distinct_for_subquery() {
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (is_from_dul_insene
+  } else if (is_from_dul_insens
              && OB_FAIL(add_implicit_distinct_for_child_stmts(from_table_stmts))) {
     LOG_WARN("failed to add implicit distinct for FROM child stmts", K(ret));
   } else if (OB_FAIL(add_implicit_distinct_for_child_stmts(semi_right_stmts))) {
