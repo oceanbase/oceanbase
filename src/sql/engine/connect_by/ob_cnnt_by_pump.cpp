@@ -292,6 +292,10 @@ int ObConnectByOpPump::join_right_table(PumpNode &node, bool &matched)
     LOG_WARN("set current level as param failed", K(ret));
   } else {
     while(OB_SUCC(ret) && false == matched) {
+      if (OB_FAIL(connect_by_->try_check_status())) {
+        LOG_WARN("check status failed", K(ret));
+        break;
+      }
       connect_by_->clear_evaluated_flag();
       if (OB_FAIL(node.row_fetcher_.get_next_row(*right_prior_exprs_, *eval_ctx_))) {
         if (OB_ITER_END != ret) {
