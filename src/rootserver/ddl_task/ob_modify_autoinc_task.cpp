@@ -93,6 +93,7 @@ int ObUpdateAutoincSequenceTask::process()
         ddl_info.set_is_ddl(true);
         // if data_table_id != dest_table_id, meaning this is happening in ddl double write
         ddl_info.set_source_table_hidden(data_table_id_ != dest_table_id_);
+        ddl_info.set_retryable_ddl(true);
         ObObj obj;
         const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
         if (OB_FAIL(session_param.ddl_info_.init(ddl_info, table_schema->get_session_id()))) {
@@ -571,12 +572,21 @@ int ObModifyAutoincTask::cleanup_impl()
 int ObModifyAutoincTask::check_update_autoinc_end(bool &is_end)
 {
   int ret = OB_SUCCESS;
+  TCWLockGuard guard(lock_);
   if (INT64_MAX == update_autoinc_job_ret_code_) {
     // not finish
   } else {
-    is_end = true;
-    ret_code_ = update_autoinc_job_ret_code_;
-    ret = ret_code_;
+    if (is_replica_build_need_retry(update_autoinc_job_ret_code_)) {
+      LOG_INFO("retry modify autoinc task", K(update_autoinc_job_ret_code_), K(update_autoinc_job_time_), K(object_id_), K(target_object_id_));
+      is_end = false;
+      update_autoinc_job_ret_code_ = INT64_MAX;
+      update_autoinc_job_time_ = 0;
+      ret_code_ = OB_SUCCESS;
+    } else {
+      is_end = true;
+      ret_code_ = update_autoinc_job_ret_code_;
+      ret = ret_code_;
+    }
   }
   return ret;
 }
@@ -584,6 +594,7 @@ int ObModifyAutoincTask::check_update_autoinc_end(bool &is_end)
 int ObModifyAutoincTask::notify_update_autoinc_finish(const uint64_t autoinc_val, const int ret_code)
 {
   int ret = OB_SUCCESS;
+  TCWLockGuard guard(lock_);
   update_autoinc_job_ret_code_ = ret_code;
   alter_table_arg_.alter_table_schema_.set_auto_increment(autoinc_val);
   return ret;
