@@ -1945,7 +1945,9 @@ int ObFtsIndexBuildTask::check_is_partition_local_ddl(bool &is_partition_local_d
         if (OB_FAIL(ObFtsIndexBuilderUtil::check_need_doc_id(*data_table_schema, need_doc_id))) {
           LOG_WARN("fail to check need doc id", K(ret));
         } else {
-          is_partition_local_ddl = !need_doc_id;
+          const bool is_duplicate_or_broadcast_table = data_table_schema->is_duplicate_table() ||
+                                                       data_table_schema->is_broadcast_table();
+          is_partition_local_ddl = !need_doc_id && !is_duplicate_or_broadcast_table;
         }
       }
     }
