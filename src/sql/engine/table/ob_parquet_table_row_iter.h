@@ -296,6 +296,18 @@ private:
   };
   // load vec data from parquet file to expr mem
 
+  struct DataLoaderBuffers {
+    int init(common::ObIAllocator &allocator, const int64_t batch_size);
+    void *shared_values_buf_ = nullptr;
+    common::ObArrayWrap<int32_t> int32_values_;
+    common::ObArrayWrap<int64_t> int64_values_;
+    common::ObArrayWrap<bool> bool_values_;
+    common::ObArrayWrap<float> float_values_;
+    common::ObArrayWrap<double> double_values_;
+    common::ObArrayWrap<parquet::Int96> int96_values_;
+    common::ObArrayWrap<parquet::ByteArray> byte_array_values_;
+    common::ObArrayWrap<parquet::FixedLenByteArray> fixed_len_byte_array_values_;
+  };
   struct DataLoader {
     DataLoader(ObEvalCtx &eval_ctx,
                ObExpr *file_col_expr,
@@ -306,6 +318,7 @@ private:
                common::ObIArrayWrap<int16_t> &def_levels_buf,
                common::ObIArrayWrap<int16_t> &rep_levels_buf,
                common::ObIAllocator &str_res_mem,
+               DataLoaderBuffers &buffers,
                const int64_t batch_size,
                const int64_t row_offset,
                int64_t &row_count,
@@ -330,6 +343,7 @@ private:
       def_levels_buf_(def_levels_buf),
       rep_levels_buf_(rep_levels_buf),
       str_res_mem_(str_res_mem),
+      buffers_(buffers),
       cur_row_group_row_cnt_(cur_row_group_row_cnt),
       col_def_(col_def),
       read_progress_(read_progress),
@@ -440,6 +454,7 @@ private:
     common::ObIArrayWrap<int16_t> &def_levels_buf_;
     common::ObIArrayWrap<int16_t> &rep_levels_buf_;
     common::ObIAllocator &str_res_mem_;
+    DataLoaderBuffers &buffers_;
     int64_t cur_row_group_row_cnt_;
     ObColumnDefaultValue &col_def_;
     int64_t &read_progress_;
@@ -584,6 +599,7 @@ private:
   ObBitVector *bit_vector_cache_;
   common::ObArrayWrap<int16_t> def_levels_buf_;
   common::ObArrayWrap<int16_t> rep_levels_buf_;
+  DataLoaderBuffers data_loader_buffers_;
   common::ObArrayWrap<char *> file_url_ptrs_; //for file url expr
   common::ObArrayWrap<ObLength> file_url_lens_; //for file url expr
   ObExternalTableAccessOptions options_;
