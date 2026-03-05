@@ -448,7 +448,7 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     rowkey_vid_table_id_(OB_INVALID_ID), vid_rowkey_table_id_(OB_INVALID_ID),
     ref_cnt_(0), idle_cnt_(0), mem_check_cnt_(0), is_mem_limited_(false), all_vsag_use_mem_(nullptr), allocator_(allocator),
     parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_(), is_in_opt_task_(false), need_be_optimized_(false), extra_info_column_count_(0),
-    reload_lock_(common::ObLatchIds::VECTOR_RELOAD_LOCK), query_lock_(common::ObLatchIds::VECTOR_QUERY_LOCK), reload_finish_(false), index_statistics_updated_(false), is_need_vid_(true)
+    reload_lock_(common::ObLatchIds::VECTOR_RELOAD_LOCK), query_lock_(common::ObLatchIds::VECTOR_QUERY_LOCK), reload_finish_(false), index_statistics_updated_(false), is_need_vid_(true), replace_scn_()
 {
 }
 
@@ -1612,6 +1612,7 @@ int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(uint64_t tablet_id, uint
         snapshot_key_prefix_.reset();
       }
       snapshot_key_prefix_.assign(key_prefix_str, pos);
+      LOG_INFO("change vector index snapshot_key_prefix success", K(snapshot_key_prefix_), KP(this), K(*this));
     }
   }
   return ret;
@@ -1641,6 +1642,24 @@ int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(const ObString &snapshot
     }
   }
   return ret;
+}
+
+int ObPluginVectorIndexAdaptor::set_replace_scn(const SCN &replace_scn)
+{
+  int ret = OB_SUCCESS;
+  if (replace_scn.is_valid()) {
+    replace_scn_ = replace_scn;
+    LOG_INFO("set replace scn", K(ret), K(replace_scn), KP(this), K(*this));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), K(replace_scn), KP(this), K(*this));
+  }
+  return ret;
+}
+
+SCN ObPluginVectorIndexAdaptor::get_replace_scn()
+{
+  return replace_scn_;
 }
 
 int ObPluginVectorIndexAdaptor::copy_meta_info(ObPluginVectorIndexAdaptor &other)

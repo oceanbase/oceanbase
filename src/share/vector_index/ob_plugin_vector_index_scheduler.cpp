@@ -1693,9 +1693,12 @@ int ObVectorIndexTask::process_one()
   int64_t start_time = ObTimeUtil::current_time();
   ObPluginVectorIndexAdapterGuard adpt_guard;
   ObPluginVectorIndexAdapterGuard new_adpt_guard;
+  bool is_leader = false;
 
-  if (OB_FAIL(ObPluginVectorIndexUtils::get_task_read_snapshot(ls_id_, read_snapshot_))) {
-    LOG_WARN("memdata sync fail to get task read snapshot", KR(ret), K(ls_id_), KPC(task_ctx_));
+  if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id_, is_leader))) {
+    LOG_WARN("memdata sync fail to get ls leader flag", KR(ret), K(ls_id_), KPC(task_ctx_));
+  } else if (OB_FAIL(ObPluginVectorIndexUtils::get_read_scn(is_leader, ls_id_, read_snapshot_))) {
+    LOG_WARN("memdata sync fail to get read scn", KR(ret), K(ls_id_), KPC(task_ctx_));
   } else if (OB_FAIL(vec_idx_mgr_->get_adapter_inst_guard(task_ctx_->index_tablet_id_, adpt_guard))) {
     LOG_WARN("memdata sync fail to get adapter instance", KR(ret), K(ls_id_), KPC(task_ctx_));
   } else {
