@@ -54,24 +54,28 @@ public:
   virtual int64_t data_type() const = 0;
 };
 
+
 class ObBackupBlockFileMacroIdItem final : public ObIBackupBlockFileItem
 {
   OB_UNIS_VERSION(1);
 
 public:
-  ObBackupBlockFileMacroIdItem() : macro_id_() {}
-  explicit ObBackupBlockFileMacroIdItem(const blocksstable::MacroBlockId &id) : macro_id_(id) {}
+  ObBackupBlockFileMacroIdItem() : macro_id_(), occupy_size_(0) {}
+  explicit ObBackupBlockFileMacroIdItem(const blocksstable::MacroBlockId &id) : macro_id_(id), occupy_size_(0) {}
+  ObBackupBlockFileMacroIdItem(const blocksstable::MacroBlockId &id, const int64_t occupy_size)
+      : macro_id_(id), occupy_size_(occupy_size) {}
   ~ObBackupBlockFileMacroIdItem() override {}
 
   bool is_valid() const override { return macro_id_.is_valid(); }
-  void reset() override { macro_id_.reset(); }
+  void reset() override { macro_id_.reset(); occupy_size_ = 0; }
   int64_t data_type() const override { return MACRO_BLOCK_ID; }
   int assign(const ObBackupBlockFileMacroIdItem &other);
 
-  TO_STRING_KV(K_(macro_id));
+  TO_STRING_KV(K_(macro_id), K_(occupy_size));
 
 public:
   blocksstable::MacroBlockId macro_id_;
+  int64_t occupy_size_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupBlockFileMacroIdItem);
 };
 
