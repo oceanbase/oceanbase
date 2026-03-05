@@ -624,7 +624,7 @@ public:
   uint64_t get_rowkey_vid_table_id() { return rowkey_vid_table_id_; }
   uint64_t get_vid_rowkey_table_id() { return vid_rowkey_table_id_; }
   void set_snap_data_has_complete() {
-    if (is_mem_data_init_atomic(VIRT_SNAP)) {
+    if (snap_data_.is_valid()) {
       snap_data_->has_complete_ = true;
     }
   }
@@ -914,6 +914,7 @@ public:
   void reset_complete();
   bool check_bitmap_is_delta_bitmap_subset(roaring::api::roaring64_bitmap_t *bitmap);
   bool check_index_bitmap_is_delta_bitmap_subset();
+  void set_index_statistics_updated(bool value) { index_statistics_updated_ = value; }
 
   // incr init
   int init_incr_data(ObVecIdxActiveDataHandle &mem_data, ObVectorIndexAlgorithmType enforce_type, ObVectorIndexParam *param);
@@ -1072,6 +1073,7 @@ private:
   // for vid opt
   bool is_need_vid_;
   ObCollectionMapType *sparse_vector_type_;
+  bool index_statistics_updated_;
 
   /*
    * record scn for replace_old_adapter to deal with task conflict between memdata sync and async task.

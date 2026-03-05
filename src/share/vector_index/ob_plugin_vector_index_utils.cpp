@@ -917,7 +917,19 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
                                 snapshot_idx_iter))) { // read_local_tablet 5th aux index get rowkey
     LOG_WARN("fail to read local tablet", KR(ret), K(ls_id), K(index_type), KPC(new_adapter));
   } else {
-    if (OB_FAIL(get_snap_index_visible_row_key(ls_id, adapter, target_scn, allocator, row_key, is_meta_data, meta_scn))) {
+    blocksstable::ObDatumRow *row = nullptr;
+    ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(snapshot_idx_iter);
+    if (OB_FAIL(table_scan_iter->get_next_row(row))) {
+      if (OB_ITER_END == ret) {
+        adapter->set_snap_data_has_complete();
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get next row", K(ret));
+      }
+    } else if (OB_ISNULL(row) || row->get_column_count() < 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid row", K(ret), K(row));
+    } else if (OB_FAIL(get_snap_index_visible_row_key(ls_id, adapter, target_scn, allocator, row_key, is_meta_data, meta_scn))) {
       LOG_WARN("fail to get snap index visible row iter", K(ret));
     } else if (!row_key.empty()) {
       ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(snapshot_idx_iter);
