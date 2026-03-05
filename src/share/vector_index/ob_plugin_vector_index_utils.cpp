@@ -692,7 +692,8 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
       } else if (OB_FAIL(iter_table_rescan(snapshot_scan_param, table_scan_iter))) {
         LOG_WARN("failed to rescan", K(ret));
       } else {
-        ObCostGuard cost_guard; // for timeout log
+        ObCostGuard cost_guard(new_adapter, "try_sync_snapshot_memdata", 0, 0,
+                               ObCostGuard::KNN_SEARCH_SLOW_THRESHOLD_US); // for timeout log
 
         ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         ObHNSWDeserializeCallback::CbParam param;
