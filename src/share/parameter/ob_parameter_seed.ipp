@@ -3067,7 +3067,7 @@ DEF_TIME(_ss_macro_block_check_interval, OB_TENANT_PARAMETER, "1d", "[30s,365d]"
          "Control the period of macro block check in shared dir."
          "Range: [30s, 365d]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "100", "[0,)",
+DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "300", "[0,)",
         "Controls the write throttling mechanism based on the percentage of the sslog table occupying the meta tenant disk. "
         "If set to 0, write throttling caused by sslog table size is disabled; Otherwise, if the size of sslog table is "
         "larger than (meta tenant disk limit * threshold), write throttling is triggered to slow down incoming write requests."
