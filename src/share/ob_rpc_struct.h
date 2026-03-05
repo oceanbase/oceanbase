@@ -55,6 +55,7 @@
 #include "share/ls/ob_ls_i_life_manager.h"//ObLSStatus
 #include "share/ob_tablet_autoincrement_param.h"
 #include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
+#include "share/ob_tenant_memory_info_operator.h"
 #include "share/ob_alive_server_tracer.h"//ServerAddr
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/ddl/ob_ddl_struct.h"
@@ -648,6 +649,47 @@ public:
   TO_STRING_KV(K_(error_table_ids));
 private:
   ObSArray<uint64_t> error_table_ids_;
+};
+
+struct ObGetTenantMemoryInfoArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetTenantMemoryInfoArg() : tenant_id_(common::OB_INVALID_TENANT_ID), svr_addr_() {}
+  TO_STRING_KV(K_(svr_addr));
+  int init(const common::ObAddr &svr_addr);
+  int assign(const ObGetTenantMemoryInfoArg &other);
+  bool is_valid() const;
+  void reset();
+  inline uint64_t get_tenant_id() const { return tenant_id_; }
+  inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  const common::ObAddr &get_svr_addr() const { return svr_addr_; }
+private:
+  uint64_t tenant_id_;
+  common::ObAddr svr_addr_;
+};
+
+struct ObGetTenantMemoryInfoResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetTenantMemoryInfoResult() : tenant_id_(OB_INVALID_ID), svr_addr_() {}
+  TO_STRING_KV(K_(tenant_id), K_(svr_addr), K_(menstore_info), K_(vector_mem_info));
+  int init(const uint64_t tenant_id, const common::ObAddr &svr_addr,
+           const share::ObTenantMemoryInfoOperator::TenantMenstoreInfo &menstore_info,
+           const share::ObTenantMemoryInfoOperator::TenantVectorMemInfo &vector_mem_info);
+  int assign(const ObGetTenantMemoryInfoResult &other);
+  bool is_valid() const;
+  void reset();
+  inline uint64_t get_tenant_id() const { return tenant_id_; }
+  const common::ObAddr &get_svr_addr() const { return svr_addr_; }
+  const share::ObTenantMemoryInfoOperator::TenantMenstoreInfo &get_menstore_info() const { return menstore_info_; }
+  const share::ObTenantMemoryInfoOperator::TenantVectorMemInfo &get_vector_mem_info() const { return vector_mem_info_; }
+private:
+  uint64_t tenant_id_;
+  common::ObAddr svr_addr_;
+  share::ObTenantMemoryInfoOperator::TenantMenstoreInfo menstore_info_;
+  share::ObTenantMemoryInfoOperator::TenantVectorMemInfo vector_mem_info_;
 };
 
 struct ObCreateTenantEndArg : public ObDDLArg

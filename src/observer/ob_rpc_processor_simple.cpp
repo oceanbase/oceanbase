@@ -3495,6 +3495,21 @@ int ObRpcGetServerResourceInfoP::process()
   return ret;
 }
 
+int ObRpcGetTenantMemoryInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else {
+    arg_.set_tenant_id(rpc_pkt_->get_tenant_id());
+    if (OB_FAIL(gctx_.ob_service_->get_tenant_memory_info(arg_, result_))) {
+      LOG_WARN("fail to call get_tenant_memory_info in ob service", KR(ret), K(arg_));
+    } else {}
+  }
+  return ret;
+}
+
 int ObBroadcastConsensusVersionP::process()
 {
   int ret = OB_SUCCESS;

@@ -115,6 +115,8 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
 
   RPC_PROCESSOR(ObRpcGetServerResourceInfoP, gctx_);
   RPC_PROCESSOR(ObRpcReverseKeepaliveP, gctx_);
+
+  RPC_PROCESSOR(ObRpcGetTenantMemoryInfoP, gctx_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_schema_test(ObSrvRpcXlator *xlator) {

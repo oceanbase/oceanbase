@@ -309,6 +309,9 @@ public:
   int check_server_empty(bool &server_empty);
   int change_external_storage_dest(obrpc::ObAdminSetConfigArg &arg);
 
+// injected from ob_srv_mem_info.h
+#include "observer/ob_srv_mem_info.h"
+
 private:
   int inner_fill_tablet_info_(
       const int64_t tenant_id,

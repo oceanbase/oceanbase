@@ -361,6 +361,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_BACKUP_DEST_VALIDITY, ObRpcCheckBackupDestVa
 OB_DEFINE_PROCESSOR_S(Srv, OB_WRITE_BACKUP_DEST_FORMAT_FILE, ObRpcWriteBackupDestFormatFileP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_DATA_DICT_TRIGGER_DUMP, ObRPcTriggerDumpDataDictP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_NESTED_MVIEW_MDS, ObCheckNestedMViewMdsP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_GET_TENANT_MEMORY_INFO, ObRpcGetTenantMemoryInfoP);
 } // end of namespace observer
 } // end of namespace oceanbase
 
