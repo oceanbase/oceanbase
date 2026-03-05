@@ -1505,6 +1505,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprCollationTypeToCollation::eval_collation_type_to_collation,   /* 903 */
   NULL, // ObExprAuditLogPasswordGet::eval_get_encryption_password,   /* 904 */
   NULL, // ObExprAuditLogPasswordSet::eval_set_encryption_password,   /* 905 */
+  NULL, // ObExprImageType::eval_image_type,                          /* 906 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1689,6 +1690,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprUDF::eval_udf_batch,                                          /* 178 */
   ObExprLocalDynamicFilter::eval_local_dynamic_filter_batch,          /* 179 */
   NULL, // ObExprArrayContains::eval_array_contains_batch_int32_t     /* 180 */
+  NULL, // ObExprImageType::eval_image_type_batch                     /* 181 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -2025,6 +2027,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprJSONKeys::eval_json_keys_vector,                        /* 330 */
   NULL, // ObExprE::eval_e_vector,                                       /* 331 */
   NULL, // ObExprCountSubstrings::eval_count_substrings_vector,          /* 332 */
+  NULL, // ObExprImageType::eval_image_type_vector,                      /* 333 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
