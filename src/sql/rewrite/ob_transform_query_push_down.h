@@ -110,7 +110,8 @@ private:
                                    common::ObIArray<int64_t> &select_offset,
                                    common::ObIArray<SelectItem> &const_select_items);
   int reset_set_stmt_select_list(ObSelectStmt *select_stmt,
-                                 ObIArray<int64_t> &select_offset);
+                                 ObIArray<int64_t> &select_offset,
+                                 ObIArray<SelectItem> &const_select_items);
   int check_set_op_is_const_expr(ObSelectStmt *select_stmt, ObRawExpr *expr, bool &is_const);
   int check_hint_allowed_query_push_down(const ObDMLStmt &stmt,
                                          const ObSelectStmt &ref_query,

@@ -7016,40 +7016,30 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
     select_stmt->get_select_items().reset();
     ObItemType set_op_type = static_cast<ObItemType>(T_OP_SET + select_stmt->get_set_op());
     const int64_t num = child_stmt->get_select_item_size();
-    SelectItem new_select_item;
+    if (num > res_types.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected select item size", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
+      SelectItem &select_item = child_stmt->get_select_item(i);
+      SelectItem new_select_item;
       if (OB_FAIL(add_cast_to_set_list(session_info, expr_factory, select_stmt->get_set_query(),
                                        res_types.at(i), i))) {
         LOG_WARN("failed to add add cast to set list", K(ret));
-      } else {
-        SelectItem &select_item = child_stmt->get_select_item(i);
-        new_select_item.alias_name_ = select_item.alias_name_;
-        new_select_item.expr_name_ = select_item.expr_name_;
-        new_select_item.is_real_alias_ = select_item.is_real_alias_ ||
-                    ObRawExprUtils::is_column_ref_skip_implicit_cast(select_item.expr_);
-        new_select_item.esc_str_flag_ = select_item.esc_str_flag_;
-        new_select_item.paramed_alias_name_ = select_item.paramed_alias_name_;
-        new_select_item.need_check_dup_name_ = select_item.need_check_dup_name_;
-        if (OB_FAIL(new_select_item.questions_pos_.assign(select_item.questions_pos_))) {
-          LOG_WARN("failed to assign questions pos", K(ret));
-        } else if (OB_FAIL(new_select_item.params_idx_.assign(select_item.params_idx_))) {
-          LOG_WARN("failed to assign params idx", K(ret));
-        } else if (OB_FAIL(new_select_item.neg_param_idx_.assign(select_item.neg_param_idx_))) {
-          LOG_WARN("failed to assign neg param idx", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::make_set_op_expr(*expr_factory,
-                                                            i,
-                                                            set_op_type,
-                                                            res_types.at(i),
-                                                            session_info,
-                                                            new_select_item.expr_))) {
-          LOG_WARN("create set op expr failed", K(ret));
-        } else if (OB_FAIL(select_stmt->add_select_item(new_select_item))) {
-          LOG_WARN("push back set select item failed", K(ret));
-        } else if (OB_ISNULL(new_select_item.expr_) ||
-                   OB_UNLIKELY(!new_select_item.expr_->is_set_op_expr())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("expr is null or is not set op expr", "set op", PC(new_select_item.expr_));
-        }
+      } else if (OB_FAIL(ObTransformUtils::create_select_item_for_set(session_info,
+                                                                      expr_factory,
+                                                                      set_op_type,
+                                                                      select_item,
+                                                                      i,
+                                                                      res_types.at(i),
+                                                                      new_select_item))) {
+        LOG_WARN("failed to create set select item", K(ret));
+      } else if (OB_FAIL(select_stmt->add_select_item(new_select_item))) {
+        LOG_WARN("push back set select item failed", K(ret));
+      } else if (OB_ISNULL(new_select_item.expr_) ||
+                 OB_UNLIKELY(!new_select_item.expr_->is_set_op_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null or is not set op expr", "set op", PC(new_select_item.expr_));
       }
     }
   }

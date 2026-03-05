@@ -972,7 +972,11 @@ public:
                                   const ObRawExpr *from_expr,
                                   ObRawExpr *&to_expr,
                                   ObSQLSessionInfo *session_info);
-
+  static int check_need_add_cast(ObRawExprFactory &expr_factory,
+                                 const ObRawExprResType src_type,
+                                 const ObRawExprResType dst_type,
+                                 ObSQLSessionInfo *session_info,
+                                 bool &need_cast);
   static int add_cast_for_replace_if_need(ObRawExprFactory &expr_factory,
                                           const ObRawExpr *from_expr,
                                           ObRawExpr *&to_expr,
@@ -1825,8 +1829,18 @@ public:
                        ObSelectStmt *parent_stmt,
                        bool pack_pure_set = false,
                        ObSelectStmt **child_stmt_ptr = NULL);
-
-  static int generate_select_list(ObTransformerCtx *ctx,
+  static int create_select_item_for_set(ObSQLSessionInfo *session_info,
+                                        ObRawExprFactory *expr_factory,
+                                        ObItemType set_op_type,
+                                        const SelectItem &child_select_item,
+                                        int64_t idx,
+                                        const ObExprResType &res_type,
+                                        SelectItem& new_select_item);
+  static int generate_select_list_for_set(ObSQLSessionInfo *session_info,
+                                          ObRawExprFactory *expr_factory,
+                                          ObSelectStmt *select_stmt,
+                                          const ObIArray<ObExprResType> &target_res_types);
+   static int generate_select_list(ObTransformerCtx *ctx,
                                   ObDMLStmt *stmt,
                                   TableItem *table,
                                   ObIArray<ObRawExpr *> *basic_select_exprs = NULL);
