@@ -82,6 +82,10 @@ public:
   static int calc_system_trigger_logoff(ObSQLSessionInfo &session);
   static int calc_system_trigger_logon(ObSQLSessionInfo &session);
   static int set_logoff_mark(ObSQLSessionInfo &session);
+  inline static uint64_t get_when_condition_routine_id()
+  {
+    return ROUTINE_IDX_CALC_WHEN;
+  }
 private:
   // trigger
   static int init_trigger_row(ObIAllocator &alloc, int64_t rowtype_col_count, pl::ObPLRecord *&record);

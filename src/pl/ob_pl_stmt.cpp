@@ -18,6 +18,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_udt_object_manager.h"
 #endif
+#include "sql/engine/dml/ob_trigger_handler.h"
 
 namespace oceanbase {
 using namespace common;
@@ -2555,24 +2556,30 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
         if (get_block_type() == BLOCK_ROUTINE && access_idxs.count() > 0) {
           ObObjAccessIdx &parent_access_idx = access_idxs.at(access_idxs.count() - 1);
           if ((0 == parent_access_idx.var_index_ || 1 == parent_access_idx.var_index_)
-              && ObTriggerInfo::is_trigger_body_package_id(package_id_)
-              && ((lib::is_oracle_mode() && parent_access_idx.var_name_.prefix_match(":"))
-                  || (lib::is_mysql_mode() && 0 == parent_access_idx.var_name_.case_compare("NEW")))) {
-            const ObPLVar *var = NULL;
-            const ObPLBlockNS *ns = (parent_access_idx.is_subprogram_var() ? parent_access_idx.var_ns_ : this);
-            if (OB_ISNULL(ns) || OB_ISNULL(ns->get_symbol_table())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("symbol table is NULL", K(ret));
-            } else if (OB_ISNULL(var = ns->get_symbol_table()->get_symbol(parent_access_idx.var_index_))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to get var", K(ret), K(parent_access_idx), K(attr_name));
-            } else {
-              ObString copy_attr;
-              if (OB_FAIL(ob_write_string(ns->get_symbol_table()->get_allocator(), attr_name, copy_attr))) {
-                LOG_WARN("failed to write string", K(ret), K(attr_name));
-              } else if (OB_FAIL((const_cast<ObPLVar*>(var))->get_trigger_ref_cols().push_back(
-                         std::make_pair(copy_attr, false)))) {
-                LOG_WARN("failed to add attr_name", K(ret), K(copy_attr));
+              && schema::ObTriggerInfo::is_trigger_body_package_id(package_id_)) {
+            bool is_mysql_trg = lib::is_mysql_mode()
+                                && (0 == parent_access_idx.var_name_.case_compare("NEW")
+                                    || 0 == parent_access_idx.var_name_.case_compare("OLD"));
+            bool is_oracle_trg = lib::is_oracle_mode()
+                                  && (parent_access_idx.var_name_.prefix_match(":")
+                                      || routine_id_ == TriggerHandle::get_when_condition_routine_id());
+            if (is_mysql_trg || is_oracle_trg) {
+              const ObPLVar *var = NULL;
+              const ObPLBlockNS *ns = (parent_access_idx.is_subprogram_var() ? parent_access_idx.var_ns_ : this);
+              if (OB_ISNULL(ns) || OB_ISNULL(ns->get_symbol_table())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("symbol table is NULL", K(ret));
+              } else if (OB_ISNULL(var = ns->get_symbol_table()->get_symbol(parent_access_idx.var_index_))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get var", K(ret), K(parent_access_idx), K(attr_name));
+              } else {
+                ObString copy_attr;
+                if (OB_FAIL(ob_write_string(ns->get_symbol_table()->get_allocator(), attr_name, copy_attr))) {
+                  LOG_WARN("failed to write string", K(ret), K(attr_name));
+                } else if (OB_FAIL((const_cast<ObPLVar*>(var))->get_trigger_ref_cols().push_back(
+                          std::make_pair(copy_attr, false)))) {
+                  LOG_WARN("failed to add attr_name", K(ret), K(copy_attr));
+                }
               }
             }
           }
