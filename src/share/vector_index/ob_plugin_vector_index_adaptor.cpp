@@ -2438,6 +2438,9 @@ int ObPluginVectorIndexAdaptor::renew_snapdata_in_lock()
   } else {
     ObVectorIndexAlgorithmType index_type = get_snap_index_type();
     free_memdata_resource(VIRT_SNAP, snap_data_, allocator_, tenant_id_);
+    if (OB_NOT_NULL(snap_data_->mem_ctx_) && snap_data_->mem_ctx_->is_inited()) {
+      snap_data_->mem_ctx_->~ObVsagMemContext();
+    }
     if (OB_FAIL(try_init_snap_data(index_type))) {
       LOG_WARN("failed to init snap data", K(ret), K(index_type));
     }
