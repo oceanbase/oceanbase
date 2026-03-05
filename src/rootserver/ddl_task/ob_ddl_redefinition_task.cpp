@@ -2756,10 +2756,9 @@ int ObSyncTabletAutoincSeqCtx::init(
     const ObIArray<ObTabletID> &dest_tablet_ids)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_ID == src_tenant_id || OB_INVALID_ID == dst_tenant_id
-              || src_tablet_ids.empty() || dest_tablet_ids.empty())) {
+  if (OB_UNLIKELY(OB_INVALID_ID == src_tenant_id || OB_INVALID_ID == dst_tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(src_tenant_id), K(dst_tenant_id), K(src_tablet_ids), K(dest_tablet_ids));
+    LOG_WARN("invalid argument", K(ret), K(src_tenant_id), K(dst_tenant_id));
   } else if (OB_FAIL(orig_src_tablet_ids_.assign(src_tablet_ids))) {
     LOG_WARN("failed to assign orig_src_tablet_ids", K(ret), K(src_tablet_ids));
   } else if (OB_FAIL(src_tablet_ids_.assign(orig_src_tablet_ids_))) {
