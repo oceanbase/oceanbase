@@ -34,47 +34,36 @@ int ObCDCEndpoint::init(const char *tenant_endpoint)
     LOG_ERROR("invalid tenant_endpoint", KR(ret));
   } else {
     const int64_t tenant_endpoint_str_len = strlen(tenant_endpoint);
-    char tenant_endpoint_str[tenant_endpoint_str_len + 1];
-    tenant_endpoint_str[tenant_endpoint_str_len] = '\0';
-    MEMCPY(tenant_endpoint_str, tenant_endpoint, tenant_endpoint_str_len);
-
     if (OB_UNLIKELY(tenant_endpoint_str_len <= 0)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_ERROR("tenant_endpoint_str_len too long", KR(ret),
-          K(tenant_endpoint_str_len), KCSTRING(tenant_endpoint_str));
+      LOG_ERROR("tenant_endpoint_str_len invalid", KR(ret),
+          K(tenant_endpoint_str_len), KCSTRING(tenant_endpoint));
     } else {
-      const char *delimiter = ":";
-      const int64_t expected_res_cnt = 2; // expect hostname and port
-      const char *split_res[2];
-      int64_t split_res_cnt = 0;
+      // Parse address with IPv6 support: format is hostname:port
+      // Supports IPv4: ipv4_address:port
+      // Supports IPv6: [ipv6_address]:port
+      // Supports hostname: hostname.example.com:2881
+      const char *host_str = nullptr;
+      const char *port_str = nullptr;
+      const char *unused_port2 = nullptr;
 
-      if (OB_FAIL(split(
-          tenant_endpoint_str,
-          delimiter,
-          expected_res_cnt,
-          split_res,
-          split_res_cnt))) {
-        LOG_ERROR("split tenant_endpoint_str failed", KR(ret),
-            KCSTRING(tenant_endpoint_str), K(delimiter), K(expected_res_cnt), K(split_res_cnt));
-      } else if (OB_UNLIKELY(split_res_cnt != expected_res_cnt)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_ERROR("split res cnt not as expected", KR(ret),
-            KCSTRING(tenant_endpoint_str), K(split_res_cnt), K(expected_res_cnt));
-      } else if (OB_ISNULL(split_res[0]) || OB_ISNULL(split_res[1])) {
+      if (OB_FAIL(parse_addr_with_port(tenant_endpoint, host_str, port_str, unused_port2))) {
+        LOG_ERROR("parse tenant_endpoint_str failed", KR(ret),
+            KCSTRING(tenant_endpoint));
+      } else if (OB_ISNULL(host_str) || OB_ISNULL(port_str)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_ERROR("split res content not as expected",
-            KCSTRING(tenant_endpoint_str), K(split_res_cnt), K(expected_res_cnt), K(split_res[0]), K(split_res[1]));
-      } else if (OB_FAIL(c_str_to_int(split_res[1], port_))) {
-        LOG_ERROR("convert port_str to port failed", KR(ret), KCSTRING(tenant_endpoint_str), K(split_res[1]), K_(port));
+            KCSTRING(tenant_endpoint), KP(host_str), KP(port_str));
+      } else if (OB_FAIL(c_str_to_int(port_str, port_))) {
+        LOG_ERROR("convert port_str to port failed", KR(ret), KCSTRING(tenant_endpoint), K(port_str), K_(port));
       } else {
-        const char *host = split_res[0];
-        const int host_len = strlen(host);
+        const int host_len = strlen(host_str);
         if (OB_UNLIKELY(MAX_HOSTNAME_LEN < host_len)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_ERROR("invalid tenant_endpoint hostname", KR(ret),
-            KCSTRING(tenant_endpoint_str), K(host), K(host_len), K(MAX_HOSTNAME_LEN));
+            KCSTRING(tenant_endpoint), K(host_str), K(host_len), K(MAX_HOSTNAME_LEN));
         } else {
-          MEMCPY(host_, host, host_len);
+          MEMCPY(host_, host_str, host_len);
           if (OB_FAIL(check_domain_or_addr_())) {
             LOG_ERROR("check_domain_or_addr_ failed", KR(ret), KPC(this));
           } else {
