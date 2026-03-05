@@ -162,11 +162,15 @@ TEST_F(TestWorkQueue, on_shoot_timer_task)
   sleep(1);
   OB_LOG(INFO, "after sleep 1");
   ASSERT_EQ(0, task1.get_process_count());
-  OB_LOG(INFO, "before sleep 2");
-  sleep(2);
-  OB_LOG(INFO, "after sleep 2");
+  const int64_t timeout_us = 10 * 1000 * 1000;  // 10 seconds max
+  const int64_t wait_interval_us = 10 * 1000;   // 10ms
+  int64_t elapsed_us = 0;
+  while (task1.get_process_count() < 16 && elapsed_us < timeout_us) {
+    usleep(wait_interval_us);
+    elapsed_us += wait_interval_us;
+  }
+  OB_LOG(INFO, "wait for task complete after:", K(elapsed_us));
   ASSERT_EQ(16, task1.get_process_count());
-
   ASSERT_EQ(OB_SUCCESS, wqueue.stop());
   ASSERT_EQ(OB_SUCCESS, wqueue.wait());
 }
