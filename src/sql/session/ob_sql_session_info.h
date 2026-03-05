@@ -2132,6 +2132,8 @@ private:
   int64_t last_update_ccl_cnt_time_;
   int64_t curr_request_id_;  // mark current request id in sql audit
   int64_t trans_gtt_v2_sequence_;
+  // The minimal data version at session creation.
+  uint64_t min_data_version_of_init_sess_;
 
   private:
   pl::ObUtlHttp* ob_utl_http_info_ = NULL;

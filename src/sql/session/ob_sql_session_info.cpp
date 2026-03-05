@@ -195,7 +195,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       has_ccl_rule_(false),
       last_update_ccl_cnt_time_(-1),
       curr_request_id_(0),
-      trans_gtt_v2_sequence_(0)
+      trans_gtt_v2_sequence_(0),
+      min_data_version_of_init_sess_(0)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -425,6 +426,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   unit_gc_min_sup_proxy_version_ = 0;
   got_tenant_conn_res_ = false;
   trans_gtt_v2_sequence_ = 0;
+  min_data_version_of_init_sess_ = 0;
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -2134,7 +2136,8 @@ int ObSQLSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
       affected_rows_,
       unit_gc_min_sup_proxy_version_,
       gtt_tablet_info_map_,
-      trans_gtt_v2_sequence_);
+      trans_gtt_v2_sequence_,
+      min_data_version_of_init_sess_);
   return ret;
 }
 
@@ -2196,6 +2199,7 @@ int ObSQLSessionInfo::deserialize(const char *buf, const int64_t data_len, int64
     OB_UNIS_DECODE(unit_gc_min_sup_proxy_version_);
     OB_UNIS_DECODE(gtt_tablet_info_map_);
     OB_UNIS_DECODE(trans_gtt_v2_sequence_);
+    OB_UNIS_DECODE(min_data_version_of_init_sess_);
     (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
 
     pos = pos_orig + len;
@@ -2235,7 +2239,8 @@ OB_DEF_SERIALIZE_SIZE(ObSQLSessionInfo)
       affected_rows_,
       unit_gc_min_sup_proxy_version_,
       gtt_tablet_info_map_,
-      trans_gtt_v2_sequence_);
+      trans_gtt_v2_sequence_,
+      min_data_version_of_init_sess_);
   return len;
 }
 
