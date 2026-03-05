@@ -3038,9 +3038,9 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
           if (OB_FAIL(write_into_index_mem(vbitmap, dim, read_scn, i_vids, d_vids))) {
             LOG_WARN("failed to write into index mem.", K(ret), K(read_scn));
           }
-          int tmp_ret = vbitmap_data_->complete_lock_.unlock();
+          int tmp_ret = vbitmap->complete_lock_.unlock();
           if (tmp_ret != OB_SUCCESS) {
-            LOG_WARN("unlock complete index lock failed", K(ret), K(tmp_ret), K(&vbitmap_data_->complete_lock_));
+            LOG_WARN("unlock complete index lock failed", K(ret), K(tmp_ret), K(&vbitmap->complete_lock_));
           }
         } else if (!ctx->is_prefilter_valid()) {
           lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPS"));
