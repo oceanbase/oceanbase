@@ -41,26 +41,17 @@ namespace share
 const int64_t OB_MAX_STORAGE_STATE_INFO_LENGTH = 1024;
 const int64_t OB_MAX_STORAGE_USED_FOR_LENGTH = 256;
 const int64_t OB_MAX_STORAGE_STATE_LENGTH = 256;
-const int64_t OB_MAX_STORAGE_ATTRIBUTE_LENGTH = 128;
 const int64_t OB_MAX_STORAGE_SCOPE_LENGTH = 128;
 const int64_t OB_STORAGE_DEFAULT_FIXED_STR_LEN = 2048; // default fixed string length
 const int64_t OB_MAX_STORAGE_ENCRYPT_INFO_LENGTH = 256;
 const int64_t OB_MAX_STORAGE_ENCRYPTKEY_LENGTH = OB_MAX_BACKUP_ACCESSKEY_LENGTH + 16;
 const int64_t OB_MAX_STORAGE_SERIALIZEKEY_LENGTH = OB_MAX_STORAGE_ENCRYPTKEY_LENGTH * 2;
-const int64_t OB_MAX_SHARED_STORAGE_LENGTH = OB_MAX_BACKUP_DEST_LENGTH + OB_MAX_STORAGE_ATTRIBUTE_LENGTH + OB_MAX_STORAGE_SCOPE_LENGTH;
+const int64_t OB_MAX_SHARED_STORAGE_LENGTH = OB_MAX_BACKUP_DEST_LENGTH + OB_MAX_BACKUP_EXTENSION_LENGTH + OB_MAX_STORAGE_SCOPE_LENGTH;
 const int64_t OB_INVALID_MAX_IOPS = -1;
 const int64_t OB_INVALID_MAX_BANDWIDTH = -1;
 
-const char *const STORAGE_ACCESS_ID = "access_id=";
 const char *const OB_STR_WILDCARD = "%%";
-const char *const STORAGE_ACCESS_KEY = "access_key=";
-const char *const STORAGE_ACCESS_MODE = "access_mode=";
-const char *const STORAGE_RAM_URL = "ram_url=";
-const char *const STORAGE_ENCRYPT_KEY = "encrypt_key=";
 const char *const STORAGE_ENCRYPT_INFO = "encrypt_info=";
-const char *const STORAGE_MAX_IOPS = "max_iops=";
-const char *const STORAGE_MAX_BANDWIDTH = "max_bandwidth=";
-const char *const STORAGE_STS_TOKEN_KEY = "sts_token=";
 const char *const STORAGE_IS_CONNECTIVE_KEY = "is_connective=";
 const char *const STORAGE_USED_FOR_TYPE = "used_for_type=";
 const char *const STORAGE_SCOPE_TYPE = "scope=";
@@ -86,9 +77,50 @@ const char *const OB_STR_STORAGE_TMP_DATA = "Tmp Data";
 
 typedef common::ObFixedLengthString<OB_MAX_BACKUP_DEST_LENGTH> ObStoragePathString;
 typedef common::ObFixedLengthString<OB_MAX_BACKUP_AUTHORIZATION_LENGTH> ObStorageAccessinfoString;
-typedef common::ObFixedLengthString<OB_MAX_STORAGE_ATTRIBUTE_LENGTH> ObStorageAttributeString;
+typedef common::ObFixedLengthString<OB_MAX_BACKUP_EXTENSION_LENGTH> ObStorageAttributeString;
 
 typedef ObStoragePathString ObStorageSetPath;
+
+struct ObKVPair final
+{
+  ObKVPair() : key_(), value_() {}
+  ObKVPair(const common::ObString &key, const common::ObString &value) : key_(key), value_(value) {}
+  common::ObString key_;   // without '='
+  common::ObString value_; // without '&'
+  TO_STRING_KV(K(key_), K(value_));
+};
+
+class ObKVStringUtil final
+{
+public:
+  // Parse "k=v&k2=v2" into kvs. Keys are case-insensitive and de-duplicated (last wins).
+  // NOTE: kvs' strings reference the provided `buf`.
+  static int parse_kv_list(
+      const common::ObString &input,
+      char *buf,
+      const int64_t buf_len,
+      common::ObIArray<ObKVPair> &kvs);
+
+  // Merge patch into base. Keys are compared case-insensitively.
+  // changed=true if any insert/update occurs.
+  static int merge_kv_list(
+      common::ObIArray<ObKVPair> &base,
+      const common::ObIArray<ObKVPair> &patch,
+      bool &changed);
+
+  // Serialize kvs into "k=v&k2=v2".
+  static int serialize_kv_list(
+      const common::ObIArray<ObKVPair> &kvs,
+      char *out, const int64_t out_len);
+
+  // Find key in kvs case-insensitively.
+  // idx = OB_INVALID_INDEX if not found.
+  static int find_key_ci(
+      const common::ObIArray<ObKVPair> &kvs, const common::ObString &key, int64_t &idx);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObKVStringUtil);
+};
 
 struct ObStorageAccessMode final
 {

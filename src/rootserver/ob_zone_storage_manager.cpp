@@ -20,6 +20,8 @@
 #include "share/ob_zone_table_operation.h"
 #include "share/object_storage/ob_zone_storage_table_operation.h"
 #include "share/object_storage/ob_device_connectivity.h"
+#include "lib/restore/ob_storage_info.h"
+#include "lib/string/ob_sensitive_string.h"
 
 namespace oceanbase
 {
@@ -231,23 +233,39 @@ int ObZoneStorageManagerBase::add_storage(const ObString &storage_path, const Ob
       ObBackupDest storage_dest;
       char storage_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = {0};
       ObRegion region;
+      int64_t pos = 0;
       if (!access_info.empty()) {
-        if (OB_FAIL(databuff_printf(storage_dest_str, OB_MAX_BACKUP_DEST_LENGTH, "%s&%s",
-                                          storage_path.ptr(), access_info.ptr()))) {
+        if (OB_FAIL(databuff_printf(storage_dest_str, sizeof(storage_dest_str), pos, "%s&%s",
+                                    storage_path.ptr(), access_info.ptr()))) {
           LOG_WARN("failed to set storage_dest_str", KR(ret), K(storage_path));
         }
       } else {
-        if (OB_FAIL(databuff_printf(storage_dest_str, OB_MAX_BACKUP_DEST_LENGTH, "%s", storage_path.ptr()))) {
+        if (OB_FAIL(databuff_printf(storage_dest_str, sizeof(storage_dest_str), pos, "%s", storage_path.ptr()))) {
           LOG_WARN("failed to set path", KR(ret), K(storage_path));
         }
       }
       ObDeviceConnectivityCheckManager device_conn_check_mgr;
-      int64_t max_iops = 0;
-      int64_t max_bandwidth = 0;
-      ObStorageChecksumType checksum_type = ObStorageChecksumType::OB_STORAGE_CHECKSUM_MAX_TYPE;
+      ParsedStorageAttribute parsed_attr;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(parse_attribute_str(attribute, max_iops, max_bandwidth, checksum_type))) {
+      } else if (OB_FAIL(parse_attribute_str(attribute, parsed_attr))) {
         LOG_WARN("fail to parse attribute str", KR(ret), K(attribute));
+      } else if (parsed_attr.has_extension_change()) {
+        // append extension kvs so that ObBackupDest does validation/normalization
+        for (int64_t kv_idx = 0; OB_SUCC(ret) && kv_idx < parsed_attr.ext_kvs_.count(); ++kv_idx) {
+          const ObKVPair &kv = parsed_attr.ext_kvs_.at(kv_idx);
+          if (OB_FAIL(databuff_printf(
+              storage_dest_str, sizeof(storage_dest_str), pos, "&%.*s=%.*s",
+              kv.key_.length(), kv.key_.ptr(), kv.value_.length(), kv.value_.ptr()))) {
+            LOG_WARN("fail to append extension kv for add storage",
+                  KR(ret), K(kv), K(kv_idx), K(pos), KS(storage_dest_str));
+          }
+        }
+      }
+
+      const int64_t max_iops = (parsed_attr.max_iops_ >= 0 ? parsed_attr.max_iops_ : 0);
+      const int64_t max_bandwidth =
+          (parsed_attr.max_bandwidth_ >= 0 ? parsed_attr.max_bandwidth_ : 0);
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(storage_dest.set(storage_dest_str))) {
         LOG_WARN("failed to set storage dest", KR(ret), K(storage_dest));
       } else if (OB_FAIL(device_conn_check_mgr.check_device_connectivity(storage_dest))) {
@@ -263,8 +281,9 @@ int ObZoneStorageManagerBase::add_storage(const ObString &storage_path, const Ob
         LOG_WARN("failed to add storage", KR(ret), K(storage_dest), K(use_for), K(zone),
                 K(wait_type), K(max_iops), K(max_bandwidth));
       } else {
-        LOG_INFO("succeed to add storage", K(storage_path), K(use_for), K(zone),
-                K(wait_type), K(max_iops), K(max_bandwidth));
+        FLOG_INFO("succeed to add storage", K(storage_path), K(use_for), K(zone),
+            K(wait_type), K(max_iops), K(max_bandwidth),
+            K(attribute), K(storage_dest), KS(storage_dest_str));
         ROOTSERVICE_EVENT_ADD("storage", "add_storage", "path", storage_path, "use_for", use_for, "zone", zone,
                               "wait_type", wait_type, "max_iops", max_iops, "max_bandwidth", max_bandwidth);
       }
@@ -303,7 +322,7 @@ int ObZoneStorageManagerBase::add_storage_operation(const ObBackupDest &storage_
     LOG_WARN("failed to get storage info", KR(ret), K(storage_dest));
   } else if (FALSE_IT(pos = STRLEN(storage_dest_info))) {
   } else if (OB_FAIL(databuff_printf(storage_dest_info, sizeof(storage_dest_info), pos,
-                     "&%s%ld&%s%ld", STORAGE_MAX_IOPS, max_iops, STORAGE_MAX_BANDWIDTH, max_bandwidth))) {
+                     "&%s%ld&%s%ld", MAX_IOPS, max_iops, MAX_BANDWIDTH, max_bandwidth))) {
     LOG_WARN("fail to databuff printf", KR(ret), K(pos), K(max_iops), K(max_bandwidth));
   } else if (OB_SUCCESS == (ret = check_zone_storage_exist(zone, storage_dest, used_for, idx))) {
     ret = OB_ENTRY_EXIST;
@@ -475,6 +494,11 @@ int ObZoneStorageManagerBase::alter_storage(const ObString &storage_path, const 
   } else if (OB_UNLIKELY(storage_path.empty() || (access_info.empty() && attribute.empty()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(storage_path), K(attribute));
+  } else if (OB_UNLIKELY(!access_info.empty() && !attribute.empty())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("alter storage does not support changing access_info and attribute at the same time",
+        KR(ret), K(storage_path), KS(access_info), KS(attribute));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "changing access_info and attribute in one command is");
   } else if (!access_info.empty() && OB_FAIL(ObStorageDestCheck::check_change_storage_accessinfo_exist(
                *proxy_, storage_path, access_info))) {
     LOG_WARN("failed to check change storage accessinfo", KR(ret));
@@ -501,12 +525,13 @@ int ObZoneStorageManagerBase::alter_storage(const ObString &storage_path, const 
       }
     }
     if (OB_SUCC(ret) && !attribute.empty()) {
-      int64_t max_iops = OB_INVALID_MAX_IOPS;
-      int64_t max_bandwidth = OB_INVALID_MAX_BANDWIDTH;
-      ObStorageChecksumType checksum_type = ObStorageChecksumType::OB_STORAGE_CHECKSUM_MAX_TYPE;
-      if (OB_FAIL(parse_attribute_str(attribute, max_iops, max_bandwidth, checksum_type))) {
+      ParsedStorageAttribute parsed_attr;
+      if (OB_FAIL(parse_attribute_str(attribute, parsed_attr))) {
         LOG_WARN("fail to parse attribute str", KR(ret), K(attribute));
-      } else if (OB_FAIL(alter_storage_attribute(storage_path, wait_type, max_iops, max_bandwidth, checksum_type))) {
+      } else if (OB_UNLIKELY(!parsed_attr.has_any_change())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("empty attribute change set", KR(ret), K(attribute));
+      } else if (OB_FAIL(alter_storage_attribute(storage_path, wait_type, parsed_attr))) {
         LOG_WARN("failed to alter storage attribute", KR(ret), K(storage_path), K(wait_type), K(attribute));
       } else {
         LOG_INFO("succeed to alter storage attribute", K(storage_path), K(wait_type), K(attribute));
@@ -611,18 +636,49 @@ int ObZoneStorageManagerBase::alter_storage_authorization(const ObBackupDest &st
   return ret;
 }
 
+int ObZoneStorageManagerBase::merge_extension_patch_(
+    const char *old_extension,
+    const ObIArray<ObKVPair> &patch,
+    char *new_extension,
+    const int64_t new_extension_len,
+    bool &changed)
+{
+  int ret = OB_SUCCESS;
+  changed = false;
+  if (OB_ISNULL(old_extension) || OB_ISNULL(new_extension)
+      || OB_UNLIKELY(new_extension_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(old_extension), KP(new_extension), K(new_extension_len));
+  } else {
+    char old_buf[OB_MAX_BACKUP_EXTENSION_LENGTH] = {0};
+    ObSEArray<ObKVPair, 16> base;
+    base.set_attr(ObMemAttr(OB_SYS_TENANT_ID, "MergeExtBase"));
+    if (OB_FAIL(ObKVStringUtil::parse_kv_list(
+        ObString(old_extension), old_buf, sizeof(old_buf), base))) {
+      LOG_WARN("failed to parse old extension", KR(ret), K(old_extension));
+    } else if (OB_FAIL(ObKVStringUtil::merge_kv_list(base, patch, changed))) {
+      LOG_WARN("failed to merge extension patch", KR(ret), K(old_extension));
+    } else if (OB_FAIL(ObKVStringUtil::serialize_kv_list(base, new_extension, new_extension_len))) {
+      LOG_WARN("failed to serialize extension",
+          KR(ret), K(old_extension), K(patch), K(new_extension_len));
+    }
+  }
+  return ret;
+}
+
 int ObZoneStorageManagerBase::alter_storage_attribute(
     const ObString &storage_path,
     const bool &wait_type,
-    const int64_t max_iops,
-    const int64_t max_bandwidth,
-    const ObStorageChecksumType &checksum_type)
+    const ParsedStorageAttribute &parsed_attr)
 {
   int ret = OB_SUCCESS;
   char root_path[OB_MAX_BACKUP_PATH_LENGTH] = {0};
   char endpoint[OB_MAX_BACKUP_ENDPOINT_LENGTH] = {0};
   char old_attribute[OB_MAX_BACKUP_AUTHORIZATION_LENGTH] = {0};
-  if (storage_path.empty() || (max_iops < 0 && max_bandwidth < 0)) {
+  const int64_t max_iops = parsed_attr.max_iops_;
+  const int64_t max_bandwidth = parsed_attr.max_bandwidth_;
+  UNUSED(wait_type);
+  if (OB_UNLIKELY(storage_path.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(storage_path), K(max_iops), K(max_bandwidth));
   } else if (OB_FAIL(ObStorageInfoOperator::parse_storage_path(
@@ -639,6 +695,9 @@ int ObZoneStorageManagerBase::alter_storage_attribute(
       if (0 == STRNCMP(zone_storage_infos_.at(i).dest_attr_.path_, root_path, sizeof(root_path)) &&
           0 == STRNCMP(zone_storage_infos_.at(i).dest_attr_.endpoint_, endpoint, sizeof(endpoint))) {
         ObBackupDest target_storage_dest;
+        share::ObStorageDestAttr new_dest_attr = zone_storage_infos_.at(i).dest_attr_;
+        const share::ObZoneStorageTableInfo old_zone_storage_info = zone_storage_infos_.at(i);
+        bool extension_changed = false;
         uint64_t op_id = OB_INVALID_ID;
         uint64_t old_op_id = OB_INVALID_ID;
         uint64_t sub_op_id = OB_INVALID_ID;
@@ -653,16 +712,20 @@ int ObZoneStorageManagerBase::alter_storage_attribute(
                    K(zone_storage_infos_.at(i)), K(i));
           LOG_USER_ERROR(OB_NOT_SUPPORTED,
                          "cannot support changing current storage state when undergoing modification, it is");
-        } else if (checksum_type != ObStorageChecksumType::OB_STORAGE_CHECKSUM_MAX_TYPE) {
-          if (OB_FAIL(zone_storage_infos_.at(i).dest_attr_.change_checksum_type(checksum_type))) {
-            LOG_WARN("failed to change checksum type", KR(ret), K(checksum_type));
+        } else if (parsed_attr.has_extension_change()) {
+          char new_extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
+          if (OB_FAIL(merge_extension_patch_(new_dest_attr.extension_, parsed_attr.ext_kvs_,
+              new_extension, sizeof(new_extension), extension_changed))) {
+            LOG_WARN("failed to merge extension patch", KR(ret));
+          } else if (extension_changed) {
+            STRNCPY(new_dest_attr.extension_, new_extension, sizeof(new_dest_attr.extension_));
           }
         }
 
-        if (FAILEDx(target_storage_dest.set(zone_storage_infos_.at(i).dest_attr_.path_,
-                                                   zone_storage_infos_.at(i).dest_attr_.endpoint_,
-                                                   zone_storage_infos_.at(i).dest_attr_.authorization_,
-                                                   zone_storage_infos_.at(i).dest_attr_.extension_))) {
+        if (FAILEDx(target_storage_dest.set(new_dest_attr.path_,
+                                            new_dest_attr.endpoint_,
+                                            new_dest_attr.authorization_,
+                                            new_dest_attr.extension_))) {
           LOG_WARN("failed to set storage dest", KR(ret), K(zone_storage_infos_.at(i)));
         } else if (OB_FAIL(ObStorageInfoOperator::fetch_new_storage_op_id(*proxy_, op_id))) {
           LOG_WARN("failed to fetch new storage op id", KR(ret), K(op_id));
@@ -672,10 +735,10 @@ int ObZoneStorageManagerBase::alter_storage_attribute(
           old_op_id = zone_storage_infos_.at(i).op_id_;
           int64_t pos = 0;
           if (max_iops >= 0 && OB_FAIL(databuff_printf(old_attribute, sizeof(old_attribute), pos, "%s%ld ",
-                                                  STORAGE_MAX_IOPS, zone_storage_infos_.at(i).max_iops_))) {
+              MAX_IOPS, zone_storage_infos_.at(i).max_iops_))) {
             LOG_WARN("fail to databuff printf", KR(ret));
           } else if (max_bandwidth >= 0 && OB_FAIL(databuff_printf(old_attribute, sizeof(old_attribute), pos, "%s%ld",
-                                              STORAGE_MAX_BANDWIDTH, zone_storage_infos_.at(i).max_bandwidth_))) {
+                                              MAX_BANDWIDTH, zone_storage_infos_.at(i).max_bandwidth_))) {
             LOG_WARN("fail to databuff printf", KR(ret));
           }
           if (max_iops >= 0) {
@@ -684,6 +747,7 @@ int ObZoneStorageManagerBase::alter_storage_attribute(
           if (max_bandwidth >= 0) {
             zone_storage_infos_.at(i).max_bandwidth_ = max_bandwidth;
           }
+          zone_storage_infos_.at(i).dest_attr_ = new_dest_attr;
           zone_storage_infos_.at(i).state_ = op_type;
           zone_storage_infos_.at(i).op_id_ = op_id;
           zone_storage_infos_.at(i).sub_op_id_ = sub_op_id;
@@ -694,10 +758,14 @@ int ObZoneStorageManagerBase::alter_storage_attribute(
           } else if (max_bandwidth >= 0 && OB_FAIL(ObStorageInfoOperator::update_storage_bandwidth(
                        trans_changing, zone, target_storage_dest, old_op_id, used_for, max_bandwidth))) {
             LOG_WARN("failed to update storage bandwidth", KR(ret), K(target_storage_dest), K(max_bandwidth));
-          } else if (checksum_type != ObStorageChecksumType::OB_STORAGE_CHECKSUM_MAX_TYPE) {
-            if (OB_FAIL(ObStorageInfoOperator::update_storage_extension(
-                       trans_changing, zone, target_storage_dest, old_op_id, used_for, zone_storage_infos_.at(i).dest_attr_.extension_))) {
-              LOG_WARN("failed to update storage extension", KR(ret), K(target_storage_dest), K(zone_storage_infos_.at(i).dest_attr_.extension_));
+          } else if (extension_changed) {
+            ObBackupStorageInfo *storage_info = target_storage_dest.get_storage_info();
+            if (OB_ISNULL(storage_info)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("storage info is null", KR(ret), K(target_storage_dest));
+            } else if (OB_FAIL(ObStorageInfoOperator::update_storage_extension(
+                       trans_changing, zone, target_storage_dest, old_op_id, used_for, storage_info->extension_))) {
+              LOG_WARN("failed to update storage extension", KR(ret), K(target_storage_dest));
             }
           }
 
@@ -711,6 +779,9 @@ int ObZoneStorageManagerBase::alter_storage_attribute(
                        trans_changing, storage_id, op_id, sub_op_id, zone, op_type, old_attribute))) {
             LOG_WARN("failed to insert zone storage operation table", KR(ret), K(storage_id),
                      K(op_id), K(sub_op_id), K(zone), K(op_type), K(old_attribute));
+          }
+          if (OB_FAIL(ret)) {
+            zone_storage_infos_.at(i) = old_zone_storage_info;
           }
         }
       }
@@ -926,15 +997,39 @@ int ObZoneStorageManagerBase::check_zone_storage_with_region_scope(const ObRegio
                  (used_for == zone_storage_infos_.at(i).used_for_ ||
                   ObStorageUsedType::TYPE::USED_TYPE_ALL == used_for ||
                   ObStorageUsedType::TYPE::USED_TYPE_ALL == zone_storage_infos_.at(i).used_for_)) {
-        ObBackupDest table_dest;
-        if (OB_FAIL(table_dest.set(zone_storage_infos_.at(i).dest_attr_.path_,
-                                   zone_storage_infos_.at(i).dest_attr_.endpoint_,
-                                   zone_storage_infos_.at(i).dest_attr_.authorization_,
-                                   zone_storage_infos_.at(i).dest_attr_.extension_))) {
-          LOG_WARN("failed to set storage dest", KR(ret), K(zone_storage_infos_.at(i)));
-        } else if (table_dest != storage_dest) {
+        // max_iops/max_bandwidth are stored as separated columns in inner table.
+        // Build a comparable dest string (path + endpoint + authorization + extension + iops/bw),
+        // then compare by ObBackupDest with ONLY one set().
+        char table_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = {0};
+        int64_t pos = 0;
+        ObBackupDest table_dest_with_attr;
+        if (OB_FAIL(databuff_printf(table_dest_str, sizeof(table_dest_str), pos, "%s?%s",
+                                    zone_storage_infos_.at(i).dest_attr_.path_,
+                                    zone_storage_infos_.at(i).dest_attr_.endpoint_))) {
+          LOG_WARN("failed to build table dest string", KR(ret), K(pos), K(zone_storage_infos_.at(i)));
+        } else if (zone_storage_infos_.at(i).dest_attr_.authorization_[0] != '\0'
+                   && OB_FAIL(databuff_printf(table_dest_str, sizeof(table_dest_str), pos, "&%s",
+                                              zone_storage_infos_.at(i).dest_attr_.authorization_))) {
+          LOG_WARN("failed to append authorization", KR(ret), K(pos), K(zone_storage_infos_.at(i)));
+        } else if (zone_storage_infos_.at(i).dest_attr_.extension_[0] != '\0'
+                   && OB_FAIL(databuff_printf(table_dest_str, sizeof(table_dest_str), pos, "&%s",
+                                              zone_storage_infos_.at(i).dest_attr_.extension_))) {
+          LOG_WARN("failed to append extension", KR(ret), K(pos), K(zone_storage_infos_.at(i)));
+        } else if (OB_FAIL(databuff_printf(table_dest_str, sizeof(table_dest_str), pos,
+                                           "&%s%ld&%s%ldB",
+                                           MAX_IOPS, zone_storage_infos_.at(i).max_iops_,
+                                           MAX_BANDWIDTH, zone_storage_infos_.at(i).max_bandwidth_))) {
+          LOG_WARN("failed to append max_iops/max_bandwidth", KR(ret), K(pos),
+                   "max_iops", zone_storage_infos_.at(i).max_iops_,
+                   "max_bandwidth", zone_storage_infos_.at(i).max_bandwidth_,
+                   K(zone_storage_infos_.at(i)));
+        } else if (OB_FAIL(table_dest_with_attr.set(table_dest_str))) {
+          LOG_WARN("failed to set table dest with max_iops/max_bandwidth",
+              KR(ret), KS(table_dest_str), K(zone_storage_infos_.at(i)));
+        } else if (OB_UNLIKELY(table_dest_with_attr != storage_dest)) {
           ret = OB_OP_NOT_ALLOW;
-          LOG_WARN("the server's shared storage info is different with inner table in region scope", KR(ret), K(storage_dest), K(table_dest));
+          LOG_WARN("the server's shared storage info is different with inner table in region scope",
+              KR(ret), K(storage_dest), K(table_dest_with_attr), KS(table_dest_str), K(zone_storage_infos_.at(i)));
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, "the server's shared storage info is different with inner table in region scope");
         }
       }
@@ -1029,54 +1124,44 @@ int ObZoneStorageManagerBase::update_zone_storage_table_state(const int64_t idx)
 
 int ObZoneStorageManagerBase::parse_attribute_str(
     const ObString &attribute,
-    int64_t &max_iops,
-    int64_t &max_bandwidth,
-    ObStorageChecksumType &checksum_type)
+    ParsedStorageAttribute &parsed_attr)
 {
   int ret = OB_SUCCESS;
-  checksum_type = ObStorageChecksumType::OB_STORAGE_CHECKSUM_MAX_TYPE;
+  parsed_attr.reset();
   if (OB_UNLIKELY(attribute.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invaild argument", KR(ret), K(attribute));
+  } else if (OB_FAIL(ObKVStringUtil::parse_kv_list(
+      attribute, parsed_attr.buf_, sizeof(parsed_attr.buf_), parsed_attr.ext_kvs_))) {
+    LOG_WARN("failed to parse attribute", KR(ret), K(attribute));
   } else {
-    char tmp[OB_MAX_STORAGE_ATTRIBUTE_LENGTH] = {0};
-    char *token = NULL;
-    char *saved_ptr = NULL;
-    MEMCPY(tmp, attribute.ptr(), attribute.length());
-    tmp[attribute.length()] = '\0';
-    token = tmp;
-    for (char *str = token; OB_SUCC(ret); str = NULL) {
-      token = ::strtok_r(str, "&", &saved_ptr);
-      if (NULL == token) {
-        break;
-      } else if (0 == STRNCASECMP(STORAGE_MAX_IOPS, token, strlen(STORAGE_MAX_IOPS))) {
-        const char *max_iops_start_str = token + strlen(STORAGE_MAX_IOPS);
-        if (false == ObString(max_iops_start_str).is_numeric()) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("max_iops is invalid argument", KR(ret), K(token));
-        } else {
-          char *end_str = nullptr;
-          max_iops = strtoll(max_iops_start_str, &end_str, 10);
-          if ('\0' != *end_str) {
-            ret = OB_INVALID_DATA;
-            LOG_WARN("invalid int value", KR(ret), K(max_iops_start_str));
-          }
+    // keys in ext_kvs_ has no '='
+    for (int64_t i = 0; OB_SUCC(ret) && i < parsed_attr.ext_kvs_.count(); ++i) {
+      const ObKVPair &kv = parsed_attr.ext_kvs_.at(i);
+      if (0 == STRNCASECMP(MAX_IOPS, kv.key_.ptr(), strlen(MAX_IOPS) - 1)) {
+        if (OB_FAIL(ob_atoll(kv.value_.ptr(), parsed_attr.max_iops_))) {
+          LOG_WARN("fail to parse max_iops", KR(ret), K(kv));
         }
-      } else if (0 == STRNCASECMP(STORAGE_MAX_BANDWIDTH, token, strlen(STORAGE_MAX_BANDWIDTH))) {
+      } else if (0 == STRNCASECMP(MAX_BANDWIDTH, kv.key_.ptr(), strlen(MAX_BANDWIDTH) - 1)) {
         bool is_valid = false;
-        max_bandwidth = ObConfigCapacityParser::get(token + strlen(STORAGE_MAX_BANDWIDTH), is_valid, true /*check_unit*/);
-        if (!is_valid) {
+        parsed_attr.max_bandwidth_ = ObConfigCapacityParser::get(
+            kv.value_.ptr(), is_valid, true /*check_unit*/);
+        if (OB_UNLIKELY(!is_valid)) {
           ret = OB_CONVERT_ERROR;
-          LOG_WARN("convert failed", KR(ret), K(token));
+          LOG_WARN("convert failed", KR(ret), K(kv));
         }
-      } else if (0 == STRNCASECMP(CHECKSUM_TYPE, token, strlen(CHECKSUM_TYPE))) {
-        const char *checksum_type_str = token + strlen(CHECKSUM_TYPE);
-        if (OB_FAIL(get_storage_checksum_type(checksum_type_str, checksum_type))) {
-          LOG_WARN("fail to get checksum type", KR(ret), K(checksum_type_str));
-        }
+      } else if (OB_UNLIKELY(
+          0 == STRNCASECMP(ACCESS_ID, kv.key_.ptr(), strlen(ACCESS_ID) - 1)
+          || 0 == STRNCASECMP(ACCESS_KEY, kv.key_.ptr(), strlen(ACCESS_KEY) - 1)
+          || 0 == STRNCASECMP(ENCRYPT_KEY, kv.key_.ptr(), strlen(ENCRYPT_KEY) - 1)
+          || 0 == STRNCASECMP(HOST, kv.key_.ptr(), strlen(HOST) - 1))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("forbidden attribute key, should be set via PATH/ACCESS_INFO", KR(ret), K(kv.key_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "attribute key is forbidden, please set it via PATH/ACCESS_INFO");
       }
     }
   }
+
   return ret;
 }
 
