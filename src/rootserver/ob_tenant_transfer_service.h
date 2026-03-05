@@ -145,6 +145,7 @@ private:
       transaction::tablelock::ObTableLockOwnerID &lock_owner_id);
   int unlock_table_and_part_(
       ObMySQLTransaction &trans,
+      const share::ObLSID &dest_ls,
       const share::ObTransferPartList &part_list,
       const share::ObTransferTabletList &trans_tablet_list,
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id);
@@ -161,6 +162,7 @@ private:
       common::ObTabletID &tablet_id,
       int64_t &part_idx);
   int get_tablet_and_partition_idx_by_object_id_(
+      const share::ObLSID &src_ls,
       share::schema::ObSimpleTableSchemaV2 &table_schema,
       const ObObjectID &part_object_id,
       common::ObIArray<common::ObTabletID> &tablet_ids,
@@ -188,6 +190,7 @@ private:
       int64_t &part_idx,
       int64_t &subpart_idx);
   int get_tablet_ids_for_oracle_tmp_table_v2_(
+      const share::ObLSID &src_ls,
       const common::ObIArray<common::ObTableID> &table_ids,
       common::ObIArray<common::ObTabletID> &temporary_tablet_ids);
   int add_table_lock_(
@@ -197,6 +200,7 @@ private:
       const bool is_out_trans,
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id);
   int refresh_schema_and_double_check_(
+      const share::ObLSID &src_ls,
       const share::ObTransferPartInfo &part_info,
       const common::ObIArray<common::ObTabletID> &tablet_ids,
       int64_t &part_idx,
