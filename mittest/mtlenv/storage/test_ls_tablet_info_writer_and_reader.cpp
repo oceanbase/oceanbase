@@ -32,7 +32,7 @@ namespace oceanbase
 {
 int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
 {
-  data_version = DATA_VERSION_4_3_2_0;
+  data_version = MOCK_DATA_VERSION_4_3_5_5;
   return OB_SUCCESS;
 }
 namespace storage
@@ -155,7 +155,7 @@ void TestLSTabletInfoWR::fill_tablet_meta()
   ObCreateTabletSchema create_tablet_schema;
 
   ret = create_tablet_schema.init(schema_allocator, table_schema, lib::Worker::CompatMode::MYSQL,
-        false/*skip_column_info*/, DATA_VERSION_4_3_0_0);
+        false/*skip_column_info*/, MOCK_DATA_VERSION_4_3_5_5);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletID empty_tablet_id;

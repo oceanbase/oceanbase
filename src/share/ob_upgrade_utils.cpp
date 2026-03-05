@@ -112,18 +112,7 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH_42x[] = {
   // !!! add new 42x versions here
 };
 const uint64_t ObUpgradeChecker::UPGRADE_PATH_43x[] = {
-  CALC_VERSION(4UL, 3UL, 0UL, 0UL),// 4.3.0.0
-  CALC_VERSION(4UL, 3UL, 0UL, 1UL),// 4.3.0.1
-  CALC_VERSION(4UL, 3UL, 1UL, 0UL),// 4.3.1.0
-  CALC_VERSION(4UL, 3UL, 2UL, 0UL),// 4.3.2.0
-  CALC_VERSION(4UL, 3UL, 2UL, 1UL),// 4.3.2.1
-  CALC_VERSION(4UL, 3UL, 3UL, 0UL),// 4.3.3.0
-  CALC_VERSION(4UL, 3UL, 3UL, 1UL),// 4.3.3.1
-  CALC_VERSION(4UL, 3UL, 4UL, 0UL),// 4.3.4.0
-  CALC_VERSION(4UL, 3UL, 4UL, 1UL),// 4.3.4.1
-  CALC_VERSION(4UL, 3UL, 5UL, 0UL),// 4.3.5.0
-  CALC_VERSION(4UL, 3UL, 5UL, 1UL),// 4.3.5.1
-  CALC_VERSION(4UL, 3UL, 5UL, 2UL),// 4.3.5.2
+  CALC_VERSION(4UL, 3UL, 5UL, 5UL),// 4.3.5.5
   // !!! add new 43x versions here
 };
 const uint64_t ObUpgradeChecker::UPGRADE_PATH_CURRENT[] = {
@@ -139,7 +128,7 @@ const ObUpgradeVersions ObUpgradeChecker::upgrade_versions[] = {
   // 需要修改42x能升级到的第一个44x版本时修改这里
   ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_42x, CALC_VERSION(4UL, 4UL, 2UL, 0UL), ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_42x)),
   // 需要修改43x能升级到的第一个44x版本时修改这里
-  ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_43x, CALC_VERSION(4UL, 4UL, 2UL, 0UL), ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_43x)),
+  ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_43x, CALC_VERSION(4UL, 4UL, 2UL, 1UL), ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_43x)),
   ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_CURRENT, DATA_CURRENT_VERSION, ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_CURRENT)),
 };
 ObUpgradeVersions::ObUpgradeVersions(const uint64_t *upgrade_path,
