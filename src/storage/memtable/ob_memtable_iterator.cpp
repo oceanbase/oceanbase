@@ -1141,7 +1141,7 @@ void ObMemtableMultiVersionScanIterator::fill_default_values_for_row_(blocksstab
     for (int64_t i = row.count_ - 1; i >= store_rowkey_cnt;
          --i) {
       if (bitmap_.test(i)) {
-        row.storage_datums_[i] = default_row_->storage_datums_[i - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()];
+        row.storage_datums_[i] = default_row_->storage_datums_[i];
       } else {
         break;
       }

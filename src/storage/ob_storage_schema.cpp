@@ -2335,7 +2335,12 @@ const ObStorageColumnSchema *ObStorageSchema::get_column_schema(const int64_t co
   return found_col;
 }
 
-int ObStorageSchema::get_multi_version_column_descs(common::ObIArray<ObColDesc> &column_descs) const
+int ObStorageSchema::get_multi_version_column_descs(common::ObIArray<share::schema::ObColDesc> &column_descs) const
+{
+  return get_multi_version_column_descs(column_descs, !is_storage_index_table());
+}
+
+int ObStorageSchema::get_multi_version_column_descs(common::ObIArray<share::schema::ObColDesc> &column_descs, bool no_virtual) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -2365,7 +2370,7 @@ int ObStorageSchema::get_multi_version_column_descs(common::ObIArray<ObColDesc> 
     }
   } else if (OB_FAIL(get_mulit_version_rowkey_column_ids(column_descs))) { // add rowkey columns
     STORAGE_LOG(WARN, "Fail to get rowkey column descs", K(ret));
-  } else if (OB_FAIL(get_column_ids_without_rowkey(column_descs, !is_storage_index_table()))) { //add other columns
+  } else if (OB_FAIL(get_column_ids_without_rowkey(column_descs, no_virtual))) { //add other columns
     STORAGE_LOG(WARN, "Fail to get column descs without rowkey", K(ret));
   }
   return ret;
