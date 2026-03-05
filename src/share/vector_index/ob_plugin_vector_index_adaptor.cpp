@@ -2130,9 +2130,15 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
     }
   } else if (is_mem_data_init_atomic(VIRT_INC) && !incr_data_->has_complete_) {
     if (incr_data_->complete_lock_.try_wrlock()) {
-      incr_data_->has_complete_ = true;
+      if (!ctx->get_is_refresh_adaptor()) {
+        incr_data_->has_complete_ = true;
+      }
       (void)incr_data_->complete_lock_.unlock();
-      LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] check complete delta not need to complete,set incr data complete to true", KPC(this), K(lbt()));
+      if (ctx->get_is_refresh_adaptor()) {
+        LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] check complete delta not need to complete, not set incr data complete for refresh adaptor", K(ctx->get_is_refresh_adaptor()), KPC(this));
+      } else {
+        LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] check complete delta not need to complete, set incr data complete to true", KPC(this), K(lbt()));
+      }
     } // if cannot get lock, wait for other thread to complete, should not set complete to true
   }
 

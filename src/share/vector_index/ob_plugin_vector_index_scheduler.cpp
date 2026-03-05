@@ -1409,9 +1409,10 @@ void ObPluginVectorIndexLoadScheduler::refresh_adapter_rb_flag()
     RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
     FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
       ObPluginVectorIndexAdaptor *adapter = iter->second;
+      adapter->set_reload_finish(false);
       adapter->reset_complete();
     }
-    LOG_INFO("finish refresh adapter rb flag", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+    LOG_INFO("finish reset adaptor complete and reload finish", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
   }
 }
 
