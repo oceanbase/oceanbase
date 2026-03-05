@@ -382,8 +382,6 @@ int ObVectorIndexRefresher::do_refresh() {
              K(domain_table_schema->get_table_name_str()));
   } else if (domain_table_row_cnt < refresh_ctx_->refresh_threshold_) {
     // refreshing is not triggered.
-  } else if (OB_FAIL(lock_domain_table_for_refresh())) { // lock table 3
-    LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret));
   }
 #ifndef DBMS_VECTOR_MOCK_TEST
   else if (OB_FAIL(get_vector_index_col_names(domain_table_schema,
@@ -609,8 +607,6 @@ int ObVectorIndexRefresher::do_rebuild() {
     // rebuilding is not triggered.
     triggered = false;
     LOG_WARN("no need to start rebuild", K(base_table_row_cnt), K(index_id_table_row_cnt), K(domain_table_row_cnt), K(refresh_ctx_->delta_rate_threshold_));
-  } else if (OB_FAIL(lock_domain_table_for_refresh())) { // lock table 3
-    LOG_WARN("fail to lock domain for rebuild", KR(ret));
   }
 
   if (OB_FAIL(ret)) {
