@@ -39,30 +39,30 @@ static int check_write_length(ObLobAccessParam& param, int64_t expected_len)
 const ObLobCommon ObLobManager::ZERO_LOB = ObLobCommon();
 
 // for only one lob meta in mysql mode, we can have no char len here
-static int is_store_char_len(ObLobAccessParam& param, int64_t store_chunk_size, int64_t add_len)
+static int is_store_char_len(ObLobAccessParam& param, int64_t store_chunk_size, int64_t new_len)
 {
   int ret = OB_SUCCESS;
   if (! lib::is_mysql_mode()) {
-    LOG_DEBUG("not mysql mode", K(add_len), K(store_chunk_size), K(param));
+    LOG_DEBUG("not mysql mode", K(new_len), K(store_chunk_size), K(param));
   } else if (! param.is_char()) {
-    LOG_DEBUG("not text", K(add_len), K(store_chunk_size), K(param));
-  } else if (store_chunk_size <= (param.byte_size_ + add_len)) {
-    LOG_DEBUG("not single", K(add_len), K(store_chunk_size), K(param));
+    LOG_DEBUG("not text", K(new_len), K(store_chunk_size), K(param));
+  } else if (store_chunk_size <= new_len) {
+    LOG_DEBUG("not single", K(new_len), K(store_chunk_size), K(param));
   } else if (param.tablet_id_.is_inner_tablet()) {
-    LOG_DEBUG("inner table skip", K(add_len), K(store_chunk_size), K(param));
+    LOG_DEBUG("inner table skip", K(new_len), K(store_chunk_size), K(param));
   } else {
     uint64_t tenant_id = param.tenant_id_;
     uint64_t data_version = 0;
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
       LOG_WARN("failed to get data version", K(ret), K(store_chunk_size), K(tenant_id));
     } else if (data_version < MOCK_DATA_VERSION_4_2_3_0) {
-      LOG_DEBUG("before 4.2.3", K(add_len), K(store_chunk_size), K(param));
+      LOG_DEBUG("before 4.2.3", K(new_len), K(store_chunk_size), K(param));
     } else if (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_2_0) {
-      LOG_DEBUG("before 4.3.2", K(add_len), K(store_chunk_size), K(param));
+      LOG_DEBUG("before 4.3.2", K(new_len), K(store_chunk_size), K(param));
     } else {
       // sinlge not need char_len after >= 4.3.2 or (>= 4.2.3 and < 4.3.0
       param.is_store_char_len_ = false;
-      LOG_DEBUG("not store char_len for single piece", K(add_len), K(store_chunk_size), K(param));
+      LOG_DEBUG("not store char_len for single piece", K(new_len), K(store_chunk_size), K(param));
     }
   }
   return ret;
@@ -888,7 +888,7 @@ int ObLobManager::check_need_out_row(
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc buf failed.", K(ret));
-      } else if (OB_FAIL(is_store_char_len(param, param.get_schema_chunk_size(), add_len))) {
+      } else if (OB_FAIL(is_store_char_len(param, param.get_schema_chunk_size(), param.byte_size_ + add_len))) {
         LOG_WARN("cacl is_store_char_len failed.", K(ret), K(add_len), K(param));
       } else {
         MEMCPY(buf, param.lob_common_, sizeof(ObLobCommon));
@@ -934,7 +934,7 @@ int ObLobManager::check_need_out_row(
       param.is_store_char_len_ = has_char_len;
     } else if (OB_FAIL(param.get_store_chunk_size(store_chunk_size))) {
       LOG_WARN("get_store_chunk_size fail", K(ret), K(param));
-    } else if (OB_FAIL(is_store_char_len(param, store_chunk_size, add_len))) {
+    } else if (OB_FAIL(is_store_char_len(param, store_chunk_size, param.byte_size_ + add_len))) {
       LOG_WARN("cacl is_store_char_len failed.", K(ret), K(store_chunk_size), K(add_len), K(param));
     } else if (param.op_type_ != ObLobDataOutRowCtx::OpType::SQL) {
       if (! param.is_store_char_len_) {
