@@ -2244,7 +2244,12 @@ int ObMultipleMerge::prepare_truncate_filter()
       tables_.count() > 0) {
     const bool need_split_src_table = access_param_->iter_param_.is_tablet_spliting();
     ObVersionRange read_version_range(major_table_version_, access_ctx_->trans_version_range_.snapshot_version_);
-    if (OB_FAIL(ObTruncatePartitionFilterFactory::build_truncate_partition_filter(
+    if (OB_UNLIKELY(tables_.at(0)->is_co_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected state, do not support truncate filter in column store",
+               K(ret),
+               KPC(tables_.at(0)));
+    } else if (OB_FAIL(ObTruncatePartitionFilterFactory::build_truncate_partition_filter(
           *get_table_param_->tablet_iter_.get_tablet(),
           need_split_src_table ? get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr() : nullptr,
           access_param_->iter_param_.get_read_info()->get_columns_desc(),
@@ -2253,9 +2258,6 @@ int ObMultipleMerge::prepare_truncate_filter()
           access_ctx_->stmt_allocator_,
           access_ctx_->truncate_part_filter_))) {
       LOG_WARN("Failed to build truncate part filter", K(ret));
-    } else if (OB_UNLIKELY(access_param_->iter_param_.is_use_column_store() && nullptr != access_ctx_->truncate_part_filter_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected state, do not support truncate filter in column store", K(ret));
     }
   }
   return ret;
