@@ -1187,6 +1187,7 @@ int RbIterateTableFunc::reset_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
         rb_iters[i] = NULL;
       }
     }
+    scan_node.iter_ = NULL;
   }
   return ret;
 }
