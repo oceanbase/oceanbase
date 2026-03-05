@@ -27,6 +27,7 @@
 #include "storage/ob_value_row_iterator.h"
 #include "share/vector_index/ob_ivf_async_task.h"
 #include "share/vector_index/ob_vector_index_aux_table_handler.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -2569,6 +2570,9 @@ int ObVecIndexAsyncTask::execute_inner_sql(
     LOG_WARN("fail to check need padding", K(ret));
   } else if (OB_FAIL(get_ls_leader_addr(tenant_id_, ls_id_, ls_leader_addr))) {
     LOG_WARN("fail to get ls leader addr", K(ret), K(tenant_id_), K(ls_id_));
+  } else if (MYADDR != ls_leader_addr) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("current node is not ls leader for execute inner sql", K(ret), K(tenant_id_), K(ls_id_), K(ls_leader_addr), K(MYADDR));
   } else {
     common::ObCommonSqlProxy *user_sql_proxy = GCTX.ddl_sql_proxy_;
     int64_t affected_rows = 0;

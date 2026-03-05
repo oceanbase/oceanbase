@@ -2789,9 +2789,15 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
       }
     } else if (is_mem_data_init_atomic(VIRT_INC) && !incr_data_->has_complete_) {
       if (incr_data_->complete_lock_.try_wrlock()) {
-        incr_data_->has_complete_ = true;
+        if (!ctx->get_is_refresh_adaptor()) {
+          incr_data_->has_complete_ = true;
+        }
         (void)incr_data_->complete_lock_.unlock();
-        LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] check complete delta not need to complete,set incr data complete to true", KPC(this), K(lbt()));
+        if (ctx->get_is_refresh_adaptor()) {
+          LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] check complete delta not need to complete, not set incr data complete for refresh adaptor", K(ctx->get_is_refresh_adaptor()), KPC(this));
+        } else {
+          LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] check complete delta not need to complete, set incr data complete to true", KPC(this), K(lbt()));
+        }
       } // if cannot get lock, wait for other thread to complete, should not set complete to true
     }
   }
@@ -5391,7 +5397,8 @@ int ObPluginVectorIndexAdaptor::inner_init_snap_builder(ObVectorIndexParam *para
     LOG_INFO("snap is inited, so skip", K(snap_data_), K(lbt()));
   // ddl may be retry, so release meta data that is previously built
   } else if (snap_data_->meta_.is_valid() && OB_FALSE_IT(snap_data_->meta_.release(get_allocator(), tenant_id_))) {
-  } else if (OB_ISNULL(snap_data_->builder_ = OB_NEWx(ObVectorIndexSegmentBuilder, get_allocator()))) {
+  } else if (OB_NOT_NULL(snap_data_->builder_) && OB_FALSE_IT(snap_data_->builder_->free(*get_allocator()))) {
+  } else if (OB_ISNULL(snap_data_->builder_) && OB_ISNULL(snap_data_->builder_ = OB_NEWx(ObVectorIndexSegmentBuilder, get_allocator()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc fail", K(ret), "size", sizeof(ObVectorIndexSegmentBuilder));
   } else if (is_buffer_mode) {
@@ -5400,6 +5407,7 @@ int ObPluginVectorIndexAdaptor::inner_init_snap_builder(ObVectorIndexParam *para
       LOG_WARN("init buffer mode snap data fail", K(ret));
     } else {
       snap_data_->builder_->seg_type_ = ObVectorIndexSegmentType::BASE;
+      snap_data_->builder_->set_inited();
       snap_data_->has_complete_ = true;
       snap_data_->set_inited();
       LOG_INFO("create snap data success.", K(ret), K(snap_data_), K(lbt()));
@@ -5417,6 +5425,7 @@ int ObPluginVectorIndexAdaptor::inner_init_snap_builder(ObVectorIndexParam *para
     LOG_WARN("failed to create vsag index.", K(ret));
   } else {
     snap_data_->builder_->seg_type_ = ObVectorIndexSegmentType::BASE;
+    snap_data_->builder_->set_inited();
     snap_data_->has_complete_ = true;
     snap_data_->set_inited();
     LOG_INFO("create snap data success.", K(ret), K(snap_data_), K(lbt()));

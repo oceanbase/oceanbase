@@ -928,7 +928,10 @@ public:
   bool is_snap_inited() const { return snap_data_.is_valid() && snap_data_->is_inited(); }
   int init_snap_data_for_build(const bool is_init_bitmap);
   int init_snap_data_for_build(ObVectorIndexParam *param, const bool is_buffer_mode);
-  int is_sanp_builder_inited() const { return snap_data_.is_valid() && snap_data_->is_inited() && OB_NOT_NULL(snap_data_->builder_); }
+  bool is_sanp_builder_inited() const
+  {
+    return is_snap_inited() && OB_NOT_NULL(snap_data_->builder_) && snap_data_->builder_->is_inited();
+  }
   int inner_init_snap_builder(ObVectorIndexParam *param, const bool is_buffer_mode);
   int try_init_snap_for_deserialize(ObVectorIndexAlgorithmType actual_type);
 
