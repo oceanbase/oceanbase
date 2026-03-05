@@ -2553,12 +2553,7 @@ int ObTableSchema::check_valid(const bool for_create) const
             } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())
                        || ob_is_geometry_tc(column->get_data_type()) || ob_is_roaringbitmap_tc(column->get_data_type())) {
               if (column->is_rowkey_column()) {
-                if (column->is_string_lob()) {
-                  rowkey_has_string_lob = true;
-                } else {
-                  ret = OB_INVALID_ERROR;
-                  LOG_WARN_RET(OB_INVALID_ERROR, "invalid lob for rowkey column", KPC(column));
-                }
+                rowkey_has_string_lob = true;
               } else {
                 ObLength max_length = 0;
                 max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
