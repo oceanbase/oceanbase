@@ -406,7 +406,7 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_CREATE_JAVA_POLICY,)                                \
   ACT(OB_DDL_DROP_JAVA_POLICY,)                                  \
   ACT(OB_DDL_MODIFY_JAVA_POLICY,)                                \
-  ACT(OB_DDL_JAVA_POLICY_OPERATION_END, )                  \
+  ACT(OB_DDL_JAVA_POLICY_OPERATION_END, = 2170)                  \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
