@@ -31,7 +31,7 @@ namespace storage
 class ObDDLDagMonitorMgr
 {
 public:
-  static const int64_t DEFAULT_MAX_NODE_COUNT = 10000L * 100L; //100w
+  static const int64_t DEFAULT_MAX_NODE_COUNT = 10000L * 10L; //10w
   static const int64_t DEFAULT_TTL_US = 24 * 60 * 60 * 1000000L; // 24 hours
   static const int64_t DEFAULT_ALLOCATOR_SIZE = 16 * 1024 * 1024; // 16MB
   static const int64_t DEFAULT_CLEAN_INTERVAL_US = 60 * 1000000L; // 60s
