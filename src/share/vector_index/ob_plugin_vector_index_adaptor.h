@@ -273,6 +273,7 @@ public:
       search_allocator_(tenant_id),
       ls_leader_(true),
       is_refresh_adaptor_(false),
+      complete_delta_lock_(nullptr),
       scn_() {};
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
@@ -316,6 +317,10 @@ public:
     int64_t curr_cnt = get_vec_cnt();
     vec_data_.curr_idx_ += curr_cnt;
   }
+
+  void set_complete_delta_lock(TCRWLock *lock) { complete_delta_lock_ = lock; }
+  TCRWLock *get_complete_delta_lock() { return complete_delta_lock_; }
+
 private:
   PluginVectorQueryResStatus status_;
   ObVectorQueryProcessFlag flag_;
@@ -332,6 +337,8 @@ private:
   ObVsagSearchAlloc search_allocator_;
   bool ls_leader_;
   bool is_refresh_adaptor_;
+  // hold complete lock
+  TCRWLock *complete_delta_lock_;
   SCN scn_;
 };
 
@@ -414,7 +421,8 @@ struct ObVectorIndexMemData
       mem_ctx_(nullptr),
       last_dml_scn_(),
       last_read_scn_(),
-      can_skip_(NOT_INITED) {}
+      can_skip_(NOT_INITED),
+      complete_lock_(ObLatchIds::VECTOR_COMPLETE_LOCK) {}
 
 public:
   TO_STRING_KV(KP(this), K_(has_complete), K_(is_init), K_(has_build_sq), K_(scn), K_(ref_cnt), K(vid_bound_.max_vid_),
@@ -483,6 +491,9 @@ public:
   SCN last_dml_scn_;
   SCN last_read_scn_;
   ObCanSkip3rdAnd4thVecIndex can_skip_;
+
+  // hold complete lock
+  TCRWLock complete_lock_;
 };
 
 struct ObVecIndexLoadInfo {
@@ -767,7 +778,8 @@ public:
   void *get_algo_data() { return algo_data_; }
 
   bool check_if_complete_data(ObVectorQueryAdaptorResultContext *ctx);
-  int complete_index_mem_data(SCN read_scn,
+  int complete_index_mem_data(ObVectorQueryAdaptorResultContext *ctx,
+                              SCN read_scn,
                               common::ObNewRowIterator *row_iter,
                               blocksstable::ObDatumRow *last_row,
                               ObArray<uint64_t> &i_vids);

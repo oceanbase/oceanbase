@@ -1698,11 +1698,20 @@ int ObVectorIndexTask::process_one()
     LOG_WARN("memdata sync fail to get task read snapshot", KR(ret), K(ls_id_), KPC(task_ctx_));
   } else if (OB_FAIL(vec_idx_mgr_->get_adapter_inst_guard(task_ctx_->index_tablet_id_, adpt_guard))) {
     LOG_WARN("memdata sync fail to get adapter instance", KR(ret), K(ls_id_), KPC(task_ctx_));
-  } else if (OB_FAIL(ObPluginVectorIndexUtils::refresh_memdata(ls_id_,
-                                                               adpt_guard.get_adatper(),
-                                                               read_snapshot_,
-                                                               allocator_))) {
-    LOG_WARN("memdata sync fail to refresh memdata", KR(ret), K(ls_id_), KPC(task_ctx_));
+  } else {
+    common::ObSpinLockGuard ctx_guard(adpt_guard.get_adatper()->get_reload_lock());
+    if (adpt_guard.get_adatper()->get_reload_finish()) {
+      // do nothing
+    } else if (OB_FAIL(ObPluginVectorIndexUtils::refresh_memdata(ls_id_,
+                                                                 adpt_guard.get_adatper(),
+                                                                 read_snapshot_,
+                                                                 allocator_))) {
+      LOG_WARN("memdata sync fail to refresh memdata", KR(ret), K(ls_id_), KPC(task_ctx_));
+    } else {
+      adpt_guard.get_adatper()->set_reload_finish(true);
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(vec_idx_mgr_->get_adapter_inst_guard(task_ctx_->index_tablet_id_, new_adpt_guard))) {
     LOG_WARN("memdata sync fail to get adapter instance", KR(ret), K(ls_id_), KPC(task_ctx_));
   }
