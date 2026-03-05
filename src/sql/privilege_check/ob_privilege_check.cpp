@@ -4078,6 +4078,31 @@ int ObPrivilegeCheck::get_stmt_ora_need_privs(
         //do nothing
       }
     }
+    // Check privilege for CTE definitions (WITH clause)
+    bool need_check_cte = false;
+    ObSessionPrivInfo session_priv;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ctx.session_info_->get_session_priv_info(session_priv))) {
+      LOG_WARN("failed to get session priv info", K(ret));
+    } else if (OB_FAIL(get_priv_need_check(session_priv, MYSQL_CTE_PRIV_CHECK, need_check_cte))) {
+      LOG_WARN("failed to get priv need check", K(ret));
+    } else if (need_check_cte) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < dml_stmt->get_table_size(); ++i) {
+        const TableItem *table_item = dml_stmt->get_table_item(i);
+        if (OB_ISNULL(table_item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table item is null", K(ret));
+        } else if (table_item->is_temp_table() && OB_NOT_NULL(table_item->ref_query_)) {
+          if (OB_FAIL(get_stmt_ora_need_privs(user_id,
+                                              ctx,
+                                              table_item->ref_query_,
+                                              need_privs,
+                                              check_flag))) {
+            LOG_WARN("Failed to extract priv info of CTE definition", K(i), K(dml_stmt), K(ret));
+          }
+        }
+      }
+    }
   }
   return ret;
 }
@@ -4113,6 +4138,26 @@ int ObPrivilegeCheck::get_stmt_need_privs(const ObSessionPrivInfo &session_priv,
         LOG_WARN("Failed to extract priv info of shild stmts", K(i), K(dml_stmt), K(ret));
       } else {
         //do nothing
+      }
+    }
+    // Check privilege for CTE definitions (WITH clause)
+    bool need_check_cte = false;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(get_priv_need_check(session_priv,
+                                     ObCompatFeatureType::MYSQL_CTE_PRIV_CHECK,
+                                     need_check_cte))) {
+      LOG_WARN("failed to get priv need check", K(ret));
+    } else if (need_check_cte) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < dml_stmt->get_table_size(); ++i) {
+        const TableItem *table_item = dml_stmt->get_table_item(i);
+        if (OB_ISNULL(table_item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table item is null", K(ret));
+        } else if (table_item->is_temp_table() && OB_NOT_NULL(table_item->ref_query_)) {
+          if (OB_FAIL(get_stmt_need_privs(session_priv, table_item->ref_query_, need_privs))) {
+            LOG_WARN("Failed to extract priv info of CTE definition", K(i), K(dml_stmt), K(ret));
+          }
+        }
       }
     }
   }
