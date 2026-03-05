@@ -464,6 +464,24 @@ int split(
 
 int split_int64(const common::ObString &str, const char delimiter, common::ObIArray<int64_t> &ret_array);
 
+/// Parse IPv6-aware address with port(s)
+/// Supports both IPv4 and IPv6 formats:
+/// - IPv4: "ipv4_address:port" or "ipv4_address:port1:port2"
+/// - IPv6: "[ipv6_address]:port" or "[ipv6_address]:port1:port2"
+///
+/// @param [in]   addr_str        address string to parse
+/// @param [out]  ip_str          extracted IP address (without brackets for IPv6)
+/// @param [out]  port1_str       first port string (rpc_port for rootserver_list)
+/// @param [out]  port2_str       second port string (sql_port for rootserver_list, NULL for single port)
+///
+/// @retval OB_SUCCESS            parse success
+/// @retval OB_INVALID_ARGUMENT   invalid format
+int parse_addr_with_port(
+    const char *addr_str,
+    const char *&ip_str,
+    const char *&port1_str,
+    const char *&port2_str);
+
 const char *calc_md5_cstr(const char *buf, const int64_t length);
 void calc_crc_checksum(uint64_t &crc_value, const char *buf, const int64_t length);
 

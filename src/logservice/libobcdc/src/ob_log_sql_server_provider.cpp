@@ -20,6 +20,7 @@
 #include "share/ob_define.h"
 #include "share/ob_web_service_root_addr.h"   // fetch_rs_list_from_url
 #include "share/location_cache/ob_location_struct.h" //ObLSReplicaLocation
+#include "ob_log_utils.h"                     // parse_addr_with_port
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -192,8 +193,6 @@ int ObLogSQLServerProvider::parse_rs_list_(const char *rs_list, ServerList &serv
 {
   int ret = OB_SUCCESS;
   static const char *rs_delimiter = ";";
-  static const char *param_delemiter = ":";
-  static const int64_t expected_rs_param_num = 3; // expect rs param: ip, rpc_port, sql_port
 
   char rs_list_copy[MAX_CONFIG_LENGTH];
   if (OB_FAIL(get_copy_of_rs_list_conf_(rs_list_copy))) {
@@ -205,45 +204,49 @@ int ObLogSQLServerProvider::parse_rs_list_(const char *rs_list, ServerList &serv
 
     rs_ptr = strtok_r(rs_list_copy, rs_delimiter, &p);
     while (OB_SUCC(ret) && rs_ptr != NULL) {
-      int64_t rs_param_cnt = 0;
-      const char *rs_param_res[3];
-
       if (OB_ISNULL(rs_ptr) || (0 == strlen(rs_ptr))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid rs info str", KR(ret), K(rs_list), K(rs_ptr));
-      } else if (OB_FAIL(split(rs_ptr, param_delemiter, expected_rs_param_num, rs_param_res, rs_param_cnt))) {
-        LOG_WARN("failed to split rs_info_str", KR(ret), K(rs_ptr));
-      } else if (expected_rs_param_num != rs_param_cnt) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid rs param count", KR(ret), K(rs_ptr), K(rs_list), K(expected_rs_param_num));
       } else {
-        const char *ip = rs_param_res[0];
-        int64_t rpc_port_64 = -1;
-        int64_t sql_port = -1;
-        if (OB_ISNULL(rs_param_res[1]) || OB_ISNULL(rs_param_res[2]) || (0 == rs_param_res[0]) || (0 == rs_param_res[1])) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_ERROR("invalid rs param", KR(ret), K(rs_list), K(rs_param_res[1]), K(rs_param_res[2]));
-        } else if (OB_FAIL(c_str_to_int(rs_param_res[1], rpc_port_64))) {
-          LOG_ERROR("fail to convert rpc_port_str to rpc_port_int64", KR(ret), K(rs_param_res[1]), K(rpc_port_64));
-        } else if (OB_FAIL(c_str_to_int(rs_param_res[2], sql_port))) {
-          LOG_ERROR("fail to convert sql_port_str to sql_port_int64", KR(ret), K(rs_param_res[2]), K(sql_port));
-        } else {
-          ObAddr addr;
-          ObRootAddr rs_addr;
-          addr.reset();
-          rs_addr.reset();
-          int32_t rpc_port_32 = static_cast<int32_t>(rpc_port_64);
+        // Parse address with IPv6 support: format is ip:rpc_port:sql_port
+        // Supports IPv4: ipv4_address:rpc_port:sql_port
+        // Supports IPv6: [ipv6_address]:rpc_port:sql_port
+        const char *ip_str = nullptr;
+        const char *rpc_port_str = nullptr;
+        const char *sql_port_str = nullptr;
 
-          if (addr.set_ip_addr(ip, rpc_port_32)) {
-            if (OB_FAIL(rs_addr.init(addr, FOLLOWER, sql_port))) {
-              LOG_WARN("failed to init addr", KR(ret), K(addr), K(sql_port));
-            } else if (!rs_addr.is_valid()) {
-              LOG_WARN("invalid rs addr, will ignore this server", K(rs_list), K(ip), K(rpc_port_32), K(sql_port));
-            } else if (OB_FAIL(server_list.push_back(rs_addr))) {
-              LOG_ERROR("failed to pushback rs server to server list", KR(ret));
-            }
+        if (OB_FAIL(parse_addr_with_port(rs_ptr, ip_str, rpc_port_str, sql_port_str))) {
+          LOG_WARN("failed to parse rs_info_str", KR(ret), K(rs_ptr));
+        } else if (OB_ISNULL(ip_str) || OB_ISNULL(rpc_port_str) || OB_ISNULL(sql_port_str)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid rs param, expected ip:rpc_port:sql_port", KR(ret), K(rs_ptr),
+              KP(ip_str), KP(rpc_port_str), KP(sql_port_str));
+        } else {
+          int64_t rpc_port_64 = -1;
+          int64_t sql_port = -1;
+
+          if (OB_FAIL(c_str_to_int(rpc_port_str, rpc_port_64))) {
+            LOG_ERROR("fail to convert rpc_port_str to rpc_port_int64", KR(ret), K(rpc_port_str), K(rpc_port_64));
+          } else if (OB_FAIL(c_str_to_int(sql_port_str, sql_port))) {
+            LOG_ERROR("fail to convert sql_port_str to sql_port_int64", KR(ret), K(sql_port_str), K(sql_port));
           } else {
-            LOG_WARN("invalid ip address for rs list config, will ignore this server", K(rs_list), K(ip), K(rpc_port_32), K(sql_port));
+            ObAddr addr;
+            ObRootAddr rs_addr;
+            addr.reset();
+            rs_addr.reset();
+            int32_t rpc_port_32 = static_cast<int32_t>(rpc_port_64);
+
+            if (addr.set_ip_addr(ip_str, rpc_port_32)) {
+              if (OB_FAIL(rs_addr.init(addr, FOLLOWER, sql_port))) {
+                LOG_WARN("failed to init addr", KR(ret), K(addr), K(sql_port));
+              } else if (!rs_addr.is_valid()) {
+                LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid rs addr, will ignore this server", K(rs_list), K(ip_str), K(rpc_port_32), K(sql_port));
+              } else if (OB_FAIL(server_list.push_back(rs_addr))) {
+                LOG_ERROR("failed to pushback rs server to server list", KR(ret));
+              }
+            } else {
+              LOG_WARN("invalid ip address for rs list config, will ignore this server", K(rs_list), K(ip_str), K(rpc_port_32), K(sql_port));
+            }
           }
         }
       }
