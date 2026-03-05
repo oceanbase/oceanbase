@@ -82815,6 +82815,8 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_routine_load_job'])
 
+# 101125: __all_tenant_macro_block_ha_task
+
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
 ################################################################################
