@@ -2136,7 +2136,9 @@ int ObTableScanOp::inner_close()
     }
   }
   if (OB_SUCC(ret)) {
-    ft_index_row_cache_.reuse();
+    if (MY_SPEC.is_fts_ddl_) {
+      ft_index_row_cache_.reuse();
+    }
     iter_end_ = false;
     need_init_before_get_row_ = true;
     rand_scan_processor_.reset();
@@ -2206,7 +2208,9 @@ void ObTableScanOp::destroy()
   domain_index_.~ObDomainIndexCache();
   das_tasks_key_.reset();
   rand_scan_processor_.reset();
-  ft_index_row_cache_.reset();
+  if (MY_SPEC.is_fts_ddl_) {
+    ft_index_row_cache_.reset();
+  }
 }
 
 void ObTableScanOp::init_scan_monitor_info()
