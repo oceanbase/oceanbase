@@ -18589,7 +18589,7 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
       || (T_FUN_COUNT_SUM == cur_aggr->get_expr_type() && (!enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0))) {
       // if vector 2.0 is not enable  can not storage pushdown for rb_build_agg
       can_push = false;
-    } else if ((T_FUN_SYS_RB_AND_AGG == cur_aggr->get_expr_type() || T_FUN_SYS_RB_AND_AGG == cur_aggr->get_expr_type()) &&
+    } else if ((T_FUN_SYS_RB_AND_AGG == cur_aggr->get_expr_type() || T_FUN_SYS_RB_OR_AGG == cur_aggr->get_expr_type()) &&
                 (! enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_3_5_3)) {
       // if vector 2.0 is not enable  can not storage pushdown for rb agg
       can_push = false;
