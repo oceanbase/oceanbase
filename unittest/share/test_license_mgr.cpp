@@ -131,7 +131,7 @@ const char *CORRECT_LICENSE = R"({
         "NodeNum": 1,
         "Options": [
             "EE",
-            "AI"
+            "AIS"
         ],
         "Version": 1
     }
