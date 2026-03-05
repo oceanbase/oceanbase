@@ -142,6 +142,7 @@ public:
   virtual int safe_to_destroy(bool &is_safe);
   int sync_all_dirty_task(common::ObIArray<ObTabletID>& dirty_tasks);
   void run_task();
+  virtual bool enable_scheduler() { return ObTTLUtil::is_enable_ttl(tenant_id_); }
 
   TO_STRING_KV(K_(tenant_id),
                K_(is_inited),
@@ -169,6 +170,8 @@ public:
   {
     return ObTTLUtil::check_is_normal_ttl_table(table_schema, is_ttl_table);
   }
+  virtual ObTTLType get_task_type() { return local_tenant_task_.task_type_; }
+  virtual ObTTLType get_ttl_type() const { return ObTTLType::NORMAL; }
 private:
   typedef common::hash::ObHashMap<ObTabletID, ObTTLTaskCtx*> TabletTaskMap;
   typedef TabletTaskMap::iterator tablet_task_iter;
@@ -321,9 +324,11 @@ public:
                                  bool need_copy_task = true) override;
   virtual int64_t get_tenant_task_table_id() override { return common::ObTTLUtil::TTL_ROWKEY_TASK_TABLE_ID; }
   virtual int64_t get_tenant_task_tablet_id() override { return common::ObTTLUtil::TTL_ROWKEY_TASK_TABLET_ID; }
+  virtual ObTTLType get_ttl_type() const override { return ObTTLType::HBASE_ROWKEY; }
   virtual int do_after_leader_switch() override;
   virtual int safe_to_destroy(bool &is_safe) override;
   virtual int check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table) override;
+  virtual bool enable_scheduler() override { return common::ObTTLUtil::is_enable_hbase_rowkey_ttl(tenant_id_); }
 
 private:
   int generate_rowkey_ttl_task();

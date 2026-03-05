@@ -119,9 +119,11 @@ public:
   void resume();
 public:
   virtual int try_add_periodic_task();
+  virtual bool enable_scheduler() { return ObTTLUtil::is_enable_ttl(tenant_id_); }
   virtual uint64_t get_tenant_task_table_id() { return common::ObTTLUtil::TTL_TENNAT_TASK_TABLE_ID; }
   virtual uint64_t get_tenant_task_tablet_id() { return common::ObTTLUtil::TTL_TENNAT_TASK_TABLET_ID; }
   virtual common::ObTTLType get_ttl_task_type() { return common::ObTTLType::NORMAL; }
+  virtual common::ObTTLType get_ttl_type() { return common::ObTTLType::NORMAL; }
   virtual int handle_user_ttl(const obrpc::ObTTLRequestArg& arg);
   virtual int check_task_need_move(bool &need_move);
 private:
@@ -214,6 +216,8 @@ public:
   virtual int handle_user_ttl(const obrpc::ObTTLRequestArg& arg) override;
   virtual int check_task_need_move(bool &need_move) override;
   virtual common::ObTTLType get_ttl_task_type() { return common::ObTTLType::HBASE_ROWKEY; }
+  virtual common::ObTTLType get_ttl_type() override { return common::ObTTLType::HBASE_ROWKEY; }
+  virtual bool enable_scheduler() override { return common::ObTTLUtil::is_enable_hbase_rowkey_ttl(tenant_id_); }
 };
 
 class ObTenantTTLManager

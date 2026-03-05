@@ -544,7 +544,7 @@ void OBTTLTimerPeriodicTask::runTimerTask()
 void ObTabletTTLScheduler::run_task()
 {
   int ret = OB_SUCCESS;
-  if (!ObTTLUtil::is_enable_ttl(tenant_id_)) {
+  if (!enable_scheduler()) {
     // do nothing
     LOG_DEBUG("ttl is disable");
   } else if (ATOMIC_BCAS(&need_do_for_switch_, true, false)) {
@@ -887,9 +887,9 @@ int ObTabletTTLScheduler::sync_sys_table_op(ObTTLTaskCtx* ctx,
   } else if (force_update) {
     if (OB_FAIL(construct_sys_table_record(ctx, ttl_record))) {
       LOG_WARN("fail to construct sys table record", KR(ret));
-      } else if (OB_FAIL(ObTTLUtil::update_ttl_task_all_fields(tenant_id_, 
-                                                               share::OB_ALL_KV_TTL_TASK_TNAME,
-                                                               trans, ttl_record))) {
+    } else if (OB_FAIL(ObTTLUtil::update_ttl_task_all_fields(tenant_id_, 
+                                                             share::OB_ALL_KV_TTL_TASK_TNAME,
+                                                             trans, ttl_record))) {
       LOG_WARN("fail to update ttl task in sys table", KR(ret), K(ttl_record));
     }
   }
@@ -906,7 +906,7 @@ int ObTabletTTLScheduler::sync_sys_table_op(ObTTLTaskCtx* ctx,
     FLOG_INFO("local tenant task state is different from sys table", KR(ret),
       K_(tenant_id), K(local_tenant_task_.state_));
   }
-  
+
   if (trans.is_started()) {
     bool commit = (OB_SUCCESS == ret);
     int tmp_ret = ret;
@@ -1267,8 +1267,9 @@ int ObTabletTTLScheduler::reload_tenant_task()
     } else {
       LOG_WARN("fail to read tenant ttl task", KR(ret), K_(tenant_id));
     }
-  } else if (OB_RS_TTL_TASK_MOVE == static_cast<ObTTLTaskStatus>(tenant_task.status_) ||
-             OB_RS_TTL_TASK_CANCEL == static_cast<ObTTLTaskStatus>(tenant_task.status_)) {
+  }
+  if (OB_SUCC(ret) && (OB_RS_TTL_TASK_MOVE == static_cast<ObTTLTaskStatus>(tenant_task.status_) ||
+                       OB_RS_TTL_TASK_CANCEL == static_cast<ObTTLTaskStatus>(tenant_task.status_))) {
     local_tenant_task_.reuse();
     FLOG_INFO("tenant task is finish now, reuse local tenant task", KR(ret), K_(local_tenant_task), K(tenant_task.task_id_));
   } else if (OB_FAIL(ObTTLUtil::transform_tenant_state(static_cast<ObTTLTaskStatus>(tenant_task.status_), expected_state))) {

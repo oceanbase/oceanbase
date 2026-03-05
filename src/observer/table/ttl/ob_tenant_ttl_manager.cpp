@@ -261,11 +261,10 @@ int ObTTLTaskScheduler::add_ttl_task_internal(TRIGGER_TYPE trigger_type)
 {
   int ret = OB_SUCCESS;
   bool is_active_time = false;
-  bool enable_ttl = ObTTLUtil::is_enable_ttl(tenant_id_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ttl tenant task mgr not init", KR(ret));
-  } else if (!enable_ttl) {
+  } else if (!enable_scheduler()) {
     ret = OB_TTL_NOT_ENABLE;
     LOG_USER_ERROR(OB_TTL_NOT_ENABLE);
     LOG_WARN("ttl is not enable currently", KR(ret), K_(tenant_id));
@@ -390,7 +389,6 @@ int ObTTLTaskScheduler::try_add_periodic_task()
   int ret = OB_SUCCESS;
   TRIGGER_TYPE trigger_type = TRIGGER_TYPE::PERIODIC_TRIGGER;  
   bool is_active_time = false;
-  bool enable_ttl = ObTTLUtil::is_enable_ttl(tenant_id_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ttl tenant task mgr not init", KR(ret));
@@ -400,7 +398,7 @@ int ObTTLTaskScheduler::try_add_periodic_task()
   } else if (need_skip_run()) {
     ret = OB_EAGAIN;
     FLOG_INFO("exit timer task once cuz leader switch", KR(ret), K_(is_leader), K_(need_do_for_switch));
-  } else if (!enable_ttl) {
+  } else if (!enable_scheduler()) {
     // do nothing
   } else if (OB_FAIL(in_active_time(is_active_time))) {
     LOG_WARN("fail to check is in active time", KR(ret));
@@ -619,7 +617,7 @@ void ObTTLTaskScheduler::runTimerTask()
   int ret = OB_SUCCESS;
   ObCurTraceId::init(GCONF.self_addr_);
   
-  if (!ObTTLUtil::is_enable_ttl(tenant_id_)) {
+  if (!enable_scheduler()) {
     // do nothing
     LOG_DEBUG("ttl is disable");
   } else if (IS_NOT_INIT) {

@@ -713,7 +713,8 @@ int ObHTableCreateHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse &resp
                                                    ctx.get_timeout_ts(),
                                                    database_schema->get_database_name(),
                                                    tablegroup_sql,
-                                                   column_family_sql_array))) {
+                                                   column_family_sql_array,
+                                                   credential.user_id_))) {
     LOG_WARN("failed to create table", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator_, "success", response.data_))) {
     LOG_WARN("failed to write response data", K(ret));

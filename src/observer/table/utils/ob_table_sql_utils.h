@@ -38,7 +38,8 @@ public:
                           int64_t timeout,
                           const common::ObString &database,
                           const common::ObString &create_tablegroup_sql,
-                          const common::ObIArray<common::ObString> &create_table_sqls);
+                          const common::ObIArray<common::ObString> &create_table_sqls,
+                          uint64_t define_user_id);
   static int drop_table(common::ObIAllocator &allocator,
                         share::schema::ObSchemaGetterGuard &schema_guard,
                         sql::ObSQLSessionInfo &session,
@@ -79,7 +80,8 @@ private:
                                   const common::ObIArray<common::ObString> &create_table_sqls,
                                   sql::ObStmt &tablegroup_stmt,
                                   const common::ObIArray<sql::ObStmt*> &table_stmts,
-                                  int64_t timeout);
+                                  int64_t timeout,
+                                  uint64_t define_user_id);
   static int execute_drop_table(sql::ObExecContext &ctx,
                                 const common::ObString &create_tablegroup_sql,
                                 sql::ObStmt &tablegroup_stmt,
