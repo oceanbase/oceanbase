@@ -187,6 +187,7 @@ src/pl/parser/pl_parser_mysql_mode.output
 src/pl/parser/pl_parser_oracle_mode.output
 src/share/inner_table/sys_package/syspack_source.cpp
 src/share/inner_table/sys_package/*.plw
+src/share/inner_table/sys_package/system_package.cpp
 src/share/parameter/standalone_default_parameter.json
 src/share/parameter/shared_storage_default_parameter.json
 src/share/system_variable/standalone_default_system_variable.json
