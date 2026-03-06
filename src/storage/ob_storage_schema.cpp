@@ -2475,11 +2475,15 @@ int ObStorageSchema::update_column_info(const share::schema::ObTableSchema& inpu
 {
   INIT_SUCC(ret);
 
+  int64_t store_column_cnt = 0, input_store_column_cnt = 0;
   if (!is_column_info_simplified()) {
     ret = OB_ERR_UNEXPECTED;
-    input_schema.get_table_id();
-    LOG_WARN("no need to update column info", K(is_column_info_simplified()), K(input_schema.get_table_id()),K(lbt()), K(input_schema), KPC(this));
-  } else if (get_column_count() > input_schema.get_column_count()) {
+    STORAGE_LOG(WARN, "no need to update column info", K(is_column_info_simplified()), K(input_schema.get_table_id()),K(lbt()), K(input_schema), KPC(this));
+  } else if (OB_FAIL(get_store_column_count(store_column_cnt, /* full_col */ true))) {
+    STORAGE_LOG(WARN, "failed to get store column count", K(ret));
+  } else if (OB_FAIL(input_schema.get_store_column_count(input_store_column_cnt, /* full_col */ true))) {
+    STORAGE_LOG(WARN, "failed to get input store column count", K(ret));
+  } else if (store_column_cnt > input_store_column_cnt) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "column count is greater than input schema", K(ret), K(get_column_count()), K(input_schema.get_column_count()));
   } else if (FALSE_IT(column_array_.reset())) {
