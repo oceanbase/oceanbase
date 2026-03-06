@@ -1518,7 +1518,7 @@ int ObAggregateProcessor::init()
       if (aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT
           || aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS
           || aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
-        approx_cnt_distinct_prec_ = aggr_info.expr_->extra_;
+        approx_cnt_distinct_prec_ = ObAggrInfo::get_valid_approx_cnt_prec(aggr_info.expr_->extra_);
       }
       if (T_FUN_MEDIAN == aggr_info.get_expr_type()
           || T_FUN_GROUP_PERCENTILE_CONT == aggr_info.get_expr_type()) {
@@ -3633,7 +3633,7 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         } else if (has_null_cell) {
           /*do nothing*/
         } else {
-          ret = llc_add_value(hash_value, llc_bitmap.get_string());
+          ret = llc_add_value(hash_value, llc_bitmap.get_string(), approx_cnt_distinct_prec_);
         }
       }
       break;
