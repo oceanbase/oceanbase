@@ -137,7 +137,7 @@ protected:
   int get_batch_size_(int64_t &batch_size);
   int prepare_backup_tablet_provider_(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type,
       ObLSBackupCtx &ls_backup_ctx, ObBackupIndexKVCache &index_kv_cache, common::ObMySQLProxy &sql_proxy,
-      ObIBackupTabletProvider *&provider);
+      const int64_t batch_size, ObIBackupTabletProvider *&provider);
 
 protected:
   bool is_inited_;
@@ -496,7 +496,8 @@ private:
   int do_backup_single_ddl_other_block_(ObMultiMacroBlockBackupReader *reader, const ObBackupProviderItem &item);
   int do_wait_index_builder_ready_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key);
   int do_backup_single_macro_block_data_(ObMultiMacroBlockBackupReader *macro_reader,
-      const ObBackupProviderItem &item, common::ObIArray<ObIODevice *> &device_handle);
+      const ObBackupProviderItem &item, common::ObIArray<ObIODevice *> &device_handle,
+      ObBackupDeviceMacroBlockId &physical_id);
   int check_tx_data_can_explain_user_data_(const storage::ObTabletHandle &tablet_handle, bool &can_explain);
   int check_and_prepare_sstable_index_builders_(const common::ObTabletID &tablet_id);
   int do_backup_single_meta_data_(const ObBackupProviderItem &item, ObIODevice *device_handle);
@@ -573,6 +574,7 @@ private:
   int remove_index_builders_();
   int remove_sstable_index_builder_(const common::ObTabletID &tablet_id);
   int close_tree_device_handle_(ObBackupWrapperIODevice *&index_tree_device_handle, ObBackupWrapperIODevice *&meta_tree_device_handle);
+  int release_tablets_after_backup_();
   int update_logic_id_to_macro_index_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
       const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupMacroBlockIndex &macro_index);
   int wait_reuse_other_block_ready_(const common::ObTabletID &tablet_id,
