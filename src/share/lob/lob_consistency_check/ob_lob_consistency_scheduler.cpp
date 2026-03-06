@@ -31,6 +31,10 @@ namespace share {
       ret = OB_NOT_SUPPORTED;                                                                                          \
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.5.1.0, DBMS_LOB_MANAGER is not supported"); \
       LOG_WARN("tenant data version is less than 4.5.1.0, DBMS_LOB_MANAGER is not supported", K(ret), K(tenant_id_));  \
+    } else if (GCTX.is_shared_storage_mode()) {                                                                        \
+      ret = OB_NOT_SUPPORTED;                                                                                          \
+      LOG_WARN("DBMS_LOB_MANAGER is not supported in shared storage mode", KR(ret), K(tenant_id_));                    \
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "DBMS_LOB_MANAGER in shared storage mode");                                     \
     } else {                                                                                                           \
       ObTTLTaskType user_lob_req_type = static_cast<ObTTLTaskType>(arg.cmd_code_);                                     \
       TRIGGER_TYPE trigger_type = arg.trigger_type_ == 1 ? USER_TRIGGER : PERIODIC_TRIGGER;                            \
