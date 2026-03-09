@@ -1945,6 +1945,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(
         for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count(); j++) {
           if (!index_table_schema->can_read_index() || !index_table_schema->is_index_visible()) {
             // skip unavaliable index table
+            LOG_INFO("[VEC_INDEX][HNSW_PLAN] skip unavaliable index table", K(ret), K(index_table_schema->get_schema_version()), K(simple_index_infos.at(i).table_id_));
           } else {
             const ObColumnSchemaV2 *col_schema = nullptr;
             if (OB_ISNULL(col_schema = index_table_schema->get_column_schema_by_idx(j))) {
@@ -1994,6 +1995,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(
           // skip if index_table_schema is not 4, 5 index table
         } else if (!index_table_schema->can_read_index() || !index_table_schema->is_index_visible()) {
           // skip unavaliable index table
+          LOG_INFO("[VEC_INDEX][HNSW_PLAN] skip unavaliable index table", K(ret), K(index_table_schema->get_schema_version()), K(simple_index_infos.at(i).table_id_));
         } else {
           ObString index_prefix;
           if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*index_table_schema, index_prefix))) {
@@ -2027,7 +2029,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("failed to get latest avaliable index tids for hnsw", K(ret), K(inc_tid_heap.count()));
     } else {
-      LOG_DEBUG("get latest avaliable index tids for hnsw", K(inc_tid), K(vbitmap_tid), K(snapshot_tid));
+      FLOG_INFO("[VEC_INDEX][HNSW_PLAN] get latest avaliable index tids for hnsw", K(inc_tid), K(vbitmap_tid), K(snapshot_tid));
     }
   }
 
