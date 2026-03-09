@@ -2332,6 +2332,35 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ARG_MIN, 3, $3, $4, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $9);
 }
+| ANY '(' opt_distinct_or_all expr ')' RESPECT NULLS OVER new_generalized_window_clause
+{
+  (void)$3;
+  ParseNode *respect_node = NULL;
+  malloc_terminal_node(respect_node, result->malloc_pool_, T_RESPECT);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $4, respect_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $9);
+}
+| ANY '(' opt_distinct_or_all expr ')' IGNORE NULLS OVER new_generalized_window_clause
+{
+  (void)$3;
+  ParseNode *ignore_node = NULL;
+  malloc_terminal_node(ignore_node, result->malloc_pool_, T_IGNORE);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $4, ignore_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $9);
+}
+| ANY '(' opt_distinct_or_all expr ')' OVER new_generalized_window_clause
+{
+  (void)$3;
+  ParseNode *ignore_node = NULL;
+  malloc_terminal_node(ignore_node, result->malloc_pool_, T_IGNORE);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $4, ignore_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
+}
+| ARBITRARY '(' expr ')' OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ARBITRARY, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $6);
+}
 | AVG '(' opt_distinct_or_all expr ')' OVER new_generalized_window_clause
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_AVG, 2, $3, $4);
@@ -2864,20 +2893,23 @@ MOD '(' expr ',' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ARG_MIN, 3, $3, $4, $6);
 }
-| ANY '(' expr ')' RESPECT NULLS
+| ANY '(' opt_distinct_or_all expr ')' RESPECT NULLS %prec LOWER_OVER
 {
+  (void)$3;
   malloc_terminal_node($$, result->malloc_pool_, T_RESPECT);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $3, $$);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $4, $$);
 }
-| ANY '(' expr ')' IGNORE NULLS
+| ANY '(' opt_distinct_or_all expr ')' IGNORE NULLS %prec LOWER_OVER
 {
+  (void)$3;
   malloc_terminal_node($$, result->malloc_pool_, T_IGNORE);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $3, $$);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $4, $$);
 }
-| ANY '(' expr ')'
+| ANY '(' opt_distinct_or_all expr ')'
 {
+  (void)$3;
   malloc_terminal_node($$, result->malloc_pool_, T_IGNORE);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $3, $$);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $4, $$);
 }
 | SYS_COUNT_INROW '(' expr ')'
 {

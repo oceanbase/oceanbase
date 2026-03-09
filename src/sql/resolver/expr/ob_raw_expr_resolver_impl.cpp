@@ -8889,7 +8889,9 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
         || T_FUN_JSON_ARRAYAGG == func_type
         || T_FUN_JSON_OBJECTAGG == func_type
         || T_FUN_ARG_MIN == func_type
-        || T_FUN_ARG_MAX == func_type) {
+        || T_FUN_ARG_MAX == func_type
+        || T_FUN_ANY == func_type
+        || T_FUN_ARBITRARY == func_type) {
       ctx_.is_win_agg_ = true;
       ObItemType canonical_type = get_mapping_func_type(func_type);
       if (canonical_type != func_type) {
