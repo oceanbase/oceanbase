@@ -2234,6 +2234,9 @@ DEF_BOOL(_enable_inner_session_mgr, OB_TENANT_PARAMETER, "True", "enable/disable
 DEF_BOOL(_enable_trace_tablet_leak, OB_TENANT_PARAMETER, "False",
         "enable t3m tablet leak checker. The default value is False",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_BOOL(_enable_schedule_tablet_split, OB_CLUSTER_PARAMETER, "True",
+        "specifies whether manual/auto tablet split scheduling is allowed",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL_WITH_CHECKER(enable_auto_split, OB_TENANT_PARAMETER, "False",
          common::ObConfigEnableAutoSplitChecker,
          "if the auto-partition clause is not used, "

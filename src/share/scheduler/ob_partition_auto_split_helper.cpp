@@ -924,7 +924,10 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   ObTablet *tablet = nullptr;
   ObTabletPointer *tablet_ptr = nullptr;
   ObRole role = INVALID_ROLE;
+
+  common::ObTabletID tablet_id;
   const share::ObLSID ls_id = ls.get_ls_id();
+  ObTabletStatus tablet_status(ObTabletStatus::MAX);
   bool num_sstables_exceed_limit = false;
   can_split = false;
   task.reset();
@@ -939,6 +942,7 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer to tablet is nullptr", K(ret), KP(tablet));
+  } else if (OB_FALSE_IT(tablet_id = tablet->get_tablet_id())) {
   } else if (OB_FAIL(tablet->ObITabletMdsCustomizedInterface::get_latest_split_data(
       split_data, writer, trans_stat, trans_version))) {
     if (OB_EMPTY_RESULT == ret) {
@@ -963,6 +967,8 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   }
 
   if (OB_FAIL(ret)) {
+  } else if (!GCONF._enable_schedule_tablet_split) {
+    can_split = false;
   } else if (auto_split_tablet_size <= 0) {
     can_split = false;
   } else if (OB_FAIL(check_sstable_limit(*tablet, num_sstables_exceed_limit))) {
@@ -979,7 +985,7 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
     can_split = tablet->get_major_table_count() > 0 && tablet->get_data_tablet_id() == tablet->get_tablet_id()
         && common::ObRole::LEADER == role && !num_sstables_exceed_limit && MTL_ID() != OB_SYS_TENANT_ID;
     // TODO gaishun.gs resident_info
-    const int64_t used_disk_space = std::max(static_cast<int64_t>(2), tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_);
+    used_disk_space = std::max(static_cast<int64_t>(2), tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_);
     can_split &= (used_disk_space > real_auto_split_size);
     if (OB_SUCC(ret) && can_split) {
       ObTabletCreateDeleteMdsUserData user_data;
@@ -989,10 +995,11 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
           user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
         LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
         can_split = false;
+      } else if (OB_FALSE_IT(tablet_status = user_data.get_tablet_status())) {
       } else if (OB_FAIL(tablet->read_medium_info_list(allocator, medium_info_list))) {
         LOG_WARN("failed to get medium info list", K(ret), KPC(tablet));
         can_split = false;
-      } else if ((can_split = user_data.get_tablet_status() == ObTabletStatus::Status::NORMAL && (medium_info_list->size() == 0))) {
+      } else if ((can_split = tablet_status == ObTabletStatus::Status::NORMAL && (medium_info_list->size() == 0))) {
         task.tenant_id_ = MTL_ID();
         task.ls_id_ = ls_id;
         task.tablet_id_ = tablet->get_tablet_id();
@@ -1002,6 +1009,10 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
       }
     }
   }
+  LOG_TRACE("auto-split check_can_split", K(ret), K(can_split), K(ls_id),
+      K(role), K(tablet_id), K(tablet_status),
+      K(auto_split_tablet_size), K(used_disk_space), K(real_auto_split_size),
+      "enable_schedule_tablet_split", GCONF._enable_schedule_tablet_split);
   return ret;
 }
 

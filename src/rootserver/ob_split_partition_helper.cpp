@@ -133,7 +133,11 @@ int ObSplitPartitionHelper::check_allow_split(
   const uint64_t tablegroup_id = table_schema.get_tablegroup_id();
   ObArray<share::ObZoneReplicaAttrSet> zone_locality;
   ObArray<uint64_t> lob_col_idxs;
-  if (OB_UNLIKELY(table_schema.is_in_recyclebin())) {
+  if (OB_UNLIKELY(!GCONF._enable_schedule_tablet_split)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("schedule tablet split is disabled", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "with disabled _enable_schedule_tablet_split, partition split is");
+  } else if (OB_UNLIKELY(table_schema.is_in_recyclebin())) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("the table is in recyclebin.", KR(ret), K(table_schema));
   } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(tenant_id,
