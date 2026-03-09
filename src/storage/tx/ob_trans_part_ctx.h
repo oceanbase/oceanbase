@@ -1066,7 +1066,6 @@ public:
                           const ObTxCommitParts &log_commit_parts);
 #ifdef OB_BUILD_SHARED_STORAGE
   sslog::ObSSLogNotifyTaskQueue &get_sslog_notify_queue() { return sslog_notify_queue_; }
-  void append_sslog_notify_task(sslog::ObSSLogNotifyTask *task);
 #endif
 protected:
   // for xa
