@@ -1765,14 +1765,6 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
               LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), K(xid));
             }
           }
-          if (is_dblink) {
-            const bool force_disconnect = false;
-            int tmp_ret = OB_SUCCESS;
-            if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret =
-                my_session->get_dblink_context().clean_dblink_conn(force_disconnect)))) {
-              LOG_WARN("dblink transaction failed to release dblink connections", K(tmp_ret), K(tx_id), K(xid));
-            }
-          }
           ctx->exec_ctx_->set_need_disconnect(false);
 #endif
         } else {
