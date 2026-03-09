@@ -82,7 +82,8 @@ struct ObDiagnosisManager
                   const ObDiagnosisInfo& diagnosis_info,
                   int64_t sqc_id,
                   int64_t task_id,
-                  common::ObIAllocator &allocator);
+                  common::ObIAllocator &allocator,
+                  bool defer_reuse);
   int calc_first_file_path(ObString &path,
                           int64_t sqc_id,
                           int64_t task_id,
@@ -109,7 +110,7 @@ struct ObDiagnosisManager
                       int64_t task_id, bool is_log_file, ObDiagnosisFileWriter *&file_writer);
   int handle_warning(int64_t err_ret, int64_t idx, ObString col_name,
                     ObString log_file, ObWarningBuffer *buffer, int64_t limit_cnt);
-  void reuse();
+  void reuse(bool defer_reuse);
 
   common::ObArray<int64_t> idxs_;
   common::ObArray<int64_t> rets_;
