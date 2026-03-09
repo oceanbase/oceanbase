@@ -1751,7 +1751,8 @@ struct NullAwareAntiJoinInfo {
                                  common::ObIArray<ObRawExpr *> &index_keys,
                                  common::ObIArray<ObRawExpr *> &ordering,
                                  ObOrderDirection &direction,
-                                 const bool is_index_back);
+                                 const bool is_index_back,
+                                 const bool is_inner_path);
 
     int get_index_scan_direction(const ObIArray<ObRawExpr *> &keys,
                                  const ObDMLStmt *stmt,
