@@ -96,7 +96,6 @@ public:
   virtual ~ObInterestOrderDim() {}
   void set_interesting_order(const bool interesting_order) { is_interesting_order_ = interesting_order; }
   int add_interest_prefix_ids(const common::ObIArray<uint64_t> &column_ids);
-  int add_const_column_info(const common::ObIArray<bool> &const_column_info);
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
   VIRTUAL_TO_STRING_KV(K_(is_interesting_order),
                K_(column_cnt),
@@ -104,8 +103,7 @@ public:
 private:
   bool is_interesting_order_;
   int64_t column_cnt_;
-  uint64_t column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
-  bool const_column_info_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
+  uint64_t column_ids_[common::OB_MAX_ROWKEY_COLUMN_NUMBER];
 };
 
 //consider query range subset
@@ -188,14 +186,13 @@ private:
 struct KeyPrefixComp
 {
   KeyPrefixComp() : status_(ObSkylineDim::UNCOMPARABLE) {}
-  int operator()(const uint64_t *left, const bool *left_const,
-                 const int64_t left_cnt, const uint64_t *right,
-                 const bool *right_const, const int64_t right_cnt);
+  int operator()(const uint64_t *left, const int64_t left_cnt,
+                 const uint64_t *right, const int64_t right_cnt);
   ObSkylineDim::CompareStat get_result() { return status_; }
 private:
   static int do_compare(const uint64_t *left, const int64_t left_cnt,
-                        const uint64_t *right, const bool *right_const,
-                        const int64_t right_cnt, ObSkylineDim::CompareStat &status);
+                        const uint64_t *right, const int64_t right_cnt,
+                        ObSkylineDim::CompareStat &status);
   ObSkylineDim::CompareStat status_;
 };
 
