@@ -4587,6 +4587,12 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
         LOG_WARN("failed to create local lookup iter", K(ret));
       }
     }
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(hnsw_scan_iter)) {
+      hnsw_scan_iter->release();
+      alloc.free(hnsw_scan_iter);
+      hnsw_scan_iter = nullptr;
+    }
   }
 
   return ret;
