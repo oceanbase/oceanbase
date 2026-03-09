@@ -30,6 +30,7 @@ public:
   virtual int est_cost();
   virtual int compute_op_ordering();
   int compute_sharding_info() override;
+  int compute_plan_type() override;
   int allocate_granule_pre(AllocGIContext &ctx) override;
   int allocate_granule_post(AllocGIContext &ctx) override;
 
