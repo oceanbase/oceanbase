@@ -8909,7 +8909,7 @@ int ObSchemaGetterGuard::get_vector_info_index_ids_in_tenant(const uint64_t tena
         LOG_WARN("push back table id failed", KR(ret));
       } else if (!has_ivf_index && tmp_schema->is_vec_ivf_index()) {
         has_ivf_index = true;
-      }  
+      }
     }
   }
   return ret;

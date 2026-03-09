@@ -144,6 +144,7 @@ public:
                                          ObIArray<ObLSTabletPair> &partial_tablet_ids,
                                          ObIArray<ObLSTabletPair> &cache_tablet_ids,
                                          char *buf, int64_t buf_len, int64_t &pos);
+  static int get_tenant_vector_index_ids(const uint64_t tenant_id, bool &has_ivf_index, common::ObIArray<uint64_t> &table_id_array);
 
 private:
   static int init_common_scan_param(storage::ObTableScanParam& scan_param,
