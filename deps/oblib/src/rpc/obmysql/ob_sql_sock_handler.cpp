@@ -88,8 +88,6 @@ int process_my_request(rpc::frame::ObReqProcessor& processor, rpc::ObRequest& re
 int handle_sql_req_inplace(void* udata)
 {
   int ret = OB_SUCCESS;
-  auto *pm = common::ObPageManager::thread_local_instance();
-  pm->set_tenant_ctx(OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID);
   lib::ContextTLOptGuard guard(true);
   lib::ContextParam param;
   param.set_mem_attr(OB_SERVER_TENANT_ID, ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)

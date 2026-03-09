@@ -602,7 +602,6 @@ void  __attribute__((constructor)) disable_parallel_memory_allocation()
           ObTenantCtxAllocatorGuard ta = allocator->get_tenant_ctx_allocator(tenant_id, ctx_id, numa_id);
           if (ta != NULL) {
             ta->obj_mgr_.parallel_ = parallel;
-            ta->set_req_chunkmgr_parallel_(parallel);
           }
         }
       }
