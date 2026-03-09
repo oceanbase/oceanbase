@@ -1719,7 +1719,7 @@ int ObVectorRefreshIndexExecutor::do_rebuild() {
   }
   if (ret == OB_EAGAIN) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Calling dbms_vector.refresh when other refresh/rebuild tasks may be running is");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Calling dbms_vector.rebuild when other rebuild tasks may be running is");
   }
   return ret;
 }
