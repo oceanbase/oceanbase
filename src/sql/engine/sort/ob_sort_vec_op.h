@@ -91,7 +91,7 @@ private:
   int get_int_value(const ObExpr *in_val, int64_t &out_val);
   int get_topn_count(int64_t &topn_cnt);
   int process_sort_batch();
-  int scan_all_then_sort_batch();
+  int scan_all_then_sort_batch() __attribute__((noinline));
   int init_prescan_row_store();
   int add_batch_prescan_store(const ObBatchRows &input_brs);
   int finish_add_prescan_store();
@@ -102,7 +102,7 @@ private:
   int init_temp_row_store(const common::ObIArray<ObExpr *> &exprs, const int64_t batch_size,
                           const ObMemAttr &mem_attr, const bool is_sort_key, ObCompressorType compress_type,
                           ObTempRowStore &row_store);
-  void reset_pd_topn_filter_expr_ctx();  
+  void reset_pd_topn_filter_expr_ctx();
 
 private:
   ObSortVecOpProvider sort_op_provider_;
