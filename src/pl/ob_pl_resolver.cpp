@@ -7425,7 +7425,8 @@ int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMod
         int64_t var_idx
           = access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_;
         CK (var_idx >= 0 && var_idx < obj_expr->get_var_indexs().count());
-        OZ (check_update_column(current_block_->get_namespace(), obj_expr->get_var_indexs().at(var_idx), access_idxs));
+        OZ (check_update_column(current_block_->get_namespace(), obj_expr->get_var_indexs().at(var_idx), access_idxs,
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
         OZ (check_local_variable_read_only(
           current_block_->get_namespace(),
           obj_expr->get_var_indexs().at(var_idx),
@@ -13406,25 +13407,45 @@ int ObPLResolver::resolve_udf_info(
       CK (OB_NOT_NULL(udf_raw_expr = udf_info.ref_expr_));
       for (int64_t i = 0; OB_SUCC(ret) && i < udf_raw_expr->get_params_desc().count(); ++i) {
         int64_t position = udf_raw_expr->get_param_position(i);
+        const ObUDFParamDesc &param_desc = udf_raw_expr->get_params_desc().at(i);
         if (position != OB_INVALID_INDEX
-            && udf_raw_expr->get_params_desc().at(i).is_local_out()) {
+            && (param_desc.is_local_out()
+                || param_desc.is_obj_access_out()
+                || param_desc.is_subprogram_var_out()
+                || param_desc.is_package_var_out())) {
           const ObPLVar *var = NULL;
-          CK (OB_NOT_NULL(var = table->get_symbol(position)));
-          if (OB_SUCC(ret) && var->is_readonly()) {
-            ret = OB_ERR_VARIABLE_IS_READONLY;
-            LOG_WARN("variable is read only", K(ret), K(position), KPC(var));
+          ObIRoutineParam *iparam = NULL;
+          CK (OB_NOT_NULL(routine_info));
+          OZ (routine_info->get_routine_param(i, iparam));
+          CK (OB_NOT_NULL(iparam));
+          if (OB_SUCC(ret) && iparam->is_self_param()) {
+            continue;
           }
-          if (OB_SUCC(ret) && var->get_name().prefix_match(ANONYMOUS_ARG)) {
+          if (param_desc.is_subprogram_var_out() || param_desc.is_obj_access_subprogram_var_out()) {
+            OZ (get_subprogram_var(current_block_->get_namespace(), param_desc.get_subprogram_id(),
+                                   param_desc.get_index(), var));
+          } else if (param_desc.is_package_var_out() || param_desc.is_obj_access_package_var_out()) {
+            OZ (current_block_->get_namespace().get_package_var(resolve_ctx_, param_desc.get_package_id(),
+                                                                param_desc.get_index(), var));
+          } else {
+            CK (OB_NOT_NULL(var = table->get_symbol(position)));
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(var)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("variable not found", K(ret), K(position), K(param_desc));
+          } else if (var->get_name().prefix_match(ANONYMOUS_ARG)) {
             ObPLVar* shadow_var = const_cast<ObPLVar*>(var);
-            ObIRoutineParam *iparam = NULL;
             OX (shadow_var->set_readonly(false));
             CK (OB_NOT_NULL(routine_info));
-            OZ (routine_info->get_routine_param(i, iparam));
             if (OB_SUCC(ret) && iparam->is_inout_param()) {
               shadow_var->set_name(ANONYMOUS_INOUT_ARG);
             }
+          } else if (var->is_readonly()) {
+            ret = OB_ERR_VARIABLE_IS_READONLY;
+            LOG_WARN("variable is read only", K(ret), K(position), KPC(var));
           }
-          if (OB_SUCC(ret)) {
+          if (OB_SUCC(ret) && param_desc.is_local_out()) {
             const ObPLDataType &pl_type = var->get_type();
             if (pl_type.is_obj_type()
                 && pl_type.get_data_type()->get_obj_type() != ObNullType) {
@@ -14168,7 +14189,8 @@ int ObPLResolver::check_variable_accessible(
   if (OB_FAIL(ret)) {
   } else if (ObObjAccessIdx::is_local_variable(access_idxs)) {
     if (for_write) {
-      OZ (check_update_column(ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_, access_idxs));
+      OZ (check_update_column(ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_,
+                              access_idxs, resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
       OZ (check_local_variable_read_only(
         ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_
         /*access_idxs.at(access_idxs.count() - 1).var_index_*/, is_inout_param), access_idxs);
@@ -14230,7 +14252,8 @@ int ObPLResolver::check_variable_accessible(
       if (T_OP_GET_SUBPROGRAM_VAR == f_expr->get_expr_type()) {
         uint64_t actual_var_idx = OB_INVALID_INDEX;
         OZ (get_const_expr_value(f_expr->get_param_expr(2), actual_var_idx));
-        OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs));
+        OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs,
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
         OZ (check_local_variable_read_only(*subprogram_ns, actual_var_idx));
       } else {
         OZ (check_local_variable_read_only(
@@ -14284,7 +14307,8 @@ int ObPLResolver::check_variable_accessible(ObRawExpr *expr, bool for_write)
         int64_t var_idx =
           access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_;
         CK (var_idx >= 0 && var_idx < obj_access->get_var_indexs().count());
-        OZ (check_update_column(current_block_->get_namespace(), obj_access->get_var_indexs().at(var_idx), access_idxs));
+        OZ (check_update_column(current_block_->get_namespace(), obj_access->get_var_indexs().at(var_idx), access_idxs,
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
         OZ (check_local_variable_read_only(
           current_block_->get_namespace(), obj_access->get_var_indexs().at(var_idx)));
       }
@@ -14302,7 +14326,8 @@ int ObPLResolver::check_variable_accessible(ObRawExpr *expr, bool for_write)
       if (T_OP_GET_SUBPROGRAM_VAR == f_expr->get_expr_type()) {
         uint64_t actual_var_idx = OB_INVALID_INDEX;
         GET_CONST_EXPR_VALUE(f_expr->get_param_expr(2), actual_var_idx);
-        OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs));
+        OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs,
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
         OZ (check_local_variable_read_only(*subprogram_ns, actual_var_idx));
       } else {
         OZ (check_variable_accessible(current_block_->get_namespace(),
@@ -19060,7 +19085,8 @@ int ObPLResolver::check_var_type(ObString &name1, ObString &name2, uint64_t db_i
   return ret;
 }
 
-int ObPLResolver::check_update_column(const ObPLBlockNS &ns, uint64_t var_idx, const ObIArray<ObObjAccessIdx>& access_idxs)
+int ObPLResolver::check_update_column(const ObPLBlockNS &ns,uint64_t var_idx, const ObIArray<ObObjAccessIdx>& access_idxs,
+                                      ObSQLSessionInfo &session_info, ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
 #define COLLECT_ASSIGN_COLUMN \
@@ -19076,15 +19102,15 @@ int ObPLResolver::check_update_column(const ObPLBlockNS &ns, uint64_t var_idx, c
     } \
   } while (0)
 
-  if (resolve_ctx_.session_info_.is_for_trigger_package() && 2 == access_idxs.count()) {
+  if (session_info.is_for_trigger_package() && access_idxs.count() >= 2) {
     if (lib::is_oracle_mode()
         && 0 != access_idxs.at(1).var_name_.case_compare(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)
         && access_idxs.at(0).var_name_.prefix_match(":")) {
       ObSchemaChecker schema_checker;
       const ObTriggerInfo *trg_info = NULL;
-      const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
+      const uint64_t tenant_id = session_info.get_effective_tenant_id();
       COLLECT_ASSIGN_COLUMN;
-      OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid_for_table()));
+      OZ (schema_checker.init(schema_guard, session_info.get_server_sid()));
       OZ (schema_checker.get_trigger_info(tenant_id,
                                           ns.get_db_name(),
                                           ns.get_package_name(),
@@ -19099,7 +19125,7 @@ int ObPLResolver::check_update_column(const ObPLBlockNS &ns, uint64_t var_idx, c
           const ObString column_name = access_idxs.at(1).var_name_;
           const ObTableSchema *table_schema = NULL;
           const ObColumnSchemaV2 *col_schema = NULL;
-          OZ (resolve_ctx_.schema_guard_.get_table_schema(tenant_id, table_id, table_schema));
+          OZ (schema_guard.get_table_schema(tenant_id, table_id, table_schema));
           CK (OB_NOT_NULL(table_schema));
           OX (col_schema = table_schema->get_column_schema(column_name));
           CK (OB_NOT_NULL(col_schema));
