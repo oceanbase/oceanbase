@@ -444,6 +444,7 @@ public:
     is_post_with_filter_ = false;
     ob_sparse_drop_ratio_search_ = 0;
     n_candidate_ = 0;
+    only_complete_data_ = false;
   }
   TO_STRING_KV(K_(query_limit), K_(query_order), K_(ef_search), K_(query_vector), K_(query_scn), K_(ob_sparse_drop_ratio_search), K_(n_candidate));
 

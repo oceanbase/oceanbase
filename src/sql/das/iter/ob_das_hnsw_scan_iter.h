@@ -296,7 +296,6 @@ public:
       distance_calc_(nullptr),
       is_primary_pre_with_rowkey_with_filter_(false),
       go_brute_force_(false),
-      only_complete_data_(false),
       extra_column_count_(0),
       simple_cmp_info_(),
       vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
@@ -592,7 +591,6 @@ private:
   ObExpr* distance_calc_;
   bool is_primary_pre_with_rowkey_with_filter_;
   bool go_brute_force_;
-  bool only_complete_data_;
   int64_t extra_column_count_;
   ObHnswSimpleCmpInfo simple_cmp_info_;
   // extra_info idx to rowkey idx, because of extra_info is sort by column id
