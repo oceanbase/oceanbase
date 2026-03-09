@@ -272,6 +272,8 @@ public:
       batch_allocator_("BATCHALLOC", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       search_allocator_(tenant_id),
       ls_leader_(true),
+      is_refresh_adaptor_(false),
+      complete_delta_lock_(nullptr),
       scn_() {};
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
@@ -306,6 +308,8 @@ public:
   void set_flag(ObVectorQueryProcessFlag flag) {flag_ = flag; }
   void set_ls_leader(const bool ls_leader) { ls_leader_ = ls_leader; }
   bool get_ls_leader() { return ls_leader_; }
+  void set_is_refresh_adaptor(const bool is_refresh_adaptor) { is_refresh_adaptor_ = is_refresh_adaptor; }
+  bool get_is_refresh_adaptor() { return is_refresh_adaptor_; }
 
   void set_scn(const SCN scn) { scn_ = scn; }
 
@@ -314,6 +318,10 @@ public:
     int64_t curr_cnt = get_vec_cnt();
     vec_data_.curr_idx_ += curr_cnt;
   }
+
+  void set_complete_delta_lock(TCRWLock *lock) { complete_delta_lock_ = lock; }
+  TCRWLock *get_complete_delta_lock() { return complete_delta_lock_; }
+
 private:
   PluginVectorQueryResStatus status_;
   ObVectorQueryProcessFlag flag_;
@@ -329,6 +337,9 @@ private:
   ObArenaAllocator batch_allocator_; // Used to complete_delta_buffer_data in batches, reuse after each batch of data is completed
   ObVsagSearchAlloc search_allocator_;
   bool ls_leader_;
+  bool is_refresh_adaptor_;
+  // hold complete lock
+  TCRWLock *complete_delta_lock_;
   SCN scn_;
 };
 
@@ -396,7 +407,7 @@ struct ObVectorIndexMemData
 {
   ObVectorIndexMemData()
     : is_init_(false),
-      rb_flag_(true),
+      has_complete_(false),
       has_build_sq_(false),
       vid_array_(nullptr),
       vec_array_(nullptr),
@@ -411,10 +422,11 @@ struct ObVectorIndexMemData
       mem_ctx_(nullptr),
       last_dml_scn_(),
       last_read_scn_(),
-      can_skip_(NOT_INITED) {}
+      can_skip_(NOT_INITED),
+      complete_lock_(ObLatchIds::VECTOR_COMPLETE_LOCK) {}
 
 public:
-  TO_STRING_KV(K(rb_flag_), K_(is_init), K_(scn), K_(ref_cnt), K(vid_bound_.max_vid_), K(vid_bound_.min_vid_), KP_(index), KPC_(bitmap), KP_(mem_ctx));
+  TO_STRING_KV(K(has_complete_), K_(is_init), K_(scn), K_(ref_cnt), K(vid_bound_.max_vid_), K(vid_bound_.min_vid_), KP_(index), KPC_(bitmap), KP_(mem_ctx));
   void free_resource(ObIAllocator *allocator_);
   bool is_inited() const { return is_init_; }
   void set_inited() { is_init_ = true; }
@@ -444,7 +456,7 @@ public:
 
 public:
   bool is_init_;
-  bool rb_flag_;
+  bool has_complete_;
   bool has_build_sq_; // for hnsw+sq
   ObVecIdxVidArray *vid_array_; // for hnsw+sq
   ObVecIdxVecArray *vec_array_; // for hnsw+sq
@@ -462,6 +474,9 @@ public:
   SCN last_dml_scn_;
   SCN last_read_scn_;
   ObCanSkip3rdAnd4thVecIndex can_skip_;
+
+  // hold complete lock
+  TCRWLock complete_lock_;
 };
 
 struct ObVectorIndexFollowerSyncStatic
@@ -586,9 +601,9 @@ public:
   uint64_t get_data_table_id() { return data_table_id_; }
   uint64_t get_rowkey_vid_table_id() { return rowkey_vid_table_id_; }
   uint64_t get_vid_rowkey_table_id() { return vid_rowkey_table_id_; }
-  void close_snap_data_rb_flag() {
+  void set_snap_data_has_complete() {
     if (OB_NOT_NULL(snap_data_)) {
-      snap_data_->rb_flag_ = false;
+      snap_data_->has_complete_ = true;
     }
   }
 
@@ -691,7 +706,8 @@ public:
   void *get_algo_data() { return algo_data_; }
 
   bool check_if_complete_data(ObVectorQueryAdaptorResultContext *ctx);
-  int complete_index_mem_data(SCN read_scn,
+  int complete_index_mem_data(ObVectorQueryAdaptorResultContext *ctx,
+                              SCN read_scn,
                               common::ObNewRowIterator *row_iter,
                               blocksstable::ObDatumRow *last_row,
                               ObArray<uint64_t> &i_vids);
@@ -799,6 +815,10 @@ public:
   {
     is_need_vid_ = is_need_vid;
   }
+
+  void reset_complete();
+  bool check_bitmap_is_delta_bitmap_subset(roaring::api::roaring64_bitmap_t *bitmap);
+  bool check_index_bitmap_is_delta_bitmap_subset();
   void set_index_statistics_updated(bool value) { index_statistics_updated_ = value; }
 
   TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data),
@@ -818,7 +838,9 @@ private:
                                ObArray<uint64_t> &i_vids,
                                ObArray<uint64_t> &d_vids);
   bool check_if_complete_index(SCN read_scn);
-  bool check_if_complete_delta(roaring::api::roaring64_bitmap_t *gene_bitmap, int64_t count);
+  bool check_if_complete_delta(ObVectorQueryAdaptorResultContext *ctx,
+                               roaring::api::roaring64_bitmap_t *gene_bitmap,
+                               int64_t count);
   int write_into_delta_mem(ObVectorQueryAdaptorResultContext *ctx,
                            int count,
                            float *vectors,
