@@ -1915,9 +1915,15 @@ int ObLSDupTabletsMgr::leader_takeover(const bool is_resume,
 {
   int ret = OB_SUCCESS;
 
+  bool force_clean_confirm_set = false;
+  if (GCTX.is_shared_storage_mode()) {
+    force_clean_confirm_set = true;
+    DUP_TABLE_LOG(INFO, "force rebuild readable set in ss", K(force_clean_confirm_set), KPC(this));
+  }
+
   TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
-  if (!is_resume) {
+  if (!is_resume || force_clean_confirm_set) {
     if (OB_FAIL(construct_clean_confirming_set_task_())) {
       DUP_TABLE_LOG(WARN, "clean new/old tablets set failed", K(ret),
                     K(need_confirm_new_queue_.get_size()), KPC(removing_old_set_),
