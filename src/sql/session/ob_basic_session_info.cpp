@@ -2317,7 +2317,7 @@ int ObBasicSessionInfo::gen_configs_in_pc_str()
       int64_t pos = 0;
       // update out-dated cached configs
       // first time to generate configuaration strings, init allocator
-      if (is_first_gen_config_ || config_in_pc_str_.size() < MAX_CONFIG_STR_SIZE) {
+      if (is_first_gen_config_) {
         inf_pc_configs_.init(tenant_id_);
         if (NULL == (buf = (char *)sess_level_name_pool_.alloc(MAX_CONFIG_STR_SIZE))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -5806,10 +5806,16 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
         LOG_WARN("fail to write sys_var_in_pc_str to string_buf_", K(sys_var_in_pc_str_), K(ret));
       } else if (OB_FAIL(sess_level_name_pool_.write_string(config_in_pc_str_, &config_in_pc_str_))) {
         LOG_WARN("fail to write config_in_pc_str_ to string_buf_", K(config_in_pc_str_), K(ret));
+      } else {
+        set_sys_vars_encode_max_size(sys_var_in_pc_str_.length());
       }
-      // above write string for sys_var_in_pc_str_ and config_in_pc_str_ will set capacity
-      // to unexpected value, so we need to check its size in
-      // next gen_configs_in_pc_str() to not reuse memory
+      // above write_string for sys_var_in_pc_str_ and config_in_pc_str_ will deep copy the string with
+      // a buffer whose size equals data_length (not MAX_SYS_VARS_STR_SIZE/MAX_CONFIG_STR_SIZE).
+      // We must mark is_first_gen_config_ = true so that the next
+      // gen_configs_in_pc_str() allocate fresh buffers instead of reusing the undersized write_string buffers.
+      // for gen_sys_var_in_pc_str(), it will expand the buffer if needed,
+      // so we don't need to mark is_first_gen_ = true
+      is_first_gen_config_ = true;
     }
     sql_scope_flags_.set_flags(sql_scope_flags);
     is_deserialized_ = true;
