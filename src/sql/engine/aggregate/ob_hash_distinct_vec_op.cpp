@@ -871,6 +871,9 @@ int ObHashDistinctVecOp::read_group_distinct_data(int64_t batch_size)
         if (ret == OB_ITER_END) {
           ret = OB_SUCCESS;
           group_distinct_state_ = GroupDistinctState::ITER_END;
+          if (group_iter_idx_ > 0 || (group_iter_idx_ == 0 && !MY_SPEC.has_non_distinct_aggr_params_)) {
+            group_distinct_bucket_cnt_ += hp_infras->get_bucket_num();
+          }
           if (OB_FAIL(hp_infras_mgr_->free_one_hp_infras(hp_infras, true))) {
             LOG_WARN("failed to free hp infras", K(ret));
           }
@@ -886,15 +889,6 @@ int ObHashDistinctVecOp::read_group_distinct_data(int64_t batch_size)
         break;
       }
       case GroupDistinctState::ITER_END: {
-        if (group_iter_idx_ > 0 || (group_iter_idx_ == 0 && !MY_SPEC.has_non_distinct_aggr_params_)) {
-          HashPartInfrasVec *hp_infras = hp_infras_arr_.at(group_iter_idx_);
-          if (OB_ISNULL(hp_infras)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid null hp infras", K(ret));
-          } else {
-            group_distinct_bucket_cnt_ += hp_infras->get_bucket_num();
-          }
-        }
         group_iter_idx_--;
         if (OB_FAIL(ret)) {
         } else if (group_iter_idx_ > min_stored_group_idx_) {
