@@ -8978,7 +8978,7 @@ def_table_schema(
 # 589: __all_catalog_column_stat
 # 590: __all_catalog_table_opt_stat_gather_history
 # 591: __all_audit_log_encryption_password
-
+# 592: __all_direct_load_stream
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
