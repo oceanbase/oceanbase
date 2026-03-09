@@ -2209,6 +2209,7 @@ int ObTabletDDLUtil::compact_ddl_kv(
               ASYNC_UPLOAD_INC_SSTABLE(SSIncSSTableType::DDL_SSTABLE,
                                        upload_register_handle,
                                        sstable->get_key(),
+                                       sstable->get_rec_scn(),
                                        SCN::min_scn() /* ddl sstable no need snapshot_version */);
             }
           } else if (ddl_param.table_key_.is_mini_sstable()) {
@@ -2218,7 +2219,7 @@ int ObTabletDDLUtil::compact_ddl_kv(
               LOG_WARN("get snapshot version failed", K(new_tablet_handle));
             } else {
               ASYNC_UPLOAD_INC_SSTABLE(
-                  SSIncSSTableType::MINI_SSTABLE, upload_register_handle, sstable->get_key(), snapshot_version);
+                  SSIncSSTableType::MINI_SSTABLE, upload_register_handle, sstable->get_key(), sstable->get_rec_scn(), snapshot_version);
             }
           }
         }

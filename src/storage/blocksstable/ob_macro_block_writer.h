@@ -49,7 +49,7 @@ namespace blocksstable
 class ObDataIndexBlockBuilder;
 class ObSSTableIndexBuilder;
 class ObSSTableSecMetaIterator;
-class ObSSTablePrivateObjectCleaner;
+class ObISSTableObjectCleaner;
 struct ObIndexBlockRowDesc;
 struct ObMacroBlockDesc;
 class ObIMacroBlockFlushCallback;
@@ -152,7 +152,7 @@ public:
       const int64_t parallel_idx,
       const blocksstable::ObMacroSeqParam &macro_seq_param,
       const share::ObPreWarmerParam &pre_warm_param,
-      ObSSTablePrivateObjectCleaner &object_cleaner,
+      ObISSTableObjectCleaner &object_cleaner,
       ObIMacroBlockFlushCallback *callback = nullptr,
       ObIMacroBlockValidator *validator = nullptr,
       ObIODevice *device_handle = nullptr);
@@ -161,7 +161,7 @@ public:
       const int64_t parallel_idx,
       const blocksstable::ObMacroSeqParam &macro_seq_param,
       const share::ObPreWarmerParam &pre_warm_param,
-      ObSSTablePrivateObjectCleaner &object_cleaner,
+      ObISSTableObjectCleaner &object_cleaner,
       ObIMacroBlockFlushCallback *callback);
   virtual int append_macro_block(const ObMacroBlockDesc &macro_desc,
                                  const ObMicroBlockData *micro_block_data);
@@ -206,7 +206,7 @@ protected:
       const blocksstable::ObMacroSeqParam &macro_seq_param,
       const share::ObPreWarmerParam &pre_warm_param,
       const bool cluster_micro_index_on_flush,
-      ObSSTablePrivateObjectCleaner &object_cleaner,
+      ObISSTableObjectCleaner &object_cleaner,
       ObIMacroBlockFlushCallback *callback,
       ObIMacroBlockValidator *validator,
       ObIODevice *device_handle);
@@ -375,7 +375,7 @@ private:
   ObDataIndexBlockBuilder *builder_;
   ObMicroBlockAdaptiveSplitter micro_block_adaptive_splitter_;
   share::ObIPreWarmer *pre_warmer_;
-  ObSSTablePrivateObjectCleaner *object_cleaner_;
+  ObISSTableObjectCleaner *object_cleaner_;
   char *io_buf_;
   ObIMacroBlockValidator *validator_;
   bool can_append_batch_;

@@ -14,6 +14,9 @@
 #include "ob_macro_block_id.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "storage/blocksstable/ob_ss_obj_util.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_inc_ss_macro_seq_define.h"
+#endif
 
 namespace oceanbase
 {
@@ -130,26 +133,41 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
         (uint64_t) third_id_,
         (int64_t) macro_private_transfer_epoch_,
         (uint64_t) tenant_seq_);
+      break;
     } else if (is_shared_data_or_meta()) {
-      databuff_printf(buf, buf_len, pos,
-        "[2nd=%lu]"
-        "[3rd=(op_id=%lu, macro_seq_id=%lu)]"
-        "[4th=(%s=%lu)]",
-        (uint64_t) second_id_,
-        (uint64_t) get_op_id(), // op_id
-        (uint64_t) get_macro_seq(), // seq_no
-        (meta_is_inner_tablet() ? "ls_id" : "reorg_scn"),
-        (uint64_t)fourth_id_);
-    } else {
-      databuff_printf(buf, buf_len, pos,
-        "[2nd=%lu]"
-        "[3rd=%lu]"
-        "[4th=%lu]}",
-        (uint64_t) second_id_,
-        (uint64_t) third_id_,
-        (uint64_t) fourth_id_);
+      const char *source_type_str = "UNKNOWN";
+      int64_t source_type = 0;
+      int64_t op_id = 0;
+      int64_t seq = 0;
+      bool fallback = false;
+      if (is_shared_mini_minor_v1()) {
+#ifdef OB_BUILD_SHARED_STORAGE
+        op_id = third_id_ >> 32;
+        seq = third_id_ & 0xFFFFFFFF;
+      } else if (is_shared_mini_v2()) {
+        ObIncSSMacroSeqHelper::parse_shared_mini_data_seq(third_id_, source_type, op_id, seq);
+        source_type_str = ObIncSSMacroSeqHelper::get_shared_mini_source_str(source_type);
+      } else if (is_shared_minor_v2()) {
+        ObIncSSMacroSeqHelper::parse_shared_minor_data_seq(third_id_, source_type, op_id, seq);
+        source_type_str = ObIncSSMacroSeqHelper::get_shared_minor_source_str(source_type);
+      } else {
+#endif
+        fallback = true;
+      }
+      if (!fallback) {
+        databuff_printf(buf, buf_len, pos,
+          "[2nd=%lu]"
+          "[3rd=(source_type=%s, op_id=%lu, macro_seq_id=%lu)]"
+          "[4th=(%s=%lu)]",
+          (uint64_t) second_id_,
+          source_type_str,
+          (uint64_t) op_id,
+          (uint64_t) seq,
+          (meta_is_inner_tablet() ? "ls_id" : "reorg_scn"),
+          (uint64_t)fourth_id_);
+        break;
+      }
     }
-    break;
   default:
     databuff_printf(buf, buf_len, pos,
         "[2nd=%lu]"
@@ -264,7 +282,49 @@ bool MacroBlockId::is_shared_data_or_meta() const
 }
 
 /*
-  SHARED_TABLET_SUB_META
+ SHARED_MINI_DATA_MACRO
+ SHARED_MINI_META_MACRO
+ SHARED_MINOR_DATA_MACRO
+ SHARED_MINOR_META_MACRO
+ SHARED_MDS_MINI_DATA_MACRO
+ SHARED_MDS_MINI_META_MACRO
+ SHARED_MDS_MINOR_DATA_MACRO
+ SHARED_MDS_MINOR_META_MACRO
+*/
+bool MacroBlockId::is_shared_mini_minor_v1() const
+{
+  bool ret = false;
+  if (is_id_mode_share()) {
+    ret |= (storage_object_type() >= ObStorageObjectType::SHARED_MINI_DATA_MACRO && storage_object_type() <= ObStorageObjectType::SHARED_MINOR_META_MACRO);
+    ret |= (storage_object_type() >= ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO && storage_object_type() <= ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO);
+  }
+  return ret;
+}
+
+/*
+ SHARED_MINI_V2_DATA_MACRO
+ SHARED_MINI_V2_META_MACRO
+*/
+bool MacroBlockId::is_shared_mini_v2() const
+{
+  return is_id_mode_share()
+    && storage_object_type() >= ObStorageObjectType::SHARED_MINI_V2_DATA_MACRO
+    && storage_object_type() <= ObStorageObjectType::SHARED_MINI_V2_META_MACRO;
+}
+
+
+/*
+ SHARED_MINOR_V2_DATA_MACRO
+ SHARED_MINOR_V2_META_MACRO
+*/
+bool MacroBlockId::is_shared_minor_v2() const
+{
+  return is_id_mode_share()
+    && storage_object_type() >= ObStorageObjectType::SHARED_MINOR_V2_DATA_MACRO
+    && storage_object_type() <= ObStorageObjectType::SHARED_MINOR_V2_META_MACRO;
+}
+/*
+ SHARED_TABLET_SUB_META
 */
 bool MacroBlockId::is_shared_sub_meta() const
 {
@@ -407,16 +467,21 @@ bool MacroBlockId::is_private() const
 {
   return is_id_mode_share() && SSObjUtil::is_private(storage_object_type());
 }
+
 /*
   PRIVATE_DATA_MACRO
   PRIVATE_META_MACRO
   PRIVATE_TABLET_META
+  SHARED_MINI_DATA_MACRO
+  SHARED_MINI_META_MACRO
 */
 bool MacroBlockId::is_macro_write_cache_ctrl_obj_type() const
 {
-  return is_id_mode_share() && (SSObjUtil::is_macro(storage_object_type()) || SSObjUtil::is_tablet_meta(storage_object_type())) &&
-         SSObjUtil::is_private(storage_object_type()) &&!SSObjUtil::is_direct_write(storage_object_type()) &&
-         !SSObjUtil::use_reserved_disk_space(storage_object_type()) && !SSObjUtil::is_tmp_file(storage_object_type());
+  return is_id_mode_share() &&
+         (SSObjUtil::is_macro(storage_object_type()) || SSObjUtil::is_tablet_meta(storage_object_type())) &&
+         STI(storage_object_type()).has_write_back_strategy() &&
+         !SSObjUtil::use_reserved_disk_space(storage_object_type()) &&
+         !SSObjUtil::is_tmp_file(storage_object_type());
 }
 
 /*
@@ -546,4 +611,3 @@ bool MacroBlockId::meta_is_inner_tablet() const
 
 } // namespace blocksstable
 } // namespace oceanbase
-

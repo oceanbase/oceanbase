@@ -60,9 +60,9 @@ void TestSSMicroCacheTaskRunner::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager *);
-  ASSERT_NE(nullptr, tnt_file_mgr);
-  tnt_file_mgr->persist_disk_space_task_.enable_adjust_size_ = false;
+  ObTenantDiskSpaceManager *tnt_disk_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_mgr);
+  tnt_disk_mgr->persist_disk_space_task_.enable_adjust_size_ = false;
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30)));
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
 }

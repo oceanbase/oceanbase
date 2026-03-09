@@ -253,8 +253,7 @@ int ObCOMergePrepareTask::schedule_minor_exec_dag(
   } else if (OB_FAIL(minor_exe_dag->prepare_init(
               dag_param,
               ctx.get_tablet()->get_tablet_meta().compat_mode_,
-              result,
-              ctx.static_param_.ls_handle_))) {
+              result))) {
     LOG_WARN("failed to init dag", K(ret), K(result));
   } else if (OB_FAIL(dag_net_->add_dag_into_dag_net(*minor_exe_dag))) {
     LOG_WARN("failed to add dag into dag net", K(ret), K(minor_exe_dag), KPC(dag_net_));

@@ -194,7 +194,7 @@ bool ObUnitResource::is_data_disk_size_valid_for_unit() const
 {
   bool b_ret = false;
   if (GCTX.is_shared_storage_mode()) {
-    b_ret = 0 == data_disk_size_ || data_disk_size_ >= UNIT_MIN_DATA_DISK_SIZE;
+    b_ret = data_disk_size_ >= UNIT_MIN_DATA_DISK_SIZE;
   } else {
     b_ret = DEFAULT_DATA_DISK_SIZE == data_disk_size_;
   }
@@ -205,9 +205,7 @@ bool ObUnitResource::is_data_disk_size_valid_for_meta_tenant() const
 {
   bool b_ret = false;
   if (GCTX.is_shared_storage_mode()) {
-    b_ret = 0 == data_disk_size_ ||
-            (data_disk_size_ >= META_TENANT_MIN_DATA_DISK_SIZE
-            && data_disk_size_ <= META_TENANT_MAX_DATA_DISK_SIZE);
+    b_ret = data_disk_size_ >= META_TENANT_MIN_DATA_DISK_SIZE;
   } else {
     b_ret = DEFAULT_DATA_DISK_SIZE == data_disk_size_;
   }
@@ -339,27 +337,23 @@ int ObUnitResource::init_update_and_check_data_disk_(const ObUnitResource &user_
 {
   int ret = OB_SUCCESS;
   if (0 == user_spec.data_disk_size()) {
-    if (! GCTX.is_shared_storage_mode()) {
+    if (!GCTX.is_shared_storage_mode()) {
       // for upgrade compatability in shared-nothing mode
       data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
     } else {
-      uint64_t sys_data_version = 0;
-      // user specifying data_disk_size = 0 is supported in 4.3.5.2 and above
-      if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
-        LOG_WARN("failed to get sys tenant min data version", KR(ret));
-      } else if (sys_data_version < DATA_VERSION_4_3_5_2) {
-        ret = common::OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "SYS tenant data version is below 4.3.5.2, DATA_DISK_SIZE being 0");
-      } else {
-        data_disk_size_ = user_spec.data_disk_size();
-      }
+      // user specifying data_disk_size = 0 is supported in 4.3.5.2 and above, after 4.5.1, user can not specify data_disk_size = 0.
+      // in older versions, no users are using a data disk size of 0, so compatibility issues do not need to be considered.
+      // here will directly return that it is not supported.
+      ret = common::OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "DATA_DISK_SIZE being 0");
     }
   } else if (user_spec.data_disk_size() > 0) {
     // user specify data_disk_size
     if (OB_FAIL(check_data_disk_size_supported())) {
       LOG_WARN("failed to check data_disk_size supported", KR(ret), K(user_spec));
     } else {
-      const int64_t unit_min_data_disk_size = UNIT_MIN_DATA_DISK_SIZE;
+      const int64_t cpu_based_size = static_cast<int64_t>(min_cpu_) * (CPU_TO_DATA_DISK_FACTOR * 1LL * GB);
+      const int64_t unit_min_data_disk_size = max(cpu_based_size, UNIT_MIN_DATA_DISK_SIZE);
       if (user_spec.data_disk_size() < unit_min_data_disk_size) {
         ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
         LOG_WARN("data_disk_size is below limit", KR(ret), K(user_spec),
@@ -377,7 +371,7 @@ int ObUnitResource::init_update_and_check_data_disk_(const ObUnitResource &user_
     } else {
       // use the default value
       if (GCTX.is_shared_storage_mode()) {
-        data_disk_size_ = get_default_data_disk_size(memory_size_);
+        data_disk_size_ = get_default_data_disk_size(memory_size_, min_cpu_);
       } else {
         data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
       }
@@ -1161,17 +1155,14 @@ int ObUnitResource::gen_sys_tenant_default_unit_resource(const bool is_hidden_sy
   int64_t hidden_sys_data_disk_size = 0;
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode()) {
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.gen_hidden_sys_data_disk_size(hidden_sys_data_disk_size))) {
-      LOG_WARN("fail to generate hidden sys data_disk_size", KR(ret), K(hidden_sys_data_disk_size));
-    }
+    hidden_sys_data_disk_size = OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
   }
 #endif
   if (OB_FAIL(ret)) {
   } else {
     data_disk_size_ = !GCTX.is_shared_storage_mode() ? DEFAULT_DATA_DISK_SIZE :
                         (is_hidden_sys ? hidden_sys_data_disk_size :
-                        max(get_default_data_disk_size(memory_size_), UNIT_MIN_DATA_DISK_SIZE));
+                        max(get_default_data_disk_size(memory_size_, min_cpu_), UNIT_MIN_DATA_DISK_SIZE));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(! is_valid_for_unit())) {

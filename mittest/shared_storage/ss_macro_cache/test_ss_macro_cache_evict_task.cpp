@@ -60,6 +60,15 @@ void TestSSMacroCacheEvictTask::SetUpTestCase()
   ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
   ASSERT_NE(nullptr, file_manager);
   file_manager->preread_cache_mgr_.preread_task_.is_inited_ = false;
+  ObTenantDiskSpaceManager *tenant_disk_space_manager = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tenant_disk_space_manager);
+  OB_SERVER_DISK_SPACE_MGR.hidden_sys_data_disk_config_size_ = 1024;
+  bool succ_resize = false;
+  int64_t config_data_disk_size = 0;
+  int64_t actual_data_disk_size = 0;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_manager->get_tenant_unit_data_disk_size(
+      MTL_ID(), config_data_disk_size, actual_data_disk_size));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_manager->resize_total_disk_size_(config_data_disk_size, succ_resize));
 }
 
 void TestSSMacroCacheEvictTask::TearDownTestCase()
@@ -84,6 +93,7 @@ void TestSSMacroCacheEvictTask::SetUp()
   write_info_.size_ = WRITE_IO_SIZE;
   write_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info_.mtl_tenant_id_ = MTL_ID();
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
 
   // construct read info
   read_buf_[0] = '\0';
@@ -156,7 +166,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_read_cache)
   // 4. simulate local cache disk space insufficient, so as to trigger macro cache evict
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
-  const int64_t macro_cache_free_size = disk_space_mgr->get_macro_cache_free_size();
+  const int64_t macro_cache_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
   ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
 
   // 5. sleep 10s to wait macro cache evict
@@ -210,7 +220,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_tmp_file_write_cache)
   // check local cache tmp file free size is enough, so as to ensure write local cache, instead of object storage
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
-  int64_t macro_cache_free_size = disk_space_mgr->get_macro_cache_free_size();
+  int64_t macro_cache_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
   ASSERT_LT(8192, macro_cache_free_size);
 
   MacroBlockId macro_id;
@@ -240,7 +250,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_tmp_file_write_cache)
   fd_handle.reset();
 
   // 3. simulate local cache disk space insufficient, so as to trigger macro cache evict
-  macro_cache_free_size = disk_space_mgr->get_macro_cache_free_size();
+  macro_cache_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
   ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE));
 
   // 4. sleep 10s to wait macro cache evict
@@ -294,6 +304,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_other_write_cache)
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
 
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
 
@@ -310,7 +321,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_other_write_cache)
   // 3. simulate local cache disk space insufficient, so as to trigger macro cache evict
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
-  const int64_t macro_cache_free_size = disk_space_mgr->get_macro_cache_free_size();
+  const int64_t macro_cache_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
   ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
 
   // 4. sleep 10s to wait macro cache evict
@@ -387,7 +398,7 @@ TEST_F(TestSSMacroCacheEvictTask, fg_trigger_evict)
   // 4. simulate local cache disk space insufficient when alloc_file_size, and trigger macro cache evict
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
-  const int64_t macro_cache_free_size = disk_space_mgr->get_macro_cache_free_size();
+  const int64_t macro_cache_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
   ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
   ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, macro_cache_mgr->alloc_file_size(ObSSMacroCacheType::MACRO_BLOCK,
                                                                          4096, ObDiskSpaceType::FILE));

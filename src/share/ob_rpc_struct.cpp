@@ -11822,6 +11822,62 @@ void ObDetectSSlogLSArg::reset()
   addr_.reset();
 }
 
+OB_SERIALIZE_MEMBER(ObGetUnitInfoArg, tenant_id_);
+
+int ObGetUnitInfoArg::assign(const ObGetUnitInfoArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+int ObGetUnitInfoArg::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObGetUnitInfoResult, addr_, data_disk_size_limit_);
+
+int ObGetUnitInfoResult::assign(const ObGetUnitInfoResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    addr_ = other.addr_;
+    data_disk_size_limit_ = other.data_disk_size_limit_;
+  }
+  return ret;
+}
+
+int ObGetUnitInfoResult::init(const ObAddr &addr, const int64_t data_disk_size_limit)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!addr.is_valid() || data_disk_size_limit <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(addr), K(data_disk_size_limit));
+  } else {
+    addr_ = addr;
+    data_disk_size_limit_ = data_disk_size_limit;
+  }
+  return ret;
+}
+
+void ObGetUnitInfoResult::reset()
+{
+  addr_.reset();
+  data_disk_size_limit_ = 0;
+}
+
 OB_SERIALIZE_MEMBER(ObCheckServerAliveArg, addr_);
 
 int ObCheckServerAliveArg::assign(const ObCheckServerAliveArg &other)
@@ -12304,6 +12360,8 @@ OB_SERIALIZE_MEMBER(ObGetSSMicroCacheAllInfoArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroCacheAllInfoResult, micro_cache_stat_, super_blk_, arc_info_);
 OB_SERIALIZE_MEMBER(ObClearSSMicroCacheArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObFlushSSLocalCacheArg, tenant_id_, flush_type_, rpc_abs_timeout_us_);
+OB_SERIALIZE_MEMBER(ObPrewarmSSLocalCacheArg, tenant_id_, req_start_us_, data_table_tablets_, index_table_tablets_);
+OB_SERIALIZE_MEMBER(ObPrewarmSSLocalCacheResult, ret_);
 OB_SERIALIZE_MEMBER(ObDelSSLocalTmpFileArg, tenant_id_, macro_id_);
 OB_SERIALIZE_MEMBER(ObDelSSLocalMajorArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObCalibrateSSDiskSpaceArg, tenant_id_);

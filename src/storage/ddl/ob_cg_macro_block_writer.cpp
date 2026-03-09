@@ -72,7 +72,7 @@ int ObCgMacroBlockWriter::init(
     share::SCN mock_start_scn;
     ObMacroSeqParam macro_seq_param;
     ObPreWarmerParam pre_warm_param;
-    ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+    ObISSTableObjectCleaner *object_cleaner = nullptr;
     ObDDLIncRedoLogWriterCallback *inc_redo_callback = nullptr;
 
     IGNORE_RETURN mock_start_scn.convert_for_tx(SS_DDL_START_SCN_VAL);
@@ -164,7 +164,7 @@ int ObCgMacroBlockWriter::init(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(
+    } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(
                  data_desc_.get_desc(), object_cleaner))) {
       LOG_WARN("fail to get cleaner from data store desc", KR(ret));
     } else if (OB_ISNULL(object_cleaner)) {
@@ -210,7 +210,7 @@ int ObCgMacroBlockWriter::init(
     const ObStorageColumnGroupSchema &cg_schema = tablet_param.storage_schema_->get_column_groups().at(cg_idx);
     ObMacroSeqParam macro_seq_param;
     ObPreWarmerParam pre_warm_param;
-    ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+    ObISSTableObjectCleaner *object_cleaner = nullptr;
     ObDDLRedoLogWriterCallback *ddl_redo_callback = nullptr;
     compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
                                        compaction::ObExecMode::EXEC_MODE_OUTPUT :
@@ -298,7 +298,7 @@ int ObCgMacroBlockWriter::init(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(data_desc_.get_desc(), object_cleaner))) {
+    } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(data_desc_.get_desc(), object_cleaner))) {
       LOG_WARN("fail to get cleaner from data store desc", K(ret), K(data_desc_.get_desc()));
 #ifdef OB_BUILD_SHARED_STORAGE
     } else if (GCTX.is_shared_storage_mode()) {

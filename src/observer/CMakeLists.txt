@@ -656,6 +656,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_tenant_mview_running_job.cpp
   virtual_table/ob_all_virtual_compatibility_control.cpp
   virtual_table/ob_all_virtual_ss_local_cache_info.cpp
+  virtual_table/ob_all_virtual_ss_local_cache_diagnose_info.cpp
   virtual_table/ob_all_virtual_vector_index_info.cpp
   virtual_table/ob_all_virtual_session_ps_info.cpp
   virtual_table/ob_all_virtual_sql_stat.cpp
@@ -673,6 +674,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_dynamic_partition_table.cpp
   virtual_table/ob_all_virtual_storage_cache_task.cpp
   virtual_table/ob_all_virtual_tablet_local_cache.cpp
+  virtual_table/ob_all_virtual_ss_macro_cache_info.cpp
   virtual_table/ob_tenant_show_catalog_databases.cpp
   virtual_table/ob_all_virtual_ss_ls_tablet_reorg_info.cpp
   virtual_table/ob_all_virtual_logservice_cluster_info.cpp

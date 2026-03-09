@@ -457,6 +457,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlushSSLocalCache);
         break;
       }
+      case T_PREWARM_SS_LOCAL_CACHE: {
+        REGISTER_STMT_RESOLVER(PrewarmSSLocalCache);
+        break;
+      }
       case T_TRIGGER_STORAGE_CACHE: {
         REGISTER_STMT_RESOLVER(TriggerStorageCache);
         break;

@@ -34,7 +34,7 @@ int ObWriteHelper::init(
   int64_t macro_start_seq = 0;
   ObMacroSeqParam macro_seq_param;
   macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
-  ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+  ObISSTableObjectCleaner *object_cleaner = nullptr;
   if (OB_FAIL(ObDataDescHelper::build(merge_param, merge_info, data_store_desc_))) {
     STORAGE_LOG(WARN, "fail to build data desc", K(ret), K(cg_schema));
   } else if (OB_FAIL(ObSSTableMergeHistory::init_sstable_merge_block_info_array(
@@ -43,7 +43,7 @@ int ObWriteHelper::init(
   } else if (OB_FAIL(ctx.generate_macro_seq_info(parallel_idx, macro_start_seq))) {
     LOG_WARN("failed to generate macro seq info for cur merge task", K(ret), K(parallel_idx), K(ctx));
   } else if (FALSE_IT(macro_seq_param.start_ = macro_start_seq)) {
-  } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(
+  } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(
                                                         data_store_desc_, object_cleaner))) {
     LOG_WARN("failed to get cleaner from data store desc", K(ret), K(data_store_desc_), KP(object_cleaner));
   } else if (OB_FAIL(macro_writer_.open(

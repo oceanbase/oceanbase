@@ -126,7 +126,7 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
         }
 
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(data_desc_.get_desc(), object_cleaner_))) {
+          if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(data_desc_.get_desc(), object_cleaner_))) {
             LOG_WARN("fail to get cleaner from data store desc", K(ret), K(data_desc_.get_desc()));
           } else if (OB_ISNULL(object_cleaner_)) {
             ret = OB_ERR_UNEXPECTED;

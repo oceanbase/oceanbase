@@ -75,27 +75,23 @@ struct ObTabletMiniMergeCtx : public ObTabletMergeCtx
 {
   ObTabletMiniMergeCtx(ObTabletMergeDagParam &param, common::ObArenaAllocator &allocator)
     : ObTabletMergeCtx(param, allocator)
-#ifdef OB_BUILD_SHARED_STORAGE
-    , upload_register_handle_()
-#endif
   {}
   virtual ~ObTabletMiniMergeCtx() {}
 protected:
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
   virtual int prepare_schema() override; // update with memtables
+  virtual int update_tablet(ObTabletHandle &new_tablet_handle) override;
+  virtual void after_update_tablet(ObTabletHandle &new_tablet_handle)
+  {
+    UNUSED(new_tablet_handle);
+  }
 private:
   virtual int update_tablet_directly(ObGetMergeTablesResult &get_merge_table_result) override;
   int pre_process_tx_data_table_merge();
-  virtual int update_tablet(
-    ObTabletHandle &new_tablet_handle) override;
+
   void try_schedule_compaction_after_mini(storage::ObTabletHandle &tablet_handle);
   void record_uncommitted_sstable_cnt();
   int try_report_tablet_stat_after_mini();
-private:
-#ifdef OB_BUILD_SHARED_STORAGE
-  void register_upload_task_(ObTabletHandle &new_tablet_handle);
-  ObSSTableUploadRegHandle upload_register_handle_;
-#endif
 };
 
 class ObTxDataMinorFilter;

@@ -132,8 +132,6 @@ int ObServerReloadConfig::operator()()
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
       OB_SERVER_DISK_SPACE_MGR.reload_hidden_sys_data_disk_config(GCONF);
-      OB_SERVER_DISK_SPACE_MGR.reload_ss_cache_max_percentage_config(GCONF);
-      OB_SERVER_DISK_SPACE_MGR.reload_ss_cache_maxsize_percpu_config(GCONF);
     }
 #endif
     // The actual semantics of _enable_malloc_v2 is to enable malloc_v3.

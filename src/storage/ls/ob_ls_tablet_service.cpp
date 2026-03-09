@@ -2150,6 +2150,7 @@ int ObLSTabletService::create_with_ss_tablet(
     } else {
       LOG_INFO("create ss tablet succeed", K(ret), K(key), K(disk_addr), K(meta_version),
         K(private_transfer_epoch), "ss_tablet_meta", ss_tablet.get_tablet_meta());
+        report_tablet_to_rs(tablet_id);
     }
   }
 

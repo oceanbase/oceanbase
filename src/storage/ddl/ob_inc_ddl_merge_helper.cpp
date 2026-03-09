@@ -326,6 +326,7 @@ int ObIncMinDDLMergeHelper::assemble_sstable(ObDDLTabletMergeDagParamV2 &dag_mer
             ASYNC_UPLOAD_INC_SSTABLE(SSIncSSTableType::MINI_SSTABLE,
                                      upload_register_handle,
                                      sstable->get_key(),
+                                     sstable->get_rec_scn(),
                                      snapshot_version);
           }
         }
@@ -2182,7 +2183,8 @@ int ObSSIncMajorDDLMergeHelper::update_tablet_table_store_for_dump_sstable(
         ASYNC_UPLOAD_INC_SSTABLE(SSIncSSTableType::INC_MAJOR_DDL_SSTABLE,
                                 upload_register_handle,
                                 dag_merge_param.table_key_,
-                                SCN::min_scn(),
+                                SCN::min_scn(), /*rec_scn, faked not used actually*/
+                                SCN::min_scn(), /*snapshot_version, faked not used actually*/
                                 dag_merge_param.trans_id_,
                                 dag_merge_param.seq_no_);
         LOG_INFO("[SS INC MAJOR]async upload inc major ddl dump sstable",

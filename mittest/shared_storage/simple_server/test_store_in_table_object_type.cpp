@@ -105,7 +105,7 @@ public:
   {
     ObSimpleClusterTestBase::SetUp();
     if (!tenant_created_) {
-      OK(create_tenant("tt1", "5G", "10G", false/*oracle_mode*/, 8, "2G"));
+      OK(create_tenant("tt1", "5G", "10G", false/*oracle_mode*/, 4));
       OK(get_tenant_id(tenant_id_));
       ASSERT_NE(0, tenant_id_);
       tenant_created_ = true;

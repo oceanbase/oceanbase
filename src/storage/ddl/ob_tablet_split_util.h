@@ -288,14 +288,24 @@ public:
       const int64_t minor_index/*the index in generated minors, from 0*/,
       const int64_t parallel_cnt/*the parallel cnt in one sstable*/,
       const int64_t parallel_idx/*the parallel idx in one sstable*/,
+      const uint64_t data_version,
       int64_t &macro_start_seq) const;
+
+  int generate_mds_minor_macro_seq_info(
+        const int64_t dest_tablet_index,
+        const int64_t minor_index,
+        const int64_t parallel_cnt,
+        const int64_t parallel_idx,
+        int64_t &macro_start_seq) const;
 
   int start_add_minor_op(
       const ObLSID &ls_id,
       const share::SCN &split_scn,
+      const share::SCN &dest_reorg_scn,
       const int64_t parallel_cnt_of_each_sstable,
       const ObTableStoreIterator &src_table_store_iterator,
-      const ObIArray<ObTabletID> &dest_tablets_id);
+      const ObIArray<ObTabletID> &dest_tablets_id,
+      const uint64_t data_version);
   int start_add_mds_op(
       const ObLSID &ls_id,
       const share::SCN &split_scn,
@@ -348,14 +358,18 @@ private:
   int prepare_minor_gc_info_list(
       const int64_t parallel_cnt_of_each_sstable,
       const int64_t sstables_cnt_of_each_tablet,
+      const bool is_for_minor,
+      const uint64_t data_version,
       ObSSTableGCInfo &minor_gc_info);
   int start_add_op(
       const ObLSID &ls_id,
       const share::SCN &split_scn,
+      const share::SCN &dest_reorg_scn,
       const ObAtomicFileType &file_type,
       const int64_t parallel_cnt_of_each_sstable,
       const int64_t sstables_cnt_of_each_tablet,
-      const ObIArray<ObTabletID> &dest_tablets_id);
+      const ObIArray<ObTabletID> &dest_tablets_id,
+      const uint64_t data_version);
 private:
   static const int64_t SPLIT_MINOR_MACRO_DATA_SEQ_BITS = 40;
   common::ObArenaAllocator allocator_;

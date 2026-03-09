@@ -51,6 +51,9 @@ void TestSSMicroCacheUtil::TearDownTestCase()
 
 void TestSSMicroCacheUtil::SetUp()
 {
+  ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_space_mgr);
+  tnt_disk_space_mgr->persist_disk_space_task_.enable_adjust_size_ = false;
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ASSERT_NE(nullptr, micro_cache);
   micro_cache->stop();

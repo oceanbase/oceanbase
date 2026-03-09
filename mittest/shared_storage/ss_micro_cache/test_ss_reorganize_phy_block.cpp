@@ -23,6 +23,7 @@
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_task_runner.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_meta_manager.h"
 #include "storage/shared_storage/micro_cache/ob_ss_physical_block_manager.h"
+#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_util.h"
 
 namespace oceanbase
 {
@@ -443,6 +444,7 @@ TEST_F(TestSSReorganizePhyBlock, test_estimate_reorgan_blk_cnt)
   ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
   ObSSPhyBlockCountInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
   const int64_t max_reorgan_task_reserve_cnt = blk_cnt_info.reorgan_blk_cnt_;
+  const bool is_mini_mode = ObSSMicroCacheUtil::check_mini_cache(micro_cache_->cache_file_size_);
 
   ASSERT_EQ(0, cache_stat.micro_stat().get_avg_micro_size());
 
@@ -471,7 +473,7 @@ TEST_F(TestSSReorganizePhyBlock, test_estimate_reorgan_blk_cnt)
       SS_REORGAN_MIN_MICRO_SIZE + (max_reorgan_task_reserve_cnt - SS_MIN_REORGAN_BLK_CNT) * SS_REORGAN_BLK_SCALING_FACTOR;
   ASSERT_LT(max_micro_size, cache_stat.micro_stat().get_avg_micro_size());
   phy_blk_mgr.reserve_reorganize_block(available_cnt);
-  ASSERT_EQ(max_reorgan_task_reserve_cnt / 2, available_cnt);
+  ASSERT_EQ(max_reorgan_task_reserve_cnt, available_cnt);
 
   // test reserve blk for reorganize_task from shared_block
   blk_cnt_info.data_blk_.used_cnt_ = blk_cnt_info.data_blk_.hold_cnt_; // mock data_blk used up.
@@ -479,12 +481,12 @@ TEST_F(TestSSReorganizePhyBlock, test_estimate_reorgan_blk_cnt)
   ASSERT_EQ(0, blk_cnt_info.data_blk_.free_blk_cnt());
 
   phy_blk_mgr.reserve_reorganize_block(available_cnt);
-  ASSERT_EQ(max_reorgan_task_reserve_cnt / 2, available_cnt);
+  ASSERT_EQ(max_reorgan_task_reserve_cnt, available_cnt);
 
   const int64_t data_blk_free_cnt = cache_stat.phy_blk_stat().data_blk_cnt_ - cache_stat.phy_blk_stat().data_blk_used_cnt_;
-  ASSERT_EQ(SS_MAX_REORGAN_BLK_CNT / 2, blk_cnt_info.data_blk_.free_blk_cnt());
-  ASSERT_EQ(SS_MAX_REORGAN_BLK_CNT / 2, data_blk_free_cnt);
-  ASSERT_EQ(SS_MAX_REORGAN_BLK_CNT, max_reorgan_task_reserve_cnt);
+  const int64_t reorgan_blk_cnt = is_mini_mode ? SS_MIN_RESERVE_REORGAN_BLK_CNT : SS_MAX_RESERVE_REORGAN_BLK_CNT;
+  ASSERT_EQ(reorgan_blk_cnt, blk_cnt_info.data_blk_.free_blk_cnt());
+  ASSERT_EQ(reorgan_blk_cnt, data_blk_free_cnt);
   const int64_t shared_blk_used_cnt = blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_;
   ASSERT_EQ(shared_blk_used_cnt, blk_cnt_info.shared_blk_used_cnt_);
   ASSERT_EQ(shared_blk_used_cnt, cache_stat.phy_blk_stat().shared_blk_used_cnt_);

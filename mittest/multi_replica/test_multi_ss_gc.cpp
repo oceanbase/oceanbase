@@ -189,7 +189,8 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(1), create_test_env)
                                                              ObLSID(1),
                                                              ObTabletID(i),
                                                              share::SCN::min_scn(),
-                                                             row_scn)));
+                                                             row_scn,
+                                                             0)));
   }
 
   ObSSPreciseGCInfos infos2;
@@ -200,7 +201,8 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(1), create_test_env)
                                                              ObLSID(1),
                                                              ObTabletID(index - i - 2),
                                                              share::SCN::min_scn(),
-                                                             row_scn)));
+                                                             row_scn,
+                                                             0)));
   }
 
   ObSSPreciseGCInfos infos;

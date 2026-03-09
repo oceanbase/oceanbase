@@ -241,6 +241,21 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminZoneExecutor);
 };
 
+class ObPrewarmSSLocalCacheExecutor
+{
+public:
+  ObPrewarmSSLocalCacheExecutor() {}
+  virtual ~ObPrewarmSSLocalCacheExecutor() {}
+  int execute(ObExecContext &ctx, ObPrewarmSSLocalCacheStmt &stmt);
+private:
+  int get_tenant_server_list(const uint64_t tenant_id, common::ObIArray<common::ObAddr> &server_list);
+  #ifdef OB_BUILD_SHARED_STORAGE
+  int send_prewarm_cache_rpc(const uint64_t tenant_id, const obrpc::ObPrewarmSSLocalCacheArg &arg);
+  #endif
+
+  DISALLOW_COPY_AND_ASSIGN(ObPrewarmSSLocalCacheExecutor);
+};
+
 DEF_SIMPLE_EXECUTOR(ObModuleData);
 
 class ObSetConfigExecutor

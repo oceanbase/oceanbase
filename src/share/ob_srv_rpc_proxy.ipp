@@ -119,6 +119,7 @@
   RPC_S(PR5 check_tablet_exist, OB_CHECK_TABLET_EXIST, (ObCheckTabletExistArg), Bool);
   RPC_S(PR5 force_set_all_as_single_replica, OB_FORCE_SET_ALL_AS_SINGLE_REPLICA, (ObForceSetAllAsSingleReplicaArg));
   RPC_S(PR5 force_set_server_list, OB_FORCE_SET_SERVER_LIST, (ObForceSetServerListArg), obrpc::ObForceSetServerListResult);
+  RPC_AP(PR5 get_unit_info, OB_GET_UNIT_INFO, (obrpc::ObGetUnitInfoArg), obrpc::ObGetUnitInfoResult);
   RPC_S(PR5 calc_column_checksum_request, OB_CALC_COLUMN_CHECKSUM_REQUEST, (ObCalcColumnChecksumRequestArg), obrpc::ObCalcColumnChecksumRequestRes);
   RPC_AP(PR5 build_ddl_single_replica_request, OB_DDL_BUILD_SINGLE_REPLICA_REQUEST, (obrpc::ObDDLBuildSingleReplicaRequestArg), obrpc::ObDDLBuildSingleReplicaRequestResult);
   RPC_S(PR5 build_split_tablet_data_start_request, OB_SPLIT_TABLET_DATA_START_REQUEST, (obrpc::ObTabletSplitStartArg), obrpc::ObTabletSplitStartResult);
@@ -228,6 +229,7 @@
   RPC_S(PR5 push_ss_gc_last_succ_scn, OB_PUSH_SS_GC_LAST_SUCC_SCN, (obrpc::ObSSGCPushLastSuccScnArg));
   RPC_S(PR5 del_ss_macro_cache, OB_DEL_SS_MACRO_CACHE, (obrpc::ObGetSSMacroBlockArg), obrpc::ObDelSSMacroCacheRes);
   RPC_S(PR5 del_ss_tablet_macro_cache, OB_DEL_SS_TABLET_MACRO_CACHE, (obrpc::ObDelSSTabletMacroCacheArg), obrpc::ObDelSSTabletMacroCacheRes);
+  RPC_AP(PR5 prewarm_ss_local_cache, OB_PREWARM_SS_LOCAL_CACHE, (obrpc::ObPrewarmSSLocalCacheArg), obrpc::ObPrewarmSSLocalCacheResult);
   RPC_S(PR5 get_ss_gc_detect_infos, OB_GET_SS_GC_DETECT_INFOS, (obrpc::ObSSGCDetectInfoArg), obrpc::ObSSGCDetectInfoRes);
   RPC_S(PR5 get_ss_gc_start_scn_items, OB_GET_SS_GC_START_SCN_ITEMS, (obrpc::ObSSGCStartSCNArg), obrpc::ObSSGCStartSCNRes);
   #endif

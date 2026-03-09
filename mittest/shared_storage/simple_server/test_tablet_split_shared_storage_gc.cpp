@@ -445,7 +445,9 @@ TEST_F(ObSharedStorageTest, test_tablet_gc_for_shared_dir)
   EXE_SQL("alter system set inc_sstable_upload_thread_score = 20;");
   EXE_SQL("alter system set _ss_garbage_collect_interval = '10s';");
   EXE_SQL("alter system set _ss_garbage_collect_file_expiration_time = '10s';");
-  EXE_SQL("alter system set _ss_enable_timeout_garbage_collection = true;");
+  //EXE_SQL("alter system set _ss_enable_timeout_garbage_collection = true;");
+  EXE_SQL("alter system set _ss_tablet_version_retention_time = '10s';");
+  EXE_SQL("alter system set _ss_advance_checkpoint_interval = '1m';");
 
   EXE_SQL("alter table test_table reorganize partition p1 into ( partition p2 values less than (5000), partition p3 values less than MAXVALUE);");
   LOG_INFO("2. tablet split finished", K(RunCtx.ls_id_), K(RunCtx.split_src_tablet_id_));

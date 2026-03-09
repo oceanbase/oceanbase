@@ -214,7 +214,7 @@ TEST_F(TestCalibrateDisk, calibrate_and_write_file)
   ObTenantDiskSpaceManager* tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager*);
   int64_t total_disk_size = 20L * 1024L * 1024L * 1024L; // 20GB
   bool succ_resize = false;
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(total_disk_size, succ_resize));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size_(total_disk_size, succ_resize));
   ASSERT_EQ(total_disk_size, tenant_disk_space_mgr->get_total_disk_size());
 
   // prepare file
@@ -239,7 +239,7 @@ TEST_F(TestCalibrateDisk, calibrate_and_delete_file)
   ObTenantDiskSpaceManager* tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager*);
   int64_t total_disk_size = 20L * 1024L * 1024L * 1024L; // 20GB
   bool succ_resize = false;
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(total_disk_size, succ_resize));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size_(total_disk_size, succ_resize));
   ASSERT_EQ(total_disk_size, tenant_disk_space_mgr->get_total_disk_size());
 
   // need calibrate disk space before calibrate_and_delete_file test,
@@ -276,7 +276,7 @@ TEST_F(TestCalibrateDisk, calibrate_and_delete_dir)
   ObTenantDiskSpaceManager* tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager*);
   int64_t total_disk_size = 20L * 1024L * 1024L * 1024L; // 20GB
   bool succ_resize = false;
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(total_disk_size, succ_resize));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size_(total_disk_size, succ_resize));
   ASSERT_EQ(total_disk_size, tenant_disk_space_mgr->get_total_disk_size());
 
   // prepare file

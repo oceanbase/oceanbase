@@ -8626,13 +8626,117 @@ int ObUnitManager::check_shrink_resource_(const share::ObResourcePool &pool,
         new_resource.data_disk_size() < resource.data_disk_size()) {
       if (!pool.is_granted_to_tenant()) {
         // do nothing
-      } else {
-        // data disk do not allow to shrink for now
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("shrinking data_disk_size not supported", KR(ret), K(resource), K(new_resource));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "shrinking data_disk_size");
+      } else if (OB_FAIL(check_shrink_data_disk_(pool, resource.data_disk_size(), new_resource.data_disk_size()))) {
+        LOG_WARN("check_shrink_data_disk failed", KR(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObUnitManager::check_shrink_data_disk_(
+    const share::ObResourcePool &pool,
+    const int64_t old_data_disk,
+    const int64_t new_data_disk) const
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObGetUnitInfoArg arg;
+  ObArray<ObUnit *> *units = NULL;
+  ObArray<common::ObAddr> unit_servers;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("check_inner_stat failed", K_(inited), K_(loaded), K(ret));
+  } else if (OB_UNLIKELY(!pool.is_granted_to_tenant()
+                      || old_data_disk <= 0
+                      || new_data_disk <= 0
+                      || new_data_disk >= old_data_disk)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid pool or invalid old_data_disk or invalid new_data_disk", KR(ret), K(pool), K(old_data_disk), K(new_data_disk));
+  } else if (OB_ISNULL(srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("srv_rpc_proxy_ is null", KR(ret), KP(srv_rpc_proxy_));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("shrinking data_disk_size not supported", KR(ret), K(pool), K(old_data_disk), K(new_data_disk));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.5.1.0, shrinking data_disk_size");
+  } else if (OB_FAIL(get_units_by_pool(pool.resource_pool_id_, units))) {
+    LOG_WARN("fail to get units by pool", KR(ret), K(pool.resource_pool_id_));
+  } else if (OB_UNLIKELY(NULL == units)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("units ptr is null", KR(ret), KP(units));
+  } else if (OB_FAIL(arg.init(pool.tenant_id_))) {
+    LOG_WARN("fail to init arg", KR(ret), K(pool.tenant_id_));
+  } else {
+    rootserver::ObGetUnitInfoProxy get_unit_info_proxy(*srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::get_unit_info);
+    for (int64_t i = 0; OB_SUCC(ret) && i < units->count(); ++i) {
+      ObUnit *unit = units->at(i);
+      if (OB_UNLIKELY(NULL == unit)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unit ptr is null", KR(ret), KP(unit));
+      } else if (OB_FAIL(unit_servers.push_back(unit->server_))) {
+        LOG_WARN("fail to push back", KR(ret), K(unit->server_));
+      } else if (!unit->migrate_from_server_.is_valid()) {
+        // this unit is not in migrating
+      } else if (OB_FAIL(unit_servers.push_back(unit->migrate_from_server_))) {
+        LOG_WARN("fail to push back", KR(ret), K(unit->migrate_from_server_));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < unit_servers.count(); ++i) {
+      const ObAddr &server = unit_servers.at(i);
+      if (OB_FAIL(get_unit_info_proxy.call(server, GCONF.rpc_timeout,
+                                           GCONF.cluster_id, pool.tenant_id_, arg))) {
+        LOG_WARN("failed to get unit info", KR(ret), K(server), K(arg), K(pool.tenant_id_));
+      }
+    } // end for
+    int tmp_ret = OB_SUCCESS;
+    ObArray<int> return_code_array;
+    if (OB_TMP_FAIL(get_unit_info_proxy.wait_all(return_code_array))) {
+      LOG_WARN("failed to wait all async rpc", KR(tmp_ret), KR(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_data_disk_size_limit_(new_data_disk, return_code_array, unit_servers, get_unit_info_proxy))) {
+      LOG_WARN("failed to check data disk size limit", KR(ret), K(new_data_disk), K(return_code_array));
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::check_data_disk_size_limit_(
+    const int64_t new_data_disk,
+    const ObArray<int> &return_code_array,
+    const ObArray<common::ObAddr> &unit_servers,
+    const rootserver::ObGetUnitInfoProxy &get_unit_info_proxy) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("check_inner_stat failed", K_(inited), K_(loaded), K(ret));
+  } else if (unit_servers.count() != return_code_array.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cnt not match", KR(ret), K(unit_servers.count()), K(return_code_array.count()));
+  } else if (OB_FAIL(get_unit_info_proxy.check_return_cnt(return_code_array.count()))) {
+    LOG_WARN("check return cnt failed", KR(ret), "return_cnt", return_code_array.count());
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); ++i) {
+      if (OB_FAIL(return_code_array.at(i))) {
+        LOG_WARN("rpc is failed", KR(ret), K(unit_servers.at(i)), K(get_unit_info_proxy.get_dests().at(i)));
+      } else {
+        const obrpc::ObGetUnitInfoResult *result = get_unit_info_proxy.get_results().at(i);
+        if (OB_ISNULL(result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null", KR(ret), KP(result));
+        } else if (new_data_disk < result->get_data_disk_size_limit()) {
+          // cpu limit and memory limit has checked in update_and_check_valid_for_unit
+          ret = OB_NOT_SUPPORTED;
+          char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
+          snprintf(err_msg, sizeof(err_msg), "target data_disk_size is below the lower limit of data_disk_size %lu", result->get_data_disk_size_limit());
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+          LOG_WARN("target data_disk_size is below the lower limit of data_disk_size",
+            KR(ret), K(i), K(new_data_disk), K(result->get_addr()), K(result->get_data_disk_size_limit()));
+        } else {
+          FLOG_INFO("check data disk size limit", KR(ret), K(new_data_disk), K(unit_servers.at(i)),
+            K(result->get_data_disk_size_limit()), K(result->get_addr()));
+        }
+      }
+    } // end for
   }
   return ret;
 }

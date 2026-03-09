@@ -62,9 +62,7 @@ int ObTriggerStorageCacheResolver::resolve(const ParseNode &parse_tree)
     const uint64_t tenant_id = session_info_->get_login_tenant_id();
     if (OB_SYS_TENANT_ID == tenant_id) {
       if (OB_ISNULL(name)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("To trigger storage cache, the tenant_name must be given", K(ret), K(tenant_id));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "trigger storage cache in sys tenant without specified tenant");
+        stmt->set_tenant_id(tenant_id);
       } else {
         uint64_t specified_tenant_id = OB_INVALID_ID;
         ObSchemaGetterGuard schema_guard;
@@ -84,10 +82,6 @@ int ObTriggerStorageCacheResolver::resolve(const ParseNode &parse_tree)
           } else if (!is_valid_tenant_id(specified_tenant_id)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("invalid tenant id to switch", K(ret), K(specified_tenant_id));
-          } else if (!is_user_tenant(specified_tenant_id)) {
-            ret = OB_OP_NOT_ALLOW;
-            LOG_ERROR("can't trigger non-user tenant for storage cache", K(ret), K(specified_tenant_id), K(tenant_name));
-            LOG_USER_ERROR(OB_OP_NOT_ALLOW, "can't trigger non-user tenant for storage cache");
           } else {
             stmt->set_tenant_id(specified_tenant_id);
           }

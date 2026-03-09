@@ -362,14 +362,19 @@ int ObSSTable::init(
   return ret;
 }
 
-int ObSSTable::copy_from_old_sstable(const ObSSTable &src, common::ObArenaAllocator &allocator, ObSSTable *&dst)
+int ObSSTable::copy_from_old_sstable(
+    const ObSSTable &src,
+    common::ObArenaAllocator &allocator,
+    ObSSTable *&dst,
+    const bool expand_macro_info,
+    IModifySSTableFunc *modify_func)
 {
   int ret = OB_SUCCESS;
   ObSSTable *sstable = nullptr;
   if (OB_UNLIKELY(!src.is_valid() || !src.is_loaded())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(src));
-  } else if (OB_FAIL(src.inner_deep_copy_and_inc_macro_ref(allocator, sstable))) {
+  } else if (OB_FAIL(src.inner_deep_copy_and_inc_macro_ref(allocator, sstable, expand_macro_info))) {
     LOG_WARN("fail to inner copy and inc macro ref", K(ret), K(src));
   } else if (!sstable->is_co_sstable() || sstable->meta_->cg_sstables_.count() == 0) {
     // nothing to do and skip it.
@@ -390,7 +395,7 @@ int ObSSTable::copy_from_old_sstable(const ObSSTable &src, common::ObArenaAlloca
       } else if (OB_FAIL(handle.get_sstable(loaded_table))) {
         LOG_WARN("fail to get sstable", K(ret), K(handle));
       }
-      if (FAILEDx(loaded_table->inner_deep_copy_and_inc_macro_ref(allocator, copied_table))) {
+      if (FAILEDx(loaded_table->inner_deep_copy_and_inc_macro_ref(allocator, copied_table, expand_macro_info))) {
         LOG_WARN("fail to inner copy and inc macro ref", K(ret), KPC(loaded_table));
       } else if (OB_FAIL(cg_sstables.push_back(copied_table))) {
         LOG_WARN("fail to push back", K(ret), KPC(copied_table));
@@ -408,6 +413,11 @@ int ObSSTable::copy_from_old_sstable(const ObSSTable &src, common::ObArenaAlloca
       for (int64_t i = 0; i < cg_sstables.count(); ++i) {// ingore error code
         cg_sstables.at(i)->~ObITable();
       }
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(modify_func) && OB_NOT_NULL(sstable)) {
+    if (OB_FAIL((*modify_func)(*sstable, *sstable->meta_))) {
+      LOG_WARN("failed to modify sstable", K(ret));
     }
   }
   if (OB_FAIL(ret)) {
@@ -2112,9 +2122,24 @@ int ObSSTable::fill_column_ckm_array(ObIArray<int64_t> &column_checksums) const
   return ret;
 }
 
+int ObSSTable::expand_macro_info_(common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (is_loaded()) {
+    if (OB_FAIL(meta_->macro_info_.expand_block_ids(allocator))) {
+      LOG_WARN("fail to expand macro info", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sstable is not loaded", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 int ObSSTable::inner_deep_copy_and_inc_macro_ref(
     common::ObIAllocator &allocator,
-    ObSSTable *&sstable) const
+    ObSSTable *&sstable,
+    const bool expand_macro_info) const
 {
   int ret = OB_SUCCESS;
   bool inc_success = false;
@@ -2130,14 +2155,17 @@ int ObSSTable::inner_deep_copy_and_inc_macro_ref(
   } else {
     table = static_cast<ObSSTable *>(meta_obj);
     table->addr_.set_mem_addr(0, deep_copy_size);
-    if (OB_FAIL(table->inc_macro_ref(inc_success))) {
-      LOG_WARN("fail to add macro ref", K(ret), K(inc_success));
-    } else if (!inc_success) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, increase macro ref failed", K(ret), K(inc_success));
-    } else {
-      table->is_tmp_sstable_ = true;
-    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (expand_macro_info && OB_FAIL(table->expand_macro_info_(allocator))) {
+    LOG_WARN("fail to expand macro info", K(ret));
+  } else if (OB_FAIL(table->inc_macro_ref(inc_success))) {
+    LOG_WARN("fail to add macro ref", K(ret), K(inc_success));
+  } else if (!inc_success) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, increase macro ref failed", K(ret), K(inc_success));
+  } else {
+    table->is_tmp_sstable_ = true;
   }
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(table)) {

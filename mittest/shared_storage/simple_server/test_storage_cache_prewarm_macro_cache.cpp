@@ -307,12 +307,12 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_space_occupy)
   // 6. test whether hot tablet can occupy space from MACRO_BLOCK when cache space is full
   // Step 1: write MACRO_BLOCK to fill up cache space first
   int64_t macro_block_write_cnt = 0;
-  int64_t macro_free_size = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t macro_free_size = tnt_disk_space_mgr->get_unit_config_shared_macro_cache_free_size();
   FLOG_INFO("[TEST] start to write macro blocks", K(macro_free_size));
   while (macro_free_size >= WRITE_IO_SIZE) {
     OK(macro_cache_write(macro_block_write_cnt, run_ctx_.tenant_id_, ObSSMacroCacheType::MACRO_BLOCK));
     macro_block_write_cnt++;
-    macro_free_size = tnt_disk_space_mgr->get_macro_cache_free_size();
+    macro_free_size = tnt_disk_space_mgr->get_unit_config_shared_macro_cache_free_size();
   }
   FLOG_INFO("[TEST] finish writing macro blocks", K(macro_block_write_cnt), K(macro_free_size));
 
@@ -346,8 +346,29 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_space_occupy)
 
   // delete the written macro block files
   OK(delete_all_wr_file(macro_block_write_cnt, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK));
-  FLOG_INFO("[TEST] test_macro_cache_space_occupy end", K(tnt_disk_space_mgr->get_macro_cache_free_size()));
+  FLOG_INFO("[TEST] test_macro_cache_space_occupy end", K(tnt_disk_space_mgr->get_unit_config_shared_macro_cache_free_size()));
 }
+
+// TODO @baonian.wcx 修复后打开
+// TEST_F(ObStorageCachePolicyPrewarmerTest, test_hot_inner_table) {
+//   share::ObTenantSwitchGuard tguard;
+//   OK(tguard.switch_to(run_ctx_.tenant_id_));
+//   exe_prepare_sql();
+//   FLOG_INFO("[TEST] start test_hot_inner_table");
+//   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+//   ASSERT_NE(nullptr, micro_cache);
+//   micro_cache->clear_micro_cache();
+//   run_ctx_.ls_id_ = ObLSID(1);
+//   run_ctx_.tablet_id_ = ObTabletID(100001);
+//   ObSSMicroCacheStat &before_cache_stat = micro_cache->cache_stat_;
+//   int64_t total_micro_size_before = before_cache_stat.micro_stat().total_micro_size_;
+//   OK(medium_compact(run_ctx_.tablet_id_.id()));
+//   check_macro_cache_exist();
+//   ObSSMicroCacheStat &after_cache_stat = micro_cache->cache_stat_;
+//   int64_t total_micro_size_after = after_cache_stat.micro_stat().total_micro_size_;
+//   ASSERT_GE(total_micro_size_after, total_micro_size_before);
+//   FLOG_INFO("[TEST] finish test_hot_inner_table", K(total_micro_size_before), K(total_micro_size_after));
+// }
 
 TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
 {
@@ -375,25 +396,25 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
   // set hot tablet status for HOT_TABLET_TABLET_ID
   ObStorageCachePolicyService *policy_service = MTL(ObStorageCachePolicyService *);
   ASSERT_NE(nullptr, policy_service);
-  policy_service->update_tablet_status(HOT_TABLET_TABLET_ID, PolicyStatus::HOT);
+  policy_service->update_tablet_status(HOT_TABLET_TABLET_ID, PolicyStatus::HOT, 200001/*fake_table_id*/);
 
   macro_cache_mgr->evict_task_.is_inited_ = false;
-  OK(exe_sql("create table test_macro_cache_full (a int)"));
+  OK(exe_sql("create table test_macro_cache_full (a varchar(1000))"));
   set_ls_and_tablet_id_for_run_ctx("test_macro_cache_full");
 
   // 7. Test if the space of hot tablet macro cache is full
   // write hot tablet macro blocks to fill up the macro cache space
   int64_t hot_tablet_write_cnt = 0;
-  int64_t macro_free_size = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t macro_free_size = tnt_disk_space_mgr->get_unit_config_shared_macro_cache_free_size();
   FLOG_INFO("[TEST] start to write hot tablet macro blocks", K(macro_free_size));
   while (macro_free_size >= WRITE_IO_SIZE) {
     OK(macro_cache_write(hot_tablet_write_cnt, run_ctx_.tenant_id_, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK));
     hot_tablet_write_cnt++;
-    macro_free_size = tnt_disk_space_mgr->get_macro_cache_free_size();
+    macro_free_size = tnt_disk_space_mgr->get_unit_config_shared_macro_cache_free_size();
   }
   FLOG_INFO("[TEST] finish writing hot tablet macro blocks", K(hot_tablet_write_cnt), K(macro_free_size));
 
-  int64_t after_write_hot_tablet_size = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t after_write_hot_tablet_size = tnt_disk_space_mgr->get_unit_config_shared_macro_cache_free_size();
   ASSERT_LT(after_write_hot_tablet_size, WRITE_IO_SIZE);
   OK(exe_sql("insert into test_macro_cache_full values (7)"));
   OK(exe_sql("insert into test_macro_cache_full values (8)"));
@@ -408,7 +429,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
       ObMemAttr(run_ctx_.tenant_id_, "TestPrewarm2")));
   ASSERT_NE(nullptr, task2);
   new (task2) ObStorageCacheTabletTask();
-  OK(task2->init(
+  OK(task2->init_for_test(
       run_ctx_.tenant_id_,
       run_ctx_.ls_id_.id(),
       run_ctx_.tablet_id_.id(),
@@ -446,7 +467,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
 
   // delete the written hot tablet macro block files
   OK(delete_all_wr_file(hot_tablet_write_cnt, tenant_file_mgr, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK));
-  FLOG_INFO("[TEST] test_prewarm_macro_block end", K(tnt_disk_space_mgr->get_macro_cache_free_size()));
+  FLOG_INFO("[TEST] test_prewarm_macro_block end", K(tnt_disk_space_mgr->get_unit_config_shared_macro_cache_free_size()));
 }
 
 TEST_F(ObStorageCachePolicyPrewarmerTest, test_micro_cache_full)
@@ -457,7 +478,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_micro_cache_full)
   OK(tguard.switch_to(run_ctx_.tenant_id_));
   exe_prepare_sql();
 
-  OK(exe_sql("create table test_micro_cache (a int)"));
+  OK(exe_sql("create table test_micro_cache (a bigint)"));
   set_ls_and_tablet_id_for_run_ctx("test_micro_cache");
   OK(exe_sql("insert into test_micro_cache values (1)"));
   OK(exe_sql("insert into test_micro_cache values (2)"));
@@ -469,9 +490,9 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_micro_cache_full)
   ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager*);
   ASSERT_NE(tnt_disk_space_mgr, nullptr);
 
-  ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager *);
-  ASSERT_NE(nullptr, tnt_file_mgr);
-  tnt_file_mgr->persist_disk_space_task_.enable_adjust_size_ = false;
+  ObTenantDiskSpaceManager *tnt_disk_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_mgr);
+  tnt_disk_mgr->persist_disk_space_task_.enable_adjust_size_ = false;
   ob_usleep(5 * 1000 * 1000);
 
   const int64_t block_size = micro_cache->phy_blk_size_;
@@ -536,7 +557,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_micro_cache_full)
       ObMemAttr(run_ctx_.tenant_id_, "TestPrewarm2")));
   ASSERT_NE(nullptr, micro_cache_task);
   new (micro_cache_task) ObStorageCacheTabletTask();
-  OK(micro_cache_task->init(
+  OK(micro_cache_task->init_for_test(
       run_ctx_.tenant_id_,
       run_ctx_.ls_id_.id(),
       run_ctx_.tablet_id_.id(),

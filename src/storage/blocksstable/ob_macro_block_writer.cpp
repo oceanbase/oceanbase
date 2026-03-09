@@ -21,6 +21,7 @@
 #include "share/ob_io_device_helper.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_major_pre_warmer.h"
+#include "storage/incremental/ob_ss_tablet_merge_helper.h"
 #endif
 namespace oceanbase
 {
@@ -464,6 +465,7 @@ int ObMacroBlockWriter::ObDefaultMacroBlockFlusher::write_disk(ObMacroBlock& mac
       object_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
       object_info.device_handle_ = device_handle_;
       object_info.has_backup_device_handle_ = OB_NOT_NULL(device_handle_);
+      object_info.write_strategy_ = macro_block_writer_->data_store_desc_->get_io_write_strategy();
     }
 
     if (OB_FAIL(macro_handle_->async_write(object_info))) {
@@ -667,7 +669,7 @@ int ObMacroBlockWriter::open(
     const int64_t parallel_idx,
     const blocksstable::ObMacroSeqParam &macro_seq_param,
     const share::ObPreWarmerParam &pre_warm_param,
-    ObSSTablePrivateObjectCleaner &object_cleaner,
+    ObISSTableObjectCleaner &object_cleaner,
     ObIMacroBlockFlushCallback *callback,
     ObIMacroBlockValidator *validator,
     ObIODevice *device_handle)
@@ -696,7 +698,7 @@ int ObMacroBlockWriter::open_for_ss_ddl(
       const int64_t parallel_idx,
       const blocksstable::ObMacroSeqParam &macro_seq_param,
       const share::ObPreWarmerParam &pre_warm_param,
-      ObSSTablePrivateObjectCleaner &object_cleaner,
+      ObISSTableObjectCleaner &object_cleaner,
       ObIMacroBlockFlushCallback *callback)
 {
   int ret = OB_SUCCESS;
@@ -726,7 +728,7 @@ int ObMacroBlockWriter::inner_init(
     const blocksstable::ObMacroSeqParam &macro_seq_param,
     const share::ObPreWarmerParam &pre_warm_param,
     const bool cluster_micro_index_on_flush,
-    ObSSTablePrivateObjectCleaner &object_cleaner,
+    ObISSTableObjectCleaner &object_cleaner,
     ObIMacroBlockFlushCallback *callback,
     ObIMacroBlockValidator *validator,
     ObIODevice *device_handle)
@@ -915,6 +917,12 @@ int ObMacroBlockWriter::append(const ObDataMacroBlockMeta &macro_meta,
   } else if (OB_UNLIKELY(!macro_meta.is_valid()) || OB_ISNULL(builder_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), KP(builder_), K(macro_meta));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()
+             && is_upload_minor_exec_mode(data_store_desc_->get_exec_mode())
+             && OB_FAIL(ObSSTabletMergeHelper::flush_shared_block_cache(macro_meta.get_macro_id()))) {
+    LOG_WARN("Fail to flush shared macro block cache", K(ret), K(macro_meta));
+#endif
   } else if (OB_FAIL(builder_->append_macro_block(macro_meta, micro_block_data))) {
     LOG_WARN("Fail to append index block rows", K(ret), KP(builder_), K(macro_meta));
   } else if (OB_FAIL(flush_reuse_macro_block(macro_meta))) {
@@ -2569,7 +2577,7 @@ int ObMacroBlockWriter::alloc_block()
   int ret = OB_SUCCESS;
   ObStorageObjectHandle &macro_handle = macro_handles_[current_index_];
   ObStorageObjectOpt storage_opt;
-  if (!is_local_exec_mode(data_store_desc_->get_exec_mode())) {
+  if (!is_local_with_private_block_mode(data_store_desc_->get_exec_mode())) {
     // for ss mode, need set shared block type
     const bool index_or_meta = data_store_desc_->is_for_index_or_meta();
     ObStorageObjectType obj_type = ObStorageObjectType::MAX;
@@ -2577,14 +2585,15 @@ int ObMacroBlockWriter::alloc_block()
     (index_or_meta ? \
       ObStorageObjectType::SHARED_##T1##_META_MACRO :\
       ObStorageObjectType::SHARED_##T1##_DATA_MACRO)
+      const bool v2 = data_store_desc_->get_data_version_for_ss() >= DATA_VERSION_4_5_1_0;
     if (data_store_desc_->static_desc_->is_inc_major_) {
       obj_type = COVERT_TO_OBJ_TYPE(INC_MAJOR);
     } else if (data_store_desc_->is_major_merge_type()) {
       obj_type = COVERT_TO_OBJ_TYPE(MAJOR);
     } else if (is_mini_merge(data_store_desc_->get_merge_type())) {
-      obj_type = COVERT_TO_OBJ_TYPE(MINI);
+      obj_type = v2 ? COVERT_TO_OBJ_TYPE(MINI_V2) : COVERT_TO_OBJ_TYPE(MINI);
     } else if (is_minor_merge(data_store_desc_->get_merge_type())) {
-      obj_type = COVERT_TO_OBJ_TYPE(MINOR);
+      obj_type = v2 ? COVERT_TO_OBJ_TYPE(MINOR_V2) : COVERT_TO_OBJ_TYPE(MINOR);
     } else if (is_mds_mini_merge(data_store_desc_->get_merge_type())) {
       obj_type = COVERT_TO_OBJ_TYPE(MDS_MINI);
     } else if (is_mds_minor_merge(data_store_desc_->get_merge_type())) {

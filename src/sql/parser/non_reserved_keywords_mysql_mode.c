@@ -1188,6 +1188,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"visible", VISIBLE},
   {"wait", WAIT},
   {"warehouse", WAREHOUSE},
+  {"warm", WARM},
   {"warnings", WARNINGS},
   {"weak", WEAK},
   {"week", WEEK},

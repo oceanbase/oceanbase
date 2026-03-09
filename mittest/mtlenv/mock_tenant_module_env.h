@@ -107,6 +107,7 @@
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
 #include "storage/incremental/sslog/ob_sslog_service.h"
+#include "storage/shared_storage/storage_cache_policy/ob_storage_cache_service.h"
 #include "storage/incremental/share/ob_ss_diagnose_mgr.h"
 #include "storage/incremental/sslog/notify/ob_sslog_notify_service.h"
 #include "storage/tiered_metadata_store/ob_tiered_metadata_store.h"
@@ -510,7 +511,7 @@ int MockTenantModuleEnv::construct_default_tenant_meta(const uint64_t tenant_id,
                         has_memstore,
                         false /*is_removed*/,
                         hidden_sys_data_disk_config_size,
-                        0/*actual_data_disk_size*/,
+                        unit.gen_init_actual_data_disk_size(unit_config)/*actual_data_disk_size*/,
                         ObReplicaType::REPLICA_TYPE_FULL/*replica_type*/))) {
     STORAGE_LOG(WARN, "fail to init tenant unit", K(ret), K(tenant_id));
   } else if (OB_FAIL(meta.build(unit, super_block))) {
@@ -943,6 +944,7 @@ int MockTenantModuleEnv::init()
         MTL_BIND2(mtl_new_default, ObSSLogNotifyService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSLogGTSService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSLogUIDService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObStorageCachePolicyService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObTabletSplitTaskCache::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSDiagnoseInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
@@ -995,6 +997,7 @@ int MockTenantModuleEnv::start_()
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_SYS_TENANT_ID;
   omt::ObTenantMeta meta;
+  share::ObUnitInfoGetter::ObTenantConfig unit;
   omt::ObTenant *tenant = nullptr;
   int64_t succ_num = 0;
 
@@ -1017,21 +1020,13 @@ int MockTenantModuleEnv::start_()
     STORAGE_LOG(WARN, "fail to create hidden sys tenant", K(ret));
   } else if (OB_FAIL(construct_default_tenant_meta(tenant_id, meta))) {
     STORAGE_LOG(WARN, "fail to construct_default_tenant_meta", K(ret));
+  } else if (OB_FAIL(multi_tenant_.get_tenant_unit(tenant_id, unit))) {
+    STORAGE_LOG(WARN, "fail to get tenant unit", K(ret), K(tenant_id));
+  } else if (FALSE_IT(meta.unit_.actual_data_disk_size_ = unit.actual_data_disk_size_)) {
   } else if (OB_FAIL(multi_tenant_.convert_hidden_to_real_sys_tenant(meta.unit_))) {
     STORAGE_LOG(WARN, "fail to create_real_sys_tenant", K(ret));
   }
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (OB_FAIL(ret)) {
-  } else if (GCTX.is_shared_storage_mode()) {
-    int64_t data_disk_size = meta.unit_.config_.data_disk_size();
-    if (is_sys_tenant(tenant_id)) { // real_sys_tenant's data_disk_size = sys_unit_config + hidden_sys_data_disk_size
-      data_disk_size += OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
-    }
-    if (OB_FAIL(multi_tenant_.update_tenant_data_disk_size(tenant_id, data_disk_size))) {
-      STORAGE_LOG(WARN, "fail to update tenant data disk size", K(ret), K(tenant_id), K(data_disk_size));
-    }
-  }
-#endif
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(multi_tenant_.get_tenant(tenant_id, tenant))) {
     STORAGE_LOG(WARN, "fail to get tenant", K(ret), K(tenant_id));

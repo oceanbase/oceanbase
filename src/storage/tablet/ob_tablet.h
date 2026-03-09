@@ -682,6 +682,7 @@ public:
   bool is_min_ss_tablet_version_initial() const { return tablet_meta_.is_min_ss_tablet_version_initial(); }
   int update_ss_tablet_meta(const ObTabletMeta &new_meta);
   share::SCN get_min_ss_tablet_version() const;
+  uint64_t get_min_ss_private_sstable_op_id() const { return (int64_t)tablet_meta_.min_ss_flush_op_id_; }
   int get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_store_meta_info) const;
   int get_ss_update_tablet_log(const int64_t tablet_serialize_size, ObSSUpdateTabletLog &update_log);
 #endif // OB_BUILD_SHARED_STORAGE
@@ -983,6 +984,7 @@ private:
   int try_update_table_store_flag(const bool with_major);
 #ifdef OB_BUILD_SHARED_STORAGE
   int try_update_min_ss_tablet_version(const ObUpdateTableStoreParam &param);
+  int calc_tablet_min_ss_flush_op_id();
 #endif // OB_BUILD_SHARED_STORAGE
   int inner_get_all_sstables(ObTableStoreIterator &iter, const bool need_unpack = false) const;
   int check_schema_version_for_bounded_staleness_read(

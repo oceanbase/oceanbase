@@ -297,11 +297,11 @@ int ObPartitionMerger::inner_open_macro_writer(
       macro_writer_ = alloc_helper<ObDataMacroBlockMergeWriter>(merger_arena_);
     }
 
-    ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+    ObISSTableObjectCleaner *object_cleaner = nullptr;
     if (OB_ISNULL(macro_writer_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to allocate memory for macro writer", K(ret), K(merge_param));
-    } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(data_store_desc_, object_cleaner))) {
+    } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(data_store_desc_, object_cleaner))) {
       STORAGE_LOG(WARN, "Failed to get private object cleaner", K(ret), K(data_store_desc_));
     } else if (OB_FAIL(macro_writer_->open(
                    data_store_desc_, task_idx_, macro_seq_param,
@@ -391,7 +391,7 @@ int ObPartitionMerger::process(
 int ObPartitionMerger::process(const ObMicroBlock &micro_block, const int64_t sstable_idx)
 {
   int ret = OB_SUCCESS;
-  const blocksstable::ObMacroBlockDesc *macro_desc;
+  const blocksstable::ObMacroBlockDesc *macro_desc = nullptr;
   if (OB_FAIL(get_base_iter_curr_macro_block(macro_desc))) {
     STORAGE_LOG(WARN, "Failed to get base iter macro", K(ret));
   } else if (!micro_block.is_valid()) {

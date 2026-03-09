@@ -783,11 +783,17 @@ int ObTablet::init_for_merge(
     LOG_WARN("failed to update start scn", K(ret), K(param), K(table_store_addr_));
   } else if (OB_FAIL(try_update_table_store_flag(param.get_update_with_major_flag()))) {
     LOG_WARN("failed to update table store flag", K(ret), K(param), K(table_store_addr_));
+  }
 #ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode() && !old_tablet.is_ss_tablet()
-             && OB_FAIL(try_update_min_ss_tablet_version(param))) {
-    LOG_WARN("failed to update min_ss_tablet_version for ss_tablet", K(ret), KPC(this));
+  if (OB_SUCC(ret) && GCTX.is_shared_storage_mode() && !old_tablet.is_ss_tablet()) {
+    if (OB_FAIL(try_update_min_ss_tablet_version(param))) {
+      LOG_WARN("failed to update min_ss_tablet_version for ss_tablet", K(ret), KPC(this));
+    } else if (OB_FAIL(calc_tablet_min_ss_flush_op_id())) {
+      LOG_WARN("failed to calc min_ss_flush_op_id", K(ret), KPC(this));
+    }
+  }
 #endif  // OB_BUILD_SHARED_STORAGE
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(calc_finish_medium_scn_(finish_medium_scn))) {
     LOG_WARN("failed to calc finish medium scn", K(ret), KPC(this));
   } else if (need_report_major)  {
@@ -8179,6 +8185,48 @@ int ObTablet::try_update_min_ss_tablet_version(const ObUpdateTableStoreParam &pa
       LOG_INFO("set tablet attach shared tablet meta version",
                K(old_version), "new_version", param.update_tablet_ss_change_version_);
     }
+  }
+  return ret;
+}
+
+int ObTablet::calc_tablet_min_ss_flush_op_id()
+{
+  int ret = OB_SUCCESS;
+  tablet_meta_.min_ss_flush_op_id_ = INT32_MAX;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  ObTableStoreIterator table_store_iter;
+  if (OB_FAIL(fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret), KPC(this));
+  } else if (OB_FAIL(table_store_wrapper.get_member()->get_mini_minor_sstables(table_store_iter))) {
+    LOG_WARN("fail to get mini minor sstables", K(ret), K(table_store_wrapper));
+  }
+  while (OB_SUCC(ret)) {
+    ObITable *table = nullptr;
+    if (OB_FAIL(table_store_iter.get_next(table))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        break;
+      } else {
+        LOG_WARN("fail to get next table from table store iter", K(ret), K(table_store_iter));
+      }
+    } else if (OB_ISNULL(table) || !table->is_sstable()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the table is null or invalid", K(ret), KPC(table));
+    } else if (table->is_mini_sstable()) {
+      ObSSTableMetaHandle meta_handle;
+      if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(meta_handle))) {
+        LOG_WARN("fail to get sstable meta handle", K(ret), KPC(table));
+      } else {
+        const ObSSTableMeta &sstable_meta = meta_handle.get_sstable_meta();
+        if (sstable_meta.get_table_shared_flag().is_shared_macro_blocks()) {
+          const int32_t flush_start_op_id = (sstable_meta.get_basic_meta().root_macro_seq_ >> 32);
+          tablet_meta_.min_ss_flush_op_id_ = MIN(tablet_meta_.min_ss_flush_op_id_, flush_start_op_id);
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && tablet_meta_.min_ss_flush_op_id_ == INT32_MAX) {
+    tablet_meta_.min_ss_flush_op_id_ = 0;
   }
   return ret;
 }

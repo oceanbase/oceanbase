@@ -43,7 +43,7 @@ int ObDataMacroBlockMergeWriter::open(
     const int64_t parallel_idx,
     const blocksstable::ObMacroSeqParam &macro_seq_param,
     const share::ObPreWarmerParam &pre_warm_param,
-    ObSSTablePrivateObjectCleaner &object_cleaner,
+    ObISSTableObjectCleaner &object_cleaner,
     ObIMacroBlockFlushCallback *callback,
     ObIMacroBlockValidator *validator,
     ObIODevice *device_handle)

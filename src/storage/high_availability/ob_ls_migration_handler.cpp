@@ -1370,7 +1370,7 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
       }
     } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-      if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.check_ls_migration_space_full(arg, required_size))) {
+      if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.check_ls_migration_space_full(arg))) {
         // if disk space is not enough, return OB_SERVER_OUTOF_DISK_SPACE. if auto expand data_disk_size, need wait OBCloud platform expand datafile_size
         FLOG_ERROR( "failed to check ls migration space full, cannot migrate in",
             KR(ret), K(required_size));

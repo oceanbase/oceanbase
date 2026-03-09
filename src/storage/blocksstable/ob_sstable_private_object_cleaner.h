@@ -24,7 +24,24 @@ namespace blocksstable
 
 class ObDataStoreDesc;
 
-class ObSSTablePrivateObjectCleaner final
+class ObISSTableObjectCleaner
+{
+public:
+  virtual ~ObISSTableObjectCleaner();
+  virtual void reset() = 0;
+  virtual int add_new_macro_block_id(const MacroBlockId &macro_id) = 0;
+  virtual int mark_succeed() = 0;
+  static int get_cleaner_from_data_store_desc(const ObDataStoreDesc &data_store_desc, ObISSTableObjectCleaner *&cleaner);
+  DECLARE_VIRTUAL_TO_STRING;
+};
+
+class ObSSTableObjectCleanerFactory
+{
+public:
+  static int build_object_cleaner(const ObDataStoreDesc &data_store_desc, ObIAllocator &allocator, ObISSTableObjectCleaner *&cleaner);
+};
+
+class ObSSTablePrivateObjectCleaner final : public ObISSTableObjectCleaner
 {
 private:
   static const int64_t CLEANER_MACRO_ID_LOCAL_ARRAY_SIZE = 32;
@@ -32,11 +49,10 @@ private:
 public:
   ObSSTablePrivateObjectCleaner();
   ~ObSSTablePrivateObjectCleaner();
-  void reset();
-  int add_new_macro_block_id(const MacroBlockId &macro_id);
-  int mark_succeed();
-  static int get_cleaner_from_data_store_desc(ObDataStoreDesc &data_store_desc, ObSSTablePrivateObjectCleaner *&cleaner);
-  TO_STRING_KV(K_(new_macro_block_ids), K_(is_ss_mode), K_(task_succeed));
+  void reset() override;
+  int add_new_macro_block_id(const MacroBlockId &macro_id) override;
+  int mark_succeed() override;
+  VIRTUAL_TO_STRING_KV(K_(new_macro_block_ids), K_(is_ss_mode), K_(task_succeed));
 
 private:
   void clean();

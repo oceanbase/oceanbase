@@ -716,7 +716,7 @@ TEST_F(TestSSMicroMetaManager, test_scan_ranges_block_meta)
   MEMSET(data_buf, 'a', micro_size);
   const int64_t payload_offset = sizeof(ObSSPhyBlockCommonHeader) + sizeof(ObSSMicroDataBlockHeader);
 
-  int64_t bucket_num = ObSSPersistMicroMetaOp::DEFAULT_BUCKET_NUM;
+  int64_t bucket_num = ObSSPersistMicroMetaOp::DEFAULT_MAP_BUCKET_NUM;
   ASSERT_EQ(OB_SUCCESS, tablet_cache_map.create(bucket_num, ObMemAttr(name::tenant_id, "SSTabletInfoMap")));
   ASSERT_EQ(0, tablet_cache_map.size());
   for (int64_t i = 0; i < macro_cnt; ++i) {
@@ -792,7 +792,7 @@ TEST_F(TestSSMicroMetaManager, test_micro_meta_manager_scan)
   ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
 
   ObSSMCTabletInfoMap tablet_cache_map;
-  int64_t bucket_num = ObSSPersistMicroMetaOp::DEFAULT_BUCKET_NUM;
+  int64_t bucket_num = ObSSPersistMicroMetaOp::DEFAULT_MAP_BUCKET_NUM;
   ASSERT_EQ(OB_SUCCESS, tablet_cache_map.create(bucket_num, ObMemAttr(name::tenant_id, "SSTabletInfoMap")));
   ASSERT_EQ(0, tablet_cache_map.size());
 

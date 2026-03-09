@@ -14,6 +14,7 @@
 #include <gmock/gmock.h>
 #define protected public
 #define private public
+#include "lib/utility/ob_test_util.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "share/ob_ss_file_util.h"
 #include "storage/shared_storage/ob_ss_format_util.h"
@@ -91,7 +92,7 @@ using namespace oceanbase::share;
     } else {                                                                                        \
       ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s", object_storage_root_dir, EXPECTED_PATH)); \
     }                                                                                               \
-    ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path)) << ctx.get_path() << "\n" << expected_path; \
+    EXPECT_EQ(0, STRCMP(ctx.get_path(), expected_path)) << ctx.get_path() << "\n" << expected_path; \
   }
 
 class TestFileDelOp : public share::ObScanDirOp
@@ -171,10 +172,10 @@ void TestFileManager::SetUpTestCase()
   MTL(tmp_file::ObTenantTmpFileManager *)->wait();
   MTL(tmp_file::ObTenantTmpFileManager *)->destroy();
   ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
-  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
-  ASSERT_NE(nullptr, file_manager);
+  ObTenantDiskSpaceManager *tnt_disk_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_mgr);
   // disable persist disk space task to avoid interfere with belowing tests
-  file_manager->persist_disk_space_task_.is_inited_ = false;
+  tnt_disk_mgr->persist_disk_space_task_.is_inited_ = false;
 }
 
 void TestFileManager::TearDownTestCase()
@@ -292,20 +293,24 @@ TEST_F(TestFileManager, test_check_micro_cache_file_size)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(f_stat.size_, ori_micro_cache_file_size);
 
-  bool succ_adjust = false;
-  int64_t new_micro_cache_size = 0;
-  ret = tnt_disk_mgr->try_adjust_cache_file_size(3, succ_adjust, new_micro_cache_size);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(false, succ_adjust);
-
-  ret = tnt_disk_mgr->try_adjust_cache_file_size(25, succ_adjust, new_micro_cache_size);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(true, succ_adjust);
+  // do not fallocate, just adjust the memory value
+  int64_t cur_micro_cache_file_size = tnt_disk_mgr->get_micro_cache_file_size();
+  const int64_t expand_size = common::MB;
+  OK(tnt_disk_mgr->resize_micro_cache_file_nolock_(
+      cur_micro_cache_file_size, expand_size, false/*do_fallocate*/));
   ObIODFileStat f_stat1;
-  ret = ObIODeviceLocalFileOp::stat(micro_cache_file_path, f_stat1);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(f_stat1.size_, new_micro_cache_size);
-  ASSERT_LT(ori_micro_cache_file_size, new_micro_cache_size);
+  OK(ObIODeviceLocalFileOp::stat(micro_cache_file_path, f_stat1));
+  ASSERT_EQ(cur_micro_cache_file_size + expand_size, tnt_disk_mgr->get_micro_cache_file_size());
+  ASSERT_EQ(f_stat1.size_, tnt_disk_mgr->get_micro_cache_file_size() - expand_size);
+
+  // do fallocate, expand the file
+  cur_micro_cache_file_size = tnt_disk_mgr->get_micro_cache_file_size();
+  OK(tnt_disk_mgr->resize_micro_cache_file_nolock_(cur_micro_cache_file_size, expand_size));
+  ObIODFileStat f_stat2;
+  OK(ObIODeviceLocalFileOp::stat(micro_cache_file_path, f_stat2));
+  ASSERT_EQ(cur_micro_cache_file_size + expand_size, tnt_disk_mgr->get_micro_cache_file_size());
+  ASSERT_EQ(f_stat2.size_, tnt_disk_mgr->get_micro_cache_file_size());
+  ASSERT_LT(ori_micro_cache_file_size, tnt_disk_mgr->get_micro_cache_file_size());
 }
 
 /* Test whether the data written by pwrite_cache_block is 4K aligned when the valid data of buf is smaller than
@@ -391,6 +396,8 @@ TEST_F(TestFileManager, test_path_convert)
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_DATA_MACRO, true/*is_in_local*/, true/*is_inner_tablet*/, "1_0/shared_mini_macro_cache/ls/1001/TX_CTX_op1seq1.T2");
   // cluster_id/tenant_id/ls/ls_id/tablet_name/mini/sstable/op_id/data/macro_seq_id
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_DATA_MACRO, false/*is_in_local*/, true/*is_inner_tablet*/, "cluster_1/tenant_1/ls/1001/TX_CTX/mini/sstable/op_1/data/seq1.T2");
+  // new format for SHARED_MINI
+  uint64_t data_seq = 0;
   //user tablet 200001
   inc_file_id.set_second_id(200001);
   inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
@@ -399,9 +406,22 @@ TEST_F(TestFileManager, test_path_convert)
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mini/sstable/op_id/data/macro_seq_id
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_DATA_MACRO, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200001/0/mini/sstable/op_1/data/seq1.T2");
 
+  // new format for SHARED_MINI
+  ASSERT_EQ(OB_SUCCESS, SSMiniMinorDataSeq::build_data_seq(SSMiniSourceType::MINI_UPLOAD, 7891, 211, data_seq));
+  inc_file_id.set_third_id(data_seq);
+  inc_file_id.set_second_id(49402);
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 1002/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_V2_DATA_MACRO, true/*is_in_local*/, true/*is_inner_tablet*/, "1_0/shared_mini_macro_cache/ls/1001/TX_DATA_opUPLOAD7891seq211.T84");
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_V2_DATA_MACRO, false/*is_in_local*/, true/*is_inner_tablet*/, "cluster_1/tenant_1/ls/1001/TX_DATA/mini/sstable/op_UPLOAD_7891/data/seq211.T84");
+  inc_file_id.set_second_id(200002);
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 1002/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_V2_DATA_MACRO, true/*is_in_local*/, false/*is_inner_tablet*/, "1_0/shared_mini_macro_cache/D1/t200002rs1002opUPLOAD7891seq211.T84");
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_V2_DATA_MACRO, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200002/1002/mini/sstable/op_UPLOAD_7891/data/seq211.T84");
+
   // 3. SHARED_MINI_META_MACRO
   // inner tablet 49401
   inc_file_id.set_second_id(49401);
+  inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
   inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
   // tenant_id_epoch_id/shared_mini_macro_cache/tablet_id_op_id_macro_seq_id_ls_id
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_META_MACRO, true/*is_in_local*/, true/*is_inner_tablet*/, "1_0/shared_mini_macro_cache/ls/1001/TX_CTX_op1seq1.T3");
@@ -415,8 +435,21 @@ TEST_F(TestFileManager, test_path_convert)
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mini/sstable/op_id/meta/macro_seq_id
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_META_MACRO, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200001/0/mini/sstable/op_1/meta/seq1.T3");
 
+  // new format for SHARED_MINI
+  ASSERT_EQ(OB_SUCCESS, SSMiniMinorDataSeq::build_data_seq(SSMiniSourceType::MINI_FLUSH, 7892, 212, data_seq));
+  inc_file_id.set_third_id(data_seq);
+  inc_file_id.set_second_id(49402);
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 1002/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_V2_META_MACRO, true/*is_in_local*/, true/*is_inner_tablet*/, "1_0/shared_mini_macro_cache/ls/1001/TX_DATA_opFLUSH7892seq212.T85");
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_V2_META_MACRO, false/*is_in_local*/, true/*is_inner_tablet*/, "cluster_1/tenant_1/ls/1001/TX_DATA/mini/sstable/op_FLUSH_7892/meta/seq212.T85");
+  inc_file_id.set_second_id(200002);
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 1002/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_V2_META_MACRO, true/*is_in_local*/, false/*is_inner_tablet*/, "1_0/shared_mini_macro_cache/5B/t200002rs1002opFLUSH7892seq212.T85");
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINI_V2_META_MACRO, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200002/1002/mini/sstable/op_FLUSH_7892/meta/seq212.T85");
+
   // 4. SHARED_MINOR_DATA_MACRO
   // inner tablet 49403
+  inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
   inc_file_id.set_second_id(49403); // TX_LOCK
   inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
   // tenant_id_epoch_id/shared_minor_macro_cache/tablet_id_op_id_macro_seq_id_ls_id
@@ -431,8 +464,21 @@ TEST_F(TestFileManager, test_path_convert)
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/minor/sstable/op_id/data/macro_seq_id
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_DATA_MACRO, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200001/0/minor/sstable/op_1/data/seq1.T4");
 
+  // new format for SHARED_MINOR
+  ASSERT_EQ(OB_SUCCESS, SSMiniMinorDataSeq::build_data_seq(SSMinorSourceType::MINOR_COMPACT, 7893, 213, data_seq));
+  inc_file_id.set_third_id(data_seq);
+  inc_file_id.set_second_id(49402);
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 1/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_V2_DATA_MACRO, true/*is_in_local*/, true/*is_inner_tablet*/, "1_0/shared_minor_macro_cache/ls/1001/TX_DATA_opCOMPACT7893seq213.T86");
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_V2_DATA_MACRO, false/*is_in_local*/, true/*is_inner_tablet*/, "cluster_1/tenant_1/ls/1001/TX_DATA/minor/sstable/op_COMPACT_7893/data/seq213.T86");
+  inc_file_id.set_second_id(200002);
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1005/*ls_id*/, 2001/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_V2_DATA_MACRO, true/*is_in_local*/, false/*is_inner_tablet*/, "1_0/shared_minor_macro_cache/59/t200002rs2001opCOMPACT7893seq213.T86");
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_V2_DATA_MACRO, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200002/2001/minor/sstable/op_COMPACT_7893/data/seq213.T86");
+
   // 5. SHARED_MINOR_META_MACRO
   // inner tablet 49402
+  inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
   inc_file_id.set_second_id(49402);// TX_DATA
   inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
   // tenant_id_epoch_id/shared_minor_macro_cache/tablet_id_op_id_macro_seq_id_ls_id
@@ -446,6 +492,18 @@ TEST_F(TestFileManager, test_path_convert)
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_META_MACRO, true/*is_in_local*/, false/*is_inner_tablet*/, "1_0/shared_minor_macro_cache/52/t200001rs0op1seq1.T5");
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/minor/sstable/op_id/meta/macro_seq_id
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_META_MACRO, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200001/0/minor/sstable/op_1/meta/seq1.T5");
+
+  // new format for SHARED_MINOR
+  ASSERT_EQ(OB_SUCCESS, SSMiniMinorDataSeq::build_data_seq(SSMinorSourceType::MINOR_UPLOAD, 7894, 214, data_seq));
+  inc_file_id.set_third_id(data_seq);
+  inc_file_id.set_second_id(49402);
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1007/*ls_id*/, 1/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_V2_META_MACRO, true/*is_in_local*/, true/*is_inner_tablet*/, "1_0/shared_minor_macro_cache/ls/1007/TX_DATA_opUPLOAD7894seq214.T87");
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_V2_META_MACRO, false/*is_in_local*/, true/*is_inner_tablet*/, "cluster_1/tenant_1/ls/1007/TX_DATA/minor/sstable/op_UPLOAD_7894/meta/seq214.T87");
+  inc_file_id.set_second_id(200002);
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1005/*ls_id*/, 2002/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_V2_META_MACRO, true/*is_in_local*/, false/*is_inner_tablet*/, "1_0/shared_minor_macro_cache/F9/t200002rs2002opUPLOAD7894seq214.T87");
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_MINOR_V2_META_MACRO, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200002/2002/minor/sstable/op_UPLOAD_7894/meta/seq214.T87");
 
   // 6.SHARED_MAJOR_DATA_MACRO
   // tenant_id_epoch_id/shared_major_macro_cache/tablet_id_reorganization_scn_cg_id_macro_seq_id
@@ -530,6 +588,8 @@ TEST_F(TestFileManager, test_path_convert)
   // MDS: 55-68
   // -- MDS mini and MDS minor -- //
   inc_file_id.set_second_id(3);
+  inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1005/*ls_id*/, 0/*reorganization_scn*/);
   // tenant_id_epoch_id/shared_mini_macro_cache/tablet_create_id_op_id_macro_seq_id
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINI_DATA_MACRO, true/*is_in_local*/, false/*is_inner_tablet*/, "1_0/shared_mini_macro_cache/0A/t3rs0op1seq1.T22");
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mds/mini/sstable/op_id/data/macro_seq_id
@@ -546,6 +606,7 @@ TEST_F(TestFileManager, test_path_convert)
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINOR_META_MACRO, true/*is_in_local*/, false/*is_inner_tablet*/, "1_0/shared_minor_macro_cache/38/t3rs0op1seq1.T25");
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mds/minor/sstable/op_id/meta/macro_seq_id
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_MDS_MINOR_META_MACRO, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/3/0/mds/minor/sstable/op_1/meta/seq1.T25");
+
   // --- Atomic protocol files -- //
   inc_file_id.set_third_id(1); // set op_id = 1
 
@@ -664,6 +725,24 @@ TEST_F(TestFileManager, test_remote_path_to_macro_id)
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mini/sstable/op_id/meta/macro_seq_id
   check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINI_META_MACRO, inc_file_id);
 
+  // new format for SHARED_MINI
+  uint64_t data_seq = 0;
+  ASSERT_EQ(OB_SUCCESS, SSMiniMinorDataSeq::build_data_seq(SSMiniSourceType::MINI_UPLOAD, 7894, 214, data_seq));
+  inc_file_id.set_third_id(data_seq);
+  inc_file_id.set_second_id(49402);
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1007/*ls_id*/, 1/*reorganization_scn*/);
+  // cluster_id/tenant_id/ls/ls_id/tablet_name/minor/sstable/op_id/data/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINI_V2_DATA_MACRO, inc_file_id);
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/minor/sstable/op_id/data/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINI_V2_META_MACRO, inc_file_id);
+
+  inc_file_id.set_second_id(200002);
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1005/*ls_id*/, 2002/*reorganization_scn*/);
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/minor/sstable/op_id/data/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINI_V2_DATA_MACRO, inc_file_id);
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/minor/sstable/op_id/meta/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINI_V2_META_MACRO, inc_file_id);
+
   // 4. SHARED_MINOR_DATA_MACRO
   // inner tablet 49403
   inc_file_id.set_second_id(49403); // TX_LOCK
@@ -687,6 +766,23 @@ TEST_F(TestFileManager, test_remote_path_to_macro_id)
   inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/minor/sstable/op_id/meta/macro_seq_id
   check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINOR_META_MACRO, inc_file_id);
+
+    // new format for SHARED_MINOR
+    ASSERT_EQ(OB_SUCCESS, SSMiniMinorDataSeq::build_data_seq(SSMinorSourceType::MINOR_UPLOAD, 7894, 214, data_seq));
+    inc_file_id.set_third_id(data_seq);
+    inc_file_id.set_second_id(49402);
+    inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1005/*ls_id*/, 2002/*reorganization_scn*/);
+    // cluster_id/tenant_id/ls/ls_id/tablet_name/minor/sstable/op_id/data/macro_seq_id
+    check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINOR_V2_DATA_MACRO, inc_file_id);
+    // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/minor/sstable/op_id/data/macro_seq_id
+    check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINOR_V2_META_MACRO, inc_file_id);
+
+    inc_file_id.set_second_id(200002);
+    inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1005/*ls_id*/, 2002/*reorganization_scn*/);
+    // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/minor/sstable/op_id/data/macro_seq_id
+    check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINOR_V2_DATA_MACRO, inc_file_id);
+    // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/minor/sstable/op_id/meta/macro_seq_id
+    check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINOR_V2_META_MACRO, inc_file_id);
 
   // 6.SHARED_MAJOR_DATA_MACRO
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/cg_id/data/macro_seq_id
@@ -765,6 +861,7 @@ TEST_F(TestFileManager, test_remote_path_to_macro_id)
 
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mds/minor/sstable/op_id/meta/macro_seq_id
   check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO, inc_file_id);
+
   // --- Atomic protocol files -- //
   inc_file_id.set_third_id(1); // set op_id = 1
 
@@ -935,6 +1032,7 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   write_info.size_ = write_io_size;
   write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info.mtl_tenant_id_ = MTL_ID();
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
 
   // step 3: test read private_macro_file
@@ -2050,6 +2148,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   tablet_data_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_data_macro));
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
   ObArray<MacroBlockId> tablet_data_macros;
   ObArray<int64_t> tablet_ids;
@@ -2076,6 +2175,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   tablet_meta_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_meta_macro));
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
   ObArray<MacroBlockId> tablet_meta_macros;
   tablet_ids.reset();
@@ -2115,6 +2215,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   tenant_root_key.set_second_id(1);
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tenant_root_key));
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
 
   ObArray<uint64_t> tenant_ids;
@@ -2143,6 +2244,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   shared_major_data_macro.set_reorganization_scn(reorganization_scn);
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(shared_major_data_macro));
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
 
   // test8: delete shared tablet data dir
@@ -2196,6 +2298,7 @@ TEST_F(TestFileManager, test_delete_tmp_seq_files)
   write_file_info.io_desc_.set_wait_event(1);
   write_file_info.mtl_tenant_id_ = MTL_ID();
   write_file_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_file_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   TP_SET_EVENT(EventTable::EN_FILE_SYSTEM_RENAME_ERROR, OB_ERR_SYS, 0, 1);
   ObSSMacroCacheStat file_cache_stat;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_file_info, write_object_handle));
@@ -2259,6 +2362,7 @@ TEST_F(TestFileManager, test_delete_not_exist_tmp_seq_file)
   write_file_info.io_desc_.set_wait_event(1);
   write_file_info.mtl_tenant_id_ = MTL_ID();
   write_file_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_file_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   TP_SET_EVENT(EventTable::EN_FILE_SYSTEM_RENAME_ERROR, OB_ERR_SYS, 0, 1);
   ObSSMacroCacheStat file_cache_stat;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_file_info, write_object_handle));
@@ -2344,6 +2448,7 @@ TEST_F(TestFileManager, test_list_local_files_rec)
   tablet_data_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_data_macro));
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
   MacroBlockId tablet_meta_macro;
   tablet_id = 4;
@@ -2357,6 +2462,7 @@ TEST_F(TestFileManager, test_list_local_files_rec)
   tablet_meta_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_meta_macro));
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
 
   file_path[0] = '\0';
@@ -3038,7 +3144,7 @@ void exhaust_macro_file_disk_size(int64_t &avail_size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  avail_size = disk_space_manager->get_macro_cache_free_size();
+  avail_size = disk_space_manager->get_allocated_shared_macro_cache_free_size_nolock_();
   ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(avail_size,
             ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
   ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192,
@@ -3091,6 +3197,7 @@ TEST_F(TestFileManager, test_list_remote_macro_ids_of_user_tablet)
   write_info.size_ = write_io_size;
   write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info.mtl_tenant_id_ = MTL_ID();
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
   int64_t avail_size = 0;
   exhaust_macro_file_disk_size(avail_size);
   write_object_handle.reset();
@@ -3193,6 +3300,8 @@ TEST_F(TestFileManager, test_list_remote_macro_ids_of_ls_inner_tablet)
   write_info.size_ = write_io_size;
   write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info.mtl_tenant_id_ = MTL_ID();
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
+
   int64_t avail_size = 0;
   exhaust_macro_file_disk_size(avail_size);
   write_object_handle.reset();
@@ -3255,6 +3364,219 @@ TEST_F(TestFileManager, test_list_remote_macro_ids_of_ls_inner_tablet)
                                          tablet_id, 0/*reorganization_scn*/, macro_ids));
   ASSERT_EQ(0, macro_ids.count());
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_remote_file(file_id, 0/*ls_epoch_id*/));
+}
+
+// inner_tablet:  cluster_id/tenant_id/ls/ls_id/TABLET_NAME/sstable_type_str/sstable/op_SOURCE_TYPE_id
+// user_tablet: cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/sstable_type_str/sstable/op_SOURCE_TYPE_id
+TEST_F(TestFileManager, test_list_remote_mini_macro_ids_by_opid)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  MacroBlockId file_id;
+  common::ObTabletID inner_tablet_id(49402);
+  int64_t ls_id = 1007;
+  int64_t reorganization_scn = 1;
+  uint64_t data_seq = 0;
+  int64_t op_id = 7894;
+  int64_t seq = 214;
+  ASSERT_EQ(OB_SUCCESS, SSMiniMinorDataSeq::build_data_seq(SSMiniSourceType::MINI_UPLOAD, op_id, seq, data_seq));
+  ObArray<blocksstable::MacroBlockId> macro_ids;
+  ObArray<blocksstable::MacroBlockId> macro_ids_inner_tablet;
+  // test0:empty macro_ids
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    inner_tablet_id, ls_id, reorganization_scn, MINI_DIR_STR, ObIncSSMacroSeqHelper::get_shared_mini_source_str(SSMiniSourceType::MINI_UPLOAD), op_id, macro_ids));
+  ASSERT_EQ(0, macro_ids.count());
+
+  file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_V2_DATA_MACRO));
+  file_id.set_second_id(inner_tablet_id.id());
+  file_id.set_reorganization_scn(reorganization_scn);
+  file_id.set_third_id(data_seq);
+  file_id.set_ss_fourth_id(inner_tablet_id.is_ls_inner_tablet(), ls_id, reorganization_scn);
+  ObStorageObjectHandle write_object_handle;
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, disk_space_mgr);
+  const int64_t write_io_size = 8 * 1024; // 8KB
+  char write_buf[write_io_size] = { 0 };
+  memset(write_buf, 'a', write_io_size);
+  ObStorageObjectWriteInfo write_info;
+  write_info.io_desc_.set_wait_event(1);
+  write_info.buffer_ = write_buf;
+  write_info.offset_ = 0;
+  write_info.size_ = write_io_size;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_info.mtl_tenant_id_ = MTL_ID();
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+
+  // test1:write SHARED_MINI_V2_DATA_MACRO inner tablet and list it:
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    inner_tablet_id, ls_id, reorganization_scn, MINI_DIR_STR, ObIncSSMacroSeqHelper::get_shared_mini_source_str(SSMiniSourceType::MINI_UPLOAD), op_id, macro_ids_inner_tablet));
+  ASSERT_EQ(1, macro_ids_inner_tablet.count());
+  ASSERT_EQ(file_id, macro_ids_inner_tablet.at(0));
+
+  // test2: write SHARED_MINI_V2_META_MACRO inner tablet and list it:
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_V2_META_MACRO));
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    inner_tablet_id, ls_id, reorganization_scn, MINI_DIR_STR, ObIncSSMacroSeqHelper::get_shared_mini_source_str(SSMiniSourceType::MINI_UPLOAD), op_id, macro_ids_inner_tablet));
+  ASSERT_EQ(2, macro_ids_inner_tablet.count());
+
+  // test3: write SHARED_MINI_V2_DATA_MACRO not inner tablet and list it:
+  common::ObTabletID tablet_id(200002);
+  file_id.set_second_id(tablet_id.id());
+  file_id.set_ss_fourth_id(tablet_id.is_ls_inner_tablet(), ls_id, reorganization_scn);
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    tablet_id, ls_id, reorganization_scn, MINI_DIR_STR, ObIncSSMacroSeqHelper::get_shared_mini_source_str(SSMiniSourceType::MINI_UPLOAD), op_id, macro_ids));
+  ASSERT_EQ(1, macro_ids.count());
+
+  // test4: write SHARED_MINI_V2_META_MACRO not inner tablet and list it:
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_V2_DATA_MACRO));
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    tablet_id, ls_id, reorganization_scn, MINI_DIR_STR, ObIncSSMacroSeqHelper::get_shared_mini_source_str(SSMiniSourceType::MINI_UPLOAD), op_id, macro_ids));
+  ASSERT_EQ(2, macro_ids.count());
+
+  // test5: delete two macro files and list them
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_remote_files(macro_ids));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    tablet_id, ls_id, reorganization_scn, MINI_DIR_STR, ObIncSSMacroSeqHelper::get_shared_mini_source_str(SSMiniSourceType::MINI_UPLOAD), op_id, macro_ids));
+  ASSERT_EQ(0, macro_ids.count());
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_remote_files(macro_ids_inner_tablet));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    inner_tablet_id, ls_id, reorganization_scn, MINI_DIR_STR, ObIncSSMacroSeqHelper::get_shared_mini_source_str(SSMiniSourceType::MINI_UPLOAD), op_id, macro_ids_inner_tablet));
+  ASSERT_EQ(0, macro_ids.count());
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_shared_tablet_data_dir(tablet_id.id(), reorganization_scn));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_shared_tablet_data_dir(inner_tablet_id.id(), reorganization_scn));
+}
+
+TEST_F(TestFileManager, test_list_remote_minor_macro_ids_by_opid)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  MacroBlockId file_id;
+  common::ObTabletID inner_tablet_id(49402);
+  int64_t ls_id = 1007;
+  int64_t reorganization_scn = 1;
+  uint64_t data_seq = 0;
+  int64_t op_id = 7894;
+  int64_t seq = 214;
+  ASSERT_EQ(OB_SUCCESS, ObIncSSMacroSeqHelper::build_shared_minor_data_seq(SSMinorSourceType::MINOR_UPLOAD, op_id, seq, data_seq));
+  ObArray<blocksstable::MacroBlockId> macro_ids;
+  ObArray<blocksstable::MacroBlockId> macro_ids_inner_tablet;
+  // test0:empty macro_ids
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    inner_tablet_id, ls_id, reorganization_scn, MINOR_DIR_STR, ObIncSSMacroSeqHelper::get_shared_minor_source_str(SSMinorSourceType::MINOR_UPLOAD), op_id, macro_ids_inner_tablet));
+  ASSERT_EQ(0, macro_ids.count());
+
+  file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_V2_DATA_MACRO));
+  file_id.set_second_id(inner_tablet_id.id());
+  file_id.set_third_id(data_seq);
+  file_id.set_ss_fourth_id(inner_tablet_id.is_ls_inner_tablet(), ls_id, reorganization_scn);
+  ObStorageObjectHandle write_object_handle;
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, disk_space_mgr);
+  const int64_t write_io_size = 8 * 1024; // 8KB
+  char write_buf[write_io_size] = { 0 };
+  memset(write_buf, 'a', write_io_size);
+  ObStorageObjectWriteInfo write_info;
+  write_info.io_desc_.set_wait_event(1);
+  write_info.buffer_ = write_buf;
+  write_info.offset_ = 0;
+  write_info.size_ = write_io_size;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_info.mtl_tenant_id_ = MTL_ID();
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+
+  // test1:write SHARED_MINI_V2_DATA_MACRO inner tablet and list it:
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    inner_tablet_id, ls_id, reorganization_scn, MINOR_DIR_STR, ObIncSSMacroSeqHelper::get_shared_minor_source_str(SSMinorSourceType::MINOR_UPLOAD), op_id, macro_ids_inner_tablet));
+  ASSERT_EQ(1, macro_ids_inner_tablet.count());
+  ASSERT_EQ(file_id, macro_ids_inner_tablet.at(0));
+
+  // test2: write SHARED_MINI_V2_META_MACRO inner tablet and list it:
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_V2_META_MACRO));
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    inner_tablet_id, ls_id, reorganization_scn, MINOR_DIR_STR, ObIncSSMacroSeqHelper::get_shared_minor_source_str(SSMinorSourceType::MINOR_UPLOAD), op_id, macro_ids_inner_tablet));
+  ASSERT_EQ(2, macro_ids_inner_tablet.count());
+
+  // test3: write SHARED_MINI_V2_DATA_MACRO not inner tablet and list it:
+  common::ObTabletID tablet_id(200002);
+  file_id.set_second_id(tablet_id.id());
+  file_id.set_ss_fourth_id(tablet_id.is_ls_inner_tablet(), ls_id, reorganization_scn);
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    tablet_id, ls_id, reorganization_scn, MINOR_DIR_STR, ObIncSSMacroSeqHelper::get_shared_minor_source_str(SSMinorSourceType::MINOR_UPLOAD), op_id, macro_ids));
+  ASSERT_EQ(1, macro_ids.count());
+
+  // test4: write SHARED_MINI_V2_META_MACRO not inner tablet and list it:
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_V2_DATA_MACRO));
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    tablet_id, ls_id, reorganization_scn, MINOR_DIR_STR, ObIncSSMacroSeqHelper::get_shared_minor_source_str(SSMinorSourceType::MINOR_UPLOAD), op_id, macro_ids));
+  ASSERT_EQ(2, macro_ids.count());
+
+  // test5: delete two macro files and list them
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_remote_files(macro_ids));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    tablet_id, ls_id, reorganization_scn, MINOR_DIR_STR, ObIncSSMacroSeqHelper::get_shared_minor_source_str(SSMinorSourceType::MINOR_UPLOAD), op_id, macro_ids));
+  ASSERT_EQ(0, macro_ids.count());
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_remote_files(macro_ids_inner_tablet));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files_by_op(
+    inner_tablet_id, ls_id, reorganization_scn, MINOR_DIR_STR, ObIncSSMacroSeqHelper::get_shared_minor_source_str(SSMinorSourceType::MINOR_UPLOAD), op_id, macro_ids_inner_tablet));
+  ASSERT_EQ(0, macro_ids.count());
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_shared_tablet_data_dir(tablet_id.id(), reorganization_scn));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_shared_tablet_data_dir(inner_tablet_id.id(), reorganization_scn));
 }
 
 // list cluster_id/server_id/tenant_id_epoch_id/ckpt/object_id

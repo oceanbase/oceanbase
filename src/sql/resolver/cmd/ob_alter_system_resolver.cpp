@@ -1432,7 +1432,7 @@ int ObFlushSSLocalCacheResolver::resolve(const ParseNode &parse_tree)
         ParseNode *node = parse_tree.children_[0];
         if (NULL == node) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("should exist tenant name", K(ret));
+          LOG_WARN("node should not be null", K(ret));
         } else {
           if (OB_UNLIKELY(NULL == node->children_)) {
             ret = OB_ERR_UNEXPECTED;
@@ -1480,6 +1480,114 @@ int ObFlushSSLocalCacheResolver::resolve(const ParseNode &parse_tree)
                 }
               }
             }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPrewarmSSLocalCacheResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_PREWARM_SS_LOCAL_CACHE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_PREWARM_SS_LOCAL_CACHE", "type", get_type_name(parse_tree.type_));
+  } else {
+    ObPrewarmSSLocalCacheStmt *stmt = create_stmt<ObPrewarmSSLocalCacheStmt>();
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObPrewarmSSLocalCacheStmt failed");
+    } else {
+      stmt_ = stmt;
+      if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children should not be null", K(ret));
+      } else if (OB_UNLIKELY(3 != parse_tree.num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children num mismatch", K(ret), K(parse_tree.num_child_));
+      } else {
+        ParseNode *node = parse_tree.children_[0];
+        if (NULL == node) {
+          stmt->tenant_name_.reset();
+        } else if (OB_UNLIKELY(node->num_child_ < 1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("node children should be valid", K(ret), K(node->num_child_));
+        } else if (T_TENANT_NAME == node->type_) {
+          node = node->children_[0];
+          if (OB_UNLIKELY(NULL == node)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("node should not be null", K(ret));
+          } else if (node->str_len_ <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("empty tenant name", K(ret), K(node->str_len_));
+          } else {
+            ObString tenant_name(node->str_len_, node->str_value_);
+            if (OB_FAIL(stmt->tenant_name_.assign(tenant_name))) {
+              LOG_WARN("assign tenant name failed", K(ret), K(tenant_name));
+            }
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected type", KR(ret), K(node->type_), K(node->num_child_));
+        }
+
+        if (OB_SUCC(ret)) {
+          node = parse_tree.children_[1];
+          if (NULL == node) {
+            stmt->table_name_.reset();
+            stmt->tablet_id_.reset();
+          } else if (OB_UNLIKELY(node->num_child_ < 1)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("node children should be valid", K(ret), K(node->num_child_));
+          } else if (T_TABLE == node->type_) {
+            node = node->children_[0];
+            if (OB_UNLIKELY(NULL == node)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("node should not be null", K(ret));
+            } else if (node->str_len_ <= 0) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("empty table name", K(ret), K(node->str_len_));
+            } else {
+              ObString full_table_name(node->str_len_, node->str_value_);
+              ObString db_name = full_table_name.split_on('.');
+              if (OB_UNLIKELY(db_name.empty() || full_table_name.empty())) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("invalid argument, not match db_name.table_name", K(ret), K(db_name), K(full_table_name));
+              } else if (OB_FAIL(stmt->db_name_.assign(db_name))) {
+                LOG_WARN("assign database name failed", K(ret), K(db_name));
+              } else if (OB_FAIL(stmt->table_name_.assign(full_table_name))) {
+                LOG_WARN("assign table name failed", K(ret), K(full_table_name));
+              }
+            }
+          } else if (T_TABLET_ID == node->type_) {
+            node = node->children_[0];
+            if (OB_UNLIKELY(NULL == node)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("node should not be null", K(ret));
+            } else if (node->value_ <= 0) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid tablet id", K(ret), K(node->value_));
+            } else {
+              common::ObTabletID tablet_id(node->value_);
+              stmt->tablet_id_ = tablet_id;
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected type", KR(ret), K(node->type_));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          node = parse_tree.children_[2];
+          if (NULL == node) {
+            stmt->with_index_type_ = ObPrewarmSSLocalCacheStmt::WithIndexType::WITH_NONE_INDEX;
+          } else if (T_INT == node->type_ && node->value_ <= 3 && node->value_ > 0) {
+            stmt->with_index_type_ = static_cast<ObPrewarmSSLocalCacheStmt::WithIndexType>(node->value_);
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected type", KR(ret), K(node->type_), K(node->value_));
           }
         }
       }

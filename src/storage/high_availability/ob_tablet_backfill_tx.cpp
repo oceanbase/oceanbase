@@ -1688,6 +1688,7 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
 int ObTabletTableFinishBackfillTXTask::update_merge_sstable_for_ss_()
 {
   int ret = OB_SUCCESS;
@@ -1697,7 +1698,7 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_for_ss_()
   compaction::ObStaticMergeParam &static_param = tablet_merge_ctx_.static_param_;
   bool skip_to_create_empty_cg = false; // placeholder
   ObSSTable *sstable = nullptr;
-
+  ObSSTableUploadRegHandle upload_register_handle;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet table finish backfill tx task do not init", K(ret));
@@ -1717,6 +1718,8 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_for_ss_()
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle_), K(ls_id_));
   } else if (OB_FAIL(tablet_merge_ctx_.merged_table_handle_.get_sstable(sstable))) {
     LOG_WARN("failed to get sstable", K(ret), K(tablet_handle_), K(ls_id_));
+  } else if (OB_FAIL(ls->prepare_register_sstable_upload(upload_register_handle))) {
+    LOG_WARN("failed to prepare register upload task", K(ret));
   } else {
     ObTabletHandle new_tablet_handle;
     const int64_t snapshot_version = static_param.version_range_.snapshot_version_;
@@ -1754,12 +1757,26 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_for_ss_()
         ret = OB_SUCCESS;
         LOG_INFO("no need update tablet table store, transfer backfill need continue", K(ret), K(param), K(tablet_info_));
       }
-    } else if (OB_FAIL(new_tablet_handle.get_obj()->release_memtables(end_scn))) {
-      LOG_WARN("failed to release memtable", K(ret), "end_scn", end_scn);
+    } else {
+      share::SCN snapshot_version;
+      if (OB_FAIL(snapshot_version.convert_for_tx(static_param.version_range_.snapshot_version_))) {
+        LOG_WARN("failed to convert snapshot version", K(ret), K(static_param.version_range_.snapshot_version_));
+      } else {
+        ASYNC_UPLOAD_INC_SSTABLE(SSIncSSTableType::MINI_SSTABLE,
+                                 upload_register_handle,
+                                 sstable->get_key(),
+                                 sstable->get_rec_scn(),
+                                 snapshot_version);
+        if (OB_FAIL(new_tablet_handle.get_obj()->release_memtables(end_scn))) {
+          LOG_WARN("failed to release memtable", K(ret), "end_scn", end_scn);
+        }
+      }
     }
   }
   return ret;
 }
+
+#endif
 
 
 int ObTabletTableFinishBackfillTXTask::process()
@@ -1772,9 +1789,11 @@ int ObTabletTableFinishBackfillTXTask::process()
   } else if (ha_dag_net_ctx_->is_failed()) {
     LOG_INFO("ctx already failed", KPC(ha_dag_net_ctx_));
   } else if (tablet_info_.is_shared_storage_) {
+#ifdef OB_BUILD_SHARED_STORAGE
     if (OB_FAIL(update_merge_sstable_for_ss_())) {
       LOG_WARN("failed to update merge sstable for ss", K(ret), KPC(this));
     }
+#endif
   } else {
     if (OB_FAIL(update_merge_sstable_())) {
       LOG_WARN("failed to update merge sstable", K(ret), KPC(this));

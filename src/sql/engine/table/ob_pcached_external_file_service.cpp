@@ -1674,28 +1674,35 @@ void ObPCachedExternalFileService::stop()
 
 void ObPCachedExternalFileService::wait()
 {
-  ObTenantIOManager *io_manager = nullptr;
   if (is_meta_tenant(MTL_ID())) {
     // skip meta tenant
   } else if (IS_INIT) {
     timer_task_scheduler_.wait();
-    if (is_virtual_tenant_id(tenant_id_)) {
-      // do nothing
-    } else if (OB_NOT_NULL(io_manager = MTL(ObTenantIOManager*))) {
-      const int64_t start_time_us = ObTimeUtility::current_time();
-      while (io_manager->get_ref_cnt() > 1) {
-        if (REACH_TIME_INTERVAL(1000L * 1000L)) { // 1s
-          LOG_INFO("wait tenant io manager quit",
-              K(tenant_id_), K(start_time_us), KPC(io_manager));
-        }
-        ob_usleep((useconds_t)10L * 1000L); //10ms
-      }
-    }
   }
 }
 
 void ObPCachedExternalFileService::destroy()
 {
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    if (is_meta_tenant(tenant_id_)) {
+      // skip meta tenant
+    } else {
+      // must wait all io finish, before destroy io_callback_allocator_
+      ObTenantIOManager *io_manager = nullptr;
+      if (is_virtual_tenant_id(tenant_id_)) {
+        // do nothing
+      } else if (OB_NOT_NULL(io_manager = MTL(ObTenantIOManager *))) {
+        const int64_t start_us = ObTimeUtility::current_time_us();
+        while (io_manager->get_ref_cnt() > 1) {
+          if (REACH_TIME_INTERVAL(1000L * 1000L)) { // 1s
+            LOG_INFO("wait tenant io manager quit", K_(tenant_id), K(start_us), KPC(io_manager));
+          }
+          ob_usleep((useconds_t)10L * 1000L); //10ms
+        }
+      }
+    }
+  }
   hit_stat_.reset();
   running_prefetch_tasks_map_.destroy();
   timer_task_scheduler_.destroy();

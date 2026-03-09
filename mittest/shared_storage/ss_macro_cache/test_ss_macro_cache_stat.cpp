@@ -147,6 +147,7 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat)
 
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();
@@ -215,6 +216,7 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat_after_evict)
 
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();

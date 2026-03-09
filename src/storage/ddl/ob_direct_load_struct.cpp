@@ -1117,7 +1117,7 @@ int ObColumnSliceStore::dump_macro_block()
       macro_seq_param.start_ = cur_start_seq.macro_data_seq_;
 
       ObPreWarmerParam pre_warm_param;
-      ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+      ObISSTableObjectCleaner *object_cleaner = nullptr;
       ObWholeDataStoreDesc data_desc;
 
       HEAP_VAR(ObMacroBlockWriter, macro_block_writer, true/*is_need_macro_buffer*/) {
@@ -1183,7 +1183,7 @@ int ObColumnSliceStore::dump_macro_block()
       } else if (FALSE_IT(data_desc.get_desc().sstable_index_builder_ = &index_builder)) { // for build the tail index block in macro block
       } else if (OB_FAIL(pre_warm_param.init(ls_id_, tablet_id_))) {
         LOG_WARN("failed to init pre warm param", K(ret), K(ls_id_), K(tablet_id_));
-      } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(data_desc.get_desc(), object_cleaner))) {
+      } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(data_desc.get_desc(), object_cleaner))) {
         LOG_WARN("failed to get cleaner from data store desc", K(ret));
       } else if (OB_FAIL(macro_block_writer.open(data_desc.get_desc(), cur_start_seq.get_parallel_idx(),
               macro_seq_param, pre_warm_param, *object_cleaner, ddl_redo_callback))) {
@@ -1569,7 +1569,7 @@ int ObColumnBatchSliceStore::dump_macro_block()
       macro_seq_param.start_ = cur_start_seq.macro_data_seq_;
 
       ObPreWarmerParam pre_warm_param;
-      ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+      ObISSTableObjectCleaner *object_cleaner = nullptr;
       ObWholeDataStoreDesc data_desc;
       ObDDLRedoLogWriterCallback ddl_redo_callback;
       HEAP_VAR(ObMacroBlockWriter, macro_block_writer, true/*is_need_macro_buffer*/) {
@@ -1636,7 +1636,7 @@ int ObColumnBatchSliceStore::dump_macro_block()
           } else if (FALSE_IT(data_desc.get_desc().sstable_index_builder_ = &index_builder)) { // for build the tail index block in macro block
           } else if (OB_FAIL(pre_warm_param.init(ls_id_, tablet_id_))) {
             LOG_WARN("failed to init pre warm param", K(ret), K(ls_id_), K(tablet_id_));
-          } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(data_desc.get_desc(), object_cleaner))) {
+          } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(data_desc.get_desc(), object_cleaner))) {
             LOG_WARN("failed to get cleaner from data store desc", K(ret));
           } else if (OB_FAIL(macro_block_writer.open(data_desc.get_desc(),
                                                     cur_start_seq.get_parallel_idx(),
@@ -1752,10 +1752,10 @@ int ObMacroBlockSliceStore::init(
       macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
       macro_seq_param.start_ = data_seq.macro_data_seq_;
       ObPreWarmerParam pre_warm_param;
-      ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+      ObISSTableObjectCleaner *object_cleaner = nullptr;
       if (OB_FAIL(pre_warm_param.init(ls_id, table_key.tablet_id_))) {
         LOG_WARN("failed to init pre warm param", K(ret), K(ls_id), "tablet_id", table_key.tablet_id_);
-      } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(
+      } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(
                                  tablet_direct_load_mgr->get_data_block_desc().get_desc(),
                                  object_cleaner))) {
         LOG_WARN("failed to get cleaner from data store desc", K(ret));
@@ -3667,7 +3667,7 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
     macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
     macro_seq_param.start_ = start_seq.macro_data_seq_;
     ObPreWarmerParam pre_warm_param;
-    ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+    ObISSTableObjectCleaner *object_cleaner = nullptr;
     ObMacroMetaTempStore *macro_meta_store = nullptr;
     const ObDirectLoadType direct_load_type = tablet_direct_load_mgr->get_direct_load_type();
     if (OB_FAIL(pre_warm_param.init(ls_id, table_key.tablet_id_))) {
@@ -3748,7 +3748,7 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(data_desc_.get_desc(), object_cleaner))) {
+    } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(data_desc_.get_desc(), object_cleaner))) {
       LOG_WARN("fail to get cleaner from data store desc", K(ret), K(data_desc_.get_desc()));
     } else if (GCTX.is_shared_storage_mode()) {
       if (OB_FAIL(macro_block_writer_.open_for_ss_ddl(data_desc_.get_desc(), start_seq.get_parallel_idx(),

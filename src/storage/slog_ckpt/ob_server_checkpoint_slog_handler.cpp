@@ -853,14 +853,6 @@ int ObServerCheckpointSlogHandler::handle_tenant_create_commit(const omt::ObTena
       // for macro check in observer start
       MTL(checkpoint::ObTabletGCService*)->set_observer_start_macro_block_id_trigger();
     }
-    // when restart observer, if current sys tenant is hidden, hidden_sys_data_disk_size is hidden_sys_data_disk_config_size
-    const bool is_hidden = tenant_meta.super_block_.is_hidden_;
-    if ((OB_SYS_TENANT_ID == tenant_id) && is_hidden) {
-      const int64_t hidden_sys_data_disk_size = tenant_meta.unit_.config_.data_disk_size();
-      if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.update_hidden_sys_data_disk_size(hidden_sys_data_disk_size))) {
-        LOG_WARN("fail to update hidden sys data disk size", KR(ret), K(hidden_sys_data_disk_size));
-      }
-    }
   }
 #endif
 

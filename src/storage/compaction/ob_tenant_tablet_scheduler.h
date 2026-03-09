@@ -193,7 +193,7 @@ public:
       const int64_t prefix_len);
   static bool check_tx_table_ready(ObLS &ls, const share::SCN &check_scn);
   static int fill_minor_compaction_param(
-      const ObTabletHandle &tablet_handle,
+      const ObTablet &tablet,
       const ObGetMergeTablesResult &result,
       const int64_t total_sstable_cnt,
       const int64_t parallel_dag_cnt,

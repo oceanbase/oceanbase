@@ -324,7 +324,7 @@ int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource &server_r
       server_resource.memory_size_ += max(ObMallocAllocator::get_instance()->get_tenant_limit(tenant_units.at(i).tenant_id_) - extra_memory,
                                           tenant_units.at(i).config_.memory_size());
       server_resource.log_disk_size_ += tenant_units.at(i).config_.log_disk_size();
-      server_resource.data_disk_size_ += tenant_units.at(i).get_effective_actual_data_disk_size();
+      server_resource.data_disk_size_ += tenant_units.at(i).get_actual_data_disk_size();
     }
   }
   return ret;
@@ -452,20 +452,6 @@ int ObTenantNodeBalancer::check_new_tenant(
     if (OB_SUCC(ret) && OB_FAIL(omt_->update_tenant_memory(unit, extra_memory))) {
       LOG_ERROR("fail to update tenant memory", K(ret), K(tenant_id));
     }
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(ret)) {
-    } else if (!GCTX.is_shared_storage_mode() || unit.config_.data_disk_size() == 0) {
-      // do nothing
-    } else {
-      int64_t data_disk_size = unit.config_.data_disk_size();
-      if (is_sys_tenant(tenant_id)) { // real_sys_tenant's data_disk_size = sys_unit_config + hidden_sys_data_disk_size
-        data_disk_size += OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
-      }
-      if (OB_FAIL(omt_->update_tenant_data_disk_size(tenant_id, data_disk_size))) {
-        LOG_WARN("fail to update tenant data disk size", K(ret), K(tenant_id), K(data_disk_size));
-      }
-    }
-#endif
     if (OB_SUCC(ret) && !is_virtual_tenant_id(tenant_id)) {
       if (OB_FAIL(omt_->modify_tenant_io(tenant_id, unit.config_))) {
         LOG_WARN("modify tenant io config failed", K(ret), K(tenant_id), K(unit.config_));

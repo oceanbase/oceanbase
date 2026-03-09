@@ -500,7 +500,7 @@ struct ObUpdateTableStoreParam
   bool need_report_major() const;
   int64_t get_report_scn() const;
   bool is_ha_replace_table() const { return ha_info_.is_only_replace_major_ || ha_info_.need_replace_remote_sstable_; }
-  bool get_need_check_sstable() const { return is_minor_merge_type(compaction_info_.merge_type_); }
+  bool get_need_check_sstable() const { return is_minor_merge_type(compaction_info_.merge_type_) && !is_ss_upload_minor_sstable_; }
   #define PARAM_DEFINE_FUNC(var_type, param, var_name) \
     OB_INLINE var_type get_##var_name() const { return param. var_name##_; }
   #define HA_PARAM_FUNC(var_type, var_name) \
@@ -521,6 +521,7 @@ struct ObUpdateTableStoreParam
                K_(compaction_info), K_(ha_info),
                K_(ddl_info), K_(allow_duplicate_sstable),
                K_(allow_adjust_next_start_scn),
+               K_(is_ss_upload_minor_sstable),
                K_(update_tablet_ss_change_version),
                K_(tablet_ss_change_fully_applied),
                K_(upper_trans_param),
@@ -536,6 +537,7 @@ struct ObUpdateTableStoreParam
   const blocksstable::ObSSTable *sstable_;
   bool allow_duplicate_sstable_;
   bool allow_adjust_next_start_scn_;           // wheter can adjust start_scn of next sibling sstable
+  bool is_ss_upload_minor_sstable_;            // for shared storage upload minor sstable
   share::SCN update_tablet_ss_change_version_; // for shared storage tablet change sync
   bool tablet_ss_change_fully_applied_;        // wheter the specified version is fully applied
   UpdateUpperTransParam upper_trans_param_;    // set upper_trans_param_ only when update upper_trans_version

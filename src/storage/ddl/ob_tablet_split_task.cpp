@@ -1093,9 +1093,11 @@ int ObTabletSplitPrepareTask::prepare_context()
     if (OB_FAIL(ss_minor_split_helper.start_add_minor_op(
         param_->ls_id_,
         context_->split_scn_,
+        context_->reorg_scn_,
         context_->parallel_cnt_of_each_sstable_,
         context_->table_store_iterator_,
-        param_->dest_tablets_id_))) {
+        param_->dest_tablets_id_,
+        param_->data_format_version_))) {
       LOG_WARN("start add minor op failed", K(ret), KPC(param_));
     } else if (OB_FAIL(ss_minor_split_helper.persist_majors_gc_rely_info(
         param_->ls_id_,

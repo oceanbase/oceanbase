@@ -123,7 +123,7 @@ TEST_F(TestSSTmpFilePrereadFlag, preread)
   // 2. exhaust local disk space to force write_through
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
-  int64_t avail_size = disk_space_mgr->get_macro_cache_free_size();
+  int64_t avail_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
   ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(avail_size,
             ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE));
   LOG_INFO("exhausted tmp file disk space to force write_through", K(avail_size));
@@ -187,7 +187,7 @@ TEST_F(TestSSTmpFilePrereadFlag, no_preread)
   // 2. exhaust local disk space to force write_through
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
-  int64_t avail_size = disk_space_mgr->get_macro_cache_free_size();
+  int64_t avail_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
   ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(avail_size,
             ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE));
   LOG_INFO("exhausted tmp file disk space to force write_through", K(avail_size));

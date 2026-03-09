@@ -140,6 +140,9 @@ public:
       const blocksstable::ObMigrationSSTableParam &migration_param,
       const common::ObIArray<blocksstable::MacroBlockId> &data_block_ids,
       const common::ObIArray<blocksstable::MacroBlockId> &other_block_ids);
+  int init_for_ss_mini_upload(const blocksstable::ObMigrationSSTableParam &migration_param,
+                              const blocksstable::ObSSTableMergeRes &res,
+                              const int64_t root_macro_seq);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_transfer_empty_mini_minor_sstable(const common::ObTabletID &tablet_id,

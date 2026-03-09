@@ -267,7 +267,9 @@ public:
 private:
   int prepare_merge_ctx_();
   int update_merge_sstable_();
+#ifdef OB_BUILD_SHARED_STORAGE
   int update_merge_sstable_for_ss_();
+#endif
 
 private:
   bool is_inited_;

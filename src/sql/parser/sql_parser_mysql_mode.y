@@ -396,7 +396,7 @@ END_P SET_VAR DELIMITER
         VALID VALUE VARIANCE VARIABLES VENDED_CREDENTAIL_ENABLED VERBOSE VERIFY VERSION VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
         VAR_SAMP VARSAMP VALIDATION VECTOR VECTOR_DISTANCE MICRO_INDEX_CLUSTERED VECTOR_SIMILARITY
 
-        WAIT WAREHOUSE WARNINGS WASH WEEK WEIGHT_STRING WHENEVER WORK WRAPPER WINDOW WEAK WITH_COLUMN_GROUP WITHOUT
+        WAIT WAREHOUSE WARM WARNINGS WASH WEEK WEIGHT_STRING WHENEVER WORK WRAPPER WINDOW WEAK WITH_COLUMN_GROUP WITHOUT
 
         X509 XA XID XML
 
@@ -615,9 +615,9 @@ END_P SET_VAR DELIMITER
 %type <node> vector_similarity_expr vector_similarity_metric
 %type <node> groupconcat_agg_func
 %type <node> create_sensitive_rule_stmt drop_sensitive_rule_stmt alter_sensitive_rule_stmt alter_sensitive_rule_action sensitive_rule_name sensitive_field_list sensitive_field sensitivity_protection_spec sensitivity_encryption_spec
+%type <node> table_name_or_tablet_id opt_with_index
 %type <node> create_routine_load_stmt load_properties load_property_list load_property opt_load_where_clause job_properties_expr job_property_list job_property
 %type <node> pause_routine_load_stmt resume_routine_load_stmt stop_routine_load_stmt
-
 %type <node> archivelog_piece_optional_piece_list backupset_optional_set_list opt_level opt_validate_backup_dest
 
 %start sql_stmt
@@ -8695,6 +8695,10 @@ BOUNDARY_COLUMN COMP_EQ column_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_HOT_RETENTION, 2, $3, $4);
 }
+| MIXED_RETENTION COMP_EQ INTNUM retention_time_unit
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MIXED_RETENTION, 2, $3, $4);
+}
 ;
 
 retention_time_unit:
@@ -10838,6 +10842,39 @@ TABLET_ID COMP_EQ INTNUM
 
 opt_tablet_id_no_empty:
 TABLET_ID COMP_EQ INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLET_ID, 1, $3);
+}
+;
+
+opt_with_index:
+WITH INDEX
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+  $$->is_hidden_const_ = 1;
+}
+| WITH LOCAL INDEX
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 2;
+  $$->is_hidden_const_ = 1;
+}
+| WITH GLOBAL INDEX
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 3;
+  $$->is_hidden_const_ = 1;
+}
+| /*EMPTY*/ { $$ = NULL; }
+;
+
+table_name_or_tablet_id:
+TABLE_NAME COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE, 1, $3);
+}
+| TABLET_ID COMP_EQ INTNUM
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLET_ID, 1, $3);
 }
@@ -21329,6 +21366,12 @@ alter_with_opt_hint SYSTEM FLUSH SS_LOCAL_CACHE opt_tenant_name opt_cache_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_SS_LOCAL_CACHE, 2, $5, $6);
 }
 |
+alter_with_opt_hint SYSTEM WARM UP LOCAL CACHE opt_tenant_name table_name_or_tablet_id opt_with_index
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PREWARM_SS_LOCAL_CACHE, 3, $7, $8, $9);
+}
+|
 alter_with_opt_hint SYSTEM FLUSH DAG WARNINGS
 {
   (void)($1);
@@ -28724,6 +28767,7 @@ ACCESS_INFO
 |       VERSION
 |       WAIT
 |       WAREHOUSE
+|       WARM
 |       WARNINGS
 |       WASH
 |       WEAK

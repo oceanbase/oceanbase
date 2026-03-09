@@ -26,6 +26,7 @@
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/filter/ob_tx_data_minor_filter.h"
 #ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_ss_mini_merge_ctx.h"
 #include "storage/incremental/ob_ss_minor_compaction.h"
 #include "storage/compaction_v2/ob_ss_major_merge_ctx.h"
 #endif
@@ -372,7 +373,8 @@ ObTabletMergeDagParam::ObTabletMergeDagParam()
      schedule_private_transfer_epoch_(-1),
      reorganization_scn_(),
      ls_id_(),
-     tablet_id_()
+     tablet_id_(),
+     modified_start_scn_()
 {
 }
 
@@ -390,18 +392,25 @@ ObTabletMergeDagParam::ObTabletMergeDagParam(
      schedule_private_transfer_epoch_(schedule_private_transfer_epoch),
      reorganization_scn_(),
      ls_id_(ls_id),
-     tablet_id_(tablet_id)
+     tablet_id_(tablet_id),
+     modified_start_scn_()
 {
 }
 
 bool ObTabletMergeDagParam::is_valid() const
 {
-  return ls_id_.is_valid()
+  bool is_valid = ls_id_.is_valid()
          && tablet_id_.is_valid()
          && is_valid_merge_type(merge_type_)
          && (!is_multi_version_merge(merge_type_) || merge_version_ >= 0)
-         && is_valid_exec_mode(exec_mode_)
-         && (is_local_exec_mode(exec_mode_) || reorganization_scn_.is_valid());
+         && is_valid_exec_mode(exec_mode_);
+  if (is_valid && is_minor_merge_type(merge_type_) && is_output_exec_mode(exec_mode_)) {
+    is_valid = reorganization_scn_.is_valid();
+  }
+  if (is_valid && is_upload_minor_exec_mode(exec_mode_)) {
+    is_valid = modified_start_scn_.is_valid();
+  }
+  return is_valid;
 }
 
 ObTabletMergeDag::ObTabletMergeDag(
@@ -803,8 +812,7 @@ int ObTabletMergeExecuteDag::init_by_param(const share::ObIDagInitParam *param)
 int ObTabletMergeExecuteDag::prepare_init(
     const ObTabletMergeDagParam &param,
     const lib::Worker::CompatMode compat_mode,
-    const ObGetMergeTablesResult &result,
-    ObLSHandle &ls_handle)
+    const ObGetMergeTablesResult &result)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY((!is_minor_merge_type(param.merge_type_)
@@ -850,6 +858,8 @@ bool ObTabletMergeExecuteDag::operator == (const ObIDag &other) const
     const ObTabletMergeExecuteDag &other_merge_dag = static_cast<const ObTabletMergeExecuteDag &>(other);
     if (!belong_to_same_tablet(&other_merge_dag)
         || merge_type_ != other_merge_dag.merge_type_) { // different merge type
+      is_same = false;
+    } else if (param_.exec_mode_ != other_merge_dag.param_.exec_mode_) {
       is_same = false;
     } else if (is_minor_merge(merge_type_)) {  // range cross -> two dag equal
       const share::ObScnRange &merge_scn_range = get_merge_range();
@@ -915,7 +925,11 @@ int ObTabletMergeDag::alloc_merge_ctx()
     LOG_WARN("ctx is not null", K(ret), K(ctx_));
   } else if (FALSE_IT(prepare_allocator(merge_type, param_.is_reserve_mode_, allocator_))) {
   } else if (is_mini_merge(merge_type)) {
-    ctx_ = NEW_CTX(ObTabletMiniMergeCtx);
+#ifdef OB_BUILD_SHARED_STORAGE
+   ctx_ = GCTX.is_shared_storage_mode() ? NEW_CTX(ObTabletSSMiniMergeCtx) : NEW_CTX(ObTabletMiniMergeCtx);
+#else
+   ctx_ = NEW_CTX(ObTabletMiniMergeCtx);
+#endif
   } else if (is_meta_major_merge(merge_type)) {
     ctx_ = NEW_CTX(ObTabletMajorMergeCtx);
   } else if (is_major_merge_type(merge_type) || is_inc_major_merge(merge_type)) {

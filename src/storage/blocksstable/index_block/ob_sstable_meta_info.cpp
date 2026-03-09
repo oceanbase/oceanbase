@@ -1568,6 +1568,55 @@ int ObSSTableMacroInfo::deep_copy(
   return ret;
 }
 
+int ObSSTableMacroInfo::expand_block_ids(common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (entry_id_ != ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK) {
+    ObMacroIdIterator data_block_iter;
+    ObMacroIdIterator other_block_iter;
+    if (OB_FAIL(get_data_block_iter(data_block_iter))) {
+      LOG_WARN("fail to get data block iterator", K(ret));
+    } else if (OB_FAIL(get_other_block_iter(other_block_iter))) {
+      LOG_WARN("fail to get other block iterator", K(ret));
+    } else {
+      MacroBlockId *data_block_ids = static_cast<MacroBlockId *>(allocator.alloc(sizeof(MacroBlockId) * data_block_count_));
+      MacroBlockId *other_block_ids = static_cast<MacroBlockId *>(allocator.alloc(sizeof(MacroBlockId) * other_block_count_));
+      if (OB_ISNULL(data_block_ids) || OB_ISNULL(other_block_ids)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory for data block ids", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < data_block_count_; ++i) {
+          new (data_block_ids + i) MacroBlockId();
+          if (OB_FAIL(data_block_iter.get_next_macro_id(*(data_block_ids + i)))) {
+            LOG_WARN("fail to get next macro id", K(ret));
+          }
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < other_block_count_; ++i) {
+          new (other_block_ids + i) MacroBlockId();
+          if (OB_FAIL(other_block_iter.get_next_macro_id(*(other_block_ids + i)))) {
+            LOG_WARN("fail to get next macro id", K(ret));
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+        if (OB_NOT_NULL(data_block_ids)) {
+          allocator.free(data_block_ids);
+        }
+        if (OB_NOT_NULL(other_block_ids)) {
+          allocator.free(other_block_ids);
+        }
+      } else {
+        data_block_ids_ = data_block_ids;
+        other_block_ids_ = other_block_ids;
+        linked_block_ids_ = nullptr;
+        linked_block_count_ = 0;
+        entry_id_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
+      }
+    }
+  }
+  return ret;
+}
+
 /*static*/int ObSSTableMacroInfo::load_members_by_entry_block_(
     const MacroBlockId &entry_block_id,
     /*out*/int64_t &data_blk_cnt,
@@ -1602,5 +1651,5 @@ int ObSSTableMacroInfo::deep_copy(
   }
   return ret;
 }
-}
+} // end namespace blocksstable
 } // end namespace oceanbase

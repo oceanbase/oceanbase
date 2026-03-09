@@ -152,6 +152,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObGetSSMicroCacheInfoP, gctx_);
     RPC_PROCESSOR(ObRpcClearSSMicroCacheP, gctx_);
     RPC_PROCESSOR(ObRpcFlushSSLocalCacheP, gctx_);
+    RPC_PROCESSOR(ObRpcPrewarmSSLocalCacheP, gctx_);
     RPC_PROCESSOR(ObDelSSLocalTmpFileP, gctx_);
     RPC_PROCESSOR(ObDelSSLocalMajorP, gctx_);
     RPC_PROCESSOR(ObCalibrateSSDiskSpaceP, gctx_);

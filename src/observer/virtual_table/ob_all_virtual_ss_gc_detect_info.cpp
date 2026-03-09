@@ -114,6 +114,8 @@ int ObAllVirtualSSGCDetectInfo::process_curr_tenant(ObNewRow *&row)
 #ifndef OB_BUILD_SHARED_STORAGE
   ret = OB_ITER_END;
 #else
+  const common::hash::ObHashMap<ObSSPreciseGCTablet, TabletInfoCache> &gc_start_scn_map =
+    MTL(ObSSGarbageCollectorService *)->get_gc_start_scn_map();
   if (!GCTX.is_shared_storage_mode()) {
     ret = OB_ITER_END;
   } else if (!start_to_read_ && OB_FAIL(prepare_start_to_read())) {
@@ -151,6 +153,8 @@ int ObAllVirtualSSGCDetectInfo::process_curr_tenant(ObNewRow *&row)
         break;
       }
       case GC_END_SCN: {
+        const TabletInfoCache *tablet_info_cache = gc_start_scn_map.get(gc_tablet);
+        const SCN gc_start_scn = OB_ISNULL(tablet_info_cache) ? share::SCN::min_scn() : tablet_info_cache->tablet_version_;
         cur_row_.cells_[i].set_int(gc_start_scn.get_val_for_inner_table_field());
         break;
       }

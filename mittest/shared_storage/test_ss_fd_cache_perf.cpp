@@ -108,8 +108,17 @@ public:
 void TestSSFdCache::SetUpTestCase()
 {
   GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
-  EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
   ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
+
+  omt::ObTenant *tenant = nullptr;
+  ASSERT_NE(nullptr, GCTX.omt_);
+  ASSERT_EQ(OB_SUCCESS, GCTX.omt_->get_tenant(MTL_ID(), tenant));
+  ASSERT_NE(nullptr, tenant);
+  share::ObUnitInfoGetter::ObTenantConfig new_unit;
+  ASSERT_EQ(OB_SUCCESS, new_unit.assign(tenant->get_unit()));
+  new_unit.config_.resource_.data_disk_size_ = 20L * 1024L * 1024L * 1024L;
+  ASSERT_EQ(OB_SUCCESS, GCTX.omt_->update_tenant_unit(new_unit));
 }
 
 void TestSSFdCache::TearDownTestCase()
@@ -166,7 +175,7 @@ TEST_F(TestSSFdCache, cost_time)
   ObTenantDiskSpaceManager *tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   int64_t total_disk_size = 20L * 1024L * 1024L * 1024L - ObDiskSpaceManager::DEFAULT_SERVER_TENANT_ID_DISK_SIZE; // 20GB
   bool succ_resize = false;
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(total_disk_size, succ_resize));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size_(total_disk_size, succ_resize));
   ASSERT_EQ(total_disk_size, tenant_disk_space_mgr->get_total_disk_size());
 
   // prepare file

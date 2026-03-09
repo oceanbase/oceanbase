@@ -149,6 +149,12 @@ int ObSSTableSplitHelper::prepare_index_builder_ctxs(
       const int64_t snapshot_version = sstable.is_major_sstable() ?
         sstable.get_snapshot_version() : sstable.get_end_scn().get_val_for_tx();
       int32_t transfer_epoch = -1;
+      share::SCN reorg_scn;
+      if (sstable.is_mds_sstable() || param.data_format_version_ < DATA_VERSION_4_5_1_0) {
+	reorg_scn = split_reorganization_scn;
+      } else {
+	reorg_scn = split_ctx.reorg_scn_;
+      }
       if (OB_FAIL(ObDDLUtil::ddl_get_tablet(split_ctx.ls_handle_, dst_tablet_id, tablet_handle))) {
         LOG_WARN("get tablet failed", K(ret));
       } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
@@ -162,7 +168,7 @@ int ObSSTableSplitHelper::prepare_index_builder_ctxs(
           tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_,
           transfer_epoch/*use dest_tablet_id's transfer_epoch*/,
           0/*concurrent_cnt*/,
-          split_reorganization_scn, sstable.get_end_scn(),
+          reorg_scn, sstable.get_end_scn(),
           cg_schema/*cg_schema*/,
           table_cg_idx/*table_cg_idx*/,
           exec_mode))) {
@@ -329,7 +335,7 @@ int ObSSTableSplitWriteHelper::prepare_macro_block_writer(
       pre_warm_param.reset();
       ObDataStoreDesc *data_desc = nullptr;
       ObMacroBlockWriter *macro_block_writer = nullptr;
-      ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+      ObISSTableObjectCleaner *object_cleaner = nullptr;
       const ObTabletID &dst_tablet_id = param_->dest_tablets_id_.at(i);
       const ObMergeType merge_type = sstable_->is_major_sstable() ? MAJOR_MERGE : MINOR_MERGE;
       const int64_t snapshot_version = sstable_->is_major_sstable() ?
@@ -354,7 +360,7 @@ int ObSSTableSplitWriteHelper::prepare_macro_block_writer(
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FAIL(pre_warm_param.init(param_->ls_id_, dst_tablet_id))) {
         LOG_WARN("failed to init pre warm param", K(ret), K(dst_tablet_id), KPC(param_));
-      } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(*data_desc, object_cleaner))) {
+      } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(*data_desc, object_cleaner))) {
         LOG_WARN("failed to get cleaner from data store desc", K(ret));
       } else if (OB_FAIL(macro_block_writer->open(*data_desc, task_idx/*parallel_idx*/,
           macro_seq_param, pre_warm_param, *object_cleaner))) {
@@ -1150,7 +1156,7 @@ int ObSpecialSplitWriteHelper::create_mds_sstable()
           LOG_INFO("no need to build mds sstable", K(dest_tablet_id));
       #ifdef OB_BUILD_SHARED_STORAGE
         } else if (GCTX.is_shared_storage_mode()
-          && OB_FAIL(ss_mds_split_helper.generate_minor_macro_seq_info(
+          && OB_FAIL(ss_mds_split_helper.generate_mds_minor_macro_seq_info(
               dest_tablet_index/*index in dest_tables_id*/,
               0/*the index in the generated minors*/,
               1/*the parallel cnt in one sstable*/,
@@ -1224,6 +1230,7 @@ int ObSSSplitWriteHelperCommon::prepare_macro_seq_param_impl(
             sstable_index/*the index in the generated minors*/,
             parallel_cnt/*the parallel cnt in one sstable*/,
             task_idx/*the parallel idx in one sstable*/,
+	    split_param.data_format_version_,
             macro_start_seq.macro_data_seq_))) {
           LOG_WARN("generate macro start seq failed", K(ret));
         }
@@ -1318,6 +1325,7 @@ int ObSSSplitWriteHelperCommon::build_create_sstable_param_impl(
               sstable_index/*the index in the generated minors*/,
               parallel_cnt/*the parallel cnt in one sstable*/,
               parallel_cnt/*the parallel idx in one sstable*/,
+	      split_param.data_format_version_,
               index_tree_start_seq))) {
           LOG_WARN("get macro seq failed", K(ret));
         } else if (OB_FAIL(index_builder_ctx.index_builder_->close_with_macro_seq(

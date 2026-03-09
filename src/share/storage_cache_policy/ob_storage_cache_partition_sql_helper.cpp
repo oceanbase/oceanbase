@@ -27,7 +27,7 @@ int ObAddPartInfoHelper::add_part_storage_cache_policy_column(const ObBasePartit
   int ret = OB_SUCCESS;
   storage::ObStorageCachePolicyType part_storage_cache_policy_type = storage::ObStorageCachePolicyType::NONE_POLICY;
   const char *part_storage_cache_policy_str = nullptr;
-  if (is_hot_or_auto_policy(part.get_part_storage_cache_policy_type())) {
+  if (is_hot_or_auto_or_cold(part.get_part_storage_cache_policy_type())) {
     part_storage_cache_policy_type = part.get_part_storage_cache_policy_type();
   }
   if (OB_FAIL(ret)) {

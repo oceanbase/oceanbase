@@ -33,6 +33,7 @@
 #include "unittest/storage/sslog/test_mock_palf_kv.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
+#include "storage/shared_storage/macro_cache/ob_ss_macro_cache_evict_policy.h"
 
 namespace oceanbase
 {
@@ -139,7 +140,7 @@ public:
     ObSimpleClusterTestBase::SetUp();
     oceanbase::palf::election::MAX_TST = 500 * 1000;  // 500ms, lease interval = 4 * 500ms = 2s
     if (!tenant_created_) {
-      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8, "2G"));
+      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 2, "4G"));
       OK(get_tenant_id(run_ctx_.tenant_id_));
       ASSERT_NE(0, run_ctx_.tenant_id_);
       tenant_created_ = true;
@@ -161,6 +162,7 @@ public:
     write_info_.size_ = WRITE_IO_SIZE;
     write_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
     write_info_.mtl_tenant_id_ = run_ctx_.tenant_id_;
+    write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
 
   }
 
@@ -173,7 +175,7 @@ public:
   void info_log(const ObSSMacroCacheType cur_type, const int64_t i, ObTenantDiskSpaceManager *disk_space_mgr,
                 ObSSMacroCacheMgr *macro_cache_mgr, const int64_t test_type, const bool is_all = false)
   {
-    const int64_t macro_cache_size = disk_space_mgr->get_macro_cache_size();
+    const int64_t macro_cache_size = disk_space_mgr->get_allocated_shared_macro_cache_size_nolock_();
     const int64_t disk_size = disk_space_mgr->get_total_disk_size();
     const int64_t meta_file_used_size = disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::META_FILE)].used_;
     const int64_t tmp_file_used_size = disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::TMP_FILE)].used_;
@@ -183,7 +185,7 @@ public:
     const int64_t write_cache_size = macro_cache_mgr->get_write_cache_size();
     const char *cur_type_name = get_ss_macro_cache_type_str(cur_type);
     if (!is_all) {
-      const int64_t cur_type_free_size = disk_space_mgr->get_macro_cache_free_size();
+      const int64_t cur_type_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
       LOG_INFO("evict_test_info_log", "macro_cache_size(MB)", macro_cache_size/ObTenantFileManager::MB,
                                       "disk_size(MB)", disk_size/ObTenantFileManager::MB,
                                       "reserved_size(MB)", reserved_size/ObTenantFileManager::MB,
@@ -193,7 +195,7 @@ public:
                                       "hot_tablet_macro_block_used_size(MB)", hot_tablet_macro_block_used_size/ObTenantFileManager::MB,
                                       "cur_type_free_size(MB)", cur_type_free_size/ObTenantFileManager::MB,
                                       "write_cache_size(MB)", write_cache_size / ObTenantFileManager::MB,
-                                      "write_cache_size(%)", (write_cache_size * 100 / (macro_cache_size - reserved_size)),
+                                      "write_cache_size(%)", (write_cache_size * 100 / macro_cache_size),
                                       K(cur_type_name), K(i), K(test_type));
     } else {
       const int64_t macro_block_weight_size = macro_cache_size * disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::MACRO_BLOCK)].get_weight() / 100;
@@ -211,7 +213,7 @@ public:
       const int64_t macro_block_max_size = macro_cache_size * disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::MACRO_BLOCK)].get_max() / 100;
       const int64_t hot_tablet_macro_block_max_size = macro_cache_size * disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK)].get_max() / 100;
 
-      const int64_t macro_cache_free_size = disk_space_mgr->get_macro_cache_free_size();
+      const int64_t macro_cache_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
       LOG_INFO("evict_test_info_log", "macro_cache_size(MB)", macro_cache_size/ObTenantFileManager::MB,
                                       "disk_size(MB)", disk_size/ObTenantFileManager::MB,
                                       "reserved_size(MB)", reserved_size/ObTenantFileManager::MB,
@@ -256,17 +258,58 @@ public:
     }
   }
 
-  void init_wr_macro_cache(ObTenantFileManager *tenant_file_mgr, const int64_t test_type)
+  void init_wr_macro_cache(
+      ObSSMacroCacheMgr *macro_cache_mgr,
+      ObTenantDiskSpaceManager *disk_space_mgr,
+      ObTenantFileManager *tenant_file_mgr,
+      const int64_t test_type)
   {
     /*
-    The reason for using 9999 is to ensure that this id value will not be written back during subsequent tests.
+    The reason for using INT64_MAX is to ensure that this id value will not be written back during subsequent tests.
     Because during initialization, 2M will be written first as an additional occupation to facilitate test evict.
     Some operations after initialization may still write data of the macro block type.
     However, generally, the id values start in sequence from 0, hundreds of them, and will not reach 9999
     */
-    macro_cache_write(9999, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type);
-    macro_cache_write(10000, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type);
-    macro_cache_write(10001, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type);
+
+    /*
+    Modification intent:
+    Ensure that init_wr_macro_cache writes a sufficient number of MACRO_BLOCK-type
+    cache entries so that the eviction policy can reliably identify MACRO_BLOCK as
+    the target for eviction.
+
+    Rationale:
+    Several eviction thresholds (min/weight) are computed using int64 integer division
+    (truncation). Under small test sizes, rounding down may cause writing only a few
+    (e.g., three) 2MB macro blocks to stay below the effective boundary, so the evict
+    policy does not select MACRO_BLOCK even though it should.
+
+    What we do:
+    We keep writing MACRO_BLOCK entries (using a large starting tenant_seq to avoid
+    collision with subsequent tests) until the default evict policy returns
+    MACRO_BLOCK as a candidate, then write additional blocks to make the usage
+    clearly exceed the boundary. This avoids misjudgment caused by precision loss
+    from int64 division.
+    */
+
+    ObSSMacroCacheType evict_macro_cache_type = ObSSMacroCacheType::MAX_TYPE;
+    int64_t i = INT64_MAX;
+    while (evict_macro_cache_type != ObSSMacroCacheType::MACRO_BLOCK) {
+      macro_cache_write(i, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type);
+      info_log(ObSSMacroCacheType::MACRO_BLOCK, i, disk_space_mgr, macro_cache_mgr, test_type);
+      i--;
+
+      ObSSMacroCacheDefaultEvictPolicy default_evict_policy;
+      ObSEArray<ObSSMacroCacheEvictEntry, 32> evict_entries;
+      OK(default_evict_policy.get_evict_candidates(evict_entries));
+      if (!evict_entries.empty()) {
+        evict_macro_cache_type = evict_entries.at(0).cache_type_;
+      }
+    }
+
+    for (int64_t j = i; j > i - 10; j--) {
+      macro_cache_write(j, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type);
+      info_log(ObSSMacroCacheType::MACRO_BLOCK, j, disk_space_mgr, macro_cache_mgr, test_type);
+    }
   }
 
   void test_evict_scene1(ObSSMacroCacheMgr *macro_cache_mgr, ObTenantDiskSpaceManager *disk_space_mgr,
@@ -274,7 +317,7 @@ public:
   {
     /* MACRO_BLOCK(>min(much)), TMP_FILE(>min(a little bit)), META_FILE(<min), HOT_TABLET_MACRO_BLOCK(close to 0)
     => result: evict macro block */
-    const int64_t macro_cache_size = disk_space_mgr->get_macro_cache_size();
+    const int64_t macro_cache_size = disk_space_mgr->get_allocated_shared_macro_cache_size_nolock_();
     const int64_t tmp_file_min_size = macro_cache_size * disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::TMP_FILE)].get_min() / 100;
     const int64_t macro_block_min_size = macro_cache_size * disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::MACRO_BLOCK)].get_min() / 100;
     const int64_t macro_block_weight_size = macro_cache_size * disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::MACRO_BLOCK)].get_weight() / 100;
@@ -285,7 +328,7 @@ public:
     int64_t macro_block_used_size = 0, macro_block_used_size_af_evict = 0;
     int64_t tmp_file_used_size = 0, tmp_file_used_size_af_evict = 0;
     // At first, write 6M of macro block into the macro cache, which is convenient for observation during subsequent test evict
-    init_wr_macro_cache(tenant_file_mgr, test_type);
+    init_wr_macro_cache(macro_cache_mgr, disk_space_mgr, tenant_file_mgr, test_type);
     // shut down evict
     macro_cache_mgr->evict_task_.is_inited_ = false;
     // init status
@@ -296,13 +339,13 @@ public:
       i = i+1;
     }
     i = 0;
-    macro_block_free_size = disk_space_mgr->get_macro_cache_free_size();
+    macro_block_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
     while (macro_block_free_size >= WRITE_IO_SIZE) {
       // write
       macro_cache_write(i, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type);
       info_log(ObSSMacroCacheType::MACRO_BLOCK, i, disk_space_mgr, macro_cache_mgr, test_type);
       i = i+1;
-      macro_block_free_size = disk_space_mgr->get_macro_cache_free_size();
+      macro_block_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
     }
     ASSERT_LT(macro_block_free_size, WRITE_IO_SIZE);
     // write to bucket   ->   check write through
@@ -332,19 +375,28 @@ public:
   {
     /* META_FILE(some), HOT_TABLET_MACRO_BLOCK(<min), MACRO_BLOCK(<min), TMP_FILE(close to 0)
     => result: evict macro block */
-    const int64_t macro_cache_size = disk_space_mgr->get_macro_cache_size();
+    const int64_t macro_cache_size = disk_space_mgr->get_allocated_shared_macro_cache_size_nolock_();
     const int64_t hot_tablet_min_size = macro_cache_size * disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK)].get_min() / 100;
     const int64_t macro_block_weight_size = macro_cache_size * disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::MACRO_BLOCK)].get_weight() / 100;
     const int64_t hot_tablet_weight_size = macro_cache_size * disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK)].get_weight() / 100;
     const int64_t macro_block_min_size = macro_cache_size * disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::MACRO_BLOCK)].get_min() / 100;
-    const int64_t hot_tablet_num = hot_tablet_min_size / WRITE_IO_SIZE - 1;
+    // Keep HOT_TABLET_MACRO_BLOCK strictly below min.
+    // NOTE: There may already be HOT_TABLET_MACRO_BLOCK usage before this scene starts,
+    // so we must subtract the baseline usage when computing how many blocks we can write.
+    const int64_t hot_tablet_used_baseline =
+        disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK)].used_;
+    const int64_t hot_tablet_remain_blocks =
+        (hot_tablet_min_size > hot_tablet_used_baseline)
+            ? ((hot_tablet_min_size - hot_tablet_used_baseline) / WRITE_IO_SIZE)
+            : 0;
+    const int64_t hot_tablet_num = (hot_tablet_remain_blocks > 0) ? (hot_tablet_remain_blocks - 1) : 0;
     int64_t i = 0;
     int64_t meta_file_free_size = 0;
     int64_t macro_block_used_size = 0, macro_block_used_size_af_evict = 0;
     int64_t hot_tablet_used_size = 0, hot_tablet_used_size_af_evict = 0;
 
     // At first, write 6M of macro block into the macro cache, which is convenient for observation during subsequent test evict
-    init_wr_macro_cache(tenant_file_mgr, test_type);
+    init_wr_macro_cache(macro_cache_mgr, disk_space_mgr, tenant_file_mgr, test_type);
     // shut down evict
     macro_cache_mgr->evict_task_.is_inited_ = false;
     // init status
@@ -354,14 +406,17 @@ public:
       info_log(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, i, disk_space_mgr, macro_cache_mgr, test_type);
       i = i+1;
     }
+    // Ensure the scene premise: HOT_TABLET_MACRO_BLOCK stays below min and thus won't be selected for eviction.
+    ASSERT_LT(disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK)].used_,
+              hot_tablet_min_size);
     i = 0;
-    meta_file_free_size = disk_space_mgr->get_macro_cache_free_size();
+    meta_file_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
     while (meta_file_free_size >= WRITE_IO_SIZE) {
       // write
       macro_cache_write(i, tenant_file_mgr, ObSSMacroCacheType::META_FILE, test_type);
       info_log(ObSSMacroCacheType::META_FILE, i, disk_space_mgr, macro_cache_mgr, test_type);
       i = i+1;
-      meta_file_free_size = disk_space_mgr->get_macro_cache_free_size();
+      meta_file_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
     }
     ASSERT_LT(meta_file_free_size, WRITE_IO_SIZE);
     // write to bucket   ->   check write through
@@ -401,6 +456,7 @@ public:
         macro_id.set_macro_private_transfer_epoch(MACRO_BLOCK_TRANSFER_SEQ); // transfer_seq
         macro_id.set_tenant_seq(i); // tenant_seq
         write_info_.set_effective_tablet_id(MACRO_BLOCK_TABLET_ID); // effective_tablet_id
+        write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
         break;
       case ObSSMacroCacheType::META_FILE:
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
@@ -429,6 +485,7 @@ public:
         macro_id.set_macro_private_transfer_epoch(HOT_TABLET_TRANSFER_SEQ); // transfer_seq
         macro_id.set_tenant_seq(i); // tenant_seq
         write_info_.set_effective_tablet_id(HOT_TABLET_TABLET_ID); // effective_tablet_id
+        write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
         break;
       default:
         ASSERT_TRUE(false);
@@ -446,6 +503,7 @@ public:
     } else {
       ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
     }
+    LOG_INFO("macro_cache_write", K(i), K(macro_id), K(write_info_), K_SS_MACRO_CACHE_TYPE(cache_type), K(test_type), K(if_check));
     ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
     write_object_handle.reset();
     if (if_check) {
@@ -502,21 +560,21 @@ public:
   void test_macro_cache_max(ObSSMacroCacheMgr *macro_cache_mgr, ObTenantDiskSpaceManager *disk_space_mgr,
                             ObTenantFileManager *tenant_file_mgr, const ObSSMacroCacheType cache_type, const int64_t test_type)
   {
-    const int64_t hot_tablet_macro_block_min_size = (disk_space_mgr->get_macro_cache_size()) * (disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK)].get_min()) / 100;
+    const int64_t hot_tablet_macro_block_min_size = (disk_space_mgr->get_allocated_shared_macro_cache_size_nolock_()) * (disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK)].get_min()) / 100;
     int64_t i = 0;
     int64_t cur_type_free_size = 0;
     int64_t meta_file_used_size = 0, tmp_file_used_size = 0, macro_block_used_size = 0, hot_tablet_used_size = 0;
     int64_t meta_file_used_size_af_evict = 0, tmp_file_used_size_af_evict = 0, macro_block_used_size_af_evict = 0, hot_tablet_used_size_af_evict = 0;
     // At first, write 6M of macro block into the macro cache, which is convenient for observation during subsequent test evict
-    init_wr_macro_cache(tenant_file_mgr, test_type);
+    init_wr_macro_cache(macro_cache_mgr, disk_space_mgr, tenant_file_mgr, test_type);
     // shut down evict
     macro_cache_mgr->evict_task_.is_inited_ = false;
     info_log(cache_type, -1, disk_space_mgr, macro_cache_mgr, test_type);
-    cur_type_free_size = disk_space_mgr->get_macro_cache_free_size();
+    cur_type_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
     while (cur_type_free_size >= WRITE_IO_SIZE) {
       macro_cache_write(i, tenant_file_mgr, cache_type, test_type);
       info_log(cache_type, i, disk_space_mgr, macro_cache_mgr, test_type);
-      cur_type_free_size = disk_space_mgr->get_macro_cache_free_size();
+      cur_type_free_size = disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
       i = i+1;
     }
     ASSERT_LT(cur_type_free_size, WRITE_IO_SIZE);
@@ -566,18 +624,20 @@ public:
   {
     int64_t write_cache_size = macro_cache_mgr->get_write_cache_size();
     int64_t write_cache_size_af_flush = 0;
-    const int64_t macro_cache_size = disk_space_mgr->get_macro_cache_size();
-    const int64_t reserved_size = disk_space_mgr->get_reserved_disk_size();
+    int64_t tenant_macro_cache_size = disk_space_mgr->get_allocated_tnt_macro_cache_size_by_usage_ratio();
+    ASSERT_GT(tenant_macro_cache_size, 0);
     int64_t i = 0;
     info_log(ObSSMacroCacheType::MACRO_BLOCK, -1, disk_space_mgr, macro_cache_mgr, test_type);
     // shut down write cache flush
     macro_cache_mgr->write_cache_ctrl_task_.is_inited_ = false;
     // shut down evict
     macro_cache_mgr->evict_task_.is_inited_ = false;
-    while ((write_cache_size * 100 / (macro_cache_size - reserved_size)) < macro_cache_mgr->WRITE_CACHE_THRESHOLD) {
+    while ((write_cache_size * 100 / tenant_macro_cache_size) < macro_cache_mgr->WRITE_CACHE_THRESHOLD) {
       macro_cache_write(i, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type);
       info_log(ObSSMacroCacheType::MACRO_BLOCK, i, disk_space_mgr, macro_cache_mgr, test_type);
       write_cache_size = macro_cache_mgr->get_write_cache_size();
+      tenant_macro_cache_size = disk_space_mgr->get_allocated_tnt_macro_cache_size_by_usage_ratio();
+      ASSERT_GT(tenant_macro_cache_size, 0);
       i = i + 1;
     }
     macro_cache_write(i, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type, true); // write to bucket -> check write through
@@ -636,7 +696,7 @@ TEST_F(ObMacroCacheEvictTest, test_evict)
   ASSERT_NE(nullptr, disk_space_mgr);
   ObStorageCachePolicyService *policy_service = MTL(ObStorageCachePolicyService *);
   ASSERT_NE(nullptr, policy_service);
-  policy_service->update_tablet_status(200005, PolicyStatus::HOT); //HOT 0
+  policy_service->update_tablet_status(200005, PolicyStatus::HOT, 200001); //HOT 0, mock tablet_id 200001
   ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager*);
   ASSERT_NE(nullptr, tenant_file_mgr);
 

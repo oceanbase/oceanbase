@@ -105,6 +105,7 @@ void ObMetaMacroExpirationTest::write_data_meta_macro(ObMacroType macro_type, Ma
   ASSERT_TRUE(macro_id.is_valid());
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
   write_info_.set_is_write_cache(true); // write cache
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();

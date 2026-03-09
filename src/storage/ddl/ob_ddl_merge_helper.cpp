@@ -1225,10 +1225,10 @@ int ObSSDDLMergeHelper::merge_cg_sstable(ObIDag *dag,
                                  tablet_handle.get_obj()->get_reorganization_scn(),
                                  SCN::min_scn(),
                                  &cg_schema,
-                                 cg_idx))) {
+                                 cg_idx,
+                                 compaction::ObExecMode::EXEC_MODE_OUTPUT))) {
         LOG_WARN("init data store desc failed", K(ret), K(tablet_id));
       } else {
-        data_desc.get_static_desc().exec_mode_ = compaction::EXEC_MODE_OUTPUT;
         data_desc.get_static_desc().schema_version_ = storage_schema->get_schema_version();
       }
 
@@ -1653,6 +1653,7 @@ int ObSSDDLMergeHelper::update_tablet_table_store(ObDDLTabletMergeDagParamV2 &da
           ASYNC_UPLOAD_INC_SSTABLE(SSIncSSTableType::DDL_SSTABLE,
                                    upload_register_handle,
                                    major_sstable->get_key(),
+                                   major_sstable->get_end_scn(),
                                    SCN::min_scn() /* ddl sstable no need snapshot_version */);
         }
       } else {

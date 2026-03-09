@@ -37,10 +37,11 @@ const char *const OB_DEFAULT_PART_STORAGE_CACHE_POLICY_STR = "NONE";
 const int64_t OB_INVALID_TG_ID = 0;
 const int32_t OB_INVALID_PARTITION_LEVEL = -1;
 // storage_cache_policy format:
-// {GLOBAL: HOT_POLICY|AUTO_POLICY, GRANULARITY: PARTITION|ROW} or
-// {GRANULARITY: PARTITION|ROW, BOUNDARY_COLUMN: column_name,
+// {GLOBAL: HOT_POLICY|AUTO_POLICY|COLD_POLICY, GRANULARITY: PARTITION|ROW} or
+// {GRANULARITY: PARTITION|ROW|BLOCK, BOUNDARY_COLUMN: column_name,
 // BOUNDARY_COLUMN_UNIT: SECOND|MILLISECOND|MICROSECOND|NANOSECOND,
 // HOT_RETENTION_INTERVAL: interval_num, HOT_RETENTION_UNIT: HOUR|DAY|WEEK|MONTH|YEAR}
+// MIXED_RETENTION_INTERVAL: interval_num, MIXED_RETENTION_UNIT: HOUR|DAY|WEEK|MONTH|YEAR}
 static constexpr int64_t OB_MAX_STORAGE_CACHE_POLICY_LENGTH = 229;
 
 struct ObStorageCachePolicyStatus
@@ -50,8 +51,8 @@ struct ObStorageCachePolicyStatus
     HOT = 0,
     AUTO = 1,
     NONE = 2,
-    MACRO_HOT = 3,  // placeholder for MACRO_HOT
-    COLD = 4,       // placeholder for COLD
+    MACRO_HOT = 3,
+    COLD = 4,
     MAX_STATUS
   };
   static int safely_get_str(const PolicyStatus &type, const char *&buf);
@@ -78,7 +79,7 @@ struct ObStorageCacheGlobalPolicy
     AUTO_POLICY = 1,
     TIME_POLICY = 2,
     NONE_POLICY = 3,
-    COLD_POLICY = 4,  // placeholder for COLD_POLICY
+    COLD_POLICY = 4,
     MAX_POLICY
   };
   static int safely_get_str(const PolicyType &type, const char *&buf);
@@ -100,7 +101,7 @@ int get_storage_cache_policy_type_from_str(const common::ObString &storage_cache
 int get_storage_cache_policy_type_from_part_str(const common::ObString &storage_cache_policy_part_str,
                                                 ObStorageCachePolicyType &policy_type);
 bool is_valid_part_storage_cache_policy(const ObStorageCachePolicyType &policy_type);
-bool is_hot_or_auto_policy(const ObStorageCachePolicyType &part_policy);
+bool is_hot_or_auto_or_cold(const ObStorageCachePolicyType &part_policy);
 
 struct ObBoundaryColumnUnit
 {
@@ -126,7 +127,7 @@ struct ObStorageCacheGranularity
   {
     PARTITION = 0,
     ROW = 1,
-    BLOCK = 2,  // placeholder for BLOCK
+    BLOCK = 2,
     MAX_GRANULARITY
   };
   static int safely_get_str(const GranularityType &type, const char *&buf);
@@ -154,37 +155,64 @@ public:
   bool is_global_policy() const
   { return global_policy_ == ObStorageCacheGlobalPolicy::HOT_POLICY
         || global_policy_ == ObStorageCacheGlobalPolicy::AUTO_POLICY
-        || global_policy_ == ObStorageCacheGlobalPolicy::NONE_POLICY; };
+        || global_policy_ == ObStorageCacheGlobalPolicy::NONE_POLICY
+        || global_policy_ == ObStorageCacheGlobalPolicy::COLD_POLICY; };
   bool is_time_policy() const;
+  bool has_set_mixed_retention() const { return mixed_retention_interval_ != UINT64_MAX && mixed_retention_unit_ != ObDateUnitType::DATE_UNIT_MAX; };
   int set_global_policy (const ObStorageCacheGlobalPolicy::PolicyType policy);
   int set_granularity (const ObStorageCacheGranularity::GranularityType granularity);
   int set_column_name (const char *column_name, const int64_t len);
   int set_column_unit (const ObBoundaryColumnUnit::ColumnUnitType unit);
   int set_hot_retention_interval (const uint64_t interval);
   int set_hot_retention_unit (const ObDateUnitType unit);
+  int check_retention_unit(const ObDateUnitType unit);
   int set_hot_retention_time (const int64_t time);
+  int set_mixed_retention_interval (const uint64_t interval);
+  int set_mixed_retention_unit (const ObDateUnitType unit);
   int set_part_level (const int32_t level);
+  int set_table_id (const int64_t table_id);
   ObStorageCacheGlobalPolicy::PolicyType get_global_policy() const { return global_policy_; };
   ObStorageCacheGranularity::GranularityType get_granularity() const { return granularity_; };
   const char *get_column_name() const { return column_name_; };
   ObBoundaryColumnUnit::ColumnUnitType get_column_unit() const { return column_unit_; };
   ObDateUnitType get_hot_retention_unit() const { return hot_retention_unit_; };
   uint64_t get_hot_retention_interval() const { return hot_retention_interval_; };
+  ObDateUnitType get_mixed_retention_unit() const { return mixed_retention_unit_; };
+  uint64_t get_mixed_retention_interval() const { return mixed_retention_interval_; };
   ObDateUnitType get_date_unit_type(const ObString &unit_str) const;
   int32_t get_part_level() const { return part_level_; };
-  int convert_hot_retention_unit(const ObDateUnitType unit, int64_t &hot_rentention_time) const;
+  int64_t get_table_id() const { return table_id_; };
+  int convert_retention_unit(const ObDateUnitType unit, int64_t &rentention_time) const;
   int convert_bound_to_column_unit(const ObString &partition_bound_val, int64_t &bound_time) const;
   int check_boundary_column_with_partition(share::schema::ObPartition &partition) const;
   int check_boundary_column_with_subpartition(share::schema::ObSubPartition &subpartition) const;
   int cal_hot_rentention_time(int64_t &hot_rentention_time) const;
+  int cal_mixed_rentention_time(int64_t &mixed_rentention_time) const;
   int check_table_cache_policy() const;
   bool is_valid_date_unit_type() const
   {
     return hot_retention_unit_ >= 0 && hot_retention_unit_ < ObDateUnitType::DATE_UNIT_MAX;
   };
+  bool is_partition_time_policy() const
+  {
+    return is_time_policy() && granularity_ == ObStorageCacheGranularity::PARTITION;
+  };
+  bool is_block_time_policy() const
+  {
+    return is_time_policy() && granularity_ == ObStorageCacheGranularity::BLOCK;
+  };
+  bool is_default_block_time_policy() const
+  {
+    return is_block_time_policy() && strlen(column_name_) == 0;
+  };
+  bool is_custom_block_time_policy() const
+  {
+    return is_block_time_policy() && strlen(column_name_) > 0;
+  };
   bool operator ==(const ObStorageCachePolicy &policy) const;
   bool operator !=(const ObStorageCachePolicy &policy) const;
-  TO_STRING_KV(K_(global_policy), K_(granularity), KCSTRING_(column_name), K_(column_unit), K_(hot_retention_interval), K_(hot_retention_unit), K_(part_level));
+  TO_STRING_KV(K_(global_policy), K_(granularity), KCSTRING_(column_name), K_(column_unit), K_(hot_retention_interval), K_(hot_retention_unit),
+               K_(mixed_retention_interval), K_(mixed_retention_unit),K_(part_level), K_(table_id));
 
 private:
   ObStorageCacheGlobalPolicy::PolicyType global_policy_;
@@ -193,7 +221,10 @@ private:
   ObBoundaryColumnUnit::ColumnUnitType column_unit_;
   uint64_t hot_retention_interval_;
   ObDateUnitType hot_retention_unit_;
+  uint64_t mixed_retention_interval_;
+  ObDateUnitType mixed_retention_unit_;
   int32_t part_level_;
+  int64_t table_id_;
 };
 
 class ObSCPTraceIdGuard
