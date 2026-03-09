@@ -3815,7 +3815,7 @@ int ObTableScanOp::transform_physical_rowid(ObIAllocator &allocator,
   return ret;
 }
 
-int ObTableScanOp::do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
+int ObTableScanOp::do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip, bool defer_reuse)
 {
   int ret = OB_SUCCESS;
   ObDiagnosisManager& diagnosis_manager = exec_ctx.get_diagnosis_manager();
@@ -3833,7 +3833,7 @@ int ObTableScanOp::do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
       LOG_WARN("fail to get diagnosis info", K(ret));
     } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip, session->get_diagnosis_info(),
                                                     ctx_.get_px_sqc_id(), ctx_.get_px_task_id(),
-                                                    ctx_.get_allocator()))){
+                                                    ctx_.get_allocator(), defer_reuse))){
       LOG_WARN("fail to do diagnosis", K(ret));
     }
   }

@@ -756,7 +756,7 @@ int ObOperator::output_expr_sanity_check_batch()
     } else if (OB_FAIL(expr->eval_vector(eval_ctx_, brs_))) {
       LOG_WARN("eval vector failed", K(ret));
     } else if (GET_MY_SESSION(eval_ctx_.exec_ctx_)->is_diagnosis_enabled() &&
-              OB_FAIL(do_diagnosis(eval_ctx_.exec_ctx_, *brs_.skip_))) {
+              OB_FAIL(do_diagnosis(eval_ctx_.exec_ctx_, *brs_.skip_, true))) {
       LOG_WARN("fail to do diagnosis", K(ret));
     } else if (OB_FAIL(output_expr_sanity_check_batch_inner(*expr))) {
       LOG_WARN("expr sanity check batch failed", K(ret));
@@ -809,7 +809,7 @@ int ObOperator::output_expr_decint_datum_len_check_batch()
       } else if (OB_FAIL(expr->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_))) {
         LOG_WARN("evaluate expression failed", K(ret));
       } else if (GET_MY_SESSION(eval_ctx_.exec_ctx_)->is_diagnosis_enabled() &&
-                OB_FAIL(do_diagnosis(eval_ctx_.exec_ctx_, *brs_.skip_))) {
+                OB_FAIL(do_diagnosis(eval_ctx_.exec_ctx_, *brs_.skip_, true))) {
         LOG_WARN("fail to do diagnosis", K(ret));
       } else if (!expr->is_batch_result()) {
         const ObDatum &datum = expr->locate_expr_datum(eval_ctx_);
@@ -1573,7 +1573,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
       }
 
       if (OB_SUCC(ret) && GET_MY_SESSION(eval_ctx_.exec_ctx_)->is_diagnosis_enabled()) {
-        if (OB_FAIL(do_diagnosis(eval_ctx_.exec_ctx_, *brs_.skip_))) {
+        if (OB_FAIL(do_diagnosis(eval_ctx_.exec_ctx_, *brs_.skip_, false))) {
           LOG_WARN("fail to do diagnosis", K(ret));
         }
       }
