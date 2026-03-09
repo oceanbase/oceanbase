@@ -117,7 +117,9 @@ int ObIKArbitrator::output_result(TokenizeContext &ctx)
 
   int64_t char_len = 0;
   ObIKTokenChain *chain = nullptr;
-  for (int64_t current = 0; OB_SUCC(ret) && current < ctx.fulltext_len();) {
+  const int64_t buffer_start_cursor = ctx.get_buffer_start_cursor();
+  const int64_t buffer_end_cursor = ctx.get_buffer_end_cursor();
+  for (int64_t current = buffer_start_cursor; OB_SUCC(ret) && current < buffer_end_cursor;) {
     ObFTCharUtil::CharType type;
     // maybe not so good to keep single, check it later
     if (OB_FAIL(ObCharset::first_valid_char(ctx.collation(),

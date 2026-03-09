@@ -69,6 +69,12 @@ public:
 
   int32_t handle_size() const { return handle_size_; }
 
+  OB_INLINE void calc_buffer_start_cursor() { buffer_start_cursor_ = cursor_; }
+
+  OB_INLINE int64_t get_buffer_start_cursor() const { return buffer_start_cursor_; }
+
+  OB_INLINE int64_t get_buffer_end_cursor() const { return cursor_; }
+
 private:
   int prepare_next_char();
 
@@ -85,6 +91,7 @@ private:
 
   ObFTSortList token_list_;
   ObList<ObIKToken, ObIAllocator> result_list_;
+  int64_t buffer_start_cursor_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(TokenizeContext);
