@@ -98,7 +98,7 @@ int ObLobExtInfoLogAllocator::init(LobExtInfoLogThrottleTool* throttle_tool)
     ret = OB_INIT_TWICE;
     SHARE_LOG(WARN, "init ext info log allocator twice", KR(ret), KP(this));
   } else if (OB_FAIL(allocator_.init(
-      common::ObMallocAllocator::get_instance(),
+      lib::ObMallocAllocator::get_instance(),
       OB_MALLOC_MIDDLE_BLOCK_SIZE, /*64KB*/
       lib::ObMemAttr(MTL_ID(), "ExtInfoLog", ObCtxIds::LOB_CTX_ID)))) {
     SHARE_LOG(WARN, "init ext info log allocator failed.", K(ret));

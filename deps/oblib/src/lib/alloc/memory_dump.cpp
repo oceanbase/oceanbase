@@ -615,9 +615,7 @@ void ObMemoryDump::handle(void *task)
                                  object->version_ < max_check_version) {
                         has_memory_leak = true;
                         char bt[MAX_BACKTRACE_LENGTH] = {'\0'};
-                        if (object->on_malloc_sample_) {
-                          parray(bt, sizeof(bt), (int64_t*)object->bt(), AOBJECT_BACKTRACE_COUNT);
-                        }
+                        PARRAY_MALLOC_BACKTRACE(object, bt, MAX_BACKTRACE_LENGTH);
                         allow_next_syslog();
                         LOG_WARN("SQL_MEMORY_LEAK", KP(object), K(tenant_id), K(ctx_id), K(object->version_), K(object->label_), K(bt));
                       }

@@ -195,11 +195,38 @@ private:
   int64_t free_cnt_;
 };
 
-class ObjectSetV3 : public ObDLinkBase<ObjectSetV3>
+class ObjectSetV2 : public ObDLinkBase<ObjectSetV2>
 {
 public:
-  ObjectSetV3()
-    : ObDLinkBase<ObjectSetV3>(),
+#define B_SIZE 64
+  static constexpr int SIZE_CLASS_MAP[][2] = {
+    {B_SIZE, ABLOCK_SIZE * 2},
+    {B_SIZE * 2, ABLOCK_SIZE * 2},
+    {B_SIZE * 3, ABLOCK_SIZE * 2},
+    {B_SIZE * 4, ABLOCK_SIZE * 2},
+    {B_SIZE * 5, ABLOCK_SIZE * 2},
+    {B_SIZE * 6, ABLOCK_SIZE * 2},
+    {B_SIZE * 7, ABLOCK_SIZE * 2},
+    {B_SIZE * 8, ABLOCK_SIZE * 2},
+    {B_SIZE * 9, ABLOCK_SIZE * 2},
+    {B_SIZE * 10, ABLOCK_SIZE * 2},
+    {B_SIZE * 11, ABLOCK_SIZE * 2},
+    {B_SIZE * 12, ABLOCK_SIZE * 2},
+    {B_SIZE * 13, ABLOCK_SIZE * 2},
+    {B_SIZE * 14, ABLOCK_SIZE * 2},
+    {B_SIZE * 15, ABLOCK_SIZE * 2},
+    {B_SIZE * 16, ABLOCK_SIZE * 2},
+    {2048, ABLOCK_SIZE * 4},
+    {4096, ABLOCK_SIZE * 8},
+    {8192, ABLOCK_SIZE * 16}
+  };
+  static constexpr int SIZE_CLASS_CNT = ARRAYSIZEOF(SIZE_CLASS_MAP);
+  static constexpr int LAGER_SC_IDX = SIZE_CLASS_CNT;
+  #define BIN_SIZE_MAP(sc_idx) SIZE_CLASS_MAP[sc_idx][0]
+  #define BLOCK_SIZE_MAP(sc_idx) SIZE_CLASS_MAP[sc_idx][1]
+
+  ObjectSetV2()
+    : ObDLinkBase<ObjectSetV2>(),
       ta_(NULL), mgr_(NULL), deferred_list_(NULL)
   {}
   static int calc_sc_idx(const int64_t x)
@@ -209,15 +236,15 @@ public:
     } else if (x <= ABLOCK_SIZE) {
       return 8 * sizeof(int64_t) - __builtin_clzll(x - 1) - 11 + 16;
     } else {
-      return ObjectSetV2::LARGE_SC_IDX;
+      return LAGER_SC_IDX;
     }
   }
 
   ABlock* new_block(int sc_idx)
   {
     ABlock *block = NULL;
-    const int bin_size = ObjectSetV2::BIN_SIZE_MAP(sc_idx);
-    const int64_t ablock_size = ObjectSetV2::BLOCK_SIZE_MAP(sc_idx);
+    const int bin_size = BIN_SIZE_MAP(sc_idx);
+    const int64_t ablock_size = BLOCK_SIZE_MAP(sc_idx);
     if (OB_NOT_NULL(block = alloc_block(ablock_size))) {
       block->sc_idx_ = sc_idx;
       block->max_cnt_ = ablock_size/bin_size;
@@ -254,7 +281,7 @@ public:
       } else {
         alloc_from = AllocMode::MMAP;
       }
-    } else if (OB_UNLIKELY(is_malloc_v2_enabled() ||
+    } else if (OB_UNLIKELY(!is_malloc_v2_enabled() ||
         !ObMallocHookAttrGuard::get_tl_use_500())) {
       ObMemAttr attr = ObMallocHookAttrGuard::get_tl_mem_attr();
       if (OB_NOT_NULL(ptr = ob_malloc(size, attr))) {
@@ -272,7 +299,7 @@ public:
       // ** 处理非本线程释放的内存，将deferred_list_转移到partitial_list_
       SizeClass &sc = scs_[sc_idx];
       AObject *obj = NULL;
-      if (OB_UNLIKELY(sc_idx == ObjectSetV2::LARGE_SC_IDX)) {
+      if (OB_UNLIKELY(sc_idx == LAGER_SC_IDX)) {
         ABlock *block = alloc_block(all_size);
         if (OB_LIKELY(block != NULL)) {
           obj = new (block->data()) AObject();
@@ -344,7 +371,7 @@ public:
     SANITY_DISABLE_CHECK_RANGE();
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
     ABlock *block = obj->block_;
-    ObjectSetV3 *os = block->obj_set_v3_;
+    ObjectSetV2 *os = block->obj_set_v2_;
     obj->in_use_ = false;
     SANITY_POISON(obj->data_, obj->alloc_bytes_);
     // TODO: check AOBJECT_TAIL_MAGIC_CODE
@@ -415,7 +442,7 @@ public:
       block = mgr_->alloc_block(size, attr);
     }
     if (OB_LIKELY(NULL != block)) {
-      block->obj_set_v3_ = this;
+      block->obj_set_v2_ = this;
       block->ablock_size_ = size;
       SANITY_POISON(block->data(), size);
     }
@@ -430,7 +457,7 @@ public:
   ObTenantCtxAllocatorGuard ta_;
   IBlockMgr *mgr_;
   ABlock *deferred_list_; // use ABlock::next2_
-  SizeClass scs_[ObjectSetV2::NORMAL_SC_CNT + 1];
+  SizeClass scs_[SIZE_CLASS_CNT + 1];
 } CACHE_ALIGNED;
 
 
@@ -439,22 +466,22 @@ struct ObjectSetList
   ObjectSetList()
     : lock_(), list_()
   {}
-  void push(ObjectSetV3 *os)
+  void push(ObjectSetV2 *os)
   {
     lock_.lock();
     list_.add_last(os);
     lock_.unlock();
   }
-  ObjectSetV3 *pop()
+  ObjectSetV2 *pop()
   {
-    ObjectSetV3 *ret = NULL;
+    ObjectSetV2 *ret = NULL;
     lock_.lock();
     ret = list_.remove_first();
     lock_.unlock();
     return ret;
   }
   ObSimpleLock lock_;
-  ObDList<ObjectSetV3> list_;
+  ObDList<ObjectSetV2> list_;
 };
 
 class GlibcMalloc
@@ -463,7 +490,7 @@ public:
   static void destructor(void* ptr)
   {
     if (!ptr) return;
-    ObjectSetV3* os = static_cast<ObjectSetV3*>(ptr);
+    ObjectSetV2* os = static_cast<ObjectSetV2*>(ptr);
     os->reclaim_deferred_to_local();
     global_os_list.push(os);
   }
@@ -479,7 +506,7 @@ public:
     if (tl_os) return;
     const int MAX_RECLAIM_CNT = 4;
     for (int cnt = 0; cnt < MAX_RECLAIM_CNT; ++cnt) {
-      ObjectSetV3 *os = NULL;
+      ObjectSetV2 *os = NULL;
       os = global_os_list.pop();
       if (os) {
         os->reclaim_deferred_to_local();
@@ -488,19 +515,19 @@ public:
     }
     if (NULL == (tl_os = global_os_list.pop())) {
       void *ptr = NULL;
-      static FixedAllocer<sizeof(ObjectSetV3)> bin_allocer_;
+      static FixedAllocer<sizeof(ObjectSetV2)> bin_allocer_;
       do {
         ptr = bin_allocer_.alloc();
         if (NULL == ptr) {
           ::usleep(10000);  // 10ms
         }
       } while (NULL == ptr);
-      tl_os = new (ptr) ObjectSetV3();
+      tl_os = new (ptr) ObjectSetV2();
     }
     pthread_setspecific(tls_key, tl_os);
   }
 public:
-  static __thread ObjectSetV3 *tl_os;
+  static __thread ObjectSetV2 *tl_os;
 private:
   static pthread_key_t tls_key;
   static ObjectSetList global_os_list;
@@ -508,7 +535,7 @@ private:
 };
 pthread_key_t GlibcMalloc::tls_key;
 ObjectSetList GlibcMalloc::global_os_list;
-__thread ObjectSetV3 *GlibcMalloc::tl_os = NULL;
+__thread ObjectSetV2 *GlibcMalloc::tl_os = NULL;
 
 EXTERN_C_BEGIN
 
