@@ -28,8 +28,18 @@ namespace observer
 {
 
 struct ObTabletReplicaInfo {
+  ObTabletReplicaInfo()
+    : tablet_id(common::OB_INVALID_ID),
+      table_id(common::OB_INVALID_ID),
+      part_idx(common::OB_INVALID_INDEX),
+      subpart_idx(common::OB_INVALID_INDEX),
+      ls_id(common::OB_INVALID_ID),
+      occupy_size(0),
+      required_size(0) {}
   uint64_t tablet_id;
   uint64_t table_id;
+  int64_t part_idx;
+  int64_t subpart_idx;
   int64_t ls_id;
   int64_t occupy_size;
   int64_t required_size;
@@ -37,10 +47,22 @@ struct ObTabletReplicaInfo {
   TO_STRING_KV(
     K(tablet_id),
     K(table_id),
+    K(part_idx),
+    K(subpart_idx),
     K(ls_id),
     K(occupy_size),
     K(required_size)
   );
+};
+
+struct ObPartInfo {
+  ObPartInfo()
+    : table_id(common::OB_INVALID_ID),
+      part_idx(common::OB_INVALID_INDEX),
+      subpart_idx(common::OB_INVALID_INDEX) {}
+  uint64_t table_id;
+  int64_t part_idx;
+  int64_t subpart_idx;
 };
 
 typedef common::ObArray<ObTabletReplicaInfo> ObTabletReplicaInfoCache;
@@ -51,7 +73,7 @@ class ObTabletReplicaInfoCacheIterator
 public:
   ObTabletReplicaInfoCacheIterator();
   ~ObTabletReplicaInfoCacheIterator();
-  int init(bool &cache_available);
+  int init(const int64_t schema_version, bool &cache_available);
   int get_next(ObTabletReplicaInfo &info);
   void reset();
 private:
@@ -112,11 +134,12 @@ public:
   void destroy();
   static int mtl_init(ObTabletReplicaInfoCacheMgr* &cache_mgr);
   int add_cache(const ObTabletReplicaInfo &info);
-  void try_invalidate();
-  bool begin_build();
+  void try_invalidate(const int64_t schema_version);
+  bool begin_build(const int64_t schema_version);
   void finish_build(bool is_build_success);
 private:
-  bool acquire_snapshot(const ObTabletReplicaInfoCache *&cache_snapshot);
+  bool acquire_snapshot(const int64_t schema_version,
+                        const ObTabletReplicaInfoCache *&cache_snapshot);
   void dec_ref();
   void print_memory_usage();
 private:
@@ -127,6 +150,7 @@ private:
   ObCacheStatus status_;
   int64_t ref_cnt_;
   int64_t last_build_time_;
+  int64_t schema_version_;
 };
 
 class ObAllVirtualTabletReplicaInfo : public common::ObVirtualTableScannerIterator,
@@ -170,6 +194,17 @@ private:
   int get_ls_role_(const int64_t ls_id, common::ObRole &role);
   int prepare_tablet_to_table_map_();
   int init_curr_tenant_();
+  int decide_read_path_(const uint64_t tenant_id,
+                        const int64_t tenant_schema_version);
+  int get_object_id_(const ObTabletReplicaInfo &info,
+                     const ObSimpleTableSchemaV2 *table_schema,
+                     uint64_t &object_id);
+  int get_partition_name_(const ObTabletReplicaInfo &info,
+                          const ObSimpleTableSchemaV2 *table_schema,
+                          common::ObString &partition_name);
+  int get_subpartition_name_(const ObTabletReplicaInfo &info,
+                             const ObSimpleTableSchemaV2 *table_schema,
+                             common::ObString &subpartition_name);
 private:
   enum {
     SERVER_IP = common::OB_APP_MIN_COLUMN_ID,
@@ -188,7 +223,10 @@ private:
     TABLEGROUP_NAME,
     DATA_TABLE_ID,
     OCCUPY_SIZE,
-    REQUIRED_SIZE
+    REQUIRED_SIZE,
+    OBJECT_ID,
+    PARTITION_NAME,
+    SUBPARTITION_NAME
   };
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTabletReplicaInfo);
@@ -207,7 +245,7 @@ private:
   /* --------- current tenant specific start --------- */
   bool is_curr_tenant_inited_;
   bool is_build_success_;
-  common::hash::ObHashMap<ObTabletID, uint64_t, common::hash::NoPthreadDefendMode> tablet_to_table_map_;
+  common::hash::ObHashMap<ObTabletID, ObPartInfo, common::hash::NoPthreadDefendMode> tablet_to_table_map_;
   common::hash::ObHashMap<uint64_t, common::ObRole, common::hash::NoPthreadDefendMode> ls_to_role_map_;
   storage::ObTenantTabletPtrWithInMemObjIterator *tablet_iter_;
   ObReadPath read_path_;

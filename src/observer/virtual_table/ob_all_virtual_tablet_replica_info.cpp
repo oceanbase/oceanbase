@@ -33,7 +33,8 @@ ObTabletReplicaInfoCacheMgr::ObTabletReplicaInfoCacheMgr()
     lock_(common::ObLatchIds::TABLET_REPLICA_INFO_CACHE_LOCK),
     status_(UNAVAILABLE),
     ref_cnt_(0),
-    last_build_time_(0)
+    last_build_time_(0),
+    schema_version_(common::OB_INVALID_VERSION)
 {}
 
 int ObTabletReplicaInfoCacheMgr::init()
@@ -60,6 +61,7 @@ void ObTabletReplicaInfoCacheMgr::destroy()
     status_ = UNAVAILABLE;
     ref_cnt_ = 0;
     last_build_time_ = 0;
+    schema_version_ = common::OB_INVALID_VERSION;
   }
 }
 
@@ -91,28 +93,26 @@ int ObTabletReplicaInfoCacheMgr::add_cache(
   return ret;
 }
 
-void ObTabletReplicaInfoCacheMgr::try_invalidate()
+void ObTabletReplicaInfoCacheMgr::try_invalidate(const int64_t schema_version)
 {
-
   common::ObSpinLockGuard guard(lock_);
   int64_t expire_time = GCONF._tablet_replica_info_cache_expire_time;
   int64_t current_time = ObTimeUtility::current_time();
-  if (BUILDING != status_ // building can not be interrupted
-      && (0 == expire_time || current_time - last_build_time_ > expire_time)) {
-    // cache is expired, invalidate it
-
-    // we don't directly reset cache here,
-    // because there may be some old readers holding the cache snapshot
-    status_ = UNAVAILABLE;
-    if (0 == ref_cnt_) {
-      // no reader is holding the cache snapshot,
-      // so we can safely reset the cache
-      cache_.reset();
+  if (BUILDING != status_) { // building can not be interrupted
+    if (0 == expire_time // cache disabled
+        || current_time - last_build_time_ > expire_time // cache is expired
+        || schema_version_ != schema_version) { // schema version changed
+      status_ = UNAVAILABLE;
+      schema_version_ = common::OB_INVALID_VERSION;
+      if (0 == ref_cnt_) {
+        // no reader is holding the cache snapshot, safe to reset
+        cache_.reset();
+      }
     }
   }
 }
 
-bool ObTabletReplicaInfoCacheMgr::begin_build()
+bool ObTabletReplicaInfoCacheMgr::begin_build(const int64_t schema_version)
 {
   bool i_am_builder = false;
   common::ObSpinLockGuard guard(lock_);
@@ -120,6 +120,7 @@ bool ObTabletReplicaInfoCacheMgr::begin_build()
     // no reader is holding the cache snapshot,
     // so we can safely reset the cache and start building
     status_ = BUILDING;
+    schema_version_ = schema_version;
     i_am_builder = true;
     cache_.reset();
   }
@@ -140,16 +141,19 @@ void ObTabletReplicaInfoCacheMgr::finish_build(bool is_build_success)
   } else {
     status_ = UNAVAILABLE;
     cache_.reset();
+    schema_version_ = common::OB_INVALID_VERSION;
   }
 }
 
 bool ObTabletReplicaInfoCacheMgr::acquire_snapshot(
+  const int64_t schema_version,
   const ObTabletReplicaInfoCache *&cache_snapshot)
 {
   common::ObSpinLockGuard guard(lock_);
   bool is_available = false;
   cache_snapshot = NULL;
-  if (AVAILABLE == status_) {
+  // if schema version is not matching, cache is expired
+  if (AVAILABLE == status_ && schema_version_ == schema_version) {
     is_available = true;
     cache_snapshot = &cache_;
     ref_cnt_++;
@@ -193,7 +197,9 @@ ObTabletReplicaInfoCacheIterator::~ObTabletReplicaInfoCacheIterator()
   reset();
 }
 
-int ObTabletReplicaInfoCacheIterator::init(bool &cache_available)
+int ObTabletReplicaInfoCacheIterator::init(
+  const int64_t schema_version,
+  bool &cache_available)
 {
   int ret = OB_SUCCESS;
   cache_available = false;
@@ -205,7 +211,7 @@ int ObTabletReplicaInfoCacheIterator::init(bool &cache_available)
     SERVER_LOG(WARN, "tablet replica info cache mgr is null", KR(ret));
   } else {
     row_idx_ = 0;
-    cache_available = cache_mgr_->acquire_snapshot(cache_snapshot_);
+    cache_available = cache_mgr_->acquire_snapshot(schema_version, cache_snapshot_);
     if (!cache_available) {
       cache_mgr_ = NULL;
       cache_snapshot_ = NULL;
@@ -330,6 +336,9 @@ int ObAllVirtualTabletReplicaInfo::fill_row_(
   const ObSimpleDatabaseSchema *database_schema = NULL;
   const ObSimpleTablegroupSchema *tablegroup_schema = NULL;
   bool valid_row_found = true;
+  uint64_t object_id = OB_INVALID_ID;
+  common::ObString partition_name;
+  common::ObString subpartition_name;
 
   do {
     valid_row_found = true;
@@ -342,7 +351,6 @@ int ObAllVirtualTabletReplicaInfo::fill_row_(
     } else {
       const uint64_t tenant_id = MTL_ID();
       const int64_t col_count = output_column_ids_.count();
-
       for (int64_t i = 0; OB_SUCC(ret) && valid_row_found && i < col_count; ++i) {
         uint64_t col_id = output_column_ids_.at(i);
         switch (col_id) {
@@ -454,6 +462,50 @@ int ObAllVirtualTabletReplicaInfo::fill_row_(
           case REQUIRED_SIZE:
             cur_row_.cells_[i].set_int(info.required_size);
             break;
+          case OBJECT_ID: {
+            if (OB_ISNULL(table_schema)) {
+              valid_row_found = false;
+            } else if (OB_FAIL(get_object_id_(info,
+                                              table_schema,
+                                              object_id))) {
+              SERVER_LOG(WARN, "fail to get object id", KR(ret), K(info.table_id), K(info.part_idx), K(info.subpart_idx));
+            } else if (OB_INVALID_ID == object_id) {
+              cur_row_.cells_[i].set_null();
+            } else {
+              cur_row_.cells_[i].set_int(object_id);
+            }
+            break;
+          }
+          case PARTITION_NAME: {
+            if (OB_ISNULL(table_schema)) {
+              valid_row_found = false;
+            } else if (OB_FAIL(get_partition_name_(info,
+                                                   table_schema,
+                                                   partition_name))) {
+              SERVER_LOG(WARN, "fail to get partition name", KR(ret), K(info.table_id), K(info.part_idx), K(info.subpart_idx));
+            } else if (partition_name.empty()) {
+              cur_row_.cells_[i].set_null();
+            } else {
+              cur_row_.cells_[i].set_varchar(partition_name);
+              cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            }
+            break;
+          }
+          case SUBPARTITION_NAME: {
+            if (OB_ISNULL(table_schema)) {
+              valid_row_found = false;
+            } else if (OB_FAIL(get_subpartition_name_(info,
+                                                      table_schema,
+                                                      subpartition_name))) {
+              SERVER_LOG(WARN, "fail to get subpartition name", KR(ret), K(info.table_id), K(info.part_idx), K(info.subpart_idx));
+            } else if (subpartition_name.empty()) {
+              cur_row_.cells_[i].set_null();
+            } else {
+              cur_row_.cells_[i].set_varchar(subpartition_name);
+              cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            }
+            break;
+          }
           default:
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid col_id", KR(ret), K(col_id));
@@ -465,6 +517,97 @@ int ObAllVirtualTabletReplicaInfo::fill_row_(
 
   if (OB_SUCC(ret)) {
     row = &cur_row_;
+  }
+  return ret;
+}
+
+int ObAllVirtualTabletReplicaInfo::get_object_id_(
+  const ObTabletReplicaInfo &info,
+  const ObSimpleTableSchemaV2 *table_schema,
+  uint64_t &object_id)
+{
+  int ret = OB_SUCCESS;
+  object_id = OB_INVALID_ID;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "table schema is null", KR(ret));
+  } else {
+    const share::schema::ObPartitionLevel part_level = table_schema->get_part_level();
+    if (share::schema::PARTITION_LEVEL_ZERO == part_level) {
+      object_id = info.table_id;
+    } else {
+      const int64_t part_idx = info.part_idx;
+      const int64_t subpart_idx = info.subpart_idx;
+      share::schema::ObBasePartition *base_part = NULL;
+      if (OB_FAIL(table_schema->get_part_by_idx(part_idx, subpart_idx, base_part))) {
+        SERVER_LOG(WARN, "fail to get subpart by idx", KR(ret), K(part_idx), K(subpart_idx), K(info.table_id));
+      } else if (OB_ISNULL(base_part)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "subpart is null", KR(ret), K(part_idx), K(subpart_idx), K(info.table_id));
+      } else {
+        object_id = base_part->get_object_id();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAllVirtualTabletReplicaInfo::get_partition_name_(
+  const ObTabletReplicaInfo &info,
+  const ObSimpleTableSchemaV2 *table_schema,
+  common::ObString &partition_name)
+{
+  int ret = OB_SUCCESS;
+  partition_name.reset();
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "table schema is null", KR(ret));
+  } else {
+    const share::schema::ObPartitionLevel part_level = table_schema->get_part_level();
+    if (share::schema::PARTITION_LEVEL_ZERO == part_level) {
+      // keep empty
+    } else {
+      const int64_t part_idx = info.part_idx;
+      const int64_t part_num = table_schema->get_partition_num();
+      share::schema::ObPartition **part_array = table_schema->get_part_array();
+      if (OB_ISNULL(part_array) || part_idx < 0 || part_idx >= part_num || OB_ISNULL(part_array[part_idx])) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "invalid part array", KR(ret), K(part_idx), K(part_num), K(info.table_id));
+      } else {
+        partition_name = part_array[part_idx]->get_part_name();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAllVirtualTabletReplicaInfo::get_subpartition_name_(
+  const ObTabletReplicaInfo &info,
+  const ObSimpleTableSchemaV2 *table_schema,
+  common::ObString &subpartition_name)
+{
+  int ret = OB_SUCCESS;
+  subpartition_name.reset();
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "table schema is null", KR(ret));
+  } else {
+    const share::schema::ObPartitionLevel part_level = table_schema->get_part_level();
+    if (share::schema::PARTITION_LEVEL_TWO != part_level) {
+      // keep empty
+    } else {
+      const int64_t part_idx = info.part_idx;
+      const int64_t subpart_idx = info.subpart_idx;
+      share::schema::ObBasePartition *base_part = NULL;
+      if (OB_FAIL(table_schema->get_part_by_idx(part_idx, subpart_idx, base_part))) {
+        SERVER_LOG(WARN, "fail to get subpart by idx", KR(ret), K(part_idx), K(subpart_idx), K(info.table_id));
+      } else if (OB_ISNULL(base_part)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "subpart is null", KR(ret), K(part_idx), K(subpart_idx), K(info.table_id));
+      } else {
+        subpartition_name = base_part->get_part_name();
+      }
+    }
   }
   return ret;
 }
@@ -485,7 +628,6 @@ int ObAllVirtualTabletReplicaInfo::inner_get_next_row(common::ObNewRow *&row)
 int ObAllVirtualTabletReplicaInfo::process_curr_tenant(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObTabletReplicaInfo tablet_replica_info;
   if (!is_curr_tenant_inited_ && OB_FAIL(init_curr_tenant_())) {
     SERVER_LOG(WARN, "fail to init curr tenant", KR(ret));
   } else if (OB_FAIL(fill_row_(row))) {
@@ -496,10 +638,39 @@ int ObAllVirtualTabletReplicaInfo::process_curr_tenant(common::ObNewRow *&row)
   return ret;
 }
 
+int ObAllVirtualTabletReplicaInfo::decide_read_path_(
+  const uint64_t tenant_id,
+  const int64_t tenant_schema_version)
+{
+  int ret = OB_SUCCESS;
+  bool cache_available = false;
+  bool cache_enabled = 0 != GCONF._tablet_replica_info_cache_expire_time;
+  cache_mgr_->try_invalidate(tenant_schema_version);
+  if (!cache_enabled) {
+    // cache is disabled, use normal path
+    read_path_ = PATH_NORMAL;
+  } else {
+    if (OB_FAIL(cache_iter_.init(tenant_schema_version, cache_available))) {
+      SERVER_LOG(WARN, "fail to init cache iterator", KR(ret), K(tenant_id));
+    } else if (cache_available) {
+      // cache is available, use cache path
+      read_path_ = PATH_CACHE;
+    } else if (cache_mgr_->begin_build(tenant_schema_version)) {
+      // I am the builder, use build path
+      read_path_ = PATH_BUILD;
+    } else {
+      // someone else is building, use normal path
+      read_path_ = PATH_NORMAL;
+    }
+  }
+  return ret;
+}
+
 int ObAllVirtualTabletReplicaInfo::init_curr_tenant_()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
+  int64_t tenant_schema_version = common::OB_INVALID_VERSION;
   static const int64_t BUCKET_NUM = 64;
   if (OB_FAIL(ls_to_role_map_.create(BUCKET_NUM, "LsToRoleMap", "LsToRoleMap", tenant_id))) {
     SERVER_LOG(WARN, "fail to create ls to role map", KR(ret), K(tenant_id));
@@ -514,44 +685,25 @@ int ObAllVirtualTabletReplicaInfo::init_curr_tenant_()
     SERVER_LOG(INFO, "tenant schema is not refreshed, skip this tenant", KR(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard_))) {
     SERVER_LOG(WARN, "fail to get schema guard", KR(ret), K(tenant_id));
-  } else {
-    cache_mgr_->try_invalidate();
-
-    // determine the read path
-    bool cache_available = false;
-    bool cache_enabled = 0 != GCONF._tablet_replica_info_cache_expire_time;
-    if (!cache_enabled) {
-      // cache is disabled, use normal path
-      read_path_ = PATH_NORMAL;
-    } else if (OB_FAIL(cache_iter_.init(cache_available))) {
-      SERVER_LOG(WARN, "fail to init cache iterator", KR(ret), K(tenant_id));
-    } else if (cache_available) {
-      // cache is available, use cache path
-      read_path_ = PATH_CACHE;
-    } else if (cache_mgr_->begin_build()) {
-      // I am the builder, use build path
-      read_path_ = PATH_BUILD;
-    } else {
-      // someone else is building, use normal path
-      read_path_ = PATH_NORMAL;
+  } else if (OB_FAIL(schema_guard_.get_schema_version(tenant_id, tenant_schema_version))) {
+    SERVER_LOG(WARN, "fail to get tenant schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(decide_read_path_(tenant_id, tenant_schema_version))) {
+    SERVER_LOG(WARN, "fail to decide read path", KR(ret), K(tenant_id));
+  } else if (PATH_CACHE != read_path_) {
+    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+    if (OB_FAIL(prepare_tablet_to_table_map_())) {
+      SERVER_LOG(WARN, "fail to prepare tablet map", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(t3m)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "fail to get t3m", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(tablet_iter_ = new (iter_buf_) ObTenantTabletPtrWithInMemObjIterator(*t3m))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "fail to new tablet_iter_", KR(ret), K(tenant_id));
     }
+  }
 
-    if (OB_SUCC(ret) && PATH_CACHE != read_path_) {
-      ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-      if (OB_FAIL(prepare_tablet_to_table_map_())) {
-        SERVER_LOG(WARN, "fail to prepare tablet map", KR(ret), K(tenant_id));
-      } else if (OB_ISNULL(t3m)) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "fail to get t3m", KR(ret), K(tenant_id));
-      } else if (OB_ISNULL(tablet_iter_ = new (iter_buf_) ObTenantTabletPtrWithInMemObjIterator(*t3m))) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "fail to new tablet_iter_", KR(ret), K(tenant_id));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      is_curr_tenant_inited_ = true;
-    }
+  if (OB_SUCC(ret)) {
+    is_curr_tenant_inited_ = true;
   }
 
   return ret;
@@ -600,18 +752,24 @@ int ObAllVirtualTabletReplicaInfo::prepare_tablet_to_table_map_()
       if (OB_FAIL(tablet_to_table_map_.create(common::hash::cal_next_prime(bucket_num), "TmpTabletMap", "TmpTabletMap", tenant_id))) {
         SERVER_LOG(WARN, "create tablet-table map failed", KR(ret), K(tenant_id));
       } else {
-        ObTabletID tablet_id;
+        ObPartitionSchemaIter::Info part_info;
         for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
           const ObSimpleTableSchemaV2 *table = tables.at(i);
           if (OB_ISNULL(table)) {
             // skip
           } else if (table->has_tablet()) {
-            share::schema::ObPartitionSchemaIter iter(*table, ObCheckPartitionMode::CHECK_PARTITION_MODE_NORMAL);
-            while (OB_SUCC(ret) && OB_SUCC(iter.next_tablet_id(tablet_id))) {
-              if (OB_UNLIKELY(0 == tablet_id.id())) {
+            ObPartitionSchemaIter iter(*table, ObCheckPartitionMode::CHECK_PARTITION_MODE_NORMAL);
+            while (OB_SUCC(ret) && OB_SUCC(iter.next_partition_info(part_info))) {
+              if (OB_UNLIKELY(0 == part_info.tablet_id_.id())) {
                 // skip, oracle global tmp table may have tablet id 0
-              } else if (OB_FAIL(tablet_to_table_map_.set_refactored(tablet_id, table->get_table_id()))) {
-                SERVER_LOG(WARN, "fail to set tablet-table map", KR(ret), K(tenant_id), K(tablet_id), KPC(table));
+              } else {
+                ObPartInfo map_value;
+                map_value.table_id = table->get_table_id();
+                map_value.part_idx = part_info.part_idx_;
+                map_value.subpart_idx = part_info.subpart_idx_;
+                if (OB_FAIL(tablet_to_table_map_.set_refactored(part_info.tablet_id_, map_value))) {
+                  SERVER_LOG(WARN, "fail to set tablet-table map", KR(ret), K(tenant_id), K(part_info), KPC(table));
+                }
               }
             } // end while
             if (OB_ITER_END == ret) {
@@ -690,7 +848,7 @@ int ObAllVirtualTabletReplicaInfo::get_next_tablet_replica_info_from_iter_(ObTab
   ObTabletPointerHandle ptr_hdl;
   ObTabletHandle tablet_hdl;
   ObTabletResidentInfo tablet_resident_info;
-  uint64_t table_id = OB_INVALID_ID;
+  ObPartInfo part_info;
   ObTabletPointer *tablet_pointer = NULL;
 
   if (OB_ISNULL(tablet_iter_)) {
@@ -710,7 +868,7 @@ int ObAllVirtualTabletReplicaInfo::get_next_tablet_replica_info_from_iter_(ObTab
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "fail to get tablet pointer", KR(ret), K(ptr_hdl));
     } else {
-      if (OB_FAIL(tablet_to_table_map_.get_refactored(key.tablet_id_, table_id))) {
+      if (OB_FAIL(tablet_to_table_map_.get_refactored(key.tablet_id_, part_info))) {
         if (OB_HASH_NOT_EXIST != ret) {
           SERVER_LOG(WARN, "fail to get tablet_map", KR(ret), K(key));
         } else {
@@ -719,7 +877,9 @@ int ObAllVirtualTabletReplicaInfo::get_next_tablet_replica_info_from_iter_(ObTab
         }
       } else {
         tablet_replica_info.tablet_id = key.tablet_id_.id();
-        tablet_replica_info.table_id = table_id;
+        tablet_replica_info.table_id = part_info.table_id;
+        tablet_replica_info.part_idx = part_info.part_idx;
+        tablet_replica_info.subpart_idx = part_info.subpart_idx;
         tablet_replica_info.ls_id = key.ls_id_.id();
         tablet_resident_info = tablet_pointer->get_tablet_resident_info(key);
         tablet_replica_info.occupy_size = tablet_resident_info.get_occupy_size();
@@ -744,6 +904,9 @@ int ObAllVirtualTabletReplicaInfo::init_need_fetch_flags_()
       case TABLE_TYPE:
       case TABLEGROUP_ID:
       case DATA_TABLE_ID:
+      case OBJECT_ID:
+      case PARTITION_NAME:
+      case SUBPARTITION_NAME:
         need_fetch_table_schema_ = true;
         break;
       case DATABASE_NAME:
