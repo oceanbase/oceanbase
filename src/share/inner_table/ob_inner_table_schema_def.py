@@ -18000,6 +18000,9 @@ def_table_schema(
     ('data_table_id', 'int'),
     ('occupy_size', 'int'),
     ('required_size', 'int'),
+    ('object_id', 'int'),
+    ('partition_name', 'varchar:OB_MAX_PARTITION_NAME_LENGTH'),
+    ('subpartition_name', 'varchar:OB_MAX_PARTITION_NAME_LENGTH'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -46530,18 +46533,28 @@ def_table_schema(
     TENANT_ID,
     LS_ID,
     TABLET_ID,
-    ROLE,
+    CASE ROLE WHEN 1 THEN 'LEADER' ELSE 'FOLLOWER' END AS ROLE,
     ZONE,
     TABLE_ID,
     TABLE_NAME,
     DATABASE_ID,
     DATABASE_NAME,
-    TABLE_TYPE,
+    /* same with CDB_OB_TABLE_LOCATIONS */
+    CASE WHEN TABLE_TYPE IN (0) THEN 'SYSTEM TABLE'
+         WHEN TABLE_TYPE IN (3,6,8,9,16,17) THEN 'USER TABLE'
+         WHEN TABLE_TYPE IN (5) THEN 'INDEX'
+         WHEN TABLE_TYPE IN (12,13) THEN 'LOB AUX TABLE'
+         WHEN TABLE_TYPE IN (15) THEN 'MATERIALIZED VIEW LOG'
+         ELSE NULL
+    END AS TABLE_TYPE,
     TABLEGROUP_ID,
     TABLEGROUP_NAME,
     DATA_TABLE_ID,
     OCCUPY_SIZE,
-    REQUIRED_SIZE
+    REQUIRED_SIZE,
+    OBJECT_ID,
+    PARTITION_NAME,
+    SUBPARTITION_NAME
   FROM oceanbase.__all_virtual_tablet_replica_info
   """.replace("\n", " ")
 )
@@ -46572,7 +46585,10 @@ def_table_schema(
     TABLEGROUP_NAME,
     DATA_TABLE_ID,
     OCCUPY_SIZE,
-    REQUIRED_SIZE
+    REQUIRED_SIZE,
+    OBJECT_ID,
+    PARTITION_NAME,
+    SUBPARTITION_NAME
   FROM oceanbase.GV$OB_TABLET_REPLICA_INFO
   WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
   """.replace("\n", " ")

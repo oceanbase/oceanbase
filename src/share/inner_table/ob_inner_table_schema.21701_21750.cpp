@@ -366,7 +366,7 @@ int ObInnerTableSchema::gv_ob_tablet_replica_info_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SVR_IP,     SVR_PORT,     TENANT_ID,     LS_ID,     TABLET_ID,     ROLE,     ZONE,     TABLE_ID,     TABLE_NAME,     DATABASE_ID,     DATABASE_NAME,     TABLE_TYPE,     TABLEGROUP_ID,     TABLEGROUP_NAME,     DATA_TABLE_ID,     OCCUPY_SIZE,     REQUIRED_SIZE   FROM oceanbase.__all_virtual_tablet_replica_info   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SVR_IP,     SVR_PORT,     TENANT_ID,     LS_ID,     TABLET_ID,     CASE ROLE WHEN 1 THEN 'LEADER' ELSE 'FOLLOWER' END AS ROLE,     ZONE,     TABLE_ID,     TABLE_NAME,     DATABASE_ID,     DATABASE_NAME,     /* same with CDB_OB_TABLE_LOCATIONS */     CASE WHEN TABLE_TYPE IN (0) THEN 'SYSTEM TABLE'          WHEN TABLE_TYPE IN (3,6,8,9,16,17) THEN 'USER TABLE'          WHEN TABLE_TYPE IN (5) THEN 'INDEX'          WHEN TABLE_TYPE IN (12,13) THEN 'LOB AUX TABLE'          WHEN TABLE_TYPE IN (15) THEN 'MATERIALIZED VIEW LOG'          ELSE NULL     END AS TABLE_TYPE,     TABLEGROUP_ID,     TABLEGROUP_NAME,     DATA_TABLE_ID,     OCCUPY_SIZE,     REQUIRED_SIZE,     OBJECT_ID,     PARTITION_NAME,     SUBPARTITION_NAME   FROM oceanbase.__all_virtual_tablet_replica_info   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -417,7 +417,7 @@ int ObInnerTableSchema::v_ob_tablet_replica_info_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SVR_IP,     SVR_PORT,     TENANT_ID,     LS_ID,     TABLET_ID,     ROLE,     ZONE,     TABLE_ID,     TABLE_NAME,     DATABASE_ID,     DATABASE_NAME,     TABLE_TYPE,     TABLEGROUP_ID,     TABLEGROUP_NAME,     DATA_TABLE_ID,     OCCUPY_SIZE,     REQUIRED_SIZE   FROM oceanbase.GV$OB_TABLET_REPLICA_INFO   WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SVR_IP,     SVR_PORT,     TENANT_ID,     LS_ID,     TABLET_ID,     ROLE,     ZONE,     TABLE_ID,     TABLE_NAME,     DATABASE_ID,     DATABASE_NAME,     TABLE_TYPE,     TABLEGROUP_ID,     TABLEGROUP_NAME,     DATA_TABLE_ID,     OCCUPY_SIZE,     REQUIRED_SIZE,     OBJECT_ID,     PARTITION_NAME,     SUBPARTITION_NAME   FROM oceanbase.GV$OB_TABLET_REPLICA_INFO   WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
