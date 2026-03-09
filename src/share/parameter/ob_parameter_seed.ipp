@@ -3118,7 +3118,7 @@ DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETE
                      "values: REQUEST, OBJECT",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "20000",
+DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "1000",
                     common::ObHNSWIterFilterScanNumChecker,
                     "The upper limit of hnsw iter-filter search nums. Range: [0,)",
                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3319,7 +3319,8 @@ DEF_INT(default_skip_index_level, OB_TENANT_PARAMETER, "0", "[0, 1]",
 DEF_BOOL(enable_mv_binlog_minimal_mode, OB_TENANT_PARAMETER, "False",
          "Switch of the minimal mode for materialized view ",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "100000",
+
+DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "1000",
         "The upper limit of ivf iter-filter search nums. Range: [0,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_max_access_entries_for_external_table_partition, OB_TENANT_PARAMETER, "1000000", "[1,)",
@@ -3426,3 +3427,11 @@ DEF_BOOL(_ss_tablet_upload_follow_cache_policy, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_ss_fast_migration, OB_TENANT_PARAMETER, "True",
          "use fast migration in shared-storage if enable",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR(ob_vector_search_strategy, OB_TENANT_PARAMETER, "LATENCY_FIRST",
+        "The strategy of vector index searching. If it is set to LATENCY_FIRST, which is default value, the search strategy is response-first mode."
+        "If it is set to RECALL_FIRST, the search strategy is deep-search mode.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "RECALL_FIRST, LATENCY_FIRST");
+DEF_TIME(_vector_pre_filtering_timeout, OB_TENANT_PARAMETER, "50ms", "[10ms,)",
+        "Control the period of pre-filtering stage in vector index search. Range: [10ms, )",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

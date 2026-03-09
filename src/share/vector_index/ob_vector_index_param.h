@@ -22,8 +22,8 @@ namespace share
 
 enum ObVecIdxQueryStrategy
 {
-  RESPONSE_FIRST = 0,
-  DEEP_SEARCH = 1,
+  LATENCY_FIRST = 0,
+  RECALL_FIRST = 1,
   STRATEGY_MAX
 };
 
@@ -40,7 +40,7 @@ public:
     ob_sparse_drop_ratio_search_(0),
     similarity_threshold_(0),
     ivf_nprobes_(0),
-    strategy_(ObVecIdxQueryStrategy::RESPONSE_FIRST)
+    strategy_(ObVecIdxQueryStrategy::RECALL_FIRST)
   {}
   virtual ~ObVectorIndexQueryParam() {}
   int assign(const ObVectorIndexQueryParam &other);

@@ -76,7 +76,7 @@ public:
       is_hybrid_(false),
       all_filters_can_be_picked_out_(false),
       use_rowkey_vid_tbl_(false),
-      strategy_(ObVecIdxQueryStrategy::RESPONSE_FIRST),
+      strategy_(ObVecIdxQueryStrategy::RECALL_FIRST),
       pre_filtering_timeout_(-1) {}
 
   inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_;  }
@@ -92,6 +92,13 @@ public:
   inline bool filter_in_hnsw_iter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   inline bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
+  inline bool is_hnsw() const
+  {
+    return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
+  }
 
   int64_t get_inv_scan_idx() const { return ObVecAuxTableIdx::VALID_VID_SCAN_IDX; }
   int64_t get_delta_tbl_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }
@@ -164,7 +171,8 @@ public:
                        K_(extra_column_count), K_(vector_index_param), K_(vec_query_param),
                        K_(vector_index_param), K_(adaptive_try_path), K_(is_multi_value_index),
                        K_(is_spatial_index), K_(can_extract_range), K_(is_hybrid),
-                       K_(all_filters_can_be_picked_out), K_(use_rowkey_vid_tbl));
+                       K_(all_filters_can_be_picked_out), K_(use_rowkey_vid_tbl), K_(strategy),
+                       K_(pre_filtering_timeout));
 
   ObExpr *inv_scan_vec_id_col_;
   ObString vec_index_param_;

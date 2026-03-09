@@ -53,7 +53,11 @@ public:
       tsc_service_(nullptr),
       result_(nullptr),
       scan_param_(nullptr),
-      skip_vectorized_print_(false)
+      skip_vectorized_print_(false),
+      try_check_tick_(0),
+      try_check_tick_rows_(0),
+      vec_start_scan_ts_us_(-1),
+      vec_pre_filtering_timeout_us_(-1)
   {}
   virtual ~ObDASScanIter() {}
   common::ObNewRowIterator *&get_output_result_iter() { return result_; }
@@ -73,19 +77,30 @@ public:
                               const ObDASScanCtDef *lookup_ctdef,
                               ObIAllocator *alloc,
                               int64_t group_id) override;
+  OB_INLINE void set_pre_filtering_timeout(int64_t vec_pre_filtering_timeout) { vec_pre_filtering_timeout_us_ = vec_pre_filtering_timeout; }
+  OB_INLINE bool is_vec_pre_filtering_timeout_set() { return vec_pre_filtering_timeout_us_ > 0; }
 protected:
   virtual int inner_init(ObDASIterParam &param) override;
   virtual int inner_reuse() override;
   virtual int inner_release() override;
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
+  int try_check_vec_pre_filter_status(const int64_t row_count = 1);
+  int check_vec_pre_filter_status();
 
 private:
+  static const uint64_t CHECK_STATUS_ROWS = 500;
+  static const uint64_t CHECK_STATUS_TRY_TIMES = 50;
+
   common::ObITabletScan *tsc_service_;
   common::ObNewRowIterator *result_;
   // must ensure the lifecycle of scan param is longer than scan iter.
   storage::ObTableScanParam *scan_param_;
   bool skip_vectorized_print_;
+  uint64_t try_check_tick_; // for check vector prefilter search status by times, default 0
+  uint64_t try_check_tick_rows_; // for check vector prefilter search status by rows, default 0
+  int64_t vec_start_scan_ts_us_; // the start timestamp of this scan for vector prefilter search, default -1
+  int64_t vec_pre_filtering_timeout_us_; // the pre-filtering timeout of vector prefilter search , default -1
 };
 
 

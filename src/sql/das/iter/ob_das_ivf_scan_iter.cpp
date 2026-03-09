@@ -286,6 +286,7 @@ int ObDASIvfBaseScanIter::inner_init(ObDASIterParam &param)
 
     vec_index_type_ = ivf_scan_param.vec_index_type_;
     vec_idx_try_path_ = ivf_scan_param.vec_idx_try_path_;
+    strategy_ = ivf_scan_param.strategy_;
 
     adaptive_ctx_.reset();
     adaptive_ctx_.selectivity_ = vec_aux_ctdef_->selectivity_;
@@ -607,7 +608,7 @@ int ObDASIvfBaseScanIter::check_iter_filter_need_retry()
     }
   }
   if (OB_FAIL(ret)) {
-    LOG_WARN("switch path check iter filter need retry", K(ret), K(adaptive_ctx_), K(iter_selectivity), K(output_row_cnt), K(scan_tablet_size_), K(centroid_tablet_id_));
+    LOG_WARN("switch path check iter filter need retry", K(ret), K(adaptive_ctx_), K(iter_selectivity), K(output_row_cnt), K(scan_tablet_size_), K(centroid_tablet_id_), K(strategy_));
   }
   return ret;
 }
@@ -626,7 +627,7 @@ int ObDASIvfBaseScanIter::check_pre_filter_need_retry()
     ret = OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY;
   }
   if (OB_FAIL(ret)) {
-    LOG_WARN("switch path check pre filter need retry", K(ret), K(adaptive_ctx_), K(pre_selectivity), K(scan_tablet_size_), K(centroid_tablet_id_));
+    LOG_WARN("switch path check pre filter need retry", K(ret), K(adaptive_ctx_), K(pre_selectivity), K(scan_tablet_size_), K(centroid_tablet_id_), K(strategy_));
   }
   return ret;
 }
@@ -636,7 +637,9 @@ int ObDASIvfBaseScanIter::reset_filter_path()
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx_);
   ObPlanStat* plan_stat = nullptr;
-  if (OB_ISNULL(plan_ctx->get_phy_plan())) {
+  if (strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER) {
+    // RT first mode, do nothing
+  } else if (OB_ISNULL(plan_ctx->get_phy_plan())) {
     // remote scan, phy plan is null, do nothing, just use try path in ctdef
     LOG_WARN("plan ctx is null", K(ret), KP(plan_ctx));
   } else if (OB_FALSE_IT(plan_stat = const_cast<ObPlanStat*>(&(plan_ctx->get_phy_plan()->stat_)))) {
@@ -653,6 +656,7 @@ int ObDASIvfBaseScanIter::reset_filter_path()
     LOG_WARN("failed to updata vec exec ctx", K(ret), K(vec_idx_try_path_));
   } else {
     can_retry_ = false;
+    reuse_cid_ctx();
   }
   return ret;
 }
@@ -1585,7 +1589,19 @@ int ObDASIvfBaseScanIter::do_table_post_filter(bool is_vectorized, ObIVFRowkeyDi
   return ret;
 }
 
+void ObDASIvfBaseScanIter::reuse_cid_ctx()
+{
+  iterative_filter_ctx_.reuse();
+}
 
+int64_t ObDASIvfBaseScanIter::get_cid_vec_batch_count()
+{
+  int batch_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
+  if (strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST && max_scan_vectors_ > 0 && adaptive_ctx_.iter_times_ > 1) {
+    batch_count = OB_MIN(max_scan_vectors_ - adaptive_ctx_.cid_vec_scan_rows_ + 1, ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE);
+  }
+  return batch_count;
+}
 /*************************** implement ObDASIvfScanIter ****************************/
 int ObDASIvfScanIter::inner_init(ObDASIterParam &param)
 {
@@ -1831,7 +1847,8 @@ int ObDASIvfScanIter::get_rowkeys_to_heap(const ObString &cid_str, int64_t cid_v
   if (OB_FAIL(scan_cid_range(cid_str, cid_vec_pri_key_cnt, cid_vec_ctdef, cid_vec_rtdef, cid_vec_scan_iter))) {
     LOG_WARN("fail to scan cid range", K(ret), K(cid_str), K(cid_vec_pri_key_cnt));
   } else if (is_vectorized) {
-    IVF_GET_NEXT_ROWS_BEGIN(cid_vec_iter_)
+    int64_t cid_vec_batch_count = get_cid_vec_batch_count();
+    IVF_GET_NEXT_ROWS_BEGIN_WITH_BATCH(cid_vec_iter_, cid_vec_batch_count)
     if (OB_SUCC(ret)) {
       ObEvalCtx::BatchInfoScopeGuard guard(*vec_aux_rtdef_->eval_ctx_);
       guard.set_batch_size(scan_row_cnt);
@@ -2045,7 +2062,12 @@ int ObDASIvfScanIter::do_ivf_scan_post(bool is_vectorized, T *search_vec)
       while (OB_SUCC(ret) && !index_end) {
         if (OB_FAIL(get_pre_filter_rowkey_batch(mem_context_->get_arena_allocator(), is_vectorized, batch_row_count,
                                                 index_end))) {
-          LOG_WARN("failed to get rowkey batch", K(ret), K(is_vectorized));
+          if (strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST && ret == OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY) {
+            LOG_INFO("pre-filter timeout and strategy is LATENCY_FIRST, need to response now", K(ret), K(strategy_), K(can_retry_), K(vec_index_type_), K(vec_idx_try_path_));
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to get rowkey batch", K(ret), K(is_vectorized));
+          }
         } else if (OB_FAIL(get_rowkey_brute_post(is_vectorized, nearest_rowkey_heap))) {
           LOG_WARN("failed to get limit rowkey brute", K(ret));
         } else {
@@ -2121,7 +2143,7 @@ int ObDASIvfScanIter::do_ivf_scan_post(bool is_vectorized, T *search_vec)
         const int64_t new_heap_size = OB_MAX(get_heap_size(left_search, select_ratio), heap_size);
         LOG_INFO("postfilter does not get enough result", K(limit_k), "near_rowkeys_count", near_rowkeys.count(),
             K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_), K(heap_size),
-            K(new_heap_size), K(select_ratio));
+            K(new_heap_size), K(select_ratio), K(can_retry_), K(strategy_), K(adaptive_ctx_));
         near_cid_.reuse();
         if (similarity_threshold_ != 0 && no_new_near_rowkeys) {
           iter_end = true;
@@ -2129,9 +2151,9 @@ int ObDASIvfScanIter::do_ivf_scan_post(bool is_vectorized, T *search_vec)
         } else if (max_scan_vectors_ > 0 && adaptive_ctx_.cid_vec_scan_rows_ > max_scan_vectors_) {
           iter_end = true;
           LOG_INFO("reach max scan vectors, stop iterative filter", K(no_new_near_rowkeys), K(near_rowkeys.count()),
-              K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
+              K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_), K(strategy_));
         } else if (can_retry_ && OB_FAIL(check_iter_filter_need_retry())) {
-          LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
+          LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_), K(strategy_));
         } else if (! has_next_center()) {
           iter_end = true;
         } else if (OB_FAIL(get_next_center_ids(is_vectorized, next_nprobe))) {
@@ -2293,7 +2315,7 @@ int ObDASIvfScanIter::do_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorize
             const int64_t left_search = limit_k - nearest_rowkey_heap.count();
             next_nprobe = OB_MIN(nprobes_, (nprobes_ * ((double)left_search) / limit_k + 1));
             LOG_INFO("prefilter does not get enough result", K(limit_k), "nearest_rowkey_heap_count", nearest_rowkey_heap.count(),
-                K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_));
+                K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_), K(can_retry_), K(strategy_), K(adaptive_ctx_));
             near_cid_.reuse();
             is_first_scan = false;
             if (similarity_threshold_ != 0 && no_new_near_rowkeys) {
@@ -2302,7 +2324,7 @@ int ObDASIvfScanIter::do_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorize
             } else if (max_scan_vectors_ > 0 && adaptive_ctx_.cid_vec_scan_rows_ > max_scan_vectors_) {
               iter_end = true;
               LOG_INFO("reach max scan vectors, stop iterative filter", K(no_new_near_rowkeys), K(nearest_rowkey_heap.count()),
-                K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
+                K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_), K(strategy_));
             } else if (! has_next_center()) {
               iter_end = true;
             } else if (OB_FAIL(get_next_center_ids(is_vectorized, next_nprobe))) {
@@ -2342,6 +2364,12 @@ int ObDASIvfScanIter::check_cid_exist(const ObString &src_cid, bool &src_cid_exi
   }
 
   return ret;
+}
+
+void ObDASIvfScanIter::reuse_cid_ctx()
+{
+  ObDASIvfBaseScanIter::reuse_cid_ctx();
+  near_cid_.reuse();
 }
 /************************************************** ObDASIvfPQScanIter ******************************************************/
 
@@ -2933,7 +2961,8 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
       } else if (OB_FAIL(scan_cid_range(cid_str, cid_vec_pri_key_cnt, cid_vec_ctdef, cid_vec_rtdef, cid_vec_scan_iter))) {
         LOG_WARN("fail to scan cid range", K(ret), K(cur_cid), K(cid_vec_pri_key_cnt));
       } else if (is_vectorized) {
-        IVF_GET_NEXT_ROWS_BEGIN(cid_vec_iter_)
+        int64_t cid_vec_batch_count = get_cid_vec_batch_count();
+        IVF_GET_NEXT_ROWS_BEGIN_WITH_BATCH(cid_vec_iter_, cid_vec_batch_count)
         if (OB_SUCC(ret)) {
           ObEvalCtx::BatchInfoScopeGuard guard(*vec_aux_rtdef_->eval_ctx_);
           guard.set_batch_size(scan_row_cnt);
@@ -3435,7 +3464,12 @@ int ObDASIvfPQScanIter::process_ivf_scan_post(bool is_vectorized)
       while (OB_SUCC(ret) && !index_end) {
         if (OB_FAIL(get_pre_filter_rowkey_batch(mem_context_->get_arena_allocator(), is_vectorized, batch_row_count,
                                                 index_end))) {
-          LOG_WARN("failed to get rowkey batch", K(ret), K(is_vectorized));
+          if (strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST && ret == OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY) {
+            LOG_INFO("pre-filter timeout and strategy is LATENCY_FIRST, need to response now", K(ret), K(strategy_), K(can_retry_), K(vec_index_type_), K(vec_idx_try_path_));
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to get rowkey batch", K(ret), K(is_vectorized));
+          }
         } else if (OB_FAIL(get_rowkey_brute_post(is_vectorized, nearest_rowkey_heap))) {
           LOG_WARN("failed to get limit rowkey brute", K(ret));
         } else {
@@ -3518,7 +3552,7 @@ int ObDASIvfPQScanIter::process_ivf_scan_post(bool is_vectorized)
         const int64_t new_heap_size = OB_MAX(get_heap_size(left_search, select_ratio), heap_size);
         LOG_INFO("postfilter does not get enough result", K(limit_k), "near_rowkeys_count", near_rowkeys.count(),
             K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_), K(heap_size),
-            K(new_heap_size), K(select_ratio));
+            K(new_heap_size), K(select_ratio), K(can_retry_), K(strategy_), K(adaptive_ctx_));
         near_cid_vec_.reuse();
         near_cid_vec_dis_.reuse();
         if (similarity_threshold_ != 0 && no_new_near_rowkeys) {
@@ -3527,9 +3561,9 @@ int ObDASIvfPQScanIter::process_ivf_scan_post(bool is_vectorized)
         } else if (max_scan_vectors_ > 0 && adaptive_ctx_.cid_vec_scan_rows_ > max_scan_vectors_) {
           iter_end = true;
           LOG_INFO("reach max scan vectors, stop iterative filter", K(no_new_near_rowkeys), K(near_rowkeys.count()),
-              K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
+              K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_), K(strategy_));
         } else if (can_retry_ && OB_FAIL(check_iter_filter_need_retry())) {
-          LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
+          LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_), K(strategy_));
         } else if (! has_next_center()) {
           iter_end = true;
         } else if (OB_FAIL(get_next_centers(is_vectorized, next_nprobe))) {
@@ -3749,7 +3783,7 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
             const int64_t left_search = limit_k - nearest_rowkey_heap.count();
             next_nprobe = OB_MIN(nprobes_, (nprobes_ * ((double)left_search) / limit_k + 1));
             LOG_INFO("prefilter does not get enough result", K(limit_k), "nearest_rowkey_heap_count", nearest_rowkey_heap.count(),
-                K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_));
+                K(selectivity_), K(left_search), K(next_nprobe), K(iter_cnt), K(nprobes_), K(can_retry_), K(strategy_), K(adaptive_ctx_));
             near_cid_vec_.reuse();
             near_cid_vec_dis_.reuse();
             is_first_scan = false;
@@ -3759,7 +3793,7 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
             } else if (max_scan_vectors_ > 0 && adaptive_ctx_.cid_vec_scan_rows_ > max_scan_vectors_) {
               iter_end = true;
               LOG_INFO("reach max scan vectors, stop iterative filter", K(no_new_near_rowkeys), K(nearest_rowkey_heap.count()),
-                K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
+                K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_), K(strategy_));
             } else if (! has_next_center()) {
               iter_end = true;
             } else if (OB_FAIL(get_next_centers(is_vectorized, next_nprobe))) {
@@ -4058,6 +4092,13 @@ int ObDASIvfPQScanIter::pre_compute_inner_prod_table(
   return ret;
 }
 
+void ObDASIvfPQScanIter::reuse_cid_ctx()
+{
+  ObDASIvfBaseScanIter::reuse_cid_ctx();
+  near_cid_vec_.reuse();
+  near_cid_vec_dis_.reuse();
+}
+
 uint64_t ObDASIvfBaseScanIter::hash_val_for_rk(const common::ObRowkey& rk)
 {
   uint64_t hash_val = 0;
@@ -4126,7 +4167,7 @@ int ObDASIvfBaseScanIter::build_rowkey_hash_set(
           }
         }
         if (OB_SUCC(ret) && can_retry_ && OB_FAIL(check_pre_filter_need_retry())) {
-          LOG_WARN("ret of check pre filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
+          LOG_WARN("ret of check pre filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_), K(strategy_));
         }
       }
       if (ret == OB_ITER_END) {
