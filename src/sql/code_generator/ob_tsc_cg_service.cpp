@@ -2468,6 +2468,8 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
       const int64_t IVF_OTHERS = 6;
       int64_t hnsw_vid_opt =  has_tr_info ? 6 : 5;
       int64_t hnsw_normal =  has_tr_info ? 7 : 6;
+      uint64_t data_version = 0;
+      uint64_t tenant_id = MTL_ID();
       if (is_hybrid) {
         hnsw_vid_opt++;
         hnsw_normal++;
@@ -2552,6 +2554,32 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
         vec_scan_ctdef->is_spatial_index_ = vc_info.is_spatial_index_;
         vec_scan_ctdef->is_multi_value_index_ = vc_info.is_multi_value_index_;
         vec_scan_ctdef->all_filters_can_be_picked_out_ = vc_info.all_filters_can_be_picked_out_;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("failed to get min data version", K(ret), K(tenant_id));
+        } else if (data_version >= DATA_VERSION_4_6_0_0) {
+          // 4.3.5.5 hotfix 6 and 4.4.1.0 hotfix 10 start to support query strategy, but the default strategy is RECALL_FIRST
+          // from 4.6.0.0, the default strategy is LATENCY_FIRST, and only set strategy from 4.6.0.0
+          // upgrading from 4.3.5.5 hotfix 6 or 4.4.1.0 hotfix 10 will keep the old strategy set before, but strategy is unavailable during upgrading stage because of the lack of version checking for hotfix
+          if (vec_scan_ctdef->vec_query_param_.is_set_strategy_ && vec_scan_ctdef->vec_query_param_.strategy_ == ObVecIdxQueryStrategy::RECALL_FIRST) {
+            vec_scan_ctdef->strategy_ = vec_scan_ctdef->vec_query_param_.strategy_;
+          } else {
+            omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+            if (OB_UNLIKELY(!tenant_config.is_valid())) {
+              LOG_WARN("tenant config is invalid", K(ret), K(tenant_id));
+              vec_scan_ctdef->strategy_ = ObVecIdxQueryStrategy::RECALL_FIRST;
+            } else {
+              if (vec_scan_ctdef->vec_query_param_.is_set_strategy_) {
+                vec_scan_ctdef->strategy_ = vec_scan_ctdef->vec_query_param_.strategy_;
+              } else {
+                ObString tenant_strategy(tenant_config->ob_vector_search_strategy.get_value());
+                vec_scan_ctdef->strategy_ = tenant_strategy.compare(ObVectorTenantSearchStrategy::LATENCY_FIRST_STR) == 0 ?
+                                            ObVecIdxQueryStrategy::LATENCY_FIRST :
+                                            ObVecIdxQueryStrategy::RECALL_FIRST;
+              }
+              vec_scan_ctdef->pre_filtering_timeout_ = tenant_config->_vector_pre_filtering_timeout;
+            }
+          }
+        }
         cg_.phy_plan_->stat_.vec_index_exec_ctx_.cur_path_ = vc_info.adaptive_try_path_;
       }
     }
