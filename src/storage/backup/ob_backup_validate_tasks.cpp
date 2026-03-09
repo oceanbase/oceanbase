@@ -781,10 +781,10 @@ int ObBackupValidatePrepareTask::prepare_basic_validate_()
           LOG_WARN("failed to check file list file exist", KR(ret), K(checkpoint_path));
         } else if (is_exist && OB_FAIL(path_list.push_back(checkpoint_path))) {
           LOG_WARN("failed to push back piece checkpoint dir path to queue", KR(ret), K(checkpoint_path));
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid task type", KR(ret), K_(param));
         }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid task type", KR(ret), K_(param));
       }
     }
     if (FAILEDx(get_and_add_dir_list_(path_list))) {
