@@ -38,7 +38,7 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
     ObStorageSchema *storage_schema = with_cs_replica ?
                                       tablet_param.cs_replica_storage_schema_ :
                                       tablet_param.storage_schema_;
-    if (OB_UNLIKELY(nullptr == storage_schema || storage_schema->is_row_store())) {
+    if (OB_UNLIKELY(nullptr == storage_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected storage schema", K(ret), K(storage_schema));
     } else {
@@ -65,7 +65,9 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
         cg_table_key.tablet_id_ = param.tablet_id_;
         cg_table_key.version_range_.snapshot_version_ = param.snapshot_version_;
         cg_table_key.column_group_idx_ = param.cg_idx_;
-        if (cg_schema.is_rowkey_column_group() || cg_schema.is_all_column_group()) {
+        if (!with_cs_replica && !param.ddl_table_schema_.table_item_.is_column_store_) {
+          cg_table_key.table_type_ = is_inc_major ? ObITable::INC_MAJOR_SSTABLE : ObITable::MAJOR_SSTABLE;
+        } else if (cg_schema.is_rowkey_column_group() || cg_schema.is_all_column_group()) {
           cg_table_key.table_type_ = is_inc_major ? ObITable::INC_COLUMN_ORIENTED_SSTABLE
                                                   : ObITable::COLUMN_ORIENTED_SSTABLE;
           cg_table_key.slice_range_.start_slice_idx_ = param.slice_idx_;

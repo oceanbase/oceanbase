@@ -338,6 +338,8 @@ public:
       dfilter_(nullptr),
       ls_leader_(true),
       is_sparse_vector_(false),
+      is_refresh_adaptor_(false),
+      complete_delta_lock_(nullptr),
       scn_() {};
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
@@ -372,6 +374,8 @@ public:
   void set_flag(ObVectorQueryProcessFlag flag) {flag_ = flag; }
   void set_ls_leader(const bool ls_leader) { ls_leader_ = ls_leader; }
   bool get_ls_leader() { return ls_leader_; }
+  void set_is_refresh_adaptor(const bool is_refresh_adaptor) { is_refresh_adaptor_ = is_refresh_adaptor; }
+  bool get_is_refresh_adaptor() { return is_refresh_adaptor_; }
   void set_scn(const SCN scn) { scn_ = scn; }
 
   inline void set_sparse_vector(const bool is_sparse) { is_sparse_vector_ = is_sparse; }
@@ -387,6 +391,8 @@ public:
   int add_segment_querier(
       ObVectorIndexSegmentHandle &handle, const bool is_incr,
       ObHnswBitmapFilter* filter, const bool reverse_filter);
+  void set_complete_delta_lock(TCRWLock *lock) { complete_delta_lock_ = lock; }
+  TCRWLock *get_complete_delta_lock() { return complete_delta_lock_; }
 
 private:
   PluginVectorQueryResStatus status_;
@@ -405,6 +411,9 @@ private:
   ObHnswBitmapFilter *dfilter_;
   bool ls_leader_;
   bool is_sparse_vector_;
+  bool is_refresh_adaptor_;
+  // hold complete lock
+  TCRWLock *complete_delta_lock_;
   SCN scn_;
 };
 
@@ -614,13 +623,13 @@ public:
   uint64_t get_embedded_table_id() { return embedded_table_id_; }
   uint64_t get_rowkey_vid_table_id() { return rowkey_vid_table_id_; }
   uint64_t get_vid_rowkey_table_id() { return vid_rowkey_table_id_; }
-  void close_snap_data_rb_flag() {
-    if (is_mem_data_init_atomic(VIRT_SNAP)) {
-      snap_data_->rb_flag_ = false;
+  void set_snap_data_has_complete() {
+    if (snap_data_.is_valid()) {
+      snap_data_->has_complete_ = true;
     }
   }
-  void try_set_snap_data_rb_flag();
-  bool get_snap_rb_flag() const { return snap_data_->rb_flag_; }
+
+  bool get_snap_has_complete() const { return snap_data_.is_valid() && snap_data_->has_complete_; }
 
   int renew_single_snap_index(bool mem_saving_mode);
   int renew_snapdata_in_lock();
@@ -737,7 +746,8 @@ public:
   void *get_algo_data() { return algo_data_; }
 
   bool check_if_complete_data(ObVectorQueryAdaptorResultContext *ctx);
-  int complete_index_mem_data(SCN read_scn,
+  int complete_index_mem_data(ObVectorQueryAdaptorResultContext *ctx,
+                              SCN read_scn,
                               common::ObNewRowIterator *row_iter,
                               blocksstable::ObDatumRow *last_row,
                               ObArray<uint64_t> &i_vids);
@@ -901,6 +911,10 @@ public:
 
   int parse_sparse_vector(char *data, int num, uint32_t *sparse_byte_lens, ObArenaAllocator *allocator, uint32_t **lens,
     uint32_t **dims, float **vals);
+  void reset_complete();
+  bool check_bitmap_is_delta_bitmap_subset(roaring::api::roaring64_bitmap_t *bitmap);
+  bool check_index_bitmap_is_delta_bitmap_subset();
+  void set_index_statistics_updated(bool value) { index_statistics_updated_ = value; }
 
   // incr init
   int init_incr_data(ObVecIdxActiveDataHandle &mem_data, ObVectorIndexAlgorithmType enforce_type, ObVectorIndexParam *param);
@@ -915,7 +929,10 @@ public:
   bool is_snap_inited() const { return snap_data_.is_valid() && snap_data_->is_inited(); }
   int init_snap_data_for_build(const bool is_init_bitmap);
   int init_snap_data_for_build(ObVectorIndexParam *param, const bool is_buffer_mode);
-  int is_sanp_builder_inited() const { return snap_data_.is_valid() && snap_data_->is_inited() && OB_NOT_NULL(snap_data_->builder_); }
+  bool is_sanp_builder_inited() const
+  {
+    return is_snap_inited() && OB_NOT_NULL(snap_data_->builder_) && snap_data_->builder_->is_inited();
+  }
   int inner_init_snap_builder(ObVectorIndexParam *param, const bool is_buffer_mode);
   int try_init_snap_for_deserialize(ObVectorIndexAlgorithmType actual_type);
 
@@ -937,9 +954,7 @@ public:
   int deserialize_snap_data(
       const ObLSID &ls_id, const share::SCN &scn,
       const ObString &meta_data, const int64_t meta_scn);
-  int deserialize_snap_data(
-      const ObLSID &ls_id, ObVectorQueryConditions *query_cond,
-      const ObString &meta_data, const int64_t meta_scn);
+  int deserialize_snap_data(ObVectorQueryConditions *query_cond);
   int deserialize_snap_data(ObHNSWDeserializeCallback::CbParam &param, ObString &row_key);
   int deserialize_snap_data(ObHNSWDeserializeCallback::CbParam &param);
 
@@ -971,7 +986,7 @@ private:
                                ObArray<uint64_t> &i_vids,
                                ObArray<uint64_t> &d_vids);
   bool check_if_complete_index(SCN read_scn);
-  int check_if_complete_delta(roaring::api::roaring64_bitmap_t *gene_bitmap, int64_t count, bool &res);
+  int check_if_complete_delta(ObVectorQueryAdaptorResultContext *ctx, roaring::api::roaring64_bitmap_t *gene_bitmap, int64_t count, bool &res);
   int write_into_delta_mem(ObVectorQueryAdaptorResultContext *ctx,
                            int count,
                            float *vectors,
@@ -1058,6 +1073,7 @@ private:
   // for vid opt
   bool is_need_vid_;
   ObCollectionMapType *sparse_vector_type_;
+  bool index_statistics_updated_;
 
   /*
    * record scn for replace_old_adapter to deal with task conflict between memdata sync and async task.

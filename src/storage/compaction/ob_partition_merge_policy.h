@@ -416,6 +416,7 @@ public:
       const int64_t column_cnt);
   static bool whether_to_rebuild_column_store(
       const ObMajorSSTableStatus current_status,
+      const ObStorageSchema &schema,
       const int64_t estimate_row_cnt,
       const int64_t column_cnt);
   static int accumulate_physical_row_cnt(

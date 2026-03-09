@@ -2453,12 +2453,12 @@ int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse, bool cl
       if (OB_NOT_NULL(spi_result)) {
         if (OB_NOT_NULL(spi_result->get_result_set())) {
           OZ (spi_result->set_cursor_env(session));
+          spi_result->destruct_exec_params(session);
           int close_ret = spi_result->close_result_set();
           if (OB_SUCCESS != close_ret) {
             LOG_WARN("close mysql result set failed", K(ret), K(close_ret));
           }
           ret = (OB_SUCCESS == ret ? close_ret : ret);
-          spi_result->destruct_exec_params(session);
           //spi_result->get_mysql_result().reset();
           int reset_ret = spi_result->reset_cursor_env(session);
           ret = (OB_SUCCESS == ret ? reset_ret : ret);
@@ -2823,11 +2823,11 @@ int ObPsCursorInfo::close(sql::ObSQLSessionInfo &session,
     ObSPIResultSet *spi_result = get_cursor_handler();
     if (OB_NOT_NULL(spi_result)) {
       if (OB_NOT_NULL(spi_result->get_result_set())) {
+        spi_result->destruct_exec_params(session);
         int close_ret = spi_result->close_result_set();
         if (OB_SUCCESS != close_ret) {
           LOG_WARN("close mysql result failed", K(close_ret));
         }
-        spi_result->destruct_exec_params(session);
         spi_result->~ObSPIResultSet();
       }
     } else {
@@ -2974,9 +2974,9 @@ int ObPLCursorInfo::convert_to_unstreaming(ObSQLSessionInfo &session)
       open(spi_cursor);
       OZ (spi_result->set_cursor_env(session));
       last_stream_cursor_ = false;
+      spi_result->destruct_exec_params(session);
       int close_ret = spi_result->close_result_set(); // close spi_result
       ret = (OB_SUCCESS == ret ? close_ret : ret);
-      spi_result->destruct_exec_params(session);
       int reset_ret = spi_result->reset_cursor_env(session);
       ret = (OB_SUCCESS == ret ? reset_ret : ret);
       spi_result->~ObSPIResultSet();

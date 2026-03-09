@@ -181,6 +181,7 @@ int ObLSSortedIterator<ItemType>::iterate(
     const int64_t tablet_id = TabletIDExtractor::get_tablet_id(item);
     ObTabletHandle tablet_handle;
     bool can_merge = false;
+    bool need_schedule = false;
     if (func.get_ls_status().ls_id_.id() == ls_id) {
       // do nothing, use old ls_handle
     } else if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(ObLSID(ls_id), ls_handle, storage::ObLSGetMod::COMPACT_MODE))) {
@@ -211,9 +212,9 @@ int ObLSSortedIterator<ItemType>::iterate(
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
                  ObTabletID(tablet_id), tablet_handle, 0 /*timeout_us*/))) {
       STORAGE_LOG(WARN, "get tablet failed", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(func.iterate_switch_tablet(tablet_handle, can_merge))) {
+    } else if (OB_FAIL(func.iterate_switch_tablet(tablet_handle, can_merge, need_schedule))) {
       STORAGE_LOG(WARN, "failed to switch tablet", K(ret), K(ls_id), K(tablet_id));
-    } else if (!can_merge && skip_follower) {
+    } else if ((!can_merge && skip_follower) || !need_schedule) {
     } else if (OB_FAIL(processor(func, item, tablet_handle, std::forward<Args>(args)...))) {
       // ATTENTION:don't print item here, since it may be a pointer and be freed when process
       STORAGE_LOG(WARN, "failed to process item", K(ret), K(ls_id), K(tablet_id));

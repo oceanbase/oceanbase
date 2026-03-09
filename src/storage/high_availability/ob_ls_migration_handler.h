@@ -188,6 +188,7 @@ private:
 
   int64_t last_advance_checkpoint_ts_; // won't clear when handler is reused
   share::SCN advance_checkpoint_scn_; // won't clear when handler is reused
+  ObLSMigrationCostStatic cost_static_;
 
 #ifdef OB_BUILD_SHARED_STORAGE
   common::ObThreadCond switch_leader_cond_;

@@ -1393,7 +1393,8 @@ int ObBlockManager::mark_sstable_meta_block(
   if (addr.is_block()) {
     if (OB_UNLIKELY(!addr.is_valid())) {
       LOG_WARN("sstable addr is invalid", K(ret), K(addr));
-    } else if (FALSE_IT(macro_id = addr.block_id())) {
+    } else if (OB_FAIL(addr.get_macro_block_id(macro_id))) {
+      LOG_WARN("failed to get macro block id", K(ret), K(addr));
     } else if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
       LOG_WARN("fail to update mark info", K(ret), K(addr), K(macro_id));
     } else if (OB_FAIL(macro_id_set.set_refactored(macro_id,
@@ -1418,42 +1419,46 @@ int ObBlockManager::mark_tablet_block(
     ObMacroBlockMarkerStatus &tmp_status) {
   int ret = OB_SUCCESS;
   const ObTablet *tablet = handle.get_obj();
-  ObTabletBlockInfo block_info(tablet->get_tablet_addr().block_id(),
-                               ObTabletMacroType::SHARED_META_BLOCK,
-                               0 /*useless param*/);
-
-  if (tablet->get_tablet_addr().is_block() &&
-      OB_FAIL(do_mark_tablet_block(block_info, mark_info, macro_id_set,
-                                   tmp_status))) {
-    LOG_WARN("fail to mark tablet macro id", K(ret), K(block_info));
-  } else if (!tablet
-                  ->is_empty_shell()) { // empty shell may don't have macro info
-    ObArenaAllocator allocator("MarkTabletBlock");
-    ObTabletMacroInfo *macro_info = nullptr;
-    ObMacroInfoIterator macro_iter;
-    if (OB_FAIL(tablet->load_macro_info(0 /* ls_epoch in shared_storage */,
-                                        allocator, macro_info))) {
-      LOG_WARN("fail to load macro info", K(ret));
-    } else if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, *macro_info))) {
-      LOG_WARN("fail to init macro iterator", K(ret), KPC(macro_info));
-    }
-    while (OB_SUCC(ret)) {
-      block_info.reset();
-      if (OB_FAIL(macro_iter.get_next(block_info))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("fail to get next block info", K(ret), K(block_info));
-        } else {
-          ret = OB_SUCCESS;
-          break;
-        }
-      } else if (block_info.macro_id_.is_backup_id()) {
-        // do nothing
-      } else if (OB_FAIL(do_mark_tablet_block(block_info, mark_info, macro_id_set, tmp_status))) {
-        LOG_WARN("fail to mark macro id", K(ret), K(block_info));
+  MacroBlockId macro_id;
+  if (OB_FAIL(tablet->get_tablet_addr().get_macro_block_id(macro_id))) {
+    LOG_WARN("failed to get macro block id", K(ret), KPC(tablet));
+  } else {
+    ObTabletBlockInfo block_info(macro_id,
+                                 ObTabletMacroType::SHARED_META_BLOCK,
+                                 0 /*useless param*/);
+    if (tablet->get_tablet_addr().is_block() &&
+        OB_FAIL(do_mark_tablet_block(block_info, mark_info, macro_id_set,
+                                     tmp_status))) {
+      LOG_WARN("fail to mark tablet macro id", K(ret), K(block_info));
+    } else if (!tablet
+                    ->is_empty_shell()) { // empty shell may don't have macro info
+      ObArenaAllocator allocator("MarkTabletBlock");
+      ObTabletMacroInfo *macro_info = nullptr;
+      ObMacroInfoIterator macro_iter;
+      if (OB_FAIL(tablet->load_macro_info(0 /* ls_epoch in shared_storage */,
+                                          allocator, macro_info))) {
+        LOG_WARN("fail to load macro info", K(ret));
+      } else if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, *macro_info))) {
+        LOG_WARN("fail to init macro iterator", K(ret), KPC(macro_info));
       }
-    }
-    if (OB_NOT_NULL(macro_info)) {
-      macro_info->reset();
+      while (OB_SUCC(ret)) {
+        block_info.reset();
+        if (OB_FAIL(macro_iter.get_next(block_info))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fail to get next block info", K(ret), K(block_info));
+          } else {
+            ret = OB_SUCCESS;
+            break;
+          }
+        } else if (block_info.macro_id().is_backup_id()) {
+          // do nothing
+        } else if (OB_FAIL(do_mark_tablet_block(block_info, mark_info, macro_id_set, tmp_status))) {
+          LOG_WARN("fail to mark macro id", K(ret), K(block_info));
+        }
+      }
+      if (OB_NOT_NULL(macro_info)) {
+        macro_info->reset();
+      }
     }
   }
   return ret;
@@ -1465,7 +1470,7 @@ int ObBlockManager::do_mark_tablet_block(
         &macro_id_set,
     ObMacroBlockMarkerStatus &tmp_status) {
   int ret = OB_SUCCESS;
-  const MacroBlockId &macro_id = block_info.macro_id_;
+  const MacroBlockId &macro_id = block_info.macro_id();
   if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
     LOG_WARN("fail to update mark info", K(ret), K(macro_id));
   } else if (OB_FAIL(macro_id_set.set_refactored(macro_id,
@@ -1476,7 +1481,7 @@ int ObBlockManager::do_mark_tablet_block(
       ret = OB_SUCCESS;
     }
   } else {
-    switch (block_info.block_type_) {
+    switch (block_info.block_type()) {
     case ObTabletMacroType::META_BLOCK:
     case ObTabletMacroType::LINKED_BLOCK:
       tmp_status.index_block_count_++;

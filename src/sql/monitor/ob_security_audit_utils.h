@@ -73,6 +73,7 @@ enum class ObAuditTrailType{
   OS,
   DB,
   DB_EXTENDED,
+  LOG,
 };
 
 ObAuditTrailType get_audit_trail_type_from_string(const common::ObString &string);

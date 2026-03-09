@@ -140,7 +140,7 @@ int prepare_file_write_ctx(
     LOG_WARN("failed to make parent dir", K(ret), K(backup_path));
   } else if (OB_FAIL(util.open_with_access_type(dev_handle, io_fd,
       backup_set_dest.get_storage_info(), backup_path.get_obstr(), access_type,
-      ObStorageIdMod::get_default_id_mod()))) {
+      ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
     LOG_WARN("failed to open with access type", K(ret));
   } else if (OB_FAIL(write_ctx.open(data_file_size, io_fd, *dev_handle, bandwidth_throttle))) {
     LOG_WARN("failed to open write ctx", K(ret));

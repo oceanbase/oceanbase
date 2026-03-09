@@ -810,6 +810,7 @@ int ObDDLTableSchema::fill_vector_index_schema_item(
 }
 
 int ObDDLTableSchema::fill_ddl_table_schema(
+    ObSchemaGetterGuard &schema_guard,
     const uint64_t tenant_id,
     const uint64_t table_id,
     const uint64_t tenant_data_version,
@@ -818,7 +819,6 @@ int ObDDLTableSchema::fill_ddl_table_schema(
 {
   int ret = OB_SUCCESS;
   ObArray<ObColDesc> column_descs;
-  ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
   bool is_vector_data_complement = false;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == table_id || tenant_data_version <= 0)) {
@@ -845,7 +845,7 @@ int ObDDLTableSchema::fill_ddl_table_schema(
     ddl_table_schema.table_item_.compress_type_ = table_schema->get_compressor_type();
     ddl_table_schema.table_item_.index_type_ = table_schema->get_index_type();
     ddl_table_schema.table_item_.is_vec_tablet_rebuild_ = !table_schema->is_unavailable_index() && table_schema->is_vec_hnsw_index();
-
+    ddl_table_schema.data_table_id_ = table_schema->get_data_table_id();
     if (OB_FAIL(ddl_table_schema.column_descs_.assign(column_descs))) {
       LOG_WARN("assign column descs failed", K(ret));
     } else if (OB_FAIL(ObDDLUtil::convert_to_storage_schema(table_schema, tenant_data_version, allocator, ddl_table_schema.storage_schema_))) {

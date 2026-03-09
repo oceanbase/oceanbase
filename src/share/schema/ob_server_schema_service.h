@@ -1154,6 +1154,8 @@ public:
 #ifdef OB_BUILD_SHARED_STORAGE
   //construct sslog schema from hard code
   int fill_sslog_table_schema(const uint64_t tenant_id, ObSchemaMgr &schema_mgr_for_cache);
+  //construct tiered metadata store schema from hard code
+  int fill_tiered_metadata_store_table_schema(const uint64_t tenant_id, ObSchemaMgr &schema_mgr_for_cache);
 #endif
   virtual int get_tenant_schema_version(const uint64_t tenant_id, int64_t &schema_version);
   int64_t get_table_count() const;

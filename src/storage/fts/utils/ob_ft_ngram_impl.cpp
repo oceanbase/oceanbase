@@ -69,6 +69,23 @@ void ObFTNgramImpl::reset()
   is_inited_ = false;
 }
 
+int ObFTNgramImpl::reuse_parser(const char *fulltext, const int64_t fulltext_len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Parser has not been inited", K(ret));
+  } else if (OB_UNLIKELY(nullptr == fulltext || 0 >= fulltext_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("There are invalid fulltext", K(ret), KP(fulltext), K(fulltext_len));
+  } else {
+    fulltext_start_ = fulltext;
+    fulltext_end_ = fulltext + fulltext_len;
+    cur_ = fulltext_start_;
+    window_.reset();
+  }
+  return ret;
+}
 
 int ObFTNgramImpl::get_next_token(const char *&word,
                                   int64_t &word_len,

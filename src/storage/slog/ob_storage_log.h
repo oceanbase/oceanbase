@@ -34,6 +34,7 @@ namespace storage
 {
 class ObTablet;
 struct ObUpdateTabletPointerParam;
+class ObSSUpdateTabletLog;
 struct ObCreateTenantPrepareLog : public ObIBaseStorageLogEntry
 {
 public:
@@ -264,6 +265,14 @@ public:
       const int64_t ls_epoch);
   virtual ~ObUpdateTabletLog() = default;
   virtual bool is_valid() const override;
+#ifdef OB_BUILD_SHARED_STORAGE
+  int convert_to_ss_update_log(
+      const share::SCN &reorg_scn,
+      const share::SCN deleted_scn,
+      const int64_t must_cache_size,
+      const int64_t try_cache_size,
+      storage::ObSSUpdateTabletLog &update_log);
+#endif
   DECLARE_TO_STRING;
   OB_UNIS_VERSION_V(1);
 public:

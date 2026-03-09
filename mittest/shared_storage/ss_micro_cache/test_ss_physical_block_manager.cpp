@@ -19,6 +19,10 @@
 #include <sys/vfs.h>
 #include <sys/types.h>
 #include <gmock/gmock.h>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
 #include "lib/thread/threads.h"
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_hashset.h"
@@ -1253,6 +1257,160 @@ TEST_F(TestSSPhysicalBlockManager, alloc_all_phy_block)
     ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_MICRO_META_BLK));
     ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK));
   }
+}
+
+// Hold phy_blk_handle (block that actually holds persisted micro data), then clear_micro_cache(), then release handle.
+TEST_F(TestSSPhysicalBlockManager, hold_phy_handle_when_clear)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: hold_phy_handle_when_clear");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSMicroCacheTaskRunner &task_runner = micro_cache->task_runner_;
+
+  task_runner.persist_data_task_.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(500 * 1000);
+
+  const int32_t block_size = phy_blk_mgr.get_block_size();
+  const int32_t micro_size = 4 << 10; // 4KB
+  const int64_t micro_cnt = 1000;
+  ObArenaAllocator allocator;
+  char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+  MEMSET(data_buf, 'a', micro_size);
+
+  // Prepare data
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(2026 + i);
+    const int32_t offset = 128;
+    ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size,
+        macro_id.second_id(), ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+  }
+
+  // Get phy block index
+  ObSSMicroBlockMetaInfo micro_info;
+  int64_t phy_blk_idx = -1;
+  for (int64_t i = 0; (i < micro_cnt) && (phy_blk_idx < 0); ++i) {
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(2026 + i);
+    const int32_t offset = 128;
+    ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_meta_info(micro_key, micro_info));
+    if (micro_info.is_data_persisted()) {
+      phy_blk_idx = micro_info.get_phy_blk_idx(block_size);
+    }
+  }
+  ASSERT_GE(phy_blk_idx, SS_SUPER_BLK_COUNT) << "no persisted micro found";
+
+  // 1. Hold phy block handle
+  ObSSPhyBlockHandle phy_blk_handle;
+  ASSERT_EQ(OB_SUCCESS, micro_cache->get_phy_block_handle(phy_blk_idx, phy_blk_handle));
+  ASSERT_TRUE(phy_blk_handle.is_valid());
+
+  // 2. Clear micro cache
+  ASSERT_EQ(OB_SUCCESS, micro_cache->clear_micro_cache());
+
+  // 3. Release phy block handle
+  phy_blk_handle.reset();
+
+  // 4. Check reusable block count
+  // reusable block count should be 1, because the handled phy block is added to reusable set when clear micro cache
+  int64_t reusable_cnt = phy_blk_mgr.get_reusable_blocks_cnt();
+  ASSERT_EQ(1, reusable_cnt);
+  int64_t stat_reusable = cache_stat.phy_blk_stat().reusable_blk_cnt_;
+  ASSERT_EQ(1, stat_reusable);
+
+  LOG_INFO("TEST_CASE: finish hold_phy_handle_when_clear");
+}
+
+// Two threads: Thread A holds phy_blk_handle, reads valid_len, sleeps 5s, reads valid_len again
+// (assert equals first value), then reset.
+// Thread B waits until A holds the handle, then calls destroy().
+TEST_F(TestSSPhysicalBlockManager, hold_phy_handle_when_destroy)
+{
+  LOG_INFO("TEST_CASE: hold_phy_handle_when_destroy");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSMicroCacheTaskRunner &task_runner = micro_cache->task_runner_;
+  ObTenantBase *tenant_base = MTL_CTX();
+
+  task_runner.persist_data_task_.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(500 * 1000);
+
+  const int32_t block_size = phy_blk_mgr.get_block_size();
+  const int32_t micro_size = 4 << 10; // 4KB
+  const int64_t micro_cnt = 1000;
+  ObArenaAllocator allocator;
+  char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+  MEMSET(data_buf, 'b', micro_size);
+
+  // Prepare data
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(2026 + i);
+    const int32_t offset = 128;
+    ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size,
+        macro_id.second_id(), ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+  }
+
+  // Get phy block index
+  ObSSMicroBlockMetaInfo micro_info;
+  int64_t phy_blk_idx = -1;
+  for (int64_t i = 0; (i < micro_cnt) && (phy_blk_idx < 0); ++i) {
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(2026 + i);
+    const int32_t offset = 128;
+    ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_meta_info(micro_key, micro_info));
+    if (micro_info.is_data_persisted()) {
+      phy_blk_idx = micro_info.get_phy_blk_idx(block_size);
+    }
+  }
+  ASSERT_GE(phy_blk_idx, SS_SUPER_BLK_COUNT) << "no persisted micro found";
+
+  std::mutex mtx;
+  std::condition_variable cv_holder_ready;
+  std::atomic<bool> holder_ready{false};
+
+  std::thread holder_thread([&]() {
+    ObTenantEnv::set_tenant(tenant_base);
+    ObSSPhyBlockHandle phy_blk_handle;
+    ASSERT_EQ(OB_SUCCESS, micro_cache->get_phy_block_handle(phy_blk_idx, phy_blk_handle));
+    ASSERT_TRUE(phy_blk_handle.is_valid());
+    const int64_t ori_valid_len = phy_blk_handle()->get_valid_len();
+    ASSERT_GT(ori_valid_len, 0);
+    {
+      std::lock_guard<std::mutex> lk(mtx);
+      holder_ready = true;
+      cv_holder_ready.notify_one();
+    }
+    sleep(5);
+    const int64_t curr_valid_len = phy_blk_handle()->get_valid_len();
+    ASSERT_EQ(ori_valid_len, curr_valid_len) << "valid_len should be unchanged while handle is held";
+    phy_blk_handle.reset();
+    ASSERT_FALSE(phy_blk_handle.is_valid());
+    std::cout << "holder: released phy_blk_handle" << std::endl;
+  });
+
+  std::thread destroy_thread([&]() {
+    ObTenantEnv::set_tenant(tenant_base);
+    {
+      std::unique_lock<std::mutex> lk(mtx);
+      cv_holder_ready.wait(lk, [&] { return holder_ready.load(); });
+    }
+    micro_cache->stop();
+    micro_cache->wait();
+    micro_cache->destroy();
+    std::cout << "destroy_thread: destroy finished" << std::endl;
+  });
+
+  holder_thread.join();
+  destroy_thread.join();
+
+  LOG_INFO("TEST_CASE: finish hold_phy_handle_when_destroy");
 }
 
 }  // namespace storage

@@ -83,6 +83,8 @@ struct ObMergeParameter {
   share::ObDiagnoseLocation *error_location_;
   ObMviewMergeParameter *mview_merge_param_;
   ObIAllocator *allocator_;
+  // Built once per merge task for mini merge (schema not simplified, CS encoding); used by merge iters via iter_param.default_row_
+  blocksstable::ObDatumRow *default_row_;
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:

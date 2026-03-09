@@ -240,16 +240,16 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
             need_retry = true;
             STORAGE_LOG(WARN, "fail to wait unpersist tablet ids flushed", KR(ret), KPC(tablet_gc_handler->ls_), K(unpersist_tablet_ids));
           }
-          // 6. update tablet_change_checkpoint in log meta
+	  // 6. set ls transfer scn
+          else if (!only_persist && OB_FAIL(tablet_gc_handler->set_ls_transfer_scn(deleted_tablets))) {
+            need_retry = true;
+            STORAGE_LOG(WARN, "failed to set ls transfer scn", KPC(ls), KR(ret), K(decided_scn));
+          }
+          // 7. update tablet_change_checkpoint in log meta
           else if (decided_scn > ls->get_tablet_change_checkpoint_scn()
                   && OB_FAIL(tablet_gc_handler->set_tablet_change_checkpoint_scn(decided_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to set_tablet_change_checkpoint_scn", KPC(ls), KR(ret), K(decided_scn));
-          }
-          // 7. set ls transfer scn
-          else if (!only_persist && OB_FAIL(tablet_gc_handler->set_ls_transfer_scn(deleted_tablets))) {
-            need_retry = true;
-            STORAGE_LOG(WARN, "failed to set ls transfer scn", KPC(ls), KR(ret), K(decided_scn));
           }
           // 8. check and gc deleted_tablets
           else if (!only_persist && !deleted_tablets.empty()

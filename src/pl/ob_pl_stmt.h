@@ -3216,7 +3216,7 @@ private:
 class ObPLDeclareCursorStmt : public ObPLStmt
 {
 public:
-  ObPLDeclareCursorStmt() : ObPLStmt(PL_CURSOR), cur_idx_(common::OB_INVALID_INDEX) {}
+  ObPLDeclareCursorStmt() : ObPLStmt(PL_CURSOR), cur_idx_(common::OB_INVALID_INDEX), default_(OB_INVALID_INDEX) {}
   virtual ~ObPLDeclareCursorStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -3226,11 +3226,15 @@ public:
   inline const ObPLCursor *get_cursor() const { return ObPLStmt::get_cursor(cur_idx_); }
   inline int64_t get_index() const { return NULL == get_cursor() ? common::OB_INVALID_INDEX : ObPLStmt::get_cursor(cur_idx_)->get_index(); }
   inline const ObPLVar *get_var() const { return common::OB_INVALID_INDEX == get_index() ? NULL : get_variable(get_index()); }
+  inline int64_t get_default() const { return default_; }
+  inline const sql::ObRawExpr *get_default_expr() const { return get_expr(default_); }
+  inline void set_default(int64_t idx) { default_ = idx; }
 
-  TO_STRING_KV(K_(type), K_(label), K_(cur_idx));
+  TO_STRING_KV(K_(type), K_(label), K_(cur_idx), K_(default));
 
 private:
   int64_t cur_idx_; // cursor表里的下标
+  int64_t default_; // 默认值表达式的索引
 };
 
 class ObPLOpenStmt : public ObPLStmt

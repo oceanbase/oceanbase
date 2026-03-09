@@ -24,6 +24,7 @@
 #include "sql/engine/ob_batch_rows.h"
 #include "common/ob_common_utility.h"
 #include "sql/ob_eval_bound.h"
+#include "sql/resolver/ob_sql_array.h"
 
 namespace oceanbase
 {
@@ -123,6 +124,59 @@ public:
   OB_INLINE ObCollationType get_cs_type() const { return type_ == ObCollectionSQLType ? CS_TYPE_BINARY : cs_type_; }
 };
 
+
+struct ObPLComplexTypeMgr
+{
+  ObPLComplexTypeMgr();
+  ~ObPLComplexTypeMgr() {reset();}
+  void reset();
+  void reset_obj_range_to_end(int64_t index);
+  int64_t get_obj_count() const { return complex_type_objects_.count(); }
+  common::ObArenaAllocator alloc_;
+  ObSqlArray<ObObj> complex_type_objects_;
+};
+
+class ObPLComplexTypeLazyMgr
+{
+public:
+  ObPLComplexTypeLazyMgr() : pl_complex_type_mgr_(nullptr) {}
+  ~ObPLComplexTypeLazyMgr()
+  {
+    if (nullptr != pl_complex_type_mgr_) {
+      pl_complex_type_mgr_->reset();
+      pl_complex_type_mgr_ = nullptr;
+    }
+  }
+  void reset()
+  {
+    if (nullptr != pl_complex_type_mgr_) {
+      pl_complex_type_mgr_->reset();
+    }
+  }
+  void reset_obj_range_to_end(int64_t index)
+  {
+    if (nullptr != pl_complex_type_mgr_) {
+      pl_complex_type_mgr_->reset_obj_range_to_end(index);
+    }
+  }
+  ObPLComplexTypeMgr *get_pl_complex_type_mgr()
+  {
+    if (nullptr == pl_complex_type_mgr_) {
+      pl_complex_type_mgr_ = new(local_buffer_) ObPLComplexTypeMgr();
+    }
+    return pl_complex_type_mgr_;
+  }
+
+  int64_t get_obj_count()
+  {
+    ObPLComplexTypeMgr *pl_complex_type_mgr = get_pl_complex_type_mgr();
+    return pl_complex_type_mgr->get_obj_count();
+  }
+private:
+  ObPLComplexTypeMgr *pl_complex_type_mgr_;
+  char local_buffer_[sizeof(ObPLComplexTypeMgr)] __attribute__ ((aligned (16)));
+};
+
 // expression evaluate context
 struct ObEvalCtx
 {
@@ -181,10 +235,10 @@ private:
     int64_t batch_size_default_val_ = 0;
     int64_t max_batch_size_default_val_ = 0;
   };
-  explicit ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator = NULL, bool is_pl_expr_eval = false);
+  explicit ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator = NULL, bool is_pl_expr_eval = false, ObPLComplexTypeLazyMgr *pl_complex_type_mgr = nullptr);
   explicit ObEvalCtx(ObEvalCtx &eval_ctx);
   virtual ~ObEvalCtx();
-
+  void reset();
   OB_INLINE int64_t get_batch_idx() { return batch_idx_; }
   OB_INLINE int64_t get_batch_size() { return batch_size_; }
   OB_INLINE bool is_vectorized() const { return 0 != max_batch_size_; }
@@ -201,6 +255,7 @@ private:
   }
   int init_datum_caster();
   bool is_pl_expr_eval() const { return is_pl_expr_eval_; }
+  int get_pl_complex_type_mgr(ObPLComplexTypeMgr *&pl_complex_type_mgr);
 
   TO_STRING_KV(K_(batch_idx), K_(batch_size), K_(max_batch_size), KP(frames_));
 private:
@@ -257,6 +312,7 @@ private:
   // used in `eval_one_datum_of_batch`
   ObBitVector *pvt_skip_for_eval_row_;
   bool is_pl_expr_eval_; // intead of by is_called_in_sql_ in ObExpr later
+  ObPLComplexTypeLazyMgr *pl_complex_type_lazy_mgr_;
 };
 
 // Expression evaluate result info

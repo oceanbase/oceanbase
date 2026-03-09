@@ -2064,16 +2064,16 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             if (can_retry) {
               retry_guard.test();
             }
+            if (!is_forall) {
+              spi_result.destruct_exec_params(*session);// need destruct exec params before close result set
+            } else {
+              release_batch_params(ctx, array_params);
+            }
             int close_ret = spi_result.close_result_set();
             if (OB_SUCCESS != close_ret) {
               LOG_WARN("close spi result failed", K(ret), K(close_ret));
             }
             ret = OB_SUCCESS == ret ? close_ret : ret;
-          }
-          if (!is_forall) {
-            spi_result.destruct_exec_params(*session);
-          } else {
-            release_batch_params(ctx, array_params);
           }
 
         } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type()); //SPI只做LOCAL重试
@@ -4339,13 +4339,13 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
               ctx->exec_ctx_->get_sql_ctx()->get_reroute_info()->assign(*spi_result.get_sql_ctx().get_reroute_info());
             }
           }
+          spi_result.destruct_exec_params(session_info);
           int close_ret = spi_result.close_result_set();
           if (OB_SUCCESS != close_ret) {
             LOG_WARN("close mysql result failed", K(ret), K(close_ret));
           }
           ret = (OB_SUCCESS == ret ? close_ret : ret);
         }
-        spi_result.destruct_exec_params(session_info);
 
       } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
     }
@@ -10173,8 +10173,8 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
       }
     }
     if (OB_SUCC(ret) && NULL != result && !result->is_null() && result->is_ext()) {
-      CK (OB_NOT_NULL(exec_ctx.get_pl_ctx()));
-      OZ (exec_ctx.get_pl_ctx()->add(*result));
+      sql::ObPLComplexTypeMgr *pl_complex_type_mgr = exec_ctx.get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+      OZ (pl_complex_type_mgr->complex_type_objects_.push_back(*result));
     }
   }
   if (OB_NOT_NULL(dblink_conn)) {
@@ -10542,14 +10542,14 @@ int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
   }
   if (!ps_cursor.is_async() && NULL != spi_result) {
     if (OB_NOT_NULL(spi_result->get_result_set())) {
+      if (OB_NOT_NULL(session)) {
+        spi_result->destruct_exec_params(*session);
+      }
       int close_ret = spi_result->close_result_set();
       if (OB_SUCCESS != close_ret) {
         LOG_WARN("close mysql result failed", K(ret), K(close_ret));
       }
       ret = (OB_SUCCESS == ret ? close_ret : ret);
-      if (OB_NOT_NULL(session)) {
-        spi_result->destruct_exec_params(*session);
-      }
     }
     spi_result->~ObSPIResultSet();
     ps_cursor.set_spi_cursor(NULL);
@@ -10578,12 +10578,12 @@ int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
     ObSPIResultSet *spi_result = ps_cursor.get_cursor_handler();        \
     if (OB_NOT_NULL(spi_result)) {                                      \
       if (OB_NOT_NULL(spi_result->get_result_set())) {                  \
+        spi_result->destruct_exec_params(session);                      \
         int close_ret = spi_result->close_result_set();                 \
         if (OB_SUCCESS != close_ret) {                                  \
           LOG_WARN("close mysql result failed", K(ret), K(close_ret));  \
         }                                                               \
         ret = (OB_SUCCESS == ret ? close_ret : ret);                    \
-        spi_result->destruct_exec_params(session);                      \
       }                                                                 \
       spi_result->~ObSPIResultSet();                                    \
       ps_cursor.set_spi_cursor(NULL);                                   \
@@ -10725,12 +10725,12 @@ int ObSPIService::close_ps_cursor_result_set(ObSQLSessionInfo &session,
       ObSPIResultSet *spi_result = ps_cursor->get_cursor_handler();
       if (OB_NOT_NULL(spi_result)) {
         if (OB_NOT_NULL(spi_result->get_result_set())) {
+          spi_result->destruct_exec_params(session);
           int close_ret = spi_result->close_result_set();
           if (OB_SUCCESS != close_ret) {
             LOG_WARN("close mysql result failed", K(ret), K(close_ret));
           }
           ret = (OB_SUCCESS == ret ? close_ret : ret);
-          spi_result->destruct_exec_params(session);
         }
         spi_result->~ObSPIResultSet();
         ps_cursor->set_spi_cursor(NULL);

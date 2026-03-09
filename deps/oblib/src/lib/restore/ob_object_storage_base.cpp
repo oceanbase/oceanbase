@@ -19,20 +19,34 @@ namespace common
 
 thread_local uint64_t ObObjectStorageTenantGuard::tl_tenant_id_ = OB_SERVER_TENANT_ID;
 thread_local int64_t ObObjectStorageTenantGuard::tl_timeout_us_ = OB_STORAGE_MAX_IO_TIMEOUT_US;
+thread_local uint64_t ObObjectStorageTenantGuard::tl_io_group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
 
 ObObjectStorageTenantGuard::ObObjectStorageTenantGuard(
     const uint64_t tenant_id, const int64_t timeout_us)
     : old_tenant_id_(tl_tenant_id_),
-      old_timeout_us_(tl_timeout_us_)
+      old_timeout_us_(tl_timeout_us_),
+      old_io_group_id_(tl_io_group_id_)
 {
   tl_tenant_id_ = tenant_id;
   tl_timeout_us_ = timeout_us;
+}
+
+ObObjectStorageTenantGuard::ObObjectStorageTenantGuard(
+    const uint64_t tenant_id, const int64_t timeout_us, const uint64_t group_id)
+    : old_tenant_id_(tl_tenant_id_),
+      old_timeout_us_(tl_timeout_us_),
+      old_io_group_id_(tl_io_group_id_)
+{
+  tl_tenant_id_ = tenant_id;
+  tl_timeout_us_ = timeout_us;
+  tl_io_group_id_ = group_id;
 }
 
 ObObjectStorageTenantGuard::~ObObjectStorageTenantGuard()
 {
   tl_tenant_id_ = old_tenant_id_;
   tl_timeout_us_ = old_timeout_us_;
+  tl_io_group_id_ = old_io_group_id_;
 }
 
 uint64_t ObObjectStorageTenantGuard::get_tenant_id()
@@ -48,6 +62,11 @@ uint64_t ObObjectStorageTenantGuard::get_tenant_id()
 int64_t ObObjectStorageTenantGuard::get_timeout_us()
 {
   return tl_timeout_us_;
+}
+
+uint64_t ObObjectStorageTenantGuard::get_io_group_id()
+{
+  return tl_io_group_id_;
 }
 
 int64_t ObObjectStorageTenantGuard::get_timeout_ms()

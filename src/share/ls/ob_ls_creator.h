@@ -69,11 +69,12 @@ public:
   ObLSCreator(obrpc::ObSrvRpcProxy &rpc_proxy,
                      const int64_t tenant_id,
                      const share::ObLSID &id,
+                     const uint64_t data_version,
                      ObMySQLProxy *proxy = NULL)
     :
       create_ls_proxy_(rpc_proxy, &obrpc::ObSrvRpcProxy::create_ls),
       set_member_list_proxy_(rpc_proxy, &obrpc::ObSrvRpcProxy::set_member_list),
-      tenant_id_(tenant_id), id_(id), proxy_(proxy) {}
+      tenant_id_(tenant_id), id_(id), data_version_(data_version), proxy_(proxy) {}
   virtual ~ObLSCreator() {}
   int create_tenant_sys_ls(const ObZone &primary_zone,
               const share::schema::ZoneLocalityIArray &zone_locality,
@@ -94,6 +95,10 @@ public:
                      const uint64_t source_tenant_id);
   int create_sys_tenant_ls(const obrpc::ObServerInfoList &rs_list,
       const common::ObIArray<share::ObUnit> &unit_array);
+  int create_metadata_ls_for_upgrade(const share::schema::ZoneLocalityIArray &zone_locality,
+                                     const ObIArray<share::ObResourcePoolName> &pool_list,
+                                     const int64_t paxos_replica_num,
+                                     const common::ObCompatibilityMode &compat_mode);
   bool is_valid();
 
 private:
@@ -233,6 +238,7 @@ private:
   rootserver::ObSetMemberListProxy set_member_list_proxy_;
   const int64_t tenant_id_;
   const share::ObLSID id_;
+  uint64_t data_version_;
   ObMySQLProxy *proxy_;
 };
 }

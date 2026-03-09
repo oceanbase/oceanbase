@@ -21,6 +21,7 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/tablet/ob_tablet_common.h"
 #include "share/ob_batch_selector.h"
+#include "storage/ddl/ob_ddl_struct.h"
 
 #define DATA_VERSION_SUPPORT_EMPTY_TABLE_CREATE_INDEX_OPT(data_version) (data_version > MOCK_DATA_VERSION_4_2_5_3 && data_version < DATA_VERSION_4_3_0_0) || (data_version >= DATA_VERSION_4_4_1_0)
 
@@ -238,6 +239,13 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   BUILD_MLOG = 52,
   GENERATE_CID_VEC_SCHEMA = 53,
   WAIT_CID_VEC_TABLE_COMPLEMENT = 54,
+  GENERATE_DOC_ROWKEY_SCHEMA = 55,
+  WAIT_DOC_ROWKEY_TABLE_COMPLEMENT = 56,
+  GENERATE_DOC_WORD_SCHEMA_FOR_FTS = 57,
+  WAIT_DOC_WORD_TABLE_COMPLEMENT_FOR_FTS = 58,
+  GENERATE_DOMAIN_INDEX_SCHEMA = 59,
+  WAIT_DOMAIN_INDEX_TABLE_COMPLEMENT = 60,
+
   FAIL = 99,
   SUCCESS = 100
 };
@@ -434,6 +442,24 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::WAIT_CID_VEC_TABLE_COMPLEMENT:
       str = "WAIT_CID_VEC_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::GENERATE_DOC_ROWKEY_SCHEMA:
+      str = "GENERATE_DOC_ROWKEY_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_DOC_ROWKEY_TABLE_COMPLEMENT:
+      str = "WAIT_DOC_ROWKEY_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::GENERATE_DOC_WORD_SCHEMA_FOR_FTS:
+      str = "GENERATE_DOC_WORD_SCHEMA_FOR_FTS";
+      break;
+    case ObDDLTaskStatus::WAIT_DOC_WORD_TABLE_COMPLEMENT_FOR_FTS:
+      str = "WAIT_DOC_WORD_TABLE_COMPLEMENT_FOR_FTS";
+      break;
+    case ObDDLTaskStatus::GENERATE_DOMAIN_INDEX_SCHEMA:
+      str = "GENERATE_DOMAIN_INDEX_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_DOMAIN_INDEX_TABLE_COMPLEMENT:
+      str = "WAIT_DOMAIN_INDEX_TABLE_COMPLEMENT";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
@@ -1661,7 +1687,6 @@ public:
       const int64_t slice_idx,
       const int64_t cg_idx,
       ObDDLIndependentDag *dag,
-      const int64_t max_batch_size,
       ObWriteMacroParam &param);
   static int get_task_ranges(
       const int64_t task_id,
@@ -1936,6 +1961,23 @@ public:
   DDLTraceId trace_id_;
 };
 
+
+/* ===== for fts using dag optimization ===== */
+class ObDDLFTSUtils
+{
+public:
+  static const int64_t DDL_FTS_DAG_DATA_FORMAT_VERSION = DATA_VERSION_4_5_0_0;
+
+  /* all fts aux table support using dag batch interface */
+  static inline bool ddl_fts_dag_opti(const ObIndexType &index_type, const ObRowStoreType row_store_type, const uint64_t data_format_version)
+  {
+    return data_format_version >= DDL_FTS_DAG_DATA_FORMAT_VERSION &&
+           (share::schema::is_fts_index_aux(index_type) || share::schema::is_fts_doc_word_aux(index_type) ||
+            share::schema::is_rowkey_doc_aux(index_type) || share::schema::is_doc_rowkey_aux(index_type)) &&
+           (ObRowStoreType::CS_ENCODING_ROW_STORE == row_store_type);
+  }
+  static bool ddl_using_batch_interface(const ObDDLTableSchema &ddl_table_schema, const uint64_t tenant_data_version);
+};
 
 }  // end namespace share
 }  // end namespace oceanbase

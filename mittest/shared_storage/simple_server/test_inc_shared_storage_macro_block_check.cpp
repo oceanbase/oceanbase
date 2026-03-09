@@ -24,10 +24,19 @@
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
 #include "mittest/shared_storage/simple_server/test_gc_util.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_dir_manager.h"
+#include "storage/tablet/ob_sstablet_persister.h"
 
 namespace oceanbase
 {
 OB_MOCK_PALF_KV_FOR_REPLACE_SYS_TENANT
+namespace storage
+{
+/*static*/ bool ObSSTabletPersister::write_to_meta_table_(const int64_t meta_serialize_size)
+{
+  return false;
+}
+}
+
 namespace sslog
 {
 

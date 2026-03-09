@@ -22,6 +22,9 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/direct_load/ob_inc_major_ddl_aggregate_sstable.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_ss_minor_compaction.h"
+#endif
 
 namespace oceanbase
 {
@@ -832,6 +835,11 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
         }
       } else if (OB_FAIL(cur_table_handle.get_sstable(table))) {
         LOG_WARN("failed to get sstable from handle", K(ret), K(cur_table_handle));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode() && ObTabletSSMinorMergeHelper::need_skip_for_local_minor(*table)) {
+        LOG_DEBUG("skip shared sstable in local minor merge", KPC(table));
+        continue;
+#endif
       } else if (!found_greater
                  && (table->get_upper_trans_version() <= min_snapshot_version ||
                      (1 < minor_compact_trigger && table->get_max_merged_trans_version() <= min_snapshot_version && table->get_max_merged_trans_version() != 0))) {
@@ -889,6 +897,13 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
         minor_merge_candidates = &prev_major_table_candidates;
       }
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
+      if (OB_FAIL(ObTabletSSMinorMergeHelper::process_local_minor_candidate(*minor_merge_candidates))) {
+        LOG_WARN("failed to process local minor candidates", K(ret));
+      }
+    }
+#endif
     if (FAILEDx(refine_and_get_minor_merge_result(
             param, tablet, minor_compact_trigger, ls, *minor_merge_candidates, result))) {
       if (OB_NO_NEED_MERGE != ret) {
@@ -2362,11 +2377,12 @@ bool ObCOMajorMergePolicy::whether_to_build_row_store(
 
 bool ObCOMajorMergePolicy::whether_to_rebuild_column_store(
     const ObMajorSSTableStatus current_status,
+    const ObStorageSchema &schema,
     const int64_t estimate_row_cnt,
     const int64_t column_cnt)
 {
   bool bret = false;
-  if (current_status == ALL_CG || current_status == ALL_EACH_CG) {
+  if ((current_status == ALL_CG && schema.has_all_column_group()) || current_status == ALL_EACH_CG) {
     // Current has redundant ALL CG (row store), use higher threshold
     bret = column_cnt > COL_CNT_THRESHOLD_REBUILD_COLUMN_STORE || estimate_row_cnt > ROW_CNT_THRESHOLD_REBUILD_COLUMN_STORE;
   } else {
@@ -2447,7 +2463,7 @@ int ObCOMajorMergePolicy::decide_merge_strategy(
       } else {
         strategy.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
       }
-    } else if (!build_row_store_flag && whether_to_rebuild_column_store(current_status, physical_row_cnt, column_cnt)) {
+    } else if (!build_row_store_flag && whether_to_rebuild_column_store(current_status, target_schema, physical_row_cnt, column_cnt)) {
       strategy.set(false/*build_all_cg_only*/, true/*only_use_row_store*/);
     } else {
       strategy.set(true/*build_all_cg_only*/, false/*only_use_row_store*/);

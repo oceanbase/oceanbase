@@ -166,6 +166,9 @@ public:
   int64_t get_ls_count() const { return ls_map_.get_ls_count(); }
   int dump_ls_info();
 
+  // online single ls
+  int online_ls(const ObLSID &ls_id);
+
 #ifdef OB_BUILD_SHARED_STORAGE
   int check_sslog_ls_exist();
   void report_tablet_id_for_tablet_version_gc(
@@ -207,6 +210,7 @@ private:
     share::ObTaskId task_id_;
     bool need_create_inner_tablet_;
     storage::ObMajorMVMergeInfo major_mv_merge_info_;
+    uint64_t data_version_;
   };
 
   int create_ls_(const ObCreateLSCommonArg &arg,
@@ -221,6 +225,7 @@ private:
                        const ObMajorMVMergeInfo &major_mv_merge_info,
                        const ObLSStoreFormat &store_format,
                        const ObReplicaType &replica_type,
+                       const uint64_t data_version,
                        ObLS *&ls);
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
@@ -257,6 +262,7 @@ private:
       const common::ObLSStoreFormat &ls_store_format,
       const ObLSMeta &ls_meta,
       ObReplicaType &replica_type);
+  int online_ls_(ObLS *ls);
 
 private:
   bool is_inited_;

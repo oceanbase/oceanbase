@@ -5450,6 +5450,8 @@ int ObLogTableScan::prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_inf
   ObColumnRefRawExpr *token_cnt_column = nullptr;
   uint64_t doc_length_col_id = OB_INVALID_ID;
   ObColumnRefRawExpr *doc_length_column = nullptr;
+  uint64_t pos_list_col_id = OB_INVALID_ID;
+  ObColumnRefRawExpr *pos_list_column = nullptr;
   ObColumnRefRawExpr *docid_or_rowkey_column = nullptr;
   ObAggFunRawExpr *related_doc_cnt = nullptr;
   ObAggFunRawExpr *total_doc_cnt = nullptr;
@@ -5492,6 +5494,8 @@ int ObLogTableScan::prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_inf
           LOG_WARN("unexpected error, column schema is nullptr in data table", K(ret), KPC(col_schema), KPC(table_schema));
         } else if (col_schema_in_data_table->is_word_count_column()) {
           token_cnt_col_id = col_schema->get_column_id();
+        } else if (col_schema_in_data_table->is_pos_list_column()) {
+          pos_list_col_id = col_schema->get_column_id();
         } else if (col_schema_in_data_table->is_word_segment_column()) {
           token_col_id = col_schema->get_column_id();
         } else if (col_schema_in_data_table->is_doc_length_column()) {
@@ -5539,6 +5543,14 @@ int ObLogTableScan::prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_inf
           doc_length_column->set_ref_id(get_table_id(), col_schema->get_column_id());
           doc_length_column->set_column_attr(get_table_name(), col_schema->get_column_name_str());
           doc_length_column->set_database_name(table_item->database_name_);
+        }
+      } else if (col_schema->get_column_id() == pos_list_col_id) {
+        if (OB_FAIL(build_column_expr(*expr_factory, *col_schema, pos_list_column))) {
+          LOG_WARN("failed to build doc id column expr", K(ret));
+        } else if (OB_NOT_NULL(pos_list_column)) {
+          pos_list_column->set_ref_id(get_table_id(), col_schema->get_column_id());
+          pos_list_column->set_column_attr(get_table_name(), col_schema->get_column_name_str());
+          pos_list_column->set_database_name(table_item->database_name_);
         }
       } else if (col_schema->is_rowkey_column() && need_skip_rowkey_doc()) {
         if (rowkey_exprs_.count() != 1) {
@@ -6597,9 +6609,10 @@ int ObLogTableScan::set_scan_order()
     LOG_WARN("failed to check is delete insert table", K(ret));
   } else if (enable_delete_insert_scan || merge_engine_type == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY) {
     bool order_used = false;
+    const bool is_partition_local_ddl = get_plan()->get_optimizer_context().get_session_info()->get_ddl_info().is_partition_local_ddl();
     if (OB_FAIL(check_op_orderding_used_by_parent(order_used))) {
       LOG_WARN("fail to check op ordering", K(ret));
-    } else if (order_used || das_keep_ordering_ || is_tsc_with_domain_id() || is_skip_scan() || use_index_merge()) {
+    } else if (order_used || das_keep_ordering_ || is_tsc_with_domain_id() || is_skip_scan() || use_index_merge() || is_partition_local_ddl) {
       scan_order_ = is_descending_direction(scan_direction_) ? ObQueryFlag::Reverse : ObQueryFlag::Forward;
     } else {
       scan_order_ = common::ObQueryFlag::NoOrder;

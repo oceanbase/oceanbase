@@ -36,7 +36,7 @@ ObCgMacroBlockWriter::ObCgMacroBlockWriter()
     data_desc_(),
     index_builder_(true/*use_double_write_macro_buffer*/),
     ddl_redo_callback_(),
-    macro_block_writer_(true/*use_double_write_macro_buffer*/)
+    macro_block_writer_()
 {
 
 }
@@ -354,14 +354,14 @@ int ObCgMacroBlockWriter::append_batch(const blocksstable::ObBatchDatumRows &cg_
   return ret;
 }
 
-int ObCgMacroBlockWriter::close()
+int ObCgMacroBlockWriter::close(ObDagSliceMacroFlusher *macro_block_flusher)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not initialized", K(ret), K(is_inited_));
-  } else if (OB_FAIL(macro_block_writer_.close())) {
-    LOG_WARN("fail to close macro block writer", K(ret));
+  } else if (OB_FAIL(macro_block_writer_.close(macro_block_flusher))) {
+    LOG_WARN("fail to close macro block writer with flusher", K(ret));
   }
   return ret;
 }

@@ -781,7 +781,7 @@ int ObLSTxCtxMgr::try_wait_gts_and_inc_max_commit_ts_()
   if (!is_leader_serving_) {
     SCN gts;
     MonotonicTs receive_gts_ts(0);
-    const bool is_sslog = is_tenant_sslog_ls(tenant_id_, ls_id_);
+    const bool is_sslog = need_sslog_trans_service(tenant_id_, ls_id_);
     const uint64_t gts_tenant_id = !is_sslog ? tenant_id_ : get_sslog_gts_tenant_id(tenant_id_);
 
     if (OB_FAIL(ts_mgr_->get_gts(gts_tenant_id,

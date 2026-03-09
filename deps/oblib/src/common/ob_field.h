@@ -86,6 +86,9 @@ public:
   bool is_paramed_select_item_;
   bool is_hidden_rowid_;
   uint8_t inout_mode_; // using for routine/anonymous resultset
+  // element type info for anonymous collection with complex element type
+  ObString elem_type_owner_;
+  ObString elem_type_name_;
 
   ObField()
     : dname_(), tname_(), org_tname_(), cname_(), org_cname_(), type_(),
@@ -93,7 +96,8 @@ public:
       default_value_(ObObj::make_nop_obj()), accuracy_(),
       charsetnr_(CS_TYPE_UTF8MB4_GENERAL_CI),
       flags_(0), length_(0), paramed_ctx_(NULL), is_paramed_select_item_(false),
-      is_hidden_rowid_(false), inout_mode_(0)
+      is_hidden_rowid_(false), inout_mode_(0),
+      elem_type_owner_(), elem_type_name_()
   {
   }
 

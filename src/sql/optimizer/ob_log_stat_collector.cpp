@@ -36,6 +36,15 @@ int ObLogStatCollector::set_sort_keys(const common::ObIArray<OrderItem> &order_k
   return ret;
 }
 
+int ObLogStatCollector::set_inverted_sort_keys(const common::ObIArray<OrderItem> &order_keys)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(inverted_sort_keys_.assign(order_keys))) {
+    LOG_WARN("failed to set inverted sort keys", K(ret));
+  } else { /* do nothing */ }
+  return ret;
+}
+
 int ObLogStatCollector::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
@@ -45,6 +54,14 @@ int ObLogStatCollector::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
       LOG_WARN("get unexpected null", K(ret));
     } else if (OB_FAIL(all_exprs.push_back(sort_keys_.at(i).expr_))) {
       LOG_WARN("failed to push back exprs", K(ret));
+    } else { /*do nothing*/ }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < inverted_sort_keys_.count(); i++) {
+    if (OB_ISNULL(inverted_sort_keys_.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(all_exprs.push_back(inverted_sort_keys_.at(i).expr_))) {
+      LOG_WARN("failed to push back inverted exprs", K(ret));
     } else { /*do nothing*/ }
   }
   if (OB_SUCC(ret)) {
@@ -64,6 +81,14 @@ int ObLogStatCollector::inner_replace_op_exprs(ObRawExprReplacer &replacer)
       LOG_WARN("get unexpected null", K(ret));
     } else if (OB_FAIL(replace_expr_action(replacer, sort_keys_.at(i).expr_))) {
       LOG_WARN("failed to replace sort key expr", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < inverted_sort_keys_.count(); i++) {
+    if (OB_ISNULL(inverted_sort_keys_.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(replace_expr_action(replacer, inverted_sort_keys_.at(i).expr_))) {
+      LOG_WARN("failed to replace inverted sort key expr", K(ret));
     }
   }
   return ret;

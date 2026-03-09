@@ -253,36 +253,6 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
   return ret;
 }
 
-// 存到objects_的obobj, 其内存必须是exec ctx的allocator来分配的
-void ObPLCtx::reset_obj()
-{
-  int tmp_ret = OB_SUCCESS;
-  for (int64_t i = 0; i < objects_.count(); ++i) {
-    if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(objects_.at(i)))) {
-      LOG_WARN_RET(tmp_ret, "failed to destruct pl object", K(i), K(tmp_ret));
-    }
-  }
-  objects_.reset();
-}
-
-void ObPLCtx::reset_obj_range_to_end(int64_t index)
-{
-  int tmp_ret = OB_SUCCESS;
-  if (index < objects_.count() && index >= 0) {
-    for (int64_t i = objects_.count() - 1; i >= index; i--) {
-      if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(objects_.at(i)))) {
-        LOG_WARN_RET(tmp_ret, "failed to destruct pl object", K(i), K(tmp_ret));
-      }
-      objects_.pop_back();
-    }
-  }
-}
-
-ObPLCtx::~ObPLCtx()
-{
-  reset_obj();
-}
-
 void ObPL::destory()
 {
 }
@@ -3077,10 +3047,6 @@ int ObPL::execute(ObExecContext &ctx,
       if (OB_FAIL(ret)) {
 #ifdef OB_BUILD_ORACLE_PL
       } else if (is_valid_id(dblink_id)) {
-        if (OB_ISNULL(ctx.get_pl_ctx())) {
-          OZ (ctx.init_pl_ctx());
-          CK (OB_NOT_NULL(ctx.get_pl_ctx()));
-        }
         OZ (ObSPIService::spi_execute_dblink(ctx, allocator, dblink_id, package_id,
                                              routine_id, params, &result,
                                              dblink_routine_info));
@@ -3676,7 +3642,6 @@ int ObPLExecState::deep_copy_result_if_need(ObIAllocator &allocator)
   ObObj new_obj;
   if (func_.get_ret_type().is_composite_type() && result_.is_ext()) {
     CK (OB_NOT_NULL(ctx_.exec_ctx_));
-    CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
     if (OB_SUCC(ret)) {
       ObIAllocator *alloc = &ctx_.exec_ctx_->get_allocator();
       ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
@@ -3691,10 +3656,11 @@ int ObPLExecState::deep_copy_result_if_need(ObIAllocator &allocator)
           alloc = parent_exec_ctx->get_top_expr_allocator();
         }
       }
-      OZ (ObUserDefinedType::deep_copy_obj(*alloc, result_, new_obj, false));
+      OZ (ObUserDefinedType::deep_copy_obj(*alloc, result_, new_obj));
       ObUserDefinedType::destruct_obj(result_, ctx_.exec_ctx_->get_my_session());
       if (OB_SUCC(ret)) {
-        OZ (ctx_.exec_ctx_->get_pl_ctx()->add(new_obj));
+        sql::ObPLComplexTypeMgr *pl_complex_type_mgr = ctx_.exec_ctx_->get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+        OZ (pl_complex_type_mgr->complex_type_objects_.push_back(new_obj));
         if (OB_FAIL(ret)) {
           ObUserDefinedType::destruct_obj(new_obj, ctx_.exec_ctx_->get_my_session());
         } else {
@@ -4321,10 +4287,6 @@ int ObPLExecState::init_params_simple(const ParamStore *params, bool is_anonymou
   int param_cnt = OB_NOT_NULL(params) ? params->count() : 0;
 
   CK (OB_NOT_NULL(ctx_.exec_ctx_));
-  if (OB_SUCC(ret) && OB_ISNULL(ctx_.exec_ctx_->get_pl_ctx())) {
-    OZ (ctx_.exec_ctx_->init_pl_ctx());
-    CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
-  }
   OZ (get_params().reserve(func_.get_variables().count()));
   ObObjParam param;
   for (int64_t i = 0; OB_SUCC(ret) && i < func_.get_variables().count(); ++i) {
@@ -4440,11 +4402,7 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
   bool is_oracle_mode = lib::is_oracle_mode();
 
   CK (OB_NOT_NULL(ctx_.exec_ctx_));
-  if (OB_SUCC(ret) && OB_ISNULL(ctx_.exec_ctx_->get_pl_ctx())) {
-    OZ (ctx_.exec_ctx_->init_pl_ctx());
-    CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
-  }
-  OX (cur_complex_obj_count_ = ctx_.exec_ctx_->get_pl_ctx()->get_objects().count());
+  OX (cur_complex_obj_count_ = ctx_.exec_ctx_->get_pl_complex_type_lazy_mgr().get_obj_count());
   OZ (get_params().reserve(func_.get_variables().count()));
   ObObjParam param;
   for (int64_t i = 0; OB_SUCC(ret) && i < func_.get_variables().count(); ++i) {
@@ -5455,8 +5413,8 @@ int ObPLExecState::check_pl_priv(
 
 void ObPLExecState::try_clear_complex_obj()
 {
-  if (OB_NOT_NULL(ctx_.exec_ctx_) && OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx())) {
-    ctx_.exec_ctx_->get_pl_ctx()->reset_obj_range_to_end(cur_complex_obj_count_);
+  if (OB_NOT_NULL(ctx_.exec_ctx_)) {
+    ctx_.exec_ctx_->get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(cur_complex_obj_count_);
   }
 }
 
@@ -5752,12 +5710,10 @@ ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
       stack_size_(OB_INVALID_SIZE),
       is_wrap_(false)
 {
-#ifndef USE_MCJIT
   int ret = OB_SUCCESS;
   if (OB_FAIL(helper_.init())) {
     LOG_WARN("failed to init llvm helper", K(ret), K(helper_.get_jc()));
   }
-#endif // USE_MCJIT
 }
 #ifdef OB_BUILD_ORACLE_PL
 int ObPLCompileUnit::add_vaild_rows_info(ObIArray<CoverageData> & vaild_row_info_array) {

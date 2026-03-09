@@ -115,7 +115,7 @@ int ObDataAccessService::get_das_task_id(int64_t &das_id, const share::ObLSID ta
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(get_das_id);
-  if (is_tenant_sslog_ls(MTL_ID(), target_ls_id)) {
+  if (need_sslog_trans_service(MTL_ID(), target_ls_id)) {
     int64_t tmp_unique_id = 0;
     if (OB_FAIL(MTL(ObTransService*)->get_unique_id_for_sslog(tmp_unique_id))) {
       LOG_WARN("get unique id for sslog failed", K(ret));

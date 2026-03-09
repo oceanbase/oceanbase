@@ -43,6 +43,7 @@ public:
   // for slog & checkpoint operation
   int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
   int write_checkpoint(const ObTenantSlogCheckpointWorkflow::Type ckpt_type);
+  int write_checkpoint_for_single_ls(const ObLSID &ls_id);
   storage::ObStorageLogger &get_slogger() { return slogger_; }
   const ObTenantCheckpointSlogHandler& get_ckpt_slog_hdl() const { return ckpt_slog_handler_; };
 
@@ -238,13 +239,7 @@ private:
       last_gc_version_(last_gc_version)
     {
     }
-    bool is_valid() const
-    {
-      return tablet_id_.is_valid() &&
-             tablet_addr_.is_valid() &&
-             last_gc_version_ >= -1 &&
-             last_gc_version_ < static_cast<int64_t>(tablet_addr_.block_id().meta_version_id());
-    }
+    bool is_valid() const;
     void reset()
     {
       tablet_id_.reset();
@@ -310,6 +305,11 @@ private:
 
 private:
 #ifdef OB_BUILD_SHARED_STORAGE
+  int read_from_sslog(
+      const ObMetaDiskAddr &addr,
+      common::ObArenaAllocator &allocator,
+      char *&buf,
+      int64_t &buf_len);
   int inner_get_blocks_for_tablet_(
     const ObMetaDiskAddr &tablet_addr,
     const int64_t ls_epoch,

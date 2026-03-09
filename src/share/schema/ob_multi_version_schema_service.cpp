@@ -732,11 +732,18 @@ int ObMultiVersionSchemaService::get_latest_schema(
   } else if ((TABLE_SCHEMA == schema_type
               || TABLE_SIMPLE_SCHEMA == schema_type)
              && is_hardcode_schema_table(schema_id)) {
-    const ObTableSchema *hard_code_schema =
+    const ObTableSchema *hard_code_schema = NULL;
 #ifdef OB_BUILD_SHARED_STORAGE
-      is_shared_storage_sslog_table(schema_id) ? schema_cache_.get_sslog_table() :
+    if (is_shared_storage_sslog_table(schema_id)) {
+      hard_code_schema = schema_cache_.get_sslog_table();
+    } else if (is_ss_tiered_metadata_store_table(schema_id)) {
+      hard_code_schema = schema_cache_.get_tiered_metadata_store_table();
+    } else {
+      hard_code_schema = schema_cache_.get_all_core_table();
+    }
+#else
+    hard_code_schema = schema_cache_.get_all_core_table();
 #endif
-      schema_cache_.get_all_core_table();
     if (OB_ISNULL(hard_code_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("all hard code table schema is null", KR(ret));
@@ -824,11 +831,18 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr *mgr,
              KP(mgr), K(tenant_id), K(schema_id), K(schema_version));
   } else if ((TABLE_SCHEMA == schema_type || TABLE_SIMPLE_SCHEMA == schema_type)
              && is_hardcode_schema_table(schema_id)) {
-    const ObTableSchema *hard_code_schema =
+    const ObTableSchema *hard_code_schema = NULL;
 #ifdef OB_BUILD_SHARED_STORAGE
-      is_shared_storage_sslog_table(schema_id) ? schema_cache_.get_sslog_table() :
+    if (is_shared_storage_sslog_table(schema_id)) {
+      hard_code_schema = schema_cache_.get_sslog_table();
+    } else if (is_ss_tiered_metadata_store_table(schema_id)) {
+      hard_code_schema = schema_cache_.get_tiered_metadata_store_table();
+    } else {
+      hard_code_schema = schema_cache_.get_all_core_table();
+    }
+#else
+    hard_code_schema = schema_cache_.get_all_core_table();
 #endif
-      schema_cache_.get_all_core_table();
     if (OB_ISNULL(hard_code_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("all core table schema is null", KR(ret));

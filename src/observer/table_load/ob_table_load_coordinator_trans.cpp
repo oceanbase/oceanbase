@@ -30,7 +30,6 @@ ObTableLoadCoordinatorTrans::ObTableLoadCoordinatorTrans(ObTableLoadTransCtx *tr
     default_session_id_(default_session_id),
     trans_bucket_writer_(nullptr),
     ref_count_(0),
-    is_dirty_(false),
     is_inited_(false)
 {
 }

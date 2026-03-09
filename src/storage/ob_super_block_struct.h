@@ -245,7 +245,6 @@ public:
   ObTenantSuperBlock(const ObTenantSuperBlock &other);
   ObTenantSuperBlock &operator==(const ObTenantSuperBlock &other) = delete;
   ObTenantSuperBlock &operator!=(const ObTenantSuperBlock &other) = delete;
-  void copy_snapshots_from(const ObTenantSuperBlock &other);
   void reset();
   bool is_valid() const;
   int get_snapshot(const share::ObTenantSnapshotID &snapshot_id, ObTenantSnapshotMeta &snapshot) const;

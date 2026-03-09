@@ -480,6 +480,7 @@ int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSST
                                                        const blocksstable::ObBlockInfo &block_info)
 {
   int ret = OB_SUCCESS;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   set_init_value_for_column_store_();
   const blocksstable::ObSSTableBasicMeta &basic_meta = sstable_meta.get_basic_meta();
   filled_tx_scn_ = basic_meta.filled_tx_scn_;
@@ -513,9 +514,10 @@ int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSST
   nested_size_ = block_info.nested_size_;
   table_shared_flag_.reset();
 
-  if (table_key_.is_column_store_sstable()) {
+  //if shared storage supported small sstable, should modify ObTablet::get_tablet_fast_iter_attr_ has_nested_table_
+  if (table_key_.is_column_store_sstable() || is_shared_storage) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("small sstable do not support co sstable", K(ret), K(table_key));
+    LOG_WARN("small sstable do not support co sstable or shared storage", K(ret), K(table_key));
   } else if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to inner init with merge res", K(ret), K(res));
   } else if (table_key_.is_major_sstable()) {

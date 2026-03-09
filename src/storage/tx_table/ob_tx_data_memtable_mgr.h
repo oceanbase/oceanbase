@@ -148,6 +148,8 @@ public:  // ObTxDataMemtableMgr
 
   virtual bool is_flushing() const override;
 
+  virtual int reuse() override;
+
   INHERIT_TO_STRING_KV("ObIMemtableMgr",
                        ObIMemtableMgr,
                        K_(is_freezing),

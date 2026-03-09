@@ -257,6 +257,7 @@ protected:
   int iterate_uncommitted_row_value_(blocksstable::ObDatumRow &row);
   int iterate_multi_version_row_value_(blocksstable::ObDatumRow &row);
   int iterate_delete_insert_compacted_row_value_(blocksstable::ObDatumRow &row);
+  void fill_default_values_for_row_(blocksstable::ObDatumRow &row);
 
 protected:
   struct ObOuputRowValidateChecker
@@ -291,6 +292,7 @@ protected:
   int32_t sql_sequence_col_idx_;
   blocksstable::ObCompatRowReader row_reader_;
   ObOuputRowValidateChecker row_checker_;
+  const blocksstable::ObDatumRow *default_row_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

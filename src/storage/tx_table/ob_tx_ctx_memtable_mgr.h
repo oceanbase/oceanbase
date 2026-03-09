@@ -60,6 +60,8 @@ public:
 
   const ObTxCtxMemtable *get_tx_ctx_memtable_(const int64_t pos) const;
 
+  virtual int reuse() override;
+
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   virtual int release_head_memtable_(ObIMemtable *imemtable,

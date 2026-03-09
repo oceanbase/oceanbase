@@ -15,7 +15,7 @@
 #include "oceanbase/ob_plugin_kms.h"
 #include "lib/string/ob_string.h"
 #include "share/ob_server_struct.h"
-#include "storage/fts/ob_fts_stop_word.h"
+#include "storage/fts/ob_fts_stop_token_check.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
 #include "plugin/sys/ob_plugin_helper.h"
 #include "plugin/sys/ob_plugin_mgr.h"

@@ -82,7 +82,7 @@ inline bool allow_ddl_thread_rpc_not_match(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_RUN_UPGRADE_JOB == pcode
          || obrpc::OB_DROP_RESTORE_POINT == pcode
          || obrpc::OB_CLEAN_SPLITTED_TABLET == pcode
-         || obrpc::OB_VALIDATE_BACKUP == pcode;
+         || obrpc::OB_ADMIN_UPGRADE_VIRTUAL_SCHEMA == pcode;
 }
 
 // precondition: enable_ddl = false

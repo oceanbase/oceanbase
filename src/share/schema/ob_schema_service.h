@@ -406,7 +406,7 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_CREATE_JAVA_POLICY,)                                \
   ACT(OB_DDL_DROP_JAVA_POLICY,)                                  \
   ACT(OB_DDL_MODIFY_JAVA_POLICY,)                                \
-  ACT(OB_DDL_JAVA_POLICY_OPERATION_END, )                  \
+  ACT(OB_DDL_JAVA_POLICY_OPERATION_END, = 2170)                  \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -902,6 +902,8 @@ public:
 #ifdef OB_BUILD_SHARED_STORAGE
   //get sslog table schema
   virtual int get_sslog_table_schema(ObTableSchema &table_schema) = 0;
+  //get tiered metadata store table schema
+  virtual int get_tiered_metadata_store_table_schema(ObTableSchema &table_schema) = 0;
 #endif
   //get all core table schema
   virtual int get_all_core_table_schema(ObTableSchema &table_schema) = 0;

@@ -50,7 +50,7 @@ static int set_session_timezone(const uint64_t exec_tenant_id, ObDeadLockInnerCo
     tmp_tm.tm_gmtoff = 0 - tmp_tm.tm_gmtoff;
   }
   const int64_t tz_hour = tmp_tm.tm_gmtoff / 3600;
-  const int64_t tz_minutes = (tmp_tm.tm_gmtoff % 3600) % 60;
+  const int64_t tz_minutes = (tmp_tm.tm_gmtoff % 3600) / 60;
   int64_t affected_rows = 0;
   if (OB_UNLIKELY(!conn_helper.is_valid())) {
     DETECT_LOG(WARN, "invalid conn helper", K(is_neg), K(tz_hour), K(tz_minutes));

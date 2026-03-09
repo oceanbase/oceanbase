@@ -176,6 +176,8 @@ public:
   int check_if_unit_id_exist(const uint64_t unit_id, bool &exist);
   int inc_tenant_ddl_count(const uint64_t tenant_id, const int64_t cpu_quota_concurrency);
   int dec_tenant_ddl_count(const uint64_t tenant_id);
+  bool is_async_proc_cpu_mode() const;
+  void update_tenants_cpu_time();
 
 protected:
   void run1();
@@ -235,6 +237,15 @@ protected:
 private:
   lib::ObShareTenantLimiter *tenant_limiter_head_;
   lib::ObMutex limiter_mutex_;
+  int64_t async_proc_cpu_sampler_started_;
+  static const int64_t ASYNC_PROC_CPU_MODE_TRIGGER_TENANT_CNT = 20;
+  class ObAsyncProcCpuSampler : public lib::TGRunnable
+  {
+  public:
+    void run1() override;
+  };
+  ObAsyncProcCpuSampler async_proc_cpu_sampler_;
+  int try_start_async_proc_cpu_sampler_();
   DISALLOW_COPY_AND_ASSIGN(ObMultiTenant);
 }; // end of class ObMultiTenant
 

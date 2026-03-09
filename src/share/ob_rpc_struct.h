@@ -99,6 +99,7 @@
 #include "share/sequence/ob_sequence_cache.h" // ObSeqCleanCacheRes
 #include "share/schema/ob_catalog_schema_struct.h"
 #include "share/schema/ob_ccl_schema_struct.h"
+#include "share/schema/ob_schema_struct_fts.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
 #include "ob_ddl_args.h"
 #include "ob_mview_args.h"
@@ -2976,8 +2977,8 @@ public:
     ObTableOption(),
     parser_name_(),
     parser_properties_(),
-    index_attributes_set_(common::OB_DEFAULT_INDEX_ATTRIBUTES_SET),
-    fts_index_type_(share::schema::OB_FTS_INDEX_TYPE_INVALID)
+    fts_index_type_(share::schema::OB_FTS_INDEX_TYPE_INVALID),
+    index_attributes_set_(common::OB_DEFAULT_INDEX_ATTRIBUTES_SET)
   { }
 
   bool is_valid() const;
@@ -2992,8 +2993,8 @@ public:
 
   common::ObString parser_name_;
   common::ObString parser_properties_;
-  uint64_t index_attributes_set_;//flags, one bit for one attribute
   share::schema::ObFTSIndexType fts_index_type_;
+  uint64_t index_attributes_set_;//flags, one bit for one attribute
 };
 
 struct ObCreateIndexArg : public ObIndexArg
@@ -3030,7 +3031,8 @@ public:
         data_version_(0),
         generated_column_names_(),
         def_index_id_(common::OB_INVALID_ID),
-        is_table_restore_(false)
+        is_table_restore_(false),
+        is_partition_local_ddl_(false)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -3071,6 +3073,7 @@ public:
     generated_column_names_.reset();
     def_index_id_ = common::OB_INVALID_ID;
     is_table_restore_ = false;
+    is_partition_local_ddl_ = false;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -3123,6 +3126,9 @@ public:
         } else if (OB_FAIL(generated_column_names_.push_back(column_name))) {
           SHARE_LOG(WARN, "failed to push back genearete column name", K(ret), K(column_name), K(generated_column_names_));
         }
+      }
+      if (OB_SUCC(ret)) {
+        is_partition_local_ddl_ = other.is_partition_local_ddl_;
       }
     }
     return ret;
@@ -3202,6 +3208,7 @@ public:
   common::ObSEArray<ObString, common::OB_PREALLOCATED_NUM> generated_column_names_;
   uint64_t def_index_id_;
   bool is_table_restore_;
+  bool is_partition_local_ddl_;
 };
 
 struct ObIndexOfflineDdlArg : ObDDLArg
@@ -3974,7 +3981,8 @@ public:
                     compat_mode_(lib::Worker::CompatMode::INVALID),
                     create_ls_type_(EMPTY_LS),
                     palf_base_info_(),
-                    major_mv_merge_info_() {}
+                    major_mv_merge_info_(),
+                    data_version_(0) {}
   ~ObCreateLSArg() {}
   bool is_valid() const;
   void reset();
@@ -3988,7 +3996,8 @@ public:
            const lib::Worker::CompatMode &mode,
            const bool create_with_palf,
            const palf::PalfBaseInfo &palf_base_info,
-           const storage::ObMajorMVMergeInfo &major_mv_merge_info);
+           const storage::ObMajorMVMergeInfo &major_mv_merge_info,
+           const uint64_t data_version);
   int64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -4032,6 +4041,10 @@ public:
   {
     return major_mv_merge_info_;
   }
+  uint64_t get_data_version() const
+  {
+    return data_version_;
+  }
   DECLARE_TO_STRING;
 
 private:
@@ -4045,6 +4058,7 @@ private:
   CreateLSType create_ls_type_;
   palf::PalfBaseInfo palf_base_info_;
   storage::ObMajorMVMergeInfo major_mv_merge_info_;
+  uint64_t data_version_;
 private:
    DISALLOW_COPY_AND_ASSIGN(ObCreateLSArg);
 };
@@ -8828,6 +8842,34 @@ public:
   TO_STRING_KV(K_(log_id), K_(timestamp));
 };
 
+struct ObCheckTabletExistArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckTabletExistArg() : tenant_id_(OB_INVALID_TENANT_ID),
+                            ls_id_(share::ObLSID::INVALID_LS_ID),
+                            tablet_id_(common::ObTabletID::INVALID_TABLET_ID) {}
+  ~ObCheckTabletExistArg() {}
+  int init(const uint64_t tenant_id,
+           const share::ObLSID &ls_id,
+           const common::ObTabletID &tablet_id);
+  void reset();
+  bool is_valid() const { return is_valid_tenant_id(tenant_id_)
+                              && ls_id_.is_valid_with_tenant(tenant_id_)
+                              && tablet_id_.is_valid(); }
+  int assign(const ObCheckTabletExistArg &other);
+  const uint64_t &get_tenant_id() const { return tenant_id_; }
+  const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  TO_STRING_KV(K_(tenant_id),
+               K_(ls_id),
+               K_(tablet_id));
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+};
+
 struct ObForceSwitchILogFileArg
 {
   OB_UNIS_VERSION(1);
@@ -12555,7 +12597,7 @@ public:
   }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), KP_(tx_desc),
                K_(need_release), K_(direct_load_type), K_(trans_id), K_(seq_no),
-               K_(snapshot_version), K_(data_format_version));
+               K_(snapshot_version), K_(data_format_version), K_(is_co_sstable));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -12568,6 +12610,9 @@ public:
   transaction::ObTxSEQ seq_no_;
   int64_t snapshot_version_;
   uint64_t data_format_version_;
+  bool is_co_sstable_;
+  ObString data_inc_major_buffer_;
+  ObString lob_inc_major_buffer_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLIncCommitLogArg);
 };

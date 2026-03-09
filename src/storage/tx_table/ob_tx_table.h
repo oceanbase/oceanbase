@@ -136,7 +136,8 @@ public:
         read_tx_data_table_cnt_(0),
         recycle_scn_cache_(),
         recycle_record_(),
-        ctx_min_start_scn_info_()
+        ctx_min_start_scn_info_(),
+        is_start_(false)
 #ifdef OB_BUILD_SHARED_STORAGE
         ,ss_upload_scn_cache_(),
         recycle_scn_from_all_cn_(),
@@ -160,7 +161,8 @@ public:
         read_tx_data_table_cnt_(0),
         recycle_scn_cache_(),
         recycle_record_(),
-        ctx_min_start_scn_info_()
+        ctx_min_start_scn_info_(),
+        is_start_(false)
 #ifdef OB_BUILD_SHARED_STORAGE
         ,ss_upload_scn_cache_(),
         recycle_scn_from_all_cn_(),
@@ -451,6 +453,7 @@ private:
   RecycleSCNCache recycle_scn_cache_;
   RecycleRecord recycle_record_;
   CtxMinStartScnInfo ctx_min_start_scn_info_;
+  bool is_start_;
 
 #ifdef OB_BUILD_SHARED_STORAGE
 private:

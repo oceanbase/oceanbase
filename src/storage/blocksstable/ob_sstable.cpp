@@ -1475,7 +1475,7 @@ bool ObSSTable::ignore_ret(const int ret)
   return OB_ALLOCATE_MEMORY_FAILED == ret || OB_TIMEOUT == ret || OB_DISK_HUNG == ret;
 }
 
-void ObSSTable::dec_macro_ref() const
+void ObSSTable::inner_dec_macro_ref() const
 {
   int ret = OB_SUCCESS;
   MacroBlockId macro_id;
@@ -1551,7 +1551,16 @@ void ObSSTable::dec_macro_ref() const
   }
 }
 
-int ObSSTable::inc_macro_ref(bool &inc_success) const
+void ObSSTable::dec_macro_ref() const
+{
+  if (GCTX.is_shared_storage_mode()) {
+    // do nothing in SS mode.
+  } else {
+    inner_dec_macro_ref();
+  }
+}
+
+int ObSSTable::inner_inc_macro_ref(bool &inc_success) const
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1690,6 +1699,19 @@ int ObSSTable::inc_macro_ref(bool &inc_success) const
     }
   }
 
+  return ret;
+}
+
+int ObSSTable::inc_macro_ref(bool &inc_success) const
+{
+  int ret = OB_SUCCESS;
+  inc_success = false;
+  if (GCTX.is_shared_storage_mode()) {
+    // do nothing in SS mode
+    inc_success = true;
+  } else if (OB_FAIL(inner_inc_macro_ref(inc_success))) {
+    LOG_WARN("fail to inc macro ref", K(ret));
+  }
   return ret;
 }
 
@@ -1935,6 +1957,7 @@ int ObSSTable::persist_linked_block_if_need(
 #else
   const int64_t block_cnt_threshold = ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD;
 #endif
+  int64_t data_blk_cnt = 0, other_blk_cnt = 0, linked_blk_cnt = 0;
   if (OB_FAIL(!is_loaded())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only loaded sstable should check linked_block", K(ret), KPC(this));
@@ -1942,8 +1965,9 @@ int ObSSTable::persist_linked_block_if_need(
     // linked block had been persisted
   } else if (is_small_sstable()) {
     // The small sstable needn't persist macro ids by linked block.
-  } else if (meta_->macro_info_.get_data_block_count() + meta_->macro_info_.get_other_block_count()
-              < block_cnt_threshold) {
+  } else if (OB_FAIL(meta_->macro_info_.get_block_count(data_blk_cnt, other_blk_cnt, linked_blk_cnt))) {
+    LOG_WARN("fail to get block count", K(ret));
+  } else if (data_blk_cnt + other_blk_cnt < block_cnt_threshold) {
     // need not persist linked_block
   } else if (OB_FAIL(meta_->macro_info_.persist_block_ids(allocator, param, macro_start_seq, linked_block_write_ctx))) {
     LOG_WARN("fail to persist linked_block", K(ret), K(meta_->macro_info_), K(param));

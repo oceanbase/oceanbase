@@ -30,9 +30,10 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
 
 ObDDLTabletScheduler::ObDDLTabletScheduler()
-  : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), table_id_(OB_INVALID_ID), ref_data_table_id_(OB_INVALID_ID),
-    task_id_(OB_INVALID_ID), parallelism_(0), snapshot_version_(0),
-    lock_(common::ObLatchIds::OB_DDL_TABLET_SCHEDULER_LOCK), root_service_(nullptr)
+  : is_inited_(false), need_single_partition_build_(false), tenant_id_(OB_INVALID_TENANT_ID),
+    table_id_(OB_INVALID_ID), ref_data_table_id_(OB_INVALID_ID), task_id_(OB_INVALID_ID),
+    parallelism_(0), snapshot_version_(0), lock_(common::ObLatchIds::OB_DDL_TABLET_SCHEDULER_LOCK),
+    root_service_(nullptr)
 {
 
 }
@@ -49,7 +50,8 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
                                const int64_t  snapshot_version,
                                const common::ObCurTraceId::TraceId &trace_id,
                                const ObIArray<ObTabletID> &tablets,
-                               const uint64_t data_version)
+                               const uint64_t data_version,
+                               const bool need_single_partition_build)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena("tblt_sched_init");
@@ -200,6 +202,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
     }
   }
   if (OB_SUCC(ret)) {
+    need_single_partition_build_ = need_single_partition_build;
     tenant_id_ = tenant_id;
     table_id_ = table_id;
     ref_data_table_id_ = ref_data_table_id;
@@ -227,7 +230,6 @@ int ObDDLTabletScheduler::get_next_batch_tablets(const bool is_ddl_retryable,
   bool need_send_task = false;
   parallelism = 0;
   new_execution_id = 0;
-  uint64_t tenant_data_version = 0;
   ls_id.reset();
   leader_addr.reset();
   tablets.reset();
@@ -258,11 +260,11 @@ int ObDDLTabletScheduler::get_next_batch_tablets(const bool is_ddl_retryable,
     if (OB_SUCC(ret)) {
       ret = OB_EAGAIN;
     }
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
-    LOG_WARN("get min data version failed", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(push_task_execution_id(new_execution_id))) {
+    LOG_WARN("failed to fetch new execution id", K(ret), K(tenant_id_), K(task_id_), K(new_execution_id));
   } else if (OB_FAIL(get_next_parallelism(parallelism))) {
     LOG_WARN("fail to get next parallelism", K(ret), K(parallelism));
-  } else if (OB_FAIL(get_unfinished_tablets(task_type, is_ddl_retryable, tenant_data_version, new_execution_id, ls_id, leader_addr, tablets))) {
+  } else if (OB_FAIL(get_unfinished_tablets(new_execution_id, ls_id, leader_addr, tablets))) {
     LOG_WARN("failed to get unfinished tablets", K(ret), K(new_execution_id), K(tablets));
   }
   return ret;
@@ -312,52 +314,6 @@ int ObDDLTabletScheduler::confirm_batch_tablets_status(const int64_t execution_i
   return ret;
 }
 
-// in (idempotent_mode && ddl can not retry) case, every tablet's execution id cannot be pushed more than once
-// so push_tablet_execution_id does the following:
-// 1.push tablet execution id, and check if the tablet execution id is pushed more than once
-// 2.push task execution id anyway, it is no need to check task execution id, we always push task execution id high to avoid different inner sql has same task execution id.
-int ObDDLTabletScheduler::push_tablet_execution_id(share::ObDDLType task_type,
-                                                   const bool ddl_can_retry,
-                                                   const int64_t data_format_version,
-                                                   const common::ObIArray<common::ObTabletID> &tablets,
-                                                   int64_t &new_task_execution_id)
-{
-  int ret = OB_SUCCESS;
-  new_task_execution_id = 0;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("scheduler not init", K(ret));
-  } else if (OB_UNLIKELY(tablets.count() <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tablets", K(ret), K(tablets.count()));
-  } else {
-    int64_t next_tablet_execution_id = DEFAULT_EXECUTION_ID;
-    for (int64_t i = 0; OB_SUCC(ret) && i < tablets.count(); ++i) {
-      const ObTabletID &tablet = tablets.at(i);
-      int64_t tablet_execution_id = -1;
-      if (OB_FAIL(tablet_id_to_execution_id_map_.get_refactored(tablet, tablet_execution_id))) {
-        if (OB_HASH_NOT_EXIST != ret) {
-          LOG_WARN("failed to get tablet execution id", K(ret), K(tablet));
-        } else {
-          tablet_execution_id = -1;
-          ret = OB_SUCCESS;
-        }
-      } else if (OB_FAIL(ObDDLTask::calc_next_execution_id(tablet_execution_id, task_type, ddl_can_retry, data_format_version, next_tablet_execution_id))) {
-        LOG_WARN("calc next execution id failed", K(ret), K(tablet_execution_id), K(task_type), K(ddl_can_retry), K(data_format_version));
-      } else if (OB_FAIL(tablet_id_to_execution_id_map_.set_refactored(tablet, next_tablet_execution_id, true))) {
-        LOG_WARN("set tablet execution id failed", K(ret), K(tablet), K(next_tablet_execution_id));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(push_task_execution_id(new_task_execution_id))) {
-        LOG_WARN("failed to push execution id", K(ret), K(new_task_execution_id));
-      }
-    }
-  }
-  return ret;
-}
-
 // push task execution id high anyway, cause retry check is done in push_tablet_execution_id
 int ObDDLTabletScheduler::push_task_execution_id(int64_t &new_task_execution_id)
 {
@@ -398,11 +354,47 @@ int ObDDLTabletScheduler::push_task_execution_id(int64_t &new_task_execution_id)
   return ret;
 }
 
+int ObDDLTabletScheduler::get_tablet_execution_id(const ObTabletID &tablet_id, int64_t &execution_id)
+{
+  int ret = OB_SUCCESS;
+  execution_id = 0;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet id", K(ret), K(tablet_id));
+  } else if (OB_FAIL(tablet_id_to_execution_id_map_.get_refactored(tablet_id, execution_id))){
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed to get tablet execution id", K(ret), K(tablet_id));
+    } else {
+      execution_id = -1;
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObDDLTabletScheduler::set_tablet_execution_id(const ObTabletID &tablet_id, const int64_t execution_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet id", K(ret), K(tablet_id));
+  } else if (OB_FAIL(tablet_id_to_execution_id_map_.set_refactored(tablet_id, execution_id, true))){
+    LOG_WARN("failed to set tablet execution id", K(ret), K(tablet_id), K(execution_id));
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObDDLTabletScheduler)
 {
   int ret = OB_SUCCESS;
   common::ObSArray<ObTabletExecutionIdPair> pairs;
-  if (tablet_id_to_execution_id_map_.created()) {
+  if (tablet_id_to_execution_id_map_.created() && tablet_id_to_execution_id_map_.size() > 0) {
     for (hash::ObHashMap<common::ObTabletID, int64_t>::const_iterator iter = tablet_id_to_execution_id_map_.begin();
           OB_SUCC(ret) && iter != tablet_id_to_execution_id_map_.end();
           ++iter) {
@@ -448,18 +440,21 @@ OB_DEF_DESERIALIZE(ObDDLTabletScheduler)
 
 OB_DEF_SERIALIZE_SIZE(ObDDLTabletScheduler)
 {
+  int ret = OB_SUCCESS;
   int64_t len = 0;
-  if (tablet_id_to_execution_id_map_.created()) {
-    const int64_t count = tablet_id_to_execution_id_map_.size();
-    len = serialization::encoded_length_vi64(count);
+  common::ObSArray<ObTabletExecutionIdPair> pairs;
+  if (tablet_id_to_execution_id_map_.created() && tablet_id_to_execution_id_map_.size() > 0) {
     for (hash::ObHashMap<common::ObTabletID, int64_t>::const_iterator iter = tablet_id_to_execution_id_map_.begin();
           iter != tablet_id_to_execution_id_map_.end();
           ++iter) {
       ObTabletExecutionIdPair pair(iter->first, iter->second);
-      len += pair.get_serialize_size();
+      if (OB_FAIL(pairs.push_back(pair))) {
+        LOG_WARN("failed to push tablet execution id pair", K(ret), K(pair));
+      }
     }
-  } else {
-    len = serialization::encoded_length_vi64(0);
+  }
+  if (OB_SUCC(ret)) {
+    len = pairs.get_serialize_size();
   }
   return len;
 }
@@ -551,10 +546,9 @@ int ObDDLTabletScheduler::get_running_sql_parallelism(int64_t &parallelism)
   return ret;
 }
 
-int ObDDLTabletScheduler::get_unfinished_tablets(const share::ObDDLType task_type,const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_execution_id, share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets)
+int ObDDLTabletScheduler::get_unfinished_tablets(const int64_t execution_id, share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets)
 {
   int ret = OB_SUCCESS;
-  new_execution_id = 0;
   tablets.reset();
   ls_id.reset();
   leader_addr.reset();
@@ -575,12 +569,13 @@ int ObDDLTabletScheduler::get_unfinished_tablets(const share::ObDDLType task_typ
     LOG_WARN("fail to get ls host left disk space", K(ret), K(tenant_id_), K(ls_id), K(leader_addr), K(left_space_size));
   } else if (OB_FAIL(calculate_candidate_tablets(left_space_size, leader_addr, tablet_queue, tablets))) {
     LOG_WARN("fail to use strategy to get tablets", K(ret), K(left_space_size), K(tablet_queue), K(tablets));
-  } else if (OB_FAIL(push_tablet_execution_id(task_type, ddl_can_retry, data_format_version, tablets, new_execution_id))) {
-    LOG_WARN("failed to push tablet execution id", K(ret), K(task_type), K(ddl_can_retry), K(data_format_version), K(tablets), K(new_execution_id));
+  } else if (need_single_partition_build_ && tablets.count() > 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("single partition build should only have one tablet", K(ret), K(tablets));
   } else {
     TCWLockGuard guard(lock_);
-    if (OB_FAIL(running_ls_to_execution_id_.set_refactored(ls_id, new_execution_id, true /* overwrite */))) {
-      LOG_WARN("running ls to execution id map set fail", K(ret), K(ls_id), K(new_execution_id));
+    if (OB_FAIL(running_ls_to_execution_id_.set_refactored(ls_id, execution_id, true /* overwrite */))) {
+      LOG_WARN("running ls to execution id map set fail", K(ret), K(ls_id), K(execution_id));
     } else {
       ObArray<ObTabletID> running_tablet_queue;
       if (OB_FAIL(running_tablet_queue.assign(tablets))) {
@@ -670,9 +665,11 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
       int64_t pre_vec_construct_mem = 0;  // accumulated vector index construct memory
       int64_t tablet_data_size = 0;
       int64_t tablet_data_row_cnt = 0;
-      uint64_t task_max_data_size = 0;
-      const int64_t task_max_data_row_cnt = 50000000;
-      if (left_space_size > 0) {
+      int64_t task_max_data_size = 0;
+      const int64_t task_max_data_row_cnt = need_single_partition_build_ ? -1L : 50000000L;
+      if (need_single_partition_build_) {
+        task_max_data_size = -1L;
+      } else if (left_space_size > 0) {
         task_max_data_size = left_space_size / 30; // according to the estimated maximum temporary space amplification factor 30, ensure that the current remaining disk space can complete index construction
       } else {
         task_max_data_size = 5368709120; // 5GB
@@ -716,7 +713,7 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
                                                             in_tablets.count())) {
               satisfied_built_vec_index_if_need = false;
             }
-            if ( 0 >= out_tablets.count() || ((tablet_data_row_cnt + pre_data_row_cnt) <= task_max_data_row_cnt && (tablet_data_size + pre_data_size) <= task_max_data_size && satisfied_built_vec_index_if_need)) {
+            if (0 >= out_tablets.count() || ((tablet_data_row_cnt + pre_data_row_cnt) <= task_max_data_row_cnt && (tablet_data_size + pre_data_size) <= task_max_data_size && satisfied_built_vec_index_if_need)) {
               if (OB_FAIL(out_tablets.push_back(in_tablets.at(i)))) {
                 LOG_WARN("fail to push back", K(ret), K(in_tablets.at(i)));
               } else {

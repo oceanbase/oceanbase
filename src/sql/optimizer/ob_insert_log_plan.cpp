@@ -2116,9 +2116,10 @@ int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("external properties is empty", K(ret));
     } else if (table_schema->get_lake_table_format() != share::ObLakeTableFormat::ICEBERG
-          && table_schema->get_lake_table_format() != share::ObLakeTableFormat::ODPS) {
+               && table_schema->get_external_properties().empty()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support to insert into external table which is not in odps or iceberg", K(ret));
+      LOG_WARN("not support to insert into external table which is not in odps or iceberg",
+               K(ret), K(table_schema->get_lake_table_format()), K(table_schema->get_external_properties()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table which is not in odps or iceberg");
     } else if (OB_FAIL(ob_write_string(get_allocator(), table_format_or_properties, external_properties))) {
       LOG_WARN("failed to append string", K(ret));

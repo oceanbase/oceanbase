@@ -83,6 +83,7 @@
 #include "share/external_table/ob_external_table_file_rpc_proxy.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_tenant_gc_task.h"
+#include "close_modules/shared_storage/storage/high_availability/ob_ss_ls_online_helper.h"
 #endif
 #include "share/ob_device_credential_task.h"
 
@@ -441,6 +442,7 @@ private:
   ObStartupAccelTaskHandler startup_accel_handler_;
 #ifdef OB_BUILD_SHARED_STORAGE
   ObTenantGCTask tenant_dir_gc_task_;
+  ObSSLSOnlineHelper ss_ls_online_helper_;
 #endif
 }; // end of class ObServer
 

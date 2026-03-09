@@ -18,6 +18,7 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/oblog/ob_log.h"
 
+
 namespace oceanbase
 {
 namespace common
@@ -39,6 +40,14 @@ public:
   static void free(common::ObIAllocator &allocator, T *&ptr);
 
   static int read_from_addr(
+    common::ObArenaAllocator &allocator,
+    const ObMetaDiskAddr &meta_addr,
+    /*out*/ char *&buf,
+    /*out*/ int64_t &buf_len);
+
+private:
+  // below methods assume that all params are valid.
+  static int read_from_storage_(
     common::ObArenaAllocator &allocator,
     const ObMetaDiskAddr &meta_addr,
     char *&buf,

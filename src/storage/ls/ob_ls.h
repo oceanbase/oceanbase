@@ -258,7 +258,8 @@ public:
            const ObMajorMVMergeInfo &major_mv_merge_info,
            const ObLSStoreFormat &store_format,
            const ObReplicaType &replica_type,
-           observer::ObIMetaReport *reporter);
+           observer::ObIMetaReport *reporter,
+           const uint64_t data_version);
   // I am ready to work now.
   int start();
   int stop();
@@ -1103,6 +1104,9 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, create_or_update_with_ss_tablet, int);
 #endif
 
+
+  CONST_DELEGATE_WITH_RET(ls_meta_, get_ss_restart_recover_scn, int);
+  DELEGATE_WITH_RET(ls_meta_, set_ss_restart_recover_scn, int);
   // ObMemberTable interface
   ObTabletReorgInfoTable *get_reorg_info_table() { return &reorg_info_table_; }
 private:

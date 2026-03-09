@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_transfer_service.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/high_availability/ob_tenant_startup_status.h"
 
 namespace oceanbase
 {
@@ -130,9 +131,9 @@ void ObTransferService::run1()
   while (!has_set_stop()) {
     DEBUG_SYNC(BEFORE_TRANSFER_SERVICE_RUNNING);
     ls_id_array_.reset();
-    if (!SERVER_STORAGE_META_SERVICE.is_started()) {
+    if (!TENANT_STARTUP_STATUS.is_in_service()) {
       ret = OB_SERVER_IS_INIT;
-      LOG_WARN("server is not serving", K(ret), K(GCTX.status_));
+      LOG_WARN("tenant is not serving", K(ret), K(GCTX.status_));
     } else if (OB_FAIL(get_ls_id_array_())) {
       LOG_WARN("failed to get ls id array", K(ret));
     } else if (OB_FAIL(scheduler_transfer_handler_())) {

@@ -1433,8 +1433,9 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                                      tenant_node->children_[0]->str_value_);
                 if (ObString::make_string("seed") == show_tenant_name) {
                   params_.show_seed_ = true; // 传递给 stmt
-                } else if (OB_FAIL(schema_checker_->get_tenant_id(show_tenant_name, show_tenant_id))
-                            || OB_INVALID_ID == show_tenant_id) {
+                } else if (OB_FAIL(schema_checker_->get_tenant_id(show_tenant_name, show_tenant_id))) {
+                  LOG_WARN("fail to get tenant id", K(show_tenant_name), K(ret));
+                } else if (OB_INVALID_ID == show_tenant_id) {
                   ret = OB_ERR_INVALID_TENANT_NAME;
                   LOG_WARN("fail to get tenant id", K(show_tenant_name), K(ret));
                 } else {

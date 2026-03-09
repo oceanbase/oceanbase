@@ -493,6 +493,57 @@ TEST_F(TestTenantSlogCkptSS, test_basic)
   }
 }
 
+TEST_F(TestTenantSlogCkptSS, test_sys_tenant_restart)
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_SUCC(tenant_guard.switch_to(OB_SYS_TENANT_ID));
+
+  SlogCkptGuard ckpt_guard;
+  ASSERT_SUCC(ckpt_guard.get_ret());
+  ObTenantFileManager *tfm = nullptr;
+  ASSERT_NE(nullptr, tfm = MTL(ObTenantFileManager *));
+  ObTenantCheckpointSlogHandler &ckpt_slog_handler = MTL(ObTenantStorageMetaService*)->ckpt_slog_handler_;
+
+  // create 3 ls and 10 tablets for each.
+  int64_t ls_id;
+  const int64_t tablet_cnt = 100;
+  LOG_AND_PRINT(INFO, "create log streams and tablets", KR(ret));
+  create_ls_and_ntablets(ls_id, tablet_cnt);
+
+  ASSERT_SUCC(ckpt_slog_handler.gc_checkpoint_file());
+  LOG_AND_PRINT(INFO, "checkpoint tenant slog");
+  ASSERT_SUCC(ObTenantSlogCheckpointWorkflow::execute(ObTenantSlogCheckpointWorkflow::Type::FORCE, ckpt_slog_handler));
+  LOG_AND_PRINT(INFO, "tenant slog checkpoint finished, check result...");
+  ASSERT_SUCC(ckpt_slog_handler.gc_checkpoint_file());
+
+  std::pair<int64_t, int64_t> cur_id_range = {-1, -1};
+  get_tenant_min_max_file_ids(OB_SYS_TENANT_ID, cur_id_range);
+
+  omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
+  {
+    // mock convert sys tenant to hidden
+    SMART_VAR(ObTenantSuperBlock, super_block){
+      lib::ObMutexGuard guard(ckpt_slog_handler.super_block_mutex_);
+      super_block = tenant->get_super_block();
+      super_block.ls_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
+      super_block.min_file_id_ = 0;
+      super_block.max_file_id_ = 0;
+      tenant->set_tenant_super_block(super_block);
+    }
+  }
+
+  SMART_VAR(ObTenantSuperBlock, super_block) {
+    super_block = tenant->get_super_block();
+    ASSERT_EQ(0LL, super_block.min_file_id_);
+    ASSERT_EQ(0LL, super_block.max_file_id_);
+    ASSERT_TRUE(ObTenantCheckpointSlogHandler::need_recover_file_id_range_by_list_(super_block));
+    ASSERT_SUCC(ckpt_slog_handler.replay_new_checkpoint(super_block));
+    super_block = tenant->get_super_block();
+    ASSERT_EQ(cur_id_range.first, super_block.min_file_id_);
+    ASSERT_EQ(cur_id_range.second, super_block.max_file_id_);
+  }
+}
 } //end namespace unittest
 } //end namespace oceanbase
 

@@ -12,6 +12,7 @@
 
 #include "ob_tablet_pointer.h"
 #include "src/storage/tx_storage/ob_ls_map.h"
+#include "storage/tablet/ob_tablet_persister.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -810,19 +811,27 @@ int ObTabletPointer::init_next_meta_version()
 {
   int ret = OB_SUCCESS;
   int64_t current_version = 0;
+  MacroBlockId block_id;
   if (OB_UNLIKELY(!phy_addr_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected invalid phy_addr", K(ret), K_(phy_addr));
-  } else if (FALSE_IT(current_version = static_cast<int64_t>(phy_addr_.block_id().meta_version_id()))) {
   } else if (OB_UNLIKELY(!attr_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected invalid attr", K(ret), K_(attr));
+  } else if (phy_addr_.is_sslog_tablet_meta()) {
+    current_version = 0;
+  } else if (OB_FAIL(phy_addr_.get_macro_block_id(block_id))) {
+    LOG_WARN("failed to get macro block id", K(ret), K(phy_addr_));
+  } else if (FALSE_IT(current_version = static_cast<int64_t>(block_id.meta_version_id()))) {
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(attr_.last_match_tablet_meta_version_ < current_version)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("FATAL ERROR!!! last_match_tablet_meta_version must be greater than(or equal to)"
               "current_version", KR(ret), K_(attr_.last_match_tablet_meta_version), K(current_version));
   } else {
-    next_meta_version_ = attr_.last_match_tablet_meta_version_ + META_VERSION_ABORT_INTERNVAL + 1;
+    next_meta_version_ = phy_addr_.is_sslog_tablet_meta() ? 0 : attr_.last_match_tablet_meta_version_ + META_VERSION_ABORT_INTERNVAL + 1;
     LOG_DEBUG("init_next_meta_version succeed", K_(next_meta_version), K_(attr), K(current_version));
   }
   return ret;
@@ -831,16 +840,30 @@ int ObTabletPointer::init_next_meta_version()
 int ObTabletPointer::try_alloc_meta_version(int64_t &version)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   LOG_DEBUG("try alloc tablet meta version", K_(phy_addr), K_(next_meta_version), K_(attr_.last_match_tablet_meta_version), K(common::lbt()));
   if (next_meta_version_ - attr_.last_match_tablet_meta_version_ > META_VERSION_ABORT_INTERNVAL) {
     ret = OB_EAGAIN;
-    int64_t current_version = static_cast<int64_t>(get_addr().block_id().meta_version_id());
-    LOG_WARN("failed to alloc meta version"
-              "(the gap of current_version and next_meta_version is"
-              " too large, maybe retry too much time or the server"
-              " has just restarted)", K(ret), K_(phy_addr), K_(next_meta_version),
-              "last_match_tablet_meta_version", attr_.last_match_tablet_meta_version_,
-              K(current_version));
+    MacroBlockId block_id;
+    if (get_addr().is_sslog_tablet_meta()) {
+      LOG_WARN("failed to alloc meta version"
+                "(the gap of current_version and next_meta_version is"
+                " too large, maybe retry too much time or the server"
+                " has just restarted)", K(ret), K_(phy_addr), K_(next_meta_version),
+                "last_match_tablet_meta_version", attr_.last_match_tablet_meta_version_,
+                KPC(this));
+    } else if (OB_SUCCESS != (tmp_ret = get_addr().get_macro_block_id(block_id))) {
+      LOG_WARN("failed to get macro block id", K(tmp_ret), KPC(this), K_(next_meta_version),
+          "last_match_tablet_meta_version", attr_.last_match_tablet_meta_version_);
+    } else {
+      int64_t current_version = static_cast<int64_t>(block_id.meta_version_id());
+      LOG_WARN("failed to alloc meta version"
+                "(the gap of current_version and next_meta_version is"
+                " too large, maybe retry too much time or the server"
+                " has just restarted)", K(ret), K_(phy_addr), K_(next_meta_version),
+                "last_match_tablet_meta_version", attr_.last_match_tablet_meta_version_,
+                K(current_version));
+    }
   } else {
     version = next_meta_version_++;
   }

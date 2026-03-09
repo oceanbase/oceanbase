@@ -18,6 +18,7 @@
 #define private public
 
 #include "storage/ls/ob_ls.h"
+#include "storage/tx_storage/ob_ls_map.h"
 
 namespace oceanbase
 {
@@ -202,6 +203,7 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_handle)
 
 TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 {
+  ObLSMap ls_map;
   ObLS fake_ls;
   FakeLs(fake_ls);
   ObLSTabletService *tablet_svr = fake_ls.get_tablet_svr();
@@ -219,6 +221,8 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 
   ObLSHandle ls_handle;
   ls_handle.ls_ = &fake_ls;
+  ls_handle.ls_map_ = &ls_map;
+  ls_handle.mod_ = ObLSGetMod::STORAGE_MOD;
   ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
   ObMetaDiskAddr phy_addr;
   phy_addr.set_none_addr();
@@ -247,6 +251,7 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
   ASSERT_NE(nullptr, tablet_buffer);
   ObMetaObjBufferHelper::new_meta_obj(tablet_buffer, old_tablet_obj.ptr_);
   old_tablet_obj.pool_ = &MTL(ObTenantMetaMemMgr*)->tablet_buffer_pool_;
+  old_tablet_obj.ptr_->tablet_addr_.set_none_addr();
   handle.set_obj(ObTabletHandle::ObTabletHdlType::FROM_T3M, old_tablet_obj);
 
   /**
@@ -305,6 +310,7 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 
 TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
 {
+  ObLSMap ls_map;
   ObLS fake_ls;
   FakeLs(fake_ls);
 
@@ -323,6 +329,8 @@ TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
 
   ObLSHandle ls_handle;
   ls_handle.ls_ = &fake_ls;
+  ls_handle.ls_map_ = &ls_map;
+  ls_handle.mod_ = ObLSGetMod::STORAGE_MOD;
   ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
   ObMetaDiskAddr phy_addr;
   phy_addr.set_none_addr();
@@ -365,6 +373,7 @@ TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
   phy_addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
 
   old_tablet_obj.ptr_->is_inited_ = true;
+  old_tablet_obj.ptr_->tablet_addr_.set_none_addr();
   old_tablet_obj.ptr_->table_store_addr_.addr_.set_none_addr(); // mock empty_shell to pass test
 
   ObTabletPointerHandle ptr_handle(tablet_map_);

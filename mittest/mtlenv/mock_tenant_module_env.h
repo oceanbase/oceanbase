@@ -109,6 +109,7 @@
 #include "storage/incremental/sslog/ob_sslog_service.h"
 #include "storage/incremental/share/ob_ss_diagnose_mgr.h"
 #include "storage/incremental/sslog/notify/ob_sslog_notify_service.h"
+#include "storage/tiered_metadata_store/ob_tiered_metadata_store.h"
 #endif
 #include "sql/engine/table/ob_pcached_external_file_service.h"
 #include "share/object_storage/ob_device_config_mgr.h"
@@ -131,6 +132,7 @@
 #include "sql/engine/table/ob_external_data_access_mgr.h"
 #include "observer/omt/ob_tenant_ai_service.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
+#include "storage/high_availability/ob_tenant_startup_status.h"
 #include "storage/tx/wrs/ob_weak_read_service.h"
 
 namespace oceanbase
@@ -944,6 +946,7 @@ int MockTenantModuleEnv::init()
         MTL_BIND2(mtl_new_default, ObTabletSplitTaskCache::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSDiagnoseInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObTieredMetadataStore::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       }
 #else
 #endif
@@ -966,6 +969,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, storage::ObTabletReorgInfoTableService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, sql::ObExternalDataAccessMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, omt::ObTenantAiService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, storage::ObTenantStartupStatus::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {

@@ -32,7 +32,7 @@ using namespace oceanbase::sql;
 */
 
 ObCgMacroBlockWriteTask::ObCgMacroBlockWriteTask(const ObITaskType type) :
-    ObITask(type),
+    ObITaskWithMonitor(type),
     is_inited_(false),
     allocator_(ObMemAttr(MTL_ID(), "CGMBWriteTask")),
     storage_schema_(nullptr),
@@ -75,7 +75,7 @@ int ObCgMacroBlockWriteTask::init(
     row_iter_ = row_iter;
     const int64_t slice_idx = row_iter_->get_slice_idx();
     ObWriteMacroParam param;
-    if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id, slice_idx, -1/*cg_idx*/, ddl_dag, 0/*max_batch_size*/, param))) {
+    if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id, slice_idx, -1/*cg_idx*/, ddl_dag, param))) {
       LOG_WARN("fill writer param common failed", K(ret), K(tablet_id), K(param));
     } else if (OB_FAIL(ObDDLUtil::init_cg_macro_block_writers(param, allocator_, storage_schema_, cg_macro_block_writers_))) {
       LOG_WARN("init cg macro block writer failed", K(ret), K(tablet_id_), K(slice_idx), KPC(ddl_dag));
@@ -151,7 +151,7 @@ int ObCgMacroBlockWriteTask::project_cg_row(
 }
 
 ObDDLScanTask::ObDDLScanTask(const ObITaskType type)
-  : ObITask(type),
+  : ObITaskWithMonitor(type),
     ddl_dag_(nullptr)
 {
 }
@@ -199,7 +199,7 @@ int ObDDLScanTask::process()
 }
 
 ObDDLTabletScanTask::ObDDLTabletScanTask()
-  : ObITask(TASK_TYPE_DDL_PREPARE_SCAN)
+  : ObITaskWithMonitor(TASK_TYPE_DDL_PREPARE_SCAN)
 {
 }
 
@@ -390,7 +390,6 @@ int ObDDLWriteMacroBlockBasePipeline::fill_writer_param(ObWriteMacroParam &param
                                                   ddl_slice_->get_slice_idx(),
                                                   -1/*cg_idx*/,
                                                   dag,
-                                                  0/*max_batch_size*/,
                                                   param))) {
     LOG_WARN("fill writer param common failed", K(ret));
   }

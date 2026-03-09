@@ -930,6 +930,7 @@ int ObPxSubCoord::start_ddl()
   } else if (OB_ISNULL(exec_ctx)
       || OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx))
       || OB_ISNULL(phy_plan = plan_ctx->get_phy_plan())
+      || OB_ISNULL(GET_MY_SESSION(*exec_ctx))
       || location_keys.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), KP(exec_ctx), KP(plan_ctx), KP(phy_plan), K(location_keys.count()));
@@ -978,6 +979,8 @@ int ObPxSubCoord::start_ddl()
       ddl_dag_param.ddl_task_param_.schema_version_ = schema_version; // for idempotence, the schema version must be fixed, so get it from task record
       ddl_dag_param.ddl_task_param_.is_no_logging_ = is_no_logging;
       ddl_dag_param.ddl_task_param_.is_offline_index_rebuild_ = is_offline_index_rebuild;
+      ddl_dag_param.ddl_task_param_.max_batch_size_ = phy_plan->get_batch_size();
+      ddl_dag_param.ddl_task_param_.is_partition_local_ = GET_MY_SESSION(*exec_ctx)->get_ddl_info().is_partition_local_ddl();
       if (OB_FAIL(get_participants(sqc_arg_.sqc_, ddl_table_id, ddl_dag_param.ls_tablet_ids_))) {
         LOG_WARN("fail to get tablet ids", K(ret), K(ddl_task_id), K(ddl_table_id));
       } else if (OB_FAIL(ObTenantDagScheduler::alloc_dag(exec_ctx->get_allocator(), false/*is_ha_dag*/, ddl_dag_))) {
@@ -1037,7 +1040,7 @@ int ObPxSubCoord::get_participants(ObPxSqcMeta &sqc,
   const DASTabletLocIArray &locations = sqc.get_access_table_locations();
   for (int64_t i = 0; OB_SUCC(ret) && i < locations.count(); ++i) {
     ObDASTabletLoc *tablet_loc = ObDASUtils::get_related_tablet_loc(*locations.at(i), table_id);
-    if (OB_FAIL(add_var_to_array_no_dup(ls_tablet_ids, std::make_pair(tablet_loc->ls_id_, tablet_loc->tablet_id_)))) {
+    if (nullptr != tablet_loc && OB_FAIL(add_var_to_array_no_dup(ls_tablet_ids, std::make_pair(tablet_loc->ls_id_, tablet_loc->tablet_id_)))) {
       LOG_WARN("add var to array no dup failed", K(ret));
     }
   }

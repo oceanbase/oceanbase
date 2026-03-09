@@ -23,6 +23,9 @@ namespace oceanbase
 {
 namespace rpc { class ObRequest; }
 namespace sql { class ObSQLSessionInfo; }
+#ifdef OB_BUILD_SHARED_STORAGE
+namespace storage { class ObTieredMetadataObjectManager; }
+#endif
 namespace lib
 {
 using common::ObIAllocator;
@@ -243,6 +246,28 @@ private:
 bool is_global_background_resource_isolation_enabled();
 
 #define CONSUMER_GROUP_ID_GUARD(group_id) oceanbase::lib::ConsumerGroupIdGuard consumer_group_id_guard_(group_id)
+
+#ifdef OB_BUILD_SHARED_STORAGE
+class WorkerGroupIdGuard
+{
+  friend class storage::ObTieredMetadataObjectManager;
+private:
+  WorkerGroupIdGuard(uint64_t group_id)
+    : old_group_id_(GET_GROUP_ID())
+  {
+    THIS_WORKER.set_group_id_(group_id);
+  }
+  ~WorkerGroupIdGuard()
+  {
+    THIS_WORKER.set_group_id_(old_group_id_);
+  }
+
+private:
+  uint64_t old_group_id_;
+};
+
+#define WORKER_GROUP_ID_GUARD(group_id) oceanbase::lib::WorkerGroupIdGuard worker_group_id_guard_(group_id)
+#endif
 
 class ConsumerGroupFuncGuard
 {

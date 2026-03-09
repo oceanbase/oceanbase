@@ -800,7 +800,7 @@ int ObCOMergeRowWriter::init(
         need_full_merge = major_need_project ||
                           table_need_full_merge ||
                           (cg_schema == &co_ctx->mocked_row_store_cg_) ||
-                          (table != nullptr && !table->is_column_store_sstable());
+                          (table != nullptr && !table->is_column_store_sstable()); // TODO: allow reuse row-store sstable
         cg_idx_ = cg_idx;
         if (OB_FAIL(ret)) {
         } else if (is_base_cg_writer()) { // no need major iter

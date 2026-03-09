@@ -48,8 +48,12 @@ int ObScheduleTabletFunc::switch_and_schedule_tablet(
 {
   int ret = OB_SUCCESS;
   bool unused_can_merge = false;
-  if (OB_FAIL(iterate_switch_tablet(tablet_handle, unused_can_merge))) {
+  bool need_schedule = false;
+  if (OB_FAIL(iterate_switch_tablet(tablet_handle, unused_can_merge, need_schedule))) {
     LOG_WARN("failed to iterate switch tablet", KR(ret), K(tablet_handle));
+  } else if (!need_schedule) {
+    tablet_merge_finish = true;
+    tablet_cnt_.finish_cnt_++;
   } else if (OB_FAIL(schedule_tablet(tablet_handle, tablet_merge_finish))) {
     LOG_WARN("failed to schedule tablet", KR(ret), K(tablet_handle));
   }
@@ -59,13 +63,15 @@ int ObScheduleTabletFunc::switch_and_schedule_tablet(
 
 int ObScheduleTabletFunc::iterate_switch_tablet(
     storage::ObTabletHandle &tablet_handle,
-    bool &can_merge)
+    bool &can_merge,
+    bool &need_schedule)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_status_.ls_id_;
   ObTablet *tablet = nullptr;
   ObTabletID tablet_id;
   can_merge = false;
+  need_schedule = false;
   tablet_status_.destroy();
   if (OB_UNLIKELY(!ls_status_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -78,6 +84,29 @@ int ObScheduleTabletFunc::iterate_switch_tablet(
   } else if (OB_UNLIKELY(ls_status_.ls_id_ != tablet->get_ls_id())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet and ls are not match", KR(ret), K_(ls_status), KPC(tablet));
+  } else if (!tablet->get_tablet_addr().is_sslog_tablet_meta()) {
+    need_schedule = true;
+  } else {
+    int64_t max_medium_snapshot = 0;
+    if (tablet->get_last_major_snapshot_version() < merge_version_) {
+      need_schedule = true;
+    } else if (tablet->get_last_major_snapshot_version() >= merge_version_) {
+      if (OB_FAIL(tablet->get_max_sync_medium_scn(max_medium_snapshot))) {
+        LOG_WARN("failed to get max sync medium scn", K(ret), KPC(tablet));
+      } else if (max_medium_snapshot > tablet->get_last_major_snapshot_version()) {
+        need_schedule = true;
+      } else {
+        need_schedule = false;
+        LOG_DEBUG("tablet no need to schedule medium", KPC(tablet));
+      }
+    }
+    LOG_DEBUG("tablet schedule medium", KPC(tablet), K(need_schedule),
+        K(max_medium_snapshot), K(merge_version_), "last major snapshot version", tablet->get_last_major_snapshot_version());
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!need_schedule) {
+    LOG_DEBUG("no need schedule tablet merge", KPC(tablet));
   } else if (OB_FAIL(tablet_status_.init_for_major(
                  ls_status_.get_ls(), merge_version_, *tablet,
                  ls_could_schedule_new_round_))) {

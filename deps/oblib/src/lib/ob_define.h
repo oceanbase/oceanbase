@@ -808,6 +808,7 @@ const char *const OB_S3A_PREFIX = "s3a://";
 const char *const OB_S3N_PREFIX = "s3n://";
 const char *const OB_HDFS_PREFIX= "hdfs://";
 const char *const OB_AZBLOB_PREFIX = "azblob://";
+const char *const OB_TABLE_PREFIX = "table://";
 const char *const OB_ADAPTIVELY_APPENDABLE_FORMAT_META = "FORMAT_META";
 const char *const OB_ADAPTIVELY_APPENDABLE_SEAL_META = "SEAL_META";
 const char *const OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";

@@ -35,6 +35,7 @@
 # is_path_include_inner_tablet: whether to is path include inner tablet, True or False.
 #   a normal tablet's id is unique in tenant, but the id of a log stream internal tablet is the same in each log stream.
 #   so if the path include inner tablet, you need to set this parameter to True.
+# is_store_in_table: whether it is store in table, True or False, default is False
 # is_valid: the MacroBlockId is valid check logic
 # to_local_path_format: the MacroBlockId convert to local cache path logic, if does not exist return OB_NOT_SUPPORTED
 # local_path_to_macro_id: logic of convert from local cache path to MacroBlockId, if does not exist, fill ret = OB_NOT_SUPPORTED;
@@ -122,6 +123,7 @@ def_storage_object_type_default_cfg = {
     'is_tmp': False,
     'server_tenant_can_have': False,
     'is_path_include_inner_tablet': False,
+    'is_store_in_table': False,
     # complex function implementation
     'is_valid': False,
     'to_local_path_format': 'OB_NOT_SUPPORTED',
@@ -4553,14 +4555,159 @@ def_storage_object_type_cfg(
     owner = 'wangxiaohui.wxh',
     access_mode = 'shared',
     data_type = 'tablet_meta',
-    read_odirect = True,
+    read_odirect = False,
     write_odirect = True,
     is_overwrite = True,
     is_path_include_inner_tablet = True,
+    is_store_in_table = True,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
 {
-  return true;
+  // user_tablet: second_id:tablet_id, third_id:op_id, fourth_id:N/A inner_tablet: second_id:tablet_id, third_id:op_id, fourth_id:ls_id
+  return (file_id.second_id() > 0) && (file_id.second_id() < INT64_MAX) && (file_id.third_id() >= 0) &&
+         (file_id.third_id() < INT64_MAX) && ((file_id.meta_is_inner_tablet() == true && (file_id.meta_ls_id() > 0 &&
+         file_id.meta_ls_id() < INT64_MAX)) || (file_id.meta_is_inner_tablet() == false));
+}
+''',
+    to_remote_path_format = '''
+int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const
+{
+  int ret = OB_SUCCESS;
+  // inner_tablet: /ls/ls_id/tablet_name/meta/op%ldseq%lu
+  // user_tablet: /tablet/tablet_id/reorganization_scn/meta/op%ldseq%lu
+  if (file_id.meta_is_inner_tablet()) {
+    if (OB_FAIL(databuff_printf(path, length, pos, "/%s/%ld/%s/%s/%s%ld%s%0*lu",
+                LS_DIR_STR, file_id.meta_ls_id()/*ls_id*/,
+                get_ls_inner_tablet_name_(file_id.second_id())/*tablet_name*/,
+                META_MACRO_DIR_STR, OP_KEY_STR, (file_id.third_id() >> 32)/*op_id*/,
+                SEQ_KEY_STR, OBJ_TIERED_METADATA_SEQ_WIDTH, (file_id.third_id() & 0xFFFFFFFF) /*macro_seq_id*/))) {
+      LOG_WARN("failed to format path", K(ret), K(file_id));
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(path, length, pos, "/%s/%ld/%ld/%s/%s%ld%s%0*lu",
+                TABLET_DIR_STR, file_id.second_id()/*tablet_id*/, file_id.reorganization_scn(),
+                META_MACRO_DIR_STR, OP_KEY_STR, (file_id.third_id() >> 32)/*op_id*/,
+                SEQ_KEY_STR, OBJ_TIERED_METADATA_SEQ_WIDTH, (file_id.third_id() & 0xFFFFFFFF) /*macro_seq_id*/))) {
+      LOG_WARN("failed to format path", K(ret), K(file_id));
+    }
+  }
+  return ret;
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  // inner_tablet: /ls/ls_id/tablet_name/meta/op%ldseq%lu -- 5
+  // user_tablet: /tablet/tablet_id/reorganization_scn/meta/op%ldseq%lu -- 5
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  bool is_inner_tablet = false;
+  int64_t tablet_id = 0;
+  int64_t reorganization_scn = 0;
+  int64_t ls_id = 0;
+  char tablet_name[512] = {0};
+  int64_t op_id = 0;
+  int64_t macro_seq_id = 0;
+  const char *judge_path = nullptr;
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 5))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (NULL != STRSTR(judge_path, LS_DIR_STR)) {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%[^/]/%s/%s%%ld%s%%lu.T%hhu",
+                       LS_DIR_STR, META_MACRO_DIR_STR, OP_KEY_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &ls_id, tablet_name, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else if (OB_FAIL(get_ls_inner_tablet_id_(tablet_name, tablet_id))) {
+      LOG_WARN("fail to get ls inner tablet id", KR(ret), K(tablet_name));
+    } else {
+      is_inner_tablet = true;
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%%ld/%s/%s%%ld%s%%lu.T%hhu",
+                TABLET_DIR_STR, META_MACRO_DIR_STR, OP_KEY_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else {
+      is_inner_tablet = false;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (is_inner_tablet) {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_meta_ls_id(ls_id);
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_reorganization_scn(reorganization_scn);
+    }
+  }
+  return ret;
+}
+''',
+    get_effective_tablet_id = '''
+int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const
+{
+  int ret = OB_SUCCESS;
+  size_t pos = 8; // offsetof(MacroBlockId, second_id_);
+  size_t size = sizeof(uint64_t);
+  if (pos + size > sizeof(MacroBlockId)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(pos), K(size));
+  } else {
+    const char* macro_id_bytes = reinterpret_cast<const char*>(&macro_id);
+    effective_tablet_id = 0;
+    memcpy(&effective_tablet_id, macro_id_bytes + pos, size);
+  }
+  return ret;
+}
+''',
+    opt_to_string = '''
+int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const
+{
+  int ret = OB_SUCCESS;
+  if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s (tablet_id=%lu, ls_id=%lu, op_id=%u, data_seq=%u,"
+             "is_inner_tablet=%d, reorganization_scn=%lu)",
+             get_type_str(), opt.ss_tablet_sub_meta_opt_.tablet_id_,
+             opt.ss_tablet_sub_meta_opt_.ls_id_, opt.ss_tablet_sub_meta_opt_.op_id_,
+             opt.ss_tablet_sub_meta_opt_.data_seq_ , opt.ss_tablet_sub_meta_opt_.is_inner_tablet_,
+             opt.ss_tablet_sub_meta_opt_.reorganization_scn_))) {
+    LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_type_str()),
+              K(opt.ss_tablet_sub_meta_opt_.tablet_id_),
+              K(opt.ss_tablet_sub_meta_opt_.ls_id_),
+              K(opt.ss_tablet_sub_meta_opt_.is_inner_tablet_),
+              K(opt.ss_tablet_sub_meta_opt_.op_id_),
+              K(opt.ss_tablet_sub_meta_opt_.data_seq_),
+              K(opt.ss_tablet_sub_meta_opt_.reorganization_scn_));
+  }
+  return ret;
+}
+''',
+    get_object_id = '''
+int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
+{
+  const int64_t default_incarnation_id = 0;
+  const int64_t default_cg_id = 0;
+  set_ss_object_first_id_(default_incarnation_id, default_cg_id, object_id);
+  object_id.set_second_id(opt.ss_tablet_sub_meta_opt_.tablet_id_);
+  object_id.set_third_id((uint64_t(opt.ss_tablet_sub_meta_opt_.op_id_) << 32) | (opt.ss_tablet_sub_meta_opt_.data_seq_ & 0xFFFFFFFF));
+  object_id.set_ss_fourth_id(opt.ss_tablet_sub_meta_opt_.is_inner_tablet_,
+  opt.ss_tablet_sub_meta_opt_.ls_id_, opt.ss_tablet_sub_meta_opt_.reorganization_scn_);
+  return OB_SUCCESS;
 }
 ''',
 )

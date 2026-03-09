@@ -950,12 +950,22 @@ int ObBlockStatIterator::check_rowkey_in_range(const ObDatumRowkey &rowkey, bool
 int ObBlockStatIterator::shrink_scan_range(const ObDatumRowkey &start_key)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(start_key.deep_copy(curr_scan_start_key_, allocator_))) {
-    LOG_WARN("failed to deep copy start key", K(ret), K(start_key));
-  } else if (OB_FAIL(curr_scan_start_key_.prepare_memtable_readable(rowkey_read_info_->get_columns_desc(), allocator_))) {
-    LOG_WARN("failed to prepare memtable readable", K(ret), K(curr_scan_start_key_));
+  if (OB_ISNULL(rowkey_read_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr to rowkey read info", K(ret), KP_(rowkey_read_info));
   } else {
-    curr_scan_range_.start_key_ = curr_scan_start_key_;
+    // Strip multi-version extra rowkey columns
+    int64_t schema_rowkey_cnt = rowkey_read_info_->get_schema_rowkey_count();
+    ObDatumRowkey new_start_key = start_key;
+    new_start_key.datum_cnt_ = MIN(schema_rowkey_cnt, start_key.get_datum_cnt());
+    if (OB_FAIL(new_start_key.deep_copy(curr_scan_start_key_, allocator_))) {
+      LOG_WARN("failed to deep copy start key", K(ret), K(start_key));
+    } else if (OB_FAIL(curr_scan_start_key_.prepare_memtable_readable(
+        rowkey_read_info_->get_columns_desc(), allocator_))) {
+      LOG_WARN("failed to prepare memtable readable", K(ret), K(curr_scan_start_key_));
+    } else {
+      curr_scan_range_.start_key_ = curr_scan_start_key_;
+    }
   }
   return ret;
 }

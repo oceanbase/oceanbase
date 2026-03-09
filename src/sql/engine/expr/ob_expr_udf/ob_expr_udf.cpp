@@ -452,9 +452,7 @@ ObExprUDFEnvGuard::ObExprUDFEnvGuard(ObEvalCtx &ctx, ObExprUDFCtx &udf_ctx, int 
     need_end_stmt_ = true;
     udf_ctx_.get_session_info()->set_start_stmt();
   }
-  if (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
-    cur_obj_count_ = ctx_.exec_ctx_.get_pl_ctx()->get_objects().count();
-  }
+  cur_obj_count_ = ctx_.exec_ctx_.get_pl_complex_type_lazy_mgr().get_obj_count();
 }
 
 ObExprUDFEnvGuard::~ObExprUDFEnvGuard()
@@ -480,8 +478,8 @@ ObExprUDFEnvGuard::~ObExprUDFEnvGuard()
     }
   }
   if (OB_FAIL(ret)
-      && udf_ctx_.get_info()->is_called_in_sql_ && OB_NOT_NULL(ctx_.exec_ctx_.get_pl_ctx())) {
-    ctx_.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(get_cur_obj_count());
+      && udf_ctx_.get_info()->is_called_in_sql_) {
+    ctx_.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(get_cur_obj_count());
   }
   // Release return value when pl eval failed,
   // if pl eval success, return value will released by process_return_value call.

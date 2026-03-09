@@ -88,7 +88,7 @@ bool ObTabletComplexAddr<T>::is_memory_object() const
 template <typename T>
 bool ObTabletComplexAddr<T>::is_disk_object() const
 {
-  return nullptr == ptr_ && addr_.is_block();
+  return nullptr == ptr_ && (addr_.is_block() || addr_.is_sslog());
 }
 
 template <typename T>

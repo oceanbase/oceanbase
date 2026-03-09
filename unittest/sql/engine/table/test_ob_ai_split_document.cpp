@@ -161,7 +161,7 @@ TEST_F(ObAiSplitDocumentTest, test_markdown_split_iterator)
     }
   }
 
-  cout << "========== Test finished ==========" << endl;;
+  cout << "========== Test finished ==========" << endl;
 }
 
 // 性能对比测试：snprintf vs ObStringBuffer::append

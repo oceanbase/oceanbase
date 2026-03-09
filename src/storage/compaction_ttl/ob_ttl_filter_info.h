@@ -69,38 +69,40 @@ public:
 
   enum class ObTTLFilterColType : uint8_t
   {
-    ROWSCN = 0, // rowscn col is int64_t, in the units of ns
-    INT64 = 1, // int64
-    DATE = 2,
-    TIMESTAMP = 3, // timestamp col
-    TIMESTAMP_TZ = 4, // timestamp with time zone for oracle
-    TIMESTAMP_LTZ = 5, // timestamp with local time zone for oracle
-    TIMESTAMP_NANO = 6, // timestamp nanosecond for oracle
-    MYSQL_DATETIME = 7, // datetime for mysql
-    MAX = 8,
+    INVALID = 0,
+    ROWSCN = 1, // rowscn col is int64_t, in the units of ns
+    INT64 = 2, // int64
+    DATE = 3, // date for oracle
+    TIMESTAMP = 4, // timestamp col
+    TIMESTAMP_TZ = 5, // timestamp with time zone for oracle
+    TIMESTAMP_LTZ = 6, // timestamp with local time zone for oracle
+    TIMESTAMP_NANO = 7, // timestamp nanosecond for oracle
+    MYSQL_DATETIME = 8, // datetime for mysql
+    MAX = 9,
   };
 
 public:
   ObTTLFilterInfo()
-      : version_(TTL_FILTER_INFO_VERSION_LATEST), ttl_filter_col_type_(ObTTLFilterColType::MAX),
+      : version_(TTL_FILTER_INFO_VERSION_V1), ttl_filter_col_type_(ObTTLFilterColType::INVALID),
         reserved_(0), key_(), commit_version_(0), ttl_filter_col_idx_(0), ttl_filter_value_(0)
   {
   }
 
   OB_INLINE bool is_valid() const
   {
-    return key_.is_valid() && ttl_filter_col_type_ < ObTTLFilterColType::MAX
-           && ttl_filter_col_idx_ >= 0 && ttl_filter_value_ > 0;
+    return key_.is_valid() && version_ <= TTL_FILTER_INFO_VERSION_LATEST
+           && ttl_filter_col_type_ > ObTTLFilterColType::INVALID && ttl_filter_col_type_ < ObTTLFilterColType::MAX && ttl_filter_col_idx_ >= 0
+           && ttl_filter_value_ > 0;
   }
 
   OB_INLINE void reset()
   {
-    version_ = TTL_FILTER_INFO_VERSION_LATEST;
+    version_ = TTL_FILTER_INFO_VERSION_V1;
     reserved_ = 0;
     key_.reset();
     commit_version_ = -1;
     ttl_filter_col_idx_ = -1;
-    ttl_filter_col_type_ = ObTTLFilterColType::MAX;
+    ttl_filter_col_type_ = ObTTLFilterColType::INVALID;
     ttl_filter_value_ = 0;
   }
 

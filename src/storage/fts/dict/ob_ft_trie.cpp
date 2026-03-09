@@ -41,7 +41,7 @@ int ObFTTrie<DATA_TYPE>::insert(const ObString &words, const ObFTTrieNodeData<DA
       bool isNewNode = false;
       // once new, every child new, and children is ordered.
       if (isNewNode || node_ptr->is_empty()
-          || node_ptr->children_->last()->word_.get_word() != current_char) {
+          || node_ptr->children_->last()->token_.get_token() != current_char) {
         isNewNode = true; // anyway new node
         ObFTTrieNode<DATA_TYPE> *new_child = nullptr;
         if (OB_ISNULL(new_child = OB_NEWx(ObFTTrieNode<DATA_TYPE>, &allocator_, allocator_))) {
@@ -50,12 +50,12 @@ int ObFTTrie<DATA_TYPE>::insert(const ObString &words, const ObFTTrieNodeData<DA
           level_statistics_[level]++;
           new_child->dat_build_info_.level_ = level;
           new_child->is_leaf_ = (offset + char_len == words.length());
-          if (OB_FAIL(new_child->word_.set_word(current_char.ptr(), current_char.length()))) {
+          if (OB_FAIL(new_child->token_.set_token(current_char.ptr(), current_char.length()))) {
             LOG_WARN("Failed to set new child", K(ret));
           } else {
             typename ObFTTrieNode<DATA_TYPE>::NodeIndex child_index;
-            ObString word = new_child->word_.get_word();
-            child_index.word_.set_word(word.ptr(), word.length());
+            ObString word = new_child->token_.get_token();
+            child_index.token_.set_token(word.ptr(), word.length());
             child_index.child_ = new_child;
             if (OB_FAIL(node_ptr->add_children(child_index))) {
               LOG_WARN("Failed to add children.", K(ret));

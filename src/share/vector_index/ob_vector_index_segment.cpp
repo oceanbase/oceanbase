@@ -24,6 +24,13 @@ namespace oceanbase
 namespace share
 {
 
+int64_t ObVectorIndexSegment::instacnce_cnt_ = 0;
+int64_t ObVecIdxActiveData::instacnce_cnt_ = 0;
+int64_t ObVecIdxVBitmapData::instacnce_cnt_ = 0;
+int64_t ObVectorIndexSegmentBuilder::instacnce_cnt_ = 0;
+int64_t ObVecIdxSnapshotData::instacnce_cnt_ = 0;
+int64_t ObVecIdxFrozenData::instacnce_cnt_ = 0;
+
 ObVectorIndexSegmentHandle::ObVectorIndexSegmentHandle(const ObVectorIndexSegmentHandle &other)
   : segment_(nullptr)
 {
@@ -458,6 +465,12 @@ int64_t ObVectorIndexSegment::dec_write_ref()
   int64_t cnt = ATOMIC_SAF(&write_ref_cnt_, 1 /* just sub 1 */);
   LOG_TRACE("segment dec ref", KP(this), "ref_cnt", cnt, K(lbt()));
   return cnt;
+}
+
+ObVectorIndexSegment::~ObVectorIndexSegment()
+{
+  const int64_t instacnce_cnt = ATOMIC_SAF(&instacnce_cnt_, 1);
+  FLOG_INFO("destruct ObVectorIndexSegment", K(instacnce_cnt), KP(this));
 }
 
 int ObVectorIndexSegment::create(
@@ -929,6 +942,12 @@ void ObVecIdxActiveData::free_memdata_resource(ObIAllocator *allocator, const ui
   is_init_ = false;
 }
 
+ObVecIdxActiveData::~ObVecIdxActiveData()
+{
+  const int64_t instacnce_cnt = ATOMIC_SAF(&instacnce_cnt_, 1);
+  FLOG_INFO("destruct ObVecIdxActiveData", K(instacnce_cnt), KP(this));
+}
+
 int ObVectorIndexSegmentWriteGuard::prepare_write(ObVecIdxActiveDataHandle& incr_data)
 {
   int ret = OB_SUCCESS;
@@ -946,6 +965,12 @@ void ObVecIdxVBitmapData::free_memdata_resource(ObIAllocator *allocator, const u
   is_init_ = false;
 }
 
+ObVecIdxVBitmapData::~ObVecIdxVBitmapData()
+{
+  const int64_t instacnce_cnt = ATOMIC_SAF(&instacnce_cnt_, 1);
+  FLOG_INFO("destruct ObVecIdxVBitmapData", K(instacnce_cnt), KP(this));
+}
+
 void ObVectorIndexSegmentBuilder::free(ObIAllocator &allocator)
 {
   LOG_INFO("free segment builder", KPC(this), K(lbt()));
@@ -955,6 +980,21 @@ void ObVectorIndexSegmentBuilder::free(ObIAllocator &allocator)
   ibitmap_ = nullptr;
   ObVectorIndexRoaringBitMap::destroy(vbitmap_);
   vbitmap_ = nullptr;
+
+  seg_type_ = ObVectorIndexSegmentType::INVALID;
+  vid_bound_.reset();
+  total_cnt_ = 0;
+  add_cnt_ = 0;
+  skip_cnt_ = 0;
+  has_build_ = false;
+  need_vid_check_ = false;
+  is_inited_ = false;
+}
+
+ObVectorIndexSegmentBuilder::~ObVectorIndexSegmentBuilder()
+{
+  const int64_t instacnce_cnt = ATOMIC_SAF(&instacnce_cnt_, 1);
+  FLOG_INFO("destruct ObVectorIndexSegmentBuilder", K(instacnce_cnt), KP(this), K(lbt()));
 }
 
 void ObVectorIndexSegmentBuilder::free_vec_buf_data(ObIAllocator &allocator)
@@ -1451,6 +1491,12 @@ void ObVecIdxSnapshotData::free_memdata_resource(ObIAllocator *allocator, const 
   is_init_ = false;
 }
 
+ObVecIdxSnapshotData::~ObVecIdxSnapshotData()
+{
+  const int64_t instacnce_cnt = ATOMIC_SAF(&instacnce_cnt_, 1);
+  FLOG_INFO("destruct ObVecIdxSnapshotData", K(instacnce_cnt), KP(this));
+}
+
 int ObVecIdxSnapshotData::free_segment_memory()
 {
   int ret = OB_SUCCESS;
@@ -1463,7 +1509,7 @@ int ObVecIdxSnapshotData::free_segment_memory()
     ObVectorIndexSegmentMeta &seg_meta = meta_.bases_.at(i);
     seg_meta.segment_handle_.reset();
   }
-  rb_flag_ = true;
+  has_complete_ = false;
   return ret;
 }
 
@@ -1948,6 +1994,12 @@ void ObVecIdxFrozenData::free_memdata_resource(ObIAllocator *allocator, const ui
   segment_handle_.reset();
   vbitmap_.reset();
   is_init_ = false;
+}
+
+ObVecIdxFrozenData::~ObVecIdxFrozenData()
+{
+  const int64_t instacnce_cnt = ATOMIC_SAF(&instacnce_cnt_, 1);
+  FLOG_INFO("destruct ObVecIdxFrozenData", K(instacnce_cnt), KP(this));
 }
 
 int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result)

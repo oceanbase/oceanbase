@@ -13,6 +13,7 @@
 #ifndef _OCEANBASE_STORAGE_FTS_OB_FTS_LITERAL_H_
 #define _OCEANBASE_STORAGE_FTS_OB_FTS_LITERAL_H_
 
+#include "lib/utility/ob_macro_utils.h"
 #include <cstdint>
 namespace oceanbase
 {

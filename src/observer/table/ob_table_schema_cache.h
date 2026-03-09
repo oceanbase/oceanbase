@@ -96,6 +96,7 @@ struct ObTableColumnInfo
   OB_INLINE bool is_word_segment_column() const { return ObSchemaUtils::is_word_segment_column(column_flags_); }
   OB_INLINE bool is_word_count_column() const { return ObSchemaUtils::is_word_count_column(column_flags_); }
   OB_INLINE bool is_doc_length_column() const { return ObSchemaUtils::is_doc_length_column(column_flags_); }
+  OB_INLINE bool is_pos_list_column() const { return ObSchemaUtils::is_pos_list_column(column_flags_); }
 
   uint64_t col_idx_;
   uint64_t column_id_;

@@ -68,7 +68,8 @@ public:
       const bool is_cg,
       const ObITableReadInfo* read_info,
       sql::ObPushdownFilterExecutor &pushdown_filter,
-      common::ObIAllocator *allocator);
+      common::ObIAllocator *allocator,
+      const int64_t batch_size = 0);
   /// Check whether we can skip filtering.
   int check_range(
       const ObITableReadInfo *read_info,
@@ -120,7 +121,7 @@ class ObSSTableIndexFilterFactory {
 public:
   static int build_sstable_index_filter(
       const bool is_cg,
-      const ObITableReadInfo* read_info,
+      const ObTableIterParam* iter_param,
       sql::ObPushdownFilterExecutor &pushdown_filter,
       common::ObIAllocator *allocator,
       ObSSTableIndexFilter *&index_filter);

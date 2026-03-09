@@ -290,9 +290,6 @@ int ObPLCompiler::compile(
     LOG_INFO(">>>>>>>>Final Compile Anonymous Block Time: ", K(ret), K(resolve_end - init_end));
     //Step 3：Code Generator
     if (OB_SUCC(ret)) {
-  #ifdef USE_MCJIT
-      HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {
-  #else
       HEAP_VAR(ObPLCodeGenerator, cg, func.get_allocator(),
                session_info_,
                schema_guard_,
@@ -301,7 +298,6 @@ int ObPLCompiler::compile(
                func.get_helper(),
                func.get_di_helper(),
                lib::is_oracle_mode()) {
-  #endif
         int64_t cg_jit_mem = 0;
         ObPLCGMallocCallback pmcb(cg_jit_mem);
         lib::ObMallocCallbackGuard memory_guard(pmcb);
@@ -553,10 +549,6 @@ int ObPLCompiler::compile(
   FLT_SET_TAG(pl_compile_resolve_time, resolve_end - parse_end);
   //Step 4: Code Generator
   if (OB_SUCC(ret)) {
-
-#ifdef USE_MCJIT
-    HEAP_VAR(ObPLCodeGenerator, cg, allocator_, session_info_) {
-#else
     HEAP_VAR(ObPLCodeGenerator, cg, func.get_allocator(), session_info_,
              schema_guard_,
              func_ast,
@@ -564,7 +556,6 @@ int ObPLCompiler::compile(
              func.get_helper(),
              func.get_di_helper(),
              lib::is_oracle_mode()) {
-#endif
       int64_t cg_jit_mem = 0;
       ObPLCGMallocCallback pmcb(cg_jit_mem);
       lib::ObMallocCallbackGuard memory_guard(pmcb);
@@ -1010,9 +1001,6 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   }
 #endif
   if (OB_SUCC(ret)) {
-#ifdef USE_MCJIT
-    HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {
-#else
     HEAP_VAR(ObPLCodeGenerator, cg, package.get_allocator(),
              session_info_,
              schema_guard_,
@@ -1021,10 +1009,11 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
              package.get_helper(),
              package.get_di_helper(),
              lib::is_oracle_mode()) {
-#endif
       OZ (cg.prepare_expression(package));
       OZ (cg.codegen_expression(package));
-      if (OB_SUCC(ret)) {
+
+      // package obj access exprs need CG for performance reason
+      if (OB_SUCC(ret) && !package_ast.get_obj_access_exprs().empty()) {
         int64_t cg_jit_mem = 0;
         ObPLCGMallocCallback pmcb(cg_jit_mem);
         lib::ObMallocCallbackGuard memory_guard(pmcb);
@@ -1037,7 +1026,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
         // check session status after get lock
         OZ (ObPL::check_session_alive(session_info_));
 
-        OZ (cg.init(true));
+        OZ (cg.init());
         OZ (cg.generate(package));
         OX (package.get_stat_for_update().pl_cg_mem_hold_ = cg_jit_mem);
       }
@@ -1629,9 +1618,6 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
         OZ (init_function(schema_guard, exec_env, *routine_info, *routine));
         if (OB_SUCC(ret)) {
           routine->set_is_wrap(compile_unit.get_is_wrap());
-#ifdef USE_MCJIT
-          HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info) {
-#else
           HEAP_VAR(ObPLCodeGenerator, cg, allocator,
                    session_info,
                    schema_guard,
@@ -1640,7 +1626,6 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
                    routine->get_helper(),
                    routine->get_di_helper(),
                    lib::is_oracle_mode()) {
-#endif
             lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
             if (OB_FAIL(cg.init())) {
               LOG_WARN("init code generator failed", K(ret));
@@ -1740,7 +1725,11 @@ ObPLCompilerEnvGuard::ObPLCompilerEnvGuard(const ObPackageInfo &info,
                                            ObPLCompileUnitAST &compile_unit,
                                            int &ret,
                                            const ObPLBlockNS *parent_ns)
-  : ret_(ret), session_info_(session_info)
+  : ret_(ret),
+    session_info_(session_info),
+    old_db_id_(OB_INVALID_ID),
+    need_reset_exec_env_(false),
+    need_reset_default_database_(false)
 {
   init(info, session_info, schema_guard, compile_unit, ret, parent_ns);
 }
@@ -1750,7 +1739,12 @@ ObPLCompilerEnvGuard::ObPLCompilerEnvGuard(const ObRoutineInfo &info,
                                            share::schema::ObSchemaGetterGuard &schema_guard,
                                            ObPLCompileUnitAST &compile_unit,
                                            int &ret)
-  : ret_(ret), session_info_(session_info), allocator_()
+  : ret_(ret),
+    session_info_(session_info),
+    old_db_id_(OB_INVALID_ID),
+    need_reset_exec_env_(false),
+    need_reset_default_database_(false),
+    allocator_()
 {
   init(info, session_info, schema_guard, compile_unit, ret);
 }
@@ -1769,9 +1763,6 @@ void ObPLCompilerEnvGuard::init(const Info &info,
   uint64_t compat_version = 0;
   bool is_invoker_right = OB_NOT_NULL(parent_ns) ? parent_ns->get_compile_flag().compile_with_invoker_right()
                                                  : info.is_invoker_right();
-  OX (need_reset_exec_env_ = false);
-  OX (need_reset_default_database_ = false);
-  OX (old_db_id_ = OB_INVALID_ID);
   OZ (old_exec_env_.load(session_info_, &allocator_));
   OZ (env.init(info.get_exec_env()));
   if (OB_SUCC(ret) && old_exec_env_ != env) {

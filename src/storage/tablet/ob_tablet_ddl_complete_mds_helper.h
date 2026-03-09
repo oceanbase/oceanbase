@@ -83,6 +83,9 @@ private:
 class ObTabletDDLCompleteMdsHelper
 {
 public:
+  // Default timeout for inner-sql transaction used by DDL_COMPLETE_MDS.
+  static constexpr int64_t DEFAULT_DDL_COMPLETE_MDS_TIMEOUT_US = 10L * 1000L * 1000L; // 10s
+
   static int on_register(const char* buf, const int64_t len, mds::BufferCtx &ctx);
   static int on_replay(const char* buf, const int64_t len, const share::SCN scn, mds::BufferCtx &ctx);
   static int process(const char* buf, const int64_t len, const share::SCN &scn,

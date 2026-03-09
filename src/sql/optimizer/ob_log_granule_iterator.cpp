@@ -118,6 +118,12 @@ int ObLogGranuleIterator::allocate_expr_post(ObAllocExprContext &ctx)
             OB_FAIL(get_plan()->get_optimizer_context().get_all_exprs().append(slice_id_expr_))) {
     LOG_WARN("failed to append expr", K(ret));
   }
+
+  if (OB_SUCC(ret) && NULL != slice_id_expr_) {
+    if (OB_FAIL(output_exprs_.push_back(slice_id_expr_))) {
+      LOG_WARN("failed to push back ddl_slice_id_expr to output_exprs_", K(ret));
+    }
+  }
   return ret;
 }
 

@@ -720,6 +720,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_width_bucket.cpp
   engine/expr/ob_expr_word_count.cpp
   engine/expr/ob_expr_word_segment.cpp
+  engine/expr/ob_expr_pos_list.cpp
   engine/expr/ob_expr_wrapper_inner.cpp
   engine/expr/ob_expr_xor.cpp
   engine/expr/ob_infix_expression.cpp
@@ -1033,6 +1034,7 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/ob_granule_pump.cpp
   engine/px/ob_granule_parallel_task_gen.cpp
   engine/px/ob_granule_util.cpp
+  engine/px/ob_granule_fts_util.cpp
   engine/px/ob_px_admission.cpp
   engine/px/ob_px_bloom_filter.cpp
   engine/px/ob_px_coord_msg_proc.cpp

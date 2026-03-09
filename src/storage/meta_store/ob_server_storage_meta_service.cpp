@@ -520,6 +520,8 @@ int ObServerStorageMetaService::start_complete_and_online_ls() const
           ObTransferService *transfer_service = nullptr;
           if (OB_FAIL(MTL(ObLSService*)->gc_ls_after_replay_slog())) {
             LOG_WARN("fail to gc ls after replay slog", K(ret));
+          } else if (is_shared_storage_) {
+            //do nothing
           } else if (OB_FAIL(MTL(ObLSService*)->online_ls())) {
             LOG_WARN("fail enable replay clog", K(ret));
           } else if (OB_ISNULL(transfer_service = (MTL(ObTransferService *)))) {
@@ -532,7 +534,12 @@ int ObServerStorageMetaService::start_complete_and_online_ls() const
       }
     }
   }
-  FLOG_INFO("storage meta service start complete and enable replay clog", K(ret));
+
+  if (is_shared_storage_) {
+    FLOG_INFO("storage meta service complete", K(ret));
+  } else {
+    FLOG_INFO("storage meta service start complete and enable replay clog", K(ret));
+  }
   return ret;
 }
 

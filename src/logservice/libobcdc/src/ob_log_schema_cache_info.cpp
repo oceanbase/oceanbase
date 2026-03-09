@@ -262,7 +262,16 @@ int ColumnSchemaInfo::init_extended_type_info_(
 
 
       if (OB_SUCCESS != ret && NULL != buf) {
+        for (int64_t idx = 0; idx < extended_type_info_size_; ++idx) {
+          ObString& str = extended_type_info_[idx];
+          char* ptr = str.ptr();
+          if (OB_NOT_NULL(ptr)) {
+            allocator.free(ptr);
+            str.reset();
+          }
+        }
         allocator.free(buf);
+        extended_type_info_ = NULL;
       }
 
       if (OB_SUCC(ret) && column_table_schema.is_collection()) {
@@ -314,10 +323,11 @@ void ColumnSchemaInfo::release_mem(common::ObIAllocator &allocator)
 
   if (NULL != extended_type_info_) {
     for (int64_t idx = 0; idx < extended_type_info_size_; ++idx) {
-      void *ptr = static_cast<void *>(&extended_type_info_[idx]);
-      if (NULL != ptr) {
+      ObString& str = extended_type_info_[idx];
+      char* ptr = str.ptr();
+      if (OB_NOT_NULL(ptr)) {
         allocator.free(ptr);
-        ptr = NULL;
+        str.reset();
       }
     }
 

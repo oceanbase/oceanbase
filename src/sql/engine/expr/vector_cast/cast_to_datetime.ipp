@@ -12,6 +12,8 @@
 #include "sql/engine/expr/vector_cast/vector_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "share/object/ob_obj_cast_util.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
+#include "sql/session/ob_local_session_var.h"
 
 namespace oceanbase
 {
@@ -525,10 +527,12 @@ struct ToDatetimeCastImpl
         public:
           StringToDatetimeFn(CAST_ARG_LIST_DECL, ArgVec* arg_vec, ResVec* res_vec,
                           ObDateSqlMode date_sql_mode, ObTimeConvertCtx cvrt_ctx,
-                          int64_t local_tz_offset_usec, ObTimeZoneInfoPos *literal_tz_info)
+                          int64_t local_tz_offset_usec, ObTimeZoneInfoPos *literal_tz_info,
+                          bool is_named_tz)
               : CastFnBase(CAST_ARG_DECL), arg_vec_(arg_vec), res_vec_(res_vec),
                 date_sql_mode_(date_sql_mode), cvrt_ctx_(cvrt_ctx), ob_time_(DT_TYPE_DATETIME),
-                local_tz_offset_usec_(local_tz_offset_usec), literal_tz_info_(literal_tz_info) {}
+                local_tz_offset_usec_(local_tz_offset_usec), literal_tz_info_(literal_tz_info),
+                is_named_tz_(is_named_tz) {}
 
           OB_INLINE int operator() (const ObExpr &expr, int idx)
           {
@@ -558,9 +562,26 @@ struct ToDatetimeCastImpl
                 if (ob_time_.parts_[DT_DATE] == ObTimeConverter::ZERO_DATE) {
                   out_val = ObTimeConverter::ZERO_DATETIME;
                 } else {
-                  // quick in_val has not tz_info, just use local_tz_offset_usec_
-                  out_val = ob_time_.parts_[DT_DATE] * USECS_PER_DAY
-                    + ObTimeConverter::ob_time_to_time(ob_time_) - local_tz_offset_usec_;
+                  const int64_t local_usecs = ob_time_.parts_[DT_DATE] * USECS_PER_DAY
+                                              + ObTimeConverter::ob_time_to_time(ob_time_);
+                  if (!cvrt_ctx_.is_timestamp_ || OB_ISNULL(cvrt_ctx_.tz_info_)) {
+                    out_val = local_usecs;
+                  } else if (!is_named_tz_) {
+                    out_val = local_usecs - local_tz_offset_usec_;
+                  } else {
+                    int32_t offset_sec = 0;
+                    int32_t tz_id = OB_INVALID_INDEX;
+                    int32_t tran_type_id = OB_INVALID_INDEX;
+                    if (CAST_FAIL(cvrt_ctx_.tz_info_->get_timezone_sub_offset(USEC_TO_SEC(local_usecs),
+                                                                              ob_time_.get_tzd_abbr_str(),
+                                                                              offset_sec,
+                                                                              tz_id,
+                                                                              tran_type_id))) {
+                      SQL_LOG(WARN, "get timezone sub offset failed", K(ret), K(local_usecs));
+                    } else {
+                      out_val = local_usecs - SEC_TO_USEC(offset_sec);
+                    }
+                  }
                 }
               } else {
                 // go common parser
@@ -613,6 +634,7 @@ struct ToDatetimeCastImpl
           ObTimeConverter::ObTimeDigits digits_[DATETIME_PART_CNT];
           ObTimeConverter::QuickParserType last_quick_parser_type_ = ObTimeConverter::QuickParserType::QuickParserUnused;
           ObTimeZoneInfoPos *literal_tz_info_;
+          bool is_named_tz_ = false;
         };
 
         ObDateSqlMode date_sql_mode;
@@ -628,7 +650,7 @@ struct ToDatetimeCastImpl
             SQL_LOG(WARN, "common_get_nls_format failed", K(ret));
           } else {
             StringToDatetimeFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, date_sql_mode,
-              cvrt_ctx, 0, NULL);
+              cvrt_ctx, 0, NULL, false /*is_named_tz*/);
             if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
                                               skip, bound, is_diagnosis, diagnosis_manager))) {
               SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
@@ -640,18 +662,42 @@ struct ToDatetimeCastImpl
           date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(expr.extra_);
           const ObTimeZoneInfo *tz_info = cvrt_ctx.tz_info_;
           int64_t local_tz_offset_usec = 0;
+          bool is_named_tz = false;
           if (tz_info != NULL) {
             if (cvrt_ctx.is_timestamp_) {
-              if (tz_info->get_tz_id() > 0) {
-                ret = OB_NOT_SUPPORTED;
+              ObString tz_str;
+              ObSessionSysVar *local_tz_var = NULL;
+              ObObj tz_obj;
+              if (OB_FAIL(helper.get_local_var(share::SYS_VAR_TIME_ZONE, local_tz_var))) {
+                SQL_LOG(WARN, "get local time_zone var failed", K(ret));
+              } else if (NULL != local_tz_var) {
+                if (OB_FAIL(local_tz_var->val_.get_string(tz_str))) {
+                  SQL_LOG(WARN, "get local time_zone string failed", K(ret));
+                }
+              } else if (OB_FAIL(session->get_sys_variable(share::SYS_VAR_TIME_ZONE, tz_obj))) {
+                SQL_LOG(WARN, "get session time_zone var failed", K(ret));
+              } else if (OB_FAIL(tz_obj.get_string(tz_str))) {
+                SQL_LOG(WARN, "get session time_zone string failed", K(ret));
+              } else {
+                int32_t offset_sec = 0;
+                int ret_more = OB_SUCCESS;
+                // if session time_zone is a pure offset (e.g. '+08:00'), we can use the constant offset in batch
+                // else if it is a named time zone (e.g. Asia/Shanghai), we must compute offset via get_timezone_sub_offset()
+                if (OB_SUCCESS == ObTimeConverter::str_to_offset(tz_str, offset_sec, ret_more,
+                                                                false /*is_oracle_mode*/,
+                                                                true /*need_check_valid*/)) {
+                  is_named_tz = false;
+                  local_tz_offset_usec = SEC_TO_USEC(offset_sec);
+                } else {
+                  is_named_tz = true;
+                }
               }
-              local_tz_offset_usec = SEC_TO_USEC(tz_info->get_offset());
               date_sql_mode.allow_invalid_dates_ = false;
             }
           }
           if (OB_SUCC(ret)) {
             StringToDatetimeFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, date_sql_mode,
-              cvrt_ctx, local_tz_offset_usec, &literal_tz_info);
+              cvrt_ctx, local_tz_offset_usec, &literal_tz_info, is_named_tz);
             if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
                                               skip, bound, is_diagnosis, diagnosis_manager))) {
               SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));

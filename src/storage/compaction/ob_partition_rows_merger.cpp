@@ -1073,7 +1073,7 @@ bool ObMultiMajorMergeIter::table_need_full_merge(
     const ObMergeParameter &merge_param) const
 {
   bool bret = false;
-  if (!table.is_major_type_sstable() || !table.is_co_sstable()) {
+  if (!table.is_major_type_sstable() || !table.is_co_sstable()) { // TODO: allow reuse row-store sstable
     bret = true;
   } else if (!replay_base_directly_) {
   } else if (OB_SUCCESS != (merge_param.static_param_.get_sstable_need_full_merge(sstable_idx, bret))) {

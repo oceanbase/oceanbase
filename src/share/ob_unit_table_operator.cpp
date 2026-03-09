@@ -593,6 +593,29 @@ int ObUnitTableOperator::get_resource_pools(common::ObIArray<ObResourcePool> &po
   return ret;
 }
 
+int ObUnitTableOperator::get_resource_pool_names(const uint64_t tenant_id,
+                                                common::ObIArray<ObResourcePoolName> &pool_names) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObResourcePool> pools;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(tenant_id), K(ret));
+  } else if (OB_FAIL(get_resource_pools(tenant_id, pools))) {
+    LOG_WARN("failed to get resource pools", K(tenant_id), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
+      if (OB_FAIL(pool_names.push_back(pools.at(i).name_))) {
+        LOG_WARN("failed to push back pool name", K(ret), K(pools.at(i).name_));
+      }
+    } // end for
+  }
+  return ret;
+}
+
 int ObUnitTableOperator::get_resource_pools(const uint64_t tenant_id,
                                             common::ObIArray<ObResourcePool> &pools) const
 {

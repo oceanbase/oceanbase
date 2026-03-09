@@ -31,8 +31,13 @@ public:
       const int64_t occupy_size);
   ~ObTabletBlockInfo();
   void reset();
+  const blocksstable::MacroBlockId &macro_id() const { return macro_id_; }
+  ObTabletMacroType block_type() const { return block_type_; }
+  /// NOTE: always returns 0 if from_sslog() returns true.
+  int64_t occupy_size() const { return occupy_size_; }
+
   TO_STRING_KV(K_(macro_id), K_(block_type), K_(occupy_size));
-public:
+private:
   blocksstable::MacroBlockId macro_id_;
   ObTabletMacroType block_type_;
   int64_t occupy_size_;
@@ -49,6 +54,7 @@ public:
   int reuse();
   // ObTabletMacroType::MAX means iterate all kinds of ids
   int init(const ObTabletMacroType target_type, const ObTabletMacroInfo &macro_info);
+  /// NOTE: judge if block_info is from sslog.
   int get_next(ObTabletBlockInfo &block_info);
   TO_STRING_KV(KPC_(macro_info), K_(cur_type), K_(target_type), K_(is_linked));
 private:
@@ -69,6 +75,7 @@ private:
   bool is_linked_;
   bool is_inited_;
 };
+
 }
 }
 

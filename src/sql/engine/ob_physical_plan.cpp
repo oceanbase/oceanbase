@@ -70,6 +70,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     gtt_session_scope_ids_(allocator_),
     gtt_trans_scope_ids_(allocator_),
     immediate_refresh_external_table_ids_(allocator_),
+    need_strong_routing_(true),
     concurrent_num_(0),
     max_concurrent_num_(ObMaxConcurrentParam::UNLIMITED),
     table_locations_(allocator_),
@@ -205,6 +206,7 @@ void ObPhysicalPlan::reset()
   gtt_session_scope_ids_.reset();
   gtt_trans_scope_ids_.reset();
   immediate_refresh_external_table_ids_.reset();
+  need_strong_routing_ = true;
   concurrent_num_ = 0;
   max_concurrent_num_ = ObMaxConcurrentParam::UNLIMITED;
   is_update_uniq_index_ = false;
@@ -933,7 +935,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     is_online_gather_statistics_,
                     phy_hint_.table_lock_mode_,
                     route_to_column_replica_,
-                    enable_inc_major_);
+                    enable_inc_major_,
+                    need_strong_routing_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -967,24 +970,6 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
     }
     LOG_DEBUG("set table location", K(tl), K(tl.use_das()));
   }
-
-  // Check if any table location has COLUMN_STORE_ONLY route policy
-  if (OB_SUCC(ret)) {
-    route_to_column_replica_ = false;
-    for (int64_t i = 0; !route_to_column_replica_ && i < table_locations_.count(); ++i) {
-      const ObTableLocation &tl = table_locations_.at(i);
-      if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(tl.get_loc_meta().route_policy_)) {
-        route_to_column_replica_ = true;
-      }
-    }
-    for (int64_t i = 0; !route_to_column_replica_ && i < das_table_locations_.count(); ++i) {
-      const ObTableLocation &tl = das_table_locations_.at(i);
-      if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(tl.get_loc_meta().route_policy_)) {
-        route_to_column_replica_ = true;
-      }
-    }
-  }
-
   return ret;
 }
 

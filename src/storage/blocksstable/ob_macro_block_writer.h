@@ -197,7 +197,7 @@ protected:
   virtual bool need_write_macro_meta() const { return true; }
   virtual bool is_keep_freespace() const {return false; }
   virtual int on_buffer_not_enough() { return OB_SUCCESS; }
-  virtual bool use_external_flusher() const { return false; }
+  virtual bool allow_use_external_flusher() const { return false; }
   inline bool is_dirty() const { return macro_blocks_[current_index_].is_dirty() || 0 != micro_writer_->get_row_count(); }
   inline int64_t get_curr_micro_writer_row_count() const { return micro_writer_->get_row_count(); }
   int inner_init(

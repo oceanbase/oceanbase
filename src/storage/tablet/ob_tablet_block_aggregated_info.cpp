@@ -64,7 +64,8 @@ int ObBlockInfoSet::init(
       const int64_t meta_bucket_num,
       const int64_t data_bucket_num,
       const int64_t shared_meta_bucket_num,
-      const int64_t shared_data_bucket_num)
+      const int64_t shared_data_bucket_num,
+      const int64_t sslog_meta_key_bucket_num)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(meta_block_info_set_.create(meta_bucket_num, "ObBlockInfoSet", "ObBlockSetNode", MTL_ID()))) {

@@ -3311,6 +3311,7 @@ public:
   }
   inline bool is_word_segment_column() const { return column_name_.prefix_match(OB_WORD_SEGMENT_COLUMN_NAME_PREFIX); }
   inline bool is_word_count_column() const { return column_name_.prefix_match(OB_WORD_COUNT_COLUMN_NAME_PREFIX); }
+  inline bool is_pos_list_column() const { return column_name_.prefix_match(OB_POS_LIST_COLUMN_NAME_PREFIX); }
   inline bool is_spatial_generated_column() const { return share::schema::ObSchemaUtils::is_spatial_generated_column(column_flags_); }
   inline bool is_multivalue_generated_column() const { return share::schema::ObSchemaUtils::is_multivalue_generated_column(column_flags_); }
   inline bool is_multivalue_generated_array_column() const { return share::schema::ObSchemaUtils::is_multivalue_generated_array_column(column_flags_); }

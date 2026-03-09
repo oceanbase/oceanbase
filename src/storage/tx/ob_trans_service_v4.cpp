@@ -1438,7 +1438,7 @@ int ObTransService::validate_snapshot_version_(const SCN snapshot,
 {
   int ret = OB_SUCCESS;
   const SCN ls_weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
-  if (is_tenant_sslog_ls(tenant_id_, ls.get_ls_id())) {
+  if (need_sslog_trans_service(tenant_id_, ls.get_ls_id())) {
     // only for sslog
     if (snapshot <= tx_version_mgr_for_sslog_.get_max_commit_ts(false)
         || snapshot <= tx_version_mgr_for_sslog_.get_max_read_ts()
@@ -1859,7 +1859,7 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
     //                                 +----------------------------------------------------------------+
     //
   }
-  const bool is_for_sslog = is_tenant_sslog_ls(tenant_id_, ls_id);
+  const bool is_for_sslog = need_sslog_trans_service(tenant_id_, ls_id);
 
   if (OB_FAIL(ret)) {
     // do nothing
@@ -2651,7 +2651,7 @@ int ObTransService::update_max_read_ts_(const uint64_t tenant_id,
                                         const SCN ts)
 {
   int ret = OB_SUCCESS;
-  if (is_tenant_sslog_ls(tenant_id, lsid)) {
+  if (need_sslog_trans_service(tenant_id, lsid)) {
     tx_version_mgr_for_sslog_.update_max_read_ts(ts);
     TRANS_LOG(TRACE, "update max read ts for sslog", K(tenant_id), K(ts), K(lsid));
   } else {

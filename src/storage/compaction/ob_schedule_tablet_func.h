@@ -29,7 +29,10 @@ struct ObScheduleTabletFunc : public ObBasicScheduleTabletFunc
     const int64_t loop_cnt = 0,
     const ObCompactionScheduleMode schedule_mode = COMPACTION_NORMAL_MODE);
   virtual ~ObScheduleTabletFunc() {}
-  int iterate_switch_tablet(storage::ObTabletHandle &tablet_handle, bool &can_merge); // should combine with destroy_tablet_status()
+  int iterate_switch_tablet(
+    storage::ObTabletHandle &tablet_handle,
+    bool &can_merge,
+    bool &need_schedule); // should combine with destroy_tablet_status()
   int schedule_tablet(
     storage::ObTabletHandle &tablet_handle,
     bool &tablet_merge_finish);

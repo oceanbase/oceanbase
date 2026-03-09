@@ -105,6 +105,9 @@ public:
 
   OB_UNIS_VERSION(1);
 public:
+  // =================== ATTENTION !!! ======================
+  // Add persisted value should consider ObSSUpdateTabletLog
+  // --------------------------------------------------------
   ObTabletFastIterAttr iter_attr_;
   int64_t ha_status_;
   // all sstable data occupy_size, include major sstable

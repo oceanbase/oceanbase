@@ -197,7 +197,7 @@ public:
     } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(
         io_device, fd, &info_base_, external_file_name,
         ObStorageAccessType::OB_STORAGE_ACCESS_READER, // for test
-        ObStorageIdMod::get_default_external_id_mod()))) {
+        ObStorageIdMod::get_default_external_id_mod(), false/*is_batch_write*/))) {
       OB_LOG(WARN, "failed to open with access type", KR(ret),
           K(external_file_name), K(read_buf_size), K(offset));
     } else if (OB_FAIL(ObBackupIoAdapter::get_file_size(io_device, fd, file_length))) {

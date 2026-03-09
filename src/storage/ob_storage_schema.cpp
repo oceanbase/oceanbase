@@ -2335,7 +2335,12 @@ const ObStorageColumnSchema *ObStorageSchema::get_column_schema(const int64_t co
   return found_col;
 }
 
-int ObStorageSchema::get_multi_version_column_descs(common::ObIArray<ObColDesc> &column_descs) const
+int ObStorageSchema::get_multi_version_column_descs(common::ObIArray<share::schema::ObColDesc> &column_descs) const
+{
+  return get_multi_version_column_descs(column_descs, !is_storage_index_table());
+}
+
+int ObStorageSchema::get_multi_version_column_descs(common::ObIArray<share::schema::ObColDesc> &column_descs, bool no_virtual) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -2365,7 +2370,7 @@ int ObStorageSchema::get_multi_version_column_descs(common::ObIArray<ObColDesc> 
     }
   } else if (OB_FAIL(get_mulit_version_rowkey_column_ids(column_descs))) { // add rowkey columns
     STORAGE_LOG(WARN, "Fail to get rowkey column descs", K(ret));
-  } else if (OB_FAIL(get_column_ids_without_rowkey(column_descs, !is_storage_index_table()))) { //add other columns
+  } else if (OB_FAIL(get_column_ids_without_rowkey(column_descs, no_virtual))) { //add other columns
     STORAGE_LOG(WARN, "Fail to get column descs without rowkey", K(ret));
   }
   return ret;
@@ -2398,6 +2403,7 @@ int ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema)
     minor_row_store_type_ = input_schema.get_minor_row_store_type();
     skip_index_level_ = input_schema.get_skip_index_level();
     has_ttl_definition_ = input_schema.has_ttl_definition();
+    was_compaction_ttl_ = input_schema.was_compaction_ttl();
   }
 
   return ret;
@@ -2469,11 +2475,15 @@ int ObStorageSchema::update_column_info(const share::schema::ObTableSchema& inpu
 {
   INIT_SUCC(ret);
 
+  int64_t store_column_cnt = 0, input_store_column_cnt = 0;
   if (!is_column_info_simplified()) {
     ret = OB_ERR_UNEXPECTED;
-    input_schema.get_table_id();
-    LOG_WARN("no need to update column info", K(is_column_info_simplified()), K(input_schema.get_table_id()),K(lbt()), K(input_schema), KPC(this));
-  } else if (get_column_count() > input_schema.get_column_count()) {
+    STORAGE_LOG(WARN, "no need to update column info", K(is_column_info_simplified()), K(input_schema.get_table_id()),K(lbt()), K(input_schema), KPC(this));
+  } else if (OB_FAIL(get_store_column_count(store_column_cnt, /* full_col */ true))) {
+    STORAGE_LOG(WARN, "failed to get store column count", K(ret));
+  } else if (OB_FAIL(input_schema.get_store_column_count(input_store_column_cnt, /* full_col */ true))) {
+    STORAGE_LOG(WARN, "failed to get input store column count", K(ret));
+  } else if (store_column_cnt > input_store_column_cnt) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "column count is greater than input schema", K(ret), K(get_column_count()), K(input_schema.get_column_count()));
   } else if (FALSE_IT(column_array_.reset())) {

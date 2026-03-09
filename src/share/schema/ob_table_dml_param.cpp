@@ -188,6 +188,15 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
       } else if (OB_FAIL(ob_write_string(allocator_, schema->get_parser_property_str(), fts_parser_properties_))) {
         LOG_WARN("fail to copy fts parser properties", K(ret), K(schema->get_parser_property_str()));
       }
+      if (OB_FAIL(ret)) {
+      } else if (schema->is_fts_index_aux() || schema->is_fts_doc_word_aux()) {
+        share::schema::ObFTSIndexParams fts_index_params;
+        if (OB_FAIL(schema->get_fts_params_from_index_params(fts_index_params))) {
+          LOG_WARN("fail to get fts index params from index params", K(ret), K(schema->get_index_params()));
+        } else {
+          fts_index_type_ = fts_index_params.fts_index_type_;
+        }
+      }
     } else if (schema->is_multivalue_index_aux()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < schema->get_column_count(); ++i) {
         const ObColumnSchemaV2 *column_schema = schema->get_column_schema_by_idx(i);

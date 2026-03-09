@@ -43,7 +43,8 @@ ObLSCompleteMigrationCtx::ObLSCompleteMigrationCtx()
     start_ts_(0),
     finish_ts_(0),
     rebuild_seq_(0),
-    chosen_src_()
+    chosen_src_(),
+    cost_static_(nullptr)
 {
 }
 
@@ -54,7 +55,8 @@ ObLSCompleteMigrationCtx::~ObLSCompleteMigrationCtx()
 bool ObLSCompleteMigrationCtx::is_valid() const
 {
   return arg_.is_valid() && !task_id_.is_invalid()
-      && tenant_id_ != 0 && tenant_id_ != OB_INVALID_ID;
+      && tenant_id_ != 0 && tenant_id_ != OB_INVALID_ID
+      && OB_NOT_NULL(cost_static_);
 }
 
 void ObLSCompleteMigrationCtx::reset()
@@ -66,6 +68,7 @@ void ObLSCompleteMigrationCtx::reset()
   finish_ts_ = 0;
   ObIHADagNetCtx::reset();
   chosen_src_.reset();
+  cost_static_ = nullptr;
 }
 
 int ObLSCompleteMigrationCtx::fill_comment(char *buf, const int64_t buf_len) const
@@ -109,7 +112,8 @@ ObLSCompleteMigrationParam::ObLSCompleteMigrationParam()
     rebuild_seq_(0),
     svr_rpc_proxy_(nullptr),
     storage_rpc_(nullptr),
-    chosen_src_()
+    chosen_src_(),
+    cost_static_(nullptr)
 {
 }
 
@@ -117,7 +121,8 @@ bool ObLSCompleteMigrationParam::is_valid() const
 {
   return arg_.is_valid()
       && !task_id_.is_invalid() && rebuild_seq_ >= 0
-      && OB_NOT_NULL(svr_rpc_proxy_) && OB_NOT_NULL(storage_rpc_);
+      && OB_NOT_NULL(svr_rpc_proxy_) && OB_NOT_NULL(storage_rpc_)
+      && OB_NOT_NULL(cost_static_);
 }
 
 void ObLSCompleteMigrationParam::reset()
@@ -129,13 +134,16 @@ void ObLSCompleteMigrationParam::reset()
   svr_rpc_proxy_ = nullptr;
   storage_rpc_ = nullptr;
   chosen_src_.reset();
+  cost_static_ = nullptr;
 }
 
 
 ObLSCompleteMigrationDagNet::ObLSCompleteMigrationDagNet()
     : ObIDagNet(ObDagNetType::DAG_NET_TYPE_COMPLETE_MIGARTION),
       is_inited_(false),
-      ctx_()
+      ctx_(),
+      svr_rpc_proxy_(nullptr),
+      storage_rpc_(nullptr)
 
 {
 }
@@ -162,6 +170,7 @@ int ObLSCompleteMigrationDagNet::init_by_param(const ObIDagInitParam *param)
     ctx_.task_id_ = init_param->task_id_;
     ctx_.rebuild_seq_ = init_param->rebuild_seq_;
     ctx_.chosen_src_ = init_param->chosen_src_;
+    ctx_.cost_static_ = init_param->cost_static_;
     if (OB_SUCCESS != init_param->result_) {
       if (OB_FAIL(ctx_.set_result(init_param->result_, false /*allow_retry*/))) {
         LOG_WARN("failed to set result", K(ret), KPC(init_param));
@@ -384,6 +393,7 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
 
     ctx_.finish_ts_ = ObTimeUtil::current_time();
     const int64_t cost_ts = ctx_.finish_ts_ - ctx_.start_ts_;
+    ctx_.cost_static_->complete_dag_net_cost_ = cost_ts;
     FLOG_INFO("finish ls complete migration dag net", "ls id", ctx_.arg_.ls_id_, "type", ctx_.arg_.type_, K(cost_ts));
   }
 
@@ -1371,6 +1381,7 @@ int ObWaitDataReadyTask::wait_log_sync_()
           LOG_WARN("failed to get end lsn", K(ret), KPC(ctx_));
         } else {
           const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
+          ctx_->cost_static_->wait_log_sync_cost_ = cost_ts;
           LOG_INFO("log is sync, stop wait_log_sync", "arg", ctx_->arg_, K(cost_ts));
         }
       } else if (is_need_rebuild) {
@@ -2561,23 +2572,8 @@ int ObWaitDataReadyTask::check_tablet_ready_(
       } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_handle), K(tablet_id));
-      } else if (tablet->is_empty_shell()) {
+      } else if (tablet->is_empty_shell() || tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
         max_minor_end_scn_ = MAX(max_minor_end_scn_, tablet->get_tablet_meta().get_max_replayed_scn());
-        break;
-      } else if (tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
-        ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-        if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
-          LOG_WARN("fail to fetch table store", K(ret));
-        } else {
-          const ObSSTableArray &minor_sstables = table_store_wrapper.get_member()->get_minor_sstables();
-          if (minor_sstables.empty()) {
-            max_minor_end_scn_ = MAX(max_minor_end_scn_, tablet->get_tablet_meta().get_max_replayed_scn());
-          } else {
-            max_minor_end_scn_ = MAX3(max_minor_end_scn_,
-                                     minor_sstables.get_boundary_table(true)->get_end_scn(),
-                                     tablet->get_tablet_meta().get_max_replayed_scn());
-          }
-        }
         break;
       } else {
         const int64_t current_ts = ObTimeUtility::current_time();

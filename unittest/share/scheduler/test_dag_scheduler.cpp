@@ -223,6 +223,14 @@ private:
   DISALLOW_COPY_AND_ASSIGN(TestHALowDag);
 };
 
+class TestHAHighDag : public TestDag
+{
+public:
+  TestHAHighDag() : TestDag(ObDagType::DAG_TYPE_INITIAL_COMPLETE_MIGRATION) {}
+private:
+  DISALLOW_COPY_AND_ASSIGN(TestHAHighDag);
+};
+
 class TestCompMidDag : public TestDag
 {
 public:
@@ -895,7 +903,7 @@ TEST_F(TestDagScheduler, test_priority)
   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag2, mul_task));
   EXPECT_EQ(OB_SUCCESS, mul_task->init(1, concurrency, finish_flag[1]));
   EXPECT_EQ(OB_SUCCESS, dag2->add_task(*mul_task));
-  TestCompLowDag *dag3 = NULL;
+  TestHAHighDag *dag3 = NULL;
   EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag3));
   EXPECT_EQ(OB_SUCCESS, dag3->init(3));
   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag3, inc_task));
@@ -941,7 +949,6 @@ TEST_F(TestDagScheduler, test_priority)
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_HA_LOW));
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_DDL));
 
-  dag3->set_priority(ObDagPrio::DAG_PRIO_HA_HIGH);
   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag3));
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_HA_HIGH));
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_HA_LOW));
@@ -1862,6 +1869,66 @@ TEST_F(TestDagScheduler, test_large_thread_cnt_2)
   scheduler->destroy();
 }
 */
+
+TEST_F(TestDagScheduler, test_cancel_task)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
+
+  int ret = OB_SUCCESS;
+  TestDag *dag = NULL;
+  int64_t counter = 1;
+  if (OB_FAIL(scheduler->alloc_dag(dag))) {
+    COMMON_LOG(WARN, "failed to alloc dag");
+  } else if (NULL == dag) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "dag is null", K(ret));
+  } else if (OB_FAIL(dag->init(1))) {
+    COMMON_LOG(WARN, "failed to init dag", K(ret));
+  } else {
+    TestAddTask *add_task = NULL;
+    TestMulTask *mul_task = NULL;
+    if (OB_FAIL(dag->alloc_task(mul_task))) {
+      COMMON_LOG(WARN, "failed to alloc task", K(ret));
+    } else if (NULL == mul_task) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "task is null", K(ret));
+    } else {
+      if (OB_FAIL(mul_task->init(&counter, 10 * 1000 * 1000))) {
+        COMMON_LOG(WARN, "failed to init add task", K(ret));
+      } else if (OB_FAIL(dag->alloc_task(add_task))) {
+        COMMON_LOG(WARN, "failed to alloc task", K(ret));
+      } else if (NULL == add_task) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "task is null", K(ret));
+      } else {
+        if (OB_FAIL(add_task->init(&counter, 1, 0, 0))) {
+          COMMON_LOG(WARN, "failed to init add task", K(ret));
+        } else if (OB_FAIL(mul_task->add_child(*add_task))) {
+          COMMON_LOG(WARN, "failed to add child", K(ret));
+        } else if (OB_FAIL(dag->add_task(*add_task))) {
+          COMMON_LOG(WARN, "failed to add task");
+        } else if (OB_FAIL(dag->add_task(*mul_task))) {
+          COMMON_LOG(WARN, "failed to add task", K(ret));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
+      //wait mul task running
+      while (true) {
+        if (ATOMIC_LOAD(&counter) == 2) {
+          break;
+        }
+      }
+      EXPECT_EQ(OB_SUCCESS, scheduler->cancel_task(dag, ObITask::TASK_TYPE_UT));
+      EXPECT_EQ(counter, 2);
+    }
+  }
+}
+
 }
 }
 

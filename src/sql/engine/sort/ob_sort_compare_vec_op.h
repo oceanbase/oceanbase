@@ -145,6 +145,21 @@ public:
   // compare function for external merge sort
   bool operator()(const SortVecOpChunk *l, const SortVecOpChunk *r);
   bool operator()(const Store_Row *r, ObEvalCtx &eval_ctx);
+  bool operator()(const Store_Row *l, const ObIArray<ObDatum> &r_datums)
+  {
+    ret_ = OB_NOT_IMPLEMENT;
+    return false;
+  }
+  bool operator()(const ObIArray<ObDatum> &l_datums, const Store_Row *r)
+  {
+    ret_ = OB_NOT_IMPLEMENT;
+    return false;
+  }
+  OB_INLINE int compare(const Store_Row *l, const ObIArray<ObDatum> &r_datums)
+  {
+    ret_ = OB_NOT_IMPLEMENT;
+    return 0;
+  }
   int with_ties_cmp(const Store_Row *r, ObEvalCtx &eval_ctx);
   int with_ties_cmp(const Store_Row *l, const Store_Row *r);
 
@@ -178,6 +193,21 @@ public:
   // compare function for external merge sort
   OB_INLINE bool operator()(const SortVecOpChunk *l, const SortVecOpChunk *r);
   OB_INLINE bool operator()(const Store_Row *r, ObEvalCtx &eval_ctx);
+  OB_INLINE bool operator()(const Store_Row *l, const ObIArray<ObDatum> &r_datums)
+  {
+    ret_ = OB_NOT_IMPLEMENT;
+    return false;
+  }
+  OB_INLINE bool operator()(const ObIArray<ObDatum> &l_datums, const Store_Row *r)
+  {
+    ret_ = OB_NOT_IMPLEMENT;
+    return false;
+  }
+  OB_INLINE int compare(const Store_Row *l, const ObIArray<ObDatum> &r_datums)
+  {
+    ret_ = OB_NOT_IMPLEMENT;
+    return 0;
+  }
   OB_INLINE int with_ties_cmp(const Store_Row *r, ObEvalCtx &eval_ctx);
   OB_INLINE int with_ties_cmp(const Store_Row *l, const Store_Row *r);
 
@@ -264,8 +294,23 @@ public:
   // compare function for external merge sort
   bool operator()(const SortVecOpChunk *l, const SortVecOpChunk *r);
   bool operator()(const Store_Row *r, ObEvalCtx &eval_ctx);
+  bool operator()(const Store_Row *l, const ObIArray<ObDatum> &r_datums)
+  {
+    ret_ = OB_NOT_IMPLEMENT;
+    return false;
+  }
+  bool operator()(const ObIArray<ObDatum> &l_datums, const Store_Row *r)
+  {
+    ret_ = OB_NOT_IMPLEMENT;
+    return false;
+  }
   int with_ties_cmp(const Store_Row *r, ObEvalCtx &eval_ctx);
   int with_ties_cmp(const Store_Row *l, const Store_Row *r);
+  OB_INLINE int compare(const Store_Row *l, const ObIArray<ObDatum> &r_datums)
+  {
+    ret_ = OB_NOT_IMPLEMENT;
+    return 0;
+  }
 
 protected:
   int compare(const Store_Row *l, const Store_Row *r, const RowMeta *row_meta);

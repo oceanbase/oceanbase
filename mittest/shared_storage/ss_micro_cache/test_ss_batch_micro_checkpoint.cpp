@@ -446,6 +446,7 @@ TEST_F(TestSSBatchMicroCheckpointTask, test_multi_times_ckpt)
   const int32_t max_micro_size = 8 * 1024;
   ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::add_micro_blocks(macro_block_cnt, block_size, p_micro_block_arr, up_micro_block_arr,
             1, true, min_micro_size, max_micro_size));
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   ASSERT_EQ(macro_block_cnt, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
   ASSERT_EQ(macro_block_cnt, cache_stat.phy_blk_stat().data_blk_used_cnt_);
   const int64_t total_add_micro_cnt = p_micro_block_arr.count() + up_micro_block_arr.count();

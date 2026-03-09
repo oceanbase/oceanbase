@@ -71,6 +71,10 @@ public:
       const share::SCN &change_version);
 
   int alloc_tablet_meta_version(const ObTabletMapKey &key, int64_t &tablet_meta_version);
+  int hook_tablet(
+      const ObTabletMapKey &key,
+      const char *buf,
+      const int64_t buf_len);
   int set_tablet_next_meta_version(const ObTabletMapKey &key, const int64_t next_meta_version);
 
 private:

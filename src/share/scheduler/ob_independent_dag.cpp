@@ -12,24 +12,83 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "ob_independent_dag.h"
+#include "storage/ddl/ob_ddl_dag_monitor_mgr.h"
+#include "storage/ddl/ob_ddl_dag_monitor_node.h"
 
 namespace oceanbase
 {
+namespace storage
+{
+using oceanbase::storage::ObDDLDagMonitorMgr;
+using oceanbase::storage::ObDDLDagMonitorNode;
+} // namespace storage
+
 namespace share
 {
 
 #define KTASK(task) KP(&task), "type", task.get_type(), "status", task.get_status(), "dag", task.get_dag()
 #define KTASK_PTR(task) KP(task), "type", task->get_type(), "status", task->get_status(), "dag", task->get_dag()
 
+ObITaskWithMonitor::~ObITaskWithMonitor()
+{
+  if (OB_NOT_NULL(monitor_info_)) {
+    monitor_info_->mark_finished();
+  }
+}
+
+int ObITaskWithMonitor::add_monitor_info()
+{
+  int ret = OB_SUCCESS;
+  ObIDag *dag = get_dag();
+  if (OB_ISNULL(dag) || !dag->is_independent()) {
+    // not an independent dag task, ignore
+  } else {
+    ObIndependentDag *ind_dag = static_cast<ObIndependentDag *>(dag);
+    storage::ObDDLDagMonitorNode *node = (OB_NOT_NULL(ind_dag)) ? ind_dag->get_monitor_node() : nullptr;
+    if (OB_ISNULL(node)) {
+      // monitor disabled or not initialized, ignore
+    } else if (OB_FAIL(inner_add_monitor_info(*node))) {
+      COMMON_LOG(WARN, "inner add monitor info failed", K(ret), KP(this));
+    }
+  }
+  return ret;
+}
+
+int ObITaskWithMonitor::inner_add_monitor_info(storage::ObDDLDagMonitorNode &node)
+{
+  int ret = OB_SUCCESS;
+  storage::ObDDLDagMonitorInfo *info = nullptr;
+  if (OB_FAIL(node.alloc_monitor_info(this, info))) {
+    COMMON_LOG(WARN, "alloc default monitor info failed", K(ret));
+  } else {
+    monitor_info_ = info;
+  }
+  return ret;
+}
+
+int ObITaskWithMonitor::update_monitor_info(const int ret_code, const int64_t exec_time_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(monitor_info_)) {
+    monitor_info_->record_execute_stat(ret_code, exec_time_us);
+  }
+  return ret;
+}
+
 ObIndependentDag::ObIndependentDag(const ObDagType::ObDagTypeEnum type)
   : ObIDag(type),
-    compat_mode_(THIS_WORKER.get_compatibility_mode())
+    compat_mode_(THIS_WORKER.get_compatibility_mode()),
+    monitor_node_(nullptr)
 {
   is_independent_ = true;
 }
 
 ObIndependentDag::~ObIndependentDag()
 {
+  if (OB_NOT_NULL(monitor_node_)) {
+    monitor_node_->mark_finished();
+    monitor_node_ = nullptr;
+  }
   reset();
 }
 
@@ -89,6 +148,8 @@ int ObIndependentDag::add_task(ObITask &task)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "dag is not inited", K(ret));
+  } else if (OB_NOT_NULL(monitor_node_) && OB_FAIL(task.add_monitor_info())) {
+    COMMON_LOG(WARN, "add monitor info failed", K(ret), K(task));
   } else {
     // need protected by lock_, otherwise task may be scheduled before print log
     lib::ObMutexGuard guard(lock_);
@@ -110,6 +171,21 @@ int ObIndependentDag::add_task(ObITask &task)
   return ret;
 }
 
+int ObIndependentDag::init_monitor_node()
+{
+  int ret = OB_SUCCESS;
+  monitor_node_ = nullptr;
+  storage::ObDDLDagMonitorMgr *mgr = MTL(storage::ObDDLDagMonitorMgr*);
+  if (OB_ISNULL(mgr)) {
+    // In some scenarios (e.g. unit tests), independent dag monitor module may not be initialized.
+    // Monitoring is best-effort; do not fail DAG initialization if monitor is unavailable.
+    COMMON_LOG(INFO, "independent dag monitor mgr is null, disable monitor for this dag", KP(this));
+  } else if (OB_FAIL(mgr->register_node(this /*dag_ptr*/, get_dag_id(), monitor_node_))) {
+    COMMON_LOG(WARN, "failed to register independent dag monitor node", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 int ObIndependentDag::batch_add_task(const ObIArray<ObITask *> &task_array)
 {
   int ret = OB_SUCCESS;
@@ -118,9 +194,21 @@ int ObIndependentDag::batch_add_task(const ObIArray<ObITask *> &task_array)
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "dag is not inited", K(ret));
   } else {
+    if (OB_NOT_NULL(monitor_node_)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < task_array.count(); ++i) {
+        ObITask *task = task_array.at(i);
+        if (OB_ISNULL(task)) {
+          ret = OB_ERR_UNEXPECTED;
+          COMMON_LOG(WARN, "task is null", K(ret), K(i), KP(task));
+        } else if (OB_FAIL(task->add_monitor_info())) {
+          COMMON_LOG(WARN, "add monitor info failed", K(ret), KPC(task));
+        }
+      }
+    }
     // after add task, the task maybe schedule and destroy immediately, so print log first
     // COMMON_LOG(INFO, "independent dag batch add task", K(ret), K(task_array.count()), K(task_array));
-    if (OB_FAIL(ObIDag::batch_add_task(task_array))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObIDag::batch_add_task(task_array))) {
       LOG_WARN("batch add task failed", K(ret));
     } else {
       ObThreadCondGuard guard(cond_);
@@ -149,10 +237,6 @@ int ObIndependentDag::init(
             || (OB_NOT_NULL(dag_id) && OB_UNLIKELY(!dag_id->is_valid()))) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid args", K(ret), KP(param), KPC(dag_id));
-  } else if (OB_FAIL(init_by_param(param))) {
-    COMMON_LOG(WARN, "failed to init dag", K(ret));
-  } else if (OB_FAIL(create_first_task())) {
-    COMMON_LOG(WARN, "failed to create first task", K(ret), KPC(this));
   } else if (OB_NOT_NULL(dag_id)) {
     cur_dag_id.set(*dag_id);
   } else if (inherit_trace_id) {
@@ -171,6 +255,12 @@ int ObIndependentDag::init(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(set_dag_id(cur_dag_id))) {
     COMMON_LOG(WARN, "failed to set dag id", K(ret), K(cur_dag_id));
+  } else if (OB_FAIL(init_monitor_node())) {
+    LOG_WARN("init monitor node failed", K(ret));
+  } else if (OB_FAIL(init_by_param(param))) {
+    COMMON_LOG(WARN, "failed to init dag", K(ret));
+  } else if (OB_FAIL(create_first_task())) {
+    COMMON_LOG(WARN, "failed to create first task", K(ret), KPC(this));
   } else {
     set_dag_status(ObIDag::DAG_STATUS_NODE_RUNNING);
   }

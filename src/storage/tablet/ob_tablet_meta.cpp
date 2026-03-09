@@ -29,6 +29,7 @@ const SCN ObTabletMeta::INVALID_CREATE_SCN = SCN::min_scn();
 // multi source transaction leader has no log scn when first time register
 // create tablet buffer, so the init create scn for tablet could be -1.
 const SCN ObTabletMeta::INIT_CREATE_SCN = SCN::invalid_scn();
+const SCN ObTabletMeta::INIT_MIN_SS_TABLET_VERSION = SCN::min_scn();
 
 ObTabletMeta::ObTabletMeta()
   : version_(TABLET_META_VERSION),
@@ -54,7 +55,7 @@ ObTabletMeta::ObTabletMeta()
     max_serialized_medium_scn_(0),
     ddl_commit_scn_(SCN::min_scn()),
     mds_checkpoint_scn_(),
-    min_ss_tablet_version_(SCN::min_scn()),
+    min_ss_tablet_version_(INIT_MIN_SS_TABLET_VERSION),
     transfer_info_(),
     extra_medium_info_(),
     last_persisted_committed_tablet_status_(),
@@ -152,7 +153,7 @@ int ObTabletMeta::init_for_share_storage(const ObTabletMeta &old_tablet_meta)
       transfer_info_ = old_tablet_meta.transfer_info_;
     }
     last_persisted_committed_tablet_status_.reset();
-    min_ss_tablet_version_.set_min();
+    min_ss_tablet_version_ = INIT_MIN_SS_TABLET_VERSION;
     min_ss_flush_op_id_ = 0;
   }
 
@@ -263,7 +264,7 @@ int ObTabletMeta::init(
     report_status_.cur_report_version_ = snapshot_version;
     report_status_.data_checksum_ = 0;
     report_status_.row_count_ = 0;
-    min_ss_tablet_version_.set_min();
+    min_ss_tablet_version_ = INIT_MIN_SS_TABLET_VERSION;
     min_ss_flush_op_id_ = 0;
     if (has_cs_replica) { // cs replica is visable when doing offline ddl
       if (need_generate_cs_replica_cg_array) {
@@ -730,7 +731,7 @@ void ObTabletMeta::reset()
   split_info_.reset();
   inc_major_snapshot_ = 0;
   has_merged_with_mds_info_ = false;
-  min_ss_tablet_version_.set_min();
+  min_ss_tablet_version_ = INIT_MIN_SS_TABLET_VERSION;
   min_ss_flush_op_id_ = 0;
   is_inited_ = false;
 }
@@ -1248,6 +1249,11 @@ bool ObTabletMeta::is_cs_replica_global_visible_and_replay_row_store() const
 bool ObTabletMeta::is_cs_replica_global_visible_and_replay_column_store() const
 {
   return CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN == ddl_replay_status_;
+}
+
+bool ObTabletMeta::is_min_ss_tablet_version_initial() const
+{
+  return INIT_MIN_SS_TABLET_VERSION == min_ss_tablet_version_;
 }
 
 ObMigrationTabletParam::ObMigrationTabletParam()

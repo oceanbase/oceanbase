@@ -17,6 +17,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "storage/test_dml_common.h"
+
 #define protected public
 #define private public
 
@@ -24,7 +26,8 @@
 #include "storage/schema_utils.h"
 #include "storage/mock_ob_log_handler.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "storage/test_dml_common.h"
+#include "storage/tablet/ob_tablet_persister.h"
+
 
 namespace oceanbase
 {

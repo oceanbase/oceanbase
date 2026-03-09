@@ -5137,22 +5137,12 @@ int ObStringExprOperator::convert_result_collation(const ObExprResType &result_t
 void ObStringExprOperator::calc_temporal_format_result_length(ObExprResType &type,
                                                              const ObExprResType &format) const
 {
-  const int64_t VARCHAR_RES_MAX_PARAM_LENGTH = 17;
-  const int64_t TEXT_RES_MAX_PARAM_LENGTH = 728;
   const int64_t MAX_VARCHAR_BUFFER_SIZE = 256;
   if (ob_is_string_tc(format.get_type())) {
     // consistent with Mysql, result_length / format_length = 30
     const int64_t ratio = 30;
-    if (format.get_length() <= VARCHAR_RES_MAX_PARAM_LENGTH) {
-      type.set_varchar();
-      type.set_length(format.get_length() * ratio);
-    } else if (format.get_length() < TEXT_RES_MAX_PARAM_LENGTH) {
-      type.set_type(ObTextType);
-      type.set_length(OB_MAX_TEXT_LENGTH);
-    } else {
-      type.set_type(ObLongTextType);
-      type.set_length(OB_MAX_LONGTEXT_LENGTH);
-    }
+    type.set_varchar();
+    type.set_length(MIN(format.get_length() * ratio, OB_MAX_VARCHAR_LENGTH));
   } else if (ob_is_text_tc(format.get_type())) {
     type.set_type(ObTinyTextType == format.get_type() ? ObTextType : ObLongTextType);
     type.set_length(ObTextType == type.get_type() ? OB_MAX_TEXT_LENGTH : OB_MAX_LONGTEXT_LENGTH);

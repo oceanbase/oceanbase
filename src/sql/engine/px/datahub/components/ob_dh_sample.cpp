@@ -435,6 +435,7 @@ int ObDynamicSamplePieceMsgCtx::build_whole_msg(ObDynamicSampleWholeMsg &whole_m
   const ObPhysicalPlanCtx *plan_ctx = NULL;
   const ObPhysicalPlan *phy_plan = nullptr;
   int64_t ddl_task_id = 0;
+  bool is_update = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
@@ -481,7 +482,7 @@ int ObDynamicSamplePieceMsgCtx::build_whole_msg(ObDynamicSampleWholeMsg &whole_m
         } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::set_inner_sql_slice_info(ddl_task_id, ddl_slice_info))) {
           LOG_WARN("fail to set vec async task slice into", K(ret), K(ddl_task_id), K(ddl_slice_info));
         }
-      } else if (OB_FAIL(rootserver::ObDDLTaskRecordOperator::get_or_insert_schedule_info(tenant_id_, ddl_task_id, exec_ctx_.get_allocator(), ddl_slice_info, is_idempotent_mode))) {
+      } else if (OB_FAIL(rootserver::ObDDLTaskRecordOperator::get_or_insert_schedule_info(tenant_id_, ddl_task_id, exec_ctx_.get_allocator(), ddl_slice_info, is_idempotent_mode, is_update))) {
         LOG_WARN("insert slice info failed", K(ret), K(tenant_id_), K(ddl_task_id), K(ddl_slice_info));
       } else if (is_idempotent_mode) {
         if (OB_UNLIKELY(!ddl_slice_info.is_valid())) {

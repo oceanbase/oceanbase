@@ -18,7 +18,9 @@
 #include "storage/fts/dict/ob_ft_dict.h"
 #include "storage/fts/dict/ob_ft_dict_def.h"
 #include "storage/fts/ik/ob_ik_processor.h"
-#include "plugin/interface/ob_plugin_ftparser_intf.h"
+#include "storage/fts/ik/ob_ik_arbitrator.h"
+#include "storage/fts/ob_i_ft_parser.h"
+#include "share/rc/ob_tenant_base.h"
 
 #include <cstdint>
 namespace oceanbase
@@ -27,23 +29,27 @@ namespace storage
 {
 class ObFTDictHub;
 
-class ObIKFTParser final : public plugin::ObITokenIterator
+class ObIKFTParser final : public ObIFTParser
 {
 public:
-  ObIKFTParser(ObIAllocator &allocator, ObFTDictHub *hub)
-      : allocator_(allocator),
-        is_inited_(false),
+  ObIKFTParser(ObIAllocator &metadata_alloc, ObFTDictHub *hub)
+      : is_inited_(false),
+        metadata_alloc_(metadata_alloc),
         coll_type_(ObCollationType::CS_TYPE_INVALID),
         ctx_(nullptr),
         hub_(hub),
-        segmenters_(allocator_),
-        cache_main_(allocator),
-        cache_quan_(allocator),
-        cache_stop_(allocator),
+        segmenters_(metadata_alloc),
+        cache_main_(metadata_alloc),
+        cache_quan_(metadata_alloc),
+        cache_stop_(metadata_alloc),
         dict_main_(nullptr),
         dict_quan_(nullptr),
-        dict_stop_(nullptr)
+        dict_stop_(nullptr),
+        arb_(),
+        scratch_alloc_()
   {
+    const int64_t tenant_id = MTL_ID() == OB_INVALID_TENANT_ID ? OB_SERVER_TENANT_ID : MTL_ID();
+    scratch_alloc_.set_attr(common::ObMemAttr(tenant_id, "ft_segment_data"));
   }
 
   virtual ~ObIKFTParser() { reset(); }
@@ -54,6 +60,8 @@ public:
                      int64_t &word_len,
                      int64_t &char_cnt,
                      int64_t &word_freq) override;
+
+  virtual int reuse_parser(const char *fulltext, const int64_t fulltext_len) override;
 
   VIRTUAL_TO_STRING_KV(K(is_inited_));
 
@@ -85,9 +93,8 @@ private:
                             ObIFTDict *&dict);
 
 private:
-  static constexpr int SEGMENT_LIMIT = 1000;
-  ObIAllocator &allocator_;
   bool is_inited_;
+  ObIAllocator &metadata_alloc_;
 
   ObCollationType coll_type_;
   TokenizeContext *ctx_;
@@ -102,6 +109,8 @@ private:
   ObIFTDict *dict_main_;
   ObIFTDict *dict_quan_;
   ObIFTDict *dict_stop_;
+  ObIKArbitrator arb_;
+  ObArenaAllocator scratch_alloc_;
 
   DISABLE_COPY_ASSIGN(ObIKFTParser);
 };
@@ -116,7 +125,7 @@ public:
   virtual int segment(plugin::ObFTParserParam *param, plugin::ObITokenIterator *&iter) const override;
   virtual void free_token_iter(plugin::ObFTParserParam *param,
                                plugin::ObITokenIterator *&iter) const override;
-  virtual int get_add_word_flag(ObAddWordFlag &flag) const override;
+  virtual int get_add_word_flag(ObProcessTokenFlag &flag) const override;
   OB_INLINE void reset() { is_inited_ = false; }
 
 private:

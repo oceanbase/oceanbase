@@ -3823,6 +3823,11 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
           LOG_WARN("resolve sample clause failed", K(ret));
         } else { }
       }
+      if (OB_SUCC(ret) && NULL == table_item->sample_info_) {
+        if (OB_FAIL(generate_ddl_sample_info_if_needed(*table_item))) {
+          LOG_WARN("failed to generate ddl sample info", K(ret));
+        }
+      }
       //resolve flashback query node
       if (OB_SUCCESS == ret && time_node != NULL) {
         if (OB_FAIL(resolve_flashback_query_node(time_node, table_item))) {
@@ -14313,6 +14318,40 @@ int ObDMLResolver::resolve_sample_clause(const ParseNode *sample_node,
   return ret;
 }
 
+int ObDMLResolver::generate_ddl_sample_info_if_needed(TableItem &table_item)
+{
+  int ret = OB_SUCCESS;
+  if (stmt_->is_select_stmt() &&
+      session_info_->get_ddl_info().is_ddl() &&
+      params_.resolver_scope_stmt_type_ == T_INSERT &&
+      !session_info_->get_ddl_info().is_heap_table_ddl()) {
+    void *buf = allocator_->alloc(sizeof(SampleInfo));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for sample info", K(ret));
+    } else {
+      SampleInfo *sample_info = new(buf) SampleInfo();
+      sample_info->method_ = SampleInfo::SampleMethod::DDL_BLOCK_SAMPLE;
+      sample_info->scope_ = SampleInfo::SAMPLE_ALL_DATA;
+      int64_t px_object_sample_rate = 0;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+      if (tenant_config.is_valid()) {
+        px_object_sample_rate = tenant_config->_px_object_sampling;
+      }
+      sample_info->percent_ = (double)px_object_sample_rate / 1000;
+      sample_info->table_id_ = table_item.table_id_;
+      if (session_info_->get_ddl_info().is_partition_local_ddl()) {
+        sample_info->method_ = SampleInfo::SampleMethod::HYBRID_SAMPLE;
+        if (sample_info->percent_ < 1) {
+          sample_info->percent_ = 1;
+        }
+      }
+      table_item.sample_info_ = sample_info;
+    }
+  }
+  return ret;
+}
+
 int ObDMLResolver::resolve_transpose_table(
     const ParseNode &parse_tree,
     TableItem *&table_item)
@@ -18484,23 +18523,33 @@ int ObDMLResolver::resolve_table_relation_in_hint(const ParseNode &table_node,
                                                   ObTableInHint &table_in_hint)
 {
   int ret = OB_SUCCESS;
-  bool is_db_explicit = false;
+  int tmp_ret = OB_SUCCESS;
   table_in_hint.reset();
   ObString catalog_name;
+  uint64_t catalog_id = OB_INTERNAL_CATALOG_ID;
+  bool is_db_explicit = false;
+  bool is_org = true;
+  bool is_oracle_sys_view = false;
   UNUSED(catalog_name);
   if (OB_UNLIKELY(T_RELATION_FACTOR_IN_HINT != table_node.type_ || 2 != table_node.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table relation node.", K(ret), K(get_type_name(table_node.type_)), K(table_node.num_child_));
   } else if (OB_FAIL(resolve_qb_name_node(table_node.children_[1], table_in_hint.qb_name_))) {
     LOG_WARN("failed to resolve qb name node.", K(ret));
-  } else if (OB_FAIL(resolve_table_relation_node_v2(table_node.children_[0],
-                                                    table_in_hint.table_name_,
-                                                    table_in_hint.db_name_,
-                                                    catalog_name,
-                                                    is_db_explicit,
-                                                    true,
-                                                    false))) {
-    LOG_WARN("fail to resolve table relation node", K(ret));
+  } else if (OB_FAIL(resolve_db_and_catalog_info(table_node.children_[0],
+                                                  table_in_hint.db_name_,
+                                                  catalog_name,
+                                                  catalog_id,
+                                                  is_oracle_sys_view,
+                                                  NULL,
+                                                  is_db_explicit,
+                                                  is_org))){
+    LOG_WARN("fail to resolve catalog and db information", K(ret));
+  } else if (OB_TMP_FAIL(resolve_tablename_info(table_node.children_[0], table_in_hint.table_name_))) {
+    if(OB_ERR_TOO_LONG_IDENT != tmp_ret && OB_WRONG_TABLE_NAME != tmp_ret){
+      ret = tmp_ret;
+      LOG_WARN("fail to resolve tablename information", K(ret));
+    }
   }
   return ret;
 }

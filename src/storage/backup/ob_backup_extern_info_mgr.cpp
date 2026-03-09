@@ -416,7 +416,8 @@ int ObExternTabletMetaWriter::prepare_backup_file_(const int64_t file_id)
                                                 backup_set_dest_.get_storage_info(),
                                                 backup_path.get_obstr(),
                                                 access_type,
-                                                mod))) {
+                                                mod,
+                                                false/*is_batch_write*/))) {
     LOG_WARN("failed to open with access type", K(ret), K(backup_set_dest_), K(backup_path));
   } else if (OB_FAIL(file_write_ctx_.open(data_file_size, io_fd_, *dev_handle_, *bandwidth_throttle_))) {
     LOG_WARN("failed to open file write ctx", K(ret), K_(io_fd), K(backup_path), K(data_file_size), K(file_id));

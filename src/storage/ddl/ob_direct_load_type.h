@@ -34,7 +34,6 @@ enum ObDirectLoadType {
   DIRECT_LOAD_INCREMENTAL_MAJOR = 10,
   DIRECT_LOAD_MAX
 };
-/* TODO@zhuoran.zzr wait to set as newest master version*/
 static int64_t DDL_IDEM_DATA_FORMAT_VERSION = DATA_VERSION_4_5_0_0;
 static int64_t DDL_TABLET_BUCKET_NUM = 1007;
 static int64_t DDL_SLICE_BUCKET_NUM = 1007;

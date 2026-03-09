@@ -14,6 +14,7 @@
 #include "ob_schema_struct.h"
 #include "share/ob_primary_zone_util.h"
 #include "share/inner_table/ob_sslog_table_schema.h"
+#include "share/inner_table/ob_tiered_metadata_store_schema.h"
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/code_generator/ob_expr_generator_impl.h"
@@ -21,6 +22,7 @@
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/engine/cmd/ob_interval_partition_utils.h"
+#include "share/ob_fts_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -313,6 +315,11 @@ int ObSysTableChecker::init_tenant_space_table_id_map()
     } else {
       tenant_space_sys_table_num_++;
     }
+    if (FAILEDx(tenant_space_table_id_map_.set_refactored(OB_ALL_TIERED_METADATA_STORE_TID))) {
+      LOG_WARN("fail to set tenant space table_id", K(ret));
+    } else {
+      tenant_space_sys_table_num_++;
+    }
   }
   return ret;
 }
@@ -320,15 +327,17 @@ int ObSysTableChecker::init_tenant_space_table_id_map()
 int ObSysTableChecker::init_sys_table_name_map()
 {
   int ret = OB_SUCCESS;
-  const schema_create_func sslog_table_schema_creators []
-      = { &ObSSlogTableSchema::all_sslog_table_schema, NULL};
+  const schema_create_func hard_code_table_schema_creators []
+      = { &ObSSlogTableSchema::all_sslog_table_schema,
+          &ObTieredMetadataStoreTableSchema::all_tiered_metadata_store_schema,
+          NULL};
   const schema_create_func all_core_table_schema_creator[]
       = { &share::ObInnerTableSchema::all_core_table_schema, NULL};
   const schema_create_func *creator_ptr_array[] = {
     all_core_table_schema_creator, share::core_table_schema_creators,
     share::sys_table_schema_creators, share::virtual_table_schema_creators,
     share::virtual_table_index_schema_creators, share::sys_view_schema_creators,
-    sslog_table_schema_creators, NULL };
+    hard_code_table_schema_creators, NULL };
 
   ObTableSchema table_schema;
   ObNameCaseMode mode = OB_ORIGIN_AND_INSENSITIVE;
@@ -340,8 +349,8 @@ int ObSysTableChecker::init_sys_table_name_map()
       table_schema.reset();
       if (OB_FAIL((*creator_ptr)(table_schema))) {
         LOG_WARN("create table schema failed", K(ret));
-      } else if (is_sslog_table(table_schema.get_table_id()) && !GCTX.is_shared_storage_mode()) {
-        LOG_INFO("not shared storage mode, skip sslog table", K(table_schema));
+      } else if (!GCTX.is_shared_storage_mode() && is_ss_special_table(table_schema.get_table_id())) {
+        LOG_INFO("not shared storage mode, skip ss special table", K(table_schema));
       } else if (OB_FAIL(ob_write_string(table_schema.get_table_name(), table_name))) {
         LOG_WARN("fail to write table name", K(ret), K(table_schema));
       } else {

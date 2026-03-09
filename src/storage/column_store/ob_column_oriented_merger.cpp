@@ -450,6 +450,30 @@ int ObCOMergeLogBuilder::handle_single_iter_end(
   return ret;
 }
 
+int ObCOMergeLogBuilder::get_major_sstable_merge_iters_for_check(common::ObIArray<ObPartitionMergeIter *> &iters)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObCOMergeLogBuilder not init", K(ret));
+  } else if (OB_ISNULL(majors_merge_iter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null majors_merge_iter_", K(ret));
+  } else {
+    const MERGE_ITER_ARRAY &inner_iters = majors_merge_iter_->get_merge_iters();
+    for (int64_t i = 0; OB_SUCC(ret) && i < inner_iters.count(); ++i) {
+      ObPartitionMergeIter *it = inner_iters.at(i);
+      if (OB_ISNULL(it)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null major iter", K(ret), K(i), K(inner_iters.count()));
+      } else if (OB_FAIL(iters.push_back(it))) {
+        LOG_WARN("failed to push back major iter", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObCOMergeLogBuilder::compare(
     const blocksstable::ObDatumRow &left,
     ObPartitionMergeIter &row_store_iter,

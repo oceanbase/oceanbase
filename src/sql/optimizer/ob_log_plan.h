@@ -434,6 +434,9 @@ public:
     return append(info, optimizer_context_.get_table_partition_info());
   }
 
+  int check_has_column_store_only_route_policy(bool &has_column_store_only) const;
+  int check_has_column_store_only_route_policy_rec(ObLogicalOperator *op, bool &has_column_store_only) const;
+
   int remove_duplicate_constraint(ObLocationConstraintContext &location_constraint,
                                   ObSqlCtx &sql_ctx) const;
   int remove_duplicate_base_table_constraint(ObLocationConstraintContext &location_constraint) const;

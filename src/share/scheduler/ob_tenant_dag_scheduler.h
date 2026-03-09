@@ -345,6 +345,12 @@ public:
     TASK_TYPE_BACKUP_VALIDATE_BASIC = 183,
     TASK_TYPE_BACKUP_VALIDATE_BACKUPSET_PHYSICAL = 184,
     TASK_TYPE_BACKUP_VALIDATE_ARCHIVE_PIECE_PHYSICAL = 185,
+    TASK_TYPE_DDL_FTS_SAMPLE_TASK = 186,
+    TASK_TYPE_DDL_MERGE_SORT_PREPARE_TASK = 187,
+    TASK_TYPE_DDL_MERGE_SORT_TASK = 188,
+    TASK_TYPE_DDL_MERGE_SORT_WRITE_TASK = 189,
+    TASK_TYPE_SS_PARALLEL_CREATE_TABLETS_TASK = 190,
+    TASK_TYPE_SS_PHYSICAL_CREATE_TABLETS_TASK = 191,
     TASK_TYPE_MAX,
   };
 
@@ -410,9 +416,12 @@ public:
   int generate_next_task();
   virtual int post_generate_next_task(); // genearte task after task process successfully, without inherit children nodes
   virtual int64_t get_sub_task_id() const { return 0; }
+  int cancel_task();
   virtual void task_debug_info_to_string(char *buf, const int64_t buf_len, int64_t &pos) const { BUF_PRINTF("Impl for task info"); }
   virtual int reset_status_for_suspend() { return common::OB_SUCCESS; }
   int copy_children_to(ObITask &next_task) const;
+  virtual int add_monitor_info() { return common::OB_SUCCESS; } // for independent dag task
+  virtual int update_monitor_info(const int ret_code, const int64_t exec_time_us) { UNUSEDx(ret_code, exec_time_us); return common::OB_SUCCESS; }
   static const char *get_task_status_str(enum ObITaskStatus status);
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(type), K_(status), K_(dag));
@@ -686,6 +695,7 @@ public:
   virtual lib::Worker::CompatMode get_compat_mode() const = 0;
   virtual uint64_t get_consumer_group_id() const = 0;
   int remove_task(ObITask &task);
+  int cancel_task(const ObITask::ObITaskType &type);
 protected:
   void inc_running_task_cnt() { ++running_task_cnt_; }
   void dec_running_task_cnt() { --running_task_cnt_; }
@@ -1194,12 +1204,10 @@ public:
   int64_t get_running_task_cnt();
   int set_thread_score(const int64_t score, int64_t &old_val, int64_t &new_val);
   bool try_switch(ObTenantDagWorker &worker);
+  int cancel_task(const ObIDag &dag, const ObITask::ObITaskType &type);
+
   void adapt_window_thread_cnt(); // only for DAG_PRIO_COMPACTION_LOW
 private:
-  OB_INLINE bool is_waiting_dag_type(ObDagType::ObDagTypeEnum dag_type)
-  { // will add into waiting dag list in add_dag() func
-    return false;
-  }
   OB_INLINE bool is_mini_compaction_dag(ObDagType::ObDagTypeEnum dag_type) const
   {
     return ObDagType::DAG_TYPE_MINI_MERGE == dag_type;
@@ -1212,7 +1220,8 @@ private:
   {
     return is_mini_compaction_dag(dag_type) ||
            is_minor_compaction_dag(dag_type) ||
-           ObDagType::DAG_TYPE_CO_MERGE_PREPARE == dag_type; // add co prepare dag to rank list first
+           ObDagType::DAG_TYPE_CO_MERGE_PREPARE == dag_type ||
+           ObDagType::DAG_TYPE_MAJOR_MERGE == dag_type;
   }
   OB_INLINE bool is_compaction_dag_prio() const
   {
@@ -1242,11 +1251,6 @@ private:
   int schedule_dag_(ObIDag &dag, bool &move_dag_to_waiting_list);
   int pop_task_from_ready_list_(ObITask *&task);
   int rank_compaction_dags_();
-  int batch_move_compaction_dags_(const int64_t batch_size);
-  bool check_need_compaction_rank_() const;
-  int do_rank_compaction_dags_(
-    const int64_t batch_size,
-    common::ObSEArray<compaction::ObTabletMergeDag *, 32> &rank_dags);
   int generate_next_dag_(ObIDag &dag);
   int finish_dag_(
     const ObIDag::ObDagStatus status,
@@ -1441,6 +1445,8 @@ public:
   }
   // for unittest
   int get_first_dag_net(ObIDagNet *&dag_net);
+  int cancel_task(const ObIDag *dag, const ObITask::ObITaskType &type);
+
   common::ObIAllocator &get_independent_allocator() { return independent_mem_context_->get_malloc_allocator(); }
 public:
   template<typename T>

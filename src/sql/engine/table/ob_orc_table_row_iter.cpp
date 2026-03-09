@@ -20,6 +20,56 @@ using namespace share::schema;
 using namespace common;
 using namespace share;
 namespace sql {
+namespace
+{
+int normalize_position_to_include_index(const int64_t column_pos,
+                                        const orc::Type &root_type,
+                                        uint64_t &field_index)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(column_pos <= 0 || root_type.getKind() != orc::TypeKind::STRUCT
+                  || column_pos > static_cast<int64_t>(root_type.getSubtypeCount()))) {
+    ret = OB_ERR_INVALID_COLUMN_ID;
+    LOG_WARN("column position is invalid", K(ret), K(column_pos), K(root_type.getSubtypeCount()));
+  } else {
+    field_index = static_cast<uint64_t>(column_pos - 1);
+  }
+  return ret;
+}
+
+int build_row_reader_options(const sql::ColumnIndexType column_index_type,
+                             const std::list<uint64_t> &include_columns,
+                             const orc::Type &root_type,
+                             const bool is_hive_lake_table,
+                             orc::RowReaderOptions &row_reader_options)
+{
+  int ret = OB_SUCCESS;
+  if (column_index_type == sql::ColumnIndexType::POSITION) {
+    row_reader_options.include(include_columns);
+  } else {
+    std::list<uint64_t> filtered_type_ids;
+    const int64_t type_id_limit = static_cast<int64_t>(root_type.getMaximumColumnId()) + 1;
+    std::list<uint64_t>::const_iterator it;
+    for (it = include_columns.begin(); OB_SUCC(ret) && it != include_columns.end(); ++it) {
+      const int64_t type_id = static_cast<int64_t>(*it);
+      if (is_hive_lake_table) {
+        if (type_id >= 0 && type_id < type_id_limit) {
+          filtered_type_ids.push_back(*it);
+        }
+      } else if (OB_UNLIKELY(type_id < 0 || type_id >= type_id_limit)) {
+        ret = OB_ERR_INVALID_COLUMN_ID;
+        LOG_WARN("invalid orc type id", K(ret), K(type_id), K(type_id_limit));
+      } else {
+        filtered_type_ids.push_back(*it);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      row_reader_options.includeTypes(filtered_type_ids);
+    }
+  }
+  return ret;
+}
+} // namespace
 
 int ObOrcTableRowIterator::to_dot_column_path(ObIArray<ObString> &col_names, ObString &path)
 {
@@ -94,7 +144,16 @@ int ObOrcTableRowIterator::compute_column_id_by_index_type(int64_t index, int64_
       }
       break;
     }
-    case sql::ColumnIndexType::POSITION:
+    case sql::ColumnIndexType::POSITION: {
+      const int64_t column_pos = file_column_exprs_.at(index)->extra_;
+      uint64_t field_index = 0;
+      const orc::Type &root_type = reader_->getType();
+      if (OB_FAIL(normalize_position_to_include_index(column_pos, root_type, field_index))) {
+      } else {
+        orc_col_id = root_type.getSubtype(field_index)->getColumnId();
+      }
+      break;
+    }
     case sql::ColumnIndexType::ID: {
       orc_col_id = file_column_exprs_.at(index)->extra_;
       break;
@@ -1066,15 +1125,21 @@ int ObOrcTableRowIterator::create_row_readers()
       case sql::ColumnIndexType::POSITION: {
         for (uint64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
           bool is_project_column = true;
-          int64_t column_id = file_column_exprs_.at(i)->extra_;
-          if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
-            eager_column_ids.push_back(column_id);
-            if (!is_dup_project_.at(i)) {
-              is_project_column = false;
+          uint64_t field_index = 0;
+          if (OB_FAIL(normalize_position_to_include_index(file_column_exprs_.at(i)->extra_,
+                                                          reader_->getType(),
+                                                          field_index))) {
+            LOG_WARN("invalid orc column position", K(ret), K(file_column_exprs_.at(i)->extra_));
+          } else {
+            if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
+              eager_column_ids.push_back(field_index);
+              if (!is_dup_project_.at(i)) {
+                is_project_column = false;
+              }
             }
-          }
-          if (is_project_column) {
-            project_column_ids.push_back(column_id);
+            if (is_project_column) {
+              project_column_ids.push_back(field_index);
+            }
           }
         }
         break;
@@ -1123,20 +1188,28 @@ int ObOrcTableRowIterator::create_row_readers()
       reader_->setCachedReaderContext(&reader_ctx_);
       int64_t capacity = MAX(1, scan_param_->op_->get_eval_ctx().max_batch_size_);
       if (project_column_ids.size() > 0) {
-        if (is_hive_lake_table()) {
-          project_reader_.init_for_hive_table(capacity, project_column_ids, reader_.get());
-        } else {
-          project_reader_.init(capacity, project_column_ids, reader_.get());
+        orc::RowReaderOptions rowReaderOptions;
+        OZ(build_row_reader_options(column_index_type_,
+                                    project_column_ids,
+                                    reader_->getType(),
+                                    is_hive_lake_table(),
+                                    rowReaderOptions));
+        if (OB_SUCC(ret)) {
+          project_reader_.init(capacity, rowReaderOptions, reader_.get());
         }
       } else {
         project_reader_.row_id_ = 0;
       }
       if (sector_reader_ != nullptr) {
         if (eager_column_ids.size() > 0) {
-          if (is_hive_lake_table()) {
-            sector_reader_->get_eager_reader().init_for_hive_table(capacity, eager_column_ids, reader_.get());
-          } else {
-            sector_reader_->get_eager_reader().init(capacity, eager_column_ids, reader_.get());
+          orc::RowReaderOptions rowReaderOptions;
+          OZ(build_row_reader_options(column_index_type_,
+                                      eager_column_ids,
+                                      reader_->getType(),
+                                      is_hive_lake_table(),
+                                      rowReaderOptions));
+          if (OB_SUCC(ret)) {
+            sector_reader_->get_eager_reader().init(capacity, rowReaderOptions, reader_.get());
           }
         } else {
           sector_reader_->get_eager_reader().row_id_ = 0;
@@ -3807,34 +3880,11 @@ int ObOrcTableRowIterator::DataLoader::load_map(ObEvalCtx &eval_ctx)
 }
 
 void ObOrcTableRowIterator::OrcRowReader::init(int64_t capacity,
-                                               const std::list<uint64_t>& include_columns,
+                                               const orc::RowReaderOptions &row_reader_options,
                                                orc::Reader *reader)
 {
-  orc::RowReaderOptions rowReaderOptions;
-  rowReaderOptions.includeTypes(include_columns);
-  row_reader_ = reader->createRowReader(rowReaderOptions);
+  row_reader_ = reader->createRowReader(row_reader_options);
   // create orc read batch for reuse.
-  orc_batch_ = row_reader_->createRowBatch(capacity);
-  row_id_ = 0;
-}
-
-void ObOrcTableRowIterator::OrcRowReader::init_for_hive_table(int64_t capacity,
-                                                        const std::list<uint64_t>& include_columns,
-                                                        orc::Reader *reader)
-{
-  orc::RowReaderOptions rowReaderOptions;
-  row_reader_ = reader->createRowReader(rowReaderOptions);
-  int64_t col_cnt =  row_reader_->getSelectedColumns().size();
-  std::list<uint64_t> filtered_column_ids;
-  std::list<uint64_t>::const_iterator it;
-  for (it = include_columns.begin(); it != include_columns.end(); ++it) {
-    uint64_t col_id = *it;
-    if (col_id < col_cnt) {
-      filtered_column_ids.push_back(col_id);
-    }
-  }
-  rowReaderOptions.includeTypes(filtered_column_ids);
-  row_reader_ = reader->createRowReader(rowReaderOptions);
   orc_batch_ = row_reader_->createRowBatch(capacity);
   row_id_ = 0;
 }
@@ -4090,7 +4140,7 @@ int ObOrcTableRowIterator::create_file_reader(const ObString& data_file_path,
                                               ObExternalFileAccess& file_access_driver,
                                               ObFilePreBuffer& file_prebuffer,
                                               const int64_t file_size,
-                                              std::unique_ptr<orc::Reader>& delete_reader)
+                                              std::unique_ptr<orc::Reader>& reader)
 {
   int ret = OB_SUCCESS;
   try {
@@ -4102,8 +4152,8 @@ int ObOrcTableRowIterator::create_file_reader(const ObString& data_file_path,
     }
     orc::ReaderOptions options;
     options.setMemoryPool(orc_alloc_);
-    delete_reader = orc::createReader(std::move(inStream), options);
-    if (!delete_reader) {
+    reader = orc::createReader(std::move(inStream), options);
+    if (!reader) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("orc create reader failed", K(ret));
       throw std::bad_exception();

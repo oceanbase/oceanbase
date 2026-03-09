@@ -20,6 +20,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "share/schema/ob_schema_struct_fts.h"
 #include "storage/fts/ob_fts_literal.h"
 
 #include <cstdint>

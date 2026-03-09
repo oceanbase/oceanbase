@@ -32,6 +32,7 @@
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tablet/ob_tablet_id_set.h"
 #include "storage/tablet/ob_tablet_persister.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/lob/ob_lob_manager.h"
 #include "storage/multi_data_source/mds_table_mgr.h"
 #include "storage/blocksstable/ob_datum_row_iterator.h"
@@ -279,6 +280,7 @@ public:
       const ObTabletID &tablet_id,
       const share::SCN &transfer_scn,
       const share::SCN &change_version);
+  int offline_for_ss_migration();
 #endif
   // Get tablet handle but ignore empty shell. Return OB_TABLET_NOT_EXIST if it is empty shell.
   int ha_get_tablet(
@@ -302,6 +304,7 @@ public:
       const char *buf,
       const int64_t buf_len,
       const ObTabletID &tablet_id,
+      const ObTabletPoolType type,
       ObTabletTransferInfo &tablet_transfer_info);
 
   int create_memtable(const common::ObTabletID &tablet_id, CreateMemtableArg &arg);
@@ -626,6 +629,41 @@ private:
     const ObTabletExpectedStatus::STATUS expected_status_;
     DISALLOW_COPY_AND_ASSIGN(ObUpdateHAExpectedStatus);
   };
+  class ObUpdateSnapshotVersion final : public ObITabletMetaModifier
+  {
+  public:
+    explicit ObUpdateSnapshotVersion(const int64_t snapshot_version)
+      : snapshot_version_(snapshot_version) {}
+    virtual ~ObUpdateSnapshotVersion() = default;
+    virtual int modify_tablet_meta(ObTabletMeta &meta) override;
+  private:
+    const int64_t snapshot_version_;
+    DISALLOW_COPY_AND_ASSIGN(ObUpdateSnapshotVersion);
+  };
+  class ObUpdateTabletReportStatus final : public ObITabletMetaModifier
+  {
+  public:
+    explicit ObUpdateTabletReportStatus(
+        const bool found_column_group_checksum_error)
+      : found_column_group_checksum_error_(found_column_group_checksum_error) {}
+    virtual ~ObUpdateTabletReportStatus() = default;
+    virtual int modify_tablet_meta(ObTabletMeta &meta) override;
+  private:
+    const bool found_column_group_checksum_error_;
+    DISALLOW_COPY_AND_ASSIGN(ObUpdateTabletReportStatus);
+  };
+#ifdef OB_BUILD_SHARED_STORAGE
+  struct ObUpdateSSChangeVersion final : public ObITabletMetaModifier
+  {
+  public:
+    ObUpdateSSChangeVersion(const share::SCN &ss_change_version)
+      : ss_change_version_(ss_change_version) {}
+    virtual ~ObUpdateSSChangeVersion() = default;
+    virtual int modify_tablet_meta(ObTabletMeta &meta) override;
+  private:
+    const share::SCN ss_change_version_;
+  };
+#endif
   class ObDmlSplitCtx final {
   public:
     ObDmlSplitCtx() : allocator_(), dst_tablet_handle_(), dst_relative_table_() {}
@@ -800,6 +838,7 @@ private:
 
 #ifdef OB_BUILD_SHARED_STORAGE
   int register_all_sstables_upload_(ObTabletHandle &new_tablet_handle);
+  int reuse_inner_tablet_memtable_mgr_();
 #endif
 private:
   static int replay_deserialize_tablet(
@@ -1079,6 +1118,25 @@ private:
     const ObIArray<uint64_t> &origin_updated_column_ids,
     ObIArray<uint64_t> &updated_column_ids_buffer,
     const ObIArray<uint64_t> *&updated_column_ids);
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  int rewrite_tablet_for_ss_change_version_(
+      const uint64_t data_version,
+      const share::SCN &reorg_scn,
+      const share::SCN &ss_change_version,
+      const share::SCN &tablet_pointer_ss_change_version,
+      const int32_t private_transfer_epoch,
+      const int64_t tablet_meta_version,
+      ObTabletHandle &old_handle);
+  int reuse_tablet_for_ss_change_version_(
+      const uint64_t data_version,
+      const share::SCN &reorg_scn,
+      const share::SCN &ss_change_version,
+      const share::SCN &tablet_pointer_ss_change_version,
+      const int32_t private_transfer_epoch,
+      const int64_t tablet_meta_version,
+      ObTabletHandle &old_handle);
+#endif
 
 private:
   static int get_storage_row(const blocksstable::ObDatumRow &sql_row,

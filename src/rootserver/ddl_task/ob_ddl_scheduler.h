@@ -274,6 +274,9 @@ public:
   virtual int switch_to_leader() override;
   virtual int switch_to_follower_gracefully() override;
   virtual int resume_leader() override;
+  // RS epoch for leader-change detection
+  inline int64_t get_rs_epoch() const { return rs_epoch_; }
+  inline void inc_rs_epoch() { ATOMIC_INC(&rs_epoch_); }
 
   // mtl_functions
   static int mtl_init(ObDDLScheduler *&ddl_scheduler);
@@ -696,6 +699,7 @@ private:
   DDLScanTask scan_task_;
   HeartBeatCheckTask heart_beat_check_task_;
   share::ObDDLReplicaBuilder ddl_builder_;
+  int64_t rs_epoch_;
 };
 
 template<typename T>

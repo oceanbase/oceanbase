@@ -898,6 +898,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
   common::ObNewRowIterator *snapshot_idx_iter = nullptr;
   storage::ObTableScanParam snapshot_scan_param;
   schema::ObTableParam snapshot_table_param(allocator);
+  ObPluginVectorIndexAdaptor *old_adapter = adapter;
   ObPluginVectorIndexAdaptor *new_adapter = nullptr;
   ObPluginVectorIndexMgr *vec_idx_mgr = nullptr;
   bool is_meta_data = false;
@@ -916,12 +917,24 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
                                 snapshot_idx_iter))) { // read_local_tablet 5th aux index get rowkey
     LOG_WARN("fail to read local tablet", KR(ret), K(ls_id), K(index_type), KPC(new_adapter));
   } else {
-    if (OB_FAIL(get_snap_index_visible_row_key(ls_id, adapter, target_scn, allocator, row_key, is_meta_data, meta_scn))) {
+    blocksstable::ObDatumRow *row = nullptr;
+    ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(snapshot_idx_iter);
+    if (OB_FAIL(table_scan_iter->get_next_row(row))) {
+      if (OB_ITER_END == ret) {
+        adapter->set_snap_data_has_complete();
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get next row", K(ret));
+      }
+    } else if (OB_ISNULL(row) || row->get_column_count() < 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid row", K(ret), K(row));
+    } else if (OB_FAIL(get_snap_index_visible_row_key(ls_id, adapter, target_scn, allocator, row_key, is_meta_data, meta_scn))) {
       LOG_WARN("fail to get snap index visible row iter", K(ret));
     } else if (!row_key.empty()) {
       ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(snapshot_idx_iter);
-      if ((is_meta_data && (meta_scn > adapter->get_snapshot_scn() || adapter->get_snap_rb_flag())) ||
-          (!is_meta_data && (adapter->get_snapshot_key_prefix().empty() || !row_key.prefix_match(adapter->get_snapshot_key_prefix()) || adapter->get_snap_rb_flag()))) {
+      if ((is_meta_data && (meta_scn > adapter->get_snapshot_scn() || ! adapter->get_snap_has_complete())) ||
+          (!is_meta_data && (adapter->get_snapshot_key_prefix().empty() || !row_key.prefix_match(adapter->get_snapshot_key_prefix()) || ! adapter->get_snap_has_complete()))) {
         ObString target_prefix;
         if (OB_ISNULL(vector_index_service)) {
           ret = OB_ERR_UNEXPECTED;
@@ -964,7 +977,9 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
         }
         if (OB_FAIL(ret)) {
         } else if (is_meta_data) {
-          if (OB_FAIL(new_adapter->deserialize_snap_data(ls_id, target_scn, row_key, meta_scn))) {
+          if (OB_FAIL(new_adapter->merge_incr_data(old_adapter))){
+            LOG_WARN("merge_incr_data fail", K(ret), KPC(old_adapter), KPC(new_adapter));
+          } else if (OB_FAIL(new_adapter->deserialize_snap_data(ls_id, target_scn, row_key, meta_scn))) {
             LOG_WARN("deserialize snap data fail", K(ret));
           } else if (OB_FAIL(new_adapter->get_snap_index_row_cnt(index_count))) {
             LOG_WARN("fail to get snap index row cnt", K(ret), KP(new_adapter), KP(adapter));
@@ -1048,7 +1063,12 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
       ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
       ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), extra_info_column_count, &allocator, &tmp_allocator);
       ada_ctx.set_scn(target_scn);
-      if (OB_FAIL(adapter->check_delta_buffer_table_readnext_status(&ada_ctx, delta_buf_iter,target_scn))) {
+      ada_ctx.set_is_refresh_adaptor(true);
+      bool ls_leader = true;
+      if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id, ls_leader))) {
+        LOG_WARN("fail to get ls leader flag", K(ret), K(ls_id));
+      } else if (FALSE_IT(ada_ctx.set_ls_leader(ls_leader))) {
+      } else if (OB_FAIL(adapter->check_delta_buffer_table_readnext_status(&ada_ctx, delta_buf_iter,target_scn))) {
         LOG_WARN("fail to check_delta_buffer_table_readnext_status.", K(ret));
       } else if (OB_FAIL(try_sync_vbitmap_memdata(ls_id, adapter, target_scn, allocator, ada_ctx))) {
         LOG_WARN("failed to sync vbitmap", KR(ret));

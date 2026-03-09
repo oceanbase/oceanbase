@@ -53,6 +53,7 @@ public:
       ObTableAccessContext &context);
   virtual ~ObBlockBatchedRowStore();
   virtual void reset() override;
+  virtual void reuse() override;
   virtual int init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask = nullptr) override;
   virtual int fill_row(blocksstable::ObDatumRow &out_row) = 0;
   virtual int fill_rows(

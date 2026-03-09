@@ -245,7 +245,6 @@ int ObDAGCGMacroBlockWriteOp::execute(const ObChunk &input_chunk,
                                                  slice_idx_,
                                                  cg_idx,
                                                  ddl_dag,
-                                                 0/*max_batch_size*/,
                                                  write_macro_param))) {
           LOG_WARN("fail to fill write macro param",
               K(ret), KPC(ddl_dag), K(tablet_id_), K(slice_idx_), K(cg_idx));

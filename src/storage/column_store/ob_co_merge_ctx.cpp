@@ -386,10 +386,6 @@ int ObCOTabletMergeCtx::cal_merge_param()
     } else if (is_rowkey_cg_status(static_param_.major_merge_sstable_status_array_.at(0).co_major_sstable_status_) && get_schema()->has_all_column_group()) {
       force_full_merge = true;
     }
-  } else {
-    if (strategy.only_use_row_store()) {
-      force_full_merge = true;
-    }
   }
 
   if (FAILEDx(ObBasicTabletMergeCtx::cal_major_merge_param(force_full_merge, progressive_merge_mgr_))) {

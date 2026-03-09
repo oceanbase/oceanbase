@@ -21,29 +21,26 @@ namespace oceanbase
 {
 namespace storage
 {
-typedef int32_t ObFTWordCode;
+typedef int32_t ObFTTokenCode;
 typedef int32_t ObFTWordBase;
 typedef uint32_t ObFTWordStateIndex;
 
 /**
- * @class ObFTSingleWord
+ * @class ObFTSingleToken
  * @brief struct to store a single character of a charset;
  */
-struct ObFTSingleWord
+struct ObFTSingleToken
 {
 public:
-  ObFTSingleWord() : word(""), word_len(0) {}
-  ObFTSingleWord(const ObFTSingleWord &other) = default;
-  ObFTSingleWord &operator=(const ObFTSingleWord &other) = default;
-
-  int hash(uint64_t &hash_value) const;
-  int32_t set_word(const char *word, int32_t word_len);
-  ObString get_word() const;
-  bool operator==(const ObFTSingleWord &other) const;
+  ObFTSingleToken() : token_(""), token_char_len_(0) { }
+  ObFTSingleToken &operator=(const ObFTSingleToken &other) = default;
+  int set_token(const char *token, int32_t token_len);
+  ObString get_token() const { return ObString(token_char_len_, token_); }
+  bool operator==(const ObFTSingleToken &other) const;
 
 public:
-  char word[common::ObCharset::MAX_MB_LEN];
-  uint8_t word_len;
+  char token_[common::ObCharset::MAX_MB_LEN];
+  uint8_t token_char_len_;
 } __attribute__((packed));
 
 enum class ObFTDictType : uint32_t

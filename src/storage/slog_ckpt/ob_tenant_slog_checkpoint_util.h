@@ -18,6 +18,7 @@
 #include "storage/meta_mem/ob_meta_obj_struct.h" // for ObMetaDiskAddr
 #include "storage/blocksstable/ob_macro_block_common_header.h"
 #include "observer/ob_startup_accel_task_handler.h"
+#include "storage/slog_ckpt/ob_tenant_storage_checkpoint_reader.h"
 
 namespace oceanbase
 {
@@ -125,6 +126,32 @@ struct ObTenantSlogCkptUtil
         ObSlogCheckpointFdDispenser *fd_dispenser,
         const ObMemAttr &mem_attr);
 
+  struct LSCkptInheritOp final
+  {
+  public:
+    LSCkptInheritOp(
+      const ObLSID &ls_id,
+      ObLinkedMacroBlockItemWriter &ls_item_writer,
+      common::ObIArray<MacroBlockId> &tablet_block_list)
+      : ls_id_(ls_id),
+        ls_item_writer_(ls_item_writer),
+        tablet_block_list_(tablet_block_list)
+    {
+    }
+
+    ~LSCkptInheritOp() = default;
+
+    int operator()(
+      const ObMetaDiskAddr &addr,
+      const char *buf,
+      const int64_t buf_len);
+
+  public:
+    const ObLSID ls_id_;
+    ObLinkedMacroBlockItemWriter &ls_item_writer_;
+    common::ObIArray<MacroBlockId> &tablet_block_list_;
+  };
+
 
   class DiskedTabletFilterOp final : public ObITabletFilterOp
   {
@@ -228,13 +255,27 @@ struct ObTenantSlogCkptUtil
 
     ~MetaBlockListApplier() = default;
 
+    OB_INLINE const common::ObIArray<MacroBlockId> &get_ls_block_list() const
+    {
+      OB_ASSERT(nullptr != ls_block_handle_);
+      return ls_block_handle_->get_meta_block_list();
+    }
+    OB_INLINE const common::ObIArray<MacroBlockId> &get_tablet_block_list() const
+    {
+      OB_ASSERT(nullptr != tablet_block_handle_);
+      return tablet_block_handle_->get_meta_block_list();
+    }
+    OB_INLINE const common::ObIArray<MacroBlockId> &get_wait_gc_tablets_block_list() const
+    {
+      OB_ASSERT(nullptr != wait_gc_tablet_block_handle_);
+      return wait_gc_tablet_block_handle_->get_meta_block_list();
+    }
     int is_valid() const;
-
     /// @brief: apply block lists into handles
     /// retry until allocate memory succeed
     int apply_from(const ObIArray<MacroBlockId> &ls_block_list,
                    const ObIArray<MacroBlockId> &tablet_block_list,
-                   const ObIArray<MacroBlockId> &wait_gc_tablet_block_list);
+                   /*optional*/ const ObIArray<MacroBlockId> *wait_gc_tablet_block_list);
 
     // disable copy and assign
     MetaBlockListApplier(const MetaBlockListApplier &) = delete;

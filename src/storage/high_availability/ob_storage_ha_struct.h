@@ -123,6 +123,7 @@ public:
   static bool is_in_rebuild(
       const ObMigrationStatus &cur_status);
   static bool is_in_replace(const ObMigrationStatus &cur_status);
+  static bool check_migration_status_is_fail(const ObMigrationStatus &cur_status);
 private:
   static int check_ls_transfer_tablet_(
       const share::ObLSID &ls_id,
@@ -131,7 +132,6 @@ private:
       ObLS *ls,
       const ObTabletID &tablet_id,
       bool &allow_gc);
-  static bool check_migration_status_is_fail_(const ObMigrationStatus &cur_status);
   static int set_ls_migrate_gc_status_(
       ObLS &ls,
       bool &allow_gc);
@@ -715,6 +715,26 @@ public:
   common::ObArray<common::ObMember> member_list_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSMemberListInfo);
+};
+
+struct ObLSMigrationCostStatic final
+{
+public:
+  ObLSMigrationCostStatic();
+  ~ObLSMigrationCostStatic() = default;
+  void reset();
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+public:
+  share::SCN clog_checkpoint_scn_;
+  int64_t tablet_count_;
+  int64_t create_tablet_cost_;
+  int64_t migration_dag_net_cost_;
+  int64_t prewarm_cost_;
+  int64_t wait_log_sync_cost_;
+  int64_t wait_log_replay_cost_;
+  int64_t complete_dag_net_cost_;
+  int64_t start_ts_;
+  int64_t finish_ts_;
 };
 
 }

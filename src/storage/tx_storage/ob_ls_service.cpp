@@ -20,6 +20,7 @@
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/high_availability/ob_tenant_startup_status.h"
 
 namespace oceanbase
 {
@@ -144,7 +145,7 @@ int ObLSService::get_resource_constraint_value_(ObResoureConstraintValue &constr
   int64_t config_value = OB_MAX_LS_NUM_PER_TENANT_PER_SERVER;
   int64_t memory_value = INT64_MAX;
   int64_t clog_disk_value = INT64_MAX;
-  const int64_t per_palf_size = GCTX.is_shared_storage_mode() ? SHARED_STORAGE_MIN_DISK_SIZE_PER_PALF_INSTANCE : MIN_DISK_SIZE_PER_PALF_INSTANCE;
+  const int64_t per_palf_size = MIN_DISK_SIZE_PER_PALF_INSTANCE;
   // 1. configuration
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (OB_LIKELY(tenant_config.is_valid())) {
@@ -166,7 +167,7 @@ int ObLSService::get_resource_constraint_value_(ObResoureConstraintValue &constr
   // 3. clog disk
   palf::PalfDiskOptions disk_opts;
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
-  if (GCONF.enable_logservice) { // do nothing
+  if (GCTX.is_shared_storage_mode()) { // do nothing
   } else
 #endif
   if (OB_FAIL(MTL(ObLogService*)->get_palf_disk_options(disk_opts))) {
@@ -238,7 +239,7 @@ int ObLSService::cal_min_phy_resource_needed_(const int64_t num,
   int64_t ls_cnt = num;
   int64_t clog_disk_bytes = 0;
   int64_t memory_bytes = 0;
-  const int64_t per_palf_size = GCTX.is_shared_storage_mode() ? SHARED_STORAGE_MIN_DISK_SIZE_PER_PALF_INSTANCE : MIN_DISK_SIZE_PER_PALF_INSTANCE;
+  const int64_t per_palf_size = MIN_DISK_SIZE_PER_PALF_INSTANCE;
   // 1. memory
   // if the ls num is smaller than OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT,
   // just return SMALL_TENANT_MEMORY_LIMIT.
@@ -251,6 +252,8 @@ int ObLSService::cal_min_phy_resource_needed_(const int64_t num,
 
   if (OB_FAIL(min_phy_res.set_type_value(PHY_RESOURCE_MEMORY, memory_bytes))) {
     LOG_WARN("set type value failed", K(PHY_RESOURCE_MEMORY), K(memory_bytes));
+  } else if (GCTX.is_shared_storage_mode()) {
+    // skip check clog disk size
   } else if (OB_FAIL(min_phy_res.set_type_value(PHY_RESOURCE_CLOG_DISK, clog_disk_bytes))) {
     LOG_WARN("set type value failed", K(PHY_RESOURCE_CLOG_DISK), K(clog_disk_bytes));
   }
@@ -423,6 +426,7 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                                   const ObMajorMVMergeInfo &major_mv_merge_info,
                                   const ObLSStoreFormat &store_format,
                                   const ObReplicaType &replica_type,
+                                  const uint64_t data_version,
                                   ObLS *&ls)
 {
   int ret = OB_SUCCESS;
@@ -443,7 +447,8 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                               major_mv_merge_info,
                               store_format,
                               replica_type,
-                              rs_reporter_))) {
+                              rs_reporter_,
+                              data_version))) {
     LOG_WARN("fail to init ls", K(ret), K(lsid));
   }
   if (OB_FAIL(ret) && NULL != ls) {
@@ -528,6 +533,7 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
     common_arg.create_type_ = get_create_type_by_tenant_role_(arg.get_tenant_info().get_tenant_role());
     common_arg.need_create_inner_tablet_ = need_create_inner_tablets_(arg);
     common_arg.major_mv_merge_info_ = arg.get_major_mv_merge_info();
+    common_arg.data_version_ = arg.get_data_version();
 
     if (OB_FAIL(create_ls_(common_arg, mig_arg))) {
       LOG_WARN("create ls failed", K(ret), K(arg));
@@ -829,7 +835,6 @@ int ObLSService::online_ls()
   int tmp_ret = OB_SUCCESS;
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
-  int64_t create_type = ObLSCreateType::NORMAL;
   if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else {
@@ -841,17 +846,16 @@ int ObLSService::online_ls()
       } else if (nullptr == ls) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("ls is null", K(ret));
-      } else {
-        ObLSLockGuard lock_ls(ls);
-        if (OB_FAIL(ls->get_create_type(create_type))) {
-          LOG_WARN("get ls create type failed", K(ret));
-        } else if (OB_FAIL(post_create_ls_(create_type, ls))) {
-          LOG_WARN("post create ls failed", K(ret));
-        }
+      } else if (OB_FAIL(online_ls_(ls))) {
+        LOG_WARN("failed to online ls", K(ret), KPC(ls));
       }
     }
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
+    }
+
+    if (OB_SUCC(ret)) {
+      TENANT_STARTUP_STATUS.start_service();
     }
   }
 
@@ -935,6 +939,7 @@ int ObLSService::replay_create_ls_(const int64_t ls_epoch, const ObLSMeta &ls_me
                                       ls_meta.get_major_mv_merge_info(),
                                       ls_meta.get_store_format(),
                                       ls_meta.get_replica_type(),
+                                      ls_meta.get_data_version(),
                                       ls))) {
     LOG_WARN("fail to inner create ls", K(ret), K(ls_meta.ls_id_));
   } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_INNER_CREATED)) {
@@ -1086,9 +1091,9 @@ int ObLSService::remove_ls(const share::ObLSID &ls_id)
   } else if (OB_UNLIKELY(!is_running_)) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls service is not running.", K(ret));
-  } else if (OB_UNLIKELY(!SERVER_STORAGE_META_SERVICE.is_started())) {
+  } else if (OB_UNLIKELY(!TENANT_STARTUP_STATUS.is_in_service())) {
     ret = OB_NOT_RUNNING;
-    LOG_WARN("ls service does not service before slog replay finished", K(ret));
+    LOG_WARN("ls service does not service before tenant in service", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id));
@@ -1269,9 +1274,9 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("the ls service has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!SERVER_STORAGE_META_SERVICE.is_started())) {
+  } else if (OB_UNLIKELY(!TENANT_STARTUP_STATUS.is_in_service())) {
     ret = OB_NOT_RUNNING;
-    LOG_WARN("ls service does not service before slog replay finished", K(ret));
+    LOG_WARN("ls service does not service before tenant in service", K(ret));
   } else if (OB_BREAK_FAIL(ObShareUtil::get_abs_timeout(DEFAULT_LOCK_TIMEOUT /* default timeout */,
                                                   abs_timeout_ts))) {
     LOG_WARN("get timeout ts failed", KR(ret));
@@ -1303,6 +1308,7 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
                                               arg.major_mv_merge_info_,
                                               ls_store_format,
                                               arg.replica_type_,
+                                              arg.data_version_,
                                               ls))) {
       LOG_WARN("create ls failed", K(ret), K(arg.ls_id_), K(ls_store_format), K(arg.replica_type_));
     } else {
@@ -1398,6 +1404,7 @@ int ObLSService::create_ls_for_ha(
     common_arg.task_id_ = task_id;
     common_arg.need_create_inner_tablet_ = false;
     common_arg.major_mv_merge_info_.reset();
+    common_arg.data_version_ = 0;
 
     if (OB_FAIL(create_ls_(common_arg, arg))) {
       LOG_WARN("failed to create ls", K(ret), K(arg));
@@ -1817,6 +1824,51 @@ int ObLSService::check_sslog_ls_exist()
   return ret;
 }
 #endif
+
+int ObLSService::online_ls(const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  int64_t create_type = ObLSCreateType::NORMAL;
+
+  if (!is_inited_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ls service do not init", K(ret));
+  } else if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("online  ls get invalid argument", K(ret), K(ls_id));
+  } else if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), K(ls_handle), K(ls_id));
+  } else if (OB_FAIL(online_ls_(ls))) {
+    LOG_WARN("failed to online ls", K(ret), KPC(ls), K(ls_id));
+  }
+  return ret;
+}
+
+int ObLSService::online_ls_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  int64_t create_type = ObLSCreateType::NORMAL;
+  if (!is_inited_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ls service do not init", K(ret));
+  } else if (OB_ISNULL(ls)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("online ls get invalid argument", K(ret), KPC(ls));
+  } else {
+    ObLSLockGuard lock_ls(ls);
+    if (OB_FAIL(ls->get_create_type(create_type))) {
+      LOG_WARN("get ls create type failed", K(ret));
+    } else if (OB_FAIL(post_create_ls_(create_type, ls))) {
+      LOG_WARN("post create ls failed", K(ret));
+    }
+  }
+  return ret;
+}
 
 } // storage
 } // oceanbase

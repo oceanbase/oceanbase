@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "ob_expr_cast.h"
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "lib/geo/ob_geometry_cast.h"
@@ -70,7 +71,6 @@ int ObExprCast::get_cast_inttc_len(ObExprResType &type1,
   }
   return ret;
 }
-
 
 // @res_len: the result length of any type be cast to string
 // for column type
@@ -1155,13 +1155,11 @@ int ObExprCast::fill_element(const sql::ObExpr &expr,
     //Collection constructed here must be recorded and destructed at last
     if (OB_FAIL(res_datum.from_obj(result, expr.obj_datum_map_))) {
       LOG_WARN("failed to from obj", K(ret));
-    } else if (OB_ISNULL(exec_ctx.get_pl_ctx()) && OB_FAIL(exec_ctx.init_pl_ctx())) {
-      LOG_WARN("failed to init pl ctx", K(ret));
-    } else if (OB_ISNULL(exec_ctx.get_pl_ctx())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (OB_FAIL(exec_ctx.get_pl_ctx()->add(result))) {
-      LOG_WARN("failed to add result", K(ret));
+    } else {
+      sql::ObPLComplexTypeMgr *pl_complex_type_mgr = exec_ctx.get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+      if (OB_FAIL(pl_complex_type_mgr->complex_type_objects_.push_back(result))) {
+        LOG_WARN("failed to push back result", K(ret));
+      }
     }
   }
 #endif

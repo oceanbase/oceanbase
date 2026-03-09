@@ -77,8 +77,15 @@ private:
       const palf::PalfBaseInfo &palf_base_info,
       const uint64_t source_tenant_id,
       const share::ObAllTenantInfo &tenant_info,
-      const bool is_sslog = false);
+      const share::ObLSID &ls_id = share::SYS_LS);
 
+#ifdef OB_BUILD_SHARED_STORAGE
+  int create_ss_ls_(
+      const uint64_t meta_tenant_id,
+      const ObIArray<share::ObResourcePoolName> &pools,
+      const palf::PalfBaseInfo &meta_palf_base_info,
+      const share::ObAllTenantInfo &tenant_info);
+#endif
   int create_tenant_user_ls_(ObParallelCreateNormalTenantProxy &proxy);
   int construct_tenant_info_(const uint64_t tenant_id, share::ObAllTenantInfo &tenant_info);
   share::SCN get_recovery_until_scn_();

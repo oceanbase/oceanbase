@@ -14,26 +14,31 @@
 #define OCEANBASE_SQL_ENGINE_SORT_SORT_VEC_OP_CHUNK_H_
 
 #include "sql/engine/basic/ob_temp_row_store.h"
+#include "sql/engine/sort/ob_sort_row_store_mgr.h"
 
 namespace oceanbase {
 namespace sql {
 template <typename Store_Row, bool has_addon>
 struct ObSortVecOpChunk : public common::ObDLinkBase<ObSortVecOpChunk<Store_Row, has_addon>>
 {
-  explicit ObSortVecOpChunk(const int64_t level) :
-    level_(level), sk_row_iter_(), addon_row_iter_(), sk_row_(nullptr), addon_row_(nullptr)
+  explicit ObSortVecOpChunk(const int64_t level, common::ObIAllocator &allocator) :
+    level_(level), sort_row_store_mgr_(allocator), sk_row_iter_(), addon_row_iter_(), sk_row_(nullptr), addon_row_(nullptr),
+    use_inmem_data_(false), inmem_rows_(), row_idx_(0), slice_id_(0)
   {}
   void reset_row_iter()
   {
     sk_row_iter_.reset();
     addon_row_iter_.reset();
+    row_idx_ = 0;
   }
   int init_row_iter()
   {
     int ret = common::OB_SUCCESS;
-    if (OB_FAIL(sk_row_iter_.init(&sk_store_))) {
+    if (use_inmem_data_) {
+      row_idx_ = 0;
+    } else if (OB_FAIL(sk_row_iter_.init(&sort_row_store_mgr_.get_sk_store()))) {
       SQL_ENG_LOG(WARN, "init iterator failed", K(ret));
-    } else if (has_addon && OB_FAIL(addon_row_iter_.init(&addon_store_))) {
+    } else if (has_addon && OB_FAIL(addon_row_iter_.init(&sort_row_store_mgr_.get_addon_store()))) {
       SQL_ENG_LOG(WARN, "init iterator failed", K(ret));
     }
     return ret;
@@ -43,7 +48,15 @@ struct ObSortVecOpChunk : public common::ObDLinkBase<ObSortVecOpChunk<Store_Row,
     int ret = common::OB_SUCCESS;
     int64_t read_rows = 0;
     const int64_t max_rows = 1;
-    if (OB_FAIL(sk_row_iter_.get_next_batch(max_rows, read_rows,
+    if (use_inmem_data_) {
+      if (row_idx_ >= inmem_rows_.count()) {
+        ret = OB_ITER_END;
+      } else {
+        sk_row_ = inmem_rows_.at(row_idx_);
+        addon_row_ = sk_row_->get_addon_ptr(*sort_row_store_mgr_.get_sk_row_meta());
+        row_idx_++;
+      }
+    } else if (OB_FAIL(sk_row_iter_.get_next_batch(max_rows, read_rows,
                                             reinterpret_cast<const ObCompactRow **>(&sk_row_)))) {
       if (OB_ITER_END != ret) {
         SQL_ENG_LOG(WARN, "get next row failed", K(ret));
@@ -55,20 +68,32 @@ struct ObSortVecOpChunk : public common::ObDLinkBase<ObSortVecOpChunk<Store_Row,
           SQL_ENG_LOG(WARN, "get next row failed", K(ret));
         }
       } else {
-        const_cast<Store_Row *>(sk_row_)->set_addon_ptr(addon_row_, sk_store_.get_row_meta());
+        const_cast<Store_Row *>(sk_row_)->set_addon_ptr(addon_row_, *sort_row_store_mgr_.get_sk_row_meta());
       }
     }
     return ret;
   }
 
+  ObTempRowStore &get_sk_store() { return sort_row_store_mgr_.get_sk_store(); }
+  ObTempRowStore &get_addon_store() { return sort_row_store_mgr_.get_addon_store(); }
+  int64_t get_file_size() const { return sort_row_store_mgr_.get_file_size(); }
+  // Row count abstraction for both in-memory and temp-store modes.
+  int64_t get_row_count() const
+  {
+    return use_inmem_data_ ? inmem_rows_.count() : sort_row_store_mgr_.get_row_cnt();
+  }
+
 public:
   int64_t level_;
-  ObTempRowStore sk_store_;
-  ObTempRowStore addon_store_;
+  ObSortRowStoreMgr<Store_Row, has_addon> sort_row_store_mgr_;
   ObTempRowStore::Iterator sk_row_iter_;
   ObTempRowStore::Iterator addon_row_iter_;
   const Store_Row *sk_row_;
   const Store_Row *addon_row_;
+  bool use_inmem_data_;
+  common::ObArray<Store_Row *> inmem_rows_;
+  int64_t row_idx_;
+  int64_t slice_id_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSortVecOpChunk);

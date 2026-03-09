@@ -643,7 +643,8 @@ ObSNIOInfo &ObSNIOInfo::operator=(const ObSNIOInfo &other)
 #ifdef OB_BUILD_SHARED_STORAGE
 ObSSIOInfo::ObSSIOInfo()
   : ObSNIOInfo(), phy_block_handle_(), fd_cache_handle_(), tmp_file_valid_length_(0),
-    effective_tablet_id_(ObTabletID::INVALID_TABLET_ID), is_write_cache_(true)
+    effective_tablet_id_(ObTabletID::INVALID_TABLET_ID), is_write_cache_(true),
+    is_batch_write_(false)
 {}
 
 ObSSIOInfo::ObSSIOInfo(const ObSSIOInfo &other)
@@ -663,6 +664,7 @@ void ObSSIOInfo::reset()
   tmp_file_valid_length_ = 0;
   effective_tablet_id_ = ObTabletID::INVALID_TABLET_ID;
   is_write_cache_ = true;
+  is_batch_write_ = false;
 }
 
 ObSSIOInfo &ObSSIOInfo::operator=(const ObSSIOInfo &other)
@@ -683,6 +685,7 @@ ObSSIOInfo &ObSSIOInfo::operator=(const ObSSIOInfo &other)
     tmp_file_valid_length_ = other.tmp_file_valid_length_;
     effective_tablet_id_ = other.effective_tablet_id_;
     is_write_cache_ = other.is_write_cache_;
+    is_batch_write_ = other.is_batch_write_;
     // ignore ret, cuz assign fails only when other.phy_block_handle_/fd_cache_handle_ is invalid.
     // in case when other.phy_block_handle_/fd_cache_handle_ is invalid, ret is unnecessary.
     int tmp_ret = OB_SUCCESS;

@@ -1193,10 +1193,12 @@ int ObDDLRedoLogWriter::wait_gts_elapse_with_timeout(
   while (need_retry) {
     if (OB_FAIL(OB_TS_MGR.wait_gts_elapse(tenant_id, scn))) {
       if (OB_EAGAIN != ret) {
+        need_retry = false;
         LOG_WARN("fail to wait gts elapse", K(ret), K(tenant_id), K(scn));
       } else {
         const int64_t current_time = ObTimeUtility::current_time();
         if (current_time - start_time > timeout_us) {
+          need_retry = false;
           ret = OB_TIMEOUT;
           LOG_WARN("wait gts elapse timeout", K(ret), K(current_time), K(start_time), K(tenant_id), K(scn));
         } else {

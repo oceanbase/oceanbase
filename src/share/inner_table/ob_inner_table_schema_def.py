@@ -18012,6 +18012,31 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12589: __all_virtual_ss_macro_cache_info
 # 12590: __all_virtual_ss_local_cache_diagnose_info
 # 12591: __all_virtual_ddl_dag_monitor
+def_table_schema(
+  owner = 'jianyun.sjy',
+  table_name = '__all_virtual_ddl_dag_monitor',
+  table_id = '12591',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [],
+  normal_columns    = [
+    ('svr_ip',    'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',  'int'),
+    ('tenant_id', 'int'),
+    ('dag_id', 'varchar:64'),
+    ('dag_info', 'varchar:256'),
+    ('task_id', 'varchar:64'),
+    ('task_info', 'varchar:256'),
+    ('format_version', 'int'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
+    ('create_time', 'timestamp'),
+    ('finish_time', 'timestamp'),
+    ('message', 'longtext'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 12592: __all_virtual_vector_segment_info
 # 12593: __all_virtual_sql_group_commit_stat
 # 12594: __all_virtual_java_policy
@@ -18052,6 +18077,7 @@ def_table_schema(
 )
 # 12597: __all_virtual_object_storage_stat
 # 12598: __all_virtual_object_storage_error_record
+# 12599: __all_virtual_audit_log_encryption_password
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -23256,7 +23282,8 @@ SELECT A.TENANT_ID,
        (CASE
             WHEN STARTUP_MODE() = 'shared_storage' THEN
                 CASE
-                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1001
+                    WHEN A.TENANT_ID = 1 THEN 1001
+                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1002
                     ELSE B.MAX_LS_ID
                 END
             ELSE
@@ -23275,7 +23302,9 @@ SELECT A.TENANT_ID,
             WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
             ELSE E.LATEST_FLASHBACK_LOG_SCN
         END) AS FLASHBACK_LOG_SCN,
-        A.INFO AS COMMENT
+        A.INFO AS COMMENT,
+        B.PROTECTION_MODE AS PROTECTION_MODE,
+        B.PROTECTION_LEVEL AS PROTECTION_LEVEL
 FROM OCEANBASE.__ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT AS A
 LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TENANT_INFO AS B
     ON A.TENANT_ID = B.TENANT_ID
@@ -38996,20 +39025,20 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
   SELECT
-    SID AS SID,
-    gv$sesstat.CON_ID AS TENANT_ID,
-    SVR_IP AS SVR_IP,
-    SVR_PORT AS SVR_PORT,
-    STAT_ID AS STAT_ID,
-    NAME AS STAT_NAME,
-    VALUE AS VALUE
+    s.SID AS SID,
+    s.CON_ID AS TENANT_ID,
+    s.SVR_IP AS SVR_IP,
+    s.SVR_PORT AS SVR_PORT,
+    n.STAT_ID AS STAT_ID,
+    n.NAME AS STAT_NAME,
+    s.VALUE AS VALUE
   FROM
-    oceanbase.GV$SESSTAT
+    oceanbase.GV$SESSTAT s
   left join
-    oceanbase.v$statname
-  on gv$sesstat.`statistic#`=v$statname.`statistic#`
+    oceanbase.V$STATNAME n
+  on s.`STATISTIC#` = n.`STATISTIC#`
   WHERE
-    STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
+    n.STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
 """.replace("\n", " "),
 )
 
@@ -64984,7 +65013,8 @@ SELECT A.TENANT_ID,
        (CASE
             WHEN (SELECT STARTUP_MODE() FROM DUAL) = 'shared_storage' THEN
                 CASE
-                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1001
+                    WHEN A.TENANT_ID = 1 THEN 1001
+                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1002
                     ELSE B.MAX_LS_ID
                 END
             ELSE
@@ -65002,7 +65032,9 @@ SELECT A.TENANT_ID,
           WHEN A.TENANT_ID = 1 THEN NULL
           WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN NULL
           ELSE E.LATEST_FLASHBACK_LOG_SCN END) AS FLASHBACK_LOG_SCN,
-        A.INFO AS "COMMENT"
+        A.INFO AS "COMMENT",
+        B.PROTECTION_MODE AS PROTECTION_MODE,
+        B.PROTECTION_LEVEL AS PROTECTION_LEVEL
 FROM SYS.ALL_VIRTUAL_TENANT_SYS_AGENT A
 LEFT JOIN SYS.ALL_VIRTUAL_TENANT_INFO B
     ON A.TENANT_ID = B.TENANT_ID
@@ -82782,6 +82814,8 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_routine_load_job'])
+
+# 101125: __all_tenant_macro_block_ha_task
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名

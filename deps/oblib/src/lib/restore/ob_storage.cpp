@@ -22,7 +22,7 @@ namespace oceanbase
 namespace common
 {
 
-const char *OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "LOCAL", "S3", "LOCAL_CACHE", "HDFS", "AZBLOB"};
+const char *OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "LOCAL", "S3", "LOCAL_CACHE", "HDFS", "AZBLOB", "TABLE"};
 
 void print_access_storage_log(
     const char *msg,

@@ -55,8 +55,8 @@ int ObFTRangeDict::build_one_range(const ObFTDictDesc &desc,
   bool range_end = false;
 
   int64_t first_char_len = 0;
-  ObFTSingleWord end_char;
-  ObFTSingleWord start_char;
+  ObFTSingleToken end_char;
+  ObFTSingleToken start_char;
 
   ObFTDAT *dat_buff = nullptr;
   size_t buffer_size = 0;
@@ -74,10 +74,10 @@ int ObFTRangeDict::build_one_range(const ObFTDictDesc &desc,
                                                       first_char_len))) {
       LOG_WARN("First char is not valid.");
     } else if (DEFAULT_KEY_PER_RANGE == count
-               && OB_FAIL(end_char.set_word(key.ptr(), first_char_len))) {
+               && OB_FAIL(end_char.set_token(key.ptr(), first_char_len))) {
       LOG_WARN("Failed to record first char.", K(ret));
     } else if (count > DEFAULT_KEY_PER_RANGE
-               && (end_char.get_word() != ObString(first_char_len, key.ptr()))) {
+               && (end_char.get_token() != ObString(first_char_len, key.ptr()))) {
       // end of range, this key is not consumed.
       range_end = true;
     } else if (OB_FAIL(trie.insert(key, {}))) {
@@ -207,22 +207,35 @@ int ObFTRangeDict::match_with_hit(const ObString &single_word,
 int ObFTRangeDict::find_first_char_range(const ObString &single_word, ObIFTDict *&dict) const
 {
   int ret = OB_SUCCESS;
-  bool found = false;
-  for (int i = 0; OB_SUCC(ret) && !found && i < range_dicts_.size(); ++i) {
-    if (ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                          range_dicts_[i].start_.get_word(),
-                          single_word)
-            <= 0
-        && ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                             range_dicts_[i].end_.get_word(),
-                             single_word)
-               >= 0) {
-      dict = range_dicts_[i].dict_;
-      found = true;
+  int64_t left = 0;
+  int64_t right = range_dicts_.size() - 1;
+  int64_t candidate = -1;
+  dict = nullptr;
+  while (left <= right) {
+    const int64_t mid = left + ((right - left) >> 1);
+    const ObFTRange &mid_range = range_dicts_[mid];
+    const int cmp_start_ret = ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                                                mid_range.start_.get_token(),
+                                                single_word);
+    if (cmp_start_ret <= 0) {
+      candidate = mid;
+      left = mid + 1;
+    } else {
+      right = mid - 1;
     }
   }
-  if (!found) {
-    // not found, dis match
+
+  if (OB_LIKELY(candidate >= 0)) {
+    const ObFTRange &range = range_dicts_[candidate];
+    const int cmp_end_ret = ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                                              range.end_.get_token(),
+                                              single_word);
+    if (cmp_end_ret >= 0) {
+      dict = range.dict_;
+    } else {
+      ret = OB_ENTRY_NOT_EXIST;
+    }
+  } else {
     ret = OB_ENTRY_NOT_EXIST;
   }
   return ret;
@@ -242,8 +255,8 @@ int ObFTRangeDict::build_dict_from_cache(const ObFTCacheRangeContainer &range_co
       LOG_WARN("Failed to alloc memory.", K(ret));
     } else {
       ObFTRange range;
-      range.start_ = dat->start_word_;
-      range.end_ = dat->end_word_;
+      range.start_ = dat->start_token_;
+      range.end_ = dat->end_token_;
       range.dict_ = dict;
       if (OB_FAIL(range_dicts_.push_back(range))) {
         LOG_WARN("Failed to push back range dict.", K(ret));

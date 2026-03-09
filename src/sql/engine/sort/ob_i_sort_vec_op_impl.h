@@ -26,12 +26,10 @@ class ObISortVecOpImpl
 {
 public:
   explicit ObISortVecOpImpl(ObMonitorNode &op_monitor_info,
-                            lib::MemoryContext &mem_context,
-                            ObSqlWorkAreaType profile_type) :
+                            lib::MemoryContext &mem_context) :
     mem_context_(mem_context), input_rows_(OB_INVALID_ID), input_width_(OB_INVALID_ID),
     op_type_(PHY_INVALID), op_id_(UINT64_MAX), io_event_observer_(nullptr),
-    profile_(profile_type), op_monitor_info_(op_monitor_info),
-    sql_mem_processor_(profile_, op_monitor_info_)
+    op_monitor_info_(op_monitor_info)
   {}
   virtual ~ObISortVecOpImpl()
   {}
@@ -45,14 +43,8 @@ public:
   virtual int add_batch_stored_row(int64_t &row_size, const ObCompactRow **sk_stored_rows,
                                    const ObCompactRow **addon_stored_rows) = 0;
   virtual int64_t get_extra_size(bool is_sort_key) = 0;
-  void unregister_profile()
-  {
-    sql_mem_processor_.unregister_profile();
-  }
-  void unregister_profile_if_necessary()
-  {
-    sql_mem_processor_.unregister_profile_if_necessary();
-  }
+  virtual void unregister_profile() = 0;
+  virtual void unregister_profile_if_necessary() = 0;
   void collect_memory_dump_info(ObMonitorNode &info)
   {
     info.otherstat_1_id_ = op_monitor_info_.otherstat_1_id_;
@@ -94,9 +86,7 @@ protected:
   ObPhyOperatorType op_type_;
   uint64_t op_id_;
   ObIOEventObserver *io_event_observer_;
-  ObSqlWorkAreaProfile profile_;
   ObMonitorNode &op_monitor_info_;
-  ObSqlMemMgrProcessor sql_mem_processor_;
 };
 
 } // end namespace sql

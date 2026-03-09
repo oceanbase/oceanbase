@@ -71,7 +71,7 @@ public:
       }
       if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator_.alloc(buffer_len)))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("alloc buf failed", K(ret));
+        SQL_ENG_LOG(ERROR, "alloc buf failed", K(ret));
       } else {
         // generate new row
         sql_mem_processor_.alloc(buffer_len);
@@ -83,7 +83,7 @@ public:
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(reuse_row->assign(
             *reinterpret_cast<const ObCompactRow *>(src_row)))) {
-      LOG_WARN("stored row assign failed", K(ret));
+      SQL_ENG_LOG(WARN, "stored row assign failed", K(ret));
     } else {
       if (has_addon && is_sort_key) {
         reuse_row->set_addon_ptr(nullptr, *sk_row_meta);
@@ -119,10 +119,10 @@ public:
     }
 
     if (OB_FAIL(copy_row(sk_row_meta_, src_row, true, reuse_row))) {
-      LOG_WARN("failed to copy sort key row", K(ret));
+      SQL_ENG_LOG(WARN, "failed to copy sort key row", K(ret));
     } else if (has_addon) {
       if (OB_FAIL(copy_row(addon_row_meta_, ori_addon_row, false, reuse_addon_row))) {
-        LOG_WARN("failed to copy addon row", K(ret));
+        SQL_ENG_LOG(WARN, "failed to copy addon row", K(ret));
       } else {
         reuse_row->set_addon_ptr(reuse_addon_row, *sk_row_meta_);
       }
@@ -156,17 +156,17 @@ public:
     char *buf = nullptr;
     if (OB_ISNULL(orign_row)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
+      SQL_ENG_LOG(WARN, "unexpected null", K(ret));
     } else if (OB_ISNULL(buf = reinterpret_cast<char *>(
                              allocator_.alloc(orign_row->get_row_size())))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc buf failed", K(ret));
+      SQL_ENG_LOG(ERROR, "alloc buf failed", K(ret));
     } else if (OB_ISNULL(new_row = new (buf) Store_Row())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("failed to new row", K(ret));
+      SQL_ENG_LOG(ERROR, "failed to new row", K(ret));
     } else if (OB_FAIL(new_row->assign(
                    *reinterpret_cast<const ObCompactRow *>(orign_row)))) {
-      LOG_WARN("stored row assign failed", K(ret));
+      SQL_ENG_LOG(WARN, "stored row assign failed", K(ret));
     } else {
       int64_t row_size = orign_row->get_row_size();
       sql_mem_processor_.alloc(row_size);
@@ -179,14 +179,14 @@ public:
   {
     int ret = OB_SUCCESS;
     if (OB_SUCCESS != (ret = deep_copy_row(sk_row_meta_, orign_row, new_row))) {
-      LOG_WARN("failed to copy to row", K(ret));
+      SQL_ENG_LOG(WARN, "failed to copy to row", K(ret));
     } else if (has_addon) {
       Store_Row *new_addon_row = nullptr;
       Store_Row *ori_addon_row =
           const_cast<Store_Row *>(orign_row->get_addon_ptr(*sk_row_meta_));
       if (OB_FAIL(deep_copy_row(addon_row_meta_, ori_addon_row, new_addon_row))) {
         free_row_store(*sk_row_meta_, new_row);
-        LOG_WARN("failed to copy to row", K(ret));
+        SQL_ENG_LOG(WARN, "failed to copy to row", K(ret));
       } else {
         new_row->set_addon_ptr(new_addon_row, *sk_row_meta_);
       }

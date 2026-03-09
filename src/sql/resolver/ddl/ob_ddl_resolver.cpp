@@ -67,6 +67,9 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     use_bloom_filter_(false),
     expire_info_(),
     compress_method_(),
+    parser_name_(),
+    parser_properties_(),
+    fts_index_type_(share::schema::OB_FTS_INDEX_TYPE_INVALID),
     comment_(),
     tablegroup_name_(),
     primary_zone_(),
@@ -1866,6 +1869,35 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                                                                                *allocator_,
                                                                                parser_properties_))) {
           LOG_WARN("fail to resolve parser properties", K(ret));
+        }
+        break;
+      }
+      case T_FTS_INDEX_TYPE: {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < MIN_DATA_VERSION_FOR_FTS_INDEX_TYPE) { // version check 4.5.1.0
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("fts index type isn't supported before version 4.5.1.0", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "enable phrase match before version 4.5.1.0 is");
+        } else {
+          ParseNode *type_node = option_node->children_[0];
+          if (OB_ISNULL(type_node)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fts type node should not be nullptr", K(ret));
+          } else if (T_FTS_INDEX_FILTER == type_node->type_) {
+            fts_index_type_ = OB_FTS_INDEX_TYPE_FILTER;
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("filter fts index type is not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "filter fts index type");
+          } else if (T_FTS_INDEX_MATCH == type_node->type_) {
+            fts_index_type_ = OB_FTS_INDEX_TYPE_MATCH;
+          } else if (T_FTS_INDEX_PHRASE_MATCH == type_node->type_) {
+            fts_index_type_ = OB_FTS_INDEX_TYPE_PHRASE_MATCH;
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected fts index type", K(type_node->type_), K(ret));
+          }
         }
         break;
       }
@@ -5758,6 +5790,7 @@ void ObDDLResolver::reset() {
   compress_method_.reset();
   parser_name_.reset();
   parser_properties_.reset();
+  fts_index_type_ = OB_FTS_INDEX_TYPE_INVALID;
   comment_.reset();
   tablegroup_name_.reset();
   primary_zone_.reset();
@@ -5805,6 +5838,7 @@ void ObDDLResolver::reset_index()
 {
   index_scope_ = NOT_SPECIFIED;
   parser_name_.reset();
+  fts_index_type_ = OB_FTS_INDEX_TYPE_INVALID;
   parser_properties_.reset();
   comment_.reset();
   // default
@@ -8101,7 +8135,9 @@ int ObDDLResolver::resolve_vec_index_constraint(
     bool is_collection_column = ob_is_collection_sql_type(column_schema.get_data_type());
     // TODO(shancai): later support text and string type
     bool is_text_column = ob_is_varchar_type(column_schema.get_data_type(), column_schema.get_collation_type());
-    if (!is_collection_column && !is_text_column) {
+    if (OB_FAIL(ObLicenseUtils::check_ai_allowed(tenant_id))) {
+      LOG_WARN("AI option is required for vector index", KR(ret), K(tenant_id));
+    } else if (!is_collection_column && !is_text_column) {
       ret = OB_ERR_BAD_VEC_INDEX_COLUMN;
       LOG_USER_ERROR(OB_ERR_BAD_VEC_INDEX_COLUMN,
           column_schema.get_column_name_str().length(),
@@ -13914,13 +13950,14 @@ int ObDDLResolver::check_ttl_expr(const ParseNode *ttl_expr_node,
   } else {
     ObTTLFlag tmp_ttl_flag;
     ObString column_name(ttl_expr_node->children_[0]->str_len_, ttl_expr_node->children_[0]->str_value_);
+    ObTTLFlag::TTLColumnType ttl_column_type = ObTTLFlag::TTLColumnType::NONE;
     if (ObCompactionTTLUtil::is_rowscn_column(column_name)) {
       if (tenant_data_version < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("rowscn column as ttl column is not supported in data version less than 4.5.1", K(ret), K(tenant_data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscn column as ttl column in this version is");
       } else {
-        tmp_ttl_flag.ttl_column_type_ = ObTTLFlag::TTLColumnType::ROWSCN;
+        ttl_column_type = ObTTLFlag::TTLColumnType::ROWSCN;
         FLOG_INFO("[COMPACTION TTL] use rowscn column as TTL column", KR(ret), K(column_name));
       }
     } else if (OB_ISNULL(tbl_schema)) {
@@ -13938,18 +13975,17 @@ int ObDDLResolver::check_ttl_expr(const ParseNode *ttl_expr_node,
                 K(ret), K(column_name), K(column_schema->get_data_type()));
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(ObTTLDefinition::COMPACTION == ttl_type && tmp_ttl_flag.ttl_column_type_ != ObTTLFlag::TTLColumnType::ROWSCN)) {
+    } else if (OB_UNLIKELY(ObTTLDefinition::COMPACTION == ttl_type && ttl_column_type != ObTTLFlag::TTLColumnType::ROWSCN)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("compaction ttl only support rowscn column", K(ret), K(tbl_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "compaction ttl only support rowscn column");
-    } else if (OB_UNLIKELY(ObTTLDefinition::COMPACTION != ttl_type && tmp_ttl_flag.ttl_column_type_ == ObTTLFlag::TTLColumnType::ROWSCN)) {
+    } else if (OB_UNLIKELY(ObTTLDefinition::COMPACTION != ttl_type && ttl_column_type == ObTTLFlag::TTLColumnType::ROWSCN)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("rowscn column as ttl column is not supported in row ttl type", K(ret), K(tbl_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscn column as ttl column is not supported in row ttl type");
+    } else if (OB_FAIL(tmp_ttl_flag.init(tenant_data_version, ttl_type, ttl_column_type))) {
+      LOG_WARN("failed to init ttl flag", KR(ret), K(ttl_type), K(ttl_column_type));
     } else {
-      tmp_ttl_flag.version_ = ObTTLFlag::TTL_FLAG_VERSION_V2;
-      tmp_ttl_flag.was_compaction_ttl_ = ttl_type == ObTTLDefinition::COMPACTION;
-      tmp_ttl_flag.ttl_type_ = ttl_type;
       ttl_flag_.fuse(tmp_ttl_flag);
     }
   }

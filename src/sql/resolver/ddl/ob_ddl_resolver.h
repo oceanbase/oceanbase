@@ -1126,6 +1126,7 @@ protected:
   common::ObString compress_method_;
   common::ObString parser_name_;
   common::ObString parser_properties_;
+  ObFTSIndexType fts_index_type_;
   common::ObString comment_;
   common::ObString tablegroup_name_;
   common::ObString primary_zone_;

@@ -2928,7 +2928,7 @@ int ObLSBackupInfoOperator::get_next_task_id(common::ObISQLClient &trans,
   int64_t current_task_id = 0;
   if (OB_FAIL(get_item(trans, get_exec_tenant_id(tenant_id), item, true))) {
     if (ret == OB_BACKUP_INFO_NOT_EXIST) {
-      current_task_id = 1/*first task id*/;
+      current_task_id = 0/*first task id*/;
       ret = OB_SUCCESS;
     }
   } else if (OB_FAIL(ob_atoll(item.value_.ptr(), current_task_id))) {

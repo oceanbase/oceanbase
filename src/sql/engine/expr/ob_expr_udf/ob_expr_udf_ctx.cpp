@@ -641,15 +641,12 @@ int ObExprUDFCtx::get_result_from_result_cache(ObObj &result, bool &found)
     } else {
       found = true;
       if (result.is_pl_extend() && result.get_meta().get_extend_type()) {
-        if (OB_ISNULL(exec_ctx_->get_pl_ctx())) {
-          OZ (exec_ctx_->init_pl_ctx());
-        }
-        OZ (exec_ctx_->get_pl_ctx()->add(result));
-        if (OB_FAIL(ret)) {
-          int tmp_ret = OB_SUCCESS;
-          if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(result, exec_ctx_->get_my_session())) != OB_SUCCESS) {
-            LOG_WARN("failed to destruct result object", K(ret), K(tmp_ret));
-          }
+        sql::ObPLComplexTypeMgr *pl_complex_type_mgr = exec_ctx_->get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+        int tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result);
+        if (OB_SUCCESS != tmp_ret) {
+          int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
+          LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
         }
       }
     }

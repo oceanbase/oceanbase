@@ -33,7 +33,7 @@ int ObTableLoadEmptyInsertDag::init_by_param(const ObIDagInitParam *param)
     LOG_WARN("init ddl independent dag failed", K(ret), KPC(init_param));
   } else {
     ObArray<ObITask *> write_macro_block_tasks;
-    if (OB_FAIL(generate_write_macro_block_tasks(write_macro_block_tasks))) {
+    if (OB_FAIL(generate_fixed_tasks(write_macro_block_tasks))) {
       LOG_WARN("fail to generate write macro block tasks", KR(ret));
     } else if (OB_FAIL(batch_add_task(write_macro_block_tasks))) {
       LOG_WARN("batch add task failed", K(ret), K(write_macro_block_tasks.count()));

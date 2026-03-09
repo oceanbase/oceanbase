@@ -29,7 +29,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::blocksstable;
 
-OB_SERIALIZE_MEMBER(ObBackupBlockFileMacroIdItem, macro_id_);
+OB_SERIALIZE_MEMBER(ObBackupBlockFileMacroIdItem, macro_id_, occupy_size_);
 
 int ObBackupBlockFileMacroIdItem::assign(const ObBackupBlockFileMacroIdItem &other)
 {
@@ -39,6 +39,7 @@ int ObBackupBlockFileMacroIdItem::assign(const ObBackupBlockFileMacroIdItem &oth
     LOG_WARN("get invalid arg", K(ret), K(other));
   } else {
     macro_id_ = other.macro_id_;
+    occupy_size_ = other.occupy_size_;
   }
   return ret;
 }

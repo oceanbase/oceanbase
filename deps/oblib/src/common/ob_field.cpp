@@ -81,6 +81,10 @@ int ObField::full_deep_copy(const ObField &other, ObIAllocator *allocator)
       LOG_WARN("ObStringBuf write Field.type_name_ string error", K(ret));
     } else if (OB_FAIL(ob_write_string(*allocator, other.type_owner_, type_owner_))) {
       LOG_WARN("ObStringBuf write Field.type_owner_ string error", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator, other.elem_type_owner_, elem_type_owner_))) {
+      LOG_WARN("ObStringBuf write Field.elem_type_owner_ string error", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator, other.elem_type_name_, elem_type_name_))) {
+      LOG_WARN("ObStringBuf write Field.elem_type_name_ string error", K(ret));
     } else if (OB_FAIL(deep_copy_obj(*allocator, other.type_, type_))) {
       LOG_WARN("deep copy obj failed", K(ret), K(other.type_));
     } else if (OB_FAIL(deep_copy_obj(*allocator, other.default_value_, default_value_))) {
@@ -132,6 +136,10 @@ int ObField::deep_copy(const ObField &other, ObIAllocator *allocator)
       LOG_WARN("ObStringBuf write Field.type_name_ string error", K(ret));
     } else if (OB_FAIL(ob_write_string(*allocator, other.type_owner_, type_owner_))) {
       LOG_WARN("ObStringBuf write Field.type_name_ string error", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator, other.elem_type_owner_, elem_type_owner_))) {
+      LOG_WARN("ObStringBuf write Field.elem_type_owner_ string error", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator, other.elem_type_name_, elem_type_name_))) {
+      LOG_WARN("ObStringBuf write Field.elem_type_name_ string error", K(ret));
     } else {
       // Attention: These two members are not deep copied.
       type_ = other.type_;
@@ -182,6 +190,8 @@ int64_t ObField::get_convert_size() const
   convert_size += type_name_.length();
   convert_size += type_owner_.length();
   convert_size += default_value_.get_deep_copy_size();
+  convert_size += elem_type_owner_.length();
+  convert_size += elem_type_name_.length();
   return convert_size;
 }
 

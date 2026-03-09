@@ -79,6 +79,7 @@ public:
                  const ObObjectStorageInfo &storage_info,
                  const ObStorageIdMod &storage_id_mod,
                  ObIODevice *&device_handle);
+
   // get ObLocalDevice or ObLocalCacheDevice.
   // @storage_type_prefix only allows OB_LOCAL_PREFIX and OB_LOCAL_CACHE_PREFIX.
   static int get_local_device(const ObString &storage_type_prefix,

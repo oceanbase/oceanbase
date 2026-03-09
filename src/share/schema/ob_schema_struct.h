@@ -201,6 +201,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_VEC_SPIV_VEC_COLUMN_FLAG (INT64_C(1) << 53)
 #define GENERATED_HYBRID_VEC_CHUNK_COLUMN_FLAG (INT64_C(1) << 54)
 #define GENERATED_VEC_VISIBLE_COLUMN_FLAG (INT64_C(1) << 55)
+#define GENERATED_FTS_POS_LIST_COLUMN_FLAG (INT64_C(1) << 56)
 #define SPATIAL_COLUMN_SRID_MASK (0xffffffffffffffe0L)
 
 #define STORED_COLUMN_FLAGS_MASK 0xFFFFFFFF
@@ -1396,6 +1397,7 @@ typedef enum {
   AI_MODEL_SCHEMA = 48,
   ICEBERG_TABLE_SCHEMA = 49,
   SENSITIVE_RULE_SCHEMA = 50,
+  JAVA_POLICY_SCHEMA = 51,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;

@@ -65,6 +65,7 @@ namespace share
 enum class ObLakeTableFormat;
 namespace schema
 {
+struct ObFTSIndexParams;
 class ObSchemaGetterGuard;
 class ObColDesc;
 class ObConstraint;
@@ -736,6 +737,7 @@ public:
   virtual inline ObIndexStatus get_index_status() const { return INDEX_STATUS_MAX; }
   virtual inline bool is_index_table() const = 0;
   virtual inline bool has_ttl_definition() const { return false; }
+  virtual inline bool was_compaction_ttl() const { return false; }
   virtual int get_is_column_store(bool &is_column_store) const { UNUSED(is_column_store); return common::OB_NOT_SUPPORTED; }
 
   virtual int get_store_column_ids(common::ObIArray<ObColDesc> &column_ids, const bool full_col) const
@@ -1583,6 +1585,7 @@ public:
   inline void set_merge_engine_type(const ObMergeEngineType merge_engine_type) { merge_engine_type_ = merge_engine_type; }
   inline void set_skip_index_level(const ObSkipIndexLevel skip_index_level) { skip_index_level_ = skip_index_level; }
   int set_store_format(const common::ObString &store_format);
+  int set_fts_params_to_index_params(const ObFTSIndexParams &fts_index_params);
   inline void set_row_store_type(const common::ObRowStoreType row_store_type) { row_store_type_ = row_store_type; }
   int set_row_store_type(const common::ObString &row_store);
   int set_tablegroup_name(const char *tablegroup_name) { return deep_copy_str(tablegroup_name, tablegroup_name_); }
@@ -1749,6 +1752,7 @@ public:
   inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
   inline ObTTLFlag get_ttl_flag() const { return ttl_flag_; }
   virtual bool has_ttl_definition() const override { return !get_ttl_definition().empty(); }
+  virtual bool was_compaction_ttl() const override { return get_ttl_flag().was_compaction_ttl_; }
   inline bool is_compaction_rowscn_ttl_di_table() const
   {
     return get_ttl_flag().ttl_type_ == share::ObTTLDefinition::COMPACTION
@@ -1773,6 +1777,7 @@ public:
   inline const char *get_parser_name() const { return extract_str(parser_name_); }
   inline const common::ObString &get_parser_name_str() const { return parser_name_; }
   inline const common::ObString &get_parser_property_str() const { return parser_properties_; }
+  int get_fts_params_from_index_params(ObFTSIndexParams &fts_index_params) const;
 
   inline uint64_t get_index_attributes_set() const { return index_attributes_set_; }
   inline int64_t get_dop() const  { return table_dop_; }

@@ -70,7 +70,7 @@ int ObCompactionTTLUtil::is_compaction_ttl_schema(
     COMMON_LOG(WARN, "fail to init ttl checker", KR(ret), K(table_schema));
   } else if (1 == ttl_checker.get_ttl_definition().count()) { // only one ttl expr
     const ObTableTTLExpr &ttl_expr = ttl_checker.get_ttl_definition().at(0);
-    if (!ObCompactionTTLUtil::is_compaction_ttl_merge_engine(table_schema.get_merge_engine_type())) {
+    if (!table_schema.is_aux_lob_table() && !ObCompactionTTLUtil::is_compaction_ttl_merge_engine(table_schema.get_merge_engine_type())) {
       COMMON_LOG(INFO, "[COMPACTION TTL] not support merge engine", K(ret), K(table_id),
         "merge_engine_type", table_schema.get_merge_engine_type());
     } else if (!ObCompactionTTLUtil::is_rowscn_column(ttl_expr.column_name_)) {
@@ -145,8 +145,9 @@ int ObCompactionTTLUtil::check_ttl_column_valid(const ObTableSchema &table_schem
           ret = OB_NOT_SUPPORTED;
           COMMON_LOG(WARN, "now, only support ora_rowscn column in sql mode", K(ret), K(table_schema));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-ora_rowscn column is not supported as ttl column in sql mode");
-        } else if (!ObCompactionTTLUtil::is_compaction_ttl_merge_engine(table_schema.get_merge_engine_type())) {
+        } else if (!table_schema.is_aux_lob_table() && !ObCompactionTTLUtil::is_compaction_ttl_merge_engine(table_schema.get_merge_engine_type())) {
           // 4. only support delete_insert and append_only merge engine
+          //    skip check aux lob table
           ret = OB_NOT_SUPPORTED;
           COMMON_LOG(WARN, "compaction ttl only support delete_insert and append_only merge engine", K(ret), K(table_schema));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "compaction ttl for partial update merge engine is");

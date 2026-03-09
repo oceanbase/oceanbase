@@ -3341,7 +3341,9 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(is_offline_rebuild),
        K_(index_key),
        K_(data_version),
-       K_(generated_column_names));
+       K_(generated_column_names),
+       K_(def_index_id),
+       K_(is_partition_local_ddl));
   J_OBJ_END();
   return pos;
 }
@@ -3376,7 +3378,8 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     data_version_,
                     generated_column_names_,
                     def_index_id_,
-                    is_table_restore_);
+                    is_table_restore_,
+                    is_partition_local_ddl_);
 
 OB_SERIALIZE_MEMBER((ObIndexOfflineDdlArg, ObDDLArg),
                     arg_,
@@ -7278,6 +7281,46 @@ OB_SERIALIZE_MEMBER(ObAdminClearBalanceTaskArg, tenant_ids_, type_, zone_names_)
 
 OB_SERIALIZE_MEMBER(ObMCLogInfo, log_id_, timestamp_);
 
+OB_SERIALIZE_MEMBER(ObCheckTabletExistArg, tenant_id_, ls_id_, tablet_id_);
+
+int ObCheckTabletExistArg::init(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+               || !ls_id.is_valid_with_tenant(tenant_id)
+               || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(tablet_id));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    tablet_id_ = tablet_id;
+  }
+  return ret;
+}
+
+int ObCheckTabletExistArg::assign(const ObCheckTabletExistArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+    tablet_id_ = other.tablet_id_;
+  }
+  return ret;
+}
+
+void ObCheckTabletExistArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_ = ObLSID::INVALID_LS_ID;
+  tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
+}
+
 DEF_TO_STRING(ObForceSwitchILogFileArg)
 {
   int64_t pos = 0;
@@ -10197,6 +10240,7 @@ bool ObCreateLSArg::is_valid() const
          && (!is_create_ls_with_palf()
              || palf_base_info_.is_valid())
          && major_mv_merge_info_.is_valid();
+         //COMPAT: data_version can not check valid
 }
 void ObCreateLSArg::reset()
 {
@@ -10210,6 +10254,7 @@ void ObCreateLSArg::reset()
   create_ls_type_ = EMPTY_LS;
   palf_base_info_.reset();
   major_mv_merge_info_.reset();
+  data_version_ = 0;
 }
 
 int ObCreateLSArg::assign(const ObCreateLSArg &arg)
@@ -10227,6 +10272,7 @@ int ObCreateLSArg::assign(const ObCreateLSArg &arg)
     create_ls_type_ = arg.create_ls_type_;
     palf_base_info_ = arg.palf_base_info_;
     major_mv_merge_info_ = arg.major_mv_merge_info_;
+    data_version_ = arg.data_version_;
   }
   return ret;
 }
@@ -10239,7 +10285,8 @@ int ObCreateLSArg::init(const int64_t tenant_id,
     const lib::Worker::CompatMode &mode,
     const bool create_with_palf,
     const palf::PalfBaseInfo &palf_base_info,
-    const storage::ObMajorMVMergeInfo &major_mv_merge_info)
+    const storage::ObMajorMVMergeInfo &major_mv_merge_info,
+    const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
@@ -10247,9 +10294,10 @@ int ObCreateLSArg::init(const int64_t tenant_id,
                   || !ObReplicaTypeCheck::is_replica_type_valid(replica_type)
                   || !replica_property.is_valid()
                   || !tenant_info.is_valid()
-                  || !major_mv_merge_info.is_valid())) {
+                  || !major_mv_merge_info.is_valid()
+                  || 0 == data_version)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id), K(replica_type), K(tenant_info), K(major_mv_merge_info));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id), K(replica_type), K(tenant_info), K(major_mv_merge_info), K(data_version));
   } else {
     (void)tenant_info_.assign(tenant_info);
     tenant_id_ = tenant_id;
@@ -10265,6 +10313,7 @@ int ObCreateLSArg::init(const int64_t tenant_id,
     }
     palf_base_info_ = palf_base_info;
     major_mv_merge_info_ = major_mv_merge_info;
+    data_version_ = data_version;
   }
   return ret;
 }
@@ -10273,12 +10322,14 @@ DEF_TO_STRING(ObCreateLSArg)
 {
   int64_t pos = 0;
   J_KV(K_(tenant_id), K_(id), K_(replica_type), K_(replica_property), K_(tenant_info),
-       K_(create_scn), K_(compat_mode), K_(palf_base_info), "create with palf", is_create_ls_with_palf(), K_(major_mv_merge_info));
+       K_(create_scn), K_(compat_mode), K_(palf_base_info), "create with palf", is_create_ls_with_palf(), K_(major_mv_merge_info), K_(data_version));
   return pos;
 }
 
 OB_SERIALIZE_MEMBER(ObCreateLSArg, tenant_id_, id_, replica_type_, replica_property_, tenant_info_,
-create_scn_, compat_mode_, create_ls_type_, palf_base_info_, major_mv_merge_info_);
+create_scn_, compat_mode_, create_ls_type_, palf_base_info_, major_mv_merge_info_,
+data_version_ // FARM COMPAT WHITELIST
+);
 
 #ifdef OB_BUILD_ARBITRATION
 bool ObCreateArbArg::is_valid() const
@@ -12362,7 +12413,15 @@ OB_DEF_SERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE, direct_load_type_, trans_id_, seq_no_, snapshot_version_, data_format_version_);
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                direct_load_type_,
+                trans_id_,
+                seq_no_,
+                snapshot_version_,
+                data_format_version_,
+                is_co_sstable_,
+                data_inc_major_buffer_,
+                lob_inc_major_buffer_);
   }
   return ret;
 }
@@ -12385,7 +12444,15 @@ OB_DEF_DESERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, direct_load_type_, trans_id_, seq_no_, snapshot_version_, data_format_version_);
+    LST_DO_CODE(OB_UNIS_DECODE,
+                direct_load_type_,
+                trans_id_,
+                seq_no_,
+                snapshot_version_,
+                data_format_version_,
+                is_co_sstable_,
+                data_inc_major_buffer_,
+                lob_inc_major_buffer_);
   }
   return ret;
 }
@@ -12397,7 +12464,15 @@ OB_DEF_SERIALIZE_SIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
   if (tx_desc_ != nullptr) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, *tx_desc_);
   }
-  LST_DO_CODE(OB_UNIS_ADD_LEN, direct_load_type_, trans_id_, seq_no_, snapshot_version_, data_format_version_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              direct_load_type_,
+              trans_id_,
+              seq_no_,
+              snapshot_version_,
+              data_format_version_,
+              is_co_sstable_,
+              data_inc_major_buffer_,
+              lob_inc_major_buffer_);
   return len;
 }
 

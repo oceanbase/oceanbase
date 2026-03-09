@@ -2642,16 +2642,20 @@ int ObDDLUtil::fill_writer_param(
     const int64_t slice_idx,
     const int64_t cg_idx,
     ObDDLIndependentDag *dag,
-    const int64_t max_batch_size,
     ObWriteMacroParam &param)
 {
   int ret = OB_SUCCESS;
   ObDDLTabletContext *tablet_context = nullptr;
+  const ObDDLTableSchema *use_schema = nullptr;
   if (OB_UNLIKELY(!tablet_id.is_valid() || slice_idx < 0 || nullptr == dag)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(slice_idx), KP(dag));
   } else if (OB_FAIL(dag->get_tablet_context(tablet_id, tablet_context))) {
     LOG_WARN("get ddl tablet context", K(ret), K(tablet_id), K(slice_idx));
+  } else if (OB_FAIL(dag->get_ddl_table_schema(tablet_id, use_schema))) {
+    LOG_WARN("get ddl table schema failed", K(ret), K(tablet_id));
+  } else if (OB_FAIL(param.ddl_table_schema_.assign(*use_schema))) {
+    LOG_WARN("assign ddl table schema failed", K(ret), KPC(use_schema));
   } else {
     const ObDDLTaskParam &ddl_task_param = dag->get_ddl_task_param();
     param.ls_id_ = tablet_context->ls_id_;
@@ -2670,14 +2674,11 @@ int ObDDLUtil::fill_writer_param(
     param.tablet_param_ = tablet_context->tablet_param_;
     param.lob_meta_tablet_param_ = tablet_context->lob_meta_tablet_param_;
     param.tx_info_ = dag->get_tx_info();
-    param.is_index_table_ = dag->get_ddl_table_schema().table_item_.is_index_table_;
+    param.is_index_table_ = use_schema->table_item_.is_index_table_;
     param.cg_idx_ = cg_idx;
     param.ddl_dag_ = dag;
     param.tablet_context_ = tablet_context;
-    param.max_batch_size_ = max_batch_size;
-    if (OB_FAIL(param.ddl_table_schema_.assign(dag->get_ddl_table_schema()))) {
-      LOG_WARN("get ddl table schema failed", K(ret));
-    }
+    param.max_batch_size_ = dag->get_ddl_task_param().max_batch_size_;
   }
   return ret;
 }
@@ -3254,8 +3255,18 @@ int ObDDLUtil::construct_domain_index_arg(const ObTableSchema *table_schema,
     create_index_arg.database_name_ = ObString(database_schema->get_database_name_str());
     create_index_arg.tenant_id_ = task.get_tenant_id();
     if (index_schema->is_fts_index()) {
-      create_index_arg.index_option_.parser_name_ = index_schema->get_parser_name_str();
-      create_index_arg.index_key_ = ObDDLResolver::INDEX_KEYNAME::FTS_KEY;
+      share::schema::ObFTSIndexParams fts_index_params;
+      if (OB_FAIL(index_schema->get_fts_params_from_index_params(fts_index_params))) {
+        LOG_WARN("failed to get fts index params", K(ret), KP(index_schema));
+      } else if (index_schema->get_parser_name_str().empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected fts index type", K(ret), K(fts_index_params));
+      } else {
+        create_index_arg.index_option_.parser_name_ = index_schema->get_parser_name_str();
+        create_index_arg.index_option_.parser_properties_ = index_schema->get_parser_property_str();
+        create_index_arg.index_key_ = ObDDLResolver::INDEX_KEYNAME::FTS_KEY;
+        create_index_arg.index_option_.fts_index_type_ = fts_index_params.fts_index_type_;
+      }
     }
   }
   return ret;
@@ -7374,4 +7385,26 @@ void ObDDLEventInfo::set_inner_sql_id(const int64_t execution_id)
   parent_trace_id_ = *ObCurTraceId::get_trace_id();
   ObCurTraceId::set_inner_sql_id(execution_id);
   trace_id_ = *ObCurTraceId::get_trace_id();
+}
+
+
+/* if satisfy any following requirements, using batch interface
+ * 1. column store table
+ * 2. vec index
+ * 3. fts index or fts doc word aux index
+*/
+bool ObDDLFTSUtils::ddl_using_batch_interface(const oceanbase::storage::ObDDLTableSchema &ddl_table_schema, const uint64_t tenant_data_version)
+{
+  bool ret = false;
+  if (ddl_table_schema.table_item_.is_column_store_) {
+    ret = true;
+  } else if (ddl_table_schema.table_item_.vec_dim_ > 0) {
+    ret = true;
+  } else if (nullptr != ddl_table_schema.storage_schema_ &&
+             ddl_fts_dag_opti(ddl_table_schema.table_item_.index_type_,
+                              ddl_table_schema.storage_schema_->get_row_store_type(),
+                              tenant_data_version)) {
+    ret = true;
+  }
+  return ret;
 }

@@ -55,6 +55,37 @@ public:
   int resolve_table_relation_factor(const ParseNode *node, uint64_t &database_id,
                                     common::ObString &table_name, common::ObString &synonym_name, common::ObString &db_name);
 
+  enum class ObNameType {
+    NAME_TYPE_TABLE,
+    NAME_TYPE_DATABASE
+  };
+
+  int resolve_dblink_info(const ParseNode* node,
+                          char **dblink_name_ptr,
+                          int32_t *dblink_name_len,
+                          bool *has_dblink_node);
+
+  int normalize_and_validate_name(common::ObString &name,
+                                  ObStmtResolver::ObNameType type,
+                                  const stmt::StmtType stmt_type = stmt::T_NONE,
+                                  const bool is_index_table = false);
+
+  int resolve_tablename_info(const ParseNode *node,
+                              common::ObString &table_name);
+
+  int resolve_db_and_catalog_info(const ParseNode *node,
+                                  common::ObString &db_name,
+                                  common::ObString &catalog_name,
+                                  uint64_t &catalog_id,
+                                  bool is_oracle_sys_view,
+                                  bool *has_dblink_node,
+                                  bool &is_db_explicit,
+                                  bool is_org);
+
+  int resolve_index_info_particularly(common::ObString &table_name,
+                                      common::ObString &db_name,
+                                      uint64_t &catalog_id);
+
   /// @param org If org is true, means get original db name.
   /// Else, when db node is NULL, get session db name.
   int resolve_table_relation_node_v2(const ParseNode *node,

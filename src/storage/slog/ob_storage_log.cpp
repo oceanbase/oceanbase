@@ -10,8 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE_REDO
 #include "ob_storage_log.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/share/ob_shared_tablet_extra_info.h"
+#endif
 
 namespace oceanbase
 {
@@ -375,6 +379,45 @@ bool ObUpdateTabletLog::is_valid() const
 {
   return ls_id_.is_valid() && tablet_id_.is_valid() && disk_addr_.is_valid() && ls_epoch_ >= 0;
 }
+
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObUpdateTabletLog::convert_to_ss_update_log(
+    const share::SCN &reorg_scn,
+    const share::SCN deleted_scn,
+    const int64_t must_cache_size,
+    const int64_t try_cache_size,
+    storage::ObSSUpdateTabletLog &update_log)
+{
+  int ret = OB_SUCCESS;
+  update_log.reset();
+
+  if (!reorg_scn.is_valid() || must_cache_size < 0 || try_cache_size < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_REDO_LOG(WARN, "convert to ss update log get invalid argument", K(ret), K(reorg_scn), K(must_cache_size), K(try_cache_size));
+  } else if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_REDO_LOG(WARN, "update tablet log is invalid, unexpected", K(ret), KPC(this));
+  } else {
+    update_log.ls_id_ = ls_id_;
+    update_log.tablet_id_ = tablet_id_;
+    update_log.reorg_scn_ = reorg_scn;
+    update_log.ss_tablet_attr_.iter_attr_ = tablet_attr_.iter_attr_;
+    update_log.ss_tablet_attr_.ha_status_ = tablet_attr_.ha_status_;
+    update_log.ss_tablet_attr_.all_sstable_data_occupy_size_ = tablet_attr_.all_sstable_data_occupy_size_;
+    update_log.ss_tablet_attr_.all_sstable_data_required_size_ = tablet_attr_.all_sstable_data_required_size_;
+    update_log.ss_tablet_attr_.tablet_meta_size_ = tablet_attr_.tablet_meta_size_;
+    update_log.ss_tablet_attr_.backup_bytes_ = tablet_attr_.backup_bytes_;
+    update_log.ss_tablet_attr_.ss_public_sstable_occupy_size_ = tablet_attr_.ss_public_sstable_occupy_size_;
+    update_log.accelerate_info_ = accelerate_info_;
+    update_log.deleted_scn_ = deleted_scn;
+    update_log.must_cache_size_ = must_cache_size;
+    update_log.try_cache_size_ = try_cache_size;
+    update_log.tablet_serialize_size_ = (int64_t)disk_addr_.size();
+  }
+  return ret;
+}
+#endif
 
 OB_SERIALIZE_MEMBER(ObUpdateTabletLog,
                     ls_id_,

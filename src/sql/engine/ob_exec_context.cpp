@@ -84,7 +84,6 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     sql_ctx_(NULL),
     pl_stack_ctx_(nullptr),
     need_disconnect_(true),
-    pl_ctx_(NULL),
     package_guard_(NULL),
     pl_expr_allocator_(NULL),
     row_id_list_(nullptr),
@@ -176,10 +175,6 @@ ObExecContext::~ObExecContext()
   if (OB_NOT_NULL(udf_ctx_mgr_)) {
     udf_ctx_mgr_->~ObUdfCtxMgr();
     udf_ctx_mgr_ = NULL;
-  }
-  if (OB_NOT_NULL(pl_ctx_)) {
-    pl_ctx_->~ObPLCtx();
-    pl_ctx_ = NULL;
   }
   if (OB_NOT_NULL(package_guard_)) {
     package_guard_->~ObPLPackageGuard();
@@ -274,6 +269,7 @@ ObExecContext::~ObExecContext()
   if (odps_partition_str_to_file_size_.created()) {
     odps_partition_str_to_file_size_.destroy();
   }
+  pl_complex_type_lazy_mgr_.reset();
 }
 
 void ObExecContext::clean_resolve_ctx()
@@ -636,21 +632,6 @@ int ObExecContext::fast_check_status_ignore_interrupt(const int64_t n)
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY((check_status_times_++ & n) == n)) {
     ret = check_status_ignore_interrupt();
-  }
-  return ret;
-}
-
-int ObExecContext::init_pl_ctx()
-{
-  int ret = OB_SUCCESS;
-  pl::ObPLCtx *pl_ctx = NULL;
-  if (OB_ISNULL(pl_ctx =
-    static_cast<pl::ObPLCtx*>(get_allocator().alloc(sizeof(pl::ObPLCtx))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocator memory", K(ret), K(sizeof(pl::ObPLCtx)));
-  } else {
-    new(pl_ctx)pl::ObPLCtx();
-    set_pl_ctx(pl_ctx);
   }
   return ret;
 }

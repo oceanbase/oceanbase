@@ -49,6 +49,7 @@
 #include "storage/compaction/ob_sstable_merge_info_mgr.h" // ObTenantSSTableMergeInfoMgr
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/access/ob_table_scan_iterator.h"
+#include "storage/ddl/ob_ddl_dag_monitor_mgr.h"
 #include "share/ob_ddl_sim_point.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 #include "observer/omt/ob_tenant_srs.h"
@@ -118,6 +119,7 @@
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_gts_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_uid_service.h"
 #include "close_modules/shared_storage/storage/incremental/share/ob_ss_diagnose_mgr.h"
+#include "close_modules/shared_storage/storage/tiered_metadata_store/ob_tiered_metadata_store.h"
 #else
 #endif
 #include "observer/ob_server_event_history_table_operator.h"
@@ -158,8 +160,10 @@
 #include "observer/table/ob_htable_rowkey_mgr.h"
 #include "sql/ob_sql_ccl_rule_manager.h"
 #include "observer/report/ob_tenant_offline_tablet_cleanup_service.h"
+#include "storage/high_availability/ob_tenant_startup_status.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_replica_info.h"
 #include "sql/monitor/ob_sql_stat_manager.h"
+#include "lib/thread/thread_mgr_interface.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -291,7 +295,8 @@ ObMultiTenant::ObMultiTenant()
       cpu_dump_(false),
       has_synced_(false),
       tenant_limiter_head_(NULL),
-      limiter_mutex_(common::ObLatchIds::OB_MULTI_TENANT_LIMITER_MUTEX)
+      limiter_mutex_(common::ObLatchIds::OB_MULTI_TENANT_LIMITER_MUTEX),
+      async_proc_cpu_sampler_started_(0)
 
 {
 }
@@ -578,6 +583,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     //MTL_BIND2(ObTransAuditRecordMgr::mtl_init, ObTransAuditRecordMgr::mtl_destroy);
     MTL_BIND2(ObTenantSqlMemoryManager::mtl_new, ObTenantSqlMemoryManager::mtl_init, nullptr, nullptr, nullptr, ObTenantSqlMemoryManager::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObPlanMonitorNodeList::mtl_init, nullptr, nullptr, nullptr, ObPlanMonitorNodeList::mtl_destroy);
+    MTL_BIND2(mtl_new_default, ObDDLDagMonitorMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(ObTableLoadService::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, ObTableLoadService::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObSharedMacroBlockMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObFLTSpanMgr::mtl_init, nullptr, nullptr, nullptr, ObFLTSpanMgr::mtl_destroy);
@@ -647,6 +653,7 @@ int ObMultiTenant::init(ObAddr myaddr,
       MTL_BIND2(mtl_new_default, ObTabletSplitTaskCache::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, sslog::ObSSLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObSSDiagnoseInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObTieredMetadataStore::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     }
 #endif
     MTL_BIND2(mtl_new_default, ObResourceLimitCalculator::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
@@ -682,6 +689,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(client_pool_mgr_mtl_new<ObHiveMetastoreClient>, nullptr, nullptr, client_pool_mgr_mtl_stop<ObHiveMetastoreClient>, client_pool_mgr_mtl_wait<ObHiveMetastoreClient>, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, share::schema::ObAddIntervalPartitionController::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(ObTenantTabletCleanupService::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, ObTenantTabletCleanupService::mtl_destroy);
+    MTL_BIND2(mtl_new_default, storage::ObTenantStartupStatus::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, observer::ObTabletReplicaInfoCacheMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(client_pool_mgr_mtl_new<ObCurlRestClient>, nullptr, nullptr, client_pool_mgr_mtl_stop<ObCurlRestClient>, client_pool_mgr_mtl_wait<ObCurlRestClient>, mtl_destroy_default);
   }
@@ -728,6 +736,10 @@ void ObMultiTenant::stop()
   // necessary to put ahead, but it isn't harmful and can exclude
   // affection for balancer.
   ObTenantNodeBalancer::get_instance().stop();
+  // Stop async proc cpu sampler if started
+  if (ATOMIC_LOAD(&async_proc_cpu_sampler_started_) == 1) {
+    TG_STOP(lib::TGDefIDs::OMTProcCpuSampler);
+  }
   // Stop workers of all tenants thus no request of tenant would be
   // processed any more. All tenants will be removed indeed.
   {
@@ -751,6 +763,10 @@ void ObMultiTenant::stop()
 
 void ObMultiTenant::wait()
 {
+  // Wait async proc cpu sampler if started
+  if (ATOMIC_LOAD(&async_proc_cpu_sampler_started_) == 1) {
+    TG_WAIT(lib::TGDefIDs::OMTProcCpuSampler);
+  }
   ObTenantNodeBalancer::get_instance().wait();
   ObThreadPool::wait();
 }
@@ -1226,6 +1242,11 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   }
 #endif
 #endif
+
+  if (OB_SUCC(ret) && write_slog) {
+    ObTenantSwitchGuard guard(tenant);
+    TENANT_STARTUP_STATUS.start_service();
+  }
 
   if (OB_SUCC(ret)) {
     if (write_slog && OB_FAIL(SERVER_STORAGE_META_SERVICE.commit_create_tenant(tenant_id, tenant_epoch))) {
@@ -2811,6 +2832,15 @@ void ObMultiTenant::run1()
         }
       }
       timeguard.click("check_cgroup_status");
+      // Check if we need to enable async proc cpu sampling mode
+      // Trigger condition: cgroup invalid AND tenant count >= threshold
+      if (!is_async_proc_cpu_mode() && !(OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid())
+          && tenants_.size() >= ASYNC_PROC_CPU_MODE_TRIGGER_TENANT_CNT) {
+        int ret = try_start_async_proc_cpu_sampler_();
+        if (OB_FAIL(ret)) {
+          LOG_WARN("Failed to start async proc cpu sampler, will retry later", K(ret));
+        }
+      }
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (OB_ISNULL(*it)) {
           LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
@@ -2843,6 +2873,55 @@ void ObMultiTenant::run1()
     }
   }
   LOG_INFO("OMT quit");
+}
+
+void ObMultiTenant::update_tenants_cpu_time()
+{
+  SpinRLockGuard guard(lock_);
+  for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
+    if (OB_ISNULL(*it)) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
+    } else if ((*it)->has_stopped()) {
+      // skip stopped tenant
+    } else {
+      (*it)->sample_cpu_time_from_proc_once();
+    }
+  }
+}
+
+void ObMultiTenant::ObAsyncProcCpuSampler::run1()
+{
+  lib::set_thread_name("OMTProcCpuSampler");
+  while (!has_set_stop()) {
+    ob_usleep(1000 * 1000L);  // sleep 1 second
+    if (has_set_stop()) {
+      break;
+    }
+    GCTX.omt_->update_tenants_cpu_time();
+  }
+  LOG_INFO("OMTProcCpuSampler thread exit");
+}
+
+bool ObMultiTenant::is_async_proc_cpu_mode() const
+{
+  return ATOMIC_LOAD(&async_proc_cpu_sampler_started_) == 1;
+}
+
+int ObMultiTenant::try_start_async_proc_cpu_sampler_()
+{
+  int ret = OB_SUCCESS;
+  // CAS to ensure only start once
+  if (!ATOMIC_BCAS(&async_proc_cpu_sampler_started_, 0, 1)) {
+    // Already started, not an error
+  } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(lib::TGDefIDs::OMTProcCpuSampler,
+                                                async_proc_cpu_sampler_))) {
+    LOG_WARN("start OMTProcCpuSampler failed", K(ret));
+    // Rollback the started flag on failure
+    ATOMIC_STORE(&async_proc_cpu_sampler_started_, 0);
+  } else {
+    LOG_INFO("OMTProcCpuSampler started successfully");
+  }
+  return ret;
 }
 
 uint32_t ObMultiTenant::get_tenant_lock_bucket_idx(const uint64_t tenant_id)

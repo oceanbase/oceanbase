@@ -15,6 +15,7 @@
 #include "ob_define.h"
 #include "share/ob_server_struct.h"
 #include "share/inner_table/ob_sslog_table_schema.h"
+#include "share/inner_table/ob_tiered_metadata_store_schema.h"
 
 namespace oceanbase {
 namespace common {
@@ -24,9 +25,24 @@ bool is_shared_storage_sslog_table(const uint64_t tid)
   return is_shared_storage_sslog_exist() && is_sslog_table(tid);
 }
 
+bool is_ss_tiered_metadata_store_table(const uint64_t tid)
+{
+  return GCTX.is_shared_storage_mode() && is_tiered_metadata_store_table(tid);
+}
+
 bool is_sslog_table(const uint64_t tid)
 {
   return share::OB_ALL_SSLOG_TABLE_TID == tid;
+}
+
+bool is_tiered_metadata_store_table(const uint64_t tid)
+{
+  return share::OB_ALL_TIERED_METADATA_STORE_TID == tid;
+}
+
+bool is_ss_special_table(const uint64_t tid)
+{
+  return is_sslog_table(tid) || is_tiered_metadata_store_table(tid);
 }
 
 bool is_shared_storage_sslog_exist()
@@ -36,7 +52,16 @@ bool is_shared_storage_sslog_exist()
 
 bool is_hardcode_schema_table(const uint64_t tid)
 {
-  return is_shared_storage_sslog_table(tid) || share::OB_ALL_CORE_TABLE_TID == tid;
+  return is_shared_storage_sslog_table(tid)
+      || is_ss_tiered_metadata_store_table(tid)
+      || share::OB_ALL_CORE_TABLE_TID == tid;
+}
+
+bool is_tenant_metadata_ls(const uint64_t tenant_id, const share::ObLSID &ls_id)
+{
+  return GCTX.is_shared_storage_mode()
+      && ls_id.is_metadata_ls()
+      && is_meta_tenant(tenant_id);
 }
 
 bool is_tenant_sslog_ls(const uint64_t tenant_id, const share::ObLSID &ls_id)
@@ -49,6 +74,16 @@ bool is_tenant_sslog_ls(const uint64_t tenant_id, const share::ObLSID &ls_id)
 bool is_tenant_has_sslog(const uint64_t tenant_id)
 {
   return GCTX.is_shared_storage_mode() && (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id));
+}
+
+bool is_ss_special_ls(const uint64_t tenant_id, const share::ObLSID &ls_id)
+{
+  return is_tenant_sslog_ls(tenant_id, ls_id) || is_tenant_metadata_ls(tenant_id, ls_id);
+}
+
+bool need_sslog_trans_service(const uint64_t tenant_id, const share::ObLSID &ls_id)
+{
+  return is_ss_special_ls(tenant_id, ls_id);
 }
 
 }

@@ -2174,6 +2174,8 @@ void ObTenant::update_token_usage()
 
   if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
     //do nothing
+  } else if (GCTX.omt_->is_async_proc_cpu_mode()) {
+    // async mode enabled, skip /proc sampling in main loop
   } else if (duration >= 1000 * 1000 && OB_SUCC(thread_list_lock_.trylock())) {  // every second
     timeguard.click("thread_list_lock");
     int64_t cpu_time_inc = 0;
@@ -2189,7 +2191,9 @@ void ObTenant::update_token_usage()
     thread_list_lock_.unlock();
     IGNORE_RETURN ATOMIC_FAA(&cpu_time_us_, cpu_time_inc);
   }
-  if (duration >= 1000 * 1000 && OB_SUCC(thread_list_lock_.trylock())) {
+  if (GCTX.omt_->is_async_proc_cpu_mode()) {
+    // async mode enabled, skip /proc sampling in main loop
+  } else if (duration >= 1000 * 1000 && OB_SUCC(thread_list_lock_.trylock())) {
     timeguard.click("thread_list_lock2");
     int64_t group_cpu_time_inc[OB_TENANT_THREAD_GROUP_MAXNUM];
     MEMSET(group_cpu_time_inc, 0, sizeof(group_cpu_time_inc));
@@ -2205,6 +2209,43 @@ void ObTenant::update_token_usage()
     }
     timeguard.click("get_group_cpu_time_inc");
     thread_list_lock_.unlock();
+    for (uint32_t i = 0; i < OB_TENANT_THREAD_GROUP_MAXNUM; i++) {
+      IGNORE_RETURN ATOMIC_FAA(&group_cpu_time_us_[i], group_cpu_time_inc[i]);
+    }
+  }
+}
+
+void ObTenant::sample_cpu_time_from_proc_once()
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(thread_list_lock_.trylock())) {
+    int64_t cpu_time_inc = 0;
+    if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
+      // when cgroup is enabled, not need to sample cpu time from /proc
+    } else {
+      DLIST_FOREACH_REMOVESAFE(thread_list_node_, thread_list_)
+      {
+        Thread *thread = thread_list_node_->get_data();
+        int64_t inc = 0;
+        if (OB_SUCC(thread->get_cpu_time_inc(inc))) {
+          cpu_time_inc += inc;
+        }
+      }
+    }
+    int64_t group_cpu_time_inc[OB_TENANT_THREAD_GROUP_MAXNUM];
+    MEMSET(group_cpu_time_inc, 0, sizeof(group_cpu_time_inc));
+    for (uint32_t i = 0; i < OB_TENANT_THREAD_GROUP_MAXNUM; i++) {
+      DLIST_FOREACH_REMOVESAFE(group_list_node_, group_thread_list_array_[i])
+      {
+        int64_t inc = 0;
+        Thread *thread = group_list_node_->get_data();
+        if (OB_SUCC(thread->get_group_cpu_time_inc(inc))) {
+          group_cpu_time_inc[i] += inc;
+        }
+      }
+    }
+    thread_list_lock_.unlock();
+    IGNORE_RETURN ATOMIC_FAA(&cpu_time_us_, cpu_time_inc);
     for (uint32_t i = 0; i < OB_TENANT_THREAD_GROUP_MAXNUM; i++) {
       IGNORE_RETURN ATOMIC_FAA(&group_cpu_time_us_[i], group_cpu_time_inc[i]);
     }

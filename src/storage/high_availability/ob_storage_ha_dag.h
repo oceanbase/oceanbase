@@ -114,6 +114,7 @@ public:
   { return consumer_group_id_; }
   ObIHADagNetCtx *get_ha_dag_net_ctx() const { return ha_dag_net_ctx_; }
   virtual bool is_ha_dag() const override { return true; }
+  bool is_failed() const { return result_mgr_.is_failed(); }
 
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, KPC_(ha_dag_net_ctx), K_(result_mgr));
 protected:

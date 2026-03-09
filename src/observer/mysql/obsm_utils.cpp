@@ -625,6 +625,8 @@ int ObSMUtils::get_ob_type(ObObjType &ob_type, EMySQLFieldType mysql_type, const
     case EMySQLFieldType::MYSQL_TYPE_SET:
       ob_type = ObSetType;
       break;
+    case EMySQLFieldType::MYSQL_TYPE_ARRAY:
+    case EMySQLFieldType::MYSQL_TYPE_STRUCT:
     case EMySQLFieldType::MYSQL_TYPE_COMPLEX:
       ob_type = ObExtendType;
       break;

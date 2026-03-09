@@ -35,7 +35,9 @@ namespace storage
   class ObServerSlogFlushTask;
   class ObSSObjectAccessUtil;
   class ObStorageCachePolicyPrewarmer;
+  class ObTieredMetadataBatchHandle;
 #endif
+  class ObSSTabletPersister;
   class ObStorageIOPipelineTaskInfo;
 }
 namespace blocksstable
@@ -64,7 +66,9 @@ class ObStorageObjectHandle final
   friend class storage::ObServerSlogFlushTask;
   friend class storage::ObSSObjectAccessUtil;
   friend class storage::ObStorageCachePolicyPrewarmer;
+  friend class storage::ObTieredMetadataBatchHandle;
   #endif
+  friend class storage::ObSSTabletPersister;
   friend class storage::ObStorageIOPipelineTaskInfo;
 public:
   ObStorageObjectHandle() = default;
@@ -89,6 +93,7 @@ public:
   int get_io_ret() const;
   int get_io_time_us(int64_t &io_time_us) const;
   int check_is_finished(bool &is_finished);
+  void cancel();
   TO_STRING_KV(K_(macro_id), K_(io_handle));
 
 private:

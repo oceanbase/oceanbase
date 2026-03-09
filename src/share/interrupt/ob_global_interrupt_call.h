@@ -361,9 +361,16 @@ OB_INLINE bool IS_INTERRUPTED_BY_OUTER_QUERY()
 OB_INLINE ObInterruptCode &GET_INTERRUPT_CODE()
 {
   static ObInterruptCode err_code(OB_ERR_UNEXPECTED);
-  if (OB_ISNULL(get_checker())) {
+  ObInterruptChecker *checker = NULL;
+  if (OB_ISNULL(checker = get_checker())) {
     LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "interrupt checker may not be set correctly");
     return err_code;
+  }
+  while (checker != NULL) {
+    if (checker->get_interrupt_code().code_ != OB_SUCCESS) {
+      return checker->get_interrupt_code();
+    }
+    checker = checker->next();
   }
   return get_checker()->get_interrupt_code();
 }

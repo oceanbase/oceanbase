@@ -16,19 +16,25 @@
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_heap.h"
 #include "sql/engine/basic/ob_temp_row_store.h"
-#include "sql/engine/ob_sql_mem_mgr_processor.h"
-#include "sql/engine/sort/ob_sort_basic_info.h"
+#include "sql/engine/basic/ob_compact_row.h"
 #include "sql/engine/sort/ob_i_sort_vec_op_impl.h"
-#include "sql/engine/sort/ob_sort_adaptive_qs_vec_op.h"
-#include "sql/engine/sort/ob_sort_compare_vec_op.h"
+#include "sql/engine/sort/ob_sort_vec_op_chunk.h"
+#include "sql/engine/sort/ob_sort_vec_op_eager_filter.h"
+#include "sql/engine/sort/ob_sort_vec_op_store_row_factory.h"
 #include "sql/engine/sort/ob_sort_key_vec_op.h"
 #include "sql/engine/sort/ob_sort_key_fetcher_vec_op.h"
 #include "sql/engine/sort/ob_sort_vec_op_eager_filter.h"
 #include "sql/engine/sort/ob_sort_vec_op_store_row_factory.h"
+#include "sql/engine/sort/ob_sort_row_store_mgr.h"
+#include "sql/engine/sort/ob_sql_sort_resource_manager.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/engine/sort/ob_pd_topn_sort_filter.h"
 #include "sql/engine/sort/ob_partition_topn_sort_vec_op.h"
+#include "sql/engine/sort/ob_sort_vec_strategy.h"
+#include "sql/engine/sort/ob_sort_vec_dump_strategy.h"
+#include "sql/engine/sort/ob_sort_chunk_builder.h"
+#include "sql/engine/sort/ob_external_merge_sorter.h"
 
 namespace oceanbase {
 namespace sql {
@@ -41,6 +47,7 @@ namespace sql {
   const_cast<const ObCompactRow **>(reinterpret_cast<ObCompactRow **>(store_row))
 
 // Vectorization 2.0 sort implementation class
+
 template <typename Compare, typename Store_Row, bool has_addon>
 class ObSortVecOpImpl : public ObISortVecOpImpl
 {
@@ -48,25 +55,26 @@ class ObSortVecOpImpl : public ObISortVecOpImpl
 
 public:
   explicit ObSortVecOpImpl(ObMonitorNode &op_monitor_info, lib::MemoryContext &mem_context, ObSqlWorkAreaType profile_type) :
-    ObISortVecOpImpl(op_monitor_info, mem_context, profile_type), flag_(0), tenant_id_(OB_INVALID_ID),
+    ObISortVecOpImpl(op_monitor_info, mem_context),
+    flag_(0), tenant_id_(OB_INVALID_ID),
     allocator_(mem_context->get_malloc_allocator()),
     page_allocator_("PartSortBucket", MTL_ID(), ObCtxIds::WORK_AREA), sk_collations_(nullptr),
     addon_collations_(nullptr), cmp_sort_collations_(nullptr), sk_row_meta_(nullptr),
     addon_row_meta_(nullptr), sk_exprs_(nullptr), addon_exprs_(nullptr), cmp_sk_exprs_(nullptr),
     all_exprs_(allocator_), sk_vec_ptrs_(allocator_), addon_vec_ptrs_(allocator_),
-    eval_ctx_(nullptr), comp_(allocator_), sk_store_(&allocator_), addon_store_(&allocator_),
+    eval_ctx_(nullptr), comp_(allocator_), store_mgr_(allocator_), sort_resource_mgr_(op_monitor_info, &mem_context, profile_type, store_mgr_),
     inmem_row_size_(0), mem_check_interval_mask_(1), row_idx_(0), quick_sort_array_(),
-    heap_iter_begin_(false), imms_heap_(nullptr), ems_heap_(nullptr),
+    heap_iter_begin_(false), imms_heap_(nullptr), external_sorter_(nullptr),
     next_stored_row_func_(&ObSortVecOpImpl::array_next_stored_row), exec_ctx_(nullptr),
-    sk_rows_(nullptr), addon_rows_(nullptr), buckets_(nullptr), max_bucket_cnt_(0),
-    part_hash_nodes_(nullptr), max_node_cnt_(0), part_cnt_(0), topn_cnt_(INT64_MAX),
+    sk_rows_(nullptr), addon_rows_(nullptr), part_cnt_(0), topn_cnt_(INT64_MAX),
     outputted_rows_cnt_(0), use_heap_sort_(false), is_fetch_with_ties_(false), is_aggregate_keep_(false), topn_heap_(nullptr),
-    ties_array_pos_(0), ties_array_(), use_partition_topn_sort_(false), partition_topn_sort_(nullptr),
+    ties_array_pos_(0), ties_array_(), use_partition_topn_sort_(false),
     sorted_dumped_rows_ptrs_(), last_ties_row_(nullptr), rows_(nullptr),
     sort_exprs_getter_(allocator_),
-    store_row_factory_(allocator_, sql_mem_processor_, sk_row_meta_, addon_row_meta_, inmem_row_size_, topn_cnt_),
+    store_row_factory_(allocator_, sort_resource_mgr_.get_sql_mem_processor(), sk_row_meta_, addon_row_meta_, inmem_row_size_, topn_cnt_),
     topn_filter_(nullptr), is_topn_filter_enabled_(false), is_fixed_key_sort_enabled_(false), fixed_sort_key_len_(0),
-    compress_type_(NONE_COMPRESSOR), tempstore_read_alignment_size_(0)
+    compress_type_(NONE_COMPRESSOR), tempstore_read_alignment_size_(0), full_sort_strategy_(nullptr), part_topn_sort_strategy_(nullptr),
+    part_sort_strategy_(nullptr), sort_strategy_(nullptr)
   {}
   virtual ~ObSortVecOpImpl()
   {
@@ -91,7 +99,7 @@ public:
   // reset to state before init
   void destroy()
   {
-    sql_mem_processor_.unregister_profile();
+    sort_resource_mgr_.unregister_profile();
     reset();
   }
   int init_pd_topn_filter_msg(ObSortVecOpContext &ctx);
@@ -129,11 +137,11 @@ public:
   int rewind();
   OB_INLINE int64_t get_memory_limit()
   {
-    return sql_mem_processor_.get_mem_bound();
+    return sort_resource_mgr_.get_memory_bound();
   }
   OB_INLINE int64_t get_memory_used()
   {
-    return mem_context_->used();
+    return sort_resource_mgr_.get_memory_used();
   }
   bool is_inited() const
   {
@@ -147,6 +155,15 @@ public:
   OB_INLINE bool is_topn_filter_enabled()
   {
     return is_topn_filter_enabled_ && !use_partition_topn_sort_;
+  }
+
+  virtual void unregister_profile() override
+  {
+    sort_resource_mgr_.unregister_profile();
+  }
+  virtual void unregister_profile_if_necessary() override
+  {
+    sort_resource_mgr_.unregister_profile_if_necessary();
   }
 
   class CopyableComparer
@@ -196,7 +213,6 @@ protected:
   int build_ems_heap(int64_t &merge_ways);
   template <typename Heap, typename NextFunc, typename Item>
   int heap_next(Heap &heap, const NextFunc &func, Item &item);
-  int ems_heap_next(SortVecOpChunk *&chunk);
   int imms_heap_next(const Store_Row *&sk_row);
   int array_next_stored_row(const Store_Row *&sk_row);
   int part_topn_next_stored_row(const Store_Row *&sk_row);
@@ -207,57 +223,9 @@ protected:
                 const int64_t row_size, ObEvalCtx &ctx, ObCompactRow *&stored_row);
   bool need_dump()
   {
-    return (mem_context_->used() + get_need_extra_mem_size() > get_tmp_buffer_mem_bound())
-            || (get_total_used_size() >= profile_.get_global_bound_size());
+    return sort_resource_mgr_.need_dump();
   }
 
-  int64_t get_need_extra_mem_size() {
-    int64_t ret = 0;
-    if (use_partition_topn_sort_) {
-      ret = partition_topn_sort_->get_need_extra_mem_size();
-    } else {
-      ret = get_partition_sort_ht_bucket_size();
-    }
-    return ret;
-  }
-
-  int64_t get_ht_bucket_size() // calculate hash table needed size
-  {
-    int64_t ret = 0;
-    if (part_cnt_ != 0) {
-      if (use_partition_topn_sort_) {
-        ret = get_partition_topn_ht_bucket_size();
-      } else {
-        ret = get_partition_sort_ht_bucket_size();
-      }
-    }
-    return ret;
-  }
-
-  int64_t get_total_used_size()
-  {
-    return mem_context_->used() + get_need_extra_mem_size();
-  }
-  int64_t get_partition_topn_ht_bucket_size() // calculate partition topn sort hash table needed size
-  {
-    OB_ASSERT(nullptr != partition_topn_sort_);
-    return partition_topn_sort_->get_ht_bucket_size();
-  }
-  int64_t get_partition_sort_ht_bucket_size() // calculate partition sort hash table needed size
-  {
-    int64_t row_cnt = sk_store_.get_row_cnt();
-    return ((part_cnt_ == 0) ? 0 :
-          (row_cnt * FIXED_PART_NODE_SIZE * 2) +                          // size of(part_hash_nodes_)
-          (next_pow2(std::max(16L, row_cnt)) * FIXED_PART_BKT_SIZE * 2)); // size of(buckets_)
-  }
-  inline int64_t get_tmp_buffer_mem_bound() {
-    // The memory reserved for ObSortVecOpEagerFilter should be deducted when topn filter is enabled.
-    return (is_topn_filter_enabled() && is_topn_sort())
-               ? sql_mem_processor_.get_mem_bound() *
-                     (1.0 - ObSortVecOpEagerFilter<Compare, Store_Row,
-                                            has_addon>::FILTER_RATIO)
-               : sql_mem_processor_.get_mem_bound();
-  }
   int preprocess_dump(bool &dumped);
   // before add row process: update date used memory, try dump ...
   int before_add_row();
@@ -301,7 +269,7 @@ protected:
   int attach_rows(const int64_t read_rows);
   bool need_imms() const
   {
-    return !use_heap_sort_ && !use_partition_topn_sort_ && rows_->count() > sk_store_.get_row_cnt();
+    return !use_heap_sort_ && !use_partition_topn_sort_ && rows_->count() > store_mgr_.get_row_cnt();
   }
   OB_INLINE bool is_separate_encode_sk() const
   {
@@ -316,150 +284,19 @@ protected:
   int init_fixed_key_sort();
   int do_fixed_key_sort(int64_t begin);
   int init_partition_topn_sort(ObSortVecOpContext &ctx);
+  int add_sort_chunk(const int64_t level, SortVecOpChunk *&chunk);
   template <typename Input>
-  int build_chunk(const int64_t level, Input &input)
-  {
-    int ret = OB_SUCCESS;
-    const int64_t curr_time = ObTimeUtility::fast_current_time();
-    int64_t stored_row_cnt = 0;
-    const Store_Row *sort_key_row = nullptr;
-    const Store_Row *addon_field_row = nullptr;
-    ObCompactRow *dst_sk_row = nullptr;
-    ObCompactRow *dst_addon_row = nullptr;
-    SortVecOpChunk *chunk = nullptr;
-    if (!is_inited()) {
-      ret = OB_NOT_INIT;
-      SQL_ENG_LOG(WARN, "not init", K(ret));
-    } else if (OB_ISNULL(
-                 chunk = OB_NEWx(SortVecOpChunk, (&mem_context_->get_malloc_allocator()), level))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      SQL_ENG_LOG(WARN, "allocate memory failed", K(ret));
-    } else if (OB_FAIL(init_temp_row_store(*sk_exprs_, 1, eval_ctx_->max_batch_size_, true,
-                                           true /*enable dump*/, Store_Row::get_extra_size(true), compress_type_,
-                                           chunk->sk_store_))) {
-      SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
-    } else if (has_addon
-               && OB_FAIL(init_temp_row_store(
-                    *addon_exprs_, 1, eval_ctx_->max_batch_size_, true, true /*enable dump*/,
-                    Store_Row::get_extra_size(false), compress_type_, chunk->addon_store_))) {
-      SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
-    } else {
-      while (OB_SUCC(ret)) {
-        if (use_heap_sort_ && !is_fetch_with_ties_ && stored_row_cnt >= topn_cnt_) {
-          break;
-        } else if (OB_FAIL(input(sort_key_row, addon_field_row))) {
-          if (OB_ITER_END != ret) {
-            SQL_ENG_LOG(WARN, "get input row failed", K(ret));
-          } else {
-            ret = OB_SUCCESS;
-          }
-          break;
-        } else if (OB_FAIL(chunk->sk_store_.add_row(SK_CONST_UPCAST_P(sort_key_row), dst_sk_row))) {
-          SQL_ENG_LOG(WARN, "copy row to row store failed");
-        } else if (has_addon
-                   && OB_FAIL(chunk->addon_store_.add_row(SK_CONST_UPCAST_P(addon_field_row),
-                                                          dst_addon_row))) {
-          SQL_ENG_LOG(WARN, "copy row to row store failed");
-        } else {
-          stored_row_cnt++;
-          if (level > 0) {
-            op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::SORT_SORTED_ROW_COUNT;
-            op_monitor_info_.otherstat_1_value_ += 1;
-          }
-        }
-      }
-
-      // 必须强制先dump，然后finish dump才有效
-      if (OB_FAIL(ret)) {
-      } else if (has_addon
-                 && (chunk->sk_store_.get_row_cnt() != chunk->addon_store_.get_row_cnt())) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_ENG_LOG(WARN, "the number of rows in sort key store and addon store is expected to be equal",
-          K(chunk->sk_store_.get_row_cnt()), K(chunk->addon_store_.get_row_cnt()), K(ret));
-      } else if (OB_FAIL(chunk->sk_store_.dump(true))) {
-        SQL_ENG_LOG(WARN, "failed to dump row store", K(ret));
-      } else if (OB_FAIL(chunk->sk_store_.finish_add_row(true /*+ need dump */))) {
-        SQL_ENG_LOG(WARN, "finish add row failed", K(ret));
-      } else if (has_addon && OB_FAIL(chunk->addon_store_.dump(true))) {
-        SQL_ENG_LOG(WARN, "failed to dump row store", K(ret));
-      } else if (has_addon && OB_FAIL(chunk->addon_store_.finish_add_row(true /*+ need dump */))) {
-        SQL_ENG_LOG(WARN, "finish add row failed", K(ret));
-      } else {
-        const int64_t sort_io_time = ObTimeUtility::fast_current_time() - curr_time;
-        const int64_t file_size =
-          has_addon ? (chunk->sk_store_.get_file_size() + chunk->addon_store_.get_file_size()) :
-                      chunk->sk_store_.get_file_size();
-        const int64_t mem_hold =
-          has_addon ? (chunk->sk_store_.get_mem_hold() + chunk->addon_store_.get_mem_hold()) :
-                      chunk->sk_store_.get_mem_hold();
-        op_monitor_info_.otherstat_4_id_ = ObSqlMonitorStatIds::SORT_DUMP_DATA_TIME;
-        op_monitor_info_.otherstat_4_value_ += sort_io_time;
-        LOG_TRACE("dump sort file", "level", level, "rows", chunk->sk_store_.get_row_cnt(),
-                  "file_size", file_size, "memory_hold", mem_hold, "mem_used",
-                  mem_context_->used());
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      // In increase sort, chunk->level_ may less than the last of sort chunks.
-      // insert the chunk to the upper bound the level.
-      SortVecOpChunk *pos = sort_chunks_.get_last();
-      for (; pos != sort_chunks_.get_header() && pos->level_ > level; pos = pos->get_prev()) {}
-      pos = pos->get_next();
-      if (!sort_chunks_.add_before(pos, chunk)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_ENG_LOG(WARN, "add link node to list failed", K(ret));
-      }
-    }
-    if (OB_SUCCESS != ret && nullptr != chunk) {
-      chunk->~SortVecOpChunk();
-      mem_context_->get_malloc_allocator().free(chunk);
-      chunk = nullptr;
-    }
-
-    return ret;
-  }
-  template <typename ArrayType>
-  int prepare_bucket_array(ArrayType *&buckets, uint64_t bucket_num)
-  {
-    int ret = OB_SUCCESS;
-    if (nullptr == buckets) {
-      void *buckets_buf = nullptr;
-      ObIAllocator &allocator = mem_context_->get_malloc_allocator();
-      if (OB_ISNULL(buckets_buf = allocator.alloc(sizeof(ArrayType)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SQL_ENG_LOG(WARN, "failed to allocate memory", K(ret));
-      } else if (FALSE_IT(buckets = new (buckets_buf) ArrayType(page_allocator_))) {
-      } else if (OB_FAIL(buckets->init(bucket_num))) {
-        SQL_ENG_LOG(WARN, "failed to init bucket", K(ret), K(bucket_num));
-      }
-    } else {
-      buckets->reuse();
-      if (OB_FAIL(buckets->init(bucket_num))) {
-        LOG_WARN("failed to init bucket array", K(ret), K(bucket_num));
-      }
-    }
-    return ret;
-  }
+  int build_chunk(const int64_t level, Input &input);
 
   DISALLOW_COPY_AND_ASSIGN(ObSortVecOpImpl);
 
 protected:
-  using BucketArray = common::ObSegmentArray<PartHashNode *,
-                                             OB_MALLOC_MIDDLE_BLOCK_SIZE,
-                                             common::ModulePageAllocator>;
-  using BucketNodeArray = common::ObSegmentArray<PartHashNode,
-                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
-                                                 common::ModulePageAllocator>;
-  const static int64_t FIXED_PART_NODE_SIZE = sizeof(PartHashNode);
-  const static int64_t FIXED_PART_BKT_SIZE = sizeof(PartHashNode *);
   static const int64_t MAX_ROW_CNT = 268435456; // (2G / 8)
   static const int64_t EXTEND_MULTIPLE = 2;
   static const int64_t MAX_MERGE_WAYS = 256;
-  static constexpr int64_t MIN_MERGE_WAYS = 8;
   static const int64_t INMEMORY_MERGE_SORT_WARN_WAYS = 10000;
   typedef common::ObBinaryHeap<Store_Row **, Compare, 16> IMMSHeap;
-  typedef common::ObBinaryHeap<SortVecOpChunk *, Compare, MAX_MERGE_WAYS> EMSHeap;
+  typedef ObExternalMergeSorter<Compare, Store_Row, has_addon> ExternalMergeSorter;
   typedef common::ObBinaryHeap<Store_Row *, Compare> TopnHeap;
 
   union
@@ -493,8 +330,8 @@ protected:
   common::ObFixedArray<ObIVector *, common::ObIAllocator> addon_vec_ptrs_;
   ObEvalCtx *eval_ctx_;
   Compare comp_;
-  ObTempRowStore sk_store_;
-  ObTempRowStore addon_store_;
+  ObSortRowStoreMgr<Store_Row, has_addon> store_mgr_;
+  ObSQLSortResourceManager<Compare, Store_Row, has_addon> sort_resource_mgr_;
   int64_t inmem_row_size_;
   int64_t mem_check_interval_mask_;
   int64_t row_idx_; // for iterate rows_
@@ -504,15 +341,11 @@ protected:
   // heap for in-memory merge sort local order rows
   IMMSHeap *imms_heap_;
   // heap for external merge sort
-  EMSHeap *ems_heap_;
+  ExternalMergeSorter *external_sorter_;
   NextStoredRowFunc next_stored_row_func_;
   ObExecContext *exec_ctx_;
   Store_Row **sk_rows_;
   Store_Row **addon_rows_;
-  BucketArray *buckets_;
-  uint64_t max_bucket_cnt_;
-  BucketNodeArray *part_hash_nodes_;
-  uint64_t max_node_cnt_;
   int64_t part_cnt_;
   // for limit topn sort change to simple sort
   int64_t topn_cnt_;
@@ -526,7 +359,6 @@ protected:
   common::ObArray<Store_Row *> ties_array_;
   // for partition topn sort
   bool use_partition_topn_sort_;
-  ObPartitionTopNSort<Compare, Store_Row, has_addon> *partition_topn_sort_;
 
   common::ObArray<Store_Row *> sorted_dumped_rows_ptrs_;
   Store_Row *last_ties_row_;
@@ -541,6 +373,11 @@ protected:
   ObCompressorType compress_type_;
   ObPushDownTopNFilter pd_topn_filter_;
   int64_t tempstore_read_alignment_size_;
+  ObFullSortStrategy<Compare, Store_Row, has_addon> *full_sort_strategy_;
+  ObPartitionTopNSortStrategy<Compare, Store_Row, has_addon> *part_topn_sort_strategy_;
+  ObPartitionSortStrategy<Compare, Store_Row, has_addon> *part_sort_strategy_;
+  // active strategy (base) used by sort_inmem_data()
+  ObISortStrategy<Compare, Store_Row, has_addon> *sort_strategy_;
 };
 
 } // end namespace sql

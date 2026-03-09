@@ -388,6 +388,24 @@ int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc
     LOG_WARN("invalid tenant config", K(ret), K(tenant_id));
   } else if (!ObTdeMethodUtil::is_valid(ObString(tenant_config->tde_method.get_value()))) {
     //do nothing
+  } else if (OB_FAIL(activate_master_key_version(rpc_proxy, tenant_id, need_wait))) {
+    LOG_WARN("fail to activate master key version", K(ret), KP(rpc_proxy), K(tenant_id), K(need_wait));
+  }
+#endif
+  return ret;
+}
+
+
+int ObRestoreCommonUtil::activate_master_key_version(
+    obrpc::ObCommonRpcProxy *rpc_proxy,
+    const uint64_t tenant_id,
+    bool need_wait)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id) || NULL == rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), KP(rpc_proxy));
   } else {
     const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout;
     obrpc::ObReloadMasterKeyArg arg;
@@ -409,9 +427,11 @@ int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc
         if (ObTimeUtility::current_time() - start > MAX_WAIT_US) {
           ret = OB_TIMEOUT;
           LOG_WARN("use too much time", KR(ret), "cost_us", ObTimeUtility::current_time() - start);
-        } else if (OB_FAIL(ObMasterKeyGetter::get_active_master_key(tenant_id, master_key,
-                                                                OB_MAX_MASTER_KEY_LENGTH,
-                                                                master_key_len, master_key_id))) {
+        } else if (OB_FAIL(ObMasterKeyGetter::get_active_master_key(tenant_id,
+                                                                    master_key,
+                                                                    OB_MAX_MASTER_KEY_LENGTH,
+                                                                    master_key_len,
+                                                                    master_key_id))) {
           if (OB_KEYSTORE_OPEN_NO_MASTER_KEY == ret) {
             ret = OB_SUCCESS;
             LOG_INFO("master key is not active, need wait", K(tenant_id));

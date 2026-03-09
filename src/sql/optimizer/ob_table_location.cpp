@@ -1503,16 +1503,6 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
       is_weak_read = (ObTxConsistencyType::BOUNDED_STALENESS_READ == trans_consistency_type);
     }
   }
-  if (OB_SUCC(ret) && !is_weak_read) {
-    int64_t route_policy_type = 0;
-    if (OB_FAIL(session->get_ob_route_policy(route_policy_type))) {
-      LOG_WARN("fail to get sys variable", K(ret));
-    } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type)) {
-      if (dml_stmt.get_query_ctx()->is_contain_inner_table_) {
-        is_weak_read = true;
-      }
-    }
-  }
   return ret;
 }
 

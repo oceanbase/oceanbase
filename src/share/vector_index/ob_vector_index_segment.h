@@ -334,6 +334,7 @@ class ObVectorIndexSegment
 {
 friend class ObVectorIndexSegQueryHandler;
 public:
+  static int64_t instacnce_cnt_;
   static int create(
       ObVectorIndexSegmentHandle &segment_handle,
       const uint64_t tenant_id,
@@ -349,7 +350,10 @@ public:
     is_inited_(false), is_base_(false), ref_cnt_(0), write_ref_cnt_(0),
     allocator_(allocator), mem_ctx_(nullptr), index_(nullptr), vid_bound_(),
     ibitmap_(nullptr), vbitmap_(nullptr)
-  {}
+  {
+    ATOMIC_INC(&instacnce_cnt_);
+  }
+  ~ObVectorIndexSegment();
 
   bool is_inited() const { return is_inited_; }
   int init(
@@ -470,11 +474,15 @@ public:
   ObVectorIndexDataBase()
     : type_(VIRT_MAX),
       is_init_(false),
+      has_complete_(false),
       ref_cnt_(0),
-      scn_() {}
+      scn_(),
+      complete_lock_(ObLatchIds::VECTOR_COMPLETE_LOCK)
+  {}
+  virtual ~ObVectorIndexDataBase() {}
 
   bool is_inited() const { return ATOMIC_LOAD(&is_init_); }
-  void set_inited() { is_init_ = true; }
+  void set_inited() { ATOMIC_STORE(&is_init_, true); }
 
   void inc_ref()
   {
@@ -491,8 +499,11 @@ public:
 public:
   ObVectorIndexRecordType type_;
   bool is_init_;
+  bool has_complete_;
   uint64_t ref_cnt_;
   SCN scn_;
+  // hold complete lock
+  TCRWLock complete_lock_;
 };
 
 template<typename T>
@@ -567,6 +578,7 @@ private:
   {
     if (nullptr != memdata_) {
       memdata_->free_memdata_resource(allocator_, tenant_id_);
+      memdata_->~T();
       allocator_->free(memdata_);
     }
   }
@@ -583,16 +595,21 @@ private:
 struct ObVecIdxActiveData : public ObVectorIndexDataBase
 {
 public:
+  static int64_t instacnce_cnt_;
   ObVecIdxActiveData()
     : ObVectorIndexDataBase(),
       segment_handle_(),
       last_dml_scn_(),
       last_read_scn_(),
-      can_skip_(NOT_INITED) {}
+      can_skip_(NOT_INITED)
+  {
+    ATOMIC_INC(&instacnce_cnt_);
+  }
+  ~ObVecIdxActiveData();
 
   void free_memdata_resource(ObIAllocator *allocator, const uint64_t tenant_id);
 
-  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(scn), K_(ref_cnt), K_(segment_handle),
+  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(has_complete), K_(scn), K_(ref_cnt), K_(segment_handle),
       K_(last_dml_scn), K_(last_read_scn), K_(can_skip));
 
 public:
@@ -629,13 +646,18 @@ private:
 struct ObVecIdxVBitmapData : public ObVectorIndexDataBase
 {
 public:
+  static int64_t instacnce_cnt_;
   ObVecIdxVBitmapData()
     : ObVectorIndexDataBase(),
-      bitmap_() {}
+      bitmap_()
+  {
+    ATOMIC_INC(&instacnce_cnt_);
+  }
+  ~ObVecIdxVBitmapData();
 
   void free_memdata_resource(ObIAllocator *allocator, const uint64_t tenant_id);
 
-  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(scn), K_(ref_cnt), KP_(bitmap));
+  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(has_complete), K_(scn), K_(ref_cnt), KP_(bitmap));
 
 public:
   TCRWLock bitmap_rwlock_{ObLatchIds::VECTOR_BITMAP_LOCK};
@@ -647,12 +669,14 @@ typedef ObVectorIndexMemDataHandle<ObVecIdxVBitmapData> ObVecIdxVBitmapDataHandl
 class ObVectorIndexSegmentBuilder
 {
 public:
+  static int64_t instacnce_cnt_;
   // for hnsw_sq/hnsw_bq
   constexpr static uint32_t VEC_INDEX_HNSW_BUILD_COUNT_THRESHOLD = 10000;
 
 public:
   ObVectorIndexSegmentBuilder():
     seg_type_(ObVectorIndexSegmentType::INVALID),
+    is_inited_(false),
     has_build_(false),
     need_vid_check_(false),
     segment_handle_(),
@@ -668,7 +692,12 @@ public:
     total_cnt_(0),
     add_cnt_(0),
     skip_cnt_(0)
-  {}
+  {
+    ATOMIC_INC(&instacnce_cnt_);
+  }
+  ~ObVectorIndexSegmentBuilder();
+  bool is_inited() const { return ATOMIC_LOAD(&is_inited_); }
+  void set_inited() { ATOMIC_STORE(&is_inited_, true); }
   void free(ObIAllocator &allocator);
   void free_vec_buf_data(ObIAllocator &allocator);
   int init_vec_buffer(const uint64_t tenant_id, ObIAllocator &allocator, const bool is_sparse_vector);
@@ -715,13 +744,14 @@ public:
   int add_index(float* vecs, int64_t* ids, int dim, char *extra_info, int size);
   int add_index(uint32_t *lens, uint32_t *dims, float *vals, int64_t *ids, int size, char *extra_infos);
 
-  TO_STRING_KV(KP(this), K_(seg_type), K_(has_build), K_(need_vid_check),
+  TO_STRING_KV(KP(this), K_(is_inited), K_(seg_type), K_(has_build), K_(need_vid_check),
       K_(segment_handle), KP_(vid_array), KP_(vec_array), KP_(extra_info_buf),
       KP_(lens_array), KP_(dims_array), KP_(vals_array),
       K_(vid_bound), KPC_(ibitmap), KPC_(vbitmap), K_(total_cnt), K_(add_cnt), K_(skip_cnt));
 
   ObVectorIndexSegmentType seg_type_;
   // if has_build is false, new vector will be inserted into vec_array
+  bool is_inited_;  // true only after segment_handle_ or vec buffer is fully initialized
   bool has_build_;
   bool need_vid_check_;
   TCRWLock mem_data_rwlock_{ObLatchIds::VECTOR_MEM_DATA};
@@ -767,14 +797,18 @@ struct ObVecIndexBuildSegInfo
 struct ObVecIdxSnapshotData : public ObVectorIndexDataBase
 {
 public:
+  static int64_t instacnce_cnt_;
   ObVecIdxSnapshotData()
     : ObVectorIndexDataBase(),
-      rb_flag_(true),
       is_ready_for_read_(false),
       builder_(nullptr),
       deserializer_(nullptr),
       meta_(),
-      vid_bound_() {}
+      vid_bound_()
+  {
+    ATOMIC_INC(&instacnce_cnt_);
+  }
+  ~ObVecIdxSnapshotData();
 
   int immutable_optimize_snap();
 
@@ -810,11 +844,10 @@ private:
       storage::ObTableScanIterator *snap_data_iter, const uint64_t tenant_id, ObVectorIndexSegmentMeta &seg_meta);
 
 public:
-  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(rb_flag), K_(is_ready_for_read), K_(scn),
+  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(has_complete), K_(is_ready_for_read), K_(scn),
     K_(ref_cnt), KPC_(builder), KPC_(deserializer), K_(meta), K_(vid_bound), K_(last_res_seg_info));
 
   TCRWLock mem_data_rwlock_{ObLatchIds::VECTOR_MEM_DATA};
-  bool rb_flag_;
   bool is_ready_for_read_;
   ObVectorIndexSegmentBuilder *builder_;
   ObVectorIndexSegmentDeserializer *deserializer_;
@@ -826,6 +859,7 @@ typedef ObVectorIndexMemDataHandle<ObVecIdxSnapshotData> ObVecIdxSnapshotDataHan
 
 struct ObVecIdxFrozenData : public ObVectorIndexDataBase
 {
+  static int64_t instacnce_cnt_;
   enum State {
     NO_FROZEN = 0,
     FROZEN,
@@ -839,7 +873,11 @@ struct ObVecIdxFrozenData : public ObVectorIndexDataBase
 
   ObVecIdxFrozenData() :
     state_(State::NO_FROZEN), ret_code_(0), retry_cnt_(0), frozen_scn_(),
-    segment_handle_(), vbitmap_() {}
+    segment_handle_(), vbitmap_()
+  {
+    ATOMIC_INC(&instacnce_cnt_);
+  }
+  ~ObVecIdxFrozenData();
 
   void reset();
   void reuse();

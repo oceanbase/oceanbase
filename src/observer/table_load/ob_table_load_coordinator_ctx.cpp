@@ -162,7 +162,6 @@ void ObTableLoadCoordinatorCtx::destroy()
   }
   for (TransMap::const_iterator iter = trans_map_.begin(); iter != trans_map_.end(); ++iter) {
     ObTableLoadCoordinatorTrans *trans = iter->second;
-    abort_unless(0 == trans->get_ref_count());
     trans_allocator_.free(trans);
   }
   trans_map_.reuse();
@@ -323,6 +322,8 @@ int ObTableLoadCoordinatorCtx::alloc_trans(const ObTableLoadSegmentID &segment_i
     LOG_WARN("fail to init trans", KR(ret), K(trans_id));
   } else if (OB_FAIL(trans_map_.set_refactored(trans_id, trans))) {
     LOG_WARN("fail to set_refactored", KR(ret), K(trans_id));
+  } else {
+    trans->inc_ref_count();
   }
   if (OB_FAIL(ret)) {
     if (nullptr != trans) {
@@ -716,7 +717,11 @@ int ObTableLoadCoordinatorCtx::commit_trans(ObTableLoadCoordinatorTrans *trans)
     } else {
       segment_ctx->current_trans_ = nullptr;
       segment_ctx->committed_trans_ctx_ = trans->get_trans_ctx();
-      trans->set_dirty();
+      if (OB_FAIL(trans_map_.erase_refactored(trans->get_trans_id()))) {
+        LOG_WARN("fail to erase_refactored", KR(ret));
+      } else {
+        put_trans(trans);
+      }
     }
     if (OB_NOT_NULL(segment_ctx)) {
       segment_ctx_map_.revert(segment_ctx);
@@ -752,7 +757,11 @@ int ObTableLoadCoordinatorCtx::abort_trans(ObTableLoadCoordinatorTrans *trans)
       LOG_WARN("fail to check trans status abort", KR(ret));
     } else {
       segment_ctx->current_trans_ = nullptr;
-      trans->set_dirty();
+      if (OB_FAIL(trans_map_.erase_refactored(trans->get_trans_id()))) {
+        LOG_WARN("fail to erase_refactored", KR(ret));
+      } else {
+        put_trans(trans);
+      }
     }
     if (OB_NOT_NULL(segment_ctx)) {
       segment_ctx_map_.revert(segment_ctx);
@@ -771,18 +780,13 @@ void ObTableLoadCoordinatorCtx::put_trans(ObTableLoadCoordinatorTrans *trans)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(trans));
   } else {
-    obsys::ObWLockGuard<> guard(rwlock_);
-    ObTableLoadTransCtx *trans_ctx = trans->get_trans_ctx();
-    if (0 == trans->dec_ref_count() && trans->is_dirty()) {
+    if (0 == trans->dec_ref_count()) {
+      ObTableLoadTransCtx *trans_ctx = trans->get_trans_ctx();
       ObTableLoadTransStatusType trans_status = trans_ctx->get_trans_status();
       OB_ASSERT(ObTableLoadTransStatusType::COMMIT == trans_status ||
                 ObTableLoadTransStatusType::ABORT == trans_status);
-      if (OB_FAIL(trans_map_.erase_refactored(trans->get_trans_id()))) {
-        LOG_WARN("fail to erase_refactored", KR(ret));
-      } else {
         trans_allocator_.free(trans);
         trans = nullptr;
-      }
     }
   }
   if (OB_FAIL(ret)) {

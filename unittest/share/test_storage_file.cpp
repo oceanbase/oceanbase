@@ -147,16 +147,16 @@ TEST_F(TestStorageFile, test_reader)
   ObIOFd fd_2;
 
   ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.open_with_access_type(dev_handle, fd, &storage_info, "bad://",  OB_STORAGE_ACCESS_READER,
-                                                               ObStorageIdMod::get_default_id_mod()));
+                                                               ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_READER,
-                                                            ObStorageIdMod::get_default_id_mod()));
+                                                            ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, &storage_info, test_content, strlen(test_content),
                                                ObStorageIdMod::get_default_id_mod()));
 
   ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_READER,
-                                                   ObStorageIdMod::get_default_id_mod()));
+                                                   ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   ASSERT_EQ(OB_INIT_TWICE, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_READER,
-                                                      ObStorageIdMod::get_default_id_mod()));
+                                                      ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   //in the old version, use a valid fd to open twice, fd will be closed automatic, this behavir has changed.
   //in such scenario, just return error. so here should success.
   //difference: OB_NOT_INIT -> OB_SUCCESS
@@ -165,7 +165,7 @@ TEST_F(TestStorageFile, test_reader)
   ASSERT_EQ(OB_SUCCESS, dev_handle->close(fd));
 
   ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd_2, &storage_info, uri, OB_STORAGE_ACCESS_READER,
-                                                   ObStorageIdMod::get_default_id_mod()));
+                                                   ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   ASSERT_EQ(OB_SUCCESS, dev_handle->pread(fd_2, 0, sizeof(read_buf), read_buf, read_size));
   ASSERT_EQ(strlen(test_content), read_size);
   ASSERT_EQ(0, strncmp(test_content, read_buf, read_size));
@@ -195,14 +195,14 @@ TEST_F(TestStorageFile, test_writer)
   ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "file://%s/test_file", test_dir_));
 
   ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.open_with_access_type(dev_handle, fd, &storage_info, "bad://", OB_STORAGE_ACCESS_OVERWRITER,
-                                                               ObStorageIdMod::get_default_id_mod()));
+                                                               ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_OVERWRITER,
-                                                   ObStorageIdMod::get_default_id_mod()));
+                                                   ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   ASSERT_EQ(OB_INIT_TWICE, util.open_with_access_type(dev_handle, fd, &storage_info, uri,  OB_STORAGE_ACCESS_OVERWRITER,
-                                                      ObStorageIdMod::get_default_id_mod()));
+                                                      ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   ASSERT_EQ(OB_SUCCESS, dev_handle->close(fd));
   ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd_2, &storage_info, uri, OB_STORAGE_ACCESS_OVERWRITER,
-                                                   ObStorageIdMod::get_default_id_mod()));
+                                                   ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   ASSERT_EQ(OB_SUCCESS, dev_handle->write(fd_2, test_content, strlen(test_content), write_size));
   ASSERT_EQ(OB_SUCCESS, dev_handle->close(fd_2));
   ASSERT_EQ(OB_NOT_INIT,  dev_handle->close(fd_2));
@@ -225,12 +225,12 @@ TEST_F(TestStorageFile, test_file_writer_fail)
   ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "file://%s/test_file", test_dir_));
 
   ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd, &storage_info, uri,  OB_STORAGE_ACCESS_OVERWRITER,
-                                                   ObStorageIdMod::get_default_id_mod()));
+                                                   ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   ASSERT_EQ(OB_SUCCESS, dev_handle->write(fd, test_content, strlen(test_content) , write_size));
   ASSERT_EQ(OB_SUCCESS, dev_handle->close(fd));
 
   ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd_2, &storage_info, uri,  OB_STORAGE_ACCESS_OVERWRITER,
-                                                   ObStorageIdMod::get_default_id_mod()));
+                                                   ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/));
   ASSERT_EQ(OB_SUCCESS, dev_handle->write(fd_2, test_content2, strlen(test_content2), write_size));
   ASSERT_EQ(OB_SUCCESS, dev_handle->close(fd_2));
 

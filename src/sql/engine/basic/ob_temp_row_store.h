@@ -316,7 +316,7 @@ public:
   inline int ensure_write_blk(const int64_t mem_size)
   {
     int ret = common::OB_SUCCESS;
-    if (NULL == blk_ || mem_size > blk_buf_.remain()) {
+    if (need_new_block(mem_size)) {
       if (OB_FAIL(new_block(mem_size))) {
         SQL_ENG_LOG(WARN, "fail to new block", K(ret), K(mem_size));
       }
@@ -324,6 +324,10 @@ public:
     return ret;
   }
 
+  inline bool need_new_block(const int64_t mem_size)
+  {
+    return NULL == blk_ || mem_size > blk_buf_.remain();
+  }
   virtual int prepare_blk_for_switch(Block *blk) override
   {
     int ret = OB_SUCCESS;

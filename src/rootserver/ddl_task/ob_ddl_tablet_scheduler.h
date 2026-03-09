@@ -33,7 +33,8 @@ public:
            const int64_t  snapshot_version,
            const common::ObCurTraceId::TraceId &trace_id,
            const ObIArray<ObTabletID> &tablets,
-           const uint64_t data_version);
+           const uint64_t data_version,
+           const bool need_single_partition_build);
   int get_next_batch_tablets(const bool is_ddl_retryable,
                              int64_t &parallelism,
                              int64_t &new_execution_id,
@@ -41,12 +42,14 @@ public:
                              common::ObAddr &leader_addr,
                              ObIArray<ObTabletID> &tablets);
   int confirm_batch_tablets_status(const int64_t execution_id, const bool finish_status, const share::ObLSID &ls_id, const ObIArray<ObTabletID> &tablets);
-  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(table_id), K_(ref_data_table_id),
+  int get_tablet_execution_id(const common::ObTabletID &tablet_id, int64_t &execution_id);
+  int set_tablet_execution_id(const ObTabletID &tablet_id, const int64_t execution_id);
+  TO_STRING_KV(K_(is_inited), K_(need_single_partition_build), K_(tenant_id), K_(table_id), K_(ref_data_table_id),
               K_(task_id), K_(parallelism), K_(snapshot_version), K_(trace_id), K_(all_tablets), K_(running_task_ls_ids_before));
 private:
   int get_next_parallelism(int64_t &parallelism);
   int get_running_sql_parallelism(int64_t &parallelism);
-  int get_unfinished_tablets(const share::ObDDLType task_type, const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_execution_id, share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets);
+  int get_unfinished_tablets(const int64_t execution_id, share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets);
   int get_to_be_scheduled_tablets(share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets);
   int calculate_candidate_tablets(const uint64_t left_space_size, common::ObAddr &leader_addr, const ObIArray<ObTabletID> &in_tablets, ObIArray<ObTabletID> &out_tablets);
   int get_session_running_lsid(ObIArray<share::ObLSID> &running_ls_ids);
@@ -57,15 +60,11 @@ private:
   bool is_all_tasks_finished();
   bool is_running_tasks_before_finished();
   int refresh_ls_location_map();
-  int push_tablet_execution_id(share::ObDDLType task_type,
-    const bool ddl_can_retry,
-    const int64_t data_format_version,
-    const common::ObIArray<common::ObTabletID> &tablets,
-    int64_t &new_task_execution_id);
   int push_task_execution_id(int64_t &new_task_execution_id);
   void destroy();
 private:
   bool is_inited_;
+  bool need_single_partition_build_;
   uint64_t tenant_id_;
   uint64_t table_id_;
   uint64_t ref_data_table_id_;

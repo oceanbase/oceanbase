@@ -581,6 +581,13 @@ int ObAnonymousBlockExecutor::execute(ObExecContext &ctx, ObAnonymousBlockStmt &
               pl::ObPLCollection *coll = reinterpret_cast<pl::ObPLCollection *>(value.get_ext());
               CK (OB_NOT_NULL(coll));
               OX (field.default_value_.set_type(coll->get_element_type().get_obj_type()));
+              // if element type is complex type (record), fill element's type_name
+              if (OB_SUCC(ret) && ObExtendType == coll->get_element_type().get_obj_type()) {
+                uint64_t elem_udt_id = coll->get_element_type().get_udt_id();
+                if (elem_udt_id != OB_INVALID_ID && !pl::is_invalid_or_mocked_package_id(elem_udt_id)) {
+                  OZ (fill_field_for_anonymous_collection(ctx, elem_udt_id, field));
+                }
+              }
             } else {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("anonymous out parameter type is not anonymous collection",
@@ -611,6 +618,35 @@ int ObAnonymousBlockExecutor::execute(ObExecContext &ctx, ObAnonymousBlockStmt &
   } else {
     CK (OB_NOT_NULL(stmt.get_params()));
     OZ (ctx.get_pl_engine()->execute(ctx, *stmt.get_params(), stmt.get_body()));
+  }
+  return ret;
+}
+
+int ObAnonymousBlockExecutor::fill_field_for_anonymous_collection(
+    ObExecContext &ctx, uint64_t elem_udt_id, common::ObField &field)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObUDTTypeInfo *elem_udt_info = NULL;
+  const share::schema::ObDatabaseSchema *elem_db_schema = NULL;
+  const uint64_t elem_tenant_id = pl::get_tenant_id_by_object_id(elem_udt_id);
+  ObSqlCtx *sql_ctx = ctx.get_sql_ctx();
+  CK (OB_NOT_NULL(sql_ctx));
+  CK (OB_NOT_NULL(sql_ctx->schema_guard_));
+  CK (elem_udt_id != OB_INVALID_ID);
+  OZ (sql_ctx->schema_guard_->get_udt_info(elem_tenant_id, elem_udt_id, elem_udt_info));
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(elem_udt_info)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only support udt type", K(ret), K(elem_udt_id));
+  } else {
+    OZ (sql_ctx->schema_guard_->get_database_schema(elem_udt_info->get_tenant_id(),
+                            elem_udt_info->get_database_id(), elem_db_schema));
+    CK (OB_NOT_NULL(elem_db_schema));
+    OZ (ob_write_string(ctx.get_allocator(),
+                        OB_SYS_TENANT_ID == elem_db_schema->get_tenant_id()
+                          ? ObString("SYS") : elem_db_schema->get_database_name(),
+                        field.elem_type_owner_));
+    OZ (ob_write_string(ctx.get_allocator(), elem_udt_info->get_type_name(), field.elem_type_name_));
   }
   return ret;
 }

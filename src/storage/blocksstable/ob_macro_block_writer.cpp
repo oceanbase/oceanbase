@@ -2237,17 +2237,15 @@ int ObMacroBlockWriter::choose_macro_block_flusher(const bool is_close_flush,
 {
   int ret = OB_SUCCESS;
   if (nullptr != custom_macro_flusher_) {
-    if (OB_UNLIKELY(is_curr_block_pre_allocated_ || !use_external_flusher())) {
+    if (OB_UNLIKELY(is_curr_block_pre_allocated_ || !allow_use_external_flusher())) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected is_curr_block_pre_allocated_", K(ret), K(is_curr_block_pre_allocated_), K(use_external_flusher()));
+      STORAGE_LOG(WARN, "unexpected is_curr_block_pre_allocated_", K(ret), K(is_curr_block_pre_allocated_), K(allow_use_external_flusher()));
     } else {
       final_flusher = custom_macro_flusher_;
     }
   } else {
-    if (OB_UNLIKELY(use_external_flusher())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected use external flusher", K(ret));
-    } else if (OB_UNLIKELY(OB_NOT_NULL(builder_) && !need_write_macro_meta())) {
+    // allow_use_external_flusher() maybe true in some special cases, such as ObDagTempMacroBlockWriter.
+    if (OB_UNLIKELY(OB_NOT_NULL(builder_) && !need_write_macro_meta())) {
       // When builder_ is not null, it must be data macro block type.
       // If ObDefaultMacroBlockFlusher and its subclasses will be used later, macro block meta must be written.
       ret = OB_ERR_UNEXPECTED;
@@ -3158,7 +3156,7 @@ bool ObMacroBlockWriter::is_pre_alloc() const
   bool is_for_index_or_meta = OB_NOT_NULL(data_store_desc_) && data_store_desc_->is_for_index_or_meta();
   bool is_pre_alloc_for_data = OB_NOT_NULL(data_store_desc_) &&
                                data_store_desc_->is_for_sstable_data() &&
-                               !use_external_flusher() &&
+                               !allow_use_external_flusher() &&
                                is_definitely_not_small_sstable();
   return is_for_index_or_meta || is_pre_alloc_for_data;
 }

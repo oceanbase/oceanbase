@@ -1237,6 +1237,51 @@ TEST_F(TestLSTabletService, test_new_tablet_has_backup_table_with_ha_status)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
+
+TEST_F(TestLSTabletService, test_tablet_table_store_cache)
+{
+  // create_tablet_without_index
+  int ret = OB_SUCCESS;
+  ObTabletID tablet_id(10000013);
+  share::schema::ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+  common::ObArenaAllocator allocator;
+
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator, ObTabletStatus::Status::DELETED);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+
+  ObTabletHandle old_tablet_handle;
+  ret = ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, old_tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTablet *tablet = old_tablet_handle.get_obj();
+  ASSERT_EQ(true, OB_NOT_NULL(tablet));
+  ObTableStoreCache &table_table_cache = tablet->table_store_cache_;
+
+  int64_t serialize_size = table_table_cache.get_serialize_size(data_version);
+  char *buf = static_cast<char*>(allocator.alloc(serialize_size));
+  int64_t pos = 0;
+  ASSERT_NE(nullptr, buf);
+  ASSERT_TRUE(table_table_cache.is_inited_);
+  ASSERT_EQ(OB_SUCCESS, table_table_cache.serialize(data_version, buf, serialize_size, pos));
+
+  pos = 0;
+  ObTableStoreCache dest_table_store_cache;
+  ASSERT_EQ(OB_SUCCESS, dest_table_store_cache.deserialize(buf, serialize_size, pos));
+  ASSERT_EQ(true, table_table_cache == dest_table_store_cache);
+  LOG_INFO("print table store cache", K(table_table_cache), K(dest_table_store_cache));
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  valid_tablet_num(inner_tablet_count);
+}
+
 } // end storage
 } // end oceanbase
 

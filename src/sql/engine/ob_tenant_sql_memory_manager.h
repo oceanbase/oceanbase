@@ -34,6 +34,11 @@ enum ObSqlWorkAreaType
 
 class ObSqlProfileExecInfo {
 public:
+  ObSqlProfileExecInfo(const int64_t dop, const int64_t plan_id, const int64_t exec_id,
+      const int64_t session_id, const uint64_t db_id, const bool disable_auto_mem_mgr)
+   : dop_(dop), plan_id_(plan_id), exec_id_(exec_id), session_id_(session_id),
+     db_id_(db_id), my_session_(nullptr), disable_auto_mem_mgr_(disable_auto_mem_mgr)
+  {}
   ObSqlProfileExecInfo() : dop_(-1), plan_id_(-1), exec_id_(-1),
                            session_id_(-1), db_id_(-1), my_session_(nullptr),
                            disable_auto_mem_mgr_(false) {

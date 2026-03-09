@@ -286,7 +286,7 @@ int ObGenDicLoader::gen_dic_loader(
   return ret;
 }
 
-int ObGenDicLoader::parser_name_without_version(const ObString &parser_name, ObString &no_version_parser_name)
+int ObGenDicLoader::parser_name_without_version(const ObString &parser_name, ObString &parser_name_without_version)
 {
   int ret = OB_SUCCESS;
   ObString tmp_parser_name = parser_name;
@@ -294,9 +294,9 @@ int ObGenDicLoader::parser_name_without_version(const ObString &parser_name, ObS
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("parser name is empty", K(ret), K(parser_name));
   } else if (OB_UNLIKELY(nullptr != tmp_parser_name.find('.'))) {
-    no_version_parser_name = tmp_parser_name.split_on('.');
+    parser_name_without_version = tmp_parser_name.split_on('.');
   } else {
-    no_version_parser_name = parser_name;
+    parser_name_without_version = parser_name;
   }
   return ret;
 }

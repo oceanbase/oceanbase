@@ -30,13 +30,13 @@ class ObBackupIoAdapter
 public:
   explicit ObBackupIoAdapter() {}
   virtual ~ObBackupIoAdapter() {}
-
   static int open_with_access_type(ObIODevice *&device_handle,
                                    ObIOFd &fd,
                                    const common::ObObjectStorageInfo *storage_info,
                                    const common::ObString &uri,
                                    ObStorageAccessType access_type,
-                                   const common::ObStorageIdMod &storage_id_mod);
+                                   const common::ObStorageIdMod &storage_id_mod,
+                                   const bool is_batch_write);
   static int get_and_init_device(ObIODevice *&dev_handle,
                                  const common::ObObjectStorageInfo *storage_info,
                                  const common::ObString &storage_type_prefix,
@@ -336,7 +336,8 @@ public:
     ObString new_uri;
     if (OB_FAIL(switch_s3_compatible_to_s3(allocator, uri, new_uri))) {
       OB_LOG(WARN, "fail to switch cos to s3", K(ret), K(uri));
-    } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(device_handle, fd, storage_info, new_uri, access_type, storage_id_mod))) {
+    } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(device_handle, fd, storage_info, new_uri, access_type,
+                                                                storage_id_mod, false/*is_batch_write*/))) {
       OB_LOG(WARN, "fail to open with access type", K(ret), KPC(storage_info), K(new_uri), K(access_type), K(storage_id_mod));
     }
     return ret;

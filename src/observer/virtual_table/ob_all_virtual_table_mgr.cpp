@@ -291,8 +291,8 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         }
         case LINKED_BLOCK_CNT: {
           int64_t blk_cnt = 0;
-          if (table->is_sstable()) {
-            blk_cnt = sst_meta_hdl.get_sstable_meta().get_linked_macro_block_count();
+          if (table->is_sstable() && OB_FAIL(sst_meta_hdl.get_sstable_meta().get_linked_macro_block_count(blk_cnt))) {
+            SERVER_LOG(WARN, "fail to get linked macro block count", K(ret));
           }
           cur_row_.cells_[i].set_int(blk_cnt);
           break;

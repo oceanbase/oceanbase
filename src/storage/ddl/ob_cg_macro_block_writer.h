@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_CG_MACRO_BLOCK_WRITER_H_
 #define OCEANBASE_STORAGE_OB_CG_MACRO_BLOCK_WRITER_H_
 
-#include "storage/blocksstable/ob_macro_block_writer.h"
+#include "storage/blocksstable/ob_dag_macro_block_writer.h"
 #include "storage/blocksstable/ob_data_store_desc.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 
@@ -23,6 +23,7 @@ namespace blocksstable
 {
 struct ObDatumRow;
 struct ObMacroDataSeq;
+class ObDagSliceMacroFlusher;
 }
 
 namespace storage
@@ -46,9 +47,11 @@ public:
   void reset();
   int append_row(const blocksstable::ObDatumRow &cg_row);
   int append_batch(const blocksstable::ObBatchDatumRows &cg_rows);
-  int close();
+  int close(ObDagSliceMacroFlusher *macro_block_flusher = nullptr);
   bool is_inited() const { return is_inited_; }
   int64_t get_last_macro_seq() const { return macro_block_writer_.get_last_macro_seq(); }
+  inline int64_t get_macro_data_size() const { return macro_block_writer_.get_macro_data_size(); }
+  int try_finish_last_micro_block() { return macro_block_writer_.try_finish_last_micro_block(); }
   TO_STRING_KV(K(is_inited_), K(macro_block_writer_), KP(ddl_redo_callback_), K(index_builder_), K(data_desc_));
 
 private:
@@ -59,7 +62,7 @@ private:
   blocksstable::ObWholeDataStoreDesc data_desc_;
   blocksstable::ObSSTableIndexBuilder index_builder_;
   ObIMacroBlockFlushCallback *ddl_redo_callback_;
-  blocksstable::ObMacroBlockWriter macro_block_writer_;
+  blocksstable::ObDagSliceMacroBlockWriter macro_block_writer_;
 };
 
 } // end namespace storage

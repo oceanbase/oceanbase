@@ -91,6 +91,7 @@ int ObTabletMemberWrapper<T, U>::set_cache_handle(ObStorageMetaHandle &handle)
   int ret = common::OB_SUCCESS;
   const ObStorageMetaValue *value = nullptr;
   if (OB_UNLIKELY(!handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "secondary meta handle is not valid", K(ret), K(handle));
   } else if (OB_FAIL(handle.get_value(value))) {
     STORAGE_LOG(WARN, "secondary meta handle get value failed", K(ret), K(handle));

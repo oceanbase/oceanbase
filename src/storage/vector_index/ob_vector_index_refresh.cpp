@@ -587,24 +587,6 @@ int ObVectorIndexRefresher::do_rebuild() {
   }
 
   if (OB_FAIL(ret)) {
-  } else if (domain_table_schema->is_vec_delta_buffer_type() &&          // only hnsw index here, because ivf not support refresh
-             OB_FAIL(ObVectorIndexUtil::get_dbms_vector_job_info(*GCTX.sql_proxy_, tenant_id,
-                                                                 domain_table_schema->get_table_id(),
-                                                                 refresh_ctx_->allocator_,
-                                                                 schema_guard,
-                                                                 job_info))) {
-    LOG_WARN("fail to get dbms_vector job info", K(ret), K(tenant_id), K(domain_table_schema->get_table_id()));
-  } else {
-    if (OB_FAIL(ob_write_string(refresh_ctx_->allocator_, domain_table_schema->get_table_name_str(), refresh_ctx_->domain_index_name_))) {
-      LOG_WARN("fail to write string", K(ret), K(domain_table_schema->get_table_name_str()));
-    } else {
-      refresh_ctx_->tmp_repeat_interval_ = job_info.get_repeat_interval();
-      refresh_ctx_->database_id_ = domain_table_schema->get_database_id();
-      LOG_WARN("get last repeat interval and database_id", K(ret), K(*refresh_ctx_));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,
                                                       domain_table_schema->get_database_id(),
                                                       db_schema))) {
@@ -873,11 +855,27 @@ int ObVectorIndexRefresher::lock_domain_table_for_tablet_refresh() {
   return ret;
 }
 
+// Calc timeout for tablet_fast_refresh based on row count
+// - Base: ObDDLUtil::calc_inner_sql_execute_timeout
+// - Row-based: 1ms per row for INSERT+DELETE, cap at 10 min; unknown row count uses 5 min
+static int64_t calc_tablet_fast_refresh_timeout_us(int64_t row_cnt)
+{
+  const static int64_t MIN_TIMEOUT_US = 60 * 1000 * 1000L;       // 60s
+  const static int64_t ROW_TIMEOUT_PER_ROW_US = 1000L;           // 1ms per row
+  const static int64_t MAX_TOTAL_TIMEOUT_US = 3600 * 1000 * 1000L;  // 1 hour cap
+  const int64_t base = std::max(ObDDLUtil::calc_inner_sql_execute_timeout(), MIN_TIMEOUT_US);
+  const int64_t row_timeout = row_cnt * ROW_TIMEOUT_PER_ROW_US;
+  return std::min(base + row_timeout, MAX_TOTAL_TIMEOUT_US);
+}
+
 int ObVectorIndexRefresher::tablet_fast_refresh()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = refresh_ctx_->tenant_id_;
   ObArenaAllocator allocator(common::ObMemAttr(tenant_id, "RefreshVecIdx"));
+  // ObTimeoutCtx uses thread-local stack: constructor links self, get_ctx() returns it.
+  // Inner SQL (trans.write/read) gets timeout via ObTimeoutCtx::get_ctx(). Must stay in scope.
+  ObTimeoutCtx timeout_ctx;
   ObSQLSessionInfo *session_info = nullptr;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *domain_table_schema = nullptr;
@@ -888,6 +886,7 @@ int ObVectorIndexRefresher::tablet_fast_refresh()
   ObSqlString domain_tb_col_names;
   ObString partition_names;
   ObArray<uint64_t> col_ids;
+  const int64_t init_timeout_us = calc_tablet_fast_refresh_timeout_us(0);
   if (OB_ISNULL(refresh_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("refresh_ctx is null", K(ret));
@@ -954,6 +953,10 @@ int ObVectorIndexRefresher::tablet_fast_refresh()
                          index_id_tb_schema->is_in_recyclebin())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("table is in recyclebin", KR(ret), KPC(db_schema), KPC(domain_table_schema), KPC(index_id_tb_schema));
+  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(init_timeout_us))) {
+    LOG_WARN("set trx timeout failed", K(ret), K(init_timeout_us));
+  } else if (OB_FAIL(timeout_ctx.set_timeout(init_timeout_us))) {
+    LOG_WARN("set timeout failed", K(ret), K(init_timeout_us));
   } else if (OB_FAIL(get_table_row_count(
       db_schema->get_database_name_str(),
       domain_table_schema->get_table_name_str(), refresh_ctx_->scn_,
@@ -964,7 +967,13 @@ int ObVectorIndexRefresher::tablet_fast_refresh()
     LOG_INFO("there is no new row, so no need refresh", K(domain_table_row_cnt), K(tenant_id),
       K(refresh_ctx_->scn_), K(refresh_ctx_->domain_tb_id_), K(refresh_ctx_->domain_tablet_id_));
   } else if (domain_table_schema->is_vec_delta_buffer_type()) {
-    if (OB_SUCC(ret)) {
+    // Refine timeout for INSERT/DELETE based on actual row count
+    const int64_t timeout_us = calc_tablet_fast_refresh_timeout_us(domain_table_row_cnt);
+    if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout_us))) {
+      LOG_WARN("set trx timeout failed", K(ret), K(timeout_us));
+    } else if (OB_FAIL(timeout_ctx.set_timeout(timeout_us))) {
+      LOG_WARN("set timeout failed", K(ret), K(timeout_us));
+    } else {
       int64_t affected_rows = 0;
       // 1. insert into index_id_table select ... from delta_buf_table
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {

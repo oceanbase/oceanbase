@@ -210,6 +210,18 @@ int ObTxCtxMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
   return ret;
 }
 
+int ObTxCtxMemtableMgr::reuse()
+{
+  int ret = OB_SUCCESS;
+  ls_id_.reset();
+  freezer_ = nullptr;
+  t3m_ = nullptr;
+  is_inited_ = false;
+
+  return ret;
+}
+
+
 }  // namespace storage
 }  // namespace oceanbase
 

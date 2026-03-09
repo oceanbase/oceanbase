@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_DDL_OB_CG_MACRO_BLOCK_WRITE_TASK_H_
 #define OCEANBASE_STORAGE_DDL_OB_CG_MACRO_BLOCK_WRITE_TASK_H_
 
+#include "share/scheduler/ob_independent_dag.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ddl/ob_ddl_pipeline.h"
 #include "storage/ddl/ob_tablet_slice_writer.h"
@@ -47,7 +48,7 @@ class ObDDLSlice;
 // this task is used to directly write cg macro blocks in the scan task.
 // This task uses a macro block writer for each column group (CG) to write macro blocks
 // and can only be used when there is sufficient memory.
-class ObCgMacroBlockWriteTask : public share::ObITask
+class ObCgMacroBlockWriteTask : public share::ObITaskWithMonitor
 {
 public:
   ObCgMacroBlockWriteTask(const ObITaskType type);
@@ -73,7 +74,7 @@ private:
   ObArray<ObCgMacroBlockWriter *> cg_macro_block_writers_;
 };
 
-class ObDDLScanTask : public share::ObITask
+class ObDDLScanTask : public share::ObITaskWithMonitor
 {
 public:
   ObDDLScanTask(const ObITaskType type);
@@ -81,12 +82,12 @@ public:
   virtual ~ObDDLScanTask();
   int init(ObDDLIndependentDag *ddl_dag);
   virtual share::ObITask::ObITaskPriority get_priority() override;
-  int process();
+  int process() override;
 private:
   ObDDLIndependentDag *ddl_dag_;
 };
 
-class ObDDLTabletScanTask final : public share::ObITask
+class ObDDLTabletScanTask final : public share::ObITaskWithMonitor
 {
 public:
   ObDDLTabletScanTask();

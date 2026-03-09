@@ -79,14 +79,21 @@ int ObAggregatedStorageMetaIOInfo::init(const common::ObIArray<AggregatedInfo> &
       uint64_t first_meta_offset = meta_addr.offset();
       uint64_t last_meta_offset = meta_addr.offset();
       uint64_t last_meta_size = meta_addr.size();
-      macro_id_ = meta_addr.block_id();
-      disk_type_ = meta_addr.type();
+      if (OB_FAIL(meta_addr.get_macro_block_id(macro_id_))) {
+        LOG_WARN("failed to get macro block id", K(ret), K(meta_addr));
+      } else {
+        disk_type_ = meta_addr.type();
+      }
+
       for (int64_t i = 1; OB_SUCC(ret) && i < aggr_params_.count(); ++i) {
         const ObMetaDiskAddr &cur_meta_addr = aggr_params_.at(i).meta_key_.get_meta_addr();
         // check macro id and disk type
-        if (OB_UNLIKELY(cur_meta_addr.block_id() != macro_id_)) {
+        blocksstable::MacroBlockId block_id;
+        if (OB_FAIL(cur_meta_addr.get_macro_block_id(block_id))) {
+          LOG_WARN("failed to get macro block id", K(ret), K(cur_meta_addr));
+        } else if (OB_UNLIKELY(block_id != macro_id_)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error, the block id of keys is not the same", K(ret), K(i), K(aggr_params_));
+          LOG_WARN("unexpected error, the block id of keys is not the same", K(ret), K(block_id), K(macro_id_), K(i), K(aggr_params_));
           break;
         } else if (OB_UNLIKELY(cur_meta_addr.type() != disk_type_)) {
           ret = OB_ERR_UNEXPECTED;

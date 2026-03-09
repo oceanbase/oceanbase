@@ -1062,8 +1062,9 @@ int ObWindowCompactionUtils::get_inc_row_cnt_factor(
   } else if (OB_INVALID_SCN_VAL != tablet.get_tablet_meta().create_scn_.get_val_for_gts()) {
     // only tablet created by replaying mds log with valid create_scn
     days_since_last_compaction = calculate_days_since_timestamp(tablet.get_tablet_meta().create_scn_.get_val_for_tx());
-  } else if (tablet.get_inc_row_cnt() <= 0) {
+  } else if (tablet.get_inc_row_cnt() <= 0 && tablet.get_clog_checkpoint_scn().get_val_for_tx() > OB_BASE_SCN_TS_NS) {
     // tablet need recycle truncate info or need progressive merge may with 0 incremental row count, use clog checkpoint scn to estimate
+    // However, clog_checkpoint_scn may not advanced for index tablets which never been written to and never do minor freeze.
     days_since_last_compaction = calculate_days_since_timestamp(tablet.get_clog_checkpoint_scn().get_val_for_tx());
   } else if (OB_FAIL(estimate_days_by_sstable(tablet, days_since_last_compaction))) {
     LOG_WARN("failed to estimate days by sstable", K(ret), K(tablet));

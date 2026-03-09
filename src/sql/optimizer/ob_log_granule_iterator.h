@@ -86,10 +86,10 @@ public:
 
   void set_tablet_id_expr(ObOpPseudoColumnRawExpr *tablet_id_expr) { tablet_id_expr_ = tablet_id_expr; }
   ObOpPseudoColumnRawExpr *get_tablet_id_expr() { return tablet_id_expr_; }
-  void set_repartition_ref_table_id(int64_t table_id) { repartition_ref_table_id_ = table_id; }
-  int64_t get_repartition_ref_table_id() { return repartition_ref_table_id_; }
   void set_ddl_slice_id_expr(ObRawExpr *slice_id_expr) { slice_id_expr_ = slice_id_expr; }
   ObRawExpr *get_ddl_slice_id_expr() { return slice_id_expr_; }
+  void set_repartition_ref_table_id(int64_t table_id) { repartition_ref_table_id_ = table_id; }
+  int64_t get_repartition_ref_table_id() { return repartition_ref_table_id_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
   virtual int allocate_expr_post(ObAllocExprContext &ctx) override;

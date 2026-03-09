@@ -429,6 +429,11 @@ public:
   virtual int post_upgrade() override;
   virtual int finish_upgrade() override;
 private:
+  int post_upgrade_for_metadata_ls_();
+  int insert_metadata_ls_status_(const uint64_t tenant_id);
+  int create_metadata_ls_(const uint64_t tenant_id);
+  int wait_metadata_ls_leader_(common::ObAddr &leader);
+  int create_tiered_metadata_tablet_(const common::ObAddr &leader);
   int post_upgrade_for_set_paralllel_target_();
   int finish_upgrade_for_daily_maintenance_window();
   int finish_upgrade_for_grant_sys_privs();

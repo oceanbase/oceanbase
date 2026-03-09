@@ -551,8 +551,8 @@ int ObAllVirtualSSExistingSSTableMgr::generate_virtual_row_(VirtualSSSSTableRow 
         if (table->is_sstable()) {
           if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
             SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
-          } else {
-            blk_cnt = sst_meta_hdl.get_sstable_meta().get_linked_macro_block_count();
+          } else if (OB_FAIL(sst_meta_hdl.get_sstable_meta().get_linked_macro_block_count(blk_cnt))) {
+            SERVER_LOG(WARN, "fail to get linked macro block count", K(ret));
           }
         }
         row.linked_block_count_ = blk_cnt;

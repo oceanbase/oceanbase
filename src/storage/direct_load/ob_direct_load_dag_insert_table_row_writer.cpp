@@ -206,9 +206,9 @@ int ObDirectLoadDagInsertTableBatchRowDirectWriter::switch_slice(const bool is_f
   } else if (OB_FAIL(insert_tablet_ctx_->get_write_ctx(write_ctx_))) {
     LOG_WARN("fail to get write ctx", KR(ret));
   } else if (OB_FAIL(ObDDLUtil::fill_writer_param(
-               tablet_id_, write_ctx_.slice_idx_, -1 /*cg_idx*/, insert_tablet_ctx_->get_dag(),
-               insert_tablet_ctx_->get_max_batch_size(), write_param_))) {
+               tablet_id_, write_ctx_.slice_idx_, -1 /*cg_idx*/, insert_tablet_ctx_->get_dag(), write_param_))) {
     LOG_WARN("fail to fill writer param", K(ret));
+  } else if (FALSE_IT(write_param_.max_batch_size_ = insert_tablet_ctx_->get_max_batch_size())) {
   } else {
     ObITabletSliceWriter *slice_writer = nullptr;
     if (OB_FAIL(ObDDLUtil::alloc_storage_macro_block_writer(write_param_,

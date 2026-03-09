@@ -1000,7 +1000,8 @@ int ObLSTxService::set_max_replay_commit_version(share::SCN commit_version)
     TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
   } else {
     mgr_->update_max_replay_commit_version(commit_version);
-    if (is_tenant_sslog_ls(MTL_ID(), ls_id_)) {
+    if (need_sslog_trans_service(MTL_ID(), ls_id_)) {
+      // TODO: ensure later
       // for sslog
       MTL(ObTransService *)->get_tx_version_mgr_for_sslog().update_max_commit_ts(commit_version, false /*elr*/);
     } else {

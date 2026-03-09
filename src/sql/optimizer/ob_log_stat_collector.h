@@ -30,6 +30,7 @@ public:
   ObLogStatCollector(ObLogPlan &plan)
       : ObLogicalOperator(plan),
         sort_keys_(plan.get_allocator()),
+        inverted_sort_keys_(),
         is_none_partition_(),
         type_(ObStatCollectorType::NOT_INIT_TYPE)
         {}
@@ -38,6 +39,8 @@ public:
 
   int set_sort_keys(const common::ObIArray<OrderItem> &order_keys);
   common::ObIArray<OrderItem> &get_sort_keys() { return sort_keys_; }
+  int set_inverted_sort_keys(const common::ObIArray<OrderItem> &order_keys);
+  common::ObIArray<OrderItem> &get_inverted_sort_keys() { return inverted_sort_keys_; }
   void set_stat_collector_type(ObStatCollectorType type) { type_ = type; }
   ObStatCollectorType get_stat_collector_type() { return type_; }
   void set_is_none_partition(bool flag) { is_none_partition_ = flag; }
@@ -46,6 +49,7 @@ public:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
 private:
   ObSqlArray<OrderItem> sort_keys_;
+  common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> inverted_sort_keys_;
   bool is_none_partition_;
   ObStatCollectorType type_;
 };

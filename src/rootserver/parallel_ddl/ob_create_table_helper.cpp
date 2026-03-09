@@ -19,6 +19,7 @@
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/inner_table/ob_sslog_table_schema.h"
+#include "share/inner_table/ob_tiered_metadata_store_schema.h"
 #include "share/ob_index_builder_util.h"
 #include "share/sequence/ob_sequence_option_builder.h" // ObSequenceOptionBuilder
 #include "share/schema/ob_table_sql_service.h"
@@ -537,7 +538,7 @@ int ObCreateTableHelper::check_and_set_database_id_()
   return ret;
 }
 
-int ObCreateTableHelper::check_sslog_table_exist_(
+int ObCreateTableHelper::check_ss_special_table_exist_(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const ObString &table_name)
@@ -555,7 +556,9 @@ int ObCreateTableHelper::check_sslog_table_exist_(
     const ObNameCaseMode mode = OB_ORIGIN_AND_INSENSITIVE;
     const share::schema::ObSysTableChecker::TableNameWrapper input_table(database_id, mode, table_name);
     const share::schema::ObSysTableChecker::TableNameWrapper sslog_table(OB_SYS_DATABASE_ID, mode, share::OB_ALL_SSLOG_TABLE_TNAME);
-    if (!is_user_tenant(tenant_id) && sslog_table == input_table) {
+    const share::schema::ObSysTableChecker::TableNameWrapper tiered_metadata_store_table(OB_SYS_DATABASE_ID, mode, share::OB_ALL_TIERED_METADATA_STORE_TNAME);
+    if ((!is_user_tenant(tenant_id)
+     && (sslog_table == input_table || tiered_metadata_store_table == input_table))) {
       /*
       The current table creation defaults to parallel mode, which directly query table_schema in the inner table
       to determine whether there is a table with the same name.
@@ -604,7 +607,7 @@ int ObCreateTableHelper::check_table_name_()
       ret = OB_ERR_EXIST_OBJECT;
       LOG_WARN("Name is already used by an existing object",
                KR(ret), K_(tenant_id), K(database_id), K(table_name), K(synonym_id));
-    } else if (OB_FAIL(check_sslog_table_exist_(tenant_id_, database_id, table_name))) {
+    } else if (OB_FAIL(check_ss_special_table_exist_(tenant_id_, database_id, table_name))) {
       LOG_WARN("fail to check sslog table", KR(ret), K_(tenant_id), K(table_name));
     } else if (OB_FAIL(schema_guard_wrapper_.get_table_id(
                        database_id, session_id, table_name, table_id, table_type, schema_version))) {

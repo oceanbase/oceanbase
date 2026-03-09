@@ -417,10 +417,9 @@ private:
       data_loaders_.reset();
     }
 
-    void init(int64_t capacity, const std::list<uint64_t>& include_columns, orc::Reader *reader);
-    void init_for_hive_table(int64_t capacity,
-                            const std::list<uint64_t>& include_columns,
-                            orc::Reader *reader);
+    void init(int64_t capacity,
+              const orc::RowReaderOptions &row_reader_options,
+              orc::Reader *reader);
 
     OB_INLINE bool next_batch(const int64_t capacity)
     {
@@ -561,7 +560,7 @@ private:
                           ObExternalFileAccess& file_access_driver,
                           ObFilePreBuffer& file_prebuffer,
                           const int64_t file_size,
-                          std::unique_ptr<orc::Reader>& delete_reader);
+                          std::unique_ptr<orc::Reader>& reader);
     void clear_filter_expr_evaluated_flag()
     {
       scan_param_->op_->clear_evaluated_flag();

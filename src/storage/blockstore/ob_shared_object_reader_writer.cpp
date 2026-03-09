@@ -13,6 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_shared_object_reader_writer.h"
 #include "src/storage/ob_storage_struct.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/tiered_metadata_store/ob_tiered_metadata_object_manager.h"
+#endif
 
 namespace oceanbase
 {
@@ -623,7 +626,8 @@ int ObSharedObjectLinkIter::get_next_macro_id(MacroBlockId &macro_id)
   } else if (!cur_.is_block()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cur addr is not block addr", K(ret), K(cur_));
-  } else if (FALSE_IT(macro_id = cur_.block_id())) {
+  } else if (OB_FAIL(cur_.get_macro_block_id(macro_id))) {
+    LOG_WARN("failed to get macro block id", K(ret), K(cur_));
   } else if (OB_FAIL(read_next_block(block_handle))) {
     LOG_WARN("fail to read next block", K(ret), K(head_), K(cur_));
   }
@@ -1080,6 +1084,7 @@ int ObSharedObjectReaderWriter::inner_write_block(
     const int64_t prev_offset = offset_;
     const int64_t prev_align_offset = align_offset_;
     const bool prev_hanging = hanging_;
+    MacroBlockId block_id;
     if (write_args.with_header_ && OB_FAIL(header.serialize(data_.current(), header.header_size_, pos))) {
       LOG_WARN("Fail to serialize header", K(ret), K(header));
     } else {
@@ -1116,7 +1121,9 @@ int ObSharedObjectReaderWriter::inner_write_block(
           LOG_WARN("Fail to advance size", K(ret), K(store_size));
         } else if (OB_FAIL(write_ctx.set_addr(addr))) {
           LOG_WARN("Fail to add addr to write ctx", K(ret), K(addr));
-        } else if (OB_FAIL(write_ctx.add_object_id(addr.block_id()))) {
+        } else if (OB_FAIL(addr.get_macro_block_id(block_id))) {
+          LOG_WARN("failed to get macro block id", K(ret), K(addr));
+        } else if (OB_FAIL(write_ctx.add_object_id(block_id))) {
           LOG_WARN("Fail to add block id to write ctx", K(ret), K(addr));
         } else {
           offset_ += store_size;
@@ -1234,9 +1241,17 @@ int ObSharedObjectReaderWriter::async_read(
   } else if (nullptr == read_info.io_callback_
       && OB_FAIL(shared_obj_handle.alloc_io_buf(object_read_info.buf_, object_read_info.size_))) {
     LOG_WARN("Fail to alloc io buf", K(ret), K(object_read_info));
-  } else if (OB_FAIL(object_handle.async_read(object_read_info))) {
+  }
+#ifdef OB_BUILD_SHARED_STORAGE
+  else if (OB_FAIL(ObTieredMetadataObjectManager::async_read_object(object_read_info, object_handle))) {
     LOG_WARN("Fail to async read block", K(ret), K(object_read_info));
-  } else if (OB_FAIL(shared_obj_handle.set_addr_and_object_handle(read_info.addr_, object_handle))) {
+  }
+#else
+  else if (OB_FAIL(object_handle.async_read(object_read_info))) {
+    LOG_WARN("Fail to async read block", K(ret), K(object_read_info));
+  }
+#endif
+  else if (OB_FAIL(shared_obj_handle.set_addr_and_object_handle(read_info.addr_, object_handle))) {
     LOG_WARN("Fail to add macro handle", K(ret), K(object_read_info));
   }
   return ret;

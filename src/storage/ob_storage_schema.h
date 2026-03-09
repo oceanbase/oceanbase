@@ -272,6 +272,7 @@ public:
   virtual inline uint64_t get_master_key_id() const override { return master_key_id_; }
   virtual inline bool is_use_bloomfilter() const override { return is_use_bloomfilter_; }
   virtual inline bool has_ttl_definition() const override { return has_ttl_definition_; }
+  virtual inline bool was_compaction_ttl() const override { return was_compaction_ttl_; }
   virtual inline bool is_index_table() const override { return share::schema::is_index_table(table_type_); }
   virtual inline bool is_storage_index_table() const override
   {
@@ -304,6 +305,7 @@ public:
   virtual int get_store_column_count(int64_t &column_count, const bool full_col) const override;
   int get_stored_column_count_in_sstable(int64_t &column_count) const;
   virtual int get_multi_version_column_descs(common::ObIArray<share::schema::ObColDesc> &column_descs) const override;
+  int get_multi_version_column_descs(common::ObIArray<share::schema::ObColDesc> &column_descs, bool no_virtual) const;
   virtual int get_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const override;
   virtual int get_skip_index_col_attr_by_schema(common::ObIArray<share::schema::ObSkipIndexColumnAttr> &skip_idx_metas,
                                                 ObSEArray<ObObjMeta, 16> *column_types=nullptr,
@@ -381,7 +383,7 @@ public:
   void set_minor_row_store_type(const ObRowStoreType minor_row_store_type) { minor_row_store_type_ = minor_row_store_type; }
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
-      K_(column_info_simplified), K_(merge_engine_type), K_(has_ttl_definition), K_(compat_mode), K_(table_type), K_(index_type),
+      K_(column_info_simplified), K_(merge_engine_type), K_(has_ttl_definition), K_(was_compaction_ttl), K_(compat_mode), K_(table_type), K_(index_type),
       K_(row_store_type), K_(schema_version), K_(is_cs_replica_compat), K_(is_column_table_schema), K_(enable_macro_block_bloom_filter),
       K_(column_cnt), K_(store_column_cnt), K_(tablet_size), K_(pctfree), K_(block_size), K_(progressive_merge_round),
       K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key), K_(is_use_bloomfilter),
@@ -433,7 +435,7 @@ public:
   static const int32_t SS_ONE_BIT = 1;
   static const int32_t SS_HALF_BYTE = 4;
   static const int32_t SS_ONE_BYTE = 8;
-  static const int32_t SS_RESERVED_BITS = 14;
+  static const int32_t SS_RESERVED_BITS = 13;
 
   // STORAGE_SCHEMA_VERSION is for serde compatibility.
   // Currently we do not use "standard" serde function macro,
@@ -464,6 +466,7 @@ public:
       uint32_t is_column_table_schema_           : SS_ONE_BIT;
       uint32_t enable_macro_block_bloom_filter_  : SS_ONE_BIT;
       uint32_t has_ttl_definition_               : SS_ONE_BIT;
+      uint32_t was_compaction_ttl_               : SS_ONE_BIT;
       uint32_t reserved_                         : SS_RESERVED_BITS;
     };
   };

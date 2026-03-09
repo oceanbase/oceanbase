@@ -20,7 +20,9 @@ using namespace blocksstable;
 namespace storage
 {
 ObTabletBlockInfo::ObTabletBlockInfo()
-  : macro_id_(), block_type_(ObTabletMacroType::INVALID_TYPE), occupy_size_(0)
+  : macro_id_(),
+    block_type_(ObTabletMacroType::INVALID_TYPE),
+    occupy_size_(0)
 {
 }
 
@@ -28,9 +30,12 @@ ObTabletBlockInfo::ObTabletBlockInfo(
     const blocksstable::MacroBlockId &macro_id,
     const ObTabletMacroType block_type,
     const int64_t occupy_size)
-  : macro_id_(macro_id), block_type_(block_type), occupy_size_(occupy_size)
+  : macro_id_(macro_id),
+    block_type_(block_type),
+    occupy_size_(occupy_size)
 {
 }
+
 
 ObTabletBlockInfo::~ObTabletBlockInfo()
 {
@@ -350,7 +355,8 @@ int ObMacroInfoIterator::convert_to_block_info(const ObTabletMacroInfo::ObBlockI
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block info is invalid", K(ret), K(tmp_arr.arr_[i]));
     } else {
-      block_info_arr_.arr_[i] = ObTabletBlockInfo(tmp_arr.arr_[i], cur_type_, OB_DEFAULT_MACRO_BLOCK_SIZE);
+      const int64_t occupy_size = tmp_arr.arr_[i].is_shared_tablet_sub_meta_in_table() ? 0 : OB_DEFAULT_MACRO_BLOCK_SIZE;
+      block_info_arr_.arr_[i] = ObTabletBlockInfo(tmp_arr.arr_[i], cur_type_, occupy_size);
     }
   }
   return ret;

@@ -839,7 +839,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
       //   a. mark delete
       ObSSMetaDeleteParam delete_param3;
       delete_param3.set_mark_delete();
-      delete_param3.set_tablet_level_param(param3.meta_type_,
+      delete_param3.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                          ObSSMetaReadResultType::DML_READ,
+                                          param3.meta_type_,
                                           param3.tablet_level_param_.ls_id_,
                                           param3.tablet_level_param_.tablet_id_,
                                           param3.tablet_level_param_.reorganization_scn_);
@@ -866,7 +868,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
     {
       ObSSMetaDeleteParam delete_param3;
       delete_param3.set_really_delete();
-      delete_param3.set_tablet_level_param(param3.meta_type_,
+      delete_param3.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                          ObSSMetaReadResultType::DML_READ,
+                                          param3.meta_type_,
                                           param3.tablet_level_param_.ls_id_,
                                           param3.tablet_level_param_.tablet_id_,
                                           param3.tablet_level_param_.reorganization_scn_);
@@ -893,7 +897,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
       //   a. mark delete
       ObSSMetaDeleteParam delete_param5;
       delete_param5.set_mark_delete();
-      delete_param5.set_ls_level_param(param5.meta_type_,
+      delete_param5.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
+                                       ObSSMetaReadResultType::DML_READ,
+                                       param5.meta_type_,
                                        param5.ls_level_param_.ls_id_);
       TRANS_LOG(INFO, "mark delete ls row", K(param4));
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::delete_meta_row(delete_param5, affected_rows));
@@ -918,7 +924,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
     {
       ObSSMetaDeleteParam delete_param5;
       delete_param5.set_really_delete();
-      delete_param5.set_ls_level_param(param5.meta_type_,
+      delete_param5.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
+                                       ObSSMetaReadResultType::DML_READ,
+                                       param5.meta_type_,
                                        param5.ls_level_param_.ls_id_);
       TRANS_LOG(INFO, "really delete ls row", K(param4));
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::delete_meta_row(delete_param5, affected_rows));

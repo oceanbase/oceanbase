@@ -251,6 +251,7 @@ int ObCommonLSService::do_create_user_ls(
   int ret = OB_SUCCESS;
   LOG_INFO("[COMMON_LS_SERVICE] start to create ls", K(info), K(create_scn));
   const int64_t start_time = ObTimeUtility::fast_current_time();
+  uint64_t data_version = 0;
   if (OB_UNLIKELY(ERRSIM_SKIP_CREATE_USER_LS)) {
     LOG_INFO("errsim skip create user ls");
   } else if (OB_UNLIKELY(!info.is_valid() || !info.ls_is_creating())) {
@@ -267,9 +268,11 @@ int ObCommonLSService::do_create_user_ls(
     if (FAILEDx(tenant_schema.get_zone_replica_attr_array(
                    locality_array))) {
       LOG_WARN("failed to get zone locality array", KR(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(info.tenant_id_, data_version))) {
+      LOG_WARN("failed to get min data version", K(ret), K(info));
     } else {
       ObLSCreator creator(*GCTX.srv_rpc_proxy_, info.tenant_id_,
-                          info.ls_id_, GCTX.sql_proxy_);
+                          info.ls_id_, data_version, GCTX.sql_proxy_);
       if (OB_FAIL(creator.create_user_ls(info,
                                          locality_array, create_scn,
                                          tenant_schema.get_compatibility_mode(),

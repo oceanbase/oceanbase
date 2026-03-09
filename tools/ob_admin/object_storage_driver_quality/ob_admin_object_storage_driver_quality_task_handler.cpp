@@ -232,7 +232,7 @@ int OSDQTaskHandler::handle_multipart_write_task_helper_(const OSDQTask *task)
   const int64_t PART_COUNTS = (task->buf_len_ + PART_SIZE - 1) / PART_SIZE;
 
   if (OB_FAIL(adapter_.open_with_access_type(device_handle, fd, storage_info_, task->uri_,
-          access_type, ObStorageIdMod::get_default_id_mod()))) {
+          access_type, ObStorageIdMod::get_default_id_mod(), false/*is_batch_write*/))) {
     OB_LOG(WARN, "failed to open device with access type", KR(ret), KPC(task));
   }
   std::vector<ObIOHandle> io_handles(PART_COUNTS);

@@ -20,6 +20,7 @@
 #include "share/ls/ob_ls_creator.h"
 #include "share/backup/ob_backup_config.h"
 #include "share/location_cache/ob_location_service.h"
+#include "share/inner_table/ob_tiered_metadata_store_schema.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 #include "share/ob_primary_zone_util.h"
 #include "rootserver/ob_tenant_thread_helper.h"
@@ -221,19 +222,10 @@ int ObParallelCreateTenantExecutor::create_tenant_sys_ls_()
     LOG_WARN("failed to get tenant_info", KR(ret), K(meta_tenant_id));
   } else if (OB_FAIL(ObTenantDDLService::get_pools(create_tenant_arg_.pool_list_, pools))) {
     LOG_WARN("failed to init pools", KR(ret), K(create_tenant_arg_.pool_list_));
-  } else if (GCTX.is_shared_storage_mode()) {
-    FLOG_INFO("[CREATE_TENANT] create sslog log stream", K(meta_tenant_id));
-    if (OB_FAIL(create_tenant_sys_ls_(meta_tenant_schema_, pools, false /*create_ls_with_palf*/,
-          meta_palf_base_info, OB_INVALID_TENANT_ID/*source_tenant_id_to_use*/, tenant_info, true /*is_sslog*/))) {
-      LOG_WARN("failed to create meta tenant sys ls", KR(ret), K(meta_tenant_schema_),
-        K(pools), K(meta_palf_base_info), K(create_tenant_arg_));
-    } else if (OB_FAIL(wait_ls_leader_(meta_tenant_id, SSLOG_LS))) {
-      LOG_WARN("failed to wait ls leader", KR(ret), K(meta_tenant_id));
-    } else if (OB_FAIL(ObRootUtils::create_sslog_tablet(meta_tenant_id))) {
-      LOG_WARN("failed to create sslog tablet", KR(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(create_ss_ls_(meta_tenant_id, pools, meta_palf_base_info, tenant_info))) {
+    LOG_WARN("failed to create ss ls", KR(ret), K(meta_tenant_id), K(pools), K(meta_palf_base_info), K(tenant_info));
+#endif
   } else if (OB_FAIL(create_tenant_sys_ls_(meta_tenant_schema_, pools, false /*create_ls_with_palf*/,
           meta_palf_base_info, create_tenant_arg_.source_tenant_id_, tenant_info))) {
     LOG_WARN("failed to create meta tenant sys ls", KR(ret), K(meta_tenant_schema_),
@@ -247,6 +239,50 @@ int ObParallelCreateTenantExecutor::create_tenant_sys_ls_()
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObParallelCreateTenantExecutor::create_ss_ls_(
+    const uint64_t meta_tenant_id,
+    const ObIArray<share::ObResourcePoolName> &pools,
+    const palf::PalfBaseInfo &meta_palf_base_info,
+    const ObAllTenantInfo &tenant_info)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("[CREATE_TENANT] create ss log stream", K(meta_tenant_id));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("failed to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(meta_tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(meta_tenant_id));
+  } else if (OB_FAIL(create_tenant_sys_ls_(meta_tenant_schema_, pools, false /*create_ls_with_palf*/,
+        meta_palf_base_info, OB_INVALID_TENANT_ID/*source_tenant_id_to_use*/, tenant_info, SSLOG_LS))) {
+    LOG_WARN("failed to create meta tenant sys ls", KR(ret), K(meta_tenant_schema_),
+      K(pools), K(meta_palf_base_info), K(create_tenant_arg_));
+  } else if (OB_FAIL(wait_ls_leader_(meta_tenant_id, SSLOG_LS))) {
+    LOG_WARN("failed to wait ls leader", KR(ret), K(meta_tenant_id));
+  } else if (OB_FAIL(ObRootUtils::create_ss_special_tablet(meta_tenant_id, share::OB_ALL_SSLOG_TABLE_TID))) {
+    LOG_WARN("failed to create sslog tablet", KR(ret));
+  } else {
+    FLOG_INFO("[CREATE_TENANT] create metadata log stream", K(meta_tenant_id));
+    uint64_t sys_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+      LOG_WARN("failed to get data version", KR(ret));
+    } else if (sys_data_version < DATA_VERSION_4_5_1_0) {
+      LOG_INFO("data version not match", KR(ret), KDV(sys_data_version));
+    } else if (OB_FAIL(create_tenant_sys_ls_(meta_tenant_schema_, pools, false /*create_ls_with_palf*/,
+        meta_palf_base_info, OB_INVALID_TENANT_ID/*source_tenant_id_to_use*/, tenant_info, METADATA_LS))) {
+      LOG_WARN("failed to create meta tenant sys ls", KR(ret), K(meta_tenant_schema_),
+        K(pools), K(meta_palf_base_info), K(create_tenant_arg_));
+    } else if (OB_FAIL(wait_ls_leader_(meta_tenant_id, METADATA_LS))) {
+      LOG_WARN("failed to wait ls leader", KR(ret), K(meta_tenant_id));
+    } else if (OB_FAIL(ObRootUtils::create_ss_special_tablet(meta_tenant_id, share::OB_ALL_TIERED_METADATA_STORE_TID))) {
+      LOG_WARN("failed to create tiered metadata tablet", KR(ret));
+    }
+  }
+  FLOG_INFO("[CREATE_TENANT] finish create ss log stream", KR(ret), K(meta_tenant_id));
+  return ret;
+}
+#endif
 
 int ObParallelCreateTenantExecutor::create_user_ls_(ObParallelCreateNormalTenantProxy &proxy)
 {
@@ -386,10 +422,9 @@ int ObParallelCreateTenantExecutor::create_tenant_sys_ls_(
     const palf::PalfBaseInfo &palf_base_info,
     const uint64_t source_tenant_id,
     const ObAllTenantInfo &tenant_info,
-    const bool is_sslog)
+    const ObLSID &ls_id)
 {
   const int64_t start_time = ObTimeUtility::fast_current_time();
-  const ObLSID ls_id = is_sslog ? SSLOG_LS : SYS_LS;
   FLOG_INFO("[CREATE_TENANT] STEP 2.1. start create sys log stream", K(tenant_schema), K(source_tenant_id), K(ls_id));
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
@@ -397,16 +432,23 @@ int ObParallelCreateTenantExecutor::create_tenant_sys_ls_(
   const uint64_t source_tenant_id_to_use = is_user_tenant(tenant_id) ? source_tenant_id : OB_INVALID_TENANT_ID;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("variable is not init", KR(ret));
-  } else if (is_sys_tenant(tenant_id)) {
+  } else if (is_sys_tenant(tenant_id) || !ls_id.is_valid_with_tenant(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant_id is invalid", KR(ret), K(tenant_id));
+    LOG_WARN("tenant_id is invalid", KR(ret), K(tenant_id), K(ls_id));
   } else {
+    uint64_t data_version = 0;
+    if (is_meta_tenant(tenant_id)) {
+      data_version = DATA_CURRENT_VERSION;
+    } else {
+      data_version = (create_tenant_arg_.is_restore_tenant() || create_tenant_arg_.is_clone_tenant())
+                                   ? create_tenant_arg_.compatible_version_ : DATA_CURRENT_VERSION;
+    }
     ObArray<share::ObZoneReplicaAttrSet> locality;
     ObZone primary_zone;
     ObSqlString zone_priority;
     share::schema::ObSchemaGetterGuard schema_guard; // not used
     int64_t paxos_replica_num = OB_INVALID_ID;
-    ObLSCreator ls_creator(*rpc_proxy_, tenant_id, ls_id, sql_proxy_);
+    ObLSCreator ls_creator(*rpc_proxy_, tenant_id, ls_id, data_version, sql_proxy_);
     if (OB_FAIL(tenant_schema.get_zone_replica_attr_array(locality))) {
       LOG_WARN("fail to get tenant's locality", KR(ret), K(locality));
     } else if (OB_FAIL(tenant_schema.get_paxos_replica_num(schema_guard, paxos_replica_num))) {
@@ -422,7 +464,7 @@ int ObParallelCreateTenantExecutor::create_tenant_sys_ls_(
                K(locality), K(paxos_replica_num), K(tenant_schema), K(zone_priority), K(source_tenant_id_to_use));
     }
   }
-  if (is_sslog) {
+  if (!ls_id.is_sys_ls()) {
   } else if (is_meta_tenant(tenant_id)) {
     DEBUG_SYNC(AFTER_CREATE_META_TENANT_SYS_LOGSTREAM);
   } else {
@@ -474,7 +516,7 @@ int ObParallelCreateTenantExecutor::wait_ls_leader_(const uint64_t tenant_id, co
     }
     int64_t wait_leader_end = ObTimeUtility::current_time();
     wait_leader = wait_leader_end - wait_leader_start;
-    LOG_INFO("wait tenant ls elect", KR(ret), K(tenant_id), K(leader), "cost", wait_leader);
+    LOG_INFO("wait tenant ls elect", KR(ret), K(tenant_id), K(ls_id), K(leader), "cost", wait_leader);
   }
   return ret;
 }

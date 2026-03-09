@@ -76,7 +76,7 @@ DEF_TO_STRING(ObTenantSlogCheckpointWorkflow::Context)
   return pos;
 }
 
-int ObTenantSlogCheckpointWorkflow::execute(
+/*static*/int ObTenantSlogCheckpointWorkflow::execute(
     const Type type,
     ObTenantCheckpointSlogHandler &ckpt_handler)
 {
@@ -84,6 +84,9 @@ int ObTenantSlogCheckpointWorkflow::execute(
   if (OB_UNLIKELY(!ckpt_handler.is_inited_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ckpt_handler is not inited", K(ret));
+  } else if (OB_UNLIKELY(!is_workflow_type_valid(type))) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid workflow type", K(ret), K(type));
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
@@ -101,6 +104,32 @@ int ObTenantSlogCheckpointWorkflow::execute(
     ObTenantSlogCheckpointWorkflow workflow(type, context);
     if (OB_FAIL(workflow.inner_execute_())) {
       STORAGE_LOG(WARN, "failed to execute tenant slog checkpoint workflow", K(ret), K(workflow));
+    }
+  }
+  return ret;
+}
+
+/*static*/int ObTenantSlogCheckpointWorkflow::execute_single_ls_ckpt(
+    const ObLSID &ls_id,
+    ObTenantCheckpointSlogHandler &ckpt_handler)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ckpt_handler.is_inited_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ckpt_handler is not inited", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid ls id", K(ret), K(ls_id));
+  } else {
+    ObTenantSlogCkptUtil::MetaBlockListApplier mbl_applier(
+        &ckpt_handler.lock_,
+        &ckpt_handler.ls_block_handle_,
+        &ckpt_handler.tablet_block_handle_,
+        &ckpt_handler.wait_gc_tablet_block_handle_);
+    Context context(ckpt_handler.super_block_mutex_, mbl_applier, ckpt_handler.ckpt_info_);
+    ObTenantSlogCheckpointWorkflow workflow(Type::SINGLE_LS_CKPT, context);
+    if (OB_FAIL(workflow.inner_execute_single_ls_ckpt_(ls_id))) {
+      STORAGE_LOG(WARN, "failed to execute single ls checkpoint workflow", K(ret), K(ls_id), K(workflow));
     }
   }
   return ret;
@@ -147,10 +176,35 @@ int ObTenantSlogCheckpointWorkflow::inner_execute_()
 
     /* --- step2: slog truncate --- */
     if (OB_SUCC(ret)) {
-      SlogTruncateHelper slog_truncate_helper(context_, tracer);
-      if (OB_FAIL(slog_truncate_helper.do_truncate(force_truncate_slog_()))) {
+      SlogCheckpointHelper slog_checkpoint_helper(context_, tracer);
+      if (OB_FAIL(slog_checkpoint_helper.do_truncate(force_truncate_slog_()))) {
         STORAGE_LOG(WARN, "failed to do slog truncate", K(ret), KPC(this));
       }
+    }
+
+    tracer.log_ckpt_finish(*this);
+  }
+  return ret;
+}
+
+int ObTenantSlogCheckpointWorkflow::inner_execute_single_ls_ckpt_(const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  STORAGE_LOG(DEBUG, "tenant single ls checkpoint workflow start", KPC(this));
+
+  if (OB_UNLIKELY(!is_valid_())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid slog checkpoint workflow", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid ls id", K(ret), K(ls_id));
+  } else {
+    Tracer tracer;
+    tracer.start();
+
+    SlogCheckpointHelper slog_checkpoint_helper(context_, tracer);
+    if (OB_FAIL(slog_checkpoint_helper.do_single_ls_ckpt(ls_id))) {
+      STORAGE_LOG(WARN, "failed to do single ls checkpoint", K(ret), K(ls_id), KPC(this));
     }
 
     tracer.log_ckpt_finish(*this);
@@ -163,6 +217,7 @@ bool ObTenantSlogCheckpointWorkflow::skip_defragment_() const
   OB_ASSERT(nullptr != MERGE_SCHEDULER_PTR);
   bool skip = false;
   if (type_ == Type::NORMAL_SS ||
+      type_ == Type::SINGLE_LS_CKPT ||
       /* temporary disabled dfgt in SS */
       (GCTX.is_shared_storage_mode() && type_ == Type::FORCE)) {
     skip = true;
@@ -194,6 +249,12 @@ DEF_TO_STRING(ObTenantSlogCheckpointWorkflow)
     break;
   case Type::FORCE:
     type = ObString("FORCE");
+    break;
+  case Type::SINGLE_LS_CKPT:
+    type = ObString("SINGLE_LS_CHECKPOINT");
+    break;
+  default:
+    type = ObString("UNKNOWN");
   }
   bool pick_all_tablets = pick_all_tablets_();
   bool skip_defragment = skip_defragment_();
@@ -581,9 +642,9 @@ int ObTenantSlogCheckpointWorkflow::TabletDefragmentHelper::update_ckpt_info_() 
 }
 
 // ============================
-//    SlogTruncateHelper
+//    SlogCheckpointHelper
 // ============================
-ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::SlogTruncateHelper(
+ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::SlogCheckpointHelper(
   Context &ctx,
   Tracer &tracer)
   : ctx_(ctx),
@@ -592,7 +653,7 @@ ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::SlogTruncateHelper(
 {
 }
 
-int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::do_truncate(const bool is_force)
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::do_truncate(const bool is_force)
 {
   int ret = OB_SUCCESS;
   bool need_truncate = is_force;
@@ -622,7 +683,7 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::do_truncate(const bool i
 
         ObSlogCheckpointFdDispenser *fd_dispenser_ptr = GCTX.is_shared_storage_mode() ? &fd_dispenser : nullptr;
         if (OB_NOT_NULL(fd_dispenser_ptr)
-          && OB_FAIL(fd_dispenser_ptr->init(last_super_block.max_file_id_))) {
+            && OB_FAIL(fd_dispenser_ptr->init(last_super_block.max_file_id_))) {
           STORAGE_LOG(WARN, "failed to init fd_dispenser", K(ret));
         } else if (OB_FAIL(ctx_.ls_service_.get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
           STORAGE_LOG(WARN, "failed to get log stream iterator", K(ret));
@@ -693,7 +754,73 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::do_truncate(const bool i
   return ret;
 }
 
-int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::update_ckpt_info_() const
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::do_single_ls_ckpt(const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ctx_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "ctx is invalid", K(ret), K(ctx_));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid ls id", K(ret), K(ls_id));
+  } else {
+    HEAP_VAR(ObTenantSuperBlock, last_super_block, ctx_.tenant_.get_super_block()) {
+      if (OB_UNLIKELY(!last_super_block.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "failed to get tenant super block", K(ret), K(last_super_block));
+      } else {
+        tracer_.record_super_block_before_truncate(last_super_block);
+
+        const ObMemAttr mem_attr = ctx_.get_mem_attr();
+        ObSlogCheckpointFdDispenser fd_dispenser;
+        ObLSHandle ls_handle;
+        ObLS *ls = nullptr;
+        common::hash::ObHashSet<MacroBlockId> exclude_tablet_block_set;
+        MacroBlockId ls_meta_entry;
+
+        ls_item_writer_.reset();
+        tablet_item_writer_.reset();
+
+        ObSlogCheckpointFdDispenser *fd_dispenser_ptr = GCTX.is_shared_storage_mode() ? &fd_dispenser : nullptr;
+        if (OB_NOT_NULL(fd_dispenser_ptr)
+            && OB_FAIL(fd_dispenser_ptr->init(last_super_block.max_file_id_))) {
+          STORAGE_LOG(WARN, "failed to init fd_dispenser", K(ret));
+        } else if (OB_FAIL(init_ls_item_writer_by_old_ckpt_(ls_id,
+                                                     last_super_block,
+                                                     mem_attr,
+                                                     fd_dispenser_ptr,
+                                                     ls_item_writer_,
+                                                     exclude_tablet_block_set))) {
+          STORAGE_LOG(WARN, "failed to init ls item writer by old ckpt", K(ret), K(ls_id));
+        } else if (OB_FAIL(ctx_.ls_service_.get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+          STORAGE_LOG(WARN, "failed to get log stream", K(ret), K(ls_id));
+        } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "unexpected null ls", K(ret), K(ls_handle));
+        }
+        // make single ls checkpoint
+        else if (OB_FAIL(record_single_ls_meta_(*ls, fd_dispenser_ptr))) {
+          STORAGE_LOG(WARN, "failed to do record log stream meta", K(ret), KPC(ls));
+        } else if (OB_FAIL(ls_item_writer_.close())) {
+          STORAGE_LOG(WARN, "failed to close ls item writer", K(ret));
+        } else if (OB_FAIL(ls_item_writer_.get_entry_block(ls_meta_entry))) {
+          STORAGE_LOG(WARN, "failed to get ls entry block", K(ret));
+        } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) { // sync macro block link before update tenant's super block
+          STORAGE_LOG(WARN, "failed to fsync block", K(ret));
+        } else if (OB_FAIL(apply_single_ls_ckpt_result_(ls_meta_entry,
+                                                        fd_dispenser_ptr,
+                                                        exclude_tablet_block_set))) {
+          STORAGE_LOG(WARN, "failed to apply single ls checkpoint result", K(ret),
+            K(ls_meta_entry));
+        }
+      }
+    }
+    tracer_.record_truncate_end(ret);
+  }
+  return ret;
+}
+
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::update_ckpt_info_() const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ctx_.ckpt_info_.is_valid())) {
@@ -705,7 +832,7 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::update_ckpt_info_() cons
   return ret;
 }
 
-int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::get_slog_ckpt_cursor_(common::ObLogCursor &ckpt_cursor)
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::get_slog_ckpt_cursor_(common::ObLogCursor &ckpt_cursor)
 {
   OB_ASSERT(ctx_.is_valid());
   int ret = OB_SUCCESS;
@@ -720,7 +847,7 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::get_slog_ckpt_cursor_(co
   return ret;
 }
 
-int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::check_if_required_(
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::check_if_required_(
     const common::ObLogCursor &ckpt_cursor,
     const ObTenantSuperBlock &last_super_block,
     bool &need_truncate) const
@@ -755,7 +882,7 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::check_if_required_(
 }
 
 /// see ObTenantStorageSnapshotWriter::write_item
-int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::write_ls_item_(const ObLSCkptMember &ls_ckpt_member)
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::write_ls_item_(const ObLSCkptMember &ls_ckpt_member)
 {
   OB_ASSERT(ctx_.is_valid());
   int ret = OB_SUCCESS;
@@ -781,16 +908,18 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::write_ls_item_(const ObL
 }
 
 /// see ObTenantStorageSnapshotWriter::do_record_ls_meta
-int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_single_ls_meta_(
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::record_single_ls_meta_(
     ObLS &ls,
     ObSlogCheckpointFdDispenser *fd_dispenser)
 {
   OB_ASSERT(ctx_.is_valid());
   int ret = OB_SUCCESS;
+  ObTimeGuard time_guard("record_single_ls_meta", 5_s);
 
   ObLSCkptMember ls_ckpt_member;
   {
     ObLSLockGuard lock_ls(&ls);
+    time_guard.click("LsLock");
     if (OB_FAIL(ls.get_ls_meta(ls_ckpt_member.ls_meta_))) {
       STORAGE_LOG(WARN, "failed to get ls meta", K(ret));
     } else if (OB_FAIL(ls.get_dup_table_ls_meta(ls_ckpt_member.dup_ls_meta_))) {
@@ -805,22 +934,26 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_single_ls_meta_(
     ls_ckpt_member.tablet_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
   } else if (OB_FAIL(record_ls_tablets_(ls, ls_ckpt_member.tablet_meta_entry_/*out*/, fd_dispenser))) {
     STORAGE_LOG(WARN, "failed to write checkpoint for this ls", K(ret), K(ls));
+  } else {
+    time_guard.click("RecordTablets");
   }
 
   if (FAILEDx(write_ls_item_(ls_ckpt_member))) {
     STORAGE_LOG(WARN, "failed to write ls item", K(ret), K(ls_ckpt_member));
+  } else {
+    time_guard.click("WriteItem");
   }
   return ret;
 }
 
-int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_ls_tablets_(
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::record_ls_tablets_(
     ObLS &ls,
     MacroBlockId &tablet_meta_entry,
     ObSlogCheckpointFdDispenser *fd_dispenser)
 {
   OB_ASSERT(ctx_.is_valid());
   int ret = OB_SUCCESS;
-
+  int64_t tablet_cnt = 0;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
 
@@ -851,6 +984,8 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_ls_tablets_(
       }
     } else if (OB_FAIL(record_single_tablet_(tablet_handle, ls.get_ls_epoch(), slog_buf))) {
       STORAGE_LOG(WARN, "failed to record single tablet", K(ret), K(tablet_handle));
+    } else {
+      ++tablet_cnt;
     }
   }
 
@@ -862,11 +997,12 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_ls_tablets_(
     STORAGE_LOG(WARN, "failed to get tablet meta entry", K(ret));
   }
 
-  STORAGE_LOG(INFO, "record ls tablets finish", K(ret), K(tablet_meta_entry));
+  STORAGE_LOG(INFO, "record ls tablets finish", K(ret), "ls_id", ls.get_ls_id(),
+    K(tablet_cnt), K(tablet_meta_entry));
   return ret;
 }
 
-int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_single_tablet_(
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::record_single_tablet_(
     ObTabletHandle &tablet_handle,
     const int64_t ls_epoch,
     char (&slog_buf)[sizeof(ObUpdateTabletLog)])
@@ -890,7 +1026,7 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_single_tablet_(
   } else if (OB_UNLIKELY(!old_addr.is_disked())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected non disked tablet", K(tablet->get_tablet_addr()));
-  } else if (old_addr.is_block()) {
+  } else if (old_addr.is_block() || old_addr.is_sslog_tablet_meta()) {
     /**
      * NOTE: CAN'T USE ObTablet::is_empty_shell() to judge whether a tablet is empty shell here,
      * because empty shell would be transform into BLOCK after defragment. If an empty shell is block
@@ -937,7 +1073,7 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_single_tablet_(
   return ret;
 }
 
-int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::apply_truncate_result_(
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::apply_truncate_result_(
     const common::ObLogCursor &ckpt_cursor,
     const MacroBlockId &ls_meta_entry,
     const MacroBlockId &wait_gc_tablet_entry,
@@ -964,16 +1100,15 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::apply_truncate_result_(
       super_block.replay_start_point_ = ckpt_cursor;
       super_block.ls_meta_entry_ = ls_meta_entry;
       super_block.wait_gc_tablet_entry_ = wait_gc_tablet_entry;
-      super_block.copy_snapshots_from(ctx_.tenant_.get_super_block());
-      if (OB_FAIL(ctx_.server_smeta_svr_.update_tenant_super_block(0, super_block))) {
-        STORAGE_LOG(WARN, "failed to update tenant super block", K(ret), K(super_block));
-      } else if (OB_FAIL(fd_dispenser.assign_to(/*out*/super_block.min_file_id_,
-                                                   /*out*/super_block.max_file_id_))) {
+      if (OB_FAIL(fd_dispenser.assign_to(/*out*/super_block.min_file_id_,
+                                         /*out*/super_block.max_file_id_))) {
         STORAGE_LOG(WARN, "fd_dispenser failed to do assign", K(ret), K(fd_dispenser));
+      } else if (OB_FAIL(ctx_.server_smeta_svr_.update_tenant_super_block(0, super_block))) {
+        STORAGE_LOG(WARN, "failed to update tenant super block", K(ret), K(super_block));
       } else {
         ctx_.tenant_.set_tenant_super_block(super_block);
       }
-      tracer_.record_super_block_after_truncate(super_block);
+      tracer_.record_super_block_after_ckpt(super_block);
     }
 
     OB_ASSERT(ctx_.mbl_applier_.is_valid());
@@ -982,14 +1117,14 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::apply_truncate_result_(
     const ObIArray<MacroBlockId> &tablet_block_list = tablet_item_writer_.get_meta_block_list();
     const ObIArray<MacroBlockId> &wait_gc_tablet_block_list = wait_gc_tablet_item_writer_.get_meta_block_list();
 
-    /** step2: apply block list and remove useless slog file if step1 is successful.
+    /** step2: apply block lists and remove useless slog file if step1 is successful.
      * NOTE: apply block list aims for hold the macro block's ref cnt, and we should ABORT
      * if failed to apply block list because once tenant super block has been updated,
      * it cannot be rollback.
      */
     if (OB_FAIL(ret)) {
       // do nothing
-    }  else if (OB_FAIL(ctx_.mbl_applier_.apply_from(ls_block_list, tablet_block_list, wait_gc_tablet_block_list))) {
+    }  else if (OB_FAIL(ctx_.mbl_applier_.apply_from(ls_block_list, tablet_block_list, &wait_gc_tablet_block_list))) {
       STORAGE_LOG(WARN, "failed to apply macro block lists", K(ret));
       // abort if failed.
       ob_usleep(1000 * 1000);
@@ -1001,7 +1136,136 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::apply_truncate_result_(
   return ret;
 }
 
-int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::alert_if_necessary_(const int64_t errcode)
+/*static*/int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::init_ls_item_writer_by_old_ckpt_(
+    const ObLSID &ls_id,
+    const ObTenantSuperBlock &old_super_block,
+    const ObMemAttr &mem_attr,
+    ObSlogCheckpointFdDispenser *fd_dispenser,
+    /*out*/ ObLinkedMacroBlockItemWriter &ls_item_writer,
+    /*out*/ common::hash::ObHashSet<MacroBlockId> &exclude_tablet_block_set)
+{
+  int ret = OB_SUCCESS;
+  const int64_t set_bkt_cnt = 16;
+
+  if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid ls id", K(ret), K(ls_id));
+  } else if (OB_UNLIKELY(!old_super_block.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid tenant super block", K(ret), K(old_super_block));
+  } else if (OB_FAIL(exclude_tablet_block_set.create(set_bkt_cnt))) {
+    STORAGE_LOG(WARN, "failed to create exclude_tablet_block_set", K(ret), K(set_bkt_cnt));
+  } else if (OB_FAIL(ls_item_writer.init_for_slog_ckpt(MTL_ID(), MTL_EPOCH_ID(), mem_attr, fd_dispenser))) {
+    STORAGE_LOG(WARN, "failed to init log stream item writer", K(ret));
+  } else if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK == old_super_block.ls_meta_entry_) {
+    // do nothing
+    STORAGE_LOG(INFO, "no checkpoint found at tenant super block", K(ret), K(old_super_block));
+  } else {
+    // inherit ls ckpt member from checkpoint
+    const MacroBlockId &ls_meta_entry = old_super_block.ls_meta_entry_;
+    ObSArray<MacroBlockId> tmp_block_list;
+    ObSEArray<MacroBlockId, 2> tablet_block_list;
+    ObTenantSlogCkptUtil::LSCkptInheritOp ls_ckpt_inherit_op(ls_id, ls_item_writer, tablet_block_list);
+
+    if (OB_FAIL(ObTenantStorageCheckpointReader::iter_read_meta_item(ls_meta_entry,
+                                                                     ls_ckpt_inherit_op,
+                                                                     tmp_block_list))) {
+      STORAGE_LOG(WARN, "failed to iterator ls block list", K(ret), K(ls_meta_entry));
+    } else {
+      if (!tablet_block_list.empty()) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < tablet_block_list.count(); ++i) {
+          const MacroBlockId &block_id = tablet_block_list.at(i);
+          if (OB_FAIL(exclude_tablet_block_set.set_refactored(block_id))) {
+            STORAGE_LOG(WARN, "failed to insert set", K(ret), K(block_id));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::apply_single_ls_ckpt_result_(
+    const MacroBlockId &ls_meta_entry,
+    const ObSlogCheckpointFdDispenser *fd_dispenser,
+    const common::hash::ObHashSet<MacroBlockId> &exclude_tablet_block_set)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!ls_meta_entry.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid ls_meta_entry", K(ret), K(ls_meta_entry));
+  } else if (GCTX.is_shared_storage_mode()
+             && OB_ISNULL(fd_dispenser)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "fd_dispenser must be provided in SS mode", K(ret), KP(fd_dispenser));
+  } else if (OB_UNLIKELY(!exclude_tablet_block_set.created())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "exclude_tablet_block_set has not been created", K(ret));
+  } else {
+    // step1: update tenant super block
+    /// NOTE: only ls_meta_entry, max_file_id need to been updated.
+    HEAP_VAR(ObTenantSuperBlock, super_block) {
+      /// HELD SUPER BLOCK MUTEX OF @c ObTenantCheckpointSlogHandler
+      lib::ObMutexGuard guard(ctx_.supper_block_mutex_);
+      super_block = ctx_.tenant_.get_super_block();
+      super_block.ls_meta_entry_ = ls_meta_entry;
+      // only update max_file_id!!!
+      int64_t tmp_min_file_id = -1;
+      if (OB_NOT_NULL(fd_dispenser)
+          && OB_FAIL(fd_dispenser->assign_to(/*out*/tmp_min_file_id,
+                                             /*out*/super_block.max_file_id_))) {
+        STORAGE_LOG(WARN, "fd_dispenser failed to do assign", K(ret), KPC(fd_dispenser));
+      } else if (OB_FAIL(ctx_.server_smeta_svr_.update_tenant_super_block(0, super_block))) {
+        STORAGE_LOG(WARN, "failed to update tenant super block", K(ret), K(super_block));
+      } else {
+        ctx_.tenant_.set_tenant_super_block(super_block);
+      }
+      tracer_.record_super_block_after_ckpt(super_block);
+    }
+
+    OB_ASSERT(ctx_.mbl_applier_.is_valid());
+
+    // step2: apply block lists
+    const ObIArray<MacroBlockId> &ls_block_list = ls_item_writer_.get_meta_block_list();
+    const ObIArray<MacroBlockId> &tablet_block_list = tablet_item_writer_.get_meta_block_list();
+    const ObIArray<MacroBlockId> &old_tablet_block_list = ctx_.mbl_applier_.get_tablet_block_list();
+    ObSEArray<MacroBlockId, 2> final_tablet_block_list;
+    /// final_tablet_block_list = tablet_block_list + (old_tablet_block_list - exclude_tablet_block_set)
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_block_list.count(); ++i) {
+      const MacroBlockId &block_id = tablet_block_list.at(i);
+      if (OB_FAIL(final_tablet_block_list.push_back(block_id))) {
+        STORAGE_LOG(WARN, "failed to push back block_id", K(ret), K(block_id));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < old_tablet_block_list.count(); ++i) {
+      const MacroBlockId &block_id = old_tablet_block_list.at(i);
+      if (OB_FAIL(exclude_tablet_block_set.exist_refactored(block_id))) {
+        if (OB_HASH_EXIST == ret) {
+          // do nothing
+          ret = OB_SUCCESS;
+        } else if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          if (OB_FAIL(final_tablet_block_list.push_back(block_id))) {
+            STORAGE_LOG(WARN, "failed to push back block_id", K(ret), K(block_id));
+          }
+        } else {
+          STORAGE_LOG(WARN, "failed to check existence", K(ret), K(block_id));
+        }
+      }
+    }
+
+    if (FAILEDx(ctx_.mbl_applier_.apply_from(ls_block_list, final_tablet_block_list, nullptr))) {
+      STORAGE_LOG(WARN, "failed to apply macro block lists", K(ret));
+      // abort if failed.
+      ob_usleep(1_s);
+      ob_abort();
+    }
+  }
+  return ret;
+}
+
+int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::alert_if_necessary_(const int64_t errcode)
 {
   OB_ASSERT(OB_SUCCESS != errcode);
   int ret = OB_SUCCESS;

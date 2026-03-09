@@ -381,6 +381,8 @@ int ObInnerSQLConnection::init_session_info(
       LOG_WARN("session load default system variable failed", K(ret));
     } else if (NOT_SPEED_UP_INIT_SESSION_INFO && OB_FAIL(session->load_default_sys_variable(print_info_log, is_sys_tenant))) {
       LOG_WARN("session load default system variable failed", K(ret));
+    } else if (session->init_default_value_changed_serialized_variables(is_sys_tenant)) {
+      LOG_WARN("failed to init default value changed serialized variables");
     } else if (OB_FAIL(session->update_max_packet_size())) {
       LOG_WARN("fail to update max packet size", K(ret));
     } else if (OB_FAIL(session->init_tenant(OB_SYS_TENANT_NAME, OB_SYS_TENANT_ID))) {

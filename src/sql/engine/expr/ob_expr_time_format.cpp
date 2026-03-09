@@ -248,6 +248,8 @@ int ObExprTimeFormat::calc_time_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       LOG_WARN("failed to convert ob time to str with format");
     } else if (res_null) {
       expr_datum.set_null();
+    } else if (pos > OB_MAX_VARCHAR_LENGTH) {
+      expr_datum.set_string(buf, static_cast<int32_t>(OB_MAX_VARCHAR_LENGTH));
     } else {
       expr_datum.set_string(buf, static_cast<int32_t>(pos));
     }

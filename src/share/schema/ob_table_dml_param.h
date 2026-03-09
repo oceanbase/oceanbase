@@ -66,6 +66,7 @@ public:
   OB_INLINE int64_t get_fulltext_col_id() const { return fulltext_col_id_; }
   OB_INLINE const common::ObString &get_fts_parser_name() const { return fts_parser_name_; }
   OB_INLINE const common::ObString &get_fts_parser_property() const { return fts_parser_properties_; }
+  OB_INLINE ObFTSIndexType get_fts_index_type() const { return fts_index_type_; }
   OB_INLINE uint64_t get_spatial_geo_col_id() const { return spatial_geo_col_id_; }
   OB_INLINE uint64_t get_spatial_cellid_col_id() const { return spatial_cellid_col_id_; }
   OB_INLINE uint64_t get_spatial_mbr_col_id() const { return spatial_mbr_col_id_; }

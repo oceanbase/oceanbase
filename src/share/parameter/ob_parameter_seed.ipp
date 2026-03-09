@@ -2273,6 +2273,9 @@ DEF_BOOL(_enable_inner_session_mgr, OB_TENANT_PARAMETER, "True", "enable/disable
 DEF_BOOL(_enable_trace_tablet_leak, OB_TENANT_PARAMETER, "False",
         "enable t3m tablet leak checker. The default value is False",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_BOOL(_enable_schedule_tablet_split, OB_CLUSTER_PARAMETER, "True",
+        "specifies whether manual/auto tablet split scheduling is allowed",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL_WITH_CHECKER(enable_auto_split, OB_TENANT_PARAMETER, "False",
          common::ObConfigEnableAutoSplitChecker,
          "if the auto-partition clause is not used, "
@@ -3363,7 +3366,7 @@ DEF_STR_WITH_CHECKER(system_protected_tenant_parameters, OB_CLUSTER_PARAMETER, "
 DEF_BOOL(_enable_atomic_drop_database, OB_TENANT_PARAMETER, "True",
          "Enable or disable atomic drop database.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "0", "[0,)",
+DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "300", "[0,)",
         "Controls the write throttling mechanism based on the percentage of the sslog table occupying the meta tenant disk. "
         "If set to 0, write throttling caused by sslog table size is disabled; Otherwise, if the size of sslog table is "
         "larger than (meta tenant disk limit * threshold), write throttling is triggered to slow down incoming write requests."
@@ -3411,3 +3414,6 @@ DEF_INT(_large_query_cpu_quota_adjustment_step, OB_TENANT_PARAMETER, "0", "[0,10
 DEF_BOOL(_enable_pl_sql_parameterize, OB_TENANT_PARAMETER, "False",
         "enable/disable pl sql parameterize optimization",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_ss_fast_migration, OB_TENANT_PARAMETER, "True",
+         "use fast migration in shared-storage if enable",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

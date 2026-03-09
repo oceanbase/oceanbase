@@ -345,7 +345,7 @@ int TestCGMicroMacroWriteOp::initialize_write_ops()
     }
   } else if (DDL_WRITE_MACRO_BLOCK_OP == ops_type_) {
     ObWriteMacroParam writer_param;
-    if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id_, 0, -1, &ddl_dag_, 0/*max_batch_size*/, writer_param))) {
+    if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id_, 0, -1, &ddl_dag_, writer_param))) {
       LOG_WARN("fail to fill writer param", K(ret));
     } else if (OB_FAIL(ddl_write_macro_block_op_.init(writer_param))) {
       LOG_WARN("fail to initialize ddl write macro block op", K(ret));

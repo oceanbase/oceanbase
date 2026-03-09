@@ -624,6 +624,7 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     rowid_projector_(allocator),
     parser_name_(),
     parser_properties_(),
+    fts_index_type_(OB_FTS_INDEX_TYPE_INVALID),
     enable_lob_locator_v2_(false),
     is_spatial_index_(false),
     is_fts_index_(false),
@@ -664,6 +665,7 @@ void ObTableParam::reset()
   rowid_projector_.reset();
   parser_name_.reset();
   parser_properties_.reset();
+  fts_index_type_ = OB_FTS_INDEX_TYPE_INVALID;
   main_read_info_.reset();
   enable_lob_locator_v2_ = false;
   is_spatial_index_ = false;
@@ -746,6 +748,9 @@ OB_DEF_SERIALIZE(ObTableParam)
     OB_UNIS_ENCODE(plan_enable_rich_format_);
     OB_UNIS_ENCODE(table_type_);
     OB_UNIS_ENCODE(merge_engine_type_);
+  }
+  if (OB_SUCC(ret) && is_fts_index_) {
+    OB_UNIS_ENCODE(fts_index_type_);
   }
   return ret;
 }
@@ -868,6 +873,9 @@ OB_DEF_DESERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_DECODE, table_type_);
     LST_DO_CODE(OB_UNIS_DECODE, merge_engine_type_);
   }
+  if (OB_SUCC(ret) && is_fts_index_ && pos < data_len) {
+    OB_UNIS_DECODE(fts_index_type_);
+  }
   return ret;
 }
 
@@ -941,6 +949,9 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
                 plan_enable_rich_format_,
                 table_type_,
                 merge_engine_type_);
+  }
+  if (OB_SUCC(ret) && is_fts_index_) {
+    OB_UNIS_ADD_LEN(fts_index_type_);
   }
   return len;
 }
@@ -1045,6 +1056,7 @@ int ObTableParam::construct_columns_and_projector(
   share::schema::ObColDesc tmp_col_desc;
   share::schema::ObColExtend tmp_col_extend;
   int32_t cg_idx = 0;
+  bool is_cs_table = false;
   bool is_cs = false;
   bool has_all_column_group = false;
   bool need_truncate_filter = false;
@@ -1052,8 +1064,9 @@ int ObTableParam::construct_columns_and_projector(
   int64_t rowkey_count = 0;
   is_column_replica_table_ = false; // row store table schema does not contains cg, if true, need calculate cg idx by designed rules
 
-  if (OB_FAIL(table_schema.get_is_column_store(is_cs))) {
+  if (OB_FAIL(table_schema.get_is_column_store(is_cs_table))) {
     LOG_WARN("fail to get is table column store", K(ret), K(table_schema));
+  } else if (FALSE_IT(is_cs = is_cs_table)) {
   } else if (!is_cs && query_cs_replica) {
     is_cs = true;
     is_column_replica_table_ = true;
@@ -1120,7 +1133,7 @@ int ObTableParam::construct_columns_and_projector(
         }
       }
     }
-    if (OB_SUCC(ret) && !is_cs && table_schema.is_global_index_table()) {
+    if (OB_SUCC(ret) && !is_cs_table && table_schema.is_global_index_table()) {
       ObSEArray<ObColDesc, COMMON_COLUMN_NUM> non_rowkey_column_ids;
       if (OB_FAIL(table_schema.get_column_ids_without_rowkey(non_rowkey_column_ids, true))) {
         LOG_WARN("get column ids failed", K(ret));
@@ -1738,6 +1751,13 @@ int ObTableParam::convert_fulltext_index_info(const ObTableSchema &table_schema)
     LOG_WARN("failed to set parser name from table schema", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator_, table_schema.get_parser_property_str(), parser_properties_))) {
     LOG_WARN("fail to set parser properties from table schema", K(ret));
+  } else {
+    share::schema::ObFTSIndexParams fts_index_params;
+    if (OB_FAIL(table_schema.get_fts_params_from_index_params(fts_index_params))) {
+      LOG_WARN("failed to get fts index params from table schema", K(ret), K(table_schema));
+    } else {
+      fts_index_type_ = fts_index_params.fts_index_type_;
+    }
   }
   return ret;
 }
@@ -1795,6 +1815,7 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_fts_index),
        K_(parser_name),
        K_(parser_properties),
+       K_(fts_index_type),
        K_(is_vec_index),
        K_(is_column_replica_table),
        K_(is_normal_cgs_at_the_end),

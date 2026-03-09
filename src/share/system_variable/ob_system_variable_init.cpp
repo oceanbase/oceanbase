@@ -26,6 +26,10 @@ static ObArenaAllocator ObSysVarAllocator(ObModIds::OB_COMMON_SYS_VAR_DEFAULT_VA
 static ObObj ObSysVarBaseValues[ObSysVarFactory::ALL_SYS_VARS_COUNT];
 static ObArenaAllocator ObBaseSysVarAllocator(ObModIds::OB_COMMON_SYS_VAR_DEFAULT_VALUE);
 static int64_t ObSysVarsIdToArrayIdx[ObSysVarFactory::OB_MAX_SYS_VAR_ID];
+// default_value != base_value and variable flags has SESSION or NEED_SERIALIZE or QUERY_SENSITIVE
+static int64_t ObDefaultValueChangedSerializedVarIndices[ObSysVarFactory::OB_SYS_DEFAULT_VALUE_CHANGED_SERIALIZED_VAR_COUNT] = {
+  14, 15, 55, 231, 234, 242, 477, 503, 839
+};
 // VarsInit中需要判断当前最大的SysVars对应的id，是否大于OB_MAX_SYS_VAR_ID
 // 如果大于OB_MAX_SYS_VAR_ID表示存在无效的SysVarsId
 static bool HasInvalidSysVar = false;
@@ -99,6 +103,7 @@ const ObSysVarClassType ESSENTIAL_SYS_VARS[] = {
   SYS_VAR_OB_TABLE_ACCESS_POLICY,        // ob_table_access_policy
   SYS_VAR__PUSH_JOIN_PREDICATE,        // _push_join_predicate
   SYS_VAR_SQL_TRANSPILER,        // sql_transpiler
+  SYS_VAR_AP_QUERY_ROUTE_POLICY,        // ap_query_route_policy
 };
 
 const int64_t ESSENTIAL_SYS_VARS_COUNT = sizeof(ESSENTIAL_SYS_VARS) / sizeof(ESSENTIAL_SYS_VARS[0]);
@@ -11714,6 +11719,8 @@ ObString ObSysVariables::get_alias(int64_t i){ return ObSysVars[i].alias_;}
 const ObObj &ObSysVariables::get_default_value(int64_t i){ return ObSysVarDefaultValues[i];}
 const ObObj &ObSysVariables::get_base_value(int64_t i){ return ObSysVarBaseValues[i];}
 int64_t ObSysVariables::get_amount(){ return var_amount;}
+int64_t ObSysVariables::get_default_value_changed_serialized_var_count(){ return ObSysVarFactory::OB_SYS_DEFAULT_VALUE_CHANGED_SERIALIZED_VAR_COUNT;}
+int64_t ObSysVariables::get_default_value_changed_serialized_var_idx(int64_t i){ return ObDefaultValueChangedSerializedVarIndices[i];}
 ObCollationType ObSysVariables::get_default_sysvar_collation() { return CS_TYPE_UTF8MB4_GENERAL_CI;}
 
 int ObSysVariables::set_value(const char *name, const char * new_value)

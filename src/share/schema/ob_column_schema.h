@@ -316,6 +316,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_word_segment_column() const { return ObSchemaUtils::is_word_segment_column(column_flags_); }
   inline bool is_word_count_column() const { return ObSchemaUtils::is_word_count_column(column_flags_); }
   inline bool is_doc_length_column() const { return ObSchemaUtils::is_doc_length_column(column_flags_); }
+  inline bool is_pos_list_column() const { return ObSchemaUtils::is_pos_list_column(column_flags_); }
   inline bool is_spatial_generated_column() const { return column_flags_ & SPATIAL_INDEX_GENERATED_COLUMN_FLAG; }
   inline bool is_spatial_cellid_column() const { return is_spatial_generated_column() && get_data_type() == common::ObUInt64Type; }
   inline bool is_multivalue_generated_column() const { return column_flags_ & MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG; }

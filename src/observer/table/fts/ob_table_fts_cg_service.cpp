@@ -78,6 +78,7 @@ int ObTableFtsExprCgService::generate_text_retrieval_dep_exprs(ObTableCtx &ctx, 
   ObColumnRefRawExpr *token_cnt_column = nullptr;
   ObColumnRefRawExpr *doc_length_column = nullptr;
   ObColumnRefRawExpr *doc_id_column = nullptr;
+  ObColumnRefRawExpr *pos_list_column = nullptr;
   ObAggFunRawExpr *related_doc_cnt = nullptr;
   ObAggFunRawExpr *total_doc_cnt = nullptr;
   ObAggFunRawExpr *doc_token_cnt = nullptr;
@@ -141,6 +142,14 @@ int ObTableFtsExprCgService::generate_text_retrieval_dep_exprs(ObTableCtx &ctx, 
             doc_length_column->set_ref_id(ctx.get_ref_table_id(), col_schema->get_column_id());
             doc_length_column->set_column_attr(ctx.get_table_name(), col_schema->get_column_name_str());
             doc_length_column->set_database_name(ctx.get_database_name());
+          }
+        } else if (col_schema_in_data_table->is_pos_list_column()) {
+          if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema, &session_info, pos_list_column))) {
+            LOG_WARN("failed to build doc id column expr", K(ret));
+          } else if (OB_NOT_NULL(pos_list_column)) {
+            pos_list_column->set_ref_id(ctx.get_ref_table_id(), col_schema->get_column_id());
+            pos_list_column->set_column_attr(ctx.get_table_name(), col_schema->get_column_name_str());
+            pos_list_column->set_database_name(ctx.get_database_name());
           }
         }
       }

@@ -5181,6 +5181,7 @@ int ObTenantDDLService::try_drop_meta_ls_(
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  FLOG_INFO("try to drop meta ls", K(meta_tenant_id), K(ls_id));
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (OB_UNLIKELY(!is_meta_tenant(meta_tenant_id) || !ls_id.is_valid_with_tenant(meta_tenant_id))) {
@@ -5382,6 +5383,8 @@ int ObTenantDDLService::drop_tenant(const ObDropTenantArg &arg)
         LOG_WARN("ddl_operator drop_tenant failed", K(meta_tenant_id), KR(ret));
       } else if (OB_FAIL(try_drop_meta_ls_(meta_tenant_id, SYS_LS, trans))) {
         LOG_WARN("failed to drop sys ls", KR(ret), K(meta_tenant_id));
+      } else if (OB_FAIL(try_drop_meta_ls_(meta_tenant_id, METADATA_LS, trans))) {
+        LOG_WARN("failed to drop sslog ls", KR(ret), K(meta_tenant_id));
       } else if (OB_FAIL(try_drop_meta_ls_(meta_tenant_id, SSLOG_LS, trans))) {
         LOG_WARN("failed to drop sslog ls", KR(ret), K(meta_tenant_id));
       } else if (tenant_schema->is_in_recyclebin()) {

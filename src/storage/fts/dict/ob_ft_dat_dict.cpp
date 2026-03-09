@@ -35,7 +35,7 @@ int ObFTDATBuilder<DATA_TYPE>::init(ObFTTrie<DATA_TYPE> &trie)
     ret = OB_INIT_TWICE;
     LOG_WARN("Builder has already inited", K(ret));
   } else {
-    size_t map_size = ObArrayHashMap::estimate_size(trie.node_num());
+    size_t map_size = ObArrayHashMap::calc_memory_size(trie.node_num());
     size_t array_size = trie.node_num() * 6; // by experience.
     size_t base_size = array_size * sizeof(int32_t);
     size_t check_size = base_size;
@@ -115,10 +115,10 @@ int ObFTDATBuilder<DATA_TYPE>::build_from_trie(ObFTTrie<DATA_TYPE> &trie)
             for (typename ObList<NodeIndex, ObIAllocator>::iterator iter = node->children_->begin();
                  iter != node->children_->end();
                  ++iter) {
-              ObFTWordCode child_code;
+              ObFTTokenCode child_code;
               NodeIndex &child_index = *iter;
               if (need_code) {
-                if (OB_FAIL(encode(child_index.word_.get_word(), child_code, true))) {
+                if (OB_FAIL(encode(child_index.token_.get_token(), child_code))) {
                   LOG_WARN("Failed to encode");
                   break;
                 }
@@ -181,12 +181,12 @@ int ObFTDATBuilder<DATA_TYPE>::build_from_trie(ObFTTrie<DATA_TYPE> &trie)
 
     if (OB_FAIL(ret)) {
       // already logged
-    } else if (OB_FAIL(trie.get_start_word(dat_->start_word_))) {
-      LOG_WARN("fail to get start word", K(ret));
-    } else if (OB_FAIL(trie.get_end_word(dat_->end_word_))) {
-      LOG_WARN("fail to get end word", K(ret));
+    } else if (OB_FAIL(trie.get_start_token(dat_->start_token_))) {
+      LOG_WARN("fail to get start token", K(ret));
+    } else if (OB_FAIL(trie.get_end_token(dat_->end_token_))) {
+      LOG_WARN("fail to get end token", K(ret));
     }
-    LOG_INFO("build dat finished", K(dat_->start_word_.get_word()), K(dat_->end_word_.get_word()));
+    LOG_INFO("finish build ft dat", K(dat_->start_token_.get_token()), K(dat_->end_token_.get_token()));
 
     dfs_queue.reset();
     alloc.reset();
@@ -226,25 +226,16 @@ int ObFTDATBuilder<DATA_TYPE>::expand()
 }
 
 template <typename DATA_TYPE>
-int ObFTDATBuilder<DATA_TYPE>::encode(const ObString &word, ObFTWordCode &code, bool add)
+int ObFTDATBuilder<DATA_TYPE>::encode(const ObString &single_token, ObFTTokenCode &code)
 {
   int ret = OB_SUCCESS;
-  ObFTWordCode code_value;
-  ObFTSingleWord single_word;
-  single_word.set_word(word.ptr(), word.length());
-  ret = map_->find(single_word, code);
+  ret = map_->find(single_token, code);
   if (OB_ENTRY_NOT_EXIST == ret) {
-    if (add) {
-      code = next_code_++;
-      ret = map_->insert(word, code);
-      if (OB_SUCCESS != ret) {
-        LOG_WARN("fail to insert word code", K(ret));
-      }
-    } else {
-      // do nothing
+    code = next_code_++;
+    ret = map_->insert(single_token, code);
+    if (OB_SUCCESS != ret) {
+      LOG_WARN("fail to insert token code", K(ret));
     }
-  } else {
-    // nothing
   }
   return ret;
 }
@@ -255,16 +246,13 @@ int ObFTDATReader<DATA_TYPE>::match_with_hit(const ObString &ft_char,
                                              ObDATrieHit &hit) const
 {
   int ret = OB_SUCCESS;
-  ObFTWordCode code;
+  ObFTTokenCode code;
   hit.set_unmatch();
-  auto *map = dat_->get_map();
   int32_t *base = reinterpret_cast<int32_t *>(dat_->buff + dat_->base_offset_);
   int32_t *check = reinterpret_cast<int32_t *>(dat_->buff + dat_->check_offset_);
 
-  ObFTSingleWord word;
-  word.set_word(ft_char.ptr(), ft_char.length());
-  if (OB_FAIL(dat_->get_map()->find(word, code)) && OB_ENTRY_NOT_EXIST != ret) {
-    LOG_WARN("fail to find word code", K(ret));
+  if (OB_FAIL(map_->find(ft_char, code)) && OB_ENTRY_NOT_EXIST != ret) {
+    LOG_WARN("fail to find token code", K(ret));
   } else if (OB_ENTRY_NOT_EXIST == ret) {
     ret = OB_SUCCESS;
     hit.set_unmatch();
@@ -303,64 +291,63 @@ template class ObFTDATReader<void>;
 
 ObArrayHashMap *ObFTDAT::get_map() { return reinterpret_cast<ObArrayHashMap *>(buff); }
 
-int ObArrayHashMap::find(const ObFTSingleWord &word, ObFTWordCode &code) const
+int ObArrayHashMap::find(const ObString &token, ObFTTokenCode &code) const
 {
   int ret = OB_ENTRY_NOT_EXIST;
-  uint64_t hash = word.get_word().hash();
-  uint64_t index = hash % header_.capacity_;
-  while (header_.data[index].used) {
-    if (header_.data[index].word == word) {
-      code = header_.data[index].code;
+  uint64_t hash = token.hash();
+  uint64_t idx = hash & header_.locator_;
+  while (header_.data[idx].used) {
+    if (header_.data[idx].token.get_token() == token) {
+      code = header_.data[idx].code;
       ret = OB_SUCCESS;
       break;
     } else {
-      index = (index + 3) % header_.capacity_;
+      idx = (idx + 3) & header_.locator_;
     }
   }
   return ret;
 }
 
-int ObArrayHashMap::insert(const ObString &key, ObFTWordCode code)
+int ObArrayHashMap::insert(const ObString &token, ObFTTokenCode code)
 {
   int ret = OB_SUCCESS;
-  uint64_t hash = key.hash();
-  uint64_t index = hash % header_.capacity_;
+  uint64_t hash = token.hash();
+  uint64_t index = hash & header_.locator_;
   while (header_.data[index].used) {
-    index = (index + 3) % header_.capacity_;
+    index = (index + 3) & header_.locator_;
   }
-
   header_.data[index].code = code;
-  header_.data[index].word.set_word(key.ptr(), key.length());
+  header_.data[index].token.set_token(token.ptr(), token.length());
   header_.data[index].used = true;
   header_.count_++;
   return ret;
 }
 
-int ObArrayHashMap::init(size_t word_num)
+int ObArrayHashMap::init(size_t token_cnt)
 {
   int ret = OB_SUCCESS;
-  size_t capacity = estimate_capacity(word_num);
-  size_t size = estimate_size(word_num);
-
+  size_t capacity = calc_capacity(token_cnt);
+  size_t size = calc_memory_size(token_cnt);
   memset(this, 0, size);
   header_.buffer_size_ = size;
   header_.capacity_ = capacity;
   header_.count_ = 0;
+  header_.locator_ = capacity - 1;
   return OB_SUCCESS;
 }
 
-size_t ObArrayHashMap::estimate_size(size_t word_num)
+size_t ObArrayHashMap::calc_memory_size(size_t token_cnt)
 {
-  size_t capacity = estimate_capacity(word_num);
+  size_t capacity = calc_capacity(token_cnt);
   size_t size = sizeof(Header) + capacity * sizeof(Entry);
   return size;
 }
 
-size_t ObArrayHashMap::estimate_capacity(size_t word_num)
+size_t ObArrayHashMap::calc_capacity(size_t token_cnt)
 {
-  constexpr size_t MIN_CAPACITY = 101;                   // prime
-  size_t capacity = MAX(word_num * 4 / 3, MIN_CAPACITY); // 75%
-  return capacity;
+  const int64_t capacity_power = 64 - __builtin_clzll(static_cast<size_t>(token_cnt + 1));
+  return static_cast<size_t>(1) << (capacity_power + 1);
 }
+
 } //  namespace storage
 } //  namespace oceanbase

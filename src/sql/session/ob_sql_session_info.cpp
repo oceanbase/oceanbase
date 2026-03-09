@@ -194,7 +194,9 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       external_resource_schema_cache_(nullptr),
       has_ccl_rule_(false),
       last_update_ccl_cnt_time_(-1),
-      curr_request_id_(0)
+      curr_request_id_(0),
+      trans_gtt_v2_sequence_(0),
+      min_data_version_of_init_sess_(0)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -423,6 +425,8 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   executing_sql_stat_record_.reset();
   unit_gc_min_sup_proxy_version_ = 0;
   got_tenant_conn_res_ = false;
+  trans_gtt_v2_sequence_ = 0;
+  min_data_version_of_init_sess_ = 0;
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -2131,7 +2135,9 @@ int ObSQLSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
       gtt_trans_scope_ids_,
       affected_rows_,
       unit_gc_min_sup_proxy_version_,
-      gtt_tablet_info_map_);
+      gtt_tablet_info_map_,
+      trans_gtt_v2_sequence_,
+      min_data_version_of_init_sess_);
   return ret;
 }
 
@@ -2192,6 +2198,8 @@ int ObSQLSessionInfo::deserialize(const char *buf, const int64_t data_len, int64
 
     OB_UNIS_DECODE(unit_gc_min_sup_proxy_version_);
     OB_UNIS_DECODE(gtt_tablet_info_map_);
+    OB_UNIS_DECODE(trans_gtt_v2_sequence_);
+    OB_UNIS_DECODE(min_data_version_of_init_sess_);
     (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
 
     pos = pos_orig + len;
@@ -2230,7 +2238,9 @@ OB_DEF_SERIALIZE_SIZE(ObSQLSessionInfo)
       gtt_trans_scope_ids_,
       affected_rows_,
       unit_gc_min_sup_proxy_version_,
-      gtt_tablet_info_map_);
+      gtt_tablet_info_map_,
+      trans_gtt_v2_sequence_,
+      min_data_version_of_init_sess_);
   return len;
 }
 
@@ -4980,6 +4990,83 @@ int ObQueryInfoEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* cu
   } else {
     share::ObTaskController::get().allow_next_syslog();
     LOG_INFO("success to verify VariousInfo", K(ret));
+  }
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(sess.get_trans_gtt_v2_sequence());
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t trans_gtt_v2_sequence = 0;
+  OB_UNIS_DECODE(trans_gtt_v2_sequence);
+  sess.set_trans_gtt_v2_sequence(trans_gtt_v2_sequence);
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::get_serialize_size(ObSQLSessionInfo &sess, int64_t &len) const
+{
+  int ret = OB_SUCCESS;
+  len = serialization::encoded_length(sess.get_trans_gtt_v2_sequence());
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(sess.get_trans_gtt_v2_sequence());
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::get_fetch_sess_info_size(ObSQLSessionInfo &sess, int64_t &size)
+{
+  int ret = OB_SUCCESS;
+  size = serialization::encoded_length(sess.get_trans_gtt_v2_sequence());
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                                    int64_t current_sess_length, const char *last_sess_buf,
+                                                    int64_t last_sess_length)
+{
+  int ret = OB_SUCCESS;
+  if (current_sess_length != last_sess_length) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sess info length not equal", K(ret), K(current_sess_length), K(last_sess_length));
+  } else if (0 != MEMCMP(current_sess_buf, last_sess_buf, current_sess_length)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sess info is different", K(ret));
+  }
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+                                                    int64_t current_sess_length, const char* last_sess_buf,
+                                                    int64_t last_sess_length)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(current_sess_buf);
+  UNUSED(current_sess_length);
+  int64_t pos = 0;
+  const char *buf = last_sess_buf;
+  int64_t data_len = last_sess_length;
+  int64_t trans_gtt_v2_sequence = 0;
+
+  LST_DO_CODE(OB_UNIS_DECODE, trans_gtt_v2_sequence);
+  if (sess.get_trans_gtt_v2_sequence() != trans_gtt_v2_sequence) {
+    share::ObTaskController::get().allow_next_syslog();
+    LOG_WARN("failed to verify trans_gtt_v2_sequence", K(ret),
+      "current_trans_gtt_v2_sequence", sess.get_trans_gtt_v2_sequence(),
+      "last_trans_gtt_v2_sequence", trans_gtt_v2_sequence);
+  } else {
+    share::ObTaskController::get().allow_next_syslog();
+    LOG_INFO("success to verify trans_gtt_v2_sequence", K(ret));
   }
   return ret;
 }

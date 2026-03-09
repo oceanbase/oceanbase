@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX TRANS
 
+#include "logservice/common_util/ob_log_time_utils.h"
 #include "storage/memtable/ob_memtable_iterator.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
 #include "storage/memtable/ob_memtable_block_row_scanner.h"
@@ -557,7 +558,9 @@ ObMemtableMultiVersionScanIterator::ObMemtableMultiVersionScanIterator()
       scan_state_(SCAN_END),
       trans_version_col_idx_(-1),
       sql_sequence_col_idx_(-1),
-      row_checker_()
+      row_reader_(),
+      row_checker_(),
+      default_row_(nullptr)
 {
   GARL_ADD(&active_resource_, "scan_iter");
 }
@@ -621,6 +624,7 @@ int ObMemtableMultiVersionScanIterator::init(
       enable_delete_insert_ = param.is_delete_insert_;
       trans_version_col_idx_ = param.get_schema_rowkey_count();
       sql_sequence_col_idx_ = param.get_schema_rowkey_count() + 1;
+      default_row_ = param.default_row_;
       is_inited_ = true;
     }
   }
@@ -944,6 +948,7 @@ void ObMemtableMultiVersionScanIterator::reset()
   trans_version_col_idx_ = -1;
   sql_sequence_col_idx_ = -1;
   row_checker_.reset();
+  default_row_ = nullptr;
 }
 
 void ObMemtableMultiVersionScanIterator::row_reset()
@@ -1107,6 +1112,7 @@ int ObMemtableMultiVersionScanIterator::iterate_compacted_row_value_(ObDatumRow 
       }
       if (OB_FAIL(row_reader_.read_memtable_row(mtd->buf_, mtd->buf_len_, *read_info_, row, bitmap_, read_finished, row_header))) {
         TRANS_LOG(WARN, "Failed to read row without", K(ret));
+      } else if (FALSE_IT(fill_default_values_for_row_(row))) {
       } else if (ObDmlFlag::DF_INSERT == mtd->dml_flag_ || ObDmlFlag::DF_DELETE == mtd->dml_flag_ || read_finished) {
         if (bitmap_.is_empty() || ObDmlFlag::DF_DELETE == mtd->dml_flag_) {
           row.set_compacted_multi_version_row();
@@ -1122,6 +1128,25 @@ int ObMemtableMultiVersionScanIterator::iterate_compacted_row_value_(ObDatumRow 
     TRANS_LOG(WARN, "failed to set state for compated row", K(row));
   }
   return ret;
+}
+
+void ObMemtableMultiVersionScanIterator::fill_default_values_for_row_(blocksstable::ObDatumRow &row)
+{
+  // @cuiyuntian.cyt fill default value of update row in full update mode
+  if (nullptr != default_row_ && !row.row_flag_.is_not_exist() &&
+      !row.row_flag_.is_lock() && !row.row_flag_.is_update() &&
+      (enable_delete_insert_ || !row.row_flag_.is_delete())) {
+    const int64_t schema_rowkey_cnt = read_info_->get_schema_rowkey_count();
+    const int64_t store_rowkey_cnt = schema_rowkey_cnt + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    for (int64_t i = row.count_ - 1; i >= store_rowkey_cnt;
+         --i) {
+      if (bitmap_.test(i)) {
+        row.storage_datums_[i] = default_row_->storage_datums_[i];
+      } else {
+        break;
+      }
+    }
+  }
 }
 
 // compact delete_insert rows which are in one transaction
@@ -1170,6 +1195,7 @@ int ObMemtableMultiVersionScanIterator::iterate_delete_insert_compacted_row_valu
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "Unexpected not empty bitmap", K(ret), K(row), K(read_finished), KPC(row_header), KPC_(read_info));
       } else {
+        fill_default_values_for_row_(row);
         row.set_compacted_multi_version_row();
         if (row.row_flag_.is_not_exist()) {
           row.storage_datums_[trans_version_col_idx_].reuse();
@@ -1239,6 +1265,7 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
     } else if (OB_FAIL(row_reader_.read_memtable_row(mtd->buf_, mtd->buf_len_, *read_info_, row, bitmap_, read_finished, row_header))) {
       TRANS_LOG(WARN, "Failed to read row without rowkey", K(ret));
     } else {
+      fill_default_values_for_row_(row);
       if (compare_trans_version > trans_version) {
         trans_version = compare_trans_version;
         row.storage_datums_[trans_version_col_idx_].reuse();

@@ -25,6 +25,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/ob_shared_meta_service.h"
 #endif
+#include "storage/high_availability/ob_tenant_startup_status.h"
 
 namespace oceanbase
 {
@@ -829,12 +830,24 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
   } else if (OB_FAIL(archive_service->get_ls_archive_progress(ls_id, lsn, scn, force_wait, ignore))){
     CLOG_LOG(WARN, "get_ls_archive_progress failed", K(ls_id), K(gc_state), K(offline_scn), K(ret));
   } else if (ignore) {
+#ifdef OB_BUILD_SHARED_STORAGE
+    // update ss_ls_meta first and then change the local meta.
+    if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, offline_scn))) {
+      CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(ls_id), K(offline_scn));
+    } else
+#endif
     if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
       CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(scn));
   } else if (scn >= offline_scn) {
+#ifdef OB_BUILD_SHARED_STORAGE
+    // update ss_ls_meta first and then change the local meta.
+    if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, offline_scn))) {
+      CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(ls_id), K(offline_scn));
+    } else
+#endif
     if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
       CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
     }
@@ -1156,7 +1169,7 @@ int ObGCHandler::offline_ls_(const SCN &offline_scn)
       // update ss_ls_meta first and then change the local meta.
     } else if (GCTX.is_shared_storage_mode()
                && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::LS_OFFLINE, offline_scn))) {
-      CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(offline_scn));
+      CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(ls_id), K(offline_scn));
 #endif
     } else if (OB_FAIL(ls_->set_gc_state(LSGCState::LS_OFFLINE, offline_scn))) {
       int ret_code = ret;
@@ -1479,7 +1492,7 @@ void ObGarbageCollector::run1()
 
   const int64_t gc_interval = GC_INTERVAL;
   while (!has_set_stop()) {
-    if (SERVER_STORAGE_META_SERVICE.is_started()) {
+    if (TENANT_STARTUP_STATUS.is_in_service()) {
       if (!stop_create_new_gc_task_) {
         CLOG_LOG(INFO, "Garbage Collector is running", K(seq_), K(gc_interval));
         ObGCCandidateArray gc_candidates;

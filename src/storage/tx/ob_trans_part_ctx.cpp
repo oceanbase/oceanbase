@@ -11680,7 +11680,7 @@ int ObPartTransCtx::collect_mview_mds_op(bool &need_collect, ObMViewOpArg &arg)
 
 bool ObPartTransCtx::is_for_sslog_() const
 {
-  return is_tenant_sslog_ls(tenant_id_, ls_id_);
+  return need_sslog_trans_service(tenant_id_, ls_id_);
 }
 
 // only root participant in user tenant can use gts ahead
@@ -11704,6 +11704,14 @@ void ObPartTransCtx::try_recover_trans_need_wait_wrap_()
     }
   }
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+void ObPartTransCtx::append_sslog_notify_task(sslog::ObSSLogNotifyTask *task)
+{
+  CtxLockGuard guard(lock_);
+  sslog_notify_queue_.append(task);
+}
+#endif
 
 } // namespace transaction
 } // namespace oceanbase

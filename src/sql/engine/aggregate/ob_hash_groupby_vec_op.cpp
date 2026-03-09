@@ -3196,8 +3196,11 @@ int ObHashGroupByVecOp::get_ordered_first_stage_batch(const int64_t batch_size)
         if (OB_FAIL(expr->init_vector_default(eval_ctx_, brs_.size_))) {
           LOG_WARN("init vector default failed", K(ret));
         } else if (OB_UNLIKELY(is_uniform_format(expr->get_format(eval_ctx_)))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid aggr func format", K(ret));
+          // only null type will be uniform format, just call ivector->set_null for convenience
+          for (int j = 0; j < brs_.size_; j++) {
+            expr->get_vector(eval_ctx_)->set_null(j);
+          }
+          expr->set_evaluated_projected(eval_ctx_);
         } else {
           expr->get_nulls(eval_ctx_).set_all(brs_.size_);
           expr->set_evaluated_projected(eval_ctx_);

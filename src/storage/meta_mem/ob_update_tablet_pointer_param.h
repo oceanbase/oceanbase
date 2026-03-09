@@ -41,14 +41,7 @@ public:
   const lib::Worker::CompatMode &compat_mode() const { return accelerate_info_.compat_mode_; }
   const ObTabletTransferInfo &transfer_info() const { return accelerate_info_.transfer_info_; }
   const ObMetaDiskAddr &tablet_addr() const { return resident_info_.addr_; }
-  void refresh_tablet_cache()
-  {
-    const int64_t current_version = static_cast<int64_t>(resident_info_.addr_.block_id().meta_version_id());
-    resident_info_.attr_.refresh_cache(accelerate_info_.clog_checkpoint_scn_,
-                                       accelerate_info_.ddl_checkpoint_scn_,
-                                       accelerate_info_.mds_checkpoint_scn_,
-                                       current_version);
-  }
+  int refresh_tablet_cache();
   void set_update_last_match_meta_version()
   {
     update_last_match_meta_version_ = true;

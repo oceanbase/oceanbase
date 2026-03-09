@@ -339,8 +339,8 @@ int ObTableStoreIterator::get_table_ptr_with_meta_handle(
   ObStorageMetaHandle sstable_meta_hdl;
   ObSSTable *sstable = nullptr;
 
-  if (OB_FAIL(ObCacheSSTableHelper::load_sstable(table->get_addr(),
-      table->is_co_sstable(), sstable_meta_hdl))) {
+  if (OB_FAIL(ObCacheSSTableHelper::load_sstable(
+      table->get_addr(), table->is_co_sstable(), sstable_meta_hdl))) {
     LOG_WARN("fail to load sstable", K(ret));
   } else if (OB_FAIL(sstable_handle_array_.push_back(sstable_meta_hdl))) {
     LOG_WARN("fail to push sstable meta handle", K(ret), K(sstable_meta_hdl));
@@ -543,6 +543,7 @@ int ObTableStoreIterator::get_unloaded_sstable(common::ObIArray<TablePtr*> &tabl
       // do not need to load sstable meta
     } else {
       // get cache meta handle
+      ObSSTable *sstable = nullptr;
       int64_t hdl_idx = sstable_handle_array_.count();
       if (OB_FAIL(sstable_handle_array_.push_back(ObStorageMetaHandle()))) {
         LOG_WARN("fail to push sstable meta handle", K(ret));
@@ -552,7 +553,7 @@ int ObTableStoreIterator::get_unloaded_sstable(common::ObIArray<TablePtr*> &tabl
         switch (ret) {
           case OB_SUCCESS: {
             // loaded from cache
-            ObSSTable *sstable = nullptr;
+            sstable = nullptr;
             if (OB_FAIL(sstable_handle_array_.at(hdl_idx).get_sstable(sstable))) {
               LOG_WARN("fail to get sstable from meta handle", K(ret), K(sstable_handle_array_.at(hdl_idx)), KP(table));
             } else {
@@ -597,6 +598,7 @@ int ObTableStoreIterator::load_sstable_meta_with_aggregate_io()
       ObStorageMetaValue::MetaType meta_type = table->is_co_sstable()
                                            ? ObStorageMetaValue::MetaType::CO_SSTABLE
                                            : ObStorageMetaValue::MetaType::SSTABLE;
+
       ObStorageMetaKey meta_key(MTL_ID(), table->get_addr());
       if (OB_FAIL(OB_STORE_CACHE.get_storage_meta_cache().prefetch(meta_type, meta_key, sstable_meta_hdl, nullptr))) {
         LOG_WARN("fail to prefetch meta", K(ret), K(meta_type), K(meta_key));
@@ -612,10 +614,17 @@ int ObTableStoreIterator::load_sstable_meta_with_aggregate_io()
         for (int64_t i = 0; OB_SUCC(ret) && i < table_ptr_aggregate.count(); ++i) {
           TablePtr *table_ptr = table_ptr_aggregate.at(i);
           ObSSTable *table = static_cast<ObSSTable *>(table_ptr->table_);
-
-          ret = block_id_set.set_refactored(table->get_addr().block_id());
-          if (OB_SUCCESS != ret && OB_HASH_EXIST != ret) {
-            LOG_WARN("fail to set block id", K(ret), K(table->get_addr().block_id()));
+          MacroBlockId block_id;
+          if (OB_UNLIKELY(table->get_addr().is_sslog())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected table addr", K(ret), K(table->get_addr()));
+          } else if (OB_FAIL(table->get_addr().get_macro_block_id(block_id))) {
+            LOG_WARN("failed to get macro block id", K(ret), KPC(table));
+          } else {
+            ret = block_id_set.set_refactored(block_id);
+            if (OB_SUCCESS != ret && OB_HASH_EXIST != ret) {
+              LOG_WARN("fail to set block id", K(ret), K(block_id));
+            }
           }
         }
 
@@ -627,7 +636,10 @@ int ObTableStoreIterator::load_sstable_meta_with_aggregate_io()
             TablePtr *table_ptr = table_ptr_aggregate.at(i);
             ObSSTable *table = static_cast<ObSSTable *>(table_ptr->table_);
             ObStorageMetaHandle *sstable_meta_hdl = &sstable_handle_array_.at(table_ptr->hdl_idx_);
-            if (table->get_addr().block_id() == block_id_iter->first) {
+            MacroBlockId block_id;
+            if (OB_FAIL(table->get_addr().get_macro_block_id(block_id))) {
+              LOG_WARN("failed to get macro block id", K(ret), KPC(table));
+            } else if (block_id == block_id_iter->first) {
               if(OB_FAIL(aggregated_infos.push_back({table, sstable_meta_hdl}))) {
                 LOG_WARN("fail to push aggregated info to array", K(ret));
               }

@@ -151,6 +151,11 @@ bool SSObjUtil::is_support_fd_cache(const ObStorageObjectType type)
   return STI(type).is_support_fd_cache();
 }
 
+bool SSObjUtil::is_store_in_table(const ObStorageObjectType type)
+{
+  return STI(type).is_store_in_table();
+}
+
 bool SSObjUtil::is_private(const MacroBlockId &macro_id)
 {
   return is_private(macro_id.storage_object_type());
@@ -231,6 +236,11 @@ bool SSObjUtil::can_append_write(const MacroBlockId &macro_id)
   return STI(macro_id.storage_object_type()).can_append_write();
 }
 
+bool SSObjUtil::is_store_in_table(const MacroBlockId &macro_id)
+{
+  return STI(macro_id.storage_object_type()).is_store_in_table();
+}
+
 bool SSObjUtil::is_tablet_meta(const MacroBlockId &macro_id)
 {
   return STI(macro_id.storage_object_type()).is_tablet_meta();
@@ -275,6 +285,29 @@ int SSObjUtil::remote_path_to_macro_id(const ObStorageObjectType type, const cha
 {
   return STI(type).remote_path_to_macro_id(path, macro_id);
 }
+
+int SSObjUtil::remote_path_to_macro_id(const char *path, MacroBlockId &macro_id)
+{
+  char *sub_path = nullptr;
+  int ret = OB_SUCCESS;
+  int num = 0;
+  int64_t type = 0;
+  if (OB_ISNULL(sub_path = const_cast<char *>(ObString(path).reverse_find('.', 1)))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (FALSE_IT(num = sscanf(sub_path, ".T%hhu", &type))) {
+  } else if (OB_UNLIKELY(1 != num)) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+  } else if (OB_UNLIKELY(type < 0 || type >= static_cast<int64_t>(ObStorageObjectType::MAX))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid object type", KR(ret), K(type));
+  } else if (OB_FAIL(STI(static_cast<ObStorageObjectType>(type)).remote_path_to_macro_id(path, macro_id))) {
+    LOG_WARN("fail to convert remote path to macro id", KR(ret), K(path), K(type));
+  }
+  return ret;
+}
+
 int SSObjUtil::aio_write(const ObStorageObjectWriteInfo &write_info, ObStorageObjectHandle &object_handle)
 {
   return STI(object_handle.get_macro_id().storage_object_type()).aio_write(write_info, object_handle);
@@ -317,6 +350,26 @@ int SSObjUtil::create_parent_dir(const MacroBlockId &macro_id, const uint64_t te
                                  const uint64_t tenant_epoch_id, const int64_t ls_epoch_id)
 {
   return STI(macro_id.storage_object_type()).create_parent_dir(macro_id, tenant_id, tenant_epoch_id, ls_epoch_id);
+}
+
+bool SSObjUtil::is_exist_store_in_table_object(const uint64_t tenant_id, const blocksstable::MacroBlockId &macro_id)
+{
+  return is_user_tenant(tenant_id) && macro_id.is_shared_tablet_sub_meta();
+}
+
+int SSObjUtil::get_store_in_table_macro_id(const uint64_t tenant_id, const blocksstable::MacroBlockId &macro_id,
+                                           blocksstable::MacroBlockId &in_table_macro_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_exist_store_in_table_object(tenant_id, macro_id)) {
+    ret = OB_ERR_OBJECT_NOT_EXIST;
+    LOG_WARN("in table macro id not exist", K(ret), K(tenant_id), K(macro_id));
+  } else {
+    in_table_macro_id = macro_id;
+    in_table_macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE));
+  }
+
+  return ret;
 }
 #endif
 

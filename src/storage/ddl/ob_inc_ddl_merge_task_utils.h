@@ -85,7 +85,7 @@ public:
   static int close_ddl_kvs(ObIArray<ObDDLKVHandle> &ddl_kvs);
   static int close_ddl_kv(const ObDDLKVHandle &ddl_kv_handle);
   static int calculate_tx_data_recycle_scn(
-    ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
+    const ObTabletTableStore &table_store,
     bool &contain_uncommitted_row,
     share::SCN &recycle_end_scn);
   static int check_inc_major_write_stat(
@@ -98,15 +98,15 @@ public:
 #endif
 private:
   static int calculate_recycle_scn_from_inc_major(
-    ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
+    const ObTabletTableStore &table_store,
     bool &contain_uncommitted_row,
     share::SCN &inc_recycle_end_scn);
   static int calculate_recycle_scn_from_inc_ddl_dump(
-    ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
+    const ObTabletTableStore &table_store,
     bool &contain_uncommitted_row,
     share::SCN &inc_recycle_end_scn);
   static int calculate_recycle_scn_from_inc_ddl_kv(
-    ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
+    const ObTabletTableStore &table_store,
     bool &contain_uncommitted_row,
     share::SCN &inc_recycle_end_scn);
 };

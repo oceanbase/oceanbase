@@ -134,6 +134,8 @@ public:
   virtual bool is_support_sn() const { return false; }
   //the ObjectType which 500 tenant can write
   virtual bool server_tenant_can_have() const { return false; }
+  // the ObjectType is store in table, true or false
+  virtual bool is_store_in_table() const { return false; }
   // check macro block id valid
   virtual bool is_valid(const MacroBlockId &file_id) const { return false; }
   virtual bool has_effective_tablet_id() const { return false; }
@@ -1201,11 +1203,24 @@ public:
   virtual ~ObSharedTabletSubMetaInTableType() {}
   virtual bool is_tablet_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_read() const { return true; }
   virtual bool is_direct_write() const { return true; }
   virtual bool is_overwrite() const { return true; }
   virtual bool is_path_include_inner_tablet() const { return true; }
+  virtual bool is_store_in_table() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
+  virtual bool has_effective_tablet_id() const { return true; }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,
+                                    const MacroBlockId &file_id, const char *object_storage_root_dir,
+                                    const uint64_t cluster_id, const uint64_t tenant_id,
+                                    const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
+
+#endif
+  virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;
+  virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
 };
 
 /**

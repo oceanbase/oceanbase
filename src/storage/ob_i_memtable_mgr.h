@@ -307,6 +307,8 @@ public:
   virtual int set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle, const int64_t trace_id = checkpoint::INVALID_TRACE_ID) { return OB_NOT_SUPPORTED; }
   virtual int get_last_frozen_memtable(ObTableHandleV2 &handle) { return OB_NOT_SUPPORTED; }
   virtual int get_direct_load_memtables_for_write(ObTableHdlArray &handles) { return OB_NOT_SUPPORTED; }
+  virtual int reuse() { return OB_NOT_SUPPORTED; }
+
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   static int64_t get_memtable_idx(const int64_t pos) { return pos & (MAX_MEMSTORE_CNT - 1); }

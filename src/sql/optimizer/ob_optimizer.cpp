@@ -1167,7 +1167,7 @@ int ObOptimizer::init_route_policy(ObDMLStmt &dml_stmt, ObSQLSessionInfo &sessio
                                                                              can_route_to_cs))) {
       LOG_WARN("failed to check can route to columnstore replica", K(ret));
     } else if (!can_route_to_cs) {
-      // do nothing
+      LOG_INFO("sql cannot route to columnstore replica", K(ret));
     } else {
       session.set_route_to_column_replica(true);
     }
@@ -1616,7 +1616,8 @@ int ObOptimizer::check_force_default_stat(const ObDMLStmt &stmt)
   #ifdef OB_BUILD_SHARED_STORAGE
   else if (stmt.is_single_table_stmt()
         && OB_NOT_NULL(stmt.get_table_item(0))
-        && is_shared_storage_sslog_table(stmt.get_table_item(0)->ref_id_)) {
+        && (is_shared_storage_sslog_table(stmt.get_table_item(0)->ref_id_)
+         || is_ss_tiered_metadata_store_table(stmt.get_table_item(0)->ref_id_))) {
     ctx_.set_use_default_stat();
   }
   #endif

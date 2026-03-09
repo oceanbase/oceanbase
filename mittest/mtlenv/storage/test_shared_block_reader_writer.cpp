@@ -151,7 +151,7 @@ TEST_F(TestSharedBlockRWriter, test_rwrite_easy_block)
     ObSharedObjectReadInfo read_info;
     OK(write_handle.get_write_ctx(write_ctx));
     if (test_round == 9) {
-      macro_id = write_ctx.addr_.block_id();
+      ASSERT_EQ(OB_SUCCESS, write_ctx.addr_.get_macro_block_id(macro_id));
     }
 
     read_info.addr_ = write_ctx.addr_;
@@ -433,7 +433,9 @@ TEST_F(TestSharedBlockRWriter, test_parse_data_from_object)
   ObArray<ObSharedObjectsWriteCtx> write_ctxs;
   OK(write_handle.batch_get_write_ctx(write_ctxs));
   ASSERT_EQ(test_round, write_ctxs.count());
-  MacroBlockId block_id = write_ctxs[0].addr_.block_id();
+  MacroBlockId block_id;
+  ASSERT_EQ(OB_SUCCESS, write_ctxs[0].addr_.get_macro_block_id(block_id));
+
   ObStorageObjectReadInfo read_info;
   ObStorageObjectHandle object_handle;
   const int64_t io_buf_size = OB_STORAGE_OBJECT_MGR.get_macro_object_size();

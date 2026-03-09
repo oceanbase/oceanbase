@@ -136,8 +136,8 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
         "[3rd=(op_id=%lu, macro_seq_id=%lu)]"
         "[4th=(%s=%lu)]",
         (uint64_t) second_id_,
-        (uint64_t) third_id_ >> 32, // op_id
-        (uint64_t) third_id_ & 0xFFFFFFFF, // seq_no
+        (uint64_t) get_op_id(), // op_id
+        (uint64_t) get_macro_seq(), // seq_no
         (meta_is_inner_tablet() ? "ls_id" : "reorg_scn"),
         (uint64_t)fourth_id_);
     } else {
@@ -223,9 +223,20 @@ bool MacroBlockId::is_id_mode_share() const
   return (ObMacroBlockIdMode::ID_MODE_SHARE == mode);
 }
 
+
 const ObStorageObjectTypeBase &MacroBlockId::get_type_instance() const
 {
   return ObStorageObjectTypeInstance::get_instance(storage_object_type());
+}
+
+bool MacroBlockId::is_shared_tablet_sub_meta_in_table() const
+{
+  return is_shared_sub_meta() && SSObjUtil::is_store_in_table(storage_object_type());
+}
+
+bool MacroBlockId::is_shared_tablet_sub_meta() const
+{
+  return is_shared_sub_meta() && !SSObjUtil::is_store_in_table(storage_object_type());
 }
 
 /*
@@ -242,6 +253,7 @@ const ObStorageObjectTypeBase &MacroBlockId::get_type_instance() const
   SHARED_MAJOR_DATA_MACRO
   SHARED_MAJOR_META_MACRO
   SHARED_TABLET_SUB_META
+  SHARED_TABLET_SUB_META_IN_TABLE
   SHARED_INC_MAJOR_DATA_MACRO
   SHARED_INC_MAJOR_META_MACRO
 */
@@ -352,6 +364,7 @@ bool MacroBlockId::is_data() const
   SHARED_MDS_MINOR_META_MACRO
   SHARED_MAJOR_META_MACRO
   SHARED_TABLET_SUB_META
+  SHARED_TABLET_SUB_META_IN_TABLE
   SHARED_INC_MAJOR_META_MACRO
 */
 bool MacroBlockId::is_meta() const
@@ -373,6 +386,7 @@ bool MacroBlockId::is_meta() const
   SHARED_MDS_MINOR_DATA_MACRO
   SHARED_MDS_MINOR_META_MACRO
   SHARED_TABLET_SUB_META
+  SHARED_TABLET_SUB_META_IN_TABLE
   SHARED_INC_MAJOR_DATA_MACRO
   SHARED_INC_MAJOR_META_MACRO
 */
@@ -403,6 +417,15 @@ bool MacroBlockId::is_macro_write_cache_ctrl_obj_type() const
   return is_id_mode_share() && (SSObjUtil::is_macro(storage_object_type()) || SSObjUtil::is_tablet_meta(storage_object_type())) &&
          SSObjUtil::is_private(storage_object_type()) &&!SSObjUtil::is_direct_write(storage_object_type()) &&
          !SSObjUtil::use_reserved_disk_space(storage_object_type()) && !SSObjUtil::is_tmp_file(storage_object_type());
+}
+
+/*
+  SHARED_TABLET_SUB_META
+  SHARED_TABLET_SUB_META_IN_TABLE
+*/
+bool MacroBlockId::is_shared_tablet_meta() const
+{
+  return is_id_mode_share() && SSObjUtil::is_shared(storage_object_type()) && SSObjUtil::is_tablet_meta(storage_object_type());
 }
 
 DEFINE_SERIALIZE(MacroBlockId)

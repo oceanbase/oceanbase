@@ -565,7 +565,7 @@ int ObTabletExeMergeCtx::prepare_rowscn_compaction_filter_()
 {
   int ret = OB_SUCCESS;
   const int64_t recycle_version = static_param_.version_range_.base_version_;
-  if (recycle_version > 1 && get_is_ha_compeleted() && !(EN_COMPACTION_DISABLE_MINOR_RECYCLE_ROWS)) {
+  if (recycle_version > 1 && !GCTX.is_shared_storage_mode() && get_is_ha_compeleted() && !(EN_COMPACTION_DISABLE_MINOR_RECYCLE_ROWS)) {
     const int64_t filter_col_idx = get_schema()->get_rowkey_column_num();
     bool need_create_filter = false;
     const ObICompactionFilter::CompactionFilterType filter_type = ObICompactionFilter::ROWSCN_FILTER;

@@ -576,32 +576,29 @@ int ObIncDDLMergeTaskUtils::close_ddl_kv(const ObDDLKVHandle &ddl_kv_handle)
 }
 
 int ObIncDDLMergeTaskUtils::calculate_tx_data_recycle_scn(
-    ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
+    const ObTabletTableStore &table_store,
     bool &contain_uncommitted_row,
     share::SCN &recycle_end_scn)
 {
   int ret = OB_SUCCESS;
   SCN inc_recycle_end_scn = SCN::max_scn();
-  if (OB_UNLIKELY(!table_store_wrapper.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(table_store_wrapper));
-  } else if (OB_FAIL(calculate_recycle_scn_from_inc_major(table_store_wrapper,
-                                                          contain_uncommitted_row,
-                                                          inc_recycle_end_scn))) {
+  if (OB_FAIL(calculate_recycle_scn_from_inc_major(table_store,
+                                                   contain_uncommitted_row,
+                                                   inc_recycle_end_scn))) {
     LOG_WARN("fail to calculate tx data recycle scn from inc major",
-              KR(ret), K(table_store_wrapper), K(contain_uncommitted_row), K(inc_recycle_end_scn));
+              KR(ret), K(table_store), K(contain_uncommitted_row), K(inc_recycle_end_scn));
   } else if (inc_recycle_end_scn.is_max()
-             && OB_FAIL(calculate_recycle_scn_from_inc_ddl_dump(table_store_wrapper,
+             && OB_FAIL(calculate_recycle_scn_from_inc_ddl_dump(table_store,
                                                                 contain_uncommitted_row,
                                                                 inc_recycle_end_scn))) {
     LOG_WARN("fail to calculate tx data recycle scn from inc ddl dump",
-              KR(ret), K(table_store_wrapper), K(contain_uncommitted_row), K(inc_recycle_end_scn));
+              KR(ret), K(table_store), K(contain_uncommitted_row), K(inc_recycle_end_scn));
   } else if (inc_recycle_end_scn.is_max()
-             && OB_FAIL(calculate_recycle_scn_from_inc_ddl_kv(table_store_wrapper,
+             && OB_FAIL(calculate_recycle_scn_from_inc_ddl_kv(table_store,
                                                               contain_uncommitted_row,
                                                               inc_recycle_end_scn))) {
     LOG_WARN("fail to calculate tx data recycle scn from inc ddl kv",
-              KR(ret), K(table_store_wrapper), K(contain_uncommitted_row), K(inc_recycle_end_scn));
+              KR(ret), K(table_store), K(contain_uncommitted_row), K(inc_recycle_end_scn));
   } else {
     recycle_end_scn = SCN::min(recycle_end_scn, inc_recycle_end_scn);
   }
@@ -645,12 +642,12 @@ int ObIncDDLMergeTaskUtils::check_inc_major_write_stat(
 }
 
 int ObIncDDLMergeTaskUtils::calculate_recycle_scn_from_inc_major(
-    ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
+    const ObTabletTableStore &table_store,
     bool &contain_uncommitted_row,
     share::SCN &inc_recycle_end_scn)
 {
   int ret = OB_SUCCESS;
-  const storage::ObSSTableArray &inc_major_sstables = table_store_wrapper.get_member()->get_inc_major_sstables();
+  const storage::ObSSTableArray &inc_major_sstables = table_store.get_inc_major_sstables();
   for (int64_t i = 0; i < inc_major_sstables.count(); i++) {
     if (INT64_MAX == inc_major_sstables.at(i)->get_upper_trans_version()) {
       contain_uncommitted_row = true;
@@ -662,12 +659,12 @@ int ObIncDDLMergeTaskUtils::calculate_recycle_scn_from_inc_major(
 }
 
 int ObIncDDLMergeTaskUtils::calculate_recycle_scn_from_inc_ddl_dump(
-    ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
+    const ObTabletTableStore &table_store,
     bool &contain_uncommitted_row,
     share::SCN &inc_recycle_end_scn)
 {
   int ret = OB_SUCCESS;
-  const storage::ObSSTableArray &inc_ddl_dumps = table_store_wrapper.get_member()->get_inc_major_ddl_sstables();
+  const storage::ObSSTableArray &inc_ddl_dumps = table_store.get_inc_major_ddl_sstables();
   if (inc_ddl_dumps.count() > 0) {
     contain_uncommitted_row = true;
     ObSSTable *first_ddl_dump = inc_ddl_dumps.at(0);
@@ -682,12 +679,12 @@ int ObIncDDLMergeTaskUtils::calculate_recycle_scn_from_inc_ddl_dump(
 }
 
 int ObIncDDLMergeTaskUtils::calculate_recycle_scn_from_inc_ddl_kv(
-    ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
+    const ObTabletTableStore &table_store,
     bool &contain_uncommitted_row,
     share::SCN &inc_recycle_end_scn)
 {
   int ret = OB_SUCCESS;
-  const storage::ObDDLKVArray &inc_ddl_kvs = table_store_wrapper.get_member()->get_inc_ddl_mem_sstables();
+  const storage::ObDDLKVArray &inc_ddl_kvs = table_store.get_inc_ddl_mem_sstables();
   if (inc_ddl_kvs.count() > 0) {
     contain_uncommitted_row = true;
     ObDDLKV *first_ddl_kv = inc_ddl_kvs[0];

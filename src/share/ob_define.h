@@ -490,12 +490,18 @@ inline bool is_query_killed_return(const int ret)
 }
 
 OB_NOINLINE bool is_shared_storage_sslog_table(const uint64_t tid);
+OB_NOINLINE bool is_ss_tiered_metadata_store_table(const uint64_t tid);
 OB_NOINLINE bool is_sslog_table(const uint64_t tid);
+OB_NOINLINE bool is_tiered_metadata_store_table(const uint64_t tid);
+OB_NOINLINE bool is_ss_special_table(const uint64_t tid);
 OB_NOINLINE bool is_shared_storage_sslog_exist();
 OB_NOINLINE bool is_hardcode_schema_table(const uint64_t tid);
 
+bool is_tenant_metadata_ls(const uint64_t tenant_id, const share::ObLSID &ls_id);
 bool is_tenant_sslog_ls(const uint64_t tenant_id, const share::ObLSID &ls_id);
 bool is_tenant_has_sslog(const uint64_t tenant_id);
+bool is_ss_special_ls(const uint64_t tenant_id, const share::ObLSID &ls_id);
+bool need_sslog_trans_service(const uint64_t tenant_id, const share::ObLSID &ls_id);
 
 //@TODO shanyan.g Temporary settings for elr
 static const bool CAN_ELR = false;

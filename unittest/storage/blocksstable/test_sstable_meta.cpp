@@ -519,8 +519,8 @@ TEST_F(TestSSTableMacroInfo, test_serialize_and_deserialize)
   ASSERT_EQ(OB_SUCCESS, sstable_macro_info.init_macro_info(allocator_, param_));
   ASSERT_TRUE(sstable_macro_info.is_valid());
   ASSERT_EQ(block_addr_, sstable_macro_info.get_macro_meta_addr());
-  ASSERT_EQ(0, sstable_macro_info.get_data_block_count());
-  ASSERT_EQ(0, sstable_macro_info.get_other_block_count());
+  ASSERT_EQ(0, sstable_macro_info.data_block_count_);
+  ASSERT_EQ(0, sstable_macro_info.other_block_count_);
 
   int64_t pos = 0;
   const int64_t buf_len = sstable_macro_info.get_serialize_size();
@@ -533,8 +533,8 @@ TEST_F(TestSSTableMacroInfo, test_serialize_and_deserialize)
   ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(allocator_, des_meta_, buf, buf_len, pos));
   ASSERT_TRUE(tmp_info.is_valid());
   ASSERT_EQ(block_addr_, tmp_info.get_macro_meta_addr());
-  ASSERT_EQ(0, tmp_info.get_data_block_count());
-  ASSERT_EQ(0, tmp_info.get_other_block_count());
+  ASSERT_EQ(0, tmp_info.data_block_count_);
+  ASSERT_EQ(0, tmp_info.other_block_count_);
   ASSERT_EQ(sstable_macro_info.macro_meta_info_.addr_, tmp_info.macro_meta_info_.addr_);
   ASSERT_EQ(sstable_macro_info.data_block_count_, tmp_info.data_block_count_);
   ASSERT_EQ(sstable_macro_info.other_block_count_, tmp_info.other_block_count_);
@@ -594,10 +594,15 @@ TEST_F(TestSSTableMacroInfo, test_huge_block_ids)
     ASSERT_EQ(OB_SUCCESS, iter.get_next_macro_id(macro_id));
     ASSERT_EQ(param_.data_block_ids_.at(i), macro_id);
   }
-  ASSERT_EQ(sstable_macro_info.data_block_count_, tmp_info.data_block_count_);
-  ASSERT_EQ(sstable_macro_info.other_block_count_, tmp_info.other_block_count_);
+  int64_t data_blk_cnt0 = -1, data_blk_cnt1 = -1;
+  int64_t other_blk_cnt0 = -1, other_blk_cnt1 = -1;
+  int64_t linked_blk_cnt0 = -1, linked_blk_cnt1 = -1;
+  ASSERT_EQ(OB_SUCCESS, sstable_macro_info.get_block_count(data_blk_cnt0, other_blk_cnt0, linked_blk_cnt0));
+  ASSERT_EQ(OB_SUCCESS, tmp_info.get_block_count(data_blk_cnt1, other_blk_cnt1, linked_blk_cnt1));
+  ASSERT_EQ(data_blk_cnt0, data_blk_cnt1);
+  ASSERT_EQ(other_blk_cnt0, other_blk_cnt1);
+  ASSERT_EQ(linked_blk_cnt0, linked_blk_cnt1);
   ASSERT_EQ(sstable_macro_info.entry_id_, tmp_info.entry_id_);
-  ASSERT_EQ(sstable_macro_info.linked_block_count_, tmp_info.linked_block_count_);
 
   ObSSTableMacroInfo deep_copy_info;
   const int64_t variable_size = sstable_macro_info.get_variable_size();
@@ -608,8 +613,11 @@ TEST_F(TestSSTableMacroInfo, test_huge_block_ids)
   ASSERT_EQ(nullptr, sstable_macro_info.other_block_ids_);
   ASSERT_NE(nullptr, sstable_macro_info.linked_block_ids_);
   ASSERT_EQ(block_cnt_threshold, sstable_macro_info.data_block_count_);
-  ASSERT_EQ(1, sstable_macro_info.other_block_count_);
-  ASSERT_EQ(1, sstable_macro_info.linked_block_count_);
+  int64_t other_blk_cnt = -1, linked_blk_cnt = -1;
+  ASSERT_EQ(OB_SUCCESS, sstable_macro_info.get_other_block_count(other_blk_cnt));
+  ASSERT_EQ(OB_SUCCESS, sstable_macro_info.get_linked_block_count(linked_blk_cnt));
+  ASSERT_EQ(1, other_blk_cnt);
+  ASSERT_EQ(1, linked_blk_cnt);
   iter.reset();
   ASSERT_EQ(OB_SUCCESS, deep_copy_info.get_data_block_iter(iter));
   for (int i = 0; i < blocksstable::ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD; i++) {
@@ -617,8 +625,16 @@ TEST_F(TestSSTableMacroInfo, test_huge_block_ids)
     ASSERT_EQ(OB_SUCCESS, iter.get_next_macro_id(macro_id));
     ASSERT_EQ(param_.data_block_ids_.at(i), macro_id);
   }
-  ASSERT_EQ(sstable_macro_info.data_block_count_, deep_copy_info.data_block_count_);
-  ASSERT_EQ(sstable_macro_info.other_block_count_, deep_copy_info.other_block_count_);
+  {
+    int64_t data_blk_cnt0 = -1, data_blk_cnt1 = -1;
+    int64_t other_blk_cnt0 = -1, other_blk_cnt1 = -1;
+    int64_t linked_blk_cnt0 = -1, linked_blk_cnt1 = -1;
+    ASSERT_EQ(OB_SUCCESS, sstable_macro_info.get_block_count(data_blk_cnt0, other_blk_cnt0, linked_blk_cnt0));
+    ASSERT_EQ(OB_SUCCESS, deep_copy_info.get_block_count(data_blk_cnt1, other_blk_cnt1, linked_blk_cnt1));
+    ASSERT_EQ(data_blk_cnt0, data_blk_cnt1);
+    ASSERT_EQ(other_blk_cnt0, other_blk_cnt1);
+    ASSERT_EQ(linked_blk_cnt0, linked_blk_cnt1);
+  }
 }
 
 TEST_F(TestSSTableMeta, test_common_sstable_persister_linked_block)

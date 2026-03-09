@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/ob_fts_index_builder_util.h"
 #define USING_LOG_PREFIX RS
 #include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
 #include "rootserver/ob_root_service.h"
@@ -549,6 +550,11 @@ int ObCreateIndexHelper::operate_schemas_()
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("parser properties isn't supported before version 4.3.5.1", KR(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "parser properties before version 4.3.5.1 is");
+    } else if (tenant_data_version < MIN_DATA_VERSION_FOR_FTS_INDEX_TYPE
+               && new_arg_->index_option_.fts_index_type_ != share::schema::OB_FTS_INDEX_TYPE_INVALID) { // version check 451
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("fts index type isn't supported before version 4.5.1.0, is not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "fts index type before version 4.5.1.0 is");
     } else if (create_index_on_empty_table_opt_) {
       if (OB_FAIL(ObTabletBindingHelper::build_single_table_write_defensive(*new_data_table_schema_,
                                                                             index_schema.get_schema_version(),
