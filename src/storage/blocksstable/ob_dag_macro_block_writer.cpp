@@ -95,7 +95,7 @@ int ObDagTempMacroBlockWriter::open(
     const ObDataStoreDesc &data_store_desc,
     const int64_t parallel_idx,
     const blocksstable::ObMacroSeqParam &macro_seq_param,
-    ObSSTablePrivateObjectCleaner &object_cleaner,
+    ObISSTableObjectCleaner &object_cleaner,
     ObCGBlockFileWriter *cg_block_writer)
 {
   int ret = OB_SUCCESS;
@@ -149,7 +149,7 @@ int ObDagMacroBlockWriter::open(
     const ObDataStoreDesc &data_store_desc,
     const int64_t parallel_idx,
     const blocksstable::ObMacroSeqParam &macro_seq_param,
-    ObSSTablePrivateObjectCleaner &object_cleaner,
+    ObISSTableObjectCleaner &object_cleaner,
     ObIMacroBlockFlushCallback *callback)
 {
   int ret = OB_SUCCESS;
@@ -171,7 +171,7 @@ int ObDagMacroBlockWriter::open_for_ss_ddl(
     const ObDataStoreDesc &data_store_desc,
     const int64_t parallel_idx,
     const blocksstable::ObMacroSeqParam &macro_seq_param,
-    ObSSTablePrivateObjectCleaner &object_cleaner,
+    ObISSTableObjectCleaner &object_cleaner,
     ObIMacroBlockFlushCallback *callback)
 {
   int ret = OB_SUCCESS;

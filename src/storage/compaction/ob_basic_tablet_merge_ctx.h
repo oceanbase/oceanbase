@@ -387,7 +387,7 @@ public:
     const int64_t row_count,
     const int64_t macro_count,
     const int64_t cg_count);
-  int build_update_table_store_param(
+  virtual int build_update_table_store_param(
     const blocksstable::ObSSTable *sstable,
     ObUpdateTableStoreParam &param);
   virtual int64_t to_string(char* buf, const int64_t buf_len) const;
@@ -409,6 +409,10 @@ protected:
   virtual int prepare_schema();
   virtual void free_schema();
   virtual int cal_merge_param() { return static_param_.cal_minor_merge_param(false/*has_compaction_filter*/); }
+  virtual ObStorageObjectWriteStrategy get_io_write_strategy() const
+  {
+     return ObStorageObjectWriteStrategy::WRITE_BACK;
+  }
   virtual int init_tablet_merge_info() = 0;
   virtual int prepare_index_tree() = 0;
   virtual void update_and_analyze_progress() {}

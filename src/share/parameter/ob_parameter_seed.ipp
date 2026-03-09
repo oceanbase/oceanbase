@@ -1676,6 +1676,10 @@ DEF_BOOL_WITH_CHECKER(suspend_storage_cache_task, OB_TENANT_PARAMETER, "False",
     common::ObConfigSuspendStorageCacheTaskChecker,
     "Suspend background caching tasks.",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(storage_cache_clean_macro_interval, OB_TENANT_PARAMETER, "24h", "[0s,]",
+    "the time interval between the schedules of storage cache policy clean macro task. "
+    "Range: [0s, +∞)",
+     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // for bloom filter
 DEF_BOOL(_bloom_filter_enabled, OB_TENANT_PARAMETER, "True",
@@ -3410,10 +3414,15 @@ DEF_BOOL(_enable_hash_gby_limit_pushdown, OB_TENANT_PARAMETER, "True",
 DEF_INT(_large_query_cpu_quota_adjustment_step, OB_TENANT_PARAMETER, "0", "[0,100]",
         "Large Query CPU Quota Tuning Step. Range: [0,100]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_BOOL(_enable_pl_sql_parameterize, OB_TENANT_PARAMETER, "False",
         "enable/disable pl sql parameterize optimization",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ss_cold_tablet_delay_upload, OB_TENANT_PARAMETER, "false",
+         "enable or disable delay upload for cold tablet.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ss_tablet_upload_follow_cache_policy, OB_TENANT_PARAMETER, "True",
+         "Enable or disable tablet upload follow cache policy",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_ss_fast_migration, OB_TENANT_PARAMETER, "True",
          "use fast migration in shared-storage if enable",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

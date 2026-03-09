@@ -102,8 +102,9 @@ public:
   static int clear_micro_cache(ObSSMicroMetaManager *micro_meta_mgr, ObSSPhysicalBlockManager *phy_blk_mgr,
                                ObSSMicroRangeManager *micro_range_mgr, int64_t &micro_data_blk_cnt,
                                int64_t &range_micro_sum);
+  // if 'ckpt_split_cnt' is 0, micro_cache will initialize based on meta_ckpt block count
   static int restart_micro_cache(ObSSMicroCache *micro_cache, const uint64_t tenant_id, const int64_t cache_file_size,
-                                 const uint32_t ckpt_split_cnt, const bool ignore_prev_super_blk = false);
+                                 const uint32_t ckpt_split_cnt = 0, const bool ignore_prev_super_blk = false);
   static void stop_all_bg_task(ObSSMicroCache *micro_cache);
   static void resume_all_bg_task(ObSSMicroCache *micro_cache);
   static int64_t get_prev_micro_ckpt_time_us() { return ObTimeUtility::current_time_us() - SS_PERSIST_META_INTERVAL_US + DIFF_CKPT_TIME_US; }
@@ -250,6 +251,7 @@ int TestSSCommonUtil::get_micro_block(const MicroBlockInfo &micro_info, char *re
   }
   return ret;
 }
+
 
 int TestSSCommonUtil::prepare_micro_blocks(
     const int64_t macro_block_cnt,
@@ -681,7 +683,7 @@ int TestSSCommonUtil::restart_micro_cache(
     const bool ignore_prev_super_blk)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(micro_cache) || OB_UNLIKELY(cache_file_size <= 0 || ckpt_split_cnt <= 0 ||
+  if (OB_ISNULL(micro_cache) || OB_UNLIKELY(cache_file_size <= 0 || ckpt_split_cnt < 0 ||
       !is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(micro_cache), K(tenant_id), K(cache_file_size), K(ckpt_split_cnt));

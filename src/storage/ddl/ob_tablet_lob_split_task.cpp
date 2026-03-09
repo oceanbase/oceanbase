@@ -934,9 +934,11 @@ int ObTabletLobMergeMapTask::prepare_split_helper()
     if (OB_FAIL(ss_split_helper.start_add_minor_op(
           param_->ls_id_,
           ctx_->split_scn_,
+          ctx_->reorg_scn_,
           1/*parallel_cnt_of_each_sstable*/,
           ctx_->lob_meta_table_store_iterator_,
-          ctx_->new_lob_tablet_ids_))) {
+          ctx_->new_lob_tablet_ids_,
+          param_->data_format_version_))) {
       LOG_WARN("start add minor op failed", K(ret), KPC(param_));
     } else if (OB_FAIL(ss_split_helper.persist_majors_gc_rely_info(
           param_->ls_id_,
@@ -1360,6 +1362,7 @@ int ObTabletLobWriteDataTask::prepare_macro_seq_param(
           write_sstable_ctx.sstable_index_/*the index in generated minors*/,
           1 /*the parallel cnt in one sstable*/,
           task_id_/*the parallel idx in one sstable*/,
+          param_->data_format_version_,
           macro_start_seq.macro_data_seq_))) {
         LOG_WARN("generate macro start seq failed", K(ret));
       }
@@ -1406,7 +1409,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_macro_writer(const ObTabletLobWrit
   } else {
     ObMacroSeqParam macro_seq_param;
     ObPreWarmerParam pre_warm_param;
-    ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+    ObISSTableObjectCleaner *object_cleaner = nullptr;
     if (OB_FAIL(prepare_macro_seq_param(write_sstable_ctx, dest_tablet_index, macro_seq_param))) {
       LOG_WARN("prepare macro seq param failed", K(ret), K(write_sstable_ctx));
     } else if (OB_ISNULL(buf = ctx_->allocator_.alloc(sizeof(ObMacroBlockWriter)))) {
@@ -1414,7 +1417,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_macro_writer(const ObTabletLobWrit
       LOG_WARN("alloc mem failed", K(ret));
     } else if (OB_FAIL(pre_warm_param.init(param_->ls_id_, new_tablet_id))) {
       LOG_WARN("failed to init pre warm param", K(ret), "ls_id", param_->ls_id_, K(new_tablet_id));
-    } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(
+    } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(
                                data_desc.get_desc(),
                                object_cleaner))) {
       LOG_WARN("failed to get cleaner from data store desc", K(ret));
@@ -1452,7 +1455,12 @@ int ObTabletLobWriteDataTask::prepare_sstable_index_builder(const ObTabletLobWri
   const int64_t snapshot_version = write_sstable_ctx.get_version();
   compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
         ObExecMode::EXEC_MODE_OUTPUT : ObExecMode::EXEC_MODE_LOCAL;
-  const share::SCN split_reorganization_scn = ctx_->split_scn_.is_valid() ? ctx_->split_scn_ : SCN::min_scn()/*use min_scn to avoid invalid*/;
+  share::SCN split_reorganization_scn;
+  if (dest_table_key.is_mds_sstable() || param_->data_format_version_ < DATA_VERSION_4_5_1_0) {
+    split_reorganization_scn = ctx_->split_scn_.is_valid() ? ctx_->split_scn_ : SCN::min_scn()/*use min_scn to avoid invalid*/;
+  } else {
+    split_reorganization_scn = ctx_->reorg_scn_;
+  }
   int32_t private_transfer_epoch = -1;
   if (OB_UNLIKELY(!ctx_->lob_meta_tablet_handle_.is_valid())) {
     ret = OB_ERR_NULL_VALUE;
@@ -1947,7 +1955,7 @@ int ObTabletLobWriteDataTask::check_and_create_mds_sstable(
         LOG_INFO("no need to build mds sstable", K(dest_tablet_id));
     #ifdef OB_BUILD_SHARED_STORAGE
       } else if (GCTX.is_shared_storage_mode()) {
-        if (OB_FAIL(ss_mds_split_helper.generate_minor_macro_seq_info(
+        if (OB_FAIL(ss_mds_split_helper.generate_mds_minor_macro_seq_info(
               dest_tablet_index/*index in dest_tables_id*/,
               0/*the index in the generated minors*/,
               1/*the parallel cnt in one sstable*/,
@@ -2048,6 +2056,7 @@ int ObTabletLobWriteDataTask::close_ss_index_builder(
           write_sstable_ctx.sstable_index_/*the index in generated minors*/,
           1/*the parallel cnt in one sstable*/,
           1/*the parallel idx in one sstable*/,
+          param_->data_format_version_,
           index_tree_start_seq))) {
       LOG_WARN("get macro seq failed", K(ret));
     } else if (OB_FAIL(index_builder->close_with_macro_seq(

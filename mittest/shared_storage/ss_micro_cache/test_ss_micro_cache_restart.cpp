@@ -63,9 +63,9 @@ void TestSSMicroCacheRestart::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager *);
-  ASSERT_NE(nullptr, tnt_file_mgr);
-  tnt_file_mgr->persist_disk_space_task_.enable_adjust_size_ = false;
+  ObTenantDiskSpaceManager *tnt_disk_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_mgr);
+  tnt_disk_mgr->persist_disk_space_task_.enable_adjust_size_ = false;
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30), 1/*micro_split_cnt*/));
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
 }
@@ -84,29 +84,84 @@ TEST_F(TestSSMicroCacheRestart, test_restart_without_file)
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager *);
+  ObTenantDiskSpaceManager *tnt_disk_mgr = MTL(ObTenantDiskSpaceManager *);
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   const int64_t cache_file_size = micro_cache->cache_file_size_;
   const int64_t block_size = micro_cache->phy_blk_size_;
+  int64_t data_disk_size = tnt_disk_mgr->get_total_disk_size();
   LOG_INFO("TEST_CASE: start test_restart_without_file");
+
+  // Write data and wait for complete one round of blk ckpt and meta ckpt before first restart
+  {
+    const int64_t micro_cnt = 1000;
+    const int64_t micro_size = 8 * 1024;
+    ObArenaAllocator allocator;
+    char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
+    ASSERT_NE(nullptr, data_buf);
+    MEMSET(data_buf, 'a', micro_size);
+    ObSSPhyBlockCommonHeader common_header;
+    ObSSMicroDataBlockHeader data_blk_header;
+    const int64_t payload_offset = common_header.get_serialize_size() + data_blk_header.get_serialize_size();
+    const int32_t offset = payload_offset;
+    for (int64_t i = 0; i < micro_cnt; ++i) {
+      MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(i + 1);
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ret = micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, macro_id.second_id(), ObSSMicroCacheAccessType::COMMON_IO_TYPE);
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+
+    ObSSPersistMicroMetaTask &micro_ckpt_task = micro_cache->task_runner_.persist_meta_task_;
+    ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
+    int64_t ori_micro_ckpt_cnt = cache_stat.task_stat().micro_ckpt_cnt_;
+    int64_t ori_blk_ckpt_cnt = cache_stat.task_stat().blk_ckpt_cnt_;
+    micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_micro_ckpt_time_us();
+    blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_blk_ckpt_time_us();
+    int64_t EXE_CKPT_TIMEOUT_S = 120;
+    int64_t start_time_s = ObTimeUtility::current_time_s();
+    bool finish_ckpt = false;
+    do {
+      if (!(cache_stat.task_stat().micro_ckpt_cnt_ > ori_micro_ckpt_cnt) ||
+          !(cache_stat.task_stat().blk_ckpt_cnt_ > ori_blk_ckpt_cnt)) {
+        LOG_INFO("ss_micro_cache checkpoint is still executing",
+                 "micro_ckpt_cnt", cache_stat.task_stat().micro_ckpt_cnt_,
+                 "blk_ckpt_cnt", cache_stat.task_stat().blk_ckpt_cnt_);
+        ob_usleep(1000 * 1000);
+      } else {
+        finish_ckpt = true;
+      }
+    } while (!finish_ckpt && ObTimeUtility::current_time_s() - start_time_s < EXE_CKPT_TIMEOUT_S);
+    ASSERT_EQ(true, finish_ckpt);
+    ASSERT_LT(ori_micro_ckpt_cnt, cache_stat.task_stat().micro_ckpt_cnt_);
+    ASSERT_LT(ori_blk_ckpt_cnt, cache_stat.task_stat().blk_ckpt_cnt_);
+    LOG_INFO("finish first round ckpt before restart",
+             "micro_ckpt_cnt", cache_stat.task_stat().micro_ckpt_cnt_,
+             "blk_ckpt_cnt", cache_stat.task_stat().blk_ckpt_cnt_);
+  }
 
   char micro_cache_file_path[512] = {0};
   ret = tnt_file_mgr->get_micro_cache_file_path(micro_cache_file_path, sizeof(micro_cache_file_path), tenant_id, MTL_EPOCH_ID());
   ASSERT_EQ(OB_SUCCESS, ret);
 
+  data_disk_size = tnt_disk_mgr->get_total_disk_size();
   tnt_file_mgr->stop();
   micro_cache->stop();
+  tnt_disk_mgr->stop();
   tnt_file_mgr->wait();
   micro_cache->wait();
+  tnt_disk_mgr->wait();
   tnt_file_mgr->destroy();
   micro_cache->destroy();
+  tnt_disk_mgr->destroy();
   LOG_INFO("TEST: start 1st restart");
 
   ret = ObIODeviceLocalFileOp::unlink(micro_cache_file_path);
   ASSERT_EQ(OB_SUCCESS, ret);
-
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_mgr->init(tenant_id, data_disk_size));
   ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->init(tenant_id));
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(tenant_id, cache_file_size, 1/*micro_split_cnt*/));
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_mgr->start());
   ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->start());
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
   LOG_INFO("TEST: finish 1st restart without micro_cache_file");
@@ -156,19 +211,25 @@ TEST_F(TestSSMicroCacheRestart, test_restart_without_file)
   ASSERT_EQ(1, cache_stat.task_stat().blk_ckpt_cnt_);
   ASSERT_LT(0, cache_stat.task_stat().blk_ckpt_item_cnt_);
 
+  data_disk_size = tnt_disk_mgr->get_total_disk_size();
   tnt_file_mgr->stop();
   micro_cache->stop();
+  tnt_disk_mgr->stop();
   tnt_file_mgr->wait();
   micro_cache->wait();
+  tnt_disk_mgr->wait();
   tnt_file_mgr->destroy();
   micro_cache->destroy();
+  tnt_disk_mgr->destroy();
   LOG_INFO("TEST: start 2nd restart");
 
   ret = ObIODeviceLocalFileOp::unlink(micro_cache_file_path);
   ASSERT_EQ(OB_SUCCESS, ret);
 
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_mgr->init(tenant_id, data_disk_size));
   ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->init(tenant_id));
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(tenant_id, cache_file_size, 1/*micro_split_cnt*/));
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_mgr->start());
   ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->start());
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
   LOG_INFO("TEST: finish 2nd restart without micro_cache_file");

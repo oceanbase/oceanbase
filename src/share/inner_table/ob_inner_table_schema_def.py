@@ -18009,9 +18009,63 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12588',
   table_name = '__all_virtual_routine_load_job',
   keywords = all_def_keywords['__all_routine_load_job']))
-# 12589: __all_virtual_ss_macro_cache_info
-# 12590: __all_virtual_ss_local_cache_diagnose_info
-# 12591: __all_virtual_ddl_dag_monitor
+
+def_table_schema(
+  owner             = 'binifei.bnf',
+  table_name        = '__all_virtual_ss_macro_cache_info',
+  table_id          = '12589',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('macro_id', 'varchar:256'),
+  ],
+  normal_columns    = [
+    ('tablet_id', 'int'),
+    ('object_type', 'varchar:128'),
+    ('size', 'int'),
+    ('last_access_time', 'timestamp'),
+    ('cache_type', 'varchar:32'),
+    ('is_write_cache', 'bool'),
+    ('is_in_fifo_list', 'bool'),
+    ('ref_cnt', 'int'),
+    ('access_cnt', 'int'),
+    ('macro_id_str', 'varchar:256'),
+    ('local_path', 'varchar:1024'),
+    ('remote_path', 'varchar:1024'),
+    ('info', 'varchar:1024'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner             = 'donglou.zl',
+  table_name        = '__all_virtual_ss_local_cache_diagnose_info',
+  table_id          = '12590',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('mod_name', 'varchar:OB_MODULE_NAME_LENGTH'),
+    ('sub_mod_name', 'varchar:OB_MODULE_NAME_LENGTH'),
+  ],
+  normal_columns    = [
+    ('status', 'int'),
+    ('modify_time', 'timestamp'),
+    ('diagnose_info', 'varchar:OB_DIAGNOSE_INFO_LENGTH'),
+    ('extra_info', 'varchar:OB_DIAGNOSE_INFO_LENGTH'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 def_table_schema(
   owner = 'jianyun.sjy',
   table_name = '__all_virtual_ddl_dag_monitor',
@@ -24940,7 +24994,8 @@ SELECT
   CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS SIGNED) AS AUTO_SPLIT_TABLET_SIZE,
   CAST(NULL AS SIGNED) AS SKIP_INDEX_LEVEL,
   T.TTL_DEFINITION AS TTL_DEFINITION,
-  T.DELTA_FORMAT AS DELTA_FORMAT
+  T.DELTA_FORMAT AS DELTA_FORMAT,
+  CAST(T.STORAGE_CACHE_POLICY AS CHAR(256)) AS STORAGE_CACHE_POLICY
 FROM
   (SELECT
      TENANT_ID,
@@ -24967,7 +25022,8 @@ FROM
      TABLE_MODE,
      INDEX_ATTRIBUTES_SET,
      TTL_DEFINITION,
-     DELTA_FORMAT
+     DELTA_FORMAT,
+     STORAGE_CACHE_POLICY
    FROM
      OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
 
@@ -24987,7 +25043,8 @@ FROM
      TABLE_MODE,
      INDEX_ATTRIBUTES_SET,
      TTL_DEFINITION,
-     DELTA_FORMAT
+     DELTA_FORMAT,
+     STORAGE_CACHE_POLICY
    FROM OCEANBASE.__ALL_VIRTUAL_TABLE
    WHERE TABLE_MODE >> 12 & 15 in (0,1) AND INDEX_ATTRIBUTES_SET & 16 = 0) T
   ON
@@ -25831,7 +25888,8 @@ def_table_schema(
       CAST(NULL AS CHAR(12)) INMEMORY_SERVICE,
       CAST(NULL AS CHAR(100)) INMEMORY_SERVICE_NAME,
       CAST(NULL AS CHAR(8)) MEMOPTIMIZE_READ,
-      CAST(NULL AS CHAR(8)) MEMOPTIMIZE_WRITE
+      CAST(NULL AS CHAR(8)) MEMOPTIMIZE_WRITE,
+      CAST(PART.STORAGE_CACHE_POLICY AS CHAR(256)) AS STORAGE_CACHE_POLICY
 
       FROM (SELECT DB.TENANT_ID,
                    DB.DATABASE_NAME,
@@ -25890,7 +25948,8 @@ def_table_schema(
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
-                   ) PARTITION_POSITION
+                   ) PARTITION_POSITION,
+                   STORAGE_CACHE_POLICY
             FROM OCEANBASE.__ALL_VIRTUAL_PART) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND PART.TENANT_ID = DB_TB.TENANT_ID
 
@@ -25967,7 +26026,8 @@ def_table_schema(
       CAST(NULL AS CHAR(1000)) INMEMORY_SERVICE_NAME,
       CAST(NULL AS CHAR(24)) CELLMEMORY,
       CAST(NULL AS CHAR(8)) MEMOPTIMIZE_READ,
-      CAST(NULL AS CHAR(8)) MEMOPTIMIZE_WRITE
+      CAST(NULL AS CHAR(8)) MEMOPTIMIZE_WRITE,
+      CAST(PART.STORAGE_CACHE_POLICY AS CHAR(256)) AS STORAGE_CACHE_POLICY
       FROM
       (SELECT DB.TENANT_ID,
               DB.DATABASE_NAME,
@@ -26020,7 +26080,8 @@ def_table_schema(
               S_PART.LIST_VAL,
               S_PART.COMPRESS_FUNC_NAME,
               S_PART.TABLESPACE_ID,
-              S_PART.SUBPARTITION_POSITION
+              S_PART.SUBPARTITION_POSITION,
+              S_PART.STORAGE_CACHE_POLICY
        FROM (SELECT
                TENANT_ID,
                TABLE_ID,
@@ -26045,7 +26106,8 @@ def_table_schema(
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
-               ) AS SUBPARTITION_POSITION
+               ) AS SUBPARTITION_POSITION,
+               STORAGE_CACHE_POLICY
              FROM OCEANBASE.__ALL_VIRTUAL_SUB_PART) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID
              AND P_PART.TABLE_ID = S_PART.TABLE_ID
@@ -27433,7 +27495,8 @@ def_table_schema(
       CAST(NULL AS CHAR(12)) INMEMORY_SERVICE,
       CAST(NULL AS CHAR(100)) INMEMORY_SERVICE_NAME,
       CAST(NULL AS CHAR(8)) MEMOPTIMIZE_READ,
-      CAST(NULL AS CHAR(8)) MEMOPTIMIZE_WRITE
+      CAST(NULL AS CHAR(8)) MEMOPTIMIZE_WRITE,
+      CAST(PART.STORAGE_CACHE_POLICY AS CHAR(256)) AS STORAGE_CACHE_POLICY
 
       FROM (SELECT DB.TENANT_ID,
                    DB.DATABASE_NAME,
@@ -27491,7 +27554,8 @@ def_table_schema(
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
-                   ) PARTITION_POSITION
+                   ) PARTITION_POSITION,
+                   STORAGE_CACHE_POLICY
             FROM OCEANBASE.__ALL_PART) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND PART.TENANT_ID = DB_TB.TENANT_ID
 
@@ -27569,7 +27633,8 @@ def_table_schema(
       CAST(NULL AS CHAR(1000)) INMEMORY_SERVICE_NAME,
       CAST(NULL AS CHAR(24)) CELLMEMORY,
       CAST(NULL AS CHAR(8)) MEMOPTIMIZE_READ,
-      CAST(NULL AS CHAR(8)) MEMOPTIMIZE_WRITE
+      CAST(NULL AS CHAR(8)) MEMOPTIMIZE_WRITE,
+      CAST(PART.STORAGE_CACHE_POLICY AS CHAR(256)) AS STORAGE_CACHE_POLICY
       FROM
       (SELECT DB.TENANT_ID,
               DB.DATABASE_NAME,
@@ -27621,7 +27686,8 @@ def_table_schema(
               S_PART.LIST_VAL,
               S_PART.COMPRESS_FUNC_NAME,
               S_PART.TABLESPACE_ID,
-              S_PART.SUBPARTITION_POSITION
+              S_PART.SUBPARTITION_POSITION,
+              S_PART.STORAGE_CACHE_POLICY
        FROM (SELECT
                TENANT_ID,
                TABLE_ID,
@@ -27631,7 +27697,8 @@ def_table_schema(
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID
                  ORDER BY PART_IDX, PART_ID ASC
-               ) AS PARTITION_POSITION
+               ) AS PARTITION_POSITION,
+               STORAGE_CACHE_POLICY
              FROM OCEANBASE.__ALL_PART) P_PART,
             (SELECT
                TENANT_ID,
@@ -27646,7 +27713,8 @@ def_table_schema(
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
-               ) AS SUBPARTITION_POSITION
+               ) AS SUBPARTITION_POSITION,
+               STORAGE_CACHE_POLICY
              FROM OCEANBASE.__ALL_SUB_PART) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID AND
              P_PART.TABLE_ID = S_PART.TABLE_ID
@@ -46029,7 +46097,8 @@ SELECT
   CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS CHAR(128)) AS AUTO_SPLIT_TABLET_SIZE,
   CAST(NULL AS SIGNED) AS SKIP_INDEX_LEVEL,
   T.TTL_DEFINITION AS TTL_DEFINITION,
-  T.DELTA_FORMAT AS DELTA_FORMAT
+  T.DELTA_FORMAT AS DELTA_FORMAT,
+  CAST(T.STORAGE_CACHE_POLICY AS CHAR(256)) AS STORAGE_CACHE_POLICY
 FROM
   (SELECT
      CAST(0 AS SIGNED) AS TENANT_ID,
@@ -46056,7 +46125,8 @@ FROM
      AUTO_PART_SIZE,
      INDEX_ATTRIBUTES_SET,
      TTL_DEFINITION,
-     DELTA_FORMAT
+     DELTA_FORMAT,
+     STORAGE_CACHE_POLICY
    FROM
      OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -46076,7 +46146,8 @@ FROM
      AUTO_PART_SIZE,
      INDEX_ATTRIBUTES_SET,
      TTL_DEFINITION,
-     DELTA_FORMAT
+     DELTA_FORMAT,
+     STORAGE_CACHE_POLICY
    FROM OCEANBASE.__ALL_TABLE
    WHERE TABLE_TYPE != 12 AND TABLE_TYPE != 13
    AND ((TABLE_MODE / 4096) & 15) IN (0,1)
@@ -46580,6 +46651,60 @@ ORDER BY A.create_time
 # 21713: V$OB_SS_LOCAL_CACHE_DIAGNOSE
 # 21714: GV$OB_SINDI_INDEX_INFO
 # 21715: V$OB_SINDI_INDEX_INFO
+
+def_table_schema(
+  owner           = 'donglou.zl',
+  table_name      = 'GV$OB_SS_LOCAL_CACHE_DIAGNOSE',
+  table_id        = '21712',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    MOD_NAME,
+    SUB_MOD_NAME,
+    case status
+        when 1 then 'NORMAL'
+        when 2 then 'WARNING'
+        when 3 then 'ERROR'
+        else 'INVALID'
+    END AS STATUS,
+    MODIFY_TIME,
+    DIAGNOSE_INFO,
+    EXTRA_INFO
+  FROM oceanbase.__all_virtual_ss_local_cache_diagnose_info
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'donglou.zl',
+  table_name      = 'V$OB_SS_LOCAL_CACHE_DIAGNOSE',
+  table_id        = '21713',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    MOD_NAME,
+    SUB_MOD_NAME,
+    STATUS,
+    MODIFY_TIME,
+    DIAGNOSE_INFO,
+    EXTRA_INFO
+  FROM oceanbase.GV$OB_SS_LOCAL_CACHE_DIAGNOSE
+  WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
+  """.replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'yutong.lzs',

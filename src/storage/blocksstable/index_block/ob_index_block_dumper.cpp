@@ -277,6 +277,7 @@ int ObBaseIndexBlockDumper::new_macro_writer()
   macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   macro_seq_param.start_ = 0;
   share::ObPreWarmerParam pre_warm_param(share::MEM_PRE_WARM);
+  ObISSTableObjectCleaner *object_cleaner = nullptr;
   if (OB_UNLIKELY(compressor_type_ != container_store_desc_->get_compressor_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to new macro block writer, unexpected compressor type",
@@ -287,8 +288,11 @@ int ObBaseIndexBlockDumper::new_macro_writer()
   // callback only can be ddl callback.
   // in sn: callback only be used for data macro blocks, dumper build macro meta block which not use callback.
   // in ss: dumper shouldn't new macro writer for dump disk.
+  } else if (OB_ISNULL(object_cleaner = sstable_index_builder_->get_object_cleaner())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("object cleaner is nullptr", K(ret), KPC(sstable_index_builder_));
   } else if (OB_FAIL(meta_macro_writer_->open(*container_store_desc_, 0 /*parallel_idx*/,
-      macro_seq_param, pre_warm_param, sstable_index_builder_->get_private_object_cleaner(), nullptr, nullptr, device_handle_))) {
+      macro_seq_param, pre_warm_param, *object_cleaner, nullptr, nullptr, device_handle_))) {
     STORAGE_LOG(WARN, "fail to open index macro writer", K(ret),
         KPC(container_store_desc_), K(macro_seq_param), KP(device_handle_));
   }

@@ -39,6 +39,9 @@
 #include "share/ob_srs_importer.h"
 #include "share/ob_license_utils.h"
 #include "lib/string/ob_sensitive_string.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_ss_local_cache_util.h"
+#endif
 
 namespace oceanbase
 {
@@ -650,7 +653,7 @@ int ObFlushKVCacheExecutor::execute(ObExecContext &ctx, ObFlushKVCacheStmt &stmt
 
 int ObFlushSSMicroCacheExecutor::execute(ObExecContext &ctx, ObFlushSSMicroCacheStmt &stmt)
 {
-  UNUSED(stmt);
+  UNUSEDx(ctx, stmt);
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_SHARED_STORAGE
   ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
@@ -659,7 +662,7 @@ int ObFlushSSMicroCacheExecutor::execute(ObExecContext &ctx, ObFlushSSMicroCache
   uint64_t tenant_id = OB_INVALID_ID;
   if (OB_ISNULL(task_exec_ctx)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("get task executor context failed");
+    LOG_WARN("get task executor context failed", KR(ret));
   } else if (OB_ISNULL(common_rpc = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed", K(task_exec_ctx));
@@ -669,7 +672,7 @@ int ObFlushSSMicroCacheExecutor::execute(ObExecContext &ctx, ObFlushSSMicroCache
   } else if (OB_FAIL(schema_guard.get_tenant_id(ObString::make_string(stmt.tenant_name_.ptr()), tenant_id)) ||
              OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant not found", K(ret), K_(stmt.tenant_name));
+    LOG_WARN("tenant not found", KR(ret), K_(stmt.tenant_name));
   } else {
     ObArray<ObAddr> server_list;
     ObArray<ObUnit> tenant_units;
@@ -725,7 +728,7 @@ int ObFlushSSMicroCacheExecutor::execute(ObExecContext &ctx, ObFlushSSMicroCache
 
 int ObFlushSSLocalCacheExecutor::execute(ObExecContext &ctx, ObFlushSSLocalCacheStmt &stmt)
 {
-  UNUSED(stmt);
+  UNUSEDx(ctx, stmt);
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_SHARED_STORAGE
   ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
@@ -817,6 +820,200 @@ int ObFlushSSLocalCacheExecutor::execute(ObExecContext &ctx, ObFlushSSLocalCache
 #endif
   return ret;
 }
+
+int ObPrewarmSSLocalCacheExecutor::execute(ObExecContext &ctx, ObPrewarmSSLocalCacheStmt &stmt)
+{
+  UNUSEDx(ctx, stmt);
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  share::schema::ObSchemaGetterGuard schema_guard;
+  uint64_t tenant_id = OB_INVALID_ID;
+  uint64_t exe_tenant_id = OB_INVALID_ID;
+  int64_t schema_version = OB_INVALID_VERSION;
+  if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed", KR(ret));
+  } else if (FALSE_IT(tenant_id = ctx.get_my_session()->get_effective_tenant_id())) {
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("effective_tenant_id should be valid", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(OB_SYS_TENANT_ID != tenant_id && !stmt.tenant_name_.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only support specifying tenant in sys_tenant", KR(ret), K(tenant_id), K(stmt));
+  } else if (stmt.tenant_name_.is_empty()) { // 'alter system' in user/meta tenant
+    exe_tenant_id = tenant_id;
+  } else { // 'alter system' in sys tenant
+    share::schema::ObSchemaGetterGuard sys_schema_guard;
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, sys_schema_guard))) {
+      LOG_WARN("get_schema_guard failed", KR(ret));
+    } else if (OB_FAIL(sys_schema_guard.get_tenant_id(ObString::make_string(stmt.tenant_name_.ptr()), exe_tenant_id)) ||
+               OB_INVALID_ID == exe_tenant_id) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("tenant not found", KR(ret), K_(stmt.tenant_name));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(exe_tenant_id, schema_guard))) {
+    LOG_WARN("get_schema_guard failed", KR(ret), K(exe_tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(exe_tenant_id, schema_version))) {
+    LOG_WARN("fail to get tenant schema version", KR(ret), K(exe_tenant_id));
+  } else {
+    const share::schema::ObTableSchema *table_schema = nullptr;
+    obrpc::ObPrewarmSSLocalCacheArg arg;
+    arg.tenant_id_ = exe_tenant_id;
+    arg.req_start_us_ = ObTimeUtility::current_time_us();
+    const bool need_local_index = stmt.with_all_index() || stmt.with_local_index();
+    const bool need_global_index = stmt.with_all_index() || stmt.with_global_index();
+    if (!stmt.db_name_.is_empty() && !stmt.table_name_.is_empty()) {
+      // If given 'db_name' and 'table_name', we will get all tablets of this table.
+      // If 'need_X_index=true', we will get all tablets of all relative index tables which belong to the table.
+      ObString db_name(stmt.db_name_.size(), stmt.db_name_.ptr());
+      ObString table_name(stmt.table_name_.size(), stmt.table_name_.ptr());
+      if (OB_FAIL(ObSSLocalCacheUtil::get_table_schema(exe_tenant_id, db_name, table_name, GCTX.schema_service_,
+          schema_guard, table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(exe_tenant_id), K(db_name), K(table_name));
+        if (OB_SCHEMA_EAGAIN == ret) {
+          ret = OB_SUCCESS;
+          if (OB_FAIL(ObSSLocalCacheUtil::get_table_schema(exe_tenant_id, db_name, table_name, GCTX.schema_service_,
+              schema_guard, table_schema, true/*is_index*/))) {
+            LOG_WARN("fail to get table schema supposed as index", KR(ret), K(exe_tenant_id), K(db_name), K(table_name));
+          } else {
+            LOG_INFO("succ to get this index table schema", K(exe_tenant_id), K(db_name), K(table_name));
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(table_schema->get_tablet_ids(arg.data_table_tablets_))) {
+        LOG_WARN("fail to get tablet ids", KR(ret), K(exe_tenant_id), KPC(table_schema));
+      } else if (!need_local_index && !need_global_index) {
+      } else if (OB_FAIL(ObSSLocalCacheUtil::get_tablets_from_all_index_tables(exe_tenant_id, need_local_index,
+                 need_global_index, table_schema, GCTX.schema_service_, schema_guard, arg.index_table_tablets_))) {
+        LOG_WARN("fail to get tablets from all index tables", KR(ret), K(exe_tenant_id), K(stmt), KPC(table_schema));
+      }
+    } else if (OB_LIKELY(stmt.tablet_id_.is_valid())) {
+      // If given 'tablet_id', we will get its table_id and table_schema firstly.
+      // If 'need_X_index=true', we will get all tablets which have the same part_idx with this tablet from all local index
+      // tables which belong to the table. For data table tablet, we don't need to consider global index.
+      if (OB_FAIL(arg.data_table_tablets_.push_back(stmt.tablet_id_))) {
+        LOG_WARN("fail to push back", KR(ret), K(stmt), K(arg));
+      } else if (!need_local_index) {
+      } else if (OB_FAIL(ObSSLocalCacheUtil::get_tablet_from_all_local_index_tables(exe_tenant_id, stmt.tablet_id_,
+                 schema_version, GCTX.schema_service_, schema_guard, arg.index_table_tablets_))) {
+        LOG_WARN("fail to get tablet from all local index tables", KR(ret), K(exe_tenant_id), K(schema_version), K(stmt));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), K(stmt));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(send_prewarm_cache_rpc(exe_tenant_id, arg))) {
+      LOG_WARN("fail to send prewarm cache rpc", KR(ret), K(exe_tenant_id), K(arg));
+    }
+  }
+#endif
+  return ret;
+}
+
+int ObPrewarmSSLocalCacheExecutor::get_tenant_server_list(
+    const uint64_t tenant_id,
+    ObIArray<ObAddr> &server_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    ObSEArray<ObUnit, 8> tenant_units;
+    tenant_units.set_attr(ObMemAttr(tenant_id, "PrewarmUnitList"));
+    uint64_t exe_tenant_id = tenant_id;
+    if (is_meta_tenant(exe_tenant_id)) {
+      exe_tenant_id += 1; // handle meta tenant
+    }
+    ObUnitTableOperator unit_op;
+    if (OB_FAIL(unit_op.init(*GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init unit op", KR(ret));
+    } else if (OB_FAIL(unit_op.get_units_by_tenant(exe_tenant_id, tenant_units))) {
+      LOG_WARN("fail to get tenant units", KR(ret), K(exe_tenant_id));
+    } else if (OB_UNLIKELY(0 == tenant_units.count())) {
+      ret = OB_TENANT_NOT_EXIST;
+      LOG_WARN("tenant not exist", KR(ret), K(exe_tenant_id));
+    } else {
+      FOREACH_X(unit, tenant_units, OB_SUCC(ret)) {
+        bool is_alive = false;
+        if (OB_FAIL(SVR_TRACER.check_server_alive(unit->server_, is_alive))) {
+          LOG_WARN("check_server_alive failed", KR(ret), K(unit->server_));
+        } else if (is_alive) {
+          if (has_exist_in_array(server_list, unit->server_)) {
+            // server exist
+          } else if (OB_FAIL(server_list.push_back(unit->server_))) {
+            LOG_WARN("push_back failed", KR(ret), K(unit->server_));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObPrewarmSSLocalCacheExecutor::send_prewarm_cache_rpc(
+    const uint64_t tenant_id,
+    const obrpc::ObPrewarmSSLocalCacheArg &arg)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObSEArray<ObAddr, 8> server_list;
+  server_list.set_attr(ObMemAttr(tenant_id, "PrewarmSvrList"));
+  // TODO @donglou.zl We can use tablet_list to get the exact servers. Thus we can decrease the rpc count.
+  if (OB_FAIL(get_tenant_server_list(tenant_id, server_list))) {
+    LOG_WARN("fail to get tenant server list", KR(ret), K(tenant_id));
+  } else {
+    int64_t timeout = GCONF.rpc_timeout;
+    rootserver::ObPrewarmSSLocalCacheProxy proxy(
+        *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::prewarm_ss_local_cache);
+
+    const int64_t svr_cnt = server_list.count();
+    int64_t sent_rpc_cnt = 0;
+    for (int64_t i = 0; i < svr_cnt; i++) {
+      ObAddr &addr = server_list.at(i);
+      if (OB_TMP_FAIL(proxy.call(addr, timeout, arg))) {
+        LOG_WARN("fail to call", KR(tmp_ret), K(i), K(addr), K(svr_cnt), K(arg));
+        tmp_ret = OB_SUCCESS;
+      } else {
+        ++sent_rpc_cnt;
+      }
+    }
+
+    if (sent_rpc_cnt > 0) {
+      ObArray<int> ret_code_arr;
+      if (OB_TMP_FAIL(proxy.wait_all(ret_code_arr))) {
+        LOG_WARN("fail to wait all", KR(tmp_ret), K(svr_cnt), K(sent_rpc_cnt));
+        tmp_ret = OB_SUCCESS;
+      } else if (OB_FAIL(proxy.check_return_cnt(ret_code_arr.count()))) {
+        LOG_WARN("return cnt not match", KR(ret), K(sent_rpc_cnt), "return_cnt", ret_code_arr.count());
+      } else {
+        for (int64_t i = 0; i < ret_code_arr.count(); i++) {
+          const ObAddr &addr = proxy.get_dests().at(i);
+          if (OB_TMP_FAIL(ret_code_arr.at(i))) {
+            LOG_WARN("fail to prewarm ss_local_cache", KR(tmp_ret), K(i), K(addr), K(tenant_id));
+            tmp_ret = OB_SUCCESS;
+          } else {
+            LOG_INFO("succ to send prewarm_ss_local_cache rpc", K(i), K(addr), K(arg));
+          }
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("all rpc were sent failed", KR(ret), K(timeout), K(svr_cnt), K(server_list), K(arg));
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObFlushIlogCacheExecutor::execute(ObExecContext &ctx, ObFlushIlogCacheStmt &stmt)
 {

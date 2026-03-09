@@ -48,6 +48,7 @@ void ObStaticDataStoreDesc::reset()
   private_transfer_epoch_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
   need_submit_io_ = true;
   micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
+  io_write_strategy_ = ObStorageObjectWriteStrategy::INVALID_WRITE_STRATEGY;
 }
 
 int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
@@ -81,6 +82,8 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   concurrent_cnt_ = desc.concurrent_cnt_;
   reorganization_scn_ = desc.reorganization_scn_;
   semistruct_properties_ = desc.semistruct_properties_;
+  data_version_for_ss_ = desc.data_version_for_ss_;
+  io_write_strategy_ = desc.io_write_strategy_;
   return ret;
 }
 
@@ -135,7 +138,8 @@ int ObStaticDataStoreDesc::init(
     const share::SCN &reorganization_scn,
     const bool need_submit_io,
     const uint64_t encoding_granularity,
-    const bool is_inc_major)
+    const bool is_inc_major,
+    const ObStorageObjectWriteStrategy io_write_strategy)
 {
   int ret = OB_SUCCESS;
   const bool is_major = compaction::is_major_or_meta_merge_type(merge_type);
@@ -158,6 +162,16 @@ int ObStaticDataStoreDesc::init(
     concurrent_cnt_ = concurrent_cnt;
     micro_block_format_version_ = merge_schema.get_micro_block_format_version();
     reorganization_scn_ = reorganization_scn;
+    data_version_for_ss_ = cluster_version;
+    io_write_strategy_ = io_write_strategy;
+
+    if (GCTX.is_shared_storage_mode() && io_write_strategy_ == ObStorageObjectWriteStrategy::INVALID_WRITE_STRATEGY) {
+      if (is_local_exec_mode(exec_mode_)) {
+        io_write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
+      } else {
+        io_write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
+      }
+    }
 
     if (compaction::is_mds_merge(merge_type_)) {
       // Disable for mds table.
@@ -1021,7 +1035,8 @@ int ObWholeDataStoreDesc::init(
     const uint16_t table_cg_idx,
     const compaction::ObExecMode exec_mode,
     const bool need_submit_io /*=true*/,
-    const bool is_inc_major /*=false*/)
+    const bool is_inc_major /*=false*/,
+    const ObStorageObjectWriteStrategy io_write_strategy)
 {
   int ret = OB_SUCCESS;
   uint64_t encoding_granularity = 0;
@@ -1038,7 +1053,7 @@ int ObWholeDataStoreDesc::init(
   if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, private_transfer_epoch, merge_type,
                                 snapshot_version, end_scn, cluster_version,
                                 exec_mode, micro_index_clustered, concurrent_cnt,reorganization_scn,
-                                need_submit_io, encoding_granularity, is_inc_major))) {
+                                need_submit_io, encoding_granularity, is_inc_major, io_write_strategy))) {
     STORAGE_LOG(WARN, "failed to init static desc", KR(ret));
   } else if (OB_FAIL(inner_init(merge_schema, cg_schema, table_cg_idx))) {
     STORAGE_LOG(WARN, "failed to init", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx));

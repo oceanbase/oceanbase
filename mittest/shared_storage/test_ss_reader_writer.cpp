@@ -13,6 +13,7 @@
 
 #define protected public
 #define private public
+#include "lib/utility/ob_test_util.h"
 #include "mittest/shared_storage/test_ss_common_util.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
@@ -146,10 +147,19 @@ void TestSSReaderWriter::SetUpTestCase()
   MTL(tmp_file::ObTenantTmpFileManager *)->wait();
   MTL(tmp_file::ObTenantTmpFileManager *)->destroy();
   ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
-  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
-  ASSERT_NE(nullptr, file_manager);
+  ObTenantDiskSpaceManager *tenant_disk_space_manager = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tenant_disk_space_manager);
+  OB_SERVER_DISK_SPACE_MGR.hidden_sys_data_disk_config_size_ = 1024;
+  bool succ_resize = false;
+  int64_t config_data_disk_size = 0;
+  int64_t actual_data_disk_size = 0;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_manager->get_tenant_unit_data_disk_size(
+            MTL_ID(), config_data_disk_size, actual_data_disk_size));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_manager->resize_total_disk_size_(config_data_disk_size, succ_resize));
+  ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tenant_disk_space_manager);
   // disable persist disk space task to avoid interfere with belowing tests
-  file_manager->persist_disk_space_task_.is_inited_ = false;
+  tenant_disk_space_manager->persist_disk_space_task_.is_inited_ = false;
 }
 
 void TestSSReaderWriter::TearDownTestCase()
@@ -174,7 +184,8 @@ void TestSSReaderWriter::SetUp()
   write_info_.offset_ = 0;
   write_info_.size_ = WRITE_IO_SIZE;
   write_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
-  write_info_.mtl_tenant_id_ = tenant_id;
+  write_info_.mtl_tenant_id_ = MTL_ID();
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
 
   // construct read info
   read_buf_[0] = '\0';
@@ -201,10 +212,19 @@ void TestSSReaderWriter::TearDown()
   if (OB_NOT_NULL(disk_space_manager)) {
     // Try to release a large amount of disk space to reset state
     // This handles cases where tests exhaust disk space but fail before cleanup
-    int64_t large_size = 100 * 1024 * 1024; // 100MB
-    disk_space_manager->free_file_size(large_size, ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE);
-    disk_space_manager->free_file_size(large_size, ObSSMacroCacheType::META_FILE, ObDiskSpaceType::FILE);
-    disk_space_manager->free_file_size(large_size, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE);
+    ObSSMacroCacheStat cache_stat;
+    OK(disk_space_manager->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+    if (cache_stat.used_ > 0) {
+      OK(disk_space_manager->free_file_size(cache_stat.used_, ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE));
+    }
+    OK(disk_space_manager->get_macro_cache_stat(ObSSMacroCacheType::META_FILE, cache_stat));
+    if (cache_stat.used_ > 0) {
+      OK(disk_space_manager->free_file_size(cache_stat.used_, ObSSMacroCacheType::META_FILE, ObDiskSpaceType::FILE));
+    }
+    OK(disk_space_manager->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, cache_stat));
+    if (cache_stat.used_ > 0) {
+      OK(disk_space_manager->free_file_size(cache_stat.used_, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
+    }
     LOG_INFO("TearDown: attempted to release disk space for next test");
   }
 
@@ -218,7 +238,7 @@ void TestSSReaderWriter::exhaust_tmp_file_disk_size(int64_t &avail_size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  avail_size = disk_space_manager->get_macro_cache_free_size();
+  avail_size = disk_space_manager->get_allocated_shared_macro_cache_free_size_nolock_();
   ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(avail_size,
             ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
   ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192,
@@ -253,7 +273,7 @@ void TestSSReaderWriter::check_tmp_file_disk_size_enough(const int64_t size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  ASSERT_LT(size, disk_space_manager->get_macro_cache_free_size()) << "call_times: " << call_times;
+  ASSERT_LT(size, disk_space_manager->get_allocated_shared_macro_cache_free_size_nolock_()) << "call_times: " << call_times;
 }
 
 void TestSSReaderWriter::write_tmp_file_data(
@@ -507,9 +527,11 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
 
   ObSSShareMacroWriter share_macro_writer;
-  ASSERT_EQ(OB_SUCCESS, share_macro_writer.aio_write(write_info_, write_object_handle));
+  ObStorageObjectWriteInfo write_info = write_info_;
+  write_info.io_desc_.set_write_through(true);
+  ASSERT_EQ(OB_SUCCESS, share_macro_writer.aio_write(write_info, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
-  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_info_.size_, write_object_handle);
+  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_info.size_, write_object_handle);
 
   ObLogicMicroBlockId logic_micro_id_1;
   logic_micro_id_1.version_ = ObLogicMicroBlockId::LOGIC_MICRO_ID_VERSION_V1;
@@ -2292,8 +2314,8 @@ TEST_F(TestSSReaderWriter, test_async_write_dual_alloc_file_size)
   check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE);
 
   // Record initial used size
-  int64_t initial_used_size = disk_space_mgr->get_macro_cache_used_size();
-  LOG_INFO("Initial disk usage", K(initial_used_size));
+  int64_t initial_used_size = disk_space_mgr->get_tenant_macro_cache_used_size();
+  LOG_INFO("Initial disk usage", K(initial_used_size), KPC(disk_space_mgr));
 
   // Write 2MB sealed segment using async_write_dual
   macro_id.set_third_id(300);
@@ -2301,9 +2323,9 @@ TEST_F(TestSSReaderWriter, test_async_write_dual_alloc_file_size)
                       OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
 
   // Verify file size was allocated (used size should increase by 2MB)
-  int64_t after_write_used_size = disk_space_mgr->get_macro_cache_used_size();
+  int64_t after_write_used_size = disk_space_mgr->get_tenant_macro_cache_used_size();
   int64_t allocated_size = after_write_used_size - initial_used_size;
-  LOG_INFO("After write disk usage", K(after_write_used_size), K(allocated_size));
+  LOG_INFO("After write disk usage", K(after_write_used_size), K(allocated_size), KPC(disk_space_mgr));
 
   // The allocated size should be approximately 2MB (may have alignment overhead)
   ASSERT_GE(allocated_size, OB_DEFAULT_MACRO_BLOCK_SIZE)
@@ -2329,7 +2351,7 @@ TEST_F(TestSSReaderWriter, test_async_write_dual_alloc_file_size)
   int64_t avail_size = 0;
   exhaust_tmp_file_disk_size(avail_size);
 
-  int64_t before_fallback_used_size = disk_space_mgr->get_macro_cache_used_size();
+  int64_t before_fallback_used_size = disk_space_mgr->get_tenant_macro_cache_used_size();
   LOG_INFO("Before fallback disk usage", K(before_fallback_used_size));
 
   // Write 2MB sealed segment (should fallback to write_through without alloc)
@@ -2338,7 +2360,7 @@ TEST_F(TestSSReaderWriter, test_async_write_dual_alloc_file_size)
                       OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
 
   // Verify no additional file size was allocated (write_through mode)
-  int64_t after_fallback_used_size = disk_space_mgr->get_macro_cache_used_size();
+  int64_t after_fallback_used_size = disk_space_mgr->get_tenant_macro_cache_used_size();
   int64_t fallback_allocated = after_fallback_used_size - before_fallback_used_size;
   LOG_INFO("After fallback disk usage", K(after_fallback_used_size), K(fallback_allocated));
 
@@ -2364,7 +2386,7 @@ TEST_F(TestSSReaderWriter, test_async_write_dual_alloc_file_size)
 
   check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE * 3);
 
-  int64_t before_multi_write = disk_space_mgr->get_macro_cache_used_size();
+  int64_t before_multi_write = disk_space_mgr->get_tenant_macro_cache_used_size();
   LOG_INFO("Before multiple writes", K(before_multi_write));
 
   // Write 3 sealed segments
@@ -2374,7 +2396,7 @@ TEST_F(TestSSReaderWriter, test_async_write_dual_alloc_file_size)
                         OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
   }
 
-  int64_t after_multi_write = disk_space_mgr->get_macro_cache_used_size();
+  int64_t after_multi_write = disk_space_mgr->get_tenant_macro_cache_used_size();
   int64_t multi_allocated = after_multi_write - before_multi_write;
   LOG_INFO("After multiple writes", K(after_multi_write), K(multi_allocated));
 
@@ -2402,10 +2424,10 @@ TEST_F(TestSSReaderWriter, test_async_write_dual_alloc_file_size)
 
   // First write 8KB unsealed segment
   macro_id.set_third_id(305);
-  int64_t before_small_write = disk_space_mgr->get_macro_cache_used_size();
+  int64_t before_small_write = disk_space_mgr->get_tenant_macro_cache_used_size();
   write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/,
                       false/*is_sealed*/, write_buf_);
-  int64_t after_small_write = disk_space_mgr->get_macro_cache_used_size();
+  int64_t after_small_write = disk_space_mgr->get_tenant_macro_cache_used_size();
   int64_t small_allocated = after_small_write - before_small_write;
   LOG_INFO("Small segment allocated", K(small_allocated));
 
@@ -2413,10 +2435,10 @@ TEST_F(TestSSReaderWriter, test_async_write_dual_alloc_file_size)
 
   // Then overwrite with 2MB sealed segment using async_write_dual
   check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE);
-  int64_t before_overwrite = disk_space_mgr->get_macro_cache_used_size();
+  int64_t before_overwrite = disk_space_mgr->get_tenant_macro_cache_used_size();
   write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
                       OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
-  int64_t after_overwrite = disk_space_mgr->get_macro_cache_used_size();
+  int64_t after_overwrite = disk_space_mgr->get_tenant_macro_cache_used_size();
   int64_t overwrite_allocated = after_overwrite - before_overwrite;
   LOG_INFO("Overwrite allocated", K(before_overwrite), K(after_overwrite), K(overwrite_allocated));
 
@@ -2469,7 +2491,7 @@ TEST_F(TestSSReaderWriter, test_disk_space_threshold_fallback_and_recovery)
 
   check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE * 10);
 
-  int64_t initial_used = disk_space_mgr->get_macro_cache_used_size();
+  int64_t initial_used = disk_space_mgr->get_tenant_macro_cache_used_size();
   LOG_INFO("Initial disk usage", K(initial_used));
 
   // Write multiple 2MB sealed segments to local disk
@@ -2487,7 +2509,7 @@ TEST_F(TestSSReaderWriter, test_disk_space_threshold_fallback_and_recovery)
     LOG_INFO("Written segment to local", K(i), "segment_id", macro_id.third_id());
   }
 
-  int64_t after_local_writes = disk_space_mgr->get_macro_cache_used_size();
+  int64_t after_local_writes = disk_space_mgr->get_tenant_macro_cache_used_size();
   int64_t local_allocated = after_local_writes - initial_used;
   LOG_INFO("After local writes", K(after_local_writes), K(local_allocated),
            "segments", LOCAL_WRITE_COUNT);
@@ -2506,7 +2528,7 @@ TEST_F(TestSSReaderWriter, test_disk_space_threshold_fallback_and_recovery)
   int64_t exhausted_size = 0;
   exhaust_tmp_file_disk_size(exhausted_size);
 
-  int64_t before_fallback = disk_space_mgr->get_macro_cache_used_size();
+  int64_t before_fallback = disk_space_mgr->get_tenant_macro_cache_used_size();
   LOG_INFO("Disk space exhausted", K(before_fallback), K(exhausted_size));
 
   // Write multiple 2MB sealed segments (should fallback to object storage)
@@ -2523,7 +2545,7 @@ TEST_F(TestSSReaderWriter, test_disk_space_threshold_fallback_and_recovery)
     LOG_INFO("Written segment to object storage (fallback)", K(i), "segment_id", macro_id.third_id());
   }
 
-  int64_t after_fallback = disk_space_mgr->get_macro_cache_used_size();
+  int64_t after_fallback = disk_space_mgr->get_tenant_macro_cache_used_size();
   int64_t fallback_allocated = after_fallback - before_fallback;
   LOG_INFO("After fallback writes", K(after_fallback), K(fallback_allocated),
            "segments", FALLBACK_WRITE_COUNT);
@@ -2544,7 +2566,7 @@ TEST_F(TestSSReaderWriter, test_disk_space_threshold_fallback_and_recovery)
   // Ensure sufficient space is available
   check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE * 5);
 
-  int64_t before_recovery = disk_space_mgr->get_macro_cache_used_size();
+  int64_t before_recovery = disk_space_mgr->get_tenant_macro_cache_used_size();
   LOG_INFO("Disk space released", K(before_recovery));
 
   // Write multiple 2MB sealed segments (should write to local again)
@@ -2562,7 +2584,7 @@ TEST_F(TestSSReaderWriter, test_disk_space_threshold_fallback_and_recovery)
     LOG_INFO("Written segment to local (recovered)", K(i), "segment_id", macro_id.third_id());
   }
 
-  int64_t after_recovery = disk_space_mgr->get_macro_cache_used_size();
+  int64_t after_recovery = disk_space_mgr->get_tenant_macro_cache_used_size();
   int64_t recovery_allocated = after_recovery - before_recovery;
   LOG_INFO("After recovery writes", K(after_recovery), K(recovery_allocated),
            "segments", RECOVERY_WRITE_COUNT);

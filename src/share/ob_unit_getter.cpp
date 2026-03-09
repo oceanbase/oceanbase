@@ -201,7 +201,7 @@ int64_t ObUnitInfoGetter::ObTenantConfig::gen_init_actual_data_disk_size(
     const share::ObUnitConfig &config) const
 {
   int64_t init_data_disk_size = 0;
-  if (!GCTX.is_shared_storage_mode() || config.data_disk_size() != 0) {
+  if (!GCTX.is_shared_storage_mode()) {
     init_data_disk_size = 0;
   } else {
     init_data_disk_size = static_cast<int64_t>(config.min_cpu()) * (2LL * ObUnitResource::GB);

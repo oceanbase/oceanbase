@@ -11916,6 +11916,40 @@ private:
   ObAddr addr_;
 };
 
+struct ObGetUnitInfoArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetUnitInfoArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObGetUnitInfoArg() {}
+  int init(const uint64_t tenant_id);
+  int assign(const ObGetUnitInfoArg &other);
+  void reset() { tenant_id_ = OB_INVALID_TENANT_ID; }
+  bool is_valid() const { return is_valid_tenant_id(tenant_id_); }
+  const uint64_t &get_tenant_id() const { return tenant_id_; }
+  TO_STRING_KV(K_(tenant_id));
+private:
+  uint64_t tenant_id_;
+};
+
+struct ObGetUnitInfoResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetUnitInfoResult() : addr_(), data_disk_size_limit_(0) {}
+  ~ObGetUnitInfoResult() {}
+  int init(const ObAddr &addr, const int64_t data_disk_size_limit);
+  int assign(const ObGetUnitInfoResult &other);
+  void reset();
+  bool is_valid() const { return addr_.is_valid() && data_disk_size_limit_ > 0; }
+  const ObAddr &get_addr() const { return addr_; }
+  const int64_t &get_data_disk_size_limit() const { return data_disk_size_limit_; }
+  TO_STRING_KV(K_(addr), K_(data_disk_size_limit));
+private:
+  ObAddr addr_;
+  int64_t data_disk_size_limit_;
+};
+
 struct ObDetectMasterRsLSResult
 {
   OB_UNIS_VERSION(1);
@@ -12329,6 +12363,53 @@ public:
   uint64_t tenant_id_;
   ObFlushSSLocalCacheType flush_type_;
   int64_t rpc_abs_timeout_us_;
+};
+
+struct ObPrewarmSSLocalCacheArg final
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObPrewarmSSLocalCacheArg()
+    : tenant_id_(OB_INVALID_TENANT_ID), req_start_us_(-1), data_table_tablets_(), index_table_tablets_()
+  {}
+  ~ObPrewarmSSLocalCacheArg() {}
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_) && (req_start_us_ > 0) && (data_table_tablets_.count() > 0);
+  }
+  TO_STRING_KV(K_(tenant_id), K_(req_start_us), "data_tablet_cnt", data_table_tablets_.count(), "idx_tablet_cnt",
+    index_table_tablets_.count(), K_(data_table_tablets), K_(index_table_tablets));
+
+public:
+  uint64_t tenant_id_;
+  int64_t req_start_us_;
+  common::ObSEArray<ObTabletID, 32> data_table_tablets_;
+  common::ObSEArray<ObTabletID, 32> index_table_tablets_;
+};
+
+struct ObPrewarmSSLocalCacheResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObPrewarmSSLocalCacheResult() : ret_(common::OB_ERROR) {}
+  ~ObPrewarmSSLocalCacheResult() {}
+  int assign(const ObPrewarmSSLocalCacheResult &other)
+  {
+    int ret = OB_SUCCESS;
+    if (this != &other) {
+      ret_ = other.ret_;
+    }
+    return ret;
+  }
+
+  void reset() { ret_ = common::OB_ERROR; }
+  void set_ret(int ret) { ret_ = ret; }
+  int get_ret() const { return ret_; }
+
+  TO_STRING_KV(K_(ret));
+private:
+  int ret_;
 };
 
 struct ObDelSSLocalTmpFileArg final

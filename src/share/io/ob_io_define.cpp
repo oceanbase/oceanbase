@@ -644,6 +644,7 @@ ObSNIOInfo &ObSNIOInfo::operator=(const ObSNIOInfo &other)
 ObSSIOInfo::ObSSIOInfo()
   : ObSNIOInfo(), phy_block_handle_(), fd_cache_handle_(), tmp_file_valid_length_(0),
     effective_tablet_id_(ObTabletID::INVALID_TABLET_ID), is_write_cache_(true),
+    write_strategy_(ObStorageObjectWriteStrategy::INVALID_WRITE_STRATEGY),
     is_batch_write_(false)
 {}
 
@@ -664,6 +665,7 @@ void ObSSIOInfo::reset()
   tmp_file_valid_length_ = 0;
   effective_tablet_id_ = ObTabletID::INVALID_TABLET_ID;
   is_write_cache_ = true;
+  write_strategy_ = ObStorageObjectWriteStrategy::INVALID_WRITE_STRATEGY;
   is_batch_write_ = false;
 }
 
@@ -685,6 +687,7 @@ ObSSIOInfo &ObSSIOInfo::operator=(const ObSSIOInfo &other)
     tmp_file_valid_length_ = other.tmp_file_valid_length_;
     effective_tablet_id_ = other.effective_tablet_id_;
     is_write_cache_ = other.is_write_cache_;
+    write_strategy_ = other.write_strategy_;
     is_batch_write_ = other.is_batch_write_;
     // ignore ret, cuz assign fails only when other.phy_block_handle_/fd_cache_handle_ is invalid.
     // in case when other.phy_block_handle_/fd_cache_handle_ is invalid, ret is unnecessary.
@@ -2978,4 +2981,3 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
   }
   return ret;
 }
-

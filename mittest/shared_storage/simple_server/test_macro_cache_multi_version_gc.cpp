@@ -514,6 +514,7 @@ TEST_F(ObMacroCacheMultiVersionGCTest, multi_version_gc_and_tablet_gc)
   OK(sys_exe_sql("alter system set ob_compaction_schedule_interval = '3s' tenant tt1;"));
   OK(sys_exe_sql("alter system set minor_compact_trigger = 2 tenant tt1;"));
   OK(sys_exe_sql("alter system set _ss_major_compaction_prewarm_level = 0 tenant tt1;"));
+  OK(sys_exe_sql("alter system set_tp tp_name = EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP,error_code = 4016,frequency = 1;"));
   OK(exe_sql("create table test_table (a int)"));
   set_ls_and_tablet_id_for_run_ctx();
   {

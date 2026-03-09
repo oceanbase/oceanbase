@@ -143,6 +143,12 @@ public:
       const bool need_check_tablet);
   static bool is_sstable_count_not_safe(const int64_t minor_table_cnt);
 
+  static int deal_with_minor_result(
+    const compaction::ObMergeType &merge_type,
+    storage::ObLS &ls,
+    const storage::ObTablet &tablet,
+    storage::ObGetMergeTablesResult &result);
+
 private:
   static int find_mini_merge_tables(
       const storage::ObGetMergeTablesParam &param,
@@ -179,11 +185,6 @@ private:
       const compaction::ObMergeType merge_type,
       const int64_t minor_compact_trigger,
       ObLS &ls,
-      storage::ObGetMergeTablesResult &result);
-  static int deal_with_minor_result(
-      const compaction::ObMergeType &merge_type,
-      storage::ObLS &ls,
-      const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
   static int get_recycle_version_for_minor(
       const storage::ObTablet &tablet,

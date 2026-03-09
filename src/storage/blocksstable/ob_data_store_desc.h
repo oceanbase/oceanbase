@@ -68,7 +68,8 @@ public:
     const share::SCN &reorganization_scn,
     const bool need_submit_io = true,
     const uint64_t encoding_granularity = 0,
-    const bool is_inc_major = false);
+    const bool is_inc_major = false,
+    const ObStorageObjectWriteStrategy io_write_strategy = ObStorageObjectWriteStrategy::INVALID_WRITE_STRATEGY);
   bool is_valid() const;
   void reset();
   int assign(const ObStaticDataStoreDesc &desc);
@@ -100,7 +101,9 @@ public:
       K_(encoding_granularity),
       K_(reorganization_scn),
       K_(semistruct_properties),
-      K_(micro_block_format_version));
+      K_(micro_block_format_version),
+      K_(data_version_for_ss),
+      K_(io_write_strategy));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
   OB_INLINE void init_block_size(const share::schema::ObMergeSchema &merge_schema);
@@ -142,6 +145,8 @@ public:
   int64_t micro_block_format_version_;
   share::SCN reorganization_scn_;
   share::ObSemistructProperties semistruct_properties_;
+  uint64_t data_version_for_ss_; // use only under shared-storage mode
+  ObStorageObjectWriteStrategy io_write_strategy_; // use only under shared-storage mode
 };
 
 // ObColDataStoreDesc is same for every parallel task
@@ -330,6 +335,8 @@ public:
   STATIC_DESC_FUNC(bool, need_submit_io);
   STATIC_DESC_FUNC(int64_t, concurrent_cnt);
   STATIC_DESC_FUNC(share::SCN, reorganization_scn);
+  STATIC_DESC_FUNC(int64_t, data_version_for_ss);
+  STATIC_DESC_FUNC(ObStorageObjectWriteStrategy, io_write_strategy);
   STATIC_DESC_FUNC(ObMergeEngineType, merge_engine_type);
   COL_DESC_FUNC(bool, is_row_store);
   COL_DESC_FUNC(uint16_t, table_cg_idx);
@@ -429,7 +436,8 @@ struct ObWholeDataStoreDesc
     const uint16_t table_cg_idx = 0,
     const compaction::ObExecMode exec_mode = compaction::ObExecMode::EXEC_MODE_LOCAL,
     const bool need_submit_io = true,
-    const bool is_inc_major = false);
+    const bool is_inc_major = false,
+    const ObStorageObjectWriteStrategy io_write_strategy = ObStorageObjectWriteStrategy::INVALID_WRITE_STRATEGY);
   int gen_index_store_desc(const ObDataStoreDesc &data_desc);
   int assign(const ObDataStoreDesc &desc);
   int assign(const ObWholeDataStoreDesc &desc);

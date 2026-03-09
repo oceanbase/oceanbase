@@ -479,7 +479,7 @@ ObSSTableIndexBuilder::ObSSTableIndexBuilder(const bool use_double_write_buffer)
     roots_(sizeof(ObIndexTreeRootCtx *),
     ModulePageAllocator(sstable_allocator_)),
     res_(),
-    object_cleaner_(),
+    object_cleaner_(nullptr),
     optimization_mode_(ENABLE),
     enable_dump_disk_(false),
     is_closed_(false),
@@ -508,9 +508,11 @@ void ObSSTableIndexBuilder::reset()
   device_handle_ = nullptr;
   roots_.reset();
   res_.reset();
+  if (OB_NOT_NULL(object_cleaner_)) {
+    OB_DELETEx(ObISSTableObjectCleaner, &sstable_allocator_, object_cleaner_);
+  }
   sstable_allocator_.reset();
   self_allocator_.reset();
-  object_cleaner_.reset();
   optimization_mode_ = ENABLE;
   enable_dump_disk_ = false;
   is_closed_ = false;
@@ -558,6 +560,8 @@ int ObSSTableIndexBuilder::init(const ObDataStoreDesc &data_desc,
                  index_store_desc_.get_desc()))) {
     STORAGE_LOG(WARN, "fail to assign container_store_desc", K(ret),
                 K(index_store_desc_));
+  } else if (OB_FAIL(ObSSTableObjectCleanerFactory::build_object_cleaner(data_desc, sstable_allocator_, object_cleaner_))) {
+    STORAGE_LOG(WARN, "fail to build object cleaner", K(ret), K(data_desc));
   } else {
     if (GCTX.is_shared_storage_mode()) {
       optimization_mode_ = DISABLE;
@@ -566,6 +570,7 @@ int ObSSTableIndexBuilder::init(const ObDataStoreDesc &data_desc,
       optimization_mode_ = mode;
       enable_dump_disk_ = true;
     }
+
     index_store_desc_.get_desc().sstable_index_builder_ = this;
     index_store_desc_.get_desc().need_pre_warm_ = true;
     index_store_desc_.get_desc().need_build_hash_index_for_micro_block_ = false;
@@ -589,7 +594,7 @@ int ObSSTableIndexBuilder::init(const ObDataStoreDesc &data_desc,
            K(ObSimplePrintDataStoreDesc(index_store_desc_.get_desc())),
            K(ObSimplePrintDataStoreDesc(container_store_desc_)),
            K(ObSimplePrintDataStoreDesc(leaf_store_desc_)),
-           KP(&object_cleaner_));
+           KP(object_cleaner_));
   return ret;
 }
 
@@ -937,8 +942,11 @@ int ObSSTableIndexBuilder::merge_index_tree(
   bool all_in_mem = true;
   const ObIndexBuildTaskType task_type = roots_[0]->task_type_;
   const bool in_array = roots_[0]->meta_block_info_.in_array();
-  if (OB_FAIL(macro_writer_.open(container_store_desc_, 0 /*parallel_idx*/,
-                                 macro_seq_param, pre_warm_param, object_cleaner_, callback,
+  if (OB_ISNULL(object_cleaner_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "object cleaner is null", K(ret));
+  } else if (OB_FAIL(macro_writer_.open(container_store_desc_, 0 /*parallel_idx*/,
+                                 macro_seq_param, pre_warm_param, *object_cleaner_, callback,
                                  nullptr, device_handle_))) {
     STORAGE_LOG(WARN, "fail to open index macro writer", K(ret));
   } else {
@@ -1447,8 +1455,11 @@ int ObSSTableIndexBuilder::build_meta_tree(
   container_store_desc_.data_store_type_ = ObMacroBlockCommonHeader::SSTableMacroMeta;
   const ObIndexBuildTaskType task_type = roots_[0]->task_type_;
   const bool in_array = roots_[0]->meta_block_info_.in_array();
-  if (OB_FAIL(macro_writer_.open(desc, 0 /*parallel_idx*/, macro_seq_param,
-                                 pre_warm_param, object_cleaner_, callback, nullptr, device_handle_))) {
+  if (OB_ISNULL(object_cleaner_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "object cleaner is null", K(ret));
+  } else if (OB_FAIL(macro_writer_.open(desc, 0 /*parallel_idx*/, macro_seq_param,
+                                 pre_warm_param, *object_cleaner_, callback, nullptr, device_handle_))) {
     STORAGE_LOG(WARN, "fail to open index macro writer", K(ret));
   } else if (OB_FAIL(builder.init(desc, self_allocator_, macro_writer_))) {
     STORAGE_LOG(WARN, "fail to init index builder", K(ret));
@@ -1743,7 +1754,10 @@ int ObSSTableIndexBuilder::close_with_macro_seq_inner(
     res.set_table_flag_with_macro_id_array();
     if (OB_FAIL(res_.assign(res))) {
       STORAGE_LOG(WARN, "fail to save merge res", K(ret), K(res));
-    } else if (OB_FAIL(object_cleaner_.mark_succeed())) {
+    } else if (OB_ISNULL(object_cleaner_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "object cleaner is null", K(ret));
+    } else if (OB_FAIL(object_cleaner_->mark_succeed())) {
       LOG_WARN("fail to mark succeed in private object cleaner", K(ret));
     } else {
       is_closed_ = true;

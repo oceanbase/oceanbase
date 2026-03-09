@@ -413,7 +413,7 @@ int ObMdsTableMiniMerger::init(
       }
     }
 
-    ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+    ObISSTableObjectCleaner *object_cleaner = nullptr;
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(storage_schema)) {
       ret = OB_ERR_UNEXPECTED;
@@ -429,7 +429,7 @@ int ObMdsTableMiniMerger::init(
     } else if (FALSE_IT(data_desc_.get_desc().sstable_index_builder_ = &sstable_builder_)) {
     } else if (OB_FAIL(sstable_builder_.init(data_desc_.get_desc()))) {
       LOG_WARN("Failed to init sstable builder", K(ret), K(data_desc_.get_desc()));
-    } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::
+    } else if (OB_FAIL(ObISSTableObjectCleaner::
                            get_cleaner_from_data_store_desc(data_desc_.get_desc(), object_cleaner))) {
       LOG_WARN("Failed to get cleaner from data store desc", K(ret), K(data_desc_.get_desc()), KP(object_cleaner));
     } else if (OB_FAIL(macro_writer_.open(

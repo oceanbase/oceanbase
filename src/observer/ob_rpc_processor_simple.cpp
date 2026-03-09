@@ -2414,6 +2414,32 @@ int ObForceSetServerListP::process()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SET_DATA_DISK_SIZE_LIMIT_THREE_GB);
+int ObRpcGetUnitInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  int64_t min_shrinkable_disk_size = 0;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (!GCTX.is_shared_storage_mode()) {
+    // do nothing
+  } else if (FALSE_IT(min_shrinkable_disk_size = INT64_MAX)) {
+  } else if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  } else if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.cal_min_shrinkable_disk_size(
+                        arg_.get_tenant_id(),
+                        min_shrinkable_disk_size))) {
+    LOG_WARN("fail to cal min shrinkable disk size", KR(ret),K_(arg));
+  } else if (OB_UNLIKELY(ERRSIM_SET_DATA_DISK_SIZE_LIMIT_THREE_GB)) {
+    min_shrinkable_disk_size = 3221225472; // 3GB
+  }
+#endif
+  if (FAILEDx(result_.init(GCONF.self_addr_, min_shrinkable_disk_size))) {
+    LOG_WARN("fail to init result", KR(ret), K_(arg), K(min_shrinkable_disk_size));
+  }
+  FLOG_INFO("get unit info", KR(ret), K_(arg), K_(result));
+  return ret;
+}
 
 int ObRenewInZoneHbP::process()
 {
@@ -4426,8 +4452,8 @@ int ObCalibrateSSDiskSpaceP::process()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObTenantFileManager is null", KR(ret), K_(arg_.tenant_id));
       } else if (FALSE_IT(file_mgr->set_mandatory_calibrate())){
-      } else if (OB_FAIL(file_mgr->calibrate_disk_space())) {
-        LOG_WARN("fail to calibrate_ss_disk_space", KR(ret));
+      } else if (OB_FAIL(file_mgr->schedule_calibrate_disk_space_task())) {
+        LOG_WARN("fail to schedule calibrate disk space task", KR(ret));
       }
     }
   }
@@ -4577,6 +4603,51 @@ int ObRpcFlushSSLocalCacheP::process()
   return ret;
 }
 
+int ObRpcPrewarmSSLocalCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K_(arg));
+  } else {
+    const int64_t start_us = ObTimeUtility::current_time_us();
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      ObStorageCachePolicyService *storage_cache_service = nullptr;
+      if (OB_ISNULL(storage_cache_service = MTL(ObStorageCachePolicyService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("storage_cache_service is nullptr", KR(ret), K_(arg));
+      } else {
+        const int64_t data_tablets_cnt = arg_.data_table_tablets_.count();
+        const int64_t index_tablets_cnt = arg_.index_table_tablets_.count();
+        int64_t prewarm_cnt = 0;
+        for (int64_t i = 0; i < data_tablets_cnt; ++i) {
+          if (OB_TMP_FAIL(storage_cache_service->prewarm_tablet(arg_.data_table_tablets_.at(i).id(),
+              PolicyStatus::AUTO))) {
+            LOG_WARN("fail to prewarm data tablet", KR(tmp_ret), K(i), K(arg_.data_table_tablets_.at(i)));
+          } else {
+            ++prewarm_cnt;
+          }
+        }
+        for (int64_t i = 0; i < index_tablets_cnt; ++i) {
+          if (OB_TMP_FAIL(storage_cache_service->prewarm_tablet(arg_.index_table_tablets_.at(i).id(),
+              PolicyStatus::AUTO))) {
+            LOG_WARN("fail to prewarm index tablet", KR(tmp_ret), K(i), K(arg_.index_table_tablets_.at(i)));
+          } else {
+            ++prewarm_cnt;
+          }
+        }
+        const int64_t process_cost_us = ObTimeUtility::current_time_us() - start_us;
+        const int64_t total_cost_us = ObTimeUtility::current_time_us() - arg_.req_start_us_;
+        LOG_INFO("finish to prewarm ss_local_cache process", KR(ret), K(data_tablets_cnt), K(index_tablets_cnt),
+          K(prewarm_cnt), K(process_cost_us), K(total_cost_us));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTriggerStorageCacheP::process()
 {
   int ret = OB_SUCCESS;
@@ -4587,9 +4658,6 @@ int ObTriggerStorageCacheP::process()
   } else if (!common::is_valid_tenant_id(tenant_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid tenant id to switch", K(ret), K(tenant_id));
-  } else if (!is_user_tenant(tenant_id)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_ERROR("can't trigger non-user tenant for storage cache", K(ret), K(tenant_id));
   } else {
     MTL_SWITCH(tenant_id)
     {
@@ -4597,7 +4665,8 @@ int ObTriggerStorageCacheP::process()
       if (OB_ISNULL(storage_cache_service = MTL(ObStorageCachePolicyService *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("storage_cache_service is nullptr", KR(ret));
-      } else if (FALSE_IT(storage_cache_service->set_trigger_status(true))) {
+      } else if (OB_FAIL(storage_cache_service->schedule_refresh_policy_task())) {
+        LOG_WARN("fail to schedule refresh policy task", KR(ret));
       } else {
         LOG_INFO("succeed to trigger storage cache", K_(arg));
       }

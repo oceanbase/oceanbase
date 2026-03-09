@@ -130,14 +130,6 @@ int ObTabletMiniMergeCtx::prepare_schema()
   } else {
     static_param_.schema_ = schema;
   }
-#ifdef OB_BUILD_SHARED_STORAGE
-  // prepare for register mini sstable upload
-  if (OB_SUCC(ret)
-      && GCTX.is_shared_storage_mode()
-      && OB_FAIL(get_ls()->prepare_register_sstable_upload(upload_register_handle_))) {
-    LOG_WARN("prepare mini sstable upload register fail", K(ret));
-  }
-#endif
   return ret;
 }
 
@@ -167,10 +159,7 @@ int ObTabletMiniMergeCtx::update_tablet(
   } else {
     time_guard_click(ObStorageCompactionTimeGuard::UPDATE_TABLET);
 #ifdef OB_BUILD_SHARED_STORAGE
-    // scheduler mini upload for shared-storage
-    if (GCTX.is_shared_storage_mode()) {
-      (void)register_upload_task_(new_tablet_handle);
-    }
+    after_update_tablet(new_tablet_handle);
 #endif
     if (OB_FAIL(new_tablet_handle.get_obj()->release_memtables(static_param_.scn_range_.end_scn_))) {
       LOG_WARN("failed to release memtable", KR(ret), "param", get_dag_param());
@@ -190,45 +179,6 @@ void ObTabletMiniMergeCtx::record_uncommitted_sstable_cnt()
     EVENT_INC(ObStatEventIds::MEMSTORE_DUMP_UNCOMMITTED_SSTABLE_CNT);
   }
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-#define PRINT_TS_WRAPPER(x) (ObPrintTableStore(*(x.get_member())))
-void ObTabletMiniMergeCtx::register_upload_task_(ObTabletHandle &new_tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  ObSSTable *sstable = NULL;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  ObSSTableWrapper sstable_wrapper;
-  if (OB_FAIL(merged_table_handle_.get_sstable(sstable))) {
-    LOG_ERROR("get sstable fail", KR(ret));
-  } else if (OB_ISNULL(sstable)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "invalid sstable", K(new_tablet_handle));
-  } else if (OB_FAIL(new_tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
-    STORAGE_LOG(ERROR, "fetch table store failed", K(new_tablet_handle));
-  } else if (OB_FAIL(table_store_wrapper.get_member()->get_sstable(sstable->get_key(), sstable_wrapper))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      FLOG_INFO("no need register upload. MINI SSTable may be coverd by checkpoint or major sstable",
-                K(PRINT_TS_WRAPPER(table_store_wrapper)));
-    } else {
-      STORAGE_LOG(ERROR, "get sstable failed", K(new_tablet_handle));
-    }
-  } else {
-    // if get snapshot version failed, use min_scn as snapshot version to avoid mini merge failed
-    int tmp_ret = OB_SUCCESS;
-    SCN snapshot_version(SCN::min_scn());
-    if (OB_TMP_FAIL(new_tablet_handle.get_obj()->get_snapshot_version(snapshot_version))) {
-      // ignore error and use min_scn as snapshot version to avoid register upload failed
-      snapshot_version.set_min();
-      LOG_WARN("get snapshot version failed", KR(ret), K(new_tablet_handle));
-    }
-
-    ASYNC_UPLOAD_INC_SSTABLE(
-        SSIncSSTableType::MINI_SSTABLE, upload_register_handle_, sstable->get_key(), snapshot_version);
-  }
-}
-#undef PRINT_TS_WRAPPER
-#endif
 
 void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &tablet_handle)
 {

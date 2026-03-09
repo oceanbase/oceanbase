@@ -122,6 +122,8 @@ int ObDDLResolver::set_default_storage_cache_policy(const bool is_alter_add_inde
       storage_cache_policy.set_global_policy(ObStorageCacheGlobalPolicy::PolicyType::AUTO_POLICY);
     } else if (default_storage_cache_policy.case_compare("HOT") == 0) {
       storage_cache_policy.set_global_policy(ObStorageCacheGlobalPolicy::PolicyType::HOT_POLICY);
+    } else if (default_storage_cache_policy.case_compare("COLD") == 0) {
+      storage_cache_policy.set_global_policy(ObStorageCacheGlobalPolicy::PolicyType::COLD_POLICY);
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid default storage cache policy", K(ret), K(default_storage_cache_policy));
@@ -238,7 +240,7 @@ int ObDDLResolver::resolve_storage_cache_time_attribute(const ParseNode *node, O
   if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse node is null", K(ret));
-  } else if (T_HOT_RETENTION != node->type_ && (node->num_child_ != 1 || OB_ISNULL(node->children_[0]))) {
+  } else if ((T_HOT_RETENTION != node->type_ && T_MIXED_RETENTION != node->type_) && (node->num_child_ != 1 || OB_ISNULL(node->children_[0]))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("num child is invalid", K(ret), K(node->num_child_));
   } else {
@@ -271,8 +273,28 @@ int ObDDLResolver::resolve_storage_cache_time_attribute(const ParseNode *node, O
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "This granularity is");
           LOG_WARN("failed. granularity type is not supported", K(ret), K(string_v));
-        } else if (OB_FAIL(cache_policy.set_granularity(granularity))) {
-          LOG_WARN("failed to set granularity", K(ret), K(granularity));
+        } else {
+          // Version defense: block granularity is supported since 4.5.1
+          if (ObStorageCacheGranularity::BLOCK == granularity) {
+            uint64_t tenant_data_version = 0;
+            uint64_t tenant_id = OB_INVALID_ID;
+            if (OB_ISNULL(session_info_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null session info", K(ret));
+            } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+            } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+              LOG_WARN("get tenant data version failed", K(ret), K(tenant_id));
+            } else if (tenant_data_version < DATA_VERSION_4_5_1_0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("block granularity storage cache policy is not supported in data version less than 4.5.1.0",
+                  K(ret), K(tenant_id), K(tenant_data_version), K(string_v));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Block granularity storage cache policy in data version less than 4.5.1.0 is");
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(cache_policy.set_granularity(granularity))) {
+            LOG_WARN("failed to set granularity", K(ret), K(granularity));
+          }
         }
         break;
       }
@@ -298,6 +320,28 @@ int ObDDLResolver::resolve_storage_cache_time_attribute(const ParseNode *node, O
             LOG_WARN("failed to set hot retention interval", K(ret), K(hot_retention_interval));
           } else if (OB_FAIL(cache_policy.set_hot_retention_unit(hot_retention_unit))) {
             LOG_WARN("failed to set hot retention unit", K(ret), K(hot_retention_unit));
+          }
+        }
+        break;
+      }
+      case T_MIXED_RETENTION: {
+        if (node->num_child_ != 2 || OB_ISNULL(node->children_[0]) || OB_ISNULL(node->children_[1])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse node is invalid", K(ret), K(node->num_child_));
+        } else {
+          const uint64_t mixed_retention_interval = static_cast<uint64_t>(node->children_[0]->value_);
+          ObDateUnitType mixed_retention_unit = static_cast<ObDateUnitType>(node->children_[1]->value_);
+
+          // Allow mixed_retention_interval == 0, which means no mixed retention period (hot -> auto directly)
+          if (ObDateUnitType::DATE_UNIT_MAX == mixed_retention_unit) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "This mixed retention unit is");
+            LOG_WARN(
+                "failed. mixed retention unit type is not supported", K(ret), K(mixed_retention_unit));
+          } else if (OB_FAIL(cache_policy.set_mixed_retention_interval(mixed_retention_interval))) {
+            LOG_WARN("failed to set mixed retention interval", K(ret), K(mixed_retention_interval));
+          } else if (OB_FAIL(cache_policy.set_mixed_retention_unit(mixed_retention_unit))) {
+            LOG_WARN("failed to set mixed retention unit", K(ret), K(mixed_retention_unit));
           }
         }
         break;
@@ -507,7 +551,7 @@ int ObDDLResolver::check_alter_stmt_storage_cache_policy(const ObTableSchema *or
 int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cache_policy, const ObTableSchema *tbl_schema)
 {
   int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *column_schema = nullptr;
+  ObColumnSchemaV2 *column_schema = nullptr;
   bool is_create_stmt = false;
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(stmt_) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -519,10 +563,14 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
     ret = OB_NOT_SUPPORTED;
     SQL_RESV_LOG(WARN, "only allow to set storage cache policy for user table", K(ret));
   } else if (FALSE_IT(is_create_stmt = (stmt::T_CREATE_TABLE == stmt_->get_stmt_type() || stmt::T_CREATE_INDEX == stmt_->get_stmt_type()))) {
-  } else if (storage_cache_policy.is_time_policy() && !tbl_schema->is_partitioned_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Time storage cache policy for non-partitioned table is");
-    LOG_WARN("time storage cache policy for non-partitioned table", K(ret), K(tbl_schema->get_table_name()));
+  } else if (storage_cache_policy.is_partition_time_policy()) {
+    if (!tbl_schema->is_partitioned_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "while granularity is partition, time storage cache policy for non-partitioned table is");
+      LOG_WARN("time storage cache policy for non-partitioned table", K(ret), K(tbl_schema->get_table_name()));
+    }
+  } else {
+    // do nothing
   }
   // Check the global storage cache policy is valid
   if (OB_SUCC(ret) && storage_cache_policy.is_global_policy()) {
@@ -539,10 +587,20 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
   if (OB_SUCC(ret) && storage_cache_policy.is_time_policy()) {
     // Check if the column is time type
     ObString column_name(storage_cache_policy.get_column_name());
-    if (OB_ISNULL(column_schema = tbl_schema->get_column_schema(column_name))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "boudary column of storage cache policy, the column does not exist");
-      LOG_WARN("storage cache policy column is not exists", K(ret), K(column_name));
+    if (OB_ISNULL(column_schema = const_cast<share::schema::ObColumnSchemaV2*>(tbl_schema->get_column_schema(column_name)))) {
+      if (storage_cache_policy.is_block_time_policy()) { // block granularity time policy
+        if (storage_cache_policy.is_default_block_time_policy()) { // block time policy with default boundary column
+          // do nothing
+        } else { // block time policy with custom boundary column
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "boudary column of storage cache policy, the column does not exist");
+          LOG_WARN("storage cache policy column is not exists", K(ret), K(column_name));
+        }
+      } else { // partition or row granularity time policy
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "boudary column of storage cache policy, the column does not exist");
+        LOG_WARN("storage cache policy column is not exists", K(ret), K(column_name));
+      }
     } else if (!column_schema->is_part_key_column() && !column_schema->is_subpart_key_column()) {
       /* not part key, skip*/
     } else {
@@ -563,7 +621,24 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
     }
 
     if (OB_FAIL(ret)) {
-    } else {
+    } else if (storage_cache_policy.is_custom_block_time_policy()) {
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is null", KR(ret), K(column_name), K(storage_cache_policy));
+      } else {
+        share::schema::ObSkipIndexColumnAttr skip_index_attr = column_schema->get_skip_index_attr();
+        if (skip_index_attr.has_min_max()) {
+          // do nothing
+        } else {
+          // create a new skip index attribute with min/max for block time policy
+          skip_index_attr.set_min_max();
+          column_schema->set_skip_index_attr(skip_index_attr.get_packed_value());
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(column_schema)) {
       switch(ob_obj_type_class(column_schema->get_data_type())) {
         // If the column is int/bigint type, check if the column unit is given
         case ObIntTC: {
@@ -599,9 +674,10 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
         }
       }
     }
-    // Check the partition level is valid
-    if (OB_SUCC(ret) && storage_cache_policy.is_time_policy()) {
-      // Check if the column is the firstpartition key column
+    // Check the partition level of partition time policy is valid
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(column_schema) && storage_cache_policy.is_partition_time_policy()) {
+      // Check if the column is the first partition key column
       // and the partition function is range or range columns
       ObPartitionLevel part_level = tbl_schema->get_part_level();
       uint64_t column_id = OB_INVALID_ID;
@@ -936,7 +1012,7 @@ int ObStorageCacheUtil::print_storage_cache_policy_element(const ObBasePartition
     // do nothing
   } else {
     ObStorageCachePolicyType storage_cache_policy_type = partition->get_part_storage_cache_policy_type();
-    if (is_hot_or_auto_policy(storage_cache_policy_type)) {
+    if (is_hot_or_auto_or_cold(storage_cache_policy_type)) {
       const char *storage_cache_policy_str = nullptr;
       if (OB_FAIL(ObStorageCacheGlobalPolicy::safely_get_str(storage_cache_policy_type, storage_cache_policy_str))) {
         LOG_WARN("failed to get storage cache policy str", K(ret), K(storage_cache_policy_type));
@@ -986,9 +1062,13 @@ int ObStorageCacheUtil::print_table_storage_cache_policy(const ObTableSchema &ta
       }
     }
   } else if (storage_cache_policy.is_time_policy()) {
+    bool has_hot_retention = (storage_cache_policy.get_hot_retention_interval() > 0 &&
+                              ObDateUnitType::DATE_UNIT_MAX != storage_cache_policy.get_hot_retention_unit());
+    bool has_mixed_retention = (storage_cache_policy.get_mixed_retention_interval() != UINT64_MAX &&
+                                ObDateUnitType::DATE_UNIT_MAX != storage_cache_policy.get_mixed_retention_unit());
     if (OB_ISNULL(storage_cache_policy.get_column_name()) ||
-        0 == storage_cache_policy.get_hot_retention_interval()||
-        !storage_cache_policy.is_valid_date_unit_type()) {
+        (!has_hot_retention && !has_mixed_retention) ||
+        !ObStorageCacheGranularity::is_valid(storage_cache_policy.get_granularity())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid storage cache policy", K(ret), K(storage_cache_policy));
     } else {
@@ -1003,20 +1083,65 @@ int ObStorageCacheUtil::print_table_storage_cache_policy(const ObTableSchema &ta
         }
       }
       ObString column_unit(column_unit_str);
-      ObString hot_retention_unit(ob_date_unit_type_str_upper(storage_cache_policy.get_hot_retention_unit()));
+      ObString granularity(ObStorageCacheGranularity::get_str(storage_cache_policy.get_granularity()));
+      ObString hot_retention_unit;
+      ObString mixed_retention_unit;
+      if (has_hot_retention) {
+        hot_retention_unit = ObString(ob_date_unit_type_str_upper(storage_cache_policy.get_hot_retention_unit()));
+      }
+      if (has_mixed_retention) {
+        mixed_retention_unit = ObString(ob_date_unit_type_str_upper(storage_cache_policy.get_mixed_retention_unit()));
+      }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "storage_cache_policy (boundary_column = %.*s, ",
-                                  column_name.length(), column_name.ptr()))) {
-        LOG_WARN("failed to print boudary column", K(ret), K(storage_cache_policy), K(pos));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "storage_cache_policy ("))) {
+        LOG_WARN("failed to print storage cache policy element", KR(ret), K(storage_cache_policy), K(pos));
+      } else if (storage_cache_policy.is_block_time_policy()) {
+        if (storage_cache_policy.is_default_block_time_policy()) {
+          // do nothing if the column is default value for block
+        } else { // print the real boundary_column
+          if (OB_FAIL(databuff_printf(buf, buf_len, pos, "boundary_column = %.*s, ",
+                                                          column_name.length(), column_name.ptr()))) {
+            LOG_WARN("failed to print boudary column", K(ret), K(storage_cache_policy), K(pos));
+          }
+        }
+      } else if (storage_cache_policy.is_partition_time_policy()) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "boundary_column = %.*s, ",
+                                                        column_name.length(), column_name.ptr()))) {
+          LOG_WARN("failed to print boudary column", K(ret), K(storage_cache_policy), K(pos));
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("this type of granulariy is not supported for storage cache policy", KR(ret), K(storage_cache_policy), K(pos));
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (ObBoundaryColumnUnit::is_valid(storage_cache_policy.get_column_unit()) &&
                 OB_FAIL(databuff_printf(buf, buf_len, pos, "boundary_column_unit = \'%.*s\', ",
                                                             column_unit.length(), column_unit.ptr()))) {
         LOG_WARN("failed to pint column unit", K(ret), K(storage_cache_policy), K(pos));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "hot_retention = %lu ",
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "granularity = \'%.*s\', ",
+                                                            granularity.length(), granularity.ptr()))) {
+        LOG_WARN("failed to print granularity", K(ret), K(storage_cache_policy), K(pos));
+      } else if (has_hot_retention && OB_FAIL(databuff_printf(buf, buf_len, pos, "hot_retention = %lu ",
                                                             storage_cache_policy.get_hot_retention_interval()))) {
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%.*s)  ", hot_retention_unit.length(),
+        LOG_WARN("failed to print hot retention interval", K(ret), K(storage_cache_policy), K(pos));
+      } else if (has_hot_retention && OB_FAIL(databuff_printf(buf, buf_len, pos, "%.*s", hot_retention_unit.length(),
                                                                       hot_retention_unit.ptr()))) {
+        LOG_WARN("failed to print hot retention unit", K(ret), K(storage_cache_policy), K(pos));
+      } else if (has_mixed_retention) {
+        if (has_hot_retention && OB_FAIL(databuff_printf(buf, buf_len, pos, ", "))) {
+          LOG_WARN("failed to print comma", K(ret), K(storage_cache_policy), K(pos));
+        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "mixed_retention = %lu ",
+                                                              storage_cache_policy.get_mixed_retention_interval()))) {
+          LOG_WARN("failed to print mixed retention interval", K(ret), K(storage_cache_policy), K(pos));
+        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%.*s", mixed_retention_unit.length(),
+                                                                        mixed_retention_unit.ptr()))) {
+          LOG_WARN("failed to print mixed retention unit", K(ret), K(storage_cache_policy), K(pos));
+        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ")  "))) {
+          LOG_WARN("failed to print storage cache policy", K(ret), K(storage_cache_policy), K(pos));
+        }
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ")  "))) {
         LOG_WARN("failed to print storage cache policy", K(ret), K(storage_cache_policy), K(pos));
       }
     }
@@ -1212,7 +1337,7 @@ int ObStorageCacheUtil::get_range_part_level(const share::schema::ObTableSchema 
       ret = OB_ERR_UNEXPECTED;
       LOG_USER_ERROR(OB_ERR_UNEXPECTED, "Boundary column not exist");
       LOG_WARN("storage cache policy boundary column does not exist", K(ret), K(column_name));
-    } else if (storage_cache_policy.is_time_policy()) {
+    } else if (storage_cache_policy.is_partition_time_policy()) {
       // Check if the column is the firstpartition key column
       // and the partition function is range or range columns
       share::schema::ObPartitionLevel table_part_level = tbl_schema.get_part_level();
@@ -1253,6 +1378,8 @@ int ObStorageCacheUtil::get_range_part_level(const share::schema::ObTableSchema 
           LOG_WARN("there must be a range type partition in the partition and the sub_partition for storage cache policy", K(ret));
         }
       }
+    } else {
+      part_level = tbl_schema.get_part_level();
     }
   }
   return ret;

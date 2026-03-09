@@ -85,6 +85,7 @@ void TestSSPreReadTask::SetUp()
   write_info_.size_ = WRITE_IO_SIZE;
   write_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info_.mtl_tenant_id_ = MTL_ID();
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
 
   // construct read info
   read_buf_[0] = '\0';
@@ -224,8 +225,7 @@ TEST_F(TestSSPreReadTask, preread_without_effective_tablet_id)
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
 
-  ObSSShareMacroWriter share_macro_writer;
-  ASSERT_EQ(OB_SUCCESS, share_macro_writer.aio_write(write_info_, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
 
   bool is_exist = false;
@@ -300,8 +300,7 @@ TEST_F(TestSSPreReadTask, preread_only_when_need_read_cache)
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
 
-  ObSSShareMacroWriter share_macro_writer;
-  ASSERT_EQ(OB_SUCCESS, share_macro_writer.aio_write(write_info_, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
 
   bool is_exist = false;
@@ -457,6 +456,8 @@ TEST_F(TestSSPreReadTask, preread_shared_tablet_sub_meta)
   write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info.mtl_tenant_id_ = MTL_ID();
 
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
+  write_info.io_desc_.set_write_through(true);
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
 

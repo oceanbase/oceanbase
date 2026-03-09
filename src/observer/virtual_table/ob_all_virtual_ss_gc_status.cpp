@@ -152,7 +152,7 @@ int ObAllVirtualSSGCStatus::process_curr_tenant(ObNewRow *&row)
         break;
       }
       case GC_TYPE: {
-        if (OB_FAIL(ss_gc_type_to_string(last_succ_scn.gc_type_, sizeof(gc_type_buf_), gc_type_buf_))) {
+        if (OB_FAIL(ss_last_succ_scn_type_to_string(last_succ_scn.gc_type_, sizeof(gc_type_buf_), gc_type_buf_))) {
           SERVER_LOG(WARN, "get lock mode buf failed", K(ret), K(last_succ_scn));
         } else {
           gc_type_buf_[OB_SS_GC_TASK_TYPE_LENGTH - 1] = '\0';

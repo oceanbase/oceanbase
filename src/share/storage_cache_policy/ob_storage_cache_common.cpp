@@ -76,6 +76,8 @@ int get_default_storage_cache_policy_for_create_table(const int64_t tenant_id, O
     storage_cache_policy.set_global_policy(ObStorageCacheGlobalPolicy::PolicyType::AUTO_POLICY);
   } else if (default_storage_cache_policy.case_compare("HOT") == 0) {
     storage_cache_policy.set_global_policy(ObStorageCacheGlobalPolicy::PolicyType::HOT_POLICY);
+  } else if (default_storage_cache_policy.case_compare("COLD") == 0) {
+    storage_cache_policy.set_global_policy(ObStorageCacheGlobalPolicy::PolicyType::COLD_POLICY);
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid default storage cache policy", K(ret), K(default_storage_cache_policy));
@@ -132,6 +134,10 @@ int get_storage_cache_policy_type_from_str(const common::ObString &storage_cache
         policy_type = ObStorageCachePolicyType::NONE_POLICY;
         break;
       }
+      case ObStorageCacheGlobalPolicy::COLD_POLICY: {
+        policy_type = ObStorageCachePolicyType::COLD_POLICY;
+        break;
+      }
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid storage cache policy", KR(ret), K(storage_cache_policy_str));
@@ -160,10 +166,12 @@ int get_storage_cache_policy_type_from_part_str(const common::ObString &storage_
     policy_type = ObStorageCachePolicyType::AUTO_POLICY;
   } else if (storage_cache_policy_part_str.case_compare("NONE") == 0) {
     policy_type = ObStorageCachePolicyType::NONE_POLICY;
+  } else if (storage_cache_policy_part_str.case_compare("COLD") == 0) {
+    policy_type = ObStorageCachePolicyType::COLD_POLICY;
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid storage cache policy", KR(ret), K(storage_cache_policy_part_str));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "storage_cache_policy, storage_cache_policy for partition must be 'HOT', 'AUTO' or 'NONE'");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "storage_cache_policy, storage_cache_policy for partition must be 'HOT', 'AUTO','COLD' or 'NONE'");
   }
   return ret;
 }
@@ -174,10 +182,11 @@ bool is_valid_part_storage_cache_policy(const ObStorageCachePolicyType &part_pol
           storage::ObStorageCachePolicyType::TIME_POLICY == part_policy);
 }
 
-bool is_hot_or_auto_policy(const ObStorageCachePolicyType &part_policy)
+bool is_hot_or_auto_or_cold(const ObStorageCachePolicyType &part_policy)
 {
   return storage::ObStorageCachePolicyType::HOT_POLICY == part_policy ||
-         storage::ObStorageCachePolicyType::AUTO_POLICY == part_policy;
+         storage::ObStorageCachePolicyType::AUTO_POLICY == part_policy ||
+         storage::ObStorageCachePolicyType::COLD_POLICY == part_policy;
 }
 
 //*************************ObStorageCacheGlobalPolicy*************************/
@@ -240,6 +249,10 @@ int ObStorageCacheGlobalPolicy::policy_type_to_status(
       }
       case PolicyType::HOT_POLICY: {
         table_policy_status = PolicyStatus::HOT;
+        break;
+      }
+      case PolicyType::COLD_POLICY: {
+        table_policy_status = PolicyStatus::COLD;
         break;
       }
       default: {
@@ -349,15 +362,19 @@ void ObStorageCachePolicy::reset()
   column_unit_ = ObBoundaryColumnUnit::MAX_UNIT;
   hot_retention_interval_ = 0;
   hot_retention_unit_ = ObDateUnitType::DATE_UNIT_MAX;
+  mixed_retention_interval_ = UINT64_MAX;
+  mixed_retention_unit_ = ObDateUnitType::DATE_UNIT_MAX;
   column_name_[0] = '\0';
   part_level_ = share::schema::PARTITION_LEVEL_MAX;
+  table_id_ = OB_INVALID_ID;
 }
 
 bool ObStorageCachePolicy::is_time_policy() const
 {
-  return strlen(column_name_) > 0
-         && hot_retention_interval_ > 0
-         && ObDateUnitType::DATE_UNIT_MAX != hot_retention_unit_;
+  const bool has_hot_retention = (hot_retention_interval_ > 0 && ObDateUnitType::DATE_UNIT_MAX != hot_retention_unit_);
+  // mixed_retention is set if: interval != UINT64_MAX AND unit != DATE_UNIT_MAX
+  const bool has_mixed_retention = (mixed_retention_interval_ != UINT64_MAX && ObDateUnitType::DATE_UNIT_MAX != mixed_retention_unit_);
+  return !is_global_policy() && (has_hot_retention || has_mixed_retention);
 }
 
 // check the validity of the table storage cache policy
@@ -376,6 +393,15 @@ int ObStorageCachePolicy::check_table_cache_policy() const
   } else if (!(is_global_policy() || is_time_policy())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid storage cache policy", K(ret), K(*this));
+  } else if (is_time_policy()) {
+    // For time policy, at least one of hot_retention or mixed_retention must be set
+    const bool has_hot_retention = (hot_retention_interval_ > 0 && ObDateUnitType::DATE_UNIT_MAX != hot_retention_unit_);
+    const bool has_mixed_retention = (mixed_retention_interval_ != UINT64_MAX && ObDateUnitType::DATE_UNIT_MAX != mixed_retention_unit_);
+    if (!has_hot_retention && !has_mixed_retention) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("time policy must have at least one of hot_retention or mixed_retention", K(ret), K(*this));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "time policy must have at least one of hot_retention or mixed_retention");
+    }
   }
   return ret;
 }
@@ -387,19 +413,45 @@ int ObStorageCachePolicy::to_json_string(char *buf, const int64_t buf_len, int64
   J_OBJ_START();
   if (is_global_policy()) {
     databuff_print_kv(buf, buf_len, pos, "\"GLOBAL\"", ObStorageCacheGlobalPolicy::get_str(global_policy_));
-    // J_COMMA();
-    // databuff_print_kv(buf, buf_len, pos, "\"GRANULARITY\"", ObStorageCacheGranularity::get_str(granularity_));
   } else if (is_time_policy()) {
-    databuff_print_kv(buf, buf_len, pos, "\"COLUMN_NAME\"", column_name_);
-    J_COMMA();
-    // databuff_print_kv(buf, buf_len, pos, "\"GRANULARITY\"", ObStorageCacheGranularity::get_str(granularity_));
-    // J_COMMA();
-    databuff_print_kv(buf, buf_len, pos, "\"HOT_RETENTION_INTERVAL\"", hot_retention_interval_);
-    J_COMMA();
-    databuff_print_kv(buf, buf_len, pos, "\"HOT_RETENTION_UNIT\"", ob_date_unit_type_str_upper(hot_retention_unit_));
-    if (ObBoundaryColumnUnit::is_valid(column_unit_)) {
+    if (granularity_ == ObStorageCacheGranularity::BLOCK) {
+      if (is_default_block_time_policy()) {
+        // no need to print column name
+      } else { // print the real boundary_column
+        databuff_print_kv(buf, buf_len, pos, "\"COLUMN_NAME\"", column_name_);
+        J_COMMA();
+      }
+    } else if (granularity_ == ObStorageCacheGranularity::PARTITION) {
+      databuff_print_kv(buf, buf_len, pos, "\"COLUMN_NAME\"", column_name_);
       J_COMMA();
-      databuff_print_kv(buf, buf_len, pos, "\"COLUMN_UNIT\"", ObBoundaryColumnUnit::get_str(column_unit_));
+    } else if (granularity_ == ObStorageCacheGranularity::ROW) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("row granularity not supported yet", K(ret));
+    } else {
+      // do nothing
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      databuff_print_kv(buf, buf_len, pos, "\"GRANULARITY\"", ObStorageCacheGranularity::get_str(granularity_));
+      J_COMMA();
+      if (hot_retention_interval_ > 0 && ObDateUnitType::DATE_UNIT_MAX != hot_retention_unit_) {
+        databuff_print_kv(buf, buf_len, pos, "\"HOT_RETENTION_INTERVAL\"", hot_retention_interval_);
+        J_COMMA();
+        databuff_print_kv(buf, buf_len, pos, "\"HOT_RETENTION_UNIT\"", ob_date_unit_type_str_upper(hot_retention_unit_));
+      }
+      if (mixed_retention_interval_ >= 0 && ObDateUnitType::DATE_UNIT_MAX != mixed_retention_unit_) {
+        // Only add comma if there are more fields after hot_retention
+        if (hot_retention_interval_ > 0 && ObDateUnitType::DATE_UNIT_MAX != hot_retention_unit_) {
+          J_COMMA();
+        }
+        databuff_print_kv(buf, buf_len, pos, "\"MIXED_RETENTION_INTERVAL\"", mixed_retention_interval_);
+        J_COMMA();
+        databuff_print_kv(buf, buf_len, pos, "\"MIXED_RETENTION_UNIT\"", ob_date_unit_type_str_upper(mixed_retention_unit_));
+      }
+      if (ObBoundaryColumnUnit::is_valid(column_unit_)) {
+        J_COMMA();
+        databuff_print_kv(buf, buf_len, pos, "\"COLUMN_UNIT\"", ObBoundaryColumnUnit::get_str(column_unit_));
+      }
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
@@ -454,6 +506,16 @@ int ObStorageCachePolicy::load_from_string(const ObString &str)
             LOG_WARN("invalid hot retention unit", K(ret), K(it->value_->get_string()));
           } else {
             set_hot_retention_unit(unit);
+          }
+        } else if (it->name_.case_compare("MIXED_RETENTION_INTERVAL") == 0) {
+          set_mixed_retention_interval(it->value_->get_number());
+        } else if (it->name_.case_compare("MIXED_RETENTION_UNIT") == 0) {
+          ObDateUnitType unit = get_date_unit_type(it->value_->get_string());
+          if (ObDateUnitType::DATE_UNIT_MAX == unit) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid mixed retention unit", K(ret), K(it->value_->get_string()));
+          } else {
+            set_mixed_retention_unit(unit);
           }
         }
       }
@@ -541,7 +603,7 @@ ObDateUnitType ObStorageCachePolicy::get_date_unit_type(const ObString &unit_str
   return unit;
 }
 
-int ObStorageCachePolicy::set_hot_retention_unit(const ObDateUnitType unit)
+int ObStorageCachePolicy::check_retention_unit(const ObDateUnitType unit)
 {
   int ret = OB_SUCCESS;
   if (ObDateUnitType::DATE_UNIT_MAX == unit) {
@@ -555,9 +617,36 @@ int ObStorageCachePolicy::set_hot_retention_unit(const ObDateUnitType unit)
                || ObDateUnitType::DATE_UNIT_MINUTE == unit
                || ObDateUnitType::DATE_UNIT_SECOND == unit)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("hot retention unit only support year/month/week/day/hour/minute/second", K(ret), K(unit));
+    LOG_WARN("retention unit only support year/month/week/day/hour/minute/second", K(ret), K(unit));
+  }
+  return ret;
+}
+int ObStorageCachePolicy::set_hot_retention_unit(const ObDateUnitType unit)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_retention_unit(unit))) {
+    LOG_WARN("hot retention unit check failed", K(ret), K(unit));
   } else {
     hot_retention_unit_ = unit;
+  }
+  return ret;
+}
+
+int ObStorageCachePolicy::set_mixed_retention_interval(const uint64_t interval)
+{
+  int ret = OB_SUCCESS;
+  // Allow interval == 0, which means no mixed retention period (hot -> cold directly)
+  mixed_retention_interval_ = interval;
+  return ret;
+}
+
+int ObStorageCachePolicy::set_mixed_retention_unit(const ObDateUnitType unit)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_retention_unit(unit))) {
+    LOG_WARN("mixed retention unit check failed", K(ret), K(unit));
+  } else {
+    mixed_retention_unit_ = unit;
   }
   return ret;
 }
@@ -574,39 +663,51 @@ int ObStorageCachePolicy::set_part_level(const int32_t level)
   return ret;
 }
 
+int ObStorageCachePolicy::set_table_id(const int64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_id));
+  } else {
+    table_id_ = table_id;
+  }
+  return ret;
+}
+
 // calculate hot retention time from hot retention unit to usecs
-int ObStorageCachePolicy::convert_hot_retention_unit(const ObDateUnitType unit, int64_t &hot_rentention_time) const
+int ObStorageCachePolicy::convert_retention_unit(const ObDateUnitType unit, int64_t &rentention_time) const
 {
   int ret = OB_SUCCESS;
   switch (unit) {
     case ObDateUnitType::DATE_UNIT_YEAR: {
       // A YEAR is considered to be 365 days
-      hot_rentention_time = 365 * USECS_PER_DAY;
+      rentention_time = 365 * USECS_PER_DAY;
       break;
     }
     case ObDateUnitType::DATE_UNIT_MONTH: {
       // A MONTH is considered to be 30 days
-      hot_rentention_time = 30 * USECS_PER_DAY;
+      rentention_time = 30 * USECS_PER_DAY;
       break;
     }
     case ObDateUnitType::DATE_UNIT_WEEK: {
-      hot_rentention_time = 7 * USECS_PER_DAY;
+      rentention_time = 7 * USECS_PER_DAY;
       break;
     }
     case ObDateUnitType::DATE_UNIT_DAY: {
-      hot_rentention_time = USECS_PER_DAY;
+      rentention_time = USECS_PER_DAY;
       break;
     }
     case ObDateUnitType::DATE_UNIT_HOUR: {
-      hot_rentention_time = 60 * USECS_PER_MIN;
+      rentention_time = 60 * USECS_PER_MIN;
       break;
     }
     case ObDateUnitType::DATE_UNIT_MINUTE: {
-      hot_rentention_time = USECS_PER_MIN;
+      rentention_time = USECS_PER_MIN;
       break;
     }
     case ObDateUnitType::DATE_UNIT_SECOND: {
-      hot_rentention_time = USECS_PER_SEC;
+      rentention_time = USECS_PER_SEC;
       break;
     }
     default: {
@@ -627,10 +728,31 @@ int ObStorageCachePolicy::cal_hot_rentention_time(int64_t &hot_rentention_time) 
   } else if (ObStorageCacheGranularity::ROW == granularity_) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("row granularity not supported yet", K(ret));
-  } else if (OB_FAIL(convert_hot_retention_unit(hot_retention_unit_, hot_rentention_time))) {
+  } else if (hot_retention_interval_ == 0 || ObDateUnitType::DATE_UNIT_MAX == hot_retention_unit_) {
+    hot_rentention_time = 0;
+  } else if (OB_FAIL(convert_retention_unit(hot_retention_unit_, hot_rentention_time))) {
     LOG_WARN("fail to convert column unit to seconds", K(ret), K(hot_retention_unit_));
   } else {
     hot_rentention_time *= hot_retention_interval_;
+  }
+  return ret;
+}
+
+int ObStorageCachePolicy::cal_mixed_rentention_time(int64_t &mixed_rentention_time) const
+{
+  int ret = OB_SUCCESS;
+  if (is_global_policy()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("global policy or none policy does not need to calculate mixed retention time", K(ret));
+  } else if (ObStorageCacheGranularity::ROW == granularity_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("row granularity not supported yet", K(ret));
+  } else if (mixed_retention_interval_ == UINT64_MAX || ObDateUnitType::DATE_UNIT_MAX == mixed_retention_unit_) {
+    mixed_rentention_time = 0;
+  } else if (OB_FAIL(convert_retention_unit(mixed_retention_unit_, mixed_rentention_time))) {
+    LOG_WARN("fail to convert column unit to seconds", K(ret), K(mixed_retention_unit_));
+  } else {
+    mixed_rentention_time *= mixed_retention_interval_;
   }
   return ret;
 }
@@ -645,7 +767,9 @@ bool ObStorageCachePolicy::operator ==(const ObStorageCachePolicy &policy) const
                && 0 == STRCMP(column_name_, policy.get_column_name())
                && column_unit_ == policy.get_column_unit()
                && hot_retention_interval_ == policy.get_hot_retention_interval()
-               && hot_retention_unit_ == policy.get_hot_retention_unit();
+               && hot_retention_unit_ == policy.get_hot_retention_unit()
+               && mixed_retention_interval_ == policy.get_mixed_retention_interval()
+               && mixed_retention_unit_ == policy.get_mixed_retention_unit();
   }
   return is_equal;
 }
@@ -668,7 +792,7 @@ int ObStorageCachePolicyStatus::safely_get_str(const PolicyStatus &type, const c
   return ret;
 }
 
-static const char *storage_cache_policy_status_type_strs[] = {"HOT", "AUTO", "NONE"};
+static const char *storage_cache_policy_status_type_strs[] = {"HOT", "AUTO", "NONE", "MACRO_HOT", "COLD"};
 
 const char *ObStorageCachePolicyStatus::get_str(const PolicyStatus &type)
 {

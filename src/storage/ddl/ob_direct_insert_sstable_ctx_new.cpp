@@ -2361,22 +2361,25 @@ int ObTabletDirectLoadMgr::prepare_index_builder_if_need(const ObTableSchema &ta
 {
   int ret = OB_SUCCESS;
   ObWholeDataStoreDesc index_block_desc;
+  compaction::ObExecMode exec_mode = compaction::EXEC_MODE_LOCAL;
+  if (GCTX.is_shared_storage_mode() && !is_incremental_direct_load(direct_load_type_)) {
+    exec_mode = compaction::EXEC_MODE_OUTPUT;
+  }
   if (sqc_build_ctx_.index_builder_ != nullptr) {
     LOG_INFO("index builder is already prepared");
   } else if (OB_FAIL(index_block_desc.init(true/*is ddl*/, table_schema, ls_id_, tablet_id_,
           is_full_direct_load(direct_load_type_) ? compaction::ObMergeType::MAJOR_MERGE : compaction::ObMergeType::MINOR_MERGE,
           is_full_direct_load(direct_load_type_) ? table_key_.get_snapshot_version() : 1L,
           tenant_data_version_, get_micro_index_clustered(), get_private_transfer_epoch(), 0/*concurrent_cnt*/, reorganization_scn_,
-          is_full_direct_load(direct_load_type_) ? SCN::invalid_scn() : table_key_.get_end_scn()))) {
+          is_full_direct_load(direct_load_type_) ? SCN::invalid_scn() : table_key_.get_end_scn(),
+          NULL/*cg_schema*/,
+          0/*cg_idx*/,
+          exec_mode))) {
     LOG_WARN("fail to init data desc", K(ret));
   } else if (FALSE_IT(index_block_desc.get_static_desc().schema_version_ = sqc_build_ctx_.build_param_.runtime_only_param_.schema_version_)) {
     /* set as a fixed schema version */
   } else {
-    if (GCTX.is_shared_storage_mode() && !is_incremental_direct_load(direct_load_type_)) {
-      index_block_desc.get_static_desc().exec_mode_ = compaction::EXEC_MODE_OUTPUT;
-    }
     void *builder_buf = nullptr;
-
     if (OB_ISNULL(builder_buf = sqc_build_ctx_.allocator_.alloc(sizeof(ObSSTableIndexBuilder)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret));
@@ -2391,14 +2394,14 @@ int ObTabletDirectLoadMgr::prepare_index_builder_if_need(const ObTableSchema &ta
             is_full_direct_load(direct_load_type_) ? compaction::ObMergeType::MAJOR_MERGE : compaction::ObMergeType::MINOR_MERGE,
             is_full_direct_load(direct_load_type_) ? table_key_.get_snapshot_version() : 1L,
             tenant_data_version_, get_micro_index_clustered(), get_private_transfer_epoch(), 0/*concurrent_cnt*/, reorganization_scn_,
-            is_full_direct_load(direct_load_type_) ? SCN::invalid_scn() : table_key_.get_end_scn()))) {
+            is_full_direct_load(direct_load_type_) ? SCN::invalid_scn() : table_key_.get_end_scn(),
+            NULL/*cg_schema*/,
+            0/*cg_idx*/,
+            exec_mode))) {
       LOG_WARN("fail to init data block desc", K(ret));
     } else {
       sqc_build_ctx_.data_block_desc_.get_static_desc().schema_version_ = sqc_build_ctx_.build_param_.runtime_only_param_.schema_version_;
       sqc_build_ctx_.data_block_desc_.get_desc().sstable_index_builder_ = sqc_build_ctx_.index_builder_; // for build the tail index block in macro block
-      if (GCTX.is_shared_storage_mode() && !is_incremental_direct_load(direct_load_type_)) {
-        sqc_build_ctx_.data_block_desc_.get_static_desc().exec_mode_ = compaction::EXEC_MODE_OUTPUT;
-      }
     }
 
 
@@ -3751,8 +3754,8 @@ int ObTabletIncDirectLoadMgr::prepare_index_builder_if_need(const ObTableSchema 
     LOG_WARN("fail to prepare builder", K(ret));
   } else {
     if (GCTX.is_shared_storage_mode()) {
-      ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
-      if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(sqc_build_ctx_.data_block_desc_.get_desc(), object_cleaner))) {
+      ObISSTableObjectCleaner *object_cleaner = nullptr;
+      if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(sqc_build_ctx_.data_block_desc_.get_desc(), object_cleaner))) {
         LOG_WARN("failed to get cleaner from data store desc", K(ret));
       } else if (OB_ISNULL(object_cleaner)) {
         ret = OB_ERR_UNEXPECTED;

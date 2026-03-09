@@ -54,7 +54,6 @@ struct TestRunCtx
 
 TestRunCtx run_ctx_;
 
-
 class ObStorageCachePolicyPrewarmerTest : public ObSimpleClusterTestBase
 {
 public:
@@ -66,7 +65,7 @@ public:
     if (!scp_tenant_created) {
       ObSimpleClusterTestBase::SetUp();
       oceanbase::palf::election::MAX_TST = 500 * 1000;  // 500ms, lease interval = 4 * 500ms = 2s
-      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8, "3G"));
+      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 4));
       OK(get_tenant_id(run_ctx_.tenant_id_));
       ASSERT_NE(0, run_ctx_.tenant_id_);
       OK(get_curr_simple_server().init_sql_proxy2());
@@ -127,6 +126,15 @@ static int sys_exe_sql(const char *sql_str)
   }
   return ret;
 }
+
+class ObStorageCachePolicyColdTest : public ObStorageCachePolicyPrewarmerTest
+{
+public:
+  ObStorageCachePolicyColdTest()
+      : ObStorageCachePolicyPrewarmerTest()
+  {}
+  virtual ~ObStorageCachePolicyColdTest() {}
+};
 
 void ObStorageCachePolicyPrewarmerTest::wait_major_finish()
 {
@@ -293,7 +301,7 @@ void ObStorageCachePolicyPrewarmerTest::add_task(SCPTabletTaskMap &tablet_tasks,
   task = OB_NEW(ObStorageCacheTabletTask, "ObStorageCache");
   ASSERT_NE(nullptr, task);
   ObStorageCacheTabletTaskHandle handle;
-  ASSERT_EQ(OB_SUCCESS, task->init(run_ctx_.tenant_id_, 2, tablet_id, PolicyStatus::HOT));
+  ASSERT_EQ(OB_SUCCESS, task->init_for_test(run_ctx_.tenant_id_, 2, tablet_id, PolicyStatus::HOT));
   task->status_ = status;
 
   task->set_end_time(end_time);
@@ -341,11 +349,13 @@ void ObStorageCachePolicyPrewarmerTest::exe_prepare_sql()
   OK(exe_sql("alter system set inc_sstable_upload_thread_score = 20;"));
   OK(exe_sql("alter system set _ss_garbage_collect_interval = '10s';"));
   OK(exe_sql("alter system set _ss_garbage_collect_file_expiration_time = '10s';"));
+  OK(exe_sql("alter system set _ss_advance_checkpoint_interval = '1m'"));
   OK(sys_exe_sql("alter system set ob_compaction_schedule_interval = '3s' tenant tt1;"));
   OK(sys_exe_sql("alter system set merger_check_interval = '10s' tenant tt1;"));
   OK(sys_exe_sql("alter system set minor_compact_trigger = 2 tenant tt1;"));
   OK(sys_exe_sql("alter system set _ss_major_compaction_prewarm_level = 0 tenant tt1;"));
   OK(sys_exe_sql("alter system set_tp tp_name = EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP, error_code = 4016, frequency = 1;"));
+  OK(sys_exe_sql("alter system set _ss_advance_checkpoint_interval = '1m';"));
   FLOG_INFO("set _ss_major_compaction_prewarm_level = 0");
 }
 

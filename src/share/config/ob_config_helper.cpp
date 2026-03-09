@@ -883,6 +883,8 @@ bool ObConfigStorageCachePolicyChecker::check(const ObConfigItem &t) const
     is_valid = true;
   } else if (0 == str.case_compare("hot")) {
     is_valid = true;
+  } else if (0 == str.case_compare("cold")) {
+    is_valid = true;
   }
   return is_valid;
 }

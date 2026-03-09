@@ -136,7 +136,15 @@ public:
   virtual int init(
       const ObTabletCreateSSTableParam &param,
       common::ObArenaAllocator *allocator);
-  static int copy_from_old_sstable(const ObSSTable &old_sstable, common::ObArenaAllocator &allocator, ObSSTable *&sstable);
+  struct IModifySSTableFunc {
+    virtual int operator()(ObSSTable &sstable, ObSSTableMeta &meta) = 0;
+  };
+  static int copy_from_old_sstable(
+      const ObSSTable &old_sstable,
+      common::ObArenaAllocator &allocator,
+      ObSSTable *&sstable,
+      const bool expand_macro_info = false,
+      IModifySSTableFunc *modify_func = nullptr);
   void reset();
 
   // Query interfaces
@@ -385,7 +393,9 @@ protected:
   int deserialize_fixed_struct(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_sstable_fix_serialize_size(const int64_t data_version) const;
   int64_t get_sstable_fix_serialize_payload_size(const int64_t data_version) const;
-  int inner_deep_copy_and_inc_macro_ref(common::ObIAllocator &allocator, ObSSTable *&sstable) const;
+  int inner_deep_copy_and_inc_macro_ref(common::ObIAllocator &allocator, ObSSTable *&sstable, const bool expand_macro_info) const;
+private:
+  int expand_macro_info_(common::ObIAllocator &allocator);
   int inner_inc_macro_ref(bool &inc_success) const;
   void inner_dec_macro_ref() const;
 protected:

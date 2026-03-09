@@ -156,9 +156,11 @@ inline bool is_valid_merge_level(const ObMergeLevel &merge_level)
 const char *merge_level_to_str(const ObMergeLevel &merge_level);
 
 enum ObExecMode : uint8_t {
-  EXEC_MODE_LOCAL = 0,
+  EXEC_MODE_LOCAL = 0, // local sstable with private macro block
   EXEC_MODE_OUTPUT,   // normal compaction, output macro to share_storage
   EXEC_MODE_VALIDATE,   // verify checksum and dump macro block
+  EXEC_MODE_LOCAL_WITH_SHARED_BLOCK, // local sstable with shared type macro block
+  EXEC_MODE_UPLOAD_MINOR, // upload local sstables to shared_storage
   EXEC_MODE_MAX
 };
 
@@ -168,21 +170,34 @@ inline bool is_valid_exec_mode(const ObExecMode &exec_mode)
 }
 inline bool is_local_exec_mode(const ObExecMode &exec_mode)
 {
-  return EXEC_MODE_LOCAL == exec_mode;
+  return EXEC_MODE_LOCAL == exec_mode ||
+         EXEC_MODE_LOCAL_WITH_SHARED_BLOCK == exec_mode;
 }
 inline bool is_output_exec_mode(const ObExecMode &exec_mode)
 {
-  return EXEC_MODE_OUTPUT == exec_mode;
+  return EXEC_MODE_OUTPUT == exec_mode ||
+         EXEC_MODE_UPLOAD_MINOR == exec_mode;
 }
-inline bool is_validate_exec_mode(const ObExecMode &exec_mode)
+inline bool is_local_with_private_block_mode(const ObExecMode &exec_mode)
 {
-  return EXEC_MODE_VALIDATE == exec_mode;
+  return EXEC_MODE_LOCAL == exec_mode;
+}
+inline bool is_local_with_shared_block_mode(const ObExecMode &exec_mode)
+{
+  return EXEC_MODE_LOCAL_WITH_SHARED_BLOCK == exec_mode;
+}
+inline bool is_upload_minor_exec_mode(const ObExecMode &exec_mode)
+{
+  return EXEC_MODE_UPLOAD_MINOR == exec_mode;
 }
 inline bool is_flush_macro_exec_mode(const ObExecMode &exec_mode)
 {
   return is_local_exec_mode(exec_mode) || is_output_exec_mode(exec_mode);
 }
-
+inline bool is_validate_exec_mode(const ObExecMode &exec_mode)
+{
+  return EXEC_MODE_VALIDATE == exec_mode;
+}
 const char *exec_mode_to_str(const ObExecMode &exec_mode);
 
 enum ObGetMacroSeqStage : uint8_t

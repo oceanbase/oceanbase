@@ -629,8 +629,12 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
     }
 
     if (OB_SUCC(ret)) {
-      if (GCTX.is_shared_storage_mode() && !is_local_exec_mode(static_param.get_exec_mode())) {
-        table_shared_flag_.set_shared_sstable();
+      if (GCTX.is_shared_storage_mode()) {
+        if (is_output_exec_mode(static_param.get_exec_mode())) {
+          table_shared_flag_.set_shared_sstable();
+        } else if (is_local_with_shared_block_mode(static_param.get_exec_mode())) {
+          table_shared_flag_.set_share_macro_blocks();
+        }
       }
     }
     if (FAILEDx(assign_uncommit_tx_info_from_ctx(ctx))) {
@@ -1393,6 +1397,17 @@ int ObTabletCreateSSTableParam::init_for_ha(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init for ha sstable get invalid argument", K(ret), K(sstable_param), KPC(this));
   }
+  return ret;
+}
+
+int ObTabletCreateSSTableParam::init_for_ss_mini_upload(const blocksstable::ObMigrationSSTableParam &migration_param,
+                                                         const blocksstable::ObSSTableMergeRes &res,
+                                                         const int64_t root_macro_seq)
+{
+  int ret = OB_SUCCESS;
+  ret = init_for_ha(migration_param, res);
+  root_macro_seq_ = root_macro_seq;
+  table_shared_flag_.set_shared_sstable();
   return ret;
 }
 

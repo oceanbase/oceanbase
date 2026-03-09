@@ -23,6 +23,7 @@ namespace storage
   class ObBloomFilterBuildTask;
 #ifdef OB_BUILD_SHARED_STORAGE
   class ObBaseFileManager;
+  class ObSSMacroCacheFlushTaskBase;
   class ObSSMacroCacheFlushTask;
   class ObSSPreReadTask;
   class ObSSMicroCacheHandler;
@@ -54,6 +55,7 @@ class ObStorageObjectHandle final
   friend class storage::ObBloomFilterBuildTask; // in construct_func
   friend class blocksstable::ObMacroBlockWriter; // int ObMacroBlockWriter::alloc_block_from_device
   #ifdef OB_BUILD_SHARED_STORAGE
+  friend class storage::ObSSMacroCacheFlushTaskBase;
   friend class storage::ObSSMacroCacheFlushTask;
   friend class storage::ObSSPreReadTask;
   friend class storage::ObSSMicroCacheHandler;

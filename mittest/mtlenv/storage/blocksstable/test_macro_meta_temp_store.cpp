@@ -50,6 +50,7 @@ public:
   ObSSTableIndexBuilder root_index_builder_;
   ObDatumRow datum_row_;
   ObDatumRow mv_row_;
+  ObSSTablePrivateObjectCleaner cleaner_;
 };
 
 void TestMacroMetaTempStore::SetUp()
@@ -74,8 +75,7 @@ void TestMacroMetaTempStore::prepare_macro_writer()
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   seq_param.start_ = 0;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
-  ObSSTablePrivateObjectCleaner cleaner;
-  ASSERT_EQ(OB_SUCCESS, macro_writer_.open(desc_.get_desc(), 0, seq_param, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, macro_writer_.open(desc_.get_desc(), 0, seq_param, pre_warm_param, cleaner_));
   ASSERT_EQ(OB_SUCCESS, datum_row_.init(allocator_, MAX_TEST_COLUMN_CNT));
   ASSERT_EQ(OB_SUCCESS, mv_row_.init(allocator_, MAX_TEST_COLUMN_CNT));
 }

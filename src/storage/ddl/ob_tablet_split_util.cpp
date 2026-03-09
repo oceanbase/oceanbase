@@ -27,6 +27,7 @@
 #include "close_modules/shared_storage/storage/incremental/ob_ss_minor_compaction.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/compaction_v2/ob_ss_compact_helper.h"
+#include "storage/incremental/ob_inc_ss_macro_seq_define.h"
 #endif
 
 using namespace oceanbase::common;
@@ -923,7 +924,7 @@ int ObTabletSplitUtil::build_mds_sstable(
       } else if (tablet_merge_ctx.static_param_.scn_range_.end_scn_.is_base_scn()) { // = 1
         LOG_INFO("no need to build lost mds sstable again", K(ls_id), K(source_tablet_id), K(dest_tablet_id));
     #ifdef OB_BUILD_SHARED_STORAGE
-      } else if (GCTX.is_shared_storage_mode() && OB_FAIL(mds_ss_split_helper.generate_minor_macro_seq_info(
+      } else if (GCTX.is_shared_storage_mode() && OB_FAIL(mds_ss_split_helper.generate_mds_minor_macro_seq_info(
           dest_tablet_index/*index in dest_tables_id*/,
           0/*the index in the generated minors*/,
           1/*the parallel cnt in one sstable*/,
@@ -1542,34 +1543,47 @@ int ObSSDataSplitHelper::get_op_id(
 int ObSSDataSplitHelper::prepare_minor_gc_info_list(
     const int64_t parallel_cnt_of_each_sstable,
     const int64_t sstables_cnt_of_each_tablet,
+    const bool is_for_minor,
+    const uint64_t data_version,
     ObSSTableGCInfo &minor_gc_info)
 {
   int ret = OB_SUCCESS;
-  const int64_t gc_reply_parallel_cnt = parallel_cnt_of_each_sstable/*parallel child task*/ + 1/*IndexTree*/;
-  minor_gc_info.data_seq_bits_ = SPLIT_MINOR_MACRO_DATA_SEQ_BITS;
-  minor_gc_info.seq_step_ = compaction::MACRO_STEP_SIZE;
-  minor_gc_info.parallel_cnt_ = gc_reply_parallel_cnt * sstables_cnt_of_each_tablet;
+  const int64_t total_parallel_cnt = (parallel_cnt_of_each_sstable + 1/*IndexTree*/) * sstables_cnt_of_each_tablet;
+  if (is_for_minor) {
+    int64_t base = data_version < DATA_VERSION_4_5_1_0 ? 0 : SSSplitMinorDataSeq::get_data_seq_base(SSMinorSourceType::MINOR_SPLIT);
+    int64_t seq_bits = SSSplitMinorDataSeq::SEQ_BITS;
+    int64_t seq_step = data_version < DATA_VERSION_4_5_1_0 ? SSSplitMinorDataSeq::V1_STEP_BITS : SSSplitMinorDataSeq::STEP_BITS;
+    bool is_seq_with_source_type = data_version < DATA_VERSION_4_5_1_0 ? false : true;
+    minor_gc_info = ObSSTableGCInfo(seq_bits, seq_step, total_parallel_cnt, base, is_seq_with_source_type);
+  } else {
+    minor_gc_info = ObSSTableGCInfo(SPLIT_MINOR_MACRO_DATA_SEQ_BITS, MACRO_STEP_SIZE, total_parallel_cnt);
+  }
   return ret;
 }
 
 int ObSSDataSplitHelper::start_add_op(
     const ObLSID &ls_id,
     const share::SCN &split_scn,
+    const share::SCN &dest_reorg_scn,
     const ObAtomicFileType &file_type,
     const int64_t parallel_cnt_of_each_sstable,
     const int64_t sstables_cnt_of_each_tablet,
-    const ObIArray<ObTabletID> &dest_tablets_id)
+    const ObIArray<ObTabletID> &dest_tablets_id,
+    const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   const int64_t dest_tablets_count = dest_tablets_id.count();
+  const bool is_for_minor = file_type == ObAtomicFileType::SPLIT_MINOR_SSTABLE;
   if (OB_UNLIKELY(!ls_id.is_valid()
       || !split_scn.is_valid()
+      || !dest_reorg_scn.is_valid()
       || parallel_cnt_of_each_sstable < 1
       || sstables_cnt_of_each_tablet < 1
-      || dest_tablets_id.empty())) {
+      || dest_tablets_id.empty())
+      || (is_for_minor && data_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(ls_id), K(split_scn), K(file_type),
-        K(parallel_cnt_of_each_sstable), K(sstables_cnt_of_each_tablet), K(dest_tablets_id));
+        K(parallel_cnt_of_each_sstable), K(sstables_cnt_of_each_tablet), K(dest_tablets_id), K(data_version));
   } else if (OB_FAIL(split_sstable_list_handle_.prepare_allocate(dest_tablets_count))) {
     LOG_WARN("init failed", K(ret));
   } else if (OB_FAIL(add_minor_op_handle_.prepare_allocate(dest_tablets_count))) {
@@ -1586,16 +1600,17 @@ int ObSSDataSplitHelper::start_add_op(
         LOG_WARN("alloc failed", K(ret));
       }
     }
+    const share::SCN reorg_scn = (is_for_minor && data_version >= DATA_VERSION_4_5_1_0) ? dest_reorg_scn : split_scn;
     for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablets_count; i++) {
       ObSSTableGCInfo ss_minor_gc_info;
       const ObTabletID &dest_tablet_id = dest_tablets_id.at(i);
       ObAtomicFileHandle<ObAtomicSSTableListFile> &file_handle = *split_sstable_list_handle_[i];
       ObAtomicOpHandle<ObAtomicSSTableListAddOp> &op_handle = *add_minor_op_handle_[i];
       if (OB_FAIL(MTL(ObAtomicFileMgr*)->get_tablet_file_handle(
-                  ls_id, dest_tablet_id, file_type, split_scn, file_handle))) {
+                  ls_id, dest_tablet_id, file_type, reorg_scn, file_handle))) {
         LOG_WARN("get tablet file handle failed", K(ret));
       } else if (OB_FAIL(prepare_minor_gc_info_list(parallel_cnt_of_each_sstable,
-        sstables_cnt_of_each_tablet, ss_minor_gc_info))) {
+        sstables_cnt_of_each_tablet, is_for_minor, data_version, ss_minor_gc_info))) {
         LOG_WARN("prepare minor task info list failed", K(ret));
       } else if (OB_FAIL(file_handle.get_atomic_file()->create_op_parallel(op_handle,
                                                                            true/*check sswriter*/,
@@ -1653,7 +1668,46 @@ int ObSSDataSplitHelper::get_major_macro_seq_by_stage(
   return ret;
 }
 
+
 int ObSSDataSplitHelper::generate_minor_macro_seq_info(
+  const int64_t dest_tablet_index,
+  const int64_t minor_index,
+  const int64_t parallel_cnt,
+  const int64_t parallel_idx,
+  const uint64_t data_version,
+  int64_t &macro_start_seq) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(dest_tablet_index < 0
+    || minor_index < 0
+    || parallel_cnt < 1
+    || parallel_idx < 0
+    || parallel_idx > parallel_cnt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(dest_tablet_index), K(minor_index),  K(parallel_cnt), K(parallel_idx));
+  } else {
+    macro_start_seq = 0;
+    int64_t op_id = 0;
+    const int64_t total_idx =
+        (parallel_cnt + 1/*tree placeholder*/) * minor_index  /*start_seq of the ith minor*/
+        + parallel_idx /*kth child task in the ith minor*/;
+    if (OB_FAIL(get_op_id(dest_tablet_index, op_id))) {
+      LOG_WARN("get op id failed", K(ret), K(dest_tablet_index));
+    } else if (data_version < DATA_VERSION_4_5_1_0) {
+      if (OB_FAIL(SSSplitMinorDataSeq::build_parallel_start_seq_v1(op_id, total_idx, macro_start_seq))) {
+        LOG_WARN("build parallel start seq failed", K(ret), K(op_id), K(total_idx));
+      }
+    } else {
+      if (OB_FAIL(SSSplitMinorDataSeq::build_parallel_start_seq(op_id, total_idx, macro_start_seq))) {
+        LOG_WARN("build parallel start seq failed", K(ret), K(op_id), K(total_idx));
+      }
+    }
+    LOG_INFO("succ build parallel start seq for minor", K(dest_tablet_index), K(minor_index), K(parallel_cnt), K(parallel_idx), K(op_id), K(macro_start_seq));
+  }
+  return ret;
+}
+
+int ObSSDataSplitHelper::generate_mds_minor_macro_seq_info(
     const int64_t dest_tablet_index,
     const int64_t minor_index,
     const int64_t parallel_cnt,
@@ -1690,14 +1744,17 @@ int ObSSDataSplitHelper::generate_minor_macro_seq_info(
 int ObSSDataSplitHelper::start_add_minor_op(
     const ObLSID &ls_id,
     const share::SCN &split_scn,
+    const share::SCN &dest_reorg_scn,
     const int64_t parallel_cnt_of_each_sstable,
     const ObTableStoreIterator &src_table_store_iterator,
-    const ObIArray<ObTabletID> &dest_tablets_id)
+    const ObIArray<ObTabletID> &dest_tablets_id,
+    const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> source_minors;
   if (OB_UNLIKELY(!ls_id.is_valid()
       || !split_scn.is_valid()
+      || !dest_reorg_scn.is_valid()
       || parallel_cnt_of_each_sstable < 1
       || !src_table_store_iterator.is_valid()
       || dest_tablets_id.empty())) {
@@ -1717,11 +1774,13 @@ int ObSSDataSplitHelper::start_add_minor_op(
     LOG_INFO("empty mini/minors in the source tablet", K(ret), K(dest_tablets_id));
   } else {
     if (OB_FAIL(start_add_op(ls_id,
-                              split_scn,
-                              ObAtomicFileType::SPLIT_MINOR_SSTABLE,
-                              parallel_cnt_of_each_sstable,
-                              source_minors.count()/*sstables_cnt_of_each_tablet*/,
-                              dest_tablets_id))) {
+                             split_scn,
+                             dest_reorg_scn,
+                             ObAtomicFileType::SPLIT_MINOR_SSTABLE,
+                             parallel_cnt_of_each_sstable,
+                             source_minors.count()/*sstables_cnt_of_each_tablet*/,
+                             dest_tablets_id,
+                             data_version))) {
       LOG_WARN("start add op failed", K(ret));
     }
   }
@@ -1746,10 +1805,12 @@ int ObSSDataSplitHelper::start_add_mds_op(
         K(sstables_cnt_of_each_tablet), K(dest_tablets_id));
   } else if (OB_FAIL(start_add_op(ls_id,
                                   split_scn,
+                                  split_scn,
                                   ObAtomicFileType::SPLIT_MDS_MINOR_SSTABLE,
                                   parallel_cnt_of_each_sstable,
                                   sstables_cnt_of_each_tablet,
-                                  dest_tablets_id))) {
+                                  dest_tablets_id,
+                                  0/*data_version*/))) {
     LOG_WARN("start add op failed", K(ret));
   }
   return ret;

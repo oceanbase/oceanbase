@@ -119,11 +119,14 @@ int ObTabletDirectLoadMgrV3::prepare_index_builder(const ObTabletDirectLoadInser
           is_full_direct_load(direct_load_type) ? compaction::ObMergeType::MAJOR_MERGE : compaction::ObMergeType::MINOR_MERGE,
           is_full_direct_load(direct_load_type) ? table_key.get_snapshot_version() : 1L,
           data_format_version, table_schema.get_micro_index_clustered(), get_private_transfer_epoch(), 0/*concurrent_cnt*/,
-          is_full_direct_load(direct_load_type) ? SCN::invalid_scn() : table_key.get_end_scn()))) {
+          SCN::min_scn(), /*reorganization_scn*/
+          is_full_direct_load(direct_load_type) ? SCN::invalid_scn() : table_key.get_end_scn(),
+          NULL/*cg_schema*/,
+          0/*cg_idx*/,
+          get_exec_mode()))) {
     LOG_WARN("fail to init data desc", K(ret));
   } else {
     void *builder_buf = nullptr;
-    update_store_desc_exec_mode(index_block_desc.get_static_desc());
     if (OB_ISNULL(builder_buf = allocator.alloc(sizeof(ObSSTableIndexBuilder)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret));
@@ -138,11 +141,14 @@ int ObTabletDirectLoadMgrV3::prepare_index_builder(const ObTabletDirectLoadInser
             compaction::ObMergeType::MAJOR_MERGE, // TODO @zhuora.zzr to set virtual
             is_full_direct_load(direct_load_type) ? table_key.get_snapshot_version() : 1L,
             data_format_version, table_schema.get_micro_index_clustered(), get_private_transfer_epoch(), 0/*concurrent_cnt*/,
-            is_full_direct_load(direct_load_type) ? SCN::invalid_scn() : table_key.get_end_scn()))) {
+            SCN::min_scn(), /*reorganization_scn*/
+            is_full_direct_load(direct_load_type) ? SCN::invalid_scn() : table_key.get_end_scn(),
+            NULL/*cg_schema*/,
+            0/*cg_idx*/,
+            get_exec_mode()))) {
       LOG_WARN("fail to init data block desc", K(ret));
     } else {
       data_block_desc.get_desc().sstable_index_builder_ = index_builder; // for build the tail index block in macro block
-      update_store_desc_exec_mode(data_block_desc.get_static_desc());
     }
 
     if (OB_FAIL(ret)) {

@@ -297,6 +297,7 @@ public:
   {
     return macro_meta_info_;
   }
+  int expand_block_ids(common::ObIAllocator &allocator);
   DECLARE_TO_STRING;
 private:
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;

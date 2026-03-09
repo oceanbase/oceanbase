@@ -115,6 +115,7 @@ DEF_SIMPLE_CMD_RESOLVER(ObFlushKVCacheResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObFlushSSMicroCacheResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObFlushSSLocalCacheResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObPrewarmSSLocalCacheResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObFlushIlogCacheResolver);
 

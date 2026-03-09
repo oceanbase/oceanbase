@@ -91,13 +91,13 @@ int ObAllVirtualStorageCacheTask::process_curr_tenant(common::ObNewRow *&row)
       tmp_str_allocator_.reset();
       if (MTL_ID() != tenant_id_) {
         tenant_id_ = MTL_ID();
-        if (is_user_tenant(tenant_id_)) {
+        if (is_valid_tenant_id(tenant_id_)) {
           const SCPTabletTaskMap &tablet_tasks_map =
               scp_service->get_tablet_tasks();
           if (OB_FAIL(copy_tablet_tasks_map_(tablet_tasks_map))) {
             SERVER_LOG(WARN, "fail to copy tablet tasks", KR(ret), KPC(scp_service));
           }
-        } else {  // only process user tenant
+        } else {  // only process valid tenant
           ret = OB_ITER_END;
         }
       }
@@ -236,8 +236,13 @@ public:
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "ObStorageCacheTabletTaskHandle is invalid",
           KR(ret), K(entry.first), KPC(entry.second.get_ptr()));
-    } else if (tmp_task_handle()->is_hot() && OB_FAIL(tablet_tasks_.push_back(tmp_task_handle))) {
-      SERVER_LOG(WARN, "fail to copy store handle", KR(ret), K(tablet_tasks_.count()));
+    } else if (tmp_task_handle()->is_hot() || tmp_task_handle()->is_macro_hot() ||
+               tmp_task_handle()->is_auto()) {
+      if (OB_FAIL(tablet_tasks_.push_back(tmp_task_handle))) {
+        SERVER_LOG(WARN, "fail to copy store handle", KR(ret), K(tablet_tasks_.count()));
+      }
+    } else {
+      // do nothing
     }
     return ret;
   }

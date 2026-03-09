@@ -121,7 +121,7 @@ public:
   bool get_micro_index_clustered() override { return micro_index_clustered_; }
   ObDirectLoadMgrRole get_role() { return role_; }
   const ObStorageSchema *get_storage_schema() const { return storage_schema_; }
-  virtual void update_store_desc_exec_mode(ObStaticDataStoreDesc &ob_data_store_desc) = 0;
+  virtual compaction::ObExecMode get_exec_mode() const = 0;
   static const int64_t TRY_LOCK_TIMEOUT = 10 * 1000000; // 10s
 protected:
   ObArenaAllocator arena_allocator_;
@@ -156,10 +156,7 @@ protected:
   int inner_close();
   int schedule_merge_tablet_task(const ObTabletDDLCompleteArg &arg, const bool wait_major = false);
 
-  void update_store_desc_exec_mode(ObStaticDataStoreDesc &ob_data_store_desc) override
-  {
-    UNUSED(ob_data_store_desc);
-  }
+  compaction::ObExecMode get_exec_mode() const override { return compaction::EXEC_MODE_LOCAL; }
 };
 
 class ObSSTabletDirectLoadMgr: public ObTabletDirectLoadMgrV3
@@ -190,7 +187,7 @@ protected:
   void update_max_data_macro_seq(const int64_t cur_data_seq);
   void update_max_meta_macro_seq(const int64_t cur_meta_seq);
   int calc_root_macro_seq(int64_t &root_seq);
-  void update_store_desc_exec_mode(ObStaticDataStoreDesc &ob_data_store_desc) { ob_data_store_desc.exec_mode_ = compaction::EXEC_MODE_OUTPUT; }
+  compaction::ObExecMode get_exec_mode() const override { return compaction::EXEC_MODE_OUTPUT; }
   int32_t get_private_transfer_epoch() override { return private_transfer_epoch_; }
 private:
   int64_t last_data_seq_;

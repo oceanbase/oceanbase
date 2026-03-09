@@ -100,6 +100,66 @@ def validate_config_functions():
 
     return all_valid
 
+def validate_write_strategies():
+    """Validate all write_strategy configurations"""
+    global all_storage_object_types
+    print("Validating write strategies...")
+    all_valid = True
+
+    for cfg in all_storage_object_types:
+        obj_type = cfg.get('obj_type')
+        if cfg.get('write_strategy'):
+            try:
+                strategy_mask = convert_write_strategy_to_mask(cfg['write_strategy'])
+                print(f"  ✅ {obj_type}: write_strategy = {cfg['write_strategy']} => 0x{strategy_mask:02x}")
+            except ValueError as e:
+                print(f"  ❌ {obj_type}: {e}")
+                all_valid = False
+
+    if all_valid:
+        print("✅ All write strategies are valid!")
+    else:
+        print("❌ Write strategy validation failed!")
+        sys.exit(1)
+
+    return all_valid
+
+def convert_write_strategy_to_mask(write_strategy):
+    """
+    Convert write strategy list to uint8_t bitmask
+
+    Strategy to bit mapping:
+    - WRITE_THROUGH: bit 0 (0x01)
+    - WRITE_BACK: bit 1 (0x02)
+    - WRITE_THROUGH_AND_TRY_WRITE_LCACHE: bit 2 (0x04)
+
+    Examples:
+    - ["WRITE_THROUGH"] => 0x01
+    - ["WRITE_THROUGH", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"] => 0x05
+    - ["WRITE_THROUGH", "WRITE_BACK", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"] => 0x07
+
+    Raises:
+        ValueError: if strategy is not one of WRITE_THROUGH, WRITE_BACK, WRITE_THROUGH_AND_TRY_WRITE_LCACHE
+    """
+    VALID_STRATEGIES = {"WRITE_THROUGH", "WRITE_BACK", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"}
+
+    mask = 0
+    if not write_strategy:
+        return mask
+
+    # Note: bit mask here is corresponding to ObStorageObjectWriteStrategy enum class
+    for strategy in write_strategy:
+        if strategy == "WRITE_THROUGH":
+            mask |= 0x01  # bit 0
+        elif strategy == "WRITE_BACK":
+            mask |= 0x02  # bit 1
+        elif strategy == "WRITE_THROUGH_AND_TRY_WRITE_LCACHE":
+            mask |= 0x04  # bit 2
+        else:
+            raise ValueError(f"Invalid write strategy: '{strategy}'. Must be one of: {VALID_STRATEGIES}")
+
+    return mask
+
 def extract_function_body(code_str):
     """Extract function body from complete function definition"""
     if not code_str or code_str == 'OB_NOT_SUPPORTED':
@@ -183,6 +243,8 @@ public:
   int get_open_flag_for_read() const;
   int aio_read(const ObStorageObjectReadInfo &read_info, ObStorageObjectHandle &object_handle) const;
   int aio_write(const ObStorageObjectWriteInfo &write_info, ObStorageObjectHandle &object_handle) const;
+  bool has_write_back_strategy() const;
+  bool has_write_through_and_try_write_lcache_strategy() const;
   // the ObjectType is macro data type, true or false
   virtual bool is_macro_data() const { return false; }
   // the ObjectType is tenant data type, true or false
@@ -211,8 +273,8 @@ public:
   virtual bool is_path_include_inner_tablet() const { return false; }
   //the ObjectType only store in remote object storage, true or false
   virtual bool is_direct_read() const { return false; }
-  //whether this type of object write through object storage, true or false
-  virtual bool is_direct_write() const { return false; }
+  // write strategy of this type object, including WRITE_THROUGH, WRITE_BACK and WRITE_THROUGH_AND_TRY_WRITE_LCACHE
+  virtual uint8_t write_strategy() const { return 0; }
   //whether this type of object exists overwrite with 'different content', true or false
   virtual bool is_overwrite() const { return false; }
   // whether this type of object can read out of bounds
@@ -302,45 +364,19 @@ def end_generate_cpp():
     global cpp_f
     end = '''
 };
+
+#ifdef OB_BUILD_SHARED_STORAGE
+
 static inline const char *get_ls_inner_tablet_name_(const int64_t tablet_id)
 {
-  ObTabletID id(tablet_id);
-  if (id.is_ls_tx_ctx_tablet()) {
-    return "TX_CTX";
-  } else if (id.is_ls_tx_data_tablet()) {
-    return "TX_DATA";
-  } else if (id.is_ls_lock_tablet()) {
-    return "TX_LOCK";
-  } else if (id.is_ls_reorg_info_tablet()) {
-    return "REORG_INFO";
-  } else {
-    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "unexpected tablet_id", K(tablet_id));
-    return "UNEXPECTED";
-  }
+  return ObFileHelper::get_ls_inner_tablet_name(tablet_id);
 }
 
 static int get_ls_inner_tablet_id_(const char *str, int64_t &tablet_id)
 {
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_ISNULL(str))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid str", KR(ret));
-  } else if (0 == STRNCMP("TX_CTX", str, STRLEN("TX_CTX"))) {
-    tablet_id = ObTabletID::LS_TX_CTX_TABLET_ID;
-  } else if (0 == STRNCMP("TX_DATA", str, STRLEN("TX_DATA"))) {
-    tablet_id = ObTabletID::LS_TX_DATA_TABLET_ID;
-  } else if (0 == STRNCMP("TX_LOCK", str, STRLEN("TX_LOCK"))) {
-    tablet_id = ObTabletID::LS_LOCK_TABLET_ID;
-  } else if (0 == STRNCMP("REORG_INFO", str, STRLEN("REORG_INFO"))) {
-    tablet_id = ObTabletID::LS_REORG_INFO_TABLET_ID;
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected str", K(str));
-  }
-  return ret;
+  return ObFileHelper::get_ls_inner_tablet_id(str, tablet_id);
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
 static int prewarm_file_to_remote_path_format(char *path, const int64_t length, int64_t &pos,
   const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id,
   const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id)
@@ -472,19 +508,24 @@ int ObStorageObjectTypeBase::get_macro_cache_type(const uint64_t effective_table
       // ObIndexBlockScanEstimator and ObSSTableSecMetaIterator do not fill effective_tablet_id.
       // preread io triggered by these routes has no effective_tablet_id.
       // treat these macros as ObSSMacroCacheType::MACRO_BLOCK.
-    } else if (use_effective_tablet_id && is_user_tenant(MTL_ID())) {
-      // 1. is_user_tenant, only user tenant has ObStorageCachePolicyService.
+    } else if (use_effective_tablet_id && is_valid_tenant_id(MTL_ID())) {
       // both oracle mode and mysql mode user tenants have ObStorageCachePolicyService,
       // although oracle mode user tenant's ObStorageCachePolicyService is empty.
-      bool is_hot = false;
+      PolicyStatus policy_status = PolicyStatus::MAX_STATUS;
       ObStorageCachePolicyService *storage_cache_policy_service = nullptr;
       if (OB_ISNULL(storage_cache_policy_service = MTL(ObStorageCachePolicyService *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("storage cache policy service is null", KR(ret));
-      } else if (OB_FAIL(storage_cache_policy_service->is_hot_tablet(effective_tablet_id, is_hot))) {
-        LOG_WARN("fail to check is hot tablet", KR(ret), K(effective_tablet_id));
-      } else if (is_hot) {
+      } else if (OB_FAIL(storage_cache_policy_service->get_tablet_policy_status(effective_tablet_id, policy_status))) {
+        LOG_WARN("fail to get tablet policy status", KR(ret), K(effective_tablet_id));
+      } else if (PolicyStatus::HOT == policy_status) { // 1. partition-level storage_cache_policy
         macro_cache_type = ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK;
+      } else if ((PolicyStatus::MACRO_HOT == policy_status)) { // 2. block-level storage_cache_policy
+        if (is_major()) { // 2.1 consider major macro as non-hot data
+          macro_cache_type = ObSSMacroCacheType::MACRO_BLOCK;
+        } else { // 2.2 consider incremental macro as hot data
+          macro_cache_type = ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK;
+        }
       }
     }
   }
@@ -669,6 +710,16 @@ int ObStorageObjectTypeBase::aio_write(
 }
 #endif
 
+bool ObStorageObjectTypeBase::has_write_back_strategy() const
+{
+  return (write_strategy() & (1 << (uint8_t)ObStorageObjectWriteStrategy::WRITE_BACK));
+}
+
+bool ObStorageObjectTypeBase::has_write_through_and_try_write_lcache_strategy() const
+{
+  return (write_strategy() & (1 << (uint8_t)ObStorageObjectWriteStrategy::WRITE_THROUGH_AND_TRY_WRITE_LCACHE));
+}
+
 void ObStorageObjectTypeBase::set_ss_object_first_id_(
   const uint64_t incarnation_id, const uint64_t column_group_id, MacroBlockId &object_id) const
 {
@@ -786,8 +837,10 @@ public:
 
         if cfg.get('read_odirect'):
             h_f.write('  virtual bool is_direct_read() const { return true; }\n')
-        if cfg.get('write_odirect'):
-            h_f.write('  virtual bool is_direct_write() const { return true; }\n')
+        if cfg.get('write_strategy'):
+            # convert strategy list to bitmask
+            strategy_mask = convert_write_strategy_to_mask(cfg['write_strategy'])
+            h_f.write(f'  virtual uint8_t write_strategy() const {{ return {strategy_mask}; }}\n')
         if cfg.get('is_pin_local'):
             h_f.write('  virtual bool is_pin_local() const { return true; }\n')
 
@@ -1013,6 +1066,9 @@ def main():
 
     # Validate function signatures before generating code
     validate_config_functions()
+
+    # Validate write strategy before generating code
+    validate_write_strategies()
 
     # generate code using all_storage_object_types
     print("Generating ob_storage_object_type.h...")

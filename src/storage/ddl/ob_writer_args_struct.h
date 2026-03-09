@@ -76,7 +76,7 @@ public:
   blocksstable::ObSSTableIndexBuilder index_builder_;
   blocksstable::ObMacroSeqParam macro_seq_param_;
   share::ObPreWarmerParam pre_warm_param_;
-  blocksstable::ObSSTablePrivateObjectCleaner *object_cleaner_;
+  blocksstable::ObISSTableObjectCleaner *object_cleaner_;
   blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback_;
 };
 

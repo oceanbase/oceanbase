@@ -38,7 +38,16 @@ public:
 void TestDiskSpaceManager::SetUpTestCase()
 {
   GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
-  EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+
+  omt::ObTenant *tenant = nullptr;
+  ASSERT_NE(nullptr, GCTX.omt_);
+  ASSERT_EQ(OB_SUCCESS, GCTX.omt_->get_tenant(MTL_ID(), tenant));
+  ASSERT_NE(nullptr, tenant);
+  share::ObUnitInfoGetter::ObTenantConfig new_unit;
+  ASSERT_EQ(OB_SUCCESS, new_unit.assign(tenant->get_unit()));
+  new_unit.config_.resource_.data_disk_size_ = 20L * 1024L * 1024L * 1024L;
+  ASSERT_EQ(OB_SUCCESS, GCTX.omt_->update_tenant_unit(new_unit));
 }
 
 void TestDiskSpaceManager::TearDownTestCase()
@@ -56,7 +65,7 @@ TEST_F(TestDiskSpaceManager, macro_block_test)
   ObTenantDiskSpaceManager *tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   int64_t total_disk_size = 20L * 1024L * 1024L * 1024L - ObDiskSpaceManager::DEFAULT_SERVER_TENANT_ID_DISK_SIZE; // 20GB - reserved_size
   bool succ_resize = false;
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(total_disk_size, succ_resize));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size_(total_disk_size, succ_resize));
   ASSERT_EQ(total_disk_size, tenant_disk_space_mgr->get_total_disk_size());
 
   // 1.alloc disk_size
@@ -87,11 +96,19 @@ TEST_F(TestDiskSpaceManager, macro_block_test)
   // 3.resize tenant_disk_size
   disk_size = 20L * 1024L * 1024L * 1024L - ObDiskSpaceManager::DEFAULT_SERVER_TENANT_ID_DISK_SIZE; // 20GB
   succ_resize = false;
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(disk_size, succ_resize));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size_(disk_size, succ_resize));
   ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_total_disk_size());
-  disk_size = 1L * 1024L * 1024L * 1024L; // 1GB
+  int64_t config_data_disk_size = 0;
+  int64_t actual_data_disk_size = 0;
+  ASSERT_EQ(OB_SUCCESS,
+      tenant_disk_space_mgr->get_tenant_unit_data_disk_size(MTL_ID(), config_data_disk_size, actual_data_disk_size));
+  ASSERT_TRUE(config_data_disk_size > actual_data_disk_size);
+
+  const int64_t new_disk_size = 1L * 1024L * 1024L * 1024L; // 1GB
   succ_resize = false;
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_disk_space_mgr->resize_total_disk_size(disk_size, succ_resize));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size_(new_disk_size, succ_resize));
+  // config data size > actual data size, should not shrink data disk size
+  ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_total_disk_size());
 }
 
 TEST_F(TestDiskSpaceManager, test_tmp_file_space_manager)
@@ -118,13 +135,8 @@ TEST_F(TestDiskSpaceManager, test_tmp_file_space_manager)
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
   ASSERT_EQ(0, cache_stat.used_);
 
-  // 3.alloc tmp_file_size fail
-  disk_size = 20L * 1024L * 1024L * 1024L; // 20GB
-  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, tenant_disk_space_mgr->alloc_file_size(disk_size, ObSSMacroCacheType::TMP_FILE,
-                                                                               ObDiskSpaceType::FILE));
-
-  // 4.alloc max_available_disk_size
-  const int64_t macro_cache_free_size = tenant_disk_space_mgr->get_macro_cache_free_size();
+  // 3.alloc max_available_disk_size
+  const int64_t macro_cache_free_size = tenant_disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::TMP_FILE,
                                                                ObDiskSpaceType::FILE));
   disk_size = 1L * 1024L * 1024L; // 1MB
@@ -136,10 +148,10 @@ TEST_F(TestDiskSpaceManager, test_tmp_file_space_manager)
   // After freeing: used_ becomes 0 (scatter dirs were already cleared in step 2's over-release protection)
   ASSERT_EQ(0, cache_stat.used_);
 
-  // 5.resize tenant_disk_size
+  // 4.resize tenant_disk_size
   disk_size = 20L * 1024L * 1024L * 1024L - ObDiskSpaceManager::DEFAULT_SERVER_TENANT_ID_DISK_SIZE; // 20GB
   bool succ_resize = false;
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(disk_size, succ_resize));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size_(disk_size, succ_resize));
   ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_total_disk_size());
 }
 
@@ -166,7 +178,7 @@ TEST_F(TestDiskSpaceManager, test_meta_file_space_manager)
   ASSERT_EQ(ori_used_size, cache_stat.used_);
 
   // 3.alloc max_available_disk_size
-  const int64_t macro_cache_free_size = tenant_disk_space_mgr->get_macro_cache_free_size();
+  const int64_t macro_cache_free_size = tenant_disk_space_mgr->get_allocated_shared_macro_cache_free_size_nolock_();
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::META_FILE,
                                                                ObDiskSpaceType::FILE));
   disk_size = 1L * 1024L * 1024L; // 1MB

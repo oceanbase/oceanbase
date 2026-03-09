@@ -39,6 +39,20 @@ void TestSSMicroCacheStat::SetUpTestCase()
 {
   GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  ASSERT_EQ(OB_SUCCESS, micro_cache->resize_micro_cache_file_size(2L * 1024L * 1024L * 1024L));
+
+  ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_space_mgr);
+  tnt_disk_space_mgr->persist_disk_space_task_.enable_adjust_size_ = false;
+  OB_SERVER_DISK_SPACE_MGR.hidden_sys_data_disk_config_size_ = 1024;
+  bool succ_resize = false;
+  int64_t config_data_disk_size = 0;
+  int64_t actual_data_disk_size = 0;
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_tenant_unit_data_disk_size(
+      MTL_ID(), config_data_disk_size, actual_data_disk_size));
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->resize_total_disk_size_(config_data_disk_size, succ_resize));
 }
 
 void TestSSMicroCacheStat::TearDownTestCase()

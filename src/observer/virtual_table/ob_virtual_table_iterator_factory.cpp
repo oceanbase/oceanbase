@@ -224,7 +224,9 @@
 #include "observer/virtual_table/ob_all_virtual_tenant_scheduler_running_job.h"
 #include "observer/virtual_table/ob_all_virtual_compatibility_control.h"
 #include "observer/virtual_table/ob_all_virtual_sql_stat.h"
+#include "observer/virtual_table/ob_all_virtual_ss_local_cache_diagnose_info.h"
 #include "observer/virtual_table/ob_all_virtual_ss_local_cache_info.h"
+#include "observer/virtual_table/ob_all_virtual_ss_macro_cache_info.h"
 #include "observer/virtual_table/ob_all_virtual_vector_index_info.h"
 #include "observer/virtual_table/ob_all_virtual_vector_segment_info.h"
 #include "observer/virtual_table/ob_all_virtual_tmp_file.h"
@@ -3027,6 +3029,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_SS_LOCAL_CACHE_DIAGNOSE_INFO_TID: {
+            ObAllVirtualSSLocalCacheDiagnoseInfo *local_cache_diag_info = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSSLocalCacheDiagnoseInfo, local_cache_diag_info))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualSSLocalCacheDiagnoseInfo", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(local_cache_diag_info);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_FUNCTION_IO_STAT_TID: {
             ObAllVirtualFunctionIOStat *all_virtual_func_io_stat = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualFunctionIOStat, all_virtual_func_io_stat))) {
@@ -3209,6 +3220,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "failed to init ObAllVirtualTabletLocalCache", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(tablet_local_cache);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SS_MACRO_CACHE_INFO_TID: {
+            ObAllVirtualSSMacroCacheInfo *ss_macro_cache_info = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSSMacroCacheInfo, ss_macro_cache_info))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualSSMacroCacheInfo", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(ss_macro_cache_info);
             }
             break;
           }

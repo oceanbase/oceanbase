@@ -74,6 +74,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObCheckTabletExistP, gctx_);
   RPC_PROCESSOR(ObRpcSendHeartbeatP, gctx_);
   RPC_PROCESSOR(ObRpcNotifySwitchLeaderP, gctx_);
+  RPC_PROCESSOR(ObRpcGetUnitInfoP, gctx_);
 
   // interrupt
   RPC_PROCESSOR(obrpc::ObInterruptProcessor);

@@ -678,7 +678,7 @@ public:
   bool is_inited() const { return is_inited_; }
   bool is_closed() const { return is_closed_; }
   bool enable_dump_disk() const { return enable_dump_disk_; }
-  OB_INLINE ObSSTablePrivateObjectCleaner & get_private_object_cleaner() { return object_cleaner_; }
+  OB_INLINE ObISSTableObjectCleaner *get_object_cleaner() { return object_cleaner_; }
   bool micro_index_clustered() const;
   int32_t get_private_transfer_epoch() const;
   OB_INLINE ObSpaceOptimizationMode get_optimization_mode() const { return optimization_mode_; }
@@ -779,7 +779,7 @@ private:
   ObIODevice *device_handle_;
   IndexTreeRootCtxList roots_;
   ObSSTableMergeRes res_;
-  ObSSTablePrivateObjectCleaner object_cleaner_;
+  ObISSTableObjectCleaner *object_cleaner_;
   ObSpaceOptimizationMode optimization_mode_;
   bool enable_dump_disk_;
   bool is_closed_;

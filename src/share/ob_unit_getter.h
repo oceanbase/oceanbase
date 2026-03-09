@@ -101,9 +101,9 @@ public:
           ObShareUtil::is_valid_replica_type_for_unit(replica_type_);
     }
 
-    int64_t get_effective_actual_data_disk_size() const
+    int64_t get_actual_data_disk_size() const
     {
-      return 0 == config_.data_disk_size() ? actual_data_disk_size_ : config_.data_disk_size();
+      return actual_data_disk_size_;
     }
 
     int64_t gen_init_actual_data_disk_size(const share::ObUnitConfig &config) const;

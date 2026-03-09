@@ -1289,6 +1289,8 @@ public:
   static int all_virtual_tablet_window_loop_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_routine_load_job_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ss_macro_cache_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ss_local_cache_diagnose_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ddl_dag_monitor_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_vector_segment_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2236,6 +2238,8 @@ public:
   static int v_ob_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_routine_load_jobs_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_routine_load_jobs_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_ss_local_cache_diagnose_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_ss_local_cache_diagnose_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_hnsw_index_segment_info_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_hnsw_index_segment_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
@@ -4700,6 +4704,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_tablet_window_loop_info_schema,
   ObInnerTableSchema::all_virtual_tablet_replica_info_schema,
   ObInnerTableSchema::all_virtual_routine_load_job_schema,
+  ObInnerTableSchema::all_virtual_ss_macro_cache_info_schema,
+  ObInnerTableSchema::all_virtual_ss_local_cache_diagnose_info_schema,
   ObInnerTableSchema::all_virtual_ddl_dag_monitor_schema,
   ObInnerTableSchema::all_virtual_vector_segment_info_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
@@ -5762,6 +5768,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_tablet_replica_info_schema,
   ObInnerTableSchema::dba_ob_routine_load_jobs_schema,
   ObInnerTableSchema::cdb_ob_routine_load_jobs_schema,
+  ObInnerTableSchema::gv_ob_ss_local_cache_diagnose_schema,
+  ObInnerTableSchema::v_ob_ss_local_cache_diagnose_schema,
   ObInnerTableSchema::gv_ob_hnsw_index_segment_info_schema,
   ObInnerTableSchema::v_ob_hnsw_index_segment_info_schema,
   ObInnerTableSchema::dba_synonyms_schema,
@@ -7101,6 +7109,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TID,
   OB_ALL_VIRTUAL_LOB_CHECK_EXCEPTION_RESULT_TID,
   OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_TID,
+  OB_ALL_VIRTUAL_SS_MACRO_CACHE_INFO_TID,
+  OB_ALL_VIRTUAL_SS_LOCAL_CACHE_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_DDL_DAG_MONITOR_TID,
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
@@ -7893,6 +7903,8 @@ const uint64_t tenant_space_tables [] = {
   OB_CDB_OB_TTL_TASKS_TID,
   OB_CDB_OB_TTL_TASK_HISTORY_TID,
   OB_DBA_OB_ROUTINE_LOAD_JOBS_TID,
+  OB_GV_OB_SS_LOCAL_CACHE_DIAGNOSE_TID,
+  OB_V_OB_SS_LOCAL_CACHE_DIAGNOSE_TID,
   OB_GV_OB_HNSW_INDEX_SEGMENT_INFO_TID,
   OB_V_OB_HNSW_INDEX_SEGMENT_INFO_TID,
   OB_DBA_SYNONYMS_TID,
@@ -10388,6 +10400,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TNAME,
   OB_ALL_VIRTUAL_LOB_CHECK_EXCEPTION_RESULT_TNAME,
   OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_TNAME,
+  OB_ALL_VIRTUAL_SS_MACRO_CACHE_INFO_TNAME,
+  OB_ALL_VIRTUAL_SS_LOCAL_CACHE_DIAGNOSE_INFO_TNAME,
   OB_ALL_VIRTUAL_DDL_DAG_MONITOR_TNAME,
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
@@ -11180,6 +11194,8 @@ const char* const tenant_space_table_names [] = {
   OB_CDB_OB_TTL_TASKS_TNAME,
   OB_CDB_OB_TTL_TASK_HISTORY_TNAME,
   OB_DBA_OB_ROUTINE_LOAD_JOBS_TNAME,
+  OB_GV_OB_SS_LOCAL_CACHE_DIAGNOSE_TNAME,
+  OB_V_OB_SS_LOCAL_CACHE_DIAGNOSE_TNAME,
   OB_GV_OB_HNSW_INDEX_SEGMENT_INFO_TNAME,
   OB_V_OB_HNSW_INDEX_SEGMENT_INFO_TNAME,
   OB_DBA_SYNONYMS_TNAME,
@@ -12808,6 +12824,8 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_TID,
   OB_ALL_VIRTUAL_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TID,
   OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_TID,
+  OB_ALL_VIRTUAL_SS_MACRO_CACHE_INFO_TID,
+  OB_ALL_VIRTUAL_SS_LOCAL_CACHE_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_DDL_DAG_MONITOR_TID,
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,

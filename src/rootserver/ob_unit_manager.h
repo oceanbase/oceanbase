@@ -739,6 +739,13 @@ private:
   int check_shrink_memory(const share::ObResourcePool &pool,
                           const int64_t old_memory,
                           const int64_t new_memory) const;
+  int check_shrink_data_disk_(const share::ObResourcePool &pool,
+                              const int64_t old_data_disk,
+                              const int64_t new_data_disk) const;
+  int check_data_disk_size_limit_(const int64_t new_data_disk,
+                                  const ObArray<int> &return_code_array,
+                                  const ObArray<common::ObAddr> &unit_servers,
+                                  const rootserver::ObGetUnitInfoProxy &get_unit_info_proxy) const;
   int change_pool_config(share::ObResourcePool *pool,
                          share::ObUnitConfig *config,
                          share::ObUnitConfig *new_config);

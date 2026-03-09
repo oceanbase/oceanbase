@@ -953,23 +953,32 @@ int ScanAllVersionTabletsOp::GetMaxMdsCkptScnOp::operator()(ObTablet &tablet)
 
 #ifdef OB_BUILD_SHARED_STORAGE
 ScanAllVersionTabletsOp::GetMinSSTabletVersionScnOp::GetMinSSTabletVersionScnOp(
-  share::SCN &min_ss_tablet_version_scn) :
-  min_ss_tablet_version_scn_(min_ss_tablet_version_scn)
+  share::SCN &min_ss_tablet_version_scn,
+  uint64_t &min_ss_private_sstable_op_id) :
+  min_ss_tablet_version_scn_(min_ss_tablet_version_scn),
+  min_ss_private_sstable_op_id_(min_ss_private_sstable_op_id)
 {
   min_ss_tablet_version_scn_.set_max();
+  min_ss_private_sstable_op_id_ = UINT64_MAX;
 }
 
 int ScanAllVersionTabletsOp::GetMinSSTabletVersionScnOp::operator()(ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
   const SCN ss_tablet_version_scn = tablet.get_min_ss_tablet_version();
-  if (min_ss_tablet_version_scn_ > ss_tablet_version_scn) {
-    LOG_INFO("find smaller ss_tablet_version_scn, will change it on tablet",
+  const uint64_t min_ss_private_sstable_op_id = tablet.get_min_ss_private_sstable_op_id();
+  if (min_ss_tablet_version_scn_ > ss_tablet_version_scn
+      || min_ss_private_sstable_op_id_ > min_ss_private_sstable_op_id) {
+    LOG_INFO("find smaller ss_tablet_version_scn or min_ss_private_sstable_op_id, will change it on tablet",
              K(min_ss_tablet_version_scn_),
              K(ss_tablet_version_scn),
+             K(min_ss_private_sstable_op_id_),
+             K(min_ss_private_sstable_op_id),
              K(tablet));
   }
   min_ss_tablet_version_scn_ = SCN::min(min_ss_tablet_version_scn_, ss_tablet_version_scn);
+  min_ss_private_sstable_op_id_ = min_ss_private_sstable_op_id_ > min_ss_private_sstable_op_id ?
+    min_ss_private_sstable_op_id : min_ss_private_sstable_op_id_;
   return ret;
 }
 #endif

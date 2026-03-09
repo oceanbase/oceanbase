@@ -90,18 +90,30 @@ static void gen_block_id(
   blocksstable::ObStorageObjectOpt opt;
   if (ObStorageObjectType::SHARED_TABLET_SUB_META == type) {
     opt.set_ss_tablet_sub_meta_opt(RunCtx.ls_id_.id(), RunCtx.tablet_id_.id(), op_id,
-        seq /* start_seq */, RunCtx.tablet_id_.is_ls_inner_tablet(), 0, true /* is_object_storage */);
+        seq /* start_seq */, RunCtx.tablet_id_.is_ls_inner_tablet(), 0 /* reorganization_scn */, true /* is_object_storage */);
+    ASSERT_EQ(OB_SUCCESS, ObObjectManager::ss_get_object_id(opt, block_id));
 
   } else if (ObStorageObjectType::SHARED_MAJOR_DATA_MACRO == type) {
     opt.set_ss_share_object_opt(type, RunCtx.tablet_id_.is_ls_inner_tablet(), RunCtx.ls_id_.id(),
         RunCtx.tablet_id_.id(), seq, cg_id /* column_group_id */, 0);
+    ASSERT_EQ(OB_SUCCESS, ObObjectManager::ss_get_object_id(opt, block_id));
+  } else if (ObStorageObjectType::SHARED_MINI_V2_DATA_MACRO == type) {
+    uint64_t data_seq = 0;
+    ASSERT_EQ(OB_SUCCESS, SSMiniMinorDataSeq::build_data_seq(SSMiniSourceType::MINI_FLUSH,
+          op_id, seq, data_seq));
+    block_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    block_id.set_third_id(data_seq);
+    block_id.set_second_id(RunCtx.tablet_id_.id());
+    block_id.set_ss_fourth_id(false, RunCtx.ls_id_.id(), 0);
+    block_id.set_storage_object_type(static_cast<uint64_t>(type));
   } else {
     opt.set_ss_share_object_opt(type, RunCtx.tablet_id_.is_ls_inner_tablet(), RunCtx.ls_id_.id(),
         RunCtx.tablet_id_.id(), (op_id << 32) | (seq & 0xFFFFFFFF), cg_id /* column_group_id */, 0);
+    ASSERT_EQ(OB_SUCCESS, ObObjectManager::ss_get_object_id(opt, block_id));
 
   }
-  ASSERT_EQ(OB_SUCCESS, ObObjectManager::ss_get_object_id(opt, block_id));
   ASSERT_TRUE(block_id.is_valid());
+  SERVER_LOG(INFO, "get block_id", K(block_id), K(op_id), K(type), K(seq));
 }
 
 static void write_block(
@@ -122,6 +134,7 @@ static void write_block(
   write_info.size_ = WRITE_IO_SIZE;
   write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info.mtl_tenant_id_ = MTL_ID();
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
 
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(block_id));
@@ -163,7 +176,7 @@ static void update_sslog(
 
   ret = iter.get_next_row(row_scn_ret, type, key, value, info);
   if (OB_FAIL(ret)) {
-    SERVER_LOG(WARN, "failed to get_next_row", K(key), K(value), K(sslog_type), K(op_id), K(state));
+    SERVER_LOG(WARN, "failed to get_next_row", K(key), K(value), K(sslog_type), K(op_id), K(state), K(param));
   }
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(type, param.meta_type_);

@@ -104,6 +104,7 @@ bool is_meta_use_sslog(const sslog::ObSSLogMetaType type, const ObLSID &ls_id)
     case sslog::ObSSLogMetaType::SSLOG_TABLET_META:
     case sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE:
     case sslog::ObSSLogMetaType::SSLOG_MINOR_SSTABLE:
+    case sslog::ObSSLogMetaType::SSLOG_UPLOAD_MINOR_SSTABLE:
     case sslog::ObSSLogMetaType::SSLOG_MDS_MINI_SSTABLE:
     case sslog::ObSSLogMetaType::SSLOG_MDS_MINOR_SSTABLE:
     case sslog::ObSSLogMetaType::SSLOG_FLUSH_MINI_SSTABLE:

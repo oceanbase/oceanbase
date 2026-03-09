@@ -274,9 +274,12 @@ struct ScanAllVersionTabletsOp
 #ifdef OB_BUILD_SHARED_STORAGE
   struct GetMinSSTabletVersionScnOp
   {
-    explicit GetMinSSTabletVersionScnOp(share::SCN &min_ss_tablet_version_scn);
+    explicit GetMinSSTabletVersionScnOp(
+        share::SCN &min_ss_tablet_version_scn,
+        uint64_t &min_ss_private_sstable_op_id);
     int operator()(ObTablet &);
     share::SCN &min_ss_tablet_version_scn_;
+    uint64_t &min_ss_private_sstable_op_id_;
   };
 #endif
 };

@@ -204,6 +204,7 @@ int ObMdsTableMergeTask::process()
         ASYNC_UPLOAD_INC_SSTABLE(SSIncSSTableType::MDS_SSTABLE,
                                  upload_reg_handle,
                                  sstable->get_key(),
+                                 sstable->get_rec_scn(),
                                  SCN::min_scn() /* mds_sstable no need snapstho_version */);
       }
     }

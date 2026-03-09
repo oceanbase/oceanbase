@@ -133,6 +133,7 @@ TEST_F(TestSSWriteCacheCtrlTask, write_cache_threshold)
 
     write_info_.set_is_write_cache(true); // write cache
     write_info_.set_effective_tablet_id(tablet_id);
+    write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
     ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info_, write_object_handle));
     write_object_handle.reset();
   }
@@ -140,7 +141,7 @@ TEST_F(TestSSWriteCacheCtrlTask, write_cache_threshold)
   // 2. simulate reach write cache threshold
   ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, tnt_disk_space_mgr);
-  const int64_t write_cache_threshold_size = tnt_disk_space_mgr->get_macro_cache_size()
+  const int64_t write_cache_threshold_size = tnt_disk_space_mgr->get_allocated_tnt_macro_cache_size_by_usage_ratio()
                                              * ObSSMacroCacheMgr::WRITE_CACHE_THRESHOLD / 100;
   macro_cache_mgr->inc_write_cache_size(last_private_macro, write_cache_threshold_size);
 

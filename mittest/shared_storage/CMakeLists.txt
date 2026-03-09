@@ -44,6 +44,7 @@ if(OB_BUILD_CLOSE_MODULES)
   mit_shared_storage_unittest(test_ss_la_micro_key_manager)
   mit_shared_storage_unittest(test_ss_local_cache_service)
   mit_shared_storage_unittest(test_delete_remote_server_dir)
+  mit_shared_storage_unittest(test_ss_write_lcache_task)
 endif()
 
 add_subdirectory(tmp_file)

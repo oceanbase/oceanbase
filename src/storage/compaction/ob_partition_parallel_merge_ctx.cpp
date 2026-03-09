@@ -15,6 +15,9 @@
 #include "ob_tablet_merge_ctx.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_ss_tablet_merge_helper.h"
+#endif
 
 namespace oceanbase
 {
@@ -308,7 +311,8 @@ int ObParallelMergeCtx::init_parallel_mini_merge(compaction::ObBasicTabletMergeC
   }
 
   if (OB_SUCC(ret)) {
-    calc_adaptive_parallel_degree(ObDagPrio::DAG_PRIO_COMPACTION_HIGH,
+    calc_adaptive_parallel_degree(merge_ctx.get_merge_type(),
+                                  ObDagPrio::DAG_PRIO_COMPACTION_HIGH,
                                   ObCompactionEstimator::MINI_MEM_PER_THREAD,
                                   (total_bytes + ObCompactionEstimator::MINI_PARALLEL_BASE_MEM - 1) / ObCompactionEstimator::MINI_PARALLEL_BASE_MEM,
                                   concurrent_cnt_);
@@ -318,7 +322,6 @@ int ObParallelMergeCtx::init_parallel_mini_merge(compaction::ObBasicTabletMergeC
     (void )errsim_set_prallel_cnt(PARALLEL_MERGE_TARGET_TASK_CNT, concurrent_cnt_);
   }
 #endif
-
 
     ObArray<ObStoreRange> store_ranges;
     store_ranges.set_attr(lib::ObMemAttr(MTL_ID(), "TmpMiniRanges", ObCtxIds::MERGE_NORMAL_CTX_ID));
@@ -393,7 +396,8 @@ int ObParallelMergeCtx::init_parallel_mini_minor_merge(compaction::ObBasicTablet
         ret = OB_INVALID_ARGUMENT;
         STORAGE_LOG(WARN, "Invalid dag priority", K(priority));
       } else {
-        calc_adaptive_parallel_degree(priority,
+        calc_adaptive_parallel_degree(merge_ctx.get_merge_type(),
+                                      priority,
                                       ObCompactionEstimator::MINOR_MEM_PER_THREAD,
                                       (total_size / tables.count() + tablet_size - 1) / tablet_size,
                                       parallel_target_count);
@@ -438,6 +442,7 @@ int ObParallelMergeCtx::init_parallel_mini_minor_merge(compaction::ObBasicTablet
 }
 
 void ObParallelMergeCtx::calc_adaptive_parallel_degree(
+    const ObMergeType merge_type,
     const int64_t prio,
     const int64_t mem_per_thread,
     const int64_t origin_degree,
@@ -464,6 +469,11 @@ void ObParallelMergeCtx::calc_adaptive_parallel_degree(
     STORAGE_LOG(INFO, "[ADAPTIVE_SCHED] calc adaptive parallel degree", K(prio), K(tenant_free_mem_byte), K(mem_per_thread),
                 K(dag_worker_limit), K(origin_degree), K(mem_allow_max_thread_cnt), K(parallel_degree));
   }
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    ObSSTabletMergeHelper::refine_parallel_degree(merge_type, parallel_degree);
+  }
+#endif
 }
 
 

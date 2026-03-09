@@ -17,6 +17,7 @@
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
+#include "storage/incremental/ob_ss_compact_object_cleaner.h"
 #endif
 
 namespace oceanbase
@@ -24,17 +25,29 @@ namespace oceanbase
 namespace blocksstable
 {
 
-int ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(ObDataStoreDesc &data_store_desc, ObSSTablePrivateObjectCleaner *&cleaner)
+ObISSTableObjectCleaner::~ObISSTableObjectCleaner()
+{
+}
+DEF_TO_STRING(ObISSTableObjectCleaner)
+{
+  return 0;
+}
+
+int ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(const ObDataStoreDesc &data_store_desc, ObISSTableObjectCleaner *&cleaner)
 {
   int ret = OB_SUCCESS;
+  ObISSTableObjectCleaner *object_cleaner = nullptr;
   if (OB_UNLIKELY(!data_store_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("fail to get private object cleaner, invalid data store desc", K(ret), K(data_store_desc));
+    LOG_WARN("data store desc is invalid", K(ret), K(data_store_desc));
   } else if (OB_ISNULL(data_store_desc.sstable_index_builder_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get private object cleaner from data store desc, unexpected sstable index builder", K(ret), K(data_store_desc));
+    LOG_WARN("sstable index builder is null", K(ret), K(data_store_desc));
+  } else if (OB_ISNULL(object_cleaner = data_store_desc.sstable_index_builder_->get_object_cleaner())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("object cleaner is null", K(ret), K(data_store_desc));
   } else {
-    cleaner = &(data_store_desc.sstable_index_builder_->get_private_object_cleaner());
+    cleaner = object_cleaner;
   }
   return ret;
 }
@@ -106,5 +119,26 @@ void ObSSTablePrivateObjectCleaner::clean()
 #endif
 }
 
+int ObSSTableObjectCleanerFactory::build_object_cleaner(const ObDataStoreDesc &data_store_desc, ObIAllocator &allocator, ObISSTableObjectCleaner *&cleaner)
+{
+  int ret = OB_SUCCESS;
+  if (GCTX.is_shared_storage_mode()) {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (OB_FAIL(ObSSTableSharedObjectCacheCleaner::build(data_store_desc, allocator, cleaner))) {
+      LOG_WARN("fail to build shared object cleaner", K(ret), K(data_store_desc));
+    }
+#else
+    cleaner = nullptr;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("fail to build object cleaner", K(ret));
+#endif
+  } else {
+    cleaner = OB_NEWx(ObSSTablePrivateObjectCleaner, &allocator);
+    if (OB_ISNULL(cleaner)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    }
+  }
+  return ret;
+}
 } // namespace blocksstable
 } // namespace oceanbase

@@ -67,23 +67,19 @@ bool SSObjUtil::is_direct_read(const ObStorageObjectType type)
 {
   return STI(type).is_direct_read();
 }
-bool SSObjUtil::is_direct_write(const ObStorageObjectType type)
-{
-  return STI(type).is_direct_write();
-}
+
 bool SSObjUtil::use_reserved_disk_space(const ObStorageObjectType type)
 {
   return STI(type).use_reserved_disk_space();
 }
 // judge whether object type need alloc disk space
-// 1. is_direct_write = true: means write directly to object storage and do not write local cache file,
-//    thus no need to alloc file size
+// 1. has_write_back_strategy = true: means may write local cache file, and thus need to alloc
+//    file size.
 // 2. is_overwrite = true: do not alloc/free file size for this kind of object, ignore these disk
 //    space usage.
 bool SSObjUtil::is_need_alloc_file_size(const ObStorageObjectType type)
 {
-  return !STI(type).is_direct_write() &&
-         !STI(type).is_overwrite();
+  return STI(type).has_write_back_strategy() && !STI(type).is_overwrite();
 }
 
 /* files with the following object types are pin:
@@ -184,11 +180,6 @@ bool SSObjUtil::is_macro_data(const MacroBlockId &macro_id)
 bool SSObjUtil::is_major(const MacroBlockId &macro_id)
 {
   return is_major(macro_id.storage_object_type());
-}
-
-bool SSObjUtil::is_direct_write(const MacroBlockId &macro_id)
-{
-  return is_direct_write(macro_id.storage_object_type());
 }
 
 bool SSObjUtil::use_reserved_disk_space(const MacroBlockId &macro_id)

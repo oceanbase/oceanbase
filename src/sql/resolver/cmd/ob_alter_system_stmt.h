@@ -147,12 +147,37 @@ public:
 class ObFlushSSLocalCacheStmt : public ObSystemCmdStmt
 {
 public:
-ObFlushSSLocalCacheStmt() : ObSystemCmdStmt(stmt::T_FLUSH_SS_LOCAL_CACHE) {}
+  ObFlushSSLocalCacheStmt() : ObSystemCmdStmt(stmt::T_FLUSH_SS_LOCAL_CACHE) {}
   virtual ~ObFlushSSLocalCacheStmt() {}
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_name), K_(cache_name));
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> cache_name_;
+};
+
+class ObPrewarmSSLocalCacheStmt : public ObSystemCmdStmt
+{
+public:
+  ObPrewarmSSLocalCacheStmt() : ObSystemCmdStmt(stmt::T_PREWARM_SS_LOCAL_CACHE) {}
+  virtual ~ObPrewarmSSLocalCacheStmt() {}
+
+  enum WithIndexType {
+    WITH_ALL_INDEX = 1,
+    WITH_LOCAL_INDEX = 2,
+    WITH_GLOBAL_INDEX = 3,
+    WITH_NONE_INDEX
+  };
+
+  bool with_all_index() const { return with_index_type_ == WithIndexType::WITH_ALL_INDEX; }
+  bool with_local_index() const { return with_index_type_ == WithIndexType::WITH_LOCAL_INDEX; }
+  bool with_global_index() const { return with_index_type_ == WithIndexType::WITH_GLOBAL_INDEX; }
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_name), K_(db_name), K_(table_name), K_(tablet_id), K_(with_index_type));
+  common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
+  common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> db_name_;
+  common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> table_name_;
+  common::ObTabletID tablet_id_;
+  WithIndexType with_index_type_;
 };
 
 class ObFlushDagWarningsStmt : public ObSystemCmdStmt

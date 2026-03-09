@@ -542,15 +542,15 @@ int ObAllVirtualSSSSTableMgr::generate_virtual_row_(VirtualSSSSTableRow &row)
           data_checksum = static_cast<blocksstable::ObSSTable *>(table)->get_data_checksum();
         }
         row.data_checksum_ = data_checksum;
-        ObTableBackupFlag table_backup_flag;
+        ObTableSharedFlag table_shared_flag;
         if (table->is_sstable()) {
           if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
             SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
           } else {
-            table_backup_flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag();
+            table_shared_flag = sst_meta_hdl.get_sstable_meta().get_table_shared_flag();
           }
         }
-        row.table_flag_ = table_backup_flag.flag_;
+        row.table_flag_ = table_shared_flag.get_flag();
         row.rec_scn_ = table->get_rec_scn().get_val_for_inner_table_field();
         SERVER_LOG(DEBUG, "generate row succeed", K(row));
       }

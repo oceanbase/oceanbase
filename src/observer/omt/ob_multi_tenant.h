@@ -99,6 +99,9 @@ public:
   int create_tenant_without_unit(const uint64_t tenant_id, const double min_cpu, const double max_cpu);
   int create_tenant(const ObTenantMeta &meta, bool write_slog, const int64_t abs_timeout_us = INT64_MAX);
   int update_tenant_unit(const share::ObUnitInfoGetter::ObTenantConfig &unit);
+  // Only update actual data disk size field of tenant unit and persist meta.
+  int update_tenant_actual_disk_size(
+      const uint64_t tenant_id, const int64_t actual_data_disk_size);
 
   int get_tenant_unit(const uint64_t tenant_id, share::ObUnitInfoGetter::ObTenantConfig &unit);
   int get_unit_id(const uint64_t tenant_id, uint64_t &unit_id);
@@ -118,8 +121,6 @@ public:
                                   const int64_t new_log_disk_size,
                                   int64_t &allowed_log_disk_size);
 #ifdef OB_BUILD_SHARED_STORAGE
-  int update_tenant_data_disk_size(const uint64_t tenant_id,
-                                    const int64_t new_data_disk_size);
   int update_ss_garbage_collection_service_config();
 #endif
   int modify_tenant_io(const uint64_t tenant_id, const share::ObUnitConfig &unit_config);

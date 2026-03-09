@@ -22,6 +22,7 @@
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #include "unittest/storage/test_dml_common.h"
 #include "storage/test_tablet_helper.h"
+#include "storage/shared_storage/ob_ss_object_access_util.h"
 #undef private
 #undef protected
 
@@ -161,6 +162,7 @@ void TestSSMCPrewarmStruct::generate_shared_major_data_macro(const int64_t table
     write_info.size_ = WRITE_IO_SIZE;
     write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
     write_info.mtl_tenant_id_ = MTL_ID();
+    write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
 
     // write
     MacroBlockId macro_id;
@@ -171,8 +173,7 @@ void TestSSMCPrewarmStruct::generate_shared_major_data_macro(const int64_t table
     ASSERT_TRUE(macro_id.is_valid());
     ObStorageObjectHandle object_handle;
     ASSERT_EQ(OB_SUCCESS, object_handle.set_macro_block_id(macro_id));
-    ObSSShareMacroWriter share_macro_writer;
-    ASSERT_EQ(OB_SUCCESS, share_macro_writer.aio_write(write_info, object_handle));
+    ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info, object_handle));
     ASSERT_EQ(OB_SUCCESS, object_handle.wait());
   }
 }

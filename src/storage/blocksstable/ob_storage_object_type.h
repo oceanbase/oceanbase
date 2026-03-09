@@ -90,6 +90,8 @@ public:
   int get_open_flag_for_read() const;
   int aio_read(const ObStorageObjectReadInfo &read_info, ObStorageObjectHandle &object_handle) const;
   int aio_write(const ObStorageObjectWriteInfo &write_info, ObStorageObjectHandle &object_handle) const;
+  bool has_write_back_strategy() const;
+  bool has_write_through_and_try_write_lcache_strategy() const;
   // the ObjectType is macro data type, true or false
   virtual bool is_macro_data() const { return false; }
   // the ObjectType is tenant data type, true or false
@@ -118,8 +120,8 @@ public:
   virtual bool is_path_include_inner_tablet() const { return false; }
   //the ObjectType only store in remote object storage, true or false
   virtual bool is_direct_read() const { return false; }
-  //whether this type of object write through object storage, true or false
-  virtual bool is_direct_write() const { return false; }
+  // write strategy of this type object, including WRITE_THROUGH, WRITE_BACK and WRITE_THROUGH_AND_TRY_WRITE_LCACHE
+  virtual uint8_t write_strategy() const { return 0; }
   //whether this type of object exists overwrite with 'different content', true or false
   virtual bool is_overwrite() const { return false; }
   // whether this type of object can read out of bounds
@@ -187,6 +189,7 @@ public:
   virtual ~ObPrivateDataMacroType() {}
   virtual bool is_macro_data() const { return true; }
   virtual bool is_private() const { return true; }
+  virtual uint8_t write_strategy() const { return 2; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_support_sn() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
@@ -224,6 +227,7 @@ public:
   virtual ~ObPrivateMetaMacroType() {}
   virtual bool is_macro_meta() const { return true; }
   virtual bool is_private() const { return true; }
+  virtual uint8_t write_strategy() const { return 2; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_support_sn() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
@@ -261,7 +265,7 @@ public:
   virtual ~ObSharedMiniDataMacroType() {}
   virtual bool is_macro_data() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_path_include_inner_tablet() const { return true; }
@@ -278,6 +282,9 @@ public:
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
+                             const MacroBlockId &file_id, const uint64_t tenant_id,
+                             const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
   virtual int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,
                                 const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
@@ -297,7 +304,7 @@ public:
   virtual ~ObSharedMiniMetaMacroType() {}
   virtual bool is_macro_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_path_include_inner_tablet() const { return true; }
@@ -314,6 +321,9 @@ public:
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
+                             const MacroBlockId &file_id, const uint64_t tenant_id,
+                             const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
   virtual int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,
                                 const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
@@ -333,7 +343,7 @@ public:
   virtual ~ObSharedMinorDataMacroType() {}
   virtual bool is_macro_data() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 5; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_path_include_inner_tablet() const { return true; }
@@ -369,7 +379,7 @@ public:
   virtual ~ObSharedMinorMetaMacroType() {}
   virtual bool is_macro_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 5; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_path_include_inner_tablet() const { return true; }
@@ -405,7 +415,7 @@ public:
   virtual ~ObSharedMajorDataMacroType() {}
   virtual bool is_macro_data() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 5; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_major() const { return true; }
@@ -439,7 +449,7 @@ public:
   virtual ~ObSharedMajorMetaMacroType() {}
   virtual bool is_macro_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 5; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_major() const { return true; }
@@ -473,6 +483,7 @@ public:
   virtual ~ObTmpFileType() {}
   virtual bool is_tenant_data() const{ return true; }
   virtual bool is_private() const { return true; }
+  virtual uint8_t write_strategy() const { return 2; }
   virtual bool need_fsync() const { return false; }
   virtual bool can_append_write() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
@@ -509,6 +520,7 @@ public:
   ObServerMetaType() : ObStorageObjectTypeBase(ObStorageObjectType::SERVER_META) {}
   virtual ~ObServerMetaType() {}
   virtual bool is_private() const { return true; }
+  virtual uint8_t write_strategy() const { return 2; }
   virtual bool is_pin_local() const { return true; }
   virtual bool is_overwrite() const { return true; }
   virtual bool server_tenant_can_have() const { return true; }
@@ -537,6 +549,7 @@ public:
   virtual ~ObPrivateTabletMetaType() {}
   virtual bool is_tablet_meta() const { return true; }
   virtual bool is_private() const { return true; }
+  virtual uint8_t write_strategy() const { return 2; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
   virtual bool has_effective_tablet_id() const { return true; }
 
@@ -572,6 +585,7 @@ public:
   virtual ~ObPrivateSlogFileType() {}
   virtual bool is_tenant_meta() const { return true; }
   virtual bool is_private() const { return true; }
+  virtual uint8_t write_strategy() const { return 2; }
   virtual bool use_reserved_disk_space() const { return true; }
   virtual bool can_append_write() const { return true; }
   virtual bool is_overwrite() const { return true; }
@@ -609,7 +623,7 @@ public:
   virtual bool is_tenant_meta() const { return true; }
   virtual bool is_private() const { return true; }
   virtual bool is_direct_read() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_support_sn() const { return true; }
   virtual bool server_tenant_can_have() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
@@ -635,7 +649,7 @@ public:
   virtual ~ObMajorPrewarmDataType() {}
   virtual bool is_shared() const { return true; }
   virtual bool is_direct_read() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_major() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
@@ -661,7 +675,7 @@ public:
   virtual ~ObMajorPrewarmDataIndexType() {}
   virtual bool is_shared() const { return true; }
   virtual bool is_direct_read() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_major() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
@@ -687,7 +701,7 @@ public:
   virtual ~ObMajorPrewarmMetaType() {}
   virtual bool is_shared() const { return true; }
   virtual bool is_direct_read() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_major() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
@@ -713,7 +727,7 @@ public:
   virtual ~ObMajorPrewarmMetaIndexType() {}
   virtual bool is_shared() const { return true; }
   virtual bool is_direct_read() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_major() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
@@ -738,6 +752,7 @@ public:
   ObTenantDiskSpaceMetaType() : ObStorageObjectTypeBase(ObStorageObjectType::TENANT_DISK_SPACE_META) {}
   virtual ~ObTenantDiskSpaceMetaType() {}
   virtual bool is_private() const { return true; }
+  virtual uint8_t write_strategy() const { return 2; }
   virtual bool is_pin_local() const { return true; }
   virtual bool is_overwrite() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
@@ -767,7 +782,7 @@ public:
   virtual ~ObIsSharedTenantDeletedType() {}
   virtual bool is_shared() const { return true; }
   virtual bool is_direct_read() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool server_tenant_can_have() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
 
@@ -793,7 +808,7 @@ public:
   virtual ~ObSharedMicroDataMacroType() {}
   virtual bool is_macro_data() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
 };
 
 /**
@@ -806,7 +821,7 @@ public:
   virtual ~ObSharedMicroMetaMacroType() {}
   virtual bool is_macro_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
 };
 
 /**
@@ -818,7 +833,7 @@ public:
   ObUnsealedRemoteSegFileType() : ObStorageObjectTypeBase(ObStorageObjectType::UNSEALED_REMOTE_SEG_FILE) {}
   virtual ~ObUnsealedRemoteSegFileType() {}
   virtual bool is_private() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
 
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -841,7 +856,7 @@ public:
   virtual ~ObSharedMdsMiniDataMacroType() {}
   virtual bool is_macro_data() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_mds() const { return true; }
@@ -876,7 +891,7 @@ public:
   virtual ~ObSharedMdsMiniMetaMacroType() {}
   virtual bool is_macro_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_mds() const { return true; }
@@ -911,7 +926,7 @@ public:
   virtual ~ObSharedMdsMinorDataMacroType() {}
   virtual bool is_macro_data() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 5; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_mds() const { return true; }
@@ -946,7 +961,7 @@ public:
   virtual ~ObSharedMdsMinorMetaMacroType() {}
   virtual bool is_macro_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 5; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_mds() const { return true; }
@@ -981,7 +996,7 @@ public:
   virtual ~ObSharedTabletMetaType() {}
   virtual bool is_shared() const { return true; }
   virtual bool is_direct_read() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
   virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
 };
@@ -996,7 +1011,7 @@ public:
   virtual ~ObSharedTabletSubMetaType() {}
   virtual bool is_tablet_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_overwrite() const { return true; }
   virtual bool is_path_include_inner_tablet() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
@@ -1034,7 +1049,7 @@ public:
   virtual ~ObTenantRootKeyType() {}
   virtual bool is_shared() const { return true; }
   virtual bool is_direct_read() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_overwrite() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
 
@@ -1059,6 +1074,7 @@ public:
   virtual ~ObExternalTableFileType() {}
   virtual bool is_tenant_data() const{ return true; }
   virtual bool is_private() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_support_sn() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
 
@@ -1086,7 +1102,7 @@ public:
   virtual ~ObMacroCacheCkptDataType() {}
   virtual bool is_private() const { return true; }
   virtual bool is_direct_read() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
 
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -1111,7 +1127,7 @@ public:
   virtual ~ObMacroCacheCkptMetaType() {}
   virtual bool is_private() const { return true; }
   virtual bool is_direct_read() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
 
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -1136,7 +1152,7 @@ public:
   virtual ~ObSharedIncMajorDataMacroType() {}
   virtual bool is_macro_data() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_major() const { return true; }
@@ -1170,9 +1186,10 @@ public:
   virtual ~ObSharedIncMajorMetaMacroType() {}
   virtual bool is_macro_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
+  virtual bool is_major() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
   virtual bool has_effective_tablet_id() const { return true; }
 
@@ -1203,7 +1220,7 @@ public:
   virtual ~ObSharedTabletSubMetaInTableType() {}
   virtual bool is_tablet_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 1; }
   virtual bool is_overwrite() const { return true; }
   virtual bool is_path_include_inner_tablet() const { return true; }
   virtual bool is_store_in_table() const { return true; }
@@ -1233,11 +1250,33 @@ public:
   virtual ~ObSharedMiniV2DataMacroType() {}
   virtual bool is_macro_data() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 7; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_path_include_inner_tablet() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
+  virtual bool has_effective_tablet_id() const { return true; }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
+                                   const MacroBlockId &file_id, const uint64_t tenant_id,
+                                   const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,
+                                    const MacroBlockId &file_id, const char *object_storage_root_dir,
+                                    const uint64_t cluster_id, const uint64_t tenant_id,
+                                    const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
+                             const MacroBlockId &file_id, const uint64_t tenant_id,
+                             const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,
+                                const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
+
+#endif
+  virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;
+  virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
 };
 
 /**
@@ -1250,11 +1289,33 @@ public:
   virtual ~ObSharedMiniV2MetaMacroType() {}
   virtual bool is_macro_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 7; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_path_include_inner_tablet() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
+  virtual bool has_effective_tablet_id() const { return true; }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
+                                   const MacroBlockId &file_id, const uint64_t tenant_id,
+                                   const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,
+                                    const MacroBlockId &file_id, const char *object_storage_root_dir,
+                                    const uint64_t cluster_id, const uint64_t tenant_id,
+                                    const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
+                             const MacroBlockId &file_id, const uint64_t tenant_id,
+                             const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,
+                                const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
+
+#endif
+  virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;
+  virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
 };
 
 /**
@@ -1267,11 +1328,33 @@ public:
   virtual ~ObSharedMinorV2DataMacroType() {}
   virtual bool is_macro_data() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 5; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_path_include_inner_tablet() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
+  virtual bool has_effective_tablet_id() const { return true; }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
+                                   const MacroBlockId &file_id, const uint64_t tenant_id,
+                                   const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,
+                                    const MacroBlockId &file_id, const char *object_storage_root_dir,
+                                    const uint64_t cluster_id, const uint64_t tenant_id,
+                                    const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
+                             const MacroBlockId &file_id, const uint64_t tenant_id,
+                             const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,
+                                const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
+
+#endif
+  virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;
+  virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
 };
 
 /**
@@ -1284,11 +1367,33 @@ public:
   virtual ~ObSharedMinorV2MetaMacroType() {}
   virtual bool is_macro_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_write() const { return true; }
+  virtual uint8_t write_strategy() const { return 5; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
   virtual bool is_path_include_inner_tablet() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
+  virtual bool has_effective_tablet_id() const { return true; }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
+                                   const MacroBlockId &file_id, const uint64_t tenant_id,
+                                   const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,
+                                    const MacroBlockId &file_id, const char *object_storage_root_dir,
+                                    const uint64_t cluster_id, const uint64_t tenant_id,
+                                    const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
+                             const MacroBlockId &file_id, const uint64_t tenant_id,
+                             const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,
+                                const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
+
+#endif
+  virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;
+  virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
 };
 
 } // end namespace blocksstable

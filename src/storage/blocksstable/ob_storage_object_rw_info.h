@@ -48,7 +48,8 @@ public:
   ObStorageObjectWriteInfo()
     : buffer_(NULL), offset_(0), size_(0), io_timeout_ms_(GCONF._data_storage_io_timeout / 1000L), io_desc_(),
       io_callback_(NULL), device_handle_(NULL), has_backup_device_handle_(false), is_batch_write_(false),
-      mtl_tenant_id_(OB_INVALID_TENANT_ID), local_cache_write_info_()
+      mtl_tenant_id_(OB_INVALID_TENANT_ID), local_cache_write_info_(),
+      write_strategy_(common::ObStorageObjectWriteStrategy::INVALID_WRITE_STRATEGY)
   {}
   ~ObStorageObjectWriteInfo() = default;
   OB_INLINE bool is_valid() const
@@ -107,7 +108,7 @@ public:
   }
   TO_STRING_KV(KP_(buffer), K_(offset), K_(size), K_(io_timeout_ms), K_(io_desc), KP_(io_callback),
                KP_(device_handle), K_(has_backup_device_handle), K_(is_batch_write),
-               K_(mtl_tenant_id), K_(local_cache_write_info));
+               K_(mtl_tenant_id), K_(local_cache_write_info), K_(write_strategy));
 public:
   const char *buffer_;
   int64_t offset_;
@@ -120,6 +121,7 @@ public:
   bool is_batch_write_; // for batch write to tiered metadata table
   uint64_t mtl_tenant_id_;
   ObLocalCacheWriteInfo local_cache_write_info_;
+  common::ObStorageObjectWriteStrategy write_strategy_;
 };
 
 

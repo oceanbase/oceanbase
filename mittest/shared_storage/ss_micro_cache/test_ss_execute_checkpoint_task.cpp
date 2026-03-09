@@ -1246,7 +1246,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_dynamic_update_cache_limit_size)
 
   blk_ckpt_op.dynamic_update_cache_limit_size();
 
-  const int64_t arc_limit_pct = micro_cache_->is_mini_mode_ ? SS_MINI_MODE_ARC_LIMIT_PCT : SS_ARC_LIMIT_PCT;
+  const int64_t arc_limit_pct = SS_ARC_LIMIT_PCT;
   const int64_t new_limit = phy_blk_mgr_->get_cache_limit_size() * arc_limit_pct / 100;
   const int64_t new_work_limit = (static_cast<double>(prewarm_work_limit) / origin_limit) * new_limit;
   ori_pct = static_cast<double>(p1 * 100) / prewarm_work_limit;

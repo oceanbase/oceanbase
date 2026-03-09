@@ -93,6 +93,9 @@ public:
   bool is_id_mode_backup() const; // sn deploy mode, but backup macro id.
   bool is_id_mode_share() const; // ss deploy mode
   bool is_shared_data_or_meta() const; // shared tablet macro block in ss mode
+  bool is_shared_mini_minor_v1() const; // old format of mini minor in ss mode
+  bool is_shared_mini_v2() const; // new format of mini in ss mode
+  bool is_shared_minor_v2() const; // new format of minor in ss mode
   bool is_shared_sub_meta() const; // shared tablet meta block in ss mode
   bool is_shared_data_block_except_mds() const; // shared tablet data macro block in ss mode, except mds
   bool is_shared_data_block_or_meta_block() const; // shared tablet meta or data macro block in ss mode
@@ -133,10 +136,14 @@ public:
   void set_meta_ls_id(const int64_t ls_id) { meta_ls_id_ = ls_id; }
   void set_reorganization_scn(const int64_t reorganization_scn) { reorganization_scn_ = reorganization_scn; }
   int64_t reorganization_scn() const { return reorganization_scn_; }
-  bool is_shared_tablet_sub_meta_in_table() const;
-  bool is_shared_tablet_sub_meta() const;
   int64_t get_op_id() const { return third_id_ >> 32; }
   int64_t get_macro_seq() const { return third_id_ & 0xFFFFFFFF;  }
+  bool is_shared_tablet_sub_meta_in_table() const;
+  bool is_shared_tablet_sub_meta() const;
+  void set_source_type(const uint8_t source_type) { source_type_ = source_type; }
+  uint8_t source_type() const { return source_type_; }
+  void set_op_id_and_seq(const uint64_t op_id_and_seq) { op_id_and_seq_ = op_id_and_seq; }
+  uint64_t op_id_and_seq() const { return op_id_and_seq_; }
   void set_ss_fourth_id(
       const bool meta_is_inner_tablet,
       const int64_t ls_id,
@@ -228,6 +235,12 @@ private:
     struct {
       uint64_t device_id_ : 8;
       uint64_t reserved_ : 56;
+    };
+    // for shared storage
+    struct {
+      uint64_t op_id_and_seq_ : 60;
+      uint64_t source_type_ : 2;
+      uint64_t third_reserved_ : 2;
     };
   };
   union {

@@ -899,7 +899,14 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
     LOG_ERROR("get_tenant_clog_dir failed", K(ret));
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-    mtl_init_ctx_->init_data_disk_size_ = meta.unit_.get_effective_actual_data_disk_size();
+    // For tenants upgraded from legacy versions where units used non auto-extend
+    // mode and data disks were fully preallocated, a 0 actual_data_disk_size
+    // indicates an upgrade case, so we initialize it with the configured data
+    // disk size (config_data_disk_size), which reflects the legacy full allocation.
+    mtl_init_ctx_->init_data_disk_size_ = meta.unit_.get_actual_data_disk_size();
+    if (mtl_init_ctx_->init_data_disk_size_ == 0) {
+      mtl_init_ctx_->init_data_disk_size_ = meta.unit_.config_.data_disk_size();
+    }
 #endif
     mtl_init_ctx_->palf_options_.disk_options_.log_disk_usage_limit_size_ = meta.unit_.config_.log_disk_size();
     mtl_init_ctx_->palf_options_.disk_options_.log_disk_utilization_threshold_ = 80;

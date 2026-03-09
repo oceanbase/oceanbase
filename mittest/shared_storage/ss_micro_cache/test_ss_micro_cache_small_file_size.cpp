@@ -102,9 +102,9 @@ TEST_F(TestSSMicroCacheSmallFileSize, test_small_file_size)
 {
   LOG_INFO("TEST_CASE: start test_small_file_size");
   int ret = OB_SUCCESS;
-  ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager *);
-  ASSERT_NE(nullptr, tnt_file_mgr);
-  tnt_file_mgr->persist_disk_space_task_.enable_adjust_size_ = false;
+  ObTenantDiskSpaceManager *tnt_disk_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_mgr);
+  tnt_disk_mgr->persist_disk_space_task_.enable_adjust_size_ = false;
   ob_usleep(5 * 1000 * 1000);
 
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);

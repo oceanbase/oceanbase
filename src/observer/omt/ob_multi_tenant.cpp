@@ -811,7 +811,7 @@ int ObMultiTenant::construct_meta_for_hidden_sys(ObTenantMeta &meta)
                         has_memstore,
                         false /*is_removed*/,
                         hidden_sys_data_disk_config_size,
-                        0 /*actual_data_disk_size*/,
+                        unit.gen_init_actual_data_disk_size(unit_config) /*actual_data_disk_size*/,
                         ObReplicaType::REPLICA_TYPE_FULL/*replica_type*/))) {
     LOG_WARN("fail to init hidden sys tenant unit", K(ret), K(tenant_id));
   } else if (OB_FAIL(meta.build(unit, super_block))) {
@@ -866,15 +866,6 @@ int ObMultiTenant::create_hidden_sys_tenant()
   } else if (OB_FAIL(create_tenant(meta, true /* write_slog */))) {
     LOG_ERROR("create hidden sys tenant failed", K(ret));
   }
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (OB_FAIL(ret)) {
-  } else if (GCTX.is_shared_storage_mode()) {
-    const int64_t hidden_sys_data_disk_size = meta.unit_.config_.data_disk_size();
-    if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.update_hidden_sys_data_disk_size(hidden_sys_data_disk_size))) {
-      LOG_WARN("fail to update hidden sys data disk size", KR(ret), K(hidden_sys_data_disk_size));
-    }
-  }
-#endif
   return ret;
 }
 
@@ -896,18 +887,18 @@ int ObMultiTenant::update_hidden_sys_tenant()
       } else if (FALSE_IT(lock_succ = true)) {
       } else if (!tenant->is_hidden() || meta.unit_ == tenant->get_unit()) {
         // do nothing
-      } else if (OB_FAIL(update_tenant_unit_no_lock(meta.unit_))) {
-        LOG_WARN("fail to update tenant unit", K(ret), K(tenant_id));
-      }
-      #ifdef OB_BUILD_SHARED_STORAGE
-      if (OB_FAIL(ret)) {
-      } else if (GCTX.is_shared_storage_mode()) {
-        const int64_t hidden_sys_data_disk_size = meta.unit_.config_.data_disk_size();
-        if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.update_hidden_sys_data_disk_size(hidden_sys_data_disk_size))) {
-          LOG_WARN("fail to update hidden sys data disk size", KR(ret), K(hidden_sys_data_disk_size));
+      } else {
+        #ifdef OB_BUILD_SHARED_STORAGE
+        if (GCTX.is_shared_storage_mode()) {
+          meta.unit_.actual_data_disk_size_ =
+              OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_size();
+        }
+        #endif
+
+        if (FAILEDx(update_tenant_unit_no_lock(meta.unit_))) {
+          LOG_WARN("fail to update tenant unit", K(ret), K(tenant_id));
         }
       }
-      #endif
       if (lock_succ) {
         bucket_lock_.unlock(bucket_lock_idx);
       }
@@ -1025,22 +1016,20 @@ int ObMultiTenant::convert_hidden_to_real_sys_tenant(const ObUnitInfoGetter::ObT
       }
     }
 
-    if (FAILEDx(update_tenant_unit_no_lock(unit))) {
-      LOG_WARN("fail to update_tenant_unit_no_lock", K(ret), K(unit));
+    ObUnitInfoGetter::ObTenantConfig new_unit = unit;
+    #ifdef OB_BUILD_SHARED_STORAGE
+    if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
+      new_unit.actual_data_disk_size_ = OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_size();
+    }
+    #endif
+
+    if (FAILEDx(update_tenant_unit_no_lock(new_unit))) {
+      LOG_WARN("fail to update_tenant_unit_no_lock", K(ret), K(unit), K(new_unit));
     } else {
       // clear sys tenant prepare gc state
       tenant->clear_prepare_unit_gc();
     }
   }
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(ret)) {
-    } else if (GCTX.is_shared_storage_mode()) { // when hidden_sys convert to real_sys, hidden_sys data_disk_size set initial default value
-      const int64_t hidden_sys_data_disk_size = OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
-      if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.update_hidden_sys_data_disk_size(hidden_sys_data_disk_size))) {
-        LOG_WARN("fail to update hidden sys data disk size", KR(ret), K(hidden_sys_data_disk_size));
-      }
-    }
-#endif
 
   if (lock_succ) {
     bucket_lock_.unlock(bucket_lock_idx);
@@ -1069,7 +1058,13 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   bool lock_succ = false;
   int64_t bucket_lock_idx = -1;
   const int64_t log_disk_size = meta.unit_.config_.log_disk_size();
-  const int64_t effective_data_disk_size = meta.unit_.get_effective_actual_data_disk_size();
+  // For tenants upgraded from legacy versions where units used non auto-extend
+  // mode and data disks were fully preallocated, a 0 actual_data_disk_size
+  // indicates an upgrade case, so we initialize it with the configured data
+  // disk size (config_data_disk_size), which reflects the legacy full allocation.
+  const int64_t effective_data_disk_size = (meta.unit_.get_actual_data_disk_size() == 0
+      ? meta.unit_.config_.data_disk_size()
+      : meta.unit_.get_actual_data_disk_size());
   int64_t lock_timeout_ts = abs_timeout_us - 5000000; // reserve 5s for creating tenant
   int64_t tenant_epoch = meta.epoch_;
 
@@ -1167,11 +1162,6 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     if (!is_virtual_tenant_id(tenant_id) && GCTX.is_shared_storage_mode()) {
       if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.alloc(effective_data_disk_size))) {
         LOG_ERROR("alloc cahce disk size in disk space manager failed", KR(ret));
-      } else if (is_sys_tenant(tenant_id) && !meta.super_block_.is_hidden_) { // when restart observer, real_sys_tenant's data_disk_size = sys_unit_config + hidden_sys_data_disk_size
-        int64_t hidden_sys_data_disk_config_size = OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
-        if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.alloc(hidden_sys_data_disk_config_size))) {
-          LOG_ERROR("alloc cahce disk size in disk space manager failed", KR(ret));
-        }
       }
     }
     // In share storage mode, the tenant data disk size must alloc before tenant init
@@ -1413,6 +1403,47 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
   return ret;
 }
 
+int ObMultiTenant::update_tenant_actual_disk_size(
+    const uint64_t tenant_id,
+    const int64_t actual_data_disk_size)
+{
+  int ret = OB_SUCCESS;
+  int64_t bucket_lock_idx = -1;
+  bool lock_succ = false;
+  share::ObUnitInfoGetter::ObTenantConfig unit;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(actual_data_disk_size <= 0
+      || !is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(actual_data_disk_size));
+  } else if (FALSE_IT(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id))) {
+  } else if (OB_FAIL(bucket_lock_.wrlock(bucket_lock_idx))) {
+    LOG_WARN("fail to wrlock for update_tenant_actual_disk_size",
+        KR(ret), K(tenant_id), K(bucket_lock_idx));
+  } else if (FALSE_IT(lock_succ = true)) {
+  } else if (OB_FAIL(get_tenant_unit(tenant_id, unit))) {
+    LOG_WARN("fail to get tenant unit", KR(ret), K(tenant_id));
+  } else {
+    unit.actual_data_disk_size_ = actual_data_disk_size;
+    if (OB_FAIL(update_tenant_unit_no_lock(unit))) {
+      LOG_WARN("fail to update_tenant_unit_no_lock when updating actual data disk size",
+          KR(ret), K(tenant_id), K(unit));
+    }
+  }
+
+  if (lock_succ) {
+    bucket_lock_.unlock(bucket_lock_idx);
+  }
+
+  LOG_INFO("OMT finish update tenant actual data disk size",
+      KR(ret), K(tenant_id), K(actual_data_disk_size), K(bucket_lock_idx));
+
+  return ret;
+}
+
 int ObMultiTenant::update_tenant_memory(const ObUnitInfoGetter::ObTenantConfig &unit,
                                         const int64_t extra_memory /* = 0 */)
 {
@@ -1588,38 +1619,6 @@ int ObMultiTenant::update_tenant_log_disk_size(const uint64_t tenant_id,
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-int ObMultiTenant::update_tenant_data_disk_size(
-    const uint64_t tenant_id,
-    const int64_t new_data_disk_size)
-{
-  int ret = OB_SUCCESS;
-  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
-  if (OB_SUCC(guard.switch_to(tenant_id))) {
-    bool succ_resize = false;
-    ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
-    if (OB_ISNULL(tnt_disk_space_mgr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("mtl module is nullptr", KR(ret), K(tnt_disk_space_mgr));
-    } else if (OB_FAIL(tnt_disk_space_mgr->resize_total_disk_size(new_data_disk_size, succ_resize))) {
-      LOG_WARN("fail to resize tenant total disk space size", K(tenant_id), K(new_data_disk_size));
-    } else if (succ_resize) {
-      LOG_INFO("update tenant total disk space size success", K(tenant_id), K(new_data_disk_size));
-    }
-
-    if (OB_SUCC(ret)) {
-      const int64_t micro_cache_file_size = tnt_disk_space_mgr->get_micro_cache_file_size();
-      ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
-      if (OB_ISNULL(micro_cache)) {
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(micro_cache->resize_micro_cache_file_size(micro_cache_file_size))) {
-        LOG_WARN("fail to resize micro cache file size", K(tenant_id), K(micro_cache_file_size));
-      } else {
-        LOG_INFO("update micro cache file size success", K(tenant_id), K(micro_cache_file_size));
-      }
-    }
-  }
-  return ret;
-}
 
 int ObMultiTenant::update_ss_garbage_collection_service_config()
 {
@@ -2378,7 +2377,7 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
             && OB_FAIL(OB_SERVER_FILE_MGR.delete_local_tenant_dir(tenant_id, tenant_epoch))) {
           LOG_ERROR("fail to delete local tenant dir files", KR(ret), K(tenant_id), K(tenant_epoch));
         } else if (GCTX.is_shared_storage_mode() && !has_free_disk_space) {
-          if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.free(local_unit.get_effective_actual_data_disk_size()))) {
+          if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.free(local_unit.get_actual_data_disk_size()))) {
             LOG_ERROR("fail to free data disk size", KR(ret), K(tenant_id), K(tenant_epoch), K(local_unit.config_));
             SLEEP(1);
           } else {
@@ -2433,29 +2432,21 @@ int ObMultiTenant::convert_real_to_hidden_sys_tenant()
         LOG_WARN("fail to construct_meta_for_hidden_sys", K(ret));
       }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-      int64_t hidden_sys_data_disk_size = 0;
-      if (OB_FAIL(ret)) {
-      } else if (GCTX.is_shared_storage_mode()) {
-        ObTenantSwitchGuard guard(tenant);
-        ObTenantDiskSpaceManager *disk_space_mgr = nullptr;
-        if (OB_ISNULL(disk_space_mgr = MTL(ObTenantDiskSpaceManager *))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("tenant disk space manager is null", KR(ret), KP(disk_space_mgr));
-        } else {
-          // when real_sys convert to hidden_sys, hidden_sys data_disk_size set real_sys data_disk_size
-          hidden_sys_data_disk_size = disk_space_mgr->get_total_disk_size();
-          tenant_meta.unit_.config_.set_data_disk_size(hidden_sys_data_disk_size);
-        }
-      }
-#endif
-
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(bucket_lock_.try_wrlock(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id)))) {
         LOG_WARN("fail to try_wrlock for delete tenant", K(ret), K(tenant_id), K(bucket_lock_idx));
       } else if (FALSE_IT(lock_succ = true)) {
-      } else if (OB_FAIL(update_tenant_unit_no_lock(tenant_meta.unit_))) {
-        LOG_WARN("fail to update_tenant_unit_no_lock", K(ret), K(tenant_meta));
+      } else {
+        #ifdef OB_BUILD_SHARED_STORAGE
+        if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
+          tenant_meta.unit_.actual_data_disk_size_ =
+              OB_SERVER_DISK_SPACE_MGR.get_real_sys_data_disk_size();
+        }
+        #endif
+
+        if (FAILEDx(update_tenant_unit_no_lock(tenant_meta.unit_))) {
+          LOG_WARN("fail to update_tenant_unit_no_lock", KR(ret), K(tenant_meta));
+        }
       }
 
       if (OB_SUCC(ret)) {
@@ -2475,15 +2466,6 @@ int ObMultiTenant::convert_real_to_hidden_sys_tenant()
           tenant->clear_prepare_unit_gc();
         }
       }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-      if (OB_FAIL(ret)) {
-      } else if (GCTX.is_shared_storage_mode()) { // when real_sys convert to hidden_sys, hidden_sys data_disk_size set real_sys data_disk_size
-        if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.update_hidden_sys_data_disk_size(hidden_sys_data_disk_size))) {
-          LOG_WARN("fail to update hidden sys data disk size", KR(ret), K(hidden_sys_data_disk_size));
-        }
-      }
-#endif
 
     }
   }

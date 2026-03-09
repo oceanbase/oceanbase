@@ -139,40 +139,25 @@ int TestSSMemBlockManager::check_micro_data_crc(
 
 TEST_F(TestSSMemBlockManager, check_mem_blk_count)
 {
-  // 1. mini_mode
-  {
-    ObSSMicroCacheStat cache_stat;
-    ObSSMemBlockManager mem_blk_mgr(cache_stat);
-    ASSERT_EQ(OB_SUCCESS, mem_blk_mgr.init(MTL_ID(), BLOCK_SIZE, true/* is_mini_mode */));
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
 
-    ObSSMemBlockPool &mem_blk_pool = mem_blk_mgr.mem_blk_pool_;
-    ASSERT_EQ(SS_MINI_MODE_MAX_FG_MEM_BLK_CNT, mem_blk_pool.max_fg_count_);
-    ASSERT_EQ(SS_MINI_MODE_MAX_BG_MEM_BLK_CNT, mem_blk_pool.max_bg_count_);
-    ASSERT_EQ(SS_MINI_MODE_MAX_FG_MEM_BLK_CNT, cache_stat.mem_blk_stat().mem_blk_fg_max_cnt_);
-    ASSERT_EQ(SS_MINI_MODE_MAX_BG_MEM_BLK_CNT, cache_stat.mem_blk_stat().mem_blk_bg_max_cnt_);
-  }
+  ObSSMicroCacheStat cache_stat;
+  ObSSMemBlockManager mem_blk_mgr(cache_stat);
+  ASSERT_EQ(OB_SUCCESS, mem_blk_mgr.init(MTL_ID(), BLOCK_SIZE));
 
-  // 2. non_mini_mode
-  {
-    ObSSMicroCacheStat cache_stat;
-    ObSSMemBlockManager mem_blk_mgr(cache_stat);
-    ASSERT_EQ(OB_SUCCESS, mem_blk_mgr.init(MTL_ID(), BLOCK_SIZE, false/* is_mini_mode */));
-
-    ObSSMemBlockPool &mem_blk_pool = mem_blk_mgr.mem_blk_pool_;
-    const int64_t memory_limit = lib::get_tenant_memory_limit(MTL_ID());
-    const int64_t max_fg_cnt = SS_FG_MEM_BLK_BASE_CNT + (memory_limit / SS_MEMORY_SIZE_PER_MEM_BLK);
-    ASSERT_EQ(max_fg_cnt, mem_blk_pool.max_fg_count_);
-    ASSERT_EQ(SS_MAX_BG_MEM_BLK_CNT, mem_blk_pool.max_bg_count_);
-    ASSERT_EQ(max_fg_cnt, cache_stat.mem_blk_stat().mem_blk_fg_max_cnt_);
-    ASSERT_EQ(SS_MAX_BG_MEM_BLK_CNT, cache_stat.mem_blk_stat().mem_blk_bg_max_cnt_);
-  }
+  ObSSMemBlockPool &mem_blk_pool = mem_blk_mgr.mem_blk_pool_;
+  ASSERT_EQ(SS_MAX_FG_MEM_BLK_CNT, mem_blk_pool.max_fg_count_);
+  ASSERT_EQ(SS_MAX_BG_MEM_BLK_CNT, mem_blk_pool.max_bg_count_);
+  ASSERT_EQ(SS_MAX_FG_MEM_BLK_CNT, cache_stat.mem_blk_stat().mem_blk_fg_max_cnt_);
+  ASSERT_EQ(SS_MAX_BG_MEM_BLK_CNT, cache_stat.mem_blk_stat().mem_blk_bg_max_cnt_);
 }
 
 TEST_F(TestSSMemBlockManager, write_micro_block)
 {
   ObSSMicroCacheStat cache_stat;
   ObSSMemBlockManager mem_blk_mgr(cache_stat);
-  ASSERT_EQ(OB_SUCCESS, mem_blk_mgr.init(MTL_ID(), BLOCK_SIZE, false));
+  ASSERT_EQ(OB_SUCCESS, mem_blk_mgr.init(MTL_ID(), BLOCK_SIZE));
 
   const int64_t index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
   const MacroBlockId macro_id =TestSSCommonUtil::gen_macro_block_id(1);
@@ -219,7 +204,7 @@ TEST_F(TestSSMemBlockManager, parallel_write_micro_block)
   const uint64_t tenant_id = MTL_ID();
   ObSSMicroCacheStat cache_stat;
   ObSSMemBlockManager mem_blk_mgr(cache_stat);
-  ASSERT_EQ(OB_SUCCESS, mem_blk_mgr.init(tenant_id, BLOCK_SIZE, false));
+  ASSERT_EQ(OB_SUCCESS, mem_blk_mgr.init(tenant_id, BLOCK_SIZE));
 
   const int64_t index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
   const int64_t micro_size = (1L << 14);
@@ -284,7 +269,7 @@ TEST_F(TestSSMemBlockManager, parallel_alloc_and_free_mem_blk)
 {
   ObSSMicroCacheStat cache_stat;
   ObSSMemBlockManager mem_blk_mgr(cache_stat);
-  ASSERT_EQ(OB_SUCCESS, mem_blk_mgr.init(MTL_ID(), BLOCK_SIZE, false));
+  ASSERT_EQ(OB_SUCCESS, mem_blk_mgr.init(MTL_ID(), BLOCK_SIZE));
 
   ObSSMemBlockPool &mem_blk_pool = mem_blk_mgr.mem_blk_pool_;
   const int64_t max_fg_cnt = mem_blk_pool.max_fg_count_;

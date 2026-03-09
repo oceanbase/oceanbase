@@ -15,7 +15,7 @@
 # data_type: the type of the storage object data, include macro_data, tenant_data, macro_meta, tablet_meta, tenant_meta, others
 # access_mode: the access mode of the storage object, include private, shared
 # read_odirect: whether to read the storage object directly, True or False
-# write_odirect: whether to write the storage object directly, True or False
+# write_strategy: write strategy of this type object, including WRITE_THROUGH, WRITE_BACK and WRITE_THROUGH_AND_TRY_WRITE_LCACHE
 #
 # optional parameters: All parameters are optional, if you don't need to modify, just not add it.If you want modify, please contact zhaomiao.
 # is_pin_local: the ObjetType only store in local cache, True or False. If is_pin_local is True, is_overwrite must be true.
@@ -35,6 +35,8 @@
 # is_path_include_inner_tablet: whether to is path include inner tablet, True or False.
 #   a normal tablet's id is unique in tenant, but the id of a log stream internal tablet is the same in each log stream.
 #   so if the path include inner tablet, you need to set this parameter to True.
+#
+# complex function implementation:
 # is_store_in_table: whether it is store in table, True or False, default is False
 # is_valid: the MacroBlockId is valid check logic
 # to_local_path_format: the MacroBlockId convert to local cache path logic, if does not exist return OB_NOT_SUPPORTED
@@ -89,13 +91,12 @@ def def_storage_object_type_cfg(**kwargs):
     if read_odirect is None:
         raise ValueError("read_odirect cannot be None")
 
-    # check write_odirect is required parameter
-    if 'write_odirect' not in kwargs:
-        raise ValueError("write_odirect is required parameter but not provided")
+    if 'write_strategy' not in kwargs:
+        raise ValueError("write_strategy is required parameter but not provided")
 
-    write_odirect = kwargs['write_odirect']
-    if write_odirect is None:
-        raise ValueError("write_odirect cannot be None")
+    write_strategy = kwargs['write_strategy']
+    if write_strategy is None:
+        raise ValueError("write_strategy cannot be None")
 
     # check owner is required parameter
     if 'owner' not in kwargs:
@@ -109,7 +110,7 @@ def_storage_object_type_default_cfg = {
     'data_type': 'others',# {macro_data, tenant_data, macro_meta, tablet_meta, tenant_meta, others}
     'access_mode':'private', #{private, shared}
     'read_odirect': False,
-    'write_odirect': False,
+    'write_strategy': ["WRITE_THROUGH"],
     # low frequency modify parameters, if you need to modify, please contact zhaomiao
     'is_pin_local': False,
     'need_fsync': True,
@@ -144,7 +145,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'macro_data',
     read_odirect = False,
-    write_odirect = False,
+    write_strategy = ["WRITE_BACK"],
     is_support_fd_cache = True,
     is_support_sn = True,
     is_valid = '''
@@ -304,7 +305,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'macro_meta',
     read_odirect = False,
-    write_odirect = False,
+    write_strategy = ["WRITE_BACK"],
     is_support_fd_cache = True,
     is_support_sn = True,
     is_valid = '''
@@ -463,7 +464,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_data',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_support_fd_cache = True,
     is_read_out_of_bounds = False,
     is_path_include_inner_tablet = True,
@@ -663,6 +664,28 @@ int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
   return ret;
 }
 ''',
+    get_parent_dir = '''
+int get_parent_dir(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
+{
+  int ret = OB_SUCCESS;
+  // inner_tablet: tenant_id_epoch_id/shared_mini_macro_cache/ls/ls_id
+  // user_tablet: tenant_id_epoch_id/shared_mini_macro_cache/scatter_id
+  if (file_id.meta_is_inner_tablet()) {
+    if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%s/%ld",
+              OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id,
+              SHARED_MINI_MACRO_CACHE_DIR_STR, LS_DIR_STR, file_id.meta_ls_id()))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%02lX",
+              OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id,
+              SHARED_MINI_MACRO_CACHE_DIR_STR, (file_id.hash() % ObDirManager::SHARED_MACRO_SCATTER_DIR_NUM)))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    }
+  }
+  return ret;
+}
+''',
     create_parent_dir = '''
 int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
 {
@@ -727,7 +750,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_meta',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_support_fd_cache = True,
     is_read_out_of_bounds = False,
     is_path_include_inner_tablet = True,
@@ -927,6 +950,28 @@ int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
   return ret;
 }
 ''',
+    get_parent_dir = '''
+int get_parent_dir(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
+{
+  int ret = OB_SUCCESS;
+  // inner_tablet: tenant_id_epoch_id/shared_mini_macro_cache/ls/ls_id
+  // user_tablet: tenant_id_epoch_id/shared_mini_macro_cache/scatter_id
+  if (file_id.meta_is_inner_tablet()) {
+    if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%s/%ld",
+              OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id,
+              SHARED_MINI_MACRO_CACHE_DIR_STR, LS_DIR_STR, file_id.meta_ls_id()))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%02lX",
+              OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id,
+              SHARED_MINI_MACRO_CACHE_DIR_STR, (file_id.hash() % ObDirManager::SHARED_MACRO_SCATTER_DIR_NUM)))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    }
+  }
+  return ret;
+}
+''',
     create_parent_dir = '''
 int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
 {
@@ -990,7 +1035,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_data',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"],
     is_support_fd_cache = True,
     is_read_out_of_bounds = False,
     is_path_include_inner_tablet = True,
@@ -1252,7 +1297,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_meta',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"],
     is_support_fd_cache = True,
     is_read_out_of_bounds = False,
     is_path_include_inner_tablet = True,
@@ -1514,7 +1559,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_data',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"],
     is_support_fd_cache = True,
     is_read_out_of_bounds = False,
     is_major = True,
@@ -1677,7 +1722,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_meta',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"],
     is_support_fd_cache = True,
     is_read_out_of_bounds = False,
     is_major = True,
@@ -1840,7 +1885,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'tenant_data',
     read_odirect = False,
-    write_odirect = False,
+    write_strategy = ["WRITE_BACK"],
     need_fsync = False,
     can_append_write = True,
     is_read_out_of_bounds = False,
@@ -1978,7 +2023,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'others',
     read_odirect = False,
-    write_odirect = False,
+    write_strategy = ["WRITE_BACK"],
     is_pin_local = True,
     is_overwrite = True,
     server_tenant_can_have = True,
@@ -2034,7 +2079,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'tablet_meta',
     read_odirect = False,
-    write_odirect = False,
+    write_strategy = ["WRITE_BACK"],
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
 {
@@ -2222,7 +2267,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'tenant_meta',
     read_odirect = False,
-    write_odirect = False,
+    write_strategy = ["WRITE_BACK"],
     is_overwrite = True,
     use_reserved_disk_space = True,
     can_append_write = True,
@@ -2410,7 +2455,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'tenant_meta',
     read_odirect = True,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     server_tenant_can_have = True,
     is_support_sn = True,
     is_valid = '''
@@ -2524,7 +2569,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'others',
     read_odirect = True,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_major = True,
     is_read_out_of_bounds = False,
     is_valid = '''
@@ -2570,7 +2615,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'others',
     read_odirect = True,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_major = True,
     is_read_out_of_bounds = False,
     is_valid = '''
@@ -2616,7 +2661,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'others',
     read_odirect = True,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_major = True,
     is_read_out_of_bounds = False,
     is_valid = '''
@@ -2662,7 +2707,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'others',
     read_odirect = True,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_major = True,
     is_read_out_of_bounds = False,
     is_valid = '''
@@ -2708,7 +2753,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'others',
     read_odirect = False,
-    write_odirect = False,
+    write_strategy = ["WRITE_BACK"],
     is_pin_local = True,
     is_overwrite = True,
     is_valid = '''
@@ -2782,7 +2827,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'others',
     read_odirect = True,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     server_tenant_can_have = True,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
@@ -2864,7 +2909,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_data',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
 )
 
 def_storage_object_type_cfg(
@@ -2874,7 +2919,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_meta',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
 )
 
 def_storage_object_type_cfg(
@@ -2884,7 +2929,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'others',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
 {
@@ -2950,7 +2995,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_data',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_support_fd_cache = True,
     is_read_out_of_bounds = False,
     is_mds = True,
@@ -3113,7 +3158,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_meta',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_support_fd_cache = True,
     is_read_out_of_bounds = False,
     is_mds = True,
@@ -3276,7 +3321,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_data',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"],
     is_support_fd_cache = True,
     is_read_out_of_bounds = False,
     is_mds = True,
@@ -3438,7 +3483,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_meta',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"],
     is_support_fd_cache = True,
     is_read_out_of_bounds = False,
     is_mds = True,
@@ -3600,7 +3645,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'others',
     read_odirect = True,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
 {
@@ -3628,7 +3673,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'tablet_meta',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_overwrite = True,
     is_path_include_inner_tablet = True,
     is_valid = '''
@@ -3921,7 +3966,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'others',
     read_odirect = True,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_overwrite = True,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
@@ -3967,7 +4012,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'tenant_data',
     read_odirect = False,
-    write_odirect = False,
+    write_strategy = ["WRITE_THROUGH"],
     is_support_sn = True,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
@@ -4066,7 +4111,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'others',
     read_odirect = True,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
 {
@@ -4149,7 +4194,7 @@ def_storage_object_type_cfg(
     access_mode = 'private',
     data_type = 'others',
     read_odirect = True,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
 {
@@ -4231,7 +4276,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_data',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_support_fd_cache = True,
     is_major = True,
     is_read_out_of_bounds = False,
@@ -4394,8 +4439,9 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'macro_meta',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_support_fd_cache = True,
+    is_major = True,
     is_read_out_of_bounds = False,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
@@ -4549,6 +4595,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 ''',
 )
 
+
 def_storage_object_type_cfg(
     obj_type = 'SHARED_TABLET_SUB_META_IN_TABLE',  #ObSharedTabletSubMetaInTableType
     id = 83,
@@ -4556,7 +4603,7 @@ def_storage_object_type_cfg(
     access_mode = 'shared',
     data_type = 'tablet_meta',
     read_odirect = False,
-    write_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
     is_overwrite = True,
     is_path_include_inner_tablet = True,
     is_store_in_table = True,
@@ -4712,78 +4759,5 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 ''',
 )
 
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINI_V2_DATA_MACRO',
-    id = 84,
-    owner = 'yunxing.cyx',
-    access_mode = 'shared',
-    data_type = 'macro_data',
-    read_odirect = False,
-    write_odirect = True,
-    is_support_fd_cache = True,
-    is_read_out_of_bounds = False,
-    is_path_include_inner_tablet = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-''',
-)
-
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINI_V2_META_MACRO',
-    id = 85,
-    owner = 'yunxing.cyx',
-    access_mode = 'shared',
-    data_type = 'macro_meta',
-    read_odirect = False,
-    write_odirect = True,
-    is_support_fd_cache = True,
-    is_read_out_of_bounds = False,
-    is_path_include_inner_tablet = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-''',
-)
-
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINOR_V2_DATA_MACRO',
-    id = 86,
-    owner = 'yunxing.cyx',
-    access_mode = 'shared',
-    data_type = 'macro_data',
-    read_odirect = False,
-    write_odirect = True,
-    is_support_fd_cache = True,
-    is_read_out_of_bounds = False,
-    is_path_include_inner_tablet = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-''',
-)
-
-def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINOR_V2_META_MACRO',
-    id = 87,
-    owner = 'yunxing.cyx',
-    access_mode = 'shared',
-    data_type = 'macro_meta',
-    read_odirect = False,
-    write_odirect = True,
-    is_support_fd_cache = True,
-    is_read_out_of_bounds = False,
-    is_path_include_inner_tablet = True,
-    is_valid = '''
-bool is_valid(const MacroBlockId &file_id) const
-{
-  return true;
-}
-''',
-)
+# Import optimized SHARED_MINI_DATA_MACRO_V2, SHARED_MINI_META_MACRO_V2, SHARED_MINOR_DATA_MACRO_V2, SHARED_MINOR_META_MACRO_V2 configurations
+exec(open("shared_mini_minor_data_macro_config.py").read())
