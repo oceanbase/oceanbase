@@ -96,6 +96,7 @@ private:
   int delete_backup_set_meta_info_files_();
   int delete_backup_piece_meta_info_files_();
   int delete_backup_dir_(const share::ObBackupPath &path);
+  int check_backup_dir_clean_ready_(const share::ObBackupPath &path, bool &is_clean_ready);
   int check_backup_set_dir_empty_();
   int check_backup_piece_dir_empty_();
   int delete_backup_set_dir_();
