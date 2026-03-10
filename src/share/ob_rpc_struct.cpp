@@ -3449,7 +3449,8 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(index_ids),
        K_(table_id),
        K_(is_drop_in_rebuild_task),
-       K_(is_oracle_tmp_table_v2_index_table));
+       K_(is_oracle_tmp_table_v2_index_table),
+       K_(is_parent_task_dropping_search_index));
   J_OBJ_END();
   return pos;
 }
@@ -3472,7 +3473,8 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     table_id_,
                     is_drop_in_rebuild_task_,
                     is_parent_task_dropping_spiv_index_,
-                    is_oracle_tmp_table_v2_index_table_);
+                    is_oracle_tmp_table_v2_index_table_,
+                    is_parent_task_dropping_search_index_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 
@@ -3497,6 +3499,7 @@ int ObDropIndexArg::assign(const ObDropIndexArg &other)
     table_id_ = other.table_id_;
     is_drop_in_rebuild_task_ = other.is_drop_in_rebuild_task_;
     is_oracle_tmp_table_v2_index_table_ = other.is_oracle_tmp_table_v2_index_table_;
+    is_parent_task_dropping_search_index_ = other.is_parent_task_dropping_search_index_;
   }
   return ret;
 }
