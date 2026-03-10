@@ -120,7 +120,8 @@ int ObCatalogDDLService::grant_revoke_catalog(const ObCatalogPrivSortKey &catalo
   } else if (OB_FAIL(ObDDLSqlGenerator::gen_catalog_priv_sql(ObAccountArg(user_name, host_name),
                                                              need_priv,
                                                              true,
-                                                             ddl_stmt_sql_str))) {
+                                                             ddl_stmt_sql_str,
+                                                             is_ora_mode))) {
     LOG_WARN("gen_catalog_priv sql failed", K(ret), K(user_name), K(host_name));
   } else {
     ddl_stmt_str = ddl_stmt_sql_str.string();
