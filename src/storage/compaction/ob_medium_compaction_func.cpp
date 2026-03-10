@@ -1652,7 +1652,7 @@ int ObMediumCompactionScheduleFunc::fill_mlog_purge_scn(ObMediumCompactionInfo &
 {
   int ret = OB_SUCCESS;
   int64_t mlog_purge_scn = 0;
-  if (medium_info.data_version_ < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
+  if (ObCompactionTTLUtil::DISABLE_MLOG_PURGE_IN_COMPACTION || medium_info.data_version_ < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
     medium_info.contain_mds_filter_info_ = false;
   } else if (!medium_info.storage_schema_.is_mlog_table()) {
     ret = OB_NOT_SUPPORTED;
@@ -1716,7 +1716,7 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
     LOG_WARN("failed to get all memtable", K(ret), K(tablet));
   } else if (!memtables.empty()) {
     // tablet has memtable, exist inc data to merge
-  } else if (medium_info.storage_schema_.is_mlog_table()) {
+  } else if (medium_info.storage_schema_.is_mlog_table() && !ObCompactionTTLUtil::DISABLE_MLOG_PURGE_IN_COMPACTION) {
     LOG_TRACE("recycle data in major compaction, should not do skip merge", KR(ret));
   } else if (read_mds && OB_FAIL(mds_info_mgr.init(allocator_, *tablet_handle_.get_obj(), nullptr/*split_extra_tablet_handles_ptr*/, read_version_range, false/*for_access*/))) {
     LOG_WARN("failed to init mds filter info mgr", KR(ret), K(read_version_range));

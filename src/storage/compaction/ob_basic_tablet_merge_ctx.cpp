@@ -1759,7 +1759,10 @@ int ObBasicTabletMergeCtx::alloc_mds_info_compaction_filter()
   } else if (filter_ctx_.mds_filter_info_.has_mlog_purge_scn()) {
     const int64_t recycle_version = filter_ctx_.mds_filter_info_.get_mlog_purge_scn();
     const ObICompactionFilter::CompactionFilterType filter_type = ObICompactionFilter::MLOG_PURGE_FILTER;
-    if (OB_FAIL(ObCompactionFilterFactory::alloc_compaction_filter<ObRowscnFilter>(
+    if (ObCompactionTTLUtil::DISABLE_MLOG_PURGE_IN_COMPACTION) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mlog purge scn is not supported in compaction", KR(ret), K(recycle_version));
+    } else if (OB_FAIL(ObCompactionFilterFactory::alloc_compaction_filter<ObRowscnFilter>(
       mem_ctx_.get_allocator(),
       filter_ctx_.compaction_filter_,
       recycle_version,
@@ -2007,7 +2010,8 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
   }
   if (OB_SUCC(ret) && storage_schema->is_mlog_table()) {
     int64_t mlog_purge_scn = 0;
-    if (OB_FAIL(ObMLogPurgeInfoHelper::get_mlog_purge_scn(table_id, get_merge_version(), mlog_purge_scn))) {
+    if (ObCompactionTTLUtil::DISABLE_MLOG_PURGE_IN_COMPACTION) {
+    } else if (OB_FAIL(ObMLogPurgeInfoHelper::get_mlog_purge_scn(table_id, get_merge_version(), mlog_purge_scn))) {
       LOG_WARN("failed to get mlog purge scn", KR(ret), K(table_id));
     } else if (mlog_purge_scn > 0 && OB_FAIL(filter_ctx_.mds_filter_info_.init(min_data_version, mlog_purge_scn))) {
       LOG_WARN("failed to init mds filter info", KR(ret), K(mlog_purge_scn));

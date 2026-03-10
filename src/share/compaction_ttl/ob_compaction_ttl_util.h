@@ -27,6 +27,7 @@ struct ObCompactionTTLUtil final
 {
 public:
   static const uint64_t COMPACTION_TTL_CMP_DATA_VERSION = DATA_VERSION_4_5_1_0;
+  static const bool DISABLE_MLOG_PURGE_IN_COMPACTION = true;
   static bool is_enable_compaction_ttl(uint64_t tenant_id);
   static bool is_compaction_ttl_merge_engine(const ObMergeEngineType &merge_engine_type) {
     return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type
