@@ -41,6 +41,7 @@ public:
   typedef common::ObFixedArray<ObColDesc, common::ObIAllocator> ObColDescArray;
   typedef common::ObFixedArray<uint64_t, common::ObIAllocator> ColumnIdArray;
   typedef common::ObFixedArray<common::ObCollectionArrayType*, common::ObIAllocator> ArrayTypeArray;
+  typedef common::ObFixedArray<ObString, common::ObIAllocator> ColumnConfigArray;
 
   explicit ObTableSchemaParam(common::ObIAllocator &allocator);
   virtual ~ObTableSchemaParam();
@@ -191,6 +192,7 @@ private:
   ColumnIdArray search_idx_included_cids_;
   Projector search_idx_included_cid_idxes_;
   ArrayTypeArray search_idx_arr_types_;
+  ColumnConfigArray search_idx_column_comments_;
 };
 
 class ObTableDMLParam

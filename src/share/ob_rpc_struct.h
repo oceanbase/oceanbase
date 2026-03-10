@@ -2890,7 +2890,8 @@ public:
                        prefix_len_(0),
                        order_type_(common::ObOrderType::ASC),
                        column_id_(common::OB_INVALID_ID),
-                       is_func_index_(false)
+                       is_func_index_(false),
+                       column_comment_()
   {}
   void reset()
   {
@@ -2899,6 +2900,7 @@ public:
     order_type_ = common::ObOrderType::ASC;
     column_id_ = common::OB_INVALID_ID;
     is_func_index_ = false;
+    column_comment_.reset();
   }
   inline uint64_t get_column_id() const { return column_id_; }
 
@@ -2909,6 +2911,7 @@ public:
   common::ObOrderType order_type_;
   uint64_t column_id_;
   bool is_func_index_;   //Whether the mark is a function index, the default is false.
+  common::ObString column_comment_;  // column-level config for search index (stored in index def column comment)
 };
 
 struct ObTableOption

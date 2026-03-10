@@ -67,7 +67,8 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     vec_embedded_col_id_(OB_INVALID_ID),
     search_idx_included_cids_(allocator),
     search_idx_included_cid_idxes_(allocator),
-    search_idx_arr_types_(allocator)
+    search_idx_arr_types_(allocator),
+    search_idx_column_comments_(allocator)
 {
 }
 
@@ -117,6 +118,7 @@ void ObTableSchemaParam::reset()
   search_idx_included_cids_.reset();
   search_idx_included_cid_idxes_.reset();
   search_idx_arr_types_.reset();
+  search_idx_column_comments_.reset();
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -727,6 +729,7 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   }
   OB_UNIS_ENCODE(fts_index_type_);
   OB_UNIS_ENCODE(is_rowscn_ttl_table_);
+  OB_UNIS_ENCODE(search_idx_column_comments_);
   return ret;
 }
 
@@ -928,6 +931,7 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   }
   OB_UNIS_DECODE(fts_index_type_);
   OB_UNIS_DECODE(is_rowscn_ttl_table_);
+  OB_UNIS_DECODE(search_idx_column_comments_);
   return ret;
 }
 
@@ -1001,6 +1005,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   }
   OB_UNIS_ADD_LEN(fts_index_type_);
   OB_UNIS_ADD_LEN(is_rowscn_ttl_table_);
+  OB_UNIS_ADD_LEN(search_idx_column_comments_);
   return len;
 }
 

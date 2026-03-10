@@ -3160,7 +3160,8 @@ OB_SERIALIZE_MEMBER(ObColumnSortItem,
                                  prefix_len_,
                                  order_type_,
                                  column_id_,
-                                 is_func_index_);
+                                 is_func_index_,
+                                 column_comment_);
 
 bool ObTableOption::is_valid() const
 {

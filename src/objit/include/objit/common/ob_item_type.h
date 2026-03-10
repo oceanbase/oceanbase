@@ -3065,6 +3065,12 @@ typedef enum ObItemType
   T_NOCACHE_HINT = 4971,
 
   T_DOMAIN_LIST = 4972, // for dblink yacc grammar
+  // search index ddl params
+  T_SEARCH_INDEX_COLUMN_PARAMS = 4973,
+  T_SEARCH_INDEX_INCLUDE_PATHS = 4974,
+  T_SEARCH_INDEX_EXCLUDE_PATHS = 4975,
+  T_SEARCH_INDEX_INCLUDE_TYPES = 4976,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
