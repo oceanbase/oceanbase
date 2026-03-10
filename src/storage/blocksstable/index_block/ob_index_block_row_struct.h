@@ -157,10 +157,11 @@ public:
 
 struct ObIndexBlockRowHeader
 {
-  static const int64_t INDEX_BLOCK_HEADER_V1 = 1;
-  static const int64_t INDEX_BLOCK_HEADER_V2 = 2;
-  static const int64_t INDEX_BLOCK_HEADER_V3 = 3; // add meta info for major node
+  static const uint8_t INDEX_BLOCK_HEADER_V1 = 1;
+  static const uint8_t INDEX_BLOCK_HEADER_V2 = 2; // From 4.3.3, add macro fourth id、logic_micro_id、data_checksum to support SS
+  static const uint8_t INDEX_BLOCK_HEADER_V3 = 3; // From 4.5.0, add meta info for major node
   static const int64_t DEFAULT_IDX_ROW_MACRO_IDX  = MacroBlockId::AUTONOMIC_BLOCK_INDEX;
+  static uint8_t mapping_data_version_to_header_version(const uint64_t data_version);
   static MacroBlockId DEFAULT_IDX_ROW_MACRO_ID;
   static MacroBlockId INVALID_MACRO_BLOCK_ID;
   static ObLogicMicroBlockId INVALID_LOGICAL_MICRO_BLOCK_ID;
@@ -202,7 +203,12 @@ struct ObIndexBlockRowHeader
           || (get_macro_id() != DEFAULT_IDX_ROW_MACRO_ID && is_data_block() && is_data_index() /* clustered index */);
     bool logic_id_valid = !(has_logic_micro_id() && has_shared_data_macro_id());
     bool bloom_filter_valid = (!has_macro_block_bloom_filter() || is_macro_node());
-    return version_valid && macro_id_valid && logic_id_valid && bloom_filter_valid;
+    // V1 serialized format does not include macro_id_fourth_id_; in-place parser points into
+    // a buffer of V1 size, so reading macro_id_fourth_id_ would read past the header (garbage).
+    bool compact_valid = (version_ == INDEX_BLOCK_HEADER_V1)
+                              ? (!has_logic_micro_id() && !has_shared_data_macro_id())
+                              : true;
+    return version_valid && macro_id_valid && logic_id_valid && bloom_filter_valid && compact_valid;
   }
 
   OB_INLINE bool is_minor_meta_info_valid() const
@@ -272,15 +278,24 @@ struct ObIndexBlockRowHeader
   {
     return has_shared_data_macro_id() && get_shared_data_macro_id().is_valid();
   }
+  // Used in read path to get the length of the serialized header buffer for deserialization.
   OB_INLINE int64_t get_serialize_size() const
   {
-    int64_t header_size = 0;
+    int64_t header_size = sizeof(ObIndexBlockRowHeader);
     if (INDEX_BLOCK_HEADER_V1 == version_) {
-      header_size = sizeof(ObIndexBlockRowHeader) - sizeof(macro_id_fourth_id_);
-    } else {
-      header_size = sizeof(ObIndexBlockRowHeader);
+      header_size -= sizeof(macro_id_fourth_id_);
+      header_size -= (sizeof(logic_micro_id_) + sizeof(data_checksum_));
     }
-    if (!has_logic_micro_id() && !has_shared_data_macro_id()) {
+    return header_size;
+  }
+  // Used in write path to get the length of the serialized header buffer for serialization.
+  OB_INLINE int64_t get_serialize_size(const uint64_t data_version) const
+  {
+    int64_t header_size = sizeof(ObIndexBlockRowHeader);
+    OB_ASSERT(sizeof(logic_micro_id_) >= sizeof(shared_data_macro_id_));
+    if (data_version < DATA_VERSION_4_3_3_0) {
+      OB_ASSERT(version_ == INDEX_BLOCK_HEADER_V1);
+      header_size -= sizeof(macro_id_fourth_id_);
       header_size -= (sizeof(logic_micro_id_) + sizeof(data_checksum_));
     }
     return header_size;
@@ -326,7 +341,8 @@ struct ObIndexBlockRowHeader
   OB_INLINE bool is_single_version_rows() const { return single_version_rows_; }
 
   int fill_micro_des_meta(const bool need_deep_copy_key, ObMicroBlockDesMeta &des_meta) const;
-
+  int deserialize(const char *data_buf, const int64_t data_len, int64_t &pos);
+  int serialize(char *data_buf, const int64_t buf_size, int64_t &write_pos, const uint64_t data_version) const;
   union { //FARM COMPAT WHITELIST
     uint64_t pack_;
     struct
@@ -396,9 +412,9 @@ struct ObIndexBlockRowHeader
                K_(schema_version),
                K_(macro_block_count),
                K_(micro_block_count),
-               K_(logic_micro_id),
-               K_(data_checksum),
-               K_(shared_data_macro_id),
+               K(get_logic_micro_id()),
+               K(get_data_checksum()),
+               K(get_shared_data_macro_id()),
                K_(has_shared_data_macro_id));
 private:
   OB_INLINE bool has_logic_micro_id() const { return 1 == has_logic_micro_id_; }
@@ -956,12 +972,22 @@ public:
 private:
   int set_rowkey(const ObIndexBlockRowDesc &desc);
   int set_rowkey(const ObDatumRowkey &rowkey);
-  int append_header_and_meta(const ObIndexBlockRowDesc &desc, const int64_t &buf_size);
+  int build_header_and_meta(const ObIndexBlockRowDesc &desc,
+                              const int64_t &buf_size,
+                              ObIndexBlockRowHeader &header,
+                              ObIndexBlockRowMinorMetaInfo &minor_meta);
+  int serialize_header_and_meta(const ObIndexBlockRowHeader &header,
+                                const ObIndexBlockRowMinorMetaInfo &minor_meta_input,
+                                const uint64_t &data_version,
+                                const int64_t &row_offset,
+                                const int64_t &buf_size);
   int append_aggregate_data(
+      const ObIndexBlockRowHeader &header,
       const ObIndexBlockRowDesc &desc,
       const int64_t &buf_size,
       ObAggRowWriter &agg_writer);
   int calc_data_size(const ObIndexBlockRowDesc &desc, ObAggRowWriter &agg_writer, int64_t &size);
+  int get_data_version(const uint64_t major_working_cluster_version, uint64_t &data_version) const;
 
 private:
   // This class does not hold allocator separately as a util class
@@ -972,7 +998,6 @@ private:
   int64_t rowkey_column_count_;
   char *data_buf_;
   int64_t write_pos_;
-  ObIndexBlockRowHeader *header_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObIndexBlockRowBuilder);
 };
@@ -981,7 +1006,7 @@ class ObIndexBlockRowParser
 {
 public:
   ObIndexBlockRowParser();
-  virtual ~ObIndexBlockRowParser() {}
+  ~ObIndexBlockRowParser() { reset(); }
 
   void reset();
   int init(const int64_t rowkey_column_count, const ObDatumRow &index_row);
