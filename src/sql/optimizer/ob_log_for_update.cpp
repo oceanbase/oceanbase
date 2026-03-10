@@ -134,6 +134,17 @@ int ObLogForUpdate::compute_sharding_info()
   return ret;
 }
 
+int ObLogForUpdate::compute_plan_type()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::compute_plan_type())) {
+    LOG_WARN("failed to compute plan type", K(ret));
+  } else if (is_multi_part_dml()) {
+    location_type_ = ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN;
+  } else { /*do nothing*/ }
+  return ret;
+}
+
 int ObLogForUpdate::allocate_granule_pre(AllocGIContext &ctx)
 {
   return pw_allocate_granule_pre(ctx);
