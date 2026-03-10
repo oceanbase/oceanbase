@@ -195,6 +195,7 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
   if (OB_SUCC(ret)) {
     OZ (def_levels_buf_.allocate_array(allocator_, eval_ctx.max_batch_size_));
     OZ (rep_levels_buf_.allocate_array(allocator_, eval_ctx.max_batch_size_));
+    OZ (data_loader_buffers_.init(allocator_, eval_ctx.max_batch_size_));
   }
 
   if (OB_SUCC(ret)) {
@@ -770,6 +771,39 @@ bool ObParquetTableRowIterator::DataLoader::check_array_column_schema(const ::pa
   return bret;
 }
 
+int ObParquetTableRowIterator::DataLoaderBuffers::init(common::ObIAllocator &allocator,
+                                                       const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t max_value_size = sizeof(parquet::Int96);
+  const int64_t alloc_size = max_value_size * batch_size;
+  if (OB_UNLIKELY(batch_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid batch size", K(ret), K(batch_size));
+  } else if (OB_ISNULL(shared_values_buf_ = allocator.alloc(alloc_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate shared value buffer failed", K(ret), K(alloc_size), K(batch_size));
+  } else {
+    int32_values_
+        = ObArrayWrap<int32_t>(reinterpret_cast<int32_t *>(shared_values_buf_), batch_size);
+    int64_values_
+        = ObArrayWrap<int64_t>(reinterpret_cast<int64_t *>(shared_values_buf_), batch_size);
+    bool_values_ = ObArrayWrap<bool>(reinterpret_cast<bool *>(shared_values_buf_), batch_size);
+    float_values_ = ObArrayWrap<float>(reinterpret_cast<float *>(shared_values_buf_), batch_size);
+    double_values_
+        = ObArrayWrap<double>(reinterpret_cast<double *>(shared_values_buf_), batch_size);
+    int96_values_
+        = ObArrayWrap<parquet::Int96>(reinterpret_cast<parquet::Int96 *>(shared_values_buf_),
+                                      batch_size);
+  }
+
+  OZ (byte_array_values_.allocate_array(allocator, batch_size));
+  OZ (fixed_len_byte_array_values_.allocate_array(allocator, batch_size));
+
+  return ret;
+}
+
 ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::DataLoader::select_load_function(
     const ObDatumMeta &datum_type, const parquet::ColumnDescriptor *col_desc, const ::parquet::schema::Node* node, const uint16_t type_id)
 {
@@ -944,12 +978,9 @@ int ObParquetTableRowIterator::DataLoader::load_int32_to_int32_vec()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
   int16_t max_def_level = reader_->descr()->max_definition_level();
-  ObArrayWrap<int32_t> values;
-
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  ObArrayWrap<int32_t> &values = buffers_.int32_values_;
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -975,12 +1006,9 @@ int ObParquetTableRowIterator::DataLoader::load_date_to_mysql_date()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
   int16_t max_def_level = reader_->descr()->max_definition_level();
-  ObArrayWrap<int32_t> values;
-
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  ObArrayWrap<int32_t> &values = buffers_.int32_values_;
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1237,8 +1265,7 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
   //int16_t def_scale = static_cast<int16_t>(reader_->descr()->type_precision());
 
   if (reader_->descr()->physical_type() == parquet::Type::type::INT32) {
-    ObArrayWrap<int32_t> values;
-    OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+    ObArrayWrap<int32_t> &values = buffers_.int32_values_;
     if (OB_SUCC(ret)) {
       row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
             batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1254,8 +1281,7 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
       }
     }
   } else if (reader_->descr()->physical_type() == parquet::Type::type::INT64) {
-    ObArrayWrap<int64_t> values;
-    OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+    ObArrayWrap<int64_t> &values = buffers_.int64_values_;
     if (OB_SUCC(ret)) {
       row_count_ = static_cast<parquet::Int64Reader*>(reader_)->ReadBatch(
             batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1271,8 +1297,7 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
       }
     }
   } else if (reader_->descr()->physical_type() == parquet::Type::type::BOOLEAN) {
-    ObArrayWrap<bool> values;
-    OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+    ObArrayWrap<bool> &values = buffers_.bool_values_;
     if (OB_SUCC(ret)) {
       row_count_ = static_cast<parquet::BoolReader*>(reader_)->ReadBatch(
             batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1288,14 +1313,13 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
       }
     }
   } else if (reader_->descr()->physical_type() == parquet::Type::Type::FIXED_LEN_BYTE_ARRAY) {
-    ObArrayWrap<parquet::FixedLenByteArray> values;
+    ObArrayWrap<parquet::FixedLenByteArray> &values = buffers_.fixed_len_byte_array_values_;
     int32_t fixed_length = reader_->descr()->type_length();
     int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
                                                     (file_col_expr_->datum_meta_.precision_ == -1)
                                                     ? 38 : file_col_expr_->datum_meta_.precision_);
     ObArrayWrap<char> buffer;
     OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
-    OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
     if (OB_SUCC(ret)) {
       row_count_ = static_cast<parquet::FixedLenByteArrayReader*>(reader_)->ReadBatch(
             batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1313,13 +1337,12 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
       }
     }
   } else if (reader_->descr()->physical_type() == parquet::Type::Type::BYTE_ARRAY) {
-    ObArrayWrap<parquet::ByteArray> values;
+    ObArrayWrap<parquet::ByteArray> &values = buffers_.byte_array_values_;
     int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
                                                     (file_col_expr_->datum_meta_.precision_ == -1)
                                                     ? 38 : file_col_expr_->datum_meta_.precision_);
     ObArrayWrap<char> buffer;
     OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
-    OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
     if (OB_SUCC(ret)) {
       row_count_ = static_cast<parquet::ByteArrayReader*>(reader_)->ReadBatch(
             batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1345,13 +1368,11 @@ int ObParquetTableRowIterator::DataLoader::load_fixed_string_col()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   int16_t max_def_level = reader_->descr()->max_definition_level();
   StrDiscVec *text_vec = static_cast<StrDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
-  ObArrayWrap<parquet::FixedLenByteArray> values;
+  ObArrayWrap<parquet::FixedLenByteArray> &values = buffers_.fixed_len_byte_array_values_;
 
   CK (VEC_DISCRETE == text_vec->get_format());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     int32_t fixed_length = reader_->descr()->type_length();
     row_count_ = static_cast<parquet::FixedLenByteArrayReader*>(reader_)->ReadBatch(
@@ -1411,13 +1432,12 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   int16_t max_def_level = reader_->descr()->max_definition_level();
   StrDiscVec *text_vec = static_cast<StrDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
-  ObArrayWrap<parquet::ByteArray> values;
+  ObArrayWrap<parquet::ByteArray> &values = buffers_.byte_array_values_;
 
-  CK (VEC_DISCRETE == text_vec->get_format());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  CK(VEC_DISCRETE == text_vec->get_format());
+
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::ByteArrayReader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1480,19 +1500,16 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
 int ObParquetTableRowIterator::DataLoader::load_string_col_dict()
 {
   int ret = OB_SUCCESS;
-
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   int16_t max_def_level = reader_->descr()->max_definition_level();
   StrDiscVec *text_vec = static_cast<StrDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
 
   CK(VEC_DISCRETE == text_vec->get_format());
   CK(OB_NOT_NULL(dict_filter_pushdown_));
 
-  ObArrayWrap<int32_t> indices;
+  ObArrayWrap<int32_t> &indices = buffers_.int32_values_;
   const parquet::ByteArray *dict_values = nullptr;
   int32_t dict_len = 0;
   int64_t indices_cnt = 0;
-  OZ(indices.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
 
   const bool is_oracle_mode = lib::is_oracle_mode();
   const bool is_byte_length
@@ -1593,13 +1610,11 @@ int ObParquetTableRowIterator::DataLoader::load_int32_to_int64_vec()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   int16_t max_def_level = reader_->descr()->max_definition_level();
   ObFixedLengthBase *int64_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
-  ObArrayWrap<int32_t> values;
+  ObArrayWrap<int32_t> &values = buffers_.int32_values_;
 
   CK (VEC_FIXED == int64_vec->get_format());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1626,13 +1641,11 @@ int ObParquetTableRowIterator::DataLoader::load_bool_to_int64_vec()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   int16_t max_def_level = reader_->descr()->max_definition_level();
   ObFixedLengthBase *int64_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
-  ObArrayWrap<bool> values;
+  ObArrayWrap<bool> &values = buffers_.bool_values_;
 
   CK (VEC_FIXED == int64_vec->get_format());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::BoolReader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1659,13 +1672,11 @@ int ObParquetTableRowIterator::DataLoader::load_uint32_to_int64_vec()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   int16_t max_def_level = reader_->descr()->max_definition_level();
   ObFixedLengthBase *int32_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
-  ObArrayWrap<int32_t> values;
+  ObArrayWrap<int32_t> &values = buffers_.int32_values_;
 
   CK (VEC_FIXED == int32_vec->get_format());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1694,13 +1705,11 @@ int ObParquetTableRowIterator::DataLoader::load_int64_to_int64_vec()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   int16_t max_def_level = reader_->descr()->max_definition_level();
   ObFixedLengthBase *int64_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
-  ObArrayWrap<int64_t> values;
+  ObArrayWrap<int64_t> &values = buffers_.int64_values_;
 
   CK (VEC_FIXED == int64_vec->get_format());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int64Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1729,12 +1738,10 @@ int ObParquetTableRowIterator::DataLoader::load_date_col_to_datetime()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
   int16_t max_def_level = reader_->descr()->max_definition_level();
-  ObArrayWrap<int32_t> values;
+  ObArrayWrap<int32_t> &values = buffers_.int32_values_;
 
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1756,11 +1763,9 @@ int ObParquetTableRowIterator::DataLoader::load_date_col_to_mysql_datetime()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
   int16_t max_def_level = reader_->descr()->max_definition_level();
-  ObArrayWrap<int32_t> values;
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  ObArrayWrap<int32_t> &values = buffers_.int32_values_;
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1785,11 +1790,9 @@ int ObParquetTableRowIterator::DataLoader::load_year_col()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
   int16_t max_def_level = reader_->descr()->max_definition_level();
-  ObArrayWrap<int32_t> values;
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  ObArrayWrap<int32_t> &values = buffers_.int32_values_;
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1811,11 +1814,9 @@ int ObParquetTableRowIterator::DataLoader::load_time_millis_col()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
   int16_t max_def_level = reader_->descr()->max_definition_level();
-  ObArrayWrap<int32_t> values;
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  ObArrayWrap<int32_t> &values = buffers_.int32_values_;
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1837,11 +1838,9 @@ int ObParquetTableRowIterator::DataLoader::load_time_nanos_col()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
   int16_t max_def_level = reader_->descr()->max_definition_level();
-  ObArrayWrap<int64_t> values;
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  ObArrayWrap<int64_t> &values = buffers_.int64_values_;
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int64Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1892,15 +1891,13 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_millis_col()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
   int16_t max_def_level = reader_->descr()->max_definition_level();
-  ObArrayWrap<int64_t> values;
+  ObArrayWrap<int64_t> &values = buffers_.int64_values_;
   int64_t adjust_us = calc_tz_adjust_us(reader_->descr()->logical_type().get(),
                                         file_col_expr_->datum_meta_,
                                         eval_ctx_.exec_ctx_.get_my_session());
 
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int64Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1933,14 +1930,12 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_micros_col()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
   int16_t max_def_level = reader_->descr()->max_definition_level();
-  ObArrayWrap<int64_t> values;
+  ObArrayWrap<int64_t> &values = buffers_.int64_values_;
   int64_t adjust_us = calc_tz_adjust_us(reader_->descr()->logical_type().get(),
                                         file_col_expr_->datum_meta_,
                                         eval_ctx_.exec_ctx_.get_my_session());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int64Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -1973,14 +1968,12 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_nanos_col()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
   int16_t max_def_level = reader_->descr()->max_definition_level();
-  ObArrayWrap<int64_t> values;
+  ObArrayWrap<int64_t> &values = buffers_.int64_values_;
   int64_t adjust_us = calc_tz_adjust_us(reader_->descr()->logical_type().get(),
                                         file_col_expr_->datum_meta_,
                                         eval_ctx_.exec_ctx_.get_my_session());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int64Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -2014,14 +2007,12 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_hive()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
   int16_t max_def_level = reader_->descr()->max_definition_level();
-  ObArrayWrap<parquet::Int96> values;
+  ObArrayWrap<parquet::Int96> &values = buffers_.int96_values_;
   int64_t adjust_us = calc_tz_adjust_us(reader_->descr()->logical_type().get(),
                                         file_col_expr_->datum_meta_,
                                         eval_ctx_.exec_ctx_.get_my_session());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::Int96Reader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -2058,13 +2049,11 @@ int ObParquetTableRowIterator::DataLoader::load_float()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   int16_t max_def_level = reader_->descr()->max_definition_level();
   ObFixedLengthBase *float_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
-  ObArrayWrap<float> values;
+  ObArrayWrap<float> &values = buffers_.float_values_;
 
   CK (VEC_FIXED == float_vec->get_format());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::FloatReader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -2093,13 +2082,11 @@ int ObParquetTableRowIterator::DataLoader::load_double()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   int16_t max_def_level = reader_->descr()->max_definition_level();
   ObFixedLengthBase *double_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
-  ObArrayWrap<double> values;
+  ObArrayWrap<double> &values = buffers_.double_values_;
 
   CK (VEC_FIXED == double_vec->get_format());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::DoubleReader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -2128,13 +2115,11 @@ int ObParquetTableRowIterator::DataLoader::load_float_to_double()
 {
   int ret = OB_SUCCESS;
   int64_t values_cnt = 0;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
   int16_t max_def_level = reader_->descr()->max_definition_level();
   ObFixedLengthBase *double_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
-  ObArrayWrap<float> values;
+  ObArrayWrap<float> &values = buffers_.float_values_;
 
   CK (VEC_FIXED == double_vec->get_format());
-  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
   if (OB_SUCC(ret)) {
     row_count_ = static_cast<parquet::FloatReader*>(reader_)->ReadBatch(
           batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
@@ -3049,7 +3034,7 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
           DataLoader loader(eval_ctx, column_expr, arr_type,
                             eager_column_readers_.at(i).get(),
                             eager_record_readers_.at(i).get(),
-                            def_levels_buf_, rep_levels_buf_, str_res_mem_,
+                            def_levels_buf_, rep_levels_buf_, str_res_mem_, data_loader_buffers_,
                             capacity - load_row_count, load_row_count,
                             temp_row_count, state_.cur_row_group_row_count_,
                             default_value, state_.eager_read_row_counts_[i],
@@ -3294,7 +3279,7 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
           DataLoader loader(eval_ctx, column_expr, arr_type,
                             column_readers_.at(cur_col_id_).get(),
                             record_readers_.at(cur_col_id_).get(),
-                            def_levels_buf_, rep_levels_buf_, str_res_mem_,
+                            def_levels_buf_, rep_levels_buf_, str_res_mem_, data_loader_buffers_,
                             orig_load_row_count + read_range.at(j) - load_row_count, load_row_count,
                             temp_row_count, state_.cur_row_group_row_count_,
                             default_value, state_.read_row_counts_[cur_col_id_],
