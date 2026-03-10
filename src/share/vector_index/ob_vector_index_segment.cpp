@@ -1975,6 +1975,7 @@ void ObVecIdxFrozenData::reset()
   frozen_scn_.reset();
   segment_handle_.reset();
   vbitmap_.reset();
+  is_in_progress_ = false;
 }
 
 void ObVecIdxFrozenData::reuse()
@@ -1986,6 +1987,7 @@ void ObVecIdxFrozenData::reuse()
   frozen_scn_.reset();
   segment_handle_.reset();
   vbitmap_.reset();
+  is_in_progress_ = false;
 }
 
 void ObVecIdxFrozenData::free_memdata_resource(ObIAllocator *allocator, const uint64_t tenant_id)
