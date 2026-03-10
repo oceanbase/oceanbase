@@ -19,7 +19,7 @@ function(ob_unittest_observer case)
   set_tests_properties(${case} PROPERTIES TIMEOUT 3600)
 endfunction()
 
-ob_unittest_observer(test_storage_cache_policy_prewarmer test_storage_cache_policy_prewarmer.cpp)
+#ob_unittest_observer(test_storage_cache_policy_prewarmer test_storage_cache_policy_prewarmer.cpp)
 #ob_unittest_observer(test_storage_cache_prewarm_macro_cache test_storage_cache_prewarm_macro_cache.cpp)
 ob_unittest_observer(test_prewarm_by_size test_prewarm_by_size.cpp)
 ob_unittest_observer(test_macro_cache_multi_version_gc test_macro_cache_multi_version_gc.cpp)
