@@ -1724,7 +1724,7 @@ int ObLogTableScan::filter_before_index_back_set()
 {
   int ret = OB_SUCCESS;
   filter_before_index_back_.reset();
-  if (index_back_ && !is_vec_idx_scan_post_filter()) {
+  if (index_back_ && !is_vec_idx_scan_post_filter() && !is_vec_adaptive_scan()) {
     if (OB_FAIL(ObOptimizerUtil::check_filter_before_indexback(filter_exprs_,
                                                                idx_columns_,
                                                                filter_before_index_back_))) {
