@@ -1188,7 +1188,7 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::init_decoders()
       LOG_WARN("fail to alloc decoders buf", K(ret));
     } else {
       int i = 0;
-      for ( ; OB_SUCC(ret) && i < column_count_; ++i) {
+      for ( ; OB_SUCC(ret) && i < min(column_count_, request_cnt_); ++i) {
         col_type.set_type(static_cast<ObObjType>(transform_helper_.get_column_header(i).obj_type_));
         if (OB_FAIL(add_decoder(i, col_type, nullptr, decoders_buf_pos, decoders_[i]))) {
           LOG_WARN("add_decoder failed", K(ret), K(i), K(col_type));
