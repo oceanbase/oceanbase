@@ -479,7 +479,9 @@ int ObLakeTablePartitionInfo::get_bucket_idx(const ObLakeTablePartKey &part_key,
                                              int32_t &bucket_idx)
 {
   int ret = OB_SUCCESS;
-  if (!part_key.part_values_.at(offset).is_int32()) {
+  if (part_key.part_values_.at(offset).is_null()) {
+    bucket_idx = hash_count_;
+  } else if (!part_key.part_values_.at(offset).is_int32()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("hash part value is not int", K(part_key.part_values_.at(offset)));
   } else {
