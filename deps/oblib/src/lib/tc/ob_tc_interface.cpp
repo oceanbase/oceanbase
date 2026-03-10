@@ -133,7 +133,25 @@ int qdisc_create(int type, int parent_id, const char* name)
 }
 
 void qdisc_destroy(int qid)
-{}
+{
+  QWGuard("qdisc_destroy");
+  QDesc* desc = (typeof(desc))imap_fetch(qid);
+  if (NULL == desc) {
+    return;
+  }
+  imap_set(qid, NULL);
+  for (int chan_id = 0; chan_id < MAX_N_CHAN; chan_id++) {
+    int64_t target_id = (chan_id + 1) * QID_CAPACITY + qid;
+    IQDisc* q = (IQDisc*)qdtable[target_id];
+    if (q != NULL) {
+      q->unlink_from_lists();
+      qdtable[target_id] = NULL;
+      delete q;
+    }
+  }
+  delete desc;
+  TC_INFO("qdisc destroy: qid: %d", qid);
+}
 
 int qdisc_set_weight(int qid, int64_t weight)
 {
