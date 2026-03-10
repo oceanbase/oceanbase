@@ -534,7 +534,6 @@ private:
 
   int set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> &exec_params,
                            const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters);
-  int generate_backup_exprs(ObMergeGroupBySpec &spec);
 
 private:
   struct BatchExecParamCache {
