@@ -188,7 +188,11 @@ int64_t ObLogPlan::to_string(char *buf,
       OB_NOT_NULL(target_plan->get_stmt()) &&
       target_plan->get_stmt()->is_explain_stmt()) {
     const ObLogValues *op = static_cast<const ObLogValues*>(target_plan->get_plan_root());
-    target_plan = op->get_explain_plan();
+    if (op != NULL && op->get_explain_plan() != NULL) {
+      target_plan = op->get_explain_plan();
+    } else {
+      LOG_WARN("unexpected explain plan root or explain_plan_ is null");
+    }
   }
   if (OB_NOT_NULL(target_plan)) {
     ObExplainDisplayOpt option;
@@ -7949,6 +7953,10 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
   return ret;
 }
 
+/*
+ * when need_sort = true,
+ * only_pushdown_topn = true means pushing down a topn but still need a full sort
+ */
 int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                                  const ObExchangeInfo &exch_info,
                                                  const ObIArray<OrderItem> &sort_keys,
@@ -7957,7 +7965,8 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                                  const bool is_local_order,
                                                  ObRawExpr *topn_expr,
                                                  bool is_fetch_with_ties,
-                                                 const OrderItem *hash_sortkey)
+                                                 const OrderItem *hash_sortkey,
+                                                 bool only_pushdown_topn)
 {
   int ret = OB_SUCCESS;
   bool is_part_topn = (NULL != hash_sortkey) && (NULL != topn_expr);
@@ -8080,9 +8089,9 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                        sort_keys,
                                        real_prefix_pos,
                                        real_local_order,
-                                       topn_expr,
-                                       is_fetch_with_ties,
-                                       hash_sortkey))) {
+                                       only_pushdown_topn ? NULL : topn_expr,
+                                       only_pushdown_topn ? false : is_fetch_with_ties,
+                                       only_pushdown_topn ? NULL : hash_sortkey))) {
         LOG_WARN("failed to allocate sort as top", K(ret));
       } else { /*do nothing*/ }
     }
@@ -14623,6 +14632,9 @@ int ObLogPlan::generate_plan()
   } else if (OB_FAIL(do_post_traverse_processing())) {
     LOG_WARN("failed to post traverse processing", K(ret));
   } else { /*do nothing*/ }
+  if (ret != OB_SUCCESS) {
+    LOG_WARN("failed to generate plan", K(ret), KPC(this));
+  }
   return ret;
 }
 

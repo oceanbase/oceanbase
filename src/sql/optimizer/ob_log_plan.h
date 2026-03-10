@@ -1148,7 +1148,8 @@ public:
                                         const bool is_local_order,
                                         ObRawExpr *topn_expr = NULL,
                                         bool is_fetch_with_ties = false,
-                                        const OrderItem *hash_sortkey = NULL);
+                                        const OrderItem *hash_sortkey = NULL,
+                                        bool only_pushdown_topn = false);
 
   int allocate_dist_range_sort_as_top(ObLogicalOperator *&top,
                                       const ObIArray<OrderItem> &sort_keys,
@@ -1227,7 +1228,7 @@ public:
                         const bool is_fetch_with_ties,
                         const ObIArray<OrderItem> *ties_ordering);
 
-   int try_push_limit_into_table_scan(ObLogicalOperator *top,
+  int try_push_limit_into_table_scan(ObLogicalOperator *top,
                                       ObRawExpr *limit_expr,
                                       ObRawExpr *pushed_expr,
                                       ObRawExpr *offset_expr,
