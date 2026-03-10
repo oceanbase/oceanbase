@@ -218,7 +218,6 @@ private:
             int64_t count);
   int advance_collect_result(int64_t group_id);
   int init_hp_infras_group_mgr();
-  int init_brs_holder();
 private:
   bool is_end_;
   // added to support groupby with rollup
