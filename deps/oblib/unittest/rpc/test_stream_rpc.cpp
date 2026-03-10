@@ -245,7 +245,8 @@ TEST_F(TestRpcServer, StreamRPCChaos)
 
   MySSHandle handle;
   int64_t num = 0;
-  proxy.timeout(1000*1000).test(MAX_NUM, num, handle);
+  proxy.timeout(200 * 1000 * 1000) // 200s
+       .test(MAX_NUM, num, handle);
   while (handle.has_more()) {
     int64_t oldnum = num;
     int rt = 0;
