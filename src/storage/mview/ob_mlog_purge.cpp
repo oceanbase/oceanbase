@@ -60,7 +60,9 @@ int ObMLogPurger::init(ObExecContext &ctx,
       // data version below 442, use sql to purge mlog
       purge_data_by_sql_ = true;
     } else {
-      purge_data_by_sql_ = purge_data_by_sql;
+      // temporarily disable compaction purge, will be enabled after the function is stable.
+      purge_data_by_sql_ = true;
+      // purge_data_by_sql_ = purge_data_by_sql;
     }
     is_inited_ = true;
   }
