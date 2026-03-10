@@ -2,6 +2,7 @@
 storage_unittest(test_block_manager)
 storage_unittest(test_block_sstable_struct)
 storage_unittest(test_data_buffer)
+storage_unittest(test_index_block_row_header)
 storage_unittest(test_index_block_aggregator)
 #storage_unittest(test_storage_cache_suite)
 #storage_unittest(test_sstable_sec_meta_iterator)
