@@ -54,7 +54,18 @@ int ObExprMap::calc_result_typeN(ObExprResType& type,
 
   uint16_t key_subid;
   uint16_t value_subid;
-  if (OB_ISNULL(exec_ctx)) {
+  uint64_t data_version = 0;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret));
+  } else if (data_version < DATA_VERSION_4_3_5_2) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.3.5.2, map function not supported",
+             K(ret), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.2, map function");
+  } else if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
   } else if (param_num % 2 != 0) {
