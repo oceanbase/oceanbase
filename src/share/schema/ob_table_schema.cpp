@@ -13,6 +13,7 @@
 #include "share/ob_fts_index_builder_util.h"
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_schema.h"
+#include "share/schema/ob_part_mgr_util.h"
 
 #include "rootserver/ob_split_partition_helper.h"
 #include "share/catalog/ob_external_catalog.h"

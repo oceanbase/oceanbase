@@ -35,6 +35,7 @@ int ObObjPrivMysqlDDLOperator::grant_object(
   const uint64_t tenant_id = object_priv_key.tenant_id_;
   ObSchemaGetterGuard schema_guard;
   ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  bool is_oracle_mode = false;
   if (OB_ISNULL(schema_sql_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schama service_impl and schema manage must not null",
@@ -46,6 +47,8 @@ int ObObjPrivMysqlDDLOperator::grant_object(
     //do nothing
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_FAIL(share::ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
   } else {
     ObPrivSet new_priv = priv_set;
     ObPrivSet object_priv_set = OB_PRIV_SET_EMPTY;
@@ -71,7 +74,7 @@ int ObObjPrivMysqlDDLOperator::grant_object(
           LOG_WARN("user not exist", K(object_priv_key), K(ret));
         } else if (gen_ddl_stmt == true && OB_FAIL(ObDDLSqlGenerator::gen_object_priv_sql(
             obrpc::ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
-            need_priv, true, /*is_grant*/ ddl_stmt_str))) {
+            need_priv, true, /*is_grant*/ ddl_stmt_str, is_oracle_mode))) {
           LOG_WARN("gen_object_priv_sql failed", K(ret), K(need_priv));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else {
@@ -104,6 +107,7 @@ int ObObjPrivMysqlDDLOperator::revoke_object(
   const uint64_t tenant_id = object_priv_key.tenant_id_;
   ObSchemaGetterGuard schema_guard;
   ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  bool is_oracle_mode = false;
   if (OB_ISNULL(schema_sql_service)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("schama service_impl and schema manage must not null",
@@ -114,6 +118,8 @@ int ObObjPrivMysqlDDLOperator::revoke_object(
     LOG_WARN("db_priv_key is invalid", K(object_priv_key), K(ret));
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_FAIL(share::ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
   } else {
     ObPrivSet object_priv_set = OB_PRIV_SET_EMPTY;
     if (OB_FAIL(schema_guard.get_obj_mysql_priv_set(object_priv_key, object_priv_set))) {
@@ -148,7 +154,7 @@ int ObObjPrivMysqlDDLOperator::revoke_object(
                    obrpc::ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
                                        need_priv,
                                        false, /*is_grant*/
-                                       ddl_stmt_str))) {
+                                       ddl_stmt_str, is_oracle_mode))) {
           LOG_WARN("gen_object_priv_sql failed", K(ret), K(need_priv));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {

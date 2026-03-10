@@ -48,13 +48,13 @@ int ObCreateUserExecutor::encrypt_passwd(const common::ObString& pwd,
     LOG_WARN("Encrypt buf not enough");
   } else {
     // Select encryption method according to the plugin type
-    if (plugin.empty() || 0 == plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD)) {
+    if (ObEncryptedHelper::is_native_password_plugin(plugin)) {
       // Use mysql_native_password encryption
       encrypted_pwd.assign_ptr(enc_buf, ENC_STRING_BUF_LEN);
       if (OB_FAIL(ObEncryptedHelper::encrypt_passwd_to_stage2(pwd, encrypted_pwd))) {
         SQL_ENG_LOG(WARN, "failed to encrypt passwd", K(ret));
       }
-    } else if (0 == plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD)) {
+    } else if (ObEncryptedHelper::is_caching_sha2_password_plugin(plugin)) {
       // Use caching_sha2_password encryption
       // Get digest_rounds from system variable
       int64_t digest_rounds = OB_SHA256_ROUNDS_DEFAULT;

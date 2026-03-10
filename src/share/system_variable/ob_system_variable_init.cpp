@@ -28,7 +28,7 @@ static ObArenaAllocator ObBaseSysVarAllocator(ObModIds::OB_COMMON_SYS_VAR_DEFAUL
 static int64_t ObSysVarsIdToArrayIdx[ObSysVarFactory::OB_MAX_SYS_VAR_ID];
 // default_value != base_value and variable flags has SESSION or NEED_SERIALIZE or QUERY_SENSITIVE
 static int64_t ObDefaultValueChangedSerializedVarIndices[ObSysVarFactory::OB_SYS_DEFAULT_VALUE_CHANGED_SERIALIZED_VAR_COUNT] = {
-  14, 15, 55, 231, 234, 242, 477, 503, 839
+  14, 15, 50, 55, 231, 234, 242, 477, 503, 839
 };
 // VarsInit中需要判断当前最大的SysVars对应的id，是否大于OB_MAX_SYS_VAR_ID
 // 如果大于OB_MAX_SYS_VAR_ID表示存在无效的SysVarsId
@@ -878,11 +878,11 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[50].default_value_ = "mysql_native_password" ;
-      ObSysVars[50].info_ = "" ;
+      ObSysVars[50].default_value_ = "" ;
+      ObSysVars[50].info_ = "The default authentication plugin for new users, empty means native_password with SHA1" ;
       ObSysVars[50].name_ = "default_authentication_plugin" ;
       ObSysVars[50].data_type_ = ObVarcharType ;
-      ObSysVars[50].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[50].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
       ObSysVars[50].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_default_authentication_plugin" ;
       ObSysVars[50].id_ = SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN)) ;
