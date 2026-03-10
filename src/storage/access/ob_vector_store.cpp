@@ -67,7 +67,9 @@ void ObVectorStore::reset()
 void ObVectorStore::reuse()
 {
   ObBlockBatchedRowStore::reuse();
-  count_ = 0;
+  if (!is_skip_scan_reuse_) {
+    count_ = 0;
+  }
 }
 
 int ObVectorStore::init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask)

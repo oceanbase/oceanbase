@@ -26,6 +26,7 @@ namespace storage
 
 ObBlockRowStore::ObBlockRowStore(ObTableAccessContext &context)
     : is_inited_(false),
+      is_skip_scan_reuse_(false),
       pd_filter_info_(),
       context_(context),
       iter_param_(nullptr),
@@ -41,6 +42,7 @@ ObBlockRowStore::~ObBlockRowStore()
 void ObBlockRowStore::reset()
 {
   is_inited_ = false;
+  is_skip_scan_reuse_ = false;
   pd_filter_info_.reset();
   disabled_ = false;
   is_aggregated_in_prefetch_ = false;

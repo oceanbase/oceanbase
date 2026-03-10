@@ -93,9 +93,12 @@ public:
     disabled_ = false;
     return OB_SUCCESS;
   }
+  OB_INLINE void set_skip_scan_reuse() { is_skip_scan_reuse_ = true; }
+  OB_INLINE void clear_skip_scan_reuse() { is_skip_scan_reuse_ = false; }
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(disabled), K_(is_aggregated_in_prefetch), K_(pd_filter_info));
 protected:
   bool is_inited_;
+  bool is_skip_scan_reuse_;
   sql::PushdownFilterInfo pd_filter_info_;
   ObTableAccessContext &context_;
   const ObTableIterParam *iter_param_;
