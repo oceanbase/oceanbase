@@ -58,7 +58,7 @@ public:
   bool try_rdlock_unsafe(int idx)
   {
     bool lock_succ = false;
-    int64_t *ref = &read_ref_[idx].value_;
+    int64_t *ref = &read_ref_unsafe_[idx].value_;
     if (0 == ATOMIC_LOAD(&write_uid_)) {
       ATOMIC_STORE(ref, 1);
       if (0 == ATOMIC_LOAD(&write_uid_)) {
@@ -77,7 +77,7 @@ public:
   }
   void rdunlock_unsafe(int idx)
   {
-    int64_t *ref = &read_ref_[idx].value_;
+    int64_t *ref = &read_ref_unsafe_[idx].value_;
     ATOMIC_STORE(ref, 0);
   }
   bool try_rdlock()
