@@ -278,6 +278,25 @@ int ObVecIdxFreezeTask::check_and_freeze(ObPluginVectorIndexAdapterGuard &adpt_g
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexAdaptor* adaptor = adpt_guard.get_adatper();
+  ObVecIdxFrozenDataHandle &frozen_data = adaptor->get_frozen_data();
+  if (frozen_data->try_set_in_progress()) {
+    if (OB_FAIL(do_check_and_freeze(adpt_guard, ls_id))) {
+      LOG_WARN("failed to check and freeze", K(ret), K(ls_id));
+    }
+    frozen_data->set_not_in_progress();
+  } else {
+    common::ObSpinLockGuard ctx_guard(ctx_->lock_);
+    ret = OB_CANCELED;
+    ctx_->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
+    LOG_INFO("another dump task is in progress, skip", KPC(adaptor));
+  }
+  return ret;
+}
+
+int ObVecIdxFreezeTask::do_check_and_freeze(ObPluginVectorIndexAdapterGuard &adpt_guard, const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexAdaptor* adaptor = adpt_guard.get_adatper();
   bool can_freeze = false;
   ObVecIdxFrozenDataHandle &frozen_data = adaptor->get_frozen_data();
   if (ObVecIdxFrozenData::State::NO_FROZEN != frozen_data->state_) {

@@ -52,6 +52,7 @@ public:
 private:
   int process_freeze();
   int check_and_freeze(ObPluginVectorIndexAdapterGuard &adpt_guard, const ObLSID &ls_id);
+  int do_check_and_freeze(ObPluginVectorIndexAdapterGuard &adpt_guard, const ObLSID &ls_id);
   int check_and_wait_write(const ObVecIdxFrozenDataHandle &frozen_data);
   int refresh_adaptor(ObPluginVectorIndexAdapterGuard &adpt_guard, ObIAllocator &allocator, const ObLSID &ls_id);
 

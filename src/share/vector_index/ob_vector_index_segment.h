@@ -873,7 +873,7 @@ struct ObVecIdxFrozenData : public ObVectorIndexDataBase
 
   ObVecIdxFrozenData() :
     state_(State::NO_FROZEN), ret_code_(0), retry_cnt_(0), frozen_scn_(),
-    segment_handle_(), vbitmap_()
+    segment_handle_(), vbitmap_(), is_in_progress_(false)
   {
     ATOMIC_INC(&instacnce_cnt_);
   }
@@ -890,6 +890,9 @@ struct ObVecIdxFrozenData : public ObVectorIndexDataBase
   void set_frozen_finish() { state_ = State::FINISH; ret_code_ = 0; retry_cnt_ = 0;}
   bool retry_too_many() const {  return retry_cnt_ >= RETRY_WARN_COUNT; }
 
+  bool try_set_in_progress() { return ATOMIC_BCAS(&is_in_progress_, false, true); }
+  void set_not_in_progress() { ATOMIC_STORE(&is_in_progress_, false); }
+
   State state_;
   int ret_code_;
   int retry_cnt_;
@@ -898,8 +901,9 @@ struct ObVecIdxFrozenData : public ObVectorIndexDataBase
   TCRWLock mem_data_rwlock_{ObLatchIds::VECTOR_MEM_DATA};
   ObVectorIndexSegmentHandle segment_handle_;
   ObVecIdxVBitmapDataHandle vbitmap_;
+  bool is_in_progress_;
 
-  TO_STRING_KV(KP(this), K_(state), K_(ret_code), K_(retry_cnt), K_(frozen_scn), K_(segment_handle), K_(vbitmap));
+  TO_STRING_KV(KP(this), K_(state), K_(ret_code), K_(retry_cnt), K_(frozen_scn), K_(segment_handle), K_(vbitmap), K_(is_in_progress));
 };
 typedef ObVectorIndexMemDataHandle<ObVecIdxFrozenData> ObVecIdxFrozenDataHandle;
 
