@@ -1388,6 +1388,8 @@ struct ObJsonTypeConstraint
       JSON_TYPE_ARRAY,
       JSON_TYPE_JSON_CONTAINS_NO_INDEX_MERGE,
       JSON_TYPE_NOT_ARRAY_OR_SCALAR,
+      JSON_TYPE_ALL_MEMBER_SCALAR,       // json scalar or array all member is scalar
+      JSON_TYPE_ARRAY_ALL_MEMBER_SCALAR, // json array all member is scalar and constrain element count
     };
     static int check_is_match(ObObjParam &obj_param,
                               ObExecContext &exec_ctx,

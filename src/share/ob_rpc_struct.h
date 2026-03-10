@@ -1709,6 +1709,7 @@ public:
     table_id_ = common::OB_INVALID_ID;
     is_drop_in_rebuild_task_ = false;
     is_oracle_tmp_table_v2_index_table_ = false;
+    is_parent_task_dropping_search_index_ = false;
   }
   virtual ~ObDropIndexArg() {}
   int assign(const ObDropIndexArg &other);
@@ -1729,6 +1730,7 @@ public:
     table_id_ = common::OB_INVALID_ID;
     is_drop_in_rebuild_task_ = false;
     is_oracle_tmp_table_v2_index_table_ = false;
+    is_parent_task_dropping_search_index_ = false;
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
@@ -1745,6 +1747,7 @@ public:
   uint64_t table_id_;
   bool is_drop_in_rebuild_task_;
   bool is_oracle_tmp_table_v2_index_table_;
+  bool is_parent_task_dropping_search_index_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };

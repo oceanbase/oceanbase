@@ -81,6 +81,7 @@ enum ObDASIterTreeType : uint32_t
   ITER_TREE_MVI_LOOKUP,
   ITER_TREE_VEC_LOOKUP,
   ITER_TREE_MATCH,
+  ITER_TREE_HYBRID_SEARCH,
   // append iter tree type before me
   ITER_TREE_MAX
 };
