@@ -2176,9 +2176,9 @@ int ObTransformPredicateMoveAround::check_pushdown_through_groupby_validity(ObSe
   ObSEArray<ObRawExpr *, 4> generalized_columns;
   bool block_by_groupby = false;
   bool block_by_rollup = false;
-  if (OB_ISNULL(query_ctx = stmt.get_query_ctx())) {
+  if (OB_ISNULL(having_expr) || OB_ISNULL(query_ctx = stmt.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("query context is NULL.", K(ret));
+    LOG_WARN("having expr or query context is NULL.", K(ret), K(having_expr), K(query_ctx));
   } else if (OB_FAIL(extract_generalized_column(having_expr, generalized_columns))) {
     LOG_WARN("failed to extract generalized columns", K(ret));
   } else if (!ObOptimizerUtil::subset_exprs(
@@ -2187,7 +2187,7 @@ int ObTransformPredicateMoveAround::check_pushdown_through_groupby_validity(ObSe
   } else if (ObOptimizerUtil::overlap_exprs(
                generalized_columns, stmt.get_rollup_exprs())) {
     block_by_rollup = true;
-  } else if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_5_1)) {
+  } else if (!having_expr->has_flag(CNT_SUB_QUERY) && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_5_1)) {
     if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(having_expr, stmt.get_group_exprs(),
             true, true, is_valid))) {
       LOG_WARN("failed to check if can pass through group by", K(ret));
