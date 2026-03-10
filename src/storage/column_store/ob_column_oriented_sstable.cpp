@@ -305,6 +305,33 @@ int ObCOSSTableV2::fill_cg_sstables(
   return ret;
 }
 
+int ObCOSSTableV2::set_upper_trans_version(
+    common::ObArenaAllocator &allocator,
+    const int64_t upper_trans_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObSSTable::set_upper_trans_version(allocator, upper_trans_version))) {
+    LOG_WARN("failed to set upper trans version for co sstable", K(ret), K(upper_trans_version));
+  } else if (is_cgs_empty_co_) {
+    // no embedded cg sstables, nothing more to do
+  } else if (OB_UNLIKELY(!is_loaded())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("co sstable must be loaded to update cg upper trans version", K(ret), KPC(this));
+  } else {
+    const ObSSTableArray &cg_sstables = meta_->get_cg_sstables();
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_sstables.count(); ++i) {
+      ObSSTable *cg_sstable = cg_sstables[i];
+      if (OB_ISNULL(cg_sstable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cg sstable is null", K(ret), K(i));
+      } else if (OB_FAIL(cg_sstable->set_upper_trans_version(allocator, upper_trans_version))) {
+        LOG_WARN("failed to set upper trans version for cg sstable", K(ret), K(i), KPC(cg_sstable));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObCOSSTableV2::build_cs_meta_without_cgs()
 {
   int ret = OB_SUCCESS;

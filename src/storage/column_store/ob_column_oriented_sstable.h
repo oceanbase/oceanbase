@@ -136,6 +136,9 @@ public:
   int fill_cg_sstables(
       const common::ObIArray<ObITable *> &cg_tables,
       const int64_t new_progressive_merge_step = OB_INVALID_INDEX_INT64 /*only used for co merge*/);
+  virtual int set_upper_trans_version(
+      common::ObArenaAllocator &allocator,
+      const int64_t upper_trans_version) override;
   int set_progressive_merge_step(const int64_t progressive_merge_step);
   OB_INLINE const ObCOSSTableMeta &get_cs_meta() const { return cs_meta_; }
   OB_INLINE bool is_all_cg_base() const override final { return ObCOSSTableBaseType::ALL_CG_TYPE == base_type_; }
