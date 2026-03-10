@@ -3527,7 +3527,7 @@ int ObTablet::deserialize(
         } else if (OB_FAIL(table_store->init(allocator, *this))) {
           LOG_WARN("failed to init table store");
         }
-      } else if (no_need_load) {
+      } else if (no_need_load && table_store_cache_.is_inited()) {
         //do nothing
       } else {
         IO_AND_DESERIALIZE(allocator, table_store_addr_.addr_, table_store, *this);
