@@ -30,6 +30,12 @@ int ObVectorAdd::calc(float *a, float *b, const int64_t len)
   } else {
     ret = common::specific::normal::vector_add(a, b, len);
   }
+#elif defined(__aarch64__)
+  if (common::is_arch_supported(ObTargetArch::NEON)) {
+    ret = vector_add_neon(a, b, len);
+  } else {
+    ret = common::specific::normal::vector_add(a, b, len);
+  }
 #else
   ret = common::specific::normal::vector_add(a, b, len);
 #endif

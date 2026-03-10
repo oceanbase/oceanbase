@@ -182,6 +182,52 @@ OB_DECLARE_AVX512_SPECIFIC_CODE(
       return ret;
     })
 
+#if defined(__aarch64__)
+inline static int vector_add_neon(float *a, const float *b, const int64_t len) {
+  int ret = OB_SUCCESS;
+  int64_t dim = len;
+  int64_t d = len;
+
+  while (d >= 16) {
+    float32x4x4_t va = vld1q_f32_x4(a + dim - d);
+    float32x4x4_t vb = vld1q_f32_x4(b + dim - d);
+
+    va.val[0] = vaddq_f32(va.val[0], vb.val[0]);
+    va.val[1] = vaddq_f32(va.val[1], vb.val[1]);
+    va.val[2] = vaddq_f32(va.val[2], vb.val[2]);
+    va.val[3] = vaddq_f32(va.val[3], vb.val[3]);
+
+    vst1q_f32_x4(a + dim - d, va);
+    d -= 16;
+  }
+
+  if (d >= 8) {
+    float32x4x2_t va = vld1q_f32_x2(a + dim - d);
+    float32x4x2_t vb = vld1q_f32_x2(b + dim - d);
+
+    va.val[0] = vaddq_f32(va.val[0], vb.val[0]);
+    va.val[1] = vaddq_f32(va.val[1], vb.val[1]);
+
+    vst1q_f32_x2(a + dim - d, va);
+    d -= 8;
+  }
+
+  if (d >= 4) {
+    float32x4_t va = vld1q_f32(a + dim - d);
+    float32x4_t vb = vld1q_f32(b + dim - d);
+    va = vaddq_f32(va, vb);
+    vst1q_f32(a + dim - d, va);
+    d -= 4;
+  }
+
+  if (d > 0) {
+    ret = vector_add_normal(a + dim - d, b + dim - d, d);
+  }
+
+  return ret;
+}
+#endif
+
 }  // namespace common
 }  // namespace oceanbase
 #endif

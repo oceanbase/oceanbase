@@ -59,7 +59,7 @@ public:
   inline uint64_t* get_used_mem_ptr() { return &all_used_mem_; }
   int64_t get_rb_mem_used();
   static void get_vector_mem_config(int64_t &resource_limit, int64_t &max_duration);
-  static int64_t get_vector_mem_limit_percentage(omt::ObTenantConfigGuard &tenant_config);
+  static int64_t get_vector_mem_limit_percentage(omt::ObTenantConfigGuard &tenant_config, uint64_t tenant_id = MTL_ID());
   TO_STRING_KV(K(is_inited_), KP(throttle_tool_), KP(memory_context_.ref_context()));
 
 private:

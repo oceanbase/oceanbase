@@ -60,7 +60,7 @@ int ObIvfCacheUtil::scan_and_write_ivf_cent_cache(ObPluginVectorIndexService &se
 int ObIvfCacheUtil::is_cache_writable(const ObLSID &ls_id, int64_t table_id,
                                       const ObTabletID &tablet_id,
                                       const ObVectorIndexParam &vec_param, int64_t dim,
-                                      bool &is_writable)
+                                      IvfCacheType cache_type, bool &is_writable)
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
@@ -82,11 +82,8 @@ int ObIvfCacheUtil::is_cache_writable(const ObLSID &ls_id, int64_t table_id,
   } else if (OB_ISNULL(cache_mgr = cache_guard.get_ivf_cache_mgr())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null cache mgr", K(ret));
-  } else if (OB_FAIL(cache_mgr->get_or_create_cache_node(vec_param.type_ == VIAT_IVF_PQ
-                                                             ? IvfCacheType::IVF_PQ_CENTROID_CACHE
-                                                             : IvfCacheType::IVF_CENTROID_CACHE,
-                                                         cent_cache))) {
-    LOG_WARN("fail to get or create cache node", K(ret));
+  } else if (OB_FAIL(cache_mgr->get_or_create_cache_node(cache_type, cent_cache))) {
+    LOG_WARN("fail to get or create cache node", K(ret), K(cache_type));
   } else {
     is_writable = cent_cache->is_idle();
   }

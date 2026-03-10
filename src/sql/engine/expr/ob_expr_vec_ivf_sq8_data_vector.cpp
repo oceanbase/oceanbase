@@ -150,12 +150,13 @@ int ObExprVecIVFSQ8DataVector::generate_data_vector(
       uint8_t *res_vec = nullptr;
       float *data_vec = reinterpret_cast<float*>(arr->get_data());
       ObExprVecIvfCenterIdCache *cache = ObVectorIndexUtil::get_ivf_center_id_cache_ctx(expr.expr_ctx_id_, &eval_ctx.exec_ctx_);
+      ObTableID cent_table_id = table_id;
       if (OB_ISNULL(service)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("service is nullptr", K(ret));
       } else if (OB_FAIL(meta_vectors.init(SQ_META_SIZE))) {
         LOG_WARN("fail to init meta vectors", K(ret));
-      } else if (OB_FAIL(ObVectorIndexUtil::get_ivf_aux_info(service, cache, table_id, tablet_id, tmp_allocator, meta_vectors))) {
+      } else if (OB_FAIL(ObVectorIndexUtil::get_ivf_aux_info(service, cache, table_id, tablet_id, tablet_id, false /* is_pq_cache */, tmp_allocator, meta_vectors, 0))) {
         LOG_WARN("failed to get centers", K(ret), K(table_id), K(tablet_id));
       } else if (meta_vectors.empty()) {
         // special case 1: empty meta table, set res_vec to {0}

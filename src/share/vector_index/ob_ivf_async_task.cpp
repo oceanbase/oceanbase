@@ -88,6 +88,8 @@ int ObIvfAsyncTask::write_cache(ObPluginVectorIndexService &vector_index_service
   } else if (OB_ISNULL(cache_mgr = cache_guard.get_ivf_cache_mgr())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null cache mgr", K(ret));
+  } else if (!aux_table_info->is_ivf_centroid_table_valid()) {
+    // IVF centroid table is not valid, skip
   } else if (OB_FAIL(cache_mgr->get_or_create_cache_node(IvfCacheType::IVF_CENTROID_CACHE,
                                                          cent_cache))) {
     LOG_WARN("fail to get or create cache node", K(ret));
@@ -96,8 +98,9 @@ int ObIvfAsyncTask::write_cache(ObPluginVectorIndexService &vector_index_service
                  aux_table_info->centroid_table_id_,
                  aux_table_info->centroid_tablet_ids_[0],
                  *cent_cache))) {
-    LOG_WARN("fail to scan and write ivf cent cache", K(ret), K(aux_table_info));
-  } else if (aux_table_info->type_ == VIAT_IVF_PQ) {
+    LOG_WARN("fail to scan and write ivf cent cache", K(ret), KPC(aux_table_info));
+  } else if (aux_table_info->type_ == VIAT_IVF_PQ
+             && aux_table_info->is_ivf_pq_centroid_table_valid()) {
     ObIvfCentCache *pq_cent_cache = nullptr;
     if (OB_FAIL(cache_mgr->get_or_create_cache_node(IvfCacheType::IVF_PQ_CENTROID_CACHE,
                                                     pq_cent_cache))) {

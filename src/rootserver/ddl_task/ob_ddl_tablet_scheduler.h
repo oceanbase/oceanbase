@@ -47,7 +47,7 @@ private:
   int get_running_sql_parallelism(int64_t &parallelism);
   int get_unfinished_tablets(const int64_t execution_id, share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets);
   int get_to_be_scheduled_tablets(share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets);
-  int calculate_candidate_tablets(const uint64_t left_space_size, const ObIArray<ObTabletID> &in_tablets, ObIArray<ObTabletID> &out_tablets);
+  int calculate_candidate_tablets(const uint64_t left_space_size, common::ObAddr &leader_addr, const ObIArray<ObTabletID> &in_tablets, ObIArray<ObTabletID> &out_tablets);
   int get_session_running_lsid(ObIArray<share::ObLSID> &running_ls_ids);
   int get_target_running_ls_tablets(const share::ObLSID &ls_id, ObIArray<ObTabletID> &tablets);
   int get_potential_finished_lsid(const ObIArray<share::ObLSID> &running_ls_ids_now, ObIArray<share::ObLSID> &potential_finished_ls_ids);

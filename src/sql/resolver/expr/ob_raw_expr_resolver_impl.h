@@ -167,6 +167,7 @@ private:
   int process_geo_func_node(const ParseNode *node, ObRawExpr *&expr);
   int set_geo_func_name(ObSysFunRawExpr *func_expr, const ObItemType func_type);
   int process_vector_func_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_vector_similarity_func_node(const ParseNode *node, ObRawExpr *&expr);
   bool is_win_expr_valid_scope(ObStmtScope scope) const;
   int check_and_canonicalize_window_expr(ObRawExpr *expr);
   int process_ident_node(const ParseNode &node, ObRawExpr *&expr);

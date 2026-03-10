@@ -524,6 +524,8 @@
 #include "sql/engine/expr/ob_expr_md5_concat_ws.h"
 #include "sql/engine/expr/ob_expr_collect_file_list.h"
 
+#include "sql/engine/expr/ob_expr_vector_similarity.h"
+
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_format_profile.h"
@@ -1207,6 +1209,10 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprVectorDims);
     REG_OP(ObExprVectorNorm);
     REG_OP(ObExprVectorDistance);
+    REG_OP(ObExprVectorL2Similarity);
+    REG_OP(ObExprVectorCosineSimilarity);
+    REG_OP(ObExprVectorIPSimilarity);
+    REG_OP(ObExprVectorSimilarity);
     REG_OP(ObExprInnerTableOptionPrinter);
     REG_OP(ObExprInnerTableSequenceGetter);
     REG_OP(ObExprRbBuildEmpty);

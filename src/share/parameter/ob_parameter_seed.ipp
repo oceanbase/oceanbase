@@ -3197,6 +3197,9 @@ DEF_CAP(syslog_sync_size_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
         "When the accumulated syslog data reaches this threshold, the system automatically performs disk synchronization."
         "Value 0 disables this function.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "100000",
+        "The upper limit of ivf iter-filter search nums. Range: [0,)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_write_throttle_by_pending_log_size_limit, OB_TENANT_PARAMETER, "0", "[0B,)",
         "the pending log size limit to trigger write throttle. 0, means disabled. Range: [0B, +∞)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

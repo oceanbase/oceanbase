@@ -90,7 +90,8 @@ int knn_search(obvsag::VectorIndexPtr index_handler,
                bool is_extra_info_filter = false,
                float valid_ratio = 1.0,
                void *allocator = nullptr,
-               bool need_extra_info = false);
+               bool need_extra_info = false,
+               float distance_threshold = FLT_MAX);
 
 int knn_search(obvsag::VectorIndexPtr index_handler,
                float *query_vector,

@@ -51,10 +51,6 @@ int ObVectorIpDistance<uint8_t>::ip_distance_func(const uint8_t *a, const uint8_
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < len; ++i) {
     distance += a[i] * b[i];
-    if (OB_UNLIKELY(0 != ::isinf(distance))) {
-      ret = OB_NUMERIC_OVERFLOW;
-      LIB_LOG(WARN, "value is overflow", K(ret), K(distance));
-    }
   }
   return ret;
 }
@@ -65,6 +61,12 @@ void ObVectorIpDistance<float>::fvec_inner_products_ny(float* ip, const float* x
   #if OB_USE_MULTITARGET_CODE
   if (common::is_arch_supported(ObTargetArch::SSE42)) {
     common::specific::sse42::fvec_inner_products_ny(ip, x, y, d, ny);
+  } else {
+    common::specific::normal::fvec_inner_products_ny(ip, x, y, d, ny);
+  }
+#elif defined(__aarch64__)
+  if (common::is_arch_supported(ObTargetArch::NEON)) {
+    fvec_inner_products_ny_neon(ip, x, y, d, ny);
   } else {
     common::specific::normal::fvec_inner_products_ny(ip, x, y, d, ny);
   }

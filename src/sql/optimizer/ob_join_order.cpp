@@ -1793,7 +1793,9 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr to index schema", K(ret));
     } else {
-      ObVecIndexType pre_vec_type = (vec_index_schema->is_vec_hnsw_index() && helper.vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN) ?
+      ObVecIndexType pre_vec_type =
+          ((vec_index_schema->is_vec_hnsw_index() || ObVectorIndexUtil::is_enable_ivf_adaptive_scan(vec_index_schema->is_vec_ivf_index()))
+          && helper.vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN) ?
       ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN : ObVecIndexType::VEC_INDEX_PRE;
       if (index_schema->is_spatial_index()) {
         access_path.vec_idx_info_.vec_extra_info_.is_spatial_index_ = true;
@@ -1819,8 +1821,8 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
     }
   } else {
     // if adaptive filter, should not come in
-    ObVecIndexType post_vec_type = ((helper.filters_.count() > 0 || !stmt->get_subquery_exprs().empty()
-    || helper.match_expr_infos_.count() > 0 || helper.is_index_merge_) && index_schema->is_vec_hnsw_index()) ?
+    ObVecIndexType post_vec_type = (helper.filters_.count() > 0
+      && (index_schema->is_vec_hnsw_index() || ObVectorIndexUtil::is_enable_ivf_iterative_filter(index_schema->is_vec_ivf_index()))) ?
     ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER : ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER;
     vec_index_schema = index_schema;
     access_path.vec_idx_info_.vec_extra_info_.set_vec_idx_type(post_vec_type);
@@ -3209,9 +3211,8 @@ int ObJoinOrder::check_need_domain_id_scan(const uint64_t table_id,
       bool res = false;
       for (int64_t i = 0; OB_SUCC(ret) && !need_domain_id_scan && i < ObDomainIdUtils::ObDomainIDType::MAX; ++i) {
         ObDomainIdUtils::ObDomainIDType cur_type = static_cast<ObDomainIdUtils::ObDomainIDType>(i);
-        if (OB_FAIL(ObDomainIdUtils::check_table_need_domain_id_merge(cur_type,
-                                                                      ddl_table_schema,
-                                                                      res))) {
+        if (OB_FAIL(ObDomainIdUtils::check_table_need_domain_id_merge(cur_type, *schema_guard->get_schema_guard(), *table_schema,
+                                                                      ddl_table_schema, res))) {
           LOG_WARN("failed to check table need domain id merge", K(ret), K(cur_type));
         } else if (res) {
           need_domain_id_scan = true;
@@ -20485,6 +20486,10 @@ int ObJoinOrder::add_valid_vec_index_ids(const ObDMLStmt &stmt,
     && helper.vec_index_type_ != ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN) {
       // if hnsw, do not add vec_index_tid, mark adaptive_scan
       helper.vec_index_type_ = ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;
+    } else if (helper.vec_index_type_ != ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN
+          && ObVectorIndexUtil::is_enable_ivf_adaptive_scan(is_vec_ivf_index(index_type))) {
+      // if ivf, do not add vec_index_tid, mark adaptive_scan
+      helper.vec_index_type_ = ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;
     } else {
       index_tid_array[size++] = vec_index_tid;
     }
@@ -20586,6 +20591,7 @@ int ObJoinOrder::get_vector_index_tid_from_expr(ObSqlSchemaGuard *schema_guard,
                                                                *table_schema,
                                                                index_type,
                                                                vec_col_id,
+                                                               true,
                                                                inv_idx_tid))) {
       LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(vec_col_id), KPC(table_schema));
     } else if (inv_idx_tid == OB_INVALID_ID) {
@@ -21659,6 +21665,8 @@ int ObJoinOrder::get_valid_hint_index_list(const ObDMLStmt &stmt,
              tenant_cluster_version >= CLUSTER_VERSION_4_4_1_0)
             && index_hint_table_schema->is_vec_hnsw_index()) {
           // hint choose vec index post-with-filter
+          vec_with_filter_index_type = ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;
+        } else if (ObVectorIndexUtil::is_enable_ivf_adaptive_scan(index_hint_table_schema->is_vec_ivf_index())) {
           vec_with_filter_index_type = ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;
         } else {
           vec_with_filter_index_type = ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;

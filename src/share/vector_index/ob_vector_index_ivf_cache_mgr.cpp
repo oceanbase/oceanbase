@@ -27,6 +27,11 @@ namespace share
 
 ObIvfCacheMgrGuard::~ObIvfCacheMgrGuard()
 {
+  reset();
+}
+
+void ObIvfCacheMgrGuard::reset()
+{
   if (is_valid()) {
     if (cache_mgr_->dec_ref_and_check_release()) {
       ObIAllocator &allocator = cache_mgr_->get_self_allocator();
@@ -398,6 +403,9 @@ int ObIvfCentCache::init(ObIvfMemContext *parent_mem_ctx, const IvfCacheKey &key
                           sub_mem_ctx_->Allocate(sizeof(float) * pqnlist * param.dim_)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to init centroids", K(ret), K(pqnlist), K(param.dim_), K(key));
+        } else if (param.m_ <= 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected m value", K(ret), K(param.m_));
         } else {
           MEMSET(centroids_, 0, sizeof(float) * pqnlist * param.dim_);
           capacity_ = pqnlist * param.m_;
@@ -565,6 +573,32 @@ bool ObIvfAuxTableInfo::is_valid() const
   return is_valid;
 }
 
+bool ObIvfAuxTableInfo::is_ivf_centroid_table_valid() const
+{
+  bool is_valid = false;
+  if (type_ == VIAT_IVF_FLAT || type_ == VIAT_IVF_SQ8 || type_ == VIAT_IVF_PQ) {
+    is_valid = centroid_table_id_ != OB_INVALID_ID && data_table_id_ != OB_INVALID_ID
+               && !centroid_tablet_ids_.empty();
+    for (int i = 0; is_valid && i < centroid_tablet_ids_.count(); ++i) {
+      is_valid = centroid_tablet_ids_[i].is_valid();
+    }
+  }
+  return is_valid;
+}
+
+bool ObIvfAuxTableInfo::is_ivf_pq_centroid_table_valid() const
+{
+  bool is_valid = false;
+  if (type_ == VIAT_IVF_PQ) {
+    is_valid = pq_centroid_table_id_ != OB_INVALID_ID && data_table_id_ != OB_INVALID_ID
+               && !pq_centroid_tablet_ids_.empty();
+    for (int i = 0; is_valid && i < pq_centroid_tablet_ids_.count(); ++i) {
+      is_valid = pq_centroid_tablet_ids_[i].is_valid();
+    }
+  }
+  return is_valid;
+}
+
 void ObIvfAuxTableInfo::reset()
 {
   centroid_table_id_ = OB_INVALID_ID;
@@ -587,8 +621,16 @@ int ObIvfAuxTableInfo::copy_ith_tablet(int64_t idx, ObIvfAuxTableInfo &dst) cons
     dst.data_table_id_ = this->data_table_id_;
     dst.type_ = this->type_;
     if (dst.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ) {
-      dst.pq_centroid_table_id_ = this->pq_centroid_table_id_;
-      dst.pq_centroid_tablet_ids_.push_back(this->pq_centroid_tablet_ids_[idx]);
+      // Try to copy pq_centroid_tablet_ids_ if available
+      if (idx >= pq_centroid_tablet_ids_.count()) {
+        // PQ centroid tablets not ready yet, but still allow centroid-only load
+        LOG_WARN("pq centroid tablet not ready yet, will load centroid only", K(idx),
+                 "pq_count", pq_centroid_tablet_ids_.count(),
+                 "centroid_count", centroid_tablet_ids_.count());
+      } else {
+        dst.pq_centroid_table_id_ = this->pq_centroid_table_id_;
+        dst.pq_centroid_tablet_ids_.push_back(this->pq_centroid_tablet_ids_[idx]);
+      }
     }
   }
   return ret;

@@ -57,6 +57,8 @@ struct ObIvfAuxTableInfo
     reset();
   }
   bool is_valid() const;
+  bool is_ivf_centroid_table_valid() const;
+  bool is_ivf_pq_centroid_table_valid() const;
   void reset();
   int64_t count() const { return centroid_tablet_ids_.count(); }
   int copy_ith_tablet(int64_t idx, ObIvfAuxTableInfo &dst) const;
@@ -180,6 +182,7 @@ public:
   OB_INLINE int64_t get_count() { return count_; }
   OB_INLINE bool is_full_cache() { return count_ == capacity_; }
   OB_INLINE float* get_centroids() { return centroids_; }
+  OB_INLINE int64_t get_cent_vec_dim() { return cent_vec_dim_; }
   void reuse() override;
   int64_t get_expect_memory_used(const IvfCacheKey &key, const ObVectorIndexParam &param) override;
   int write_centroid_with_real_idx(const int64_t real_idx, const float *centroid,
@@ -233,6 +236,9 @@ public:
   template<typename CacheType>
   int get_or_create_cache_node(const IvfCacheKey &key, CacheType *&cache);
 
+  template<typename CacheType>
+  int get_cache_node(const IvfCacheKey &key, CacheType *&cache);
+
   int get_centroid_cache_size(const IvfCacheKey &);
   int write_pq_centroid_cache(const IvfCacheKey &key, float *centroid_vec, int64_t length);
   int check_memory_limit(int64_t base);
@@ -273,6 +279,7 @@ public:
   bool is_valid() { return cache_mgr_ != nullptr; }
   ObIvfCacheMgr *get_ivf_cache_mgr() { return cache_mgr_; }
   int set_cache_mgr(ObIvfCacheMgr *cache_mgr);
+  void reset();
   TO_STRING_KV(KPC_(cache_mgr));
 
 private:
@@ -316,6 +323,32 @@ int ObIvfCacheMgr::get_or_create_cache_node(const IvfCacheKey &key, CacheType *&
   }
   return ret;
 }
+
+template<typename CacheType>
+int ObIvfCacheMgr::get_cache_node(const IvfCacheKey &key, CacheType *&cache)
+{
+  int ret = OB_SUCCESS;
+  ObIvfICache *icache = nullptr;
+  cache = nullptr;
+
+  if (OB_FAIL(cache_objs_.get_refactored(key, icache))) {
+    // Do not create new cache, return error directly
+    if (ret == OB_HASH_NOT_EXIST) {
+      OB_LOG(DEBUG, "cache obj not exist", K(key), K(cache_objs_.size()));
+    } else {
+      OB_LOG(WARN, "fail to get cache obj", K(ret), K(key));
+    }
+  } else if (OB_ISNULL(icache)) {
+    ret = OB_ERR_NULL_VALUE;
+    OB_LOG(WARN, "cache obj is null", K(ret), K(key));
+  } else {
+    cache = static_cast<CacheType*>(icache);
+  }
+
+  return ret;
+}
+
+
 
 }  // namespace share
 }  // namespace oceanbase
