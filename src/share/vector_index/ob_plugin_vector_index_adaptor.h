@@ -769,7 +769,6 @@ public:
                               blocksstable::ObDatumRow *last_row,
                               ObArray<uint64_t> &i_vids);
   int prepare_delta_mem_data(roaring::api::roaring64_bitmap_t *gene_bitmap,
-                             ObArray<uint64_t> &i_vids,
                              ObVectorQueryAdaptorResultContext *ctx);
   int serialize(ObIAllocator *allocator, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb);
   int complete_delta_mem_data(roaring::api::roaring64_bitmap_t *gene_bitmap,
