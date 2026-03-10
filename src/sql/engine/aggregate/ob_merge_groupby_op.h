@@ -43,8 +43,7 @@ public:
       sort_cmp_funcs_(alloc),
       enable_encode_sort_(false),
       est_rows_per_group_(0),
-      enable_hash_base_distinct_(false),
-      backup_exprs_(alloc)
+      enable_hash_base_distinct_(false)
     {
     }
 
@@ -85,7 +84,6 @@ public:
   bool enable_encode_sort_;
   int64_t est_rows_per_group_;
   bool enable_hash_base_distinct_;
-  ExprFixedArray backup_exprs_;
 };
 
 // 输入数据已经按照groupby列排序
@@ -218,7 +216,6 @@ private:
             int64_t count);
   int advance_collect_result(int64_t group_id);
   int init_hp_infras_group_mgr();
-  int init_brs_holder();
 private:
   bool is_end_;
   // added to support groupby with rollup
