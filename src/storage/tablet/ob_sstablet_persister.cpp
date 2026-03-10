@@ -124,40 +124,71 @@ int ObSSTabletPersister::InnerWriteBuffer::append_batch(
                                                     /* out */ object_opt))) {
     STORAGE_LOG(WARN, "failed to get storage opt by write info", K(ret), K(param_),
       K(macro_seq), K(write_info));
-  } else if (OB_FAIL(pending_write_infos_.push_back(write_info))) {
-    STORAGE_LOG(WARN, "failed to push back write info", K(ret), K(write_info));
-  } else if (OB_FAIL(pending_object_opts_.push_back(object_opt))) {
-    STORAGE_LOG(WARN, "failed to push back object opt", K(ret), K(object_opt));
   } else if (OB_FAIL(ObObjectManager::ss_get_object_id(object_opt, block_id))) {
     STORAGE_LOG(WARN, "failed to get object id by object opt", K(ret), K(object_opt));
-  } else if (OB_FAIL(block_ids_.push_back(block_id))) {
-    STORAGE_LOG(WARN, "failed to push back block id", K(ret), K(block_id));
+  } else if (!block_id.is_shared_tablet_sub_meta_in_table()) {
+    /// NOTE: If the obj needs to be written to OSS, it must be written using
+    /// shared obj reader writer to ensure data includes macro block header.
+    /// Scenarios involving individual metadata larger than 1MiB are rare,
+    /// for now, sync writing here.
+    ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService *);
+    ObSharedObjectWriteHandle handle;
+    ObSharedObjectsWriteCtx write_ctx;
+    MacroBlockId written_block_id;
+    if (OB_ISNULL(meta_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected null tenant meta service", K(ret), KP(meta_service));
+    } else if (OB_FAIL(meta_service->get_shared_object_reader_writer().async_write(write_info,
+                                                                                   object_opt,
+                                                                                   /*out*/handle))) {
+      STORAGE_LOG(WARN, "failed to async write", K(ret), K(write_info), K(object_opt));
+    } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
+      STORAGE_LOG(WARN, "failed to wait handle", K(ret), K(handle));
+    } else if (OB_FAIL(write_ctx.addr_.get_macro_block_id(written_block_id))) {
+      STORAGE_LOG(WARN, "failed to get block id from write ctx", K(ret), K(write_ctx));
+    } else if (OB_UNLIKELY(written_block_id != block_id)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "written block id mismatch", K(ret), K(block_id), K(written_block_id));
+    } else {
+      addr = write_ctx.addr_;
+    }
+  } else {
+    /// NOTE: otherwise, stash write info which would store at meta table to pending buffer.
+    if (OB_FAIL(pending_write_infos_.push_back(write_info))) {
+      STORAGE_LOG(WARN, "failed to push back write info", K(ret), K(write_info));
+    } else if (OB_FAIL(pending_object_opts_.push_back(object_opt))) {
+      STORAGE_LOG(WARN, "failed to push back object opt", K(ret), K(object_opt));
+    }  else if (OB_FAIL(block_ids_.push_back(block_id))) {
+      STORAGE_LOG(WARN, "failed to push back block id", K(ret), K(block_id));
+    }
+    /// COMMENT: RAW_BLOCK
+    else if (OB_FAIL(addr.set_block_addr(block_id,
+                                        /*offset*/ 0,
+                                        write_info.size_,
+                                        ObMetaDiskAddr::DiskType::RAW_BLOCK))) {
+      STORAGE_LOG(WARN, "failed to set block addr", K(ret), K(block_id), K(write_info));
+    } else {
+      buf_size_in_bytes_ += write_info.size_;
+      if (buf_size_in_bytes_ >= buffer_size_limit_) {
+        STORAGE_LOG(INFO, "write buffer size reach the limit, do sync", K(ret),
+          K_(buf_size_in_bytes), K_(buffer_size_limit), "pending_row_cnts",
+          pending_write_cnt());
+        // reach the size limit, do sync
+        if (OB_FAIL(sync_batch())) {
+          STORAGE_LOG(WARN, "failed to do sync", K(ret));
+        }
+      }
+    }
   }
-  /// COMMENT: RAW_BLOCK
-  else if (OB_FAIL(addr.set_block_addr(block_id,
-                                       /*offset*/ 0,
-                                       write_info.size_,
-                                       ObMetaDiskAddr::DiskType::RAW_BLOCK))) {
-    STORAGE_LOG(WARN, "failed to set block addr", K(ret), K(block_id), K(write_info));
+
+  // record write op if every thing is ok.
+  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!addr.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected invalid phy addr", K(ret), K(addr));
-  }
-  // record write op
-  else if (OB_FAIL(write_summary_.record(write_info, addr))) {
+  } else if (OB_FAIL(write_summary_.record(write_info, addr))) {
     STORAGE_LOG(WARN, "failed to record write op", K(ret), K(write_info), K(addr),
       K_(write_summary));
-  } else {
-    buf_size_in_bytes_ += write_info.size_;
-    if (buf_size_in_bytes_ >= buffer_size_limit_) {
-      STORAGE_LOG(INFO, "write buffer size reach the limit, do sync", K(ret),
-        K_(buf_size_in_bytes), K_(buffer_size_limit), "pending_row_cnts",
-        pending_write_cnt());
-      // reach the size limit, do sync
-      if (OB_FAIL(sync_batch())) {
-        STORAGE_LOG(WARN, "failed to do sync", K(ret));
-      }
-    }
   }
   return ret;
 #endif
@@ -661,7 +692,7 @@ int ObSSTabletPersister::SubMetaWriteResult::get_table_store_meta_info(
 
   if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), data_version))) {
     STORAGE_LOG(WARN, "failed to get meta tenant data version, write to meta table is not allowed", K(ret));
-  } else if (data_version >= DATA_VERSION_4_5_1_0) {
+  } else if (data_version >= DATA_VERSION_4_5_1_0 && !common::is_meta_tenant(tenant_id)) {
     strategy = WriteStrategy::BATCH;
   } else {
     strategy = WriteStrategy::AGGREGATED;

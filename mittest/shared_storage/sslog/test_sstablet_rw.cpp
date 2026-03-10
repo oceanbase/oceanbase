@@ -35,6 +35,7 @@
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
 #include "lib/ob_lib_config.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
+#include "storage/tablet/ob_sstablet_persister.h"
 
 #undef private
 #undef protected
@@ -535,9 +536,172 @@ TEST_F(TestSSTabletRW, test_create_ls)
   LOG_INFO("test_create_ls finish");
 }
 
+TEST_F(TestSSTabletRW, test_sstablet_persister_write_buffer)
+{
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
+  int ret = OB_SUCCESS;
+  ASSERT_TRUE(is_user_tenant(MTL_ID()));
+
+  common::ObArenaAllocator allocator("TestTabletMeta",
+                                     OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID);
+
+  const ObLSID ls_id(1001);
+  const ObTabletID tablet_id(200001);
+
+  global_is_sswriter = true;
+
+  ObAtomicFileMgr *atomic_file_mgr = MTL(decltype(atomic_file_mgr));
+  ASSERT_NE(nullptr, atomic_file_mgr);
+  GET_TABLET_META_HANLDE_DEFAULT(file_handle, 1, ls_id, tablet_id);
+  ObAtomicTabletMetaFile *file = file_handle1.get_atomic_file();
+  ASSERT_NE(nullptr, file);
+  ObAtomicTabletMetaFile *tablet_meta_file = file;
+  uint64_t tablet_cur_op_id = 0;
+  CREATE_TABLET_META_WRITE_OP_WITH_RECONFIRM(op_handle);
+  ASSERT_NE(nullptr, file);
+  ObAtomicTabletMetaOp *op = op_handle.get_atomic_op();
+  ASSERT_NE(nullptr, op);
+
+  uint64_t data_version = 0;
+  ASSERT_EQ(OB_SUCCESS, GET_MIN_DATA_VERSION(MTL_ID(), data_version));
+  LOG_INFO("current data version", K(ret), KDV(data_version));
+  ObTabletPersisterParam persist_param(data_version,
+                                       ls_id,
+                                       tablet_id,
+                                       ObMetaUpdateReason::CREATE_TABLET,
+                                       -1,
+                                       0,
+                                       &op_handle,
+                                       file,
+                                       nullptr,
+                                       nullptr,
+                                       SCN::min_scn().get_val_for_tx(),
+                                       nullptr);
+  ASSERT_TRUE(persist_param.is_valid());
+  ASSERT_TRUE(persist_param.is_inc_shared_object());
+
+
+
+
+  const int64_t buf_size_limit = ObSSTabletPersister::WRITE_BUFFER_SIZE_LIMIT;
+
+  struct Util final
+  {
+    static void make_write_info(
+      const bool write_to_oss,
+      ObArenaAllocator &allocator,
+      ObSharedObjectWriteInfo &write_info,
+      std::string &str)
+    {
+      static const char *alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGUIJKLMNOPQRSTUVWXYZ";
+      static const size_t total_cnt = strlen(alphabet);
+      str.clear();
+      write_info.reset();
+      const size_t str_len = write_to_oss ? (size_t)upper_align(ObSSTabletPersister::OBJECT_LIMIT + 1, DIO_READ_ALIGN_SIZE) : 4096ul;
+      char *buf = (char *)allocator.alloc(str_len);
+      ASSERT_NE(nullptr, buf);
+      for (size_t i = 0; i < str_len; ++i) {
+        const int64_t idx = ObRandom::rand(0, total_cnt - 1);
+        buf[i] = alphabet[i];
+      }
+      write_info.buffer_ = buf;
+      write_info.offset_ = 0;
+      write_info.size_ = str_len;
+      write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+      write_info.ls_epoch_ = 0;
+      ASSERT_TRUE(write_info.is_valid());
+      str.append(buf, str_len);
+      ASSERT_EQ(str_len, str.size());
+      ASSERT_EQ(0, memcmp(buf, str.data(), str_len));
+    }
+
+
+    static void check_write(
+      const ObMetaDiskAddr &addr,
+      const std::string &expected_str)
+    {
+      ObArenaAllocator allocator(lib::ObMemAttr(MTL_ID(), "CheckWrite"));
+      ObSharedObjectReadInfo read_info;
+      read_info.addr_ = addr;
+      read_info.io_desc_.set_mode(ObIOMode::READ);
+      read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+      read_info.ls_epoch_ = 0;
+      read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
+      ObSharedObjectReadHandle io_handle(allocator);
+      ASSERT_EQ(OB_SUCCESS, ObSharedObjectReaderWriter::async_read(read_info, io_handle));
+      ASSERT_EQ(OB_SUCCESS, io_handle.wait());
+      char *buf = nullptr;
+      int64_t buf_len = 0;
+      ASSERT_EQ(OB_SUCCESS, io_handle.get_data(allocator, buf, buf_len));
+      ASSERT_NE(nullptr, buf);
+      ASSERT_EQ((size_t)buf_len, expected_str.size());
+      ASSERT_EQ(0, memcmp(buf, expected_str.data(), buf_len));
+    }
+  };
+
+  struct AddrComp final
+  {
+    bool operator()(const ObMetaDiskAddr &a, const ObMetaDiskAddr &b) const
+    {
+      return MEMCMP(&a, &b, sizeof(ObMetaDiskAddr)) < 0;
+    }
+  };
+  int64_t macro_seq = 0;
+  std::map<ObMetaDiskAddr, std::string, AddrComp> written_data;
+  ObSharedObjectWriteInfo write_info;
+  ObMetaDiskAddr addr;
+
+  ObSSTabletPersister::InnerWriteBuffer write_buffer(persist_param, lib::ObMemAttr(MTL_ID(), "WriteBuf"), buf_size_limit, allocator);
+
+  ASSERT_EQ(OB_SUCCESS, write_buffer.init(ObSSTabletPersister::WriteStrategy::BATCH));
+
+  common::ObArray<ObSharedObjectWriteInfo> write_infos;
+  vector<bool> is_write_to_oss;
+  vector<std::string> strs;
+
+  const int64_t total_write_op = 16;
+  int64_t oss_write_ops = 0, table_write_ops = 0;
+  for (int64_t i = 0; i < total_write_op; ++i) {
+    const bool write_to_oss = ObRandom::rand(0, 5) < 3;
+    std::string tmp_str;
+    Util::make_write_info(write_to_oss, allocator, write_info, tmp_str);
+    ASSERT_EQ(OB_SUCCESS, write_infos.push_back(write_info));
+    is_write_to_oss.push_back(write_to_oss);
+    strs.emplace_back(std::move(tmp_str));
+    int64_t tmp = write_to_oss ? ++oss_write_ops : ++table_write_ops;
+  }
+
+  common::ObArray<ObMetaDiskAddr> addrs;
+  ASSERT_EQ(OB_SUCCESS, write_buffer.append(write_infos, macro_seq, addrs));
+  ASSERT_EQ(macro_seq, total_write_op);
+  ASSERT_EQ(addrs.count(), total_write_op);
+  for (int64_t i = 0; i < total_write_op; ++i) {
+    const ObMetaDiskAddr &addr = addrs.at(i);
+    MacroBlockId block_id;
+    ASSERT_EQ(OB_SUCCESS, addr.get_macro_block_id(block_id));
+    ASSERT_EQ(is_write_to_oss[i], !block_id.is_shared_tablet_sub_meta_in_table());
+    ASSERT_TRUE(written_data.insert({addr, std::move(strs[i])}).second);
+  }
+
+  ASSERT_EQ(OB_SUCCESS, write_buffer.sync_batch());
+
+  for (const auto &iter : written_data) {
+    const ObMetaDiskAddr &addr = iter.first;
+    const std::string &expected_str = iter.second;
+    Util::check_write(addr, expected_str);
+  }
+
+  const ObSSTabletPersister::InnerWriteSummary &summary = write_buffer.write_summary();
+  ASSERT_EQ(oss_write_ops, summary.write_ops_for_oss_);
+  ASSERT_EQ(table_write_ops, summary.write_ops_for_table_);
+
+  fprintf(stdout, "test finished(summary:%s)\n", ObCStringHelper().convert(summary));
+}
+
 TEST_F(TestSSTabletRW, test_load_macro_info_from_sslog)
 {
-share::ObTenantSwitchGuard tenant_guard;
+  share::ObTenantSwitchGuard tenant_guard;
   ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
   int ret = OB_SUCCESS;
   ASSERT_TRUE(is_user_tenant(MTL_ID()));
