@@ -210,7 +210,7 @@ public:
       storage::ObTableAccessContext &context,
       share::SCN &max_trans_version,
       ObRowsInfo &rows_info);
-  int set_upper_trans_version(
+  virtual int set_upper_trans_version(
       common::ObArenaAllocator &allocator,
       const int64_t upper_trans_version);
   // for inc major sstable that needs update upper trans version && filled tx scn at same time
