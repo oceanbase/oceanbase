@@ -45485,16 +45485,16 @@ def_table_schema(
       A.TENANT_ID,
       A.DATA_TABLE_ID,
       A.DATA_TABLET_ID,
-      T.TABLE_NAME,
-      SUBSTR(T1.TABLE_NAME, 7 + INSTR(SUBSTR(T1.TABLE_NAME, 7), '_')) AS INDEX_NAME,
+      JSON_VALUE(A.STATISTICS, '$.table_name') AS TABLE_NAME,
+      JSON_VALUE(A.STATISTICS, '$.index_name') AS INDEX_NAME,
       (CASE M.ROLE WHEN 1 THEN 'LEADER' ELSE 'FOLLOWER' END) AS ROLE,
       JSON_VALUE(A.STATISTICS, '$.param') AS INDEX_PARAM,
       JSON_VALUE(A.STATISTICS, '$.incr_mem_used' RETURNING SIGNED) + JSON_VALUE(A.STATISTICS, '$.snap_mem_used' RETURNING SIGNED) AS MEMORY_USED,
       JSON_VALUE(A.STATISTICS, '$.incr_mem_hold' RETURNING SIGNED) + JSON_VALUE(A.STATISTICS, '$.snap_mem_hold' RETURNING SIGNED) AS MEMORY_HOLD,
       JSON_VALUE(A.STATISTICS, '$.incr_mem_hold' RETURNING SIGNED) AS INCR_MEM_HOLD,
       JSON_VALUE(A.STATISTICS, '$.snap_mem_hold' RETURNING SIGNED) AS SNAP_MEM_HOLD,
-      JSON_VALUE(A.STATISTICS, '$.incr_index_cnt' RETURNING SIGNED) AS INCR_INDEX_CNT,
-      JSON_VALUE(A.STATISTICS, '$.snap_index_cnt' RETURNING SIGNED) AS SNAP_INDEX_CNT,
+      JSON_VALUE(A.STATISTICS, '$.incr_vector_cnt' RETURNING SIGNED) AS INCR_VECTOR_CNT,
+      JSON_VALUE(A.STATISTICS, '$.snap_vector_cnt' RETURNING SIGNED) AS SNAP_VECTOR_CNT,
       JSON_VALUE(A.STATISTICS, '$.incr_data_scn' RETURNING UNSIGNED) AS INCR_DATA_SCN,
       JSON_VALUE(A.STATISTICS, '$.snap_data_scn' RETURNING UNSIGNED) AS SNAP_DATA_SCN,
       (CASE JSON_VALUE(A.SYNC_INFO, '$.last_succ_time' RETURNING SIGNED) WHEN 0 THEN NULL ELSE usec_to_time(JSON_VALUE(A.SYNC_INFO, '$.last_succ_time' RETURNING SIGNED)) END) as LAST_SUCC_SYNC_TIME,
@@ -45504,12 +45504,6 @@ def_table_schema(
       oceanbase.__all_virtual_vector_index_info A
   LEFT JOIN OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE M
       ON A.TENANT_ID = M.TENANT_ID AND A.LS_ID = M.LS_ID AND A.SVR_IP = M.SVR_IP AND A.SVR_PORT = M.SVR_PORT
-  LEFT JOIN oceanbase.__all_virtual_table T
-      ON A.TENANT_ID = T.TENANT_ID
-      AND A.DATA_TABLE_ID = T.TABLE_ID
-  LEFT JOIN oceanbase.__all_virtual_table T1
-      ON A.TENANT_ID = T1.TENANT_ID
-      AND A.inc_index_table_id = T1.TABLE_ID
   WHERE
       A.INDEX_TYPE IN (0,1,5,6);
 """.replace("\n", " ")
@@ -45539,8 +45533,8 @@ SELECT
     MEMORY_HOLD,
     INCR_MEM_HOLD,
     SNAP_MEM_HOLD,
-    INCR_INDEX_CNT,
-    SNAP_INDEX_CNT,
+    INCR_VECTOR_CNT,
+    SNAP_VECTOR_CNT,
     INCR_DATA_SCN,
     SNAP_DATA_SCN,
     LAST_SUCC_SYNC_TIME,
@@ -45569,9 +45563,9 @@ def_table_schema(
     A.SVR_IP,
     A.SVR_PORT,
     A.TENANT_ID,
-    T.TABLE_ID AS DATA_TABLE_ID,
-    T.TABLE_NAME AS TABLE_NAME,
-    SUBSTR(T1.TABLE_NAME, 7 + INSTR(SUBSTR(T1.TABLE_NAME, 7), '_')) AS INDEX_NAME,
+    A.DATA_TABLE_ID,
+    JSON_VALUE(A.STATISTICS, '$.table_name') AS TABLE_NAME,
+    JSON_VALUE(A.STATISTICS, '$.index_name') AS INDEX_NAME,
     A.ROWKEY_VID_TABLE_ID AS INDEX_TABLE_ID,
     A.ROWKEY_VID_TABLET_ID AS INDEX_TABLET_ID,
     JSON_VALUE(A.STATISTICS, '$.param') AS INDEX_PARAM,
@@ -45590,13 +45584,7 @@ def_table_schema(
     CAST(JT.MEMORY_HOLD AS SIGNED) AS MEMORY_HOLD,
     JSON_VALUE(JT.CACHE_INFO, '$') AS CACHE_INFO
   FROM
-    oceanbase.__all_virtual_vector_index_info A
-  LEFT JOIN oceanbase.__all_virtual_table T1
-      ON A.TENANT_ID = T1.TENANT_ID
-      AND A.ROWKEY_VID_TABLE_ID = T1.TABLE_ID
-  LEFT JOIN oceanbase.__all_virtual_table T
-      ON A.TENANT_ID = T.TENANT_ID
-      AND SUBSTR(T1.TABLE_NAME, 7, INSTR(SUBSTR(T1.TABLE_NAME, 7), '_') - 1) = T.TABLE_ID,
+    oceanbase.__all_virtual_vector_index_info A,
   JSON_TABLE(A.statistics, '$.cache_objs_info[*]' COLUMNS (
       CACHE_TYPE INT PATH '$.cache_type',
       MEMORY_USED INT UNSIGNED PATH '$.mem_used',
@@ -46720,6 +46708,86 @@ def_table_schema(
   FROM oceanbase.GV$OB_SS_LOCAL_CACHE_DIAGNOSE
   WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
   """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'ningxin.ning',
+  table_name      = 'GV$OB_SINDI_INDEX_INFO',
+  table_id        = '21714',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      A.SVR_IP,
+      A.SVR_PORT,
+      A.TENANT_ID,
+      A.DATA_TABLE_ID,
+      A.DATA_TABLET_ID,
+      JSON_VALUE(A.STATISTICS, '$.table_name') AS TABLE_NAME,
+      JSON_VALUE(A.STATISTICS, '$.index_name') AS INDEX_NAME,
+      (CASE M.ROLE WHEN 1 THEN 'LEADER' ELSE 'FOLLOWER' END) AS ROLE,
+      JSON_VALUE(A.STATISTICS, '$.param') AS INDEX_PARAM,
+      JSON_VALUE(A.STATISTICS, '$.incr_mem_used' RETURNING SIGNED) + JSON_VALUE(A.STATISTICS, '$.snap_mem_used' RETURNING SIGNED) AS MEMORY_USED,
+      JSON_VALUE(A.STATISTICS, '$.incr_mem_hold' RETURNING SIGNED) + JSON_VALUE(A.STATISTICS, '$.snap_mem_hold' RETURNING SIGNED) AS MEMORY_HOLD,
+      JSON_VALUE(A.STATISTICS, '$.incr_mem_hold' RETURNING SIGNED) AS INCR_MEM_HOLD,
+      JSON_VALUE(A.STATISTICS, '$.snap_mem_hold' RETURNING SIGNED) AS SNAP_MEM_HOLD,
+      JSON_VALUE(A.STATISTICS, '$.incr_vector_cnt' RETURNING SIGNED) AS INCR_VECTOR_CNT,
+      JSON_VALUE(A.STATISTICS, '$.snap_vector_cnt' RETURNING SIGNED) AS SNAP_VECTOR_CNT,
+      JSON_VALUE(A.STATISTICS, '$.incr_data_scn' RETURNING UNSIGNED) AS INCR_DATA_SCN,
+      JSON_VALUE(A.STATISTICS, '$.snap_data_scn' RETURNING UNSIGNED) AS SNAP_DATA_SCN,
+      (CASE JSON_VALUE(A.SYNC_INFO, '$.last_succ_time' RETURNING SIGNED) WHEN 0 THEN NULL ELSE usec_to_time(JSON_VALUE(A.SYNC_INFO, '$.last_succ_time' RETURNING SIGNED)) END) as LAST_SUCC_SYNC_TIME,
+      (CASE JSON_VALUE(A.SYNC_INFO, '$.last_fail_time' RETURNING SIGNED) WHEN 0 THEN NULL ELSE usec_to_time(JSON_VALUE(A.SYNC_INFO, '$.last_fail_time' RETURNING SIGNED)) END) as LAST_FAILED_SYNC_TIME,
+      JSON_VALUE(A.SYNC_INFO, '$.last_fail_code' RETURNING SIGNED) as LAST_FAILED_CODE
+  FROM
+      oceanbase.__all_virtual_vector_index_info A
+  LEFT JOIN OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE M
+      ON A.TENANT_ID = M.TENANT_ID AND A.LS_ID = M.LS_ID AND A.SVR_IP = M.SVR_IP AND A.SVR_PORT = M.SVR_PORT
+  WHERE
+      A.INDEX_TYPE IN (8,9);
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'ningxin.ning',
+  table_name      = 'V$OB_SINDI_INDEX_INFO',
+  table_id        = '21715',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    DATA_TABLE_ID,
+    DATA_TABLET_ID,
+    TABLE_NAME,
+    INDEX_NAME,
+    ROLE,
+    INDEX_PARAM,
+    MEMORY_USED,
+    MEMORY_HOLD,
+    INCR_MEM_HOLD,
+    SNAP_MEM_HOLD,
+    INCR_VECTOR_CNT,
+    SNAP_VECTOR_CNT,
+    INCR_DATA_SCN,
+    SNAP_DATA_SCN,
+    LAST_SUCC_SYNC_TIME,
+    LAST_FAILED_SYNC_TIME,
+    LAST_FAILED_CODE
+FROM
+    OCEANBASE.GV$OB_SINDI_INDEX_INFO
+WHERE
+        SVR_IP=HOST_IP()
+    AND
+        SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
 )
 
 def_table_schema(

@@ -789,6 +789,39 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
   STAT_PRINT(",\"ref_cnt\":%lld", ATOMIC_LOAD(&ref_cnt_) - 1);
   STAT_PRINT(",\"idle_cnt\":%lld", idle_cnt_);
 
+  // Fill table_name and index_name
+  if (OB_SUCC(ret) && data_table_id_ != OB_INVALID_ID) {
+    ObSchemaGetterGuard schema_guard;
+    const ObSimpleTableSchemaV2 *data_table_schema = NULL;
+    const ObSimpleTableSchemaV2 *inc_index_table_schema = NULL;
+    ObString table_name;
+    ObString index_name;
+
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, data_table_id_, data_table_schema))) {
+      LOG_WARN("failed to get data table schema", KR(ret), K(tenant_id_), K(data_table_id_));
+    } else if (OB_NOT_NULL(data_table_schema)) {
+      table_name = data_table_schema->get_table_name_str();
+      if (!table_name.empty()) {
+        STAT_PRINT(",\"table_name\":\"%.*s\"", table_name.length(), table_name.ptr());
+      }
+    }
+
+    // Get index_name from inc_index_table_id
+    if (OB_SUCC(ret) && inc_table_id_ != OB_INVALID_ID) {
+      if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, inc_table_id_, inc_index_table_schema))) {
+        LOG_WARN("failed to get inc index table schema", KR(ret), K(tenant_id_), K(inc_table_id_));
+      } else if (OB_NOT_NULL(inc_index_table_schema)) {
+        if (OB_FAIL(inc_index_table_schema->get_index_name(index_name))) {
+          LOG_WARN("failed to get index name", K(ret), K(inc_table_id_));
+        } else if (!index_name.empty()) {
+          STAT_PRINT(",\"index_name\":\"%.*s\"", index_name.length(), index_name.ptr());
+        }
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && !index_identity_.empty()) {
     STAT_PRINT(",\"index\":\"%s\"", helper.convert(index_identity_));
   }
@@ -798,7 +831,7 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
       LOG_WARN("failed to get inc index number.", K(ret));
     }
     STAT_PRINT(",\"incr_data_scn\":%llu", incr_data_->scn_.get_val_for_inner_table_field());
-    STAT_PRINT(",\"incr_index_cnt\":%lld", incr_cnt);
+    STAT_PRINT(",\"incr_vector_cnt\":%lld", incr_cnt);
   }
   if (vbitmap_data_.is_valid()) {
     STAT_PRINT(",\"vbitmap_data_scn\":%llu", vbitmap_data_->scn_.get_val_for_inner_table_field());
@@ -823,7 +856,7 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
 
     STAT_PRINT(",\"snapshot_key_prefix\":\"%s\"", helper.convert(snapshot_key_prefix_));
     STAT_PRINT(",\"snap_data_scn\":%llu", snap_data_->scn_.get_val_for_inner_table_field());
-    STAT_PRINT(",\"snap_index_cnt\":%lld", snap_cnt);
+    STAT_PRINT(",\"snap_vector_cnt\":%lld", snap_cnt);
     STAT_PRINT(",\"sbitmap_insert_cnt\":%lld", sbitmap_insert_cnt);
     STAT_PRINT(",\"sbitmap_delete_cnt\":%lld", sbitmap_delete_cnt);
 

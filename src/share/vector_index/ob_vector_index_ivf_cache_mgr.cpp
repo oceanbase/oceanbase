@@ -225,6 +225,7 @@ int ObIvfCacheMgr::fill_cache_info(ObVectorIndexInfo &info){
   info.rowkey_vid_tablet_id_ = cache_mgr_key_.id();
   info.rowkey_vid_table_id_ = table_id_;
   info.index_type_ = vec_param_.type_;
+  info.data_table_id_ = OB_INVALID_ID;
   ObVectorIndexParam *param;
   int64_t pos = 0;
   #define STAT_PRINT(...) \
@@ -239,6 +240,42 @@ int ObIvfCacheMgr::fill_cache_info(ObVectorIndexInfo &info){
   STAT_PRINT(",\"is_reach_limit\":%d", is_reach_limit_);
   STAT_PRINT(",\"reach_limit_cnt\":%d", reach_limit_cnt_);
   STAT_PRINT(",\"is_inited\":%d", is_inited_);
+  // Fill table_name and index_name
+  if (OB_SUCC(ret) && table_id_ != OB_INVALID_ID) {
+    ObSchemaGetterGuard schema_guard;
+    const ObSimpleTableSchemaV2 *index_table_schema = NULL;
+    const ObSimpleTableSchemaV2 *data_table_schema = NULL;
+    ObString table_name;
+    ObString index_name;
+    uint64_t data_table_id = OB_INVALID_ID;
+
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, table_id_, index_table_schema))) {
+      LOG_WARN("failed to get index table schema", KR(ret), K(tenant_id_), K(table_id_));
+    } else if (OB_NOT_NULL(index_table_schema)) {
+      // Get index_name from index table schema
+      if (OB_FAIL(index_table_schema->get_index_name(index_name))) {
+        LOG_WARN("failed to get index name", K(ret), K(table_id_));
+      } else if (!index_name.empty()) {
+        STAT_PRINT(",\"index_name\":\"%.*s\"", index_name.length(), index_name.ptr());
+      }
+
+      // Get data_table_id from index table schema
+      data_table_id = index_table_schema->get_data_table_id();
+      if (data_table_id != OB_INVALID_ID) {
+        info.data_table_id_ = data_table_id;
+        if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, data_table_id, data_table_schema))) {
+          LOG_WARN("failed to get data table schema", KR(ret), K(tenant_id_), K(data_table_id));
+        } else if (OB_NOT_NULL(data_table_schema)) {
+          table_name = data_table_schema->get_table_name_str();
+          if (!table_name.empty()) {
+            STAT_PRINT(",\"table_name\":\"%.*s\"", table_name.length(), table_name.ptr());
+          }
+        }
+      }
+    }
+  }
   STAT_PRINT(",\"param\":\"");
   if (OB_SUCC(ret)) {
     if (OB_FAIL(vec_param_.print_to_string(info.statistics_, sizeof(info.statistics_), pos))) {

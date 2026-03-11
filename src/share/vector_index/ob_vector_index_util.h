@@ -269,6 +269,10 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
   float ob_sparse_drop_ratio_search_;
   float similarity_threshold_;
   OB_UNIS_VERSION(1);
+private:
+  int print_hnsw_params(char *buf, int64_t buf_len, int64_t &pos) const;
+  int print_ivf_params(char *buf, int64_t buf_len, int64_t &pos) const;
+  int print_ipivf_params(char *buf, int64_t buf_len, int64_t &pos) const;
 public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
     K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
@@ -1051,6 +1055,9 @@ public:
   }
 
   static int get_part_key_num(const schema::ObTableSchema &data_schema, int8_t &part_key_num);
+
+  static const char* get_type_str(ObVectorIndexAlgorithmType type);
+  static const char* get_dist_algorithm_str(ObVectorIndexDistAlgorithm dist);
 
 private:
   static void save_column_schema(
