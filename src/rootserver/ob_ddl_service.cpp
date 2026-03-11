@@ -28588,7 +28588,7 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
       ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
       LOG_WARN("Can not truncate index of db in recyclebin", K(ret), K(arg));
     } else {
-      const uint64_t table_id = table_schema->get_table_id();
+      const uint64_t data_table_id = table_schema->get_table_id();
       const ObTableSchema *index_table_schema = NULL;
       ObIndexBuilder index_builder(*this);
       uint64_t tenant_data_version = 0;
@@ -28601,7 +28601,7 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
       } else if (!ObVectorIndexUtil::check_index_is_all_ready(schema_guard, *table_schema, *index_table_schema)) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "rebuild on not ready vector index is");
-      } else if (OB_FAIL(check_vec_index_conflict(table_schema->get_tenant_id(), table_id))) {
+      } else if (OB_FAIL(check_vec_index_conflict(table_schema->get_tenant_id(), data_table_id))) {
         if (OB_EAGAIN != ret) {
           LOG_WARN("failed to check vec index ", K(ret));
         }
@@ -28610,6 +28610,13 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
       } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "rebuild vec index before 4.3.3 is");
+      } else if (index_table_schema->is_in_recyclebin()) {
+        ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+        LOG_WARN("can not rebuild index table in recyclebin.", KR(ret), KPC(table_schema));
+      } else if (index_table_schema->get_data_table_id() != data_table_id) { // if data table id not match, rebuild_index lock will not free normally
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index schema data table id is not match with data table",
+          K(ret), K(arg), KPC(index_table_schema), KPC(table_schema));
       } else if ((tenant_data_version >= DATA_VERSION_4_4_1_0 ||
                  (tenant_data_version >= MOCK_DATA_VERSION_4_3_5_4 && tenant_data_version < DATA_VERSION_4_4_0_0)) &&
                  arg.rebuild_index_online_) {
@@ -28635,7 +28642,7 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
               LOG_WARN("failed to update data table schema attribute", K(ret));
             } else if (OB_FAIL(schema_service->get_table_sql_service().update_data_table_schema_version(trans,
                                                                                                         tenant_id,
-                                                                                                        table_id,
+                                                                                                        data_table_id,
                                                                                                         table_schema->get_in_offline_ddl_white_list()))) {
               LOG_WARN("fail to update schema version", K(ret));
             }
