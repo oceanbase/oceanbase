@@ -20436,8 +20436,64 @@ int ObJoinOrder::check_vec_hint_index_id(const ObDMLStmt &stmt,
   } else if (OB_FAIL(get_vector_index_tid_from_expr(schema_guard, vector_expr, table_id, ref_table_id,
                                                     has_aggr, vector_index_match, vec_index_tid, index_type))) {
       LOG_WARN("failed to get vector index tid", K(ret));
-  } else if (vec_index_tid == OB_INVALID_ID || vec_index_tid != hint_index_id) {
-    // skip
+  } else if (vec_index_tid == OB_INVALID_ID) {
+    // no vector index found
+    FLOG_INFO("[VEC_INDEX][HINT_MISMATCH] no vector index found", K(hint_index_id), K(vec_index_tid));
+  } else if (vec_index_tid != hint_index_id) {
+    // mismatch is allowed during rebuild if hint index and selected index are on the same vector column.
+    const ObTableSchema *data_table_schema = nullptr;
+    const ObTableSchema *hint_index_schema = nullptr;
+    const ObTableSchema *curr_index_schema = nullptr;
+    ObSEArray<uint64_t, 1> hint_col_ids;
+    ObSEArray<uint64_t, 1> curr_col_ids;
+    bool same_vec_col = false;
+    bool fallback_accept = false;
+    if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, data_table_schema))) {
+      LOG_WARN("failed to get data table schema", K(ret), K(ref_table_id));
+    } else if (OB_FAIL(schema_guard->get_table_schema(hint_index_id, hint_index_schema))) {
+      LOG_WARN("failed to get hint index schema", K(ret), K(hint_index_id));
+    } else if (OB_FAIL(schema_guard->get_table_schema(vec_index_tid, curr_index_schema))) {
+      LOG_WARN("failed to get current vec index schema", K(ret), K(vec_index_tid));
+    } else if (OB_ISNULL(data_table_schema) || OB_ISNULL(hint_index_schema) || OB_ISNULL(curr_index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr to vec hint schema", K(ret), K(ref_table_id), K(hint_index_id), K(vec_index_tid),
+               KP(data_table_schema), KP(hint_index_schema), KP(curr_index_schema));
+    } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_id(*data_table_schema,
+                                                                      *hint_index_schema,
+                                                                      hint_col_ids))) {
+      LOG_WARN("failed to get hint vector index column ids", K(ret), K(hint_index_id));
+    } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_id(*data_table_schema,
+                                                                      *curr_index_schema,
+                                                                      curr_col_ids))) {
+      LOG_WARN("failed to get current vector index column ids", K(ret), K(vec_index_tid));
+    } else if (hint_col_ids.count() != 1 || curr_col_ids.count() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid vector col counts", K(ret), K(hint_col_ids.count()), K(curr_col_ids.count()),
+               K(hint_index_id), K(vec_index_tid));
+    } else {
+      same_vec_col = (hint_col_ids.at(0) == curr_col_ids.at(0));
+    }
+    // During vector index rebuild, the old index may be dropped while the new one
+    // is being created. In this case, schema fetch may fail temporarily.
+    // We choose to fallback accept the hint to maintain query availability,
+    // as the optimizer has already selected a valid vector index (vec_index_tid).
+    if (OB_FAIL(ret)) {
+      fallback_accept = true;
+      FLOG_WARN("[VEC_INDEX][HINT_MISMATCH] schema check failed, fallback accept for rebuild scenario",
+               K(ret), K(hint_index_id), K(vec_index_tid), K(hint_col_ids.count()), K(curr_col_ids.count()));
+      ret = OB_SUCCESS;
+    }
+    if (fallback_accept || same_vec_col) {
+      // old/new index ids can mismatch during rebuild, allow it for the same vector column
+      // or when same-column verification is unavailable.
+      is_valid = true;
+      FLOG_INFO("[VEC_INDEX][HINT_MISMATCH] mismatch accepted",
+                K(hint_index_id), K(vec_index_tid), K(same_vec_col), K(fallback_accept),
+                K(hint_col_ids), K(curr_col_ids));
+    } else {
+      FLOG_INFO("[VEC_INDEX][HINT_MISMATCH] mismatch rejected for different vector columns",
+                K(hint_index_id), K(vec_index_tid), K(hint_col_ids), K(curr_col_ids));
+    }
   } else {
     is_valid = true;
   }
@@ -21657,6 +21713,9 @@ int ObJoinOrder::get_valid_hint_index_list(const ObDMLStmt &stmt,
                                           has_aggr, is_valid))) {
         LOG_WARN("failed to check vec hint index", K(table_id), K(ref_table_id), K(index_hint_table_schema));
       } else if (!is_valid || helper.is_index_merge_ || !helper.match_expr_infos_.empty()) {
+        // hint specified vector index validation failed
+        FLOG_INFO("[VEC_INDEX][HINT_INVALID] hint specified vector index validation failed",
+                  K(tid), K(is_valid), K(helper.is_index_merge_), "match_expr_count", helper.match_expr_infos_.count());
       } else {
         ObVecIndexType vec_with_filter_index_type = ObVecIndexType::VEC_INDEX_INVALID;
         uint64_t tenant_cluster_version = GET_MIN_CLUSTER_VERSION();

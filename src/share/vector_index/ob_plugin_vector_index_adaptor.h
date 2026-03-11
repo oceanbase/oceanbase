@@ -435,9 +435,25 @@ public:
   void free_resource(ObIAllocator *allocator_);
   bool is_inited() const { return is_init_; }
   void set_inited() { is_init_ = true; }
-  void set_vid_bound(ObVidBound other) {
+  void set_vid_bound_inc(ObVidBound other) {
     vid_bound_.max_vid_ = vid_bound_.max_vid_ > other.max_vid_ ? vid_bound_.max_vid_ : other.max_vid_;
     vid_bound_.min_vid_ = vid_bound_.min_vid_ < other.min_vid_ ? vid_bound_.min_vid_ : other.min_vid_;
+  }
+  void set_vid_bound_snap(ObVidBound other) {
+    int64_t old_max = ATOMIC_LOAD(&vid_bound_.max_vid_);
+    while (other.max_vid_ > old_max) {
+      if (ATOMIC_BCAS(&vid_bound_.max_vid_, old_max, other.max_vid_)) {
+        break;
+      }
+      old_max = ATOMIC_LOAD(&vid_bound_.max_vid_);
+    }
+    int64_t old_min = ATOMIC_LOAD(&vid_bound_.min_vid_);
+    while (other.min_vid_ < old_min) {
+      if (ATOMIC_BCAS(&vid_bound_.min_vid_, old_min, other.min_vid_)) {
+        break;
+      }
+      old_min = ATOMIC_LOAD(&vid_bound_.min_vid_);
+    }
   }
 
   void get_read_bound_vid(int64_t &max_vid, int64_t &min_vid) {

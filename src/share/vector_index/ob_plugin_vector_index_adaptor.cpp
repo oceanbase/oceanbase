@@ -1306,7 +1306,7 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
     if (OB_SUCC(ret)) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPH"));
       TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
-      incr_data_->set_vid_bound(vid_bound);
+      incr_data_->set_vid_bound_inc(vid_bound);
       for (int64_t i = 0; OB_SUCC(ret) && i < incr_vid_count; i++) {
         ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, incr_vids[i]));
       }
@@ -1880,7 +1880,7 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
       if (OB_SUCC(ret)) {
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPJ"));
         TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
-        incr_data_->set_vid_bound(vid_bound);
+        incr_data_->set_vid_bound_inc(vid_bound);
         for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
           ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, vids[i]));
         }
@@ -3109,6 +3109,9 @@ int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultCont
                                                   ObVectorQueryVidIterator *&vids_iter)
 {
   INIT_SUCC(ret);
+  ObCostGuard query_next_cost_guard(this, "query_next_result",
+      OB_NOT_NULL(query_cond) ? query_cond->ef_search_ : 0,
+      OB_NOT_NULL(query_cond) ? query_cond->query_limit_ : 0, ObCostGuard::KNN_THRESHOLD_200MS);
   vids_iter = nullptr;
   int64_t dim = 0;
   int64_t *merge_vids = nullptr;
@@ -3445,7 +3448,8 @@ int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *q
   ObVectorIndexAlgorithmType index_type = VIAT_MAX;
   ObString key_prefix;
   ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(query_cond->row_iter_);
-  ObCostGuard cost_guard; // for timeout log
+  ObCostGuard cost_guard(this, "deserialize_snap_data", 0, 0,
+                         ObCostGuard::KNN_SEARCH_SLOW_THRESHOLD_US); // for timeout log
   if (OB_ISNULL(table_scan_iter) || OB_ISNULL(query_cond)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null pointer.", K(ret), K(table_scan_iter), K(query_cond));
@@ -4038,11 +4042,10 @@ int ObPluginVectorIndexAdaptor::get_vid_bound(ObVidBound &bound)
     int64_t tmp_max_vid = 0;
     snap_data_->get_read_bound_vid(tmp_max_vid, tmp_min_vid);
     if (tmp_max_vid == 0 && tmp_min_vid == INT64_MAX) {
-      TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
       if (OB_FAIL(obvectorutil::get_vid_bound(snap_data_->index_, tmp_min_vid, tmp_max_vid))) {
         LOG_WARN("failed to get vid bound", K(ret));
       } else {
-        snap_data_->set_vid_bound(ObVidBound(tmp_min_vid, tmp_max_vid));
+        snap_data_->set_vid_bound_snap(ObVidBound(tmp_min_vid, tmp_max_vid));
       }
     }
     max_vid = max_vid > tmp_max_vid ? max_vid : tmp_max_vid;
