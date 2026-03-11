@@ -1870,6 +1870,22 @@ TEST_F(TestDagScheduler, test_large_thread_cnt_2)
 }
 */
 
+class TestSleepAfterMulTask : public TestMulTask
+{
+public:
+  TestSleepAfterMulTask() = default;
+  ~TestSleepAfterMulTask() = default;
+
+  virtual int process() {
+    *counter_ = *counter_ * 2;
+    ::usleep(sleep_us_);
+    return OB_SUCCESS;
+  }
+  INHERIT_TO_STRING_KV("ObITask", ObITask, "type", "SleepAfterMulTask", KP_(counter));
+private:
+  DISALLOW_COPY_AND_ASSIGN(TestSleepAfterMulTask);
+};
+
 TEST_F(TestDagScheduler, test_cancel_task)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
@@ -1888,7 +1904,7 @@ TEST_F(TestDagScheduler, test_cancel_task)
     COMMON_LOG(WARN, "failed to init dag", K(ret));
   } else {
     TestAddTask *add_task = NULL;
-    TestMulTask *mul_task = NULL;
+    TestSleepAfterMulTask *mul_task = NULL;
     if (OB_FAIL(dag->alloc_task(mul_task))) {
       COMMON_LOG(WARN, "failed to alloc task", K(ret));
     } else if (NULL == mul_task) {
@@ -1896,7 +1912,7 @@ TEST_F(TestDagScheduler, test_cancel_task)
       COMMON_LOG(WARN, "task is null", K(ret));
     } else {
       if (OB_FAIL(mul_task->init(&counter, 10 * 1000 * 1000))) {
-        COMMON_LOG(WARN, "failed to init add task", K(ret));
+        COMMON_LOG(WARN, "failed to init mul task", K(ret));
       } else if (OB_FAIL(dag->alloc_task(add_task))) {
         COMMON_LOG(WARN, "failed to alloc task", K(ret));
       } else if (NULL == add_task) {
