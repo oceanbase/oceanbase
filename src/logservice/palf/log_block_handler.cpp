@@ -386,12 +386,12 @@ int LogBlockHandler::inner_write_once_(const offset_t offset,
   int64_t start_ts = ObTimeUtility::fast_current_time();
   if (OB_FAIL(dio_aligned_buf_.align_buf(buf, buf_len, aligned_buf,
       aligned_buf_len, aligned_block_offset))) {
-    PALF_LOG(ERROR, "align_buf failed", K(ret), K(buf), K(buf_len),
-        K(aligned_buf), K(aligned_buf_len), K(aligned_block_offset), K(offset));
+    PALF_LOG(ERROR, "align_buf failed", K(ret), KP(buf), K(buf_len),
+        KP(aligned_buf), K(aligned_buf_len), K(aligned_block_offset), K(offset));
   } else if (FALSE_IT(ATOMIC_STORE(&last_pwrite_start_time_us_, start_ts))) {
   } else if (FALSE_IT(ATOMIC_STORE(&last_pwrite_size_, aligned_buf_len))) {
   } else if (OB_FAIL(inner_write_impl_(io_fd_, aligned_buf, aligned_buf_len, aligned_block_offset))){
-    PALF_LOG(ERROR, "pwrite failed", K(ret), K(io_fd_), K(aligned_buf), K(aligned_block_offset),
+    PALF_LOG(ERROR, "pwrite failed", K(ret), K(io_fd_), KP(aligned_buf), K(aligned_block_offset),
         K(offset), K(buf_len));
   } else {
     int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
