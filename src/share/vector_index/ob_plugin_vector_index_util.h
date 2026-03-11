@@ -162,14 +162,35 @@ public:
                                           int64_t& memory_limit);
 };
 
+// ObDASHNSWScanIter::process_adaptor_state                                                        CostGuard(KNN_THRESHOLD_1S)
+//     -> ObDASHNSWScanIter::inner_process_adaptor_state
+//     -> ObDASHNSWScanIter::process_adaptor_state_hnsw
+//         -> ObDASHNSWScanIter::process_adaptor_state_pre_filter                                  CostGuard(KNN_THRESHOLD_1S)
+//             -> ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter              CostGuard(KNN_THRESHOLD_500MS)
+//             -> ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey                  CostGuard(KNN_THRESHOLD_500MS)
+//             -> ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force
+//                 -> ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_bq       CostGuard(KNN_THRESHOLD_200MS)
+//                 -> ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_bq           CostGuard(KNN_THRESHOLD_200MS)
+//             -> ObDASHNSWScanIter::process_adaptor_state_post_filter_once                        CostGuard(KNN_THRESHOLD_500MS)
+//                 -> ObDASHNSWScanIter::call_pva_interface                                        CostGuard(KNN_THRESHOLD_200MS)
+// 
+//         -> ObDASHNSWScanIter::process_adaptor_state_post_filter                                 CostGuard(KNN_THRESHOLD_500MS)
+//             -> ObDASHNSWScanIter::process_adaptor_state_post_filter_once                        CostGuard(KNN_THRESHOLD_500MS)
+//                 -> ObDASHNSWScanIter::call_pva_interface                                        CostGuard(KNN_THRESHOLD_200MS)
+// 
+//                 ObPluginVectorIndexAdaptor::query_next_result                                   CostGuard(KNN_THRESHOLD_200MS)
+
 // RAII class for measuring function call latency
 // Uses OB_TSC_TIMESTAMP.fast_current_time() for optimal performance (rdtsc CPU instruction)
 class ObPluginVectorIndexAdaptor;
 class ObCostGuard
 {
 public:
-  // Default slow query threshold: 100ms = 100000us
+  // Unified slow query thresholds: 200ms / 500ms / 1s
   static const int64_t KNN_SEARCH_SLOW_THRESHOLD_US = 100 * 1000;
+  static const int64_t KNN_THRESHOLD_200MS = 200 * 1000;
+  static const int64_t KNN_THRESHOLD_500MS = 500 * 1000;
+  static const int64_t KNN_THRESHOLD_1S = 1000 * 1000;
   explicit OB_INLINE ObCostGuard(int64_t threshold_us = KNN_SEARCH_SLOW_THRESHOLD_US)
       : is_knn_serch_(false),
         start_ts_(OB_TSC_TIMESTAMP.fast_current_time()),
@@ -179,12 +200,13 @@ public:
         ef_search_(0),
         limit_(0)
   {}
-  OB_INLINE ObCostGuard(const ObPluginVectorIndexAdaptor* adaptor, const char *func_name, int64_t ef_search, int64_t limit)
+  OB_INLINE ObCostGuard(const ObPluginVectorIndexAdaptor* adaptor, const char *func_name, int64_t ef_search, int64_t limit,
+                        int64_t threshold_us = KNN_SEARCH_SLOW_THRESHOLD_US)
       : is_knn_serch_(true),
         start_ts_(OB_TSC_TIMESTAMP.fast_current_time()),
         func_name_(func_name),
         adaptor_(adaptor),
-        threshold_us_(KNN_SEARCH_SLOW_THRESHOLD_US),
+        threshold_us_(threshold_us),
         ef_search_(ef_search),
         limit_(limit)
   {}
