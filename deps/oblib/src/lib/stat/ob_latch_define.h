@@ -434,9 +434,9 @@ LATCH_DEF(VECTOR_QUERY_LOCK, 394, "vector query lock", LATCH_FIFO, 1000, 0, true
 LATCH_DEF(VECTOR_ADAPTER_MAP_LOCK, 395, "vector adapter map lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(VECTOR_SYNC_SWITCH_LOCK, 396, "vector sync switch lock", LATCH_FIFO, 500, 0, true)
 LATCH_DEF(VECTOR_IVF_CACHE_LOCK, 397, "vector ivf cache lock", LATCH_READ_PREFER, 1000, 0, true)
+LATCH_DEF(VECTOR_COMPLETE_LOCK, 399, "vector complete lock", LATCH_FIFO, 200, 0, true)
 
-
-LATCH_DEF(LATCH_END, 398, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 400, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

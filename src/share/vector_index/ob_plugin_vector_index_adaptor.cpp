@@ -135,6 +135,7 @@ OB_DEF_DESERIALIZE(ObVectorIndexParam)
 }
 
 ObVectorQueryAdaptorResultContext::~ObVectorQueryAdaptorResultContext() {
+  int ret = OB_SUCCESS;
   status_ = PVQ_START;
   flag_ = PVQP_MAX;
   if (OB_NOT_NULL(bitmaps_)) {
@@ -159,6 +160,16 @@ ObVectorQueryAdaptorResultContext::~ObVectorQueryAdaptorResultContext() {
 
   batch_allocator_.reset();
   search_allocator_.reset();
+
+  if (OB_NOT_NULL(complete_delta_lock_)) {
+    if (OB_FAIL(complete_delta_lock_->unlock())) {
+      FLOG_WARN("unlock complete delta lock failed", K(ret), K(complete_delta_lock_));
+    } else {
+      FLOG_INFO("unlock complete delta lock", K(complete_delta_lock_));
+    }
+    complete_delta_lock_ = nullptr;
+  }
+
 };
 
 int ObVectorQueryAdaptorResultContext::init_bitmaps()
@@ -1248,16 +1259,13 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
                                               incr_vid_count))) {
         LOG_WARN("failed to add index.", K(ret), K(dim), K(row_count));
       }
-    } 
+    }
     if (OB_SUCC(ret)) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPH"));
       TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
       incr_data_->set_vid_bound(vid_bound);
       for (int64_t i = 0; OB_SUCC(ret) && i < incr_vid_count; i++) {
         ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, incr_vids[i]));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < del_vid_count; i++) {
-        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(incr_data_->bitmap_->insert_bitmap_, del_vids[i]));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < null_vid_count; i++) {
         ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, null_vids[i]));
@@ -1931,6 +1939,17 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
           incr_data_->has_complete_ = true;
           LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] set incr data complete to true", K(ctx->get_is_refresh_adaptor()), KPC(this), K(lbt()));
         }
+        if (ctx->get_complete_delta_lock() == nullptr || ctx->get_complete_delta_lock() != &incr_data_->complete_lock_) {
+          ret = OB_ERR_UNEXPECTED;
+          FLOG_WARN("[VEC_INDEX][COMPLETE_DELTA] ctx complete delta lock is nullptr or complete index lock is not incr data complete lock",
+            K(ret), K(ctx), K(ctx->get_complete_delta_lock()), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
+          ret = OB_SUCCESS;
+        }
+        if (OB_FAIL(incr_data_->complete_lock_.unlock())) {
+          LOG_WARN("[VEC_INDEX][COMPLETE_DELTA] unlock complete delta lock failed", K(ret), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
+        }
+        ctx->set_complete_delta_lock(nullptr);
+        ret = OB_SUCCESS;
       }
     }
   }
@@ -1999,19 +2018,67 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
       ctx->status_ = PVQ_COM_DATA;
     }
   } else if (check_if_complete_index(read_scn) && 
-             OB_FAIL(complete_index_mem_data(read_scn, row_iter, datum_row, i_vids))) {
+             OB_FAIL(complete_index_mem_data(ctx, read_scn, row_iter, datum_row, i_vids))) {
     LOG_WARN("failed to check comple index mem data.", K(ret), K(read_scn), K(vbitmap_data_->scn_));
   } else if (OB_ISNULL(ctx->bitmaps_) || OB_ISNULL(ctx->bitmaps_->insert_bitmap_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ctx bit map.", K(ret));
   } else if (check_if_complete_delta(ctx, ctx->bitmaps_->insert_bitmap_, i_vids.count())) {
-    if (OB_FAIL(prepare_delta_mem_data(ctx->bitmaps_->insert_bitmap_, i_vids, ctx))) {
-      LOG_WARN("failed to complete.", K(ret));
-    } else if (ctx->vec_data_.count_ > 0) {
-      ctx->status_ = PVQ_COM_DATA;
+    if (OB_FAIL(try_init_mem_data(VIRT_INC))) {
+      LOG_WARN("failed to init mem data incr.", K(ret));
+    } else {
+      if (!ctx->get_is_refresh_adaptor()) {
+        if (incr_data_->complete_lock_.try_wrlock()) {
+          ctx->set_complete_delta_lock(&incr_data_->complete_lock_);
+          FLOG_INFO("[VEC_INDEX][COMPLETE_DELTA] success to hold complete delta lock", K(ctx), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
+          if (OB_FAIL(prepare_delta_mem_data(ctx->bitmaps_->insert_bitmap_, ctx))) {
+            LOG_WARN("failed to complete.", K(ret));
+          } else if (ctx->vec_data_.count_ > 0) {
+            ctx->status_ = PVQ_COM_DATA;
+          }
+        } else {
+          FLOG_INFO("[VEC_INDEX][COMPLETE_DELTA] skip complete delta for other thread already hold the complete lock", KPC(this), K(lbt()));
+        }// else just do nothing else 
+      } else {
+        // wait for complete delta lock
+        int tmp_ret = OB_SUCCESS;
+        if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = incr_data_->complete_lock_.wrlock()))) {
+          FLOG_INFO("[VEC_INDEX][COMPLETE_DELTA] fail to write lock, ", K(tmp_ret), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
+        } else {
+          FLOG_INFO("[VEC_INDEX][COMPLETE_DELTA] success to hold complete delta lock guard", K(ctx), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
+        }
+        // check again if complete delta
+        if (check_if_complete_delta(ctx, ctx->bitmaps_->insert_bitmap_, i_vids.count())) {
+          ctx->set_complete_delta_lock(&incr_data_->complete_lock_);
+          if (OB_FAIL(prepare_delta_mem_data(ctx->bitmaps_->insert_bitmap_, ctx))) {
+            LOG_WARN("failed to complete.", K(ret));
+          } else if (ctx->vec_data_.count_ > 0) {
+            ctx->status_ = PVQ_COM_DATA;
+          }
+        } else {
+          // no need to complete just unlock
+          if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = incr_data_->complete_lock_.wrunlock()))) {
+            FLOG_INFO("[VEC_INDEX][COMPLETE_DELTA] fail to unlock complete delta lock", K(tmp_ret), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
+          } else {
+            FLOG_INFO("[VEC_INDEX][COMPLETE_DELTA] success to unlock complete delta lock", K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
+          }
+        }
+      }
     }
+  } else if (is_mem_data_init_atomic(VIRT_INC) && !incr_data_->has_complete_) {
+    if (incr_data_->complete_lock_.try_wrlock()) {
+      if (!ctx->get_is_refresh_adaptor()) {
+        incr_data_->has_complete_ = true;
+      }
+      (void)incr_data_->complete_lock_.unlock();
+      if (ctx->get_is_refresh_adaptor()) {
+        LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] check complete delta not need to complete, not set incr data complete for refresh adaptor", K(ctx->get_is_refresh_adaptor()), KPC(this));
+      } else {
+        LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] check complete delta not need to complete, set incr data complete to true", KPC(this), K(lbt()));
+      }
+    } // if cannot get lock, wait for other thread to complete, should not set complete to true
   }
-  
+
   if (OB_SUCC(ret) && check_if_complete_index(read_scn) && !is_skip_4th_index) {
     update_index_id_read_scn();
   }
@@ -2153,7 +2220,8 @@ int ObPluginVectorIndexAdaptor::add_datum_row_into_array(blocksstable::ObDatumRo
   return ret;
 }
 
-int ObPluginVectorIndexAdaptor::complete_index_mem_data(SCN read_scn, 
+int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResultContext *ctx,
+                                                        SCN read_scn, 
                                                         common::ObNewRowIterator *row_iter,
                                                         blocksstable::ObDatumRow *last_row,
                                                         ObArray<uint64_t> &i_vids)
@@ -2199,8 +2267,35 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(SCN read_scn,
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_dim(dim))) {
       LOG_WARN("failed to get dim.", K(ret));
-    } else if (OB_FAIL(write_into_index_mem(dim, read_scn, i_vids, d_vids))) {
-      LOG_WARN("failed to write into index mem.", K(ret), K(read_scn));
+    } else {
+      if (!ctx->get_is_refresh_adaptor()) {
+        if (vbitmap_data_->complete_lock_.try_wrlock()) {
+          if (OB_FAIL(write_into_index_mem(dim, read_scn, i_vids, d_vids))) {
+            LOG_WARN("failed to write into index mem.", K(ret), K(read_scn));
+          }
+          int tmp_ret = vbitmap_data_->complete_lock_.unlock();
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("unlock complete index lock failed", K(ret), K(tmp_ret), K(&vbitmap_data_->complete_lock_));
+          }
+        } else if (ctx->is_bitmaps_valid()) {
+          lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPS"));
+          FLOG_INFO("[VEC_INDEX][COMPLETE_INDEX] set ctx bitmaps directly", K(i_vids.count()), K(d_vids.count()), KPC(this), K(lbt()));
+          for (int64_t i = 0; OB_SUCC(ret) && i < i_vids.count(); i++) {
+            ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->bitmaps_->insert_bitmap_, i_vids[i]));
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
+            ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->bitmaps_->delete_bitmap_, d_vids[i]));
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
+            ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(ctx->bitmaps_->insert_bitmap_, d_vids.at(i)));
+          }
+        }
+      } else {
+        TCWLockGuard guard(vbitmap_data_->complete_lock_);
+        if (OB_FAIL(write_into_index_mem(dim, read_scn, i_vids, d_vids))) {
+          LOG_WARN("failed to write into index mem.", K(ret), K(read_scn));
+        }
+      }
     }
   }
 
@@ -2240,8 +2335,7 @@ bool ObPluginVectorIndexAdaptor::check_if_complete_delta(ObVectorQueryAdaptorRes
           LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] do not need to set has_complete to true for refresh adaptor",
             K(is_gene_subset), K(is_index_subset), K(gene_vid_cnt), K(count), KPC(this));
         } else {
-          incr_data_->has_complete_ = true;
-          LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] has check incr data and do not need to complete delta, set has_complete to true",
+          FLOG_INFO("[VEC_INDEX][COMPLETE_DELTA] check incr data and do not need to complete delta",
             K(is_gene_subset), K(is_index_subset), K(gene_vid_cnt), K(count), KPC(this), K(lbt()));
         }
       }
@@ -2252,7 +2346,7 @@ bool ObPluginVectorIndexAdaptor::check_if_complete_delta(ObVectorQueryAdaptorRes
   if (res) {
     if (is_mem_data_init_atomic(VIRT_INC) && incr_data_->has_complete_ && ctx->get_ls_leader()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("[VEC_INDEX][COMPLETE_DELTA] incr data has been complete, trigger complete delta data is not expected",
+      LOG_ERROR("[VEC_INDEX][COMPLETE_DELTA] incr data has been complete, trigger complete delta data is not expected",
         K(ret), K(is_gene_subset), K(is_index_subset), K(gene_vid_cnt), K(count), K(incr_data_->has_complete_), KPC(this));
     } else {
       LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] incr data is not complete, need to complete delta",
@@ -2263,7 +2357,6 @@ bool ObPluginVectorIndexAdaptor::check_if_complete_delta(ObVectorQueryAdaptorRes
 }
 
 int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_bitmap_t *gene_bitmap,
-                                                       ObArray<uint64_t> &i_vids,
                                                        ObVectorQueryAdaptorResultContext *ctx)
 {
   INIT_SUCC(ret);
@@ -2275,22 +2368,32 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid bitmap.", K(ret), KP(gene_bitmap), KP(delta_bitmap), KP(ctx));
   } else {
-    roaring::api::roaring64_bitmap_t *andnot_bitmap = nullptr;
+    roaring::api::roaring64_bitmap_t *res_bitmap = nullptr;
     if (OB_SUCC(ret)) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPL"));
-      TCRLockGuard rd_bitmap_lock_guard(incr_data_->bitmap_rwlock_);
-      ROARING_TRY_CATCH(andnot_bitmap = roaring64_bitmap_andnot(gene_bitmap, delta_bitmap));
+      if (is_mem_data_init_atomic(VIRT_BITMAP)) {
+        TCRLockGuard rd_vbitmap_lock_guard(vbitmap_data_->bitmap_rwlock_);
+        ROARING_TRY_CATCH(res_bitmap = roaring64_bitmap_or(gene_bitmap, vbitmap_data_->bitmap_->insert_bitmap_));
+      } else { // vbitmap not init, res_bitmap = gene_bitmap
+        ROARING_TRY_CATCH(res_bitmap = roaring64_bitmap_copy(gene_bitmap));
+      }
+
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(andnot_bitmap)) {
+      } else if (OB_ISNULL(res_bitmap)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create andnot bitmap", K(ret));
       }
+
+      if (OB_SUCC(ret)) {
+        TCRLockGuard rd_delta_bitmap_lock_guard(incr_data_->bitmap_rwlock_);
+        ROARING_TRY_CATCH(roaring64_bitmap_andnot_inplace(res_bitmap, delta_bitmap));
+      }
     }
     if (OB_FAIL(ret)) {
-    } else if (0 == roaring64_bitmap_get_cardinality(andnot_bitmap) + i_vids.count()) {
+    } else if (0 == roaring64_bitmap_get_cardinality(res_bitmap)) {
       ctx->vec_data_.count_ = 0;
     } else {
-      uint64_t bitmap_cnt = roaring64_bitmap_get_cardinality(andnot_bitmap) + i_vids.count();
+      uint64_t bitmap_cnt = roaring64_bitmap_get_cardinality(res_bitmap);
       // uint64_t use roaring64_bitmap_to_uint64_array(andnot_bitmap, bitmap_out);
       bool is_continue = true;
       int index = 0;
@@ -2302,7 +2405,7 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
       roaring::api::roaring64_iterator_t *bitmap_iter = nullptr;
       {
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPM"));
-        ROARING_TRY_CATCH(bitmap_iter = roaring64_iterator_create(andnot_bitmap));
+        ROARING_TRY_CATCH(bitmap_iter = roaring64_iterator_create(res_bitmap));
       }
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(bitmap_iter)) {
@@ -2339,15 +2442,10 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
       }
 
       if (OB_FAIL(ret)) {
-      } else if (index + i_vids.count() != bitmap_cnt) {
+      } else if (index != bitmap_cnt) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get invalid vid iter count.", K(ret), K(index), K(roaring64_bitmap_get_cardinality(andnot_bitmap)));
+        LOG_WARN("get invalid vid iter count.", K(ret), K(index), K(roaring64_bitmap_get_cardinality(res_bitmap)));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < i_vids.count() && i + index < bitmap_cnt; i++) {
-          vids[i + index].reset();
-          vids[i + index].set_int(i_vids.at(i));
-        }
-
         ctx->vec_data_.dim_ = dim;
         ctx->vec_data_.extra_column_count_ = extra_column_count;
         ctx->vec_data_.count_ = bitmap_cnt;
@@ -2363,10 +2461,10 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
       }
 
     }
-    if (OB_NOT_NULL(andnot_bitmap)) {
+    if (OB_NOT_NULL(res_bitmap)) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPO"));
-      roaring64_bitmap_free(andnot_bitmap);
-      andnot_bitmap = nullptr;
+      roaring64_bitmap_free(res_bitmap);
+      res_bitmap = nullptr;
     }
 
   }
@@ -3269,7 +3367,7 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
             LOG_WARN("fail to get snap index number", K(ret));
           } else if (current_snapshot_count > 0) {
             ctx->status_ = PVQ_REFRESH;
-            LOG_WARN("[VEC_INDEX][COMPLETE_SNAP] query snap table is empty, snap index not empty, need to refresh adaptor",
+            LOG_ERROR("[VEC_INDEX][COMPLETE_SNAP] query snap table is empty, snap index not empty, need to refresh adaptor",
                      K(ret), K(ls_id), K(snapshot_tablet_id_), K(get_snapshot_key_prefix()), K(current_snapshot_count), KPC(this));
           }
         } else {
@@ -3278,12 +3376,14 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
       } else if (OB_ISNULL(row) || row->get_column_count() < 2) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid row", K(ret), K(row));
-      } else if (get_snapshot_key_prefix().empty() ||
-          !row->storage_datums_[0].get_string().prefix_match(get_snapshot_key_prefix()))
-      {
+      } else if (get_snapshot_key_prefix().empty() || get_snapshot_key_prefix().prefix_match("renew")) {
+        if (OB_FAIL(deserialize_snap_data(query_cond, row))) {
+          LOG_WARN("failed to deserialize snap data", K(ret));
+        }
+      } else if (!row->storage_datums_[0].get_string().prefix_match(get_snapshot_key_prefix())) {
         if (get_create_type() == CreateTypeComplete) {
           ctx->status_ = PVQ_REFRESH;
-          LOG_WARN("[VEC_INDEX][COMPLETE_SNAP] snap key is empty or prefix not match, need to refresh adaptor", 
+          LOG_ERROR("[VEC_INDEX][COMPLETE_SNAP] snap key is empty or prefix not match, need to refresh adaptor", 
             K(ret), K(ls_id), K(ctx->get_ls_leader()), K(snapshot_tablet_id_),
             K(get_snapshot_key_prefix()), K(row->storage_datums_[0].get_string()), KPC(this));
         } else if (OB_FAIL(deserialize_snap_data(query_cond, row))) {
@@ -3348,7 +3448,7 @@ int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *q
         LOG_INFO("[VEC_INDEX][COMPLETE_SNAP] snap data is not complete, do deserialize", K(key_prefix), KPC(this));
       } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("[VEC_INDEX][COMPLETE_SNAP] snap data is complete, need to deserialize is not expected", K(ret), K(key_prefix), KPC(this));
+        LOG_ERROR("[VEC_INDEX][COMPLETE_SNAP] snap data is complete, need to deserialize is not expected", K(ret), K(key_prefix), KPC(this));
         ret = OB_SUCCESS; // recover ret to success, continue to deserialize
       }
       if (OB_FAIL(index_seri.deserialize(snap_data_->index_, param, cb, tenant_id_))) {
