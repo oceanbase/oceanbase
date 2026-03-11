@@ -5464,6 +5464,18 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
              OB_FALSE_IT(groupby_helper.is_scalar_group_by_ =
                          static_cast<const ObSelectStmt*>(stmt)->is_scala_group_by())) {
   } else if (FALSE_IT(query_ctx = get_optimizer_context().get_query_ctx())) {
+  } else if (OB_FAIL(get_log_plan_hint().get_aggregation_info(
+               groupby_helper.force_use_hash_,
+               groupby_helper.force_use_merge_,
+               groupby_helper.force_part_sort_,
+               groupby_helper.force_normal_sort_,
+               groupby_helper.force_basic_,
+               groupby_helper.force_partition_wise_,
+               groupby_helper.force_dist_hash_,
+               groupby_helper.force_pull_to_local_,
+               groupby_helper.force_hash_local_,
+               groupby_helper.force_pushdown_group_by_))) {
+    LOG_WARN("failed to get aggregation info from hint", K(ret));
   } else {
     rowsets_enabled = get_optimizer_context().get_rowsets_enabled();
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
@@ -5475,6 +5487,7 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
     ObString policy;
     bool has_hint_policy = false;
     rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
+    bool allow_hash_gby = groupby_helper.ignore_hint_ || !groupby_helper.force_use_merge_;
     if (OB_FAIL(opt_params.get_distinct_with_expansion_param(hint_policy, has_hint_policy))) {
       LOG_WARN("failed to get distinct with expansion hint", K(ret));
     } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
@@ -5485,11 +5498,13 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
                           config_policy.case_compare("auto") == 0;
       policy = has_hint_policy ? hint_policy : config_policy;
       groupby_helper.enable_expansion_ordered_output_ = rowsets_enabled
+                                                        && allow_hash_gby
                                                         && (policy.case_compare("ordered") == 0)
                                                         && session_info->use_rich_format()
                                                         && groupby_helper.optimizer_features_enable_version_ >= COMPAT_VERSION_4_6_0
                                                         && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0;
       groupby_helper.enable_distinct_with_expansion_ = rowsets_enabled
+                                                && allow_hash_gby
                                                 && (policy.case_compare("normal") == 0 || policy.case_compare("ordered") == 0 || policy.case_compare("auto") == 0)
                                                 && session_info->use_rich_format()
                                                 && groupby_helper.optimizer_features_enable_version_ >= COMPAT_VERSION_4_6_0
@@ -5499,17 +5514,6 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
     } else if (OB_FAIL(append(group_rollup_exprs, group_exprs))
         || OB_FAIL(append(group_rollup_exprs, rollup_exprs))) {
       LOG_WARN("failed to append group rollup exprs", K(ret));
-    } else if (OB_FAIL(get_log_plan_hint().get_aggregation_info(groupby_helper.force_use_hash_,
-                                                                groupby_helper.force_use_merge_,
-                                                                groupby_helper.force_part_sort_,
-                                                                groupby_helper.force_normal_sort_,
-                                                                groupby_helper.force_basic_,
-                                                                groupby_helper.force_partition_wise_,
-                                                                groupby_helper.force_dist_hash_,
-                                                                groupby_helper.force_pull_to_local_,
-                                                                groupby_helper.force_hash_local_,
-                                                                groupby_helper.force_pushdown_group_by_))) {
-      LOG_WARN("failed to get aggregation info from hint", K(ret));
     } else if (OB_FAIL(check_storage_groupby_pushdown(aggr_items, group_exprs,
                                                       groupby_helper.pushdown_groupby_columns_,
                                                       groupby_helper.can_storage_pushdown_))) {
