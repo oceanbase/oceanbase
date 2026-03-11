@@ -1180,7 +1180,6 @@ int ObMPConnect::update_login_stat_in_trans(const uint64_t tenant_id,
   int64_t failed_login_limit_time = INT64_MAX;
   int64_t current_gmt = ObTimeUtil::current_time();
   bool is_standby_tenant = false;
-  bool is_locked_now = false;
   ObMySQLTransaction trans;
   bool commit = true;
 
@@ -1211,37 +1210,58 @@ int ObMPConnect::update_login_stat_in_trans(const uint64_t tenant_id,
   } else if (OB_FAIL(get_last_failed_login_info(tenant_id, user_id, trans,
              current_failed_login_num, last_failed_login_timestamp))) {
     LOG_WARN("fail to get current user failed login num", K(ret));
-  } else if (FALSE_IT(is_locked_now = (failed_login_limit_num != 0
-                                       && current_failed_login_num >= failed_login_limit_num
-                                       && current_gmt - last_failed_login_timestamp < failed_login_limit_time))) {
-  } else if (OB_UNLIKELY(is_locked_now && is_standby_tenant)) {
-    // mimic user lock mechanism for standby tenant
-    // because standby tenant cannot execute DDL to lock/unlock user
-    ret = OB_ERR_USER_IS_LOCKED;
-    LOG_WARN("user locked by failed login attempts",
-             K(ret), K(tenant_id), K(user_name_), K(client_ip_),
-             K(is_login_succ), K(current_failed_login_num), K(failed_login_limit_num),
-             K(last_failed_login_timestamp), K(failed_login_limit_time));
-  } else if (OB_LIKELY(!is_locked_now && is_login_succ)) {
-    //如果登录成功了，清除之前登录失败的统计信息
-    if (OB_UNLIKELY(current_failed_login_num != 0)) {
-      if (OB_FAIL(clear_current_user_failed_login_num(tenant_id, user_id, trans))) {
-        LOG_WARN("fail to clear current user failed login", K(ret));
+  } else {
+    // `in_locked_window` is a statistic based flag, it may not correctly reflect the actual user lock status:
+    // 1. user was not manually locked or unlocked
+    //     -> `in_locked_window` should reflect the actual user lock status
+    // 2. `in_locked_window` is true, but the user was manually unlocked
+    //     -> user is actually NOT LOCKED now
+    // 3. `in_locked_window` is false, but the user was manually locked
+    //     -> user is actually LOCKED now
+    const bool in_locked_window = (failed_login_limit_num != 0
+                                   && current_failed_login_num >= failed_login_limit_num
+                                   && current_gmt - last_failed_login_timestamp < failed_login_limit_time);
+    if (OB_UNLIKELY(is_standby_tenant && in_locked_window)) {
+      // Case 1: standby tenant in the locked window.
+      // a standby tenant cannot execute lock/unlock user DDL
+      // so we treat `in_locked_window` as the actual lock status
+      ret = OB_ERR_USER_IS_LOCKED;
+      LOG_WARN("user locked by connection control",
+               K(ret), K(tenant_id), K_(user_name), K_(client_ip),
+               K(is_login_succ), K(current_failed_login_num), K(failed_login_limit_num),
+               K(last_failed_login_timestamp), K(failed_login_limit_time));
+    } else if (OB_LIKELY(is_login_succ)) {
+      // Case 2: login succeeded, clear failed-login counters
+      // notice: if user is actually locked, the login would be rejected earlier (before this function)
+      if (OB_UNLIKELY(current_failed_login_num != 0)) {
+        if (OB_FAIL(clear_current_user_failed_login_num(tenant_id, user_id, trans))) {
+          LOG_WARN("fail to clear current user failed login", K(ret));
+        }
       }
-    }
-  } else if (OB_LIKELY(!is_locked_now && !is_login_succ)) {
-    //如果登录失败了，统计失败登录次数，达到阈值锁定用户
-    if (OB_FAIL(update_current_user_failed_login_num(
-        tenant_id, user_id, trans, current_failed_login_num + 1))) {
-      LOG_WARN("fail to clear current user failed login", K(ret));
-    } else if (current_failed_login_num + 1 == failed_login_limit_num
-               || (current_failed_login_num + 1 > failed_login_limit_num
-                   && ObTimeUtil::current_time() - last_failed_login_timestamp > USECS_PER_SEC * 10)) {
+    } else if (OB_UNLIKELY(in_locked_window)) {
+      // Case 3: primary tenant in the locked window and authentication failed.
+      // just update the user status as LOCKED but do not update failed login num
       if (OB_FAIL(switch_lock_status_for_current_login_user(tenant_id, true))) {
         LOG_WARN("fail to lock current login user", K(ret));
       }
+    } else {
+      // Case 4: not in locked window and login failed
+      // Increase the failed-login counter first
+      // then lock the account when the failing threshold is reached or when the delayed re-lock condition holds.
+      if (OB_FAIL(update_current_user_failed_login_num(tenant_id,
+                                                       user_id,
+                                                       trans,
+                                                       current_failed_login_num + 1))) {
+        LOG_WARN("fail to clear current user failed login", K(ret));
+      } else if (current_failed_login_num + 1 == failed_login_limit_num
+                 || (current_failed_login_num + 1 > failed_login_limit_num
+                     && ObTimeUtil::current_time() - last_failed_login_timestamp > USECS_PER_SEC * 10)) {
+        if (OB_FAIL(switch_lock_status_for_current_login_user(tenant_id, true))) {
+          LOG_WARN("fail to lock current login user", K(ret));
+        }
+      }
+      commit = (current_failed_login_num < failed_login_limit_num) || is_standby_tenant;
     }
-    commit = (current_failed_login_num < failed_login_limit_num) || is_standby_tenant;
   }
 
   if (trans.is_started()) {
@@ -1265,7 +1285,7 @@ int ObMPConnect::update_login_stat_mysql(const uint64_t tenant_id,
   ObSEArray<const ObUserInfo*, 1> user_infos;
   const ObUserInfo *user_info = NULL;
   bool is_locked_tmp = false;
-  bool is_locked_now = false;
+  bool in_locked_window = false;
   is_unlocked_now = false;
   if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1284,10 +1304,10 @@ int ObMPConnect::update_login_stat_mysql(const uint64_t tenant_id,
                                                           is_locked_tmp))) {
         LOG_WARN("fail to update login stat in trans mysql");
       } else {
-        is_locked_now = is_locked_now || is_locked_tmp;
+        in_locked_window = in_locked_window || is_locked_tmp;
       }
     }
-    OX(is_unlocked_now = !is_locked_now);
+    OX(is_unlocked_now = !in_locked_window);
   }
   return ret;
 }
@@ -1295,13 +1315,13 @@ int ObMPConnect::update_login_stat_mysql(const uint64_t tenant_id,
 int ObMPConnect::update_login_stat_in_trans_mysql(const uint64_t tenant_id,
                                                   const ObUserInfo &user_info,
                                                   const bool is_login_succ,
-                                                  bool &is_locked_now) {
+                                                  bool &in_locked_window) {
   int ret = OB_SUCCESS;
   int64_t current_failed_login_num = INT64_MAX;
   int64_t last_failed_login_timestamp = INT64_MAX;
   bool need_lock = false; // true if need to lock user
   bool is_standby_tenant = false;
-  is_locked_now = false;  // true if exceed the threshold and time's not up
+  in_locked_window = false;  // true if exceed the threshold and time's not up
   ObMySQLTransaction trans;
   if (OB_FAIL(trans.start(gctx_.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
     LOG_WARN("fail to start transaction", K(ret));
@@ -1314,25 +1334,34 @@ int ObMPConnect::update_login_stat_in_trans_mysql(const uint64_t tenant_id,
   } else if (OB_FAIL(get_connection_control_stat_mysql(tenant_id,
                                                        current_failed_login_num,
                                                        last_failed_login_timestamp,
-                                                       is_locked_now))) {
+                                                       in_locked_window))) {
     LOG_WARN("fail to get current user failed login num", K(ret));
-  } else if (OB_UNLIKELY(is_standby_tenant && is_locked_now)) {
-    // mimic user lock mechanism for standby tenant
-    // because standby tenant cannot execute DDL to lock/unlock user
+  } else if (OB_UNLIKELY(is_standby_tenant && in_locked_window)) {
+    // Case 1: standby tenant in the locked window.
+    // a standby tenant cannot execute lock/unlock user DDL
+    // so we treat `in_locked_window` as the actual lock status
     ret = OB_ERR_USER_IS_LOCKED;
     LOG_WARN("user locked by connection control",
              K(tenant_id), K(user_info), K(client_ip_),
              K(is_login_succ), K(current_failed_login_num), K(last_failed_login_timestamp), K(ret));
-  } else if (OB_LIKELY(!is_locked_now && is_login_succ)) {
-    // clear the failed login num if login succ
+  } else if (OB_LIKELY(is_login_succ)) {
+    // Case 2: login succeeded, clear failed-login counters
+    // notice: if user is actually locked, the login would be rejected earlier (before this function)
     if (OB_UNLIKELY(current_failed_login_num != 0)) {
       if (OB_FAIL(clear_current_user_failed_login_num(tenant_id, user_info.get_user_id(), trans))) {
         LOG_WARN("fail to clear current user failed login", K(ret));
       }
     }
-  } else if (OB_LIKELY(!is_locked_now && !is_login_succ)) {
-    // if user is not locked, increase login failed num if login failed
-    // and lock user if reached the failed login num threshold
+  } else if (OB_UNLIKELY(in_locked_window)) {
+    // Case 3: primary tenant in the locked window and authentication failed.
+    // just update the user status as LOCKED but do not update failed login num
+    if (OB_FAIL(switch_lock_status_for_current_login_user(tenant_id, true))) {
+      LOG_WARN("fail to lock current login user", K(ret));
+    }
+  } else {
+    // Case 4: not in locked window and login failed
+    // Increase the failed-login counter first
+    // then lock the account when the failing threshold is reached or when the delayed re-lock condition holds.
     if (OB_FAIL(update_current_user_failed_login_num(
         tenant_id, user_info.get_user_id(), trans, current_failed_login_num + 1))) {
       LOG_WARN("fail to clear current user failed login", K(ret));
