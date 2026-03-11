@@ -10743,7 +10743,6 @@ int ObSPIService::close_ps_cursor_result_set(ObSQLSessionInfo &session,
 
 ObPLSubPLSqlTimeGuard::ObPLSubPLSqlTimeGuard(pl::ObPLExecCtx *ctx) :
   old_sub_plsql_exec_time_(-1),
-  execute_start_(ObTimeUtility::current_time()),
   state_(NULL)
 {
   if (OB_NOT_NULL(ctx)
@@ -10762,14 +10761,7 @@ ObPLSubPLSqlTimeGuard::ObPLSubPLSqlTimeGuard(pl::ObPLExecCtx *ctx) :
 ObPLSubPLSqlTimeGuard::~ObPLSubPLSqlTimeGuard()
 {
   int ret = OB_SUCCESS;
-  int64_t sql_exec_time = ObTimeUtility::current_time() - execute_start_;
   if (OB_NOT_NULL(state_)) {
-    if (state_->get_sub_plsql_exec_time() > 0) {
-      //此时纯SQL时间已经在 add_pl_exec_time 被加到了上层
-      LOG_DEBUG("<<< sql exec time ", K(sql_exec_time), K(state_->get_sub_plsql_exec_time()),
-        K(sql_exec_time-state_->get_sub_plsql_exec_time()), K(state_->get_pure_sql_exec_time()),
-        K(old_sub_plsql_exec_time_), K(old_pure_sql_exec_time_));
-    }
     // update sub plsql exec time
     if (-1 != old_sub_plsql_exec_time_) {
       state_->add_sub_plsql_exec_time(old_sub_plsql_exec_time_);

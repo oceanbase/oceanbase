@@ -36,6 +36,7 @@
 #include "sql/dblink/ob_tm_service.h"
 #include "pl/ob_pl_exception_handling.h"
 #include "observer/mysql/ob_async_cmd_driver.h"
+#include "observer/ob_server.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1996,7 +1997,8 @@ int ObPL::execute(ObExecContext &ctx,
                   bool is_agg_func)
 {
   int ret = OB_SUCCESS;
-  int64_t execute_start = ObClockGenerator::getClock();
+  static const uint64_t scale = (1000 << 20) / OBSERVER_FREQUENCE.get_cpu_frequency_khz();
+  int64_t execute_start = rdtsc();
   ObObj local_result(ObMaxType);
   int local_status = OB_SUCCESS;
   bool udf_from_sql = routine.is_function() && is_called_from_sql;
@@ -2164,20 +2166,21 @@ int ObPL::execute(ObExecContext &ctx,
     }
 
     //当前层 pl 执行时间
-    int64_t execute_end = ObClockGenerator::getClock();
-    pl.add_pl_exec_time(execute_end - execute_start - pl.get_pure_sql_exec_time(), is_called_from_sql);
+    int64_t execute_end = rdtsc();
+    int64_t cost_time = ((execute_end - execute_start) * scale) >> 20;
+    pl.add_pl_exec_time(cost_time - pl.get_pure_sql_exec_time(), is_called_from_sql);
   #ifndef NDEBUG
     LOG_INFO(">>>>>>>>>Execute Time: ", K(ret),
       K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start),
-        K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),
+        K(is_top_stack), K(cost_time - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),
         K(pl.get_plsql_exec_time()), K(pl.get_sub_plsql_exec_time()));
   #else
     LOG_DEBUG(">>>>>>>>Execute Time: ", K(ret),
       K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start),
-      K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),  K(pl.get_plsql_exec_time()),
+      K(is_top_stack), K(cost_time - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),  K(pl.get_plsql_exec_time()),
       K(pl.get_sub_plsql_exec_time()));
   #endif
-    OX (routine.update_execute_time(execute_end - execute_start));
+    OX (routine.update_execute_time(cost_time));
   }
 
   return ret;
