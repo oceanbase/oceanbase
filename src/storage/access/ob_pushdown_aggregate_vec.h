@@ -239,7 +239,8 @@ public:
   ObSumAggCellVec(const int64_t agg_idx,
                   const ObAggCellVecBasicInfo &basic_info,
                   common::ObIAllocator &allocator);
-  void reuse() override;
+  int init() override;
+  void reset() override;
   int eval(blocksstable::ObStorageDatum &datum,
            const int64_t row_count = 1,
            const int64_t agg_row_idx = 0) override;
@@ -254,12 +255,13 @@ public:
     UNUSEDx(reader, col_offset, row_ids, row_count);
     return false;
   }
-  INHERIT_TO_STRING_KV("ObAggCellVec", ObAggCellVec, K_(cast_datum));
+  INHERIT_TO_STRING_KV("ObAggCellVec", ObAggCellVec, K_(cast_datum), KP_(cast_datum_buf));
 protected:
   OB_INLINE bool can_use_index_info() const override
   { return nullptr != basic_info_.col_param_ && basic_info_.col_param_->get_meta_type().is_numeric_type(); }
 private:
   blocksstable::ObStorageDatum cast_datum_;
+  char *cast_datum_buf_;
 };
 
 class ObHyperLogLogAggCellVec final : public ObAggCellVec
