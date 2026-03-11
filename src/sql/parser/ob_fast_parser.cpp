@@ -160,7 +160,7 @@ ObFastParserBase::ObFastParserBase(ObIAllocator &allocator, const FPContext fp_c
   copy_begin_pos_(0), copy_end_pos_(0), str_buffer_(allocator), last_escape_check_pos_(0),
   try_check_tick_(0), param_node_list_(nullptr), tail_param_node_(nullptr),
   cur_token_type_(INVALID_TOKEN), allocator_(allocator),
-  found_insert_status_(NOT_FOUND_INSERT_TOKEN), values_token_pos_(0),
+  found_insert_status_(NOT_FOUND_INSERT_TOKEN), values_token_pos_(0), left_parenthesis_count_(0),
   parse_next_token_func_(nullptr), process_idf_func_(nullptr)
 {
   question_mark_ctx_.count_ = 0;
@@ -2841,7 +2841,7 @@ int ObFastParserMysql::process_identifier_begin_with_backslash()
 int ObFastParserMysql::process_values(const char *str)
 {
   int ret = OB_SUCCESS;
-  if (found_insert_status_ == FOUND_INSERT_TOKEN_ONCE) {
+  if (found_insert_status_ == FOUND_INSERT_TOKEN_ONCE && 0 == left_parenthesis_count_) {
     if (!is_oracle_mode_) {
       // mysql support: insert ... values / value (xx, ...);
       if (CHECK_EQ_STRNCASECMP("alues", 5)) {
@@ -3143,6 +3143,17 @@ int ObFastParserMysql::parse_next_token()
           }
         } else if (is_normal_char(ch)) {
           cur_token_type_ = NORMAL_TOKEN;
+          if (FOUND_INSERT_TOKEN_ONCE == found_insert_status_) {
+            if (is_left_parenthesis(ch)) {
+              left_parenthesis_count_++;
+            } else if (is_right_parenthesis(ch)) {
+              left_parenthesis_count_--;
+              if (left_parenthesis_count_ < 0) {
+                ret = OB_ERR_PARSER_SYNTAX;
+                LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
+              }
+            }
+          }
           raw_sql_.scan();
         } else {
           cur_token_type_ = IGNORE_TOKEN;

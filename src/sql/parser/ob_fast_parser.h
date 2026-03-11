@@ -740,6 +740,7 @@ public:
 	const ObCharsetInfo *charset_info_;
 	FoundInsertTokenStatus found_insert_status_;
 	int64_t values_token_pos_;
+	int64_t left_parenthesis_count_;
 	ParseNextTokenFunc parse_next_token_func_;
 	ProcessIdfFunc process_idf_func_;
   bool is_format_;
