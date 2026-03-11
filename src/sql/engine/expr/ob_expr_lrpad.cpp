@@ -2518,6 +2518,7 @@ int ObExprBaseLRpad::calc_oracle_inner_vector_optimized(const ObExpr &expr,
           if (OB_UNLIKELY(result_size > max_result_size)) {
             pad_space = false;
             repeat_count = (max_result_size - text_size) / pad_size;
+            prefix_size = 0;
             int64_t remain_width = len_int - (text_width + pad_width * repeat_count);
             int64_t remain_size = max_result_size - (text_size + repeat_count * pad_size);
             int64_t total_width = 0;
