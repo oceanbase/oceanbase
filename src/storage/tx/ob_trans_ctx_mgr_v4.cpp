@@ -1358,21 +1358,23 @@ int ObLSTxCtxMgr::del_tx_ctx(ObTransCtx *ctx)
 int ObLSTxCtxMgr::traverse_tx_to_submit_redo_log(ObTransID &fail_tx_id, const uint32_t freeze_clock)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObClockGenerator::getClock();
   RLockGuard guard(rwlock_);
   ObTxSubmitLogFunctor fn(ObTxSubmitLogFunctor::SUBMIT_REDO_LOG, freeze_clock);
   if (is_follower_()) {
     // quit submit log because this is a follower
   } else if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-    if (OB_SUCCESS != fn.get_result()) {
-      // get real ret code
-      ret = fn.get_result();
-    }
-    TRANS_LOG(WARN, "failed to submit log", K(ret));
+    const int64_t cost_time = ObClockGenerator::getClock() - start_time;
+    TRANS_LOG(WARN, "failed to submit log", K(ret), K(freeze_clock), K(fn), K(cost_time));
   } else {
-    TRANS_LOG(INFO, "traverse tx to submit redo log finish", K(ret), K(freeze_clock));
+    const int64_t cost_time = ObClockGenerator::getClock() - start_time;
+    TRANS_LOG(INFO, "traverse tx to submit redo log finish", K(ret), K(freeze_clock), K(fn), K(cost_time));
   }
 
   fail_tx_id = fn.get_fail_tx_id();
+  if (OB_SUCC(ret)) {
+    ret = fn.get_result();
+  }
 
   return ret;
 }
@@ -1380,14 +1382,20 @@ int ObLSTxCtxMgr::traverse_tx_to_submit_redo_log(ObTransID &fail_tx_id, const ui
 int ObLSTxCtxMgr::traverse_tx_to_submit_next_log()
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObClockGenerator::getClock();
   RLockGuard guard(rwlock_);
   ObTxSubmitLogFunctor fn(ObTxSubmitLogFunctor::SUBMIT_NEXT_LOG);
-  if (!is_follower_() && OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-    if (OB_SUCCESS != fn.get_result()) {
-      // get real ret code
-      ret = fn.get_result();
-    }
-    TRANS_LOG(WARN, "failed to submit log", K(ret));
+  if (is_follower_()) {
+  } else if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+    const int64_t cost_time = ObClockGenerator::getClock() - start_time;
+    TRANS_LOG(WARN, "failed to submit log", K(ret), K(fn), K(cost_time));
+  } else {
+    const int64_t cost_time = ObClockGenerator::getClock() - start_time;
+    TRANS_LOG(INFO, "traverse tx to submit next log finish", K(ret), K(fn), K(cost_time));
+  }
+
+  if (OB_SUCC(ret)) {
+    ret = fn.get_result();
   }
 
   return ret;

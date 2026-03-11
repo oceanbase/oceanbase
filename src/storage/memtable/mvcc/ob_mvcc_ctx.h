@@ -231,7 +231,6 @@ public:
                                                         transaction::tablelock::ObLockMemtable *memtable) = 0;
   virtual void free_table_lock_callback(ObITransCallback *cb) = 0;
   ObMvccRowCallback *alloc_row_callback(ObIMvccCtx &ctx, ObMvccRow &value, ObMemtable *memtable);
-  ObMvccRowCallback *alloc_row_callback(ObMvccRowCallback &cb, ObMemtable *memtable);
 private:
   void check_row_callback_registration_between_stmt_();
   int register_table_lock_cb_(

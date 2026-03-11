@@ -540,14 +540,13 @@ private:
 class ObGetMemtableKeyWTimeoutFunctor : public ObITxCallbackFunctor
 {
 public:
-  ObGetMemtableKeyWTimeoutFunctor(transaction::ObMemtableKeyArray &memtable_key_arr)
-    : start_ts_(ObTimeUtility::current_time()),
+  ObGetMemtableKeyWTimeoutFunctor(transaction::ObMemtableKeyArray &memtable_key_arr, const int64_t timeout)
+    : timeout_(timeout),
     memtable_key_arr_(memtable_key_arr) {}
 
   virtual bool is_iter_end(ObITransCallback *callback) const override
   {
-    // It can only take up to 300ms
-    return ObTimeUtility::current_time() - start_ts_ >= 300 * 1000L;
+    return ObTimeUtility::current_time() >= timeout_;
   }
 
     virtual int operator()(ObITransCallback *callback) override
@@ -564,7 +563,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(memtable_key_arr));
 
 private:
-  int64_t start_ts_;
+  int64_t timeout_;
   transaction::ObMemtableKeyArray &memtable_key_arr_;
 };
 

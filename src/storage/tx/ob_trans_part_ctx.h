@@ -1027,7 +1027,7 @@ public:
   int handle_tx_keepalive_response(const int64_t status);
   bool is_for_sslog() const { return is_for_sslog_(); }
 private:
-  bool fast_check_need_submit_redo_for_freeze_() const;
+  bool fast_check_need_submit_redo_for_freeze_(uint32_t freeze_clock) const;
   int check_status_();
   int tx_keepalive_response_(const int64_t status);
   void post_keepalive_msg_(const int status);
@@ -1059,7 +1059,6 @@ public:
                           ObTxLogCb *&log_cb,
                           memtable::ObRedoLogSubmitHelper &helper,
                           const int64_t replay_hint,
-                          const bool has_hold_ctx_lock,
                           share::SCN &submitted_scn);
   bool is_parallel_logging() const;
   int assign_commit_parts(const share::ObLSArray &log_participants,

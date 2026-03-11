@@ -24,6 +24,7 @@ ObTxCallbackList::ObTxCallbackList(ObTransCallbackMgr &callback_mgr, const int16
     head_(),
     log_cursor_(&head_),
     log_epoch_(INT64_MAX),
+    log_freeze_clock_(UINT32_MAX),
     parallel_start_pos_(NULL),
     length_(0),
     appended_(0),
@@ -43,6 +44,7 @@ ObTxCallbackList::ObTxCallbackList(ObTransCallbackMgr &callback_mgr, const int16
     callback_mgr_(callback_mgr),
     append_latch_(common::ObLatchIds::TX_CALLBACK_LIST_APPEND_LOCK),
     log_latch_(common::ObLatchIds::TX_CALLBACK_LIST_LOG_LOCK),
+    log_submitted_pending_latch_(common::ObLatchIds::TX_CALLBACK_LIST_LOG_LOCK),
     iter_synced_latch_(common::ObLatchIds::TX_CALLBACK_LIST_ITER_SYNCED_LOCK)
 {
   reset();
@@ -99,6 +101,8 @@ int ObTxCallbackList::append_callback(ObITransCallback *callback,
   if (OB_ISNULL(callback)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "before_append_cb failed", K(ret), KPC(callback));
+  } else if (!for_replay && OB_FAIL(check_freeze_clock_order_(callback))) {
+    TRANS_LOG(WARN, "check freeze clock order failed", K(ret), KPC(callback));
   } else if (OB_FAIL(callback->before_append_cb(for_replay))) {
     TRANS_LOG(WARN, "before_append_cb failed", K(ret), KPC(callback));
   } else {
@@ -167,6 +171,8 @@ int ObTxCallbackList::append_callback(ObITransCallback *head,
   if (OB_ISNULL(head) || OB_ISNULL(tail)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "before_append_cb failed", K(ret));
+  } else if (!for_replay && OB_FAIL(check_freeze_clock_order_(head))) {
+    TRANS_LOG(WARN, "check freeze clock order failed", K(ret), KPC(head));
   } else {
     // Step1: prepare the callback append(unsubmitted_cnt for memtable and so on)
     ObITransCallback *last_succeed_cb = nullptr;
@@ -643,7 +649,25 @@ int ObTxCallbackList::submit_log_succ(const ObCallbackScope &callbacks)
   }
   ATOMIC_AAF(&logged_, (int64_t)callbacks.cnt_);
   ATOMIC_AAF(&logged_data_size_, callbacks.data_size_);
+  clear_prepared_log_submitted();
   return ret;
+}
+
+int ObTxCallbackList::prepare_log_submitted()
+{
+  int ret = OB_SUCCESS;
+  if (!log_submitted_pending_latch_.try_lock()) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(WARN, "log submitted pending latch is locked", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+void ObTxCallbackList::clear_prepared_log_submitted()
+{
+  if (log_submitted_pending_latch_.is_locked()) {
+    log_submitted_pending_latch_.unlock();
+  }
 }
 
 int ObTxCallbackList::sync_log_succ(const share::SCN scn, int64_t sync_cnt)
@@ -651,6 +675,7 @@ int ObTxCallbackList::sync_log_succ(const share::SCN scn, int64_t sync_cnt)
   // because log-succ callback is concurrent with submit log
   // so the sync_scn_ may be update before log_cursor updated
   int ret = OB_SUCCESS;
+  ObSmallSpinLockGuard log_submitted_pending_guard(log_submitted_pending_latch_);
   sync_scn_.atomic_store(scn);
   synced_ += sync_cnt;
   return ret;
@@ -661,6 +686,7 @@ int ObTxCallbackList::sync_log_fail(const ObCallbackScope &callbacks,
                                     int64_t &removed_cnt)
 {
   int ret = OB_SUCCESS;
+  ObSmallSpinLockGuard log_submitted_pending_guard(log_submitted_pending_latch_);
   ObSyncLogFailFunctor functor;
   functor.max_committed_scn_ = scn;
   // prevent append, because table-lock will not acquire tx-ctx'lock to append callback
@@ -694,13 +720,13 @@ int ObTxCallbackList::clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunc
   return ret;
 }
 
-int ObTxCallbackList::get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyArray &memtable_key_arr)
+int ObTxCallbackList::get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyArray &memtable_key_arr, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
-  ObGetMemtableKeyWTimeoutFunctor functor(memtable_key_arr);
+  ObGetMemtableKeyWTimeoutFunctor functor(memtable_key_arr, timeout);
 
   ObTimeGuard tg("get memtable key arr", 500 * 1000L);
-  LockGuard guard(*this, LOCK_MODE::LOCK_ALL, &tg);
+  LockGuard guard(*this, LOCK_MODE::LOCK_ITERATE, &tg);
   if (OB_FAIL(callback_(functor, guard.state_))) {
     TRANS_LOG(WARN, "get memtable key arr failed", K(ret), K(functor));
   }
@@ -1018,6 +1044,7 @@ int64_t ObTxCallbackList::get_log_epoch() const
 void ObTxCallbackList::set_log_cursor_(ObITransCallback* log_cursor)
 {
   ATOMIC_STORE(&log_epoch_, (log_cursor == &head_) ? INT64_MAX : log_cursor->get_epoch());
+  ATOMIC_STORE(&log_freeze_clock_, (log_cursor == &head_) ? UINT32_MAX : log_cursor->get_freeze_clock());
   ATOMIC_STORE(&log_cursor_, log_cursor);
 }
 
@@ -1054,6 +1081,14 @@ bool ObTxCallbackList::is_logging_blocked() const
     log_latch_.unlock();
   }
   return blocked;
+}
+
+bool ObTxCallbackList::has_pending_log_for_freeze(const uint32_t freeze_clock) const
+{
+  // the callback list has callback need to logging
+  // and the next to log callback with freeze_clock under target freeze_clock
+  return &head_ != get_log_cursor() &&
+    ATOMIC_LOAD(&log_freeze_clock_) <= freeze_clock;
 }
 
 ObTxCallbackList::LockGuard::LockGuard(const ObTxCallbackList &list,
@@ -1128,6 +1163,19 @@ ObTxCallbackList::LockGuard::~LockGuard()
   if (state_.ITERATE_LOCKED_) {
     host_.iter_synced_latch_.unlock();
   }
+}
+
+int ObTxCallbackList::check_freeze_clock_order_(ObITransCallback *callback)
+{
+  int ret = OB_SUCCESS;
+  uint32_t freeze_clock = callback->get_freeze_clock();
+  uint32_t tail_freeze_clock = get_tail()->get_freeze_clock();
+  if (freeze_clock && freeze_clock < tail_freeze_clock) {
+    ret = OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING;
+    TRANS_LOG(WARN, "freeze clock order descending", K(ret), K_(id),
+              KPC(callback), KPC(get_tail()));
+  }
+  return ret;
 }
 
 } // memtable

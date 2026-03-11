@@ -1323,7 +1323,7 @@ class ObTxSubmitLogFunctor
 {
 public:
   explicit ObTxSubmitLogFunctor(const int action, const uint32_t freeze_clock = UINT32_MAX)
-    : action_(action), freeze_clock_(freeze_clock), result_(common::OB_SUCCESS), fail_tx_id_()
+    : action_(action), freeze_clock_(freeze_clock), result_(common::OB_SUCCESS), fail_tx_id_(), start_time_(0), iter_cnt_(0)
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
   }
@@ -1337,7 +1337,10 @@ public:
   OPERATOR_V4(ObTxSubmitLogFunctor)
   {
     int ret = OB_SUCCESS;
-
+    if (start_time_ == 0) {
+      start_time_ = ObClockGenerator::getClock();
+    }
+    iter_cnt_++;
     if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", K(ret), K(tx_id), "ctx", OB_P(tx_ctx));
@@ -1358,18 +1361,29 @@ public:
       result_ = ret;
       fail_tx_id_ = tx_id;
     }
-
+    if (OB_TX_NOLOGCB == ret) {
+      // try other tx ctx
+      ret = OB_SUCCESS;
+    }
     return OB_SUCC(ret);
   }
 
   ObTransID get_fail_tx_id() { return fail_tx_id_; }
   int get_result() const { return result_; }
-
+  TO_STRING_KV(K(action_),
+               K(freeze_clock_),
+               K(result_),
+               K(fail_tx_id_),
+               K(iter_cnt_),
+               K(start_time_),
+               "cost_time", ObClockGenerator::getClock() - start_time_);
 private:
   int action_;
   uint32_t freeze_clock_;
   int result_;
   ObTransID fail_tx_id_;
+  int64_t start_time_;
+  int64_t iter_cnt_;
 };
 
 class GetMinStartSCNFunctor
