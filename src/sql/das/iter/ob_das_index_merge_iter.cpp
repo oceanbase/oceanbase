@@ -103,10 +103,13 @@ int ObDASIndexMergeIter::IndexMergeRowStore::save(bool is_vectorized, int64_t si
 {
   int ret = OB_SUCCESS;
   int64_t stored_rows_count = 0;
-  row_store_->remove_added_blocks();
   if (OB_UNLIKELY(size <= 0 || size > capacity_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected size", K(ret), K(size), K(capacity_));
+  } else if (OB_ISNULL(row_store_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr for row store", K(ret));
+  } else if (FALSE_IT(row_store_->reset())) {
   } else if (!is_vectorized) {
     // not vectorized, no need to prepare rowids
     if (OB_FAIL(row_store_->add_row(*exprs_, eval_ctx_, stored_rows_))) {
