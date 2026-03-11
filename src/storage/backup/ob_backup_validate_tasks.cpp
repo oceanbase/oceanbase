@@ -277,7 +277,7 @@ int ObBackupValidateBasicTask::do_basic_validate_(const ObBackupPathString &dir_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx_ is null", KR(ret), KP_(ctx));
   } else {
-    ObSArray<ObBackupFileInfo> file_list;
+    ObSArray<ObBackupFilePathInfo> file_list;
     common::ObBackupIoAdapter io_adapter;
     int tmp_ret = OB_SUCCESS;
     const ObBackupBlockFileDataType data_type = ObBackupBlockFileDataType::FILE_PATH_INFO;
@@ -288,7 +288,7 @@ int ObBackupValidateBasicTask::do_basic_validate_(const ObBackupPathString &dir_
     ObBackupPath backup_path;
     ObBackupFileSuffix suffix = param_.task_type_.is_archivelog() ? ObBackupFileSuffix::ARCHIVE
                                                                   : ObBackupFileSuffix::BACKUP;
-    ObBackupFileInfo file_info;
+    ObBackupFilePathInfo file_info;
     int64_t actual_size = 0;
     share::ObBackupPathString absolute_path;
     if (OB_FAIL(backup_path.init(dir_path.ptr()))) {

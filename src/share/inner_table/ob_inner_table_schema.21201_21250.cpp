@@ -2304,7 +2304,7 @@ int ObInnerTableSchema::cdb_ob_backup_delete_tasks_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TENANT_ID,       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       ROUND_ID,       DEST_ID,       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           USEC_TO_TIME(END_TS)         END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT,       FINISH_LS_COUNT,       RESULT,       COMMENT,       PATH     FROM oceanbase.__all_virtual_backup_delete_task )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TENANT_ID,       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       ROUND_ID,       DEST_ID,       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           USEC_TO_TIME(END_TS)         END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT AS TOTAL_TASK_COUNT,       FINISH_LS_COUNT AS FINISH_TASK_COUNT,       RESULT,       COMMENT,       PATH     FROM oceanbase.__all_virtual_backup_delete_task )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2355,7 +2355,7 @@ int ObInnerTableSchema::cdb_ob_backup_delete_task_history_schema(ObTableSchema &
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TENANT_ID,       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       ROUND_ID,       DEST_ID,       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           USEC_TO_TIME(END_TS)         END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT,       FINISH_LS_COUNT,       RESULT,       COMMENT,       PATH     FROM oceanbase.__all_virtual_backup_delete_task_history )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TENANT_ID,       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       ROUND_ID,       DEST_ID,       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           USEC_TO_TIME(END_TS)         END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT AS TOTAL_TASK_COUNT,       FINISH_LS_COUNT AS FINISH_TASK_COUNT,       RESULT,       COMMENT,       PATH     FROM oceanbase.__all_virtual_backup_delete_task_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

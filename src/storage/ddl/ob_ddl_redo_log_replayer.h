@@ -58,7 +58,9 @@ private:
                                  const transaction::ObTxSEQ &seq_no,
                                  const int64_t snapshot_version,
                                  const uint64_t data_format_version,
-                                 const bool is_rollback);
+                                 const bool is_rollback,
+                                 const bool is_co_sstable,
+                                 const ObString &inc_major_buffer);
 
 private:
   static const int64_t TOTAL_LIMIT = 10 * 1024 * 1024 * 1024L;

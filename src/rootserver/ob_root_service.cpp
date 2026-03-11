@@ -8611,11 +8611,6 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (GCTX.is_shared_storage_mode()) {
-    // TODO(mingqiao): remove this after restore tenant is supported in shared storage mode
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("restore does not support shared storage mode for now", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "restore tenant in SS mode is");
   } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("in upgrade mode is not allowed", KR(ret));
@@ -10386,10 +10381,6 @@ int ObRootService::handle_archive_log(const obrpc::ObArchiveLogArg &arg)
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (GCTX.is_shared_storage_mode()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("archivelog does not support shared storage mode for now", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "archivelog in SS mode is");
   } else if (OB_FAIL(ObBackupServiceProxy::handle_archive_log(arg))) {
     LOG_WARN("failed to handle archive log", K(ret));
   }
@@ -10402,11 +10393,6 @@ int ObRootService::handle_backup_database(const obrpc::ObBackupDatabaseArg &in_a
 	if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (GCTX.is_shared_storage_mode()) {
-     // TODO(mingqiao): remove this after backup is supported in SS mode
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("backup does not support shared storage mode for now", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup in SS mode is");
   } else if (OB_FAIL(ObBackupServiceProxy::handle_backup_database(in_arg))) {
     LOG_WARN("failed to handle backup database", K(ret), K(in_arg));
   }

@@ -229,6 +229,8 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log(
     const int64_t snapshot_version,
     const uint64_t data_format_version,
     ObTxDesc *tx_desc,
+    const ObSSTable *inc_major,
+    const ObSSTable *lob_inc_major,
     SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
@@ -253,7 +255,17 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log(
           K_(trans_id), K_(seq_no), K(snapshot_version), K(data_format_version));
     } else if (OB_FAIL(log.init(log_basic, false/*is_rollback*/))) {
       LOG_WARN("fail to init DDLIncCommitLog", K(ret), K(log_basic));
-    } else if (OB_FAIL(local_write_inc_commit_log(log, tx_desc, commit_scn))) {
+    }
+#ifdef OB_BUILD_SHARED_STORAGE
+    else if (GCTX.is_shared_storage_mode()
+             && is_incremental_major_direct_load(direct_load_type_)
+             && OB_FAIL(log.set_ss_inc_major(inc_major,
+                                             lob_inc_major))) {
+      LOG_WARN("fail to set ss inc major",
+               KR(ret), K_(direct_load_type), KP(inc_major), KP(lob_inc_major));
+    }
+#endif
+    else if (OB_FAIL(local_write_inc_commit_log(log, tx_desc, commit_scn))) {
       if (ObDDLUtil::need_remote_write(ret) && allow_remote_write) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret), K(tablet_id_));
@@ -264,7 +276,7 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log(
     }
   }
   if (OB_SUCC(ret) && remote_write_) {
-    if (OB_FAIL(retry_remote_write_inc_commit_log(lob_meta_tablet_id, snapshot_version, data_format_version, tx_desc, commit_scn))) {
+    if (OB_FAIL(retry_remote_write_inc_commit_log(lob_meta_tablet_id, snapshot_version, data_format_version, tx_desc, inc_major, lob_inc_major, commit_scn))) {
       LOG_WARN("remote write inc commit log fail", K(ret), K(tablet_id_),
           K(lob_meta_tablet_id), K(snapshot_version), K(data_format_version));
     }
@@ -365,6 +377,8 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log_with_retry(
     const int64_t snapshot_version,
     const uint64_t data_format_version,
     ObTxDesc *tx_desc,
+    const ObSSTable *inc_major,
+    const ObSSTable *lob_inc_major,
     share::SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
@@ -378,7 +392,7 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log_with_retry(
       ret = OB_TIMEOUT;
       LOG_WARN("already timeout", K(ret), K(start_ts));
     } else if (OB_FAIL(write_inc_commit_log(allow_remote_write, lob_meta_tablet_id,
-        snapshot_version, data_format_version, tx_desc, commit_scn))) {
+        snapshot_version, data_format_version, tx_desc, inc_major, lob_inc_major, commit_scn))) {
       LOG_WARN("write inc ddl commit log failed", K(ret), K(allow_remote_write),
           K(lob_meta_tablet_id), K(snapshot_version), K(data_format_version));
       if (ObDDLIncRedoLogWriter::need_retry(ret, false/*allow_remote_write*/)) {
@@ -697,6 +711,8 @@ int ObDDLIncRedoLogWriter::retry_remote_write_inc_commit_log(
     const int64_t snapshot_version,
     const uint64_t data_format_version,
     transaction::ObTxDesc *tx_desc,
+    const ObSSTable *inc_major,
+    const ObSSTable *lob_inc_major,
     SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
@@ -705,7 +721,13 @@ int ObDDLIncRedoLogWriter::retry_remote_write_inc_commit_log(
   while (OB_SUCC(ret)) {
     if (OB_FAIL(switch_to_remote_write())) {
       LOG_WARN("flush ls leader location failed", K(ret));
-    } else if (OB_FAIL(remote_write_inc_commit_log(lob_meta_tablet_id, snapshot_version, data_format_version, tx_desc, commit_scn))) {
+    } else if (OB_FAIL(remote_write_inc_commit_log(lob_meta_tablet_id,
+                                                   snapshot_version,
+                                                   data_format_version,
+                                                   tx_desc,
+                                                   inc_major,
+                                                   lob_inc_major,
+                                                   commit_scn))) {
       if (OB_NOT_MASTER == ret && retry_cnt++ < MAX_REMOTE_WRITE_RETRY_CNT) {
         ob_usleep(10 * 1000); // 10 ms.
         ret = OB_SUCCESS;
@@ -726,6 +748,8 @@ int ObDDLIncRedoLogWriter::remote_write_inc_commit_log(
     const int64_t snapshot_version,
     const uint64_t data_format_version,
     transaction::ObTxDesc *tx_desc,
+    const ObSSTable *inc_major,
+    const ObSSTable *lob_inc_major,
     SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
@@ -750,7 +774,15 @@ int ObDDLIncRedoLogWriter::remote_write_inc_commit_log(
       LOG_WARN("fail to init ObRpcRemoteWriteDDLIncCommitLogArg", K(ret), K_(leader_ls_id),
           K_(tablet_id),K(lob_meta_tablet_id), K(tx_desc), K_(direct_load_type),
           K_(trans_id), K_(seq_no), K(snapshot_version), K(data_format_version));
-    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).by(MTL_ID()).remote_write_ddl_inc_commit_log(arg, res))) {
+    }
+#ifdef OB_BUILD_SHARED_STORAGE
+    else if (GCTX.is_shared_storage_mode()
+             && is_incremental_major_direct_load(direct_load_type_)
+             && OB_FAIL(arg.set_ss_inc_major(inc_major, lob_inc_major))) {
+      LOG_WARN("fail to set ss inc major", KR(ret), K(data_format_version), KP(inc_major), KP(lob_inc_major));
+    }
+#endif
+    else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).by(MTL_ID()).remote_write_ddl_inc_commit_log(arg, res))) {
       LOG_WARN("remote write inc commit log failed", K(ret), K_(leader_ls_id), K_(leader_addr));
     } else if (OB_FAIL(MTL(ObTransService *)->add_tx_exec_result(*arg.tx_desc_, res.tx_result_))) {
       LOG_WARN("fail to get_tx_exec_result", K(ret), K(*arg.tx_desc_));

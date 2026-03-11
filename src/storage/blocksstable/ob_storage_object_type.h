@@ -148,6 +148,7 @@ public:
   virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
                                    const MacroBlockId &file_id, const uint64_t tenant_id,
                                    const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const { return OB_NOT_SUPPORTED; }
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const { return OB_NOT_SUPPORTED; }
   virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,
                                     const MacroBlockId &file_id, const char *object_storage_root_dir,
                                     const uint64_t cluster_id, const uint64_t tenant_id,
@@ -164,6 +165,7 @@ public:
   void get_ss_macro_block_type(const MacroBlockId &macro_id, storage::ObSSMacroBlockType &ss_macro_block_type) const;
   int get_macro_cache_type(const uint64_t effective_tablet_id, const bool use_effective_tablet_id,
                            storage::ObSSMacroCacheType &macro_cache_type) const;
+  int stract_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id) const;
 #endif
   virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const { return OB_SUCCESS; }
   virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const { return OB_SUCCESS; }
@@ -282,6 +284,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
                              const MacroBlockId &file_id, const uint64_t tenant_id,
@@ -321,6 +324,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
                              const MacroBlockId &file_id, const uint64_t tenant_id,
@@ -360,6 +364,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,
                                 const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
@@ -396,6 +401,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,
                                 const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
@@ -432,6 +438,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
@@ -466,6 +473,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
@@ -661,6 +669,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
 
 #endif
   virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
@@ -687,6 +696,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
 
 #endif
   virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
@@ -713,6 +723,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
 
 #endif
   virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
@@ -739,6 +750,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
 
 #endif
   virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
@@ -874,6 +886,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
@@ -909,6 +922,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
@@ -944,6 +958,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
@@ -979,6 +994,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
@@ -1026,6 +1042,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
                              const MacroBlockId &file_id, const uint64_t tenant_id,
@@ -1058,6 +1075,7 @@ public:
                                     const MacroBlockId &file_id, const char *object_storage_root_dir,
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
 
 #endif
   virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;
@@ -1168,6 +1186,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
@@ -1202,6 +1221,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
@@ -1233,6 +1253,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
 #endif
@@ -1266,6 +1287,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
                              const MacroBlockId &file_id, const uint64_t tenant_id,
@@ -1305,6 +1327,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
                              const MacroBlockId &file_id, const uint64_t tenant_id,
@@ -1344,6 +1367,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
                              const MacroBlockId &file_id, const uint64_t tenant_id,
@@ -1383,6 +1407,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
   virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
                              const MacroBlockId &file_id, const uint64_t tenant_id,

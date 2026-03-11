@@ -113,15 +113,15 @@ ObBackupDeleteSelector::ObBackupDeleteSelector()
 ObBackupDeleteSelector::~ObBackupDeleteSelector()
 {
   if (OB_NOT_NULL(data_provider_)) {
-    OB_DELETE(IObBackupDataProvider, "BackupProvider", data_provider_);
+    OB_DELETE(IObBackupDataProvider, "BackupClean", data_provider_);
     data_provider_ = nullptr;
   }
   if (OB_NOT_NULL(connectivity_checker_)) {
-    OB_DELETE(IObConnectivityChecker, "ConnChecker", connectivity_checker_);
+    OB_DELETE(IObConnectivityChecker, "BackupClean", connectivity_checker_);
     connectivity_checker_ = nullptr;
   }
   if (OB_NOT_NULL(archive_helper_)) {
-    OB_DELETE(ObArchivePersistHelper, "ArchiveHelper", archive_helper_);
+    OB_DELETE(ObArchivePersistHelper, "BackupClean", archive_helper_);
     archive_helper_ = nullptr;
   }
 }
@@ -142,9 +142,9 @@ int ObBackupDeleteSelector::init(common::ObMySQLProxy &sql_proxy,
     job_attr_ = &job_attr;
     rpc_proxy_ = &rpc_proxy;
     delete_mgr_ = &delete_mgr;
-    ObBackupDataProvider *data_provider_impl = OB_NEW(ObBackupDataProvider, "BackupProvider");
-    ObConnectivityChecker *connectivity_checker_impl = OB_NEW(ObConnectivityChecker, "ConnChecker");
-    ObArchivePersistHelper *archive_helper_impl = OB_NEW(ObArchivePersistHelper, "ArchiveHelper");
+    ObBackupDataProvider *data_provider_impl = OB_NEW(ObBackupDataProvider, "BackupClean");
+    ObConnectivityChecker *connectivity_checker_impl = OB_NEW(ObConnectivityChecker, "BackupClean");
+    ObArchivePersistHelper *archive_helper_impl = OB_NEW(ObArchivePersistHelper, "BackupClean");
 
     if (OB_ISNULL(data_provider_impl) || OB_ISNULL(connectivity_checker_impl) || OB_ISNULL(archive_helper_impl)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -165,13 +165,13 @@ int ObBackupDeleteSelector::init(common::ObMySQLProxy &sql_proxy,
       is_inited_ = true;
     }
     if (OB_NOT_NULL(data_provider_impl)) {
-      OB_DELETE(ObBackupDataProvider, "BackupProvider", data_provider_impl);
+      OB_DELETE(ObBackupDataProvider, "BackupClean", data_provider_impl);
     }
     if (OB_NOT_NULL(connectivity_checker_impl)) {
-      OB_DELETE(ObConnectivityChecker, "ConnChecker", connectivity_checker_impl);
+      OB_DELETE(ObConnectivityChecker, "BackupClean", connectivity_checker_impl);
     }
     if (OB_NOT_NULL(archive_helper_impl)) {
-      OB_DELETE(ObArchivePersistHelper, "ArchiveHelper", archive_helper_impl);
+      OB_DELETE(ObArchivePersistHelper, "BackupClean", archive_helper_impl);
     }
   }
   return ret;

@@ -254,7 +254,7 @@ int prepare_block_file_item_list(const int64_t item_count,
   return ret;
 }
 
-int prepare_file_path_item(const int64_t idx, ObBackupFileInfo &item)
+int prepare_file_path_item(const int64_t idx, ObBackupFilePathInfo &item)
 {
   int ret = OB_SUCCESS;
   item.reset();
@@ -275,11 +275,11 @@ int prepare_file_path_item(const int64_t idx, ObBackupFileInfo &item)
 }
 
 int prepare_file_path_item_list(const int64_t item_count,
-    common::ObIArray<ObBackupFileInfo> &item_list)
+    common::ObIArray<ObBackupFilePathInfo> &item_list)
 {
   int ret = OB_SUCCESS;
   item_list.reset();
-  ObBackupFileInfo item;
+  ObBackupFilePathInfo item;
   for (int64_t i = 0; OB_SUCC(ret) && i < item_count; ++i) {
     if (OB_FAIL(prepare_file_path_item(i, item))) {
       LOG_WARN("failed to prepare file path item", K(ret), K(i));
@@ -290,12 +290,12 @@ int prepare_file_path_item_list(const int64_t item_count,
   return ret;
 }
 
-int write_file_path_items_to_writer(const common::ObIArray<ObBackupFileInfo> &item_list,
+int write_file_path_items_to_writer(const common::ObIArray<ObBackupFilePathInfo> &item_list,
     ObBackupBlockFileItemWriter &writer)
 {
   int ret = OB_SUCCESS;
   ARRAY_FOREACH_X(item_list, idx, cnt, OB_SUCC(ret)) {
-    const ObBackupFileInfo &item = item_list.at(idx);
+    const ObBackupFilePathInfo &item = item_list.at(idx);
     if (OB_FAIL(writer.write_item(item))) {
       LOG_WARN("failed to write file path item", K(ret), K(item));
     }
@@ -304,11 +304,11 @@ int write_file_path_items_to_writer(const common::ObIArray<ObBackupFileInfo> &it
 }
 
 int read_file_path_items_from_reader(ObBackupBlockFileItemReader &reader,
-    common::ObIArray<ObBackupFileInfo> &item_list)
+    common::ObIArray<ObBackupFilePathInfo> &item_list)
 {
   int ret = OB_SUCCESS;
   item_list.reset();
-  ObBackupFileInfo item;
+  ObBackupFilePathInfo item;
   while (OB_SUCC(ret)) {
     item.reset();
     if (OB_FAIL(reader.get_next_item(item))) {
@@ -326,8 +326,8 @@ int read_file_path_items_from_reader(ObBackupBlockFileItemReader &reader,
 }
 
 int compare_file_path_item_lists(
-    const common::ObIArray<ObBackupFileInfo> &expected,
-    const common::ObIArray<ObBackupFileInfo> &actual)
+    const common::ObIArray<ObBackupFilePathInfo> &expected,
+    const common::ObIArray<ObBackupFilePathInfo> &actual)
 {
   int ret = OB_SUCCESS;
   if (expected.count() != actual.count()) {
@@ -335,8 +335,8 @@ int compare_file_path_item_lists(
     LOG_WARN("file path item count mismatch", K(ret), K(expected.count()), K(actual.count()));
   } else {
     ARRAY_FOREACH_X(expected, idx, cnt, OB_SUCC(ret)) {
-      const ObBackupFileInfo &lhs = expected.at(idx);
-      const ObBackupFileInfo &rhs = actual.at(idx);
+      const ObBackupFilePathInfo &lhs = expected.at(idx);
+      const ObBackupFilePathInfo &rhs = actual.at(idx);
       if (lhs.type_ != rhs.type_ || lhs.file_size_ != rhs.file_size_ || lhs.path_ != rhs.path_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("file path item mismatch", K(ret), K(idx), K(lhs), K(rhs));
@@ -438,8 +438,8 @@ int write_and_read_file_path_items(const int64_t item_count, const int64_t max_f
   mod.storage_id_ = 1;
   mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
 
-  ObArray<ObBackupFileInfo> write_item_list;
-  ObArray<ObBackupFileInfo> read_item_list;
+  ObArray<ObBackupFilePathInfo> write_item_list;
+  ObArray<ObBackupFilePathInfo> read_item_list;
   ObBackupPath file_list_dir;
 
   if (OB_FAIL(prepare_backup_dest(backup_dest, file_list_dir))) {
@@ -645,6 +645,238 @@ TEST_F(TestBackupBlockFileReaderWriter, write_and_read_file_path_many_items)
   clean_env_();
   const int64_t item_count = 5000; // exercises multi-block writing
   OK(write_and_read_file_path_items(item_count, 16L * 1024L * 1024L/*max_file_size*/));
+}
+
+// Test ObBackupBlockFileReaderUtil::get_all_block_addrs
+TEST_F(TestBackupBlockFileReaderWriter, test_get_all_block_addrs)
+{
+  clean_env_();
+  int ret = OB_SUCCESS;
+  ObBackupDest backup_dest;
+  const int64_t backup_set_id = 1;
+  ObBackupDest backup_set_dest;
+  ObBackupSetDesc backup_set_desc;
+  backup_set_desc.backup_set_id_ = backup_set_id;
+  backup_set_desc.backup_type_.type_ = ObBackupType::FULL_BACKUP;
+  const int64_t dest_id = 1;
+  const int64_t item_count = 100000; // Should create multiple blocks
+  const int64_t max_file_size = 4L * 1024L * 1024L * 1024L;
+
+  ObBackupBlockFileItemWriter writer;
+  ObBackupBlockFileAddr entry_block_addr;
+  int64_t total_item_count = 0;
+  int64_t total_block_count = 0;
+  ObStorageIdMod mod;
+  mod.storage_id_ = 1;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
+
+  ObArray<blocksstable::MacroBlockId> write_item_list;
+  ObBackupPath file_list_dir;
+
+  // Write test data
+  if (OB_FAIL(prepare_backup_dest(backup_dest, file_list_dir))) {
+    LOG_WARN("failed to prepare backup dest", K(ret));
+  } else if (OB_FAIL(share::ObBackupPathUtil::construct_backup_set_dest(
+      backup_dest, backup_set_desc, backup_set_dest))) {
+    LOG_WARN("failed to construct backup set dest", K(ret));
+  } else if (OB_FAIL(prepare_block_file_item_list(item_count, write_item_list))) {
+    LOG_WARN("failed to prepare block file item list", K(ret));
+  } else if (OB_FAIL(writer.init(backup_dest.get_storage_info(), ObBackupBlockFileDataType::MACRO_BLOCK_ID,
+                                    ObBackupFileSuffix::BACKUP, file_list_dir, dest_id, max_file_size))) {
+    LOG_WARN("failed to init writer", K(ret));
+  } else if (OB_FAIL(write_items_to_writer(write_item_list, writer))) {
+    LOG_WARN("failed to write items to writer", K(ret));
+  } else if (OB_FAIL(writer.close(entry_block_addr, total_item_count, total_block_count))) {
+    LOG_WARN("failed to close writer", K(ret));
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // Test get_all_block_addrs
+  ObArray<ObBackupBlockFileAddr> block_addr_list;
+  ObBackupBlockFileReaderParam param;
+  param.storage_info_ = backup_dest.get_storage_info();
+  param.data_type_ = ObBackupBlockFileDataType::MACRO_BLOCK_ID;
+  param.file_list_dir_ = file_list_dir;
+  param.suffix_ = ObBackupFileSuffix::BACKUP;
+  param.storage_id_mod_ = mod;
+
+  ret = ObBackupBlockFileReaderUtil::get_all_block_addrs(param, block_addr_list);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(total_block_count, block_addr_list.count());
+  LOG_INFO("successfully got all block addrs", K(total_block_count), K(block_addr_list.count()));
+
+  // Verify each block address is valid
+  for (int64_t i = 0; i < block_addr_list.count(); ++i) {
+    ASSERT_TRUE(block_addr_list.at(i).is_valid());
+  }
+}
+
+// Test ObBackupBlockFileReaderUtil::get_items_from_block
+TEST_F(TestBackupBlockFileReaderWriter, test_get_items_from_block)
+{
+  clean_env_();
+  int ret = OB_SUCCESS;
+  ObBackupDest backup_dest;
+  const int64_t backup_set_id = 1;
+  ObBackupDest backup_set_dest;
+  ObBackupSetDesc backup_set_desc;
+  backup_set_desc.backup_set_id_ = backup_set_id;
+  backup_set_desc.backup_type_.type_ = ObBackupType::FULL_BACKUP;
+  const int64_t dest_id = 1;
+  const int64_t item_count = 100000; // Should create multiple blocks
+  const int64_t max_file_size = 4L * 1024L * 1024L * 1024L;
+
+  ObBackupBlockFileItemWriter writer;
+  ObBackupBlockFileAddr entry_block_addr;
+  int64_t total_item_count = 0;
+  int64_t total_block_count = 0;
+  ObStorageIdMod mod;
+  mod.storage_id_ = 1;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
+
+  ObArray<blocksstable::MacroBlockId> write_item_list;
+  ObBackupPath file_list_dir;
+
+  // Write test data
+  if (OB_FAIL(prepare_backup_dest(backup_dest, file_list_dir))) {
+    LOG_WARN("failed to prepare backup dest", K(ret));
+  } else if (OB_FAIL(share::ObBackupPathUtil::construct_backup_set_dest(
+      backup_dest, backup_set_desc, backup_set_dest))) {
+    LOG_WARN("failed to construct backup set dest", K(ret));
+  } else if (OB_FAIL(prepare_block_file_item_list(item_count, write_item_list))) {
+    LOG_WARN("failed to prepare block file item list", K(ret));
+  } else if (OB_FAIL(writer.init(backup_dest.get_storage_info(), ObBackupBlockFileDataType::MACRO_BLOCK_ID,
+                                    ObBackupFileSuffix::BACKUP, file_list_dir, dest_id, max_file_size))) {
+    LOG_WARN("failed to init writer", K(ret));
+  } else if (OB_FAIL(write_items_to_writer(write_item_list, writer))) {
+    LOG_WARN("failed to write items to writer", K(ret));
+  } else if (OB_FAIL(writer.close(entry_block_addr, total_item_count, total_block_count))) {
+    LOG_WARN("failed to close writer", K(ret));
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // Get all block addresses
+  ObArray<ObBackupBlockFileAddr> block_addr_list;
+  ObBackupBlockFileReaderParam param;
+  param.storage_info_ = backup_dest.get_storage_info();
+  param.data_type_ = ObBackupBlockFileDataType::MACRO_BLOCK_ID;
+  param.file_list_dir_ = file_list_dir;
+  param.suffix_ = ObBackupFileSuffix::BACKUP;
+  param.storage_id_mod_ = mod;
+
+  ret = ObBackupBlockFileReaderUtil::get_all_block_addrs(param, block_addr_list);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_GT(block_addr_list.count(), 0);
+
+  // Test getting items from each block
+  int64_t total_read_items = 0;
+  ObArenaAllocator item_allocator("TestItems");
+  for (int64_t i = 0; i < block_addr_list.count(); ++i) {
+    ObArray<ObIBackupBlockFileItem *> item_list;
+    ret = ObBackupBlockFileReaderUtil::get_items_from_block(
+        param,
+        block_addr_list.at(i),
+        item_allocator,
+        item_list);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_GT(item_list.count(), 0);
+    total_read_items += item_list.count();
+
+    // Verify each item is valid
+    for (int64_t j = 0; j < item_list.count(); ++j) {
+      ASSERT_TRUE(item_list.at(j)->is_valid());
+      ASSERT_EQ(ObBackupBlockFileDataType::MACRO_BLOCK_ID, item_list.at(j)->data_type());
+      // Can cast to specific type if needed
+      ObBackupBlockFileMacroIdItem *macro_item = static_cast<ObBackupBlockFileMacroIdItem*>(item_list.at(j));
+      ASSERT_TRUE(macro_item->macro_id_.is_valid());
+    }
+  }
+  ASSERT_EQ(total_item_count, total_read_items);
+  LOG_INFO("successfully got all items from blocks", K(total_item_count), K(total_read_items));
+}
+
+// Test ObBackupBlockFileReaderUtil with file path items
+TEST_F(TestBackupBlockFileReaderWriter, test_util_with_file_path_items)
+{
+  clean_env_();
+  int ret = OB_SUCCESS;
+  ObBackupDest backup_dest;
+  const int64_t backup_set_id = 1;
+  ObBackupDest backup_set_dest;
+  ObBackupSetDesc backup_set_desc;
+  backup_set_desc.backup_set_id_ = backup_set_id;
+  backup_set_desc.backup_type_.type_ = ObBackupType::FULL_BACKUP;
+  const int64_t dest_id = 1;
+  const int64_t item_count = 5000;
+  const int64_t max_file_size = 4L * 1024L * 1024L * 1024L;
+
+  ObBackupBlockFileItemWriter writer;
+  ObBackupBlockFileAddr entry_block_addr;
+  int64_t total_item_count = 0;
+  int64_t total_block_count = 0;
+  ObStorageIdMod mod;
+  mod.storage_id_ = 1;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
+
+  ObArray<ObBackupFilePathInfo> write_item_list;
+  ObBackupPath file_list_dir;
+
+  // Write test data
+  if (OB_FAIL(prepare_backup_dest(backup_dest, file_list_dir))) {
+    LOG_WARN("failed to prepare backup dest", K(ret));
+  } else if (OB_FAIL(share::ObBackupPathUtil::construct_backup_set_dest(
+      backup_dest, backup_set_desc, backup_set_dest))) {
+    LOG_WARN("failed to construct backup set dest", K(ret));
+  } else if (OB_FAIL(prepare_file_path_item_list(item_count, write_item_list))) {
+    LOG_WARN("failed to prepare file path item list", K(ret));
+  } else if (OB_FAIL(writer.init(backup_dest.get_storage_info(), ObBackupBlockFileDataType::FILE_PATH_INFO,
+                                    ObBackupFileSuffix::BACKUP, file_list_dir, dest_id, max_file_size))) {
+    LOG_WARN("failed to init writer", K(ret));
+  } else if (OB_FAIL(write_file_path_items_to_writer(write_item_list, writer))) {
+    LOG_WARN("failed to write file path items", K(ret));
+  } else if (OB_FAIL(writer.close(entry_block_addr, total_item_count, total_block_count))) {
+    LOG_WARN("failed to close writer", K(ret));
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // Get all block addresses
+  ObArray<ObBackupBlockFileAddr> block_addr_list;
+  ObBackupBlockFileReaderParam param;
+  param.storage_info_ = backup_dest.get_storage_info();
+  param.data_type_ = ObBackupBlockFileDataType::FILE_PATH_INFO;
+  param.file_list_dir_ = file_list_dir;
+  param.suffix_ = ObBackupFileSuffix::BACKUP;
+  param.storage_id_mod_ = mod;
+
+  ret = ObBackupBlockFileReaderUtil::get_all_block_addrs(param, block_addr_list);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_GT(block_addr_list.count(), 0);
+
+  // Test getting items from each block
+  int64_t total_read_items = 0;
+  ObArenaAllocator item_allocator("TestFileItems");
+  for (int64_t i = 0; i < block_addr_list.count(); ++i) {
+    ObArray<ObIBackupBlockFileItem *> item_list;
+    ret = ObBackupBlockFileReaderUtil::get_items_from_block(
+        param,
+        block_addr_list.at(i),
+        item_allocator,
+        item_list);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_GT(item_list.count(), 0);
+    total_read_items += item_list.count();
+
+    // Verify each item is valid
+    for (int64_t j = 0; j < item_list.count(); ++j) {
+      ASSERT_TRUE(item_list.at(j)->is_valid());
+      ASSERT_EQ(ObBackupBlockFileDataType::FILE_PATH_INFO, item_list.at(j)->data_type());
+      // Can cast to specific type if needed
+      ObBackupFilePathInfo *file_item = static_cast<ObBackupFilePathInfo*>(item_list.at(j));
+      ASSERT_FALSE(file_item->path_.is_empty());
+    }
+  }
+  ASSERT_EQ(total_item_count, total_read_items);
+  LOG_INFO("successfully got all file path items from blocks", K(total_item_count));
 }
 
 }

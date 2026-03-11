@@ -85,6 +85,10 @@ const int64_t OB_DEFAULT_LAG_TARGET = 120 * 1000LL * 1000LL;// 2min, unit:us
 const int64_t OB_BACKUP_MAX_RETRY_TIMES = 64;
 const int64_t OB_BACKUP_VALIDATE_MAX_RETRY_TIMES = 64;
 const int64_t OB_BACKUP_RETRY_TIME_INTERVAL = 5 * 1000LL * 1000LL;
+const int64_t OB_BACKUP_DELETE_BATCH_SIZE = 1000;
+const int64_t OB_BACKUP_DELETE_FILE_RETRY_TIME_INTERVAL = 5 * 1000LL * 1000LL;
+const int64_t OB_BACKUP_DELETE_FILE_MAX_RETRY_COUNT = 3; // Maximum retry count for backup file delete operations
+const int64_t OB_BACKUP_DELETE_LOG_INTERVAL = 20 * 1000LL * 1000LL; // 20 seconds, for delete operation log interval
 const int64_t OB_BACKUP_DIR_PREFIX_LENGTH = 64;
 const int64_t OB_BACKUP_DELETE_POLICY_NAME_LENGTH = 64;
 const int64_t OB_BACKUP_RECOVERY_WINDOW_LENGTH = 32;
@@ -112,6 +116,7 @@ const int64_t OB_MAX_BACKUP_DELETE_IDS_COUNT = 32;
 const int64_t OB_MAX_FILES_PER_VALIDATE_GROUP = 20;  // Maximum files per validation group for basic validate
 const int64_t OB_MAX_TABLETS_PER_VALIDATE_GROUP = 50;  // Maximum tablets per validation group for physical validate
 const int64_t MIN_LAG_TARGET_FOR_S3 = 60 * 1000 * 1000UL/*60s*/;
+const int64_t OB_BACKUP_MACRO_BLOCK_LIST_MAX_FILE_SIZE = 64L * 1024L * 1024L; // 64MB
 const int64_t OB_MAX_VALIDATE_RUNNING_GROUP_COUNT = 1024;
 const int64_t OB_MAX_MACRO_BLOCK_NUMBER_PER_TASK = 128;
 const int64_t OB_BACKUP_DEFAULT_MAX_FILE_SIZE = 64L * 1024L * 1024L; // 64MB
@@ -126,6 +131,8 @@ static constexpr const int64_t DEFAULT_BACKUP_DATA_FILE_SIZE = 4 * 1024LL * 1024
 
 // max ObMigrationTabletParam serialize size during backup.
 static constexpr const int64_t MAX_BACKUP_TABLET_META_SERIALIZE_SIZE = 2 * 1024LL * 1024LL; // 2MB
+
+static constexpr const int64_t OB_BACKUP_DEFAULT_BUCKET_NUM = 4096;
 
 //add by physical backup and restore
 const char *const OB_STR_INCARNATION = "incarnation";
@@ -171,6 +178,7 @@ const char *const Ob_STR_BACKUP_REGION = "region";
 const char *const OB_STR_BACKUP_ZONE = "zone";
 const char *const OB_STR_BACKUP_IDC = "idc";
 const char *const OB_STR_JOB_ID = "job_id";
+const char *const OB_STR_PARENT_TASK_ID = "parent_task_id";
 const char *const OB_STR_BACKUP_SET_ID = "backup_set_id";
 const char *const OB_STR_BACKUP_COMPRESSOR_TYPE = "compressor_type";
 const char *const OB_STR_INITIATOR_TENANT_ID = "initiator_tenant_id";
@@ -215,7 +223,7 @@ const char *const OB_STR_SUCCESS_TASK_COUNT = "success_task_count";
 const char *const OB_STR_BACKUP_PATH = "path";
 const char *const OB_STR_TOTAL_LS_COUNT = "total_ls_count";
 const char *const OB_STR_MIN_RESTORE_SCN = "min_restore_scn";
-const char *const OB_STR_FILE_LIST="file_list";
+const char *const OB_STR_FILE_LIST = "file_list";
 
 const char *const OB_STR_LOG_ARCHIVE_STATUS = "log_archive_status";
 const char *const OB_STR_DATA_BACKUP_DEST = "data_backup_dest";
@@ -302,6 +310,7 @@ const char *const OB_STR_CLOG = "clog";
 const char *const OB_STR_BACKUP_SETS = "backup_sets";
 const char *const OB_STR_BACKUP_SET = "backup_set";
 const char *const OB_STR_LS = "logstream";
+const char *const OB_STR_TABLET = "tablet";
 const char *const OB_STR_COMPLEMENT_LOG = "complement_log";
 const char *const OB_STR_MAJOR_BACKUP = "major_data";
 const char *const OB_STR_MINOR_BACKUP = "minor_data";
@@ -453,6 +462,7 @@ const char *const OB_STR_CONSISTENT_SCN = "consistent_scn";
 const char *const OB_STR_ROOT_KEY = "root_key";
 const char *const OB_STR_BACKUP_DATA_VERSION = "backup_data_version";
 const char *const OB_STR_CLUSTER_VERSION = "cluster_version";
+const char *const OB_STR_EXTRA_INFO = "extra_info";
 const char *const OB_BACKUP_SUFFIX=".obbak";
 const char *const OB_ARCHIVE_SUFFIX=".obarc";
 const char *const OB_STR_MIN_RESTORE_SCN_DISPLAY = "min_restore_scn_display";
@@ -467,6 +477,11 @@ const char *const OB_STR_MAX_IOPS_AND_MAX_BANDWIDTH = "max_iops, max_bandwidth";
 const char *const OB_STR_TABLE_LIST = "table_list";
 const char *const OB_STR_TABLE_LIST_META_INFO = "table_list_meta_info";
 const char *const OB_STR_MAJOR_COMPACTION_MVIEW_DEP_TABLET_LIST = "major_compaction_mview_dep_tablet_list";
+const char *const OB_STR_SS_TABLET_GROUP_CHECKPOINT = "tablet_group_checkpoint";
+const char *const OB_STR_SS_TABLET_INFO = "tablet_info";
+const char *const OB_STR_SS_TABLET_META_FILE_INFO = "ss_tablet_meta_file_info";
+const char *const OB_STR_SS_TABLET_MACRO_BLOCK_FILE_INFO = "ss_tablet_macro_block_file_info";
+const char *const OB_STR_MACRO_BLOCK_LIST = "macro_block_list";
 const char *const OB_STR_VALIDATE_TYPE = "type";
 const char *const OB_STR_PATH_TYPE = "path_type";
 const char *const OB_STR_TYPE = "type";
@@ -474,7 +489,6 @@ const char *const OB_STR_VALIDATE_LEVEL = "validate_level";
 const char *const OB_STR_INITIATOR_TASK_ID = "initiator_task_id";
 const char *const OB_STR_VALIDATED_BYTES = "validated_bytes";
 const char *const OB_STR_BACKUP_FILE_LIST = "backup_file_list";
-
 
 enum ObBackupFileType
 {
@@ -521,7 +535,11 @@ enum ObBackupFileType
   BACKUP_MVIEW_DEP_TABLET_LIST_FILE = 40,
   BACKUP_PARAMETERS_INFO = 41,
   BACKUP_LS_ID_LIST_INFO = 42,
-  SS_BACKUP_BLOCK_FILE = 46,
+  SS_BACKUP_TABLET_GROUP_CHECKPOINT_FILE = 43,
+  SS_BACKUP_TABLET_META_FILE_INFO_FILE = 44,
+  SS_BACKUP_TABLET_MACRO_BLOCK_FILE_INFO_FILE = 45,
+  SS_BACKUP_LS_META_INFOS_FILE = 46,
+  SS_BACKUP_BLOCK_FILE = 47,
   // type <=255 is write header struct to disk directly
   // type > 255 is use serialization to disk
   BACKUP_MAX_DIRECT_WRITE_TYPE = 255,
@@ -636,7 +654,9 @@ struct ObBackupSetDesc {
   int assign(const ObBackupSetDesc &that);
   bool is_valid() const;
   bool operator==(const ObBackupSetDesc &other) const;
+  bool operator!=(const ObBackupSetDesc &other) const;
   void reset();
+  uint64_t hash() const;
 
   TO_STRING_KV(K_(backup_set_id), K_(backup_type), K_(min_restore_scn), K_(total_bytes));
   int64_t backup_set_id_;
@@ -1426,6 +1446,10 @@ public:
     BACKUP_LOG = 12,
     BACKUP_FUSE_TABLET_META = 13,
     PREPARE_BACKUP_LOG = 14,
+    DISABLE_SS_GC = 15,
+    WAIT_SS_CLOG_CHECKPOINT = 16,
+    SS_WAIT_LS_CONSISTENCY = 17,
+    ENABLE_SS_GC = 18,
     MAX_STATUS
   };
   ObBackupStatus(): status_(MAX_STATUS) {}
@@ -1455,6 +1479,7 @@ struct ObBackupTaskStatus final
     PENDING = 1,
     DOING = 2,
     FINISH = 3,
+    FAILED = 4,
     MAX_STATUS
   };
   ObBackupTaskStatus(): status_(Status::MAX_STATUS) {}
@@ -1463,6 +1488,8 @@ struct ObBackupTaskStatus final
   bool is_valid() const;
   const char* get_str() const;
   int set_status(const char *str);
+  int set_status(const common::ObString &str);
+  int set_status(const ObBackupTaskStatus::Status &status);
   bool is_init() const { return Status::INIT == status_; }
   bool is_pending() const { return Status::PENDING == status_; }
   bool is_doing() const { return Status::DOING == status_; }
@@ -1598,6 +1625,21 @@ public:
   ObHAResultInfo::Comment comment_;
 };
 
+struct ObBackupExtraInfo final
+{
+  ObBackupExtraInfo() : sslog_gts_(), read_scn_() {}
+  ~ObBackupExtraInfo() = default;
+  void reset() { sslog_gts_.reset(); read_scn_.reset(); }
+  bool has_value() const { return sslog_gts_.is_valid_and_not_min() || read_scn_.is_valid_and_not_min(); }
+  int assign(const ObBackupExtraInfo &other);
+  int encode_to_str(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int decode_from_str(const char *str);
+  TO_STRING_KV(K_(sslog_gts), K_(read_scn));
+
+  SCN sslog_gts_;
+  SCN read_scn_;
+};
+
 struct ObBackupSetTaskAttr final
 {
 public:
@@ -1609,7 +1651,7 @@ public:
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(incarnation_id), K_(job_id), K_(backup_set_id), K_(start_ts), K_(end_ts),
       K_(start_scn), K_(end_scn), K_(user_ls_start_scn), K_(data_turn_id), K_(meta_turn_id), K_(minor_turn_id),
       K_(major_turn_id), K_(status), K_(encryption_mode), K_(passwd), K_(stats), K_(backup_path), K_(retry_cnt), K_(result),
-      K_(comment));
+      K_(comment), K_(extra_info));
   int64_t task_id_;
   uint64_t tenant_id_;
   int64_t incarnation_id_;
@@ -1632,6 +1674,7 @@ public:
   int64_t retry_cnt_;
   int result_;
   ObHAResultInfo::Comment comment_;
+  ObBackupExtraInfo extra_info_;
 };
 
 struct ObBackupDataTaskType final
@@ -1777,7 +1820,7 @@ public:
       K_(date), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(stats), K_(start_time), K_(end_time),
       K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K_(backup_path), K_(start_replay_scn),
       K_(min_restore_scn), K_(tenant_compatible), K_(backup_compatible), K_(data_turn_id), K_(meta_turn_id),
-      K_(cluster_version), K_(consistent_scn));
+      K_(cluster_version), K_(consistent_scn), K_(is_shared_storage_mode));
   int64_t to_string(char *min_restore_scn_display, char *buf, int64_t buf_len) const;
 
   int64_t backup_set_id_;
@@ -1808,6 +1851,7 @@ public:
   int64_t minor_turn_id_;
   int64_t major_turn_id_;
   SCN consistent_scn_;
+  bool is_shared_storage_mode_;
 };
 
 struct ObBackupSkippedType;

@@ -1457,6 +1457,25 @@ int ObRestorePersistHelper::get_ls_total_bytes(
   return ret;
 }
 
+int ObRestorePersistHelper::get_total_bytes(
+    common::ObISQLClient &proxy, const ObRestoreJobPersistKey &key,
+    int64_t &total_bytes) const
+{
+  int ret = OB_SUCCESS;
+  ObInnerTableOperator table_op;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRestorePersistHelper not init", K(ret));
+  } else if (OB_FAIL(table_op.init(OB_ALL_RESTORE_PROGRESS_TNAME, *this, group_id_))) {
+    LOG_WARN("failed to init restore progress table", K(ret));
+  } else if (OB_FAIL(table_op.get_int_column(proxy, false /*need lock*/, key, OB_STR_TOTAL_BYTES, total_bytes))) {
+    LOG_WARN("failed to get total bytes", K(ret), K(key));
+  }
+
+  return ret;
+}
+
 int ObRestorePersistHelper::set_ls_finish_bytes(
     common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
     const int64_t finish_bytes) const

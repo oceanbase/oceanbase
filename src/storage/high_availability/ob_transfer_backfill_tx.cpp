@@ -203,7 +203,8 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         tablet_info.is_shared_storage_ = false;
         tablet_info.relative_ls_id_ = dest_ls_->get_ls_id();
         tablet_info.reorganization_scn_ = src_transfer_info.transfer_start_scn_;
-        tablet_info.tablet_status_ = ObTabletStatus::TRANSFER_OUT;
+        tablet_info.backfill_type_ = ObTabletBackfillType::BACKFILL_TRANSFER_OUT;
+        tablet_info.tablet_status_ = user_data.tablet_status_;
         tablet_info.transfer_seq_ = src_transfer_info.transfer_seq_;
 
         if (!tablet_info.is_valid()) {

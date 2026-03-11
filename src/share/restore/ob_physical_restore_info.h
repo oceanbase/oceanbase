@@ -53,6 +53,10 @@ enum PhysicalRestoreStatus //FARM COMPAT WHITELIST
   PHYSICAL_RESTORE_SUCCESS = 8,                // restore success
   PHYSICAL_RESTORE_FAIL = 9,                   // restore fail
   PHYSICAL_RESTORE_WAIT_TENANT_RESTORE_FINISH = 10, //sys tenant wait user tenant restore finish
+  PHYSICAL_SS_RESTORE_GEN_TASK = 11,
+  PHYSICAL_SS_RESTORE_DATA = 12,
+  PHYSICAL_SS_RESTORE_LS = 13,
+  PHYSICAL_SS_RESTORE_CLOG = 14,
   PHYSICAL_RESTORE_MAX_STATUS
 };
 

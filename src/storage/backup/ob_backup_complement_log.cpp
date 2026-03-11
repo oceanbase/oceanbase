@@ -1544,7 +1544,7 @@ int ObBackupLSLogTask::copy_ls_file_info_(
   ObBackupPath ls_path;
   bool is_exist = false;
   ObBackupFileListInfo file_list_info;
-  ObBackupFileInfo dir_info;
+  ObBackupFilePathInfo dir_info;
   if (OB_FAIL(src_store.is_single_ls_info_file_exist(src_dest_id, round_id, piece_id, ls_id, is_exist))) {
     LOG_WARN("failed to check is single ls info file exist", K(ret), K(src_dest_id), K(round_id), K(piece_id));
   } else if (!is_exist) {

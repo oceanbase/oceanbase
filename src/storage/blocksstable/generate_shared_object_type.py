@@ -37,7 +37,8 @@ BASE_FUNCTION_SIGNATURES = {
     'remote_path_to_macro_id': 'int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const',
     'get_effective_tablet_id': 'int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const',
     'opt_to_string': 'int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const',
-    'get_object_id': 'int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const'
+    'get_object_id': 'int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const',
+    'to_relative_remote_path_format': 'int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const',
 }
 
 def extract_function_signature(code_str):
@@ -301,6 +302,7 @@ public:
   virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
                                    const MacroBlockId &file_id, const uint64_t tenant_id,
                                    const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const { return OB_NOT_SUPPORTED; }
+  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const { return OB_NOT_SUPPORTED; }
   virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,
                                     const MacroBlockId &file_id, const char *object_storage_root_dir,
                                     const uint64_t cluster_id, const uint64_t tenant_id,
@@ -317,6 +319,7 @@ public:
   void get_ss_macro_block_type(const MacroBlockId &macro_id, storage::ObSSMacroBlockType &ss_macro_block_type) const;
   int get_macro_cache_type(const uint64_t effective_tablet_id, const bool use_effective_tablet_id,
                            storage::ObSSMacroCacheType &macro_cache_type) const;
+  int stract_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id) const;
 #endif
   virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const { return OB_SUCCESS; }
   virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const { return OB_SUCCESS; }
@@ -709,6 +712,21 @@ int ObStorageObjectTypeBase::aio_write(
   }
   return ret;
 }
+
+int ObStorageObjectTypeBase::stract_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id) const
+{
+  int ret = OB_SUCCESS;
+  char relative_path[common::MAX_PATH_SIZE] = {0};
+  int64_t relative_pos = 0;
+  if (OB_FAIL(to_relative_remote_path_format(relative_path, sizeof(relative_path), relative_pos, file_id))) {
+    LOG_WARN("fail to convert to relative remote path format", KR(ret), K(file_id));
+  } else if (OB_FAIL(databuff_printf(path, length, pos, "%s/%s_%ld/%s_%lu/%s",
+                object_storage_root_dir, CLUSTER_DIR_STR, cluster_id, TENANT_DIR_STR, tenant_id, relative_path))) {
+    LOG_WARN("fail to databuff printf", KR(ret), K(file_id), K(object_storage_root_dir), K(cluster_id), K(tenant_id), K(relative_path));
+  }
+  return ret;
+}
+
 #endif
 
 bool ObStorageObjectTypeBase::has_write_back_strategy() const
@@ -730,6 +748,7 @@ void ObStorageObjectTypeBase::set_ss_object_first_id_(
   object_id.set_incarnation_id(incarnation_id);
   object_id.set_column_group_id(column_group_id);
 }
+
 '''
     cpp_f.write(end)
 
@@ -904,6 +923,9 @@ public:
         if cfg.get('remote_path_to_macro_id') and cfg['remote_path_to_macro_id'] != 'OB_NOT_SUPPORTED':
             shared_storage_functions.append('  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;')
 
+        if cfg.get('to_relative_remote_path_format') and cfg['to_relative_remote_path_format'] != 'OB_NOT_SUPPORTED':
+            shared_storage_functions.append('  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;')
+
         if cfg.get('local_path_to_macro_id') and cfg['local_path_to_macro_id'] != 'OB_NOT_SUPPORTED':
             shared_storage_functions.append('  virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;')
 
@@ -968,6 +990,11 @@ def generate_class_implementations():
             impl += '  const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id,\n'
             impl += '  const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const\n'
             impl += extract_function_body(cfg['to_remote_path_format'])
+            shared_storage_impls.append(impl)
+
+        if cfg.get('to_relative_remote_path_format') and cfg['to_relative_remote_path_format'] != 'OB_NOT_SUPPORTED':
+            impl = f'int {class_name}::to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const\n'
+            impl += extract_function_body(cfg['to_relative_remote_path_format'])
             shared_storage_impls.append(impl)
 
         if cfg.get('remote_path_to_macro_id') and cfg['remote_path_to_macro_id'] != 'OB_NOT_SUPPORTED':

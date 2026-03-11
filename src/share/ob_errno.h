@@ -1619,7 +1619,7 @@ constexpr int OB_BACKUP_DEST_NOT_ALLOWED_TO_SET = -9149;
 constexpr int OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET = -9150;
 constexpr int OB_BACKUP_CLEAN_CAN_NOT_START = -9151;
 constexpr int OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT = -9154;
-constexpr int OB_SS_LS_IN_GC_STATUS = -9156;
+constexpr int OB_BACKUP_WAIT_SS_LS_CONSISTENCY_TIMEOUT = -9157;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -2084,8 +2084,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
+constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -4108,6 +4108,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__USER_ERROR_MSG "ls archive max scn less than checkpoint scn"
 #define OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE__USER_ERROR_MSG "micro block is too large and rejected from micro cache"
 #define OB_SS_LS_IN_GC_STATUS__USER_ERROR_MSG "ss ls is in gc status"
+#define OB_BACKUP_WAIT_SS_LS_CONSISTENCY_TIMEOUT__USER_ERROR_MSG "backup wait shared storage ls consistency timeout"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4612,8 +4613,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -8656,6 +8657,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9155, micro block is too large and rejected from micro cache"
 #define OB_SS_LS_IN_GC_STATUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9156, ss ls is in gc status"
 #define OB_SS_LS_IN_GC_STATUS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9156, ss ls is in gc status"
+#define OB_BACKUP_WAIT_SS_LS_CONSISTENCY_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9157, backup wait shared storage ls consistency timeout"
+#define OB_BACKUP_WAIT_SS_LS_CONSISTENCY_TIMEOUT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9157, backup wait shared storage ls consistency timeout"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9664,12 +9667,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2524];
+extern int g_all_ob_errnos[2525];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

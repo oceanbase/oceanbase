@@ -30,6 +30,8 @@
   RPC_S(PR5 backup_build_index, OB_BACKUP_BUILD_INDEX, (ObBackupBuildIdxArg));
   RPC_S(PR5 backup_meta, OB_BACKUP_META, (ObBackupMetaArg));
   RPC_S(PR5 backup_fuse_tablet_meta, OB_BACKUP_FUSE_TABLET_META, (ObBackupFuseTabletMetaArg));
+  RPC_S(PR5 ss_ha_copy_macro_blocks, OB_SS_HA_COPY_MACRO_BLOCKS, (ObSSHAMacroBlocksArg));
+  RPC_S(PR5 ss_ha_delete_macro_blocks, OB_SS_HA_DELETE_MACRO_BLOCKS, (ObSSHAMacroBlocksArg));
   RPC_S(PR5 check_backup_task_exist, OB_CHECK_BACKUP_TASK_EXIST, (ObBackupCheckTaskArg), obrpc::Bool);
   RPC_S(PR5 report_backup_over, OB_BACKUP_LS_DATA_RES, (ObBackupTaskRes));
   RPC_S(PR5 report_backup_clean_over, OB_DELETE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));
@@ -226,6 +228,7 @@
   RPC_S(PR5 schedule_tablet_split, OB_TABLET_SPLIT_SCHEDULE, (obrpc::ObTabletSplitScheduleArg), obrpc::ObLSTabletSplitScheduleRes);
   RPC_S(PR5 get_min_ss_gc_last_succ_scn, OB_GET_MIN_SS_GC_LAST_SUCC_SCN, (obrpc::ObSSGCLastSuccScnArg), obrpc::Int64);
   RPC_S(PR5 get_ss_gc_last_succ_scns, OB_GET_SS_GC_LAST_SUCC_SCNS, (obrpc::ObSSGCLastSuccScnArg), obrpc::ObSSGCLastSuccSCNsRes);
+  RPC_S(PR5 adjust_ss_gc_tablet_version_retention_scn, OB_ADJUST_SS_GC_TABLET_VERSION_RETENTION_SCN, (obrpc::ObSSGCAdjustRetentionScnArg), obrpc::Int64);
   RPC_S(PR5 push_ss_gc_last_succ_scn, OB_PUSH_SS_GC_LAST_SUCC_SCN, (obrpc::ObSSGCPushLastSuccScnArg));
   RPC_S(PR5 del_ss_macro_cache, OB_DEL_SS_MACRO_CACHE, (obrpc::ObGetSSMacroBlockArg), obrpc::ObDelSSMacroCacheRes);
   RPC_S(PR5 del_ss_tablet_macro_cache, OB_DEL_SS_TABLET_MACRO_CACHE, (obrpc::ObDelSSTabletMacroCacheArg), obrpc::ObDelSSTabletMacroCacheRes);

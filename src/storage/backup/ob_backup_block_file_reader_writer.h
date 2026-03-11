@@ -28,12 +28,25 @@ namespace oceanbase
 namespace backup
 {
 
-// Data type enumeration for different kinds of payload stored in block files
+// Data type enumeration for different kinds of payload stored in block files.
 enum ObBackupBlockFileDataType {
-  MACRO_BLOCK_ID = 0,
-  FILE_PATH_INFO = 1,
+  MACRO_BLOCK_ID = 0,  // macro block list written at INIT stage
+  FILE_PATH_INFO = 1,  // file path information
   MAX_TYPE,
 };
+
+inline const char *ob_backup_block_file_data_type_str(const ObBackupBlockFileDataType type)
+{
+  static const char *type_strs[] = {
+    "MACRO_BLOCK_ID",
+    "FILE_PATH_INFO",
+  };
+  const char *str = "UNKNOWN";
+  if (type >= 0 && type < MAX_TYPE) {
+    str = type_strs[type];
+  }
+  return str;
+}
 
 enum ObBackupFileListDataType
 {
@@ -52,6 +65,8 @@ public:
   virtual int deserialize(const char *buf, const int64_t buf_len, int64_t &pos) = 0;
   virtual void reset() = 0;
   virtual int64_t data_type() const = 0;
+
+  TO_STRING_KV(KP(this));
 };
 
 
@@ -79,13 +94,13 @@ public:
   DISALLOW_COPY_AND_ASSIGN(ObBackupBlockFileMacroIdItem);
 };
 
-struct ObBackupFileInfo final : public ObIBackupBlockFileItem
+struct ObBackupFilePathInfo final : public ObIBackupBlockFileItem
 {
   OB_UNIS_VERSION(1);
 
 public:
-  ObBackupFileInfo();
-  ~ObBackupFileInfo() override {}
+  ObBackupFilePathInfo();
+  ~ObBackupFilePathInfo() override {}
 
   bool is_valid() const override;
   void reset() override;
@@ -95,8 +110,8 @@ public:
   int64_t data_type() const override { return FILE_PATH_INFO; }
   bool is_file() const { return BACKUP_FILE_LIST_FILE_INFO == type_; }
   bool is_dir() const { return BACKUP_FILE_LIST_DIR_INFO == type_; }
-  int assign(const ObBackupFileInfo &other);
-  bool operator<(const ObBackupFileInfo &other) const;
+  int assign(const ObBackupFilePathInfo &other);
+  bool operator<(const ObBackupFilePathInfo &other) const;
 
   TO_STRING_KV(K_(type), K_(file_size), K_(path));
 
@@ -104,6 +119,8 @@ public:
   ObBackupFileListDataType type_;
   int64_t file_size_;
   share::ObBackupPathString path_;
+  ObBackupFilePathInfo(const ObBackupFilePathInfo &other);
+  ObBackupFilePathInfo &operator=(const ObBackupFilePathInfo &other);
 };
 
 struct ObBackupFileListInfo final
@@ -114,14 +131,14 @@ public:
   void reset();
   bool is_empty() const { return file_list_.empty(); }
   bool is_valid() const;
-  int push_file_info(const ObBackupFileInfo &file_info);
+  int push_file_info(const ObBackupFilePathInfo &file_info);
   int push_file_info(const share::ObBackupPath &file_path, const int64_t file_size);
   int push_dir_info(const share::ObBackupPath &dir_path);
   int assign(const ObBackupFileListInfo &other);
   int64_t count() const { return file_list_.count(); }
   void sort_file_list();
   TO_STRING_KV(K_(file_list));
-  common::ObArray<ObBackupFileInfo> file_list_;
+  common::ObArray<ObBackupFilePathInfo> file_list_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupFileListInfo);
 };
@@ -129,7 +146,7 @@ private:
 class ObBackupDirListOp : public ObBaseDirEntryOperator
 {
 public:
-  ObBackupDirListOp(ObIArray<ObBackupFileInfo> &filelist);
+  ObBackupDirListOp(ObIArray<ObBackupFilePathInfo> &filelist);
   virtual ~ObBackupDirListOp() {}
   bool need_get_file_meta() const override { return true; }
   int func(const dirent *entry) override;
@@ -137,7 +154,7 @@ public:
   TO_STRING_KV(K_(filelist));
 
 private:
-  ObIArray<ObBackupFileInfo> &filelist_;
+  ObIArray<ObBackupFilePathInfo> &filelist_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDirListOp);
@@ -337,6 +354,8 @@ private:
   int64_t total_file_count_;
   common::ObStorageIdMod mod_;
   common::ObArenaAllocator allocator_;
+  common::ObIODevice *device_handle_;
+  common::ObIOFd fd_;
   int64_t max_file_size_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBackupBlockFileWriter);
@@ -480,6 +499,68 @@ private:
   mutable lib::ObMutex mutex_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBackupBlockFileItemReader);
+};
+
+struct ObBackupBlockFileReaderParam final
+{
+public:
+  ObBackupBlockFileReaderParam()
+    : storage_info_(nullptr),
+      data_type_(ObBackupBlockFileDataType::MAX_TYPE),
+      file_list_dir_(),
+      suffix_(share::ObBackupFileSuffix::NONE),
+      storage_id_mod_()
+  {}
+
+  bool is_valid() const
+  {
+    return OB_NOT_NULL(storage_info_)
+        && data_type_ < ObBackupBlockFileDataType::MAX_TYPE
+        && !file_list_dir_.is_empty()
+        && share::ObBackupFileSuffix::NONE != suffix_
+        && storage_id_mod_.is_valid();
+  }
+
+  TO_STRING_KV(KP_(storage_info), K_(data_type), K_(file_list_dir), K_(suffix), K_(storage_id_mod));
+
+  const common::ObObjectStorageInfo *storage_info_;
+  ObBackupBlockFileDataType data_type_;
+  share::ObBackupPath file_list_dir_;
+  share::ObBackupFileSuffix suffix_;
+  common::ObStorageIdMod storage_id_mod_;
+};
+
+class ObBackupBlockFileReaderUtil final
+{
+public:
+  // Get all block addresses from backup block files by iterating through all blocks
+  static int get_all_block_addrs(
+      const ObBackupBlockFileReaderParam &param,
+      common::ObIArray<ObBackupBlockFileAddr> &block_addr_list);
+
+  // Get all items from a specific block by its address
+  // Items are allocated using the provided allocator and returned as base class pointers
+  // The caller is responsible for managing the allocator lifecycle
+  static int get_items_from_block(
+      const ObBackupBlockFileReaderParam &param,
+      const ObBackupBlockFileAddr &block_addr,
+      common::ObArenaAllocator &allocator,
+      common::ObIArray<ObIBackupBlockFileItem *> &item_list);
+
+private:
+  static int read_block_data_(
+      const ObBackupBlockFileReaderParam &param,
+      const ObBackupBlockFileAddr &block_addr,
+      common::ObArenaAllocator &allocator,
+      blocksstable::ObBufferReader &buffer_reader);
+
+  static int deserialize_items_(
+      const ObBackupBlockFileDataType data_type,
+      const int64_t item_count,
+      blocksstable::ObBufferReader &buffer_reader,
+      int64_t &pos,
+      common::ObArenaAllocator &allocator,
+      common::ObIArray<ObIBackupBlockFileItem *> &item_list);
 };
 
 class ObBackupFileListWriterUtil final

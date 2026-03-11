@@ -107,9 +107,15 @@ public:
       common::ObISQLClient &proxy,
       const ObBackupSetFileDesc &backup_set_desc);
       
-  static int get_prev_backup_set_id(common::ObISQLClient &proxy, const uint64_t &tenant_id, const int64_t &backup_set_id, 
-      const ObBackupType &backup_type, const ObBackupPathString &backup_path, int64_t &prev_full_backup_set_id, 
+  static int get_prev_backup_set_id(common::ObISQLClient &proxy, const uint64_t &tenant_id, const int64_t &backup_set_id,
+      const ObBackupType &backup_type, const ObBackupPathString &backup_path, int64_t &prev_full_backup_set_id,
       int64_t &prev_inc_backup_set_id);
+  static int update_backup_set_file_min_restore_scn(
+      common::ObMySQLProxy &proxy,
+      const uint64_t tenant_id,
+      const int64_t backup_set_id,
+      const int64_t dest_id,
+      const SCN &min_restore_scn);
 private:
   static int fill_dml_with_backup_set_(const ObBackupSetFileDesc &backup_set_desc, ObDMLSqlSplicer &dml);
   static int parse_backup_set_info_result_(sqlclient::ObMySQLResult &result, 
@@ -162,8 +168,12 @@ public:
   static int move_task_to_his(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t job_id);
   static int update_stats(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id, 
       const ObBackupStats &stats);
-  static int update_user_ls_start_scn(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id, 
+  static int update_user_ls_start_scn(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id,
       const SCN &scn);
+  static int update_start_scn(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id,
+      const SCN &scn);
+  static int update_extra_info(common::ObISQLClient &proxy, const int64_t task_id,
+      const uint64_t tenant_id, const SCN &sslog_gts, const SCN &read_scn);
 private:
   static int fill_dml_with_backup_task_(const ObBackupSetTaskAttr &backup_set_task, ObDMLSqlSplicer &dml);
 };

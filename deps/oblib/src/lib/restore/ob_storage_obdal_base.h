@@ -58,7 +58,8 @@ int parse_obdal_scheme_from_storage_type(const ObStorageType storage_type, const
 static const char* OBJECT_STORAGE_IF_MATCH_WHITELIST[] =
 {
   ".T14", // MAJOR_PREWARM_DATA_INDEX
-  ".T16"  // MAJOR_PREWARM_META_INDEX
+  ".T16", // MAJOR_PREWARM_META_INDEX
+  "SEAL_META.obarc"
 };
 
 bool is_in_object_storage_if_match_whitelist(const ObString &uri);

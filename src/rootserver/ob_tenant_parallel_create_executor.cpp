@@ -711,7 +711,7 @@ int ObParallelCreateTenantExecutor::get_tenant_schema_from_inner_table_()
 }
 
 int ObParallelCreateTenantExecutor::init(
-      obrpc::ObCreateTenantArg create_tenant_arg,
+      const obrpc::ObCreateTenantArg &create_tenant_arg,
       obrpc::ObSrvRpcProxy *rpc_proxy,
       obrpc::ObCommonRpcProxy *common_rpc,
       common::ObMySQLProxy *sql_proxy,

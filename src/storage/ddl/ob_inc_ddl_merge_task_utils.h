@@ -48,7 +48,7 @@ public:
       const ObStorageSchema *storage_schema);
   static int link_inc_major(
       ObLS *ls,
-      ObTabletHandle &tablet_handle,
+      const ObTabletHandle &tablet_handle,
       const transaction::ObTransID &trans_id,
       const transaction::ObTxSEQ &seq_no);
 
@@ -95,6 +95,25 @@ public:
     const ObDDLWriteStat &write_stat);
 #ifdef OB_BUILD_SHARED_STORAGE
   static int gc_ss_inc_major_ddl_dump(const ObIArray<std::pair<share::ObLSID, ObTabletID>> &ls_tablet_ids);
+  static int serialize_inc_major_to_string(
+    ObIAllocator &allocator,
+    const ObSSTable *inc_major,
+    const uint64_t data_format_version,
+    ObString &inc_major_buffer);
+  static int deserialize_inc_major_from_string(
+    ObArenaAllocator &allocator,
+    const ObString &inc_major_buffer,
+    ObSSTable *inc_major);
+  static int deep_copy_string_buffer(ObArenaAllocator &allocator, ObString &buffer);
+  static int check_ss_inc_major_exist(
+    ObArenaAllocator &allocator,
+    const ObLSID &ls_id,
+    const ObTabletID &tablet_id,
+    const SCN &transfer_scn,
+    const transaction::ObTransID &trans_id,
+    const transaction::ObTxSEQ &seq_no,
+    const uint64_t &data_format_version,
+    bool &is_exist);
 #endif
 private:
   static int calculate_recycle_scn_from_inc_major(

@@ -331,6 +331,9 @@ public:
   int get_restore_sync_status(int ret_code, const ObLogRestoreErrorContext::ErrorType error_type, RestoreSyncStatus &sync_status);
   void inc_delay_count();
   void print_stat();
+  int enable_ignore_log_handler_online();
+  int disable_ignore_log_handler_online();
+  bool is_ignore_log_handler_online() const;
   TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context), K_(restore_context));
 
 private:
@@ -364,6 +367,7 @@ private:
   int64_t last_delay_count_;
   ObRemoteFetchStat cur_stat_info_;
   ObRemoteFetchStat last_stat_info_;
+  bool ignore_log_handler_online_;
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   ObLogLSSubmitLogRateLimiter *shared_log_submit_log_rate_limiter_;
 #endif // OB_BUILD_SHARED_LOG_SERVICE

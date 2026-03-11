@@ -29,6 +29,30 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::blocksstable;
 
+static int get_block_file_path(
+    const ObBackupBlockFileDataType data_type,
+    const share::ObBackupPath &file_list_dir,
+    const int64_t file_id,
+    const share::ObBackupFileSuffix suffix,
+    share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  path = file_list_dir;
+  if (ObBackupBlockFileDataType::FILE_PATH_INFO == data_type) {
+    if (OB_FAIL(path.join_file_list(file_id, suffix))) {
+      LOG_WARN("failed to join file list", K(ret), K(file_id));
+    }
+  } else if (ObBackupBlockFileDataType::MACRO_BLOCK_ID == data_type) {
+    if (OB_FAIL(path.join_macro_block_list(file_id))) {
+      LOG_WARN("failed to join macro block list", K(ret), K(file_id));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid data type", K(ret), K(data_type));
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObBackupBlockFileMacroIdItem, macro_id_, occupy_size_);
 
 int ObBackupBlockFileMacroIdItem::assign(const ObBackupBlockFileMacroIdItem &other)
@@ -44,16 +68,16 @@ int ObBackupBlockFileMacroIdItem::assign(const ObBackupBlockFileMacroIdItem &oth
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObBackupFileInfo, type_, file_size_, path_);
+OB_SERIALIZE_MEMBER(ObBackupFilePathInfo, type_, file_size_, path_);
 
-ObBackupFileInfo::ObBackupFileInfo()
+ObBackupFilePathInfo::ObBackupFilePathInfo()
   : type_(BACKUP_FILE_LIST_MAX_TYPE),
     file_size_(0),
     path_()
 {
 }
 
-bool ObBackupFileInfo::is_valid() const
+bool ObBackupFilePathInfo::is_valid() const
 {
   bool bret = false;
   if (BACKUP_FILE_LIST_DIR_INFO == type_ && !path_.is_empty()) {
@@ -66,14 +90,14 @@ bool ObBackupFileInfo::is_valid() const
   return bret;
 }
 
-void ObBackupFileInfo::reset()
+void ObBackupFilePathInfo::reset()
 {
   type_ = BACKUP_FILE_LIST_MAX_TYPE;
   file_size_ = 0;
   path_.reset();
 }
 
-int ObBackupFileInfo::assign(const ObBackupFileInfo &other)
+int ObBackupFilePathInfo::assign(const ObBackupFilePathInfo &other)
 {
   int ret = OB_SUCCESS;
   if (!other.is_valid()) {
@@ -87,7 +111,35 @@ int ObBackupFileInfo::assign(const ObBackupFileInfo &other)
   return ret;
 }
 
-int ObBackupFileInfo::set_file_info(const char *file_name, const int64_t file_size)
+ObBackupFilePathInfo::ObBackupFilePathInfo(const ObBackupFilePathInfo &other)
+  : type_(other.type_),
+    file_size_(other.file_size_),
+    path_(other.path_)
+{
+}
+
+ObBackupFilePathInfo &ObBackupFilePathInfo::operator=(const ObBackupFilePathInfo &other)
+{
+  if (this != &other) {
+    type_ = other.type_;
+    file_size_ = other.file_size_;
+    path_ = other.path_;
+  }
+  return *this;
+}
+
+bool ObBackupFilePathInfo::operator <(const ObBackupFilePathInfo &other) const
+{
+  bool bret = false;
+  if (type_ != other.type_) {
+    bret = type_ < other.type_;
+  } else {
+    bret = path_ < other.path_;
+  }
+  return bret;
+}
+
+int ObBackupFilePathInfo::set_file_info(const char *file_name, const int64_t file_size)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(file_name) || '\0' == file_name[0] || file_size < 0) {
@@ -102,7 +154,7 @@ int ObBackupFileInfo::set_file_info(const char *file_name, const int64_t file_si
   return ret;
 }
 
-int ObBackupFileInfo::set_file_info(const share::ObBackupPath &file_path, const int64_t file_size)
+int ObBackupFilePathInfo::set_file_info(const share::ObBackupPath &file_path, const int64_t file_size)
 {
   int ret = OB_SUCCESS;
   ObBackupPathString file_name;
@@ -117,7 +169,7 @@ int ObBackupFileInfo::set_file_info(const share::ObBackupPath &file_path, const 
   return ret;
 }
 
-int ObBackupFileInfo::set_dir_info(const char *dir_name)
+int ObBackupFilePathInfo::set_dir_info(const char *dir_name)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(dir_name) || '\0' == dir_name[0]) {
@@ -129,17 +181,6 @@ int ObBackupFileInfo::set_dir_info(const char *dir_name)
     type_ = BACKUP_FILE_LIST_DIR_INFO;
   }
   return ret;
-}
-
-bool ObBackupFileInfo::operator <(const ObBackupFileInfo &other) const
-{
-  bool bret = false;
-  if (type_ != other.type_) {
-    bret = type_ < other.type_;
-  } else {
-    bret = path_ < other.path_;
-  }
-  return bret;
 }
 
 //ObBackupFileListInfo
@@ -178,7 +219,7 @@ void ObBackupFileListInfo::sort_file_list()
   lib::ob_sort(file_list_.begin(), file_list_.end());
 }
 
-int ObBackupFileListInfo::push_file_info(const ObBackupFileInfo &file_info)
+int ObBackupFileListInfo::push_file_info(const ObBackupFilePathInfo &file_info)
 {
   int ret = OB_SUCCESS;
   if (!file_info.is_valid()) {
@@ -198,7 +239,7 @@ int ObBackupFileListInfo::push_file_info(const ObBackupPath &file_path, const in
     LOG_WARN("invalid file path or file size", KR(ret), K(file_path), K(file_size));
   } else {
     ObBackupPathString file_name;
-    ObBackupFileInfo file_info;
+    ObBackupFilePathInfo file_info;
     if (OB_FAIL(file_path.get_basename(file_name))) {
       LOG_WARN("failed to get file name", KR(ret), K(file_path));
     } else if (OB_FAIL(file_info.set_file_info(file_name.ptr(), file_size))) {
@@ -218,7 +259,7 @@ int ObBackupFileListInfo::push_dir_info(const ObBackupPath &dir_path)
     LOG_WARN("invalid dir path", KR(ret), K(dir_path));
   } else {
     ObBackupPathString dir_name;
-    ObBackupFileInfo file_info;
+    ObBackupFilePathInfo file_info;
     if (OB_FAIL(dir_path.get_basename(dir_name))) {
       LOG_WARN("failed to get dir name", KR(ret), K(dir_path));
     } else if (OB_FAIL(file_info.set_dir_info(dir_name.ptr()))) {
@@ -233,7 +274,7 @@ int ObBackupFileListInfo::push_dir_info(const ObBackupPath &dir_path)
 /**
  * ------------------------------ObBackupDirListOp---------------------
  */
-ObBackupDirListOp::ObBackupDirListOp(ObIArray<ObBackupFileInfo> &filelist)
+ObBackupDirListOp::ObBackupDirListOp(ObIArray<ObBackupFilePathInfo> &filelist)
   : filelist_(filelist)
 {
 }
@@ -241,7 +282,7 @@ ObBackupDirListOp::ObBackupDirListOp(ObIArray<ObBackupFileInfo> &filelist)
 int ObBackupDirListOp::func(const dirent *entry)
 {
   int ret = OB_SUCCESS;
-  ObBackupFileInfo file_info;
+  ObBackupFilePathInfo file_info;
   if (OB_ISNULL(entry)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid entry", K(ret));
@@ -465,12 +506,25 @@ ObBackupBlockFileWriter::ObBackupBlockFileWriter()
     total_file_count_(1),
     mod_(),
     allocator_("BkupLinkWr"),
+    device_handle_(nullptr),
+    fd_(),
     max_file_size_()
 {
 }
 
 ObBackupBlockFileWriter::~ObBackupBlockFileWriter()
 {
+  if (OB_NOT_NULL(device_handle_)) {
+    int ret = OB_SUCCESS;
+    int tmp_ret = OB_SUCCESS;
+    ObBackupIoAdapter util;
+    if (fd_.is_valid() && OB_FAIL(device_handle_->abort(fd_))) {
+      LOG_WARN("fail to abort multipart upload", K(ret), K(device_handle_), K(fd_));
+    }
+    if (OB_TMP_FAIL(util.close_device_and_fd(device_handle_, fd_))) {
+      LOG_WARN("fail to close device and fd", K(ret), K(tmp_ret));
+    }
+  }
 }
 
 int ObBackupBlockFileWriter::init(
@@ -562,7 +616,7 @@ int ObBackupBlockFileWriter::check_and_switch_file_()
   int ret = OB_SUCCESS;
 
   // Check if the current file size is close to the configured max size
-  const int64_t file_size_limit = max_file_size_ > 0 ? max_file_size_ : OB_BACKUP_DEFAULT_MAX_FILE_SIZE;
+  const int64_t file_size_limit = max_file_size_ > 0 ? max_file_size_ : OB_BACKUP_MACRO_BLOCK_LIST_MAX_FILE_SIZE;
   if (file_offset_ + BLOCK_SIZE > file_size_limit) {
     if (OB_FAIL(switch_to_new_file_())) {
       LOG_WARN("failed to switch to new file", K(ret));
@@ -730,24 +784,10 @@ int ObBackupBlockFileWriter::write_file_tailer_(const ObBackupBlockFileAddr &ent
 
 int ObBackupBlockFileWriter::get_file_path_(const int64_t file_id, ObBackupPath &path)
 {
-  int ret = OB_SUCCESS;
-  path = file_list_dir_;
-  if (ObBackupBlockFileDataType::FILE_PATH_INFO == data_type_) {
-    if (OB_FAIL(path.join_file_list(file_id, suffix_))) {
-      LOG_WARN("failed to join ss backup file list", K(ret), K(path));
-    }
-  } else if (ObBackupBlockFileDataType::MACRO_BLOCK_ID == data_type_) {
-    if (OB_FAIL(path.join_backup_file_list(file_id))) {
-      LOG_WARN("failed to join ss backup file list", K(ret), K(file_id));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid data type", K(ret), K(data_type_));
-  }
-  return ret;
+  return get_block_file_path(data_type_, file_list_dir_, file_id, suffix_, path);
 }
 
- int ObBackupBlockFileWriter::ensure_dir_created_()
+int ObBackupBlockFileWriter::ensure_dir_created_()
 {
   int ret = OB_SUCCESS;
   if (!is_dir_created_) {
@@ -765,13 +805,16 @@ int ObBackupBlockFileWriter::get_file_path_(const int64_t file_id, ObBackupPath 
 int ObBackupBlockFileWriter::close_current_file_()
 {
   int ret = OB_SUCCESS;
-  if (file_offset_ > 0) {
-    ObBackupPath file_path;
-    ObBackupIoAdapter util;
-    if (OB_FAIL(get_file_path_(current_file_id_, file_path))) {
-      LOG_WARN("failed to get file path", K(ret), K(current_file_id_));
-    } else if (OB_FAIL(util.seal_file(file_path.get_obstr(), storage_info_, mod_))) {
-      LOG_WARN("failed to seal file", K(ret), K(file_path), K(current_file_id_));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_NOT_NULL(device_handle_)) {
+    if (file_offset_ > 0) {
+      ObBackupPath file_path;
+      ObBackupIoAdapter util;
+      if (OB_FAIL(get_file_path_(current_file_id_, file_path))) {
+        LOG_WARN("failed to get file path", K(ret), K(current_file_id_));
+      } else if (OB_FAIL(util.seal_file(file_path.get_obstr(), storage_info_, mod_))) {
+        LOG_WARN("failed to seal file", K(ret), K(file_path), K(current_file_id_));
+      }
     }
   }
   return ret;
@@ -930,9 +973,7 @@ int ObBackupBlockFileReader::detect_file_count_()
   for (; OB_SUCC(ret); ++detected_count) {
     bool exist = false;
     path.reset();
-    if (ObBackupBlockFileDataType::FILE_PATH_INFO == data_type_ && 1 == detected_count) {
-      break;
-    } else if (OB_FAIL(get_file_path_(detected_count, path))) {
+    if (OB_FAIL(get_file_path_(detected_count, path))) {
       LOG_WARN("failed to get file path", K(ret), K(detected_count));
     } else if (OB_FAIL(ObBackupIoAdapter::adaptively_is_exist(path.get_obstr(), storage_info_, exist))) {
       LOG_WARN("failed to check file exist", K(ret), K(path));
@@ -1125,22 +1166,7 @@ int ObBackupBlockFileReader::parse_block_headers_(ObBufferReader &buffer_reader,
 
 int ObBackupBlockFileReader::get_file_path_(const int64_t file_id, ObBackupPath &path)
 {
-  int ret = OB_SUCCESS;
-  path = file_list_dir_;
-  if (ObBackupBlockFileDataType::FILE_PATH_INFO == data_type_) {
-    if (OB_FAIL(path.join_file_list(file_id, suffix_))) {
-      LOG_WARN("failed to join ss backup file list", K(ret), K(path));
-    }
-  } else if (ObBackupBlockFileDataType::MACRO_BLOCK_ID == data_type_) {
-    if (OB_FAIL(path.join_backup_file_list(file_id))) {
-      LOG_WARN("failed to join ss backup file list", K(ret), K(file_id));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid data type", K(ret), K(data_type_));
-  }
-
-  return ret;
+  return get_block_file_path(data_type_, file_list_dir_, file_id, suffix_, path);
 }
 
 ObBackupBlockFileItemWriter::ObBackupBlockFileItemWriter()
@@ -1220,7 +1246,8 @@ int ObBackupBlockFileItemWriter::write_item(const ObIBackupBlockFileItem &item)
       current_block_data_type_ = item.data_type();
     } else if (current_block_data_type_ != item.data_type()) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("mixed data types in same block", K(ret), K(current_block_data_type_), "new_type", item.data_type());
+      LOG_WARN("mixed data types in same block", K(ret),
+               K(current_block_data_type_), "new_type", item.data_type());
     }
   }
 
@@ -1505,6 +1532,186 @@ int ObBackupBlockFileItemReader::validate_block_type_(int64_t file_data_type)
   return ret;
 }
 
+// ObBackupBlockFileReaderUtil
+
+int ObBackupBlockFileReaderUtil::get_all_block_addrs(
+    const ObBackupBlockFileReaderParam &param,
+    common::ObIArray<ObBackupBlockFileAddr> &block_addr_list)
+{
+  int ret = OB_SUCCESS;
+  block_addr_list.reset();
+
+  if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(param));
+  } else {
+    ObBackupBlockFileReader reader;
+    blocksstable::ObBufferReader buffer_reader;
+    ObBackupBlockFileAddr block_addr;
+    int64_t item_count = 0;
+    int64_t block_data_type = 0;
+
+    if (OB_FAIL(reader.init(param.storage_info_, param.data_type_, param.file_list_dir_,
+                            param.suffix_, param.storage_id_mod_))) {
+      LOG_WARN("failed to init block reader", KR(ret), K(param));
+    } else {
+      while (OB_SUCC(ret)) {
+        buffer_reader.assign(NULL, 0);
+        block_addr.reset();
+        item_count = 0;
+        block_data_type = 0;
+
+        if (OB_FAIL(reader.get_next_block(buffer_reader, block_addr, item_count, block_data_type))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("failed to get next block", KR(ret));
+          }
+        } else if (OB_FAIL(block_addr_list.push_back(block_addr))) {
+          LOG_WARN("failed to push back block addr", KR(ret), K(block_addr));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObBackupBlockFileReaderUtil::read_block_data_(
+    const ObBackupBlockFileReaderParam &param,
+    const ObBackupBlockFileAddr &block_addr,
+    common::ObArenaAllocator &allocator,
+    blocksstable::ObBufferReader &buffer_reader)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  int64_t read_size = 0;
+  share::ObBackupPath file_path;
+
+
+  if (OB_FAIL(get_block_file_path(param.data_type_, param.file_list_dir_, block_addr.file_id_,
+                                      param.suffix_, file_path))) {
+    LOG_WARN("failed to get block file path", K(ret), K(block_addr));
+  } else if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(block_addr.length_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", KR(ret), K(block_addr.length_));
+  } else if (OB_FAIL(ObBackupIoAdapter::adaptively_read_part_file(
+      file_path.get_obstr(),
+      param.storage_info_,
+      buf,
+      block_addr.length_,
+      block_addr.offset_,
+      read_size,
+      param.storage_id_mod_))) {
+    LOG_WARN("failed to read block", KR(ret), K(file_path), K(block_addr));
+  } else if (read_size != block_addr.length_) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("read size mismatch", KR(ret), K(read_size), K(block_addr.length_));
+  } else {
+    buffer_reader.assign(buf, block_addr.length_, block_addr.length_);
+  }
+
+  return ret;
+}
+
+int ObBackupBlockFileReaderUtil::deserialize_items_(
+    const ObBackupBlockFileDataType data_type,
+    const int64_t item_count,
+    blocksstable::ObBufferReader &buffer_reader,
+    int64_t &pos,
+    common::ObArenaAllocator &allocator,
+    common::ObIArray<ObIBackupBlockFileItem *> &item_list)
+{
+  int ret = OB_SUCCESS;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < item_count; ++i) {
+    ObIBackupBlockFileItem *item = nullptr;
+
+    if (ObBackupBlockFileDataType::MACRO_BLOCK_ID == data_type) {
+      ObBackupBlockFileMacroIdItem *macro_item = OB_NEWx(ObBackupBlockFileMacroIdItem, &allocator);
+      if (OB_ISNULL(macro_item)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate macro id item", KR(ret), K(i));
+      } else if (OB_FAIL(macro_item->deserialize(buffer_reader.data(), buffer_reader.length(), pos))) {
+        LOG_WARN("failed to deserialize macro id item", KR(ret), K(i), K(item_count));
+      } else {
+        item = macro_item;
+      }
+    } else if (ObBackupBlockFileDataType::FILE_PATH_INFO == data_type) {
+      ObBackupFilePathInfo *file_item = OB_NEWx(ObBackupFilePathInfo, &allocator);
+      if (OB_ISNULL(file_item)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate file info item", KR(ret), K(i));
+      } else if (OB_FAIL(file_item->deserialize(buffer_reader.data(), buffer_reader.length(), pos))) {
+        LOG_WARN("failed to deserialize file info item", KR(ret), K(i), K(item_count));
+      } else {
+        item = file_item;
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported data type", KR(ret), K(data_type));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(item_list.push_back(item))) {
+      LOG_WARN("failed to push back item", KR(ret), K(i));
+    }
+  }
+
+  return ret;
+}
+
+int ObBackupBlockFileReaderUtil::get_items_from_block(
+    const ObBackupBlockFileReaderParam &param,
+    const ObBackupBlockFileAddr &block_addr,
+    common::ObArenaAllocator &allocator,
+    common::ObIArray<ObIBackupBlockFileItem *> &item_list)
+{
+  int ret = OB_SUCCESS;
+  item_list.reset();
+
+  if (!param.is_valid() || !block_addr.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(param), K(block_addr));
+  } else {
+    common::ObArenaAllocator read_allocator("BlockReader");
+    blocksstable::ObBufferReader buffer_reader;
+    share::ObBackupCommonHeader common_header;
+    ObBackupBlockFileHeader block_header;
+    int64_t pos = 0;
+
+    if (OB_FAIL(read_block_data_(param, block_addr, read_allocator, buffer_reader))) {
+      LOG_WARN("failed to read block data", KR(ret), K(block_addr));
+    } else if (buffer_reader.length() < sizeof(ObBackupCommonHeader)) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("buffer too small for common header", KR(ret), K(buffer_reader.length()));
+    } else {
+      MEMCPY(&common_header, buffer_reader.data(), sizeof(ObBackupCommonHeader));
+      pos += sizeof(ObBackupCommonHeader);
+
+      if (OB_FAIL(common_header.check_valid())) {
+        LOG_WARN("invalid common header", KR(ret), K(common_header));
+      } else if (OB_FAIL(common_header.check_data_checksum(
+          buffer_reader.data() + sizeof(ObBackupCommonHeader), common_header.data_zlength_))) {
+        LOG_WARN("data checksum mismatch", KR(ret));
+      } else if (OB_FAIL(block_header.deserialize(buffer_reader.data(), buffer_reader.length(), pos))) {
+        LOG_WARN("failed to deserialize block header", KR(ret));
+      } else if (!block_header.is_valid()) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("invalid block header", KR(ret), K(block_header));
+      } else if (block_header.data_type_ != param.data_type_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data type mismatch", KR(ret), K(block_header.data_type_), K(param.data_type_));
+      } else if (OB_FAIL(deserialize_items_(param.data_type_, block_header.item_count_,
+                                           buffer_reader, pos, allocator, item_list))) {
+        LOG_WARN("failed to deserialize items", KR(ret), K(param.data_type_), K(block_header.item_count_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupFileListWriterUtil::add_file_to_file_list_info(
     const ObBackupPath &file_path,
     const ObBackupStorageInfo storage_info,
@@ -1571,7 +1778,7 @@ int ObBackupFileListWriterUtil::write_file_list_to_path(
       int64_t total_item_count = -1;
       int64_t total_block_count = -1;
       for (int64_t i = 0; OB_SUCC(ret) && i < file_count; ++i) {
-        const ObBackupFileInfo &file_info = file_list_info.file_list_.at(i);
+        const ObBackupFilePathInfo &file_info = file_list_info.file_list_.at(i);
         if (OB_FAIL(writer.write_item(file_info))) {
           LOG_WARN("failed to write file info", KR(ret), K(file_info));
         }
@@ -1637,7 +1844,7 @@ int ObBackupFileListReaderUtil::read_file_list_from_path(
   } else {
     file_list_info.reset();
     ObBackupBlockFileItemReader reader;
-    ObBackupFileInfo item;
+    ObBackupFilePathInfo item;
     const ObBackupBlockFileDataType data_type = ObBackupBlockFileDataType::FILE_PATH_INFO;
     if (OB_FAIL(reader.init(storage_info, data_type, file_list_dir, suffix, storage_id_mod))) {
       LOG_WARN("failed to init reader", KR(ret), K(file_list_dir), K(suffix), K(storage_id_mod));
@@ -1673,7 +1880,7 @@ int ObBackupFileListReaderUtil::get_dir_list_(
   } else {
     dir_list.reset();
     ObBackupBlockFileItemReader reader;
-    ObBackupFileInfo item;
+    ObBackupFilePathInfo item;
     ObBackupPathString child_dir_path;
     if (OB_FAIL(reader.init(storage_info, ObBackupBlockFileDataType::FILE_PATH_INFO, dir_path, suffix, storage_id_mod))) {
       LOG_WARN("failed to init reader", KR(ret), K(dir_path), K(suffix), K(storage_id_mod));
@@ -1739,7 +1946,7 @@ int ObBackupFileListReaderUtil::get_ls_id_list(
     ObArray<ObBackupPathString> dir_list;
     ls_id_list.reset();
     ObBackupBlockFileItemReader reader;
-    ObBackupFileInfo item;
+    ObBackupFilePathInfo item;
     int64_t ls_id = 0;
     ObLSID ls_id_obj;
     if (OB_FAIL(reader.init(storage_info, ObBackupBlockFileDataType::FILE_PATH_INFO,

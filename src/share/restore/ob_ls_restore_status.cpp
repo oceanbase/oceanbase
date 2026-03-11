@@ -49,7 +49,12 @@ ObLSRestoreStatus &ObLSRestoreStatus::operator=(const ObLSRestoreStatus &restore
     LRS_CASE_TO_TYPE(CLONE_COPY_ALL_TABLET_META); \
     LRS_CASE_TO_TYPE(CLONE_COPY_LS_META); \
     LRS_CASE_TO_TYPE(CLONE_CLOG_REPLAY); \
-    LRS_CASE_TO_TYPE(CLONE_FAILED);
+    LRS_CASE_TO_TYPE(CLONE_FAILED); \
+    LRS_CASE_TO_TYPE(SS_RESTORE_START); \
+    LRS_CASE_TO_TYPE(SS_RESTORE_LS); \
+    LRS_CASE_TO_TYPE(SS_RESTORE_WAIT_LS); \
+    LRS_CASE_TO_TYPE(SS_RESTORE_CLOG);
+
 
 const char *ObLSRestoreStatus::get_restore_status_str(const ObLSRestoreStatus &status)
 {
@@ -93,7 +98,8 @@ bool ObLSRestoreStatus::need_online() const
   return ((status_ >= WAIT_RESTORE_SYS_TABLETS
            && status_ <= WAIT_RESTORE_MAJOR_DATA)
           || status_ == NONE
-          || status_ == CLONE_CLOG_REPLAY);
+          || status_ == CLONE_CLOG_REPLAY
+          || (status_ > SS_RESTORE_LS));
 }
 
 int ObLSRestoreStatus::set_status(int32_t status)
@@ -151,4 +157,45 @@ int ObLSRestoreStatus::deserialize(const char *buf, const int64_t len, int64_t &
 int64_t ObLSRestoreStatus::get_serialize_size() const
 {
   return serialization::encoded_length_i8(static_cast<int8_t>(status_));
+}
+
+bool ObLSRestoreStatus::is_in_restoring() const
+{
+  bool b_ret = (status_ >= Status::RESTORE_START && status_ < QUICK_RESTORE_FINISH)
+                || (status_ > QUICK_RESTORE_FINISH && status_ < Status::RESTORE_FAILED)
+                || (status_ >= Status::SS_RESTORE_START && status_ <= Status::SS_RESTORE_CLOG);
+  return b_ret;
+}
+
+bool ObLSRestoreStatus::can_change_status(const ObLSRestoreStatus &curr_status, const ObLSRestoreStatus &next_status)
+{
+  bool b_ret = false;
+  switch (curr_status) {
+    case SS_RESTORE_LS : {
+      b_ret = next_status == SS_RESTORE_CLOG;
+      break;
+    }
+    default: {
+      b_ret = false;
+      break;
+    }
+  }
+  return b_ret;
+}
+
+bool ObLSRestoreStatus::is_restore_first_step() const
+{
+  bool b_ret = status_ == Status::RESTORE_FAILED;
+  if (!b_ret) {
+    b_ret = (status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_SYS_TABLETS)
+             || (status_ >= Status::SS_RESTORE_START && status_ <= Status::SS_RESTORE_LS);
+  }
+  return b_ret;
+}
+
+bool ObLSRestoreStatus::is_in_restore_status() const
+{
+  bool b_ret = (status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_FAILED)
+                || (status_ >= Status::SS_RESTORE_START && status_ <= Status::SS_RESTORE_CLOG);
+  return b_ret;
 }

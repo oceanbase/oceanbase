@@ -223,9 +223,22 @@ int ObBackupCleanLSTaskMgr::cancel(int64_t &finish_cnt)
   ObBackupTaskStatus next_status;
   next_status.status_ = ObBackupTaskStatus::Status::FINISH;
   if (ObBackupTaskStatus::Status::PENDING == ls_attr_->status_.status_
-      || ObBackupTaskStatus::Status::DOING == ls_attr_->status_.status_) {
-    if (OB_FAIL(task_scheduler_->cancel_tasks(
-        BackupJobType::BACKUP_CLEAN_JOB, ls_attr_->job_id_, ls_attr_->tenant_id_))) {
+    || ObBackupTaskStatus::Status::DOING == ls_attr_->status_.status_) {
+#if OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      ret = task_scheduler_->cancel_tasks(BackupJobType::BACKUP_CLEAN_JOB, ls_attr_->tenant_id_);
+    } else {
+      ret = task_scheduler_->cancel_tasks(BackupJobType::BACKUP_CLEAN_JOB, ls_attr_->job_id_, ls_attr_->tenant_id_);
+    }
+#else
+    if (!GCTX.is_shared_storage_mode()) {
+      ret = task_scheduler_->cancel_tasks(BackupJobType::BACKUP_CLEAN_JOB, ls_attr_->job_id_, ls_attr_->tenant_id_);
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unexpeced shared storage mode", K(ret));
+    }
+#endif
+    if (OB_FAIL(ret)) {
       if (OB_ENTRY_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {

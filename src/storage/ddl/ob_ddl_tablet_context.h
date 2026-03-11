@@ -193,6 +193,7 @@ public:
     ObArenaAllocator arena_;  // used for prepare task & create sstable;
     hash::ObHashMap<int64_t, ObArray<ObTableHandleV2>*> slice_cg_sstables_;
     ObIDDLMergeHelper *merge_helper_;
+    const blocksstable::ObSSTable *inc_major_;
     bool is_inited_;
   };
 

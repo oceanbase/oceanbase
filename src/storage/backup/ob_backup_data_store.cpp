@@ -15,6 +15,10 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/backup/ob_ss_backup_utils.h"
+#endif
+
 #include "share/backup/ob_backup_struct.h"
 using namespace oceanbase;
 using namespace common;
@@ -306,6 +310,104 @@ bool ObBackupLSMetaInfosDesc::is_valid() const
   return !ls_meta_packages_.empty();
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+// ObBackupSSLSMetaInfo
+
+OB_SERIALIZE_MEMBER(ObBackupSSLSMetaInfo, raw_ls_meta_row_);
+
+ObBackupSSLSMetaInfo::ObBackupSSLSMetaInfo() : raw_ls_meta_row_()
+{}
+
+ObBackupSSLSMetaInfo::~ObBackupSSLSMetaInfo()
+{}
+
+int64_t ObBackupSSLSMetaInfo::get_total_serialize_buf_size() const
+{
+  return sizeof(ObBackupCommonHeader) + get_serialize_size();
+}
+
+int ObBackupSSLSMetaInfo::serialize_to(char *buf, int64_t buf_size, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t required_size = get_total_serialize_buf_size();
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is null", K(ret), KP(buf));
+  } else if (buf_size - pos < required_size) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is not enough", K(ret), K(buf_size), K(pos), K(required_size));
+  } else {
+    // serialize common header.
+    ObBackupCommonHeader *common_header = new (buf + pos) ObBackupCommonHeader;
+    common_header->reset();
+    common_header->compressor_type_ = 0;
+    common_header->data_type_ = 0;
+    common_header->data_version_ = 0;
+    common_header->header_length_ = sizeof(ObBackupCommonHeader);
+    pos += sizeof(ObBackupCommonHeader);
+    int64_t saved_pos = pos;
+    // serialize self.
+    if (OB_FAIL(serialize(buf, buf_size, pos))) {
+      LOG_WARN("failed to serialize", K(ret));
+    } else {
+      common_header->data_length_ = pos - saved_pos;
+      common_header->data_zlength_ = common_header->data_length_;
+      if (OB_FAIL(common_header->set_checksum(buf + saved_pos, common_header->data_length_))) {
+        LOG_WARN("failed to set common header checksum", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupSSLSMetaInfo::deserialize_from(char *buf, int64_t buf_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is null", K(ret));
+  } else if (buf_size < sizeof(ObBackupCommonHeader)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf size is too small", K(ret), K(buf_size), K(sizeof(ObBackupCommonHeader)));
+  } else {
+    ObBackupCommonHeader *common_header = reinterpret_cast<ObBackupCommonHeader *>(buf);
+    int64_t pos = common_header->header_length_;
+    if (OB_FAIL(common_header->check_header_checksum())) {
+      LOG_WARN("failed to check common header", K(ret));
+    } else if (common_header->data_zlength_ > buf_size - pos) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("buf size is too small", K(ret), K(buf_size), K(*common_header));
+    } else if (OB_FAIL(common_header->check_data_checksum(buf + pos, common_header->data_zlength_))) {
+      LOG_WARN("failed to check round start desc checksum", K(ret), KPC(common_header));
+    } else if (OB_FAIL(deserialize(buf, pos + common_header->data_zlength_, pos))) {
+      LOG_WARN("failed to deserialize", K(ret), KPC(common_header));
+    }
+  }
+  return ret;
+}
+
+/*
+ *-----------------------------ObBackupSSLSMetaInfosDesc-----------------------
+ */
+
+OB_SERIALIZE_MEMBER(ObBackupSSLSMetaInfosDesc, ls_metas_);
+
+ObBackupSSLSMetaInfosDesc::ObBackupSSLSMetaInfosDesc()
+  : ObExternBackupDataDesc(share::ObBackupFileType::SS_BACKUP_LS_META_INFOS_FILE, FILE_VERSION),
+    ls_metas_()
+{
+}
+
+ObBackupSSLSMetaInfosDesc::~ObBackupSSLSMetaInfosDesc()
+{
+}
+
+bool ObBackupSSLSMetaInfosDesc::is_valid() const
+{
+  return !ls_metas_.empty();
+}
+#endif
+
 /*
  *-----------------------------ObBackupPartialTableListDesc-----------------------
  */
@@ -375,6 +477,164 @@ bool ObBackupMajorCompactionMViewDepTabletListDesc::is_valid() const
   }
   return bret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+/*
+ *-----------------------------ObSSBackupTabletGroupCheckpointDesc-----------------------
+ */
+
+OB_SERIALIZE_MEMBER(ObSSBackupTabletGroupCheckpointDesc, tablet_list_);
+
+ObSSBackupTabletGroupCheckpointDesc::ObSSBackupTabletGroupCheckpointDesc()
+  : ObExternBackupDataDesc(ObBackupFileType::SS_BACKUP_TABLET_GROUP_CHECKPOINT_FILE, FILE_VERSION),
+    tablet_list_() {}
+
+void ObSSBackupTabletGroupCheckpointDesc::reset()
+{
+  tablet_list_.reset();
+}
+
+bool ObSSBackupTabletGroupCheckpointDesc::is_valid() const
+{
+  int ret = OB_SUCCESS;
+  bool bret = true;
+  ARRAY_FOREACH(tablet_list_, i) {
+    const backup::ObSSBackupTabletPair &tablet = tablet_list_.at(i);
+    if (!tablet.is_valid()) {
+      bret = false;
+      break;
+    }
+  }
+  return bret;
+}
+
+// ObBackupSSTabletMetaInfo
+
+OB_SERIALIZE_MEMBER(ObBackupSSTabletMetaInfo, raw_meta_row_);
+
+ObBackupSSTabletMetaInfo::ObBackupSSTabletMetaInfo() : raw_meta_row_()
+{}
+
+ObBackupSSTabletMetaInfo::~ObBackupSSTabletMetaInfo()
+{}
+
+int64_t ObBackupSSTabletMetaInfo::get_total_serialize_buf_size() const
+{
+  return sizeof(ObBackupCommonHeader) + get_serialize_size();
+}
+
+int ObBackupSSTabletMetaInfo::serialize_to(char *buf, int64_t buf_size, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t required_size = get_total_serialize_buf_size();
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is null", K(ret), KP(buf));
+  } else if (buf_size - pos < required_size) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is not enough", K(ret), K(buf_size), K(pos), K(required_size));
+  } else {
+    // serialize common header.
+    ObBackupCommonHeader *common_header = new (buf + pos) ObBackupCommonHeader;
+    common_header->reset();
+    common_header->compressor_type_ = 0;
+    common_header->data_type_ = 0;
+    common_header->data_version_ = 0;
+    common_header->header_length_ = sizeof(ObBackupCommonHeader);
+    pos += sizeof(ObBackupCommonHeader);
+    int64_t saved_pos = pos;
+    // serialize self.
+    if (OB_FAIL(serialize(buf, buf_size, pos))) {
+      LOG_WARN("failed to serialize", K(ret));
+    } else {
+      common_header->data_length_ = pos - saved_pos;
+      common_header->data_zlength_ = common_header->data_length_;
+      if (OB_FAIL(common_header->set_checksum(buf + saved_pos, common_header->data_length_))) {
+        LOG_WARN("failed to set common header checksum", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupSSTabletMetaInfo::deserialize_from(char *buf, int64_t buf_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is null", K(ret));
+  } else if (buf_size < sizeof(ObBackupCommonHeader)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf size is too small", K(ret), K(buf_size), K(sizeof(ObBackupCommonHeader)));
+  } else {
+    ObBackupCommonHeader *common_header = reinterpret_cast<ObBackupCommonHeader *>(buf);
+    int64_t pos = common_header->header_length_;
+    if (OB_FAIL(common_header->check_header_checksum())) {
+      LOG_WARN("failed to check common header", K(ret));
+    } else if (common_header->data_zlength_ > buf_size - pos) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("buf size is too small", K(ret), K(buf_size), K(*common_header));
+    } else if (OB_FAIL(common_header->check_data_checksum(buf + pos, common_header->data_zlength_))) {
+      LOG_WARN("failed to check round start desc checksum", K(ret), KPC(common_header));
+    } else if (OB_FAIL(deserialize(buf, pos + common_header->data_zlength_, pos))) {
+      LOG_WARN("failed to deserialize", K(ret), KPC(common_header));
+    }
+  }
+  return ret;
+}
+
+/*
+ *-----------------------------ObSSBackupTabletMetaFileInfoDesc-----------------------
+ */
+
+OB_SERIALIZE_MEMBER(ObSSBackupTabletMetaFileInfoDesc, info_);
+
+ObSSBackupTabletMetaFileInfoDesc::ObSSBackupTabletMetaFileInfoDesc()
+  : ObExternBackupDataDesc(ObBackupFileType::SS_BACKUP_TABLET_META_FILE_INFO_FILE, FILE_VERSION),
+    info_()
+{
+}
+
+ObSSBackupTabletMetaFileInfoDesc::~ObSSBackupTabletMetaFileInfoDesc()
+{
+}
+
+/*
+ *-----------------------------ObSSBackupTabletMacroBlockFileInfoDesc-----------------------
+ */
+
+// TODO(yanfeng): need refactor this when tablet becomes very big.
+OB_SERIALIZE_MEMBER(ObSSBackupTabletMacroBlockFileInfoDesc, macro_id_list_);
+
+ObSSBackupTabletMacroBlockFileInfoDesc::ObSSBackupTabletMacroBlockFileInfoDesc()
+  : ObExternBackupDataDesc(ObBackupFileType::SS_BACKUP_TABLET_MACRO_BLOCK_FILE_INFO_FILE, FILE_VERSION),
+    macro_id_list_()
+{
+}
+
+ObSSBackupTabletMacroBlockFileInfoDesc::~ObSSBackupTabletMacroBlockFileInfoDesc()
+{
+}
+
+void ObSSBackupTabletMacroBlockFileInfoDesc::reset()
+{
+  macro_id_list_.reset();
+}
+
+bool ObSSBackupTabletMacroBlockFileInfoDesc::is_valid() const
+{
+  int ret = OB_SUCCESS;
+  bool bret = true;
+  ARRAY_FOREACH(macro_id_list_, i) {
+    const blocksstable::MacroBlockId &macro_id = macro_id_list_.at(i);
+    if (!macro_id.is_valid()) {
+      bret = false;
+      break;
+    }
+  }
+  return bret;
+}
+#endif
 
 int ObBackupSetFilter::get_backup_set_array(ObIArray<share::ObBackupSetDesc> &backup_set_array) const
 {
@@ -1832,6 +2092,56 @@ int ObBackupDataStore::read_major_compaction_mview_dep_tablet_list(ObBackupMajor
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObBackupDataStore::write_tablet_group_checkpoint(const share::ObLSID &ls_id,
+    const int64_t retry_id, const ObSSBackupTabletGroupCheckpointDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (!desc.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table group checkpoint desc is not valid", K(ret), K(desc));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ss_tablet_group_checkpoint_file_path(
+      backup_set_dest_, ls_id, retry_id, path))) {
+    LOG_WARN("fail to get ss tablet group checkpoint path", K(ret), K(ls_id), K(retry_id), K_(backup_set_dest));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, desc))) {
+    LOG_WARN("fail to write single file", K(ret), K(desc));
+  } else {
+    LOG_INFO("write tablet group checkpoint", K(desc));
+  }
+  return ret;
+}
+
+// 16MB if 1 million tablet
+int ObBackupDataStore::read_tablet_group_checkpoint(const share::ObLSID &ls_id,
+    const int64_t retry_id, ObSSBackupTabletGroupCheckpointDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ss_tablet_group_checkpoint_file_path(
+      backup_set_dest_, ls_id, retry_id, path))) {
+    LOG_WARN("fail to get ss tablet group checkpoint path", K(ret), K(retry_id), K_(backup_set_dest));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, desc))) {
+    LOG_WARN("fail to read single file", K(ret), K(full_path));
+  } else {
+    LOG_INFO("read tablet group checkpoint", K(desc));
+  }
+  return ret;
+}
+#endif // OB_BUILD_SHARED_STORAGE
+
 int ObBackupDataStore::write_backup_meta_file_list(const share::ObBackupLSTaskAttr &ls_attr)
 {
   int ret = OB_SUCCESS;
@@ -1858,6 +2168,80 @@ int ObBackupDataStore::write_backup_meta_file_list(const share::ObBackupLSTaskAt
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObBackupDataStore::write_tablet_meta_file_info(
+    const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const ObSSBackupTabletMetaFileInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (!ls_id.is_valid() || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ss_tablet_meta_file_info_path(
+      backup_set_dest_, ls_id, tablet_id, path))) {
+    LOG_WARN("fail to get ss tablet meta file info path", K(ret), K(ls_id), K(tablet_id), K_(backup_set_dest));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, desc))) {
+    LOG_WARN("fail to write single file", K(ret), K(desc));
+  } else {
+    LOG_INFO("write tablet meta file info", K(desc));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::read_tablet_meta_file_info(
+    const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, ObSSBackupTabletMetaFileInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ss_tablet_meta_file_info_path(
+      backup_set_dest_, ls_id, tablet_id, path))) {
+    LOG_WARN("fail to get ss tablet meta file info path", K(ret), K(tablet_id), K_(backup_set_dest));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, desc))) {
+    LOG_WARN("fail to read single file", K(ret), K(full_path));
+  } else {
+    LOG_INFO("read tablet meta file info", K(desc));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_tablet_macro_block_file_info(
+    const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
+    const ObSSBackupTabletMacroBlockFileInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (!desc.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table list meta desc is not valid", K(ret), K(desc));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ss_tablet_macro_block_file_info_path(backup_set_dest_, ls_id, tablet_id, path))) {
+    LOG_WARN("fail to get ss tablet file info path", K(ret), K(ls_id), K(tablet_id), K_(backup_set_dest));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, desc))) {
+    LOG_WARN("fail to write single file", K(ret), K(desc));
+  } else {
+    LOG_INFO("write tablet macro block file info", K(desc));
+  }
+  return ret;
+}
+#endif // OB_BUILD_SHARED_STORAGE
 
 int ObBackupDataStore::write_backup_data_file_list(const share::ObBackupLSTaskAttr &ls_attr)
 {
@@ -1899,6 +2283,91 @@ int ObBackupDataStore::write_backup_fuse_meta_info_file_list(const share::ObBack
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObBackupDataStore::is_tablet_macro_block_file_info_exist(
+    const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath full_path;
+  ObBackupIoAdapter util;
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ss_tablet_macro_block_file_info_path(backup_set_dest_, ls_id, tablet_id, full_path))) {
+    LOG_WARN("fail to get ss tablet file info path", K(ret), K(ls_id), K(tablet_id), K_(backup_set_dest));
+  } else if (OB_FAIL(util.is_exist(full_path.get_obstr(), storage_info, is_exist))) {
+    LOG_WARN("failed to check tablet macro block file info exist.", K(ret), K(full_path));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::read_tablet_macro_block_file_info(
+    const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
+    ObSSBackupTabletMacroBlockFileInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ss_tablet_macro_block_file_info_path(backup_set_dest_, ls_id, tablet_id, path))) {
+    LOG_WARN("fail to get ss tablet file info path", K(ret), K(ls_id), K(tablet_id), K_(backup_set_dest));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, desc))) {
+    LOG_WARN("fail to read single file", K(ret), K(full_path));
+  } else {
+    LOG_INFO("read tablet macro block file info", K(desc));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_ss_ls_meta_infos(const ObBackupSSLSMetaInfosDesc &ls_meta_infos)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPathString full_path;
+  share::ObBackupPath path;
+
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ls_meta_infos_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, ls_meta_infos))) {
+    LOG_WARN("fail to write single file", K(ret));
+  }
+
+  return ret;
+}
+
+int ObBackupDataStore::read_ss_ls_meta_infos(
+    common::ObIAllocator &allocator, ObBackupSSLSMetaInfosDesc &ls_meta_infos)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPathString full_path;
+  share::ObBackupPath path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ls_meta_infos_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get tenant ls attr info path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file_with_allocator(full_path, allocator, ls_meta_infos))) {
+    LOG_WARN("failed to read single file", K(ret), K(full_path));
+  } else if (!ls_meta_infos.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid ls meta infos", K(ret), K(ls_meta_infos));
+  }
+  return ret;
+}
+
+#endif
 int ObBackupDataStore::list_and_generate_file_list_(
     const ObBackupPath &path,
     const ObBackupFileSuffix &suffix,
@@ -1913,7 +2382,7 @@ int ObBackupDataStore::list_and_generate_file_list_(
     LOG_WARN("[DATA_BACKUP]invalid dest id or path or file list", K(ret), K(path));
   } else {
     file_list_info.reset();
-    ObSArray<ObBackupFileInfo> file_list;
+    ObSArray<ObBackupFilePathInfo> file_list;
     ObBackupIoAdapter io_util;
     const ObBackupStorageInfo *storage_info = backup_set_dest_.get_storage_info();
     const int64_t dest_id = storage_info->get_dest_id();
@@ -1924,7 +2393,7 @@ int ObBackupDataStore::list_and_generate_file_list_(
       LOG_INFO("[DATA_BACKUP]no direct files, do nothing", K(ret), K(path));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < file_list.count(); ++i) {
-        const ObBackupFileInfo &file_info = file_list.at(i);
+        const ObBackupFilePathInfo &file_info = file_list.at(i);
         if (!file_info.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("[DATA_BACKUP]file info is not valid", K(ret), K(file_info));

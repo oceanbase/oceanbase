@@ -1340,6 +1340,7 @@ int ObWaitDataReadyTask::wait_log_sync_()
   bool need_wait = true;
   ObTimeoutCtx timeout_ctx;
   int64_t timeout = 10_min;
+  const bool is_primay_tenant = MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1371,6 +1372,11 @@ int ObWaitDataReadyTask::wait_log_sync_()
         LOG_WARN("already timeout", K(ret), KPC(ctx_));
       } else if (OB_FAIL(check_ls_and_task_status_(ls))) {
         LOG_WARN("failed to check ls and task status", K(ret), KPC(ctx_));
+        //TODO(mingqiao): remove this after is_in_sync is modified
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (!is_primay_tenant && GCTX.is_shared_storage_mode()) {
+        is_log_sync = true;
+#endif
       } else if (OB_FAIL(ls->is_in_sync(is_log_sync, is_need_rebuild))) {
         LOG_WARN("failed to check is in sync", K(ret), KPC(ctx_));
       }

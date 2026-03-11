@@ -342,6 +342,9 @@ ob_set_subtarget(ob_storage restore
   restore/ob_ls_restore_task_mgr.cpp
   restore/ob_tenant_restore_info_mgr.cpp
   restore/ob_restore_compatibility_util.cpp
+  restore/ob_i_ls_restore_state.cpp
+  restore/ob_ls_restore_stat.cpp
+  restore/ob_sn_ls_restore_state.cpp
 )
 
 ob_set_subtarget(ob_storage backup

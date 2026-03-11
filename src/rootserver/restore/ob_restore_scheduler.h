@@ -50,13 +50,13 @@ public:
   static int assign_pool_list(const char *str,
                        common::ObIArray<common::ObString> &pool_list);
 
-private:
-  int process_restore_job(const share::ObPhysicalRestoreJob &job);
+protected:
+  virtual int process_restore_job(const share::ObPhysicalRestoreJob &job);
   int process_sys_restore_job(const share::ObPhysicalRestoreJob &job);
   int try_recycle_job(const share::ObPhysicalRestoreJob &job);
 
   int restore_tenant(const share::ObPhysicalRestoreJob &job_info);
-  int restore_upgrade(const share::ObPhysicalRestoreJob &job_info);
+  virtual int restore_upgrade(const share::ObPhysicalRestoreJob &job_info);
   int restore_pre(const share::ObPhysicalRestoreJob &job_info);
 
   int post_check(const share::ObPhysicalRestoreJob &job_info);
@@ -72,13 +72,13 @@ private:
 
   int fill_create_tenant_arg(const share::ObPhysicalRestoreJob &job_info,
                              const ObSqlString &pool_list,
+                             common::ObIAllocator &alloc,
                              obrpc::ObCreateTenantArg &arg);
   int convert_tde_parameters(const share::ObPhysicalRestoreJob &job_info);
-  int restore_root_key(const share::ObPhysicalRestoreJob &job_info);
   int restore_keystore(const share::ObPhysicalRestoreJob &job_info);
 
   int check_locality_valid(const share::schema::ZoneLocalityIArray &locality);
-  int try_update_job_status(
+  virtual int try_update_job_status(
       common::ObISQLClient &sql_client,
       int return_ret,
       const share::ObPhysicalRestoreJob &job,
@@ -90,7 +90,7 @@ private:
   share::PhysicalRestoreStatus get_sys_next_status(share::PhysicalRestoreStatus current_status);
   
   int fill_restore_statistics(const share::ObPhysicalRestoreJob &job_info);
-private:
+protected:
   int create_all_ls_(const share::schema::ObTenantSchema &tenant_schema,
       const common::ObIArray<share::ObLSAttr> &ls_attr_array);
   int wait_all_ls_created_(const share::schema::ObTenantSchema &tenant_schema,
@@ -126,7 +126,8 @@ private:
   int update_restore_progress_by_bytes_(const ObPhysicalRestoreJob &job, const int64_t total_bytes, const int64_t finish_bytes);
   int set_tenant_sts_crendential_config_(common::ObISQLClient &proxy,
       const uint64_t tenant_id, const share::ObPhysicalRestoreJob &job_info);
-private:
+  bool can_retry_(const int err_code);
+protected:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
   common::ObMySQLProxy *sql_proxy_;
@@ -136,6 +137,7 @@ private:
   ObRestoreService *restore_service_;
   common::ObAddr self_addr_;
   uint64_t tenant_id_;
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRestoreScheduler);
 };
 

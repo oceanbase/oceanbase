@@ -1935,7 +1935,9 @@ int ObTabletStartTransferInHelper::check_transfer_dest_ls_restore_status_(
   } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));
   } else if (restore_status.is_in_restoring_or_failed()) {
-    if(OB_FAIL(ls->get_ls_restore_handler()->get_consistent_scn(consistent_scn))) {
+    if (GCTX.is_shared_storage_mode()) {
+      // shared storage mode, skip check transfer dest ls consistent scn
+    } else if (OB_FAIL(ls->get_ls_restore_handler()->get_consistent_scn(consistent_scn))) {
       LOG_WARN("failed to get consistent scn", K(ret));
     } else if (!consistent_scn.is_valid_and_not_min()) {
       ret = OB_INVALID_ARGUMENT;

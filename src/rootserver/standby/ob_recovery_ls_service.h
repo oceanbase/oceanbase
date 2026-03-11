@@ -19,6 +19,7 @@
 #include "rootserver/ob_primary_ls_service.h" //ObTenantThreadHelper
 #include "lib/lock/ob_spin_lock.h" //ObSpinLock
 #include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
+#include "logservice/ipalf/ipalf_iterator.h" // IPalfIterator
 
 namespace oceanbase
 {
@@ -87,15 +88,15 @@ private:
  int process_thread0_(const ObAllTenantInfo &tenant_info);
  int process_thread1_(const ObAllTenantInfo &tenant_info,
      share::SCN &start_scn,
-     palf::PalfBufferIterator &iterator);
+     ipalf::IPalfIterator<ipalf::ILogEntry> &iterator);
  //get log iterator by start_scn
  //interface for thread0
  int init_palf_handle_guard_(palf::PalfHandleGuard &palf_handle_guard);
  int seek_log_iterator_(const share::SCN &syn_scn,
-                        palf::PalfBufferIterator &iterator);
+                        ipalf::IPalfIterator<ipalf::ILogEntry> &iterator);
  int process_ls_log_(const ObAllTenantInfo &tenant_info,
                      share::SCN &start_scn,
-                     palf::PalfBufferIterator &iterator);
+                     ipalf::IPalfIterator<ipalf::ILogEntry> &iterator);
  int process_upgrade_log_(const share::SCN &sync_scn,
      const transaction::ObTxBufferNode &node);
  int process_upgrade_data_version_log_(const share::SCN &sync_scn,

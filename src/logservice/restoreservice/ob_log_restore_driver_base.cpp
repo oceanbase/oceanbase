@@ -113,6 +113,7 @@ int ObLogRestoreDriverBase::check_replica_status_(storage::ObLS &ls, bool &can_f
     LOG_WARN("get restore status failed", K(ret), K(ls));
   } else {
     can_fetch_log = restore_status.can_restore_log();
+    LOG_TRACE("check replica status", K(can_fetch_log), K(restore_status));
   }
   return ret;
 }

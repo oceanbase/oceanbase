@@ -474,7 +474,7 @@ public:
   int update_ls_meta(const bool update_restore_status,
                      const ObLSMeta &src_ls_meta);
 #ifdef OB_BUILD_SHARED_STORAGE
-  int update_ls_meta(const ObSSLSMeta &src_ss_meta);
+  int update_ls_meta(const ObSSLSMeta &src_ss_meta, const bool update_restore_status);
   // advance notify ss change version
   // @param [in] tablet_id
   // @param [in] transfer_scn

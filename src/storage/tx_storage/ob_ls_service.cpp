@@ -1669,6 +1669,11 @@ ObLSRestoreStatus ObLSService::get_restore_status_by_tenant_role_(const ObTenant
 
   if (tenant_role.is_restore()) {
     restore_status = ObLSRestoreStatus::RESTORE_START;
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      restore_status = ObLSRestoreStatus::SS_RESTORE_START;
+    }
+#endif
   } else if (tenant_role.is_clone()) {
     restore_status = ObLSRestoreStatus::CLONE_START;
   } else {

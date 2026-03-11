@@ -296,7 +296,7 @@ static int record_piece_ls_log_file_list(
     const ObBackupStorageInfo *storage_info = store.get_storage_info();
     const int64_t dest_id = storage_info->get_dest_id();
     ObBackupFileListInfo file_list_info;
-    ObBackupFileInfo file_info;
+    ObBackupFilePathInfo file_info;
     ObBackupPath file_path;
     ObBackupPathString file_name;
     ObBackupBlockFileItemWriter writer;

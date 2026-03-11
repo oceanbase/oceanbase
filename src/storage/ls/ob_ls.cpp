@@ -2918,7 +2918,7 @@ int ObLS::update_ls_meta(const bool update_restore_status,
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-int ObLS::update_ls_meta(const ObSSLSMeta &src_ss_meta)
+int ObLS::update_ls_meta(const ObSSLSMeta &src_ss_meta, const bool update_restore_status)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -2934,7 +2934,7 @@ int ObLS::update_ls_meta(const ObSSLSMeta &src_ss_meta)
     ObSSLSMeta tmp_ss_meta(src_ss_meta);
     if (OB_FAIL(tmp_ss_meta.convert_local_ls_meta())) {
       LOG_WARN("fail to convert_sn_ls_meta", K(ret), K(tmp_ss_meta), K(src_ss_meta));
-    } else if (OB_FAIL(update_ls_meta(true /*update restore status*/, tmp_ss_meta))) {
+    } else if (OB_FAIL(update_ls_meta(update_restore_status, tmp_ss_meta))) {
       LOG_WARN("fail to update ls meta", K(ret), K(tmp_ss_meta), K(src_ss_meta));
     }
   }

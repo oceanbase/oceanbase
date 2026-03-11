@@ -88,7 +88,7 @@ int ObRemoteLogIterator<LogEntryType>::init(const uint64_t tenant_id,
     single_read_size_ = single_read_size;
     log_ext_handler_ = log_ext_handler;
     ret = build_data_generator_(pre_scn, source, refresh_storage_info_func_);
-    CLOG_LOG(INFO, "ObRemoteLogIterator init", K(ret), K(tenant_id), K(id), K(pre_scn), K(start_lsn), K(end_lsn));
+    CLOG_LOG(INFO, "ObRemoteLogIterator init", K(ret), K(tenant_id), K(id), K(pre_scn), K(start_lsn), K(end_lsn), K(single_read_size), K(enable_logservice));
   }
   data_buffer_.iter_.set_logservice_mode(enable_logservice);
   if (OB_SUCC(ret)) {

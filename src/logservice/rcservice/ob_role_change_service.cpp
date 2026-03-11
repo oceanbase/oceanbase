@@ -364,7 +364,16 @@ int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
     ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  const bool log_handler_is_offline = ls->get_log_handler()->is_offline();
+  bool log_handler_is_offline = ls->get_log_handler()->is_offline();
+  ObLogRestoreHandler *log_restore_handler = ls->get_log_restore_handler();
+  // TODO by nianguan: remove before merging to master
+  if (GCONF.enable_logservice) {
+    const bool is_ignore_log_handler_online = log_restore_handler->is_ignore_log_handler_online();
+    if (is_ignore_log_handler_online) {
+      log_handler_is_offline = false;
+    }
+    CLOG_LOG(INFO, "consider is_ignore_log_handler_online when restore_handler changes role", K(log_handler_is_offline), K(is_ignore_log_handler_online));
+  }
 
   // If log handler is offline, need execute LEADER_2_FOLLOWER or FOLLOWER_2_FOLLOWER.
   //
@@ -381,7 +390,6 @@ int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
   bool is_pending_state = false;
   int64_t curr_proposal_id = -1;
   int64_t new_proposal_id = -1;
-  ObLogRestoreHandler *log_restore_handler = ls->get_log_restore_handler();
   ObRoleChangeHandler *restore_role_change_handler = ls->get_restore_role_change_handler();
   if (OB_FAIL(log_restore_handler->prepare_switch_role(curr_role, curr_proposal_id, new_role,
           new_proposal_id, is_pending_state))) {
@@ -785,6 +793,7 @@ int ObRoleChangeService::switch_follower_to_leader_restore_(
   } else {
     ATOMIC_SET(&cur_task_info_.state_, TakeOverState::TAKE_OVER_FINISH);
     ATOMIC_SET(&cur_task_info_.log_type_, ObLogBaseType::INVALID_LOG_BASE_TYPE);
+    CLOG_LOG(INFO, "switch_follower_to_leader_restore_ success", K(new_proposal_id), KPC(ls));
   }
   if (OB_FAIL(ret)) {
     log_restore_handler->advance_election_epoch_and_downgrade_priority(0_s, "palf switch follower to leader restore failed");
@@ -801,6 +810,7 @@ int ObRoleChangeService::switch_leader_to_follower_forcedly_restore_(
   ObRoleChangeHandler *restore_role_change_handler = ls->get_restore_role_change_handler();
   (void)restore_role_change_handler->switch_to_follower_forcedly();
   (void)log_restore_handler->switch_role(FOLLOWER, new_proposal_id);
+  CLOG_LOG(INFO, "switch_leader_to_follower_forcedly_restore_ success", K(new_proposal_id), KPC(ls));
   return ret;
 }
 
@@ -830,6 +840,7 @@ int ObRoleChangeService::switch_leader_to_follower_gracefully_restore_(
 
 int ObRoleChangeService::switch_follower_to_follower_restore_()
 {
+  CLOG_LOG(INFO, "switch_follower_to_follower_restore_ success");
   return OB_SUCCESS;
 }
 
@@ -849,7 +860,7 @@ int ObRoleChangeService::switch_leader_to_leader_restore_(
     CLOG_LOG(WARN, "switch_follower_to_leader_restore_ failed", K(ret),
         K(new_proposal_id), K(ls));
   } else {
-    CLOG_LOG(INFO, "switch_leader_to_leader_restore_ success", K(ls));
+    CLOG_LOG(INFO, "switch_leader_to_leader_restore_ success", K(new_proposal_id), K(curr_proposal_id), KPC(ls));
   }
   return ret;
 }

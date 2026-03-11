@@ -21,6 +21,12 @@
 
 namespace oceanbase
 {
+
+namespace blocksstable
+{
+class ObSSTable;
+}
+
 namespace storage
 {
 class ObStorageSchema;
@@ -110,15 +116,24 @@ class ObDDLIncCommitLog final
   OB_UNIS_VERSION_V(1);
 public:
   ObDDLIncCommitLog();
-  ~ObDDLIncCommitLog() = default;
+  ~ObDDLIncCommitLog();
   int init(const ObDDLIncLogBasic &log_basic, const bool is_rollback);
+  int set_ss_inc_major(const blocksstable::ObSSTable *data_inc_major,
+                       const blocksstable::ObSSTable *lob_inc_major);
   bool is_valid() const { return log_basic_.is_valid(); }
   const ObDDLIncLogBasic &get_log_basic() const { return log_basic_; }
   bool is_rollback() const { return is_rollback_; }
-  TO_STRING_KV(K_(log_basic), K_(is_rollback));
+  bool is_co_sstable() const { return is_co_sstable_; }
+  const ObString &get_data_inc_major_buffer() const { return data_inc_major_buffer_; }
+  const ObString &get_lob_inc_major_buffer() const { return lob_inc_major_buffer_; }
+  TO_STRING_KV(K_(log_basic), K_(is_rollback), K_(is_co_sstable), K_(data_inc_major_buffer), K_(lob_inc_major_buffer));
 private:
+  ObArenaAllocator allocator_;
   ObDDLIncLogBasic log_basic_;
   bool is_rollback_;
+  bool is_co_sstable_;
+  ObString data_inc_major_buffer_;
+  ObString lob_inc_major_buffer_;
 };
 
 } // namespace storage

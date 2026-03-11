@@ -85,6 +85,11 @@ public:
   static int get_restore_ls_palf_base_info(const share::ObPhysicalRestoreJob &job_info,
                                            const share::ObLSID &ls_id,
                                            palf::PalfBaseInfo &palf_base_info);
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int get_ss_restore_ls_palf_base_info(const share::ObPhysicalRestoreJob &job_info,
+                                              const ObLSID &ls_id,
+                                              palf::PalfBaseInfo &palf_base_info);
+#endif
   static int check_physical_restore_finish(common::ObISQLClient &proxy, const int64_t job_id, bool &is_finish, bool &is_failed);
   static int get_restore_job_comment(common::ObISQLClient &proxy, const int64_t job_id, char *buf, const int64_t buf_size);
   static int get_restore_tenant_cpu_count(common::ObMySQLProxy &proxy, const uint64_t tenant_id, double &cpu_count);

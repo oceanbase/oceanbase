@@ -522,6 +522,9 @@ public:
   int get_ls_total_bytes(
     common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
     int64_t &total_bytes) const;
+  int get_total_bytes(
+      common::ObISQLClient &proxy, const ObRestoreJobPersistKey &key,
+      int64_t &total_bytes) const;
   int set_ls_finish_bytes(
       common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
       const int64_t finish_bytes) const;

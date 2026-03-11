@@ -355,6 +355,49 @@ int ObBackupCleanUtil::delete_backup_file(
   return ret;
 }
 
+int ObBackupCleanUtil::delete_meta_info(
+  const ObBackupPath &path,
+  const share::ObBackupStorageInfo *storage_info)
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  ObArray<ObIODirentEntry> d_entrys;
+  const char meta_info_prefix[OB_BACKUP_DIR_PREFIX_LENGTH] = "meta_info_turn_";
+  ObDirPrefixEntryNameFilter prefix_op(d_entrys);
+  if (OB_ISNULL(storage_info) || path.is_empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("storage info is null or path is empty", K(ret), KP(storage_info), K(path));
+  } else if (OB_FAIL(prefix_op.init(meta_info_prefix, strlen(meta_info_prefix)))) {
+    LOG_WARN("failed to init dir prefix", K(ret), K(meta_info_prefix));
+  } else if (OB_FAIL(util.list_directories(path.get_obstr(), storage_info, prefix_op))) {
+    if (OB_DIR_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("path not exist, skip", K(path));
+    } else {
+      LOG_WARN("failed to list directories", K(ret), K(path));
+    }
+  } else {
+    ObIODirentEntry tmp_entry;
+    ObBackupPath meta_path;
+    for (int64_t i = 0; OB_SUCC(ret) && i < d_entrys.count(); ++i) {
+      tmp_entry = d_entrys.at(i);
+      meta_path.reset();
+      if (OB_ISNULL(tmp_entry.name_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("file name is null", K(ret));
+      } else if (OB_FAIL(meta_path.init(path.get_ptr()))) {
+        LOG_WARN("failed to init meta path", K(ret), K(path));
+      } else if (OB_FAIL(meta_path.join(tmp_entry.name_, ObBackupFileSuffix::NONE))) {
+        LOG_WARN("failed to join meta path", K(ret));
+      } else if (OB_FAIL(delete_backup_dir_files(meta_path, storage_info))) {
+        LOG_WARN("failed to delete backup log stream meta info turn dir files", K(ret), K(meta_path));
+      } else {
+        LOG_INFO("[BACKUP_CLEAN]success delete meta info turn", K(meta_path));
+      }
+    }
+  }
+  return ret;
+}
 
 void ObBackupCleanUtil::check_need_retry(
     const int64_t result,
@@ -431,6 +474,32 @@ int ObBackupCleanUtil::parse_time_interval(const char *str, int64_t &val)
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid time interval str", K(ret), K(str));
     }
+  }
+  return ret;
+}
+
+int ObBackupCleanUtil::get_ls_ids_from_backup_set_path(
+    const common::ObString &path,
+    const ObBackupStorageInfo *storage_info,
+    common::ObIArray<ObLSID> &ls_ids)
+{
+  int ret = OB_SUCCESS;
+  common::ObBackupIoAdapter util;
+  ObArray<ObLSID> ls_entrys;
+  common::ObDirPrefixLSIDFilter prefix_lsid_op(ls_entrys);
+  char logstream_prefix[OB_BACKUP_DIR_PREFIX_LENGTH] = { 0 };
+  int64_t logstream_prefix_len = 0;
+
+  // list logstream_* directories under backup_set_path
+  if (OB_FAIL(databuff_printf(logstream_prefix, sizeof(logstream_prefix), logstream_prefix_len, "%s_", OB_STR_LS))) {
+    LOG_WARN("failed to set log stream prefix for filter", K(ret), K(OB_STR_LS));
+  } else if (OB_FAIL(prefix_lsid_op.init(logstream_prefix, strlen(logstream_prefix)))) {
+    LOG_WARN("failed to init dir prefix operator", K(ret), K(logstream_prefix));
+  // TODO(lyh444845) iterate dir sequentially 4.4.1
+  } else if (OB_FAIL(util.list_directories(path, storage_info, prefix_lsid_op))) {
+    LOG_WARN("failed to list directories", K(ret), K(path));
+  } else if (OB_FAIL(ls_ids.assign(ls_entrys))) {
+    LOG_WARN("failed to assign ls id array", K(ret));
   }
   return ret;
 }

@@ -114,6 +114,10 @@ public:
   virtual int64_t get_tenant_id() override final;
 
   virtual int advance_base_lsn(int64_t id, palf::LSN lsn) override final;
+
+  virtual int flashback(const uint64_t tenant_id,
+                        const share::SCN &flashback_scn,
+                        const int64_t timeout_us) override final;
 public:
   // just for LogRpc
   palf::IPalfEnvImpl *get_palf_env_impl() { return &palf_env_impl_; }

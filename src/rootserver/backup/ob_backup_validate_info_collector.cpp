@@ -619,7 +619,7 @@ int ObBackupValidateInfoCollector::collect_piece_keys_from_file_list_(
                   KPC(storage_info), K(storage_id_mod), K(suffix));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < file_list_info.count(); ++i) {
-      const backup::ObBackupFileInfo &file_info = file_list_info.file_list_.at(i);
+      const backup::ObBackupFilePathInfo &file_info = file_list_info.file_list_.at(i);
       is_piece_start = false;
       key.reset();
       if (OB_FAIL(ObArchiveStoreUtil::is_piece_start_file_name(file_info.path_.str(), is_piece_start))) {

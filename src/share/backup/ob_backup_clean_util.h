@@ -93,6 +93,9 @@ public:
   static int delete_backup_file(
       const ObBackupPath &path,
       const share::ObBackupStorageInfo *storage_info);
+  static int delete_meta_info(
+      const ObBackupPath &path,
+      const share::ObBackupStorageInfo *storage_info);
   static int lock_policy_table_then_check(
       common::ObMySQLTransaction &trans, const uint64_t tenant_id, const bool log_only, bool &policy_exists);
   static int parse_int64_list(const ObString &str, ObIArray<int64_t> &value_list);
@@ -102,6 +105,11 @@ public:
   static int format_uint64_list(const ObIArray<uint64_t> &value_list, char *buffer,
                                 int64_t buffer_size, int64_t &cur_pos);
   static int parse_time_interval(const char *str, int64_t &val);
+  // Get ls ids from backup set path by listing logstream_* directories
+  static int get_ls_ids_from_backup_set_path(
+      const common::ObString &path,
+      const ObBackupStorageInfo *storage_info,
+      common::ObIArray<ObLSID> &ls_ids);
 
 private:
   static int delete_backup_dir_(

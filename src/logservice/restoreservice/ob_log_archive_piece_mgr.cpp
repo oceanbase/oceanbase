@@ -1467,7 +1467,7 @@ int ObLogArchivePieceContext::get_max_log_in_file_(const ObLogArchivePieceContex
   const int64_t header_size = archive::ARCHIVE_FILE_HEADER_SIZE;
   int64_t read_size = 0;
   palf::MemoryStorage mem_storage;
-  palf::MemPalfGroupBufferIterator iter;
+  ipalf::IPalfIterator<ipalf::IGroupEntry> iter;
 
   // if get max log context match origin piece context
   // only need to read data not restored
@@ -1510,7 +1510,7 @@ int ObLogArchivePieceContext::get_max_log_in_file_(const ObLogArchivePieceContex
     } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(MTL_ID(), id_.id(), palf::LogIOUser::ARCHIVE)))) {
       CLOG_LOG(WARN, "iter set_io_context failed", K(id_), K(base_lsn));
     } else {
-      palf::LogGroupEntry entry;
+      ipalf::IGroupEntry entry;
       while (OB_SUCC(ret)) {
         if (OB_FAIL(iter.next())) {
           if (OB_ITER_END != ret) {
@@ -1518,11 +1518,11 @@ int ObLogArchivePieceContext::get_max_log_in_file_(const ObLogArchivePieceContex
           }
         } else if (OB_FAIL(iter.get_entry(entry, lsn))) {
           CLOG_LOG(WARN, "get entry failed", K(ret));
-        } else if (! entry.check_integrity()) {
+        } else if (! entry.check_integrity(lsn)) {
           ret = OB_INVALID_DATA;
           CLOG_LOG(WARN, "invalid data", K(ret), KPC(this), K(iter), K(entry));
         } else {
-          lsn = lsn + entry.get_serialize_size();
+          lsn = lsn + entry.get_serialize_size(lsn);
           scn = entry.get_scn();
           exist = true;
         }
@@ -1599,7 +1599,7 @@ int ObLogArchivePieceContext::seek_in_file_(const int64_t file_id, const SCN &sc
   int64_t read_size = 0;
   palf::LSN base_lsn;
   palf::MemoryStorage mem_storage;
-  palf::MemPalfGroupBufferIterator iter;
+  ipalf::IPalfIterator<ipalf::IGroupEntry> iter;
   if (OB_ISNULL(buf = (char *)mtl_malloc(buf_size, "ArcFile"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "alloc memory failed", K(ret));
@@ -1617,7 +1617,7 @@ int ObLogArchivePieceContext::seek_in_file_(const int64_t file_id, const SCN &sc
   } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(MTL_ID(), id_.id(), palf::LogIOUser::ARCHIVE)))) {
     CLOG_LOG(WARN, "iter set_io_context failed", K(ret));
   } else {
-    palf::LogGroupEntry entry;
+    ipalf::IGroupEntry entry;
     palf::LSN lsn;
     out_lsn = base_lsn;
     while (OB_SUCC(ret)) {
@@ -1627,11 +1627,11 @@ int ObLogArchivePieceContext::seek_in_file_(const int64_t file_id, const SCN &sc
         }
       } else if (OB_FAIL(iter.get_entry(entry, lsn))) {
         CLOG_LOG(WARN, "get entry failed", K(ret));
-      } else if (! entry.check_integrity()) {
+      } else if (! entry.check_integrity(lsn)) {
         ret = OB_INVALID_DATA;
         CLOG_LOG(WARN, "invalid data", K(ret), KPC(this), K(iter), K(entry));
       } else if (entry.get_scn() < scn) {
-        out_lsn = lsn + entry.get_serialize_size();
+        out_lsn = lsn + entry.get_serialize_size(lsn);
         CLOG_LOG(TRACE, "entry log_ts smaller than scn", K(ret),
             K(scn), K(out_lsn), K(lsn), K(entry));
       } else if (entry.get_scn() == scn) {
@@ -2168,7 +2168,7 @@ int ObLogRawPathPieceContext::get_max_log_in_file_(const ObLogRawPathPieceContex
   const int64_t header_size = archive::ARCHIVE_FILE_HEADER_SIZE;
   int64_t read_size = 0;
   palf::MemoryStorage mem_storage;
-  palf::MemPalfGroupBufferIterator iter;
+  ipalf::IPalfIterator<ipalf::IGroupEntry> iter;
   bool exist;
 
   const int64_t file_offset = 0;
@@ -2196,7 +2196,7 @@ int ObLogRawPathPieceContext::get_max_log_in_file_(const ObLogRawPathPieceContex
     } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(palf::LogIOUser::ARCHIVE)))) {
       CLOG_LOG(WARN, "iter set_io_context failed", K_(id), K(base_lsn));
     } else {
-      palf::LogGroupEntry entry;
+      ipalf::IGroupEntry entry;
       while (OB_SUCC(ret)) {
         if (OB_FAIL(iter.next())) {
           if (OB_ITER_END != ret) {
@@ -2204,11 +2204,11 @@ int ObLogRawPathPieceContext::get_max_log_in_file_(const ObLogRawPathPieceContex
           }
         } else if (OB_FAIL(iter.get_entry(entry, lsn))) {
           CLOG_LOG(WARN, "get entry failed", K(ret));
-        } else if (! entry.check_integrity()) {
+        } else if (! entry.check_integrity(lsn)) {
           ret = OB_INVALID_DATA;
           CLOG_LOG(WARN, "invalid data", K(ret), KPC(this), K(iter), K(entry));
         } else {
-          lsn = lsn + entry.get_serialize_size();
+          lsn = lsn + entry.get_serialize_size(lsn);
           scn = entry.get_scn();
           exist = true;
         }

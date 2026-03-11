@@ -74,6 +74,8 @@ public:
       const int64_t snapshot_version,
       const uint64_t data_format_version,
       transaction::ObTxDesc *tx_desc,
+      const ObSSTable *inc_major,
+      const ObSSTable *lob_inc_major,
       share::SCN &commit_scn);
 private:
   int write_inc_start_log(
@@ -95,6 +97,8 @@ private:
       const int64_t snapshot_version,
       const uint64_t data_format_version,
       transaction::ObTxDesc *tx_desc,
+      const ObSSTable *inc_major,
+      const ObSSTable *lob_inc_major,
       share::SCN &commit_scn);
   int get_write_store_ctx_guard(
       transaction::ObTxDesc *tx_desc,
@@ -119,12 +123,16 @@ private:
       const int64_t snapshot_version,
       const uint64_t data_format_version,
       transaction::ObTxDesc *tx_desc,
+      const ObSSTable *inc_major,
+      const ObSSTable *lob_inc_major,
       share::SCN &commit_scn);
   int remote_write_inc_commit_log(
       const common::ObTabletID lob_meta_tablet_id,
       const int64_t snapshot_version,
       const uint64_t data_format_version,
       transaction::ObTxDesc *tx_desc,
+      const ObSSTable *inc_major,
+      const ObSSTable *lob_inc_major,
       share::SCN &commit_scn);
   int freeze_inc_minor_ddl_kv(
       ObLS *ls,

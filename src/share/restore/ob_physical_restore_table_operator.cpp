@@ -44,7 +44,11 @@ static const char* phy_restore_status_str_array[PHYSICAL_RESTORE_MAX_STATUS] = {
   "UPGRADE",
   "RESTORE_SUCCESS",
   "RESTORE_FAIL",
-  "WAIT_TENANT_RESTORE_FINISH"
+  "WAIT_TENANT_RESTORE_FINISH",
+  "SS_RESTORE_GEN_TASK",
+  "SS_RESTORE_DATA",
+  "SS_RESTORE_LS",
+  "SS_RESTORE_CLOG",
 };
 
 const char* ObPhysicalRestoreTableOperator::get_restore_status_str(

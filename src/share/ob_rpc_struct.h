@@ -66,6 +66,7 @@
 #include "storage/tx/ob_multi_data_source.h"
 #include "share/unit/ob_unit_info.h" //ObUnit*
 #include "share/backup/ob_backup_clean_struct.h"
+#include "storage/backup/ob_backup_block_file_reader_writer.h"
 #include "share/backup/ob_backup_validate_struct.h"
 #include "logservice/palf/palf_options.h"//access mode
 #include "logservice/palf/palf_base_info.h"//PalfBaseInfo
@@ -92,6 +93,7 @@
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h" // storage::ObSSMicroCacheStat
 #  include "storage/shared_storage/micro_cache/ob_ss_micro_cache_arc_info.h"
 #  include "storage/incremental/garbage_collector/ob_ss_garbage_collector_define.h"  // LastSuccSCNs
+#include "share/backup/ob_ss_ha_macro_block_struct.h"
 #endif
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 #include "storage/mview/ob_major_mv_merge_info.h"       //ObMajorMVMergeInfo
@@ -108,6 +110,7 @@
 #include "share/schema/ob_location_schema_struct.h"
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/backup/ob_ss_ha_macro_block_struct.h"
 #include "share/ai_service/ob_ai_service_struct.h"
 #include "share/schema/ob_schema_struct_fts.h"
 
@@ -599,6 +602,7 @@ public:
   ~ObRootKeyResult() {}
   int assign(const ObRootKeyResult &other);
   void reset();
+  bool is_valid() const;
   TO_STRING_KV(K_(key_type), K_(root_key));
   enum RootKeyType key_type_;
   common::ObString root_key_;
@@ -5756,13 +5760,14 @@ public:
       retry_id_(0),
       dst_server_(),
       backup_path_(),
-      backup_data_type_() {}
+      backup_data_type_(),
+      start_scn_() {}
 public:
   int assign(const ObBackupDataArg &arg);
   bool is_valid() const;
   TO_STRING_KV(K_(trace_id), K_(job_id), K_(tenant_id), K_(task_id), K_(backup_set_id), K_(incarnation_id),
       K_(backup_type), K_(backup_date), K_(ls_id), K_(turn_id), K_(retry_id), K_(dst_server), K_(backup_path),
-      K_(backup_data_type));
+      K_(backup_data_type), K_(start_scn));
 public:
   share::ObTaskId trace_id_;
   int64_t job_id_;
@@ -5778,6 +5783,7 @@ public:
   common::ObAddr dst_server_;
   share::ObBackupPathString backup_path_;
   share::ObBackupDataType backup_data_type_;
+  share::SCN start_scn_;
 };
 
 struct ObBackupComplLogArg
@@ -5885,6 +5891,32 @@ public:
   int64_t retry_id_;
   common::ObAddr dst_server_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupFuseTabletMetaArg);
+};
+
+struct ObSSHAMacroBlocksArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSSHAMacroBlocksArg();
+  int assign(const ObSSHAMacroBlocksArg &arg);
+  bool is_valid() const;
+  TO_STRING_KV(K_(job_id), K_(task_id), K_(task_type), K_(ls_id), K_(retry_cnt), K_(trace_id), K_(tenant_id), K_(backup_set_id), K_(backup_path),
+      K_(dst_server), K_(macro_block_cnt), K_(macro_block_batch), K_(macro_list_addr));
+public:
+  int64_t job_id_;
+  int64_t ls_id_;
+  int64_t task_id_;
+  uint8_t task_type_;
+  int64_t retry_cnt_;
+  share::ObTaskId trace_id_;
+  uint64_t tenant_id_;
+  int64_t backup_set_id_;
+  share::ObBackupPathString backup_path_;
+  common::ObAddr dst_server_;
+  share::ObSSHAMacroBlockBatch macro_block_batch_;    // Macro block batch (binary serialized)
+  backup::ObBackupBlockFileAddr macro_list_addr_;  // For BACKUP_CLEAN tasks: block file address
+  int64_t macro_block_cnt_;
+  DISALLOW_COPY_AND_ASSIGN(ObSSHAMacroBlocksArg);
 };
 
 struct ObBackupCheckTaskArg
@@ -12585,6 +12617,55 @@ public:
   bool is_for_sslog_table_;
 };
 
+struct ObSSGCAdjustRetentionScnArg final
+{
+  OB_UNIS_VERSION(2);
+public:
+  ObSSGCAdjustRetentionScnArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      task_type_(storage::ObSSGCRetentionTaskType::INVALID_TYPE),
+      task_id_(0),
+      preserve_scn_(),
+      ls_id_()
+  {}
+  ObSSGCAdjustRetentionScnArg(const uint64_t tenant_id, const share::SCN &preserve_scn)
+    : tenant_id_(tenant_id),
+      task_type_(storage::ObSSGCRetentionTaskType::INVALID_TYPE),
+      task_id_(0),
+      preserve_scn_(preserve_scn),
+      ls_id_()
+  {}
+  ObSSGCAdjustRetentionScnArg(const uint64_t tenant_id,
+                              const storage::ObSSGCRetentionTaskType task_type,
+                              const int64_t task_id,
+                              const share::SCN &preserve_scn,
+                              const share::ObLSID &ls_id = share::ObLSID())
+    : tenant_id_(tenant_id),
+      task_type_(task_type),
+      task_id_(task_id),
+      preserve_scn_(preserve_scn),
+      ls_id_(ls_id)
+  {}
+  ~ObSSGCAdjustRetentionScnArg() {}
+  bool is_valid() const
+  {
+    return OB_INVALID_TENANT_ID != tenant_id_
+           && task_type_ != storage::ObSSGCRetentionTaskType::INVALID_TYPE
+           && task_type_ < storage::ObSSGCRetentionTaskType::MAX_TYPE
+           && task_id_ > 0
+           && preserve_scn_.is_valid()
+           && (task_type_ != storage::ObSSGCRetentionTaskType::MIGRATE || ls_id_.is_valid());
+  };
+  TO_STRING_KV(K_(tenant_id), K_(task_type), K_(task_id), K_(preserve_scn), K_(ls_id));
+
+public:
+  uint64_t tenant_id_;
+  storage::ObSSGCRetentionTaskType task_type_;
+  int64_t task_id_;
+  share::SCN preserve_scn_;
+  share::ObLSID ls_id_;
+};
+
 struct ObSSGCPushLastSuccScnArg final
 {
   OB_UNIS_VERSION(1);
@@ -12676,6 +12757,10 @@ public:
            const transaction::ObTxSEQ &seq_no,
            const int64_t snapshot_version,
            const uint64_t data_format_version);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int set_ss_inc_major(const blocksstable::ObSSTable *data_inc_major,
+                       const blocksstable::ObSSTable *lob_inc_major);
+#endif
   int release();
   bool is_valid() const
   {
@@ -12686,6 +12771,7 @@ public:
                K_(need_release), K_(direct_load_type), K_(trans_id), K_(seq_no),
                K_(snapshot_version), K_(data_format_version), K_(is_co_sstable));
 public:
+  ObArenaAllocator allocator_;
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;

@@ -81,6 +81,10 @@ public:
   virtual int advance_base_lsn(int64_t id, palf::LSN base_lsn) = 0;
 
   virtual int64_t get_tenant_id() = 0;
+
+  virtual int flashback(const uint64_t tenant_id,
+                        const share::SCN &flashback_scn,
+                        const int64_t timeout_us) = 0;
 };
 
 } // end namespace ipalf

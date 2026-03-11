@@ -169,6 +169,10 @@ public:
              const bool skip_call_rs = false,
              const uint64_t &cluster_id = OB_INVALID_CLUSTER_ID,
              common::ObIAllocator *allocator = NULL);
+  int restore_create_root_key(
+             const uint64_t tenant_id,
+             const obrpc::ObCreateTenantArg &arg,
+             const common::ObIArray<common::ObAddr> &addrs);
 #endif
   template <typename SCHEMA>
   int check_primary_zone_locality_condition(

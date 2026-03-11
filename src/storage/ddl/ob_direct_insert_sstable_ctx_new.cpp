@@ -3724,6 +3724,8 @@ int ObTabletIncDirectLoadMgr::close(const int64_t current_execution_id, const sh
                  0/*snapshot_version*/,
                  0/*data_format_version*/,
                  sqc_build_ctx_.build_param_.runtime_only_param_.tx_desc_,
+                 nullptr/*inc_major*/,
+                 nullptr/*lob_inc_major*/,
                  commit_scn))) {
       LOG_WARN("fail write start log", K(ret), K(tenant_data_version_), K(sqc_build_ctx_));
     } else if (nullptr != lob_tablet_mgr && OB_FAIL(lob_tablet_mgr->commit(current_execution_id, start_scn))) {

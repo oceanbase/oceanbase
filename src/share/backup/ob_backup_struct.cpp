@@ -2096,10 +2096,23 @@ bool ObBackupSetDesc::operator==(const ObBackupSetDesc &other) const
   return backup_set_id_ == other.backup_set_id_ && backup_type_.type_ == other.backup_type_.type_;
 }
 
+bool ObBackupSetDesc::operator!=(const ObBackupSetDesc &other) const
+{
+  return !operator==(other);
+}
+
 void ObBackupSetDesc::reset()
 {
   backup_set_id_ = -1;
   backup_type_.type_ = ObBackupType::MAX;
+}
+
+uint64_t ObBackupSetDesc::hash() const
+{
+  uint64_t hash_value = 0;
+  hash_value = common::murmurhash(&backup_set_id_, sizeof(backup_set_id_), hash_value);
+  hash_value = common::murmurhash(&backup_type_, sizeof(backup_type_), hash_value);
+  return hash_value;
 }
 
 OB_SERIALIZE_MEMBER(ObBackupType, type_);
@@ -3423,32 +3436,36 @@ ObBackupStatus &ObBackupStatus::operator=(const Status &status)
   return *this;
 }
 
+static const char *OB_BACKUP_STATUS_STRS[] = {
+  "INIT",
+  "DOING",
+  "COMPLETED",
+  "FAILED",
+  "CANCELING",
+  "CANCELED",
+  "BACKUP_SYS_META",
+  "BACKUP_USER_META",
+  "BACKUP_META_FINISH",
+  "BACKUP_SYS_DATA",
+  "BACKUP_USER_DATA",
+  "BEFORE_BACKUP_LOG",
+  "BACKUP_LOG",
+  "BACKUP_FUSE_TABLET_META",
+  "PREPARE_BACKUP_LOG",
+  "DISABLE_SS_GC",
+  "WAIT_SS_CLOG_CHECKPOINT",
+  "SS_WAIT_LS_CONSISTENCY",
+  "ENABLE_SS_GC",
+};
+
 const char* ObBackupStatus::get_str() const
 {
   const char *str = "UNKNOWN";
-  const char *status_strs[] = {
-    "INIT",
-    "DOING",
-    "COMPLETED",
-    "FAILED",
-    "CANCELING",
-    "CANCELED",
-    "BACKUP_SYS_META",
-    "BACKUP_USER_META",
-    "BACKUP_META_FINISH",
-    "BACKUP_SYS_DATA",
-    "BACKUP_USER_DATA",
-    "BEFORE_BACKUP_LOG",
-    "BACKUP_LOG",
-    "BACKUP_FUSE_TABLET_META",
-    "PREPARE_BACKUP_LOG",
-  };
-
-  STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(status_strs), "status count mismatch");
+  STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(OB_BACKUP_STATUS_STRS), "status count mismatch");
   if (status_ < INIT || status_ >= MAX_STATUS) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid backup data job status", K(status_));
   } else {
-    str = status_strs[status_];
+    str = OB_BACKUP_STATUS_STRS[status_];
   }
   return str;
 }
@@ -3457,30 +3474,14 @@ int ObBackupStatus::set_status(const char *str)
 {
   int ret = OB_SUCCESS;
   ObString s(str);
-  const char *status_strs[] = {
-    "INIT",
-    "DOING",
-    "COMPLETED",
-    "FAILED",
-    "CANCELING",
-    "CANCELED",
-    "BACKUP_SYS_META",
-    "BACKUP_USER_META",
-    "BACKUP_META_FINISH",
-    "BACKUP_SYS_DATA",
-    "BACKUP_USER_DATA",
-    "BEFORE_BACKUP_LOG",
-    "BACKUP_LOG",
-    "BACKUP_FUSE_TABLET_META",
-    "PREPARE_BACKUP_LOG",
-  };
-  const int64_t count = ARRAYSIZEOF(status_strs);
+  const int64_t count = ARRAYSIZEOF(OB_BACKUP_STATUS_STRS);
+  STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(OB_BACKUP_STATUS_STRS), "status count mismatch");
   if (s.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("status can't empty", K(ret));
   } else {
     for (int64_t i = 0; i < count; ++i) {
-      if (0 == s.case_compare(status_strs[i])) {
+      if (0 == s.case_compare(OB_BACKUP_STATUS_STRS[i])) {
         status_ = static_cast<Status>(i);
         break;
       }
@@ -3529,6 +3530,7 @@ const char* ObBackupTaskStatus::get_str() const
     "PENDING",
     "DOING",
     "FINISH",
+    "FAILED",
   };
   STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(status_strs), "status count mismatch");
   if (status_ < INIT || status_ >= MAX_STATUS) {
@@ -3543,11 +3545,21 @@ int ObBackupTaskStatus::set_status(const char *str)
 {
   int ret = OB_SUCCESS;
   ObString s(str);
+  if (OB_FAIL(set_status(s))) {
+    LOG_WARN("failed to set status", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupTaskStatus::set_status(const common::ObString &s)
+{
+  int ret = OB_SUCCESS;
   const char *status_strs[] = {
     "INIT",
     "PENDING",
     "DOING",
     "FINISH",
+    "FAILED",
   };
   const int64_t count = ARRAYSIZEOF(status_strs);
   if (s.empty()) {
@@ -3559,6 +3571,18 @@ int ObBackupTaskStatus::set_status(const char *str)
         status_ = static_cast<Status>(i);
       }
     }
+  }
+  return ret;
+}
+
+int ObBackupTaskStatus::set_status(const ObBackupTaskStatus::Status &status)
+{
+  int ret = OB_SUCCESS;
+  if (status < INIT || status >= MAX_STATUS) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("status is not valid", K(ret), K(status));
+  } else {
+    status_ = status;
   }
   return ret;
 }
@@ -4026,8 +4050,57 @@ ObBackupSetTaskAttr::ObBackupSetTaskAttr()
     backup_path_(0),
     retry_cnt_(0),
     result_(0),
-    comment_()
+    comment_(),
+    extra_info_()
 {
+}
+
+int ObBackupExtraInfo::assign(const ObBackupExtraInfo &other)
+{
+  int ret = OB_SUCCESS;
+  sslog_gts_ = other.sslog_gts_;
+  read_scn_ = other.read_scn_;
+  return ret;
+}
+
+int ObBackupExtraInfo::encode_to_str(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "sslog_gts:%lu,read_scn:%lu",
+                     sslog_gts_.get_val_for_gts(), read_scn_.get_val_for_gts()))) {
+    LOG_WARN("failed to encode extra_info", K(ret), K(buf_len), K_(sslog_gts), K_(read_scn));
+  }
+  return ret;
+}
+
+int ObBackupExtraInfo::decode_from_str(const char *str)
+{
+  int ret = OB_SUCCESS;
+  sslog_gts_.reset();
+  read_scn_.reset();
+  if (OB_ISNULL(str)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (0 == strlen(str)) {
+    // empty string means not set, return default (reset) values
+  } else {
+    uint64_t gts_value = 0;
+    uint64_t scn_value = 0;
+    int scan_count = sscanf(str, "sslog_gts:%lu,read_scn:%lu", &gts_value, &scn_value);
+    if (scan_count != 2) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("failed to parse extra_info", K(ret), K(str), K(scan_count));
+    } else if (OB_FAIL(sslog_gts_.convert_for_gts(gts_value))) {
+      LOG_WARN("failed to convert gts to scn", K(ret), K(gts_value));
+    } else if (OB_FAIL(read_scn_.convert_for_gts(scn_value))) {
+      LOG_WARN("failed to convert read_scn to scn", K(ret), K(scn_value));
+    }
+  }
+  return ret;
 }
 
 bool ObBackupSetTaskAttr::is_valid() const
@@ -4055,6 +4128,8 @@ int ObBackupSetTaskAttr::assign(const ObBackupSetTaskAttr &other)
     LOG_WARN("failed to assign comment", K(ret));
   } else if (OB_FAIL(stats_.assign(other.stats_))) {
     LOG_WARN("failed to assign stats", K(ret));
+  } else if (OB_FAIL(extra_info_.assign(other.extra_info_))) {
+    LOG_WARN("failed to assign extra_info", K(ret), K(other.extra_info_));
   } else {
     incarnation_id_ = other.incarnation_id_;
     task_id_ = other.task_id_;
@@ -4230,7 +4305,9 @@ OB_SERIALIZE_MEMBER(ObBackupSetFileDesc, backup_set_id_, incarnation_, tenant_id
     plus_archivelog_, date_, prev_full_backup_set_id_, prev_inc_backup_set_id_, stats_, start_time_, end_time_, status_,
     result_, encryption_mode_, passwd_, file_status_, backup_path_, start_replay_scn_, min_restore_scn_,
     tenant_compatible_, backup_compatible_, data_turn_id_, meta_turn_id_, cluster_version_,
-    minor_turn_id_, major_turn_id_, consistent_scn_);
+    minor_turn_id_, major_turn_id_, consistent_scn_,
+    is_shared_storage_mode_ // FARM COMPAT WHITELIST # TODO(yanfeng): remove later
+);
 
 ObBackupSetFileDesc::ObBackupSetFileDesc()
   : backup_set_id_(0),
@@ -4260,7 +4337,8 @@ ObBackupSetFileDesc::ObBackupSetFileDesc()
     cluster_version_(0),
     minor_turn_id_(0),
     major_turn_id_(0),
-    consistent_scn_()
+    consistent_scn_(),
+    is_shared_storage_mode_(false)
 {
 }
 
@@ -4294,6 +4372,7 @@ void ObBackupSetFileDesc::reset()
   minor_turn_id_ = 0;
   major_turn_id_ = 0;
   consistent_scn_.reset();
+  is_shared_storage_mode_ = false;
 }
 
 bool ObBackupSetFileDesc::is_key_valid() const
@@ -4432,6 +4511,7 @@ int ObBackupSetFileDesc::assign(const ObBackupSetFileDesc &other)
     minor_turn_id_ = other.minor_turn_id_;
     major_turn_id_ = other.major_turn_id_;
     consistent_scn_ = other.consistent_scn_;
+    is_shared_storage_mode_ = other.is_shared_storage_mode_;
   }
   return ret;
 }
@@ -4455,7 +4535,7 @@ int64_t ObBackupSetFileDesc::to_string(char *min_restore_scn_str_buf,  char *buf
       K_(date), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(stats), K_(start_time), K_(end_time),
       K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K_(backup_path), K_(start_replay_scn),
       K_(min_restore_scn), K(min_restore_scn_display), K(tenant_compatible_display), K_(backup_compatible), K_(data_turn_id), K_(meta_turn_id),
-      K(cluster_version_display), K_(consistent_scn));
+      K(cluster_version_display), K_(consistent_scn), K_(is_shared_storage_mode));
     J_OBJ_END();
   }
   return pos;

@@ -1029,6 +1029,10 @@ int ObTenantDDLService::create_tenant_schema(
         if (OB_FAIL(standby_create_root_key(user_tenant_id, arg, addrs))) {
           LOG_WARN("failed to create root key", KR(ret), K(user_tenant_id), K(arg));
         }
+      } else if (arg.is_restore_) {
+        if (OB_FAIL(restore_create_root_key(user_tenant_id, arg, addrs))) {
+          LOG_WARN("fail to restore create root key", KR(ret), K(user_tenant_id), K(arg));
+        }
       } else if (OB_FAIL(create_root_key(*rpc_proxy_, user_tenant_id, addrs))) {
         LOG_WARN("fail to create root key", KR(ret), K(addrs));
       }
@@ -1202,7 +1206,7 @@ int ObTenantDDLService::check_need_create_root_key(const ObCreateTenantArg &arg,
   need_create = false;
   if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
     need_create = false;
-  } else if (arg.is_restore_tenant() || arg.is_clone_tenant()) {
+  } else if (arg.is_clone_tenant()) {
     need_create = false;
   } else {
     need_create = true;
@@ -1450,6 +1454,34 @@ int ObTenantDDLService::notify_root_key(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpect root key", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObTenantDDLService::restore_create_root_key(
+             const uint64_t tenant_id,
+             const obrpc::ObCreateTenantArg &arg,
+             const common::ObIArray<common::ObAddr> &addrs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id) || !arg.is_restore_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(arg));
+  } else {
+    obrpc::RootKeyType key_type = arg.root_key_type_;
+    common::ObString root_key = arg.root_key_;
+    obrpc::ObRootKeyArg root_key_arg;
+    obrpc::ObRootKeyResult dummy_result;
+    if (RootKeyType::INVALID == key_type || root_key.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid root key", KR(ret), K(tenant_id), K(key_type), K(root_key));
+    } else if (OB_FAIL(root_key_arg.init(tenant_id, key_type, root_key))) {
+      LOG_WARN("failed to init root key arg", KR(ret), K(tenant_id), K(key_type), K(root_key));
+    } else if (OB_FAIL(notify_root_key(*rpc_proxy_, root_key_arg, addrs, dummy_result))) {
+      LOG_WARN("fail to notify root key", KR(ret), K(root_key_arg));
     }
   }
   return ret;
