@@ -10242,6 +10242,8 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_CDB_OB_ROUTINE_LOAD_JOBS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_CDB_OB_ROUTINE_LOAD_JOBS_SCHEMA_VERSION); break;
     case OB_GV_OB_SS_LOCAL_CACHE_DIAGNOSE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_SS_LOCAL_CACHE_DIAGNOSE_SCHEMA_VERSION); break;
     case OB_V_OB_SS_LOCAL_CACHE_DIAGNOSE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_SS_LOCAL_CACHE_DIAGNOSE_SCHEMA_VERSION); break;
+    case OB_GV_OB_SINDI_INDEX_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_SINDI_INDEX_INFO_SCHEMA_VERSION); break;
+    case OB_V_OB_SINDI_INDEX_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_SINDI_INDEX_INFO_SCHEMA_VERSION); break;
     case OB_GV_OB_HNSW_INDEX_SEGMENT_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_HNSW_INDEX_SEGMENT_INFO_SCHEMA_VERSION); break;
     case OB_V_OB_HNSW_INDEX_SEGMENT_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_HNSW_INDEX_SEGMENT_INFO_SCHEMA_VERSION); break;
     case OB_DBA_SYNONYMS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_SYNONYMS_ORACLE_SCHEMA_VERSION); break;

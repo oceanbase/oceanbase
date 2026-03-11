@@ -638,6 +638,55 @@ int ObVectorIndexUtil::is_int_val(const ObString &str, bool &is_int)
   return ret;
 }
 
+const char* ObVectorIndexUtil::get_type_str(ObVectorIndexAlgorithmType type)
+{
+  const char* ret_str = "UNKNOWN";
+  switch (type) {
+    case ObVectorIndexAlgorithmType::VIAT_HNSW:
+      ret_str = "HNSW";
+      break;
+    case ObVectorIndexAlgorithmType::VIAT_HNSW_SQ:
+      ret_str = "HNSW_SQ";
+      break;
+    case ObVectorIndexAlgorithmType::VIAT_HNSW_BQ:
+      ret_str = "HNSW_BQ";
+      break;
+    case ObVectorIndexAlgorithmType::VIAT_IVF_FLAT:
+      ret_str = "IVF_FLAT";
+      break;
+    case ObVectorIndexAlgorithmType::VIAT_IVF_SQ8:
+      ret_str = "IVF_SQ8";
+      break;
+    case ObVectorIndexAlgorithmType::VIAT_IVF_PQ:
+      ret_str = "IVF_PQ";
+      break;
+    case ObVectorIndexAlgorithmType::VIAT_HGRAPH:
+      ret_str = "HGRAPH";
+      break;
+    case ObVectorIndexAlgorithmType::VIAT_IPIVF:
+      ret_str = "SINDI";
+      break;
+    case ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ:
+      ret_str = "SINDI_SQ";
+      break;
+    case ObVectorIndexAlgorithmType::VIAT_SPIV:
+      ret_str = "SPIV";
+      break;
+    default:
+      break;
+  }
+  return ret_str;
+}
+
+const char* ObVectorIndexUtil::get_dist_algorithm_str(ObVectorIndexDistAlgorithm dist)
+{
+  const char* ret_str = "UNKNOWN";
+  if (dist >= 0 && dist < ObVectorIndexDistAlgorithm::VIDA_MAX) {
+    ret_str = VEC_INDEX_ALGTH[dist];
+  }
+  return ret_str;
+}
+
 int ObVectorIndexParam::print_to_string(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
@@ -647,27 +696,100 @@ int ObVectorIndexParam::print_to_string(char *buf, int64_t buf_len, int64_t &pos
         LOG_WARN("fail to print param", K(ret), K(fmt), K(val));       \
       }                                                                \
     }
-  PRINT_PARAM("type=%d,", type_);
-  PRINT_PARAM("lib=%d,", lib_);
-  PRINT_PARAM("dist_algorithm=%d,", dist_algorithm_);
+  PRINT_PARAM("type=%s,", ObVectorIndexUtil::get_type_str(type_));
+
+  // Print parameters based on index type
+  if (ObVectorIndexUtil::is_hnsw_index_type(type_)) {
+    if (OB_FAIL(print_hnsw_params(buf, buf_len, pos))) {
+      LOG_WARN("fail to print hnsw params", K(ret));
+    }
+  } else if (ObVectorIndexUtil::is_ivf_index_type(type_)) {
+    if (OB_FAIL(print_ivf_params(buf, buf_len, pos))) {
+      LOG_WARN("fail to print ivf params", K(ret));
+    }
+  } else if (ObVectorIndexUtil::is_ipivf_index_type(type_)) {
+    if (OB_FAIL(print_ipivf_params(buf, buf_len, pos))) {
+      LOG_WARN("fail to print ipivf params", K(ret));
+    }
+  } else if (type_ == ObVectorIndexAlgorithmType::VIAT_SPIV) {
+    PRINT_PARAM("dist_algorithm=%s,", ObVectorIndexUtil::get_dist_algorithm_str(dist_algorithm_));
+    PRINT_PARAM("dim=%ld", dim_);
+  }
+
+  #undef PRINT_PARAM
+  return ret;
+}
+
+int ObVectorIndexParam::print_hnsw_params(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  #define PRINT_PARAM(fmt, val)                                        \
+    if (OB_SUCC(ret)) {                                                \
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, fmt, val))) {     \
+        LOG_WARN("fail to print param", K(ret), K(fmt), K(val));       \
+      }                                                                \
+    }
+
+  PRINT_PARAM("lib=%d,", static_cast<int>(lib_));
+  PRINT_PARAM("dist_algorithm=%s,", ObVectorIndexUtil::get_dist_algorithm_str(dist_algorithm_));
   PRINT_PARAM("dim=%ld,", dim_);
   PRINT_PARAM("m=%ld,", m_);
   PRINT_PARAM("ef_construction=%ld,", ef_construction_);
   PRINT_PARAM("ef_search=%ld,", ef_search_);
-  PRINT_PARAM("nlist=%ld,", nlist_);
-  PRINT_PARAM("sample_per_nlist=%ld,", sample_per_nlist_);
   PRINT_PARAM("extra_info_max_size=%ld,", extra_info_max_size_);
   PRINT_PARAM("extra_info_actual_size=%ld,", extra_info_actual_size_);
-  PRINT_PARAM("refine_type=%d,", static_cast<int>(refine_type_));
-  PRINT_PARAM("bq_bits_query=%d,", static_cast<int>(bq_bits_query_));
-  PRINT_PARAM("refine_k=%f,", refine_k_);
-  PRINT_PARAM("bq_use_fht=%d,", static_cast<int>(bq_use_fht_));
+  if (type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ) {
+    PRINT_PARAM("refine_type=%d,", static_cast<int>(refine_type_));
+    PRINT_PARAM("bq_bits_query=%d,", static_cast<int>(bq_bits_query_));
+    PRINT_PARAM("refine_k=%f,", refine_k_);
+    PRINT_PARAM("bq_use_fht=%s,", bq_use_fht_ ? "true" : "false");
+  }
   PRINT_PARAM("sync_interval_type=%d,", static_cast<int>(sync_interval_type_));
   PRINT_PARAM("sync_interval_value=%ld,", sync_interval_value_);
   PRINT_PARAM("endpoint=%s,", endpoint_);
-  PRINT_PARAM("nbits=%ld,", nbits_);
+
+  #undef PRINT_PARAM
+  return ret;
+}
+
+int ObVectorIndexParam::print_ivf_params(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  #define PRINT_PARAM(fmt, val)                                        \
+    if (OB_SUCC(ret)) {                                                \
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, fmt, val))) {     \
+        LOG_WARN("fail to print param", K(ret), K(fmt), K(val));       \
+      }                                                                \
+    }
+
+  PRINT_PARAM("lib=%d,", static_cast<int>(lib_));
+  PRINT_PARAM("dist_algorithm=%s,", ObVectorIndexUtil::get_dist_algorithm_str(dist_algorithm_));
+  PRINT_PARAM("dim=%ld,", dim_);
+  PRINT_PARAM("nlist=%ld,", nlist_);
+  PRINT_PARAM("sample_per_nlist=%ld,", sample_per_nlist_);
+  if (type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ) {
+    PRINT_PARAM("m=%ld,", m_);
+    PRINT_PARAM("nbits=%ld,", nbits_);
+  }
+
+  #undef PRINT_PARAM
+  return ret;
+}
+
+int ObVectorIndexParam::print_ipivf_params(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  #define PRINT_PARAM(fmt, val)                                        \
+    if (OB_SUCC(ret)) {                                                \
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, fmt, val))) {     \
+        LOG_WARN("fail to print param", K(ret), K(fmt), K(val));       \
+      }                                                                \
+    }
+
+  PRINT_PARAM("dist_algorithm=%s,", ObVectorIndexUtil::get_dist_algorithm_str(dist_algorithm_));
   PRINT_PARAM("prune=%s,", prune_ ? "true" : "false");
   PRINT_PARAM("refine=%s,", refine_ ? "true" : "false");
+  PRINT_PARAM("refine_k=%f,", refine_k_);
   PRINT_PARAM("drop_ratio_build=%f,", ob_sparse_drop_ratio_build_);
   PRINT_PARAM("drop_ratio_search=%f", ob_sparse_drop_ratio_search_);
   #undef PRINT_PARAM

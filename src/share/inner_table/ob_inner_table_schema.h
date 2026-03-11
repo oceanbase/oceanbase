@@ -2240,6 +2240,8 @@ public:
   static int cdb_ob_routine_load_jobs_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_ss_local_cache_diagnose_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_ss_local_cache_diagnose_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_sindi_index_info_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_sindi_index_info_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_hnsw_index_segment_info_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_hnsw_index_segment_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
@@ -5770,6 +5772,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_ob_routine_load_jobs_schema,
   ObInnerTableSchema::gv_ob_ss_local_cache_diagnose_schema,
   ObInnerTableSchema::v_ob_ss_local_cache_diagnose_schema,
+  ObInnerTableSchema::gv_ob_sindi_index_info_schema,
+  ObInnerTableSchema::v_ob_sindi_index_info_schema,
   ObInnerTableSchema::gv_ob_hnsw_index_segment_info_schema,
   ObInnerTableSchema::v_ob_hnsw_index_segment_info_schema,
   ObInnerTableSchema::dba_synonyms_schema,
@@ -7905,6 +7909,8 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_ROUTINE_LOAD_JOBS_TID,
   OB_GV_OB_SS_LOCAL_CACHE_DIAGNOSE_TID,
   OB_V_OB_SS_LOCAL_CACHE_DIAGNOSE_TID,
+  OB_GV_OB_SINDI_INDEX_INFO_TID,
+  OB_V_OB_SINDI_INDEX_INFO_TID,
   OB_GV_OB_HNSW_INDEX_SEGMENT_INFO_TID,
   OB_V_OB_HNSW_INDEX_SEGMENT_INFO_TID,
   OB_DBA_SYNONYMS_TID,
@@ -11196,6 +11202,8 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_ROUTINE_LOAD_JOBS_TNAME,
   OB_GV_OB_SS_LOCAL_CACHE_DIAGNOSE_TNAME,
   OB_V_OB_SS_LOCAL_CACHE_DIAGNOSE_TNAME,
+  OB_GV_OB_SINDI_INDEX_INFO_TNAME,
+  OB_V_OB_SINDI_INDEX_INFO_TNAME,
   OB_GV_OB_HNSW_INDEX_SEGMENT_INFO_TNAME,
   OB_V_OB_HNSW_INDEX_SEGMENT_INFO_TNAME,
   OB_DBA_SYNONYMS_TNAME,
