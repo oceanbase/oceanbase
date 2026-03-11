@@ -13,6 +13,45 @@
 #define USING_LOG_PREFIX SHARE
 #include <sys/vfs.h>
 #include <sys/statvfs.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <fcntl.h>
+
+// statx(2) glibc wrapper was added in glibc 2.28.  Define the struct and
+// constants ourselves so that we can call the syscall directly on older
+// toolchains (kernel >= 4.11 is still required at runtime).
+#include <stdint.h>
+#ifndef STATX_BTIME
+#define STATX_BTIME 0x00000800U
+struct statx_timestamp {
+  int64_t  tv_sec;
+  uint32_t tv_nsec;
+  int32_t  reserved_;
+};
+struct statx {
+  uint32_t stx_mask;
+  uint32_t stx_blksize;
+  uint64_t stx_attributes;
+  uint32_t stx_nlink;
+  uint32_t stx_uid;
+  uint32_t stx_gid;
+  uint16_t stx_mode;
+  uint16_t spare0_[1];
+  uint64_t stx_ino;
+  uint64_t stx_size;
+  uint64_t stx_blocks;
+  uint64_t stx_attributes_mask;
+  struct statx_timestamp stx_atime;
+  struct statx_timestamp stx_btime;
+  struct statx_timestamp stx_ctime;
+  struct statx_timestamp stx_mtime;
+  uint32_t stx_rdev_major;
+  uint32_t stx_rdev_minor;
+  uint32_t stx_dev_major;
+  uint32_t stx_dev_minor;
+  uint64_t spare2_[14];
+};
+#endif  // STATX_BTIME
 #include "common/storage/ob_io_device.h"
 #include "share/ob_device_manager.h"
 #include "share/ob_io_device_helper.h"
@@ -656,6 +695,45 @@ int ObIODeviceLocalFileOp::stat(const char *pathname, ObIODFileStat &statbuf)
       statbuf.mtime_s_ = static_cast<int64_t>(buf.st_mtim.tv_sec);
       statbuf.ctime_s_ = static_cast<int64_t>(buf.st_ctim.tv_sec);
       statbuf.btime_s_ = INT64_MAX; // local file system stat does not offer birth time
+    }
+  }
+  return ret;
+}
+
+int ObIODeviceLocalFileOp::get_dir_create_time(const char *pathname, int64_t &create_time_s)
+{
+  int ret = OB_SUCCESS;
+  create_time_s = INT64_MAX;
+  if (OB_ISNULL(pathname) || 0 == STRLEN(pathname)) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "invalid argument", K(ret), KP(pathname));
+  } else {
+#ifdef SYS_statx
+    struct statx stx;
+    MEMSET(&stx, 0, sizeof(stx));
+    if (0 != ::syscall(SYS_statx, AT_FDCWD, pathname, 0, STATX_BTIME, &stx)) {
+      ret = convert_sys_errno();
+      SHARE_LOG(WARN, "fail to statx, fallback to mtime", K(ret), K(pathname), K(errno), KERRMSG);
+    } else if (stx.stx_mask & STATX_BTIME) {
+      create_time_s = static_cast<int64_t>(stx.stx_btime.tv_sec);
+    } else {
+      // file system does not support birth time, fall back to mtime
+      if (REACH_TIME_INTERVAL(5 * 1000 * 1000 /* 5 seconds */)) {
+        SHARE_LOG(INFO, "file system does not support birth time, fallback to mtime", K(pathname));
+      }
+    }
+#endif  // SYS_statx
+
+    if (OB_FAIL(ret) || INT64_MAX == create_time_s) {
+      // fallback: use mtime from stat(), if birth time is not supported
+      struct stat buf;
+      ret = OB_SUCCESS;
+      if (0 != ::stat(pathname, &buf)) {
+        ret = convert_sys_errno();
+        SHARE_LOG(WARN, "fail to stat for fallback mtime", K(ret), K(pathname), K(errno), KERRMSG);
+      } else {
+        create_time_s = static_cast<int64_t>(buf.st_mtim.tv_sec);
+      }
     }
   }
   return ret;

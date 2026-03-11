@@ -192,6 +192,7 @@ public:
   static int exist(const char *pathname, bool &is_exist);
   static int stat(const char *pathname, common::ObIODFileStat &statbuf);
   static int fstat(const common::ObIOFd &fd, common::ObIODFileStat &statbuf);
+  static int get_dir_create_time(const char *pathname, int64_t &create_time_s);
 
   static int read(
     const common::ObIOFd &fd,
