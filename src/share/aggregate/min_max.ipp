@@ -413,13 +413,18 @@ private:
       *reinterpret_cast<int64_t *>(rollup_agg_cell) = reinterpret_cast<int64_t>(tmp_buf);
       *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = curr_agg_cell_len;
     } else {
-      int32_t new_cap = ((curr_agg_cell_len + BUF_BLOCK_SIZE - 1) / BUF_BLOCK_SIZE) * BUF_BLOCK_SIZE;
+      int32_t agg_cell_len = MAX(curr_agg_cell_len, 1);
+      int32_t new_cap = ((agg_cell_len + BUF_BLOCK_SIZE - 1) / BUF_BLOCK_SIZE) * BUF_BLOCK_SIZE;
       void *new_buf = nullptr;
       if (OB_ISNULL(new_buf = agg_ctx.allocator_.alloc(new_cap))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_LOG(WARN, "allocate memory failed", K(ret), K(new_cap));
       } else {
-        MEMCPY(new_buf, cur_agg_data, curr_agg_cell_len);
+        if (curr_agg_cell_len > 0) {
+          MEMCPY(new_buf, cur_agg_data, curr_agg_cell_len);
+        } else {
+          MEMSET(new_buf, 0, new_cap);
+        }
         cap = new_cap;
         *reinterpret_cast<int64_t *>(rollup_agg_cell + sizeof(char *) + sizeof(int32_t)) =
           reinterpret_cast<int64_t>(new_buf);
