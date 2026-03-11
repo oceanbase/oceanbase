@@ -68,7 +68,8 @@ public:
   static bool is_tablet_meta(const MacroBlockId &macro_id);
   static bool is_shared_tablet_sub_meta(const ObStorageObjectType type);
   static bool is_shared_tablet_sub_meta(const MacroBlockId &macro_id);
-
+  static bool is_shared_tablet_sub_meta_in_table(const ObStorageObjectType type);
+  static bool is_shared_tablet_sub_meta_in_table(const MacroBlockId &macro_id);
 #ifdef OB_BUILD_SHARED_STORAGE
   static int get_open_flag_for_write(const ObStorageObjectType type);
   static int get_open_flag_for_read(const ObStorageObjectType type);

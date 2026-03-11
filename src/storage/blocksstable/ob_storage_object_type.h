@@ -141,7 +141,8 @@ public:
   // check macro block id valid
   virtual bool is_valid(const MacroBlockId &file_id) const { return false; }
   virtual bool has_effective_tablet_id() const { return false; }
-  virtual bool is_shared_tablet_sub_meta() const { return is_shared() && is_tablet_meta(); }
+  virtual bool is_shared_tablet_sub_meta() const { return is_shared() && is_tablet_meta() && !is_store_in_table(); }
+  virtual bool is_shared_tablet_sub_meta_in_table() const { return is_shared() && is_tablet_meta() && is_store_in_table(); }
 #ifdef OB_BUILD_SHARED_STORAGE
   // path format reverse, macro id to local path
   virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,

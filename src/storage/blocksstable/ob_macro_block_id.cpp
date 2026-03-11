@@ -249,12 +249,12 @@ const ObStorageObjectTypeBase &MacroBlockId::get_type_instance() const
 
 bool MacroBlockId::is_shared_tablet_sub_meta_in_table() const
 {
-  return is_shared_sub_meta() && SSObjUtil::is_store_in_table(storage_object_type());
+  return is_id_mode_share() && SSObjUtil::is_shared_tablet_sub_meta_in_table(storage_object_type());
 }
 
 bool MacroBlockId::is_shared_tablet_sub_meta() const
 {
-  return is_shared_sub_meta() && !SSObjUtil::is_store_in_table(storage_object_type());
+  return is_id_mode_share() && SSObjUtil::is_shared_tablet_sub_meta(storage_object_type());
 }
 
 /*
@@ -312,7 +312,6 @@ bool MacroBlockId::is_shared_mini_v2() const
     && storage_object_type() <= ObStorageObjectType::SHARED_MINI_V2_META_MACRO;
 }
 
-
 /*
  SHARED_MINOR_V2_DATA_MACRO
  SHARED_MINOR_V2_META_MACRO
@@ -322,14 +321,6 @@ bool MacroBlockId::is_shared_minor_v2() const
   return is_id_mode_share()
     && storage_object_type() >= ObStorageObjectType::SHARED_MINOR_V2_DATA_MACRO
     && storage_object_type() <= ObStorageObjectType::SHARED_MINOR_V2_META_MACRO;
-}
-/*
- SHARED_TABLET_SUB_META
-*/
-bool MacroBlockId::is_shared_sub_meta() const
-{
-  return is_id_mode_share()
-         && SSObjUtil::is_shared_tablet_sub_meta(storage_object_type());
 }
 
 /*
