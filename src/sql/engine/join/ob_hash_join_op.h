@@ -924,9 +924,8 @@ private:
   // **** for vectorized *****
   int fill_partition_batch(int64_t &num_left_rows);
   int fill_partition_batch_opt(int64_t &num_left_rows);
-  int get_next_left_row_batch(bool is_from_row_store,
-                              const ObBatchRows *&child_brs);
-  int get_next_left_row_batch_na(bool is_from_row_store, const ObBatchRows *&child_brs);
+  int get_next_left_row_batch(bool is_from_row_store);
+  int get_next_left_row_batch_na(bool is_from_row_store);
   int get_next_right_batch();
   int get_next_right_batch_na();
   int calc_hash_value_batch(const ObIArray<ObExpr*> &join_keys,
@@ -1102,8 +1101,7 @@ private:
   typedef int (ObHashJoinOp::*Get_next_right_row)();
   typedef int (ObHashJoinOp::*Get_next_left_row)();
   typedef int (ObHashJoinOp::*Get_next_right_batch)();
-  typedef int (ObHashJoinOp::*Get_next_left_batch)(bool is_from_row_store,
-                                                   const ObBatchRows *&child_brs);
+  typedef int (ObHashJoinOp::*Get_next_left_batch)(bool is_from_row_store);
   static const int64_t RATIO_OF_BUCKETS = 2;
   // min row count for estimated row count
   static const int64_t MIN_ROW_COUNT = 10000;
