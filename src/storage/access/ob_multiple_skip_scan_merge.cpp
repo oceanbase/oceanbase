@@ -419,6 +419,9 @@ int ObMultipleSkipScanMerge::update_scan_rows_range(blocksstable::ObDatumRow &ro
   }
 
   if (OB_SUCC(ret)) {
+    if (OB_NOT_NULL(block_row_store_)) {
+      block_row_store_->set_skip_scan_reuse();
+    }
     ObMultipleScanMerge::reuse();
     const ObColDescIArray *col_descs = nullptr;
     if (OB_ISNULL(col_descs = access_param_->iter_param_.get_out_col_descs())) {
@@ -428,6 +431,9 @@ int ObMultipleSkipScanMerge::update_scan_rows_range(blocksstable::ObDatumRow &ro
       STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret));
     } else if (OB_FAIL(ObMultipleScanMerge::open(scan_rows_range_))) {
       STORAGE_LOG(WARN, "Fail to open scan rows range", K(ret), K(scan_rows_range_));
+    }
+    if (OB_NOT_NULL(block_row_store_)) {
+      block_row_store_->clear_skip_scan_reuse();
     }
   }
   if (OB_SUCC(ret)) {
@@ -465,6 +471,9 @@ int ObMultipleSkipScanMerge::update_scan_rowkey_range()
       } else if (cmp_ret >= 0) {
         ret = OB_ITER_END;
       } else {
+        if (OB_NOT_NULL(block_row_store_)) {
+          block_row_store_->set_skip_scan_reuse();
+        }
         ObMultipleScanMerge::reuse();
         const ObColDescIArray *col_descs = nullptr;
         if (OB_ISNULL(col_descs = access_param_->iter_param_.get_out_col_descs())) {
@@ -474,6 +483,9 @@ int ObMultipleSkipScanMerge::update_scan_rowkey_range()
           STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret));
         } else if (OB_FAIL(ObMultipleScanMerge::open(scan_rowkey_range_))) {
           STORAGE_LOG(WARN, "Fail to open scan rowkey range", K(ret), K(scan_rowkey_range_));
+        }
+        if (OB_NOT_NULL(block_row_store_)) {
+          block_row_store_->clear_skip_scan_reuse();
         }
       }
     }
