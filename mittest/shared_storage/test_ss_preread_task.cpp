@@ -582,16 +582,29 @@ TEST_F(TestSSPreReadTask, preread_shared_tablet_sub_meta)
   bool is_local_exist = false;
   ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_local_exist));
   ASSERT_TRUE(is_local_exist);
+  is_exist = false;
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->exist(macro_id, is_exist));
+  ASSERT_TRUE(is_exist);
   LOG_INFO("macro block is now in local disk cache", K(macro_id));
 
+  ObSSMacroCacheStat macro_cache_stat;
+  macro_cache_stat.reset();
+  ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_space_mgr);
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, macro_cache_stat));
   // 13. delete file
   ASSERT_EQ(OB_SUCCESS, file_manager->delete_file(macro_id, 0/*ls_epoch_id*/));
   ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_remote_file(macro_id, 0/*ls_epoch_id*/, is_exist));
   ASSERT_FALSE(is_exist);
   ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_local_exist));
   ASSERT_FALSE(is_local_exist);
+  int64_t expected_disk_size = macro_cache_stat.used_ - SHARED_TABLET_SUB_META_SIZE;
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, macro_cache_stat));
+  ASSERT_EQ(expected_disk_size, macro_cache_stat.used_);
 
-  // 13. Clean up resources
+  // 14. Clean up resources
   ob_free(write_buf);
   ob_free(read_buf);
 }

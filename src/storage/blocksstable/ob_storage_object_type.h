@@ -1013,7 +1013,6 @@ public:
   virtual bool is_tablet_meta() const { return true; }
   virtual bool is_shared() const { return true; }
   virtual uint8_t write_strategy() const { return 1; }
-  virtual bool is_overwrite() const { return true; }
   virtual bool is_path_include_inner_tablet() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
   virtual bool has_effective_tablet_id() const { return true; }

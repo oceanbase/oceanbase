@@ -3674,7 +3674,6 @@ def_storage_object_type_cfg(
     data_type = 'tablet_meta',
     read_odirect = False,
     write_strategy = ["WRITE_THROUGH"],
-    is_overwrite = True,
     is_path_include_inner_tablet = True,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const
