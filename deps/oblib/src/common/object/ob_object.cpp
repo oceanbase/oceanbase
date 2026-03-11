@@ -3161,6 +3161,8 @@ int ObObjCharacterUtil::print_safe_hex_represent_mysql(const ObObj &obj, char *b
   ObCharsetType charset_type = ObCharset::charset_type_by_coll(collation_type);
   const char *charset_name = nullptr;
   const char *collation_name = nullptr;
+  ObString data_str;
+
   if (!ObCharset::is_valid_collation(charset_type, collation_type)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid collation info", K(ret), K(obj.get_type()));
@@ -3169,13 +3171,21 @@ int ObObjCharacterUtil::print_safe_hex_represent_mysql(const ObObj &obj, char *b
   } else if (OB_UNLIKELY(!charset_name || !collation_name)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected collation name", K(ret), K(charset_type), K(collation_type));
-  } else if (OB_FAIL(databuff_printf(buffer, length, pos, "%s", CAST_PREFIX))) {
+  } else if (obj.is_outrow_lob()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("out of row lob is unexpected", K(ret), K(obj));
+  } else {
+    data_str = obj.get_text_print_string(length - pos);
+  }
+
+  if (FAILEDx(databuff_printf(buffer, length, pos, "%s", CAST_PREFIX))) {
     LOG_WARN("fail to print string", K(ret), K(CAST_PREFIX));
-  } else if (OB_FAIL(hex_print(obj.get_string_ptr(), obj.get_string_len(), buffer, length, pos))) {
+  } else if (OB_FAIL(hex_print(data_str.ptr(), data_str.length(), buffer, length, pos))) {
     LOG_WARN("fail to print hex", K(ret));
   } else if (OB_FAIL(databuff_printf(buffer, length, pos, CAST_SUFFIX, charset_name, collation_name))) {
     LOG_WARN("fail to print string", K(ret), K(CAST_SUFFIX), K(charset_name), K(collation_name));
   }
+
   return ret;
 }
 
@@ -3183,7 +3193,7 @@ int ObObjCharacterUtil::print_safe_hex_represent(const ObObj &obj, char* buf, co
   const ObAccuracy &accuracy)
 {
   int ret = OB_SUCCESS;
-  if (!ob_is_character_type(obj.get_type(), obj.get_collation_type())){
+  if (!can_print_safe_hex_represent(obj)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected obj type", K(ret), K(obj.get_type()), K(obj.get_collation_type()));
   } else {
@@ -3193,3 +3203,12 @@ int ObObjCharacterUtil::print_safe_hex_represent(const ObObj &obj, char* buf, co
   return ret;
 }
 
+bool ObObjCharacterUtil::can_print_safe_hex_represent(const ObObj &obj)
+{
+  bool bret = ob_is_character_type(obj.get_type(), obj.get_collation_type());
+  if (!lib::is_oracle_mode() && !bret) {
+    // string type is supported only for mysql mode
+    bret = ob_is_text_tc(obj.get_type()) && CS_TYPE_BINARY != obj.get_collation_type();
+  }
+  return bret;
+}

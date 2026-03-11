@@ -2697,17 +2697,34 @@ int ObRemoteScan::convert_rowkey_to_sql_literal(
       print_params.ob_obj_type_ = tmp_obj.get_type();
       print_params.accuracy_ = rowkey_col_accuracys_.at(i);
       /* safe hex representation of character types */
-      print_params.character_hex_safe_represent_ =
-        ob_is_character_type(tmp_obj.get_type(), tmp_obj.get_collation_type());
+      print_params.character_hex_safe_represent_ = ObObjCharacterUtil::can_print_safe_hex_represent(tmp_obj);
       /*  ObObj read from storage layer may loss ObObjMeta scale info and need to be obtained from schema. */
-      tmp_obj.set_scale(rowkey_col_accuracys_.at(i).get_scale());
+      if (!tmp_obj.has_lob_header()) {
+        // for primary key of type string, lob header should not be overwriten.
+        tmp_obj.set_scale(rowkey_col_accuracys_.at(i).get_scale());
+      }
+
       if (0 != i) {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, ","))) {
           LOG_WARN("failed to add comma", K(ret));
         }
       }
+
       if (FAILEDx(tmp_obj.print_sql_literal(buf, buf_len, pos, print_params))) {
-        LOG_WARN("failed to print obj", K(ret), K(tmp_obj), K(print_params));
+        LOG_WARN("failed to print obj", K(ret),
+                                        K(i),
+                                        K(tmp_obj),
+                                        K(print_params),
+                                        "obj", objs[i],
+                                        "tmp_obj.get_scale", tmp_obj.get_scale(),
+                                        "obj.get_scale", objs[i].get_scale());
+      } else {
+        LOG_INFO("print_sql_literal", K(i),
+                                      "obj", objs[i],
+                                      K(tmp_obj),
+                                      K(print_params),
+                                      "tmp_obj.get_scale", tmp_obj.get_scale(),
+                                      "obj.get_scale", objs[i].get_scale());
       }
     }
   }
