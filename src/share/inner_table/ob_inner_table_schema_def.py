@@ -8979,6 +8979,7 @@ def_table_schema(
 # 590: __all_catalog_table_opt_stat_gather_history
 # 591: __all_audit_log_encryption_password
 # 592: __all_direct_load_stream
+# 593: __all_optstat_catalog_user_prefs
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18135,6 +18136,7 @@ def_table_schema(
 # 12597: __all_virtual_object_storage_stat
 # 12598: __all_virtual_object_storage_error_record
 # 12599: __all_virtual_audit_log_encryption_password
+# 12600: __all_virtual_optstat_catalog_user_prefs
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
