@@ -4599,7 +4599,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
       && (!cursor->get_fetched() || cursor->get_fetched_with_row())
       && cursor->is_need_check_snapshot()
       && lib::is_oracle_mode()) {
-    /* case: select * from dual, snapshot do not initilize, so it's invalid */
+    /* case: select * from dual, snapshot do not initialize, so it's invalid */
     /*
       a) if snapshot has been invalidated, can not fetch
       b) for update cursor:
