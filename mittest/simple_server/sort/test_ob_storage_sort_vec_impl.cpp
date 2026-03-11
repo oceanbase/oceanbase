@@ -866,7 +866,11 @@ TEST_F(ObStorageSortVecImplAddBatchTest, test_merge_sort_chunks_external)
   ASSERT_GE(sort_impl_.sort_chunks_.get_size(), 2);
 
   SortVecOpChunkType *merged_chunk = nullptr;
-  ASSERT_EQ(OB_SUCCESS, sort_impl_.merge_sort_chunks(merged_chunk));
+  ASSERT_EQ(OB_SUCCESS, sort_impl_.merge_sort_chunks());
+  common::ObArray<SortVecOpChunkType *> sort_chunks;
+  ASSERT_EQ(OB_SUCCESS, sort_impl_.get_sort_chunks(sort_chunks));
+  ASSERT_EQ(1, sort_chunks.count());
+  merged_chunk = sort_chunks[0];
   ASSERT_NE(nullptr, merged_chunk);
 
   int64_t expected[4] = {10, 20, 25, 30};
@@ -916,7 +920,11 @@ TEST_F(ObStorageSortVecImplAddBatchTest, test_sort_full_external_merge_path)
   SortVecOpChunkType *final_chunk = nullptr;
   if (sort_impl_.sort_chunks_.get_size() >= 2) {
     // 内部还留有多个 chunk，直接调用 merge_sort_chunks 模拟最终归并
-    ASSERT_EQ(OB_SUCCESS, sort_impl_.merge_sort_chunks(final_chunk));
+    common::ObArray<SortVecOpChunkType *> sort_chunks;
+    ASSERT_EQ(OB_SUCCESS, sort_impl_.merge_sort_chunks());
+    ASSERT_EQ(OB_SUCCESS, sort_impl_.get_sort_chunks(sort_chunks));
+    ASSERT_EQ(1, sort_chunks.count());
+    final_chunk = sort_chunks[0];
     ASSERT_NE(nullptr, final_chunk);
   } else {
     common::ObArray<SortVecOpChunkType *> sort_chunks;

@@ -377,7 +377,7 @@ public:
         STORAGE_LOG(WARN, "chunk is empty, cannot add to sort_chunks_", K(ret), K(chunk_row_count));
       } else {
         STORAGE_LOG(INFO, "sealing chunk with row count", K(chunk_row_count));
-        if (OB_FAIL(sort_impl_.add_sort_chunk(1 /* level */, sealed))) {
+        if (OB_FAIL(sort_impl_.add_sort_chunk(1 /* level */, false/*need_update_mem_stat*/, sealed))) {
           STORAGE_LOG(WARN, "fail to add sealed chunk", K(ret));
         } else {
           // allocate a fresh in-memory chunk for next add_batch()

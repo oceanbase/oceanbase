@@ -155,11 +155,13 @@ int ObDDLSlice::push_sorted_chunk(ChunkType *&sort_op_chunk, const int64_t file_
   } else {
     ObDDLSortChunk ddl_sort_chunk;
     ddl_sort_chunk.set_sort_op_chunk(sort_op_chunk, file_size, chunk_allocator);
+
     lib::ObMutexGuard guard(sorted_mutex_);
     if (OB_FAIL(ddl_sort_chunks_.push_back(ddl_sort_chunk))) {
       LOG_WARN("push sorted chunk failed", K(ret));
     } else {
       sort_op_chunk = nullptr;
+      LOG_DEBUG("pushed sorted chunk to ddl slice", K_(tablet_id), K_(slice_idx), K(file_size));
     }
   }
   return ret;
@@ -192,7 +194,7 @@ int ObDDLSlice::pop_sorted_chunks(const int64_t final_merge_ways, const int64_t 
           LOG_WARN("push chunk into result failed", K(ret), K(chunk_idx));
         }
       }
-      // avoid partial failure
+      // Use pop_back to automatically free memory tracking
       for (int64_t i = 0; OB_SUCC(ret) && i < pop_cnt; ++i) {
         ddl_sort_chunks_.pop_back();
       }
@@ -211,11 +213,13 @@ int ObDDLSlice::pop_all_sorted_chunks(common::ObIArray<ObDDLSortChunk> &ddl_sort
   ddl_sort_chunks.reuse();
   lib::ObMutexGuard guard(sorted_mutex_);
 
-  if (OB_FAIL(ddl_sort_chunks.assign(ddl_sort_chunks_))) {
+  if (OB_FAIL(ddl_sort_chunks.assign(ddl_sort_chunks_.get_array()))) {
     LOG_WARN("assign ddl sort chunks failed", K(ret));
   } else {
-    // clean up member array
-    ddl_sort_chunks_.reuse();
+    // Use pop_back to automatically free memory tracking for all chunks
+    while (OB_SUCC(ret) && ddl_sort_chunks_.count() > 0) {
+      ddl_sort_chunks_.pop_back();
+    }
   }
   return ret;
 }
@@ -241,6 +245,14 @@ int ObDDLSlice::init(const ObTabletID &tablet_id, const int64_t slice_idx, const
   } else if (OB_FAIL(remain_cg_blocks_.reserve(column_group_count))) {
     LOG_WARN("reserve remain cg blocks failed", K(ret), K(column_group_count));
   } else {
+    // Get global tenant SQL memory manager (similar to ObSqlMemMgrProcessor::get_sql_mem_mgr)
+    sql::ObTenantSqlMemoryManager *sql_mem_mgr = MTL(sql::ObTenantSqlMemoryManager*);
+    if (OB_NOT_NULL(sql_mem_mgr)) {
+      ddl_sort_chunks_.set_ddl_sort_chunk_mem_stat(sql_mem_mgr->get_sql_memory_callback());
+    } else {
+      // sys tenant
+      LOG_INFO("sql mem mgr is null", K(tablet_id), K(slice_idx), K(column_group_count), K(MTL_ID()));
+    }
     // push back empty remain block
     ObRemainCgBlock remain_block;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_group_count; ++i) {
@@ -713,4 +725,41 @@ int ObDDLTabletContext::set_parallel_cnt(const int64_t parallel_cnt)
     fts_parallel_cnt_ = parallel_cnt;
   }
   return ret;
+}
+
+// Template method implementations for ObDDLSortChunkArrayWrapper
+template <typename T>
+int ObDDLSortChunkArrayWrapper<T>::push_back(const T &element)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(array_.push_back(element))) {
+    LOG_WARN("push back ddl sort chunk failed", K(ret));
+  } else {
+    ChunkType *chunk = reinterpret_cast<ChunkType *>(element.get_sort_op_chunk());
+    if (OB_NOT_NULL(chunk) && OB_NOT_NULL(ddl_sort_chunk_mem_stat_)) {
+      const int64_t chunk_mem_hold = chunk->sort_row_store_mgr_.get_mem_hold();
+      if (chunk_mem_hold > 0) {
+        ddl_sort_chunk_mem_stat_->alloc(chunk_mem_hold);
+      }
+      chunk->sort_row_store_mgr_.set_callback(ddl_sort_chunk_mem_stat_);
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+void ObDDLSortChunkArrayWrapper<T>::pop_back()
+{
+  if (array_.count() > 0) {
+    const T &element = array_.at(array_.count() - 1);
+    ChunkType *chunk = reinterpret_cast<ChunkType *>(element.get_sort_op_chunk());
+    if (OB_NOT_NULL(chunk) && OB_NOT_NULL(ddl_sort_chunk_mem_stat_)) {
+      const int64_t chunk_mem_hold = chunk->sort_row_store_mgr_.get_mem_hold();
+      if (chunk_mem_hold > 0) {
+        ddl_sort_chunk_mem_stat_->free(chunk_mem_hold);
+      }
+      chunk->sort_row_store_mgr_.set_callback(nullptr);
+    }
+    array_.pop_back();
+  }
 }

@@ -317,6 +317,7 @@ int ObFullTextIndexWritePipeline::init(ObDDLSlice *ddl_slice)
         LOG_WARN("ddl dag is null", K(ret));
       } else if (OB_UNLIKELY(1 != ddl_dag->get_sort_ls_tablet_ids().count())) {
         ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported", K(ret), K(ddl_dag->get_sort_ls_tablet_ids().count()));
       } else if (OB_FAIL(inverted_index_sort_flush_op_.init(ddl_dag->get_sort_ls_tablet_ids().at(0).second))) {
         LOG_WARN("fail to initialize inverted index sort flush operator", K(ret));
       } else if (OB_FAIL(add_op(&inverted_index_sort_flush_op_))) {

@@ -363,6 +363,7 @@ int TestFulltextIndexPipelineAndOp::custom_ddl_dag()
       LOG_WARN("push back column item failed", K(ret), K(i));
     }
   }
+
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ddl_dag_.init_sort_provider())) {
       LOG_WARN("fail to init sort provider", K(ret));
@@ -585,7 +586,7 @@ TEST_F(TestFulltextIndexPipelineAndOp, test_fulltext_index_pipeline)
   LOG_INFO("verify_compare initialized");
 
   // Access ddl_sort_chunks_ (private member accessible due to #define private public)
-  ObArray<ObDDLSortChunk> &sorted_chunks = ddl_slice->ddl_sort_chunks_;
+  ObArray<ObDDLSortChunk> &sorted_chunks = ddl_slice->ddl_sort_chunks_.array_;
   LOG_INFO("Number of sorted chunks to verify", K(sorted_chunks.count()));
   ASSERT_GT(sorted_chunks.count(), 0) << "Should have at least one sorted chunk";
 
