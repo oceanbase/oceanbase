@@ -91,7 +91,7 @@ bool SSObjUtil::is_pin_local(const ObStorageObjectType type)
 }
 
 /* files with the following object types are overwrite:
- * SERVER_META, TENANT_DISK_SPACE_META, SHARED_TABLET_SUB_META, TENANT_ROOT_KEY
+ * SERVER_META, TENANT_DISK_SPACE_META, TENANT_ROOT_KEY
  */
 bool SSObjUtil::is_overwrite(const ObStorageObjectType type)
 {
