@@ -2280,7 +2280,7 @@ int ObLSRestoreConsistentScnState::do_restore()
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
       LOG_INFO("clog replay not finish, wait later", KPC_(ls));
     }
-  } else if (OB_FAIL(set_empty_for_transfer_tablets_())) {
+  } else if (OB_FAIL(set_empty_for_transfer_or_split_tablets_())) {
     LOG_WARN("fail to set empty for transfer tablets", K(ret), KPC_(ls));
   } else if (OB_FAIL(report_finish_replay_clog_lsn_())) {
     LOG_WARN("fail to report finish replay clog lsn", K(ret));
@@ -2305,7 +2305,7 @@ int ObLSRestoreConsistentScnState::check_recover_to_consistent_scn_finish(bool &
   return ret;
 }
 
-int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
+int ObLSRestoreConsistentScnState::set_empty_for_transfer_or_split_tablets_()
 {
   int ret = OB_SUCCESS;
   ObLSTabletService *ls_tablet_svr = nullptr;
@@ -2344,22 +2344,39 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
       ++total_tablet_cnt_;
     } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_empty()) {
       ++total_tablet_cnt_;
-    } else if (!tablet->get_tablet_meta().has_transfer_table()) {
-    } else if (OB_FAIL(tablet->get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
-      LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
-    } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat
-        && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_.get_status()) {
-      LOG_INFO("skip tablet which transfer in not commit", "tablet_id", tablet->get_tablet_meta().tablet_id_, K(user_data));
-    } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_reorganization_scn(),
-                                                         tablet->get_tablet_meta().tablet_id_,
-                                                         restore_status,
-                                                         true/* need reset tranfser flag */,
-                                                         false/*need_to_set_split_data_complete*/))) {
-      LOG_WARN("failed to update tablet restore status to EMPTY", K(ret), KPC(tablet));
+    } else if (tablet->get_tablet_meta().has_transfer_table()) {
+      if (OB_FAIL(tablet->get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
+        LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
+      } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat
+          && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_.get_status()) {
+        LOG_INFO("skip tablet which transfer in not commit", "tablet_id", tablet->get_tablet_meta().tablet_id_, K(user_data));
+      } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_reorganization_scn(),
+                                                           tablet->get_tablet_meta().tablet_id_,
+                                                           restore_status,
+                                                           true/* need reset tranfser flag */,
+                                                           false/*need_to_set_split_data_complete*/))) {
+        LOG_WARN("failed to update tablet restore status to EMPTY", K(ret), KPC(tablet));
+      } else {
+        ++total_tablet_cnt_;
+        LOG_INFO("update tablet restore status to EMPTY",
+                 "tablet_meta", tablet->get_tablet_meta());
+      }
+    } else if (tablet->get_tablet_meta().split_info_.is_data_incomplete()) {
+      ObTabletRestoreStatus::STATUS origin_status = ObTabletRestoreStatus::STATUS::RESTORE_STATUS_MAX;
+      if (OB_FAIL(tablet->get_restore_status(origin_status))) {
+        LOG_WARN("failed to get restore status of tablet", K(ret), KPC(tablet));
+      } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_reorganization_scn(),
+                                                           tablet->get_tablet_meta().tablet_id_,
+                                                           restore_status,
+                                                           false/* need reset transfer flag */,
+                                                           true/*need_to_set_split_data_complete*/))) {
+        LOG_WARN("failed to update tablet restore status", K(ret), KPC(tablet));
+      } else {
+        ++total_tablet_cnt_;
+        LOG_INFO("split update tablet restore status to EMPTY", K(origin_status), "tablet_meta", tablet->get_tablet_meta());
+      }
     } else {
       ++total_tablet_cnt_;
-      LOG_INFO("update tablet restore status to EMPTY",
-               "tablet_meta", tablet->get_tablet_meta());
     }
   }
 
