@@ -3157,7 +3157,7 @@ void release_macro_file_disk_size(const int64_t avail_size)
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
   ASSERT_EQ(OB_SUCCESS, disk_space_manager->free_file_size(avail_size,
-            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
+            ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
 }
 
 // list cluster_id/tenant_id/tablet/tablet_id/reorganization_scn
@@ -3724,6 +3724,144 @@ TEST_F(TestFileManager, test_list_private_ckpt_file_server_tenant)
   object_ids.reset();
   ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.list_private_ckpt_file(OB_SERVER_TENANT_ID, tenant_epoch_id, object_ids));
   ASSERT_EQ(0, object_ids.count());
+}
+
+// Test 1: verify get_dir_create_time returns a valid birth time,
+//         and that subsequent file writes into the directory do NOT change the create time
+//         but DO update the mtime.
+// Test 2: write PRIVATE_TABLET_META into an existing directory, verify:
+//         - directory create_time remains unchanged (< start_calc_size_time_s)
+//         - directory mtime is updated (>= start_calc_size_time_s)
+//         - calc_meta_file_disk_space correctly includes the directory (via create_time)
+TEST_F(TestFileManager, test_dir_create_time_and_meta_write_impact)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+
+  const int64_t ls_id = 55;
+  const int64_t ls_epoch_id = 0;
+  const int64_t tablet_id = 1001;
+  const int64_t meta_private_transfer_epoch = 0;
+  const int64_t write_io_size = 4096;
+
+  // --- step 1: write first PRIVATE_TABLET_META to create the directory structure ---
+  MacroBlockId file_id_1;
+  file_id_1.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  file_id_1.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
+  file_id_1.set_second_id(ls_id);
+  file_id_1.set_third_id(tablet_id);
+  file_id_1.set_meta_private_transfer_epoch(meta_private_transfer_epoch);
+  file_id_1.set_meta_version_id(100);
+
+  char write_buf[write_io_size] = { 0 };
+  memset(write_buf, 'x', write_io_size);
+  ObStorageObjectWriteInfo write_info;
+  write_info.io_desc_.set_wait_event(1);
+  write_info.buffer_ = write_buf;
+  write_info.offset_ = 0;
+  write_info.size_ = write_io_size;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_info.mtl_tenant_id_ = MTL_ID();
+  write_info.set_ls_epoch_id(ls_epoch_id);
+
+  ObStorageObjectHandle write_handle_1;
+  ASSERT_EQ(OB_SUCCESS, write_handle_1.set_macro_block_id(file_id_1));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_handle_1));
+
+  // --- step 2: record create_time and mtime of the private_transfer_epoch directory
+  //             (i.e. the {transfer_epoch}/ level) right after creation.
+  //
+  //   Path structure:
+  //     tablet_meta/{scatter_id}/{tablet_id}/{transfer_epoch}/ver{version}.T10
+  //
+  //   Writing ver100.T10 creates the {transfer_epoch}=0 subdir and places the file
+  //   inside it.  The {transfer_epoch} dir is the one whose mtime gets bumped every
+  //   time a new version is written into it — this is the exact directory level that
+  //   caused the original bug: a write during calibration updates its mtime to
+  //   >= start_calc_size_time_s, making mtime-based scan miss it. ---
+  char transfer_epoch_dir[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_tablet_meta_tablet_id_private_transfer_epoch_dir(
+      transfer_epoch_dir, sizeof(transfer_epoch_dir),
+      MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, meta_private_transfer_epoch));
+
+  int64_t create_time_after_mkdir = INT64_MAX;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::get_dir_create_time(transfer_epoch_dir, create_time_after_mkdir));
+  ASSERT_NE(INT64_MAX, create_time_after_mkdir);
+  ASSERT_GT(create_time_after_mkdir, 0);
+
+  ObIODFileStat statbuf_after_mkdir;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(transfer_epoch_dir, statbuf_after_mkdir));
+  const int64_t mtime_after_mkdir = statbuf_after_mkdir.mtime_s_;
+  LOG_INFO("transfer_epoch dir stat after first write", K(transfer_epoch_dir),
+           K(create_time_after_mkdir), K(mtime_after_mkdir));
+
+  // --- step 3: sleep across a second boundary, then record start_calc_size_time_s ---
+  // This simulates choose_start_calc_size_time_s: sleep until we are just past a second boundary.
+  ob_usleep(2000 * 1000); // 2s, ensure we cross into a new second
+  const int64_t start_calc_size_time_s = ObTimeUtility::current_time_s();
+
+  // Verify the directory's create_time is before start_calc_size_time_s (should be counted)
+  ASSERT_LT(create_time_after_mkdir, start_calc_size_time_s);
+  // Verify mtime is also before start_calc_size_time_s (written before the sleep)
+  ASSERT_LT(mtime_after_mkdir, start_calc_size_time_s);
+
+  // --- step 4: write a NEW PRIVATE_TABLET_META into the SAME transfer_epoch directory
+  //             AFTER start_calc_size_time_s.
+  //             Writing ver200.T10 directly into {transfer_epoch}/ bumps that dir's mtime. ---
+  MacroBlockId file_id_2;
+  file_id_2.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  file_id_2.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
+  file_id_2.set_second_id(ls_id);
+  file_id_2.set_third_id(tablet_id);
+  file_id_2.set_meta_private_transfer_epoch(meta_private_transfer_epoch); // same transfer_epoch
+  file_id_2.set_meta_version_id(200); // new version written after start_calc_size_time_s
+
+  ObStorageObjectHandle write_handle_2;
+  ASSERT_EQ(OB_SUCCESS, write_handle_2.set_macro_block_id(file_id_2));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_handle_2));
+
+  // --- step 5: verify the transfer_epoch dir's mtime is updated (>= start_calc_size_time_s),
+  //             but create_time remains unchanged ---
+  int64_t create_time_after_write2 = INT64_MAX;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::get_dir_create_time(transfer_epoch_dir, create_time_after_write2));
+
+  ObIODFileStat statbuf_after_write2;
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(transfer_epoch_dir, statbuf_after_write2));
+  const int64_t mtime_after_write2 = statbuf_after_write2.mtime_s_;
+
+  LOG_INFO("transfer_epoch dir stat after second write", K(transfer_epoch_dir),
+           K(create_time_after_write2), K(mtime_after_write2), K(start_calc_size_time_s));
+
+  // create_time must be unchanged — birth time is immutable
+  ASSERT_LE(create_time_after_mkdir, create_time_after_write2);
+  // mtime must be updated by the second write (>= start_calc_size_time_s)
+  ASSERT_GE(mtime_after_write2, start_calc_size_time_s);
+  // create_time is still before start_calc_size_time_s — key invariant for the fix
+  ASSERT_LE(create_time_after_write2, start_calc_size_time_s);
+
+  // --- step 6: run calc_meta_file_disk_space and verify the directory IS counted.
+  //             With the old mtime-based logic, this directory would be MISSED because
+  //             its mtime >= start_calc_size_time_s. With create_time-based logic it
+  //             should be correctly included. ---
+  ObCalibrateDiskSpaceResult calibrate_res;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_meta_file_disk_space(start_calc_size_time_s, calibrate_res));
+
+  // The tablet_id directory itself must have been counted (total_dir_num_ > 0)
+  ASSERT_GT(calibrate_res.total_dir_num_, 0);
+  // total_file_size_ must include the file written before start_calc_size_time_s (file_id_1)
+  // and the directory sizes; it must be > 0
+  ASSERT_GT(calibrate_res.total_file_size_, 0);
+  LOG_INFO("calibrate result after second write into existing dir", K(calibrate_res),
+           K(start_calc_size_time_s), K(create_time_after_write2), K(mtime_after_write2));
+
+  // --- step 7: cleanup ---
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_file(file_id_1));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_file(file_id_2));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_meta_tablet_id_private_transfer_epoch_dir(
+      MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, meta_private_transfer_epoch));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_meta_tablet_id_dir(
+      MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id));
 }
 
 TEST_F(TestFileManager, test_delete_tenant)
