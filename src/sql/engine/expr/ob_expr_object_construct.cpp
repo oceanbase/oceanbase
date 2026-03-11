@@ -275,7 +275,7 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
     OZ(res.from_obj(result, expr.obj_datum_map_));
     if (OB_NOT_NULL(record->get_allocator())) {
       int tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result);
-      if (OB_FAIL(tmp_ret)) {
+      if (tmp_ret != OB_SUCCESS) {
         int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
         LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
