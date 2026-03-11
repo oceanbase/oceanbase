@@ -22,6 +22,7 @@
 #include "share/resource_manager/ob_resource_manager.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_inner_sql_connection.h"
+#include "sql/ob_spi.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_pl_dbms_utility_helper.h"
 #endif
@@ -34,6 +35,30 @@ using namespace dbms_scheduler;
 using namespace observer;
 namespace pl
 {
+
+int ObPLRecompileTaskHelper::refresh_latest_schema_guard(uint64_t tenant_id,
+                                int64_t refresh_version,
+                                share::schema::ObSchemaGetterGuard &latest_schema_guard,
+                                share::schema::ObSchemaGetterGuard *&schema_guard)
+{
+  int ret = OB_SUCCESS;
+  int64_t refreshed_schema_version = OB_INVALID_VERSION;
+  int64_t current_schema_version = OB_INVALID_VERSION;
+  CK (OB_NOT_NULL(GCTX.schema_service_));
+  CK (OB_NOT_NULL(schema_guard));
+  if (OB_SUCC(ret)) {
+    OZ (ObSPIService::force_refresh_schema(tenant_id, refresh_version));
+    OZ (GCTX.schema_service_->get_tenant_refreshed_schema_version(tenant_id, refreshed_schema_version));
+    OZ (schema_guard->get_schema_version(tenant_id, current_schema_version));
+    if (OB_SUCC(ret) && refreshed_schema_version != current_schema_version) {
+      OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, latest_schema_guard));
+      if (OB_SUCC(ret)) {
+        schema_guard = &latest_schema_guard;
+      }
+    }
+  }
+  return ret;
+}
 
 int ObPLRecompileTaskHelper::check_job_exists(ObMySQLTransaction &trans,
                                                         const uint64_t tenant_id,
@@ -503,6 +528,8 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
 {
   int ret = OB_SUCCESS;
   if (dep_objs.count() > 0 && end > 0) {
+    share::schema::ObSchemaGetterGuard latest_schema_guard;
+    share::schema::ObSchemaGetterGuard *current_schema_guard = schema_guard;
     common::sqlclient::ObMySQLResult *result = NULL;
     ObSqlString query_inner_sql;
     ObSqlString update_sql;
@@ -516,6 +543,8 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
     }
     OZ (query_inner_sql.assign_fmt("select KEY_ID, MERGE_VERSION, EXTRA_INFO FROM %s",
                   OB_ALL_NCOMP_DLL_V2_TNAME));
+    OZ (refresh_latest_schema_guard(tenant_id, OB_INVALID_VERSION, latest_schema_guard, current_schema_guard));
+    LOG_INFO("JBKTEST, update recomp table", K(ret));
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         OZ (sql_proxy->read(res, tenant_id, query_inner_sql.ptr()));
@@ -543,12 +572,14 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
                                                                         tenant_id,
                                                                         key_id,
                                                                         sql_proxy,
-                                                                        schema_guard,
+                                                                        current_schema_guard,
                                                                         extra_info,
                                                                         is_valid));
 #endif
               if (OB_SUCC(ret) && is_valid) {
                 batch_dep_objs.set_refactored(key_id, true, 1);
+              } else {
+                LOG_WARN("JBKTEST recompile task update recomp table failed or not valid!", K(ret), K(key_id), K(is_valid));
               }
             }
           }
@@ -580,6 +611,7 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
       OZ (update_sql.append_fmt(")"));
       OZ (sql_proxy->write(tenant_id, update_sql.ptr(), affected_rows));
     }
+    LOG_INFO("JBKTEST update recomp table sql:", K(query_inner_sql), K(update_sql));
     if (batch_dep_objs.created()) {
       int tmp_ret = batch_dep_objs.destroy();
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
@@ -677,6 +709,8 @@ int ObPLRecompileTaskHelper::batch_recompile_obj(common::ObMySQLProxy* sql_proxy
 {
   int ret = OB_SUCCESS;
   int64_t batch_num = 200;
+  share::schema::ObSchemaGetterGuard latest_schema_guard;
+  share::schema::ObSchemaGetterGuard *current_schema_guard = schema_guard;
   for (int i = 0; OB_SUCC(ret) && i < dep_objs.count(); i = i + batch_num) {
     int64_t start = i;
     int64_t end = i + batch_num > dep_objs.count() ? dep_objs.count() : i + batch_num;
@@ -696,13 +730,14 @@ int ObPLRecompileTaskHelper::batch_recompile_obj(common::ObMySQLProxy* sql_proxy
         if (dropped_schema_version != 0) {
           // do nothing
         } else if (dep_objs.at(start).fail_cnt_ < 3) {
+          OZ (refresh_latest_schema_guard(tenant_id, OB_INVALID_VERSION, latest_schema_guard, current_schema_guard));
           OZ (recompile_single_obj(dep_objs.at(start), connection, tenant_id));
         }
       } else {
         LOG_WARN("[PLRECOMPILE]: Unexpected error!", K(ret));
       }
     }
-    int tmp_ret = update_recomp_table(dep_objs, sql_proxy, tenant_id, max_schema_version, i, start, schema_guard);
+    int tmp_ret = update_recomp_table(dep_objs, sql_proxy, tenant_id, max_schema_version, i, start, current_schema_guard);
     ret = OB_SUCCESS == ret ? tmp_ret : ret;
   }
   return ret;
@@ -748,7 +783,7 @@ int ObPLRecompileTaskHelper::recompile_pl_objs(ObPLExecCtx &ctx, sql::ParamStore
                 && !GCONF.in_upgrade_mode()
                 && (data_version >= DATA_VERSION_4_3_5_2 && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2);
   LOG_INFO("[PLRECOMPILE]: before recompile ", K(ret), K(consumer_group_id), K(enable), K(recompile_start));
-  if (enable) {
+  if (OB_SUCC(ret) && enable) {
     int64_t max_schema_version = 0;
     OZ (collect_delta_recompile_obj_data(sql_proxy,
                                           tenant_id,

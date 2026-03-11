@@ -62,6 +62,10 @@ public:
   int64_t schema_version_;
   ObString ref_obj_name_;
 };
+  static int refresh_latest_schema_guard(uint64_t tenant_id,
+                                          int64_t refresh_version,
+                                          share::schema::ObSchemaGetterGuard &latest_schema_guard,
+                                          share::schema::ObSchemaGetterGuard *&schema_guard);
   static int recompile_pl_objs(pl::ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
   static int collect_delta_recompile_obj_data(common::ObMySQLProxy* sql_proxy,
                                                       uint64_t tenant_id,

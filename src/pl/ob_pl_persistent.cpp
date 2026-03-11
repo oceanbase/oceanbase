@@ -556,7 +556,10 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
         // do nothing
       } else if (table_schema->get_schema_version() <= merge_version) {
         match = true;
-      } else if (is_check_package_state) {
+      } else if (is_check_package_state || table_schema->is_view_table()) {
+        // If it's a view, the schema version upgrade is temporarily considered outdated,
+        // But it should be configured the same as the table. Check if the column information has changed.
+        // refer to RESOLVE_SELECT_VIEW_STMT
         match = false;
       } else {
         // here do not set false , will check column info later
@@ -878,7 +881,7 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
       } else if (table_schema->is_index_table()) {
         // do nothing
       } else {
-        OZ (concat_ids_sql.append_fmt("%s", table_schema->get_table_name()));
+        OZ (concat_ids_sql.append_fmt("|%s", table_schema->get_table_name()));
         ObTableSchema::const_column_iterator cs_iter = table_schema->column_begin();
         ObTableSchema::const_column_iterator cs_iter_end = table_schema->column_end();
         for (; OB_SUCC(ret) && cs_iter != cs_iter_end; ++cs_iter) {
@@ -887,15 +890,15 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
             // do nothing
           } else {
             // column_id_,meta_type_,charset_type_,accuracy_,is_invisible_col_,column_name_
-            OZ (concat_ids_sql.append_fmt("%d|%d|%d|%d|%d|%ld|%ld|%ld|%s",
+            OZ (concat_ids_sql.append_fmt("|%lu|%d|%d|%d|%d|%d|%ld|%d|%s",
                                           column_schema->get_column_id(),
-                                          static_cast<uint8_t>(column_schema->get_meta_type().get_type()),
-                                          static_cast<uint8_t>(column_schema->get_meta_type().get_cs_level()),
-                                          static_cast<uint8_t>(column_schema->get_meta_type().get_cs_type()),
-                                          static_cast<uint8_t>(column_schema->get_meta_type().get_extend_type()),
-                                          static_cast<uint64_t>(column_schema->get_charset_type()),
-                                          static_cast<uint64_t>(column_schema->get_accuracy().get_accuracy()),
-                                          static_cast<uint8_t>(column_schema->is_invisible_column()),
+                                          static_cast<int>(column_schema->get_meta_type().get_type()),
+                                          static_cast<int>(column_schema->get_meta_type().get_cs_level()),
+                                          static_cast<int>(column_schema->get_meta_type().get_cs_type()),
+                                          static_cast<int>(column_schema->get_meta_type().get_extend_type()),
+                                          static_cast<int>(column_schema->get_charset_type()),
+                                          static_cast<int64_t>(column_schema->get_accuracy().get_accuracy()),
+                                          static_cast<int>(column_schema->is_invisible_column()),
                                           column_schema->get_column_name()));
             // extended_type_info
             const common::ObIArray<common::ObString>& type_info = column_schema->get_extended_type_info();
@@ -909,6 +912,7 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
     OZ (concat_ids_sql.append_fmt("| "));
   }
   OZ (ObSQLUtils::md5(concat_ids_sql.string(), extra_info.dep_obj_ids_md5_, dep_obj_ids_md5_len));
+  LOG_INFO("JBKTEST: extra info ",K(ret),K(concat_ids_sql), K(extra_info.dep_obj_ids_md5_));
   return ret;
 }
 
