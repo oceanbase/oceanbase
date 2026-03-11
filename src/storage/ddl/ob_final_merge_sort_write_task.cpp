@@ -201,7 +201,6 @@ int ObDDLFinalMergeSortOp::execute(const ObChunk &input_chunk,
   } else {
     output_bdrs_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
   }
-
   /* create sort impl if needed */
   if (OB_FAIL(ret)) {
   } else if (nullptr == sort_impl_) {
@@ -221,7 +220,7 @@ int ObDDLFinalMergeSortOp::execute(const ObChunk &input_chunk,
         // add_sort_chunk takes ChunkType *& and will set it to nullptr on success (ownership transferred).
         // We must also clear ddl_chunk's pointer to avoid double-free in ObChunk::~ObChunk().
         SqlSortChunk *chunk = sql_sort_chunk;
-        if (OB_FAIL(sort_impl_->add_sort_chunk(0 /* merge_sort_level*/, chunk))) {
+        if (OB_FAIL(sort_impl_->add_sort_chunk(0 /* merge_sort_level*/, true/*need_update_mem_stat*/, chunk))) {
           LOG_WARN("add sort chunk failed", K(ret));
         } else {
           ddl_chunk.reset();

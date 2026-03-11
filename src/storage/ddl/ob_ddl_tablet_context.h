@@ -21,6 +21,7 @@
 #include "sql/engine/sort/ob_sort_key_vec_op.h"
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "lib/container/ob_2d_array.h"
+#include "sql/engine/basic/ob_sql_mem_callback.h"
 
 namespace oceanbase
 {
@@ -106,6 +107,42 @@ private:
   ObIAllocator *allocator_; // allocator for sort op chunk
 };
 
+// Wrapper for ObArray<ObDDLSortChunk> that adds memory statistics tracking
+// for push_back and pop_back operations
+template <typename T>
+class ObDDLSortChunkArrayWrapper
+{
+public:
+  ObDDLSortChunkArrayWrapper() : array_(), ddl_sort_chunk_mem_stat_(nullptr) {}
+  ~ObDDLSortChunkArrayWrapper() {}
+  void set_ddl_sort_chunk_mem_stat(sql::ObSqlMemoryCallback *ddl_sort_chunk_mem_stat) { ddl_sort_chunk_mem_stat_ = ddl_sort_chunk_mem_stat; }
+  // Wrapper methods with memory statistics
+  int push_back(const T &element);
+  void pop_back();
+
+  // Forward other methods to the underlying array
+  int64_t count() const { return array_.count(); }
+  T &at(int64_t idx) { return array_.at(idx); }
+  const T &at(int64_t idx) const { return array_.at(idx); }
+  T *begin() { return array_.begin(); }
+  T *end() { return array_.end(); }
+  const T *begin() const { return array_.begin(); }
+  const T *end() const { return array_.end(); }
+  void reset()
+  {
+    array_.reset();
+    ddl_sort_chunk_mem_stat_ = nullptr;
+  }
+  int assign(const common::ObIArray<T> &other) { return array_.assign(other); }
+
+  // Get underlying array for assign operations
+  const common::ObArray<T> &get_array() const { return array_; }
+
+private:
+  common::ObArray<T> array_;
+  sql::ObSqlMemoryCallback *ddl_sort_chunk_mem_stat_;      // Memory callback from sql_mem_mgr
+};
+
 class ObDDLSlice
 {
 public:
@@ -136,7 +173,7 @@ private:
   int64_t slice_idx_;
   common::LightyQueue chunk_queue_;
   ObArray<ObRemainCgBlock> remain_cg_blocks_; // not support lob meta tablet and column replica for now
-  ObArray<ObDDLSortChunk> ddl_sort_chunks_; // store sorted chunks from vec sort op
+  ObDDLSortChunkArrayWrapper<ObDDLSortChunk> ddl_sort_chunks_; // store sorted chunks from vec sort op
   mutable lib::ObMutex sorted_mutex_;
 };
 

@@ -33,6 +33,62 @@ namespace sql
 struct ObBatchRows;
 struct ObCompactRow;
 struct RowMeta;
+class ObSqlMemoryCallback;
+
+// Wrapper for ObDList that adds memory statistics tracking
+// for chunk add/remove operations
+template <typename ChunkType>
+class ObSortChunkListWrapper
+{
+public:
+  ObSortChunkListWrapper() : list_(), mem_callback_(nullptr) {}
+  ~ObSortChunkListWrapper()
+  {
+    list_.reset();
+    mem_callback_ = nullptr;
+  }
+
+  // Modification operations with memory statistics
+  bool add_before(const ChunkType *pos, ChunkType *chunk, bool need_update_mem_stat)
+  {
+    bool ret = list_.add_before(pos, chunk);
+    if (ret && need_update_mem_stat && OB_NOT_NULL(mem_callback_) && OB_NOT_NULL(chunk)) {
+      const int64_t chunk_mem_hold = chunk->sort_row_store_mgr_.get_mem_hold();
+      if (chunk_mem_hold > 0) {
+        mem_callback_->alloc(chunk_mem_hold);
+      }
+      (void) chunk->sort_row_store_mgr_.set_callback(mem_callback_);
+    }
+    return ret;
+  }
+
+  ChunkType *remove_first(bool need_update_mem_stat)
+  {
+    ChunkType *chunk = list_.remove_first();
+    if (need_update_mem_stat && OB_NOT_NULL(mem_callback_) && OB_NOT_NULL(chunk)) {
+      const int64_t chunk_mem_hold = chunk->sort_row_store_mgr_.get_mem_hold();
+      if (chunk_mem_hold > 0) {
+        mem_callback_->free(chunk_mem_hold);
+      }
+      (void) chunk->sort_row_store_mgr_.set_callback(nullptr);
+    }
+    return chunk;
+  }
+  bool is_empty() const { return list_.is_empty(); }
+  int32_t get_size() const { return list_.get_size(); }
+  ChunkType *get_first() { return list_.get_first(); }
+  const ChunkType *get_first() const { return list_.get_first(); }
+  ChunkType *get_last() { return list_.get_last(); }
+  ChunkType *get_header() { return list_.get_header(); }
+  // Get underlying list reference (for external_sorter_->init)
+  common::ObDList<ChunkType> &get_list() { return list_; }
+  void set_mem_callback(ObSqlMemoryCallback *mem_callback) { mem_callback_ = mem_callback; }
+
+
+private:
+  common::ObDList<ChunkType> list_;
+  ObSqlMemoryCallback *mem_callback_;
+};
 
 template <typename Compare, typename Store_Row, bool has_addon = false>
 class ObStorageVecSortImpl
@@ -59,7 +115,7 @@ public:
   void reset_for_merge_sort()
   {
     while (!sort_chunks_.is_empty()) {
-      ObSortVecOpChunk<Store_Row, has_addon> *chunk = sort_chunks_.remove_first();
+      ObSortVecOpChunk<Store_Row, has_addon> *chunk = sort_chunks_.remove_first(false);
       if(OB_NOT_NULL(chunk)) {
         chunk->~ObSortVecOpChunk<Store_Row, has_addon>();
         if (nullptr != mem_context_) {
@@ -83,10 +139,10 @@ public:
   int sort();
   int sort_inmem_data(const bool need_force_dump);
   int get_sort_chunks(common::ObIArray<ChunkType *> &sort_chunks);
-  int add_sort_chunks(const int64_t level, common::ObIArray<ChunkType *> &output_chunks);
-  int add_sort_chunk(const int64_t level, ChunkType *&chunk);
+  int add_sort_chunks(const int64_t level, const bool need_update_mem_stat, common::ObIArray<ChunkType *> &output_chunks);
+  int add_sort_chunk(const int64_t level, const bool need_update_mem_stat, ChunkType *&chunk);
   int get_merge_ways(const int64_t max_merge_ways, int64_t &merge_ways);
-  int merge_sort_chunks(ChunkType *&output_chunk);
+  int merge_sort_chunks();
   int get_next_batch(int64_t &output_row_cnt, ObIArray<ObIVector *> *&output_sk_rows, ObIArray<ObIVector *> *&output_addon_rows);
   int get_sort_chunks_size() { return sort_chunks_.get_size(); }
   ObIAllocator *get_allocator() { return &mem_context_->get_malloc_allocator(); }
@@ -121,7 +177,7 @@ private:
   ObSortVecOpChunk<Store_Row, has_addon> *in_memory_chunk_;
   ObMonitorNode &op_monitor_info_;
   ObStorageSortResourceManager<Compare, Store_Row, has_addon> *sort_resource_mgr_;
-  common::ObDList<ObSortVecOpChunk<Store_Row, has_addon>> sort_chunks_;
+  ObSortChunkListWrapper<ObSortVecOpChunk<Store_Row, has_addon>> sort_chunks_;
   ExternalMergeSorter *external_sorter_;
   uint64_t tenant_id_;
   int64_t tempstore_read_alignment_size_;
@@ -236,6 +292,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::init(Compare *comp,
         addon_row_meta_ = has_addon ? addon_row_meta : nullptr;
         chunk_toolkit_ = chunk_toolkit; // can be nullptr
         rows_.set_block_allocator(ModulePageAllocator(mem_context_.ref_context()->get_malloc_allocator(), "SortOpRows"));
+        sort_chunks_.set_mem_callback(&sort_resource_mgr_->get_sql_mem_processor());
         SQL_ENG_LOG(DEBUG, "ObStorageVecSortImpl init success", K(has_addon), K(max_batch_size));
       }
     }
@@ -289,7 +346,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::sort_inmem_data(const b
       sort_resource_mgr_->set_force_dump_temp_store(force_dump);
       if (OB_FAIL(build_chunk(0/*level*/, input, output_chunks))) {
         SQL_ENG_LOG(WARN, "failed to build chunk", K(ret));
-      } else if (OB_FAIL(add_sort_chunks(0/*level*/, output_chunks))) {
+      } else if (OB_FAIL(add_sort_chunks(0/*level*/, false/*need_update_mem_stat*/, output_chunks))) {
         SQL_ENG_LOG(WARN, "failed to add sort chunks", K(ret));
       } else {
         rows_.reset();
@@ -330,7 +387,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::get_sort_chunks(common:
     SQL_ENG_LOG(WARN, "not initialized", K(ret));
   } else if (sort_chunks_.get_size() > 0) {
     while (OB_SUCC(ret) && !sort_chunks_.is_empty()) {
-      ChunkType *chunk = sort_chunks_.remove_first();
+      ChunkType *chunk = sort_chunks_.remove_first(true/*need_update_mem_stat*/);
       if (OB_FAIL(sort_chunks.push_back(chunk))) {
         SQL_ENG_LOG(WARN, "failed to push back chunk", K(ret));
         if (OB_NOT_NULL(chunk)) {
@@ -401,7 +458,7 @@ void ObStorageVecSortImpl<Compare, Store_Row, has_addon>::reset()
   comp_ = nullptr;
   chunk_toolkit_ = nullptr;
   while (!sort_chunks_.is_empty()) {
-    ObSortVecOpChunk<Store_Row, has_addon> *chunk = sort_chunks_.remove_first();
+    ObSortVecOpChunk<Store_Row, has_addon> *chunk = sort_chunks_.remove_first(false/*need_update_mem_stat*/);
     if(OB_NOT_NULL(chunk)) {
       chunk->~ObSortVecOpChunk<Store_Row, has_addon>();
       if (nullptr != mem_context_) {
@@ -423,6 +480,7 @@ void ObStorageVecSortImpl<Compare, Store_Row, has_addon>::reset()
     sort_resource_mgr_->~ObStorageSortResourceManager<Compare, Store_Row, has_addon>();
     mem_context_.ref_context()->get_malloc_allocator().free(sort_resource_mgr_);
     sort_resource_mgr_ = nullptr;
+    sort_chunks_.set_mem_callback(nullptr);
   }
 
   if (OB_NOT_NULL(output_sk_rows_)) {
@@ -473,7 +531,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::do_dump()
     ObArray<ChunkType *> output_chunks;
     if (OB_FAIL(build_chunk(level, input, output_chunks))) {
       SQL_ENG_LOG(WARN, "build chunk failed", K(ret));
-    } else if (OB_FAIL(add_sort_chunks(level, output_chunks))) {
+    } else if (OB_FAIL(add_sort_chunks(level, false/*need_update_mem_stat*/, output_chunks))) {
       SQL_ENG_LOG(WARN, "failed to add sort chunks", K(ret));
     } else {
       rows_.reset();
@@ -615,7 +673,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::add_batch(
 }
 
 template <typename Compare, typename Store_Row, bool has_addon>
-int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::add_sort_chunk(const int64_t level, ChunkType *&chunk)
+int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::add_sort_chunk(const int64_t level, const bool need_update_mem_stat, ChunkType *&chunk)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -628,18 +686,6 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::add_sort_chunk(const in
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "sort resource manager is null", K(ret));
   } else {
-    // Rebind memory callback for externally provided chunks.
-    //
-    // DDL merge-sort chunks can outlive the SortImpl instance that originally created them
-    // and may be processed by another thread later (thread-local SortImpl reuse).
-    // The TempRowStore inside chunk keeps a raw pointer (ObSqlMemoryCallback*) to the
-    // original sql_mem_processor. If that processor is reset/destroyed, later reads may
-    // crash in ObTempBlockStore::inc_mem_hold().
-    //
-    // Binding the callback to *current* sort_impl's sql_mem_processor makes the pointer
-    // always valid for the lifetime of the current merge operation.
-    chunk->sort_row_store_mgr_.set_callback(&sort_resource_mgr_->get_sql_mem_processor());
-
     // In increase sort, chunk->level_ may less than the last of sort chunks.
     // insert the chunk to the upper bound the level.
     ObSortVecOpChunk<Store_Row, has_addon> *pos = sort_chunks_.get_last();
@@ -647,7 +693,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::add_sort_chunk(const in
          pos = pos->get_prev()) {
     }
     pos = pos->get_next();
-    if (!sort_chunks_.add_before(pos, chunk)) {
+    if (!sort_chunks_.add_before(pos, chunk, need_update_mem_stat)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "add link node to list failed", K(ret));
     } else {
@@ -658,12 +704,12 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::add_sort_chunk(const in
 }
 
 template <typename Compare, typename Store_Row, bool has_addon>
-int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::add_sort_chunks(const int64_t level, common::ObIArray<ChunkType *> &output_chunks)
+int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::add_sort_chunks(const int64_t level, const bool need_update_mem_stat, common::ObIArray<ChunkType *> &output_chunks)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < output_chunks.count(); i++) {
     ChunkType *&chunk = output_chunks.at(i);
-    if (OB_FAIL(add_sort_chunk(level, chunk))) {
+    if (OB_FAIL(add_sort_chunk(level, need_update_mem_stat, chunk))) {
       SQL_ENG_LOG(WARN, "failed to add sort chunk", K(ret));
     }
   }
@@ -688,11 +734,10 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::get_merge_ways(const in
 }
 
 template <typename Compare, typename Store_Row, bool has_addon>
-int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::merge_sort_chunks(
-    ObSortVecOpChunk<Store_Row, has_addon> *&output_chunk)
+int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::merge_sort_chunks()
 {
   int ret = OB_SUCCESS;
-  output_chunk = nullptr;
+  ChunkType *merged_chunk = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -713,24 +758,57 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::merge_sort_chunks(
       return external_sorter_->get_next_row(sk_row, addon_row);
     };
     const int64_t merge_ways = sort_chunks_.get_size();
-    if (OB_FAIL(external_sorter_->init(sort_chunks_, merge_ways))) {
+    if (OB_FAIL(external_sorter_->init(sort_chunks_.get_list(), merge_ways))) {
       SQL_ENG_LOG(WARN, "init external sorter failed", K(ret));
     } else if (OB_FAIL(build_chunk(0/*level*/, input, output_chunks))) {
       SQL_ENG_LOG(WARN, "failed to build chunk", K(ret));
-    } else if (output_chunks.count() != 1) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_ENG_LOG(WARN, "unexpected output chunks count", K(ret), K(output_chunks.count()));
-      // Cleanup all created chunks on unexpected count
-      for (int64_t i = 0; i < output_chunks.count(); i++) {
-        ChunkType *chunk = output_chunks.at(i);
-        if (nullptr != chunk) {
-          chunk->~ChunkType();
-          mem_context_->get_malloc_allocator().free(chunk);
-        }
+    }
+
+    // Remove and free the old chunks from sort_chunks_
+    for (int64_t i = 0; OB_SUCC(ret) && i < merge_ways; i++) {
+      //no need to update the mem stat, the destructor of chunk will handle it.
+      ChunkType *old_chunk = sort_chunks_.remove_first(false/*need_update_mem_stat*/);
+      if (OB_NOT_NULL(old_chunk)) {
+        old_chunk->~ChunkType();
+        mem_context_->get_malloc_allocator().free(old_chunk);
       }
-      output_chunks.reset();
+    }
+
+    if (OB_SUCC(ret)) {
+      if (output_chunks.count() != 1) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_ENG_LOG(WARN, "unexpected output chunks count", K(ret), K(output_chunks.count()));
+        // Cleanup all created chunks on unexpected count
+        for (int64_t i = 0; i < output_chunks.count(); i++) {
+          ChunkType *new_chunk = output_chunks.at(i);
+          if (nullptr != new_chunk) {
+            new_chunk->~ChunkType();
+            mem_context_->get_malloc_allocator().free(new_chunk);
+          }
+        }
+        output_chunks.reset();
+      } else {
+        merged_chunk = output_chunks[0];
+      }
+    }
+  }
+
+  // Add the merged chunk back to sort_chunks_
+  // Note: need_update_mem_stat=false because:
+  // - The chunk's memory is already allocated and tracked by sql_mem_processor during build_chunk()
+  // - We don't want to double-count the memory
+  if (OB_SUCC(ret) && OB_NOT_NULL(merged_chunk)) {
+    if (OB_FAIL(add_sort_chunk(0/*level*/, false/*need_update_mem_stat*/, merged_chunk))) {
+      SQL_ENG_LOG(WARN, "failed to add merged chunk back to sort_chunks_", K(ret));
+      // Cleanup on failure: need to free the memory that was allocated in build_chunk
+      if (nullptr != merged_chunk) {
+        merged_chunk->~ChunkType();
+        mem_context_->get_malloc_allocator().free(merged_chunk);
+        merged_chunk = nullptr;
+      }
     } else {
-      output_chunk = output_chunks[0];
+      SQL_ENG_LOG(DEBUG, "successfully merged chunks", K(ret),
+                  "merged_chunk_mem_hold", merged_chunk->sort_row_store_mgr_.get_mem_hold());
     }
   }
   return ret;
@@ -804,7 +882,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::get_next_batch(
         OB_ISNULL(external_sorter_ = OB_NEWx(ExternalMergeSorter, (inner_allocator), *inner_allocator, *comp_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SQL_ENG_LOG(WARN, "allocate memory failed", K(ret));
-    } else if (!external_sorter_->is_inited() && OB_FAIL(external_sorter_->init(sort_chunks_, sort_chunks_.get_size()))) {
+    } else if (!external_sorter_->is_inited() && OB_FAIL(external_sorter_->init(sort_chunks_.get_list(), sort_chunks_.get_size()))) {
       SQL_ENG_LOG(WARN, "init external sorter failed", K(ret));
     }
   } else if (using_external_sort && sorted_chunk_cnt == 1) {
@@ -934,7 +1012,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::sort()
     // Intermediate merge rounds: reduce chunks until count <= MAX_MERGE_WAYS
     // This ensures the final merge round can handle all remaining chunks
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(sort_resource_mgr_->calc_merge_ways(sort_chunks_,
+      if (OB_FAIL(sort_resource_mgr_->calc_merge_ways(sort_chunks_.get_list(),
                                                       &mem_context_->get_malloc_allocator(),
                                                       tempstore_read_alignment_size_,
                                                       merge_ways))) {
@@ -952,14 +1030,15 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::sort()
         };
 
         // Initialize external sorter with first merge_ways chunks
-        if (OB_FAIL(external_sorter_->init(sort_chunks_, merge_ways))) {
+        if (OB_FAIL(external_sorter_->init(sort_chunks_.get_list(), merge_ways))) {
           SQL_ENG_LOG(WARN, "init external sorter failed", K(ret));
         } else if (OB_FAIL(build_chunk(level, input, output_chunks))) {
           SQL_ENG_LOG(WARN, "build chunk failed", K(ret));
         }
         // Remove merged chunks from the front of the list
         for (int64_t i = 0; OB_SUCC(ret) && i < merge_ways; i++) {
-          ChunkType *c = sort_chunks_.remove_first();
+          //no need to update the mem stat, the destructor of chunk will handle it.
+          ChunkType *c = sort_chunks_.remove_first(false/*need_update_mem_stat*/);
           if (OB_NOT_NULL(c)) {
             c->~ChunkType();
             mem_context_->get_malloc_allocator().free(c);
@@ -967,7 +1046,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::sort()
         }
         // Add newly generated chunk(s) to the list
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(add_sort_chunks(level, output_chunks))) {
+          if (OB_FAIL(add_sort_chunks(level, false/*need_update_mem_stat*/, output_chunks))) {
             SQL_ENG_LOG(WARN, "failed to add sort chunks", K(ret));
           } else {
             SQL_ENG_LOG(DEBUG, "intermediate merge round completed",

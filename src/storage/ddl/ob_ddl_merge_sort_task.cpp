@@ -108,6 +108,7 @@ int ObDDLMergeSortTask::process()
       ret = OB_SUCCESS;
     }
   } else if (input_ddl_chunks.count() > 0) {
+
     ObArray<ObDDLSortProvider::ChunkType *> input_sort_op_chunks;
     for (int64_t i = 0; OB_SUCC(ret) && i < input_ddl_chunks.count(); ++i) {
       ObDDLSortChunk &ddl_chunk = input_ddl_chunks.at(i);
@@ -124,12 +125,18 @@ int ObDDLMergeSortTask::process()
       }
     }
     if (OB_SUCC(ret)) {
+      ObArray<ObDDLSortProvider::ChunkType *> output_sort_op_chunks;
       ObDDLSortProvider::ChunkType *output_sort_op_chunk = nullptr;
-      if (OB_FAIL(sort_impl->add_sort_chunks(0, input_sort_op_chunks))) {
+      if (OB_FAIL(sort_impl->add_sort_chunks(0, true/*need_update_mem_stat*/, input_sort_op_chunks))) {
         LOG_WARN("add sort chunks failed", K(ret));
-      } else if (OB_FAIL(sort_impl->merge_sort_chunks(output_sort_op_chunk))) {
+      } else if (OB_FAIL(sort_impl->merge_sort_chunks())) {
         LOG_WARN("merge sort chunks failed", K(ret));
-      } else if (OB_ISNULL(output_sort_op_chunk)) {
+      } else if (OB_FAIL(sort_impl->get_sort_chunks(output_sort_op_chunks))) {
+        LOG_WARN("get sort chunks failed", K(ret));
+      } else if (output_sort_op_chunks.count() != 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("output sort op chunk is null", K(ret));
+      } else if (OB_ISNULL(output_sort_op_chunk = output_sort_op_chunks.at(0))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("output sort op chunk is null", K(ret));
       } else if (FALSE_IT(output_row_cnt = output_sort_op_chunk->get_row_count())) {
