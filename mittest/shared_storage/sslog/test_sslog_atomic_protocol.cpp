@@ -1705,7 +1705,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstablet_macro_info_merge)
 
   auto only_need_shared_meta = [](const ObTabletBlockInfo &block_info)->bool
     {
-      return block_info.macro_id_.is_shared_sub_meta();
+      return block_info.macro_id_.is_shared_tablet_sub_meta() || block_info.macro_id_.is_shared_tablet_sub_meta_in_table();
     };
 
   auto need_all = [](const ObTabletBlockInfo &block_info)->bool

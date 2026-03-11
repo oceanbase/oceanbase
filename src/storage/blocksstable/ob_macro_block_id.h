@@ -96,7 +96,6 @@ public:
   bool is_shared_mini_minor_v1() const; // old format of mini minor in ss mode
   bool is_shared_mini_v2() const; // new format of mini in ss mode
   bool is_shared_minor_v2() const; // new format of minor in ss mode
-  bool is_shared_sub_meta() const; // shared tablet meta block in ss mode
   bool is_shared_data_block_except_mds() const; // shared tablet data macro block in ss mode, except mds
   bool is_shared_data_block_or_meta_block() const; // shared tablet meta or data macro block in ss mode
   bool is_transfer_out_non_gc_block() const; // macro blocks that should skip gc for transfer out tablet

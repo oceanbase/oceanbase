@@ -354,7 +354,7 @@ int ObStorageObjectTypeBase::aio_read(
     if (OB_FAIL(tmp_file_reader.aio_read(read_info, object_handle))) {
       LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
     }
-  } else if (is_store_in_table()) {
+  } else if (is_shared_tablet_sub_meta_in_table()) {
     ObSSTableReader table_reader;
     if (OB_FAIL(table_reader.aio_read(read_info, object_handle))) {
       LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
@@ -424,7 +424,7 @@ int ObStorageObjectTypeBase::aio_write(
     if (OB_FAIL(tmp_file_writer.aio_write(write_info, object_handle))) {
       LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
     }
-  } else if (is_store_in_table()) {
+  } else if (is_shared_tablet_sub_meta_in_table()) {
     ObSSTableWriter table_writer;
     if (OB_FAIL(table_writer.aio_write(write_info, object_handle))) {
       LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
