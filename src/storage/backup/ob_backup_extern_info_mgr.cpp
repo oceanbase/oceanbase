@@ -882,16 +882,15 @@ int ObExternBackupInfoIdGetter::get_tablet_info_file_ids(
 int ObExternBackupInfoIdGetter::ObLSMetaInfoDirFilter::func(const dirent *entry)
 {
   int ret = OB_SUCCESS;
-  ObString dir_name(entry->d_name);
   int64_t cur_turn_id = 0;
   int64_t cur_retry_id = 0;
   if (is_final_fuse_) {
-    if (2 != sscanf(dir_name.ptr(), "fused_meta_info_turn_%ld_retry_%ld", &cur_turn_id, &cur_retry_id)) {
-      LOG_INFO("ls meta info do filter", K(dir_name));
+    if (2 != sscanf(entry->d_name, "fused_meta_info_turn_%ld_retry_%ld", &cur_turn_id, &cur_retry_id)) {
+      LOG_INFO("ls meta info do filter", "dir_name", entry->d_name);
     }
   } else {
-    if (2 != sscanf(dir_name.ptr(), "meta_info_turn_%ld_retry_%ld", &cur_turn_id, &cur_retry_id)) {
-      LOG_INFO("ls meta info do filter", K(dir_name));
+    if (2 != sscanf(entry->d_name, "meta_info_turn_%ld_retry_%ld", &cur_turn_id, &cur_retry_id)) {
+      LOG_INFO("ls meta info do filter", "dir_name", entry->d_name);
     }
   }
   if (cur_turn_id > turn_id_) {
@@ -922,9 +921,8 @@ int ObExternBackupInfoIdGetter::ObLSTabletInfoIdFilter::init(const bool is_final
 int ObExternBackupInfoIdGetter::ObLSTabletInfoIdFilter::func(const dirent *entry)
 {
   int ret = OB_SUCCESS;
-  ObString file_name(entry->d_name);
   int64_t file_id = 0;
-  if (1 != sscanf(file_name.ptr(), "tablet_info.%ld", &file_id)) {
+  if (1 != sscanf(entry->d_name, "tablet_info.%ld", &file_id)) {
   } else if (file_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid file id", K(ret), K(file_id));

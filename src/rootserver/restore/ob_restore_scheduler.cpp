@@ -212,6 +212,7 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
   ObCreateTenantArg arg;
   //the pool list of job_info is obstring without '\0'
   ObSqlString pool_list;
+  ObArenaAllocator key_alloc(ObModIds::RESTORE);
   UInt64 tenant_id = OB_INVALID_TENANT_ID;
   DEBUG_SYNC(BEFORE_PHYSICAL_RESTORE_TENANT);
   int64_t timeout =  GCONF._ob_ddl_timeout;
@@ -225,7 +226,7 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
     // only update job status
   } else if (OB_FAIL(pool_list.assign(job_info.get_pool_list()))) {
     LOG_WARN("failed to assign pool list", KR(ret), K(job_info));
-  } else if (OB_FAIL(fill_create_tenant_arg(job_info, pool_list, arg))) {
+  } else if (OB_FAIL(fill_create_tenant_arg(job_info, pool_list, key_alloc, arg))) {
     LOG_WARN("fail to fill create tenant arg", K(ret), K(pool_list), K(job_info));
   } else if (OB_FAIL(ObTenantDDLService::schedule_create_tenant(arg, tenant_id))) {
     LOG_WARN("fail to create tenant", K(ret), K(arg));
@@ -259,6 +260,7 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
 int ObRestoreScheduler::fill_create_tenant_arg(
     const ObPhysicalRestoreJob &job,
     const ObSqlString &pool_list,
+    common::ObIAllocator &alloc,
     ObCreateTenantArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -275,49 +277,69 @@ int ObRestoreScheduler::fill_create_tenant_arg(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid compat mode", K(ret));
   } else {
-    /*
-     * restore_tenant will only run trans one when create tenant.
-     * Consider the following tenant options:
-     * 1) need backup: tenant_name,compatibility_mode
-     * 2) need backup and replace(maybe): zone_list,primary_zone,locality,previous_locality
-     * 3) not backup yet:locked,default_tablegroup_id,info  TODO: (yanmu.ztl)
-     * 4) no need to backup:drop_tenant_time,status,collation_type
-     * 6) abandoned: replica_num,read_only,rewrite_merge_version,logonly_replica_num,
-     *                storage_format_version,storage_format_work_version
-     */
-     ObCompatibilityMode mode = lib::Worker::CompatMode::ORACLE == job.get_compat_mode() ?
-                                ObCompatibilityMode::ORACLE_MODE :
-                                ObCompatibilityMode::MYSQL_MODE;
-     arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
-     arg.tenant_schema_.set_tenant_name(job.get_tenant_name());
-     arg.tenant_schema_.set_compatibility_mode(mode);
-     arg.if_not_exist_ = false;
-     arg.is_restore_ = true;
-     //  create tmp tenant for recover table
-     arg.is_tmp_tenant_for_recover_ = job.get_recover_table();
-     // Physical restore is devided into 2 stages. Recover to 'consistent_scn' which was recorded during
-     // data backup first, then to user specified scn.
-     arg.recovery_until_scn_ = job.get_consistent_scn();
-     arg.compatible_version_ = job.get_source_data_version();
-     if (OB_FAIL(assign_pool_list(pool_list.ptr(), arg.pool_list_))) {
-       LOG_WARN("fail to get pool list", K(ret), K(pool_list));
-     }
+  /*
+    * restore_tenant will only run trans one when create tenant.
+    * Consider the following tenant options:
+    * 1) need backup: tenant_name,compatibility_mode
+    * 2) need backup and replace(maybe): zone_list,primary_zone,locality,previous_locality
+    * 3) not backup yet:locked,default_tablegroup_id,info  TODO: (yanmu.ztl)
+    * 4) no need to backup:drop_tenant_time,status,collation_type
+    * 6) abandoned: replica_num,read_only,rewrite_merge_version,logonly_replica_num,
+    *                storage_format_version,storage_format_work_version
+    */
+    ObCompatibilityMode mode = lib::Worker::CompatMode::ORACLE == job.get_compat_mode() ?
+                              ObCompatibilityMode::ORACLE_MODE :
+                              ObCompatibilityMode::MYSQL_MODE;
+    arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
+    arg.tenant_schema_.set_tenant_name(job.get_tenant_name());
+    arg.tenant_schema_.set_compatibility_mode(mode);
+    arg.if_not_exist_ = false;
+    arg.is_restore_ = true;
+    //  create tmp tenant for recover table
+    arg.is_tmp_tenant_for_recover_ = job.get_recover_table();
+    // in SN mode, Physical restore is devided into 2 stages. Recover to 'consistent_scn' which was recorded during
+    // data backup first, then to user specified scn.
+    // in SS mode, log recover all the way to restore scn
+    arg.recovery_until_scn_ = GCTX.is_shared_storage_mode() ? job.get_restore_scn() : job.get_consistent_scn();
+    arg.compatible_version_ = job.get_source_data_version();
+    if (OB_FAIL(assign_pool_list(pool_list.ptr(), arg.pool_list_))) {
+      LOG_WARN("fail to get pool list", K(ret), K(pool_list));
+    } else {
+      //set tenant schema params
+      ObTenantSchema &tenant_schema = arg.tenant_schema_;
+      const ObString& locality_str = job.get_locality();
+      const ObString &primary_zone = job.get_primary_zone();
+      if (!primary_zone.empty()) {
+        // specific primary_zone
+        tenant_schema.set_primary_zone(primary_zone);
+      }
+      if (!locality_str.empty()) {
+        tenant_schema.set_locality(locality_str);
+      }
+      // set palf base info
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (GCTX.is_shared_storage_mode()) {
+        if (OB_FAIL(ObRestoreUtil::get_ss_restore_ls_palf_base_info(job, SYS_LS, arg.palf_base_info_))) {
+          LOG_WARN("failed to get sys ls palf base info", KR(ret), K(job));
+        }
+      }
+#endif
+      if (!GCTX.is_shared_storage_mode()) {
+        if (FAILEDx(ObRestoreUtil::get_restore_ls_palf_base_info(job, SYS_LS, arg.palf_base_info_))) {
+          LOG_WARN("failed to get sys ls palf base info", KR(ret), K(job));
+        }
+      }
 
-     if (OB_SUCC(ret)) {
-       ObTenantSchema &tenant_schema = arg.tenant_schema_;
-       const ObString& locality_str = job.get_locality();
-       const ObString &primary_zone = job.get_primary_zone();
-       if (!primary_zone.empty()) {
-         // specific primary_zone
-         tenant_schema.set_primary_zone(primary_zone);
-       }
-       if (!locality_str.empty()) {
-         tenant_schema.set_locality(locality_str);
-       }
-     }
-     if (FAILEDx(ObRestoreUtil::get_restore_ls_palf_base_info(job, SYS_LS, arg.palf_base_info_))) {
-       LOG_WARN("failed to get sys ls palf base info", KR(ret), K(job));
-     }
+#ifdef OB_BUILD_TDE_SECURITY
+      ObRootKey root_key;
+      if (FAILEDx(ObRestoreCommonUtil::restore_root_key(job, alloc, root_key))) {
+        LOG_WARN("fail to restore root key", K(ret), K(job));
+      } else {
+        arg.root_key_type_ = root_key.key_type_;
+        arg.root_key_ = root_key.key_;
+      }
+#endif
+    }
   }
   return ret;
 }
@@ -421,10 +443,8 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
     }
   } else if (!is_sys_ready) { // sys job not in WAIT_RETSTORE_TENANT_FINISH  state
     ret = OB_EAGAIN;
-  } else if (OB_FAIL(update_tenant_restore_data_mode_to_remote_(tenant_id_))) {
+  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(update_tenant_restore_data_mode_to_remote_(tenant_id_))) {
     LOG_WARN("fail to update tenant restore data mode to REMOTE", K(ret), K_(tenant_id));
-  } else if (OB_FAIL(restore_root_key(job_info))) {
-    LOG_WARN("fail to restore root key", K(ret));
   } else if (OB_FAIL(restore_keystore(job_info))) {
     LOG_WARN("fail to restore keystore", K(ret), K(job_info));
   } else if (OB_FAIL(fill_backup_storage_info_(job_info))) {
@@ -435,7 +455,7 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("fail to convert tde parameters", K(ret), K(job_info));
   }
 
-  if (OB_IO_ERROR == ret || OB_RESTORE_TENANT_FAILED == ret || OB_KMS_SERVER_CONNECT_ERROR == ret || OB_SUCC(ret)) {
+  if (!can_retry_(ret) || OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(try_update_job_status(*sql_proxy_, ret, job_info))) {
       LOG_WARN("fail to update job status", K(ret), K(tmp_ret), K(job_info));
@@ -448,6 +468,25 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
 
   return ret;
 }
+
+bool ObRestoreScheduler::can_retry_(const int err_code)
+{
+  int b_ret = true;
+  switch (err_code) {
+    case OB_SUCCESS:
+    case OB_ERR_UNEXPECTED:
+    case OB_IO_ERROR:
+    case OB_RESTORE_TENANT_FAILED:
+    case OB_KMS_SERVER_CONNECT_ERROR:
+      b_ret = false;
+      break;
+    default:
+      b_ret = true;
+      break;
+  }
+  return b_ret;
+}
+
 int ObRestoreScheduler::set_tenant_sts_crendential_config_(
     common::ObISQLClient &proxy, const uint64_t tenant_id, const share::ObPhysicalRestoreJob &job_info)
 {
@@ -591,48 +630,6 @@ int ObRestoreScheduler::convert_tde_parameters(
   return ret;
 }
 
-ERRSIM_POINT_DEF(EN_RESTORE_ROOT_KEY_FAILED);
-int ObRestoreScheduler::restore_root_key(const share::ObPhysicalRestoreJob &job_info)
-{
-  int ret = OB_SUCCESS;
-
-#ifdef ERRSIM
-  ret = EN_RESTORE_ROOT_KEY_FAILED ? : OB_SUCCESS;
-  if (OB_FAIL(ret)) {
-    LOG_WARN("fake EN_RESTORE_ROOT_KEY_FAILED", K(ret));
-  }
-#endif
-
-#ifdef OB_BUILD_TDE_SECURITY
-  int64_t idx = 0;
-  if (OB_FAIL(ret)) {
-  } else if (FALSE_IT(idx = job_info.get_multi_restore_path_list().get_backup_set_path_list().count() - 1)) {
-  } else if (idx < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid job info", K(ret), K(idx), K(job_info));
-  } else if (OB_ISNULL(srv_rpc_proxy_) || OB_ISNULL(sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null svr rpc proxy or sql proxy", K(ret));
-  } else {
-    storage::ObBackupDataStore store;
-    const share::ObBackupSetPath &backup_set_path = job_info.get_multi_restore_path_list().get_backup_set_path_list().at(idx);
-    ObRootKey root_key;
-    if (OB_FAIL(store.init(backup_set_path.ptr()))) {
-      LOG_WARN("fail to init backup data store", K(ret));
-    } else if (OB_FAIL(store.read_root_key_info(tenant_id_))) {
-      LOG_WARN("fail to read root key info", K(ret));
-    } else if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(tenant_id_, root_key))) {
-      LOG_WARN("fail to get root key", K(ret));
-    } else if (obrpc::RootKeyType::INVALID == root_key.key_type_) {
-      // do nothing
-    } else if (OB_FAIL(ObRestoreCommonUtil::notify_root_key(srv_rpc_proxy_, sql_proxy_, tenant_id_, root_key))) {
-      LOG_WARN("failed to notify root key", KR(ret), K(tenant_id_));
-    }
-  }
-#endif
-  return ret;
-}
-
 int ObRestoreScheduler::restore_keystore(const share::ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
@@ -699,7 +696,7 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id_));
   } else if (OB_FAIL(restore_service_->check_stop())) {
     LOG_WARN("restore scheduler stopped", K(ret));
-  } else if (job_info.get_restore_type().is_full_restore()
+  } else if (!GCTX.is_shared_storage_mode() && job_info.get_restore_type().is_full_restore()
              && OB_FAIL(update_tenant_restore_data_mode_to_normal_(tenant_id_))) {
     LOG_WARN("fail to update tenant restore data mode to NORMAL", K(ret), K_(tenant_id));
   } else if (OB_FAIL(ObRestoreCommonUtil::try_update_tenant_role(sql_proxy_, tenant_id_,
@@ -1212,7 +1209,12 @@ int ObRestoreScheduler::wait_all_ls_created_(const share::schema::ObTenantSchema
         if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id, info.ls_id_,
               false/*for_update*/, recovery_stat, *sql_proxy_))) {
           LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id), K(info));
-        } else if (OB_FAIL(ObRestoreUtil::get_restore_ls_palf_base_info(
+#ifdef OB_BUILD_SHARED_STORAGE
+        } else if (GCTX.is_shared_storage_mode() && OB_FAIL(ObRestoreUtil::get_ss_restore_ls_palf_base_info(
+                job_info, info.ls_id_, palf_base_info))) {
+          LOG_WARN("fail to get ss ls palf info", K(ret), K(info));
+#endif
+        } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(ObRestoreUtil::get_restore_ls_palf_base_info(
                 job_info, info.ls_id_, palf_base_info))) {
           LOG_WARN("failed to get restore ls palf info", KR(ret), K(info),
                    K(job_info));

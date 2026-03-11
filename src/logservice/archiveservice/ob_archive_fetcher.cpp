@@ -341,7 +341,8 @@ int ObArchiveFetcher::handle_log_fetch_task_(ObArchiveLogFetchTask &task)
   bool need_delay = false;
   bool submit_log = false;
   const ObLSID id = task.get_ls_id();
-  PalfGroupBufferIterator iter;
+  // PalfGroupBufferIterator iter;
+  ipalf::IPalfIterator<ipalf::IGroupEntry> iter;
   TmpMemoryHelper helper(unit_size_, allocator_);
   ObArchiveSendTask *send_task = NULL;
   const ArchiveWorkStation &station = task.get_station();
@@ -581,7 +582,7 @@ int ObArchiveFetcher::init_helper_(ObArchiveLogFetchTask &task, const LSN &commi
 
 int ObArchiveFetcher::init_iterator_(const ObLSID &id,
     const TmpMemoryHelper &helper,
-    PalfGroupBufferIterator &iter)
+    ipalf::IPalfIterator<ipalf::IGroupEntry> &iter)
 {
   int ret = OB_SUCCESS;
   bool exists = false;
@@ -601,13 +602,12 @@ int ObArchiveFetcher::init_iterator_(const ObLSID &id,
 }
 
 // generate send buffer 前一定已经有足够数据
-int ObArchiveFetcher::generate_send_buffer_(PalfGroupBufferIterator &iter, TmpMemoryHelper &helper)
+int ObArchiveFetcher::generate_send_buffer_(ipalf::IPalfIterator<ipalf::IGroupEntry> &iter, TmpMemoryHelper &helper)
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
   int64_t buf_len = 0;
-  LogGroupEntry entry;
-  LSN offset;
+  ipalf::IGroupEntry entry;
   bool piece_change = false;  // 遇到更大piece, 不同piece内数据分开, 当前piece已到终点
   bool iter_end = false;    // 任务已处理到end_lsn
   SCN max_scn;
@@ -617,6 +617,8 @@ int ObArchiveFetcher::generate_send_buffer_(PalfGroupBufferIterator &iter, TmpMe
   const int64_t start_ts = common::ObTimeUtility::fast_current_time();
   while (OB_SUCC(ret) && ! iter_end && ! piece_change && ! has_set_stop()) {
     buffer = NULL;
+    LSN offset;
+    int64_t serialize_size = 0;
     if (OB_FAIL(iter.next(max_scn))) {
       if (iterator_need_retry_(ret)) {
         ARCHIVE_LOG(TRACE, "iterate log entry to end", K(ret), K(iter));
@@ -625,13 +627,14 @@ int ObArchiveFetcher::generate_send_buffer_(PalfGroupBufferIterator &iter, TmpMe
       }
     } else if (OB_FAIL(iter.get_entry(buffer, entry, offset))) {
       ARCHIVE_LOG(WARN, "get entry failed", K(ret));
-    } else if (OB_UNLIKELY(! entry.check_integrity())) {
+    } else if (OB_UNLIKELY(! entry.check_integrity(offset))) {
       ret = OB_INVALID_DATA;
       ARCHIVE_LOG(ERROR, "iterate buf not valid", K(ret), K(entry));
-    } else if (OB_UNLIKELY(entry.get_serialize_size() > helper.get_capaicity())) {
+    } else if (FALSE_IT(serialize_size = entry.get_serialize_size(offset))) {
+    } else if (OB_UNLIKELY(serialize_size > helper.get_capaicity())) {
       ret = OB_ERR_UNEXPECTED;
        ARCHIVE_LOG(ERROR, "iterate buf not valid", K(ret), K(helper), K(entry));
-    } else if (OB_UNLIKELY(helper.is_log_out_of_range(entry.get_serialize_size()))) {
+    } else if (OB_UNLIKELY(helper.is_log_out_of_range(serialize_size))) {
       // Committed logs can only be truncated in failover, and the commit_lsn before failover may be not match a log group entry,
       // and the log may not match the buffer for the task
       ret = OB_EAGAIN;
@@ -651,7 +654,7 @@ int ObArchiveFetcher::generate_send_buffer_(PalfGroupBufferIterator &iter, TmpMe
         } else {
           ARCHIVE_LOG(INFO, "set next piece succ", K(piece), K(entry), K(helper));
         }
-      } else if (OB_FAIL(append_log_entry_(buffer, entry, helper))) {
+      } else if (OB_FAIL(append_log_entry_(buffer, entry, helper, offset))) {
         ARCHIVE_LOG(WARN, "helper append buf failed", K(ret));
       } else {
         iter_end = helper.reach_end();
@@ -698,9 +701,9 @@ int ObArchiveFetcher::fill_helper_piece_if_empty_(const ObArchivePiece &piece, T
   return ret;
 }
 
-int ObArchiveFetcher::append_log_entry_(const char *buffer, LogGroupEntry &entry, TmpMemoryHelper &helper)
+int ObArchiveFetcher::append_log_entry_(const char *buffer, ipalf::IGroupEntry &entry, TmpMemoryHelper &helper, const LSN &lsn)
 {
-  return helper.append_log_entry(buffer, entry);
+  return helper.append_log_entry(buffer, entry, lsn);
 }
 
 bool ObArchiveFetcher::cached_buffer_full_(TmpMemoryHelper &helper)
@@ -1201,10 +1204,10 @@ int ObArchiveFetcher::TmpMemoryHelper::set_piece(const ObArchivePiece &piece)
   return ret;
 }
 
-int ObArchiveFetcher::TmpMemoryHelper::append_log_entry(const char *buffer, LogGroupEntry &entry)
+int ObArchiveFetcher::TmpMemoryHelper::append_log_entry(const char *buffer, ipalf::IGroupEntry &entry, const LSN &lsn)
 {
   int ret = OB_SUCCESS;
-  int64_t entry_size = entry.get_serialize_size();
+  int64_t entry_size = entry.get_serialize_size(lsn);
   const SCN &scn = entry.get_scn();
 
   origin_buf_ = buffer;

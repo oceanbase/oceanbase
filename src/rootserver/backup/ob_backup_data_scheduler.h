@@ -18,6 +18,10 @@
 #include "storage/backup/ob_backup_data_store.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "share/backup/ob_backup_struct.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/backup/ob_ss_ha_macro_block_struct.h"
+#include "rootserver/backup/ob_ss_ha_macro_block_task_mgr.h"
+#endif
 #include "share/ob_ls_id.h"
 
 namespace oceanbase
@@ -69,6 +73,7 @@ public:
   int cancel_backup_data(uint64_t tenant_id, const common::ObIArray<uint64_t> &backup_tenant_ids);
 
 private:
+  int check_backup_type_allowed_(const obrpc::ObBackupDatabaseArg &in_arg);
   int fill_template_job_(const obrpc::ObBackupDatabaseArg &in_arg, share::ObBackupJobAttr &job_attr);
   int start_sys_backup_data_(const share::ObBackupJobAttr &job_attr);
   int check_log_archive_status_(const uint64_t tenant_id, bool &is_doing);

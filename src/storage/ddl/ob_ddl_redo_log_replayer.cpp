@@ -241,7 +241,9 @@ int ObDDLRedoLogReplayer::replay_inc_commit(
                                              seq_no,
                                              snapshot_version,
                                              data_format_version,
-                                             is_rollback))) {
+                                             is_rollback,
+                                             log.is_co_sstable(),
+                                             log.get_data_inc_major_buffer()))) {
         LOG_WARN("failed to do replay inc major commit", KR(ret), K(tablet_id), K(scn),
                  K(log_basic), K(is_rollback));
       } else if (lob_meta_tablet_id.is_valid() &&
@@ -251,7 +253,9 @@ int ObDDLRedoLogReplayer::replay_inc_commit(
                                                     seq_no,
                                                     snapshot_version,
                                                     data_format_version,
-                                                    is_rollback))) {
+                                                    is_rollback,
+                                                    false/*is_co_sstable, lob inc major is always row store*/,
+                                                    log.get_lob_inc_major_buffer()))) {
         LOG_WARN("failed to do replay inc major commit for lob", KR(ret), K(lob_meta_tablet_id),
                  K(scn), K(log_basic), K(is_rollback));
       }
@@ -346,7 +350,9 @@ int ObDDLRedoLogReplayer::do_replay_inc_major_commit(
     const ObTxSEQ &seq_no,
     const int64_t snapshot_version,
     const uint64_t data_format_version,
-    const bool is_rollback)
+    const bool is_rollback,
+    const bool is_co_sstable,
+    const ObString &inc_major_buffer)
 {
   int ret = OB_SUCCESS;
   ObDDLIncMajorCommitReplayExecutor replay_executor;
@@ -357,10 +363,12 @@ int ObDDLRedoLogReplayer::do_replay_inc_major_commit(
                                    seq_no,
                                    snapshot_version,
                                    data_format_version,
-                                   is_rollback))) {
+                                   is_rollback,
+                                   is_co_sstable,
+                                   inc_major_buffer))) {
     STORAGE_LOG(WARN, "failed to init ddl inc major commit log replay executor", KR(ret),
                 K(tablet_id), K(scn), K(trans_id), K(seq_no), K(snapshot_version),
-                K(data_format_version), K(is_rollback));
+                K(data_format_version), K(is_rollback), K(is_co_sstable));
   } else if (OB_FAIL(replay_executor.execute(scn, ls_->get_ls_id(), tablet_id))) {
     if (OB_TABLET_NOT_EXIST == ret || OB_NO_NEED_UPDATE == ret) {
       FLOG_INFO("no need to replay ddl inc major commit log", KR(ret));

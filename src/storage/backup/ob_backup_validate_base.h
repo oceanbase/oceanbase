@@ -42,7 +42,7 @@ public:
 
   int64_t group_id_;
   int64_t accumulated_file_count_;
-  common::ObSArray<backup::ObBackupFileInfo> file_list_;
+  common::ObSArray<backup::ObBackupFilePathInfo> file_list_;
 };
 
 struct ObBackupValidateDagNetInitParam : public share::ObIDagInitParam

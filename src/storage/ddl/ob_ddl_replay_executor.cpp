@@ -1885,7 +1885,11 @@ int ObDDLIncMajorStartReplayExecutor::update_storage_schema_to_tablet(
 
 // ObDDLIncMajorCommitReplayExecutor
 ObDDLIncMajorCommitReplayExecutor::ObDDLIncMajorCommitReplayExecutor()
-  : ObDDLReplayExecutor(), tablet_id_(), is_rollback_(false)
+  : ObDDLReplayExecutor(),
+    tablet_id_(),
+    is_rollback_(false),
+    is_co_sstable_(false),
+    inc_major_buffer_(nullptr)
 {
 }
 
@@ -1897,14 +1901,16 @@ int ObDDLIncMajorCommitReplayExecutor::init(
     const ObTxSEQ &seq_no,
     const int64_t snapshot_version,
     const uint64_t data_format_version,
-    const bool is_rollback)
+    const bool is_rollback,
+    const bool is_co_sstable,
+    const ObString &inc_major_buffer)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret), K_(is_inited));
   } else if (OB_ISNULL(ls)
-          || OB_UNLIKELY(!tablet_id.is_valid()
+            || OB_UNLIKELY(!tablet_id.is_valid()
                       || (!scn.is_valid())
                       || (!trans_id.is_valid())
                       || (!seq_no.is_valid())
@@ -1922,12 +1928,68 @@ int ObDDLIncMajorCommitReplayExecutor::init(
     snapshot_version_ = snapshot_version;
     data_format_version_ = data_format_version;
     is_rollback_ = is_rollback;
+    is_co_sstable_ = is_co_sstable;
+    inc_major_buffer_ = inc_major_buffer;
     is_inited_ = true;
   }
 
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObDDLIncMajorCommitReplayExecutor::deserialize_and_update_ss_inc_major(ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!tablet_handle.is_valid() || inc_major_buffer_.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tablet_handle), K(inc_major_buffer_.length()), KP(inc_major_buffer_.ptr()));
+  } else {
+    ObMemAttr attr(MTL_ID(), "SS_INC_MAJOR");
+    ObArenaAllocator allocator(attr);
+    ObSSTable sstable;
+    ObCOSSTableV2 co_sstable;
+    ObSSTable *inc_major_ptr = is_co_sstable_ ? &co_sstable : &sstable;
+    bool is_exist = false;
+    ObStorageSchema *storage_schema = nullptr;
+    if (OB_FAIL(ObIncDDLMergeTaskUtils::deserialize_inc_major_from_string(allocator,
+                                                                          inc_major_buffer_,
+                                                                          inc_major_ptr))) {
+      LOG_WARN("fail to deserialize inc major from string", KR(ret), K(is_co_sstable_));
+    } else if (OB_FAIL(ObIncDDLMergeTaskUtils::check_ss_inc_major_exist(allocator,
+                                                                        ls_->get_ls_id(),
+                                                                        tablet_handle.get_obj()->get_tablet_id(),
+                                                                        tablet_handle.get_obj()->get_reorganization_scn(),
+                                                                        trans_id_,
+                                                                        seq_no_,
+                                                                        data_format_version_,
+                                                                        is_exist))) {
+      LOG_WARN("fail to check ss inc major exist",
+               KR(ret), "ls_id", ls_->get_ls_id(), "tablet_id", tablet_handle.get_obj()->get_tablet_id(),
+               K_(trans_id), K_(seq_no), K_(data_format_version));
+    } else if (is_exist) {
+    } else if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(allocator, storage_schema))) {
+      LOG_WARN("fail to load storage schema", KR(ret));
+    } else if (OB_ISNULL(storage_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null storage schema", KR(ret));
+    } else if (OB_FAIL(ObSSDDLUtil::update_shared_tablet_table_store(*ls_,
+                                                                     *inc_major_ptr,
+                                                                     *storage_schema,
+                                                                     data_format_version_,
+                                                                     tablet_handle.get_obj()->get_reorganization_scn()))) {
+      LOG_WARN("fail to update shared tablet table store", KR(ret));
+    } else if (OB_FAIL(MTL(observer::ObTabletTableUpdater*)->submit_tablet_update_task(ls_->get_ls_id(),
+                                                                                       tablet_handle.get_obj()->get_tablet_id()))) {
+      LOG_WARN("fail to submit tablet update task",
+               KR(ret), "ls_id", ls_->get_ls_id(), "tablet_id", tablet_handle.get_obj()->get_tablet_id());
+    }
+    if (OB_NOT_NULL(storage_schema)) {
+      ObTabletObjLoadHelper::free(allocator, storage_schema);
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObDDLIncMajorCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
 {
@@ -1960,8 +2022,11 @@ int ObDDLIncMajorCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
 #ifdef OB_BUILD_SHARED_STORAGE
     } else if (GCTX.is_shared_storage_mode()) {
       // ss模式
-      if (OB_FAIL(ObIncDDLMergeTaskUtils::link_inc_major(ls_, tablet_handle, trans_id_, seq_no_))) {
-        LOG_WARN("fail to link inc major", KR(ret), K(ls_->get_ls_id()), K(tablet_id_), K(trans_id_), K(seq_no_));
+      if (is_rollback_) {
+      } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY() && OB_FAIL(deserialize_and_update_ss_inc_major(tablet_handle))) {
+        LOG_WARN("fail to deserialize and update ss inc major", KR(ret));
+      } else if (OB_FAIL(ObIncDDLMergeTaskUtils::link_inc_major(ls_, tablet_handle, trans_id_, seq_no_))) {
+        LOG_WARN("fail to link inc major", KR(ret), K(trans_id_), K(seq_no_));
       }
 #endif
     } else {

@@ -3956,6 +3956,7 @@ def_table_schema(
     ('major_turn_id', 'int', 'false', '0'),
     ('log_file_count', 'int', 'false', '0'),
     ('finish_log_file_count', 'int', 'false', '0'),
+    ('extra_info', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'false', ''),
     ],
 )
 def_table_schema(
@@ -4001,6 +4002,7 @@ def_table_schema(
     ('major_turn_id', 'int', 'false', '0'),
     ('log_file_count', 'int', 'false', '0'),
     ('finish_log_file_count', 'int', 'false', '0'),
+    ('extra_info', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'false', ''),
     ],
 )
 def_table_schema(
@@ -8747,7 +8749,6 @@ all_ai_model_endpoint_def = dict(
 def_table_schema(**all_ai_model_endpoint_def)
 
 # 573 : __wr_active_session_history_v2
-
 def_table_schema(
   owner = 'zhangyiqiang.zyq',
   table_id      = '573',
@@ -8811,9 +8812,97 @@ def_table_schema(
     ('weight', 'double', 'true')
   ],
 )
-# 574: __all_tenant_macro_block_ha_task
-# 575: __all_tenant_macro_block_ha_task_progress
-# 576: __all_tenant_macro_block_ha_task_history
+
+def_table_schema(
+  owner = 'haoyuanke.hyk',
+  table_name    = '__all_tenant_macro_block_ha_task',
+  table_id      = '574',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('parent_task_id', 'int'),
+    ('task_type', 'varchar:60'),
+    ('ls_id', 'int'),
+    ('task_id', 'int'),
+    ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('macro_block_cnt', 'int'),
+    ('macro_info', 'longblob'),
+    ('total_bytes', 'int', 'true', '0'),
+    ('finish_bytes', 'int', 'true', '0'),
+    ('task_status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'true', ''),
+    ('start_time', 'timestamp'),
+    ('end_time', 'timestamp'),
+    ('retry_cnt', 'int', 'false', '0'),
+    ('result', 'int', 'true', '0'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
+    ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ],
+)
+
+def_table_schema(
+  owner = 'haoyuanke.hyk',
+  table_name    = '__all_tenant_macro_block_ha_task_progress',
+  table_id      = '575',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('parent_task_id', 'int'),
+    ('task_type', 'varchar:60'),
+    ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('task_status', 'int', 'true', '0'),
+    ('total_task_count', 'int', 'true', '0'),
+    ('finish_task_count', 'int', 'true', '0'),
+    ('total_macro_block_count', 'int', 'true', '0'),
+    ('finish_macro_block_count', 'int', 'true', '0'),
+    ('total_bytes', 'int', 'true', '0'),
+    ('finish_bytes', 'int', 'true', '0'),
+    ('result', 'int', 'true', '0'),
+    ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ],
+)
+
+def_table_schema(
+  owner = 'haoyuanke.hyk',
+  table_name    = '__all_tenant_macro_block_ha_task_history',
+  table_id      = '576',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('parent_task_id', 'int'),
+    ('task_type', 'varchar:60'),
+    ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('task_status', 'int', 'true', '0'),
+    ('total_task_count', 'int', 'true', '0'),
+    ('finish_task_count', 'int', 'true', '0'),
+    ('total_macro_block_count', 'int', 'true', '0'),
+    ('finish_macro_block_count', 'int', 'true', '0'),
+    ('total_bytes', 'int', 'true', '0'),
+    ('finish_bytes', 'int', 'true', '0'),
+    ('result', 'int', 'true', '0'),
+    ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ],
+)
+
 def_table_schema(
   owner       = 'yunshan.tys',
   table_name  = '__all_tablet_to_global_temporary_table',
@@ -8970,7 +9059,25 @@ def_table_schema(
     ('last_error_msg', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true'),
   ],
 )
-# 584: __all_ss_gc_reserved_snapshot
+def_table_schema(
+  owner = 'yangyifei.yyf',
+  table_name    = '__all_ss_gc_reserved_snapshot',
+  table_id      = '584',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('task_type', 'int'),
+    ('task_id', 'int'),
+    ('tenant_id', 'int'),
+    ('ls_id', 'int')
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('snapshot_version', 'uint'),
+  ],
+)
 # 585: __all_table_archive_history
 # 586: __all_java_policy
 # 587: __all_java_policy_history
@@ -17891,9 +17998,23 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_active_session_history_v2']))
 
-# 12577: __all_virtual_macro_block_ha_task
-# 12578: __all_virtual_macro_block_ha_task_progress
-# 12579: __all_virtual_macro_block_ha_task_history
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12577',
+  table_name = '__all_virtual_macro_block_ha_task',
+  keywords = all_def_keywords['__all_tenant_macro_block_ha_task'],
+  in_tenant_space = True))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12578',
+  table_name = '__all_virtual_macro_block_ha_task_progress',
+  keywords = all_def_keywords['__all_tenant_macro_block_ha_task_progress'],
+  in_tenant_space = True))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12579',
+  table_name = '__all_virtual_macro_block_ha_task_history',
+  keywords = all_def_keywords['__all_tenant_macro_block_ha_task_history'],
+  in_tenant_space = True))
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12580',
@@ -18722,9 +18843,9 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15539', all_def_ke
 # 15541: __all_sync_standby_status
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15542', all_def_keywords['__all_virtual_tablet_window_loop_info']))
 
-# 15543: __all_virtual_macro_block_ha_task
-# 15544: __all_virtual_macro_block_ha_task_progress
-# 15545: __all_virtual_macro_block_ha_task_history
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15543', all_def_keywords['__all_virtual_macro_block_ha_task'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15544', all_def_keywords['__all_virtual_macro_block_ha_task_progress'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15545', all_def_keywords['__all_virtual_macro_block_ha_task_history'])))
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15546', all_def_keywords['__all_routine_load_job']))
 # 15548: __all_virtual_ss_local_cache_diagnose_info
@@ -22202,7 +22323,8 @@ def_table_schema(
     CASE
       WHEN RECOVER_SCN IS NULL
         THEN NULL
-      WHEN STATUS IN ('RESTORE_PRE', 'RESTORE_CREATE_INIT_LS', 'PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN')
+      WHEN STATUS IN ('RESTORE_PRE', 'RESTORE_CREATE_INIT_LS', 'PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN',
+                      'SS_RESTORE_GEN_TASK', 'SS_RESTORE_DATA', 'SS_RESTORE_LS')
         THEN CAST(0 AS DECIMAL(6, 2))
       WHEN RESTORE_SCN = RECOVER_START_SCN
         THEN CAST(100 AS DECIMAL(6, 2))
@@ -29327,8 +29449,8 @@ def_table_schema(
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
-      TOTAL_LS_COUNT,
-      FINISH_LS_COUNT,
+      TOTAL_LS_COUNT AS TOTAL_TASK_COUNT,
+      FINISH_LS_COUNT AS FINISH_TASK_COUNT,
       RESULT,
       COMMENT,
       PATH
@@ -29362,8 +29484,8 @@ def_table_schema(
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
-      TOTAL_LS_COUNT,
-      FINISH_LS_COUNT,
+      TOTAL_LS_COUNT AS TOTAL_TASK_COUNT,
+      FINISH_LS_COUNT AS FINISH_TASK_COUNT,
       RESULT,
       COMMENT,
       PATH
@@ -31180,8 +31302,8 @@ def_table_schema(
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
-      TOTAL_LS_COUNT,
-      FINISH_LS_COUNT,
+      TOTAL_LS_COUNT AS TOTAL_TASK_COUNT,
+      FINISH_LS_COUNT AS FINISH_TASK_COUNT,
       RESULT,
       COMMENT,
       PATH
@@ -31216,8 +31338,8 @@ def_table_schema(
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
-      TOTAL_LS_COUNT,
-      FINISH_LS_COUNT,
+      TOTAL_LS_COUNT AS TOTAL_TASK_COUNT,
+      FINISH_LS_COUNT AS FINISH_TASK_COUNT,
       RESULT,
       COMMENT,
       PATH
@@ -31352,7 +31474,8 @@ def_table_schema(
     CASE
       WHEN RECOVER_SCN IS NULL
         THEN NULL
-      WHEN STATUS IN ('RESTORE_PRE', 'RESTORE_CREATE_INIT_LS', 'PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN')
+      WHEN STATUS IN ('RESTORE_PRE', 'RESTORE_CREATE_INIT_LS', 'PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN',
+                      'SS_RESTORE_GEN_TASK', 'SS_RESTORE_DATA', 'SS_RESTORE_LS')
         THEN CAST(0 AS DECIMAL(6, 2))
       WHEN RESTORE_SCN = RECOVER_START_SCN
         THEN CAST(100 AS DECIMAL(6, 2))
@@ -64314,8 +64437,8 @@ def_table_schema(
           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
         END AS END_TIMESTAMP,
       STATUS,
-      TOTAL_LS_COUNT,
-      FINISH_LS_COUNT,
+      TOTAL_LS_COUNT AS TOTAL_TASK_COUNT,
+      FINISH_LS_COUNT AS FINISH_TASK_COUNT,
       RESULT,
       "COMMENT",
       PATH
@@ -64352,8 +64475,8 @@ def_table_schema(
           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
         END AS END_TIMESTAMP,
       STATUS,
-      TOTAL_LS_COUNT,
-      FINISH_LS_COUNT,
+      TOTAL_LS_COUNT AS TOTAL_TASK_COUNT,
+      FINISH_LS_COUNT AS FINISH_TASK_COUNT,
       RESULT,
       "COMMENT",
       PATH
@@ -64427,7 +64550,8 @@ def_table_schema(
     CASE
       WHEN RECOVER_SCN IS NULL
         THEN NULL
-      WHEN STATUS IN ('RESTORE_PRE', 'RESTORE_CREATE_INIT_LS', 'PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN')
+      WHEN STATUS IN ('RESTORE_PRE', 'RESTORE_CREATE_INIT_LS', 'PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN',
+                      'SS_RESTORE_GEN_TASK', 'SS_RESTORE_DATA', 'SS_RESTORE_LS')
         THEN CAST(0 AS NUMBER(6, 2))
       WHEN RESTORE_SCN = RECOVER_START_SCN
         THEN CAST(100 AS NUMBER(6, 2))
@@ -83026,7 +83150,13 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_routine_load_job'])
 
-# 101125: __all_tenant_macro_block_ha_task
+def_sys_index_table(
+  index_name = 'idx_ha_task_status',
+  index_table_id = 101125,
+  index_columns = ['tenant_id', 'parent_task_id', 'task_type', 'task_status'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_macro_block_ha_task'])
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名

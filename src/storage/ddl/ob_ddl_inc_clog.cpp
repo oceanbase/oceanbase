@@ -14,6 +14,7 @@
 
 #include "storage/ddl/ob_ddl_inc_clog.h"
 #include "storage/ob_storage_schema.h"
+#include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
 
 namespace oceanbase
 {
@@ -230,8 +231,24 @@ OB_DEF_DESERIALIZE(ObDDLIncStartLog)
  */
 
 ObDDLIncCommitLog::ObDDLIncCommitLog()
-  : log_basic_(), is_rollback_(false)
+  : allocator_(ObMemAttr(MTL_ID(), "INC_COMMIT_LOG")),
+    log_basic_(),
+    is_rollback_(false),
+    is_co_sstable_(false)
 {
+}
+
+ObDDLIncCommitLog::~ObDDLIncCommitLog()
+{
+  if (!lob_inc_major_buffer_.empty()) {
+    allocator_.free(lob_inc_major_buffer_.ptr());
+    lob_inc_major_buffer_.reset();
+  }
+  if (!data_inc_major_buffer_.empty()) {
+    allocator_.free(data_inc_major_buffer_.ptr());
+    data_inc_major_buffer_.reset();
+  }
+  allocator_.reset();
 }
 
 int ObDDLIncCommitLog::init(const ObDDLIncLogBasic &log_basic, const bool is_rollback)
@@ -247,7 +264,75 @@ int ObDDLIncCommitLog::init(const ObDDLIncLogBasic &log_basic, const bool is_rol
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLIncCommitLog, log_basic_, is_rollback_);
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObDDLIncCommitLog::set_ss_inc_major(
+    const ObSSTable *data_inc_major,
+    const ObSSTable *lob_inc_major)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIncDDLMergeTaskUtils::serialize_inc_major_to_string(allocator_,
+                                                                    data_inc_major,
+                                                                    log_basic_.get_data_format_version(),
+                                                                    data_inc_major_buffer_))) {
+    LOG_WARN("fail to serialize inc major", KR(ret));
+  } else if (log_basic_.get_lob_meta_tablet_id().is_valid()
+             && OB_FAIL(ObIncDDLMergeTaskUtils::serialize_inc_major_to_string(allocator_,
+                                                                              lob_inc_major,
+                                                                              log_basic_.get_data_format_version(),
+                                                                              lob_inc_major_buffer_))) {
+    LOG_WARN("fail to serialize lob inc major", KR(ret));
+  } else {
+    is_co_sstable_ = data_inc_major->is_co_sstable();
+  }
+  return ret;
+}
+#endif
+
+OB_DEF_SERIALIZE_SIZE(ObDDLIncCommitLog)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              log_basic_,
+              is_rollback_,
+              is_co_sstable_,
+              data_inc_major_buffer_,
+              lob_inc_major_buffer_);
+  return len;
+}
+
+OB_DEF_SERIALIZE(ObDDLIncCommitLog)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              log_basic_,
+              is_rollback_,
+              is_co_sstable_,
+              data_inc_major_buffer_,
+              lob_inc_major_buffer_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDDLIncCommitLog)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              log_basic_,
+              is_rollback_,
+              is_co_sstable_,
+              data_inc_major_buffer_,
+              lob_inc_major_buffer_);
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObIncDDLMergeTaskUtils::deep_copy_string_buffer(allocator_, data_inc_major_buffer_))) {
+      LOG_WARN("fail to deep copy string buffer", KR(ret));
+    } else if (OB_FAIL(ObIncDDLMergeTaskUtils::deep_copy_string_buffer(allocator_, lob_inc_major_buffer_))) {
+      LOG_WARN("fail to deep copy string buffer", KR(ret));
+    }
+  }
+#endif
+  return ret;
+}
 
 } // namespace storage
 } // namespace oceanbase

@@ -70,6 +70,12 @@ public:
     // clone failed
     CLONE_FAILED = 105,
 
+    // ss restore
+    SS_RESTORE_START = 201,
+    SS_RESTORE_LS = 202,
+    SS_RESTORE_WAIT_LS = 203,
+    SS_RESTORE_CLOG = 204,
+
     LS_RESTORE_STATUS_MAX = 255
   };
 
@@ -100,21 +106,17 @@ public:
   bool is_wait_quick_restore() const { return Status::WAIT_QUICK_RESTORE == status_; }
   bool is_wait_restore_major_data() const { return Status::WAIT_RESTORE_MAJOR_DATA == status_; }
   bool is_quick_restore_finish() const { return Status::QUICK_RESTORE_FINISH == status_;}
+  bool is_ss_restore_start() const { return Status::SS_RESTORE_START == status_; }
+  bool is_ss_restore_ls() const { return Status::SS_RESTORE_LS == status_; }
+  bool is_ss_restore_wait_ls() const { return Status::SS_RESTORE_WAIT_LS == status_; }
+  bool is_ss_restore_clog() const { return Status::SS_RESTORE_CLOG == status_; }
 
-
-  bool is_in_restoring() const
-  {
-    return (status_ >= Status::RESTORE_START && status_ < QUICK_RESTORE_FINISH)
-           || (status_ > QUICK_RESTORE_FINISH && status_ < Status::RESTORE_FAILED);
-  }
+  bool is_in_restoring() const;
   bool is_in_restoring_or_failed() const
   {
     return is_in_restoring() || RESTORE_FAILED == status_;
   }
-  bool is_in_restore_status() const
-  {
-    return status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_FAILED;
-  }
+  bool is_in_restore_status() const;
   bool is_valid_restore_status() const
   {
     return is_in_restore_status() || Status::NONE == status_;
@@ -131,11 +133,7 @@ public:
   // offline ls and enable sync and online ls restore handler in [RESTORE_START, RESTORE_SYS_TABLETS] or RESTORE_FAILED
   bool need_online() const;
   // enable sync and online ls restore handler in [RESTORE_START, RESTORE_SYS_TABLETS] or RESTORE_FAILED
-  bool is_restore_first_step() const
-  {
-    return ((status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_SYS_TABLETS) ||
-             status_ == Status::RESTORE_FAILED);
-  }
+  bool is_restore_first_step() const;
 
 
 
@@ -158,9 +156,10 @@ public:
                                        status_ != Status::RESTORE_FAILED &&
                                        status_ != Status::CLONE_FAILED; }
 
-  bool can_restore_log() const { return status_ == NONE ||
-    (status_ >= RESTORE_TO_CONSISTENT_SCN && status_ < RESTORE_FAILED) ||
-    (status_ >= CLONE_CLOG_REPLAY && status_ < CLONE_FAILED); }
+  bool can_restore_log() const { return status_ == NONE
+    || (status_ >= RESTORE_TO_CONSISTENT_SCN && status_ < RESTORE_FAILED)
+    || (status_ >= CLONE_CLOG_REPLAY && status_ < CLONE_FAILED)
+    || SS_RESTORE_CLOG == status_; }
 
   bool can_migrate() const
   {
@@ -194,7 +193,7 @@ public:
   int serialize(char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t len, int64_t &pos);
   int64_t get_serialize_size() const;
-
+  static bool can_change_status(const ObLSRestoreStatus &curr_status, const ObLSRestoreStatus &next_status);
   TO_STRING_KV(K_(status));
 private:
   bool is_valid_(int32_t status) const;

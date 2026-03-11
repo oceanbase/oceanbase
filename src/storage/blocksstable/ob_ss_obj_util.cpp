@@ -353,6 +353,11 @@ int SSObjUtil::create_parent_dir(const MacroBlockId &macro_id, const uint64_t te
   return STI(macro_id.storage_object_type()).create_parent_dir(macro_id, tenant_id, tenant_epoch_id, ls_epoch_id);
 }
 
+int SSObjUtil::to_relative_remote_path_format(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos)
+{
+  return STI(macro_id.storage_object_type()).to_relative_remote_path_format(path, length, pos, macro_id);
+}
+
 bool SSObjUtil::is_exist_store_in_table_object(const uint64_t tenant_id, const blocksstable::MacroBlockId &macro_id)
 {
   return is_user_tenant(tenant_id) && macro_id.is_shared_tablet_sub_meta();

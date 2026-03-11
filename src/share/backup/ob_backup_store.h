@@ -159,6 +159,10 @@ public:
 protected:
   int write_single_file(const ObBackupPathString &full_path, const ObIBackupSerializeProvider &serializer) const;
   int read_single_file(const ObBackupPathString &full_path, ObIBackupSerializeProvider &serializer) const;
+  int read_single_file_with_allocator(
+      const ObBackupPathString &full_path,
+      common::ObIAllocator &allocator,
+      ObIBackupSerializeProvider &serializer) const;
 
 private:
   bool is_inited_;

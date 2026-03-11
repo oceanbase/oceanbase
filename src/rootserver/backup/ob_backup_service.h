@@ -108,6 +108,7 @@ public:
 
   int handle_backup_delete(const obrpc::ObBackupCleanArg &arg);
   int handle_delete_policy(const obrpc::ObDeletePolicyArg &arg);
+  int start_obsolete_backup_clean(const uint64_t tenant_id);
   int handle_backup_validate(const obrpc::ObBackupValidateArg &arg);
   int handle_backup_validate_cancel(const uint64_t tenant_id, const ObIArray<uint64_t> &managed_tenant_ids);
 private:

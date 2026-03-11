@@ -317,6 +317,27 @@ int ObBackupMgrService::do_reload_task(
   return ret;
 }
 
+int ObBackupMgrService::start_obsolete_backup_clean(const uint64_t tenant_id) {
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (is_user_tenant(tenant_id)) {
+    obrpc::ObBackupCleanArg arg;
+    arg.initiator_tenant_id_ = tenant_id;
+    arg.tenant_id_ = tenant_id;
+    arg.type_ = ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP;
+    if (OB_FAIL(handle_backup_delete(arg))) {
+      LOG_WARN("failed to schedule backup clean", K(ret), K(arg));
+    }
+    FLOG_INFO("[BACKUP_CLEAN] finish schedule auto delete", K(ret), K(tenant_id));
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id, only user tenant can start auto delete obsolete backup", K(ret), K(tenant_id));
+  }
+  return ret;
+}
+
 int ObBackupMgrService::handle_backup_delete(const obrpc::ObBackupCleanArg &arg)
 {
   int ret = OB_SUCCESS;

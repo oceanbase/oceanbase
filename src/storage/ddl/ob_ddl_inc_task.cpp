@@ -232,6 +232,8 @@ int ObDDLIncCommitTask::process()
                                                                  dag->get_ddl_task_param().snapshot_version_,
                                                                  dag->get_ddl_task_param().tenant_data_version_,
                                                                  dag->get_tx_info().tx_desc_,
+                                                                 tablet_ctx->merge_ctx_.inc_major_,
+                                                                 tablet_ctx->lob_merge_ctx_.inc_major_,
                                                                  commit_scn))) {
     LOG_WARN("fail to write inc commit log", KR(ret), KPC(tablet_ctx), K(dag->get_ddl_task_param()), K(dag->get_tx_info()));
   } else if (is_incremental_major_direct_load(dag->get_direct_load_type())) {

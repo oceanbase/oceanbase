@@ -22,6 +22,7 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
+#include "share/backup/ob_backup_path.h"
 
 using namespace oceanbase::share::schema;
 using namespace oceanbase::rootserver;
@@ -442,6 +443,46 @@ int ObRestoreCommonUtil::activate_master_key_version(
         } else {
           is_active = true;
         }
+      }
+    }
+  }
+#endif
+  return ret;
+}
+
+int ObRestoreCommonUtil::restore_root_key(
+  const share::ObPhysicalRestoreJob &job_info,
+  common::ObIAllocator &alloc,
+  ObRootKey &root_key)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  if (!job_info.is_valid()) {
+  ret = OB_INVALID_ARGUMENT;
+  LOG_WARN("invalid job info ", KR(ret), K(job_info));
+  } else {
+    int64_t idx = job_info.get_multi_restore_path_list().get_backup_set_path_list().count() - 1;
+    if (idx < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid job info", K(ret), K(idx), K(job_info));
+    } else {
+      ObBackupDest backup_set_dest;
+      share::ObBackupPath root_key_path;
+      ObString encrypt_key("");
+      const share::ObBackupSetPath &backup_set_path = job_info.get_multi_restore_path_list().get_backup_set_path_list().at(idx);
+      if (OB_FAIL(backup_set_dest.set(backup_set_path))) {
+        LOG_WARN("fail to set backup set dest", K(ret));
+      } else if (OB_FAIL(ObBackupPathUtil::get_backup_root_key_path(backup_set_dest, root_key_path))) {
+        LOG_WARN("fail to get backup root key path", K(ret), K(backup_set_dest));
+      } else if (OB_FAIL(ObMasterKeyUtil::read_root_key_from_backup(root_key_path.get_obstr(),
+                                                                    backup_set_dest.get_storage_info(),
+                                                                    encrypt_key,
+                                                                    alloc,
+                                                                    root_key))) {
+        LOG_WARN("fail to restore root key", K(ret), K(root_key_path), K(backup_set_dest));
+      } else if (OB_UNLIKELY(obrpc::RootKeyType::INVALID == root_key.key_type_) || root_key.key_.empty()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid root key", K(ret), K(root_key));
       }
     }
   }

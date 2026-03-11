@@ -267,8 +267,7 @@ int ObReplayServiceSubmitTask::next_log(const SCN &replayable_point,
         CLOG_LOG(INFO, "next_min_scn is invalid", K(type_), K(replayable_point),
                  K(next_min_scn), K(next_to_submit_scn_), K(ret), K(iterator_));
       } else if (OB_UNLIKELY(next_min_scn < next_to_submit_scn_)) {
-        // TODO @yunlong: 维护next_min_scn, 当前实现会导致replay卡住
-        ret = OB_SUCCESS;
+        ret = OB_ERR_UNEXPECTED;
         LSN unused_lsn;
         // updating next to submit log info is failed, set fatal error for replay status.
         replay_status_->set_err_info(unused_lsn, next_min_scn, ObLogBaseType::INVALID_LOG_BASE_TYPE,

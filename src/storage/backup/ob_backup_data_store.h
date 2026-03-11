@@ -18,6 +18,10 @@
 #include "storage/backup/ob_backup_extern_info_mgr.h"
 #include "storage/ls/ob_ls_meta_package.h"
 #include "storage/tablet/ob_tablet_meta.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/share/ob_shared_meta_common.h"
+#include "storage/incremental/share/ob_shared_ls_meta.h"
+#endif
 #include "storage/backup/ob_backup_block_file_reader_writer.h"
 
 namespace oceanbase
@@ -313,6 +317,39 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupLSMetaInfosDesc);
 };
 
+#ifdef OB_BUILD_SHARED_STORAGE
+struct ObBackupSSLSMetaInfo final
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObBackupSSLSMetaInfo();
+  ~ObBackupSSLSMetaInfo();
+  int64_t get_total_serialize_buf_size() const;
+  int serialize_to(char *buf, int64_t buf_size, int64_t &pos) const;
+  int deserialize_from(char *buf, int64_t buf_size);
+  TO_STRING_KV(K_(raw_ls_meta_row));
+  storage::ObRawMetaRow raw_ls_meta_row_;
+};
+
+struct ObBackupSSLSMetaInfosDesc final: public ObExternBackupDataDesc
+{
+public:
+  static const uint8_t FILE_VERSION = 1;
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupSSLSMetaInfosDesc();
+  virtual ~ObBackupSSLSMetaInfosDesc();
+  bool is_valid() const override;
+  TO_STRING_KV("count", ls_metas_.count());
+public:
+  ObSArray<storage::ObBackupSSLSMetaInfo> ls_metas_;
+  // TODO(yanfeng): refactor to only maintain ls_id list, no need to merge ls metas
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupSSLSMetaInfosDesc);
+};
+#endif
+
 struct ObBackupPartialTableListDesc final : public ObExternBackupDataDesc
 {
 public:
@@ -373,6 +410,79 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupMajorCompactionMViewDepTabletListDesc);
 };
+
+#ifdef OB_BUILD_SHARED_STORAGE
+} // end namespace storage
+} // end namespace oceanbase
+#include "storage/backup/ob_ss_backup_tablet_pair.h"
+namespace oceanbase
+{
+namespace storage
+{
+class ObSSBackupTabletGroupCheckpointDesc final : public ObExternBackupDataDesc
+{
+public:
+  static const uint8_t FILE_VERSION = 1;
+  OB_UNIS_VERSION(1);
+public:
+  ObSSBackupTabletGroupCheckpointDesc();
+  ~ObSSBackupTabletGroupCheckpointDesc() override {}
+  void reset();
+  bool is_valid() const override;
+  TO_STRING_KV(K_(tablet_list));
+public:
+  common::ObSArray<backup::ObSSBackupTabletPair> tablet_list_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSSBackupTabletGroupCheckpointDesc);
+};
+
+struct ObBackupSSTabletMetaInfo final
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObBackupSSTabletMetaInfo();
+  ~ObBackupSSTabletMetaInfo();
+  int64_t get_total_serialize_buf_size() const;
+  int serialize_to(char *buf, int64_t buf_size, int64_t &pos) const;
+  int deserialize_from(char *buf, int64_t buf_size);
+  TO_STRING_KV(K_(raw_meta_row));
+  storage::ObRawMetaRow raw_meta_row_;
+};
+
+class ObSSBackupTabletMetaFileInfoDesc final : public ObExternBackupDataDesc
+{
+public:
+  static const uint8_t FILE_VERSION = 1;
+  OB_UNIS_VERSION(1);
+public:
+  ObSSBackupTabletMetaFileInfoDesc();
+  ~ObSSBackupTabletMetaFileInfoDesc();
+  bool is_valid() const override { return true; }
+  TO_STRING_KV(K_(info));
+public:
+  ObBackupSSTabletMetaInfo info_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSSBackupTabletMetaFileInfoDesc);
+};
+
+class ObSSBackupTabletMacroBlockFileInfoDesc final : public ObExternBackupDataDesc
+{
+public:
+  static const uint8_t FILE_VERSION = 1;
+  OB_UNIS_VERSION(1);
+public:
+  ObSSBackupTabletMacroBlockFileInfoDesc();
+  ~ObSSBackupTabletMacroBlockFileInfoDesc();
+  void reset();
+  bool is_valid() const override;
+  TO_STRING_KV(K_(macro_id_list));
+public:
+  common::ObSArray<blocksstable::MacroBlockId> macro_id_list_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSSBackupTabletMacroBlockFileInfoDesc);
+};
+#endif
 
 class ObBackupSetFilter : public ObBaseDirEntryOperator
 {
@@ -474,6 +584,21 @@ public:
   // mview dep tablet list
   int write_major_compaction_mview_dep_tablet_list(const ObBackupMajorCompactionMViewDepTabletListDesc &desc);
   int read_major_compaction_mview_dep_tablet_list(ObBackupMajorCompactionMViewDepTabletListDesc &desc);
+#ifdef OB_BUILD_SHARED_STORAGE
+  // tablet group checkpoint
+  int write_tablet_group_checkpoint(const share::ObLSID &ls_id, const int64_t retry_id, const ObSSBackupTabletGroupCheckpointDesc &desc);
+  int read_tablet_group_checkpoint(const share::ObLSID &ls_id, const int64_t retry_id, ObSSBackupTabletGroupCheckpointDesc &desc);
+  // tablet meta info
+  int write_tablet_meta_file_info(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const ObSSBackupTabletMetaFileInfoDesc &desc);
+  int read_tablet_meta_file_info(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, ObSSBackupTabletMetaFileInfoDesc &desc);
+  // tablet macro block file info
+  int write_tablet_macro_block_file_info(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const ObSSBackupTabletMacroBlockFileInfoDesc &desc);
+  int is_tablet_macro_block_file_info_exist(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, bool &is_exist);
+  int read_tablet_macro_block_file_info(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, ObSSBackupTabletMacroBlockFileInfoDesc &desc);
+  // ss ls meta infos
+  int write_ss_ls_meta_infos(const ObBackupSSLSMetaInfosDesc &ls_meta_infos);
+  int read_ss_ls_meta_infos(common::ObIAllocator &allocator, ObBackupSSLSMetaInfosDesc &ls_meta_infos);
+#endif
   // write file list when path contains only one file
   int write_backup_meta_file_list(const share::ObBackupLSTaskAttr &ls_attr);
   int write_backup_data_file_list(const share::ObBackupLSTaskAttr &ls_attr);

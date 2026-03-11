@@ -109,7 +109,7 @@ void ObRecoveryLSService::do_work()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(inited_), KP(proxy_));
   } else {
-    palf::PalfBufferIterator iterator;//can not use without palf_guard
+    ipalf::IPalfIterator<ipalf::ILogEntry> iterator;
     int64_t idle_time_us = 100 * 1000L;
     SCN start_scn;
     last_report_ts_ = OB_INVALID_TIMESTAMP;
@@ -175,7 +175,7 @@ int ObRecoveryLSService::process_thread0_(const ObAllTenantInfo &tenant_info)
 ERRSIM_POINT_DEF(ERRSIM_RECOVERY_LS_THREAD1);
 int ObRecoveryLSService::process_thread1_(const ObAllTenantInfo &tenant_info,
      share::SCN &start_scn,
-     palf::PalfBufferIterator &iterator)
+     ipalf::IPalfIterator<ipalf::ILogEntry> &iterator)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(STOP_RECOVERY_LS_THREAD1);
@@ -249,7 +249,7 @@ int ObRecoveryLSService::init_palf_handle_guard_(palf::PalfHandleGuard &palf_han
 }
 
 int ObRecoveryLSService::seek_log_iterator_(const SCN &sync_scn,
-    PalfBufferIterator &iterator)
+    ipalf::IPalfIterator<ipalf::ILogEntry> &iterator)
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_svr = MTL(ObLSService *);
@@ -276,7 +276,7 @@ int ObRecoveryLSService::seek_log_iterator_(const SCN &sync_scn,
   } else if (OB_FAIL(log_handler->locate_by_scn_coarsely(sync_scn, start_lsn))) {
     LOG_WARN("locate_by_scn_coarsely failed", KR(ret), K(sync_scn));
   }
-  if (FAILEDx(log_handler->seek(start_lsn, iterator))) {
+  if (FAILEDx(logservice::seek_log_iterator(SYS_LS, start_lsn, iterator))) {
     LOG_WARN("failed to seek iterator", KR(ret), K(sync_scn), K(start_lsn));
   } else if (OB_FAIL(iterator.set_io_context(palf::LogIOContext(MTL_ID(), SYS_LS.id(), palf::LogIOUser::OTHER)))) {
     LOG_WARN("failed to set_io_context", KR(ret));
@@ -287,10 +287,10 @@ int ObRecoveryLSService::seek_log_iterator_(const SCN &sync_scn,
 int ObRecoveryLSService::process_ls_log_(
       const ObAllTenantInfo &tenant_info,
       SCN &start_scn,
-      PalfBufferIterator &iterator)
+      ipalf::IPalfIterator<ipalf::ILogEntry> &iterator)
 {
   int ret = OB_SUCCESS;
-  palf::LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN target_lsn;
   SCN sync_scn;
   SCN last_sync_scn;

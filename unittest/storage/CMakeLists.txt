@@ -139,6 +139,10 @@ storage_unittest(test_backup_tmp_file_queue backup/test_backup_tmp_file_queue.cp
 storage_unittest(test_backup_clean_path backup/test_backup_clean_path.cpp)
 storage_unittest(test_backup_block_file_reader_writer backup/test_backup_block_file_reader_writer.cpp)
 
+if(OB_BUILD_CLOSE_MODULES)
+storage_unittest(test_ss_backup_extern_info_mgr backup/test_ss_backup_extern_info_mgr.cpp)
+endif()
+
 #storage_unittest(test_create_tablet_clog tx_storage/test_create_tablet_clog.cpp)
 storage_unittest(test_safe_destroy_handler tx_storage/test_safe_destroy_handler.cpp)
 storage_unittest(test_simple_rows_merger)

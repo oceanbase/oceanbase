@@ -938,7 +938,11 @@ int ObLogService::flashback(const uint64_t tenant_id,
       timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid arguments", K(ret), K(tenant_id), K(flashback_scn), K(timeout_us));
-  } else if (OB_FAIL(flashback_service_.flashback(tenant_id, flashback_scn, timeout_us))) {
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (GCONF.enable_logservice && OB_FAIL(palf_env_->flashback(tenant_id, flashback_scn, timeout_us))) {
+    CLOG_LOG(WARN, "flashback in ss failed", K(ret), K(tenant_id), K(flashback_scn), K(timeout_us));
+#endif
+  } else if (!GCONF.enable_logservice &&OB_FAIL(flashback_service_.flashback(tenant_id, flashback_scn, timeout_us))) {
     CLOG_LOG(WARN, "flashback failed", K(ret), K(tenant_id), K(flashback_scn), K(timeout_us));
   } else {
     CLOG_LOG(INFO, "flashback success", K(ret), K(tenant_id), K(flashback_scn), K(timeout_us));

@@ -492,6 +492,48 @@ int ObBackupStore::read_single_file(const ObBackupPathString &full_path, ObIBack
   return ret;
 }
 
+int ObBackupStore::read_single_file_with_allocator(
+    const ObBackupPathString &full_path,
+    common::ObIAllocator &allocator,
+    ObIBackupSerializeProvider &serializer) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int64_t file_length = 0;
+  char *buf = nullptr;
+  int64_t read_size = 0;
+  ObBackupIoAdapter util;
+  // wrapper with common header.
+  ObBackupSerializeHeaderWrapper serializer_wrapper(&serializer);
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+
+  if (OB_FAIL(util.get_file_length(full_path.ptr(), storage_info, file_length))) {
+    if (OB_OBJECT_NOT_EXIST != ret) {
+      LOG_WARN("failed to get file length.", K(ret), K(full_path));
+    } else {
+      LOG_INFO("file not exist.", K(ret), K(full_path));
+    }
+  } else if (0 == file_length) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_INFO("file is empty.", K(ret), K(full_path));
+  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc buf", K(ret), K(full_path), K(file_length));
+  } else if (OB_FAIL(util.read_single_file(full_path.str(), storage_info, buf, file_length, read_size,
+                                           ObStorageIdMod::get_default_backup_id_mod()))) {
+    LOG_WARN("failed to read file.", K(ret), K(full_path), K(file_length));
+  } else if (file_length != read_size) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("read file length not match.", K(ret), K(full_path), K(file_length), K(read_size));
+  } else if (OB_FAIL(serializer_wrapper.deserialize(buf, file_length, pos))) {
+    LOG_WARN("failed to deserialize.", K(ret), K(full_path), K(file_length));
+  } else {
+    FLOG_INFO("succeed to read single file.", K(full_path), K(serializer));
+  }
+
+  return ret;
+}
+
 ObBackupDestMgr::ObBackupDestMgr()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),

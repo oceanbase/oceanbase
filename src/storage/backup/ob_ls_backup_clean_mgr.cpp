@@ -903,33 +903,25 @@ int ObLSBackupCleanTask::delete_user_data_(const ObBackupPath &path)
 int ObLSBackupCleanTask::delete_meta_info_(const ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBackupCleanUtil::delete_meta_info(path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete meta info", K(ret), K(path));
+  }
+  return ret;
+}
+
+int ObLSBackupCleanTask::delete_log_stream_dir_(const share::ObBackupPath &ls_path)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator allocator("BackupClean");
+  ObArray<common::ObString> file_names;
   ObBackupIoAdapter util;
-  ObArray<ObIODirentEntry> d_entrys;
-  const char meta_info_prefix[OB_BACKUP_DIR_PREFIX_LENGTH] = "meta_info_turn_";
-  ObDirPrefixEntryNameFilter prefix_op(d_entrys);
-  if (OB_FAIL(prefix_op.init(meta_info_prefix, strlen(meta_info_prefix)))) {
-    LOG_WARN("failed to init dir prefix", K(ret), K(meta_info_prefix));
-  } else if (OB_FAIL(util.list_directories(path.get_obstr(), backup_dest_.get_storage_info(), prefix_op))) {
-    LOG_WARN("failed to list files", K(ret));
-  } else {
-    ObIODirentEntry tmp_entry;
-    ObBackupPath meta_path;
-    for (int64_t i = 0; OB_SUCC(ret) && i < d_entrys.count(); ++i) {
-      ObIODirentEntry tmp_entry = d_entrys.at(i);
-      meta_path.reset();
-      if (OB_ISNULL(tmp_entry.name_)) {
-        ret = OB_ERR_UNEXPECTED; 
-        LOG_WARN("file name is null", K(ret));
-      } else if (OB_FAIL(meta_path.init(path.get_ptr()))) {
-        LOG_WARN("failed to init meta path", K(ret), K(path));
-      } else if (OB_FAIL(meta_path.join(tmp_entry.name_, ObBackupFileSuffix::NONE))) {
-        LOG_WARN("failed to join meta path", K(ret));
-      } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(meta_path, backup_dest_.get_storage_info()))) {
-        LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
-      } else {
-        LOG_INFO("[BACKUP_CLEAN]success delete meta info turn", K(meta_path)); 
-      } 
-    }
+  ObFileListArrayOp file_name_op(file_names, allocator);
+  if (OB_FAIL(util.list_files(ls_path.get_ptr(), backup_dest_.get_storage_info(), file_name_op))) {
+    LOG_WARN("failed to list files", K(ret), K(ls_path));
+  } else if (0 != file_names.count()) {
+    // do nothing
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir(ls_path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup dir", K(ret));
   }
   return ret;
 }

@@ -680,10 +680,10 @@ int ObStorageObDalWriter::write_with_if_match_(const char *pathname, const char 
       } else if (OB_FAIL(ObDalAccessor::obdal_reader_read(reader, read_buf, read_buf_size, 0/*offset*/, read_size))) {
         OB_LOG(WARN, "failed to read", K(ret), KP(reader), K(read_buf_size));
       } else if (OB_UNLIKELY(read_size != size || 0 != MEMCMP(read_buf, buf, size))) {
-        ret = OB_OBJECT_STORAGE_CONDITION_NOT_MATCH;
         if (is_in_object_storage_if_match_whitelist(object_)) {
-          OB_LOG(WARN, "failed write_with_if_match, but in whitelist", KR(ret), K(read_size), K(size), K(object_), K(obdal_account_));
+          OB_LOG_RET(WARN, OB_OBJECT_STORAGE_CONDITION_NOT_MATCH, "failed write_with_if_match, but in whitelist", KR(ret), K(read_size), K(size), K(object_), K(obdal_account_));
         } else {
+          ret = OB_OBJECT_STORAGE_CONDITION_NOT_MATCH;
           OB_LOG(ERROR, "failed write_with_if_match", KR(ret), K(read_size), K(size), K(object_), K(obdal_account_));
         }
       } else {

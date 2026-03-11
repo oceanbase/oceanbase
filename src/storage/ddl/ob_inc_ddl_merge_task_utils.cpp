@@ -29,6 +29,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction_v2/ob_ss_compact_helper.h"
 #include "storage/incremental/ob_shared_meta_service.h"
+#include "close_modules/shared_storage/storage/ddl/ob_ss_ddl_util.h"
 #endif
 
 using namespace oceanbase::observer;
@@ -265,7 +266,7 @@ int ObIncDDLMergeTaskUtils::update_tablet_table_store_with_storage_schema(
 #ifdef OB_BUILD_SHARED_STORAGE
 int ObIncDDLMergeTaskUtils::link_inc_major(
     ObLS *ls,
-    ObTabletHandle &tablet_handle,
+    const ObTabletHandle &tablet_handle,
     const ObTransID &trans_id,
     const ObTxSEQ &seq_no)
 {
@@ -728,6 +729,126 @@ int ObIncDDLMergeTaskUtils::gc_ss_inc_major_ddl_dump(const ObIArray<std::pair<sh
         LOG_WARN("fail to schedule ss gc inc major ddl dump", KR(ret), K(ls_id), K(tablet_id));
       }
     }
+  }
+  return ret;
+}
+
+int ObIncDDLMergeTaskUtils::serialize_inc_major_to_string(
+    ObIAllocator &allocator,
+    const ObSSTable *inc_major,
+    const uint64_t data_format_version,
+    ObString &data_buf)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == inc_major
+                  || !is_data_version_support_inc_major_direct_load(data_format_version))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(inc_major), K(data_format_version));
+  } else {
+    char *buf = nullptr;
+    int64_t pos = 0;
+    ObSSTablePersistWrapper sstable_persister(data_format_version, inc_major);
+    const int64_t buf_size = sstable_persister.get_serialize_size();
+    if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", KR(ret), K(buf_size), KPC(inc_major));
+    } else if (OB_FAIL(sstable_persister.serialize(buf, buf_size, pos))) {
+      LOG_WARN("fail to serialize sstable persister",
+               KR(ret), K(buf_size), K(pos), K(sstable_persister));
+    } else {
+      data_buf.assign_ptr(buf, buf_size);
+    }
+    if (OB_FAIL(ret) && nullptr != buf) {
+      allocator.free(buf);
+      buf = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObIncDDLMergeTaskUtils::deserialize_inc_major_from_string(
+  ObArenaAllocator &allocator,
+  const ObString &inc_major_buffer,
+  ObSSTable *inc_major)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_UNLIKELY(inc_major_buffer.empty() || inc_major == nullptr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid nullptr", KR(ret), K(inc_major_buffer.length()),
+                                KP(inc_major_buffer.ptr()), KP(inc_major));
+  } else if (OB_FAIL(inc_major->deserialize(allocator,
+                                            inc_major_buffer.ptr(),
+                                            inc_major_buffer.length(),
+                                            pos))) {
+    LOG_WARN("fail to deserialize inc major",
+             KR(ret), KPC(inc_major), KP(inc_major_buffer.ptr()), K(inc_major_buffer.length()));
+  } else if (pos != inc_major_buffer.length()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("deserialize length mismatch", KR(ret), K(pos), K(inc_major_buffer.length()));
+  } else if (nullptr == inc_major || !inc_major->is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected inc major", KR(ret), KPC(inc_major));
+  }
+  return ret;
+}
+
+int ObIncDDLMergeTaskUtils::deep_copy_string_buffer(ObArenaAllocator &allocator, ObString &buffer)
+{
+  int ret = OB_SUCCESS;
+  if (!buffer.empty()) {
+    char *buf = nullptr;
+    const int64_t buf_len = buffer.length();
+    if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", KR(ret));
+    } else {
+      MEMCPY(buf, buffer.ptr(), buf_len);
+      buffer.assign_ptr(buf, buf_len);
+    }
+  }
+  return ret;
+}
+
+int ObIncDDLMergeTaskUtils::check_ss_inc_major_exist(
+    ObArenaAllocator &allocator,
+    const ObLSID &ls_id,
+    const ObTabletID &tablet_id,
+    const SCN &transfer_scn,
+    const transaction::ObTransID &trans_id,
+    const transaction::ObTxSEQ &seq_no,
+    const uint64_t &data_format_version,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  ObSSMetaService* ss_meta_service = MTL(ObSSMetaService*);
+  ObTabletHandle ss_tablet_handle;
+  if (OB_UNLIKELY(!ls_id.is_valid()
+                  || !tablet_id.is_valid()
+                  || !trans_id.is_valid()
+                  || !seq_no.is_valid()
+                  || !is_data_version_support_inc_major_direct_load(data_format_version))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tablet_id),
+                                 K(trans_id), K(seq_no), K(data_format_version));
+  } else if (OB_ISNULL(ss_meta_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ss meta service", KR(ret));
+  } else if (OB_FAIL(ss_meta_service->get_tablet(ls_id,
+                                                 tablet_id,
+                                                 transfer_scn,
+                                                 allocator,
+                                                 ss_tablet_handle))) {
+    LOG_WARN("fail to get tablet", KR(ret), K(ls_id), K(tablet_id), K(transfer_scn));
+  } else if (OB_UNLIKELY(!ss_tablet_handle.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected ss tablet handle", KR(ret), K(ls_id), K(tablet_id), K(transfer_scn));
+  } else if (OB_FAIL(ObIncMajorTxHelper::check_inc_major_exist(ss_tablet_handle,
+                                                               trans_id,
+                                                               seq_no,
+                                                               is_exist))) {
+    LOG_WARN("fail to check inc major exist", KR(ret), K(ls_id), K(tablet_id), K(trans_id), K(seq_no));
   }
   return ret;
 }

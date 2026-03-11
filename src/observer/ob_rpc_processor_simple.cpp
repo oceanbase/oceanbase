@@ -91,6 +91,11 @@
 #endif
 #include "share/backup/ob_backup_connectivity.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/backup/ob_ss_ha_macro_block_table_operator.h"
+#include "close_modules/shared_storage/storage/high_availability/ob_ss_ha_macro_copy_dag_net.h"
+#include "close_modules/shared_storage/storage/high_availability/ob_ss_ha_macro_delete_dag_net.h"
+#endif
 
 namespace oceanbase
 {
@@ -824,6 +829,142 @@ int ObRpcBackupFuseTabletMetaP::process()
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+ERRSIM_POINT_DEF(EN_SS_HA_COPY_MACRO_BLOCKS_REPORT_TIMEOUT);
+
+int ObRpcSSHADeleteMacroBlocksP::process()
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObTenantDagScheduler *dag_scheduler = NULL;
+
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else if (OB_FAIL(guard.switch_to(arg_.tenant_id_))) {
+    LOG_WARN("failed to switch to tenant", K(ret), K(arg_.tenant_id_));
+  } else if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag scheduler must not be NULL", K(ret));
+  } else {
+    // Set up task attribute
+    //TODO(yanfeng.yyy): refactor ObSSHACopyMacroBlocksArg
+
+    HEAP_VAR(share::ObSSHAMacroBlockTaskAttr, task_attr) {
+      if (OB_FAIL(task_attr.init_from_rpc_arg(arg_))) {
+        LOG_WARN("failed to init task attr from rpc arg", K(ret), K_(arg));
+      } else {
+        share::ObBackupDest backup_dest_base;
+        share::ObBackupSetDesc backup_set_desc;
+        backup_set_desc.backup_set_id_ = arg_.backup_set_id_;
+        backup_set_desc.backup_type_.type_ = share::ObBackupType::BackupType::FULL_BACKUP;
+
+        if (OB_FAIL(share::ObBackupStorageInfoOperator::get_backup_dest(
+                *GCTX.sql_proxy_, arg_.tenant_id_, arg_.backup_path_, backup_dest_base))) {
+          LOG_WARN("failed to get backup dest", K(ret), K(arg_.tenant_id_), K_(arg));
+        } else {
+          HEAP_VAR(storage::ObSSHAMacroDeleteDagNetInitParam, delete_param) {
+            delete_param.tenant_id_ = arg_.tenant_id_;
+            delete_param.job_id_ = arg_.job_id_;
+            delete_param.task_id_ = arg_.trace_id_;
+            delete_param.arg_.backup_set_desc_ = backup_set_desc;
+
+            if (OB_FAIL(delete_param.arg_.task_attr_.assign(task_attr))) {
+              LOG_WARN("failed to assign task attr for delete", K(ret));
+            } else if (OB_FAIL(delete_param.arg_.backup_set_dest_.deep_copy(backup_dest_base))) {
+              LOG_WARN("failed to deep copy base backup dest for delete", K(ret), K(backup_dest_base));
+            } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net<storage::ObSSHAMacroDeleteDagNet>(&delete_param))) {
+              LOG_WARN("failed to create SS HA macro delete dag net", K(ret), K_(arg), K(delete_param));
+            } else {
+              FLOG_INFO("success to create SS HA macro delete dag net", K(ret), K(delete_param));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRpcSSHACopyMacroBlocksP::process()
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObTenantDagScheduler *dag_scheduler = NULL;
+
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else if (OB_FAIL(guard.switch_to(arg_.tenant_id_))) {
+    LOG_WARN("failed to switch to tenant", K(ret), K(arg_.tenant_id_));
+  } else if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag scheduler must not be NULL", K(ret));
+  } else {
+    // Set up task attribute
+    HEAP_VAR(share::ObSSHAMacroBlockTaskAttr, task_attr) {
+      if (OB_FAIL(task_attr.init_from_rpc_arg(arg_))) {
+        LOG_WARN("failed to init task attr from rpc arg", K(ret), K_(arg));
+      } else {
+        share::ObBackupDest backup_dest_base;
+        share::ObBackupSetDesc backup_set_desc;
+        backup_set_desc.backup_set_id_ = arg_.backup_set_id_;
+        backup_set_desc.backup_type_.type_ = share::ObBackupType::BackupType::FULL_BACKUP;
+
+        if (OB_FAIL(share::ObBackupStorageInfoOperator::get_backup_dest(
+                *GCTX.sql_proxy_, arg_.tenant_id_, arg_.backup_path_, backup_dest_base))) {
+          LOG_WARN("failed to get backup dest", K(ret), K(arg_.tenant_id_), K_(arg));
+        } else {
+          // For backup/restore
+          HEAP_VAR(storage::ObSSHAMacroCopyDagNetInitParam, param) {
+            param.tenant_id_ = arg_.tenant_id_;
+            param.task_id_ = arg_.trace_id_;
+            param.bandwidth_throttle_ = GCTX.bandwidth_throttle_;
+            param.arg_.job_id_ = arg_.job_id_;
+            param.arg_.backup_set_desc_ = backup_set_desc;
+            if (OB_FAIL(param.arg_.task_attr_.assign(task_attr))) {
+              LOG_WARN("failed to assign task attr for copy", K(ret));
+            }
+
+            if (OB_SUCC(ret)) {
+              common::ObAddr leader_addr;
+              const int64_t timeout = 10 * 1000 * 1000; // 10 seconds
+              bool need_report = true;
+
+#ifdef ERRSIM
+              ret = EN_SS_HA_COPY_MACRO_BLOCKS_REPORT_TIMEOUT ? : OB_SUCCESS;
+              if (OB_FAIL(ret)) {
+                need_report = false;
+                LOG_WARN("error injected for SS HA copy macro blocks", K(ret), K_(arg));
+                SERVER_EVENT_SYNC_ADD("storage_ha", "ss_ha_copy_macro_blocks_report_timeout",
+                                      "tenant_id", arg_.tenant_id_,
+                                      "job_id", arg_.job_id_,
+                                      "task_id", arg_.task_id_,
+                                      "ls_id", arg_.ls_id_,
+                                      "result", ret);
+                ret = OB_SUCCESS;
+              }
+#endif
+
+              if (!need_report) {
+                // do nothing
+              } else if (OB_FAIL(param.arg_.backup_set_dest_.deep_copy(backup_dest_base))) {
+                LOG_WARN("failed to deep copy backup dest", K(ret), K(backup_dest_base));
+              } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net<storage::ObSSHAMacroCopyDagNet>(&param))) {
+                LOG_WARN("failed to create SS HA macro copy dag net", K(ret), K_(arg), K(param));
+              } else {
+                FLOG_INFO("success to create SS HA macro copy dag net", K(ret), K(param));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObRpcCheckBackupTaskExistP::process()
 {
@@ -2710,6 +2851,48 @@ int ObRpcGetMinSSGCLastSuccScnP::process()
   return ret;
 }
 
+int ObRpcAdjustSSGCTabletVersionRetentionScnP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSSGarbageCollectorService *ss_gc_srv = nullptr;
+
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ObSSGCAdjustRetentionScnArg is invalid", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSGarbageCollectorService is null", KR(ret), K_(arg));
+      } else {
+        // Use interface with retention info (task_type must be set)
+        if (arg_.task_type_ == storage::ObSSGCRetentionTaskType::INVALID_TYPE) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("task_type must be set", KR(ret), K_(arg));
+        } else if (arg_.task_type_ == storage::ObSSGCRetentionTaskType::MIGRATE) {
+          storage::ObSSGCMigrateRetentionInfo migrate_info(arg_.task_id_, arg_.preserve_scn_, arg_.ls_id_);
+          if (OB_FAIL(ss_gc_srv->adjust_tablet_version_retention_scn(migrate_info))) {
+            LOG_WARN("adjust tablet version retention scn from ObSSGarbageCollectorService failed", KR(ret), K_(arg));
+          } else {
+            // Return 0 for success (no previous_retention_scn needed)
+            result_ = 0;
+          }
+        } else {
+          storage::ObSSGCBackupRetentionInfo backup_info(arg_.task_id_, arg_.preserve_scn_);
+          if (OB_FAIL(ss_gc_srv->adjust_tablet_version_retention_scn(backup_info))) {
+            LOG_WARN("adjust tablet version retention scn from ObSSGarbageCollectorService failed", KR(ret), K_(arg));
+          } else {
+            // Return 0 for success (no previous_retention_scn needed)
+            result_ = 0;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRpcGetSSGCLastSuccScnsP::process()
 {
   int ret = OB_SUCCESS;
@@ -3099,6 +3282,31 @@ int ObRpcSyncHotMicroKeyP::process()
 
 #endif
 
+#define DESERIALIZE_INC_MAJOR(type, sstable)                                               \
+  do {                                                                                    \
+    int64_t pos = 0;                                                                      \
+    if (OB_FAIL(ret)) {                                                                   \
+    } else if (OB_UNLIKELY(arg_.type##_inc_major_buffer_.empty())) {                      \
+      ret = OB_ERR_UNEXPECTED;                                                            \
+      LOG_WARN("unexpected empty inc major buffer", KR(ret));                             \
+    } else if (OB_FAIL((sstable).deserialize(allocator,                                   \
+                                             arg_.type##_inc_major_buffer_.ptr(),         \
+                                             arg_.type##_inc_major_buffer_.length(),      \
+                                             pos))) {                                     \
+      LOG_WARN("fail to deserialize inc major", KR(ret),                                  \
+               KP(arg_.type##_inc_major_buffer_.ptr()));                                  \
+    } else if (!(sstable).is_valid()) {                                                   \
+      ret = OB_ERR_UNEXPECTED;                                                            \
+      LOG_WARN("inc major is invalid", KR(ret), K(sstable));                              \
+    } else if (pos != arg_.type##_inc_major_buffer_.length()) {                           \
+      ret = OB_DESERIALIZE_ERROR;                                                         \
+      LOG_WARN("deserialize size mismatch",                                               \
+               K(pos), K(arg_.type##_inc_major_buffer_.length()));                        \
+    } else {                                                                              \
+      type##_inc_major_ptr = &(sstable);                                                  \
+    }                                                                                     \
+  } while (false)
+
 int ObRpcRemoteWriteDDLIncCommitLogP::process()
 {
   int ret = OB_SUCCESS;
@@ -3107,6 +3315,7 @@ int ObRpcRemoteWriteDDLIncCommitLogP::process()
     LOG_WARN("invalid arguments", K(ret), K_(arg));
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
+      ObArenaAllocator allocator(ObMemAttr(arg_.tenant_id_, "SS_INC_MAJOR"));
       ObRole role = INVALID_ROLE;
       ObDDLIncRedoLogWriter sstable_redo_writer;
       ObLSService *ls_service = MTL(ObLSService*);
@@ -3114,6 +3323,13 @@ int ObRpcRemoteWriteDDLIncCommitLogP::process()
       ObLSHandle ls_handle;
       ObLS *ls = nullptr;
       share::SCN commit_scn;
+
+      ObSSTable data_inc_major;
+      ObCOSSTableV2 data_co_inc_major;
+      ObSSTable lob_inc_major;
+      ObSSTable *data_inc_major_ptr = nullptr;
+      ObSSTable *lob_inc_major_ptr = nullptr;
+
       if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
         LOG_WARN("get ls failed", K(ret), K(arg_));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
@@ -3131,11 +3347,27 @@ int ObRpcRemoteWriteDDLIncCommitLogP::process()
                                                   arg_.seq_no_))) {
         LOG_WARN("init sstable redo writer", K(ret), K(arg_.tablet_id_),
             K(arg_.direct_load_type_), K(arg_.trans_id_), K(arg_.seq_no_));
+      }
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (OB_SUCC(ret) && GCTX.is_shared_storage_mode() && is_incremental_major_direct_load(arg_.direct_load_type_)) {
+        if (arg_.is_co_sstable_) {
+          DESERIALIZE_INC_MAJOR(data, data_co_inc_major);
+        } else {
+          DESERIALIZE_INC_MAJOR(data, data_inc_major);
+        }
+        if (arg_.lob_meta_tablet_id_.is_valid()) {
+          DESERIALIZE_INC_MAJOR(lob, lob_inc_major);
+        }
+      }
+#endif
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(sstable_redo_writer.write_inc_commit_log_with_retry(false/*allow_remote_write*/,
                                                                              arg_.lob_meta_tablet_id_,
                                                                              arg_.snapshot_version_,
                                                                              arg_.data_format_version_,
                                                                              arg_.tx_desc_,
+                                                                             data_inc_major_ptr,
+                                                                             lob_inc_major_ptr,
                                                                              commit_scn))) {
         LOG_WARN("fail to write inc commit log", K(ret), K(arg_));
       } else if (OB_FAIL(trans_service->get_tx_exec_result(*arg_.tx_desc_, result_.tx_result_))) {
@@ -3148,6 +3380,7 @@ int ObRpcRemoteWriteDDLIncCommitLogP::process()
 
   return ret;
 }
+#undef DESERIALIZE_INC_MAJOR
 
 int ObCleanSequenceCacheP::process()
 {

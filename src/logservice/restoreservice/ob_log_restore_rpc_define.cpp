@@ -12,6 +12,7 @@
 
 #include "ob_log_restore_rpc_define.h"
 #include "logservice/ob_log_service.h"      // ObLogService
+#include "logservice/ipalf/ipalf_iterator.h"  // IPalfIterator
 
 namespace oceanbase
 {
@@ -143,7 +144,7 @@ int ObRemoteFetchLogP::fetch_log_(const share::ObLSID &id,
     int64_t &data_len)
 {
   int ret = OB_SUCCESS;
-  palf::PalfGroupBufferIterator iter;
+  ipalf::IPalfIterator<ipalf::IGroupEntry> iter;
   uint64_t buf_len = end_lsn - start_lsn;
   const uint64_t tenant_id = MTL_ID();
   const int64_t buf_size = logservice::MAX_FETCH_LOG_BUF_LEN;
@@ -155,7 +156,7 @@ int ObRemoteFetchLogP::fetch_log_(const share::ObLSID &id,
   } else {
     int64_t pos = 0;
     int64_t append_data_len = 0;
-    palf::LogGroupEntry entry;
+    ipalf::IGroupEntry entry;
     palf::LSN offset;
     bool is_full = false;
     while (OB_SUCC(ret) && ! is_full) {
@@ -167,12 +168,12 @@ int ObRemoteFetchLogP::fetch_log_(const share::ObLSID &id,
         }
       } else if (OB_FAIL(iter.get_entry(entry, offset))) {
         CLOG_LOG(WARN, "get entry failed", K(ret), K(id), K(tenant_id));
-      } else if (OB_UNLIKELY(! entry.check_integrity())) {
+      } else if (OB_UNLIKELY(! entry.check_integrity(offset))) {
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(ERROR, "check integrity failed", K(ret), K(id), K(tenant_id), K(offset), K(entry));
-      } else if (true == (is_full = pos + entry.get_serialize_size() > buf_size)) {
+      } else if (true == (is_full = pos + entry.get_serialize_size(offset) > buf_size)) {
         // full just skip
-      } else if (OB_FAIL(entry.serialize(data, buf_size, pos))) {
+      } else if (OB_FAIL(entry.serialize(offset, data, buf_size, pos))) {
         CLOG_LOG(WARN, "entry serialize failed", K(ret), K(id), K(tenant_id), K(pos), K(entry));
       } else {
         is_full = pos > end_lsn - start_lsn;

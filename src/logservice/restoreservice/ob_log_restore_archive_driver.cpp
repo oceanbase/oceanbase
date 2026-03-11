@@ -115,7 +115,7 @@ int ObLogRestoreArchiveDriver::do_fetch_log_(ObLS &ls)
   } else {
     LOG_TRACE("do fetch log succ", K(id), K(lsn), K(task_count));
   }
-  LOG_TRACE("print do_fetch_log_", K(lsn), K(max_fetch_lsn), K(need_schedule),
+  LOG_TRACE("print do_fetch_log_", K(lsn), K(max_fetch_lsn), K(need_schedule), K(can_fetch_log),
       K(proposal_id), K(last_fetch_ts), K(task_count), K(ls));
   return ret;
 }

@@ -22,7 +22,7 @@
 #include "logservice/palf/lsn.h"            // LSN
 #include "share/scn.h"                      // SCN
 #include "ob_archive_define.h"
-#include "logservice/palf/palf_iterator.h"  // PalfGroupBufferIterator
+#include "logservice/ipalf/ipalf_iterator.h"  // IPalfIterator
 
 namespace oceanbase
 {
@@ -149,10 +149,10 @@ private:
   int init_helper_(ObArchiveLogFetchTask &task, const LSN &commit_lsn, TmpMemoryHelper &helper);
 
   // 1.3 初始化日志迭代器
-  int init_iterator_(const ObLSID &id, const TmpMemoryHelper &helper, palf::PalfGroupBufferIterator &iter);
+  int init_iterator_(const ObLSID &id, const TmpMemoryHelper &helper, ipalf::IPalfIterator<ipalf::IGroupEntry> &iter);
 
   // 1.4 产生归档数据
-  int generate_send_buffer_(palf::PalfGroupBufferIterator &iter,
+  int generate_send_buffer_(ipalf::IPalfIterator<ipalf::IGroupEntry> &iter,
                             TmpMemoryHelper &helper);
 
   // 1.4.1 获取受控归档位点
@@ -168,7 +168,7 @@ private:
   int set_next_piece_(TmpMemoryHelper &helper);
 
   // 1.4.4 聚合压缩加密单元
-  int append_log_entry_(const char *buffer, LogGroupEntry &entry, TmpMemoryHelper &helper);
+  int append_log_entry_(const char *buffer, ipalf::IGroupEntry &entry, TmpMemoryHelper &helper, const LSN &lsn);
 
   // 1.4.5 是否聚合到足够压缩加密单元大小数据
   bool cached_buffer_full_(TmpMemoryHelper &helper);
@@ -255,7 +255,7 @@ private:
     int get_original_buf(const char *&buf, int64_t &buf_size);
     int append_handled_buf(char *buf, const int64_t buf_size);
     int get_handled_buf(char *&buf, int64_t &buf_size);
-    int append_log_entry(const char *buffer, LogGroupEntry &entry);
+    int append_log_entry(const char *buffer, ipalf::IGroupEntry &entry, const LSN &lsn);
     void freeze_log_entry();
     void reset_original_buffer();
     int64_t get_log_fetch_size() const { return cur_offset_ - start_offset_; }

@@ -15,7 +15,9 @@
 #include "ob_backup_base_job.h"
 #include "share/backup/ob_backup_clean_struct.h"
 #include "share/backup/ob_archive_struct.h"
-
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/backup/ob_ss_ha_macro_block_table_operator.h"
+#endif
 
 namespace oceanbase
 {
@@ -84,6 +86,20 @@ private:
       const share::ObBackupCleanLSTaskAttr &ls_task,
       common::ObIAllocator &allocator,
       ObBackupTaskSchedulerQueue &queue);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int build_macro_block_task_(
+      const share::ObBackupCleanJobAttr &job_attr,
+      const share::ObBackupCleanTaskAttr &task_attr,
+      const share::ObSSHAMacroBlockTaskAttr &macro_task_attr,
+      common::ObIAllocator &allocator,
+      ObBackupScheduleTask *&task);
+  int do_reload_macro_block_tasks_(
+      const share::ObBackupCleanJobAttr &job_attr,
+      const share::ObBackupCleanTaskAttr &task_attr,
+      const ObArray<share::ObSSHAMacroBlockTaskAttr> &macro_tasks,
+      common::ObIAllocator &allocator,
+      ObBackupTaskSchedulerQueue &queue);
+#endif
   int build_task_(
       const share::ObBackupCleanTaskAttr &task_attr, 
       const share::ObBackupCleanLSTaskAttr &ls_task, 
@@ -109,6 +125,14 @@ private:
   int parse_time_interval_(const char *str, int64_t &val);
   int get_delete_policy_parameter_(const share::ObDeletePolicyAttr &delete_policy, int64_t &recovery_window);
   int backup_clean_pre_checker_(share::ObBackupCleanJobAttr &job_attr, const bool is_sys_tenant);
+  int handle_macro_block_task_execute_over_(
+      const ObBackupScheduleTask *task,
+      const share::ObHAResultInfo &result_info,
+      bool &can_remove);
+  int handle_ls_task_execute_over_(
+      const ObBackupScheduleTask *task,
+      const share::ObHAResultInfo &result_info,
+      bool &can_remove);
   bool check_need_cancel_job_(const ObIArray<share::ObBackupCleanJobAttr> &clean_jobs);
 private:
   bool is_inited_;

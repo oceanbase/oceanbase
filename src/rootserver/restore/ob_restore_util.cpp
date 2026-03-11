@@ -22,6 +22,9 @@
 #include "share/restore/ob_restore_progress_display_mode.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "share/location_cache/ob_location_service.h" // for ObLocationService
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/backup/ob_ss_backup_restore_util.h"
+#endif
 
 using namespace oceanbase::common;
 using namespace oceanbase;
@@ -56,6 +59,12 @@ int ObRestoreUtil::fill_physical_restore_job(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObPhysicalRestoreOptionParser::parse(arg.restore_option_, job))) {
         LOG_WARN("fail to parse restore_option", K(ret), K(arg), K(job_id));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode() && job.get_restore_type().is_quick_restore()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("quick restore does not support shared storage mode for now", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "quick restore in SS mode is");
+#endif
       } else if (OB_FAIL(job.set_restore_option(arg.restore_option_))){
         LOG_WARN("failed to set restore option", KR(ret), K(arg));
       } else if (job.get_kms_encrypt()) {
@@ -70,9 +79,10 @@ int ObRestoreUtil::fill_physical_restore_job(
         LOG_WARN("failed to fill backup info", KR(ret), K(arg), K(job));
       } else {
         // restore progress display mode
-        if (share::ObBackupSetFileDesc::is_allow_quick_restore(
-            static_cast<share::ObBackupSetFileDesc::Compatible>(job.get_backup_compatible()))
-            && job.get_restore_type().is_full_restore()) {
+        if (GCTX.is_shared_storage_mode()
+            || (share::ObBackupSetFileDesc::is_allow_quick_restore(
+                    static_cast<share::ObBackupSetFileDesc::Compatible>(job.get_backup_compatible()))
+                && job.get_restore_type().is_full_restore())) {
           job.set_progress_display_mode(BYTES_DISPLAY_MODE);
         } else {
           job.set_progress_display_mode(TABLET_CNT_DISPLAY_MODE);
@@ -1718,9 +1728,14 @@ int ObRestoreUtil::do_fill_backup_info_(
       // becuase of no consistent scn in 4.1.x backup set, using ls_info.backup_scn to set the restore consisitent scn
       // ls_info.backup_scn is the default replayable scn when create restore tenant,
       // so using it as the consistet scn can also make recovery service work normally
-      const SCN &scn = backup_set_info.backup_set_file_.tenant_compatible_ < DATA_VERSION_4_2_0_0
-                     ? ls_info.backup_scn_
-                     : backup_set_info.backup_set_file_.consistent_scn_;
+      // In SS mode, consistent_scn has no meaning for recovery progress calculation.
+      // Use start_replay_scn instead, which is the actual clog replay start point,
+      // so that recover_progress = (readable_scn - start_replay_scn) / (restore_scn - start_replay_scn) * 100
+      const SCN &scn = GCTX.is_shared_storage_mode()
+                     ? backup_set_info.backup_set_file_.start_replay_scn_
+                     : (backup_set_info.backup_set_file_.tenant_compatible_ < DATA_VERSION_4_2_0_0
+                        ? ls_info.backup_scn_
+                        : backup_set_info.backup_set_file_.consistent_scn_);
       job.set_consistent_scn(scn);
     }
   }
@@ -1955,6 +1970,56 @@ int ObRestoreUtil::get_restore_ls_palf_base_info(
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObRestoreUtil::get_ss_restore_ls_palf_base_info(
+    const share::ObPhysicalRestoreJob &job_info,
+    const ObLSID &ls_id,
+    palf::PalfBaseInfo &palf_base_info)
+{
+  int ret = OB_SUCCESS;
+  const common::ObSArray<share::ObBackupSetPath> &backup_set_array =
+    job_info.get_multi_restore_path_list().get_backup_set_path_list();
+  const int64_t idx = backup_set_array.count() - 1;
+  ObArenaAllocator allocator;
+  if (!job_info.is_valid() || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid job info or ls id", KR(ret), K(job_info), K(ls_id));
+  } else if (idx < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup_set_array can't empty", KR(ret), K(job_info));
+  } else {
+    const int64_t fake_dest_id = 0;
+    ObBackupDest backup_dest;
+    storage::ObBackupSSLSMetaInfo ls_meta;
+    if (OB_FAIL(backup_dest.set(backup_set_array.at(idx).ptr()))) {
+      LOG_WARN("fail to set backup dest", K(ret));
+    } else if (OB_FAIL(backup::ObSSBackupRestoreUtil::read_ss_ls_meta(
+                                              backup_dest,
+                                              ls_id,
+                                              fake_dest_id,
+                                              allocator,
+                                              ls_meta))) {
+      LOG_WARN("fail to read ss ls meta", K(ret), K(backup_dest), K(ls_id));
+    } else {
+      int64_t pos = 0;
+      typedef ObDefaultSSMetaSSLogValue<ObSSLSMeta> ObSSLSMetaSSLogValue;
+      SMART_VAR(ObSSLSMetaSSLogValue, tmp) {
+        if (OB_FAIL(tmp.deserialize(ls_meta.raw_ls_meta_row_.meta_value_.ptr(),
+                                  ls_meta.raw_ls_meta_row_.meta_value_.length(),
+                                  pos))) {
+          LOG_WARN("fail to deserialize ss ls meta", K(ret), K(ls_meta));
+        } else if (OB_FAIL(tmp.meta_value_.get_palf_meta(palf_base_info))) {
+          LOG_WARN("fail to get palf meta", K(ret), K(tmp));
+        } else {
+          LOG_INFO("[SS RESTORE] get restore ls palf base info", K(palf_base_info), K(tmp));
+        }
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObRestoreUtil::check_physical_restore_finish(
     common::ObISQLClient &proxy, const int64_t job_id, bool &is_finish, bool &is_failed) {
@@ -2377,7 +2442,7 @@ int ObRestoreStorageInfoFiller::get_next_dest_id_(int64_t &dest_id)
 {
   int ret = OB_SUCCESS;
   uint64_t id = OB_INVALID_ID;
-  const int64_t initial = 1L;
+  const int64_t initial = OB_START_DEST_ID;
   const ObMaxIdType type = OB_MAX_USED_STORAGE_ID_TYPE;
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2395,7 +2460,6 @@ int ObRestoreStorageInfoFiller::get_next_dest_id_(int64_t &dest_id)
   }
   return ret;
 }
-
 int ObRestoreStorageInfoFiller::insert_backup_storage_info_for_set_(
     const share::ObBackupSetPath &backup_set_path,
     const int64_t dest_id)

@@ -31,9 +31,10 @@
 #include "common/ob_learner_list.h"
 #include "storage/high_availability/ob_tablet_ha_status.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
-
+#include "share/backup/ob_ss_ha_macro_block_struct.h"
 namespace oceanbase
 {
+using namespace share;
 namespace storage
 {
 
@@ -544,6 +545,33 @@ public:
   share::ObRebuildTabletLocation src_;
 };
 
+class ObTabletBackfillType final
+{
+public:
+  enum TYPE
+  {
+    BACKFILL_TRANSFER_OUT = 0,
+    BACKFILL_TRANSFER_IN = 1,
+    BACKFILL_MAX
+  };
+public:
+  ObTabletBackfillType() : type_(BACKFILL_MAX) {}
+  ~ObTabletBackfillType() = default;
+  explicit ObTabletBackfillType(const TYPE &type) : type_(type) {}
+  ObTabletBackfillType &operator=(const TYPE &type) { type_ = type; return *this; }
+  operator TYPE() const { return type_; }
+  bool operator==(const TYPE &type) const { return type_ == type; }
+  bool operator!=(const TYPE &type) const { return type_ != type; }
+  bool operator==(const ObTabletBackfillType &other) const { return type_ == other.type_; }
+  bool operator!=(const ObTabletBackfillType &other) const { return type_ != other.type_; }
+  void reset() { type_ = BACKFILL_MAX; }
+  bool is_valid() const { return type_ >= BACKFILL_TRANSFER_OUT && type_ < BACKFILL_MAX; }
+  static const char *get_str(const ObTabletBackfillType &type);
+  TO_STRING_KV("val", static_cast<uint8_t>(type_), "str", get_str(*this));
+private:
+  TYPE type_;
+};
+
 struct ObTabletBackfillInfo final
 {
 public:
@@ -560,6 +588,7 @@ public:
       K_(relative_ls_id),
       K_(reorganization_scn),
       K_(backfill_scn),
+      K_(backfill_type),
       K_(tablet_status),
       K_(src_reorganization_scn),
       K_(transfer_seq));
@@ -570,6 +599,7 @@ public:
   share::ObLSID relative_ls_id_;
   share::SCN reorganization_scn_;
   share::SCN backfill_scn_;
+  ObTabletBackfillType backfill_type_;
   ObTabletStatus tablet_status_;
   share::SCN src_reorganization_scn_;
   int64_t transfer_seq_;
@@ -715,6 +745,14 @@ public:
   common::ObArray<common::ObMember> member_list_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSMemberListInfo);
+};
+
+class ObSSHAMacroCopyUtils final
+{
+public:
+  static int get_dag_priority(const ObSSHAMacroTaskType &task_type, ObDagPrio::ObDagPrioEnum &prio);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSSHAMacroCopyUtils);
 };
 
 struct ObLSMigrationCostStatic final

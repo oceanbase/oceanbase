@@ -157,7 +157,7 @@ int ObBackupConnectivityCheckManager::check_backup_dest_connectivity(
   } else if (OB_FAIL(set_connectivity_check_path_(backup_dest, path))) {
     LOG_WARN("failed to get check file", K(ret), K_(tenant_id), K(backup_dest));
   } else if (OB_FAIL(schedule_check_read_write_consistency_(backup_dest))) {
-    LOG_WARN("fail to check nfs connectivity", K(ret), K_(tenant_id), K(backup_dest));
+    LOG_WARN("fail to check read write consistency", K(ret), K_(tenant_id), K(backup_dest));
   } else if (OB_FAIL(set_last_check_time_(backup_dest))) {
     LOG_WARN("failed to set last check time", K(ret), K_(tenant_id), K(backup_dest));
   } else {
@@ -200,6 +200,8 @@ int ObBackupConnectivityCheckManager::schedule_check_read_write_consistency_(con
                                                   file_len,
                                                   data_checksum))) { // check PUT
     LOG_WARN("[RW CONSISTENCY CHECK] fail to check RW consistency after PUT", K(ret), K(server_list), K(check_file_path));
+  } else if (!backup_dest.is_storage_type_file()) {
+    // normal object is not appendable
   } else if (OB_FAIL(check_file.overwrite_check_file(file_len, data_checksum))) {
     LOG_WARN("fail to create check file", K(ret), K(check_file));
   } else if (OB_FAIL(check_server_rw_consistency_(server_list,
@@ -207,8 +209,6 @@ int ObBackupConnectivityCheckManager::schedule_check_read_write_consistency_(con
                                                   file_len,
                                                   data_checksum))) { // check OVERWRITE
     LOG_WARN("fail to check RW consistency after OVERWRITE", K(ret), K(server_list), K(check_file_path));
-  } else if (!backup_dest.is_storage_type_file()) {
-    // normal object is not appendablw
   } else if (OB_FAIL(check_file.append_check_file(file_len, data_checksum))) {
     LOG_WARN("fail to append check file", K(ret), K(check_file));
   } else if (OB_FAIL(check_server_rw_consistency_(server_list,

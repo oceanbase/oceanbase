@@ -1279,7 +1279,9 @@ bool ObMigrationOpArg::is_valid() const
       && dst_.is_valid();
 
   if (b_ret) {
-    if (ObMigrationOpType::REBUILD_LS_OP != type_ && ObMigrationOpType::REPLACE_LS_OP != type_) {
+    if (ObMigrationOpType::REBUILD_LS_OP != type_
+        && ObMigrationOpType::REPLACE_LS_OP != type_
+        && ObMigrationOpType::RESTORE_LS_OP != type_) {
       b_ret = paxos_replica_number_ > 0;
     }
   }
@@ -2112,6 +2114,25 @@ int ObLSRebuildInfo::assign(const ObLSRebuildInfo &info)
 
 OB_SERIALIZE_MEMBER(ObLSRebuildInfo, status_, type_, tablet_id_array_, src_);
 
+/******************ObTabletBackfillType*********************/
+const char *ObTabletBackfillType::get_str(const ObTabletBackfillType &type)
+{
+  const char *str = "UNKNOWN";
+  switch (type.type_) {
+    case BACKFILL_TRANSFER_OUT:
+      str = "BACKFILL_TRANSFER_OUT";
+      break;
+    case BACKFILL_TRANSFER_IN:
+      str = "BACKFILL_TRANSFER_IN";
+      break;
+    default:
+      str = "UNKNOWN";
+      break;
+  }
+  return str;
+}
+
+/******************ObTabletBackfillInfo*********************/
 ObTabletBackfillInfo::ObTabletBackfillInfo()
   : tablet_id_(),
     is_committed_(false),
@@ -2119,6 +2140,7 @@ ObTabletBackfillInfo::ObTabletBackfillInfo()
     relative_ls_id_(false),
     reorganization_scn_(),
     backfill_scn_(),
+    backfill_type_(),
     tablet_status_(ObTabletStatus::MAX),
     src_reorganization_scn_(),
     transfer_seq_(-1)
@@ -2133,6 +2155,7 @@ void ObTabletBackfillInfo::reset()
   relative_ls_id_.reset();
   reorganization_scn_.reset();
   backfill_scn_.reset();
+  backfill_type_.reset();
   tablet_status_ = ObTabletStatus::MAX;
   src_reorganization_scn_.reset();
   transfer_seq_ = -1;
@@ -2142,9 +2165,10 @@ bool ObTabletBackfillInfo::is_valid() const
 {
   bool b_ret = false;
   if (!relative_ls_id_.is_valid() || !tablet_id_.is_valid() || !reorganization_scn_.is_valid()
-      || !backfill_scn_.is_valid() || !tablet_status_.is_valid() || transfer_seq_ < 0) {
+      || !backfill_scn_.is_valid() || !backfill_type_.is_valid() || !tablet_status_.is_valid()
+      || transfer_seq_ < 0) {
     b_ret = false;
-  } else if (tablet_status_ == ObTabletStatus::TRANSFER_IN) {
+  } else if (ObTabletBackfillType::BACKFILL_TRANSFER_IN == backfill_type_) {
     if (!src_reorganization_scn_.is_valid()) {
       b_ret = false;
     } else {
@@ -2173,6 +2197,7 @@ bool ObTabletBackfillInfo::operator == (const ObTabletBackfillInfo &other) const
           && tablet_id_ == other.tablet_id_
           && reorganization_scn_ == other.reorganization_scn_
           && backfill_scn_ == other.backfill_scn_
+          && backfill_type_ == other.backfill_type_
           && tablet_status_ == other.tablet_status_
           && src_reorganization_scn_ == other.src_reorganization_scn_
           && is_committed_ == other.is_committed_;
@@ -2189,6 +2214,7 @@ uint64_t ObTabletBackfillInfo::hash() const
     hash_val = common::murmurhash(&tablet_id_, sizeof(tablet_id_), hash_val);
     hash_val = common::murmurhash(&reorganization_scn_, sizeof(reorganization_scn_), hash_val);
     hash_val = common::murmurhash(&backfill_scn_, sizeof(backfill_scn_), hash_val);
+    hash_val = common::murmurhash(&backfill_type_, sizeof(backfill_type_), hash_val);
     hash_val = common::murmurhash(&tablet_status_, sizeof(tablet_status_), hash_val);
     hash_val = common::murmurhash(&src_reorganization_scn_, sizeof(src_reorganization_scn_), hash_val);
     hash_val = common::murmurhash(&transfer_seq_, sizeof(transfer_seq_), hash_val);
@@ -2835,6 +2861,32 @@ int ObLSMemberListInfo::assign(const ObLSMemberListInfo &info)
   } else {
     learner_list_ = info.learner_list_;
     leader_addr_ = info.leader_addr_;
+  }
+  return ret;
+}
+
+int ObSSHAMacroCopyUtils::get_dag_priority(const ObSSHAMacroTaskType &task_type, ObDagPrio::ObDagPrioEnum &prio)
+{
+  int ret = OB_SUCCESS;
+  if (!task_type.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), K(task_type));
+  } else {
+    switch (task_type.type_) {
+      case ObSSHAMacroTaskType::Type::BACKUP: {
+        prio = ObDagPrio::DAG_PRIO_HA_LOW;
+        break;
+      }
+      case ObSSHAMacroTaskType::Type::RESTORE: {
+        prio = ObDagPrio::DAG_PRIO_HA_HIGH;
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("type not expected", K(ret), K(task_type));
+        break;
+      }
+    }
   }
   return ret;
 }

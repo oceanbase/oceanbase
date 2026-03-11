@@ -41,6 +41,7 @@ namespace compaction
 ERRSIM_POINT_DEF(EN_COMPACTION_DISABLE_ROW_COL_SWITCH);
 ERRSIM_POINT_DEF(EN_COMPACTION_MINOR_ALL);
 ERRSIM_POINT_DEF(EN_CO_MERGE_WITH_MINOR);
+ERRSIM_POINT_DEF(EN_MINOR_MERGE_GC_TX_DATA);
 
 // keep order with ObMergeType
 ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[]

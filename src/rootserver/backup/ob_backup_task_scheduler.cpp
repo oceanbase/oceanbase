@@ -17,6 +17,7 @@
 #include "share/backup/ob_backup_server_mgr.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ob_debug_sync.h"
+#include "rootserver/restore/ob_restore_service.h"
 
 namespace oceanbase
 
@@ -1043,6 +1044,35 @@ int ObBackupTaskSchedulerQueue::get_all_tasks(
   return ret;
 }
 
+int ObBackupTaskSchedulerQueue::get_task_count(
+    const uint64_t tenant_id, const int64_t job_id,
+    const bool only_macro_block_task, int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  count = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("queue not init", K(ret));
+  } else {
+    ObMutexGuard guard(mutex_);
+    DLIST_FOREACH(t, schedule_list_) {
+      if (t->get_tenant_id() == tenant_id
+          && t->get_job_id() == job_id
+          && (!only_macro_block_task || t->is_macro_block_task())) {
+        count++;
+      }
+    }
+    DLIST_FOREACH(t, wait_list_) {
+      if (t->get_tenant_id() == tenant_id
+          && t->get_job_id() == job_id
+          && (!only_macro_block_task || t->is_macro_block_task())) {
+        count++;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupTaskSchedulerQueue::check_task_exist(const ObBackupScheduleTaskKey key, bool &is_exist)
 {
   int ret = OB_SUCCESS;
@@ -1193,7 +1223,8 @@ ObBackupTaskScheduler::ObBackupTaskScheduler()
     rpc_proxy_(nullptr),
     sql_proxy_(nullptr),
     schema_service_(nullptr),
-    backup_srv_array_()
+    backup_srv_array_(),
+    restore_srv_(nullptr)
 {
 }
 
@@ -1352,13 +1383,14 @@ int ObBackupTaskScheduler::reload_task_(int64_t &last_reload_task_ts, bool &relo
   const int64_t MAX_CHECK_TIME_INTERVAL = 10 * 60 * 1000 * 1000L;
   common::ObArenaAllocator allocator;
   reload_flag = false;
+  const bool need_reload = now > MAX_CHECK_TIME_INTERVAL + last_reload_task_ts;
   ARRAY_FOREACH(backup_srv_array_, i) {
     ObBackupService *backup_service = backup_srv_array_.at(i);
-    if (!backup_service->can_schedule() || now > MAX_CHECK_TIME_INTERVAL + last_reload_task_ts) {
+    if (!backup_service->can_schedule() || need_reload) {
       if (OB_FAIL(backup_service->do_reload_task(allocator, queue_))) {
         LOG_WARN("failed to do reload tasks", K(ret));
       } else {
-        LOG_INFO("succeed reload tasks", "task_count", queue_.get_task_cnt());
+        LOG_INFO("succeed reload backup tasks", "task_count", queue_.get_task_cnt());
       }
 
       if (OB_SUCC(ret)) {
@@ -1369,6 +1401,25 @@ int ObBackupTaskScheduler::reload_task_(int64_t &last_reload_task_ts, bool &relo
         reload_flag = false;
         backup_service->disable_backup();
       }
+    }
+  }
+
+  // Reload restore tasks if restore_srv_ is registered
+  // Note: restore_srv_ may be null in non-shared-storage mode, which is expected
+  // Use separate error code to avoid overwriting backup reload result
+  if (need_reload && OB_NOT_NULL(restore_srv_)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = restore_srv_->do_reload_task(queue_))) {
+      LOG_WARN("fail to reload task for restore", K(tmp_ret));
+      // Don't overwrite ret if backup reload succeeded, preserve first error
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
+    } else {
+      LOG_INFO("succeed reload restore tasks", "task_count", queue_.get_task_cnt());
+      // Set reload_flag to trigger immediate alive check for reloaded restore tasks
+      reload_flag = true;
+      restore_srv_->wakeup();
     }
   }
   if (OB_SUCC(ret) && reload_flag) {
@@ -1545,6 +1596,20 @@ int ObBackupTaskScheduler::get_all_tasks(ObIAllocator &allocator, ObIArray<ObBac
   return ret;
 }
 
+int ObBackupTaskScheduler::get_task_count(
+    const uint64_t tenant_id, const int64_t job_id,
+    const bool only_macro_block_task, int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(queue_.get_task_count(tenant_id, job_id, only_macro_block_task, count))) {
+    LOG_WARN("failed to get task count", K(ret), K(tenant_id), K(job_id));
+  }
+  return ret;
+}
+
 int ObBackupTaskScheduler::do_execute_(const ObBackupScheduleTask &task)
 {
   int ret = OB_SUCCESS;
@@ -1700,6 +1765,28 @@ int ObBackupTaskScheduler::register_backup_srv(ObBackupService &srv)
   }
   if (OB_SUCC(ret) && OB_FAIL(backup_srv_array_.push_back(&srv))) {
     LOG_WARN("failed to push backup backup service", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupTaskScheduler::register_restore_srv(ObRestoreService *srv)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(scheduler_mtx_);
+  if (OB_ISNULL(srv)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("restore srv is null", K(ret));
+  } else if (OB_NOT_NULL(restore_srv_)) {
+    if (restore_srv_ == srv) {
+      // same service, idempotent operation, treat as success
+      LOG_INFO("restore srv already registered", KP(srv));
+    } else {
+      LOG_INFO("unregister old service and register new service", KP(restore_srv_), KP(srv));
+      restore_srv_ = srv;
+    }
+  } else {
+    restore_srv_ = srv;
+    LOG_INFO("register restore srv succeed", KP(srv));
   }
   return ret;
 }

@@ -295,6 +295,7 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
   int64_t fetch_log_size = 0;
   task->task_stat_.start_fetch_ts_ = ObTimeUtility::current_time();
   const uint64_t io_tenant_id = MTL_ID();
+  bool enable_logservice = GCONF.enable_logservice;
   ObObjectStorageTenantGuard object_storage_tenant_guard(
         io_tenant_id, OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_tenant_id) * 1000LL);
   if (OB_UNLIKELY(! task->is_valid())) {
@@ -302,7 +303,7 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
     LOG_ERROR("invalid argument", K(ret), K(task));
   } else if (OB_FAIL(task->iter_.init(tenant_id_, task->id_, task->pre_scn_,
           task->cur_lsn_, task->end_lsn_, allocator_->get_buferr_pool(),
-          &log_ext_handler_, DEFAULT_BUF_SIZE))) {
+          &log_ext_handler_, DEFAULT_BUF_SIZE, enable_logservice))) {
     LOG_WARN("ObRemoteLogIterator init failed", K(ret), K_(tenant_id), KPC(task));
   } else if (OB_FAIL(task->iter_.set_io_context(palf::LogIOContext(tenant_id_, task->id_.id(), palf::LogIOUser::RESTORE)))) {
     LOG_WARN("set_io_context failed", K(ret), K_(tenant_id), KPC(task));

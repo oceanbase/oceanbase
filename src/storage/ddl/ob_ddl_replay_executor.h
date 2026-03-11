@@ -282,7 +282,9 @@ public:
            const transaction::ObTxSEQ &seq_no,
            const int64_t snapshot_version,
            const uint64_t data_format_version,
-           const bool is_rollback);
+           const bool is_rollback,
+           const bool is_co_sstable,
+           const ObString &inc_major_buffer);
 
 protected:
   // replay to the tablet
@@ -293,12 +295,18 @@ protected:
   int do_replay_(ObTabletHandle &handle) override;
 
 private:
+#ifdef OB_BUILD_SHARED_STORAGE
+  int deserialize_and_update_ss_inc_major(ObTabletHandle &tablet_handle);
+#endif
+private:
   common::ObTabletID tablet_id_;
   transaction::ObTransID trans_id_;
   transaction::ObTxSEQ seq_no_;
   int64_t snapshot_version_;
   uint64_t data_format_version_;
   bool is_rollback_;
+  bool is_co_sstable_;
+  ObString inc_major_buffer_;
 };
 
 class ObSplitStartReplayExecutor final : public ObDDLReplayExecutor

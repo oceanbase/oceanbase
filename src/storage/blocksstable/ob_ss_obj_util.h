@@ -93,6 +93,7 @@ public:
                             const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id);
   static int create_parent_dir(const MacroBlockId &macro_id, const uint64_t tenant_id,
                                const uint64_t tenant_epoch_id, const int64_t ls_epoch_id);
+  static int to_relative_remote_path_format(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos);
   // only macro bloclk in user tenant with type of SHARED_TABLET_SUB_META return true.
   static bool is_exist_store_in_table_object(const uint64_t tenant_id, const blocksstable::MacroBlockId &macro_id);
   static int get_store_in_table_macro_id(const uint64_t tenant_id, const blocksstable::MacroBlockId &macro_id,

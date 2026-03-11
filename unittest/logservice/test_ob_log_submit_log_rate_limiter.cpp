@@ -277,6 +277,11 @@ public:
   virtual int64_t get_tenant_id() override
   { return tenant_id_; }
 
+  virtual int flashback(const uint64_t tenant_id,
+                        const share::SCN &flashback_scn,
+                        const int64_t timeout_us) override
+  { return OB_NOT_SUPPORTED; }
+
 private:
   MockIPalfHandle mock_handle_;
   int64_t tenant_id_;

@@ -683,12 +683,14 @@ int ObTabletSplitUtil::check_satisfy_split_condition(
         "source_tablet_id", tablet->get_tablet_meta().tablet_id_, K(max_decided_scn), K(min_split_start_scn));
     }
   } else if (MTL_TENANT_ROLE_CACHE_IS_RESTORE()) {
+    LOG_INFO("dont check compaction in restore progress", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
+#ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support now", K(ret));
-    } else {
-      LOG_INFO("dont check compaction in restore progress", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
+      if (OB_FAIL(ObSSDataSplitHelper::check_satisfy_ss_split_condition(ls_handle, local_source_tablet_handle, dest_tablets_id, is_data_split_executor))) {
+        LOG_WARN("check satisfy ss split condition failed", K(ret), K(dest_tablets_id));
+      }
     }
+#endif
   } else {
     const compaction::ObMediumCompactionInfoList *medium_list = nullptr;
     ObArenaAllocator tmp_allocator("SplitGetMedium", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // for load medium info

@@ -1331,6 +1331,153 @@ TEST_F(ObTestSSLogMetaService, test_BasePointerHandle)
   ASSERT_EQ(true, ss_tablet_handle.get_obj()->get_pointer_handle().is_valid());
   ASSERT_EQ(1, ss_tablet_handle.get_obj()->get_pointer_handle().base_pointer_->get_ref_cnt());
 }
+
+TEST_F(ObTestSSLogMetaService, test_modify_raw_meta_tenant_id)
+{
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
+  int ret = OB_SUCCESS;
+  ObSSMetaService *meta_svr = MTL(ObSSMetaService*);
+  ASSERT_TRUE(nullptr != meta_svr);
+
+  ObArenaAllocator allocator("TestModifyTId");
+
+  // Test case 1: Same digit count - in-place modification
+  {
+    ObRawMetaRow row;
+    row.type_ = ObSSLogMetaType::SSLOG_TABLET_META;
+    row.row_scn_ = share::SCN::base_scn();
+
+    // Create a meta_key with tenant_id = 1002
+    const char* original_meta_key = "id_1:1002;id_2:1;id_3:200002;id_4:0;";
+    int64_t meta_key_len = strlen(original_meta_key);
+    char* meta_key_buf = static_cast<char*>(allocator.alloc(meta_key_len + 1));
+    ASSERT_TRUE(nullptr != meta_key_buf);
+    memcpy(meta_key_buf, original_meta_key, meta_key_len);
+    meta_key_buf[meta_key_len] = '\0';
+    row.meta_key_.assign_ptr(meta_key_buf, meta_key_len);
+
+    uint64_t new_tenant_id = 1014; // Same digit count as 1002
+    ret = meta_svr->modify_raw_meta_tenant_id(new_tenant_id, allocator, row);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    // Verify the modification
+    const char* expected_meta_key = "id_1:1014;id_2:1;id_3:200002;id_4:0;";
+    LOG_INFO("expected meta key", K(expected_meta_key));
+    LOG_INFO("actual meta key", K(row.meta_key_));
+    ASSERT_EQ(0, memcmp(row.meta_key_.ptr(), expected_meta_key, row.meta_key_.length()));
+    LOG_INFO("Test case 1 passed: same digit count modification", K(row.meta_key_));
+  }
+
+  // Test case 2: Different digit count - serialize/deserialize method
+  {
+    ObRawMetaRow row;
+    row.type_ = ObSSLogMetaType::SSLOG_TABLET_META;
+    row.row_scn_ = share::SCN::base_scn();
+
+    // Create a meta_key with tenant_id = 1
+    const char* original_meta_key = "id_1:1;id_2:1;id_3:200002;id_4:0;";
+    int64_t meta_key_len = strlen(original_meta_key);
+    char* meta_key_buf = static_cast<char*>(allocator.alloc(meta_key_len + 1));
+    ASSERT_TRUE(nullptr != meta_key_buf);
+    memcpy(meta_key_buf, original_meta_key, meta_key_len);
+    meta_key_buf[meta_key_len] = '\0';
+    row.meta_key_.assign_ptr(meta_key_buf, meta_key_len);
+
+    uint64_t new_tenant_id = 1003; // Different digit count from 1
+    ret = meta_svr->modify_raw_meta_tenant_id(new_tenant_id, allocator, row);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    // Verify the modification
+    const char* expected_meta_key = "id_1:1003;id_2:1;id_3:200002;id_4:0;";
+    ASSERT_EQ(0, memcmp(row.meta_key_.ptr(), expected_meta_key, row.meta_key_.length()));
+    LOG_INFO("Test case 2 passed: different digit count modification", K(row.meta_key_));
+  }
+
+  // Test case 3: Invalid meta_key - empty string
+  {
+    ObRawMetaRow row;
+    row.type_ = ObSSLogMetaType::SSLOG_TABLET_META;
+    row.row_scn_ = share::SCN::base_scn();
+    row.meta_key_.assign_ptr("", 0); // Empty meta_key
+
+    uint64_t new_tenant_id = 1002;
+    ret = meta_svr->modify_raw_meta_tenant_id(new_tenant_id, allocator, row);
+    ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+    LOG_INFO("Test case 3 passed: invalid empty meta_key", K(ret));
+  }
+
+  // Test case 4: Invalid meta_key - missing id_1: prefix
+  {
+    ObRawMetaRow row;
+    row.type_ = ObSSLogMetaType::SSLOG_TABLET_META;
+    row.row_scn_ = share::SCN::base_scn();
+
+    const char* invalid_meta_key = "invalid_key_format";
+    int64_t meta_key_len = strlen(invalid_meta_key);
+    char* meta_key_buf = static_cast<char*>(allocator.alloc(meta_key_len + 1));
+    ASSERT_TRUE(nullptr != meta_key_buf);
+    memcpy(meta_key_buf, invalid_meta_key, meta_key_len);
+    meta_key_buf[meta_key_len] = '\0';
+    row.meta_key_.assign_ptr(meta_key_buf, meta_key_len);
+
+    uint64_t new_tenant_id = 1002;
+    ret = meta_svr->modify_raw_meta_tenant_id(new_tenant_id, allocator, row);
+    ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+    LOG_INFO("Test case 4 passed: invalid meta_key format", K(ret));
+  }
+
+  // Test case 5: Edge case - single digit to single digit
+  {
+    ObRawMetaRow row;
+    row.type_ = ObSSLogMetaType::SSLOG_TABLET_META;
+    row.row_scn_ = share::SCN::base_scn();
+
+    const char* original_meta_key = "id_1:5;id_2:1;id_3:200002;id_4:0;";
+    int64_t meta_key_len = strlen(original_meta_key);
+    char* meta_key_buf = static_cast<char*>(allocator.alloc(meta_key_len + 1));
+    ASSERT_TRUE(nullptr != meta_key_buf);
+    memcpy(meta_key_buf, original_meta_key, meta_key_len);
+    meta_key_buf[meta_key_len] = '\0';
+    row.meta_key_.assign_ptr(meta_key_buf, meta_key_len);
+
+    uint64_t new_tenant_id = 9; // Same digit count as 5
+    ret = meta_svr->modify_raw_meta_tenant_id(new_tenant_id, allocator, row);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    // Verify the modification
+    const char* expected_meta_key = "id_1:9;id_2:1;id_3:200002;id_4:0;";
+    ASSERT_EQ(0, memcmp(row.meta_key_.ptr(), expected_meta_key, row.meta_key_.length()));
+    LOG_INFO("Test case 5 passed: single digit modification", K(row.meta_key_));
+  }
+
+  // Test case 6: Large tenant_id
+  {
+    ObRawMetaRow row;
+    row.type_ = ObSSLogMetaType::SSLOG_TABLET_META;
+    row.row_scn_ = share::SCN::base_scn();
+
+    const char* original_meta_key = "id_1:12345;id_2:1;id_3:200002;id_4:0;";
+    int64_t meta_key_len = strlen(original_meta_key);
+    char* meta_key_buf = static_cast<char*>(allocator.alloc(meta_key_len + 1));
+    ASSERT_TRUE(nullptr != meta_key_buf);
+    memcpy(meta_key_buf, original_meta_key, meta_key_len);
+    meta_key_buf[meta_key_len] = '\0';
+    row.meta_key_.assign_ptr(meta_key_buf, meta_key_len);
+
+    uint64_t new_tenant_id = 99999; // Same digit count as 12345
+    ret = meta_svr->modify_raw_meta_tenant_id(new_tenant_id, allocator, row);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    // Verify the modification
+    const char* expected_meta_key = "id_1:99999;id_2:1;id_3:200002;id_4:0;";
+    ASSERT_EQ(0, memcmp(row.meta_key_.ptr(), expected_meta_key, row.meta_key_.length()));
+    LOG_INFO("Test case 6 passed: large tenant_id modification", K(row.meta_key_));
+  }
+
+  LOG_INFO("All test cases for modify_raw_meta_tenant_id passed");
+}
+
 } // unittest
 } // oceanbase
 

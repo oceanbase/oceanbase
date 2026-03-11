@@ -81,6 +81,8 @@ int ObTabletFinishTransferUtil::can_skip_check_transfer_tablets(
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));
   } else if (!restore_status.is_in_restoring_or_failed()) {
     // ls not in restore, cannot skip.
+  } else if (GCTX.is_shared_storage_mode()) {
+    // shared storage mode, skip check transfer dest ls consistent scn
   } else if (OB_FALSE_IT(restore_handler = ls->get_ls_restore_handler())) {
   } else if (OB_FAIL(restore_handler->get_consistent_scn(consistent_scn))) {
     LOG_WARN("failed to get consistent_scn", K(ret), KPC(ls));

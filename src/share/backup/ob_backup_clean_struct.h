@@ -32,6 +32,7 @@ struct ObBackupCleanStatus
     MAX_STATUS
   };
   ObBackupCleanStatus(): status_(MAX_STATUS) {}
+  ObBackupCleanStatus(const Status &status): status_(status) {}
   virtual ~ObBackupCleanStatus() = default;
   bool is_valid() const;
   const char* get_str() const;

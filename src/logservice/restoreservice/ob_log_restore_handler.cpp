@@ -92,7 +92,8 @@ ObLogRestoreHandler::ObLogRestoreHandler() :
   cur_delay_count_(0),
   last_delay_count_(0),
   cur_stat_info_(),
-  last_stat_info_()
+  last_stat_info_(),
+  ignore_log_handler_online_(false)
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   , shared_log_submit_log_rate_limiter_(NULL)
 #endif // OB_BUILD_SHARED_LOG_SERVICE
@@ -191,6 +192,7 @@ void ObLogRestoreHandler::destroy()
     last_stat_info_.reset();
     role_ = ObRole::INVALID_ROLE;
     context_.reset();
+    ignore_log_handler_online_ = false;
   }
   if (NULL != parent_) {
     ObResSrcAlloctor::free(parent_);
@@ -678,9 +680,9 @@ void ObLogRestoreHandler::alloc_source(const ObLogRestoreSourceType &type)
 int ObLogRestoreHandler::check_restore_done(const SCN &recovery_end_scn, bool &done)
 {
   int ret = OB_SUCCESS;
-  palf::PalfGroupBufferIterator iter;
+  ipalf::IPalfIterator<ipalf::IGroupEntry> iter;
   SCN end_scn;
-  palf::LogGroupEntry entry;
+  ipalf::IGroupEntry entry;
   SCN entry_scn;
   palf::LSN end_lsn;
   int64_t id = 0;
@@ -718,7 +720,7 @@ int ObLogRestoreHandler::check_restore_done(const SCN &recovery_end_scn, bool &d
     } else if (entry.get_scn() == recovery_end_scn) {
       // if the max log scn equals to recovery_end_scn, the max log should be replayed
       // otherwise the max log should not be replayed
-      end_lsn = end_lsn + entry.get_serialize_size();
+      end_lsn = end_lsn + entry.get_serialize_size(end_lsn);
     }
     id = ATOMIC_LOAD(&id_);
   }
@@ -1375,6 +1377,42 @@ void ObLogRestoreHandler::print_stat()
   last_delay_count_ = cur_delay_count_;
   last_stat_info_ = cur_stat_info_;
   last_stat_ts_ = ObTimeUtility::current_time();
+}
+
+int ObLogRestoreHandler::enable_ignore_log_handler_online()
+{
+  int ret = OB_SUCCESS;
+  WLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_IN_STOP_STATE;
+  } else {
+    ignore_log_handler_online_ = true;
+    CLOG_LOG(INFO, "enable ignore log handler online", K_(id));
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::disable_ignore_log_handler_online()
+{
+  int ret = OB_SUCCESS;
+  WLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_IN_STOP_STATE;
+  } else {
+    ignore_log_handler_online_ = false;
+    CLOG_LOG(INFO, "disable ignore log handler online", K_(id));
+  }
+  return ret;
+}
+
+bool ObLogRestoreHandler::is_ignore_log_handler_online() const
+{
+  RLockGuard guard(lock_);
+  return ignore_log_handler_online_;
 }
 
 int ObLogRestoreHandler::get_offline_scn_(share::SCN &scn)

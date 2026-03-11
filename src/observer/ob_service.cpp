@@ -667,13 +667,21 @@ int ObService::backup_ls_data(const obrpc::ObBackupDataArg &arg)
   const int64_t turn_id = arg.turn_id_;
   const int64_t retry_id = arg.retry_id_;
   const ObBackupDataType &backup_data_type = arg.backup_data_type_;
+  const share::SCN &start_scn = arg.start_scn_;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (!arg.is_valid() || OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", KR(ret), K(arg));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, tenant_id, arg.backup_path_, backup_dest))) {
     LOG_WARN("failed to get backup dest", KR(ret), K(arg));
-  } else if (OB_FAIL(ObBackupHandler::schedule_backup_data_dag(job_desc,
+  }
+#ifdef OB_BUILD_SHARED_STORAGE
+  else if (GCTX.is_shared_storage_mode() && OB_FAIL(ObBackupHandler::schedule_ss_backup_dag(
+      job_desc, backup_dest, tenant_id, backup_set_desc, ls_id, retry_id, start_scn, backup_data_type.is_user_backup()))) {
+    LOG_WARN("failed to schedule ss backup data dag", K(ret), K(arg));
+  }
+#endif
+  else if (!GCTX.is_shared_storage_mode() && OB_FAIL(ObBackupHandler::schedule_backup_data_dag(job_desc,
       backup_dest, tenant_id, backup_set_desc, ls_id, turn_id, retry_id, backup_data_type))) {
     LOG_WARN("failed to schedule backup data dag", K(ret), K(arg));
   } else {
@@ -797,7 +805,14 @@ int ObService::backup_meta(const obrpc::ObBackupMetaArg &arg)
     LOG_WARN("get invalid args", KR(ret), K(arg));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, tenant_id, arg.backup_path_, backup_dest))) {
     LOG_WARN("failed to get backup dest", K(ret), K(arg));
-  } else if (OB_FAIL(ObBackupHandler::schedule_backup_meta_dag(job_desc,
+  }
+#ifdef OB_BUILD_SHARED_STORAGE
+  else if (GCTX.is_shared_storage_mode() && OB_FAIL(ObBackupHandler::schedule_ss_backup_dag(
+      job_desc, backup_dest, tenant_id, backup_set_desc, ls_id, retry_id, start_scn, false/*is_backup_data*/))) {
+    LOG_WARN("failed to schedule ss backup data dag", K(ret), K(arg));
+  }
+#endif
+  else if (!GCTX.is_shared_storage_mode() && OB_FAIL(ObBackupHandler::schedule_backup_meta_dag(job_desc,
       backup_dest, tenant_id, backup_set_desc, ls_id, turn_id, retry_id, start_scn))) {
     LOG_WARN("failed to schedule backup data dag", KR(ret), K(arg));
   } else {

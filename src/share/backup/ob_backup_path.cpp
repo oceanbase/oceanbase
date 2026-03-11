@@ -138,6 +138,26 @@ int ObBackupPath::join(const common::ObString &str_path, const ObBackupFileSuffi
 
 }
 
+int ObBackupPath::join(const common::ObString &str_path)
+{
+  int ret = OB_SUCCESS;
+
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (str_path.length() <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(str_path));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_,
+      "/%.*s", str_path.length(), str_path.ptr()))) {
+    LOG_WARN("failed to join path", K(ret), K(str_path), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
+  }
+
+  return ret;
+}
+
 int ObBackupPath::join(const uint64_t int_path, const ObBackupFileSuffix &type)
 {
   int ret = OB_SUCCESS;
@@ -653,27 +673,6 @@ int ObBackupPath::join_major_compaction_mview_dep_tablet_list_file()
   return ret;
 }
 
-int ObBackupPath::join_backup_file_list(const int64_t file_id)
-{
-  int ret = OB_SUCCESS;
-  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K(*this));
-  } else if (OB_FAIL(databuff_printf(file_name,
-                                     sizeof(file_name),
-                                     "%s.%ld",
-                                     OB_STR_BACKUP_FILE_LIST,
-                                     file_id))) {
-    LOG_WARN("failed to join table list tmp file", K(ret), K(*this));
-  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
-    LOG_WARN("failed to join file_name", K(ret), K(file_name));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    LOG_WARN("failed to trim right backslash", K(ret));
-  }
-  return ret;
-}
-
 int ObBackupPath::join_file_list(const int64_t file_id, const ObBackupFileSuffix &type)
 {
   int ret = OB_SUCCESS;
@@ -688,6 +687,137 @@ int ObBackupPath::join_file_list(const int64_t file_id, const ObBackupFileSuffix
                                      file_id))) {
     LOG_WARN("failed to join table list tmp file", K(ret), K(*this));
   } else if (OB_FAIL(join(file_name, type))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_ss_tablet_group_checkpoint(const int64_t retry_id)
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                                     sizeof(file_name),
+                                     "%s.%ld",
+                                     OB_STR_SS_TABLET_GROUP_CHECKPOINT,
+                                     retry_id))) {
+    LOG_WARN("failed to join table list tmp file", K(ret), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_tablet()
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%s", OB_STR_TABLET))) {
+    LOG_WARN("failed to join macro block data file", K(ret), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_tablet_id(const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%ld", tablet_id.id()))) {
+    LOG_WARN("failed to join macro block data file", K(ret), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_ss_tablet_info(const int64_t file_id)
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                                     sizeof(file_name),
+                                     "%s.%ld",
+                                     OB_STR_SS_TABLET_INFO,
+                                     file_id))) {
+    LOG_WARN("failed to join table list tmp file", K(ret), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_ss_tablet_macro_block_file_info()
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                                     sizeof(file_name),
+                                     "%s",
+                                     OB_STR_SS_TABLET_MACRO_BLOCK_FILE_INFO))) {
+    LOG_WARN("failed to join table list tmp file", K(ret), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_ss_tablet_meta_file_info()
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                                     sizeof(file_name),
+                                     "%s",
+                                     OB_STR_SS_TABLET_META_FILE_INFO))) {
+    LOG_WARN("failed to join table list tmp file", K(ret), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_macro_block_list(const int64_t file_id)
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                                     sizeof(file_name),
+                                     "%s.%ld",
+                                     OB_STR_MACRO_BLOCK_LIST,
+                                     file_id))) {
+    LOG_WARN("failed to join macro block list file", K(ret), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
     LOG_WARN("failed to join file_name", K(ret), K(file_name));
   } else if (OB_FAIL(trim_right_backslash())) {
     LOG_WARN("failed to trim right backslash", K(ret));
@@ -1530,6 +1660,24 @@ int ObBackupPathUtil::get_ls_meta_info_backup_path(const share::ObBackupDest &ba
   return ret;
 }
 
+// file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1_retry_0/ls_meta_info.obbak
+int ObBackupPathUtil::get_ls_meta_info_backup_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, const int64_t turn_id,
+    const int64_t retry_id, ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("fail to get backup set dier path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join_ls(ls_id))) {
+    LOG_WARN("fail to join ls", K(ret), K(ls_id));
+  } else if (OB_FAIL(backup_path.join_meta_info_turn_and_retry(turn_id, retry_id, false/*is_final_fuse*/))) {
+    LOG_WARN("failed to join info retry", K(ret), K(retry_id));
+  } else if (OB_FAIL(backup_path.join(OB_STR_LS_META_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join info turn", K(ret));
+  }
+  return ret;
+}
+
 // file:///obbackup/backup_set_1_full/logstream_1/xxx_xxx_turn_1_retry_0/macro_range_index.obbak
 int ObBackupPathUtil::get_tenant_macro_range_index_backup_path(const share::ObBackupDest &backup_set_dest,
     const ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id, ObBackupPath &path)
@@ -1738,6 +1886,76 @@ int ObBackupPathUtil::get_major_compaction_mview_dep_tablet_list_path(const shar
     LOG_WARN("fail to get backup set info path", K(ret), K(backup_set_dest));
   } else if (OB_FAIL(path.join_major_compaction_mview_dep_tablet_list_file())) {
     LOG_WARN("failed to join major compaction mview dep tablet list file", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/logstream_1/tablet_group_checkpoint.<retry_id>
+int ObBackupPathUtil::get_ss_tablet_group_checkpoint_file_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, const int64_t retry_id, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_ls(ls_id))) {
+    LOG_WARN("fail to join ls", K(ret), K(ls_id));
+  } else if (OB_FAIL(path.join_ss_tablet_group_checkpoint(retry_id))) {
+    LOG_WARN("failed to join ss tablet group checkpoint", K(ret));
+  }
+  return ret;
+}
+
+  // file:///obbackup/backup_set_1_full/log_stream_1/ss_tablet_info.file_id.obbak
+int ObBackupPathUtil::get_ss_ls_data_tablet_info_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id,
+    const int64_t file_id, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  const bool is_final_fuse = false;
+  if (OB_FAIL(get_ls_backup_dir_path(backup_set_dest, ls_id, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join_meta_info_turn_and_retry(turn_id, retry_id, is_final_fuse))) {
+    LOG_WARN("failed to join info retry", K(ret));
+  } else if (OB_FAIL(backup_path.join_ss_tablet_info(file_id))) {
+    LOG_WARN("failed to join ss tablet info", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/tablet/[tablet_id]/ss_tablet_meta_file_info.obbak
+int ObBackupPathUtil::get_ss_tablet_meta_file_info_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (tablet_id.is_ls_inner_tablet() && OB_FAIL(backup_path.join_ls(ls_id))) {
+    LOG_WARN("failed to join ls", K(ret), K(ls_id));
+  } else if (OB_FAIL(backup_path.join_tablet())) {
+    LOG_WARN("failed to join tablet", K(ret));
+  } else if (OB_FAIL(backup_path.join_tablet_id(tablet_id))) {
+    LOG_WARN("failed to join tablet id", K(ret), K(tablet_id));
+  } else if (OB_FAIL(backup_path.join_ss_tablet_meta_file_info())) {
+    LOG_WARN("failed to join ss tablet file info", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/tablet/[tablet_id]/ss_tablet_macro_block_file_info.obbak
+int ObBackupPathUtil::get_ss_tablet_macro_block_file_info_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (tablet_id.is_ls_inner_tablet() && OB_FAIL(backup_path.join_ls(ls_id))) {
+    LOG_WARN("failed to join ls", K(ret), K(ls_id));
+  } else if (OB_FAIL(backup_path.join_tablet())) {
+    LOG_WARN("failed to join tablet", K(ret));
+  } else if (OB_FAIL(backup_path.join_tablet_id(tablet_id))) {
+    LOG_WARN("failed to join tablet id", K(ret), K(tablet_id));
+  } else if (OB_FAIL(backup_path.join_ss_tablet_macro_block_file_info())) {
+    LOG_WARN("failed to join ss tablet macro block file info", K(ret));
   }
   return ret;
 }
