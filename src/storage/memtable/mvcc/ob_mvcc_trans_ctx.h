@@ -251,7 +251,7 @@ public:
   void set_for_replay(const bool for_replay);
   bool is_for_replay() const { return ATOMIC_LOAD(&for_replay_); }
   int remove_callbacks_for_fast_commit(const int16_t callback_list_idx, const share::SCN stop_scn);
-  int remove_callbacks_for_fast_commit(const ObCallbackScopeArray &callbacks_arr);
+  int remove_callbacks_for_fast_commit(const uint64_t callback_scope_host_bitmap);
   int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
   int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);
   int acquire_callback_list(const bool new_epoch);
@@ -263,9 +263,10 @@ private:
   void wakeup_waiting_txns_();
   int extend_callback_lists_(const int16_t cnt);
 public:
-  bool is_logging_blocked(bool &has_pending_log) const;
+  bool has_pending_log_for_freeze(const uint32_t freeze_clock) const;
   int fill_log(ObTxFillRedoCtx &ctx, ObITxFillRedoFunctor &func);
   int log_submitted(const ObCallbackScopeArray &callbacks, share::SCN scn, int &submitted);
+  int prepare_log_submitted(const ObCallbackScopeArray &callbacks);
   int log_sync_succ(const ObCallbackScopeArray &callbacks, const share::SCN scn, int64_t &sync_cnt);
   int log_sync_fail(const ObCallbackScopeArray &callbacks, const share::SCN scn, int64_t &removed_cnt);
   void check_all_redo_flushed();
@@ -425,34 +426,7 @@ private:
 class ObMvccRowCallback final : public ObITransCallback
 {
 public:
-  ObMvccRowCallback(ObIMvccCtx &ctx, ObMvccRow& value, ObMemtable *memtable) :
-      ObITransCallback(),
-      ctx_(ctx),
-      value_(value),
-      tnode_(NULL),
-      data_size_(-1),
-      memtable_(memtable),
-      is_link_(false),
-      not_calc_checksum_(false),
-      is_non_unique_local_index_cb_(false),
-      seq_no_(),
-      column_cnt_(0)
-  {}
-  ObMvccRowCallback(ObMvccRowCallback &cb, ObMemtable *memtable) :
-      ObITransCallback(cb.need_submit_log_),
-      ctx_(cb.ctx_),
-      value_(cb.value_),
-      tnode_(cb.tnode_),
-      data_size_(cb.data_size_),
-      memtable_(memtable),
-      is_link_(cb.is_link_),
-      not_calc_checksum_(cb.not_calc_checksum_),
-      is_non_unique_local_index_cb_(cb.is_non_unique_local_index_cb_),
-      seq_no_(cb.seq_no_),
-      column_cnt_(cb.column_cnt_)
-  {
-    (void)key_.encode(cb.key_.get_rowkey());
-  }
+  ObMvccRowCallback(ObIMvccCtx &ctx, ObMvccRow& value, ObMemtable *memtable);
   virtual ~ObMvccRowCallback() {}
   int link_trans_node();
   void unlink_trans_node();
@@ -462,13 +436,10 @@ public:
            ObMvccTransNode *node,
            const int64_t data_size,
            const ObRowData &old_row,
-           const bool is_replay,
            const transaction::ObTxSEQ seq_no,
            const int64_t column_cnt,
            const bool is_non_unique_local_index_cb)
   {
-    UNUSED(is_replay);
-
     if (NULL != key) {
       key_.encode(*key);
     }
@@ -561,6 +532,7 @@ private:
   };
   transaction::ObTxSEQ seq_no_;
   int64_t column_cnt_;
+  uint32_t freeze_clock_;
 };
 
 }; // end namespace memtable

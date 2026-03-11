@@ -1019,7 +1019,8 @@ TEST_F(TestLockMemtable, test_lock_retry)
   start_tx(DEFAULT_TRANS_ID, default_ctx);
   get_store_ctx(default_ctx, store_ctx);
   default_ctx.tx_ctx_.change_to_leader();
-  ASSERT_EQ(OB_SUCCESS, default_ctx.tx_ctx_.lock_.lock());
+  CtxLockGuard guard(default_ctx.tx_ctx_.lock_);
+  ASSERT_EQ(guard.is_locked(), true);
 
   // 2. do obj lock
   LOG_INFO("TestLockMemtable::test_lock_retry 2 do obj lock");
@@ -1054,7 +1055,7 @@ TEST_F(TestLockMemtable, test_lock_retry)
   ASSERT_EQ(default_ctx.tx_ctx_.mds_cache_.mds_list_.empty(), true);
 
   // 4. unlock part ctx
-  default_ctx.tx_ctx_.lock_.unlock();
+  guard.reset();
 
   // 5. do obj lock again.
   LOG_INFO("TestLockMemtable::test_lock_retry 5 do lock again");

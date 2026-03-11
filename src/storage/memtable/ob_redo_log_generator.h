@@ -98,6 +98,7 @@ struct ObTxFillRedoCtx
     last_log_blocked_memtable_(NULL),
     fill_count_(0),
     is_all_filled_(false),
+    reach_freeze_clock_(false),
     fill_time_(0)
   {
     list_log_epoch_arr_.set_max_print_count(256);
@@ -123,6 +124,7 @@ struct ObTxFillRedoCtx
   int fill_count_;         // number of callbacks was filled
   int fill_round_;         // iter of `choice-list -> fill -> fill others` loop count
   bool is_all_filled_;     // no remains, all callbacks was filled
+  bool reach_freeze_clock_; // whether reach freeze clock
   int64_t fill_time_;      // time used
 public:
   bool is_empty() const { return fill_count_ == 0; }
@@ -140,6 +142,7 @@ public:
                KPC_(callback_scope),
                K_(skip_lock_node),
                K_(is_all_filled),
+               K_(reach_freeze_clock),
                K_(list_idx),
                K_(list_log_epoch_arr),
                KP_(last_log_blocked_memtable),

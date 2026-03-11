@@ -668,6 +668,11 @@ int ObMemtableCtx::log_submitted(const ObRedoLogSubmitHelper &helper)
   return log_gen_.log_submitted(helper.callbacks_, helper.log_scn_);
 }
 
+int ObMemtableCtx::prepare_log_submitted(const ObRedoLogSubmitHelper &helper)
+{
+  return trans_mgr_.prepare_log_submitted(helper.callbacks_);
+}
+
 int ObMemtableCtx::sync_log_succ(const SCN scn, const ObCallbackScopeArray &callbacks)
 {
   lock_mem_ctx_.sync_log_succ(scn);
@@ -849,11 +854,11 @@ int ObMemtableCtx::remove_callbacks_for_fast_commit(const int16_t callback_list_
   }
   return ret;
 }
-int ObMemtableCtx::remove_callbacks_for_fast_commit(const ObCallbackScopeArray &cb_scope_array)
+int ObMemtableCtx::remove_callbacks_for_fast_commit(const uint64_t callback_scope_host_bitmap)
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("remove callbacks for fast commit", 10 * 1000);
-  if (OB_FAIL(trans_mgr_.remove_callbacks_for_fast_commit(cb_scope_array))) {
+  if (OB_FAIL(trans_mgr_.remove_callbacks_for_fast_commit(callback_scope_host_bitmap))) {
     TRANS_LOG(WARN, "fail to remove callback for fast commit", K(ret));
   }
   return ret;

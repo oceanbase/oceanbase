@@ -54,92 +54,32 @@ void CtxLock::after_unlock(CtxLockArg &arg)
   }
 }
 
-thread_local pid_t lock_thread_id_ = 0;
-#define CHECK_LOCK(the_lock)                                            \
-  {                                                                     \
-    int64_t tid = - (OB_E(EventTable::EN_CHECK_TX_CTX_LOCK) OB_SUCCESS); \
-    if (tid) {                                                          \
-      if (lock_thread_id_ == 0) {                                       \
-        lock_thread_id_ = (pid_t)syscall(__NR_gettid);                  \
-      }                                                                 \
-      const int64_t diff = tid - lock_thread_id_;                       \
-      if (diff == 0) {                                                  \
-        TRANS_LOG(INFO, "[CHECK_LOCK]", "lock", the_lock,               \
-                  K(tid), K(lock_thread_id_), K(lbt()));                \
-      }                                                                 \
-    }                                                                   \
-  }
-
-int CtxLock::lock(const int64_t timeout_us)
+int CtxLock::wrlock_ctx(const int64_t timeout)
 {
-  ATOMIC_INC(&waiting_lock_cnt_);
-  int ret = OB_SUCCESS;
-  int64_t timeout = timeout_us >= 0 ? (ObTimeUtility::current_time() + timeout_us) : INT64_MAX;
-  if (OB_SUCC(access_lock_.wrlock(common::ObLatchIds::TRANS_ACCESS_LOCK, timeout))) {
-    CHECK_LOCK(access_lock_);
-    if (OB_SUCC(flush_redo_lock_.wrlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK, timeout))) {
-      if (OB_SUCC(ctx_lock_.wrlock(common::ObLatchIds::TRANS_CTX_LOCK, timeout))) {
-        lock_start_ts_ = ObClockGenerator::getClock();
-      } else {
-        flush_redo_lock_.unlock();
-        access_lock_.unlock();
-      }
-    } else {
-      access_lock_.unlock();
-    }
-  }
-  ATOMIC_DEC(&waiting_lock_cnt_);
-  return ret;
-}
-
-int CtxLock::try_lock()
-{
-  int ret = OB_SUCCESS;
-  if (OB_SUCC(access_lock_.try_wrlock(common::ObLatchIds::TRANS_ACCESS_LOCK))) {
-    CHECK_LOCK(access_lock_);
-    if (OB_SUCC(flush_redo_lock_.try_wrlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK))) {
-      if (OB_SUCC(ctx_lock_.try_wrlock(common::ObLatchIds::TRANS_CTX_LOCK))) {
-        lock_start_ts_ = ObClockGenerator::getClock();
-      } else {
-        flush_redo_lock_.unlock();
-        access_lock_.unlock();
-      }
-    } else {
-      access_lock_.unlock();
-    }
-  }
-  return ret;
-}
-
-int CtxLock::try_rdlock_ctx()
-{
-  int ret = ctx_lock_.try_rdlock(common::ObLatchIds::TRANS_CTX_LOCK);
-  lock_start_ts_ = 0;
-  return ret;
-}
-
-void CtxLock::unlock()
-{
-  // Unlock in reverse order of acquisition to keep the lock hierarchy sane.
-  // This is important because ctx_->before_unlock/after_unlock may rely on
-  // ACCESS/REDO locks still being held when releasing ctx lock.
-  unlock_ctx();
-  unlock_flush_redo();
-  unlock_access();
-}
-
-int CtxLock::wrlock_ctx()
-{
-  int ret = ctx_lock_.wrlock(common::ObLatchIds::TRANS_CTX_LOCK);
+  int ret = ctx_lock_.wrlock(common::ObLatchIds::TRANS_CTX_LOCK, timeout);
   lock_start_ts_ = ObClockGenerator::getClock();
   return ret;
 }
 
-int CtxLock::wrlock_access()
+int CtxLock::try_wrlock_ctx()
 {
-  CHECK_LOCK(access_lock_);
-  return access_lock_.wrlock(common::ObLatchIds::TRANS_ACCESS_LOCK);
+  int ret = ctx_lock_.try_wrlock(common::ObLatchIds::TRANS_CTX_LOCK);
+  if (OB_SUCC(ret)) {
+    lock_start_ts_ = ObClockGenerator::getClock();
+  }
+  return ret;
 }
+
+int CtxLock::wrlock_access(const int64_t timeout)
+{
+  return access_lock_.wrlock(common::ObLatchIds::TRANS_ACCESS_LOCK, timeout);
+}
+
+int CtxLock::try_wrlock_access()
+{
+  return access_lock_.try_wrlock(common::ObLatchIds::TRANS_ACCESS_LOCK);
+}
+
 void CtxLock::unlock_access()
 {
   access_lock_.unlock();
@@ -160,28 +100,24 @@ void CtxLock::unlock_ctx()
   after_unlock(arg);
 }
 
-int CtxLock::wrlock_flush_redo()
+int CtxLock::wrlock_flush_redo(const int64_t timeout)
 {
-  int ret = flush_redo_lock_.wrlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK);
-  return ret;
+  return flush_redo_lock_.wrlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK, timeout);
 }
 
 int CtxLock::try_wrlock_flush_redo()
 {
-    int ret = flush_redo_lock_.try_wrlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK);
-    return ret;
+  return flush_redo_lock_.try_wrlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK);
 }
 
-int CtxLock::rdlock_flush_redo()
+int CtxLock::rdlock_flush_redo(const int64_t timeout)
 {
-  int ret = flush_redo_lock_.rdlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK);
-  return ret;
+  return flush_redo_lock_.rdlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK, timeout);
 }
 
 int CtxLock::try_rdlock_flush_redo()
 {
-  int ret = flush_redo_lock_.try_rdlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK);
-  return ret;
+  return flush_redo_lock_.try_rdlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK);
 }
 
 void CtxLock::unlock_flush_redo()
@@ -198,8 +134,52 @@ void CtxLockGuard::set(CtxLock &lock, uint8_t mode)
 {
   reset();
   lock_ = &lock;
-  mode_ = mode;
-  do_lock_(true);
+  do_lock_(mode, false, 0);
+}
+
+void CtxLockGuard::do_lock_(int mode, bool try_lock, int64_t timeout_us)
+{
+  request_ts_ = ObTimeUtility::fast_current_time();
+  int64_t timeout = timeout_us > 0 ? (request_ts_ + timeout_us) : INT64_MAX;
+  int ret = OB_SUCCESS;
+  if (mode & ACCESS) {
+    if (try_lock) {
+      if (OB_SUCC(lock_->try_wrlock_access())) {
+        mode_ |= ACCESS;
+      }
+    } else if (OB_SUCC(lock_->wrlock_access(timeout))) {
+      mode_ |= ACCESS;
+    }
+  }
+  if (OB_SUCC(ret) && (mode & REDO_FLUSH_X)) {
+    if (try_lock) {
+      if (OB_SUCC(lock_->try_wrlock_flush_redo())) {
+        mode_ |= REDO_FLUSH_X;
+      }
+    } else if (OB_SUCC(lock_->wrlock_flush_redo(timeout))) {
+      mode_ |= REDO_FLUSH_X;
+    }
+  }
+  if (OB_SUCC(ret) && (mode & REDO_FLUSH_R)) {
+    if (try_lock) {
+      if (OB_SUCC(lock_->try_rdlock_flush_redo())) {
+        mode_ |= REDO_FLUSH_R;
+      }
+    } else if (OB_SUCC(lock_->rdlock_flush_redo(timeout))) {
+      mode_ |= REDO_FLUSH_R;
+    }
+  }
+  if (OB_SUCC(ret) && (mode & CTX)) {
+    if (try_lock) {
+      if (OB_SUCC(lock_->try_wrlock_ctx())) {
+        mode_ |= CTX;
+      }
+    } else if (OB_SUCC(lock_->wrlock_ctx(timeout))) {
+      mode_ |= CTX;
+    }
+  }
+  hold_ts_ = ObTimeUtility::fast_current_time();
+  locked_ = OB_SUCC(ret);
 }
 
 ERRSIM_POINT_DEF(EN_SLOW_CTX_LOCK_THRESHOLD)
@@ -218,17 +198,14 @@ void CtxLockGuard::reset()
     int64_t release_ts = ObTimeUtility::fast_current_time();
     const int64_t slow_threshold = EN_SLOW_CTX_LOCK_THRESHOLD ? (-EN_SLOW_CTX_LOCK_THRESHOLD) * 1_ms : 50_ms;
     if (release_ts - request_ts_ > slow_threshold) {
-      TRANS_LOG_RET(WARN, OB_SUCCESS, "[slow ctx lock]",
+      TRANS_LOG_RET(WARN, OB_SUCCESS, "[slow tx ctx lock]",
                     KP(lock_), K(mode_),
+                    "trans_id", lock_->ctx_->get_trans_id(),
+                    "ls_id", lock_->ctx_->get_ls_id(),
                     "request_used", hold_ts_ - request_ts_,
-                    "hold_used", release_ts - hold_ts_,
-                    K(ctx_lock_val_), K(access_lock_val_), K(flush_redo_lock_val_),
-                    K(lbt()));
+                    "hold_used", release_ts - hold_ts_);
     }
     lock_ = NULL;
-    ctx_lock_val_ = 0;
-    access_lock_val_ = 0;
-    flush_redo_lock_val_ = 0;
   }
 }
 

@@ -75,13 +75,19 @@ public:
                                        const share::SCN replay_scn);
 
   // get_memtable_key_arr__timeout get all memtable key until timeout
-  int get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyArray &memtable_key_arr);
+  int get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyArray &memtable_key_arr, const int64_t timeout);
 
   // clean_unlog_callbacks will remove all unlogged callbacks. Which is called
   // when switch to follower forcely.
   int clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunction<void()> &before_remove);
   int fill_log(ObITransCallback* log_cursor, ObTxFillRedoCtx &ctx, ObITxFillRedoFunctor &functor);
   int submit_log_succ(const ObCallbackScope &callbacks);
+  // mark callback list has submitted log but relative callbacks not marked as submitted
+  // execute sync log succ/fail callback must wait this flag cleared
+  int prepare_log_submitted();
+  // clear prepared log submitted flag
+  void clear_prepared_log_submitted();
+  // sync log succ will update sync_scn and synced_
   int sync_log_succ(const share::SCN scn, int64_t sync_cnt);
   // sync_log_fail will remove all callbacks that not sync successfully. Which
   // is called when callback is on failure.
@@ -130,6 +136,12 @@ public:
 
   // is logging blocked: test current list can fill log
   bool is_logging_blocked() const;
+
+  // check if the callback list has pending log for freeze
+  bool has_pending_log_for_freeze(const uint32_t freeze_clock) const;
+
+  // get callback list id
+  int16_t get_id() const { return id_; }
 private:
   union LockState {
     LockState() : v_(0) {}
@@ -221,12 +233,14 @@ public:
   DECLARE_TO_STRING;
 private:
   void set_log_cursor_(ObITransCallback *log_cursor);
+  int check_freeze_clock_order_(ObITransCallback *callback);
 private:
   const int16_t id_;
   // callback list sentinel
   ObITransCallback head_;
   ObITransCallback *log_cursor_;
   int64_t log_epoch_;
+  uint32_t log_freeze_clock_;
   ObITransCallback *parallel_start_pos_;
   int64_t length_;
   // stats
@@ -268,6 +282,8 @@ private:
   mutable common::ObByteLock append_latch_;
   // used to serialize fill and flush log of this list
   mutable common::ObByteLock log_latch_;
+  // used to prevent log sync succ callback be called after log submitted callback
+  mutable common::ObByteLock log_submitted_pending_latch_;
   // used to serialize operates on synced callbacks
   mutable common::ObByteLock iter_synced_latch_;
   DISALLOW_COPY_AND_ASSIGN(ObTxCallbackList);
