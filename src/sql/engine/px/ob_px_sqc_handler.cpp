@@ -434,6 +434,30 @@ void ObPxSqcHandler::check_interrupt()
   }
 }
 
+int ObPxSqcHandler::task_need_regeneration_for_external_table(ObGranulePump &pump, bool &need_regeneration)
+{
+  int ret = OB_SUCCESS;
+  need_regeneration = false;
+  int64_t tsc_op_id = 0;
+  if (OB_FAIL(pump.get_first_tsc_op_id(tsc_op_id))) {
+    // fail to get op_id, cannot check
+    LOG_WARN("fail to get tsc op id", K(ret));
+  } else if (OB_INVALID_ID == tsc_op_id) {
+    // invalid op_id, do not need to regenerate
+  } else {
+    GITaskGenRunner *runner = NULL;
+    pump.find_external_task_runner(tsc_op_id, runner);
+    if (NULL != runner) {
+      // runner is not null
+      // pre task generated and tasks have not been generated completely
+      // task generation is in incomplete/half stage
+      // we cannot adjust the thread count
+      need_regeneration = true;
+    }
+  }
+  return ret;
+}
+
 int ObPxSqcHandler::thread_count_auto_scaling(int64_t &reserved_px_thread_count)
 {
   int ret = OB_SUCCESS;
@@ -442,15 +466,23 @@ int ObPxSqcHandler::thread_count_auto_scaling(int64_t &reserved_px_thread_count)
    * the max thread cnt should be less than ranges cnt.
    */
   int64_t range_cnt = 0;
-  ObGranulePump &pump = sub_coord_->get_sqc_ctx().gi_pump_;
   int64_t temp_cnt = reserved_px_thread_count;
-  if (reserved_px_thread_count <= 1 || !sqc_init_args_->sqc_.is_single_tsc_leaf_dfo()) {
-  } else if (OB_ISNULL(sub_coord_)) {
+  if (OB_ISNULL(sub_coord_) || OB_ISNULL(sqc_init_args_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("subcoord is null", K(ret));
   } else {
     ObGranulePump &pump = sub_coord_->get_sqc_ctx().gi_pump_;
-    if (OB_FAIL(pump.get_first_tsc_range_cnt(range_cnt))) {
+    bool need_regeneration = false;
+    if (reserved_px_thread_count <= 1 ||
+               !sqc_init_args_->sqc_.is_single_tsc_leaf_dfo()) {
+      // do nothing
+    } else if (OB_FAIL(
+            task_need_regeneration_for_external_table(pump, need_regeneration))) {
+      LOG_WARN("fail to check task generation status", K(ret));
+    } else if (need_regeneration) {
+      // task generation is incomplete (in half stage)
+      // we cannot adjust the thread count
+    } else if (OB_FAIL(pump.get_first_tsc_range_cnt(range_cnt))) {
       LOG_WARN("fail to get first tsc range cnt", K(ret));
     } else if (0 == range_cnt) {
       ret = OB_ERR_UNEXPECTED;

@@ -134,7 +134,10 @@ struct ObCSVGeneralFormat {
     file_extension_(DEFAULT_FILE_EXTENSION),
     parse_header_(false),
     binary_format_(ObCSVBinaryFormat::DEFAULT),
-    ignore_last_empty_col_(true)
+    ignore_last_empty_col_(true),
+    parallel_parse_on_single_file_(true),
+    parallel_parse_file_size_threshold_(DEFAULT_CSV_LARGE_FILE_SIZE_THRESHOLD),
+    max_row_length_(DEFAULT_MAX_CSV_ROW_LENGTH)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "LINE_DELIMITER",
@@ -152,7 +155,10 @@ struct ObCSVGeneralFormat {
     "FILE_EXTENSION",
     "PARSE_HEADER",
     "BINARY_FORMAT",
-    "IGNORE_LAST_EMPTY_COLUMN"
+    "IGNORE_LAST_EMPTY_COLUMN",
+    "PARALLEL_PARSE_ON_SINGLE_FILE",
+    "PARALLEL_PARSE_FILE_SIZE_THRESHOLD",
+    "MAX_ROW_LENGTH"
   };
 
   // ObCSVOptionsEnum should keep the same order as OPTION_NAMES
@@ -173,6 +179,9 @@ struct ObCSVGeneralFormat {
     PARSE_HEADER,
     BINARY_FORMAT,
     IGNORE_LAST_EMPTY_COLUMN,
+    PARALLEL_PARSE_ON_SINGLE_FILE,
+    PARALLEL_PARSE_FILE_SIZE_THRESHOLD,
+    MAX_ROW_LENGTH,
     // put new options here, before MAX_OPTIONS
     // ....
     MAX_OPTIONS
@@ -190,6 +199,7 @@ struct ObCSVGeneralFormat {
     GZIP = 2,
     DEFLATE = 3,
     ZSTD = 4,
+    SNAPPY_BLOCK = 5,  //FARM COMPAT WHITELIST
   };
   enum class ObCSVBinaryFormat {
     DEFAULT = 0,
@@ -216,6 +226,11 @@ struct ObCSVGeneralFormat {
   bool parse_header_;
   ObCSVBinaryFormat binary_format_;
   bool ignore_last_empty_col_;
+  bool parallel_parse_on_single_file_;
+  int64_t parallel_parse_file_size_threshold_;
+  int64_t max_row_length_;
+  static constexpr int64_t DEFAULT_CSV_LARGE_FILE_SIZE_THRESHOLD = 256 * 1024 * 1024; // 256MB
+  static constexpr int64_t DEFAULT_MAX_CSV_ROW_LENGTH = 2 * 1024 * 1024; // 2MB
 
   int init_format(const ObDataInFileStruct &format,
                   int64_t file_column_nums,
@@ -225,7 +240,8 @@ struct ObCSVGeneralFormat {
 
   TO_STRING_KV(K(cs_type_), K(file_column_nums_), K(line_start_str_), K(field_enclosed_char_),
                K(is_optional_), K(field_escaped_char_), K(field_term_str_), K(line_term_str_),
-               K(compression_algorithm_), K(file_extension_), K(binary_format_), K(skip_blank_lines_), K(ignore_extra_fields_));
+               K(compression_algorithm_), K(file_extension_), K(binary_format_), K(skip_blank_lines_), K(ignore_extra_fields_),
+               K(parallel_parse_on_single_file_), K(parallel_parse_file_size_threshold_), K(max_row_length_));
   OB_UNIS_VERSION(1);
 };
 

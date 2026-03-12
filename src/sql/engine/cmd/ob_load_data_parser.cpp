@@ -408,7 +408,6 @@ int ObCSVGeneralFormat::init_format(const ObDataInFileStruct &format,
                                     ObCollationType file_cs_type)
 {
   int ret = OB_SUCCESS;
-
   if (!ObCharset::is_valid_collation(file_cs_type)) {
     ret = OB_ERR_UNKNOWN_CHARSET;
     LOG_WARN("invalid charset", K(ret), K(file_cs_type));
@@ -605,6 +604,24 @@ int ObCSVGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, int6
                        OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::IGNORE_LAST_EMPTY_COLUMN)],
                        STR_BOOL(ignore_last_empty_col_)));
   }
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_1) {
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, R"("%s":%s)",
+                       OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::PARALLEL_PARSE_ON_SINGLE_FILE)],
+                       STR_BOOL(parallel_parse_on_single_file_)));
+  }
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_1) {
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, R"("%s":%ld)",
+                       OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::PARALLEL_PARSE_FILE_SIZE_THRESHOLD)],
+                       parallel_parse_file_size_threshold_));
+  }
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_1) {
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, R"("%s":%ld)",
+                       OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::MAX_ROW_LENGTH)],
+                       max_row_length_));
+  }
   return ret;
 }
 
@@ -746,6 +763,27 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
       ignore_last_empty_col_ = true;
     } else {
       ignore_last_empty_col_ = false;
+    }
+    node = node->get_next();
+  }
+  parallel_parse_on_single_file_ = true;
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::PARALLEL_PARSE_ON_SINGLE_FILE)])) {
+    if (json::JT_TRUE == node->value_->get_type()) {
+      parallel_parse_on_single_file_ = true;
+    } else {
+      parallel_parse_on_single_file_ = false;
+    }
+    node = node->get_next();
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::PARALLEL_PARSE_FILE_SIZE_THRESHOLD)])) {
+    if (json::JT_NUMBER == node->value_->get_type()) {
+      parallel_parse_file_size_threshold_ = node->value_->get_number();
+    }
+    node = node->get_next();
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::MAX_ROW_LENGTH)])) {
+    if (json::JT_NUMBER == node->value_->get_type()) {
+      max_row_length_ = node->value_->get_number();
     }
     node = node->get_next();
   }
@@ -965,7 +1003,8 @@ const char *compression_algorithm_to_string(ObCSVGeneralFormat::ObCSVCompression
     case ObCSVGeneralFormat::ObCSVCompression::GZIP:    return "GZIP";
     case ObCSVGeneralFormat::ObCSVCompression::DEFLATE: return "DEFLATE";
     case ObCSVGeneralFormat::ObCSVCompression::ZSTD:    return "ZSTD";
-    default:                               return "INVALID";
+    case ObCSVGeneralFormat::ObCSVCompression::SNAPPY_BLOCK:  return "SNAPPY_BLOCK";
+    default:                                            return "INVALID";
   }
 }
 
@@ -985,6 +1024,8 @@ int compression_algorithm_from_string(ObString compression_name,
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::ZSTD;
   } else if (0 == compression_name.case_compare("auto")) {
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::AUTO;
+  } else if (0 == compression_name.case_compare("snappy_block")) {
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::SNAPPY_BLOCK;
   } else {
     ret = OB_INVALID_ARGUMENT;
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::INVALID;
@@ -1054,6 +1095,8 @@ int compression_algorithm_from_suffix(ObString filename,
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::DEFLATE;
   } else if (filename.suffix_match_ci(".zst") || filename.suffix_match_ci(".zstd")) {
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::ZSTD;
+  } else if (filename.suffix_match_ci(".snappy")) {
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::SNAPPY_BLOCK;
   } else {
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::NONE;
   }
@@ -1065,6 +1108,7 @@ const char *compression_algorithm_to_suffix(ObCSVGeneralFormat::ObCSVCompression
     case ObCSVGeneralFormat::ObCSVCompression::GZIP:    return ".gz";
     case ObCSVGeneralFormat::ObCSVCompression::DEFLATE: return ".deflate";
     case ObCSVGeneralFormat::ObCSVCompression::ZSTD:    return ".zst";
+    case ObCSVGeneralFormat::ObCSVCompression::SNAPPY_BLOCK:  return ".snappy";
     default:                                            return "";
   }
 }

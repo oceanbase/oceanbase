@@ -251,7 +251,7 @@ ObExternalStreamFileReader::~ObExternalStreamFileReader()
 }
 
 const char *  ObExternalStreamFileReader::MEMORY_LABEL = "ExternalReader";
-const int64_t ObExternalStreamFileReader::COMPRESSED_DATA_BUFFER_SIZE = 2 * 1024 * 1024;
+const int64_t ObExternalStreamFileReader::DEFAULT_COMPRESSED_DATA_BUFFER_SIZE = 2 * 1024 * 1024;
 
 int ObExternalStreamFileReader::init(const common::ObString &location,
                              const ObString &access_info,
@@ -312,6 +312,9 @@ void ObExternalStreamFileReader::close()
     is_file_end_ = true;
     file_offset_ = 0;
     file_size_   = 0;
+    compress_data_size_ = 0;
+    consumed_data_size_ = 0;
+    uncompressed_size_ = 0;
     LOG_DEBUG("close file");
   }
 }
@@ -350,7 +353,8 @@ int ObExternalStreamFileReader::read(char *buf, int64_t buf_len, int64_t &read_s
     LOG_DEBUG("read file", K(is_file_end_), K(file_offset_), K(file_size_), K(read_size));
   } else {
     ret = read_decompress(buf, buf_len, read_size);
-    is_file_end_ = (file_offset_ >= file_size_) && (consumed_data_size_ >= compress_data_size_);
+    is_file_end_ = (file_offset_ >= file_size_) && (consumed_data_size_ >= compress_data_size_)
+                   && !decompressor_->has_remain_data();
   }
   return ret;
 }
@@ -380,7 +384,11 @@ int ObExternalStreamFileReader::read_decompress(char *buf, int64_t buf_len, int6
   } else if (OB_ISNULL(buf) || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP(buf), K(buf_len));
-  } else if (consumed_data_size_ >= compress_data_size_) {
+  } else if ((consumed_data_size_ >= compress_data_size_ && !decompressor_->has_remain_data())
+             || (decompressor_->need_more_data())) {
+    // 需要读取更多压缩数据：
+    // 1. 当前压缩数据已全部消费且解压器内部无残留数据
+    // 2. 解压器表示当前数据不完整，需要更多数据
     if (file_offset_ < file_size_) {
       ret = read_compressed_data();
     } else {
@@ -388,7 +396,7 @@ int ObExternalStreamFileReader::read_decompress(char *buf, int64_t buf_len, int6
     }
   }
 
-  if (OB_SUCC(ret) && compress_data_size_ > consumed_data_size_) {
+  if (OB_SUCC(ret) && (compress_data_size_ > consumed_data_size_ || decompressor_->has_remain_data())) {
     int64_t consumed_size = 0;
     ret = decompressor_->decompress(compressed_data_ + consumed_data_size_,
                                     compress_data_size_ - consumed_data_size_,
@@ -427,7 +435,7 @@ int ObExternalStreamFileReader::read_compressed_data()
   if (OB_SUCC(ret)) {
     // read data from source reader
     int64_t read_size = 0;
-    int64_t capacity  = COMPRESSED_DATA_BUFFER_SIZE - compress_data_size_;
+    int64_t capacity  = compressed_data_capacity_ - compress_data_size_;
     ret = read_from_driver(read_buffer, capacity, read_size);
     if (OB_SUCC(ret)) {
       compress_data_size_ += read_size;
@@ -445,7 +453,11 @@ int ObExternalStreamFileReader::create_decompressor(ObCSVGeneralFormat::ObCSVCom
     ObDecompressor::destroy(decompressor_);
     decompressor_ = nullptr;
   } else if (OB_NOT_NULL(decompressor_) && decompressor_->compression_format() == compression_format) {
-    // do nothing
+    // reuse decompressor, snappy needs manual reset for new file
+    if (compression_format == ObCSVGeneralFormat::ObCSVCompression::SNAPPY_BLOCK) {
+      decompressor_->destroy();
+      decompressor_->init();
+    }
   } else {
     if (OB_NOT_NULL(decompressor_)) {
       ObDecompressor::destroy(decompressor_);
@@ -454,10 +466,12 @@ int ObExternalStreamFileReader::create_decompressor(ObCSVGeneralFormat::ObCSVCom
 
     if (OB_FAIL(ObDecompressor::create(compression_format, *allocator_, decompressor_))) {
       LOG_WARN("failed to create decompressor", K(ret));
-    } else if (OB_ISNULL(compressed_data_) &&
-               OB_ISNULL(compressed_data_ = (char *)allocator_->alloc(COMPRESSED_DATA_BUFFER_SIZE))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(COMPRESSED_DATA_BUFFER_SIZE));
+    } else if (OB_ISNULL(compressed_data_)) {
+      compressed_data_capacity_ = DEFAULT_COMPRESSED_DATA_BUFFER_SIZE;
+      if (OB_ISNULL(compressed_data_ = (char *)allocator_->alloc(compressed_data_capacity_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(compressed_data_capacity_));
+      }
     }
   }
   return ret;

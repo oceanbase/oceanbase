@@ -66,7 +66,11 @@ int ObExprCalcOdpsSize::calc_result_type3(ObExprResType &type,
     if (ObMaxType == type1.get_type()) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
     } else {
-      type.set_int();
+      type.set_varchar();
+      type.set_calc_type(ObVarcharType);
+      type.set_length(1024);
+      type.set_collation_level(CS_LEVEL_IMPLICIT);
+      type.set_collation_type(CS_TYPE_BINARY);
       type1.set_calc_type(ObVarcharType);
       type2.set_calc_type(ObIntType);
       type3.set_calc_type(ObVarcharType);
@@ -98,55 +102,68 @@ int ObExprCalcOdpsSize::calc_result_typeN(ObExprResType &type,
 int ObExprCalcOdpsSize::calc_odps_size(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_EXPR);
+  ObString session_id = ObString::make_empty_string();
   ObDatum *file_url_datum = NULL;
-  ObDatum *table_id_datum = NULL;
   int ret_file_url = expr.args_[0]->eval(ctx, file_url_datum);
-  int ret_table_id  = expr.args_[1]->eval(ctx, table_id_datum);
   ObString property;
-  int64_t get_row_count_or_size = -1; // 0 get row count, 1 get size
+  int64_t rowcount_0_size_1_option = -1; //  0 get row count, 1 get size, -1 is not set
 
   ObString file_url;
-  int64_t table_id = -1;
   int64_t row_count = -1;
-  if (OB_SUCCESS != ret_file_url || OB_SUCCESS != ret_table_id) {
+  if (OB_SUCCESS != ret_file_url) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ret_file_url), K(ret_table_id));
+    LOG_WARN("invalid argument", K(ret), K(ret_file_url));
   } else {
-    if (file_url_datum->is_null() || table_id_datum->is_null()) {
+    if (file_url_datum->is_null()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null datum", K(ret), K(file_url_datum->is_null()), K(table_id_datum->is_null()));
+      LOG_WARN("unexpected null datum", K(ret), K(file_url_datum->is_null()));
     } else {
       file_url = file_url_datum->get_string();
-      table_id = table_id_datum->get_int();
     }
   }
 
   if (OB_FAIL(ret)) {
 
   } else if (expr.arg_cnt_ == 3) {
+    ObDatum *rowcount_0_size_1_option_datum = NULL;
     ObDatum *property_name_datum = NULL;
-    ObDatum *get_row_count_or_size_datum = NULL;
-    int ret_get_size_or_row_count = expr.args_[1]->eval(ctx, get_row_count_or_size_datum);
+    int ret_rowcount_0_size_1_option = expr.args_[1]->eval(ctx, rowcount_0_size_1_option_datum);
     int ret_property_name = expr.args_[2]->eval(ctx, property_name_datum);
-    if (OB_SUCCESS != ret_get_size_or_row_count) {
-      ret = ret_get_size_or_row_count;
-    } else if (OB_SUCCESS != ret_property_name) {
-      ret = ret_property_name;
+    if (OB_SUCCESS != ret_rowcount_0_size_1_option || OB_SUCCESS != ret_property_name) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(ret_rowcount_0_size_1_option), K(ret_property_name));
     } else {
-      if (property_name_datum->is_null() || get_row_count_or_size_datum->is_null()) {
+      if (property_name_datum->is_null() || rowcount_0_size_1_option_datum->is_null()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null datum", K(ret), K(property_name_datum->is_null()));
       } else {
         property = property_name_datum->get_string();
-        get_row_count_or_size = get_row_count_or_size_datum->get_int();
+        rowcount_0_size_1_option = rowcount_0_size_1_option_datum->get_int();
       }
-      if (get_row_count_or_size != 1 && get_row_count_or_size != 0) {
+      if (OB_FAIL(ret)) {
+      } else if (rowcount_0_size_1_option != 1 && rowcount_0_size_1_option != 0) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("unexpected get size or row count", K(ret), K(get_row_count_or_size));
+        LOG_WARN("unexpected get size or row count", K(ret), K(rowcount_0_size_1_option));
       }
     }
   } else if (expr.arg_cnt_ == 2) {
-    if (table_id == -1) {
+    ObDatum *table_id_datum = NULL;
+    int ret_table_id  = expr.args_[1]->eval(ctx, table_id_datum);
+    int64_t table_id = -1;
+    if (OB_SUCCESS != ret_table_id) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(ret_table_id));
+    } else {
+      if (table_id_datum->is_null()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null datum", K(ret), K(table_id_datum->is_null()));
+      } else {
+        table_id = table_id_datum->get_int();
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (table_id == -1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table id", K(ret), K(table_id));
     } else {
@@ -165,7 +182,7 @@ int ObExprCalcOdpsSize::calc_odps_size(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         LOG_WARN("unexpected null ptr", K(ret));
       } else {
         property = table_schema->get_external_properties();
-        get_row_count_or_size = 0; // row count
+        rowcount_0_size_1_option = 1; // 统计size
       }
     }
   } else {
@@ -173,10 +190,21 @@ int ObExprCalcOdpsSize::calc_odps_size(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     LOG_WARN("unexpected argument count", K(ret), K(expr.arg_cnt_));
   }
 
+  ObOdpsJniConnector::OdpsFetchType fetch_type = ObOdpsJniConnector::OdpsFetchType::GET_ODPS_TABLE_ROW_COUNT;
+  if (OB_SUCC(ret)) {
+    if (rowcount_0_size_1_option == 0) {
+      fetch_type = ObOdpsJniConnector::OdpsFetchType::GET_ODPS_TABLE_ROW_COUNT;
+    } else if (rowcount_0_size_1_option == 1) {
+      fetch_type = ObOdpsJniConnector::OdpsFetchType::GET_ODPS_TABLE_SIZE;
+    }
+  }
+
   if (OB_SUCC(ret)) {
     if (!GCONF._use_odps_jni_connector) {
 #if defined(OB_BUILD_CPP_ODPS)
-      ret = ObExternalTableUtils::fetch_row_count_wrapper<sql::ObODPSTableRowIterator, sql::ObOdpsPartitionDownloaderMgr>(file_url, property, get_row_count_or_size, row_count);
+      ret = fetch_size_or_row_count_wrapper<sql::ObODPSTableRowIterator,
+                                            sql::ObOdpsPartitionDownloaderMgr>(
+          file_url, property, fetch_type, row_count, allocator, session_id);
       if (ret == OB_ODPS_ERROR) {
         ret = OB_SUCCESS;
         row_count = -1;
@@ -196,7 +224,10 @@ int ObExprCalcOdpsSize::calc_odps_size(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       } else {
         if (odps_api_mode == ObODPSGeneralFormat::TUNNEL_API) {
           // do nothing
-          ret = ObExternalTableUtils::fetch_row_count_wrapper<sql::ObODPSJNITableRowIterator, sql::ObOdpsPartitionJNIDownloaderMgr>(file_url, property, get_row_count_or_size, row_count);
+          ret = fetch_size_or_row_count_wrapper<
+              sql::ObODPSJNITableRowIterator,
+              sql::ObOdpsPartitionJNIDownloaderMgr>(
+              file_url, property, fetch_type, row_count, allocator, session_id);
           if (ret == OB_JNI_JAVA_EXCEPTION_ERROR) {
             ret = OB_SUCCESS;
             row_count = -1;
@@ -212,7 +243,41 @@ int ObExprCalcOdpsSize::calc_odps_size(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     }
   }
   if (OB_SUCC(ret)) {
-    res_datum.set_int(row_count);
+    if (expr.arg_cnt_ == 2) {
+      res_datum.set_int(row_count);
+    } else if (expr.arg_cnt_ == 3) {
+      // 拼接session_id和row_count
+      // row_count to string
+      ObFastFormatInt ffi(row_count);
+      ObString answer = ObString::make_empty_string();
+      ObString temp_str = ObString::make_string(ffi.str());
+      ObString row_count_str = ObString::make_empty_string();
+      if (OB_FAIL(ob_write_string(allocator, temp_str, row_count_str))) {
+        LOG_WARN("failed to write row count", K(ret));
+      } else {
+        if (!session_id.empty()) {
+          ObString str[3] = {row_count_str, ObString::make_string("|"), session_id};
+          if (OB_FAIL(ob_concat_string(allocator, answer, 3, str))) {
+            LOG_WARN("failed to concat string", K(ret));
+          }
+        } else {
+          if (OB_FAIL(ob_write_string(allocator, row_count_str, answer))) {
+            LOG_WARN("failed to write row count", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        char *buf = expr.get_str_res_mem(ctx, answer.length());
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret), K(answer.length()));
+        } else {
+          MEMCPY(buf, answer.ptr(), answer.length());
+          answer.assign_ptr(buf, answer.length());
+        }
+        OX(res_datum.set_string(answer));
+      }
+    }
   }
 
   return ret;

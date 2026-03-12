@@ -66,4 +66,7 @@ DEF_COMPAT_CONTROL_FEATURE(IMPLICIT_FIRST_CENTURY_YEAR,
 DEF_COMPAT_CONTROL_FEATURE(PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
     "Whether can transform the PL/SQL select into from dual statement to an assignment statement",
     CLUSTER_VERSION_4_4_2_0)
+DEF_COMPAT_CONTROL_FEATURE(DEFAULT_CSV_ESCAPE_CHAR_IS_NONE,
+    "Whether the default CSV escape character is none",
+    CLUSTER_VERSION_4_4_2_1)
 #endif

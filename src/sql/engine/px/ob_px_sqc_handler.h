@@ -153,6 +153,7 @@ public:
 private:
   void init_flt_content();
   int destroy_sqc(int &report_ret);
+  int task_need_regeneration_for_external_table(ObGranulePump &pump, bool &need_regeneration);
 private:
   lib::MemoryContext mem_context_;
   uint64_t tenant_id_;

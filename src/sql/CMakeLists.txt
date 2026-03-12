@@ -1011,6 +1011,7 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/ob_dfo_scheduler.cpp
   engine/px/ob_granule_iterator_op.cpp
   engine/px/ob_granule_pump.cpp
+  engine/px/ob_granule_parallel_task_gen.cpp
   engine/px/ob_granule_util.cpp
   engine/px/ob_px_admission.cpp
   engine/px/ob_px_bloom_filter.cpp
@@ -1110,6 +1111,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_pcached_external_file_service_scheduler.cpp
   engine/table/ob_external_table_pushdown_filter.cpp
   engine/table/ob_csv_table_row_iter.cpp
+  engine/table/ob_csv_prefetch_mgr.cpp
   engine/table/ob_dummy_table_row_iter.cpp
   engine/table/ob_orc_table_row_iter.cpp
   engine/table/ob_parquet_table_row_iter.cpp

@@ -47,6 +47,8 @@ bool ObExternalReadInfo::is_valid() const
 void ObExternalFileReadHandle::reset()
 {
   object_handles_.reset();
+  expect_read_size_.reset();
+  cache_hit_size_ = 0;
 }
 bool ObExternalFileReadHandle::is_valid() const
 {

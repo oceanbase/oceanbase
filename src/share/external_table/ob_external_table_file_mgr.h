@@ -319,6 +319,9 @@ public:
       common::ObIArray<ObExternalFileInfo> &external_files,
       common::ObIArray<ObNewRange *> *range_filter = NULL);
 
+
+
+
   int flush_cache(
       const uint64_t tenant_id,
       const uint64_t table_id,
@@ -346,28 +349,17 @@ public:
     const uint64_t table_id,
     const uint64_t part_id,
     ObMySQLTransaction &trans);
-
   int get_external_file_list_on_device_with_cache(
-    const common::ObString &location,
+    ObSQLSessionInfo &session,
+    const ObIArray<common::ObString> &location,
     const uint64_t tenant_id,
-    const uint64_t ts,
+    const ObIArray<int64_t> &part_id,
     const common::ObString &pattern,
-    const sql::ObExprRegexpSessionVariables &regexp_vars,
-    ObExternalTableFiles &external_table_files,
     const common::ObString &access_info,
     common::ObIAllocator &allocator,
-    int64_t refresh_interval_ms);
-
-  int get_external_file_list_on_device_with_cache(
-      const ObIArray<common::ObString> &location,
-      const uint64_t tenant_id,
-      const ObIArray<int64_t> &part_id,
-      const common::ObString &pattern,
-      const common::ObString &access_info,
-      common::ObIAllocator &allocator,
-      int64_t refresh_interval_ms,
-      ObIArray<ObExternalTableFiles *> &external_table_files,
-      ObIArray<int64_t> &reorder_part_id);
+    int64_t refresh_interval_ms,
+    ObIArray<ObExternalTableFiles *> &external_table_files,
+    ObIArray<int64_t> &reorder_part_id);
 
   int get_external_file_list_on_device(const ObString &location,
                                        const uint64_t modify_ts,
@@ -427,6 +419,12 @@ public:
                                           common::ObIArray<ObString> &content_digests);
 
 private:
+  int fill_single_file_info(ObIAllocator &allocator,
+                            const ObExternalTableFiles *ext_files,
+                            int64_t index, int64_t partition_id,
+                            int64_t file_id, const bool is_local_file_on_disk,
+                            ObIArray<ObExternalFileInfo> &external_files);
+
   int collect_odps_table_statistics(const bool collect_statistic,
                                     const uint64_t tenant_id,
                                     const uint64_t table_id,
@@ -548,7 +546,8 @@ private:
                                   const ObString &part_name,
                                   ObNewRow &part_val);
 
-  int collect_file_list_by_expr_parallel(uint64_t tenant_id,
+  int collect_file_list_by_expr_parallel(ObSQLSessionInfo &session,
+                                         uint64_t tenant_id,
                                          const ObIArray<ObString> &location,
                                          const ObString &pattern,
                                          const ObString &access_info,

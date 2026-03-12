@@ -1510,6 +1510,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel_without_data_getter(const int64_
     const ObOdpsScanTask *odps_scan_task = static_cast<const ObOdpsScanTask *>(scan_task);
     int64_t part_id = 0;
     ObString part_spec;
+    ObString session_id;
 
     int64_t start = 0;
     int64_t step = 0;
@@ -1519,6 +1520,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel_without_data_getter(const int64_
     } else {
       part_id = odps_scan_task->part_id_;
       part_spec = odps_scan_task->file_url_;
+      session_id = odps_scan_task->session_id_;
     }
 
     if (OB_FAIL(ret)) {
@@ -1534,8 +1536,8 @@ int ObODPSJNITableRowIterator::next_task_tunnel_without_data_getter(const int64_
       if (OB_ISNULL(odps_jni_schema_scanner_)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("could not init schema scanner which is null", K(ret));
-      } else if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_row_count(
-                     task_alloc_, part_spec, real_time_partition_row_count))) {
+      } else if (OB_FAIL(odps_jni_schema_scanner_->get_odps_tunnel_partition_row_count_for_given_session_id(
+                     task_alloc_, session_id, part_spec, real_time_partition_row_count))) {
         LOG_WARN("failed to get partition row count", K(ret));
       } else if (OB_UNLIKELY(-1 == real_time_partition_row_count)) {
         ret = OB_ODPS_ERROR;
@@ -1610,6 +1612,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
     const ObOdpsScanTask *odps_scan_task = static_cast<const ObOdpsScanTask *>(scan_task);
     int64_t part_id = 0;
     ObString part_spec;
+    ObString session_id;
 
     int64_t start = 0;
     int64_t step = 0;
@@ -1620,6 +1623,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
     } else {
       part_id = odps_scan_task->part_id_;
       part_spec = odps_scan_task->file_url_;
+      session_id = odps_scan_task->session_id_;
       if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
         LOG_WARN("failed to resolve odps start step", K(ret));
       }
@@ -1639,7 +1643,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
         }
       }
       LOG_TRACE("iterator of odps jni scanner is end with dummy file", K(ret));
-    } else if (OB_FAIL(build_tunnel_partition_task_state(task_idx, part_id, part_spec, start, step, capacity))) {
+    } else if (OB_FAIL(build_tunnel_partition_task_state(task_idx, part_id, part_spec, start, step, capacity, session_id))) {
       LOG_WARN("failed to build tunnel task");
     }
   }
@@ -1648,101 +1652,100 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
 }
 
 int ObODPSJNITableRowIterator::build_tunnel_partition_task_state(
-    int64_t task_idx, int64_t part_id, const ObString &part_spec, int64_t start, int64_t step, int64_t capacity)
+    int64_t task_idx, int64_t part_id, const ObString &part_spec, int64_t start, int64_t step, int64_t capacity, const ObString &session_id)
 {
   int ret = OB_SUCCESS;
   const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
   ObEvalCtx &ctx = scan_param_->op_->get_eval_ctx();
 
-  int64_t real_time_partition_row_count = 0;
-  if (OB_ISNULL(odps_jni_schema_scanner_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("could not init schema scanner which is null", K(ret));
-  } else if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_row_count(
-                 task_alloc_, part_spec, real_time_partition_row_count))) {
-    LOG_WARN("failed to get partition row count", K(ret));
-  } else if (OB_UNLIKELY(-1 == real_time_partition_row_count)) {
-    ret = OB_ODPS_ERROR;
-    LOG_WARN("odps get invalid partition", K(ret));
-  } else {
-    if (start >= real_time_partition_row_count) {
-      start = real_time_partition_row_count;
-      step = 0;
-    } else if (INT64_MAX == step || start + step > real_time_partition_row_count) {
-      step = real_time_partition_row_count - start;
+  state_.task_idx_ = task_idx;
+  state_.part_id_ = part_id;
+  state_.count_ = 0;
+  state_.part_spec_ = part_spec;
+  if (obexpr_odps_part_col_idsmap_.count() != 0) {
+    bool is_part_table = scan_param_->table_param_->is_partition_table();
+    bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
+    if (obexpr_odps_part_col_idsmap_.count() != 0 && is_external_object) {
+      // for partitioned external url table,
+      // calculate partition values by calc_file_part_list_value_by_array
+      if (is_part_table) {
+        if (OB_FAIL(calc_file_part_list_value_by_array(
+                part_id, task_alloc_, scan_param_->partition_infos_, state_.part_list_val_))) {
+          LOG_WARN("failed to calc parttion list value for mocked table", K(part_id), K(ret));
+        }
+      }
+    } else {
+      // for regular external table, calculate partition values by calc_file_partition_list_value
+      if (OB_FAIL(calc_file_partition_list_value(part_id, task_alloc_, state_.part_list_val_))) {
+        LOG_WARN("failed to calc parttion list value", K(part_id), K(ret));
+      }
     }
   }
-  if (OB_SUCC(ret)) {
-    state_.task_idx_ = task_idx;
-    state_.part_id_ = part_id;
-    state_.start_ = start;
-    state_.step_ = step;
-    state_.count_ = 0;
-    state_.part_spec_ = part_spec;
-    if (obexpr_odps_part_col_idsmap_.count() != 0) {
-      bool is_part_table = scan_param_->table_param_->is_partition_table();
-      bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
-      if (obexpr_odps_part_col_idsmap_.count() != 0 && is_external_object) {
-        // for partitioned external url table,
-        // calculate partition values by calc_file_part_list_value_by_array
-        if (is_part_table) {
-          if (OB_FAIL(calc_file_part_list_value_by_array(
-                  part_id, task_alloc_, scan_param_->partition_infos_, state_.part_list_val_))) {
-            LOG_WARN("failed to calc parttion list value for mocked table", K(part_id), K(ret));
+
+  if (OB_FAIL(ret)) {
+
+  } else if (OB_NOT_NULL(state_.odps_jni_scanner_) && OB_FAIL(state_.odps_jni_scanner_->do_close())) {
+    // RELEASE LAST TASK CORRECTLY
+    LOG_WARN("failed to close the scanner of previous task", K(ret));
+  } else {
+    ObPxSqcHandler *sqc = ctx.exec_ctx_.get_sqc_handler();  // if sqc is not NULL, odps read is in px plan
+    if (OB_ISNULL(sqc)) {
+      // das mode
+      state_.odps_jni_scanner_ = create_odps_jni_scanner();
+      state_.is_from_gi_pump_ = false;
+      LOG_TRACE("succ to create jni scanner without GI", K(ret), K(part_id), KP(sqc), K(state_.is_from_gi_pump_));
+    } else {
+      // NOTE:  px mode gen scanner in current thread
+      state_.odps_jni_scanner_ = create_odps_jni_scanner();
+      state_.is_from_gi_pump_ = true;
+    }
+    LOG_TRACE("timer build tunnel reader and open connection");
+    if (OB_ISNULL(state_.odps_jni_scanner_.get())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcepted null ptr", K(ret), K(state_.is_from_gi_pump_));
+    } else if (OB_UNLIKELY(ctx.max_batch_size_ < capacity)) {  // exec once only
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("setup batch size for odps jni iterator", K(ret), K(ctx.max_batch_size_), K(capacity));
+    } else if (OB_FAIL(init_data_tunnel_reader_params(start, step, part_spec, session_id))) {
+      LOG_WARN("failed to init data reader params", K(ret), K(start), K(step), K(part_spec));
+    } else if (state_.odps_jni_scanner_->is_inited()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("jni scanner should not be inited", K(ret));
+    } else if (OB_FAIL(state_.odps_jni_scanner_->do_init(odps_params_map_))) {
+      // If the jni scanner is total new fresh, then init before open.
+      LOG_WARN("failed to init next odps jni scanner", K(ret));
+    } else if (OB_FAIL(state_.odps_jni_scanner_->do_open())) {
+      LOG_WARN(
+          "failed to open next odps jni scanner", K(ret), K(task_idx), K(part_id), K(start), K(step), K(part_spec));
+    } else { /* do nothing */
+      int64_t real_time_partition_row_count = 0;
+      if (session_id.empty()) {
+        if (OB_FAIL(state_.odps_jni_scanner_->get_odps_tunnel_existing_reader_row_count(real_time_partition_row_count))) {
+          LOG_WARN("failed to get tunnel reader row count", K(ret));
+        } else if (OB_UNLIKELY(-1 == real_time_partition_row_count)) {
+          ret = OB_ODPS_ERROR;
+          LOG_WARN("odps get invalid partition", K(ret));
+        } else {
+          if (start >= real_time_partition_row_count) {
+            state_.start_ = real_time_partition_row_count;
+            state_.step_ = 0;
+          } else if (INT64_MAX == step || start + step > real_time_partition_row_count) {
+            state_.step_ = real_time_partition_row_count - start;
           }
         }
       } else {
-        // for regular external table, calculate partition values by calc_file_partition_list_value
-        if (OB_FAIL(calc_file_partition_list_value(part_id, task_alloc_, state_.part_list_val_))) {
-          LOG_WARN("failed to calc parttion list value", K(part_id), K(ret));
-        }
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-
-    } else if (OB_NOT_NULL(state_.odps_jni_scanner_) && OB_FAIL(state_.odps_jni_scanner_->do_close())) {
-      // RELEASE LAST TASK CORRECTLY
-      LOG_WARN("failed to close the scanner of previous task", K(ret));
-    } else {
-      ObPxSqcHandler *sqc = ctx.exec_ctx_.get_sqc_handler();  // if sqc is not NULL, odps read is in px plan
-      if (OB_ISNULL(sqc) || !sqc->get_sqc_ctx().gi_pump_.is_odps_scanner_mgr_inited()) {
-        state_.odps_jni_scanner_ = create_odps_jni_scanner();
-        state_.is_from_gi_pump_ = false;
-        LOG_TRACE("succ to create jni scanner without GI", K(ret), K(part_id), KP(sqc), K(state_.is_from_gi_pump_));
-      } else {
-        state_.odps_jni_scanner_ = create_odps_jni_scanner();
-        // NOTE: mock as px mode
-        state_.is_from_gi_pump_ = true;
-      }
-      LOG_TRACE("timer build tunnel reader and open connection");
-      if (OB_ISNULL(state_.odps_jni_scanner_.get())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexcepted null ptr", K(ret), K(state_.is_from_gi_pump_));
-      } else if (OB_UNLIKELY(ctx.max_batch_size_ < capacity)) {  // exec once only
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("setup batch size for odps jni iterator", K(ret), K(ctx.max_batch_size_), K(capacity));
-      } else if (OB_FAIL(init_data_tunnel_reader_params(start, step, part_spec))) {
-        LOG_WARN("failed to init data reader params", K(ret), K(start), K(step), K(part_spec));
-      } else if (state_.odps_jni_scanner_->is_inited()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("jni scanner should not be inited", K(ret));
-      } else if (OB_FAIL(state_.odps_jni_scanner_->do_init(odps_params_map_))) {
-        // If the jni scanner is total new fresh, then init before open.
-        LOG_WARN("failed to init next odps jni scanner", K(ret));
-      } else if (OB_FAIL(state_.odps_jni_scanner_->do_open())) {
-        LOG_WARN(
-            "failed to open next odps jni scanner", K(ret), K(task_idx), K(part_id), K(start), K(step), K(part_spec));
-      } else { /* do nothing */
+        state_.start_ = start;
+        state_.step_ = step;
         state_.odps_jni_scanner_->total_read_rows_ = step;
       }
-      LOG_TRACE("timer build tunnel reader and open connection");
-    }  // two branch 1 select count(*) 2 select col
-  }
+    }
+    LOG_TRACE("timer build tunnel reader and open connection", K(ret), K(state_));
+  }  // two branch 1 select count(*) 2 select col
+
   return ret;
 }
 
-int ObODPSJNITableRowIterator::init_data_tunnel_reader_params(int64_t start, int64_t step, const ObString &part_spec)
+int ObODPSJNITableRowIterator::init_data_tunnel_reader_params(int64_t start, int64_t step, const ObString& part_spec, const ObString& session_id)
 {
   int ret = OB_SUCCESS;
   if (!odps_params_map_.created() || odps_params_map_.empty() || OB_ISNULL(state_.odps_jni_scanner_)) {
@@ -1756,23 +1759,27 @@ int ObODPSJNITableRowIterator::init_data_tunnel_reader_params(int64_t start, int
     ObString start_offset_str = ObString::make_string(fsf.str());
     ObString split_size_str = ObString::make_string(fss.str());
 
-    LOG_INFO("display variables of odps jni iterator", K(ret), K(start_offset_str), K(split_size_str));
+    LOG_TRACE("display variables of odps jni iterator", K(ret), K(start_offset_str), K(split_size_str));
 
     ObString temp_partition_spec = ObString::make_string("partition_spec");
     ObString temp_start_offset = ObString::make_string("start_offset");
     ObString temp_split_size = ObString::make_string("split_size");
     ObString temp_transfer_mode = ObString::make_string("transfer_mode");
+    ObString temp_session_id = ObString::make_string("session_id");
     ObString transfer_option = state_.odps_jni_scanner_->get_transfer_mode_str();
 
     ObString partition_spec;
     ObString start_offset;
     ObString split_size;
+    ObString session_id_str;
     if (OB_FAIL(ob_write_string(task_alloc_, part_spec, partition_spec, true))) {
       LOG_WARN("failed to write c_str style for partition spec", K(ret));
     } else if (OB_FAIL(ob_write_string(task_alloc_, start_offset_str, start_offset, true))) {
       LOG_WARN("failed to write c_str style for start offset", K(ret));
     } else if (OB_FAIL(ob_write_string(task_alloc_, split_size_str, split_size, true))) {
       LOG_WARN("failed to write c_str style for split size", K(ret));
+    } else if (OB_FAIL(ob_write_string(task_alloc_, session_id, session_id_str, true))) {
+      LOG_WARN("failed to write c_str style for session id", K(ret));
     } else if (!start_offset.is_numeric()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("configure start offset is not number", K(ret), K(start_offset));
@@ -1786,6 +1793,9 @@ int ObODPSJNITableRowIterator::init_data_tunnel_reader_params(int64_t start, int
     } else if (OB_FAIL(odps_params_map_.set_refactored(temp_transfer_mode, transfer_option, 1))) {
       LOG_WARN("failed to add transfer mode for tunnel");
     } else if (OB_FAIL(odps_params_map_.set_refactored(temp_partition_spec, partition_spec, 1))) {
+      LOG_WARN("failed to add partition spec", K(ret));
+    } else if (OB_FAIL(odps_params_map_.set_refactored(temp_session_id, session_id_str, 1))) {
+      LOG_WARN("failed to add session id", K(ret));
     } else { /* do nothing */
     }
   }
@@ -2019,7 +2029,7 @@ int ObODPSJNITableRowIterator::pull_partition_info()
   } else {
     ObSEArray<ObString, 4> partition_specs;
     // just get partition
-    if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_phy_specs(arena_alloc_, partition_specs))) {
+    if (OB_FAIL(odps_jni_schema_scanner_->get_odps_tunnel_partitions_sizes_specs(arena_alloc_, partition_specs))) {
       LOG_WARN("failed to get partition specs", K(ret));
     } else if (OB_FAIL(extract_odps_partition_specs(partition_specs))) {
       LOG_WARN("failed to extract partition specs", K(ret));
@@ -2061,7 +2071,7 @@ int ObODPSJNITableRowIterator::extract_odps_partition_specs(ObSEArray<ObString, 
   return ret;
 }
 
-int ObODPSJNITableRowIterator::get_file_total_row_count(int64_t &count)
+int ObODPSJNITableRowIterator::fetch_storage_file_total_row_count(int64_t &count)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(odps_jni_schema_scanner_.get())) {
@@ -2074,7 +2084,7 @@ int ObODPSJNITableRowIterator::get_file_total_row_count(int64_t &count)
     ret = OB_JNI_ENV_ERROR;
     LOG_WARN("jni scanner is not opened", K(ret));
   } else {
-    if (OB_FAIL(odps_jni_schema_scanner_->get_file_total_row_count(count))) {
+    if (OB_FAIL(odps_jni_schema_scanner_->get_storage_file_total_row_count(count))) {
       LOG_WARN("failed to get partition specs", K(ret));
     } else { /* do nothing */
     }
@@ -2082,7 +2092,7 @@ int ObODPSJNITableRowIterator::get_file_total_row_count(int64_t &count)
   return ret;
 }
 
-int ObODPSJNITableRowIterator::get_file_total_size(int64_t &count)
+int ObODPSJNITableRowIterator::fetch_storage_file_total_size(int64_t &count)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(odps_jni_schema_scanner_.get())) {
@@ -2095,7 +2105,7 @@ int ObODPSJNITableRowIterator::get_file_total_size(int64_t &count)
     ret = OB_JNI_ENV_ERROR;
     LOG_WARN("jni scanner is not opened", K(ret));
   } else {
-    if (OB_FAIL(odps_jni_schema_scanner_->get_file_total_size(count))) {
+    if (OB_FAIL(odps_jni_schema_scanner_->get_storage_file_total_size(count))) {
       LOG_WARN("failed to get partition specs", K(ret));
     } else { /* do nothing */
     }
@@ -2103,7 +2113,7 @@ int ObODPSJNITableRowIterator::get_file_total_size(int64_t &count)
   return ret;
 }
 
-int ObODPSJNITableRowIterator::get_split_count(int64_t &count)
+int ObODPSJNITableRowIterator::fetch_storage_split_count(int64_t &count)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(odps_jni_schema_scanner_.get())) {
@@ -2116,7 +2126,7 @@ int ObODPSJNITableRowIterator::get_split_count(int64_t &count)
     ret = OB_JNI_ENV_ERROR;
     LOG_WARN("jni scanner is not opened", K(ret));
   } else {
-    if (OB_FAIL(odps_jni_schema_scanner_->get_split_count(count))) {
+    if (OB_FAIL(odps_jni_schema_scanner_->get_storage_split_count(count))) {
       LOG_WARN("failed to get partition specs", K(ret));
     } else { /* do nothing */
     }
@@ -2124,7 +2134,7 @@ int ObODPSJNITableRowIterator::get_split_count(int64_t &count)
   return ret;
 }
 
-int ObODPSJNITableRowIterator::get_session_id(ObIAllocator &alloc, ObString &sid)
+int ObODPSJNITableRowIterator::fetch_odps_tunnel_session_id(ObIAllocator &alloc, ObString &sid)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(odps_jni_schema_scanner_.get())) {
@@ -2137,7 +2147,7 @@ int ObODPSJNITableRowIterator::get_session_id(ObIAllocator &alloc, ObString &sid
     ret = OB_JNI_ENV_ERROR;
     LOG_WARN("jni scanner is not opened", K(ret));
   } else {
-    if (OB_FAIL(odps_jni_schema_scanner_->get_session_id(alloc, sid))) {
+    if (OB_FAIL(odps_jni_schema_scanner_->get_odps_tunnel_session_id(alloc, sid))) {
       LOG_WARN("failed to get partition specs", K(ret));
     } else { /* do nothing */
     }
@@ -2145,7 +2155,7 @@ int ObODPSJNITableRowIterator::get_session_id(ObIAllocator &alloc, ObString &sid
   return ret;
 }
 
-int ObODPSJNITableRowIterator::get_serilize_session(ObIAllocator &alloc, ObString &sstr)
+int ObODPSJNITableRowIterator::fetch_serilize_session(ObIAllocator &alloc, ObString &sstr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(odps_jni_schema_scanner_.get())) {
@@ -2166,7 +2176,7 @@ int ObODPSJNITableRowIterator::get_serilize_session(ObIAllocator &alloc, ObStrin
   return ret;
 }
 
-int ObODPSJNITableRowIterator::fetch_partition_row_count(const ObString &part_spec, int64_t &row_count)
+int ObODPSJNITableRowIterator::fetch_partition_row_count_via_tunnel(const ObString &part_spec, int64_t &row_count)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(odps_jni_schema_scanner_.get())) {
@@ -2178,11 +2188,12 @@ int ObODPSJNITableRowIterator::fetch_partition_row_count(const ObString &part_sp
   } else if (!odps_jni_schema_scanner_->is_opened()) {
     ret = OB_JNI_ENV_ERROR;
     LOG_WARN("jni scanner is not opened", K(ret));
-  } else if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_row_count(arena_alloc_, part_spec, row_count))) {
+  } else if (OB_FAIL(odps_jni_schema_scanner_->get_odps_tunnel_partition_row_count(arena_alloc_, part_spec, row_count))) {
     LOG_WARN("failed to get partition specs", K(ret));
   }
   return ret;
 }
+
 
 int ObODPSJNITableRowIterator::fetch_partition_size(const ObString &part_spec, int64_t &row_count)
 {
@@ -2196,7 +2207,7 @@ int ObODPSJNITableRowIterator::fetch_partition_size(const ObString &part_spec, i
   } else if (!odps_jni_schema_scanner_->is_opened()) {
     ret = OB_JNI_ENV_ERROR;
     LOG_WARN("jni scanner is not opened", K(ret));
-  } else if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_phy_size(arena_alloc_, part_spec, row_count))) {
+  } else if (OB_FAIL(odps_jni_schema_scanner_->get_odps_tunnel_partition_size(arena_alloc_, part_spec, row_count))) {
     LOG_WARN("failed to get partition specs", K(ret));
   }
   return ret;
@@ -4326,7 +4337,7 @@ bool ObODPSJNITableRowIterator::is_zero_time(const ObObj &obj)
 /*
  * 刷新数据
  */
-int ObOdpsPartitionJNIDownloaderMgr::init_odps_driver(const bool get_part_table_size, ObSQLSessionInfo *session, const ObString &properties, ObODPSJNITableRowIterator &odps_driver)
+int ObOdpsPartitionJNIDownloaderMgr::init_odps_driver(ObOdpsJniConnector::OdpsFetchType fetch_type, ObSQLSessionInfo *session, const ObString &properties, ObODPSJNITableRowIterator &odps_driver)
 {
   int ret = OB_SUCCESS;
   sql::ObExternalFileFormat external_odps_format;
@@ -4336,7 +4347,7 @@ int ObOdpsPartitionJNIDownloaderMgr::init_odps_driver(const bool get_part_table_
     LOG_WARN("unexpected null ptr", K(ret));
   } else if (OB_FAIL(external_odps_format.load_from_string(properties, arena_alloc))) {
     LOG_WARN("failed to init external_odps_format", K(ret));
-  } else if (get_part_table_size) {
+  } else if (ObOdpsJniConnector::OdpsFetchType::GET_ODPS_TABLE_SIZE == fetch_type) {
     if (OB_FAIL(odps_driver.init_jni_schema_scanner(external_odps_format.odps_format_, session))) {
       LOG_WARN("failed to init jni scanner", K(ret));
     }
@@ -4348,21 +4359,43 @@ int ObOdpsPartitionJNIDownloaderMgr::init_odps_driver(const bool get_part_table_
   return ret;
 }
 
-/*
- * 刷新数据
- */
-int ObOdpsPartitionJNIDownloaderMgr::fetch_row_count(
-  const ObString& part_spec, const bool get_part_table_size, ObODPSJNITableRowIterator &odps_driver, int64_t &row_count)
+int ObOdpsPartitionJNIDownloaderMgr::fetch_odps_partition_size(const ObString &part_spec,
+                                                ObODPSJNITableRowIterator &odps_driver,
+                                                int64_t &size)
 {
   int ret = OB_SUCCESS;
-  if (get_part_table_size) { // 1 get size 0 get row count
-    if (OB_FAIL(odps_driver.fetch_partition_size(part_spec, row_count))) {
+  size = 0;
+  if (OB_FAIL(odps_driver.fetch_partition_size(part_spec, size))) {
       LOG_WARN("failed to pull partition infos", K(ret));
-    }
-  } else {
-    if (OB_FAIL(odps_driver.fetch_partition_row_count(part_spec, row_count))) {
-      LOG_WARN("failed to pull partition infos", K(ret));
-    }
+  }
+  return ret;
+}
+// -1 means the partition is not exist
+int ObOdpsPartitionJNIDownloaderMgr::fetch_odps_partition_row_count(
+    ObODPSJNITableRowIterator &odps_driver, const ObString &part_spec,
+    int64_t &row_count) {
+  int ret = OB_SUCCESS;
+  row_count = 0;
+  if (OB_FAIL(odps_driver.fetch_partition_row_count_via_tunnel(part_spec,
+                                                               row_count))) {
+    LOG_WARN("failed to pull partition infos", K(ret));
+  }
+  return ret;
+}
+
+// when row_count is -1 means the partitioin is not exist
+// do not get session id
+int ObOdpsPartitionJNIDownloaderMgr::fetch_odps_partition_row_count_and_session_id(
+    ObODPSJNITableRowIterator &odps_driver, const ObString &part_spec,
+    int64_t &row_count, ObIAllocator &allocator, ObString &session_id) {
+  int ret = OB_SUCCESS;
+  row_count = 0;
+  if (OB_FAIL(odps_driver.fetch_partition_row_count_via_tunnel(part_spec, row_count))) {
+    LOG_WARN("failed to pull partition infos", K(ret));
+  } else if (row_count == -1) {
+    session_id = ObString::make_empty_string();
+  } else if (OB_FAIL(odps_driver.fetch_odps_tunnel_session_id(allocator, session_id))) {
+    LOG_WARN("failed to get session id", K(ret));
   }
   return ret;
 }
@@ -4385,7 +4418,7 @@ int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_row_count(
     LOG_WARN("failed to init jni scanner", K(ret));
   } else if (OB_FAIL(odps_driver.init_jni_meta_scanner(external_odps_format.odps_format_, session))) {
     LOG_WARN("failed to init jni scanner", K(ret));
-  } else if (OB_FAIL(odps_driver.get_file_total_row_count(row_count))) {
+  } else if (OB_FAIL(odps_driver.fetch_storage_file_total_row_count(row_count))) {
     LOG_WARN("failed to pull partition infos", K(ret));
   } else {
     /* do nothing */
@@ -4393,7 +4426,7 @@ int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_row_count(
   return ret;
 }
 
-int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_total_task(ObExecContext &exec_ctx,
+int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_byte(ObExecContext &exec_ctx,
                                                                const ExprFixedArray &ext_file_column_expr,
                                                                const ObString &part_list_str,
                                                                const ObDASScanCtDef &das_ctdef,
@@ -4406,6 +4439,7 @@ int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_total_task(ObExecContext 
   int ret = OB_SUCCESS;
   sql::ObExternalFileFormat external_odps_format;
   common::ObArenaAllocator arena_alloc;
+  ObString session_odps_id;
   ObODPSJNITableRowIterator odps_driver;
   if (OB_FAIL(external_odps_format.load_from_string(das_ctdef.external_file_format_str_.str_, arena_alloc))) {
     LOG_WARN("failed to init external_odps_format", K(ret));
@@ -4419,14 +4453,16 @@ int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_total_task(ObExecContext 
     LOG_WARN("failed to close schema scanner", K(ret));
   } else if (OB_FAIL(odps_driver.init_jni_meta_scanner(external_odps_format.odps_format_, exec_ctx.get_my_session()))) {
     LOG_WARN("failed to init jni scanner", K(ret));
-  // } else if (OB_FAIL(odps_driver.get_file_total_size(total_size))) {
+  // } else if (OB_FAIL(odps_driver.fetch_storage_file_total_size(total_size))) {
   //   LOG_WARN("failed to get total phy size", K(ret));
-  } else if (OB_FAIL(odps_driver.get_split_count(split_count))) {
+  } else if (OB_FAIL(odps_driver.fetch_storage_split_count(split_count))) {
     LOG_WARN("failed to get split count ", K(ret));
-  } else if (OB_FAIL(odps_driver.get_serilize_session(range_allocator, session_str))) {
+  } else if (OB_FAIL(odps_driver.fetch_serilize_session(range_allocator, session_str))) {
+    LOG_WARN("failed to get session id ", K(ret));
+  } else if (OB_FAIL(odps_driver.fetch_odps_tunnel_session_id(range_allocator, session_odps_id))) {
     LOG_WARN("failed to get session id ", K(ret));
   } else {
-    LOG_INFO("show storage api total task", K(parallel), K(split_count));
+    LOG_INFO("show storage api total task", K(parallel), K(split_count), K(session_odps_id));
   }
 
   return ret;
@@ -4445,6 +4481,7 @@ int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_row(ObExecContex
   int ret = OB_SUCCESS;
   sql::ObExternalFileFormat external_odps_format;
   common::ObArenaAllocator arena_alloc;
+  ObString session_odps_id;
   ObODPSJNITableRowIterator odps_driver;
   if (OB_FAIL(external_odps_format.load_from_string(das_ctdef.external_file_format_str_.str_, arena_alloc))) {
     LOG_WARN("failed to init external_odps_format", K(ret));
@@ -4458,25 +4495,18 @@ int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_row(ObExecContex
     LOG_WARN("failed to close schema scanner", K(ret));
   } else if (OB_FAIL(odps_driver.init_jni_meta_scanner(external_odps_format.odps_format_, exec_ctx.get_my_session()))) {
     LOG_WARN("failed to init jni scanner", K(ret));
-  } else if (OB_FAIL(odps_driver.get_file_total_row_count(row_count))) {
+  } else if (OB_FAIL(odps_driver.fetch_storage_file_total_row_count(row_count))) {
     LOG_WARN("failed to get total phy size", K(ret));
-  } else if (OB_FAIL(odps_driver.get_serilize_session(range_allocator, session_str))) {
+  } else if (OB_FAIL(odps_driver.fetch_serilize_session(range_allocator, session_str))) {
+    LOG_WARN("failed to get session id ", K(ret));
+  } else if (OB_FAIL(odps_driver.fetch_odps_tunnel_session_id(range_allocator, session_odps_id))) {
     LOG_WARN("failed to get session id ", K(ret));
   } else {
-    LOG_INFO("show storage api total task", K(parallel), K(row_count));
+    LOG_INFO("show storage api total task", K(parallel), K(row_count), K(session_odps_id));
   }
   return ret;
 }
 
-int ObOdpsPartitionJNIDownloaderMgr::reset()
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    // do nothing
-  }
-  inited_ = false;
-  return ret;
-}
 
 // ================================================================================================================
 

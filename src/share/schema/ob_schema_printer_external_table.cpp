@@ -125,6 +125,24 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "  TYPE = '%s',", ObExternalFileFormat::FORMAT_TYPE_STR[format.format_type_]))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print TYPE", K(ret));
     }
+
+    int64_t default_escaped_char = ObDataInFileStruct::DEFAULT_FIELD_ESCAPED_CHAR;
+    bool is_default_escaped_char_none = true;
+    uint64_t compat_version = 0;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(share::ObExternalTableUtils::get_tenant_compat_version(schema_guard_,
+                                                             tenant_id,
+                                                             compat_version))) {
+      LOG_WARN("failed to get tenant compat version", K(ret), K(tenant_id));
+    } else if (OB_FAIL(ObCompatControl::check_feature_enable(
+                                compat_version,
+                                ObCompatFeatureType::DEFAULT_CSV_ESCAPE_CHAR_IS_NONE,
+                                is_default_escaped_char_none))) {
+      LOG_WARN("failed to check default csv escape char feature", K(ret), K(compat_version));
+    } else if (is_default_escaped_char_none) {
+      default_escaped_char = INT64_MAX;
+    }
+
     if (OB_SUCC(ret) && ObExternalFileFormat::CSV_FORMAT == format.format_type_) {
       const ObCSVGeneralFormat &csv = format.csv_format_;
       const ObOriginFileFormat &origin_format = format.origin_file_format_str_;
@@ -136,7 +154,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       } else if (OB_FAIL(0 != csv.field_term_str_.case_compare(ObDataInFileStruct::DEFAULT_FIELD_TERM_STR) &&
                         databuff_printf(buf, buf_len, pos, "\n  FIELD_DELIMITER = %.*s,", origin_format.origin_field_term_str_.length(), origin_format.origin_field_term_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print FIELD_DELIMITER", K(ret));
-      } else if (OB_FAIL(ObDataInFileStruct::DEFAULT_FIELD_ESCAPED_CHAR != csv.field_escaped_char_ &&
+      } else if (OB_FAIL(default_escaped_char != csv.field_escaped_char_ &&
                         databuff_printf(buf, buf_len, pos, "\n  ESCAPE = %.*s,", origin_format.origin_field_escaped_str_.length(), origin_format.origin_field_escaped_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ESCAPE", K(ret));
       } else if (OB_FAIL(ObDataInFileStruct::DEFAULT_FIELD_ENCLOSED_CHAR != csv.field_enclosed_char_ &&
@@ -173,6 +191,14 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       } else if (OB_FAIL(!csv.ignore_last_empty_col_ &&
                         databuff_printf(buf, buf_len, pos, "\n  IGNORE_LAST_EMPTY_COLUMN = FALSE,"))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print IGNORE_LAST_EMPTY_COLUMN", K(ret));
+      } else if (OB_FAIL(csv.parallel_parse_on_single_file_ && databuff_printf(buf, buf_len, pos, "\n  PARALLEL_PARSE_ON_SINGLE_FILE = TRUE,"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print PARALLEL_PARSE_ON_SINGLE_FILE", K(ret));
+      } else if (OB_FAIL(csv.parallel_parse_on_single_file_ &&
+                         databuff_printf(buf, buf_len, pos, "\n  PARALLEL_PARSE_FILE_SIZE_THRESHOLD = %ld,", csv.parallel_parse_file_size_threshold_))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print PARALLEL_PARSE_FILE_SIZE_THRESHOLD", K(ret));
+      } else if (OB_FAIL(csv.parallel_parse_on_single_file_ &&
+                         databuff_printf(buf, buf_len, pos, "\n  MAX_ROW_LENGTH = %ld,", csv.max_row_length_))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print MAX_ROW_LENGTH", K(ret));
       }
     } else if (OB_SUCC(ret) && ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
       const ObODPSGeneralFormat &odps = format.odps_format_;

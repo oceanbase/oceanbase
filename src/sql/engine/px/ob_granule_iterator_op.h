@@ -209,11 +209,12 @@ public:
 class ObGranuleIteratorOp : public ObOperator
 {
 private:
-  enum ObGranuleIteratorState {
+  enum ObGranuleIteratorState { //FARM COMPAT WHITELIST
     GI_UNINITIALIZED,
     GI_PREPARED,
     GI_TABLE_SCAN,
     GI_GET_NEXT_GRANULE_TASK,
+    GI_EXTERNAL_TASK_GEN,
     GI_END,
   };
   class RescanTasksInfo
@@ -265,6 +266,12 @@ public:
   void set_has_add_to_finished_worker(bool value) { has_add_to_finished_worker_ = value; }
   const common::ObIArray<int64_t> &get_pw_dml_tsc_ids() const { return MY_SPEC.pw_dml_tsc_ids_; }
   ObGranulePumpArgs *pump_arg() { return pump_arg_; }
+
+// for external table range gen parallel
+  int64_t get_parallelism() const { return parallelism_; }
+  int get_next_granule_task_map_for_range_gen_parallel();
+  int fetch_task_for_range_gen_parallel(int64_t tsc_op_id, ObGranuleTaskInfo &task_info);
+
 private:
   int parameters_init();
   // 非full partition wise获得task的方式

@@ -64,6 +64,7 @@ struct ObExternalReadInfo final
 struct ObExternalFileUrlInfo
 {
   friend class ObExternalFileAccess;
+  friend class ObCSVPrefetchMgr;
   ObExternalFileUrlInfo(const ObString &location, const ObString &access_info, const ObString &url,
                         const ObString &content_digest, const int64_t file_size,
                         const int64_t modify_time) :

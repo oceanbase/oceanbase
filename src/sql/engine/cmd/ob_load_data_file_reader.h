@@ -17,6 +17,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/allocator/ob_allocator.h"
 #include "lib/file/ob_file.h"
+#include "lib/compress/snappy_1_2_2/ob_snappy_compressor_1_2_2.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 #include "share/backup/ob_backup_struct.h"
@@ -230,6 +231,9 @@ public:
 
   virtual ObCSVGeneralFormat::ObCSVCompression compression_format() const = 0;
 
+  virtual bool has_remain_data() const { return false; }
+  virtual bool need_more_data() const { return false; }
+
   static int create(ObCSVGeneralFormat::ObCSVCompression format,
                     ObIAllocator &allocator,
                     ObDecompressor *&decompressor);
@@ -321,6 +325,61 @@ private:
   void *zstd_stream_context_ = nullptr;
 };
 
+/**
+ * snappy block decompressor
+*/
+class ObSnappyBlockDecompressor : public ObDecompressor
+{
+public:
+  explicit ObSnappyBlockDecompressor(ObIAllocator &allocator);
+  virtual ~ObSnappyBlockDecompressor();
+  int  init() override;
+  void destroy() override;
+
+  int decompress(const char *src, int64_t src_size, int64_t &consumed_size,
+                 char *dest, int64_t dest_capacity, int64_t &decompressed_size) override;
+
+  ObCSVGeneralFormat::ObCSVCompression compression_format() const override
+  {
+    return ObCSVGeneralFormat::ObCSVCompression::SNAPPY_BLOCK;
+  }
+
+  bool has_remain_data() const override
+  {
+    return decomp_buf_pos_ < decomp_buf_size_;
+  }
+
+  bool need_more_data() const override
+  {
+    return need_more_data_;
+  }
+
+private:
+  static constexpr int64_t BLOCK_HEADER_SIZE = 4;
+  static constexpr int64_t DEFAULT_BUFFER_SIZE = 2 * 1024 * 1024;  // 2MB
+  static inline uint32_t read_be32(const char *p)
+  {
+    return (static_cast<uint32_t>(static_cast<unsigned char>(p[0])) << 24) |
+           (static_cast<uint32_t>(static_cast<unsigned char>(p[1])) << 16) |
+           (static_cast<uint32_t>(static_cast<unsigned char>(p[2])) << 8)  |
+           (static_cast<uint32_t>(static_cast<unsigned char>(p[3])));
+  }
+
+  bool is_inited_ = false;
+  bool need_more_data_ = false;  // 当前数据不完整，需要外部追加更多数据后重试
+
+  // 状态1 大块解压后的大小
+  int64_t remaining_large_block_len_ = 0;
+
+  // 状态2 解压后但 dest 装不下的数据缓冲区
+  char *decomp_buf_ = nullptr;       // pending decompressed data when block > dest_capacity
+  int64_t decomp_buf_pos_ = 0;       // offset already returned within decomp_buf_
+  int64_t decomp_buf_size_ = 0;      // total decompressed size in decomp_buf_
+  int64_t decomp_buf_capacity_ = 0;  // decomp_buf_ capacity
+
+  // 无状态的decompressor
+  oceanbase::common::snappy_1_2_2::ObSnappyCompressor1_2_2 snappy_compressor_;
+};
 } // namespace sql
 } // namespace oceanbase
 

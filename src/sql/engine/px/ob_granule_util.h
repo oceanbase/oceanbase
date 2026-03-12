@@ -31,6 +31,8 @@ class ObStoreRange;
 }
 namespace sql
 {
+enum class ObGIRandomType;
+struct GITaskGenRunner;
 
 #define NON_ZERO_VALUE(num) \
      ((num == 0) ? 1 : num)
@@ -423,15 +425,6 @@ public:
                                 bool range_independent);
 
 
-  static int split_granule_for_external_table(ObIAllocator &allocator,
-                                              const ObTableScanSpec *tsc,
-                                              const common::ObIArray<common::ObNewRange> &input_ranges,
-                                              const common::ObIArray<ObDASTabletLoc*> &tablet_array,
-                                              const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
-                                              int64_t parallelism,
-                                              common::ObIArray<ObDASTabletLoc*> &granule_tablets,
-                                              common::ObIArray<ObIExtTblScanTask*> &granule_tasks,
-                                              common::ObIArray<int64_t> &granule_idx);
   static int split_granule_for_lake_table(ObExecContext &exec_ctx,
                                           ObIAllocator &allocator,
                                           const ObIArray<ObNewRange> &ranges,
@@ -441,26 +434,77 @@ public:
                                           ObIArray<ObIExtTblScanTask*> &granule_tasks,
                                           ObIArray<int64_t> &granule_idx);
 
-  static int split_granule_by_partition_line_tunnel(ObIAllocator &allocator,
-                                        const ObIArray<ObDASTabletLoc *> &tablets,
-                                        const ObIArray<share::ObExternalFileInfo> &external_table_files,
-                                        ObIArray<ObDASTabletLoc *> &granule_tablets,
-                                        ObIArray<ObIExtTblScanTask*> &granule_tasks,
-                                        ObIArray<int64_t> &granule_idx);
-  static int split_granule_by_total_byte(ObIAllocator &allocator,
-                                         int64_t parallelism,
-                                         const ObIArray<ObDASTabletLoc *> &tablets,
-                                         const ObIArray<share::ObExternalFileInfo> &external_table_files,
-                                         ObIArray<ObDASTabletLoc *> &granule_tablets,
-                                         ObIArray<ObIExtTblScanTask*> &granule_tasks,
-                                         ObIArray<int64_t> &granule_idx);
-  static int split_granule_by_total_row(ObIAllocator &allocator,
+  static int split_granule_for_external_table(ObGranulePumpArgs &args,
+                                              const ObTableScanSpec *tsc,
+                                              const common::ObIArray<common::ObNewRange> &input_ranges,
+                                              const common::ObIArray<ObDASTabletLoc*> &tablet_array,
+                                              common::ObIArray<ObDASTabletLoc*> &granule_tablets,
+                                              common::ObIArray<ObIExtTblScanTask*> &granule_tasks,
+                                              common::ObIArray<int64_t> &granule_idx);
+
+  static int get_external_task_runner_rescan_status(
+      ObGranulePump &gi_pump,
+      int64_t tsc_op_id,
+      GITaskGenRunner *&runner,
+      bool &is_rescan_process);
+
+  static int split_granule_for_odps_by_line_tunnel_partition_for_range_prepare(
+      ObExecContext &exec_ctx, common::ObIAllocator &args_ctx_allocator,
+      const ObString &properties, int64_t parallelism, int64_t tsc_op_id, int64_t op_id,
+      const common::ObIArray<ObDASTabletLoc *> &tablets,
+      const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
+      common::ObIArray<ObDASTabletLoc *> &granule_tablets,
+      common::ObIArray<ObIExtTblScanTask *> &granule_tasks,
+      common::ObIArray<int64_t> &granule_idx);
+
+  static int split_granule_for_odps_by_line_tunnel_partition(
+      ObExecContext &exec_ctx, common::ObIAllocator &allocator,
+      const ObString &properties, int64_t parallelism,
+      const common::ObIArray<ObDASTabletLoc *> &tablets,
+      const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
+      common::ObIArray<ObDASTabletLoc *> &granule_tablets,
+      common::ObIArray<ObIExtTblScanTask *> &granule_tasks,
+      common::ObIArray<int64_t> &granule_idx);
+
+  static int split_granule_for_odps_by_total_byte(ObIAllocator &allocator,
+                                                  int64_t parallelism,
+                                                  const ObIArray<ObDASTabletLoc *> &tablets,
+                                                  const ObIArray<share::ObExternalFileInfo> &external_table_files,
+                                                  ObIArray<ObDASTabletLoc *> &granule_tablets,
+                                                  ObIArray<ObIExtTblScanTask*> &granule_tasks,
+                                                  ObIArray<int64_t> &granule_idx);
+
+  static int split_granule_for_odps_by_total_row(ObIAllocator &allocator,
                                         int64_t parallelism,
                                         const ObIArray<ObDASTabletLoc *> &tablets,
                                         const ObIArray<share::ObExternalFileInfo> &external_table_files,
                                         ObIArray<ObDASTabletLoc *> &granule_tablets,
                                         ObIArray<ObIExtTblScanTask*> &granule_tasks,
                                         ObIArray<int64_t> &granule_idx);
+  static int split_granule_for_parallel_resolve_csv_for_range_prepare(
+                                      ObExecContext &exec_ctx,
+                                      common::ObIAllocator &args_ctx_allocator,
+                                      const ObString &location, const ObString &access_info,
+                                      const ObString &format, int64_t parallelism,
+                                      int64_t tsc_op_id, int64_t op_id, int64_t csv_large_file_size_threshold,
+                                      const common::ObIArray<ObDASTabletLoc *> &tablets,
+                                      const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
+                                      common::ObIArray<ObDASTabletLoc *> &granule_tablets,
+                                      common::ObIArray<ObIExtTblScanTask *> &granule_tasks,
+                                      common::ObIArray<int64_t> &granule_idx);
+  static int split_granule_for_parallel_resolve_csv(
+                                        ObExecContext &exec_ctx,
+                                        common::ObIAllocator &allocator,
+                                        const ObString &location,
+                                        const ObString &access_info,
+                                        const ObString &format,
+                                        int64_t parallelism, GITaskGenRunner *runner,
+                                        int64_t csv_large_file_size_threshold,
+                                        const common::ObIArray<ObDASTabletLoc *> &tablets,
+                                        const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
+                                        common::ObIArray<ObDASTabletLoc *> &granule_tablets,
+                                        common::ObIArray<ObIExtTblScanTask *> &granule_tasks,
+                                        common::ObIArray<int64_t> &granule_idx);
   /**
    * get the total task count for all partitions
    * params                     IN the parameters for splitting
@@ -472,6 +516,30 @@ public:
                                 int64_t total_size,
                                 int64_t &total_task_count);
   static ObGranuleSplitterType calc_split_type(uint64_t gi_attr_flag);
+
+  static int fill_final_task(GITaskGenRunner *runner,
+                             int64_t tsc_op_id,
+                             common::ObIArray<ObDASTabletLoc *> &granule_tablets,
+                             common::ObIArray<ObIExtTblScanTask *> &granule_tasks,
+                             common::ObIArray<int64_t> &granule_idx);
+
+  static int create_runner_for_odps(ObExecContext &exec_ctx,
+                                    ObGranulePump &gi_pump,
+                                    int64_t tsc_op_id,
+                                    int64_t gi_op_id,
+                                    const ObString &properties,
+                                    int64_t parallelism,
+                                    GITaskGenRunner *&runner);
+
+  static int create_runner_for_csv(ObExecContext &exec_ctx,
+                                   ObGranulePump &gi_pump,
+                                   int64_t tsc_op_id,
+                                   int64_t gi_op_id,
+                                   const ObString &location,
+                                   const ObString &access_info,
+                                   const ObString &format,
+                                   int64_t parallelism,
+                                   GITaskGenRunner *&runner);
 
 private:
   /**

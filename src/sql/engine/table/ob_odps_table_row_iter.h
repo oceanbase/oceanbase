@@ -188,7 +188,7 @@ public:
   }
   virtual void reset() override;
   int init_tunnel(const sql::ObODPSGeneralFormat &odps_format, bool need_decrypt = true);
-  int create_downloader(const ObString &part_spec, apsara::odps::sdk::IDownloadPtr &downloader, const ObString &session_id);
+  int create_downloader(const ObString &part_spec, const ObString &session_id, apsara::odps::sdk::IDownloadPtr &downloader);
   apsara::odps::sdk::IODPSTablePtr get_table_handle() {
     return table_handle_;
   }
@@ -252,56 +252,66 @@ private:
 class ObOdpsPartitionDownloaderMgr
 {
 public:
-  typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::SpinReadWriteDefendMode> OdpsMgrMap;
-  ObOdpsPartitionDownloaderMgr() : inited_(false), is_download_(true) {}
   struct OdpsPartitionDownloader {
-    OdpsPartitionDownloader() :
-      odps_driver_(),
-      odps_partition_downloader_(NULL),
-      downloader_init_status_(0)
-    {}
-    ~OdpsPartitionDownloader() {
-      reset();
-    }
+    OdpsPartitionDownloader()
+        : odps_driver_(), odps_partition_downloader_(NULL),
+          downloader_init_status_(0) {}
+    ~OdpsPartitionDownloader() { reset(); }
     int reset();
     ObODPSTableRowIterator odps_driver_;
     apsara::odps::sdk::IDownloadPtr odps_partition_downloader_;
     common::ObThreadCond tunnel_ready_cond_;
-    int downloader_init_status_; // 0 is uninitialized, 1 is successfully initialized, -1 is failed to initialize
+    int downloader_init_status_; // 0 is uninitialized, 1 is successfully
+                                 // initialized, -1 is failed to initialize
   };
-  class DeleteDownloaderFunc
-  {
+  class DeleteDownloaderFunc {
   private:
-    enum ErrType
-    {
-      SUCCESS = 0,
-      ALLOC_IS_NULL,
-      DOWNLOADER_IS_NULL
-    };
+    enum ErrType { SUCCESS = 0, ALLOC_IS_NULL, DOWNLOADER_IS_NULL };
     ObIAllocator *downloader_alloc_;
     ErrType err_;
+
   public:
-    explicit DeleteDownloaderFunc(ObIAllocator *downloader_alloc) :
-                              downloader_alloc_(downloader_alloc),
-                              err_(ErrType::SUCCESS) {}
+    explicit DeleteDownloaderFunc(ObIAllocator *downloader_alloc)
+        : downloader_alloc_(downloader_alloc), err_(ErrType::SUCCESS) {}
     virtual ~DeleteDownloaderFunc() = default;
     int operator()(common::hash::HashMapPair<int64_t, int64_t> &kv);
     OB_INLINE bool err_occurred() { return err_ != ErrType::SUCCESS; }
     OB_INLINE int get_err() { return static_cast<int>(err_); }
   };
-  int init_downloader(int64_t bucket_size);
+  typedef common::hash::ObHashMap<int64_t, int64_t,
+                                  common::hash::SpinReadWriteDefendMode>
+      OdpsMgrMap;
+
+public:
   /*0 get row count, 1 get size*/
-  static int init_odps_driver(const bool get_part_table_size, ObSQLSessionInfo *session,
-                              const ObString &properties, ObODPSTableRowIterator &odps_driver);
-  static int fetch_row_count(const ObString &part_spec,
-                             const bool get_part_table_size,
-                             ObODPSTableRowIterator &odps_driver,
-                             int64_t &row_count);
-  OB_INLINE OdpsMgrMap &get_odps_map() { return odps_mgr_map_; }
-  OB_INLINE ObIAllocator &get_allocator() { return fifo_alloc_; }
+  static int init_odps_driver(ObOdpsJniConnector::OdpsFetchType driver_type,
+                              ObSQLSessionInfo *session,
+                              const ObString &properties,
+                              ObODPSTableRowIterator &odps_driver);
+  static int fetch_odps_partition_size(const ObString &part_spec,
+                                       ObODPSTableRowIterator &odps_driver,
+                                       int64_t &size);
+  static int fetch_odps_partition_row_count(ObODPSTableRowIterator &odps_driver,
+                                            const ObString &part_spec,
+                                            int64_t &row_count);
+  // 看上去一样但是不做close很重要
+  static int fetch_odps_partition_row_count_and_session_id(
+      ObODPSTableRowIterator &odps_driver, const ObString &part_spec,
+      int64_t &row_count, ObIAllocator &allocator, ObString &session_id);
 
+public:
+  ObOdpsPartitionDownloaderMgr() : inited_(false), is_download_(true) {}
 
-  int get_odps_downloader(int64_t part_id, apsara::odps::sdk::IDownloadPtr &downloader);
+  int init_downloader(int64_t bucket_size);
+
+  // 创建或获取 ODPS partition downloader，支持并发安全
+  int get_or_create_odps_downloader(
+      int64_t part_id,
+      const ObString &part_spec,
+      const ObString &session_id,
+      const sql::ObODPSGeneralFormat &odps_format,
+      bool need_decrypt,
+      apsara::odps::sdk::IDownloadPtr &download_handle);
 
   int reset();
   OB_INLINE bool is_download_mgr_inited() { return inited_ && is_download_; }

@@ -36,6 +36,7 @@ enum ObCompressorType : uint8_t
   ZLIB_LITE_COMPRESSOR           = 11,//Composed of qpl+zlib
   ZSTD_1_5_7_COMPRESSOR          = 12,
   STREAM_ZSTD_1_5_7_COMPRESSOR   = 13,//used for clog rpc compress
+  SNAPPY_1_2_2_COMPRESSOR        = 14,
 
   MAX_COMPRESSOR
 };
@@ -56,6 +57,7 @@ const char *const all_compressor_name[] =
   "zlib_lite_1.0",
   "zstd_1.5.7",
   "stream_zstd_1.5.7",
+  "snappy_1.2.2",
 };
 
 STATIC_ASSERT(ARRAYSIZEOF(all_compressor_name) == ObCompressorType::MAX_COMPRESSOR, "compressor count mismatch");
