@@ -168,6 +168,8 @@ public:
                                   ObTableScanParam &scan_param,
                                   ObTableParam &table_param,
                                   common::ObNewRowIterator *&iter);
+  static int try_reuse_segments_from_old_adapter(ObPluginVectorIndexAdaptor *new_adapter,
+                                                 ObPluginVectorIndexAdaptor *old_adapter);
   static int get_snap_index_visible_row_iter(ObAccessService *tsc_service,
                                             ObLSID &ls_id,
                                             ObPluginVectorIndexAdaptor *adapter,
@@ -239,6 +241,8 @@ private:
                                        const bool create_new_adp,
                                        SCN &target_scn,
                                        ObIAllocator &allocator);
+  static int find_segment_in_old_meta(ObVectorIndexSegmentMeta &new_seg_meta,
+                                      const ObVectorIndexMeta &old_meta);
   static int fill_mem_context_detail_info(ObPluginVectorIndexService *service, ObIArray<ObLSTabletPair> &tablet_ids, char *buf, int64_t buf_len, int64_t &pos);
   static int fill_ivf_mem_context_detail_info(ObPluginVectorIndexService *service, ObIArray<ObLSTabletPair> &tablet_ids, char *buf, int64_t buf_len, int64_t &pos);
 
