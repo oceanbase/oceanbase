@@ -171,8 +171,15 @@ public:
         }
       }
       if (OB_SUCC(ret)) {
-        EVENT_INC(RPC_PACKET_OUT);
-        EVENT_ADD(RPC_PACKET_OUT_BYTES, req_sz);
+        if (oceanbase::obrpc::OB_LOG_PUSH_REQ == pcode) {
+          //don not collect push log rpc in sql audit
+          ObTenantDiagnosticInfoSummaryGuard guard(src_tenant_id);
+          EVENT_INC(RPC_PACKET_OUT);
+          EVENT_ADD(RPC_PACKET_OUT_BYTES, req_sz);
+        } else {
+          EVENT_INC(RPC_PACKET_OUT);
+          EVENT_ADD(RPC_PACKET_OUT_BYTES, req_sz);
+        }
         int64_t timeout = get_proxy_timeout(proxy);
         if (OB_FAIL(cb.wait(timeout, pcode, req_sz))) {
           RPC_LOG(WARN, "sync rpc execute fail", K(ret), K(addr), K(pcode), K(timeout));
@@ -275,8 +282,15 @@ public:
           ret = translate_io_error(sys_err);
           RPC_LOG(WARN, "pn_send fail", K(sys_err), K(addr), K(pcode));
         } else {
-          EVENT_INC(RPC_PACKET_OUT);
-          EVENT_ADD(RPC_PACKET_OUT_BYTES, req_sz);
+          if (oceanbase::obrpc::OB_LOG_PUSH_REQ == pcode) {
+            //don not collect push log rpc in sql audit
+            ObTenantDiagnosticInfoSummaryGuard guard(src_tenant_id);
+            EVENT_INC(RPC_PACKET_OUT);
+            EVENT_ADD(RPC_PACKET_OUT_BYTES, req_sz);
+          } else {
+            EVENT_INC(RPC_PACKET_OUT);
+            EVENT_ADD(RPC_PACKET_OUT_BYTES, req_sz);
+          }
         }
       }
       if (OB_FAIL(ret) && NULL != req) {
