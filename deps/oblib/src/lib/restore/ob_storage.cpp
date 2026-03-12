@@ -2441,7 +2441,8 @@ ObStorageAppender::ObStorageAppender()
     storage_info_(nullptr),
     allocator_(APPENDABLE_OBJECT_ALLOCATOR),
     type_(OB_STORAGE_MAX_TYPE),
-    open_mode_(StorageOpenMode::CREATE_OPEN_LOCK)
+    open_mode_(StorageOpenMode::CREATE_OPEN_LOCK),
+    is_adaptive_appendable_(false)
 {
     uri_[0] = '\0';
 }
@@ -2455,7 +2456,8 @@ ObStorageAppender::ObStorageAppender(StorageOpenMode mode)
     storage_info_(nullptr),
     allocator_(APPENDABLE_OBJECT_ALLOCATOR),
     type_(OB_STORAGE_MAX_TYPE),
-    open_mode_(mode)
+    open_mode_(mode),
+    is_adaptive_appendable_(false)
 {
     uri_[0] = '\0';
 }
@@ -2532,6 +2534,19 @@ int ObStorageAppender::open(
       STORAGE_LOG(WARN, "appender_ is null", K(ret), K(uri));
     } else if (OB_FAIL(appender_->open(uri, storage_info))) {
       STORAGE_LOG(WARN, "failed to open writer", K(ret), K(uri));
+    } else if (is_adaptive_append_mode(*storage_info)) {
+      bool is_exist = false;
+      ObStorageUtil util;
+      if (OB_FAIL(util.open(storage_info))) {
+        STORAGE_LOG(WARN, "failed to open util", K(ret));
+      } else if (OB_FAIL(util.is_exist(uri, false/*is_adaptive*/, is_exist))) {
+        STORAGE_LOG(WARN, "failed to check if exist", K(ret));
+      } else if (!is_exist) {
+        is_adaptive_appendable_ = true;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else {
       is_opened_ = true;
     }
@@ -2617,6 +2632,9 @@ int ObStorageAppender::pwrite(const char *buf, const int64_t size, const int64_t
   } else if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
+  } else if (is_adaptive_append_mode(*storage_info_) && !is_adaptive_appendable_) {
+    ret = OB_OBJECT_STORAGE_INVALID_OBJECT_TYPE;
+    STORAGE_LOG(WARN, "object is not adaptive appendable", K(ret), K_(uri), K_(is_adaptive_appendable));
   } else if (OB_FAIL(appender_->pwrite(buf, size, offset))) {
     STORAGE_LOG(WARN, "failed to write", K(ret));
   }
@@ -2719,6 +2737,7 @@ void ObStorageAppender::reset()
   uri_[0] = '\0';
   is_opened_ = false;
   storage_info_ = nullptr;
+  is_adaptive_appendable_ = false;
 }
 
 int ObStorageAppender::seal_for_adaptive()

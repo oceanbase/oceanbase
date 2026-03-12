@@ -1620,6 +1620,7 @@ constexpr int OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET = -9150;
 constexpr int OB_BACKUP_CLEAN_CAN_NOT_START = -9151;
 constexpr int OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT = -9154;
 constexpr int OB_BACKUP_WAIT_SS_LS_CONSISTENCY_TIMEOUT = -9157;
+constexpr int OB_OBJECT_STORAGE_INVALID_OBJECT_TYPE = -9158;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -4109,6 +4110,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE__USER_ERROR_MSG "micro block is too large and rejected from micro cache"
 #define OB_SS_LS_IN_GC_STATUS__USER_ERROR_MSG "ss ls is in gc status"
 #define OB_BACKUP_WAIT_SS_LS_CONSISTENCY_TIMEOUT__USER_ERROR_MSG "backup wait shared storage ls consistency timeout"
+#define OB_OBJECT_STORAGE_INVALID_OBJECT_TYPE__USER_ERROR_MSG "the object type is invalid"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -8659,6 +8661,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_SS_LS_IN_GC_STATUS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9156, ss ls is in gc status"
 #define OB_BACKUP_WAIT_SS_LS_CONSISTENCY_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9157, backup wait shared storage ls consistency timeout"
 #define OB_BACKUP_WAIT_SS_LS_CONSISTENCY_TIMEOUT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9157, backup wait shared storage ls consistency timeout"
+#define OB_OBJECT_STORAGE_INVALID_OBJECT_TYPE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9158, the object type is invalid"
+#define OB_OBJECT_STORAGE_INVALID_OBJECT_TYPE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9158, the object type is invalid"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9672,7 +9676,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2525];
+extern int g_all_ob_errnos[2526];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
