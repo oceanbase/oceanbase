@@ -62,6 +62,7 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
    sqlstat_record_.set_is_in_retry(session_info_.get_is_in_retry());
    session_info_.sql_sess_record_sql_stat_start_value(sqlstat_record_);
   }
+  session_info_.set_retry_wait_event_begin_time();
   // 监控项统计开始
   record_.time_record_.set_send_timestamp(ObTimeUtility::current_time());
   session_info_.get_raw_audit_record().sql_memory_used_ = &sql_used_memory_size_;
