@@ -248,7 +248,7 @@ TEST_F(TestSSMicroCacheHugeData, test_add_huge_micro_data)
   ASSERT_GT(max_result_val, cache_stat.micro_stat().valid_micro_size_);
   const int64_t ori_valid_size = arc_info.get_valid_size();
 
-  micro_cache->task_runner_.blk_ckpt_task_.ckpt_op_.enable_update_arc_limit_ = false;
+  micro_cache->task_runner_.monitor_task_.monitor_op_.enable_update_arc_limit_ = false;
   LOG_INFO("TEST: start update arc", K(cache_stat), K(arc_info));
   ob_usleep(1000);
   const int64_t tmp_arc_limit = arc_info.limit_ / 8;

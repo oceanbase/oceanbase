@@ -1129,6 +1129,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_reserve_micro_ckpt_blk)
   const int64_t start_case_us = ObTimeUtility::current_time_us();
   ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
   ObSSPhyBlockCountInfo &blk_cnt_info = phy_blk_mgr_->blk_cnt_info_;
+  SSMicroCacheMonitorCtx &monitor_ctx = micro_cache_->task_runner_.monitor_task_.monitor_op_.monitor_ctx_;
 
   // 1. write enough micro blocks so that the number of blocks required to execute micro_ckpt exceeds meta_blk.min_cnt_
   const int64_t extra_meta_blk_cnt = 5;
@@ -1170,8 +1171,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_reserve_micro_ckpt_blk)
 
   // 5. try to adjust micro_meta_block in micro_meta_ckpt, check that the number of blocks used by micro_ckpt has increased
   const int64_t origin_meta_blk_usd_cnt = blk_cnt_info.meta_blk_.used_cnt_;
-  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_print_stat_time_us_ = TestSSCommonUtil::get_prev_print_stat_time_us();
-  ob_usleep(2 * 1000 * 1000);
+  monitor_ctx.prev_print_stat_time_us_ = TestSSCommonUtil::get_prev_print_stat_time_us();
+  ob_usleep(3 * 1000 * 1000);
   ASSERT_LT(2 * origin_meta_blk_usd_cnt, blk_cnt_info.meta_blk_.hold_cnt_);
 
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_micro_ckpt_time_us();
@@ -1198,8 +1199,6 @@ TEST_F(TestSSExecuteCheckpointTask, test_dynamic_update_cache_limit_size)
   LOG_INFO("TEST_CASE: start test_dynamic_update_cache_limit_size");
   ObSSARCInfo &arc_info = micro_cache_->micro_meta_mgr_.arc_info_;
   ObSSPhyBlockCountInfo &blk_cnt_info = phy_blk_mgr_->blk_cnt_info_;
-  ObSSPersistMicroMetaOp &micro_ckpt_op = persist_meta_task_->persist_meta_op_;
-  ObSSDoBlkCheckpointOp &blk_ckpt_op = blk_ckpt_task_->ckpt_op_;
 
   const int64_t origin_limit = arc_info.limit_;
   const int64_t origin_work_limit = arc_info.work_limit_;
@@ -1211,7 +1210,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_dynamic_update_cache_limit_size)
   // this will result in fewer available cache_data_blocks and dynamically lower arc_limit.
   blk_cnt_info.meta_blk_.hold_cnt_ = blk_cnt_info.meta_blk_.max_cnt_;
   blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.meta_blk_.hold_cnt_ + blk_cnt_info.data_blk_.hold_cnt_;
-  blk_ckpt_op.dynamic_update_cache_limit_size();
+  phy_blk_mgr_->get_and_update_cache_limit_size();
 
   ASSERT_GT(origin_limit, arc_info.limit_);
   ASSERT_GT(origin_work_limit, arc_info.work_limit_);
@@ -1222,7 +1221,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_dynamic_update_cache_limit_size)
   blk_cnt_info.meta_blk_.hold_cnt_ = blk_cnt_info.meta_blk_.min_cnt_;
   blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.meta_blk_.hold_cnt_ + blk_cnt_info.data_blk_.hold_cnt_;
 
-  blk_ckpt_op.dynamic_update_cache_limit_size();
+  phy_blk_mgr_->get_and_update_cache_limit_size();
   ASSERT_EQ(origin_limit, arc_info.limit_);
   ASSERT_EQ(origin_work_limit, arc_info.work_limit_);
   ASSERT_LE(abs(origin_p - arc_info.p_), 5); // the conversion between 'int64_t' and 'double' causes some deviations
@@ -1244,7 +1243,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_dynamic_update_cache_limit_size)
   blk_cnt_info.meta_blk_.hold_cnt_ = blk_cnt_info.meta_blk_.max_cnt_;
   blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.meta_blk_.hold_cnt_ + blk_cnt_info.data_blk_.hold_cnt_;
 
-  blk_ckpt_op.dynamic_update_cache_limit_size();
+  phy_blk_mgr_->get_and_update_cache_limit_size();
 
   const int64_t arc_limit_pct = SS_ARC_LIMIT_PCT;
   const int64_t new_limit = phy_blk_mgr_->get_cache_limit_size() * arc_limit_pct / 100;
