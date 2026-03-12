@@ -1399,7 +1399,7 @@ int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema ptr is null", KR(ret), K(table_schema_array));
       } else if (!is_add_partition_ || tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_NONE) {
-        if (table_schema_array.at(0)->get_table_id() == table_schema.get_table_id()) {
+        if (!is_add_partition_ && table_schema_array.at(0)->get_table_id() == table_schema.get_table_id()) {
           // In the scene of creating multi tables in one ddl transaction,
           // the schema of the creating table will be getted by latest schema guard
           if (OB_FAIL(alloc_tablet_for_tablegroup(table_schema, tablegroup_schema))) {
