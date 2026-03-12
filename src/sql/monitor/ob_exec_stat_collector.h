@@ -97,7 +97,7 @@ public:
         exec_timestamp.before_process_ts_ = process.get_process_timestamp();
         exec_timestamp.single_process_ts_ = process.get_single_process_timestamp();
         exec_timestamp.process_executor_ts_ = process.get_exec_start_timestamp();
-        if (!async_resp_used || exec_timestamp.executor_end_ts_ == 0) {
+        if (!async_resp_used || exec_timestamp.executor_end_ts_ <= 0) {
           exec_timestamp.executor_end_ts_ = process.get_exec_end_timestamp();
         } else {
           // For async commiting. The executor_end_ts_ is updated in end_trans
