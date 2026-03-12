@@ -56,13 +56,16 @@ public:
       try_check_tick_(0),
       try_check_tick_rows_(0),
       vec_start_scan_ts_us_(-1),
-      vec_pre_filtering_timeout_us_(-1)
+      vec_pre_filtering_timeout_us_(-1),
+      skip_vectorized_print_(false)
   {}
   virtual ~ObDASScanIter() {}
   common::ObNewRowIterator *&get_output_result_iter() { return result_; }
 
   void set_scan_param(storage::ObTableScanParam &scan_param) { scan_param_ = &scan_param; }
   storage::ObTableScanParam &get_scan_param() { return *scan_param_; }
+  OB_INLINE void set_skip_vectorized_print() { skip_vectorized_print_ = true; }
+  OB_INLINE bool is_skip_vectorized_print() { return skip_vectorized_print_; }
 
   virtual int do_table_scan() override;
   virtual int rescan() override;
@@ -94,6 +97,7 @@ private:
   uint64_t try_check_tick_rows_; // for check vector prefilter search status by rows, default 0
   int64_t vec_start_scan_ts_us_; // the start timestamp of this scan for vector prefilter search, default -1
   int64_t vec_pre_filtering_timeout_us_; // the pre-filtering timeout of vector prefilter search , default -1
+  bool skip_vectorized_print_;
 };
 
 

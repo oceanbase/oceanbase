@@ -190,6 +190,9 @@ int ObDASDomainIdMergeIter::inner_init(ObDASIterParam &param)
       data_table_rtdef_ = merge_param.data_table_rtdef_;
       rowkey_domain_ls_id_ = merge_param.rowkey_domain_ls_id_;
       need_filter_rowkey_domain_ = true;
+      if (OB_NOT_NULL(data_table_iter_)) {
+        data_table_iter_->set_skip_vectorized_print();
+      }
     }
   }
   return ret;
@@ -603,6 +606,16 @@ int ObDASDomainIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
       // recover ret from iter end when not last one
       if (ret == OB_ITER_END && i < rowkey_domain_iters_.count() - 1) {
         ret = OB_SUCCESS;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const ObBitVector *skip = nullptr;
+      if (OB_NOT_NULL(data_table_rtdef_) &&
+          OB_NOT_NULL(data_table_rtdef_->eval_ctx_) &&
+          OB_NOT_NULL(data_table_ctdef_)) {
+        ObEvalCtx &ctx = *data_table_rtdef_->eval_ctx_;
+        const ObExprPtrIArray &exprs = data_table_ctdef_->result_output_;
+        PRINT_VECTORIZED_ROWS(SQL, DEBUG, ctx, exprs, data_row_cnt, skip);
       }
     }
   }
