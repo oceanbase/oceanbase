@@ -561,6 +561,9 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
 
   } else if (!is_high_prio_rpc_req(req) && OB_FAIL(check_easy_memory_limit(req))) {
   } else if (is_stream) {
+    //if is_stream is true, req will not be pushed into queue, enqueue_timestamp is not set,
+    //so net_wait_time and queue_time in sql audit will be wrong, so set enqueue_timestamp here.
+    req.set_enqueue_timestamp(ObTimeUtility::current_time());
     if (!session_handler_.wakeup_next_thread(req)) {
       ret = OB_SESSION_NOT_FOUND;
       LOG_WARN("receive stream rpc packet but session not found",
