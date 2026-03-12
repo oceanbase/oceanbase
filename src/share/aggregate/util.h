@@ -689,6 +689,7 @@ inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_
     if (!has_rollup && ob_version >= CLUSTER_VERSION_4_3_5_1) {
       return true;
     }
+    return false;
   }
   case T_FUN_TOP_FRE_HIST: {
     return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2;
