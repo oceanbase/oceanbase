@@ -934,7 +934,11 @@ int ObWrCollector::collect_sqlstat()
                   "    cast(sum(retry_total) as SIGNED INTEGER ) as retry_total, cast(sum(retry_delta) as SIGNED INTEGER ) as retry_delta, "
                   "    cast(sum(partition_total) as SIGNED INTEGER ) as partition_total, "
                   "    cast(sum(partition_delta) as SIGNED INTEGER ) as partition_delta, cast(sum(nested_sql_total) as SIGNED INTEGER ) as nested_sql_total, "
-                  "    cast(sum(nested_sql_delta) as SIGNED INTEGER ) as nested_sql_delta ,source_ip, source_port , cast(sum(route_miss_total) as SIGNED INTEGER ) as route_miss_total, "
+                  "    cast(sum(nested_sql_delta) as SIGNED INTEGER ) as nested_sql_delta, cast(sum(muti_query_total) as SIGNED INTEGER ) as muti_query_total, "
+                  "    cast(sum(muti_query_delta) as SIGNED INTEGER ) as muti_query_delta, cast(sum(muti_query_batch_total) as SIGNED INTEGER ) as muti_query_batch_total, "
+                  "    cast(sum(muti_query_batch_delta) as SIGNED INTEGER ) as muti_query_batch_delta, cast(sum(full_table_scan_total) as SIGNED INTEGER ) as full_table_scan_total, "
+                  "    cast(sum(full_table_scan_delta) as SIGNED INTEGER ) as full_table_scan_delta, cast(sum(error_count_total) as SIGNED INTEGER ) as error_count_total, "
+                  "    cast(sum(error_count_delta) as SIGNED INTEGER ) as error_count_delta, source_ip, source_port, cast(sum(route_miss_total) as SIGNED INTEGER ) as route_miss_total, "
                   "    cast(sum(route_miss_delta) as SIGNED INTEGER ) as route_miss_delta , first_load_time,  cast(sum(plan_cache_hit_total) as SIGNED INTEGER ) as plan_cache_hit_total, "
                   "    cast(sum(plan_cache_hit_delta) as SIGNED INTEGER ) as plan_cache_hit_delta "
                   "from oceanbase.__all_virtual_sqlstat   "
@@ -1029,6 +1033,14 @@ int ObWrCollector::collect_sqlstat()
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "partition_delta", sqlstat.partition_delta_, int64_t, null_error, skip_column_error, default_value);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "nested_sql_total", sqlstat.nested_sql_total_, int64_t, null_error, skip_column_error, default_value);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "nested_sql_delta", sqlstat.nested_sql_delta_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "muti_query_total", sqlstat.muti_query_total_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "muti_query_delta", sqlstat.muti_query_delta_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "muti_query_batch_total", sqlstat.muti_query_batch_total_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "muti_query_batch_delta", sqlstat.muti_query_batch_delta_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "full_table_scan_total", sqlstat.full_table_scan_total_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "full_table_scan_delta", sqlstat.full_table_scan_delta_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "error_count_total", sqlstat.error_count_total_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "error_count_delta", sqlstat.error_count_delta_, int64_t, null_error, skip_column_error, default_value);
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "source_ip", sqlstat.source_ip_, sizeof(sqlstat.source_ip_), tmp_real_str_len);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "source_port", sqlstat.source_port_, int64_t, true/*skip_null_error*/, skip_column_error, default_value);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "route_miss_total", sqlstat.route_miss_total_, int64_t, null_error, skip_column_error, default_value);
@@ -1159,6 +1171,22 @@ int ObWrCollector::collect_sqlstat()
                 LOG_WARN("failed to add column nested_sql_total", KR(ret), K(sqlstat));
               } else if (OB_FAIL(dml_splicer.add_column("nested_sql_delta", sqlstat.nested_sql_delta_))) {
                 LOG_WARN("failed to add column nested_sql_delta", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("muti_query_total", sqlstat.muti_query_total_))) {
+                LOG_WARN("failed to add column muti_query_total", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("muti_query_delta", sqlstat.muti_query_delta_))) {
+                LOG_WARN("failed to add column muti_query_delta", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("muti_query_batch_total", sqlstat.muti_query_batch_total_))) {
+                LOG_WARN("failed to add column muti_query_batch_total", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("muti_query_batch_delta", sqlstat.muti_query_batch_delta_))) {
+                LOG_WARN("failed to add column muti_query_batch_delta", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("full_table_scan_total", sqlstat.full_table_scan_total_))) {
+                LOG_WARN("failed to add column full_table_scan_total", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("full_table_scan_delta", sqlstat.full_table_scan_delta_))) {
+                LOG_WARN("failed to add column full_table_scan_delta", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("error_count_total", sqlstat.error_count_total_))) {
+                LOG_WARN("failed to add column error_count_total", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("error_count_delta", sqlstat.error_count_delta_))) {
+                LOG_WARN("failed to add column error_count_delta", KR(ret), K(sqlstat));
               } else if (OB_FAIL(dml_splicer.add_column("route_miss_total", sqlstat.route_miss_total_))) {
                 LOG_WARN("failed to add column route_miss_total", KR(ret), K(sqlstat));
               } else if (OB_FAIL(dml_splicer.add_column("route_miss_delta", sqlstat.route_miss_delta_))) {

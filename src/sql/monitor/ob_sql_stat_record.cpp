@@ -478,8 +478,8 @@ int ObExecutedSqlStatRecord::move_to_sqlstat_cache(ObSqlStatRecordKey &key, bool
   } else if (OB_ISNULL(executed_record)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("executed_record is NULL", KR(ret));
-  } else if (is_create && FALSE_IT(executed_record->get_sql_stat_info().set_key(key))) {
-    LOG_WARN("failed to set key", K(ret));
+  } else if (is_create && OB_FAIL(executed_record->copy_sql_stat_info(this->get_sql_stat_info()))) {
+    LOG_WARN("failed to copy sql stat info", K(ret));
   } else if (!need_lock) {
     if (OB_FAIL(executed_record->sum_stat_value(*this))) {
       LOG_WARN("failed to sum stat value", K(ret));
