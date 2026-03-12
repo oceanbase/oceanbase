@@ -23,7 +23,7 @@ namespace oceanbase
 namespace observer
 {
 
-int ObService::get_tenant_memstore_info(const uint64_t tenant_id, share::ObTenantMemoryInfoOperator::TenantMenstoreInfo &menstore_info)
+int ObService::get_tenant_memstore_info(const uint64_t tenant_id, share::TenantMemstoreInfo &memstore_info)
 {
   int ret = OB_SUCCESS;
   storage::ObTenantFreezer *freezer = nullptr;
@@ -45,14 +45,14 @@ int ObService::get_tenant_memstore_info(const uint64_t tenant_id, share::ObTenan
                                                   throttle_trigger_percentage))) {
       LOG_WARN("fail to get tenant memstore cond", KR(ret), K(tenant_id));
     } else {
-      menstore_info.total_memstore_used_ = total_memstore_used;
-      menstore_info.memstore_limit_ = memstore_limit;
+      memstore_info.total_memstore_used_ = total_memstore_used;
+      memstore_info.memstore_limit_ = memstore_limit;
     }
   }
   return ret;
 }
 
-int ObService::get_tenant_vector_mem_info(const uint64_t tenant_id, share::ObTenantMemoryInfoOperator::TenantVectorMemInfo &vector_mem_info)
+int ObService::get_tenant_vector_mem_info(const uint64_t tenant_id, share::TenantVectorMemInfo &vector_mem_info)
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexService *service = MTL(ObPluginVectorIndexService*);
@@ -103,17 +103,17 @@ int ObService::get_tenant_memory_info(const obrpc::ObGetTenantMemoryInfoArg &arg
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
   } else {
-    share::ObTenantMemoryInfoOperator::TenantMenstoreInfo menstore_info;
-    share::ObTenantMemoryInfoOperator::TenantVectorMemInfo vector_mem_info;
+    share::TenantMemstoreInfo memstore_info;
+    share::TenantVectorMemInfo vector_mem_info;
     MTL_SWITCH(tenant_id) {
-      if (OB_FAIL(get_tenant_memstore_info(tenant_id, menstore_info))) {
+      if (OB_FAIL(get_tenant_memstore_info(tenant_id, memstore_info))) {
         LOG_WARN("fail to get tenant memstore info", KR(ret), K(tenant_id));
       } else if (OB_FAIL(get_tenant_vector_mem_info(tenant_id, vector_mem_info))) {
         LOG_WARN("fail to get tenant vector mem info", KR(ret), K(tenant_id));
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(result.init(tenant_id, my_addr, menstore_info, vector_mem_info))) {
+    } else if (OB_FAIL(result.init(tenant_id, my_addr, memstore_info, vector_mem_info))) {
       LOG_WARN("fail to init result", KR(ret), K(tenant_id), K(my_addr));
     }
   }

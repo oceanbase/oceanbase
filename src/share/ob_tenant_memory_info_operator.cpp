@@ -41,8 +41,7 @@ int ObTenantMemoryInfoOperator::init()
   return ret;
 }
 
-int ObTenantMemoryInfoOperator::get(const ObIArray<ObAddr> &servers,
-                                    ObIArray<TenantServerMemoryInfo> &mem_infos)
+int ObTenantMemoryInfoOperator::get(const common::ObIArray<common::ObAddr> &servers, common::ObIArray<TenantServerMemoryInfo> &mem_infos)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -50,6 +49,10 @@ int ObTenantMemoryInfoOperator::get(const ObIArray<ObAddr> &servers,
   mem_infos.reset();
   if (servers.count() == 0) {
     // do nothing
+  } else if (OB_UNLIKELY(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_2_1)) {
+    if (OB_FAIL(get_by_sql(servers, mem_infos))) {
+      LOG_WARN("fail to get from sql", KR(ret), K(servers));
+    }
   } else if (OB_FAIL(ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
     LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
   } else {
@@ -90,11 +93,12 @@ int ObTenantMemoryInfoOperator::get(const ObIArray<ObAddr> &servers,
           LOG_WARN("rpc_result is invalid", KR(ret), KPC(rpc_result));
         } else {
           TenantServerMemoryInfo mem_info;
-          mem_info.tenant_id_ = rpc_result->get_tenant_id();
-          mem_info.server_ = rpc_result->get_svr_addr();
-          mem_info.menstore_info_ = rpc_result->get_menstore_info();
-          mem_info.vector_mem_info_ = rpc_result->get_vector_mem_info();
-          if (OB_FAIL(mem_infos.push_back(mem_info))) {
+          if (OB_FAIL(mem_info.set_by_rpc(rpc_result->get_tenant_id(),
+                                            rpc_result->get_svr_addr(),
+                                            rpc_result->get_memstore_info(),
+                                            rpc_result->get_vector_mem_info()))) {
+            LOG_WARN("fail to init mem_info from rpc", KR(ret), KPC(rpc_result));
+          } else if (OB_FAIL(mem_infos.push_back(mem_info))) {
             LOG_WARN("fail to push back mem_info", KR(ret), K(mem_info));
           }
         }
@@ -104,11 +108,115 @@ int ObTenantMemoryInfoOperator::get(const ObIArray<ObAddr> &servers,
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTenantMemoryInfoOperator::TenantMenstoreInfo,
+int ObTenantMemoryInfoOperator::get_by_sql(const common::ObIArray<common::ObAddr> &servers, common::ObIArray<TenantServerMemoryInfo> &mem_infos)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObSqlString unit_servers_str;
+  for (int64_t i = 0; OB_SUCC(ret) && i < servers.count(); ++i) {
+    char svr_ip_str[common::MAX_IP_ADDR_LENGTH] = "";
+    const common::ObAddr &unit_server = servers.at(i);
+    if (!unit_server.ip_to_string(svr_ip_str, static_cast<int32_t>(MAX_IP_ADDR_LENGTH))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to convert ip to string", K(ret));
+    } else if (OB_FAIL(unit_servers_str.append_fmt("%s(svr_ip='%s' and svr_port=%d)",
+        (0 != i) ? " or " : "",
+        svr_ip_str,
+        unit_server.get_port()))) {
+      LOG_WARN("fail to append fmt", K(ret));
+    } else {} // no more to do
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(sql.assign_fmt("SELECT tenant_id, svr_ip, svr_port, memstore_used, memstore_limit FROM %s WHERE tenant_id = %ld and (%s)",
+      OB_ALL_VIRTUAL_TENANT_MEMSTORE_INFO_TNAME, tenant_id_, unit_servers_str.ptr()))) {
+    LOG_WARN("assign_fmt failed", K(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(mysql_proxy_.read(res, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(sql), K(ret));
+      } else if (NULL == (result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("execute sql failed", K(sql), K(ret));
+      } else {
+        TenantServerMemoryInfo mem_info;
+        int64_t tmp_real_str_len = 0; // It is only used to fill out the parameters and does not work. It is necessary to ensure that there is no'\0' character in the corresponding string
+        char svr_ip[OB_IP_STR_BUFF] = "";
+        int64_t svr_port = 0;
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("result next failed", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
+          } else {
+            uint64_t tenant_id = OB_INVALID_TENANT_ID;
+            TenantMemstoreInfo memstore_info;
+            common::ObAddr server_addr;
+            EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", tenant_id, uint64_t);
+            EXTRACT_STRBUF_FIELD_MYSQL(*result, "svr_ip", svr_ip, OB_IP_STR_BUFF, tmp_real_str_len);
+            (void) tmp_real_str_len; // make compiler happy
+            EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", svr_port, int64_t);
+            EXTRACT_INT_FIELD_MYSQL(*result, "memstore_used", memstore_info.total_memstore_used_, int64_t);
+            EXTRACT_INT_FIELD_MYSQL(*result, "memstore_limit", memstore_info.memstore_limit_, int64_t);
+            if (OB_FAIL(ret)) {
+            } else if (!server_addr.set_ip_addr(svr_ip, static_cast<int32_t>(svr_port))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid svr_ip or invalid svr_port", K(svr_ip), K(svr_port), K(ret));
+            } else if (OB_FAIL(mem_info.set_by_sql(tenant_id, server_addr, memstore_info))) {
+              LOG_WARN("fail to init mem_info from sql", K(ret), K(tenant_id), K(server_addr), K(memstore_info));
+            } else if (OB_FAIL(mem_infos.push_back(mem_info))) {
+              LOG_WARN("push_back failed", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantMemoryInfoOperator::TenantServerMemoryInfo::set_by_rpc(uint64_t tenant_id,
+                                                                     const common::ObAddr &server,
+                                                                     const TenantMemstoreInfo &memstore_info,
+                                                                     const TenantVectorMemInfo &vector_mem_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(server));
+  } else {
+    tenant_id_ = tenant_id;
+    server_ = server;
+    memstore_info_ = memstore_info;
+    vector_mem_info_ = vector_mem_info;
+  }
+  return ret;
+}
+
+int ObTenantMemoryInfoOperator::TenantServerMemoryInfo::set_by_sql(uint64_t tenant_id,
+                                                                     const common::ObAddr &server,
+                                                                     const TenantMemstoreInfo &memstore_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(server));
+  } else {
+    tenant_id_ = tenant_id;
+    server_ = server;
+    memstore_info_ = memstore_info;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(TenantMemstoreInfo,
                     total_memstore_used_,
                     memstore_limit_);
 
-OB_SERIALIZE_MEMBER(ObTenantMemoryInfoOperator::TenantVectorMemInfo,
+OB_SERIALIZE_MEMBER(TenantVectorMemInfo,
                     raw_malloc_size_,
                     index_metadata_size_,
                     vector_mem_hold_,

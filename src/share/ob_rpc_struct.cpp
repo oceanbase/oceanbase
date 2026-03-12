@@ -13236,12 +13236,12 @@ void ObGetTenantMemoryInfoArg::reset()
   svr_addr_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObGetTenantMemoryInfoResult, tenant_id_, svr_addr_, menstore_info_, vector_mem_info_);
+OB_SERIALIZE_MEMBER(ObGetTenantMemoryInfoResult, tenant_id_, svr_addr_, memstore_info_, vector_mem_info_);
 
 int ObGetTenantMemoryInfoResult::init(const uint64_t tenant_id,
                                       const common::ObAddr &svr_addr,
-                                      const share::ObTenantMemoryInfoOperator::TenantMenstoreInfo &menstore_info,
-                                      const share::ObTenantMemoryInfoOperator::TenantVectorMemInfo &vector_mem_info)
+                                      const share::TenantMemstoreInfo &memstore_info,
+                                      const share::TenantVectorMemInfo &vector_mem_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !svr_addr.is_valid())) {
@@ -13250,7 +13250,7 @@ int ObGetTenantMemoryInfoResult::init(const uint64_t tenant_id,
   } else {
     tenant_id_ = tenant_id;
     svr_addr_ = svr_addr;
-    menstore_info_ = menstore_info;
+    memstore_info_ = memstore_info;
     vector_mem_info_ = vector_mem_info;
   }
   return ret;
@@ -13261,7 +13261,7 @@ int ObGetTenantMemoryInfoResult::assign(const ObGetTenantMemoryInfoResult &other
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
   svr_addr_ = other.svr_addr_;
-  menstore_info_ = other.menstore_info_;
+  memstore_info_ = other.memstore_info_;
   vector_mem_info_ = other.vector_mem_info_;
   return ret;
 }
@@ -13275,8 +13275,8 @@ void ObGetTenantMemoryInfoResult::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   svr_addr_.reset();
-  menstore_info_ = share::ObTenantMemoryInfoOperator::TenantMenstoreInfo();
-  vector_mem_info_ = share::ObTenantMemoryInfoOperator::TenantVectorMemInfo();
+  memstore_info_ = share::TenantMemstoreInfo();
+  vector_mem_info_ = share::TenantVectorMemInfo();
 }
 
 OB_SERIALIZE_MEMBER(ObGetServerResourceInfoArg, rs_addr_);

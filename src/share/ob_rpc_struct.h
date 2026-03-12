@@ -674,22 +674,22 @@ struct ObGetTenantMemoryInfoResult
   OB_UNIS_VERSION(1);
 public:
   ObGetTenantMemoryInfoResult() : tenant_id_(OB_INVALID_ID), svr_addr_() {}
-  TO_STRING_KV(K_(tenant_id), K_(svr_addr), K_(menstore_info), K_(vector_mem_info));
+  TO_STRING_KV(K_(tenant_id), K_(svr_addr), K_(memstore_info), K_(vector_mem_info));
   int init(const uint64_t tenant_id, const common::ObAddr &svr_addr,
-           const share::ObTenantMemoryInfoOperator::TenantMenstoreInfo &menstore_info,
-           const share::ObTenantMemoryInfoOperator::TenantVectorMemInfo &vector_mem_info);
+           const share::TenantMemstoreInfo &memstore_info,
+           const share::TenantVectorMemInfo &vector_mem_info);
   int assign(const ObGetTenantMemoryInfoResult &other);
   bool is_valid() const;
   void reset();
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   const common::ObAddr &get_svr_addr() const { return svr_addr_; }
-  const share::ObTenantMemoryInfoOperator::TenantMenstoreInfo &get_menstore_info() const { return menstore_info_; }
-  const share::ObTenantMemoryInfoOperator::TenantVectorMemInfo &get_vector_mem_info() const { return vector_mem_info_; }
+  const share::TenantMemstoreInfo &get_memstore_info() const { return memstore_info_; }
+  const share::TenantVectorMemInfo &get_vector_mem_info() const { return vector_mem_info_; }
 private:
   uint64_t tenant_id_;
   common::ObAddr svr_addr_;
-  share::ObTenantMemoryInfoOperator::TenantMenstoreInfo menstore_info_;
-  share::ObTenantMemoryInfoOperator::TenantVectorMemInfo vector_mem_info_;
+  share::TenantMemstoreInfo memstore_info_;
+  share::TenantVectorMemInfo vector_mem_info_;
 };
 
 struct ObCreateTenantEndArg : public ObDDLArg
