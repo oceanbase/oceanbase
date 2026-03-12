@@ -263,6 +263,7 @@ protected:
   int extract_assignment_subqueries(ObRawExpr *expr,
                                     ObIArray<ObRawExpr*> &normal_query_refs,
                                     ObIArray<ObRawExpr*> &alias_query_refs);
+  int check_pdml_interval_partition_supported(const uint64_t ref_table_id) const;
   int check_use_direct_load();
   int check_basic_sharding_for_dml_stmt(ObShardingInfo &target_sharding,
                                         ObLogicalOperator &child,
