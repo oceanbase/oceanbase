@@ -647,18 +647,20 @@ int ObDbmsWorkloadRepository::get_ash_bound_sql_time(const AshReportParams &ash_
   int64_t ash_end_time = ash_report_params.ash_end_time > 0 ? ash_report_params.ash_end_time : ash_report_params.wr_end_time;
   char ash_begin_time_buf[time_buf_len] = "";
   char ash_end_time_buf[time_buf_len] = "";
+  // Oracle TO_DATE does not support microseconds, use scale 0 for Oracle mode
+  const int scale = is_oracle_mode() ? 0 : 6;
   if (OB_FAIL(usec_to_string(ash_report_params.tz_info,
                              ash_begin_time,
                              ash_begin_time_buf,
                              time_buf_len,
-                             time_buf_pos, 6))) {
+                             time_buf_pos, scale))) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
   } else if (FALSE_IT(time_buf_pos = 0)) {
   } else if (OB_FAIL(usec_to_string(ash_report_params.tz_info,
                                     ash_end_time,
                                     ash_end_time_buf,
                                     time_buf_len,
-                                    time_buf_pos, 6))) {
+                                    time_buf_pos, scale))) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
   } else if (is_oracle_mode()) {
     snprintf(start_time_buf, start_buf_len, "TO_DATE('%s')", ash_begin_time_buf);
