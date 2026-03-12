@@ -991,7 +991,7 @@ LATCH_DEF(DDL_DAG_MONITOR_LOCK, 956, "ob ddl dag monitor lock", LATCH_FIFO, 2000
 LATCH_DEF(DDL_SORT_PROVIDER_LOCK, 957, "ob ddl sort provider lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(AI_MODEL_CONFIG_MGR_LOCK, 958, "ai model config manager lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_VEC_IDX_ASYNC_TASK_SCHEDULER_EXECUTOR_MAP_LOCK, 959, "vec idx async task scheduler executor map lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(MA_SYNC_MODE_SWiTCH_LOCK, 960, "ma protection level switch helper lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(MA_SYNC_MODE_SWITCH_LOCK, 960, "ma protection level switch helper lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(LATCH_END, 961, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
