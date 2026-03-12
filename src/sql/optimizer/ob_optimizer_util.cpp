@@ -9457,6 +9457,28 @@ int ObOptimizerUtil::check_contain_part_id_columnref_expr(const ObRawExpr *expr,
   return ret;
 }
 
+int ObOptimizerUtil::check_contain_pl_composite_expr(const ObRawExpr *expr, bool &contains)
+{
+  int ret = OB_SUCCESS;
+  contains = false;
+
+  if (OB_ISNULL(expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid raw expr", K(expr), K(ret));
+  } else if (expr->get_result_type().is_pl_extend_type()) {
+    contains = true;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !contains && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_contain_pl_composite_expr(expr->get_param_expr(i),
+          contains)))) {
+        LOG_WARN("failed to contain PL composite expr", K(ret));
+      } else { /*do nothing*/}
+    }
+  }
+
+  return ret;
+}
+
 int ObOptimizerUtil::allocate_group_id_expr(ObLogPlan *log_plan, ObRawExpr *&group_id_expr)
 {
   int ret = OB_SUCCESS;
