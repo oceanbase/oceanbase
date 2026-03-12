@@ -752,12 +752,12 @@ int ObAllVirtualTabletReplicaInfo::prepare_tablet_to_table_map_()
       if (OB_FAIL(tablet_to_table_map_.create(common::hash::cal_next_prime(bucket_num), "TmpTabletMap", "TmpTabletMap", tenant_id))) {
         SERVER_LOG(WARN, "create tablet-table map failed", KR(ret), K(tenant_id));
       } else {
-        ObPartitionSchemaIter::Info part_info;
         for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
           const ObSimpleTableSchemaV2 *table = tables.at(i);
           if (OB_ISNULL(table)) {
             // skip
           } else if (table->has_tablet()) {
+            ObPartitionSchemaIter::Info part_info;
             ObPartitionSchemaIter iter(*table, ObCheckPartitionMode::CHECK_PARTITION_MODE_NORMAL);
             while (OB_SUCC(ret) && OB_SUCC(iter.next_partition_info(part_info))) {
               if (OB_UNLIKELY(0 == part_info.tablet_id_.id())) {
