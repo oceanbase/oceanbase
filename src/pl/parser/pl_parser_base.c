@@ -55,6 +55,8 @@ int obpl_parser_parse(ObParseCtx *parse_ctx)
   if (NULL_PTR(parse_ctx) || NULL_PTR(parse_ctx->stmt_str_) || OB_UNLIKELY(parse_ctx->stmt_len_ <= 0)) {
     ret = OB_PARSER_ERR_EMPTY_QUERY;
   } else {
+    int save_errcode = get_errcode_for_allocator();
+    reset_errcode_for_allocator();
     int val = setjmp(parse_ctx->jmp_buf_);
     if (val) {
       ret = parse_ctx->global_errno_;
@@ -84,6 +86,7 @@ int obpl_parser_parse(ObParseCtx *parse_ctx)
       obpl_mysql_yy_delete_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
 #endif
     }
+    set_errcode_for_allocator(save_errcode);
   }
   return ret;
 }

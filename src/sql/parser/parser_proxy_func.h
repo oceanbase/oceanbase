@@ -19,6 +19,16 @@
 void *parser_alloc_buffer(void *malloc_pool, const int64_t alloc_size);
 void parser_free_buffer(void *malloc_pool, void *buffer);
 
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+int get_errcode_for_allocator();
+void reset_errcode_for_allocator();
+void set_errcode_for_allocator(int errcode);
+#ifdef __cplusplus
+}
+#endif // __cplusplus
+
 #ifdef SQL_PARSER_COMPILATION
 #ifdef __cplusplus
 extern "C" {

@@ -27,6 +27,7 @@
 #include "sql/parser/ob_non_reserved_keywords.h"
 #include "sql/parser/parse_define.h"
 #include "lib/ob_date_unit_type.h"
+#include "sql/parser/parser_proxy_func.h"
 
 extern int64_t ob_strntoll(const char *ptr, size_t len, int base, char **end, int *err);
 extern int64_t ob_strntoull(const char *ptr, size_t len, int base, char **end, int *err);
@@ -47,7 +48,11 @@ do {                                                                           \
 #define check_ptr(ptr)                                                          \
 do {                                                                            \
   if (NULL_PTR(ptr)) {                                                          \
-    YY_UNEXPECTED_ERROR("'%s' is null", #ptr);                                  \
+    if (OB_PARSER_ERR_NO_MEMORY == get_errcode_for_allocator()) {               \
+      YY_FATAL_ERROR("no memory to malloc '%s'", #ptr);                         \
+    } else {                                                                    \
+      YY_UNEXPECTED_ERROR("'%s' is null", #ptr);                                \
+    }                                                                           \
   }                                                                             \
 } while (0)
 

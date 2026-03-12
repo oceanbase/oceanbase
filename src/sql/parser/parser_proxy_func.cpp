@@ -20,6 +20,23 @@
 
 using namespace oceanbase::common;
 
+static __thread int errcode_for_allocator = 0;
+
+int get_errcode_for_allocator()
+{
+  return  errcode_for_allocator;
+}
+
+void reset_errcode_for_allocator()
+{
+  errcode_for_allocator = 0;
+}
+
+void set_errcode_for_allocator(int errcode)
+{
+  errcode_for_allocator = errcode;
+}
+
 void *parser_alloc_buffer(void *malloc_pool, const int64_t alloc_size)
 {
   int ret = OB_SUCCESS;
@@ -31,6 +48,7 @@ void *parser_alloc_buffer(void *malloc_pool, const int64_t alloc_size)
     ObIAllocator *allocator = static_cast<ObIAllocator *>(malloc_pool);
     if (OB_ISNULL(alloced_buf = allocator->alloc(alloc_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      errcode_for_allocator = ret;
       LOG_WARN("failed to allocate memory", K(ret), K(alloc_size));
     } else {
       // do nothing
