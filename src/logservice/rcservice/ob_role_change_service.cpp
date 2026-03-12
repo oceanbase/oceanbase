@@ -310,7 +310,8 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
   } else {
     switch (event.event_type_) {
       case RoleChangeEventType::CHANGE_LEADER_EVENT_TYPE:
-        ObDIActionGuard("change leader event");
+      {
+        ObDIActionGuard di_action_guard1("change leader event");
         CLOG_LOG(INFO, "begin change leader", K(curr_access_mode), K(event), KPC(ls));
 #ifdef ERRSIM
         ret = OB_E(EventTable::EN_RC_ONLY_LEADER_TO_LEADER) OB_SUCCESS;
@@ -329,8 +330,10 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
         }
         CLOG_LOG(INFO, "end change leader", K(ret), K(curr_access_mode), K(event), KPC(ls));
         break;
+      }
       case RoleChangeEventType::ROLE_CHANGE_CB_EVENT_TYPE:
-        ObDIActionGuard("role change cb event");
+      {
+        ObDIActionGuard di_action_guard2("role change cb event");
         CLOG_LOG(INFO, "begin log handler role change", K(curr_access_mode), K(event), KPC(ls));
         if (OB_FAIL(handle_role_change_cb_event_for_log_handler_(curr_access_mode, ls, retry_ctx))) {
           CLOG_LOG(WARN, "handle_role_change_cb_event_for_log_handler_ failed", K(ret),
@@ -344,6 +347,7 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
         }
         CLOG_LOG(INFO, "end restore handler role change", K(ret), K(curr_access_mode), K(event), KPC(ls));
         break;
+      }
       default:
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(WARN, "unexpected role change event type", K(ret));

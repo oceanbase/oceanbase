@@ -213,7 +213,7 @@ int ObTransferService::scheduler_transfer_handler_()
 int ObTransferService::do_transfer_handler_(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  ObDIActionGuard(ObDIActionGuard::NS_ACTION, "TransferLSID:%ld", ls_id.id());
+  ObDIActionGuard di_action_guard(ObDIActionGuard::NS_ACTION, "TransferLSID:%ld", ls_id.id());
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
 

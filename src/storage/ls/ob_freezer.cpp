@@ -672,10 +672,10 @@ struct AsyncFreezeFunctor {
       STORAGE_LOG(
           INFO, "[Freezer] An Async Freeze Task Start", K(trace_id_), K(ls_id_), K(is_ls_freeze_), KP(ls));
       if (is_ls_freeze_) {
-        common::ObDIActionGuard(common::ObDIActionGuard::NS_ACTION, "LSFreeze:%ld", ls_id_.id());
+        common::ObDIActionGuard di_action_guard(common::ObDIActionGuard::NS_ACTION, "LSFreeze:%ld", ls_id_.id());
         (void)ls->get_freezer()->async_ls_freeze_consumer(trace_id_);
       } else {
-        common::ObDIActionGuard(common::ObDIActionGuard::NS_ACTION, "TabletFreeze:%ld", ls_id_.id());
+        common::ObDIActionGuard di_action_guard(common::ObDIActionGuard::NS_ACTION, "TabletFreeze:%ld", ls_id_.id());
         (void)ls->get_freezer()->async_tablet_freeze_consumer(trace_id_);
       }
     }

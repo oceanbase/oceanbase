@@ -553,7 +553,7 @@ int ObRebuildService::scheduler_rebuild_mgr_()
       ObLSHandle ls_handle;
       ObLS *ls = nullptr;
       ObLSRebuildInfo rebuild_info;
-      ObDIActionGuard(ObDIActionGuard::NS_ACTION, "rebuild LSID:%ld", rebuild_ctx.ls_id_.id());
+      ObDIActionGuard di_action_guard(ObDIActionGuard::NS_ACTION, "rebuild LSID:%ld", rebuild_ctx.ls_id_.id());
       if (OB_FAIL(ls_service_->get_ls(rebuild_ctx.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
         if (OB_LS_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
