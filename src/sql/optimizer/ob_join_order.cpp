@@ -6212,7 +6212,7 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "when using match against expr/index merge, vector index is");
   } else if (nullptr != select_stmt && FALSE_IT(has_aggr = select_stmt->get_aggr_item_size() > 0)) {
-  } else if (stmt->has_vec_approx() && helper.vec_index_id_ == OB_INVALID_ID
+  } else if (stmt->has_vec_approx() && !has_aggr && helper.vec_index_id_ == OB_INVALID_ID
       && OB_FAIL(check_vector_index_count_by_expr(*stmt, schema_guard, table_id, ref_table_id))) {
     LOG_WARN("failed to check vector index count by expr", K(ret), K(ref_table_id));
   } else if (stmt->has_vec_approx()
@@ -6258,7 +6258,7 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
                                           table_id, ref_table_id, has_aggr, schema_guard, helper, valid_index_ids))) {
       LOG_WARN("failed to get valid hint index list", K(ret));
     } else if (stmt->has_vec_approx() && helper.vec_index_type_ == ObVecIndexType::VEC_INDEX_INVALID
-        && (helper.filters_.count() == 0 && stmt->get_subquery_exprs().empty() && !has_match_expr_on_table && !helper.is_index_merge_)) {
+        && (helper.filters_.count() == 0 && stmt->get_subquery_exprs().empty() && !has_match_expr_on_table && !helper.is_index_merge_ && !has_aggr)) {
       valid_index_ids.reuse();
       if (OB_FAIL(add_valid_vec_index_ids(*stmt, schema_guard, table_id, ref_table_id, has_aggr, valid_index_ids))) {
         LOG_WARN("failed to add valid vec index ids", K(ret));
