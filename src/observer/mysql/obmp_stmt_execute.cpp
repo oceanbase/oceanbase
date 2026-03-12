@@ -1241,7 +1241,10 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
   const bool enable_sqlstat = session.is_sqlstat_enabled();
 
   single_process_timestamp_ = ObTimeUtility::current_time();
-
+  //if single_process_timestamp_ is set and session is killed when set session active,
+  //exec_start_timestamp_ will not be set, so get plan time and execute time in sql audit will be wrong.
+  //so set exec_start_timestamp_ to single_process_timestamp_ here.
+  exec_start_timestamp_ = single_process_timestamp_;
   /* !!!
    * 注意req_timeinfo_guard一定要放在result前面
    * !!!
