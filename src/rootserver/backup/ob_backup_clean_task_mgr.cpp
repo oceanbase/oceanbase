@@ -19,6 +19,7 @@
 #include "share/backup/ob_archive_path.h"
 #include "share/backup/ob_archive_store.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "lib/restore/ob_storage_info.h"
 
 using namespace oceanbase;
 using namespace rootserver;
@@ -874,21 +875,45 @@ int ObBackupCleanTaskMgr::delete_backup_dir_(const share::ObBackupPath &path)
   return ret;
 }
 
+int ObBackupCleanTaskMgr::check_backup_dir_clean_ready_(const share::ObBackupPath &path, bool &is_clean_ready)
+{
+  int ret = OB_SUCCESS;
+  is_clean_ready = true;
+  const share::ObBackupStorageInfo *storage_info = backup_dest_.get_storage_info();
+  if (path.is_empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("path is empty", K(ret), K(path));
+  } else if (OB_ISNULL(storage_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage_info is null", K(ret));
+  } else if (common::ObStorageDeleteMode::STORAGE_TAGGING_MODE == storage_info->get_delete_mode()) {
+    // For tagging mode: skip check to avoid expensive GetObjectTagging calls for each file.
+    is_clean_ready = true;
+    LOG_INFO("skip backup dir clean empty check due to tagging mode", K(path));
+  } else {
+    // For delete mode: check if directory is empty
+    if (OB_FAIL(common::ObBackupIoAdapter::is_empty_directory(path.get_obstr(), storage_info, is_clean_ready))) {
+      LOG_WARN("failed to check if backup dir is empty", K(ret), K(path));
+    }
+  }
+  return ret;
+}
+
 int ObBackupCleanTaskMgr::check_backup_set_dir_empty_()
 {
   int ret = OB_SUCCESS;
   ObBackupPath set_path;
   ObBackupSetDesc desc;
-  bool is_empty = true;
+  bool is_clean_ready = true;
   desc.backup_set_id_ = backup_set_info_.backup_set_id_;
   desc.backup_type_ = backup_set_info_.backup_type_;
 
   if (OB_FAIL(ObBackupPathUtil::get_backup_set_dir_path(backup_dest_, desc, set_path))) {
     LOG_WARN("failed to get backup set dir path", K(ret), K_(backup_dest), K_(task_attr));
-  } else if (OB_FAIL(ObBackupIoAdapter::is_empty_directory(set_path.get_ptr(), backup_dest_.get_storage_info(), is_empty))) {
-    LOG_WARN("failed to check if backup set dir is empty", K(ret), K(set_path));
-  } else if (!is_empty) {
-    LOG_ERROR("backup set dir is not empty, there are still files left", K(set_path));
+  } else if (OB_FAIL(check_backup_dir_clean_ready_(set_path, is_clean_ready))) {
+    LOG_WARN("failed to check if backup set dir is clean ready", K(ret), K(set_path));
+  } else if (!is_clean_ready) {
+    LOG_ERROR("backup set dir is not clean ready, there are still files left or untagged files", K(set_path));
   } else {
     LOG_INFO("backup set dir is empty, safe to delete", K(set_path));
   }
@@ -899,16 +924,16 @@ int ObBackupCleanTaskMgr::check_backup_piece_dir_empty_()
 {
   int ret = OB_SUCCESS;
   ObBackupPath piece_path;
-  bool is_empty = true;
+  bool is_clean_ready = true;
 
   if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(
       backup_dest_, backup_piece_info_.key_.dest_id_, backup_piece_info_.key_.round_id_,
       backup_piece_info_.key_.piece_id_, piece_path))) {
     LOG_WARN("failed to get backup piece dir path", K(ret), K_(backup_dest), K_(backup_piece_info));
-  } else if (OB_FAIL(ObBackupIoAdapter::is_empty_directory(piece_path.get_ptr(), backup_dest_.get_storage_info(), is_empty))) {
-    LOG_WARN("failed to check if backup piece dir is empty", K(ret), K(piece_path));
-  } else if (!is_empty) {
-    LOG_ERROR("backup piece dir is not empty, there are still files left", K(piece_path));
+  } else if (OB_FAIL(check_backup_dir_clean_ready_(piece_path, is_clean_ready))) {
+    LOG_WARN("failed to check if backup piece dir is clean ready", K(ret), K(piece_path));
+  } else if (!is_clean_ready) {
+    LOG_ERROR("backup piece dir is not clean ready, there are still files left or untagged files", K(piece_path));
   } else {
     LOG_INFO("backup piece dir is empty, safe to delete", K(piece_path));
   }
