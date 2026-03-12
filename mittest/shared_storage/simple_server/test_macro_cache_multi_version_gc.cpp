@@ -115,30 +115,6 @@ public:
       run_ctx_()
   {}
 
-  virtual void SetUp() override
-  {
-    ObSimpleClusterTestBase::SetUp();
-    oceanbase::palf::election::MAX_TST = 500 * 1000;  // 500ms, lease interval = 4 * 500ms = 2s
-    if (!tenant_created_) {
-      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8));
-      OK(get_tenant_id(run_ctx_.tenant_id_));
-      ASSERT_NE(0, run_ctx_.tenant_id_);
-      OK(get_curr_simple_server().init_sql_proxy2());
-      tenant_created_ = true;
-      {
-        share::ObTenantSwitchGuard tguard;
-        OK(tguard.switch_to(run_ctx_.tenant_id_));
-        OK(TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
-      }
-    }
-  }
-
-  static void TearDownTestCase()
-  {
-    ResidualDataCleanerHelper::clean_in_mock_env();
-    ObSimpleClusterTestBase::TearDownTestCase();
-  }
-
   int exe_sql(const char *sql_str)
   {
     int ret = OB_SUCCESS;
@@ -169,6 +145,32 @@ public:
       LOG_WARN("fail to write sql", KR(ret), K(sql_str), K(sql));
     }
     return ret;
+  }
+
+  virtual void SetUp() override
+  {
+    ObSimpleClusterTestBase::SetUp();
+    oceanbase::palf::election::MAX_TST = 500 * 1000;  // 500ms, lease interval = 4 * 500ms = 2s
+    if (!tenant_created_) {
+      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8));
+      OK(get_tenant_id(run_ctx_.tenant_id_));
+      ASSERT_NE(0, run_ctx_.tenant_id_);
+      OK(get_curr_simple_server().init_sql_proxy2());
+      tenant_created_ = true;
+      {
+        share::ObTenantSwitchGuard tguard;
+        OK(tguard.switch_to(run_ctx_.tenant_id_));
+        OK(TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
+        OK(sys_exe_sql("alter system set _ss_advance_checkpoint_interval = '1m' tenant tt1;"));
+        OK(sys_exe_sql("alter system set_tp tp_name = EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP,error_code = 4016,frequency = 1;"));
+      }
+    }
+  }
+
+  static void TearDownTestCase()
+  {
+    ResidualDataCleanerHelper::clean_in_mock_env();
+    ObSimpleClusterTestBase::TearDownTestCase();
   }
 
   void get_tablet_version(int64_t &tablet_version);
@@ -514,6 +516,7 @@ TEST_F(ObMacroCacheMultiVersionGCTest, multi_version_gc_and_tablet_gc)
   OK(sys_exe_sql("alter system set ob_compaction_schedule_interval = '3s' tenant tt1;"));
   OK(sys_exe_sql("alter system set minor_compact_trigger = 2 tenant tt1;"));
   OK(sys_exe_sql("alter system set _ss_major_compaction_prewarm_level = 0 tenant tt1;"));
+  OK(sys_exe_sql("alter system set _ss_advance_checkpoint_interval = '1m' tenant tt1;"));
   OK(sys_exe_sql("alter system set_tp tp_name = EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP,error_code = 4016,frequency = 1;"));
   OK(exe_sql("create table test_table (a int)"));
   set_ls_and_tablet_id_for_run_ctx();
