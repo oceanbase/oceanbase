@@ -18,6 +18,7 @@
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "storage/ddl/ob_direct_load_struct.h"
+#include "src/share/vector_index/ob_plugin_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -2027,6 +2028,7 @@ int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result)
     result.mem_ctx_ = segment_querier_->handle_->mem_ctx_;
     if (! query_cond_->is_post_with_filter_) {
       if (is_sparse_vector_) {
+        ObCostGuard incr_cost_guard(this, "sparse_pre", query_cond_->ob_sparse_drop_ratio_search_, query_cond_->query_limit_);
         if (OB_FAIL(obvectorutil::knn_search(segment_querier_->handle_->index_,
             sparse_lens_[0],
             sparse_dims_,
@@ -2048,7 +2050,9 @@ int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result)
             segment_querier_->valid_vid_count_))) {
           LOG_WARN("knn search sparse vector failed.", K(ret));
         }
-      } else if (OB_FAIL(obvectorutil::knn_search(segment_querier_->handle_->index_,
+      } else {
+        ObCostGuard dense_cost_guard(this, "pre", query_cond_->ef_search_, query_cond_->query_limit_);
+        if (OB_FAIL(obvectorutil::knn_search(segment_querier_->handle_->index_,
           query_vector_,
           dim_,
           query_cond_->query_limit_,
@@ -2064,12 +2068,15 @@ int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result)
           &ctx_->search_allocator_,
           query_cond_->extra_column_count_ > 0,
           query_cond_->distance_threshold_))) {
-        LOG_WARN("knn search dense vector failed.", K(ret));
+          LOG_WARN("knn search dense vector failed.", K(ret));
+        }
       }
     } else if (is_sparse_vector_) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("spare vector is not support iterative filter", K(ret));
-    } else if (OB_FAIL(obvectorutil::knn_search(segment_querier_->handle_->index_,
+    } else {
+      ObCostGuard delta_cost_guard(this, "post", query_cond_->ef_search_, query_cond_->query_limit_);
+      if (OB_FAIL(obvectorutil::knn_search(segment_querier_->handle_->index_,
         query_vector_,
         dim_,
         query_cond_->query_limit_,
@@ -2086,7 +2093,8 @@ int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result)
         query_cond_->extra_column_count_ > 0,
         segment_querier_->iter_ctx_,
         query_cond_->is_last_search_))) {
-      LOG_WARN("knn search delta failed.", K(ret));
+        LOG_WARN("knn search delta failed.", K(ret));
+      }
     }
     LOG_TRACE("search_result", K(ret),
         "vids", ObArrayWrap<int64_t>(result.vids_, result.total_),

@@ -473,6 +473,61 @@ public:
   int64_t n_candidate_;
 };
 
+struct ObVecIndexLoadInfo {
+  uint64_t insert_vids_cnt_;
+  uint64_t delete_vids_cnt_;
+  TO_STRING_KV(K_(insert_vids_cnt), K_(delete_vids_cnt));
+};
+
+typedef ObSEArray<ObVecIndexLoadInfo, 2> ObVecIndexLoadInfos;  // insert vids cnt, delete vids cnt
+struct ObVectorIndexDumpInfo {
+  ObVectorIndexDumpInfo() : dump_info_lock_(common::ObLatchIds::VECTOR_ADAPTER_MAP_LOCK)
+  {
+    incr_complete_info_.set_attr(ObMemAttr(MTL_ID(), "VecDumpInfo"));
+    vbitmap_table_load_info_.set_attr(ObMemAttr(MTL_ID(), "VecDumpInfo"));
+    snap_table_load_info_.set_attr(ObMemAttr(MTL_ID(), "VecDumpInfo"));
+  }
+  ~ObVectorIndexDumpInfo() { reset(); }
+
+  OB_INLINE void reset()
+  {
+    common::ObSpinLockGuard guard(dump_info_lock_);
+    incr_complete_info_.reset();
+    vbitmap_table_load_info_.reset();
+    snap_table_load_info_.reset();
+  }
+  OB_INLINE void record_incr_complete(uint64_t insert_vids_cnt = 0, uint64_t delete_vids_cnt = 0)
+  {
+    common::ObSpinLockGuard guard(dump_info_lock_);
+    incr_complete_info_.push_back({insert_vids_cnt, delete_vids_cnt});
+  }
+  OB_INLINE void record_vbitmap_table_load(uint64_t insert_vids_cnt = 0, uint64_t delete_vids_cnt = 0)
+  {
+    common::ObSpinLockGuard guard(dump_info_lock_);
+    vbitmap_table_load_info_.push_back({insert_vids_cnt, delete_vids_cnt});
+  }
+
+  OB_INLINE void record_snap_table_load(uint64_t insert_vids_cnt = 0, uint64_t delete_vids_cnt = 0)
+  {
+    common::ObSpinLockGuard guard(dump_info_lock_);
+    snap_table_load_info_.push_back({insert_vids_cnt, delete_vids_cnt});
+  }
+
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    common::ObSpinLockGuard guard(dump_info_lock_);
+    J_OBJ_START();
+    J_KV(K_(incr_complete_info), K_(vbitmap_table_load_info), K_(snap_table_load_info));
+    J_OBJ_END();
+    return pos;
+  }
+  mutable common::ObSpinLock dump_info_lock_;
+  ObVecIndexLoadInfos incr_complete_info_;
+  ObVecIndexLoadInfos vbitmap_table_load_info_;
+  ObVecIndexLoadInfos snap_table_load_info_;
+};
+
 struct ObVectorIndexFollowerSyncStatic
 {
 public:
@@ -979,6 +1034,12 @@ public:
   int create_snap_segment(const ObVectorIndexAlgorithmType enforce_type, ObVectorIndexSegmentMeta &seg_meta);
 
 public:
+
+  void log_deseri_snap_without_lock(ObVectorIndexAlgorithmType index_type, const ObString &target_prefix,
+                                    const ObString &key_prefix, int64_t cost_ms);
+  int print_adapter_info(char *buf, int64_t buf_len, int64_t &pos);
+  void reset_dump_info() { dump_info_.reset(); }
+
   TO_STRING_KV(KP(this), K_(create_type), K_(type), KP_(algo_data),
               K_(incr_data), K_(frozen_data), K_(snap_data), K_(vbitmap_data), K_(tenant_id),
               K_(data_tablet_id),K_(rowkey_vid_tablet_id), K_(vid_rowkey_tablet_id),
@@ -987,7 +1048,7 @@ public:
               K_(inc_table_id), K_(vbitmap_table_id), K_(snapshot_table_id), K_(embedded_table_id),
               K_(ref_cnt), K_(idle_cnt), KP_(allocator),
               K_(index_identity), K_(follower_sync_statistics),
-              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid), K_(snapshot_key_prefix), K_(replace_scn));
+              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid), K_(snapshot_key_prefix), K_(replace_scn), K_(dump_info));
 
 private:
   int add_datum_row_into_array(blocksstable::ObDatumRow *datum_row,
@@ -1002,6 +1063,7 @@ private:
                            ObVecExtraInfoObj *extra_objs,
                            int64_t extra_column_count,
                            ObVidBound vid_bound,
+                           bool& has_written,
                            uint32_t *sparse_byte_lens = nullptr);
   int write_into_index_mem(ObVecIdxVBitmapDataHandle &vbitmap, int64_t dim, SCN read_scn, ObArray<uint64_t> &i_vids, ObArray<uint64_t> &d_vids);
   int generate_snapshot_valid_bitmap(ObVectorQueryAdaptorResultContext *ctx,
@@ -1067,6 +1129,9 @@ private:
 
   // statistics for judging whether need sync follower
   ObVectorIndexFollowerSyncStatic follower_sync_statistics_;
+  // static for information between two dump
+  ObVectorIndexDumpInfo dump_info_;
+
   bool is_in_opt_task_;
   bool need_be_optimized_;
   int64_t extra_info_column_count_;
