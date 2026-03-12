@@ -622,9 +622,6 @@ protected:
       const share::ObLSID &ls_id,
       common::ObAddr &leader_addr);
   int try_reuse_segments_from_old_adapter();
-  int find_segment_in_old_adapter(
-      ObVectorIndexSegmentMeta &new_seg_meta,
-      const ObVectorIndexMeta &old_meta);
   bool check_snapshot_table_available(ObPluginVectorIndexAdaptor &adaptor);
   bool check_task_satisfied_memory_limited(ObPluginVectorIndexAdaptor &adaptor);
   bool check_new_adapter_exist(const int64_t task_id);

@@ -977,10 +977,17 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
         }
         if (OB_FAIL(ret)) {
         } else if (is_meta_data) {
-          if (OB_FAIL(new_adapter->merge_incr_data(old_adapter))){
+          ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+          if (OB_FAIL(new_adapter->deserialize_snap_meta(row_key))) {
+            LOG_WARN("deserialize snap meta fail", K(ret));
+          } else if (OB_FAIL(try_reuse_segments_from_old_adapter(new_adapter, old_adapter))) {
+            LOG_WARN("try reuse segments from old adapter fail", K(ret));
+          } else if (OB_FAIL(new_adapter->get_snap_data()->load_persist_segments(new_adapter, tmp_allocator, ls_id, target_scn))) {
+            LOG_WARN("load persist segments fail", K(ret));
+          } else if (OB_FALSE_IT(new_adapter->get_snap_data()->set_inited())) {
+          } else if (OB_FALSE_IT(new_adapter->set_snap_data_has_complete())) {
+          } else if (new_adapter->get_snapshot_scn() == old_adapter->get_snapshot_scn() && OB_FAIL(new_adapter->merge_incr_data(old_adapter))){
             LOG_WARN("merge_incr_data fail", K(ret), KPC(old_adapter), KPC(new_adapter));
-          } else if (OB_FAIL(new_adapter->deserialize_snap_data(ls_id, target_scn, row_key, meta_scn))) {
-            LOG_WARN("deserialize snap data fail", K(ret));
           } else if (OB_FAIL(new_adapter->get_snap_index_row_cnt(index_count))) {
             LOG_WARN("fail to get snap index row cnt", K(ret), KP(new_adapter), KP(adapter));
           }
@@ -1017,6 +1024,72 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
       LOG_WARN("revert snapshot_idx_iter failed", K(ret));
     }
     snapshot_idx_iter = nullptr;
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::find_segment_in_old_meta(
+    ObVectorIndexSegmentMeta &new_seg_meta,
+    const ObVectorIndexMeta &old_meta)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < old_meta.incrs_.count() && !found; ++i) {
+    const ObVectorIndexSegmentMeta &old_seg_meta = old_meta.incrs_.at(i);
+    if (old_seg_meta.segment_handle_.is_valid() && 0 == new_seg_meta.start_key_.compare(old_seg_meta.start_key_)) {
+      new_seg_meta.segment_handle_ = old_seg_meta.segment_handle_;
+      new_seg_meta.blocks_cnt_ = old_seg_meta.blocks_cnt_;
+      found = true;
+      LOG_INFO("find segment in old adapter incrs", K(new_seg_meta), K(old_seg_meta));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < old_meta.bases_.count() && !found; ++i) {
+    const ObVectorIndexSegmentMeta &old_seg_meta = old_meta.bases_.at(i);
+    if (old_seg_meta.segment_handle_.is_valid() && 0 == new_seg_meta.start_key_.compare(old_seg_meta.start_key_)) {
+      new_seg_meta.segment_handle_ = old_seg_meta.segment_handle_;
+      new_seg_meta.blocks_cnt_ = old_seg_meta.blocks_cnt_;
+      found = true;
+      LOG_INFO("find segment in old adapter bases", K(new_seg_meta), K(old_seg_meta));
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::try_reuse_segments_from_old_adapter(
+    ObPluginVectorIndexAdaptor *new_adapter,
+    ObPluginVectorIndexAdaptor *old_adapter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(new_adapter) || OB_ISNULL(old_adapter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new_adapter or old_adapter is null", K(ret), KP(new_adapter), KP(old_adapter));
+  } else {
+    ObVecIdxSnapshotDataHandle &new_snap = new_adapter->get_snap_data();
+    const ObVecIdxSnapshotDataHandle &old_snap = old_adapter->get_snap_data();
+    if (!new_snap.is_valid() || !old_snap.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("snap data is invalid", K(ret), K(new_snap), K(old_snap));
+    } else {
+      ObVectorIndexMeta &new_meta = new_snap->meta_;
+      const ObVectorIndexMeta &old_meta = old_snap->meta_;
+      for (int64_t i = 0; OB_SUCC(ret) && i < new_meta.incrs_.count(); ++i) {
+        ObVectorIndexSegmentMeta &new_seg_meta = new_meta.incrs_.at(i);
+        if (!new_seg_meta.segment_handle_.is_valid()) {
+          if (OB_FAIL(find_segment_in_old_meta(new_seg_meta, old_meta))) {
+            LOG_WARN("find segment in old adapter fail", K(ret), K(i), K(new_seg_meta.start_key_));
+          }
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < new_meta.bases_.count(); ++i) {
+        ObVectorIndexSegmentMeta &new_seg_meta = new_meta.bases_.at(i);
+        if (!new_seg_meta.segment_handle_.is_valid()) {
+          if (OB_FAIL(find_segment_in_old_meta(new_seg_meta, old_meta))) {
+            LOG_WARN("find segment in old adapter fail", K(ret), K(i), K(new_seg_meta.start_key_));
+          }
+        }
+      }
+      LOG_INFO("try reuse segments from old adapter finished", K(ret), K(new_meta), K(old_meta));
+    }
   }
   return ret;
 }
