@@ -190,6 +190,7 @@ public:
   }
 
   int get_or_register_child(ObProfileId id, ObOpProfile<MetricType> *&child);
+  int register_child(ObProfileId id, ObOpProfile<MetricType> *&child);
 
   int get_all_count(int64_t &metric_count, int64_t &profile_cnt) const;
   int to_persist_profile(const char *&persist_profile, int64_t &persist_profile_size,

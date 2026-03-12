@@ -2109,6 +2109,73 @@ int ObDelUpdResolver::add_all_columns_to_stmt_for_trigger(const TableItem &table
   return ret;
 }
 
+int ObDelUpdResolver::add_all_part_columns_to_stmt(const TableItem &table_item,
+                                                   common::ObIArray<ObColumnRefRawExpr*> &column_exprs)
+{
+  int ret = OB_SUCCESS;
+  uint64_t partkey_column_id = 0;
+  const ObTableSchema *table_schema = NULL;
+  const ObTableSchema *def_index_schema = NULL;
+  const ObTableSchema *data_index_schema = NULL;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  const TableItem &base_table_item = table_item.get_base_table_item();
+  ObDelUpdStmt *stmt = get_del_upd_stmt();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(stmt));
+  } else if (stmt->has_instead_of_trigger()) {
+    // do nothing, instead of trigger doesn't have rowkey
+  } else if (OB_ISNULL(params_.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params_.session_info_ is null", K(ret));
+  } else if (!params_.session_info_->get_ddl_info().is_search_index_ddl()) {
+    // do nothing
+  } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                       base_table_item.ref_id_,
+                                                       data_index_schema,
+                                                       base_table_item.is_link_table()))) {
+    LOG_WARN("table schema not found", K(base_table_item));
+  } else if (NULL == data_index_schema) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid table schema", K(table_item));
+  } else if (data_index_schema->is_search_data_index()
+    && OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                 data_index_schema->get_data_table_id(),
+                                                 def_index_schema,
+                                                 base_table_item.is_link_table()))) {
+    LOG_WARN("table schema not found", K(table_schema->get_data_table_id()));
+  } else if (OB_NOT_NULL(def_index_schema) && def_index_schema->is_search_def_index()
+    && OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                 def_index_schema->get_data_table_id(),
+                                                 table_schema,
+                                                 base_table_item.is_link_table()))) {
+
+  } else if (OB_NOT_NULL(table_schema)) {
+    const ObPartitionKeyInfo &partition_keys = table_schema->get_partition_key_info();
+    const ObPartitionKeyInfo &subpartition_keys = table_schema->get_subpartition_key_info();
+    ObSEArray<uint64_t, 2> column_ids;
+    if (partition_keys.is_valid() && OB_FAIL(partition_keys.get_column_ids(column_ids))) {
+      LOG_WARN("fail to get column ids from partition keys", K(ret));
+    } else if (subpartition_keys.is_valid() && OB_FAIL(subpartition_keys.get_column_ids(column_ids))) {
+      LOG_WARN("fail to get column ids from subpartition keys", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+        uint64_t rowkey_column_id = column_ids.at(i);
+        if (OB_FAIL(get_column_schema(table_schema->get_table_id(),
+                                      rowkey_column_id,
+                                      column_schema,
+                                      true,
+                                      table_item.is_link_table()))) {
+          LOG_WARN("get column schema failed", K(table_schema->get_table_id()), K(rowkey_column_id));
+        } else if (OB_FAIL(add_column_to_stmt(table_item, *column_schema, column_exprs, stmt))) {
+          LOG_WARN("add column to stmt failed", K(ret), K(table_item), KPC(column_schema));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDelUpdResolver::add_all_rowkey_columns_to_stmt(const TableItem &table_item,
                                                      ObIArray<ObColumnRefRawExpr*> &column_exprs)
 {
@@ -4417,6 +4484,9 @@ int ObDelUpdResolver::generate_insert_table_info(const TableItem &table_item,
       LOG_WARN("failed to add columns", K(ret));
     // } else if (OB_FAIL(prune_columns_for_ddl(table_item, table_info.column_exprs_))) {
       // LOG_WARN("failed to prune columns for ddl", K(ret));
+    } else if (add_column && session_info_->get_ddl_info().is_search_index_ddl()
+      && OB_FAIL(add_all_part_columns_to_stmt(table_item, table_info.column_exprs_))) {
+      LOG_WARN("failed to add part key columns", K(ret));
     } else {
       table_info.table_id_ = table_item.table_id_;
       table_info.loc_table_id_ = base_table_item.table_id_;

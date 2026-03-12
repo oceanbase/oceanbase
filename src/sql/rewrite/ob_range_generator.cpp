@@ -25,6 +25,8 @@
 #include "src/share/object/ob_obj_cast_util.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_json_utils.h"
+#include "lib/udt/ob_array_type.h"
+#include "share/search_index/ob_search_index_encoder.h"
 
 namespace oceanbase
 {
@@ -726,6 +728,85 @@ int ObRangeGenerator::formalize_complex_range(const ObRangeNode *node)
             }
           } else if (OB_FAIL(SMART_CALL(formalize_complex_range(cur_node->and_next_)))) {
             LOG_WARN("failed to formalize range");
+          }
+        }
+      }
+    } else if (cur_node->is_domain_node_ && cur_node->is_search_node_) {
+      const ObDomainOpType domain_op_type = GET_RANGE_NODE_DOMAIN_TYPE(cur_node);
+      ObTmpInParam *tmp_in_param = nullptr;
+      if (ObDomainOpType::T_ARRAY_OVERLAPS != domain_op_type &&
+          ObDomainOpType::T_JSON_OVERLAPS != domain_op_type &&
+          ObDomainOpType::T_JSON_CONTAINS != domain_op_type &&
+          ObDomainOpType::T_JSON_IN_QUERY != domain_op_type) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported domain op type", K(ret), K(domain_op_type));
+      } else if (OB_FAIL(generate_tmp_search_index_domain_param(*cur_node, domain_op_type,
+                                                                tmp_in_param))) {
+        LOG_WARN("failed to generate tmp search index domain param", K(ret));
+      } else if (OB_ISNULL(tmp_in_param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(tmp_in_param));
+      } else if (tmp_in_param->always_false_) {
+        if (OB_FAIL(generate_one_range(*always_false_tmp_range_))) {
+          LOG_WARN("failed to generate one range", K(ret));
+        }
+      } else if (tmp_in_param->always_true_) {
+        if (cur_node->and_next_ == nullptr) {
+          if (OB_FAIL(generate_one_complex_range())) {
+            LOG_WARN("failed to generate one range");
+          }
+        } else if (OB_FAIL(SMART_CALL(formalize_complex_range(cur_node->and_next_)))) {
+          LOG_WARN("failed to formalize range");
+        }
+      } else {
+        int64_t path_cnt = 1;
+        bool skip_scalar_path = false;
+        if (ObDomainOpType::T_JSON_OVERLAPS == domain_op_type) {
+          // generate two ranges: one for scalar path, one for array path
+          path_cnt = 2;
+        } else if (ObDomainOpType::T_JSON_CONTAINS == domain_op_type) {
+          // generate three ranges: one for scalar path, one for array path,
+          // one for multi-dimension array path
+          path_cnt = 3;
+          skip_scalar_path = cur_node->domain_extra_.srid_ == 1;
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_in_param->in_param_.count(); ++i) {
+          for (int64_t path_idx = 0; OB_SUCC(ret) && path_idx < path_cnt; ++path_idx) {
+            ObTmpRange *new_range = nullptr;
+            if (pre_node_offset != -1 && add_last) {
+              tmp_range_lists_[pre_node_offset].remove_last();
+            }
+            add_last = false;
+            // path_idx: 0 = scalar path, 1 = array path, 2 = multi-dimension array path
+            if (skip_scalar_path && path_idx == 0) {
+              continue;
+            } else if (OB_FAIL(final_search_index_domain_range_node(*cur_node, i, tmp_in_param,
+                                                                    path_idx,
+                                                                    new_range))) {
+              LOG_WARN("failed to final search index range node");
+            } else if (new_range->always_false_) {
+              // If range is always false, directly generate it to set always_false_range_
+              if (OB_FAIL(generate_one_range(*new_range))) {
+                LOG_WARN("failed to generate one range", KPC(new_range));
+              }
+            } else {
+              if (new_range->always_true_) {
+                // do nothing, don't add to list
+              } else if (OB_UNLIKELY(!tmp_range_lists_[pre_node_offset].add_last(new_range))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to add last to dlist", KPC(new_range));
+              } else {
+                add_last = true;
+              }
+              if (OB_FAIL(ret)) {
+              } else if (cur_node->and_next_ == nullptr) {
+                if (OB_FAIL(generate_one_complex_range())) {
+                  LOG_WARN("failed to generate one range");
+                }
+              } else if (OB_FAIL(SMART_CALL(formalize_complex_range(cur_node->and_next_)))) {
+                LOG_WARN("failed to formalize range");
+              }
+            }
           }
         }
       }
@@ -2650,6 +2731,319 @@ int ObRangeGenerator::final_domain_range_node(const ObRangeNode &node,
                                               *in_param->in_param_.at(in_idx),
                                               range))) {
       LOG_WARN("failed to fill domain equal range node", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRangeGenerator::generate_tmp_search_index_domain_param(const ObRangeNode &node,
+                                                            const ObDomainOpType domain_op_type,
+                                                            ObTmpInParam *&tmp_in_param)
+{
+  int ret = OB_SUCCESS;
+  ObObj* objs_ptr = nullptr;
+  const ObRangeColumnMeta *meta = nullptr;
+  ObObj const_param;
+  bool is_valid = false;
+  if (OB_UNLIKELY(!node.is_domain_node_ || !node.is_search_node_ ||
+                  node.node_id_ < 0 ||
+                  node.node_id_ >= all_tmp_node_caches_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected search index array node", K(node.node_id_), K(all_tmp_node_caches_.count()));
+  } else if (OB_NOT_NULL(tmp_in_param = static_cast<ObTmpInParam*>(all_tmp_node_caches_.at(node.node_id_)))) {
+    // already cached, do nothing
+  } else if (OB_UNLIKELY(share::SEARCH_INDEX_VALUE >= pre_range_graph_->get_column_cnt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected range", K(node), K(pre_range_graph_->get_column_cnt()));
+  } else if (OB_ISNULL(meta = pre_range_graph_->get_column_meta(share::SEARCH_INDEX_VALUE))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(meta));
+  } else if (OB_ISNULL(tmp_in_param = (ObTmpInParam*)allocator_.alloc(sizeof(ObTmpInParam)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(tmp_in_param));
+  } else if (OB_FALSE_IT(tmp_in_param = new(tmp_in_param) ObTmpInParam(allocator_))) {
+  } else if (OB_FAIL(get_result_value(node.start_keys_[share::SEARCH_INDEX_VALUE], const_param, is_valid, exec_ctx_))) {
+    LOG_WARN("failed to get result value", K(node.start_keys_[share::SEARCH_INDEX_VALUE]));
+  } else if (!is_valid) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected not valid", K(ret), K(const_param));
+  } else if (const_param.is_null()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(const_param));
+  } else if (ObDomainOpType::T_JSON_OVERLAPS == domain_op_type ||
+             ObDomainOpType::T_JSON_IN_QUERY == domain_op_type ||
+             ObDomainOpType::T_JSON_CONTAINS == domain_op_type) {
+    // parse JSON and extract elements
+    ObIJsonBase* j_base = nullptr;
+    if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(const_param, &exec_ctx_, false, &allocator_, j_base))) {
+      LOG_WARN("fail to get json val", K(ret), K(const_param));
+    } else if (OB_ISNULL(j_base)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get json base", K(ret));
+    } else if (j_base->is_json_scalar(j_base->json_type())) {
+      // scalar JSON, treat as single value
+      if (OB_ISNULL(objs_ptr = (ObObj*)allocator_.alloc(sizeof(ObObj)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(objs_ptr));
+      } else if (OB_FAIL(tmp_in_param->in_param_.init(1))) {
+        LOG_WARN("failed to init fixed array size", K(ret));
+      } else {
+        // store ObIJsonBase pointer using set_ext for later retrieval
+        objs_ptr[0].set_ext(reinterpret_cast<int64_t>(j_base));
+        if (OB_FAIL(tmp_in_param->in_param_.push_back(&objs_ptr[0]))) {
+          LOG_WARN("failed to push back array", K(ret));
+        }
+      }
+    } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
+      // JSON array, iterate through elements
+      int64_t size = j_base->element_count();
+      if (size == 0) {
+        tmp_in_param->always_true_ = true;
+      } else if (OB_ISNULL(objs_ptr = (ObObj*)allocator_.alloc(sizeof(ObObj) * size))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(objs_ptr));
+      } else if (OB_FAIL(tmp_in_param->in_param_.init(size))) {
+        LOG_WARN("failed to init fixed array size", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+          ObIJsonBase* tmp_j_base = nullptr;
+          if (OB_FAIL(j_base->get_array_element(i, tmp_j_base))) {
+            LOG_WARN("fail to get json array element", K(i), K(ret));
+          } else if (OB_ISNULL(tmp_j_base)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get json array element result is null", K(i), K(ret));
+          } else {
+            // store ObIJsonBase pointer using set_ext for later retrieval
+            objs_ptr[i].set_ext(reinterpret_cast<int64_t>(tmp_j_base));
+            if (OB_FAIL(tmp_in_param->in_param_.push_back(&objs_ptr[i]))) {
+              LOG_WARN("failed to push back array element", K(ret));
+            }
+          }
+        }
+      }
+    } else {
+      // non-scalar and non-array JSON (e.g. object), set always_true
+      tmp_in_param->always_true_ = true;
+    }
+  } else if (const_param.is_collection_sql_type()) {
+    // parse array and extract elements
+    ObString data_str = const_param.get_string();
+    uint16_t subschema_id = const_param.get_meta().get_subschema_id();
+    ObSubSchemaValue value;
+    ObIArrayType *arr_obj = nullptr;
+    const ObSqlCollectionInfo *coll_info = nullptr;
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_, const_param, data_str))) {
+      LOG_WARN("failed to read array data", K(ret));
+    } else if (OB_FAIL(exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+      LOG_WARN("failed to get subschema ctx", K(ret), K(subschema_id));
+    } else if (OB_ISNULL(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("collection info is null", K(ret));
+    } else if (OB_ISNULL(coll_info->collection_meta_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("collection meta is null", K(ret));
+    } else if (OB_FAIL(ObArrayTypeObjFactory::construct(allocator_, *coll_info->collection_meta_, arr_obj, true))) {
+      LOG_WARN("failed to construct array obj", K(ret));
+    } else if (OB_FAIL(arr_obj->init(data_str))) {
+      LOG_WARN("failed to init array obj", K(ret));
+    } else {
+      int64_t size = arr_obj->size();
+      if (size == 0) {
+        tmp_in_param->always_true_ = true;
+      } else if (OB_ISNULL(objs_ptr = (ObObj*)allocator_.alloc(sizeof(ObObj) * size))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(objs_ptr));
+      } else if (OB_FAIL(tmp_in_param->in_param_.init(size))) {
+        LOG_WARN("failed to init fixed array size", K(ret));
+      } else {
+        uint32_t depth = 0;
+        const ObDataType *basic_elem_type = &(coll_info->get_basic_meta(depth));
+        const ObObjMeta elem_meta = basic_elem_type->get_meta_type();
+        for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+          ObObj elem_obj;
+          elem_obj.set_meta_type(elem_meta);
+          if (arr_obj->is_null(i)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("get unexpected null", K(ret));
+          } else if (OB_FAIL(arr_obj->elem_at(i, elem_obj))) {
+            LOG_WARN("failed to get array element", K(ret), K(i));
+          } else {
+            objs_ptr[i] = elem_obj;
+            if (OB_FAIL(tmp_in_param->in_param_.push_back(&objs_ptr[i]))) {
+              LOG_WARN("failed to push back array element", K(ret));
+            }
+          }
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected const param", K(ret), K(const_param));
+  }
+  return ret;
+}
+
+int ObRangeGenerator::final_search_index_domain_range_node(const ObRangeNode &node,
+                                                           const int64_t in_idx,
+                                                           ObTmpInParam *in_param,
+                                                           const int64_t path_idx,
+                                                           ObTmpRange *&range)
+{
+  int ret = OB_SUCCESS;
+  range = all_tmp_ranges_.at(node.node_id_);
+  if (range == nullptr) {
+    if (OB_FAIL(generate_tmp_range(range, pre_range_graph_->get_column_cnt()))) {
+      LOG_WARN("failed to generate tmp range");
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(in_param) ||
+        OB_UNLIKELY(in_idx >= in_param->in_param_.count()) ||
+        OB_ISNULL(in_param->in_param_.at(in_idx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected in idx", K(ret), K(in_idx), KPC(in_param));
+    } else if (OB_FAIL(fill_search_index_domain_range_node(node, *in_param->in_param_.at(in_idx),
+                                                           path_idx, range))) {
+      LOG_WARN("failed to fill search index domain range node", K(ret));
+    }
+  }
+  return ret;
+}
+
+static bool set_range(int64_t value, ObObj &range)
+{
+  bool has_range = true;
+  if (value == OB_RANGE_MIN_VALUE) {
+    range.set_min_value();
+  } else if (value == OB_RANGE_MAX_VALUE) {
+    range.set_max_value();
+  } else if (value == OB_RANGE_NULL_VALUE) {
+    range.set_null();
+  } else if (value == OB_RANGE_EMPTY_VALUE) {
+    range.set_nop_value();
+  } else {
+    has_range = false;
+  }
+  return has_range;
+}
+
+int ObRangeGenerator::fill_search_index_range_column(const int64_t col_idx,
+                                                     const int64_t key_val,
+                                                     const ObObj& value,
+                                                     const bool is_json_value,
+                                                     const int64_t path_idx,
+                                                     ObObj &range_obj,
+                                                     bool &always_false)
+{
+  int ret = OB_SUCCESS;
+  if (set_range(key_val, range_obj)) {
+    // do nothing
+  } else if (share::SEARCH_INDEX_COL_IDX == col_idx) {
+    bool is_valid = true;
+    if (OB_FAIL(get_result_value(key_val, range_obj, is_valid, exec_ctx_))) {
+      LOG_WARN("failed to get value", K(ret), K(key_val));
+    } else if (!is_valid) {
+      always_false = true;
+    }
+  } else if (share::SEARCH_INDEX_PATH == col_idx) {
+    bool is_valid = true;
+    ObObj path_obj;
+    if (OB_FAIL(get_result_value(key_val, path_obj, is_valid, exec_ctx_))) {
+      LOG_WARN("failed to get value", K(ret), K(key_val));
+    } else if (!is_valid) {
+      always_false = true;
+    } else if (is_json_value) {
+      ObString encoded_path;
+      ObIJsonBase* j_base = reinterpret_cast<ObIJsonBase*>(value.get_ext());
+      if (OB_ISNULL(j_base)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (path_idx == 0) {
+        // Use scalar path type for matching scalar elements
+        if (OB_FAIL(share::ObSearchIndexPathEncoder::encode_path(allocator_,
+            path_obj.get_string(), j_base, encoded_path))) {
+          LOG_WARN("failed to calc search index path", K(ret));
+        }
+      } else if (path_idx == 1) {
+        // Use array path type for matching array elements
+        if (OB_FAIL(share::ObSearchIndexPathEncoder::encode_array_path(allocator_,
+            path_obj.get_string(), j_base, encoded_path))) {
+          LOG_WARN("failed to calc search index array path", K(ret));
+        }
+      } else if (path_idx == 2) {
+        // Use multi-dimension array path type for matching multi-dimension array elements
+        if (OB_FAIL(share::ObSearchIndexPathEncoder::encode_multi_array_path(allocator_,
+            path_obj.get_string(), j_base, encoded_path))) {
+          LOG_WARN("failed to calc search index multi-dimension array path", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected path index", K(ret), K(path_idx));
+      }
+      if (OB_SUCC(ret)) {
+        range_obj.set_varbinary(encoded_path);
+      }
+    } else {
+      range_obj = path_obj;
+    }
+  } else if (share::SEARCH_INDEX_VALUE == col_idx) {
+    if (is_json_value) {
+      ObString encoded_value;
+      ObIJsonBase* j_base = reinterpret_cast<ObIJsonBase*>(value.get_ext());
+      if (OB_ISNULL(j_base)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(share::ObSearchIndexValueEncoder::encode_value(allocator_,
+          j_base, encoded_value))) {
+        LOG_WARN("failed to calc search index value from json", K(ret));
+      } else {
+        range_obj.set_varbinary(encoded_value);
+      }
+    } else {
+      ObString encoded_value;
+      if (OB_FAIL(share::ObSearchIndexValueEncoder::encode_value(allocator_,
+          value, encoded_value))) {
+        LOG_WARN("failed to calc search index value from obj", K(ret));
+      } else {
+        range_obj.set_varbinary(encoded_value);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRangeGenerator::fill_search_index_domain_range_node(const ObRangeNode &node,
+                                                          const ObObj& value,
+                                                          const int64_t path_idx,
+                                                          ObTmpRange *range)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(range)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    range->always_false_ = false;
+    range->always_true_ = false;
+    range->min_offset_ = node.min_offset_;
+    range->max_offset_ = node.max_offset_;
+    range->include_start_ = node.include_start_;
+    range->include_end_ = node.include_end_;
+    range->is_phy_rowid_ = node.is_phy_rowid_;
+    const bool is_json_value = value.is_ext();
+    // Fill search index columns
+    for (int64_t i = 0; OB_SUCC(ret) && !range->always_false_ && i < pre_range_graph_->get_column_cnt(); ++i) {
+      int64_t start = node.start_keys_[i];
+      int64_t end = node.end_keys_[i];
+      // Fill start range
+      if (OB_FAIL(fill_search_index_range_column(i, start, value, is_json_value, path_idx,
+                                                 range->start_[i], range->always_false_))) {
+        LOG_WARN("failed to fill search index start range column", K(ret), K(i));
+      } else if (range->always_false_) {
+        // do nothing
+      } else if (OB_FAIL(fill_search_index_range_column(i, end, value, is_json_value, path_idx,
+                                                        range->end_[i], range->always_false_))) {
+        LOG_WARN("failed to fill search index end range column", K(ret), K(i));
+      }
     }
   }
   return ret;

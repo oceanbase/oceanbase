@@ -565,7 +565,32 @@ int ObSqlCollectionInfo::parse_collection_info(std::string type_info, ObCollecti
 {
   int ret = OB_SUCCESS;
 
-  if (0 == type_info.compare("SPARSEVECTOR")) {
+  if (name_len_ > 7 && ObString(7, name_def_).compare("VECTOR(") == 0 && ObString(name_len_, name_def_).find(',') == NULL) {
+    // vector shortcut
+    if (OB_ISNULL(meta_info = OB_NEWx(ObCollectionArrayType, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to create array type meta", K(ret));
+    } else {
+      meta_info->type_id_ = ObNestedType::OB_VECTOR_TYPE;
+      ObCollectionBasicType *basic_meta_info = NULL;
+      if (OB_ISNULL(basic_meta_info = OB_NEWx(ObCollectionBasicType, &allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to create basic element type meta", K(ret));
+      } else {
+        static_cast<ObCollectionArrayType *>(meta_info)->element_type_ = basic_meta_info;
+        basic_meta_info->type_id_ = ObNestedType::OB_BASIC_TYPE;
+        basic_meta_info->basic_meta_.meta_.set_float(); // set default type
+        ObString dim(name_len_ - 8, name_def_ + 7);
+        char *p_end = nullptr;
+        int64_t val;
+        if (OB_FAIL(ob_strtoll(dim.ptr(), p_end, val))) {
+          LOG_WARN("failed to get value from string", K(ret), K(dim));
+        } else {
+          static_cast<ObCollectionArrayType *>(meta_info)->dim_cnt_ = static_cast<uint32_t>(val);
+        }
+      }
+    }
+  } else if (0 == type_info.compare("SPARSEVECTOR")) {
     if (OB_ISNULL(meta_info = OB_NEWx(ObCollectionMapType, &allocator_, allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create array type meta", K(ret));

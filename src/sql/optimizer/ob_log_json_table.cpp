@@ -192,5 +192,55 @@ ObColumnDefault* ObLogJsonTable::get_column_param_default_val(int64_t index)
   return val;
 }
 
+int ObLogJsonTable::gen_data_table_col_ids(const ObJsonTableDef &tbl_def)
+{
+  int ret = OB_SUCCESS;
+  if (index_column_cnt_ > tbl_def.doc_exprs_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index column count", K(index_column_cnt_), K(tbl_def.doc_exprs_.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_column_cnt_; ++i) {
+      ObColumnRefRawExpr *col_expr = NULL;
+      if (OB_ISNULL(tbl_def.doc_exprs_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("doc_expr in json_table_def is null", K(ret));
+      } else if (!tbl_def.doc_exprs_.at(i)->is_column_ref_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expect column ref expr", K(ret));
+      } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(tbl_def.doc_exprs_.at(i)))) {
+      } else if (col_expr->is_hidden_column()) {
+      } else if (OB_FAIL(data_table_col_ids_.push_back(col_expr->get_column_id()))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogJsonTable::generate_inc_pk_proj(const ObIArray<ObRawExpr*> &exprs)
+{
+  int ret = OB_SUCCESS;
+  if (index_column_cnt_ > exprs.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index column count", K(index_column_cnt_), K(exprs.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_column_cnt_; ++i) {
+      ObColumnRefRawExpr *col_expr = NULL;
+      if (OB_ISNULL(exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else if (!exprs.at(i)->is_column_ref_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expect column ref expr", K(ret));
+      } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(exprs.at(i)))) {
+      } else if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == col_expr->get_column_id()) {
+        inc_pk_proj_ = i;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 } // namespace sql
 }// namespace oceanbase

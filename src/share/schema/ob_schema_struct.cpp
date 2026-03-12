@@ -6733,11 +6733,22 @@ int ObPartitionUtils::check_param_valid_(
         // if table_schema is local index, check its existence in data table schema.
         bool index_exist = !is_index;
         for (int64_t i = 0; OB_SUCC(ret) && i < related_table->related_tids_->count(); i++) {
-          const uint64_t related_tid =
+          bool finded = false;
+          uint64_t related_tid =
             share::is_oracle_mapping_real_virtual_table(related_table->related_tids_->at(i)) ?
                   ObSchemaUtils::get_real_table_mappings_tid(related_table->related_tids_->at(i))
                   : related_table->related_tids_->at(i);
-          bool finded = false;
+          if (!share::is_oracle_mapping_real_virtual_table(related_table->related_tids_->at(i))) {
+            const ObTableSchema *related_schema = NULL;
+            if (OB_FAIL(guard->get_table_schema(tenant_id, related_tid, related_schema))) {
+              LOG_WARN("fail to get related_schema table schema", KR(ret), K(tenant_id), K(related_tid));
+            } else if (OB_ISNULL(related_schema)) {
+              ret = OB_TABLE_NOT_EXIST;
+              LOG_WARN("data table schema not exist", KR(ret), K(tenant_id), K(related_tid));
+            } else if (related_schema->is_search_data_index()) {
+              related_tid = related_schema->get_data_table_id();
+            }
+          }
           for (int64_t j = 0; !finded && OB_SUCC(ret) && j < simple_index_infos.count(); j++) {
             const ObAuxTableMetaInfo &index_info = simple_index_infos.at(j);
             if (is_index_local_storage(index_info.index_type_)

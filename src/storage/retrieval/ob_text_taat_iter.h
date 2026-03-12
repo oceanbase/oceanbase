@@ -30,7 +30,7 @@ struct ObTextTaaTParam
 {
   ObTextTaaTParam()
     : dim_iter_(nullptr), query_tokens_(nullptr), base_param_(nullptr), allocator_(nullptr),
-      bm25_param_est_ctx_(), mode_flag_(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE),
+      bm25_param_est_ctx_(nullptr), mode_flag_(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE),
       function_lookup_mode_(false) {}
   ~ObTextTaaTParam() {}
   TO_STRING_KV(K_(base_param), KP_(dim_iter), KP_(query_tokens), K_(bm25_param_est_ctx),
@@ -39,7 +39,7 @@ struct ObTextTaaTParam
   ObIArray<ObString> *query_tokens_;
   ObSparseRetrievalMergeParam *base_param_;
   common::ObArenaAllocator *allocator_;
-  ObBM25ParamEstCtx bm25_param_est_ctx_;
+  ObBM25ParamMultiEstCtx *bm25_param_est_ctx_;
   ObMatchAgainstMode mode_flag_;
   bool function_lookup_mode_;
 };
@@ -64,7 +64,7 @@ protected:
 protected:
   lib::MemoryContext mem_context_;
   ObIArray<ObString> *query_tokens_;
-  ObBM25ParamEstimator bm25_param_estimator_;
+  ObBM25ParamMultiEstimator bm25_param_estimator_;
   ObMatchAgainstMode mode_flag_;
   bool function_lookup_mode_;
 private:

@@ -440,6 +440,8 @@ OB_DEF_DESERIALIZE(ObJsonTableSpec)
         table_type_flag = OB_RB_ITERATE_TABLE;
       } else if (col_info->col_type_ == COL_TYPE_UNNEST) {
         table_type_flag = OB_UNNEST_TABLE;
+      } else if (col_info->col_type_ == OB_INDEX_DATA_GEN_TABLE_TYPE) {
+        table_type_flag = OB_INDEX_DATA_GEN_TABLE;
       } else if (col_info->col_type_ == COL_TYPE_AI_SPLIT_DOCUMENT) {
         table_type_flag = OB_AI_SPLIT_DOCUMENT_TABLE;
       }
@@ -463,7 +465,7 @@ OB_DEF_DESERIALIZE(ObJsonTableSpec)
         LOG_WARN("fail to store value expr.", K(ret));
       }
     }
-  } else if (table_type_flag == OB_INDEX_DATA_GEN_TABLE_TYPE) {
+  } else if (table_type_flag == OB_INDEX_DATA_GEN_TABLE) {
     OB_UNIS_DECODE(table_type_);
      int32_t value_exprs_count = 0;
     OB_UNIS_DECODE(value_exprs_count);
@@ -684,7 +686,8 @@ int ObJsonTableOp::inner_open()
   } else if (MY_SPEC.value_exprs_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to open iter, value expr is null.", K(ret));
-  } else if (OB_FAIL(root_->open(&jt_ctx_))) {
+  } else if (MY_SPEC.table_type_ != OB_INDEX_DATA_GEN_TABLE_TYPE
+    && OB_FAIL(root_->open(&jt_ctx_))) {
     LOG_WARN("failed to open table func xml column node.", K(ret));
   } else {
     is_evaled_ = false;
@@ -698,14 +701,17 @@ int ObJsonTableOp::inner_rescan()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to inner rescan", K(ret));
+  } else if (MY_SPEC.table_type_ == OB_INDEX_DATA_GEN_TABLE_TYPE) {
+    row_idx_ = 0;
+    row_.reuse();
+    rows_.reuse();
   } else if (OB_FAIL(root_->reset(&jt_ctx_))) {
     LOG_WARN("failed to open table func xml column node.", K(ret));
   } else {
     jt_ctx_.row_alloc_.reuse();
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(reset_variable())) {
-    LOG_WARN("failed to inner open", K(ret));
+    if (OB_FAIL(reset_variable())) {
+      LOG_WARN("failed to inner open", K(ret));
+    }
   }
   return ret;
 }
@@ -750,92 +756,98 @@ int ObJsonTableOp::init()
   if (!is_inited_) {
     const ObJsonTableSpec* spec_ptr = reinterpret_cast<const ObJsonTableSpec*>(&spec_);
     jt_ctx_.spec_ptr_ = const_cast<ObJsonTableSpec*>(spec_ptr);
-    if (OB_FAIL(generate_table_exec_tree())) {
-      LOG_WARN("fail to init json table op, as generate exec tree occur error.", K(ret));
+    if (jt_ctx_.is_index_data_gen_table_func()) {
+      if (OB_FAIL(init_row_generator())) {
+        LOG_WARN("failed to init row generator", K(ret));
+      }
     } else {
-      const sql::ObSQLSessionInfo *session = get_exec_ctx().get_my_session();
-      if (OB_ISNULL(session)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("session is NULL", K(ret));
+      if (OB_FAIL(generate_table_exec_tree())) {
+        LOG_WARN("fail to init json table op, as generate exec tree occur error.", K(ret));
       } else {
-        tenant_id = session->get_effective_tenant_id();
-        is_inited_ = true;
-        jt_ctx_.spec_ptr_ = const_cast<ObJsonTableSpec*>(spec_ptr);
-        jt_ctx_.eval_ctx_ = &eval_ctx_;
-        jt_ctx_.exec_ctx_ = &get_exec_ctx();
-        jt_ctx_.row_alloc_.set_tenant_id(tenant_id);
-        jt_ctx_.op_exec_alloc_ = allocator_;
-        jt_ctx_.is_evaled_ = false;
-        jt_ctx_.is_charset_converted_ = false;
-        jt_ctx_.res_obj_ = nullptr;
-        jt_ctx_.jt_op_ = this;
-        jt_ctx_.is_const_input_ = !MY_SPEC.has_correlated_expr_;
+        const sql::ObSQLSessionInfo *session = get_exec_ctx().get_my_session();
+        if (OB_ISNULL(session)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session is NULL", K(ret));
+        } else {
+          tenant_id = session->get_effective_tenant_id();
+          is_inited_ = true;
+          jt_ctx_.spec_ptr_ = const_cast<ObJsonTableSpec*>(spec_ptr);
+          jt_ctx_.eval_ctx_ = &eval_ctx_;
+          jt_ctx_.exec_ctx_ = &get_exec_ctx();
+          jt_ctx_.row_alloc_.set_tenant_id(tenant_id);
+          jt_ctx_.op_exec_alloc_ = allocator_;
+          jt_ctx_.is_evaled_ = false;
+          jt_ctx_.is_charset_converted_ = false;
+          jt_ctx_.res_obj_ = nullptr;
+          jt_ctx_.jt_op_ = this;
+          jt_ctx_.is_const_input_ = !MY_SPEC.has_correlated_expr_;
+        }
       }
-    }
-    void* table_func_buf = NULL;
-    if (OB_FAIL(ret)) {
-    } else if (jt_ctx_.is_json_table_func()) {
-      table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(JsonTableFunc));
-      if (OB_ISNULL(table_func_buf)) {
+      void* table_func_buf = NULL;
+      if (OB_FAIL(ret)) {
+      } else if (jt_ctx_.is_json_table_func()) {
+        table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(JsonTableFunc));
+        if (OB_ISNULL(table_func_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate table func buf", K(ret));
+        } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) JsonTableFunc())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to new json array node", K(ret));
+        }
+      } else if (jt_ctx_.is_rb_iterate_table_func()) {
+        table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(RbIterateTableFunc));
+        if (OB_ISNULL(table_func_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate table func buf", K(ret));
+        } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) RbIterateTableFunc())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to new rb iterate node", K(ret));
+        }
+      } else if (jt_ctx_.is_unnest_table_func()) {
+        table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(UnnestTableFunc));
+        if (OB_ISNULL(table_func_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate table func buf", K(ret));
+        } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) UnnestTableFunc())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to new unnest node", K(ret));
+        }
+      } else if (jt_ctx_.is_ai_split_document_table_func()) {
+        table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(AiSplitDocumentTableFunc));
+        if (OB_ISNULL(table_func_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate table func buf", K(ret));
+        } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) AiSplitDocumentTableFunc())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to new ai_split_document node", K(ret));
+        }
+      } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(jt_ctx_.op_exec_alloc_, jt_ctx_.xpath_ctx_))) {
+        LOG_WARN("fail to create xpath memory context", K(ret));
+      } else if (jt_ctx_.is_xml_table_func()) {
+        table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(XmlTableFunc));
+        if (OB_ISNULL(table_func_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate table func buf", K(ret));
+        } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) XmlTableFunc())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to new json array node", K(ret));
+        }
+      }
+      jt_ctx_.is_cover_error_ = false;
+      jt_ctx_.error_code_ = 0;
+      jt_ctx_.is_need_end_ = 0;
+      MultimodeAlloctor *tmp_allocator = nullptr;
+      if (OB_ISNULL(tmp_allocator = static_cast<MultimodeAlloctor*>(jt_ctx_.row_alloc_.alloc(sizeof(MultimodeAlloctor))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate table func buf", K(ret));
-      } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) JsonTableFunc())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to new json array node", K(ret));
+        LOG_WARN("failed to allocate Multimode alloc buf", K(ret));
+      } else {
+        new (tmp_allocator)MultimodeAlloctor(jt_ctx_.row_alloc_, T_XML_TABLE_EXPRESSION, ret);
       }
-    } else if (jt_ctx_.is_rb_iterate_table_func()) {
-      table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(RbIterateTableFunc));
-      if (OB_ISNULL(table_func_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate table func buf", K(ret));
-      } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) RbIterateTableFunc())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to new rb iterate node", K(ret));
-      }
-    } else if (jt_ctx_.is_unnest_table_func()) {
-      table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(UnnestTableFunc));
-      if (OB_ISNULL(table_func_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate table func buf", K(ret));
-      } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) UnnestTableFunc())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to new unnest node", K(ret));
-      }
-    } else if (jt_ctx_.is_ai_split_document_table_func()) {
-      table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(AiSplitDocumentTableFunc));
-      if (OB_ISNULL(table_func_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate table func buf", K(ret));
-      } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) AiSplitDocumentTableFunc())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to new ai_split_document node", K(ret));
-      }
-    } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(jt_ctx_.op_exec_alloc_, jt_ctx_.xpath_ctx_))) {
-      LOG_WARN("fail to create xpath memory context", K(ret));
-    } else if (jt_ctx_.is_xml_table_func()) {
-      table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(XmlTableFunc));
-      if (OB_ISNULL(table_func_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate table func buf", K(ret));
-      } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) XmlTableFunc())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to new json array node", K(ret));
-      }
-    }
-  }
-  jt_ctx_.is_cover_error_ = false;
-  jt_ctx_.error_code_ = 0;
-  jt_ctx_.is_need_end_ = 0;
-  MultimodeAlloctor *tmp_allocator = nullptr;
-  if (OB_ISNULL(tmp_allocator = static_cast<MultimodeAlloctor*>(jt_ctx_.row_alloc_.alloc(sizeof(MultimodeAlloctor))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate Multimode alloc buf", K(ret));
-  } else {
-    new (tmp_allocator)MultimodeAlloctor(jt_ctx_.row_alloc_, T_XML_TABLE_EXPRESSION, ret);
-  }
 
-  if (OB_SUCC(ret) && OB_FAIL(ObXmlUtil::create_mulmode_tree_context(tmp_allocator, jt_ctx_.mem_ctx_))) {
-    LOG_WARN("fail to create tree memory context", K(ret));
+      if (OB_SUCC(ret) && OB_FAIL(ObXmlUtil::create_mulmode_tree_context(tmp_allocator, jt_ctx_.mem_ctx_))) {
+        LOG_WARN("fail to create tree memory context", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -843,21 +855,27 @@ int ObJsonTableOp::init()
 int ObJsonTableOp::inner_close()
 {
   INIT_SUCC(ret);
-  if (OB_NOT_NULL(root_)) {
-    if (OB_FAIL(root_->reset(&jt_ctx_))) {
-      LOG_WARN("failed to reset root node", K(ret));
+  if (MY_SPEC.table_type_ == OB_INDEX_DATA_GEN_TABLE_TYPE) {
+    row_.reset();
+    rows_.reset();
+    row_generator_.reset();
+  } else {
+    if (OB_NOT_NULL(root_)) {
+      if (OB_FAIL(root_->reset(&jt_ctx_))) {
+        LOG_WARN("failed to reset root node", K(ret));
+      }
+      root_->destroy();
     }
-    root_->destroy();
-  }
-  if (OB_NOT_NULL(def_root_)) {
-    def_root_->destroy();
-  }
-  jt_ctx_.row_alloc_.clear();
-  if (OB_NOT_NULL(jt_ctx_.table_func_) && OB_NOT_NULL(jt_ctx_.op_exec_alloc_)) {
-    jt_ctx_.op_exec_alloc_->free(jt_ctx_.table_func_);
-  }
-  if (OB_NOT_NULL(jt_ctx_.xpath_ctx_) && OB_NOT_NULL(jt_ctx_.op_exec_alloc_)) {
-    jt_ctx_.op_exec_alloc_->free(jt_ctx_.xpath_ctx_);
+    if (OB_NOT_NULL(def_root_)) {
+      def_root_->destroy();
+    }
+    jt_ctx_.row_alloc_.clear();
+    if (OB_NOT_NULL(jt_ctx_.table_func_) && OB_NOT_NULL(jt_ctx_.op_exec_alloc_)) {
+      jt_ctx_.op_exec_alloc_->free(jt_ctx_.table_func_);
+    }
+    if (OB_NOT_NULL(jt_ctx_.xpath_ctx_) && OB_NOT_NULL(jt_ctx_.op_exec_alloc_)) {
+      jt_ctx_.op_exec_alloc_->free(jt_ctx_.xpath_ctx_);
+    }
   }
   return ret;
 }
@@ -2697,9 +2715,14 @@ int ObJsonTableOp::inner_get_next_row()
         || jt_ctx_.is_json_table_func()
         || jt_ctx_.is_rb_iterate_table_func()
         || jt_ctx_.is_unnest_table_func()
+        || jt_ctx_.is_index_data_gen_table_func()
         || jt_ctx_.is_ai_split_document_table_func())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unsupport table function", K(ret));
+  } else if (jt_ctx_.is_index_data_gen_table_func()) {
+    if (OB_FAIL(get_next_index_gen_row())) {
+      LOG_WARN("failed to get next data index gen row", K(ret));
+    }
   } else if (is_evaled_) {
     clear_evaluated_flag();
     if (OB_FAIL(root_->get_next_row(input_, &jt_ctx_, is_root_null))) {
@@ -2722,6 +2745,136 @@ int ObJsonTableOp::inner_get_next_row()
     }
   }
 
+  return ret;
+}
+
+int ObJsonTableOp::init_row_generator()
+{
+  INIT_SUCC(ret);
+  ObString index_properties;
+  common::ObSEArray<ObObjMeta, 8> included_cid_metas;
+  common::ObSEArray<int64_t, 8> row_projector;
+  common::ObSEArray<ObCollectionArrayType*, 8> arr_types;
+  if (OB_FAIL(row_.init(MY_SPEC.index_column_cnt_))) {
+    LOG_WARN("failed to init datum row", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.index_column_cnt_; i++) {
+      ObExpr *value_expr = MY_SPEC.value_exprs_.at(i);
+      if (OB_ISNULL(value_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("is null", K(value_expr), K(ret));
+      } else if (MY_SPEC.inc_pk_proj_ == i) {
+        // skip __pk_increment
+        continue;
+      } else if (OB_FAIL(included_cid_metas.push_back(value_expr->obj_meta_))) {
+        LOG_WARN("failed to push meta", K(ret));
+      } else if (OB_FAIL(row_projector.push_back(i))) {
+        LOG_WARN("failed to push projector", K(ret));
+      } else {
+        // get arr_type from subschema_id if it's collection type
+        ObCollectionArrayType *arr_type = nullptr;
+        if (ob_is_collection_sql_type(value_expr->obj_meta_.get_type())) {
+          uint16_t subschema_id = value_expr->obj_meta_.get_subschema_id();
+          if (OB_FAIL(ObArrayExprUtils::get_array_type_by_subschema_id(eval_ctx_, subschema_id, arr_type))) {
+            LOG_WARN("failed to get array type by subschema id", K(ret), K(subschema_id));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(arr_types.push_back(arr_type))) {
+          LOG_WARN("failed to push arr type", K(ret));
+        }
+      }
+    }
+  }
+  // the last position of row_projector is __pk_increment
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(row_projector.push_back(MY_SPEC.inc_pk_proj_))) {
+    LOG_WARN("failed to push projector", K(ret));
+  } else if (OB_FAIL(row_generator_.init(MY_SPEC.search_idx_included_cid_idxes_, included_cid_metas, row_projector,
+                                         index_properties, false, &arr_types))) {
+    LOG_WARN("failed to init row generator", K(ret));
+  }
+  return ret;
+}
+
+int ObJsonTableOp::generate_index_gen_rows()
+{
+  INIT_SUCC(ret);
+  int64_t row_cnt = 0;
+  blocksstable::ObDatumRow *row_array = NULL;
+  if (row_.get_column_count() != MY_SPEC.index_column_cnt_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the number of columns is not equal", K(row_.get_column_count()), K(MY_SPEC.index_column_cnt_));
+  } else {
+    row_.reuse();
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.value_exprs_.count(); ++i) {
+      ObDatum *datum = NULL;
+      ObExpr *value_expr = MY_SPEC.value_exprs_.at(i);
+      if (OB_FAIL(value_expr->eval(eval_ctx_, datum))) {
+        LOG_WARN("failed to eval args", K(ret));
+      } else if (i < MY_SPEC.index_column_cnt_) {
+        row_.storage_datums_[i].shallow_copy_from_datum(*datum);
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(row_generator_.generate_rows(row_, row_array, row_cnt))) {
+    LOG_WARN("failed to generate search rows", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
+      if (OB_FAIL(rows_.push_back(&row_array[i]))) {
+        LOG_WARN("fail to push back row", K(ret));
+      }
+    }
+  }
+  LOG_DEBUG("generate index gen rows", K(ret), K(rows_), K(row_));
+  return ret;
+}
+
+int ObJsonTableOp::fill_index_gen_column_exprs(blocksstable::ObDatumRow &row)
+{
+  INIT_SUCC(ret);
+  if (MY_SPEC.column_exprs_.count() != row.get_column_count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the number of columns is not equal", K(MY_SPEC.column_exprs_.count()),
+    K(row.get_column_count()), K(MY_SPEC.value_exprs_.count()), K(MY_SPEC.index_column_cnt_), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.column_exprs_.count(); i++) {
+      ObExpr *expr = MY_SPEC.column_exprs_.at(i);
+      expr->locate_datum_for_write(eval_ctx_) = row.storage_datums_[i];
+      expr->set_evaluated_projected(eval_ctx_);
+    }
+  }
+  return ret;
+}
+
+int ObJsonTableOp::get_next_index_gen_row()
+{
+  INIT_SUCC(ret);
+  bool got_row = false;
+  while (OB_SUCC(ret) && !got_row) {
+    if (row_idx_ >= rows_.count()) {
+      rows_.reuse();
+      row_idx_ = 0;
+      clear_evaluated_flag();
+      if (OB_FAIL(child_->get_next_row())) {
+        if (ret != OB_ITER_END) {
+          LOG_WARN("fail get next child row", K(ret));
+        }
+      } else if (OB_FAIL(generate_index_gen_rows())) {
+        LOG_WARN("fail to generate index gen row", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && row_idx_ < rows_.count()) {
+      ObDatumRow *row = rows_[row_idx_];
+      if (OB_FAIL(fill_index_gen_column_exprs(*row))) {
+        LOG_WARN("failed to fill index gen column exprs", K(ret));
+      } else {
+        ++row_idx_;
+        got_row = true;
+      }
+    }
+  }
   return ret;
 }
 

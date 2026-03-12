@@ -126,7 +126,8 @@ public:
       uint32_t is_not_in_node_: 1;
       uint32_t is_like_node_:   1; // for generate range expr
       uint32_t is_rowid_node_:  1; // for generate range expr
-      uint32_t reserved_:      22;
+      uint32_t is_search_node_: 1; // for search index range expr
+      uint32_t reserved_:      21;
     };
   };
   int64_t column_cnt_;
@@ -242,6 +243,35 @@ public:
   };
 };
 
+/*
+ * Context for search index used to generate query range.
+ */
+struct ObSearchIndexRangeCtx
+{
+public:
+  ObSearchIndexRangeCtx() : column_meta_(), column_idx_(OB_INVALID_INDEX), need_constraint_(false),
+    path_prefix_(), pick_type_(T_NULL) {}
+
+  ~ObSearchIndexRangeCtx() {}
+
+  int init(const ObTableSchema *base_table_schema, const ColumnItem &column_item,
+           ObExecContext *exec_ctx);
+  bool is_range_key(const uint64_t column_id) const { return column_id == column_meta_.column_id_; }
+  uint64_t column_id() const { return column_meta_.column_id_; }
+  ObRangeColumnMeta *column_meta() { return &column_meta_; }
+  inline bool has_pick() const { return pick_type_ != T_NULL; }
+  inline bool need_constraint() const { return need_constraint_; }
+
+  TO_STRING_KV(K_(column_meta), K_(column_idx), K_(path_prefix), K_(pick_type));
+
+  // selected column info
+  ObRangeColumnMeta column_meta_;  // column meta used to extract search index range.
+  int64_t column_idx_;             // column index in search index table.
+  bool need_constraint_;           // constraint to check string length
+  ObString path_prefix_;           // current literal path string.
+  ObItemType pick_type_;           // current pick type
+};
+
 struct ObQueryRangeCtx
 {
   ObQueryRangeCtx(ObExecContext *exec_ctx)
@@ -268,7 +298,8 @@ struct ObQueryRangeCtx
       is_global_index_(false),
       unique_index_column_num_(-1),
       constraints_expr_factory_(nullptr),
-      ignore_fake_const_udf_(false) {}
+      ignore_fake_const_udf_(false),
+      search_index_range_ctx_(nullptr) {}
   ~ObQueryRangeCtx() {}
   int init(ObPreRangeGraph *pre_range_graph,
            const ObIArray<ColumnItem> &range_columns,
@@ -282,7 +313,9 @@ struct ObQueryRangeCtx
            const bool force_no_link,
            const ObTableSchema *index_schema,
            ObRawExprFactory *constraints_expr_factory,
-           const bool ignore_fake_const_udf);
+           const bool ignore_fake_const_udf,
+           ObSearchIndexRangeCtx *search_index_range_ctx);
+  OB_INLINE bool is_search_index() const { return OB_NOT_NULL(search_index_range_ctx_); }
   int64_t column_cnt_;
   // 131 is the next prime number larger than OB_MAX_ROWKEY_COLUMN_NUMBER
   common::hash::ObPlacementHashMap<int64_t, int64_t, 131> range_column_map_;
@@ -318,6 +351,7 @@ struct ObQueryRangeCtx
   int64_t unique_index_column_num_;
   ObRawExprFactory *constraints_expr_factory_;
   bool ignore_fake_const_udf_;
+  ObSearchIndexRangeCtx *search_index_range_ctx_;
 };
 
 class ObPreRangeGraph : public ObQueryRangeProvider
@@ -371,7 +405,8 @@ public:
                                       const ObTableSchema *index_schema = NULL,
                                       const ColumnIdInfoMap *geo_column_id_map = NULL,
                                       ObRawExprFactory *constraint_expr_factory = NULL,
-                                      const bool ignore_fake_const_udf = false);
+                                      const bool ignore_fake_const_udf = false,
+                                      ObSearchIndexRangeCtx *search_index_range_ctx = NULL);
   virtual int get_tablet_ranges(common::ObIAllocator &allocator,
                                 ObExecContext &exec_ctx,
                                 ObQueryRangeArray &ranges,

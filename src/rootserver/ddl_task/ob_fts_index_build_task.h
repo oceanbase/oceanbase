@@ -118,10 +118,12 @@ private:
   bool is_fts_task() const { return task_type_ == share::DDL_CREATE_FTS_INDEX; }
   bool is_multivalue_task() const { return task_type_ == share::DDL_CREATE_MULTIVALUE_INDEX; }
   bool is_spiv_task() const { return task_type_ == share::DDL_CREATE_VEC_SPIV_INDEX; }
+  bool is_search_index_task() const { return task_type_ == share::DDL_CREATE_SEARCH_INDEX; }
   bool is_domain_index_aux(const ObIndexType index_type) const { return share::schema::is_fts_index_aux(index_type) ||
                            share::schema::is_multivalue_index_aux(index_type) || share::schema::is_vec_spiv_index_aux(index_type); }
   bool is_domain_index(const ObIndexType index_type) const { return share::schema::is_fts_index(index_type) ||
                        share::schema::is_multivalue_index(index_type) || share::schema::is_vec_spiv_index(index_type); }
+  bool is_search_index(const ObIndexType index_type) const { return share::schema::is_search_index(index_type); }
   int get_next_status(share::ObDDLTaskStatus &next_status);
   int prepare_aux_table(
       const ObIndexType index_type,
@@ -141,6 +143,7 @@ private:
   int construct_doc_rowkey_arg(obrpc::ObCreateIndexArg &arg);
   int construct_domain_index_aux_arg(obrpc::ObCreateIndexArg &arg);
   int construct_fts_doc_word_arg(obrpc::ObCreateIndexArg &arg);
+  int construct_search_data_index_arg(obrpc::ObCreateIndexArg &arg);
   int calculate_aux_table_parallelism(
       const ObIndexType index_type,
       const int64_t total_parallelism,

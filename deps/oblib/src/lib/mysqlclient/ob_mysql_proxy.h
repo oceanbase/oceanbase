@@ -66,6 +66,8 @@ public:
   bool is_major_refreshing_mview() const { return is_major_refreshing_mview_; }
   void set_is_vec_tablet_rebuild(const bool flag) { is_vec_tablet_rebuild_ = flag; }
   bool is_vec_tablet_rebuild() const { return is_vec_tablet_rebuild_; }
+  void set_search_index_ddl(const bool flag) { is_search_index_ddl_ = flag; }
+  bool is_search_index_ddl() const { return is_search_index_ddl_; }
   void set_is_partition_local_ddl(const bool flag) { is_partition_local_ddl_ = flag; }
   bool is_partition_local_ddl() const { return is_partition_local_ddl_; }
   inline void reset() { ddl_info_ = 0; }
@@ -134,6 +136,7 @@ public:
   void set_is_dummy_ddl_for_inner_visibility(const bool flag) { ddl_info_.set_is_dummy_ddl_for_inner_visibility(flag); }
   void set_major_refreshing_mview(const bool flag) { ddl_info_.set_major_refreshing_mview(flag); }
   void set_is_vec_tablet_rebuild(const bool flag) { ddl_info_.set_is_vec_tablet_rebuild(flag); }
+  void set_search_index_ddl(const bool flag) { ddl_info_.set_search_index_ddl(flag); }
   void set_partition_local_ddl(const bool flag) { ddl_info_.set_is_partition_local_ddl(flag); }
 
   bool is_ddl() const { return ddl_info_.is_ddl(); }
@@ -147,6 +150,7 @@ public:
   bool is_dummy_ddl_for_inner_visibility() const { return ddl_info_.is_dummy_ddl_for_inner_visibility(); }
   bool is_major_refreshing_mview() const { return ddl_info_.is_major_refreshing_mview(); }
   bool is_vec_tablet_rebuild() const { return ddl_info_.is_vec_tablet_rebuild(); }
+  bool is_search_index_ddl() const { return ddl_info_.is_search_index_ddl(); }
   bool is_partition_local_ddl() const { return ddl_info_.is_partition_local_ddl(); }
   inline uint64_t get_session_id() const { return session_id_;}
   inline void reset() { session_id_ = OB_INVALID_ID;

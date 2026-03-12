@@ -3152,6 +3152,9 @@ public:
   inline bool is_spatial_index() const { return ObSimpleTableSchemaV2::is_spatial_index(index_type_); }
   inline bool is_multivalue_index() const { return is_multivalue_index_aux(index_type_); }
   inline bool is_vec_index() const { return ObSimpleTableSchemaV2::is_vec_index(index_type_); }
+  inline bool is_search_index() const { return ObSimpleTableSchemaV2::is_search_index(index_type_); }
+  inline bool is_search_def_index() const { return ObSimpleTableSchemaV2::is_search_def_index(index_type_); }
+  inline bool is_search_data_index() const { return ObSimpleTableSchemaV2::is_search_data_index(index_type_); }
   inline bool is_offline_or_restore() const { return is_offline_rebuild_ || is_table_restore_; }
 
 //todo @qilu:only for each_cg now, when support customized cg ,refine this

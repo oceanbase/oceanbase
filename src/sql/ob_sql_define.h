@@ -159,7 +159,7 @@ enum ObMatchScoreNorm {
   MAX_SCORE_NORM_TYPE = 3,
 };
 
-enum ObMatchFiledsType {
+enum ObMatchFieldsType {
   MATCH_MOST_FIELDS = 0,
   MATCH_BEST_FIELDS = 1,
   MATCH_CROSS_FIELDS = 2,

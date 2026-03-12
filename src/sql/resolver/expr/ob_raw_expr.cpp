@@ -656,6 +656,12 @@ bool ObRawExpr::is_json_domain_expr() const
   return IS_JSON_DOMAIN_OP(expr->get_expr_type());
 }
 
+bool ObRawExpr::is_domain_array_expr() const
+{
+  const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(this);
+  return IS_DOMAIN_ARRAY_OP(expr->get_expr_type());
+}
+
 bool ObRawExpr::is_multivalue_expr() const
 {
   const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(this);
@@ -4646,6 +4652,13 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
     bool_ret = l_expr->same_as(*r_expr, check_context);
   }
 
+  if (bool_ret
+      && l_expr->get_expr_type() == r_expr->get_expr_type()
+      && (T_FUN_SYS_JSON_VALUE == l_expr->get_expr_type()
+          || T_FUN_SYS_JSON_EXTRACT == l_expr->get_expr_type())) {
+    bool_ret = (l_expr->get_pick() == r_expr->get_pick());
+  }
+
   return bool_ret;
 }
 
@@ -4776,6 +4789,11 @@ void ObSysFunRawExpr::inner_calc_hash()
     } else {
       expr_hash_ = common::do_hash(get_param_expr(i)->get_expr_hash(), expr_hash_);
     }
+  }
+
+  if (T_FUN_SYS_JSON_VALUE == get_expr_type()
+      || T_FUN_SYS_JSON_EXTRACT == get_expr_type()) {
+    expr_hash_ = common::do_hash(static_cast<uint64_t>(get_pick()), expr_hash_);
   }
   if (0 == get_param_count()
       && (T_FUN_SYS_CUR_TIMESTAMP == get_expr_type()
@@ -5020,9 +5038,17 @@ int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
             LOG_WARN("param_expr is NULL", K(i), K(ret));
           } else if (OB_FAIL(get_param_expr(i)->get_name(buf, buf_len, pos, type))) {
             LOG_WARN("fail to get_name", K(i), K(ret));
-          } else if (OB_FAIL(BUF_PRINTF(", "))) {
+          } else if (T_FUN_SYS_JSON_VALUE == get_expr_type() && lib::is_mysql_mode() && 1 == i) {
+            const ObItemType pick_type = get_pick();
+            if (T_JSON_NUMBER == pick_type) {
+              OZ(BUF_PRINTF(" pick json_number"));
+            } else if (T_JSON_STRING == pick_type) {
+              OZ(BUF_PRINTF(" pick json_string"));
+            }
+          }
+          if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF(", "))) {
             LOG_WARN("fail to BUF_PRINTF", K(ret));
-          } else {}
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -5043,6 +5069,14 @@ int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
       }
     }
     if (OB_SUCC(ret)) {
+      if (T_FUN_SYS_JSON_EXTRACT == get_expr_type() && lib::is_mysql_mode()) {
+        const ObItemType pick_type = get_pick();
+        if (T_JSON_NUMBER == pick_type) {
+          OZ(BUF_PRINTF(" pick json_number"));
+        } else if (T_JSON_STRING == pick_type) {
+          OZ(BUF_PRINTF(" pick json_string"));
+        }
+      }
       if (OB_FAIL(BUF_PRINTF(")"))) {
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       } else if (EXPLAIN_EXTENDED == type) {

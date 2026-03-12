@@ -1070,6 +1070,12 @@ inline bool is_hybrid_vec_index(const ObIndexType index_type)
          || is_hybrid_vec_index_embedded_type(index_type);
 }
 
+inline bool is_search_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_SEARCH_DEF_INDEX_LOCAL
+      || index_type == INDEX_TYPE_SEARCH_DATA_INDEX_LOCAL;
+}
+
 inline bool is_built_in_multivalue_index(const ObIndexType index_type)
 {
   return is_rowkey_doc_aux(index_type)
@@ -1081,6 +1087,11 @@ inline bool is_built_in_fts_index(const ObIndexType index_type)
   return is_rowkey_doc_aux(index_type)
       || is_doc_rowkey_aux(index_type)
       || is_fts_doc_word_aux(index_type);
+}
+
+inline bool is_built_in_search_index(const ObIndexType index_type)
+{
+  return is_search_index(index_type);
 }
 
 inline bool is_multivalue_index(const ObIndexType index_type)
@@ -1154,6 +1165,16 @@ inline bool is_vec_index(const ObIndexType index_type)
          is_hybrid_vec_index(index_type);
 }
 
+inline bool is_search_def_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_SEARCH_DEF_INDEX_LOCAL;
+}
+
+inline bool is_search_data_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_SEARCH_DATA_INDEX_LOCAL;
+}
+
 
 // new built in index type should add case in built_in_index_not_visible.test
 inline bool is_built_in_index(const ObIndexType index_type)
@@ -1176,7 +1197,8 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || is_local_fts_index(index_type)
            || is_local_vec_index(index_type)
            || is_global_local_fts_index(index_type)
-           || is_local_multivalue_index(index_type);
+           || is_local_multivalue_index(index_type)
+           || is_search_index(index_type);
 }
 
 inline bool is_index_support_empty_table_opt(ObIndexType index_type)
@@ -1213,7 +1235,8 @@ inline bool index_has_tablet(const ObIndexType &index_type)
         || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_type
         || is_fts_index(index_type)
         || is_multivalue_index(index_type)
-        || is_vec_index(index_type);
+        || is_vec_index(index_type)
+        || is_search_index(index_type);
 }
 
 inline static bool is_local_unique_index_table(const ObIndexType index_type)
@@ -4329,7 +4352,7 @@ public :
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_database_id() const { return database_id_; }
   inline const common::ObString &get_index_name() const { return index_name_; }
-  TO_STRING_KV(K_(index_name));
+  TO_STRING_KV(K_(index_name), K_(tenant_id), K_(pure_data_table_id), K_(index_name));
 private :
   uint64_t tenant_id_;
   uint64_t database_id_;

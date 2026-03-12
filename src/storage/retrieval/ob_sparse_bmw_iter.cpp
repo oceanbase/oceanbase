@@ -162,6 +162,7 @@ int ObSRBMWIterImpl::evaluate_pivot(const int64_t pivot_iter_idx)
   const ObDatum *collected_id = nullptr;
   double pivot_relevance = 0.0;
   bool need_project = false;
+  bool is_top_k = false;
   if (OB_ISNULL(iter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null iter", K(ret));
@@ -169,9 +170,9 @@ int ObSRBMWIterImpl::evaluate_pivot(const int64_t pivot_iter_idx)
     LOG_WARN("failed to get pivot id", K(ret), K(pivot_iter_idx));
   } else if (OB_FAIL(advance_dim_iters_for_next_round(*pivot_id, true))) {
     LOG_WARN("failed to advance dim iters for next round", K(ret));
-  } else if (OB_FAIL(collect_dims_by_id(collected_id, pivot_relevance, need_project))) {
+  } else if (OB_FAIL(collect_dims_by_id(false, collected_id, pivot_relevance, need_project))) {
     LOG_WARN("failed to collect dims by id", K(ret));
-  } else if (OB_FAIL(process_collected_row(*collected_id, pivot_relevance))) {
+  } else if (OB_FAIL(process_collected_row(*collected_id, pivot_relevance, is_top_k))) {
     LOG_WARN("failed to process collected row", K(ret));
   } else if (OB_FAIL(unify_dim_iters_for_next_round())) {
     LOG_WARN("failed to unify dim iters for next round", K(ret));
@@ -196,7 +197,7 @@ int ObSRBMWIterImpl::evaluate_pivot_range(const int64_t pivot_iter_idx, bool &is
     LOG_WARN("failed to get pivot id", K(ret), K(pivot_iter_idx));
   }
 
-  double block_max_score = 0.0;
+  relevance_collector_->reuse();
   const ObMaxScoreTuple *max_score_tuple = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < next_round_cnt_; ++i) {
     const int64_t iter_idx = next_round_iter_idxes_[i];
@@ -212,12 +213,16 @@ int ObSRBMWIterImpl::evaluate_pivot_range(const int64_t pivot_iter_idx, bool &is
       }
     } else if (OB_FAIL(iter->get_curr_block_max_info(max_score_tuple))) {
       LOG_WARN("failed to get block max score", K(ret), K(iter_idx));
-    } else {
-      block_max_score += max_score_tuple->max_score_;
+    } else if (OB_FAIL(relevance_collector_->collect_one_dim(iter_idx, max_score_tuple->max_score_))) {
+      LOG_WARN("failed to collect one dimension", K(ret));
     }
   }
 
-  if (OB_SUCC(ret)) {
+  double block_max_score = 0.0;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(relevance_collector_->get_partial_result(block_max_score))) {
+    LOG_WARN("failed to get result", K(ret));
+  } else {
     is_candidate = block_max_score > get_top_k_threshold();
   }
 

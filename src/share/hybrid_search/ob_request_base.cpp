@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_request_base.h"
+#include "sql/printer/ob_raw_expr_printer.h"
+
 #define IS_LOGICAL_OPERATOR(type) ((type) == T_OP_AND || (type) == T_OP_OR || (type) == T_OP_XOR)
 #define IS_SIMPLIFIABLE_OPERATOR(type) (IS_LOGICAL_OPERATOR(type) || \
                                         (type) == T_OP_ADD || \

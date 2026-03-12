@@ -252,6 +252,12 @@ double ObExprBM25::doc_token_weight(const int64_t token_freq, const double norm_
   return tf / (tf + p_k1 * (1.0 - p_b + p_b * norm_len));
 }
 
+double ObExprBM25::doc_phrase_weight(const double phrase_freq, const double norm_len)
+{
+  const double tf = phrase_freq;
+  return tf / (tf + p_k1 * (1.0 - p_b + p_b * norm_len));
+}
+
 double ObExprBM25::query_token_weight(const int64_t doc_freq, const int64_t doc_cnt)
 {
   const double df = static_cast<double>(doc_freq);

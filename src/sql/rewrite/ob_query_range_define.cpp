@@ -19,9 +19,12 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/optimizer/ob_opt_est_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "share/search_index/ob_search_index_encoder.h"
 
 namespace oceanbase {
 using namespace common;
+using namespace share;
+
 namespace sql {
 ERRSIM_POINT_DEF(ERRSIM_FAST_NLJ_RANGE_GENERATOR_CHECK);
 
@@ -347,7 +350,8 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const bool force_no_link,
                           const ObTableSchema *index_schema,
                           ObRawExprFactory *constraints_expr_factory,
-                          const bool ignore_fake_const_udf)
+                          const bool ignore_fake_const_udf,
+                          ObSearchIndexRangeCtx *search_index_range_ctx)
 {
   int ret = OB_SUCCESS;
   ObQueryCtx *query_ctx = NULL;
@@ -389,6 +393,9 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     if (OB_NOT_NULL(index_schema)) {
       is_global_index_ = index_schema->is_global_index_table();
     }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(search_index_range_ctx)) {
+    search_index_range_ctx_ = search_index_range_ctx;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < range_columns.count(); ++i) {
     const ColumnItem &col = range_columns.at(i);
@@ -634,7 +641,8 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
                                                      const ObTableSchema *index_schema /* = NULL*/,
                                                      const ColumnIdInfoMap *geo_column_id_map /* = NULL*/,
                                                      ObRawExprFactory *constraint_expr_factory /* = NULL*/,
-                                                     const bool ignore_fake_const_udf /* = false*/)
+                                                     const bool ignore_fake_const_udf /* = false*/,
+                                                     ObSearchIndexRangeCtx *search_index_range_ctx /* = NULL*/)
 {
   int ret = OB_SUCCESS;
   bool force_no_link = false;
@@ -649,7 +657,8 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
                               params, &expr_factory,
                               phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
                               geo_column_id_map, force_no_link, index_schema,
-                              constraint_expr_factory, ignore_fake_const_udf))) {
+                              constraint_expr_factory, ignore_fake_const_udf,
+                              search_index_range_ctx))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);
@@ -1369,7 +1378,7 @@ int ObPreRangeGraph::get_range_exprs(ObRawExprFactory &expr_factory,
                               params, &expr_factory,
                               phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
                               geo_column_id_map, force_no_link, index_schema,
-                              NULL, ignore_fake_const_udf))) {
+                              NULL, ignore_fake_const_udf, NULL /*search_index_range_ctx*/))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);
@@ -1974,6 +1983,56 @@ int ObPreRangeGraph::set_general_nlj_range_extraction(const ObIArray<ObFastFinal
     LOG_WARN("failed to assign array", K(ret));
   } else {
     general_nlj_range_ = true;
+  }
+  return ret;
+}
+
+int ObSearchIndexRangeCtx::init(const ObTableSchema *base_table_schema,
+                                 const ColumnItem &column_item,
+                                 ObExecContext *exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(base_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret), K(base_table_schema));
+  } else if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret), KP(exec_ctx));
+  } else if (OB_UNLIKELY(column_item.is_invalid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret), K(column_item));
+  } else {
+    const uint64_t column_id = column_item.column_id_;
+    const int64_t column_idx = base_table_schema->get_column_idx(column_id);
+    if (column_idx < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get column idx", K(ret), K(column_id));
+    } else {
+      column_idx_ = column_idx;
+      column_meta_.column_id_ = column_id;
+      const ObRawExprResType col_type = column_item.expr_->get_result_type();
+      column_meta_.column_type_ = col_type;
+      if (col_type.is_lob_locator()) {
+        column_meta_.column_type_.set_type(ObLongTextType);
+      } else if (ob_is_string_tc(col_type.get_type())) {
+        const ObLength column_length = col_type.get_length();
+        need_constraint_ = ObSearchIndexValueEncoder::string_column_may_truncate(col_type, column_length);
+      } else if (ob_is_json_tc(col_type.get_type())) {
+        need_constraint_ = true;
+      } else if (ob_is_collection_sql_type(col_type.get_type())) {
+        uint16_t subschema_id = col_type.get_subschema_id();
+        ObSubSchemaValue value;
+        const ObSqlCollectionInfo *coll_info = nullptr;
+        if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+          LOG_WARN("failed to get subschema", K(ret), K(subschema_id));
+        } else if (OB_ISNULL(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("collection info is null", K(ret));
+        } else {
+          need_constraint_ = ObSearchIndexConstraint::need_array_string_constraint(*coll_info);
+        }
+      }
+    }
   }
   return ret;
 }

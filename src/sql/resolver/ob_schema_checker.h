@@ -583,6 +583,8 @@ public:
   int check_set_default_role_priv(const ObSqlCtx &sql_ctx);
   int set_lbca_op();
   bool is_lbca_op();
+  int set_search_index_ddl();
+  bool is_search_index_ddl() const;
 
   static bool is_ora_priv_check(); 
   static bool enable_mysql_pl_priv_check(int64_t tenant_id, share::schema::ObSchemaGetterGuard &schema_guard);
@@ -636,6 +638,16 @@ int construct_udt_qualified_name(const share::schema::ObUDTTypeInfo &udt_info, O
                                 const common::ObString &column_name,
                                 bool &is_ddl_tmp,
                                 const share::schema::ObColumnSchemaV2 *&column_schema) const;
+  int get_column_schema_from_mgr(const uint64_t tenant_id, uint64_t table_id,
+                                 const common::ObString &column_name,
+                                 const share::schema::ObColumnSchemaV2 *&column_schema,
+                                 bool is_link = false) const;
+  int get_column_schema_from_mgr(const uint64_t tenant_id, uint64_t table_id, const uint64_t column_id,
+                                 const share::schema::ObColumnSchemaV2 *&column_schema,
+                                 bool is_link = false) const;
+  int get_search_index_data_table_schema(const uint64_t tenant_id,
+                                         const uint64_t table_id,
+                                         const share::schema::ObTableSchema *&table_schema) const;
 private:
   bool is_inited_;
   share::schema::ObSchemaGetterGuard *schema_mgr_;
@@ -647,7 +659,15 @@ private:
   common::ObArray<const share::schema::ObTableSchema*,
                   common::ModulePageAllocator, true> ddl_tmp_schemas_;
   // 记录checker的额外信息，例如安全员的操作等
-  int flag_;
+  union {
+    uint32_t flag_;
+    struct {
+      uint32_t lbca_op_flag_ : 1;
+      uint32_t search_index_ddl_ : 1;
+      uint32_t reserved_;
+    };
+  };
+
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSchemaChecker);
 };

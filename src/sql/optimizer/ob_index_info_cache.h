@@ -171,6 +171,7 @@ public:
     is_fulltext_index_(false),
     is_multivalue_index_(false),
     is_vector_index_(false),
+    is_search_index_(false),
     force_direction_(false),
     range_info_(allocator),
     ordering_info_(allocator),
@@ -208,6 +209,8 @@ public:
   void set_is_fulltext_index(const bool is_fulltext_index) { is_fulltext_index_ = is_fulltext_index; }
   bool is_vector_index() const { return is_vector_index_; }
   void set_is_vector_index(const bool is_vector_index) { is_vector_index_ = is_vector_index; }
+  bool is_search_index() const { return is_search_index_; }
+  void set_is_search_index(const bool is_search_index) { is_search_index_ = is_search_index; }
   void set_partition_info(ObTablePartitionInfo *partition_info) { partition_info_ = partition_info; }
   ObTablePartitionInfo *get_partition_info() const { return partition_info_; }
   void set_sharding_info(ObShardingInfo *sharding_info) { sharding_info_ = sharding_info; }
@@ -217,7 +220,7 @@ public:
   bool is_force_direction() const { return force_direction_; }
   void set_force_direction(bool force) { force_direction_ = force; }
   TO_STRING_KV(K_(index_id), K_(is_unique_index), K_(is_index_back), K_(is_index_global),
-               K_(is_fulltext_index), K_(is_multivalue_index), K_(range_info), K_(ordering_info), K_(interesting_order_info),
+               K_(is_fulltext_index), K_(is_multivalue_index), K_(is_search_index), K_(range_info), K_(ordering_info), K_(interesting_order_info),
                K_(interesting_order_prefix_count));
 private:
   uint64_t index_id_;
@@ -228,6 +231,7 @@ private:
   bool is_fulltext_index_;
   bool is_multivalue_index_;
   bool is_vector_index_;
+  bool is_search_index_;
   bool force_direction_;
   QueryRangeInfo range_info_;
   OrderingInfo ordering_info_;

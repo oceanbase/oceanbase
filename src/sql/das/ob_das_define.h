@@ -382,6 +382,7 @@ public:
   virtual bool has_expr() const { return false; }
   virtual bool has_pdfilter_or_calc_expr() const { return false; }
   virtual bool has_pl_udf() const { return false; }
+  virtual bool is_search_ctdef() const { return false; }
 
 protected:
   ObDASBaseCtDef(ObDASOpType op_type)

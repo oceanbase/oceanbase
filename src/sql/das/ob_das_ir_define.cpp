@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "ob_das_ir_define.h"
+#include "sql/das/search/ob_das_scalar_define.h"
 
 namespace oceanbase
 {
@@ -161,6 +162,16 @@ OB_DEF_SERIALIZE_SIZE(ObDASIRScanCtDef)
   return len;
 }
 
+const ObDASScalarScanCtDef *ObDASIRScanCtDef::get_child_scalar_ctdef(const int64_t idx) const
+{
+  OB_ASSERT(use_scalar_scan_def_);
+  const ObDASScalarScanCtDef *child_ctdef = nullptr;
+  if (children_cnt_ > idx && idx >= 0 && children_ != nullptr) {
+    child_ctdef = static_cast<const ObDASScalarScanCtDef *>(children_[idx]);
+  }
+  return child_ctdef;
+}
+
 OB_SERIALIZE_MEMBER(ObDASIRScanRtDef);
 
 OB_SERIALIZE_MEMBER((ObDASIRAuxLookupCtDef, ObDASAttachCtDef),
@@ -187,6 +198,15 @@ OB_SERIALIZE_MEMBER((ObDASIREsMatchRtDef, ObDASAttachRtDef));
 OB_SERIALIZE_MEMBER((ObDASIREsScoreCtDef, ObDASAttachCtDef));
 
 OB_SERIALIZE_MEMBER((ObDASIREsScoreRtDef, ObDASAttachRtDef));
+
+ObDASScalarScanRtDef *ObDASIRScanRtDef::get_child_scalar_rtdef(const int64_t idx) const
+{
+  ObDASScalarScanRtDef *scalar_rtdef = nullptr;
+  if (children_cnt_ > idx && idx >= 0 && children_ != nullptr) {
+    scalar_rtdef = static_cast<ObDASScalarScanRtDef *>(children_[idx]);
+  }
+  return scalar_rtdef;
+}
 
 ObDocIdExt::ObDocIdExt()
   : buf_{}, datum_(buf_, 0, false)
@@ -238,6 +258,23 @@ int ObDocIdExt::from_datum(const ObDatum &datum)
   int64_t dummy_pos = 0;
   if (OB_FAIL(datum_.deep_copy(datum, buf_, OB_DOC_ID_EXT_SIZE, dummy_pos))) {
     LOG_WARN("failed to copy datum to doc id ext", K(ret));
+  }
+  return ret;
+}
+
+int ObDocIdExt::from_vector(const ObIVector &vec, const int64_t idx)
+{
+  int ret = common::OB_SUCCESS;
+  const char *payload = nullptr;
+  int32_t length = 0;
+  vec.get_payload(idx, payload, length);
+  if (OB_UNLIKELY(nullptr == payload || length <= 0 || length > OB_DOC_ID_EXT_SIZE)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected payload", K(ret), K(idx), KP(payload), K(length));
+  } else {
+    MEMCPY(buf_, payload, length);
+    datum_.ptr_ = buf_;
+    datum_.pack_ = length;
   }
   return ret;
 }

@@ -64,6 +64,27 @@ struct ObEstRowCountRecord
   OB_UNIS_VERSION(1);
 };
 
+struct ObEstRowCountParam
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObEstRowCountParam()
+    : method_(EstRowCountMethod::EST_ROW_COUNT_METHOD_STRICT)
+  {
+  }
+  enum class EstRowCountMethod : uint8_t
+  {
+    EST_ROW_COUNT_METHOD_STRICT = 0,
+    EST_ROW_COUNT_METHOD_LOOSE = 1,
+    EST_ROW_COUNT_METHOD_MAX
+  };
+  OB_INLINE bool is_valid() const { return EstRowCountMethod::EST_ROW_COUNT_METHOD_STRICT <= method_ && method_ < EstRowCountMethod::EST_ROW_COUNT_METHOD_MAX; }
+  OB_INLINE bool is_strict() const { return EstRowCountMethod::EST_ROW_COUNT_METHOD_STRICT == method_; }
+  OB_INLINE bool is_loose() const { return EstRowCountMethod::EST_ROW_COUNT_METHOD_LOOSE == method_; }
+  TO_STRING_KV(K_(method));
+  EstRowCountMethod method_;
+};
+
 /** Record sampling information */
 struct SampleInfo
 {

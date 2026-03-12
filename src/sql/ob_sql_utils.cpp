@@ -42,6 +42,10 @@ extern "C" {
 }
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "observer/ob_server.h"
+#include "share/search_index/ob_search_index_encoder.h"
+#include "lib/udt/ob_array_type.h"
+#include "lib/udt/ob_collection_type.h"
+
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::obmysql;
@@ -5332,6 +5336,12 @@ int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
         }
       }
       break;
+      case PRE_CALC_SEARCH_INDEX_CONSTRAINT: {
+        if (OB_FAIL(ObSearchIndexConstraint::check_is_match(obj_param, exec_ctx, extra, is_match))) {
+          LOG_WARN("failed to check search index constraint is match", K(ret));
+        }
+      }
+      break;
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected expect res type", K_(expect_result), K(ret));
@@ -5430,6 +5440,254 @@ int ObJsonTypeConstraint::check_is_match(ObObjParam &obj_param,
                j_base->json_type() != common::ObJsonNodeType::J_ARRAY;
   } else {
     is_match = false;
+  }
+  return ret;
+}
+
+int ObSearchIndexConstraint::check_is_match(ObObjParam &obj_param,
+                                            ObExecContext &exec_ctx,
+                                            ObConstraintExtra *extra,
+                                            bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  if (OB_ISNULL(extra)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected extra", K(ret));
+  } else {
+    const int64_t extra_val = extra->extra_;
+    const ConstraintType constraint_type = static_cast<ConstraintType>(get_constraint_type(extra_val));
+    if (is_json_constraint(constraint_type)) {
+      if (OB_FAIL(check_json_is_match(obj_param, exec_ctx, extra_val, is_match))) {
+        LOG_WARN("failed to check json constraint", K(ret));
+      }
+    } else if (is_array_constraint(constraint_type)) {
+      if (OB_FAIL(check_array_is_match(obj_param, exec_ctx, extra_val, is_match))) {
+        LOG_WARN("failed to check array constraint", K(ret));
+      }
+    } else if (constraint_type == STRING_TYPE_LENGTH) {
+      if (OB_FAIL(check_string_length_is_match(obj_param, is_match))) {
+        LOG_WARN("failed to check string length constraint", K(ret));
+      }
+    } else {
+      is_match = false;
+    }
+  }
+  return ret;
+}
+
+int ObSearchIndexConstraint::check_json_is_match(ObObjParam &obj_param,
+                                                 ObExecContext &exec_ctx,
+                                                 int64_t extra,
+                                                 bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_EXPR_CALC);
+  ObIJsonBase *j_base = nullptr;
+  is_match = false;
+  const ConstraintType constraint_type = static_cast<ConstraintType>(get_constraint_type(extra));
+  const int32_t element_count = get_element_count(extra);
+  const int8_t cons_encode_type = static_cast<int8_t>(get_json_encode_type(extra));
+  if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(obj_param,
+                                                              &exec_ctx,
+                                                              false,
+                                                              &allocator,
+                                                              j_base))) {
+    LOG_WARN("failed to refine range json value const", K(ret));
+  } else if (OB_ISNULL(j_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get json base", K(ret));
+  } else if (constraint_type == JSON_TYPE_SCALAR) {
+    if (OB_FAIL(is_json_scalar_match(j_base, cons_encode_type, is_match))) {
+      LOG_WARN("failed to check json scalar match", K(ret));
+    }
+  } else if (constraint_type == JSON_TYPE_SCALAR_OR_ARRAY || constraint_type == JSON_ARRAY_COUNT) {
+    is_match = true;
+    if (constraint_type == JSON_ARRAY_COUNT) {
+      is_match = j_base->json_type() == common::ObJsonNodeType::J_ARRAY &&
+                 j_base->element_count() == element_count;
+    }
+    if (OB_SUCC(ret) && is_match) {
+      if (OB_FAIL(is_json_scalar_or_array_match(j_base, cons_encode_type, is_match))) {
+        LOG_WARN("failed to check json scalar or array match", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSearchIndexConstraint::is_json_scalar_or_array_match(const ObIJsonBase *j_base,
+                                                           const uint8_t cons_encode_type,
+                                                           bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(j_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("j_base is null", K(ret));
+  } else if (j_base->is_json_scalar(j_base->json_type())) {
+    if (OB_FAIL(is_json_scalar_match(j_base, cons_encode_type, is_match))) {
+      LOG_WARN("failed to check json scalar match", K(ret));
+    }
+  } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
+    is_match = true;
+    const int64_t arr_element_count = j_base->element_count();
+    // Check all elements are valid scalars
+    for (int64_t i = 0; OB_SUCC(ret) && is_match && i < arr_element_count; ++i) {
+      ObIJsonBase *element = nullptr;
+      if (OB_FAIL(j_base->get_array_element(i, element))) {
+        LOG_WARN("failed to get array element", K(ret), K(i));
+      } else if (OB_FAIL(is_json_scalar_match(element, cons_encode_type, is_match))) {
+        LOG_WARN("failed to check json scalar match", K(ret));
+      }
+    }
+  } else {
+    is_match = false;
+  }
+  return ret;
+}
+
+int ObSearchIndexConstraint::is_json_scalar_match(const ObIJsonBase *j_base,
+                                                  const uint8_t cons_encode_type,
+                                                  bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  if (OB_ISNULL(j_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("j_base is null", K(ret));
+  } else if (j_base->is_json_scalar(j_base->json_type())) {
+    is_match = true;
+    const ObJsonNodeType json_type = j_base->json_type();
+    if (cons_encode_type != 0) {
+      // check json_type should be encoded as cons_encode_type
+      uint8_t encode_type = 0;
+      if (OB_FAIL(share::ObSearchIndexPathEncoder::encode_type(json_type, encode_type))) {
+        LOG_WARN("failed to encode type", K(ret));
+      } else if (encode_type != cons_encode_type) {
+        is_match = false;
+      }
+    }
+    if (OB_SUCC(ret) && is_match) {
+      // check json_scalar value should be within SEARCH_INDEX_VALUE_LENGTH
+      if (json_type == common::ObJsonNodeType::J_STRING ||
+          json_type == common::ObJsonNodeType::J_OPAQUE) {
+        ObString string = ObString(j_base->get_data_length(), j_base->get_data());
+        is_match = share::ObSearchIndexValueEncoder::string_safety_to_compare(string);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSearchIndexConstraint::check_array_is_match(ObObjParam &obj_param,
+                                                  ObExecContext &exec_ctx,
+                                                  int64_t extra,
+                                                  bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  const ConstraintType constraint_type = static_cast<ConstraintType>(get_constraint_type(extra));
+  const int32_t expected_element_count = get_element_count(extra);
+  ObArenaAllocator tmp_allocator(ObModIds::OB_SQL_EXPR_CALC);
+  if (!obj_param.is_collection_sql_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not an array type", K(ret));
+  } else {
+    ObString data_str = obj_param.get_string();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator, obj_param, data_str))) {
+      LOG_WARN("failed to read array data", K(ret));
+    } else if (data_str.length() < sizeof(uint32_t)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("array data length is invalid", K(ret), K(data_str.length()));
+    } else if (constraint_type == ARRAY_ELEMENT_COUNT) {
+      // Read element count from first 4 bytes of array binary data
+      uint32_t actual_element_count = *reinterpret_cast<const uint32_t *>(data_str.ptr());
+      is_match = static_cast<int32_t>(actual_element_count) == expected_element_count;
+    } else if (constraint_type == ARRAY_STRING_LENGTH) {
+      is_match = true;
+      const uint16_t subschema_id = obj_param.get_udt_subschema_id();
+      ObSubSchemaValue subschema_value;
+      if (OB_FAIL(exec_ctx.get_sqludt_meta_by_subschema_id(subschema_id, subschema_value))) {
+        LOG_WARN("failed to get subschema meta", K(ret), K(subschema_id));
+      } else if (OB_ISNULL(subschema_value.value_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("subschema value is null", K(ret));
+      } else {
+        const ObSqlCollectionInfo *coll_info =
+            reinterpret_cast<const ObSqlCollectionInfo *>(subschema_value.value_);
+        if (OB_ISNULL(coll_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("coll info is null", K(ret));
+        } else if (need_array_string_constraint(*coll_info)) {
+          const ObCollectionTypeBase *coll_meta = coll_info->collection_meta_;
+          common::ObIArrayType *arr_obj = nullptr;
+          if (OB_FAIL(common::ObArrayTypeObjFactory::construct(tmp_allocator,
+                                                               *coll_meta,
+                                                               arr_obj,
+                                                               true))) {
+            LOG_WARN("failed to construct array obj", K(ret));
+          } else if (OB_FAIL(arr_obj->init(data_str))) {
+            LOG_WARN("failed to init array obj", K(ret));
+          } else if (OB_FAIL(is_array_string_length_match(arr_obj, is_match))) {
+            LOG_WARN("failed to check array string length", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSearchIndexConstraint::is_array_string_length_match(common::ObIArrayType *arr_obj,
+                                                          bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = true;
+  // Check each varchar element's length
+  for (uint32_t i = 0; OB_SUCC(ret) && is_match && i < arr_obj->size(); ++i) {
+    if (!arr_obj->is_null(i)) {
+      ObObj elem_obj;
+      if (OB_FAIL(arr_obj->elem_at(i, elem_obj))) {
+        LOG_WARN("failed to get element", K(ret), K(i));
+      } else if (elem_obj.is_string_type()) {
+        ObString elem_str = elem_obj.get_string();
+        is_match = ObSearchIndexValueEncoder::string_safety_to_compare(elem_str);
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObSearchIndexConstraint::need_array_string_constraint(const ObSqlCollectionInfo &coll_info)
+{
+  bool need_constraint = false;
+  const ObCollectionTypeBase *coll_meta = coll_info.collection_meta_;
+  // Check if it's array(varchar)
+  if (coll_meta->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+    const ObCollectionArrayType *arr_type = static_cast<const ObCollectionArrayType *>(coll_meta);
+    if (OB_NOT_NULL(arr_type->element_type_) &&
+        arr_type->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
+      const ObCollectionBasicType *elem_type =
+          static_cast<const ObCollectionBasicType *>(arr_type->element_type_);
+      // Check if element type is varchar
+      ObObjMeta obj_meta = elem_type->basic_meta_.get_meta_type();
+      ObLength length = elem_type->basic_meta_.get_length();
+      need_constraint = ObSearchIndexValueEncoder::string_column_may_truncate(obj_meta, length);
+    }
+  }
+  return need_constraint;
+}
+
+int ObSearchIndexConstraint::check_string_length_is_match(ObObjParam &obj_param,
+                                                          bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  if (!obj_param.is_string_type()) {
+    is_match = false;
+  } else {
+    ObString str_value = obj_param.get_string();
+    is_match = share::ObSearchIndexValueEncoder::string_safety_to_compare(str_value);
   }
   return ret;
 }

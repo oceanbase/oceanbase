@@ -32,7 +32,7 @@ struct ObTextDaaTParam
 {
   ObTextDaaTParam()
     : dim_iters_(nullptr), base_param_(nullptr), allocator_(nullptr), relevance_collector_(nullptr),
-      bm25_param_est_ctx_(), mode_flag_(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE),
+      bm25_param_est_ctx_(nullptr), mode_flag_(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE),
       function_lookup_mode_(false) {}
   ~ObTextDaaTParam() {}
   TO_STRING_KV(K_(base_param), KP_(dim_iters), K_(bm25_param_est_ctx),  K_(mode_flag), K_(function_lookup_mode));
@@ -40,7 +40,7 @@ struct ObTextDaaTParam
   ObSparseRetrievalMergeParam *base_param_;
   common::ObArenaAllocator *allocator_;
   ObSRDaaTRelevanceCollector *relevance_collector_;
-  ObBM25ParamEstCtx bm25_param_est_ctx_;
+  ObBM25ParamMultiEstCtx *bm25_param_est_ctx_;
   ObMatchAgainstMode mode_flag_;
   bool function_lookup_mode_;
 };
@@ -48,10 +48,7 @@ struct ObTextDaaTParam
 class ObTextDaaTIter final : public ObSRDaaTIterImpl
 {
 public:
-  ObTextDaaTIter() : ObSRDaaTIterImpl(),
-      bm25_param_estimator_(),
-      mode_flag_(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE),
-      function_lookup_mode_(false) {}
+  ObTextDaaTIter();
   virtual ~ObTextDaaTIter() { reset(); }
 
   int init(const ObTextDaaTParam &param);
@@ -60,7 +57,7 @@ public:
 protected:
   virtual int pre_process() override;
 protected:
-  ObBM25ParamEstimator bm25_param_estimator_;
+  ObBM25ParamMultiEstimator bm25_param_estimator_;
   ObMatchAgainstMode mode_flag_;
   bool function_lookup_mode_;
 private:
@@ -73,14 +70,14 @@ class ObTextBMWIter final : public ObSRBMMIterImpl
 public:
   ObTextBMWIter();
   virtual ~ObTextBMWIter() { reset(); }
+  int init(const ObTextDaaTParam &param);
   virtual void reuse(const bool switch_tablet = false) override;
   virtual void reset() override;
-  int init(const ObTextDaaTParam &param);
 protected:
   virtual int get_next_rows(const int64_t capacity, int64_t &count) override;
   virtual int init_before_topk_search() override;
 protected:
-  ObBM25ParamEstimator bm25_param_estimator_;
+  ObBM25ParamMultiEstimator bm25_param_estimator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTextBMWIter);
 };

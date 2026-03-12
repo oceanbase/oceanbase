@@ -599,6 +599,13 @@ class ObTopKSpec;
 class ObTopKOp;
 REGISTER_OPERATOR(ObLogTopk, PHY_TOPK, ObTopKSpec, ObTopKOp, NOINPUT);
 
+class ObLogHybridFusion;
+class ObHybridFusionSpec;
+class ObHybridFusionOp;
+REGISTER_OPERATOR(ObLogHybridFusion, PHY_HYBRID_FUSION, ObHybridFusionSpec, ObHybridFusionOp,
+                  NOINPUT, VECTORIZED_OP, 0 /*+version*/,
+                  SUPPORT_RICH_FORMAT);
+
 class ObLogMonitoringDump;
 class ObMonitoringDumpSpec;
 class ObMonitoringDumpOp;

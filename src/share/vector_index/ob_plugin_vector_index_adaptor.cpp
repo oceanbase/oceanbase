@@ -298,6 +298,57 @@ int ObVectorQueryAdaptorResultContext::init_prefilter(void *adaptor, double sele
   return ret;
 }
 
+int ObVectorQueryAdaptorResultContext::init_prefilter(uint8_t *bitmap, int64_t min_vid_bound, int64_t max_vid_bound, uint64_t capacity, uint64_t valid_cnt)
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(tmp_allocator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ctx allocator invalid.", K(ret));
+  } else if (OB_ISNULL(bitmap)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("bitmap is null", K(ret));
+  } else {
+    ObHnswBitmapFilter *vsag_filter = nullptr;
+    // Pass nullptr as allocator to indicate bitmap is externally managed
+    if (OB_ISNULL(vsag_filter = OB_NEWx(ObHnswBitmapFilter, tmp_allocator_, tenant_id_, ObHnswBitmapFilter::FilterType::BYTE_ARRAY, capacity, nullptr, bitmap))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create pre filter", K(ret));
+    } else {
+      vsag_filter->base_ = min_vid_bound;
+      vsag_filter->capacity_ = capacity;
+      vsag_filter->valid_cnt_ = valid_cnt;
+      vsag_filter->type_ = ObHnswBitmapFilter::FilterType::BYTE_ARRAY;
+      vsag_filter->is_external_bitmap_ = true;  // Mark as externally managed
+      pre_filter_ = vsag_filter;
+    }
+  }
+  return ret;
+}
+
+int ObVectorQueryAdaptorResultContext::init_prefilter(roaring::api::roaring64_bitmap_t *roaring_bitmap)
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(tmp_allocator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ctx allocator invalid.", K(ret));
+  } else if (OB_ISNULL(roaring_bitmap)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("roaring_bitmap is null", K(ret));
+  } else {
+    ObHnswBitmapFilter *vsag_filter = nullptr;
+    if (OB_ISNULL(vsag_filter = OB_NEWx(ObHnswBitmapFilter, tmp_allocator_, tenant_id_, ObHnswBitmapFilter::FilterType::ROARING_BITMAP, 0, tmp_allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create pre filter", K(ret));
+    } else {
+      vsag_filter->set_roaring_bitmap(roaring_bitmap);
+      vsag_filter->valid_cnt_ = roaring64_bitmap_get_cardinality(roaring_bitmap);
+      vsag_filter->is_external_bitmap_ = true;  // Mark as externally managed
+      pre_filter_ = vsag_filter;
+    }
+  }
+  return ret;
+}
+
 bool ObVectorQueryAdaptorResultContext::is_bitmaps_valid()
 {
   bool bret = false;
@@ -2430,7 +2481,7 @@ int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVecto
       } else if (OB_ISNULL(datum_row) || !datum_row->is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get row invalid.", K(ret));
-      } else if (datum_row->get_column_count() != 3) {
+      } else if (datum_row->get_column_count() < 2) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get row column cnt invalid.", K(ret), K(datum_row->get_column_count()));
       } else if (OB_FALSE_IT(vid = datum_row->storage_datums_[0].get_int())) {
@@ -4951,8 +5002,8 @@ void ObPluginVectorIndexAdaptor::reset_complete()
 
 void ObHnswBitmapFilter::reset()
 {
-  // release memory
-  if (OB_NOT_NULL(bitmap_)) {
+  // release memory only if bitmap is not externally managed
+  if (OB_NOT_NULL(bitmap_) && !is_external_bitmap_) {
     if (type_ == FilterType::ROARING_BITMAP) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPR"));
       roaring::api::roaring64_bitmap_free(roaring_bitmap_);
@@ -4974,6 +5025,7 @@ void ObHnswBitmapFilter::reset()
   bitmap_ = nullptr;
   rk_range_.reset();
   selectivity_ = 0;
+  is_external_bitmap_ = false;
   segment_handle_.reset();
   tmp_alloc_.reset();
   extra_buffer_ = nullptr;

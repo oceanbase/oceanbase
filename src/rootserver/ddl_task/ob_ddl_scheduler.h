@@ -611,6 +611,16 @@ private:
       const obrpc::ObDropIndexArg *drop_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
+   int create_drop_search_index_task(
+      common::ObISQLClient &proxy,
+      const share::schema::ObTableSchema *index_schema,
+      const int64_t schema_version,
+      const int64_t consumer_group_id,
+      const share::schema::ObTableSchema *def_index_schema,
+      const share::schema::ObTableSchema *data_index_schema,
+      const obrpc::ObDropIndexArg *drop_index_arg,
+      ObIAllocator &allocator,
+      ObDDLTaskRecord &task_record);
 
   int create_drop_lob_task(
       common::ObISQLClient &proxy,
@@ -675,6 +685,7 @@ int create_partition_split_task(
   int schedule_rebuild_index_task(const ObDDLTaskRecord &task_record);
   int schedule_drop_fts_index_task(const ObDDLTaskRecord &task_record);
   int schedule_drop_lob_task(const ObDDLTaskRecord &task_record);
+  int schedule_drop_search_index_task(const ObDDLTaskRecord &task_record);
   int schedule_ddl_retry_task(const ObDDLTaskRecord &task_record);
   int schedule_partition_split_task(const ObDDLTaskRecord &task_record);
   int schedule_recover_restore_table_task(const ObDDLTaskRecord &task_record);

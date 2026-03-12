@@ -497,7 +497,6 @@ int ObDASSPIVMergeIter::init_spiv_merge_param(ObSPIVDaaTParam &iter_param)
     iter_param.dim_iters_ = &dim_iters_;
     iter_param.is_pre_filter_ = vec_aux_ctdef_->is_pre_filter();
     iter_param.is_use_docid_ = is_use_docid();
-    base_param_.dim_weights_ = nullptr;
     base_param_.limit_param_ = &limit_param_;
     base_param_.eval_ctx_ = vec_aux_rtdef_->eval_ctx_;
     base_param_.id_proj_expr_ = vec_aux_ctdef_->spiv_scan_docid_col_;

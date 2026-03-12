@@ -39,6 +39,7 @@ class ObDMLStmt;
 class ObStmtExprVisitor;
 class ObStmtExprGetter;
 struct TransposeDef;
+struct ObDSLQueryInfo;
 
 struct ObUnpivotItem
 {
@@ -123,7 +124,9 @@ typedef struct ObJsonTableDef {
     : all_cols_(allocator),
       doc_exprs_(allocator),
       table_type_(MulModeTableType::INVALID_TABLE_TYPE),
-      namespace_arr_(allocator) {}
+      namespace_arr_(allocator),
+      index_table_id_(OB_INVALID_ID),
+      index_column_cnt_(0) {}
 
   int deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
   int assign(const ObJsonTableDef& src);
@@ -131,6 +134,8 @@ typedef struct ObJsonTableDef {
   ObSqlArray<ObRawExpr*> doc_exprs_;
   MulModeTableType table_type_;
   ObSqlArray<ObString> namespace_arr_;
+  int64_t index_table_id_;
+  int64_t index_column_cnt_;
 } ObJsonTableDef;
 
 struct ObValuesTableDef {
@@ -212,6 +217,7 @@ struct TableItem
     // assign default value for compatibility
     catalog_name_ = lib::is_oracle_mode() ? OB_INTERNAL_CATALOG_NAME_UPPER : OB_INTERNAL_CATALOG_NAME;
     external_location_id_ = common::OB_INVALID_ID;  // 检查权限时临时外表拿不到tableschema
+    dsl_query_ = NULL;
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -290,7 +296,7 @@ struct TableItem
   bool is_link_type() const { return LINK_TABLE == type_; } // after dblink transformer, LINK_TABLE will be BASE_TABLE, BASE_TABLE will be LINK_TABLE
   bool is_json_table() const { return JSON_TABLE == type_; }  // json_table_def_->table_type_ == MulModeTableType::OB_ORA_JSON_TABLE_TYPE
   bool is_values_table() const { return VALUES_TABLE == type_; }//used to mark values statement: values row(1,2), row(3,4);
-
+  bool is_hybrid_search() const { return dsl_query_ != NULL; }
   bool is_lateral_table() const { return LATERAL_TABLE == type_; }
   bool is_synonym() const { return !synonym_name_.empty(); }
   bool is_oracle_all_or_user_sys_view() const
@@ -306,6 +312,7 @@ struct TableItem
     return ((database_name_ == OB_ORA_SYS_SCHEMA_NAME) && (table_name_.prefix_match("USER_") || table_name_.prefix_match("ALL_")));
   }
   bool access_all_part() const { return part_ids_.empty(); }
+  bool is_hybrid_search_table() const { return dsl_query_ != nullptr; }
   int deep_copy(ObIRawExprCopier &expr_copier,
                 const TableItem &other,
                 ObIAllocator* allocator = nullptr);
@@ -334,6 +341,7 @@ struct TableItem
   int deep_copy_values_table_def(const ObValuesTableDef& table_def,
                                  ObIRawExprCopier &expr_copier,
                                  ObIAllocator* allocator);
+  int deep_copy_dsl_query_info(const ObDSLQueryInfo& dsl_query_info, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
   virtual bool has_for_update() const { return for_update_; }
   // if real table id, it is valid for all threads,
   // else if generated id, it is unique just during the thread session
@@ -402,6 +410,7 @@ struct TableItem
   TransposeDef *transpose_table_def_;
   // external location
   uint64_t external_location_id_;
+  ObDSLQueryInfo *dsl_query_;
 };
 
 struct ColumnItem
@@ -1059,6 +1068,8 @@ public:
   inline bool is_reverse_link() const { return is_reverse_link_; }
   inline void set_has_vec_approx(bool has_vec_approx) { has_vec_approx_ = has_vec_approx; }
   inline bool has_vec_approx() const { return has_vec_approx_; }
+  inline void set_hybrid_search() { is_hybrid_search_ = true; }
+  inline bool is_hybrid_search() const { return is_hybrid_search_; }
   const share::ObVectorIndexQueryParam& get_vector_index_query_param() const { return vector_index_query_param_; }
   share::ObVectorIndexQueryParam& get_vector_index_query_param() { return vector_index_query_param_; }
   bool is_contain_vector_origin_distance_calc() const;
@@ -1348,6 +1359,7 @@ protected:
   // fulltext search exprs
   ObSqlArray<ObMatchFunRawExpr*> match_exprs_;
   share::ObVectorIndexQueryParam vector_index_query_param_;
+  bool is_hybrid_search_;
 };
 
 template <typename T>

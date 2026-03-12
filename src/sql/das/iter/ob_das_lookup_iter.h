@@ -97,6 +97,9 @@ protected:
   virtual int do_index_lookup() = 0;
   virtual int check_index_lookup() = 0;
   virtual bool can_limit_pushdown(const ObDASPushDownTopN &push_down_topn) override { return true; }
+
+public:
+  const ObDASScanCtDef *get_lookup_ctdef() const { return lookup_ctdef_; }
 protected:
   enum LookupState : uint32_t
   {

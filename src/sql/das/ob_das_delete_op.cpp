@@ -15,6 +15,7 @@
 #include "sql/das/ob_das_domain_utils.h"
 #include "sql/engine/dml/ob_dml_service.h"
 #include "share/schema/ob_schema_struct.h"
+#include "sql/das/ob_das_search_index_utils.h"
 namespace oceanbase
 {
 namespace common

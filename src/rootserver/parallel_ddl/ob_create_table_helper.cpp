@@ -32,6 +32,7 @@
 #include "rootserver/ob_location_ddl_service.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "share/ob_license_utils.h"
+#include "share/search_index/ob_search_index_builder_util.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

@@ -242,7 +242,7 @@ public:
                                      int64_t &trans_version,
                                      int64_t &sql_sequence) override;
   virtual int compare_rowkey(
-    const ObDatumRowkey &rowkey, const int64_t index, int32_t &compare_result) override;
+    const ObDatumRowkey &rowkey, const int64_t index, int32_t &compare_result, const int64_t common_prefix_len = 0) override;
   virtual int compare_rowkey(const ObDatumRange &range, const int64_t index,
     int32_t &start_key_compare_result, int32_t &end_key_compare_result) override;
 

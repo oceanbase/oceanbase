@@ -106,6 +106,14 @@ private:
       const obrpc::ObCreateForeignKeyArg &foreign_key_arg,
       share::schema::ObForeignKeyInfo &foreign_key_info,
       share::schema::ObMockFKParentTableSchema *&new_mock_fk_parent_table_schema);
+  int check_fk_columns_type_for_replacing_mock_fk_parent_table_(
+      const share::schema::ObTableSchema &parent_table_schema,
+      const share::schema::ObMockFKParentTableSchema &mock_parent_table_schema);
+
+  int create_sequence_();
+  int create_tables_();
+  int create_audits_();
+  int deal_with_mock_fk_parent_tables_();
 private:
   const obrpc::ObCreateTableArg &arg_;
   obrpc::ObCreateTableRes &res_;

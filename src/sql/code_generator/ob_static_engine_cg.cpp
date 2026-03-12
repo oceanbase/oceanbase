@@ -33,6 +33,7 @@
 #include "sql/optimizer/ob_log_window_function.h"
 #include "sql/optimizer/ob_log_select_into.h"
 #include "sql/optimizer/ob_log_topk.h"
+#include "sql/optimizer/ob_log_hybrid_fusion.h"
 #include "sql/optimizer/ob_log_count.h"
 #include "sql/optimizer/ob_log_granule_iterator.h"
 #include "sql/optimizer/ob_log_link_scan.h"
@@ -89,6 +90,8 @@
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
 #include "sql/engine/join/ob_merge_join_op.h"
 #include "sql/engine/basic/ob_topk_op.h"
+#include "sql/engine/basic/ob_hybrid_fusion_op.h"
+#include "sql/optimizer/ob_log_hybrid_fusion.h"
 #include "sql/executor/ob_task_spliter.h"
 #include "sql/engine/dml/ob_table_delete_op.h"
 #include "sql/engine/dml/ob_table_merge_op.h"
@@ -459,7 +462,9 @@ int ObStaticEngineCG::disable_use_rich_format(const ObLogicalOperator &op, ObOpS
     // do nothing
   } else if (log_op_def::LOG_TABLE_SCAN == op.get_type()) {
     const ObLogTableScan &tsc = static_cast<const ObLogTableScan &>(op);
-    if (tsc.get_index_back()
+    if (tsc.get_is_hybrid_search()) {
+      // use rich format for hybrid search
+    } else if (tsc.get_index_back()
         || tsc.use_batch()
         || is_virtual_table(tsc.get_ref_table_id())
         || (NULL != spec.get_parent() && PHY_UPDATE == spec.get_parent()->type_)
@@ -6352,7 +6357,14 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
       } else if (ddl_table_schema->is_fts_doc_word_aux() || ddl_table_schema->is_fts_index_aux()) {
         spec.is_fts_ddl_ = true;
         spec.is_fts_index_aux_ = ddl_table_schema->is_fts_index_aux();
-        if (OB_UNLIKELY(ddl_table_schema->get_parser_name_str().empty())) {
+        ObFTSIndexParams fts_index_params;
+        if (OB_FAIL(ddl_table_schema->get_fts_params_from_index_params(fts_index_params))) {
+          LOG_WARN("fail to get fts index params from index params", K(ret), KPC(ddl_table_schema));
+        } else {
+          spec.fts_index_type_ = fts_index_params.fts_index_type_;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_UNLIKELY(ddl_table_schema->get_parser_name_str().empty())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, parser name is empty", K(ret), KPC(ddl_table_schema));
         } else {
@@ -9791,6 +9803,62 @@ int ObStaticEngineCG::generate_spec(ObLogFunctionTable &op, ObFunctionTableSpec 
   return ret;
 }
 
+int ObStaticEngineCG::generate_spec(ObLogHybridFusion &op,
+                                    ObHybridFusionSpec &spec,
+                                    const bool in_root_job)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(in_root_job);
+  spec.fusion_method_ = op.get_fusion_algo();
+  const ObIArray<ObRawExpr*> &score_exprs = op.get_score_exprs();
+  const ObIArray<ObRawExpr*> &weights_exprs = op.get_weights_exprs();
+  const ObIArray<ObRawExpr*> &path_top_k_limit_exprs = op.path_top_k_limit_exprs();
+  if (OB_ISNULL(op.get_rank_window_size_expr()) || OB_ISNULL(op.get_size_expr()) ||
+      OB_ISNULL(op.get_min_score_expr()) || OB_ISNULL(op.get_from_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rank window size or size expr or min score expr or from expr is null", K(ret));
+  } else if (OB_FAIL(generate_rt_expr(*op.get_rank_window_size_expr(), spec.rank_window_size_expr_))) {
+    LOG_WARN("failed to generate rt expr for rank window size", K(ret));
+  } else if (OB_FAIL(generate_rt_expr(*op.get_size_expr(), spec.size_expr_))) {
+    LOG_WARN("failed to generate rt expr for size expr", K(ret));
+  } else if (OB_FAIL(generate_rt_expr(*op.get_min_score_expr(), spec.min_score_expr_))) {
+    LOG_WARN("failed to generate rt expr for min score expr", K(ret));
+  } else if (OB_FAIL(generate_rt_expr(*op.get_from_expr(), spec.offset_expr_))) {
+    LOG_WARN("failed to generate rt expr for from expr", K(ret));
+  } else if (OB_FAIL(generate_rt_exprs(weights_exprs, spec.weights_exprs_))) {
+    LOG_WARN("failed to generate rt exprs for weights", K(ret));
+  } else if (OB_FAIL(generate_rt_exprs(path_top_k_limit_exprs, spec.path_top_k_limit_exprs_))) {
+    LOG_WARN("failed to generate rt exprs for path top k limit", K(ret));
+  } else if (OB_FAIL(spec.score_expr_output_indices_.prepare_allocate(score_exprs.count()))) {
+    LOG_WARN("failed to prepare allocate score expr output indices", K(ret));
+  } else if (OB_ISNULL(op.get_child(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child is null", K(ret));
+  } else {
+    const ObIArray<ObRawExpr*> &child_output_exprs = op.get_child(0)->get_output_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < score_exprs.count(); ++i) {
+      ObRawExpr *score_expr = score_exprs.at(i);
+      bool found = false;
+      for (int64_t j = 0;!found && j < child_output_exprs.count(); ++j) {
+        if (child_output_exprs.at(j) == score_expr) {
+          spec.score_expr_output_indices_.at(i) = j;
+          found = true;
+        }
+      }
+      if (!found) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("score expr not found in child output exprs", K(ret), K(i), KPC(score_expr));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && spec.fusion_method_ == ObFusionMethod::RRF) {
+    if (OB_FAIL(generate_rt_expr(*op.get_rank_constant_expr(), spec.rank_constant_expr_))) {
+      LOG_WARN("failed to generate rt expr for rank constant", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
     const bool in_root_job)
 {
@@ -9913,6 +9981,57 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
             OZ (spec.emp_default_exprs_.push_back(emp_expr));
           }
         }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (MulModeTableType::OB_INDEX_DATA_GEN_TABLE_TYPE == op.get_table_type()
+    && OB_FAIL(generate_index_data_gen_table_spec(op, spec))) {
+    LOG_WARN("failed to generate index data gen table spec", K(ret));
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::generate_index_data_gen_table_spec(ObLogJsonTable &op, ObJsonTableSpec &spec)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *data_schema = nullptr;
+  const ObTableSchema *data_index_schema = nullptr;
+  const ObTableSchema *def_index_schema = nullptr;
+  const uint64_t data_index_id = op.get_data_index_id();
+  ObSchemaGetterGuard *schema_guard = op.get_plan()->get_optimizer_context().get_schema_guard();
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(schema_guard));
+  } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), data_index_id, data_index_schema))) {
+    LOG_WARN("fail to get search def index schema", K(ret), K(data_index_id));
+  } else if (OB_ISNULL(data_index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema is NULL", K(ret), K(data_index_id));
+  } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), data_index_schema->get_data_table_id(),
+                                                    def_index_schema))) {
+    LOG_WARN("fail to get search def index schema", K(ret), K(data_index_schema->get_data_table_id()));
+  } else if (OB_ISNULL(def_index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema is NULL", K(ret), K(data_index_schema->get_data_table_id()));
+  } else if (!def_index_schema->is_search_def_index()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect search def index", K(ret), K(def_index_schema->get_index_type()));
+  } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), def_index_schema->get_data_table_id(),
+                                                    data_schema))) {
+    LOG_WARN("fail to get search def index schema", K(ret), K(def_index_schema->get_data_table_id()));
+  } else if (OB_ISNULL(data_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema is NULL", K(ret), K(def_index_schema->get_data_table_id()));
+  } else if (OB_FAIL(spec.search_idx_included_cid_idxes_.init(op.get_data_table_col_ids().count()))) {
+    LOG_WARN("fail to init array", K(ret), K(op.get_data_table_col_ids().count()));
+  } else {
+    spec.inc_pk_proj_ = op.get_inc_pk_proj();
+    spec.index_column_cnt_ = op.get_index_column_cnt();
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_data_table_col_ids().count(); i++) {
+      uint64_t col_id = op.get_data_table_col_ids().at(i);
+      if (OB_FAIL(spec.search_idx_included_cid_idxes_.push_back(data_schema->get_column_idx(col_id)))) {
+        LOG_WARN("fail to push back column index", K(ret));
       }
     }
   }
@@ -10990,6 +11109,10 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
     }
     case log_op_def::LOG_TOPK: {
       type = PHY_TOPK;
+      break;
+    }
+    case log_op_def::LOG_HYBRID_FUSION: {
+      type = PHY_HYBRID_FUSION;
       break;
     }
     case log_op_def::LOG_COUNT: {

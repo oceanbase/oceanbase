@@ -44,7 +44,8 @@ protected:
                   const int64_t end_idx,
                   const ObStorageDatumUtils &datum_utils,
                   int64_t &row_idx,
-                  bool &equal);
+                  bool &equal,
+                  const int64_t common_prefix_len = 0);
   OB_INLINE int init(const ObMicroBlockData &block_data, const ObMicroBlockHeader *&micro_header);
   OB_INLINE int read_column(const int64_t row_idx, const int64_t col_idx, ObStorageDatum &datum);
   OB_INLINE int read_row(const int64_t row_idx, const ObITableReadInfo *read_info, ObDatumRow &row);
@@ -52,7 +53,8 @@ protected:
   OB_INLINE int compare_meta_rowkey(const ObDatumRowkey &rowkey,
                                      const ObStorageDatumUtils &datum_utils,
                                      const int64_t row_idx,
-                                     int32_t &compare_result);
+                                     int32_t &compare_result,
+                                     const int64_t common_prefix_len);
 protected:
   const char *data_begin_;
   const char *data_end_;
@@ -167,7 +169,8 @@ public:
   virtual int compare_rowkey(
       const ObDatumRowkey &rowkey,
       const int64_t index,
-      int32_t &compare_result) override;
+      int32_t &compare_result,
+      const int64_t common_prefix_len = 0) override;
   virtual int find_bound(
       const ObDatumRowkey &key,
       const bool lower_bound,
@@ -179,14 +182,15 @@ public:
       const int64_t begin_idx,
       int64_t &row_idx) override;
 
-  // For column store
+  // For column store and skip scan
   virtual int find_bound(
       const ObDatumRowkey &key,
       const bool lower_bound,
       const int64_t begin_idx,
       const int64_t end_idx,
       int64_t &row_idx,
-      bool &equal) override;
+      bool &equal,
+      const int64_t common_prefix_len = 0) override;
   virtual void reserve_reader_memory(bool reserve) override
   { allocator_.set_reserve_memory(reserve); }
   int get_rows(

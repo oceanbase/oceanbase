@@ -19,7 +19,6 @@ namespace oceanbase
 namespace share
 {
 
-
 const ObString ObESQueryParser::SCORE_NAME("_score");
 const ObString ObESQueryParser::FTS_SCORE_NAME("_keyword_score");
 const ObString ObESQueryParser::VS_SCORE_NAME("_semantic_score");
@@ -131,7 +130,7 @@ int ObESQueryParser::parse(const common::ObString &req_str, ObQueryReqFromJson *
       if (OB_FAIL(ret)) {
       } else if (default_size_ == NULL && from_expr != NULL) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported sytnax in query, 'size' must be set when 'from' is specified", K(ret));
+        LOG_WARN("not supported syntax in query, 'size' must be set when 'from' is specified", K(ret));
       } else {
         query_req->set_offset(from_expr);
         if (query_req->get_limit() == NULL) {
@@ -402,7 +401,7 @@ int ObESQueryParser::parse_rrf(ObIJsonBase &req_node)
       }
     } else {
       ret = OB_ERR_PARSER_SYNTAX;
-      LOG_WARN("not supported sytnax in query", K(ret), K(key));
+      LOG_WARN("not supported syntax in query", K(ret), K(key));
     }
   }
   return ret;
@@ -1170,7 +1169,7 @@ int ObESQueryParser::parse_bool(ObIJsonBase &req_node, ObEsQueryInfo &query_info
       }
     } else {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not supported sytnax in query", K(ret), K(key));
+      LOG_WARN("not supported syntax in query", K(ret), K(key));
     }
     if (OB_SUCC(ret) && OB_NOT_NULL(condition_item) && OB_FAIL(condition_items.push_back(condition_item))) {
       LOG_WARN("failed add term to bool expr array", K(ret), K(i));
@@ -1514,7 +1513,7 @@ int ObESQueryParser::parse_single_term(ObIJsonBase &req_node, ObEsQueryInfo &que
     }
   } else {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported sytnax in query", K(ret), K(key));
+    LOG_WARN("not supported syntax in query", K(ret), K(key));
   }
 
   if (OB_SUCC(ret) && enable_es_mode_ && query_info.support_es_mode()) {
@@ -1619,7 +1618,7 @@ int ObESQueryParser::parse_range(ObIJsonBase &req_node, ObEsQueryInfo &query_inf
       }
     } else {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not supported sytnax in query", K(ret), K(key));
+      LOG_WARN("not supported syntax in query", K(ret), K(key));
     }
 
     if (OB_FAIL(ret)) {
@@ -2778,7 +2777,7 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
       }
     } else {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not supported sytnax in query", K(ret), K(key));
+      LOG_WARN("not supported syntax in query", K(ret), K(key));
     }
   }
   // construct normalize expr

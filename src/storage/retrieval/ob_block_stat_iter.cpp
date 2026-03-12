@@ -601,7 +601,7 @@ int ObBlockStatIterator::build_merge_heap(const ObITableReadInfo *rowkey_read_in
   } else if (OB_UNLIKELY(sstable_iters_.count() < MIN_SSTABLE_CNT_USE_MERGED_RANGE)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("merge heap not supported for single sstable", K(ret), K(sstable_iters_.count()));
-  } else if (!key_cmp_.is_valid() && OB_FAIL(key_cmp_.init(rowkey_read_info->get_datum_utils(), rowkey_read_info->get_schema_column_count()))) {
+  } else if (!key_cmp_.is_valid() && OB_FAIL(key_cmp_.init(rowkey_read_info->get_datum_utils(), rowkey_read_info->get_schema_rowkey_count()))) {
     LOG_WARN("failed to init key cmp", K(ret));
   } else if (sstable_iters_.count() <= ObBSSimpleMerger::USE_SIMPLE_MERGER_MAX_TABLE_CNT) {
     if (OB_ISNULL(merge_heap_ = OB_NEWx(ObBSSimpleMerger, iter_allocator_, key_cmp_))) {

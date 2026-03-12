@@ -189,7 +189,9 @@ public:
         scan_resume_point_(nullptr),
         mds_collector_(nullptr),
         row_scan_cnt_(NULL),
-        enable_new_false_range_(false)
+        enable_new_false_range_(false),
+        est_row_count_param_(),
+        range_prefix_in_advance_scan_(0)
   {}
   virtual ~ObTableScanParam() {}
 public:
@@ -236,6 +238,8 @@ public:
   ObMdsReadInfoCollector *mds_collector_; // used for collect mds info when query mds sstable
   uint64_t *row_scan_cnt_;
   bool enable_new_false_range_;
+  common::ObEstRowCountParam est_row_count_param_;
+  int8_t range_prefix_in_advance_scan_;
 
   DECLARE_VIRTUAL_TO_STRING;
 private:

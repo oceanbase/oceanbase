@@ -92,6 +92,7 @@ public:
       = "the max_ngram_size must be equal to or greater than min_ngram_size";
 
   static constexpr const char *IK_MODE_SCOPE_STR = "the ik_mode should be max_word or smart";
+
 };
 
 } //  namespace storage

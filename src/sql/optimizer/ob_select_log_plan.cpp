@@ -24,6 +24,7 @@
 #include "sql/optimizer/ob_log_unpivot.h"
 #include "sql/optimizer/ob_log_link_scan.h"
 #include "sql/optimizer/ob_log_expand.h"
+#include "sql/optimizer/ob_log_hybrid_fusion.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -5948,6 +5949,15 @@ int ObSelectLogPlan::allocate_plan_top()
       }
     }
 
+    if (OB_SUCC(ret) && optimizer_context_.get_query_ctx()->has_hybrid_search()) {
+      if (OB_FAIL(candi_allocate_hybrid_fusion())) {
+        LOG_WARN("failed to allocate hybrid fusion operator", K(ret));
+      } else {
+        LOG_TRACE("succeed to allocate hybrid fusion operator",
+            K(candidates_.candidate_plans_.count()));
+      }
+    }
+
     // step. allocate 'count' if needed
     if (OB_SUCC(ret)) {
       bool has_rownum = false;
@@ -6036,6 +6046,8 @@ int ObSelectLogPlan::allocate_plan_top()
                   K(candidates_.candidate_plans_.count()));
       }
     }
+
+
     // step. allocate 'order-by' if needed
     if (OB_SUCC(ret) && select_stmt->has_order_by() && !select_stmt->is_order_siblings() &&
         !get_optimizer_context().is_insert_stmt_in_online_ddl()) {

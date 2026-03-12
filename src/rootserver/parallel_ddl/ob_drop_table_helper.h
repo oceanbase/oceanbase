@@ -76,6 +76,7 @@ private:
                                                const ObTableSchema &table_schema,
                                                ObArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schemas);
   int collect_aux_table_schemas_(const ObTableSchema &table_schema, ObIArray<const ObTableSchema *> &aux_table_schemas);
+  int collect_search_index_schemas_(const ObTableSchema &table_schema, ObIArray<const ObTableSchema *> &aux_table_schemas);
   int calc_schema_version_cnt_for_table_(const ObTableSchema &table_schema, bool to_recyclebin);
   int calc_schema_version_cnt_for_dep_objs_();
   int calc_schema_version_cnt_for_sequence_(const ObTableSchema &table_schema);

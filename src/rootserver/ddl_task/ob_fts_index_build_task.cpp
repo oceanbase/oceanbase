@@ -24,6 +24,7 @@
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "storage/fts/dict/ob_dic_loader.h"
 #include "storage/fts/dict/ob_dic_lock.h"
+#include "share/search_index/ob_search_index_builder_util.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
 
 using namespace oceanbase::share;
@@ -132,6 +133,8 @@ int ObFtsIndexBuildTask::init(
       task_type_ = DDL_CREATE_MULTIVALUE_INDEX;
     } else if (INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL == create_index_arg.index_type_) {
       task_type_ = DDL_CREATE_VEC_SPIV_INDEX;
+    } else if (INDEX_TYPE_SEARCH_DEF_INDEX_LOCAL == create_index_arg.index_type_) {
+      task_type_ = DDL_CREATE_SEARCH_INDEX;
     }
     set_gmt_create(ObTimeUtility::current_time());
     tenant_id_ = tenant_id;
@@ -238,9 +241,9 @@ int ObFtsIndexBuildTask::process()
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(check_health())) {
     LOG_WARN("check health failed", K(ret));
-  } else if (!is_domain_index(index_type)) {
+  } else if (!is_domain_index(index_type) && !is_search_index(index_type)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect index type is of fts index", K(ret), K(index_type));
+    LOG_WARN("expect index type is of domain/fts/multivalue/search index", K(ret), K(index_type));
   } else if (!need_retry()) {
     // by pass
   } else {
@@ -445,7 +448,11 @@ int ObFtsIndexBuildTask::get_next_status(share::ObDDLTaskStatus &next_status)
     const ObDDLTaskStatus status = static_cast<ObDDLTaskStatus>(task_status_);
     switch (status) {
       case ObDDLTaskStatus::PREPARE: {
-        next_status = ObDDLTaskStatus::GENERATE_ROWKEY_DOC_SCHEMA;
+        if (is_search_index(index_type)) {
+          next_status = ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA;
+        } else {
+          next_status = ObDDLTaskStatus::GENERATE_ROWKEY_DOC_SCHEMA;
+        }
         break;
       }
       case ObDDLTaskStatus::GENERATE_ROWKEY_DOC_SCHEMA: {
@@ -888,7 +895,9 @@ int ObFtsIndexBuildTask::prepare_aux_index_tables()
   int ret = OB_SUCCESS;
   bool state_finished = false;
   const ObIndexType doc_rowkey_type = ObIndexType::INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
-  const ObIndexType domain_index_aux_type = create_index_arg_.index_type_;
+  const ObIndexType domain_index_aux_type = is_search_index_task() ?
+                                            ObIndexType::INDEX_TYPE_SEARCH_DATA_INDEX_LOCAL :
+                                            create_index_arg_.index_type_;
   const ObIndexType fts_doc_word_type = ObIndexType::INDEX_TYPE_FTS_DOC_WORD_LOCAL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -982,6 +991,10 @@ int ObFtsIndexBuildTask::construct_create_index_arg(
     if (OB_FAIL(construct_fts_doc_word_arg(arg))) {
       LOG_WARN("failed to construct fts doc word arg", K(ret));
     }
+  } else if (share::schema::is_search_data_index(index_type)) {
+    if (OB_FAIL(construct_search_data_index_arg(arg))) {
+      LOG_WARN("failed to construct search data arg", K(ret));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected index type", K(ret), K(index_type));
@@ -1041,6 +1054,20 @@ int ObFtsIndexBuildTask::construct_fts_doc_word_arg(obrpc::ObCreateIndexArg &arg
   } else if (OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_aux_index_name(arg,
                                                                         &allocator_))) {
     LOG_WARN("failed to generate index name", K(ret));
+  }
+  return ret;
+}
+
+int ObFtsIndexBuildTask::construct_search_data_index_arg(obrpc::ObCreateIndexArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(deep_copy_index_arg(allocator_, create_index_arg_, arg))) {
+    LOG_WARN("failed to deep copy index arg", K(ret));
+  } else if (FALSE_IT(arg.index_type_ = INDEX_TYPE_SEARCH_DATA_INDEX_LOCAL)) {
+  } else if (OB_FAIL(ObSearchIndexBuilderUtil::generate_search_index_name(arg, &allocator_))) {
+    LOG_WARN("failed to generate search data index name", K(ret), K(arg));
+  } else {
+    arg.def_index_id_ = index_table_id_;
   }
   return ret;
 }
@@ -2122,6 +2149,10 @@ int ObFtsIndexBuildTask::submit_drop_fts_index_task()
   } else if (OB_INVALID_ID != domain_index_aux_table_id_ &&
              OB_FAIL(drop_index_arg.index_ids_.push_back(domain_index_aux_table_id_))) {
     LOG_WARN("fail to push back domain_index_aux_table_id_", K(ret), K(domain_index_aux_table_id_));
+  } else if (is_search_index_task()
+             && OB_INVALID_ID != index_table_id_
+             && OB_FAIL(drop_index_arg.index_ids_.push_back(index_table_id_))) {
+    LOG_WARN("fail to push back search def index table id", K(ret), K(index_table_id_));
   } else if (OB_INVALID_ID != fts_doc_word_aux_table_id_ &&
              OB_FAIL(drop_index_arg.index_ids_.push_back(fts_doc_word_aux_table_id_))) {
     LOG_WARN("fail to push back fts_doc_word_aux_table_id_", K(ret), K(fts_doc_word_aux_table_id_));
@@ -2157,6 +2188,7 @@ int ObFtsIndexBuildTask::submit_drop_fts_index_task()
     drop_index_arg.is_parent_task_dropping_fts_index_ = is_fts_task();  // if want to drop only one index, is_parent_task_dropping_fts_index_ should be false, else should be true.
     drop_index_arg.is_parent_task_dropping_multivalue_index_ = is_multivalue_task();
     drop_index_arg.is_parent_task_dropping_spiv_index_ = is_spiv_task();
+    drop_index_arg.is_parent_task_dropping_search_index_ = is_search_index_task();
     drop_index_arg.is_hidden_         = create_index_arg_.is_offline_or_restore();
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(data_table_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", KR(ret));

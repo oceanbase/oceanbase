@@ -89,7 +89,8 @@ int ObDDLLock::lock_for_add_drop_index(
   const int64_t timeout_us = DEFAULT_TIMEOUT;
   ObSEArray<ObTabletID, 1> data_tablet_ids;
   ObInnerSQLConnection *iconn = nullptr;
-  if (OB_UNLIKELY(data_table_schema.is_user_hidden_table() || data_table_id != index_schema.get_data_table_id())) {
+  if (OB_UNLIKELY(data_table_schema.is_user_hidden_table()
+    || (!index_schema.is_search_data_index() && data_table_id != index_schema.get_data_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lock for rebuild hidden table index", K(ret), K(tenant_id), K(data_table_id), K(index_table_id), K(index_schema.get_data_table_id()));
   } else if (!need_lock(data_table_schema)) {

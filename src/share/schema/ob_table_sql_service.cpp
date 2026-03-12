@@ -2672,8 +2672,17 @@ int ObTableSqlService::batch_create_table(ObIArray<ObTableSchema> &tables,
       time_guard.click("add_foreign_key");
       if (OB_FAIL(ret)) {
       } else if (sync_schema_version_for_last_table && table_need_sync_schema_version(last_table)) {
+        uint64_t data_table_id = last_table.get_data_table_id();
+        if (last_table.is_search_data_index()) {
+          for (int64_t j = 0; j < tables.count(); j++) {
+            if (data_table_id == tables.at(j).get_table_id()) {
+              data_table_id = tables.at(j).get_data_table_id();
+              break;
+            }
+          }
+        }
         if (OB_FAIL(update_data_table_schema_version(sql_client, tenant_id,
-            last_table.get_data_table_id(), last_table.get_in_offline_ddl_white_list()))) {
+            data_table_id, last_table.get_in_offline_ddl_white_list()))) {
           LOG_WARN("fail to update schema_version", KR(ret));
         }
         time_guard.click("update_data_table_schema_version");
@@ -2701,7 +2710,7 @@ int ObTableSqlService::create_table(ObTableSchema &table,
 }
 
 int ObTableSqlService::update_index_status(
-    const ObTableSchema &data_table_schema,
+    const ObTableSchema &table_schema,
     const uint64_t index_table_id,
     const ObIndexStatus status,
     const int64_t new_schema_version,
@@ -2710,40 +2719,77 @@ int ObTableSqlService::update_index_status(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  ObTableSchema index_schema;
-  const uint64_t data_table_id = data_table_schema.get_table_id();
-  const uint64_t tenant_id = data_table_schema.get_tenant_id();
+  bool is_search_index = table_schema.is_search_def_index();
+  ObSchemaGetterGuard schema_guard;
+  const uint64_t data_table_id = is_search_index ?
+                                 table_schema.get_data_table_id() : table_schema.get_table_id();
+  const uint64_t tenant_id = table_schema.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  if (OB_FAIL(check_ddl_allowed(data_table_schema))) {
-    LOG_WARN("check ddl allowd failed", KR(ret), K(data_table_schema));
+  bool in_offline_ddl_white_list = table_schema.get_in_offline_ddl_white_list();
+  if (OB_FAIL(check_ddl_allowed(table_schema))) {
+    LOG_WARN("check ddl allowd failed", KR(ret), K(table_schema));
   } else if (OB_INVALID_ID == data_table_id || OB_INVALID_ID == index_table_id
       || status <= INDEX_STATUS_NOT_FOUND || status >= INDEX_STATUS_MAX) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(data_table_id), K(index_table_id), K(status));
-  } else if (OB_FAIL(update_data_table_schema_version(sql_client, tenant_id, data_table_id,
-                     data_table_schema.get_in_offline_ddl_white_list()))) {
-    LOG_WARN("update data table schema version failed", K(ret));
+  } else if (is_search_index) {
+    uint64_t def_index_id = table_schema.get_table_id();
+    int64_t def_index_new_version = OB_INVALID_VERSION;
+    if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, OB_INVALID_VERSION, def_index_new_version))) {
+      LOG_WARN("fail to gen new schema version", K(ret), K(tenant_id));
+    } else if (OB_FAIL(update_index_status_(tenant_id, index_table_id, status, new_schema_version,
+                                            in_offline_ddl_white_list, sql_client, ddl_stmt_str))) {
+      LOG_WARN("update index table schema version failed", K(ret));
+    } else if (OB_FAIL(update_index_status_(tenant_id, def_index_id, status, def_index_new_version,
+                                            in_offline_ddl_white_list, sql_client, ddl_stmt_str))) {
+      LOG_WARN("update index table schema version failed", K(ret));
+    } else if (OB_FAIL(update_data_table_schema_version(sql_client, tenant_id, data_table_id,
+                       in_offline_ddl_white_list))) {
+      LOG_WARN("update data table schema version failed", K(ret));
+    }
   } else {
-    ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
-                                               exec_tenant_id, tenant_id)))
-        || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
-                                                 exec_tenant_id, index_table_id)))
-        || OB_FAIL(dml.add_column("schema_version", new_schema_version))
-        || OB_FAIL(dml.add_column("index_status", status))
-        || OB_FAIL(dml.add_gmt_modified())) {
-      LOG_WARN("add column failed", K(ret));
-    } else {
-      int64_t affected_rows = 0;
-      const char *table_name = NULL;
-      if (OB_FAIL(ObSchemaUtils::get_all_table_name(exec_tenant_id, table_name))) {
-        LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
-      } else if (OB_FAIL(exec_update(sql_client, tenant_id, index_table_id, table_name, dml, affected_rows))) {
-        LOG_WARN("exec update failed", K(ret));
-      } else if (affected_rows > 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error", K(affected_rows), K(ret));
-      }
+    if (OB_FAIL(update_data_table_schema_version(sql_client, tenant_id, data_table_id,
+                                                 in_offline_ddl_white_list))) {
+      LOG_WARN("update data table schema version failed", K(ret));
+    } else if (OB_FAIL(update_index_status_(tenant_id, index_table_id, status, new_schema_version,
+                                            in_offline_ddl_white_list, sql_client, ddl_stmt_str))) {
+      LOG_WARN("update index table schema version failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableSqlService::update_index_status_(const uint64_t tenant_id,
+                                            const uint64_t index_table_id,
+                                            const ObIndexStatus status,
+                                            const int64_t new_schema_version,
+                                            const bool in_offline_ddl_white_list,
+                                            common::ObISQLClient &sql_client,
+                                            const common::ObString *ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObTableSchema index_schema;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  ObDMLSqlSplicer dml;
+  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                              exec_tenant_id, tenant_id)))
+      || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
+                                                exec_tenant_id, index_table_id)))
+      || OB_FAIL(dml.add_column("schema_version", new_schema_version))
+      || OB_FAIL(dml.add_column("index_status", status))
+      || OB_FAIL(dml.add_gmt_modified())) {
+    LOG_WARN("add column failed", K(ret));
+  } else {
+    int64_t affected_rows = 0;
+    const char *table_name = NULL;
+    if (OB_FAIL(ObSchemaUtils::get_all_table_name(exec_tenant_id, table_name))) {
+      LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
+    } else if (OB_FAIL(exec_update(sql_client, tenant_id, index_table_id, table_name, dml, affected_rows))) {
+      LOG_WARN("exec update failed", K(ret));
+    } else if (affected_rows > 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(affected_rows), K(ret));
     }
   }
 
@@ -2757,7 +2803,7 @@ int ObTableSqlService::update_index_status(
       const bool only_history = true;
       index_schema.set_index_status(status);
       index_schema.set_schema_version(new_schema_version);
-      index_schema.set_in_offline_ddl_white_list(data_table_schema.get_in_offline_ddl_white_list());
+      index_schema.set_in_offline_ddl_white_list(in_offline_ddl_white_list);
       if (OB_FAIL(add_table(sql_client, index_schema, update_object_status_ignore_version, only_history))) {
         LOG_WARN("add_table failed", K(index_schema), K(only_history), K(ret));
       }

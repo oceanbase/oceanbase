@@ -29,7 +29,7 @@ struct ObTableScanRange
 public:
   ObTableScanRange();
   ~ObTableScanRange() { reset(); }
-  int init(ObTableScanParam &scan_param, const ObTablet &tablet, const bool is_tablet_spliting);
+  int init(ObTableScanParam &scan_param, const ObTablet &tablet, const bool is_tablet_spliting, const bool cannot_be_false_range = false);
   int init(ObTableScanParam &scan_param,
            const common::ObSimpleBatch &simple_batch,
            common::ObIAllocator &allocator);
@@ -56,7 +56,8 @@ private:
       const bool is_tablet_spliting,
       const common::ObIArray<common::ObNewRange> &ranges,
       const common::ObQueryFlag &scan_flag,
-      const blocksstable::ObStorageDatumUtils *datum_utils);
+      const blocksstable::ObStorageDatumUtils *datum_utils,
+      const bool cannot_be_false_range = false);
   int init_ranges_in_skip_scan(
       const ObTablet &tablet,
       const bool is_tablet_spliting,

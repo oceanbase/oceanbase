@@ -22,6 +22,7 @@
 #include "sql/optimizer/ob_log_set.h"
 #include "src/share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "share/catalog/ob_catalog_properties.h"
+#include "share/hybrid_search/ob_query_parse.h"
 
 namespace oceanbase
 {
@@ -269,7 +270,8 @@ struct ObVecIndexInfo
     is_hybrid_index(false),
     vec_index_name_(),
     has_get_visible_column_(false),
-    all_filters_can_be_picked_out_(false)
+    all_filters_can_be_picked_out_(false),
+    knn_filter_mode_(ObKnnFilterMode::INVALID_KNN_FILTER_MODE)
   { }
   ~ObVecIndexInfo() {}
 
@@ -360,6 +362,8 @@ struct ObVecIndexInfo
   ObString vec_index_name_;
   bool has_get_visible_column_;
   bool all_filters_can_be_picked_out_;
+  // hybrid search search options
+  ObKnnFilterMode knn_filter_mode_;
 };
 
 struct ObPushDownTopNInfo
@@ -395,6 +399,7 @@ public:
         is_index_global_(false),
         is_spatial_index_(false),
         is_multivalue_index_(false),
+        is_search_index_(false),
         use_das_(false),
         index_back_(false),
         is_multi_part_table_scan_(false),
@@ -487,7 +492,8 @@ public:
         pseudo_columnref_exprs_(plan.get_allocator()),
         aggr_param_mono_(plan.get_allocator()),
         is_gtt_temp_table_v2_(false),
-        is_scan_resumable_(false)
+        is_scan_resumable_(false),
+	      is_hybrid_search_(false)
   {
   }
 
@@ -629,6 +635,22 @@ public:
 
   inline bool get_is_multivalue_index() const
   { return is_multivalue_index_; }
+
+  /*
+   * set is hybrid search
+   */
+  inline void set_is_hybrid_search(bool is_hybrid_search)
+  { is_hybrid_search_ = is_hybrid_search; }
+
+  inline bool get_is_hybrid_search() const
+  { return is_hybrid_search_; }
+
+  /*
+   * set is search index
+   */
+  inline void set_is_search_index(bool is_search_index) { is_search_index_ = is_search_index; }
+
+  inline bool get_is_search_index() const { return is_search_index_; }
 
   /**
    *  Set scan direction
@@ -894,6 +916,10 @@ public:
   // for index merge, we need to set range conds and filters for each index scan
   int set_index_merge_scan_filters(const AccessPath *path);
   int set_index_table_scan_filters(ObIndexMergeNode *node, bool is_intersect_child);
+  int collect_hybrid_search_exprs(const AccessPath *path);
+  int get_hybrid_search_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int get_hybrid_search_index_name_list(ObIArray<ObString> &name_list);
+  int prepare_vector_node_access_exprs();
   int generate_dynamic_id_filter(ObIndexMergeNode *node, ObIArray<ObRawExpr*> &scan_pushdown_filters);
   inline common::ObIArray<ObRawExpr*> &get_range_conditions() { return range_conds_; }
   const common::ObIArray<ObRawExpr*> &get_range_conditions() const { return range_conds_; }
@@ -985,6 +1011,8 @@ public:
   inline bool is_text_retrieval_scan() const { return is_index_scan() && NULL != text_retrieval_info_.match_expr_; }
   inline bool is_multivalue_index_scan() const { return is_multivalue_index_; }
   inline bool is_spatial_index_scan() const { return is_spatial_index_; }
+  inline bool is_hybrid_search() const { return is_hybrid_search_; }
+  inline bool is_search_index_scan() const { return is_search_index_; }
   inline ObTextRetrievalInfo &get_text_retrieval_info() { return text_retrieval_info_; }
   inline const ObTextRetrievalInfo &get_text_retrieval_info() const { return text_retrieval_info_; }
   int prepare_vector_access_exprs();
@@ -1005,7 +1033,7 @@ public:
   {
     return is_skip_rowkey_doc_ ? is_tsc_with_domain_id() : is_tsc_with_domain_id() || has_func_lookup();
   }
-  int prepare_hnsw_vector_access_exprs();
+  int prepare_hnsw_vector_access_exprs(ObVecIndexInfo &vc_info);
   int prepare_ivf_vector_access_exprs();
   int prepare_spiv_vector_access_exprs();
   int prepare_spiv_dim_docid_value_tbl_access_exprs(const ObTableSchema *dim_docid_value_tbl,
@@ -1068,6 +1096,7 @@ public:
                                             const ObTableSchema *table_schema,
                                             ObRawExprFactory *expr_factory,
                                             TableItem *table_item,
+                                            bool need_skip_rowkey_vid,
                                             ObColumnRefRawExpr *&delta_vid_column,
                                             ObColumnRefRawExpr *&delta_type_column,
                                             ObColumnRefRawExpr *&delta_vector_column);
@@ -1075,6 +1104,7 @@ public:
                                             const ObTableSchema *table_schema,
                                             ObRawExprFactory *expr_factory,
                                             TableItem *table_item,
+                                            bool need_skip_rowkey_vid,
                                             ObColumnRefRawExpr *&index_id_vid_column,
                                             ObColumnRefRawExpr *&index_id_scn_column,
                                             ObColumnRefRawExpr *&index_id_type_column,
@@ -1090,6 +1120,7 @@ public:
                                              const ObTableSchema *table_schema,
                                              ObRawExprFactory *expr_factory,
                                              TableItem *table_item,
+                                             bool need_skip_rowkey_vid,
                                              ObColumnRefRawExpr *&embedded_vid_column,
                                              ObColumnRefRawExpr *&embedded_vector_column);
   int prepare_hnsw_index_id_col();
@@ -1309,6 +1340,7 @@ protected: // memeber variables
   bool is_index_global_;
   bool is_spatial_index_;
   bool is_multivalue_index_;
+  bool is_search_index_;
   // TODO yuming: tells whether the table scan uses shared data access or not
   // mainly designed for code generator
   bool use_das_;
@@ -1440,7 +1472,8 @@ protected: // memeber variables
   share::ObLakeTableFormat lake_table_format_;
   bool use_column_store_;
   // in the new fts version, doc_id_table_id_ may be invalid.
-  uint64_t doc_id_table_id_; // used for rowkey lookup of fulltext, JSON multi-value and vector index
+  // used for rowkey lookup of fulltext, JSON multi-value, vector index and search index
+  uint64_t doc_id_table_id_;
   // text retrieval as index scan
   ObTextRetrievalInfo text_retrieval_info_;
   // text retrieval as functional lookup
@@ -1484,6 +1517,9 @@ protected: // memeber variables
   ObSqlArray<ObRawAggrParamMonotonicity> aggr_param_mono_;
   bool is_gtt_temp_table_v2_;
   bool is_scan_resumable_;
+  bool is_hybrid_search_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> hybrid_search_exprs_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> hybrid_search_scores_;
 
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);

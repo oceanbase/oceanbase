@@ -17,7 +17,6 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/string/ob_string.h"
 #include "objit/common/ob_item_type.h"
-#include "sql/printer/ob_raw_expr_printer.h"
 
 namespace oceanbase
 {
@@ -268,7 +267,7 @@ enum ObReqJoinType
   RIGHT_OUTER_JOIN,
   FULL_OUTER_JOIN,
   UNION_ALL,
-  MAX_JOIN_TYPE
+  MAX_REQ_JOIN_TYPE
 };
 
 class ObReqJoinedTable : public ObReqTable

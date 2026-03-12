@@ -166,6 +166,14 @@ public:
   {
     return is_advance_skip_scan_;
   }
+  OB_INLINE int8_t get_range_prefix_in_advance_scan() const
+  {
+    return range_prefix_in_advance_scan_;
+  }
+  OB_INLINE void set_range_prefix_in_advance_scan(const int8_t prefix_cnt)
+  {
+    range_prefix_in_advance_scan_ = prefix_cnt;
+  }
   OB_INLINE void disable_blockscan()
   {
     pd_storage_flag_.set_blockscan_pushdown(false);
@@ -285,6 +293,7 @@ public:
   const common::ObIArray<bool> *output_sel_mask_;
   const blocksstable::ObDatumRange *ss_datum_range_;
   bool is_advance_skip_scan_;
+  int8_t range_prefix_in_advance_scan_;
   int64_t ss_rowkey_prefix_cnt_;
   uint32_t cg_idx_;
   sql::ObStoragePushdownFlag pd_storage_flag_;

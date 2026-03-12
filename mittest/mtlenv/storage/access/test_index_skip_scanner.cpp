@@ -681,6 +681,7 @@ TEST_F(TestIndexSkipScanner, test_advance_scan_loop)
   ObSSTableRowScanner<> skip_scanner;
   iter_param_.ss_rowkey_prefix_cnt_ = 0;
   iter_param_.is_advance_skip_scan_ = false;
+  iter_param_.range_prefix_in_advance_scan_ = 1;
   context_.alloc_skip_scan_factory();
   ASSERT_EQ(OB_SUCCESS, skip_scanner.init(iter_param_, context_, &sstable_, &scan_range_));
 

@@ -14,6 +14,7 @@
 #include "ob_raw_expr_resolver_impl.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "lib/json/ob_json_print_utils.h"
+#include "sql/engine/expr/ob_json_param_type.h"
 #include "lib/string/ob_sql_string.h"
 #include "pl/ob_pl_resolver.h"
 #ifdef OB_BUILD_ORACLE_PL
@@ -1302,6 +1303,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_SYS_JSON_VALUE: {
         if (OB_FAIL(process_json_value_node(node, expr))) {
           LOG_WARN("fail to process json value node", K(ret), K(node));
+        }
+        break;
+      }
+      case T_FUN_SYS_JSON_EXTRACT: {
+        if (OB_FAIL(process_json_extract_node(node, expr))) {
+          LOG_WARN("fail to process json extract node", K(ret), K(node));
         }
         break;
       }
@@ -7108,7 +7115,7 @@ int ObRawExprResolverImpl::malloc_new_specified_type_node(common::ObIAllocator &
 // use： json value (mismatch ype)
 int ObRawExprResolverImpl::expand_node(common::ObIAllocator &allocator, ParseNode *node, int p, ObVector<const ParseNode*> &arr) {
   int ret = OB_SUCCESS;
-  if (node->type_ == T_LINK_NODE || node->type_ == T_VALUE_VECTOR)
+  if (node->type_ == T_LINK_NODE || node->type_ == T_VALUE_VECTOR || node->type_ == T_EXPR_LIST)
   {
     for (int32_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++){
       if (OB_ISNULL(node->children_[i])) {
@@ -7126,6 +7133,7 @@ int ObRawExprResolverImpl::expand_node(common::ObIAllocator &allocator, ParseNod
   }
   return ret;
 }
+
 
 int ObRawExprResolverImpl::remove_format_json_opt_in_pl(ParseNode *node, int8_t expr_flag)
 {
@@ -7618,8 +7626,8 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
   INIT_SUCC(ret);
   CK(OB_NOT_NULL(node))
   CK(T_FUN_SYS_JSON_VALUE == node->type_);
-  // node child_num is nine,
-  CK(10 == node->num_child_);
+  // node child_num is 11
+  CK(11 == node->num_child_);
   bool mismatch_vec = false;
   int32_t num = 0;
   ObSysFunRawExpr *func_expr = NULL;
@@ -7635,33 +7643,59 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
   }
   // pl mode check whether has mismatch
   if (lib::is_oracle_mode() && ctx_.current_scope_ == T_PL_SCOPE) {
-    if (node->children_[9]->num_child_ != 2
-        || node->children_[9]->children_[0]->value_ != 3
-        || node->children_[9]->children_[1]->value_ != 7) {
+    if (node->children_[JSN_VAL_MISMATCH + 1]->num_child_ != 2 // +1 because pick is at position 2
+        || node->children_[JSN_VAL_MISMATCH + 1]->children_[0]->value_ != 3
+        || node->children_[JSN_VAL_MISMATCH + 1]->children_[1]->value_ != 7) {
       ret = OB_ERR_PARSE_PLSQL;
       LOG_USER_ERROR(OB_ERR_PARSE_PLSQL, "\"MISMATCH\"", "error empty");
     }
   }
-  const ParseNode *path_node = node->children_[1];
+  const ParseNode *path_node = node->children_[JSN_VAL_PATH];
   // check path
   if (OB_SUCC(ret) && lib::is_oracle_mode() && OB_FAIL(pre_check_json_path_valid(path_node))) {
     LOG_WARN("pre check path fail", K(ret));
   }
 
-  const ParseNode *returning_type = node->children_[2];
+  // parse pick parameter and store in extra_
+  // Pick is at position 2 in children_ array (not as a parameter)
+  const ParseNode *pick_node = node->children_[2];
+  ObItemType pick_type = T_NULL;
+  if (OB_SUCC(ret) && OB_NOT_NULL(pick_node)) {
+    pick_type = static_cast<ObItemType>(pick_node->type_);
+    func_expr->set_pick(pick_type);
+  }
+
+  const ParseNode *returning_type = node->children_[JSN_VAL_RET + 1]; // +1 because pick is at position 2
   // check [returning_type]
   if (OB_SUCC(ret)) {
-    const char *input = node->children_[0]->str_value_;
+    const char *input = node->children_[JSN_VAL_DOC]->str_value_;
     ret = cast_accuracy_check(returning_type, input);
   }
   // pre check default returning type with item method
   if (OB_SUCC(ret)) {
     ObString default_val(7, "default");
-    if (OB_NOT_NULL(returning_type->raw_text_) && (0 == default_val.case_compare(returning_type->raw_text_)) && node->children_[1]->text_len_ > 0) {
-      ObString path_str(node->children_[1]->text_len_, node->children_[1]->raw_text_);
+    if (OB_NOT_NULL(returning_type->raw_text_) && (0 == default_val.case_compare(returning_type->raw_text_)) && node->children_[JSN_VAL_PATH]->text_len_ > 0) {
+      ObString path_str(node->children_[JSN_VAL_PATH]->text_len_, node->children_[JSN_VAL_PATH]->raw_text_);
       if (OB_FAIL(ObJsonPath::change_json_expr_res_type_if_need(ctx_.expr_factory_.get_allocator(), path_str, const_cast<ParseNode&>(*returning_type), OPT_JSON_VALUE))) {
         LOG_WARN("set return type by path item method fail", K(ret), K(path_str));
       }
+    }
+  }
+  // When pick_type is json_number/json_string, the json_value result is used as a
+  // search index key for range scans. The default implicit return type in MySQL mode
+  // (VARCHAR(512) with connection collation) is unsuitable for two reasons:
+  //   1. Non-binary collations (e.g. utf8mb4_general_ci) produce case/accent-insensitive
+  //      comparisons, breaking index key ordering.
+  //   2. 512 bytes may truncate key values, causing incorrect range boundaries.
+  // Fix: switch to utf8mb4_bin for deterministic byte-order comparison, and expand the
+  // length to OB_MAX_USER_ROW_KEY_LENGTH (16 KB) to avoid truncation.
+  // Only override when is_hidden_const_ (i.e. the user did not write an explicit
+  // RETURNING clause); an explicit RETURNING is left as-is.
+  if (OB_SUCC(ret) && lib::is_mysql_mode() && (pick_type == T_JSON_NUMBER || pick_type == T_JSON_STRING)) {
+    ParseNode *ret_type_node = node->children_[JSN_VAL_RET + 1];
+    if (OB_NOT_NULL(ret_type_node) && ret_type_node->type_ == T_CAST_ARGUMENT && ret_type_node->is_hidden_const_) {
+      ret_type_node->int16_values_[OB_NODE_CAST_COLL_IDX] = static_cast<int16_t>(CS_TYPE_UTF8MB4_BIN);
+      ret_type_node->int32_values_[OB_NODE_CAST_C_LEN_IDX] = OB_MAX_USER_ROW_KEY_LENGTH;
     }
   }
   // empty type i, error type i + 3 , distinct empty and error clause
@@ -7669,16 +7703,17 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
   ParseNode *empty_default_value = NULL;
   ParseNode *error_type = NULL;
   ParseNode *error_default_value = NULL;
-  if (node->children_[5]->is_input_quoted_ == 1) {
-    empty_type = node->children_[7];
-    empty_default_value = node->children_[8];
-    error_type = node->children_[5];
-    error_default_value = node->children_[6];
+  // +1 because pick is at position 2 in children_ array
+  if (node->children_[JSN_VAL_EMPTY + 1]->is_input_quoted_ == 1) {
+    empty_type = node->children_[JSN_VAL_ERROR + 1];
+    empty_default_value = node->children_[JSN_VAL_ERROR_DEF + 1];
+    error_type = node->children_[JSN_VAL_EMPTY + 1];
+    error_default_value = node->children_[JSN_VAL_EMPTY_DEF + 1];
   } else {
-    empty_type = node->children_[5];
-    empty_default_value = node->children_[6];
-    error_type = node->children_[7];
-    error_default_value = node->children_[8];
+    empty_type = node->children_[JSN_VAL_EMPTY + 1];
+    empty_default_value = node->children_[JSN_VAL_EMPTY_DEF + 1];
+    error_type = node->children_[JSN_VAL_ERROR + 1];
+    error_default_value = node->children_[JSN_VAL_ERROR_DEF + 1];
   }
   // if use defualt, value should not be null , support
   if (OB_SUCC(ret)) {
@@ -7701,33 +7736,37 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(check_first_node(node->children_[0]))) {
+  if (OB_SUCC(ret) && OB_FAIL(check_first_node(node->children_[JSN_VAL_DOC]))) {
     LOG_WARN("invalid db.table.column, table.column, or column specification", K(ret));
   }
   // judge input TODO object type can use ignore and match type
   ObVector<const ParseNode*> mismatch_arr;
   if (OB_SUCC(ret)) {
-    const ParseNode *on_mismatch = node->children_[9];
+    const ParseNode *on_mismatch = node->children_[JSN_VAL_MISMATCH + 1]; // +1 because pick is at position 2
     if (OB_ISNULL(on_mismatch)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mismatch node is null", K(ret));
     } else {
       if (OB_FAIL(expand_node(ctx_.expr_factory_.get_allocator(), const_cast<ParseNode *>(on_mismatch), 0, mismatch_arr))) {
         LOG_WARN("parse mismatch has error", K(ret), K(mismatch_arr.size()));
-      } else if (OB_FAIL(func_expr->init_param_exprs(num + mismatch_arr.size()))) {
+      } else if (OB_FAIL(func_expr->init_param_exprs(num - 1 + mismatch_arr.size()))) { // -1 because pick is not a parameter
         LOG_WARN("failed to init param exprs", K(ret));
       } else {
-        // [json_text][json_path][returning_type][empty_type][empty_default_value][error_type][error_default_value]
+        // [json_text][json_path][pick][returning_type][empty_type][empty_default_value][error_type][error_default_value]
         ParseNode *cur_node = NULL;
         for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
+          // Skip position 2 (pick) as it's stored in extra_, not as a parameter
+          if (i == 2) {
+            continue;
+          }
           cur_node = node->children_[i];
-          if (i == 5) {
+          if (i == JSN_VAL_EMPTY + 1) {
             cur_node = empty_type;
-          } else if (i == 6) {
+          } else if (i == JSN_VAL_EMPTY_DEF + 1) {
             cur_node = empty_default_value;
-          } else if (i == 7) {
+          } else if (i == JSN_VAL_ERROR + 1) {
             cur_node = error_type;
-          } else if (i == 8) {
+          } else if (i == JSN_VAL_ERROR_DEF + 1) {
             cur_node = error_default_value;
           }
           if (node->children_[i]->type_ == T_LINK_NODE || node->children_[i]->type_ == T_VALUE_VECTOR) {
@@ -7791,6 +7830,114 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
       }
     }
   }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_json_extract_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  INIT_SUCC(ret);
+  CK(OB_NOT_NULL(node))
+  CK(T_FUN_SYS_JSON_EXTRACT == node->type_);
+  CK(2 == node->num_child_);
+
+  ObSysFunRawExpr *func_expr = NULL;
+  if (OB_FAIL(ret)) {
+  } else {
+    OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_EXTRACT, func_expr));
+    CK(OB_NOT_NULL(func_expr));
+    OX(func_expr->set_func_name(ObString::make_string("json_extract")));
+  }
+
+  // Parse parameters: expr_list (json_doc + paths) and opt_pick
+  if (OB_SUCC(ret)) {
+    const ParseNode *expr_list = node->children_[0];
+    const ParseNode *opt_pick = node->children_[1];
+
+    // Validate expr_list (required, cannot be NULL)
+    if (OB_ISNULL(expr_list)) {
+      ret = OB_ERR_PARSER_SYNTAX;
+      LOG_WARN("expr_list is NULL for json_extract", K(ret));
+    }
+
+     // Parse pick parameter and store in extra_ (similar to json_value)
+     // Pick is stored in extra_, not as a parameter
+     ObItemType pick_type = T_NULL;
+     if (OB_SUCC(ret) && OB_NOT_NULL(opt_pick)) {
+       pick_type = static_cast<ObItemType>(opt_pick->type_);
+       if (pick_type != T_NULL && pick_type != T_JSON_NUMBER && pick_type != T_JSON_STRING) {
+         ret = OB_ERR_UNEXPECTED;
+         LOG_WARN("pick parameter type is unexpected", K(ret), K(pick_type));
+       } else {
+        func_expr->set_pick(pick_type);
+       }
+     }
+
+     // Expand expr_list to get all parameters (json_doc + paths)
+     ObVector<const ParseNode*> param_arr;
+     if (OB_SUCC(ret)) {
+       if (OB_FAIL(expand_node(ctx_.expr_factory_.get_allocator(),
+                               const_cast<ParseNode *>(expr_list), 0, param_arr))) {
+         LOG_WARN("expand expr_list failed", K(ret));
+       }
+     }
+
+     // Check if multiple paths with pick parameter (not allowed)
+     // param_arr[0] is json_doc, param_arr[1..] are paths
+     if (OB_SUCC(ret) && pick_type != T_NULL
+         && (param_arr.size() > 2 || param_arr.size() <= 1)) {
+       ret = OB_ERR_PARAM_SIZE;
+       ObString func_name = ObString::make_string("json_extract");
+       LOG_WARN("json_extract with pick can only have one path", K(ret), K(func_name),
+                K(param_arr.size()), K(pick_type));
+       LOG_USER_ERROR(OB_ERR_PARAM_SIZE,
+                     func_name.length(), func_name.ptr());
+     }
+
+     // Calculate total parameter count: only params from expr_list (pick is in extra_)
+     int32_t total_param_count = param_arr.size();
+
+     // Initialize param exprs
+     if (OB_SUCC(ret)) {
+       OZ(func_expr->init_param_exprs(total_param_count));
+     }
+
+     // Resolve all parameters from expr_list
+     // Check for alias during resolution (not allowed for json_extract)
+     if (OB_SUCC(ret)) {
+       ObRawExpr *para_expr = NULL;
+       for (int32_t i = 0; OB_SUCC(ret) && i < param_arr.size(); i++) {
+         const ParseNode *param_node = param_arr.at(i);
+         if (OB_ISNULL(param_node)) {
+           ret = OB_ERR_PARSER_SYNTAX;
+           LOG_WARN("invalid parse tree", K(ret), K(i));
+         } else if (T_EXPR_WITH_ALIAS == param_node->type_) {
+           // alias is not allowed for json_extract, report parameter error
+           ret = OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT;
+           ObString func_name = ObString::make_string("json_extract");
+           LOG_WARN("wrong parameters to native function: alias not allowed", K(ret), K(func_name));
+           LOG_USER_ERROR(OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT,
+                         func_name.length(), func_name.ptr());
+         } else if (OB_FAIL(SMART_CALL(recursive_resolve(param_node, para_expr)))) {
+           LOG_WARN("fail to recursive resolve", K(ret), K(param_node));
+         } else if (OB_FAIL(func_expr->add_param_expr(para_expr))) {
+           LOG_WARN("fail to add param expr", K(ret), K(para_expr));
+         }
+       }
+     }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObRawExprUtils::function_alias(ctx_.expr_factory_, func_expr))) {
+      LOG_WARN("failed to do function alias", K(ret), K(func_expr));
+    } else if (OB_FAIL(func_expr->check_param_num())) {
+      if (OB_ERR_FUNCTION_UNKNOWN != ret) {
+        LOG_WARN("failed to check param num", K(ret));
+      }
+    } else {
+      expr = func_expr;
+    }
+  }
+
   return ret;
 }
 

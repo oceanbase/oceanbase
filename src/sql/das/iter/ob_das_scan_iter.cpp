@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_scan_iter.h"
+#include "sql/das/search/ob_das_search_utils.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "src/sql/engine/ob_exec_context.h"
 
@@ -28,10 +29,10 @@ int ObDASScanIter::inner_init(ObDASIterParam &param)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inner init das iter with bad param type", K(param), K(ret));
   } else {
-    const ObDASScanCtDef *scan_ctdef = (static_cast<ObDASScanIterParam&>(param)).scan_ctdef_;
-    output_ = &scan_ctdef->result_output_;
-    tsc_service_ = is_virtual_table(scan_ctdef->ref_table_id_) ? GCTX.vt_par_ser_
-                              : scan_ctdef->is_external_table_ ? GCTX.et_access_service_
+    ObDASScanIterParam &scan_iter_param = static_cast<ObDASScanIterParam&>(param);
+    output_ = &scan_iter_param.get_result_output();
+    tsc_service_ = is_virtual_table(scan_iter_param.get_ref_table_id()) ? GCTX.vt_par_ser_
+                              : scan_iter_param.is_external_table() ? GCTX.et_access_service_
                                                                : MTL(ObAccessService *);
   }
 
@@ -202,8 +203,18 @@ int ObDASScanIter::set_scan_rowkey(ObEvalCtx *eval_ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; i++) {
       ObObj tmp_obj;
       const ObExpr *expr = rowkey_exprs.at(i);
-      ObDatum &col_datum = expr->locate_expr_datum(*eval_ctx);
-      if (OB_UNLIKELY(T_PSEUDO_GROUP_ID == expr->type_ || T_PSEUDO_ROW_TRANS_INFO_COLUMN == expr->type_)) {
+      ObDatum col_datum;
+      if (expr->enable_rich_format() && is_valid_format(expr->get_format(*eval_ctx))) {
+        const int64_t batch_idx = eval_ctx->get_batch_idx();
+        if (OB_FAIL(ObDASSearchUtils::get_datum(*expr, *eval_ctx, batch_idx, col_datum))) {
+          LOG_WARN("failed to get datum", K(ret));
+        }
+      } else {
+        col_datum = expr->locate_expr_datum(*eval_ctx);
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(T_PSEUDO_GROUP_ID == expr->type_ || T_PSEUDO_ROW_TRANS_INFO_COLUMN == expr->type_)) {
         // skip.
       } else if (OB_FAIL(col_datum.to_obj(tmp_obj, expr->obj_meta_, expr->obj_datum_map_))) {
         LOG_WARN("failed to convert datum to obj", K(ret));
@@ -225,7 +236,6 @@ int ObDASScanIter::set_scan_rowkey(ObEvalCtx *eval_ctx,
     }
   }
   LOG_DEBUG("set scan iter scan rowkey", K(range), K(ret));
-
   return ret;
 }
 

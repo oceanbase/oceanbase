@@ -348,14 +348,16 @@ public:
     return OB_NOT_SUPPORTED;
   }
   virtual int64_t get_column_count() const { return OB_NOT_SUPPORTED; }
-  // For column store
+  // For column store and skip scan
   virtual int find_bound(const ObDatumRowkey &key,
                  const bool lower_bound,
                  const int64_t begin_idx,
                  const int64_t end_idx,
                  int64_t &row_idx,
-                 bool &equal)
+                 bool &equal,
+                 const int64_t common_prefix_len = 0)
   {
+    UNUSEDx(key, lower_bound, begin_idx, end_idx, row_idx, equal, common_prefix_len);
     return OB_NOT_SUPPORTED;
   }
   int get_column_datum(
@@ -489,8 +491,10 @@ public:
   virtual int compare_rowkey(
       const ObDatumRowkey &rowkey,
       const int64_t index,
-      int32_t &compare_result)
+      int32_t &compare_result,
+      const int64_t common_prefix_len = 0)
   {
+    UNUSED(common_prefix_len);
     return OB_NOT_SUPPORTED;
   }
   static int filter_white_filter(

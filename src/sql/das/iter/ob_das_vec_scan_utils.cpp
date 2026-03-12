@@ -135,17 +135,17 @@ int ObDasVecScanUtils::check_ivf_support_similarity_threshold(ObExpr &expr)
 }
 
 int ObDasVecScanUtils::get_real_search_vec(common::ObIAllocator &allocator,
-                                           ObDASSortRtDef *sort_rtdef,
+                                           ObEvalCtx *eval_ctx,
                                            ObExpr *origin_vec,
                                            ObString &real_search_vec)
 {
   int ret = OB_SUCCESS;
 
   ObDatum *search_vec_datum = NULL;
-  if (OB_ISNULL(sort_rtdef) || OB_ISNULL(origin_vec)) {
+  if (OB_ISNULL(eval_ctx) || OB_ISNULL(origin_vec)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ptr is null", K(ret), K(sort_rtdef), K(origin_vec));
-  } else if (OB_FAIL(origin_vec->eval(*(sort_rtdef->eval_ctx_), search_vec_datum))) {
+    LOG_WARN("ptr is null", K(ret), K(eval_ctx), K(origin_vec));
+  } else if (OB_FAIL(origin_vec->eval(*eval_ctx, search_vec_datum))) {
     LOG_WARN("eval vec arg failed", K(ret));
   } else if (search_vec_datum->is_null()) {
     ret = OB_ERR_NULL_VALUE;
@@ -275,7 +275,7 @@ int ObDasVecScanUtils::init_sort_of_hybrid_index(ObIAllocator &allocator,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("semantic_distance expr args are not string type", K(ret), KPC(expr->args_[ARGS_IDX_ZERO]), KPC(expr->args_[ARGS_IDX_ONE]));
         } else if (FALSE_IT(query_str_expr = expr->args_[ARGS_IDX_ZERO]->is_const_expr() ? expr->args_[ARGS_IDX_ZERO] : expr->args_[ARGS_IDX_ONE])) {
-        } else if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(allocator, sort_rtdef, query_str_expr, query_str))) {
+        } else if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(allocator, sort_rtdef->eval_ctx_, query_str_expr, query_str))) {
           LOG_WARN("failed to get real search vec", K(ret));
         } else {
           if (expr->is_semantic_vector_distance_expr()) {

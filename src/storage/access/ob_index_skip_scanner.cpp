@@ -985,7 +985,8 @@ int ObIndexSkipScanner::check_disabled()
 
 ObAdvanceSkipScanner::ObAdvanceSkipScanner(const bool is_for_memtable, const blocksstable::ObStorageDatumUtils &datum_utils)
   : ObISkipScanner(is_for_memtable, ObSkipScannerType::ADVANCE_SCAN, datum_utils),
-    left_border_reached_(false)
+    left_border_reached_(false),
+    range_prefix_in_advance_scan_(0)
 {
 }
 
@@ -997,6 +998,7 @@ void ObAdvanceSkipScanner::reset()
 {
   ObISkipScanner::reset();
   left_border_reached_ = false;
+  range_prefix_in_advance_scan_ = 0;
 }
 
 int ObAdvanceSkipScanner::init(
@@ -1007,7 +1009,7 @@ int ObAdvanceSkipScanner::init(
     const ObITableReadInfo &read_info,
     common::ObIAllocator &stmt_allocator)
 {
-  UNUSEDx(prefix_cnt, skip_range);
+  UNUSEDx(skip_range);
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -1022,6 +1024,7 @@ int ObAdvanceSkipScanner::init(
     scan_range_ = &scan_range;
     read_info_ = &read_info;
     stmt_alloc_ = &stmt_allocator;
+    range_prefix_in_advance_scan_ = prefix_cnt;
     is_inited_ = true;
     LOG_TRACE("[INDEX SKIP SCAN] success to init", KR(ret), K(*this));
   }
@@ -1169,10 +1172,14 @@ int ObAdvanceSkipScanner::skip(
   }
   if (OB_SUCC(ret) && !left_border_reached_ && !state.is_skipped()) {
     bool has_data = false;
-    bool range_covered = false;
-    if (OB_FAIL(micro_scanner.skip_to_range(micro_start_, micro_last_, complete_range_, is_left_border, is_right_border,
-                                            micro_current_, has_data, range_covered))) {
-      LOG_WARN("failed to skip to next prefix range", KR(ret), K(micro_scanner), KPC(this));
+    const int64_t common_prefix_len = range_prefix_in_advance_scan_ > 0 ? range_prefix_in_advance_scan_ : 0;
+    // For advance scan, only left boundary changes, right boundary is unchanged
+    // Use skip_to_rowkey to skip end key location for better performance
+    if (OB_FAIL(micro_scanner.skip_to_rowkey(micro_start_, micro_last_, complete_range_.get_start_key(),
+                                             complete_range_.get_border_flag().inclusive_start(),
+                                             is_left_border, is_right_border,
+                                             micro_current_, has_data, common_prefix_len))) {
+      LOG_WARN("failed to skip to start key", KR(ret), K(micro_scanner), KPC(this));
     } else if (has_data) {
       index_skip_strategy_.add_skipped_row_count(micro_current_ - micro_start_ + 1);
       micro_start_ = MAX(micro_start_, micro_current_);
@@ -1182,7 +1189,7 @@ int ObAdvanceSkipScanner::skip(
       micro_start_ = MAX(micro_start_, micro_current_);
       state.set_state(0, ObIndexSkipNodeState::PREFIX_SKIPPED_LEFT);
     }
-    LOG_DEBUG("[INDEX SKIP SCAN] micro scanner skip to range", KR(ret), K(has_data), K(range_covered), K(state), KPC(this));
+    LOG_DEBUG("[INDEX SKIP SCAN] micro scanner advance to", KR(ret), K(has_data), K(state), KPC(this));
   }
   return ret;
 }
@@ -1196,7 +1203,7 @@ int ObIndexSkipScanFactory::build_index_skip_scanner(
 {
   int ret = OB_SUCCESS;
   const bool is_reverse_scan = access_ctx.query_flag_.is_reverse_scan();
-  const int64_t prefix_cnt = iter_param.get_ss_rowkey_prefix_cnt();
+  const int64_t prefix_cnt = iter_param.is_index_skip_scan() ? iter_param.get_ss_rowkey_prefix_cnt() : iter_param.get_range_prefix_in_advance_scan();
   const ObDatumRange *skip_range = iter_param.is_advance_skip_scan() ? range : iter_param.get_ss_datum_range();
   const ObITableReadInfo *read_info = iter_param.get_read_info();
   ObIAllocator &stmt_allocator = *access_ctx.allocator_;
@@ -1209,7 +1216,7 @@ int ObIndexSkipScanFactory::build_index_skip_scanner(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument to build index skip scanner", KR(ret), K(iter_param), K(lbt()));
   } else if (OB_UNLIKELY((iter_param.is_index_skip_scan() && prefix_cnt <= 0) ||
-                         (iter_param.is_advance_skip_scan() && prefix_cnt != 0) ||
+                         (iter_param.is_advance_skip_scan() && prefix_cnt < 0) ||
                          nullptr == range || !range->is_valid() ||
                          nullptr == skip_range || !skip_range->is_valid() || nullptr == read_info)) {
     ret = OB_INVALID_ARGUMENT;

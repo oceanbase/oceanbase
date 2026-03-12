@@ -15,6 +15,7 @@
 #include "lib/container/ob_iarray.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/diagnosis/ob_runtime_metrics.h"
+#include "share/diagnosis/ob_profile_name_def.h"
 
 namespace oceanbase
 {
@@ -127,8 +128,12 @@ public:
                                  ObIArray<ExecutionBound> &execution_bounds);
   static int merge_profile(ObMergedProfile &merged_profile, const ObProfile *piece_profile,
                            ObIAllocator *alloc);
+  static bool is_hybrid_search_profile(ObProfileId id);
 
 private:
+  static int merge_children_for_hybrid_search(ObMergedProfile &merged_profile,
+                                              const ObProfile *piece_profile,
+                                              ObIAllocator *alloc);
   static int inner_get_profile(ObIAllocator *alloc, int64_t tenant_id, const ObSqlString &sql,
                                ObIArray<ObProfileItem> &profile_items);
 

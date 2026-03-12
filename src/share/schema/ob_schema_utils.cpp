@@ -17,6 +17,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "share/ob_fts_index_builder_util.h"
+#include "share/search_index/ob_search_index_builder_util.h"
 namespace oceanbase
 {
 using namespace common;

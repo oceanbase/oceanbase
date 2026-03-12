@@ -154,6 +154,7 @@ public:
   bool need_print_catalog_name(const ObString& catalog_name);
   int print_flashback_info(const TableItem *table_item);
 private:
+  int print_hybrid_search_table(const TableItem *table_item);
   // added for json table
   int print_json_table_nested_column(const TableItem *table_item, const ObDmlJtColDef& col_def);
   int print_json_return_type(int64_t value, ObDataType data_type);

@@ -23,6 +23,7 @@
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_heap_organized_table_util.h"
+#include "lib/udt/ob_collection_type.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -1477,10 +1478,15 @@ int ObDmlCgService::generate_updated_column_ids(const ObLogDelUpd &log_op,
   int ret = OB_SUCCESS;
   updated_column_ids.reset();
   const ObDMLStmt *stmt = log_op.get_stmt();
+  bool is_search_index = das_ctdef.table_param_.get_data_table().is_search_index();
   if (!assigns.empty()) {
     if (OB_ISNULL(stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null stmt", K(ret));
+    } else if (is_search_index) {
+      if (OB_FAIL(generate_search_index_updated_column_ids(das_ctdef, updated_column_ids))) {
+        LOG_WARN("failed to generate search index updated column ids", K(ret));
+      }
     } else if (OB_FAIL(updated_column_ids.reserve(assigns.count()))) {
       LOG_WARN("init updated column ids array failed", K(ret), K(assigns.count()));
     } else {
@@ -1675,6 +1681,31 @@ int ObDmlCgService::set_embedded_vec_ref_flag(const ObIArray<ObRawExpr*> &cur_ro
     }
   }
   das_ctdef.is_embedded_vec_ref_column_ = is_ref_column;
+  return ret;
+}
+
+template<typename ExprType>
+int ObDmlCgService::add_search_index_doc_id_projector(const ObIArray<ExprType*> &cur_row,
+                                                      const ObIArray<ObRawExpr*> &full_row,
+                                                      const ObIArray<uint64_t> &dml_column_ids,
+                                                      uint32_t proj_idx,
+                                                      ObDASDMLBaseCtDef &das_ctdef,
+                                                      IntFixedArray &row_projector)
+{
+  int ret = OB_SUCCESS;
+  int64_t column_idx = OB_INVALID_INDEX;
+  int64_t projector_idx = OB_INVALID_INDEX;
+  uint64_t doc_cid = das_ctdef.table_param_.get_data_table().get_inc_pk_doc_id_col_id();
+  if (has_exist_in_array(dml_column_ids, doc_cid, &column_idx)) {
+    ObRawExpr *column_expr = cur_row.at(column_idx);
+    if (!has_exist_in_array(full_row, column_expr, &projector_idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("row column not found in full row columns", K(ret),
+                K(column_idx), KPC(cur_row.at(column_idx)));
+    } else {
+      row_projector.at(proj_idx) = projector_idx;
+    }
+  }
   return ret;
 }
 
@@ -2025,7 +2056,6 @@ int ObDmlCgService::check_upd_need_all_columns(ObLogDelUpd &op,
     need_all_columns = true;
     LOG_TRACE("update primary_table primary key, need all columns", K(table_schema->get_table_name_str()));
   }
-
   return ret;
 }
 
@@ -2228,7 +2258,6 @@ int ObDmlCgService::generate_minimal_delete_old_row_cid(ObLogDelUpd &op,
       LOG_WARN("fail to append heap table part_id", K(ret));
     }
   }
-
   return ret;
 }
 
@@ -2272,6 +2301,80 @@ int ObDmlCgService::append_all_uk_column_id(ObSchemaGetterGuard *schema_guard,
 }
 
 template<typename OldExprType, typename NewExprType>
+int ObDmlCgService::generate_search_index_das_projector(const ObIArray<uint64_t> &dml_column_ids,
+                                                        const ObIArray<OldExprType*> &old_row,
+                                                        const ObIArray<NewExprType*> &new_row,
+                                                        const ObIArray<ObRawExpr*> &full_row,
+                                                        ObDASDMLBaseCtDef &das_ctdef)
+{
+  int ret = OB_SUCCESS;
+  IntFixedArray &old_row_projector = das_ctdef.old_row_projector_;
+  IntFixedArray &new_row_projector = das_ctdef.new_row_projector_;
+  const common::ObIArray<uint64_t> &included_cids = das_ctdef.table_param_.get_data_table().get_search_index_included_cids();
+  //generate old row projector
+  if (!old_row.empty()) {
+    //generate storage row projector
+    if (OB_FAIL(old_row_projector.prepare_allocate(included_cids.count() + 1/*inc_pk*/))) {
+      LOG_WARN("init row projector array failed", K(ret), K(included_cids.count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < included_cids.count(); ++i) {
+      uint64_t cid = included_cids.at(i);
+      int64_t column_idx = OB_INVALID_INDEX;
+      int64_t projector_idx = OB_INVALID_INDEX;
+      old_row_projector.at(i) = OB_INVALID_INDEX;
+      if (has_exist_in_array(dml_column_ids, cid, &column_idx)) {
+        ObRawExpr *column_expr = old_row.at(column_idx);
+        if (!has_exist_in_array(full_row, column_expr, &projector_idx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("row column not found in full row columns", K(ret),
+                    K(column_idx), KPC(old_row.at(column_idx)));
+        } else {
+          old_row_projector.at(i) = projector_idx;
+        }
+      }
+    }
+    if (OB_SUCC(ret)
+        && OB_FAIL(add_search_index_doc_id_projector(old_row, full_row, dml_column_ids,
+          included_cids.count(), das_ctdef, old_row_projector))) {
+      LOG_WARN("add search index doc id column projector failed", K(ret));
+    }
+  }
+  //generate new row projector
+  if (!new_row.empty()) {
+    //generate storage row projector
+    if (OB_FAIL(new_row_projector.prepare_allocate(included_cids.count() + 1/*inc_pk*/))) {
+      LOG_WARN("init row projector array failed", K(ret), K(included_cids.count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < included_cids.count(); ++i) {
+      uint64_t cid = included_cids.at(i);
+      int64_t column_idx = OB_INVALID_INDEX;
+      int64_t projector_idx = OB_INVALID_INDEX;
+      new_row_projector.at(i) = OB_INVALID_INDEX;
+      if (has_exist_in_array(dml_column_ids, cid, &column_idx)) {
+        ObRawExpr *column_expr = new_row.at(column_idx);
+        if (!has_exist_in_array(full_row, column_expr, &projector_idx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("row column not found in full row columns", K(ret),
+                    K(column_idx), KPC(new_row.at(column_idx)));
+        } else {
+          new_row_projector.at(i) = projector_idx;
+        }
+      }
+
+    }
+    if (OB_SUCC(ret)
+        && OB_FAIL(add_search_index_doc_id_projector(new_row, full_row, dml_column_ids,
+          included_cids.count(), das_ctdef, new_row_projector))) {
+        LOG_WARN("add search index doc id column projector failed", K(ret));
+    }
+  }
+
+  LOG_TRACE("print dml_column_ids", K(dml_column_ids), K(included_cids),
+      K(das_ctdef.old_row_projector_), K(das_ctdef.new_row_projector_));
+  return ret;
+}
+
+template<typename OldExprType, typename NewExprType>
 int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_ids,
                                            const ObIArray<uint64_t> &storage_column_ids,
                                            const ObIArray<uint64_t> &written_column_ids,
@@ -2288,94 +2391,101 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
                           && das_ctdef.op_type_ == DAS_OP_TABLE_UPDATE;
   bool is_spatial_index = das_ctdef.table_param_.get_data_table().is_spatial_index();
   bool is_semantic_embedded_index = das_ctdef.table_param_.get_data_table().is_hybrid_vector_index_embedded();
+  bool is_search_index = das_ctdef.table_param_.get_data_table().is_search_data_index();
   uint8_t extra_geo = (is_spatial_index) ? 1 : 0;
-  //generate old row projector
-  if (!old_row.empty()) {
-    //generate storage row projector
-    if (OB_FAIL(old_row_projector.prepare_allocate(storage_column_ids.count() + extra_geo))) {
-      LOG_WARN("init row projector array failed", K(ret), K(storage_column_ids.count()), K(extra_geo));
+  if (is_search_index) {
+    if (OB_FAIL(generate_search_index_das_projector(dml_column_ids, old_row, new_row, full_row, das_ctdef))) {
+      LOG_WARN("failed to generate gin das projector", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < storage_column_ids.count(); ++i) {
-      uint64_t storage_cid = storage_column_ids.at(i);
-      int64_t column_idx = OB_INVALID_INDEX;
-      int64_t projector_idx = OB_INVALID_INDEX;
-      old_row_projector.at(i) = OB_INVALID_INDEX;
-      // the column_id of shadow_pk in storage_column_ids and written_column_ids
-      // don't subtract offset of OB_MIN_SHADOW_COLUMN_ID.
-      // but the column_id of shadow_pk in dml_column_ids subtract the offset of OB_MIN_SHADOW_COLUMN_ID
-      if (has_exist_in_array(written_column_ids, storage_cid, &column_idx)) {
-        uint64_t ref_cid = is_shadow_column(storage_cid) ?
-                               storage_cid - OB_MIN_SHADOW_COLUMN_ID :
-                               storage_cid;
-        if (is_mlog_reference_column(storage_cid)
-              && !das_ctdef.is_access_mlog_as_master_table_) {
-          ref_cid = ObTableSchema::gen_ref_col_id_from_mlog_col_id(storage_cid);
-        }
-        if (has_exist_in_array(dml_column_ids, ref_cid, &column_idx)) {
-          ObRawExpr *column_expr = old_row.at(column_idx);
-          if (!has_exist_in_array(full_row, column_expr, &projector_idx)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("row column not found in full row columns", K(ret),
-                     K(column_idx), KPC(old_row.at(column_idx)));
-          } else {
-            old_row_projector.at(i) = projector_idx;
+  } else {
+    //generate old row projector
+    if (!old_row.empty()) {
+      //generate storage row projector
+      if (OB_FAIL(old_row_projector.prepare_allocate(storage_column_ids.count() + extra_geo))) {
+        LOG_WARN("init row projector array failed", K(ret), K(storage_column_ids.count()), K(extra_geo));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < storage_column_ids.count(); ++i) {
+        uint64_t storage_cid = storage_column_ids.at(i);
+        int64_t column_idx = OB_INVALID_INDEX;
+        int64_t projector_idx = OB_INVALID_INDEX;
+        old_row_projector.at(i) = OB_INVALID_INDEX;
+        // the column_id of shadow_pk in storage_column_ids and written_column_ids
+        // don't subtract offset of OB_MIN_SHADOW_COLUMN_ID.
+        // but the column_id of shadow_pk in dml_column_ids subtract the offset of OB_MIN_SHADOW_COLUMN_ID
+        if (has_exist_in_array(written_column_ids, storage_cid, &column_idx)) {
+          uint64_t ref_cid = is_shadow_column(storage_cid) ?
+                                storage_cid - OB_MIN_SHADOW_COLUMN_ID :
+                                storage_cid;
+          if (is_mlog_reference_column(storage_cid)
+                && !das_ctdef.is_access_mlog_as_master_table_) {
+            ref_cid = ObTableSchema::gen_ref_col_id_from_mlog_col_id(storage_cid);
+          }
+          if (has_exist_in_array(dml_column_ids, ref_cid, &column_idx)) {
+            ObRawExpr *column_expr = old_row.at(column_idx);
+            if (!has_exist_in_array(full_row, column_expr, &projector_idx)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("row column not found in full row columns", K(ret),
+                      K(column_idx), KPC(old_row.at(column_idx)));
+            } else {
+              old_row_projector.at(i) = projector_idx;
+            }
           }
         }
       }
-    }
 
-    if (OB_SUCC(ret) && is_spatial_index
-        && OB_FAIL(add_geo_col_projector(old_row, full_row, dml_column_ids, storage_column_ids.count(),
-                                         das_ctdef, old_row_projector))) {
-      LOG_WARN("add geo column projector failed", K(ret));
+      if (OB_SUCC(ret) && is_spatial_index
+          && OB_FAIL(add_geo_col_projector(old_row, full_row, dml_column_ids, storage_column_ids.count(),
+                                          das_ctdef, old_row_projector))) {
+        LOG_WARN("add geo column projector failed", K(ret));
+      }
     }
-  }
-  //generate new row projector
-  if (!new_row.empty()) {
-    //generate storage row projector
-    if (OB_FAIL(new_row_projector.prepare_allocate(storage_column_ids.count() + extra_geo))) {
-      LOG_WARN("init row projector array failed", K(ret), K(storage_column_ids.count()), K(extra_geo));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < storage_column_ids.count(); ++i) {
-      uint64_t storage_cid = storage_column_ids.at(i);
-      int64_t column_idx = OB_INVALID_INDEX;
-      int64_t projector_idx = OB_INVALID_INDEX;
-      new_row_projector.at(i) = OB_INVALID_INDEX;
-      // the column_id of shadow_pk in storage_column_ids and written_column_ids
-      // don't subtract offset of OB_MIN_SHADOW_COLUMN_ID.
-      // but the column_id of shadow_pk in dml_column_ids subtract the offset of OB_MIN_SHADOW_COLUMN_ID
-      if (has_exist_in_array(written_column_ids, storage_cid, &column_idx)) {
-        uint64_t ref_cid = is_shadow_column(storage_cid) ?
-                               storage_cid - OB_MIN_SHADOW_COLUMN_ID :
-                               storage_cid;
-        if (is_mlog_reference_column(storage_cid)
-            && !das_ctdef.is_access_mlog_as_master_table_) {
-          ref_cid = ObTableSchema::gen_ref_col_id_from_mlog_col_id(storage_cid);
-        }
-        if (has_exist_in_array(dml_column_ids, ref_cid, &column_idx)) {
-          ObRawExpr *column_expr = new_row.at(column_idx);
-          if (!has_exist_in_array(full_row, column_expr, &projector_idx)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("row column not found in full row columns", K(ret),
-                     K(column_idx), KPC(new_row.at(column_idx)));
-          } else {
-            new_row_projector.at(i) = projector_idx;
+    //generate new row projector
+    if (!new_row.empty()) {
+      //generate storage row projector
+      if (OB_FAIL(new_row_projector.prepare_allocate(storage_column_ids.count() + extra_geo))) {
+        LOG_WARN("init row projector array failed", K(ret), K(storage_column_ids.count()), K(extra_geo));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < storage_column_ids.count(); ++i) {
+        uint64_t storage_cid = storage_column_ids.at(i);
+        int64_t column_idx = OB_INVALID_INDEX;
+        int64_t projector_idx = OB_INVALID_INDEX;
+        new_row_projector.at(i) = OB_INVALID_INDEX;
+        // the column_id of shadow_pk in storage_column_ids and written_column_ids
+        // don't subtract offset of OB_MIN_SHADOW_COLUMN_ID.
+        // but the column_id of shadow_pk in dml_column_ids subtract the offset of OB_MIN_SHADOW_COLUMN_ID
+        if (has_exist_in_array(written_column_ids, storage_cid, &column_idx)) {
+          uint64_t ref_cid = is_shadow_column(storage_cid) ?
+                                storage_cid - OB_MIN_SHADOW_COLUMN_ID :
+                                storage_cid;
+          if (is_mlog_reference_column(storage_cid)
+              && !das_ctdef.is_access_mlog_as_master_table_) {
+            ref_cid = ObTableSchema::gen_ref_col_id_from_mlog_col_id(storage_cid);
+          }
+          if (has_exist_in_array(dml_column_ids, ref_cid, &column_idx)) {
+            ObRawExpr *column_expr = new_row.at(column_idx);
+            if (!has_exist_in_array(full_row, column_expr, &projector_idx)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("row column not found in full row columns", K(ret),
+                      K(column_idx), KPC(new_row.at(column_idx)));
+            } else {
+              new_row_projector.at(i) = projector_idx;
+            }
           }
         }
       }
-    }
-    if (OB_SUCC(ret) && is_spatial_index
-        && OB_FAIL(add_geo_col_projector(new_row, full_row, dml_column_ids, storage_column_ids.count(),
-                                         das_ctdef, new_row_projector))) {
-        LOG_WARN("add geo column projector failed", K(ret));
-    }
-    if (OB_SUCC(ret) && is_vec_vid_index &&
-        OB_FAIL(add_vec_idx_col_projector(new_row, full_row, dml_column_ids, das_ctdef, new_row_projector))) {
-      LOG_WARN("add vec idx column for new projector failed", K(ret));
-    }
-    if (OB_SUCC(ret) && is_semantic_embedded_index &&
-        OB_FAIL(set_embedded_vec_ref_flag(new_row, das_ctdef))) {
-      LOG_WARN("fail to set embedded vec ref flag", K(ret));
+      if (OB_SUCC(ret) && is_spatial_index
+          && OB_FAIL(add_geo_col_projector(new_row, full_row, dml_column_ids, storage_column_ids.count(),
+                                          das_ctdef, new_row_projector))) {
+          LOG_WARN("add geo column projector failed", K(ret));
+      }
+      if (OB_SUCC(ret) && is_vec_vid_index &&
+          OB_FAIL(add_vec_idx_col_projector(new_row, full_row, dml_column_ids, das_ctdef, new_row_projector))) {
+        LOG_WARN("add vec idx column for new projector failed", K(ret));
+      }
+      if (OB_SUCC(ret) && is_semantic_embedded_index &&
+          OB_FAIL(set_embedded_vec_ref_flag(new_row, das_ctdef))) {
+        LOG_WARN("fail to set embedded vec ref flag", K(ret));
+      }
     }
   }
 
@@ -2829,6 +2939,159 @@ int ObDmlCgService::fill_multivalue_extra_info_on_table_param(
   return ret;
 }
 
+int ObDmlCgService::fill_search_index_extra_info_on_table_param(
+    share::schema::ObSchemaGetterGuard *guard,
+    const ObTableSchema *index_schema,
+    uint64_t tenant_id,
+    ObDASDMLBaseCtDef &das_dml_ctdef)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *data_schema = nullptr;
+  const ObTableSchema *def_schema = nullptr;
+  if (OB_ISNULL(guard) || OB_ISNULL(index_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(guard), KP(index_schema));
+  } else {
+    const uint64_t def_tid = index_schema->get_data_table_id();
+    if (OB_FAIL(guard->get_table_schema(tenant_id, def_tid, def_schema))) {
+      LOG_WARN("fail to get def index schema", K(ret), K(def_tid));
+    } else if (OB_ISNULL(def_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema is NULL", K(ret), K(def_tid));
+    } else if (!def_schema->is_search_def_index()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expect def index", K(ret), K(def_tid), KPC(def_schema));
+    } else if (OB_FAIL(guard->get_table_schema(tenant_id, def_schema->get_data_table_id(), data_schema))) {
+      LOG_WARN("fail to get def index schema", K(ret), K(def_tid));
+    } else if (OB_ISNULL(data_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema is NULL", K(ret), K(def_schema->get_data_table_id()));
+    } else {
+      const ObIndexInfo &index_info = def_schema->get_index_info();
+      common::ObSEArray<uint64_t, 8> included_cids;
+      common::ObSEArray<int32_t, 8> included_cid_idxes;
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_info.get_size(); ++i) {
+        const ObRowkeyColumn *col = index_info.get_column(i);
+        if (OB_ISNULL(col)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null rowkey column in def index_info", K(ret), K(i));
+        } else if (OB_FAIL(included_cids.push_back(col->column_id_))) {
+          LOG_WARN("failed to push back included cid", K(ret), KPC(col));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        uint64_t inc_pkc_doc_id_col_id = OB_INVALID_ID;
+        const ObColumnSchemaV2 *col = NULL;
+        ObColumnIterByPrevNextID iter(*data_schema);
+        while (OB_SUCC(ret) && OB_SUCC(iter.next(col))) {
+          if (OB_ISNULL(col)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null column", K(ret));
+          } else if (col->is_hidden_pk_column_id(col->get_column_id())) {
+            inc_pkc_doc_id_col_id = col->get_column_id();
+          }
+        }
+        if (OB_ITER_END != ret) {
+          LOG_WARN("iter table column failed", K(ret), K(data_schema));
+        } else if (OB_INVALID_ID == inc_pkc_doc_id_col_id) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("inc pkc id is invalid", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+          common::ObSEArray<ObCollectionArrayType*, 8> included_arr_types;
+          common::ObArenaAllocator tmp_allocator(ObMemAttr(MTL_ID(), "SearchIdxCg"));
+          for (int64_t i = 0; OB_SUCC(ret) && i < included_cids.count(); ++i) {
+            int64_t col_id = included_cids.at(i);
+            if (OB_FAIL(included_cid_idxes.push_back(data_schema->get_column_idx(col_id)))) {
+              LOG_WARN("failed to push back included cid idx", K(ret), K(col_id));
+            } else {
+              const ObColumnSchemaV2 *col_schema =
+                data_schema->get_column_schema(included_cids.at(i));
+              ObCollectionArrayType *arr_type = nullptr;
+              if (OB_NOT_NULL(col_schema) && col_schema->is_collection()) {
+                const ObIArray<common::ObString> &extended_type_info_array =
+                  col_schema->get_extended_type_info();
+                if (extended_type_info_array.count() >= 1) {
+                  const ObString &type_info_str = extended_type_info_array.at(0);
+                  if (!type_info_str.empty()) {
+                    common::ObSqlCollectionInfo type_info_parse(tmp_allocator);
+                    type_info_parse.set_name(type_info_str);
+                    if (OB_FAIL(type_info_parse.parse_type_info())) {
+                      LOG_WARN("fail to parse type info", K(ret), K(type_info_str));
+                    } else if (OB_ISNULL(type_info_parse.collection_meta_)) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_WARN("collection meta is null after parsing", K(ret), K(type_info_str));
+                    } else if (type_info_parse.collection_meta_->type_id_ != ObNestedType::OB_ARRAY_TYPE
+                               && type_info_parse.collection_meta_->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+                      ret = OB_NOT_SUPPORTED;
+                      LOG_WARN("unsupported collection type for search index", K(ret),
+                               K(type_info_parse.collection_meta_->type_id_));
+                    } else {
+                      arr_type = static_cast<ObCollectionArrayType *>(type_info_parse.collection_meta_);
+                    }
+                  }
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(included_arr_types.push_back(arr_type))) {
+                LOG_WARN("failed to push back arr type", K(ret));
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            ObTableSchemaParam &table_param = das_dml_ctdef.table_param_.get_data_table_ref();
+            if (OB_FAIL(table_param.set_search_index_included_cids(included_cids))) {
+              LOG_WARN("failed to set search index included cids", K(ret), K(included_cids));
+            } else if (OB_FAIL(table_param.set_search_index_included_cid_idxes(included_cid_idxes))) {
+              LOG_WARN("failed to set search index included cids", K(ret), K(included_cid_idxes));
+            } else if (OB_FAIL(table_param.set_search_index_arr_types(included_arr_types))) {
+              LOG_WARN("failed to set search index arr types", K(ret));
+            } else {
+              table_param.set_inc_pk_doc_id_col_id(inc_pkc_doc_id_col_id);
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDmlCgService::generate_search_index_updated_column_ids(const ObDASDMLBaseCtDef &das_ctdef,
+                                                             ObIArray<uint64_t> &updated_column_ids)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *data_schema = nullptr;
+  const uint64_t tid = das_ctdef.table_param_.get_data_table().get_table_id();
+  ObSqlSchemaGuard *sql_guard = cg_.opt_ctx_->get_sql_schema_guard();
+  if (OB_ISNULL(sql_guard) || OB_ISNULL(sql_guard->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null schema guard", K(ret));
+  } else if (OB_FAIL(sql_guard->get_schema_guard()->get_table_schema(MTL_ID(), tid, data_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(tid));
+  } else if (OB_ISNULL(data_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null schema", K(ret));
+  } else if (!data_schema->is_search_data_index()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect search index data index", K(ret));
+  } else {
+    const int64_t col_cnt = data_schema->get_column_count();
+    if (OB_FAIL(updated_column_ids.reserve(col_cnt))) {
+      LOG_WARN("init updated column ids array failed", K(ret), K(col_cnt));
+    } else {
+      const ObColumnSchemaV2 *iter = NULL;
+      for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; i++) {
+        iter = data_schema->get_column_schema_by_idx(i);
+        if (OB_FAIL(updated_column_ids.push_back(iter->get_column_id()))) {
+          LOG_WARN("add updated column id failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDmlCgService::fill_table_dml_param(share::schema::ObSchemaGetterGuard *guard,
                                          uint64_t table_id,
                                          ObDASDMLBaseCtDef &das_dml_ctdef)
@@ -2858,6 +3121,10 @@ int ObDmlCgService::fill_table_dml_param(share::schema::ObSchemaGetterGuard *gua
   } else if (table_schema->is_multivalue_index_aux() &&
             OB_FAIL(fill_multivalue_extra_info_on_table_param(guard, table_schema, tenant_id, das_dml_ctdef))) {
     LOG_WARN("fail to set multivalue index extra info on table param", K(ret), K(das_dml_ctdef));
+  } else if (table_schema->is_search_data_index() &&
+             OB_FAIL(fill_search_index_extra_info_on_table_param(guard, table_schema,
+              tenant_id, das_dml_ctdef))) {
+    LOG_WARN("fail to set search index extra info on table param", K(ret), K(das_dml_ctdef));
   }
   return ret;
 }

@@ -301,17 +301,60 @@ int ObProfileUtil::merge_profile(ObMergedProfile &merged_profile, const ObProfil
       cur_metric_wrap = cur_metric_wrap->next_;
     }
     if (OB_FAIL(ret)) {
+    } else if (is_hybrid_search_profile(merged_profile.get_id())) {
+      if (OB_FAIL(merge_children_for_hybrid_search(merged_profile, piece_profile, alloc))) {
+        LOG_WARN("failed to merge children for hybrid search", K(ret));
+      }
     } else {
       ObOpProfile<ObMetric>::ProfileWrap *cur_child_wrap = piece_profile->get_child_head();
       while (OB_SUCC(ret) && nullptr != cur_child_wrap) {
         ObOpProfile<ObMergeMetric> *new_child = nullptr;
         if (OB_FAIL(merged_profile.get_or_register_child(cur_child_wrap->elem_->get_id(), new_child))) {
           LOG_WARN("failed to get or register child", K(cur_child_wrap->elem_->get_id()));
-        } else if(OB_FAIL(merge_profile(*new_child, cur_child_wrap->elem_, alloc))) {
+        } else if (OB_FAIL(merge_profile(*new_child, cur_child_wrap->elem_, alloc))) {
           LOG_WARN("failed to merge profile", K(cur_child_wrap->elem_->get_id()));
         }
         cur_child_wrap = cur_child_wrap->next_;
       }
+    }
+  }
+  return ret;
+}
+
+bool ObProfileUtil::is_hybrid_search_profile(ObProfileId id)
+{
+  return id >= common::ObProfileId::HYBRID_SEARCH_BEGIN && id <= common::ObProfileId::HYBRID_SEARCH_END;
+}
+
+// In the hybrid search op tree, a parent op may have multiple children with the same op type,
+// for example, a conjunction op contains two scalar ops:
+//  ConjunctionOp{
+//    ScalarOp{index1},
+//    ScalarOp{index2}
+//  }
+// The two scalar ops have the same profile type, but they are different index scans, so they should
+// not be merged into one.
+// In addition, we ensure that the execution of a hybrid search op tree is single-threaded, so there
+// is no need to merge from different threads.
+// So we use register_child instead of get_or_register_child to avoid merging the same profile type.
+int ObProfileUtil::merge_children_for_hybrid_search(ObMergedProfile &merged_profile,
+                                                    const ObProfile *piece_profile,
+                                                    ObIAllocator *alloc)
+{
+  int ret = OB_SUCCESS;
+  ObOpProfile<ObMetric>::ProfileWrap *cur_child_wrap = piece_profile->get_child_head();
+  ObOpProfile<ObMergeMetric>::ProfileWrap *merged_child_wrap = merged_profile.get_child_head();
+  while (OB_SUCC(ret) && OB_NOT_NULL(cur_child_wrap)) {
+    ObOpProfile<ObMergeMetric> *new_child = nullptr;
+    if (OB_FAIL(merged_profile.register_child(cur_child_wrap->elem_->get_id(), new_child))) {
+      LOG_WARN("failed to register child", KR(ret), K(cur_child_wrap->elem_->get_id()));
+    } else if (OB_ISNULL(new_child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("new child is null", KR(ret), K(cur_child_wrap->elem_->get_id()));
+    } else if (OB_FAIL(ObProfileUtil::merge_profile(*new_child, cur_child_wrap->elem_, alloc))) {
+      LOG_WARN("failed to merge profile", KR(ret), K(cur_child_wrap->elem_->get_id()));
+    } else {
+      cur_child_wrap = cur_child_wrap->next_;
     }
   }
   return ret;

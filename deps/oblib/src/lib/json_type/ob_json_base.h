@@ -425,6 +425,7 @@ public:
   virtual ObScale get_decimal_scale() const = 0;
   virtual int get_obtime(ObTime &t) const = 0;
   bool is_json_number(ObJsonNodeType json_type) const;
+  static bool is_json_number_type(ObJsonNodeType json_type);
   bool is_json_scalar(ObJsonNodeType json_type) const;
   bool is_json_string(ObJsonNodeType json_type) const;
   bool is_json_date(ObJsonNodeType json_type) const;

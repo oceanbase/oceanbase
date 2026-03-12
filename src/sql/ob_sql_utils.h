@@ -1329,7 +1329,8 @@ struct ObExprConstraint
   {
     return PRE_CALC_PRECISE == expect_result ||
            PRE_CALC_NOT_PRECISE == expect_result ||
-           PRE_CALC_JSON_TYPE;
+           PRE_CALC_JSON_TYPE == expect_result ||
+           PRE_CALC_SEARCH_INDEX_CONSTRAINT == expect_result;
   }
   ObRawExpr *pre_calc_expr_;
   PreCalcExprExpectResult expect_result_;
@@ -1407,6 +1408,117 @@ struct ObJsonTypeConstraint
     {
       return static_cast<int32_t>(extra & 0xFFFFFFFF);
     }
+};
+
+struct ObSearchIndexConstraint
+{
+  public:
+  enum ConstraintType {
+    // Scenario: simple JSON column comparison, e.g. WHERE json_col > CAST('"x"' AS JSON).
+    // Requires: value is a JSON scalar (not object/array); if the scalar is a string,
+    // its encoded length must fit within SEARCH_INDEX_VALUE_LENGTH (no truncation).
+    JSON_TYPE_SCALAR,
+    // Scenario: JSON overlaps/contains query, e.g. WHERE json_col MEMBER OF(json_arr).
+    // Requires: value is a JSON scalar or a JSON array whose every element is a scalar,
+    // with the same string-length safety check as JSON_TYPE_SCALAR on each element.
+    JSON_TYPE_SCALAR_OR_ARRAY,
+    // Scenario: IN-list rewritten to JSON overlaps with a fixed-size array.
+    // Same requirements as JSON_TYPE_SCALAR_OR_ARRAY, plus when the value is a JSON
+    // array, its element count must exactly match the expected count (from the IN-list).
+    // Scalar values are also accepted (same as JSON_TYPE_SCALAR_OR_ARRAY).
+    JSON_ARRAY_COUNT,
+    // Scenario: array(varchar) column in search index.
+    // Requires: every varchar element in the array has an encoded length that fits
+    // within SEARCH_INDEX_VALUE_LENGTH.
+    ARRAY_STRING_LENGTH,
+    // Scenario: array column IN-list rewritten to array overlaps with a fixed-size array.
+    // Requires: the array element count exactly matches the expected count.
+    ARRAY_ELEMENT_COUNT,
+    // Scenario: pick json_string/json_number where the constant is VARCHAR,
+    // e.g. WHERE json_value(c1, '$' pick json_string) > '1'.
+    // Requires: the string's encoded length fits within SEARCH_INDEX_VALUE_LENGTH.
+    STRING_TYPE_LENGTH,
+  };
+  static int check_is_match(ObObjParam &obj_param,
+                            ObExecContext &exec_ctx,
+                            ObConstraintExtra *extra,
+                            bool &is_match);
+
+  // Pack three constraint fields into a single int64_t for ObConstraintExtra::extra_.
+  // Used to pass search index constraint metadata from plan cache to runtime check.
+  //
+  // Bit layout of extra:
+  //   [63 .......... 48] [47 .......... 16] [15 .... 8] [7 ...... 0]
+  //       (unused)         element_count     enc_type    cons_type
+  //
+  // - cons_type    (bits 0-7):   ConstraintType enum, determines which check to run.
+  // - enc_type     (bits 8-15):  JSON path encoding type for type-match validation;
+  //                              0 means no type restriction.
+  // - element_count(bits 16-47): expected array element count for JSON_ARRAY_COUNT /
+  //                              ARRAY_ELEMENT_COUNT constraints; unused by others.
+  static int64_t make_extra(int32_t type, int32_t json_encode_type, int32_t element_count)
+  {
+    return (static_cast<int64_t>(type) & 0xFF) |
+           ((static_cast<int64_t>(json_encode_type) & 0xFF) << 8) |
+           ((static_cast<int64_t>(element_count) & 0xFFFFFFFF) << 16);
+  }
+
+  // Extract ConstraintType from bits 0-7.
+  static int32_t get_constraint_type(int64_t extra)
+  {
+    return static_cast<int32_t>(extra & 0xFF);
+  }
+
+  // Extract JSON path encoding type from bits 8-15.
+  static int32_t get_json_encode_type(int64_t extra)
+  {
+    return static_cast<int32_t>((extra >> 8) & 0xFF);
+  }
+
+  // Extract expected element count from bits 16-47.
+  static int32_t get_element_count(int64_t extra)
+  {
+    return static_cast<int32_t>((extra >> 16) & 0xFFFFFFFF);
+  }
+
+private:
+  static bool is_json_constraint(const ConstraintType constraint_type)
+  {
+    return constraint_type == JSON_TYPE_SCALAR ||
+           constraint_type == JSON_TYPE_SCALAR_OR_ARRAY ||
+           constraint_type == JSON_ARRAY_COUNT;
+  }
+
+  static bool is_array_constraint(const ConstraintType constraint_type)
+  {
+    return constraint_type == ARRAY_ELEMENT_COUNT || constraint_type == ARRAY_STRING_LENGTH;
+  }
+
+  static int check_json_is_match(ObObjParam &obj_param,
+                                 ObExecContext &exec_ctx,
+                                 int64_t extra,
+                                 bool &is_match);
+
+  static int check_array_is_match(ObObjParam &obj_param,
+                                  ObExecContext &exec_ctx,
+                                  int64_t extra,
+                                  bool &is_match);
+
+  static int check_string_length_is_match(ObObjParam &obj_param,
+                                          bool &is_match);
+
+public:
+  static int is_json_scalar_or_array_match(const ObIJsonBase *j_base,
+                                           const uint8_t encode_type,
+                                           bool &is_match);
+
+  static int is_json_scalar_match(const ObIJsonBase *j_base,
+                                  const uint8_t encode_type,
+                                  bool &is_match);
+
+  static int is_array_string_length_match(common::ObIArrayType *arr_obj, bool &is_match);
+
+  static bool need_array_string_constraint(const ObSqlCollectionInfo &coll_info);
 };
 
 //this guard use to link the exec context and session

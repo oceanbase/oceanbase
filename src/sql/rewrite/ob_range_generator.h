@@ -278,10 +278,29 @@ private:
                              ObTmpRange *range);
   int generate_tmp_json_array_param(const ObRangeNode &node,
                                     ObTmpInParam *&in_param);
+  int generate_tmp_search_index_domain_param(const ObRangeNode &node,
+                                             const ObDomainOpType domain_op_type,
+                                             ObTmpInParam *&in_param);
   int final_domain_range_node(const ObRangeNode &node,
                               const int64_t in_idx,
                               ObTmpInParam *in_param,
                               ObTmpRange *&range);
+  int final_search_index_domain_range_node(const ObRangeNode &node,
+                                           const int64_t in_idx,
+                                           ObTmpInParam *in_param,
+                                           int64_t path_idx,
+                                           ObTmpRange *&range);
+  int fill_search_index_domain_range_node(const ObRangeNode &node,
+                                          const ObObj& value,
+                                          int64_t path_idx,
+                                          ObTmpRange *range);
+  int fill_search_index_range_column(const int64_t col_idx,
+                                     const int64_t key_val,
+                                     const ObObj& value,
+                                     const bool is_json_value,
+                                     int64_t path_idx,
+                                     ObObj &range_obj,
+                                     bool &always_false);
 private:
   ObRangeGenerator();
   static const int64_t RANGE_BUCKET_SIZE = 1000;

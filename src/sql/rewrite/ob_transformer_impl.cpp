@@ -702,7 +702,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     LOG_WARN("failed to check stmt functions", K(ret));
   } else {
     //TODO::unpivot open @xifeng
-    if (func.contain_geometry_values_ || func.contain_vec_index_approx_) {
+    if (func.contain_geometry_values_ || func.contain_vec_index_approx_ || func.contain_hybrid_search_) {
       disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
     }
     if (func.contain_unpivot_query_) {
@@ -848,6 +848,7 @@ int ObTransformerImpl::check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &fun
     func.contain_unpivot_query_ = func.contain_unpivot_query_ || stmt->is_unpivot_select();
     func.contain_fulltext_search_ = func.contain_fulltext_search_ || (stmt->get_match_exprs().count() != 0);
     func.contain_vec_index_approx_ = func.contain_vec_index_approx_ || stmt->has_vec_approx();
+    func.contain_hybrid_search_ = func.contain_hybrid_search_ || stmt->is_hybrid_search();
   }
   for (int64_t i = 0; OB_SUCC(ret)
                       && (!func.contain_enum_set_values_ || !func.contain_geometry_values_)

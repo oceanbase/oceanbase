@@ -440,7 +440,7 @@ int ObSPIVBMWIter::project_rows_from_result_docids(const int64_t capacity, int64
   return ret;
 }
 
-int ObSPIVBMWIter::process_collected_row(const ObDatum &id_datum, const double relevance)
+int ObSPIVBMWIter::process_collected_row(const ObDatum &id_datum, const double relevance, bool &is_top_k)
 {
   int ret = OB_SUCCESS;
   bool valid = false;

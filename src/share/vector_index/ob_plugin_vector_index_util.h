@@ -89,10 +89,12 @@ public:
         rel_count_(rel_cnt),
         rel_map_ptr_(rel_map_ptr) {};
   virtual ~ObVectorQueryVidIterator() {};
+  bool is_init() const { return is_init_; }
   int init(int64_t need_count, ObIAllocator *allocator);
   int add_results(int64_t add_cnt, int64_t *add_vids, float *add_distance, const ObVecExtraInfoPtr &extra_infos);
   int add_result(int64_t add_vids, float add_distance, const char *extra_info);
   int64_t get_total() const { return total_; }
+  void set_total(int64_t total) { if (total_ > total) { total_ = total; } }
   int64_t* get_vids() const { return vids_; }
   float* get_distance() const { return distance_; }
   int64_t get_extra_column_count() const { return extra_column_count_; }

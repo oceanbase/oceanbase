@@ -33,6 +33,9 @@
 #include "plugin/sys/ob_plugin_helper.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "sql/resolver/ddl/ob_interval_partition_resolver.h"
+#include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/resolver/ddl/ob_create_view_resolver.h"
+#include "share/search_index/ob_search_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -255,6 +258,34 @@ int ObDDLResolver::append_multivalue_args(
     }
   }
 
+  return ret;
+}
+
+int ObDDLResolver::append_search_index_args(
+    const share::schema::ObTableSchema &data_schema,
+    const ObPartitionResolveResult &resolve_result,
+    const obrpc::ObCreateIndexArg &index_arg,
+    ObIArray<ObPartitionResolveResult> &resolve_results,
+    ObIArray<ObCreateIndexArg> &index_arg_list,
+    ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  const int64_t num_search_args = 2;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_FAIL(ObSearchIndexBuilderUtil::append_search_index_arg(index_arg,
+                                                           allocator,
+                                                           index_arg_list))) {
+    LOG_WARN("failed to append search_index arg", K(ret));
+  } else if (OB_FAIL(index_arg_list.push_back(index_arg))) {
+    LOG_WARN("fail to push back index_arg", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < num_search_args; ++i) {
+    if (OB_FAIL(resolve_results.push_back(resolve_result))) {
+      LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
+    }
+  }
   return ret;
 }
 
@@ -14537,6 +14568,50 @@ int ObDDLResolver::formalize_part_str(ObIArray<ObRawExpr*> &part_exprs, ObString
       if (OB_SUCC(ret)) {
         part_str.assign_ptr(part_str_buf, pos);
       }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_search_index_constraint(
+    const share::schema::ObTableSchema &table_schema,
+    const common::ObString &column_name,
+    const int64_t index_keyname_value)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  if (!table_schema.is_valid() || column_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argumnet", K(ret), K(table_schema), K(column_name));
+  } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_name))) {
+    ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+    LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS,
+                   column_name.length(),
+                   column_name.ptr());
+  } else if (OB_FAIL(resolve_search_index_constraint(*column_schema,
+                                                     index_keyname_value))) {
+    LOG_WARN("resolve search index constraint fail", K(ret), K(index_keyname_value));
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_search_index_constraint(
+    const share::schema::ObColumnSchemaV2 &column_schema,
+    const int64_t index_keyname_value)
+{
+  int ret = OB_SUCCESS;
+  if (!column_schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argumnet", K(ret), K(column_schema));
+  } else {
+    bool is_search_index =
+         (index_keyname_value == static_cast<int64_t>(INDEX_KEYNAME::SEARCH_KEY));
+    if (is_search_index
+        && OB_UNLIKELY(column_schema.is_virtual_generated_column()
+                       || column_schema.is_stored_generated_column())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "search index on generated column is");
+      LOG_WARN("search index on generated column is not supported", K(ret), K(column_schema));
     }
   }
   return ret;

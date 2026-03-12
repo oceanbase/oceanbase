@@ -96,7 +96,7 @@ int ObTabletDrop::add_drop_tablets_of_table_arg(
             && !aux_table_schema->is_mlog_table()) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("aux_table_schema must be local index or aux lob table", KR(ret), K(schemas), KPC(aux_table_schema));
-        } else if (data_table_id != aux_table_schema->get_data_table_id()) {
+        } else if (!aux_table_schema->is_search_data_index() && data_table_id != aux_table_schema->get_data_table_id()) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("aux table schema must be of same data table", KR(ret), K(schemas), KPC(aux_table_schema));
         }

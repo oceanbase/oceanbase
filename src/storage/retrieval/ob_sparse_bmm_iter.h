@@ -54,6 +54,9 @@ private:
   int forward_next_round_iters();
   bool need_update_essential_dims() const { return non_essential_dim_threshold_ < get_top_k_threshold(); }
 private:
+  int calc_other_dims_max_score_sum(const int64_t iter_idx, double &max_score_sum);
+  int set_filter_threshold_for_dim(const int64_t iter_idx, ObISRDimBlockMaxIter *iter);
+  int update_filter_thresholds_after_topk_update();
   class DimMaxScoreCmp
   {
   public:
@@ -84,6 +87,9 @@ private:
   int64_t non_essential_dim_count_;
   double non_essential_dim_max_score_;
   double non_essential_dim_threshold_;
+  double all_dims_max_score_sum_;
+  ObFixedArray<double, ObIAllocator> dim_max_scores_;
+  bool is_max_score_cached_;
   DISALLOW_COPY_AND_ASSIGN(ObSRBMMIterImpl);
 };
 

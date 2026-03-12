@@ -483,9 +483,9 @@ int ObTableScanIterator::advance_scan(ObTableScanParam &scan_param)
 {
   int ret = OB_SUCCESS;
   ACTIVE_GLOBAL_ITERATOR_GUARD(ret, cached_iter_node_);
-  if (OB_UNLIKELY(!is_inited_ || nullptr == scan_param_ || nullptr == main_iter_ || main_iter_ != scan_merge_)) {
+  if (OB_UNLIKELY(!is_inited_ || nullptr == scan_param_ || scan_param_ != &scan_param || nullptr == main_iter_ || main_iter_ != scan_merge_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected state", K(ret), K(is_inited_), KP(scan_param_), KP(main_iter_), KP(scan_merge_));
+    STORAGE_LOG(WARN, "Unexpected state", K(ret), K(is_inited_), KP(scan_param_), KP(&scan_param), KP(main_iter_), KP(scan_merge_));
   } else if (OB_FAIL(check_advance_scan_supported())) {
     STORAGE_LOG(WARN, "Failed to check advance scan supported", K(ret));
   } else {
@@ -493,11 +493,12 @@ int ObTableScanIterator::advance_scan(ObTableScanParam &scan_param)
     const ObTablet *tablet = get_table_param_.tablet_iter_.get_tablet_handle().get_obj();
     bool is_tablet_spliting = false;
     main_table_param_.iter_param_.set_is_advance_skip_scan();
+    main_table_param_.iter_param_.set_range_prefix_in_advance_scan(scan_param.range_prefix_in_advance_scan_);
     if (OB_ISNULL(tablet)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet is null", K(ret), K(scan_param_));
     } else if (FALSE_IT(table_scan_range_.reset())) {
-    } else if (OB_FAIL(table_scan_range_.init(*scan_param_, *tablet, is_tablet_spliting))) {
+    } else if (OB_FAIL(table_scan_range_.init(*scan_param_, *tablet, is_tablet_spliting, true/*cannot_be_false_range*/))) {
       STORAGE_LOG(WARN, "Failed to init table scan range", K(ret));
     } else if (OB_UNLIKELY(!table_scan_range_.is_scan() || table_scan_range_.get_ranges().count() != 1)) {
       STORAGE_LOG(WARN, "Unexpected table scan range", K(ret), K(table_scan_range_));

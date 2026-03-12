@@ -7,6 +7,9 @@ ob_set_subtarget(ob_sql code_generator
   code_generator/ob_static_engine_expr_cg.cpp
   code_generator/ob_tsc_cg_service.cpp
   code_generator/ob_enable_rich_format_flags.cpp
+  code_generator/ob_hybrid_search_cg_service.cpp
+  code_generator/ob_hybrid_search_cg_service_vec.cpp
+  code_generator/ob_hybrid_search_cg_service_fulltext.cpp
 )
 
 ob_set_subtarget(ob_sql common
@@ -87,8 +90,6 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_local_lookup_iter.cpp
   das/iter/ob_das_global_lookup_iter.cpp
   das/iter/ob_das_sort_iter.cpp
-  das/iter/ob_das_text_retrieval_iter.cpp
-  das/iter/ob_das_text_retrieval_merge_iter.cpp
   das/iter/ob_das_text_retrieval_eval_node.cpp
   das/iter/ob_das_iter_utils.cpp
   das/iter/ob_das_index_merge_iter.cpp
@@ -106,8 +107,45 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_domain_id_merge_iter.cpp
   das/iter/ob_das_vec_scan_utils.cpp
   das/iter/sparse_retrieval/ob_das_tr_merge_iter.cpp
-  das/iter/sparse_retrieval/ob_das_match_iter.cpp
+  das/iter/sparse_retrieval/ob_das_multi_match_iter.cpp
   das/iter/ob_das_index_merge_fts_and_iter.cpp
+  das/iter/ob_das_search_driver_iter.cpp
+  das/iter/ob_das_vec_index_driver_iter.cpp
+  das/iter/ob_das_vec_index_scan_iter.cpp
+  das/iter/ob_das_vec_index_hnsw_scan_iter.cpp
+  das/iter/ob_das_fusion_iter.cpp
+  das/iter/ob_das_profile_iter.cpp
+  das/search/ob_das_search_define.cpp
+  das/search/ob_das_search_context.cpp
+  das/search/ob_i_das_search_op.cpp
+  das/search/ob_das_search_utils.cpp
+  das/search/ob_das_scalar_ror_op.cpp
+  das/search/ob_das_scalar_index_ror_op.cpp
+  das/search/ob_das_scalar_primary_ror_op.cpp
+  das/search/ob_das_scalar_scan_op.cpp
+  das/search/ob_das_scalar_define.cpp
+  das/search/ob_das_bitmap_op.cpp
+  das/search/ob_das_sort_op.cpp
+  das/search/ob_das_topk_collect_op.cpp
+  das/search/ob_das_req_excl_op.cpp
+  das/search/ob_das_req_opt_op.cpp
+  das/search/ob_das_boolean_query.cpp
+  das/search/ob_das_conjunction_op.cpp
+  das/search/ob_das_disjunction_op.cpp
+  das/search/ob_das_disjunction_filter_op.cpp
+  das/search/ob_das_disjunctive_max_op.cpp
+  das/search/ob_das_token_op.cpp
+  das/search/ob_das_token_utils.cpp
+  das/search/ob_das_match_query.cpp
+  das/search/ob_das_match_phrase_op.cpp
+  das/search/ob_das_match_phrase_query.cpp
+  das/search/ob_das_multi_match_query.cpp
+  das/search/ob_das_query_string_query.cpp
+  das/search/ob_daat_merge_iter.cpp
+  das/search/ob_disjunctive_daat_merger.cpp
+  das/search/ob_das_bmw_op.cpp
+  das/search/ob_das_bmm_op.cpp
+  das/ob_das_search_index_utils.cpp
 )
 
 ob_set_subtarget(ob_sql dtl
@@ -271,6 +309,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_base_version_filter_struct.cpp
   engine/basic/ob_consistent_hashing_load_balancer.cpp
   engine/basic/ob_lake_table_reader_profile.cpp
+  engine/basic/ob_hybrid_fusion_op.cpp
 )
 
 ob_set_subtarget(ob_sql engine_cmd
@@ -947,6 +986,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_date_trunc.cpp
   engine/expr/ob_expr_is_nan.cpp
   engine/expr/ob_expr_collect_file_list.cpp
+  engine/expr/ob_expr_search_index_inner.cpp
   engine/expr/ob_expr_ai/ob_expr_load_file.cpp
 )
 
@@ -1188,6 +1228,13 @@ ob_set_subtarget(ob_sql executor
   executor/ob_memory_tracker_wrapper.cpp
 )
 
+ob_set_subtarget(ob_sql hybrid_search
+  hybrid_search/ob_fulltext_search_node.cpp
+  hybrid_search/ob_fulltext_search_query.cpp
+  hybrid_search/ob_hybrid_search_dsl_resolver.cpp
+  hybrid_search/ob_hybrid_search_node.cpp
+)
+
 ob_set_subtarget(ob_sql monitor
   monitor/ob_exec_stat_collector.cpp
   monitor/ob_monitor_info_elimination_task.cpp
@@ -1303,6 +1350,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_values_table_access.cpp
   optimizer/ob_direct_load_optimizer_ctx.cpp
   optimizer/ob_log_expand.cpp
+  optimizer/ob_log_hybrid_fusion.cpp
   optimizer/file_prune/ob_hive_file_pruner.cpp
   optimizer/file_prune/ob_i_lake_table_file_pruner.cpp
   optimizer/file_prune/ob_iceberg_file_pruner.cpp
@@ -1631,6 +1679,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_query_range_define.cpp
   rewrite/ob_range_generator.cpp
   rewrite/ob_range_graph_generator.cpp
+  rewrite/ob_search_index_query_range_utils.cpp
   rewrite/ob_stmt_comparer.cpp
   rewrite/ob_transform_count_to_exists.cpp
   rewrite/ob_transform_aggr_subquery.cpp

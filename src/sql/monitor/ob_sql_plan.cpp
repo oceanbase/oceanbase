@@ -1102,6 +1102,26 @@ int ObSqlPlan::print_constraint_info(char *buf,
       ret = BUF_PRINTF("JSON_CONTAINS_PRECISE");
     } else if (PRE_CALC_JSON_CONTAINS_NOT_PRECISE == info.expect_result_) {
       ret = BUF_PRINTF("JSON_CONTAINS_NOT_PRECISE");
+    } else if (PRE_CALC_SEARCH_INDEX_CONSTRAINT == info.expect_result_) {
+      int32_t constraint_type = ObSearchIndexConstraint::get_constraint_type(info.cons_extra_.extra_);
+      int32_t json_encode_type = ObSearchIndexConstraint::get_json_encode_type(info.cons_extra_.extra_);
+      int32_t element_count = ObSearchIndexConstraint::get_element_count(info.cons_extra_.extra_);
+      if (constraint_type == ObSearchIndexConstraint::JSON_TYPE_SCALAR) {
+        ret = BUF_PRINTF("SEARCH_INDEX_JSON_TYPE_SCALAR");
+      } else if (constraint_type == ObSearchIndexConstraint::JSON_TYPE_SCALAR_OR_ARRAY) {
+        ret = BUF_PRINTF("SEARCH_INDEX_JSON_TYPE_SCALAR_OR_ARRAY");
+      } else if (constraint_type == ObSearchIndexConstraint::JSON_ARRAY_COUNT) {
+        ret = BUF_PRINTF("SEARCH_INDEX_JSON_ARRAY_%d_ELEMENT", element_count);
+      } else if (constraint_type == ObSearchIndexConstraint::ARRAY_STRING_LENGTH) {
+        ret = BUF_PRINTF("SEARCH_INDEX_ARRAY_STRING_LENGTH");
+      } else if (constraint_type == ObSearchIndexConstraint::ARRAY_ELEMENT_COUNT) {
+        ret = BUF_PRINTF("SEARCH_INDEX_ARRAY_%d_ELEMENT", element_count);
+      } else if (constraint_type == ObSearchIndexConstraint::STRING_TYPE_LENGTH) {
+        ret = BUF_PRINTF("SEARCH_INDEX_STRING_TYPE_LENGTH");
+      }
+      if (OB_SUCC(ret) && json_encode_type != 0) {
+        ret = BUF_PRINTF("_ENCODE_TYPE_%d", json_encode_type);
+      }
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {

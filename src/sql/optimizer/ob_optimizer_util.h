@@ -292,6 +292,21 @@ public:
     return bret;
   }
 
+  /**
+   * @brief check_index_match_prefix
+   * Check if an index can be used for the given column ids based on prefix matching rules.
+   * For indexes that can ignore prefix (e.g., search index), only checks if all column_ids
+   * are contained in index_column_ids, without requiring prefix order.
+   * For normal indexes, checks if index columns contain all the filter columns as prefix.
+   * @param column_ids the column ids from filter expressions
+   * @param index_column_ids the column ids in the index
+   * @param can_ignore_prefix whether this index can ignore prefix matching (e.g., search index)
+   * @return true if the index matches, false otherwise
+   */
+  static bool check_index_match_prefix(const common::ObIArray<uint64_t> &column_ids,
+                                       const common::ObIArray<uint64_t> &index_column_ids,
+                                       bool can_ignore_prefix);
+
   template <class T>
   static int intersect(const ObIArray<T> &first,
                        const ObIArray<T> &second,

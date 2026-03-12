@@ -255,9 +255,12 @@ int ObCreateTableLikeHelper::generate_aux_table_schemas_()
     ObTableSchema *new_table_schema = &new_tables_.at(0);
     ObIDGenerator id_generator;
     ObSEArray<ObAuxTableMetaInfo,16> simple_index_infos;
+    common::hash::ObHashMap<uint64_t, uint64_t> search_def_id_map;
     ObSArray<ObTableSchema> shared_schema_array;
     ObSArray<ObTableSchema> domain_schema_array;
     ObSArray<ObTableSchema> aux_schema_array;
+    ObSArray<ObTableSchema> search_def_schema_array;
+    ObSArray<ObTableSchema> search_data_schema_array;
     int64_t obj_cnt = 0;
     uint64_t new_table_id = OB_INVALID_ID;
     uint64_t new_database_id = OB_INVALID_ID;
@@ -266,6 +269,8 @@ int ObCreateTableLikeHelper::generate_aux_table_schemas_()
       LOG_WARN("new table scheam is null", KR(ret));
     } else if (OB_FAIL(new_table_schema->get_simple_index_infos(simple_index_infos))) {
       LOG_WARN("get simple_index_infos failed", KR(ret));
+    } else if (OB_FAIL(append_search_data_index_infos_(simple_index_infos))) {
+      LOG_WARN("append search data index infos failed", KR(ret));
     } else {
       obj_cnt= simple_index_infos.count();
       if (new_table_schema->has_lob_column(true/*ignore_unused_column*/)) {
@@ -276,6 +281,9 @@ int ObCreateTableLikeHelper::generate_aux_table_schemas_()
     }
     if (FAILEDx(gen_object_ids_(obj_cnt, id_generator))) {
       LOG_WARN("fail to gen object ids", KR(ret), K_(tenant_id), K(obj_cnt));
+    } else if (OB_FAIL(search_def_id_map.create(simple_index_infos.count() + 1,
+                                                lib::ObLabel("CreateLike")))) {
+      LOG_WARN("failed to create search def id map", KR(ret));
     }
     HEAP_VAR(ObTableSchema, new_index_schema) {
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
@@ -331,6 +339,24 @@ int ObCreateTableLikeHelper::generate_aux_table_schemas_()
             if (OB_FAIL(aux_schema_array.push_back(new_index_schema))) {
               LOG_WARN("fail to add aux schema", KR(ret));
             }
+          } else if (new_index_schema.is_search_def_index()) {
+            if (OB_FAIL(search_def_id_map.set_refactored(index_table_schema->get_table_id(), new_index_id))) {
+              LOG_WARN("fail to set search def id map", KR(ret), K(index_table_schema->get_table_id()), K(new_index_id));
+            } else if (OB_FAIL(search_def_schema_array.push_back(new_index_schema))) {
+              LOG_WARN("fail to add search def schema", KR(ret));
+            }
+          } else if (new_index_schema.is_search_data_index()) {
+            const uint64_t old_def_id = index_table_schema->get_data_table_id();
+            uint64_t new_def_index_id = OB_INVALID_ID;
+            if (OB_FAIL(search_def_id_map.get_refactored(old_def_id, new_def_index_id))) {
+              LOG_WARN("failed to get new search def index id", KR(ret), K(old_def_id), K(index_table_schema->get_table_id()));
+            } else if (OB_FAIL(ObTableSchema::build_index_table_name(allocator_, new_def_index_id, index_name, new_index_table_name))) {
+              LOG_WARN("fail to build new index table name", KR(ret), K(new_table_id), K(new_index_table_name));
+            } else if (FALSE_IT(new_index_schema.set_data_table_id(new_def_index_id))) {
+            } else if (FALSE_IT(new_index_schema.set_table_name(new_index_table_name))) {
+            } else if (OB_FAIL(search_data_schema_array.push_back(new_index_schema))) {
+              LOG_WARN("fail to add search def schema", KR(ret));
+            }
           } else if (OB_FAIL(new_tables_.push_back(new_index_schema))) {
             LOG_WARN("fail to add index schema", KR(ret));
           }
@@ -358,6 +384,20 @@ int ObCreateTableLikeHelper::generate_aux_table_schemas_()
                                                                                   need_doc_id,
                                                                                   need_vid))) {
         LOG_WARN("fail to retrieve complete index", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && (!search_def_schema_array.empty() || !search_data_schema_array.empty())) {
+      // the search data index must be pushed into the array first, followed by processing the
+      // search def index. It is essential to ensure that the schema_version of the search def
+      // index is greater than that of the search data index.
+      if (search_def_schema_array.count() != search_data_schema_array.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the def index and the data index must correspond one-to-one", KR(ret),
+        K(search_def_schema_array.count()), K(search_data_schema_array.count()));
+      } else if (OB_FAIL(append(new_tables_, search_data_schema_array))) {
+        LOG_WARN("fail to append search data schema array", K(ret));
+      } else if (OB_FAIL(append(new_tables_, search_def_schema_array))) {
+        LOG_WARN("fail to append search data schema array", K(ret));
       }
     }
     new_table_schema = &(new_tables_.at(0));
@@ -464,6 +504,51 @@ int ObCreateTableLikeHelper::construct_and_adjust_result_(int &return_ret) {
     } else {
       LOG_USER_ERROR(OB_ERR_TABLE_EXIST, arg_.new_table_name_.length(), arg_.new_table_name_.ptr());
       LOG_WARN("table is exist, cannot create it twice", KR(ret), K_(arg));
+    }
+  }
+  return ret;
+}
+
+int ObCreateTableLikeHelper::append_search_data_index_infos_(
+    ObIArray<ObAuxTableMetaInfo> &simple_index_infos)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 16> search_def_index_ids;
+  // collect search def index ids first
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    const ObTableSchema *def_schema = nullptr;
+    if (OB_FAIL(schema_guard_wrapper_.get_table_schema(simple_index_infos.at(i).table_id_, def_schema))) {
+      LOG_WARN("fail to get index table schema", KR(ret), K_(tenant_id), K_(simple_index_infos.at(i).table_id));
+    } else if (OB_ISNULL(def_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index table schema is null", KR(ret), K_(simple_index_infos.at(i).table_id));
+    } else if (def_schema->is_search_def_index()) {
+      if (OB_FAIL(search_def_index_ids.push_back(def_schema->get_table_id()))) {
+        LOG_WARN("fail to push back search def index id", KR(ret), K(def_schema->get_table_id()));
+      }
+    }
+  }
+  // append search data index infos for each search def index
+  for (int64_t i = 0; OB_SUCC(ret) && i < search_def_index_ids.count(); ++i) {
+    const uint64_t def_tid = search_def_index_ids.at(i);
+    const ObTableSchema *def_schema = nullptr;
+    ObSEArray<ObAuxTableMetaInfo, 16> child_infos;
+    if (OB_FAIL(schema_guard_wrapper_.get_table_schema(def_tid, def_schema))) {
+      LOG_WARN("fail to get search def index schema", KR(ret), K_(tenant_id), K(def_tid));
+    } else if (OB_ISNULL(def_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("search def index schema is null", KR(ret), K(def_tid));
+    } else if (OB_FAIL(def_schema->get_simple_index_infos(child_infos))) {
+      LOG_WARN("get_simple_index_infos for search def index failed", KR(ret), K(def_tid));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < child_infos.count(); ++j) {
+        if (!share::schema::is_search_data_index(child_infos.at(j).index_type_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expect search data index", KR(ret), K(child_infos.at(j).index_type_));
+        } else if (OB_FAIL(simple_index_infos.push_back(child_infos.at(j)))) {
+          LOG_WARN("push back search data index info failed", KR(ret), K(child_infos.at(j).table_id_));
+        }
+      }
     }
   }
   return ret;

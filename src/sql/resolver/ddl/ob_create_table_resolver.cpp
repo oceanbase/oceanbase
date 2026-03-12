@@ -24,6 +24,7 @@
 #include "share/ob_vec_index_builder_util.h"
 #include "share/ob_heap_organized_table_util.h"
 #include "share/ob_license_utils.h"
+#include "share/search_index/ob_search_index_builder_util.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 
@@ -2831,6 +2832,21 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
         } else {
           type = INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
         }
+      } else if (SEARCH_KEY == index_keyname_) {
+        if (tenant_data_version < DATA_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.5.1, search index is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.5.1, search index is");
+        } else if (!table_schema.is_heap_organized_table() || table_schema.is_table_with_clustering_key()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("Non-heap organized tables is not support search index yet", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Search index for a non-heap organized table is");
+        } else if (global_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support global search index now", K(ret));
+        } else {
+          type = INDEX_TYPE_SEARCH_DEF_INDEX_LOCAL;
+        }
       }
     }
     if(OB_SUCC(ret)) {
@@ -3101,6 +3117,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         bool is_multi_value_index = false;
         const bool is_vec_index = (index_keyname_ == INDEX_KEYNAME::VEC_KEY);
         const bool is_fts_index = (index_keyname_ == INDEX_KEYNAME::FTS_KEY);
+        const bool is_search_index = (index_keyname_ == INDEX_KEYNAME::SEARCH_KEY);
         uint64_t tenant_data_version = 0;
         bool is_support = false;
         if (OB_FAIL(ret)) {
@@ -3128,6 +3145,14 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
           LOG_WARN("vector index search index isn't supported in shared storage mode", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index search index in shared storage mode is");
 #endif
+        } else if (is_search_index && tenant_data_version < DATA_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("search index is not support yet", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "search index is");
+        } else if (is_search_index && !is_organization_set_to_heap()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("Non-heap organized tables is not support search indexe yet", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Search index for a non-heap organized table is");
         }
         for (int32_t i = 0; OB_SUCC(ret) && i < index_column_list_node->num_child_; ++i) {
           ObString &column_name = sort_item.column_name_;
@@ -3178,6 +3203,10 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 if (0 == sort_item.prefix_len_) {
                   ret = OB_KEY_PART_0;
                   LOG_USER_ERROR(OB_KEY_PART_0, column_name.length(), column_name.ptr());
+                } else if (INDEX_KEYNAME::SEARCH_KEY == index_keyname_) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("prefix length for search index is not supported", K(ret), K(sort_item.prefix_len_));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "prefix length for search index is");
                 }
               } else {
                 sort_item.prefix_len_ = 0;
@@ -3298,15 +3327,29 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               }
             }
             if (OB_SUCC(ret)) {
-              if (OB_ISNULL(session_info_)) {
+              bool is_single_layer_array_for_search = true;
+              if (is_search_index
+                  && ob_is_collection_sql_type(column_schema->get_data_type())) {
+                if (OB_FAIL(ObSearchIndexBuilderUtil::check_single_layer_array_for_search_index(
+                              *column_schema, allocator_, is_single_layer_array_for_search))) {
+                  LOG_WARN("failed to check collection column for search index", K(ret), KPC(column_schema));
+                } else if (!is_single_layer_array_for_search) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("search index on map or non-single-layer array column is not supported", K(ret));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "search index on map or non-single-layer array column is");
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (OB_ISNULL(session_info_)) {
                 ret = OB_NOT_INIT;
                 LOG_WARN("session_info_ is null");
               }  else if (sort_item.prefix_len_ > column_schema->get_data_length()) {
                 ret = OB_WRONG_SUB_KEY;
                 SQL_RESV_LOG(WARN, "prefix length is longer than column length", K(sort_item), K(column_schema->get_data_length()), K(ret));
               } else if (!is_oracle_mode // oracle mode is not support vector column yet
-                  && ob_is_collection_sql_type(column_schema->get_data_type())
-                  && static_cast<int64_t>(INDEX_KEYNAME::VEC_KEY) != node->value_) {
+                && ob_is_collection_sql_type(column_schema->get_data_type())
+                && !is_search_index
+                && static_cast<int64_t>(INDEX_KEYNAME::VEC_KEY) != node->value_) {
                 ret = OB_NOT_SUPPORTED;
                 LOG_WARN("index column is vector column, but is not vector index is not supported", K(ret));
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector column index but not vector index is");
@@ -3330,6 +3373,9 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               } else if (OB_FAIL(resolve_fts_index_constraint(*column_schema,
                                                               node->value_))) {
                 SQL_RESV_LOG(WARN, "fail to resolve fts index constraint", K(ret), K(column_name));
+              } else if (OB_FAIL(resolve_search_index_constraint(*column_schema,
+                                                                 node->value_))) {
+                SQL_RESV_LOG(WARN, "fail to resolve search index constraint", K(ret), K(column_name));
               } else if (OB_FAIL(resolve_multivalue_index_constraint(*column_schema, index_keyname_))) {
                 SQL_RESV_LOG(WARN, "fail to resolve multivalue index constraint", K(ret), K(column_name));
               }
@@ -3642,6 +3688,15 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               LOG_WARN("failed to append multivalue args", K(ret));
             } else {
               has_multivalue_index_ = true;
+            }
+          } else if (is_search_index(index_arg_.index_type_)) {
+            if (OB_FAIL(ObDDLResolver::append_search_index_args(tbl_schema,
+                                                                resolve_result,
+                                                                create_index_arg,
+                                                                resolve_results,
+                                                                index_arg_list,
+                                                                allocator_))) {
+              LOG_WARN("failed to append search args", K(ret));
             }
           } else {
             if (OB_FAIL(resolve_results.push_back(resolve_result))) {

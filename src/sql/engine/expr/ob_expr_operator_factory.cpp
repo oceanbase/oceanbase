@@ -60,6 +60,7 @@
 #include "sql/engine/expr/ob_expr_agg_param_list.h"
 #include "sql/engine/expr/ob_expr_is_serving_tenant.h"
 #include "sql/engine/expr/ob_expr_hex.h"
+#include "sql/engine/expr/ob_expr_search_index_inner.h"
 #include "sql/engine/expr/ob_expr_password.h"
 #include "sql/engine/expr/ob_expr_int2ip.h"
 #include "sql/engine/expr/ob_expr_ip2int.h"
@@ -535,8 +536,6 @@
 #include "sql/engine/expr/ob_expr_collect_file_list.h"
 #include "sql/engine/expr/ob_expr_pos_list.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_load_file.h"
-
-
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_format_profile.h"
 #include "sql/engine/expr/ob_expr_max_pt.h"
@@ -1376,6 +1375,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCollectFileList, EAGER_EVALUATION);
     REG_OP(ObExprVoid, EAGER_EVALUATION);
     REG_OP(ObExprLoadFile, SHORT_CIRCUIT_EVALUATION);
+    REG_OP(ObExprSearchIndexInnerPath, SHORT_CIRCUIT_EVALUATION);
+    REG_OP(ObExprSearchIndexInnerValue, SHORT_CIRCUIT_EVALUATION);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath, EAGER_EVALUATION);

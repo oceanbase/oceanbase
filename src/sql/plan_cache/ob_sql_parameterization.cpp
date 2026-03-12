@@ -382,6 +382,8 @@ bool ObSqlParameterization::is_tree_not_param(const ParseNode *tree)
     ret_bool = true;
   } else if (T_VEC_INDEX_PARAMS == tree->type_) {
     ret_bool = true;
+  } else if (T_INDEX_DATA_GEN_EXPRESSION == tree->type_) {
+    ret_bool = true;
   } else {
     // do nothing
   }
@@ -2412,14 +2414,38 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
       }
     } else { /*do nothing*/ }
   } else if(T_FUN_SYS_JSON_VALUE == tree->type_) {
-    if (10 != tree->num_child_) {
+    if (11 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
       SQL_PC_LOG(WARN, "invalid json value expr argument", K(ret), K(tree->num_child_)); 
     } else {
-      const int64_t ARGS_NUMBER_TEN = 10;
-      bool mark_arr[ARGS_NUMBER_TEN] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_TEN, sql_info))) {
+      const int64_t ARGS_NUMBER_ELEVEN = 11;
+      bool mark_arr[ARGS_NUMBER_ELEVEN] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_ELEVEN, sql_info))) {
         SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
+      }
+    }
+  } else if(T_FUN_SYS_JSON_EXTRACT == tree->type_) {
+    if (2 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid json extract expr argument", K(ret), K(tree->num_child_));
+    } else {
+      sql_info.ps_need_parameterized_ = false;
+
+      if (OB_NOT_NULL(tree->children_[1])) {
+        tree->children_[1]->is_tree_not_param_ = true;
+      }
+
+      if (OB_SUCC(ret) && OB_NOT_NULL(tree->children_[0])
+          && T_EXPR_LIST == tree->children_[0]->type_) {
+        ParseNode *expr_list = tree->children_[0];
+        for (int64_t i = 1; OB_SUCC(ret) && i < expr_list->num_child_; i++) {
+          if (OB_ISNULL(expr_list->children_[i])) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_PC_LOG(WARN, "invalid argument", K(ret), K(expr_list->children_[i]));
+          } else {
+            expr_list->children_[i]->is_tree_not_param_ = true;
+          }
+        }
       }
     }
   } else if(T_FUN_SYS_JSON_OBJECT == tree->type_) {
@@ -2530,6 +2556,17 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
       bool mark_arr[ARGS_NUMBER_TWO] = {1, 0};
       if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_TWO, sql_info))) {
         SQL_PC_LOG(WARN, "fail to mark treat arg", K(ret));
+      }
+    }
+  } else if (T_HYBRID_SEARCH == tree->type_) {
+    if (2 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid hybrid search expr argument", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_TWO = 2;
+      bool mark_arr[ARGS_NUMBER_TWO] = {1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_TWO, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark hybrid search arg", K(ret));
       }
     }
   } else { /*do nothing*/ }

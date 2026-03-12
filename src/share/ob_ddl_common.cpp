@@ -41,6 +41,7 @@
 #endif
 #include "storage/mview/ob_mview_refresh_helper.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
+#include "share/search_index/ob_search_index_builder_util.h"
 #include "lib/utility/ob_sort.h"
 
 using namespace oceanbase::share;
@@ -76,6 +77,12 @@ const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
       break;
     case ObDDLType::DDL_CREATE_FTS_INDEX:
       ret_name = "DDL_CREATE_FTS_INDEX";
+      break;
+    case ObDDLType::DDL_CREATE_SEARCH_INDEX:
+      ret_name = "DDL_CREATE_SEARCH_INDEX";
+      break;
+    case ObDDLType::DDL_DROP_SEARCH_INDEX:
+      ret_name = "DDL_DROP_SEARCH_INDEX";
       break;
     case ObDDLType::DDL_CREATE_MLOG:
       ret_name = "DDL_CREATE_MLOG";
@@ -828,6 +835,7 @@ int ObDDLUtil::generate_column_name_str(
 int ObDDLUtil::generate_order_by_str(
     const ObIArray<int64_t> &select_column_ids,
     const ObIArray<int64_t> &order_column_ids,
+    const bool is_search_index,
     ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
@@ -839,17 +847,63 @@ int ObDDLUtil::generate_order_by_str(
     LOG_WARN("append failed", K(ret));
   } else {
     bool append_comma = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < order_column_ids.count(); ++i) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < select_column_ids.count(); ++j) {
-        if (select_column_ids.at(j) == order_column_ids.at(i)) {
-          if (OB_FAIL(sql_string.append_fmt("%s %ld", append_comma ? ",": "", j + 1))) {
-            LOG_WARN("append fmt failed", K(ret));
-          } else if (!append_comma) {
-            append_comma = true;
+    if (is_search_index) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < order_column_ids.count(); ++i) {
+        if (OB_FAIL(sql_string.append_fmt("%s %ld", append_comma ? ",": "", i + 1))) {
+          LOG_WARN("append fmt failed", K(ret));
+        } else if (!append_comma) {
+          append_comma = true;
+        }
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < order_column_ids.count(); ++i) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < select_column_ids.count(); ++j) {
+          if (select_column_ids.at(j) == order_column_ids.at(i)) {
+            if (OB_FAIL(sql_string.append_fmt("%s %ld", append_comma ? ",": "", j + 1))) {
+              LOG_WARN("append fmt failed", K(ret));
+            } else if (!append_comma) {
+              append_comma = true;
+            }
           }
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLUtil::generate_select_item_str(
+    const ObSqlString &part_key_column_sql_string,
+    ObSqlString &select_item_sql_string)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(select_item_sql_string.append("DATA_GEN_TABLE.*"))) {
+    LOG_WARN("append failed", K(ret));
+  } else if (!part_key_column_sql_string.empty()
+    && OB_FAIL(select_item_sql_string.append_fmt(", %.*s",
+               static_cast<int>(part_key_column_sql_string.length()),
+               part_key_column_sql_string.ptr()))) {
+    LOG_WARN("append fmt failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLUtil::generate_index_data_gen_str(
+    const ObSqlString &query_column_sql_string,
+    const ObSqlString &part_key_column_sql_string,
+    const int64_t dest_table_id,
+    ObSqlString &index_data_gen_sql_string)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(index_data_gen_sql_string.append_fmt(", INDEX_DATA_GEN(COLUMNS(%.*s)",
+              static_cast<int>(query_column_sql_string.length()), query_column_sql_string.ptr()))) {
+    LOG_WARN("append fmt failed", K(ret));
+  } else if (!part_key_column_sql_string.empty()
+    && OB_FAIL(index_data_gen_sql_string.append_fmt(", PARTITION KEY(%.*s)",
+               static_cast<int>(part_key_column_sql_string.length()), part_key_column_sql_string.ptr()))) {
+    LOG_WARN("append fmt failed", K(ret));
+  } else if (OB_FAIL(index_data_gen_sql_string.append_fmt(", %ld) DATA_GEN_TABLE", dest_table_id))) {
+    LOG_WARN("append fmt failed", K(ret));
   }
   return ret;
 }
@@ -1084,6 +1138,42 @@ int ObDDLUtil::append_multivalue_extra_column(const ObTableSchema &dest_table_sc
   return ret;
 }
 
+int ObDDLUtil::generate_search_index_column_names(const ObTableSchema &def_table_schema,
+                                                  const ObColumnNameMap *col_name_map,
+                                                  ObArray<ObColumnNameInfo> &column_names,
+                                                  ObArray<int64_t> &select_column_ids)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObColDesc> column_ids;
+  if (OB_FAIL(def_table_schema.get_column_ids(column_ids))) {
+    LOG_WARN("fail to get column ids", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+      ObString orig_column_name;
+      const ObColumnSchemaV2 *column_schema = nullptr;
+      const int64_t col_id = column_ids.at(i).col_id_;
+      bool is_shadow_column = common::is_shadow_column(column_ids.at(i).col_id_);
+      if (OB_ISNULL(column_schema = def_table_schema.get_column_schema(col_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
+      } else if (nullptr == col_name_map && OB_FALSE_IT(orig_column_name.assign_ptr(column_schema->get_column_name_str().ptr(), column_schema->get_column_name_str().length()))) {
+      } else if (nullptr != col_name_map && OB_FAIL(col_name_map->get_orig_column_name(column_schema->get_column_name_str(), orig_column_name))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          // newly added column cannot be selected from source table.
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get orig column name", K(ret));
+        }
+      } else if (OB_FAIL(column_names.push_back(ObColumnNameInfo(orig_column_name, is_shadow_column)))) {
+        LOG_WARN("fail to push back column name", K(ret));
+      } else if (OB_FAIL(select_column_ids.push_back(col_id))) {
+        LOG_WARN("push back select column id failed", K(ret), K(col_id));
+      }
+    }
+  }
+  return ret;
+}
+
 
 int ObDDLUtil::generate_build_replica_sql(
     const uint64_t tenant_id,
@@ -1106,6 +1196,7 @@ int ObDDLUtil::generate_build_replica_sql(
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *source_table_schema = nullptr;
   const ObTableSchema *dest_table_schema = nullptr;
+  const ObTableSchema *def_index_schema = nullptr;
   bool oracle_mode = false;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == data_table_id || OB_INVALID_ID == dest_table_id
       || schema_version <= 0 || snapshot_version <= 0 || execution_id < 0 || task_id <= 0)) {
@@ -1127,11 +1218,20 @@ int ObDDLUtil::generate_build_replica_sql(
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("fail to get table schema", K(ret), KP(source_table_schema), KP(dest_table_schema),
       K(tenant_id), K(data_table_id), K(dest_table_id));
+  } else if (dest_table_schema->is_search_data_index()
+    && OB_FAIL(schema_guard.get_table_schema(tenant_id, dest_table_schema->get_data_table_id(),
+                                             def_index_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(dest_table_schema->get_data_table_id()));
+  } else if (dest_table_schema->is_search_data_index() && OB_ISNULL(def_index_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("fail to get table schema", K(ret), K(def_index_schema),
+      K(dest_table_schema->get_data_table_id()), K(tenant_id));
   } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(tenant_id, data_table_id, oracle_mode))) {
     LOG_WARN("check if oracle mode failed", K(ret), K(data_table_id));
   } else {
     ObArray<ObColDesc> column_ids;
     ObArray<ObColumnNameInfo> column_names;
+    ObArray<ObColumnNameInfo> part_key_column_names;
     ObArray<ObColumnNameInfo> insert_column_names;
     ObArray<ObColumnNameInfo> rowkey_column_names;
     ObArray<int64_t> select_column_ids;
@@ -1139,6 +1239,7 @@ int ObDDLUtil::generate_build_replica_sql(
     bool is_shadow_column = false;
     const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, false/*is mv refresh*/);
     const bool is_rowkey_doc_aux_table = dest_table_schema->is_rowkey_doc_id();
+    const bool is_search_index = dest_table_schema->is_search_index();
     uint64_t doc_id_col_id = OB_INVALID_ID;
     uint64_t ft_id_col_id = OB_INVALID_ID;
     // get dest table column names
@@ -1169,17 +1270,24 @@ int ObDDLUtil::generate_build_replica_sql(
           } else {
             LOG_WARN("failed to get orig column name", K(ret));
           }
-        } else if (OB_FAIL(column_names.push_back(ObColumnNameInfo(orig_column_name, is_shadow_column)))) {
+        } else if (!is_search_index && OB_FAIL(column_names.push_back(ObColumnNameInfo(orig_column_name, is_shadow_column)))) {
           LOG_WARN("fail to push back column name", K(ret));
         } else if ((is_alter_clustering_key_tbl_partition_by || is_add_clustering_key) && column_schema->is_hidden_clustering_key_column()) {
           // do nothing
-        } else if (OB_FAIL(select_column_ids.push_back(col_id))) {
+        } else if (!is_search_index && OB_FAIL(select_column_ids.push_back(col_id))) {
           LOG_WARN("push back select column id failed", K(ret), K(col_id));
         } else if (!is_shadow_column) {
           if (OB_FAIL(insert_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), is_shadow_column)))) {
             LOG_WARN("push back insert column name failed", K(ret));
           }
         }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (is_search_index && OB_FAIL(generate_search_index_column_names(*def_index_schema,
+                                                                               col_name_map,
+                                                                               column_names,
+                                                                               select_column_ids))) {
+        LOG_WARN("failed to generate search index select column ids", K(ret));
       }
     }
     if (OB_SUCC(ret) && dest_table_schema->need_partition_key_for_build_local_index(*source_table_schema)) {
@@ -1222,7 +1330,7 @@ int ObDDLUtil::generate_build_replica_sql(
           if (OB_ISNULL(column_schema = source_table_schema->get_column_schema(col_id))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
-          } else if (is_contain(select_column_ids, col_id)) {
+          } else if (!is_search_index && is_contain(select_column_ids, col_id)) {
             // do nothing
           } else if (nullptr == col_name_map && OB_FALSE_IT(orig_column_name.assign_ptr(column_schema->get_column_name_str().ptr(), column_schema->get_column_name_str().length()))) {
           } else if (nullptr != col_name_map && OB_FAIL(col_name_map->get_orig_column_name(column_schema->get_column_name_str(), orig_column_name))) {
@@ -1232,7 +1340,9 @@ int ObDDLUtil::generate_build_replica_sql(
             } else {
               LOG_WARN("failed to get orig column name", K(ret));
             }
-          } else if (OB_FAIL(column_names.push_back(ObColumnNameInfo(orig_column_name, false)))) {
+          } else if (!is_search_index && OB_FAIL(column_names.push_back(ObColumnNameInfo(orig_column_name, false)))) {
+            LOG_WARN("fail to push back column name", K(ret));
+          } else if (is_search_index && OB_FAIL(part_key_column_names.push_back(ObColumnNameInfo(orig_column_name, false)))) {
             LOG_WARN("fail to push back column name", K(ret));
           } else if (OB_FAIL(insert_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), false)))) {
             LOG_WARN("push back insert column name failed", K(ret));
@@ -1284,9 +1394,12 @@ int ObDDLUtil::generate_build_replica_sql(
     // generate build replica sql
     if (OB_SUCC(ret)) {
       ObSqlString query_column_sql_string;
+      ObSqlString part_key_column_sql_string;
       ObSqlString insert_column_sql_string;
       ObSqlString rowkey_column_sql_string;
       ObSqlString src_table_schema_version_hint_sql_string;
+      ObSqlString select_column_sql_string;
+      ObSqlString index_data_gen_sql_string;
       const ObString &dest_table_name = dest_table_schema->get_table_name_str();
       const uint64_t dest_database_id = dest_table_schema->get_database_id();
       ObString dest_database_name;
@@ -1317,12 +1430,21 @@ int ObDDLUtil::generate_build_replica_sql(
         }
 
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(generate_column_name_str(column_names, oracle_mode, true/*with origin name*/, true/*with alias name*/, use_heap_table_ddl_plan, is_add_clustering_key, is_alter_clustering_key_tbl_partition_by, query_column_sql_string))) {
+        } else if (OB_FAIL(generate_column_name_str(column_names, oracle_mode, true/*with origin name*/, is_search_index ? false : true/*with alias name*/, use_heap_table_ddl_plan, is_add_clustering_key, is_alter_clustering_key_tbl_partition_by, is_search_index ? query_column_sql_string : select_column_sql_string))) {
           LOG_WARN("fail to generate column name str", K(ret));
         } else if (OB_FAIL(generate_column_name_str(insert_column_names, oracle_mode, true/*with origin name*/, false/*with alias name*/, use_heap_table_ddl_plan, is_add_clustering_key, is_alter_clustering_key_tbl_partition_by, insert_column_sql_string))) {
           LOG_WARN("generate column name str failed", K(ret));
-        } else if (!use_heap_table_ddl_plan && OB_FAIL(generate_order_by_str(select_column_ids, order_column_ids, rowkey_column_sql_string))) {
+        } else if (!use_heap_table_ddl_plan && OB_FAIL(generate_order_by_str(select_column_ids, order_column_ids, is_search_index, rowkey_column_sql_string))) {
           LOG_WARN("generate order by string failed", K(ret));
+        } else if (is_search_index) {
+          if (!part_key_column_names.empty()
+              && OB_FAIL(generate_column_name_str(part_key_column_names, oracle_mode, true/*with origin name*/, false/*with alias name*/, use_heap_table_ddl_plan, is_add_clustering_key, is_alter_clustering_key_tbl_partition_by, part_key_column_sql_string))) {
+            LOG_WARN("failed to generate column name str", K(ret));
+          } else if (OB_FAIL(generate_select_item_str(part_key_column_sql_string, select_column_sql_string))) {
+            LOG_WARN("failed to generate select item str", K(ret));
+          } else if (OB_FAIL(generate_index_data_gen_str(query_column_sql_string, part_key_column_sql_string, dest_table_id, index_data_gen_sql_string))) {
+            LOG_WARN("failed to generate index data gen str", K(ret));
+          }
         }
       }
 
@@ -1380,14 +1502,14 @@ int ObDDLUtil::generate_build_replica_sql(
               static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
               static_cast<int>(new_source_table_name.length()), new_source_table_name.ptr(),
               static_cast<int>(src_table_schema_version_hint_sql_string.length()), src_table_schema_version_hint_sql_string.ptr(),
-              static_cast<int>(query_column_sql_string.length()), query_column_sql_string.ptr(),
+              static_cast<int>(select_column_sql_string.length()), select_column_sql_string.ptr(),
               static_cast<int>(new_source_database_name.length()), new_source_database_name.ptr(), static_cast<int>(new_source_table_name.length()), new_source_table_name.ptr(),
               static_cast<int>(partition_names.length()), partition_names.ptr(),
               snapshot_version, static_cast<int>(rowkey_column_sql_string.length()), rowkey_column_sql_string.ptr()))) {
             LOG_WARN("fail to assign sql string", K(ret));
           }
         } else {
-          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') %.*s use_px */INTO `%.*s`.`%.*s` %.*s(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` %.*s as of snapshot %ld %.*s %.*s",
+          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') %.*s use_px */INTO `%.*s`.`%.*s` %.*s(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` %.*s as of snapshot %ld %.*s %.*s %.*s",
               real_parallelism, execution_id, task_id,
               static_cast<int>(strlen(io_read_hint)), io_read_hint,
               static_cast<int>(new_dest_database_name.length()), new_dest_database_name.ptr(), static_cast<int>(new_dest_table_name.length()), new_dest_table_name.ptr(),
@@ -1395,10 +1517,11 @@ int ObDDLUtil::generate_build_replica_sql(
               static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
               static_cast<int>(new_source_table_name.length()), new_source_table_name.ptr(),
               static_cast<int>(src_table_schema_version_hint_sql_string.length()), src_table_schema_version_hint_sql_string.ptr(),
-              static_cast<int>(query_column_sql_string.length()), query_column_sql_string.ptr(),
+              static_cast<int>(select_column_sql_string.length()), select_column_sql_string.ptr(),
               static_cast<int>(new_source_database_name.length()), new_source_database_name.ptr(), static_cast<int>(new_source_table_name.length()), new_source_table_name.ptr(),
               static_cast<int>(partition_names.length()), partition_names.ptr(),
               snapshot_version,
+              static_cast<int>(index_data_gen_sql_string.length()), index_data_gen_sql_string.ptr(),
               static_cast<int>(filter_sql_str.length()), filter_sql_str.ptr(),
               static_cast<int>(rowkey_column_sql_string.length()), rowkey_column_sql_string.ptr()))) {
             LOG_WARN("fail to assign sql string", K(ret));
@@ -3193,6 +3316,8 @@ int ObDDLUtil::construct_domain_index_arg(const ObTableSchema *table_schema,
     ddl_type = ObDDLType::DDL_CREATE_MULTIVALUE_INDEX;
   } else if (index_schema->is_vec_spiv_index()) {
     ddl_type = ObDDLType::DDL_CREATE_VEC_SPIV_INDEX;
+  } else if (index_schema->is_search_index()) {
+    ddl_type = ObDDLType::DDL_CREATE_SEARCH_INDEX;
   } else {
     ddl_type = get_create_index_type(task.get_data_format_version(), *index_schema);
   }
@@ -3230,6 +3355,10 @@ int ObDDLUtil::construct_domain_index_arg(const ObTableSchema *table_schema,
              && OB_FAIL(share::ObFtsIndexBuilderUtil::get_multivalue_index_column_name(
                  *table_schema, *index_schema, col_names))) {
     LOG_WARN("fail to get multivalue index column name", K(ret), K(index_schema));
+  } else if (index_schema->is_search_index()
+             && OB_FAIL(share::ObSearchIndexBuilderUtil::get_search_index_column_name(
+                 *table_schema, *index_schema, col_names))) {
+    LOG_WARN("fail to get search index column name", K(ret), K(index_schema));
   } else {
     FOREACH_X(it, col_names, OB_SUCC(ret)) {
       obrpc::ObColumnSortItem sort_item;

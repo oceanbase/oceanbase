@@ -765,6 +765,9 @@ constexpr int64_t OB_WORD_SEGMENT_COLUMN_NAME_PREFIX_LEN = sizeof("__word_segmen
 constexpr int64_t OB_WORD_COUNT_COLUMN_NAME_PREFIX_LEN = sizeof("__word_count") - 1;
 const char OB_FT_COL_ID_DELIMITER = '_';
 
+// hybrid search
+const char *const OB_HYBRID_SEARCH_SCORE_COLUMN_NAME = "__score";
+
 // backup and restore
 const int64_t OB_MAX_CLUSTER_NAME_LENGTH = OB_MAX_APP_NAME_LENGTH;
 const int64_t OB_MAX_URI_LENGTH = 2048;

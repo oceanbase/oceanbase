@@ -25,6 +25,7 @@
 #include "rootserver/ddl_task/ob_vec_ivf_index_build_task.h"
 #include "rootserver/ddl_task/ob_fts_index_build_task.h"
 #include "rootserver/ddl_task/ob_drop_fts_index_task.h"
+#include "rootserver/ddl_task/ob_drop_search_index_task.h"
 
 const bool OB_DDL_TASK_ENABLE_TRACING = false;
 
@@ -228,7 +229,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam()
     aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr), fts_index_aux_schema_(nullptr), aux_doc_word_schema_(nullptr),
     vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_domain_index_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
     vec_centroid_schema_(nullptr), vec_cid_vector_schema_(nullptr), vec_rowkey_cid_schema_(nullptr), vec_sq_meta_schema_(nullptr), vec_pq_centroid_schema_(nullptr), vec_pq_code_schema_(nullptr),
-    hybrid_vec_embedded_schema_(nullptr), tenant_data_version_(0), ddl_need_retry_at_executor_(false), is_pre_split_(false)
+    hybrid_vec_embedded_schema_(nullptr), def_index_schema_(nullptr), data_index_schema_(nullptr), tenant_data_version_(0), ddl_need_retry_at_executor_(false), is_pre_split_(false)
 {
 }
 
@@ -251,7 +252,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
     fts_index_aux_schema_(nullptr), aux_doc_word_schema_(nullptr),
     vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_domain_index_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
     vec_centroid_schema_(nullptr), vec_cid_vector_schema_(nullptr), vec_rowkey_cid_schema_(nullptr), vec_sq_meta_schema_(nullptr), vec_pq_centroid_schema_(nullptr), vec_pq_code_schema_(nullptr),
-    hybrid_vec_embedded_schema_(nullptr), tenant_data_version_(0),
+    hybrid_vec_embedded_schema_(nullptr), def_index_schema_(nullptr), data_index_schema_(nullptr), tenant_data_version_(0),
     ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false), new_snapshot_version_(0)
 {
 }
@@ -943,6 +944,8 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
       break;
     case DDL_REPLACE_MLOG:
       ddl_type_str = "replace materialized view log";
+    case DDL_CREATE_SEARCH_INDEX:
+      ddl_type_str =  "create search index";
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -3219,6 +3222,41 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
           LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
         }
       }
+    } else if (task_record.ddl_type_ == DDL_DROP_SEARCH_INDEX) {
+      SMART_VAR(ObDropSearchIndexTask, task) {
+        if (OB_FAIL(task.init(task_record))) {
+          LOG_WARN("fail to initialize the drop fulltext index task", K(ret), K(task_record));
+        } else if (UPDATE_DROP_INDEX_TASK_ID == update_type) {
+          if (index_schema.is_search_data_index()) {
+            task.set_drop_data_index_task_id(target_task_id);
+          } else if (index_schema.is_search_def_index()) {
+            task.set_drop_def_index_task_id(target_task_id);
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(task.update_task_message(proxy))) {
+          LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
+        }
+      }
+    } else if (DDL_CREATE_SEARCH_INDEX == task_record.ddl_type_) {
+      SMART_VAR(ObFtsIndexBuildTask, task) {
+        if (OB_FAIL(task.init(task_record))) {
+          LOG_WARN("fail to init ObFtsIndexBuildTask", K(ret), K(task_record));
+        } else if (UPDATE_CREATE_INDEX_ID == update_type) {
+          if (index_schema.is_search_data_index()) {
+            task.set_fts_index_aux_table_id(target_table_id);
+            task.set_fts_index_aux_task_id(target_task_id);
+            task.set_fts_index_aux_task_submitted(true);
+          }
+        } else if (UPDATE_DROP_INDEX_TASK_ID == update_type) {
+          task.set_drop_index_task_id(target_task_id);
+          task.set_drop_index_task_submitted(true);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(task.update_task_message(proxy))) {
+        LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
+      }
     } else {
       // TODO: other ddl type need to be update parent task message, now skip.
     }
@@ -4048,10 +4086,10 @@ int ObDDLTaskRecordOperator::get_create_index_or_mlog_task_cnt(
     ObSqlString sql_string;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_string.assign_fmt("SELECT COUNT(*) as cnt FROM %s WHERE object_id = %lu AND ddl_type IN (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+      if (OB_FAIL(sql_string.assign_fmt("SELECT COUNT(*) as cnt FROM %s WHERE object_id = %lu AND ddl_type IN (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
           OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id,
             ObDDLType::DDL_CREATE_INDEX, ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX, ObDDLType::DDL_CREATE_MLOG,
-            ObDDLType::DDL_CREATE_VEC_INDEX, ObDDLType::DDL_CREATE_MULTIVALUE_INDEX, ObDDLType::DDL_CREATE_FTS_INDEX,
+            ObDDLType::DDL_CREATE_VEC_INDEX, ObDDLType::DDL_CREATE_MULTIVALUE_INDEX, ObDDLType::DDL_CREATE_FTS_INDEX, ObDDLType::DDL_CREATE_SEARCH_INDEX,
             ObDDLType::DDL_CREATE_VEC_IVFFLAT_INDEX, ObDDLType::DDL_CREATE_VEC_IVFSQ8_INDEX, ObDDLType::DDL_CREATE_VEC_IVFPQ_INDEX, ObDDLType::DDL_CREATE_VEC_SPIV_INDEX))) {
         LOG_WARN("assign sql string failed", K(ret));
       } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {

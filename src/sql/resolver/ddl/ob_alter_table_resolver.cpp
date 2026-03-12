@@ -25,6 +25,7 @@
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/resolver/ddl/ob_interval_partition_resolver.h"
 #include "rootserver/ob_partition_exchange.h"
+#include "share/search_index/ob_search_index_builder_util.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
@@ -1824,10 +1825,28 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
           const ObColumnSchemaV2 *column_schema = NULL;
           if (is_oracle_mode()) { // oracle mode is not support vector column yet
           } else if (OB_NOT_NULL(column_schema = table_schema_->get_column_schema(sort_item.column_name_))) {
-            if (ob_is_collection_sql_type(column_schema->get_data_type()) && index_keyname_ != VEC_KEY) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("not support index create on vector column yet", K(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector column is");
+            if (ob_is_collection_sql_type(column_schema->get_data_type())) {
+              if (index_keyname_ == SEARCH_KEY) {
+                bool is_single_layer_array_for_search = false;
+                if (OB_FAIL(ObSearchIndexBuilderUtil::check_single_layer_array_for_search_index(
+                      *column_schema, allocator_, is_single_layer_array_for_search))) {
+                  LOG_WARN("failed to check collection column for search index", K(ret),
+                           KPC(column_schema));
+                } else if (!is_single_layer_array_for_search) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("search index on map or non-single-layer array column is not supported", K(ret));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "create search index on map or non-single-layer array column is");
+                }
+              } else if (index_keyname_ != VEC_KEY) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("not support index create on vector column yet", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector column is");
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(resolve_search_index_constraint(*column_schema,
+                                                               index_name_value))) {
+              SQL_RESV_LOG(WARN, "check search index constraint fail", K(ret), K(sort_item.column_name_));
             }
           }
         }
@@ -2314,6 +2333,18 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                     ret = OB_NOT_SUPPORTED;
                     LOG_WARN("tenant data version is less than 4.3.4, create dynamic multivalue index not supported", K(ret), K(tenant_data_version));
                     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, multivalue index not support dynamic create.");
+                  }
+                } else if (share::schema::is_search_index(index_arg.index_type_)) {
+                  uint64_t tenant_data_version = 0;
+                  if (OB_ISNULL(session_info_)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("unexpected null", K(ret));
+                  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+                    LOG_WARN("get tenant data version failed", K(ret));
+                  } else if (tenant_data_version < DATA_VERSION_4_5_1_0) {
+                    ret = OB_NOT_SUPPORTED;
+                    LOG_WARN("tenant data version is less than 4.5.1, create dynamic search index not supported", K(ret), K(tenant_data_version));
+                    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.5.1, search index not support dynamic create.");
                   }
                 }
                 if (OB_SUCC(ret)) {
@@ -2904,7 +2935,15 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.3.1, multivalue index not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, multivalue index");
-        }  else if (table_schema_->is_mysql_tmp_table() && index_keyname_ == FTS_KEY) {
+        } else if (index_keyname_ == SEARCH_KEY && (!table_schema_->is_heap_organized_table() || table_schema_->is_table_with_clustering_key())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("Non-heap organized tables is not support Search index yet", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Search index for a non-heap organized table is");
+        } else if (tenant_data_version < DATA_VERSION_4_5_1_0 && index_keyname_ == SEARCH_KEY) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.5.1, search index not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.5.1, search index");
+        } else if (table_schema_->is_mysql_tmp_table() && index_keyname_ == FTS_KEY) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("fulltext index on mysql temporary table is not supported", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext index on mysql temporary table is");
@@ -2925,6 +2964,10 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("global multivalue index not supported", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, multivalue index");
+          } else if (index_keyname_ == SEARCH_KEY) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("global search index is not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "global search index is");
           } else {
             type = INDEX_TYPE_NORMAL_GLOBAL;
           }
@@ -2935,6 +2978,8 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
             type = INDEX_TYPE_FTS_INDEX_LOCAL;
           } else if (index_keyname_ == MULTI_KEY) {
             type = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
+          } else if (index_keyname_ == SEARCH_KEY) {
+            type = INDEX_TYPE_SEARCH_DEF_INDEX_LOCAL;
           } else {
             type = INDEX_TYPE_NORMAL_LOCAL;
           }

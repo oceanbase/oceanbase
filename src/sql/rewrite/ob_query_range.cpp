@@ -1352,7 +1352,8 @@ bool ObQueryRange::can_be_extract_range(ObItemType cmp_type,
                                         const ObRawExprResType &col_type,
                                         const ObObjMeta &calc_meta,
                                         ObObjType data_type,
-                                        bool &always_true)
+                                        bool &always_true,
+                                        bool is_search_index)
 {
   bool bret = true;
   always_true = true;
@@ -1397,7 +1398,9 @@ bool ObQueryRange::can_be_extract_range(ObItemType cmp_type,
   if (bret && T_OP_LIKE == cmp_type) {
     //只对string like string的形式进行抽取
     if ((! col_type.is_string_or_lob_locator_type())
-      || (! calc_type.is_string_or_lob_locator_type())) {
+      || (! calc_type.is_string_or_lob_locator_type())
+      || is_search_index) {
+      // search index can not extract range for like expression
       bret = false;
       //不能进行规则抽取，将表达式视为恒true处理
       always_true = true;
@@ -1447,7 +1450,8 @@ bool ObQueryRange::can_be_extract_range(ObItemType cmp_type,
         bret = false;
         always_true = true;
       }
-    } else if (calc_type.is_json() && col_type.is_json()) {
+    } else if (calc_type.is_json() && col_type.is_json() && !is_search_index) {
+      // search index supports json type, so it can be extracted range
       bret = false;
       always_true = true;
     }
@@ -10066,6 +10070,18 @@ common::ObDomainOpType ObQueryRange::get_domain_op_type(ObItemType type)
     }
     case T_FUN_SYS_SDO_RELATE : {
       rel_type = common::ObDomainOpType::T_GEO_RELATE;
+      break;
+    }
+    case T_FUNC_SYS_ARRAY_CONTAINS : {
+      rel_type = common::ObDomainOpType::T_ARRAY_CONTAINS;
+      break;
+    }
+    case T_FUNC_SYS_ARRAY_CONTAINS_ALL : {
+      rel_type = common::ObDomainOpType::T_ARRAY_CONTAINS_ALL;
+      break;
+    }
+    case T_FUNC_SYS_ARRAY_OVERLAPS : {
+      rel_type = common::ObDomainOpType::T_ARRAY_OVERLAPS;
       break;
     }
     default:

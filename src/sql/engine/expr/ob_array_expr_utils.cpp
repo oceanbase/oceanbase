@@ -1632,6 +1632,16 @@ int ObArrayExprUtils::deduce_array_type(ObExecContext *exec_ctx, ObExprResType &
             subschema_id = deduce_type.get_subschema_id();
           }
         }
+      } else if (ob_is_string_tc(type2.get_type())) {
+        // Array uses memcmp for string comparison (binary comparison semantics).
+        // For case-insensitive collations (e.g., UTF8MB4_GENERAL_CI), we need to convert
+        // to the corresponding binary collation (e.g., UTF8MB4_BIN) of the same charset.
+        // This ensures consistent comparison behavior without charset conversion issues.
+        ObCharsetType cs_type = ObCharset::charset_type_by_coll(type2.get_collation_type());
+        ObCollationType bin_coll_type = ObCharset::get_bin_collation(cs_type);
+        if (CS_TYPE_INVALID != bin_coll_type && type2.get_collation_type() != bin_coll_type) {
+          type2.set_calc_collation_type(bin_coll_type);
+        }
       }
     } else {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;

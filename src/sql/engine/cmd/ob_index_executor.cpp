@@ -21,6 +21,7 @@
 #include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/ob_partition_pre_split.h"
+#include "share/search_index/ob_search_index_builder_util.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
 
 using namespace oceanbase::common;
@@ -111,7 +112,8 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
               || data_version < DATA_VERSION_4_2_2_0
               || (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_5_0)
               || share::schema::is_fts_or_multivalue_index(create_index_arg.index_type_)
-              || share::schema::is_vec_index(create_index_arg.index_type_)) {
+              || share::schema::is_vec_index(create_index_arg.index_type_)
+              || share::schema::is_search_index(create_index_arg.index_type_)) {
       start_time = ObTimeUtility::current_time();
       if (OB_FAIL(common_rpc_proxy->create_index(create_index_arg, res))) {    //send the signal of creating index to rs
         LOG_WARN("rpc proxy create index failed", K(create_index_arg),

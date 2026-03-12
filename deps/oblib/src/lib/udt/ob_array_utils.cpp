@@ -156,6 +156,38 @@ int ObArrayUtil::convert_collection_bin_to_string(const ObString &collection_bin
   return ret;
 }
 
+int ObArrayUtil::get_collection_info(const common::ObIArray<common::ObString> &extended_type_info,
+                                     common::ObIAllocator &allocator,
+                                     ObSqlCollectionInfo *&collection_info)
+{
+  int ret = OB_SUCCESS;
+  collection_info = nullptr;
+  if (OB_UNLIKELY(extended_type_info.count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid extended type info for collection type", K(ret), K(extended_type_info.count()));
+  } else {
+    ObSqlCollectionInfo *type_info_parse = OB_NEWx(ObSqlCollectionInfo, &allocator, allocator);
+    ObString collection_type_name = extended_type_info.at(0);
+    if (OB_ISNULL(type_info_parse)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc ObSqlCollectionInfo failed", K(ret));
+    } else {
+      type_info_parse->set_name(collection_type_name);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(type_info_parse->parse_type_info())) {
+      LOG_WARN("fail to parse type info", K(ret), K(collection_type_name));
+    } else if (OB_ISNULL(type_info_parse->collection_meta_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("collection meta is null", K(ret), K(collection_type_name));
+    } else {
+      collection_info = type_info_parse;
+    }
+  }
+  return ret;
+}
+
+
 // determine a collection type is vector, array or map
 int ObArrayUtil::get_mysql_type(const common::ObIArray<common::ObString> &extended_type_info,
                                 obmysql::EMySQLFieldType &type)
@@ -163,32 +195,25 @@ int ObArrayUtil::get_mysql_type(const common::ObIArray<common::ObString> &extend
   int ret = OB_SUCCESS;
   type = obmysql::MYSQL_TYPE_NOT_DEFINED;
   ObArenaAllocator tmp_allocator("OB_ARRAY_UTIL");
-  if (OB_UNLIKELY(extended_type_info.count() != 1)) {
+  ObSqlCollectionInfo *collection_info = nullptr;
+  if (OB_FAIL(get_collection_info(extended_type_info, tmp_allocator, collection_info))) {
+    LOG_WARN("fail to get collection info", K(ret), K(extended_type_info.count()));
+  } else if (OB_ISNULL(collection_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid extended type info for collection type", K(ret), K(extended_type_info.count()));
+    LOG_WARN("collection info or meta is null", K(ret), KP(collection_info));
   } else {
-    ObSqlCollectionInfo type_info_parse(tmp_allocator);
-    ObString collection_type_name = extended_type_info.at(0);
-    type_info_parse.set_name(collection_type_name);
-    if (OB_FAIL(type_info_parse.parse_type_info())) {
-      LOG_WARN("fail to parse type info", K(ret), K(collection_type_name));
-    } else if (OB_ISNULL(type_info_parse.collection_meta_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("collection meta is null", K(ret), K(collection_type_name));
+    uint16_t detail_type = collection_info->collection_meta_->type_id_;
+    if (detail_type == OB_ARRAY_TYPE) {
+      type = obmysql::MYSQL_TYPE_OB_ARRAY;
+    } else if (detail_type == OB_VECTOR_TYPE) {
+      type = obmysql::MYSQL_TYPE_OB_VECTOR;
+    } else if (detail_type == OB_MAP_TYPE) {
+      type = obmysql::MYSQL_TYPE_OB_MAP;
+    } else if (detail_type == OB_SPARSE_VECTOR_TYPE) {
+      type = obmysql::MYSQL_TYPE_OB_SPARSE_VECTOR;
     } else {
-      uint16_t detail_type = type_info_parse.collection_meta_->type_id_;
-      if (detail_type == OB_ARRAY_TYPE) {
-        type = obmysql::MYSQL_TYPE_OB_ARRAY;
-      } else if (detail_type == OB_VECTOR_TYPE) {
-        type = obmysql::MYSQL_TYPE_OB_VECTOR;
-      } else if (detail_type == OB_MAP_TYPE) {
-        type = obmysql::MYSQL_TYPE_OB_MAP;
-      } else if (detail_type == OB_SPARSE_VECTOR_TYPE) {
-        type = obmysql::MYSQL_TYPE_OB_SPARSE_VECTOR;
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        OB_LOG(WARN, "unexpected collection type", K(ret), K(detail_type));
-      }
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "unexpected collection type", K(ret), K(detail_type));
     }
   }
   tmp_allocator.reset();

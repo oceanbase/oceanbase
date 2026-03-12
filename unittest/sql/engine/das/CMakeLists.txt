@@ -1,0 +1,2 @@
+sql_unittest(test_das_boolean_query)
+sql_unittest(test_das_fusion_iter)

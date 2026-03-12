@@ -519,7 +519,8 @@ public:
 
   static bool can_be_extract_range(ObItemType cmp_type, const ObRawExprResType &col_type,
                             const ObObjMeta &calc_meta, common::ObObjType data_type,
-                            bool &always_true);
+                            bool &always_true,
+                            bool is_search_index = false);
   static bool can_domain_be_extract_range(const ObDomainOpType &op_type, const ObRawExprResType &col_type,
                                           const ObObjMeta &res_type, common::ObObjType data_type,
                                           bool &always_true);

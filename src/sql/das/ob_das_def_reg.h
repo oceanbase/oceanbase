@@ -173,6 +173,55 @@ REGISTER_DAS_ATTACH_OP(DAS_OP_IR_ES_MATCH, ObDASIREsMatchCtDef, ObDASIREsMatchRt
 struct ObDASIREsScoreCtDef;
 struct ObDASIREsScoreRtDef;
 REGISTER_DAS_ATTACH_OP(DAS_OP_IR_ES_SCORE, ObDASIREsScoreCtDef, ObDASIREsScoreRtDef);
+
+struct ObDASScalarCtDef;
+struct ObDASScalarRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_SCALAR_QUERY, ObDASScalarCtDef, ObDASScalarRtDef);
+
+struct ObDASScalarScanCtDef;
+struct ObDASScalarScanRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_SCALAR_SCAN_QUERY, ObDASScalarScanCtDef, ObDASScalarScanRtDef);
+
+struct ObDASFusionCtDef;
+struct ObDASFusionRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_FUSION_QUERY, ObDASFusionCtDef, ObDASFusionRtDef);
+
+struct ObDASBooleanQueryCtDef;
+struct ObDASBooleanQueryRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_BOOLEAN_QUERY, ObDASBooleanQueryCtDef, ObDASBooleanQueryRtDef);
+
+struct ObDASMatchCtDef;
+struct ObDASMatchRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_MATCH_QUERY, ObDASMatchCtDef, ObDASMatchRtDef);
+
+struct ObDASMatchPhraseCtDef;
+struct ObDASMatchPhraseRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_MATCH_PHRASE_QUERY, ObDASMatchPhraseCtDef, ObDASMatchPhraseRtDef);
+
+struct ObDASMultiMatchCtDef;
+struct ObDASMultiMatchRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_MULTI_MATCH_QUERY, ObDASMultiMatchCtDef, ObDASMultiMatchRtDef);
+
+struct ObDASQueryStringCtDef;
+struct ObDASQueryStringRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_QUERY_STRING_QUERY, ObDASQueryStringCtDef, ObDASQueryStringRtDef);
+
+struct ObDASVecIndexScanCtDef;
+struct ObDASVecIndexScanRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_VEC_INDEX_SCAN, ObDASVecIndexScanCtDef, ObDASVecIndexScanRtDef);
+
+struct ObDASVecIndexHNSWScanCtDef;
+struct ObDASVecIndexHNSWScanRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_VEC_INDEX_HNSW_SCAN, ObDASVecIndexHNSWScanCtDef, ObDASVecIndexHNSWScanRtDef);
+
+struct ObDASVecIndexDriverCtDef;
+struct ObDASVecIndexDriverRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_VEC_INDEX_DRIVER, ObDASVecIndexDriverCtDef, ObDASVecIndexDriverRtDef);
+
+struct ObDASTopKCollectCtDef;
+struct ObDASTopKCollectRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_TOPK_COLLECT, ObDASTopKCollectCtDef, ObDASTopKCollectRtDef);
+
 #undef REGISTER_DAS_ATTACH_OP
 }  // namespace sql
 }  // namespace oceanbase

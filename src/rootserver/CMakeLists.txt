@@ -177,6 +177,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_sys_ddl_util.cpp
   ddl_task/ob_vec_ivf_index_build_task.cpp
   ddl_task/ob_drop_lob_task.cpp
+  ddl_task/ob_drop_search_index_task.cpp
 )
 
 ob_set_subtarget(ob_rootserver parallel_ddl

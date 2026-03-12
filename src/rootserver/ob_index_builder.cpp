@@ -26,6 +26,8 @@
 #include "rootserver/ob_create_index_on_empty_table_helper.h"
 #include "share/schema/ob_schema_struct_fts.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
+#include "share/search_index/ob_search_index_builder_util.h"
+#include "share/schema/ob_schema_struct_fts.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
@@ -349,6 +351,10 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("drop hybrid vector index before version 4.4.1 is not supported", KR(ret), K(compat_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop hybrid vector index before version 4.4.1 is");
+    } else if (index_table_schema->is_search_index() && compat_version < DATA_VERSION_4_5_1_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("drop search index before version 4.5.1 is not supported", KR(ret), K(compat_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop search index before version 4.5.1 is");
     } else if (arg.is_add_to_scheduler_ && !index_table_schema->is_oracle_tmp_table_v2_index_table()) {
       ObDDLOperator ddl_operator(ddl_service_.get_schema_service(), ddl_service_.get_sql_proxy());
       ObDDLSQLTransaction trans(&ddl_service_.get_schema_service());
@@ -357,13 +363,14 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
       ObDDLTaskRecord task_record;
       bool has_other_domain_index = false;
       const bool is_vec_spiv_index = index_table_schema->is_vec_spiv_index_aux();
-      const bool is_vec_or_fts_or_multivalue_index = index_table_schema->is_fts_or_multivalue_index() || index_table_schema->is_vec_index();
+      const bool is_search_or_vec_or_fts_or_multivalue_index = index_table_schema->is_fts_or_multivalue_index() || index_table_schema->is_vec_index() || index_table_schema->is_search_index();
       const bool is_inner_and_fts_index = arg.is_inner_ && !arg.is_parent_task_dropping_fts_index_ && index_table_schema->is_fts_index();
       const bool need_check_fts_index_conflict = !arg.is_inner_ && (index_table_schema->is_fts_or_multivalue_index() || is_vec_spiv_index);
       const bool is_inner_and_multivalue_index = arg.is_inner_ && index_table_schema->is_multivalue_index();
       const bool is_inner_and_vec_index = arg.is_inner_ && !arg.is_vec_inner_drop_ && index_table_schema->is_vec_index();
+      const bool is_inner_and_search_index = arg.is_inner_ && index_table_schema->is_search_index();
       const bool need_check_vec_index_conflict = !arg.is_inner_ && index_table_schema->is_vec_index();
-      const bool is_inner_and_fts_or_mulvalue_or_vector_index = is_inner_and_fts_index || is_inner_and_multivalue_index || is_inner_and_vec_index;
+      const bool is_inner_and_search_or_fts_or_mulvalue_or_vector_index = is_inner_and_fts_index || is_inner_and_multivalue_index || is_inner_and_vec_index || is_inner_and_search_index;
       bool has_index_task = false;
       typedef common::ObSEArray<share::schema::ObTableSchema, 4> TableSchemaArray;
       SMART_VAR(TableSchemaArray, new_index_schemas) {
@@ -422,6 +429,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
         uint64_t spiv_aux_index_schema_count = 3;  // default value
         uint64_t hnsw_aux_index_schema_count = 5;  // default value
         uint64_t hybrid_hnsw_aux_index_schema_count = 6;  // default value
+        uint64_t search_index_schema_count = 2;
         uint64_t docid_col_id = OB_INVALID_ID;
         if (OB_FAIL(ret)) {
         } else if (!arg.is_inner_ && (index_table_schema->is_fts_index_aux()
@@ -455,7 +463,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
         if (OB_FAIL(ret) || has_other_domain_index) {
         } else if (need_rename_index && OB_FAIL(ddl_service_.rename_dropping_index_name(
                                                       *index_table_schema,
-                                                      is_inner_and_fts_or_mulvalue_or_vector_index,
+                                                      is_inner_and_search_or_fts_or_mulvalue_or_vector_index,
                                                       arg,
                                                       schema_guard,
                                                       ddl_operator,
@@ -464,12 +472,12 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
           LOG_WARN("rename index name failed", K(ret));
         } else if (!need_rename_index && OB_FAIL(new_index_schemas.push_back(*index_table_schema))) {
           LOG_WARN("failed to assign index table schema to new index schema", KR(ret));
-        } else if (is_inner_and_fts_or_mulvalue_or_vector_index && 0 == new_index_schemas.count()) {
+        } else if (is_inner_and_search_or_fts_or_mulvalue_or_vector_index && 0 == new_index_schemas.count()) {
           if (OB_FAIL(new_index_schemas.push_back(*index_table_schema))) {
             LOG_WARN("fail to push back index schema", K(ret), KPC(index_table_schema));
           }
-        } else if (OB_UNLIKELY(!is_vec_or_fts_or_multivalue_index && new_index_schemas.count() != 1)
-                || OB_UNLIKELY(is_inner_and_fts_or_mulvalue_or_vector_index && new_index_schemas.count() != 1)
+        } else if (OB_UNLIKELY(!is_search_or_vec_or_fts_or_multivalue_index && new_index_schemas.count() != 1)
+                || OB_UNLIKELY(is_inner_and_search_or_fts_or_mulvalue_or_vector_index && new_index_schemas.count() != 1)
                 || OB_UNLIKELY(!arg.is_inner_ && index_table_schema->is_hybrid_vec_index_log_type() && new_index_schemas.count() != hybrid_hnsw_aux_index_schema_count) // four or six index assistant table of hybrid vec index
                 || OB_UNLIKELY(!arg.is_inner_ && index_table_schema->is_vec_ivfflat_centroid_index() && new_index_schemas.count() != 3)
                 || OB_UNLIKELY(!arg.is_inner_ && index_table_schema->is_vec_delta_buffer_type() && new_index_schemas.count() != hnsw_aux_index_schema_count)
@@ -477,10 +485,11 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
                 || OB_UNLIKELY(!arg.is_inner_ && index_table_schema->is_vec_ivfpq_centroid_index() && new_index_schemas.count() != 4)
                 || OB_UNLIKELY(!arg.is_inner_ && index_table_schema->is_fts_index_aux() && new_index_schemas.count() != fts_aux_index_schema_count)
                 || OB_UNLIKELY(!arg.is_inner_ && index_table_schema->is_multivalue_index_aux() && new_index_schemas.count() != multivalue_aux_index_schema_count)
+                || OB_UNLIKELY(!arg.is_inner_ && index_table_schema->is_search_def_index() && new_index_schemas.count() != search_index_schema_count)
                 || OB_UNLIKELY(!arg.is_inner_ && index_table_schema->is_vec_spiv_index_aux() && new_index_schemas.count() != spiv_aux_index_schema_count)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, invalid new index schema count", K(ret),
-              "is vec or fts or multivalue index", is_vec_or_fts_or_multivalue_index,
+              "is vec or fts or multivalue index", is_search_or_vec_or_fts_or_multivalue_index,
               "is inner", arg.is_inner_,
               "count", new_index_schemas.count(),
               "is vec index", index_table_schema->is_vec_delta_buffer_type(),
@@ -748,10 +757,11 @@ int ObIndexBuilder::submit_build_index_task(
                              &create_index_arg);
   param.tenant_data_version_ = tenant_data_version;
   param.new_snapshot_version_ = new_fetched_snapshot;
+  const bool is_search_index = share::schema::is_search_index(create_index_arg.index_type_);
   const bool is_fts_or_multivalue = share::schema::is_fts_or_multivalue_index(create_index_arg.index_type_);
   const bool is_vec_index = share::schema::is_vec_index(create_index_arg.index_type_);
   if (tenant_data_version >= DATA_VERSION_4_5_1_0) {
-    param.ddl_need_retry_at_executor_ = (is_vec_index || is_fts_or_multivalue) && !create_index_arg.is_offline_or_restore();
+    param.ddl_need_retry_at_executor_ = (is_vec_index || is_fts_or_multivalue || is_search_index) && !create_index_arg.is_offline_or_restore();
   } else if (tenant_data_version >= DATA_VERSION_4_4_0_0) {
     param.ddl_need_retry_at_executor_ = is_fts_or_multivalue && !create_index_arg.is_offline_or_restore();
   } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
@@ -782,6 +792,8 @@ int ObIndexBuilder::submit_build_index_task(
       param.type_ = ObDDLType::DDL_CREATE_VEC_IVFPQ_INDEX;
     } else if (share::schema::is_vec_spiv_index(create_index_arg.index_type_)) {
       param.type_ = ObDDLType::DDL_CREATE_VEC_SPIV_INDEX;
+    } else if (share::schema::is_search_index(create_index_arg.index_type_)) {
+      param.type_ = ObDDLType::DDL_CREATE_SEARCH_INDEX;
     }
     if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
       LOG_WARN("submit create index ddl task failed", K(ret));
@@ -1117,6 +1129,49 @@ int ObIndexBuilder::recognize_fts_or_multivalue_index_schemas(
   return ret;
 }
 
+int ObIndexBuilder::recognize_search_index_schemas(
+      const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
+      const bool is_parent_task_dropping_search_index,
+      int64_t &index_ith,
+      int64_t &def_index_ith,
+      int64_t &data_index_ith)
+{
+  int ret = OB_SUCCESS;
+  index_ith = 0;
+  def_index_ith = -1;
+  data_index_ith = -1;
+
+  if (OB_UNLIKELY(!is_parent_task_dropping_search_index
+                  && index_schemas.count() < 1
+                  && index_schemas.count() > 2)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(index_schemas));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_schemas.count(); ++i) {
+      if (index_schemas.at(i).is_search_def_index()) {
+        if (OB_UNLIKELY(-1 != def_index_ith)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, there are multiple def search index tables", K(ret), K(index_schemas));
+        } else {
+          def_index_ith = i;
+          index_ith = def_index_ith;
+        }
+      } else if (index_schemas.at(i).is_search_data_index()) {
+        if (OB_UNLIKELY(-1 != data_index_ith)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, there are multiple data search index tables", K(ret), K(index_schemas));
+        } else {
+          data_index_ith = i;
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, unrecognized index table type", K(ret), K(index_schemas));
+      }
+    }
+  }
+  return ret;
+}
+
 // better to make it a static function only used here
 bool ObIndexBuilder::rowkey_doc_index_valid(const bool has_docid_col,
                                             const int64_t aux_rowkey_doc_ith,
@@ -1195,6 +1250,12 @@ bool ObIndexBuilder::is_drop_with_docid_index_task(const obrpc::ObDropIndexArg &
   return is_drop_fts_task || is_drop_multivalue_task || is_drop_vec_spiv_task;
 }
 
+bool ObIndexBuilder::is_drop_search_index_task(const obrpc::ObDropIndexArg &arg, const share::schema::ObTableSchema &index_schema)
+{
+  const bool is_drop_search_task = (!arg.is_inner_ && index_schema.is_search_index()) || arg.is_parent_task_dropping_search_index_;
+  return is_drop_search_task;
+}
+
 int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
                                            const ObTableSchema &data_schema,
                                            const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
@@ -1223,6 +1284,8 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
   int64_t vec_sq_meta_ith = -1;
   int64_t vec_pq_centroid_ith = -1;
   int64_t vec_pq_code_ith = -1;
+  int64_t def_index_ith = -1;
+  int64_t data_index_ith = -1;
 
   const int64_t NORMAL_INDEX_COUNT = 1;
   const int64_t FTS_INDEX_COUNT = 4;
@@ -1236,13 +1299,14 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
   const int64_t VEC_IVFPQ_INDEX_COUNT = 4;
   const int64_t VEC_SPIV_INDEX_COUNT = 3;
   const int64_t VEC_SPIV_INDEX_COUNT_WITHOUT_DOCID = 1;
+  const int64_t SEARCH_INDEX_COUNT = 2;
 
   if (OB_UNLIKELY(index_schemas.count() != NORMAL_INDEX_COUNT &&
                   !arg.is_parent_task_dropping_fts_index_ && (index_schemas.count() != FTS_INDEX_COUNT && index_schemas.count() != FTS_INDEX_COUNT_WITHOUT_DOCID) &&
                   !arg.is_parent_task_dropping_multivalue_index_ && (index_schemas.count() != MULTIVALUE_INDEX_COUNT &&
                                                                      index_schemas.count() != MULTIVALUE_INDEX_COUNT_WITHOUT_DOCID) &&
-                  !arg.is_parent_task_dropping_spiv_index_ && (index_schemas.count() != VEC_SPIV_INDEX_COUNT &&
-                                                                     index_schemas.count() != VEC_SPIV_INDEX_COUNT_WITHOUT_DOCID) &&
+                  !arg.is_parent_task_dropping_spiv_index_ && (index_schemas.count() != SEARCH_INDEX_COUNT) &&
+                  !arg.is_parent_task_dropping_search_index_ && (index_schemas.count() != FTS_INDEX_COUNT && index_schemas.count() != FTS_INDEX_COUNT_WITHOUT_DOCID) &&
                   !arg.is_vec_inner_drop_ && (index_schemas.count() != VEC_HNSW_INDEX_COUNT &&
                                               index_schemas.count() != HYBRID_VEC_HNSW_INDEX_COUNT &&
                                               index_schemas.count() != VEC_IVFFLAT_INDEX_COUNT &&
@@ -1262,6 +1326,10 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
     && OB_FAIL(recognize_vec_ivf_index_schemas(index_schemas, arg.is_vec_inner_drop_, index_ith,
       vec_centroid_ith, vec_cid_vector_ith, vec_rowkey_cid_ith, vec_sq_meta_ith, vec_pq_centroid_ith, vec_pq_code_ith))) {
     LOG_WARN("fail to recognize index and aux table from schema array", K(ret));
+  } else if (index_schemas.at(0).is_search_index()
+    && OB_FAIL(recognize_search_index_schemas(index_schemas, arg.is_parent_task_dropping_search_index_,
+      index_ith, def_index_ith, data_index_ith))) {
+    LOG_WARN("fail to recognize search index from schema array", K(ret));
   } else if (OB_UNLIKELY(index_ith < 0 || index_ith >= index_schemas.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, invalid array index", K(ret), K(index_ith));
@@ -1269,6 +1337,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
     const ObTableSchema &index_schema = index_schemas.at(index_ith);
     bool is_drop_dense_vec_index = is_drop_dense_vec_index_task(arg, index_schema);
     bool is_drop_with_docid_index = is_drop_with_docid_index_task(arg, index_schema);
+    bool is_drop_search_index = is_drop_search_index_task(arg, index_schema);
 
     if (OB_UNLIKELY(!index_schema.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
@@ -1283,7 +1352,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
     } else if (is_drop_with_docid_index && OB_FAIL(check_drop_with_docid_indexs_ith_valid(
                 arg, index_schema, index_schemas.count(), aux_rowkey_doc_ith, aux_doc_rowkey_ith, aux_doc_word_ith))) {
       LOG_WARN("unexpected error, invalid aux table id for with docid index", K(ret));
-    } else if (!is_drop_with_docid_index && !is_drop_dense_vec_index) {
+    } else if (!is_drop_with_docid_index && !is_drop_dense_vec_index && !is_drop_search_index) {
       // this isn't drop fts and isn't vec index task.
       const int64_t parent_task_id = arg.task_id_;
       ObTableLockOwnerID owner_id;
@@ -1402,6 +1471,36 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
         } else {
           LOG_WARN("submit drop vec index ddl task failed", K(ret), K(param));
         }
+      } else if (data_schema.is_user_hidden_table()) {
+        // not lock hidden data table
+      } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                     task_record.task_id_))) {
+        LOG_WARN("fail to get owner id", K(ret), K(task_record.task_id_));
+      } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(data_schema,
+                                                            inc_data_tablet_ids,
+                                                            del_data_tablet_ids,
+                                                            index_schema,
+                                                            owner_id,
+                                                            trans))) {
+        LOG_WARN("failed to lock online ddl lock", K(ret));
+      }
+    } else if (is_drop_search_index) {
+      ObTableLockOwnerID owner_id;
+      ObDDLType ddl_type = ObDDLType::DDL_DROP_SEARCH_INDEX;
+      ObCreateDDLTaskParam param(index_schema.get_tenant_id(),
+                                 ddl_type,
+                                 &index_schema,
+                                 nullptr/*dest_table_schema*/,
+                                 0/*object_id*/,
+                                 index_schema.get_schema_version(),
+                                 0/*parallelism*/,
+                                 arg.consumer_group_id_,
+                                 &allocator,
+                                 &arg);
+      param.def_index_schema_ = (-1 == def_index_ith) ? nullptr : &(index_schemas.at(def_index_ith));
+      param.data_index_schema_ = (-1 == data_index_ith) ? nullptr : &(index_schemas.at(data_index_ith));
+      if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
+        LOG_WARN("fail to create drop fts index task", K(ret), K(param));
       } else if (data_schema.is_user_hidden_table()) {
         // not lock hidden data table
       } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
@@ -1793,7 +1892,8 @@ int ObIndexBuilder::do_create_index(
              || INDEX_TYPE_SPATIAL_LOCAL == arg.index_type_
              || is_fts_index(arg.index_type_)
              || is_multivalue_index(arg.index_type_)
-             || is_vec_index(arg.index_type_)) {
+             || is_vec_index(arg.index_type_)
+             || is_search_index(arg.index_type_)) {
     if (OB_FAIL(do_create_local_index(schema_guard, arg, *table_schema, res))) {
       LOG_WARN("fail to do create local index", K(ret), K(arg));
     }
@@ -1932,6 +2032,16 @@ int ObIndexBuilder::generate_schema(
           LOG_WARN("mysql temp table not support vector index", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create vector index is");
         }
+      } else if (is_search_index(arg.index_type_)) {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(data_schema.get_tenant_id(),
+                                         tenant_data_version))) {
+          LOG_WARN("failed to get tenant data version", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.5.1, search index is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.5.1, search index");
+        }
       }
       if (OB_SUCC(ret)
           && (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
@@ -1998,7 +2108,7 @@ int ObIndexBuilder::generate_schema(
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
           LOG_WARN("index created on udt column is not supported", K(arg.index_type_), K(ret));
         } else if (ob_is_json_tc(data_column->get_data_type())) {
-          if (data_column->is_multivalue_generated_array_column()) {
+          if (data_column->is_multivalue_generated_array_column() || arg.is_search_index()) {
           } else if (!is_oracle_mode && data_column->is_func_idx_column()) {
             ret = OB_ERR_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION;
             LOG_WARN("Cannot create a functional index on an expression that returns a JSON or GEOMETRY.",K(ret));

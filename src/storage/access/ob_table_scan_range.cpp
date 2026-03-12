@@ -70,7 +70,7 @@ do {                                                                            
   is_inited_ = false;
 }
 
-int ObTableScanRange::init(ObTableScanParam &scan_param, const ObTablet &tablet, const bool is_tablet_spliting)
+int ObTableScanRange::init(ObTableScanParam &scan_param, const ObTablet &tablet, const bool is_tablet_spliting, const bool cannot_be_false_range)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -114,7 +114,8 @@ int ObTableScanRange::init(ObTableScanParam &scan_param, const ObTablet &tablet,
         scan_param.is_tablet_spliting_,
         scan_param.key_ranges_,
         scan_param.scan_flag_,
-        datum_utils))) {
+        datum_utils,
+        cannot_be_false_range))) {
       STORAGE_LOG(WARN, "Failed to init ranges", K(ret));
     }
 
@@ -296,7 +297,8 @@ int ObTableScanRange::init_ranges(
     const bool is_tablet_spliting,
     const common::ObIArray<common::ObNewRange> &ranges,
     const common::ObQueryFlag &scan_flag,
-    const blocksstable::ObStorageDatumUtils *datum_utils)
+    const blocksstable::ObStorageDatumUtils *datum_utils,
+    const bool cannot_be_false_range)
 {
   int ret = OB_SUCCESS;
 
@@ -329,7 +331,7 @@ int ObTableScanRange::init_ranges(
         ObDatumRange datum_range;
         const ObNewRange &range = ranges.at(i);
         bool is_false = false;
-        if (OB_FAIL(always_false(range, is_false))) {
+        if (!cannot_be_false_range && OB_FAIL(always_false(range, is_false))) {
           STORAGE_LOG(WARN, "Failed to check range always false", K(ret), K(range));
         } else if (is_false) {
         } else if (OB_FAIL(datum_range.from_range(range, *allocator_, enable_new_false_range_))) {

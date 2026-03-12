@@ -247,7 +247,8 @@ public:
   virtual int compare_rowkey(
       const ObDatumRowkey &rowkey,
       const int64_t index,
-      int32_t &compare_result) override;
+      int32_t &compare_result,
+      const int64_t common_prefix_len = 0) override;
   virtual int compare_rowkey(
       const ObDatumRange &range,
       const int64_t index,

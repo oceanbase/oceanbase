@@ -17,6 +17,7 @@
 #include "sql/engine/dml/ob_dml_service.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
 #include "sql/das/ob_das_dml_vec_iter.h"
+#include "sql/das/ob_das_search_index_utils.h"
 
 namespace oceanbase
 {
@@ -60,7 +61,8 @@ public:
       got_old_row_(false),
       iter_has_built_(false),
       is_main_table_in_fts_ddl_(das_ctdef->is_main_table_in_fts_ddl_),
-      allocator_(alloc)
+      allocator_(alloc),
+      main_ctdef_(das_ctdef)
   {
     batch_size_ = MIN(write_buffer_.get_row_cnt(), DEFAULT_BATCH_SIZE);
   }
@@ -135,6 +137,7 @@ private:
   bool is_main_table_in_fts_ddl_;
   common::ObIAllocator &allocator_;
   int64_t batch_size_;
+  const ObDASDMLBaseCtDef *main_ctdef_;
 };
 
 int ObDASUpdIterator::get_next_row(blocksstable::ObDatumRow *&row)
@@ -307,8 +310,9 @@ int ObDASUpdIterator::get_next_domain_index_row(ObDatumRow *&row)
   }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(domain_iter_)){
+      bool is_search_index = das_ctdef_->table_param_.get_data_table().is_search_index();
       const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
-      ObDomainDMLParam param(allocator_, &cur_proj, result_iter_, das_ctdef_, nullptr/*main_ctdef*/);
+      ObDomainDMLParam param(allocator_, &cur_proj, result_iter_, das_ctdef_, is_search_index ? main_ctdef_ : nullptr);
       if (das_ctdef_->table_param_.get_data_table().is_fts_index() && !got_old_row_) {
         param.mode_ = is_main_table_in_fts_ddl_ ? ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT : ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN;
         param.ft_doc_word_info_ = ft_doc_word_info_;
@@ -354,8 +358,9 @@ int ObDASUpdIterator::get_next_domain_index_rows(ObDatumRow *&rows, int64_t &row
   }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(domain_iter_)) {
+      bool is_search_index = das_ctdef_->table_param_.get_data_table().is_search_index();
       const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
-      ObDomainDMLParam param(allocator_, &cur_proj, result_iter_, das_ctdef_, nullptr/*main_ctdef*/);
+      ObDomainDMLParam param(allocator_, &cur_proj, result_iter_, das_ctdef_, is_search_index ? main_ctdef_ : nullptr);
       if (das_ctdef_->table_param_.get_data_table().is_fts_index() && !got_old_row_) {
         param.mode_ = is_main_table_in_fts_ddl_ ? ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT : ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN;
         param.ft_doc_word_info_ = ft_doc_word_info_;

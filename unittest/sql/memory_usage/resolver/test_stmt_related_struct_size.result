@@ -1,8 +1,8 @@
 | class | sizeof(class) |
 | --- | --- |
-| TableItem | 512 |
+| TableItem | 520 |
 | ObJtColBaseInfo | 144 |
-| ObJsonTableDef | 128 |
+| ObJsonTableDef | 144 |
 | ObUnpivotItem | 128 |
 | TransposeDef | 32 |
 | ObValuesTableDef | 248 |

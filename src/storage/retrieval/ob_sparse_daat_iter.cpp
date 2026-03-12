@@ -109,9 +109,6 @@ int ObSRDaaTIterImpl::init(
       set_datum_func_ = ObISparseRetrievalMergeIter::set_datum_shallow;
     }
     if (OB_UNLIKELY(dim_iters.count() == 0)) {
-    } else if (OB_NOT_NULL(iter_param_->dim_weights_) && dim_iters.count() != iter_param_->dim_weights_->count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected dim iters count", K(ret), K(dim_iters_->count()), KP(iter_param_->dim_weights_));
     } else if (FALSE_IT(iter_domain_ids_.set_allocator(iter_allocator_))) {
     } else if (OB_FAIL(iter_domain_ids_.init(dim_iters.count()))) {
       LOG_WARN("failed to init iter domain ids array", K(ret));
@@ -191,25 +188,33 @@ void ObSRDaaTIterImpl::reuse(const bool switch_tablet)
   output_row_cnt_ = 0;
 }
 
-  int ObSRDaaTIterImpl::get_query_max_score(double &score)
-  {
-    int ret = OB_SUCCESS;
-    score = 0.0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < dim_iters_->count(); ++i) {
-      ObISRDaaTDimIter *dim_iter = dim_iters_->at(i);
-      double dim_score = 0.0;
-      if (OB_ISNULL(dim_iter) || OB_ISNULL(iter_param_->dim_weights_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null dimension iter", K(ret), K(i));
-      } else if (OB_FAIL(dim_iter->get_dim_max_score(dim_score))) {
-        LOG_WARN("failed to get dim max score and boost", K(ret));
-      } else {
-        score += dim_score * iter_param_->field_boost_ * iter_param_->dim_weights_->at(i);
-      }
+int ObSRDaaTIterImpl::get_query_max_score(double &score)
+{
+  int ret = OB_SUCCESS;
+  score = 0.0;
+  bool got_valid_id = false;
+  relevance_collector_->reuse();
+  for (int64_t i = 0; OB_SUCC(ret) && i < dim_iters_->count(); ++i) {
+    ObISRDaaTDimIter *dim_iter = dim_iters_->at(i);
+    double dim_score = 0.0;
+    if (OB_ISNULL(dim_iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null dimension iter", K(ret), K(i));
+    } else if (OB_FAIL(dim_iter->get_dim_max_score(dim_score))) {
+      LOG_WARN("failed to get dim max score and boost", K(ret));
+    } else if (OB_FAIL(relevance_collector_->collect_one_dim(i, dim_score))) {
+      LOG_WARN("failed to collect one dimension", K(ret));
     }
-
-    return ret;
   }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(relevance_collector_->get_result(score, got_valid_id))) {
+    LOG_WARN("failed to get result", K(ret));
+  } else if (!got_valid_id) {
+    ret = OB_ITER_END;
+  }
+
+  return ret;
+}
 
 int ObSRDaaTIterImpl::get_next_row()
 {
@@ -276,16 +281,17 @@ int ObSRDaaTIterImpl::pre_process()
 int ObSRDaaTIterImpl::do_one_merge_round(int64_t &count)
 {
   int ret = OB_SUCCESS;
-  bool need_project = true;
+  bool need_project = false;
   double relevance = 0.0;
   const ObDatum *id_datum = nullptr;
+  bool is_top_k = false;
   if (OB_FAIL(fill_merge_heap())) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to fill merge heap", K(ret));
     }
-  } else if (OB_FAIL(collect_dims_by_id(id_datum, relevance, need_project))) {
+  } else if (OB_FAIL(collect_dims_by_id(false, id_datum, relevance, need_project))) {
     LOG_WARN("failed to merge dimensions", K(ret));
-  } else if (need_project && OB_FAIL(process_collected_row(*id_datum, relevance))) {
+  } else if (need_project && OB_FAIL(process_collected_row(*id_datum, relevance, is_top_k))) {
     LOG_WARN("failed to process collected row", K(ret));
   } else if (need_project && OB_FAIL(filter_on_demand(count, relevance, need_project))) {
     LOG_WARN("failed to process filter", K(ret));
@@ -315,7 +321,6 @@ int ObSRDaaTIterImpl::fill_merge_heap()
       }
     } else if (OB_FAIL(dim_iter->get_curr_score(item.relevance_))) {
       LOG_WARN("fail to get current score", K(ret));
-    } else if (OB_NOT_NULL(iter_param_->dim_weights_) && FALSE_IT(item.relevance_ = item.relevance_ * iter_param_->field_boost_ * iter_param_->dim_weights_->at(iter_idx))) {
     } else if (OB_FAIL(dim_iter->get_curr_id(iter_domain_ids_[iter_idx]))) {
       LOG_WARN("fail to get current doc id", K(ret));
     } else if (FALSE_IT(item.iter_idx_ = iter_idx)) {
@@ -334,10 +339,23 @@ int ObSRDaaTIterImpl::fill_merge_heap()
   } else {
     next_round_cnt_ = 0;
   }
+
+  if (OB_SUCC(ret) && iter_param_->need_set_score_norm_) {
+    double max_score = 0.0;
+    if (OB_FAIL(get_query_max_score(max_score))) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("failed to get query max score", K(ret));
+      }
+    } else if (OB_FAIL(relevance_collector_->set_norm(max_score))) {
+      LOG_WARN("failed to set norm", K(ret));
+    } else {
+      iter_param_->need_set_score_norm_ = false;
+    }
+  }
   return ret;
 }
 
-int ObSRDaaTIterImpl::collect_dims_by_id(const ObDatum *&id_datum, double &relevance, bool &got_valid_id)
+int ObSRDaaTIterImpl::collect_dims_by_id(const bool is_partial, const ObDatum *&id_datum, double &relevance, bool &got_valid_id)
 {
   int ret = OB_SUCCESS;
 
@@ -345,7 +363,6 @@ int ObSRDaaTIterImpl::collect_dims_by_id(const ObDatum *&id_datum, double &relev
   bool curr_doc_end = false;
   int64_t iter_idx = 0;
   relevance = 0.0;
-  got_valid_id = false;
   relevance_collector_->reuse();
 
   while (OB_SUCC(ret) && !merge_heap_->empty() && !curr_doc_end) {
@@ -370,7 +387,9 @@ int ObSRDaaTIterImpl::collect_dims_by_id(const ObDatum *&id_datum, double &relev
     if (OB_ISNULL(id_datum)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null id datum", K(ret));
-    } else if (OB_FAIL(relevance_collector_->get_result(relevance, got_valid_id))) {
+    } else if (is_partial && OB_FAIL(relevance_collector_->get_partial_result(relevance))) {
+      LOG_WARN("failed to get result", K(ret));
+    } else if (!is_partial && OB_FAIL(relevance_collector_->get_result(relevance, got_valid_id))) {
       LOG_WARN("failed to get result", K(ret));
     }
   }
@@ -378,7 +397,7 @@ int ObSRDaaTIterImpl::collect_dims_by_id(const ObDatum *&id_datum, double &relev
   return ret;
 }
 
-int ObSRDaaTIterImpl::process_collected_row(const ObDatum &id_datum, const double relevance)
+int ObSRDaaTIterImpl::process_collected_row(const ObDatum &id_datum, const double relevance, bool &is_top_k)
 {
   return OB_SUCCESS;
 }
@@ -633,7 +652,7 @@ int ObSRBlockMaxTopKIterImpl::preset_top_k_threshold(const double threshold)
   return ret;
 }
 
-int ObSRBlockMaxTopKIterImpl::process_collected_row(const ObDatum &id_datum, const double relevance)
+int ObSRBlockMaxTopKIterImpl::process_collected_row(const ObDatum &id_datum, const double relevance, bool &is_top_k)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(top_k_heap_.count() > top_k_count_)) {
@@ -656,6 +675,8 @@ int ObSRBlockMaxTopKIterImpl::process_collected_row(const ObDatum &id_datum, con
       LOG_WARN("failed to pop top k heap", K(ret));
     } else if (OB_FAIL(top_k_heap_.push(TopKItem(relevance, cache_idx)))) {
       LOG_WARN("failed to push top k item", K(ret));
+    } else {
+      is_top_k = true;
     }
   }
   return ret;
@@ -693,17 +714,19 @@ int ObSRBlockMaxTopKIterImpl::build_top_k_heap()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected empty top k heap", K(ret));
   } else {
-    bool need_project = true;
+    bool need_project = false;
     double relevance = 0.0;
     const ObDatum *id_datum = nullptr;
+    bool is_top_k = false;
     while (OB_SUCC(ret) && top_k_heap_.count() < top_k_count_) {
+      need_project = false;
       if (OB_FAIL(fill_merge_heap())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("failed to fill merge heap", K(ret));
         }
-      } else if (OB_FAIL(collect_dims_by_id(id_datum, relevance, need_project))) {
+      } else if (OB_FAIL(collect_dims_by_id(false, id_datum, relevance, need_project))) {
         LOG_WARN("failed to collect dims by id", K(ret));
-      } else if (need_project && OB_FAIL(process_collected_row(*id_datum, relevance))) {
+      } else if (need_project && OB_FAIL(process_collected_row(*id_datum, relevance, is_top_k))) {
         LOG_WARN("failed to process collected row", K(ret));
       }
     }

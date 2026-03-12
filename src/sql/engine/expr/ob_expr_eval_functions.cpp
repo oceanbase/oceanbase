@@ -488,6 +488,7 @@
 #include "ob_expr_is_nan.h"
 #include "ob_expr_to_days.h"
 #include "ob_expr_md5_concat_ws.h"
+#include "ob_expr_search_index_inner.h"
 #include "ob_expr_pos_list.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_load_file.h"
 #include "ob_expr_collation.h"
@@ -1492,8 +1493,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRandCanonical::calc_random_expr_canonical            /* 890 */
   ObExprLoadFile::eval_load_file,                                     /* 891 */
   NULL, // ObExprAIParseDocument::eval_ai_parse_document              /* 892 */
-  NULL, // ObExprSearchIndexInnerType::calc_search_index_inner_path   /* 893 */
-  NULL, // ObExprSearchIndexInnerValue::calc_search_index_inner_value /* 894 */
+  ObExprSearchIndexInnerPath::calc_search_index_inner_path,           /* 893 */
+  ObExprSearchIndexInnerValue::calc_search_index_inner_value,         /* 894 */
   NULL, // ObExprToTypeName::eval_to_type_name,                       /* 895 */
   NULL, // ObExprToFloat64OrNull::eval_to_float64_or_null,            /* 896 */
   NULL, // ObExprNewTime::eval_new_time,                              /* 897 */

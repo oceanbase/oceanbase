@@ -120,6 +120,10 @@ public :
                                               const ObCollectionTypeBase *collection_meta,
                                               common::ObIAllocator &allocator,
                                               ObString &res_str);
+  // parse extended_type_info to ObSqlCollectionInfo allocated from the given allocator.
+  static int get_collection_info(const common::ObIArray<common::ObString> &extended_type_info,
+                                 common::ObIAllocator &allocator,
+                                 ObSqlCollectionInfo *&collection_info);
   static int get_mysql_type(const common::ObIArray<common::ObString> &extended_type_info,
                             obmysql::EMySQLFieldType &type);
 

@@ -29,7 +29,7 @@ namespace sql
 class ObFTIndexRowCache final
 {
 public:
-static const int64_t ALL_EXPR_COUNT = 4;
+static const int64_t ALL_EXPR_COUNT = 5;
 
 static const int64_t FTS_INDEX_COL_CNT = 5;
 static const int64_t FTS_DOC_WORD_COL_CNT = 5;
@@ -127,7 +127,7 @@ private:
                      const char *fulltext,
                      const int64_t fulltext_len);
 
-  int reuse_ft_token_map(const int64_t ft_token_bkt_cnt);
+  int create_ft_token_map(const int64_t ft_token_bkt_cnt);
 
   /**
    * @brief estimate the average number of characters per token

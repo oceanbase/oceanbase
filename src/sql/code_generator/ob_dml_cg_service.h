@@ -254,6 +254,19 @@ private:
                                 IntFixedArray &row_projector);
   int set_embedded_vec_ref_flag(const ObIArray<ObRawExpr*> &cur_row,
                                 ObDASDMLBaseCtDef &das_ctdef);
+  template<typename OldExprType, typename NewExprType>
+  int generate_search_index_das_projector(const common::ObIArray<uint64_t> &dml_column_ids,
+                                          const common::ObIArray<OldExprType*> &old_row,
+                                          const common::ObIArray<NewExprType*> &new_row,
+                                          const common::ObIArray<ObRawExpr*> &full_row,
+                                          ObDASDMLBaseCtDef &das_ctdef);
+  template<typename ExprType>
+  int add_search_index_doc_id_projector(const ObIArray<ExprType*> &cur_row,
+                                        const ObIArray<ObRawExpr*> &full_row,
+                                        const ObIArray<uint64_t> &dml_column_ids,
+                                        uint32_t proj_idx,
+                                        ObDASDMLBaseCtDef &das_ctdef,
+                                        IntFixedArray &row_projector);
   int fill_multivalue_extra_info_on_table_param(
                             share::schema::ObSchemaGetterGuard *guard,
                             const ObTableSchema *index_schema,
@@ -468,6 +481,12 @@ private:
                                      const uint64_t table_id,
                                      const IndexDMLInfo &index_dml_info,
                                      ObDASDMLBaseCtDef &das_dml_ctdef);
+  int fill_search_index_extra_info_on_table_param(share::schema::ObSchemaGetterGuard *guard,
+                                                  const share::schema::ObTableSchema *index_schema,
+                                                  uint64_t tenant_id,
+                                                  ObDASDMLBaseCtDef &das_dml_ctdef);
+  int generate_search_index_updated_column_ids(const ObDASDMLBaseCtDef &das_ctdef,
+                                               common::ObIArray<uint64_t> &updated_column_ids);
 private:
   int need_fire_update_event(const ObTableSchema &table_schema,
                             const ObString &update_events,

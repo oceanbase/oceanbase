@@ -412,6 +412,11 @@ int ObDASLocalLookupIter::init_rowkey_exprs_for_compat()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ir_ctdef and vec_idx_ctdef shouldn't be null at the same time", K(ret));
     }
+  } else if (ObDASOpType::DAS_OP_FUSION_QUERY == index_ctdef_->op_type_) {
+    const ObDASFusionCtDef *fusion_ctdef = static_cast<const ObDASFusionCtDef *>(index_ctdef_);
+    if (OB_FAIL(rowkey_exprs_.assign(fusion_ctdef->rowid_exprs_))) {
+      LOG_WARN("failed to assign rowkey exprs", K(ret));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected compatible das scan op type", K(ret), K(index_ctdef_->op_type_));

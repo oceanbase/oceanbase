@@ -51,7 +51,7 @@ struct ObJsonBaseUnique {
   }
 };
 
-bool ObIJsonBase::is_json_number(ObJsonNodeType json_type) const
+bool ObIJsonBase::is_json_number_type(ObJsonNodeType json_type)
 {
   bool ret_bool = false;
   switch (json_type) {
@@ -72,6 +72,11 @@ bool ObIJsonBase::is_json_number(ObJsonNodeType json_type) const
     }
   }
   return ret_bool;
+}
+
+bool ObIJsonBase::is_json_number(ObJsonNodeType json_type) const
+{
+  return is_json_number_type(json_type);
 }
 
 bool ObIJsonBase::is_json_scalar(ObJsonNodeType json_type) const
@@ -4775,7 +4780,8 @@ int ObIJsonBase::compare(const ObIJsonBase &other, int &res, bool is_path) const
               LOG_WARN("fail to compare json string", K(ret));
             }
           } else {
-            res = str_a.compare(str_b);
+            int raw_cmp = str_a.compare(str_b);
+            res = (raw_cmp < 0) ? -1 : ((raw_cmp > 0) ? 1 : 0);
           }
           break;
         }

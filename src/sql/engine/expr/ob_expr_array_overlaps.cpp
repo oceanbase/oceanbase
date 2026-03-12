@@ -79,15 +79,36 @@ int ObExprArrayOverlaps::calc_result_type2(ObExprResType &type,
   } else if (type1.get_subschema_id() == type2.get_subschema_id()) {
     // do nothing
   } else {
-    ObExprResType coll_calc_type;
-    if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
-      LOG_WARN("failed to check array compatibilty", K(ret));
+    // Check if both arrays have varchar elements with only length difference
+    // In this case, no cast is needed because array comparison uses memcmp
+    uint32_t depth1 = 0, depth2 = 0;
+    bool is_vec1 = false, is_vec2 = false;
+    ObDataType elem_type1, elem_type2;
+    bool skip_cast = false;
+    if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, type1.get_subschema_id(), elem_type1, depth1, is_vec1))) {
+      LOG_WARN("failed to get array element type", K(ret));
+    } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, type2.get_subschema_id(), elem_type2, depth2, is_vec2))) {
+      LOG_WARN("failed to get array element type", K(ret));
+    } else if (depth1 == depth2 && !is_vec1 && !is_vec2 &&
+               ob_is_string_tc(elem_type1.get_obj_type()) &&
+               elem_type1.get_obj_type() == elem_type2.get_obj_type() &&
+               elem_type1.get_collation_type() == elem_type2.get_collation_type()) {
+      // Both are varchar arrays with same collation, only length differs - no cast needed
+      skip_cast = true;
+    }
+    if (OB_FAIL(ret) || skip_cast) {
+      // do nothing
     } else {
-      if (type1.get_subschema_id() != coll_calc_type.get_subschema_id()) {
-        type1.set_calc_meta(coll_calc_type);
-      }
-      if (type2.get_subschema_id() != coll_calc_type.get_subschema_id()) {
-        type2.set_calc_meta(coll_calc_type);
+      ObExprResType coll_calc_type;
+      if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
+        LOG_WARN("failed to check array compatibilty", K(ret));
+      } else {
+        if (type1.get_subschema_id() != coll_calc_type.get_subschema_id()) {
+          type1.set_calc_meta(coll_calc_type);
+        }
+        if (type2.get_subschema_id() != coll_calc_type.get_subschema_id()) {
+          type2.set_calc_meta(coll_calc_type);
+        }
       }
     }
   }

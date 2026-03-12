@@ -256,7 +256,7 @@ int ObBlockMaxScoreIterator::advance_to(const ObDatum &domain_id, const bool inc
     max_score_tuple_.min_domain_id_ = &advance_doc_id_.get_datum();
   } else if (FALSE_IT(rowkey_domain_id_datum.shallow_copy_from_datum(advance_doc_id_.get_datum()))) {
   } else if (OB_FAIL(stat_iter_.advance_to(advance_rowkey_, inclusive))) {
-    LOG_WARN("fail to advance to", K(ret), K_(advance_rowkey), K(inclusive));
+    LOG_WARN("fail to advance to", K(ret), K_(advance_rowkey), K(inclusive), K(domain_id), K_(advance_doc_id));
   } else if (OB_FAIL(get_next(next_max_score_tuple))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to get next", K(ret));

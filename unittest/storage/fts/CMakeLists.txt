@@ -1,1 +1,2 @@
 ob_unittest(test_ft_parser)
+ob_unittest(test_phrase_match_counter)

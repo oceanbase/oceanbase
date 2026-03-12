@@ -315,7 +315,9 @@ DEF_TO_STRING(ObTableScanParam)
        K_(auto_split_filter_type),
        K_(is_tablet_spliting),
        K_(need_update_tablet_param),
-       KPC_(mds_collector));
+       KPC_(mds_collector),
+       K_(est_row_count_param),
+       K_(range_prefix_in_advance_scan));
   J_OBJ_END();
   return pos;
 }

@@ -35,13 +35,15 @@ public:
       ReaderType *reader,
       const char *data_begin,
       const int32_t *index_data,
-      const ObStorageDatumUtils *datum_utils)
+      const ObStorageDatumUtils *datum_utils,
+      const int64_t common_prefix_len = 0)
       : ret_(ret),
       equal_(equal),
       reader_(reader),
       data_begin_(data_begin),
       index_data_(index_data),
-      datum_utils_(datum_utils) {}
+      datum_utils_(datum_utils),
+      common_prefix_len_(common_prefix_len) {}
   ~PreciseCompare() {}
   inline bool operator() (const int64_t row_idx, const ObDatumRowkey &rowkey)
   {
@@ -64,7 +66,8 @@ private:
                 *datum_utils_,
                 data_begin_ + index_data_[row_idx],
                 index_data_[row_idx + 1] - index_data_[row_idx],
-                compare_result))) {
+                compare_result,
+                common_prefix_len_))) {
       LOG_WARN("fail to compare rowkey", K(ret), K(rowkey), KPC_(datum_utils));
     } else {
       bret = lower_bound ? compare_result < 0 : compare_result > 0;
@@ -84,6 +87,7 @@ private:
   const char *data_begin_;
   const int32_t *index_data_;
   const ObStorageDatumUtils *datum_utils_;
+  const int64_t common_prefix_len_;
 };
 
 template<bool EnableNewFlatFormat>
@@ -152,14 +156,16 @@ int ObIMicroBlockFlatReader<EnableNewFlatFormat>::compare_meta_rowkey(
     const ObDatumRowkey &rowkey,
     const ObStorageDatumUtils &datum_utils,
     const int64_t row_idx,
-    int32_t &compare_result)
+    int32_t &compare_result,
+    const int64_t common_prefix_len)
 {
   return flat_row_reader_.compare_meta_rowkey(
       rowkey,
       datum_utils,
       data_begin_ + index_data_[row_idx],
       index_data_[row_idx + 1] - index_data_[row_idx],
-      compare_result);
+      compare_result,
+      common_prefix_len);
 }
 
 template<bool EnableNewFlatFormat>
@@ -170,7 +176,8 @@ int ObIMicroBlockFlatReader<EnableNewFlatFormat>::find_bound_(
     const int64_t end_idx,
     const ObStorageDatumUtils &datum_utils,
     int64_t &row_idx,
-    bool &equal)
+    bool &equal,
+    const int64_t common_prefix_len)
 {
   int ret = OB_SUCCESS;
   equal = false;
@@ -185,7 +192,8 @@ int ObIMicroBlockFlatReader<EnableNewFlatFormat>::find_bound_(
         &flat_row_reader_,
         data_begin_,
         index_data_,
-        &datum_utils);
+        &datum_utils,
+        common_prefix_len);
     ObRowIndexIterator begin_iter(begin_idx);
     ObRowIndexIterator end_iter(end_idx);
     ObRowIndexIterator found_iter;
@@ -428,7 +436,7 @@ int ObMicroBlockGetReader<EnableNewFlatFormat>::locate_rowkey_fast_path(const Ob
         if (OB_UNLIKELY(tmp_row_idx >= row_count_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected row_idx", K(ret), K(tmp_row_idx), K(row_count_), K(rowkey), KPC_(read_info));
-        } else if (OB_FAIL(this->compare_meta_rowkey(rowkey, read_info_->get_datum_utils(), tmp_row_idx, compare_result))) {
+        } else if (OB_FAIL(this->compare_meta_rowkey(rowkey, read_info_->get_datum_utils(), tmp_row_idx, compare_result, 0/**common_prefix_len*/))) {
           LOG_WARN("fail to compare rowkey", K(ret), K(rowkey), KPC_(read_info));
         } else if (0 != compare_result) {
           row_idx = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
@@ -575,7 +583,8 @@ template<bool EnableNewFlatFormat>
 int ObMicroBlockReader<EnableNewFlatFormat>::compare_rowkey(
     const ObDatumRowkey &rowkey,
     const int64_t row_idx,
-    int32_t &compare_result)
+    int32_t &compare_result,
+    const int64_t common_prefix_len)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -584,7 +593,7 @@ int ObMicroBlockReader<EnableNewFlatFormat>::compare_rowkey(
   } else if (OB_UNLIKELY(!rowkey.is_valid() || row_idx < 0 || row_idx >= row_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(rowkey), K(row_idx), K_(row_count));
-  } else if (OB_FAIL(this->compare_meta_rowkey(rowkey, *datum_utils_, row_idx, compare_result))) {
+  } else if (OB_FAIL(this->compare_meta_rowkey(rowkey, *datum_utils_, row_idx, compare_result, common_prefix_len))) {
     LOG_WARN("Failed to compare rowkey", K(ret), K(rowkey), K_(row_count), K(row_idx));
   }
   return ret;
@@ -597,7 +606,8 @@ int ObMicroBlockReader<EnableNewFlatFormat>::find_bound(
                  const int64_t begin_idx,
                  const int64_t end_idx,
                  int64_t &row_idx,
-                 bool &equal)
+                 bool &equal,
+                 const int64_t common_prefix_len)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -614,7 +624,8 @@ int ObMicroBlockReader<EnableNewFlatFormat>::find_bound(
           end_idx,
           *datum_utils_,
           row_idx,
-          equal))) {
+          equal,
+          common_prefix_len))) {
     LOG_WARN("failed to find bound", K(ret), K(lower_bound), K(begin_idx), K_(row_count), KPC_(read_info));
   }
   return ret;
@@ -666,7 +677,7 @@ int ObMicroBlockReader<EnableNewFlatFormat>::find_bound_through_linear_search(
     int32_t cmp_result = 0;
     int64_t idx = begin_idx + 1;
     for (; OB_SUCC(ret) && idx < row_count_; ++idx) {
-      if (OB_FAIL(this->compare_meta_rowkey(rowkey, *datum_utils_, idx, cmp_result))) {
+      if (OB_FAIL(this->compare_meta_rowkey(rowkey, *datum_utils_, idx, cmp_result, 0/**common_prefix_len*/))) {
         LOG_WARN("Failed to compare meta rowkey", K(ret), K(rowkey), K(idx));
       } else if (cmp_result != 0) {
         break;

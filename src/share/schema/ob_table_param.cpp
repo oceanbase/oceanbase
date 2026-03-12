@@ -1763,7 +1763,7 @@ int ObTableParam::convert_fulltext_index_info(const ObTableSchema &table_schema)
 }
 
 int ObTableParam::check_is_safe_filter_with_di(
-    common::ObIArray<sql::ObRawExpr *> &exprs,
+    const common::ObIArray<sql::ObRawExpr *> &exprs,
     sql::ObPushdownFilterNode &pushdown_filters)
 {
   int ret = OB_SUCCESS;

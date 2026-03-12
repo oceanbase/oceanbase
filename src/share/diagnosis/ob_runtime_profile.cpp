@@ -11,6 +11,7 @@
  */
 
 #include "share/diagnosis/ob_runtime_profile.h"
+#include "share/diagnosis/ob_profile_util.h"
 #include "lib/container/ob_array_iterator.h"
 #include "observer/ob_server.h"
 
@@ -350,31 +351,41 @@ int ObOpProfile<MetricType>::get_or_register_child(ObProfileId id, ObOpProfile<M
     }
   }
   if (!found) {
-    char *buf = nullptr;
-    size_t alloc_size = sizeof(ProfileWrap) + sizeof(ObOpProfile<MetricType>);
-    if (OB_ISNULL(buf = (char *)alloc_->alloc(alloc_size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory");
+    if (OB_FAIL(register_child(id, child))) {
+      LOG_WARN("failed to register child", K(ret), K(id));
+    }
+  }
+  return ret;
+}
+
+template<typename MetricType>
+int ObOpProfile<MetricType>::register_child(ObProfileId id, ObOpProfile<MetricType> *&child)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  size_t alloc_size = sizeof(ProfileWrap) + sizeof(ObOpProfile<MetricType>);
+  if (OB_ISNULL(buf = (char *)alloc_->alloc(alloc_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory");
+  } else {
+    MEMSET(buf, 0, alloc_size);
+    ProfileWrap *profile_wrap = reinterpret_cast<ProfileWrap *>(buf);
+    ObOpProfile<MetricType> *child_profile =
+        new (buf + sizeof(ProfileWrap)) ObOpProfile<MetricType>(id, alloc_);
+    profile_wrap->elem_ = child_profile;
+    if (OB_FAIL(child_array_.push_back(child_profile))) {
+      LOG_WARN("failed to push_back child profile");
     } else {
-      MEMSET(buf, 0, alloc_size);
-      ProfileWrap *profile_wrap = reinterpret_cast<ProfileWrap *>(buf);
-      ObOpProfile<MetricType> *child_profile =
-          new (buf + sizeof(ProfileWrap)) ObOpProfile<MetricType>(id, alloc_);
-      profile_wrap->elem_ = child_profile;
-      if (OB_FAIL(child_array_.push_back(child_profile))) {
-        LOG_WARN("failed to push_back child profile");
+      child_profile->parent_ = this;
+      child = child_profile;
+      if (nullptr == ATOMIC_LOAD(&child_head_)) {
+        // first child
+        ATOMIC_STORE_RLX(&child_head_, profile_wrap);
       } else {
-        child_profile->parent_ = this;
-        child = child_profile;
-        if (nullptr == ATOMIC_LOAD(&child_head_)) {
-          // first child
-          ATOMIC_STORE_RLX(&child_head_, profile_wrap);
-        } else {
-          ATOMIC_STORE_RLX(&(child_tail_->next_), profile_wrap);
-        }
-        // tail only access by query thread
-        child_tail_ = profile_wrap;
+        ATOMIC_STORE_RLX(&(child_tail_->next_), profile_wrap);
       }
+      // tail only access by query thread
+      child_tail_ = profile_wrap;
     }
   }
   return ret;
@@ -546,8 +557,12 @@ int convert_persist_profile_to_realtime(const char *persist_profile, const int64
     for (int64_t i = 0; OB_SUCC(ret) && i < profile_cnt; ++i) {
       if (profile_head[i].parent_idx_ != -1 && profile_head[i].parent_idx_ < profile_cnt
           && OB_NOT_NULL(profiles_array[profile_head[i].parent_idx_])) {
-        profiles_array[profile_head[i].parent_idx_]->get_or_register_child(profile_head[i].id_,
-                                                                           new_profile);
+        if (ObProfileUtil::is_hybrid_search_profile(profile_head[i].id_)) {
+          // refer to the comment in ObProfileUtil::merge_children_for_hybrid_search
+          profiles_array[profile_head[i].parent_idx_]->register_child(profile_head[i].id_, new_profile);
+        } else {
+          profiles_array[profile_head[i].parent_idx_]->get_or_register_child(profile_head[i].id_, new_profile);
+        }
       } else {
         new_profile = OB_NEWx(ObOpProfile<ObMetric>, alloc, profile_head[i].id_, alloc,
                               profile_head[i].enable_rich_format_);

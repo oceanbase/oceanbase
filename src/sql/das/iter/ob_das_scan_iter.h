@@ -15,6 +15,7 @@
 
 #include "sql/das/iter/ob_das_iter.h"
 #include "sql/das/ob_das_scan_op.h"
+#include "sql/das/search/ob_das_scalar_define.h"
 namespace oceanbase
 {
 namespace common {
@@ -36,12 +37,30 @@ struct ObDASScanIterParam : public ObDASIterParam
 public:
   ObDASScanIterParam()
     : ObDASIterParam(ObDASIterType::DAS_ITER_SCAN),
-      scan_ctdef_(nullptr)
+      scan_ctdef_(nullptr),
+      scalar_scan_ctdef_(nullptr),
+      use_scalar_ctdef_(false)
   {}
   const ObDASScanCtDef *scan_ctdef_;
+  const ObDASScalarScanCtDef *scalar_scan_ctdef_;
+  bool use_scalar_ctdef_;
   virtual bool is_valid() const override
   {
-    return nullptr != scan_ctdef_ && ObDASIterParam::is_valid();
+    const bool ctdef_valid = (!use_scalar_ctdef_ && nullptr != scan_ctdef_)
+                          || (use_scalar_ctdef_ && nullptr != scalar_scan_ctdef_);
+    return ctdef_valid && ObDASIterParam::is_valid();
+  }
+  const ExprFixedArray &get_result_output() const
+  {
+    return use_scalar_ctdef_ ? scalar_scan_ctdef_->result_output_ : scan_ctdef_->result_output_;
+  }
+  common::ObTableID get_ref_table_id() const
+  {
+    return use_scalar_ctdef_ ? scalar_scan_ctdef_->ref_table_id_ : scan_ctdef_->ref_table_id_;
+  }
+  bool is_external_table() const
+  {
+    return use_scalar_ctdef_ ? false : scan_ctdef_->is_external_table_;
   }
 };
 

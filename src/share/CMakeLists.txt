@@ -449,6 +449,9 @@ ob_set_subtarget(ob_share common_mixed
   table/redis/ob_redis_error.cpp
   table/ob_redis_importer.cpp
   restore/ob_restore_progress_display_mode.cpp
+  search_index/ob_search_index_encoder.cpp
+  search_index/ob_search_index_generator.cpp
+  search_index/ob_search_index_builder_util.cpp
 )
 
 ob_set_subtarget(ob_share tablet

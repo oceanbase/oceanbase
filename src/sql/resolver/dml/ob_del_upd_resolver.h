@@ -146,6 +146,8 @@ protected:
                                           common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
   int add_all_rowkey_columns_to_stmt(const TableItem &table_item,
                                      common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
+  int add_all_part_columns_to_stmt(const TableItem &table_item,
+                                   common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
   int add_index_related_columns_to_stmt(const TableItem &table_item,
                                         const uint64_t column_id,
                                         common::ObIArray<ObColumnRefRawExpr*> &column_exprs);

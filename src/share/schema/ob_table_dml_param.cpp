@@ -17,6 +17,7 @@
 #include "object/ob_object.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "share/search_index/ob_search_index_builder_util.h"
 #include "lib/udt/ob_collection_type.h"
 
 namespace oceanbase
@@ -1020,6 +1021,45 @@ int ObTableSchemaParam::has_udf_column(bool &has_udf) const
       LOG_WARN("get column failed", K(ret), KP(param));
     } else {
       has_udf = param->is_gen_col_udf_expr();
+    }
+  }
+  return ret;
+}
+
+int ObTableSchemaParam::set_search_index_included_cids(const common::ObIArray<uint64_t> &cids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(search_idx_included_cids_.assign(cids))) {
+    LOG_WARN("failed to assign search index included cids", K(ret));
+  }
+  return ret;
+}
+
+int ObTableSchemaParam::set_search_index_included_cid_idxes(const common::ObIArray<int32_t> &cid_idxes)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(search_idx_included_cid_idxes_.assign(cid_idxes))) {
+    LOG_WARN("failed to assign search index included cid idxes", K(ret));
+  }
+  return ret;
+}
+
+int ObTableSchemaParam::set_search_index_arr_types(const common::ObIArray<ObCollectionArrayType*> &arr_types)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(search_idx_arr_types_.prepare_allocate(arr_types.count()))) {
+    LOG_WARN("failed to allocate arr types", K(ret), K(arr_types.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < arr_types.count(); ++i) {
+    if (OB_NOT_NULL(arr_types.at(i))) {
+      ObCollectionTypeBase *dst = nullptr;
+      if (OB_FAIL(arr_types.at(i)->deep_copy(allocator_, dst))) {
+        LOG_WARN("failed to deep copy arr type", K(ret), K(i));
+      } else {
+        search_idx_arr_types_.at(i) = static_cast<ObCollectionArrayType*>(dst);
+      }
+    } else {
+      search_idx_arr_types_.at(i) = nullptr;
     }
   }
   return ret;

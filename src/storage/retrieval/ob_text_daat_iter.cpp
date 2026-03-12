@@ -18,6 +18,14 @@ namespace oceanbase
 {
 namespace storage
 {
+
+ObTextDaaTIter::ObTextDaaTIter()
+  : ObSRDaaTIterImpl(),
+    bm25_param_estimator_(),
+    mode_flag_(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE),
+    function_lookup_mode_(false)
+{}
+
 int ObTextDaaTIter::init(const ObTextDaaTParam &param)
 {
   int ret = OB_SUCCESS;
@@ -29,7 +37,7 @@ int ObTextDaaTIter::init(const ObTextDaaTParam &param)
   } else if (OB_FAIL(ObSRDaaTIterImpl::init(*param.base_param_, *param.dim_iters_,
                                             *param.allocator_, *param.relevance_collector_))) {
     LOG_WARN("failed to init sr daat iter", K(ret));
-  } else if (OB_FAIL(bm25_param_estimator_.init(param.bm25_param_est_ctx_))) {
+  } else if (OB_FAIL(bm25_param_estimator_.init(param.bm25_param_est_ctx_, param.allocator_))) {
     LOG_WARN("failed to init bm25 param estimator", K(ret));
   } else {
     mode_flag_ = param.mode_flag_;
@@ -82,6 +90,23 @@ ObTextBMWIter::ObTextBMWIter()
   : ObSRBMMIterImpl(),
     bm25_param_estimator_() {}
 
+int ObTextBMWIter::init(const ObTextDaaTParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(param.base_param_) || OB_ISNULL(param.dim_iters_) || OB_ISNULL(param.allocator_)
+      || OB_ISNULL(param.relevance_collector_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected null pointer in param", K(ret), KP_(param.base_param),
+             KP_(param.dim_iters), KP_(param.allocator), KP_(param.relevance_collector));
+  } else if (OB_FAIL(ObSRBMMIterImpl::init(*param.base_param_, *param.dim_iters_,
+                                           *param.allocator_, *param.relevance_collector_))) {
+    LOG_WARN("failed to init sr bmw iter", K(ret));
+  } else if (OB_FAIL(bm25_param_estimator_.init(param.bm25_param_est_ctx_, param.allocator_))) {
+    LOG_WARN("failed to init bm25 param estimator", K(ret));
+  }
+  return ret;
+}
+
 void ObTextBMWIter::reuse(const bool switch_tablet)
 {
   bm25_param_estimator_.reuse(switch_tablet);
@@ -102,23 +127,6 @@ void ObTextBMWIter::reset()
     }
   }
   ObSRBMMIterImpl::reset();
-}
-
-int ObTextBMWIter::init(const ObTextDaaTParam &param)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(param.base_param_) || OB_ISNULL(param.dim_iters_) || OB_ISNULL(param.allocator_)
-      || OB_ISNULL(param.relevance_collector_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unexpected null pointer in param", K(ret), KP_(param.base_param),
-             KP_(param.dim_iters), KP_(param.allocator), KP_(param.relevance_collector));
-  } else if (OB_FAIL(ObSRBMMIterImpl::init(*param.base_param_, *param.dim_iters_,
-                                           *param.allocator_, *param.relevance_collector_))) {
-    LOG_WARN("failed to init sr bmw iter", K(ret));
-  } else if (OB_FAIL(bm25_param_estimator_.init(param.bm25_param_est_ctx_))) {
-    LOG_WARN("failed to init bm25 param estimator", K(ret));
-  }
-  return ret;
 }
 
 int ObTextBMWIter::get_next_rows(const int64_t capacity, int64_t &count)
@@ -144,15 +152,22 @@ int ObTextBMWIter::get_next_rows(const int64_t capacity, int64_t &count)
 int ObTextBMWIter::init_before_topk_search()
 {
   int ret = OB_SUCCESS;
+  const ObIArray<double> &avg_doc_token_cnts = bm25_param_estimator_.get_avg_doc_token_cnts();
+  int64_t token_cnt = 0;
   if (OB_UNLIKELY(!bm25_param_estimator_.is_estimated())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("bm25 param not estimated", K(ret));
+  } else if (OB_UNLIKELY(avg_doc_token_cnts.empty() || avg_doc_token_cnts.count() > dim_iters_->count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected number of avg doc token cnts", K(ret));
+  } else {
+    token_cnt = dim_iters_->count() / avg_doc_token_cnts.count();
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < dim_iters_->count(); ++i) {
     ObTextRetrievalBlockMaxIter *block_max_iter = static_cast<ObTextRetrievalBlockMaxIter *>(dim_iters_->at(i));
     if (OB_FAIL(block_max_iter->init_block_max_iter(
-        bm25_param_estimator_.get_total_doc_cnt(), bm25_param_estimator_.get_avg_doc_token_cnt()))) {
+        bm25_param_estimator_.get_total_doc_cnt(), avg_doc_token_cnts.at(i / token_cnt)))) {
       LOG_WARN("failed to init block max iter", K(ret));
     }
   }
