@@ -350,6 +350,7 @@ TEST_F(ObSharedStorageTest, add_tenant)
     ObSqlString sql;
     int64_t affected_rows = 0;
     SYS_EXE_SQL("alter system set _ss_advance_checkpoint_interval = '1m' tenant tt1;");
+    SYS_EXE_SQL("alter system set_tp tp_name = EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP,error_code = 4016,frequency = 1;");
 }
 
 // TEST_F(ObSharedStorageTest, test_timeout_block_gc)

@@ -424,6 +424,10 @@ TEST_F(ObSharedStorageTest, add_tenant)
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(OB_SUCCESS, get_tenant_id(RunCtx.tenant_id_));
     ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    SYS_EXE_SQL("alter system set _ss_advance_checkpoint_interval = '1m' tenant tt1;");
+    SYS_EXE_SQL("alter system set_tp tp_name = EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP,error_code = 4016,frequency = 1;");
 }
 
 TEST_F(ObSharedStorageTest, test_tablet_gc_for_shared_dir)

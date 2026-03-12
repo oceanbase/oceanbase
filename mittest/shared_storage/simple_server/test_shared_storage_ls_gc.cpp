@@ -240,6 +240,10 @@ TEST_F(ObSharedStorageTest, add_tenant)
     } else if (OB_FAIL(get_curr_simple_server().init_sql_proxy2())) {
       TRANS_LOG(WARN, "init sql proxy fail", K(ret));
     } else {
+      ObSqlString sql;
+      int64_t affected_rows = 0;
+      SYS_EXE_SQL("alter system set _ss_advance_checkpoint_interval = '1m' tenant tt1;");
+      SYS_EXE_SQL("alter system set_tp tp_name = EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP,error_code = 4016,frequency = 1;");
       break;
     }
     cnt++;
