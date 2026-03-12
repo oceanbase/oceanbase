@@ -597,6 +597,8 @@ void convert_obdal_error(const opendal_error *error, int &ob_errcode)
       ob_errcode = OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM;
     } else if (error->code == OPENDAL_OVERWRITE_CONTENT_MISMATCH) {
       ob_errcode = OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH;
+    } else if (error->code == OPENDAL_INVALID_BLOB_TYPE) {
+      ob_errcode = OB_OBJECT_STORAGE_INVALID_OBJECT_TYPE;
     } else {
       ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
     }

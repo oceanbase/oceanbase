@@ -2880,7 +2880,7 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
           ret = OB_OBJECT_STORAGE_IO_ERROR;
           OB_LOG(ERROR, "oss type is null", K(ret));
         } else if (0 != strncmp(OSS_OBJECT_TYPE_APPENDABLE, object_type, strlen(OSS_OBJECT_TYPE_APPENDABLE))) {
-          ret = OB_CLOUD_OBJECT_NOT_APPENDABLE;
+          ret = OB_OBJECT_STORAGE_INVALID_OBJECT_TYPE;
           OB_LOG(WARN, "oss object must be appendable", K(ret), KCSTRING(object_type));
         } else {
           char *next_append_position = (char*)(apr_table_get(resp_headers, OSS_NEXT_APPEND_POSITION));

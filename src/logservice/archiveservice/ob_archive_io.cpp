@@ -60,7 +60,7 @@ int ObArchiveIO::push_log(const ObString &uri,
     }
   }
 
-  if (OB_CLOUD_OBJECT_NOT_APPENDABLE == ret) {
+  if (OB_OBJECT_STORAGE_INVALID_OBJECT_TYPE == ret) {
     if (OB_FAIL(check_context_match_in_normal_file_(uri, storage_info,
         common::ObStorageIdMod(backup_dest_id, common::ObStorageUsedMod::STORAGE_USED_ARCHIVE),
         data, data_len, offset))) {

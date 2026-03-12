@@ -498,7 +498,7 @@ public:
   int64_t get_length();
   void set_open_mode(StorageOpenMode mode) { open_mode_ = mode; }
   int seal_for_adaptive();
-  TO_STRING_KV(KP_(appender), K_(start_ts), K_(is_opened), KCSTRING_(uri), K_(open_mode), KPC(storage_info_), K(type_), K(open_mode_), K(handle_type_));
+  TO_STRING_KV(KP_(appender), K_(start_ts), K_(is_opened), KCSTRING_(uri), K_(open_mode), KPC(storage_info_), K(type_), K(open_mode_), K(handle_type_), K(is_adaptive_appendable_));
 
 private:
   ObIStorageWriter *appender_;
@@ -520,6 +520,7 @@ private:
   ObArenaAllocator allocator_;
   ObStorageType type_;
   StorageOpenMode open_mode_;
+  bool is_adaptive_appendable_;
 
   int repeatable_pwrite_(const char *buf, const int64_t size, const int64_t offset);
   DISALLOW_COPY_AND_ASSIGN(ObStorageAppender);

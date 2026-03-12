@@ -2397,6 +2397,7 @@ DEFINE_ERROR(OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT, -9154, -1, "HY000", "ls
 DEFINE_ERROR_DEP(OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE, -9155, -1, "HY000", "micro block is too large and rejected from micro cache");
 DEFINE_ERROR_DEP(OB_SS_LS_IN_GC_STATUS, -9156, -1, "HY000", "ss ls is in gc status");
 DEFINE_ERROR(OB_BACKUP_WAIT_SS_LS_CONSISTENCY_TIMEOUT, -9157, -1, "HY000", "backup wait shared storage ls consistency timeout");
+DEFINE_ERROR(OB_OBJECT_STORAGE_INVALID_OBJECT_TYPE, -9158, -1, "HY000", "the object type is invalid");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////
