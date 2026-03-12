@@ -2135,7 +2135,10 @@ sp_labeled_control:
 sp_proc_stmt_return:
     RETURN return_expr
     {
-      if (NULL == $2) YYERROR;
+      if (NULL == $2) {
+        obpl_mysql_yyerror(&@1, parse_ctx, "Syntax Error\n");
+        YYERROR;
+      }
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_RETURN, 1, $2);
     }
 ;
