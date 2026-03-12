@@ -664,7 +664,12 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
           }
           callback->handin();
         } else {
-          audit_record.exec_timestamp_.executor_end_ts_ = tx_ptr->get_commit_start_time();
+          if (OB_NOT_NULL(tx_ptr)) {
+            int64_t commit_ts = tx_ptr->get_commit_start_time();
+            if (commit_ts > 0) {
+              audit_record.exec_timestamp_.executor_end_ts_ = commit_ts;
+            }
+          }
         }
       }
     } else {
@@ -672,7 +677,12 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
       if (OB_FAIL(txs->commit_tx(*tx_ptr, expire_ts, &trace_info))) {
         LOG_WARN("sync commit tx fail", K(ret), K(expire_ts), KPC(tx_ptr));
       }
-      audit_record.exec_timestamp_.commit_t_ = tx_ptr->get_trans_commit_time();
+      if (OB_NOT_NULL(tx_ptr)) {
+        int64_t commit_ts = tx_ptr->get_commit_start_time();
+        if (commit_ts > 0) {
+          audit_record.exec_timestamp_.commit_t_ = commit_ts;
+        }
+      }
     }
   }
 
