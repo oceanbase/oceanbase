@@ -323,6 +323,9 @@ private:
       ObSEArray<uint64_t, 4> &dml_column_ids);
   int delete_incr_table_data(ObPluginVectorIndexAdaptor &adaptor, storage::ObDMLBaseParam &dml_param, transaction::ObTxDesc *tx_desc);
   bool check_task_satisfied_memory_limited(ObPluginVectorIndexAdaptor &adaptor);
+  
+  int fetch_commit_scn_from_tx_table(const transaction::ObTransID &tx_id, share::SCN &commit_scn);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVecIndexAsyncTask);
 };
