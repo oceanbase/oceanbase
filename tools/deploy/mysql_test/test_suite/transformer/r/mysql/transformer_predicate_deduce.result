@@ -3533,15 +3533,15 @@ select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 r
 +----+------+----+------+----+------+
 EXPLAIN select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
 Query Plan
-===================================================
-|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------
-|0 |MERGE OUTER JOIN   |    |1       |13          |
-|1 |├─TABLE FULL SCAN  |tt3 |2       |4           |
-|2 |└─MERGE OUTER JOIN |    |3       |9           |
-|3 |  ├─TABLE FULL SCAN|tt1 |3       |4           |
-|4 |  └─TABLE FULL SCAN|tt2 |2       |4           |
-===================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |MERGE OUTER JOIN         |    |1       |13          |
+|1 |├─TABLE FULL SCAN        |tt3 |2       |4           |
+|2 |└─MERGE RIGHT OUTER JOIN |    |3       |8           |
+|3 |  ├─TABLE FULL SCAN      |tt2 |2       |4           |
+|4 |  └─TABLE FULL SCAN      |tt1 |3       |4           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2], [tt3.c1], [tt3.c2]), filter([tt1.c1 = 1]), rowset=16
@@ -3554,14 +3554,14 @@ Outputs & filters:
   2 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2]), filter(nil), rowset=16
       equal_conds([tt1.c1 = tt2.c1]), other_conds(nil)
       merge_directions([ASC])
-  3 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
-      access([tt1.c1], [tt1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([tt1.c1]), range(MIN ; MAX)always true
-  4 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
+  3 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
       access([tt2.c1], [tt2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([tt2.c1]), range(MIN ; MAX)always true
+  4 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
+      access([tt1.c1], [tt1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([tt1.c1]), range(MIN ; MAX)always true
 select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
 +----+------+----+------+----+------+
 | c1 | c2   | c1 | c2   | c1 | c2   |
@@ -3728,18 +3728,18 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR                               |NAME        |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |PX COORDINATOR                         |            |2       |72          |
-|1 |└─EXCHANGE OUT DISTR                   |:EX10002    |2       |71          |
-|2 |  └─HASH OUTER JOIN                    |            |2       |67          |
-|3 |    ├─EXCHANGE IN DISTR                |            |2       |58          |
-|4 |    │ └─EXCHANGE OUT DISTR (PKEY)      |:EX10001    |2       |57          |
-|5 |    │   └─MERGE OUTER JOIN             |            |2       |55          |
+|0 |PX COORDINATOR                         |            |3       |75          |
+|1 |└─EXCHANGE OUT DISTR                   |:EX10002    |3       |73          |
+|2 |  └─HASH OUTER JOIN                    |            |3       |69          |
+|3 |    ├─EXCHANGE IN DISTR                |            |3       |59          |
+|4 |    │ └─EXCHANGE OUT DISTR (PKEY)      |:EX10001    |3       |58          |
+|5 |    │   └─MERGE OUTER JOIN             |            |3       |55          |
 |6 |    │     ├─EXCHANGE IN DISTR          |            |2       |5           |
 |7 |    │     │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000    |2       |5           |
 |8 |    │     │   └─TABLE FULL SCAN        |t1(HLDINDEX)|2       |4           |
-|9 |    │     └─SORT                       |            |1       |50          |
-|10|    │       └─PX PARTITION ITERATOR    |            |1       |50          |
-|11|    │         └─TABLE FULL SCAN        |t2          |1       |50          |
+|9 |    │     └─SORT                       |            |2       |50          |
+|10|    │       └─PX PARTITION ITERATOR    |            |2       |50          |
+|11|    │         └─TABLE FULL SCAN        |t2          |2       |50          |
 |12|    └─PX PARTITION ITERATOR            |            |1       |8           |
 |13|      └─TABLE FULL SCAN                |t3          |1       |8           |
 ===============================================================================
@@ -3850,7 +3850,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
+      estimation method:[STORAGE, DYNAMIC SAMPLING FULL]
   A:
       table_rows:1
       physical_range_rows:1
@@ -3861,7 +3861,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
+      estimation method:[STORAGE, DYNAMIC SAMPLING FULL]
   Plan Type:
       LOCAL
   Parameters:
@@ -3935,7 +3935,7 @@ Optimization Info:
       pruned_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
+      estimation method:[STORAGE, DYNAMIC SAMPLING FULL]
   A:
       table_rows:1
       physical_range_rows:1
@@ -3948,7 +3948,7 @@ Optimization Info:
       unstable_index_name:[t1]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
+      estimation method:[STORAGE, DYNAMIC SAMPLING FULL]
   Plan Type:
       LOCAL
   Parameters:
@@ -4032,7 +4032,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
+      estimation method:[STORAGE, DYNAMIC SAMPLING FULL]
   A:
       table_rows:1
       physical_range_rows:1
@@ -4043,7 +4043,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
+      estimation method:[STORAGE, DYNAMIC SAMPLING FULL]
   Plan Type:
       DISTRIBUTED
   Parameters:
