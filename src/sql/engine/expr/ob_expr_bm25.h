@@ -63,6 +63,7 @@ public:
     return score;
   }
   static double doc_token_weight(const int64_t token_freq, const double norm_len);
+  static double doc_phrase_weight(const double phrase_freq, const double norm_len);
   static double query_token_weight(const int64_t doc_freq, const int64_t doc_cnt);
   static bool use_new_version(const ObExpr &expr)
   {

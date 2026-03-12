@@ -453,9 +453,11 @@ public:
     return !left_border_reached_;
   }
   INHERIT_TO_STRING_KV("ObISkipScanner", ObISkipScanner,
-                       K_(left_border_reached));
+                       K_(left_border_reached),
+                       K_(range_prefix_in_advance_scan));
 private:
   bool left_border_reached_;
+  int64_t range_prefix_in_advance_scan_;
 };
 
 class ObIndexSkipScanFactory

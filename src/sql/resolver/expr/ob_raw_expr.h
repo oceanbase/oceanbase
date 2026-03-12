@@ -121,6 +121,11 @@ struct ObExprEqualCheckContext;
     || ((op) == T_FUN_SYS_JSON_CONTAINS) \
     || ((op) == T_FUN_SYS_JSON_OVERLAPS)) \
 
+#define IS_DOMAIN_ARRAY_OP(op) \
+  (((op) == T_FUNC_SYS_ARRAY_CONTAINS) \
+    || ((op) == T_FUNC_SYS_ARRAY_CONTAINS_ALL) \
+    || ((op) == T_FUNC_SYS_ARRAY_OVERLAPS)) \
+
 #define IS_MYSQL_GEO_OP(op) \
   (((op) == T_FUN_SYS_ST_GEOMFROMTEXT) \
     || ((op) == T_FUN_SYS_ST_INTERSECTION) \
@@ -1939,8 +1944,14 @@ struct ObRawExprExtraInfo
        // T_FUN_SYS_TREAT
     bool add_implicit_cast_for_in_param_; // T_OP_IN
                                           // T_OP_NOT_IN
-    bool is_inner_split_contains_expr_;   // T_FUN_SYS_JSON_CONTAINS
-                                          // T_FUNC_SYS_ARRAY_CONTAINS_ALL
+    struct {
+      ObItemType pick_;
+      uint8_t bound_enc_type_;
+    }; // T_FUN_SYS_JSON_EXTRACT
+       // T_FUN_SYS_JSON_VALUE
+    bool is_inner_split_json_contains_; // T_FUN_SYS_JSON_CONTAINS
+    bool is_inner_split_contains_expr_; // T_FUN_SYS_JSON_CONTAINS
+                                        // T_FUN_SYS_ARRAY_CONTAINS_ALL
   };
 };
 static_assert(8 == sizeof(ObRawExprExtraInfo), "sizeof extra info must be 8 bytes");
@@ -2295,6 +2306,9 @@ public:
   void set_aggr_type(const uint64_t val) { extra_.aggr_type_ = val; }
   void set_range_flag(const uint64_t val) { extra_.range_flag_ = val; }
   void set_encryption_mode(const int64_t val) { extra_.encryption_mode_ = val; }
+  void set_pick(const ObItemType val) {extra_.pick_ = val; }
+  void set_bound_enc_type(const uint8_t val) { extra_.bound_enc_type_ = val; }
+  void set_is_inner_split_contains_expr(const bool val) { extra_.is_inner_split_contains_expr_ = val; }
   uint64_t get_cast_mode() const { return extra_.cast_mode_; }
   uint64_t get_autoinc_nextval_extra() const { return extra_.autoinc_nextval_extra_; }
   uint64_t get_res_cs_type() const { return extra_.res_cs_type_; }
@@ -2316,6 +2330,9 @@ public:
   const ObExprCalcType &get_extra_calc_meta() const { return extra_.calc_meta_; }
   ObPrecision get_extra_calc_precision() const { return extra_.calc_precision_; }
   ObScale get_extra_calc_scale() const { return extra_.calc_scale_; }
+  ObItemType get_pick() const {return extra_.pick_; }
+  uint8_t get_bound_enc_type() const { return extra_.bound_enc_type_; }
+  bool is_inner_split_contains_expr() const { return extra_.is_inner_split_contains_expr_; }
   void set_rt_expr(sql::ObExpr *expr) { rt_expr_ = expr; }
   void reset_rt_expr() { rt_expr_ = NULL; }
   void set_expr_hash(uint64_t expr_hash) { expr_hash_ = expr_hash; }
@@ -2337,6 +2354,7 @@ public:
   bool is_geo_expr() const;
   bool is_domain_expr() const;
   bool is_domain_json_expr() const;
+  bool is_domain_array_expr() const;
   bool is_mysql_geo_expr() const;
   bool is_priv_geo_expr() const;
   bool is_xml_expr() const;
@@ -2378,8 +2396,6 @@ public:
   void set_runtime_filter_type(RuntimeFilterType type) { extra_.runtime_filter_type_ = type; }
   inline bool with_null_equal_cond() const { return extra_.with_null_equal_cond_; }
   inline void set_with_null_equal_cond(bool val) { extra_.with_null_equal_cond_ = val; }
-  inline bool is_inner_split_contains_expr() const { return extra_.is_inner_split_contains_expr_; }
-  inline void set_is_inner_split_contains_expr(bool val) { extra_.is_inner_split_contains_expr_ = val; }
   VIRTUAL_TO_STRING_KVP(N_ITEM_TYPE, type_,
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,

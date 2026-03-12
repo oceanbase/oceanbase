@@ -22,6 +22,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/omt/ob_tenant_srs.h"
 #include "storage/tx/ob_trans_service.h"
+#include "sql/das/ob_das_search_index_utils.h"
 
 using namespace oceanbase::common;
 
@@ -126,8 +127,8 @@ int ObFTIndexRowCache::segment(const common::ObObjMeta &ft_obj_meta,
     LOG_WARN("the ft index row cache hasn't be initialized", K(ret));
   } else if (OB_UNLIKELY(fulltext.empty())) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(reuse_ft_token_map(ft_token_bkt_cnt))) {
-    LOG_WARN("fail to reuse ft token map", K(ret));
+  } else if (OB_FAIL(create_ft_token_map(ft_token_bkt_cnt))) {
+    LOG_WARN("fail to create ft token map", K(ret), K(ft_token_bkt_cnt));
   } else if (need_tolower_ft && OB_FAIL(ObCharset::tolower(ft_obj_meta.get_collation_type(),
                                                            fulltext, regularized_ft_str,
                                                            scratch_allocator_))) {
@@ -261,6 +262,7 @@ void ObFTIndexRowCache::reuse()
   row_pool_index_ = 0;
   token_arr_.reuse();
   ft_token_processor_.reuse();
+  ft_token_map_.destroy();
   scratch_allocator_.reset_remain_one_page();
 }
 
@@ -294,10 +296,9 @@ int ObFTIndexRowCache::prepare_parser(const common::ObObjMeta &ft_obj_meta,
   return ret;
 }
 
-inline int ObFTIndexRowCache::reuse_ft_token_map(const int64_t ft_token_bkt_cnt)
+inline int ObFTIndexRowCache::create_ft_token_map(const int64_t ft_token_bkt_cnt)
 {
   int ret = OB_SUCCESS;
-  ft_token_map_.destroy();
   if (OB_FAIL(ft_token_map_.create(ft_token_bkt_cnt, common::ObMemAttr(MTL_ID(), "ft_token_map")))) {
     LOG_WARN("fail to create ft token map", K(ret), K(ft_token_bkt_cnt));
   }
@@ -315,7 +316,7 @@ int ObFTIndexRowCache::fetch_exprs(const common::ObIArray<ObExpr *> &all_ft_expr
                                    const common::ObIArray<ObExpr *> &other_exprs)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(all_ft_exprs.count() != ALL_EXPR_COUNT)) {
+  if (OB_UNLIKELY(all_ft_exprs.count() > ALL_EXPR_COUNT)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("exprs count is not equal to all expr count", K(ret), K(all_ft_exprs.count()));
   } else {
@@ -578,6 +579,9 @@ int ObDASDomainUtils::build_ft_doc_word_infos(
             if (OB_FAIL(pos_list_store.encode_and_serialize(allocator, *token_info.position_list_, store_buf, store_buf_len))) {
               LOG_WARN("fail to encode and serialize pos list", K(ret), K(ft_token), K(token_info),
                 KPC(token_info.position_list_));
+            } else if (OB_ISNULL(store_buf) || OB_UNLIKELY(store_buf_len <= 0)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null position list string", K(ret), K(store_buf), K(store_buf_len));
             } else {
               ObString pos_list_str(store_buf_len, store_buf);
               rows[i].storage_datums_[pos_list_idx].set_string(pos_list_str);
@@ -875,6 +879,22 @@ int ObDomainDMLIterator::create_domain_dml_iterator(
         domain_iter = static_cast<ObDomainDMLIterator *>(iter);
       }
     }
+  } else if (param.das_ctdef_->table_param_.get_data_table().is_search_data_index()) {
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = param.allocator_.alloc(sizeof(ObSearchIndexDMLIterator)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate search index dml iterator memory", K(ret), KP(buf));
+    } else {
+      ObSearchIndexDMLIterator *iter = new (buf) ObSearchIndexDMLIterator(
+                                          param.allocator_, param.row_projector_,
+                                          param.write_iter_, param.das_ctdef_,
+                                          param.main_ctdef_);
+      if (OB_FAIL(iter->init(param.das_ctdef_, param.main_ctdef_, param.row_projector_))) {
+        LOG_WARN("fail to init search index dml iterator", K(ret), KPC(iter));
+      } else {
+        domain_iter = static_cast<ObDomainDMLIterator *>(iter);
+      }
+    }
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported domain index type", K(ret), K(param.das_ctdef_->table_param_.get_data_table()));
@@ -1153,10 +1173,8 @@ int ObFTDMLIterator::rewind()
         // This is the same as the parser name of the previous index.
         // nothing to do, just skip.
       } else if (FALSE_IT(ft_parse_helper_.reset())) {
-      } else {
-        if (OB_FAIL(ft_parse_helper_.init(&allocator_, parser_str, parser_property_str, fts_index_type))) {
-          LOG_WARN("fail to init fulltext parse helper", K(ret), K(parser_str), K(parser_property_str));
-        }
+      } else if (OB_FAIL(ft_parse_helper_.init(&allocator_, parser_str, parser_property_str, fts_index_type))) {
+        LOG_WARN("fail to init fulltext parse helper", K(ret), K(parser_str), K(parser_property_str));
       }
     } else if (ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN == mode_) {
       if (OB_ISNULL(doc_word_info_)) {
@@ -1260,10 +1278,8 @@ int ObFTDMLIterator::change_domain_dml_mode(const ObDomainDMLMode &mode)
           // This is the same as the parser name of the previous index.
           // nothing to do, just skip.
         } else if (FALSE_IT(ft_parse_helper_.reset())) {
-        } else {
-          if (OB_FAIL(ft_parse_helper_.init(&allocator_, parser_str, parser_property_str, fts_index_type))) {
-            LOG_WARN("fail to init fulltext parse helper", K(ret), K(parser_str), K(parser_property_str));
-          }
+        } else if (OB_FAIL(ft_parse_helper_.init(&allocator_, parser_str, parser_property_str, fts_index_type))) {
+          LOG_WARN("fail to init fulltext parse helper", K(ret), K(parser_str), K(parser_property_str));
         }
         break;
       }
@@ -1757,6 +1773,5 @@ int ObMultivalueDMLIterator::get_multivlaue_json_data_for_update(
 
   return ret;
 }
-
 } // end namespace storage
 } // end namespace oceanbase

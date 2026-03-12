@@ -83,6 +83,14 @@ public:
   OB_INLINE int64_t get_column_count() const { return columns_.count(); }
   OB_INLINE const Columns &get_columns() const { return columns_; }
   OB_INLINE const ColumnMap &get_col_map() const { return col_map_; }
+  OB_INLINE const common::ObIArray<uint64_t> &get_search_index_included_cids() const { return search_idx_included_cids_; }
+  OB_INLINE const common::ObIArray<int32_t> &get_search_index_included_cid_idxes() const { return search_idx_included_cid_idxes_; }
+  OB_INLINE const common::ObIArray<common::ObCollectionArrayType*> &get_search_index_arr_types() const { return search_idx_arr_types_; }
+  int set_search_index_included_cids(const common::ObIArray<uint64_t> &cids);
+  int set_search_index_included_cid_idxes(const common::ObIArray<int32_t> &cid_idxes);
+  int set_search_index_arr_types(const common::ObIArray<common::ObCollectionArrayType*> &arr_types);
+  OB_INLINE void set_inc_pk_doc_id_col_id(const int32_t col_id) { inc_pk_doc_id_col_id_ = col_id; }
+  OB_INLINE int32_t get_inc_pk_doc_id_col_id() const { return inc_pk_doc_id_col_id_; }
   OB_INLINE bool is_index_table() const { return share::schema::is_index_table(table_type_); }
   OB_INLINE bool is_lob_meta_table() const { return share::schema::is_aux_lob_meta_table(table_type_); }
   OB_INLINE bool is_materialized_view() const
@@ -121,6 +129,9 @@ public:
            share::schema::is_vec_ivfpq_centroid_index(index_type_) ||
            share::schema::is_vec_ivfpq_pq_centroid_index(index_type_);
   }
+  OB_INLINE bool is_search_index() const { return share::schema::is_search_index(index_type_); }
+  OB_INLINE bool is_search_def_index() const { return share::schema::is_search_def_index(index_type_); }
+  OB_INLINE bool is_search_data_index() const { return share::schema::is_search_data_index(index_type_); }
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
   OB_INLINE ObMvMode get_mv_mode() const { return mv_mode_; }

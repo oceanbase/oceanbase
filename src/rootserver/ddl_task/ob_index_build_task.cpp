@@ -21,6 +21,7 @@
 #include "rootserver/ob_root_service.h"
 #include "share/schema/ob_mlog_info.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "share/search_index/ob_search_index_builder_util.h"
 #include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
 
 using namespace oceanbase::rootserver;
@@ -197,6 +198,7 @@ int ObIndexSSTableBuildTask::process()
         ddl_info.set_is_ddl(true);
         ddl_info.set_source_table_hidden(data_schema->is_user_hidden_table());
         ddl_info.set_dest_table_hidden(index_schema->is_user_hidden_table());
+        ddl_info.set_search_index_ddl(index_schema->is_search_index());
         ddl_info.set_retryable_ddl(is_retryable_ddl_);
         ddl_info.set_is_partition_local_ddl(is_partition_local_ddl_);
         session_param.nls_formats_[ObNLSFormatEnum::NLS_DATE] = nls_date_format_;
@@ -1170,7 +1172,7 @@ int ObIndexBuildTask::wait_data_complement()
     }
   }
   if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index() && !create_index_arg_.is_vec_index()
-      && !create_index_arg_.is_multivalue_index()) {
+      && !create_index_arg_.is_multivalue_index() && !create_index_arg_.is_search_index()) {
     uint64_t src_table_id = object_id_;
     bool dummy_equal = false;
     bool need_verify_checksum = true;
@@ -1270,7 +1272,8 @@ int ObIndexBuildTask::wait_local_index_data_complement()
     }
   }
   if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index() && !create_index_arg_.is_multivalue_index()
-                                     && !create_index_arg_.is_vec_index()) {
+                                     && !create_index_arg_.is_vec_index()
+                                     && !create_index_arg_.is_search_index()) {
     uint64_t src_table_id = object_id_;
     bool dummy_equal = false;
     bool need_verify_checksum = true;
@@ -1368,7 +1371,8 @@ int ObIndexBuildTask::check_need_verify_checksum(bool &need_verify)
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (create_index_arg_.is_spatial_index() ||
              share::schema::is_fts_index(create_index_arg_.index_type_) ||
-             create_index_arg_.is_multivalue_index()) {
+             create_index_arg_.is_multivalue_index() ||
+             create_index_arg_.is_search_index()) {
     need_verify = false;
   } else if (is_unique_index_) {
     ObDDLTaskRecord task_record;

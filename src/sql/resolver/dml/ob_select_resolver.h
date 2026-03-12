@@ -385,6 +385,7 @@ private:
   int mark_aggr_in_select_scope(ObSelectStmt *select_stmt);
 
   int check_audit_log_stmt(ObSelectStmt *select_stmt);
+  int check_hybrid_search_stmt(ObSelectStmt *select_stmt);
   int try_resolve_values_table_from_union(const ParseNode &parse_node, bool &resolve_happened);
   int check_union_to_values_table_valid(const ParseNode &parse_node,
                                         const ObSelectStmt &select_stmt,

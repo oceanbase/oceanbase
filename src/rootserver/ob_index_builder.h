@@ -80,6 +80,7 @@ public:
                       share::schema::ObTableSchema &index_schema);
   bool is_drop_dense_vec_index_task(const obrpc::ObDropIndexArg &arg, const share::schema::ObTableSchema &index_schema);
   bool is_drop_with_docid_index_task(const obrpc::ObDropIndexArg &arg, const share::schema::ObTableSchema &index_schema);
+  bool is_drop_search_index_task(const obrpc::ObDropIndexArg &arg, const share::schema::ObTableSchema &index_schema);
   int check_drop_with_docid_indexs_ith_valid(
       const obrpc::ObDropIndexArg &arg,
       const share::schema::ObTableSchema &index_schema,
@@ -163,6 +164,12 @@ private:
       int64_t &aux_rowkey_doc_ith,
       int64_t &domain_index_ith,
       int64_t &aux_doc_rowkey_ith);
+    int recognize_search_index_schemas(
+      const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
+      const bool is_parent_task_dropping_search_index,
+      int64_t &index_ith,
+      int64_t &def_index_ith,
+      int64_t &data_index_ith);
   int set_basic_infos(const obrpc::ObCreateIndexArg &arg,
                       const share::schema::ObTableSchema &data_schema,
                       share::schema::ObTableSchema &schema);

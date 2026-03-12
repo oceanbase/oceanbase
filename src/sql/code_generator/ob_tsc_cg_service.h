@@ -13,6 +13,8 @@
 #ifndef DEV_SRC_SQL_CODE_GENERATOR_OB_TSC_CG_SERVICE_H_
 #define DEV_SRC_SQL_CODE_GENERATOR_OB_TSC_CG_SERVICE_H_
 #include "sql/optimizer/ob_log_table_scan.h"
+#include "sql/code_generator/ob_hybrid_search_cg_service.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -33,7 +35,8 @@ class ObTscCgService
 {
 public:
   ObTscCgService(ObStaticEngineCG &cg)
-    : cg_(cg)
+    : cg_(cg),
+      hybrid_search_cg_service_(cg)
   { }
 
   int generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef);
@@ -61,6 +64,19 @@ public:
                                  const ObRawExpr *trans_info_expr,
                                  const bool include_agg = false);
   int generate_ext_column_mapping(ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef);
+
+  // generate attach ctdef for SQL query
+  int generate_attach_ctdef(
+    ObLogTableScan &op,
+    ObTableScanCtDef &tsc_ctdef,
+    ObDASBaseCtDef *&root_ctdef,
+    bool &need_attach);
+
+  static int remove_virtual_generated_access_exprs(
+    const ObLogTableScan &op,
+    ObStaticEngineCG &cg,
+    ObIArray<ObRawExpr*> &access_exprs,
+    const bool is_vec_com_aux_scan = false);
 private:
   // temporary context for multiple das scan in one table scan operator
   struct DASScanCGCtx
@@ -362,6 +378,7 @@ private:
                                              UIntFixedArray &column_ids);
 private:
   ObStaticEngineCG &cg_;
+  ObHybridSearchCgService hybrid_search_cg_service_;
 };
 }  // namespace sql
 }  // namespace oceanbase

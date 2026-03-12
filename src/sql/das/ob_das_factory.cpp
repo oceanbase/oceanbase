@@ -20,7 +20,15 @@
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/das/ob_das_ir_define.h"
 #include "sql/das/ob_das_vec_define.h"
+#include "sql/das/iter/ob_das_vec_index_driver_iter.h"
 #include "share/datum/ob_datum_util.h"
+#include "sql/das/search/ob_das_scalar_define.h"
+#include "sql/das/search/ob_das_boolean_query.h"
+#include "sql/das/search/ob_das_match_query.h"
+#include "sql/das/search/ob_das_match_phrase_query.h"
+#include "sql/das/search/ob_das_multi_match_query.h"
+#include "sql/das/search/ob_das_query_string_query.h"
+#include "sql/das/search/ob_das_topk_collect_op.h"
 
 #define STORE_DAS_OBJ(obj_store, das_obj, class_name)       \
   if (OB_SUCC(ret)) {                                       \

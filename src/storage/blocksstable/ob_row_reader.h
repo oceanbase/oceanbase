@@ -123,6 +123,7 @@ public:
    */
   virtual int batch_compare(const ObDatumRowkey &rhs,
                             const ObStorageDatumUtils &datum_utils,
+                            const int64_t common_prefix_len,
                             int &cmp_ret) const = 0;
 
 protected:
@@ -160,6 +161,7 @@ public:
 
   int batch_compare(const ObDatumRowkey &rhs,
                     const ObStorageDatumUtils &datum_utils,
+                    const int64_t common_prefix_len,
                     int &cmp_ret) const override;
 
 private:
@@ -200,6 +202,7 @@ public:
 
   int batch_compare(const ObDatumRowkey &rhs,
                     const ObStorageDatumUtils &datum_utils,
+                    const int64_t common_prefix_len,
                     int &cmp_ret) const override;
 
 private:
@@ -353,7 +356,8 @@ public:
       const blocksstable::ObStorageDatumUtils &datum_utils,
       const char *buf,
       const int64_t row_len,
-      int32_t &cmp_result);
+      int32_t &cmp_result,
+      const int64_t common_prefix_len = 0);
   void reset();
   TO_STRING_KV(KP_(buf), K_(row_len), KPC_(row_header), K_(cluster_cnt),
       K_(cur_read_cluster_idx), K_(cluster_reader));
@@ -470,7 +474,8 @@ public:
                           const blocksstable::ObStorageDatumUtils &datum_utils,
                           const char *buf,
                           const int64_t row_len,
-                          int32_t &cmp_result);
+                          int32_t &cmp_result,
+                          const int64_t common_prefix_len = 0);
 
   TO_STRING_KV(KP_(buf), KPC_(row_header), K_(cluster_cnt));
 

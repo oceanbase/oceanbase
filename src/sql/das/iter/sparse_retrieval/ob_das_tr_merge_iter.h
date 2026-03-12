@@ -31,6 +31,8 @@ class ObFtsEvalNode;
 class ObDASTextRetrievalIter;
 class ObDocIdExt;
 
+static const int64_t OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT = 256;
+
 struct ObDASTRMergeIterParam : public ObDASIterParam
 {
   ObDASTRMergeIterParam()
@@ -40,7 +42,6 @@ struct ObDASTRMergeIterParam : public ObDASIterParam
       tx_desc_(nullptr),
       snapshot_(nullptr),
       query_tokens_(),
-      dim_weights_(),
       max_batch_size_(0),
       boolean_compute_node_(nullptr),
       flags_(0)
@@ -56,7 +57,6 @@ struct ObDASTRMergeIterParam : public ObDASIterParam
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
   ObArray<ObString> query_tokens_;
-  ObArray<double> dim_weights_;
   int64_t max_batch_size_;
   ObFtsEvalNode *boolean_compute_node_;
   union {
@@ -109,7 +109,6 @@ public:
       ObDASIRScanRtDef *ir_rtdef,
       common::ObIAllocator &alloc,
       ObArray<ObString> &query_tokens,
-      ObArray<double> &boost_values,
       ObFtsEvalNode *&root_node,
       bool &has_duplicate_boolean_tokens);
   int set_children_iter_rangekey(const common::ObIArray<std::pair<ObDocIdExt, int>> &virtual_rangekeys, const int64_t batch_size);
@@ -137,10 +136,12 @@ public:
     return ret;
   }
   int is_topk_mode() const { return topk_mode_; }
+  static int init_topk_limit(
+      const ObDASIRScanCtDef *ir_ctdef,
+      ObEvalCtx &eval_ctx,
+      int64_t &topk_limit);
   void set_topk_limit(const int64_t limit) { topk_limit_ = limit; }
   int adjust_topk_limit(const int64_t limit);
-private:
-  int init_das_iter_scan_params();
   static int init_das_iter_scan_param(
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
@@ -154,18 +155,30 @@ private:
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
       ObTableScanParam &scan_param);
+  static int gen_inv_idx_scan_default_range(
+      const ObDASIRScanCtDef *ir_ctdef,
+      const ObString &query_token,
+      common::ObArenaAllocator &allocator,
+      ObNewRange &scan_range);
+  static int gen_inv_idx_scan_one_range(
+      const ObDASIRScanCtDef *ir_ctdef,
+      const ObString &query_token,
+      const ObDocIdExt &doc_id,
+      common::ObArenaAllocator &allocator,
+      ObNewRange &scan_range);
+  static int gen_fwd_idx_scan_feak_range(
+      const ObDASIRScanCtDef *ir_ctdef,
+      ObNewRange &scan_range);
+private:
+  int init_das_iter_scan_params();
   int create_dim_iters();
   int init_dim_iter_param(ObTextRetrievalScanIterParam &iter_param, const int64_t &idx);
   int create_sparse_retrieval_iter();
   int init_daat_iter_param(ObTextDaaTParam &iter_param);
   int init_taat_iter_param(ObTextTaaTParam &iter_param);
   int set_children_iter_rangekey();
-  int gen_inv_idx_scan_default_range(const ObString &query_token, ObNewRange &scan_range);
-  int gen_inv_idx_scan_one_range(const ObString &query_token, const ObDocIdExt &doc_id, ObNewRange &scan_range);
-  int gen_fwd_idx_scan_feak_range(ObNewRange &scan_range);
-  int init_topk_limit();
   int init_block_max_iter_param();
-  int init_doc_length_est_param();
+  int init_bm25_param_est_ctx();
 private:
   static const int64_t FWD_IDX_ROWKEY_COL_CNT = 2;
   static const int64_t INV_IDX_ROWKEY_COL_CNT = 2;
@@ -177,7 +190,6 @@ private:
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
   ObArray<ObString> query_tokens_;
-  ObArray<double> dim_weights_;
   ObSparseRetrievalMergeParam sr_iter_param_;
   storage::ObISparseRetrievalMergeIter *sparse_retrieval_iter_;
   static const int64_t OB_DEFAULT_QUERY_TOKEN_ITER_CNT = 4;
@@ -191,8 +203,7 @@ private:
   ObFtsEvalNode *boolean_compute_node_;
   ObFixedArray<ObTableScanParam *, ObIAllocator> block_max_scan_params_;
   ObBlockMaxScoreIterParam block_max_iter_param_;
-  ObBlockStatScanParam doc_length_est_param_;
-  ObFixedArray<ObSkipIndexColMeta, ObIAllocator> doc_length_est_stat_cols_;
+  ObBM25ParamMultiEstCtx bm25_param_est_ctx_;
   int64_t topk_limit_;
   ObLSID ls_id_;
   ObTabletID total_doc_cnt_tablet_id_;

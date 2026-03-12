@@ -10,6 +10,7 @@ target_link_libraries(mit_env PUBLIC
 
 add_subdirectory(logservice)
 add_subdirectory(simple_server)
+add_subdirectory(hybrid_search)
 add_subdirectory(mtlenv)
 add_subdirectory(multi_replica)
 #add_subdirectory(palf_cluster)

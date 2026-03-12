@@ -84,7 +84,7 @@ public:
       output_row_cnt_(0),
       inited_(false)
   {}
-  virtual ~ObDASIter() { release(); }
+  virtual ~ObDASIter() {}
 
   VIRTUAL_TO_STRING_KV(K_(type), K_(max_size), K_(eval_ctx), K_(exec_ctx), K_(output),
       K_(group_id_expr), K_(children_cnt), K_(inited));
@@ -95,6 +95,9 @@ public:
   void set_children_cnt(uint32_t children_cnt) { children_cnt_ = children_cnt; }
   int64_t get_children_cnt() const { return children_cnt_; }
   const ExprFixedArray *get_output() { return output_; }
+  int64_t get_max_size() const { return max_size_; }
+  ObEvalCtx *get_eval_ctx() const { return eval_ctx_; }
+  ObExecContext *get_exec_ctx() const { return exec_ctx_; }
 
   // The state of ObDASMergeIter may change many times during execution, e.g., the merge_type
   // changing from SEQUENTIAL_MERGE to SORT_MERGE, or the creation of a new batch of DAS tasks.

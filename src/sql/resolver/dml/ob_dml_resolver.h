@@ -372,6 +372,12 @@ public:
   void set_upper_insert_resolver(ObInsertResolver *insert_resolver) {
     upper_insert_resolver_ = insert_resolver; }
   int estimate_values_table_stats(ObValuesTableDef &table_def);
+  int create_index_data_gen_table_item(TableItem *&table_item, ObString table_name);
+  int index_data_gen_table_add_column(const share::schema::ObColumnSchemaV2 &column,
+                                      TableItem *&table_item,
+                                      ColumnItem *&col_item);
+  int resolve_index_data_gen_item(const ParseNode &table_node,
+                                  TableItem *&table_item);
 protected:
   int generate_pl_data_type(ObRawExpr *expr, pl::ObPLDataType &pl_data_type);
   int resolve_into_variables(const ParseNode *node,
@@ -936,6 +942,8 @@ protected:
                                     TableItem &table_item);
   int resolve_match_against_expr(ObMatchFunRawExpr &expr);
   int resolve_es_match_expr(ObMatchFunRawExpr &expr);
+  int resolve_index_data_gen_table_column_item(const ParseNode &parse_tree,
+                                               TableItem *table_item);
 private:
   int get_coll_type_from_anonymous_array(ObRawExpr *table_expr,
                                          const pl::ObCollectionType *&coll_type,

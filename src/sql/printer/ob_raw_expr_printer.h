@@ -147,6 +147,7 @@ private:
   int print_cast_type(ObRawExpr *expr);
   int print_json_expr(ObSysFunRawExpr *expr);
   int print_json_value(ObSysFunRawExpr *expr);
+  int print_json_extract(ObSysFunRawExpr *expr);
   int print_json_query(ObSysFunRawExpr *expr);
   int print_dot_notation(ObSysFunRawExpr *expr);
   int print_json_object_star(ObSysFunRawExpr *expr);
@@ -155,6 +156,7 @@ private:
   int print_json_array(ObSysFunRawExpr *expr);
   int print_json_mergepatch(ObSysFunRawExpr *expr);
   int print_json_return_type(ObRawExpr *expr);
+  int print_json_pick_type(ObRawExpr *expr);
   int print_is_json(ObSysFunRawExpr *expr);
   int print_json_object(ObSysFunRawExpr *expr);
   int print_ora_json_arrayagg(ObAggFunRawExpr *expr);

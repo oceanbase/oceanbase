@@ -81,6 +81,8 @@
 #include "sql/optimizer/ob_log_err_log.h"
 #include "sql/optimizer/ob_log_stat_collector.h"
 #include "sql/optimizer/ob_log_expand.h"
+#include "sql/optimizer/ob_log_hybrid_fusion.h"
+#include "sql/engine/basic/ob_hybrid_fusion_op.h"
 #include "sql/engine/aggregate/ob_merge_distinct_op.h"
 #include "sql/engine/aggregate/ob_merge_distinct_vec_op.h"
 #include "sql/engine/aggregate/ob_hash_distinct_op.h"

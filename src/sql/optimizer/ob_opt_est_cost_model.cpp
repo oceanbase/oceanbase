@@ -186,6 +186,7 @@ void ObIndexMetaInfo::assign(const ObIndexMetaInfo &index_meta_info)
   is_unique_index_ = index_meta_info.is_unique_index_;
   is_global_index_ = index_meta_info.is_global_index_;
   index_micro_block_count_ = index_meta_info.index_micro_block_count_;
+  is_search_index_ = index_meta_info.is_search_index_;
 }
 
 double ObIndexMetaInfo::get_micro_block_numbers() const

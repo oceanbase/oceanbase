@@ -120,6 +120,7 @@ private:
   int remove_strict_opt_in_pl(ParseNode *node, int8_t expr_flag);
   int remove_format_json_opt_in_pl(ParseNode *node, int8_t expr_flag);
   int process_json_value_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_json_extract_node(const ParseNode *node, ObRawExpr *&expr);
   int pre_check_json_path_valid(const ParseNode *node);
   int get_column_raw_text_from_node(const ParseNode *node, ObString &col_name);
   int process_ora_json_object_node(const ParseNode *node, ObRawExpr *&expr);

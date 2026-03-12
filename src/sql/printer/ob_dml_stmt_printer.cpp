@@ -20,6 +20,7 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/monitor/ob_sql_plan.h"
 #include "sql/resolver/dml/ob_transpose_resolver.h"
+#include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -506,20 +507,16 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
     LOG_WARN("stmt_ is NULL or buf_ is NULL or pos_ is NULL", K(ret));
   } else {
     switch (table_item->type_) {
-    case TableItem::LINK_TABLE: {
-        if (OB_FAIL(print_base_table(table_item))) {
-          LOG_WARN("failed to print base table", K(ret), K(*table_item));
-        } else if (!no_print_alias && !table_item->alias_name_.empty()) {
-          //DATA_PRINTF(lib::is_oracle_mode() ? " \"%.*s\"" : " `%.*s`",
-          //            LEN_AND_PTR(table_item->alias_name_));
-          DATA_PRINTF(" ");
-          PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
-        }
-        break;
-      }
+    case TableItem::LINK_TABLE:
     case TableItem::BASE_TABLE: {
-        if (OB_FAIL(print_base_table(table_item))) {
+        if (table_item->is_hybrid_search_table()) {
+          if (OB_FAIL(print_hybrid_search_table(table_item))) {
+            LOG_WARN("failed to print hybrid search table", K(ret), K(*table_item));
+          }
+        } else if (OB_FAIL(print_base_table(table_item))) {
           LOG_WARN("failed to print base table", K(ret), K(*table_item));
+        }
+        if (OB_FAIL(ret)) {
         } else if (!no_print_alias && !table_item->alias_name_.empty()) {
           //DATA_PRINTF(lib::is_oracle_mode() ? " \"%.*s\"" : " `%.*s`",
           //            LEN_AND_PTR(table_item->alias_name_));
@@ -529,10 +526,16 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
         break;
       }
     case TableItem::ALIAS_TABLE: {
-        if (OB_FAIL(print_base_table(table_item))) {
+        if (table_item->is_hybrid_search_table()) {
+          if (OB_FAIL(print_hybrid_search_table(table_item))) {
+            LOG_WARN("failed to print hybrid search table", K(ret), K(*table_item));
+          }
+        } else if (OB_FAIL(print_base_table(table_item))) {
           LOG_WARN("failed to print base table", K(ret), K(*table_item));
         //table in insert all can't print alias(bug:
-        } else if (!no_print_alias) {
+        }
+        if (OB_FAIL(ret)) {
+        } else  if (!no_print_alias) {
           DATA_PRINTF(" ");
           PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
         }
@@ -730,6 +733,20 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
           }
           break;
         }
+        case MulModeTableType::OB_INDEX_DATA_GEN_TABLE_TYPE : {
+          DATA_PRINTF("INDEX_DATA_GENERATOR_TABLE(");
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_item->json_table_def_->doc_exprs_.count(); ++i) {
+            if (OB_FAIL(expr_printer_.do_print(table_item->json_table_def_->doc_exprs_.at(i), T_FROM_SCOPE))) {
+              LOG_WARN("failed to print expr", K(ret));
+            } else {
+              DATA_PRINTF(",");
+            }
+          }
+          DATA_PRINTF(" %d", table_item->json_table_def_->index_table_id_);
+          DATA_PRINTF(")");
+          DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+          break;
+        }
         case MulModeTableType::OB_AI_SPLIT_DOCUMENT_TABLE_TYPE : {
           DATA_PRINTF("AI_SPLIT_DOCUMENT(");
           for (int64_t i = 0; OB_SUCC(ret) && i < table_item->json_table_def_->doc_exprs_.count(); ++i) {
@@ -780,6 +797,51 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
     }
   }
 
+  return ret;
+}
+
+int ObDMLStmtPrinter::print_hybrid_search_table(const TableItem *table_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item is null", K(ret));
+  } else {
+    DATA_PRINTF("hybrid_search(table ");
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(print_base_table(table_item))) {
+      LOG_WARN("failed to print base table for hybrid search", K(ret), KPC(table_item));
+    } else if (OB_ISNULL(table_item->dsl_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("hybrid search query info is null", K(ret), KPC(table_item));
+    } else if (table_item->dsl_query_->raw_dsl_param_str_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("hybrid search raw dsl param string is empty", K(ret), KPC(table_item));
+    } else {
+      ObString dsl_param_str = table_item->dsl_query_->raw_dsl_param_str_.trim_space_only();
+      DATA_PRINTF(", '");
+      if (OB_FAIL(ret)) {
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < dsl_param_str.length(); ++i) {
+          const char ch = dsl_param_str.ptr()[i];
+          if ('\'' == ch) {
+            DATA_PRINTF("''");
+          } else if ('\\' == ch) {
+            // Keep backslashes after SQL literal parsing.
+            DATA_PRINTF("\\\\");
+          } else {
+            DATA_PRINTF("%c", ch);
+          }
+        }
+        if (OB_SUCC(ret)) {
+          DATA_PRINTF("'");
+        }
+      }
+      if (OB_SUCC(ret)) {
+        DATA_PRINTF(")");
+      }
+    }
+  }
   return ret;
 }
 

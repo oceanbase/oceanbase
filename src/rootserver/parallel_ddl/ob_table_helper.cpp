@@ -1047,6 +1047,7 @@ int ObTableHelper::inner_generate_aux_table_schema_(const ObCreateTableArg &arg)
       ObIDGenerator id_generator;
       int64_t object_cnt = arg.index_arg_list_.size();
       bool has_lob_table = false;
+      bool has_index_def_table = false;
       uint64_t object_id = OB_INVALID_ID;
       if (!data_table->is_external_table()) {
         has_lob_table = data_table->has_lob_column(true/*ignore_unused_column*/);
@@ -1119,6 +1120,8 @@ int ObTableHelper::inner_generate_aux_table_schema_(const ObCreateTableArg &arg)
           } else {
             // do nothing, don't need to force generate the lob table
           }
+        } else if (is_search_def_index(index_arg.index_type_)) {
+          has_index_def_table = true;
         }
 
         if (OB_FAIL(ret)) {
@@ -1177,9 +1180,65 @@ int ObTableHelper::inner_generate_aux_table_schema_(const ObCreateTableArg &arg)
 
         } // end HEAP_VARS_2
       }
+      if (OB_SUCC(ret) && has_index_def_table) {
+        if (OB_FAIL(build_search_index_mapping_())) {
+          LOG_WARN("failed to build search index mapping", KR(ret));
+        }
+      }
     }
   }
 
   } // end HEAP_VAR
+  return ret;
+}
+
+int ObTableHelper::build_search_index_mapping_()
+{
+  int ret = OB_SUCCESS;
+  if (new_tables_.count() <= 1) {
+    // only base table exists, nothing to do
+  } else {
+    // new_tables_[0] is the main data table, index tables start from 1
+    for (int64_t i = 1; OB_SUCC(ret) && i < new_tables_.count(); ++i) {
+      ObTableSchema &def_schema = new_tables_.at(i);
+      if (!share::schema::is_search_def_index(def_schema.get_index_type())) {
+        continue;
+      }
+      bool matched = false;
+      const ObString &def_name = def_schema.get_table_name_str();
+      const uint64_t def_table_id = def_schema.get_table_id();
+      // find its paired gin data table by name pattern: "<def_name>_gin_data"
+      for (int64_t j = 1; OB_SUCC(ret) && j < new_tables_.count(); ++j) {
+        ObTableSchema &data_schema = new_tables_.at(j);
+        if (!share::schema::is_search_data_index(data_schema.get_index_type())) {
+          continue;
+        }
+        const ObString &data_name = data_schema.get_table_name_str();
+        const char *suffix = "_search_data";
+        const int64_t suffix_len = STRLEN("_search_data");
+        if (data_name.length() == def_name.length() + suffix_len) {
+          if (0 == STRNCMP(data_name.ptr(), def_name.ptr(), def_name.length())
+              && 0 == STRNCMP(data_name.ptr() + def_name.length(), suffix, suffix_len)) {
+            matched = true;
+          }
+        }
+        if (matched) {
+          data_schema.set_data_table_id(def_table_id);
+          ObString index_table_name;
+          if (OB_FAIL(ObTableSchema::build_index_table_name(
+              allocator_, def_table_id, data_schema.get_origin_index_name_str(), index_table_name))) {
+            LOG_WARN("build_index_table_name failed", K(def_table_id), K(data_schema.get_origin_index_name_str()), K(ret));
+          } else if (OB_FAIL(data_schema.set_table_name(index_table_name))) {
+            LOG_WARN("set_table_name failed", K(index_table_name), K(ret));
+          }
+          break;
+        }
+      }
+      if (OB_SUCC(ret) && !matched) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the index definition table and the index data table should correspond one-to-one", K(ret));
+      }
+    }
+  }
   return ret;
 }

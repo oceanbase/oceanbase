@@ -15,6 +15,7 @@
  */
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_attach_define.h"
+#include "sql/das/search/ob_das_scalar_define.h"
 namespace oceanbase {
 namespace sql {
 
@@ -273,20 +274,21 @@ int ObDASAttachSpec::set_calc_exprs_tree(ObDASAttachCtDef *root,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < root->children_cnt_; ++i) {
     ObDASBaseCtDef *child = root->children_[i];
-    if (ObDASTaskFactory::is_attached(child->op_type_)) {
-      ObDASAttachCtDef *attach_child = static_cast<ObDASAttachCtDef *>(child);
-      OZ(set_calc_exprs_tree(attach_child, calc_exprs, max_batch_size));
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null child", K(ret), K(i));
+    } else if (ObDASTaskFactory::is_attached(child->op_type_)) {
+      if (child->op_type_ == DAS_OP_SCALAR_SCAN_QUERY) {
+        if (OB_FAIL(static_cast<ObDASScalarScanCtDef *>(child)->pd_expr_spec_.set_calc_exprs(calc_exprs, max_batch_size))) {
+          LOG_WARN("failed to set scalar scan calc exprs", K(ret), KPC(child));
+        }
+      } else {
+        ObDASAttachCtDef *attach_child = static_cast<ObDASAttachCtDef *>(child);
+        OZ(set_calc_exprs_tree(attach_child, calc_exprs, max_batch_size));
+      }
     } else if (child->op_type_ == DAS_OP_TABLE_SCAN) {
       if (OB_FAIL(static_cast<ObDASScanCtDef *>(child)->pd_expr_spec_.set_calc_exprs(calc_exprs, max_batch_size))) {
         LOG_WARN("failed to set scan calc exprs", K(ret), KPC(child));
-      }
-    }
-  }
-  if (OB_SUCC(ret) && root->op_type_ == DAS_OP_INDEX_MERGE) {
-    ObDASScanCtDef *main_scan_ctdef = static_cast<ObDASIndexMergeCtDef *>(root)->main_scan_ctdef_;
-    if (main_scan_ctdef != nullptr) {
-      if (OB_FAIL(main_scan_ctdef->pd_expr_spec_.set_calc_exprs(calc_exprs, max_batch_size))) {
-        LOG_WARN("failed to set main scan calc exprs", K(ret), KPC(main_scan_ctdef));
       }
     }
   }

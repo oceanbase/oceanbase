@@ -33,7 +33,7 @@ public:
   static void set_whole_range(ObNewRange &scan_range, common::ObTableID table_id);
   static int get_distance_expr_type(ObExpr &expr, ObEvalCtx &ctx, ObExprVectorDistance::ObVecDisType &dis_type);
   static int get_real_search_vec(common::ObIAllocator &allocator,
-                                 ObDASSortRtDef *sort_rtdef,
+                                 ObEvalCtx *eval_ctx,
                                  ObExpr *origin_vec,
                                  ObString &real_search_vec);
   static int init_limit(const ObDASVecAuxScanCtDef *ir_ctdef,

@@ -19,6 +19,10 @@
 #include "sql/das/ob_das_ir_define.h"
 #include "ob_block_max_iter.h"
 #include "ob_i_sparse_retrieval_iter.h"
+
+#include "sql/das/search/ob_i_das_search_op.h"
+#include "ob_inv_idx_param_estimator.h"
+
 namespace oceanbase
 {
 namespace storage
@@ -29,7 +33,6 @@ struct ObTextRetrievalScanIterParam
 {
   ObTextRetrievalScanIterParam()
     : allocator_(nullptr),
-      mem_context_(nullptr),
       inv_idx_scan_param_(nullptr),
       inv_idx_agg_param_(nullptr),
       fwd_idx_scan_param_(nullptr),
@@ -42,24 +45,27 @@ struct ObTextRetrievalScanIterParam
       relevance_expr_(nullptr),
       inv_scan_doc_length_col_(nullptr),
       inv_scan_domain_id_col_(nullptr),
-      inv_idx_agg_cache_mode_(false)
+      inv_scan_pos_list_col_(nullptr),
+      reuse_inv_idx_agg_res_(false),
+      use_rich_format_(false)
   {}
 
-  ObArenaAllocator *allocator_;
-  lib::MemoryContext mem_context_;
+  ObArenaAllocator *allocator_; // long-term allocator, lifetime larger than iter
   ObTableScanParam *inv_idx_scan_param_;
-  ObTableScanParam *inv_idx_agg_param_;
-  ObTableScanParam *fwd_idx_scan_param_;
+  ObTableScanParam *inv_idx_agg_param_; // reserved for potential stable ranking feature
+  ObTableScanParam *fwd_idx_scan_param_; // TODO: remove after barrier version between 43x
   sql::ObDASScanIter *inv_idx_scan_iter_;
-  sql::ObDASScanIter *inv_idx_agg_iter_;
-  sql::ObDASScanIter *fwd_idx_agg_iter_;
-  sql::ObExpr *inv_idx_agg_expr_;
-  sql::ObExpr *fwd_idx_agg_expr_;
+  sql::ObDASScanIter *inv_idx_agg_iter_; // reserved for potential stable ranking feature
+  sql::ObDASScanIter *fwd_idx_agg_iter_; // TODO: remove after barrier version between 43x
+  sql::ObExpr *inv_idx_agg_expr_; // reserved for potential stable ranking feature
+  sql::ObExpr *fwd_idx_agg_expr_; // TODO: remove after barrier version between 43x
   sql::ObEvalCtx *eval_ctx_;
   sql::ObExpr *relevance_expr_;
   sql::ObExpr *inv_scan_doc_length_col_;
   sql::ObExpr *inv_scan_domain_id_col_;
-  bool inv_idx_agg_cache_mode_;
+  sql::ObExpr *inv_scan_pos_list_col_;
+  bool reuse_inv_idx_agg_res_;
+  bool use_rich_format_;
 };
 
 class ObTextRetrievalTokenIter final : public ObISparseRetrievalDimIter
@@ -79,8 +85,8 @@ public:
   virtual int update_scan_param(const ObString &token, common::ObArenaAllocator &allocator);
 public:
   sql::ObBitVector *get_skip() { return skip_; }
-  int get_token_doc_cnt(int64_t &token_doc_cnt) const;
-  double get_max_token_relevance() const { return max_token_relevance_; }
+  int get_token_doc_cnt(int64_t &token_doc_cnt);
+  int get_or_calculate_max_token_relevance(double &max_token_relevance);
 private:
   int init_calc_exprs_in_relevance_expr();
   void clear_batch_wise_evaluated_flag(const int64_t count);
@@ -103,12 +109,17 @@ private:
   inline bool need_fill_token_weight() { return !need_fill_token_cnt(); }
   // tools method
   // In ivector2.0, need use the size which is created by precision to alloc the memeory.
+  // TODO: remove this decimal int set functions after using doc_length expr as bm25 arg expr directly
   static int set_decimal_int_by_precision(ObDatum &result_datum, const uint64_t decint, const ObPrecision precision);
+  static int set_decimal_int_by_precision(
+      const uint64_t &value,
+      const ObPrecision precision,
+      const int64_t idx,
+      ObIVector &vec);
 public:
   static const int64_t FWD_IDX_ROWKEY_COL_CNT = 2;
   static const int64_t INV_IDX_ROWKEY_COL_CNT = 2;
 private:
-  lib::MemoryContext mem_context_;
   ObArenaAllocator *allocator_;
   ObTableScanParam *inv_idx_scan_param_;
   ObTableScanParam *inv_idx_agg_param_;
@@ -131,8 +142,10 @@ private:
   int64_t token_doc_cnt_;
   double max_token_relevance_;
   ObDocIdExt advance_doc_id_;
+  bool use_doc_length_col_as_agg_;
   bool token_doc_cnt_calculated_;
-  bool inv_idx_agg_cache_mode_;
+  bool reuse_inv_idx_agg_res_;
+  bool use_rich_format_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTextRetrievalTokenIter);
 };
@@ -150,32 +163,48 @@ public:
   virtual int advance_to(const ObDatum &id_datum) override;
   virtual int get_curr_score(double &score) const override;
   virtual int get_curr_id(const ObDatum *&id_datum) const override;
+  int get_curr_doc_length(int64_t &length) const;
+  int get_curr_pos_list(ObString &pos_list) const;
   virtual bool iter_end() const override { return iter_end_; }
 public:
-  int get_token_doc_cnt(int64_t &token_doc_cnt) const { return token_iter_->get_token_doc_cnt(token_doc_cnt); }
+  int get_token_doc_cnt(int64_t &token_doc_cnt) { return token_iter_.get_token_doc_cnt(token_doc_cnt); }
   virtual int get_dim_max_score(double &score) override {
     int ret = OB_SUCCESS;
-    score = token_iter_->get_max_token_relevance();
-    if (OB_UNLIKELY(score < 0.0)) {
+    if (OB_FAIL(token_iter_.get_or_calculate_max_token_relevance(score))) {
+      LOG_WARN("failed to get or calculate max token relevance", K(ret));
+    } else if (OB_UNLIKELY(score < 0.0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected max token relevance", K(ret), K(score));
     }
     return ret;
   }
+  void set_filter_threshold(const double threshold);
 private:
-  int save_relevances_and_docids();
-  int save_docids();
+  int do_expr_materialization();
+  int do_expr_materialization_with_threshold();
+  int try_refresh_max_batch_size();
+private:
+  static constexpr int64_t MIN_BATCH_SIZE = 4;
+  static constexpr double SKIPPED_ROWS_RATIO = 0.9;
   ObArenaAllocator *allocator_;
-  ObTextRetrievalTokenIter *token_iter_;
+  ObTextRetrievalTokenIter token_iter_;
   sql::ObEvalCtx *eval_ctx_;
   sql::ObExpr *relevance_expr_;
   sql::ObExpr *inv_scan_domain_id_col_;
+  sql::ObExpr *inv_scan_doc_length_col_;
+  sql::ObExpr *inv_scan_pos_list_col_;
   int64_t max_batch_size_;
+  int64_t initial_max_batch_size_;
   int64_t cur_idx_;
   int64_t count_;
+  int64_t skipped_rows_in_advance_;
+  double filter_threshold_;
   ObFixedArray<double, ObIAllocator> relevance_; // when ~ObFixedArray(), wikll destory itself
   ObFixedArray<ObDocIdExt, ObIAllocator> doc_id_;
+  ObFixedArray<int64_t, ObIAllocator> doc_length_;
+  ObFixedArray<ObString, ObIAllocator> pos_list_;
   common::ObDatumCmpFuncType cmp_func_;
+  bool use_rich_format_;
   bool is_inited_;
   bool iter_end_;
   DISALLOW_COPY_AND_ASSIGN(ObTextRetrievalDaaTTokenIter);
@@ -199,6 +228,10 @@ public:
 
   virtual int get_curr_score(double &score) const override;
   virtual int get_curr_id(const ObDatum *&id_datum) const override;
+  int get_curr_doc_length(int64_t &length) const;
+  int get_curr_pos_list(ObString &pos_list) const;
+  int get_max_token_relevance(double &max_token_relevance)
+  { return token_iter_.get_dim_max_score(max_token_relevance); }
   virtual int get_dim_max_score(double &score) override;
   virtual int advance_shallow(const ObDatum &id_datum, const bool inclusive) override;
   virtual int get_curr_block_max_info(const ObMaxScoreTuple *&max_score_tuple) override;
@@ -206,6 +239,8 @@ public:
   virtual bool iter_end() const override { return block_max_iter_end_ || token_iter_.iter_end(); }
   // currently, for text retrieval, total_doc_cnt and token_doc_cnt is required before block max calculation
   int init_block_max_iter(const int64_t total_doc_cnt, const double avg_doc_token_cnt);
+  // threshold = topK_threshold - other_dim_max_score
+  virtual void set_filter_threshold(const double threshold) override { token_iter_.set_filter_threshold(threshold); }
 private:
   int calc_dim_max_score(
       const ObBlockMaxScoreIterParam &block_max_iter_param,
@@ -226,6 +261,10 @@ private:
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTextRetrievalBlockMaxIter);
 };
+
+
+/***************************************** Vec 2.0 ************************************************/
+
 
 } // namespace storage
 } // namespace oceanbase

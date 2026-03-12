@@ -39,6 +39,7 @@
 #include "share/ob_scheduled_manage_dynamic_partition.h"
 #include "share/schema/ob_ccl_rule_sql_service.h"
 #include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
+#include "share/search_index/ob_search_index_builder_util.h"
 #include "share/ob_lob_check_job_scheduler.h"                    // ObLobCheckJobScheduler
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
@@ -753,7 +754,8 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
       LOG_WARN("get tables in database failed", K(tenant_id), KT(database_id), K(ret));
     } else {
       // drop index tables first
-      for (int64_t cycle = 0; OB_SUCC(ret) && cycle < 2; ++cycle) {
+      int64_t cycle_cnt = 2;
+      for (int64_t cycle = 0; OB_SUCC(ret) && cycle < cycle_cnt; ++cycle) {
         for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
           const ObTableSchema *table = NULL;
           const uint64_t table_id = table_ids.at(i);
@@ -767,8 +769,28 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
           } else if (table->is_in_recyclebin()) {
             // already been dropped before
           } else {
+            /**
+             * search_data_index establishes cascading dependencies on search_def_index and main_table via data_table_id.
+             * The dependency chain is: search_data_index -> search_def_index -> main_table.
+             * During deletion, the following order must be strictly followed to avoid dependency conflicts:
+             * 1. Delete search_data_index first
+             * 2. Then delete search_def_index
+             * 3. Finally delete the main_table
+             * This ensures the integrity of the cascading relationship during cleanup.
+            */
+            if (table->is_search_index()) {
+              cycle_cnt = 3;
+            }
+            bool is_immediate_delete = false;
             bool is_delete_first = table->is_aux_table() || table->is_mlog_table();
-            if ((0 == cycle ? is_delete_first : !is_delete_first)) {
+            if (0 == cycle) {
+              is_immediate_delete = (is_delete_first && !table->is_search_def_index());
+            } else if (1 == cycle) {
+              is_immediate_delete = (2 == cycle_cnt ? !is_delete_first : table->is_search_def_index());
+            } else {
+              is_immediate_delete = !is_delete_first;
+            }
+            if (is_immediate_delete) {
               // drop triggers before drop table
               if (OB_FAIL(ObPLDDLOperator::drop_trigger_cascade(*table, trans, *this))) {
                 LOG_WARN("drop trigger failed", K(ret), K(table->get_table_id()));
@@ -9596,11 +9618,18 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
   const ObColumnSchemaV2 *index_col = NULL;
   const uint64_t tenant_id = index_schema.get_tenant_id();
   uint64_t data_table_id = index_schema.get_data_table_id();
+  const bool is_search_data_index = index_schema.is_search_data_index();
   if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table))) {
     LOG_WARN("get table schema failed", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_ISNULL(data_table)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("data table schema is unknown", K(data_table_id));
+    LOG_WARN("data table schema is unknown", KR(ret), K(data_table_id));
+  } else if (data_table->is_search_def_index()
+    && OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table->get_data_table_id(), data_table))) {
+    LOG_WARN("get table schema failed", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(data_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data table schema is unknown", KR(ret), K(data_table_id));
   } else if (!new_data_table_schema.is_valid()) {
     if (OB_FAIL(new_data_table_schema.assign(*data_table))) {
       LOG_WARN("fail to assign schema", K(ret));
@@ -9614,7 +9643,7 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
     new_data_table_schema.set_in_offline_ddl_white_list(index_schema.get_in_offline_ddl_white_list());
   }
   for (ObTableSchema::const_column_iterator iter = index_schema.column_begin();
-       OB_SUCC(ret) && iter != index_schema.column_end();
+       OB_SUCC(ret) && !is_search_data_index && iter != index_schema.column_end();
        ++iter) {
     ObColumnSchemaV2 *column_schema = (*iter);
     if (OB_ISNULL(column_schema)) {
@@ -9673,7 +9702,7 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
                                     trans))) {
       LOG_WARN("alter table options failed", K(ret), K(new_data_table_schema));
     } else {
-      for (int64_t j = 0; OB_SUCC(ret) && j < simple_index_infos.count(); ++j) {
+      for (int64_t j = 0; OB_SUCC(ret) && !is_search_data_index && j < simple_index_infos.count(); ++j) {
         if (simple_index_infos.at(j).table_id_ == index_schema.get_table_id()) {
           simple_index_infos.remove(j);
           if (OB_FAIL(new_data_table_schema.set_simple_index_infos(simple_index_infos))) {

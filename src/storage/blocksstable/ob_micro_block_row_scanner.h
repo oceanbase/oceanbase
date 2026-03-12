@@ -174,6 +174,16 @@ public:
       int64_t &skip_row_idx,
       bool &has_data,
       bool &range_finished);
+  int skip_to_rowkey(
+      const int64_t begin,
+      const int64_t end,
+      const ObDatumRowkey &key,
+      const bool inclusive_start,
+      const bool is_left_border,
+      const bool is_right_border,
+      int64_t &skip_row_idx,
+      bool &has_data,
+      const int64_t common_prefix_len = 0);
   int compare_rowkey(const ObDatumRowkey &rowkey, const bool is_cmp_end, int32_t &cmp_ret) const;
   OB_INLINE void skip_to_end()
   {

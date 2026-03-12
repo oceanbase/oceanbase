@@ -89,6 +89,7 @@ public :
   virtual int advance_shallow(const ObDatum &id_datum, const bool inclusive) = 0;
   virtual int get_curr_block_max_info(const ObMaxScoreTuple *&max_score_tuple) = 0;
   virtual bool in_shallow_status() const = 0;
+  virtual void set_filter_threshold(const double threshold) { UNUSED(threshold); }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObISRDimBlockMaxIter);
 };
@@ -96,25 +97,23 @@ private:
 struct ObSparseRetrievalMergeParam
 {
   ObSparseRetrievalMergeParam()
-    : dim_weights_(nullptr),
-      limit_param_(nullptr),
+    : limit_param_(nullptr),
       eval_ctx_(nullptr),
       id_proj_expr_(nullptr),
       relevance_expr_(nullptr),
       relevance_proj_expr_(nullptr),
       filter_expr_(nullptr),
       topk_limit_(0),
-      field_boost_(1.0),
-      max_batch_size_(1)
+      max_batch_size_(1),
+      need_set_score_norm_(false)
   {}
   ~ObSparseRetrievalMergeParam() {}
   bool need_project_relevance() const { return relevance_proj_expr_ != nullptr; }
   bool need_filter() const { return filter_expr_ != nullptr; }
   bool need_pushdown_topk() const { return topk_limit_ > 0; }
-  TO_STRING_KV(KPC_(dim_weights), KPC(limit_param_), KP_(eval_ctx),
+  TO_STRING_KV(KPC(limit_param_), KP_(eval_ctx),
       KP_(id_proj_expr), KP_(relevance_expr), KP_(relevance_proj_expr), KP_(filter_expr),
       K_(topk_limit), K_(max_batch_size));
-  const ObIArray<double> *dim_weights_; // score weight for each dimension
   const common::ObLimitParam *limit_param_;
   sql::ObEvalCtx *eval_ctx_;
   sql::ObExpr *id_proj_expr_;
@@ -122,8 +121,8 @@ struct ObSparseRetrievalMergeParam
   sql::ObExpr *relevance_proj_expr_;
   sql::ObExpr *filter_expr_; // filter expr on score
   int64_t topk_limit_;
-  double field_boost_;
   int64_t max_batch_size_;
+  bool need_set_score_norm_; // for multi match only; default to false
 };
 
 class ObISparseRetrievalMergeIter

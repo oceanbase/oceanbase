@@ -25,7 +25,10 @@ ObSRBMMIterImpl::ObSRBMMIterImpl()
     sorted_iters_(),
     non_essential_dim_count_(0),
     non_essential_dim_max_score_(0.0),
-    non_essential_dim_threshold_(0.0)
+    non_essential_dim_threshold_(0.0),
+    all_dims_max_score_sum_(0.0),
+    dim_max_scores_(),
+    is_max_score_cached_(false)
 {}
 
 int ObSRBMMIterImpl::init(
@@ -42,6 +45,11 @@ int ObSRBMMIterImpl::init(
     LOG_WARN("failed to init sorted iters", K(ret));
   } else if (OB_FAIL(sorted_iters_.prepare_allocate(dim_iters.count()))) {
     LOG_WARN("failed to prepare allocate sorted iters", K(ret));
+  } else if (FALSE_IT(dim_max_scores_.set_allocator(&allocator_))) {
+  } else if (OB_FAIL(dim_max_scores_.init(dim_iters.count()))) {
+    LOG_WARN("failed to init iter max scores", K(ret));
+  } else if (OB_FAIL(dim_max_scores_.prepare_allocate(dim_iters.count()))) {
+    LOG_WARN("failed to prepare allocate iter max scores", K(ret));
   }
   return ret;
 }
@@ -51,6 +59,8 @@ void ObSRBMMIterImpl::reuse(const bool switch_tablet)
   non_essential_dim_count_ = 0;
   non_essential_dim_max_score_ = 0.0;
   non_essential_dim_threshold_ = 0.0;
+  all_dims_max_score_sum_ = 0.0;
+  is_max_score_cached_ = false;
   ObSRBlockMaxTopKIterImpl::reuse(switch_tablet);
 }
 
@@ -60,6 +70,9 @@ void ObSRBMMIterImpl::reset()
   non_essential_dim_count_ = 0;
   non_essential_dim_max_score_ = 0.0;
   non_essential_dim_threshold_ = 0.0;
+  all_dims_max_score_sum_ = 0.0;
+  dim_max_scores_.reset();
+  is_max_score_cached_ = false;
   ObSRBlockMaxTopKIterImpl::reset();
 }
 
@@ -198,6 +211,8 @@ int ObSRBMMIterImpl::try_update_essential_dims()
 
   // Notice that non_essential_dim_max_score could decrease with non-essential dims iter end
   double curr_non_ess_max_score = 0;
+  double next_non_ess_max_score = 0;
+  relevance_collector_->reuse();
   for (int64_t i = 0;
       OB_SUCC(ret) && i < sorted_iters_.count() && non_essential_dim_threshold_ <= top_k_threshold;
       ++i) {
@@ -211,8 +226,11 @@ int ObSRBMMIterImpl::try_update_essential_dims()
       // skip
     } else if (OB_FAIL(iter->get_dim_max_score(score))) {
       LOG_WARN("failed to get curr score", K(ret));
+    } else if (OB_FAIL(relevance_collector_->collect_one_dim(iter_idx, score))) {
+      LOG_WARN("failed to collect one dimension", K(ret));
+    } else if (OB_FAIL(relevance_collector_->get_partial_result(next_non_ess_max_score))) {
+      LOG_WARN("failed to get result", K(ret));
     } else {
-      const double next_non_ess_max_score = curr_non_ess_max_score + score;
       if (next_non_ess_max_score > top_k_threshold) {
         non_essential_dim_count_ = (i - 1) >= 0 ? i : 0;
         non_essential_dim_max_score_ = curr_non_ess_max_score;
@@ -310,9 +328,8 @@ int ObSRBMMIterImpl::evaluate_pivot_range(
 {
   int ret = OB_SUCCESS;
   is_candidate = false;
-  non_essential_block_max_score = 0.0;
 
-  double block_max_score = 0.0;
+  relevance_collector_->reuse();
   const double essential_threshold = get_essential_dim_threshold();
   const ObMaxScoreTuple *max_score_tuple = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < next_round_cnt_; ++i) {
@@ -329,16 +346,21 @@ int ObSRBMMIterImpl::evaluate_pivot_range(
       }
     } else if (OB_FAIL(iter->get_curr_block_max_info(max_score_tuple))) {
       LOG_WARN("failed to get block max score", K(ret), K(iter_idx));
-    } else {
-      block_max_score += max_score_tuple->max_score_;
+    } else if (OB_FAIL(relevance_collector_->collect_one_dim(iter_idx, max_score_tuple->max_score_))) {
+      LOG_WARN("failed to collect one dimension", K(ret));
     }
   }
 
-  if (OB_SUCC(ret)) {
-    is_candidate = block_max_score > essential_threshold;
+  double essential_block_max_score = 0.0;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(relevance_collector_->get_partial_result(essential_block_max_score))) {
+    LOG_WARN("failed to get result", K(ret));
+  } else {
+    is_candidate = essential_block_max_score > essential_threshold;
   }
 
   if (OB_SUCC(ret) && is_candidate) {
+    relevance_collector_->reuse();
     is_candidate = false;
     const double top_k_threshold = get_top_k_threshold();
     for (int64_t i = 0; OB_SUCC(ret) && i < non_essential_dim_count_; ++i) {
@@ -357,17 +379,21 @@ int ObSRBMMIterImpl::evaluate_pivot_range(
         }
       } else if (OB_FAIL(iter->get_curr_block_max_info(max_score_tuple))) {
         LOG_WARN("failed to get block max score", K(ret), K(iter_idx));
-      } else {
-        block_max_score += max_score_tuple->max_score_;
-        non_essential_block_max_score += max_score_tuple->max_score_;
+      } else if (OB_FAIL(relevance_collector_->collect_one_dim(iter_idx, max_score_tuple->max_score_))) {
+        LOG_WARN("failed to collect one dimension", K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
-      is_candidate = block_max_score > top_k_threshold;
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(relevance_collector_->get_partial_result(non_essential_block_max_score))) {
+      LOG_WARN("failed to get result", K(ret));
+    } else {
+      is_candidate = essential_block_max_score + non_essential_block_max_score > top_k_threshold;
     }
   }
 
-  LOG_DEBUG("[Sparse Retrieval] eval bmm pivot", K(ret), K(pivot_id), K(is_candidate), K(block_max_score),
+  LOG_DEBUG("[Sparse Retrieval] eval bmm pivot", K(ret), K(pivot_id), K(is_candidate),
+      K(essential_block_max_score + non_essential_block_max_score),
       K(non_essential_block_max_score), K(essential_threshold), K(get_top_k_threshold()), K_(sorted_iters));
   return ret;
 }
@@ -385,7 +411,7 @@ int ObSRBMMIterImpl::evaluate_essential_pivot(
 
   const ObDatum *collected_id = nullptr;
   essential_score = 0.0;
-  bool need_project = false;
+  bool need_project = true;
 
   if (OB_FAIL(advance_dim_iters_for_next_round(pivot_id, true))) {
     LOG_WARN("failed to advance dim iters for next round", K(ret), K(pivot_id));
@@ -406,7 +432,7 @@ int ObSRBMMIterImpl::evaluate_essential_pivot(
   }
 
   if (OB_FAIL(ret) || !is_valid_pivot) {
-  } else if (OB_FAIL(collect_dims_by_id(collected_id, essential_score, need_project))) {
+  } else if (OB_FAIL(collect_dims_by_id(true, collected_id, essential_score, need_project))) {
     LOG_WARN("failed to collect dims by id", K(ret));
   } else {
     is_candidate = non_essential_block_max_score + essential_score > get_top_k_threshold();
@@ -454,14 +480,93 @@ int ObSRBMMIterImpl::evaluate_pivot(const ObDatum &pivot_id, const double &essen
 
   double pivot_score = 0.0;
   bool got_valid_id = false;
+  bool is_top_k = false;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(relevance_collector_->get_result(pivot_score, got_valid_id))) {
     LOG_WARN("failed to get result", K(ret));
-  } else if (got_valid_id && OB_FAIL(process_collected_row(pivot_id, pivot_score))) {
+  } else if (got_valid_id && OB_FAIL(process_collected_row(pivot_id, pivot_score, is_top_k))) {
     LOG_WARN("failed to process collected row", K(ret));
+  } else if (is_top_k) {
+    if (OB_FAIL(update_filter_thresholds_after_topk_update())) {
+      LOG_WARN("failed to update filter thresholds after topk update", K(ret));
+    }
   }
   LOG_DEBUG("[Sparse Retrieval] eval bmm pivot", K(ret), K(pivot_id), K(non_essential_score),
       K(essential_score), K(pivot_score), K(got_valid_id));
+  return ret;
+}
+
+
+int ObSRBMMIterImpl::calc_other_dims_max_score_sum(const int64_t iter_idx, double &max_score_sum)
+{
+  int ret = OB_SUCCESS;
+  if (!is_max_score_cached_) {
+    all_dims_max_score_sum_ = 0.0;
+    for (int64_t j = 0; OB_SUCC(ret) && j < dim_iters_->count(); ++j) {
+      ObISRDimBlockMaxIter *iter = get_iter(j);
+      if (OB_ISNULL(iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null iter", K(ret), K(j));
+      } else {
+        double dim_max_score = 0.0;
+        if (OB_FAIL(iter->get_dim_max_score(dim_max_score))) {
+          LOG_WARN("failed to get iter dim max score", K(ret), K(j));
+        } else {
+          dim_max_scores_.at(j) = dim_max_score;
+          all_dims_max_score_sum_ += dim_max_score;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_max_score_cached_ = true;
+      LOG_DEBUG("[Sparse Retrieval] cached all iters max score sum", K(all_dims_max_score_sum_), K(dim_iters_->count()));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(iter_idx < 0 || iter_idx >= dim_iters_->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected iter idx", K(ret), K(iter_idx), K(dim_iters_->count()));
+    } else {
+      max_score_sum = all_dims_max_score_sum_ - dim_max_scores_.at(iter_idx);
+    }
+  }
+  return ret;
+}
+
+int ObSRBMMIterImpl::set_filter_threshold_for_dim(const int64_t iter_idx, ObISRDimBlockMaxIter *iter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(iter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null iter", K(ret));
+  } else {
+    double other_iters_max_score_sum = 0.0;
+    if (OB_FAIL(calc_other_dims_max_score_sum(iter_idx, other_iters_max_score_sum))) {
+      LOG_WARN("failed to calc other iters max score sum", K(ret), K(iter_idx));
+    } else {
+      const double top_k_threshold = get_top_k_threshold();
+      const double filter_threshold = top_k_threshold - other_iters_max_score_sum;
+      iter->set_filter_threshold(filter_threshold);
+      LOG_DEBUG("[Sparse Retrieval] set filter threshold for iter", K(iter_idx), K(filter_threshold),
+          K(top_k_threshold), K(other_iters_max_score_sum));
+    }
+  }
+  return ret;
+}
+
+int ObSRBMMIterImpl::update_filter_thresholds_after_topk_update()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < dim_iters_->count(); ++i) {
+    ObISRDimBlockMaxIter *iter = get_iter(i);
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null iter", K(ret), K(i));
+    } else if (OB_FAIL(set_filter_threshold_for_dim(i, iter))) {
+      LOG_WARN("failed to set filter threshold for iter", K(ret), K(i));
+    }
+  }
   return ret;
 }
 
@@ -474,6 +579,8 @@ int ObSRBMMIterImpl::forward_next_round_iters()
     if (OB_ISNULL(iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null iter", K(ret));
+    } else if (OB_FAIL(set_filter_threshold_for_dim(iter_idx, iter))) {
+      LOG_WARN("failed to set filter threshold for iter", K(ret), K(iter_idx));
     } else if (OB_FAIL(iter->get_next_row())) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("failed to get next row", K(ret));

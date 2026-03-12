@@ -118,7 +118,8 @@ public:
     ITER_TREE_INDEX_MERGE == (_type)    ||               \
     ITER_TREE_MVI_LOOKUP == (_type)     ||               \
     ITER_TREE_VEC_LOOKUP == (_type)     ||               \
-    ITER_TREE_GIS_LOOKUP == (_type);                     \
+    ITER_TREE_GIS_LOOKUP == (_type)     ||               \
+    ITER_TREE_HYBRID_SEARCH == (_type);                  \
 })
 
 struct ObDASRelatedTabletID

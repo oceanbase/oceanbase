@@ -15,6 +15,7 @@
 #include "src/pl/ob_pl.h"
 #include "ob_expr_json_utils.h"
 #include "share/object/ob_obj_cast_util.h"
+#include "sql/engine/expr/ob_json_param_type.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -52,6 +53,7 @@ int ObExprJsonQueryParamInfo::deep_copy(common::ObIAllocator &allocator,
     other.pretty_type_ = pretty_type_;
     other.ascii_type_ = ascii_type_;
     other.scalars_type_ = scalars_type_;
+    other.pick_ = pick_;
     other.j_path_ = NULL;
     if (OB_FAIL(ob_write_string(allocator, path_str_, other.path_str_, true))) {
       LOG_WARN("fail to deep copy path str", K(ret));

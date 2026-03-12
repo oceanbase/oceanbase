@@ -6324,7 +6324,7 @@ bool ObServerSchemaService::need_construct_aux_infos_(
      const ObTableSchema &table_schema)
 {
   bool bret = true;
-  if (table_schema.is_index_table()
+  if ((table_schema.is_index_table() && !table_schema.is_search_def_index())
       || (table_schema.is_view_table()
            && !table_schema.is_materialized_view())
        || table_schema.is_aux_vp_table()

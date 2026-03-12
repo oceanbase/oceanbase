@@ -5,7 +5,7 @@
 | ObLogGroupBy | 1640 |
 | ObLogSort | 1272 |
 | ObLogJoin | 1624 |
-| ObLogTableScan | 4320 |
+| ObLogTableScan | 4672 |
 | ObLogLimit | 1104 |
 | ObLogExchange | 1728 |
 | ObLogSubPlanScan | 1096 |
@@ -28,7 +28,7 @@
 | ObLogSequence | 1208 |
 | ObLogMonitoringDump | 1048 |
 | ObLogFunctionTable | 1104 |
-| ObLogJsonTable | 1264 |
+| ObLogJsonTable | 1560 |
 | ObLogUnpivot | 1160 |
 | ObLogTempTableInsert | 1056 |
 | ObLogTempTableAccess | 1120 |

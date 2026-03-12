@@ -203,6 +203,13 @@ public:
       ObIArray<ObPartitionResolveResult> &resolve_results,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
       ObIAllocator *allocator);
+  static int append_search_index_args(
+      const share::schema::ObTableSchema &data_schema,
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg &index_arg,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<ObCreateIndexArg> &index_arg_list,
+      ObIAllocator *allocator);
   static int check_text_length(ObCharsetType cs_type, ObCollationType co_type,
                                const char *name, ObObjType &type,
                                int32_t &length,
@@ -581,12 +588,18 @@ public:
       const share::schema::ObColumnSchemaV2 &column_schema,
       const int64_t index_keyname_value,
       ParseNode *node);
+  int resolve_search_index_constraint(
+      const share::schema::ObTableSchema &table_schema,
+      const common::ObString &column_name,
+      const int64_t index_keyname_value);
+  int resolve_search_index_constraint(
+      const share::schema::ObColumnSchemaV2 &column_schema,
+      const int64_t index_keyname_value);
   static int get_partition_keys_by_part_func_expr(
       const ObString &part_func_expr_str,
       const bool is_oracle_mode,
       ObIAllocator &allocator,
       ObIArray<ObString> &partkey_strs);
-
 protected:
   static int append_vec_hnsw_args(
       const ObPartitionResolveResult &resolve_result,

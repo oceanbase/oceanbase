@@ -14,6 +14,7 @@
 
 #include "ob_ddl_scheduler.h"
 #include "rootserver/ddl_task/ob_drop_fts_index_task.h"
+#include "rootserver/ddl_task/ob_drop_search_index_task.h"
 #include "rootserver/ddl_task/ob_drop_vec_index_task.h"
 #include "rootserver/ddl_task/ob_drop_lob_task.h"
 #include "rootserver/ddl_task/ob_build_mview_task.h"
@@ -1308,6 +1309,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
       case DDL_CREATE_FTS_INDEX:
       case DDL_CREATE_MULTIVALUE_INDEX:
       case DDL_CREATE_VEC_SPIV_INDEX:
+      case DDL_CREATE_SEARCH_INDEX:
         create_index_arg = static_cast<const obrpc::ObCreateIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_build_fts_index_task(proxy,
                                                 param.src_table_schema_,
@@ -1444,6 +1446,20 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                          param.dest_table_schema_->get_aux_lob_meta_tid(),
                                          task_record))) {
           LOG_WARN("fail to create drop index task failed", K(ret));
+        }
+        break;
+      case DDL_DROP_SEARCH_INDEX:
+        drop_index_arg = static_cast<const obrpc::ObDropIndexArg *>(param.ddl_arg_);
+        if (OB_FAIL(create_drop_search_index_task(proxy,
+                                                  param.src_table_schema_,
+                                                  param.schema_version_,
+                                                  param.consumer_group_id_,
+                                                  param.def_index_schema_,
+                                                  param.data_index_schema_,
+                                                  drop_index_arg,
+                                                  *param.allocator_,
+                                                  task_record))) {
+          LOG_WARN("fail to create drop search index task", K(ret));
         }
         break;
       case DDL_MODIFY_COLUMN:
@@ -2737,6 +2753,84 @@ int ObDDLScheduler::create_drop_vec_ivf_index_task(
   return ret;
 }
 
+int ObDDLScheduler::create_drop_search_index_task(
+    common::ObISQLClient &proxy,
+    const share::schema::ObTableSchema *index_schema,
+    const int64_t schema_version,
+    const int64_t consumer_group_id,
+    const share::schema::ObTableSchema *def_index_schema,
+    const share::schema::ObTableSchema *data_index_schema,
+    const obrpc::ObDropIndexArg *drop_index_arg,
+    ObIAllocator &allocator,
+    ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  int64_t task_id = 0;
+  ObDropSearchIndexTask index_task;
+  common::ObString def_index_name;
+  common::ObString data_index_name;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(index_schema) || OB_ISNULL(drop_index_arg) || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(index_schema), KP(drop_index_arg), KP(GCTX.sql_proxy_));
+  } else if (OB_UNLIKELY(schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(index_schema), K(schema_version));
+  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, index_schema->get_tenant_id(),
+          task_id))) {
+    LOG_WARN("fetch new task id failed", K(ret));
+  } else {
+    if (OB_FAIL(ret) || OB_ISNULL(def_index_schema)) {
+    } else if (OB_FAIL(def_index_schema->get_index_name(def_index_name))) {
+      LOG_WARN("fail to get def index name", K(ret), KPC(def_index_schema));
+    }
+    if (OB_FAIL(ret) || OB_ISNULL(data_index_schema)) {
+    } else if (OB_FAIL(data_index_schema->get_index_name(data_index_name))) {
+      LOG_WARN("fail to get data index name", K(ret), KPC(data_index_schema));
+    }
+
+    int64_t target_object_id = drop_index_arg->index_table_id_;
+    if (OB_FAIL(ret)) {
+    } else if (target_object_id == OB_INVALID_ID) {
+      if (OB_ISNULL(index_schema)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("fail to get valid target object id", K(ret));
+      } else {
+        target_object_id = index_schema->get_table_id();
+      }
+    }
+
+    const uint64_t data_table_id = index_schema->get_data_table_id();
+    uint64_t def_index_table_id = OB_ISNULL(def_index_schema) ? OB_INVALID_ID : def_index_schema->get_table_id();
+    uint64_t data_index_table_id = OB_ISNULL(data_index_schema) ? OB_INVALID_ID : data_index_schema->get_table_id();
+
+    const ObFTSDDLChildTaskInfo search_def_index(def_index_name, def_index_table_id, 0/*task_id*/);
+    const ObFTSDDLChildTaskInfo search_data_index(data_index_name, data_index_table_id, 0/*task_id*/);
+    const ObDDLType ddl_type = DDL_DROP_SEARCH_INDEX;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(index_task.init(index_schema->get_tenant_id(),
+                                       task_id,
+                                       data_table_id,
+                                       ddl_type,
+                                       search_def_index,
+                                       search_data_index,
+                                       drop_index_arg->ddl_stmt_str_,
+                                       schema_version,
+                                       consumer_group_id,
+                                       target_object_id))) {
+      LOG_WARN("init drop index task failed", K(ret), K(data_table_id), K(search_def_index));
+    } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
+      LOG_WARN("set trace id failed", K(ret));
+    } else if (OB_FAIL(insert_task_record(proxy, index_task, allocator, task_record))) {
+      LOG_WARN("fail to insert task record", K(ret));
+    }
+  }
+  LOG_INFO("ddl_scheduler create drop search index task finished", K(ret), K(index_task));
+  return ret;
+}
+
 int ObDDLScheduler::create_drop_lob_task(
     common::ObISQLClient &proxy,
     const ObCreateDDLTaskParam &param,
@@ -3295,6 +3389,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case ObDDLType::DDL_CREATE_FTS_INDEX:
       case ObDDLType::DDL_CREATE_MULTIVALUE_INDEX:
       case ObDDLType::DDL_CREATE_VEC_SPIV_INDEX:
+      case ObDDLType::DDL_CREATE_SEARCH_INDEX:
         ret = schedule_build_fts_index_task(record);
         break;
       case ObDDLType::DDL_DROP_VEC_IVFFLAT_INDEX:
@@ -3317,6 +3412,9 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case ObDDLType::DDL_DROP_MULVALUE_INDEX:
       case ObDDLType::DDL_DROP_VEC_SPIV_INDEX:
         ret = schedule_drop_fts_index_task(record);
+        break;
+      case ObDDLType::DDL_DROP_SEARCH_INDEX:
+        ret = schedule_drop_search_index_task(record);
         break;
       case ObDDLType::DDL_REBUILD_INDEX:
       case ObDDLType::DDL_REPLACE_MLOG:
@@ -3911,6 +4009,32 @@ int ObDDLScheduler::schedule_drop_lob_task(const ObDDLTaskRecord &task_record)
     drop_lob_task->~ObDropLobTask();
     allocator_.free(drop_lob_task);
     drop_lob_task = nullptr;
+  }
+  return ret;
+}
+
+int ObDDLScheduler::schedule_drop_search_index_task(const ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  ObDropSearchIndexTask *drop_search_index_task = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLScheduler has not been inited", K(ret));
+  } else if (OB_FAIL(alloc_ddl_task(drop_search_index_task))) {
+    LOG_WARN("fail to alloc drop search index task", K(ret));
+  } else if (OB_FAIL(drop_search_index_task->init(task_record))) {
+    LOG_WARN("fail to init drop search index task", K(ret));
+  } else if (OB_FAIL(drop_search_index_task->set_trace_id(task_record.trace_id_))) {
+    LOG_WARN("fail to set trace id", K(ret));
+  } else if (OB_FAIL(inner_schedule_ddl_task(drop_search_index_task, task_record))) {
+    if (OB_ENTRY_EXIST != ret) {
+      LOG_WARN("fail to inner schedule task", K(ret));
+    }
+  }
+  if (OB_FAIL(ret) && nullptr != drop_search_index_task) {
+    drop_search_index_task->~ObDropSearchIndexTask();
+    allocator_.free(drop_search_index_task);
+    drop_search_index_task = nullptr;
   }
   return ret;
 }

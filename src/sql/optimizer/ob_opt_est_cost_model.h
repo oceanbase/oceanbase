@@ -137,6 +137,7 @@ struct ObIndexMetaInfo
       is_fulltext_index_(false),
       is_multivalue_index_(false),
       is_vector_index_(false),
+      is_search_index_(false),
       index_micro_block_count_(-1)
   { }
   virtual ~ObIndexMetaInfo()
@@ -161,6 +162,7 @@ struct ObIndexMetaInfo
   bool is_fulltext_index_; // is fulltext index
   bool is_multivalue_index_; // is multivalue index
   bool is_vector_index_;   // is vector index
+  bool is_search_index_; // is search index
   int64_t index_micro_block_count_;  // micro block count from table static info
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexMetaInfo);

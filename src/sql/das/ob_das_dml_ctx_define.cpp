@@ -16,6 +16,7 @@
 #include "sql/das/ob_das_domain_utils.h"
 #include "sql/engine/dml/ob_dml_service.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
+#include "sql/das/ob_das_search_index_utils.h"
 namespace oceanbase
 {
 namespace sql

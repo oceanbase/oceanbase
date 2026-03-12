@@ -174,6 +174,7 @@ public:
                bitmap_(bitmap),
                rk_range_(),
                selectivity_(0),
+               is_external_bitmap_(false),
                segment_handle_(),
                tmp_alloc_("extmpalloc", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
                extra_buffer_(nullptr),
@@ -207,6 +208,7 @@ public:
     rk_range_.assign(filter.rk_range_);
     selectivity_ = filter.selectivity_;
     segment_handle_= filter.segment_handle_;
+    is_external_bitmap_ = filter.is_external_bitmap_;
     extra_buffer_ = filter.extra_buffer_;
     tmp_objs_ = filter.tmp_objs_;
     extra_in_rowkey_idxs_ = filter.extra_in_rowkey_idxs_;
@@ -239,6 +241,7 @@ public:
   };
   ObArray<const ObNewRange *> rk_range_;
   double selectivity_;
+  bool is_external_bitmap_;  // Indicates if bitmap is externally managed
   ObVectorIndexSegmentHandle segment_handle_;
   ObArenaAllocator tmp_alloc_;
   char *extra_buffer_;
@@ -346,6 +349,8 @@ public:
   int init_prefilter(const int64_t &min, const int64_t &max);
   int init_prefilter(void *adaptor, double selectivity, const ObIArray<const ObNewRange *> &range,
                      const sql::ExprFixedArray &rowkey_exprs, const ObIArray<int64_t> &extra_in_rowkey_idxs);
+  int init_prefilter(uint8_t *bitmap, int64_t min_vid_bound, int64_t max_vid_bound, uint64_t capacity, uint64_t valid_cnt);
+  int init_prefilter(roaring::api::roaring64_bitmap_t *roaring_bitmap);
   bool is_bitmaps_valid();
   bool is_prefilter_valid();
   bool is_range_prefilter();
@@ -364,6 +369,7 @@ public:
   ObVectorQueryProcessFlag get_flag() { return flag_; }
   ObIAllocator *get_allocator() { return allocator_; }
   ObIAllocator *get_tmp_allocator() { return tmp_allocator_; }
+  void set_temp_allocator(ObIAllocator *tmp_allocator) { tmp_allocator_ = tmp_allocator; }
   ObIAllocator *get_batch_allocator() { return &batch_allocator_; }
   int set_vector(int64_t index, const char *ptr, common::ObString::obstr_size_t size);
   int set_vector(int64_t index, ObObj &obj);
@@ -428,6 +434,7 @@ public:
       query_vector_(),
       query_scn_(),
       row_iter_(nullptr),
+      extra_column_count_(0),
       is_last_search_(false),
       scan_param_(nullptr),
       rel_count_(0),

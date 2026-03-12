@@ -683,7 +683,7 @@ int ObLogDelUpd::find_trans_info_producer(ObLogicalOperator &op,
   producer = NULL;
   if (op.get_type() == log_op_def::LOG_TABLE_SCAN) {
     ObLogTableScan &tsc = static_cast<ObLogTableScan &>(op);
-    if (tid == tsc.get_table_id()) {
+    if (tid == tsc.get_table_id() && !tsc.is_hybrid_search()) { // hybrid search do not produce trans info
       producer = &op;
     }
   }

@@ -221,10 +221,6 @@ public:
         const uint64_t col_id,
         ObTableSchema &data_schema, // not const since will add column to data schema
         ObColumnSchemaV2 *&doc_id_col);
-  static int decide_parallelism(
-        const share::schema::ObIndexType index_type,
-        const int64_t original_parallelism,
-        int64_t &decided_parallelism);
   // Generate skip index attributes for FTS auxiliary table non-rowkey columns
   // FTS auxiliary table has 4 fixed columns:
   //   - doc_id (rowkey)

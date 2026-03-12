@@ -1247,6 +1247,12 @@ public:
   inline bool is_multivalue_index() const;
   inline bool is_multivalue_index_aux() const;
   inline bool is_spatial_index() const;
+  inline bool is_search_index() const;
+  inline bool is_search_def_index() const;
+  inline bool is_search_data_index() const;
+  inline static bool is_search_index(const ObIndexType index_type);
+  inline static bool is_search_def_index(const ObIndexType index_type);
+  inline static bool is_search_data_index(const ObIndexType index_type);
   inline static bool is_spatial_index(const ObIndexType index_type);
   inline bool is_vec_index() const;
   inline static bool is_vec_index(const ObIndexType index_type);
@@ -1386,7 +1392,8 @@ public:
     const bool vec_case = is_partitioned_table() && is_index_local_storage() &&
                           (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type() || is_vec_spiv_index_aux());
     const bool cluster_case = is_partitioned_table() && is_index_local_storage() && data_table_schema.is_table_with_clustering_key();
-    return heap_case || fts_case || vec_case || multivalue_case || cluster_case;
+    const bool search_case = is_partitioned_table() && is_index_local_storage() && is_search_data_index();
+    return heap_case || fts_case || vec_case || multivalue_case || cluster_case || search_case;
   }
   inline void set_with_dynamic_partition_policy(bool with_dynamic_partition_policy)
   {
@@ -2368,6 +2375,8 @@ public:
   int check_support_interval_part() const;
   int check_identity_column_for_interval_part() const;
   int get_hidden_column_count(int64_t &hidden_column_count) const;
+  int get_search_data_index_tid(uint64_t &tid) const;
+
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
@@ -2669,6 +2678,36 @@ inline bool ObSimpleTableSchemaV2::is_multivalue_index() const
   return share::schema::is_multivalue_index(index_type_);
 }
 
+inline bool ObSimpleTableSchemaV2::is_search_index() const
+{
+  return share::schema::is_search_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_search_def_index() const
+{
+  return share::schema::is_search_def_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_search_data_index() const
+{
+  return share::schema::is_search_data_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_search_index(const ObIndexType index_type)
+{
+  return share::schema::is_search_index(index_type);
+}
+
+inline bool ObSimpleTableSchemaV2::is_search_def_index(const ObIndexType index_type)
+{
+  return share::schema::is_search_def_index(index_type);
+}
+
+inline bool ObSimpleTableSchemaV2::is_search_data_index(const ObIndexType index_type)
+{
+  return share::schema::is_search_data_index(index_type);
+}
+
 inline bool ObSimpleTableSchemaV2::is_multivalue_index_aux() const
 {
   return share::schema::is_multivalue_index_aux(index_type_);
@@ -2930,7 +2969,8 @@ inline bool ObSimpleTableSchemaV2::is_domain_index(const ObIndexType index_type)
          share::schema::is_vec_ivfpq_centroid_index(index_type) ||
          share::schema::is_vec_ivfsq8_centroid_index(index_type) ||
          share::schema::is_vec_dim_docid_value_type(index_type) ||
-         share::schema::is_hybrid_vec_index(index_type);
+         share::schema::is_hybrid_vec_index(index_type) ||
+         share::schema::is_search_index(index_type);
 }
 
 inline bool ObSimpleTableSchemaV2::is_fts_or_multivalue_index() const

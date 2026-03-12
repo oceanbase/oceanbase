@@ -81,6 +81,7 @@ ob_unittest(test_json_bin)
 ob_unittest(test_json_path)
 ob_unittest(test_json_schema)
 ob_unittest(test_json_tree)
+ob_unittest(test_search_index_encoder)
 
 ob_unittest(test_text_analyzer text_analysis/test_text_analyzer.cpp)
 

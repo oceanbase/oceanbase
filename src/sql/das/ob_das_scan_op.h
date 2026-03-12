@@ -34,6 +34,7 @@ namespace sql
 class ObDASExtraData;
 class ObLocalIndexLookupOp;
 struct ObDASTCBInterruptInfo;
+class ObDASSearchCtx;
 
 struct ObDASTCBMemProfileKey {
   ObDASTCBMemProfileKey(): fake_unique_id_(0), timestamp_(0)
@@ -418,6 +419,7 @@ public:
   storage::ObTableScanParam *get_local_lookup_param();
 
   int init_related_tablet_ids(ObDASRelatedTabletID &related_tablet_ids);
+  int create_das_search_context();
 
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
@@ -434,6 +436,7 @@ public:
   int set_related_task_info(const ObDASBaseCtDef *attach_ctdef,
                             ObDASBaseRtDef *attach_rtdef,
                             const common::ObTabletID &tablet_id);
+  int get_related_tablet_id(const ObDASBaseCtDef *scan_ctdef, common::ObTabletID &tablet_id) const;
   //only used in local index lookup, it it nullptr when scan data table or scan index table
   const ObDASScanCtDef *get_lookup_ctdef() const;
   ObDASScanRtDef *get_lookup_rtdef();
@@ -487,6 +490,10 @@ protected:
   common::ObNewRowIterator *get_output_result_iter() { return result_; }
   ObDASIterTreeType get_iter_tree_type() const;
   int try_set_pushdown_topk_related_ids(ObDASIter *result_iter);
+private:
+  int create_iter_tree_and_init_tablet_ids(const ObDASIterTreeType &tree_type, ObDASIter *&result);
+  int create_das_iter_tree_internal(const ObDASIterTreeType &tree_type, ObDASIter *&result);
+  int set_hybrid_search_tablet_ids(ObDASIter *result);
 
 public:
   ObSEArray<ObDatum *, 4> trans_info_array_;
@@ -518,6 +525,7 @@ protected:
     common::ObArenaAllocator retry_alloc_buf_;
   };
   ObDASObsoletedObj ir_param_;   // FARM COMPAT WHITELIST: obsoleted attribute, please gc me at next barrier version
+  ObDASSearchCtx *search_ctx_;
 };
 
 class ObDASScanResult : public ObIDASTaskResult, public common::ObNewRowIterator

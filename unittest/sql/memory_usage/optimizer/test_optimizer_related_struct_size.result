@@ -4,11 +4,11 @@
 | BaseTableOptInfo | 168 |
 | JoinFilterInfo | 304 |
 | DomainIndexAccessInfo | 288 |
-| ObIndexMergeNode | 200 |
+| ObIndexMergeNode | 208 |
 | InnerPathInfo | 264 |
 | ObConflictDetector | 392 |
 | JoinInfo | 160 |
-| IndexInfoEntry | 616 |
+| IndexInfoEntry | 624 |
 | OrderingInfo | 88 |
 | QueryRangeInfo | 472 |
 | ObSkylineDim | 16 |

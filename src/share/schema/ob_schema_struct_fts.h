@@ -23,7 +23,8 @@ namespace share
 namespace schema
 {
 
-enum ObFTSIndexType : uint8_t {
+enum ObFTSIndexType : uint8_t
+{
   OB_FTS_INDEX_TYPE_INVALID = 0,
   OB_FTS_INDEX_TYPE_FILTER = 1,
   OB_FTS_INDEX_TYPE_MATCH = 2,
@@ -31,9 +32,13 @@ enum ObFTSIndexType : uint8_t {
   OB_FTS_INDEX_TYPE_MAX
 };
 
+#ifndef OB_BUILD_PACKAGE
+inline constexpr ObFTSIndexType DEFAULT_FTS_INDEX_TYPE = OB_FTS_INDEX_TYPE_PHRASE_MATCH;
+#else
 inline constexpr ObFTSIndexType DEFAULT_FTS_INDEX_TYPE = OB_FTS_INDEX_TYPE_MATCH;
-
-struct ObFTSIndexParams {
+#endif
+struct ObFTSIndexParams
+{
   ObFTSIndexParams()
       : fts_index_type_(OB_FTS_INDEX_TYPE_INVALID)
   {

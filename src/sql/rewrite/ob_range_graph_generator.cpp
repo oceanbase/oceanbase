@@ -969,6 +969,10 @@ int ObRangeGraphGenerator::get_max_precise_pos(ObRangeNode *range_node,
       range_node->always_true_ &&
       range_node->and_next_ == NULL) {
     max_precise_pos = 0;
+  } else if (range_node->is_search_node_) {
+    // For search index, we always treat the range as precise. Setting max_precise_pos
+    // to max_offset_ + 1 ensures it passes all unprecise checks downstream.
+    max_precise_pos = range_node->max_offset_ + 1;
   } else if (!pre_range_graph_->is_precise_get()) {
     bool equals[ctx_.column_cnt_];
     MEMSET(equals, 0, sizeof(bool) * ctx_.column_cnt_);
@@ -993,7 +997,7 @@ int ObRangeGraphGenerator::inner_get_max_precise_pos(const ObRangeNode *range_no
 
     if (cur_node->min_offset_ >= 0 &&
         !cur_node->is_not_in_node_ &&
-        !cur_node->is_domain_node_ &&
+        (!cur_node->is_domain_node_ || cur_node->is_search_node_) &&
       OB_FAIL(get_new_equal_idx(cur_node, equals, new_idx))) {
       LOG_WARN("failed to get new idx");
     } else if (cur_node->and_next_ != nullptr) {

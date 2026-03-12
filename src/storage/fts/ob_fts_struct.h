@@ -23,7 +23,6 @@ namespace oceanbase
 {
 namespace storage
 {
-
 class ObFTToken final
 {
 public:

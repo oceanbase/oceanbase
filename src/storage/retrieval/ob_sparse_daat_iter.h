@@ -85,8 +85,8 @@ protected:
   virtual int pre_process();
   virtual int do_one_merge_round(int64_t &count);
   virtual int fill_merge_heap();
-  virtual int collect_dims_by_id(const ObDatum *&id_datum, double &relevance, bool &got_valid_id);
-  virtual int process_collected_row(const ObDatum &id_datum, const double relevance);
+  virtual int collect_dims_by_id(const bool is_partial, const ObDatum *&id_datum, double &relevance, bool &got_valid_id);
+  virtual int process_collected_row(const ObDatum &id_datum, const double relevance, bool &is_top_k);
   virtual int filter_on_demand(const int64_t count, const double relevance, bool &need_project);
   virtual int cache_result(int64_t &count, const ObDatum &id_datum, const double relevance);
   virtual int project_results(const int64_t count);
@@ -124,7 +124,7 @@ public:
   virtual int preset_top_k_threshold(const double threshold) override;
   int adjust_topk_limit(const int64_t new_topk_limit);
 protected:
-  virtual int process_collected_row(const ObDatum &id_datum, const double relevance) override;
+  virtual int process_collected_row(const ObDatum &id_datum, const double relevance, bool &is_top_k) override;
   virtual int top_k_search() { return OB_NOT_IMPLEMENT; }
   virtual int init_before_topk_search() { return OB_NOT_IMPLEMENT; }
   int before_top_k_process();

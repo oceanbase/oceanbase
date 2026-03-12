@@ -379,7 +379,7 @@ int ObSubSchemaCtx::get_new_subschema_id(uint16_t &subschema_id)
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "more then 64K different subschema", K(ret), K(subschema_id), K(lbt()));
   } else {
-    SQL_ENG_LOG(INFO, "new subschema id", KP(this), K(subschema_id), K(lbt()));
+    LOG_DEBUG("new subschema id", KP(this), K(subschema_id), K(lbt()));
   }
   return ret;
 }

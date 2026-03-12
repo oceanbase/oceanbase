@@ -23,8 +23,8 @@ namespace blocksstable
 class EncodingCompareV2
 {
 public:
-  EncodingCompareV2(int &ret, bool &equal, ObIMicroBlockDecoder *decoder)
-    : ret_(ret), equal_(equal), decoder_(decoder)
+  EncodingCompareV2(int &ret, bool &equal, ObIMicroBlockDecoder *decoder, const int64_t common_prefix_len)
+    : ret_(ret), equal_(equal), decoder_(decoder), common_prefix_len_(common_prefix_len)
   {
   }
   ~EncodingCompareV2() {}
@@ -45,7 +45,7 @@ private:
     int32_t compare_result = 0;
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(decoder_->compare_rowkey(rowkey, row_idx, compare_result))) {
+    } else if (OB_FAIL(decoder_->compare_rowkey(rowkey, row_idx, compare_result, common_prefix_len_))) {
       LOG_WARN("fail to compare rowkey", K(ret));
     } else {
       bret = lower_bound ? compare_result < 0 : compare_result > 0;
@@ -62,6 +62,7 @@ private:
   int &ret_;
   bool &equal_;
   ObIMicroBlockDecoder *decoder_;
+  const int64_t common_prefix_len_;
 };
 
 class EncodingRangeCompareV2
@@ -151,7 +152,7 @@ int ObIMicroBlockDecoder::find_bound(const ObDatumRowkey &key, const bool lower_
     LOG_WARN("invalid compare column count", K(ret), K(key.get_datum_cnt()),
       K(datum_utils_->get_rowkey_count()));
   } else {
-    EncodingCompareV2 encoding_compare(ret, equal, this);
+    EncodingCompareV2 encoding_compare(ret, equal, this, 0/* common_prefix_len */);
     ObRowIndexIterator begin_iter(begin_idx);
     ObRowIndexIterator end_iter(row_count_);
     ObRowIndexIterator found_iter;
@@ -198,7 +199,7 @@ int ObIMicroBlockDecoder::find_bound(const ObDatumRange &range, const int64_t be
 
 // for column store
 int ObIMicroBlockDecoder::find_bound(const ObDatumRowkey &key, const bool lower_bound,
-  const int64_t begin_idx, const int64_t end_idx, int64_t &row_idx, bool &equal)
+  const int64_t begin_idx, const int64_t end_idx, int64_t &row_idx, bool &equal, const int64_t common_prefix_len)
 {
   int ret = OB_SUCCESS;
   equal = false;
@@ -214,7 +215,7 @@ int ObIMicroBlockDecoder::find_bound(const ObDatumRowkey &key, const bool lower_
     LOG_WARN("invalid compare column count", K(ret), K(key.get_datum_cnt()),
       K(datum_utils_->get_rowkey_count()));
   } else {
-    EncodingCompareV2 encoding_compare(ret, equal, this);
+    EncodingCompareV2 encoding_compare(ret, equal, this, common_prefix_len);
     ObRowIndexIterator begin_iter(begin_idx);
     ObRowIndexIterator end_iter(end_idx);
     ObRowIndexIterator found_iter;

@@ -245,6 +245,12 @@ int ObDropIndexTask::drop_index_impl()
   } else if (OB_UNLIKELY(nullptr == database_schema || nullptr == data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null schema", K(ret), KP(database_schema), KP(data_table_schema));
+  } else if (data_table_schema->is_search_def_index()
+    && OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_schema->get_data_table_id(), data_table_schema))) {
+    LOG_WARN("get data table schema failed", K(ret), K(data_table_schema->get_data_table_id()));
+  } else if (nullptr == data_table_schema) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null schema", K(ret), KP(database_schema), KP(data_table_schema));
   } else if (OB_FAIL(drop_index_sql.assign(drop_index_arg_.ddl_stmt_str_))) {
     LOG_WARN("assign user drop index sql failed", K(ret));
   } else {

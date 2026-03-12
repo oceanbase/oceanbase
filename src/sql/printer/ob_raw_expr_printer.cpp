@@ -1882,6 +1882,33 @@ int ObRawExprPrinter::print_json_return_type(ObRawExpr *expr)
   return ret;
 }
 
+int ObRawExprPrinter::print_json_pick_type(ObRawExpr *expr)
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
+  } else if (expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT
+             || expr->get_expr_type() == T_FUN_SYS_JSON_VALUE) {
+    ObItemType pick_type = expr->get_pick();
+    if (pick_type != T_NULL) {
+      DATA_PRINTF(" PICK ");
+      switch (pick_type) {
+        case T_JSON_NUMBER:
+          DATA_PRINTF("JSON_NUMBER");
+          break;
+        case T_JSON_STRING:
+          DATA_PRINTF("JSON_STRING");
+          break;
+        default:
+          // T_INVALID or other, don't print
+          break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprPrinter::print_st_asmvt(ObAggFunRawExpr *expr)
 {
   INIT_SUCC(ret);
@@ -2098,16 +2125,40 @@ int ObRawExprPrinter::print_json_array(ObSysFunRawExpr *expr)
   return ret;
 }
 
+int ObRawExprPrinter::print_json_extract(ObSysFunRawExpr *expr)
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
+  } else {
+    // json_extract(json_doc, path1, path2, ... PICK json_number/json_string)
+    // Print all parameters (json_doc and paths)
+    int64_t param_count = expr->get_param_count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_count; i++) {
+      if (i > 0) {
+        DATA_PRINTF(",");
+      }
+      PRINT_EXPR(expr->get_param_expr(i));
+    }
+    // Print pick type (stored in extra_)
+    if (OB_SUCC(ret) && OB_FAIL(print_json_pick_type(expr))) {
+      LOG_WARN("fail to print pick type", K(ret));
+    }
+    DATA_PRINTF(")");
+  }
+  return ret;
+}
+
 int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
 {
   INIT_SUCC(ret);
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(print_json_return_type(expr->get_param_expr(JsnValueClause::JSN_VAL_RET)))) {
-      LOG_WARN("fail to print cast_type", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
+  // Pick is stored in extra_, not as a parameter
+  if (OB_FAIL(print_json_pick_type(expr))) {
+    LOG_WARN("fail to print pick type", K(ret));
+  } else if (OB_FAIL(print_json_return_type(expr->get_param_expr(JsnValueClause::JSN_VAL_RET)))) {
+    LOG_WARN("fail to print cast_type", K(ret));
+  } else {
     if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(JsnValueClause::JSN_VAL_TRUNC))->get_value().is_int()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("truncate value isn't int value");
@@ -2798,6 +2849,14 @@ int ObRawExprPrinter::print_json_expr(ObSysFunRawExpr *expr)
           if (OB_SUCC(ret) && OB_FAIL(print_json_value(expr))) {
             LOG_WARN("bool expr have to be inner expr for now", K(ret), K(*expr));
           }
+        }
+        break;
+      }
+      case T_FUN_SYS_JSON_EXTRACT: {
+        // json_extract(json_doc, path1, path2, ...) PICK json_number/json_string
+        DATA_PRINTF("JSON_EXTRACT(");
+        if (OB_FAIL(print_json_extract(expr))) {
+          LOG_WARN("fail to print json extract", K(ret), K(*expr));
         }
         break;
       }
@@ -3578,13 +3637,15 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
       case T_FUN_SYS_JSON_EQUAL:
       case T_FUN_SYS_JSON_ARRAY:
       case T_FUN_SYS_JSON_MERGE_PATCH:
-      case T_FUN_SYS_JSON_EXISTS: {
+      case T_FUN_SYS_JSON_EXISTS:
+      case T_FUN_SYS_JSON_EXTRACT: {
         if (lib::is_mysql_mode() && (expr_type == T_FUN_SYS_JSON_ARRAY || expr_type == T_FUN_SYS_JSON_MERGE_PATCH)) {
           DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
           OZ(inner_print_fun_params(*expr));
         } else if (lib::is_oracle_mode()
                   ||  T_FUN_SYS_JSON_QUERY == expr_type
-                  || T_FUN_SYS_JSON_VALUE == expr_type) {
+                  || T_FUN_SYS_JSON_VALUE == expr_type
+                  || T_FUN_SYS_JSON_EXTRACT == expr_type) {
           if (OB_FAIL(print_json_expr(expr))) {
             LOG_WARN("fail to print json expr", K(ret), K(*expr));
           }

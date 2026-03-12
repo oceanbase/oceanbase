@@ -15,6 +15,7 @@
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/das/ob_das_domain_utils.h"
 #include "storage/ob_query_iterator_factory.h"
+#include "sql/das/ob_das_search_index_utils.h"
 
 namespace oceanbase
 {

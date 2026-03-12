@@ -96,6 +96,7 @@ struct ObTextRetrievalInfo;
 class ObHashRollupInfo;
 class ObGroupingSetInfo;
 class ObTablePartitionInfo;
+class ObFusionNode;
 class ObJoinOrderEnum;
 class ObDASLocationRouter;
 struct ObDASTableLocMeta;
@@ -376,6 +377,8 @@ public:
   int collect_table_location(ObLogicalOperator *op);
   int collect_vec_index_location_related_info(ObLogTableScan &tsc_op,
                                               TableLocRelInfo& rel_info);
+  int collect_hybrid_search_location_related_info(ObLogTableScan &tsc_op,
+                                                  TableLocRelInfo& rel_info);
   int collect_location_related_info(ObLogicalOperator &op);
   int build_location_related_tablet_ids();
   int check_das_need_keep_ordering(ObLogicalOperator *op);
@@ -754,6 +757,9 @@ public:
                              const int64_t table_id,
                              const int64_t index_id);
 
+  int check_opt_join_json_table_valid(JoinPath *join_path, bool &is_valid);
+  int allocate_join_json_table_path(JoinPath *join_path,
+                                    ObLogicalOperator *&out_join_path_op);
   /** @brief Allcoate operator for join path */
   int allocate_join_path(JoinPath *join_path,
                          ObLogicalOperator *&out_join_path_op);
@@ -1238,6 +1244,12 @@ public:
                              const ObIArray<OrderItem> *ties_order_item = NULL,
                              const bool is_partial_limit = false);
 
+  /** @brief Create hybrid fusion plan, only for distributed scenario now */
+  int candi_allocate_hybrid_fusion();
+  int create_hybrid_fusion_plan(ObLogicalOperator *&top);
+  int allocate_hybrid_fusion_as_top(ObLogicalOperator *&top,
+                                    ObFusionNode *fusion_node);
+
   int is_plan_reliable(const ObLogicalOperator *root,
                        bool &is_reliable);
 
@@ -1641,7 +1653,8 @@ public:
   const ColumnItem *get_column_item_by_id(uint64_t table_id, uint64_t column_id) const;
   inline common::ObIArray<ColumnItem> &get_column_items() { return column_items_; }
   int generate_column_expr(ObRawExprFactory &expr_factory,
-                           const uint64_t &table_id,
+                           const uint64_t table_id,
+                           const uint64_t column_item_table_id,
                            const ObColumnSchemaV2 &column_schema,
                            ColumnItem &column_item);
 
@@ -1796,6 +1809,14 @@ public:
                                              bool need_exchange,
                                              const ObIArray<OrderItem> &sort_keys,
                                              bool &need_further_sort);
+  int try_push_topn_into_es_match_scan(ObLogicalOperator *&top,
+                                       ObRawExpr *topn_expr,
+                                       ObRawExpr *limit_expr,
+                                       ObRawExpr *offset_expr,
+                                       bool is_fetch_with_ties,
+                                       bool need_exchange,
+                                       const ObIArray<OrderItem> &sort_keys,
+                                      bool &need_further_sort);
   int try_push_topn_into_index_merge_scan(ObLogicalOperator *&top,
                                           ObRawExpr *topn_expr,
                                           ObRawExpr *limit_expr,
@@ -1807,6 +1828,8 @@ public:
   static int adjust_dup_table_replica_by_cons(
     const ObIArray<ObDupTabConstraint> &dup_table_replica_cons,
     common::ObIArray<ObCandiTableLoc> &phy_tbl_info_list);
+
+  int prepare_search_index_scan(ObLogicalOperator *scan);
 
 protected:
   virtual int generate_normal_raw_plan() = 0;
@@ -2035,6 +2058,8 @@ public:
   static bool is_multivalue_index_in_path(const AccessPath *ap);
   // Helper function to recursively check multivalue index in index merge node
   static bool check_multivalue_index_in_node(const ObIndexMergeNode *node);
+  // Helper function to find hybrid search table scan in plan tree
+  static int find_hybrid_search_table_scan(ObLogicalOperator *op, ObLogTableScan *&out_tsc);
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable

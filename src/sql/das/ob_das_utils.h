@@ -114,6 +114,7 @@ public:
   static bool is_vec_idx_scan(const ObDASBaseCtDef *attach_ctdef);
   static bool is_fts_idx_scan(const ObDASBaseCtDef *attach_ctdef);
   static bool is_es_match_scan(const ObDASBaseCtDef *attach_ctdef);
+  static bool is_hybrid_search(const ObDASBaseCtDef *attach_ctdef);
   template <typename CtDefType>
   static int find_target_ctdef(const ObDASBaseCtDef *root_ctdef,
                                  ObDASOpType op_type,

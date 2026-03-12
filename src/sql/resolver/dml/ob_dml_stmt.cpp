@@ -14,6 +14,7 @@
 #include "ob_dml_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -246,6 +247,9 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   } else if (is_values_table() &&
              OB_FAIL(deep_copy_values_table_def(*other.values_table_def_, expr_copier, allocator))) {
     LOG_WARN("failed to deep copy values table def", K(ret));
+  } else if (OB_NOT_NULL(other.dsl_query_) &&
+             OB_FAIL(deep_copy_dsl_query_info(*other.dsl_query_, expr_copier, allocator))) {
+    LOG_WARN("failed to deep copy dsl query info", K(ret));
   } else { /* do nothing */ }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(other.sample_info_)) {
@@ -392,7 +396,8 @@ ObDMLStmt::ObDMLStmt(stmt::StmtType type, ObIAllocator &allocator)
       dblink_id_(OB_INVALID_ID),
       is_reverse_link_(false),
       has_vec_approx_(false),
-      match_exprs_(allocator)
+      match_exprs_(allocator),
+      is_hybrid_search_(false)
 {
 }
 
@@ -507,6 +512,7 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     dblink_id_ = other.dblink_id_;
     is_reverse_link_ = other.is_reverse_link_;
     has_vec_approx_ = other.has_vec_approx_;
+    is_hybrid_search_ = other.is_hybrid_search_;
   }
   return ret;
 }
@@ -681,6 +687,7 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     dblink_id_ = other.dblink_id_;
     is_reverse_link_ = other.is_reverse_link_;
     has_vec_approx_ = other.has_vec_approx_;
+    is_hybrid_search_ = other.is_hybrid_search_;
   }
   if (OB_SUCC(ret)) {
     ObUnpivotItem *tmp = NULL;
@@ -2383,6 +2390,7 @@ int ObDMLStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
   for (int64_t i = column_items_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
     ObColumnRefRawExpr *expr = NULL;
     bool is_referred = false;
+    bool in_dsl = false;
     bool need_remove = false;
     if (OB_ISNULL(expr = column_items_.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2400,8 +2408,10 @@ int ObDMLStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
     } else if (OB_FAIL(generated_column_depend_column_is_referred(expr, is_referred))) {
       //if the generate column's depend expr has columns referred.
       LOG_WARN("generated expr has normal column depends", K(ret));
+    } else if (OB_FAIL(ObDSLQueryInfo::check_column_in_dsl(table_items_, expr, in_dsl))) {
+      LOG_WARN("failed to check column in dsl", K(ret));
     } else {
-      need_remove = !is_referred;
+      need_remove = !is_referred && !in_dsl;
     }
 
     if (OB_SUCC(ret) && need_remove) {
@@ -5826,6 +5836,8 @@ int ObJsonTableDef::deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_
 {
   int ret = OB_SUCCESS;
   table_type_ = src.table_type_;
+  index_table_id_ = src.index_table_id_;
+  index_column_cnt_ = src.index_column_cnt_;
   for (size_t i = 0; OB_SUCC(ret) && i < src.doc_exprs_.count(); ++i) {
     if (OB_ISNULL(src.doc_exprs_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -5877,10 +5889,11 @@ int ObJsonTableDef::deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_
 int ObJsonTableDef::assign(const ObJsonTableDef& src)
 {
   int ret = OB_SUCCESS;
-
   if (OB_FAIL(doc_exprs_.assign(src.doc_exprs_))) {
     LOG_WARN("fail to assign doc exprs.", K(ret));
   } else if (OB_FALSE_IT(table_type_ = src.table_type_)) {
+  } else if (OB_FALSE_IT(index_table_id_ = src.index_table_id_)) {
+  } else if (OB_FALSE_IT(index_column_cnt_ = src.index_column_cnt_)) {
   } else if (OB_FAIL(all_cols_.assign(src.all_cols_))) {
     LOG_WARN("fail to assign all cols.", K(ret));
   }
@@ -5911,6 +5924,28 @@ int TableItem::deep_copy_values_table_def(const ObValuesTableDef& table_def,
       LOG_WARN("deep copy json table define failed.", K(ret));
     }
   }
+  return ret;
+}
+
+int TableItem::deep_copy_dsl_query_info(const ObDSLQueryInfo& dsl_query_info, ObIRawExprCopier &expr_copier, ObIAllocator* allocator)
+{
+  int ret = OB_SUCCESS;
+  ObDSLQueryInfo* tmp_dsl_query_info = nullptr;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param, invalid param.", K(ret));
+  } else if (OB_ISNULL(tmp_dsl_query_info = static_cast<ObDSLQueryInfo*>(allocator->alloc(sizeof(ObDSLQueryInfo))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory dsl query info struct failed.", K(ret));
+  } else {
+    tmp_dsl_query_info = new (tmp_dsl_query_info) ObDSLQueryInfo();
+    if (OB_FAIL(tmp_dsl_query_info->deep_copy(dsl_query_info, expr_copier, allocator))) {
+      LOG_WARN("deep copy dsl query info failed.", K(ret));
+    } else {
+      dsl_query_ = tmp_dsl_query_info;
+    }
+  }
+
   return ret;
 }
 

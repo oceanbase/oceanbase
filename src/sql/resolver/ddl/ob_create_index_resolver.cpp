@@ -15,6 +15,7 @@
 #include "share/ob_fts_index_builder_util.h"
 #include "share/ob_vec_index_builder_util.h"
 #include "share/table/ob_ttl_util.h"
+#include "share/search_index/ob_search_index_builder_util.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
@@ -211,10 +212,30 @@ int ObCreateIndexResolver::resolve_index_column_node(
           } else if (OB_NOT_NULL(column_schema = tbl_schema->get_column_schema(sort_item.column_name_))) {
             if (ob_is_collection_sql_type(column_schema->get_data_type())) {
               bool is_sparse_vec_col = false;
-              if (index_keyname_ != INDEX_KEYNAME::VEC_KEY) {
+              bool is_search_index = (index_keyname_ == INDEX_KEYNAME::SEARCH_KEY);
+              bool is_single_layer_array_for_search = false;
+              if (is_search_index) {
+                if (OB_FAIL(ObSearchIndexBuilderUtil::check_single_layer_array_for_search_index(
+                              *column_schema, allocator_, is_single_layer_array_for_search))) {
+                  LOG_WARN("failed to check collection column for search index", K(ret), KPC(column_schema));
+                } else if (!is_single_layer_array_for_search) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("search index on map or non-single-layer array column is not supported", K(ret));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "create search index on map or non-single-layer array column is");
+                }
+              } else if (index_keyname_ != INDEX_KEYNAME::VEC_KEY) {
                 ret = OB_NOT_SUPPORTED;
                 LOG_WARN("not support index type create on vector or array column yet", K(ret), K(index_keyname_));
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector or array column is");
+              }
+
+              if (OB_FAIL(ret)) {
+              } else if (index_keyname_ != INDEX_KEYNAME::VEC_KEY
+                         && !(is_search_index && is_single_layer_array_for_search)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("vector column index but not vector index, and non-single-layer array SEARCH index are not supported",
+                         K(ret), K(column_schema->get_data_type()), K(index_keyname_));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector column index but not vector index, and non-single-layer array SEARCH index are");
               } else if (OB_FAIL(ObVectorIndexUtil::is_sparse_vec_col(column_schema->get_extended_type_info(), is_sparse_vec_col))) {
                 LOG_WARN("fail to check is sparse vec col", K(ret));
               } else if (is_sparse_vec_col) {
@@ -231,6 +252,11 @@ int ObCreateIndexResolver::resolve_index_column_node(
                 }
               }
             }
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(resolve_search_index_constraint(*column_schema,
+                                                               static_cast<int64_t>(index_keyname_)))) {
+              LOG_WARN("resolve search index constraint fail", K(ret), K(sort_item.column_name_));
+            }
           }
         }
       }
@@ -242,6 +268,10 @@ int ObCreateIndexResolver::resolve_index_column_node(
           ret = OB_KEY_PART_0;
           LOG_WARN("index prefix len invalid", K(ret), "prefix_len", sort_item.prefix_len_);
           LOG_USER_ERROR(OB_KEY_PART_0, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+        } else if (INDEX_KEYNAME::SEARCH_KEY == index_keyname_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("prefix length for search index is not supported", K(ret), K(sort_item.prefix_len_));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "prefix length for search index is");
         }
         is_prefix_index = true;
       } else {
@@ -1051,6 +1081,25 @@ int ObCreateIndexResolver::set_table_option_to_stmt(
         ret = OB_NOT_SUPPORTED;
       } else {
         index_arg.index_type_ = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
+      }
+    } else if (INDEX_KEYNAME::SEARCH_KEY == index_keyname_) {
+      uint64_t tenant_data_version = 0;
+      if (!tbl_schema.is_heap_organized_table() || tbl_schema.is_table_with_clustering_key()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("Non-heap organized tables is not support search index yet", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Search index for a non-heap organized table is");
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_5_1_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant data version is less than 4.5.1, create search index on existing table not supported", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.5.1, search index");
+      } else if (global_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support global search index now", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "global search index is");
+      } else {
+        index_arg.index_type_ = INDEX_TYPE_SEARCH_DEF_INDEX_LOCAL;
       }
     }
     index_arg.data_table_id_ = data_table_id_;

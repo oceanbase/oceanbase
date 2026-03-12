@@ -75,13 +75,25 @@ int ObSchemaChecker::init(ObSqlSchemaGuard &sql_schema_mgr, uint64_t session_id)
 int ObSchemaChecker::set_lbca_op()
 {
   int ret = OB_SUCCESS;
-  flag_ = LBCA_OP_FLAG;
+  lbca_op_flag_ = true;
   return ret;
 }
 
 bool ObSchemaChecker::is_lbca_op()
 {
-  return flag_ == LBCA_OP_FLAG;
+  return lbca_op_flag_;
+}
+
+int ObSchemaChecker::set_search_index_ddl()
+{
+  int ret = OB_SUCCESS;
+  search_index_ddl_ = true;
+  return ret;
+}
+
+bool ObSchemaChecker::is_search_index_ddl() const
+{
+  return search_index_ddl_;
 }
 
 int ObSchemaChecker::check_ora_priv(
@@ -2520,10 +2532,10 @@ int ObSchemaChecker::get_link_table_schema_inner(
   return ret;
 }
 
-int ObSchemaChecker::get_column_schema_inner(const uint64_t tenant_id, uint64_t table_id,
-                                             const ObString &column_name,
-                                             const ObColumnSchemaV2 *&column_schema,
-                                             bool is_link /* = false */) const
+int ObSchemaChecker::get_column_schema_from_mgr(const uint64_t tenant_id, uint64_t table_id,
+                                                const ObString &column_name,
+                                                const ObColumnSchemaV2 *&column_schema,
+                                                bool is_link /* = false */) const
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(sql_schema_mgr_)) {
@@ -2537,9 +2549,9 @@ int ObSchemaChecker::get_column_schema_inner(const uint64_t tenant_id, uint64_t 
   return ret;
 }
 
-int ObSchemaChecker::get_column_schema_inner(const uint64_t tenant_id, uint64_t table_id, const uint64_t column_id,
-                                             const ObColumnSchemaV2 *&column_schema,
-                                             bool is_link /* = false */) const
+int ObSchemaChecker::get_column_schema_from_mgr(const uint64_t tenant_id, uint64_t table_id, const uint64_t column_id,
+                                                const ObColumnSchemaV2 *&column_schema,
+                                                bool is_link /* = false */) const
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(sql_schema_mgr_)) {
@@ -2549,6 +2561,71 @@ int ObSchemaChecker::get_column_schema_inner(const uint64_t tenant_id, uint64_t 
     OV (OB_NOT_NULL(schema_mgr_));
     OZ (schema_mgr_->get_column_schema(tenant_id, table_id, column_id, column_schema),
         table_id, column_id);
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_column_schema_inner(const uint64_t tenant_id, uint64_t table_id,
+                                             const ObString &column_name,
+                                             const ObColumnSchemaV2 *&column_schema,
+                                             bool is_link /* = false */) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_column_schema_from_mgr(tenant_id, table_id, column_name, column_schema, is_link))) {
+    LOG_WARN("failed to get column schema from mgr", K(ret), K(table_id), K(column_name));
+  } else if (is_search_index_ddl() && OB_ISNULL(column_schema)) {
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(get_search_index_data_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("failed to get search index ref table schema", K(ret), K(table_id));
+    } else if (OB_NOT_NULL(table_schema)
+      && OB_FAIL(get_column_schema_from_mgr(tenant_id, table_schema->get_table_id(), column_name,
+                                            column_schema, is_link))) {
+      LOG_WARN("failed to get column schema", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_column_schema_inner(const uint64_t tenant_id, uint64_t table_id, const uint64_t column_id,
+                                             const ObColumnSchemaV2 *&column_schema,
+                                             bool is_link /* = false */) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_column_schema_from_mgr(tenant_id, table_id, column_id, column_schema, is_link))) {
+    LOG_WARN("failed to get column schema from mgr", K(ret), K(table_id), K(column_id));
+  } else if (is_search_index_ddl() && OB_ISNULL(column_schema)) {
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(get_search_index_data_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("failed to get search index ref table schema", K(ret), K(table_id));
+    } else if (OB_NOT_NULL(table_schema)
+      &&OB_FAIL(get_column_schema_from_mgr(tenant_id, table_schema->get_table_id(), column_id,
+                                           column_schema, is_link))) {
+      LOG_WARN("failed to get column schema", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_search_index_data_table_schema(
+  const uint64_t tenant_id,
+  const uint64_t table_id,
+  const share::schema::ObTableSchema *&table_schema) const
+{
+  int ret = OB_SUCCESS;
+  table_schema = nullptr;
+  const ObTableSchema *index_data_schema = nullptr;
+  const ObTableSchema *index_def_schema = nullptr;
+  if (OB_FAIL(get_table_schema(tenant_id, table_id, index_data_schema))) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("get table schema failed", K(table_id), K(ret));
+  } else if (index_data_schema->is_search_data_index()
+    && OB_FAIL(get_table_schema(tenant_id, index_data_schema->get_data_table_id(), index_def_schema))) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("get table schema failed", K(index_data_schema->get_table_name_str()), K(ret));
+  } else if (OB_NOT_NULL(index_def_schema) && index_def_schema->is_search_def_index()
+    && OB_FAIL(get_table_schema(tenant_id, index_def_schema->get_data_table_id(), table_schema))) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("get table schema failed", K(index_def_schema->get_table_name_str()), K(ret));
   }
   return ret;
 }

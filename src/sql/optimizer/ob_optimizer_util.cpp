@@ -502,6 +502,36 @@ int ObOptimizerUtil::generate_stable_ordering(common::ObIArray<ObRawExpr *> &exp
   return ret;
 }
 
+bool ObOptimizerUtil::check_index_match_prefix(const common::ObIArray<uint64_t> &column_ids,
+                                               const common::ObIArray<uint64_t> &index_column_ids,
+                                               bool can_ignore_prefix)
+{
+  bool is_match = false;
+  if (index_column_ids.count() < column_ids.count() ||
+      column_ids.count() == 0) {
+    // not enough columns in index
+    is_match = false;
+  } else if (can_ignore_prefix) {
+    // index like search index does not require prefix condition match,
+    // but all column_ids must be contained in index_column_ids
+    is_match = true;
+    for (int64_t j = 0; is_match && j < column_ids.count(); ++j) {
+      if (!find_item(index_column_ids, column_ids.at(j))) {
+        is_match = false;
+      }
+    }
+  } else {
+    // normal index requires prefix condition match
+    is_match = true;
+    for (int64_t j = 0; is_match && j < column_ids.count(); ++j) {
+      if (!find_item(column_ids, index_column_ids.at(j))) {
+        is_match = false;
+      }
+    }
+  }
+  return is_match;
+}
+
 // used to generate specific ordering exprs
 bool ObOptimizerUtil::stable_expr_cmp_func(std::pair<ObRawExpr*,int64_t> l_pair,
                                            std::pair<ObRawExpr*,int64_t> r_pair)

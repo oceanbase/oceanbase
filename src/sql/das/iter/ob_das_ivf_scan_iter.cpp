@@ -314,7 +314,7 @@ int ObDASIvfBaseScanIter::inner_init(ObDASIterParam &param)
         } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(
                        vec_aux_ctdef_->vec_index_param_, ObVectorIndexType::VIT_IVF_INDEX, vec_index_param_))) {
           LOG_WARN("fail to parse params from string", K(ret), K(vec_aux_ctdef_->vec_index_param_));
-        } else if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(persist_alloc_, sort_rtdef_, search_vec_,
+        } else if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(persist_alloc_, sort_rtdef_->eval_ctx_, search_vec_,
                                                                   real_search_vec_))) {
           LOG_WARN("failed to get real search vec", K(ret));
         } else if (OB_FAIL(ObDasVecScanUtils::get_distance_expr_type(*sort_ctdef_->sort_exprs_[0],
@@ -3278,7 +3278,7 @@ int ObDASIvfBaseScanIter::get_rowkey_brute_post(bool is_vectorized, IvfRowkeyHea
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid rowkey cnt", K(ret));
   } else if (need_norm_) {
-    if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(mem_context_->get_arena_allocator(), sort_rtdef_, search_vec_,
+    if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(mem_context_->get_arena_allocator(), sort_rtdef_->eval_ctx_, search_vec_,
                                                        raw_search_vec))) {
       LOG_WARN("failed to get real search vec", K(ret));
     } else if (OB_FALSE_IT(search_vec = reinterpret_cast<float *>(raw_search_vec.ptr()))) {

@@ -1244,7 +1244,7 @@ int ObJsonExprHelper::find_and_add_cache(
   return ret;
 }
 
-bool ObJsonExprHelper::is_convertible_to_json(ObObjType &type)
+bool ObJsonExprHelper::is_convertible_to_json(const ObObjType type)
 {
   bool val = false;
   switch (type) {
@@ -2190,6 +2190,19 @@ int ObJsonExprHelper::get_clause_opt(ObExpr *expr,
   return ret;
 }
 
+bool ObJsonExprHelper::check_pick_type_match(ObJsonNodeType json_type, ObItemType pick_type)
+{
+  bool is_match = true;
+  if (lib::is_mysql_mode()) {
+    if (pick_type == T_JSON_NUMBER) {
+      is_match = ObIJsonBase::is_json_number_type(json_type);
+    } else if (pick_type == T_JSON_STRING) {
+      is_match = (json_type == ObJsonNodeType::J_STRING);
+    }
+  }
+  return is_match;
+}
+
 int ObJsonExprHelper::get_cast_string_len(ObExprResType &type1,
                         ObExprResType &type2,
                         common::ObExprTypeCtx &type_ctx,
@@ -2905,6 +2918,7 @@ bool ObJsonExprHelper::check_json_expr_can_pushdown(const ObRawExpr &json_expr)
   if (T_FUN_SYS_JSON_VALUE == json_expr.get_expr_type() && json_expr.get_param_count() == OB_JSON_VALUE_EXPR_PARAM_COUNT) {
     const ObRawExpr *doc_expr = json_expr.get_param_expr(JSN_VAL_DOC);
     const ObRawExpr *path_expr = json_expr.get_param_expr(JSN_VAL_PATH);
+    ObItemType pick_type = json_expr.get_pick();
     const ObRawExpr *type_expr = json_expr.get_param_expr(JSN_VAL_RET);
     const ObRawExpr *trunc_expr = json_expr.get_param_expr(JSN_VAL_TRUNC);
     const ObRawExpr *ascii_expr = json_expr.get_param_expr(JSN_VAL_ASCII);
@@ -2927,6 +2941,9 @@ bool ObJsonExprHelper::check_json_expr_can_pushdown(const ObRawExpr &json_expr)
     // check path_expr
     } else if (! check_json_path_can_pushdown(*path_expr)) {
       LOG_INFO("json path is not support pushdown", KPC(path_expr), K(json_expr));
+    // check pick (stored in extra_)
+    } else if (pick_type != T_NULL) {
+      LOG_INFO("pick is not default, so do not support pushdown", K(pick_type), K(json_expr));
     // check return type expr
     } else if (! type_expr->is_const_raw_expr()) {
       LOG_INFO("returning type is not const, so do not pushdown", KPC(type_expr), K(json_expr));

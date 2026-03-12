@@ -1049,6 +1049,23 @@ bool ObDASUtils::is_es_match_scan(const ObDASBaseCtDef *attach_ctdef)
   return bret;
 }
 
+bool ObDASUtils::is_hybrid_search(const ObDASBaseCtDef *attach_ctdef)
+{
+  int ret = OB_SUCCESS;
+
+  bool bret = false;
+  if (attach_ctdef != nullptr) {
+    const ObDASBaseCtDef *fusion_search_ctdef = nullptr;
+    if (OB_FAIL(ObDASUtils::find_child_das_ctdef(attach_ctdef, DAS_OP_FUSION_QUERY, fusion_search_ctdef))) {
+      SQL_DAS_LOG(WARN, "find chld das def failed", K(ret));
+    } else {
+      bret = (nullptr != fusion_search_ctdef);
+    }
+  }
+
+  return bret;
+}
+
 int ObDASUtils::generate_mlog_row(const ObLSID &ls_id,
                                   const ObTabletID &tablet_id,
                                   const storage::ObDMLBaseParam &dml_param,

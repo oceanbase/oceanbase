@@ -21,8 +21,10 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/das/iter/ob_das_iter_utils.h"
+#include "sql/das/search/ob_das_scalar_define.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 #include "sql/engine/px/ob_granule_iterator_op.h"
+#include "sql/das/search/ob_das_scalar_define.h"
 
 namespace oceanbase
 {
@@ -1015,10 +1017,9 @@ int ObTableScanOp::attach_related_taskinfo(ObDASScanOp &target_op, ObDASBaseRtDe
   if (OB_ISNULL(attach_rtdef) || OB_ISNULL(attach_rtdef->ctdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("attach rtdef is invalid", K(ret), KP(attach_rtdef));
-  } else if (attach_rtdef->op_type_ == DAS_OP_TABLE_SCAN) {
-    const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(attach_rtdef->ctdef_);
-    ObDASScanRtDef *scan_rtdef = static_cast<ObDASScanRtDef*>(attach_rtdef);
-    ObDASTableLoc *table_loc = scan_rtdef->table_loc_;
+  } else if (attach_rtdef->op_type_ == DAS_OP_TABLE_SCAN ||
+             attach_rtdef->op_type_ == DAS_OP_SCALAR_SCAN_QUERY) {
+    ObDASTableLoc *table_loc = attach_rtdef->table_loc_;
     ObDASTabletLoc *tablet_loc = ObDASUtils::get_related_tablet_loc(
         *target_op.get_tablet_loc(), table_loc->loc_meta_->ref_table_id_);
     if (OB_ISNULL(tablet_loc)) {
@@ -1026,8 +1027,8 @@ int ObTableScanOp::attach_related_taskinfo(ObDASScanOp &target_op, ObDASBaseRtDe
       LOG_WARN("related tablet loc is not found", K(ret),
                KPC(target_op.get_tablet_loc()),
                KPC(table_loc->loc_meta_));
-    } else if (OB_FAIL(target_op.set_related_task_info(scan_ctdef,
-                                                       scan_rtdef,
+    } else if (OB_FAIL(target_op.set_related_task_info(attach_rtdef->ctdef_,
+                                                       attach_rtdef,
                                                        tablet_loc->tablet_id_))) {
       LOG_WARN("set attach task info failed", K(ret), KPC(tablet_loc));
     } else {
@@ -1227,37 +1228,29 @@ int ObTableScanOp::init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef,
   } else if (OB_FAIL(das_factory.create_das_rtdef(attach_ctdef->op_type_, attach_rtdef))) {
     LOG_WARN("create das rtdef failed", K(ret), K(attach_ctdef->op_type_));
   } else if (ObDASTaskFactory::is_attached(attach_ctdef->op_type_)) {
-    attach_rtdef->ctdef_ = attach_ctdef;
-    attach_rtdef->children_cnt_ = attach_ctdef->children_cnt_;
-    attach_rtdef->eval_ctx_ = &eval_ctx_;
-    if (attach_ctdef->children_cnt_ > 0) {
-      if (OB_ISNULL(attach_rtdef->children_ = OB_NEW_ARRAY(ObDASBaseRtDef*,
-                                                           &ctx_.get_allocator(),
-                                                           attach_ctdef->children_cnt_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate child buf failed", K(ret), K(attach_ctdef->children_cnt_));
+    if (DAS_OP_SCALAR_SCAN_QUERY == attach_ctdef->op_type_) {
+      tsc_rtdef_.attach_rtinfo_->related_scan_cnt_++;
+      const ObDASScalarScanCtDef *scalar_scan_ctdef = static_cast<const ObDASScalarScanCtDef*>(attach_ctdef);
+      ObDASScalarScanRtDef *scalar_scan_rtdef = static_cast<ObDASScalarScanRtDef*>(attach_rtdef);
+      const ObDASTableLocMeta *attach_loc_meta =
+        MY_CTDEF.attach_spec_.get_attach_loc_meta(MY_SPEC.table_loc_id_, scalar_scan_ctdef->ref_table_id_);
+      if (OB_FAIL(init_das_scalar_scan_rtdef(*scalar_scan_ctdef, *scalar_scan_rtdef, attach_loc_meta))) {
+        LOG_WARN("init das scan rtdef failed", K(ret));
       }
-      for (int i = 0; OB_SUCC(ret) && i < attach_ctdef->children_cnt_; ++i) {
-        if (OB_FAIL(init_attach_scan_rtdef(attach_ctdef->children_[i], attach_rtdef->children_[i]))) {
-          LOG_WARN("init attach scan rtdef failed", K(ret));
-        }
-      }
-    }
-    if (attach_ctdef->op_type_ == DAS_OP_INDEX_MERGE) {
-      const ObDASIndexMergeCtDef *index_merge_ctdef = static_cast<const ObDASIndexMergeCtDef*>(attach_ctdef);
-      if (index_merge_ctdef->main_scan_ctdef_ != nullptr) {
-        ObDASScanRtDef *main_scan_rtdef = nullptr;
-        ObDASIndexMergeRtDef *index_merge_rtdef = static_cast<ObDASIndexMergeRtDef*>(attach_rtdef);
-        if (OB_ISNULL(main_scan_rtdef = OB_NEWx(ObDASScanRtDef, &ctx_.get_allocator()))) {
+    } else {
+      attach_rtdef->ctdef_ = attach_ctdef;
+      attach_rtdef->children_cnt_ = attach_ctdef->children_cnt_;
+      attach_rtdef->eval_ctx_ = &eval_ctx_;
+      if (attach_ctdef->children_cnt_ > 0) {
+        if (OB_ISNULL(attach_rtdef->children_ = OB_NEW_ARRAY(ObDASBaseRtDef*,
+                                                             &ctx_.get_allocator(),
+                                                             attach_ctdef->children_cnt_))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate main scan rtdef failed", K(ret));
-        } else {
-          const ObDASTableLocMeta *attach_loc_meta = MY_CTDEF.attach_spec_.get_attach_loc_meta(
-            MY_SPEC.table_loc_id_, index_merge_ctdef->main_scan_ctdef_->ref_table_id_);
-          if (OB_FAIL(init_das_scan_rtdef(*index_merge_ctdef->main_scan_ctdef_, *main_scan_rtdef, attach_loc_meta))) {
-            LOG_WARN("init das scan rtdef failed", K(ret));
-          } else {
-            index_merge_rtdef->main_scan_rtdef_ = main_scan_rtdef;
+          LOG_WARN("allocate child buf failed", K(ret), K(attach_ctdef->children_cnt_));
+        }
+        for (int i = 0; OB_SUCC(ret) && i < attach_ctdef->children_cnt_; ++i) {
+          if (OB_FAIL(init_attach_scan_rtdef(attach_ctdef->children_[i], attach_rtdef->children_[i]))) {
+            LOG_WARN("init attach scan rtdef failed", K(ret));
           }
         }
       }
@@ -1278,6 +1271,53 @@ int ObTableScanOp::init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef,
       ObDASScanRtDef *attach_scan_rtdef = static_cast<ObDASScanRtDef*>(attach_rtdef);
       if (OB_FAIL(init_das_scan_rtdef(*attach_scan_ctdef, *attach_scan_rtdef, attach_loc_meta))) {
         LOG_WARN("init das scan rtdef failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableScanOp::init_das_scalar_scan_rtdef(const ObDASScalarScanCtDef &scalar_scan_ctdef,
+                                              ObDASScalarScanRtDef &scalar_scan_rtdef,
+                                              const ObDASTableLocMeta *loc_meta)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
+  ObTaskExecutorCtx &task_exec_ctx = ctx_.get_task_exec_ctx();
+  if (OB_ISNULL(plan_ctx) || OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), K(plan_ctx), K(my_session));
+  } else {
+    scalar_scan_rtdef.ctdef_ = &scalar_scan_ctdef;
+    scalar_scan_rtdef.timeout_ts_ = plan_ctx->get_ps_timeout_timestamp();
+    scalar_scan_rtdef.tx_lock_timeout_ = my_session->get_trx_lock_timeout();
+    scalar_scan_rtdef.scan_flag_ = MY_CTDEF.scan_flags_;
+    scalar_scan_rtdef.sql_mode_ = my_session->get_sql_mode();
+    scalar_scan_rtdef.stmt_allocator_.set_alloc(&ctx_.get_allocator());
+    scalar_scan_rtdef.scan_allocator_.set_alloc(&ctx_.get_allocator());
+    scalar_scan_rtdef.eval_ctx_ = &get_eval_ctx();
+    scalar_scan_rtdef.tenant_schema_version_ = task_exec_ctx.get_query_tenant_begin_schema_version();
+    scalar_scan_rtdef.really_need_rowkey_order_ = scalar_scan_ctdef.need_rowkey_order_;
+
+    if (OB_FAIL(scalar_scan_rtdef.init_pd_op(ctx_, scalar_scan_ctdef))) {
+      LOG_WARN("init pushdown storage filter failed", K(ret));
+    } else {
+      ObTableID table_loc_id = MY_SPEC.get_table_loc_id();
+      scalar_scan_rtdef.table_loc_ = DAS_CTX(ctx_).get_table_loc_by_id(table_loc_id, scalar_scan_ctdef.ref_table_id_);
+      if (OB_ISNULL(scalar_scan_rtdef.table_loc_)) {
+        if (OB_ISNULL(loc_meta)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get table loc by id failed", K(ret), K(table_loc_id),
+            K(scalar_scan_ctdef.ref_table_id_), K(DAS_CTX(ctx_).get_table_loc_list()));
+        } else if (OB_FAIL(DAS_CTX(ctx_).extended_table_loc(*loc_meta, scalar_scan_rtdef.table_loc_))) {
+          LOG_WARN("extended table location failed", K(ret), KPC(loc_meta));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(scalar_scan_rtdef.table_loc_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table loc is null", K(ret), K(scalar_scan_ctdef.ref_table_id_));
       }
     }
   }
@@ -1733,6 +1773,10 @@ int ObTableScanOp::prepare_index_merge_scan_range(int64_t group_idx, bool need_s
   if (OB_ISNULL(attach_rtdef)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KPC(attach_rtdef), K(ret));
+  } else if (MY_CTDEF.is_hybrid_search_) {
+    if (OB_FAIL(prepare_hybrid_search_scan_range(group_idx, need_sort, range_allocator, attach_rtdef))) {
+      LOG_WARN("failed to prepare hybrid search scan range", KPC(attach_rtdef), K(ret));
+    }
   } else {
     ObDASBaseRtDef *index_merge_rtdef = nullptr;
     ObDASBaseRtDef *vir_scan_rtdef = nullptr;
@@ -1746,6 +1790,60 @@ int ObTableScanOp::prepare_index_merge_scan_range(int64_t group_idx, bool need_s
     }
     if (OB_FAIL(prepare_range_for_each_index(group_idx, need_sort, range_allocator, index_merge_rtdef))) {
       LOG_WARN("failed to prepare range for each index", KPC(index_merge_rtdef), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableScanOp::prepare_hybrid_search_scan_range(int64_t group_idx,
+                                                    bool need_sort,
+                                                    ObIAllocator &allocator,
+                                                    ObDASBaseRtDef *rtdef)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rtdef) || OB_ISNULL(rtdef->ctdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr rtdef", K(ret), K(rtdef));
+  } else if (DAS_OP_SCALAR_SCAN_QUERY == rtdef->op_type_) {
+    ObQueryRangeArray key_ranges;
+    ObDASScalarScanRtDef *scan_rtdef = static_cast<ObDASScalarScanRtDef *>(rtdef);
+    const ObDASScalarScanCtDef *scan_ctdef = static_cast<const ObDASScalarScanCtDef *>(scan_rtdef->ctdef_);
+    const ObQueryRangeProvider &query_range_provider = scan_ctdef->get_query_range_provider();
+    scan_rtdef->key_ranges_.reuse();
+    if (OB_UNLIKELY(!query_range_provider.has_range())) {
+      // virtual table, do nothing
+    } else if (OB_FAIL(ObSQLUtils::extract_pre_query_range(
+      query_range_provider,
+      allocator,
+      ctx_,
+      key_ranges,
+      ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
+      LOG_WARN("failed to extract pre query ranges", K(ret));
+    } else {
+      if (OB_UNLIKELY(need_sort) && key_ranges.count() > 1) {
+        lib::ob_sort(key_ranges.begin(), key_ranges.end(), ObNewRangeCmp());
+      }
+      ObNewRange *key_range = nullptr;
+      for (int64_t j = 0; OB_SUCC(ret) && j < key_ranges.count(); ++j) {
+        key_range = key_ranges.at(j);
+        if (OB_ISNULL(key_range)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr key range", K(ret), K(key_ranges));
+        } else {
+          key_range->table_id_ = scan_ctdef->ref_table_id_;
+          key_range->group_idx_ = group_idx;
+          if (OB_FAIL(scan_rtdef->key_ranges_.push_back(*key_range))) {
+            LOG_WARN("failed to push back key range", KPC(scan_rtdef), K(ret));
+          }
+        }
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rtdef->children_cnt_; ++i) {
+      ObDASBaseRtDef *child_rtdef = rtdef->children_[i];
+      if (OB_FAIL(SMART_CALL(prepare_hybrid_search_scan_range(group_idx, need_sort, allocator, child_rtdef)))) {
+        LOG_WARN("failed to prepare hybrid search scan range", KPC(child_rtdef), K(ret));
+      }
     }
   }
   return ret;
@@ -2418,6 +2516,8 @@ int ObTableScanOp::set_stmt_allocator(ObDASBaseRtDef *rtdef, ObIAllocator *alloc
     LOG_WARN("unexpected nullptr", K(rtdef), K(alloc), K(ret));
   } else if (DAS_OP_TABLE_SCAN == rtdef->op_type_) {
     static_cast<ObDASScanRtDef*>(rtdef)->stmt_allocator_.set_alloc(alloc);
+  } else if (DAS_OP_SCALAR_SCAN_QUERY == rtdef->op_type_) {
+    static_cast<ObDASScalarScanRtDef*>(rtdef)->stmt_allocator_.set_alloc(alloc);
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < rtdef->children_cnt_; ++i) {
       if (OB_FAIL(set_stmt_allocator(rtdef->children_[i], alloc))) {

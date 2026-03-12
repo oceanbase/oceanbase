@@ -308,6 +308,9 @@ public:
   const ObTableSchema *vec_pq_centroid_schema_;
   const ObTableSchema *vec_pq_code_schema_;
   const ObTableSchema *hybrid_vec_embedded_schema_;
+  const ObTableSchema *def_index_schema_;
+  const ObTableSchema *data_index_schema_;
+
 
   uint64_t tenant_data_version_;
   bool ddl_need_retry_at_executor_;

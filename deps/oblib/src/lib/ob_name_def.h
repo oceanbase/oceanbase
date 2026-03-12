@@ -1311,4 +1311,7 @@
 #define N_COLLECT_FILE_LIST                 "collect_file_list"
 #define N_TO_TYPE_NAME                      "to_type_name"
 #define N_LOAD_FILE                         "load_file"
+// Inner functions for search index
+#define N_SEARCH_INDEX_INNER_PATH           "search_index_inner_path"
+#define N_SEARCH_INDEX_INNER_VALUE          "search_index_inner_value"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

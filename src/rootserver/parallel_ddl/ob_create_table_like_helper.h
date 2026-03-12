@@ -53,6 +53,9 @@ public:
   virtual int generate_sequence_object_() override { return OB_SUCCESS; };
 
 private:
+  int append_search_data_index_infos_(ObIArray<share::schema::ObAuxTableMetaInfo> &simple_index_infos);
+
+private:
   const obrpc::ObCreateTableLikeArg &arg_;
   obrpc::ObCreateTableRes &res_;
   uint64_t orig_table_id_;

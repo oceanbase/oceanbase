@@ -2415,6 +2415,23 @@ private:
       const share::schema::ObTableSchema &table_schema,
       const share::schema::ObTableType table_type,
       const bool to_recyclebin);
+  int operate_drop_aux_table(
+      ObMySQLTransaction &trans,
+      ObDDLOperator &ddl_operator,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &index_schema,
+      const share::schema::ObTableSchema &table_schema,
+      const bool to_recyclebin);
+  int rebuild_table_schema_with_new_id(const share::schema::ObTableSchema &orig_table_schema,
+                                       const share::schema::ObDatabaseSchema &new_database_schema,
+                                       const common::ObString &new_table_name,
+                                       const common::ObString &create_host,
+                                       const int64_t session_id,
+                                       const share::schema::ObTableType table_type_,
+                                       share::schema::ObSchemaService &schema_service,
+                                       common::ObIArray<share::schema::ObTableSchema> &new_scheams,
+                                       common::ObArenaAllocator &allocator,
+                                       const uint64_t define_user_id);
   int check_enable_sys_table_ddl(const share::schema::ObTableSchema &table_schema,
                                  const share::schema::ObSchemaOperationType operation_type);
   int log_drop_warn_or_err_msg(const obrpc::ObTableItem table_item,
@@ -2562,6 +2579,12 @@ private:
 
   int fix_local_idx_part_name_for_add_subpart_(const ObSimpleTableSchemaV2 &ori_table_schema,
                                           ObSimpleTableSchemaV2 &inc_table_schema);
+  // Get effective data table schema, handling search_data_index case
+  int get_effective_data_table_schema_(const ObTableSchema &orig_table_schema,
+                                       const ObTableSchema &orig_data_table_schema,
+                                       ObSchemaGetterGuard &schema_guard,
+                                       const uint64_t tenant_id,
+                                       const ObTableSchema *&effective_data_table_schema);
   int gen_inc_table_schema_for_rename_part_(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
@@ -2740,6 +2763,11 @@ private:
       const uint64_t orig_table_mlog_tid,
       const uint64_t hidden_table_mlog_tid,
       ObIArray<ObTableSchema> &table_schemas);
+  int add_search_data_index_schemas_(
+      const uint64_t tenant_id,
+      const ObTableSchema &search_def_index_schema,
+      ObSchemaGetterGuard &schema_guard,
+      ObIArray<ObTableSchema> &table_schemas);
   int build_hidden_table_index_and_mlog_schema_(
       const share::schema::ObTableSchema &hidden_table_schema,
       share::schema::ObTableSchema &index_schema);
@@ -2753,6 +2781,24 @@ private:
   int update_tables_tablegroup_for_database_(
       ObMySQLTransaction &trans,
       const share::schema::ObDatabaseSchema &new_database_schema);
+  int set_search_index_mapping_(obrpc::ObCreateIndexArg &create_index_arg,
+                                ObTableSchema &data_index_schema);
+  int reconstruct_search_data_index(
+      const uint64_t tenant_id,
+      const ObTableSchema &search_def_index,
+      const uint64_t new_search_def_idx_tid,
+      ObMySQLTransaction &trans,
+      ObSchemaGetterGuard &schema_guard,
+      ObIAllocator &allocator,
+      ObIArray<ObRecycleObject> &index_recycle_objs,
+      ObIArray<ObTableSchema> &table_schemas);
+  int operate_drop_aux_table_in_truncate(
+      const ObTableSchema &aux_table_schema,
+      const bool to_recyclebin,
+      const bool is_inner_table,
+      ObDDLOperator &ddl_operator,
+      ObMySQLTransaction &trans,
+      ObSchemaGetterGuard &schema_guard);
 
   bool check_change_to_compaction_scn_ttl_table(const AlterTableSchema &alter_table_schema, const ObTableSchema &orig_table_schema) const;
   int update_being_scn_ttl_time(ObTableSchema &new_table_schema);

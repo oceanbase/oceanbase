@@ -517,6 +517,13 @@ private:
   int update_partition_option_(ObISQLClient &sql_client,
                                const ObTableSchema &table,
                                ObDMLSqlSplicer &dml);
+  int update_index_status_(const uint64_t tenant_id,
+                           const uint64_t index_table_id,
+                           const ObIndexStatus status,
+                           const int64_t new_schema_version,
+                           const bool in_offline_ddl_white_list,
+                           common::ObISQLClient &sql_client,
+                           const common::ObString *ddl_stmt_str);
 
 public:
   int insert_column_ids_into_column_group(ObISQLClient &sql_client,

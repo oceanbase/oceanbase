@@ -214,6 +214,17 @@ int ObMergeSchema::get_skip_index_col_attr(
       skip_idx_attrs.at(trans_version_col_idx).set_min_max();
     }
   }
+
+  // special handling
+  if (OB_SUCC(ret) && !is_major) {
+    for (int64_t i = 0; i < skip_idx_attrs.count(); ++i) {
+      skip_idx_attrs.at(i).unset_sum(); // delta sstable do not support sum
+    }
+    if (data_version >= DATA_VERSION_4_5_1_0) {
+      skip_idx_attrs.at(trans_version_col_idx).set_min_max();
+    }
+  }
+
   return ret;
 }
 
@@ -717,7 +728,8 @@ bool ObSimpleTableSchemaV2::is_valid() const
         ret = false;
         LOG_WARN("invalid data table_id", K(ret), K(data_table_id_));
       } else if (is_index_table() && !is_normal_index() && !is_unique_index()
-          && !is_domain_index() && !is_vec_index() && !is_fts_index() && !is_multivalue_index()) {
+          && !is_domain_index() && !is_vec_index() && !is_fts_index() && !is_multivalue_index()
+          && !is_search_index()) {
         ret = false;
         LOG_WARN("table_type is not consistent with index_type",
             "table_type", static_cast<int64_t>(table_type_),
@@ -2551,8 +2563,9 @@ int ObTableSchema::check_valid(const bool for_create) const
               } else {
                 varchar_col_total_length += varchar_col_len;
               }
-            } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())
-                       || ob_is_geometry_tc(column->get_data_type()) || ob_is_roaringbitmap_tc(column->get_data_type())) {
+            } else if (!is_search_def_index() &&
+                       (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())
+                       || ob_is_geometry_tc(column->get_data_type()) || ob_is_roaringbitmap_tc(column->get_data_type()))) {
               if (column->is_rowkey_column()) {
                 rowkey_has_string_lob = true;
               } else {
@@ -11162,6 +11175,22 @@ int ObTableSchema::get_hidden_column_count(int64_t &hidden_column_count) const
       // do nothing
     } else if (column_schema->is_hidden()) {
       hidden_column_count++;
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::get_search_data_index_tid(uint64_t &tid) const
+{
+  int ret = OB_SUCCESS;
+  if (is_search_def_index()) {
+    if (1 != get_index_tid_count()
+      || !share::schema::is_search_data_index(get_simple_index_infos().at(0).index_type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the search index definition table and the search index data table should"
+                                  " correspond one-to-one", K(ret), K(get_index_tid_count()));
+    } else {
+      tid = get_simple_index_infos().at(0).table_id_;
     }
   }
   return ret;

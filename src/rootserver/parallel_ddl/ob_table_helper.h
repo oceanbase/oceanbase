@@ -58,6 +58,7 @@ protected:
                       const uint64_t replace_mock_fk_parent_table_id);
   int create_tables_(const ObString *ddl_stmt_str);
   int inner_generate_aux_table_schema_(const ObCreateTableArg &arg);
+  int build_search_index_mapping_();
   int create_sequences_();
   int deal_with_mock_fk_parent_tables_(
       const uint64_t replace_mock_fk_parent_table_id);

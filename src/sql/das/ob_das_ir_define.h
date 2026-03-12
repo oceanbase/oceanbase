@@ -19,6 +19,8 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObDASScalarScanCtDef;
+class ObDASScalarScanRtDef;
 
 struct ObTextBlockMaxSpec
 {
@@ -89,11 +91,11 @@ public:
   {
     return has_block_max_scan_
         && nullptr != token_col_
-        && nullptr != topk_limit_expr_
         && block_max_spec_.is_valid();
   }
   const ObDASScanCtDef *get_inv_idx_scan_ctdef() const
   {
+    OB_ASSERT(!use_scalar_scan_def_);
     const ObDASScanCtDef *idx_scan_ctdef = nullptr;
     if (children_cnt_ > 0 && children_ != nullptr) {
       idx_scan_ctdef = static_cast<const ObDASScanCtDef*>(children_[get_inv_scan_idx()]);
@@ -102,6 +104,7 @@ public:
   }
   const ObDASScanCtDef *get_inv_idx_agg_ctdef() const
   {
+    OB_ASSERT(!use_scalar_scan_def_);
     const ObDASScanCtDef *idx_agg_ctdef = nullptr;
     const int64_t ctdef_idx = get_inv_agg_idx();
     if (children_cnt_ > ctdef_idx && ctdef_idx > 0 && children_ != nullptr) {
@@ -114,6 +117,7 @@ public:
   }
   const ObDASScanCtDef *get_doc_agg_ctdef() const
   {
+    OB_ASSERT(!use_scalar_scan_def_);
     const ObDASScanCtDef *doc_agg_ctdef = nullptr;
     const int64_t ctdef_idx = get_doc_agg_idx();
     if (children_cnt_ > ctdef_idx && ctdef_idx > 0 && children_ != nullptr) {
@@ -126,6 +130,7 @@ public:
   }
   const ObDASScanCtDef *get_fwd_idx_agg_ctdef() const
   {
+    OB_ASSERT(!use_scalar_scan_def_);
     const ObDASScanCtDef *fwd_idx_agg_ctdef = nullptr;
     const int64_t ctdef_idx = get_fwd_agg_idx();
     if (children_cnt_ > ctdef_idx && ctdef_idx > 0 && children_ != nullptr) {
@@ -138,6 +143,7 @@ public:
   }
   const ObDASScanCtDef *get_block_max_scan_ctdef() const
   {
+    OB_ASSERT(!use_scalar_scan_def_);
     const ObDASScanCtDef *block_max_scan_ctdef = nullptr;
     const int64_t ctdef_idx = get_block_max_scan_idx();
     if (children_cnt_ > ctdef_idx && ctdef_idx > 0 && children_ != nullptr) {
@@ -148,6 +154,28 @@ public:
     }
     return block_max_scan_ctdef;
   }
+
+  const ObDASScalarScanCtDef *get_inv_idx_scan_scalar_ctdef() const
+  {
+    return get_child_scalar_ctdef(get_inv_scan_idx());
+  }
+
+  const ObDASScalarScanCtDef *get_inv_idx_agg_scalar_ctdef() const
+  {
+    return get_child_scalar_ctdef(get_inv_agg_idx());
+  }
+
+  const ObDASScalarScanCtDef *get_doc_agg_scalar_ctdef() const
+  {
+    return get_child_scalar_ctdef(get_doc_agg_idx());
+  }
+
+  const ObDASScalarScanCtDef *get_block_max_scan_scalar_ctdef() const
+  {
+    return get_child_scalar_ctdef(get_block_max_scan_idx());
+  }
+
+  const ObDASScalarScanCtDef *get_child_scalar_ctdef(const int64_t idx) const;
   int64_t get_inv_scan_idx() const { return 0; }
   int64_t get_inv_agg_idx() const { return has_inv_agg_ ? 1 : -1; }
   int64_t get_doc_agg_idx() const { return has_doc_id_agg_ ? (1 + has_inv_agg_) : -1; }
@@ -163,6 +191,7 @@ public:
                        KPC_(search_text),
                        KPC_(inv_scan_domain_id_col),
                        KPC_(inv_scan_doc_length_col),
+                       KPC_(inv_scan_pos_list_col),
                        KPC_(match_filter),
                        KPC_(relevance_expr),
                        KPC_(relevance_proj_col),
@@ -204,7 +233,7 @@ public:
       uint8_t reserved_:2;
     };
   };
-  ObExpr *field_boost_expr_;
+  ObExpr *field_boost_expr_; // for es match sql expr only
 };
 
 struct ObDASIRScanRtDef : ObDASAttachRtDef
@@ -213,8 +242,7 @@ struct ObDASIRScanRtDef : ObDASAttachRtDef
 public:
   ObDASIRScanRtDef()
     : ObDASAttachRtDef(DAS_OP_IR_SCAN),
-      fts_idx_(OB_INVALID_INDEX),
-      minimum_should_match_(0) {}
+      fts_idx_(OB_INVALID_INDEX) {}
 
   virtual ~ObDASIRScanRtDef() {}
 
@@ -269,12 +297,37 @@ public:
     return block_max_scan_rtdef;
   }
 
+  ObDASScalarScanRtDef *get_inv_idx_scan_scalar_rtdef() const
+  {
+    const ObDASIRScanCtDef *ctdef = static_cast<const ObDASIRScanCtDef *>(ctdef_);
+    return get_child_scalar_rtdef(ctdef->get_inv_scan_idx());
+  }
+
+  ObDASScalarScanRtDef *get_inv_idx_agg_scalar_rtdef() const
+  {
+    const ObDASIRScanCtDef *ctdef = static_cast<const ObDASIRScanCtDef *>(ctdef_);
+    return get_child_scalar_rtdef(ctdef->get_inv_agg_idx());
+  }
+
+  ObDASScalarScanRtDef *get_doc_agg_scalar_rtdef() const
+  {
+    const ObDASIRScanCtDef *ctdef = static_cast<const ObDASIRScanCtDef *>(ctdef_);
+    return get_child_scalar_rtdef(ctdef->get_doc_agg_idx());
+  }
+
+  ObDASScalarScanRtDef *get_block_max_scan_scalar_rtdef() const
+  {
+    const ObDASIRScanCtDef *ctdef = static_cast<const ObDASIRScanCtDef *>(ctdef_);
+    return get_child_scalar_rtdef(ctdef->get_block_max_scan_idx());
+  }
+
+  ObDASScalarScanRtDef *get_child_scalar_rtdef(const int64_t idx) const;
+
   // currently a query could involve multiple fts indexes, such as index merge or func lookup,
   // and fts_idx_ serves as a unique identifier for each fts index, such as locating the corresponding
   // fts tablet ids in ObDASRelatedTabletID.
   // fts_idx_ is dynamically generated during execution based on the rtdef tree and does not need to be serialized.
   int64_t fts_idx_;
-  int64_t minimum_should_match_;
 };
 
 struct ObDASIRAuxLookupCtDef : ObDASAttachCtDef
@@ -468,14 +521,16 @@ public:
     : ObDASAttachRtDef(DAS_OP_IR_ES_MATCH),
       match_boost_(0),
       match_operator_(ObMatchOperator::MATCH_OPERATOR_OR),
+      minimum_should_match_(0),
       score_norm_function_(ObMatchScoreNorm::SCORE_NORM_NONE),
-      match_fields_type_(ObMatchFiledsType::MATCH_MOST_FIELDS) {}
+      match_fields_type_(ObMatchFieldsType::MATCH_MOST_FIELDS) {}
 
   virtual ~ObDASIREsMatchRtDef() {}
   double match_boost_;
   ObMatchOperator match_operator_;
+  int64_t minimum_should_match_;
   ObMatchScoreNorm score_norm_function_;
-  ObMatchFiledsType match_fields_type_;
+  ObMatchFieldsType match_fields_type_;
 };
 
 struct ObDASIREsScoreCtDef : ObDASAttachCtDef
@@ -509,6 +564,7 @@ public:
   int hash(uint64_t &hash_val) const;
   const ObDatum &get_datum() const;
   int from_datum(const ObDatum &datum);
+  int from_vector(const ObIVector &vec, const int64_t idx);
   int from_obj(const ObObj &obj);
 
   ObDocIdExt &operator=(const ObDocIdExt &other);

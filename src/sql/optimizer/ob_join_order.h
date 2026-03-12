@@ -48,6 +48,7 @@ namespace schema
 {
 class ObSchemaGetterGuard;
 }
+enum ObEsQueryItem : int8_t;
 }
 namespace common
 {
@@ -64,6 +65,7 @@ namespace sql
   class ObLakeTablePartitionInfo;
   class ObLogPlan;
   class ObJoinOrderEnum;
+  class ObDSLQuery;
   struct CandiRangeExprs
   {
     CandiRangeExprs(common::ObIAllocator &allocator)
@@ -647,7 +649,8 @@ class Path
         index_prefix_(-1),
         can_batch_rescan_(false),
         can_das_dynamic_part_pruning_(-1),
-        is_ordered_by_pk_(false)
+        is_ordered_by_pk_(false),
+        search_data_index_id_(OB_INVALID_ID)
     {
     }
     virtual ~AccessPath() {
@@ -752,6 +755,19 @@ class Path
                                   const ObIArray<ObAddr> &server_list,
                                   int64_t &server_cnt);
     virtual bool is_index_merge_path() const { return false; }
+    virtual bool is_hybrid_search_path() const { return false; }
+    bool is_search_index_path() const { return est_cost_info_.index_meta_info_.is_search_index_; }
+    uint64_t get_real_index_table_id() const
+    { return is_search_index_path() ? search_data_index_id_ : index_id_; }
+
+    bool is_new_query_range_with_precise_expr() const
+    {
+      const ObQueryRangeProvider *range_provider = get_query_range_provider();
+      return NULL != range_provider &&
+        range_provider->is_new_query_range() &&
+        range_provider->get_unprecise_range_exprs().empty();
+    }
+
     TO_STRING_KV(K_(table_id),
                  K_(ref_table_id),
                  K_(index_id),
@@ -773,7 +789,8 @@ class Path
                  K_(is_valid_inner_path),
                  K_(can_batch_rescan),
                  K_(can_das_dynamic_part_pruning),
-                 K_(is_ordered_by_pk));
+                 K_(is_ordered_by_pk),
+                 K_(search_data_index_id));
   public:
     //member variables
     uint64_t table_id_;
@@ -805,6 +822,7 @@ class Path
     bool can_batch_rescan_;
     int64_t can_das_dynamic_part_pruning_;
     bool is_ordered_by_pk_; // indicate whether result from index table scan is ordered by primary key
+    uint64_t search_data_index_id_; // data index id for search index path
   private:
     DISALLOW_COPY_AND_ASSIGN(AccessPath);
   };
@@ -844,11 +862,23 @@ class Path
         non_ror_filters_(allocator),
         all_expr_constraints_(allocator)
     {}
+    virtual ~ObIndexMergeNode() {}
 
     static int formalize_index_merge_tree(ObIndexMergeNode *&node, common::ObIAllocator &allocator);
     int set_scan_direction(const ObOrderDirection &direction);
     inline bool is_merge_node() const {return INDEX_MERGE_UNION == node_type_ || INDEX_MERGE_INTERSECT == node_type_; }
-    inline bool is_scan_node() const {return INDEX_MERGE_SCAN == node_type_ || INDEX_MERGE_FTS_INDEX == node_type_ || INDEX_MERGE_MULTIVALUE_INDEX == node_type_; }
+    inline bool is_scan_node() const {return INDEX_MERGE_SCAN == node_type_ || INDEX_MERGE_FTS_INDEX == node_type_ || INDEX_MERGE_MULTIVALUE_INDEX == node_type_ || is_hybrid_scalar_node_with_index(); }
+    inline bool is_leaf_node() const {return INDEX_MERGE_SCAN == node_type_
+                                          || INDEX_MERGE_FTS_INDEX == node_type_
+                                          || INDEX_MERGE_MULTIVALUE_INDEX == node_type_
+                                          || INDEX_MERGE_HYBRID_FTS_QUERY == node_type_
+                                          || INDEX_MERGE_HYBRID_KNN == node_type_
+                                          || is_hybrid_scalar_node(); }
+
+    virtual inline bool is_hybrid_scalar_node() const { return false; }
+    virtual inline bool is_hybrid_scalar_node_with_index() const { return false; }
+    virtual inline bool is_hybrid_search_node() const { return false; }
+    virtual inline bool contains_vector_node() const { return false; }
 
     TO_STRING_KV(K_(node_type), K_(children), K_(filter), K_(index_tid), KPC_(ap), K_(scan_node_idx));
 
@@ -918,26 +948,42 @@ class Path
                    common::ObIAllocator &allocator)
       : AccessPath(table_id, ref_table_id, ref_table_id, parent, NULLS_FIRST_ASC, allocator),
         root_(NULL),
-        index_cnt_(0)
+        index_cnt_(0),
+        is_dsl_query_(false)
     {}
 
-    INHERIT_TO_STRING_KV("AccessPath", AccessPath, KPC_(root), K_(index_cnt));
+    INHERIT_TO_STRING_KV("AccessPath", AccessPath, KPC_(root), K_(index_cnt), K_(is_dsl_query));
 
     virtual int estimate_cost() override;
     virtual int re_estimate_cost(EstimateCostInfo &param, double &card, double &cost) override;
     virtual bool is_index_merge_path() const override { return true; }
+    virtual bool is_hybrid_search_path() const { return root_->is_hybrid_search_node(); }
     int get_all_scan_nodes(ObIArray<ObIndexMergeNode*> &scan_nodes) const;
     int get_all_scan_access_paths(ObIArray<AccessPath*> &scan_paths) const;
     int get_all_index_ids(ObIArray<uint64_t> &index_ids) const;
     int get_all_match_exprs(ObIArray<ObRawExpr*> &match_exprs, ObIArray<uint64_t> &match_index_ids) const;
 
+  private:
+    int get_hybrid_search_index_ids(ObIArray<uint64_t> &index_ids) const;
+
   public:
     ObIndexMergeNode *root_;
     int64_t index_cnt_;
+    bool is_dsl_query_;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(IndexMergePath);
   };
+
+
+  OB_INLINE static bool is_dsl_query_path(const AccessPath *ap)
+  { return ap != NULL && ap->is_index_merge_path() && static_cast<const IndexMergePath *>(ap)->is_dsl_query_; }
+  OB_INLINE static void set_dsl_query_path(AccessPath *ap, bool is_dsl_query)
+  {
+    if (ap != NULL && ap->is_index_merge_path()) {
+      static_cast<IndexMergePath *>(ap)->is_dsl_query_ = is_dsl_query;
+    }
+  }
 
   class JoinPath : public Path
   {
@@ -1306,6 +1352,7 @@ class Path
   public:
     uint64_t table_id_;
     ObSqlArray<ObRawExpr*> value_exprs_;
+    common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> ori_value_exprs_;
     ObSqlArray<ObColumnDefault> column_param_default_exprs_;
   private:
       DISALLOW_COPY_AND_ASSIGN(JsonTablePath);
@@ -1928,7 +1975,9 @@ struct MergeKeyInfoHelper
                                       const uint64_t ref_table_id,
                                       ObIArray<uint64_t> &valid_index_ids,
                                       ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
-                                      const bool use_force_hint);
+                                      ObIArray<bool> &index_can_ignore_prefix,
+                                      const bool use_force_hint,
+                                      const bool is_hybrid_search);
 
     int generate_candi_index_merge_tree(const uint64_t ref_table_id,
                                         const ObIArray<ObRawExpr*> &filters,
@@ -1966,9 +2015,9 @@ struct MergeKeyInfoHelper
                                        bool &merge_happened);
 
     int build_json_contains_expr_from_json_path(const ObRawExpr *const_param,
-                                            const ObColumnRefRawExpr *column_param,
-                                            const char *json_path,
-                                            ObRawExpr *&member_of_expr);
+                                                const ObColumnRefRawExpr *column_param,
+                                                const char *json_path,
+                                                ObRawExpr *&new_expr);
 
     int process_json_scalar_type(ObIndexMergeNode *candi_node,
                                  const ObRawExpr *const_param,
@@ -1996,6 +2045,7 @@ struct MergeKeyInfoHelper
                                   const ObIArray<ObRawExpr*> &filters,
                                   const ObIArray<uint64_t> &valid_index_ids,
                                   const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                  const ObIArray<bool> &index_can_ignore_prefix,
                                   ObIArray<uint64_t> &candicate_index_tids);
 
     int build_access_path_for_scan_node(const uint64_t table_id,
@@ -2003,6 +2053,7 @@ struct MergeKeyInfoHelper
                                         const PathHelper &helper,
                                         const ObIArray<uint64_t> &valid_index_ids,
                                         const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                        const ObIArray<bool> &index_can_ignore_prefix,
                                         ObIndexMergeNode* node,
                                         bool &has_valid_path);
 
@@ -2011,6 +2062,7 @@ struct MergeKeyInfoHelper
                                                 const PathHelper &helper,
                                                 const ObIArray<uint64_t> &valid_index_ids,
                                                 const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                                const ObIArray<bool> &index_can_ignore_prefix,
                                                 const bool is_match_hint,
                                                 ObIArray<ObCandiIndexMergeNode> &candi_index_nodes,
                                                 ObIndexMergeNode* &candi_index_tree,
@@ -2021,6 +2073,7 @@ struct MergeKeyInfoHelper
                                    const PathHelper &helper,
                                    const ObIArray<uint64_t> &valid_index_ids,
                                    const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                   const ObIArray<bool> &index_can_ignore_prefix,
                                    ObIndexMergeNode* &candi_node,
                                    const bool ignore_sel_prune,
                                    bool &is_valid,
@@ -2066,6 +2119,35 @@ struct MergeKeyInfoHelper
                                       int64_t &scan_node_count);
 
     int collect_non_ror_filters(ObIndexMergeNode* node);
+
+    int create_hybrid_search_access_paths(const uint64_t table_id,
+                                          const uint64_t ref_table_id,
+                                          const PathHelper &helper,
+                                          const ObDSLQueryInfo *dsl_query,
+                                          ObIArray<AccessPath *> &access_paths,
+                                          bool &ignore_normal_access_path);
+    int create_hybrid_search_node_path(const uint64_t table_id,
+                                       const uint64_t ref_table_id,
+                                       const PathHelper &helper,
+                                       const ObIArray<uint64_t> &valid_index_ids,
+                                       const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                       const ObIArray<bool> &index_can_ignore_prefix,
+                                       ObIndexMergeNode *node,
+                                       bool &has_valid_path);
+    int create_hybrid_search_nodes_path(const uint64_t table_id,
+                                        const uint64_t ref_table_id,
+                                        const PathHelper &helper,
+                                        const ObIArray<uint64_t> &valid_index_ids,
+                                        const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                        const ObIArray<bool> &index_can_ignore_prefix,
+                                        const ObIArray<ObIndexMergeNode *> &nodes,
+                                        bool &has_valid_path);
+    int create_access_path_for_node(const uint64_t table_id,
+                                    const uint64_t ref_table_id,
+                                    const uint64_t index_id,
+                                    ObIndexMergeNode *node,
+                                    const PathHelper &helper,
+                                    AccessPath *&access_path);
 
     int create_one_index_merge_path(const uint64_t table_id,
                                     const uint64_t ref_table_id,
@@ -2233,6 +2315,15 @@ struct MergeKeyInfoHelper
                                                   ObQueryRangeProvider *&query_range,
                                                   ObIArray<ObExprConstraint> &expr_constraints,
                                                   const bool is_index_merge_path = false);
+
+    int extract_search_index_preliminary_query_range(ObIArray<ColumnItem> &range_columns,
+                                            const ObIArray<ObRawExpr*> &predicates,
+                                            const uint64_t table_id,
+                                            const ObTableSchema *def_index_schema,
+                                            const ObTableSchema *base_table_schema,
+                                            PathHelper &helper,
+                                            ObIArray<ObExprConstraint> &expr_constraints,
+                                            ObQueryRangeProvider *&query_range);
 
     int extract_geo_schema_info(const uint64_t table_id,
                                 const uint64_t index_id,
@@ -3354,6 +3445,19 @@ struct MergeKeyInfoHelper
                                   uint64_t used_column_id,
                                   const ObTableSchema &index_schema,
                                   bool &found);
+    int init_dsl_query(const TableItem *table_item, const PathHelper &helper,
+                       const ObDSLQueryInfo *&dsl_query);
+    int use_hybrid_search_index_merge(const TableItem *table_item, bool &use_hs_index_merge);
+    int convert_filter_to_dsl_query(ObRawExpr *filter,
+                                    share::ObEsQueryItem outer_query_type,
+                                    ObDSLQuery *parent_query,
+                                    ObConstRawExpr *one_const_expr,
+                                    ObDSLQuery *&dsl_query);
+    int set_search_index_access_info(AccessPath &ap, const QueryRangeInfo &range_info);
+    int build_search_index_scalar_params(ObIndexMergeNode *node);
+    static int check_column_in_search_index(const ObIArray<ObRawExpr*> &predicates,
+                                            const ObIArray<ColumnItem> &range_columns,
+                                            const ColumnItem *&column_item);
     bool is_expanded_realtime_major_refresh_mview() const;
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;

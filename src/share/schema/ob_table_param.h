@@ -368,7 +368,7 @@ public:
   static int deserialize_columns(const char *buf, const int64_t data_len,
                                  int64_t &pos, Columns &columns, common::ObIAllocator &allocator);
   static int alloc_column(common::ObIAllocator &allocator, ObColumnParam *& col_ptr);
-  int check_is_safe_filter_with_di(common::ObIArray<sql::ObRawExpr *> &exprs,
+  int check_is_safe_filter_with_di(const common::ObIArray<sql::ObRawExpr *> &exprs,
                                    sql::ObPushdownFilterNode &pushdown_filters);
   inline ObTableType get_table_type() const { return table_type_; }
 private:

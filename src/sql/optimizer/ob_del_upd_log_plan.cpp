@@ -2129,20 +2129,25 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
     if (OB_FAIL(schema_guard->get_table_schema(tenant_id, index_tid_array[i], index_schema))) {
       LOG_WARN("get index schema failed", K(ret), K(index_tid_array[i]), K(i));
     } else if (index_schema->is_index_local_storage() || index_schema->is_mlog_table()) {
+      uint64_t tid = index_schema->get_table_id();
       //only need to attach local index and primary index in the same DAS Task
       if (primary_dml_info.assignments_.empty()) {
         //is insert or delete, need to add to the related index ids
-        if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(index_schema->get_table_id()))) {
+        if (index_schema->is_search_def_index() && OB_FAIL(index_schema->get_search_data_index_tid(tid))) {
+          LOG_WARN("failed to get search data index tid", K(ret));
+        } else if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(tid))) {
           LOG_WARN("add related index ids failed", K(ret));
         }
       } else if (primary_dml_info.is_update_part_key_ && (index_schema->is_fts_index() || index_schema->is_vec_index())) {
         // If part key is updated and it is fts index, need to be added into the related index ids.
-        if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(index_schema->get_table_id()))) {
+        if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(tid))) {
           LOG_WARN("add related index ids failed", K(ret));
         }
       } else if (primary_dml_info.is_vec_hnsw_index_vid_opt_) {
-        // need to add all the related index ids
-        if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(index_schema->get_table_id()))) {
+        // need to add all the related index ids (use search_data tid for search index, not search_def)
+        if (index_schema->is_search_def_index() && OB_FAIL(index_schema->get_search_data_index_tid(tid))) {
+          LOG_WARN("failed to get search data index tid", K(ret));
+        } else if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(tid))) {
           LOG_WARN("add related index ids failed", K(ret));
         }
       } else if (index_schema->is_compaction_rowscn_ttl_di_table()) {
@@ -2164,7 +2169,9 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
         }
         if (OB_SUCC(ret) && found_col) {
           //update clause will modify this local index, need to add it to related_index_ids_
-          if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(index_schema->get_table_id()))) {
+          if (index_schema->is_search_def_index() && OB_FAIL(index_schema->get_search_data_index_tid(tid))) {
+            LOG_WARN("failed to get search data index tid", K(ret));
+          } else if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(tid))) {
             LOG_WARN("store index id to related index ids failed", K(ret));
           }
         }

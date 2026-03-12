@@ -108,6 +108,21 @@ int ObAccessPathEstimation::estimate_one_index_merge_node(const ObIndexMergeNode
   if (OB_ISNULL(node) || OB_ISNULL(sel_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KPC(node), K(sel_ctx));
+  } else if (node->node_type_ == INDEX_MERGE_HYBRID_FTS_QUERY) {
+    // Fulltext search query in hybrid search path has skipped access path estimation since
+    // estimation could be both inaccurate and expensive for fulltext search query. (Always hard
+    // resolve with out plan cache for now)
+    // We also support dynamic pruning on excution which could provide reasonable efficiency, and
+    // for most hybrid search scenarios, the search space for plan is limited.
+    // Here we use a default selectivity and row count for fulltext search query, to avoid low
+    // cardinality of table scan trigger some OLTP specific optimizations.
+    // TODO: Support accurate estimation if needed.
+    constexpr double default_fts_query_selectivity = 0.1;
+    constexpr double default_fts_query_row_count = 64.0;
+    const double base_rows = std::max(sel_ctx->get_current_rows(), 1.0);
+    selectivity = default_fts_query_selectivity;
+    sum_child_sel += selectivity;
+    sum_child_row += std::max(base_rows * selectivity, default_fts_query_row_count);
   } else if (node->is_scan_node()) {
     if (OB_ISNULL(node->ap_)) {
       ret = OB_ERR_UNEXPECTED;

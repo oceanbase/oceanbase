@@ -52,6 +52,7 @@ public:
     wrapper_(0),
     empty_type_(0),
     error_type_(0),
+    pick_(T_NULL),
     is_empty_default_const_(false),
     is_error_default_const_(false),
     is_asis_(false),
@@ -76,6 +77,7 @@ public:
   int8_t wrapper_;
   int8_t empty_type_;
   int8_t error_type_;
+  ObItemType pick_;
   bool is_empty_default_const_;
   bool is_error_default_const_;
   bool is_asis_;
@@ -384,7 +386,7 @@ public:
                                               const ObTimeZoneInfo *tz_info,
                                               ObJsonBuffer &j_buf);
 
-  static bool is_convertible_to_json(ObObjType &type);
+  static bool is_convertible_to_json(const ObObjType type);
   static int is_valid_for_json(ObExprResType* types_stack, uint32_t index, const char* func_name);
   static int is_valid_for_json(ObExprResType& type, uint32_t index, const char* func_name);
   static int is_valid_for_path(ObExprResType* types_stack, uint32_t index);
@@ -484,6 +486,7 @@ public:
   static int get_clause_opt(ObExpr *expr,
                             ObEvalCtx &ctx,
                             int8_t &type);
+  static bool check_pick_type_match(ObJsonNodeType json_type, ObItemType pick_type);
   static bool is_json_depth_exceed_limit(uint32_t depth)
   {
     return depth > JSON_DOCUMENT_MAX_DEPTH && depth > get_json_max_depth_config();

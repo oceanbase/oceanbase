@@ -1097,6 +1097,9 @@ int ObDropTableHelper::collect_aux_table_schemas_(
       } else if (OB_ISNULL(aux_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", KR(ret));
+      } else if (aux_table_schema->is_search_def_index()
+        && OB_FAIL(collect_search_index_schemas_(*aux_table_schema, aux_table_schemas))) {
+        LOG_WARN("fail to collect search index schema", KR(ret));
       } else if (OB_FAIL(aux_table_schemas.push_back(aux_table_schema))) {
         LOG_WARN("fail to push back aux table schema", KR(ret));
       }
@@ -1124,6 +1127,36 @@ int ObDropTableHelper::collect_aux_table_schemas_(
         } else if (OB_FAIL(aux_table_schemas.push_back(aux_table_schema))) {
           LOG_WARN("fail to push back aux table schema", KR(ret));
         }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDropTableHelper::collect_search_index_schemas_(
+  const ObTableSchema &table_schema,
+  ObIArray<const ObTableSchema *> &aux_table_schemas)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (table_schema.is_search_def_index()) {
+    ObArray<ObAuxTableMetaInfo> simple_index_infos;
+    if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
+      LOG_WARN("get simple index infos failed", KR(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
+      const ObTableSchema *aux_table_schema = NULL;
+      const uint64_t table_id = simple_index_infos.at(i).table_id_;
+      if (OB_FAIL(schema_guard_wrapper_.get_table_schema(table_id, aux_table_schema))) {
+        LOG_WARN("get table schema failed", KR(ret), K(table_id));
+      } else if (OB_ISNULL(aux_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", KR(ret));
+      } else if (OB_FAIL(aux_table_schemas.push_back(aux_table_schema))) {
+        LOG_WARN("fail to push back aux table schema", KR(ret));
       }
     }
   }

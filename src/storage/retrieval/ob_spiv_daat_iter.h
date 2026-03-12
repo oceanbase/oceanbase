@@ -209,7 +209,7 @@ public:
   virtual int get_next_rows(const int64_t capacity, int64_t &count) override;
   virtual int init_before_topk_search() override;
   // do pre-filter
-  virtual int process_collected_row(const ObDatum &id_datum, const double relevance) override;
+  virtual int process_collected_row(const ObDatum &id_datum, const double relevance, bool &is_top_k) override;
   int project_rows_from_result_docids(const int64_t capacity, int64_t &count);
   int reverse_top_k_heap();
   int set_valid_docid_set(const common::hash::ObHashSet<ObDocIdExt> &valid_docid_set);

@@ -1441,6 +1441,62 @@ int ObIMicroBlockRowScanner::skip_to_range(
   return ret;
 }
 
+int ObIMicroBlockRowScanner::skip_to_rowkey(
+    const int64_t begin,
+    const int64_t end,
+    const ObDatumRowkey &key,
+    const bool inclusive_start,
+    const bool is_left_border,
+    const bool is_right_border,
+    int64_t &skip_row_idx,
+    bool &has_data,
+    const int64_t common_prefix_len)
+{
+  int ret = OB_SUCCESS;
+  bool equal = false;
+  int64_t begin_row_idx = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+  int64_t end_row_idx = end;
+  const int64_t last = end + 1;
+  has_data = true;
+  if (OB_UNLIKELY(reverse_scan_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("reverse scan is not supported", K(ret));
+  } else if (OB_UNLIKELY(begin < 0 || begin > end || !key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid range", K(ret), K(begin), K(end), K(key));
+  } else if (key.is_min_rowkey()) {
+    begin_row_idx = begin;
+  } else if (OB_FAIL(reader_->find_bound(key, true, begin, last, begin_row_idx, equal, common_prefix_len))) {
+    LOG_WARN("fail to find bound", K(ret), K(key));
+  } else if (begin_row_idx == last) {
+    has_data = false;
+  } else if (!inclusive_start) {
+    if (equal) {
+      ++begin_row_idx;
+      if (begin_row_idx == last) {
+        has_data = false;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    skip_row_idx = begin_row_idx;
+    is_left_border_ = begin_row_idx > 0 || (0 == begin_row_idx && is_left_border);
+    is_right_border_ = end_row_idx < reader_->row_count() || (end_row_idx == reader_->row_count() && is_right_border);
+    if (!has_data) {
+      current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+      start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+      last_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+    } else {
+      current_ = start_ = begin_row_idx;
+      last_ = end_row_idx;
+    }
+  }
+  LOG_DEBUG("[INDEX SKIP SCAN] micro skip to rowkey, locate key", K(ret), K(begin), K(end), K(key),
+             K(has_data), K(equal), K(begin_row_idx), K(end_row_idx), K_(current), K_(start), K_(last),
+             K(skip_row_idx));
+  return ret;
+}
+
 int ObIMicroBlockRowScanner::compare_rowkey(const ObDatumRowkey &rowkey, const bool is_cmp_end, int32_t &cmp_ret) const
 {
   int ret = OB_SUCCESS;

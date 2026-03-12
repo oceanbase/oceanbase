@@ -1656,6 +1656,7 @@ int ObInsertLogPlan::prepare_table_dml_info_for_ddl(const ObInsertTableInfo& tab
   IndexDMLInfo* index_dml_info = nullptr;
   const ObTableSchema* index_schema = nullptr;
   const ObTableSchema *data_table_schema = nullptr;
+  const ObTableSchema *index_def_schema = nullptr;
   TableItem *table_item = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(schema_guard) || OB_ISNULL(session_info) ||
       OB_ISNULL(table_item = stmt->get_table_item_by_id(table_info.table_id_))) {
@@ -1675,25 +1676,51 @@ int ObInsertLogPlan::prepare_table_dml_info_for_ddl(const ObInsertTableInfo& tab
     } else if (index_schema->is_index_table() && !index_schema->is_global_index_table()) {
       // local index
       ObArray<uint64_t> index_part_ids;
-      if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
-                                                index_schema->get_data_table_id(),
-                                                data_table_schema))) {
-        LOG_WARN("get table schema failed", K(ret), K(session_info->get_effective_tenant_id()), K(index_schema->get_data_table_id()));
-      } else if (OB_ISNULL(data_table_schema)) {
-        ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("failed to get table schema", K(ret), K(index_schema->get_data_table_id()));
+      if (!index_schema->is_search_data_index()) {
+        if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                  index_schema->get_data_table_id(),
+                                                  data_table_schema))) {
+          LOG_WARN("get table schema failed", K(ret), K(session_info->get_effective_tenant_id()), K(index_schema->get_data_table_id()));
+        } else if (OB_ISNULL(data_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("failed to get table schema", K(ret), K(index_schema->get_data_table_id()));
+        }
+      } else {
+        if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                  index_schema->get_data_table_id(),
+                                                  index_def_schema))) {
+          LOG_WARN("get table schema failed", K(ret), K(session_info->get_effective_tenant_id()), K(index_schema->get_data_table_id()));
+        } else if (OB_ISNULL(index_def_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("failed to get table schema", K(ret), K(index_schema->get_data_table_id()));
+        } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                          index_def_schema->get_data_table_id(),
+                                                          data_table_schema))) {
+          LOG_WARN("get table schema failed", K(ret), K(session_info->get_effective_tenant_id()), K(index_def_schema->get_data_table_id()));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (index_schema->is_search_data_index()) {
+        // For search data index DDL, table_info.part_ids_ are already resolved against
+        // the search data index itself in resolver. They are not data table partition ids,
+        // so we must not remap them through get_index_part_ids().
+        if (OB_FAIL(index_dml_info->part_ids_.assign(table_info.part_ids_))) {
+          LOG_WARN("fail to assign part ids", K(ret), K(table_info.part_ids_));
+        }
       } else if (OB_FAIL(get_index_part_ids(table_info, data_table_schema, index_schema, index_part_ids))) {
         LOG_WARN("fail to get index part ids", K(ret), K(table_info), K(table_item->ddl_table_id_), K(index_schema->get_data_table_id()), K(index_part_ids));
       } else if (OB_FAIL(index_dml_info->part_ids_.assign(index_part_ids))) {
-          LOG_WARN("fail to assign part ids", K(ret), K(index_part_ids));
+        LOG_WARN("fail to assign part ids", K(ret), K(index_part_ids));
+      }
+      if (OB_FAIL(ret)) {
       } else {
-          index_dml_info->table_id_ = table_info.table_id_;
-          index_dml_info->loc_table_id_ = table_info.loc_table_id_;
-          index_dml_info->ref_table_id_ = index_schema->get_data_table_id();
-          index_dml_info->rowkey_cnt_ = index_schema->get_rowkey_column_num();
-          index_dml_info->spk_cnt_ = index_schema->get_shadow_rowkey_column_num();
-          index_dml_info->index_name_ = data_table_schema->get_table_name_str();
-          LOG_INFO("index dml info contains part ids: ", K(ret), K(index_dml_info->part_ids_)); //在局部索引表补数据场景下，对主表part ids和索引表part ids做了关系映射
+        index_dml_info->table_id_ = table_info.table_id_;
+        index_dml_info->loc_table_id_ = table_info.loc_table_id_;
+        index_dml_info->ref_table_id_ = data_table_schema->get_table_id();
+        index_dml_info->rowkey_cnt_ = index_schema->get_rowkey_column_num();
+        index_dml_info->spk_cnt_ = index_schema->get_shadow_rowkey_column_num();
+        index_dml_info->index_name_ = data_table_schema->get_table_name_str();
+        LOG_INFO("index dml info contains part ids: ", K(ret), K(index_dml_info->part_ids_)); //在局部索引表补数据场景下，对主表part ids和索引表part ids做了关系映射
       }
     } else {
       // global index or primary table

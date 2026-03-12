@@ -103,6 +103,7 @@ public:
   bool is_contains(uint64_t value);
 
   int value_add(uint64_t value);
+  int value_add_many(const ObIArray<uint64_t> &values);
   int value_remove(uint64_t value);
   int value_and(ObRoaringBitmap *rb);
   int value_or(ObRoaringBitmap *rb);
@@ -174,6 +175,7 @@ class ObRoaringBitmapIter
   inline uint64_t get_curr_value() { return curr_val_; };
   inline uint64_t get_val_idx() { return val_idx_; };
   int get_next();
+  int advance_to(uint64_t target);
   void deinit() {
     inited_ = false;
     is_reverse_ = false;

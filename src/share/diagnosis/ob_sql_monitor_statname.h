@@ -183,6 +183,26 @@ SQL_MONITOR_STATNAME_DEF(DTL_BLOCKING_TIME, metric::Unit::TIME_NS, "dtl blocking
 SQL_MONITOR_STATNAME_DEF(DUMP_RW_TIME, metric::Unit::CPU_CYCLE, "read/write time for dumped data", "read/write time for dumped data", M_AVG | E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(PX_MS_RECV_STORED_ROWS, metric::Unit::INT, "temp stored row cnt", "stored row cnt in px ms recv", M_SUM | E_MAX | E_MIN | E_STDDEV, metric::Level::STANDARD)
 
+// Hybrid Search Metrics
+SQL_MONITOR_STATNAME_DEF(HS_OUTPUT_ROW_COUNT, metric::Unit::INT, "output row count", "output row count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_TOTAL_TIME, metric::Unit::TIME_NS, "total execution time", "total execution time", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_ADVANCE_COUNT, metric::Unit::INT, "advance count", "advance count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_ADVANCE_TIME, metric::Unit::TIME_NS, "advance time", "advance time", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_NEXT_ROWID_COUNT, metric::Unit::INT, "next rowid count", "next rowid count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_NEXT_ROWID_TIME, metric::Unit::TIME_NS, "next rowid time", "next rowid time", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_ADVANCE_SHALLOW_COUNT, metric::Unit::INT, "advance shallow count", "advance shallow count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_ADVANCE_SHALLOW_TIME, metric::Unit::TIME_NS, "advance shallow time", "advance shallow time", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_NEXT_ROWIDS_TIME, metric::Unit::TIME_NS, "next rowids time", "next rowids time", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_NEXT_ROWIDS_COUNT, metric::Unit::INT, "next rowids count", "next rowids count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_SET_MIN_COMPETITIVE_SCORE_TIME, metric::Unit::TIME_NS, "set min competitive score time", "set min competitive score time", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_SET_MIN_COMPETITIVE_SCORE_COUNT, metric::Unit::INT, "set min competitive score count", "set min competitive score count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_CALC_MAX_SCORE_TIME, metric::Unit::TIME_NS, "calc max score time", "calc max score time", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_CALC_MAX_SCORE_COUNT, metric::Unit::INT, "calc max score count", "calc max score count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_TABLET_ID, metric::Unit::INT, "tablet id", "tablet id", M_FIRST_VAL, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_VEC_INDEX_TYPE, metric::Unit::INT, "vec index type", "vec index type", M_FIRST_VAL, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_VEC_FILTER_MODE , metric::Unit::INT, "vec filter mode", "vec filter mode", M_FIRST_VAL, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_OP_ID , metric::Unit::INT, "op id", "op id", M_FIRST_VAL, metric::Level::STANDARD)
+
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)
 #endif

@@ -211,7 +211,8 @@ public:
                K_(global_index_rowkey_exprs),
                K_(attach_spec),
                K_(is_das_keep_order),
-               K_(use_index_merge));
+               K_(use_index_merge),
+               K_(is_hybrid_search));
   //the query range of index scan/table scan
   ObQueryRange pre_query_range_;
   FlashBackItem flashback_item_;
@@ -601,6 +602,9 @@ protected:
                           ObDASScanRtDef &das_rtdef,
                           const ObDASTableLocMeta *loc_meta);
   int init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *&attach_rtdef);
+  int init_das_scalar_scan_rtdef(const ObDASScalarScanCtDef &scalar_scan_ctdef,
+                                 ObDASScalarScanRtDef &scalar_scan_rtdef,
+                                 const ObDASTableLocMeta *loc_meta);
   int prepare_scan_range();
   int prepare_batch_scan_range();
   int build_bnlj_params();
@@ -608,6 +612,7 @@ protected:
   bool need_extract_range() const { return MY_SPEC.tsc_ctdef_.get_query_range_provider().has_range(); }
   int prepare_single_scan_range(int64_t group_idx = 0, bool need_sort = false);
   int prepare_index_merge_scan_range(int64_t group_idx = 0, bool need_sort = false);
+  int prepare_hybrid_search_scan_range(int64_t group_idx, bool need_sort, ObIAllocator &allocator, ObDASBaseRtDef *rtdef);
   int prepare_range_for_each_index(int64_t group_idx, bool need_sort, ObIAllocator &allocator, ObDASBaseRtDef *rtdef);
   int reuse_table_rescan_allocator();
 

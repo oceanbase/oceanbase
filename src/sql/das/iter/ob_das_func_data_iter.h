@@ -15,7 +15,7 @@
 
 #include "sql/das/iter/ob_das_iter.h"
 #include "sql/das/iter/ob_das_scan_iter.h"
-#include "sql/das/iter/ob_das_text_retrieval_merge_iter.h"
+#include "sql/das/iter/sparse_retrieval/ob_das_tr_merge_iter.h"
 #include "common/ob_tablet_id.h"
 #include "share/ob_ls_id.h"
 #include "storage/access/ob_dml_param.h"

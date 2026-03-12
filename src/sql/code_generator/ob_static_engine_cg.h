@@ -151,6 +151,8 @@ class ObHashRollupInfo;
 class HashRollupRTInfo;
 class ObGroupingSetInfo;
 class GroupingSetRTInfo;
+class ObLogHybridFusion;
+class ObHybridFusionSpec;
 
 class ObMergeGroupByVecSpec;
 class ObNestedLoopJoinVecSpec;
@@ -192,6 +194,7 @@ class ObStaticEngineCG
 {
   friend class ObDmlCgService;
   friend class ObTscCgService;
+  friend class ObHybridSearchCgService;
 public:
   template <int TYPE>
   friend struct GenSpecHelper;
@@ -453,6 +456,8 @@ private:
 
   int generate_spec(ObLogTopk &op, ObTopKSpec &spec, const bool in_root_job);
 
+  int generate_spec(ObLogHybridFusion &op, ObHybridFusionSpec &spec, const bool in_root_job);
+
   int generate_spec(ObLogSequence &op, ObSequenceSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogMonitoringDump &op, ObMonitoringDumpSpec &spec, const bool in_root_job);
@@ -683,6 +688,8 @@ private:
   int generate_disable_rich_format_flags(int64_t &flags);
   int set_das_ctdef_false_range_flag(ObDASBaseCtDef &ctdef,
                                      bool enable_new_false_range);
+  int generate_index_data_gen_table_spec(ObLogJsonTable &op, ObJsonTableSpec &spec);
+  int generate_backup_exprs(ObMergeGroupBySpec &spec);
 private:
   struct BatchExecParamCache {
     BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)

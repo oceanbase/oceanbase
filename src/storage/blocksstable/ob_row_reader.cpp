@@ -142,6 +142,7 @@ int ObDenseClusterReader<T>::try_batch_read(ObStorageDatum *datums,
 template <typename T>
 int ObDenseClusterReader<T>::batch_compare(const ObDatumRowkey &rhs,
                                            const ObStorageDatumUtils &datum_utils,
+                                           const int64_t common_prefix_len,
                                            int &cmp_ret) const
 {
   int ret = OB_SUCCESS;
@@ -150,11 +151,14 @@ int ObDenseClusterReader<T>::batch_compare(const ObDatumRowkey &rhs,
                   || datum_utils.get_rowkey_count() < rhs.get_datum_cnt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Fail to do batch compare", KR(ret), K(coverd_column_cnt_), K(rhs.get_datum_cnt()));
+  } else if (OB_UNLIKELY(common_prefix_len < 0 || common_prefix_len >= rhs.get_datum_cnt())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(common_prefix_len), K(rhs.get_datum_cnt()));
   } else {
     ObStorageDatum datum;
 
     cmp_ret = 0;
-    for (uint32_t i = 0; OB_SUCC(ret) && 0 == cmp_ret && i < rhs.get_datum_cnt(); i++) {
+    for (uint32_t i = common_prefix_len; OB_SUCC(ret) && 0 == cmp_ret && i < rhs.get_datum_cnt(); i++) {
       if (OB_FAIL(read_column(i, datum))) {
         LOG_WARN("Fail to read column", KR(ret), K(i));
       } else if (OB_FAIL(
@@ -351,6 +355,7 @@ template <typename T, typename R, ObFlatEmptyDatumType EmptyDatumType>
 int ObSparseClusterReader<T, R, EmptyDatumType>::batch_compare(
     const ObDatumRowkey &rhs,
     const ObStorageDatumUtils &datum_utils,
+    const int64_t common_prefix_len,
     int &cmp_ret) const
 {
   int ret = OB_ERR_UNEXPECTED;
@@ -585,7 +590,8 @@ int ObRowReaderV1::compare_meta_rowkey(const ObDatumRowkey &rhs,
                                        const ObStorageDatumUtils &datum_utils,
                                        const char *buf,
                                        const int64_t row_len,
-                                       int32_t &cmp_result)
+                                       int32_t &cmp_result,
+                                       const int64_t common_prefix_len)
 {
   int ret = OB_SUCCESS;
 
@@ -596,7 +602,7 @@ int ObRowReaderV1::compare_meta_rowkey(const ObDatumRowkey &rhs,
     LOG_WARN("Fail to init buffer", K(ret), K(buf), K(row_len));
   } else if (OB_FAIL(init_cluster(0))) {
     LOG_WARN("Fail to init cluster", KR(ret));
-  } else if (OB_FAIL(reader_->batch_compare(rhs, datum_utils, cmp_result))) {
+  } else if (OB_FAIL(reader_->batch_compare(rhs, datum_utils, common_prefix_len, cmp_result))) {
     LOG_WARN("Failed to compare datums", K(ret), K(rhs));
   }
 
@@ -1461,7 +1467,8 @@ int ObRowReaderV0::compare_meta_rowkey(
     const ObStorageDatumUtils &datum_utils,
     const char *buf,
     const int64_t row_len,
-    int32_t &cmp_result)
+    int32_t &cmp_result,
+    const int64_t common_prefix_len)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!rhs.is_valid() || !datum_utils.is_valid() || nullptr == buf || row_len <= 0)) {
@@ -1479,6 +1486,9 @@ int ObRowReaderV0::compare_meta_rowkey(
     } else if (OB_UNLIKELY(row_header_->get_rowkey_count() < compare_column_count)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected rowkey count", K(ret), K(compare_column_count), K(rhs), KPC(row_header_));
+    } else if (OB_UNLIKELY(common_prefix_len < 0 || common_prefix_len >= compare_column_count)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(common_prefix_len), K(compare_column_count));
     } else {
       ObStorageDatum datum;
       int64_t cluster_col_cnt = 0;
@@ -1495,6 +1505,7 @@ int ObRowReaderV0::compare_meta_rowkey(
               ++idx, ++i) {
             if (OB_FAIL(cluster_reader_.sequence_read_datum(i, datum))) {
               LOG_WARN("Fail to read column", K(ret), K(i), K(idx), K(datum_utils));
+            } else if (idx < common_prefix_len) {
             } else if (OB_FAIL(datum_utils.get_cmp_funcs().at(idx).compare(datum, rhs.datums_[idx], cmp_result))) {
               STORAGE_LOG(WARN, "Failed to compare datums", K(ret), K(idx), K(datum), K(rhs.datums_[idx]));
             }

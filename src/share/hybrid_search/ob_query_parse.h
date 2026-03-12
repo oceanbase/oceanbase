@@ -55,16 +55,34 @@ enum ObEsQueryItem : int8_t {
   QUERY_ITEM_ARRAY_OVERLAPS,
 };
 
+#define IS_QUERY_ITEM_BOOL(query_item) (query_item == QUERY_ITEM_BOOL)
+#define IS_QUERY_ITEM_KNN(query_item) (query_item == QUERY_ITEM_KNN)
+#define IS_QUERY_ITEM_SCALAR(query_item) (query_item == QUERY_ITEM_TERM || query_item == QUERY_ITEM_TERMS || query_item == QUERY_ITEM_RANGE)
+#define IS_QUERY_ITEM_FULLTEXT(query_item) (query_item == QUERY_ITEM_MATCH || query_item == QUERY_ITEM_MULTI_MATCH || query_item == QUERY_ITEM_QUERY_STRING || query_item == QUERY_ITEM_MATCH_PHRASE)
+#define IS_QUERY_ITEM_JSON(query_item) (query_item == QUERY_ITEM_JSON_CONTAINS || query_item == QUERY_ITEM_JSON_OVERLAPS || query_item == QUERY_ITEM_JSON_MEMBER_OF)
+#define IS_QUERY_ITEM_ARRAY(query_item) (query_item == QUERY_ITEM_ARRAY_CONTAINS || query_item == QUERY_ITEM_ARRAY_CONTAINS_ALL || query_item == QUERY_ITEM_ARRAY_OVERLAPS)
+
 enum ObFusionMethod
 {
   WEIGHT_SUM = 0,
-  RRF
+  RRF,
+  MINMAX_NORMALIZER,
 };
 
 enum ObMsmApplyType : int8_t {
   MSM_NOT_APPLY = 0,
   MSM_APPLY_NOT_SUB,
   MSM_APPLY_WITH_SUB,
+};
+
+enum ObKnnFilterMode
+{
+  INVALID_KNN_FILTER_MODE = 0,
+  PRE_ADAPTIVE = 1,
+  PRE_KNN = 2,
+  PRE_BRUTE_FORCE = 3,
+  POST_FILTER = 4,
+  POST_INDEX_MERGE = 5
 };
 
 class ObRankFusion {
@@ -107,14 +125,16 @@ struct MinimumShouldMatchInfo {
 class ObColumnIndexInfo
 {
 public :
-  ObColumnIndexInfo() : index_name_(), index_type_(schema::ObIndexType::INDEX_TYPE_IS_NOT), dist_algorithm_(ObVectorIndexDistAlgorithm::VIDA_L2) {}
+  ObColumnIndexInfo() : index_name_(), index_type_(schema::ObIndexType::INDEX_TYPE_IS_NOT), dist_algorithm_(ObVectorIndexDistAlgorithm::VIDA_L2), index_schema_(nullptr) {}
   virtual ~ObColumnIndexInfo() {}
   common::ObString index_name_;
   schema::ObIndexType index_type_;
   ObVectorIndexDistAlgorithm dist_algorithm_;
+  const schema::ObTableSchema *index_schema_;
 };
 
 typedef common::hash::ObHashMap<common::ObString, ObColumnIndexInfo*> ColumnIndexNameMap;
+typedef common::hash::ObHashMap<common::ObString, const share::schema::ObColumnSchemaV2*> ColumnSchemaMap;
 typedef common::hash::ObHashSet<common::ObString> RequiredParamsSet;
 class ObEsQueryInfo {
 public:
