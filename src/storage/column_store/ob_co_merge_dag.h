@@ -348,6 +348,8 @@ public:
   ObCOTabletMergeCtx *get_merge_ctx() const { return co_merge_ctx_; }
   const ObCOMergeDagParam& get_dag_param() const { return basic_param_; }
   void set_prepare_dag_running_ts() { prepare_dag_running_ts_ = ObTimeUtility::fast_current_time(); }
+  virtual share::ObLSID get_ls_id() const override { return ls_id_; }
+  virtual common::ObTabletID get_tablet_id() const override { return tablet_id_; }
   int64_t get_prepare_dag_running_ts() const { return prepare_dag_running_ts_; }
   template<class T>
   int create_dag(
