@@ -16,8 +16,11 @@
 #include "storage/ob_i_store.h"
 #include "ob_tablet_merge_task.h"
 #include "lib/list/ob_dlist.h"
+#include "lib/hash/ob_hashmap.h"
+#include "lib/container/ob_se_array.h"
 #include "share/scheduler/ob_diagnose_config.h"
 #include "storage/compaction/ob_compaction_tablet_diagnose.h"
+#include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "share/compaction/ob_compaction_info_param.h"
 
 namespace oceanbase
@@ -377,6 +380,75 @@ protected:
   char buff[ObIBasicInfoParam::MAX_INFO_PARAM_SIZE];
 };
 
+/*
+ * ObDagNetProgressSnapshot: snapshot of dag net progress for diagnosis
+ */
+struct ObDagNetProgressSnapshot
+{
+  ObDagNetProgressSnapshot()
+    : dag_net_id_(),
+      start_time_(0),
+      progress_list_()
+  {
+    progress_list_.set_attr(common::ObMemAttr(MTL_ID(), "DagNetProList"));
+  }
+  share::ObDagId dag_net_id_;
+  int64_t start_time_;
+  common::ObSEArray<ObDiagnoseTabletCompProgress, 4> progress_list_;
+  TO_STRING_KV(K_(dag_net_id), K_(start_time), K_(progress_list));
+};
+
+/*
+ * ObCompactionDagSnapshot: snapshot container for compaction dag diagnosis.
+ *
+ * Snapshot timeliness: point-in-time snapshot; stale data is acceptable under
+ * diagnose semantics (diagnose phase runs after collect phase in each cycle).
+ *
+ * Thread safety: single-threaded write during collect phase, single-threaded
+ * read during diagnose phase; no concurrent access across phases.
+ *
+ * Internal maps:
+ * - dag_map_: key by ObMergeDagHash::inner_hash() -> ObDiagnoseTabletCompProgress
+ * - dag_net_map_: key by make_exe_key(ls_id, tablet_id) -> ObDagNetProgressSnapshot
+ */
+class ObCompactionDagSnapshot
+{
+public:
+  ObCompactionDagSnapshot();
+  ~ObCompactionDagSnapshot() { reset(); }
+
+  int init(const int64_t dag_capacity = 512, const int64_t dag_net_capacity = 64);
+  void reset();
+
+  int put_dag(const ObMergeType merge_type,
+              const share::ObLSID &ls_id,
+              const common::ObTabletID &tablet_id,
+              const ObDiagnoseTabletCompProgress &progress);
+  int put_dag_net(const share::ObLSID &ls_id,
+                  const common::ObTabletID &tablet_id,
+                  const ObDagNetProgressSnapshot &snapshot);
+
+  int get_dag_progress(const ObMergeType merge_type,
+                      const share::ObLSID &ls_id,
+                      const common::ObTabletID &tablet_id,
+                      const ObDiagnoseTabletCompProgress *&progress) const;
+  int get_dag_net_snapshot(const share::ObLSID &ls_id,
+                          const common::ObTabletID &tablet_id,
+                          const ObDagNetProgressSnapshot *&snapshot) const;
+
+  static uint64_t make_exe_key(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id);
+
+private:
+  typedef common::hash::ObHashMap<uint64_t, ObDiagnoseTabletCompProgress,
+      common::hash::NoPthreadDefendMode> DagProgressMap;
+  typedef common::hash::ObHashMap<uint64_t, ObDagNetProgressSnapshot,
+      common::hash::NoPthreadDefendMode> DagNetSnapshotMap;
+
+  bool is_inited_;
+  DagProgressMap dag_map_;
+  DagNetSnapshotMap dag_net_map_;
+};
+
 struct ObCompactionDiagnoseInfo
 {
   ObCompactionDiagnoseInfo()
@@ -468,44 +540,49 @@ public:
   }
 
 private:
-#ifdef OB_BUILD_SHARED_STORAGE
-  int diagnose_tenant_merge_for_ss();
-#endif
-  int diagnose_tablet_mini_merge(const ObLSID &ls_id, ObTablet &tablet);
-  int diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet);
+  int diagnose_tablet_mini_merge(const ObLSID &ls_id, ObTablet &tablet,
+      const ObCompactionDagSnapshot &snapshot);
+  int diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet,
+      const ObCompactionDagSnapshot &snapshot);
   int diagnose_tablet_multi_version_start(storage::ObLS &ls, ObTablet &tablet);
   int diagnose_tablet_major_merge(
       const int64_t compaction_scn,
       const ObLSID &ls_id,
       const ObTabletStatusCache &tablet_status,
-      ObTablet &tablet);
+      ObTablet &tablet,
+      const ObCompactionDagSnapshot &snapshot);
   int diagnose_tablet_medium_merge(
       const bool diagnose_major_flag,
       const int64_t compaction_scn,
       const ObLSID &ls_id,
-      ObTablet &tablet);
+      ObTablet &tablet,
+      const ObCompactionDagSnapshot &snapshot);
   int diagnose_tablet_merge(
       const ObMergeType type,
       const ObLSID ls_id,
       ObTablet &tablet,
+      const ObCompactionDagSnapshot &snapshot,
       const int64_t merge_version = ObVersionRange::MIN_VERSION);
   int diagnose_row_store_dag(
       const ObMergeType merge_type,
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
-      const int64_t merge_version = ObVersionRange::MIN_VERSION);
+      const int64_t merge_version,
+      const ObCompactionDagSnapshot &snapshot);
   int diagnose_column_store_dag(
       const ObMergeType merge_type,
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
       const lib::Worker::CompatMode &compat_mode,
-      const int64_t merge_version = ObVersionRange::MIN_VERSION);
+      const int64_t merge_version,
+      const ObCompactionDagSnapshot &snapshot);
   int diagnose_no_dag(
       const int64_t dag_key,
       const ObMergeType merge_type,
       const ObLSID ls_id,
       const ObTabletID tablet_id,
-      const int64_t compaction_scn);
+      const int64_t compaction_scn,
+      const ObCompactionDagSnapshot &snapshot);
   int get_suspect_and_warning_info(
       const int64_t dag_key,
       const ObMergeType merge_type,
@@ -542,6 +619,7 @@ private:
   static const int64_t DIAGNOSE_TABELT_MAX_COUNT = 10; // same type diagnose tablet max count
   static const int64_t MAX_REPORT_TASK_DIAGNOSE_CNT = 3;
   typedef ObSEArray<ObDiagnoseTablet, ObDiagnoseTabletMgr::DEFAULT_DIAGNOSE_TABLET_COUNT> DiagnoseTabletArray;
+  ObCompactionDagSnapshot dag_snapshot_;
   bool is_inited_;
   bool normal_; // true means the tablet doesn't have any diagnose info
   ObCompactionDiagnoseInfo *info_array_;

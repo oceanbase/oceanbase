@@ -96,7 +96,7 @@ public:
   virtual int deal_with_cancel() override;
 
   ObLSCompleteMigrationCtx *get_ctx() { return &ctx_; }
-  const share::ObLSID &get_ls_id() const { return ctx_.arg_.ls_id_; }
+  virtual share::ObLSID get_ls_id() const override { return ctx_.arg_.ls_id_; }
   obrpc::ObStorageRpcProxy *get_storage_rpc_proxy() { return svr_rpc_proxy_; }
   storage::ObStorageRpc *get_storage_rpc() { return storage_rpc_; }
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(ctx));

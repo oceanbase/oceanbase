@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_tenant_compaction_progress.h"
+#include "storage/compaction/ob_sstable_merge_history.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
