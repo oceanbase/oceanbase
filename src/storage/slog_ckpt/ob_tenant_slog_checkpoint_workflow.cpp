@@ -1026,7 +1026,7 @@ int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::record_single_tablet_(
   } else if (OB_UNLIKELY(!old_addr.is_disked())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected non disked tablet", K(tablet->get_tablet_addr()));
-  } else if (old_addr.is_block() || old_addr.is_sslog_tablet_meta()) {
+  } else if (old_addr.is_block() || old_addr.is_sslog()) {
     /**
      * NOTE: CAN'T USE ObTablet::is_empty_shell() to judge whether a tablet is empty shell here,
      * because empty shell would be transform into BLOCK after defragment. If an empty shell is block

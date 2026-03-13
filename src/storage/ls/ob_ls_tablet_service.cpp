@@ -9738,7 +9738,7 @@ int ObLSTabletService::update_tablet_ss_change_version(
       // This is because the min_ss_tablet_version_ of the sstablet is set to its initial value.
       // As a result, all tablets with a min_ss_tablet_version_ equal to the initial value are required to fully
       // rewrite their metadata to local device.
-      if (old_tablet.get_tablet_addr().is_sslog_tablet_meta() || old_tablet.is_min_ss_tablet_version_initial()) {
+      if (old_tablet.get_tablet_addr().is_sslog() || old_tablet.is_min_ss_tablet_version_initial()) {
         if (OB_FAIL(rewrite_tablet_for_ss_change_version_(data_version, reorg_scn, ss_change_version,
             tablet_pointer_ss_change_version, private_transfer_epoch, tablet_meta_version, old_handle))) {
           LOG_WARN("failed to rewrite tablet for ss change version", K(ret), K(old_handle), K(ss_change_version),

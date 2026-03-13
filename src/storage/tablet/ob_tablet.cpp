@@ -3410,7 +3410,7 @@ int ObTablet::deserialize(
   ObTabletBlockHeader header;
   int32_t bhv = 0;
   macro_info_addr_.addr_.set_none_addr();
-  const bool no_need_load = tablet_addr_.is_sslog_tablet_meta();
+  const bool no_need_load = tablet_addr_.is_sslog();
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -8063,7 +8063,7 @@ int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
       OB_MAX(tablet_meta_.clog_checkpoint_scn_, OB_MAX(tablet_meta_.mds_checkpoint_scn_,
                                                        tablet_meta_.ddl_checkpoint_scn_));
     int64_t current_version = 0;
-    if (tablet_addr_.is_sslog_tablet_meta() || is_empty_shell()) {
+    if (tablet_addr_.is_sslog() || is_empty_shell()) {
       current_version = 0;
     } else if (OB_FAIL(tablet_addr_.get_macro_block_id(block_id))) {
       LOG_WARN("failed to get macro block id", K(ret), K(tablet_addr_));
@@ -10742,7 +10742,7 @@ share::SCN ObTablet::get_min_ss_tablet_version() const
 {
   int ret = OB_SUCCESS;
   share::SCN ss_tablet_version(share::SCN::min_scn());
-  if (tablet_addr_.is_sslog_tablet_meta()) {
+  if (tablet_addr_.is_sslog()) {
     if (OB_FAIL(tablet_addr_.get_sslog_tablet_row_scn(ss_tablet_version))) {
       LOG_ERROR("failed to get sslog tablet row scn", K(ret), K(tablet_addr_));
     }

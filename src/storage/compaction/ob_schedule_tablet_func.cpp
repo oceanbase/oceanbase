@@ -84,7 +84,7 @@ int ObScheduleTabletFunc::iterate_switch_tablet(
   } else if (OB_UNLIKELY(ls_status_.ls_id_ != tablet->get_ls_id())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet and ls are not match", KR(ret), K_(ls_status), KPC(tablet));
-  } else if (!tablet->get_tablet_addr().is_sslog_tablet_meta()) {
+  } else if (!tablet->get_tablet_addr().is_sslog()) {
     need_schedule = true;
   } else {
     int64_t max_medium_snapshot = 0;

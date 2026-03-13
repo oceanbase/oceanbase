@@ -1987,7 +1987,7 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
     } else if (OB_ISNULL(tablet_ptr = ptr_handle.get_tablet_pointer())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
-    } else if (tablet_ptr->get_addr().is_sslog_tablet_meta()) {
+    } else if (tablet_ptr->get_addr().is_sslog()) {
       allow_tablet_version_gc = false;
       tablet_version = 0;
       last_gc_version = -1;
@@ -2060,7 +2060,7 @@ int ObTenantMetaMemMgr::get_last_gc_version_for_tablet(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
     } else if (FALSE_IT(last_gc_version = tablet_ptr->get_last_gc_version())) {
-    } else if (tablet_ptr->get_addr().is_sslog_tablet_meta()) {
+    } else if (tablet_ptr->get_addr().is_sslog()) {
       //do nothing
     } else if (OB_FAIL(tablet_ptr->get_addr().get_macro_block_id(block_id))) {
       LOG_WARN("failed to get macro block id", K(ret), KPC(tablet_ptr));
@@ -2139,7 +2139,7 @@ int ObTenantMetaMemMgr::update_tablet_last_gc_version(
     } else if (tablet_fingerprint != reinterpret_cast<uintptr_t>(tablet_ptr)) {
       ret = OB_NOT_THE_OBJECT;
       LOG_WARN("tablet pointer has been changed", K(ret), K(tablet_fingerprint), "cur_fingerprint", reinterpret_cast<uintptr_t>(tablet_ptr));
-    } else if (tablet_ptr->get_addr().is_sslog_tablet_meta()) {
+    } else if (tablet_ptr->get_addr().is_sslog()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet addr is sslog, unexpected!", K(ret), KPC(tablet_ptr));
     } else if (OB_FAIL(tablet_ptr->get_addr().get_macro_block_id(block_id))) {
@@ -2289,7 +2289,7 @@ int ObTenantMetaMemMgr::check_tablet_has_sstable_need_upload(const SCN &ls_ss_ch
       LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
     } else if (tablet_ptr->is_empty_shell() || tablet_ptr->get_addr().is_none()) {
       need_upload = false;
-    } else if (tablet_ptr->get_addr().is_sslog_tablet_meta()) {
+    } else if (tablet_ptr->get_addr().is_sslog()) {
       need_upload = false;
     } else {
       const share::SCN &scn = tablet_ptr->get_tablet_max_checkpoint_scn();

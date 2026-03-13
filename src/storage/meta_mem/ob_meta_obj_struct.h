@@ -58,7 +58,6 @@ public:
   OB_INLINE bool is_memory() const { return MEM == type_; }
   OB_INLINE bool is_none() const { return NONE == type_; }
   OB_INLINE bool is_sslog() const {  return SSLOG_TABLET_META == type_; }
-  OB_INLINE bool is_sslog_tablet_meta() const { return SSLOG_TABLET_META == type_; }
   OB_INLINE void set_none_addr() { type_ = NONE; }
   OB_INLINE void set_seq(const uint64_t seq) { seq_ = seq; }
   OB_INLINE void set_size(const uint64_t size) { size_ = size; }
