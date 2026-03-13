@@ -642,7 +642,7 @@ int ObZoneMergeManagerBase::set_window_compaction_info(
       if (param.with_start_ts_) {
         tmp_global_info.merge_start_time_.set_val(param.window_start_time_us_, true);
       } else {
-        tmp_global_info.merge_start_time_.set_val(0, true); // speical window compaction mode, no need to set window start time
+        tmp_global_info.merge_start_time_.set_val(ObTimeUtility::current_time(), true);
       }
       tmp_global_info.merge_mode_.set_val(ObGlobalMergeInfo::MERGE_MODE_WINDOW, true);
       tmp_global_info.merge_status_.set_val(ObZoneMergeInfo::MERGE_STATUS_MERGING, true);

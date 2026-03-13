@@ -66,7 +66,7 @@ int ObDBMSDailyMaintenance::trigger_window_compaction_proc(sql::ObExecContext &c
         LOG_USER_ERROR(OB_MAJOR_FREEZE_NOT_ALLOW, "daily maintenance window job is disabled, please enable DAILY_MAINTENANCE_WINDOW firstly");
       } else if (is_daily_maintenance) {
         // trigger by DAILY_MAINTENANCE_WINDOW
-        window_start_time_us = job_info.start_date_;
+        window_start_time_us = job_info.this_date_;
       } else {
         window_start_time_us = trigger_start_time_us;
       }

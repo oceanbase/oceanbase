@@ -45,8 +45,8 @@ void ObWindowLoop::LoopPriorityQueueRecord::finish(const int64_t score)
 int ObWindowLoop::LoopPriorityQueueRecord::record_to_string(ObSqlString &loop_info) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(loop_info.append_fmt("{\"min\":%ld,\"max\":%ld,\"moved\":%ld,\"failed\":%ld}",
-                                       min_score_, max_score_, moved_cnt_, failed_cnt_))) {
+  if (OB_FAIL(loop_info.append_fmt("{\"min\":%ld,\"max\":%ld,\"moved\":%ld,\"failed\":%ld,\"eagain\":%ld,\"updated\":%ld}",
+                                       min_score_, max_score_, moved_cnt_, failed_cnt_, eagain_cnt_, updated_cnt_))) {
     LOG_WARN("failed to append record", K(ret));
   }
   return ret;
@@ -325,6 +325,7 @@ int ObWindowLoop::loop_priority_queue()
 #endif
     while (OB_SUCC(ret) && ready_list_.get_remaining_space() > 0) {
       ObTabletCompactionScore *score = nullptr;
+      bool is_updated = false;
       const int64_t remaining_space = ready_list_.get_remaining_space();
       if (OB_FAIL(score_prio_queue_.check_and_pop(remaining_space, score))) {
         if (OB_EAGAIN == ret || OB_ENTRY_NOT_EXIST == ret) {
@@ -339,17 +340,23 @@ int ObWindowLoop::loop_priority_queue()
       } else if (FALSE_IT(score->pos_at_priority_queue_ = -1)) {
       } else if (FALSE_IT(score->add_timestamp_ = time_guard_.add_time_)) {
       } else if (FALSE_IT(score_value = score->score_)) {
-      } else if (OB_TMP_FAIL(ready_list_.add(score))) {
-        LOG_WARN("failed to add candidate into ready list", K(tmp_ret), KPC(score));
+      } else if (OB_TMP_FAIL(ready_list_.add(score, is_updated))) {
+        if (OB_EAGAIN == tmp_ret) {
+          record.eagain_cnt_++;
+        } else {
+          record.failed_cnt_++;
+          LOG_WARN("failed to add candidate into ready list", K(tmp_ret), KPC(score));
+        }
         if (OB_NOT_NULL(score) && OB_TMP_FAIL(failed_scores.push_back(score))) {
           LOG_WARN("failed to push score into failed scores", K(tmp_ret));
           (void) mem_ctx_.free_score(score);
         }
+      } else if (is_updated) {
+        record.updated_cnt_++;
       } else {
         record.finish(score_value);
       }
     }
-    record.failed_cnt_ = failed_scores.count();
     for (int i = 0; i < failed_scores.count(); i++) {
       failed_scores.at(i)->pos_at_priority_queue_ = -1;
       if (OB_TMP_FAIL(score_prio_queue_.push(failed_scores.at(i)))) {

@@ -808,11 +808,12 @@ int ObWindowCompactionReadyList::get_candidate_list(
   return ret;
 }
 
-int ObWindowCompactionReadyList::add(ObTabletCompactionScore *&score)
+int ObWindowCompactionReadyList::add(ObTabletCompactionScore *&score, bool &is_updated)
 {
   int ret = OB_SUCCESS;
   ObTabletCompactionScore *candidate = nullptr;
   bool exist = false;
+  is_updated = false;
   obsys::ObWLockGuard guard(lock_);
   if (OB_UNLIKELY(!guard.acquired())) {
     ret = OB_EAGAIN;
@@ -828,6 +829,8 @@ int ObWindowCompactionReadyList::add(ObTabletCompactionScore *&score)
   } else if (exist) {
     if (OB_FAIL(inner_update_candidate_with_new_score(candidate, score))) {
       LOG_WARN("failed to update candidate score", K(ret), KPC(score));
+    } else {
+      is_updated = true;
     }
   } else {
     if (OB_FAIL(inner_add_candidate(score))) {
