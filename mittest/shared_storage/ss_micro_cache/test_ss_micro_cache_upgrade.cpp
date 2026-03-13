@@ -140,8 +140,8 @@ TEST_F(TestSSMicroCacheUpgrade, test_upgrade_micro_cache_file)
       ASSERT_EQ(OB_SUCCESS, micro_cache->resize_micro_cache_file_size(
           tnt_disk_space_mgr->micro_cache_file_size_));
     }
-    ASSERT_GE(tnt_disk_space_mgr->micro_cache_file_size_, large_micro_cache_size);
-    ASSERT_GE(micro_cache->cache_file_size_, large_micro_cache_size);
+    ASSERT_EQ(tnt_disk_space_mgr->micro_cache_file_size_, large_micro_cache_size);
+    ASSERT_EQ(micro_cache->cache_file_size_, large_micro_cache_size);
   }
   LOG_INFO("TEST_CASE: ", "total_disk_size", tnt_disk_space_mgr->total_disk_size_,
     "micro_cache_size", tnt_disk_space_mgr->micro_cache_file_size_);
@@ -191,10 +191,10 @@ TEST_F(TestSSMicroCacheUpgrade, test_upgrade_micro_cache_file)
       data_disk_size -= OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
     }
 
-    ASSERT_EQ(OB_SUCCESS, tnt_file_manager->init(MTL_ID()));
     ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->init(MTL_ID(), data_disk_size));
-    const int64_t SS_STARTUP_CACHE_FILE_SIZE = 810 * 1024 * 1024L; // 810MB
-    ASSERT_EQ(SS_STARTUP_CACHE_FILE_SIZE, tnt_disk_space_mgr->micro_cache_file_size_);
+    ASSERT_EQ(OB_SUCCESS, tnt_file_manager->init(MTL_ID()));
+    // 不删除旧文件，重启后保持原大小
+    ASSERT_EQ(large_micro_cache_size, tnt_disk_space_mgr->micro_cache_file_size_);
 
     ASSERT_EQ(OB_SUCCESS, tnt_file_manager->start());
     ASSERT_EQ(large_micro_cache_size, tnt_disk_space_mgr->micro_cache_file_size_);
@@ -208,7 +208,61 @@ TEST_F(TestSSMicroCacheUpgrade, test_upgrade_micro_cache_file)
     ASSERT_GT(large_micro_cache_size, small_micro_cache_size);
   }
 
-  // 5. Test basic functionality of micro cache after restart
+  // 5. 以一个较小(小于SS_STARTUP_CACHE_FILE_SIZE)的旧文件重启，检查文件大小是否保持不变
+  {
+    const int64_t small_micro_cache_file_size = SS_MIN_CACHE_FILE_SIZE + 100LL * common::MB;
+    ASSERT_LT(small_micro_cache_file_size, SS_STARTUP_CACHE_FILE_SIZE);
+    char micro_cache_file_path[1024] = { 0 };
+    ASSERT_EQ(OB_SUCCESS, tnt_file_manager->get_micro_cache_file_path(
+        micro_cache_file_path, sizeof(micro_cache_file_path), MTL_ID(), MTL_EPOCH_ID()));
+
+    // 停掉环境
+    micro_cache->stop();
+    tnt_file_manager->stop();
+    tnt_disk_space_mgr->stop();
+    micro_cache->wait();
+    tnt_file_manager->wait();
+    tnt_disk_space_mgr->wait();
+    micro_cache->destroy();
+    tnt_file_manager->destroy();
+    tnt_disk_space_mgr->destroy();
+
+    // 直接截断文件，文件大小改为small_micro_cache_file_size
+    ASSERT_EQ(OB_SUCCESS,
+        ObIODeviceLocalFileOp::truncate(micro_cache_file_path, small_micro_cache_file_size));
+    // 覆盖原始内容
+    ObIOFd fd;
+    ObArenaAllocator allocator;
+    char *buf = static_cast<char *>(allocator.alloc(small_micro_cache_file_size));
+    ASSERT_NE(nullptr, buf);
+    MEMSET(buf, 0, small_micro_cache_file_size);
+    int64_t written_size = 0;
+    ASSERT_EQ(OB_SUCCESS,
+        ObIODeviceLocalFileOp::open(micro_cache_file_path, O_RDWR | O_TRUNC, S_IWUSR | S_IRUSR, fd));
+    ASSERT_EQ(OB_SUCCESS,
+        ObIODeviceLocalFileOp::write(fd, buf, small_micro_cache_file_size, written_size));
+    ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::close(fd));
+
+    // 期望重启后，微块缓存大小为small_micro_cache_file_size
+    int64_t data_disk_size = total_disk_size;
+    if (is_sys_tenant(tenant_id)) {
+      data_disk_size -= OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
+    }
+
+    ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->init(MTL_ID(), data_disk_size));
+    ASSERT_EQ(OB_SUCCESS, tnt_file_manager->init(MTL_ID()));
+    ASSERT_EQ(small_micro_cache_file_size, tnt_disk_space_mgr->micro_cache_file_size_);
+
+    ASSERT_EQ(OB_SUCCESS, tnt_file_manager->start());
+    ASSERT_EQ(small_micro_cache_file_size, tnt_disk_space_mgr->micro_cache_file_size_);
+
+    ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->start());
+    ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), tnt_disk_space_mgr->micro_cache_file_size_));
+    ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+    ASSERT_EQ(small_micro_cache_file_size, micro_cache->cache_file_size_);
+  }
+
+  // 6. Test basic functionality of micro cache after restart
   {
     ObSSMicroCacheMicroStat &micro_stat = micro_cache->cache_stat_.micro_stat_;
     const int64_t micro_size = 12 * 1024;
