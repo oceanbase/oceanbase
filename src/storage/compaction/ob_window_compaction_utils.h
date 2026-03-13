@@ -359,7 +359,7 @@ public:
   OB_INLINE int64_t get_current_weighted_size() const { return weighted_size_; }
   OB_INLINE int64_t get_max_capacity() const { return max_capacity_; }
   int get_candidate_list(ObIArray<ObTabletCompactionScore *> &candidates, const int64_t ts_threshold);
-  int add(ObTabletCompactionScore *&score);
+  int add(ObTabletCompactionScore *&score, bool &is_updated);
   int remove(ObTabletCompactionScore *&candidate); // protected by ObWindowCompactionBaseContainerGuard
   void update_max_capacity(const int64_t finished_weighted_size);
   TO_STRING_KV(K_(is_inited), "size", candidate_map_.size(), K_(max_capacity), K_(weighted_size), K_(waiting_score_cnt));

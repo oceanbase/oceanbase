@@ -34,9 +34,10 @@ public:
   struct LoopPriorityQueueRecord final
   {
   public:
-    LoopPriorityQueueRecord() : min_score_(INT64_MAX), max_score_(0), moved_cnt_(0), failed_cnt_(0) {}
+    LoopPriorityQueueRecord()
+      : min_score_(INT64_MAX), max_score_(0), moved_cnt_(0), failed_cnt_(0), eagain_cnt_(0), updated_cnt_(0) {}
     ~LoopPriorityQueueRecord() = default;
-    TO_STRING_KV(K_(min_score), K_(max_score), K_(moved_cnt), K_(failed_cnt));
+    TO_STRING_KV(K_(min_score), K_(max_score), K_(moved_cnt), K_(failed_cnt), K_(eagain_cnt), K_(updated_cnt));
     void finish(const int64_t score);
     int record_to_string(ObSqlString &loop_info) const;
   public:
@@ -44,6 +45,8 @@ public:
     int64_t max_score_;
     int64_t moved_cnt_;
     int64_t failed_cnt_;
+    int64_t eagain_cnt_;
+    int64_t updated_cnt_;
   };
   struct LoopReadyListRecord final
   {

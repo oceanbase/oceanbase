@@ -279,8 +279,10 @@ TEST_F(TestWindowCompaction, test_window_compaction_ready_list)
     ASSERT_EQ(OB_SUCCESS, ready_list.inner_check_exist_and_get_candidate(score->key_, exist, candidate));
     ASSERT_FALSE(exist);
     // weighted_size is random, so the previous one may add failed, but the later one succeed
+    bool is_updated = false;
     if (ready_list.get_remaining_space() >= weighted_size) {
-      ASSERT_EQ(OB_SUCCESS, ready_list.add(score));
+      ASSERT_EQ(OB_SUCCESS, ready_list.add(score, is_updated));
+      ASSERT_FALSE(is_updated);
       ASSERT_EQ(nullptr, score);
       total_weighted_size += weighted_size;
       ASSERT_EQ(candidates.count() + 1, ready_list.candidate_map_.size());
@@ -292,7 +294,8 @@ TEST_F(TestWindowCompaction, test_window_compaction_ready_list)
       ASSERT_NE(nullptr, candidate);
       ASSERT_EQ(OB_SUCCESS, candidates.push_back(candidate));
     } else {
-      ASSERT_EQ(OB_EAGAIN, ready_list.add(score));
+      ASSERT_EQ(OB_EAGAIN, ready_list.add(score, is_updated));
+      ASSERT_FALSE(is_updated);
       mem_ctx.free_score(score);
     }
   }
@@ -317,7 +320,9 @@ TEST_F(TestWindowCompaction, test_window_compaction_ready_list)
     ASSERT_TRUE(candidate->is_ready_status());
 
     candidate->set_log_submitted_status();
-    ASSERT_EQ(OB_EAGAIN, ready_list.add(score));
+    bool is_updated = false;
+    ASSERT_EQ(OB_EAGAIN, ready_list.add(score, is_updated));
+    ASSERT_FALSE(is_updated);
     ASSERT_NE(nullptr, score);
 
     candidate->compact_status_ = ObTabletCompactionScore::COMPACT_STATUS_READY;
@@ -330,7 +335,9 @@ TEST_F(TestWindowCompaction, test_window_compaction_ready_list)
     score->decision_info_ = candidate->decision_info_;
     score->decision_info_.dynamic_info_.cg_merge_batch_cnt_ = new_cg_merge_batch_cnt;
     score->score_ = new_score;
-    ASSERT_EQ(OB_SUCCESS, ready_list.add(score));
+    is_updated = false;
+    ASSERT_EQ(OB_SUCCESS, ready_list.add(score, is_updated));
+    ASSERT_TRUE(is_updated);
     ASSERT_EQ(nullptr, score);
     ASSERT_EQ(new_score, candidate->score_);
     ASSERT_EQ(new_size, candidate->get_weighted_size());
