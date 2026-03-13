@@ -149,9 +149,6 @@ private:
       const share::ObTransferPartList &part_list,
       const share::ObTransferTabletList &trans_tablet_list,
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id);
-  int get_tablet_ids_transferred_for_oracle_tmp_table_v2_(
-      const share::ObTransferTabletList &trans_tablet_list,
-      common::ObIArray<common::ObTabletID> &tablet_ids_get_by_table_id);
   int get_related_table_schemas_(
       share::schema::ObSimpleTableSchemaV2 &table_schema,
       ObArenaAllocator &allocator,
@@ -190,8 +187,13 @@ private:
       int64_t &part_idx,
       int64_t &subpart_idx);
   int get_tablet_ids_for_oracle_tmp_table_v2_(
-      const share::ObLSID &src_ls,
+      const share::ObLSID &ls_id,
       const common::ObIArray<common::ObTableID> &table_ids,
+      common::ObIArray<common::ObTabletID> &temporary_tablet_ids);
+  int get_tablet_ids_for_oracle_tmp_table_v2_for_unlock_(
+      const share::ObLSID &ls_id,
+      const common::ObIArray<common::ObTableID> &table_ids,
+      const share::ObTransferTabletList &trans_tablet_list,
       common::ObIArray<common::ObTabletID> &temporary_tablet_ids);
   int add_table_lock_(
       ObMySQLTransaction &trans,
