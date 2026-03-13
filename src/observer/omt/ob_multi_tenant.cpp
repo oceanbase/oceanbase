@@ -736,10 +736,6 @@ void ObMultiTenant::stop()
   // necessary to put ahead, but it isn't harmful and can exclude
   // affection for balancer.
   ObTenantNodeBalancer::get_instance().stop();
-  // Stop async proc cpu sampler if started
-  if (ATOMIC_LOAD(&async_proc_cpu_sampler_started_) == 1) {
-    TG_STOP(lib::TGDefIDs::OMTProcCpuSampler);
-  }
   // Stop workers of all tenants thus no request of tenant would be
   // processed any more. All tenants will be removed indeed.
   {
@@ -763,10 +759,6 @@ void ObMultiTenant::stop()
 
 void ObMultiTenant::wait()
 {
-  // Wait async proc cpu sampler if started
-  if (ATOMIC_LOAD(&async_proc_cpu_sampler_started_) == 1) {
-    TG_WAIT(lib::TGDefIDs::OMTProcCpuSampler);
-  }
   ObTenantNodeBalancer::get_instance().wait();
   ObThreadPool::wait();
 }
@@ -2852,6 +2844,11 @@ void ObMultiTenant::run1()
         }
       }
     }
+  }
+  if (ATOMIC_LOAD(&async_proc_cpu_sampler_started_) == 1) {
+    LOG_INFO("stop and wait async proc cpu sampler");
+    TG_STOP(lib::TGDefIDs::OMTProcCpuSampler);
+    TG_WAIT(lib::TGDefIDs::OMTProcCpuSampler);
   }
   LOG_INFO("OMT quit");
 }
