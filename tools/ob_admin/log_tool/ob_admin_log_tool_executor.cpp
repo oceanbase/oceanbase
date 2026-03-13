@@ -15,6 +15,7 @@
 #include "dump/ob_admin_dump_block.h"
 #include "cmd_args_parser.h"
 #include <fstream>
+#include <cstdlib>
 
 
 namespace oceanbase
@@ -107,7 +108,8 @@ void ObAdminLogExecutor::print_usage()
             "4. 支持解析归档文件\n"
             "5. 如何通过LSN快速定位日志:\n"
             "   1. 获取文件ID: BLOCK_ID=LSN/(64MB-4KB)\n"
-            "   2. 根据LSN去输出文件中执行grep操作"
+            "   2. 根据LSN去输出文件中执行grep操作\n"
+            "6. 完整输出大列 hex: 设置环境变量 OB_ADMIN_DUMP_FULL_HEX=1 或 OB_ADMIN_DUMP_FULL_HEX=<字节数>，可输出更多/完整列数据(默认每列最多 128 字节)"
            );
   }
 }
@@ -219,6 +221,12 @@ int ObAdminLogExecutor::dump_all_blocks_(int argc, char **argv, LogFormatFlag fl
     str_arg.decompress_buf_ = decompress_buf_;
     str_arg.decompress_buf_len_ = decompress_buf_size_;
     str_arg.pos_ = 0;
+    str_arg.hex_length_ = 0;
+    const char *full_hex_env = getenv("OB_ADMIN_DUMP_FULL_HEX");
+    if (full_hex_env != nullptr) {
+      const int64_t v = atol(full_hex_env);
+      str_arg.hex_length_ = (v > 0) ? v : (2 * 1024 * 1024);
+    }
     str_arg.filter_ = filter_;
     if (LogFormatFlag::BLOCK_FORMAT == flag) {
       str_arg.dir_path_ = dir_path_;

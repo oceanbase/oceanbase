@@ -356,6 +356,7 @@ void ObAdminMutatorStringArg::reset()
   decompress_buf_ = NULL;
   decompress_buf_len_ = 0;
   flag_ = LogFormatFlag::NO_FORMAT;
+  hex_length_ = 0;
   //pos_ = 0;
   //:w
   //:wtx_id_ = 0;
@@ -379,6 +380,7 @@ ObAdminMutatorStringArg &ObAdminMutatorStringArg::operator=(const ObAdminMutator
   decompress_buf_len_ = rhs.decompress_buf_len_;
   pos_ = rhs.pos_;
   flag_ = rhs.flag_;
+  hex_length_ = rhs.hex_length_;
   writer_ptr_ = rhs.writer_ptr_;
   filter_ = rhs.filter_;
   log_stat_ = rhs.log_stat_;
