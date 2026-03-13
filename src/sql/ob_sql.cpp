@@ -1759,7 +1759,8 @@ int ObSql::handle_pl_execute(const ObString &sql,
   if (!context.is_dbms_sql_ && !context.is_dynamic_sql_ && lib::is_oracle_mode()) {
     param_byorder = true;
   }
-  if (ObParser::is_pl_stmt(sql, nullptr, &is_call_procedure) || is_call_procedure) {
+  if (ObParser::is_pl_stmt(sql, nullptr, &is_call_procedure) || is_call_procedure
+      || session_info.is_for_trigger_package()) {
     try_paramlize = false;
   }
 
