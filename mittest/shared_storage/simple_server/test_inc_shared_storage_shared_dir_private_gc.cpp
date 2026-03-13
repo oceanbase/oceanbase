@@ -276,6 +276,7 @@ TEST_F(ObSharedStorageSharedDirPrivateGC, test_shared_dir_private)
   int64_t tablet_version1 = 0;
   int64_t tablet_version2 = 0;
   int64_t tablet_version3 = 0;
+  EXE_SQL("alter system set _ss_advance_checkpoint_interval = '1m';");
   EXE_SQL("create table test_table (a int) storage_cache_policy (global = 'hot');");
   sleep(32);
   LOG_INFO("create_table finish");
