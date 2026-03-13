@@ -915,7 +915,11 @@ int ObTxRedoLog::format_row_data_(const memtable::ObRowData &row_data, ObAdminMu
       if (nullptr != arg.writer_ptr_) {
         sprintf(arg.buf_ + arg.pos_, "%lu", i);
         arg.writer_ptr_->dump_key(arg.buf_ + arg.pos_);
-        pos = datum_row.storage_datums_[i].storage_to_string(arg.buf_ + arg.pos_, arg.buf_len_ - arg.pos_);
+        const int64_t effective_hex_len = (arg.hex_length_ > 0 ? arg.hex_length_ : OB_ADMIN_DEFAULT_DUMP_HEX_LENGTH);
+        const int64_t hex_len_cap = std::max(0L, (arg.buf_len_ - arg.pos_ - 256) / 2);
+        const int64_t hex_len = std::min(effective_hex_len, hex_len_cap);
+        pos = datum_row.storage_datums_[i].storage_to_string(
+            arg.buf_ + arg.pos_, arg.buf_len_ - arg.pos_, true, hex_len);
         arg.writer_ptr_->dump_string(arg.buf_ + arg.pos_);
       }
     }

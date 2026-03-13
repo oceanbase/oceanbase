@@ -172,6 +172,9 @@ struct ObLogStat
   K(ext_info_log_count_));
 };
 
+/// Default max bytes of column payload to dump as hex when hex_length_ is 0.
+static const int64_t OB_ADMIN_DEFAULT_DUMP_HEX_LENGTH = 128L;
+
 struct ObAdminMutatorStringArg
 {
 public:
@@ -185,8 +188,8 @@ public:
   void reset();
   void reset_buf();
   ObAdminMutatorStringArg &operator= (const ObAdminMutatorStringArg &rhs);
-  TO_STRING_KV(KP_(buf), K_(buf_len), KP(decompress_buf_), K(decompress_buf_len_), K_(pos), K(flag_), K(filter_),
-               KPC(log_stat_), KP(dir_path_));
+  TO_STRING_KV(KP_(buf), K_(buf_len), KP(decompress_buf_), K(decompress_buf_len_), K_(pos), K(flag_), K(hex_length_),
+               K(filter_), KPC(log_stat_), KP(dir_path_));
 public:
   char *buf_;
   int64_t buf_len_;
@@ -195,6 +198,8 @@ public:
   int64_t decompress_buf_len_;
   int64_t pos_;
   LogFormatFlag flag_;
+  /// Max bytes of column data to dump as hex (0 = use default 128). Set via OB_ADMIN_DUMP_FULL_HEX env or --full-hex.
+  int64_t hex_length_;
 //  int64_t tx_id_;
   ObAdminLogDumperInterface *writer_ptr_;
   ObAdminLogDumpFilter filter_;

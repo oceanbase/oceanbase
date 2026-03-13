@@ -21,7 +21,15 @@ namespace tools
 class ObAdminLogExecutor : public ObAdminExecutor
 {
 public:
-  ObAdminLogExecutor(bool flag) : mutator_str_buf_(nullptr), mutator_buf_size_(0), is_ob_log_service_(flag){}
+  ObAdminLogExecutor(bool flag)
+    : mutator_str_buf_(nullptr),
+      mutator_buf_size_(0),
+      decompress_buf_(nullptr),
+      decompress_buf_size_(0),
+      is_ob_log_service_(flag)
+  {
+    dir_path_[0] = '\0';
+  }
   virtual ~ObAdminLogExecutor();
   virtual int execute(int argc, char *argv[]);
 
