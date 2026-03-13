@@ -409,7 +409,7 @@ TEST_F(TestTransferHandler, prepare_valid_data)
   g_tenant_id = OB_INVALID_TENANT_ID;
 
   // create oracle tenant
-  ASSERT_EQ(OB_SUCCESS, create_tenant("oracle", "4G", "4G", true, 2));
+  ASSERT_EQ(OB_SUCCESS, create_tenant("oracle", "2G", "2G", true));
   ASSERT_EQ(OB_SUCCESS, get_tenant_id(g_tenant_id, "oracle"));
   ASSERT_TRUE(is_valid_tenant_id(g_tenant_id));
 
