@@ -5209,7 +5209,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
             LOG_WARN("fail to get session temp table used", K(ret));
           } else if (is_already_set) {
             //do nothing
-          } else if (OB_FAIL(session.set_session_temp_table_used(true))) {
+          } else if (OB_FAIL(session.set_session_temp_table_used(session, true, phy_plan->need_strong_routing()))) {
             LOG_WARN("fail to set session temp table used", K(ret));
           }
           LOG_DEBUG("plan contain oracle session level temporary table detected", K(is_already_set));

@@ -297,6 +297,8 @@ public:
   inline bool is_gtt_temp_table_v2() const { return is_gtt_temp_table_v2_; }
   common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
+  bool need_strong_routing() const { return need_strong_routing_; }
+  void set_need_strong_routing(bool need_strong_routing) { need_strong_routing_ = need_strong_routing; }
   common::ObIArray<uint64_t> &get_immediate_refresh_external_table_ids() { return immediate_refresh_external_table_ids_; }
   bool is_contain_oracle_trx_level_temporary_table() const { return gtt_trans_scope_ids_.count() > 0; }
   bool is_contain_oracle_session_level_temporary_table() const { return gtt_session_scope_ids_.count() > 0; }
@@ -693,6 +695,7 @@ private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_session_scope_ids_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_trans_scope_ids_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> immediate_refresh_external_table_ids_;
+  bool need_strong_routing_;
 
   int64_t concurrent_num_;           //plan当前的并发执行个数
   int64_t max_concurrent_num_;       //plan最大并发可执行个数, -1表示没有限制
@@ -797,6 +800,7 @@ public:
 private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
   bool enable_inc_direct_load_; // for incremental direct load
+  bool enable_inc_major_; // for incremental direct load
   bool enable_replace_; // for incremental direct load
   bool insert_overwrite_; // for insert overwrite
   double online_sample_percent_; // for incremental direct load
@@ -817,6 +821,7 @@ private:
   int64_t px_worker_share_plan_enabled_;
   bool extend_sql_plan_monitor_metrics_;
   uint64_t optimizer_features_enable_version_;
+  bool route_to_column_replica_;
   bool is_gtt_temp_table_v2_;
 };
 

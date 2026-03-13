@@ -183,9 +183,7 @@ public:
   int prepare_for_oracle_temp_table(
       ObMySQLTransaction &trans,
       const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObTablegroupSchema *tablegroup_schema,
-      const storage::ObSessionTabletInfo &data_table_info,
-      share::schema::ObLatestSchemaGuard *latest_schema_guard = nullptr);
+      const storage::ObSessionTabletInfo &data_table_info);
   int get_ls_id_array(
       common::ObIArray<share::ObLSID> &ls_id_array);
   int finish(const bool commit);

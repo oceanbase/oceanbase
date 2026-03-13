@@ -193,7 +193,9 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       unit_gc_min_sup_proxy_version_(0),
       external_resource_schema_cache_(nullptr),
       has_ccl_rule_(false),
-      last_update_ccl_cnt_time_(-1)
+      last_update_ccl_cnt_time_(-1),
+      trans_gtt_v2_sequence_(0),
+      min_data_version_of_init_sess_(0)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -417,11 +419,14 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   job_info_ = nullptr;
   need_send_feedback_proxy_info_ = false;
   is_lock_session_ = false;
+  is_temporary_table_session_ = false;
   failover_mode_ = false;
   service_name_.reset();
   executing_sql_stat_record_.reset();
   unit_gc_min_sup_proxy_version_ = 0;
   got_tenant_conn_res_ = false;
+  trans_gtt_v2_sequence_ = 0;
+  min_data_version_of_init_sess_ = 0;
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -926,18 +931,18 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
     common::ObMySQLTransaction trans;
     ObIArray<uint64_t> &table_ids = table_type == share::schema::TMP_TABLE_ORA_TRX ?
           get_gtt_trans_scope_ids() : get_gtt_session_scope_ids();
-    const int64_t unique_id = table_type == share::schema::TMP_TABLE_ORA_TRX ?
-          get_gtt_trans_scope_unique_id() : get_gtt_session_scope_unique_id();
+    const int64_t sequence_for_gtt_v2 = table_type == share::schema::TMP_TABLE_ORA_TRX ?
+          get_trans_gtt_v2_sequence() : get_session_gtt_v2_sequence();
     if (!gtt_tablet_info_map_.is_empty()) {
       const uint64_t session_id = get_sessid_for_table();
       common::ObArray<uint64_t> tmp_table_ids;
-      if (OB_FAIL(gtt_tablet_info_map_.get_table_ids_by_session_id_and_sequence(session_id, unique_id, tmp_table_ids))) {
-        LOG_WARN("failed to get table ids by session id and sequence", K(ret), K(session_id), K(unique_id));
+      if (OB_FAIL(gtt_tablet_info_map_.get_table_ids_by_session_id_and_sequence(session_id, sequence_for_gtt_v2, tmp_table_ids))) {
+        LOG_WARN("failed to get table ids by session id and sequence", K(ret), K(session_id), K(sequence_for_gtt_v2));
       } else if (OB_FAIL(append_array_no_dup(table_ids, tmp_table_ids))) {
         LOG_WARN("failed to append array", K(ret), K(tmp_table_ids), K(table_ids));
       }
     }
-    LOG_INFO("delete temp table", K(table_type), K(table_ids), K(unique_id));
+    LOG_INFO("delete temp table", K(table_type), K(table_ids), K(sequence_for_gtt_v2));
     if (FAILEDx(trans.start(sql_proxy, tenant_id))) {
       LOG_WARN("failed to begin transaction", K(ret), K(tenant_id));
     }
@@ -963,8 +968,7 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
           data_schema = table_schema;
         }
         const bool is_trx_tmp_table_v2 = data_schema->is_oracle_trx_tmp_table_v2();
-        const int64_t sequence = is_trx_tmp_table_v2 ? get_gtt_trans_scope_unique_id()
-                                                     : get_gtt_session_scope_unique_id();
+        const int64_t sequence = is_trx_tmp_table_v2 ? get_trans_gtt_v2_sequence() : get_session_gtt_v2_sequence();
         const bool need_skip = is_trx_tmp_table_v2 ^ (TMP_TABLE_ORA_TRX == table_type);
         LOG_INFO("delete temp table", K(table_type), K(is_trx_tmp_table_v2), K(sequence), K(get_sessid_for_table()), K(need_skip), KPC(data_schema));
         if (OB_FAIL(ret) || need_skip) {
@@ -986,6 +990,8 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
         } else if (database_schema->is_in_recyclebin() || table_schema->is_in_recyclebin()) {
           LOG_DEBUG("skip table schema in recyclebin", K(*table_schema));
         } else {
+          const int64_t unique_id = table_type == share::schema::TMP_TABLE_ORA_TRX ?
+            get_gtt_trans_scope_unique_id() : get_gtt_session_scope_unique_id();
           ret = sql.assign_fmt("DELETE FROM \"%.*s\".\"%.*s\" WHERE %s = %ld",
                                 database_schema->get_database_name_str().length(),
                                 database_schema->get_database_name_str().ptr(),
@@ -1021,8 +1027,9 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
     if ((TMP_TABLE_ORA_TRX == table_type || TMP_TABLE_ORA_TRX_V2 == table_type) && !get_is_deserialized()) {
       gtt_trans_scope_ids_.reuse();
       gen_gtt_trans_scope_unique_id();
+      update_trans_gtt_v2_sequence();
       if (gtt_session_scope_ids_.count() == 0) {
-        if (OB_FAIL(set_session_temp_table_used(false))) {
+        if (OB_FAIL(set_session_temp_table_used(*this, false, table_type != share::schema::TMP_TABLE_ORA_TRX_V2))) {
           LOG_WARN("fail to set session temp table unused", K(ret));
         }
       }
@@ -1198,6 +1205,25 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn,
              K(lbt()));
   }
   return ret;
+}
+// for 2.0 Protocol
+void ObSQLSessionInfo::mark_session_temp_table_used(const bool is_used)
+{
+  if (!is_feedback_proxy_info_support()) {
+    LOG_INFO("The client connects directly to the Observer, or the OBProxy currently does not support the feedback proxy info feature",
+              K(get_server_sid()),
+              K(is_temporary_table_session()),
+              K(is_need_send_feedback_proxy_info()));
+  } else if (is_temporary_table_session() != is_used) {
+    LOG_INFO("mark session temp table used", K(get_server_sid()), K(is_used));
+    set_is_temporary_table_session(is_used);
+    set_need_send_feedback_proxy_info(true);
+  } else {
+    LOG_DEBUG("the session temp table used status on the session won't be changed, no need to mark again",
+              K(get_server_sid()),
+              K(is_temporary_table_session()),
+              K(is_need_send_feedback_proxy_info()));
+  }
 }
 
 //proxy方式下session创建、断开和后台定时task检查:
@@ -2130,7 +2156,9 @@ int ObSQLSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
       gtt_trans_scope_ids_,
       affected_rows_,
       unit_gc_min_sup_proxy_version_,
-      gtt_tablet_info_map_);
+      gtt_tablet_info_map_,
+      trans_gtt_v2_sequence_,
+      min_data_version_of_init_sess_);
   return ret;
 }
 
@@ -2200,6 +2228,8 @@ int ObSQLSessionInfo::deserialize(const char *buf, const int64_t data_len, int64
 
     OB_UNIS_DECODE(unit_gc_min_sup_proxy_version_);
     OB_UNIS_DECODE(gtt_tablet_info_map_);
+    OB_UNIS_DECODE(trans_gtt_v2_sequence_);
+    OB_UNIS_DECODE(min_data_version_of_init_sess_);
     (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
 
     pos = pos_orig + len;
@@ -2238,7 +2268,9 @@ OB_DEF_SERIALIZE_SIZE(ObSQLSessionInfo)
       gtt_trans_scope_ids_,
       affected_rows_,
       unit_gc_min_sup_proxy_version_,
-      gtt_tablet_info_map_);
+      gtt_tablet_info_map_,
+      trans_gtt_v2_sequence_,
+      min_data_version_of_init_sess_);
   return len;
 }
 
@@ -4265,7 +4297,45 @@ void ObSQLSessionInfo::gen_gtt_trans_scope_unique_id()
   static int64_t cur_ts = 0;
   int64_t next_ts = ObSQLUtils::combine_server_id(ObSQLUtils::get_next_ts(cur_ts), GCTX.get_server_id());
   gtt_trans_scope_unique_id_ = next_ts;
+  // If trans_gtt_v2_sequence_ is 0, this means this is the first time obtaining the value,
+  // so set this value as the global sequence value
+  if (0 == trans_gtt_v2_sequence_ && !get_is_deserialized()) {
+    update_trans_gtt_v2_sequence();
+  }
   LOG_DEBUG("check temporary table ssid trans scope", K(next_ts), K(get_sessid_for_table()), K(GCTX.get_server_id()), K(lbt()));
+}
+
+void ObSQLSessionInfo::set_trans_gtt_v2_sequence(const int64_t sequence)
+{
+  if (get_min_data_version_of_init_sess() == 0) {
+    ATOMIC_STORE(&min_data_version_of_init_sess_, get_data_version());
+  }
+  ATOMIC_STORE(&trans_gtt_v2_sequence_, sequence);
+}
+
+void ObSQLSessionInfo::update_trans_gtt_v2_sequence()
+{
+  set_trans_gtt_v2_sequence(get_gtt_trans_scope_unique_id());
+  trans_gtt_v2_sequence_encoder_.is_changed_ = true;
+  LOG_INFO("update trans gtt v2 sequence", K(get_trans_gtt_v2_sequence()));
+}
+
+int64_t ObSQLSessionInfo::get_session_gtt_v2_sequence() const
+{
+  int64_t result = ATOMIC_LOAD(&gtt_session_scope_unique_id_);
+  if (get_min_data_version_of_init_sess() >= DATA_VERSION_4_4_2_1) {
+    result = OB_GTT_V2_SESS_TABLET_SEQUENCE;
+  }
+  return result;
+}
+
+int64_t ObSQLSessionInfo::get_trans_gtt_v2_sequence() const
+{
+  int64_t result = ATOMIC_LOAD(&gtt_trans_scope_unique_id_);
+  if (get_min_data_version_of_init_sess() >= DATA_VERSION_4_4_2_1) {
+    result = ATOMIC_LOAD(&trans_gtt_v2_sequence_);
+  }
+  return result;
 }
 
 int ObAppInfoEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
@@ -4963,6 +5033,89 @@ int ObQueryInfoEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* cu
   } else {
     share::ObTaskController::get().allow_next_syslog();
     LOG_INFO("success to verify VariousInfo", K(ret));
+  }
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(sess.get_trans_gtt_v2_sequence());
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t trans_gtt_v2_sequence = 0;
+  OB_UNIS_DECODE(trans_gtt_v2_sequence);
+  sess.set_trans_gtt_v2_sequence(trans_gtt_v2_sequence);
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::get_serialize_size(ObSQLSessionInfo &sess, int64_t &len) const
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ADD_LEN(sess.get_trans_gtt_v2_sequence());
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(serialize(sess, buf, length, pos))) {
+    LOG_WARN("failed to fetch session info.", K(ret), K(pos), K(length));
+  }
+  return ret;
+}
+
+int64_t ObTransGttV2SequenceEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
+{
+  int64_t len = 0;
+  get_serialize_size(sess, len);
+  return len;
+}
+
+int ObTransGttV2SequenceEncoder::compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                          int64_t current_sess_length, const char *last_sess_buf,
+                                          int64_t last_sess_length)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(sess);
+  if (current_sess_length != last_sess_length) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to compare session info", K(ret), K(current_sess_length), K(last_sess_length),
+      KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
+  } else if (memcmp(current_sess_buf, last_sess_buf, current_sess_length) == 0) {
+    LOG_TRACE("success to compare session info", K(ret));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to compare buf session info", K(ret),
+      KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
+  }
+  return ret;
+}
+
+int ObTransGttV2SequenceEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+            int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(current_sess_buf);
+  UNUSED(current_sess_length);
+  int64_t pos = 0;
+  const char *buf = last_sess_buf;
+  int64_t data_len = last_sess_length;
+  int64_t trans_gtt_v2_sequence = 0;
+
+  LST_DO_CODE(OB_UNIS_DECODE, trans_gtt_v2_sequence);
+  if (sess.get_trans_gtt_v2_sequence() != trans_gtt_v2_sequence) {
+    share::ObTaskController::get().allow_next_syslog();
+    LOG_WARN("failed to verify trans_gtt_v2_sequence", K(ret),
+      "current_trans_gtt_v2_sequence", sess.get_trans_gtt_v2_sequence(),
+      "last_trans_gtt_v2_sequence", trans_gtt_v2_sequence);
+  } else {
+    share::ObTaskController::get().allow_next_syslog();
+    LOG_INFO("success to verify TransGttV2Sequence", K(ret), K(sess.get_trans_gtt_v2_sequence()));
   }
   return ret;
 }

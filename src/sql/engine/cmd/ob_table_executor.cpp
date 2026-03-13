@@ -2546,7 +2546,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
             || stmt.get_oracle_temp_table_type() == share::schema::TMP_TABLE_ORA_TRX_V2) {
       //do nothing
     } else if (stmt.get_oracle_temp_table_type() == share::schema::TMP_TABLE_ORA_SESS_V2) {
-      const int64_t sequence = my_session->get_gtt_session_scope_unique_id();
+      const int64_t sequence = my_session->get_session_gtt_v2_sequence();
       const uint64_t tenant_id = truncate_table_arg.tenant_id_;
       const uint64_t table_id = truncate_table_arg.table_id_;
       const uint64_t session_id = my_session->get_sessid_for_table();

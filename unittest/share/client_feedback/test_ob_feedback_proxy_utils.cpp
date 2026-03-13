@@ -70,12 +70,13 @@ TEST(ObFeedbackProxyUtils, test_serialize_from_session)
   bool verified = false;
 
   session.set_is_lock_session(true);
+  session.set_is_temporary_table_session(true);
   ret = ObFeedbackProxyUtils::serialize_(session, buf, LEN, pos);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ASSERT_EQ(pos, 7);
+  ASSERT_EQ(pos, 14);
 
   // result in hex
-  std::string hex_string = "00000100000031";
+  std::string hex_string = "0000010000003101000100000000";
   verified = verifyHexString(buf, pos, hex_string);
   ASSERT_TRUE(verified);
 }

@@ -327,7 +327,6 @@ int ObSessionTabletCreateHelper::choose_log_stream(
       LOG_WARN("failed to init tablet allocator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.prepare_for_oracle_temp_table(trans_,
                                                                                 *schema,
-                                                                                tablegroup_schema,
                                                                                 data_table_info))) {
       LOG_WARN("failed to prepare tablet allocator", KR(ret), K(data_table_info), K(table_schema));
     } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {

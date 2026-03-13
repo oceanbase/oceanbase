@@ -104,8 +104,8 @@ int ObDASCtx::get_das_tablet_mapper(const uint64_t ref_table_id,
       } else {
         tablet_mapper.related_info_.guard_ = schema_guard;
         const storage::ObGTTTabletInfo gtt_tablet_info(real_table_id,
-                                                      session_info->get_gtt_session_scope_unique_id(),
-                                                      session_info->get_gtt_trans_scope_unique_id(),
+                                                      session_info->get_session_gtt_v2_sequence(),
+                                                      session_info->get_trans_gtt_v2_sequence(),
                                                       session_info->get_sessid_for_table());
         tablet_mapper.set_session_tablet_info(gtt_tablet_info, &(session_info->get_gtt_tablet_info_map()));
       }

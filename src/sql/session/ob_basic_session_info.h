@@ -1713,7 +1713,7 @@ public:
   int set_enable_role_ids(const ObIArray<uint64_t>& role_ids);
   int load_default_sys_variable(common::ObIAllocator &allocator, int64_t var_idx);
 
-  int set_session_temp_table_used(const bool is_used);
+  int set_session_temp_table_used(ObSQLSessionInfo &session, const bool is_used, const bool need_strong_routing);
   int get_session_temp_table_used(bool &is_used) const;
   int get_enable_optimizer_null_aware_antijoin(bool &is_enabled) const;
   void update_tenant_config_version(int64_t v) { cached_tenant_config_version_ = v; };

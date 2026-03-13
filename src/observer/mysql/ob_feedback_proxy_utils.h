@@ -151,6 +151,7 @@ private:
 
 private:
   static ObIsLockSessionInfo is_lock_session;
+  static ObIsTemporaryTableSessionInfo is_temporary_table_session;
 };
 }  // namespace observer
 }  // namespace oceanbase

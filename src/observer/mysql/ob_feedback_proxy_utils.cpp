@@ -21,6 +21,7 @@ using namespace common;
 namespace observer
 {
 ObIsLockSessionInfo ObFeedbackProxyUtils::is_lock_session(ObFeedbackProxyInfoType::IS_LOCK_SESSION, '1');
+ObIsTemporaryTableSessionInfo ObFeedbackProxyUtils::is_temporary_table_session(ObFeedbackProxyInfoType::IS_TEMPORARY_TABLE_SESSION, '1');
 
 int ObFeedbackProxyUtils::append_feedback_proxy_info(common::ObIAllocator &allocator,
                                                      ObIArray<obmysql::Obp20Encoder *> *extra_info_ecds,
@@ -80,6 +81,7 @@ int64_t ObFeedbackProxyUtils::get_serialize_size_(sql::ObSQLSessionInfo &sess)
 {
   int64_t size = 0;
   size += is_lock_session.get_serialize_size();
+  size += is_temporary_table_session.get_serialize_size();
   // add other information here...
   return size;
 }
@@ -94,6 +96,14 @@ int ObFeedbackProxyUtils::serialize_(sql::ObSQLSessionInfo &sess, char *buf, int
   }
   if (OB_FAIL(is_lock_session.serialize(buf, len, pos))) {
     LOG_WARN("serialize is_lock_session failed", K(ret), K(is_lock_session));
+  }
+  if (!sess.is_temporary_table_session()) {
+    is_temporary_table_session.set_value('0');
+  } else {
+    is_temporary_table_session.set_value('1');
+  }
+  if (FAILEDx(is_temporary_table_session.serialize(buf, len, pos))) {
+    LOG_WARN("serialize is_temporary_table_session failed", K(ret), K(is_temporary_table_session));
   }
   // add other information here...
   return ret;

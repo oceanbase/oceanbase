@@ -9800,12 +9800,20 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
             LOG_WARN("fail to get table schema", K(ret), K(object_id));
           } else {
             if (table_schema->is_oracle_trx_tmp_table() || table_schema->is_oracle_trx_tmp_table_v2()) {
-             if (OB_FAIL(gtt_trans_scope_ids.push_back(object_id))) {
-               LOG_WARN("fail to push back", K(ret));
-             }
+              if (OB_FAIL(gtt_trans_scope_ids.push_back(object_id))) {
+                LOG_WARN("fail to push back", K(ret));
+              } else if (table_schema->is_oracle_trx_tmp_table()) {
+                phy_plan.set_need_strong_routing(true);
+              } else {
+                phy_plan.set_need_strong_routing(false);
+              }
             } else if (table_schema->is_oracle_sess_tmp_table() || table_schema->is_oracle_sess_tmp_table_v2()) {
               if (OB_FAIL(gtt_session_scope_ids.push_back(object_id))) {
                 LOG_WARN("fail to push back", K(ret));
+              } else if (table_schema->is_oracle_sess_tmp_table()) {
+                phy_plan.set_need_strong_routing(true);
+              } else {
+                phy_plan.set_need_strong_routing(false);
               }
             } else if (table_schema->is_external_table() && table_schema->is_external_table_immediate_refresh()) {
               if (OB_FAIL(add_var_to_array_no_dup(immediate_refresh_external_table_ids, (uint64_t)object_id))) {

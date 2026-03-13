@@ -69,6 +69,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     gtt_session_scope_ids_(allocator_),
     gtt_trans_scope_ids_(allocator_),
     immediate_refresh_external_table_ids_(allocator_),
+    need_strong_routing_(true),
     concurrent_num_(0),
     max_concurrent_num_(ObMaxConcurrentParam::UNLIMITED),
     table_locations_(allocator_),
@@ -128,6 +129,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     udf_has_dml_stmt_(false),
     mview_ids_(&allocator_),
     enable_inc_direct_load_(false),
+    enable_inc_major_(false),
     enable_replace_(false),
     insert_overwrite_(false),
     online_sample_percent_(1.),
@@ -144,6 +146,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     px_worker_share_plan_enabled_(false),
     extend_sql_plan_monitor_metrics_(false),
     optimizer_features_enable_version_(0),
+    route_to_column_replica_(false),
     is_gtt_temp_table_v2_(false)
 {
 }
@@ -192,12 +195,14 @@ void ObPhysicalPlan::reset()
   contain_table_scan_ = false;
   has_nested_sql_ = false;
   session_id_ = 0;
+  route_to_column_replica_ = false;
   is_gtt_temp_table_v2_ = false;
   contain_oracle_trx_level_temporary_table_ = false;
   contain_oracle_session_level_temporary_table_ = false;
   gtt_session_scope_ids_.reset();
   gtt_trans_scope_ids_.reset();
   immediate_refresh_external_table_ids_.reset();
+  need_strong_routing_ = true;
   concurrent_num_ = 0;
   max_concurrent_num_ = ObMaxConcurrentParam::UNLIMITED;
   is_update_uniq_index_ = false;
@@ -922,7 +927,10 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     px_worker_share_plan_enabled_,
                     extend_sql_plan_monitor_metrics_,
                     is_online_gather_statistics_,
-                    phy_hint_.table_lock_mode_);
+                    phy_hint_.table_lock_mode_,
+                    route_to_column_replica_,
+                    enable_inc_major_,
+                    need_strong_routing_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

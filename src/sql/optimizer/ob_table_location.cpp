@@ -1293,8 +1293,8 @@ int ObTableLocation::calc_not_partitioned_table_ids(ObExecContext &exec_ctx)
   ObDASTabletMapper tablet_mapper;
   const storage::ObGTTTabletInfo gtt_tablet_info(
     loc_meta_.ref_table_id_,
-    exec_ctx.get_my_session()->get_gtt_session_scope_unique_id(),
-    exec_ctx.get_my_session()->get_gtt_trans_scope_unique_id(),
+    exec_ctx.get_my_session()->get_session_gtt_v2_sequence(),
+    exec_ctx.get_my_session()->get_trans_gtt_v2_sequence(),
     exec_ctx.get_my_session()->get_sessid_for_table());
   tablet_mapper.set_session_tablet_info(gtt_tablet_info, &(exec_ctx.get_my_session()->get_gtt_tablet_info_map()));
   if (OB_FAIL(exec_ctx.get_das_ctx().get_das_tablet_mapper(
@@ -1874,8 +1874,8 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
       if (!is_partitioned_) {
         const storage::ObGTTTabletInfo gtt_tablet_info(
           loc_meta_.ref_table_id_,
-          exec_ctx.get_my_session()->get_gtt_session_scope_unique_id(),
-          exec_ctx.get_my_session()->get_gtt_trans_scope_unique_id(),
+          exec_ctx.get_my_session()->get_session_gtt_v2_sequence(),
+          exec_ctx.get_my_session()->get_trans_gtt_v2_sequence(),
           exec_ctx.get_my_session()->get_sessid_for_table());
         storage::ObSessionTabletInfoMap *session_tablet_info_map = &(exec_ctx.get_my_session()->get_gtt_tablet_info_map());
         tablet_mapper.set_session_tablet_info(gtt_tablet_info, session_tablet_info_map);
@@ -6607,8 +6607,7 @@ int ObTableLocation::get_tablet_id_for_temp_table(
     LOG_WARN("data table schema is null", K(ret), K(table_schema));
   } else {
     const bool is_trx_tmp_table = data_table_schema->is_oracle_trx_tmp_table_v2();
-    const int64_t sequence = is_trx_tmp_table ? session_info.get_gtt_trans_scope_unique_id()
-                                              : session_info.get_gtt_session_scope_unique_id();
+    const int64_t sequence = is_trx_tmp_table ? session_info.get_trans_gtt_v2_sequence() : session_info.get_session_gtt_v2_sequence();
     const ObSessionTabletInfoKey info_key(table_schema.get_table_id(), sequence, session_info.get_sessid_for_table());
     ObSessionTabletInfo tablet_info;
     if (OB_SUCC(session_info.get_gtt_tablet_info_map().get_session_tablet(info_key, tablet_info))) {

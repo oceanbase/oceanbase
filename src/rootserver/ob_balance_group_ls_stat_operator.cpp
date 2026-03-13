@@ -21,6 +21,8 @@
 #include "rootserver/ob_primary_ls_service.h" // ObDupLSCreateHelper
 #include "share/schema/ob_latest_schema_guard.h"
 #include "storage/tablet/ob_session_tablet_info_map.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -638,14 +640,15 @@ int ObNewTableTabletAllocator::prepare_like(
 int ObNewTableTabletAllocator::prepare_for_oracle_temp_table(
   ObMySQLTransaction &trans,
   const share::schema::ObTableSchema &table_schema,
-  const share::schema::ObTablegroupSchema *tablegroup_schema,
-  const storage::ObSessionTabletInfo &data_table_info,
-  share::schema::ObLatestSchemaGuard *latest_schema_guard)
+  const storage::ObSessionTabletInfo &data_table_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+    LOG_WARN("not init or sql_proxy_ is null", KR(ret));
+  } else if (OB_UNLIKELY(MTL_ID() != table_schema.get_tenant_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant id is not match", KR(ret), K(table_schema.get_tenant_id()), K(MTL_ID()));
   } else if (OB_UNLIKELY(!table_schema.is_oracle_tmp_table_v2()
                       && !table_schema.is_oracle_tmp_table_v2_index_table())) {
     ret = OB_INVALID_ARGUMENT;
@@ -658,15 +661,73 @@ int ObNewTableTabletAllocator::prepare_for_oracle_temp_table(
       LOG_WARN("fail to alloc ls for oracle tmp table v2 index table", KR(ret), K(data_table_info), K(table_schema));
     }
   } else if (OB_INVALID_ID != table_schema.get_tablegroup_id()) {
-    if (OB_ISNULL(tablegroup_schema)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("tablegroup_schema is null", KR(ret), K(table_schema));
-    } else if (OB_FAIL(alloc_ls_for_in_tablegroup_tablet(table_schema, *tablegroup_schema, latest_schema_guard))) {
-      LOG_WARN("fail to alloc ls for in tablegroup tablet", KR(ret));
-    }
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablegroup id is not supported", KR(ret), K(table_schema.get_tablegroup_id()), K(table_schema));
   } else {
-    if (OB_FAIL(alloc_ls_for_normal_table_tablet(table_schema))) {
-      LOG_WARN("fail to alloc ls for normal table tablet", KR(ret));
+    // Get the local LS list from MTL. Check each LS by ObSessionTabletCreateHelper::is_ls_leader.
+    // If a leader is found, select it. If no leader is found, choose any tenant LS available.
+    // If there is no tenant LS locally, fetch one via ls_operator.get_random_normal_user_ls.
+    // The selected LS will be added into ls_id_array_.
+    storage::ObLSService *ls_service = MTL(storage::ObLSService*);
+    common::ObArray<share::ObLSID> local_ls_id_array;
+    share::ObLSID selected_ls_id;
+    bool found_leader = false;
+
+    if (OB_ISNULL(ls_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls service is null", KR(ret));
+    } else if (OB_FAIL(ls_service->get_ls_ids(local_ls_id_array))) {
+      LOG_WARN("fail to get ls ids from MTL", KR(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < local_ls_id_array.count(); ++i) {
+        const share::ObLSID &ls_id = local_ls_id_array.at(i);
+        if (!ls_id.is_user_ls()) {
+          continue;
+        }
+        bool is_leader = false;
+        int tmp_ret = storage::ObSessionTabletCreateHelper::is_ls_leader(ls_id, is_leader);
+        if (OB_SUCCESS != tmp_ret) {
+          // if fail to check is ls leader, continue to check next ls
+          LOG_WARN("fail to check is ls leader", KR(tmp_ret), K(ls_id));
+        } else if (is_leader) {
+          selected_ls_id = ls_id;
+          found_leader = true;
+          LOG_INFO("found tenant ls leader", K(ls_id));
+          break;
+        }
+      }
+
+      // If no leader is found, select any available user LS
+      if (OB_SUCC(ret) && !found_leader) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < local_ls_id_array.count(); ++i) {
+          const share::ObLSID &ls_id = local_ls_id_array.at(i);
+          if (ls_id.is_user_ls()) {
+            selected_ls_id = ls_id;
+            LOG_INFO("no leader found, use first user ls", K(ls_id));
+            break;
+          }
+        }
+      }
+
+      // If no tenant LS is found on this observer, fetch one via ls_operator.get_random_normal_user_ls.
+      if (OB_SUCC(ret) && !selected_ls_id.is_valid()) {
+        share::ObLSAttrOperator ls_operator(table_schema.get_tenant_id(), sql_proxy_);
+        if (OB_FAIL(ls_operator.get_random_normal_user_ls(selected_ls_id))) {
+          LOG_WARN("get random normal user ls failed", KR(ret),
+                   "tenant_id", table_schema.get_tenant_id(), K(selected_ls_id));
+        } else {
+          LOG_INFO("get random normal user ls from operator", K(selected_ls_id));
+        }
+      }
+
+      if (OB_SUCC(ret) && selected_ls_id.is_valid()) {
+        if (OB_FAIL(ls_id_array_.push_back(selected_ls_id))) {
+          LOG_WARN("fail to push back ls id", KR(ret), K(selected_ls_id));
+        }
+      } else if (OB_SUCC(ret)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to select any ls", KR(ret), K(local_ls_id_array));
+      }
     }
   }
   DEBUG_SYNC(BEFORE_LOCK_LS_WHEN_CREATE_TABLE);

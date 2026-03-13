@@ -24,6 +24,7 @@ namespace observer
 enum ObFeedbackProxyInfoType
 {
   IS_LOCK_SESSION = 0,
+  IS_TEMPORARY_TABLE_SESSION = 1,
   FEEDBACK_PROXY_MAX_TYPE
 };
 
@@ -92,6 +93,7 @@ private:
 };
 
 typedef ObFeedbackProxyInfo<char> ObIsLockSessionInfo;
+typedef ObFeedbackProxyInfo<char> ObIsTemporaryTableSessionInfo;
 }  // namespace observer
 }  // namespace oceanbase
 #endif

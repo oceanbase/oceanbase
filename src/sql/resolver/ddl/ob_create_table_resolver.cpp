@@ -281,11 +281,12 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
+  bool need_strong_routing = !table_schema.is_oracle_tmp_table_v2_index_table() && !table_schema.is_oracle_tmp_table_v2();
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", KR(ret));
   } else if (FALSE_IT(session_info_->set_has_temp_table_flag())) {
-  } else if (OB_FAIL(session_info_->set_session_temp_table_used(true))) {
+  } else if (OB_FAIL(session_info_->set_session_temp_table_used(*session_info_, true, need_strong_routing))) {
     LOG_WARN("fail to set session temp table used", KR(ret));
   } else if (OB_FAIL(set_table_name(table_name_))) {
     LOG_WARN("failed to set table name", K(ret), K(table_name_));

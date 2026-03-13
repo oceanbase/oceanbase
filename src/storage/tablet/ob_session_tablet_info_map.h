@@ -20,6 +20,7 @@ namespace oceanbase
 {
 namespace storage
 {
+const int64_t OB_GTT_V2_SESS_TABLET_SEQUENCE = -1;
 
 struct ObGTTTabletInfo final
 {
