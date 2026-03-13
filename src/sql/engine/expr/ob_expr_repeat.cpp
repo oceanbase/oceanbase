@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_repeat.h"
-
+#include "sql/engine/expr/ob_expr_cast.h"
 
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
@@ -73,7 +73,17 @@ int ObExprRepeat::calc_result_type2(ObExprResType &type,
             &alloc, &dtc_params, cur_time, cast_mode, CS_TYPE_INVALID);
         int64_t count_val = 0;
         EXPR_GET_INT64_V2(obj, count_val);
-        res_type = get_result_type_mysql(text.get_length() * count_val);
+        int32_t calc_type_len = 0;
+        int16_t semantics = LS_BYTE;
+        ObExprResType target_type;
+        target_type.set_type(text.get_calc_type());
+        target_type.set_collation_type(type_ctx.get_coll_type());
+        ObExprCast cast_op(alloc);
+        if(OB_FAIL(cast_op.get_cast_string_len(text, target_type, type_ctx, calc_type_len, semantics, type_ctx.get_coll_type(), cast_mode))){
+          LOG_WARN("failed to get cast string len", K(ret));
+        } else{
+          res_type = get_result_type_mysql(calc_type_len * count_val);
+        }
       }
     } else {
       res_type = ObLongTextType;

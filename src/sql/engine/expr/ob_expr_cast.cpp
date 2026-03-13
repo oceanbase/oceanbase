@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "ob_expr_cast.h"
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "lib/geo/ob_geometry_cast.h"
@@ -70,7 +71,6 @@ int ObExprCast::get_cast_inttc_len(ObExprResType &type1,
   }
   return ret;
 }
-
 
 // @res_len: the result length of any type be cast to string
 // for column type
