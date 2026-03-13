@@ -27,6 +27,7 @@
 #include "rootserver/ob_partition_exchange.h"
 #include "share/search_index/ob_search_index_builder_util.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
+#include "share/search_index/ob_search_index_config_filter.h"
 
 namespace oceanbase
 {
@@ -1915,6 +1916,20 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
         } else {
           //兼容mysql5.7, 降序索引不生效且不报错
           sort_item.order_type_ = common::ObOrderType::ASC;
+        }
+
+        // SEARCH INDEX: handle column-level WITH(...) config from children_[4]
+        if (OB_SUCC(ret)
+            && index_keyname_ == INDEX_KEYNAME::SEARCH_KEY
+            && sort_column_node->num_child_ >= 5
+            && OB_NOT_NULL(sort_column_node->children_[4])
+            && sort_column_node->children_[4]->type_ == T_SEARCH_INDEX_COLUMN_PARAMS) {
+          const ParseNode *search_with_node = sort_column_node->children_[4];
+          const ObColumnSchemaV2 *col_schema = table_schema_->get_column_schema(sort_item.column_name_);
+          if (OB_FAIL(ObDDLResolver::resolve_search_index_column_comment(
+                  search_with_node, col_schema, sort_item.column_name_, allocator_, sort_item.column_comment_))) {
+            LOG_WARN("failed to resolve search index column config", K(ret), K(sort_item.column_name_));
+          }
         }
 
         if (OB_SUCC(ret)) {

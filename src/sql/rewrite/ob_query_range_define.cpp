@@ -20,6 +20,7 @@
 #include "sql/optimizer/ob_opt_est_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "share/search_index/ob_search_index_encoder.h"
+#include "share/search_index/ob_search_index_config_filter.h"
 
 namespace oceanbase {
 using namespace common;
@@ -1987,14 +1988,25 @@ int ObPreRangeGraph::set_general_nlj_range_extraction(const ObIArray<ObFastFinal
   return ret;
 }
 
+ObSearchIndexRangeCtx::~ObSearchIndexRangeCtx()
+{
+  if (OB_NOT_NULL(json_filter_)) {
+    json_filter_->~ObSearchIndexConfigFilter();
+    json_filter_ = nullptr;
+  }
+}
+
 int ObSearchIndexRangeCtx::init(const ObTableSchema *base_table_schema,
                                  const ColumnItem &column_item,
-                                 ObExecContext *exec_ctx)
+                                 ObExecContext *exec_ctx,
+                                const ObTableSchema *index_schema,
+                                common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(base_table_schema)) {
+  const ObColumnSchemaV2 *index_column_schema = nullptr;
+  if (OB_ISNULL(base_table_schema) || OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null param", K(ret), K(base_table_schema));
+    LOG_WARN("unexpected null param", K(ret), K(base_table_schema), K(index_schema));
   } else if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null param", K(ret), KP(exec_ctx));
@@ -2030,6 +2042,28 @@ int ObSearchIndexRangeCtx::init(const ObTableSchema *base_table_schema,
           LOG_WARN("collection info is null", K(ret));
         } else {
           need_constraint_ = ObSearchIndexConstraint::need_array_string_constraint(*coll_info);
+        }
+      }
+      if (ob_is_json(column_meta_.column_type_.get_type())) {
+        // Find the corresponding index column by column_id
+        index_column_schema = index_schema->get_column_schema(column_id);
+        if (OB_NOT_NULL(index_column_schema)) {
+          const ObString &column_comment = index_column_schema->get_comment_str();
+          if (!column_comment.empty()) {
+            void *filter_buf = allocator.alloc(sizeof(share::ObSearchIndexConfigFilter));
+            if (OB_ISNULL(filter_buf)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to allocate memory for json filter", K(ret));
+            } else {
+              const uint64_t tenant_id = index_schema->get_tenant_id();
+              json_filter_ = new (filter_buf) share::ObSearchIndexConfigFilter(tenant_id);
+              if (OB_FAIL(json_filter_->init_from_comment(column_comment))) {
+                LOG_WARN("failed to parse json column filter", K(ret), K(column_comment));
+                json_filter_->~ObSearchIndexConfigFilter();
+                json_filter_ = nullptr;
+              }
+            }
+          }
         }
       }
     }

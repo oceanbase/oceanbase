@@ -2751,7 +2751,6 @@ int ObJsonTableOp::inner_get_next_row()
 int ObJsonTableOp::init_row_generator()
 {
   INIT_SUCC(ret);
-  ObString index_properties;
   common::ObSEArray<ObObjMeta, 8> included_cid_metas;
   common::ObSEArray<int64_t, 8> row_projector;
   common::ObSEArray<ObCollectionArrayType*, 8> arr_types;
@@ -2791,7 +2790,7 @@ int ObJsonTableOp::init_row_generator()
   } else if (OB_FAIL(row_projector.push_back(MY_SPEC.inc_pk_proj_))) {
     LOG_WARN("failed to push projector", K(ret));
   } else if (OB_FAIL(row_generator_.init(MY_SPEC.search_idx_included_cid_idxes_, included_cid_metas, row_projector,
-                                         index_properties, false, &arr_types))) {
+                                         MY_SPEC.column_comments_, false, &arr_types))) {
     LOG_WARN("failed to init row generator", K(ret));
   }
   return ret;

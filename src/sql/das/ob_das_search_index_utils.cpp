@@ -39,7 +39,6 @@ int ObSearchIndexDMLIterator::init(const ObDASDMLBaseCtDef *das_ctdef,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("is null", K(das_ctdef), K(main_ctdef), K(row_projector), K(ret));
   } else {
-    ObString index_properties;
     const share::schema::ObTableSchemaParam &table_param = das_ctdef->table_param_.get_data_table();
     const common::ObIArray<uint64_t> &included_cids = table_param.get_search_index_included_cids();
     const common::ObIArray<int32_t> &included_cid_idxes = table_param.get_search_index_included_cid_idxes();
@@ -78,7 +77,7 @@ int ObSearchIndexDMLIterator::init(const ObDASDMLBaseCtDef *das_ctdef,
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(row_generator_.init(included_cid_idxes, included_cid_metas, *row_projector,
-                  index_properties, false, &included_arr_types))) {
+                  table_param.get_search_index_column_comments(), false, &included_arr_types))) {
         LOG_WARN("failed to init row generator", K(ret));
       } else {
         is_inited_ = true;

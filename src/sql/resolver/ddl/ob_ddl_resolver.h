@@ -210,6 +210,14 @@ public:
       ObIArray<ObPartitionResolveResult> &resolve_results,
       ObIArray<ObCreateIndexArg> &index_arg_list,
       ObIAllocator *allocator);
+  // Resolve search index column-level WITH(...) config from parse node
+  // and validate it, then store the serialized config string in column_comment.
+  static int resolve_search_index_column_comment(
+      const ParseNode *search_with_node,
+      const share::schema::ObColumnSchemaV2 *col_schema,
+      const ObString &column_name,
+      ObIAllocator *allocator,
+      ObString &column_comment);
   static int check_text_length(ObCharsetType cs_type, ObCollationType co_type,
                                const char *name, ObObjType &type,
                                int32_t &length,

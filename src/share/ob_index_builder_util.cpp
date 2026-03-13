@@ -507,6 +507,14 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("add column failed", "data_column", *data_column, K(is_index_column),
                 K(is_rowkey), "rowkey_order_type", arg.index_columns_.at(i).order_type_,
                 K(row_desc), K(ret));
+        } else if (arg.is_search_def_index() && !sort_item.column_comment_.empty()) {
+          ObColumnSchemaV2 *index_column = index_schema.get_column_schema(data_column->get_column_name());
+          if (OB_ISNULL(index_column)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get column schema just added", K(ret), K(data_column->get_column_name()));
+          } else if (OB_FAIL(index_column->set_comment(sort_item.column_comment_))) {
+            LOG_WARN("failed to set column comment", K(ret), K(sort_item.column_comment_));
+          }
         }
       }
       if (OB_SUCC(ret)) {

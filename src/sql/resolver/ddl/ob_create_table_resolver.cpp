@@ -26,7 +26,7 @@
 #include "share/ob_license_utils.h"
 #include "share/search_index/ob_search_index_builder_util.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
-
+#include "share/search_index/ob_search_index_config_filter.h"
 
 namespace oceanbase
 {
@@ -3163,6 +3163,17 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
           } else {
             index_column_node = index_column_list_node->children_[i];
           }
+          const ParseNode *search_col_param_node = nullptr;
+          if (OB_SUCC(ret) && is_search_index
+              && OB_NOT_NULL(index_column_node)
+              && index_column_node->type_ == T_SORT_COLUMN_KEY
+              && index_column_node->num_child_ >= 5
+              && OB_NOT_NULL(index_column_node->children_)) {
+            if (OB_NOT_NULL(index_column_node->children_[4])
+                && index_column_node->children_[4]->type_ == T_SEARCH_INDEX_COLUMN_PARAMS) {
+              search_col_param_node = index_column_node->children_[4];
+            }
+          }
           if (OB_SUCC(ret)) {
             if (OB_ISNULL(index_column_node->children_)
                 || index_column_node->num_child_ < 3
@@ -3299,6 +3310,13 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               if (NULL == (column_schema = tbl_schema.get_column_schema(column_name))) {
                 ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
                 LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
+              }
+            }
+            // SEARCH INDEX: validate per-column WITH(...) config and serialize it into index_params_.
+            if (OB_SUCC(ret) && is_search_index && OB_NOT_NULL(search_col_param_node)) {
+              if (OB_FAIL(ObDDLResolver::resolve_search_index_column_comment(
+                      search_col_param_node, column_schema, column_name, allocator_, sort_item.column_comment_))) {
+                LOG_WARN("failed to resolve search index column config", K(ret), K(column_name));
               }
             }
             if (OB_FAIL(ret)) {

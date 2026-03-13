@@ -4394,11 +4394,11 @@ int ObExprRangeConverter::get_json_access_expr_range(const ObRawExpr *l_expr,
   int ret = OB_SUCCESS;
   bool can_extract = true;
   if (is_json_access_expr(*l_expr)) {
-    if (OB_FAIL(preprocess_json_access_expr(l_expr, cmp_type, l_expr, can_extract))) {
+    if (OB_FAIL(preprocess_json_access_expr(l_expr, cmp_type, l_expr, can_extract, r_expr))) {
       LOG_WARN("failed to preprocess json access expr", K(ret));
     }
   } else if (is_json_access_expr(*r_expr)) {
-    if (OB_FAIL(preprocess_json_access_expr(r_expr, cmp_type, r_expr, can_extract))) {
+    if (OB_FAIL(preprocess_json_access_expr(r_expr, cmp_type, r_expr, can_extract, l_expr))) {
       LOG_WARN("failed to preprocess json access expr", K(ret));
     }
   }
@@ -4441,9 +4441,11 @@ bool ObExprRangeConverter::is_json_access_expr(const ObRawExpr &expr)
 int ObExprRangeConverter::preprocess_json_access_expr(const ObRawExpr *json_expr,
                                                       const ObItemType op_type,
                                                       const ObRawExpr *&new_expr,
-                                                      bool &can_extract)
+                                                      bool &can_extract,
+                                                      const ObRawExpr *const_expr)
 {
   int ret = OB_SUCCESS;
+  bool is_range_cmp = IS_RANGE_CMP_OP(op_type);
   new_expr = json_expr;
   const ObRawExpr *origin_expr = json_expr;
   json_expr = ObRawExprUtils::skip_implicit_cast(json_expr);
@@ -4492,7 +4494,7 @@ int ObExprRangeConverter::preprocess_json_access_expr(const ObRawExpr *json_expr
     } else if (!is_valid) {
       // do nothing
     } else if (OB_FAIL(ObSearchIndexQueryRangeUtils::json_prefix_path_encode(allocator_, ctx_,
-        *path_expr, encoded_path, is_valid))) {
+        *path_expr, encoded_path, is_range_cmp, is_valid, const_expr))) {
       LOG_WARN("failed to check json path can extract range", K(ret));
     } else if (!is_valid) {
       // path is not a single member path, no need to extract range.
@@ -4541,7 +4543,7 @@ int ObExprRangeConverter::preprocess_json_access_expr(const ObRawExpr *json_expr
     } else if (!is_valid) {
       // do nothing
     } else if (OB_FAIL(ObSearchIndexQueryRangeUtils::json_prefix_path_encode(allocator_, ctx_,
-        *path_expr, encoded_path, is_valid))) {
+        *path_expr, encoded_path, false, is_valid, const_expr))) {
       LOG_WARN("failed to check json path can extract range", K(ret));
     } else if (!is_valid) {
       // path is not a single member path, no need to extract range.
@@ -4860,7 +4862,7 @@ int ObExprRangeConverter::get_domain_param_expr(const ObRawExpr &domain_expr,
         } else if (!can_extract) {
           // do nothing
         } else if (OB_FAIL(ObSearchIndexQueryRangeUtils::json_prefix_path_encode(allocator_, ctx_,
-            *path_expr, encoded_path, can_extract))) {
+            *path_expr, encoded_path, false, can_extract, const_expr))) {
           LOG_WARN("failed to check json path can extract range", K(ret));
         } else if (!can_extract) {
           // path is not a single member path, no need to extract range.
@@ -4883,7 +4885,7 @@ int ObExprRangeConverter::get_domain_param_expr(const ObRawExpr &domain_expr,
       can_extract = false;
     } else if (is_json_access_expr(*jdoc_expr)) {
       const ObItemType op_type = domain_expr.get_expr_type();
-      if (OB_FAIL(preprocess_json_access_expr(jdoc_expr, op_type, jdoc_expr, can_extract))) {
+      if (OB_FAIL(preprocess_json_access_expr(jdoc_expr, op_type, jdoc_expr, can_extract, const_expr))) {
         LOG_WARN("failed to preprocess json access expr", K(ret));
       }
     }

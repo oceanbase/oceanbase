@@ -3000,6 +3000,7 @@ int ObDmlCgService::fill_search_index_extra_info_on_table_param(
           ret = OB_SUCCESS;
           common::ObSEArray<ObCollectionArrayType*, 8> included_arr_types;
           common::ObArenaAllocator tmp_allocator(ObMemAttr(MTL_ID(), "SearchIdxCg"));
+          common::ObSEArray<ObString, 8> column_comments;
           for (int64_t i = 0; OB_SUCC(ret) && i < included_cids.count(); ++i) {
             int64_t col_id = included_cids.at(i);
             if (OB_FAIL(included_cid_idxes.push_back(data_schema->get_column_idx(col_id)))) {
@@ -3036,6 +3037,16 @@ int ObDmlCgService::fill_search_index_extra_info_on_table_param(
               } else if (OB_FAIL(included_arr_types.push_back(arr_type))) {
                 LOG_WARN("failed to push back arr type", K(ret));
               }
+              // Read column-level config from def index column comment
+              const ObColumnSchemaV2 *def_col = def_schema->get_column_schema(col_id);
+              if (OB_SUCC(ret) && OB_NOT_NULL(def_col)) {
+                ObString column_comment;
+                if (OB_FAIL(ob_write_string(cg_.phy_plan_->get_allocator(), def_col->get_comment_str(), column_comment))) {
+                  LOG_WARN("failed to copy column config", K(ret));
+                } else if (OB_FAIL(column_comments.push_back(column_comment))) {
+                  LOG_WARN("failed to push column config", K(ret));
+                }
+              }
             }
           }
           if (OB_SUCC(ret)) {
@@ -3046,6 +3057,8 @@ int ObDmlCgService::fill_search_index_extra_info_on_table_param(
               LOG_WARN("failed to set search index included cids", K(ret), K(included_cid_idxes));
             } else if (OB_FAIL(table_param.set_search_index_arr_types(included_arr_types))) {
               LOG_WARN("failed to set search index arr types", K(ret));
+            } else if (OB_FAIL(table_param.set_search_index_column_comments(column_comments))) {
+              LOG_WARN("failed to set search index column configs", K(ret));
             } else {
               table_param.set_inc_pk_doc_id_col_id(inc_pkc_doc_id_col_id);
             }

@@ -10025,13 +10025,23 @@ int ObStaticEngineCG::generate_index_data_gen_table_spec(ObLogJsonTable &op, ObJ
     LOG_WARN("schema is NULL", K(ret), K(def_index_schema->get_data_table_id()));
   } else if (OB_FAIL(spec.search_idx_included_cid_idxes_.init(op.get_data_table_col_ids().count()))) {
     LOG_WARN("fail to init array", K(ret), K(op.get_data_table_col_ids().count()));
+  } else if (OB_FAIL(spec.column_comments_.init(op.get_data_table_col_ids().count()))) {
+    LOG_WARN("fail to init column_comments array", K(ret), K(op.get_data_table_col_ids().count()));
   } else {
     spec.inc_pk_proj_ = op.get_inc_pk_proj();
     spec.index_column_cnt_ = op.get_index_column_cnt();
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_data_table_col_ids().count(); i++) {
       uint64_t col_id = op.get_data_table_col_ids().at(i);
+      const ObColumnSchemaV2 *def_col = def_index_schema->get_column_schema(col_id);
+      ObString comment_str;
       if (OB_FAIL(spec.search_idx_included_cid_idxes_.push_back(data_schema->get_column_idx(col_id)))) {
         LOG_WARN("fail to push back column index", K(ret));
+      } else if (OB_NOT_NULL(def_col)
+                 && OB_FAIL(ob_write_string(phy_plan_->get_allocator(), def_col->get_comment_str(),
+                                            comment_str))) {
+        LOG_WARN("failed to copy column config", K(ret));
+      } else if (OB_FAIL(spec.column_comments_.push_back(comment_str))) {
+        LOG_WARN("failed to push column config", K(ret));
       }
     }
   }

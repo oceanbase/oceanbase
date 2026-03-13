@@ -7500,7 +7500,7 @@ int ObJoinOrder::extract_search_index_preliminary_query_range(
     LOG_WARN("failed to choose range columns", K(ret));
   } else if (NULL != column_item &&
       OB_FAIL(search_index_range_ctx.init(base_table_schema, *column_item,
-                                          opt_ctx->get_exec_ctx()))) {
+                                         opt_ctx->get_exec_ctx(), def_index_schema, *allocator_))) {
     LOG_WARN("failed to init search index range ctx", K(ret));
   } else {
     // reset def range columns to empty, use data range columns instead

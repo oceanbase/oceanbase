@@ -27,6 +27,11 @@
 
 namespace oceanbase
 {
+namespace share
+{
+struct ObSearchIndexConfigFilter;
+}
+
 namespace sql
 {
 class ObExecContext;
@@ -250,19 +255,21 @@ struct ObSearchIndexRangeCtx
 {
 public:
   ObSearchIndexRangeCtx() : column_meta_(), column_idx_(OB_INVALID_INDEX), need_constraint_(false),
-    path_prefix_(), pick_type_(T_NULL) {}
+    path_prefix_(), pick_type_(T_NULL), json_filter_(nullptr) {}
 
-  ~ObSearchIndexRangeCtx() {}
+  ~ObSearchIndexRangeCtx();
 
   int init(const ObTableSchema *base_table_schema, const ColumnItem &column_item,
-           ObExecContext *exec_ctx);
+           ObExecContext *exec_ctx, const ObTableSchema *index_schema,
+           common::ObIAllocator &allocator);
   bool is_range_key(const uint64_t column_id) const { return column_id == column_meta_.column_id_; }
   uint64_t column_id() const { return column_meta_.column_id_; }
   ObRangeColumnMeta *column_meta() { return &column_meta_; }
   inline bool has_pick() const { return pick_type_ != T_NULL; }
   inline bool need_constraint() const { return need_constraint_; }
+  const share::ObSearchIndexConfigFilter *get_json_filter() const { return json_filter_; }
 
-  TO_STRING_KV(K_(column_meta), K_(column_idx), K_(path_prefix), K_(pick_type));
+  TO_STRING_KV(K_(column_meta), K_(column_idx), K_(path_prefix), K_(pick_type), KP_(json_filter));
 
   // selected column info
   ObRangeColumnMeta column_meta_;  // column meta used to extract search index range.
@@ -270,6 +277,7 @@ public:
   bool need_constraint_;           // constraint to check string length
   ObString path_prefix_;           // current literal path string.
   ObItemType pick_type_;           // current pick type
+  share::ObSearchIndexConfigFilter *json_filter_; // json path and type filter
 };
 
 struct ObQueryRangeCtx

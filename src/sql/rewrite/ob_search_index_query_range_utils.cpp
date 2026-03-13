@@ -18,6 +18,7 @@
 #include "lib/json_type/ob_json_path.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_json_param_type.h"
+#include "share/search_index/ob_search_index_config_filter.h"
 
 namespace oceanbase
 {
@@ -310,10 +311,16 @@ int ObSearchIndexQueryRangeUtils::json_prefix_path_encode(ObIAllocator &allocato
                                                           ObQueryRangeCtx &ctx,
                                                           const ObRawExpr &path_expr,
                                                           ObString &path_prefix,
-                                                          bool &can_extract_range)
+                                                          const bool is_range_cmp,
+                                                          bool &can_extract_range,
+                                                          const ObRawExpr *const_expr)
 {
   int ret = OB_SUCCESS;
   can_extract_range = false;
+  const share::ObSearchIndexConfigFilter *json_filter = nullptr;
+  if (ctx.is_search_index() && OB_NOT_NULL(ctx.search_index_range_ctx_)) {
+    json_filter = ctx.search_index_range_ctx_->get_json_filter();
+  }
   if (!path_expr.is_static_const_expr()) {
     can_extract_range = false;
   } else {
@@ -375,7 +382,16 @@ int ObSearchIndexQueryRangeUtils::json_prefix_path_encode(ObIAllocator &allocato
             }
           }
         }
-        can_extract_range = only_member_nodes;
+        // Check path filter if json_filter is configured
+        bool filter_passed = true;
+        if (OB_SUCC(ret) && only_member_nodes && OB_NOT_NULL(json_filter)) {
+          if (json_filter->has_types()) {
+            filter_passed = false;
+          } else if (OB_FAIL(json_filter->is_path_indexed(path_items, filter_passed, is_range_cmp))) {
+            LOG_WARN("failed to check path filter", K(ret));
+          }
+        }
+        can_extract_range = only_member_nodes && filter_passed;
         if (OB_SUCC(ret) && can_extract_range) {
           if (path_items.empty()) {
             // empty path, such as $

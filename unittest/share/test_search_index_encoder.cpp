@@ -118,7 +118,8 @@ TEST_F(TestSearchIndexEncoder, test_json_row_generator_basic_nested)
   obj_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
 
   ObSearchIndexRowGenerator::Generator generator(allocator, allocator);
-  ret = generator.init(0, obj_meta, nullptr);
+  ObString column_comment;
+  ret = generator.init(0, obj_meta, nullptr, &column_comment);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObSEArray<ObIndexRow, 16> rows;
@@ -157,7 +158,8 @@ TEST_F(TestSearchIndexEncoder, test_json_row_generator_multiple_leaves)
   obj_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
 
   ObSearchIndexRowGenerator::Generator generator(allocator, allocator);
-  ret = generator.init(0, obj_meta, nullptr);
+  ObString column_comment;
+  ret = generator.init(0, obj_meta, nullptr, &column_comment);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObSEArray<ObIndexRow, 16> rows;
@@ -199,7 +201,8 @@ TEST_F(TestSearchIndexEncoder, test_json_row_generator_array_scalars)
   obj_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
 
   ObSearchIndexRowGenerator::Generator generator(allocator, allocator);
-  ret = generator.init(0, obj_meta, nullptr);
+  ObString column_comment;
+  ret = generator.init(0, obj_meta, nullptr, &column_comment);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObSEArray<ObIndexRow, 16> rows;
@@ -240,7 +243,8 @@ TEST_F(TestSearchIndexEncoder, test_json_row_generator_array_nested_objects)
   obj_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
 
   ObSearchIndexRowGenerator::Generator generator(allocator, allocator);
-  ret = generator.init(0, obj_meta, nullptr);
+  ObString column_comment;
+  ret = generator.init(0, obj_meta, nullptr, &column_comment);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObSEArray<ObIndexRow, 16> rows;
@@ -287,7 +291,8 @@ TEST_F(TestSearchIndexEncoder, test_json_row_generator_deeply_nested)
   obj_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
 
   ObSearchIndexRowGenerator::Generator generator(allocator, allocator);
-  ret = generator.init(0, obj_meta, nullptr);
+  ObString column_comment;
+  ret = generator.init(0, obj_meta, nullptr, &column_comment);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObSEArray<ObIndexRow, 16> rows;
@@ -327,7 +332,8 @@ TEST_F(TestSearchIndexEncoder, test_json_row_generator_empty_object)
   obj_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
 
   ObSearchIndexRowGenerator::Generator generator(allocator, allocator);
-  ret = generator.init(0, obj_meta, nullptr);
+  ObString column_comment;
+  ret = generator.init(0, obj_meta, nullptr, &column_comment);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObSEArray<ObIndexRow, 16> rows;
@@ -349,7 +355,8 @@ TEST_F(TestSearchIndexEncoder, test_json_row_generator_null_datum)
   obj_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
 
   ObSearchIndexRowGenerator::Generator generator(allocator, allocator);
-  int ret = generator.init(0, obj_meta, nullptr);
+  ObString column_comment;
+  int ret = generator.init(0, obj_meta, nullptr, &column_comment);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObSEArray<ObIndexRow, 16> rows;
@@ -386,7 +393,8 @@ TEST_F(TestSearchIndexEncoder, test_json_row_generator_complex_structure)
   obj_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
 
   ObSearchIndexRowGenerator::Generator generator(allocator, allocator);
-  ret = generator.init(0, obj_meta, nullptr);
+  ObString column_comment;
+  ret = generator.init(0, obj_meta, nullptr, &column_comment);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObSEArray<ObIndexRow, 16> rows;
