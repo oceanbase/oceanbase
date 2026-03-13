@@ -227,6 +227,9 @@ private:
     const ObTablesHandleArray &input_tables,
     const int64_t start_pos,
     ObIArray<ObTableHandleV2> &output_tables);
+  static int set_filled_tx_scn_for_minor_merge(
+    const ObTablet &tablet,
+    ObGetMergeTablesResult &result);
 public:
   static const int64_t OB_HIST_MINOR_FACTOR = 3;
   static const int64_t OB_UNSAFE_TABLE_CNT = 32;

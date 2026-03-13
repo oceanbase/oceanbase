@@ -607,6 +607,8 @@ int ObPartitionMergePolicy::deal_with_minor_result(
     LOG_WARN("failed to check continues", K(ret), K(result));
   } else if (OB_FAIL(get_multi_version_start(merge_type, ls, tablet, result.version_range_, result.snapshot_info_))) {
     LOG_WARN("failed to get kept multi_version_start", K(ret), "merge_type", merge_type_to_str(merge_type), K(tablet));
+  } else if (is_minor_merge_type(merge_type) && OB_FAIL(set_filled_tx_scn_for_minor_merge(tablet, result))) {
+    LOG_WARN("failed to set filled tx scn for minor merge", K(ret), K(result));
   } else {
     result.version_range_.base_version_ = 0;
     if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
@@ -2487,7 +2489,6 @@ int ObPartitionMergePolicy::refine_and_get_minor_merge_result(const ObGetMergeTa
 
   int64_t left_border = 0;
   int64_t right_border = minor_merge_candidates.get_count();
-  SCN max_filled_tx_scn(SCN::min_scn());
   if (MINOR_MERGE == param.merge_type_ &&
       OB_FAIL(refine_minor_merge_tables(tablet, minor_merge_candidates, left_border, right_border))) {
     LOG_WARN("failed to adjust mini minor merge tables", K(ret));
@@ -2511,7 +2512,6 @@ int ObPartitionMergePolicy::refine_and_get_minor_merge_result(const ObGetMergeTa
         result.rec_scn_ = sstable->get_rec_scn();
       }
       result.scn_range_.end_scn_ = sstable->get_end_scn();
-      max_filled_tx_scn = SCN::max(sstable->get_filled_tx_scn(), max_filled_tx_scn);
     }
   }
   if (FAILEDx(refine_minor_merge_result(tablet, param.merge_type_, minor_compact_trigger, ls, result))) {
@@ -2519,12 +2519,6 @@ int ObPartitionMergePolicy::refine_and_get_minor_merge_result(const ObGetMergeTa
       LOG_WARN("failed to refine minor_merge result", K(ret));
     }
   } else {
-    if (!result.is_gc_tx_data() && !tablet.is_ls_inner_tablet()) {
-      if (max_filled_tx_scn != result.scn_range_.end_scn_) {
-        LOG_TRACE("use max_filled_tx_scn as new filled_tx_scn", KR(ret), K(max_filled_tx_scn));
-      }
-      result.fill_tx_info_.set_special_fill_tx_type(ObFillTxType::FILL_TX_TYPE_DATA_MINOR, max_filled_tx_scn);
-    }
     result.version_range_.snapshot_version_ = tablet.get_snapshot_version();
   }
   return ret;
@@ -2728,6 +2722,9 @@ int ObPartitionMergePolicy::deal_with_ss_minor_result(
     } else if (OB_FAIL(get_recycle_version_for_minor(tablet, result))) {
       LOG_WARN("Fail to get table store recycle version", K(ret), K(result.version_range_), K(tablet));
     }
+  }
+  if (FAILEDx(set_filled_tx_scn_for_minor_merge(tablet, result))) {
+    LOG_WARN("failed to set filled tx scn for minor merge", K(ret), K(result));
   }
   return ret;
 }
@@ -3354,6 +3351,25 @@ int ObIncMajorTxHelper::check_all_inc_major_included_by_major(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObPartitionMergePolicy::set_filled_tx_scn_for_minor_merge(const ObTablet &tablet, ObGetMergeTablesResult &result)
+{
+  int ret = OB_SUCCESS;
+  if (!result.is_gc_tx_data() && !tablet.is_ls_inner_tablet() && result.fill_tx_info_.is_normal()) {
+    SCN max_filled_tx_scn = SCN::min_scn();
+    for (int i = 0; i < result.handle_.get_count(); ++i) {
+      ObSSTable *sstable = static_cast<ObSSTable *>(result.handle_.get_table(i));
+      if (sstable->get_filled_tx_scn() > max_filled_tx_scn) {
+        max_filled_tx_scn = sstable->get_filled_tx_scn();
+      }
+    }
+    if (max_filled_tx_scn != result.scn_range_.end_scn_) {
+      LOG_TRACE("use max_filled_tx_scn as new filled_tx_scn for minor merge", K(max_filled_tx_scn), K(result));
+    }
+    result.fill_tx_info_.set_special_fill_tx_type(ObFillTxType::FILL_TX_TYPE_DATA_MINOR, max_filled_tx_scn);
   }
   return ret;
 }
