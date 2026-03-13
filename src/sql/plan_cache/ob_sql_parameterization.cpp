@@ -628,7 +628,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                     || (lib::is_oracle_mode() && T_CHAR == ctx.tree_->type_)
                     || T_QUESTIONMARK == ctx.tree_->type_)) {
               if (T_QUESTIONMARK == ctx.tree_->type_) {
-                if (OB_FAIL(ctx.sql_info_->no_check_type_offsets_.push_back(ctx.question_num_))) {
+                if (OB_FAIL(ctx.sql_info_->no_check_type_offsets_.push_back(ctx.tree_->value_))) {
                   SQL_PC_LOG(WARN, "failed to add no check type offsets", K(ret));
                 }
               } else if(ctx.is_from_pl_ && ctx.enable_pl_sql_parameterize_) {
