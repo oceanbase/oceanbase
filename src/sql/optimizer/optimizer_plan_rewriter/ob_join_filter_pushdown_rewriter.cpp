@@ -288,10 +288,12 @@ struct NoSpecialExprPredicate {
         // Check if table_id is in valid_table_ids_set_
         // it is not enough to check this
         // todo check the rtf is from upper above the check point
-        bool has_filters = !scannode->get_filter_exprs().empty();
-        uint64_t table_id = scannode->get_table_id();
         bool exists = false;
-        if (has_filters) {
+        uint64_t table_id = scannode->get_table_id();
+        bool has_filters = !scannode->get_filter_exprs().empty();
+        if (!has_filters && OB_FAIL(scannode->has_pushdown_filters(has_filters))) {
+          LOG_WARN("failed to check table has pushed down filters", K(ret));
+        } else if (has_filters) {
         } else if (OB_FAIL(valid_table_ids_set_.exist_refactored(table_id))) {
           if (OB_HASH_EXIST == ret) {
             exists = true;
