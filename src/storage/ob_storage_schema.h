@@ -379,7 +379,7 @@ public:
   OB_INLINE int64_t get_micro_block_format_version() const override { return micro_block_format_version_; }
   OB_INLINE ObRowStoreType get_minor_row_store_type() const { return minor_row_store_type_; }
   int set_storage_schema_version(const uint64_t tenant_data_version);
-  int update_column_info(const share::schema::ObTableSchema& input_schema, const uint64_t tenant_data_version = DATA_CURRENT_VERSION);
+  int update_column_info(const share::schema::ObTableSchema &input_schema, const uint64_t tenant_data_version = DATA_CURRENT_VERSION);
   void set_minor_row_store_type(const ObRowStoreType minor_row_store_type) { minor_row_store_type_ = minor_row_store_type; }
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
