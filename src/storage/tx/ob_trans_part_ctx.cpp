@@ -2041,7 +2041,7 @@ int ObPartTransCtx::prepare_for_submit_redo(ObTxLogCb *&log_cb,
   return ret;
 }
 
-
+// NOTE: REDO_FLUSH_X lock mode has been acquired by caller
 int ObPartTransCtx::submit_redo_log_for_freeze_(bool &submitted, const uint32_t freeze_clock)
 {
   int ret = OB_SUCCESS;
@@ -2058,6 +2058,8 @@ int ObPartTransCtx::submit_redo_log_for_freeze_(bool &submitted, const uint32_t 
     submitted = submitter.get_submitted_cnt() > 0;
   }
   if (OB_SUCC(ret) || OB_BLOCK_FROZEN == ret) {
+    // NOTE: need acquire CTX_LOCK to satisfy the assumption of submit_log_impl_
+    CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
     ret = submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG);
     if (ret == OB_TRANS_KILLED) {
       ret = OB_TRANS_HAS_DECIDED;

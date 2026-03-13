@@ -94,7 +94,8 @@ int ObPartTransCtx::submit_redo_log_for_freeze(const uint32_t freeze_clock)
   int ret = OB_SUCCESS;
   int64_t sleep_time = rand() % SLEEP_TIME;
   ob_usleep(sleep_time);
-  CtxLockGuard guard(lock_);
+  // Use REDO_FLUSH_X to match production path; submit_redo_log_for_freeze_ acquires CTX internally
+  CtxLockGuard guard(lock_, CtxLockGuard::MODE::REDO_FLUSH_X);
   bool submitted = false;
   ret = submit_redo_log_for_freeze_(submitted, freeze_clock);
   if (sleep_time > 50 && sleep_time < 90) {
