@@ -274,6 +274,12 @@ int ObTableApiScanExecutor::prepare_das_task()
   } else if (OB_ISNULL(tablet_loc)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not found tablet loc", K(ret), K(tsc_rtdef_), K(tb_ctx_.get_index_tablet_id()));
+  } else if (tb_ctx_.is_global_index_back() && tablet_loc->server_ != GCONF.self_addr_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("current is global index scan but scan target is not self, expect routing to index node",
+              K(ret), "index_tablet_id", tb_ctx_.get_index_tablet_id(),
+              "target_server", tablet_loc->server_,
+              "self_addr", GCONF.self_addr_);
   } else if (OB_FAIL(das_ref_.create_das_task(tablet_loc, DAS_OP_TABLE_SCAN, task_op))) {
     LOG_WARN("fail to prepare das task", K(ret));
   } else {
