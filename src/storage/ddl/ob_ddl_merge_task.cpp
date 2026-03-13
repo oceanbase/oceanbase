@@ -816,7 +816,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                  compaction::ObMergeType::MAJOR_MERGE,
                                  snapshot_version, data_format_version,
                                  tablet.get_tablet_meta().micro_index_clustered_,
-                                 tablet.get_transfer_seq(), reorganization_scn,
+                                 tablet.get_transfer_seq(), 0/*concurrent_cnt*/, reorganization_scn,
                                  end_scn, &cur_cg_schema, cg_idx))) {
         LOG_WARN("init data desc for cg failed", K(ret));
       } else {
@@ -835,6 +835,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                     data_format_version,
                                     tablet.get_tablet_meta().micro_index_clustered_,
                                     tablet.get_transfer_seq(),
+                                    0/*concurrent_cnt*/,
                                     reorganization_scn,
                                     end_scn))) {
     // use storage schema to init ObDataStoreDesc

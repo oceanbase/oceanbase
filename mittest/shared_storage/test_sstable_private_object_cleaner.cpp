@@ -202,6 +202,7 @@ int TestSSTablePrivateObjectCleaner::prepare_data_store_desc(ObWholeDataStoreDes
       DATA_CURRENT_VERSION,
       TestSSTablePrivateObjectCleaner::table_schema_.get_micro_index_clustered(),
       0 /*transfer_seq*/,
+      0 /*concurrent_cnt*/,
       reorganization_scn);
   data_desc.get_desc().sstable_index_builder_ = nullptr;
   return ret;

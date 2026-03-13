@@ -16,6 +16,7 @@
 #include "ob_macro_block_bare_iterator.h"
 #include "ob_macro_block_meta.h"
 #include "index_block/ob_index_block_row_struct.h"
+#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 
 namespace oceanbase
 {
@@ -209,6 +210,7 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
     const ObSSTableMacroBlockHeader &block_header,
     const char *buf,
     const int64_t size,
+    const bool need_deep_copy,
     const char *&uncomp_buf,
     int64_t &uncomp_size,
     bool &is_compressed)
@@ -228,7 +230,7 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
         block_header.fixed_header_.master_key_id_,
         block_header.fixed_header_.encrypt_key_);
     if (OB_FAIL(decrypt_and_decompress_data(deserialize_meta, buf, size, uncomp_buf, uncomp_size,
-        is_compressed, false/*need_deep_copy*/, nullptr/*ext_allocator*/))) {
+        is_compressed, need_deep_copy, nullptr/*ext_allocator*/))) {
       STORAGE_LOG(WARN, "fail to decrypt and decompress data", K(ret));
     }
   }

@@ -987,6 +987,7 @@ int ObBasicTabletMergeCtx::init_static_desc()
                                 static_param_.data_version_,
                                 static_param_.get_exec_mode(),
                                 get_tablet()->get_tablet_meta().micro_index_clustered_,
+                                get_concurrent_cnt(),
                                 get_tablet()->get_reorganization_scn(),
                                 true,
                                 static_param_.encoding_granularity_))) {

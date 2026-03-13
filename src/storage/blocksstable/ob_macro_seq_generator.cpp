@@ -40,6 +40,14 @@ bool ObMacroSeqParam::is_valid() const
   return bret;
 }
 
+void ObMacroIncSeqGenerator::reset()
+{
+  is_inited_ = false;
+  start_ = 0;
+  current_ = -1;
+  seq_threshold_ = 0;
+}
+
 int ObMacroIncSeqGenerator::init(const ObMacroSeqParam &seq_param)
 {
   int ret = OB_SUCCESS;
@@ -95,6 +103,11 @@ int ObMacroIncSeqGenerator::preview_next(const int64_t current_val, int64_t &nex
     }
   }
   return ret;
+}
+
+void ObMacroSkipSeqGenerator::reset()
+{
+  ddl_seq_generator_.reset();
 }
 
 int ObMacroSkipSeqGenerator::init(const ObMacroSeqParam &seq_param)

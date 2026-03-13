@@ -28,33 +28,6 @@ using namespace share;
 using namespace compaction;
 
 /**
- * ---------------------------------------ObBlockInfo----------------------------------------
- */
-ObBlockInfo::~ObBlockInfo()
-{
-  reset();
-}
-
-void ObBlockInfo::reset()
-{
-  nested_size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
-  nested_offset_ = 0;
-  macro_id_.reset();
-}
-
-bool ObBlockInfo::is_valid() const
-{
-  return macro_id_.is_valid()
-      && nested_offset_ >= 0
-      && nested_size_ >= 0;
-}
-
-bool ObBlockInfo::is_small_sstable() const
-{
-  return OB_DEFAULT_MACRO_BLOCK_SIZE != nested_size_;
-}
-
-/**
  * ---------------------------------------ObSharedMacroBlockMgr----------------------------------------
  */
 ObSharedMacroBlockMgr::ObSharedMacroBlockMgr()
@@ -291,6 +264,13 @@ int ObSharedMacroBlockMgr::write_block(
         read_handle.get_data_size(),
         CHECK_LEVEL_PHYSICAL))) {
       LOG_WARN("fail to verify macro block", K(ret), K(macro_id));
+    } else if (OB_FAIL(ObSSTableMacroBlockChecker::check_data_macro_block_rows_and_index(
+      read_handle.get_buffer(),
+      read_handle.get_data_size(),
+      CHECK_LEVEL_PHYSICAL))) {
+      STORAGE_LOG(WARN, "fail to check data macro block rows and index", K(ret), K(macro_id));
+    } else {
+      STORAGE_LOG(INFO, "succeed to check write complete", K(ret), K(macro_id), K(offset), K(size));
     }
   }
   return ret;
@@ -709,7 +689,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
     LOG_WARN("fail to read old_sstable's block", K(ret), K(old_sstable));
   } else if (OB_FAIL(write_block(
       block_handle.get_buffer(), block_handle.get_data_size(), block_info, write_ctx))) {
-    LOG_WARN("fail to write old_sstable's buf to new block", K(ret));
+    LOG_WARN("fail to write old_sstable's buf to new block", K(ret), K(old_sstable), KP(&old_sstable));
   } else if (OB_FAIL(index_block_rebuilder.append_macro_row(
       block_handle.get_buffer(), block_handle.get_data_size(),
       block_info.macro_id_, -1 /*absolute_row_offset*/))) {
@@ -793,6 +773,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           cluster_version,
           tablet.get_tablet_meta().micro_index_clustered_,
           tablet.get_transfer_seq(),
+          0/*concurrent_cnt*/,
           tablet.get_reorganization_scn(),
           end_scn))) {
       LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema),
@@ -826,6 +807,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           cluster_version,
           tablet.get_tablet_meta().micro_index_clustered_,
           tablet.get_transfer_seq(),
+          0/*concurrent_cnt*/,
           tablet.get_reorganization_scn(),
           end_scn,
           cg_schema,
@@ -921,6 +903,11 @@ int ObSharedMacroBlockMgr::read_sstable_block(
             || sstable.get_macro_read_size() != block_handle.get_data_size())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("block handle is invalid", K(ret), K(block_handle));
+      } else if (MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION_AND_WRITE_COMPLETE == GCONF.micro_block_merge_verify_level) {
+        if (OB_FAIL(check_write_complete(macro_id, read_info.offset_, read_info.size_))) {
+          LOG_WARN("fail to check write completion", K(ret), K(sstable), KP(&sstable), K(macro_id),
+                                                     K(read_info.offset_), K(read_info.size_));
+        }
       }
     }
   }

@@ -71,6 +71,7 @@ public:
                         DATA_CURRENT_VERSION,
                         table_schema_.get_micro_index_clustered(),
                         0 /*transfer_seq*/,
+                        0 /*concurrent_cnt*/,
                         scn));
     ObIArray<ObColDesc> &col_descs = desc.get_desc().col_desc_->col_desc_array_;
     for (int64_t i = 0; i < col_descs.count(); ++i) {
@@ -100,6 +101,7 @@ public:
                       DATA_CURRENT_VERSION,
                       table_schema_.get_micro_index_clustered(),
                       0 /*transfer_seq*/,
+                      0 /*concurrent_cnt*/,
                       share::SCN::min_scn()/*reorgnize scn*/,
                       scn,
                       &cg_schema,

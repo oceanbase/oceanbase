@@ -1269,6 +1269,7 @@ int ObColumnSliceStore::dump_macro_block()
                                         tenant_data_version_,
                                         is_micro_index_clustered_,
                                         tablet_transfer_seq_,
+                                        0/*concurrent_cnt*/,
                                         SCN::min_scn()/*reorganization_scn, only for ss*/,
                                         SCN::min_scn()/*end_scn, unused for major*/,
                                         &cur_cg_schema,
@@ -1667,6 +1668,7 @@ int ObColumnBatchSliceStore::dump_macro_block()
                                     tenant_data_version_,
                                     is_micro_index_clustered_,
                                     tablet_transfer_seq_,
+                                    0/*concurrent_cnt*/,
                                     SCN::min_scn()/*reorganization_scn unused for mjor*/,
                                     SCN::min_scn()/*end_scn, unused for major*/,
                                     &cur_cg_schema,
@@ -3703,6 +3705,7 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
                                 data_format_version,
                                 tablet_direct_load_mgr->get_micro_index_clustered(),
                                 tablet_direct_load_mgr->get_tablet_transfer_seq(),
+                                0/*concurrent_cnt*/,
                                 SCN::min_scn(), /*reorganization_scn : only for ss*/
                                 SCN::min_scn(),
                                 &cg_schema,

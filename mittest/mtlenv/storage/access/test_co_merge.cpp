@@ -383,6 +383,7 @@ void TestCOMerge::prepare_co_sstable(
                           DATA_CURRENT_VERSION,
                           table_schema.get_micro_index_clustered(),
                           0 /*tablet_transfer_seq*/,
+                          0/*concurrent_cnt*/,
                           share::SCN::min_scn(), /*reorganization_scn*/
                           share::SCN::invalid_scn(), /*end_scn*/
                           &cg_schema,
@@ -2474,6 +2475,7 @@ TEST_F(TestCOMerge, test_rebuild_sstable)
 
   //prepare merge_ctx
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
+  merge_context.static_desc_.concurrent_cnt_ = 2;
 	merge_context.array_count_ = 3;
   alloc_merge_infos(merge_context);
   OK(merge_context.prepare_index_builder(0, 3));

@@ -76,6 +76,7 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   need_submit_io_ = desc.need_submit_io_;
   merge_engine_type_ = desc.merge_engine_type_;
   encoding_granularity_ = desc.encoding_granularity_;
+  concurrent_cnt_ = desc.concurrent_cnt_;
   reorganization_scn_ = desc.reorganization_scn_;
   semistruct_properties_ = desc.semistruct_properties_;
   return ret;
@@ -128,6 +129,7 @@ int ObStaticDataStoreDesc::init(
     const int64_t cluster_version,
     const compaction::ObExecMode exec_mode,
     const bool micro_index_clustered,
+    const int64_t concurrent_cnt,
     const share::SCN &reorganization_scn,
     const bool need_submit_io,
     const uint64_t encoding_granularity)
@@ -149,6 +151,7 @@ int ObStaticDataStoreDesc::init(
     exec_mode_ = exec_mode;
     encoding_granularity_ = encoding_granularity;
     enable_macro_block_bloom_filter_ = merge_schema.get_enable_macro_block_bloom_filter();
+    concurrent_cnt_ = concurrent_cnt;
     micro_block_format_version_ = merge_schema.get_micro_block_format_version();
     reorganization_scn_ = reorganization_scn;
     ObSemiStructEncodingType semi_type;
@@ -960,6 +963,7 @@ int ObWholeDataStoreDesc::init(
     const int64_t cluster_version,
     const bool micro_index_clustered,
     const int64_t tablet_transfer_seq,
+    const int64_t concurrent_cnt,
     const share::SCN &reorganization_scn,
     const share::SCN &end_scn,
     const storage::ObStorageColumnGroupSchema *cg_schema,
@@ -981,7 +985,7 @@ int ObWholeDataStoreDesc::init(
 
   if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, tablet_transfer_seq, merge_type,
                                 snapshot_version, end_scn, cluster_version,
-                                exec_mode, micro_index_clustered, reorganization_scn, need_submit_io, encoding_granularity))) {
+                                exec_mode, micro_index_clustered, concurrent_cnt, reorganization_scn, need_submit_io, encoding_granularity))) {
     STORAGE_LOG(WARN, "failed to init static desc", KR(ret));
   } else if (OB_FAIL(inner_init(merge_schema, cg_schema, table_cg_idx))) {
     STORAGE_LOG(WARN, "failed to init", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx));

@@ -85,6 +85,7 @@ public:
       const ObSSTableMacroBlockHeader &block_header,
       const char *buf,
       const int64_t size,
+      const bool need_deep_copy,
       const char *&uncomp_buf,
       int64_t &uncomp_size,
       bool &is_compressed);

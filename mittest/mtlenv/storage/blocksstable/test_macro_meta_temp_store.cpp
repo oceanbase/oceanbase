@@ -61,7 +61,7 @@ void TestMacroMetaTempStore::prepare_macro_writer()
   share::SCN scn;
   scn.convert_for_tx(SNAPSHOT_VERSION);
   ASSERT_EQ(OB_SUCCESS, desc_.init(false, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_),
-      merge_type_, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0, scn));
+      merge_type_, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0, 0/*concurrent_cnt*/, scn));
   desc_.get_desc().static_desc_->schema_version_ = 10;
   desc_.get_desc().sstable_index_builder_ = &root_index_builder_;
   ASSERT_TRUE(desc_.is_valid());

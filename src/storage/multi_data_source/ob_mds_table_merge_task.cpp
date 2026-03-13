@@ -109,6 +109,7 @@ int ObMdsTableMergeTask::process()
     ctx.static_param_.merge_scn_ = flush_scn;
     ctx.static_param_.version_range_.snapshot_version_ = flush_scn.get_val_for_tx();
     ctx.static_param_.pre_warm_param_.type_ = ObPreWarmerType::MEM_PRE_WARM;
+    ctx.parallel_merge_ctx_.init_serial_merge(); // only use concurrent_cnt for small sstable temp space optimization
     ObTabletHandle new_tablet_handle;
     mds::MdsTableHandle mds_table;
     const int64_t mds_construct_sequence = mds_merge_dag_->get_mds_construct_sequence();

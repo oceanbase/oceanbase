@@ -122,6 +122,7 @@ TEST_F(TestIndexBlockRowStruct, test_invalid)
 
   const ObDatumRow *row;
   ObIndexBlockRowDesc desc;
+  desc.macro_id_ = MacroBlockId::mock_valid_macro_id();
   desc.row_key_ = row_key;
   ret = row_builder.build_row(desc, row);
   EXPECT_NE(OB_SUCCESS, ret);
@@ -145,6 +146,7 @@ TEST_F(TestIndexBlockRowStruct, test_normal)
   ObIndexBlockRowDesc row_desc(desc_.get_desc());
   // row_desc.data_store_desc_ = &desc_.get_desc();
   row_desc.row_key_ = row_key;
+  row_desc.macro_id_ = MacroBlockId::mock_valid_macro_id();
   ASSERT_TRUE(row_desc.is_valid());
 
   const ObDatumRow *row;
@@ -251,6 +253,7 @@ TEST_F(TestIndexBlockRowStruct, test_set_rowkey)
 
   const ObDatumRow *row;
   row_desc.row_key_ = row_key;
+  row_desc.macro_id_ = MacroBlockId::mock_valid_macro_id();
   ret = row_builder.build_row(row_desc, row);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_TRUE(row->storage_datums_[0] == row_key.datums_[0]);
@@ -264,7 +267,7 @@ TEST_F(TestIndexBlockRowStruct, test_set_rowkey)
 int main(int argc, char** argv)
 {
   system("rm -f test_index_block_row_struct.log*");
-  OB_LOGGER.set_file_name("test_index_block_row_struct.log");
+  OB_LOGGER.set_file_name("test_index_block_row_struct.log", true);
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

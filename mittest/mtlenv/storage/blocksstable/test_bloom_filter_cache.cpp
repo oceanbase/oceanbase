@@ -128,7 +128,7 @@ TEST_F(TestBloomFilterCache, test_invalid)
   prepare_valid_read_handle(read_handle, 2);
   storage::ObITable::TableKey sstable_key;
   prepare_valid_sstable_key(sstable_key);
-  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, ls_id, sstable_key, macro_block_id, 2, &read_handle);
+  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, ls_id, sstable_key, macro_block_id, 2, 0, OB_DEFAULT_MACRO_BLOCK_SIZE, &read_handle);
   EXPECT_NE(OB_SUCCESS, ret);
 
   bf_cache.destroy();
@@ -189,14 +189,14 @@ TEST_F(TestBloomFilterCache, test_normal)
 
   storage::ObEmptyReadCell *cell;
   ObBloomFilterCacheKey bf_key(tenant_id, block_id, rowkey.get_datum_cnt());
-  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, ls_id, sstable_key, block_id, rowkey.get_datum_cnt(), &read_handle);
+  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, ls_id, sstable_key, block_id, rowkey.get_datum_cnt(), 0, OB_DEFAULT_MACRO_BLOCK_SIZE, &read_handle);
   EXPECT_EQ(OB_SUCCESS, ret);
   MTL(storage::ObEmptyReadBucket *)->get_cell(bf_key.hash(),cell);
   ASSERT_TRUE(NULL != cell);
   EXPECT_EQ(1, cell->count_);
 
   prepare_valid_read_handle(read_handle, rowkey.get_datum_cnt());
-  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, ls_id, sstable_key, block_id, rowkey.get_datum_cnt(), &read_handle);
+  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, ls_id, sstable_key, block_id, rowkey.get_datum_cnt(), 0, OB_DEFAULT_MACRO_BLOCK_SIZE, &read_handle);
   EXPECT_EQ(OB_SUCCESS, ret);
   MTL(storage::ObEmptyReadBucket *)->get_cell(bf_key.hash(),cell);
   ASSERT_TRUE(NULL != cell);

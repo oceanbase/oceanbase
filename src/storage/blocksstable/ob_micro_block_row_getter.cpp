@@ -260,6 +260,8 @@ int ObMicroBlockRowGetter::get_block_row(ObSSTableReadHandle &read_handle,
                                                            sstable_->get_key(),
                                                            read_handle.micro_handle_->macro_block_id_,
                                                            read_handle.get_rowkey().get_datum_cnt(),
+                                                           sstable_->get_macro_offset(),
+                                                           sstable_->get_macro_read_size(),
                                                            &read_handle);
       }
     } else {

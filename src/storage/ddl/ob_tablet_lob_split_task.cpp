@@ -1518,6 +1518,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_index_builder(const ObTabletLobWri
         param_->data_format_version_,
         ctx_->lob_meta_tablet_handle_.get_obj()->get_tablet_meta().micro_index_clustered_,
         tablet_handle.get_obj()->get_transfer_seq(),
+        0/*concurrent_cnt*/,
         split_reorganization_scn,
         write_sstable_ctx.table_key_.get_end_scn(),
         nullptr/*cg_schema*/,

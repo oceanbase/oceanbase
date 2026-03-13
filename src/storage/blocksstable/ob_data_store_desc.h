@@ -64,6 +64,7 @@ public:
     const int64_t cluster_version,
     const compaction::ObExecMode exec_mode,
     const bool micro_index_clustered,
+    const int64_t concurrent_cnt,
     const share::SCN &reorganization_scn,
     const bool need_submit_io = true,
     const uint64_t encoding_granularity = 0);
@@ -76,6 +77,7 @@ public:
       K_(ls_id),
       K_(tablet_id),
       K_(tablet_transfer_seq),
+      K_(concurrent_cnt),
       "merge_type", merge_type_to_str(merge_type_),
       K_(snapshot_version),
       K_(end_scn),
@@ -113,6 +115,7 @@ public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   int64_t tablet_transfer_seq_;
+  int64_t concurrent_cnt_;
   int64_t macro_block_size_;
   int64_t macro_store_size_; //macro_block_size_ * reserved_percent
   int64_t micro_block_size_limit_;
@@ -228,6 +231,10 @@ public:
     is_force_flat_store_type_ = true;
   }
   bool is_store_type_valid() const;
+  OB_INLINE bool is_for_sstable_data() const
+  {
+    return ObMacroBlockCommonHeader::SSTableData == data_store_type_;
+  }
   OB_INLINE bool is_for_index_or_meta() const
   {
     return data_store_type_ == ObMacroBlockCommonHeader::SSTableIndex ||
@@ -316,6 +323,7 @@ public:
   STATIC_DESC_FUNC(const char *, encrypt_key);
   STATIC_DESC_FUNC(compaction::ObExecMode, exec_mode);
   STATIC_DESC_FUNC(bool, need_submit_io);
+  STATIC_DESC_FUNC(int64_t, concurrent_cnt);
   STATIC_DESC_FUNC(share::SCN, reorganization_scn);
   STATIC_DESC_FUNC(ObMergeEngineType, merge_engine_type);
   COL_DESC_FUNC(bool, is_row_store);
@@ -409,6 +417,7 @@ struct ObWholeDataStoreDesc
     const int64_t cluster_version,
     const bool micro_index_clustered,
     const int64_t tablet_transfer_seq,
+    const int64_t concurrent_cnt,
     const share::SCN &reorganization_scn,
     const share::SCN &end_scn = share::SCN::invalid_scn(),
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,

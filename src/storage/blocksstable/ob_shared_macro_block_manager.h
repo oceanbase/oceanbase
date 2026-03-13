@@ -19,6 +19,7 @@
 #include "lib/task/ob_timer.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
+#include "storage/blocksstable/ob_shared_block_info.h"
 
 namespace oceanbase
 {
@@ -34,23 +35,6 @@ class ObIndexBlockRebuilder;
 class ObSSTableMergeRes;
 struct ObSSTableBasicMeta;
 struct ObWholeDataStoreDesc;
-struct ObBlockInfo
-{
-public:
-  ObBlockInfo()
-    : nested_size_(OB_DEFAULT_MACRO_BLOCK_SIZE), nested_offset_(0), macro_id_()
-  {
-  }
-  ~ObBlockInfo();
-  void reset();
-  bool is_valid() const;
-  bool is_small_sstable() const;
-  TO_STRING_KV(K_(nested_size), K_(nested_offset), K_(macro_id));
-public:
-  int64_t nested_size_;
-  int64_t nested_offset_;
-  MacroBlockId macro_id_;
-};
 
 // set it as a member variable of t3m in 4.1
 class ObSharedMacroBlockMgr final

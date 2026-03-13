@@ -347,6 +347,7 @@ int ObMacroMetaTempStoreIter::get_macro_meta_from_block_buf(ObDataMacroBlockMeta
       curr_read_item_.macro_header_,
       curr_read_item_.macro_meta_block_buf_,
       curr_read_item_.macro_meta_block_size_,
+      false,
       meta_block.get_buf(),
       meta_block.get_buf_size(),
       is_compressed))) {

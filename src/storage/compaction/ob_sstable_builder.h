@@ -49,7 +49,7 @@ public:
   int open_next_macro_block();
   int get_next_micro_block(
       blocksstable::ObMicroBlockDesc &micro_block_desc,
-      blocksstable::ObMicroIndexInfo &micro_index_info);
+      blocksstable::ObMicroIndexData &micro_index_data);
   inline bool is_iter_end() const { return iter_idx_ >= macro_id_array_.count() - 1; }
 
   TO_STRING_KV(K_(macro_id_array), K_(mirco_block_iter), K_(iter_idx));
