@@ -1768,6 +1768,10 @@ int ObDSLResolver::resolve_knn(ObIJsonBase &req_node, ObDSLQuery *&query)
         LOG_WARN("similarity should be number or string type", K(ret), K(sub_node->json_type()));
       }
       if (OB_FAIL(ret)) {
+      } else if (similarity < 0.0 || similarity > 1.0) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "similarity, should be in range [0.0, 1.0]");
+        LOG_WARN("similarity should be in range [0.0, 1.0]", K(ret), K(similarity));
       } else if (OB_ISNULL(search_option) &&
                  OB_ISNULL(search_option = OB_NEWx(ObDSLKnnQuery::SearchOption, allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3756,6 +3760,7 @@ int ObDSLResolver::trim_strtod(const ObString &num_str, double &num_val)
     num_val = strtod(buf, &end_ptr);
     if (end_ptr == buf || end_ptr != buf + str_len) {
       ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "string to number conversion, invalid numeric string");
       LOG_WARN("invalid numeric string", K(ret), K(num_str));
     }
   }
