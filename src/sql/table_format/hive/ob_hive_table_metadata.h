@@ -14,6 +14,7 @@
 #define OB_SQL_TABLE_FORMAT_HIVE_H
 
 #include "lib/allocator/ob_allocator.h"
+#include "lib/container/ob_array_wrap.h"
 #include "lib/string/ob_string.h"
 #include "share/catalog/hive/thrift/gen_cpp/hive_metastore_types.h"
 #include "share/catalog/ob_external_catalog.h"
@@ -137,9 +138,21 @@ public:
                        const ObString &uri,
                        const ObString &access_info);
 
+  template <typename PartValsArrayType>
+  static int calculate_part_val_from_string_impl(const share::schema::ObTableSchema &table_schema,
+                                                 const bool &is_part_table,
+                                                 const PartValsArrayType &one_part_vals,
+                                                 ObIAllocator &allocator,
+                                                 ObNewRow &ob_part_row);
+
   static int calculate_part_val_from_string(const share::schema::ObTableSchema &table_schema,
                                             const bool &is_part_table,
-                                            ObIArray<ObString> &one_part_vals,
+                                            const ObIArray<ObString> &one_part_vals,
+                                            ObIAllocator &allocator,
+                                            ObNewRow &ob_part_row);
+  static int calculate_part_val_from_string(const share::schema::ObTableSchema &table_schema,
+                                            const bool &is_part_table,
+                                            const ObIArrayWrap<ObString> &one_part_vals,
                                             ObIAllocator &allocator,
                                             ObNewRow &ob_part_row);
 

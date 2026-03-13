@@ -14,6 +14,7 @@
 #define _OCEANBASE_SQL_OPTIMIZER_FILE_PRUNE_OB_HIVE_FILE_PRUNER_H
 
 #include "ob_i_lake_table_file_pruner.h"
+#include "ob_opt_hive_define_fwd.h"
 #include "sql/das/ob_das_define.h"
 #include "sql/engine/table/ob_external_table_pushdown_filter.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
@@ -25,17 +26,6 @@ namespace sql
 class ObRawExpr;
 class ObSqlSchemaGuard;
 
-struct ObHiveFileDesc
-{
-  ObHiveFileDesc() : part_id_(OB_INVALID_PARTITION_ID), file_size_(0), modify_ts_(0)
-  {
-  }
-  TO_STRING_KV(K(part_id_), K(file_size_), K(modify_ts_), K(file_path_));
-  int64_t part_id_;
-  int64_t file_size_;
-  int64_t modify_ts_;
-  ObString file_path_;
-};
 
 struct ObHivePartFieldBound
 {

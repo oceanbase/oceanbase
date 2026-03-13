@@ -13,6 +13,7 @@
 #ifndef _OB_EXTERNAL_TABLE_FILE_MANAGER_H_
 #define _OB_EXTERNAL_TABLE_FILE_MANAGER_H_
 
+#include "sql/optimizer/file_prune/ob_opt_hive_define_fwd.h"
 #include "share/ob_rpc_struct.h"
 #include "observer/ob_server_struct.h"
 #include "sql/engine/ob_exec_context.h"
@@ -174,32 +175,6 @@ public:
   int64_t lake_table_metadata_version_;
 };
 
-struct PartitionInfo
-{
-  PartitionInfo() : partition_(), path_(), modify_ts_(0)
-  {
-  }
-  // 分区，比如 pa=a/pb=b/pc=c
-  ObString partition_;
-  // 该分区对应的文件路径，比如 hdfs://abc/def
-  ObString path_;
-  // 该分区的分区值，比如 [a,b,c]
-  ObArrayWrap<ObString> partition_values_;
-  int64_t modify_ts_;
-  TO_STRING_KV(K_(partition), K_(path), K_(modify_ts));
-
-  int64_t get_size() const
-  {
-    int64_t size = sizeof(PartitionInfo)
-                   + sizeof(ObString) + partition_.length() + 1
-                   + sizeof(ObString) + path_.length() + 1;
-    for (int64_t i = 0; i < partition_values_.count(); ++i) {
-      size += sizeof(ObString) + partition_values_.at(i).length() + 1;
-    }
-    return size;
-  }
-};
-
 class ObExternalTablePartitions : public ObIKVCacheValue
 {
 public:
@@ -221,7 +196,7 @@ public:
 
 public:
   int64_t create_ts_;  // ms
-  ObArrayWrap<PartitionInfo> partition_infos_;
+  ObArrayWrap<sql::HivePartitionInfo> partition_infos_;
 };
 
 
@@ -373,7 +348,7 @@ public:
                                      ObSqlSchemaGuard &sql_schema_guard,
                                      common::ObIAllocator& allocator,
                                      int64_t refresh_interval_ms,
-                                     ObArray<PartitionInfo*> &partition_infos);
+                                     ObIArray<sql::HivePartitionInfo*> &partition_infos);
 
   int get_partitions_info(const ObTableSchema &table_schema,
                           ObSqlSchemaGuard &sql_schema_guard,

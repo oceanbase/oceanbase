@@ -108,6 +108,7 @@ public:
     allocator_(allocator), storage_info_(nullptr)
   {}
   int init(const common::ObString &location, const ObString &access_info);
+  common::ObStorageType get_storage_type() { return storage_type_; }
   int get_file_list(const common::ObString &path, const common::ObString &pattern,
                     const ObExprRegexpSessionVariables &regexp_vars,
                     common::ObIArray<common::ObString> &file_urls,
@@ -389,13 +390,14 @@ public:
                                                    const ObString &pattern,
                                                    ObIAllocator &allocator,
                                                    int64_t refresh_interval_ms,
-                                                   ObIArray<ObHiveFileDesc> &hive_file_desc);
+                                                   ObIArray<ObHiveFileDesc> &hive_file_desc,
+                                                   ObIArray<int64_t> &part_file_count);
 
   static int collect_partitions_info_with_cache(const ObTableSchema &table_schema,
                                                 ObSqlSchemaGuard &sql_schema_guard,
                                                 ObIAllocator &allocator,
                                                 int64_t refresh_interval_ms,
-                                                ObArray<PartitionInfo*> &partition_infos);
+                                                ObIArray<sql::HivePartitionInfo*> &partition_infos);
 
   static int create_external_file_url_info(const common::ObString &file_location,
                                            const common::ObString &access_info,
