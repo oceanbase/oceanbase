@@ -17,6 +17,7 @@
 #include "lib/net/ob_addr.h"
 #include "lib/hash/ob_placement_hashset.h"
 #include "lib/container/ob_2d_array.h"
+#include "sql/optimizer/file_prune/ob_hive_query_partition_cache.h"
 #include "lib/random/ob_random.h"
 #include "sql/optimizer/ob_table_partition_info.h"
 #include "sql/monitor/ob_exec_stat.h"
@@ -921,6 +922,7 @@ public:
     optimizer_features_enable_version_ = 0;
     ori_question_marks_count_ = 0;
     filter_ds_stat_cache_.reuse();
+    hive_table_file_cache_.reset();
     type_demotion_flag_ = 0;
     // initial_type_ctx_.reset();
     has_hybrid_search_ = false;
@@ -1044,6 +1046,7 @@ public:
   ObRandom rand_gen_;
   int64_t ori_question_marks_count_;
   common::hash::ObHashMap<ObOptDSStat::Key, ObOptDSStat, common::hash::NoPthreadDefendMode> filter_ds_stat_cache_;
+  ObHiveQueryPartitionCache hive_table_file_cache_;
   union {
     int8_t type_demotion_flag_;
     struct {

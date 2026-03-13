@@ -966,11 +966,12 @@ int ObHiveTableMetadata::set_partition_expr(const FieldSchemas &par_cols,
   return ret;
 }
 
-int ObHiveTableMetadata::calculate_part_val_from_string(const ObTableSchema &table_schema,
-                                                        const bool &is_part_table,
-                                                        ObIArray<ObString> &one_part_vals,
-                                                        ObIAllocator &allocator,
-                                                        ObNewRow &ob_part_row)
+template <typename PartValsArrayType>
+int ObHiveTableMetadata::calculate_part_val_from_string_impl(const ObTableSchema &table_schema,
+                                                            const bool &is_part_table,
+                                                            const PartValsArrayType &one_part_vals,
+                                                            ObIAllocator &allocator,
+                                                            ObNewRow &ob_part_row)
 {
   int ret = OB_SUCCESS;
 
@@ -1189,6 +1190,24 @@ int ObHiveTableMetadata::calculate_part_val_from_string(const ObTableSchema &tab
     }
   }
   return ret;
+}
+
+int ObHiveTableMetadata::calculate_part_val_from_string(const ObTableSchema &table_schema,
+                                                        const bool &is_part_table,
+                                                        const ObIArray<ObString> &one_part_vals,
+                                                        ObIAllocator &allocator,
+                                                        ObNewRow &ob_part_row)
+{
+  return calculate_part_val_from_string_impl(table_schema, is_part_table, one_part_vals, allocator, ob_part_row);
+}
+
+int ObHiveTableMetadata::calculate_part_val_from_string(const ObTableSchema &table_schema,
+                                                        const bool &is_part_table,
+                                                        const ObIArrayWrap<ObString> &one_part_vals,
+                                                        ObIAllocator &allocator,
+                                                        ObNewRow &ob_part_row)
+{
+  return calculate_part_val_from_string_impl(table_schema, is_part_table, one_part_vals, allocator, ob_part_row);
 }
 
 int ObHiveTableMetadata::extract_decimal_precision_and_scale(ObString &decimal,

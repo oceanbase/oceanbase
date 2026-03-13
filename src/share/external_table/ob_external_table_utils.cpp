@@ -21,6 +21,7 @@
 #include "share/config/ob_server_config.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
+#include "sql/engine/table/ob_odps_table_row_iter.h"
 #include "plugin/interface/ob_plugin_external_intf.h"
 #include "sql/engine/basic/ob_consistent_hashing_load_balancer.h"
 #include "lib/restore/ob_object_device.h"
@@ -2088,7 +2089,8 @@ int ObExternalTableUtils::collect_external_file_list_with_cache(
     const ObString &pattern,
     ObIAllocator &allocator,
     int64_t refresh_interval_ms,
-    ObIArray<ObHiveFileDesc> &hive_file_desc)
+    ObIArray<ObHiveFileDesc> &hive_file_desc,
+    ObIArray<int64_t> &part_file_count)
 {
   int ret = OB_SUCCESS;
 
@@ -2121,6 +2123,12 @@ int ObExternalTableUtils::collect_external_file_list_with_cache(
   for (int64_t k = 0; OB_SUCC(ret) && k < tmp_external_table_files.count(); ++k) {
     ObExternalTableFiles *tmp_table_files = tmp_external_table_files.at(k);
     int64_t tmp_part_id = reorder_part_id.at(k);
+    if (OB_ISNULL(tmp_table_files)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null table files");
+    } else if (OB_FAIL(part_file_count.push_back(tmp_table_files->file_urls_.count()))) {
+      LOG_WARN("failed to push back file count");
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_table_files->file_urls_.count(); i++) {
       if (OB_ISNULL(desc = hive_file_desc.alloc_place_holder())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2142,7 +2150,7 @@ int ObExternalTableUtils::collect_partitions_info_with_cache(
     ObSqlSchemaGuard &sql_schema_guard,
     ObIAllocator &allocator,
     int64_t refresh_interval_ms,
-    ObArray<PartitionInfo*> &partition_infos)
+    ObIArray<sql::HivePartitionInfo*> &partition_infos)
 {
   int ret = OB_SUCCESS;
 
