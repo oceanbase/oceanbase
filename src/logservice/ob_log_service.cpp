@@ -19,6 +19,7 @@
 #include "storage/ob_file_system_router.h"
 #include "logservice/ob_net_keepalive_adapter.h"            // ObNetKeepAliveAdapter
 #include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
+#include "share/ls/ob_ls_status_operator.h"                   // ObLSStatusInfoArray
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
 #include "logservice/libpalf/libpalf_env.h"
 #endif
@@ -939,8 +940,15 @@ int ObLogService::flashback(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid arguments", K(ret), K(tenant_id), K(flashback_scn), K(timeout_us));
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
-  } else if (GCONF.enable_logservice && OB_FAIL(palf_env_->flashback(tenant_id, flashback_scn, timeout_us))) {
-    CLOG_LOG(WARN, "flashback in ss failed", K(ret), K(tenant_id), K(flashback_scn), K(timeout_us));
+  } else if (GCONF.enable_logservice) {
+    share::ObLSStatusInfoArray ls_array;
+    if (OB_FAIL(flashback_service_.get_ls_list(tenant_id, ls_array))) {
+      CLOG_LOG(WARN, "get_ls_list failed", K(ret), K(tenant_id));
+    } else if (OB_FAIL(palf_env_->flashback(tenant_id, flashback_scn, timeout_us, ls_array))) {
+      CLOG_LOG(WARN, "flashback in ss failed", K(ret), K(tenant_id), K(flashback_scn), K(timeout_us), K(ls_array));
+    } else {
+      CLOG_LOG(INFO, "flashback in ss success", K(ret), K(tenant_id), K(flashback_scn), K(timeout_us), K(ls_array));
+    }
 #endif
   } else if (!GCONF.enable_logservice &&OB_FAIL(flashback_service_.flashback(tenant_id, flashback_scn, timeout_us))) {
     CLOG_LOG(WARN, "flashback failed", K(ret), K(tenant_id), K(flashback_scn), K(timeout_us));

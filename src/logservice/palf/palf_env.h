@@ -117,7 +117,8 @@ public:
 
   virtual int flashback(const uint64_t tenant_id,
                         const share::SCN &flashback_scn,
-                        const int64_t timeout_us) override final;
+                        const int64_t timeout_us,
+                        const share::ObLSStatusInfoArray &ls_array) override final;
 public:
   // just for LogRpc
   palf::IPalfEnvImpl *get_palf_env_impl() { return &palf_env_impl_; }

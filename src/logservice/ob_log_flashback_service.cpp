@@ -91,8 +91,8 @@ int ObLogFlashbackService::flashback(const uint64_t tenant_id, const SCN &flashb
     const int64_t begin_time_us = common::ObTimeUtility::current_time();
     int64_t curr_time_us = 0;
     #define REMAIN_TIMEOUT (timeout_us - (common::ObTimeUtility::current_time() - begin_time_us))
-    if (OB_FAIL(get_ls_list_(tenant_id, ls_array))) {
-      CLOG_LOG(WARN, "get_ls_list_ failed", COMMON_LOG_INFO);
+    if (OB_FAIL(get_ls_list(tenant_id, ls_array))) {
+      CLOG_LOG(WARN, "get_ls_list failed", COMMON_LOG_INFO);
     } else if (FALSE_IT(time_guard.click("get_ls_list")) ||
         OB_FAIL(get_and_change_access_mode_(tenant_id, flashback_scn, palf::AccessMode::PREPARE_FLASHBACK,
         ls_array, REMAIN_TIMEOUT, stop_mode_op_array))) {
@@ -120,7 +120,7 @@ int ObLogFlashbackService::flashback(const uint64_t tenant_id, const SCN &flashb
   return ret;
 }
 
-int ObLogFlashbackService::get_ls_list_(const uint64_t tenant_id,
+int ObLogFlashbackService::get_ls_list(const uint64_t tenant_id,
                                         share::ObLSStatusInfoArray &ls_array)
 {
   int ret = OB_SUCCESS;
