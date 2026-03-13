@@ -726,7 +726,7 @@ int ObVectorCenterClusterHelper<VEC_T, CENTER_T>::push_center(
   } else {
     double distance = DBL_MAX;
     if (OB_FAIL(oceanbase::sql::ObExprVectorDistance::DisFunc<VEC_T>::distance_funcs[dis_type_](const_vec_, center_vec, dim_, distance))) {
-      SHARE_LOG(WARN, "failed to get distance type", K(ret));
+      SHARE_LOG(WARN, "failed to calculate distance", K(ret), K(dis_type_));
     } else if (OB_FAIL(push_center(center, distance, center_save_mode, center_vec))) {
       SHARE_LOG(WARN, "fail to push back center with distance", K(ret), K(distance));
     }
