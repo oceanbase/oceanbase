@@ -304,7 +304,7 @@ END_P SET_VAR DELIMITER
         DIRECTORY DISABLE DISALLOW DISCARD DISK DISKGROUP DO DOT DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DUPLICATE_READ_CONSISTENCY DYNAMIC
         DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND DELETE_INSERT DYNAMIC_PARTITION_POLICY
 
-        EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENABLE_MACRO_BLOCK_BLOOM_FILTER ENCODING_TYPE ENCRYPT ENCRYPTED ENCRYPTION END ENDPOINT ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
+        EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENABLE_MACRO_BLOCK_BLOOM_FILTER ENCODING_TYPE ENCRYPT ENCRYPTED ENCRYPTION END ENDPOINT ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE EXCLUDE_PATHS
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXCLUDING EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
         EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED ENCODING EMPTY_FIELD_AS_NULL EUCLIDEAN EXTERNAL EXTERNAL_STORAGE_DEST EXPIRE_TIME EXCLUSIVE
 
@@ -317,7 +317,7 @@ END_P SET_VAR DELIMITER
 
         HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOT_RETENTION MIXED_RETENTION HOUR HIDDEN HTTP_TIMEOUT HTTP_KEEPALIVE_TIME HYBRID HYBRID_HIST HYBRID_SEARCH HMS_CATALOG_NAME
 
-        ID IDC IDENTIFIED IGNORE_SERVER_IDS IK_MODE ILOG IMMEDIATE IMPORT INCLUDING INCR INDEXES INDEX_DATA_GEN INDEX_TABLE_ID INFO INITIAL_SIZE
+        ID IDC IDENTIFIED IGNORE_SERVER_IDS IK_MODE ILOG IMMEDIATE IMPORT INCLUDING INCLUDE_PATHS INCLUDE_TYPES INCR INDEXES INDEX_DATA_GEN INDEX_TABLE_ID INFO INITIAL_SIZE
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER
         INCREMENT IS_TENANT_SYS_POOL INVISIBLE MERGE ISNULL INTERSECT INCREMENTAL INNER_PARSE ILOGCACHE INPUT INDEXED INPLACE INSTANT INCONSISTENT INDIVIDUAL
 
@@ -501,6 +501,9 @@ END_P SET_VAR DELIMITER
 %type <node> audit_stmt audit_clause op_audit_tail_clause audit_operation_clause audit_all_shortcut_list audit_all_shortcut auditing_on_clause auditing_by_user_clause audit_user_list audit_user audit_user_with_host_name
 %type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint merge_with_opt_hint hint_list_with_end global_hint transform_hint optimize_hint
 %type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list opt_fulltext_index_option_list index_option fulltext_index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr alter_with_opt_hint
+%type <node> search_sort_column_list search_sort_column_key opt_search_column_with
+%type <node> search_index_with_opt_list search_index_with_opt
+%type <node> search_index_path_list search_index_type_list search_index_type_item
 %type <node> opt_when check_state constraint_definition
 %type <node> create_mlog_stmt opt_mlog_option_list opt_mlog_options mlog_option opt_mlog_with mlog_with_values mlog_with_special_columns mlog_with_reference_columns mlog_with_special_column_list mlog_with_reference_column_list mlog_with_special_column mlog_with_reference_column opt_mlog_new_values mlog_including_or_excluding opt_mlog_purge mlog_purge_values mlog_purge_immediate_sync_or_async mlog_purge_start mlog_purge_next
 %type <node> drop_mlog_stmt
@@ -6298,7 +6301,7 @@ column_definition
   malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX, 6, $3, col_list, index_option, $4, NULL, $9);
   $$->value_ = 2;
 }
-| SEARCH key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list
+| SEARCH key_or_index opt_index_name opt_index_using_algorithm '(' search_sort_column_list ')' opt_index_option_list
 {
   (void)($2);
   ParseNode *col_list = NULL;
@@ -6319,6 +6322,95 @@ column_definition
   malloc_non_terminal_node($$, result->malloc_pool_, T_FOREIGN_KEY, 7, child_col_list, $8, parent_col_list, reference_option_list, NULL, $3, $12);
 }
 ;
+
+search_sort_column_list:
+search_sort_column_key
+{
+  $$ = $1;
+}
+| search_sort_column_list ',' search_sort_column_key
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+search_sort_column_key:
+column_name opt_sort_column_key_length opt_asc_desc opt_column_id opt_search_column_with
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SORT_COLUMN_KEY, 5, $1, $2, $3, $4, $5);
+}
+;
+
+opt_search_column_with:
+/*EMPTY*/
+{
+  $$ = NULL;
+}
+| WITH '(' search_index_with_opt_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SEARCH_INDEX_COLUMN_PARAMS, 1, $3);
+}
+;
+
+search_index_with_opt_list:
+search_index_with_opt
+{
+  $$ = $1;
+}
+| search_index_with_opt_list ',' search_index_with_opt
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+search_index_with_opt:
+INCLUDE_PATHS COMP_EQ '(' search_index_path_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SEARCH_INDEX_INCLUDE_PATHS, 1, $4);
+}
+| EXCLUDE_PATHS COMP_EQ '(' search_index_path_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SEARCH_INDEX_EXCLUDE_PATHS, 1, $4);
+}
+| INCLUDE_TYPES COMP_EQ '(' search_index_type_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SEARCH_INDEX_INCLUDE_TYPES, 1, $4);
+}
+;
+
+search_index_path_list:
+STRING_VALUE
+{
+  $$ = $1;
+}
+| search_index_path_list ',' STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+search_index_type_list:
+search_index_type_item
+{
+  $$ = $1;
+}
+| search_index_type_list ',' search_index_type_item
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+search_index_type_item:
+JSON_STRING
+{
+  make_name_node($$, result->malloc_pool_, "json_string");
+}
+| JSON_NUMBER
+{
+  make_name_node($$, result->malloc_pool_, "json_number");
+}
+;
+
 opt_column_reference:
 REFERENCES relation_factor '(' column_name_list ')' opt_match_option opt_reference_option_list
 {
@@ -11027,6 +11119,25 @@ opt_index_option_list opt_partition_option with_column_group
                            $4,                   /* if not exists*/
                            $1);                  /* index hint*/
 }
+| create_with_opt_hint SEARCH INDEX opt_if_not_exists normal_relation_factor opt_index_using_algorithm ON relation_factor '(' search_sort_column_list ')'
+opt_index_option_list opt_partition_option
+{
+  ParseNode *idx_columns = NULL;
+  ParseNode *index_options = NULL;
+  merge_nodes(idx_columns, result, T_INDEX_COLUMN_LIST, $10);
+  merge_nodes(index_options, result, T_TABLE_OPTION_LIST, $12);
+  $5->value_ = 7; /* SEARCH_KEY */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_INDEX, 9,
+                           $5,                   /* index name */
+                           $8,                   /* table name */
+                           idx_columns,          /* index columns */
+                           index_options,        /* index option(s) */
+                           $6,                   /* index method */
+                           $13,                  /* partition method*/
+                           NULL,                 /* column group */
+                           $4,                   /* if not exists*/
+                           $1);                  /* index hint*/
+}
 ;
 
 create_with_opt_hint:
@@ -11044,7 +11155,6 @@ ALTER {$$ = NULL;}
 opt_index_keyname:
 VECTOR { $$[0] = 6; }
 | SPATIAL { $$[0] = 2; }
-| SEARCH { $$[0] = 7; }
 | UNIQUE { $$[0] = 1; }
 | /*EMPTY*/ { $$[0] = 0; }
 ;
@@ -21018,7 +21128,7 @@ add_search_index
 ;
 
 add_search_index:
-SEARCH key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list
+SEARCH key_or_index opt_index_name opt_index_using_algorithm '(' search_sort_column_list ')' opt_index_option_list
 {
   (void)($2);
   ParseNode *col_list = NULL;
@@ -28225,6 +28335,7 @@ ACCESS_INFO
 |       EVERY
 |       EXCEPT %prec HIGHER_PARENS
 |       EXCHANGE
+|       EXCLUDE_PATHS
 |       EXCLUDING
 |       EXCLUSIVE
 |       EXPANSION
@@ -28311,6 +28422,8 @@ ACCESS_INFO
 |       INDEXES
 |       INDEX_DATA_GEN
 |       INDEX_TABLE_ID
+|       INCLUDE_PATHS
+|       INCLUDE_TYPES
 |       INCLUDING
 |       INCR
 |       INFO

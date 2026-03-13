@@ -21,6 +21,7 @@
 #include "share/search_index/ob_search_index_encoder.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "ob_search_index_config_filter.h"
 
 namespace oceanbase
 {
@@ -126,11 +127,13 @@ private:
         enc_param_(),
         obj_meta_(),
         arr_type_(nullptr),
-        elem_generator_(nullptr) {}
+        elem_generator_(nullptr),
+        config_filter_(nullptr) {}
     virtual ~Generator() {}
 
     int init(const uint64_t column_idx, const ObObjMeta &obj_meta,
-             const common::ObCollectionArrayType *arr_type);
+             const common::ObCollectionArrayType *arr_type,
+             const ObString *column_comment = nullptr);
     int generate_rows(const int64_t doc_id, const ObDatum& datum, ObSearchIndexRows &rows);
     int generate_rows(const ObIVector &doc_id_vec, const ObIVector &data_vec,
                       const int64_t batch_size, ObSearchIndexRows &rows);
@@ -159,14 +162,15 @@ private:
     // for array type
     common::ObCollectionArrayType *arr_type_;
     Generator *elem_generator_;
+    const ObSearchIndexConfigFilter *config_filter_;
   };
 
 public:
   explicit ObSearchIndexRowGenerator()
     : row_allocator_(common::ObMemAttr(MTL_ID(), "SearchIdxRow")),
       inner_allocator_(common::ObMemAttr(MTL_ID(), "SearchIdxGen")),
-      generators_(inner_allocator_), row_projector_(inner_allocator_), row_projector_ptr_(nullptr),
-      index_properties_() {}
+      generators_(inner_allocator_), row_projector_(inner_allocator_), row_projector_ptr_(nullptr)
+      {}
   virtual ~ObSearchIndexRowGenerator() { reset(); }
 
   void reset();
@@ -174,7 +178,7 @@ public:
   int init(const common::ObIArray<int32_t> &included_cid_idxes,
            const common::ObIArray<ObObjMeta> &included_obj_metas,
            const common::ObIArray<int64_t> &row_projector,
-           const ObString &index_properties,
+           const common::ObIArray<ObString> &column_comments,
            bool rowkey_only,
            const common::ObIArray<common::ObCollectionArrayType*> *arr_types);
 
@@ -191,7 +195,6 @@ private:
   common::ObFixedArray<Generator*, ObIAllocator> generators_;
   common::ObFixedArray<int64_t, ObIAllocator> row_projector_;
   const common::ObFixedArray<int64_t, ObIAllocator> *row_projector_ptr_;
-  ObString index_properties_;
 };
 
 } // namespace share

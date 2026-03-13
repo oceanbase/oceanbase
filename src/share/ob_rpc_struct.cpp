@@ -3151,7 +3151,8 @@ DEF_TO_STRING(ObColumnSortItem)
        K_(prefix_len),
        K_(order_type),
        K_(column_id),
-       K_(is_func_index));
+       K_(is_func_index),
+       K_(column_comment));
   J_OBJ_END();
   return pos;
 }

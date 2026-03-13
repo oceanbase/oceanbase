@@ -51,7 +51,9 @@ public:
                                      ObQueryRangeCtx &ctx,
                                      const ObRawExpr &path_expr,
                                      ObString &path,
-                                     bool &can_extract_range);
+                                     const bool is_range_cmp,
+                                     bool &can_extract_range,
+                                     const ObRawExpr *const_expr = nullptr);
 
   static int is_json_scalar_match_index(ObExecContext &exec_ctx, const ObObj &json_value,
                                         bool &is_match);

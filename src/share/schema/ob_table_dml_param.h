@@ -86,6 +86,8 @@ public:
   OB_INLINE const common::ObIArray<uint64_t> &get_search_index_included_cids() const { return search_idx_included_cids_; }
   OB_INLINE const common::ObIArray<int32_t> &get_search_index_included_cid_idxes() const { return search_idx_included_cid_idxes_; }
   OB_INLINE const common::ObIArray<common::ObCollectionArrayType*> &get_search_index_arr_types() const { return search_idx_arr_types_; }
+  OB_INLINE const common::ObIArray<ObString> &get_search_index_column_comments() const { return search_idx_column_comments_; }
+  int set_search_index_column_comments(const common::ObIArray<ObString> &column_comments);
   int set_search_index_included_cids(const common::ObIArray<uint64_t> &cids);
   int set_search_index_included_cid_idxes(const common::ObIArray<int32_t> &cid_idxes);
   int set_search_index_arr_types(const common::ObIArray<common::ObCollectionArrayType*> &arr_types);

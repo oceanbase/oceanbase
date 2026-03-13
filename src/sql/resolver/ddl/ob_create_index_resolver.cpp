@@ -17,6 +17,7 @@
 #include "share/table/ob_ttl_util.h"
 #include "share/search_index/ob_search_index_builder_util.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
+#include "share/search_index/ob_search_index_config_filter.h"
 
 namespace oceanbase
 {
@@ -165,6 +166,8 @@ int ObCreateIndexResolver::resolve_index_column_node(
     }
     for (int32_t i = 0; OB_SUCC(ret) && i < index_column_node->num_child_; ++i) {
       ParseNode *col_node = index_column_node->children_[i];
+      ParseNode *real_col_node = col_node;
+      const ParseNode *search_with_node = nullptr;
       ObColumnSortItem sort_item;
       if (OB_UNLIKELY(NULL == col_node)) {
         ret = OB_ERR_UNEXPECTED;
@@ -173,16 +176,28 @@ int ObCreateIndexResolver::resolve_index_column_node(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to check node type", K(ret));
       } else {
+        if (col_node->num_child_ >= 5 && OB_NOT_NULL(col_node->children_)
+            && OB_NOT_NULL(col_node->children_[4])) {
+          if (index_keyname_ == INDEX_KEYNAME::SEARCH_KEY
+              && col_node->children_[4]->type_ == T_SEARCH_INDEX_COLUMN_PARAMS) {
+            search_with_node = col_node->children_[4];
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("column-level WITH(...) is only supported for search index", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "column-level WITH(...) on non-search index is");
+          }
+        }
         //如果此node类型不是identifier,那么认为是函数索引.
-        if (col_node->children_[0]->type_ != T_IDENT) {
+        if (real_col_node->children_[0]->type_ != T_IDENT) {
           sort_item.is_func_index_ = true;
           cnt_func_index = true;
         }
-        sort_item.column_name_.assign_ptr(const_cast<char *>(col_node->children_[0]->str_value_),
-                                          static_cast<int32_t>(col_node->children_[0]->str_len_));
+        sort_item.column_name_.assign_ptr(const_cast<char *>(real_col_node->children_[0]->str_value_),
+                                          static_cast<int32_t>(real_col_node->children_[0]->str_len_));
         bool is_multi_value_index = false;
-        if (col_node->children_[0]->type_ != T_IDENT) {
-          ParseNode *expr_node = col_node->children_[0];
+        if (OB_FAIL(ret)) {
+        } else if (real_col_node->children_[0]->type_ != T_IDENT) {
+          ParseNode *expr_node = real_col_node->children_[0];
           if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(expr_node,
                                                                     is_multi_value_index,
                                                                     reinterpret_cast<int*>(&index_keyname_)))) {
@@ -262,8 +277,8 @@ int ObCreateIndexResolver::resolve_index_column_node(
       }
       // 前缀索引的前缀长度
       if (OB_FAIL(ret)) {
-      } else if (NULL != col_node->children_[1]) {
-        sort_item.prefix_len_ = static_cast<int32_t>(col_node->children_[1]->value_);
+      } else if (NULL != real_col_node->children_[1]) {
+        sort_item.prefix_len_ = static_cast<int32_t>(real_col_node->children_[1]->value_);
         if (0 == sort_item.prefix_len_) {
           ret = OB_KEY_PART_0;
           LOG_WARN("index prefix len invalid", K(ret), "prefix_len", sort_item.prefix_len_);
@@ -388,11 +403,11 @@ int ObCreateIndexResolver::resolve_index_column_node(
 
       if (OB_FAIL(ret)) {
         //do nothing
-      } else if (col_node->num_child_ <= 3) {
+      } else if (real_col_node->num_child_ <= 3) {
         //no id specified, do nothing
-      } else if (col_node->children_[3] &&
-                 col_node->children_[3]->type_ == T_COLUMN_ID) {
-        ParseNode *id_node = col_node->children_[3];
+      } else if (real_col_node->children_[3] &&
+                 real_col_node->children_[3]->type_ == T_COLUMN_ID) {
+        ParseNode *id_node = real_col_node->children_[3];
         bool is_sync_ddl_user = false;
         if (id_node->num_child_ != 1
             || OB_ISNULL(id_node->children_[0])
@@ -406,6 +421,16 @@ int ObCreateIndexResolver::resolve_index_column_node(
           LOG_WARN("Only support for sync ddl user to specify column id", K(ret), K(session_info_->get_user_name()));
         } else {
           sort_item.column_id_ = static_cast<int32_t>(id_node->children_[0]->value_);
+        }
+      }
+
+      if (OB_SUCC(ret)
+          && index_keyname_ == INDEX_KEYNAME::SEARCH_KEY
+          && OB_NOT_NULL(search_with_node)) {
+        const ObColumnSchemaV2 *col_schema = tbl_schema->get_column_schema(sort_item.column_name_);
+        if (OB_FAIL(ObDDLResolver::resolve_search_index_column_comment(
+                search_with_node, col_schema, sort_item.column_name_, allocator_, sort_item.column_comment_))) {
+          LOG_WARN("failed to resolve search index column config", K(ret), K(sort_item.column_name_));
         }
       }
 

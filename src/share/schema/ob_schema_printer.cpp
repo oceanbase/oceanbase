@@ -26,6 +26,7 @@
 #include "sql/resolver/ddl/ob_storage_cache_ddl_util.h"
 #include "lib/restore/ob_storage_info.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/search_index/ob_search_index_config_filter.h"
 
 namespace oceanbase
 {
@@ -630,6 +631,10 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, " VECTOR KEY "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print VECTOR KEY", K(ret));
         }
+      } else if (index_schema->is_search_def_index()) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " SEARCH KEY "))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print SEARCH KEY", K(ret));
+        }
       } else if (index_schema->is_fts_index()) {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, " FULLTEXT KEY "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print FULLTEXT KEY", K(ret));
@@ -690,7 +695,7 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
               }
             }
             if (OB_SUCC(ret) && is_valid_col) {
-              if (OB_FAIL(print_index_column(table_schema, last_col, false /* not last one */, buf, buf_len, pos))) {
+              if (OB_FAIL(print_index_column(table_schema, last_col, *index_schema, false /* not last one */, buf, buf_len, pos))) {
                 SHARE_SCHEMA_LOG(WARN, "fail to print index column", K(last_col), K(ret));
               }
             }
@@ -710,7 +715,7 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(print_index_column(table_schema, last_col, true /* last column */, buf, buf_len, pos))) {
+          if (OB_FAIL(print_index_column(table_schema, last_col, *index_schema, true /* last column */, buf, buf_len, pos))) {
             SHARE_SCHEMA_LOG(WARN, "fail to print column name", K(ret), K(last_col));
           } else { /*do nothing*/ }
         }
@@ -1203,6 +1208,7 @@ int ObSchemaPrinter::print_ordinary_index_column_expr(const ObColumnSchemaV2 &co
 
 int ObSchemaPrinter::print_index_column(const ObTableSchema &table_schema,
                                         const ObColumnSchemaV2 &column,
+                                        const ObTableSchema &index_schema,
                                         bool is_last,
                                         char *buf,
                                         int64_t buf_len,
@@ -1212,6 +1218,9 @@ int ObSchemaPrinter::print_index_column(const ObTableSchema &table_schema,
   bool is_oracle_mode = false;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
   ObString new_col_name;
+  const bool is_search_index = index_schema.is_search_def_index();
+  const ObColumnSchemaV2 *index_col = schema_guard_.get_column_schema(
+    index_schema.get_tenant_id(), index_schema.get_table_id(), column.get_column_id());
   if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
   } else if (column.is_hidden() && column.is_generated_column()) { //automatic generated column
@@ -1268,6 +1277,9 @@ int ObSchemaPrinter::print_index_column(const ObTableSchema &table_schema,
     SHARE_SCHEMA_LOG(WARN, "fail to generate new name with escape character", K(ret), K(column.get_column_name_str()));
   } else if (OB_FAIL(print_identifier(buf, buf_len, pos, new_col_name, is_oracle_mode))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print column name", K(ret), K(column));
+  } else if (is_search_index && OB_NOT_NULL(index_col) &&
+      OB_FAIL(share::ObSearchIndexConfigFilter::print_schema(index_col->get_comment_str(), buf, buf_len, pos))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to print search index column config", K(ret), K(column));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, is_last ? ")" : ", "))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print column name", K(ret), K(column));
   } else { /*do nothing*/ }

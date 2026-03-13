@@ -46,7 +46,8 @@ int ObSearchIndexRow::build_datum_row(ObIAllocator &allocator, blocksstable::ObD
 }
 
 int ObSearchIndexRowGenerator::Generator::init(const uint64_t column_idx, const ObObjMeta &obj_meta,
-                                               const common::ObCollectionArrayType *arr_type)
+                                               const common::ObCollectionArrayType *arr_type,
+                                               const ObString *column_comment)
 {
   int ret = OB_SUCCESS;
   column_idx_ = column_idx;
@@ -70,6 +71,22 @@ int ObSearchIndexRowGenerator::Generator::init(const uint64_t column_idx, const 
       LOG_WARN("fail to init array generator", K(ret));
     }
   }
+
+  // Allocate filter from inner_allocator_ so it outlives generate_rows(); row_allocator_ is reused each generate_rows() and would otherwise free the filter.
+  if (OB_SUCC(ret) && OB_NOT_NULL(column_comment) && !column_comment->empty()) {
+    ObSearchIndexConfigFilter *filter = OB_NEWx(ObSearchIndexConfigFilter, &inner_allocator_, MTL_ID());
+    if (OB_ISNULL(filter)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc search index json path filter", K(ret));
+    } else if (OB_FAIL(filter->init_from_comment(*column_comment))) {
+      LOG_WARN("failed to parse json filter from column comment", K(ret), K(*column_comment));
+      filter->~ObSearchIndexConfigFilter();
+      filter = nullptr;
+    } else {
+      config_filter_ = filter;
+    }
+  }
+
   return ret;
 }
 
@@ -95,7 +112,7 @@ int ObSearchIndexRowGenerator::Generator::init_array_generator(const common::ObC
         LOG_WARN("fail to allocate memory for element generator", K(ret));
       } else {
         elem_generator_ = new (elem_generator_ptr) Generator(allocator_, inner_allocator_);
-        if (OB_FAIL(elem_generator_->init(column_idx_, elem_meta, nullptr))) {
+        if (OB_FAIL(elem_generator_->init(column_idx_, elem_meta, nullptr, nullptr))) {
           LOG_WARN("fail to init element generator", K(ret));
         }
       }
@@ -290,7 +307,12 @@ int ObSearchIndexRowGenerator::Generator::generate_rows(
       // scalar json node
       ObString path;
       ObString value;
-      if (OB_FAIL(ObSearchIndexValueEncoder::encode_json_scalar(allocator_, j_base, value,
+      bool passed = true;
+      if (OB_NOT_NULL(config_filter_) && OB_FAIL(config_filter_->is_indexed(path_items, node_type, passed))) {
+        LOG_WARN("failed to check path filter", K(ret));
+      } else if (!passed) {
+        // do nothing
+      } else if (OB_FAIL(ObSearchIndexValueEncoder::encode_json_scalar(allocator_, j_base, value,
                                                                 enc_param_))) {
         LOG_WARN("fail to encode json scalar", K(ret));
       } else if (OB_FAIL(ObSearchIndexPathEncoder::encode_path(allocator_, path_items, node_type,
@@ -396,13 +418,14 @@ int ObSearchIndexRowGenerator::Generator::generate_array_rows(const int64_t doc_
 int ObSearchIndexRowGenerator::init(const common::ObIArray<int32_t> &included_cid_idxes,
                                     const common::ObIArray<ObObjMeta> &included_obj_metas,
                                     const common::ObIArray<int64_t> &row_projector,
-                                    const ObString &index_properties,
+                                    const common::ObIArray<ObString> &column_comments,
                                     bool rowkey_only,
                                     const common::ObIArray<common::ObCollectionArrayType*> *arr_types)
 {
   int ret = OB_SUCCESS;
   UNUSED(rowkey_only);
   CK (included_cid_idxes.count() == included_obj_metas.count());
+  CK (included_cid_idxes.count() == column_comments.count());
   void *mem = nullptr;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(row_projector_.assign(row_projector))) {
@@ -421,13 +444,12 @@ int ObSearchIndexRowGenerator::init(const common::ObIArray<int32_t> &included_ci
       generators_.at(i) = new (static_cast<char*>(mem) + i * sizeof(Generator)) Generator(row_allocator_, inner_allocator_);
       const common::ObCollectionArrayType *arr_type = (nullptr != arr_types) ? arr_types->at(i) : nullptr;
       if (OB_FAIL(generators_.at(i)->init(included_cid_idxes.at(i), included_obj_metas.at(i),
-                                          arr_type))) {
+                                          arr_type, &column_comments.at(i)))) {
         LOG_WARN("fail to init generator", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
       row_projector_ptr_ = &row_projector_;
-      index_properties_ = index_properties;
     }
   }
   return ret;

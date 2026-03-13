@@ -1026,6 +1026,15 @@ int ObTableSchemaParam::has_udf_column(bool &has_udf) const
   return ret;
 }
 
+int ObTableSchemaParam::set_search_index_column_comments(const common::ObIArray<ObString> &column_comments)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(search_idx_column_comments_.assign(column_comments))) {
+    LOG_WARN("failed to assign search index column configs", K(ret));
+  }
+  return ret;
+}
+
 int ObTableSchemaParam::set_search_index_included_cids(const common::ObIArray<uint64_t> &cids)
 {
   int ret = OB_SUCCESS;

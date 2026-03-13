@@ -36,6 +36,7 @@
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
 #include "share/search_index/ob_search_index_builder_util.h"
+#include "share/search_index/ob_search_index_config_filter.h"
 
 namespace oceanbase
 {
@@ -284,6 +285,36 @@ int ObDDLResolver::append_search_index_args(
   for (int64_t i = 0; OB_SUCC(ret) && i < num_search_args; ++i) {
     if (OB_FAIL(resolve_results.push_back(resolve_result))) {
       LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_search_index_column_comment(
+    const ParseNode *search_with_node,
+    const share::schema::ObColumnSchemaV2 *col_schema,
+    const ObString &column_name,
+    ObIAllocator *allocator,
+    ObString &column_comment)
+{
+  int ret = OB_SUCCESS;
+  column_comment.reset();
+  if (OB_ISNULL(search_with_node)) {
+    // No WITH(...) clause, return empty config
+  } else if (OB_ISNULL(col_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column schema is null when validating search index column params", K(ret), K(column_name));
+  } else if (!ob_is_json_tc(col_schema->get_data_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("search index column WITH(...) is only supported for JSON column", K(ret),
+             K(column_name), K(col_schema->get_data_type()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "search index column WITH(...) on non-JSON column is");
+  } else {
+    ObSqlString cfg;
+    if (OB_FAIL(share::ObSearchIndexConfigFilter::print_comment(search_with_node, cfg))) {
+      LOG_WARN("failed to build search index column config string", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator, cfg.string(), column_comment))) {
+      LOG_WARN("failed to copy column config", K(ret), K(cfg.string()));
     }
   }
   return ret;
@@ -1792,6 +1823,10 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           ret = OB_NOT_SUPPORTED;
           SQL_RESV_LOG(WARN, "vector index not support storing column", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "setting vector index storing column is");
+        } else if (INDEX_KEYNAME::SEARCH_KEY == index_keyname_) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "search index not support storing column", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "setting search index storing column is");
         } else if (OB_ISNULL(option_node->children_[0]) ||
             T_STORING_COLUMN_LIST != option_node->type_ ||
             option_node->num_child_ <1) {

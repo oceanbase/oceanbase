@@ -193,6 +193,7 @@ public:
                                          int64_t& pos) const;
   int print_index_column(const ObTableSchema &table_schema,
                          const ObColumnSchemaV2 &column,
+                         const ObTableSchema &index_schema,
                          bool is_last,
                          char *buf,
                          int64_t buf_len,
