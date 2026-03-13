@@ -577,6 +577,73 @@ TEST_F(ObTieredMetadataIOTest, test_tiered_big_metadata_io)
   ASSERT_EQ(0, macro_ids.count());
 }
 
+TEST_F(ObTieredMetadataIOTest, test_repeat_insert_same_key)
+{
+  // Three SHARED_TABLET_SUB_META_IN_TABLE object IO
+  share::ObTenantSwitchGuard guard;
+  OK(guard.switch_to(tenant_id_));
+  int ret = OB_SUCCESS;
+
+  // IO 1 : SHARED_TABLET_SUB_META_IN_TABLE object IO
+  ObArray<MacroBlockId> batch_macro_id;
+  ObArray<ObStorageObjectWriteInfo> batch_write_info;
+  const int64_t tablet_id = 200005;
+
+  MacroBlockId file_id_1 = build_tiered_metadata_file_id(ObStorageObjectType::SHARED_TABLET_SUB_META_IN_TABLE,
+                                                         tablet_id,
+                                                         1);
+  const char *buffer_1 = "aaa";
+  ObStorageObjectWriteInfo write_info_1 = gen_one_object_write_info(buffer_1, STRLEN(buffer_1));
+  ASSERT_EQ(OB_SUCCESS, batch_macro_id.push_back(file_id_1));
+  ASSERT_EQ(OB_SUCCESS, batch_write_info.push_back(write_info_1));
+
+  // IO 2 : SHARED_TABLET_SUB_META_IN_TABLE object IO
+  MacroBlockId file_id_2 = inc_file_id_seq(file_id_1);
+  const char *buffer_2 = "bbbb";
+  ObStorageObjectWriteInfo write_info_2 = gen_one_object_write_info(buffer_2, STRLEN(buffer_2));
+  ASSERT_EQ(OB_SUCCESS, batch_macro_id.push_back(file_id_2));
+  ASSERT_EQ(OB_SUCCESS, batch_write_info.push_back(write_info_2));
+
+  // IO 3 : SHARED_TABLET_SUB_META_IN_TABLE object IO
+  MacroBlockId file_id_3 = inc_file_id_seq(file_id_2);
+  const char *buffer_3 = "cccccc";
+  ObStorageObjectWriteInfo write_info_3 = gen_one_object_write_info(buffer_3, STRLEN(buffer_3));
+  ASSERT_EQ(OB_SUCCESS, batch_macro_id.push_back(file_id_3));
+  ASSERT_EQ(OB_SUCCESS, batch_write_info.push_back(write_info_3));
+
+  // batch write 3 ss object io
+  ObTieredMetadataBatchHandle batch_hd;
+  ASSERT_EQ(OB_SUCCESS, OB_TIERED_METADATA_OBJECT_MGR.batch_write_object(batch_macro_id, batch_write_info, batch_hd));
+
+  // rewrite file_id_1, with same value
+  const char *rewrite_buffer_1 = "aaa";
+  ObStorageObjectWriteInfo rewrite_info_1 = gen_one_object_write_info(rewrite_buffer_1, STRLEN(rewrite_buffer_1));
+  ObStorageObjectHandle rewrite_hd_1;
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.async_write_object(file_id_1, rewrite_info_1, rewrite_hd_1));
+  ASSERT_EQ(OB_SUCCESS, rewrite_hd_1.wait());
+
+  // rewrite file_id_2, with shorter value
+  const char *rewrite_buffer_2 = "bbb";
+  ObStorageObjectWriteInfo rewrite_info_2 = gen_one_object_write_info(rewrite_buffer_2, STRLEN(rewrite_buffer_2));
+  ObStorageObjectHandle rewrite_hd_2;
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.async_write_object(file_id_2, rewrite_info_2, rewrite_hd_2));
+  ASSERT_EQ(OB_OBJECT_STORAGE_CONDITION_NOT_MATCH, rewrite_hd_2.wait());
+
+  // rewrite file_id_3, with longer value
+  const char *rewrite_buffer_3 = "ccccccc";
+  ObStorageObjectWriteInfo rewrite_info_3 = gen_one_object_write_info(rewrite_buffer_3, STRLEN(rewrite_buffer_3));
+  ObStorageObjectHandle rewrite_hd_3;
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.async_write_object(file_id_3, rewrite_info_3, rewrite_hd_3));
+  ASSERT_EQ(OB_OBJECT_STORAGE_CONDITION_NOT_MATCH, rewrite_hd_3.wait());
+
+  // read and verify
+  const int64_t read_buf_size = 1024;
+  char read_buf[read_buf_size];
+  READ_AND_TEST(1)
+  READ_AND_TEST(2)
+  READ_AND_TEST(3)
+}
+
 } // namespace unittest
 } // namespace oceanbase
 
