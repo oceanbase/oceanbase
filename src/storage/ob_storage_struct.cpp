@@ -495,7 +495,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam()
       update_tablet_ss_change_version_(),
       tablet_ss_change_fully_applied_(false),
       upper_trans_param_(),
-      need_wait_check_flag_(true)
+      need_wait_check_flag_(true),
+      input_tables_handle_(NULL)
 {
 }
 
@@ -519,7 +520,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     update_tablet_ss_change_version_(),
     tablet_ss_change_fully_applied_(false),
     upper_trans_param_(upper_trans_param),
-    need_wait_check_flag_(true)
+    need_wait_check_flag_(true),
+    input_tables_handle_(NULL)
 {
 }
 
@@ -545,7 +547,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
       update_tablet_ss_change_version_(),
       tablet_ss_change_fully_applied_(false),
       upper_trans_param_(),
-      need_wait_check_flag_(need_wait_check_flag)
+      need_wait_check_flag_(need_wait_check_flag),
+      input_tables_handle_(NULL)
 {
 }
 
