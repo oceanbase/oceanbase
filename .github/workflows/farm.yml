@@ -1,8 +1,8 @@
-name: SeekDB CI
+name: Farm
 
 on:
   pull_request:
-    branches: [ master, develop ]
+    branches: [master, develop]
     types: [opened, reopened, synchronize, ready_for_review]
     paths-ignore:
       - 'docs/**'
@@ -17,188 +17,231 @@ on:
 
 env:
   MYSQLTEST_SLICES: "4"
-  SEEKDB_TASK_DIR: ${{ github.workspace }}/seekdb_build/${{ github.run_id }}
+  FARM_TASK_DIR: ${{ github.workspace }}/farm_build/${{ github.run_id }}
+  cache-name: cache-deps
 
 jobs:
-  seekdb:
-    if: ${{ github.repository_owner == 'oceanbase' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
-    name: seekdb
-    # If the registered runner label is different in this repo, replace it here.
-    runs-on: seekdb-test-arc-runner
+  farm-setup:
+    if: ${{ github.repository_owner == 'guoyan1996' && !github.event.pull_request.draft }}
+    name: setup
+    runs-on: ob-test-arc-runner-k8s
+    container:
+      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260310
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+
       - name: Cache deps
         uses: actions/cache@v4
         with:
-          key: ${{ runner.os }}-seekdb-deps-el9-${{ hashFiles('deps/init/oceanbase.el9.x86_64.deps') }}
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-el9.x86_64-${{ hashFiles('deps/init/oceanbase.el9.x86_64.deps') }}
           path: deps/3rd
 
-      - name: Prepare
+      - name: Prepare (jobargs, run_jobs)
+        shell: bash
         run: |
-          chmod +x .github/script/seekdb/prepare.sh
+          chmod +x .github/script/farm/prepare.sh
           export GITHUB_RUN_ID="${{ github.run_id }}"
           export GITHUB_WORKSPACE="${{ github.workspace }}"
           export MYSQLTEST_SLICES="${{ env.MYSQLTEST_SLICES }}"
-          export SEEKDB_TASK_DIR="${{ env.SEEKDB_TASK_DIR }}"
-          .github/script/seekdb/prepare.sh
+          export FARM_TASK_DIR="${{ env.FARM_TASK_DIR }}"
+          .github/script/farm/prepare.sh
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2.11
+        with:
+          max-size: 800M
+          save: ${{ github.event_name == 'push' }}
+          key: farm
 
       - name: Compile
         id: compile
+        shell: bash
         run: |
-          chmod +x .github/script/seekdb/compile.sh
+          chmod +x .github/script/farm/compile.sh
           export GITHUB_RUN_ID="${{ github.run_id }}"
-          export GITHUB_WORKSPACE="${{ github.workspace }}"
-          export SEEKDB_TASK_DIR="${{ env.SEEKDB_TASK_DIR }}"
+          WS="${{ github.workspace }}"
+          if [[ ! -f "$WS/build.sh" ]] && [[ -f "$(pwd)/build.sh" ]]; then
+            export GITHUB_WORKSPACE="$(pwd)"
+          else
+            export GITHUB_WORKSPACE="$WS"
+          fi
+          export FARM_TASK_DIR="${{ env.FARM_TASK_DIR }}"
           export RELEASE_MODE="${{ vars.RELEASE_MODE || '' }}"
           export FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}"
-          export PATH="${{ github.workspace }}/deps/3rd/usr/local/oceanbase/devtools/bin:$PATH"
-          if [[ -n "${{ vars.FARM2_WORKER_IMAGE || '' }}" ]]; then
-            docker run --rm \
-              -v "${{ github.workspace }}:/workspace" \
-              -w /workspace \
-              -e GITHUB_RUN_ID="${{ github.run_id }}" \
-              -e GITHUB_WORKSPACE="/workspace" \
-              -e SEEKDB_TASK_DIR="/workspace/seekdb_build/${{ github.run_id }}" \
-              -e RELEASE_MODE="${{ vars.RELEASE_MODE || '' }}" \
-              -e FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}" \
-              -e PATH="/workspace/deps/3rd/usr/local/oceanbase/devtools/bin:$PATH" \
-              "${{ vars.FARM2_WORKER_IMAGE }}" \
-              /bin/bash -x /workspace/.github/script/seekdb/compile.sh
-          else
-            .github/script/seekdb/compile.sh
-          fi
+          export PATH="$GITHUB_WORKSPACE/deps/3rd/usr/local/oceanbase/devtools/bin:$PATH"
+          .github/script/farm/compile.sh
 
-      - name: Record compile failure
-        if: steps.compile.outcome == 'failure'
-        run: echo '++compile++' >> "${{ env.SEEKDB_TASK_DIR }}/fail_cases.output"
-
-      - name: Show parser error
-        if: always()
+      - name: Prepare observer
+        shell: bash
         run: |
-          WS="${{ github.workspace }}"
-          ERR="$WS/src/sql/parser/_gen_parser.error"
-          OUT="$WS/src/sql/parser/_gen_parser.output"
-          echo "workspace=$WS"
-          echo "looking for: $ERR"
-          ls -la "$WS/src/sql/parser/" 2>/dev/null || true
-          echo "--- _gen_parser.error ---"
-          if [[ -f "$ERR" ]]; then cat "$ERR"; else echo "(file not found)"; fi
-          echo "--- _gen_parser.output (last 80 lines) ---"
-          if [[ -f "$OUT" ]]; then tail -80 "$OUT"; else echo "(file not found)"; fi
-
-      - name: Mysqltest slice 0
-        if: success()
-        run: |
-          chmod +x .github/script/seekdb/mysqltest_slice.sh
-          export GITHUB_RUN_ID="${{ github.run_id }}"
-          export GITHUB_WORKSPACE="${{ github.workspace }}"
-          export SEEKDB_TASK_DIR="${{ env.SEEKDB_TASK_DIR }}"
-          export SLICE_IDX=0
-          export SLICES="${{ env.MYSQLTEST_SLICES }}"
-          export BRANCH="${{ github.ref_name }}"
-          export FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}"
-          if [[ -n "${{ vars.FARM2_WORKER_IMAGE || '' }}" ]]; then
-            docker run --rm \
-              -v "${{ github.workspace }}:/workspace" \
-              -w /workspace \
-              -e GITHUB_RUN_ID="${{ github.run_id }}" \
-              -e GITHUB_WORKSPACE="/workspace" \
-              -e SEEKDB_TASK_DIR="/workspace/seekdb_build/${{ github.run_id }}" \
-              -e SLICE_IDX=0 \
-              -e SLICES="${{ env.MYSQLTEST_SLICES }}" \
-              -e BRANCH="${{ github.ref_name }}" \
-              -e FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}" \
-              "${{ vars.FARM2_WORKER_IMAGE }}" \
-              /bin/bash -c '. /workspace/.github/script/seekdb/mysqltest_slice.sh'
-          else
-            .github/script/seekdb/mysqltest_slice.sh
+          if [[ ! -x observer ]]; then
+            for base in build_debug build_release build; do
+              for cand in "$base/observer" "$base/src/observer/observer"; do
+                if [[ -f "$cand" ]] && [[ -x "$cand" ]]; then
+                  cp -f "$cand" observer && chmod +x observer
+                  echo "observer copied from $cand"
+                  break 2
+                fi
+              done
+            done
           fi
+          if [[ ! -x observer ]]; then echo "observer missing or not executable"; exit 1; fi
+          echo "observer size: $(stat -c%s observer 2>/dev/null || stat -f%z observer 2>/dev/null) bytes"
 
-      - name: Mysqltest slice 1
-        if: success()
+      - name: Compress and upload observer
+        shell: bash
         run: |
-          export GITHUB_RUN_ID="${{ github.run_id }}"
-          export GITHUB_WORKSPACE="${{ github.workspace }}"
-          export SEEKDB_TASK_DIR="${{ env.SEEKDB_TASK_DIR }}"
-          export SLICE_IDX=1
-          export SLICES="${{ env.MYSQLTEST_SLICES }}"
-          export BRANCH="${{ github.ref_name }}"
-          export FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}"
-          if [[ -n "${{ vars.FARM2_WORKER_IMAGE || '' }}" ]]; then
-            docker run --rm -v "${{ github.workspace }}:/workspace" -w /workspace \
-              -e GITHUB_RUN_ID="${{ github.run_id }}" -e GITHUB_WORKSPACE="/workspace" \
-              -e SEEKDB_TASK_DIR="/workspace/seekdb_build/${{ github.run_id }}" \
-              -e SLICE_IDX=1 -e SLICES="${{ env.MYSQLTEST_SLICES }}" -e BRANCH="${{ github.ref_name }}" \
-              -e FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}" \
-              "${{ vars.FARM2_WORKER_IMAGE }}" \
-              /bin/bash -c '. /workspace/.github/script/seekdb/mysqltest_slice.sh'
-          else
-            .github/script/seekdb/mysqltest_slice.sh
-          fi
+          zstd -f -q -T0 -o observer.zst observer
+          echo "observer.zst size: $(stat -c%s observer.zst 2>/dev/null || stat -f%z observer.zst 2>/dev/null) bytes"
 
-      - name: Mysqltest slice 2
-        if: success()
+      - name: Upload observer artifact (zst)
+        uses: actions/upload-artifact@v4
+        with:
+          name: farm-observer
+          path: observer.zst
+          retention-days: 1
+
+  farm-mysqltest:
+    if: ${{ github.repository_owner == 'guoyan1996' && !github.event.pull_request.draft }}
+    name: mysqltest-slice-${{ matrix.slice }}
+    needs: farm-setup
+    runs-on: ob-test-arc-runner-k8s
+    strategy:
+      fail-fast: false
+      matrix:
+        slice: [0, 1, 2, 3]
+    container:
+      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260310
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download observer from artifact
+        id: get-observer
+        uses: actions/download-artifact@v4
+        with:
+          name: farm-observer
+        continue-on-error: true
+
+      - name: Place observer (decompress or fallback wget)
+        shell: bash
         run: |
-          export GITHUB_RUN_ID="${{ github.run_id }}"
-          export GITHUB_WORKSPACE="${{ github.workspace }}"
-          export SEEKDB_TASK_DIR="${{ env.SEEKDB_TASK_DIR }}"
-          export SLICE_IDX=2
-          export SLICES="${{ env.MYSQLTEST_SLICES }}"
-          export BRANCH="${{ github.ref_name }}"
-          export FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}"
-          if [[ -n "${{ vars.FARM2_WORKER_IMAGE || '' }}" ]]; then
-            docker run --rm -v "${{ github.workspace }}:/workspace" -w /workspace \
-              -e GITHUB_RUN_ID="${{ github.run_id }}" -e GITHUB_WORKSPACE="/workspace" \
-              -e SEEKDB_TASK_DIR="/workspace/seekdb_build/${{ github.run_id }}" \
-              -e SLICE_IDX=2 -e SLICES="${{ env.MYSQLTEST_SLICES }}" -e BRANCH="${{ github.ref_name }}" \
-              -e FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}" \
-              "${{ vars.FARM2_WORKER_IMAGE }}" /bin/bash -c '. /workspace/.github/script/seekdb/mysqltest_slice.sh'
+          if [[ -f farm-observer ]]; then
+            zstd -d -f -q -o observer farm-observer && chmod +x observer
+          elif [[ -f farm-observer/observer.zst ]]; then
+            zstd -d -f -q -o observer farm-observer/observer.zst && chmod +x observer
+          elif [[ -f farm-observer/observer ]]; then
+            mv farm-observer/observer observer && chmod +x observer
           else
-            .github/script/seekdb/mysqltest_slice.sh
+            echo "Artifact not found, falling back to wget"
+            URL="${{ vars.FARM_OBSERVER_URL }}"
+            [[ -z "$URL" ]] && URL="http://6.12.233.4:5000/observer"
+            wget -O observer "$URL" || exit 1
+            chmod +x observer
           fi
+          ls -la observer
 
-      - name: Mysqltest slice 3
-        if: success()
+      - name: Run mysqltest slice
+        shell: bash
         run: |
-          export GITHUB_RUN_ID="${{ github.run_id }}"
-          export GITHUB_WORKSPACE="${{ github.workspace }}"
-          export SEEKDB_TASK_DIR="${{ env.SEEKDB_TASK_DIR }}"
-          export SLICE_IDX=3
-          export SLICES="${{ env.MYSQLTEST_SLICES }}"
-          export BRANCH="${{ github.ref_name }}"
-          export FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}"
-          if [[ -n "${{ vars.FARM2_WORKER_IMAGE || '' }}" ]]; then
-            docker run --rm -v "${{ github.workspace }}:/workspace" -w /workspace \
-              -e GITHUB_RUN_ID="${{ github.run_id }}" -e GITHUB_WORKSPACE="/workspace" \
-              -e SEEKDB_TASK_DIR="/workspace/seekdb_build/${{ github.run_id }}" \
-              -e SLICE_IDX=3 -e SLICES="${{ env.MYSQLTEST_SLICES }}" -e BRANCH="${{ github.ref_name }}" \
-              -e FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}" \
-              "${{ vars.FARM2_WORKER_IMAGE }}" /bin/bash -c '. /workspace/.github/script/seekdb/mysqltest_slice.sh'
-          else
-            .github/script/seekdb/mysqltest_slice.sh
-          fi
+          chmod +x .github/script/farm/mysqltest_slice.sh
+          export GITHUB_RUN_ID="${{ github.run_id }}" GITHUB_WORKSPACE="${{ github.workspace }}"
+          export FARM_TASK_DIR="${{ github.workspace }}/farm_build/${{ github.run_id }}/slice_${{ matrix.slice }}"
+          export SLICE_IDX=${{ matrix.slice }} SLICES="${{ env.MYSQLTEST_SLICES }}"
+          export BRANCH="${{ github.ref_name }}" FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}"
+          mkdir -p "$FARM_TASK_DIR"
+          .github/script/farm/mysqltest_slice.sh
 
-      - name: Collect result
+      - name: Collect slice result
         if: success() || failure()
+        shell: bash
         run: |
-          chmod +x .github/script/seekdb/collect_result.sh
-          export GITHUB_RUN_ID="${{ github.run_id }}"
-          export GITHUB_WORKSPACE="${{ github.workspace }}"
-          export SEEKDB_TASK_DIR="${{ env.SEEKDB_TASK_DIR }}"
-          .github/script/seekdb/collect_result.sh "${{ github.workspace }}/seekdb_result.json"
+          chmod +x .github/script/farm/collect_result.sh
+          export GITHUB_RUN_ID="${{ github.run_id }}" GITHUB_WORKSPACE="${{ github.workspace }}"
+          export FARM_TASK_DIR="${{ github.workspace }}/farm_build/${{ github.run_id }}/slice_${{ matrix.slice }}"
+          .github/script/farm/collect_result.sh farm_result.json
+        continue-on-error: true
 
-      - name: Output result to log
-        if: success() || failure()
-        run: |
-          echo "=== SeekDB native result ==="
-          cat seekdb_result.json
-
-      - name: Upload SeekDB result
+      - name: Upload slice result
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
-          name: seekdb-result
+          name: farm-result-slice-${{ matrix.slice }}
+          path: farm_result.json
+          retention-days: 1
+        continue-on-error: true
+
+      # 失败时上传 collected_log 便于排查：obd_log、mysqltest_log、mysqltest_rec_log、core
+      - name: Upload collected_log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: farm-collected-log-slice-${{ matrix.slice }}
+          path: farm_home_${{ matrix.slice }}/collected_log_${{ matrix.slice }}.tar.gz
+          retention-days: 7
+        continue-on-error: true
+
+      - name: Job summary (logs hint)
+        if: always()
+        run: |
+          if [[ -f "farm_home_${{ matrix.slice }}/collected_log_${{ matrix.slice }}.tar.gz" ]]; then
+            echo "### Slice ${{ matrix.slice }} collected_log uploaded" >> "$GITHUB_STEP_SUMMARY"
+            echo "Download **farm-collected-log-slice-${{ matrix.slice }}** from Artifacts. Contents: \`obd_log/\`, \`mysqltest_log/\`, \`mysqltest_rec_log/\`, core dumps." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  farm-collect:
+    # 仅在 4 个 mysqltest slice 都跑完（成功或失败）时执行；若 mysqltest 被 skip 则不跑
+    if: ${{ github.repository_owner == 'guoyan1996' && !github.event.pull_request.draft && (always() && (needs.farm-mysqltest.result == 'success' || needs.farm-mysqltest.result == 'failure')) }}
+    name: collect
+    needs: farm-mysqltest
+    runs-on: ob-test-arc-runner-k8s
+    container:
+      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260310
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all slice results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: seekdb-result-slice-*
+          path: slice_results
+          merge-multiple: true
+
+      - name: Merge results and upload
+        shell: bash
+        run: |
+          RUN_ID="${{ github.run_id }}"
+          FAILED=""
+          SUCCESS="true"
+          while IFS= read -r f; do
+            [[ -f "$f" ]] || continue
+            grep -q '"success":false' "$f" 2>/dev/null && SUCCESS="false"
+            while IFS= read -r c; do
+              [[ -n "$c" ]] && FAILED="${FAILED}${FAILED:+,}\"${c//\"/\\\"}\""
+            done < <(grep -oP '"failed_cases":\[\K[^\]]*' "$f" 2>/dev/null | tr ',' '\n' | sed 's/^"\|"$//g')
+          done < <(find slice_results -name 'seekdb_result.json' 2>/dev/null)
+          echo "{\"success\":$SUCCESS,\"run_id\":\"$RUN_ID\",\"failed_cases\":[${FAILED:-}]}" > seekdb_result.json
+          echo "=== SeekDB native result ==="
+          cat seekdb_result.json
+
+      - name: Upload SeekDB result as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: seekdb-result-native
           path: seekdb_result.json
           retention-days: 30
+
+      - name: Job summary (where to find logs)
+        run: |
+          echo "## FARM CI 结果与日志" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 内容 | Artifact 名称 | 说明 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|---------------|------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 汇总结果 | \`farm-result-native\` | 各 slice 合并后的 success/failed_cases |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 单 slice 结果 | \`farm-result-slice-0\` ~ \`3\` | 各 slice 的 farm_result.json |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 失败时详细日志 | \`farm-collected-log-slice-N\` | obd_log、mysqltest_log、mysqltest_rec_log、core，仅失败时上传 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "在本次 Run 的 **Artifacts** 区域下载上述文件。" >> "$GITHUB_STEP_SUMMARY"
