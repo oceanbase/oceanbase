@@ -103,12 +103,12 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_adapters()
       FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
         ObPluginVectorIndexAdaptor *adapter = iter->second;
         ObSchemaGetterGuard schema_guard;
-        const ObTableSchema *table_schema;
+        const ObSimpleTableSchemaV2 *table_schema = NULL;
         ObTabletID tablet_id = iter->first;
         ObTabletHandle tablet_handle;
         if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
           LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
-        } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, adapter->get_vbitmap_table_id(), table_schema))) {
+        } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, adapter->get_vbitmap_table_id(), table_schema))) {
           LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(adapter->get_vbitmap_table_id()));
         } else if (OB_ISNULL(table_schema) || table_schema->is_in_recyclebin()) {
           // remove adapter if tablet not exist or is in recyclebin
@@ -527,7 +527,7 @@ int ObPluginVectorIndexLoadScheduler::set_shared_table_info_in_maintenance(
 int ObPluginVectorIndexLoadScheduler::check_has_vector_index(bool &has_ivf_index, ObIArray<uint64_t> &vec_table_id_array)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTTLUtil::get_tenant_vector_index_ids(tenant_id_, has_ivf_index, vec_table_id_array))) {
+  if (OB_FAIL(ObPluginVectorIndexUtils::get_tenant_vector_index_ids(tenant_id_, has_ivf_index, vec_table_id_array))) {
     LOG_WARN("fail to get tenant table ids", KR(ret), K_(tenant_id));
   }
   return ret;
@@ -539,7 +539,6 @@ int ObPluginVectorIndexLoadScheduler::execute_adapter_maintenance(ObIArray<uint6
   int ret = OB_SUCCESS;
   ObTimeGuard guard("ObPluginVectorIndexLoadScheduler::check_and_generate_tablet_tasks",
                     VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD);
-  const schema::ObTableSchema *table_schema = nullptr;
 
   ObVecIdxSharedTableInfoMap shared_table_info_map;
   ObMemAttr memattr(tenant_id_, "VecIdxInfo");
