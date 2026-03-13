@@ -24859,7 +24859,8 @@ def_table_schema(
       ,'SEQUENCE' AS OBJECT_TYPE
       ,'VALID' AS STATUS
       ,'N' AS TEMPORARY
-      ,'N' AS "GENERATED"
+      ,CASE WHEN IS_SYSTEM_GENERATED = 1 THEN 'Y'
+            ELSE 'N' END AS "GENERATED"
       ,'N' AS SECONDARY
       , 0 AS NAMESPACE
       ,NULL AS EDITION_NAME
@@ -47508,7 +47509,8 @@ def_table_schema(
       ,'SEQUENCE' AS OBJECT_TYPE
       ,'VALID' AS STATUS
       ,'N' AS TEMPORARY
-      ,'N' AS "GENERATED"
+      ,CASE WHEN IS_SYSTEM_GENERATED = 1 THEN 'Y'
+            ELSE 'N' END AS "GENERATED"
       ,'N' AS SECONDARY
       , 0 AS NAMESPACE
       ,NULL AS EDITION_NAME
@@ -48067,7 +48069,8 @@ def_table_schema(
       ,'SEQUENCE' AS OBJECT_TYPE
       ,'VALID' AS STATUS
       ,'N' AS TEMPORARY
-      ,'N' AS "GENERATED"
+      ,CASE WHEN IS_SYSTEM_GENERATED = 1 THEN 'Y'
+            ELSE 'N' END AS "GENERATED"
       ,'N' AS SECONDARY
       , 0 AS NAMESPACE
       ,NULL AS EDITION_NAME
@@ -48617,7 +48620,8 @@ def_table_schema(
       ,'SEQUENCE' AS OBJECT_TYPE
       ,'VALID' AS STATUS
       ,'N' AS TEMPORARY
-      ,'N' AS "GENERATED"
+      ,CASE WHEN IS_SYSTEM_GENERATED = 1 THEN 'Y'
+            ELSE 'N' END AS "GENERATED"
       ,'N' AS SECONDARY
       , 0 AS NAMESPACE
       ,NULL AS EDITION_NAME
