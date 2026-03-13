@@ -178,6 +178,8 @@ union ObProxyCapabilityFlags
 
   bool is_ob_protocol_v2_compress() const { return 1 == cap_flags_.OB_CAP_OB_PROTOCOL_V2_COMPRESS
                                                         && is_ob_protocol_v2_support(); }
+  bool is_max_execution_time_support() const { return 1 == cap_flags_.OB_CAP_MAX_EXECUTION_TIME
+                                                        && is_ob_protocol_v2_support(); }
   uint64_t capability_;
   struct CapabilityFlags
   {
@@ -216,7 +218,8 @@ union ObProxyCapabilityFlags
     uint64_t OB_CAP_OB_PROTOCOL_V2_COMPRESS:           1;
     uint64_t OB_CAP_FEEDBACK_PROXY_SHIFT:              1;
     uint64_t OB_CAP_CHANGE_USER_CONN_ATTRS:            1;
-    uint64_t OB_CAP_RESERVED_NOT_USE:                 40;
+    uint64_t OB_CAP_MAX_EXECUTION_TIME:                1;
+    uint64_t OB_CAP_RESERVED_NOT_USE:                 39;
   } cap_flags_;
 };
 
