@@ -1641,9 +1641,8 @@ int ObBackupDeleteSelector::get_delete_obsolete_backup_piece_infos_log_only_(int
 #ifdef ERRSIM
   } else if (OB_FAIL(get_errsim_expired_parameter_(expired_scn_from_errsim))) {
     LOG_WARN("errsim failed to override expired time for errsim", K(ret));
-  } else if (OB_FAIL(clog_data_clean_point.convert_from_ts(
-                 static_cast<uint64_t>(expired_scn_from_errsim / 1000)))) {
-    LOG_WARN("errsim failed to convert from ts", K(ret), K(expired_scn_from_errsim));
+  } else if (expired_scn_from_errsim > 0 && OB_FAIL(clog_data_clean_point.convert_for_gts(expired_scn_from_errsim))) {
+    LOG_WARN("errsim failed to convert for gts", K(ret), K(expired_scn_from_errsim));
 #endif
   } else if (OB_FAIL(get_all_dest_backup_piece_infos_(clog_data_clean_point, backup_piece_infos, true))) {
     LOG_WARN("failed to get all dest backup piece infos", K(ret), K(clog_data_clean_point));
