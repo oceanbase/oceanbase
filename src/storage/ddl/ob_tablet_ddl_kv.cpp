@@ -181,12 +181,6 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!data_desc_.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("data desc is invalid", K(ret), K(data_desc_));
-  } else if (data_desc_.get_desc().get_major_working_cluster_version() <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("major working cluster version should be greater than 0", K(ret), K(data_desc_));
   } else if (OB_UNLIKELY(!macro_handle.is_valid() || nullptr == rowkey || nullptr == meta)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(macro_handle), K(rowkey), KP(meta));

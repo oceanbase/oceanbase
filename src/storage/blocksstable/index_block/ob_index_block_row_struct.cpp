@@ -215,21 +215,23 @@ ObIndexBlockRowHeader::ObIndexBlockRowHeader()
     macro_block_count_(0), micro_block_count_(0),
     macro_id_fourth_id_(0), logic_micro_id_(), data_checksum_(0)
 {
-  version_ = INDEX_BLOCK_HEADER_V3;
+  version_ = DEFAULT_INDEX_BLOCK_HEADER_VERSION;
   set_has_logic_micro_id();
 }
 
 void ObIndexBlockRowHeader::reset()
 {
   MEMSET(this, 0, sizeof(*this));
-  version_ = INDEX_BLOCK_HEADER_V3;
+  version_ = DEFAULT_INDEX_BLOCK_HEADER_VERSION;
   set_has_logic_micro_id();
 }
 
 uint8_t ObIndexBlockRowHeader::mapping_data_version_to_header_version(const uint64_t data_version)
 {
   uint8_t version = 0;
-  if (data_version < DATA_VERSION_4_3_3_0) {
+  if (data_version <= 0) {
+    version = DEFAULT_INDEX_BLOCK_HEADER_VERSION;
+  } else if (data_version < DATA_VERSION_4_3_3_0) {
     version = INDEX_BLOCK_HEADER_V1;
   } else if (data_version < DATA_VERSION_4_5_0_0) {
     version = INDEX_BLOCK_HEADER_V2;

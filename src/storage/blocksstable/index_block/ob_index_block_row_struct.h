@@ -160,6 +160,7 @@ struct ObIndexBlockRowHeader
   static const uint8_t INDEX_BLOCK_HEADER_V1 = 1;
   static const uint8_t INDEX_BLOCK_HEADER_V2 = 2; // From 4.3.3, add macro fourth id、logic_micro_id、data_checksum to support SS
   static const uint8_t INDEX_BLOCK_HEADER_V3 = 3; // From 4.5.0, add meta info for major node
+  static const uint8_t DEFAULT_INDEX_BLOCK_HEADER_VERSION = INDEX_BLOCK_HEADER_V3;
   static const int64_t DEFAULT_IDX_ROW_MACRO_IDX  = MacroBlockId::AUTONOMIC_BLOCK_INDEX;
   static uint8_t mapping_data_version_to_header_version(const uint64_t data_version);
   static MacroBlockId DEFAULT_IDX_ROW_MACRO_ID;
