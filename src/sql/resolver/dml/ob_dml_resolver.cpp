@@ -17959,23 +17959,33 @@ int ObDMLResolver::resolve_table_relation_in_hint(const ParseNode &table_node,
                                                   ObTableInHint &table_in_hint)
 {
   int ret = OB_SUCCESS;
-  bool is_db_explicit = false;
+  int tmp_ret = OB_SUCCESS;
   table_in_hint.reset();
   ObString catalog_name;
+  uint64_t catalog_id = OB_INTERNAL_CATALOG_ID;
+  bool is_db_explicit = false;
+  bool is_org = true;
+  bool is_oracle_sys_view = false;
   UNUSED(catalog_name);
   if (OB_UNLIKELY(T_RELATION_FACTOR_IN_HINT != table_node.type_ || 2 != table_node.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table relation node.", K(ret), K(get_type_name(table_node.type_)), K(table_node.num_child_));
   } else if (OB_FAIL(resolve_qb_name_node(table_node.children_[1], table_in_hint.qb_name_))) {
     LOG_WARN("failed to resolve qb name node.", K(ret));
-  } else if (OB_FAIL(resolve_table_relation_node_v2(table_node.children_[0],
-                                                    table_in_hint.table_name_,
-                                                    table_in_hint.db_name_,
-                                                    catalog_name,
-                                                    is_db_explicit,
-                                                    true,
-                                                    false))) {
-    LOG_WARN("fail to resolve table relation node", K(ret));
+  } else if (OB_FAIL(resolve_db_and_catalog_info(table_node.children_[0],
+                                                  table_in_hint.db_name_,
+                                                  catalog_name,
+                                                  catalog_id,
+                                                  is_oracle_sys_view,
+                                                  NULL,
+                                                  is_db_explicit,
+                                                  is_org))){
+    LOG_WARN("fail to resolve catalog and db information", K(ret));
+  } else if (OB_TMP_FAIL(resolve_tablename_info(table_node.children_[0], table_in_hint.table_name_))) {
+    if(OB_ERR_TOO_LONG_IDENT != tmp_ret && OB_WRONG_TABLE_NAME != tmp_ret){
+      ret = tmp_ret;
+      LOG_WARN("fail to resolve tablename information", K(ret));
+    }
   }
   return ret;
 }
