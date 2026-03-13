@@ -1352,6 +1352,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_expand.cpp
   optimizer/ob_log_hybrid_fusion.cpp
   optimizer/file_prune/ob_hive_file_pruner.cpp
+  optimizer/file_prune/ob_hive_query_partition_cache.cpp
   optimizer/file_prune/ob_i_lake_table_file_pruner.cpp
   optimizer/file_prune/ob_iceberg_file_pruner.cpp
   optimizer/file_prune/ob_iceberg_file_filter.cpp
