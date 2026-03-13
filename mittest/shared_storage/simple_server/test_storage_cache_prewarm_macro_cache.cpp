@@ -470,6 +470,80 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
   FLOG_INFO("[TEST] test_prewarm_macro_block end", K(tnt_disk_space_mgr->get_unit_config_shared_macro_cache_free_size()));
 }
 
+TEST_F(ObStorageCachePolicyPrewarmerTest, test_meta_theoretical_free_size_when_over_95_and_user_has_auto)
+{
+  // Verify: when macro cache total used reaches CACHE_EVICT_THRESHOLD (95%) mainly by user-tenant's
+  // auto (MACRO_BLOCK) usage, meta tenant can still obtain theoretical free size for HOT prewarm.
+  share::ObTenantSwitchGuard tguard;
+  const uint64_t user_tenant_id = run_ctx_.tenant_id_;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(user_tenant_id);
+
+  int64_t user_hot_used_backup = 0;
+  int64_t meta_hot_used_backup = 0;
+  int64_t occupy_delta = 0;
+
+  // 1) Clear existing hot used (best-effort) to make the scenario deterministic.
+  OK(tguard.switch_to(user_tenant_id));
+  ObTenantDiskSpaceManager *user_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, user_mgr);
+  ObSSMacroCacheStat user_hot_stat;
+  ASSERT_EQ(OB_SUCCESS,
+      user_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, user_hot_stat));
+  user_hot_used_backup = user_hot_stat.used_;
+  if (user_hot_used_backup > 0) {
+    OK(user_mgr->free_file_size(user_hot_used_backup,
+        ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
+  }
+
+  OK(tguard.switch_to(meta_tenant_id));
+  ObTenantDiskSpaceManager *meta_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, meta_mgr);
+  ObSSMacroCacheStat meta_hot_stat;
+  ASSERT_EQ(OB_SUCCESS,
+      meta_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, meta_hot_stat));
+  meta_hot_used_backup = meta_hot_stat.used_;
+  if (meta_hot_used_backup > 0) {
+    OK(meta_mgr->free_file_size(meta_hot_used_backup,
+        ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
+  }
+
+  // 2) Occupy to CACHE_EVICT_THRESHOLD by user-tenant MACRO_BLOCK (auto).
+  const int64_t macro_cache_size = meta_mgr->get_shared_macro_cache_size();
+  const int64_t target_used_size =
+      macro_cache_size / 100 * ObSSMacroCacheMgr::CACHE_EVICT_THRESHOLD;
+  const int64_t cur_used_size = meta_mgr->get_shared_macro_cache_used_size();
+  occupy_delta = target_used_size - cur_used_size;
+  ASSERT_GT(occupy_delta, 100 * common::MB);
+
+  OK(tguard.switch_to(user_tenant_id));
+  if (occupy_delta > 0) {
+    OK(user_mgr->alloc_file_size(occupy_delta, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
+  }
+
+  // 3) Meta tenant should still be able to get theoretical free size for HOT prewarm.
+  OK(tguard.switch_to(meta_tenant_id));
+  int64_t theoretical_free_size = 0;
+  OK(meta_mgr->get_theoretical_free_disk_size(
+      ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, theoretical_free_size));
+  const int64_t hot_min_rate = meta_hot_stat.get_min();
+  ASSERT_GT(theoretical_free_size, occupy_delta / 100 * hot_min_rate);
+
+  // 4) Cleanup: revert the occupancy and restore original hot used (best-effort).
+  OK(tguard.switch_to(user_tenant_id));
+  if (occupy_delta > 0) {
+    OK(user_mgr->free_file_size(occupy_delta, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
+  }
+  if (user_hot_used_backup > 0) {
+    OK(user_mgr->alloc_file_size(user_hot_used_backup,
+        ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
+  }
+  OK(tguard.switch_to(meta_tenant_id));
+  if (meta_hot_used_backup > 0) {
+    OK(meta_mgr->alloc_file_size(meta_hot_used_backup,
+        ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
+  }
+}
+
 TEST_F(ObStorageCachePolicyPrewarmerTest, test_micro_cache_full)
 {
   FLOG_INFO("[TEST] start test_micro_cache_full");
