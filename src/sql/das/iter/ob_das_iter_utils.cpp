@@ -5153,6 +5153,10 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
       } else if (OB_NOT_NULL(rowkey_vid_ctdef) && OB_NOT_NULL(rowkey_vid_rtdef)
               && OB_FAIL(create_das_scan_iter(alloc, rowkey_vid_ctdef, rowkey_vid_rtdef, rowkey_vid_table_iter))) {
         LOG_WARN("failed to create rowkey vid table iter", K(ret));
+      } else if (OB_NOT_NULL(rowkey_vid_table_iter)
+                 && vec_aux_ctdef->can_use_vec_pri_opt()
+                 && vec_aux_ctdef->strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST) {
+        rowkey_vid_table_iter->set_pre_filtering_timeout(vec_aux_ctdef->pre_filtering_timeout_);
       }
     }
 
