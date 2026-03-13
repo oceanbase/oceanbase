@@ -196,6 +196,9 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
     LOG_WARN("not support tx free route for dblink trans");
   } else {
     tx_id = tx_desc->tid();
+    // save before commit: tx_desc will be set to NULL by xa_end inside commit_for_dblink_trans
+    bool need_clean_tx_temp_table = (tx_desc->with_temporary_table()
+        && tx_desc->get_addr() == GCONF.self_addr_);
     {
       ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
       my_session->get_tx_desc() = NULL;
@@ -210,13 +213,22 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
     }
     // TODO, if fail, kill trans forcely and reset session
     // reset
-    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
-    my_session->get_tx_desc() = tx_desc;
-    my_session->get_raw_audit_record().trans_id_ = tx_id;
-    my_session->reset_first_need_txn_stmt_type();
-    my_session->get_trans_result().reset();
-    my_session->reset_tx_variable();
-    my_session->disassociate_xa();
+    {
+      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+      my_session->get_tx_desc() = tx_desc;
+      my_session->get_raw_audit_record().trans_id_ = tx_id;
+      my_session->reset_first_need_txn_stmt_type();
+      my_session->get_trans_result().reset();
+      my_session->reset_tx_variable();
+      my_session->disassociate_xa();
+    }
+    // cleanup transaction-level temporary tables outside lock
+    if (need_clean_tx_temp_table) {
+      int tmp_ret = my_session->drop_temp_tables(false, true /* is_xa_trans */);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("trx level temporary table clean failed", KR(tmp_ret));
+      }
+    }
   }
   // for statistics
   const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
@@ -251,6 +263,9 @@ int ObTMService::tm_rollback(ObExecContext &exec_ctx,
     LOG_WARN("not support tx free route for dblink trans");
   } else {
     tx_id = tx_desc->tid();
+    // save before rollback: tx_desc will be set to NULL by xa_end inside rollback_for_dblink_trans
+    bool need_clean_tx_temp_table = (tx_desc->with_temporary_table()
+        && tx_desc->get_addr() == GCONF.self_addr_);
     {
       ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
       my_session->get_tx_desc() = NULL;
@@ -262,13 +277,22 @@ int ObTMService::tm_rollback(ObExecContext &exec_ctx,
     }
     // TODO, if fail, kill trans forcely and reset session
     // reset
-    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
-    my_session->get_tx_desc() = tx_desc;
-    my_session->get_raw_audit_record().trans_id_ = tx_id;
-    my_session->reset_first_need_txn_stmt_type();
-    my_session->get_trans_result().reset();
-    my_session->reset_tx_variable();
-    my_session->disassociate_xa();
+    {
+      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+      my_session->get_tx_desc() = tx_desc;
+      my_session->get_raw_audit_record().trans_id_ = tx_id;
+      my_session->reset_first_need_txn_stmt_type();
+      my_session->get_trans_result().reset();
+      my_session->reset_tx_variable();
+      my_session->disassociate_xa();
+    }
+    // cleanup transaction-level temporary tables outside lock
+    if (need_clean_tx_temp_table) {
+      int tmp_ret = my_session->drop_temp_tables(false, true /* is_xa_trans */);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("trx level temporary table clean failed", KR(tmp_ret));
+      }
+    }
   }
   // for statistics
   const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
