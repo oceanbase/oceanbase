@@ -1436,7 +1436,7 @@ int ObDASIvfBaseScanIter::calc_vec_dis(T *a, T *b, int dim, float &dis, ObExprVe
   if (dis_type != oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN) {
     double distance = 0;
     if (OB_FAIL(oceanbase::sql::ObExprVectorDistance::DisFunc<T>::distance_funcs[dis_type](a, b, dim, distance))) {
-      LOG_WARN("failed to get distance type", K(ret), KP(a), KP(b), K(dim));
+      LOG_WARN("failed to calculate distance", K(ret), K(dis_type), KP(a), KP(b), K(dim));
     } else {
       dis = distance;
     }
@@ -2501,7 +2501,7 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_cache(ObIvfCentCache &ce
       //       The sum of j = 0 ~ m is the distance from x to rowkey
       float dis = 0.0f;
       if (OB_FAIL(calc_vec_dis<float>(splited_residual.at(j), pq_cid_vec, dim_ / m_, dis, dis_type_))) {
-        SHARE_LOG(WARN, "failed to get distance type", K(ret));
+        SHARE_LOG(WARN, "failed to calc vec dis", K(ret));
       } else {
         square += dis;
       }
@@ -2584,7 +2584,7 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_table(
             pq_cid_idx++;
           } else if (OB_FAIL(calc_vec_dis<float>(splited_residual.at(pq_cid_idx), reinterpret_cast<float *>(vec.ptr()),
                                                  dim_ / m_, cur_dis, dis_type_))) {
-            SHARE_LOG(WARN, "failed to get distance type", K(ret));
+            SHARE_LOG(WARN, "failed to calc vec dis", K(ret));
           } else {
             dis_square += cur_dis;
             pq_cid_idx++;
@@ -2617,7 +2617,7 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_table(
             pq_cid_idx++;
           } else if (OB_FAIL(calc_vec_dis<float>(splited_residual.at(pq_cid_idx), reinterpret_cast<float *>(vec.ptr()),
                                                  dim_ / m_, cur_dis, dis_type_))) {
-            SHARE_LOG(WARN, "failed to get distance type", K(ret));
+            SHARE_LOG(WARN, "failed to calc vec dis", K(ret));
           } else {
             dis_square += cur_dis;
             pq_cid_idx++;
@@ -3345,7 +3345,12 @@ int ObDASIvfBaseScanIter::get_rowkey_brute_post(bool is_vectorized, IvfRowkeyHea
             float distance = 0.0f;
             ObRowkey main_rowkey;
             if (OB_FAIL(calc_vec_dis<float>(reinterpret_cast<float *>(c_vec.ptr()), search_vec, dim_, distance, raw_dis_type))) {
-              LOG_WARN("fail to calc vec dis", K(ret), K(dim_));
+              if (OB_ERR_NULL_VALUE == ret) {
+                ret = OB_SUCCESS;
+                LOG_TRACE("skip zero-norm vector, cosine distance undefined");
+              } else {
+                LOG_WARN("fail to calc vec dis", K(ret), K(dim_));
+              }
             } else if (OB_FAIL(get_main_rowkey_brute(mem_context_->get_arena_allocator(), brute_ctdef, main_rowkey_cnt, main_rowkey))) {
               LOG_WARN("fail to get main rowkey", K(ret));
             } else if (OB_FAIL(nearest_rowkey_heap.push_center(main_rowkey, distance))) {
@@ -3379,7 +3384,12 @@ int ObDASIvfBaseScanIter::get_rowkey_brute_post(bool is_vectorized, IvfRowkeyHea
             float distance = 0.0f;
             ObRowkey main_rowkey;
             if (OB_FAIL(calc_vec_dis<float>(reinterpret_cast<float *>(c_vec.ptr()), search_vec, dim_, distance, raw_dis_type))) {
-              LOG_WARN("fail to calc vec dis", K(ret), K(dim_));
+              if (OB_ERR_NULL_VALUE == ret) {
+                ret = OB_SUCCESS;
+                LOG_TRACE("skip zero-norm vector, cosine distance undefined");
+              } else {
+                LOG_WARN("fail to calc vec dis", K(ret), K(dim_));
+              }
             } else if (OB_FAIL(get_main_rowkey_brute(mem_context_->get_arena_allocator(), brute_ctdef, main_rowkey_cnt, main_rowkey))) {
               LOG_WARN("fail to get main rowkey", K(ret));
             } else if (OB_FAIL(nearest_rowkey_heap.push_center(main_rowkey, distance))) {
