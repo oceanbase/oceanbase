@@ -2471,14 +2471,14 @@ void ObStorageSchema::update_column_cnt_and_schema_version(
   }
 }
 
-int ObStorageSchema::update_column_info(const share::schema::ObTableSchema& input_schema, const uint64_t tenant_data_version)
+int ObStorageSchema::update_column_info(const share::schema::ObTableSchema &input_schema, const uint64_t tenant_data_version)
 {
-  INIT_SUCC(ret);
+  int ret = OB_SUCCESS;
 
   int64_t store_column_cnt = 0, input_store_column_cnt = 0;
   if (!is_column_info_simplified()) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "no need to update column info", K(is_column_info_simplified()), K(input_schema.get_table_id()),K(lbt()), K(input_schema), KPC(this));
+    STORAGE_LOG(WARN, "no need to update column info", K(is_column_info_simplified()), K(input_schema.get_table_id()), K(lbt()), K(input_schema), KPC(this));
   } else if (OB_FAIL(get_store_column_count(store_column_cnt, /* full_col */ true))) {
     STORAGE_LOG(WARN, "failed to get store column count", K(ret));
   } else if (OB_FAIL(input_schema.get_store_column_count(input_store_column_cnt, /* full_col */ true))) {
@@ -2487,23 +2487,16 @@ int ObStorageSchema::update_column_info(const share::schema::ObTableSchema& inpu
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "column count is greater than input schema", K(ret), K(get_column_count()), K(input_schema.get_column_count()));
   } else if (FALSE_IT(column_array_.reset())) {
-  } else if (OB_FAIL(column_array_.reserve(input_schema.get_column_count()))) {
-    STORAGE_LOG(WARN, "failed to reserve column array", K(ret), K(input_schema.get_column_count()));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < input_schema.get_column_count(); ++i) {
-    const share::schema::ObColumnSchemaV2 *col_schema = input_schema.get_column_schema_by_idx(i);
-    if (OB_ISNULL(col_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "invalid column schema", K(ret), K(i));
-    } else if (OB_FAIL(add_column(*col_schema, tenant_data_version))) {
-      STORAGE_LOG(WARN, "failed to add column", K(ret), K(*col_schema));
-    }
+  } else if (FALSE_IT(skip_idx_attr_array_.reset())) {
+  } else if (FALSE_IT(rowkey_array_.reset())) {
+  } else if (FALSE_IT(column_info_simplified_ = false)) {
+  } else if (OB_FAIL(generate_column_array(input_schema, tenant_data_version))) {
+    STORAGE_LOG(WARN, "failed to generate column array", K(ret));
   }
 
   if (OB_SUCC(ret)) {
     column_cnt_ = column_array_.count();
     store_column_cnt_ = get_store_column_count_by_column_array();
-    column_info_simplified_ = false;
   }
 
   return ret;

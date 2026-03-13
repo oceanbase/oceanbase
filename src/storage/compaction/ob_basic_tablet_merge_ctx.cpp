@@ -1600,11 +1600,8 @@ int ObBasicTabletMergeCtx::try_update_storage_schema(ObStorageSchema &new_schema
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null schema!", KP(table_schema));
-  } else {
-    if (new_schema.is_column_info_simplified() &&
-        OB_FAIL(new_schema.update_column_info(*table_schema, static_param_.data_version_))) {
-      LOG_WARN("failed to update column info", "schema_version", new_schema.get_schema_version(), KPC(table_schema), K(new_schema));
-    }
+  } else if (OB_FAIL(new_schema.update_column_info(*table_schema, static_param_.data_version_))) {
+    LOG_WARN("failed to update column info", "schema_version", new_schema.get_schema_version(), KPC(table_schema), K(new_schema));
   }
   return ret;
 }
