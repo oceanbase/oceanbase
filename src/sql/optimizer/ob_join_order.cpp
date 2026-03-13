@@ -15833,7 +15833,7 @@ int ObJoinOrder::generate_join_filter_infos(const Path &left_path,
   *  4. 检查代价是否可以生成.
   *  5. 检查hint是否可以生成.
   */
-  if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_5_0)) {
+  if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_6_0)) {
     OPT_TRACE("plan will generate join filter after phase one");
   } else if (ObGlobalHint::DEFAULT_PARALLEL >= join_parallel) {
     OPT_TRACE("hash join parallel <= 1, plan will not use join filter");

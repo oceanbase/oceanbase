@@ -850,6 +850,7 @@ public:
   inline const ObRawExpr *get_offset_expr() const { return push_down_top_n_info_.limit_offset_expr_; }
   inline bool need_sort() const { return push_down_top_n_info_.sort_key_.expr_ != nullptr; }
   inline ObPushDownTopNInfo &get_push_down_top_n_info() { return push_down_top_n_info_; }
+  int has_pushdown_filters(bool &has);
   inline const ObPushDownTopNInfo &get_push_down_top_n_info() const { return push_down_top_n_info_; }
   inline bool is_push_down_limit_into_index() const { return push_down_top_n_info_.is_push_into_index_; }
   int set_limit_offset(ObRawExpr *limit, ObRawExpr *offset);

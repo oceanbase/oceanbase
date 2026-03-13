@@ -3286,6 +3286,29 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
   }
   return ret;
 }
+int ObLogTableScan::has_pushdown_filters(bool &has)
+{
+  int ret = OB_SUCCESS;
+  has = !range_conds_.empty();
+  if (!has && lake_table_format_ == share::ObLakeTableFormat::HIVE) {
+    // check has filters
+    ObTablePartitionInfo *part_info = get_table_partition_info();
+    ObILakeTableFilePruner *file_pruner = nullptr;
+    ObSEArray<uint64_t, 4> part_column_ids;
+    ObSEArray<ObRawExpr*, 16> range_exprs;
+    if (OB_ISNULL(part_info) ||
+        OB_UNLIKELY(!part_info->is_lake_table_partition_info()) ||
+        OB_ISNULL(file_pruner = static_cast<ObLakeTablePartitionInfo*>(part_info)->get_file_pruner())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(part_info), K(file_pruner));
+    } else if (OB_FAIL(static_cast<ObHiveFilePruner*>(file_pruner)->get_part_id_and_range_exprs(part_column_ids, range_exprs))) {
+      LOG_WARN("failed to get part id and range exprs", K(ret));
+    } else if (!range_exprs.empty()) {
+      has = true;
+    }
+  }
+  return ret;
+}
 
 int ObLogTableScan::set_limit_offset(ObRawExpr *limit, ObRawExpr *offset)
 {
