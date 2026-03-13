@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Run one mysqltest slice and record failures into fail_cases.output.
+set -e
+
+WORKSPACE="${GITHUB_WORKSPACE:?}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPTS_DIR="$SCRIPT_DIR/scripts"
+
+export GITHUB_WORKSPACE="$WORKSPACE"
+export SEEKDB_TASK_DIR="${SEEKDB_TASK_DIR:?}"
+export SLICE_IDX="${SLICE_IDX:-0}"
+export SLICES="${SLICES:-4}"
+export BRANCH="${BRANCH:-master}"
+
+if [[ -f "$SCRIPTS_DIR/frame.sh" ]]; then
+  source "$SCRIPTS_DIR/frame.sh"
+fi
+
+for artifact in observer.zst obproxy.zst; do
+  if [[ -f "$SEEKDB_TASK_DIR/$artifact" ]] && [[ ! -f "$WORKSPACE/$artifact" ]]; then
+    cp -f "$SEEKDB_TASK_DIR/$artifact" "$WORKSPACE/" || true
+  fi
+done
+
+if [[ -f "$SCRIPTS_DIR/mysqltest_for_farm.sh" ]]; then
+  bash "$SCRIPTS_DIR/mysqltest_for_farm.sh" "$@"
+else
+  echo "[mysqltest_slice.sh] mysqltest_for_farm.sh is missing, skip slice $SLICE_IDX."
+fi
