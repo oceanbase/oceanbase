@@ -58,7 +58,7 @@ int ObMetaDiskAddr::get_block_addr(
     }
   }
 #ifdef OB_BUILD_SHARED_STORAGE
-  else if (is_sslog_tablet_meta()) {
+  else if (is_sslog()) {
     if (OB_FAIL(get_block_addr_from_sslog_tablet_meta_(macro_id, offset, size))) {
       LOG_WARN("failed to get block addr from sslog tablet meta", K(ret), KPC(this));
     }
@@ -102,7 +102,7 @@ int ObMetaDiskAddr::get_block_addr_from_sslog_tablet_meta_(
   const int64_t op_id = 0;
   const ObTabletID tablet_id(tablet_id_);
   const ObAtomicFileType type = ObAtomicFileType::TABLET_META;
-  if (OB_UNLIKELY(!is_sslog_tablet_meta())) {
+  if (OB_UNLIKELY(!is_sslog())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("type isn't sslog, not support", K(ret), KPC(this));
   } else if (OB_FAIL(ObAtomicTabletMetaFile::generate_file_obj_opt(type,
@@ -270,9 +270,9 @@ int ObMetaDiskAddr::get_sslog_tablet_meta_addr(
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("meta disk addr is invalid, unexpected", K(ret), KPC(this));
-  } else if (!is_sslog_tablet_meta()) {
+  } else if (!is_sslog()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("meta disk addr type is not sslog tablet meta, unexpected", K(ret), KPC(this));
+    LOG_WARN("meta disk addr type is not sslog, unexpected", K(ret), KPC(this));
   } else {
     ls_id = ls_id_;
     tablet_id = tablet_id_;
@@ -293,9 +293,9 @@ int ObMetaDiskAddr::get_sslog_tablet_row_scn(
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("meta disk addr is invalid, unexpected", K(ret), KPC(this));
-  } else if (!is_sslog_tablet_meta()) {
+  } else if (!is_sslog()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("meta disk addr type is not sslog tablet meta, unexpected", K(ret), KPC(this));
+    LOG_WARN("meta disk addr type is not sslog, unexpected", K(ret), KPC(this));
   } else if (OB_FAIL(row_scn.convert_for_tx(row_scn_))) {
     LOG_WARN("failed to conver to row scn", K(ret), KPC(this));
   }
@@ -348,7 +348,7 @@ int64_t ObMetaDiskAddr::to_string(char *buf, const int64_t buf_len) const
   int64_t pos = 0;
   MacroBlockId block_id;
 
-  if (is_sslog_tablet_meta()) {
+  if (is_sslog()) {
     //do nothing
   } else if (OB_SUCCESS != get_macro_block_id(block_id)) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "failed to get block id", KPC(this));
@@ -439,15 +439,15 @@ int ObMetaDiskAddr::memcpy_deserialize(const char* buf, const int64_t data_len, 
 bool ObMetaDiskAddr::operator<(const ObMetaDiskAddr &r) const
 {
   bool b_ret = false;
-  if (is_sslog_tablet_meta() && r.is_sslog_tablet_meta()) {
+  if (is_sslog() && r.is_sslog()) {
     if (tablet_id_ < r.tablet_id_) {
       b_ret = true;
     } else {
       b_ret = false;
     }
-  } else if (is_sslog_tablet_meta()) {
+  } else if (is_sslog()) {
     b_ret = true;
-  } else if (r.is_sslog_tablet_meta()) {
+  } else if (r.is_sslog()) {
     b_ret = false;
   } else if (type_ < r.type_) {
     b_ret = true;
@@ -474,9 +474,9 @@ int ObMetaDiskAddr::get_macro_block_id(blocksstable::MacroBlockId &block_id) con
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("meta disk addr is invalid, unexpected", K(ret), KPC(this));
-  } else if (is_sslog_tablet_meta()) {
+  } else if (is_sslog()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_ERROR("meta disk addr is sslog tablet meta addr, do not support to change to block id", K(ret), KPC(this));
+    LOG_ERROR("meta disk addr is sslog meta addr, do not support to change to block id", K(ret), KPC(this));
   } else {
     blocksstable::MacroBlockId id(first_id_, second_id_, third_id_, fifth_id_);
     id.set_version_v2();

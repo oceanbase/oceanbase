@@ -23,7 +23,7 @@ int ObUpdateTabletPointerParam::refresh_tablet_cache()
   int ret = OB_SUCCESS;
   int64_t current_version = 0;
   MacroBlockId block_id;
-  if (resident_info_.addr_.is_sslog_tablet_meta()) {
+  if (resident_info_.addr_.is_sslog()) {
     current_version = 0;
   } else if (OB_FAIL(resident_info_.addr_.get_macro_block_id(block_id))) {
     LOG_WARN("failed to get macro block id", K(ret), K(resident_info_));

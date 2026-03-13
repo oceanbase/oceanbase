@@ -37,7 +37,7 @@ bool ObTenantStorageMetaService::TabletInfo::is_valid() const
   if (b_ret) {
     int64_t current_meta_version = 0;
     MacroBlockId block_id;
-    if (tablet_addr_.is_sslog_tablet_meta()) {
+    if (tablet_addr_.is_sslog()) {
       current_meta_version = 0;
     } else if (OB_SUCCESS != (tmp_ret = tablet_addr_.get_macro_block_id(block_id))) {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "failed to get macro block id", K(tmp_ret), K(tablet_addr_));
@@ -1078,7 +1078,7 @@ int ObTenantStorageMetaService::write_remove_tablet_slog_for_ss(
   WaitGCTabletArray *tablet_array = nullptr;
   MacroBlockId block_id;
   int64_t meta_version = 0;
-  if (tablet_addr.is_sslog_tablet_meta()) {
+  if (tablet_addr.is_sslog()) {
     meta_version = 0;
   } else if (OB_FAIL(tablet_addr.get_macro_block_id(block_id))) {
     LOG_WARN("failed to get macro block id", K(ret), K(tablet_addr));
@@ -1306,7 +1306,7 @@ int ObTenantStorageMetaService::safe_batch_write_remove_tablet_slog_for_ss(
         const int64_t last_gc_version = tablet_info.last_gc_version_;
         int64_t current_meta_version = 0;
         MacroBlockId block_id;
-        if (tablet_addr.is_sslog_tablet_meta()) {
+        if (tablet_addr.is_sslog()) {
           current_meta_version = 0;
         } else if (OB_FAIL(tablet_addr.get_macro_block_id(block_id))) {
           LOG_WARN("failed to get macro block id", K(ret), K(tablet_addr));
