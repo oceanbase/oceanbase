@@ -536,12 +536,16 @@ int convert_persist_profile_to_realtime(const char *persist_profile, const int64
   const ObProfileHeads *profile_heads = reinterpret_cast<const ObProfileHeads *>(persist_profile);
   int64_t profile_cnt = profile_heads->head_count_;
   int64_t metric_cnt = profile_heads->metric_count_;
+  int64_t expected_persist_size = profile_heads->head_offset_ +
+                                  profile_cnt * sizeof(ObProfileHead) +
+                                  2 * metric_cnt * sizeof(uint64_t);
   const ObProfileHead *profile_head =
       reinterpret_cast<const ObProfileHead *>(persist_profile + profile_heads->head_offset_);
   ObOpProfile<ObMetric> **profiles_array = nullptr;
-  if (OB_UNLIKELY(profile_heads->head_offset_ > persist_len)) {
+  if (expected_persist_size > persist_len) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("unexpected persist profile size", K(profile_heads->head_offset_), K(persist_len));
+    LOG_WARN("unexpected persist profile size", K(profile_cnt), K(metric_cnt),
+             K(expected_persist_size), K(persist_len));
   } else if (OB_ISNULL(profiles_array = static_cast<ObOpProfile<ObMetric> **>(
                            alloc->alloc(sizeof(ObOpProfile<ObMetric> *) * profile_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
