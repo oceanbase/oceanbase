@@ -8229,14 +8229,11 @@ int ObTablet::calc_tablet_min_ss_flush_op_id()
       } else {
         const ObSSTableMeta &sstable_meta = meta_handle.get_sstable_meta();
         if (sstable_meta.get_table_shared_flag().is_shared_macro_blocks()) {
-          const int32_t flush_start_op_id = (sstable_meta.get_basic_meta().root_macro_seq_ >> 32);
+          const uint32_t flush_start_op_id = (sstable_meta.get_basic_meta().root_macro_seq_ >> 32);
           tablet_meta_.min_ss_flush_op_id_ = MIN(tablet_meta_.min_ss_flush_op_id_, flush_start_op_id);
         }
       }
     }
-  }
-  if (OB_SUCC(ret) && tablet_meta_.min_ss_flush_op_id_ == INT32_MAX) {
-    tablet_meta_.min_ss_flush_op_id_ = 0;
   }
   return ret;
 }

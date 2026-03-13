@@ -69,7 +69,7 @@ ObTabletMeta::ObTabletMeta()
     split_info_(),
     has_merged_with_mds_info_(false),
     inc_major_snapshot_(0),
-    min_ss_flush_op_id_(0),
+    min_ss_flush_op_id_(INT32_MAX),
     is_inited_(false)
 {
 }
@@ -154,7 +154,7 @@ int ObTabletMeta::init_for_share_storage(const ObTabletMeta &old_tablet_meta)
     }
     last_persisted_committed_tablet_status_.reset();
     min_ss_tablet_version_ = INIT_MIN_SS_TABLET_VERSION;
-    min_ss_flush_op_id_ = 0;
+    min_ss_flush_op_id_ = INT32_MAX;
   }
 
   if (OB_SUCC(ret)) {
@@ -265,7 +265,7 @@ int ObTabletMeta::init(
     report_status_.data_checksum_ = 0;
     report_status_.row_count_ = 0;
     min_ss_tablet_version_ = INIT_MIN_SS_TABLET_VERSION;
-    min_ss_flush_op_id_ = 0;
+    min_ss_flush_op_id_ = INT32_MAX;
     if (has_cs_replica) { // cs replica is visable when doing offline ddl
       if (need_generate_cs_replica_cg_array) {
         ddl_replay_status_ = CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN; // need process cs replica locally
@@ -732,7 +732,7 @@ void ObTabletMeta::reset()
   inc_major_snapshot_ = 0;
   has_merged_with_mds_info_ = false;
   min_ss_tablet_version_ = INIT_MIN_SS_TABLET_VERSION;
-  min_ss_flush_op_id_ = 0;
+  min_ss_flush_op_id_ = INT32_MAX;
   is_inited_ = false;
 }
 
