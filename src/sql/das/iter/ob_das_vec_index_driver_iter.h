@@ -219,6 +219,7 @@ public:
 
   static const uint64_t VSAG_MAX_EF_SEARCH = 160000;
   static constexpr double FIXED_MAGNIFICATION_RATIO = 2.0;
+  static constexpr double FIXED_MAGNIFICATION_RATIO_EACH_ITERATIVE = 10.0;
   static constexpr double ITER_CONSIDER_LAST_SEARCH_SELETIVITY = 0.05;
 
 protected:

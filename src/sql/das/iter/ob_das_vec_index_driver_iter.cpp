@@ -949,11 +949,11 @@ int ObDASVecIndexDriverIter::adjust_vector_query_condition(bool first_search)
 
       if (iter_unfiltered_vid_cnt_ < query_cond_.query_limit_
           || (hnsw_max_iter_scan_nums > 0 && iter_scan_total_num_ > hnsw_max_iter_scan_nums)) {
-        query_cond_.query_limit_ = 0;
         LOG_TRACE("iteractive filter: stop search",
                   K(iter_unfiltered_vid_cnt_), K(query_cond_.query_limit_),
                   K(adaptor_vid_iter_->get_total()),
                   K(iter_scan_total_num_), K(hnsw_max_iter_scan_nums));
+        query_cond_.query_limit_ = 0;
       } else {
         int64_t need_cnt_next = adaptor_vid_iter_->get_alloc_size() - adaptor_vid_iter_->get_total();
         int64_t total_after_add = adaptor_vid_iter_->get_total();
@@ -965,9 +965,6 @@ int ObDASVecIndexDriverIter::adjust_vector_query_condition(bool first_search)
           float select_ratio = iter_unfiltered_vid_cnt_ > 0 ?
                                 static_cast<float>(added_cnt) / static_cast<float>(iter_unfiltered_vid_cnt_) : 0.0f;
 
-          int64_t need_res_cnt = select_ratio > 0 ?
-                                 static_cast<int64_t>(std::ceil(need_cnt_next / select_ratio)) : need_cnt_next;
-
           uint32_t new_limit = 0;
           int64_t new_ef = old_ef;
 
@@ -977,7 +974,8 @@ int ObDASVecIndexDriverIter::adjust_vector_query_condition(bool first_search)
             new_ef = new_ef > VSAG_MAX_EF_SEARCH ? VSAG_MAX_EF_SEARCH : new_ef;
             query_cond_.is_last_search_ = false;
           } else {
-            need_res_cnt = static_cast<int64_t>(std::ceil(need_cnt_next / select_ratio));
+            int64_t need_res_cnt = OB_MIN(static_cast<int64_t>(std::ceil(need_cnt_next / select_ratio)),
+                                   query_cond_.query_limit_ * FIXED_MAGNIFICATION_RATIO_EACH_ITERATIVE);
             if (can_be_last_search(old_ef, need_cnt_next, select_ratio)) {
               new_limit = old_ef;
               query_cond_.is_last_search_ = true;
