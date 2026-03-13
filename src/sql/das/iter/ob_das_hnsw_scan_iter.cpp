@@ -2960,7 +2960,6 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
         } else if (need_cnt_next > 0) {
           float need_ratio = static_cast<float>(need_cnt_next) / static_cast<float>(added_cnt);
           float select_ratio = static_cast<float>(added_cnt) / static_cast<float>(unfiltered_vid_cnt);
-          int need_res_cnt = select_ratio > 0 ? static_cast<int64_t>(std::ceil(need_cnt_next / select_ratio)) : need_cnt_next;
           uint32_t new_limit = 0;
           int64_t new_ef = old_ef;
           if (added_cnt == 0) {
@@ -2972,7 +2971,8 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
             new_ef = new_ef > VSAG_MAX_EF_SEARCH ? VSAG_MAX_EF_SEARCH : new_ef;
             query_cond_.is_last_search_ = false;
           } else {
-            int need_res_cnt = static_cast<int64_t>(std::ceil(need_cnt_next / select_ratio));
+            int64_t need_res_cnt = OB_MIN(static_cast<int64_t>(std::ceil(need_cnt_next / select_ratio)),
+                                   query_cond_.query_limit_ * FIXED_MAGNIFICATION_RATIO_EACH_ITERATIVE);
             if (can_be_last_search(old_ef, need_cnt_next, select_ratio)) {
               new_limit = old_ef;
               query_cond_.is_last_search_ = true;
