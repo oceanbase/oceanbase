@@ -71,7 +71,8 @@ public:
   int64_t get_serialize_size() const;
   int generate_from_range_array(
       ObIAllocator &allocator,
-      common::ObArrayArray<ObStoreRange> &paral_range);
+      common::ObArrayArray<ObStoreRange> &paral_range,
+      const uint64_t data_version);
   int deep_copy_datum_rowkey(
     const int64_t idx,
     ObIAllocator &allocator,
