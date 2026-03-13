@@ -59,6 +59,8 @@ public:
   //   - OB_TIMEOUT: timeout
   int flashback(const uint64_t tenant_id, const share::SCN &flashback_scn, const int64_t timeout_us);
   int handle_flashback_resp(const LogFlashbackMsg &resp);
+  int get_ls_list(const uint64_t tenant_id,
+                   share::ObLSStatusInfoArray &ls_array);
 private:
   class BaseLSOperator
   {
@@ -337,10 +339,6 @@ private:
   typedef common::ObArray<ObLogFlashbackService::CheckLSLogSyncOperator> CheckLogOpArray;
   typedef common::ObArray<ObLogFlashbackService::ChangeAccessModeOperator> ChangeModeOpArray;
   typedef common::ObArray<ObLogFlashbackService::ExecuteFlashbackOperator> FlashbackOpArray;
-
-private:
-  int get_ls_list_(const uint64_t tenant_id,
-                   share::ObLSStatusInfoArray &ls_array);
   // @returns:
   //   - OB_TIMEOUT
   int wait_all_ls_replicas_log_sync_(const uint64_t tenant_id,

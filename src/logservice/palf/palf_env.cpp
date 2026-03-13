@@ -300,7 +300,8 @@ int PalfEnv::advance_base_lsn(int64_t id, palf::LSN lsn)
 
 int PalfEnv::flashback(const uint64_t tenant_id,
                         const share::SCN &flashback_scn,
-                        const int64_t timeout_us)
+                        const int64_t timeout_us,
+                        const share::ObLSStatusInfoArray &ls_array)
 {
   return common::OB_NOT_SUPPORTED;
 }

@@ -60,7 +60,7 @@ int LogRequestHandler::change_access_mode_(const LogChangeAccessModeCmd &req)
   return ret;
 }
 
-int ObLogFlashbackService::get_ls_list_(const uint64_t tenant_id,
+int ObLogFlashbackService::get_ls_list(const uint64_t tenant_id,
                                         share::ObLSStatusInfoArray &ls_array)
 {
   int ret = OB_SUCCESS;

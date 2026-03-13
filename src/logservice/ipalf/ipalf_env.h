@@ -19,6 +19,7 @@
 #include "share/scn.h"
 #include "lib/function/ob_function.h"
 #include "ipalf_handle.h"
+#include "share/ls/ob_ls_status_operator.h"
 
 namespace oceanbase
 {
@@ -84,7 +85,8 @@ public:
 
   virtual int flashback(const uint64_t tenant_id,
                         const share::SCN &flashback_scn,
-                        const int64_t timeout_us) = 0;
+                        const int64_t timeout_us,
+                        const share::ObLSStatusInfoArray &ls_array) = 0;
 };
 
 } // end namespace ipalf

@@ -25,6 +25,7 @@
 #include "logservice/ob_log_submit_log_rate_limiter.h"
 #include "logservice/logrpc/ob_log_rpc_proxy.h"
 #include "logservice/logrpc/ob_log_rpc_req.h"
+#include "share/ls/ob_ls_status_operator.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -279,7 +280,8 @@ public:
 
   virtual int flashback(const uint64_t tenant_id,
                         const share::SCN &flashback_scn,
-                        const int64_t timeout_us) override
+                        const int64_t timeout_us,
+                        const share::ObLSStatusInfoArray &ls_array) override
   { return OB_NOT_SUPPORTED; }
 
 private:
