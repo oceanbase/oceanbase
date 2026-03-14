@@ -96,8 +96,10 @@ public:
       OK(tguard.switch_to(run_ctx_.tenant_id_));
       OK(TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
     }
+    disable_delayed_upload();
   }
 
+  void disable_delayed_upload();
   void get_shared_blocks_for_tablet(common::ObIArray<blocksstable::MacroBlockId> &block_ids);
   int check_local_cache(const MacroBlockId &macro_id, const bool expect_exist);
   int check_micro_cache(const MacroBlockId &macro_id, const char *macro_buf, const int64_t macro_size, const bool expect_exist);
@@ -105,6 +107,14 @@ public:
   void wait_macro_cache_gc_for_tablet(const common::ObIArray<blocksstable::MacroBlockId> &block_ids, const ObTabletID &tablet_id);
   void set_ls_and_tablet_id_for_partition_run_ctx(const char *table_name, const char *partition_name);
 };
+
+void ObDropPartitionTableCacheCleanupTest::disable_delayed_upload()
+{
+  // Disable delayed upload to prevent HOT tablet minor SSTs from blocking
+  // ss_checkpoint_scn advancement, which would cause GC timeout.
+  // Disable delayed upload to prevent mittest from timing out.
+  OK(exe_sql("alter system set _ss_tablet_upload_follow_cache_policy = False;"));
+}
 
 void ObDropPartitionTableCacheCleanupTest::get_shared_blocks_for_tablet(
     common::ObIArray<blocksstable::MacroBlockId> &block_ids)

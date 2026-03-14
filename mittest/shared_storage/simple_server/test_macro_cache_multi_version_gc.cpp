@@ -518,6 +518,7 @@ TEST_F(ObMacroCacheMultiVersionGCTest, multi_version_gc_and_tablet_gc)
   OK(sys_exe_sql("alter system set _ss_major_compaction_prewarm_level = 0 tenant tt1;"));
   OK(sys_exe_sql("alter system set _ss_advance_checkpoint_interval = '1m' tenant tt1;"));
   OK(sys_exe_sql("alter system set_tp tp_name = EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP,error_code = 4016,frequency = 1;"));
+  OK(exe_sql("alter system set _ss_tablet_upload_follow_cache_policy = False;")); // Disable delayed upload to prevent mittest from timing out.
   OK(exe_sql("create table test_table (a int)"));
   set_ls_and_tablet_id_for_run_ctx();
   {
