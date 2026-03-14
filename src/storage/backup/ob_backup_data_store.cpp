@@ -962,6 +962,7 @@ int ObBackupDataStore::write_tablet_to_ls_info(const ObBackupDataTabletToLSDesc 
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(write_single_file(full_path, tablet_to_ls_info))) {
     LOG_WARN("fail to write single file", K(ret));
+  } else if (GCTX.is_shared_storage_mode()) {
   } else if (OB_FAIL(file_list_info.push_file_info(path, file_size))) {
     LOG_WARN("failed to push file info", K(ret), K(path), K(file_size));
   } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, ObBackupFileSuffix::BACKUP,
@@ -2380,6 +2381,7 @@ int ObBackupDataStore::list_and_generate_file_list_(
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (GCTX.is_shared_storage_mode()) {
   } else if (path.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid dest id or path or file list", K(ret), K(path));

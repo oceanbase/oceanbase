@@ -3994,7 +3994,7 @@ int ObBackupSetTaskMgr::generate_backup_set_file_list_()
     LOG_WARN("[DATA_BACKUP]failed to get backup set dir path", K(ret), K(backup_set_dest));
   } else if (OB_FAIL(store_.is_file_list_file_exist(dir_path, suffix, is_exist))) {
     LOG_WARN("[DATA_BACKUP]failed to check backup set dir exist", K(ret), K(dir_path), K(suffix));
-  } else if (is_exist) {
+  } else if (is_exist || GCTX.is_shared_storage_mode()) {
   } else {
     backup::ObBackupFileListInfo file_list_info;
     SCN start_replay_scn = job_attr_->plus_archivelog_ ? set_task_attr_.end_scn_ : set_task_attr_.start_scn_;
@@ -4083,7 +4083,8 @@ int ObBackupSetTaskMgr::generate_backup_meta_info_file_list_()
   const int64_t dest_id = storage_info->get_dest_id();
   ObBackupFileSuffix suffix(ObBackupFileSuffix::BACKUP);
   bool is_exist = false;
-  if (!backup_set_dest.is_valid() || !backup_set_desc.is_valid()) {
+  if (GCTX.is_shared_storage_mode()) {
+  } else if (!backup_set_dest.is_valid() || !backup_set_desc.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]invalid backup set dest or desc", K(ret), K(backup_set_dest), K(backup_set_desc));
   } else if (OB_FAIL(ObBackupPathUtil::get_tenant_meta_info_dir_path(backup_set_dest, dir_path))) {
@@ -4184,7 +4185,8 @@ int ObBackupSetTaskMgr::generate_infos_file_list_()
   major_data_type.set_major_data_backup();
   ObBackupDataType user_data_type;
   user_data_type.set_user_data_backup();
-  if (!backup_set_dest.is_valid()) {
+  if (GCTX.is_shared_storage_mode()) {
+  } else if (!backup_set_dest.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]invalid backup set dest", K(ret), K(backup_set_dest));
   } else if (OB_FAIL(ObBackupPathUtil::get_ls_info_dir_path(backup_set_dest, info_dir_path))) {
@@ -4253,37 +4255,40 @@ int ObBackupSetTaskMgr::generate_infos_file_list_()
 int ObBackupSetTaskMgr::generate_log_stream_file_list_(const ObIArray<ObBackupLSTaskAttr> &ls_task)
 {
   int ret = OB_SUCCESS;
-  const ObBackupDest &backup_set_dest = store_.get_backup_set_dest();
-  ObBackupPath file_path;
-  backup::ObBackupFileListInfo file_list_info;
-  ObBackupDataType user_data_type;
-  bool is_exist = false;
-  ObBackupPath log_stream_dir_path;
-  ObBackupFileSuffix suffix(ObBackupFileSuffix::BACKUP);
-  user_data_type.set_user_data_backup();
-  const ObBackupStorageInfo *storage_info = backup_set_dest.get_storage_info();
-  const int64_t dest_id = storage_info->get_dest_id();
-  if (!backup_set_dest.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("[DATA_BACKUP]invalid backup set dest", K(ret), K(backup_set_dest));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < ls_task.count(); ++i) {
-    const ObBackupLSTaskAttr &ls_attr = ls_task.at(i);
-    file_path.reset();
-    file_list_info.reset();
-    is_exist = false;
-    if (OB_FAIL(ObBackupPathUtil::get_ls_backup_dir_path(backup_set_dest, ls_attr.ls_id_, file_path))) {
-      LOG_WARN("[DATA_BACKUP]failed to get log stream dir path", K(ret), K(backup_set_dest), K(ls_attr));
-    } else if (OB_FAIL(store_.is_file_list_file_exist(file_path, suffix, is_exist))) {
-      LOG_WARN("[DATA_BACKUP]failed to check log stream dir exist", K(ret), K(file_path), K(suffix));
-    } else if (is_exist) {
-    } else if (OB_FAIL(add_log_stream_meta_dirs_(ls_attr, backup_set_dest, file_list_info))) {
-      LOG_WARN("[DATA_BACKUP]failed to add log stream meta dirs", K(ret), K(ls_attr), K(backup_set_dest));
-    } else if (OB_FAIL(add_log_stream_data_dirs_(ls_attr, backup_set_dest, file_list_info))) {
-      LOG_WARN("[DATA_BACKUP]failed to add log stream data dirs", K(ret), K(ls_attr), K(backup_set_dest));
-    } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, suffix,
-                                                                            file_path, dest_id, file_list_info))) {
-      LOG_WARN("[DATA_BACKUP]failed to write log stream file list", K(ret), K(file_path), K(file_list_info));
+  if (GCTX.is_shared_storage_mode()) {
+  } else {
+    const ObBackupDest &backup_set_dest = store_.get_backup_set_dest();
+    ObBackupPath file_path;
+    backup::ObBackupFileListInfo file_list_info;
+    ObBackupDataType user_data_type;
+    bool is_exist = false;
+    ObBackupPath log_stream_dir_path;
+    ObBackupFileSuffix suffix(ObBackupFileSuffix::BACKUP);
+    user_data_type.set_user_data_backup();
+    const ObBackupStorageInfo *storage_info = backup_set_dest.get_storage_info();
+    const int64_t dest_id = storage_info->get_dest_id();
+    if (!backup_set_dest.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("[DATA_BACKUP]invalid backup set dest", K(ret), K(backup_set_dest));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_task.count(); ++i) {
+      const ObBackupLSTaskAttr &ls_attr = ls_task.at(i);
+      file_path.reset();
+      file_list_info.reset();
+      is_exist = false;
+      if (OB_FAIL(ObBackupPathUtil::get_ls_backup_dir_path(backup_set_dest, ls_attr.ls_id_, file_path))) {
+        LOG_WARN("[DATA_BACKUP]failed to get log stream dir path", K(ret), K(backup_set_dest), K(ls_attr));
+      } else if (OB_FAIL(store_.is_file_list_file_exist(file_path, suffix, is_exist))) {
+        LOG_WARN("[DATA_BACKUP]failed to check log stream dir exist", K(ret), K(file_path), K(suffix));
+      } else if (is_exist) {
+      } else if (OB_FAIL(add_log_stream_meta_dirs_(ls_attr, backup_set_dest, file_list_info))) {
+        LOG_WARN("[DATA_BACKUP]failed to add log stream meta dirs", K(ret), K(ls_attr), K(backup_set_dest));
+      } else if (OB_FAIL(add_log_stream_data_dirs_(ls_attr, backup_set_dest, file_list_info))) {
+        LOG_WARN("[DATA_BACKUP]failed to add log stream data dirs", K(ret), K(ls_attr), K(backup_set_dest));
+      } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, suffix,
+                                                                              file_path, dest_id, file_list_info))) {
+        LOG_WARN("[DATA_BACKUP]failed to write log stream file list", K(ret), K(file_path), K(file_list_info));
+      }
     }
   }
   return ret;
@@ -4438,7 +4443,8 @@ int ObBackupSetTaskMgr::generate_complement_log_file_list_()
   ObArray<ObPieceKey> key_array;
   ObBackupFileSuffix suffix(ObBackupFileSuffix::ARCHIVE);
   bool is_exist = false;
-  if (OB_FAIL(ObBackupPathUtil::construct_backup_complement_log_dest(set_backup_dest, complement_log_dest))) {
+  if (GCTX.is_shared_storage_mode()) {
+  } else if (OB_FAIL(ObBackupPathUtil::construct_backup_complement_log_dest(set_backup_dest, complement_log_dest))) {
     LOG_WARN("[DATA_BACKUP]failed to construct complement log dest", K(ret), K(set_backup_dest));
   } else if (FALSE_IT(storage_info = complement_log_dest.get_storage_info())) {
   } else if (FALSE_IT(dest_id = storage_info->get_dest_id())) {
@@ -4602,7 +4608,8 @@ int ObBackupSetTaskMgr::add_piece_file_list_(
     const ObPieceKey &key)
 {
   int ret = OB_SUCCESS;
-  if (!complement_log_dest.is_valid() || OB_INVALID_DEST_ID == dest_id || OB_INVALID_ID == dest_id
+  if (GCTX.is_shared_storage_mode()) {
+  } else if (!complement_log_dest.is_valid() || OB_INVALID_DEST_ID == dest_id || OB_INVALID_ID == dest_id
           || OB_START_DEST_ID > dest_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid dest id", K(ret), K(dest_id), K(complement_log_dest));
@@ -4686,53 +4693,54 @@ int ObBackupSetTaskMgr::process_complement_log_logstream_dir_list_(
   const ObPieceKey &key,
   backup::ObBackupFileListInfo &file_list_info)
 {
-int ret = OB_SUCCESS;
-if (!complement_log_dest.is_valid() || OB_INVALID_DEST_ID == dest_id) {
-  ret = OB_INVALID_ARGUMENT;
-  LOG_WARN("[DATA_BACKUP]invalid complement log dest or dest id", K(ret), K(complement_log_dest), K(dest_id));
-} else {
-  ObBackupPath logstream_dir_path;
-  ObBackupPath log_dir_path;
-  ObArray<ObBackupLSTaskAttr> ls_attrs;
-  bool file_list_exist = false;
-  ObBackupFileListInfo log_stream_file_list_info;
-  const ObBackupStorageInfo *storage_info = complement_log_dest.get_storage_info();
-  if (OB_FAIL(ObBackupLSTaskOperator::get_ls_tasks(*sql_proxy_, set_task_attr_.task_id_,
-                                                      job_attr_->tenant_id_, false/*update*/, ls_attrs))) {
-      LOG_WARN("[DATA_BACKUP]failed to get ls tasks", K(ret), K(set_task_attr_), KPC(job_attr_));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < ls_attrs.count(); ++i) {
-    const ObBackupLSTaskAttr &ls_attr = ls_attrs.at(i);
-    const ObLSID &ls_id = ls_attr.ls_id_;
-    logstream_dir_path.reset();
-    log_dir_path.reset();
-    log_stream_file_list_info.reset();
-    file_list_exist = false;
-    if (OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(complement_log_dest, dest_id, key.round_id_,
-                                                                            key.piece_id_, ls_id, log_dir_path))) {
-      LOG_WARN("[DATA_BACKUP]failed to get piece ls log dir path", K(ret), K(complement_log_dest), K(dest_id), K(key), K(ls_id));
-    } else if (OB_FAIL(store_.is_file_list_file_exist(log_dir_path, ObBackupFileSuffix::ARCHIVE,
-                                                                                file_list_exist))) {
-      LOG_WARN("[DATA_BACKUP]failed to check file list exist", K(ret), K(log_dir_path));
-    } else if (!file_list_exist) {
-    } else if (FALSE_IT(file_list_exist = false)) {
-    } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_dir_path(complement_log_dest, dest_id, key.round_id_,
-                                                                            key.piece_id_, ls_id, logstream_dir_path))) {
-      LOG_WARN("[DATA_BACKUP]failed to get piece ls dir path", K(ret), K(complement_log_dest), K(dest_id), K(key), K(ls_id));
-    } else if (OB_FAIL(file_list_info.push_dir_info(logstream_dir_path))) {
-      LOG_WARN("[DATA_BACKUP]failed to push logstream dir to list", K(ret), K(logstream_dir_path));
-    } else if (OB_FAIL(store_.is_file_list_file_exist(logstream_dir_path, ObBackupFileSuffix::ARCHIVE,
-                                                                                file_list_exist))) {
-      LOG_WARN("[DATA_BACKUP]failed to check file list exist", K(ret), K(logstream_dir_path));
-    } else if (file_list_exist) {
-    } else if (OB_FAIL(log_stream_file_list_info.push_dir_info(log_dir_path))) {
-      LOG_WARN("[DATA_BACKUP]failed to push log stream dir to list", K(ret), K(log_dir_path));
-    } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, ObBackupFileSuffix::ARCHIVE,
-                                                         logstream_dir_path, dest_id, log_stream_file_list_info))) {
-      LOG_WARN("[DATA_BACKUP]failed to write log stream file list", K(ret),
-                  K(logstream_dir_path), K(log_stream_file_list_info), KP(storage_info), K(dest_id));
+  int ret = OB_SUCCESS;
+  if (GCTX.is_shared_storage_mode()) {
+  } else if (!complement_log_dest.is_valid() || OB_INVALID_DEST_ID == dest_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[DATA_BACKUP]invalid complement log dest or dest id", K(ret), K(complement_log_dest), K(dest_id));
+  } else {
+    ObBackupPath logstream_dir_path;
+    ObBackupPath log_dir_path;
+    ObArray<ObBackupLSTaskAttr> ls_attrs;
+    bool file_list_exist = false;
+    ObBackupFileListInfo log_stream_file_list_info;
+    const ObBackupStorageInfo *storage_info = complement_log_dest.get_storage_info();
+    if (OB_FAIL(ObBackupLSTaskOperator::get_ls_tasks(*sql_proxy_, job_attr_->job_id_,
+                                                        job_attr_->tenant_id_, false/*update*/, ls_attrs))) {
+        LOG_WARN("[DATA_BACKUP]failed to get ls tasks", K(ret), K(set_task_attr_), KPC(job_attr_));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_attrs.count(); ++i) {
+      const ObBackupLSTaskAttr &ls_attr = ls_attrs.at(i);
+      const ObLSID &ls_id = ls_attr.ls_id_;
+      logstream_dir_path.reset();
+      log_dir_path.reset();
+      log_stream_file_list_info.reset();
+      file_list_exist = false;
+      if (OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(complement_log_dest, dest_id, key.round_id_,
+                                                                              key.piece_id_, ls_id, log_dir_path))) {
+        LOG_WARN("[DATA_BACKUP]failed to get piece ls log dir path", K(ret), K(complement_log_dest), K(dest_id), K(key), K(ls_id));
+      } else if (OB_FAIL(store_.is_file_list_file_exist(log_dir_path, ObBackupFileSuffix::ARCHIVE,
+                                                                                  file_list_exist))) {
+        LOG_WARN("[DATA_BACKUP]failed to check file list exist", K(ret), K(log_dir_path));
+      } else if (!file_list_exist) {
+      } else if (FALSE_IT(file_list_exist = false)) {
+      } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_dir_path(complement_log_dest, dest_id, key.round_id_,
+                                                                              key.piece_id_, ls_id, logstream_dir_path))) {
+        LOG_WARN("[DATA_BACKUP]failed to get piece ls dir path", K(ret), K(complement_log_dest), K(dest_id), K(key), K(ls_id));
+      } else if (OB_FAIL(file_list_info.push_dir_info(logstream_dir_path))) {
+        LOG_WARN("[DATA_BACKUP]failed to push logstream dir to list", K(ret), K(logstream_dir_path));
+      } else if (OB_FAIL(store_.is_file_list_file_exist(logstream_dir_path, ObBackupFileSuffix::ARCHIVE,
+                                                                                  file_list_exist))) {
+        LOG_WARN("[DATA_BACKUP]failed to check file list exist", K(ret), K(logstream_dir_path));
+      } else if (file_list_exist) {
+      } else if (OB_FAIL(log_stream_file_list_info.push_dir_info(log_dir_path))) {
+        LOG_WARN("[DATA_BACKUP]failed to push log stream dir to list", K(ret), K(log_dir_path));
+      } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, ObBackupFileSuffix::ARCHIVE,
+                                                          logstream_dir_path, dest_id, log_stream_file_list_info))) {
+        LOG_WARN("[DATA_BACKUP]failed to write log stream file list", K(ret),
+                    K(logstream_dir_path), K(log_stream_file_list_info), KP(storage_info), K(dest_id));
+      }
     }
   }
-}
-return ret;
+  return ret;
 }

@@ -37,6 +37,10 @@ int ObBackupValidateResolver::resolve(const ParseNode &parse_tree)
   if (OB_UNLIKELY(T_BACKUP_VALIDATE != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type is not T_VALIDATE_BACKUP", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(GCTX.is_shared_storage_mode())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("BACKUP_VALIDATE command is not supported in shared storage mode", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup validate command in shared storage mode is");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(cur_tenant_id, data_version))) {
     LOG_WARN("get tenant data version failed", KR(ret));
   } else if (data_version < DATA_VERSION_4_5_1_0) {
