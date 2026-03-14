@@ -1533,6 +1533,9 @@ int ObBackupDataStore::get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap 
       LOG_WARN("fail to list files", K(ret), K(tenant_backup_placeholder_dir_path));
     } else if (OB_FAIL(op.get_backup_set_array(backup_set_desc_array))) {
       LOG_WARN("fail to get backup set name array", K(ret), K(op));
+    } else if (backup_set_desc_array.empty()) {
+      ret = OB_BACKUP_SET_NOT_FOUND;
+      LOG_WARN("available data backup set is not found", K(ret));
     } else {
       ObBackupSetDescComparator cmp;
       HEAP_VARS_2((storage::ObExternTenantLocalityInfoDesc, locality_info),
