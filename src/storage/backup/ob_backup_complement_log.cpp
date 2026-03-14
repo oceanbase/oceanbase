@@ -1563,7 +1563,8 @@ int ObBackupLSLogTask::copy_ls_file_info_(
     if (OB_FAIL(dest_store.write_single_ls_info(dest_dest_id, round_id, piece_id, ls_id, desc))) {
       LOG_WARN("failed to write single ls info", K(ret), K(piece_file));
     }
-    if (FAILEDx(ObArchivePathUtil::get_piece_ls_dir_path(dest, dest_dest_id, round_id, piece_id, ls_id, ls_path))) {
+    if (OB_FAIL(ret) || GCTX.is_shared_storage_mode()) {
+    } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_dir_path(dest, dest_dest_id, round_id, piece_id, ls_id, ls_path))) {
       LOG_WARN("failed to get piece ls dir path", K(ret), K(dest), K(dest_dest_id), K(round_id), K(piece_id), K(ls_id));
     } else if (OB_FAIL(dir_info.set_dir_info("log"))) {
       LOG_WARN("failed to set dir info", K(ret));
@@ -1679,7 +1680,7 @@ int ObBackupLSLogTask::copy_checkpoint_info_(const ObTenantArchivePieceAttr &pie
     LOG_WARN("failed to get piece checkpoint file path", K(ret), K(dest), K(dest_dest_id), K(round_id), K(piece_id));
   } else if (OB_FAIL(dest_store.is_file_list_file_exist(piece_checkpoint_dir_path, suffix, is_exist))) {
     LOG_WARN("failed to check is file list file exist", K(ret), K(piece_checkpoint_dir_path), K(suffix));
-  } else if (is_exist) {
+  } else if (is_exist || GCTX.is_shared_storage_mode()) {
     // do nothing
   } else {
     ObBackupFileListInfo file_list_info;
@@ -2356,6 +2357,7 @@ int ObBackupLSLogFinishTask::generate_log_file_list_()
   if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx should not be null", K(ret));
+  } else if (GCTX.is_shared_storage_mode()) {
   } else if (OB_FAIL(ObBackupPathUtil::construct_backup_complement_log_dest(
     ctx_->backup_dest_, ctx_->backup_set_desc_, dest))) {
     LOG_WARN("failed to construct backup complement log dest", K(ret), K(ctx_->backup_dest_), K(ctx_->backup_set_desc_));
