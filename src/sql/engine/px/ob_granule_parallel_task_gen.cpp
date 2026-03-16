@@ -768,7 +768,10 @@ int GICsvFullScanParallelTaskGen::csv_full_scan_one_task_processing(
     };
     FullScanFunctor func;
     func.bound_helper_.is_escaped_ = csv_parallel_info->is_gambling_end_with_escaped_;
-    if (OB_FAIL(share::ObExternalTableUtils::read_data_for_bound(
+    // chunk小于max_row_length_的情况下gambling阶段可能就已经做完了全量扫描，此时下发的start_pos > end_pos.
+    // 所以直接跳过扫描，但仍然需要提交结果。因为full_scan join时是按idx分别获取gambling阶段和full_scan阶段的结果.
+    // 两个结果的长度一致便于合并.
+    if (start_pos < end_pos && OB_FAIL(share::ObExternalTableUtils::read_data_for_bound(
                                              external_location_, external_access_info_,
                                              external_file_format_, url, start_pos,
                                              end_pos, func))) {

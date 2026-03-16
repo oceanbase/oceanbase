@@ -48,10 +48,10 @@ struct ObCsvGamblingResult {
 
   ObCsvGamblingResult()
     : is_success_(false), is_gambling_end_with_escaped_(false),
-      file_id_(0), chunk_idx_(0), chunk_cnt_(0),
-      bounded_start_pos_(0), end_pos_(0),
+      file_id_(OB_INVALID_INDEX), chunk_idx_(OB_INVALID_INDEX), chunk_cnt_(0),
+      bounded_start_pos_(OB_INVALID_INDEX), end_pos_(OB_INVALID_INDEX),
       enclosed_cnt_(0), even_pos_(OB_INVALID_INDEX),
-      odd_pos_(OB_INVALID_INDEX), next_start_pos_(0),
+      odd_pos_(OB_INVALID_INDEX), next_start_pos_(OB_INVALID_INDEX),
       tablet_loc_(nullptr), scan_task_(nullptr)
   {}
   TO_STRING_KV(K_(is_success), K_(is_gambling_end_with_escaped), K_(file_id),
@@ -71,7 +71,7 @@ struct ObCsvFullScanResult {
   ObDASTabletLoc *tablet_loc_;
   sql::ObIExtTblScanTask *scan_task_;
   ObCsvFullScanResult()
-    : file_id_(0), chunk_idx_(0),
+    : file_id_(OB_INVALID_INDEX), chunk_idx_(OB_INVALID_INDEX),
       chunk_cnt_(0), enclosed_cnt_(0),
       even_pos_(OB_INVALID_INDEX), odd_pos_(OB_INVALID_INDEX),
       tablet_loc_(nullptr), scan_task_(nullptr)

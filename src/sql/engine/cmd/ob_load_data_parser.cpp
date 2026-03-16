@@ -1228,6 +1228,7 @@ const char *compression_algorithm_to_suffix(ObCSVGeneralFormat::ObCSVCompression
     case ObCSVGeneralFormat::ObCSVCompression::GZIP:    return ".gz";
     case ObCSVGeneralFormat::ObCSVCompression::DEFLATE: return ".deflate";
     case ObCSVGeneralFormat::ObCSVCompression::ZSTD:    return ".zst";
+    case ObCSVGeneralFormat::ObCSVCompression::SNAPPY:  return ".snappy";
     default:                                            return "";
   }
 }
