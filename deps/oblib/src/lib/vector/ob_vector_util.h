@@ -111,7 +111,8 @@ int knn_search(obvsag::VectorIndexPtr index_handler,
                float valid_ratio = 1.0,
                void *allocator = nullptr,
                bool need_extra_info = false,
-               float distance_threshold = FLT_MAX);
+               float distance_threshold = FLT_MAX,
+               float timeout_ms = 0.0f);
 
 int knn_search(obvsag::VectorIndexPtr index_handler,
                float *query_vector,
@@ -129,7 +130,8 @@ int knn_search(obvsag::VectorIndexPtr index_handler,
                void *allocator,
                bool need_extra_info,
                void *&iter_filter,
-               bool is_last_search = false);
+               bool is_last_search = false,
+               float timeout_ms = 0.0f);
 
 int knn_search(obvsag::VectorIndexPtr index_handler, uint32_t len, uint32_t *dims, float *vals, int64_t topk,
     const float *&result_dist, const int64_t *&result_ids, const char *&extra_info, int64_t &result_size, float query_prune_ratio, int64_t n_candidate,

@@ -14,11 +14,15 @@
 
 #include "ob_vector_index_segment.h"
 #include "lib/roaringbitmap/ob_roaringbitmap.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "storage/ddl/ob_direct_load_struct.h"
 #include "src/share/vector_index/ob_plugin_vector_index_util.h"
+
+ERRSIM_POINT_DEF(ERRSIM_VEC_ENABLE_SEARCH_TIMEOUT_MS, "When set, add timeout_ms to VSAG search param to limit search time.");
+ERRSIM_POINT_DEF(ERRSIM_VEC_ENABLE_SEGMENT_EF_REDUCTION, "When set, reduce ef_search proportionally across segments to improve QPS in multi-segment searches.");
 
 namespace oceanbase
 {
@@ -31,6 +35,47 @@ int64_t ObVecIdxVBitmapData::instacnce_cnt_ = 0;
 int64_t ObVectorIndexSegmentBuilder::instacnce_cnt_ = 0;
 int64_t ObVecIdxSnapshotData::instacnce_cnt_ = 0;
 int64_t ObVecIdxFrozenData::instacnce_cnt_ = 0;
+
+// Compute actual per-segment ef_search and query_limit when segment ef-reduction is active.
+// When ERRSIM_VEC_ENABLE_SEGMENT_EF_REDUCTION is not set, returns original values unchanged.
+static void calc_segment_ef_params(const ObVectorQueryConditions *query_cond,
+                                   int segment_cnt,
+                                   int64_t &actual_ef_search,
+                                   int64_t &actual_query_limit)
+{
+  const int eff_seg = (segment_cnt > 1 && ERRSIM_VEC_ENABLE_SEGMENT_EF_REDUCTION != OB_SUCCESS)
+                      ? segment_cnt : 1;
+  if (eff_seg > 1) {
+    // Distribute query_limit evenly across segments, then apply 2.5x empirical headroom factor.
+    int64_t q = (query_cond->query_limit_ + eff_seg - 1) / eff_seg;
+    q = q * 5 / 2;
+    actual_ef_search  = MAX(q, query_cond->ef_search_ / eff_seg);
+    actual_query_limit = q;
+  } else {
+    actual_ef_search  = query_cond->ef_search_;
+    actual_query_limit = query_cond->query_limit_;
+  }
+}
+
+// Compute per-segment timeout_ms from optimizer selectivity and configured ef_search.
+// Returns 0 when ERRSIM_VEC_ENABLE_SEARCH_TIMEOUT_MS is not set or segment_cnt <= 1.
+static float calc_vsag_search_timeout_ms(int64_t ef_search,
+                                         double selectivity,
+                                         int segment_cnt)
+{
+  float timeout_ms = 0.0f;
+  if (ERRSIM_VEC_ENABLE_SEARCH_TIMEOUT_MS != OB_SUCCESS && segment_cnt > 1) {
+    double s = MAX(0.0, MIN(1.0, selectivity));
+    // [TODO] 计算公式还可以继续优化
+    // Linear calibration: coef(sel=0.1)=0.02, coef(sel=0.3)=0.0125 ms/ef-step
+    const double TIMEOUT_COEF_INTERCEPT = 0.02375; // selectivity=0 时的基础系数
+    const double TIMEOUT_COEF_SLOPE     = 0.0375;  // 选择率越高，则所需时间越少。每单位 selectivity 的系数减少量
+    const double TIMEOUT_COEF_SCALE     = 8.0;     // segment个数越多，所需时间越少。缩放因子，以 8 个 segment 为基准。
+    double coef = (TIMEOUT_COEF_INTERCEPT - TIMEOUT_COEF_SLOPE * s) * TIMEOUT_COEF_SCALE;
+    timeout_ms = static_cast<float>(coef * ef_search / segment_cnt);
+  }
+  return timeout_ms;
+}
 
 ObVectorIndexSegmentHandle::ObVectorIndexSegmentHandle(const ObVectorIndexSegmentHandle &other)
   : segment_(nullptr)
@@ -2005,7 +2050,8 @@ ObVecIdxFrozenData::~ObVecIdxFrozenData()
   FLOG_INFO("destruct ObVecIdxFrozenData", K(instacnce_cnt), KP(this));
 }
 
-int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result)
+
+int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result, int segment_cnt)
 {
   int ret = OB_SUCCESS;
   int64_t vec_cnt = 0;
@@ -2026,6 +2072,16 @@ int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result)
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ctx_->tenant_id_, "VIndexVsagADP"));
     lib::ObLightBacktraceGuard light_backtrace_guard(false);
     result.mem_ctx_ = segment_querier_->handle_->mem_ctx_;
+    int64_t actual_ef_search = 0;
+    int64_t actual_query_limit = 0;
+    calc_segment_ef_params(query_cond_, segment_cnt, actual_ef_search, actual_query_limit);
+
+    const float timeout_ms = calc_vsag_search_timeout_ms(
+        query_cond_->ef_search_, static_cast<double>(selectivity_), segment_cnt);
+
+    LOG_TRACE("multi-segment knn_search ef_search adjust",
+      K(segment_cnt), K(query_cond_->ef_search_), K(actual_ef_search),
+      K(actual_query_limit), K(timeout_ms), K(selectivity_));
     if (! query_cond_->is_post_with_filter_) {
       if (is_sparse_vector_) {
         ObCostGuard incr_cost_guard(this, "sparse_pre", query_cond_->ob_sparse_drop_ratio_search_, query_cond_->query_limit_);
@@ -2051,23 +2107,24 @@ int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result)
           LOG_WARN("knn search sparse vector failed.", K(ret));
         }
       } else {
-        ObCostGuard dense_cost_guard(this, "pre", query_cond_->ef_search_, query_cond_->query_limit_);
+        ObCostGuard dense_cost_guard(this, "pre", actual_ef_search, actual_query_limit);
         if (OB_FAIL(obvectorutil::knn_search(segment_querier_->handle_->index_,
           query_vector_,
           dim_,
-          query_cond_->query_limit_,
+          actual_query_limit,
           result.distances_,
           result.vids_,
           result.extra_info_buf_ptr_,
           result.total_,
-          query_cond_->ef_search_,
+          actual_ef_search,
           segment_querier_->filter_,
           segment_querier_->reverse_filter_,
           segment_querier_->is_extra_info_filter(),
           valid_ratio_,
           &ctx_->search_allocator_,
           query_cond_->extra_column_count_ > 0,
-          query_cond_->distance_threshold_))) {
+          query_cond_->distance_threshold_,
+          timeout_ms))) {
           LOG_WARN("knn search dense vector failed.", K(ret));
         }
       }
@@ -2075,16 +2132,16 @@ int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("spare vector is not support iterative filter", K(ret));
     } else {
-      ObCostGuard delta_cost_guard(this, "post", query_cond_->ef_search_, query_cond_->query_limit_);
+      ObCostGuard delta_cost_guard(this, "post", actual_ef_search, actual_query_limit);
       if (OB_FAIL(obvectorutil::knn_search(segment_querier_->handle_->index_,
         query_vector_,
         dim_,
-        query_cond_->query_limit_,
+        actual_query_limit,
         result.distances_,
         result.vids_,
         result.extra_info_buf_ptr_,
         result.total_,
-        query_cond_->ef_search_,
+        actual_ef_search,
         segment_querier_->filter_,
         segment_querier_->reverse_filter_,
         segment_querier_->is_extra_info_filter(),
@@ -2092,14 +2149,15 @@ int ObVectorIndexSegQueryHandler::knn_search(ObVsagQueryResult &result)
         &ctx_->search_allocator_,
         query_cond_->extra_column_count_ > 0,
         segment_querier_->iter_ctx_,
-        query_cond_->is_last_search_))) {
+        query_cond_->is_last_search_,
+        timeout_ms))) {
         LOG_WARN("knn search delta failed.", K(ret));
       }
     }
     LOG_TRACE("search_result", K(ret),
         "vids", ObArrayWrap<int64_t>(result.vids_, result.total_),
-        KPC(segment_querier_), K(query_cond_->query_limit_),
-        K(query_cond_->ef_search_), K(query_cond_->is_last_search_),
+        KPC(segment_querier_), K(actual_query_limit),
+        K(query_cond_->ef_search_), K(actual_ef_search), K(query_cond_->is_last_search_),
         K(query_cond_->extra_column_count_), K(query_cond_->distance_threshold_));
 
     if (OB_SUCC(ret) && query_cond_->distance_threshold_ != FLT_MAX && result.total_ > 0) {

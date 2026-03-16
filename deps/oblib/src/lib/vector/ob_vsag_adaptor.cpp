@@ -22,6 +22,7 @@
 #include "vsag/options.h"
 #include "vsag/factory.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/worker.h"
 #include "lib/allocator/ob_allocator.h"
@@ -824,7 +825,8 @@ int construct_vsag_sindi_create_param(uint8_t create_type, const char *dtype, co
 int construct_vsag_search_param(uint8_t create_type,
                                 int64_t ef_search,
                                 bool use_extra_info_filter,
-                                char *result_param_str)
+                                char *result_param_str,
+                                float timeout_ms)
 {
   int ret = OB_SUCCESS;
   bool is_hgraph_type = get_is_hgraph_type(create_type);
@@ -847,6 +849,11 @@ int construct_vsag_search_param(uint8_t create_type,
                         pos,
                         ",\"skip_ratio\":%f", 0.7))) {
     LOG_WARN("failed to fill result_param_str", K(ret), K(index_type_str));
+  } else if (timeout_ms > 0.0 && OB_FAIL(databuff_printf(result_param_str,
+                        buf_len,
+                        pos,
+                        ",\"timeout_ms\":%.4f", timeout_ms))) {
+    LOG_WARN("failed to fill result_param_str timeout_ms", K(ret), K(timeout_ms));
   } else if (is_hgraph_type && OB_FAIL(databuff_printf(result_param_str,
                         buf_len,
                         pos,
@@ -1233,7 +1240,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
                int64_t &result_size, int ef_search, bool need_extra_info,
                const char *&extra_infos, void *invalid, bool reverse_filter,
                bool use_extra_info_filter, void *allocator, float valid_ratio,
-               float distance_threshold)
+               float distance_threshold, float timeout_ms)
 {
   int ret = OB_SUCCESS;
   if (index_handler == nullptr || query_vector == nullptr) {
@@ -1254,7 +1261,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
       int64_t ef_search_threshold = AMPLIFICATION_FACTOR * topk > EF_SEARCH_LIMIT ? AMPLIFICATION_FACTOR * topk : EF_SEARCH_LIMIT;
       ef_search = ef_search < ef_search_threshold ? ef_search : ef_search_threshold;
     }
-    if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str))) {
+    if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str, timeout_ms))) {
       LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter), K(topk));
     } else {
       const std::string input_json_string(result_param_str);
@@ -1275,7 +1282,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
                int64_t &result_size, int ef_search, bool need_extra_info,
                const char *&extra_infos, void *invalid, bool reverse_filter,
                bool use_extra_info_filter, float valid_ratio, void *&iter_ctx,
-               bool is_last_search, void *allocator)
+               bool is_last_search, void *allocator, float timeout_ms)
 {
   int ret = OB_SUCCESS;
   if (index_handler == nullptr || query_vector == nullptr) {
@@ -1296,7 +1303,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
       int64_t ef_search_threshold = AMPLIFICATION_FACTOR * topk > EF_SEARCH_LIMIT ? AMPLIFICATION_FACTOR * topk : EF_SEARCH_LIMIT;
       ef_search = ef_search < ef_search_threshold ? ef_search : ef_search_threshold;
     }
-    if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str))) {
+    if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str, timeout_ms))) {
       LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter), K(topk));
     } else {
       const std::string input_json_string(result_param_str);

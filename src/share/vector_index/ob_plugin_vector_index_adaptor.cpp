@@ -22,12 +22,14 @@
 #include "share/allocator/ob_tenant_vector_allocator.h"
 #include "share/vector_index/ob_vector_index_aux_table_handler.h"
 #include "storage/vector_index/ob_vector_index_refresh.h"
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
 namespace share
 {
 
+ERRSIM_POINT_DEF(ERRSIM_VEC_DISABLE_MERGE, "When set, check_need_merge always returns false and vector index merge is disabled.");
 ObVectorIndexInfo::ObVectorIndexInfo()
   : ls_id_(share::ObLSID::INVALID_LS_ID),
     rowkey_vid_table_id_(common::OB_INVALID_ID),
@@ -3812,6 +3814,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
   handler.ctx_ = ctx;
   handler.extra_info_actual_size_ = extra_info_actual_size;
   handler.valid_ratio_ = valid_ratio;
+  handler.selectivity_ = ctx->is_prefilter_valid() ? static_cast<float>(ctx->pre_filter_->selectivity_) : 1.0f;
   handler.query_vector_ = query_vector;
   handler.dim_ = dim;
   handler.is_sparse_vector_ = is_sparse_vector;
@@ -3873,7 +3876,8 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
     }
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < ctx->segments_.count(); ++i) {
+  const int total_segment_cnt = static_cast<int>(ctx->segments_.count());
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_segment_cnt; ++i) {
     ObVectorIndexSegmentQuerier* segment_querier = ctx->segments_.at(i);
     handler.segment_querier_ = segment_querier;
     ObVsagQueryResult *res = nullptr;
@@ -3883,7 +3887,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
     if (OB_ISNULL(res = OB_NEWx(ObVsagQueryResult, ctx->tmp_allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc fail", K(ret), "size", sizeof(ObVsagQueryResult));
-    } else if (OB_FAIL(handler.knn_search(*res))) {
+    } else if (OB_FAIL(handler.knn_search(*res, total_segment_cnt))) {
       LOG_WARN("knn search snap fail", K(ret));
     } else if (res->total_ > 0 && OB_FAIL(result_list.push_back(res))) {
       LOG_WARN("push back snap data fail", K(ret), KPC(res));
@@ -4029,6 +4033,7 @@ int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultCont
     handler.ctx_ = ctx;
     handler.extra_info_actual_size_ = extra_info_actual_size;
     handler.valid_ratio_ = valid_ratio;
+    handler.selectivity_ = 1.0f;
     handler.query_vector_ = query_vector;
     handler.dim_ = dim;
 
@@ -5851,7 +5856,9 @@ int ObPluginVectorIndexAdaptor::check_need_merge(const int64_t merge_base_percen
 {
   int ret = OB_SUCCESS;
   need_merge = false;
-  if (! snap_data_.is_valid() || ! snap_data_->is_inited()) {
+  if (ERRSIM_VEC_DISABLE_MERGE != OB_SUCCESS) {
+    LOG_INFO("[VECTOR INDEX MERGE] disabled by errsim");
+  } else if (! snap_data_.is_valid() || ! snap_data_->is_inited()) {
     LOG_TRACE("snap is not init, so no need merge", K(ret), KPC(this));
   } else if (! snap_data_->has_complete_) {
     LOG_INFO("snap data is not loaded, can not merge", KPC(this));

@@ -86,7 +86,8 @@ int construct_vsag_create_param(
 int construct_vsag_search_param(uint8_t create_type,
                                              int64_t ef_search,
                                              bool use_extra_info_filter,
-                                             char *result_param_str);
+                                             char *result_param_str,
+                                             float timeout_ms = 0.0f);
 int create_index(VectorIndexPtr& index_handler, IndexType index_type,
                  const char* dtype,
                  const char* metric,int dim,
@@ -114,12 +115,14 @@ int knn_search(VectorIndexPtr& index_handler,float* query_vector, int dim, int64
                const float*& dist, const int64_t*& ids, int64_t &result_size, int ef_search,
                bool need_extra_info, const char*& extra_infos,
                void* invalid, bool reverse_filter, bool use_extra_info_filter,
-               float valid_ratio, void *&iter_ctx, bool is_last_search = false, void *allocator = nullptr);
+               float valid_ratio, void *&iter_ctx, bool is_last_search = false, void *allocator = nullptr,
+               float timeout_ms = 0.0f);
 int knn_search(VectorIndexPtr& index_handler,float* query_vector, int dim, int64_t topk,
                const float*& dist, const int64_t*& ids, int64_t &result_size, int ef_search,
                bool need_extra_info, const char*& extra_infos,
                void* invalid = nullptr, bool reverse_filter = false,
-               bool use_extra_info_filter = false, void *allocator = nullptr, float valid_ratio = 1, float distance_threshold = FLT_MAX);
+               bool use_extra_info_filter = false, void *allocator = nullptr, float valid_ratio = 1,
+               float distance_threshold = FLT_MAX, float timeout_ms = 0.0f);
 int knn_search(obvsag::VectorIndexPtr &index_handler, uint32_t len, uint32_t *dims, float *vals, int64_t topk,
     const float *&result_dist, const int64_t *&result_ids, const char *&extra_infos, int64_t &result_size,
     float query_prune_ratio, int64_t n_candidate, void *invalid = nullptr, bool reverse_filter = false,

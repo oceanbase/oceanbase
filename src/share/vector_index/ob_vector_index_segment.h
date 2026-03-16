@@ -915,6 +915,7 @@ struct ObVectorIndexSegQueryHandler
       ctx_(nullptr),
       query_cond_(nullptr),
       valid_ratio_(0.0f),
+      selectivity_(1.0f),
       extra_info_actual_size_(0),
       is_sparse_vector_(false),
       query_vector_(nullptr),
@@ -923,10 +924,10 @@ struct ObVectorIndexSegQueryHandler
       sparse_dims_(nullptr),
       sparse_vals_(nullptr) {}
 
-  int knn_search(ObVsagQueryResult &result);
+  int knn_search(ObVsagQueryResult &result, int segment_cnt = 0);
 
   TO_STRING_KV(KP(this), K_(tenant_id), KPC_(segment_querier), KP_(ctx), KP_(query_cond),
-      K_(valid_ratio), K_(extra_info_actual_size), K_(is_sparse_vector),
+      K_(valid_ratio), K_(selectivity), K_(extra_info_actual_size), K_(is_sparse_vector),
       KP_(query_vector), K_(dim), KP_(sparse_lens), KP_(sparse_dims), KP_(sparse_vals));
 
 
@@ -935,6 +936,7 @@ struct ObVectorIndexSegQueryHandler
   ObVectorQueryAdaptorResultContext *ctx_;
   ObVectorQueryConditions *query_cond_;
   float valid_ratio_;
+  float selectivity_; // optimizer-estimated selectivity for timeout_ms calculation
   int64_t extra_info_actual_size_;
   bool is_sparse_vector_;
 
