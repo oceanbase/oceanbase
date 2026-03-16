@@ -327,6 +327,20 @@ int ObIODeviceLocalFileOp::mkdir(const char *pathname, mode_t mode)
   return ret;
 }
 
+// Note: this function would return OB_FILE_OR_DIRECTORY_EXIST, if the directory already exists.
+int ObIODeviceLocalFileOp::mkdir_exclusively(const char *pathname, mode_t mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pathname) || OB_UNLIKELY(STRLEN(pathname) == 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "invalid arguments.", K(pathname), K(ret));
+  } else if (::mkdir(pathname, mode) != 0) {
+    ret = convert_sys_errno();
+    SHARE_LOG(WARN, "create directory failed.", K(pathname), K(errno), KERRMSG, K(ret));
+  }
+  return ret;
+}
+
 int ObIODeviceLocalFileOp::rmdir(const char *pathname)
 {
   int ret = OB_SUCCESS;
@@ -342,6 +356,8 @@ int ObIODeviceLocalFileOp::rmdir(const char *pathname)
   } else if (0 != ::rmdir(pathname)) {
     ret = convert_sys_errno();
     SHARE_LOG(WARN, "rmdir failed.", K(pathname), K(errno), KERRMSG, K(ret));
+  } else {
+    FLOG_INFO("succ to rmdir", K(pathname));
   }
   return ret;
 }

@@ -170,6 +170,7 @@ public:
                   common::ObIODOpts *opts = NULL);
   static int close(const common::ObIOFd &fd);
   static int mkdir(const char *pathname, mode_t mode);
+  static int mkdir_exclusively(const char *pathname, mode_t mode);
   static int rmdir(const char *pathname);
   static int unlink(const char *pathname);
   static int rename(const char *oldpath, const char *newpath);
