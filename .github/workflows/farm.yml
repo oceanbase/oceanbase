@@ -26,7 +26,7 @@ jobs:
     name: setup
     runs-on: ob-test-arc-runner-k8s
     container:
-      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260310
+      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260316
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -113,7 +113,7 @@ jobs:
       matrix:
         slice: [0, 1, 2, 3]
     container:
-      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260310
+      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260316
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -198,7 +198,7 @@ jobs:
     needs: farm-mysqltest
     runs-on: ob-test-arc-runner-k8s
     container:
-      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260310
+      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260316
     steps:
       - name: Checkout
         uses: actions/checkout@v4
