@@ -286,8 +286,7 @@ int ObExprSearchIndexInnerValue::calc_search_index_inner_value(const ObExpr &exp
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, cmp_type_datum))) {
     LOG_WARN("eval param value failed", K(ret));
   } else if (OB_UNLIKELY(param_datum->is_null())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("param value is null", K(ret));
+    expr_datum.set_null();
   } else {
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     ObString value;
