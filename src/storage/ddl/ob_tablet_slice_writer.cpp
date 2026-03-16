@@ -1413,7 +1413,7 @@ int ObCsSliceWriter::flush_row_buffer(const bool is_end)
     } else if (need_check_rowkey_order_ && OB_FAIL(check_order(*buffer_batch_rows))) {
       LOG_WARN("check order failed", K(ret));
     } else if (OB_FAIL(output_row_buffer(is_end))) {
-      LOG_WARN("output row buffer failed", K(ret), KPC(buffer_batch_rows));
+      LOG_WARN("output row buffer failed", K(ret));
     }
   }
   return ret;
