@@ -1068,11 +1068,11 @@ int ObHashJoinOp::get_next_left_row_na()
   return ret;
 }
 
-int ObHashJoinOp::get_next_left_row_batch(bool is_from_row_store,
-                                          const ObBatchRows *&child_brs)
+int ObHashJoinOp::get_next_left_row_batch(bool is_from_row_store)
 {
   int ret = common::OB_SUCCESS;
   left_row_joined_ = false;
+  const ObBatchRows *child_brs = nullptr;
   if (!is_from_row_store) {
     if (OB_FAIL(left_->get_next_batch(max_output_cnt_, child_brs))) {
       LOG_WARN("get left row from child failed", K(ret));
@@ -1085,6 +1085,9 @@ int ObHashJoinOp::get_next_left_row_batch(bool is_from_row_store,
       FOREACH_CNT_X(e, left_->get_spec().output_, OB_SUCC(ret)) {
         (*e)->get_eval_info(eval_ctx_).projected_ = true;
       }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(child_brs_.copy(child_brs))) {
+      LOG_WARN("failed to deep copy child brs", K(ret));
     }
   } else {
     int64_t read_size = 0;
@@ -1112,10 +1115,11 @@ int ObHashJoinOp::get_next_left_row_batch(bool is_from_row_store,
   return ret;
 }
 
-int ObHashJoinOp::get_next_left_row_batch_na(bool is_from_row_store, const ObBatchRows *&child_brs)
+int ObHashJoinOp::get_next_left_row_batch_na(bool is_from_row_store)
 {
   int ret = OB_SUCCESS;
   left_row_joined_ = false;
+  const ObBatchRows *child_brs = nullptr;
   bool is_left = true;
   bool has_null = false;
   if (!is_from_row_store) {
@@ -1148,6 +1152,9 @@ int ObHashJoinOp::get_next_left_row_batch_na(bool is_from_row_store, const ObBat
         }
       }
       LOG_TRACE("right naaj null break", K(ret));
+    }
+    if (OB_SUCC(ret) && OB_FAIL(child_brs_.copy(child_brs))) {
+      LOG_WARN("failed to deep copy child brs", K(ret));
     }
   } else {
     int64_t read_size = 0;
@@ -2508,17 +2515,16 @@ int ObHashJoinOp::fill_partition_batch(int64_t &num_left_rows)
   bool is_left_side = true;
   while (OB_SUCC(ret)) {
     clear_evaluated_flag();
-    const ObBatchRows *child_brs = NULL;
     // next batch
-    if (OB_FAIL((this->*get_next_left_batch_func_)(is_from_row_store, child_brs))) {
-      LOG_WARN("get next left row failed", K(ret), K(child_brs));
-    } else if (OB_FAIL(calc_hash_value_batch(left_join_keys_, child_brs, is_from_row_store,
+    if (OB_FAIL((this->*get_next_left_batch_func_)(is_from_row_store))) {
+      LOG_WARN("get next left row failed", K(ret), K(child_brs_));
+    } else if (OB_FAIL(calc_hash_value_batch(left_join_keys_, &child_brs_, is_from_row_store,
                                             hash_vals_, hj_part_stored_rows_,
                                             is_left_side))) {
       LOG_WARN("fail to calc hash value batch", K(ret));
-    } else if (child_brs->size_ > 16 * part_count_) {
+    } else if (child_brs_.size_ > 16 * part_count_) {
       // add partition by batch
-      if (OB_FAIL(calc_part_idx_batch(hash_vals_, *child_brs))) {
+      if (OB_FAIL(calc_part_idx_batch(hash_vals_, child_brs_))) {
         LOG_WARN("Fail to calc batch idx", K(ret));
       }
       for (int64_t part_idx = 0; OB_SUCC(ret) && part_idx < part_count_; part_idx++) {
@@ -2527,8 +2533,8 @@ int ObHashJoinOp::fill_partition_batch(int64_t &num_left_rows)
         if (OB_FAIL(hj_part_array_[part_idx].add_batch(
                                      left_->get_spec().output_,
                                      eval_ctx_,
-                                     *child_brs->skip_,
-                                     child_brs->size_,
+                                     *child_brs_.skip_,
+                                     child_brs_.size_,
                                      part_selectors_ + part_idx * MY_SPEC.max_batch_size_,
                                      part_selector_sizes_[part_idx],
                                      hj_part_added_rows_))) {
@@ -2549,9 +2555,9 @@ int ObHashJoinOp::fill_partition_batch(int64_t &num_left_rows)
     } else {
       // add row to partition
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
-      batch_info_guard.set_batch_size(child_brs->size_);
-      for (int64_t i = 0; OB_SUCC(ret) && i < child_brs->size_; i++) {
-        if (child_brs->skip_->exist(i)) {
+      batch_info_guard.set_batch_size(child_brs_.size_);
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_brs_.size_; i++) {
+        if (child_brs_.skip_->exist(i)) {
           continue;
         }
         ++num_left_rows;
@@ -2572,7 +2578,7 @@ int ObHashJoinOp::fill_partition_batch(int64_t &num_left_rows)
         }
       } // for end
     }
-    if (OB_SUCC(ret) && child_brs->end_) {
+    if (OB_SUCC(ret) && child_brs_.end_) {
       ret = OB_ITER_END;
     }
   }
@@ -4531,6 +4537,9 @@ int ObHashJoinOp::calc_hash_value_batch(const ObIArray<ObExpr*> &join_keys,
         need_null_random &= (MY_SPEC.join_type_ != LEFT_ANTI_JOIN && MY_SPEC.join_type_ != RIGHT_ANTI_JOIN);
         if (need_null_random) {
           if (skip_null) {
+            if (is_left_side) {
+              brs->skip_->set(i);
+            }
           } else {
             hash_vals[i] = null_random_hash_value_++;
             right_selector_[selector_idx++] = i;
