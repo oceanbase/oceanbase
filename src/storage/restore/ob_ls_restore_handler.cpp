@@ -2375,8 +2375,6 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_or_split_tablets_()
         ++total_tablet_cnt_;
         LOG_INFO("split update tablet restore status to EMPTY", K(origin_status), "tablet_meta", tablet->get_tablet_meta());
       }
-    } else {
-      ++total_tablet_cnt_;
     }
   }
 
