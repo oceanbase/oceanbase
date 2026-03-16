@@ -151,7 +151,15 @@ int ObVirtualSqlPlanMonitor::check_ip_and_port(bool &is_valid)
         ObObj ip_high = (req_id_range.get_end_key().get_obj_ptr()[PRI_KEY_IP_IDX]);
         ip_obj.set_varchar(ipstr_);
         ip_obj.set_collation_type(ip_low.get_collation_type());
-        if (ip_obj.compare(ip_low) >= 0 && ip_obj.compare(ip_high) <= 0) {
+        if (ip_low.is_min_value() || ip_low.is_max_value() ||
+            ip_low.is_null() || ip_high.is_min_value() ||
+            ip_high.is_max_value() || ip_high.is_null() ||
+            ip_low.get_string() != ip_high.get_string()) {
+          // ip is not equal range, which means port is not effective range column
+          // do full scan
+          SERVER_LOG(TRACE, "ip is not equal range, which means port is not effective range column, do full scan");
+          is_valid = true;
+        } else if (ip_obj.compare(ip_low) >= 0 && ip_obj.compare(ip_high) <= 0) {
           ObObj port_obj;
           port_obj.set_int32(port_);
           ObObj port_low = (req_id_range.get_start_key().get_obj_ptr()[PRI_KEY_PORT_IDX]);
@@ -197,7 +205,7 @@ int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
 
   if (OB_SUCC(ret)) {
     if (!need_rt_node_ && OB_FAIL(switch_tenant_monitor_node_list())) {
-      LOG_WARN("fail to switch tenant monitor node list", K(ret));
+      LOG_WARN_IGNORE_ITER_END(ret, "fail to switch tenant monitor node list", K(ret));
     } else if (OB_FAIL(report_rt_monitor_node(row))) {
       if (OB_ITER_END == ret) {
         reset_rt_node_info();
@@ -288,7 +296,7 @@ int ObVirtualSqlPlanMonitor::report_rt_monitor_node(common::ObNewRow *&row)
     if (OB_FAIL(ret)) {
     } else if (rt_node_idx_ >= rt_end_idx_ || rt_node_idx_ < rt_start_idx_) {
       ret = OB_ITER_END;
-      LOG_WARN("rt node iter end", K(ret));
+      LOG_DEBUG("rt node iter end", K(ret));
     } else if (OB_FAIL(convert_node_to_row(rt_nodes_.at(rt_node_idx_), row))) {
       LOG_WARN("fail to convert node to row", K(ret));
     } else if (OB_ISNULL(row)) {
@@ -453,6 +461,18 @@ int ObVirtualSqlPlanMonitor::extract_tenant_ids()
         } else if (start_key_obj_ptr[PRI_KEY_TENANT_ID_IDX].is_min_value()
                    && end_key_obj_ptr[PRI_KEY_TENANT_ID_IDX].is_max_value()) {
           is_full_scan = true;
+        } else if (start_key_obj_ptr[PRI_KEY_PORT_IDX].is_min_value() ||
+                   start_key_obj_ptr[PRI_KEY_PORT_IDX].is_max_value() ||
+                   start_key_obj_ptr[PRI_KEY_PORT_IDX].is_null() ||
+                   end_key_obj_ptr[PRI_KEY_PORT_IDX].is_min_value() ||
+                   end_key_obj_ptr[PRI_KEY_PORT_IDX].is_max_value() ||
+                   end_key_obj_ptr[PRI_KEY_PORT_IDX].is_null() ||
+                   start_key_obj_ptr[PRI_KEY_PORT_IDX].get_int() !=
+                       end_key_obj_ptr[PRI_KEY_PORT_IDX].get_int()) {
+          // svr port is not equal range, which means tenant_id is not effective
+          // range column, do full scan
+          is_full_scan = true;
+          SERVER_LOG(TRACE, "svr port is not equal range, which means tenant_id is not effective range column, do full scan");
         } else if (start_key_obj_ptr[PRI_KEY_TENANT_ID_IDX].is_max_value() &&
                    end_key_obj_ptr[PRI_KEY_TENANT_ID_IDX].is_min_value()) {
           is_always_false = true;
