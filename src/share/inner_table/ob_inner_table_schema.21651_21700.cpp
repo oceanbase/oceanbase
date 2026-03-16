@@ -1335,7 +1335,7 @@ int ObInnerTableSchema::dba_ob_backup_validate_tasks_schema(ObTableSchema &table
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TENANT_ID,       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       PATH,       PATH_TYPE,       DEST_ID,       PLUS_ARCHIVELOG,       INITIATOR_TASK_ID,       VALIDATE_LEVEL,       ROUND_ID,       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           USEC_TO_TIME(END_TS)         END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT,       FINISH_LS_COUNT,       TOTAL_BYTES,       VALIDATED_BYTES,       RESULT,       COMMENT     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_VALIDATE_TASK     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       PATH,       PATH_TYPE,       DEST_ID,       PLUS_ARCHIVELOG,       INITIATOR_TASK_ID,       VALIDATE_LEVEL,       ROUND_ID,       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           USEC_TO_TIME(END_TS)         END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT,       FINISH_LS_COUNT,       TOTAL_BYTES,       VALIDATED_BYTES,       RESULT,       COMMENT     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_VALIDATE_TASK     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

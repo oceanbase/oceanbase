@@ -1986,7 +1986,12 @@ int ObBackupValidateMacroBlockTask::read_macro_block_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tenant restore info mgr or storage info is null", KR(ret), KP(mgr), KP(storage_info));
     } else if (OB_FAIL(mgr->get_backup_dest(macro_index.backup_set_id_, backup_set_dest))) {
-      LOG_WARN("failed to get backup dest", KR(ret), K(macro_index));
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_BACKUP_SET_NOT_FOUND;
+        LOG_WARN("backup set not found", KR(ret), K(macro_index));
+      } else {
+        LOG_WARN("failed to get backup dest", KR(ret), K(macro_index));
+      }
     } else if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_set_dest, index.ls_id_,
                                             data_type, index.turn_id_, index.retry_id_, index.file_id_, backup_path))) {
       LOG_WARN("failed to get macro block backup path", KR(ret), K(index), K(backup_set_dest), K(data_type));

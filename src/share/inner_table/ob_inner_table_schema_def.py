@@ -45520,7 +45520,6 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
     SELECT
-      TENANT_ID,
       TASK_ID,
       INCARNATION,
       JOB_ID,
@@ -69618,10 +69617,12 @@ def_table_schema(
           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
         END AS END_TIMESTAMP,
       STATUS,
+      RETRY_COUNT,
       TASK_COUNT,
       SUCCESS_TASK_COUNT,
       RESULT,
-      "COMMENT"
+      "COMMENT",
+      DESCRIPTION
     FROM SYS.ALL_VIRTUAL_BACKUP_VALIDATE_JOB_HISTORY
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -69640,7 +69641,6 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
     SELECT
-      TENANT_ID,
       TASK_ID,
       INCARNATION,
       JOB_ID,

@@ -580,11 +580,11 @@ int ObBackupValidateScheduler::start_tenant_backup_validate_(
     bool need_insert = false;
     if (OB_FAIL(validate_dest.get_backup_dest_str(validate_path.ptr(), validate_path.capacity()))) {
       LOG_WARN("[BACKUP_VALIDATE]failed to get backup dest str", KR(ret), K(validate_dest));
-    } else if (OB_FAIL(check_dest_connectivity_(trans, job_attr.tenant_id_, validate_path))) {
-      LOG_WARN("[BACKUP_VALIDATE]failed to check dest connectivity", KR(ret), K(job_attr), K(validate_path));
     } else if (OB_FAIL(insert_backup_storage_info_for_validate_(trans, validate_dest, job_attr.tenant_id_))) {
       LOG_WARN("[BACKUP_VALIDATE]failed to insert backup storage info for validate",
                     KR(ret), K(validate_dest), K(job_attr));
+    } else if (OB_FAIL(check_dest_connectivity_(trans, job_attr.tenant_id_, validate_path))) {
+      LOG_WARN("[BACKUP_VALIDATE]failed to check dest connectivity", KR(ret), K(job_attr), K(validate_path));
     }
   } else if (OB_FAIL(check_backup_dest_and_archive_dest_(job_attr.tenant_id_, job_attr, need_validate))) {
     LOG_WARN("[BACKUP_VALIDATE]failed to check backup dest and archive dest", KR(ret), K(job_attr));
