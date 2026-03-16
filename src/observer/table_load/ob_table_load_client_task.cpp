@@ -517,6 +517,8 @@ ObTableLoadClientTask::~ObTableLoadClientTask()
     task_scheduler_ = nullptr;
   }
   if (nullptr != session_info_) {
+    // TODO(suzhi.yt) session的生命周期应该比exec_ctx长
+    exec_ctx_.set_my_session(nullptr);
     ObTableLoadUtils::free_session_info(session_info_, free_session_ctx_);
     session_info_ = nullptr;
   }
