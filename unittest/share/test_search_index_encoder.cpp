@@ -339,7 +339,7 @@ TEST_F(TestSearchIndexEncoder, test_json_row_generator_empty_object)
   ObSEArray<ObIndexRow, 16> rows;
   ret = generator.generate_rows(0, datum, rows);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(0, rows.count()) << "Expected 0 search index rows for empty object";
+  ASSERT_EQ(1, rows.count()) << "Expected 1 search index row for empty object";
 }
 
 // Test ObSearchIndexRowGenerator with null datum

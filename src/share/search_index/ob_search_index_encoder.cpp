@@ -80,6 +80,14 @@ int ObSearchIndexPathEncoder::encode_type(ObJsonNodeType json_type, uint8_t &enc
       enc_type = TYPE_MYSQL_DATETIME;
       break;
     }
+    case ObJsonNodeType::J_OBJECT: {
+      enc_type = TYPE_OBJECT;
+      break;
+    }
+    case ObJsonNodeType::J_ARRAY: {
+      enc_type = TYPE_ARRAY;
+      break;
+    }
     default: {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unsupported json node type", K(ret), K(json_type));

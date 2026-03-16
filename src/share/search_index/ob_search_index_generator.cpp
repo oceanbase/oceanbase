@@ -287,7 +287,9 @@ int ObSearchIndexRowGenerator::Generator::generate_rows(
     LOG_WARN("json base is null", K(ret));
   } else {
     ObJsonNodeType node_type = j_base->json_type();
-    if (ObJsonNodeType::J_OBJECT == node_type) {
+    const int64_t elem_cnt = j_base->element_count();
+    const bool is_empty = (elem_cnt == 0);
+    if (ObJsonNodeType::J_OBJECT == node_type && !is_empty) {
       JsonObjectIterator iter(j_base);
       while (OB_SUCC(ret) && !iter.end()) {
         common::ObJsonObjPair elem;
@@ -302,11 +304,8 @@ int ObSearchIndexRowGenerator::Generator::generate_rows(
           iter.next();
         }
       }
-    } else if (ObJsonNodeType::J_ARRAY == node_type) {
-      const uint64_t elem_cnt = j_base->element_count();
-      if (elem_cnt == 0) {
-        // empty array, do nothing
-      } else if (OB_FAIL(path_items.push_back(ObSearchIndexPathEncoder::make_array_path()))) {
+    } else if (ObJsonNodeType::J_ARRAY == node_type && !is_empty) {
+      if (OB_FAIL(path_items.push_back(ObSearchIndexPathEncoder::make_array_path()))) {
         LOG_WARN("fail to push path string", K(ret));
       } else {
         for (uint64_t i = 0; OB_SUCC(ret) && i < elem_cnt; ++i) {
@@ -323,13 +322,16 @@ int ObSearchIndexRowGenerator::Generator::generate_rows(
       // scalar json node
       ObString path;
       ObString value;
+      const bool is_json_scalar = j_base->is_json_scalar(node_type);
       bool passed = true;
       if (OB_NOT_NULL(config_filter_) && OB_FAIL(config_filter_->is_indexed(path_items, node_type, passed))) {
         LOG_WARN("failed to check path filter", K(ret));
       } else if (!passed) {
         // do nothing
-      } else if (OB_FAIL(ObSearchIndexValueEncoder::encode_json_scalar(allocator_, j_base, value,
-                                                                enc_param_))) {
+      } else if (is_json_scalar && OB_FAIL(ObSearchIndexValueEncoder::encode_json_scalar(allocator_,
+                                                                                         j_base,
+                                                                                         value,
+                                                                                         enc_param_))) {
         LOG_WARN("fail to encode json scalar", K(ret));
       } else if (OB_FAIL(ObSearchIndexPathEncoder::encode_path(allocator_, path_items, node_type,
                                                                path))) {

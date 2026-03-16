@@ -195,7 +195,7 @@ int ObHybridSearchGenerator::deal_child_node(ObIndexMergeNode *node, bool &prune
         }
       }
       if (OB_SUCC(ret) && !prune_happened) {
-        if (min_selectivity > MAX_INTERSECTION_MERGE_SEL) {
+        if (min_selectivity < 1.0 && min_selectivity > MAX_INTERSECTION_MERGE_SEL) {
           prune_happened = true;
         } else {
           sel = 0.0;
