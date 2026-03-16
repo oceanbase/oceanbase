@@ -4885,26 +4885,74 @@ int ObTriggerStorageCacheP::process()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg_.tenant_id_;
+  const obrpc::ObTriggerStorageCacheArg::ObStorageCacheOp op = arg_.op_;
+  LOG_INFO("[SCP]rpc_processor: received trigger_storage_cache RPC",
+      K(op), K(tenant_id), "tablet_id", arg_.tablet_id_,
+      "policy_status", arg_.policy_status_, "arg_is_valid", arg_.is_valid());
   if (OB_UNLIKELY(!arg_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K_(arg));
+    LOG_WARN("[SCP]rpc_processor: invalid arguments", K(ret), K_(arg),
+        "is_valid_op", (op < obrpc::ObTriggerStorageCacheArg::MAX_OP),
+        "is_valid_tenant_id", is_valid_tenant_id(tenant_id),
+        "tablet_id", arg_.tablet_id_);
   } else if (!common::is_valid_tenant_id(tenant_id)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid tenant id to switch", K(ret), K(tenant_id));
+    LOG_ERROR("[SCP]rpc_processor: invalid tenant id", K(ret), K(tenant_id));
+  } else if (obrpc::ObTriggerStorageCacheArg::TRIGGER == op && !is_valid_tenant_id(tenant_id)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_ERROR("[SCP]rpc_processor: can't trigger non-user tenant", K(ret), K(tenant_id));
   } else {
+    LOG_INFO("[SCP]rpc_processor: about to MTL_SWITCH", K(tenant_id), K(op));
     MTL_SWITCH(tenant_id)
     {
       ObStorageCachePolicyService *storage_cache_service = nullptr;
       if (OB_ISNULL(storage_cache_service = MTL(ObStorageCachePolicyService *))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("storage_cache_service is nullptr", KR(ret));
-      } else if (OB_FAIL(storage_cache_service->schedule_refresh_policy_task())) {
-        LOG_WARN("fail to schedule refresh policy task", KR(ret));
-      } else {
-        LOG_INFO("succeed to trigger storage cache", K_(arg));
+        LOG_WARN("[SCP]rpc_processor: storage_cache_service is nullptr", KR(ret), K(tenant_id));
+      } else if (obrpc::ObTriggerStorageCacheArg::TRIGGER == op) {
+        if (OB_FAIL(storage_cache_service->refresh_policy_scheduler_.schedule_force_refresh_policy_task())) {
+          LOG_WARN("[SCP]rpc_processor: fail to schedule force refresh policy task", KR(ret), K(tenant_id));
+        } else {
+          LOG_INFO("[SCP]rpc_processor: succeed to trigger storage cache", K_(arg));
+        }
+      } else if (obrpc::ObTriggerStorageCacheArg::SET_STATUS == op) {
+        const int64_t tablet_id = arg_.tablet_id_;
+        const int8_t policy_status_val = arg_.policy_status_;
+        PolicyStatus policy_status = PolicyStatus::AUTO;
+        if (PolicyStatus::HOT == policy_status_val) {
+          policy_status = PolicyStatus::HOT;
+        } else if (PolicyStatus::AUTO == policy_status_val) {
+          policy_status = PolicyStatus::AUTO;
+        } else if (PolicyStatus::COLD == policy_status_val) {
+          policy_status = PolicyStatus::COLD;
+        }
+        PolicyStatus ori_policy_status = PolicyStatus::MAX_STATUS;
+        ObStorageCachePolicy table_policy;
+        LOG_INFO("[SCP]rpc_processor: calling update status and handle tablet",
+            K(tenant_id), K(tablet_id), K(policy_status_val), K(policy_status));
+        if (OB_FAIL(storage_cache_service->get_tablet_policy_status(tablet_id, ori_policy_status))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            ori_policy_status = PolicyStatus::MAX_STATUS;
+          } else {
+            LOG_WARN("[SCP]rpc_processor: fail to get tablet policy status", KR(ret), K(tablet_id));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(storage_cache_service->update_tablet_status(tablet_id, policy_status, OB_INVALID_ID))) {
+          LOG_WARN("[SCP]rpc_processor: fail to update tablet status", KR(ret), K(tablet_id), K(policy_status));
+        } else if (OB_FAIL(storage_cache_service->handle_tablet_if_status_changed(
+            tenant_id, tablet_id, policy_status, table_policy, ori_policy_status))) {
+          LOG_WARN("[SCP]rpc_processor: fail to handle tablet if status changed",
+              KR(ret), K(tenant_id), K(tablet_id), K(policy_status));
+        } else {
+          LOG_INFO("[SCP]rpc_processor: succeed to set storage cache status",
+              K_(arg), K(tenant_id), K(tablet_id), K(policy_status));
+        }
       }
     }
   }
+  LOG_INFO("[SCP]rpc_processor: process finished", K(ret), K(tenant_id), K(op), "tablet_id", arg_.tablet_id_);
   return ret;
 }
 

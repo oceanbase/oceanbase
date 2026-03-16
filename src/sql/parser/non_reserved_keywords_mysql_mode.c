@@ -792,6 +792,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"plus", PLUS},
   {"point", POINT},
   {"policy", POLICY},
+  {"policy_status", POLICY_STATUS},
   {"polygon", POLYGON},
   {"pool", POOL},
   {"port", PORT},

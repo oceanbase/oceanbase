@@ -20,6 +20,8 @@ namespace oceanbase
 namespace sql
 {
 
+class ObTriggerStorageCacheStmt;
+
 class ObTriggerStorageCacheResolver : public ObCMDResolver
 {
 public:
@@ -28,6 +30,7 @@ public:
 
   virtual int resolve(const ParseNode &parse_tree);
 private:
+  int resolve_tenant_name_(ObTriggerStorageCacheStmt *stmt, ParseNode *name);
   DISALLOW_COPY_AND_ASSIGN(ObTriggerStorageCacheResolver);
 };
 } // end namespace sql

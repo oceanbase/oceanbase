@@ -14912,14 +14912,14 @@ public:
   int8_t get_policy_status() const { return policy_status_; }
   void set_tenant_id(const int64_t tenant_id) { tenant_id_ = tenant_id; }
   void set_op(const ObStorageCacheOp op) { op_ = op; }
-  void set_tablet_id(const int64_t tablet_id) { tablet_id_ = tablet_id; }
   void set_policy_status(const int8_t policy_status) { policy_status_ = policy_status; }
+  void set_tablet_id(const int64_t tablet_id) { tablet_id_ = tablet_id; }
   TO_STRING_KV(K_(op), K_(tenant_id), K_(tablet_id), K_(policy_status));
-public:
+
   ObStorageCacheOp op_;
   int64_t tenant_id_;
   int64_t tablet_id_;
-  int8_t policy_status_;  // 0: HOT, 1: AUTO
+  int8_t policy_status_;  // storage::PolicyStatus: HOT(0), AUTO(1), COLD(4)
 };
 
 struct ObNotifySharedStorageInfoResult final

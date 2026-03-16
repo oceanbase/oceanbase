@@ -350,7 +350,7 @@ END_P SET_VAR DELIMITER
         LOGSERVICE_ACCESS_POINT
 
         PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARSER_PROPERTIES PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PAXOS_REPLICA_NUM PER PERCENTAGE PICK
-        PERCENT_RANK PERCENTILE_CONT PHASE PHRASE PHRASE_MATCH PHYSICAL PLAN PLAINACCESS PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
+        PERCENT_RANK PERCENTILE_CONT PHASE PHRASE PHRASE_MATCH PHYSICAL PLAN PLAINACCESS PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLICY_STATUS POLYGON PERFORMANCE
         PREFIX PARALLEL_PARSE_FILE_SIZE_THRESHOLD PARALLEL_PARSE_ON_SINGLE_FILE PRINCIPAL PROTECTION PROJECT_NAME PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROCTIME PROFILE PROFILES PROPERTIES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
         PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE FILES PARTIAL_UPDATE PRECREATE_TIME ON_ERROR
@@ -515,7 +515,7 @@ END_P SET_VAR DELIMITER
 %type <node> drop_index_stmt hint_options opt_expr_as_list expr_as_list expr_with_opt_alias substr_params opt_comma substr_or_substring
 %type <node> /*frozen_type*/ opt_binary
 %type <node> ip_port
-%type <node> create_view_stmt view_name opt_column_list opt_mv_column_list mv_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option opt_tablet_id_no_empty
+%type <node> create_view_stmt view_name opt_column_list opt_mv_column_list mv_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option opt_tablet_id_no_empty policy_status_type
 %type <node> create_mview_stmt create_mview_opts mview_refresh_opt mv_refresh_on_clause mv_refresh_mode mv_refresh_interval mv_start_clause mv_next_clause mv_nested_refresh_opt mview_nested_refresh_mode
 %type <ival> mv_refresh_method mview_enable_disable
 %type <node> name_list opt_name_list
@@ -22618,6 +22618,16 @@ alter_with_opt_hint SYSTEM TRIGGER STORAGE_CACHE_POLICY_EXECUTOR opt_tenant_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_TRIGGER_STORAGE_CACHE, 2, action_type, $5);
 }
 |
+alter_with_opt_hint SYSTEM SET STATUS STORAGE_CACHE_POLICY_EXECUTOR POLICY_STATUS COMP_EQ policy_status_type opt_tablet_id_no_empty opt_tenant_name
+{
+  (void)($1);
+  ParseNode *action_type = NULL;
+  malloc_terminal_node(action_type, result->malloc_pool_, T_INT);
+  action_type->value_ = 1; /* 1:set_status */
+  /* children order: action_type, policy_status, tablet_id, tenant_name */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TRIGGER_STORAGE_CACHE, 4, action_type, $8, $9, $10);
+}
+|
 SET ENCRYPTION ON IDENTIFIED BY STRING_VALUE ONLY
 {
   ParseNode *mode = NULL;
@@ -24002,6 +24012,16 @@ tenant_name
 | /* EMPTY */
 {
   $$ = NULL;
+}
+;
+
+policy_status_type:
+STRING_VALUE
+{
+  /* Accept string value like 'hot' or 'auto', validation is done in resolver */
+  malloc_terminal_node($$, result->malloc_pool_, T_VARCHAR);
+  $$->str_value_ = $1->str_value_;
+  $$->str_len_ = $1->str_len_;
 }
 ;
 
@@ -28670,6 +28690,7 @@ ACCESS_INFO
 |       PLUS
 |       POINT
 |       POLICY
+|       POLICY_STATUS
 |       POLYGON
 |       POOL
 |       PORT
