@@ -2026,7 +2026,8 @@ int ObSearchIndexRangeCtx::init(const ObTableSchema *base_table_schema,
       column_meta_.column_type_ = col_type;
       if (col_type.is_lob_locator()) {
         column_meta_.column_type_.set_type(ObLongTextType);
-      } else if (ob_is_string_tc(col_type.get_type())) {
+        need_constraint_ = true;
+      } else if (ob_is_string_type(col_type.get_type())) {
         const ObLength column_length = col_type.get_length();
         need_constraint_ = ObSearchIndexValueEncoder::string_column_may_truncate(col_type, column_length);
       } else if (ob_is_json_tc(col_type.get_type())) {

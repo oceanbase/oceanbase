@@ -2086,7 +2086,8 @@ int ObIndexBuilder::generate_schema(
         } else if (!is_oracle_mode && data_column->is_func_idx_column() && ob_is_text_tc(data_column->get_data_type())) {
           ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
           LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));
-        } else if (data_column->is_key_forbid_lob() && !data_column->is_fulltext_column()) {
+        } else if (data_column->is_key_forbid_lob() && !data_column->is_fulltext_column() &&
+            !share::schema::is_search_index(arg.index_type_)) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
           LOG_WARN("index created direct on large text column should only be fulltext or string", K(arg.index_type_), K(ret));
@@ -2136,7 +2137,8 @@ int ObIndexBuilder::generate_schema(
             } else {
               length = 0;
             }
-          } else if (share::schema::is_hybrid_vec_index(arg.index_type_)) {
+          } else if (share::schema::is_hybrid_vec_index(arg.index_type_) ||
+                     share::schema::is_search_index(arg.index_type_)) {
             length = 0;
           } else if (OB_FAIL(data_column->get_byte_length(length, is_oracle_mode, false))) {
             LOG_WARN("fail to get byte length of column", K(ret));

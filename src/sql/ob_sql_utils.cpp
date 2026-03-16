@@ -5686,8 +5686,28 @@ int ObSearchIndexConstraint::check_string_length_is_match(ObObjParam &obj_param,
   if (!obj_param.is_string_type()) {
     is_match = false;
   } else {
-    ObString str_value = obj_param.get_string();
-    is_match = share::ObSearchIndexValueEncoder::string_safety_to_compare(str_value);
+    ObArenaAllocator tmp_allocator(ObModIds::OB_SQL_EXPR_CALC);
+    if (OB_FAIL(is_string_length_match(tmp_allocator, obj_param, is_match))) {
+      LOG_WARN("fail to check string length match", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSearchIndexConstraint::is_string_length_match(ObIAllocator &allocator,
+                                                    const ObObj &str_value,
+                                                    bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  ObString str = str_value.get_string();
+  if (ob_is_text_tc(str_value.get_type())) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, str_value, str))) {
+      LOG_WARN("fail to read real string data", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    is_match = share::ObSearchIndexValueEncoder::string_safety_to_compare(str);
   }
   return ret;
 }

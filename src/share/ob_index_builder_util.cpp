@@ -450,7 +450,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
                    "database_id", data_schema.get_database_id(),
                    "table_name", data_schema.get_table_name(),
                    "column name", sort_item.column_name_, K(ret));
-        } else if (data_column->is_key_forbid_lob()) {
+        } else if (data_column->is_key_forbid_lob() && !share::schema::is_search_index(arg.index_type_)) {
           if (use_mysql_errno && data_column->is_func_idx_column()) {
             ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
             LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));

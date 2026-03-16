@@ -479,6 +479,26 @@ int ObSearchIndexValueEncoder::encode_value(ObIAllocator &allocator,
       }
       break;
     }
+    case ObTinyTextType:
+    case ObTextType:
+    case ObMediumTextType:
+    case ObLongTextType: {
+      ObEncParam enc_param;
+      ObString str_value = datum.get_string();
+      bool has_lob_header = obj_meta.has_lob_header();
+      sql::ObDatumMeta datum_meta(obj_meta.get_type(), obj_meta.get_collation_type(),
+                                  obj_meta.get_scale());
+      if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(allocator, datum, datum_meta,
+                                                                 has_lob_header, str_value))) {
+        LOG_WARN("fail to get real data", K(ret), K(str_value));
+      } else if (OB_FAIL(init_string_enc_param(ObVarcharType, obj_meta.get_collation_type(), 0,
+                                               true, true, enc_param))) {
+        LOG_WARN("fail to init string enc param", K(ret));
+      } else if (OB_FAIL(encode_string(allocator, str_value, value, enc_param))) {
+        LOG_WARN("fail to encode string", K(ret));
+      }
+      break;
+    }
     case ObDateType:
     case ObMySQLDateType: {
       ret = encode_int32(allocator, datum.get_date(), value);
@@ -924,6 +944,8 @@ bool ObSearchIndexValueEncoder::string_column_may_truncate(const ObObjMeta &colu
     // TODO: optimize this by collation type.
     // value encoded length worst case is 7x expansion + 20 bytes safety buffer
     truncated = column_length > (SEARCH_INDEX_VALUE_LENGTH - 20) / 7;
+  } else if (ob_is_text_tc(obj_type)) {
+    truncated = true;
   }
   return truncated;
 }

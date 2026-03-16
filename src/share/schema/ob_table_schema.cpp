@@ -2554,8 +2554,14 @@ int ObTableSchema::check_valid(const bool for_create) const
               }
               if (OB_FAIL(ret)) {
               } else if (column->is_rowkey_column() && !column->is_hidden()) {
-                if (is_index_table() && 0 == column->get_index_position()) {
-                  // Non-user-created index columns in the index table are not counted in rowkey_varchar_col_length
+                if (is_index_table() && (0 == column->get_index_position() || is_search_def_index())) {
+                  // Skip rowkey length accounting for two cases:
+                  // 1. index_position == 0: non-user-created index columns (shadow columns
+                  //    inherited from the main table) are not part of the user-defined key.
+                  // 2. is_search_def_index(): search index is built on an inverted-index
+                  //    structure; its path/value columns are encoded and truncated to
+                  //    SEARCH_INDEX_VALUE_LENGTH during index data generation, so the
+                  //    original column length is irrelevant to the rowkey length limit.
                   varchar_col_total_length += varchar_col_len;
                 } else {
                   rowkey_varchar_col_length += varchar_col_len;

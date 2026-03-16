@@ -269,6 +269,7 @@ private:
   int get_final_search_index_value_param_idx(const ObRawExpr &const_expr,
                                              const ObObjType *cmp_type,
                                              int64_t &value_param_idx);
+  int check_str_length_for_search_index_range(const ObRawExpr *const_expr, bool &can_extract);
   int gen_search_index_cmp_node(const ObColumnRefRawExpr &column_expr,
                                 const ObRawExpr *const_expr,
                                 ObItemType cmp_type,

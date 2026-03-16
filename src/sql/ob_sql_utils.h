@@ -1518,6 +1518,10 @@ public:
 
   static int is_array_string_length_match(common::ObIArrayType *arr_obj, bool &is_match);
 
+  static int is_string_length_match(common::ObIAllocator &allocator,
+                                    const common::ObObj &str_value,
+                                    bool &is_match);
+
   static bool need_array_string_constraint(const ObSqlCollectionInfo &coll_info);
 };
 

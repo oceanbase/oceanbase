@@ -57,8 +57,9 @@ int ObSearchIndexRowGenerator::Generator::init(const uint64_t column_idx, const 
     if (OB_FAIL(ObSearchIndexValueEncoder::init_json_string_enc_param(enc_param_))) {
       LOG_WARN("fail to init json string enc param", K(ret));
     }
-  } else if (ob_is_string_tc(col_type)) {
-    if (OB_FAIL(ObSearchIndexValueEncoder::init_string_enc_param(obj_meta_.get_type(),
+  } else if (ob_is_string_type(col_type)) {
+    ObObjType obj_type = ob_is_text_tc(col_type) ? ObVarcharType : obj_meta_.get_type();
+    if (OB_FAIL(ObSearchIndexValueEncoder::init_string_enc_param(obj_type,
                                                                  obj_meta_.get_collation_type(),
                                                                  0, /** sql_mode */
                                                                  true, /** is_null_first */
@@ -174,6 +175,21 @@ int ObSearchIndexRowGenerator::Generator::generate_rows(
       case ObCharType: {
         ret = ObSearchIndexValueEncoder::encode_string(allocator_, datum.get_string(), value,
                                                        enc_param_);
+        break;
+      }
+      case ObTinyTextType:
+      case ObTextType:
+      case ObMediumTextType:
+      case ObLongTextType: {
+        ObString str_value = datum.get_string();
+        if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(
+                &allocator_, obj_meta_.get_type(), obj_meta_.get_collation_type(),
+                true, str_value))) {
+          LOG_WARN("fail to read real string data", K(ret));
+        } else {
+          ret = ObSearchIndexValueEncoder::encode_string(allocator_, str_value, value,
+                                                         enc_param_);
+        }
         break;
       }
       case ObDateType:

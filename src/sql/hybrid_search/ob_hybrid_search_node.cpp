@@ -1950,6 +1950,7 @@ int ObHybridSearchGenerator::split_array_contains_all(const ObDSLScalarQuery *sc
       ObObj result;
       ObArenaAllocator tmp_allocator(ObModIds::OB_SQL_EXPR_CALC);
       const common::ObSqlCollectionInfo *coll_info = nullptr;
+      const common::ObSqlCollectionInfo *col_coll_info = nullptr;
       if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(exec_ctx,
                                                            candidate_expr,
                                                            result,
@@ -1963,12 +1964,17 @@ int ObHybridSearchGenerator::split_array_contains_all(const ObDSLScalarQuery *sc
       } else if (OB_ISNULL(coll_info) || OB_ISNULL(coll_info->collection_meta_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("collection info is null", K(ret), KPC(coll_info));
+      } else if (OB_FAIL(ObRawExprUtils::get_expr_collection_info(array_expr, exec_ctx, col_coll_info))) {
+        LOG_WARN("failed to get column collection info", K(ret));
+      } else if (OB_ISNULL(col_coll_info) || OB_ISNULL(col_coll_info->collection_meta_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column collection info is null", K(ret));
       } else {
         ObString data_str = result.get_string();
         common::ObIArrayType *arr_obj = nullptr;
         bool can_extract = true;
         const bool need_array_string_constraint =
-          ObSearchIndexConstraint::need_array_string_constraint(*coll_info);
+          ObSearchIndexConstraint::need_array_string_constraint(*col_coll_info);
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator, result, data_str))) {
           LOG_WARN("failed to read array data", K(ret));
         } else if (OB_FAIL(common::ObArrayTypeObjFactory::construct(tmp_allocator,

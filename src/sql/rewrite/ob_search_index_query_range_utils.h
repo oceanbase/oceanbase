@@ -66,6 +66,7 @@ public:
   static int add_json_scalar_or_array_constraint(ObQueryRangeCtx &ctx, const ObRawExpr *expr);
   static int add_array_string_length_constraint(ObQueryRangeCtx &ctx, const ObRawExpr *expr);
   static int add_string_type_length_constraint(ObQueryRangeCtx &ctx, const ObRawExpr *expr);
+  static int is_string_length_match_index(const ObObj &str_value, bool &is_match);
 };
 
 } // namespace sql

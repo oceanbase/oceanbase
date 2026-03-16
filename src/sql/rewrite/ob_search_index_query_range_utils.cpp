@@ -512,11 +512,25 @@ int ObSearchIndexQueryRangeUtils::add_string_type_length_constraint(ObQueryRange
   ObExprConstraint cons(const_cast<ObRawExpr*>(expr), expect_result, cons_extra);
   if (NULL == ctx.expr_constraints_) {
     // do nothing
-  } else if (OB_ISNULL(expr) || !ob_is_string_tc(expr->get_result_type().get_type())) {
+  } else if (OB_ISNULL(expr) || !ob_is_string_type(expr->get_result_type().get_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null or not string type", K(ret), KP(expr));
   } else if (OB_FAIL(add_var_to_array_no_dup(*ctx.expr_constraints_, cons))) {
     LOG_WARN("failed to add string type length constraint", K(ret));
+  }
+  return ret;
+}
+
+int ObSearchIndexQueryRangeUtils::is_string_length_match_index(const ObObj &str_value,
+                                                              bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_EXPR_CALC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  if (!str_value.is_string_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not string type", K(ret));
+  } else if (OB_FAIL(ObSearchIndexConstraint::is_string_length_match(allocator, str_value, is_match))) {
+    LOG_WARN("fail to check string length match", K(ret));
   }
   return ret;
 }
