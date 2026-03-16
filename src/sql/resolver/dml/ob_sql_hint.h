@@ -330,6 +330,7 @@ struct LogTableHint
       join_filter_hints_(allocator),
       left_tables_(allocator),
       dynamic_sampling_hint_(NULL),
+      cache_hint_(NULL),
       is_ds_hint_conflict_(false) {}
   int assign(const LogTableHint &other);
   int check_vec_hint_index_id(const ObDMLStmt &stmt,
@@ -343,6 +344,7 @@ struct LogTableHint
                                 || NULL != use_das_hint_ || !join_filter_hints_.empty()
                                 || dynamic_sampling_hint_ != NULL
                                 || NULL != use_column_store_hint_
+                                || NULL != cache_hint_
                                 || !index_merge_hints_.empty(); }
   bool has_valid_index_merge_hint() const { return !index_merge_hints_.empty()
                                                    && !index_merge_list_.empty(); }
@@ -366,7 +368,7 @@ struct LogTableHint
   TO_STRING_KV(K_(table), K_(index_list), K_(index_hints),
                K_(parallel_hint), K_(use_das_hint), K_(index_merge_list),
                K_(index_merge_hints), K_(join_filter_hints), K_(left_tables),
-               KPC(dynamic_sampling_hint_), K(is_ds_hint_conflict_), K_(vec_index_list), K_(vec_index_hints));
+               KPC(dynamic_sampling_hint_), K(is_ds_hint_conflict_), K_(vec_index_list), K_(vec_index_hints), KPC(cache_hint_));
 
   const TableItem *table_;
   ObSqlArray<uint64_t> index_list_;
@@ -381,6 +383,7 @@ struct LogTableHint
   ObSqlArray<const ObJoinFilterHint*> join_filter_hints_;
   ObSqlArray<ObRelIds> left_tables_; // left table relids in join filter hint
   const ObTableDynamicSamplingHint *dynamic_sampling_hint_;
+  const ObCacheHint *cache_hint_;  // Single hint that can represent both CACHE and NOCACHE
   bool is_ds_hint_conflict_;
 };
 
@@ -519,6 +522,9 @@ struct ObLogPlanHint
   int add_table_dynamic_sampling_hint(const ObDMLStmt &stmt,
                                       const ObQueryHint &query_hint,
                                       const ObTableDynamicSamplingHint &table_ds_hint);
+  int add_table_cache_hint(const ObDMLStmt &stmt,
+                           const ObQueryHint &query_hint,
+                           const ObCacheHint &cache_hint);
   int add_index_hint(const ObDMLStmt &stmt,
                      const ObQueryHint &query_hint,
                      const ObIndexHint &index_hint);

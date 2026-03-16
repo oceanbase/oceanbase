@@ -3166,6 +3166,20 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
         LOG_WARN("failed to print use column store hint", K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      const ObLogPlanHint &plan_hint = get_plan()->get_log_plan_hint();
+      const LogTableHint *table_hint = plan_hint.get_log_table_hint(table_id_);
+      if (NULL != table_hint && NULL != table_hint->cache_hint_) {
+        ObCacheHint cache_hint;
+        if (OB_FAIL(cache_hint.assign(*table_hint->cache_hint_))) {
+          LOG_WARN("failed to assign cache hint", K(ret));
+        } else if (FALSE_IT(cache_hint.get_table().set_table(*table_item))) {
+        } else if (FALSE_IT(cache_hint.set_qb_name(qb_name))) {
+        } else if (OB_FAIL(cache_hint.print_hint(plan_text))) {
+          LOG_WARN("failed to print cache hint in outline data", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -3204,6 +3218,9 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
                && use_column_store() == table_hint->use_column_store_hint_->is_enable_hint()
                && OB_FAIL(table_hint->use_column_store_hint_->print_hint(plan_text))) {
       LOG_WARN("failed to print use column_store hint", K(ret));
+    } else if (NULL != table_hint->cache_hint_
+               && OB_FAIL(table_hint->cache_hint_->print_hint(plan_text))) {
+      LOG_WARN("failed to print cache hint", K(ret));
     } else if (table_hint->index_list_.empty()) {
       /*do nothing*/
     } else if (OB_UNLIKELY(table_hint->index_list_.count() != table_hint->index_hints_.count())) {

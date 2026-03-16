@@ -1375,6 +1375,7 @@ int ObStmtHint::merge_hint(ObHint &hint,
       || hint.is_join_filter_hint()
       || hint.is_table_parallel_hint()
       || hint.is_table_dynamic_sampling_hint()
+      || hint.is_table_cache_hint()
       || hint.is_pq_subquery_hint()
       || hint.is_index_merge_hint()) {
     if (OB_FAIL(add_var_to_array_no_dup(other_opt_hints_, &hint))) {
@@ -1542,6 +1543,11 @@ int ObLogPlanHint::init_other_opt_hints(ObSqlSchemaGuard &schema_guard,
                                                   *static_cast<const ObTableDynamicSamplingHint*>(hint)))) {
         LOG_WARN("failed to add dynamic sampling hint", K(ret));
       }
+    } else if (hint->is_table_cache_hint()) {
+      if (OB_FAIL(add_table_cache_hint(stmt, query_hint,
+                                       *static_cast<const ObCacheHint*>(hint)))) {
+        LOG_WARN("failed to add cache hint", K(ret));
+      }
     } else if (hint->is_pq_subquery_hint()) {
       if (OB_FAIL(normal_hints_.push_back(hint))) {
         LOG_WARN("failed to push back", K(ret));
@@ -1669,6 +1675,27 @@ int ObLogPlanHint::add_table_dynamic_sampling_hint(const ObDMLStmt &stmt,
     log_table_hint->dynamic_sampling_hint_ = NULL;
     log_table_hint->is_ds_hint_conflict_ = true;
   }
+  return ret;
+}
+
+int ObLogPlanHint::add_table_cache_hint(const ObDMLStmt &stmt,
+                                        const ObQueryHint &query_hint,
+                                        const ObCacheHint &cache_hint)
+{
+  int ret = OB_SUCCESS;
+  LogTableHint *log_table_hint = NULL;
+  if (OB_FAIL(get_log_table_hint_for_update(stmt, query_hint, cache_hint.get_table(),
+                                            true, log_table_hint))) {
+    LOG_WARN("failed to get log table hint by hint", K(ret));
+  } else if (NULL == log_table_hint) {
+    /* do nothing */
+  } else if (NULL == log_table_hint->cache_hint_) {
+    log_table_hint->cache_hint_ = &cache_hint;
+  } else if (cache_hint.is_enable_hint()) {
+    // CACHE takes precedence: if any CACHE hint exists for this table, keep it
+    log_table_hint->cache_hint_ = &cache_hint;
+  }
+  // If incoming hint is NOCACHE but existing is already set, keep existing (CACHE wins over NOCACHE)
   return ret;
 }
 
@@ -2327,6 +2354,12 @@ int ObLogPlanHint::init_hints_capacity(const ObDMLStmt &stmt,
                                      true, table_ids))) {
         LOG_WARN("failed to extract hint table", K(ret));
       }
+    } else if (hint->is_table_cache_hint()) {
+      if (OB_FAIL(extract_hint_table(stmt, query_hint,
+                                     static_cast<const ObCacheHint*>(hint)->get_table(),
+                                     true, table_ids))) {
+        LOG_WARN("failed to extract hint table", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected hint type in other_opt_hints_", K(ret), K(*hint));
@@ -2736,6 +2769,9 @@ int LogTableHint::assign(const LogTableHint &other)
   parallel_hint_ = other.parallel_hint_;
   use_das_hint_ = other.use_das_hint_;
   use_column_store_hint_ = other.use_column_store_hint_;
+  dynamic_sampling_hint_ = other.dynamic_sampling_hint_;
+  cache_hint_ = other.cache_hint_;
+  is_ds_hint_conflict_ = other.is_ds_hint_conflict_;
   if (OB_FAIL(index_list_.assign(other.index_list_))) {
     LOG_WARN("failed to assign index list", K(ret));
   } else if (OB_FAIL(index_hints_.assign(other.index_hints_))) {

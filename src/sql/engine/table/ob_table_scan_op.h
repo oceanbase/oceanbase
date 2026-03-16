@@ -173,9 +173,7 @@ public:
       global_index_rowkey_exprs_(allocator),
       pre_range_graph_(allocator),
       attach_spec_(allocator_, &scan_ctdef_),
-      flags_(0),
-      hint_enabled_caches_(0),
-      hint_disabled_caches_(0)
+      flags_(0)
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
@@ -212,7 +210,9 @@ public:
                K_(attach_spec),
                K_(is_das_keep_order),
                K_(use_index_merge),
-               K_(is_hybrid_search));
+               K_(is_hybrid_search),
+               K_(hint_cache_set),
+               K_(hint_cache_enabled));
   //the query range of index scan/table scan
   ObQueryRange pre_query_range_;
   FlashBackItem flashback_item_;
@@ -249,11 +249,11 @@ public:
       uint64_t ordering_used_by_parent_      : 1; // whether tsc ordering used by parent
       uint64_t enable_new_false_range_       : 1; // whether use new false range
       uint64_t is_hybrid_search_             : 1; // whether is hybrid search
-      uint64_t reserved_                     : 59;
+      uint64_t hint_cache_set_               : 1; // whether has cache hint
+      uint64_t hint_cache_enabled_           : 1; // whether cache hint is enabled
+      uint64_t reserved_                     : 57;
     };
   };
-  uint8_t hint_enabled_caches_;
-  uint8_t hint_disabled_caches_;
 };
 
 struct ObTableScanRtDef
@@ -638,7 +638,7 @@ protected:
   void fill_table_scan_stat(const ObTableScanStatistic &statistic,
                             ObTableScanStat &scan_stat) const;
   void init_scan_monitor_info();
-  void set_cache_stat(const ObPlanStat &plan_stat);
+  void set_cache_stat(ObDASScanRtDef &rtdef, const ObPlanStat &plan_stat);
   int inner_get_next_row_implement();
   int fill_generated_cellid_mbr(const ObStorageDatum &cellid, const ObStorageDatum &mbr);
   int inner_get_next_spatial_index_row();

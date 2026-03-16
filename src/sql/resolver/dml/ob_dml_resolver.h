@@ -1024,6 +1024,7 @@ private:
                          const ParseNode &index_hint_node);
   int resolve_index_merge_hint(const ParseNode &hint_node,
                                ObOptHint *&opt_hint);
+  int resolve_cache_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_table_parallel_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_order_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_hint(const ParseNode &join_node, ObIArray<ObHint*> &join_hints);

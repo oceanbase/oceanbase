@@ -52,7 +52,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObFuseRowCacheKeyBase);
 };
 
-class ObFuseRowCacheKey : public common::ObIKVCacheKey
+class ObFuseRowCacheKey final : public common::ObIKVCacheKey
 {
 public:
   ObFuseRowCacheKey();

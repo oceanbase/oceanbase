@@ -17354,6 +17354,13 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
       OZ(resolve_table_dynamic_sampling_hint(hint_node, opt_hint));
       break;
     }
+    case T_CACHE_HINT:
+    case T_NOCACHE_HINT: {
+      if (OB_FAIL(resolve_cache_hint(hint_node, opt_hint))) {
+        LOG_WARN("failed to resolve cache hint", K(ret));
+      }
+      break;
+    }
     default: {
       resolved_hint = false;
       break;
@@ -17464,6 +17471,31 @@ int ObDMLResolver::resolve_index_hint(const ParseNode &index_node,
         index_hint->get_filter_type() = VecFilterType::ADAPTIVE;
       }
     }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_cache_hint(const ParseNode &hint_node, ObOptHint *&opt_hint)
+{
+  INIT_SUCC(ret);
+  opt_hint = nullptr;
+  ObCacheHint *cache_hint = nullptr;
+  ParseNode *table_node = nullptr;
+  ObString qb_name;
+  if (OB_UNLIKELY(2 != hint_node.num_child_)
+      || OB_ISNULL(table_node = hint_node.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cache hint", K(ret), K(hint_node.type_), K(hint_node.num_child_),
+                                      K(table_node));
+  } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, cache_hint))) {
+    LOG_WARN("failed to create cache hint", K(ret));
+  } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
+    LOG_WARN("Failed to resolve qb name node", K(ret));
+  } else if (OB_FAIL(resolve_table_relation_in_hint(*table_node, cache_hint->get_table()))) {
+    LOG_WARN("Resolve table relation fail", K(ret));
+  } else {
+    cache_hint->set_qb_name(qb_name);
+    opt_hint = cache_hint;
   }
   return ret;
 }

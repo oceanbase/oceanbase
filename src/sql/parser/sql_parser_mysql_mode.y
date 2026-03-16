@@ -13930,6 +13930,14 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_inde
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_DAS_HINT, 2, $3, $4);
 }
+| CACHE '(' qb_name_option relation_factor_in_hint ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CACHE_HINT, 2, $3, $4);
+}
+| NOCACHE '(' qb_name_option relation_factor_in_hint ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NOCACHE_HINT, 2, $3, $4);
+}
 | INDEX_SS_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_SS_HINT, 3, $3, $4, $5);

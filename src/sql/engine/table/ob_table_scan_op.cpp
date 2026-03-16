@@ -25,6 +25,7 @@
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 #include "sql/engine/px/ob_granule_iterator_op.h"
 #include "sql/das/search/ob_das_scalar_define.h"
+#include "sql/resolver/dml/ob_hint.h"
 
 namespace oceanbase
 {
@@ -159,8 +160,6 @@ int ObTableScanCtDef::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
   if (is_new_query_range) {
     OB_UNIS_ENCODE(pre_range_graph_);
   }
-  OB_UNIS_ENCODE(hint_enabled_caches_);
-  OB_UNIS_ENCODE(hint_disabled_caches_);
   return ret;
 }
 
@@ -199,8 +198,6 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   if (is_new_query_range) {
     OB_UNIS_ADD_LEN(pre_range_graph_);
   }
-  OB_UNIS_ADD_LEN(hint_enabled_caches_);
-  OB_UNIS_ADD_LEN(hint_disabled_caches_);
   return len;
 }
 
@@ -283,8 +280,6 @@ int ObTableScanCtDef::deserialize(const char *buf, const int64_t data_len, int64
       if (is_new_query_range) {
         OB_UNIS_DECODE(pre_range_graph_);
       }
-      OB_UNIS_DECODE(hint_enabled_caches_);
-      OB_UNIS_DECODE(hint_disabled_caches_);
     }
 
     pos = pos_orig + len;
@@ -1330,7 +1325,6 @@ int ObTableScanOp::init_table_scan_rtdef()
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
   ObDASTaskFactory &das_factory = DAS_CTX(ctx_).get_das_factory();
-  set_cache_stat(plan_ctx->get_phy_plan()->stat_);
   bool is_null_value = false;
   if (OB_SUCC(ret) && NULL != MY_SPEC.limit_) {
     if (OB_FAIL(calc_expr_int_value(*MY_SPEC.limit_, limit_param_.limit_, is_null_value))) {
@@ -1372,6 +1366,12 @@ int ObTableScanOp::init_table_scan_rtdef()
                                       MY_CTDEF.lookup_loc_meta_))) {
         LOG_WARN("init das scan rtdef failed", K(ret), K(lookup_ctdef));
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    set_cache_stat(tsc_rtdef_.scan_rtdef_, plan_ctx->get_phy_plan()->stat_);
+    if (tsc_rtdef_.lookup_rtdef_ != nullptr) {
+      set_cache_stat(*tsc_rtdef_.lookup_rtdef_, plan_ctx->get_phy_plan()->stat_);
     }
   }
   if (OB_SUCC(ret) && MY_CTDEF.attach_spec_.attach_ctdef_ != nullptr) {
@@ -3542,48 +3542,70 @@ OB_INLINE void ObTableScanOp::fill_table_scan_stat(const ObTableScanStatistic &s
   scan_stat.row_cache_miss_cnt_ += statistic.row_cache_miss_cnt_;
 }
 
-void ObTableScanOp::set_cache_stat(const ObPlanStat &plan_stat)
+void ObTableScanOp::set_cache_stat(ObDASScanRtDef &rtdef, const ObPlanStat &plan_stat)
 {
   const int64_t TRY_USE_CACHE_INTERVAL = 15;
-  const int64_t BF_CACHE_POLICY_UDPATE_THRESHOLD = (1L << 17) - 1;
-  ObQueryFlag &query_flag = tsc_rtdef_.scan_rtdef_.scan_flag_;
+  ObQueryFlag &query_flag = rtdef.scan_flag_;
+  const bool hint_cache_set = MY_CTDEF.hint_cache_set_;
+  const bool hint_cache_enabled = MY_CTDEF.hint_cache_enabled_;
   bool try_use_cache = !(plan_stat.execute_times_ & TRY_USE_CACHE_INTERVAL);
-  if (try_use_cache && !plan_stat.enable_bf_cache_) {
-    query_flag.set_use_bloomfilter_cache();
-  } else {
-    if (plan_stat.enable_bf_cache_) {
+
+  if (!hint_cache_set) {
+    // No cache hint: use adaptive policy for all cache types
+    if (try_use_cache && !plan_stat.enable_bf_cache_) {
       query_flag.set_use_bloomfilter_cache();
-      tsc_rtdef_.scan_rtdef_.in_bf_cache_threshold_ = plan_stat.in_bf_cache_threshold_;
     } else {
-      query_flag.set_not_use_bloomfilter_cache();
+      if (plan_stat.enable_bf_cache_) {
+        query_flag.set_use_bloomfilter_cache();
+        rtdef.in_bf_cache_threshold_ = plan_stat.in_bf_cache_threshold_;
+      } else {
+        query_flag.set_not_use_bloomfilter_cache();
+      }
     }
-  }
-  if (try_use_cache && !plan_stat.enable_row_cache_) {
-    query_flag.set_use_row_cache();
-    const int64_t row_cache_access_cnt = plan_stat.row_cache_miss_cnt_ + plan_stat.row_cache_hit_cnt_;
-    tsc_rtdef_.scan_rtdef_.in_row_cache_threshold_ = row_cache_access_cnt > ObPlanStat::CACHE_ACCESS_THRESHOLD ?
-        (ObPlanStat::ROW_CACHE_GROWTH_SLOPE * plan_stat.row_cache_hit_cnt_ / row_cache_access_cnt) : plan_stat.in_row_cache_threshold_;
-  } else {
-    if (plan_stat.enable_row_cache_) {
+
+    if (try_use_cache && !plan_stat.enable_row_cache_) {
       query_flag.set_use_row_cache();
-      tsc_rtdef_.scan_rtdef_.in_row_cache_threshold_ = plan_stat.in_row_cache_threshold_;
+      const int64_t row_cache_access_cnt = plan_stat.row_cache_miss_cnt_ + plan_stat.row_cache_hit_cnt_;
+      rtdef.in_row_cache_threshold_ = row_cache_access_cnt > ObPlanStat::CACHE_ACCESS_THRESHOLD ?
+          (ObPlanStat::ROW_CACHE_GROWTH_SLOPE * plan_stat.row_cache_hit_cnt_ / row_cache_access_cnt) : plan_stat.in_row_cache_threshold_;
     } else {
-      query_flag.set_not_use_row_cache();
+      if (plan_stat.enable_row_cache_) {
+        query_flag.set_use_row_cache();
+        rtdef.in_row_cache_threshold_ = plan_stat.in_row_cache_threshold_;
+      } else {
+        query_flag.set_not_use_row_cache();
+      }
     }
-  }
-  const int64_t fuse_row_cache_access_cnt =
-      plan_stat.fuse_row_cache_hit_cnt_ + plan_stat.fuse_row_cache_miss_cnt_;
-  if (fuse_row_cache_access_cnt > ObPlanStat::CACHE_ACCESS_THRESHOLD) {
-    if (plan_stat.enable_fuse_row_cache_) {
+
+    const int64_t fuse_row_cache_access_cnt =
+        plan_stat.fuse_row_cache_hit_cnt_ + plan_stat.fuse_row_cache_miss_cnt_;
+    if (fuse_row_cache_access_cnt > ObPlanStat::CACHE_ACCESS_THRESHOLD) {
+      if (plan_stat.enable_fuse_row_cache_) {
+        query_flag.set_use_fuse_row_cache();
+        rtdef.in_fuse_row_cache_threshold_ = plan_stat.in_fuse_row_cache_threshold_;
+      } else {
+        query_flag.set_not_use_fuse_row_cache();
+      }
+    } else {
       query_flag.set_use_fuse_row_cache();
-      tsc_rtdef_.scan_rtdef_.in_fuse_row_cache_threshold_ = plan_stat.in_fuse_row_cache_threshold_;
-    } else {
-      query_flag.set_not_use_fuse_row_cache();
     }
-  } else {
+  } else if (hint_cache_enabled) {
+    // CACHE hint: enable all cache types
+    query_flag.set_use_bloomfilter_cache();
+    query_flag.set_use_row_cache();
     query_flag.set_use_fuse_row_cache();
+    query_flag.set_use_block_index_cache();
+    query_flag.set_use_block_cache();
+  } else {
+    // NOCACHE hint: disable all cache types
+    query_flag.set_not_use_bloomfilter_cache();
+    query_flag.set_not_use_row_cache();
+    query_flag.set_not_use_fuse_row_cache();
+    query_flag.set_not_use_block_index_cache();
+    query_flag.set_not_use_block_cache();
   }
-  LOG_DEBUG("[CACHE_DYNAMIC_ADJUST] update cache threshold", K(plan_stat.plan_id_), K(plan_stat.execute_times_),
+
+  LOG_DEBUG("[CACHE_DYNAMIC_ADJUST] update cache threshold", K(hint_cache_set), K(hint_cache_enabled), K(query_flag), K(plan_stat.plan_id_), K(plan_stat.execute_times_),
             K(plan_stat.enable_bf_cache_), K(plan_stat.enable_row_cache_), K(plan_stat.enable_fuse_row_cache_),
             K(plan_stat.bf_filter_cnt_), K(plan_stat.bf_access_cnt_), K(tsc_rtdef_.scan_rtdef_.in_bf_cache_threshold_),
             K(plan_stat.row_cache_hit_cnt_), K(plan_stat.row_cache_miss_cnt_), K(plan_stat.in_row_cache_threshold_),

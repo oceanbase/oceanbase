@@ -862,6 +862,7 @@ public:
   bool is_join_filter_hint() const { return HINT_JOIN_FILTER == hint_class_; }
   bool is_project_prune_hint() const { return T_PROJECT_PRUNE == hint_type_; }
   bool is_table_dynamic_sampling_hint() const { return T_TABLE_DYNAMIC_SAMPLING == hint_type_; }
+  bool is_table_cache_hint() const { return T_CACHE_HINT == hint_type_ || T_NOCACHE_HINT == hint_type_; }
   bool is_pq_subquery_hint() const { return T_PQ_SUBQUERY == hint_type_; }
   bool is_decorrelate_hint() const { return T_DECORRELATE == hint_type_; }
   bool is_coalesce_aggr_hint() const {return HINT_COALESCE_AGGR == hint_class_; }
@@ -1605,6 +1606,27 @@ private:
   ObTableInHint table_;
   int64_t dynamic_sampling_;
   int64_t sample_block_cnt_;
+};
+
+class ObCacheHint : public ObOptHint
+{
+public:
+  ObCacheHint(ObItemType hint_type = T_CACHE_HINT)
+    : ObOptHint(hint_type)
+  {
+    set_hint_class(HINT_OPTIMIZE);
+  }
+  int assign(const ObCacheHint &other);
+  virtual ~ObCacheHint() {}
+  virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return all_tables.push_back(&table_); }
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+  ObTableInHint &get_table() { return table_; }
+  const ObTableInHint &get_table() const { return table_; }
+
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table));
+
+private:
+  ObTableInHint table_;
 };
 
 }

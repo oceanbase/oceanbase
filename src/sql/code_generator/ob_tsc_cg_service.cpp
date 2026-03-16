@@ -18,6 +18,8 @@
 #include "src/share/vector_index/ob_vector_index_util.h"
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "sql/resolver/dml/ob_hint.h"
+#include "sql/resolver/dml/ob_sql_hint.h"
 namespace oceanbase
 {
 
@@ -48,6 +50,8 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     query_flag.set_is_new_query_range();
   }
   OZ(generate_mr_mv_scan_flag(op, query_flag));
+  // Apply cache hint to query flag
+  OZ(apply_cache_hint_to_tsc_ctdef(op, tsc_ctdef));
   tsc_ctdef.scan_flags_ = query_flag;
   if (op.use_index_merge()) {
     tsc_ctdef.use_index_merge_ = true;
@@ -5780,6 +5784,25 @@ int ObTscCgService::generate_mr_mv_scan_flag(const ObLogTableScan &op, ObQueryFl
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObTscCgService::apply_cache_hint_to_tsc_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef) const
+{
+  int ret = OB_SUCCESS;
+  const LogTableHint *table_hint = nullptr;
+  if (OB_NOT_NULL(op.get_plan())) {
+    const ObLogPlanHint &plan_hint = op.get_plan()->get_log_plan_hint();
+    table_hint = plan_hint.get_log_table_hint(op.get_table_id());
+    if (OB_ISNULL(table_hint) && op.get_ref_table_id() != op.get_table_id() && op.get_ref_table_id() != OB_INVALID_ID) {
+      table_hint = plan_hint.get_log_table_hint(op.get_ref_table_id());
+    }
+  }
+  if (OB_NOT_NULL(table_hint) && OB_NOT_NULL(table_hint->cache_hint_)) {
+    const ObCacheHint *cache_hint = table_hint->cache_hint_;
+    tsc_ctdef.hint_cache_enabled_ = cache_hint->is_enable_hint();
+    tsc_ctdef.hint_cache_set_ = true;
   }
   return ret;
 }

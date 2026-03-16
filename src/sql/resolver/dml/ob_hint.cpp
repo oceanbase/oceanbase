@@ -1499,6 +1499,7 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_USE_MERGE:        return T_USE_MERGE;
     case T_NO_USE_HASH:         return T_USE_HASH;
     case T_NO_USE_NL:           return T_USE_NL;
+    case T_NOCACHE_HINT:         return T_CACHE_HINT;
     case T_NO_USE_NL_MATERIALIZATION:  return T_USE_NL_MATERIALIZATION;
     case T_NO_PX_JOIN_FILTER:   return T_PX_JOIN_FILTER;
     case T_NO_PX_PART_JOIN_FILTER:      return T_PX_PART_JOIN_FILTER;
@@ -1570,6 +1571,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_USE_MERGE:           return is_enable_hint ? "USE_MERGE" : "NO_USE_MERGE";
     case T_USE_HASH:            return is_enable_hint ? "USE_HASH" : "NO_USE_HASH";
     case T_USE_NL:              return is_enable_hint ? "USE_NL" : "NO_USE_NL";
+    case T_CACHE_HINT:           return is_enable_hint ? "CACHE" : "NOCACHE";
     case T_USE_NL_MATERIALIZATION:     return is_enable_hint ? "USE_NL_MATERIALIZATION"
                                                              : "NO_USE_NL_MATERIALIZATION";
     case T_PX_JOIN_FILTER:      return is_enable_hint ? "PX_JOIN_FILTER" : "NO_PX_JOIN_FILTER";
@@ -4014,6 +4016,26 @@ int TriggerHint::merge_trigger_hint(const TriggerHint &other)
     }
     return ret;
   }
+
+int ObCacheHint::assign(const ObCacheHint &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(table_.assign(other.table_))) {
+    LOG_WARN("fail to assign table", K(ret));
+  } else if (OB_FAIL(ObOptHint::assign(other))) {
+    LOG_WARN("fail to assign hint", K(ret));
+  }
+  return ret;
+}
+
+int ObCacheHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(table_.print_table_in_hint(plan_text))) {
+    LOG_WARN("fail to print table in hint", K(ret));
+  }
+  return ret;
+}
 
 }//end of namespace sql
 }//end of namespace oceanbase

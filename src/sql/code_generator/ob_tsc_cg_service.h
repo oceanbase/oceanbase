@@ -72,6 +72,8 @@ public:
     ObDASBaseCtDef *&root_ctdef,
     bool &need_attach);
 
+  int apply_cache_hint_to_tsc_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef) const;
+
   static int remove_virtual_generated_access_exprs(
     const ObLogTableScan &op,
     ObStaticEngineCG &cg,

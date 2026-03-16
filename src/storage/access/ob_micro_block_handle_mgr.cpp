@@ -476,6 +476,7 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
   const int64_t offset = index_block_info.get_block_offset();
   const int64_t size = index_block_info.get_block_size();
   const ObIndexBlockRowHeader *idx_header = index_block_info.row_header_;
+  bool use_cache = true;
   ObPointerSwizzleNode *ps_node = index_block_info.ps_node_;
   micro_block_handle.reset();
   ObIMicroBlockCache *cache = is_data_block ? data_block_cache_ : index_block_cache_;
@@ -486,11 +487,15 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
   } else if (OB_ISNULL(idx_header)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpect null index header", K(ret), KP(idx_header));
+  } else if (OB_ISNULL(query_flag_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null query flag", K(ret));
+  } else if (FALSE_IT(use_cache = is_data_block ? query_flag_->is_use_block_cache() : query_flag_->is_use_block_index_cache())) {
   } else if (OB_FAIL(idx_header->fill_micro_des_meta(true /* deep_copy_key */, micro_block_handle.des_meta_))) {
     LOG_WARN("Fail to fill micro block deserialize meta", K(ret));
   } else if (FALSE_IT(micro_block_handle.init(tenant_id, macro_id, offset, size, index_block_info.get_logic_micro_id(),
                                               index_block_info.get_data_checksum(), this))) {
-  } else if (OB_LIKELY(nullptr != ps_node)
+  } else if (use_cache && OB_LIKELY(nullptr != ps_node)
       && OB_SUCC(ps_node->access_mem_ptr(micro_block_handle.cache_handle_))) {
     // get data / index block cache with direct memory pointer
     micro_block_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
@@ -499,7 +504,7 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
                                                     K(micro_block_handle.cache_handle_), K(cur_level));
   } else {
     ObMicroBlockCacheKey key(tenant_id, index_block_info);
-    if (OB_FAIL(cache->get_cache_block(key, micro_block_handle.cache_handle_))) {
+    if (!use_cache || OB_FAIL(cache->get_cache_block(key, micro_block_handle.cache_handle_))) {
       // get data / index block cache from disk
       if (!need_submit_io) {
       } else if (cache_mem_ctrl_.need_sync_io(*query_flag_, micro_block_handle, cache, block_io_allocator_)) {
