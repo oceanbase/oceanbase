@@ -155,6 +155,15 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
         LOG_WARN("fail to check table consistenc", KR(ret), K(arg), K(res));
       }
     }
+    if (OB_FAIL(ret) && res.task_id_ > 0) {
+      int tmp_ret = OB_SUCCESS;
+      ObTableLoadRedefTableAbortArg abort_arg;
+      abort_arg.tenant_id_ = arg.tenant_id_;
+      abort_arg.task_id_ = res.task_id_;
+      if (OB_TMP_FAIL(abort(abort_arg, session_info))) {
+        LOG_WARN("fail to abort hidden table", KR(tmp_ret), K(abort_arg));
+      }
+    }
   }
   return ret;
 }
