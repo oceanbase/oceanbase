@@ -199,7 +199,7 @@ int ObStaticMergeParam::init_multi_version_column_descs()
   if (OB_UNLIKELY(!multi_version_column_descs_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("multi_version_column_descs is invalid", K(ret), K(multi_version_column_descs_));
-  } else if (is_major) {
+  } else if (is_major || !schema_->is_column_info_simplified()) {
     if (OB_FAIL(schema_->get_multi_version_column_descs(multi_version_column_descs_))) {
       LOG_WARN("failed to get_multi_version_column_descs", K(ret), KPC_(schema), K(is_major));
     }

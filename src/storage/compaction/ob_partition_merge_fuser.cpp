@@ -211,6 +211,27 @@ int ObIPartitionMergeFuser::init(const ObMergeParameter &merge_param, const bool
   return ret;
 }
 
+int ObIPartitionMergeFuser::init_default_row(const ObMergeParameter& merge_param)
+{
+  int ret = OB_SUCCESS;
+  const common::ObIArray<share::schema::ObColDesc> &multi_version_column_ids = merge_param.static_param_.multi_version_column_descs_;
+  const ObStorageSchema *schema = merge_param.get_schema();
+  column_cnt_ = multi_version_column_ids.count();
+  const uint64_t data_version = merge_param.static_param_.data_version_;
+  const bool need_trim_default_row = data_version >= DATA_VERSION_4_3_1_0 || data_version < DATA_VERSION_4_3_0_0;
+
+  if (OB_FAIL(default_row_.init(allocator_, column_cnt_))) {
+    STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K_(column_cnt));
+  } else if (OB_FAIL(schema->get_orig_default_row(multi_version_column_ids, need_trim_default_row, default_row_))) {
+    STORAGE_LOG(WARN, "Failed to get default row from table schema", K(ret), K(multi_version_column_ids));
+  } else if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, multi_version_column_ids, default_row_))) {
+    STORAGE_LOG(WARN, "fail to fill lob header for default row", K(ret), K(multi_version_column_ids));
+  } else {
+    default_row_.row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+  }
+  return ret;
+}
+
 /*
  *ObDefaultMergeFuser
  */
@@ -247,13 +268,8 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter &merge_param)
   column_cnt_ = multi_version_column_ids.count();
   const bool need_trim_default_row = cluster_version_ >= DATA_VERSION_4_3_1_0 || cluster_version_ < DATA_VERSION_4_3_0_0;
 
-  if (OB_FAIL(default_row_.init(allocator_, column_cnt_))) {
-    STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K_(column_cnt));
-  } else if (OB_FAIL(schema->get_orig_default_row(multi_version_column_ids, need_trim_default_row, default_row_))) {
-    STORAGE_LOG(WARN, "Failed to get default row from table schema", K(ret), K(multi_version_column_ids));
-  } else if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, multi_version_column_ids, default_row_))) {
-    STORAGE_LOG(WARN, "fail to fill lob header for default row", K(ret), K(multi_version_column_ids));
-  } else if (FALSE_IT(default_row_.row_flag_.set_flag(ObDmlFlag::DF_UPDATE))) {
+  if (OB_FAIL(init_default_row(merge_param))) {
+    LOG_WARN("Failed to init default row", K(ret));
   } else if (OB_FAIL(generated_cols_.init(column_cnt_))) {
     LOG_WARN("Fail to init generated_cols", K(ret), K_(column_cnt));
   } else {
@@ -335,14 +351,20 @@ int ObMinorPartitionMergeFuser::inner_init(const ObMergeParameter &merge_param)
   int ret = OB_SUCCESS;
 
   int64_t column_cnt = 0;
+  const ObStorageSchema* schema = merge_param.get_schema();
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObIPartitionMergeFuser init twice", K(ret));
-  } else if (OB_FAIL(merge_param.get_schema()->get_store_column_count(column_cnt, true/*full_col*/))) {
-    STORAGE_LOG(WARN, "failed to get store column count", K(ret), K(merge_param.get_schema()));
+  } else if (OB_FAIL(schema->get_store_column_count(column_cnt, true/*full_col*/))) {
+    STORAGE_LOG(WARN, "failed to get store column count", K(ret), K(schema));
+  } else if (!schema->is_column_info_simplified() &&
+             ObStoreFormat::is_row_store_type_with_encoding(
+                 schema->get_minor_row_store_type()) &&
+             OB_FAIL(init_default_row(merge_param))) {
+    LOG_WARN("Failed to init default row", K(ret));
   } else {
     column_cnt_ = column_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    multi_version_rowkey_column_cnt_ = merge_param.static_param_.multi_version_column_descs_.count();
+    multi_version_rowkey_column_cnt_ = merge_param.get_schema()->get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     enable_delete_insert_ = merge_param.is_delete_insert_merge();
   }
 
@@ -355,7 +377,26 @@ int ObMinorPartitionMergeFuser::end_fuse_row(const storage::ObNopPos &nop_pos, b
   if (result_row.row_flag_.is_delete() || nop_pos.count_ == 0) {
     result_row.set_compacted_multi_version_row();
   }
+  fill_default_value_of_added_columns(result_row);
   return ret;
+}
+
+void ObMinorPartitionMergeFuser::fill_default_value_of_added_columns(ObDatumRow& row)
+{
+  // handle default value for added column when delta format is encoding
+  // @cuiyuntian.cyt TODO: fill default value of update row in full update mode
+  if (default_row_.is_valid() && !row.row_flag_.is_lock() &&
+      !row.row_flag_.is_update() && !row.row_flag_.is_not_exist() &&
+      (enable_delete_insert_ || !row.row_flag_.is_delete())) {
+    for (int64_t i = row.get_column_count() - 1;
+         i >= multi_version_rowkey_column_cnt_; --i) {
+      if (row.storage_datums_[i].is_nop()) {
+        row.storage_datums_[i] = default_row_.storage_datums_[i];
+      } else {
+        break;
+      }
+    }
+  }
 }
 
 int ObMinorPartitionMergeFuser::preprocess_fuse_row(const blocksstable::ObDatumRow &row, bool &is_need_fuse)

@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "storage/compaction/ob_partition_merge_fuser.h"
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_partition_merger.h"
 #include "ob_tenant_tablet_scheduler.h"
@@ -1195,10 +1196,12 @@ int ObPartitionMinorMerger::merge_single_iter(ObPartitionMergeIter &merge_iter)
       } else {
         const_cast<ObDatumRow *>(cur_row)->mvcc_row_flag_.set_first_multi_version_row(false);
       }
+      ObMinorPartitionMergeFuser* fuser = static_cast<ObMinorPartitionMergeFuser*>(partition_fuser_);
       if (OB_FAIL(ret) || finish) {
       } else if (shadow_already_output && cur_row->is_shadow_row()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("exist two shadow row", K(ret), KPC(cur_row), K(merge_iter));
+      } else if (FALSE_IT(fuser->fill_default_value_of_added_columns(const_cast<ObDatumRow&>(*cur_row)))) {
       } else if (OB_FAIL(process(*cur_row))) {
         STORAGE_LOG(WARN, "Failed to process row", K(ret), KPC(cur_row), K(merge_iter));
       } else if (cur_row->is_last_multi_version_row()) {

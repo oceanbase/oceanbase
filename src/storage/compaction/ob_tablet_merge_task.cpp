@@ -54,8 +54,7 @@ ObMergeParameter::ObMergeParameter(
     trans_state_mgr_(nullptr),
     error_location_(nullptr),
     mview_merge_param_(nullptr),
-    allocator_(nullptr),
-    default_row_(nullptr)
+    allocator_(nullptr)
 {
 }
 
@@ -88,11 +87,6 @@ void ObMergeParameter::reset()
     mview_merge_param_->~ObMviewMergeParameter();
     allocator_->free(mview_merge_param_);
     mview_merge_param_ = nullptr;
-  }
-  if (nullptr != default_row_) {
-    default_row_->~ObDatumRow();
-    allocator_->free(default_row_);
-    default_row_ = nullptr;
   }
   allocator_ = nullptr;
 }
@@ -131,48 +125,6 @@ int ObMergeParameter::init(
       LOG_WARN("schema is null", K(ret), K(*this));;
     } else if (schema->is_mv_major_refresh_table() && is_major_merge_type(static_param_.get_merge_type()) && OB_FAIL(init_mview_merge_param(allocator))) {
       STORAGE_LOG(WARN, "failed to init mview merge param", K(ret));
-    } else if (is_mini_merge(static_param_.get_merge_type()) && nullptr != schema
-        && !schema->is_column_info_simplified()
-        && schema->get_minor_row_store_type() == common::ObRowStoreType::CS_ENCODING_ROW_STORE
-        && nullptr != allocator) {
-      // Build default_row once per merge task for mini merge; merge iters use it via iter_param.default_row_
-      common::ObSEArray<share::schema::ObColDesc, 2 * OB_ROW_DEFAULT_COLUMNS_COUNT> full_col_descs;
-      full_col_descs.set_attr(ObMemAttr(MTL_ID(), "col_desc"));
-      const uint64_t data_version = static_param_.data_version_;
-      const bool need_trim_default_row = data_version >= DATA_VERSION_4_3_1_0 || data_version < DATA_VERSION_4_3_0_0;
-      void *buf = nullptr;
-      int64_t store_column_cnt = 0;
-      if (OB_NOT_NULL(default_row_)) {
-        ret = OB_INIT_TWICE;
-        STORAGE_LOG(WARN, "default row already initialized", K(ret));
-      } else if (OB_FAIL(schema->get_store_column_count(store_column_cnt, /* no_virtual */ true))) {
-        STORAGE_LOG(WARN, "failed to get store column count", K(ret), K(schema));
-      } else if (FALSE_IT(store_column_cnt += storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt())) {
-      } else if (OB_FAIL(full_col_descs.reserve(store_column_cnt))) {
-        STORAGE_LOG(WARN, "failed to reserve full column descs", K(ret), K(store_column_cnt));
-      } else if (OB_FAIL(schema->get_multi_version_column_descs(full_col_descs, true))) {
-        STORAGE_LOG(WARN, "failed to get multi version column descs", K(ret), K(schema));
-      } else if (full_col_descs.count() != store_column_cnt) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "full column descs count not match store column cnt", K(ret), K(full_col_descs.count()), K(store_column_cnt));
-      } else if (OB_ISNULL(buf = allocator->alloc(sizeof(blocksstable::ObDatumRow)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "Failed to allocate memory for default row", K(ret));
-      } else if (FALSE_IT(default_row_ = new (buf) blocksstable::ObDatumRow())) {
-      } else if (OB_FAIL(default_row_->init(*allocator, full_col_descs.count()))) {
-        STORAGE_LOG(WARN, "Failed to init default row", K(ret), K(full_col_descs.count()));
-      } else if (OB_FAIL(schema->get_orig_default_row(full_col_descs, need_trim_default_row, *default_row_))) {
-        STORAGE_LOG(WARN, "Failed to get default row from table schema", K(ret), K(full_col_descs));
-      } else if (OB_FAIL(storage::ObLobManager::fill_lob_header(*allocator, full_col_descs, *default_row_))) {
-        STORAGE_LOG(WARN, "fail to fill lob header for default row", K(ret), K(full_col_descs));
-      } else {
-        STORAGE_LOG(DEBUG, "Successfully initialized default row for mini merge in merge param", KP_(default_row), K(full_col_descs.count()));
-      }
-      if (OB_FAIL(ret) && nullptr != default_row_) {
-        default_row_->~ObDatumRow();
-        allocator->free(default_row_);
-        default_row_ = nullptr;
-      }
     }
   }
   if (OB_SUCC(ret)) {

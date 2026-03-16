@@ -295,7 +295,7 @@ private:
 struct DynamicTableOptions {
   DynamicTableOptions()
     : mode_(share::schema::ObTableModeFlag::TABLE_MODE_NORMAL),
-      minor_row_store_type_(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE)
+      minor_row_store_type_(ObRowStoreType::MAX_ROW_STORE)
   {}
   void refresh(const share::schema::ObSimpleTableSchemaV2 &table_schema);
   share::schema::ObTableModeFlag mode_;

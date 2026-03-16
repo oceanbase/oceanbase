@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "ob_store_format.h"
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_tenant_tablet_stat_mgr.h"
@@ -1294,6 +1295,10 @@ int ObTenantTabletStatMgr::get_minor_row_store_type(
   } else if (OB_ISNULL(dynamic_table_options)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dynamic table options is null", K(ret), K(ls_id), K(tablet_id));
+  } else if (dynamic_table_options->minor_row_store_type_ == ObRowStoreType::MAX_ROW_STORE) {
+    // the node is allocated, but has not been initialized
+    // treat it as node does not exist.
+    ret = OB_HASH_NOT_EXIST;
   } else {
     minor_row_store_type = dynamic_table_options->minor_row_store_type_;
   }

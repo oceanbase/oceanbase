@@ -234,8 +234,6 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
       if (access_context_.merge_scn_ != static_param.scn_range_.end_scn_) {
         STORAGE_LOG(TRACE, "end scn is not same with merge scn", K(access_context_.merge_scn_), K(static_param.scn_range_));
       }
-      // Use default_row from merge_param (built once per merge task in ObMergeParameter::init)
-      access_param_.iter_param_.default_row_ = merge_param.default_row_;
     }
   }
   return ret;

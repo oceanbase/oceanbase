@@ -135,7 +135,7 @@ public:
 class ObIPartitionMergeFuser : public ObMergeFuser
 {
 public:
-  ObIPartitionMergeFuser(common::ObIAllocator &allocator) : ObMergeFuser(allocator)
+  ObIPartitionMergeFuser(common::ObIAllocator &allocator) : ObMergeFuser(allocator), default_row_()
   {}
   virtual ~ObIPartitionMergeFuser() {}
   virtual int init(const ObMergeParameter &merge_param, const bool is_fuse_row_flag = false) override final;
@@ -143,6 +143,8 @@ public:
   INHERIT_TO_STRING_KV("ObMergeFuser", ObMergeFuser, "cur_fuser", "ObIPartitionMergeFuser");
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) = 0;
+  int init_default_row(const ObMergeParameter &merge_param);
+  blocksstable::ObDatumRow default_row_;
 };
 
 class ObMajorPartitionMergeFuser : public ObIPartitionMergeFuser
@@ -150,7 +152,6 @@ class ObMajorPartitionMergeFuser : public ObIPartitionMergeFuser
 public:
   ObMajorPartitionMergeFuser(common::ObIAllocator &allocator, const int64_t cluster_version)
     : ObIPartitionMergeFuser(allocator),
-      default_row_(),
       generated_cols_(allocator_),
       cluster_version_(cluster_version)
   {}
@@ -160,7 +161,6 @@ public:
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
 protected:
-  blocksstable::ObDatumRow default_row_;
   ObFixedArray<int32_t, ObIAllocator> generated_cols_;
   const int64_t cluster_version_;
 private:
@@ -176,6 +176,7 @@ public:
   {}
   virtual ~ObMinorPartitionMergeFuser() {}
   virtual bool is_valid() const override;
+  void fill_default_value_of_added_columns(blocksstable::ObDatumRow& row);
   INHERIT_TO_STRING_KV("ObIPartitionMergeFuser", ObIPartitionMergeFuser,
       K_(multi_version_rowkey_column_cnt));
 protected:
