@@ -151,7 +151,7 @@ int ObLogFetcher::init(
       LOG_ERROR("init cluster_id_filter fail", KR(ret));
     } else if (OB_FAIL(lsn_filter_.init(cfg.lsn_black_list.str()))) {
       LOG_ERROR("init lsn_black_list failed", KR(ret));
-    } else if (OB_FAIL(part_trans_resolver_factory_.init(*task_pool, *log_entry_task_pool, *dispatcher_, cluster_id_filter_, lsn_filter_))) {
+    } else if (OB_FAIL(part_trans_resolver_factory_.init(*task_pool, *log_entry_task_pool, *dispatcher_, cluster_id_filter_, lsn_filter_, cluster_id))) {
       LOG_ERROR("init part trans resolver factory fail", KR(ret));
     } else if (OB_FAIL(large_buffer_pool_.init("ObLogFetcher", 1L * 1024 * 1024 * 1024))) {
       LOG_ERROR("init large buffer pool failed", KR(ret));

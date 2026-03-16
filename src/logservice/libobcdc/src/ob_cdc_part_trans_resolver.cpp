@@ -144,13 +144,15 @@ ObCDCPartTransResolver::ObCDCPartTransResolver(
     PartTransTaskMap &task_map,
     IObLogFetcherDispatcher &dispatcher,
     IObLogClusterIDFilter &cluster_id_filter,
-    IObLogLsnFilter &lsn_filter) :
+    IObLogLsnFilter &lsn_filter,
+    const int64_t source_cluster_id) :
     offlined_(false),
     tls_id_(),
     part_trans_dispatcher_(tls_id_str, task_pool, task_map, dispatcher),
     cluster_id_filter_(cluster_id_filter),
     enable_direct_load_inc_(false),
-    lsn_filter_(lsn_filter)
+    lsn_filter_(lsn_filter),
+    source_cluster_id_(source_cluster_id)
 {}
 
 ObCDCPartTransResolver::~ObCDCPartTransResolver()
@@ -184,6 +186,7 @@ int ObCDCPartTransResolver::read(
   bool is_cluster_id_served = false;
   transaction::ObTxLogBlock tx_log_block;
   transaction::ObTxLogBlockHeader *tx_log_block_header = NULL;
+  bool use_src_cluster_id = false;
 
   if (OB_FAIL(tx_log_block.init_for_replay(buf, buf_len, pos))) {
     LOG_ERROR("failed to init tx_log_block with header",
@@ -192,7 +195,7 @@ int ObCDCPartTransResolver::read(
   } else if (OB_UNLIKELY(!tx_log_block_header->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid ObTxLogBlockHeader found in LogEntry", KR(ret), K_(tls_id), K(lsn), K(pos), KPC(tx_log_block_header), KPHEX(buf, MIN(buf_len, 512)));
-  } else if (cluster_id_filter_.check_is_served(tx_log_block_header->get_org_cluster_id(), is_cluster_id_served)) {
+  } else if (cluster_id_filter_.check_is_served(tx_log_block_header->get_org_cluster_id(), is_cluster_id_served, use_src_cluster_id)) {
     LOG_ERROR("check_cluster_id_served failed", KR(ret), K_(tls_id), K(lsn), KPC(tx_log_block_header));
   } else if (OB_UNLIKELY(!is_cluster_id_served)) {
     LOG_DEBUG("[STAT] [FETCHER] [TRANS_NOT_SERVE]", K_(tls_id), K(is_cluster_id_served), K(lsn));
@@ -236,7 +239,8 @@ int ObCDCPartTransResolver::read(
           submit_ts,
           serve_info,
           missing_info,
-          has_redo_in_cur_entry))) {
+          has_redo_in_cur_entry,
+          use_src_cluster_id))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("read_trans_log_ fail", KR(ret), K_(tls_id), KPC(tx_log_block_header),
               K(tx_header), K(has_redo_in_cur_entry));
@@ -417,11 +421,12 @@ int ObCDCPartTransResolver::read_trans_log_(
     const int64_t submit_ts,
     const logfetcher::PartServeInfo &serve_info,
     MissingLogInfo &missing_info,
-    bool &has_redo_in_cur_entry)
+    bool &has_redo_in_cur_entry,
+    bool use_src_cluster_id)
 {
   int ret = OB_SUCCESS;
   // tx_log_block_header is valid(check by ObCDCPartTransResolver::read)
-  const int64_t cluster_id = tx_log_block_header.get_org_cluster_id();
+  const int64_t cluster_id = use_src_cluster_id ? source_cluster_id_ : tx_log_block_header.get_org_cluster_id();
   const transaction::ObTransID &tx_id = tx_log_block_header.get_tx_id();
   const bool handling_miss_log = missing_info.is_resolving_miss_log();
   const transaction::ObTxLogType log_type = tx_log_header.get_tx_log_type();

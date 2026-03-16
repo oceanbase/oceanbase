@@ -1023,10 +1023,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       if (OB_FAIL(query_cluster_info_(cluster_info, timeout))) {
         LOG_ERROR("query_cluster_info_ fail", KR(ret), K(cluster_info));
       }
-    } else {
-      // Default is 1, unused now
-      cluster_info.cluster_id_ = 1;
     }
+    LOG_INFO("source cluster_info", K(cluster_info));
   }
 
   INIT(trans_msg_sorter_, ObLogTransMsgSorter, enable_sort_by_seq_no, TCONF.msg_sorter_thread_num,

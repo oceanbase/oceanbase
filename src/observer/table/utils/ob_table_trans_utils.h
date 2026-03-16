@@ -59,6 +59,7 @@ public:
     if (OB_NOT_NULL(trans_state_ptr_)) {
       trans_state_ptr_->reset();
     }
+    cluster_id_ = OB_INVALID_ORG_CLUSTER_ID;
   }
   TO_STRING_KV(KPC_(trans_desc),
                K_(tx_snapshot),
@@ -72,7 +73,8 @@ public:
                K_(is_rollback),
                K_(did_async_commit),
                K_(create_cb_functor),
-               KPC_(trace_info));
+               KPC_(trace_info),
+               K_(cluster_id));
   int init(const ObTableConsistencyLevel consistency_level,
            const share::ObLSID &ls_id,
            int64_t timeout_ts,
@@ -102,6 +104,7 @@ public:
   bool require_rerouting_;
   bool require_refresh_kv_meta_;
   const ObString *trace_info_;
+  int64_t cluster_id_;
 };
 
 class ObTableTransUtils final

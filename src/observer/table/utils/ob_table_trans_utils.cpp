@@ -139,7 +139,7 @@ int ObTableTransUtils::start_trans(ObTableTransParam &trans_param)
     ObTxAccessMode access_mode = (trans_param.is_readonly_ ? ObTxAccessMode::RD_ONLY : ObTxAccessMode::RW);
     tx_param.access_mode_ = access_mode;
     tx_param.isolation_ = ObTxIsolationLevel::RC;
-    tx_param.cluster_id_ = ObServerConfig::get_instance().cluster_id;
+    tx_param.cluster_id_ = trans_param.cluster_id_ != OB_INVALID_ORG_CLUSTER_ID ? trans_param.cluster_id_ : ObServerConfig::get_instance().cluster_id;
     tx_param.timeout_us_ = std::max(0l, trans_param.timeout_ts_ - ObClockGenerator::getClock());
     if (tx_param.timeout_us_ <= 0l) {
       ret = OB_TIMEOUT;

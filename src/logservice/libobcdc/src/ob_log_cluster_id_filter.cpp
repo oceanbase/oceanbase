@@ -19,6 +19,7 @@
 #include "lib/string/ob_string.h"           // ObString
 
 #include "ob_log_utils.h"                   // get_timestamp, get_record_type, split_int64
+#include "ob_log_config.h"                  // TCONF
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -135,6 +136,7 @@ void ObLogClusterIDFilter::stat_ignored_tps()
 }
 
 int ObLogClusterIDFilter::check_is_served(const uint64_t cluster_id, bool &is_served,
+    bool &use_src_cluster_id,
     const bool stat_tps)
 {
   int ret = OB_SUCCESS;
@@ -148,6 +150,15 @@ int ObLogClusterIDFilter::check_is_served(const uint64_t cluster_id, bool &is_se
       // not serve if in blacklist
       if (cluster_id == cluster_id_black_list_.at(idx)) {
         is_served = false;
+      }
+    }
+    const bool is_ttl_delete_log = (cluster_id == OB_KV_TTL_FILTER_CLUSTER_ID);
+    if (is_served && is_ttl_delete_log) {
+      if (1 == TCONF.filter_ttl_delete_log) {
+        is_served = false;
+        LOG_DEBUG("[FILTER_TTL_DELETE] filter TTL delete log");
+      } else {
+        use_src_cluster_id = true;
       }
     }
 

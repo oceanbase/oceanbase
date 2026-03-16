@@ -32,6 +32,7 @@ ObLogPartTransResolverFactory::ObLogPartTransResolverFactory() :
     log_entry_task_pool_(NULL),
     dispatcher_(NULL),
     cluster_id_filter_(NULL),
+    source_cluster_id_(OB_INVALID_CLUSTER_ID),
     allocator_(),
     task_map_()
 {}
@@ -45,7 +46,8 @@ int ObLogPartTransResolverFactory::init(TaskPool &task_pool,
     IObLogEntryTaskPool &log_entry_task_pool,
     IObLogFetcherDispatcher &dispatcher,
     IObLogClusterIDFilter &cluster_id_filter,
-    IObLogLsnFilter &lsn_filter)
+    IObLogLsnFilter &lsn_filter,
+    const int64_t source_cluster_id)
 {
   int ret = OB_SUCCESS;
   const int64_t obj_size = sizeof(ObCDCPartTransResolver);
@@ -64,6 +66,7 @@ int ObLogPartTransResolverFactory::init(TaskPool &task_pool,
     dispatcher_ = &dispatcher;
     cluster_id_filter_ = &cluster_id_filter;
     lsn_filter_ = &lsn_filter;
+    source_cluster_id_ = source_cluster_id;
     inited_ = true;
   }
   return ret;
@@ -77,6 +80,7 @@ void ObLogPartTransResolverFactory::destroy()
   dispatcher_ = NULL;
   cluster_id_filter_ = NULL;
   lsn_filter_ = NULL;
+  source_cluster_id_ = OB_INVALID_CLUSTER_ID;
   (void)allocator_.destroy();
   (void)task_map_.destroy();
 }
@@ -96,7 +100,7 @@ int ObLogPartTransResolverFactory::alloc(const char *tls_id_str,
       LOG_ERROR("allocate memory for ObCDCPartTransResolver fail", K(obj));
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      ptr = new(obj) ObCDCPartTransResolver(tls_id_str, *task_pool_, task_map_, *dispatcher_, *cluster_id_filter_, *lsn_filter_);
+      ptr = new(obj) ObCDCPartTransResolver(tls_id_str, *task_pool_, task_map_, *dispatcher_, *cluster_id_filter_, *lsn_filter_, source_cluster_id_);
     }
   }
 

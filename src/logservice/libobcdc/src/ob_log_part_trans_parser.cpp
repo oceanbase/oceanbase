@@ -71,8 +71,7 @@ int ObLogPartTransParser::init(
     LOG_ERROR("parser has been initialized", K(inited_));
     ret = OB_INIT_TWICE;
   } else if (OB_ISNULL(br_pool_ = br_pool)
-      || OB_ISNULL(meta_manager_ = meta_manager)
-      || OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id)) {
+      || OB_ISNULL(meta_manager_ = meta_manager)) {
     LOG_ERROR("invalid argument", K(br_pool), K(meta_manager), K(cluster_id));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(all_ddl_operation_table_schema_info_.init())) {

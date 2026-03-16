@@ -74,9 +74,10 @@ using namespace logfetcher;
     ObLogLsnFilter lsn_filter; \
     double a = 1.0; \
     void *fetcher = &a; \
+    const int64_t source_cluster_id = 1; \
     EXPECT_EQ(OB_SUCCESS, cluster_id_filter.init(cluster_id_black_list, 2147473648, 2147483647)); \
     EXPECT_EQ(OB_SUCCESS, lsn_filter.init("|")); \
-    EXPECT_EQ(OB_SUCCESS, resolver_factory.init(task_pool, log_entry_task_pool, fetcher_dispatcher, cluster_id_filter, lsn_filter)); \
+    EXPECT_EQ(OB_SUCCESS, resolver_factory.init(task_pool, log_entry_task_pool, fetcher_dispatcher, cluster_id_filter, lsn_filter, source_cluster_id)); \
     EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.init(1, progress_controller, resolver_factory, fetcher));
 
 

@@ -17,6 +17,7 @@
 
 #include "ob_cdc_part_trans_resolver.h"           // IObLogPartTransResolver, PartTransTaskMap
 #include "lib/allocator/ob_small_allocator.h"     // ObSmallAllocator
+#include "share/ob_define.h"                       // OB_INVALID_CLUSTER_ID
 
 namespace oceanbase
 {
@@ -54,7 +55,8 @@ public:
       IObLogEntryTaskPool &log_entry_task_pool,
       IObLogFetcherDispatcher &dispatcher,
       IObLogClusterIDFilter &cluster_id_filter,
-      IObLogLsnFilter &lsn_filter);
+      IObLogLsnFilter &lsn_filter,
+      const int64_t source_cluster_id);
   void destroy();
 
 public:
@@ -78,6 +80,7 @@ private:
   IObLogFetcherDispatcher   *dispatcher_;
   IObLogClusterIDFilter     *cluster_id_filter_;
   IObLogLsnFilter           *lsn_filter_;
+  int64_t                   source_cluster_id_;
 
   common::ObSmallAllocator  allocator_;
   PartTransTaskMap          task_map_;

@@ -224,7 +224,8 @@ public:
       PartTransTaskMap &task_map,
       IObLogFetcherDispatcher &dispatcher,
       IObLogClusterIDFilter &cluster_id_filter,
-      IObLogLsnFilter &lsn_filter);
+      IObLogLsnFilter &lsn_filter,
+      const int64_t source_cluster_id);
   virtual ~ObCDCPartTransResolver();
 
 public:
@@ -293,7 +294,8 @@ private:
       const int64_t submit_ts,
       const logfetcher::PartServeInfo &serve_info,
       MissingLogInfo &missing_info,
-      bool &has_redo_in_cur_entry);
+      bool &has_redo_in_cur_entry,
+      bool use_src_cluster_id);
 
   // read ObTxRedoLog
   int handle_redo_(
@@ -452,6 +454,7 @@ private:
   IObLogClusterIDFilter     &cluster_id_filter_;
   bool                      enable_direct_load_inc_;
   IObLogLsnFilter           &lsn_filter_;
+  int64_t                   source_cluster_id_;         // Source OB cluster ID for TTL delete log conversion
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCDCPartTransResolver);
 };

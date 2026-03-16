@@ -33,6 +33,7 @@ public:
 
 public:
   virtual int check_is_served(const uint64_t cluster_id, bool &is_served,
+      bool &use_src_cluster_id,
       const bool stat_tps = true) = 0;
   virtual void stat_ignored_tps() = 0;
 };
@@ -46,6 +47,7 @@ public:
 
 public:
   virtual int check_is_served(const uint64_t cluster_id, bool &is_served,
+      bool &use_src_cluster_id,
       const bool stat_tps = true);
   virtual void stat_ignored_tps();
 

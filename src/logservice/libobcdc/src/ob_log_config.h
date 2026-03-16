@@ -238,6 +238,11 @@ public:
 
   T_DEF_BOOL(skip_rename_tenant_ddl, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
+  // Whether to filter TTL delete logs (cluster_id = 0x100000000)
+  // Default: 0 (not filter), TTL delete logs will be converted to source cluster_id
+  // When set to 1, TTL delete logs will be filtered out
+  T_DEF_BOOL(filter_ttl_delete_log, OB_CLUSTER_PARAMETER, 0, "0:not_filter, 1:filter");
+
   // Whether to sort the list of participants within a distributed transaction
   // Scenario: online business does not need to enable this configuration item; this configuration item is only for obtest test scenario.
   // After each restart of obtest, the list of participants in the observer is random. In order to ensure consistent case results,

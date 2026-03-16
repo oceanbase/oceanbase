@@ -294,6 +294,7 @@ int ObTableTTLDeleteTask::process_one()
   SMART_VAR(ObTableCtx, scan_ctx, allocator_) {
     ObKVAttr attr;
     ObTableQuery query;
+    uint64_t tenant_data_version = 0;
     if (OB_FAIL(init_kv_schema_guard(schema_cache_guard))) {
       LOG_WARN("fail to init kv schema cache guard", K(ret));
     } else if (OB_FAIL(schema_cache_guard.get_kv_attributes(attr))) {
@@ -310,6 +311,9 @@ int ObTableTTLDeleteTask::process_one()
                                         get_timeout_ts(),
                                         scan_ctx.need_dist_das()))) {
       LOG_WARN("fail to init trans param", K(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(info_.tenant_id_, tenant_data_version))) {
+      LOG_WARN("fail to get tenant data version", K(ret));
+    } else if (tenant_data_version > DATA_VERSION_4_4_2_0 && FALSE_IT(trans_param.cluster_id_ = OB_KV_TTL_FILTER_CLUSTER_ID)) {
     } else if (OB_FAIL(ObTableTransUtils::start_trans(trans_param))) {
       LOG_WARN("fail to start transaction", K(ret), K(scan_ctx));
     } else if (OB_FAIL(scan_ctx.init_trans(trans_param.trans_desc_, trans_param.tx_snapshot_))) {
