@@ -53,8 +53,7 @@ int ObCreateRoutineLoadResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(mystmt = create_stmt<ObCreateRoutineLoadStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create select stmt", KR(ret));
-  //TODO: 权限检查，判断系统租户、普通租户、login_tenant_id等。
-  //      是否能在系统租户下创建？
+  //TODO: 权限检查，判断系统租户、普通租户、login_tenant_id等
   } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
   } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
     ret = OB_NOT_SUPPORTED;
@@ -62,9 +61,9 @@ int ObCreateRoutineLoadResolver::resolve(const ParseNode &parse_tree)
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, create routine load");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
-  } else if (data_version < DATA_VERSION_4_5_1_0) {
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_5_1_0)) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("tenant data version is below 4.5.1", KR(ret), K(tenant_id));
+    LOG_WARN("tenant data version is below 4.5.1", KR(ret), K(tenant_id), K(data_version));
   } else {
     stmt_ = mystmt;
     mystmt->set_tenant_id(tenant_id);
@@ -79,7 +78,7 @@ int ObCreateRoutineLoadResolver::resolve(const ParseNode &parse_tree)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc buf", KR(ret));
     } else if (OB_FAIL(ObExecEnv::gen_exec_env(*session_info_, job_exec_buf, OB_MAX_PROC_ENV_LENGTH, pos))){
-      LOG_WARN("generate exec env failed", K(ret), K(session_info_));
+      LOG_WARN("generate exec env failed", KR(ret), KP(session_info_));
     } else {
       mystmt->set_exec_env((ObString(pos, job_exec_buf)));
     }
@@ -150,7 +149,7 @@ int ObCreateRoutineLoadResolver::resolve(const ParseNode &parse_tree)
         if (OB_ISNULL(buf =
             static_cast<char *>(allocator_->alloc(size * sizeof(char))))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory for database and table name failed", KR(ret));
+          LOG_WARN("allocate memory for database and table name failed", KR(ret), K(size));
         } else if (OB_FAIL(databuff_printf(
                                 buf, size, pos,
                                 lib::is_oracle_mode() ? "\"%.*s\".\"%.*s\"" : "`%.*s`.`%.*s`",
@@ -235,7 +234,10 @@ int ObCreateRoutineLoadResolver::resolve_load_properties(
       } else {
         switch (node->type_) {
           case T_PARALLEL: {
-            if (OB_ISNULL(node->children_[0])) {
+            if (OB_UNLIKELY(node->num_child_ <= 0)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("parallel node is null", KR(ret), K(node->num_child_));
+            } else if (OB_ISNULL(node->children_[0])) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("parallel node is null", KR(ret));
             } else {
@@ -243,7 +245,7 @@ int ObCreateRoutineLoadResolver::resolve_load_properties(
               if (stmt.get_parallel() <= 0) {
                 ret = OB_OP_NOT_ALLOW;
                 LOG_WARN("parallel is too small", KR(ret), K(stmt.get_parallel()));
-                LOG_USER_ERROR(OB_OP_NOT_ALLOW, "parallel equal to 0 is");
+                LOG_USER_ERROR(OB_OP_NOT_ALLOW, "parallel less than or equal to 0 is");
               }
             }
             break;
@@ -308,12 +310,6 @@ int ObCreateRoutineLoadResolver::resolve_load_properties(
         } else {
           stmt.set_dupl_action(dupl_action);
         }
-        if (stmt.get_field_or_var_list().empty()) {
-          if (OB_FAIL(resolve_empty_field_or_var_list_node(stmt.get_table_id(),
-                                  stmt.get_field_or_var_list()))) {
-            LOG_WARN("resolve empty field var list failed", KR(ret), K(stmt));
-          }
-        }
       }
     }
   }
@@ -357,19 +353,27 @@ int ObCreateRoutineLoadResolver::resolve_job_properties(
       } else {
         switch (node->type_) {
           case T_EXTERNAL_FILE_FORMAT_TYPE: {
-            ObExternalFileFormat::FormatType format_type = ObExternalFileFormat::INVALID_FORMAT;
-            ObString string_v = ObString(static_cast<int32_t>(node->children_[0]->str_len_),
-                                            node->children_[0]->str_value_).trim_space_only();
-            for (int i = 0; i < ObExternalFileFormat::MAX_FORMAT; i++) {
-              if (0 == string_v.case_compare(ObExternalFileFormat::FORMAT_TYPE_STR[i])) {
-                format_type = static_cast<ObExternalFileFormat::FormatType>(i);
-                break;
+            if (OB_UNLIKELY(node->num_child_ <= 0)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected node", KR(ret), K(node->num_child_));
+            } else if (OB_ISNULL(node->children_[0])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected node", KR(ret));
+            } else {
+              ObExternalFileFormat::FormatType format_type = ObExternalFileFormat::INVALID_FORMAT;
+              ObString string_v = ObString(static_cast<int32_t>(node->children_[0]->str_len_),
+                                              node->children_[0]->str_value_).trim_space_only();
+              for (int i = 0; i < ObExternalFileFormat::MAX_FORMAT; i++) {
+                if (0 == string_v.case_compare(ObExternalFileFormat::FORMAT_TYPE_STR[i])) {
+                  format_type = static_cast<ObExternalFileFormat::FormatType>(i);
+                  break;
+                }
               }
-            }
-            if (ObExternalFileFormat::KAFKA_FORMAT != format_type) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("not support this stream type", KR(ret), K(string_v));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "this stream type");
+              if (ObExternalFileFormat::KAFKA_FORMAT != format_type) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("not support this stream type", KR(ret), K(string_v));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "this stream type");
+              }
             }
             break;
           }
@@ -378,6 +382,9 @@ int ObCreateRoutineLoadResolver::resolve_job_properties(
             if (OB_UNLIKELY(2 != node->num_child_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected node", KR(ret), K(node->num_child_));
+            } else if (OB_UNLIKELY(NULL == node->children_[0] || NULL == node->children_[1])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected node", KR(ret), KP(node->children_[0]), KP(node->children_[1]));
             } else {
               ObString prop_name = ObString(static_cast<int32_t>(node->children_[0]->str_len_),
                                             node->children_[0]->str_value_).trim_space_only();
@@ -478,21 +485,21 @@ int ObCreateRoutineLoadResolver::resolve_job_properties(
               for (int i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
                 if (OB_ISNULL(node->children_[i])) {
                   ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("fail to get unexpected NULL ptr", KR(ret), K(node->num_child_));
+                  LOG_WARN("fail to get unexpected NULL ptr", KR(ret), K(i), K(node->num_child_));
                 } else if (OB_FAIL(ObResolverUtils::resolve_file_format(node->children_[i], format, params_, ff_ctx))) {
                   LOG_WARN("fail to resolve file format", KR(ret), K(format));
                 }
               }
               if (OB_SUCC(ret)) {
-                if (ObExternalFileFormat::CSV_FORMAT != format.format_type_) {
+                if (OB_UNLIKELY(ObExternalFileFormat::CSV_FORMAT != format.format_type_)) {
                   ret = OB_NOT_SUPPORTED;
                   LOG_WARN("not support this format type", KR(ret), K(format));
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "this format type");
-                } else if (format.csv_format_.parse_header_) {
+                } else if (OB_UNLIKELY(format.csv_format_.parse_header_)) {
                   ret = OB_NOT_SUPPORTED;
                   LOG_WARN("not support parse header", KR(ret), K(format));
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "format contains PARSE_HEADER");
-                } else if (0 != format.csv_format_.skip_header_lines_) {
+                } else if (OB_UNLIKELY(0 != format.csv_format_.skip_header_lines_)) {
                   ret = OB_NOT_SUPPORTED;
                   LOG_WARN("not support skip header lines", KR(ret), K(format));
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "format contains SKIP_HEADER");
@@ -621,9 +628,9 @@ int ObPauseRoutineLoadResolver::resolve(const ParseNode &parse_tree)
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, pause routine load");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
-  } else if (data_version < DATA_VERSION_4_5_1_0) {
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_5_1_0)) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("tenant data version is below 4.5.1", KR(ret), K(tenant_id));
+    LOG_WARN("tenant data version is below 4.5.1", KR(ret), K(tenant_id), K(data_version));
   } else {
     stmt_ = mystmt;
     mystmt->set_tenant_id(tenant_id);
@@ -674,9 +681,9 @@ int ObResumeRoutineLoadResolver::resolve(const ParseNode &parse_tree)
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, resume routine load");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
-  } else if (data_version < DATA_VERSION_4_5_1_0) {
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_5_1_0)) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("tenant data version is below 4.5.1", KR(ret), K(tenant_id));
+    LOG_WARN("tenant data version is below 4.5.1", KR(ret), K(tenant_id), K(data_version));
   } else {
     stmt_ = mystmt;
     mystmt->set_tenant_id(tenant_id);
@@ -727,9 +734,9 @@ int ObStopRoutineLoadResolver::resolve(const ParseNode &parse_tree)
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, stop routine load");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
-  } else if (data_version < DATA_VERSION_4_5_1_0) {
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_5_1_0)) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("tenant data version is below 4.5.1", KR(ret), K(tenant_id));
+    LOG_WARN("tenant data version is below 4.5.1", KR(ret), K(tenant_id), K(data_version));
   } else {
     stmt_ = mystmt;
     mystmt->set_tenant_id(tenant_id);

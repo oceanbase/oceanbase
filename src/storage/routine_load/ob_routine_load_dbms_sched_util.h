@@ -38,7 +38,8 @@ public:
                                            const ObString &job_action,
                                            const int64_t create_time,
                                            const ObString &exec_env,
-                                           const ObString &repeat_interval);
+                                           const ObString &repeat_interval,
+                                           const int64_t max_run_duration);
 
 public:
   template<typename T>

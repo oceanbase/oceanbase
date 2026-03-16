@@ -55,6 +55,8 @@ public:
   ObRoutineLoadConsumeExecutor();
   int execute(sql::ObExecContext &ctx, const ObRoutineLoadConsumeArg &arg);
 private:
+  int check_init_conditions(const ObRoutineLoadConsumeArg &arg,
+                            const ObString &origin_progress);
   int check_and_parser_(ObArenaAllocator &allocator,
                         const ObRLoadDynamicFields &dynamic_fields,
                         ObString &new_kafka_partitions,

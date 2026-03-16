@@ -164,7 +164,6 @@ int ObRoutineLoadTableOperator::build_insert_dml_(
     ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;
-  char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
   if (OB_FAIL(dml.add_pk_column("job_id", job.get_job_id()))) {
     LOG_WARN("add column failed", KR(ret));
   } else if (OB_FAIL(dml.add_column("job_name", job.get_job_name()))) {
@@ -193,13 +192,14 @@ int ObRoutineLoadTableOperator::build_insert_dml_(
     LOG_WARN("add column failed", KR(ret));
   } else if (OB_FAIL(dml.add_column("tmp_lag", job.get_dynamic_fields().tmp_lag_))) {
     LOG_WARN("add column failed", KR(ret));
-  // } else if (OB_FAIL(dml.add_column("err_infos", job.get_err_infos()))) {
-  //   LOG_WARN("add column failed", KR(ret));
-  } else if (FALSE_IT(job.get_trace_id().to_string(trace_id_buf, sizeof(trace_id_buf)))) {
-  } else if (OB_FAIL(dml.add_column("last_trace_id", trace_id_buf))) {
-    LOG_WARN("add column failed", KR(ret));
-  } else if (OB_FAIL(dml.add_column("last_ret_code", job.get_ret_code()))) {
-    LOG_WARN("add column failed", KR(ret));
+  } else if (job.get_trace_id().is_valid()) {
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+    job.get_trace_id().to_string(trace_id_buf, sizeof(trace_id_buf));
+    if (OB_FAIL(dml.add_column("last_trace_id", trace_id_buf))) {
+      LOG_WARN("add column failed", KR(ret));
+    } else if (OB_FAIL(dml.add_column("last_ret_code", job.get_ret_code()))) {
+      LOG_WARN("add column failed", KR(ret));
+    }
   }
   return ret;
 }

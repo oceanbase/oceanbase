@@ -18,6 +18,7 @@
 #include "storage/routine_load/ob_routine_load_dbms_sched_util.h"
 #include "storage/mview/ob_mview_transaction.h"
 #include "common/ob_timeout_ctx.h"
+#include "lib/utility/ob_fast_convert.h"
 
 namespace oceanbase
 {
@@ -76,7 +77,7 @@ int ObRoutineLoadConsumeExecutor::execute(ObExecContext &ctx, const ObRoutineLoa
   } else if (FALSE_IT(tenant_id = session_info->get_effective_tenant_id())) {
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
-  } else if (data_version < DATA_VERSION_4_5_1_0) {
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_5_1_0)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("tenant data version is below 4.5.1", KR(ret), K(tenant_id), K(data_version));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
@@ -100,6 +101,8 @@ int ObRoutineLoadConsumeExecutor::execute(ObExecContext &ctx, const ObRoutineLoa
       FLOG_WARN("failed to get status", KR(ret), K(job_name));
     } else if (OB_FAIL(table_op.get_dynamic_fields(job_id, false, allocator, origin_dynamic_fields))) {
       FLOG_WARN("failed to get dynamic fields from table", KR(ret), K(job_id));
+    } else if (!origin_dynamic_fields.progress_.empty() && OB_FAIL(check_init_conditions(arg, origin_dynamic_fields.progress_))) {
+      FLOG_WARN("failed to check init conditions", KR(ret), K(arg), K(origin_dynamic_fields));
     } else if (OB_UNLIKELY(ObRoutineLoadJobState::RUNNING != state)) {
       FLOG_WARN("unexpected status", KR(ret), K(job_id), K(job_name), K(state));
     }
@@ -137,7 +140,7 @@ int ObRoutineLoadConsumeExecutor::execute(ObExecContext &ctx, const ObRoutineLoa
     WITH_MVIEW_TRANS_INNER_MYSQL_GUARD(trans) {
       if (!is_zero_row(affected_rows)) {
       } else {
-        LOG_WARN("kafka has no data to consume", KR(ret), K(affected_rows));
+        LOG_WARN("kafka consume affected_rows is zero", KR(ret), K(affected_rows));
       }
 
       //STEP2: update routine_load_job (__all_routine_load_job)
@@ -249,6 +252,100 @@ int ObRoutineLoadConsumeExecutor::execute(ObExecContext &ctx, const ObRoutineLoa
   }
   // Restore original timeout
   THIS_WORKER.set_timeout_ts(original_timeout_us);
+  return ret;
+}
+
+int ObRoutineLoadConsumeExecutor::check_init_conditions(
+    const ObRoutineLoadConsumeArg &arg,
+    const ObString &origin_progress)
+{
+  int ret = OB_SUCCESS;
+  ObString partitions_str(arg.par_str_len_, arg.exec_sql_.ptr() + arg.par_str_pos_);
+  ObString offsets_str(arg.off_str_len_, arg.exec_sql_.ptr() + arg.off_str_pos_);
+  if (OB_UNLIKELY(partitions_str.empty() || offsets_str.empty() || origin_progress.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected partitions_str or offsets_str", KR(ret), K(partitions_str), K(offsets_str), K(origin_progress));
+  } else {
+    common::ObArray<int32_t> origin_partitions;
+    common::ObArray<int64_t> origin_offsets;
+    common::ObArray<int32_t> parsed_partitions;
+    common::ObArray<int64_t> parsed_offsets;
+    ObString tmp_origin_progress = origin_progress;
+    ObString tmp_partitions_str = partitions_str;
+    ObString tmp_offsets_str = offsets_str;
+    while (OB_SUCC(ret) && !tmp_origin_progress.empty()) {
+      if (OB_UNLIKELY(tmp_partitions_str.empty()
+                      || tmp_offsets_str.empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected remain_str", KR(ret), K(tmp_partitions_str), K(tmp_offsets_str));
+      }
+      if (OB_SUCC(ret)) {
+        ObString item_str = tmp_origin_progress.split_on(',');
+        if (item_str.empty()) {
+          item_str = tmp_origin_progress;
+          tmp_origin_progress.reset();
+        }
+        ObString item_partition = item_str.split_on(':');
+        if (OB_UNLIKELY(item_partition.empty() || item_str.empty())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected partition str or offset str", KR(ret), K(item_partition), K(item_str));
+        } else {
+          bool part_valid = false;
+          bool off_valid = false;
+          int32_t part_val = ObFastAtoi<int32_t>::atoi(item_partition.ptr(), item_partition.ptr() + item_partition.length(), part_valid);
+          int64_t off_val = ObFastAtoi<int64_t>::atoi(item_str.ptr(), item_str.ptr() + item_str.length(), off_valid);
+          if (OB_UNLIKELY(!part_valid || !off_valid)) {
+            ret = OB_INVALID_DATA;
+            LOG_WARN("fail to parse origin_progress", KR(ret), K(item_partition), K(item_str), K(part_valid), K(off_valid));
+          } else if (OB_FAIL(origin_partitions.push_back(part_val))) {
+            LOG_WARN("fail to push back", KR(ret), K(part_val));
+          } else if (OB_FAIL(origin_offsets.push_back(off_val))) {
+            LOG_WARN("fail to push back", KR(ret), K(off_val));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ObString item_partition = tmp_partitions_str.split_on(',');
+        if (item_partition.empty()) {
+          item_partition = tmp_partitions_str;
+          tmp_partitions_str.reset();
+        }
+        ObString item_offset = tmp_offsets_str.split_on(',');
+        if (item_offset.empty()) {
+          item_offset = tmp_offsets_str;
+          tmp_offsets_str.reset();
+        }
+        bool part_valid = false;
+        bool off_valid = false;
+        int32_t part_val = ObFastAtoi<int32_t>::atoi(item_partition.ptr(), item_partition.ptr() + item_partition.length(), part_valid);
+        int64_t off_val = ObFastAtoi<int64_t>::atoi(item_offset.ptr(), item_offset.ptr() + item_offset.length(), off_valid);
+        if (OB_UNLIKELY(!part_valid || !off_valid)) {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("fail to parse origin_progress", KR(ret), K(item_partition), K(item_offset), K(part_valid), K(off_valid));
+        } else if (OB_FAIL(parsed_partitions.push_back(part_val))) {
+          LOG_WARN("fail to push back", KR(ret), K(part_val));
+        } else if (OB_FAIL(parsed_offsets.push_back(off_val))) {
+          LOG_WARN("fail to push back", KR(ret), K(off_val));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_UNLIKELY(!tmp_partitions_str.empty() || !tmp_offsets_str.empty()
+                      || origin_partitions.count() != parsed_partitions.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected remain_str", KR(ret), K(tmp_partitions_str), K(tmp_offsets_str), K(origin_partitions), K(parsed_partitions));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < origin_partitions.count(); ++i) {
+          if (OB_UNLIKELY(origin_partitions.at(i) != parsed_partitions.at(i)
+                          || origin_offsets.at(i) != parsed_offsets.at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("origin_partitions and origin_offsets not consistent", KR(ret),
+                     K(origin_partitions), K(parsed_partitions), K(origin_offsets), K(parsed_offsets));
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 

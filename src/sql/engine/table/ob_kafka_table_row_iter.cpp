@@ -199,6 +199,9 @@ int ObKAFKATableRowIterator::init_consumer(
                 kafka_error_msg_, OB_MAX_ERROR_MSG_LEN)) {
         ret = OB_KAFKA_ERROR;
         LOG_WARN("fail to rd kafka conf set", KR(ret), KCSTRING(kafka_error_msg_));
+        if (OB_INVALID_ID == job_id && NULL != kafka_error_msg_ && strlen(kafka_error_msg_) > 0) {
+          LOG_USER_ERROR(OB_KAFKA_ERROR, kafka_error_msg_);
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -275,7 +278,7 @@ int ObKAFKATableRowIterator::parse_partitions_and_offsets(
     if (OB_UNLIKELY(offset_arr.empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected offset_arr", KR(ret), K(p_str), K(o_str), K(partition_arr), K(offset_arr));
-    } else if (offset_arr.count() != partition_arr.count() && 1 != offset_arr.count()) {
+    } else if (OB_UNLIKELY(offset_arr.count() != partition_arr.count() && 1 != offset_arr.count())) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported kafka offsets or partitions", KR(ret), K(p_str), K(o_str), K(partition_arr), K(offset_arr));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "kafka partitions/offsets");
@@ -710,121 +713,21 @@ int ObKAFKATableRowIterator::parser_datetime_offsets_(
 int ObKAFKATableRowIterator::get_next_row()
 {
   int ret = OB_SUCCESS;
-  int64_t returned_row_cnt = 0;
-  const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
-  ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
-  bool is_oracle_mode = lib::is_oracle_mode();
-  ObSEArray<ObCSVGeneralParser::LineErrRec, 4> error_msgs;
-  ObKafkaSingleRowHandler handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode, returned_row_cnt);
-  ObSqlString parser_err_msg;
-  if (state_.need_expand_buf_) {
-    if (OB_FAIL(expand_buf())) {
-      LOG_WARN("fail to expand buf", KR(ret));
-    } else {
-      state_.need_expand_buf_ = false;
-    }
-  }
-  while (OB_SUCC(ret)
-         && returned_row_cnt <= 0) {
-    if (0 < state_.task_cnt_ && state_.pos_ < state_.data_end_) {
-      //返回一条row出去
-      int64_t nrows = 1;
-      ret = parser_.scan<decltype(handle_one_line), true>(state_.pos_, state_.data_end_, nrows,
-              state_.escape_buf_, state_.escape_buf_end_, handle_one_line, error_msgs);
-      if (OB_SUCC(ret)) {
-        //一条msg可能有多条row
-        state_.row_idx_ += nrows;
-        if (OB_UNLIKELY(error_msgs.count() > 0)) {
-          if (OB_FAIL(handle_error_msgs_(error_msgs))) {
-            LOG_WARN("fail to handle error messages", KR(ret), K(error_msgs));
-          }
-        }
-      } else {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(parser_err_msg.append_fmt("message parser failed."
-                      "This round consumed message count: %ld, parsed row index: %ld",
-                      state_.msg_cnt_, state_.row_idx_))) {
-          LOG_WARN("fail to append fmt", KR(tmp_ret), K(state_));
-        }
-        LOG_WARN("fail to scan", KR(ret), KR(tmp_ret), K(state_));
-      }
-    } else if (0 == state_.task_cnt_ && OB_FAIL(get_all_tasks_())) {
-      LOG_WARN("fail to get all tasks", KR(ret), K(state_));
-    } else if (state_.task_reach_end_) {
-      if (OB_FAIL(finish_tasks_())) {
-        LOG_WARN("fail to finish tasks", KR(ret), K(state_));
-      } else {
-        ret = OB_ITER_END;
-        LOG_INFO("kafka iter end", KR(ret), K(state_));
-      }
-    } else {
-      if (OB_FAIL(consume_from_kafka_())) {
-        LOG_WARN("fail to consume from kafka", KR(ret), K(state_));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    for (int i = 0; OB_SUCC(ret) && i < file_column_exprs.count(); i++) {
-      file_column_exprs.at(i)->set_evaluated_flag(eval_ctx);
-    }
-    for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
-      ObExpr *column_expr = column_exprs_.at(i);
-      ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
-      ObDatum *convert_datum = NULL;
-      OZ (column_convert_expr->eval(eval_ctx, convert_datum));
-      if (OB_SUCC(ret)) {
-        column_expr->locate_datum_for_write(eval_ctx) = *convert_datum;
-        column_expr->set_evaluated_flag(eval_ctx);
-      }
-    }
-  }
-  if ((NULL != kafka_error_msg_ && strlen(kafka_error_msg_) > 0) || !parser_err_msg.empty()) {
-    int tmp_ret = OB_SUCCESS;
-    ObRoutineLoadTableOperator table_op;
-    int64_t job_id = scan_param_->external_file_format_.kafka_format_.job_id_;
-    ObString error_msg;
-    if (OB_UNLIKELY(OB_SUCCESS == ret)) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      ret = tmp_ret;
-      LOG_WARN("unexpected success", KR(tmp_ret));
-    } else if (NULL != kafka_error_msg_ && strlen(kafka_error_msg_) > 0) {
-      error_msg.assign_ptr(kafka_error_msg_, static_cast<int32_t>(strlen(kafka_error_msg_)));
-    } else {
-      error_msg = parser_err_msg.string();
-    }
-    if (OB_SUCCESS == tmp_ret) {
-      if (OB_TMP_FAIL(table_op.init(scan_param_->tenant_id_, GCTX.sql_proxy_))) {
-        LOG_WARN("failed to init table op", KR(ret), K(scan_param_->tenant_id_));
-      } else if (OB_TMP_FAIL(table_op.update_error_msg(job_id, error_msg))) {
-        LOG_WARN("fail to update error msg", KR(tmp_ret), K(job_id));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObKAFKATableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
-{
-  int ret = OB_SUCCESS;
-  int64_t returned_row_cnt = 0;
-  const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
-  ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
-  bool enable_rich_format = scan_param_->op_->enable_rich_format_;
-  bool is_oracle_mode = lib::is_oracle_mode();
-  ObSEArray<ObCSVGeneralParser::LineErrRec, 4> error_msgs;
-  ObSqlString parser_err_msg;
-
-  if (OB_ISNULL(bit_vector_cache_)) {
-    void *mem = nullptr;
-    if (OB_ISNULL(mem = malloc_alloc_.alloc(ObBitVector::memory_size(eval_ctx.max_batch_size_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory for skip", K(ret), K(eval_ctx.max_batch_size_));
-    } else {
-      bit_vector_cache_ = to_bit_vector(mem);
-      bit_vector_cache_->reset(eval_ctx.max_batch_size_);
-    }
-  }
-  if (OB_SUCC(ret)) {
+  if (OB_UNLIKELY(NULL == scan_param_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null scan_param_", KR(ret), KP(scan_param_));
+  } else if (OB_UNLIKELY(NULL == scan_param_->ext_file_column_exprs_
+                          || NULL == scan_param_->op_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ext_file_column_exprs_ or op_", KR(ret), KP(scan_param_->ext_file_column_exprs_), KP(scan_param_->op_));
+  } else {
+    int64_t returned_row_cnt = 0;
+    const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
+    ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+    bool is_oracle_mode = lib::is_oracle_mode();
+    ObSEArray<ObCSVGeneralParser::LineErrRec, 4> error_msgs;
+    ObKafkaSingleRowHandler handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode, returned_row_cnt);
+    ObSqlString parser_err_msg;
     if (state_.need_expand_buf_) {
       if (OB_FAIL(expand_buf())) {
         LOG_WARN("fail to expand buf", KR(ret));
@@ -832,40 +735,16 @@ int ObKAFKATableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         state_.need_expand_buf_ = false;
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    ObKafkaBatchRowHandler handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode, returned_row_cnt);
     while (OB_SUCC(ret)
-            && returned_row_cnt <= 0) {
+          && returned_row_cnt <= 0) {
       if (0 < state_.task_cnt_ && state_.pos_ < state_.data_end_) {
         //返回一条row出去
-        int64_t nrows = capacity;
-        if (state_.has_escape_) {
-          if (use_handle_batch_lines_ && enable_rich_format) {
-            ret = parser_.scan<decltype(handle_one_line), true, true>(state_.pos_, state_.data_end_, nrows,
-              state_.escape_buf_, state_.escape_buf_end_, handle_one_line, error_msgs);
-          } else {
-            ret = parser_.scan<decltype(handle_one_line), true, false>(state_.pos_, state_.data_end_, nrows,
-              state_.escape_buf_, state_.escape_buf_end_, handle_one_line, error_msgs);
-          }
-        } else {
-          if (use_handle_batch_lines_ && enable_rich_format) {
-            ret = parser_.scan<decltype(handle_one_line), false, true>(state_.pos_, state_.data_end_, nrows,
-              state_.escape_buf_, state_.escape_buf_end_, handle_one_line, error_msgs);
-          } else {
-            ret = parser_.scan<decltype(handle_one_line), false, false>(state_.pos_, state_.data_end_, nrows,
-              state_.escape_buf_, state_.escape_buf_end_, handle_one_line, error_msgs);
-          }
-        }
+        int64_t nrows = 1;
+        ret = parser_.scan<decltype(handle_one_line), true>(state_.pos_, state_.data_end_, nrows,
+                state_.escape_buf_, state_.escape_buf_end_, handle_one_line, error_msgs);
         if (OB_SUCC(ret)) {
+          //一条msg可能有多条row
           state_.row_idx_ += nrows;
-          if (nrows >= 1
-              && nrows < capacity
-              && !state_.task_reach_end_
-              && state_.buf_len_ * 2 <= OB_MALLOC_BIG_BLOCK_SIZE) {
-            //TODO: This part of the logic will not lead to
-            state_.need_expand_buf_ = true;
-          }
           if (OB_UNLIKELY(error_msgs.count() > 0)) {
             if (OB_FAIL(handle_error_msgs_(error_msgs))) {
               LOG_WARN("fail to handle error messages", KR(ret), K(error_msgs));
@@ -891,86 +770,272 @@ int ObKAFKATableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         }
       } else {
         if (OB_FAIL(consume_from_kafka_())) {
-          LOG_WARN("fail to consume from kafka", KR(ret));
+          LOG_WARN("fail to consume from kafka", KR(ret), K(state_));
         }
       }
-    }
-    if (OB_ITER_END == ret && returned_row_cnt > 0) {
-      ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs.count(); i++) {
-        file_column_exprs.at(i)->set_evaluated_flag(eval_ctx);
+        if (OB_UNLIKELY(NULL == file_column_exprs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null file_column_exprs", KR(ret), K(i));
+        } else {
+          file_column_exprs.at(i)->set_evaluated_flag(eval_ctx);
+        }
       }
-      if (enable_rich_format) {
-        //TODO: 新的向量化2.0格式,定长用fixed, 变长用discrete
-        for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
-          ObExpr *column_expr = column_exprs_.at(i);
-          ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
-          OZ (column_convert_expr->eval_vector(eval_ctx, *bit_vector_cache_, returned_row_cnt, true));
-          if (OB_SUCC(ret)) {
-            ObExpr *to = column_exprs_.at(i);
-            ObExpr *from = scan_param_->ext_column_dependent_exprs_->at(i);
-            VectorHeader &to_vec_header = to->get_vector_header(eval_ctx);
-            VectorHeader &from_vec_header = from->get_vector_header(eval_ctx);
-            if (from_vec_header.format_ == VEC_UNIFORM_CONST) {
-              ObDatum *from_datum =
-                static_cast<ObUniformBase *>(from->get_vector(eval_ctx))->get_datums();
-              OZ(to->init_vector(eval_ctx, VEC_UNIFORM, returned_row_cnt));
-              ObUniformBase *to_vec = static_cast<ObUniformBase *>(to->get_vector(eval_ctx));
-              ObDatum *to_datums = to_vec->get_datums();
-              for (int64_t j = 0; j < returned_row_cnt && OB_SUCC(ret); j++) {
-                to_datums[j] = *from_datum;
+      if (OB_SUCC(ret)) {
+        if (OB_UNLIKELY(!column_exprs_.empty() &&
+                        (NULL == scan_param_->ext_column_dependent_exprs_
+                        || scan_param_->ext_column_dependent_exprs_->count() != column_exprs_.count()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected column_dependent_exprs count", KR(ret), K(column_exprs_.count()), KP(scan_param_->ext_column_dependent_exprs_));
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
+            if (OB_UNLIKELY(NULL == column_exprs_.at(i)
+                            || NULL == scan_param_->ext_column_dependent_exprs_->at(i))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null column_exprs", KR(ret), K(i), KP(column_exprs_.at(i)), KP(scan_param_->ext_column_dependent_exprs_->at(i)));
+            } else {
+              ObExpr *column_expr = column_exprs_.at(i);
+              ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
+              ObDatum *convert_datum = NULL;
+              OZ (column_convert_expr->eval(eval_ctx, convert_datum));
+              if (OB_SUCC(ret)) {
+                column_expr->locate_datum_for_write(eval_ctx) = *convert_datum;
+                column_expr->set_evaluated_flag(eval_ctx);
               }
-            } else if (from_vec_header.format_ == VEC_UNIFORM) {
-              ObUniformBase *uni_vec = static_cast<ObUniformBase *>(from->get_vector(eval_ctx));
-              ObDatum *src = uni_vec->get_datums();
-              ObDatum *dst = to->locate_batch_datums(eval_ctx);
-              if (src != dst) {
-                MEMCPY(dst, src, returned_row_cnt * sizeof(ObDatum));
-              }
-              OZ(to->init_vector(eval_ctx, VEC_UNIFORM, returned_row_cnt));
-            } else if (OB_FAIL(to_vec_header.assign(from_vec_header))) {
-              LOG_WARN("assign vector header failed", K(ret));
             }
-            column_exprs_.at(i)->set_evaluated_projected(eval_ctx);
-          }
-        }
-      } else {
-        for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
-          ObExpr *column_expr = column_exprs_.at(i);
-          ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
-          OZ (column_convert_expr->eval_batch(eval_ctx, *bit_vector_cache_, returned_row_cnt));
-          if (OB_SUCC(ret)) {
-            ObDatum &datum = *column_convert_expr->locate_batch_datums(eval_ctx);
-            MEMCPY(column_expr->locate_batch_datums(eval_ctx),
-                  column_convert_expr->locate_batch_datums(eval_ctx), sizeof(ObDatum) * returned_row_cnt);
-            column_expr->set_evaluated_flag(eval_ctx);
           }
         }
       }
     }
-    count = returned_row_cnt;
-  }
-  if ((NULL != kafka_error_msg_ && strlen(kafka_error_msg_) > 0) || !parser_err_msg.empty()) {
-    int tmp_ret = OB_SUCCESS;
-    ObRoutineLoadTableOperator table_op;
-    int64_t job_id = scan_param_->external_file_format_.kafka_format_.job_id_;
-    ObString error_msg;
-    if (OB_UNLIKELY(OB_SUCCESS == ret)) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      ret = tmp_ret;
-      LOG_WARN("unexpected success", KR(tmp_ret));
-    } else if (NULL != kafka_error_msg_ && strlen(kafka_error_msg_) > 0) {
-      error_msg.assign_ptr(kafka_error_msg_, static_cast<int32_t>(strlen(kafka_error_msg_)));
-    } else {
-      error_msg = parser_err_msg.string();
+    if ((NULL != kafka_error_msg_ && strlen(kafka_error_msg_) > 0) || !parser_err_msg.empty()) {
+      int tmp_ret = OB_SUCCESS;
+      ObRoutineLoadTableOperator table_op;
+      int64_t job_id = scan_param_->external_file_format_.kafka_format_.job_id_;
+      ObString error_msg;
+      if (OB_UNLIKELY(OB_SUCCESS == ret)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        ret = tmp_ret;
+        LOG_WARN("unexpected success", KR(tmp_ret));
+      } else if (NULL != kafka_error_msg_ && strlen(kafka_error_msg_) > 0) {
+        error_msg.assign_ptr(kafka_error_msg_, static_cast<int32_t>(strlen(kafka_error_msg_)));
+      } else {
+        error_msg = parser_err_msg.string();
+      }
+      if (OB_SUCCESS == tmp_ret) {
+        if (OB_TMP_FAIL(table_op.init(scan_param_->tenant_id_, GCTX.sql_proxy_))) {
+          LOG_WARN("failed to init table op", KR(ret), K(scan_param_->tenant_id_));
+        } else if (OB_TMP_FAIL(table_op.update_error_msg(job_id, error_msg))) {
+          LOG_WARN("fail to update error msg", KR(tmp_ret), K(job_id));
+        }
+      }
     }
-    if (OB_SUCCESS == tmp_ret) {
-      if (OB_TMP_FAIL(table_op.init(scan_param_->tenant_id_, GCTX.sql_proxy_))) {
-        LOG_WARN("failed to init table op", KR(ret), K(scan_param_->tenant_id_));
-      } else if (OB_TMP_FAIL(table_op.update_error_msg(job_id, error_msg))) {
-        LOG_WARN("fail to update error msg", KR(tmp_ret), K(job_id));
+  }
+  return ret;
+}
+
+int ObKAFKATableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == scan_param_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null scan_param_", KR(ret), KP(scan_param_));
+  } else if (OB_UNLIKELY(NULL == scan_param_->ext_file_column_exprs_
+                          || NULL == scan_param_->op_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ext_file_column_exprs_ or op_", KR(ret), KP(scan_param_->ext_file_column_exprs_), KP(scan_param_->op_));
+  } else {
+    int64_t returned_row_cnt = 0;
+    const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
+    ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+    bool enable_rich_format = scan_param_->op_->enable_rich_format_;
+    bool is_oracle_mode = lib::is_oracle_mode();
+    ObSEArray<ObCSVGeneralParser::LineErrRec, 4> error_msgs;
+    ObSqlString parser_err_msg;
+
+    if (OB_ISNULL(bit_vector_cache_)) {
+      void *mem = nullptr;
+      if (OB_ISNULL(mem = malloc_alloc_.alloc(ObBitVector::memory_size(eval_ctx.max_batch_size_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory for skip", K(ret), K(eval_ctx.max_batch_size_));
+      } else {
+        bit_vector_cache_ = to_bit_vector(mem);
+        bit_vector_cache_->reset(eval_ctx.max_batch_size_);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (state_.need_expand_buf_) {
+        if (OB_FAIL(expand_buf())) {
+          LOG_WARN("fail to expand buf", KR(ret));
+        } else {
+          state_.need_expand_buf_ = false;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObKafkaBatchRowHandler handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode, returned_row_cnt);
+      while (OB_SUCC(ret)
+              && returned_row_cnt <= 0) {
+        if (0 < state_.task_cnt_ && state_.pos_ < state_.data_end_) {
+          //返回一条row出去
+          int64_t nrows = capacity;
+          if (state_.has_escape_) {
+            if (use_handle_batch_lines_ && enable_rich_format) {
+              ret = parser_.scan<decltype(handle_one_line), true, true>(state_.pos_, state_.data_end_, nrows,
+                state_.escape_buf_, state_.escape_buf_end_, handle_one_line, error_msgs);
+            } else {
+              ret = parser_.scan<decltype(handle_one_line), true, false>(state_.pos_, state_.data_end_, nrows,
+                state_.escape_buf_, state_.escape_buf_end_, handle_one_line, error_msgs);
+            }
+          } else {
+            if (use_handle_batch_lines_ && enable_rich_format) {
+              ret = parser_.scan<decltype(handle_one_line), false, true>(state_.pos_, state_.data_end_, nrows,
+                state_.escape_buf_, state_.escape_buf_end_, handle_one_line, error_msgs);
+            } else {
+              ret = parser_.scan<decltype(handle_one_line), false, false>(state_.pos_, state_.data_end_, nrows,
+                state_.escape_buf_, state_.escape_buf_end_, handle_one_line, error_msgs);
+            }
+          }
+          if (OB_SUCC(ret)) {
+            state_.row_idx_ += nrows;
+            if (nrows >= 1
+                && nrows < capacity
+                && !state_.task_reach_end_
+                && state_.buf_len_ * 2 <= OB_MALLOC_BIG_BLOCK_SIZE) {
+              //TODO: This part of the logic will not lead to
+              state_.need_expand_buf_ = true;
+            }
+            if (OB_UNLIKELY(error_msgs.count() > 0)) {
+              if (OB_FAIL(handle_error_msgs_(error_msgs))) {
+                LOG_WARN("fail to handle error messages", KR(ret), K(error_msgs));
+              }
+            }
+          } else {
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(parser_err_msg.append_fmt("message parser failed."
+                          "This round consumed message count: %ld, parsed row index: %ld",
+                          state_.msg_cnt_, state_.row_idx_))) {
+              LOG_WARN("fail to append fmt", KR(tmp_ret), K(state_));
+            }
+            LOG_WARN("fail to scan", KR(ret), KR(tmp_ret), K(state_));
+          }
+        } else if (0 == state_.task_cnt_ && OB_FAIL(get_all_tasks_())) {
+          LOG_WARN("fail to get all tasks", KR(ret), K(state_));
+        } else if (state_.task_reach_end_) {
+          if (OB_FAIL(finish_tasks_())) {
+            LOG_WARN("fail to finish tasks", KR(ret), K(state_));
+          } else {
+            ret = OB_ITER_END;
+            LOG_INFO("kafka iter end", KR(ret), K(state_));
+          }
+        } else {
+          if (OB_FAIL(consume_from_kafka_())) {
+            LOG_WARN("fail to consume from kafka", KR(ret));
+          }
+        }
+      }
+      if (OB_ITER_END == ret && returned_row_cnt > 0) {
+        ret = OB_SUCCESS;
+      }
+      if (OB_SUCC(ret)) {
+        for (int i = 0; OB_SUCC(ret) && i < file_column_exprs.count(); i++) {
+          if (OB_UNLIKELY(NULL == file_column_exprs.at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null file_column_exprs", KR(ret), K(i));
+          } else {
+            file_column_exprs.at(i)->set_evaluated_flag(eval_ctx);
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_UNLIKELY(!column_exprs_.empty() &&
+                          (NULL == scan_param_->ext_column_dependent_exprs_
+                          || scan_param_->ext_column_dependent_exprs_->count() != column_exprs_.count()))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected column_dependent_exprs count", KR(ret), K(column_exprs_.count()), KP(scan_param_->ext_column_dependent_exprs_));
+          } else if (enable_rich_format) {
+            //TODO: 新的向量化2.0格式,定长用fixed, 变长用discrete
+            for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
+              if (OB_UNLIKELY(NULL == column_exprs_.at(i)
+                              || NULL == scan_param_->ext_column_dependent_exprs_->at(i))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null column_exprs", KR(ret), K(i), KP(column_exprs_.at(i)), KP(scan_param_->ext_column_dependent_exprs_->at(i)));
+              } else {
+                ObExpr *column_expr = column_exprs_.at(i);
+                ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
+                OZ (column_convert_expr->eval_vector(eval_ctx, *bit_vector_cache_, returned_row_cnt, true));
+                if (OB_SUCC(ret)) {
+                  ObExpr *to = column_exprs_.at(i);
+                  ObExpr *from = scan_param_->ext_column_dependent_exprs_->at(i);
+                  VectorHeader &to_vec_header = to->get_vector_header(eval_ctx);
+                  VectorHeader &from_vec_header = from->get_vector_header(eval_ctx);
+                  if (from_vec_header.format_ == VEC_UNIFORM_CONST) {
+                    ObDatum *from_datum =
+                      static_cast<ObUniformBase *>(from->get_vector(eval_ctx))->get_datums();
+                    OZ(to->init_vector(eval_ctx, VEC_UNIFORM, returned_row_cnt));
+                    ObUniformBase *to_vec = static_cast<ObUniformBase *>(to->get_vector(eval_ctx));
+                    ObDatum *to_datums = to_vec->get_datums();
+                    for (int64_t j = 0; j < returned_row_cnt && OB_SUCC(ret); j++) {
+                      to_datums[j] = *from_datum;
+                    }
+                  } else if (from_vec_header.format_ == VEC_UNIFORM) {
+                    ObUniformBase *uni_vec = static_cast<ObUniformBase *>(from->get_vector(eval_ctx));
+                    ObDatum *src = uni_vec->get_datums();
+                    ObDatum *dst = to->locate_batch_datums(eval_ctx);
+                    if (src != dst) {
+                      MEMCPY(dst, src, returned_row_cnt * sizeof(ObDatum));
+                    }
+                    OZ(to->init_vector(eval_ctx, VEC_UNIFORM, returned_row_cnt));
+                  } else if (OB_FAIL(to_vec_header.assign(from_vec_header))) {
+                    LOG_WARN("assign vector header failed", K(ret));
+                  }
+                  column_exprs_.at(i)->set_evaluated_projected(eval_ctx);
+                }
+              }
+            }
+          } else {
+            for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
+              if (OB_UNLIKELY(NULL == column_exprs_.at(i)
+                              || NULL == scan_param_->ext_column_dependent_exprs_->at(i))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null column_exprs", KR(ret), K(i), KP(column_exprs_.at(i)), KP(scan_param_->ext_column_dependent_exprs_->at(i)));
+              } else {
+                ObExpr *column_expr = column_exprs_.at(i);
+                ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
+                OZ (column_convert_expr->eval_batch(eval_ctx, *bit_vector_cache_, returned_row_cnt));
+                if (OB_SUCC(ret)) {
+                  ObDatum &datum = *column_convert_expr->locate_batch_datums(eval_ctx);
+                  MEMCPY(column_expr->locate_batch_datums(eval_ctx),
+                        column_convert_expr->locate_batch_datums(eval_ctx), sizeof(ObDatum) * returned_row_cnt);
+                  column_expr->set_evaluated_flag(eval_ctx);
+                }
+              }
+            }
+          }
+        }
+      }
+      count = returned_row_cnt;
+    }
+    if ((NULL != kafka_error_msg_ && strlen(kafka_error_msg_) > 0) || !parser_err_msg.empty()) {
+      int tmp_ret = OB_SUCCESS;
+      ObRoutineLoadTableOperator table_op;
+      int64_t job_id = scan_param_->external_file_format_.kafka_format_.job_id_;
+      ObString error_msg;
+      if (OB_UNLIKELY(OB_SUCCESS == ret)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        ret = tmp_ret;
+        LOG_WARN("unexpected success", KR(tmp_ret));
+      } else if (NULL != kafka_error_msg_ && strlen(kafka_error_msg_) > 0) {
+        error_msg.assign_ptr(kafka_error_msg_, static_cast<int32_t>(strlen(kafka_error_msg_)));
+      } else {
+        error_msg = parser_err_msg.string();
+      }
+      if (OB_SUCCESS == tmp_ret) {
+        if (OB_TMP_FAIL(table_op.init(scan_param_->tenant_id_, GCTX.sql_proxy_))) {
+          LOG_WARN("failed to init table op", KR(ret), K(scan_param_->tenant_id_));
+        } else if (OB_TMP_FAIL(table_op.update_error_msg(job_id, error_msg))) {
+          LOG_WARN("fail to update error msg", KR(tmp_ret), K(job_id));
+        }
       }
     }
   }
@@ -1568,9 +1633,11 @@ void ObKAFKATableRowIterator::copy_kafka_error_msg_(const char *err_str)
   }
 }
 
+// 与 librdkafka rd_kafka_err_action() 及 ListOffsets/OffsetFetch/Fetch 等错误处理保持一致的可重试错误集合
 bool ObKAFKATableRowIterator::is_kafka_error_retriable(rd_kafka_resp_err_t err) {
+  bool bret = false;
   switch (err) {
-    // 网络和连接相关
+    // 网络和连接相关（与 rd_kafka_err_action 默认及 cgrp/request 中的 RETRY 一致）
     case RD_KAFKA_RESP_ERR__TRANSPORT:
     case RD_KAFKA_RESP_ERR__RESOLVE:
     case RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN:
@@ -1578,6 +1645,7 @@ bool ObKAFKATableRowIterator::is_kafka_error_retriable(rd_kafka_resp_err_t err) 
     case RD_KAFKA_RESP_ERR__CRIT_SYS_RESOURCE:
     case RD_KAFKA_RESP_ERR__SSL:
     case RD_KAFKA_RESP_ERR__UNKNOWN_BROKER:
+    case RD_KAFKA_RESP_ERR__DESTROY_BROKER:
 
     // 超时相关
     case RD_KAFKA_RESP_ERR__TIMED_OUT:
@@ -1585,13 +1653,15 @@ bool ObKAFKATableRowIterator::is_kafka_error_retriable(rd_kafka_resp_err_t err) 
     case RD_KAFKA_RESP_ERR_REQUEST_TIMED_OUT:
     case RD_KAFKA_RESP_ERR__TIMED_OUT_QUEUE:
 
-    // Leader/Coordinator 相关
+    // Leader/Coordinator 相关（REFRESH 或 REFRESH|RETRY，应用层重试合理）
     case RD_KAFKA_RESP_ERR_LEADER_NOT_AVAILABLE:
     case RD_KAFKA_RESP_ERR_NOT_LEADER_FOR_PARTITION:
     case RD_KAFKA_RESP_ERR_COORDINATOR_NOT_AVAILABLE:
     case RD_KAFKA_RESP_ERR_COORDINATOR_LOAD_IN_PROGRESS:
     case RD_KAFKA_RESP_ERR_NOT_COORDINATOR:
     case RD_KAFKA_RESP_ERR_PREFERRED_LEADER_NOT_AVAILABLE:
+    case RD_KAFKA_RESP_ERR_FENCED_LEADER_EPOCH:
+    case RD_KAFKA_RESP_ERR_UNKNOWN_LEADER_EPOCH:
 
     // Broker 可用性相关
     case RD_KAFKA_RESP_ERR_BROKER_NOT_AVAILABLE:
@@ -1605,24 +1675,29 @@ bool ObKAFKATableRowIterator::is_kafka_error_retriable(rd_kafka_resp_err_t err) 
     case RD_KAFKA_RESP_ERR_REPLICA_NOT_AVAILABLE:
     case RD_KAFKA_RESP_ERR_OFFSET_NOT_AVAILABLE:
 
-    // 操作状态相关
+    // Broker 存储/集群状态（librdkafka 中为 REFRESH+RETRY 或 REFRESH）
+    case RD_KAFKA_RESP_ERR_KAFKA_STORAGE_ERROR:
+    case RD_KAFKA_RESP_ERR_REBOOTSTRAP_REQUIRED:
+
+    // 部分响应/元数据未就绪（Metadata 等会触发 RETRY）
+    case RD_KAFKA_RESP_ERR__PARTIAL:
     case RD_KAFKA_RESP_ERR__IN_PROGRESS:
     case RD_KAFKA_RESP_ERR__PREV_IN_PROGRESS:
-    case RD_KAFKA_RESP_ERR__INTR:
-    case RD_KAFKA_RESP_ERR__PARTIAL:
-
-    // 明确的重试标记
     case RD_KAFKA_RESP_ERR__RETRY:
     case RD_KAFKA_RESP_ERR__WAIT_COORD:
     case RD_KAFKA_RESP_ERR__WAIT_CACHE:
 
-    // 配额限制相关（可以重试，等待配额恢复）
-    case RD_KAFKA_RESP_ERR_THROTTLING_QUOTA_EXCEEDED:
-      return true;
-
-    default:
-      return false;
+    // 配额限制（重试等待配额恢复）
+    case RD_KAFKA_RESP_ERR_THROTTLING_QUOTA_EXCEEDED: {
+      bret = true;
+      break;
+    }
+    default: {
+      bret = false;
+      break;
+    }
   }
+  return bret;
 }
 
 } // end namespace sql

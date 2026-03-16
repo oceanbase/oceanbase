@@ -29,7 +29,8 @@ int ObRoutineLoadSchedUtil::create_routine_load_sched_job(
     const ObString &job_action,
     const int64_t create_time,
     const ObString &exec_env,
-    const ObString &repeat_interval_str)
+    const ObString &repeat_interval_str,
+    const int64_t max_run_duration)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
@@ -56,11 +57,10 @@ int ObRoutineLoadSchedUtil::create_routine_load_sched_job(
       job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
       job_info.start_date_ = create_time;
       job_info.end_date_ = 64060560000000000; // 4000-01-01
-      //设置为不间断执行（1秒间隔）
       job_info.repeat_interval_ = repeat_interval_str;
       job_info.enabled_ = true;
       job_info.auto_drop_ = false;
-      job_info.max_run_duration_ = 24 * 60 * 60; // set to 1 day
+      job_info.max_run_duration_ = max_run_duration;
       job_info.exec_env_ = exec_env;
       job_info.comments_ = ObString("used to load data from kafka periodically");
       job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::ROUTINE_LOAD_KAFKA_JOB;

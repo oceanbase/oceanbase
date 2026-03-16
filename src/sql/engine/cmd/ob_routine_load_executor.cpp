@@ -35,12 +35,6 @@ int ObCreateRoutineLoadExecutor::execute(ObExecContext &ctx, ObCreateRoutineLoad
   ObRLoadDynamicFields dynamic_fields;
   ObRoutineLoadTableOperator table_op;
   ObMySQLTransaction trans;
-  common::ObCurTraceId::TraceId trace_id;
-  if (nullptr != ObCurTraceId::get_trace_id()) {
-    trace_id = *ObCurTraceId::get_trace_id();
-  } else {
-    trace_id.init(GCONF.self_addr_);
-  }
 
   //STEP1: generate routine_load_job, and insert into __all_routine_load_job
   //NOTE: routine load job's job_id and job_name are the same as dbms sched job's
@@ -58,9 +52,8 @@ int ObCreateRoutineLoadExecutor::execute(ObExecContext &ctx, ObCreateRoutineLoad
                           ObRoutineLoadJobState::RUNNING,
                           stmt.get_job_prop_json_str(),
                           dynamic_fields  /*empty*/,
-                          //TODO: err infos
                           ObString::make_empty_string()  /*err_infos*/,
-                          trace_id, OB_SUCCESS))) {
+                          TraceId(), OB_SUCCESS))) {
     LOG_WARN("fail to init routine load job", KR(ret), K(stmt), K(job_id), K(create_time), K(dynamic_fields));
   } else if (OB_FAIL(table_op.insert_routine_load_job(routine_load_job))) {
     LOG_WARN("fail to init routine load table op", KR(ret), K(routine_load_job));
@@ -82,6 +75,7 @@ int ObCreateRoutineLoadExecutor::execute(ObExecContext &ctx, ObCreateRoutineLoad
       char sql_buf[DEFAULT_BUF_LENGTH] = {0};
       ObHexEscapeSqlStr sql_escaped(sql.string());
       int64_t sql_len = sql_escaped.to_string(sql_buf, sizeof(sql_buf));
+      int64_t max_run_duration = MAX(stmt.get_max_batch_interval_s() * 2, 24 * 60 * 60);
       ObSqlString repeat_interval;
       int64_t repeat_interval_s = stmt.get_max_batch_interval_s() / 2;
       if (repeat_interval_s < 1) {
@@ -100,8 +94,8 @@ int ObCreateRoutineLoadExecutor::execute(ObExecContext &ctx, ObCreateRoutineLoad
         LOG_WARN("fail to assign job action", KR(ret), K(job_id),
              K(par_str_pos), K(par_str_len), K(off_str_pos), K(off_str_len), K(stmt), K(sql));
       } else if (OB_FAIL(ObRoutineLoadSchedUtil::create_routine_load_sched_job(trans, tenant_id, job_id,
-          stmt.get_job_name(), job_action.string(), create_time, stmt.get_exec_env(), repeat_interval.string()))) {
-        LOG_WARN("fail to create routine load sched job", KR(ret), K(stmt), K(create_time), K(sql), K(repeat_interval));
+          stmt.get_job_name(), job_action.string(), create_time, stmt.get_exec_env(), repeat_interval.string(), max_run_duration))) {
+        LOG_WARN("fail to create routine load sched job", KR(ret), K(stmt), K(create_time), K(sql), K(repeat_interval), K(max_run_duration));
       }
     }
   }
@@ -178,15 +172,13 @@ int ObCreateRoutineLoadExecutor::build_sql_(
       if (OB_FAIL(sql.append("("))) {
         LOG_WARN("fail to append", KR(ret));
       } else {
+        const char quote_char = lib::is_oracle_mode() ? '"' : '`';
         ARRAY_FOREACH_N(field_list, i, cnt) {
           const FieldOrVarStruct &field = field_list.at(i);
           if (0 < i && OB_FAIL(sql.append(","))) {
             LOG_WARN("fail to append", KR(ret));
-          } else {
-            const char quote_char = lib::is_oracle_mode() ? '"' : '`';
-            if (OB_FAIL(sql.append_fmt("%c%.*s%c", quote_char, field.field_or_var_name_.length(), field.field_or_var_name_.ptr(), quote_char))) {
-              LOG_WARN("fail to append", KR(ret));
-            }
+          } else if (OB_FAIL(sql.append_fmt("%c%.*s%c", quote_char, field.field_or_var_name_.length(), field.field_or_var_name_.ptr(), quote_char))) {
+            LOG_WARN("fail to append", KR(ret));
           }
         }
         if (FAILEDx(sql.append(") "))) {
@@ -284,53 +276,18 @@ int ObCreateRoutineLoadExecutor::add_kafka_partitions_and_offsets_str_(
       LOG_WARN("unexpected job_prop_sql_str", KR(ret), K(stmt));
     } else if (OB_FAIL(sql.append_fmt(", %c%s%c = %c",
                    quote_char, ObKAFKAGeneralFormat::KAFKA_PARTITIONS, quote_char, quote_char))) {
-      LOG_WARN("fail to append fmt", KR(ret), K(quote_char), K(ObKAFKAGeneralFormat::KAFKA_PARTITIONS));
+      LOG_WARN("fail to append fmt", KR(ret), K(quote_char));
     } else if (FALSE_IT(par_str_pos = sql.length())) {
     } else if (OB_FAIL(sql.append_fmt("%.*s%c", new_partitions_str.length(), new_partitions_str.ptr(), quote_char))) {
-      LOG_WARN("fail to printf", KR(ret), K(new_partitions_str));
+      LOG_WARN("fail to printf", KR(ret), K(new_partitions_str), K(quote_char));
     } else if (OB_FAIL(sql.append_fmt(", %c%s%c = %c",
                    quote_char, ObKAFKAGeneralFormat::KAFKA_OFFSETS, quote_char, quote_char))) {
-      LOG_WARN("fail to append fmt", KR(ret), K(quote_char), K(ObKAFKAGeneralFormat::KAFKA_OFFSETS));
+      LOG_WARN("fail to append fmt", KR(ret), K(quote_char));
     } else if (FALSE_IT(off_str_pos = sql.length())) {
     } else if (OB_FAIL(sql.append_fmt("%.*s%c", new_offsets_str.length(), new_offsets_str.ptr(), quote_char))) {
-      LOG_WARN("fail to printf", KR(ret), K(new_offsets_str));
+      LOG_WARN("fail to printf", KR(ret), K(new_offsets_str), K(quote_char));
     }
   }
-  return ret;
-}
-
-int ObCreateRoutineLoadExecutor::check_kafka_partitions_and_offsets_(ObCreateRoutineLoadStmt &stmt)
-{
-  int ret = OB_SUCCESS;
-  // ObString kafka_offsets(stmt.get_offsets_str_len(), stmt.get_job_prop_sql_str().ptr() + stmt.get_offsets_str_pos());
-  // ObString kafka_partitions(stmt.get_partition_str_len(), stmt.get_job_prop_sql_str().ptr() + stmt.get_partition_str_pos());
-  // int64_t kafka_partition_cnt = 0;
-  // int64_t kafka_offset_cnt = 0;
-  // const char delimiter = ',';
-  // if (!kafka_offsets.empty()) {
-  //   if (OB_FAIL(ObRoutineLoadSchedUtil::parser_and_check_kafka_offsets(kafka_offsets, delimiter, kafka_offset_cnt))) {
-  //     LOG_WARN("fail to parser and check kafka offsets", KR(ret), K(kafka_offsets));
-  //   }
-  // }
-  // if (OB_FAIL(ret)) {
-  // } else if (!kafka_partitions.empty()) {
-  //   if (OB_FAIL(ObRoutineLoadSchedUtil::parser_and_check_kafka_partitions(kafka_partitions, delimiter, kafka_partition_cnt))) {
-  //     LOG_WARN("fail to parser and check kafka partitions", KR(ret), K(kafka_partitions));
-  //   } else if (OB_UNLIKELY(!kafka_offsets.empty() && kafka_offset_cnt != kafka_partition_cnt)) {
-  //     ret = OB_OP_NOT_ALLOW;
-  //     LOG_WARN("not allow a mismatch between offsets and partitions", KR(ret), K(kafka_offsets), K(kafka_partitions),
-  //                                             K(kafka_offset_cnt), K(kafka_partition_cnt));
-  //     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "a mismatch between kafka offsets and kafka partitions");
-  //   }
-  // } else {
-  //   //kafka_partitions is empty (consume all partitions)
-  //   if (OB_UNLIKELY(!kafka_offsets.empty() && 1 != kafka_offset_cnt)) {
-  //     ret = OB_OP_NOT_ALLOW;
-  //     LOG_WARN("not allow a mismatch between offsets and partitions", KR(ret), K(kafka_offsets), K(kafka_partitions),
-  //                                             K(kafka_offset_cnt), K(kafka_partition_cnt));
-  //     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "a mismatch between kafka offsets and kafka partitions");
-  //   }
-  // }
   return ret;
 }
 
@@ -388,7 +345,7 @@ int ObPauseRoutineLoadExecutor::execute(ObExecContext &ctx, ObPauseRoutineLoadSt
                   allocator,
                   job_info))) {
       LOG_WARN("fail to get dbms sched job info", KR(ret), K(tenant_id), K(job_name));
-    } else if (FAILEDx(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(
+    } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(
                         *GCTX.sql_proxy_, job_info, ObString("enabled"), obj))) {
       LOG_WARN("fail to update dbms sched job info", KR(ret), K(job_info), K(obj));
     } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::stop_dbms_sched_job(
@@ -538,7 +495,9 @@ int ObStopRoutineLoadExecutor::execute(ObExecContext &ctx, ObStopRoutineLoadStmt
       LOG_WARN("fail to remove dbms sched job", KR(ret), K(tenant_id), K(job_name));
     }
 
-    // Update routine load job status to STOPPED
+    // Update routine load job status to STOPPED.
+    // If the following operation fails, it indicates a system error. Therefore,
+    //    there is no need to rollback the above operations.
     if (FAILEDx(trans.start(GCTX.sql_proxy_, tenant_id))) {
       LOG_WARN("fail to start trans", KR(ret), K(tenant_id));
     } else if (OB_FAIL(table_op.init(tenant_id, &trans))) {

@@ -46,7 +46,6 @@ private:
                                             uint32_t &off_str_pos,
                                             uint32_t &par_str_len,
                                             uint32_t &off_str_len);
-  int check_kafka_partitions_and_offsets_(ObCreateRoutineLoadStmt &stmt);
   int add_dest_table_info_(const ObCreateRoutineLoadStmt &stmt, ObSqlString &sql);
 private:
   // disallow copy
