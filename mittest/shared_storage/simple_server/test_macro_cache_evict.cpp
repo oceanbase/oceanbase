@@ -389,7 +389,9 @@ public:
         (hot_tablet_min_size > hot_tablet_used_baseline)
             ? ((hot_tablet_min_size - hot_tablet_used_baseline) / WRITE_IO_SIZE)
             : 0;
-    const int64_t hot_tablet_num = (hot_tablet_remain_blocks > 0) ? (hot_tablet_remain_blocks - 1) : 0;
+    // Note: cannot write whole hot_tablet_remain_blocks, as background mini/minor/major compaction
+    // of inner table will occupy the space of HOT_TABLET_MACRO_BLOCK. so we only write half of it.
+    const int64_t hot_tablet_num = (hot_tablet_remain_blocks > 0) ? (hot_tablet_remain_blocks / 2) : 0;
     int64_t i = 0;
     int64_t meta_file_free_size = 0;
     int64_t macro_block_used_size = 0, macro_block_used_size_af_evict = 0;
