@@ -5152,7 +5152,7 @@ Query Plan
 |0 |PX COORDINATOR                 |        |1       |50          |
 |1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |49          |
 |2 |  └─PX PARTITION ITERATOR      |        |1       |46          |
-|3 |    └─HASH JOIN                |        |1       |46          |
+|3 |    └─MERGE JOIN               |        |1       |46          |
 |4 |      ├─MERGE RIGHT OUTER JOIN |        |1       |31          |
 |5 |      │ ├─TABLE FULL SCAN      |t1      |1       |16          |
 |6 |      │ └─TABLE FULL SCAN      |t2      |1       |16          |
@@ -5167,6 +5167,7 @@ Outputs & filters:
       partition wise, force partition granule
   3 - output([t2.a], [t3.a], [t2.b], [t3.b], [t1.a], [t1.b]), filter(nil), rowset=16
       equal_conds([t2.a = t3.a], [t2.b = t3.b]), other_conds(nil)
+      merge_directions([ASC], [ASC])
   4 - output([t2.a], [t2.b], [t1.a], [t1.b]), filter(nil), rowset=16
       equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
