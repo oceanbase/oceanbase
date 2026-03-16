@@ -211,11 +211,11 @@ int ObBloomFilterLoadTaskQueue::push_task(const storage::ObITable::TableKey &sst
         }
         // Release memory.
         if (OB_FAIL(ret)) {
-          if (nullptr == array) {
+          if (OB_NOT_NULL(array)) {
             array->~ObArray<ValuePair>();
             allocator_.free(array);
           }
-          if (nullptr == key_node) {
+          if (OB_NOT_NULL(key_node)) {
             key_node->~KeyLink();
             allocator_.free(key_node);
           }
@@ -274,7 +274,8 @@ int ObBloomFilterLoadTaskQueue::pop_task(ObBloomFilterLoadKey &load_key, ObArray
     }
   }
   // Free fetch queue's memory.
-  if (key_node != nullptr) {
+  if (OB_NOT_NULL(key_node)) {
+    (static_cast<KeyLink *>(key_node))->~KeyLink();
     allocator_.free(key_node);
   }
   return ret;
@@ -478,6 +479,7 @@ int ObMacroBlockBloomFilterLoadTG::do_multi_get(const ObBloomFilterLoadKey &key,
     int64_t duplicate_cnt = 0;
 
     SMART_VAR(ObSSTableSecMetaIterator, sec_meta_iter) {
+      int64_t empty_read_prefix_tmp = 0;
       // Fetch tablet and sstable.
       if (OB_FAIL(MTL(ObTenantMetaMemMgr *)->get_tablet(WashTabletPriority::WTP_LOW, tablet_map_key, tablet_handle))) {
         if (OB_ENTRY_NOT_EXIST != ret && OB_ITEM_NOT_SETTED != ret) {
@@ -489,11 +491,12 @@ int ObMacroBlockBloomFilterLoadTG::do_multi_get(const ObBloomFilterLoadKey &key,
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("fail to get sstable", K(ret), K(key));
         }
+      } else {
+        empty_read_prefix_tmp = tablet_handle.get_obj()->get_rowkey_read_info().get_rowkey_count()
+            - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() /* mvcc col */;
       }
 
-      const int64_t empty_read_prefix
-          = tablet_handle.get_obj()->get_rowkey_read_info().get_rowkey_count()
-            - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() /* mvcc col */;
+      const int64_t empty_read_prefix = empty_read_prefix_tmp;
       for (int64_t curr_idx = 0; OB_SUCC(ret) && curr_idx < array_count; ++curr_idx) {
         sec_meta_iter.reset();
         const ValuePair &curr_pair = array.at(curr_idx);
