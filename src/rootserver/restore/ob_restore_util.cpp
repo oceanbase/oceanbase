@@ -846,6 +846,12 @@ int ObRestoreUtil::get_restore_backup_set_array_(
       }
     }
   }
+
+  if (OB_SUCC(ret) && backup_set_list.empty()) {
+    ret = OB_BACKUP_SET_NOT_FOUND;
+    LOG_WARN("available data backup set is not found", K(ret), K(restore_scn));
+  }
+
   return ret;
 }
 
