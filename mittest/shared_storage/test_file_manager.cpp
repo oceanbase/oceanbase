@@ -25,6 +25,7 @@
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #include "storage/shared_storage/ob_ss_local_cache_service.h"
+#include "storage/shared_storage/ob_disk_space_manager.h"
 #include "storage/blocksstable/ob_ss_obj_util.h"
 
 #undef private
@@ -3863,6 +3864,60 @@ TEST_F(TestFileManager, test_dir_create_time_and_meta_write_impact)
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_meta_tablet_id_dir(
       MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id));
 }
+
+// When free_size > macro_cache_stats_[idx].used_, free_file_size() sets used_ to 0.
+// Only when is_first_calibration_done is true: accumulate free_size_exceeded_sum_[idx] and FLOG_ERROR;
+// when false (before first calibration): no error stat, but log WARN.
+TEST_F(TestFileManager, test_free_file_size_exceeded_used_by_is_first_calibration_done)
+{
+  ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, disk_space_mgr);
+
+  const ObSSMacroCacheType cache_type = ObSSMacroCacheType::TMP_FILE;
+  const uint8_t idx = static_cast<uint8_t>(cache_type);
+  const int64_t alloc_sz = 4096; // 4KB
+
+  disk_space_mgr->set_first_calibration_done(false);
+
+  ObSSMacroCacheStat stat;
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(cache_type, stat));
+  // Reset TMP_FILE used_ to 0 so this test is independent of execution order (previous tests
+  // may leave TMP_FILE used_ non-zero). Free (used_ + 1) to force the "free > used" branch
+  // and clamp used_ to 0.
+  if (stat.used_ > 0) {
+    ASSERT_EQ(OB_SUCCESS, disk_space_mgr->free_file_size(stat.used_, cache_type, ObDiskSpaceType::FILE));
+    ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(cache_type, stat));
+    ASSERT_EQ(0, stat.used_);
+  }
+  const int64_t used_before = stat.used_;
+
+  // 1. alloc so that used_ = used_before + alloc_sz
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(alloc_sz, cache_type, ObDiskSpaceType::FILE));
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(cache_type, stat));
+  const int64_t used_after_alloc = stat.used_;
+  ASSERT_EQ(used_before + alloc_sz, used_after_alloc);
+  const int64_t free_sz = 8192; // 8KB
+
+  // 2. is_first_calibration_done == false: free more than used_; used_ -> 0, no error stat
+  int64_t exceeded_before = disk_space_mgr->free_size_exceeded_sum_[idx];
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->free_file_size(free_sz, cache_type, ObDiskSpaceType::FILE));
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(cache_type, stat));
+  ASSERT_EQ(0, stat.used_);
+  ASSERT_EQ(exceeded_before, disk_space_mgr->free_size_exceeded_sum_[idx]);
+
+  // 3. alloc again, then is_first_calibration_done == true: free more than used_; used_ -> 0, error stat increased
+  disk_space_mgr->set_first_calibration_done(true);
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(alloc_sz, cache_type, ObDiskSpaceType::FILE));
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(cache_type, stat));
+  const int64_t used_before_second_free = stat.used_;
+  const int64_t free_sz2 = 16384; // 16KB
+  exceeded_before = disk_space_mgr->free_size_exceeded_sum_[idx];
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->free_file_size(free_sz2, cache_type, ObDiskSpaceType::FILE));
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(cache_type, stat));
+  ASSERT_EQ(0, stat.used_);
+  ASSERT_EQ(exceeded_before + (free_sz2 - used_before_second_free), disk_space_mgr->free_size_exceeded_sum_[idx]);
+}
+
 
 TEST_F(TestFileManager, test_delete_tenant)
 {
