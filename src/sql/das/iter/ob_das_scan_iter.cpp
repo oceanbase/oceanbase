@@ -197,7 +197,7 @@ int ObDASScanIter::set_scan_rowkey(ObEvalCtx *eval_ctx,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate enough memory", K(rowkey_cnt), K(ret));
     } else {
-      obj_ptr = new (buf) ObObj(rowkey_cnt);
+      obj_ptr = new (buf) ObObj[rowkey_cnt];
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; i++) {
