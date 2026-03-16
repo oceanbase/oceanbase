@@ -185,7 +185,7 @@ int ObBackupDataScheduler::do_reload_single_ls_task_(
   if (!job.is_valid() || !ls_task.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(job), K(ls_task));
-  } else if (!(job.plus_archivelog_ && set_task_attr.status_.is_backup_log())
+  } else if (!(job.plus_archivelog_ && set_task_attr.status_.is_backup_log_phase())
       && OB_FAIL(ObBackupDataLSTaskMgr::check_ls_is_dropped(ls_task, *sql_proxy_, is_dropped))) {
     LOG_WARN("failed to check ls is dropped", K(ret), K(ls_task));
   } else if (is_dropped) {

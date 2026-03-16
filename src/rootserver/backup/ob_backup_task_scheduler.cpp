@@ -1380,10 +1380,16 @@ int ObBackupTaskScheduler::reload_task_(int64_t &last_reload_task_ts, bool &relo
 {
   int ret = OB_SUCCESS;
   const int64_t now = ObTimeUtility::current_time();
-  const int64_t MAX_CHECK_TIME_INTERVAL = 10 * 60 * 1000 * 1000L;
+  int64_t max_check_time_interval = 10 * 60 * 1000 * 1000L; // 10min
+#ifdef ERRSIM
+  const int64_t errsim_interval = GCONF.errsim_backup_scheduler_reload_interval;
+  if (0 != errsim_interval) {
+    max_check_time_interval = errsim_interval;
+  }
+#endif
   common::ObArenaAllocator allocator;
   reload_flag = false;
-  const bool need_reload = now > MAX_CHECK_TIME_INTERVAL + last_reload_task_ts;
+  const bool need_reload = now > max_check_time_interval + last_reload_task_ts;
   ARRAY_FOREACH(backup_srv_array_, i) {
     ObBackupService *backup_service = backup_srv_array_.at(i);
     if (!backup_service->can_schedule() || need_reload) {

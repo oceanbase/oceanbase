@@ -1370,6 +1370,12 @@ ERRSIM_DEF_TIME(errsim_max_backup_meta_retry_time_interval, OB_CLUSTER_PARAMETER
         "Range: [1s, 5m]",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+ERRSIM_DEF_TIME(errsim_backup_scheduler_reload_interval, OB_CLUSTER_PARAMETER, "0s", "[0s,10m]",
+        "backup task scheduler reload interval in errsim mode. "
+        "0s means use default 10min interval. "
+        "Range: [0s, 10m]",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 ERRSIM_DEF_INT(errsim_storage_meta_macro_ids_threshold, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "the threshold value that macro block list is stored by linked way in storage meta. "
         "Range: [0,) in integer",
