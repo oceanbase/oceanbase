@@ -190,7 +190,14 @@ void TestFileManager::TearDownTestCase()
 
 void TestFileManager::get_macro_block_scatter_dir_size(int64_t &scatter_dir_size)
 {
-  // scatter dirs of private data/meta macro, shared mini/minor/major/inc_major macro, shared_tablet_sub_meta, external table file
+  // Calculate scatter directory sizes for:
+  // 1. private data/meta macro (tablet_data/00-99)
+  // 2. shared mini/minor/major/inc_major macro (each has 00-FF scatter dirs)
+  // 3. shared_tablet_sub_meta (00-FF scatter dirs)
+  // 4. external_table_file (00-FF scatter dirs)
+  // Note: Each shared macro type directory is counted separately because directory sizes
+  // may differ across filesystems (e.g., XFS vs ext4) and some types have additional
+  // subdirectories like /ls.
   scatter_dir_size = 0;
   ObIODFileStat statbuf;
   char dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
@@ -203,6 +210,8 @@ void TestFileManager::get_macro_block_scatter_dir_size(int64_t &scatter_dir_size
     ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(scatter_dir_path, statbuf));
     scatter_dir_size += statbuf.size_;
   }
+  // Separately count scatter dirs for mini, minor, major, and inc_major to handle
+  // filesystem-specific directory size differences (e.g., XFS vs ext4)
   dir_path[0] ='\0';
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_shared_macro_cache_dir(dir_path, sizeof(dir_path),
             MTL_ID(), MTL_EPOCH_ID(), ObSharedMacroType::MINI));
@@ -211,7 +220,37 @@ void TestFileManager::get_macro_block_scatter_dir_size(int64_t &scatter_dir_size
     ASSERT_EQ(OB_SUCCESS, databuff_printf(scatter_dir_path,
               sizeof(scatter_dir_path), "%s/%02lX", dir_path, i));
     ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(scatter_dir_path, statbuf));
-    scatter_dir_size += (statbuf.size_ * 4); // mini + minor + major + inc_major, thus multiply with 4
+    scatter_dir_size += statbuf.size_;
+  }
+  dir_path[0] ='\0';
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_shared_macro_cache_dir(dir_path, sizeof(dir_path),
+            MTL_ID(), MTL_EPOCH_ID(), ObSharedMacroType::MINOR));
+  for (int64_t i = 0; i < ObDirManager::SHARED_MACRO_SCATTER_DIR_NUM; ++i) {
+    scatter_dir_path[0] = '\0';
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(scatter_dir_path,
+              sizeof(scatter_dir_path), "%s/%02lX", dir_path, i));
+    ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(scatter_dir_path, statbuf));
+    scatter_dir_size += statbuf.size_;
+  }
+  dir_path[0] ='\0';
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_shared_macro_cache_dir(dir_path, sizeof(dir_path),
+            MTL_ID(), MTL_EPOCH_ID(), ObSharedMacroType::MAJOR));
+  for (int64_t i = 0; i < ObDirManager::SHARED_MACRO_SCATTER_DIR_NUM; ++i) {
+    scatter_dir_path[0] = '\0';
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(scatter_dir_path,
+              sizeof(scatter_dir_path), "%s/%02lX", dir_path, i));
+    ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(scatter_dir_path, statbuf));
+    scatter_dir_size += statbuf.size_;
+  }
+  dir_path[0] ='\0';
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_shared_macro_cache_dir(dir_path, sizeof(dir_path),
+            MTL_ID(), MTL_EPOCH_ID(), ObSharedMacroType::INC_MAJOR));
+  for (int64_t i = 0; i < ObDirManager::SHARED_MACRO_SCATTER_DIR_NUM; ++i) {
+    scatter_dir_path[0] = '\0';
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(scatter_dir_path,
+              sizeof(scatter_dir_path), "%s/%02lX", dir_path, i));
+    ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(scatter_dir_path, statbuf));
+    scatter_dir_size += statbuf.size_;
   }
   dir_path[0] ='\0';
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_shared_tablet_sub_meta_cache_dir(dir_path, sizeof(dir_path), MTL_ID(), MTL_EPOCH_ID()));
@@ -1008,6 +1047,7 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   int ret = OB_SUCCESS;
   ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
   ASSERT_NE(nullptr, tenant_file_mgr);
+  LOG_INFO("begin to test_private_macro_file_operator");
   MacroBlockId file_id;
   file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
