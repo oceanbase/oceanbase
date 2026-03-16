@@ -3979,6 +3979,9 @@ int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultCont
                                                   ObVectorQueryVidIterator *&vids_iter)
 {
   INIT_SUCC(ret);
+  ObCostGuard query_next_cost_guard(this, "query_next_result",
+      OB_NOT_NULL(query_cond) ? query_cond->ef_search_ : 0,
+      OB_NOT_NULL(query_cond) ? query_cond->query_limit_ : 0, ObCostGuard::KNN_THRESHOLD_200MS);
   vids_iter = nullptr;
   int64_t dim = 0;
   int64_t *merge_vids = nullptr;
@@ -4232,7 +4235,8 @@ int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *q
   ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(query_cond->row_iter_);
   ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
   ObArenaAllocator allocator;
-  ObCostGuard cost_guard; // for timeout log
+  ObCostGuard cost_guard(this, "deserialize_snap_data", 0, 0,
+                         ObCostGuard::KNN_SEARCH_SLOW_THRESHOLD_US); // for timeout log
   if (OB_ISNULL(table_scan_iter) || OB_ISNULL(query_cond)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null pointer.", K(ret), K(table_scan_iter), K(query_cond));

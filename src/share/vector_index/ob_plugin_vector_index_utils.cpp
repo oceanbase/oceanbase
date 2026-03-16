@@ -892,6 +892,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
                                                         ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  ObCostGuard sync_snapshot_cost_guard(adapter, "try_sync_snapshot_memdata", 0, 0, ObCostGuard::KNN_THRESHOLD_500MS);
   schema::ObIndexType index_type = INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL;
   ObAccessService *tsc_service = MTL(ObAccessService *);
   ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);

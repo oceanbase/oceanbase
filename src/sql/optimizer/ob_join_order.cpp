@@ -23373,6 +23373,8 @@ int ObJoinOrder::get_valid_vec_hint_index_list(const uint64_t table_id, const ui
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObSelectStmt *select_stmt = NULL;
   bool has_aggr = false; // defend aggr for ann search
+  bool has_vec_hint = false;
+  bool vec_hint_applied = false;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard()) ||
@@ -23397,9 +23399,11 @@ int ObJoinOrder::get_valid_vec_hint_index_list(const uint64_t table_id, const ui
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr to index hint table schema", K(ret), K(tid));
       } else if (index_hint_table_schema->is_vec_index()) {
+        has_vec_hint = true;
         const ObIndexHint* hint = hint_index_hints.at(i);
         if (OB_NOT_NULL(hint)) {
           helper.vec_index_id_ = tid;
+          vec_hint_applied = true;
           int filter_type = hint->get_filter_type();
           if (stmt->has_es_match()) {
             helper.vec_index_type_ = ObVecIndexType::VEC_INDEX_PRE;
@@ -23428,6 +23432,12 @@ int ObJoinOrder::get_valid_vec_hint_index_list(const uint64_t table_id, const ui
         }
       }
     } // end for loop.
+    if (OB_SUCC(ret) && has_vec_hint && !vec_hint_applied) {
+      FLOG_INFO("[VEC_INDEX][HINT_NOT_APPLIED] vec index hint exists but no valid vec index is applied",
+                K(table_id), K(ref_table_id), K(hint_index_ids),
+                K(helper.is_index_merge_), "match_expr_count", helper.match_expr_infos_.count(),
+                K(helper.vec_index_id_), K(helper.vec_index_type_), K(has_aggr));
+    }
   }
   return ret;
 }
@@ -23444,6 +23454,8 @@ int ObJoinOrder::get_valid_hint_index_list(const ObDMLStmt &stmt,
 {
   int ret = OB_SUCCESS;
   const bool has_match_expr_on_table = helper.match_expr_infos_.count() > 0;
+  bool has_vec_hint = false;
+  bool vec_hint_applied = false;
   if (OB_ISNULL(schema_guard)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(schema_guard));
@@ -23462,10 +23474,12 @@ int ObJoinOrder::get_valid_hint_index_list(const ObDMLStmt &stmt,
     } else if (stmt.has_vec_approx() && invalid_index_for_vec_pre_filter(index_hint_table_schema)) {
       // skip
     } else if (index_hint_table_schema->is_vec_index()) {
+      has_vec_hint = true;
       if (helper.vec_index_id_ != OB_INVALID_ID) {
       } else if (helper.is_index_merge_ || !helper.match_expr_infos_.empty()) {
       } else {
         helper.vec_index_id_ = tid;
+        vec_hint_applied = true;
         ObVecIndexType vec_with_filter_index_type = ObVecIndexType::VEC_INDEX_INVALID;
         uint64_t tenant_cluster_version = GET_MIN_CLUSTER_VERSION();
         if (((tenant_cluster_version >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
@@ -23508,6 +23522,12 @@ int ObJoinOrder::get_valid_hint_index_list(const ObDMLStmt &stmt,
     } else if (OB_FAIL(valid_hint_index_ids.push_back(tid))) {
       LOG_WARN("failed to append valid hint index list", K(ret), K(tid));
     }
+  }
+  if (OB_SUCC(ret) && has_vec_hint && !vec_hint_applied) {
+    FLOG_INFO("[VEC_INDEX][HINT_NOT_APPLIED] vec index hint exists but no valid vec index is applied",
+              K(table_id), K(ref_table_id), K(hint_index_ids),
+              K(helper.is_index_merge_), "match_expr_count", helper.match_expr_infos_.count(),
+              K(helper.vec_index_id_), K(helper.vec_index_type_), K(has_aggr));
   }
   return ret;
 }

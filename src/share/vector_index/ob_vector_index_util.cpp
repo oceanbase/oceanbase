@@ -1915,10 +1915,8 @@ int ObVectorIndexUtil::check_has_multi_valid_vector_index(const ObTableSchema &d
       } else if (OB_ISNULL(index_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
-      } else if (!index_table_schema->is_vec_index()) {
-        // skip none vector index
-      } else if (index_table_schema->is_built_in_vec_index()) {
-        // skip built in vector index table
+      } else if (!index_table_schema->is_hybrid_vec_index_log_type()) {
+        // only hybrid vector domain(log) index participates in ambiguity interception
       } else if (OB_FAIL(check_vector_index_column_id_match(data_table_schema, *index_table_schema, col_id, is_match))) {
         LOG_WARN("failed to check vector index column id match", K(ret));
       } else if (is_match) {
