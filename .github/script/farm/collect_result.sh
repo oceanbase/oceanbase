@@ -2,8 +2,8 @@
 # Collect workflow result from fail_cases.output.
 set -e
 
-OUT_PATH="${1:-$GITHUB_WORKSPACE/seekdb_result.json}"
-TASK_DIR="${SEEKDB_TASK_DIR:?}"
+OUT_PATH="${1:-$GITHUB_WORKSPACE/farm_result.json}"
+TASK_DIR="${FARM_TASK_DIR:-${SEEKDB_TASK_DIR:?}}"
 
 FAIL_FILE="$TASK_DIR/fail_cases.output"
 failed_cases=()

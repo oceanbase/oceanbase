@@ -2,13 +2,19 @@
 
 set -x
 
-export HOME=$_CONDOR_JOB_IWD
-export PATH=/bin:/usr/bin
+export HOME="${_CONDOR_JOB_IWD:-${HOME:-${GITHUB_WORKSPACE}/farm_home_${SLICE_IDX:-0}}}"
+mkdir -p "$HOME"
+if [[ -n "${GITHUB_WORKSPACE:-}" ]]; then
+    ln -sfn "$GITHUB_WORKSPACE" "$HOME/oceanbase"
+    [[ -x "$GITHUB_WORKSPACE/observer" && ! -e "$HOME/observer" ]] && ln -sfn "$GITHUB_WORKSPACE/observer" "$HOME/observer"
+    [[ -x "$GITHUB_WORKSPACE/obproxy" && ! -e "$HOME/obproxy" ]] && ln -sfn "$GITHUB_WORKSPACE/obproxy" "$HOME/obproxy"
+fi
+export PATH="${PATH:-/bin:/usr/bin}:/usr/local/bin"
 export USER=$(whoami)
 
 HOST=`hostname -i`
-DOWNLOAD_DIR=$HOME/downloads
-SLOT_ID=`echo $_CONDOR_SLOT | cut -c5-`
+DOWNLOAD_DIR="${DOWNLOAD_DIR:-$HOME/downloads}"
+SLOT_ID="${SLOT_ID:-`echo ${_CONDOR_SLOT:-slot${SLICE_IDX:-0}} | cut -c5-`}"
 
 function prepare_config {
     if [[ "$MINI" == "1" ]] || ([[ "$MINI" == "-1" ]] && [[ -f $HOME/oceanbase/tools/deploy/enable_mini_mode ]])

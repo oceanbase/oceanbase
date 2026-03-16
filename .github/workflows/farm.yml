@@ -206,7 +206,7 @@ jobs:
       - name: Download all slice results
         uses: actions/download-artifact@v4
         with:
-          pattern: seekdb-result-slice-*
+          pattern: farm-result-slice-*
           path: slice_results
           merge-multiple: true
 
@@ -222,16 +222,16 @@ jobs:
             while IFS= read -r c; do
               [[ -n "$c" ]] && FAILED="${FAILED}${FAILED:+,}\"${c//\"/\\\"}\""
             done < <(grep -oP '"failed_cases":\[\K[^\]]*' "$f" 2>/dev/null | tr ',' '\n' | sed 's/^"\|"$//g')
-          done < <(find slice_results -name 'seekdb_result.json' 2>/dev/null)
-          echo "{\"success\":$SUCCESS,\"run_id\":\"$RUN_ID\",\"failed_cases\":[${FAILED:-}]}" > seekdb_result.json
-          echo "=== SeekDB native result ==="
-          cat seekdb_result.json
+          done < <(find slice_results -name 'farm_result.json' 2>/dev/null)
+          echo "{\"success\":$SUCCESS,\"run_id\":\"$RUN_ID\",\"failed_cases\":[${FAILED:-}]}" > farm_result.json
+          echo "=== Farm result ==="
+          cat farm_result.json
 
-      - name: Upload SeekDB result as artifact
+      - name: Upload farm result as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: seekdb-result-native
-          path: seekdb_result.json
+          name: farm-result-native
+          path: farm_result.json
           retention-days: 30
 
       - name: Job summary (where to find logs)
