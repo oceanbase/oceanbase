@@ -14767,8 +14767,10 @@ int ObJoinOrder::check_path_contain_filter(const ObLogicalOperator* op, bool &co
   } else if (0 != op->get_filter_exprs().count()) {
     contain = true;
   } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
-    const ObLogTableScan *table_scan = static_cast<const ObLogTableScan*>(op);
-    contain = 0 != table_scan->get_range_conditions().count();
+    ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(const_cast<ObLogicalOperator*>(op));
+    if (OB_FAIL(table_scan->has_pushdown_filters(contain))) {
+      LOG_WARN("failed to check table has pushdown filters", K(ret));
+    }
   } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type()) {
     if (OB_FAIL(SMART_CALL(check_path_contain_filter(op->get_child(0), contain)))) {
       LOG_WARN("failed to check path contain filter", K(ret));
