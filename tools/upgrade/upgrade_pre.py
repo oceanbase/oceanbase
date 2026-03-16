@@ -1712,7 +1712,7 @@
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_checker.log'
-#  old_version = '4.2.5.1'
+#  old_version = '4.3.0.0'
 #
 #class PasswordMaskingFormatter(logging.Formatter):
 #  def format(self, record):
@@ -2792,6 +2792,43 @@
 #  else:
 #    logging.info("check upgrade for cos:// prefix in archive, backup and restore task failed")
 #
+## 检查是否存在列存表上创建的向量索引, 如果存在则不允许升级到新版本
+#def check_vector_index_exist_on_column_table(query_cur):
+#  sql = """select distinct value from GV$OB_PARAMETERS where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#    if min_cluster_version < get_version("4.3.3.0"):
+#      logging.info("Cluster version < 4.3.3.0, skip vector index check")
+#    else:
+#      sql = """
+#        SELECT t.tenant_id, t.table_id, t.table_name, t.database_id
+#        FROM oceanbase.__all_virtual_table t
+#        INNER JOIN (
+#            SELECT tenant_id, table_id
+#            FROM oceanbase.__all_virtual_column_group
+#            GROUP BY tenant_id, table_id
+#            HAVING COUNT(*) > 1
+#        ) cg ON t.tenant_id = cg.tenant_id AND t.table_id = cg.table_id
+#        INNER JOIN (
+#            SELECT DISTINCT tenant_id, data_table_id
+#            FROM oceanbase.__all_virtual_table
+#            WHERE index_type >= 25 AND index_type <= 44 AND index_type != 41
+#        ) vi ON t.tenant_id = vi.tenant_id AND t.table_id = vi.data_table_id
+#        WHERE t.table_type = 3
+#          AND t.data_table_id = 0
+#          AND t.column_store = 1
+#      """
+#      (desc, results) = query_cur.exec_query(sql, print_when_succ=False)
+#      if len(results) > 0:
+#        fail_list.append("exist vector index on column table in the cluster, upgrade to current version is not supported")
+#        logging.info("check vector index exist failed, found vector index on column table")
+#      else:
+#        logging.info("check vector index exist success")
 #
 ## 开始升级前的检查
 #def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_arch):
@@ -2838,6 +2875,7 @@
 #      check_direct_load_job_exist(cur, query_cur)
 #      check_enable_logonly_replica(cur, query_cur)
 #      check_enable_record_trace_id(cur, query_cur)
+#      check_vector_index_exist_on_column_table(query_cur)
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)
 #    except Exception as e:
