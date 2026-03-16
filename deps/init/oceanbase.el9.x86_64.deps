@@ -63,6 +63,3 @@ obshell-4.3.2.0-52025092411.el8.x86_64.rpm target=community
 #obshell-4.3.2.1-12025101110.el8.x86_64.rpm target=community
 
 [test-utils]
-ob-deploy-1.6.0-41.el8.x86_64.rpm target=community
-obclient-2.2.2-1.el8.x86_64.rpm target=community
-libobclient-2.2.2-3.el8.x86_64.rpm target=community
