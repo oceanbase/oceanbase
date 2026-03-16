@@ -45,8 +45,14 @@ int ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(
     } else if (!is_create_index_on_empty_table_opt) {
     } else if (OB_FAIL(ddl_service.lock_table(trans, table_schema))) {
       if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret || OB_EAGAIN == ret) {
-        ret = OB_SUCCESS;
-        is_create_index_on_empty_table_opt = false;
+        if (table_schema.is_oracle_tmp_table_v2()) {
+          // For oracle temporary table v2, lock conflict should fail fast.
+          // Falling back to long path is not expected for this table type.
+          ret = OB_EAGAIN;
+        } else {
+          ret = OB_SUCCESS;
+          is_create_index_on_empty_table_opt = false;
+        }
       } else {
         LOG_WARN("failed to lock table", KR(ret), K(table_schema));
       }
