@@ -19,11 +19,61 @@
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/tmp_file/ob_tmp_file_cache.h"
 #include "share/io/ob_io_manager.h"
+#include "share/config/ob_server_config.h"
 
 namespace oceanbase
 {
 namespace tmp_file
 {
+
+void ObTmpFileFlushWaitTimerTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(write_cache_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("write_cache_ is null", KR(ret));
+  } else if (OB_FAIL(write_cache_->exec_wait_())) {
+    LOG_WARN("fail to exec wait", KR(ret));
+  }
+}
+
+void ObTmpFileFlushBatchTimerTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(write_cache_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("write_cache_ is null", KR(ret));
+  } else if (OB_FAIL(write_cache_->dispatch_flush_tasks_batch_(*this))) {
+    LOG_WARN("fail to dispatch flush tasks batch", KR(ret));
+  }
+}
+
+int ObTmpFileFlushWaitTimerTask::init(ObTmpFileWriteCache *write_cache)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(write_cache)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("write cache is null", KR(ret), KP(write_cache));
+  } else {
+    write_cache_ = write_cache;
+  }
+  return ret;
+}
+
+int ObTmpFileFlushBatchTimerTask::init(ObTmpFileWriteCache *write_cache, const int64_t task_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(write_cache) || task_idx < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid init argument", KR(ret), KP(write_cache), K(task_idx));
+  } else {
+    write_cache_ = write_cache;
+    task_idx_ = task_idx;
+    print_ts_ = common::ObClockGenerator::getClock();
+    scheduled_ = 0;
+  }
+  return ret;
+}
 
 ObTmpFileWriteCache::ObTmpFileWriteCache()
   : tmp_file_block_manager_(nullptr),
@@ -32,14 +82,15 @@ ObTmpFileWriteCache::ObTmpFileWriteCache()
     tg_id_(-1),
     flush_ret_(OB_SUCCESS),
     used_page_cnt_(0),
+    incomplete_data_page_cnt_(0),
+    meta_page_cnt_(0),
     memory_limit_(0),
     tenant_config_access_ts_(0),
     default_memory_limit_(0),
     disk_usage_limit_(0),
-    cur_timer_idx_(0),
     flush_tg_id_(),
-    swap_queue_size_(0),
-    io_waiting_queue_size_(0),
+    flush_batch_tasks_(),
+    pending_flush_queue_(),
     swap_queue_(),
     io_waiting_queue_(),
     free_page_list_(),
@@ -51,13 +102,13 @@ ObTmpFileWriteCache::ObTmpFileWriteCache()
     pages_(),
     page_map_(),
     page_allocator_(),
-    block_allocator_(),
     flush_allocator_(),
-    swap_allocator_()
+    flush_failed_blocks_()
 {
   for (int32_t i = 0; i < MAX_FLUSH_TIMER_NUM; ++i) {
     flush_tg_id_[i] = -1;
   }
+  flush_wait_tg_id_ = -1;
 }
 
 ObTmpFileWriteCache::~ObTmpFileWriteCache()
@@ -72,21 +123,13 @@ int ObTmpFileWriteCache::init(ObTmpFileBlockManager *tmp_file_block_manager)
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTmpFileWriteCache init twice", KR(ret));
   } else if (OB_FAIL(page_allocator_.init(
-                     lib::ObMallocAllocator::get_instance(), OB_MALLOC_NORMAL_BLOCK_SIZE,
+                     lib::ObMallocAllocator::get_instance(), OB_MALLOC_BIG_BLOCK_SIZE,
                      ObMemAttr(MTL_ID(), "TmpFilePage", ObCtxIds::DEFAULT_CTX_ID)))) {
     LOG_WARN("fail to init page allocator", KR(ret));
-  } else if (OB_FAIL(block_allocator_.init(
-                     lib::ObMallocAllocator::get_instance(), OB_MALLOC_BIG_BLOCK_SIZE,
-                     ObMemAttr(MTL_ID(), "TmpFileCacheBlk", ObCtxIds::DEFAULT_CTX_ID)))) {
-    LOG_WARN("fail to init block allocator", KR(ret));
   } else if (OB_FAIL(flush_allocator_.init(
-                     lib::ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                     lib::ObMallocAllocator::get_instance(), OB_MALLOC_BIG_BLOCK_SIZE,
                      ObMemAttr(MTL_ID(), "TmpFileFLTask", ObCtxIds::DEFAULT_CTX_ID)))) {
     LOG_WARN("fail to init flush task allocator", KR(ret));
-  } else if (OB_FAIL(swap_allocator_.init(
-                     lib::ObMallocAllocator::get_instance(), OB_MALLOC_NORMAL_BLOCK_SIZE,
-                     ObMemAttr(MTL_ID(), "TmpFileSwapJ", ObCtxIds::DEFAULT_CTX_ID)))) {
-    LOG_WARN("fail to init swap job allocator", KR(ret));
   } else if (OB_FAIL(bucket_lock_.init(BUCKET_CNT, ObLatchIds::TMP_FILE_WRITE_CACHE_BUCKET_LOCK))) {
     LOG_WARN("fail to init bucket lock", KR(ret));
   } else if (OB_FAIL(pages_.init())) {
@@ -101,19 +144,32 @@ int ObTmpFileWriteCache::init(ObTmpFileBlockManager *tmp_file_block_manager)
     LOG_WARN("fail to init cond", KR(ret));
   } else if (OB_FAIL(page_map_.init("TmpFileBlkMap", MTL_ID()))) {
     LOG_WARN("fail to init page map", KR(ret));
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TmpFileFlushWait, flush_wait_tg_id_))) {
+    LOG_WARN("fail to create flush wait timer thread", KR(ret));
   } else {
+    for (int32_t i = 0; OB_SUCC(ret) && i < MAX_FLUSH_TIMER_NUM; ++i) {
+      if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TmpFileFlush, flush_tg_id_[i]))) {
+        LOG_WARN("fail to create flush timer thread", KR(ret), K(i));
+      } else if (OB_FAIL(flush_batch_tasks_[i].init(this, i))) {
+        LOG_WARN("failed to init flush batch task", KR(ret), K(i));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(flush_wait_task_.init(this))) {
+    LOG_WARN("failed to init flush wait task", KR(ret));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(swap_queue_.init())) {
+    LOG_WARN("fail to init swap queue", KR(ret));
+  } else if (OB_SUCC(ret) && OB_FAIL(pending_flush_queue_.init())) {
+    LOG_WARN("fail to init pending flush queue", KR(ret));
+  } else if (OB_SUCC(ret) && OB_FAIL(io_waiting_queue_.init())) {
+    LOG_WARN("fail to init io waiting queue", KR(ret));
+  }
+  if (OB_SUCC(ret)) {
     tmp_file_block_manager_ = tmp_file_block_manager;
     is_flush_all_ = false;
     memory_limit_ = 0;
     tenant_config_access_ts_ = 0;
-    cur_timer_idx_ = 0;
-    for (int32_t i = 0; OB_SUCC(ret) && i < MAX_FLUSH_TIMER_NUM; ++i) {
-      if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TmpFileFlush, flush_tg_id_[i]))) {
-        LOG_WARN("fail to create flush timer thread", KR(ret));
-      }
-    }
-    swap_queue_size_ = 0;
-    io_waiting_queue_size_ = 0;
     shrink_ctx_.reset();
     is_inited_ = true;
   }
@@ -128,6 +184,8 @@ int ObTmpFileWriteCache::start()
     LOG_WARN("ObTmpFileWriteCache is not inited", KR(ret));
   } else if (OB_FAIL(TG_START(tg_id_))) {
     LOG_WARN("fail to start swap thread", KR(ret));
+  } else if (OB_FAIL(TG_START(flush_wait_tg_id_))) {
+    LOG_WARN("fail to start flush wait timer thread", KR(ret));
   } else {
     for (int32_t i = 0; OB_SUCC(ret) && i < MAX_FLUSH_TIMER_NUM; ++i) {
       if (OB_FAIL(TG_START(flush_tg_id_[i]))) {
@@ -146,6 +204,7 @@ void ObTmpFileWriteCache::stop()
     LOG_WARN("ObTmpFileWriteCache is not inited", KR(ret));
   } else {
     TG_STOP(tg_id_);
+    TG_STOP(flush_wait_tg_id_);
     for (int32_t i = 0; OB_SUCC(ret) && i < MAX_FLUSH_TIMER_NUM; ++i) {
       TG_STOP(flush_tg_id_[i]);
     }
@@ -163,6 +222,7 @@ void ObTmpFileWriteCache::wait()
     for (int32_t i = 0; OB_SUCC(ret) && i < MAX_FLUSH_TIMER_NUM; ++i) {
       TG_WAIT(flush_tg_id_[i]);
     }
+    TG_WAIT(flush_wait_tg_id_);
   }
 }
 
@@ -183,21 +243,25 @@ void ObTmpFileWriteCache::destroy()
       TG_DESTROY(tg_id_);
       tg_id_ = -1;
     }
+    if (-1 != flush_wait_tg_id_) {
+      TG_DESTROY(flush_wait_tg_id_);
+      flush_wait_tg_id_ = -1;
+    }
     for (int32_t i = 0; i < MAX_FLUSH_TIMER_NUM; ++i) {
       if (-1 != flush_tg_id_[i]) {
         TG_DESTROY(flush_tg_id_[i]);
         flush_tg_id_[i] = -1;
       }
     }
-    swap_queue_size_ = 0;
-    io_waiting_queue_size_ = 0;
+    swap_queue_.reset();
+    io_waiting_queue_.reset();
+    pending_flush_queue_.reset();
 
+    flush_failed_blocks_.reset();
     pages_.destroy();
     page_map_.reset();
-    block_allocator_.reset();
     flush_allocator_.reset();
-    swap_allocator_.reset();
-
+    page_allocator_.reset();
     is_inited_ = false;
     LOG_INFO("write cache destroy complete");
   }
@@ -208,17 +272,14 @@ void ObTmpFileWriteCache::run1()
   int ret = OB_SUCCESS;
   lib::set_thread_name("TFSwap");
   while (!has_set_stop()) {
-
     if (OB_FAIL(try_shrink_())) {
       LOG_WARN("try_shrink failed", KR(ret));
       ret = OB_SUCCESS;
     }
-
     if (OB_FAIL(swap_())) {
       LOG_WARN("swap failed", KR(ret));
       ret = OB_SUCCESS;
     }
-
     if (OB_FAIL(flush_())) {
       LOG_WARN("flush failed", KR(ret));
       ret = OB_SUCCESS;
@@ -227,7 +288,6 @@ void ObTmpFileWriteCache::run1()
     if (TC_REACH_TIME_INTERVAL(REFRESH_CONFIG_INTERVAL)) {
       refresh_disk_usage_limit_();
       tmp_file_block_manager_->print_block_usage();
-      // tmp_file_block_manager_->print_blocks();
       metrics_.print();
       print_();
     }
@@ -248,10 +308,14 @@ int ObTmpFileWriteCache::swap_()
 {
   int ret = OB_SUCCESS;
   int32_t free_page_cnt = free_page_list_.size();
-  LOG_DEBUG("doing swap", K(free_page_cnt), K(swap_queue_size_), K(io_waiting_queue_size_), K(ATOMIC_LOAD(&used_page_cnt_)));
+  LOG_DEBUG("doing swap", K(free_page_cnt),
+            "swap_queue_size", swap_queue_.size(),
+            "io_waiting_queue_size", io_waiting_queue_.size(),
+            K(ATOMIC_LOAD(&used_page_cnt_)));
   while (OB_SUCC(ret) && free_page_cnt > 0 && !swap_queue_.is_empty()) {
     ObTmpFileSwapJob *swap_job = nullptr;
-    if (OB_FAIL(pop_swap_job_(swap_job))) {
+    if (OB_FAIL(swap_queue_.pop(swap_job))) {
+      LOG_WARN("fail to pop swap job", KR(ret));
     } else {
       metrics_.record_swap_job(ObTimeUtility::current_time() - swap_job->get_create_ts());
       int32_t expect_swap_cnt = swap_job->get_expect_swap_cnt();
@@ -261,16 +325,17 @@ int ObTmpFileWriteCache::swap_()
   }
 
   // wake up timeout jobs
-  int32_t swap_queue_size = ATOMIC_LOAD(&swap_queue_size_);
+  int32_t swap_queue_size = swap_queue_.size();
   while (OB_SUCC(ret) && swap_queue_size > 0) {
     ObTmpFileSwapJob *swap_job = nullptr;
-    if (OB_FAIL(pop_swap_job_(swap_job))) {
+    if (OB_FAIL(swap_queue_.pop(swap_job))) {
+      LOG_WARN("fail to pop swap job", KR(ret));
     } else if (swap_job->get_abs_timeout_ts() <= ObTimeUtility::current_time()) {
       metrics_.record_swap_job(ObTimeUtility::current_time() - swap_job->get_create_ts());
       if (OB_FAIL(swap_job->signal_swap_complete(OB_TIMEOUT))) {
         LOG_WARN("fail to signal swap complete", KR(ret), KPC(swap_job));
       }
-    } else if (OB_FAIL(add_swap_job_(swap_job))) {
+    } else if (OB_FAIL(swap_queue_.push(swap_job))) {
       LOG_WARN("fail to add swap job", KR(ret));
     }
     swap_queue_size -= 1;
@@ -282,7 +347,8 @@ int ObTmpFileWriteCache::swap_()
       OB_TMP_FILE_EXCEED_DISK_QUOTA == ret_code) {
     while (OB_SUCC(ret) && OB_SUCCESS != ret_code && !swap_queue_.is_empty()) {
       ObTmpFileSwapJob *swap_job = nullptr;
-      if (OB_FAIL(pop_swap_job_(swap_job))) {
+      if (OB_FAIL(swap_queue_.pop(swap_job))) {
+        LOG_WARN("fail to pop swap job", KR(ret));
       } else {
         metrics_.record_swap_job(ObTimeUtility::current_time() - swap_job->get_create_ts());
         swap_job->signal_swap_complete(ret_code);
@@ -300,29 +366,21 @@ int ObTmpFileWriteCache::flush_()
     ret = OB_NOT_RUNNING;
     LOG_WARN("ObTmpFileFlushTG does not work before server slog replay finished", KR(ret));
   } else {
-    if (!io_waiting_queue_.is_empty()) {
-      (void) exec_wait_();
-    }
-
+    int64_t flush_task_cnt = 0;
     int64_t expect_flush_cnt = cal_flush_page_cnt_();
     ObTmpFileBlockFlushIterator block_iterator;
     ObTmpFileBlockFlushPriorityManager &flush_prio_mgr = tmp_file_block_manager_->get_flush_priority_mgr();
-    ObArray<ObTmpFileFlushTask *> tasks;
-    ObArray<ObTmpFileBlockHandle> failed_blocks;
+    flush_failed_blocks_.reuse();
     if (expect_flush_cnt == 0) {
       LOG_DEBUG("no need to flush", K(expect_flush_cnt), K(ATOMIC_LOAD(&used_page_cnt_)));
     } else if (OB_FAIL(check_tmp_file_disk_usage_limit_(metrics_.get_flushing_data_size()))) {
       set_flush_ret_code_(ret);
-    } else if (OB_FAIL(tasks.reserve(MAX_FLUSH_TASK_NUM_PER_BATCH))) {
-      LOG_WARN("fail to prepare allocate flush tasks", KR(ret));
-    } else if (OB_FAIL(failed_blocks.reserve(MAX_ITER_BLOCK_NUM_PER_BATCH))) {
+    } else if (OB_FAIL(flush_failed_blocks_.reserve(MAX_ITER_BLOCK_NUM_PER_BATCH))) {
       LOG_WARN("fail to prepare allocate failed_blocks", KR(ret));
     } else if (OB_FAIL(block_iterator.init(&flush_prio_mgr))) {
       LOG_WARN("fail to init block iterator", KR(ret));
-    } else if (OB_FAIL(build_task_(expect_flush_cnt, block_iterator, tasks, failed_blocks))) {
+    } else if (OB_FAIL(build_task_(expect_flush_cnt, block_iterator, flush_task_cnt, flush_failed_blocks_))) {
       LOG_WARN("fail to build flush task", KR(ret));
-    } else if (OB_FAIL(exec_wait_())) {
-      LOG_WARN("fail to exec wait", KR(ret));
     }
   }
   return ret;
@@ -399,7 +457,7 @@ int ObTmpFileWriteCache::release_blocks_reverse_(const int64_t begin, const int6
             KR(ret), K(i), K(pages_[i]), K(pages_.size()));
       } else {
         LOG_DEBUG("free block at ", K(i), K(pages_.size()));
-        block_allocator_.free(pages_[i].get_buffer());
+        ob_free(pages_[i].get_buffer());
         for (int64_t j = 0; j < BLOCK_PAGE_NUMS; ++j) {
           int32_t last = pages_.size() - 1;
           page_allocator_.free(pages_.get_ptr(last));
@@ -429,9 +487,11 @@ int ObTmpFileWriteCache::expand_()
 
     int64_t old_size = pages_.size();
     char *buffer = nullptr;
+    ObMemAttr attr = SET_IGNORE_MEM_VERSION(
+        ObMemAttr(MTL_ID(), "TmpFileCacheBlk", ObCtxIds::DEFAULT_CTX_ID));
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_ISNULL(buffer = static_cast<char *>(block_allocator_.alloc(WBP_BLOCK_SIZE)))) {
+    } else if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(WBP_BLOCK_SIZE, attr)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate buffer", KR(ret), K(current_capacity), K(memory_limit));
     } else {
@@ -455,7 +515,7 @@ int ObTmpFileWriteCache::expand_()
         free_page_list_.push_range(tmp_list);
       } else {
         if (OB_NOT_NULL(buffer)) {
-          block_allocator_.free(buffer);
+          ob_free(buffer);
         }
         for (int32_t i = pages_.size() - 1; i > old_size; --i) {
           page_allocator_.free(pages_.get_ptr(i));
@@ -542,6 +602,9 @@ int ObTmpFileWriteCache::alloc_page(
           page_handle.init(&curr);
           update_current_max_used_percent_();
           ATOMIC_INC(&used_page_cnt_);
+          if (PageType::META == page_key.type_) {
+            ATOMIC_INC(&meta_page_cnt_);
+          }
           break;
         }
       }
@@ -565,17 +628,19 @@ int ObTmpFileWriteCache::swap_page_(const int64_t timeout_ms)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
+  ObMemAttr attr = SET_IGNORE_MEM_VERSION(
+      ObMemAttr(MTL_ID(), "TmpFileSwapJob", ObCtxIds::DEFAULT_CTX_ID));
   ObTmpFileSwapJob *swap_job = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("write cache not init", KR(ret));
-  } else if (OB_ISNULL(buf = swap_allocator_.alloc(sizeof(ObTmpFileSwapJob)))) {
+  } else if (OB_ISNULL(buf = ob_malloc(sizeof(ObTmpFileSwapJob), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for swap job", KR(ret));
   } else if (FALSE_IT(swap_job = new (buf) ObTmpFileSwapJob())) {
   } else if (OB_FAIL(swap_job->init(SWAP_PAGE_NUM_PER_BATCH, timeout_ms))) {
     LOG_WARN("fail to init swap job", KR(ret));
-  } else if (OB_FAIL(add_swap_job_(swap_job))) {
+  } else if (OB_FAIL(swap_queue_.push(swap_job))) {
     LOG_WARN("fail to add swap job", KR(ret));
   } else {
     LOG_DEBUG("swapping page", K(pages_.size()), K(used_page_cnt_));
@@ -592,7 +657,8 @@ int ObTmpFileWriteCache::swap_page_(const int64_t timeout_ms)
       ret = OB_TIMEOUT == swap_job->get_ret_code() ? OB_IO_ERROR : swap_job->get_ret_code();
       LOG_WARN("swap job complete with error", KR(ret), KPC(swap_job));
     }
-    swap_allocator_.free(swap_job);
+    swap_job->~ObTmpFileSwapJob();
+    ob_free(swap_job);
   }
   return ret;
 }
@@ -645,6 +711,8 @@ int ObTmpFileWriteCache::free_page(const ObTmpFileWriteCacheKey& page_key)
     } else {
       ret = OB_SUCCESS;
     }
+  } else if (PageType::META == page_key.type_) {
+    ATOMIC_DEC(&meta_page_cnt_);
   }
   // we only decrease the reference count of the page.
   // the actual release and return of the page are deferred until the reference count drops to zero
@@ -762,35 +830,6 @@ int ObTmpFileWriteCache::add_free_page_(ObTmpFilePage *page)
   return ret;
 }
 
-int ObTmpFileWriteCache::add_swap_job_(ObTmpFileSwapJob *swap_job)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("write cache is not init", KR(ret), KPC(swap_job));
-  } else if (OB_FAIL(swap_queue_.push(swap_job))) {
-    LOG_WARN("fail to push swap job", KR(ret), KPC(swap_job));
-  } else {
-    ATOMIC_INC(&swap_queue_size_);
-  }
-  return ret;
-}
-
-int ObTmpFileWriteCache::pop_swap_job_(ObTmpFileSwapJob *&swap_job)
-{
-  int ret = OB_SUCCESS;
-  swap_job = nullptr;
-  ObSpLinkQueue::Link *link = nullptr;
-  if (IS_NOT_INIT) {
-  } else if (OB_FAIL(swap_queue_.pop(link))) {
-  } else if (OB_ISNULL(link)) {
-  } else {
-    ATOMIC_DEC(&swap_queue_size_);
-    swap_job = static_cast<ObTmpFileSwapJob *>(link);
-  }
-  return ret;
-}
-
 int ObTmpFileWriteCache::alloc_flush_task_(ObTmpFileFlushTask *&task)
 {
   int ret = OB_SUCCESS;
@@ -822,44 +861,6 @@ int ObTmpFileWriteCache::free_flush_task_(ObTmpFileFlushTask *task)
   return ret;
 }
 
-int ObTmpFileWriteCache::add_flush_task_(ObTmpFileFlushTask *task)
-{
-  int ret = OB_SUCCESS;
-  common::ObSpLinkQueue::Link *link = dynamic_cast<ObSpLinkQueue::Link *>(task);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("write cache is not init", KR(ret), KPC(task));
-  } else if (OB_ISNULL(link)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("task ptr is null", KR(ret), KPC(task));
-  } else if (OB_FAIL(io_waiting_queue_.push(link))) {
-    LOG_ERROR("fail to push flush task", KR(ret), KPC(task));
-  } else {
-    ATOMIC_INC(&io_waiting_queue_size_);
-  }
-  return ret;
-}
-
-int ObTmpFileWriteCache::pop_flush_task_(ObTmpFileFlushTask *&task)
-{
-  int ret = OB_SUCCESS;
-  task = nullptr;
-  ObSpLinkQueue::Link *link = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("write cache is not init", KR(ret));
-  } else if (OB_FAIL(io_waiting_queue_.pop(link))) {
-    LOG_WARN("fail to pop flush task", KR(ret));
-  } else if (OB_ISNULL(link)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("link is nullptr", KR(ret));
-  } else {
-    ATOMIC_DEC(&io_waiting_queue_size_);
-    task = static_cast<ObTmpFileFlushTask *>(link);
-  }
-  return ret;
-}
-
 int ObTmpFileWriteCache::try_to_set_macro_block_idx_(ObTmpFileBlock &block)
 {
   int ret = OB_SUCCESS;
@@ -883,17 +884,19 @@ int ObTmpFileWriteCache::try_to_set_macro_block_idx_(ObTmpFileBlock &block)
 int ObTmpFileWriteCache::build_task_(
     const int64_t expect_flush_cnt,
     ObTmpFileBlockFlushIterator &iterator,
-    ObIArray<ObTmpFileFlushTask *> &tasks,
+    int64_t &task_cnt,
     ObIArray<ObTmpFileBlockHandle> &failed_blocks)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t actual_flush_cnt = 0;
-
+  ObTimeGuard time_guard("TmpFile_build_task", 200 * 1000);
+  ObTmpFileFlushMetrics &flush_metrics = metrics_.flush_metrics_;
+  const int64_t start_ts = ObTimeUtility::fast_current_time();
   while (OB_SUCC(ret)
         && actual_flush_cnt < expect_flush_cnt
         && MAX_FLUSHING_DATA_SIZE >= metrics_.get_flushing_data_size()
-        && MAX_FLUSH_TASK_NUM_PER_BATCH >= tasks.count()
+        && MAX_FLUSH_TASK_NUM_PER_BATCH >= task_cnt
         && MAX_ITER_BLOCK_NUM_PER_BATCH >= failed_blocks.count()) {
     ObTmpFileBlockHandle block_handle;
     if (OB_FAIL(iterator.next(block_handle))) {
@@ -906,10 +909,13 @@ int ObTmpFileWriteCache::build_task_(
     } else if (OB_ISNULL(block_handle.get())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block is nullptr", KR(ret));
-    } else if (OB_FAIL(build_task_in_block_(block_handle, tasks, failed_blocks, actual_flush_cnt))) {
+    } else if (OB_FAIL(build_task_in_block_(block_handle, task_cnt, failed_blocks, actual_flush_cnt))) {
       LOG_WARN("fail to build task in block", KR(ret));
     }
   }
+  const int64_t end_ts = ObTimeUtility::fast_current_time();
+  const int64_t iterate_build_us = end_ts - start_ts;
+  flush_metrics.record_iterate_build_us(iterate_build_us);
 
   for (int64_t i = 0; i < failed_blocks.count(); ++i) {
     ObTmpFileBlockHandle &block_handle = failed_blocks.at(i);
@@ -920,36 +926,23 @@ int ObTmpFileWriteCache::build_task_(
       LOG_ERROR("fail to reinsert into flush prio mgr", KR(tmp_ret), K(block_handle));
     }
   }
-  for (int32_t i = 0; i < tasks.count(); ++i) {
-    ObTmpFileFlushTask *task = tasks.at(i);
-    if (OB_ISNULL(task) || OB_UNLIKELY(cur_timer_idx_ < 0 || cur_timer_idx_ >= MAX_FLUSH_TIMER_NUM)) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid timer index or task ptr", KR(tmp_ret), K(i), K(cur_timer_idx_), KPC(task));
-    } else if (OB_TMP_FAIL(TG_SCHEDULE(flush_tg_id_[cur_timer_idx_],
-                          task->get_write_block_task(), 0/*delay*/))) {
-      LOG_ERROR("fail to schedule flush task", KR(tmp_ret), KPC(task));
-    }  else if (OB_TMP_FAIL(add_flush_task_(task))) {
-      LOG_ERROR("fail to add task to continue waiting", KR(tmp_ret), KPC(task));
-    } else {
-      cur_timer_idx_ = (cur_timer_idx_ + 1) % MAX_FLUSH_TIMER_NUM;
-      metrics_.record_flush_task(task->get_page_cnt());
-    }
-  }
-
+  time_guard.click("TmpFile_build_task_end");
   if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-    LOG_INFO("build_task_end", KR(ret), K(actual_flush_cnt),
-          K(expect_flush_cnt), K(io_waiting_queue_size_));
+    LOG_INFO("build_task_ end", KR(ret),
+      K(actual_flush_cnt), K(expect_flush_cnt),
+      K(task_cnt), "failed_blk_cnt", failed_blocks.count());
   }
   return ret;
 }
 
 int ObTmpFileWriteCache::build_task_in_block_(
     ObTmpFileBlockHandle &block_handle,
-    ObIArray<ObTmpFileFlushTask *> &tasks,
+    int64_t &task_cnt,
     ObIArray<ObTmpFileBlockHandle> &failed_blocks,
     int64_t &actual_flush_cnt)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTmpFileBlockHandle cur_blk_handle = block_handle;
   ObTmpFileBlockFlushingPageIterator page_iterator;
   if (OB_ISNULL(block_handle.get())) {
@@ -964,7 +957,7 @@ int ObTmpFileWriteCache::build_task_in_block_(
       LOG_ERROR("fail to init page iterator", KR(ret), K(block_handle));
     }
   } else {
-    while (OB_SUCC(ret) && MAX_FLUSH_TASK_NUM_PER_BATCH >= tasks.count()) {
+    while (OB_SUCC(ret) && MAX_FLUSH_TASK_NUM_PER_BATCH >= task_cnt) {
       if (OB_FAIL(page_iterator.next_range())) {
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to get next range", KR(ret));
@@ -973,7 +966,7 @@ int ObTmpFileWriteCache::build_task_in_block_(
         }
         break;
       }
-      for (int32_t i = 0; OB_SUCC(ret) && MAX_FLUSH_TASK_NUM_PER_BATCH >= tasks.count(); ++i) {
+      for (int32_t i = 0; OB_SUCC(ret) && MAX_FLUSH_TASK_NUM_PER_BATCH >= task_cnt; ++i) {
         ObTmpFileFlushTask *task = nullptr;
         if (OB_FAIL(alloc_flush_task_(task))) {
           LOG_WARN("fail to alloc flush task", KR(ret), KPC(task));
@@ -994,11 +987,13 @@ int ObTmpFileWriteCache::build_task_in_block_(
             task = nullptr;
           }
           break;
-        } else if (OB_FAIL(tasks.push_back(task))) {
-          LOG_ERROR("fail to push back task", KR(ret), KPC(task));
+        } else if (OB_FAIL(schedule_flush_task_(task))) {
+          LOG_WARN("fail to schedule flush task", KR(ret), KPC(task));
         } else {
+          ++task_cnt;
           actual_flush_cnt += task->get_page_cnt();
-          LOG_DEBUG("build_task_ succ", K(actual_flush_cnt), KPC(task), K(io_waiting_queue_size_));
+          LOG_DEBUG("build_task_ succ", K(actual_flush_cnt),
+              "io_waiting_queue_size", io_waiting_queue_.size(), K(task_cnt), KPC(task));
         }
       }
     }
@@ -1066,23 +1061,138 @@ int ObTmpFileWriteCache::collect_pages_(
   return ret;
 }
 
+int ObTmpFileWriteCache::schedule_flush_task_(ObTmpFileFlushTask *task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("task is null", KR(ret));
+  } else if (OB_FAIL(pending_flush_queue_.push(task))) {
+    LOG_ERROR("fail to add task to pending queue", KR(ret), KPC(task));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    for (int64_t i = 0; i < MAX_FLUSH_TIMER_NUM; ++i) {
+      if (OB_TMP_FAIL(try_schedule_flush_dispatch_task_(i))) {
+        LOG_ERROR("fail to schedule flush dispatch task", KR(tmp_ret), K(i));
+      }
+    }
+    metrics_.record_flush_task(task->get_page_cnt());
+  }
+  return ret;
+}
+int ObTmpFileWriteCache::try_schedule_flush_dispatch_task_(const int64_t task_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(task_idx < 0 || task_idx >= MAX_FLUSH_TIMER_NUM)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid task idx", KR(ret), K(task_idx));
+  } else if (flush_batch_tasks_[task_idx].try_mark_scheduled()) {
+    // NOTE: flush_batch_task_ delegates to dispatch_flush_tasks_batch_(), which offloads
+    // flush dispatching to the timer thread pool. This keeps the TFSwap thread unblocked
+    // and improves I/O submission throughput.
+    if (OB_FAIL(TG_SCHEDULE(flush_tg_id_[task_idx], flush_batch_tasks_[task_idx], 0/*delay*/))) {
+      LOG_ERROR("fail to schedule flush batch task", KR(ret), K(task_idx), K(flush_tg_id_[task_idx]));
+    }
+    if (OB_FAIL(ret)) {
+      flush_batch_tasks_[task_idx].clear_scheduled();
+    }
+  }
+  return ret;
+}
+
+int ObTmpFileWriteCache::try_schedule_flush_wait_task_(const int64_t delay_us)
+{
+  int ret = OB_SUCCESS;
+  if (flush_wait_task_.try_mark_scheduled()) {
+    if (OB_FAIL(TG_SCHEDULE(flush_wait_tg_id_, flush_wait_task_, delay_us))) {
+      LOG_ERROR("fail to schedule flush wait task", KR(ret), K(flush_wait_tg_id_), K(delay_us));
+      flush_wait_task_.clear_scheduled();
+    }
+  }
+  return ret;
+}
+
+int ObTmpFileWriteCache::dispatch_flush_tasks_batch_(ObTmpFileFlushBatchTimerTask &batch_task)
+{
+  int ret = OB_SUCCESS;
+  int64_t task_cnt = 0;
+  int64_t metrics_page_cnt = 0;
+  const int64_t task_idx = batch_task.get_task_idx();
+  if (OB_UNLIKELY(task_idx < 0 || task_idx >= MAX_FLUSH_TIMER_NUM)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid batch task", KR(ret), K(task_idx));
+  }
+  while (OB_SUCC(ret) && pending_flush_queue_.size() > 0) {
+    ObTmpFileFlushTask *task = nullptr;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_FAIL(pending_flush_queue_.pop(task))) {
+      LOG_WARN("fail to pop pending flush task", KR(ret));
+      break;
+    } else if (OB_ISNULL(task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("task ptr is null", KR(ret));
+      break;
+    } else if (OB_TMP_FAIL(task->write())) {
+      LOG_WARN("fail to write block", KR(tmp_ret), KPC(task));
+      task->set_write_ret(tmp_ret);
+      task->set_is_written(true);
+    } else {
+      task->set_write_ret(OB_SUCCESS);
+      task->set_is_written(true);
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(io_waiting_queue_.push(task))) {
+        LOG_ERROR("fail to add task to io waiting queue", KR(ret), KPC(task));
+        if (OB_TMP_FAIL(task->cancel(ret))) {
+          LOG_ERROR("fail to cancel task", KR(tmp_ret), KPC(task));
+        }
+        if (OB_TMP_FAIL(free_flush_task_(task))) {
+          LOG_ERROR("fail to free flush task", KR(tmp_ret), KPC(task));
+        }
+      } else {
+        ++task_cnt;
+        metrics_page_cnt += task->get_page_cnt();
+        if (OB_TMP_FAIL(try_schedule_flush_wait_task_(0/*delay_us*/))) {
+          LOG_ERROR("fail to schedule flush wait task", KR(tmp_ret));
+        }
+      }
+    }
+
+    if (batch_task.reach_print_interval(1000 * 1000)) {
+      LOG_DEBUG("[TMP FILE FLUSH PERF]dispatch flush tasks batch send IO size",
+               K(task_idx), "bytes", metrics_page_cnt * ObTmpFileGlobal::PAGE_SIZE);
+      metrics_page_cnt = 0;
+    }
+  }
+
+  batch_task.clear_scheduled();
+  if (OB_SUCC(ret) && pending_flush_queue_.size() > 0) {
+    if (OB_FAIL(try_schedule_flush_dispatch_task_(task_idx))) {
+      LOG_ERROR("fail to schedule flush dispatch task", KR(ret), K(task_idx),
+                "pending_flush_queue_size", pending_flush_queue_.size());
+    }
+  }
+  return ret;
+}
+
 int ObTmpFileWriteCache::exec_wait_()
 {
   int ret = OB_SUCCESS;
-  int64_t task_cnt = ATOMIC_LOAD(&io_waiting_queue_size_);
+  int64_t task_cnt = io_waiting_queue_.size();
   for (; OB_SUCC(ret) && task_cnt > 0; --task_cnt) {
     ObTmpFileFlushTask *task = nullptr;
-    if (OB_FAIL(pop_flush_task_(task))) {
+    if (OB_FAIL(io_waiting_queue_.pop(task))) {
       LOG_WARN("fail to pop flush task", KR(ret));
     } else if (!task->is_written()) {
-      add_flush_task_(task);
+      io_waiting_queue_.push(task);
       task = nullptr;
     } else if (OB_SUCCESS != task->get_write_ret()) {
       task->cancel(task->get_write_ret());
     } else if (OB_FAIL(task->wait())) {
       if (OB_EAGAIN == ret) { // add task into queue again
         ret = OB_SUCCESS;
-        add_flush_task_(task);
+        io_waiting_queue_.push(task);
         task = nullptr;
       } else {
         LOG_WARN("fail to exec wait for tmp file flush io", KR(ret), KPC(task));
@@ -1091,6 +1201,13 @@ int ObTmpFileWriteCache::exec_wait_()
 
     // ignore ret
     if (OB_NOT_NULL(task)) {
+      if (task->get_schedule_delay_us() >= 0 && task->get_io_wait_us() >= 0) {
+        metrics_.flush_metrics_.record_task_profile(
+            task->get_schedule_delay_us(),
+            task->get_io_wait_us(),
+            task->get_queue_wait_us());
+      }
+
       LOG_DEBUG("task is finished, evict", KPC(task));
       set_flush_ret_code_(task->get_ret_code());
       if (OB_SUCCESS == task->get_ret_code()
@@ -1098,11 +1215,19 @@ int ObTmpFileWriteCache::exec_wait_()
         LOG_WARN("fail to evict", KR(ret), KPC(task));
       } else if (FALSE_IT(metrics_.record_flush_task_over(task->get_page_cnt()))) {
       } else if (OB_FAIL(free_flush_task_(task))) {
-        LOG_ERROR("fail to free flush task", KR(ret), K(io_waiting_queue_size_));
+        LOG_ERROR("fail to free flush task", KR(ret), "io_waiting_queue_size", io_waiting_queue_.size());
       }
     }
   }
-  LOG_DEBUG("exec wait", KR(ret), K(io_waiting_queue_size_), K(swap_queue_size_));
+  flush_wait_task_.clear_scheduled();
+  if (io_waiting_queue_.size() > 0) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(try_schedule_flush_wait_task_(FLUSH_WAIT_TIMER_INTERVAL_US))) {
+      LOG_WARN("fail to re-schedule flush wait task", KR(tmp_ret));
+    }
+  }
+  LOG_DEBUG("exec wait", KR(ret), "io_waiting_queue_size", io_waiting_queue_.size(),
+            "swap_queue_size", swap_queue_.size());
   return ret;
 }
 
@@ -1142,11 +1267,11 @@ int64_t ObTmpFileWriteCache::cal_idle_time_()
 {
   int64_t idle_time = 0;
   if (OB_UNLIKELY(!SERVER_STORAGE_META_SERVICE.is_started())
-      || (ATOMIC_LOAD(&swap_queue_size_) == 0
-          && ATOMIC_LOAD(&io_waiting_queue_size_) == 0
+      || (swap_queue_.size() == 0
+          && io_waiting_queue_.size() == 0
           && !shrink_ctx_.is_valid())) {
     idle_time = SWAP_INTERVAL;
-  } else if (ATOMIC_LOAD(&swap_queue_size_) > 0 && free_page_list_.size() > 0) {
+  } else if (swap_queue_.size() > 0 && free_page_list_.size() > 0) {
     idle_time = 0;
   } else {
     idle_time = SWAP_FAST_INTERVAL;
@@ -1154,7 +1279,7 @@ int64_t ObTmpFileWriteCache::cal_idle_time_()
   return idle_time;
 }
 
-// 简单策略: 1.达到 L1 90%，刷60%，并开始刷meta页和未写满页; 2.达到 L2 80%，刷40%; 3.达到 L3 60%，刷20%;
+// 简单策略: 1.达到 L1 80%，刷40%，并开始刷meta页和未写满页; 2.达到 L2 60%，刷30%; 3.达到 L3 40%，刷20%;
 int64_t ObTmpFileWriteCache::cal_flush_page_cnt_()
 {
   int64_t expect_flush_cnt = 0;
@@ -1197,18 +1322,18 @@ void ObTmpFileWriteCache::refresh_disk_usage_limit_()
 int ObTmpFileWriteCache::check_tmp_file_disk_usage_limit_(const int64_t flushing_size)
 {
   int ret = OB_SUCCESS;
+  int64_t disk_usage_limit = ATOMIC_LOAD(&disk_usage_limit_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("write cache is not inited", KR(ret));
-  } else {
-    int64_t disk_usage_limit = ATOMIC_LOAD(&disk_usage_limit_);
+  } else if (disk_usage_limit > 0) {
     int64_t used_page_num = 0;
     int64_t tmp_file_block_num = 0;
     int64_t current_disk_usage = 0;
     if (OB_FAIL(tmp_file_block_manager_->get_block_usage_stat(used_page_num, tmp_file_block_num))) {
       LOG_WARN("fail to get tmp file block usage stat", KR(ret));
     } else if (FALSE_IT(current_disk_usage = flushing_size + (tmp_file_block_num * ObTmpFileGlobal::SN_BLOCK_SIZE))) {
-    } else if (disk_usage_limit > 0 && current_disk_usage > disk_usage_limit) {
+    } else if (current_disk_usage > disk_usage_limit) {
       ret = OB_TMP_FILE_EXCEED_DISK_QUOTA;
       LOG_INFO("tmp file exceeds disk usage limit",
           KR(ret), K(current_disk_usage), K(disk_usage_limit), K(tmp_file_block_num), K(flushing_size));
@@ -1219,9 +1344,16 @@ int ObTmpFileWriteCache::check_tmp_file_disk_usage_limit_(const int64_t flushing
 
 bool ObTmpFileWriteCache::is_memory_sufficient_()
 {
-  int64_t used_page_cnt = ATOMIC_LOAD(&used_page_cnt_);
-  int64_t max_page_cnt = pages_.size();
-  return ATOMIC_LOAD(&is_flush_all_) ? false : used_page_cnt <= max_page_cnt * FLUSH_WATERMARK_L2 / 100;
+  int bret = false;
+  if (ATOMIC_LOAD(&is_flush_all_)) {
+    bret = false;
+  } else {
+    int64_t max_page_cnt = pages_.size();
+    int64_t special_page_cnt = ATOMIC_LOAD(&incomplete_data_page_cnt_)
+                             + ATOMIC_LOAD(&meta_page_cnt_);
+    bret = special_page_cnt <= max_page_cnt * INCOMPLETE_PAGE_HOLD_LIMIT / 100;
+  }
+  return bret;
 }
 
 void ObTmpFileWriteCache::print_()
@@ -1235,11 +1367,16 @@ void ObTmpFileWriteCache::print_()
   int64_t disk_limit = ATOMIC_LOAD(&disk_usage_limit_);
   bool is_flush_all = ATOMIC_LOAD(&is_flush_all_);
 
-  int64_t io_queue_size = ATOMIC_LOAD(&io_waiting_queue_size_);
-  int64_t swap_queue_size = ATOMIC_LOAD(&swap_queue_size_);
+  int64_t io_queue_size = io_waiting_queue_.size();
+  int64_t swap_queue_size = swap_queue_.size();
+  int64_t incomplete_data_page_cnt = ATOMIC_LOAD(&incomplete_data_page_cnt_);
+  int64_t meta_page_cnt = ATOMIC_LOAD(&meta_page_cnt_);
+  int64_t pending_flush_queue_size = pending_flush_queue_.size();
   LOG_INFO("tmp file write cache info",
     K(used_page_watermark), K(cache_page_cnt),
     K(free_page_cnt), K(used_page_cnt),
+    K(incomplete_data_page_cnt), K(meta_page_cnt),
+    K(pending_flush_queue_size),
     K(io_queue_size), K(swap_queue_size),
     K(current_capacity), K(max_page_cnt), K(disk_limit),
     K(is_flush_all));
@@ -1557,15 +1694,36 @@ int ObTmpFileWriteCache::remove_pending_task_()
 {
   int ret = OB_SUCCESS;
   ObTmpFileFlushTask *task = nullptr;
-  for (int64_t i = io_waiting_queue_size_; i > 0; --i) {
-    if (OB_FAIL(pop_flush_task_(task))) {
+  for (int64_t i = io_waiting_queue_.size(); i > 0; --i) {
+    if (OB_FAIL(io_waiting_queue_.pop(task))) {
       LOG_WARN("fail to pop flush task", KR(ret));
     } else if (OB_UNLIKELY(!task->is_written())) {
       LOG_INFO("flush task is not sending IO after flush timer stop", KPC(task));
       free_flush_task_(task);
-    } else if (OB_FAIL(add_flush_task_(task))) {
+    } else if (OB_FAIL(io_waiting_queue_.push(task))) {
       LOG_ERROR("fail to add flush task", KR(ret), KPC(task));
     }
+  }
+  return ret;
+}
+
+int ObTmpFileWriteCache::remove_pending_dispatch_task_()
+{
+  int ret = OB_SUCCESS;
+  ObTmpFileFlushTask *task = nullptr;
+  for (int64_t i = pending_flush_queue_.size(); i > 0; --i) {
+    if (OB_FAIL(pending_flush_queue_.pop(task))) {
+      LOG_WARN("fail to pop pending flush task", KR(ret));
+    } else if (OB_ISNULL(task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("task ptr is null", KR(ret));
+    } else {
+      LOG_INFO("flush task is pending dispatch after flush timer stop", KPC(task));
+      free_flush_task_(task);
+    }
+  }
+  for (int32_t i = 0; i < MAX_FLUSH_TIMER_NUM; ++i) {
+    flush_batch_tasks_[i].clear_scheduled();
   }
   return ret;
 }
@@ -1573,14 +1731,17 @@ int ObTmpFileWriteCache::remove_pending_task_()
 int ObTmpFileWriteCache::cleanup_list_()
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("cleanup lists begin", K(swap_queue_size_), K(io_waiting_queue_size_));
+  LOG_INFO("cleanup lists begin", "swap_queue_size", swap_queue_.size(),
+           "io_waiting_queue_size", io_waiting_queue_.size());
+  TG_CANCEL_ALL(flush_wait_tg_id_);
+  flush_wait_task_.clear_scheduled();
   for (int32_t i = 0; i < MAX_FLUSH_TIMER_NUM; ++i) {
     TG_CANCEL_ALL(flush_tg_id_[i]);
   }
 
   while (!swap_queue_.is_empty()) {
     ObTmpFileSwapJob *swap_job = nullptr;
-    if (OB_FAIL(pop_swap_job_(swap_job))) {
+    if (OB_FAIL(swap_queue_.pop(swap_job))) {
       LOG_WARN("fail to pop swap job", KR(ret), KPC(swap_job));
       ret = OB_SUCCESS;
     } else {
@@ -1588,10 +1749,11 @@ int ObTmpFileWriteCache::cleanup_list_()
     }
   }
 
+  remove_pending_dispatch_task_();
   remove_pending_task_();
 
-  for (int32_t retry = 10; io_waiting_queue_size_ > 0 && retry > 0; --retry) {
-    LOG_WARN("io waiting queue is not empty", K(io_waiting_queue_size_));
+  for (int32_t retry = 10; io_waiting_queue_.size() > 0 && retry > 0; --retry) {
+    LOG_WARN("io waiting queue is not empty", "io_waiting_queue_size", io_waiting_queue_.size());
     if (OB_FAIL(exec_wait_())) {
       if (OB_EAGAIN != ret) {
         LOG_ERROR("exec wait failed", KR(ret));

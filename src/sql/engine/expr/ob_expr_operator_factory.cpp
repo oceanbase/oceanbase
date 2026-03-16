@@ -1056,12 +1056,10 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprBenchmark, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprWeightString, EAGER_EVALUATION);
     REG_OP(ObExprCrc32, EAGER_EVALUATION);
-  #if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
     REG_OP(ObExprTmpFileOpen, EAGER_EVALUATION);
     REG_OP(ObExprTmpFileClose, EAGER_EVALUATION);
     REG_OP(ObExprTmpFileWrite, EAGER_EVALUATION);
     REG_OP(ObExprTmpFileRead, EAGER_EVALUATION);
-  #endif
     REG_OP(ObExprToBase64, EAGER_EVALUATION);
     REG_OP(ObExprFromBase64, EAGER_EVALUATION);
     REG_OP(ObExprOpSubQueryInPl, SHORT_CIRCUIT_EVALUATION);
@@ -1717,12 +1715,10 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprCurrentCatalog, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprCheckCatalogAccess, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprStartUpMode, SHORT_CIRCUIT_EVALUATION);
-#if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
   REG_OP_ORCL(ObExprTmpFileOpen, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprTmpFileClose, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprTmpFileWrite, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprTmpFileRead, EAGER_EVALUATION);
-#endif
   REG_OP_ORCL(ObExprLocalDynamicFilter, SHORT_CIRCUIT_EVALUATION);
   REG_OP_ORCL(ObExprFormatProfile, SHORT_CIRCUIT_EVALUATION);
   REG_OP_ORCL(ObExprCheckLocationAccess, EAGER_EVALUATION);

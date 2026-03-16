@@ -224,7 +224,6 @@ void TestCompactChunk::SetUp()
 
   ObTimerService *timer_service = nullptr;
   EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
-  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_start(timer_service));
   tenant_ctx.set(timer_service);
 
   tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
@@ -232,6 +231,7 @@ void TestCompactChunk::SetUp()
   tenant_ctx.set(tf_mgr);
   EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
   tf_mgr->get_sn_file_manager().write_cache_.default_memory_limit_ = 40*1024*1024;
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_start(timer_service));
   EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
   SERVER_STORAGE_META_SERVICE.is_started_ = true;
   ObTenantEnv::set_tenant(&tenant_ctx);
@@ -246,10 +246,15 @@ void TestCompactChunk::TearDown()
 
   tmp_file::ObTmpPageCache::get_instance().destroy();
   common::ObClockGenerator::destroy();
+  tmp_file::ObTenantTmpFileManager *tf_mgr = MTL(tmp_file::ObTenantTmpFileManager *);
   ObTimerService *timer_service = MTL(ObTimerService *);
+  ASSERT_NE(nullptr, tf_mgr);
   ASSERT_NE(nullptr, timer_service);
+  tf_mgr->stop();
   timer_service->stop();
+  tf_mgr->wait();
   timer_service->wait();
+  tf_mgr->destroy();
   timer_service->destroy();
 }
 

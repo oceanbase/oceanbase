@@ -62,9 +62,11 @@ public:
   int insert_block_into_alloc_priority_mgr(const int64_t free_page_num, ObTmpFileBlock &block);
   int remove_block_from_alloc_priority_mgr(const int64_t free_page_num, ObTmpFileBlock &block);
   int adjust_block_alloc_priority(const int64_t old_free_page_num, const int64_t free_page_num, ObTmpFileBlock &block);
-  int insert_block_into_flush_priority_mgr(const int64_t flushing_page_num, ObTmpFileBlock &block);
-  int remove_block_from_flush_priority_mgr(const int64_t flushing_page_num, ObTmpFileBlock &block);
-  int adjust_block_flush_priority(const int64_t old_flushing_page_num, const int64_t flushing_page_num, ObTmpFileBlock &block);
+  int insert_block_into_flush_priority_mgr(const BlockFlushLevel level, ObTmpFileBlock &block);
+  int remove_block_from_flush_priority_mgr(const BlockFlushLevel level, ObTmpFileBlock &block);
+  int adjust_block_flush_priority(const BlockFlushLevel old_level,
+                                  const BlockFlushLevel new_level,
+                                  ObTmpFileBlock &block);
 
 public:
   int get_tmp_file_block_handle(const int64_t block_index, ObTmpFileBlockHandle &handle);

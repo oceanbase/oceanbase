@@ -119,7 +119,9 @@ int ObSharedNothingTmpFile::release_resource()
 int ObSharedNothingTmpFile::inner_delete_file_()
 {
   int ret = OB_SUCCESS;
-  // do nothing
+  if (file_size_ % ObTmpFileGlobal::PAGE_SIZE != 0) {
+    write_cache_->dec_incomplete_data_page_cnt();
+  }
   return ret;
 }
 
@@ -636,7 +638,16 @@ int ObSharedNothingTmpFile::write(ObTmpFileIOWriteCtx &io_ctx, int64_t &cur_file
         bool is_unaligned_write = 0 != file_size_ % ObTmpFileGlobal::PAGE_SIZE ||
                                   0 != io_ctx.get_done_size() % ObTmpFileGlobal::PAGE_SIZE;
         io_ctx.set_is_unaligned_write(is_unaligned_write);
+        bool old_has_incomplete = (file_size_ % ObTmpFileGlobal::PAGE_SIZE != 0);
         file_size_ = end_write_offset;
+        bool new_has_incomplete = (file_size_ % ObTmpFileGlobal::PAGE_SIZE != 0);
+        if (old_has_incomplete != new_has_incomplete) {
+          if (new_has_incomplete) {
+            write_cache_->inc_incomplete_data_page_cnt();
+          } else {
+            write_cache_->dec_incomplete_data_page_cnt();
+          }
+        }
         cur_file_size = file_size_;
         LOG_DEBUG("write success", K(fd_), K(start_write_offset), K(end_write_offset), KPC(this), K(io_ctx));
       }

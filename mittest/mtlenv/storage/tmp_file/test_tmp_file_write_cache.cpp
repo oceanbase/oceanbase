@@ -267,7 +267,7 @@ TEST_F(TestWriteCache, test_auto_shrink)
 TEST_F(TestWriteCache, test_shrink_abort)
 {
   LOG_INFO("test_shrink_abort begin");
-  const int64_t WRITE_SIZE = BIG_MEMORY_LIMIT * 0.9;
+  const int64_t WRITE_SIZE = BIG_MEMORY_LIMIT * 2;
   char *buffer = generate_data(WRITE_SIZE);
   ObTmpFileWriteCache &write_cache = WRITE_CACHE_INSTANCE;
   write_cache.default_memory_limit_ = BIG_MEMORY_LIMIT;
@@ -277,7 +277,8 @@ TEST_F(TestWriteCache, test_shrink_abort)
     test1.init(MTL_CTX(), ATOMIC_FAA(&global_fd_generator_, 1), buffer, WRITE_SIZE);
     test1.start();
     test1.wait();
-    ASSERT_EQ(BIG_MEMORY_LIMIT, write_cache.get_current_capacity_());
+    ASSERT_LT(SMALL_MEMORY_LIMIT, write_cache.get_current_capacity_());
+    ASSERT_NO_FATAL_FAILURE(check_resource_release());
   }
 
   write_cache.stop(); // manually control write cache thread's tick

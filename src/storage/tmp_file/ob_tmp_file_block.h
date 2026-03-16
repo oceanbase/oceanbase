@@ -82,7 +82,9 @@ public:
                     free_page_num_(0), prealloc_blk_node_(*this), flush_blk_node_(*this),
                     alloc_page_bitmap_(),
                     flushed_page_bitmap_(), flushing_page_bitmap_(),
-                    flushing_page_list_() {}
+                    flushing_page_list_(),
+                    full_page_cnt_in_flushing_list_(0),
+                    flush_level_(BlockFlushLevel::INVALID) {}
   ~ObTmpFileBlock();
 
   int destroy();
@@ -101,6 +103,10 @@ public:
   int set_flushing_status(bool &lock_succ);
   int flush_pages_succ(const int64_t begin_page_id, const int64_t page_num);
   int is_page_flushed(const ObTmpFilePageId &page_id, bool &is_flushed) const;
+  OB_INLINE bool is_all_incomplete_flushing() const
+  {
+    return flushing_page_list_.get_size() > 0 && 0 == full_page_cnt_in_flushing_list_;
+  }
 public:
   bool is_deleting() const;
   bool is_valid() const;
@@ -127,6 +133,8 @@ public:
                KP(&prealloc_blk_node_), KP(prealloc_blk_node_.get_prev()), KP(prealloc_blk_node_.get_next()),
                KP(&flush_blk_node_), KP(flush_blk_node_.get_prev()), KP(flush_blk_node_.get_next()),
                K(flushing_page_list_.get_size()),
+               K(full_page_cnt_in_flushing_list_),
+               K(flush_level_),
                K(alloc_page_bitmap_),
                K(flushed_page_bitmap_), K(flushing_page_bitmap_),
                KP(tmp_file_blk_mgr_));
@@ -136,7 +144,7 @@ private:
   int remove_page_from_flushing_status_(const int64_t page_id);
   int insert_page_into_flushing_list_(ObTmpFilePageHandle &page_handle);
   int reinsert_into_flush_prio_mgr_();
-  int update_block_flush_level_(const int64_t old_flushing_page_num);
+  int update_block_flush_level_();
 private:
   int32_t magic_code_;
   common::SpinRWLock lock_;
@@ -156,6 +164,8 @@ private:
   ObTmpFileBlockPageBitmap flushed_page_bitmap_; // records the usage of pages which have been flushed
   ObTmpFileBlockPageBitmap flushing_page_bitmap_; // records the pages which are in flushing list
   PageList flushing_page_list_;
+  int64_t full_page_cnt_in_flushing_list_;
+  BlockFlushLevel flush_level_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileBlock);
 };
 

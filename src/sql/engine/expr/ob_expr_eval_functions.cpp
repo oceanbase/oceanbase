@@ -1446,17 +1446,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprUDF::eval_external_udf,                                        /* 850 */
   ObExprStartUpMode::eval_startup_mode,                                /* 851 */
   ObExprVectorL2Squared::calc_l2_squared,                              /* 852 */
-#if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
   ObExprTmpFileOpen::eval_tmp_file_open,                              /* 853 */
   ObExprTmpFileClose::eval_tmp_file_close,                            /* 854 */
   ObExprTmpFileWrite::eval_tmp_file_write,                            /* 855 */
   ObExprTmpFileRead::eval_tmp_file_read,                              /* 856 */
-#else
-  NULL,// ObExprTmpFileOpen::eval_tmp_file_open,                      /* 853 */
-  NULL,// ObExprTmpFileClose::eval_tmp_file_close,                    /* 854 */
-  NULL,// ObExprTmpFileWrite::eval_tmp_file_write,                    /* 855 */
-  NULL,// ObExprTmpFileRead::eval_tmp_file_read,                      /* 856 */
-#endif
   ObExprAIComplete::eval_ai_complete,                                 /* 857 */
   ObExprAIEmbed::eval_ai_embed,                                       /* 858 */
   ObExprAIRerank::eval_ai_rerank,                                     /* 859 */
