@@ -487,6 +487,8 @@ int ObLSRestoreHandler::refresh_restore_info_()
     ObPhysicalRestoreBackupDestList backup_dest_list;
     common::ObArray<share::ObBackupSetBriefInfo> backup_set_list;
     const ObBackupDestType::TYPE backup_dest_type = ObBackupDestType::DEST_TYPE_RESTORE_DATA;
+    // dest_id is reserved for traffic control, which is not available currently; temporarily set it to 0
+    // TODO (xingzhi): get correct dest id when traffic control is available
     int64_t dest_id = 0;
     ObTenantBackupDestInfoMgr *mgr = MTL(ObTenantBackupDestInfoMgr *);
     if (OB_ISNULL(mgr)) {
@@ -507,9 +509,6 @@ int ObLSRestoreHandler::refresh_restore_info_()
       LOG_WARN("failed to get backup dest list from restore info", K(ret), K(tenant_id));
     } else if (OB_FAIL(backup_dest_list.get_backup_set_brief_info_list(backup_set_list))) {
       LOG_WARN("fail to get backup set brief info list", K(ret), K(backup_dest_list));
-    } else if (OB_FAIL(share::ObBackupStorageInfoOperator::get_restore_dest_id(*sql_proxy, tenant_id,
-                                                                                  backup_dest_type, dest_id))) {
-      LOG_WARN("failed to get restore dest id", K(ret), K(tenant_id), K(backup_dest_type));
     } else if (backup_set_list.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("backup set list is empty", K(ret), K(tenant_id));

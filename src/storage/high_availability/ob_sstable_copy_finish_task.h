@@ -161,40 +161,21 @@ private:
 };
 
 
-#ifdef OB_BUILD_SHARED_STORAGE
-// Create non empty shared SSTable in shared storage mode, only during leader restore.
-class ObRestoredSharedSSTableCreator final : public ObCopiedSSTableCreatorImpl
+// Create SSTable whose macro blocks are entirely stored in backup. During quick restore,
+// only small SSTables may remain fully remote. This creator is used when migration
+// encounters such SSTables.
+class ObCopiedSharedSSTableCreator final : public ObCopiedSSTableCreatorImpl
 {
 public:
-  ObRestoredSharedSSTableCreator() : ObCopiedSSTableCreatorImpl() {}
+  ObCopiedSharedSSTableCreator() : ObCopiedSSTableCreatorImpl() {}
 
   virtual int create_sstable() override;
 
 private:
   virtual int check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const override;
 
-  DISALLOW_COPY_AND_ASSIGN(ObRestoredSharedSSTableCreator);
+  DISALLOW_COPY_AND_ASSIGN(ObCopiedSharedSSTableCreator);
 };
-
-
-// Create shared-only-macro-blocks SSTable, currently only ddl sstable in shared storage mode. This kind of SSTable
-// does not own an index, but should record the macro ids on meta. Macro blocks are required to copy only during
-// leader restore, otherwise, are not.
-class ObCopiedSharedMacroBlocksSSTableCreator final : public ObCopiedSSTableCreatorImpl
-{
-public:
-  ObCopiedSharedMacroBlocksSSTableCreator() : ObCopiedSSTableCreatorImpl() {}
-
-  virtual int create_sstable() override;
-
-private:
-  virtual int check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const override;
-
-  int get_shared_macro_id_list_(common::ObIArray<MacroBlockId> &macro_block_id_array);
-
-  DISALLOW_COPY_AND_ASSIGN(ObCopiedSharedMacroBlocksSSTableCreator);
-};
-#endif
 
 class ObSSTableCopyFinishTask : public share::ObITask
 {
