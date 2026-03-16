@@ -69,6 +69,17 @@ public:
       OK(get_tenant_id(run_ctx_.tenant_id_));
       ASSERT_NE(0, run_ctx_.tenant_id_);
       OK(get_curr_simple_server().init_sql_proxy2());
+      share::ObTenantSwitchGuard tguard;
+      ASSERT_EQ(OB_SUCCESS, tguard.switch_to(run_ctx_.tenant_id_));
+      ObTenantDiskSpaceManager *tenant_disk_space_manager = MTL(ObTenantDiskSpaceManager *);
+      ASSERT_NE(nullptr, tenant_disk_space_manager);
+      OB_SERVER_DISK_SPACE_MGR.hidden_sys_data_disk_config_size_ = 1024;
+      bool succ_resize = false;
+      int64_t config_data_disk_size = 0;
+      int64_t actual_data_disk_size = 0;
+      ASSERT_EQ(OB_SUCCESS, tenant_disk_space_manager->get_tenant_unit_data_disk_size(
+          MTL_ID(), config_data_disk_size, actual_data_disk_size));
+      ASSERT_EQ(OB_SUCCESS, tenant_disk_space_manager->resize_total_disk_size_(config_data_disk_size, succ_resize));
       scp_tenant_created = true;
     }
     // Note: MTL_ID() returns sys tenant in SetUp context, use run_ctx_.tenant_id_ instead

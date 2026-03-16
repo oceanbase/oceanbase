@@ -794,57 +794,59 @@ TEST_F(ObPrereadMetaMacroTest, test_storage_cache_policy_prewarm)
   FLOG_INFO("[TEST] finish test_storage_cache_policy_prewarm", K(prewarm_add_cnt), K(macro_in_macro_cache_cnt), K(should_in_macro_cache_cnt));
 }
 
-// TEST_F(ObPrereadMetaMacroTest, test_major_compaction_prewarm)
-// {
-//   share::ObTenantSwitchGuard tguard;
-//   OK(tguard.switch_to(run_ctx.tenant_id_));
-//   OK(sys_exe_sql("alter system set _enable_adaptive_compaction = false tenant tt1;"));
-//   OK(sys_exe_sql("alter system set _ss_major_compaction_prewarm_level = 2 tenant tt1;"));
-//   exe_prepare_sql();
-//   FLOG_INFO("[TEST] start test_major_compaction_prewarm", K(run_ctx));
-//   ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
-//   ASSERT_NE(nullptr, file_manager);
-//   ObPrereadCacheManager &preread_cache_mgr = file_manager->preread_cache_mgr_;
-//   ObSSPreReadTask &preread_task = preread_cache_mgr.preread_task_;
-//   preread_task.is_inited_ = false;
-//   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
-//   ASSERT_NE(nullptr, micro_cache);
-//   IGNORE_RETURN micro_cache->clear_micro_cache();
+TEST_F(ObPrereadMetaMacroTest, test_major_compaction_prewarm)
+{
+  share::ObTenantSwitchGuard tguard;
+  OK(tguard.switch_to(run_ctx.tenant_id_));
+  OK(sys_exe_sql("alter system set _enable_adaptive_compaction = false tenant tt1;"));
+  OK(sys_exe_sql("alter system set _ss_major_compaction_prewarm_level = 0 tenant tt1;"));
+  exe_prepare_sql();
+  FLOG_INFO("[TEST] start test_major_compaction_prewarm", K(run_ctx));
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(run_ctx_.tenant_id_));
+  ASSERT_TRUE(tenant_config.is_valid());
+  tenant_config->_ss_micro_cache_max_block_size = 128 * 1024; // 128KB
+  micro_cache->micro_meta_mgr_.max_micro_blk_size_ = 128 * 1024; // 128KB
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ObPrereadCacheManager &preread_cache_mgr = file_manager->preread_cache_mgr_;
+  ObSSPreReadTask &preread_task = preread_cache_mgr.preread_task_;
+  preread_task.is_inited_ = false;
+  IGNORE_RETURN micro_cache->clear_micro_cache();
 
-//   ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
-//   ASSERT_NE(nullptr, macro_cache_mgr);
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
 
-//   OK(exe_sql("create table test_major_compaction_prewarm (a bigint) storage_cache_policy = (global = 'hot')"));
-//   set_ls_and_tablet_id_for_run_ctx("test_major_compaction_prewarm");
-//   OK(exe_sql("insert into test_major_compaction_prewarm select random(100) from table(generator(262144))"));
-//   sleep(1);
-//   OK(medium_compact(run_ctx.tablet_id_.id()));
-//   FLOG_INFO("[TEST] finish medium compact");
-//   ObSSMicroCachePrewarmStat &after_prewarm_stat = micro_cache->cache_stat_.prewarm_stat_;
-//   int64_t after_prewarm_add_cnt = 0;
-//   after_prewarm_stat.get_prewarm_add_cnt(ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, after_prewarm_add_cnt);
-//   ASSERT_GT(after_prewarm_add_cnt, 0);
-//   FLOG_INFO("[TEST] finish check micro cache prewarm add cnt in major compaction", K(after_prewarm_add_cnt));
+  OK(exe_sql("create table test_major_compaction_prewarm (a bigint) storage_cache_policy = (global = 'hot')"));
+  set_ls_and_tablet_id_for_run_ctx("test_major_compaction_prewarm");
+  OK(exe_sql("insert into test_major_compaction_prewarm select random(100) from table(generator(262144))"));
+  sleep(1);
+  OK(TestCompactionUtil::medium_compact(run_ctx.tenant_id_, run_ctx.tablet_id_.id(), run_ctx.ls_id_));
+  FLOG_INFO("[TEST] finish medium compact");
+  ObSSMicroCachePrewarmStat &after_prewarm_stat = micro_cache->cache_stat_.prewarm_stat_;
+  int64_t after_prewarm_add_cnt = 0;
+  after_prewarm_stat.get_prewarm_add_cnt(ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, after_prewarm_add_cnt);
+  ASSERT_GT(after_prewarm_add_cnt, 0);
+  FLOG_INFO("[TEST] finish check micro cache prewarm add cnt in major compaction", K(after_prewarm_add_cnt));
 
-//   int64_t macro_in_macro_cache_cnt = 0;
-//   check_macro_exist_in_macro_cache(run_ctx.tablet_id_.id(), macro_in_macro_cache_cnt);
-//   ASSERT_GT(macro_in_macro_cache_cnt, 0);
-//   int64_t should_in_macro_cache_cnt = 0;
-//   int64_t should_in_micro_cache_cnt = 0;
-//   get_macro_cnt_in_local_cache(run_ctx.tablet_id_.id(), should_in_macro_cache_cnt, should_in_micro_cache_cnt);
-//   ASSERT_GT(should_in_macro_cache_cnt, 0);
-//   ASSERT_EQ(should_in_macro_cache_cnt, macro_in_macro_cache_cnt);
-//   ASSERT_GT(should_in_micro_cache_cnt, 0);
+  int64_t macro_in_macro_cache_cnt = 0;
+  check_macro_exist_in_macro_cache(run_ctx.tablet_id_.id(), macro_in_macro_cache_cnt);
+  ASSERT_GT(macro_in_macro_cache_cnt, 0);
+  int64_t should_in_macro_cache_cnt = 0;
+  int64_t should_in_micro_cache_cnt = 0;
+  get_macro_cnt_in_local_cache(run_ctx.tablet_id_.id(), should_in_macro_cache_cnt, should_in_micro_cache_cnt);
+  ASSERT_GT(should_in_micro_cache_cnt, 0);
 
-//   ObArray<blocksstable::MacroBlockId> block_ids;
-//   get_shared_blocks_for_tablet(block_ids);
-//   for (int64_t i = 0; (i < block_ids.count()); ++i) {
-//     if (block_ids.at(i).is_shared_data_or_meta()) {
-//       check_local_cache(block_ids.at(i), true/*expect_exist*/);
-//     }
-//   }
-//   FLOG_INFO("[TEST] finish test_major_compaction_prewarm", K(run_ctx), K(macro_in_macro_cache_cnt), K(should_in_macro_cache_cnt), K(should_in_micro_cache_cnt));
-// }
+  ObArray<blocksstable::MacroBlockId> block_ids;
+  get_shared_blocks_for_tablet(block_ids);
+  for (int64_t i = 0; (i < block_ids.count()); ++i) {
+    if (block_ids.at(i).is_shared_data_or_meta()) {
+      check_local_cache(block_ids.at(i), true/*expect_exist*/);
+    }
+  }
+  FLOG_INFO("[TEST] finish test_major_compaction_prewarm", K(run_ctx), K(macro_in_macro_cache_cnt), K(should_in_macro_cache_cnt), K(should_in_micro_cache_cnt));
+}
 TEST_F(ObPrereadMetaMacroTest, end)
 {
   if (run_ctx.time_sec_ > 0) {
