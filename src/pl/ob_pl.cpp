@@ -2876,7 +2876,7 @@ int ObPLExecState::final(int ret)
           }
         } else {
           // local cursor must be closed.
-          if (!cursor->is_session_cursor() && !cursor->is_ref_by_refcursor()) {
+          if (!cursor->is_session_cursor()) {
             if (OB_SUCCESS != ObSPIService::spi_cursor_close(&ctx_, func_.get_package_id(),
                                                     func_.get_routine_id(), i, true)) {
               LOG_WARN("failed to close cursor info", K(tmp_ret),
