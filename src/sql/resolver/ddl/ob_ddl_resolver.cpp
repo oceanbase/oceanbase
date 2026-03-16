@@ -13963,6 +13963,9 @@ int ObDDLResolver::check_ttl_definition(
       database_name_, table_name_, false, tbl_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(session_info_->get_effective_tenant_id()),
         K(alter_table_stmt->get_alter_table_arg()));
+    } else if (OB_ISNULL(tbl_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", K(ret), K(database_name_), K(table_name_));
     } else {
       ttl_flag_.fuse(tbl_schema->get_ttl_flag());
     }
@@ -13971,7 +13974,8 @@ int ObDDLResolver::check_ttl_definition(
     LOG_WARN("not supported statement for TTL expression", K(ret), K(stmt_->get_stmt_type()));
   }
 
-  if (node->type_ == T_TTL_DEFINITION_WITH_TYPE) {
+  if (OB_FAIL(ret)) {
+  } else if (node->type_ == T_TTL_DEFINITION_WITH_TYPE) {
     if (OB_UNLIKELY(node->num_child_ < 1)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected ttl type", K(ret), K(node));

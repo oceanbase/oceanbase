@@ -3971,6 +3971,8 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
     LOG_WARN("fail to check can drop column instant", KR(ret), K(orig_table_schema), K(alter_table_schema));
   } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_column_for_append_only_valid(alter_table_arg, orig_table_schema, is_oracle_mode))) {
     LOG_WARN("fail to check alter column for append only valid", KR(ret), K(orig_table_schema), K(alter_table_schema));
+  } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_column_for_compaction_ttl_valid(alter_table_arg, orig_table_schema, tenant_data_version))) {
+    LOG_WARN("fail to check alter column for compaction ttl valid", KR(ret), K(orig_table_schema), K(alter_table_schema));
   }
   for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
     if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {

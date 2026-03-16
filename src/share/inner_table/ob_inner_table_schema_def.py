@@ -25121,7 +25121,7 @@ SELECT
   CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS CHAR(16)) AS AUTO_SPLIT,
   CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS SIGNED) AS AUTO_SPLIT_TABLET_SIZE,
   CAST(NULL AS SIGNED) AS SKIP_INDEX_LEVEL,
-  T.TTL_DEFINITION AS TTL_DEFINITION,
+  CONCAT(T.TTL_DEFINITION, T.TTL_TYPE) AS TTL_DEFINITION,
   T.DELTA_FORMAT AS DELTA_FORMAT,
   CAST(T.STORAGE_CACHE_POLICY AS CHAR(256)) AS STORAGE_CACHE_POLICY
 FROM
@@ -25151,7 +25151,8 @@ FROM
      INDEX_ATTRIBUTES_SET,
      TTL_DEFINITION,
      DELTA_FORMAT,
-     STORAGE_CACHE_POLICY
+     STORAGE_CACHE_POLICY,
+     CASE FLOOR(((CONV(SUBSTR(HEX(TTL_FLAG), 6, 1), 16, 10) & 12) / 4)) WHEN 0 THEN '' WHEN 1 THEN ' BY DELETING' ELSE ' BY COMPACTION' END AS TTL_TYPE
    FROM
      OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
 
@@ -25172,7 +25173,8 @@ FROM
      INDEX_ATTRIBUTES_SET,
      TTL_DEFINITION,
      DELTA_FORMAT,
-     STORAGE_CACHE_POLICY
+     STORAGE_CACHE_POLICY,
+     CASE FLOOR(((CONV(SUBSTR(HEX(TTL_FLAG), 6, 1), 16, 10) & 12) / 4)) WHEN 0 THEN '' WHEN 1 THEN ' BY DELETING' ELSE ' BY COMPACTION' END AS TTL_TYPE
    FROM OCEANBASE.__ALL_VIRTUAL_TABLE
    WHERE TABLE_MODE >> 12 & 15 in (0,1) AND INDEX_ATTRIBUTES_SET & 16 = 0) T
   ON
@@ -46212,7 +46214,7 @@ SELECT
   CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS CHAR(16)) AS AUTO_SPLIT,
   CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS CHAR(128)) AS AUTO_SPLIT_TABLET_SIZE,
   CAST(NULL AS SIGNED) AS SKIP_INDEX_LEVEL,
-  T.TTL_DEFINITION AS TTL_DEFINITION,
+  CONCAT(T.TTL_DEFINITION, T.TTL_TYPE) AS TTL_DEFINITION,
   T.DELTA_FORMAT AS DELTA_FORMAT,
   CAST(T.STORAGE_CACHE_POLICY AS CHAR(256)) AS STORAGE_CACHE_POLICY
 FROM
@@ -46242,7 +46244,8 @@ FROM
      INDEX_ATTRIBUTES_SET,
      TTL_DEFINITION,
      DELTA_FORMAT,
-     STORAGE_CACHE_POLICY
+     STORAGE_CACHE_POLICY,
+     CASE FLOOR(((CONV(SUBSTR(HEX(TTL_FLAG), 6, 1), 16, 10) & 12) / 4)) WHEN 0 THEN '' WHEN 1 THEN ' BY DELETING' ELSE ' BY COMPACTION' END AS TTL_TYPE
    FROM
      OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -46263,7 +46266,8 @@ FROM
      INDEX_ATTRIBUTES_SET,
      TTL_DEFINITION,
      DELTA_FORMAT,
-     STORAGE_CACHE_POLICY
+     STORAGE_CACHE_POLICY,
+     CASE FLOOR(((CONV(SUBSTR(HEX(TTL_FLAG), 6, 1), 16, 10) & 12) / 4)) WHEN 0 THEN '' WHEN 1 THEN ' BY DELETING' ELSE ' BY COMPACTION' END AS TTL_TYPE
    FROM OCEANBASE.__ALL_TABLE
    WHERE TABLE_TYPE != 12 AND TABLE_TYPE != 13
    AND ((TABLE_MODE / 4096) & 15) IN (0,1)
@@ -46511,7 +46515,7 @@ def_table_schema(
         else "INVALID" END AS TASK_TYPE
       FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on
           a.table_id = b.table_id and a.tenant_id = b.tenant_id and a.tenant_id = effective_tenant_id()
-          where a.task_type=4
+          where a.task_type=4 and a.tenant_id = effective_tenant_id()
 """.replace("\n", " ")
 )
 
@@ -46546,7 +46550,7 @@ def_table_schema(
         else "INVALID" END AS TASK_TYPE
       FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_virtual_table b on
           a.table_id = b.table_id and a.tenant_id = b.tenant_id and a.tenant_id = effective_tenant_id()
-          where a.task_type=4
+          where a.task_type=4 and a.tenant_id = effective_tenant_id()
 """.replace("\n", " ")
 )
 
@@ -51370,7 +51374,7 @@ SELECT
   CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS VARCHAR2(16)) AS AUTO_SPLIT,
   CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS VARCHAR2(128)) AS AUTO_SPLIT_TABLET_SIZE,
   CAST(NULL AS NUMBER) AS SKIP_INDEX_LEVEL,
-  T.TTL_DEFINITION AS TTL_DEFINITION,
+  CONCAT(T.TTL_DEFINITION, T.TTL_TYPE) AS TTL_DEFINITION,
   T.DELTA_FORMAT AS DELTA_FORMAT
 FROM
   (SELECT
@@ -51398,7 +51402,12 @@ FROM
      AUTO_PART_SIZE,
      INDEX_ATTRIBUTES_SET,
      TTL_DEFINITION,
-     DELTA_FORMAT
+     DELTA_FORMAT,
+     CASE FLOOR( (BITAND(TO_NUMBER(SUBSTR(RAWTOHEX(TTL_FLAG), 6, 1), 'XX'), 12) / 4) )
+       WHEN 1 THEN ' BY DELETING'
+       WHEN 2 THEN ' BY COMPACTION'
+       ELSE ''
+     END AS TTL_TYPE
    FROM
      SYS.ALL_VIRTUAL_CORE_ALL_TABLE
 
@@ -51417,7 +51426,12 @@ FROM
      AUTO_PART_SIZE,
      INDEX_ATTRIBUTES_SET,
      TTL_DEFINITION,
-     DELTA_FORMAT
+     DELTA_FORMAT,
+     CASE FLOOR( (BITAND(TO_NUMBER(SUBSTR(RAWTOHEX(TTL_FLAG), 6, 1), 'XX'), 12) / 4) )
+       WHEN 1 THEN ' BY DELETING'
+       WHEN 2 THEN ' BY COMPACTION'
+       ELSE ''
+     END AS TTL_TYPE
    FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
    WHERE TENANT_ID = EFFECTIVE_TENANT_ID() AND TABLE_TYPE != 12 AND TABLE_TYPE != 13
    AND BITAND((TABLE_MODE / 4096), 15) IN (0,1)
@@ -81983,11 +81997,11 @@ def_table_schema(
         else 'INVALID' END) AS STATUS,
       a.ret_code as RET_CODE,
       (case a.task_type
-        when 2 then 'COMPACTION'
+        when 4 then 'COMPACTION'
         else 'INVALID' END) AS TASK_TYPE
       FROM SYS.ALL_VIRTUAL_KV_TTL_TASK a left outer JOIN SYS.ALL_VIRTUAL_CORE_ALL_TABLE b on
           a.table_id = b.table_id and a.tenant_id = b.tenant_id and a.tenant_id = effective_tenant_id()
-          where a.task_type=4
+          where a.task_type=4 and a.tenant_id = effective_tenant_id()
 """.replace("\n", " ")
 )
 
@@ -82020,11 +82034,11 @@ def_table_schema(
         else 'INVALID' END) AS STATUS,
       a.ret_code as RET_CODE,
       (case a.task_type
-        when 2 then 'COMPACTION'
+        when 4 then 'COMPACTION'
         else 'INVALID' END) AS TASK_TYPE
       FROM SYS.ALL_VIRTUAL_KV_TTL_TASK_HISTORY a left outer JOIN SYS.ALL_VIRTUAL_CORE_ALL_TABLE b on
           a.table_id = b.table_id and a.tenant_id = b.tenant_id and a.tenant_id = effective_tenant_id()
-          where a.task_type=4
+          where a.task_type=4 and a.tenant_id = effective_tenant_id()
 """.replace("\n", " ")
 )
 # 28294: DBA_OB_SYNC_STANDBY_DEST

@@ -1290,14 +1290,22 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     }
     // after resolve drop column, check append_only table requirements
     if (OB_SUCC(ret)) {
-       if (OB_ISNULL(table_schema_)) {
+      uint64_t tenant_data_version = 0;
+      if (OB_ISNULL(table_schema_) || OB_ISNULL(session_info_)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "table schema is null", K(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret), K(session_info_->get_effective_tenant_id()));
       } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_column_for_append_only_valid(
                      alter_table_stmt->get_alter_table_arg(),
                      *table_schema_,
                      lib::is_oracle_mode()))) {
         SQL_RESV_LOG(WARN, "check alter column for append only valid failed", KR(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_column_for_compaction_ttl_valid(
+                     alter_table_stmt->get_alter_table_arg(),
+                     *table_schema_,
+                     tenant_data_version))) {
+        SQL_RESV_LOG(WARN, "check alter column for compaction ttl valid failed", KR(ret));
       }
     }
 

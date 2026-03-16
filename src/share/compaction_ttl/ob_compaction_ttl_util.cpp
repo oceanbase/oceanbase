@@ -153,7 +153,7 @@ int ObCompactionTTLUtil::check_ttl_column_valid(const ObTableSchema &table_schem
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "compaction ttl for partial update merge engine is");
         } else if (OB_FAIL(check_exist_user_defined_rowscn_column(table_schema))) {
           COMMON_LOG(WARN, "table have user defined rowscn column, can't be compaction ttl table", K(ret), K(table_schema));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "table with user defined rowscn column is not supported as compaction ttl table");
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "table with user defined rowscn column as compaction ttl table is");
         } else if (OB_FAIL(ttl_checker.get_ttl_filter_us(unused))) {
           COMMON_LOG(WARN, "fail to get ttl filter us", KR(ret), K(ttl_definition));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "negative or very large ttl time is");

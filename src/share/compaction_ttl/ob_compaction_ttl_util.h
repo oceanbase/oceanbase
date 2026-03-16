@@ -90,6 +90,11 @@ public:
                                                                 const share::schema::ObTableSchema &table_schema,
                                                                 const bool is_oracle_mode);
 
+  OB_INLINE static int check_alter_column_for_compaction_ttl_valid(
+      const obrpc::ObAlterTableArg &alter_table_arg,
+      const share::schema::ObTableSchema &table_schema,
+      const uint64_t tenant_data_version);
+
   OB_INLINE static int check_alter_partition_for_append_only_valid(const schema::ObTableSchema &table_schema,
                                                                    const obrpc::ObAlterTableArg::AlterPartitionType alter_partition_type);
 
@@ -446,6 +451,58 @@ OB_INLINE int ObCompactionTTLUtil::check_create_mview_for_ttl_valid(const share:
     COMMON_LOG(WARN, "ttl table don't support materialized view", K(ret), K(view_table));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view with ttl definition is");
 
+  }
+
+  return ret;
+}
+
+int ObCompactionTTLUtil::check_alter_column_for_compaction_ttl_valid(
+  const obrpc::ObAlterTableArg &alter_table_arg,
+  const share::schema::ObTableSchema &table_schema,
+  const uint64_t tenant_data_version)
+{
+  using ColumnIterator = schema::ObTableSchema::const_column_iterator;
+
+  int ret = OB_SUCCESS;
+
+  if (is_compaction_ttl_type(table_schema)) {
+
+    if (tenant_data_version < COMPACTION_TTL_CMP_DATA_VERSION) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "compaction ttl is not supported in data version less than 4.5.1", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "compaction ttl table in this version is");
+    } else {
+      const AlterColumnSchema *alter_column_schema = nullptr;
+      ColumnIterator it_begin = alter_table_arg.alter_table_schema_.column_begin();
+      ColumnIterator it_end = alter_table_arg.alter_table_schema_.column_end();
+      for (ColumnIterator it = it_begin; OB_SUCC(ret) && it != it_end; ++it) {
+        if (OB_ISNULL(alter_column_schema = static_cast<const AlterColumnSchema *>(*it))) {
+          ret = OB_ERR_UNEXPECTED;
+          COMMON_LOG(WARN, "unexpected null alter column", KR(ret), K(alter_table_arg), K(table_schema));
+        } else {
+          switch (alter_column_schema->alter_type_) {
+          case OB_DDL_ADD_COLUMN:
+          case OB_DDL_CHANGE_COLUMN:
+          case OB_DDL_MODIFY_COLUMN:
+          case OB_DDL_ALTER_COLUMN: {
+            // 1. can't add ora_rowscn column for ttl table
+            if (is_rowscn_column(alter_column_schema->get_column_name())) {
+              ret = OB_NOT_SUPPORTED;
+              COMMON_LOG(WARN, "can't add ora_rowscn column for ttl table", K(ret), K(table_schema), K(alter_column_schema));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "add ora_rowscn column for ttl table is");
+            }
+            break;
+          }
+          case OB_DDL_DROP_COLUMN:
+            // unrestricted
+            break;
+          default:
+            // other operation is not alter-column-related, unrestricted
+            break;
+          }
+        }
+      }
+    }
   }
 
   return ret;
