@@ -3071,6 +3071,9 @@ typedef enum ObItemType
   T_SEARCH_INDEX_EXCLUDE_PATHS = 4975,
   T_SEARCH_INDEX_INCLUDE_TYPES = 4976,
   T_SET_STORAGE_CACHE_POLICY_STATUS = 4977,
+
+  T_EXTERNAL_LANGUAGE = 4978,  // for Oracle external language parse node
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

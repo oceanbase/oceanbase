@@ -1960,6 +1960,7 @@ constexpr int OB_ERR_MVIEW_CAN_NOT_USE_DIRECT_LOAD = -9835;
 constexpr int OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE = -9836;
 constexpr int OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE = -9837;
 constexpr int OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX = -9838;
+constexpr int OB_ERR_JAVA_SESSION_STATE_CHANGED = -9839;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -4455,6 +4456,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE__USER_ERROR_MSG "FORALL bulk index cannot be used in INTO clause"
 #define OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE__USER_ERROR_MSG "FORALL bulk IN-bind variables cannot be used here"
 #define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__USER_ERROR_MSG "bulk SQL attributes must use a single index"
+#define OB_ERR_JAVA_SESSION_STATE_CHANGED__USER_ERROR_MSG "class %.*s has changed, Java session state cleared"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -9351,6 +9353,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE__OBE_USER_ERROR_MSG "PLS-00440: FORALL bulk IN-bind variables cannot be used here"
 #define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__ORA_USER_ERROR_MSG "PLS-00431: bulk SQL attributes must use a single index"
 #define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__OBE_USER_ERROR_MSG "PLS-00431: bulk SQL attributes must use a single index"
+#define OB_ERR_JAVA_SESSION_STATE_CHANGED__ORA_USER_ERROR_MSG "ORA-29549: class %.*s has changed, Java session state cleared"
+#define OB_ERR_JAVA_SESSION_STATE_CHANGED__OBE_USER_ERROR_MSG "OBE-29549: class %.*s has changed, Java session state cleared"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9684,7 +9688,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2528];
+extern int g_all_ob_errnos[2529];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

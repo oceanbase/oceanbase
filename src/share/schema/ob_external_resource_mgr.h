@@ -35,6 +35,8 @@ public:
     INVALID_TYPE = 0,
     JAVA_JAR_TYPE = 1,
     PYTHON_PY_TYPE = 2,
+    JAVA_ORACLE_JAR_TYPE = 3,  // in Oracle, JAR is not a first-class resource and does not show up in ALL_OBJECTS
+    JAVA_ORACLE_JAR_CLASS_TYPE = 4,  // Java class reside in a JAR file
   };
 
 public:

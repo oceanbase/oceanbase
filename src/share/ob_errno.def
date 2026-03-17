@@ -2773,6 +2773,8 @@ DEFINE_ERROR(OB_ERR_MVIEW_CAN_NOT_USE_DIRECT_LOAD, -9835, -1, "HY000", "material
 DEFINE_PLS_ERROR(OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE, -9836, -1, "HY000", "FORALL bulk index cannot be used in INTO clause", 437, "FORALL bulk index cannot be used in INTO clause");
 DEFINE_PLS_ERROR(OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE, -9837, -1, "HY000", "FORALL bulk IN-bind variables cannot be used here", 440, "FORALL bulk IN-bind variables cannot be used here");
 DEFINE_PLS_ERROR(OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX, -9838, -1, "HY000", "bulk SQL attributes must use a single index", 431, "bulk SQL attributes must use a single index");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_JAVA_SESSION_STATE_CHANGED, -9839, -1, "HY000", "class has changed, Java session state cleared", "class %.*s has changed, Java session state cleared", 29549, "class has changed, Java session state cleared", "class %.*s has changed, Java session state cleared");
+
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)
