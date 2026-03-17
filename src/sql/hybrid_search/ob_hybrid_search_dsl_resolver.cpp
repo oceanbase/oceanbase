@@ -974,7 +974,7 @@ int ObDSLResolver::get_fulltext_index_schema(const ObString &col_name, const ObT
   } else if (OB_ISNULL(idx_info->index_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index schema is null", K(ret), K(col_name));
-  } else if (!share::schema::is_fts_index_aux(idx_info->index_schema_->get_index_type())) {
+  } else if (!idx_info->index_schema_->is_fts_index_aux()) {
   } else {
     index_schema = idx_info->index_schema_;
   }
@@ -1160,18 +1160,29 @@ int ObDSLResolver::init_col_idx_map()
           } else if (OB_FAIL(table_column->get_cascaded_column_ids(cascaded_column_ids))) {
             LOG_WARN("failed to get cascaded_column_ids", K(ret));
           } else {
+            ObSEArray<uint64_t, 4, ModulePageAllocator, true> user_column_ids;
+            bool is_multi_column_index = false;
             for (int64_t k = 0; OB_SUCC(ret) && k < cascaded_column_ids.count(); k++) {
+              const ObColumnSchemaV2 *cascaded_column = table_schema_->get_column_schema(cascaded_column_ids.at(k));
+              if (cascaded_column->is_hidden() ||
+                  cascaded_column->is_unused() ||
+                  cascaded_column->is_invisible_column() ||
+                  cascaded_column->is_shadow_column()) {
+                // ignore these columns
+              } else if (OB_FAIL(user_column_ids.push_back(cascaded_column->get_column_id()))) {
+                LOG_WARN("fail to push back visible column id", K(ret), K(cascaded_column->get_column_id()));
+              }
+            }
+            if (OB_SUCC(ret) && index_schema->is_fts_index_aux() && user_column_ids.count() > 1) {
+              is_multi_column_index = true;
+            }
+            for (int64_t k = 0; OB_SUCC(ret) && !is_multi_column_index && k < user_column_ids.count(); k++) {
               const ObColumnSchemaV2 *cascaded_column = nullptr;
               ObString column_name;
               ObColumnIndexInfo *existing_idx_info = nullptr;
-              if (OB_ISNULL(cascaded_column = table_schema_->get_column_schema(cascaded_column_ids.at(k)))) {
+              if (OB_ISNULL(cascaded_column = table_schema_->get_column_schema(user_column_ids.at(k)))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("unexpected cascaded column", K(ret));
-              } else if (cascaded_column->is_hidden() ||
-                         cascaded_column->is_unused() ||
-                         cascaded_column->is_invisible_column() ||
-                         cascaded_column->is_shadow_column()) {
-                // do nothing
               } else if (OB_FALSE_IT(column_name = cascaded_column->get_column_name_str())) {
               } else if (OB_FAIL(col_idx_map_.get_refactored(column_name, existing_idx_info))) {
                 if (ret == OB_HASH_NOT_EXIST) {
