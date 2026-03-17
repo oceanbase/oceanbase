@@ -2467,7 +2467,13 @@ int ObPlanCacheValue::get_all_dep_schema(ObSchemaGetterGuard &schema_guard,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get an unexpected null synonym schema", K(ret));
         } else {
-          tmp_schema_obj.database_id_ = synonym_schema->get_database_id();
+          // 对公共同义词（database_id == OB_PUBLIC_SCHEMA_ID），当 is_db_explicit_=true 时，
+          // 需使用 invoker_db_id_ 而非 OB_PUBLIC_SCHEMA_ID，与 init_with_synonym 保持一致。
+          tmp_schema_obj.database_id_ =
+              (dep_schema_objs.at(i).is_db_explicit_ &&
+               synonym_schema->get_database_id() == OB_PUBLIC_SCHEMA_ID)
+                  ? dep_schema_objs.at(i).invoker_db_id_
+                  : synonym_schema->get_database_id();
           tmp_schema_obj.schema_version_ = synonym_schema->get_schema_version();
           tmp_schema_obj.schema_id_ = synonym_schema->get_synonym_id();
           tmp_schema_obj.schema_type_ = SYNONYM_SCHEMA;
