@@ -896,12 +896,38 @@ int ObDBMSVectorMySql::check_sql_valid(const ObString &sql_query)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("sql query is empty", K(ret));
   } else {
-    // Check for subqueries by counting SELECT keywords outside of string literals
-    int select_count = 0;
     const char *ptr = sql_query.ptr();
     const char *end = ptr + sql_query.length();
 
+    // Enhanced check for dangerous SQL patterns that shouldn't be allowed in recall functions
+    // Check for subqueries by counting SELECT keywords outside of string literals
+    int select_count = 0;
+
     while (ptr < end) {
+      // Skip comments
+      if (ptr + 2 <= end && ptr[0] == '-' && ptr[1] == '-') {
+        ptr += 2;
+        while (ptr < end && *ptr != '\n' && *ptr != '\r') {
+          ptr++;
+        }
+        continue;
+      } else if (ptr + 2 <= end && ptr[0] == '/' && ptr[1] == '*') {
+        ptr += 2;
+        int comment_depth = 1;
+        while (comment_depth > 0 && ptr + 1 < end) {
+          if (*ptr == '/' && *(ptr + 1) == '*') {
+            comment_depth++;
+            ptr += 2;
+          } else if (*ptr == '*' && *(ptr + 1) == '/') {
+            comment_depth--;
+            ptr += 2;
+          } else {
+            ptr++;
+          }
+        }
+        continue;
+      }
+
       // Skip string literals (single quotes)
       if (*ptr == '\'') {
         ptr++;
@@ -930,6 +956,94 @@ int ObDBMSVectorMySql::check_sql_valid(const ObString &sql_query)
         continue;
       }
 
+      // Skip backtick-quoted identifiers
+      if (*ptr == '`') {
+        ptr++;
+        while (ptr < end && *ptr != '`') {
+          if (*ptr == '`' && ptr + 1 < end && *(ptr + 1) == '`') {
+            ptr += 2;  // Skip escaped backtick
+          } else {
+            ptr++;
+          }
+        }
+        if (ptr < end) ptr++;  // Skip closing backtick
+        continue;
+      }
+
+      // Check for dangerous keywords/patterns
+      if (ptr + 6 <= end) {
+        // Check for UNION keywords as they are commonly used for SQL injection
+        if ((ptr[0] == 'U' || ptr[0] == 'u') &&
+            (ptr[1] == 'N' || ptr[1] == 'n') &&
+            (ptr[2] == 'I' || ptr[2] == 'i') &&
+            (ptr[3] == 'O' || ptr[3] == 'o') &&
+            (ptr[4] == 'N' || ptr[4] == 'n')) {
+          // Check if it's a whole word
+          bool is_word_start = (ptr == sql_query.ptr()) ||
+                               (!isalnum(static_cast<unsigned char>(*(ptr - 1))) && *(ptr - 1) != '_');
+          bool is_word_end = (ptr + 5 >= end) ||
+                             (!isalnum(static_cast<unsigned char>(*(ptr + 5))) && *(ptr + 5) != '_');
+          if (is_word_start && is_word_end) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "UNION not supported in recall rate calculation SQL");
+            LOG_WARN("UNION found in sql_query, not supported", K(ret), K(sql_query));
+            break;
+          }
+        }
+        // Check for INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, EXECUTE, etc.
+        else if ((ptr[0] == 'I' || ptr[0] == 'i') &&
+                 (ptr[1] == 'N' || ptr[1] == 'n') &&
+                 (ptr[2] == 'S' || ptr[2] == 's') &&
+                 (ptr[3] == 'E' || ptr[3] == 'e') &&
+                 (ptr[4] == 'R' || ptr[4] == 'r') &&
+                 (ptr[5] == 'T' || ptr[5] == 't')) {
+          bool is_word_start = (ptr == sql_query.ptr()) ||
+                               (!isalnum(static_cast<unsigned char>(*(ptr - 1))) && *(ptr - 1) != '_');
+          bool is_word_end = (ptr + 6 >= end) ||
+                             (!isalnum(static_cast<unsigned char>(*(ptr + 6))) && *(ptr + 6) != '_');
+          if (is_word_start && is_word_end) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "INSERT not supported in recall rate calculation SQL");
+            LOG_WARN("INSERT found in sql_query, not supported", K(ret), K(sql_query));
+            break;
+          }
+        }
+        else if ((ptr[0] == 'U' || ptr[0] == 'u') &&
+                 (ptr[1] == 'P' || ptr[1] == 'p') &&
+                 (ptr[2] == 'D' || ptr[2] == 'd') &&
+                 (ptr[3] == 'A' || ptr[3] == 'a') &&
+                 (ptr[4] == 'T' || ptr[4] == 't') &&
+                 (ptr[5] == 'E' || ptr[5] == 'e')) {
+          bool is_word_start = (ptr == sql_query.ptr()) ||
+                               (!isalnum(static_cast<unsigned char>(*(ptr - 1))) && *(ptr - 1) != '_');
+          bool is_word_end = (ptr + 6 >= end) ||
+                             (!isalnum(static_cast<unsigned char>(*(ptr + 6))) && *(ptr + 6) != '_');
+          if (is_word_start && is_word_end) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "UPDATE not supported in recall rate calculation SQL");
+            LOG_WARN("UPDATE found in sql_query, not supported", K(ret), K(sql_query));
+            break;
+          }
+        }
+        else if ((ptr[0] == 'D' || ptr[0] == 'd') &&
+                 (ptr[1] == 'E' || ptr[1] == 'e') &&
+                 (ptr[2] == 'L' || ptr[2] == 'l') &&
+                 (ptr[3] == 'E' || ptr[3] == 'e') &&
+                 (ptr[4] == 'T' || ptr[4] == 't') &&
+                 (ptr[5] == 'E' || ptr[5] == 'e')) {
+          bool is_word_start = (ptr == sql_query.ptr()) ||
+                               (!isalnum(static_cast<unsigned char>(*(ptr - 1))) && *(ptr - 1) != '_');
+          bool is_word_end = (ptr + 6 >= end) ||
+                             (!isalnum(static_cast<unsigned char>(*(ptr + 6))) && *(ptr + 6) != '_');
+          if (is_word_start && is_word_end) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "DELETE not supported in recall rate calculation SQL");
+            LOG_WARN("DELETE found in sql_query, not supported", K(ret), K(sql_query));
+            break;
+          }
+        }
+      }
+
       // Check for SELECT keyword (case-insensitive)
       if (ptr + 6 <= end &&
           (ptr[0] == 'S' || ptr[0] == 's') &&
@@ -954,6 +1068,21 @@ int ObDBMSVectorMySql::check_sql_valid(const ObString &sql_query)
           }
           ptr += 6;
           continue;
+        }
+      }
+
+      // Check for other dangerous patterns like semicolons outside quotes/comments
+      // Allow trailing semicolon (e.g. "SELECT * FROM t;") but reject multi-statement (e.g. "SELECT 1; DROP TABLE t")
+      if (*ptr == ';') {
+        const char *p = ptr + 1;
+        while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) {
+          p++;
+        }
+        if (p < end) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "semicolon not supported in recall rate calculation SQL");
+          LOG_WARN("semicolon found in sql_query, not supported", K(ret), K(sql_query));
+          break;
         }
       }
 

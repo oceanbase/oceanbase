@@ -170,82 +170,280 @@ int sql::ObVectorRecallCalcUtil::parse_table_name_from_sql(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(allocator));
   } else {
-    // Convert SQL to uppercase for keyword matching
-    ObString sql_upper;
-    char *upper_buf = nullptr;
-    if (OB_ISNULL(upper_buf = static_cast<char*>(allocator->alloc(sql_query.length())))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory", K(ret), K(sql_query.length()));
-    } else {
-      for (int64_t i = 0; i < sql_query.length(); ++i) {
-        upper_buf[i] = static_cast<char>(toupper(static_cast<unsigned char>(sql_query.ptr()[i])));
-      }
-      sql_upper.assign_ptr(upper_buf, sql_query.length());
+    // First find all quoted strings and comments to properly handle them
+    const char *orig_sql_ptr = sql_query.ptr();
+    const int64_t sql_len = sql_query.length();
 
-      const char *sql_ptr = sql_upper.ptr();
-      const char *from_pos = strstr(sql_ptr, "FROM ");
+    // Skip potential leading comments before the SELECT keyword
+    const char *ptr = orig_sql_ptr;
+    const char *end = orig_sql_ptr + sql_len;
+
+    // Skip past potential comment blocks
+    while (ptr + 1 < end) {
+      // Skip comment: -- style
+      if (ptr + 1 < end && ptr[0] == '-' && ptr[1] == '-') {
+        ptr += 2;
+        while (ptr < end && *ptr != '\n' && *ptr != '\r') {
+          ptr++;
+        }
+      }
+      // Skip comment: /* */ style
+      else if (ptr + 1 < end && ptr[0] == '/' && ptr[1] == '*') {
+        ptr += 2;
+        while (ptr + 1 < end) {
+          if (ptr[0] == '*' && ptr[1] == '/') {
+            ptr += 2;
+            break;
+          }
+          ptr++;
+        }
+      }
+      // Skip regular character if not a comment start
+      else {
+        ptr++;
+      }
+    }
+
+    // Now look for SELECT statement after handling comments
+    const char *select_pos = nullptr;
+    const char *current_ptr = ptr = orig_sql_ptr;  // Reset to original start
+    // Find first SELECT
+    while (current_ptr + 6 <= end) {
+      // Check if current location is actual SELECT word (case-insensitive, whole word only)
+      if ((current_ptr[0] == 'S' || current_ptr[0] == 's') &&
+          (current_ptr[1] == 'E' || current_ptr[1] == 'e') &&
+          (current_ptr[2] == 'L' || current_ptr[2] == 'l') &&
+          (current_ptr[3] == 'E' || current_ptr[3] == 'e') &&
+          (current_ptr[4] == 'C' || current_ptr[4] == 'c') &&
+          (current_ptr[5] == 'T' || current_ptr[5] == 't')) {
+        // Check if SELECT is surrounded by word boundaries to avoid SELECT* etc.
+        bool is_select_word = true;
+        if (current_ptr > orig_sql_ptr) {
+          // Check preceding character
+          char prev_char = *(current_ptr - 1);
+          is_select_word = (!isalnum(prev_char) && prev_char != '_');
+        }
+        if (current_ptr + 6 < end) {
+          // Check following character
+          char next_char = current_ptr[6];
+          is_select_word = is_select_word && (!isalnum(next_char) && next_char != '_');
+        }
+        if (is_select_word) {
+          select_pos = current_ptr;
+          break;
+        }
+      }
+      current_ptr++;
+    }
+
+    if (select_pos == nullptr) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "calc, no SELECT clause found in sql");
+      LOG_WARN("no SELECT clause found in sql", K(ret), K(sql_query));
+    } else {
+      // Skip past the SELECT clause and potential user hints
+      const char *start = select_pos + 6; // Skip past "SELECT"
+      bool in_hint = false;
+      while (start < end && isspace(*start)) {
+        start++;
+      }
+
+      // Handle /*+ hint */ at the beginning after SELECT
+      if (start + 3 <= end && start[0] == '/' && start[1] == '*' && start[2] == '+') {
+        in_hint = true;
+        start += 3; // Skip "/*+"
+        while (start + 1 < end) {
+          if (start[0] == '*' && start[1] == '/') {
+            start += 2; // Skip "*/"
+            in_hint = false;
+            break;
+          }
+          start++;
+        }
+      }
+
+      // Find the FROM clause after skipping the hint
+      const char *from_pos = nullptr;
+      const char *cursor = start;
+      while (cursor + 4 <= end) {
+        // Only look for FROM if not in a string literal
+        if ((cursor[0] == 'F' || cursor[0] == 'f') &&
+            (cursor[1] == 'R' || cursor[1] == 'r') &&
+            (cursor[2] == 'O' || cursor[2] == 'o') &&
+            (cursor[3] == 'M' || cursor[3] == 'm')) {
+          // Check if 'FROM' is surrounded by non-word characters to avoid "FROM*" etc.
+          bool is_from_word = true;
+          if (cursor > start) {
+            char prev_char = *(cursor - 1);
+            is_from_word = (!isalnum(prev_char) && prev_char != '_');
+          }
+          if (cursor + 4 < end) {
+            char next_char = cursor[4];
+            is_from_word = is_from_word && (!isalnum(next_char) && next_char != '_');
+          }
+          if (is_from_word) {
+            from_pos = cursor;
+            break;
+          }
+        }
+        cursor++;
+      }
 
       if (OB_ISNULL(from_pos)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "calc, no FROM clause found in sql");
         LOG_WARN("no FROM clause found in sql", K(ret));
       } else {
-        // Find the table name after FROM
-        const char *table_start = from_pos + 5; // skip "FROM "
+        // Find the table name after FROM, but properly skip string literals and comments
+        const char *table_start = from_pos + 4; // skip "FROM"
 
-        // Skip whitespace
-        while (table_start < sql_ptr + sql_upper.length() && isspace(*table_start)) {
-          table_start++;
+        // Properly skip whitespace, handling comments etc.
+        bool skipping = true;
+        while (table_start < end && skipping) {
+          // Skip comments
+          if (table_start + 2 <= end && table_start[0] == '-' && table_start[1] == '-') {
+            table_start += 2;
+            while (table_start < end && *table_start != '\n' && *table_start != '\r') {
+              table_start++;
+            }
+          } else if (table_start + 2 <= end && table_start[0] == '/' && table_start[1] == '*') {
+            table_start += 2;
+            while (table_start + 1 < end) {
+              if (table_start[0] == '*' && table_start[1] == '/') {
+                table_start += 2;
+                break;
+              }
+              table_start++;
+            }
+          }
+          // Skip whitespace
+          else if (isspace(*table_start)) {
+            table_start++;
+          } else {
+            skipping = false;
+          }
         }
 
-        // Find end of table name
-        const char *table_end = table_start;
-        while (table_end < sql_ptr + sql_upper.length() &&
-               !isspace(*table_end) &&
-               *table_end != ',' &&
-               *table_end != '(' &&
-               *table_end != ';' &&
-               *table_end != ')' &&
-               strncmp(table_end, "WHERE", 5) != 0 &&
-               strncmp(table_end, "ORDER", 5) != 0 &&
-               strncmp(table_end, "GROUP", 5) != 0 &&
-               strncmp(table_end, "HAVING", 6) != 0 &&
-               strncmp(table_end, "LIMIT", 5) != 0 &&
-               strncmp(table_end, "UNION", 5) != 0) {
-          table_end++;
-        }
-
-        // Get the original case table name from original SQL
-        const char *orig_sql_ptr = sql_query.ptr();
-        const char *orig_table_start = orig_sql_ptr + (table_start - sql_ptr);
-        const char *orig_table_end = orig_sql_ptr + (table_end - sql_ptr);
-        int64_t table_len = orig_table_end - orig_table_start;
-
-        if (table_len <= 0) {
+        if (table_start >= end) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "calc, did not find table name in sql");
-          LOG_WARN("invalid table name length", K(ret), K(table_len));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "calc, no table name found after FROM");
+          LOG_WARN("no table name found after FROM", K(ret));
         } else {
-          table_name.assign_ptr(orig_table_start, static_cast<int32_t>(table_len));
+          // Now we need to parse the table name, properly handling string literals with quotes
+          const char *table_end = table_start;
 
-          // Check if table name contains database prefix (db.table)
-          const char *dot_pos = nullptr;
-          for (const char *p = table_name.ptr(); p < table_name.ptr() + table_name.length(); p++) {
-            if (*p == '.') {
-              dot_pos = p;
-              break;
+          // Handle quoted identifiers
+          if (*table_end == '`' || *table_end == '"' || *table_end == '\'') {  // backtick, double quote, regular quote
+            char quote_char = *table_end;
+            table_end++; // move past opening quote
+
+            while (table_end < end) {
+              if (*table_end == quote_char) {
+                table_end++; // move past closing quote
+                // Check if this is an escaped quote (e.g. "", '')
+                if (table_end < end && *table_end == quote_char) {
+                  table_end++; // skip the escaped quote
+                  continue;    // continue inside the quoted identifier
+                }
+                break; // normal closing quote
+              }
+              table_end++;
+            }
+          } else {
+            // Not quoted, find the end using word boundary checks
+            while (table_end < end && *table_end != ',' && *table_end != ';' &&
+                   !isspace(*table_end) && *table_end != '(' && *table_end != ')') {
+              // Check for SQL keywords that indicate the end of table name
+              if (table_end + 5 <= end) {
+                // Check for common keywords after table name
+                if ((table_end[0] == 'W' || table_end[0] == 'w') &&
+                    (table_end[1] == 'H' || table_end[1] == 'h') &&
+                    (table_end[2] == 'E' || table_end[2] == 'e') &&
+                    (table_end[3] == 'R' || table_end[3] == 'r') &&
+                    (table_end[4] == 'E' || table_end[4] == 'e')) {
+                  // Check if it's a whole keyword
+                  if (table_end == table_start || (!isalnum(table_end[-1]) && table_end[-1] != '_')) {
+                    if (table_end + 5 >= end || (!isalnum(table_end[5]) && table_end[5] != '_')) {
+                      break;
+                    }
+                  }
+                }
+              }
+              if (table_end + 4 <= end) {
+                if ((table_end[0] == 'L' || table_end[0] == 'l') &&
+                    (table_end[1] == 'I' || table_end[1] == 'i') &&
+                    (table_end[2] == 'M' || table_end[2] == 'm') &&
+                    (table_end[3] == 'I' || table_end[3] == 'i') &&
+                    (table_end[4] == 'T' || table_end[4] == 't')) {
+                  // Check if it's a whole keyword
+                  if (table_end == table_start || (!isalnum(table_end[-1]) && table_end[-1] != '_')) {
+                    if (table_end + 5 >= end || (!isalnum(table_end[5]) && table_end[5] != '_')) {
+                      break;
+                    }
+                  }
+                }
+              }
+              if (table_end + 5 <= end) {
+                if ((table_end[0] == 'O' || table_end[0] == 'o') &&
+                    (table_end[1] == 'R' || table_end[1] == 'r') &&
+                    (table_end[2] == 'D' || table_end[2] == 'd') &&
+                    (table_end[3] == 'E' || table_end[3] == 'e') &&
+                    (table_end[4] == 'R' || table_end[4] == 'r')) {
+                  // Check if it's a whole keyword
+                  if (table_end == table_start || (!isalnum(table_end[-1]) && table_end[-1] != '_')) {
+                    if (table_end + 5 >= end || (!isalnum(table_end[5]) && table_end[5] != '_')) {
+                      break;
+                    }
+                  }
+                }
+              }
+              if (table_end + 4 <= end) {
+                if ((table_end[0] == 'G' || table_end[0] == 'g') &&
+                    (table_end[1] == 'R' || table_end[1] == 'r') &&
+                    (table_end[2] == 'O' || table_end[2] == 'o') &&
+                    (table_end[3] == 'U' || table_end[3] == 'u') &&
+                    (table_end[4] == 'P' || table_end[4] == 'p')) {
+                  // Check if it's a whole keyword
+                  if (table_end == table_start || (!isalnum(table_end[-1]) && table_end[-1] != '_')) {
+                    if (table_end + 5 >= end || (!isalnum(table_end[5]) && table_end[5] != '_')) {
+                      break;
+                    }
+                  }
+                }
+              }
+              table_end++;
             }
           }
 
-          // If table name contains database prefix, extract database and table parts
-          db_name = default_db_name;
-          if (dot_pos != nullptr) {
-            int64_t db_len = dot_pos - table_name.ptr();
-            db_name.assign_ptr(table_name.ptr(), static_cast<int32_t>(db_len));
-            table_name.assign_ptr(dot_pos + 1, static_cast<int32_t>(table_name.length() - db_len - 1));
-          }
+          int64_t table_len = table_end - table_start;
 
-          LOG_DEBUG("parsed table name from sql", K(db_name), K(table_name));
+          if (table_len <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "calc, did not find table name in sql");
+            LOG_WARN("invalid table name length", K(ret), K(table_len));
+          } else {
+            table_name.assign_ptr(table_start, static_cast<int32_t>(table_len));
+
+            // Check if table name contains database prefix (db.table)
+            const char *dot_pos = nullptr;
+            for (const char *p = table_name.ptr(); p < table_name.ptr() + table_name.length(); p++) {
+              if (*p == '.') {
+                // Only treat as prefix if not inside backticks, which could be a complex column path
+                dot_pos = p;
+                break;
+              }
+            }
+
+            // If table name contains database prefix, extract database and table parts
+            db_name = default_db_name;
+            if (dot_pos != nullptr) {
+              int64_t db_len = dot_pos - table_name.ptr();
+              db_name.assign_ptr(table_name.ptr(), static_cast<int32_t>(db_len));
+              table_name.assign_ptr(dot_pos + 1, static_cast<int32_t>(table_name.length() - db_len - 1));
+            }
+
+            LOG_DEBUG("parsed table name from sql", K(db_name), K(table_name));
+          }
         }
       }
     }
@@ -305,9 +503,21 @@ int sql::ObVectorRecallCalcUtil::build_pk_select_sql(
     // Parse the original SQL to extract the remaining clause after table name
     const char *orig_sql_ptr = sql_query.ptr();
     const char *sql_end = orig_sql_ptr + sql_query.length();
-    const char *from_pos = strstr(orig_sql_ptr, "FROM ");
-    if (OB_ISNULL(from_pos)) {
-      from_pos = strstr(orig_sql_ptr, "from ");
+    // Case-insensitive search for "FROM " in the original SQL string
+    const char *from_pos = nullptr;
+    const char *p = orig_sql_ptr;
+
+    // Search for "FROM " (case-insensitive)
+    while (p <= sql_end - 5) { // "FROM " is 5 chars (F-R-O-M-space)
+      if ((p[0] == 'F' || p[0] == 'f') &&
+          (p[1] == 'R' || p[1] == 'r') &&
+          (p[2] == 'O' || p[2] == 'o') &&
+          (p[3] == 'M' || p[3] == 'm') &&
+          (p[4] == ' ')) {
+        from_pos = p;
+        break;
+      }
+      p++;
     }
 
     if (OB_ISNULL(from_pos)) {
@@ -318,9 +528,21 @@ int sql::ObVectorRecallCalcUtil::build_pk_select_sql(
       // Extract user hint from original SQL (between SELECT and FROM)
       // Look for /*+ ... */ pattern after SELECT keyword
       ObString user_hint;
-      const char *select_pos = strstr(orig_sql_ptr, "SELECT ");
-      if (OB_ISNULL(select_pos)) {
-        select_pos = strstr(orig_sql_ptr, "select ");
+      const char *select_pos = nullptr;
+      const char *p_select = orig_sql_ptr;
+      // Search for "SELECT " (case-insensitive)
+      while (p_select <= sql_end - 7) { // "SELECT " is 7 chars (S-E-L-E-C-T-space)
+        if ((p_select[0] == 'S' || p_select[0] == 's') &&
+            (p_select[1] == 'E' || p_select[1] == 'e') &&
+            (p_select[2] == 'L' || p_select[2] == 'l') &&
+            (p_select[3] == 'E' || p_select[3] == 'e') &&
+            (p_select[4] == 'C' || p_select[4] == 'c') &&
+            (p_select[5] == 'T' || p_select[5] == 't') &&
+            (p_select[6] == ' ')) {
+          select_pos = p_select;
+          break;
+        }
+        p_select++;
       }
       if (OB_NOT_NULL(select_pos)) {
         const char *after_select = select_pos + 7; // skip "SELECT "
@@ -429,16 +651,44 @@ int sql::ObVectorRecallCalcUtil::build_pk_select_sql(
         }
       }
 
+      // Validate database name and table name for malicious content
+      if (OB_SUCC(ret)) {
+        // Check for potentially harmful patterns in the schema/table names
+        for (int64_t i = 0; i < db_name.length(); ++i) {
+          char c = db_name.ptr()[i];
+          if (!isalnum(c) && c != '_' && c != '-' && c != '.') {
+            // Check for dangerous patterns like SQL injection
+            if (c == '\'' || c == '"' || c == ';' || c == '\\' || c == '/') {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid character in database name", K(ret), K(c), K(db_name));
+              break;
+            }
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        for (int64_t i = 0; i < table_name.length(); ++i) {
+          char c = table_name.ptr()[i];
+          if (!isalnum(c) && c != '_' && c != '-' && c != '.' && c != '`') {
+            // Check for dangerous patterns like SQL injection
+            if (c == '\'' || c == '"' || c == ';' || c == '\\' || c == '/') {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid character in table name", K(ret), K(c), K(table_name));
+              break;
+            }
+          }
+        }
+      }
+
       // Append FROM database_name.table_name
       if (OB_SUCC(ret)) {
         if (OB_FAIL(modified_sql.append(" FROM "))) {
           LOG_WARN("fail to append FROM", K(ret));
-        } else if (OB_FAIL(modified_sql.append(db_name))) {
-          LOG_WARN("fail to append database name", K(ret), K(db_name));
-        } else if (OB_FAIL(modified_sql.append("."))) {
-          LOG_WARN("fail to append dot", K(ret));
-        } else if (OB_FAIL(modified_sql.append(table_name))) {
-          LOG_WARN("fail to append table name", K(ret), K(table_name));
+        } else if (OB_FAIL(modified_sql.append_fmt("`%.*s`.`%.*s`",
+                     static_cast<int32_t>(db_name.length()), db_name.ptr(),
+                     static_cast<int32_t>(table_name.length()), table_name.ptr()))) {
+          LOG_WARN("fail to append qualified table name", K(ret), K(db_name), K(table_name));
         } else if (remaining_sql.length() > 0 && OB_FAIL(modified_sql.append(remaining_sql))) {
           LOG_WARN("fail to append remaining clause", K(ret));
         }
