@@ -383,6 +383,7 @@ using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::
       common::ObDiagnosticInfoContainer*,            \
       ObTimerService*,                               \
       omt::ObSharedTimer*,                           \
+      storage::ObDDLDagMonitorMgr*,                  \
       oceanbase::sql::ObTenantSQLSessionMgr*,        \
       storage::ObTenantMetaMemMgr*,                  \
       storage::ObTenantFTPluginMgr*,                 \
@@ -463,7 +464,6 @@ using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::
       sql::ObTenantSqlMemoryManager*,                \
       sql::dtl::ObDTLIntermResultManager*,           \
       sql::ObPlanMonitorNodeList*,                   \
-      storage::ObDDLDagMonitorMgr*,          \
       sql::ObDataAccessService*,                     \
       sql::ObDASIDService*,                          \
       share::schema::ObTenantSchemaService*,         \
