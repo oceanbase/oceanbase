@@ -23966,10 +23966,12 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
             } else {
               // modify the state of the all hidden index tables to non-hidden
               tmp_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_NORMAL);
-              if (OB_FAIL(table_schemas.push_back(tmp_schema))) {
-                LOG_WARN("failed to add table schema!", K(ret));
-              } else if (OB_FAIL(add_search_data_index_schemas_(tenant_id, tmp_schema, schema_guard, table_schemas))) {
+              if (tmp_schema.is_search_def_index()
+                  && OB_FAIL(add_search_data_index_schemas_(tenant_id, tmp_schema, schema_guard,
+                                                            table_schemas))) {
                 LOG_WARN("failed to add search data index schemas", KR(ret));
+              } else if (OB_FAIL(table_schemas.push_back(tmp_schema))) {
+                LOG_WARN("failed to add table schema!", K(ret));
               }
             }
           }
