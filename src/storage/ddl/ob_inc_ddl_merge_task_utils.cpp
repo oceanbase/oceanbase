@@ -94,7 +94,8 @@ int ObIncDDLMergeTaskUtils::freeze_inc_major_ddl_kv(
     const ObTxSEQ &seq_no,
     const int64_t snapshot_version,
     const uint64_t data_format_version,
-    const bool is_replay)
+    const bool is_replay,
+    const share::SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!tablet_handle.is_valid()
@@ -140,7 +141,16 @@ int ObIncDDLMergeTaskUtils::freeze_inc_major_ddl_kv(
       mock_start_scn.convert_for_tx(SS_DDL_START_SCN_VAL);
       ObStorageSchema *storage_schema = nullptr;
       ObArenaAllocator arena("FreezeIncDdlKv", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-      if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(arena, storage_schema))) {
+      ObLSHandle ls_handle;
+      const share::ObLSID &ls_id = tablet_handle.get_obj()->get_tablet_meta().ls_id_;
+      ObLSService *ls_service = MTL(ObLSService *);
+
+      if (OB_ISNULL(ls_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls service is null", K(ret));
+      } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+        LOG_WARN("get ls failed", K(ret), K(ls_id));
+      } else if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(arena, storage_schema))) {
         LOG_WARN("load storage schema failed", K(ret), K(tablet_handle));
       } else if (OB_ISNULL(storage_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -153,10 +163,12 @@ int ObIncDDLMergeTaskUtils::freeze_inc_major_ddl_kv(
         if (!storage_schema->is_user_data_table()) {
           // 非用户表只有行存
           table_type = ObITable::INC_MAJOR_DDL_MEM_SSTABLE;
-        } else if (storage_schema->is_row_store() &&
-                   CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN !=
-                     tablet_handle.get_obj()->get_tablet_meta().ddl_replay_status_) {
-          table_type = ObITable::INC_MAJOR_DDL_MEM_SSTABLE;
+        } else if (storage_schema->is_row_store()) {
+          if (ls_handle.get_ls()->is_cs_replica() && start_scn > tablet_handle.get_obj()->get_tablet_meta().inc_major_replay_scn_) {
+            table_type = ObITable::INC_MAJOR_DDL_MEM_CO_SSTABLE;
+          } else {
+            table_type = ObITable::INC_MAJOR_DDL_MEM_SSTABLE;
+          }
         } else {
           table_type = ObITable::INC_MAJOR_DDL_MEM_CO_SSTABLE;
         }

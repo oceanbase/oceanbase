@@ -1433,6 +1433,13 @@ int ObLSTabletService::ObUpdateTabletReportStatus::modify_tablet_meta(ObTabletMe
   return ret;
 }
 
+int ObLSTabletService::ObUpdateIncMajorReplayScn::modify_tablet_meta(ObTabletMeta &meta)
+{
+  int ret = OB_SUCCESS;
+  meta.inc_major_replay_scn_ = SCN::max(meta.inc_major_replay_scn_, inc_major_replay_scn_);
+  return ret;
+}
+
 int ObLSTabletService::update_tablet_report_status(
     const common::ObTabletID &tablet_id,
     const bool found_column_group_checksum_error)
@@ -1504,24 +1511,23 @@ int ObLSTabletService::update_tablet_report_status(
   return ret;
 }
 
-int ObLSTabletService::update_tablet_ddl_replay_status_for_cs_replica(
+int ObLSTabletService::update_tablet_inc_major_replay_scn(
     const common::ObTabletID &tablet_id,
-    const ObCSReplicaDDLReplayStatus &ddl_replay_status)
+    const share::SCN &inc_major_replay_scn)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   uint64_t data_version = 0;
-  ObTimeGuard time_guard("ObLSTabletService::update_tablet_ddl_replay_status_for_cs_replica", 1_s);
+  ObTimeGuard time_guard("ObLSTabletService::update_tablet_inc_major_replay_scn", 1_s);
   time_guard.click("Lock");
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() || !inc_major_replay_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tablet_id));
+    LOG_WARN("invalid args", K(ret), K(tablet_id), K(inc_major_replay_scn));
   } else {
-    ObTimeGuard time_guard("ObLSTabletService::update_tablet_ddl_replay_status_for_cs_replica", 1_s);
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
     time_guard.click("Lock");
 
@@ -1539,26 +1545,35 @@ int ObLSTabletService::update_tablet_ddl_replay_status_for_cs_replica(
       const ObTabletMapKey key(ls_->get_ls_id(), tablet_id);
       ObTablet *tablet = tablet_handle.get_obj();
       ObTabletHandle new_tablet_handle;
-      tablet->tablet_meta_.ddl_replay_status_ = ddl_replay_status;
+      const SCN old_scn = tablet->tablet_meta_.inc_major_replay_scn_;
+      ObUpdateIncMajorReplayScn modifier(inc_major_replay_scn);
 
+      int32_t private_transfer_epoch = -1;
       int64_t tablet_meta_version = 0;
-      if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
+      if (OB_FAIL(tablet->get_private_transfer_epoch(private_transfer_epoch))) {
+        LOG_WARN("failed to get private transfer epoch", K(ret), "old_tablet_meta", tablet->get_tablet_meta());
+      } else if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
         LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
       }
       const ObTabletPersisterParam param(data_version,
                                         ls_->get_ls_id(),
                                         ls_->get_ls_epoch(),
                                         tablet_id,
-                                        tablet->get_transfer_seq(),
+                                        private_transfer_epoch,
                                         tablet_meta_version);
-      if (FAILEDx(ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle))) {
+      if (FAILEDx(tablet->check_valid())) {
+        LOG_WARN("failed to check tablet valid", K(ret), KPC(tablet));
+      } else if (OB_FAIL(ObTabletPersister::persist_and_transform_only_tablet_meta(
+          tablet->get_reorganization_scn(), param, *tablet, modifier, new_tablet_handle))) {
         LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tablet), K(new_tablet_handle));
       } else if (FALSE_IT(time_guard.click("Persist"))) {
       } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {
       } else if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, tablet_handle, new_tablet_handle, time_guard))) {
         LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
       } else {
-        LOG_INFO("succeeded to init tablet with updating ddl replay status", K(ret), K(key), K(disk_addr), K(ddl_replay_status));
+        const SCN &new_scn = new_tablet_handle.get_obj()->tablet_meta_.inc_major_replay_scn_;
+        LOG_INFO("succeeded to update inc_major_replay_scn", K(ret), K(key), K(disk_addr),
+            K(old_scn), K(inc_major_replay_scn), K(new_scn));
       }
     }
   }

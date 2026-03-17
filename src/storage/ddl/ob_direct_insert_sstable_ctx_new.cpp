@@ -3723,6 +3723,7 @@ int ObTabletIncDirectLoadMgr::close(const int64_t current_execution_id, const sh
                  nullptr != lob_tablet_mgr ? lob_tablet_mgr->get_tablet_id() : ObTabletID(),
                  0/*snapshot_version*/,
                  0/*data_format_version*/,
+                 SCN::min_scn(),/*placeholder*/
                  sqc_build_ctx_.build_param_.runtime_only_param_.tx_desc_,
                  nullptr/*inc_major*/,
                  nullptr/*lob_inc_major*/,

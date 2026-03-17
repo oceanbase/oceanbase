@@ -182,7 +182,8 @@ public:
                K_(ddl_replay_status),
                K_(split_info),
                K_(has_merged_with_mds_info),
-               K_(inc_major_snapshot));
+               K_(inc_major_snapshot),
+               K_(inc_major_replay_scn));
 
 public:
   int32_t version_; // alignment: 4B, size: 4B
@@ -239,7 +240,7 @@ public:
   // | TRUE                 | FALSE                            | CS_REPLICA_VISIBLE_AND_REPLAY_ROW    |
   // | TRUE                 | TRUE                             | CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN |
   // + -------------------- + --------------------------------- + ----------------------------------- +
-  ObCSReplicaDDLReplayStatus ddl_replay_status_;
+  ObCSReplicaDDLReplayStatus ddl_replay_status_; // only used for full direct load and ddl load
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
   // yuque :
@@ -251,6 +252,7 @@ public:
   bool has_merged_with_mds_info_; // be True after first major with mds info
   int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
   int32_t min_ss_flush_op_id_; // the min referenced flush op id in local tablet
+  share::SCN inc_major_replay_scn_; // alignment: 8B, size: 8B, only used for inc major direct load
 private:
   void update_extra_medium_info(
       const compaction::ObMergeType merge_type,
@@ -346,7 +348,8 @@ public:
                K_(split_info),
                K_(has_merged_with_mds_info),
                K_(min_ss_tablet_version),
-               K_(inc_major_snapshot));
+               K_(inc_major_snapshot),
+               K_(inc_major_replay_scn));
 private:
   int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
@@ -407,6 +410,7 @@ public:
 
   share::SCN min_ss_tablet_version_;
   int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
+  share::SCN inc_major_replay_scn_;
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema
 };

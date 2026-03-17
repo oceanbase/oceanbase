@@ -835,7 +835,17 @@ int ObDDLRedoReplayExecutor::filter_redo_log_(
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
   } else if (is_cs_replica) {
     const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
-    if (tablet_meta.is_cs_replica_global_visible_when_ddl()) {
+    if (is_incremental_major_direct_load(redo_info.type_)) {
+      if (redo_info.with_cs_replica_) {
+        if (redo_info.start_scn_ <= tablet_meta.inc_major_replay_scn_) {
+          can_skip = redo_info.is_cs_replica_column_store();
+        } else {
+          can_skip = redo_info.is_cs_replica_row_store();
+        }
+      } else {
+        // the data table is column store, no need to skip
+      }
+    } else if (tablet_meta.is_cs_replica_global_visible_when_ddl()) {
       if (tablet_meta.is_cs_replica_global_visible_and_replay_row_store()) {
         // row store redo log is replayed in migration src, so need continue replay row store redo log even local is cs replica
         if (redo_info.is_cs_replica_column_store()) {
@@ -1774,7 +1784,7 @@ int ObDDLIncMajorStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
   bool need_replay = true;
-  ObCSReplicaDDLReplayStatus ddl_replay_status = CS_REPLICA_REPLAY_MAX;
+  SCN inc_major_replay_scn = SCN::max_scn();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLIncMajorStartReplayExecutor has not been inited", K(ret));
@@ -1788,52 +1798,20 @@ int ObDDLIncMajorStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
   } else if (!need_replay) {
     // do nothing
     FLOG_INFO("no need to replay ddl inc major start log", K(ls_->get_ls_id()), K(scn_), K(tablet_id_));
-  } else if (OB_FALSE_IT(ddl_replay_status = tablet_handle.get_obj()->get_tablet_meta().ddl_replay_status_)) {
-  } else if (has_cs_replica_ && OB_FAIL(update_tablet_meta_for_cs_replica_(tablet_handle, ddl_replay_status))) {
-    LOG_WARN("failed to update tablet meta for cs replica", K(ret), K_(tablet_id));
-  } else if (!is_lob_ && OB_FAIL(update_storage_schema_to_tablet(tablet_handle, ddl_replay_status))) {
-    LOG_WARN("failed to update storage schema to tablet", KR(ret), K_(tablet_id), K(ddl_replay_status));
+  } else if (FALSE_IT(inc_major_replay_scn = tablet_handle.get_obj()->get_tablet_meta().inc_major_replay_scn_)) {
+  } else if (!ls_->is_cs_replica() && scn_ > inc_major_replay_scn && OB_FAIL(ls_->get_tablet_svr()->update_tablet_inc_major_replay_scn(tablet_id_, scn_))) {
+    LOG_WARN("failed to update inc_major_replay_scn for F replica", K(ret), K_(tablet_id), K_(scn));
+  } else if (!is_lob_ && OB_FAIL(update_storage_schema_to_tablet(tablet_handle, inc_major_replay_scn))) {
+    LOG_WARN("failed to update storage schema to tablet", KR(ret), K_(tablet_id), K(inc_major_replay_scn));
   }
-  FLOG_INFO("replay inc major start log", K(ret), K(ls_->get_ls_id()),
+  FLOG_INFO("replay inc major start log", K(ret), K(ls_->get_ls_id()), K(inc_major_replay_scn),
       K_(scn), K_(tablet_id), K_(has_cs_replica), K_(is_lob), K(need_replay), KPC_(storage_schema));
-  return ret;
-}
-
-int ObDDLIncMajorStartReplayExecutor::update_tablet_meta_for_cs_replica_(
-    ObTabletHandle &tablet_handle,
-    ObCSReplicaDDLReplayStatus &updated_ddl_replay_status)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!tablet_handle.is_valid() || !has_cs_replica_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tablet_handle), K(has_cs_replica_));
-  } else {
-    const ObCSReplicaDDLReplayStatus &ddl_replay_status = tablet_handle.get_obj()->get_tablet_meta().ddl_replay_status_;
-    const bool ls_is_cs_replica = ls_->is_cs_replica();
-    ObCSReplicaDDLReplayStatus new_ddl_replay_status = ddl_replay_status;
-    updated_ddl_replay_status = ddl_replay_status;
-
-    if (CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN == ddl_replay_status ||
-        CS_REPLICA_VISIBLE_AND_REPLAY_ROW == ddl_replay_status) {
-      // continue replay according to the orig ddl replay status
-      FLOG_INFO("[CS-Replica] no need to update tablet meta", K(ddl_replay_status), K(ls_is_cs_replica), "tablet_id", tablet_handle.get_obj()->get_tablet_id());
-    } else {
-      new_ddl_replay_status = ls_is_cs_replica
-                            ? CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN
-                            : CS_REPLICA_VISIBLE_AND_REPLAY_ROW;
-      if (OB_FAIL(ls_->get_tablet_svr()->update_tablet_ddl_replay_status_for_cs_replica(tablet_id_, new_ddl_replay_status))) {
-        LOG_WARN("failed to update talbet ddl replay status", K(ret), K(tablet_id_), K(new_ddl_replay_status), K(ddl_replay_status), K(ls_is_cs_replica));
-      } else {
-        updated_ddl_replay_status = new_ddl_replay_status;
-      }
-    }
-  }
   return ret;
 }
 
 int ObDDLIncMajorStartReplayExecutor::update_storage_schema_to_tablet(
     ObTabletHandle &tablet_handle,
-    const ObCSReplicaDDLReplayStatus &ddl_replay_status)
+    const share::SCN &inc_major_replay_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -1847,7 +1825,7 @@ int ObDDLIncMajorStartReplayExecutor::update_storage_schema_to_tablet(
     LOG_WARN("unexpected lob tablet", KR(ret), K(ls_->get_ls_id()), K_(tablet_id), K_(is_lob));
   } else {
     bool storage_schema_transformed_to_columnar = false;
-    if (storage_schema_->is_row_store() && (CS_REPLICA_VISIBLE_AND_REPLAY_ROW != ddl_replay_status)) {
+    if (storage_schema_->is_row_store() && ls_->is_cs_replica() && inc_major_replay_scn < scn_) {
       ObArenaAllocator arena("IncMajorStart", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       ObStorageSchema *old_storage_schema = nullptr;
       if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(arena, old_storage_schema))) {
@@ -1872,11 +1850,11 @@ int ObDDLIncMajorStartReplayExecutor::update_storage_schema_to_tablet(
     } else if (OB_FAIL(ObIncDDLMergeTaskUtils::update_tablet_table_store_with_storage_schema(
         ls_, tablet_handle, storage_schema_))) {
       LOG_WARN("failed to update tablet table store with storage schema",
-          KR(ret), K(ls_->get_ls_id()), K_(tablet_id), K_(has_cs_replica), K(ddl_replay_status),
+          KR(ret), K(ls_->get_ls_id()), K_(tablet_id), K_(has_cs_replica), K(inc_major_replay_scn),
           K(storage_schema_transformed_to_columnar), KPC_(storage_schema));
     } else {
       FLOG_INFO("succeed to update storage schema to tablet in replaying inc major start log",
-          KR(ret), K(ls_->get_ls_id()), K_(tablet_id), K_(has_cs_replica), K(ddl_replay_status),
+          KR(ret), K(ls_->get_ls_id()), K_(tablet_id), K_(has_cs_replica), K(inc_major_replay_scn),
           K(storage_schema_transformed_to_columnar), KPC_(storage_schema));
     }
   }
@@ -1903,7 +1881,8 @@ int ObDDLIncMajorCommitReplayExecutor::init(
     const uint64_t data_format_version,
     const bool is_rollback,
     const bool is_co_sstable,
-    const ObString &inc_major_buffer)
+    const ObString &inc_major_buffer,
+    const share::SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -1915,10 +1894,11 @@ int ObDDLIncMajorCommitReplayExecutor::init(
                       || (!trans_id.is_valid())
                       || (!seq_no.is_valid())
                       || (snapshot_version <= 0)
-                      || !is_data_version_support_inc_major_direct_load(data_format_version))) {
+                      || !is_data_version_support_inc_major_direct_load(data_format_version)
+                      || !start_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(ls), K(tablet_id),
-        K(scn), K(trans_id), K(seq_no), K(snapshot_version), K(data_format_version));
+        K(scn), K(trans_id), K(seq_no), K(snapshot_version), K(data_format_version), K(start_scn));
   } else {
     ls_ = ls;
     tablet_id_ = tablet_id;
@@ -1930,9 +1910,9 @@ int ObDDLIncMajorCommitReplayExecutor::init(
     is_rollback_ = is_rollback;
     is_co_sstable_ = is_co_sstable;
     inc_major_buffer_ = inc_major_buffer;
+    start_scn_ = start_scn;
     is_inited_ = true;
   }
-
   return ret;
 }
 
@@ -2016,9 +1996,10 @@ int ObDDLIncMajorCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
                                                                 seq_no_,
                                                                 snapshot_version_,
                                                                 data_format_version_,
-                                                                true/*is_replay*/))) {
+                                                                true/*is_replay*/,
+                                                                start_scn_))) {
       LOG_WARN("fail to freeze inc major ddl kv", KR(ret), K(tablet_id_), K(scn_), K(trans_id_),
-               K(seq_no_), K(snapshot_version_), K(data_format_version_), K(is_rollback_));
+               K(seq_no_), K(snapshot_version_), K(data_format_version_), K(is_rollback_), K(start_scn_));
 #ifdef OB_BUILD_SHARED_STORAGE
     } else if (GCTX.is_shared_storage_mode()) {
       // ss模式

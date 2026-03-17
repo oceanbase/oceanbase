@@ -1314,6 +1314,7 @@ int ObComplementWriteTask::fill_writer_param(ObWriteMacroParam &param)
   param.lob_meta_tablet_param_ = param_->lob_meta_tablet_param_;
   param.lob_meta_tablet_id_ = param_->dest_lob_meta_tablet_id_;
   param.tablet_context_ = context_->tablet_ctx_;
+  param.start_scn_ = context_->tablet_ctx_->get_start_scn();
   // do not need to set param.tx_info_;
   if (OB_FAIL(param.ddl_table_schema_.assign(param_->ddl_table_schema_))) {
     LOG_WARN("get ddl table schema failed", K(ret));

@@ -471,6 +471,9 @@ int ObDDLTabletContext::init(
       if (OB_FAIL(init_vector_index_context(snapshot_version, ddl_task_id, ddl_table_schema))) {
         LOG_WARN("init vector index context failed", K(ret));
       } else {
+        if (is_full_direct_load(direct_load_type)) {
+          start_scn_.convert_for_tx(SS_DDL_START_SCN_VAL);
+        }
         is_inited_ = true;
         LOG_INFO("[CS-Replica] init tablet context", K(tablet_id), K(direct_load_type), K(tablet_param_));
       }
@@ -524,6 +527,7 @@ void ObDDLTabletContext::reset()
     }
   }
   slice_map_.destroy();
+  start_scn_.reset();
 
   if (OB_NOT_NULL(macro_meta_store_mgr_)) {
     macro_meta_store_mgr_->~ObMacroMetaStoreManager();

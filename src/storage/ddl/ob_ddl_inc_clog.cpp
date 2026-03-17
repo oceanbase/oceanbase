@@ -234,7 +234,8 @@ ObDDLIncCommitLog::ObDDLIncCommitLog()
   : allocator_(ObMemAttr(MTL_ID(), "INC_COMMIT_LOG")),
     log_basic_(),
     is_rollback_(false),
-    is_co_sstable_(false)
+    is_co_sstable_(false),
+    start_scn_()
 {
 }
 
@@ -251,15 +252,16 @@ ObDDLIncCommitLog::~ObDDLIncCommitLog()
   allocator_.reset();
 }
 
-int ObDDLIncCommitLog::init(const ObDDLIncLogBasic &log_basic, const bool is_rollback)
+int ObDDLIncCommitLog::init(const ObDDLIncLogBasic &log_basic, const bool is_rollback, const share::SCN start_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!log_basic.is_valid())) {
+  if (OB_UNLIKELY(!log_basic.is_valid()) || !start_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(log_basic));
+    LOG_WARN("invalid argument", KR(ret), K(log_basic), K(start_scn));
   } else {
     log_basic_ = log_basic;
     is_rollback_ = is_rollback;
+    start_scn_ = start_scn;
   }
   return ret;
 }
@@ -296,7 +298,8 @@ OB_DEF_SERIALIZE_SIZE(ObDDLIncCommitLog)
               is_rollback_,
               is_co_sstable_,
               data_inc_major_buffer_,
-              lob_inc_major_buffer_);
+              lob_inc_major_buffer_,
+              start_scn_);
   return len;
 }
 
@@ -308,7 +311,8 @@ OB_DEF_SERIALIZE(ObDDLIncCommitLog)
               is_rollback_,
               is_co_sstable_,
               data_inc_major_buffer_,
-              lob_inc_major_buffer_);
+              lob_inc_major_buffer_,
+              start_scn_);
   return ret;
 }
 
@@ -320,7 +324,8 @@ OB_DEF_DESERIALIZE(ObDDLIncCommitLog)
               is_rollback_,
               is_co_sstable_,
               data_inc_major_buffer_,
-              lob_inc_major_buffer_);
+              lob_inc_major_buffer_,
+              start_scn_);
 
 #ifdef OB_BUILD_SHARED_STORAGE
   if (OB_SUCC(ret)) {

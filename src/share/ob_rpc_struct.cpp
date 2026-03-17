@@ -12471,7 +12471,8 @@ ObRpcRemoteWriteDDLIncCommitLogArg::ObRpcRemoteWriteDDLIncCommitLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(),
     lob_meta_tablet_id_(), tx_desc_(nullptr), need_release_(false),
     direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
-    trans_id_(), seq_no_(), snapshot_version_(0), data_format_version_(0)
+    trans_id_(), seq_no_(), snapshot_version_(0), data_format_version_(0),
+    is_co_sstable_(false), start_scn_()
 {}
 
 ObRpcRemoteWriteDDLIncCommitLogArg::~ObRpcRemoteWriteDDLIncCommitLogArg()
@@ -12500,7 +12501,8 @@ int ObRpcRemoteWriteDDLIncCommitLogArg::init(const uint64_t tenant_id,
                                              const ObTransID &trans_id,
                                              const ObTxSEQ &seq_no,
                                              const int64_t snapshot_version,
-                                             const uint64_t data_format_version)
+                                             const uint64_t data_format_version,
+                                             const share::SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id_ = OB_INVALID_ID && !ls_id.is_valid() || !tablet_id.is_valid() ||
@@ -12531,6 +12533,7 @@ int ObRpcRemoteWriteDDLIncCommitLogArg::init(const uint64_t tenant_id,
     seq_no_ = seq_no;
     snapshot_version_ = snapshot_version;
     data_format_version_ = data_format_version;
+    start_scn_ = start_scn;
   }
   return ret;
 }
@@ -12599,7 +12602,8 @@ OB_DEF_SERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
                 data_format_version_,
                 is_co_sstable_,
                 data_inc_major_buffer_,
-                lob_inc_major_buffer_);
+                lob_inc_major_buffer_,
+                start_scn_);
   }
   return ret;
 }
@@ -12630,7 +12634,8 @@ OB_DEF_DESERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
                 data_format_version_,
                 is_co_sstable_,
                 data_inc_major_buffer_,
-                lob_inc_major_buffer_);
+                lob_inc_major_buffer_,
+                start_scn_);
   }
 #ifdef OB_BUILD_SHARED_STORAGE
   if (OB_SUCC(ret)) {
@@ -12659,7 +12664,8 @@ OB_DEF_SERIALIZE_SIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
               data_format_version_,
               is_co_sstable_,
               data_inc_major_buffer_,
-              lob_inc_major_buffer_);
+              lob_inc_major_buffer_,
+              start_scn_);
   return len;
 }
 

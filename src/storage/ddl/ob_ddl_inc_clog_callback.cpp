@@ -403,7 +403,8 @@ int ObDDLIncCommitClogCb::on_success_(const ObLSHandle &ls_handle, const ObTable
                                                                        log_basic_.get_seq_no(),
                                                                        log_basic_.get_snapshot_version(),
                                                                        log_basic_.get_data_format_version(),
-                                                                       false /*is_replay*/))) {
+                                                                       false /*is_replay*/,
+                                                                       SCN::min_scn()/*placeholder*/))) {
       LOG_WARN("fail to freeze inc major ddl kv", KR(ret), K(ls_id_), K(tablet_id), K(commit_scn), K(log_basic_));
     } else if (is_rollback_) {
       // do nothing

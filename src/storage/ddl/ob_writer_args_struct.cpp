@@ -174,16 +174,14 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
 
         if (OB_SUCC(ret) && is_need_ddl_redo_callback_type(writer_type)) {
           const int64_t row_offset = param.row_offset_;
-          SCN start_scn;
           const ObDDLMacroBlockType block_type = !is_inc_minor && param.is_no_logging_ ? DDL_MB_SS_EMPTY_DATA_TYPE : DDL_MB_DATA_TYPE;
-          IGNORE_RETURN start_scn.convert_for_tx(SS_DDL_START_SCN_VAL);
           ObDDLRedoLogWriterCallbackInitParam init_param;
           init_param.ls_id_ = ls_id;
           init_param.tablet_id_ = cg_table_key.tablet_id_;
           init_param.direct_load_type_ = param.direct_load_type_;
           init_param.block_type_ = block_type;
           init_param.table_key_ = cg_table_key;
-          init_param.start_scn_ = start_scn;
+          init_param.start_scn_ = param.start_scn_;
           init_param.task_id_ = param.task_id_;
           init_param.data_format_version_ = tenant_data_version;
           init_param.parallel_cnt_ = param.get_logic_parallel_count();

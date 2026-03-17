@@ -635,7 +635,7 @@ public:
       schema_version_(0), slice_idx_(0), slice_count_(0), ddl_thread_count_(0), snapshot_version_(0), direct_load_type_(DIRECT_LOAD_INVALID),
       task_id_(0), is_index_table_(false), tx_info_(), ddl_table_schema_(), tablet_param_(), lob_meta_tablet_param_(),
       cg_idx_(-1), ddl_dag_(nullptr), tablet_context_(nullptr), max_batch_size_(0), start_sequence_(), row_offset_(0),
-      is_sorted_table_load_(false)
+      is_sorted_table_load_(false), start_scn_()
   {}
   ~ObWriteMacroParam() = default;
   bool is_valid() const
@@ -644,7 +644,7 @@ public:
         && slice_idx_ >= 0 && snapshot_version_ > 0 && direct_load_type_ > DIRECT_LOAD_INVALID
         && direct_load_type_ < DIRECT_LOAD_MAX && task_id_ > 0
         && (!is_incremental_major_direct_load(direct_load_type_)
-            || (is_incremental_major_direct_load(direct_load_type_) && tx_info_.is_valid()));
+            || (is_incremental_major_direct_load(direct_load_type_) && tx_info_.is_valid() && start_scn_.is_valid_and_not_min()));
   }
   int64_t get_logic_parallel_count() const { return slice_count_ > 0 ? slice_count_ : ddl_thread_count_; }
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), K_(tenant_data_version), K_(is_no_logging), KP_(macro_meta_store_mgr),
@@ -652,7 +652,7 @@ public:
       K_(task_id), K_(is_index_table), K_(tx_info),
       K_(ddl_table_schema), K_(tablet_param), K_(lob_meta_tablet_param), K_(cg_idx), KP(ddl_dag_), KP_(tablet_context),
       K_(max_batch_size), K_(start_sequence), K_(row_offset),
-      K_(is_sorted_table_load));
+      K_(is_sorted_table_load), K_(start_scn));
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
@@ -679,6 +679,7 @@ public:
   blocksstable::ObMacroDataSeq start_sequence_;
   int64_t row_offset_;
   bool is_sorted_table_load_;
+  share::SCN start_scn_;
 };
 
 }  // end namespace storage

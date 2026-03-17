@@ -2806,6 +2806,7 @@ int ObDDLUtil::fill_writer_param(
     param.ddl_dag_ = dag;
     param.tablet_context_ = tablet_context;
     param.max_batch_size_ = dag->get_ddl_task_param().max_batch_size_;
+    param.start_scn_ = tablet_context->get_start_scn();
   }
   return ret;
 }

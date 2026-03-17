@@ -227,8 +227,11 @@ public:
   int64_t get_expect_range_count() const { return fts_expect_range_cnt_; }
   int set_parallel_cnt(const int64_t parallel_cnt);
   int64_t get_parallel_cnt() const { return fts_parallel_cnt_; }
+  void set_start_scn(const share::SCN &start_scn) { start_scn_ = start_scn; }
+  const share::SCN &get_start_scn() const { return start_scn_; }
   TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id), K_(tablet_param), K_(lob_meta_tablet_id), K_(lob_meta_tablet_param),
-      K_(slice_count), K_(table_slice_offset), K_(last_lob_id), K_(last_autoinc_val), K(bucket_count_), K(slice_map_.size()), KP(macro_meta_store_mgr_));
+               K_(slice_count), K_(table_slice_offset), K_(last_lob_id), K_(last_autoinc_val), K(bucket_count_),
+               K(slice_map_.size()), KP(macro_meta_store_mgr_), K_(start_scn));
 private:
   int init_vector_index_context(
       const int64_t snapshot_version,
@@ -264,6 +267,10 @@ private:
   int64_t bucket_count_;
   typedef hash::ObHashMap<int64_t, ObDDLSlice *, hash::NoPthreadDefendMode> SLICE_MAP;
   SLICE_MAP slice_map_;
+
+  // In full direct load, start_scn_ is a mock value
+  // In incremental direct load, start_scn_ is set by ObDDLIncStartTask
+  share::SCN start_scn_;
 
 public:
   ObMacroMetaStoreManager *macro_meta_store_mgr_;

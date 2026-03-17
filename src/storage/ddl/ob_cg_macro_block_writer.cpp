@@ -69,13 +69,11 @@ int ObCgMacroBlockWriter::init(
     const int64_t parallel_idx = param.slice_idx_;
     const ObTxSEQ seq_no = ObTxSEQ::cast_from_int(param.tx_info_.seq_no_);
 
-    share::SCN mock_start_scn;
     ObMacroSeqParam macro_seq_param;
     ObPreWarmerParam pre_warm_param;
     ObISSTableObjectCleaner *object_cleaner = nullptr;
     ObDDLIncRedoLogWriterCallback *inc_redo_callback = nullptr;
 
-    IGNORE_RETURN mock_start_scn.convert_for_tx(SS_DDL_START_SCN_VAL);
     macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
     macro_seq_param.start_ = start_sequence.macro_data_seq_;
     compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() && is_inc_major
@@ -145,7 +143,7 @@ int ObCgMacroBlockWriter::init(
       init_param.direct_load_type_ = param.direct_load_type_;
       init_param.block_type_ = (is_inc_major && param.is_no_logging_) ? DDL_MB_SS_EMPTY_DATA_TYPE : DDL_MB_DATA_TYPE;
       init_param.table_key_ = table_key;
-      init_param.start_scn_ = mock_start_scn;
+      init_param.start_scn_ = param.start_scn_;
       init_param.task_id_ = param.task_id_;
       init_param.data_format_version_ = param.tenant_data_version_;
       init_param.parallel_cnt_ = param.get_logic_parallel_count();
@@ -195,8 +193,6 @@ int ObCgMacroBlockWriter::init(
                K(start_sequence), KPC(object_cleaner));
     }
   } else { // 全量
-    share::SCN mock_start_scn;
-    IGNORE_RETURN mock_start_scn.convert_for_tx(SS_DDL_START_SCN_VAL);
     const ObWriteTabletParam &tablet_param = table_key.tablet_id_ != param.tablet_id_ ?
                                                           param.lob_meta_tablet_param_ :
                                                           param.tablet_param_;
@@ -280,7 +276,7 @@ int ObCgMacroBlockWriter::init(
       init_param.direct_load_type_ = param.direct_load_type_;
       init_param.block_type_ = block_type;
       init_param.table_key_ = table_key;
-      init_param.start_scn_ = mock_start_scn;
+      init_param.start_scn_ = param.start_scn_;
       init_param.task_id_ = param.task_id_;
       init_param.data_format_version_ = tenant_data_version;
       init_param.parallel_cnt_ = param.get_logic_parallel_count();

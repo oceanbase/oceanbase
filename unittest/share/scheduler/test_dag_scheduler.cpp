@@ -627,12 +627,16 @@ public:
 
       if (OB_FAIL(dag->init(dag_id, expect_ret, expect_value, this))) {
         COMMON_LOG(WARN, "failed to init dag", K(ret));
+        scheduler_->free_dag(*dag);
       } else if (OB_SUCCESS != (tmp_ret = alloc_task(*dag, task))){
         COMMON_LOG(WARN, "failed to alloc task", K(tmp_ret));
+        scheduler_->free_dag(*dag);
       } else if (OB_FAIL(task->init(dag_id, NULL, expect_ret != OB_SUCCESS))) {
         COMMON_LOG(WARN, "failed to init task", K(ret));
+        scheduler_->free_dag(*dag);
       } else if (OB_FAIL(dag->add_task(*task))) {
         COMMON_LOG(WARN, "failed to add task", K(ret));
+        scheduler_->free_dag(*dag);
       } else {
         if (OB_SUCCESS != (tmp_ret = scheduler_->add_dag(dag))) {
           if (OB_SIZE_OVERFLOW != tmp_ret) {

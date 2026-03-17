@@ -12764,7 +12764,8 @@ public:
            const transaction::ObTransID &trans_id,
            const transaction::ObTxSEQ &seq_no,
            const int64_t snapshot_version,
-           const uint64_t data_format_version);
+           const uint64_t data_format_version,
+           const share::SCN &start_scn);
 #ifdef OB_BUILD_SHARED_STORAGE
   int set_ss_inc_major(const blocksstable::ObSSTable *data_inc_major,
                        const blocksstable::ObSSTable *lob_inc_major);
@@ -12777,7 +12778,7 @@ public:
   }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), KP_(tx_desc),
                K_(need_release), K_(direct_load_type), K_(trans_id), K_(seq_no),
-               K_(snapshot_version), K_(data_format_version), K_(is_co_sstable));
+               K_(snapshot_version), K_(data_format_version), K_(is_co_sstable), K_(start_scn));
 public:
   ObArenaAllocator allocator_;
   uint64_t tenant_id_;
@@ -12794,6 +12795,7 @@ public:
   bool is_co_sstable_;
   ObString data_inc_major_buffer_;
   ObString lob_inc_major_buffer_;
+  share::SCN start_scn_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLIncCommitLogArg);
 };

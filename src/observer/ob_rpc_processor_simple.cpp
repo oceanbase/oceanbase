@@ -3365,6 +3365,7 @@ int ObRpcRemoteWriteDDLIncCommitLogP::process()
                                                                              arg_.lob_meta_tablet_id_,
                                                                              arg_.snapshot_version_,
                                                                              arg_.data_format_version_,
+                                                                             arg_.start_scn_,
                                                                              arg_.tx_desc_,
                                                                              data_inc_major_ptr,
                                                                              lob_inc_major_ptr,

@@ -1792,6 +1792,7 @@ TEST_F(TestDDLIncCommitLog, test_rpc_arg_full_serialize)
   ObTxSEQ seq_no(3001);
   int64_t snapshot_version = 1000000;
   uint64_t data_format_version = DATA_VERSION_4_5_0_0;
+  share::SCN start_scn = share::SCN::base_scn();
 
   // 创建一个简单的 mock tx_desc（只设置必要字段）
   ObTxDesc mock_tx_desc;
@@ -1806,7 +1807,7 @@ TEST_F(TestDDLIncCommitLog, test_rpc_arg_full_serialize)
   // 初始化 arg
   ASSERT_SUCC(arg_src.init(tenant_id, ls_id, tablet_id, lob_tablet_id,
                            &mock_tx_desc, direct_load_type, trans_id, seq_no,
-                           snapshot_version, data_format_version));
+                           snapshot_version, data_format_version, start_scn));
 
   // 设置 buffer 数据
   const char *data_content = "test_data_inc_major_buffer_for_rpc_arg";
@@ -1865,6 +1866,7 @@ TEST_F(TestDDLIncCommitLog, test_rpc_arg_serialize_with_empty_buffers)
   ObTxSEQ seq_no(3001);
   int64_t snapshot_version = 0;  // 非 major 场景，snapshot_version 可以为 0
   uint64_t data_format_version = 0;
+  share::SCN start_scn = share::SCN::base_scn();
 
   // 创建简单的 mock tx_desc
   ObTxDesc mock_tx_desc;
@@ -1879,7 +1881,7 @@ TEST_F(TestDDLIncCommitLog, test_rpc_arg_serialize_with_empty_buffers)
   // 初始化（不调用 set_ss_inc_major）
   ASSERT_SUCC(arg_src.init(tenant_id, ls_id, tablet_id, lob_tablet_id,
                            &mock_tx_desc, direct_load_type, trans_id, seq_no,
-                           snapshot_version, data_format_version));
+                           snapshot_version, data_format_version, start_scn));
 
   // 验证 buffer 为空
   ASSERT_TRUE(arg_src.data_inc_major_buffer_.empty());
@@ -1914,6 +1916,7 @@ TEST_F(TestDDLIncCommitLog, test_rpc_arg_init_validation)
   ObTxSEQ seq_no(3001);
   int64_t snapshot_version = 1000000;
   uint64_t data_format_version = DATA_VERSION_4_5_0_0;
+  share::SCN start_scn = share::SCN::base_scn();
 
   ObTxDesc mock_tx_desc;
   mock_tx_desc.tenant_id_ = tenant_id;
@@ -1927,32 +1930,32 @@ TEST_F(TestDDLIncCommitLog, test_rpc_arg_init_validation)
   // 测试1: 正常初始化
   ASSERT_SUCC(arg.init(tenant_id, ls_id, tablet_id, lob_tablet_id,
                        &mock_tx_desc, direct_load_type, trans_id, seq_no,
-                       snapshot_version, data_format_version));
+                       snapshot_version, data_format_version, start_scn));
   ASSERT_TRUE(arg.is_valid());
 
   // 测试2: 无效的 ls_id
   ObRpcRemoteWriteDDLIncCommitLogArg arg2;
   ASSERT_FAIL(arg2.init(tenant_id, ObLSID(), tablet_id, lob_tablet_id,
                         &mock_tx_desc, direct_load_type, trans_id, seq_no,
-                        snapshot_version, data_format_version));
+                        snapshot_version, data_format_version, start_scn));
 
   // 测试3: 无效的 tablet_id
   ObRpcRemoteWriteDDLIncCommitLogArg arg3;
   ASSERT_FAIL(arg3.init(tenant_id, ls_id, ObTabletID(), lob_tablet_id,
                         &mock_tx_desc, direct_load_type, trans_id, seq_no,
-                        snapshot_version, data_format_version));
+                        snapshot_version, data_format_version, start_scn));
 
   // 测试4: nullptr tx_desc
   ObRpcRemoteWriteDDLIncCommitLogArg arg4;
   ASSERT_FAIL(arg4.init(tenant_id, ls_id, tablet_id, lob_tablet_id,
                         nullptr, direct_load_type, trans_id, seq_no,
-                        snapshot_version, data_format_version));
+                        snapshot_version, data_format_version, start_scn));
 
   // 测试5: 无效的 direct_load_type
   ObRpcRemoteWriteDDLIncCommitLogArg arg5;
   ASSERT_FAIL(arg5.init(tenant_id, ls_id, tablet_id, lob_tablet_id,
                         &mock_tx_desc, ObDirectLoadType::DIRECT_LOAD_INVALID,
-                        trans_id, seq_no, snapshot_version, data_format_version));
+                        trans_id, seq_no, snapshot_version, data_format_version, start_scn));
 }
 
 } // namespace unittest

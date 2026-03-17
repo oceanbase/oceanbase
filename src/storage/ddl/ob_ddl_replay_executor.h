@@ -258,10 +258,8 @@ protected:
   // @return other error codes, failed to replay.
   int do_replay_(ObTabletHandle &handle) override;
 private:
-  int update_tablet_meta_for_cs_replica_(ObTabletHandle &tablet_handle,
-                                         ObCSReplicaDDLReplayStatus &updated_ddl_replay_status);
   int update_storage_schema_to_tablet(ObTabletHandle &tablet_handle,
-                                      const ObCSReplicaDDLReplayStatus &ddl_replay_status);
+                                      const share::SCN &inc_major_replay_scn);
 
 private:
   common::ObTabletID tablet_id_;
@@ -284,7 +282,8 @@ public:
            const uint64_t data_format_version,
            const bool is_rollback,
            const bool is_co_sstable,
-           const ObString &inc_major_buffer);
+           const ObString &inc_major_buffer,
+           const share::SCN &start_scn);
 
 protected:
   // replay to the tablet
@@ -307,6 +306,7 @@ private:
   bool is_rollback_;
   bool is_co_sstable_;
   ObString inc_major_buffer_;
+  share::SCN start_scn_;
 };
 
 class ObSplitStartReplayExecutor final : public ObDDLReplayExecutor

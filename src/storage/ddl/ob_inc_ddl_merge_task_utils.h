@@ -38,7 +38,8 @@ public:
       const transaction::ObTxSEQ &seq_no,
       const int64_t snapshot_version,
       const uint64_t data_format_version,
-      const bool is_replay);
+      const bool is_replay,
+      const share::SCN &start_scn /*only worked when is_replay is true*/);
   static int update_tablet_table_store(
         ObLS *ls,
         ObTabletHandle &tablet_handle);

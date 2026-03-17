@@ -1593,7 +1593,7 @@ int ObSSIncMajorDDLMergeHelper::merge_cg_sstable(ObIDag* dag,
       init_param.direct_load_type_ = dag_merge_param.direct_load_type_;
       init_param.block_type_ = DDL_MB_INDEX_TYPE;
       init_param.table_key_ = cur_cg_table_key;
-      init_param.start_scn_ = dag_merge_param.start_scn_;
+      init_param.start_scn_ = dag_merge_param.get_tablet_ctx()->get_start_scn();
       init_param.task_id_ = dag_merge_param.ddl_task_param_.ddl_task_id_;
       init_param.data_format_version_ = dag_merge_param.ddl_task_param_.tenant_data_version_;
       init_param.parallel_cnt_ = max(dag_merge_param.get_tablet_ctx()->slice_count_, 1);
@@ -1792,7 +1792,8 @@ int ObSSIncMajorDDLMergeHelper::prepare_for_dump_sstable(
                                                                      dag_merge_param.seq_no_,
                                                                      dag_merge_param.ddl_task_param_.snapshot_version_,
                                                                      dag_merge_param.ddl_task_param_.tenant_data_version_,
-                                                                     false/*is_replay*/))) {
+                                                                     false/*is_replay*/,
+                                                                     SCN::min_scn()/*placeholder*/))) {
     LOG_WARN("fail to freeze inc major ddl kv", KR(ret), K(dag_merge_param));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {

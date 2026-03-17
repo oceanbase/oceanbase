@@ -69,8 +69,7 @@ int ObDDLIncStartTask::process()
 {
   int ret = OB_SUCCESS;
   ObDDLIndependentDag *dag = static_cast<ObDDLIndependentDag *>(dag_);
-  const std::pair<share::ObLSID, ObTabletID> &ls_tablet_id =
-    dag->get_ls_tablet_ids().at(tablet_idx_);
+  const std::pair<share::ObLSID, ObTabletID> &ls_tablet_id = dag->get_ls_tablet_ids().at(tablet_idx_);
   ObDDLTabletContext *tablet_ctx = nullptr;
   ObDDLIncRedoLogWriter redo_writer;
   SCN start_scn;
@@ -96,6 +95,7 @@ int ObDDLIncStartTask::process()
                                                                 dag->get_tx_info().tx_desc_,
                                                                 start_scn))) {
     LOG_WARN("fail to write inc start log", KR(ret), KPC(tablet_ctx), K(dag->get_ddl_task_param()), K(dag->get_tx_info()));
+  } else if (FALSE_IT(tablet_ctx->set_start_scn(start_scn))) {
   } else if (is_incremental_major_direct_load(dag->get_direct_load_type())) {
     ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DdlIncStartTask"));
     if (OB_FAIL(record_inc_major_start_info_to_mds(*storage_schema,
@@ -232,6 +232,7 @@ int ObDDLIncCommitTask::process()
                                                                  tablet_ctx->lob_meta_tablet_id_,
                                                                  dag->get_ddl_task_param().snapshot_version_,
                                                                  dag->get_ddl_task_param().tenant_data_version_,
+                                                                 tablet_ctx->get_start_scn(),
                                                                  dag->get_tx_info().tx_desc_,
                                                                  tablet_ctx->merge_ctx_.inc_major_,
                                                                  tablet_ctx->lob_merge_ctx_.inc_major_,
