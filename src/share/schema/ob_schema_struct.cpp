@@ -1890,6 +1890,7 @@ ObTenantSchema& ObTenantSchema::operator =(const ObTenantSchema &src_schema)
     set_charset_type(src_schema.get_charset_type());
     set_name_case_mode(src_schema.name_case_mode_);
     set_default_tablegroup_id(src_schema.default_tablegroup_id_);
+    set_default_tablespace_id(src_schema.default_tablespace_id_);
     set_compatibility_mode(src_schema.compatibility_mode_);
     set_drop_tenant_time(src_schema.drop_tenant_time_);
     set_status(src_schema.status_);
@@ -1913,6 +1914,8 @@ ObTenantSchema& ObTenantSchema::operator =(const ObTenantSchema &src_schema)
       LOG_WARN("fail to set previous locality", K(ret));
     } else if (OB_FAIL(set_default_tablegroup_name(src_schema.default_tablegroup_name_))) {
       LOG_WARN("set default tablegroup name failed", K(ret));
+    } else if (OB_FAIL(set_default_tablespace_name(src_schema.default_tablespace_name_))) {
+      LOG_WARN("set default tablespace name failed", K(ret));
     }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
@@ -1947,6 +1950,8 @@ void ObTenantSchema::reset()
   reset_string(comment_);
   default_tablegroup_id_ = OB_INVALID_ID;
   reset_string(default_tablegroup_name_);
+  default_tablespace_id_ = OB_INVALID_ID;
+  reset_string(default_tablespace_name_);
   compatibility_mode_ = ObCompatibilityMode::OCEANBASE_MODE;
   drop_tenant_time_ = OB_INVALID_TIMESTAMP;
   status_ = TENANT_STATUS_NORMAL;
@@ -1988,6 +1993,8 @@ void ObTenantSchema::reset_alter_tenant_attributes()
   reset_string(comment_);
   default_tablegroup_id_ = OB_INVALID_ID;
   reset_string(default_tablegroup_name_);
+  default_tablespace_id_ = OB_INVALID_ID;
+  reset_string(default_tablespace_name_);
   reset_physical_location_info();
 }
 
@@ -2013,6 +2020,7 @@ int64_t ObTenantSchema::get_convert_size() const
   }
   convert_size += previous_locality_str_.length() + 1;
   convert_size += default_tablegroup_name_.length() + 1;
+  convert_size += default_tablespace_name_.length() + 1;
   return convert_size;
 }
 
@@ -2344,7 +2352,9 @@ OB_DEF_SERIALIZE(ObTenantSchema)
               drop_tenant_time_,
               status_,
               in_recyclebin_,
-              arbitration_service_status_);
+              arbitration_service_status_,
+              default_tablespace_id_,
+              default_tablespace_name_);
 
   LOG_INFO("serialize schema",
            K_(tenant_id), K_(schema_version), K_(tenant_name),
@@ -2374,7 +2384,9 @@ OB_DEF_DESERIALIZE(ObTenantSchema)
               drop_tenant_time_,
               status_,
               in_recyclebin_,
-              arbitration_service_status_);
+              arbitration_service_status_,
+              default_tablespace_id_,
+              default_tablespace_name_);
 
   if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data", K(ret));
@@ -2388,6 +2400,8 @@ OB_DEF_DESERIALIZE(ObTenantSchema)
     LOG_WARN("set_locality failed", K(ret));
   } else if (OB_FAIL(set_default_tablegroup_name(default_tablegroup_name_))) {
     LOG_WARN("set default_tablegroup_name failed", K(ret));
+  } else if (OB_FAIL(set_default_tablespace_name(default_tablespace_name_))) {
+    LOG_WARN("set default_tablespace_name failed", K(ret));
   } else if (OB_FAIL(set_previous_locality(previous_locality_str_))) {
     // parse and set zone and region replica num array
     if (locality_str_.length() > 0 && zone_list_.count() > 0) {
@@ -2429,7 +2443,8 @@ OB_DEF_SERIALIZE_SIZE(ObTenantSchema)
               primary_zone_, locked_, comment_, charset_type_, collation_type_, name_case_mode_,
               read_only_, locality_str_, previous_locality_str_,
               default_tablegroup_id_, default_tablegroup_name_,
-              compatibility_mode_, drop_tenant_time_, status_, in_recyclebin_, arbitration_service_status_);
+              compatibility_mode_, drop_tenant_time_, status_, in_recyclebin_, arbitration_service_status_,
+              default_tablespace_id_, default_tablespace_name_);
   len += get_string_array_serialize_size(zone_list_);
   return len;
 }
@@ -2657,6 +2672,7 @@ ObDatabaseSchema &ObDatabaseSchema::operator =(const ObDatabaseSchema &src_schem
     set_name_case_mode(src_schema.name_case_mode_);
     set_read_only(src_schema.read_only_);
     set_default_tablegroup_id(src_schema.default_tablegroup_id_);
+    set_default_tablespace_id(src_schema.default_tablespace_id_);
     set_in_recyclebin(src_schema.is_in_recyclebin());
 
     if (OB_FAIL(set_database_name(src_schema.database_name_))) {
@@ -2665,6 +2681,8 @@ ObDatabaseSchema &ObDatabaseSchema::operator =(const ObDatabaseSchema &src_schem
       LOG_WARN("set_comment failed", K(ret));
     } else if (OB_FAIL(set_default_tablegroup_name(src_schema.default_tablegroup_name_))) {
       LOG_WARN("set_comment failed", K(ret));
+    } else if (OB_FAIL(set_default_tablespace_name(src_schema.default_tablespace_name_))) {
+      LOG_WARN("set default tablespace name failed", K(ret));
     } else {} // no more to do
 
     if (OB_FAIL(ret)) {
@@ -2686,6 +2704,7 @@ int64_t ObDatabaseSchema::get_convert_size() const
   int64_t convert_size = sizeof(*this);
   convert_size += database_name_.length() + 1;
   convert_size += comment_.length() + 1;
+  convert_size += default_tablespace_name_.length() + 1;
   return convert_size;
 }
 
@@ -2709,6 +2728,8 @@ void ObDatabaseSchema::reset()
   read_only_ = false;
   default_tablegroup_id_ = OB_INVALID_ID;
   reset_string(default_tablegroup_name_);
+  default_tablespace_id_ = OB_INVALID_ID;
+  reset_string(default_tablespace_name_);
   in_recyclebin_ = false;
   ObSchema::reset();
 }
@@ -2790,7 +2811,8 @@ OB_DEF_SERIALIZE(ObDatabaseSchema)
   LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_,
               database_id_, schema_version_, database_name_,
               comment_, charset_type_, collation_type_, name_case_mode_, read_only_,
-              default_tablegroup_id_, default_tablegroup_name_, in_recyclebin_);
+              default_tablegroup_id_, default_tablegroup_name_, in_recyclebin_,
+              default_tablespace_id_, default_tablespace_name_);
   if (OB_FAIL(ret)) {
     LOG_WARN("func_SERIALIZE failed", K(ret));
   } else {} // no more to do
@@ -2803,10 +2825,12 @@ OB_DEF_DESERIALIZE(ObDatabaseSchema)
   ObString database_name;
   ObString comment;
   ObString default_tablegroup_name;
+  ObString default_tablespace_name;
   LST_DO_CODE(OB_UNIS_DECODE, tenant_id_,
               database_id_, schema_version_, database_name,
               comment, charset_type_, collation_type_, name_case_mode_, read_only_,
-              default_tablegroup_id_, default_tablegroup_name, in_recyclebin_);
+              default_tablegroup_id_, default_tablegroup_name, in_recyclebin_,
+              default_tablespace_id_, default_tablespace_name);
   if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data", K(ret));
   } else if (OB_FAIL(set_database_name(database_name))) {
@@ -2815,6 +2839,8 @@ OB_DEF_DESERIALIZE(ObDatabaseSchema)
     LOG_WARN("set_comment failed", K(ret));
   } else if (OB_FAIL(set_default_tablegroup_name(default_tablegroup_name))) {
     LOG_WARN("set_comment failed", K(ret));
+  } else if (OB_FAIL(set_default_tablespace_name(default_tablespace_name))) {
+    LOG_WARN("set default tablespace name failed", K(ret));
   } else {} // no more to do
   return ret;
 }
@@ -2827,7 +2853,8 @@ OB_DEF_SERIALIZE_SIZE(ObDatabaseSchema)
               database_name_,
               comment_, charset_type_, collation_type_,
               name_case_mode_, read_only_, default_tablegroup_id_,
-              default_tablegroup_name_, in_recyclebin_);
+              default_tablegroup_name_, in_recyclebin_,
+              default_tablespace_id_, default_tablespace_name_);
 
   return len;
 }

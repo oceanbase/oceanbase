@@ -372,6 +372,7 @@ GLOBAL_ERRSIM_POINT_DEF(527, EN_WRITE_SPLIT_START_LOG_DELAY_SEC, "delay seconds 
 GLOBAL_ERRSIM_POINT_DEF(528, EN_AUTO_SPLIT_TASK_CNT_LESS_THAN, "max number of running auto split task allowed in cluster");
 GLOBAL_ERRSIM_POINT_DEF(529, EN_BLOCK_BEFORE_SPLIT_DOWNLOAD_SSTABLE, "block split before downloading sstables");
 GLOBAL_ERRSIM_POINT_DEF(530, EN_SKIP_TABLET_NUM_LIMIT_CHECK, "skip tablet num limit check");
+GLOBAL_ERRSIM_POINT_DEF(531, EN_MOCK_DATA_VERSION, "specify minor and patch version of data version");
 
 // vec index
 GLOBAL_ERRSIM_POINT_DEF(530, EN_VEC_INDEX_DROP_SHARE_TABLE_ERR, "");

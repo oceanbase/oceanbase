@@ -505,6 +505,7 @@ all_database_def = dict(
       ('read_only', 'int'),
       ('default_tablegroup_id', 'int', 'false', 'OB_INVALID_ID'),
       ('in_recyclebin', 'int', 'false', '0'),
+      ('default_tablespace_id', 'int', 'false', 'OB_INVALID_ID'),
     ],
 )
 
@@ -572,6 +573,7 @@ all_tenant_def = dict(
       ('status', 'varchar:MAX_TENANT_STATUS_LENGTH', 'false', 'NORMAL'),
       ('in_recyclebin', 'int', 'false', '0'),
       ('arbitration_service_status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false', 'DISABLED'),
+      ('default_tablespace_id', 'int', 'false', 'OB_INVALID_ID'),
   ],
 )
 

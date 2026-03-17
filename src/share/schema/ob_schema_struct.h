@@ -2297,6 +2297,8 @@ public:
   inline void set_storage_format_work_version(const int64_t storage_format_work_version);
   void set_default_tablegroup_id(const uint64_t tablegroup_id) { default_tablegroup_id_ = tablegroup_id; }
   int set_default_tablegroup_name(const common::ObString &tablegroup_name) { return deep_copy_str(tablegroup_name, default_tablegroup_name_); }
+  void set_default_tablespace_id(const uint64_t tablespace_id) { default_tablespace_id_ = tablespace_id; }
+  int set_default_tablespace_name(const common::ObString &tablespace_name) { return deep_copy_str(tablespace_name, default_tablespace_name_); }
   inline void set_compatibility_mode(const common::ObCompatibilityMode compatibility_mode) { compatibility_mode_ = compatibility_mode; }
 
   //get methods
@@ -2346,6 +2348,8 @@ public:
       common::ObIArray<common::ObZone> &zone_list) const;
   inline uint64_t get_default_tablegroup_id() const { return default_tablegroup_id_; }
   inline const common::ObString &get_default_tablegroup_name() const { return default_tablegroup_name_; }
+  inline uint64_t get_default_tablespace_id() const { return default_tablespace_id_; }
+  inline const common::ObString &get_default_tablespace_name() const { return default_tablespace_name_; }
   inline common::ObCompatibilityMode get_compatibility_mode() const { return compatibility_mode_; }
 
   inline bool is_oracle_tenant() const
@@ -2381,7 +2385,8 @@ public:
                K_(read_only), K_(locality_str),
                K_(zone_replica_attr_array), K_(primary_zone_array), K_(previous_locality_str),
                K_(default_tablegroup_id), K_(default_tablegroup_name), K_(compatibility_mode), K_(drop_tenant_time),
-               K_(status), K_(in_recyclebin), K_(arbitration_service_status));
+               K_(status), K_(in_recyclebin), K_(arbitration_service_status),
+               K_(default_tablespace_id), K_(default_tablespace_name));
 private:
   uint64_t tenant_id_;
   int64_t schema_version_;
@@ -2403,6 +2408,8 @@ private:
   common::ObString previous_locality_str_;
   uint64_t default_tablegroup_id_;
   common::ObString default_tablegroup_name_;
+  uint64_t default_tablespace_id_;
+  common::ObString default_tablespace_name_;
   common::ObCompatibilityMode compatibility_mode_;//创建后不可修改
   int64_t drop_tenant_time_;
   ObTenantStatus status_;
@@ -2459,6 +2466,8 @@ public:
   inline void set_read_only(const bool read_only) { read_only_ = read_only; }
   void set_default_tablegroup_id(const uint64_t tablegroup_id) { default_tablegroup_id_ = tablegroup_id; }
   int set_default_tablegroup_name(const common::ObString &tablegroup_name) { return deep_copy_str(tablegroup_name, default_tablegroup_name_); }
+  void set_default_tablespace_id(const uint64_t tablespace_id) { default_tablespace_id_ = tablespace_id; }
+  int set_default_tablespace_name(const common::ObString &tablespace_name) { return deep_copy_str(tablespace_name, default_tablespace_name_); }
   inline void set_in_recyclebin(const bool in_recyclebin) { in_recyclebin_ = in_recyclebin; }
   inline bool is_hidden() const
   {
@@ -2481,6 +2490,8 @@ public:
   inline bool is_read_only() const { return read_only_; }
   inline uint64_t get_default_tablegroup_id() const { return default_tablegroup_id_; }
   inline const common::ObString &get_default_tablegroup_name() const { return default_tablegroup_name_; }
+  inline uint64_t get_default_tablespace_id() const { return default_tablespace_id_; }
+  inline const common::ObString &get_default_tablespace_name() const { return default_tablespace_name_; }
   inline bool is_in_recyclebin() const { return in_recyclebin_; }
   inline bool is_or_in_recyclebin() const
   { return in_recyclebin_ || is_recyclebin_database_id(database_id_); }
@@ -2507,7 +2518,8 @@ public:
   virtual void reset();
   TO_STRING_KV(K_(tenant_id), K_(database_id), K_(schema_version), K_(database_name),
     K_(charset_type), K_(collation_type), K_(name_case_mode), K_(comment), K_(read_only),
-    K_(default_tablegroup_id), K_(default_tablegroup_name), K_(in_recyclebin));
+    K_(default_tablegroup_id), K_(default_tablegroup_name), K_(in_recyclebin),
+    K_(default_tablespace_id), K_(default_tablespace_name));
 
 private:
   uint64_t tenant_id_;
@@ -2522,6 +2534,8 @@ private:
   bool read_only_;
   uint64_t default_tablegroup_id_;
   common::ObString default_tablegroup_name_;
+  uint64_t default_tablespace_id_;
+  common::ObString default_tablespace_name_;
   bool in_recyclebin_;
 };
 

@@ -822,6 +822,7 @@ public:
        PROGRESSIVE_MERGE_NUM,
        ENABLE_EXTENDED_ROWID,
        ENABLE_ARBITRATION_SERVICE,
+       DEFAULT_TABLESPACE,
        MAX_OPTION,
   };
   ObModifyTenantArg() : ObDDLArg()
@@ -1055,6 +1056,7 @@ public:
        PRIMARY_ZONE,
        READ_ONLY,
        DEFAULT_TABLEGROUP,
+       DEFAULT_TABLESPACE,
        MAX_OPTION
   };
 
@@ -6324,7 +6326,8 @@ struct ObCreateUserArg : public ObDDLArg
 
 public:
   ObCreateUserArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), if_not_exist_(false),
-                      creator_id_(common::OB_INVALID_ID), primary_zone_(), is_create_role_(false)
+                      creator_id_(common::OB_INVALID_ID), primary_zone_(), is_create_role_(false),
+                      default_tablespace_name_()
   {}
   virtual ~ObCreateUserArg()
   {}
@@ -6339,6 +6342,7 @@ public:
   uint64_t creator_id_;
   common::ObString primary_zone_; // only used in oracle mode
   bool is_create_role_;
+  common::ObString default_tablespace_name_; // only used in oracle mode
 };
 
 struct ObDropUserArg : public ObDDLArg

@@ -1607,6 +1607,25 @@ int ObInnerTableSchema::all_virtual_tenant_mysql_sys_agent_schema(ObTableSchema 
       arbitration_service_status_default,
       arbitration_service_status_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj default_tablespace_id_default;
+    default_tablespace_id_default.set_int(OB_INVALID_ID);
+    ADD_COLUMN_SCHEMA_T("default_tablespace_id", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      default_tablespace_id_default,
+      default_tablespace_id_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
