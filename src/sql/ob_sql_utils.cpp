@@ -41,6 +41,7 @@ extern "C" {
 #include "sql/parser/ob_non_reserved_keywords.h"
 }
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "sql/engine/connector/ob_odps_jni_reader.h"
 #include "observer/ob_server.h"
 #include "share/search_index/ob_search_index_encoder.h"
 #include "lib/udt/ob_array_type.h"
@@ -1444,6 +1445,100 @@ int ObSQLUtils::get_odps_api_mode(const ObString &table_format_or_properties,
     is_odps_external_table = (ObExternalFileFormat::FormatType:: ODPS_FORMAT == format.format_type_);
     if (is_odps_external_table) {
       mode = format.odps_format_.api_mode_;
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::parse_odps_jni_params_from_format_str(const ObString &external_file_format_str,
+                                                      bool &use_odps_jni_connector,
+                                                      int8_t &odps_data_transfer_mode)
+{
+  int ret = OB_SUCCESS;
+  use_odps_jni_connector = true;
+  odps_data_transfer_mode = ObOdpsJniReader::TransferMode::ARROW_TABLE;  // arrowTable
+  if (external_file_format_str.empty()) {
+    // use defaults
+  } else {
+    ObExternalFileFormat format;
+    ObArenaAllocator allocator;
+    if (OB_FAIL(format.load_from_string(external_file_format_str, allocator))) {
+      LOG_WARN("fail to load from format string", K(ret), K(external_file_format_str));
+    } else if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
+      use_odps_jni_connector = format.odps_format_.use_odps_jni_connector_;
+      odps_data_transfer_mode = format.odps_format_.odps_data_transfer_mode_;
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::apply_odps_hints_to_format_str(const ObString &original_format_str,
+                                              const ObOptParamHint &opt_params,
+                                              ObIAllocator &allocator,
+                                              ObString &result_format_str)
+{
+  int ret = OB_SUCCESS;
+  result_format_str.reset();
+  if (original_format_str.empty()) {
+    // nothing to apply
+  } else {
+    ObExternalFileFormat::FormatType format_type = ObExternalFileFormat::INVALID_FORMAT;
+    if (OB_FAIL(ObSQLUtils::get_external_table_type(original_format_str, format_type))) {
+      LOG_WARN("fail to get external table type", K(ret), K(original_format_str));
+    } else if (ObExternalFileFormat::ODPS_FORMAT != format_type) {
+      // not ODPS, no override needed; leave result_format_str empty
+    } else {
+      ObExternalFileFormat format;
+      // jni connector
+      bool use_odps_jni_connector = GCONF._use_odps_jni_connector;
+      // data transfer mode
+      ObOdpsJniReader::TransferMode odps_data_transfer_mode = ObOdpsJniReader::TransferMode::ARROW_TABLE;
+      const ObString gc_mode = GCONF._ob_java_odps_data_transfer_mode.get_value_string();
+      if (0 == gc_mode.case_compare("offHeapTable")) {
+        odps_data_transfer_mode = ObOdpsJniReader::TransferMode::OFF_HEAP_TABLE;
+      }
+      ObObj transfer_mode_obj;
+      // jdk storage batch size
+      bool has_batch_size_hint = false;
+      int64_t odps_jdk_storage_batch_size = -1;
+
+      // jni connector
+      if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::_USE_ODPS_JNI_CONNECTOR, use_odps_jni_connector))) {
+        LOG_WARN("failed to get _use_odps_jni_connector from opt params", K(ret));
+      }
+
+      // data transfer mode
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(opt_params.get_opt_param(ObOptParamHint::_OB_JAVA_ODPS_DATA_TRANSFER_MODE, transfer_mode_obj))) {
+        LOG_WARN("failed to get _ob_java_odps_data_transfer_mode from opt params", K(ret));
+      } else if (transfer_mode_obj.is_varchar()
+                  && 0 == transfer_mode_obj.get_varchar().case_compare("arrowTable")) {
+        odps_data_transfer_mode = ObOdpsJniReader::TransferMode::ARROW_TABLE;
+      } else if (transfer_mode_obj.is_varchar()
+                  && 0 == transfer_mode_obj.get_varchar().case_compare("offHeapTable")) {
+        odps_data_transfer_mode = ObOdpsJniReader::TransferMode::OFF_HEAP_TABLE;
+      }
+
+      // jdk storage batch size
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(opt_params.get_integer_opt_param(
+                ObOptParamHint::ODPS_JDK_STORAGE_BATCH_SIZE, odps_jdk_storage_batch_size, has_batch_size_hint))) {
+        LOG_WARN("failed to get jdk storage batch size", K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(format.load_from_string(original_format_str, allocator))) {
+        LOG_WARN("failed to load external file format", K(ret));
+      } else {
+        format.odps_format_.use_odps_jni_connector_ = use_odps_jni_connector;
+        format.odps_format_.odps_data_transfer_mode_ = odps_data_transfer_mode;
+        if (has_batch_size_hint && odps_jdk_storage_batch_size > 0) {
+          format.odps_format_.odps_jdk_storage_batch_size_ = odps_jdk_storage_batch_size;
+        }
+        if (OB_FAIL(format.to_string_with_alloc(result_format_str, allocator))) {
+          LOG_WARN("failed to dump external file format", K(ret));
+        }
+      }
     }
   }
   return ret;

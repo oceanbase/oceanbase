@@ -421,6 +421,7 @@ public:
   is_taskset_reset_(false),
   fetch_task_ret_(OB_SUCCESS),
   finished_cnt_(0),
+  use_odps_jni_connector_(false),
   external_task_runners_() {
     external_task_runners_.set_attr(common::ObMemAttr(MTL_ID(), MEM_ATTR_EXT_TASK_GEN));
   }
@@ -544,6 +545,7 @@ private:
   // others should not fetch tasks any more.
   int fetch_task_ret_;
   uint64_t finished_cnt_;
+  bool use_odps_jni_connector_;
 
 public:
 // external table start;

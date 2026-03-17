@@ -565,7 +565,9 @@ int ObExternalTableAccessService::table_scan(
           }
           break;
         case ObExternalFileFormat::ODPS_FORMAT:
-          if (!GCONF._use_odps_jni_connector) {
+        {
+          bool use_odps_jni_connector = param.external_file_format_.odps_format_.use_odps_jni_connector_;
+          if (!use_odps_jni_connector) {
 #if defined(OB_BUILD_CPP_ODPS)
             if (OB_ISNULL(row_iter = OB_NEWx(ObODPSTableRowIterator,
                                             (scan_param.allocator_)))) {
@@ -589,6 +591,7 @@ int ObExternalTableAccessService::table_scan(
 #endif
           }
           break;
+        }
         case ObExternalFileFormat::ORC_FORMAT:
           if (OB_ISNULL(row_iter = OB_NEWx(ObOrcTableRowIterator, (scan_param.allocator_)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;

@@ -79,6 +79,14 @@ int ObODPSGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, int
   OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], helper.convert(ObHexStringWrap(region_))));
   OZ(J_COMMA());
   OZ(databuff_printf(buf, buf_len, pos, R"("%s":%d)", OPTION_NAMES[idx++], (int)api_mode_));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s":%s)", OPTION_NAMES[idx++], STR_BOOL(use_odps_jni_connector_)));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s":%d)", OPTION_NAMES[idx++], static_cast<int>(odps_data_transfer_mode_)));
+  if (odps_jdk_storage_batch_size_ > 0) {
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, R"("%s":%ld)", OPTION_NAMES[idx++], odps_jdk_storage_batch_size_));
+  }
   return ret;
 }
 
@@ -171,6 +179,9 @@ int ObODPSGeneralFormat::deep_copy(const ObODPSGeneralFormat &src) {
   } else {
     collect_statistics_on_create_ = src.collect_statistics_on_create_;
     api_mode_ = src.api_mode_;
+    use_odps_jni_connector_ = src.use_odps_jni_connector_;
+    odps_data_transfer_mode_ = src.odps_data_transfer_mode_;
+    odps_jdk_storage_batch_size_ = src.odps_jdk_storage_batch_size_;
   }
   return ret;
 }
@@ -306,6 +317,34 @@ int ObODPSGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &al
   } else {
     // if there is no this option, use tunnel api old version has no this option
     api_mode_ = ApiMode::TUNNEL_API;
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])) {
+    if (json::JT_TRUE == node->value_->get_type()) {
+      use_odps_jni_connector_ = true;
+      node = node->get_next();
+    } else if (json::JT_FALSE == node->value_->get_type()) {
+      use_odps_jni_connector_ = false;
+      node = node->get_next();
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid odps jni connector option", K(ret), K(node->name_));
+    }
+  } else {
+    use_odps_jni_connector_ = true;
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+      && json::JT_NUMBER == node->value_->get_type()) {
+    odps_data_transfer_mode_ = static_cast<int8_t>(node->value_->get_number());
+    node = node->get_next();
+  } else {
+    odps_data_transfer_mode_ = 0;
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+      && json::JT_NUMBER == node->value_->get_type()) {
+    odps_jdk_storage_batch_size_ = node->value_->get_number();
+    node = node->get_next();
+  } else {
+    odps_jdk_storage_batch_size_ = -1;
   }
   return ret;
 }

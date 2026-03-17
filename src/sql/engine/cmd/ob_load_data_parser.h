@@ -64,7 +64,10 @@ struct ObODPSGeneralFormat {
     compression_code_(),
     collect_statistics_on_create_(false),
     region_(),
-    api_mode_(ApiMode::TUNNEL_API)
+    api_mode_(ApiMode::TUNNEL_API),
+    use_odps_jni_connector_(true),
+    odps_data_transfer_mode_(0),  // 0=arrowTable, 1=offHeapTable
+    odps_jdk_storage_batch_size_(-1)  // -1=not set, use default capacity
   {
   }
   int deep_copy_str(const ObString &src,
@@ -87,7 +90,10 @@ struct ObODPSGeneralFormat {
     "COLLECT_STATISTICS_ON_CREATE",
     "REGION",
     "API_MODE",
-    "SPLIT"
+    "SPLIT",
+    "USE_ODPS_JNI_CONNECTOR",
+    "ODPS_DATA_TRANSFER_MODE",
+    "ODPS_JDK_STORAGE_BATCH_SIZE"
   };
   common::ObString access_type_;
   common::ObString access_id_;
@@ -103,12 +109,16 @@ struct ObODPSGeneralFormat {
   bool collect_statistics_on_create_;
   common::ObString region_;
   ApiMode api_mode_;
+  bool use_odps_jni_connector_;
+  int8_t odps_data_transfer_mode_;
+  int64_t odps_jdk_storage_batch_size_;
   common::ObArenaAllocator arena_alloc_;
   int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
   TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token),
                K_(endpoint), K_(tunnel_endpoint), K_(project), K_(schema), K_(table), K_(quota),
-               K_(compression_code), K_(collect_statistics_on_create), K_(region), K(api_mode_));
+               K_(compression_code), K_(collect_statistics_on_create), K_(region), K(api_mode_),
+               K_(use_odps_jni_connector), K_(odps_data_transfer_mode), K_(odps_jdk_storage_batch_size));
   OB_UNIS_VERSION(1);
 };
 

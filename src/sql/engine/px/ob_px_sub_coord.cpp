@@ -586,7 +586,7 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
     } else if (OB_FAIL(external_properties.odps_format_.decrypt())) {
       LOG_WARN("failed to decrypt odps format", K(ret));
     }  else {
-      if (!GCONF._use_odps_jni_connector) {
+      if (!external_properties.odps_format_.use_odps_jni_connector_) {
 #if defined (OB_BUILD_CPP_ODPS)
         ObOdpsPartitionUploaderMgr &odps_mgr = sqc_ctx.gi_pump_.get_odps_uploader_mgr();
         if (OB_FAIL(odps_mgr.init_uploader(
