@@ -136,7 +136,8 @@ public:
   // 指定case运行目录前缀 test_ob_simple_cluster_
   ObSharedStorageTest() : ObSimpleClusterTestBase("test_tablet_split_shared_storage_gc_", "50G", "50G", "50G")
   {}
-  void wait_minor_finish();
+  void flush_mds_and_schedule_upload(
+      const ObLSID &ls_id, const ObTabletID &tablet_id);
   void set_ls_and_split_source_tablet_id();
   void set_split_dest_tablets_id();
   void wait_shared_split_source_tablet_gc_finish();
@@ -176,6 +177,48 @@ public:
   }
 
 };
+
+void ObSharedStorageTest::flush_mds_and_schedule_upload(
+    const ObLSID &ls_id, const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  SCN decided_scn;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  ObLS *ls = nullptr;
+  mds::MdsTableHandle mds_table;
+  ObLSService *ls_svr = MTL(ObLSService *);
+  if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls_svr is null", K(ret));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("fail to get ls", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(ret), K(ls_id));
+  } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(tablet_id, tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+    LOG_WARN("fail to get tablet", K(ret), K(tablet_id));
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_mds_table_for_dump(mds_table))) {
+    if (OB_EMPTY_RESULT != ret) {
+      LOG_WARN("get mds table failed", K(ret), KPC(tablet_handle.get_obj()));
+    } else { // no mds table.
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(ls->get_max_decided_scn(decided_scn))) {
+    LOG_WARN("decide_max_decided_scn failed", K(ret), K(ls_id));
+  } else if (OB_FAIL(tablet_handle.get_obj()->mds_table_flush(decided_scn))) {
+    LOG_WARN("persist mds table failed", K(ret), KPC(tablet_handle.get_obj()));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObLSIncSSTableUploader &upload_handler = ls->get_inc_sstable_uploader();
+    if (OB_FAIL(upload_handler.schedule_emergency_tablet_upload(tablet_id))) {
+      LOG_WARN("schedule failed", K(ret), K(tablet_id));
+    }
+  }
+  LOG_INFO("flush_mds_and_schedule_upload", K(ret), K(ls_id), K(tablet_id), K(decided_scn));
+
+}
 
 void ObSharedStorageTest::set_ls_and_split_source_tablet_id()
 {
@@ -247,11 +290,9 @@ void ObSharedStorageTest::wait_shared_split_source_tablet_gc_finish()
   bool is_mark_deleted = false;
   char dir_path[common::MAX_PATH_SIZE] = {0};
   ObCheckDirEmptOp shared_macro_op;
-  ObMemAttr mem_attr(MTL_ID(), "test_gc");
-  ObArenaAllocator allocator(mem_attr);
-
   do {
 	ObTabletHandle ss_tablet;
+    flush_mds_and_schedule_upload(RunCtx.ls_id_, RunCtx.split_src_tablet_id_);
     ret = MTL(ObSSMetaService*)->check_mark_deleted(RunCtx.ls_id_, RunCtx.split_src_tablet_id_, share::SCN::min_scn(), is_mark_deleted);
     LOG_INFO("wait tablet meta", K(ret), K(RunCtx.ls_id_), K(RunCtx.split_src_tablet_id_), K(is_mark_deleted));
     if (OB_TABLET_NOT_EXIST == ret) {
@@ -350,6 +391,9 @@ void ObSharedStorageTest::wait_shared_table_tablets_gc_finish()
   for (int i = 0; i < checked_tablet_ids.count(); i++) {
     memset(dir_path, 0, sizeof(dir_path));
     ObTabletID tablet_id = checked_tablet_ids.at(i);
+    for (int j = 0; j < checked_tablet_ids.count(); j++) {
+      flush_mds_and_schedule_upload(RunCtx.ls_id_, checked_tablet_ids.at(j));
+    }
     do {
       shared_macro_op.reset();
       ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_shared_tablet_dir(dir_path, sizeof(dir_path), tablet_id.id()));
@@ -366,30 +410,6 @@ void ObSharedStorageTest::wait_shared_table_tablets_gc_finish()
   }
 }
 
-void ObSharedStorageTest::wait_minor_finish()
-{
-  int ret = OB_SUCCESS;
-  LOG_INFO("wait minor begin");
-  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
-
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  int64_t row_cnt = 0;
-  do {
-    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as row_cnt from oceanbase.__all_virtual_table_mgr where tenant_id=%lu and tablet_id=%lu and table_type=0;",
-          RunCtx.tenant_id_, RunCtx.split_src_tablet_id_.id()));
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, sql.ptr()));
-      sqlclient::ObMySQLResult *result = res.get_result();
-      ASSERT_NE(nullptr, result);
-      ASSERT_EQ(OB_SUCCESS, result->next());
-      ASSERT_EQ(OB_SUCCESS, result->get_int("row_cnt", row_cnt));
-    }
-    usleep(100 * 1000);
-    LOG_INFO("minor result", K(row_cnt));
-  } while (row_cnt > 0);
-  LOG_INFO("minor finished", K(row_cnt));
-}
 
 TEST_F(ObSharedStorageTest, observer_start)
 {
@@ -449,13 +469,14 @@ TEST_F(ObSharedStorageTest, test_tablet_gc_for_shared_dir)
   EXE_SQL("alter system set inc_sstable_upload_thread_score = 20;");
   EXE_SQL("alter system set _ss_garbage_collect_interval = '10s';");
   EXE_SQL("alter system set _ss_garbage_collect_file_expiration_time = '10s';");
-  //EXE_SQL("alter system set _ss_enable_timeout_garbage_collection = true;");
+  // EXE_SQL("alter system set _ss_enable_timeout_garbage_collection = true;");
   EXE_SQL("alter system set _ss_tablet_version_retention_time = '10s';");
   EXE_SQL("alter system set _ss_advance_checkpoint_interval = '1m';");
 
   EXE_SQL("alter table test_table reorganize partition p1 into ( partition p2 values less than (5000), partition p3 values less than MAXVALUE);");
   LOG_INFO("2. tablet split finished", K(RunCtx.ls_id_), K(RunCtx.split_src_tablet_id_));
 
+  EXE_SQL("alter system minor freeze;");
   wait_shared_split_source_tablet_gc_finish();
   LOG_INFO("3. wait source tablet gc finished", K(RunCtx.ls_id_), K(RunCtx.split_src_tablet_id_));
 
@@ -464,6 +485,7 @@ TEST_F(ObSharedStorageTest, test_tablet_gc_for_shared_dir)
   LOG_INFO("4. set split dests and check normal", K(RunCtx.ls_id_), K(RunCtx.split_dest_tablet_ids_));
 
   EXE_SQL("drop table test_table;");
+  EXE_SQL("alter system minor freeze;");
   wait_shared_table_tablets_gc_finish();
   LOG_INFO("5. wait shared table tablets gc finished", K(RunCtx.ls_id_), K(RunCtx.split_src_tablet_id_));
 }
