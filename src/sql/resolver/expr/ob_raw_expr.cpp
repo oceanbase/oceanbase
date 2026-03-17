@@ -914,7 +914,7 @@ int ObRawExpr::calc_hash()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
     } else if (OB_FAIL(SMART_CALL(get_param_expr(i)->calc_hash()))) {
-      LOG_WARN("fail to extract sysvar from params", K(ret));
+      LOG_WARN("fail to extract sysvar from params", K(ret), K(get_param_expr(i)));
     }
   }
   if (OB_SUCC(ret)) {

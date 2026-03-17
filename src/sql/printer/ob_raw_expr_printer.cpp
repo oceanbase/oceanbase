@@ -253,6 +253,11 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       PRINT_EXPR(pse_expr);
       break;
     }
+    case ObRawExpr::EXPR_OP_PSEUDO_COLUMN: {
+      ObOpPseudoColumnRawExpr *op_pse_expr = static_cast<ObOpPseudoColumnRawExpr *>(expr);
+      PRINT_EXPR(op_pse_expr);
+      break;
+    }
     case ObRawExpr::EXPR_SET_OP: {
       ObSetOpRawExpr *set_op_expr = static_cast<ObSetOpRawExpr *>(expr);
       PRINT_EXPR(set_op_expr);
@@ -4549,6 +4554,28 @@ int ObRawExprPrinter::print(ObPseudoColumnRawExpr *expr)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected pseudo column type", K(type));
       }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print(ObOpPseudoColumnRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
+  } else {
+    const char *name = expr->get_name();
+    if (OB_ISNULL(name)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("op pseudo column name is NULL", K(ret));
+    } else if (T_PSEUDO_DUP_EXPR == expr->get_expr_type()) {
+      DATA_PRINTF("dup(");
+      DATA_PRINTF("%s", name);
+      DATA_PRINTF(")");
+    } else {
+      DATA_PRINTF("%s", name);
     }
   }
   return ret;

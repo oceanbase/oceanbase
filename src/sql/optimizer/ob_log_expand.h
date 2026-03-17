@@ -44,6 +44,7 @@ public:
   inline void set_grouping_set_info(ObGroupingSetInfo *grouping_set_info) { grouping_set_info_ = grouping_set_info; }
 
   ObGroupingSetInfo *get_grouping_set_info() { return grouping_set_info_; }
+  int replace_op_replaced_exprs(ObRawExprReplacer &replacer);
 
   virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
 

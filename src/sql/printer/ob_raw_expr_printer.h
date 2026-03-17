@@ -139,6 +139,7 @@ private:
   int print(ObUDFRawExpr *expr);
   int print(ObWinFunRawExpr *expr);
   int print(ObPseudoColumnRawExpr *expr);
+  int print(ObOpPseudoColumnRawExpr *expr);
   int print(ObMatchFunRawExpr *expr);
   int print(ObUnpivotRawExpr *expr);
 

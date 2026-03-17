@@ -388,7 +388,22 @@ int ObLogExpand::find_expr_within_aggr_item(ObAggFunRawExpr *aggr_item, const Ob
   }
   return ret;
 }
-
+int ObLogExpand::replace_op_replaced_exprs(ObRawExprReplacer &replacer)
+{
+  int ret = OB_SUCCESS;
+  if (grouping_set_info_ != NULL) {
+    for (int i = 0; OB_SUCC(ret) && i < grouping_set_info_->replaced_agg_pairs_.count(); i++) {
+      ObRawExpr *&org_agg = grouping_set_info_->replaced_agg_pairs_.at(i).element<0>();
+      ObRawExpr *&new_agg = grouping_set_info_->replaced_agg_pairs_.at(i).element<1>();
+      if (OB_FAIL(replace_expr_action(replacer, org_agg))) {
+        LOG_WARN("replace org agg failed", K(ret));
+      } else if (OB_FAIL(replace_expr_action(replacer, new_agg))) {
+        LOG_WARN("replace new agg failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 int ObLogExpand::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;

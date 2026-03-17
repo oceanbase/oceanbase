@@ -4936,7 +4936,6 @@ int ObLogPlan::perform_group_by_pushdown(ObLogicalOperator *op)
         }
       }
     }
-    // always use replace before every thing
     if (OB_FAIL(ret)) {
       // do nothing
     } else if(OB_FAIL(op->replace_op_exprs(group_replacer_))) {
@@ -4964,8 +4963,6 @@ int ObLogPlan::perform_one_distinct_pushdown(ObLogicalOperator *op)
       if (OB_ISNULL(org_agg) || OB_ISNULL(new_agg)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid null exprs", K(ret));
-      } else if (OB_FAIL(onetime_replacer_.replace(org_agg))) {
-        LOG_WARN("failed to replace expr", K(ret));
       } else if (OB_FAIL(distinct_pushdown_replacer_.add_replace_expr(org_agg, new_agg))) {
         LOG_WARN("add replace expr failed", K(ret));
       }
@@ -4990,8 +4987,6 @@ int ObLogPlan::perform_groupingsets_replacement(ObLogicalOperator *op)
       if (OB_ISNULL(org_agg) || OB_ISNULL(new_agg)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid null agg exprs", K(ret));
-      } else if (OB_FAIL(onetime_replacer_.replace(org_agg))) {
-        LOG_WARN("replace expr failed", K(ret));
       } else if (OB_FAIL(groupingset_agg_replacer_.add_replace_expr(org_agg, new_agg))) {
         LOG_WARN("add replace expr failed", K(ret));
       } else {
@@ -12084,10 +12079,12 @@ int ObLogPlan::init_tree_optimizers(common::ObIArray<ObOptimizeRule *> &tree_opt
   }
   return ret;
 }
+
 int ObLogPlan::adjust_final_plan_tree()
 {
   int ret = OB_SUCCESS;
-  OPT_TRACE_TITLE("start adjust final plan tree");
+  OPT_TRACE_TITLE("start to adjust final plan tree");
+  OPT_TRACE("current plan is ", this);
   ObLogicalOperator *root = NULL;
   ObSEArray<ObOptimizeRule *, 8> tree_optimizers;
   if (OB_ISNULL(root = get_plan_root()) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
@@ -12289,8 +12286,6 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         LOG_WARN("failed to perform simplify win expr", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_window_function_pushdown(op))) {
         LOG_WARN("failed to perform window function push down", K(ret));
-      } else if (OB_FAIL(op->get_plan()->perform_adjust_onetime_expr(op))) {
-        LOG_WARN("failed to perform adjust onetime expr", K(ret));
       } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0 &&
                  get_optimizer_context().get_query_ctx()->get_global_hint().has_dbms_stats_hint() &&
                  OB_FAIL(op->get_plan()->perform_gather_stat_replace(op))) {
@@ -14754,6 +14749,8 @@ int ObLogPlan::perform_adjust_onetime_expr(ObLogicalOperator *op)
 {
   int ret = OB_SUCCESS;
   ObLogSubPlanFilter *subplan_filter = NULL;
+  ObLogGroupBy *group_by = NULL;
+  ObLogExpand *expand = NULL;
   if (OB_ISNULL(op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null op", K(ret));
@@ -14766,6 +14763,18 @@ int ObLogPlan::perform_adjust_onetime_expr(ObLogicalOperator *op)
   }
   if (OB_SUCC(ret) && OB_FAIL(op->replace_op_exprs(onetime_replacer_))) {
     LOG_WARN("failed to replace onetime subquery", K(ret));
+  }
+  // if it is a groupby, updated stored mapping
+  if (OB_SUCC(ret) && NULL != (group_by = dynamic_cast<ObLogGroupBy *>(op))) {
+    if (OB_FAIL(group_by->replace_op_replaced_exprs(onetime_replacer_))) {
+      LOG_WARN("failed to replace op replaced exprs", K(ret));
+    }
+  }
+  // if it is a expand, updated stored mapping
+  if (OB_SUCC(ret) && NULL != (expand = dynamic_cast<ObLogExpand *>(op))) {
+    if (OB_FAIL(expand->replace_op_replaced_exprs(onetime_replacer_))) {
+      LOG_WARN("failed to replace op replaced exprs", K(ret));
+    }
   }
   return ret;
 }

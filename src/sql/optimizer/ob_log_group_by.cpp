@@ -528,7 +528,33 @@ int ObLogGroupBy::get_gby_output_exprs(ObIArray<ObRawExpr *> &output_exprs)
   } else {/*do nothing*/}
   return ret;
 }
-
+int ObLogGroupBy::replace_op_replaced_exprs(ObRawExprReplacer &replacer)
+{
+  int ret = OB_SUCCESS;
+  if (is_three_stage_expand_aggr()) {
+    for (int i = 0; OB_SUCC(ret) && i < third_stage_expand_replace_pairs_.count(); i++) {
+      ObRawExpr *&org_agg = third_stage_expand_replace_pairs_.at(i).element<0>();
+      ObRawExpr *&new_agg = third_stage_expand_replace_pairs_.at(i).element<1>();
+      if (OB_FAIL(replace_expr_action(replacer, org_agg))) {
+        LOG_WARN("replace org agg failed", K(ret));
+      } else if (OB_FAIL(replace_expr_action(replacer, new_agg))) {
+        LOG_WARN("replace new agg failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && is_three_stage_expand_aggr() && grouping_set_info_ != NULL) {
+    for (int i = 0; OB_SUCC(ret) && i < grouping_set_info_->replaced_agg_pairs_.count(); i++) {
+      ObRawExpr *&org_agg = grouping_set_info_->replaced_agg_pairs_.at(i).element<0>();
+      ObRawExpr *&new_agg = grouping_set_info_->replaced_agg_pairs_.at(i).element<1>();
+      if (OB_FAIL(replace_expr_action(replacer, org_agg))) {
+        LOG_WARN("replace org agg failed", K(ret));
+      } else if (OB_FAIL(replace_expr_action(replacer, new_agg))) {
+        LOG_WARN("replace new agg failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 int ObLogGroupBy::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;

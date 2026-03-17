@@ -347,7 +347,7 @@ public:
   {
     return distinct_pairs_;
   }
-
+  int replace_op_replaced_exprs(ObRawExprReplacer &replacer);
   bool is_gby_with_ordered_grouping_id() const { return grouping_id_ != nullptr; }
 
   ObRawExpr *get_grouping_id() const { return grouping_id_; }

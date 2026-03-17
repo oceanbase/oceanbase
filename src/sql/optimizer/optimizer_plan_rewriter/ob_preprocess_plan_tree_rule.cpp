@@ -22,13 +22,15 @@
 int PlanNodeIdAllocator::visit_node(ObLogicalOperator * plannode, RewriterContext* context, RewriterResult*& result)
 {
  int ret = OB_SUCCESS;
- if (OB_ISNULL(plannode)) {
+ if (OB_ISNULL(plannode) || OB_ISNULL(plannode->get_plan())) {
    ret = OB_ERR_UNEXPECTED;
    LOG_WARN("get unexpected null", K(ret));
  } else if (OB_FALSE_IT(plannode->set_op_id(ctx_->get_next_op_id()))) {
    LOG_WARN("failed to set plan id", K(ret));
  } else if (OB_FAIL(visit_children_with(plannode, context, result))) {
    LOG_WARN("failed to rewrite children", K(ret));
+ } else if (OB_FAIL(plannode->get_plan()->perform_adjust_onetime_expr(plannode))) {
+   LOG_WARN("failed to perform adjust onetime expr", K(ret));
  }
  return ret;
 }
@@ -56,8 +58,6 @@ int PlanNodeIdAllocator::visit_node(ObLogicalOperator * plannode, RewriterContex
     RewriterResult *result = NULL;
     if (OB_FAIL((rewriter.visit(root, NULL, result)))) {
       LOG_WARN("failed to do plannode id allocate", K(ret));
-    } else {
-      OPT_TRACE("after apply preprocess plan tree:", root);
     }
   }
   return ret;

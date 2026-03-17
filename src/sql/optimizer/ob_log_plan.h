@@ -1635,7 +1635,7 @@ public:
   int allocate_output_expr_for_values_op(ObLogicalOperator &values_op);
 
   inline ObRawExprCopier *get_onetime_copier() { return onetime_copier_; }
-
+  inline ObRawExprReplacer *get_onetime_replacer() { return &onetime_replacer_; }
   int get_rowkey_exprs(const uint64_t table_id,
                        const uint64_t ref_table_id,
                        ObIArray<ObRawExpr*> &keys);
