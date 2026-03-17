@@ -2677,14 +2677,18 @@ int ObVecIndexAsyncTask::execute_exchange()
     RWLock::WLockGuard query_lock_guard(old_adapter_->get_query_lock()); // lock for query before end trans
 
     share::SCN commit_scn;
-    transaction::ObTransID tx_id = tx_desc->get_tx_id(); // save tx_id before end_trans
+    transaction::ObTransID tx_id;
+    if (OB_NOT_NULL(tx_desc)) {
+      tx_id = tx_desc->get_tx_id(); // save tx_id before end_trans
+    }
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
       ret = tmp_ret;
-      LOG_WARN("fail to end trans", K(ret), KPC(tx_desc), KPC(ctx_));
-    } else if (OB_SUCC(ret) &&OB_FAIL(fetch_commit_scn_from_tx_table(tx_id, commit_scn))) {
+      LOG_WARN("fail to end trans", K(ret), K(tx_id), KPC(ctx_));
+    } else if (OB_SUCC(ret) && OB_FAIL(fetch_commit_scn_from_tx_table(tx_id, commit_scn))) {
       LOG_WARN("fail to fetch commit scn from tx_table", K(ret), K(tx_id));
     }
+    tx_desc = nullptr;
 
     RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
     if (OB_FAIL(ret)) {
@@ -2737,6 +2741,7 @@ int ObVecIndexAsyncTask::execute_clean()
       ret = tmp_ret;
       LOG_WARN("fail to end trans", K(ret));
     }
+    tx_desc = nullptr;
   }
   LOG_INFO("end execute_clean", K(ret));
   return ret;
@@ -3696,14 +3701,18 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   * otherwise, a deadlock could occur between the query and asynchronous tasks. */
   RWLock::WLockGuard query_lock_guard(old_adapter_->get_query_lock()); // lock for query before end trans
   share::SCN commit_scn;
-  transaction::ObTransID tx_id = tx_desc->get_tx_id(); // save tx_id before end_trans
+  transaction::ObTransID tx_id;
+  if (trans_start && OB_NOT_NULL(tx_desc)) {
+    tx_id = tx_desc->get_tx_id(); // save tx_id before end_trans
+  }
   int tmp_ret = OB_SUCCESS;
   if (trans_start && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
     ret = tmp_ret;
-    LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
+    LOG_WARN("fail to end trans", K(ret), K(tx_id));
   } else if (OB_SUCC(ret) && OB_FAIL(fetch_commit_scn_from_tx_table(tx_id, commit_scn))) {
     LOG_WARN("fail to fetch commit scn from tx_table", K(ret), K(tx_id));
   }
+  tx_desc = nullptr;
 
   RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
   if (OB_SUCC(ret)) {

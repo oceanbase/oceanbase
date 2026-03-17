@@ -89,9 +89,10 @@ int ObInsertLobColumnHelper::end_trans(transaction::ObTxDesc *tx_desc,
         LOG_WARN("fail commit trans", K(ret), KPC(tx_desc), K(timeout_ts));
       }
     }
+    transaction::ObTransID tx_id = tx_desc->get_tx_id();
     if (OB_SUCCESS != (tmp_ret = txs->release_tx(*tx_desc))) {
       ret = tmp_ret;
-      LOG_WARN("release tx failed", K(ret), KPC(tx_desc));
+      LOG_WARN("release tx failed", K(ret), K(tx_id));
     }
   }
   return ret;
@@ -178,10 +179,15 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
           datum.set_lob_data(*lob_param.lob_common_, lob_param.handle_size_);
         }
       }
+      transaction::ObTransID tx_id;
+      if (OB_NOT_NULL(tx_desc)) {
+        tx_id = tx_desc->get_tx_id();
+      }
       if (OB_SUCCESS != (tmp_ret = end_trans(tx_desc, OB_SUCCESS != ret, timeout_ts))) {
         ret = tmp_ret;
-        LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
+        LOG_WARN("fail to end trans", K(ret), K(tx_id));
       }
+      tx_desc = nullptr;
     }
   }
   return ret;
