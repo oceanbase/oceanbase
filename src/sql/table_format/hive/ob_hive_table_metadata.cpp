@@ -63,7 +63,8 @@ int ObHiveTableMetadata::setup_tbl_schema(const uint64_t tenant_id,
                                           const Apache::Hadoop::Hive::Table &table,
                                           const ObString &properties,
                                           const ObString &uri,
-                                          const ObString &access_info)
+                                          const uint64_t location_object_id,
+                                          const ObString &location_object_sub_path)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(properties) || OB_UNLIKELY(properties.empty())) {
@@ -102,7 +103,8 @@ int ObHiveTableMetadata::setup_tbl_schema(const uint64_t tenant_id,
   } else if (OB_FAIL(setup_external_location(table,
                                              location,
                                              uri,
-                                             access_info,
+                                             location_object_id,
+                                             location_object_sub_path,
                                              allocator_,
                                              table_schema_))) {
     LOG_WARN("failed to setup external location", K(ret), K(uri), K(location));
@@ -463,7 +465,8 @@ int ObHiveTableMetadata::handle_orc_format(const Apache::Hadoop::Hive::Table &ta
 int ObHiveTableMetadata::setup_external_location(const Apache::Hadoop::Hive::Table &table,
                                                  const ObString &location,
                                                  const ObString &uri,
-                                                 const ObString &access_info,
+                                                 const uint64_t location_object_id,
+                                                 const ObString &location_object_sub_path,
                                                  ObIAllocator &allocator,
                                                  ObTableSchema &table_schema)
 {
@@ -483,8 +486,10 @@ int ObHiveTableMetadata::setup_external_location(const Apache::Hadoop::Hive::Tab
       LOG_WARN("failed to get storage info str", K(ret));
     } else if (OB_FAIL(table_schema.set_external_file_location(final_location))) {
       LOG_WARN("failed to set external file location", K(ret));
-    } else if (OB_FAIL(table_schema.set_external_file_location_access_info(access_info))) {
-      LOG_WARN("failed to set external file location access info", K(ret));
+    } else if (OB_FALSE_IT(table_schema.set_external_location_id(location_object_id))) {
+      LOG_WARN("failed to set external location id", K(ret));
+    } else if (OB_FAIL(table_schema.set_external_sub_path(location_object_sub_path))) {
+      LOG_WARN("failed to set external sub path", K(ret));
     } else {
       LOG_TRACE("get table schema in detail",
                 K(ret),

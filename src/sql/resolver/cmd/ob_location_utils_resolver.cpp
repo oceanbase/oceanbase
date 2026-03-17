@@ -48,8 +48,16 @@ int ObLocationUtilsResolver::resolve(const ParseNode &parse_tree)
     if (OB_SUCC(ret)) {
       ParseNode *child_node = parse_tree.children_[LOCATION_NAME];
       location_name.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
-      stmt->set_location_name(location_name);
-      if (OB_LOCATION_UTILS_REMOVE == child_node->value_ ) {
+      ObCollationType cs_type = CS_TYPE_UTF8MB4_BIN;
+      ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
+      if (OB_FAIL(session_info_->get_name_case_mode(case_mode))) {
+        LOG_WARN("failed to get name case mode", K(ret));
+      } else if (is_mysql_mode() && OB_LOWERCASE_AND_INSENSITIVE == case_mode
+          && OB_FAIL(ObCharset::tolower(cs_type, location_name, location_name, *allocator_))) {
+        LOG_WARN("failed to lower string", K(ret));
+      } else if (OB_FALSE_IT(stmt->set_location_name(location_name))){
+
+      } else if (OB_LOCATION_UTILS_REMOVE == child_node->value_ ) {
         stmt->set_op_type(child_node->value_);
       } else {
         ret = OB_INVALID_ARGUMENT;

@@ -25,6 +25,7 @@
 #include "sql/parser/ob_parser_utils.h"
 #include "sql/resolver/mv/ob_major_refresh_mjv_printer.h"
 #include "sql/privilege_check/ob_privilege_check.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 #include "sql/executor/ob_memory_tracker.h"
 namespace oceanbase
@@ -5596,6 +5597,50 @@ int ObSelectResolver::resolve_into_const_node(const ParseNode *node, ObObj &obj)
   return ret;
 }
 
+int ObSelectResolver::resolve_into_file_name_node(const ParseNode *node, ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node is null", K(ret));
+  } else if (T_LOCATION_OBJECT == node->type_) {
+    if (2 != node->num_child_ || OB_ISNULL(node->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node", K(ret));
+    } else {
+      const ParseNode *location_node = node->children_[0];
+      const ParseNode *sub_path_node = node->children_[1];
+      ObString location_name(location_node->str_len_, location_node->str_value_);
+      ObString sub_path;
+      if (OB_NOT_NULL(sub_path_node)) {
+        sub_path = ObString(sub_path_node->str_len_, sub_path_node->str_value_);
+      }
+
+      share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+      ObString full_path_str;
+      if (OB_ISNULL(schema_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema guard is null", K(ret));
+      } else if (OB_FAIL(ObExternalTableUtils::resolve_location_for_load_and_select_into(
+                                *schema_guard, *session_info_, *allocator_,
+                                location_name, sub_path, full_path_str))) {
+        LOG_WARN("failed to resolve location object", K(ret), K(location_name), K(sub_path));
+      } else {
+        obj.set_varchar(full_path_str);
+        obj.set_collation_type(session_info_->get_local_collation_connection());
+      }
+    }
+  } else if (T_EXTERNAL_FILE_LOCATION == node->type_) {
+    if (1 != node->num_child_ || OB_ISNULL(node->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node", "child", node->children_[0]);
+    } else if (OB_FAIL(resolve_into_const_node(node->children_[0], obj))) {
+      LOG_WARN("failed to resolve into const node", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSelectResolver::resolve_into_field_node(
   const ParseNode *list_node,
   ObSelectIntoItem &into_item)
@@ -5762,7 +5807,7 @@ int ObSelectResolver::resolve_into_outfile_with_format(const ParseNode *node, Ob
   ParseNode* format_node = NULL;
   ParseNode* option_node = NULL;
   if (node->num_child_ > 0
-      && OB_FAIL(resolve_into_const_node(node->children_[0], into_item.outfile_name_))) { // name
+      && OB_FAIL(resolve_into_file_name_node(node->children_[0], into_item.outfile_name_))) { // name
     LOG_WARN("resolve into outfile name failed", K(ret));
   }
   if (OB_SUCC(ret) && node->num_child_ > 1 && NULL != node->children_[1]) { // partition by
@@ -5849,7 +5894,7 @@ int ObSelectResolver::resolve_into_outfile_without_format(const ParseNode *node,
 {
   int ret = OB_SUCCESS;
   if (node->num_child_ > 0
-      && OB_FAIL(resolve_into_const_node(node->children_[0], into_item.outfile_name_))) { // name
+      && OB_FAIL(resolve_into_file_name_node(node->children_[0], into_item.outfile_name_))) { // name
     LOG_WARN("resolve into outfile name failed", K(ret));
   }
   if (OB_SUCC(ret) && node->num_child_ > 1 && NULL != node->children_[1]) { // partition by

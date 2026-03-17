@@ -2068,7 +2068,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("got null ptr", K(ret));
           } else if (OB_FAIL(schema_guard->check_location_access(session_priv, enable_role_id_array, location_name))) {
-            LOG_WARN("check location priv failed", K(ret), K(session_priv), K(enable_role_id_array), K(location_name));
+            LOG_WARN("failed to check location access", K(ret), K(session_priv), K(enable_role_id_array), K(location_name));
           }
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
             ParseNode *child_node = parse_tree.children_[1];

@@ -30,11 +30,14 @@ ObCatalogLocationSchemaProvider::ObCatalogLocationSchemaProvider(
 int ObCatalogLocationSchemaProvider::get_access_info_by_path(ObIAllocator &allocator,
                                                              const uint64_t tenant_id,
                                                              const common::ObString &access_path,
-                                                             common::ObString &access_info) const
+                                                             common::ObString &access_info,
+                                                             uint64_t &location_id,
+                                                             common::ObString &sub_path) const
 {
   int ret = OB_SUCCESS;
-  // todo 权限检查没处理
   access_info.reset();
+  location_id = OB_INVALID_ID;
+  sub_path.reset();
   const schema::ObLocationSchema *location_schema = NULL;
   sql::ObSQLSessionInfo *session = THIS_WORKER.get_session();
   schema::ObSessionPrivInfo session_priv;
@@ -52,13 +55,22 @@ int ObCatalogLocationSchemaProvider::get_access_info_by_path(ObIAllocator &alloc
     LOG_WARN("get location schema failed", K(ret));
   } else if (NULL == location_schema) {
     // do nothing
-  } else if (OB_FAIL(ob_write_string(allocator,
-                                     location_schema->get_location_access_info_str(),
-                                     access_info,
-                                     true))) {
-    LOG_WARN("failed to deep copy access info", K(ret));
+  } else {
+    location_id = location_schema->get_location_id();
+    const ObString &location_url = location_schema->get_location_url_str();
+    if (access_path.prefix_match(location_url)) {
+      int64_t url_len = location_url.length();
+      int64_t path_len = access_path.length();
+      if (path_len >= url_len) {
+        ObString tmp_sub_path(path_len - url_len, access_path.ptr() + url_len);
+        if (OB_FAIL(ob_write_string(allocator, tmp_sub_path, sub_path, true))) {
+          LOG_WARN("failed to deep copy sub path", K(ret));
+        } else if (OB_FAIL(ob_write_string(allocator, location_schema->get_location_access_info_str(), access_info, true))) {
+          LOG_WARN("failed to deep copy access info", K(ret));
+        }
+      }
+    }
   }
-  LOG_TRACE("fetch access info", K(ret), K(access_info), K(access_path));
   return ret;
 }
 

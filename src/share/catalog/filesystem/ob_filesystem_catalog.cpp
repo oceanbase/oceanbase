@@ -56,7 +56,9 @@ int ObFileSystemCatalog::do_init(const common::ObString &properties)
       if (OB_FAIL(location_schema_provider_->get_access_info_by_path(allocator_,
                                                                      tenant_id_,
                                                                      warehouse_,
-                                                                     access_info_))) {
+                                                                     access_info_,
+                                                                     location_object_id_,
+                                                                     warehouse_sub_path_))) {
         LOG_WARN("failed to get access info", K(ret));
       }
     }
@@ -167,7 +169,16 @@ int ObFileSystemCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
     switch (table_format) {
       case ObLakeTableFormat::ICEBERG: {
         iceberg::ObIcebergTableMetadata *iceberg_table_metadata = NULL;
-        if (OB_ISNULL(iceberg_table_metadata
+        ObSqlString sub_path_builder;
+        if (OB_FAIL(sub_path_builder.append_fmt("%.*s/%.*s/%.*s",
+                                                warehouse_sub_path_.length(),
+                                                warehouse_sub_path_.ptr(),
+                                                ns_name.length(),
+                                                ns_name.ptr(),
+                                                tbl_name.length(),
+                                                tbl_name.ptr()))) {
+          LOG_WARN("failed to build sub path", K(ret));
+        } else if (OB_ISNULL(iceberg_table_metadata
                       = OB_NEWx(iceberg::ObIcebergTableMetadata, &allocator, allocator))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate iceberg table metadata", K(ret));
@@ -181,6 +192,9 @@ int ObFileSystemCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
           LOG_WARN("failed to init iceberg table metadata", K(ret));
         } else if (OB_FAIL(iceberg_table_metadata->set_access_info(access_info_))) {
           LOG_WARN("failed to set access_info", K(ret));
+        } else if (OB_FALSE_IT(iceberg_table_metadata->set_location_object_id(location_object_id_))) {
+        } else if (OB_FAIL(iceberg_table_metadata->set_location_object_sub_path(sub_path_builder.string()))) {
+          LOG_WARN("failed to set location object sub path", K(ret));
         } else if (OB_FAIL(iceberg_table_metadata->load_by_table_location(tbl_path.string()))) {
           LOG_WARN("failed to load iceberg table metadata", K(ret));
         } else {
