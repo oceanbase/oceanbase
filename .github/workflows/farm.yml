@@ -19,6 +19,7 @@ env:
   MYSQLTEST_SLICES: "4"
   FARM_TASK_DIR: ${{ github.workspace }}/farm_build/${{ github.run_id }}
   cache-name: cache-deps
+  SKIP_FARM_COMPILE: "true"
 
 jobs:
   farm-setup:
@@ -49,6 +50,7 @@ jobs:
           .github/script/farm/prepare.sh
 
       - name: Setup ccache
+        if: env.SKIP_FARM_COMPILE != 'true'
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           max-size: 800M
@@ -56,6 +58,7 @@ jobs:
           key: farm
 
       - name: Compile
+        if: env.SKIP_FARM_COMPILE != 'true'
         id: compile
         shell: bash
         run: |
@@ -74,6 +77,7 @@ jobs:
           .github/script/farm/compile.sh
 
       - name: Prepare observer
+        if: env.SKIP_FARM_COMPILE != 'true'
         shell: bash
         run: |
           if [[ ! -x observer ]]; then
@@ -91,12 +95,14 @@ jobs:
           echo "observer size: $(stat -c%s observer 2>/dev/null || stat -f%z observer 2>/dev/null) bytes"
 
       - name: Compress and upload observer
+        if: env.SKIP_FARM_COMPILE != 'true'
         shell: bash
         run: |
           zstd -f -q -T0 -o observer.zst observer
           echo "observer.zst size: $(stat -c%s observer.zst 2>/dev/null || stat -f%z observer.zst 2>/dev/null) bytes"
 
       - name: Upload observer artifact (zst)
+        if: env.SKIP_FARM_COMPILE != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: farm-observer
