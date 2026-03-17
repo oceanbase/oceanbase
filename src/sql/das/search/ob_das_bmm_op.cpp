@@ -454,7 +454,11 @@ int ObDASBMMOp::try_update_essential_dims()
 
   if (FAILEDx(row_merger_->reuse_with_selected_iters(
       sorted_iter_idxes_, true, non_essential_dim_count_, sorted_iter_idxes_.count() - 1))) {
-    LOG_WARN("failed to reuse with selected iters", K(ret));
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("failed to reuse with selected iters", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+    }
   }
 
   LOG_DEBUG("[Sparse Retrieval] try update essential dims", K(ret), K(non_essential_dim_count_), K(non_essential_dim_max_score_),
@@ -550,7 +554,11 @@ int ObDASBMMOp::evaluate_pivot(const ObDASRowID &pivot_id, const double &essenti
     } else if (iter->iter_end()) {
       // skip
     } else if (OB_FAIL(iter->advance_to(pivot_id))) {
-      LOG_WARN("failed to advance to pivot id", K(ret), K(iter_idx));
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("failed to advance to pivot id", K(ret), K(iter_idx));
+      } else {
+        ret = OB_SUCCESS;
+      }
     } else if (OB_FAIL(iter->get_curr_score(score))) {
       LOG_WARN("failed to get curr score", K(ret), K(iter_idx));
     } else if (OB_FAIL(iter->get_curr_id(curr_id))) {
