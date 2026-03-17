@@ -5,6 +5,12 @@ set -e
 WORKSPACE="${GITHUB_WORKSPACE:?}"
 TASK_DIR="${FARM_TASK_DIR:-${SEEKDB_TASK_DIR:?}}"
 SLICE_SLOT="${SLICE_IDX:-0}"
+
+if [[ ! -f "$WORKSPACE/build.sh" ]] && [[ -f "$(pwd)/build.sh" ]]; then
+  WORKSPACE="$(pwd)"
+fi
+
+export GITHUB_WORKSPACE="$WORKSPACE"
 FARM_HOME="${WORKSPACE}/farm_home_${SLICE_SLOT}"
 
 mkdir -p "$FARM_HOME" "$FARM_HOME/downloads" "$FARM_HOME/data"

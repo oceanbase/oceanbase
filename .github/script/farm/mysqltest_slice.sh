@@ -7,6 +7,10 @@ TASK_DIR="${FARM_TASK_DIR:-${SEEKDB_TASK_DIR:?}}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 
+if [[ ! -f "$WORKSPACE/build.sh" ]] && [[ -f "$(pwd)/build.sh" ]]; then
+  WORKSPACE="$(pwd)"
+fi
+
 export GITHUB_WORKSPACE="$WORKSPACE"
 export FARM_TASK_DIR="$TASK_DIR"
 export SLICE_IDX="${SLICE_IDX:-0}"
