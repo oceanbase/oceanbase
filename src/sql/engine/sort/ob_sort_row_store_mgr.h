@@ -97,6 +97,7 @@ public:
 
   ObTempRowStore &get_sk_store() { return sk_store_; }
   ObTempRowStore &get_addon_store() { return addon_store_; }
+  ObIAllocator &get_allocator() { return allocator_; }
 
   void set_sk_row_meta(const RowMeta *meta) { sk_row_meta_ = meta; }
   void set_addon_row_meta(const RowMeta *meta) { addon_row_meta_ = meta; }

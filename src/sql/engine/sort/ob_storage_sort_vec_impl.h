@@ -116,12 +116,7 @@ public:
   {
     while (!sort_chunks_.is_empty()) {
       ObSortVecOpChunk<Store_Row, has_addon> *chunk = sort_chunks_.remove_first(false);
-      if(OB_NOT_NULL(chunk)) {
-        chunk->~ObSortVecOpChunk<Store_Row, has_addon>();
-        if (nullptr != mem_context_) {
-          mem_context_->get_malloc_allocator().free(chunk);
-        }
-      }
+      free_sort_chunk(chunk);
     }
     if (OB_NOT_NULL(external_sorter_)) {
       external_sorter_->~ExternalMergeSorter();
@@ -129,6 +124,7 @@ public:
       external_sorter_ = nullptr;
     }
   }
+  void free_sort_chunk(ChunkType *&chunk);
   int add_batch(const common::ObFixedArray<ObIVector *, common::ObIAllocator> &sk_vec_ptrs,
                 const common::ObFixedArray<ObIVector *, common::ObIAllocator> *addon_vec_ptrs,
                 const uint16_t selector[],
@@ -351,17 +347,12 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::sort_inmem_data(const b
       } else {
         rows_.reset();
         sort_resource_mgr_->reset_force_dump_temp_store();
-        in_memory_chunk_->~ObSortVecOpChunk<Store_Row, has_addon>();
-        mem_context_.ref_context()->get_malloc_allocator().free(in_memory_chunk_);
-        in_memory_chunk_ = nullptr;
+        free_sort_chunk(in_memory_chunk_);
       }
       if (OB_FAIL(ret)) {
         for (int64_t i = 0; i < output_chunks.count(); i++) {
           ChunkType *chunk = output_chunks.at(i);
-          if (nullptr != chunk) {
-            chunk->~ChunkType();
-            mem_context_->get_malloc_allocator().free(chunk);
-          }
+          free_sort_chunk(chunk);
         }
         output_chunks.reset();
       }
@@ -390,23 +381,13 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::get_sort_chunks(common:
       ChunkType *chunk = sort_chunks_.remove_first(true/*need_update_mem_stat*/);
       if (OB_FAIL(sort_chunks.push_back(chunk))) {
         SQL_ENG_LOG(WARN, "failed to push back chunk", K(ret));
-        if (OB_NOT_NULL(chunk)) {
-          chunk->~ObSortVecOpChunk<Store_Row, has_addon>();
-          if (nullptr != mem_context_) {
-            mem_context_->get_malloc_allocator().free(chunk);
-          }
-        }
+        free_sort_chunk(chunk);
       }
     }
     if (OB_FAIL(ret)) {
       for (int64_t i = 0; i < sort_chunks.count(); ++i) {
         ChunkType *chunk = sort_chunks.at(i);
-        if(OB_NOT_NULL(chunk)) {
-          chunk->~ObSortVecOpChunk<Store_Row, has_addon>();
-          if (nullptr != mem_context_) {
-            mem_context_->get_malloc_allocator().free(chunk);
-          }
-        }
+        free_sort_chunk(chunk);
       }
       sort_chunks.reset();
     }
@@ -459,17 +440,10 @@ void ObStorageVecSortImpl<Compare, Store_Row, has_addon>::reset()
   chunk_toolkit_ = nullptr;
   while (!sort_chunks_.is_empty()) {
     ObSortVecOpChunk<Store_Row, has_addon> *chunk = sort_chunks_.remove_first(false/*need_update_mem_stat*/);
-    if(OB_NOT_NULL(chunk)) {
-      chunk->~ObSortVecOpChunk<Store_Row, has_addon>();
-      if (nullptr != mem_context_) {
-        mem_context_->get_malloc_allocator().free(chunk);
-      }
-    }
+    free_sort_chunk(chunk);
   }
   if (OB_NOT_NULL(in_memory_chunk_)) {
-    in_memory_chunk_->~ObSortVecOpChunk<Store_Row, has_addon>();
-    mem_context_.ref_context()->get_malloc_allocator().free(in_memory_chunk_);
-    in_memory_chunk_ = nullptr;
+    free_sort_chunk(in_memory_chunk_);
   }
   if (OB_NOT_NULL(external_sorter_)) {
     external_sorter_->~ExternalMergeSorter();
@@ -494,6 +468,17 @@ void ObStorageVecSortImpl<Compare, Store_Row, has_addon>::reset()
   last_sk_row_ = nullptr;
   last_addon_row_ = nullptr;
   is_inited_ = false;
+}
+
+template <typename Compare, typename Store_Row, bool has_addon>
+void ObStorageVecSortImpl<Compare, Store_Row, has_addon>::free_sort_chunk(ObSortVecOpChunk<Store_Row, has_addon> *&chunk)
+{
+  if (OB_NOT_NULL(chunk)) {
+    ObIAllocator &allocator = chunk->sort_row_store_mgr_.get_allocator();
+    chunk->~ObSortVecOpChunk<Store_Row, has_addon>();
+    allocator.free(chunk);
+    chunk = nullptr;
+  }
 }
 
 template <typename Compare, typename Store_Row, bool has_addon>
@@ -543,10 +528,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::do_dump()
     if (OB_FAIL(ret)) {
       for (int64_t i = 0; i < output_chunks.count(); i++) {
         ChunkType *chunk = output_chunks.at(i);
-        if (nullptr != chunk) {
-          chunk->~ChunkType();
-          mem_context_->get_malloc_allocator().free(chunk);
-        }
+        free_sort_chunk(chunk);
       }
       output_chunks.reset();
     }
@@ -768,10 +750,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::merge_sort_chunks()
     for (int64_t i = 0; OB_SUCC(ret) && i < merge_ways; i++) {
       //no need to update the mem stat, the destructor of chunk will handle it.
       ChunkType *old_chunk = sort_chunks_.remove_first(false/*need_update_mem_stat*/);
-      if (OB_NOT_NULL(old_chunk)) {
-        old_chunk->~ChunkType();
-        mem_context_->get_malloc_allocator().free(old_chunk);
-      }
+      free_sort_chunk(old_chunk);
     }
 
     if (OB_SUCC(ret)) {
@@ -781,10 +760,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::merge_sort_chunks()
         // Cleanup all created chunks on unexpected count
         for (int64_t i = 0; i < output_chunks.count(); i++) {
           ChunkType *new_chunk = output_chunks.at(i);
-          if (nullptr != new_chunk) {
-            new_chunk->~ChunkType();
-            mem_context_->get_malloc_allocator().free(new_chunk);
-          }
+          free_sort_chunk(new_chunk);
         }
         output_chunks.reset();
       } else {
@@ -801,11 +777,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::merge_sort_chunks()
     if (OB_FAIL(add_sort_chunk(0/*level*/, false/*need_update_mem_stat*/, merged_chunk))) {
       SQL_ENG_LOG(WARN, "failed to add merged chunk back to sort_chunks_", K(ret));
       // Cleanup on failure: need to free the memory that was allocated in build_chunk
-      if (nullptr != merged_chunk) {
-        merged_chunk->~ChunkType();
-        mem_context_->get_malloc_allocator().free(merged_chunk);
-        merged_chunk = nullptr;
-      }
+      free_sort_chunk(merged_chunk);
     } else {
       SQL_ENG_LOG(DEBUG, "successfully merged chunks", K(ret),
                   "merged_chunk_mem_hold", merged_chunk->sort_row_store_mgr_.get_mem_hold());
@@ -1039,10 +1011,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::sort()
         for (int64_t i = 0; OB_SUCC(ret) && i < merge_ways; i++) {
           //no need to update the mem stat, the destructor of chunk will handle it.
           ChunkType *c = sort_chunks_.remove_first(false/*need_update_mem_stat*/);
-          if (OB_NOT_NULL(c)) {
-            c->~ChunkType();
-            mem_context_->get_malloc_allocator().free(c);
-          }
+          free_sort_chunk(c);
         }
         // Add newly generated chunk(s) to the list
         if (OB_SUCC(ret)) {
@@ -1056,10 +1025,7 @@ int ObStorageVecSortImpl<Compare, Store_Row, has_addon>::sort()
         if (OB_FAIL(ret)) {
           for (int64_t i = 0; i < output_chunks.count(); i++) {
             ChunkType *chunk = output_chunks.at(i);
-            if (nullptr != chunk) {
-              chunk->~ChunkType();
-              mem_context_->get_malloc_allocator().free(chunk);
-            }
+            free_sort_chunk(chunk);
           }
           output_chunks.reset();
         }

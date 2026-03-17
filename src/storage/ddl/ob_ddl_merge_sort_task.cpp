@@ -159,8 +159,9 @@ int ObDDLMergeSortTask::process()
       // Cleanup output_sort_op_chunk if it wasn't successfully transferred to slice
       if (OB_FAIL(ret) && OB_NOT_NULL(output_sort_op_chunk)) {
         using ChunkType = ObDDLSortProvider::ChunkType;
+        ObIAllocator &allocator = output_sort_op_chunk->sort_row_store_mgr_.get_allocator();
         output_sort_op_chunk->~ChunkType();
-        sort_impl->get_allocator()->free(output_sort_op_chunk);
+        allocator.free(output_sort_op_chunk);
         output_sort_op_chunk = nullptr;
       }
     }
