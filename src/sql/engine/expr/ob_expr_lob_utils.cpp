@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "storage/lob/ob_lob_persistent_reader.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -125,6 +126,17 @@ int ObTextStringHelper::read_real_string_data(
   return ret;
 }
 
+void ObTextStringHelper::reset_lob_iter_if_timeout(sql::ObExecContext *exec_ctx)
+{
+  storage::ObLobAccessCtx *lob_access_ctx = nullptr;
+  if (OB_ISNULL(exec_ctx)) {
+  } else if (OB_SUCCESS != exec_ctx->get_lob_access_ctx(lob_access_ctx)) {
+    // best-effort, no return
+  } else if (OB_NOT_NULL(lob_access_ctx)) {
+    lob_access_ctx->reader_cache_.check_and_release_if_timeout();
+  }
+}
+
 int ObTextStringHelper::read_real_string_data(
     ObIAllocator *allocator,
     const common::ObObj &obj,
@@ -137,18 +149,21 @@ int ObTextStringHelper::read_real_string_data(
   if (meta.is_null()) {
     str.reset();
   } else if (! obj.is_lob_storage()) {
-  } else if (obj.has_lob_header() && obj.get_string_len() != 0 &&
-      ! obj.get_lob_value()->is_mem_loc_ && obj.get_lob_value()->in_row_) {
-    const ObLobCommon* lob = obj.get_lob_value();
-    str.assign_ptr(lob->get_inrow_data_ptr(), static_cast<int32_t>(lob->get_byte_size(obj.get_string_len())));
-  } else if (OB_FAIL(read_real_string_data(
-      allocator,
-      meta.get_type(),
-      meta.get_collation_type(),
-      obj.has_lob_header(),
-      str,
-      exec_ctx))) {
-    COMMON_LOG(WARN, "read_real_string_data fail", K(ret));
+  } else {
+    if (obj.has_lob_header() && obj.get_string_len() != 0 &&
+        ! obj.get_lob_value()->is_mem_loc_ && obj.get_lob_value()->in_row_) {
+      reset_lob_iter_if_timeout(exec_ctx);
+      const ObLobCommon* lob = obj.get_lob_value();
+      str.assign_ptr(lob->get_inrow_data_ptr(), static_cast<int32_t>(lob->get_byte_size(obj.get_string_len())));
+    } else if (OB_FAIL(read_real_string_data(
+        allocator,
+        meta.get_type(),
+        meta.get_collation_type(),
+        obj.has_lob_header(),
+        str,
+        exec_ctx))) {
+      COMMON_LOG(WARN, "read_real_string_data fail", K(ret));
+    }
   }
   return ret;
 }

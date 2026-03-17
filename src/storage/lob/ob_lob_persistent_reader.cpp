@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_persistent_reader.h"
+#include "lib/time/ob_time_utility.h"
 #include "storage/lob/ob_lob_persistent_iterator.h"
 
 namespace oceanbase
@@ -22,30 +23,28 @@ namespace storage
 
 ObPersistLobReaderCache::~ObPersistLobReaderCache()
 {
-  int ret = OB_SUCCESS;
-  DLIST_FOREACH(curr, list_) {
-    curr->reader_->reset();
-    curr->reader_->~ObLobMetaIterator();
-    curr->reader_ = nullptr;
+  reset_and_clear();
+}
+
+void ObPersistLobReaderCache::reset_and_clear()
+{
+  if (OB_NOT_NULL(cached_reader_)) {
+    cached_reader_->reset();
+    cached_reader_->~ObLobMetaIterator();
+    allocator_.free(cached_reader_);
+    cached_reader_ = nullptr;
   }
-  list_.clear();
+  cached_key_.tablet_id_.reset();
+  last_cached_time_us_ = 0;
 }
 
 int ObPersistLobReaderCache::get(ObPersistLobReaderCacheKey key, ObLobMetaIterator *&reader)
 {
   int ret = OB_SUCCESS;
-  DLIST_FOREACH_X(curr, list_, OB_SUCC(ret) && nullptr == reader) {
-    if (OB_ISNULL(curr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("curr is null", K(ret));
-    } else if (! (curr->key_ == key)) { // next
-    } else if (false  == list_.move_to_last(curr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("move_to_last fail", K(ret), K(key));
-    } else if (OB_ISNULL(reader = curr->reader_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("reader is null", K(ret), K(key));
-    }
+  reader = nullptr;
+  if (OB_NOT_NULL(cached_reader_) && cached_key_ == key) {
+    reader = cached_reader_;
+    last_cached_time_us_ = ObTimeUtility::current_time();
   }
   return ret;
 }
@@ -53,46 +52,28 @@ int ObPersistLobReaderCache::get(ObPersistLobReaderCacheKey key, ObLobMetaIterat
 int ObPersistLobReaderCache::put(ObPersistLobReaderCacheKey key, ObLobMetaIterator *reader)
 {
   int ret = OB_SUCCESS;
-  ObPersistLobReaderCacheNode *node = nullptr;
   if (OB_ISNULL(reader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("reader is null", K(ret), K(key));
-  } else if (OB_ISNULL(node = OB_NEWx(ObPersistLobReaderCacheNode, &allocator_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc fail", K(ret));
   } else {
-    node->key_ = key;
-    node->reader_ = reader;
-    if (list_.get_size() >= cap_ && OB_FAIL(remove_first())) {
-      LOG_WARN("remove_first fail", K(ret), K(list_), K(cap_));
-    } else if (false == list_.add_last(node)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("add_last fail", K(ret), K(key));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(node)) {
-      allocator_.free(node);
-    }
+    reset_and_clear();
+    cached_key_ = key;
+    cached_reader_ = reader;
+    last_cached_time_us_ = ObTimeUtility::current_time();
   }
   return ret;
 }
 
-int ObPersistLobReaderCache::remove_first()
+void ObPersistLobReaderCache::check_and_release_if_timeout(const int64_t timeout_us)
 {
-  int ret = OB_SUCCESS;
-  ObPersistLobReaderCacheNode *node = list_.remove_first();
-  if (OB_ISNULL(node)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node is null", K(ret), K(list_));
-  } else {
-    node->reader_->~ObLobMetaIterator();
-    allocator_.free(node->reader_);
-    node->reader_ = nullptr;
-    allocator_.free(node);
+  if (OB_ISNULL(cached_reader_)) {
+  } else if (OB_UNLIKELY((++timeout_check_call_count_ == TIMEOUT_CHECK_THROTTLE_INTERVAL))) {
+    const int64_t now_us = ObTimeUtility::current_time();
+    timeout_check_call_count_ = 0;
+    if (now_us - last_cached_time_us_ > timeout_us) {
+      reset_and_clear();
+    }
   }
-  return ret;
 }
 
 ObLobMetaIterator* ObPersistLobReaderCache::alloc_reader(const ObLobAccessCtx *access_ctx)
