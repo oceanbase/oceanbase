@@ -2737,7 +2737,7 @@ DEF_BOOL(load_vector_index_on_follower, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(enable_ps_parameterize, OB_TENANT_PARAMETER, "True",
          "Used to control enable or disable parameterization in PS statement parsing",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR_WITH_CHECKER(ob_storage_s3_url_encode_type, OB_CLUSTER_PARAMETER, "default",
+DEF_STR_WITH_CHECKER(ob_storage_s3_url_encode_type, OB_CLUSTER_PARAMETER, "compliantRfc3986Encoding",
                      common::ObConfigS3URLEncodeTypeChecker,
                      "Determines the URL encoding method for S3 requests."
                      "\"default\": Uses the S3 standard URL encoding method."
