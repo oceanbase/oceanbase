@@ -634,7 +634,8 @@ private:
                              ObIArray<ObRawExpr*> &column_ref_remove_const_exprs,
                              ObIArray<ObRawExpr*> &query_ref_exprs,
                              ObIArray<ObRawExpr*> &query_ref_remove_const_exprs,
-                             bool &trans_happened);
+                             bool &trans_happened,
+                             bool is_rollup = false);
   int formalize_limit_expr_oracle(ObDMLStmt &stmt);
   int formalize_limit_expr_mysql(ObDMLStmt &stmt);
   int replace_remove_const_exprs(ObSelectStmt *stmt,

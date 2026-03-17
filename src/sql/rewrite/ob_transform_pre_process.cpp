@@ -9411,7 +9411,8 @@ int ObTransformPreProcess::transform_rollup_groupset_exprs(ObDMLStmt *stmt, bool
                                             column_ref_remove_const_exprs,
                                             query_ref_exprs,
                                             query_ref_remove_const_exprs,
-                                            trans_happened))) {
+                                            trans_happened,
+                                            true))) {
       LOG_WARN("failed to get rollup const exprs", K(ret));
     } else if (static_const_exprs.empty() && exec_param_exprs.empty() && query_ref_exprs.empty()) {
       //do nothing
@@ -9473,7 +9474,8 @@ int ObTransformPreProcess::transform_rollup_groupset_exprs(ObDMLStmt *stmt, bool
                                                   ObIArray<ObRawExpr*> &column_ref_remove_const_exprs,
                                                   ObIArray<ObRawExpr*> &query_ref_exprs,
                                                   ObIArray<ObRawExpr*> &query_ref_remove_const_exprs,
-                                                  bool &trans_happened)
+                                                  bool &trans_happened,
+                                                  bool is_rollup)
 {
   int ret = OB_SUCCESS;
   ObSEArray<std::pair<int64_t, ObRawExpr *>, 2> dummy_onetime_exprs;
@@ -9517,7 +9519,7 @@ int ObTransformPreProcess::transform_rollup_groupset_exprs(ObDMLStmt *stmt, bool
         trans_happened = true;
       }
     } else if (expr->is_static_const_expr()) { //static const expr
-      if (ObOptimizerUtil::find_item(static_const_exprs, expr)) {
+      if (ObOptimizerUtil::find_item(static_const_exprs, expr) && !is_rollup) {
         //do nothing, skip dup exprs
       } else if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(
                                         *ctx_->expr_factory_,
@@ -9536,7 +9538,7 @@ int ObTransformPreProcess::transform_rollup_groupset_exprs(ObDMLStmt *stmt, bool
         replacing_exprs.at(i) = remove_const_expr;
         trans_happened = true;
       }
-    }  else if (ObOptimizerUtil::find_item(exec_param_exprs, expr)) {
+    } else if (ObOptimizerUtil::find_item(exec_param_exprs, expr) && !is_rollup) {
       //do nothing, skip dup exprs
     } else if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(
                                       *ctx_->expr_factory_,

@@ -6632,6 +6632,11 @@ int ObSelectResolver::resolve_column_ref_for_subquery(
         }
       }
     }
+  } else if (GCONF._enable_pseudo_partition_id
+             && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2
+             && q_name.tbl_name_.empty()
+             && ObResolverUtils::is_pseudo_partition_column_name(q_name.col_name_)) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
   } else if (OB_FAIL(resolve_table_column_ref(q_name, real_ref_expr))) {
     LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve table column failed", K(ret), K(q_name));
   }
