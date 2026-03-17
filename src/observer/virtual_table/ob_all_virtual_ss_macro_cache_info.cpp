@@ -48,6 +48,10 @@ ObAllVirtualSSMacroCacheInfo::~ObAllVirtualSSMacroCacheInfo()
 
 void ObAllVirtualSSMacroCacheInfo::reset()
 {
+  // Note: ObMultiTenantOperator::reset() will call release_last_tenant() within ObTenantSwitchGuard.
+  // ObAllVirtualSSMacroCacheInfo::release_last_tenant() calls macro_cache_meta_arr_.reset().
+  // this ensures macro_cache_meta_arr_ is reset within ObTenantSwitchGuard.
+  omt::ObMultiTenantOperator::reset();
 #ifdef OB_BUILD_SHARED_STORAGE
   macro_cache_meta_arr_.reset();
 #endif
@@ -60,7 +64,6 @@ void ObAllVirtualSSMacroCacheInfo::reset()
   macro_id_str_buf_[0] = '\0';
   macro_id_buf_[0] = '\0';
   ip_buf_[0] = '\0';
-  omt::ObMultiTenantOperator::reset();
   ObVirtualTableScannerIterator::reset();
 }
 
