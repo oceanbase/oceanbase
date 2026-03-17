@@ -3655,9 +3655,12 @@ int ObLSGroupCountBalance::expand_empty_row_by_create_(LSGroupMatrix &lg_matrix,
 /*
  * 算法步骤：
  * 1. 确定在这行中，每个需要扩容出来的lg需要放在哪个单元格内；
- * 2. 根据是否开启 enable_transfer
- *   a. 如果开启 enable_transfer，将日志流平均分裂到各ls group,并尽量按照primary zone对齐.
- *   b. 如果关闭 enable_transfer，则通过alter操作，将日志流尽量平铺到各ls group.
+ * 2. 对于每个 cell，根据是否开启 enable_transfer 以及组内 LS count 是否均衡，选择扩容方式：
+ *   a. 如果关闭 enable_transfer，则仅通过 alter 平铺已有日志流
+ *   b. 如果开启 enable_transfer：
+ *     i. 如果组内 LS count 不均衡，则先通过alter平铺已有LS，如果不够每个LSG至少1个LS，则给剩余每个空LSG分裂出1个LS
+ *     ii. 如果组内 LS count 均衡，则直接给每个空LSG分裂出相同个数的LS, 并尽量按照primary zone对齐
+ *     (原因是仅均衡态下需要通过transfer保持各组leader均衡。如果非均衡态则不必要,且可能产生过多临时日志流)
  * */
 int ObLSGroupCountBalance::expand_ls_group_cnt_(
     LSGroupMatrix &lg_matrix, const int64_t row_index, const int64_t target_lg_cnt,
@@ -3676,8 +3679,7 @@ int ObLSGroupCountBalance::expand_ls_group_cnt_(
           curr_lg_count))) {
     LOG_WARN("failed to set cell expand lg cnt", KR(ret), K(lg_matrix), K(row_index),
         K(target_lg_cnt), K(curr_lg_count));
-  }
-  if (OB_SUCC(ret)) {
+  } else {
     const int64_t col_cnt = lg_matrix.get_column_count();
     for (int64_t j = 0; OB_SUCC(ret) && j < col_cnt; ++j) {
       ObLSGroupMatrixCell *cell = lg_matrix.get(row_index, j);
@@ -3689,13 +3691,24 @@ int ObLSGroupCountBalance::expand_ls_group_cnt_(
         if (OB_FAIL(get_cell_expand_lg_(*cell, target_lg_array))) {
           LOG_WARN("failed to get cell expand lg", KR(ret), KPC(cell));
         } else if (tenant_info_->job_desc_.get_enable_transfer()) {
-          if (OB_FAIL(expand_ls_group_cnt_in_cell_by_transfer_(target_lg_array))) {
-            LOG_WARN("failed to construct expand task", KR(ret), K(row_index), K(target_lg_array));
+          bool is_ls_count_balanced = true;
+          ARRAY_FOREACH_X(cell->get_ls_groups(), idx, cnt, OB_SUCC(ret) && is_ls_count_balanced) {
+            const ObLSGroupStat* lg = cell->get_ls_groups().at(idx);
+            CK(OB_NOT_NULL(lg))
+            if (OB_SUCC(ret) && lg->ls_count_in_group() != tenant_info_->job_desc_.get_ls_cnt_in_group()) {
+              is_ls_count_balanced = false;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (!is_ls_count_balanced
+              && OB_FAIL(expand_ls_group_cnt_in_cell_by_alter_(target_lg_array))) {
+            LOG_WARN("failed to expand ls group cnt in cell by alter", KR(ret), K(target_lg_array));
+          } else if (OB_FAIL(expand_ls_group_cnt_in_cell_by_transfer_(target_lg_array))) {
+            LOG_WARN("failed to expand ls in empty lsg by transfer", KR(ret), K(target_lg_array));
           }
         } else {
-          //在curr_lg_array范围内，把日志流从这个lg调整到另一个lg，保证最大最小不大于1
           if (OB_FAIL(expand_ls_group_cnt_in_cell_by_alter_(target_lg_array))) {
-            LOG_WARN("failed to construct migrate task", KR(ret), K(target_lg_array));
+            LOG_WARN("failed to expand ls group cnt in cell by alter", KR(ret), K(target_lg_array));
           }
         }
         LOG_INFO("after expand", K(target_lg_array));
@@ -3799,7 +3812,8 @@ int ObLSGroupCountBalance::set_cell_expand_lg_cnt_(LSGroupMatrix &lg_matrix,
 /*
  * 算法描述：
  * 经过前面的操作，如果某一个cell上的日志流组内没有日志流，则对通过分裂其他日志流组内的日志流，在空日志流组内构造出新的日志流
- * 1. 首先检查是否存在空的日志流组。如果不存在结束。找到所有的空日志流组的个数
+ * 1. 首先检查是否存在空的日志流组。如果不存在结束。
+ *    如果存在，找到所有的空日志流组的个数，且预期每个日志流组内LS个数相同，每个空组分裂出相同个数日志流。
  * 2. 把非空日志流组内的日志流作为分裂源端。
  * 3. 每个空日志流组分别构造固定数量的新日志流，作为分裂目的端(数量为源端日志流组的日志流最少个数)
  * 4. 构造split + alter + merge任务
@@ -3816,12 +3830,12 @@ int ObLSGroupCountBalance::expand_ls_group_cnt_in_cell_by_transfer_(ObIArray<ObL
     // 空lsg为新expand的lsg，需要创建新日志流，并将旧lsg上的日志流平均分裂到新日志流上。
     // 每个新lsg的初始LS个数与旧lsg的LS个数相同，且src_ls以primary_zone排序，以保证源端和目的端日志流按primary_zone聚合,
     //   在各lsg的LS已经按primary_zone打散的情况下，可避免跨primary_zone的transfer导致分区切主。
-    // (为能处理各lsg个数不等的非稳态情况，取各lsg中LS个数最少的作为新lsg的初始LS个数)
     int64_t expand_ls_cnt = 0;
     ObSplitLSParamArray src_ls;
     ObArray<ObSplitLSParamArray> dest_split_array;
     ObArray<uint64_t> ls_group_ids;
-    int64_t min_ls_cnt_in_group = INT64_MAX;
+    int64_t ls_cnt_in_group = -1;
+    bool is_ls_count_same = true;
     ARRAY_FOREACH(curr_lg, idx) {
       ObLSGroupStat *lg_stat = curr_lg.at(idx);
       CK(OB_NOT_NULL(lg_stat))
@@ -3834,8 +3848,10 @@ int ObLSGroupCountBalance::expand_ls_group_cnt_in_cell_by_transfer_(ObIArray<ObL
       //日志流组非空，则作为分裂源端
       } else if (OB_FAIL(construct_src_split_param_array(*lg_stat, src_ls))) {
         LOG_WARN("failed to construct src split param", KR(ret), KPC(lg_stat));
-      } else {
-        min_ls_cnt_in_group = MIN(min_ls_cnt_in_group, lg_stat->ls_count_in_group());
+      } else if (ls_cnt_in_group < 0) {
+        ls_cnt_in_group = lg_stat->ls_count_in_group();
+      } else if (ls_cnt_in_group != lg_stat->ls_count_in_group()) {
+        is_ls_count_same = false;
       }
     }//end for get src param and expand_ls_cnt
 
@@ -3846,9 +3862,11 @@ int ObLSGroupCountBalance::expand_ls_group_cnt_in_cell_by_transfer_(ObIArray<ObL
 
     if (OB_FAIL(ret)) {
     } else if (ls_group_ids.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expand target ls group ids is empty", KR(ret), K(ls_group_ids));
-    } else if (FALSE_IT(expand_ls_cnt = ls_group_ids.count() * min_ls_cnt_in_group)) {
+      LOG_INFO("no empty lsg to fill, skip", K(curr_lg));
+    } else if (!is_ls_count_same) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("ls count in group is not same, should not happen", KR(ret), K(curr_lg));
+    } else if (FALSE_IT(expand_ls_cnt = ls_group_ids.count() * ls_cnt_in_group)) {
     } else if (OB_FAIL(construct_expand_dest_param(expand_ls_cnt, src_ls, dest_split_array))) {
       LOG_WARN("failed to construct dest split array", KR(ret), K(expand_ls_cnt), K(src_ls));
     } else if (OB_UNLIKELY(dest_split_array.count() != expand_ls_cnt)) {
@@ -4026,7 +4044,7 @@ int ObLSGroupCountBalance::construct_ls_expand_task(const uint64_t ls_group_id,
 #undef FINISH_LS_GROUP_OP
 /*
  * curr_lg_array:包含了需要扩容出来的日志流和当前cell上全部的日志流
- * 如果enable_transfer关闭，只能通过alter任务将日志流尽量平铺到各ls group.
+ * 如果enable_transfer关闭，或者组内LS count不均衡，则通过alter任务将日志流尽量平铺到各ls group, 使ls count相差不超过1.
  * 找到日志流个数最多的日志流组max_lg，找到日志流最少的日志流组min_lg
  * 如果max_lg内的日志流个数减去min_lg的日志流个数大于1，则调整max_lg内的一个日志流到min_lg内
  * */
