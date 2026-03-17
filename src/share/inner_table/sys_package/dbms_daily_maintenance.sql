@@ -11,5 +11,9 @@ CREATE OR REPLACE PACKAGE dbms_daily_maintenance AUTHID CURRENT_USER IS
     thread_count IN INT
   );
 
+  PROCEDURE ALTER_REPEAT_INTERVAL (
+    repeat_interval IN VARCHAR2
+  );
+
 END dbms_daily_maintenance;
 //

@@ -418,6 +418,30 @@ int ObScheduleDailyMaintenanceWindow::set_thread_count(
   return ret;
 }
 
+int ObScheduleDailyMaintenanceWindow::set_repeat_interval(
+    ObExecContext &ctx,
+    const uint64_t tenant_id,
+    const common::ObString &repeat_interval_str)
+{
+  int ret = OB_SUCCESS;
+  dbms_scheduler::ObDBMSSchedJobInfo job_info;
+  common::ObObj repeat_interval_obj;
+
+  if (OB_UNLIKELY(!ctx.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ctx));
+  } else if (OB_FAIL(get_daily_maintenance_window_job_info(ctx, job_info))) {
+    LOG_WARN("failed to get daily maintenance window job info", KR(ret), K(tenant_id));
+  } else if (FALSE_IT(repeat_interval_obj.set_string(ObVarcharType, repeat_interval_str))) {
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(
+                *ctx.get_sql_proxy(), job_info, ObString("repeat_interval"), repeat_interval_obj))) {
+    LOG_WARN("failed to update repeat_interval", KR(ret), K(tenant_id), K(repeat_interval_str), K(repeat_interval_obj));
+  } else {
+    LOG_INFO("succeed to alter repeat_interval for DAILY_MAINTENANCE_WINDOW", KR(ret), K(tenant_id), K(repeat_interval_str));
+  }
+  return ret;
+}
+
 int ObScheduleDailyMaintenanceWindow::set_job_config(
     ObMySQLTransaction &trans,
     ObIAllocator &allocator,

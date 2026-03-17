@@ -161,6 +161,10 @@ public:
     ObExecContext &ctx,
     const uint64_t tenant_id,
     const int64_t thread_cnt);
+  static int set_repeat_interval(
+    ObExecContext &ctx,
+    const uint64_t tenant_id,
+    const common::ObString &repeat_interval_str);
   static int set_job_config(
     ObMySQLTransaction &trans,
     ObIAllocator &allocator,

@@ -22,6 +22,7 @@ namespace oceanbase
 {
 namespace pl
 {
+ERRSIM_POINT_DEF(EN_ALTER_DAILY_MAINTENANCE_REPEAT_INTERVAL, "enable alter daily maintenance repeat interval for testing");
 
 int ObDBMSDailyMaintenance::trigger_window_compaction_proc(sql::ObExecContext &ctx,
                                                            sql::ParamStore &params,
@@ -126,6 +127,41 @@ int ObDBMSDailyMaintenance::set_thread_count(sql::ObExecContext &ctx,
   }
   const int64_t cost_time = ObTimeUtility::current_time() - start_time_us;
   FLOG_INFO("[WIN-COMPACTION] end to set window thread count", KR(ret), K(thread_cnt), K(start_time_us), K(cost_time));
+  return ret;
+}
+
+int ObDBMSDailyMaintenance::alter_repeat_interval_proc(sql::ObExecContext &ctx,
+                                                       sql::ParamStore &params,
+                                                       common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(result);
+  const int64_t start_time_us = ObTimeUtility::current_time();
+  uint64_t tenant_id = MTL_ID();
+  ObString repeat_interval_str;
+
+  if (OB_UNLIKELY(!EN_ALTER_DAILY_MAINTENANCE_REPEAT_INTERVAL)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ALTER_REPEAT_INTERVAL is for testing only now, enable tracepoint EN_ALTER_DAILY_MAINTENANCE_REPEAT_INTERVAL first", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ALTER_REPEAT_INTERVAL only allowed for testing, execute without EN_ALTER_DAILY_MAINTENANCE_REPEAT_INTERVAL tracepoint");
+  } else if (OB_FAIL(check_supported(tenant_id))) {
+    LOG_WARN("fail to check window compaction compatbility", K(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!ctx.is_valid() || 1 != params.count() || params.at(0).is_null())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ctx), K(params));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "repeat_interval should be a non-empty string");
+  } else if (OB_FAIL(params.at(0).get_string(repeat_interval_str))) {
+    LOG_WARN("failed to get repeat_interval string", KR(ret), K(params.at(0)));
+  } else if (repeat_interval_str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("repeat_interval is empty", KR(ret));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "repeat_interval should be a non-empty string");
+  } else if (OB_FAIL(ObScheduleDailyMaintenanceWindow::set_repeat_interval(ctx, tenant_id, repeat_interval_str))) {
+    LOG_WARN("failed to set repeat_interval", KR(ret), K(tenant_id), K(repeat_interval_str));
+  }
+  const int64_t cost_time = ObTimeUtility::current_time() - start_time_us;
+  FLOG_INFO("[WIN-COMPACTION] end to alter repeat interval", KR(ret), K(repeat_interval_str),
+            K(start_time_us), K(cost_time));
   return ret;
 }
 

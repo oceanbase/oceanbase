@@ -29,6 +29,9 @@ public:
   static int set_thread_count(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
                               common::ObObj &result);
+  static int alter_repeat_interval_proc(sql::ObExecContext &ctx,
+                                        sql::ParamStore &params,
+                                        common::ObObj &result);
 private:
   static constexpr int64_t USES_PER_SEC = 1000 * 1000L;
   static constexpr int64_t DEFAULT_RETRY_TIMEOUT_US = 24 * 60 * 60 * USES_PER_SEC; // 24h
