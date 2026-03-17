@@ -168,7 +168,8 @@ int64_t ObParallelMergeInfo::get_serialize_size() const
 
 int ObParallelMergeInfo::generate_from_range_array(
     ObIAllocator &allocator,
-    ObArrayArray<ObStoreRange> &paral_range)
+    ObArrayArray<ObStoreRange> &paral_range,
+    const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 != list_size_
@@ -184,15 +185,16 @@ int ObParallelMergeInfo::generate_from_range_array(
     if (sum_range_cnt < MIN_VALID_CONCURRENT_CNT || sum_range_cnt > UINT8_MAX) {
       // do nothing
     } else if (1 == sum_range_cnt) {
-      list_size_ = 1; // whole range, don't need to split actually, but set list_size_ as 1 for compatibility
-      ret = generate_datum_rowkey_list(allocator, paral_range);
-      LOG_INFO("generate datum rowkey list for whole range", KR(ret), K(paral_range), K(list_size_));
+      if (data_version < DATA_VERSION_4_4_2_0) {
+        // do nothing for compatibility, otherwise it will generate datum rowkey with MIN and MAX, which will core in old version
+      } else {
+        list_size_ = 1; // whole range, don't need to split actually, but set list_size_ as 1 for compatibility
+        ret = generate_datum_rowkey_list(allocator, paral_range);
+        LOG_INFO("generate datum rowkey list for whole range", KR(ret), K(paral_range), K(list_size_));
+      }
     } else {
       list_size_ = sum_range_cnt - 1;
-      uint64_t compat_version = 0;
-      if (OB_FAIL(MERGE_SCHEDULER_PTR->get_min_data_version(compat_version))) {
-        LOG_WARN("failed to get min data version", KR(ret));
-      } else if (compat_version < DATA_VERSION_4_2_0_0) { // sync store_rowkey_list
+      if (data_version < DATA_VERSION_4_2_0_0) { // sync store_rowkey_list
         ret = generate_store_rowkey_list(allocator, paral_range);
       } else { // sync datum_rowkey_list
         ret = generate_datum_rowkey_list(allocator, paral_range);
@@ -506,7 +508,7 @@ int ObMediumCompactionInfo::gene_parallel_info(
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is not init", KR(ret), KP_(allocator));
-  } else if (OB_FAIL(parallel_merge_info_.generate_from_range_array(*allocator_, paral_range))) {
+  } else if (OB_FAIL(parallel_merge_info_.generate_from_range_array(*allocator_, paral_range, data_version_))) {
     if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
       LOG_WARN("failed to generate parallel merge info", K(ret), K(paral_range));
     }
