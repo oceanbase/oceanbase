@@ -8,7 +8,8 @@ SLICE_SLOT="${SLICE_IDX:-0}"
 FARM_HOME="${WORKSPACE}/farm_home_${SLICE_SLOT}"
 
 mkdir -p "$FARM_HOME" "$FARM_HOME/downloads" "$FARM_HOME/data"
-ln -sfn "$WORKSPACE" "$FARM_HOME/oceanbase"
+rm -rf "$FARM_HOME/oceanbase"
+ln -s "$WORKSPACE" "$FARM_HOME/oceanbase"
 
 export HOME="$FARM_HOME"
 export USER="$(whoami)"

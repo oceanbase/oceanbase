@@ -5,7 +5,8 @@ set -x
 export HOME="${_CONDOR_JOB_IWD:-${HOME:-${GITHUB_WORKSPACE}/farm_home_${SLICE_IDX:-0}}}"
 mkdir -p "$HOME"
 if [[ -n "${GITHUB_WORKSPACE:-}" ]]; then
-    ln -sfn "$GITHUB_WORKSPACE" "$HOME/oceanbase"
+    rm -rf "$HOME/oceanbase"
+    ln -s "$GITHUB_WORKSPACE" "$HOME/oceanbase"
     [[ -x "$GITHUB_WORKSPACE/observer" && ! -e "$HOME/observer" ]] && ln -sfn "$GITHUB_WORKSPACE/observer" "$HOME/observer"
     [[ -x "$GITHUB_WORKSPACE/obproxy" && ! -e "$HOME/obproxy" ]] && ln -sfn "$GITHUB_WORKSPACE/obproxy" "$HOME/obproxy"
 fi
