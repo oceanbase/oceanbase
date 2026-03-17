@@ -18260,6 +18260,7 @@ def_table_schema(
 # 12598: __all_virtual_object_storage_error_record
 # 12599: __all_virtual_audit_log_encryption_password
 # 12600: __all_virtual_optstat_catalog_user_prefs
+# 12601: __all_virtual_sandbox_process
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
