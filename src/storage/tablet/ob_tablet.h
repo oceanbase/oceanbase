@@ -681,10 +681,11 @@ public:
   bool is_ss_tablet() const;
   bool is_min_ss_tablet_version_initial() const { return tablet_meta_.is_min_ss_tablet_version_initial(); }
   int update_ss_tablet_meta(const ObTabletMeta &new_meta);
-  share::SCN get_min_ss_tablet_version() const;
   uint64_t get_min_ss_private_sstable_op_id() const { return (int64_t)tablet_meta_.min_ss_flush_op_id_; }
+  share::SCN get_min_ss_tablet_version() const { return tablet_meta_.min_ss_tablet_version_; }
   int get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_store_meta_info) const;
   int get_ss_update_tablet_log(const int64_t tablet_serialize_size, ObSSUpdateTabletLog &update_log);
+  int check_tablet_need_rewrite_meta(bool &need_rewrite) const;
 #endif // OB_BUILD_SHARED_STORAGE
   const ObMetaDiskAddr &get_tablet_addr() const { return tablet_addr_; }
   const ObTabletMeta &get_tablet_meta() const { return tablet_meta_; }
@@ -1198,6 +1199,10 @@ private:
         const ObMetaDiskAddr &addr,
         const int64_t secondary_meta_size,
         /* out */ObMetaDiskAddr &macro_info_addr);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int set_ss_min_tablet_version_();
+#endif
+
 public:
   static constexpr int32_t VERSION_V1 = 1;
   static constexpr int32_t VERSION_V2 = 2;

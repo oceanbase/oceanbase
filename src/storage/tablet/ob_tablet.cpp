@@ -3639,6 +3639,16 @@ int ObTablet::deserialize(
       }
     }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+    //Here need set ss min tablet version for local tablet
+    //Because tablet meta in sslog tablet version is min
+    //But in local should set effective min tablet version for avoid tablet recycle
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(set_ss_min_tablet_version_())) {
+      LOG_WARN("failed to set ss min tablet version", K(ret), KPC(this));
+    }
+#endif
+
     if (OB_FAIL(ret)) {
     } else if (ObTabletBlockHeader::is_supported_version(bhv) && OB_FAIL(header.check_data_version_for_compat())) {
       LOG_WARN("fail to check data version for compat", K(ret));
@@ -10736,18 +10746,50 @@ int ObTablet::get_last_major_snapshot_(int64_t &last_major_snapshot) const
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-share::SCN ObTablet::get_min_ss_tablet_version() const
+int ObTablet::set_ss_min_tablet_version_()
 {
   int ret = OB_SUCCESS;
-  share::SCN ss_tablet_version(share::SCN::min_scn());
+  share::SCN row_scn(share::SCN::min_scn());
   if (tablet_addr_.is_sslog()) {
-    if (OB_FAIL(tablet_addr_.get_sslog_tablet_row_scn(ss_tablet_version))) {
+    if (!tablet_meta_.is_min_ss_tablet_version_initial()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("min ss tablet version is not initial value, unexpected", K(ret), KPC(this));
+    } else if (OB_FAIL(tablet_addr_.get_sslog_tablet_row_scn(row_scn))) {
       LOG_ERROR("failed to get sslog tablet row scn", K(ret), K(tablet_addr_));
+    } else {
+      tablet_meta_.min_ss_tablet_version_ = row_scn;
     }
-  } else {
-    ss_tablet_version = tablet_meta_.min_ss_tablet_version_;
   }
-  return ss_tablet_version;
+  return ret;
+}
+
+//Tablet first, second and thired meta will in shared storage
+//SS garbage collector will check tablet first meta's min_ss_tablet_version
+//It will makes first meta in local but second and thired meta is shared which may collect shared data mistake
+//Forth meta is for CG, CG is only for major andy major is always shared in shared storage
+int ObTablet::check_tablet_need_rewrite_meta(
+    bool &need_rewrite) const
+{
+  int ret = OB_SUCCESS;
+  need_rewrite = false;
+  MacroBlockId block_id;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (tablet_addr_.is_sslog() || macro_info_addr_.addr_.is_sslog()) {
+    need_rewrite = true;
+  } else if (OB_FAIL(table_store_addr_.addr_.get_macro_block_id(block_id))) {
+    LOG_WARN("failed to get table store addr macro block id", K(table_store_addr_));
+  } else if (block_id.is_shared_data_or_meta()) {
+    need_rewrite = true;
+  } else if (OB_FAIL(storage_schema_addr_.addr_.get_macro_block_id(block_id))) {
+    LOG_WARN("failed to get storage schema addr macro block id", K(table_store_addr_));
+  } else if (block_id.is_shared_data_or_meta()) {
+    need_rewrite = true;
+  } else {
+    need_rewrite = false;
+  }
+  return ret;
 }
 #endif
 
