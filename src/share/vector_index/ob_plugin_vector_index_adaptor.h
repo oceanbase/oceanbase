@@ -367,6 +367,7 @@ public:
     ef_search_ = 0;
     is_last_search_ = false;
     is_post_with_filter_ = false;
+    only_complete_data_ = false;
   }
   TO_STRING_KV(K_(query_limit), K_(query_order), K_(ef_search), K_(query_vector), K_(query_scn));
 
