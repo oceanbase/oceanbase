@@ -441,7 +441,7 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema is null", K(ret));
     }
-    if (OB_FAIL(ret)){
+    if (OB_FAIL(ret)) {
     } else if (external_format.odps_format_.api_mode_ == sql::ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
       // 现在有所有分区 和 过滤获得分区
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(table_metadata->tenant_id_));
@@ -548,10 +548,11 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
     } else { // Storage api mode 谓词过滤不加入
       if (GCONF._use_odps_jni_connector) {
         // use split by row
-        ObString part_str = ObString::make_empty_string();
-        if (partition_values.count() == 1) {
+        #if defined(OB_BUILD_JNI_ODPS)
+          ObString part_str = ObString::make_empty_string();
           ObSqlString part_spec_str;
           int64_t part_count = partition_values.count();
+          int64_t part_sum_row_count = 0;
           for (int64_t i = 0; OB_SUCC(ret) && i < part_count; ++i) {
             const ObString &external_info = partition_values.at(i);
             if (0 == external_info.compare(ObExternalTableUtils::dummy_file_name())) {
@@ -566,18 +567,23 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
           } else if (OB_FAIL(ob_write_string(allocator, part_spec_str.string(), part_str, true))) {
             LOG_WARN("failed to write string", K(ret), K(part_spec_str));
           }
-          OX(total_partition_count = 1);
-        } else {
-          OX(total_partition_count = table_schema->get_partition_num());
-        }
 
-        OZ(ObOdpsPartitionJNIDownloaderMgr::fetch_storage_row_count(
-            THIS_WORKER.get_session(), part_str, format_str, row_count));
-        LOG_INFO("fetch storage row count", K(row_count));
+          OZ(ObOdpsPartitionJNIDownloaderMgr::fetch_storage_row_count(
+              THIS_WORKER.get_session(), part_str, format_str, part_sum_row_count));
+          LOG_INFO("fetch storage row count", K(part_sum_row_count));
+          if (OB_SUCC(ret)) {
+            OX(total_partition_count = part_sum_row_count / part_count * table_schema->get_partition_num());
+            OX(total_partition_count = table_schema->get_partition_num());
+          }
+        #else
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support jni odps", K(ret));
+        #endif
       } else {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support row api", K(ret));
       }
+
     }
 
     if (OB_SUCC(ret)) {
