@@ -320,6 +320,17 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, JoinedTable *
       } else if (OB_FAIL(copier.copy_on_replace(semi_info->semi_conditions_,
                                                 semi_info->semi_conditions_))) {
         LOG_WARN("failed to revert modified shared exprs", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_part_exprs().count(); ++i) {
+          PartExprItem &part_item = stmt->get_part_exprs().at(i);
+          if (OB_NOT_NULL(part_item.part_expr_) &&
+              OB_FAIL(copier.copy_on_replace(part_item.part_expr_, part_item.part_expr_))) {
+            LOG_WARN("failed to revert part expr", K(ret));
+          } else if (OB_NOT_NULL(part_item.subpart_expr_) &&
+                     OB_FAIL(copier.copy_on_replace(part_item.subpart_expr_, part_item.subpart_expr_))) {
+            LOG_WARN("failed to revert subpart expr", K(ret));
+          }
+        }
       }
     }
   }
