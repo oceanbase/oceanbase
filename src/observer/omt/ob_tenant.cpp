@@ -900,8 +900,14 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
     // indicates an upgrade case, so we initialize it with the configured data
     // disk size (config_data_disk_size), which reflects the legacy full allocation.
     mtl_init_ctx_->init_data_disk_size_ = meta.unit_.get_actual_data_disk_size();
-    if (mtl_init_ctx_->init_data_disk_size_ == 0) {
+    if (GCTX.is_shared_storage_mode() && mtl_init_ctx_->init_data_disk_size_ == 0) {
       mtl_init_ctx_->init_data_disk_size_ = meta.unit_.config_.data_disk_size();
+      // sys tenant is special in upgrade: its actual pre-upgrade occupied size
+      // equals (config data_disk_size + hidden sys extra size).
+      if (is_sys_tenant(meta.unit_.tenant_id_) && !meta.super_block_.is_hidden_) {
+        mtl_init_ctx_->init_data_disk_size_ +=
+            OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
+      }
     }
 #endif
     mtl_init_ctx_->palf_options_.disk_options_.log_disk_usage_limit_size_ = meta.unit_.config_.log_disk_size();
