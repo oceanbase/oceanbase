@@ -508,7 +508,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_meta_theoretical_free_size_when_o
   }
 
   // 2) Occupy to CACHE_EVICT_THRESHOLD by user-tenant MACRO_BLOCK (auto).
-  const int64_t macro_cache_size = meta_mgr->get_shared_macro_cache_size();
+  const int64_t macro_cache_size = meta_mgr->get_unit_config_shared_macro_cache_size();
   const int64_t target_used_size =
       macro_cache_size / 100 * ObSSMacroCacheMgr::CACHE_EVICT_THRESHOLD;
   const int64_t cur_used_size = meta_mgr->get_shared_macro_cache_used_size();
