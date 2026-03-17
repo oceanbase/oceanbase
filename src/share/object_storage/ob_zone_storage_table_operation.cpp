@@ -627,6 +627,65 @@ int ObStorageInfoOperator::get_ls_leader_addr(const uint64_t tenant_id, const in
   return ret;
 }
 
+int ObStorageInfoOperator::get_ls_replica_addrs(
+    const uint64_t tenant_id,
+    const int64_t ls_id,
+    common::ObIArray<common::ObAddr> &servers)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  servers.reset();
+  if (OB_FAIL(sql.assign_fmt(
+      "SELECT DISTINCT svr_ip, svr_port FROM %s WHERE tenant_id = %lu AND ls_id = %ld",
+      OB_ALL_VIRTUAL_LS_INFO_TNAME, tenant_id, ls_id))) {
+    LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(ls_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res)
+    {
+      sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(OBSERVER.get_mysql_proxy().read(res, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, query result must not be NULL", KR(ret), K(sql));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get next row", KR(ret), K(sql));
+            }
+          } else {
+            int64_t tmp_real_str_len = 0;
+            char svr_ip[OB_IP_STR_BUFF] = { 0 };
+            int64_t svr_port = 0;
+            common::ObAddr server;
+            EXTRACT_STRBUF_FIELD_MYSQL(*result, "svr_ip", svr_ip, OB_IP_STR_BUFF, tmp_real_str_len);
+            EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", svr_port, int64_t);
+            if (OB_FAIL(ret)) {
+              LOG_WARN("fail to extract fields", KR(ret), K(sql));
+            } else if (OB_UNLIKELY(!server.set_ip_addr(svr_ip, static_cast<int32_t>(svr_port)))) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("fail to set ip addr", KR(ret), K(svr_ip), K(svr_port), K(sql));
+            } else if (OB_FAIL(servers.push_back(server))) {
+              LOG_WARN("fail to push back server", KR(ret), K(server), K(sql));
+            }
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+        if (OB_SUCC(ret) && servers.empty()) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("no exist row", KR(ret), K(sql));
+        } else {
+          LOG_INFO("succ to get ls replica addrs", KR(ret), K(tenant_id), K(ls_id), K(servers.count()));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObStorageInfoOperator::zone_storage_dest_exist(common::ObISQLClient &proxy, const ObZone &zone,
                                                    const ObBackupDest &storage_dest,
                                                    const ObStorageUsedType::TYPE used_for,

@@ -118,6 +118,8 @@ public:
   static int get_table_total_data_size(const uint64_t tenant_id, const common::ObAddr &server, int64_t &total_size);
   static int get_tmp_file_data_size(const uint64_t tenant_id, const common::ObAddr &server, int64_t &total_size);
   static int get_ls_leader_addr(const uint64_t tenant_id, const int64_t ls_id, common::ObAddr &server);
+  static int get_ls_replica_addrs(
+      const uint64_t tenant_id, const int64_t ls_id, common::ObIArray<common::ObAddr> &servers);
 private:
   static int extract_storage_table_info(const sqlclient::ObMySQLResult &result,
       share::ObZoneStorageTableInfo &storage_table_info);
