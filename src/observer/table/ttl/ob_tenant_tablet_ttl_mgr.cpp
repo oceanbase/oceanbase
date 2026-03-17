@@ -1300,12 +1300,14 @@ int ObTabletTTLScheduler::reload_tenant_task()
   int ret = OB_SUCCESS;
   ObTTLStatus tenant_task;
   ObTTLTaskStatus expected_state;
+  ObArenaAllocator tmp_allocator;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (!is_leader_) {
     // do nothing
-  } else if (OB_FAIL(ObTTLUtil::read_tenant_ttl_task(tenant_id_, get_tenant_task_table_id(), get_ttl_type(), *sql_proxy_, tenant_task))) {
+  } else if (OB_FAIL(ObTTLUtil::read_tenant_ttl_task(tenant_id_, get_tenant_task_table_id(), get_ttl_type(),
+                                        *sql_proxy_, tenant_task, false, &tmp_allocator))) {
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
       local_tenant_task_.reuse();

@@ -2222,6 +2222,7 @@ public:
   int check_has_fts_index_aux(ObSchemaGetterGuard &schema_guard, bool &has_fts_index) const;
   int check_has_multivalue_index_aux(ObSchemaGetterGuard &schema_guard, bool &has_multivalue_index) const;
   int check_has_vec_domain_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const;
+  int check_has_vec_index_snapshot_data_type(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const;
   int check_has_spatial_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const;
   int check_has_unique_index(ObSchemaGetterGuard &schema_guard, bool &has_unique_index) const;
   int is_real_unique_index_column(ObSchemaGetterGuard &schema_guard,
