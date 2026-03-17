@@ -242,8 +242,6 @@ public:
   class ObDDLRowBuffer
   {
   public:
-    static constexpr int64_t DEFAULT_MAX_BATCH_SIZE = 256;
-  public:
     ObDDLRowBuffer() : is_inited_(false), buffer_(), bdrs_() { }
     ~ObDDLRowBuffer()
     {

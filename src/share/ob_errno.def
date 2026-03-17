@@ -2399,6 +2399,7 @@ DEFINE_ERROR_DEP(OB_SS_LS_IN_GC_STATUS, -9156, -1, "HY000", "ss ls is in gc stat
 DEFINE_ERROR(OB_BACKUP_WAIT_SS_LS_CONSISTENCY_TIMEOUT, -9157, -1, "HY000", "backup wait shared storage ls consistency timeout");
 DEFINE_ERROR(OB_OBJECT_STORAGE_INVALID_OBJECT_TYPE, -9158, -1, "HY000", "the object type is invalid");
 DEFINE_ERROR(OB_BACKUP_SET_NOT_FOUND, -9159, -1, "HY000", "available data backup set is not found");
+DEFINE_ERROR(OB_INC_MAJOR_COUNT_REACH_LIMIT, -9160, -1, "HY000", "number of inc major has reached limit");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////

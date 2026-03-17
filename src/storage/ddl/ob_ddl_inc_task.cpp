@@ -23,6 +23,7 @@
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "lib/ob_define.h"
 #include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
+#include "storage/ddl/ob_ddl_merge_schedule.h"
 
 namespace oceanbase
 {
@@ -403,9 +404,15 @@ int ObDDLIncPrepareTask::process()
         (void) ObIncDDLMergeTaskUtils::gc_ss_inc_major_ddl_dump(ls_tablet_ids);
       }
 #endif
-      ret = OB_SIZE_OVERFLOW;
+      ret = OB_INC_MAJOR_COUNT_REACH_LIMIT;
       LOG_WARN("inc major count exceeds max limit",
-               KR(ret), "ls_id", ls_tablet_id.first, "tablet_id", ls_tablet_id.second, KPC(dag));
+               KR(ret), "ls_id", ls_tablet_id.first, "tablet_id", ls_tablet_id.second,
+               "count", trans_ids_.size());
+      // trigger inc major merge
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge(ls_tablet_id.first, ls_tablet_id.second))) {
+        LOG_WARN("fail to schedule tablet ddl inc major merge", KR(tmp_ret), K(ls_tablet_id.first), K(ls_tablet_id.second));
+      }
     }
   }
   return ret;

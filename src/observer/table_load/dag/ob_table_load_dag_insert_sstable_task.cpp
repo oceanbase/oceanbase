@@ -451,10 +451,6 @@ int ObTableLoadMacroBlockWriteTask::process()
     writer_param.is_sorted_table_load_ = true;
     if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id, slice_idx, -1 /*cg_idx*/, dag_, writer_param))) {
       LOG_WARN("fail to fill writer param", K(ret), K(tablet_id), K(slice_idx), K(dag_));
-    } else if (0 == writer_param.max_batch_size_) {
-      writer_param.max_batch_size_ = ObTabletSliceBufferTempFileWriter::ObDDLRowBuffer::DEFAULT_MAX_BATCH_SIZE;
-    }
-    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObDDLUtil::alloc_storage_macro_block_writer(writer_param, allocator,
                                                                    storage_writer))) {
       LOG_WARN("fail to alloc storage macro block writer", K(ret), K(writer_param));

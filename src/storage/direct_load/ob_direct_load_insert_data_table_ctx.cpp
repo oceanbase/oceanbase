@@ -654,6 +654,7 @@ int ObDirectLoadInsertDataTableContext::init_dag(
   init_param.ddl_task_param_.target_table_id_ = param_.table_id_;
   init_param.ddl_task_param_.schema_version_ = param_.schema_version_;
   init_param.ddl_task_param_.is_no_logging_ = param_.is_no_logging_;
+  init_param.ddl_task_param_.max_batch_size_ = param_.max_batch_size_;
   init_param.is_inc_major_log_ = param_.is_inc_major_log_;
   if (!param_.is_incremental_) {
     init_param.ddl_task_param_.snapshot_version_ = param_.snapshot_version_;
