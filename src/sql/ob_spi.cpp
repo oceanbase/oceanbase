@@ -8320,11 +8320,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
                                                   true,
                                                   can_retry));
           OZ (query_driver->send_eof_packet(true));
-          if (session_info->is_pl_async_commit() && session_info->has_async_query_sender()) {
-            ObAsyncCmdDriver *async_cmd_driver = static_cast<observer::ObAsyncCmdDriver *>(query_driver);
-            CK (OB_NOT_NULL(async_cmd_driver));
-            OZ (async_cmd_driver->flush_buffer(false));
-          }
+          OZ (query_driver->get_packet_sender().flush_buffer(false));
         }
         OX(implicit_cursor->set_rowcount(into_count > 0 ? 1 : 0));
       }
