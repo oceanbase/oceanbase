@@ -1001,6 +1001,7 @@ typedef enum ObItemType
   T_FUN_SYS_NLS_CHARSET_ID = 1948,
   T_FUN_SYS_AUDIT_LOG_PASSWORD_SET = 1949,
   T_FUN_SYS_AUDIT_LOG_PASSWORD_GET = 1950,
+  T_FUN_SYS_RANDOM_PART_NEXTVAL = 1951,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,

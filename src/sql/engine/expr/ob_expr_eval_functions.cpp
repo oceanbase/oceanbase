@@ -1500,6 +1500,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprAuditLogPasswordGet::eval_get_encryption_password,   /* 904 */
   NULL, // ObExprAuditLogPasswordSet::eval_set_encryption_password,   /* 905 */
   NULL, // ObExprImageType::eval_image_type,                          /* 906 */
+  NULL, // ObExprRandomPartNextval::eval_nextval,                     /* 907 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

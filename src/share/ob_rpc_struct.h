@@ -4761,7 +4761,7 @@ struct ObFetchTabletSeqArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObFetchTabletSeqArg() : tenant_id_(OB_INVALID_TENANT_ID), cache_size_(0), tablet_id_(), ls_id_() {}
+  ObFetchTabletSeqArg() : tenant_id_(OB_INVALID_TENANT_ID), cache_size_(0), tablet_id_(), ls_id_(), sync_value_(0) {}
   ~ObFetchTabletSeqArg() {}
   bool is_valid() const;
   void reset();
@@ -4777,6 +4777,7 @@ public:
   uint64_t cache_size_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
+  uint64_t sync_value_; // ensure that mds's start is greater than sync_value_
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFetchTabletSeqArg);
 

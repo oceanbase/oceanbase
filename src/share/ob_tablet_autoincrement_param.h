@@ -146,15 +146,16 @@ struct ObMigrateTabletAutoincSeqParam final
   OB_UNIS_VERSION(1);
 public:
   ObMigrateTabletAutoincSeqParam()
-    : src_tablet_id_(), dest_tablet_id_(), ret_code_(OB_SUCCESS), autoinc_seq_(0)
+    : src_tablet_id_(), dest_tablet_id_(), ret_code_(OB_SUCCESS), autoinc_seq_(0), autoinc_seq_end_(INT64_MAX)
   {}
   bool is_valid() const { return src_tablet_id_.is_valid(); }
-  TO_STRING_KV(K_(src_tablet_id), K_(dest_tablet_id), K_(ret_code), K_(autoinc_seq));
+  TO_STRING_KV(K_(src_tablet_id), K_(dest_tablet_id), K_(ret_code), K_(autoinc_seq), K_(autoinc_seq_end));
 public:
   common::ObTabletID src_tablet_id_;
   common::ObTabletID dest_tablet_id_;
   int ret_code_;
   uint64_t autoinc_seq_;
+  uint64_t autoinc_seq_end_;
 };
 
 class ObTabletAutoincSeq : public memtable::ObIMultiSourceDataUnit, public storage::ObIStorageMetaObj

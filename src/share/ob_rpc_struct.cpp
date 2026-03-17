@@ -11725,6 +11725,7 @@ void ObFetchTabletSeqArg::reset()
   ls_id_.reset();
   tenant_id_ = OB_INVALID_TENANT_ID;
   cache_size_ = 0;
+  sync_value_ = 0;
 }
 
 int ObFetchTabletSeqArg::assign(const ObFetchTabletSeqArg &arg)
@@ -11738,6 +11739,7 @@ int ObFetchTabletSeqArg::assign(const ObFetchTabletSeqArg &arg)
     tenant_id_ = arg.tenant_id_;
     ls_id_ = arg.ls_id_;
     cache_size_ = arg.cache_size_;
+    sync_value_ = arg.sync_value_;
   }
   return ret;
 }
@@ -11764,11 +11766,11 @@ int ObFetchTabletSeqArg::init(const uint64_t tenant_id,
 DEF_TO_STRING(ObFetchTabletSeqArg)
 {
   int64_t pos = 0;
-  J_KV(K_(tenant_id), K_(tablet_id), K_(ls_id));
+  J_KV(K_(tenant_id), K_(tablet_id), K_(ls_id), K_(sync_value));
   return pos;
 }
 
-OB_SERIALIZE_MEMBER(ObFetchTabletSeqArg, tenant_id_, cache_size_, tablet_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObFetchTabletSeqArg, tenant_id_, cache_size_, tablet_id_, ls_id_, sync_value_);
 
 bool ObFetchTabletSeqRes::is_valid() const
 {
