@@ -1066,6 +1066,7 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
   // 主表的index_tid_和ref_table_id_都是一样的
   scan_ctdef.ref_table_id_ = ref_table_id;
   const uint64_t tenant_id = MTL_ID();
+  bool is_column_store = false;
   if (OB_ISNULL(op.get_plan()) ||
       OB_ISNULL(schema_guard = op.get_plan()->get_optimizer_context().get_sql_schema_guard()) ||
       OB_ISNULL(schema_guard->get_schema_guard())) {
@@ -1073,6 +1074,11 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
     LOG_ERROR("get unexpected null", K(schema_guard), K(ret));
   } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", KR(ret));
+  } else if (OB_FAIL(table_schema->get_is_column_store(is_column_store))) {
+    LOG_WARN("failed to get is column store", KR(ret));
   } else if (OB_FAIL(check_need_domain_id_merge_iter(index_dml_info.column_exprs_, op, ref_table_id, domain_types, domain_tids))) {
     LOG_WARN("fail to check need domain id merge iter", K(ret), K(ref_table_id));
   } else if (OB_FAIL(schema_guard->get_schema_guard()->get_schema_version(
@@ -1105,6 +1111,9 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
   } else if (OB_FAIL(scan_ctdef.domain_tids_.assign(domain_tids))) {
     LOG_WARN("fail to init domain tid array ", K(ret));
   } else {
+    if (!is_column_store) {
+      scan_ctdef.is_get_ = true;
+    }
     // prepare domain_id_idxs_
     ARRAY_FOREACH(scan_ctdef.domain_id_idxs_, i) {
       if (OB_FAIL(scan_ctdef.domain_id_idxs_.at(i).prepare_allocate(domain_id_col_ids.at(i).count()))) {
