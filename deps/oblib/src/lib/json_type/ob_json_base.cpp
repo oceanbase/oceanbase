@@ -4780,8 +4780,7 @@ int ObIJsonBase::compare(const ObIJsonBase &other, int &res, bool is_path) const
               LOG_WARN("fail to compare json string", K(ret));
             }
           } else {
-            int raw_cmp = str_a.compare(str_b);
-            res = (raw_cmp < 0) ? -1 : ((raw_cmp > 0) ? 1 : 0);
+            res = str_a.compare(str_b);
           }
           break;
         }

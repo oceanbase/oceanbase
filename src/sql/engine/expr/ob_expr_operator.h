@@ -1458,7 +1458,8 @@ protected:
                                             const int cmp_ret)
   {
     bool ret_bool = false;
-    switch (cmp_ret) {
+    int cmp_ret_tmp = (cmp_ret < 0) ? -1 : ((cmp_ret > 0) ? 1 : 0);
+    switch (cmp_ret_tmp) {
     case 0: {
       ret_bool = (cmp_op == common::CO_EQ || cmp_op == common::CO_GE || cmp_op == common::CO_LE);
     } break;
