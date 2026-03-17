@@ -1366,7 +1366,7 @@ struct ObObjPrintParams
     ob_obj_type_(ObNullType),
     coll_meta_(NULL)
   {}
-  TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags), K_(ob_obj_type));
+  TO_STRING_KV(K_(tz_info), K_(cs_type), K_(accuracy), K_(print_flags), K_(ob_obj_type));
   const ObTimeZoneInfo *tz_info_;
   ObCollationType cs_type_;
   ObAccuracy accuracy_;
@@ -4589,6 +4589,7 @@ class ObObjCharacterUtil
   // Utils for safe hex representation of character types.
   // Only use for the character types that supported as primary key columns.
 public:
+  static bool can_print_safe_hex_represent(const ObObj &obj);
   static int print_safe_hex_represent_oracle(const ObObj &obj, char* buf, const int64_t buf_len, int64_t& pos, const ObAccuracy &accuracy);
   static int print_safe_hex_represent_mysql(const ObObj &obj, char *buffer, int64_t length, int64_t &pos);
   static int print_safe_hex_represent(const ObObj &obj, char *buffer, int64_t length, int64_t &pos, const ObAccuracy &accuracy);
