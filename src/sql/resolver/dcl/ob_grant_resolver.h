@@ -421,8 +421,10 @@ int ObGrantResolver::resolve_priv_object(const ParseNode *priv_object_node,
       }
     } else if (priv_object_node->value_ == 5) {
       object_type = ObObjectType::LOCATION;
-      if (OB_FAIL(schema_checker->get_location_id(tenant_id, table, object_id))) {
+      if (OB_FAIL(schema_checker->get_location_id_name(tenant_id, table, object_id, allocator, !is_grant))) {
         LOG_WARN("failed to get location id", K(ret));
+      } else {
+        grant_stmt->set_table_name(table);
       }
     } else if (priv_object_node->value_ == 6) {
       object_type = ObObjectType::SENSITIVE_RULE;

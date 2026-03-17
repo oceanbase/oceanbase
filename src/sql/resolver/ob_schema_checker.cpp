@@ -657,6 +657,44 @@ int ObSchemaChecker::get_sensitive_rule_schema_by_column(const uint64_t tenant_i
   return ret;
 }
 
+int ObSchemaChecker::get_location_id_name(const uint64_t tenant_id,
+                                          common::ObString &location_name,
+                                          uint64_t &location_id,
+                                          ObIAllocator *allocator,
+                                          bool allow_not_exist) const
+{
+  int ret = OB_SUCCESS;
+  location_id = OB_INVALID_ID;
+  const ObLocationSchema *location_schema = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
+  } else if (OB_ISNULL(schema_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || location_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(tenant_id), K(location_name), K(ret));
+  } else if (OB_FAIL(schema_mgr_->get_location_schema_by_name(tenant_id, location_name, location_schema))) {
+    LOG_WARN("failed to get location schema", K(ret));
+  } else if (OB_ISNULL(location_schema)) {
+    if (allow_not_exist) {
+      // do nothing
+    } else {
+      ret = OB_LOCATION_NOT_EXIST;
+      LOG_WARN("location not exist", K(ret), K(location_name));
+      LOG_USER_ERROR(OB_LOCATION_NOT_EXIST, location_name.length(), location_name.ptr());
+    }
+  } else {
+    location_id = location_schema->get_location_id();
+    location_name = location_schema->get_location_name_str();
+    if (allocator != NULL && OB_FAIL(ob_write_string(*allocator, location_name, location_name))) {
+      LOG_WARN("failed to deep copy str", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSchemaChecker::get_column_schema(
     const uint64_t tenant_id,
     const uint64_t table_id,

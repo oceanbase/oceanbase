@@ -2026,7 +2026,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           if(OB_ISNULL(schema_checker_) || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("got null ptr", K(ret));
-          } else if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
+          } else if (OB_FAIL(schema_checker_->get_location_id_name(real_tenant_id, location_name, location_id))) {
             LOG_WARN("failed to get location id", K(ret));
           } else if (OB_FAIL(schema_guard->check_location_access(session_priv, enable_role_id_array, location_name))) {
             LOG_WARN("failed to check location access", K(ret));
@@ -2062,7 +2062,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           if(OB_ISNULL(schema_checker_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("got null ptr", K(ret));
-          } else if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
+          } else if (OB_FAIL(schema_checker_->get_location_id_name(real_tenant_id, location_name, location_id))) {
             LOG_WARN("get location id failed", K(ret), K(real_tenant_id), K(location_name));
           } else if(OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
             ret = OB_ERR_UNEXPECTED;
