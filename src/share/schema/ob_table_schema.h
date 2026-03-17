@@ -1722,6 +1722,7 @@ public:
   inline int64_t get_index_column_num() const { return index_info_.get_size(); }
   inline int64_t get_partition_key_column_num() const { return partition_key_info_.get_size(); }
   inline int64_t get_subpartition_key_column_num() const { return subpartition_key_info_.get_size(); }
+  int has_string_lob_in_rowkey_or_partkey(bool &has) const;
   inline ObTableLoadType get_load_type() const { return load_type_; }
   inline ObIndexUsingType get_index_using_type() const { return index_using_type_; }
   inline ObTableDefType get_def_type() const { return def_type_; }

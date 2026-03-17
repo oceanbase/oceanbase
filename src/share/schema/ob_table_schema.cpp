@@ -8803,6 +8803,23 @@ int ObTableSchema::is_presetting_partition_key(const uint64_t partition_key_id,
   return ret;
 }
 
+int ObTableSchema::has_string_lob_in_rowkey_or_partkey(bool &has) const
+{
+  int ret = OB_SUCCESS;
+  has = false;
+  const ObColumnSchemaV2 *column = nullptr;
+  const int64_t column_cnt = get_column_count();
+  for (int64_t i = 0; OB_SUCC(ret) && !has && i < column_cnt; ++i) {
+    if (OB_ISNULL(column = get_column_schema_by_idx(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is null", K(ret), K(i));
+    } else if ((column->is_rowkey_column() || column->is_part_key_column() || column->is_subpart_key_column()) && column->get_meta_type().is_lob()) {
+      has = true;
+    }
+  }
+  return ret;
+}
+
 int ObTableSchema::check_primary_key_cover_partition_column(ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;

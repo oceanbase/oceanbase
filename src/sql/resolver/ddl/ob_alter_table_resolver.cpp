@@ -5870,6 +5870,21 @@ int ObAlterTableResolver::resolve_partitioned_partition(const ParseNode *node,
       LOG_WARN("failed to resolve auto partition option", K(ret));
     } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column(*schema_guard))) {
       LOG_WARN("fail to check primary key cover partition column", K(ret));
+    } else {
+      bool has_string_lob_in_rowkey_or_partkey = false;
+      bool has_vec_index = false;
+      if (OB_FAIL(table_schema.has_string_lob_in_rowkey_or_partkey(has_string_lob_in_rowkey_or_partkey))) {
+        LOG_WARN("fail to check string lob in rowkey or partkey", K(ret));
+      } else if (has_string_lob_in_rowkey_or_partkey
+                 && OB_FAIL(share::ObVectorIndexUtil::check_table_has_vector_index(origin_table_schema, *schema_guard, has_vec_index))) {
+        LOG_WARN("fail to check table has vector index", K(ret));
+      } else if (has_string_lob_in_rowkey_or_partkey && has_vec_index) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("setting STRING type column as partition key when table has vector index is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "setting STRING type column as partition key when table has vector index is");
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(table_schema.set_origin_table_name(origin_table_name))) {
       LOG_WARN("fail to set origin table name", K(ret), K(origin_table_name));
     } else if (OB_FAIL(table_schema.set_origin_database_name(origin_database_name))) {

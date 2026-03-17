@@ -3357,7 +3357,14 @@ int ObVectorIndexUtil::check_vec_index_param(
     bool is_text_col = false;
     uint64_t tenant_data_version = 0;
     const ObColumnSchemaV2 *col_schema = nullptr;
-    if(OB_ISNULL(col_schema = tbl_schema.get_column_schema(vec_column_name))){
+    bool has_string_lob_in_key = false;
+    if (OB_FAIL(tbl_schema.has_string_lob_in_rowkey_or_partkey(has_string_lob_in_key))) {
+      LOG_WARN("fail to check string lob in rowkey or partkey", K(ret), K(tbl_schema));
+    } else if (has_string_lob_in_key) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("creating vector index on table with STRING type as primary key opartition key is not supported", K(ret), K(tbl_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "creating vector index on table with STRING type as primary key or partition key is");
+    } else if(OB_ISNULL(col_schema = tbl_schema.get_column_schema(vec_column_name))){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null column schema", K(ret), KP(col_schema));
     } else if (!col_schema->is_valid()) {

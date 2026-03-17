@@ -911,6 +911,19 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
+  if (OB_SUCC(ret) && schema::is_vec_index(crt_idx_stmt->get_create_index_arg().index_type_)) {
+    bool has_string_lob_in_key = false;
+    if (OB_ISNULL(tbl_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (OB_FAIL(tbl_schema->has_string_lob_in_rowkey_or_partkey(has_string_lob_in_key))) {
+      LOG_WARN("fail to check string lob in rowkey or partkey", K(ret));
+    } else if (has_string_lob_in_key) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("creating vector index on table with STRING type as primary key or partition key is not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "creating vector index on table with STRING type as primary key or partition key is");
+    }
+  }
   // Check storage cache policy for index
   if (OB_FAIL(ret)) {
   } else if (GCTX.is_shared_storage_mode() && is_mysql_mode()) {

@@ -22316,12 +22316,25 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
     // which come from rebuild hidden table index
     ObDocIDType doc_id_type = ObDocIDType::INVALID;
     ObDocIDType vid_type = ObDocIDType::INVALID;
-    if (OB_SUCC(ret) && OB_FAIL(hidden_table_schema.get_is_column_store(disallow_vec_index))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(hidden_table_schema.get_is_column_store(disallow_vec_index))) {
       LOG_WARN("fail to get is column store", K(ret), K(hidden_table_schema));
     } else if (OB_FAIL(ObFtsIndexBuilderUtil::determine_docid_type(hidden_table_schema, doc_id_type))) {
       LOG_WARN("failed to determine docid type", K(ret));
     } else if (OB_FAIL(ObVectorIndexUtil::determine_vid_type(hidden_table_schema, vid_type))) {
       LOG_WARN("failed to determine docid type", K(ret));
+    } else {
+      bool has_string_lob_in_key = false;
+      bool has_vec_index = false;
+      if (OB_FAIL(hidden_table_schema.has_string_lob_in_rowkey_or_partkey(has_string_lob_in_key))) {
+        LOG_WARN("fail to check string lob in rowkey or partkey", K(ret));
+      } else if (has_string_lob_in_key && OB_FAIL(ObVectorIndexUtil::check_table_has_vector_index(orig_table_schema, schema_guard, has_vec_index))) {
+        LOG_WARN("fail to check table has vector index", K(ret));
+      } else if (has_string_lob_in_key && has_vec_index) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("adding STRING type as primary key or partition key when table has vector index is not supported", K(ret), K(orig_table_schema), K(hidden_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "adding STRING type as primary key or partition key when table has vector index is");
+      }
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
