@@ -8235,7 +8235,12 @@ def_table_schema(
     ('ret_code', 'int'),
     ('trace_id', 'varchar:OB_MAX_ERROR_MSG_LEN'),
     ('progress_info', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true', 'NULL'),
-    ('task_info', 'longtext', 'true', 'NULL')
+    ('task_info', 'longtext', 'true', 'NULL'),
+    ('exec_addr', 'varchar:MAX_IP_PORT_LENGTH', 'true', 'NULL'),
+    ('priority', 'int', 'false', '0'),
+    ('start_time', 'timestamp', 'true', 'NULL'),
+    ('end_time', 'timestamp', 'true', 'NULL'),
+    ('err_msg', 'varchar:1024', 'true', 'NULL'),
   ],
 )
 
@@ -8259,7 +8264,12 @@ def_table_schema(
     ('target_scn', 'int'),
     ('ret_code', 'int'),
     ('trace_id', 'varchar:OB_MAX_ERROR_MSG_LEN'),
-    ('task_info', 'longtext', 'true', 'NULL')
+    ('task_info', 'longtext', 'true', 'NULL'),
+    ('exec_addr', 'varchar:MAX_IP_PORT_LENGTH', 'true', 'NULL'),
+    ('priority', 'int', 'false', '0'),
+    ('start_time', 'timestamp', 'true', 'NULL'),
+    ('end_time', 'timestamp', 'true', 'NULL'),
+    ('err_msg', 'varchar:1024', 'true', 'NULL'),
   ],
 )
 
@@ -44360,7 +44370,7 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      gmt_create as START_TIME,
+      gmt_create as CREATE_TIME,
       gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "USER"
@@ -44377,7 +44387,12 @@ def_table_schema(
       ret_code as RET_CODE,
       trace_id as TRACE_ID,
       progress_info as PROGRESS_INFO,
-      task_info as TASK_INFO
+      task_info as TASK_INFO,
+      exec_addr as EXEC_ADDR,
+      priority as PRIORITY,
+      start_time as START_TIME,
+      end_time as END_TIME,
+      err_msg as ERR_MSG
   FROM oceanbase.__all_vector_index_task
 """.replace("\n", " ")
 )
@@ -44396,7 +44411,7 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      gmt_create as START_TIME,
+      gmt_create as CREATE_TIME,
       gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "USER"
@@ -44413,7 +44428,12 @@ def_table_schema(
       ret_code as RET_CODE,
       trace_id as TRACE_ID,
       progress_info as PROGRESS_INFO,
-      task_info as TASK_INFO
+      task_info as TASK_INFO,
+      exec_addr as EXEC_ADDR,
+      priority as PRIORITY,
+      start_time as START_TIME,
+      end_time as END_TIME,
+      err_msg as ERR_MSG
   FROM oceanbase.__all_virtual_vector_index_task
 """.replace("\n", " ")
 )
@@ -44432,7 +44452,7 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      gmt_create as START_TIME,
+      gmt_create as CREATE_TIME,
       gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "AUTO"
@@ -44448,7 +44468,12 @@ def_table_schema(
       target_scn as TASK_SCN,
       ret_code as RET_CODE,
       trace_id as TRACE_ID,
-      task_info as TASK_INFO
+      task_info as TASK_INFO,
+      exec_addr as EXEC_ADDR,
+      priority as PRIORITY,
+      start_time as START_TIME,
+      end_time as END_TIME,
+      err_msg as ERR_MSG
   FROM oceanbase.__all_vector_index_task_history
 """.replace("\n", " ")
 )
@@ -44467,7 +44492,7 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      gmt_create as START_TIME,
+      gmt_create as CREATE_TIME,
       gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "AUTO"
@@ -44483,7 +44508,12 @@ def_table_schema(
       target_scn as TASK_SCN,
       ret_code as RET_CODE,
       trace_id as TRACE_ID,
-      task_info as TASK_INFO
+      task_info as TASK_INFO,
+      exec_addr as EXEC_ADDR,
+      priority as PRIORITY,
+      start_time as START_TIME,
+      end_time as END_TIME,
+      err_msg as ERR_MSG
   FROM oceanbase.__all_virtual_vector_index_task_history
 """.replace("\n", " ")
 )

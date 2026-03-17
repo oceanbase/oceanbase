@@ -569,12 +569,18 @@ int ObVecIndexAsyncTaskUtil::move_task_to_history_table(
   } else {
     /*
      [451, ): task_info已经占位;
+     [460, ): exec_addr, priority, start_time, end_time, err_msg 已经占位;
     */
     const bool has_task_info = (data_version >= DATA_VERSION_4_5_1_0);
-    const char *extra_cols = has_task_info ? ", task_info " : "";
-    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s SELECT gmt_create, gmt_modified, tenant_id, table_id, tablet_id, task_id, trigger_type, task_type, status, target_scn, ret_code, trace_id%s FROM %s WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create LIMIT %ld",
+    const bool has_obs_cols = (data_version >= DATA_VERSION_4_6_0_0);
+    ObSqlString extra_cols;
+    if (has_task_info && OB_FAIL(extra_cols.append(", task_info"))) {
+      LOG_WARN("fail to append extra_cols", K(ret));
+    } else if (has_obs_cols && OB_FAIL(extra_cols.append(", exec_addr, priority, start_time, end_time, err_msg"))) {
+      LOG_WARN("fail to append extra_cols", K(ret));
+    } else if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s SELECT gmt_create, gmt_modified, tenant_id, table_id, tablet_id, task_id, trigger_type, task_type, status, target_scn, ret_code, trace_id%s FROM %s WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create LIMIT %ld",
               share::OB_ALL_VECTOR_INDEX_TASK_HISTORY_TNAME,
-              extra_cols,
+              extra_cols.empty() ? "" : extra_cols.ptr(),
               share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
               ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
               batch_size))){
