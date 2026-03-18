@@ -1609,7 +1609,11 @@ ObPLCompilerEnvGuard::ObPLCompilerEnvGuard(const ObPackageInfo &info,
                                            share::schema::ObSchemaGetterGuard &schema_guard,
                                            int &ret,
                                            const ObPLBlockNS *parent_ns)
-  : ret_(ret), session_info_(session_info)
+  : ret_(ret),
+    session_info_(session_info),
+    old_db_id_(OB_INVALID_ID),
+    need_reset_exec_env_(false),
+    need_reset_default_database_(false)
 {
   init(info, session_info, schema_guard, ret, parent_ns);
 }
@@ -1618,7 +1622,12 @@ ObPLCompilerEnvGuard::ObPLCompilerEnvGuard(const ObRoutineInfo &info,
                                            ObSQLSessionInfo &session_info,
                                            share::schema::ObSchemaGetterGuard &schema_guard,
                                            int &ret)
-  : ret_(ret), session_info_(session_info), allocator_()
+  : ret_(ret),
+    session_info_(session_info),
+    old_db_id_(OB_INVALID_ID),
+    need_reset_exec_env_(false),
+    need_reset_default_database_(false),
+    allocator_()
 {
   init(info, session_info, schema_guard, ret);
 }
@@ -1634,9 +1643,6 @@ void ObPLCompilerEnvGuard::init(const Info &info,
   bool need_set_db = true;
   bool is_invoker_right = OB_NOT_NULL(parent_ns) ? parent_ns->get_compile_flag().compile_with_invoker_right()
                                                  : info.is_invoker_right();
-  OX (need_reset_exec_env_ = false);
-  OX (need_reset_default_database_ = false);
-  OX (old_db_id_ = OB_INVALID_ID);
   OZ (old_exec_env_.load(session_info_, &allocator_));
   OZ (env.init(info.get_exec_env()));
   if (OB_SUCC(ret) && old_exec_env_ != env) {
