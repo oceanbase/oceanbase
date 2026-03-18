@@ -1208,6 +1208,8 @@ public:
 
   int check_das_need_keep_ordering();
   int check_das_need_scan_with_domain_id();
+  // Prune domain_id plan when access columns do not contain any domain_id column (called after ALLOC_EXPR).
+  int prune_domain_id_plan_if_access_not_need();
 
   const ObIArray<ObRawFilterMonotonicity>& get_filter_monotonicity() const
   { return filter_monotonicity_; }

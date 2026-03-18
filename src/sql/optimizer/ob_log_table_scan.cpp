@@ -6464,6 +6464,45 @@ int ObLogTableScan::check_das_need_scan_with_domain_id()
   return ret;
 }
 
+int ObLogTableScan::prune_domain_id_plan_if_access_not_need()
+{
+  int ret = OB_SUCCESS;
+  if (!is_tsc_with_domain_id()) {
+    // nothing to prune
+  } else {
+    bool access_has_domain_id = false;
+    const ObIArray<ObRawExpr *> &access = get_access_exprs();
+    for (int64_t i = 0; !access_has_domain_id && i < access.count(); ++i) {
+      const ObRawExpr *e = access.at(i);
+      if (OB_NOT_NULL(e) && e->is_column_ref_expr()
+          && static_cast<const ObColumnRefRawExpr *>(e)->is_domain_id_column()) {
+        access_has_domain_id = true;
+      }
+    }
+    if (access_has_domain_id) {
+      // keep domain_id plan
+    } else {
+      // access does not contain domain_id column, prune domain_id plan (only clear domain_id related state)
+      with_domain_types_.reset();
+      domain_table_ids_.reset();
+      rowkey_doc_tid_ = OB_INVALID_ID;
+      ObSEArray<std::pair<ObRowkeyIdExprType, ObRawExpr *>, 8> kept_rowkey_id;
+      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_id_exprs_.count(); ++i) {
+        if (rowkey_id_exprs_.at(i).first != ObRowkeyIdExprType::DOMAIN_ID_MERGE) {
+          if (OB_FAIL(kept_rowkey_id.push_back(rowkey_id_exprs_.at(i)))) {
+            LOG_WARN("failed to push back rowkey id expr", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(rowkey_id_exprs_.assign(kept_rowkey_id))) {
+        LOG_WARN("failed to assign rowkey_id_exprs_", K(ret));
+      }
+      LOG_INFO("pruned domain_id plan: access has no domain_id column", K(ret), K(table_id_), K(ref_table_id_));
+    }
+  }
+  return ret;
+}
+
 int ObLogTableScan::prepare_rowkey_domain_id_dep_exprs()
 {
   int ret = OB_SUCCESS;

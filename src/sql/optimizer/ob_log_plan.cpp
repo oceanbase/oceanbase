@@ -11766,7 +11766,9 @@ int ObLogPlan::replace_generate_column_exprs(ObLogicalOperator *op)
     // of the main table, the index table and the index back table to determine whether
     // to replace the expression of the virtual generated column
     ObLogTableScan *scan_op = static_cast<ObLogTableScan*>(op);
-    if (OB_FAIL(generate_tsc_replace_exprs_pair(scan_op))) {
+    if (OB_FAIL(scan_op->prune_domain_id_plan_if_access_not_need())) {
+      LOG_WARN("failed to prune domain_id plan when access has no domain_id column", K(ret));
+    } else if (OB_FAIL(generate_tsc_replace_exprs_pair(scan_op))) {
       LOG_WARN("failed to generate replace generated tsc expr", K(ret));
     } else if (OB_FAIL(scan_op->generate_ddl_output_column_ids())) {
       LOG_WARN("fail to generate ddl output column ids");
