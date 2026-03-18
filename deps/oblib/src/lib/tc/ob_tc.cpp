@@ -48,11 +48,12 @@ protected:
 class ITCLimiter: public IQD
 {
 public:
-  enum { LIMIT_BALANCE_BOUND_MS = 10 };
-  ITCLimiter(int id, int type, const char* name): IQD(id, type, name), limit_per_sec_(INT64_MAX), due_ts_(0), storage_key_(0) {}
-  ITCLimiter(int id, int type, const char* name, uint64_t storage_key): IQD(id, type, name), limit_per_sec_(INT64_MAX), due_ts_(0), storage_key_(storage_key) {}
+  enum { LIMIT_BALANCE_BOUND_MS = 10, LIMIT_UPPER_BOUND_MS = 1 };
+  ITCLimiter(int id, int type, const char* name): IQD(id, type, name), upper_limit_enabled_(false), limit_per_sec_(INT64_MAX), due_ts_(0), storage_key_(0) {}
+  ITCLimiter(int id, int type, const char* name, uint64_t storage_key): IQD(id, type, name), upper_limit_enabled_(false), limit_per_sec_(INT64_MAX), due_ts_(0), storage_key_(storage_key) {}
   virtual ~ITCLimiter() {}
   virtual int64_t get_cost(TCRequest* req) = 0;
+  void enable_upper_limit() { upper_limit_enabled_ = true; }
   void set_limit_per_sec(int64_t limit) { limit_per_sec_ = limit; }
   int64_t get_limit_per_sec() { return limit_per_sec_; }
   uint64_t get_storage_key() { return storage_key_; }
@@ -74,11 +75,18 @@ public:
       }
       int64_t inc_ts = get_cost(req) * 1000000000LL/limit_per_sec_;
       ATOMIC_FAA(&due_ts_, inc_ts);
+      if (upper_limit_enabled_) {
+        int64_t ts_upper_limit = cur_ns + LIMIT_UPPER_BOUND_MS * 1000 * 1000;
+        if (due_ts_ > ts_upper_limit) {
+          due_ts_ = ts_upper_limit;
+        }
+      }
     }
     return due_ts_;
   }
   int64_t get_due_ns() { return due_ts_; }
 protected:
+  bool upper_limit_enabled_;
   int64_t limit_per_sec_;
   int64_t due_ts_ CACHE_ALIGNED;
   uint64_t storage_key_;
@@ -92,6 +100,7 @@ public:
   enum { MAX_LIMITER_COUNT = 100 };
   TCLimiterList(): limiter0_(-1, "builtin") { memset(limiter_, 0, sizeof(limiter_)); }
 
+  void enable_upper_limit() { limiter0_.enable_upper_limit(); }
   void set_limit_per_sec(int64_t limit) { limiter0_.set_limit_per_sec(limit); }
   int64_t get_limit_per_sec() { return limiter0_.get_limit_per_sec(); }
   void print_limiters_per_sec(StrFormat& f) {
@@ -174,9 +183,13 @@ protected:
   LimiterList reserver_;
   LimiterList limiter_;
 public:
-  QDesc(int id, int type, int parent, int root, const char* name): IQD(id, type, name), parent_(parent), root_(root),
-                                                         weight_(1), reserver_(), limiter_()
+  QDesc(int id, int type, int parent, int root, const char* name)
+    : IQD(id, type, name), parent_(parent), root_(root),
+      weight_(1), reserver_(), limiter_()
   {
+    if (type != QDISC_BUFFER_QUEUE) {
+      limiter_.enable_upper_limit();
+    }
     reserver_.set_limit_per_sec(0);
   }
   ~QDesc() {}
@@ -258,6 +271,7 @@ public:
                        next_active_ts_(INT64_MAX), ready_list_(&ready_list_), dirty_list_(&dirty_list_) {
   }
   virtual ~IQDisc() {}
+  void unlink_from_lists();
 protected:
   IQDisc* get_parent() { return parent_; }
   IQDisc* get_root() { return root_; }
@@ -423,6 +437,25 @@ protected:
   void add_to_dirty_list(IQDisc* child) {
     link_insert(&dirty_list_, &child->dirty_link_);
   }
+  void unlink_child(IQDisc* child) {
+    if (child->ready_dlink_.next_) {
+      dlink_del(&child->ready_dlink_);
+      child->ready_dlink_.next_ = NULL;
+    }
+    if (child->dirty_link_.next_) {
+      TCLink* prev = &dirty_list_;
+      TCLink* cur = dirty_list_.next_;
+      while (&dirty_list_ != cur) {
+        if (cur == &child->dirty_link_) {
+          link_del(prev, cur);
+          cur->next_ = NULL;
+          break;
+        }
+        prev = cur;
+        cur = cur->next_;
+      }
+    }
+  }
 };
 
 class BufferQueue: public IQDisc
@@ -512,6 +545,20 @@ public:
       }
     }
   }
+  void remove_qdisc(IQDisc* target) {
+    TCLink* h = &over_quota_list_;
+    TCLink* prev = h;
+    TCLink* cur = h->next_;
+    while (h != cur) {
+      if (cur == &target->over_quota_link_) {
+        link_del(prev, cur);
+        cur->next_ = NULL;
+        return;
+      }
+      prev = cur;
+      cur = cur->next_;
+    }
+  }
 };
 
 class OverReserveList
@@ -564,6 +611,20 @@ public:
       }
     }
   }
+  void remove_qdisc(IQDisc* target) {
+    TCLink* h = &over_reserve_list_;
+    TCLink* prev = h;
+    TCLink* cur = h->next_;
+    while (h != cur) {
+      if (cur == &target->over_reserve_link_) {
+        link_del(prev, cur);
+        cur->next_ = NULL;
+        return;
+      }
+      prev = cur;
+      cur = cur->next_;
+    }
+  }
 };
 
 class QDescRoot: public QDesc
@@ -612,6 +673,10 @@ public:
   }
   void wake_overquota_req(TCLink* wake_q) {
     over_quota_list_.wake_overquota_req(wake_q);
+  }
+  void remove_qdisc(IQDisc* target) {
+    over_quota_list_.remove_qdisc(target);
+    over_reserve_list_.remove_qdisc(target);
   }
   int submit_req(TCRequest* req) {
     req->start_ns_ = tc_get_ns();
@@ -712,6 +777,18 @@ void IQDisc::on_over_reserve(int64_t next_active_ts)
 {
   next_active_ts_ = next_active_ts;
   ((QDiscRoot*)get_root())->sort_over_reserve_qdisc(this);
+}
+
+void IQDisc::unlink_from_lists()
+{
+  IQDisc* parent = get_parent();
+  if (parent != NULL) {
+    parent->unlink_child(this);
+  }
+  QDiscRoot* root = (QDiscRoot*)get_root();
+  if (root != NULL && root != this) {
+    root->remove_qdisc(this);
+  }
 }
 
 static QDiscRoot* create_and_fetch_root(int qid, int chan_id);
