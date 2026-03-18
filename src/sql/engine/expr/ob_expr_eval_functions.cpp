@@ -492,6 +492,7 @@
 #include "ob_expr_pos_list.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_load_file.h"
 #include "ob_expr_collation.h"
+#include "ob_expr_get_routine_param_type_str.h"
 
 namespace oceanbase
 {
@@ -1501,6 +1502,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprAuditLogPasswordSet::eval_set_encryption_password,   /* 905 */
   NULL, // ObExprImageType::eval_image_type,                          /* 906 */
   NULL, // ObExprRandomPartNextval::eval_nextval,                     /* 907 */
+  ObExprGetRoutineParamTypeStr::eval_routine_param_type_str,          /* 908 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

@@ -710,6 +710,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_can_access_trigger.cpp
   engine/expr/ob_expr_mysql_proc_info.cpp
   engine/expr/ob_expr_get_mysql_routine_parameter_type_str.cpp
+  engine/expr/ob_expr_get_routine_param_type_str.cpp
   engine/expr/ob_expr_prefix_pattern.cpp
   engine/expr/ob_expr_sys_makexml.cpp
   engine/expr/ob_expr_xml_func_helper.cpp

@@ -627,6 +627,10 @@ public:
                                   ObIArray<share::schema::ObSchemaObjVersion> *deps = NULL,
                                   pl::ObPLDbLinkGuard *dblink_guard = NULL,
                                   pl::ObPLResolveCache *resolve_cache = nullptr);
+#ifdef OB_BUILD_ORACLE_PL
+  static int to_type_str(const ObPLDataType &pl_type,
+                                     char *buf, int64_t buf_len, int64_t &pos);
+#endif
   static int transform_and_add_routine_param(const pl::ObPLRoutineParam *param,
                                   int64_t position,
                                   int64_t level,

@@ -1271,6 +1271,7 @@
 #define N_RB_BUILD                          "rb_build"
 #define N_MYSQL_PROC_INFO                   "mysql_proc_info"
 #define N_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR   "get_mysql_routine_parameter_type_str"
+#define N_GET_ROUTINE_PARAM_TYPE_STR       "get_routine_param_type_str"
 #define N_ORA_LOGIN_USER                    "ora_login_user"
 #define N_CALC_ODPS_SIZE                  "calc_odps_size"
 #define N_PRIV_ST_GEOHASH                   "_st_geohash"

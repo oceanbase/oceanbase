@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX PL
 #include "ob_pl_type.h"
+#include "lib/utility/ob_print_utils.h"
 #include "observer/mysql/obsm_utils.h"
 #include "src/sql/resolver/ob_resolver_utils.h"
 #include "ob_pl_code_generator.h"
@@ -475,6 +476,47 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
   }
   return ret;
 }
+
+#ifdef OB_BUILD_ORACLE_PL
+int ObPLDataType::to_type_str(const ObPLDataType &pl_type,
+                                         char *buf, int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(pl_type.get_data_type())) {
+    const ObDataType *data_type = pl_type.get_data_type();
+    const char *type_name = ob_obj_type_str(data_type->get_meta_type().get_type());
+    OZ (databuff_printf(buf, buf_len, pos, "%s", type_name));
+  } else {
+    // Oracle EXTEND_TYPE format: REF CURSOR, OBJECT, VARRAY, TABLE, PL/SQL RECORD, PL/SQL TABLE, OPAQUE/XMLTYPE
+    switch (pl_type.get_type()) {
+      case PL_RECORD_TYPE:
+        OZ (databuff_printf(buf, buf_len, pos, "%s",
+                            pl_type.is_udt_type() ? "OBJECT" : "PL/SQL RECORD"));
+        break;
+      case PL_VARRAY_TYPE:
+        OZ (databuff_printf(buf, buf_len, pos, "VARRAY"));
+        break;
+      case PL_NESTED_TABLE_TYPE:
+        OZ (databuff_printf(buf, buf_len, pos, "TABLE"));
+        break;
+      case PL_ASSOCIATIVE_ARRAY_TYPE:
+        OZ (databuff_printf(buf, buf_len, pos, "PL/SQL TABLE"));
+        break;
+      case PL_OPAQUE_TYPE:
+        OZ (databuff_printf(buf, buf_len, pos, "OPAQUE/XMLTYPE"));
+        break;
+      case PL_REF_CURSOR_TYPE:
+      case PL_CURSOR_TYPE:
+        OZ (databuff_printf(buf, buf_len, pos, "REF CURSOR"));
+        break;
+      default:
+        OZ (databuff_printf(buf, buf_len, pos, "EXT"));
+        break;
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObPLDataType::transform_and_add_routine_param(const pl::ObPLRoutineParam *param,
                                                   int64_t position,
