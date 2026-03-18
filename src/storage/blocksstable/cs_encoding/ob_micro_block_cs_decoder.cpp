@@ -1102,8 +1102,10 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::alloc_decoders_buf(const bool by_re
     }
     if constexpr (IS_MULTI_VERSION) {
       if (read_info_not_contain_multi_version_cols()) {
+        const int64_t schema_rowkey_cnt = transform_helper_.get_micro_block_header()->rowkey_column_count_
+          - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
         for (int i = 0; i < ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(); ++i) {
-          const int64_t store_idx = transform_helper_.get_micro_block_header()->rowkey_column_count_ + i;
+          const int64_t store_idx = schema_rowkey_cnt + i;
           const ObCSColumnHeader &col_header =
               transform_helper_.get_column_header(store_idx);
           if (OB_NOT_NULL(cached_decoder_) &&
