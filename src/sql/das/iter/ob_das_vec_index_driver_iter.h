@@ -192,7 +192,8 @@ public:
       vid_to_distance_(),
       filter_mode_(ObVecFilterMode::VEC_FILTER_MODE_INVALID),
       scalar_scan_ctdef_(nullptr),
-      scalar_scan_rtdef_(nullptr) {}
+      scalar_scan_rtdef_(nullptr),
+      profile_(nullptr) {}
 
   virtual ~ObDASVecIndexDriverIter() {}
 
@@ -317,6 +318,7 @@ private:
   const ObDASScalarScanCtDef *scalar_scan_ctdef_;
   ObDASScalarScanRtDef *scalar_scan_rtdef_;
   common::ObObj vid_obj_for_lookup_;
+  common::ObOpProfile<common::ObMetric> *profile_;
 };
 
 } // namespace sql

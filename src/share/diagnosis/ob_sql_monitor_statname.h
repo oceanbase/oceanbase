@@ -202,6 +202,10 @@ SQL_MONITOR_STATNAME_DEF(HS_TABLET_ID, metric::Unit::INT, "tablet id", "tablet i
 SQL_MONITOR_STATNAME_DEF(HS_VEC_INDEX_TYPE, metric::Unit::INT, "vec index type", "vec index type", M_FIRST_VAL, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(HS_VEC_FILTER_MODE , metric::Unit::INT, "vec filter mode", "vec filter mode", M_FIRST_VAL, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(HS_OP_ID , metric::Unit::INT, "op id", "op id", M_FIRST_VAL, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_FUSION_METHOD, metric::Unit::INT, "fusion method", "fusion method", M_FIRST_VAL, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_FUSION_OFFSET, metric::Unit::INT, "fusion offset", "fusion offset", M_FIRST_VAL, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_FUSION_SIZE, metric::Unit::INT, "fusion size", "fusion size", M_FIRST_VAL, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_RANK_WINDOW_SIZE, metric::Unit::INT, "rank window size", "rank window size", M_FIRST_VAL, metric::Level::STANDARD)
 
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)

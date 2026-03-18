@@ -126,6 +126,7 @@ int ObDASFusionIter::inner_reuse()
   output_idx_ = 0;
   input_row_cnt_ = 0;
   output_row_cnt_ = 0;
+  fusion_profile_ = nullptr;
   fake_skip_ = nullptr;
 
   return ret;
@@ -163,6 +164,7 @@ int ObDASFusionIter::inner_release()
   output_idx_ = 0;
   input_row_cnt_ = 0;
   output_row_cnt_ = 0;
+  fusion_profile_ = nullptr;
   fake_skip_ = nullptr;
   score_exprs_ = nullptr;
   return ret;
@@ -177,7 +179,12 @@ int ObDASFusionIter::do_table_scan()
           common::ObProfileId::HYBRID_SEARCH_FUSION_ITER, fusion_profile))) {
     LOG_WARN("failed to init runtime profile", KR(ret));
   } else {
+    fusion_profile_ = fusion_profile;
     common::ObProfileSwitcher switcher(fusion_profile);
+    SET_METRIC_VAL(common::ObMetricId::HS_FUSION_OFFSET, offset_);
+    SET_METRIC_VAL(common::ObMetricId::HS_FUSION_SIZE, size_);
+    SET_METRIC_VAL(common::ObMetricId::HS_RANK_WINDOW_SIZE, rank_window_size_);
+    SET_METRIC_VAL(common::ObMetricId::HS_FUSION_METHOD, static_cast<uint64_t>(fusion_method_));
     for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt_; ++i) {
       if (OB_NOT_NULL(children_[i]) && OB_FAIL(children_[i]->do_table_scan())) {
         LOG_WARN("failed to do table scan on child", K(ret), K(i));
@@ -199,6 +206,7 @@ int ObDASFusionIter::rescan()
           common::ObProfileId::HYBRID_SEARCH_FUSION_ITER, fusion_profile))) {
     LOG_WARN("failed to init runtime profile", KR(ret));
   } else {
+    fusion_profile_ = fusion_profile;
     common::ObProfileSwitcher switcher(fusion_profile);
     for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt_; ++i) {
       if (OB_NOT_NULL(children_[i]) && OB_FAIL(children_[i]->rescan())) {
@@ -213,6 +221,7 @@ int ObDASFusionIter::rescan()
 int ObDASFusionIter::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
+  common::ObProfileSwitcher switcher(fusion_profile_);
   if (limit_param_.limit_ >= 0 && output_row_cnt_ >= limit_param_.limit_) {
     ret = OB_ITER_END;
   } else if (!fusion_finished_ && OB_FAIL(do_fusion(false /* is_vectorized */))) {
@@ -225,6 +234,7 @@ int ObDASFusionIter::inner_get_next_row()
     } else {
       ++input_row_cnt_;
       ++output_row_cnt_;
+      INC_METRIC_VAL(common::ObMetricId::HS_OUTPUT_ROW_COUNT, 1);
     }
   }
   return ret;
@@ -233,6 +243,7 @@ int ObDASFusionIter::inner_get_next_row()
 int ObDASFusionIter::inner_get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
+  common::ObProfileSwitcher switcher(fusion_profile_);
   count = 0;
   if (size_ == 0 || rank_window_size_ == 0) {
     ret = OB_ITER_END;
@@ -258,6 +269,7 @@ int ObDASFusionIter::inner_get_next_rows(int64_t &count, int64_t capacity)
         input_row_cnt_ += count;
         output_row_cnt_ += count;
       }
+      INC_METRIC_VAL(common::ObMetricId::HS_OUTPUT_ROW_COUNT, count);
     }
   }
 

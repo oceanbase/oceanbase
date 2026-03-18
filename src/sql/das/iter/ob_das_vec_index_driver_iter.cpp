@@ -45,6 +45,7 @@ int ObDASVecIndexDriverIter::do_table_scan()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("vec index scan iter or filter iter is null", K(ret));
   } else {
+    profile_ = my_profile;
     common::ObProfileSwitcher switcher(my_profile);
     SET_METRIC_VAL(common::ObMetricId::HS_VEC_INDEX_TYPE, vec_index_type_);
     SET_METRIC_VAL(common::ObMetricId::HS_VEC_FILTER_MODE, static_cast<uint64_t>(filter_mode_));
@@ -70,6 +71,7 @@ int ObDASVecIndexDriverIter::rescan()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("vec index scan iter or filter iter is null", K(ret));
   } else {
+    profile_ = my_profile;
     common::ObProfileSwitcher switcher(my_profile);
     SET_METRIC_VAL(common::ObMetricId::HS_VEC_INDEX_TYPE, vec_index_type_);
     SET_METRIC_VAL(common::ObMetricId::HS_VEC_FILTER_MODE, static_cast<uint64_t>(filter_mode_));
@@ -214,6 +216,7 @@ int ObDASVecIndexDriverIter::init_limit_param()
 int ObDASVecIndexDriverIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
+  profile_ = nullptr;
 
   int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(vec_index_scan_iter_) && OB_FAIL(vec_index_scan_iter_->reuse())) {
@@ -266,6 +269,7 @@ int ObDASVecIndexDriverIter::inner_reuse()
 int ObDASVecIndexDriverIter::inner_release()
 {
   int ret = OB_SUCCESS;
+  profile_ = nullptr;
 
   int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(vec_index_scan_iter_) && OB_FAIL(vec_index_scan_iter_->release())) {
@@ -396,6 +400,7 @@ int ObDASVecIndexDriverIter::get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search)
 int ObDASVecIndexDriverIter::inner_get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
+  common::ObProfileSwitcher switcher(profile_);
 
   if (!ready_to_output_) {
     if (limit_param_.limit_ + limit_param_.offset_ == 0) {
@@ -454,6 +459,7 @@ int ObDASVecIndexDriverIter::inner_get_next_rows(int64_t &count, int64_t capacit
         LOG_WARN_IGNORE_ITER_END(ret, "failed to fill results to eval ctx", K(ret));
       }
     }
+    INC_METRIC_VAL(common::ObMetricId::HS_OUTPUT_ROW_COUNT, count);
   }
 
   return ret;

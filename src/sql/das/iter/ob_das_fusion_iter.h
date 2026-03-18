@@ -269,7 +269,8 @@ public:
       rowkey_is_uint64_(false),
       output_idx_(0),
       input_row_cnt_(0),
-      output_row_cnt_(0)
+      output_row_cnt_(0),
+      fusion_profile_(nullptr)
   {}
   virtual ~ObDASFusionIter() {}
 
@@ -415,6 +416,7 @@ private:
 
   int64_t input_row_cnt_;
   int64_t output_row_cnt_;
+  common::ObOpProfile<common::ObMetric> *fusion_profile_;
 };
 
 }  // namespace sql
