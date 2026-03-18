@@ -482,7 +482,6 @@ private:
       const ObTablesHandleArray &new_tables_handle,
       const bool check_continue,
       common::ObIArray<ObITable *> &out_sstables);
-  int get_mini_minor_sstables_(ObTableStoreIterator &iter) const;
   template<typename ...Args>
   int init_minor_sstable_array_with_check(ObSSTableArray &minor_sstable_array, Args&& ...args);
   int only_replace_major_(

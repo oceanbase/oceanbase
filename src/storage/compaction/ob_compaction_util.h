@@ -38,6 +38,32 @@ enum ObMergeType : uint8_t
   MERGE_TYPE_MAX
 };
 
+enum ObFillTxType : uint8_t {
+  // NORMAL type use the last sstable's end_scn as fill_tx_scn(for example, ls_inner_tablets' mini/minor)
+  FILL_TX_TYPE_NORMAL = 0,
+  FILL_TX_TYPE_DATA_MINI = 1,
+  FILL_TX_TYPE_DATA_MINOR = 2,
+  FILL_TX_TYPE_BACKFILL = 3,
+  FILL_TX_TYPE_GC_TX_DATA = 4
+};
+static const char *FillTxTypeToStr(ObFillTxType type)
+{
+  switch (type) {
+    case FILL_TX_TYPE_NORMAL:
+      return "NORMAL";
+    case FILL_TX_TYPE_DATA_MINI:
+      return "DATA_MINI";
+    case FILL_TX_TYPE_DATA_MINOR:
+      return "DATA_MINOR";
+    case FILL_TX_TYPE_BACKFILL:
+      return "BACKFILL";
+    case FILL_TX_TYPE_GC_TX_DATA:
+      return "GC_TX_DATA";
+    default:
+      return "UNKNOWN";
+  }
+}
+
 const char *merge_type_to_str(const ObMergeType &merge_type);
 inline bool is_valid_merge_type(const ObMergeType &merge_type)
 {

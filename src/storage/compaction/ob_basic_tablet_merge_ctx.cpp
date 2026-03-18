@@ -41,12 +41,12 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     need_parallel_minor_merge_(true),
     is_tenant_major_merge_(false),
     is_cs_replica_(false),
-    is_backfill_(false),
     is_delete_insert_merge_(false),
     is_ha_compeleted_(true),
     for_unittest_(false),
     is_cs_replica_force_full_merge_(false),
     merge_level_(MICRO_BLOCK_MERGE_LEVEL),
+    fill_tx_type_(FILL_TX_TYPE_NORMAL),
     merge_reason_(ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE),
     co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE),
     major_sstable_status_(ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS),
@@ -212,7 +212,7 @@ int ObStaticMergeParam::get_basic_info_from_result(
     version_range_ = get_merge_table_result.version_range_;
     scn_range_ = get_merge_table_result.scn_range_;
     snapshot_info_ = get_merge_table_result.snapshot_info_;
-    is_backfill_ = get_merge_table_result.is_backfill_;
+    fill_tx_type_ = get_merge_table_result.fill_tx_info_.type_;
     merge_scn_ = get_merge_table_result.get_merge_scn();
     rec_scn_ = get_merge_table_result.rec_scn_;
 
@@ -375,7 +375,10 @@ int64_t ObStaticMergeParam::to_string(char* buf, const int64_t buf_len) const
       }
     } else {
       J_COMMA();
-      J_KV(K_(merge_scn), K_(need_parallel_minor_merge), K_(is_backfill), K_(sstable_logic_seq));
+      J_KV(K_(merge_scn),
+           K_(need_parallel_minor_merge),
+           K_(sstable_logic_seq),
+           "fill_tx_type", compaction::FillTxTypeToStr(fill_tx_type_));
     }
     J_COMMA();
     J_KV(K_(tables_handle), KP_(schema), K_(snapshot_info), "multi_version_column_descs_cnt", multi_version_column_descs_.count(),

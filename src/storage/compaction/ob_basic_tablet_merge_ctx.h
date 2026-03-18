@@ -65,12 +65,12 @@ public:
   bool need_parallel_minor_merge_;
   bool is_tenant_major_merge_;
   bool is_cs_replica_;
-  bool is_backfill_;
   bool is_delete_insert_merge_;
   bool is_ha_compeleted_; // only used for delete insert minor merge to control multi version row recycle logic, inited from tablet meta
   bool for_unittest_;
   bool is_cs_replica_force_full_merge_;
   ObMergeLevel merge_level_;
+  ObFillTxType fill_tx_type_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
   ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type_;
   ObCOMajorSSTableStatus major_sstable_status_; // The type of major sstable, may mismatch with table schema (such as no normal col cg)
