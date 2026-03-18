@@ -26,6 +26,7 @@
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "sql/resolver/dml/ob_hint.h"
 
 namespace oceanbase {
 namespace sql {
@@ -193,6 +194,12 @@ int ObODPSJNITableRowIterator::init(const storage::ObTableScanParam *scan_param)
       }
     }
     if (OB_SUCC(ret)) {
+      // 1) Prefer value from format (set at codegen via OPT_PARAM hint, works in DAS/PX)
+      if (scan_param->external_file_format_.odps_format_.odps_jdk_storage_batch_size_ > 0) {
+        odps_jdk_storage_batch_size_ = scan_param->external_file_format_.odps_format_.odps_jdk_storage_batch_size_;
+      }
+    }
+    if (OB_SUCC(ret)) {
       int ret_more = OB_SUCCESS;
       int32_t offset_sec = 0;
       if (OB_FAIL(ObTimeConverter::str_to_offset(timezone_str_, offset_sec, ret_more,
@@ -321,6 +328,15 @@ int ObODPSJNITableRowIterator::init_required_mini_params(const ObSQLSessionInfo*
               odps_params_map_.set_refactored(ObString::make_string("api_mode"), ObString::make_string("tunnel_api"), 1))) {
         // Note: current only support tunnel api.
         LOG_WARN("failed to add api_mode to params", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObString transfer_mode_val = (odps_format.odps_data_transfer_mode_ == ObOdpsJniReader::TransferMode::ARROW_TABLE)
+          ? ObString::make_string("arrowTable")
+          : ObString::make_string("offHeapTable");
+      if (OB_FAIL(odps_params_map_.set_refactored(
+              ObString::make_string("transfer_mode"), transfer_mode_val, 1))) {
+        LOG_WARN("failed to add transfer_mode to params", K(ret));
       }
     }
   }
@@ -1261,10 +1277,14 @@ int ObODPSJNITableRowIterator::init_data_storage_reader_params(int64_t start_spl
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("failed to get odps params", K(ret));
   } else {
+    int64_t java_capacity = capacity;
+    if (odps_jdk_storage_batch_size_ > 0) {
+      java_capacity = odps_jdk_storage_batch_size_;
+    }
     // update `batch_size`, `start` and `step` to jni scanner
     ObFastFormatInt fssp(start_split);
     ObFastFormatInt fsep(end_split);
-    ObFastFormatInt fsc(capacity);
+    ObFastFormatInt fsc(java_capacity);
     ObFastFormatInt fsso(start_rows);
     ObFastFormatInt fsrc(row_count);
 
@@ -1280,8 +1300,6 @@ int ObODPSJNITableRowIterator::init_data_storage_reader_params(int64_t start_spl
     ObString temp_end_split = ObString::make_string("end_split_offset");
     ObString temp_session_str = ObString::make_string("serialized_session");
     ObString temp_capacity = ObString::make_string("capacity");
-    ObString temp_transfer_mode = ObString::make_string("transfer_mode");
-    ObString transfer_option = state_.odps_jni_scanner_->get_transfer_mode_str();
 
     ObString start_split;
     ObString end_split;
@@ -1317,8 +1335,6 @@ int ObODPSJNITableRowIterator::init_data_storage_reader_params(int64_t start_spl
       LOG_WARN("failed to add start offset", K(ret));
     } else if (OB_FAIL(odps_params_map_.set_refactored(temp_split_size, split_size, 1))) {
       LOG_WARN("failed to add split size", K(ret));
-    } else if (OB_FAIL(odps_params_map_.set_refactored(temp_transfer_mode, transfer_option, 1))) {
-      LOG_WARN("failed to add transfer mode for tunnel");
     } else if (OB_FAIL(odps_params_map_.set_refactored(temp_capacity, capacity_obstr, 1))) {
       LOG_WARN("failted to set capacity", K(ret));
     } else { /* do nothing */
@@ -1643,7 +1659,8 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
         }
       }
       LOG_TRACE("iterator of odps jni scanner is end with dummy file", K(ret));
-    } else if (OB_FAIL(build_tunnel_partition_task_state(task_idx, part_id, part_spec, start, step, capacity, session_id))) {
+    } else if (OB_FAIL(build_tunnel_partition_task_state(task_idx, part_id, part_spec, start, step, capacity,
+                                                         session_id))) {
       LOG_WARN("failed to build tunnel task");
     }
   }
@@ -1652,7 +1669,8 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
 }
 
 int ObODPSJNITableRowIterator::build_tunnel_partition_task_state(
-    int64_t task_idx, int64_t part_id, const ObString &part_spec, int64_t start, int64_t step, int64_t capacity, const ObString &session_id)
+    int64_t task_idx, int64_t part_id, const ObString &part_spec, int64_t start, int64_t step, int64_t capacity,
+    const ObString &session_id)
 {
   int ret = OB_SUCCESS;
   const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
@@ -1764,9 +1782,7 @@ int ObODPSJNITableRowIterator::init_data_tunnel_reader_params(int64_t start, int
     ObString temp_partition_spec = ObString::make_string("partition_spec");
     ObString temp_start_offset = ObString::make_string("start_offset");
     ObString temp_split_size = ObString::make_string("split_size");
-    ObString temp_transfer_mode = ObString::make_string("transfer_mode");
     ObString temp_session_id = ObString::make_string("session_id");
-    ObString transfer_option = state_.odps_jni_scanner_->get_transfer_mode_str();
 
     ObString partition_spec;
     ObString start_offset;
@@ -1790,8 +1806,6 @@ int ObODPSJNITableRowIterator::init_data_tunnel_reader_params(int64_t start, int
       LOG_WARN("failed to add start offset", K(ret));
     } else if (OB_FAIL(odps_params_map_.set_refactored(temp_split_size, split_size, 1))) {
       LOG_WARN("failed to add start offset", K(ret));
-    } else if (OB_FAIL(odps_params_map_.set_refactored(temp_transfer_mode, transfer_option, 1))) {
-      LOG_WARN("failed to add transfer mode for tunnel");
     } else if (OB_FAIL(odps_params_map_.set_refactored(temp_partition_spec, partition_spec, 1))) {
       LOG_WARN("failed to add partition spec", K(ret));
     } else if (OB_FAIL(odps_params_map_.set_refactored(temp_session_id, session_id_str, 1))) {

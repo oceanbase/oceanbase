@@ -911,6 +911,10 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && (0 <= val.get_int() && 65535 >= val.get_int());
       break;
     }
+    case ODPS_JDK_STORAGE_BATCH_SIZE: {
+      is_valid = val.is_int() && (0 < val.get_int() && 65535 >= val.get_int());
+      break;
+    }
     case OPTIMIZER_INDEX_COST_ADJ:
     case BLOOM_FILTER_RATIO: {
       is_valid = val.is_int() && (0 <= val.get_int() && 100 >= val.get_int());
@@ -988,6 +992,16 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       break;
     }
     case _PUSH_JOIN_PREDICATE: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
+    case _OB_JAVA_ODPS_DATA_TRANSFER_MODE: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("arrowTable")
+                                      || 0 == val.get_varchar().case_compare("offHeapTable"));
+      break;
+    }
+    case _USE_ODPS_JNI_CONNECTOR: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;

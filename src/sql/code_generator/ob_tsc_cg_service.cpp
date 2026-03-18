@@ -113,12 +113,29 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     } else {
       scan_ctdef.is_external_table_ = true;
       scan_ctdef.lake_table_format_ = op.get_lake_table_type();
-      const ObString &table_format_or_properties = table_schema->get_external_file_format().empty() ?
-                                            table_schema->get_external_properties() :
-                                            table_schema->get_external_file_format();
+      const ObString schema_format = table_schema->get_external_file_format().empty()
+          ? table_schema->get_external_properties()
+          : table_schema->get_external_file_format();
+      ObString table_format_or_properties = schema_format;
+      ObString effective_format;
+      const ObLogPlan *log_plan = op.get_plan();
+      if (OB_ISNULL(log_plan) || OB_ISNULL(log_plan->get_stmt()) || OB_ISNULL(log_plan->get_stmt()->get_query_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::apply_odps_hints_to_format_str(schema_format,
+              log_plan->get_stmt()->get_query_ctx()->get_global_hint().opt_params_,
+              cg_.phy_plan_->get_allocator(),
+              effective_format))) {
+        LOG_WARN("failed to apply odps hints to format str", K(ret));
+      } else if (effective_format.empty()) {
+        // do nothing for no hints applied
+      } else {
+        table_format_or_properties = effective_format;
+      }
 
       int64_t partition_num = table_schema->get_partition_num();
-      if (is_external_object_id(table_schema->get_table_id())
+      if (OB_FAIL(ret)) {
+      } else if (is_external_object_id(table_schema->get_table_id())
           && table_schema->is_partitioned_table()
           && partition_num > 0) {
         if (OB_FAIL(scan_ctdef.partition_infos_.reserve(partition_num))) {

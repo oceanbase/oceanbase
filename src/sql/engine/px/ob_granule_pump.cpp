@@ -771,6 +771,7 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args, bool check_task_exis
 int ObGranulePump::init_external_odps_table_downloader(
     ObGranulePumpArgs &args) {
   int ret = OB_SUCCESS;
+  use_odps_jni_connector_ = GCONF._use_odps_jni_connector;
   const ObTableScanSpec *tsc = NULL;
   bool is_odps_external_table = false;
   ObIArray<const ObTableScanSpec *> &scan_ops = args.op_info_.get_scan_ops();
@@ -790,9 +791,16 @@ int ObGranulePump::init_external_odps_table_downloader(
     } else if (OB_ISNULL(tsc = scan_ops.at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret));
+    } else {
+      int8_t unused_mode = 0;
+      if (OB_FAIL(ObSQLUtils::parse_odps_jni_params_from_format_str(
+              tsc->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+              use_odps_jni_connector_, unused_mode))) {
+        LOG_WARN("failed to parse odps jni params from format str", K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
-      if (!GCONF._use_odps_jni_connector) {
+      if (!use_odps_jni_connector_) {
 #if defined(OB_BUILD_CPP_ODPS)
         if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(
                 args.external_table_files_.count()))) {
@@ -951,7 +959,7 @@ void ObGranulePump::destroy()
     OB_DELETEx(GITaskGenRunner, &external_task_runners_.at(i)->get_exec_ctx().get_allocator(), external_task_runners_.at(i));
   }
   external_task_runners_.reset();
-  if (!GCONF._use_odps_jni_connector) {
+  if (!use_odps_jni_connector_) {
 #if defined (OB_BUILD_CPP_ODPS)
     if (is_odps_downloader_inited()) {
       int ret = OB_SUCCESS;
@@ -963,6 +971,7 @@ void ObGranulePump::destroy()
 #if defined (OB_BUILD_JNI_ODPS)
 #endif
   }
+  use_odps_jni_connector_ = false;
   pump_args_.reset();
 }
 

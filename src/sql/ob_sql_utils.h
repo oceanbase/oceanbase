@@ -35,6 +35,7 @@
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "share/ob_compatibility_control.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#include "sql/resolver/dml/ob_hint.h"
 
 namespace oceanbase
 {
@@ -790,6 +791,15 @@ public:
   static int get_odps_api_mode(const ObString &table_format_or_properties,
                                     bool &is_odps_external_table,
                                     ObODPSGeneralFormat::ApiMode& mode);
+  /// Parse ODPS JNI params from external_file_format_str_. Default: use_odps_jni_connector=true, odps_data_transfer_mode=0(arrowTable).
+  static int parse_odps_jni_params_from_format_str(const ObString &external_file_format_str,
+                                                    bool &use_odps_jni_connector,
+                                                    int8_t &odps_data_transfer_mode);
+  /// Apply ODPS hint params to format str at resolve stage. Returns format_str with hints injected.
+  static int apply_odps_hints_to_format_str(const ObString &original_format_str,
+                                            const ObOptParamHint &opt_params,
+                                            ObIAllocator &allocator,
+                                            ObString &result_format_str);
   static int is_odps_external_table(const uint64_t tenant_id,
                                     const uint64_t table_id,
                                     bool &is_odps_external_table);

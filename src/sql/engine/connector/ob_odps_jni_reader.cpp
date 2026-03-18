@@ -18,11 +18,11 @@
 #include <arrow/c/bridge.h>
 
 #include "ob_odps_jni_reader.h"
+#include "share/ob_define.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/jni_env/ob_java_env.h"
-#include "share/config/ob_server_config.h"
 
 namespace oceanbase {
 
@@ -37,21 +37,15 @@ ObOdpsJniReader::ObOdpsJniReader(ObString factory_class, ObString scanner_type, 
       skipped_log_params_(),
       skipped_required_params_(),
       table_meta_(),
+      cur_arrow_schema_(nullptr),
       cur_arrow_batch_(nullptr),
       cur_reader_(nullptr),
       inited_(false),
       is_opened_(false),
-      is_schema_scanner_(is_schema_scanner)
+      is_schema_scanner_(is_schema_scanner),
+      split_mode_(ObOdpsJniReader::SplitMode::RETURN_ODPS_BATCH),
+      transfer_mode_(ObOdpsJniReader::TransferMode::ARROW_TABLE)
 {
-  int ret = OB_SUCCESS;
-
-  if (0 == GCONF._ob_java_odps_data_transfer_mode.case_compare("arrowTable")) {
-    transfer_mode_ = ObOdpsJniReader::TransferMode::ARROW_TABLE;
-    split_mode_ = ObOdpsJniReader::SplitMode::RETURN_ODPS_BATCH;
-  } else {
-    transfer_mode_ = ObOdpsJniReader::TransferMode::OFF_HEAP_TABLE;
-    split_mode_ = ObOdpsJniReader::SplitMode::RETURN_OB_BATCH;
-  }
 }
 
 int ObOdpsJniReader::do_init(common::hash::ObHashMap<ObString, ObString> &params) {
@@ -94,6 +88,20 @@ int ObOdpsJniReader::do_init(common::hash::ObHashMap<ObString, ObString> &params
         LOG_WARN("failed to add access key to set", K(ret));
       } else {
         /* do nothing */
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObString transfer_mode_key = ObString::make_string("transfer_mode");
+    ObString transfer_mode_val;
+    if (OB_SUCC(params.get_refactored(transfer_mode_key, transfer_mode_val))) {
+      if (0 == transfer_mode_val.case_compare("arrowTable")) {
+        set_data_transfer_mode(ObOdpsJniReader::TransferMode::ARROW_TABLE);
+        LOG_TRACE("set transfer mode from params", K(transfer_mode_val));
+      } else {
+        set_data_transfer_mode(ObOdpsJniReader::TransferMode::OFF_HEAP_TABLE);
+        LOG_TRACE("set transfer mode from params", K(transfer_mode_val));
       }
     }
   }
@@ -306,6 +314,7 @@ int ObOdpsJniReader::do_open() {
   if (is_opened_) {
     LOG_INFO("jni scanner is already opened, skip to re-open", K(ret));
   } else {
+    cur_arrow_schema_.reset();
     if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
       LOG_WARN("failed to get jni env", K(ret));
     } else if (nullptr == env) {
@@ -368,6 +377,7 @@ int ObOdpsJniReader::do_close() {
     LOG_WARN("jni_scanner is not opened, but inited", K(ret));
     scanner_params_.reuse();
     skipped_log_params_.reuse();
+    cur_arrow_schema_.reset();
     inited_ = false;
   } else {
     JNIEnv *env = nullptr;
@@ -388,6 +398,9 @@ int ObOdpsJniReader::do_close() {
                 " cur_reader_ shoud be null");
       cur_reader_.reset();
       cur_reader_ = nullptr;
+    }
+    if (OB_SUCC(ret)) {
+      cur_arrow_schema_.reset();
     }
 
     // NOTE!!! schema scanner should not clear this part
@@ -438,7 +451,7 @@ int ObOdpsJniReader::do_get_next_split_by_ob(int64_t *read_rows, bool *eof, int 
   // return the address of meta information
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (transfer_mode_ == ObOdpsJniReader::ARROW_TABLE) {
+  if (transfer_mode_ == ObOdpsJniReader::TransferMode::ARROW_TABLE) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("arrow table do not support get next split in ob batchsize", K(ret));
   } else if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
@@ -523,13 +536,17 @@ int ObOdpsJniReader::do_get_next_split_by_odps(int64_t *read_rows, bool *eof, in
       LOG_WARN("failed to release table", K(ret));
     }
     long num_rows = 0;
+    const bool need_import_schema = OB_ISNULL(cur_arrow_schema_.get());
     struct ArrowSchema arrowSchema = {};
     struct ArrowArray arrowArray = {};
     if (OB_SUCC(ret)) {
       // 这里一旦发动就必须要读取，先在假定num_rows等于0是最后一个块数据，这个时候结构为空
+      const jlong schema_addr = need_import_schema
+          ? static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchema))
+          : static_cast<jlong>(0);
       num_rows = env->CallLongMethod(jni_scanner_obj_,
           jni_scanner_get_next_arrow_,
-          static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchema)),
+          schema_addr,
           static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArray)));
       if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         ret = OB_JNI_ERROR;
@@ -538,27 +555,67 @@ int ObOdpsJniReader::do_get_next_split_by_odps(int64_t *read_rows, bool *eof, in
     }
     if (OB_FAIL(ret)) {
     } else if (num_rows != 0) {
-      if (OB_NOT_NULL(arrowSchema.format)) {
-        arrow::Result<std::shared_ptr<arrow::RecordBatch>> resultImportVectorSchemaRoot
-          = arrow::ImportRecordBatch(&arrowArray, &arrowSchema);
-        if (resultImportVectorSchemaRoot.ok()) {
-          cur_reader_ = resultImportVectorSchemaRoot.ValueOrDie();
+      if (need_import_schema) {
+        arrow::Result<std::shared_ptr<arrow::Schema>> result_import_schema = arrow::ImportSchema(&arrowSchema);
+        if (result_import_schema.ok()) {
+          cur_arrow_schema_ = result_import_schema.ValueOrDie();
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to import schema", K(ret), K(result_import_schema.status().ToString().c_str()));
+        }
+      } else if (OB_ISNULL(cur_arrow_schema_.get())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null schema in non-first arrow batch", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+
+        // Some producers may return a top-level StructArray with non-zero
+        // null_count, which ImportRecordBatch rejects. Fallback to
+        // ImportArray + RecordBatch::Make.
+        arrow::Result<std::shared_ptr<arrow::Array>> result_import_array =
+            arrow::ImportArray(&arrowArray, arrow::struct_(cur_arrow_schema_->fields()));
+        if (result_import_array.ok()) {
+          std::shared_ptr<arrow::StructArray> struct_array =
+              std::dynamic_pointer_cast<arrow::StructArray>(result_import_array.ValueOrDie());
+          if (OB_ISNULL(struct_array.get())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to import struct array for record batch", K(ret));
+          } else {
+            if (struct_array->null_count() > 0) {
+              LOG_WARN("top-level struct array has null rows, fallback to make record batch from fields",
+                        K(struct_array->null_count()));
+            }
+            cur_reader_ = arrow::RecordBatch::Make(cur_arrow_schema_,
+                                                    struct_array->length(),
+                                                    struct_array->fields());
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to import record batch and import array",
+                    K(ret),
+                    K(result_import_array.status().ToString().c_str()));
+        }
+
+
+        if (OB_SUCC(ret)) {
           long cur_rows = cur_reader_->num_rows();
           if (num_rows != cur_rows) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to get next batch data, num_rows != cur_rows", K(ret));
           }
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Failed to import record batch", K(resultImportVectorSchemaRoot.status().ToString().c_str()));
         }
-        if (OB_SUCC(ret)) {
-          remain_total_rows_ = num_rows;
-          start_offset_ = 0;
-        }
+      }
+
+      if (OB_SUCC(ret)) {
+        remain_total_rows_ = num_rows;
+        start_offset_ = 0;
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("UNEXPECTED null pointer of arrow", K(ret));
+        if (OB_NOT_NULL(arrowArray.release)) {
+          arrowArray.release(&arrowArray);
+        }
+        if (need_import_schema && OB_NOT_NULL(arrowSchema.release)) {
+          arrowSchema.release(&arrowSchema);
+        }
       }
     } else {
       // num_rows == 0, 说明已经读完了
@@ -589,7 +646,6 @@ int ObOdpsJniReader::do_get_next_split_by_odps(int64_t *read_rows, bool *eof, in
       remain_total_rows_ = 0;
     }
   }
-
   LOG_DEBUG("get one odps size batch", K(remain_total_rows_), K(start_offset_), K(*eof), K(*read_rows));
   return ret;
 }

@@ -189,8 +189,9 @@ int GIOdpsParallelTaskGen::odps_one_task_processing(
       odps_scan_task->last_lineno_ = 0;
     } else {
       ObString session_id = odps_scan_task->session_id_;
+      const bool use_odps_jni_connector = external_odps_format_.odps_format_.use_odps_jni_connector_;
       if (session_id.empty()) {
-        if (GCONF._use_odps_jni_connector) {
+        if (use_odps_jni_connector) {
 #if defined(OB_BUILD_JNI_ODPS)
           // JniRowTableIter::fetch_odps_row_count_and_session_id
           sql::ObODPSJNITableRowIterator odps_driver;
@@ -250,7 +251,7 @@ int GIOdpsParallelTaskGen::odps_one_task_processing(
 #endif
         }
       } else { // session id not empty
-        if (GCONF._use_odps_jni_connector) {
+        if (use_odps_jni_connector) {
 #if defined(OB_BUILD_JNI_ODPS)
           // do nothing
 #else

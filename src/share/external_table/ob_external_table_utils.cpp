@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX SQL
 #include "share/external_table/ob_external_table_utils.h"
 
+#include "sql/ob_sql_utils.h"
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_schema_struct.h"
@@ -496,13 +497,22 @@ int ObExternalTableUtils::prepare_single_scan_task_(const uint64_t tenant_id,
   }
   bool is_odps_external_table = false;
   ObODPSGeneralFormat::ApiMode odps_api_mode;
+  bool use_odps_jni_connector = true;
+  int8_t unused_mode = 0;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObSQLUtils::get_odps_api_mode(table_format_or_properties, is_odps_external_table, odps_api_mode))) {
     LOG_WARN("failed to check is odps external table or not", K(ret), K(table_format_or_properties));
+  } else if (OB_FAIL(ObSQLUtils::parse_odps_jni_params_from_format_str(
+          table_format_or_properties, use_odps_jni_connector, unused_mode))) {
+    LOG_WARN("failed to parse odps jni params from format str", K(ret));
   } else if (!file_urls.empty() && is_odps_external_table) {
     const ExprFixedArray &ext_file_column_expr = das_ctdef.pd_expr_spec_.ext_file_column_exprs_;
-    if (!GCONF._use_odps_jni_connector) {
+    if (!use_odps_jni_connector) {
 #if defined (OB_BUILD_CPP_ODPS)
+      if (odps_api_mode != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("storage api is not supported", K(ret));
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); ++i) {
         const ObExternalFileInfo &external_info = file_urls.at(i);
         ObOdpsScanTask *scan_task = NULL;
@@ -829,11 +839,23 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
   int64_t table_total_row_count = 0;
   ObString session_str;
   ObString part_str;
+  bool use_odps_jni_connector = true;
+  int8_t odps_data_transfer_mode = 0;
+  if (OB_SUCC(ret)) {
+    const ObString &format_str = scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_;
+    if (OB_FAIL(ObSQLUtils::parse_odps_jni_params_from_format_str(
+            format_str, use_odps_jni_connector, odps_data_transfer_mode))) {
+      LOG_WARN("failed to parse odps jni params from format str", K(ret));
+    }
+  }
 
   if (OB_SUCC(ret)) {
-    if (!GCONF._use_odps_jni_connector) {
+    if (!use_odps_jni_connector) {
 #if defined (OB_BUILD_CPP_ODPS)
-      if (OB_FAIL(fetch_odps_all_partitions_info_for_task_assign(
+      if (odps_api_mode != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("storage api is not supported", K(ret));
+      } else if (OB_FAIL(fetch_odps_all_partitions_info_for_task_assign(
                                               dfo.get_allocator(),
                                               scan_ops.at(0),
                                               exec_ctx,
@@ -920,7 +942,7 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
   if (OB_FAIL(ret)) {
     /* do nothing */
   } else {
-    if (!GCONF._use_odps_jni_connector || odps_api_mode == sql::ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+    if (!use_odps_jni_connector || odps_api_mode == sql::ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
       if (one_partition_per_thread) {
         int64_t sqc_idx = 0;
         int64_t sqc_count = sqcs.count();
@@ -1026,7 +1048,8 @@ int ObExternalTableUtils::fetch_odps_all_partitions_info_for_task_assign(
 }
 
 int ObExternalTableUtils::split_qc_for_odps_to_sqcs_storage_api_byte(int64_t split_task_count,
-    const ObString& session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta> &sqcs, ObIAllocator &range_allocator)
+    const ObString& session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta> &sqcs,
+    ObIAllocator &range_allocator)
 {
   int ret = OB_SUCCESS;
   int64_t sqc_count = sqcs.count();
@@ -1056,7 +1079,8 @@ int ObExternalTableUtils::split_qc_for_odps_to_sqcs_storage_api_byte(int64_t spl
 }
 
 int ObExternalTableUtils::split_qc_for_odps_to_sqcs_storage_api_row(int64_t table_total_row_count,
-    const ObString& session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta> &sqcs, int parallel, ObIAllocator &range_allocator)
+    const ObString& session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta> &sqcs, int parallel,
+    ObIAllocator &range_allocator)
 {
   int ret = OB_SUCCESS;
   int64_t sqc_count = sqcs.count();
