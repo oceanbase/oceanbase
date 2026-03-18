@@ -19,7 +19,7 @@ env:
   MYSQLTEST_SLICES: "4"
   FARM_TASK_DIR: ${{ github.workspace }}/farm_build/${{ github.run_id }}
   cache-name: cache-deps
-  SKIP_FARM_COMPILE: "true"
+  SKIP_FARM_COMPILE: "false"
 
 jobs:
   farm-setup:
