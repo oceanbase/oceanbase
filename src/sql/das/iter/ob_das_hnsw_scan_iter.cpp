@@ -972,6 +972,7 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
   index_ctx.data_tablet_id_ = com_aux_vec_tablet_id_;
   bool ls_leader = true;
 
+  DEBUG_SYNC(VECTOR_INDEX_QUERY_BEFORE_GET_ADAPTOR);
   if (OB_FAIL(vec_index_service->acquire_adapter_guard(ls_id_, index_ctx, adaptor_guard, &vec_index_param_, dim_))) {
     LOG_WARN("failed to get ObPluginVectorIndexAdapter", K(ret), K(ls_id_), K(index_ctx));
   } else {
@@ -1003,17 +1004,63 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
       }
     }
 
+    if (OB_SUCC(ret)) {
+      SCN replace_scn = adaptor->get_replace_scn();
+      if (replace_scn.is_valid() && replace_scn > ada_ctx.get_scn()) {
+        // Adaptor is newer, return OB_SCHEMA_EAGAIN to retry
+        ret = OB_SCHEMA_EAGAIN;
+        LOG_INFO("adaptor replace scn is greater than query scn, retry", K(ret), K(replace_scn), K(ada_ctx.get_scn()));
+      }
+    }
+
     if (OB_FAIL(ret)) {
     } else {
+      DEBUG_SYNC(VECTOR_INDEX_QUERY_BEFORE_LOCK);
       RWLock::RLockGuard lock_guard(adaptor->get_query_lock());
-      if (is_pre_filter() || is_in_filter()) {
-        if (OB_FAIL(process_adaptor_state_pre_filter(&ada_ctx, adaptor, is_vectorized))) {
-          LOG_WARN("hnsw pre filter failed to query result.", K(ret));
+
+      // After acquiring query_lock, re-check if the adapter is still the latest one in map.
+      // If it has been replaced, check the latest adapter's replace_scn to decide which adapter to use.
+      ObPluginVectorIndexAdapterGuard latest_adaptor_guard;
+      bool query_executed = false;
+      if (OB_FAIL(vec_index_service->acquire_adapter_guard(ls_id_, index_ctx, latest_adaptor_guard, &vec_index_param_, dim_))) {
+        LOG_WARN("failed to re-acquire latest adapter guard",
+                 K(ret), K(ls_id_), K(index_ctx), K(vec_index_param_), K(dim_));
+      } else {
+        ObPluginVectorIndexAdaptor *latest_adaptor = latest_adaptor_guard.get_adatper();
+        if (OB_ISNULL(latest_adaptor)) {
+          ret = OB_BAD_NULL_ERROR;
+          LOG_WARN("latest adaptor is null", K(ret));
+        } else if (latest_adaptor != adaptor) {
+          SCN latest_replace_scn = latest_adaptor->get_replace_scn();
+          if (latest_replace_scn.is_valid() && latest_replace_scn <= ada_ctx.get_scn()) {
+            RWLock::RLockGuard latest_lock_guard(latest_adaptor->get_query_lock());
+            adaptor = latest_adaptor;
+            LOG_INFO("adapter has been replaced, use latest adapter", K(latest_replace_scn), K(ada_ctx.get_scn()), KP(latest_adaptor));
+
+            if (is_pre_filter() || is_in_filter()) {
+              if (OB_FAIL(process_adaptor_state_pre_filter(&ada_ctx, adaptor, is_vectorized))) {
+                LOG_WARN("hnsw pre filter failed to query result.", K(ret));
+              }
+            } else if (OB_FAIL(process_adaptor_state_post_filter(&ada_ctx, adaptor, is_vectorized))) {
+              LOG_WARN("hnsw post filter failed to query result.", K(ret));
+            }
+            query_executed = true;
+          } else {
+            LOG_INFO("latest adapter is too new, use first adapter", K(latest_replace_scn), K(ada_ctx.get_scn()), KP(latest_adaptor));
+          }
         }
-      // for compatibility, do not check by vec_aux_ctdef.is_post_filter, use is_pre_filter_ instead
-      // because the vec_type_ is not serialize in the vec_ctdef in version 435, making it impossible to use this flag to check whether it is pre/post
-      } else if (OB_FAIL(process_adaptor_state_post_filter(&ada_ctx, adaptor, is_vectorized))) {
-        LOG_WARN("hnsw post filter failed to query result.", K(ret));
+      }
+
+      if (OB_SUCC(ret) && !query_executed) {
+        if (is_pre_filter() || is_in_filter()) {
+          if (OB_FAIL(process_adaptor_state_pre_filter(&ada_ctx, adaptor, is_vectorized))) {
+            LOG_WARN("hnsw pre filter failed to query result.", K(ret));
+          }
+        // for compatibility, do not check by vec_aux_ctdef.is_post_filter, use is_pre_filter_ instead
+        // because the vec_type_ is not serialize in the vec_ctdef in version 435, making it impossible to use this flag to check whether it is pre/post
+        } else if (OB_FAIL(process_adaptor_state_post_filter(&ada_ctx, adaptor, is_vectorized))) {
+          LOG_WARN("hnsw post filter failed to query result.", K(ret));
+        }
       }
     }
   }

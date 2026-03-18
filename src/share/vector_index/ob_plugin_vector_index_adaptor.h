@@ -383,6 +383,7 @@ public:
   void set_is_refresh_adaptor(const bool is_refresh_adaptor) { is_refresh_adaptor_ = is_refresh_adaptor; }
   bool get_is_refresh_adaptor() { return is_refresh_adaptor_; }
   void set_scn(const SCN scn) { scn_ = scn; }
+  SCN get_scn() const { return scn_; }
 
   inline void set_sparse_vector(const bool is_sparse) { is_sparse_vector_ = is_sparse; }
 

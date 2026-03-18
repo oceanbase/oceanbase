@@ -2696,6 +2696,8 @@ int ObVecIndexAsyncTask::execute_exchange()
     }
     tx_desc = nullptr;
 
+
+    DEBUG_SYNC(ASYNC_TASK_BEFORE_REPLACE_OLD_ADAPTOR);
     RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
     if (OB_FAIL(ret)) {
     } else if (OB_FALSE_IT(new_adapter_->update_can_skip(NOT_SKIP))) { // can skip only use when create vector index and no dml
