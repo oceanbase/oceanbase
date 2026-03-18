@@ -2063,3 +2063,41 @@ DEF_COMMAND(SERVER, push_ss_gc_last_succ_scn, 1, "tenant_id:succ_scn # push ss g
   return ret;
 }
 #endif
+
+// clear_transfer_meta_info
+// @params [in]  tenant_id, which tenant to modify
+// @params [in]  ls_id, which log stream to modify
+DEF_COMMAND(SERVER, clear_transfer_meta_info, 1, "tenant_id:ls_id # clear_transfer_meta_info")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObAdminClearTransferMetaInfoOpArg arg;
+  uint64_t tenant_id_to_set = OB_INVALID_TENANT_ID;
+  int64_t ls_id_to_set = 0;
+
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id, ls_id");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (2 != sscanf(arg_str.c_str(), "%ld:%ld", &tenant_id_to_set, &ls_id_to_set)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()), K(cmd_.c_str()),
+               K(tenant_id_to_set), K(ls_id_to_set));
+  } else {
+    share::ObLSID ls_id(ls_id_to_set);
+    if (OB_INVALID_ID == tenant_id_to_set || !ls_id.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "argument is invalid", K(ret), K(tenant_id_to_set), K(ls_id));
+    } else if (OB_FAIL(arg.set(tenant_id_to_set, ls_id))) {
+      COMMON_LOG(WARN, "failed to set clear transfer meta info op arg", K(ret), K(tenant_id_to_set), K(ls_id));
+    } else if (OB_FAIL(client_->admin_clear_transfer_meta_info_op(arg))) {
+      COMMON_LOG(ERROR, "send req fail", K(ret));
+    }
+  }
+  COMMON_LOG(INFO, "clear_transfer_meta_info", K(ret), K(arg));
+  return ret;
+}

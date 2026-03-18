@@ -235,7 +235,7 @@ bool ObTabletAbortTransferHelper::check_can_do_tx_end(
   int64_t pos = 0;
   ObTransferUtils::set_transfer_module();
 
-  LOG_INFO("check can do finish transfer in tx end", K(is_willing_to_commit), K(for_replay), K(log_scn));
+  LOG_INFO("check can do abort transfer in tx end", K(is_willing_to_commit), K(for_replay), K(log_scn));
   if (OB_ISNULL(buf) || buf_len < 0 || (for_replay && !log_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check can replay finish transfer in commit get invalid argument", K(ret), KP(buf), K(buf_len), K(for_replay), K(log_scn));

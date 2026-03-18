@@ -4342,5 +4342,41 @@ int ObService::refresh_service_name(
   return ret;
 }
 
+int ObService::ob_admin_clear_transfer_meta_info(
+    const obrpc::ObAdminClearTransferMetaInfoOpArg &arg)
+{
+  LOG_INFO("start ob_admin_clear_transfer_meta_info", K(arg));
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(arg));
+  } else if (arg.tenant_id_ != MTL_ID() && OB_FAIL(guard.switch_to(arg.tenant_id_))) {
+    LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  } else {
+    ObLSService *ls_service = MTL(ObLSService *);
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+
+    if (OB_ISNULL(ls_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls service should not be NULL", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      LOG_WARN("get ls failed", K(ret), K(arg));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", K(ret), K(arg), K(ls_handle));
+    } else if (OB_FAIL(ls->admin_clear_transfer_meta_info())) {
+      LOG_WARN("failed to do admin clear transfer meta info", K(ret), K(arg), KPC(ls));
+    }
+  }
+  return ret;
+}
+
+
 }// end namespace observer
 }// end namespace oceanbase

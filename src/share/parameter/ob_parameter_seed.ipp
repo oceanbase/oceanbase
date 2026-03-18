@@ -3446,3 +3446,7 @@ DEF_STR(ob_vector_search_strategy, OB_TENANT_PARAMETER, "LATENCY_FIRST",
 DEF_TIME(_vector_pre_filtering_timeout, OB_TENANT_PARAMETER, "50ms", "[10ms,)",
         "Control the period of pre-filtering stage in vector index search. Range: [10ms, )",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_BOOL(inject_latency_before_on_success, OB_TENANT_PARAMETER, "False",
+          "errsim to inject latency before on success",
+          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

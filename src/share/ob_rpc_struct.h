@@ -15390,6 +15390,21 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchDetectSessionAliveResult);
 };
 
+struct ObAdminClearTransferMetaInfoOpArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminClearTransferMetaInfoOpArg();
+  ~ObAdminClearTransferMetaInfoOpArg();
+  int set(const uint64_t tenant_id,
+          const share::ObLSID &ls_id);
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
 
 }//end namespace obrpc
 }//end namespace oceanbase

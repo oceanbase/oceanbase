@@ -376,6 +376,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_NESTED_MVIEW_MDS, ObCheckNestedMViewMdsP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_VALIDATE_BACKUP_LS_TASK, ObRpcBackupLSValidateP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_VALIDATE_BACKUP_LS_TASK_RES, ObRpcBackupValidateLSResP);
 
+OB_DEFINE_PROCESSOR_S(Srv, OB_HA_CLEAR_TRANSFER_META_INFO, ObAdminClearTransferMetaInfoP);
 } // end of namespace observer
 } // end of namespace oceanbase
 

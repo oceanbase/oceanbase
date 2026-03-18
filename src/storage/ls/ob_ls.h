@@ -1087,6 +1087,7 @@ public:
   }
   CONST_DELEGATE_WITH_RET(ls_meta_, get_transfer_meta, int);
 
+  DELEGATE_WITH_RET(ls_meta_, admin_clear_transfer_meta_info, int);
 
   int set_ls_migration_gc(bool &allow_gc);
   int inner_check_allow_read_(

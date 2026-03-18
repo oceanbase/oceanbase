@@ -323,3 +323,4 @@
   RPC_S(PR5 write_backup_dest_format_file, OB_WRITE_BACKUP_DEST_FORMAT_FILE, (obrpc::ObRemoteCheckBackupDestValidityArg));
   RPC_S(PR5 validate_backup_ls_task, OB_VALIDATE_BACKUP_LS_TASK, (ObBackupValidateLSArg));
   RPC_S(PR5 report_backup_validate_over, OB_VALIDATE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));
+  RPC_S(PR5 admin_clear_transfer_meta_info_op, OB_HA_CLEAR_TRANSFER_META_INFO, (obrpc::ObAdminClearTransferMetaInfoOpArg));

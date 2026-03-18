@@ -29,14 +29,14 @@ namespace mds
 ObAbortTransferInMdsCtx::ObAbortTransferInMdsCtx()
     : MdsCtx(),
       version_(ObAbortTransferInMdsCtxVersion::CURRENT_CTX_VERSION),
-      redo_scn_(share::SCN::base_scn())
+      redo_scn_()
 {
 }
 
 ObAbortTransferInMdsCtx::ObAbortTransferInMdsCtx(const MdsWriter &writer)
     : MdsCtx(writer),
       version_(ObAbortTransferInMdsCtxVersion::CURRENT_CTX_VERSION),
-      redo_scn_(share::SCN::base_scn())
+      redo_scn_()
 
 {
 }

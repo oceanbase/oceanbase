@@ -129,6 +129,7 @@ public:
       const uint64_t data_version);
   int get_transfer_meta_info(ObLSTransferMetaInfo &trasfer_meta_info) const;
   int cleanup_transfer_meta_info(const share::SCN &replay_scn);
+  int admin_clear_transfer_meta_info();
   ObMajorMVMergeInfo get_major_mv_merge_info() const;
   int set_major_mv_merge_scn(const SCN &major_mv_merge_scn);
   int set_major_mv_merge_scn_safe_calc(const SCN &major_mv_merge_scn_safe_calc);

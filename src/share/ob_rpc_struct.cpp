@@ -15294,5 +15294,43 @@ int ObBatchDetectSessionAliveResult::init(int64_t count)
   return ret;
 }
 
+ObAdminClearTransferMetaInfoOpArg::ObAdminClearTransferMetaInfoOpArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_()
+{
+}
+
+ObAdminClearTransferMetaInfoOpArg::~ObAdminClearTransferMetaInfoOpArg()
+{
+}
+
+void ObAdminClearTransferMetaInfoOpArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+}
+
+bool ObAdminClearTransferMetaInfoOpArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_
+      && ls_id_.is_valid();
+}
+
+int ObAdminClearTransferMetaInfoOpArg::set(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("set admin clear transfer meta info arg get invalid argument", K(ret), K(tenant_id), K(ls_id));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;;
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObAdminClearTransferMetaInfoOpArg, tenant_id_, ls_id_);
+
 }//end namespace obrpc
 }//end namespace oceanbase

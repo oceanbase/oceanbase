@@ -314,6 +314,8 @@ public:
       const obrpc::ObAdminUnlockMemberListOpArg &arg);
   int check_server_empty(bool &server_empty);
   int change_external_storage_dest(obrpc::ObAdminSetConfigArg &arg);
+  int ob_admin_clear_transfer_meta_info(
+      const obrpc::ObAdminClearTransferMetaInfoOpArg &arg);
 
 private:
   int inner_fill_tablet_info_(

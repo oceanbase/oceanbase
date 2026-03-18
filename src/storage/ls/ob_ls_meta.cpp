@@ -1118,6 +1118,28 @@ int ObLSMeta::cleanup_transfer_meta_info(const share::SCN &replay_scn)
   return ret;
 }
 
+int ObLSMeta::admin_clear_transfer_meta_info()
+{
+  int ret = OB_SUCCESS;
+  bool need_update = true;
+  ObReentrantWLockGuard update_guard(update_lock_);
+  if (OB_FAIL(check_can_update_())) {
+    LOG_WARN("ls meta cannot update", K(ret), K(*this));
+  } else if (!transfer_meta_info_.is_in_trans()) {
+    FLOG_INFO("transfer meta info is not in trans, no need clear", KPC(this));
+  } else if (need_update) {
+    ObLSMeta tmp(*this);
+    if (OB_FAIL(tmp.transfer_meta_info_.cleanup_transfer_info())) {
+      LOG_WARN("failed to set transfer meta info", K(ret), K(tmp));
+    } else if (OB_FAIL(write_slog_(tmp))) {
+      LOG_WARN("rebuild_info write slog failed", K(ret));
+    } else {
+      transfer_meta_info_ = tmp.transfer_meta_info_;
+      FLOG_INFO("admin clear transfer meta info success", K(transfer_meta_info_), KPC(this));
+    }
+  }
+  return ret;
+}
 
 int ObLSMeta::check_ls_need_online(bool &need_online) const
 {

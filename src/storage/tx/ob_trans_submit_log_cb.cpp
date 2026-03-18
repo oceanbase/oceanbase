@@ -185,6 +185,17 @@ int ObTxLogCb::on_success()
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "ctx is null", K(ret), KPC(part_ctx));
     } else {
+#ifdef ERRSIM
+    const uint64_t tenant_id = MTL_ID();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      const bool need_inject_latency = tenant_config->inject_latency_before_on_success;
+      if (need_inject_latency) {
+        STORAGE_LOG(ERROR, "errsim : inject latency before on success", K(ret));
+        ob_usleep(500 * 1000); //500ms
+      }
+    }
+#endif
       if (OB_FAIL(part_ctx->on_success(this))) {
         TRANS_LOG(WARN, "sync log success callback error", K(ret), K(tx_id), K(ls_id), K(log_ts));
       }
