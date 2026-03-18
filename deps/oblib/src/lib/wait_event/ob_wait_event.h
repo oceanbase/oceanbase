@@ -211,6 +211,7 @@ WAIT_EVENT_DEF(GI_TASK_REBALANCER_COND_WAIT, 18264, "gi task rebalancer cond wai
 WAIT_EVENT_DEF(PX_SQC_ASYNC_PROXY_COND_WAIT, 18265, "px sqc async proxy cond wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(ODPS_PARTITION_DOWNLOADER_COND_WAIT, 18266, "odps partition downloader cond wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(GI_PARALLEL_TASK_STAGE_COND, 18267, "gi parallel task stage cond", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(GI_STAGE_COND_WAIT, 18268, "gi stage cond wait", "address", "", "", CONCURRENCY, true, true)
 
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)
