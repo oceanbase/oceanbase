@@ -357,7 +357,7 @@ public:
 private:
   // Set restore status to EMPTY for those committed tablets whose restore status is FULL, 
   // but transfer table is not replaced.
-  int set_empty_for_transfer_tablets_();
+  int set_empty_for_transfer_or_split_tablets_();
   int report_total_tablet_cnt_();
 
 private:
