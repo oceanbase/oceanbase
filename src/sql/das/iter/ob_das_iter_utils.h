@@ -263,21 +263,21 @@ private:
                                     common::ObIAllocator &alloc,
                                     const ObDASBaseCtDef *attach_ctdef,
                                     ObDASBaseRtDef *attach_rtdef,
+                                    const ObDASVecAuxScanCtDef *vec_aux_ctdef,
                                     const ObDASRelatedTabletID &related_tablet_ids,
                                     transaction::ObTxDesc *trans_desc,
                                     transaction::ObTxReadSnapshot *snapshot,
-                                    ObDASIter *&iter_tree,
-                                    const bool in_vec_pre_filter = false);
+                                    ObDASIter *&iter_tree);
 
   static int create_gis_lookup_tree(ObTableScanParam &scan_param,
                                     common::ObIAllocator &alloc,
                                     const ObDASBaseCtDef *attach_ctdef,
                                     ObDASBaseRtDef *attach_rtdef,
+                                    const ObDASVecAuxScanCtDef *vec_aux_ctdef,
                                     const ObDASRelatedTabletID &related_tablet_ids,
                                     transaction::ObTxDesc *trans_desc,
                                     transaction::ObTxReadSnapshot *snapshot,
-                                    ObDASIter *&iter_tree,
-                                    const bool in_vec_pre_filter = false);
+                                    ObDASIter *&iter_tree);
   static int create_vec_lookup_tree(ObTableScanParam &scan_param,
                                     common::ObIAllocator &alloc,
                                     const ObDASBaseCtDef *attach_ctdef,
@@ -316,6 +316,7 @@ private:
                                         const ObDASBaseCtDef *inv_idx_ctdef,
                                         ObDASBaseRtDef *inv_idx_rtdef,
                                         const ObDASScanCtDef *data_table_ctdef,
+                                        const ObDASVecAuxScanCtDef *vec_aux_ctdef,
                                         const ObDASRelatedTabletID &related_tablet_ids,
                                         transaction::ObTxDesc *trans_desc,
                                         transaction::ObTxReadSnapshot *snapshot,

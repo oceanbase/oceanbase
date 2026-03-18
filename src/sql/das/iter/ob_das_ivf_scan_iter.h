@@ -78,7 +78,8 @@ public:
         data_filter_rtdef_(nullptr),
         vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
         vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
-        is_primary_index_(false)
+        is_primary_index_(false),
+        strategy_(ObVecIdxQueryStrategy::RECALL_FIRST)
   {}
 
   virtual bool is_valid() const override
@@ -123,6 +124,7 @@ public:
   ObVecIndexType vec_index_type_;
   ObVecIdxAdaTryPath vec_idx_try_path_;
   bool is_primary_index_;
+  ObVecIdxQueryStrategy strategy_;
 
 };
 
@@ -355,7 +357,8 @@ public:
         search_param_(),
         similarity_threshold_(0),
         scan_tablet_size_(1),
-        max_scan_vectors_(0)
+        max_scan_vectors_(0),
+        strategy_(ObVecIdxQueryStrategy::LATENCY_FIRST)
   {
     dis_type_ = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
     saved_rowkeys_.set_attr(ObMemAttr(MTL_ID(), "VecIdxKeyRanges"));
@@ -485,12 +488,15 @@ protected:
   inline bool is_iter_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER
                       || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER);}
   inline bool check_if_can_retry() { return is_adaptive_filter() && (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER
-                                                                 || vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);}
+                                                                 || vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER)
+                                                                 && (strategy_ == ObVecIdxQueryStrategy::RECALL_FIRST ||
+                                                                    (strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER));}
   int reset_filter_path();
   int check_iter_filter_need_retry();
   int check_pre_filter_need_retry();
   int updata_vec_exec_ctx(ObPlanStat* plan_stat);
   inline double get_default_selectivity_rate() const { return ObVecIdxExtraInfo::get_default_selectivity_rate(vec_index_param_.type_); }
+  virtual void reuse_cid_ctx();
 
 protected:
   static const int64_t CENTROID_PRI_KEY_CNT = 1;
@@ -586,6 +592,7 @@ protected:
   float similarity_threshold_;
   uint64_t scan_tablet_size_;
   int64_t max_scan_vectors_;
+  ObVecIdxQueryStrategy strategy_;
 };
 
 class ObDASIvfScanIter : public ObDASIvfBaseScanIter
@@ -636,6 +643,7 @@ protected:
     const int64_t rowkey_cnt,
     ObRowkey &main_rowkey,
     ObString &com_key);
+  virtual void reuse_cid_ctx() override;
 protected:
   // cid is begin with 0, so near_cid_vec_dist_ count is nlist + 1
   common::ObArrayWrap<bool> near_cid_dist_;
@@ -744,6 +752,7 @@ protected:
     ObIvfCacheMgrGuard &pre_cache_guard,
     ObIvfCentCache *&pre_cent_cache,
     bool &pre_compute_table);
+  virtual void reuse_cid_ctx() override;
 private:
   // in pq_code table
   static const int64_t PQ_CENTROID_VEC_IDX = 1;

@@ -3040,7 +3040,7 @@ DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETE
                      "values: REQUEST, OBJECT",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "20000",
+DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "1000",
                     common::ObHNSWIterFilterScanNumChecker,
                     "The upper limit of hnsw iter-filter search nums. Range: [0,)",
                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3196,7 +3196,7 @@ DEF_CAP(syslog_sync_size_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
         "When the accumulated syslog data reaches this threshold, the system automatically performs disk synchronization."
         "Value 0 disables this function.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "100000",
+DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "1000",
         "The upper limit of ivf iter-filter search nums. Range: [0,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_write_throttle_by_pending_log_size_limit, OB_TENANT_PARAMETER, "0", "[0B,)",
@@ -3217,3 +3217,11 @@ DEF_BOOL(_enable_foreign_key_gts_opt, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_nested_sql_local_optimize, OB_TENANT_PARAMETER, "False",
          "enable or disable nested sql use local plan first",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR(ob_vector_search_strategy, OB_TENANT_PARAMETER, "RECALL_FIRST",
+        "The strategy of vector index searching. If it is set to RECALL_FIRST, which is default value, the search strategy is deep-search mode."
+        "If it is set to LATENCY_FIRST, the search strategy is response-first mode.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "RECALL_FIRST, LATENCY_FIRST");
+DEF_TIME(_vector_pre_filtering_timeout, OB_TENANT_PARAMETER, "50ms", "[10ms,)",
+        "Control the period of pre-filtering stage in vector index search. Range: [10ms, )",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
