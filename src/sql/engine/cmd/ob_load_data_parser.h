@@ -207,7 +207,7 @@ struct ObCSVGeneralFormat {
     GZIP = 2,
     DEFLATE = 3,
     ZSTD = 4,
-    SNAPPY = 5,
+    SNAPPY_BLOCK = 5,
   };
   enum class ObCSVBinaryFormat {
     DEFAULT = 0,

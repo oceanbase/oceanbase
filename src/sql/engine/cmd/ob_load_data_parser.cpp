@@ -1162,7 +1162,7 @@ const char *compression_algorithm_to_string(ObCSVGeneralFormat::ObCSVCompression
     case ObCSVGeneralFormat::ObCSVCompression::GZIP:    return "GZIP";
     case ObCSVGeneralFormat::ObCSVCompression::DEFLATE: return "DEFLATE";
     case ObCSVGeneralFormat::ObCSVCompression::ZSTD:    return "ZSTD";
-    case ObCSVGeneralFormat::ObCSVCompression::SNAPPY:  return "SNAPPY";
+    case ObCSVGeneralFormat::ObCSVCompression::SNAPPY_BLOCK:  return "SNAPPY_BLOCK";
     default:                                            return "INVALID";
   }
 }
@@ -1183,8 +1183,8 @@ int compression_algorithm_from_string(ObString compression_name,
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::ZSTD;
   } else if (0 == compression_name.case_compare("auto")) {
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::AUTO;
-  } else if (0 == compression_name.case_compare("snappy")) {
-    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::SNAPPY;
+  } else if (0 == compression_name.case_compare("snappy_block")) {
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::SNAPPY_BLOCK;
   } else {
     ret = OB_INVALID_ARGUMENT;
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::INVALID;
@@ -1255,7 +1255,7 @@ int compression_algorithm_from_suffix(ObString filename,
   } else if (filename.suffix_match_ci(".zst") || filename.suffix_match_ci(".zstd")) {
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::ZSTD;
   } else if (filename.suffix_match_ci(".snappy")) {
-    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::SNAPPY;
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::SNAPPY_BLOCK;
   } else {
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::NONE;
   }
@@ -1267,7 +1267,7 @@ const char *compression_algorithm_to_suffix(ObCSVGeneralFormat::ObCSVCompression
     case ObCSVGeneralFormat::ObCSVCompression::GZIP:    return ".gz";
     case ObCSVGeneralFormat::ObCSVCompression::DEFLATE: return ".deflate";
     case ObCSVGeneralFormat::ObCSVCompression::ZSTD:    return ".zst";
-    case ObCSVGeneralFormat::ObCSVCompression::SNAPPY:  return ".snappy";
+    case ObCSVGeneralFormat::ObCSVCompression::SNAPPY_BLOCK:  return ".snappy";
     default:                                            return "";
   }
 }

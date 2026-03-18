@@ -582,8 +582,8 @@ int ObDecompressor::create(ObCSVGeneralFormat::ObCSVCompression format,
       decompressor = OB_NEW(ObZstdDecompressor, MEMORY_ATTR, allocator);
     } break;
 
-    case ObCSVGeneralFormat::ObCSVCompression::SNAPPY: {
-      decompressor = OB_NEW(ObSnappyDecompressor, MEMORY_ATTR, allocator);
+    case ObCSVGeneralFormat::ObCSVCompression::SNAPPY_BLOCK: {
+      decompressor = OB_NEW(ObSnappyBlockDecompressor, MEMORY_ATTR, allocator);
     } break;
 
     default: {
@@ -900,83 +900,192 @@ int ObZstdDecompressor::decompress(const char *src, int64_t src_size, int64_t &c
 }
 
 /**
- * snappy decompressor
+ * snappy block decompressor
+ * Hadoop Snappy 块格式有两种：
+ *
+ * 1) NativeTask：
+ * https://github.com/apache/hadoop/blob/trunk/hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-nativetask/src/main/native/src/codec/BlockCodec.cc
+ *    +--------+--------+-------------+
+ *    | 解压后长度(4B) | 压缩后长度(4B) | 压缩数据     |
+ *    +--------+--------+-------------+
+ *    | 解压后长度(4B) | 压缩后长度(4B) | 压缩数据     |  ...
+ *    +--------+--------+-------------+
+ *
+ * 2) Java（多个大块，每大块内可含多个小块）：
+ * https://github.com/apache/hadoop/blob/trunk/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/io/compress/BlockDecompressorStream.java
+ *    +------------------+--------+-------------+--------+-------------+
+ *    | 本大块解压总长(4B) | 压缩长(4B) | 压缩数据1    | 压缩长(4B) | 压缩数据2    | ...
+ *    +------------------+--------+-------------+--------+-------------+
+ *    | 本大块解压总长(4B) | 压缩长(4B) | 压缩数据    | ...
+ *    +------------------+--------+-------------+
+ * Java 在「一大块仅一小块」时与 NativeTask 布局相同，故按 Java 实现可兼容两种。
+ * 按照小块为基本单位进行解压
  */
-ObSnappyDecompressor::ObSnappyDecompressor(ObIAllocator &allocator)
+ObSnappyBlockDecompressor::ObSnappyBlockDecompressor(ObIAllocator &allocator)
     : ObDecompressor(allocator),
       snappy_compressor_(allocator)
 {}
 
-ObSnappyDecompressor::~ObSnappyDecompressor()
+ObSnappyBlockDecompressor::~ObSnappyBlockDecompressor()
 {
   this->destroy();
 }
 
-void ObSnappyDecompressor::destroy()
+void ObSnappyBlockDecompressor::destroy()
 {
-  if (OB_NOT_NULL(buffer_)) {
-    allocator_.free(buffer_);
-    buffer_ = nullptr;
+  if (OB_NOT_NULL(decomp_buf_)) {
+    allocator_.free(decomp_buf_);
+    decomp_buf_ = nullptr;
   }
-  read_size_ = 0;
-  data_size_ = 0;
-  buffer_capacity_ = 0;
-  is_decompressed_ = false;
+  decomp_buf_pos_ = 0;
+  decomp_buf_size_ = 0;
+  decomp_buf_capacity_ = 0;
+  remaining_large_block_len_ = 0;
+  need_more_data_ = false;
+  is_inited_ = false;
 }
 
-int ObSnappyDecompressor::init()
+int ObSnappyBlockDecompressor::init()
 {
-  return OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("snappy decompressor already inited");
+  } else if (OB_ISNULL(decomp_buf_ = static_cast<char *>(allocator_.alloc(DEFAULT_BUFFER_SIZE)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate decomp buffer", K(DEFAULT_BUFFER_SIZE));
+  } else {
+    decomp_buf_capacity_ = DEFAULT_BUFFER_SIZE;
+    remaining_large_block_len_ = 0;
+    decomp_buf_pos_ = 0;
+    decomp_buf_size_ = 0;
+    need_more_data_ = false;
+    is_inited_ = true;
+  }
+  return ret;
 }
 
-int ObSnappyDecompressor::decompress(const char *src, int64_t src_size, int64_t &consumed_size,
+int ObSnappyBlockDecompressor::decompress(const char *src, int64_t src_size, int64_t &consumed_size,
                                      char *dest, int64_t dest_capacity, int64_t &decompressed_size)
 {
   int ret = OB_SUCCESS;
   consumed_size = 0;
   decompressed_size = 0;
-  if (OB_ISNULL(src) || src_size <= 0
-      || OB_ISNULL(dest) || dest_capacity <= 0) {
+  need_more_data_ = false;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("snappy decompressor not inited");
+  } else if (OB_ISNULL(src) || src_size < 0 || OB_ISNULL(dest) || dest_capacity <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP(src), K(src_size), KP(dest), K(dest_capacity));
-  } else if (!is_decompressed_) {
-    size_t uncompressed_size = 0;
-    if (OB_FAIL(snappy_compressor_.get_uncompressed_length(src, src_size, uncompressed_size))) {
-      LOG_WARN("failed to get uncompressed length", K(ret));
-    } else if (uncompressed_size > static_cast<size_t>(buffer_capacity_)) {
-      if (OB_NOT_NULL(buffer_)) {
-        allocator_.free(buffer_);
-        buffer_ = nullptr;
+  } else if (decomp_buf_pos_ < decomp_buf_size_) {
+    // 1. 先输出上次解压后还没读完的数据
+    int64_t pending = decomp_buf_size_ - decomp_buf_pos_;
+    int64_t copy_size = MIN(pending, dest_capacity);
+    MEMCPY(dest, decomp_buf_ + decomp_buf_pos_, copy_size);
+    decomp_buf_pos_ += copy_size;
+    decompressed_size = copy_size;
+    if (decomp_buf_pos_ >= decomp_buf_size_) {
+      decomp_buf_pos_ = 0;
+      decomp_buf_size_ = 0;
+    }
+  } else {
+    // 2. 直接从 src 解压，按需消费
+    int64_t pos = 0;
+    int64_t dest_remaining = dest_capacity;
+    char *dest_ptr = dest;
+    bool done = false;
+
+    while (OB_SUCC(ret) && !done && pos < src_size && dest_remaining > 0) {
+      // 2.1 读大块头
+      if (remaining_large_block_len_ == 0) {
+        if (src_size - pos < BLOCK_HEADER_SIZE) {
+          need_more_data_ = true;
+          done = true;
+        } else {
+          remaining_large_block_len_ = static_cast<int64_t>(read_be32(src + pos));
+          pos += BLOCK_HEADER_SIZE;
+        }
       }
-      buffer_capacity_ = static_cast<int64_t>(uncompressed_size);
-      if (OB_ISNULL(buffer_ = static_cast<char *>(allocator_.alloc(buffer_capacity_)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate buffer", K(buffer_capacity_));
+
+      // 2.2 读小块头并解压
+      if (OB_SUCC(ret) && !done && remaining_large_block_len_ > 0) {
+        if (src_size - pos < BLOCK_HEADER_SIZE) {
+          need_more_data_ = true;
+          done = true;
+        } else {
+          uint32_t compressed_len = read_be32(src + pos);
+          if (compressed_len == 0) {
+            pos += BLOCK_HEADER_SIZE;
+          } else if (src_size - pos < BLOCK_HEADER_SIZE + static_cast<int64_t>(compressed_len)) {
+            // 没有完整的小块，需要更多数据
+            need_more_data_ = true;
+            done = true;
+          } else {
+            pos += BLOCK_HEADER_SIZE;
+            const char *block_src = src + pos;
+            pos += compressed_len;
+
+            size_t block_uncompressed_len = 0;
+            if (OB_FAIL(snappy_compressor_.get_uncompressed_length(block_src,
+                                                                   static_cast<int64_t>(compressed_len),
+                                                                   block_uncompressed_len))) {
+              LOG_WARN("failed to get uncompressed length", K(ret), K(compressed_len));
+            } else {
+              int64_t block_out_size = static_cast<int64_t>(block_uncompressed_len);
+              if (block_out_size <= dest_remaining) {
+                // dest 空间够，直接解压到 dest
+                int64_t actual_out = 0;
+                if (OB_FAIL(snappy_compressor_.decompress(block_src, static_cast<int64_t>(compressed_len),
+                                                          dest_ptr, dest_remaining, actual_out))) {
+                  LOG_WARN("failed to decompress snappy block", K(ret), K(compressed_len));
+                } else {
+                  dest_ptr += actual_out;
+                  dest_remaining -= actual_out;
+                  decompressed_size += actual_out;
+                  remaining_large_block_len_ -= actual_out;
+                }
+              } else {
+                // dest 空间不足，解压到 decomp_buf_
+                if (block_out_size > decomp_buf_capacity_) {
+                  if (OB_NOT_NULL(decomp_buf_)) {
+                    allocator_.free(decomp_buf_);
+                    decomp_buf_ = nullptr;
+                  }
+                  decomp_buf_capacity_ = block_out_size;
+                  decomp_buf_ = static_cast<char *>(allocator_.alloc(decomp_buf_capacity_));
+                  if (OB_ISNULL(decomp_buf_)) {
+                    ret = OB_ALLOCATE_MEMORY_FAILED;
+                    LOG_WARN("failed to allocate decomp buffer", K(decomp_buf_capacity_));
+                  }
+                }
+                if (OB_SUCC(ret)) {
+                  int64_t actual_out = 0;
+                  if (OB_FAIL(snappy_compressor_.decompress(block_src, static_cast<int64_t>(compressed_len),
+                                                            decomp_buf_, decomp_buf_capacity_, actual_out))) {
+                    LOG_WARN("failed to decompress snappy block", K(ret), K(compressed_len));
+                  } else {
+                    decomp_buf_size_ = actual_out;
+                    int64_t copy_size = MIN(actual_out, dest_remaining);
+                    MEMCPY(dest_ptr, decomp_buf_, copy_size);
+                    decomp_buf_pos_ = copy_size;
+                    dest_ptr += copy_size;
+                    dest_remaining -= copy_size;
+                    decompressed_size += copy_size;
+                    remaining_large_block_len_ -= actual_out;
+                    done = true;
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(snappy_compressor_.decompress(src, src_size, buffer_, buffer_capacity_, data_size_))) {
-      LOG_WARN("failed to decompress", K(ret));
-    } else {
-      is_decompressed_ = true;
-    }
-  }
-
-  if (OB_SUCC(ret) && is_decompressed_) {
-    int64_t available = data_size_ - read_size_;
-    int64_t copy_size = min(available, dest_capacity);
-    if (copy_size > 0) {
-      MEMCPY(dest, buffer_ + read_size_, copy_size);
-      read_size_ += copy_size;
-      decompressed_size = copy_size;
-    } else {
-      decompressed_size = 0;
-    }
-    if (read_size_ >= data_size_) {
-      consumed_size = src_size;
-      destroy();
-    }
+    // 3. 设置实际消费的字节数
+    consumed_size = pos;
   }
 
   return ret;
