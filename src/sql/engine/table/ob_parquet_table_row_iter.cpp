@@ -1777,7 +1777,7 @@ int ObParquetTableRowIterator::DataLoader::load_string_col_dict()
           int32_t *indices_data = indices.get_data();
           const bool has_null = !(IS_PARQUET_COL_NOT_NULL && indices_cnt == row_count_);
 
-          const bool is_fast_path = !is_oracle_mode && !has_null;
+          const bool is_fast_path = !is_oracle_mode && !has_null && !is_large_text;
 
           if (OB_LIKELY(is_fast_path)) {
             for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
@@ -1794,9 +1794,19 @@ int ObParquetTableRowIterator::DataLoader::load_string_col_dict()
                 text_vec->set_null(i + row_offset_);
                 j++;
               } else {
-                text_vec->set_string(i + row_offset_,
-                                     dict_ptrs[indices_data[j]],
-                                     dict_lens[indices_data[j]]);
+                if (OB_UNLIKELY(is_large_text)) {
+                  if (OB_FAIL(ObTextStringHelper::string_to_templob_result(
+                          *file_col_expr_,
+                          eval_ctx_,
+                          ObString(dict_lens[indices_data[j]], dict_ptrs[indices_data[j]]),
+                          i + row_offset_))) {
+                    LOG_WARN("fail to convert dict value to templob", K(ret), K(i), K(j));
+                  }
+                } else {
+                  text_vec->set_string(i + row_offset_,
+                                       dict_ptrs[indices_data[j]],
+                                       dict_lens[indices_data[j]]);
+                }
                 j++;
               }
             }

@@ -3951,7 +3951,6 @@ int ObTableScanOp::do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip, bool
   } else {
     ObDASMergeIter *das_merge_iter = static_cast<ObDASMergeIter *>(output_);
     if (OB_FAIL(das_merge_iter->get_cur_diagnosis_info(&diagnosis_manager))) {
-      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get diagnosis info", K(ret));
     } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip, session->get_diagnosis_info(),
                                                     ctx_.get_px_sqc_id(), ctx_.get_px_task_id(),

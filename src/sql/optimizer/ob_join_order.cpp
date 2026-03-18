@@ -21273,7 +21273,7 @@ int ObJoinOrder::copy_path(const Path& src_path, Path* &dst_path)
         dst_path = new_subquery_path;
       }
     }
-  } else if (src_path.is_access_path()) {
+  } else if (src_path.is_access_path() || src_path.is_lake_table_access_path()) {
     const AccessPath &access_path = static_cast<const AccessPath&>(src_path);
     AccessPath *new_access_path = NULL;
     if (OB_ISNULL(new_access_path = reinterpret_cast<AccessPath*>(allocator_->alloc(sizeof(AccessPath))))) {

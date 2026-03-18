@@ -25,6 +25,25 @@ namespace oceanbase
 {
 namespace sql
 {
+namespace
+{
+int reset_expr_eval_state_for_batch(ObExpr *expr, ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr is null", K(ret));
+  } else {
+    expr->get_eval_info(eval_ctx).clear_evaluated_flag();
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->arg_cnt_; ++i) {
+      if (OB_FAIL(reset_expr_eval_state_for_batch(expr->args_[i], eval_ctx))) {
+        LOG_WARN("fail to reset expr eval state for batch", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+} // namespace
 
 ObParquetDictFilterPushdown::ObParquetDictFilterPushdown()
     : dict_columns_(), dict_encoding_check_cache_(), decode_exprs_(), processed_dict_op_filters_(),
@@ -107,6 +126,7 @@ void ObParquetDictFilterPushdown::reset()
   dict_filter_executors_.reset();
   processed_dict_op_filters_.reset();
   failed_dict_filters_.reset();
+  allocator_.reset();
 }
 
 int ObParquetDictFilterPushdown::collect_dict_filter_executor(
@@ -170,7 +190,6 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
         }
       } else if (parquet_type == parquet::Type::BYTE_ARRAY) {
         const parquet::ByteArray *src_dict = static_cast<const parquet::ByteArray *>(dict_values);
-        const bool is_large_text = ob_is_large_text(file_col_expr->datum_meta_.type_);
 
         sql::ObBitVector *nulls = nullptr;
         int32_t *lens = nullptr;
@@ -191,24 +210,14 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
               = is_oracle_byte_length(is_oracle_mode, file_col_expr->datum_meta_.length_semantics_);
 
           char *string_data = nullptr;
-          ObDatum *lob_datums = nullptr;
-          if (is_large_text) {
-            if (OB_ISNULL(lob_datums = OB_NEW_ARRAY(ObDatum, &allocator_, dict_len))) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("fail to allocate memory for lob datums", K(ret), K(dict_len));
-            }
-          } else {
-            int64_t string_data_size = 0;
-            for (int32_t i = 0; i < dict_len; ++i) {
-              string_data_size += src_dict[i].len;
-            }
-            if (OB_ISNULL(string_data = static_cast<char *>(allocator_.alloc(string_data_size)))) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("fail to allocate memory for string data", K(ret), K(string_data_size));
-            }
+          int64_t string_data_size = 0;
+          for (int32_t i = 0; i < dict_len; ++i) {
+            string_data_size += src_dict[i].len;
           }
-
-          if (OB_SUCC(ret)) {
+          if (OB_ISNULL(string_data = static_cast<char *>(allocator_.alloc(string_data_size)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to allocate memory for string data", K(ret), K(string_data_size));
+          } else {
             char *data_ptr = string_data;
             for (int32_t i = 0; i < dict_len && OB_SUCC(ret); ++i) {
               if (OB_UNLIKELY(is_oracle_mode && 0 == src_dict[i].len)) {
@@ -223,18 +232,6 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
                                                 > max_length))) {
                 ret = OB_ERR_DATA_TOO_LONG;
                 LOG_WARN("data too long", K(max_length), K(src_dict[i].len), K(ret));
-              } else if (OB_UNLIKELY(is_large_text)) {
-                if (OB_FAIL(ObTextStringHelper::string_to_templob_result(
-                        file_col_expr->datum_meta_.type_,
-                        true, // has_lob_header
-                        allocator_,
-                        ObString(src_dict[i].len, pointer_cast<const char *>(src_dict[i].ptr)),
-                        lob_datums[i]))) {
-                  LOG_WARN("fail to convert string to templob", K(ret), K(i));
-                } else {
-                  ptrs[i] = const_cast<char *>(lob_datums[i].get_string().ptr());
-                  lens[i] = lob_datums[i].get_string().length();
-                }
               } else {
                 MEMCPY(data_ptr, src_dict[i].ptr, src_dict[i].len);
                 ptrs[i] = data_ptr;
@@ -1017,6 +1014,7 @@ int ObParquetDictFilterPushdown::eval_black_filter_on_dict_values(
           common::StrDiscVec *dict_values = dict_data->dict_values_;
           char **dict_ptrs = dict_values->get_ptrs();
           int32_t *dict_lens = dict_values->get_lens();
+          const bool is_large_text = ob_is_large_text(col_expr->datum_meta_.type_);
 
           for (int64_t i = 0; i < batch_count && OB_SUCC(ret); ++i) {
             int32_t dict_idx = static_cast<int32_t>(batch_start + i);
@@ -1024,6 +1022,14 @@ int ObParquetDictFilterPushdown::eval_black_filter_on_dict_values(
             if (dict_idx < dict_data->dict_len_) {
               if (OB_UNLIKELY(dict_values->is_null(dict_idx))) {
                 discrete_vec->set_null(i);
+              } else if (OB_UNLIKELY(is_large_text)) {
+                if (OB_FAIL(ObTextStringHelper::string_to_templob_result(
+                        *col_expr,
+                        eval_ctx,
+                        ObString(dict_lens[dict_idx], dict_ptrs[dict_idx]),
+                        i))) {
+                  LOG_WARN("fail to convert dict value to templob", K(ret), K(i), K(dict_idx));
+                }
               } else {
                 discrete_vec->set_string(i, dict_ptrs[dict_idx], dict_lens[dict_idx]);
               }
@@ -1045,9 +1051,11 @@ int ObParquetDictFilterPushdown::eval_black_filter_on_dict_values(
           LOG_WARN("fail to filter batch", K(ret), K(batch_start), K(batch_count));
         } else {
           // 清空filter表达式的评估标志
-          for (int64_t i = 0; i < black_filter->get_filter_node().filter_exprs_.count(); ++i) {
-            ObExpr *filter_expr = black_filter->get_filter_node().filter_exprs_.at(i);
-            filter_expr->get_evaluated_flags(eval_ctx).reset(batch_count);
+          const ObIArray<ObExpr *> &filter_exprs = black_filter->get_filter_node().filter_exprs_;
+          for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+            if (OB_FAIL(reset_expr_eval_state_for_batch(filter_exprs.at(i), eval_ctx))) {
+              LOG_WARN("fail to reset expr eval state for batch", K(ret), K(i));
+            }
           }
 
           for (int64_t i = 0; i < batch_count && OB_SUCC(ret); ++i) {
@@ -1110,6 +1118,51 @@ int ObParquetDictFilterPushdown::filter_by_dict_codes(const common::ObBitmap &va
     }
   }
 
+  return ret;
+}
+
+int ObParquetDictFilterPushdown::build_datum(common::ObIVector *col_vector,
+                                             const int64_t idx,
+                                             const bool need_lob_convert,
+                                             const ObObjType lob_type,
+                                             const bool has_lob_header,
+                                             const bool need_pad,
+                                             const common::ObObjMeta &col_obj_meta,
+                                             const common::ObAccuracy &accuracy,
+                                             ObIAllocator &allocator,
+                                             blocksstable::ObStorageDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  const char *payload = nullptr;
+  ObLength payload_len = 0;
+  if (OB_ISNULL(col_vector)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("col vector is null", K(ret), KP(col_vector), K(idx));
+  } else {
+    col_vector->get_payload(idx, payload, payload_len);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(need_lob_convert)) {
+    ObDatum lob_datum;
+    if (OB_FAIL(ObTextStringHelper::string_to_templob_result(
+            lob_type,
+            has_lob_header,
+            allocator,
+            ObString(static_cast<int32_t>(payload_len), payload),
+            lob_datum))) {
+      LOG_WARN("fail to convert payload to templob", K(ret), K(payload_len), K(lob_type));
+    } else {
+      datum.set_string(lob_datum.get_string());
+    }
+  } else {
+    datum.set_string(payload, static_cast<int32_t>(payload_len));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (need_pad && OB_FAIL(storage::pad_column(col_obj_meta, accuracy, allocator, datum))) {
+    LOG_WARN("fail to pad datum", K(ret), K(idx), K(datum));
+  }
   return ret;
 }
 
@@ -1199,7 +1252,8 @@ int ObParquetDictFilterPushdown::decode_dict_column_to_expr(
             int32_t *lens = dict_values->get_lens();
 
             const bool is_oracle_mode = lib::is_oracle_mode();
-            const bool is_fast_path = !is_oracle_mode && !dict_data->has_null_;
+            const bool is_large_text = ob_is_large_text(file_col_expr->datum_meta_.type_);
+            const bool is_fast_path = !is_oracle_mode && !dict_data->has_null_ && !is_large_text;
 
             if (OB_LIKELY(is_fast_path)) {
               for (int64_t row = 0; OB_SUCC(ret) && row < dict_data->indices_count_; ++row) {
@@ -1212,7 +1266,17 @@ int ObParquetDictFilterPushdown::decode_dict_column_to_expr(
                 if (dict_idx == dict_data->get_null_ref() || dict_values->is_null(dict_idx)) {
                   text_vec->set_null(row);
                 } else if (dict_idx >= 0 && dict_idx < dict_data->dict_len_) {
-                  text_vec->set_string(row, ptrs[dict_idx], lens[dict_idx]);
+                  if (OB_UNLIKELY(is_large_text)) {
+                    if (OB_FAIL(ObTextStringHelper::string_to_templob_result(
+                            *file_col_expr,
+                            eval_ctx,
+                            ObString(lens[dict_idx], ptrs[dict_idx]),
+                            row))) {
+                      LOG_WARN("fail to convert dict value to templob", K(ret), K(row), K(dict_idx));
+                    }
+                  } else {
+                    text_vec->set_string(row, ptrs[dict_idx], lens[dict_idx]);
+                  }
                 } else {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("unexpected dict index", K(ret), K(dict_idx));
@@ -1408,144 +1472,163 @@ int ObParquetDictFilterPushdown::filter_batch_by_format(common::ObIVector *col_v
   int64_t skipped_count = 0;
 
   const bool is_oracle_mode = lib::is_oracle_mode();
-
-  // 检查是否需要 padding（CHAR 类型）
-  const common::ObObjMeta &col_obj_meta = white_filter->get_col_obj_meta();
-  bool need_pad = white_filter->is_padding_mode() && col_obj_meta.is_fixed_len_char_type();
-
-  // 如果需要 padding，获取 accuracy 信息
+  const ExprFixedArray &column_exprs = white_filter->get_filter_node().column_exprs_;
+  bool need_lob_convert = false;
+  ObObjType lob_type = ObNullType;
+  bool has_lob_header = false;
+  bool need_pad = false;
   common::ObAccuracy accuracy;
-  if (need_pad) {
-    const ExprFixedArray &column_exprs = white_filter->get_filter_node().column_exprs_;
-    if (column_exprs.count() > 0 && OB_NOT_NULL(column_exprs.at(0))) {
-      ObExpr *col_expr = column_exprs.at(0);
-      if (col_expr->max_length_ > 0) {
-        accuracy.set_length(col_expr->max_length_);
-        accuracy.set_length_semantics(col_expr->datum_meta_.length_semantics_);
-      } else {
-        need_pad = false;
-      }
+  const common::ObObjMeta &col_obj_meta = white_filter->get_col_obj_meta();
+
+  if (OB_UNLIKELY(column_exprs.count() != 1 || OB_ISNULL(column_exprs.at(0)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect single column filter", K(ret), K(column_exprs.count()));
+  } else {
+    ObExpr *col_expr = column_exprs.at(0);
+    need_lob_convert = ob_is_large_text(col_expr->datum_meta_.type_);
+    if (need_lob_convert) {
+      lob_type = col_expr->datum_meta_.type_;
+      has_lob_header = col_expr->obj_meta_.has_lob_header();
+    }
+    need_pad = white_filter->is_padding_mode() && col_obj_meta.is_fixed_len_char_type();
+    if (need_pad && col_expr->max_length_ > 0) {
+      accuracy.set_length(col_expr->max_length_);
+      accuracy.set_length_semantics(col_expr->datum_meta_.length_semantics_);
     } else {
       need_pad = false;
     }
   }
 
-  switch (op_type) {
-    case sql::WHITE_OP_EQ:
-    case sql::WHITE_OP_NE:
-    case sql::WHITE_OP_GT:
-    case sql::WHITE_OP_GE:
-    case sql::WHITE_OP_LT:
-    case sql::WHITE_OP_LE: {
-      // 比较操作：使用get_payload统一获取datum
-      if (OB_UNLIKELY(ref_datums.count() != 1)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("Invalid argument for comparison operator", K(ret), K(ref_datums));
-      } else {
-        const common::ObDatum &ref_datum = ref_datums.at(0);
-        const common::ObCmpOp cmp_op = sql::ObPushdownWhiteFilterNode::WHITE_OP_TO_CMP_OP[op_type];
-        bool ref_is_null = ref_datum.is_null();
-
-        if (ref_is_null) {
-          // ref_datum是NULL，所有行都不通过过滤
+  if (OB_SUCC(ret)) {
+    switch (op_type) {
+      case sql::WHITE_OP_EQ:
+      case sql::WHITE_OP_NE:
+      case sql::WHITE_OP_GT:
+      case sql::WHITE_OP_GE:
+      case sql::WHITE_OP_LT:
+      case sql::WHITE_OP_LE: {
+        // 比较操作：使用get_payload统一获取datum
+        if (OB_UNLIKELY(ref_datums.count() != 1)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("Invalid argument for comparison operator", K(ret), K(ref_datums));
         } else {
+          const common::ObDatum &ref_datum = ref_datums.at(0);
+          const common::ObCmpOp cmp_op
+              = sql::ObPushdownWhiteFilterNode::WHITE_OP_TO_CMP_OP[op_type];
+          bool ref_is_null = ref_datum.is_null();
+
+          if (ref_is_null) {
+            // ref_datum是NULL，所有行都不通过过滤
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+              if (OB_NOT_NULL(parent_filter) && parent_filter->can_skip_filter(i)) {
+                ++skipped_count;
+              } else if (arg_vec->is_null(i)) {
+                // NULL不通过过滤
+              } else {
+                blocksstable::ObStorageDatum datum;
+                bool cmp_ret = false;
+                if (OB_FAIL(build_datum(col_vector,
+                                        i,
+                                        need_lob_convert,
+                                        lob_type,
+                                        has_lob_header,
+                                        need_pad,
+                                        col_obj_meta,
+                                        accuracy,
+                                        temp_allocator,
+                                        datum))) {
+                  LOG_WARN("fail to build storage datum", K(ret), K(i));
+                } else if (OB_FAIL(blocksstable::compare_datum(datum,
+                                                               ref_datum,
+                                                               cmp_func,
+                                                               cmp_op,
+                                                               cmp_ret))) {
+                  LOG_WARN("Failed to compare datum", K(ret), K(i));
+                } else if (cmp_ret) {
+                  result->set(i, true);
+                }
+              }
+            }
+          }
+        }
+        break;
+      }
+      case sql::WHITE_OP_BT: {
+        if (OB_UNLIKELY(ref_datums.count() != 2)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("Invalid argument for between operators", K(ret), K(ref_datums));
+        } else {
+          const common::ObDatum &ref_datum0 = ref_datums.at(0);
+          const common::ObDatum &ref_datum1 = ref_datums.at(1);
+
           for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
             if (OB_NOT_NULL(parent_filter) && parent_filter->can_skip_filter(i)) {
               ++skipped_count;
             } else if (arg_vec->is_null(i)) {
               // NULL不通过过滤
             } else {
-              const char *payload = nullptr;
-              ObLength payload_len = 0;
-              arg_vec->get_payload(i, payload, payload_len);
               blocksstable::ObStorageDatum datum;
-              datum.set_string(payload, static_cast<int32_t>(payload_len));
-              bool cmp_ret = false;
-              if (need_pad
-                  && OB_FAIL(storage::pad_column(col_obj_meta, accuracy, temp_allocator, datum))) {
-                LOG_WARN("fail to pad datum", K(ret), K(i), K(datum));
-              } else if (OB_FAIL(blocksstable::compare_datum(datum,
-                                                             ref_datum,
-                                                             cmp_func,
-                                                             cmp_op,
-                                                             cmp_ret))) {
+              int cmp_ret_0 = 0;
+              int cmp_ret_1 = 0;
+              if (OB_FAIL(build_datum(col_vector,
+                                      i,
+                                      need_lob_convert,
+                                      lob_type,
+                                      has_lob_header,
+                                      need_pad,
+                                      col_obj_meta,
+                                      accuracy,
+                                      temp_allocator,
+                                      datum))) {
+                LOG_WARN("fail to build storage datum", K(ret), K(i));
+              } else if (OB_FAIL(cmp_func(datum, ref_datum0, cmp_ret_0))) {
                 LOG_WARN("Failed to compare datum", K(ret), K(i));
-              } else if (cmp_ret) {
+              } else if (cmp_ret_0 < 0) {
+              } else if (OB_FAIL(cmp_func(datum, ref_datum1, cmp_ret_1))) {
+                LOG_WARN("Failed to compare datum", K(ret), K(i));
+              } else if (cmp_ret_1 <= 0) {
                 result->set(i, true);
               }
             }
           }
         }
+        break;
       }
-      break;
-    }
-    case sql::WHITE_OP_BT: {
-      if (OB_UNLIKELY(ref_datums.count() != 2)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("Invalid argument for between operators", K(ret), K(ref_datums));
-      } else {
-        const common::ObDatum &ref_datum0 = ref_datums.at(0);
-        const common::ObDatum &ref_datum1 = ref_datums.at(1);
-
+      case sql::WHITE_OP_IN: {
         for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
           if (OB_NOT_NULL(parent_filter) && parent_filter->can_skip_filter(i)) {
             ++skipped_count;
           } else if (arg_vec->is_null(i)) {
             // NULL不通过过滤
           } else {
-            const char *payload = nullptr;
-            ObLength payload_len = 0;
-            arg_vec->get_payload(i, payload, payload_len);
             blocksstable::ObStorageDatum datum;
-            datum.set_string(payload, static_cast<int32_t>(payload_len));
-
-            int cmp_ret_0 = 0;
-            int cmp_ret_1 = 0;
-            if (need_pad
-                && OB_FAIL(storage::pad_column(col_obj_meta, accuracy, temp_allocator, datum))) {
-              LOG_WARN("fail to pad datum", K(ret), K(i), K(datum));
-            } else if (OB_FAIL(cmp_func(datum, ref_datum0, cmp_ret_0))) {
-              LOG_WARN("Failed to compare datum", K(ret), K(i));
-            } else if (cmp_ret_0 < 0) {
-            } else if (OB_FAIL(cmp_func(datum, ref_datum1, cmp_ret_1))) {
-              LOG_WARN("Failed to compare datum", K(ret), K(i));
-            } else if (cmp_ret_1 <= 0) {
+            bool is_existed = false;
+            if (OB_FAIL(build_datum(col_vector,
+                                    i,
+                                    need_lob_convert,
+                                    lob_type,
+                                    has_lob_header,
+                                    need_pad,
+                                    col_obj_meta,
+                                    accuracy,
+                                    temp_allocator,
+                                    datum))) {
+              LOG_WARN("fail to build storage datum", K(ret), K(i));
+            } else if (OB_FAIL(white_filter->exist_in_set(datum, is_existed))) {
+              LOG_WARN("Failed to check object in hashset", K(ret), K(i));
+            } else if (is_existed) {
               result->set(i, true);
             }
           }
         }
+        break;
       }
-      break;
-    }
-    case sql::WHITE_OP_IN: {
-      for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-        if (OB_NOT_NULL(parent_filter) && parent_filter->can_skip_filter(i)) {
-          ++skipped_count;
-        } else if (arg_vec->is_null(i)) {
-          // NULL不通过过滤
-        } else {
-          const char *payload = nullptr;
-          ObLength payload_len = 0;
-          arg_vec->get_payload(i, payload, payload_len);
-          blocksstable::ObStorageDatum datum;
-          datum.set_string(payload, static_cast<int32_t>(payload_len));
-          bool is_existed = false;
-          if (need_pad
-              && OB_FAIL(storage::pad_column(col_obj_meta, accuracy, temp_allocator, datum))) {
-            LOG_WARN("fail to pad datum", K(ret), K(i), K(datum));
-          } else if (OB_FAIL(white_filter->exist_in_set(datum, is_existed))) {
-            LOG_WARN("Failed to check object in hashset", K(ret), K(i));
-          } else if (is_existed) {
-            result->set(i, true);
-          }
-        }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("Unexpected filter pushdown operation type", K(ret), K(op_type));
+        break;
       }
-      break;
-    }
-    default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("Unexpected filter pushdown operation type", K(ret), K(op_type));
-      break;
     }
   }
   LOG_DEBUG("filter batch by format completed", K(ret), K(skipped_count));
