@@ -265,6 +265,7 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
                 OZ (cg.init());
                 if (cg.get_debug_mode()
                     || cg.get_profile_mode()
+                    || cg.get_code_coverage_mode()
                     || !routine_ast->get_is_all_sql_stmt()
                     || !routine_ast->get_obj_access_exprs().empty()) {
                   OZ (SMART_CALL(decode_dll(session_info, schema_guard, routine->get_exec_env(), *routine_ast, *routine, buf, len, pos, cur_level, sub_id)));
