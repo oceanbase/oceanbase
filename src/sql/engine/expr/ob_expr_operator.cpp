@@ -1414,6 +1414,7 @@ int ObExprOperator::aggregate_result_type_for_merge(
         OZ (aggregate_extend_accuracy_for_merge(type, types, param_num));
       } else if (ob_is_json(res_type)) {
         type.set_json();
+        type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
       } else if (ob_is_geometry(res_type)) {
         type.set_geometry();
         type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
