@@ -1049,11 +1049,16 @@ void ObLockWaitMgr::ls_switch_to_follower(const share::ObLSID &ls_id)
       if (cur->get_ls_id() == ls_id.id()) {
         node2del = cur;
         bool is_placeholder = ATOMIC_LOAD(&node2del->is_placeholder_);
-        if (!is_placeholder || (is_placeholder && node2del->get_node_type() == Node::REMOTE_EXEC_SIDE)) {
+        const bool need_retire = !is_placeholder
+                                 || (is_placeholder && node2del->get_node_type() == Node::REMOTE_EXEC_SIDE);
+        if (need_retire) {
           retire_node(retire_iter, node2del);
+          // keep `prev` unchanged because `cur` might be removed from hash_
+        } else {
+          // `cur` is still in hash_; advance `prev` to avoid visiting it repeatedly.
+          prev = cur;
         }
         node2del = NULL;
-        // keep `prev` unchanged because `cur` might be removed from hash_
       } else {
         prev = cur;
       }
