@@ -482,7 +482,7 @@ Optimization Info:
       avaiable_index_name:[t11]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
+      estimation method:[STORAGE, DYNAMIC SAMPLING FULL]
   t21:
       table_rows:1
       physical_range_rows:1
