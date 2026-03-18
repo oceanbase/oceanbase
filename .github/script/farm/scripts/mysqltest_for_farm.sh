@@ -196,7 +196,7 @@ function obd_prepare_global {
     export LANG=en_US.UTF-8
     HOST=`hostname -i`
     DOWNLOAD_DIR=$HOME/downloads
-    SLOT_ID=`echo $_CONDOR_SLOT | cut -c5-`
+    SLOT_ID="${SLOT_ID:-$(echo "${_CONDOR_SLOT:-slot${SLICE_IDX:-0}}" | cut -c5-)}"
     PORT_NUM=`expr 5000 + $SLOT_ID \* 100`
 
     # 根据传入的observer binary判断是否开源版
