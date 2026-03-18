@@ -522,6 +522,7 @@ public:
   ReqQueue& get_req_queue() { return req_queue_; }
   ObMultiLevelQueue* get_multi_level_queue() { return multi_level_queue_; }
   GroupMap& get_group_map() { return group_map_;}
+  void sample_cpu_time_from_proc_once();
   // OB_INLINE bool has_normal_request() const { return req_queue_.size() != 0; }
   // OB_INLINE bool has_level_request() const { return OB_NOT_NULL(multi_level_queue_) && multi_level_queue_->get_total_size() != 0; }
 private:

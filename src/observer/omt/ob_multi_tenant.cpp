@@ -159,6 +159,7 @@
 #include "observer/mysql/ob_query_response_time.h" //ObTenantQueryRespTimeCollector
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "lib/thread/thread_mgr_interface.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -290,8 +291,8 @@ ObMultiTenant::ObMultiTenant()
       cpu_dump_(false),
       has_synced_(false),
       tenant_limiter_head_(NULL),
-      limiter_mutex_()
-
+      limiter_mutex_(),
+      async_proc_cpu_sampler_started_(0)
 {
 }
 
@@ -2572,6 +2573,15 @@ void ObMultiTenant::run1()
           need_regist_cgroup = GCTX.cgroup_ctrl_->check_cgroup_status();
         }
       }
+      // Check if we need to enable async proc cpu sampling mode
+      // Trigger condition: cgroup invalid AND tenant count >= threshold
+      if (!is_async_proc_cpu_mode() && !(OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid())
+          && tenants_.size() >= ASYNC_PROC_CPU_MODE_TRIGGER_TENANT_CNT) {
+        int ret = try_start_async_proc_cpu_sampler_();
+        if (OB_FAIL(ret)) {
+          LOG_WARN("Failed to start async proc cpu sampler, will retry later", K(ret));
+        }
+      }
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (OB_ISNULL(*it)) {
           LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
@@ -2602,7 +2612,61 @@ void ObMultiTenant::run1()
       }
     }
   }
+  if (ATOMIC_LOAD(&async_proc_cpu_sampler_started_) == 1) {
+    LOG_INFO("stop and wait async proc cpu sampler");
+    TG_STOP(lib::TGDefIDs::OMTProcCpuSampler);
+    TG_WAIT(lib::TGDefIDs::OMTProcCpuSampler);
+  }
   LOG_INFO("OMT quit");
+}
+
+void ObMultiTenant::update_tenants_cpu_time()
+{
+  SpinRLockGuard guard(lock_);
+  for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
+    if (OB_ISNULL(*it)) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
+    } else if ((*it)->has_stopped()) {
+      // skip stopped tenant
+    } else {
+      (*it)->sample_cpu_time_from_proc_once();
+    }
+  }
+}
+
+void ObMultiTenant::ObAsyncProcCpuSampler::run1()
+{
+  lib::set_thread_name("OMTProcCpuSampler");
+  while (!has_set_stop()) {
+    ob_usleep(1000 * 1000L);  // sleep 1 second
+    if (has_set_stop()) {
+      break;
+    }
+    GCTX.omt_->update_tenants_cpu_time();
+  }
+  LOG_INFO("OMTProcCpuSampler thread exit");
+}
+
+bool ObMultiTenant::is_async_proc_cpu_mode() const
+{
+  return ATOMIC_LOAD(&async_proc_cpu_sampler_started_) == 1;
+}
+
+int ObMultiTenant::try_start_async_proc_cpu_sampler_()
+{
+  int ret = OB_SUCCESS;
+  // CAS to ensure only start once
+  if (!ATOMIC_BCAS(&async_proc_cpu_sampler_started_, 0, 1)) {
+    // Already started, not an error
+  } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(lib::TGDefIDs::OMTProcCpuSampler,
+                                                async_proc_cpu_sampler_))) {
+    LOG_WARN("start OMTProcCpuSampler failed", K(ret));
+    // Rollback the started flag on failure
+    ATOMIC_STORE(&async_proc_cpu_sampler_started_, 0);
+  } else {
+    LOG_INFO("OMTProcCpuSampler started successfully");
+  }
+  return ret;
 }
 
 uint32_t ObMultiTenant::get_tenant_lock_bucket_idx(const uint64_t tenant_id)

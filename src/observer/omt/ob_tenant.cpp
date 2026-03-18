@@ -2044,6 +2044,8 @@ void ObTenant::update_token_usage()
 
   if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
     //do nothing
+  } else if (GCTX.omt_->is_async_proc_cpu_mode()) {
+    // async mode enabled, skip /proc sampling in main loop
   } else if (duration >= 1000 * 1000 && OB_SUCC(thread_list_lock_.trylock())) {  // every second
     int64_t cpu_time_inc = 0;
     DLIST_FOREACH_REMOVESAFE(thread_list_node_, thread_list_)
@@ -2052,6 +2054,28 @@ void ObTenant::update_token_usage()
       int64_t inc = 0;
       if (OB_SUCC(thread->get_cpu_time_inc(inc))) {
         cpu_time_inc += inc;
+      }
+    }
+    thread_list_lock_.unlock();
+    IGNORE_RETURN ATOMIC_FAA(&cpu_time_us_, cpu_time_inc);
+  }
+}
+
+void ObTenant::sample_cpu_time_from_proc_once()
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(thread_list_lock_.trylock())) {
+    int64_t cpu_time_inc = 0;
+    if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
+      // when cgroup is enabled, not need to sample cpu time from /proc
+    } else {
+      DLIST_FOREACH_REMOVESAFE(thread_list_node_, thread_list_)
+      {
+        Thread *thread = thread_list_node_->get_data();
+        int64_t inc = 0;
+        if (OB_SUCC(thread->get_cpu_time_inc(inc))) {
+          cpu_time_inc += inc;
+        }
       }
     }
     thread_list_lock_.unlock();
