@@ -1225,12 +1225,14 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
                                             ObIArray<ObSelEstimator *> &sel_estimators,
                                             double &selectivity,
                                             common::ObIArray<ObExprSelPair> &all_predicate_sel,
-                                            bool record_range_sel)
+                                            bool record_range_sel,
+                                            bool *is_complex_filter_out)
 {
   int ret = OB_SUCCESS;
   selectivity = 1.0;
   ObSEArray<double, 4> selectivities;
   ObSEArray<const ObRawExpr *, 4> eigen_exprs;
+  bool is_complex_filter = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < sel_estimators.count(); ++i) {
     ObSelEstimator *estimator = sel_estimators.at(i);
     double tmp_selectivity = 0.0;
@@ -1241,6 +1243,7 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
       LOG_WARN("failed to get sel", K(ret), KPC(estimator));
     } else {
       tmp_selectivity = revise_between_0_1(tmp_selectivity);
+      is_complex_filter |= estimator->is_complex_filter_qual();
     }
     if (OB_SUCC(ret) && record_range_sel &&
         ObSelEstType::COLUMN_RANGE == estimator->get_type()) {
@@ -1271,6 +1274,9 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
   if (OB_SUCC(ret)) {
     selectivity = ctx.get_correlation_model().combine_filters_selectivity(selectivities);
   }
+  if (OB_SUCC(ret) && OB_NOT_NULL(is_complex_filter_out)) {
+    *is_complex_filter_out = is_complex_filter;
+  }
   LOG_DEBUG("calculate predicates selectivity", K(selectivity), K(selectivities), K(eigen_exprs), K(sel_estimators));
   return ret;
 }
@@ -1279,7 +1285,8 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
                                             const OptSelectivityCtx &ctx,
                                             const ObIArray<ObRawExpr*> &input_predicates,
                                             double &selectivity,
-                                            ObIArray<ObExprSelPair> &all_predicate_sel)
+                                            ObIArray<ObExprSelPair> &all_predicate_sel,
+                                            bool *is_complex_filter_out)
 {
   int ret = OB_SUCCESS;
   selectivity = 1.0;
@@ -1333,7 +1340,7 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
       DISABLE_OPT_TRACE_COST_MODEL;
     }
   }
-  if (FAILEDx(calculate_selectivity(table_metas, ctx, sel_estimators, selectivity, all_predicate_sel, true))) {
+  if (FAILEDx(calculate_selectivity(table_metas, ctx, sel_estimators, selectivity, all_predicate_sel, true, is_complex_filter_out))) {
     LOG_WARN("failed to calculate estimator selectivity", K(ret), K(selectivities), K(sel_estimators));
   }
   return ret;
@@ -1344,7 +1351,8 @@ int ObOptSelectivity::calculate_join_selectivity(const OptTableMetas &table_meta
                                                  const ObIArray<ObRawExpr*> &predicates,
                                                  double &selectivity,
                                                  ObIArray<ObExprSelPair> &all_predicate_sel,
-                                                 bool is_outerjoin_filter)
+                                                 bool is_outerjoin_filter,
+                                                 bool *is_complex_join_out)
 {
   int ret = OB_SUCCESS;
   selectivity = 1.0;
@@ -1436,6 +1444,10 @@ int ObOptSelectivity::calculate_join_selectivity(const OptTableMetas &table_meta
   }
   LOG_TRACE("succeed to calculate join selectivity",
       K(selectivity), K(is_complex_join), K(default_complex_sel), K(reliable_sel_upper_bound), K(ctx));
+
+  if (OB_SUCC(ret) && nullptr != is_complex_join_out) {
+    *is_complex_join_out = is_complex_join;
+  }
   return ret;
 }
 

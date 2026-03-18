@@ -759,13 +759,15 @@ public:
                                    ObIArray<ObSelEstimator *> &sel_estimators,
                                    double &selectivity,
                                    common::ObIArray<ObExprSelPair> &all_predicate_sel,
-                                   bool record_range_sel = false);
+                                   bool record_range_sel = false,
+                                   bool *is_complex_filter_out = nullptr);
 
   static int calculate_selectivity(const OptTableMetas &table_metas,
                                    const OptSelectivityCtx &ctx,
                                    const common::ObIArray<ObRawExpr*> &quals,
                                    double &selectivity,
-                                   common::ObIArray<ObExprSelPair> &all_predicate_sel);
+                                   common::ObIArray<ObExprSelPair> &all_predicate_sel,
+                                   bool *is_complex_filter_out = nullptr);
 
   static int calculate_conditional_selectivity(const OptTableMetas &table_metas,
                                                const OptSelectivityCtx &ctx,
@@ -780,7 +782,8 @@ public:
                                         const common::ObIArray<ObRawExpr*> &quals,
                                         double &selectivity,
                                         common::ObIArray<ObExprSelPair> &all_predicate_sel,
-                                        bool is_outerjoin_filter = false);
+                                        bool is_outerjoin_filter = false,
+                                        bool *is_complex_join = nullptr);
 
   static int calculate_qual_selectivity(const OptTableMetas &table_metas,
                                         const OptSelectivityCtx &ctx,

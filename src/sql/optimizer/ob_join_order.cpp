@@ -10204,49 +10204,89 @@ int JoinPath::get_re_estimate_param(EstimateCostInfo &param,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected param", K(param), K(ret));
   } else {
+    double tmp_sel = 1.0;
+    ObLogPlan *plan = parent_->get_plan();
+    const ObJoinOrder *left_tree = left_path_->parent_;
+    const ObJoinOrder *right_tree = right_path_->parent_;
+    const JoinInfo *join_info = parent_->get_join_info();
+    bool is_complex_join = false;
+    ObSEArray<ObRawExpr *, 8> re_est_join_quals;
     left_param.rescan_left_server_list_ = param.rescan_left_server_list_;
     right_param.rescan_left_server_list_ = left_path_->is_match_all()
                                            ? param.rescan_left_server_list_
                                            : &get_server_list();
     double card = get_path_output_rows();
-    if (param.need_row_count_ >= card || param.need_row_count_ < 0) {
-      param.need_row_count_ = card;
-    } else if (JoinAlgo::HASH_JOIN == join_algo_ &&
-               LEFT_SEMI_JOIN != join_type_ &&
-               LEFT_ANTI_JOIN != join_type_) {
-      right_param.need_row_count_ = right_path_->get_path_output_rows();
-      right_param.need_row_count_ *= (param.need_row_count_ / card);
-    } else if (JoinAlgo::NESTED_LOOP_JOIN == join_algo_) {
-      left_param.need_row_count_ = left_path_->get_path_output_rows();
-      left_param.need_row_count_ *= (param.need_row_count_ / card);
-    } else if (JoinAlgo::MERGE_JOIN == join_algo_) {
-      left_param.need_row_count_ = left_path_->get_path_output_rows();
-      left_param.need_row_count_ *= sqrt(param.need_row_count_ / card);
-      right_param.need_row_count_ = right_path_->get_path_output_rows();
-      right_param.need_row_count_ *= sqrt(param.need_row_count_ / card);
+
+    if (param.need_row_count_ >= 0) {
+      if(OB_ISNULL(join_info) || OB_ISNULL(left_tree) || OB_ISNULL(right_tree)){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get join order info", K(ret), K(join_info), K(left_tree), K(right_tree));
+      } else if (OB_FAIL(append(re_est_join_quals, join_info->where_conditions_))) {
+        LOG_WARN("failed to append filter conditions from join info", K(ret));
+      } else if (OB_FAIL(append(re_est_join_quals, join_info->on_conditions_))) {
+        LOG_WARN("failed to append other join conditions from join info", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        plan->get_selectivity_ctx().init_join_ctx(join_type_,
+                                                  &left_tree->get_tables(),
+                                                  &right_tree->get_tables(),
+                                                  left_path_->get_path_output_rows(),
+                                                  right_path_->get_path_output_rows());
+        if (OB_FAIL(ObOptSelectivity::calculate_join_selectivity(
+                    plan->get_update_table_metas(),
+                    plan->get_selectivity_ctx(),
+                    re_est_join_quals,
+                    tmp_sel,
+                    plan->get_predicate_selectivities(),
+                    false,
+                    &is_complex_join))) {
+          LOG_WARN("failed to detect complex join in re-estimate param", K(ret), K(re_est_join_quals));
+        }
+      }
     }
 
-    if (right_path_->is_inner_path() && (right_param.need_row_count_ > 1 || right_param.need_row_count_ < 0)
-        && (LEFT_SEMI_JOIN == join_type_ || LEFT_ANTI_JOIN == join_type_)
-        && ObEnableOptRowGoal::OFF != parent_->get_plan()->get_optimizer_context().get_enable_opt_row_goal()) {
-      right_param.need_row_count_ = 1;
-    }
+    if (OB_SUCC(ret)) {
+      if (is_complex_join){
+        right_param.need_row_count_ = -1;
+        left_param.need_row_count_ = -1;
+      } else if (param.need_row_count_ >= card || param.need_row_count_ < 0) {
+        param.need_row_count_ = card;
+      } else if (JoinAlgo::HASH_JOIN == join_algo_ &&
+                LEFT_SEMI_JOIN != join_type_ &&
+                LEFT_ANTI_JOIN != join_type_) {
+        right_param.need_row_count_ = right_path_->get_path_output_rows();
+        right_param.need_row_count_ *= (param.need_row_count_ / card);
+      } else if (JoinAlgo::NESTED_LOOP_JOIN == join_algo_) {
+        left_param.need_row_count_ = left_path_->get_path_output_rows();
+        left_param.need_row_count_ *= (param.need_row_count_ / card);
+      } else if (JoinAlgo::MERGE_JOIN == join_algo_) {
+        left_param.need_row_count_ = left_path_->get_path_output_rows();
+        left_param.need_row_count_ *= sqrt(param.need_row_count_ / card);
+        right_param.need_row_count_ = right_path_->get_path_output_rows();
+        right_param.need_row_count_ *= sqrt(param.need_row_count_ / card);
+      }
 
-    if (re_est_for_op) {
-      left_param.need_parallel_ = left_path_->is_match_all() ? ObGlobalHint::UNSET_PARALLEL : param.need_parallel_;
-      right_param.need_parallel_ = right_path_->is_match_all() ? ObGlobalHint::UNSET_PARALLEL : param.need_parallel_;
-    } else if (is_partition_wise()) {
-      left_param.need_parallel_ = param.need_parallel_;
-      right_param.need_parallel_ = param.need_parallel_;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(left_param.join_filter_infos_.assign(param.join_filter_infos_))) {
-      LOG_WARN("failed to assign join filter infos", K(ret));
-    } else if (OB_FAIL(right_param.join_filter_infos_.assign(param.join_filter_infos_))) {
-      LOG_WARN("failed to assign join filter infos", K(ret));
-    } else if (OB_FAIL(append(right_param.join_filter_infos_, join_filter_infos_))) {
-      LOG_WARN("failed to append join filter infos", K(ret));
+      if (right_path_->is_inner_path() && (right_param.need_row_count_ > 1 || right_param.need_row_count_ < 0)
+          && (LEFT_SEMI_JOIN == join_type_ || LEFT_ANTI_JOIN == join_type_)
+          && ObEnableOptRowGoal::OFF != parent_->get_plan()->get_optimizer_context().get_enable_opt_row_goal()) {
+        right_param.need_row_count_ = 1;
+      }
+
+      if (re_est_for_op) {
+        left_param.need_parallel_ = left_path_->is_match_all() ? ObGlobalHint::UNSET_PARALLEL : param.need_parallel_;
+        right_param.need_parallel_ = right_path_->is_match_all() ? ObGlobalHint::UNSET_PARALLEL : param.need_parallel_;
+      } else if (is_partition_wise()) {
+        left_param.need_parallel_ = param.need_parallel_;
+        right_param.need_parallel_ = param.need_parallel_;
+      }
+
+      if (OB_FAIL(left_param.join_filter_infos_.assign(param.join_filter_infos_))) {
+        LOG_WARN("failed to assign join filter infos", K(ret));
+      } else if (OB_FAIL(right_param.join_filter_infos_.assign(param.join_filter_infos_))) {
+        LOG_WARN("failed to assign join filter infos", K(ret));
+      } else if (OB_FAIL(append(right_param.join_filter_infos_, join_filter_infos_))) {
+        LOG_WARN("failed to append join filter infos", K(ret));
+      }
     }
   }
   return ret;
