@@ -143,7 +143,7 @@ jobs:
           else
             echo "Artifact not found, falling back to wget"
             URL="${{ vars.FARM_OBSERVER_URL }}"
-            [[ -z "$URL" ]] && URL="http://6.12.233.4:5000/observer"
+            [[ -z "$URL" ]] && URL="http://11.166.86.153:8877/observer"
             wget -O observer "$URL" || exit 1
             chmod +x observer
           fi
