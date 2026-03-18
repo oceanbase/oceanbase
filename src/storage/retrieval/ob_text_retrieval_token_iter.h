@@ -252,6 +252,7 @@ private:
   const ObBlockMaxScoreIterParam *block_max_iter_param_;
   ObTableScanParam *block_max_scan_param_;
   ObBlockMaxBM25RankingParam ranking_param_;
+  ObDomainIdCmp domain_id_cmp_;
   const ObDatum *curr_id_;
   const ObMaxScoreTuple *max_score_tuple_;
   double dim_max_score_;
