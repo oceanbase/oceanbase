@@ -101,6 +101,60 @@ public:
   ObSEArray<float*, 64> sample_vectors_;
 };
 
+// Abstract input interface for vector data passed to K-means.
+// Avoids materializing large split pointer arrays by computing sub-space offsets on-the-fly.
+class ObKmeansVectorInput {
+public:
+  ObKmeansVectorInput() {}
+  virtual ~ObKmeansVectorInput() {}
+  virtual int64_t count() const = 0;
+  virtual float *at(int64_t idx) const = 0;
+  VIRTUAL_TO_STRING_KV(K("ObKmeansVectorInput"));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansVectorInput);
+};
+
+// Wraps a plain ObIArray<float*> as a read-only ObKmeansVectorInput.
+// Used by single-kmeans where sample_vectors_ is passed directly.
+class ObKmeansArrayInput : public ObKmeansVectorInput {
+public:
+  explicit ObKmeansArrayInput(const ObIArray<float *> &arr) : ObKmeansVectorInput(), arr_(arr) {}
+  virtual int64_t count() const override { return arr_.count(); }
+  virtual float *at(int64_t idx) const override { return arr_.at(idx); }
+  VIRTUAL_TO_STRING_KV(K("ObKmeansArrayInput"), K(count()));
+private:
+  const ObIArray<float *> &arr_;
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansArrayInput);
+};
+
+// Input for one PQ sub-space of the sample vector array.
+// For sub-space m_idx and sample j the pointer is: sample_vectors_[j] + m_idx * dim_.
+// No backing pointer array is allocated; computation is done on every at() call.
+class ObKmeansSplitInput : public ObKmeansVectorInput {
+public:
+  ObKmeansSplitInput() : ObKmeansVectorInput(), samples_(nullptr), m_idx_(0), dim_(0) {}
+  void init(const ObIArray<float *> &samples, int64_t m_idx, int64_t dim)
+  {
+    samples_ = &samples;
+    m_idx_   = m_idx;
+    dim_     = dim;
+  }
+  virtual int64_t count() const override
+  {
+    return OB_NOT_NULL(samples_) ? samples_->count() : 0;
+  }
+  virtual float *at(int64_t idx) const override
+  {
+    return samples_->at(idx) + m_idx_ * dim_;
+  }
+  VIRTUAL_TO_STRING_KV(K("ObKmeansSplitInput"), K_(m_idx), K_(dim), K(count()));
+private:
+  const ObIArray<float *> *samples_;
+  int64_t m_idx_;
+  int64_t dim_;
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansSplitInput);
+};
+
 // normal kmeans
 // quantization and normalization are not of concern here
 class ObKmeansBaseTask;
@@ -131,7 +185,7 @@ public:
   virtual void destroy();
   // ivfpq enable_parallel is false, because ivf_dim is small, there is no need for parallel kmeans.
   int init(ObKmeansCtx &kmeans_ctx, bool enable_parallel = false);
-  int build(const ObIArray<float*> &input_vectors);
+  int build(const ObKmeansVectorInput &input_vectors);
   bool is_finish() const { return FINISH == status_; }
   int64_t next_idx() { return 1L - cur_idx_; }
   ObCentersBuffer<float> &get_cur_centers() { return centers_[cur_idx_]; }
@@ -140,7 +194,7 @@ public:
   ObKmeansBuildTaskHandler* get_task_handler() { return task_handler_; }
   int init_build_handle(ObKmeansBuildTaskHandler &handle);
   float get_centers_distance_public(float* centers_distance, int64_t i, int64_t j) { return get_centers_distance(centers_distance, i, j); }
-  static int calc_distances_range(const ObIArray<float*> &input_vectors, int64_t start_idx, int64_t end_idx,
+  static int calc_distances_range(const ObKmeansVectorInput &input_vectors, int64_t start_idx, int64_t end_idx,
                                  float* current_center, float* weight, const int64_t dim, float &sum);
 
   template<typename TaskType>
@@ -152,7 +206,7 @@ public:
                KP(weight_),
                K(status_));
   // virtual functions
-  virtual int do_kmeans(const ObIArray<float*> &input_vectors) = 0;
+  virtual int do_kmeans(const ObKmeansVectorInput &input_vectors) = 0;
   static int calc_kmeans_distance(const float* a, const float* b, const int64_t len, float &distance);
   OB_INLINE void set_kmeans_monitor(ObKmeansMonitor &kmeans_monitor) { kmeans_monitor_ = &kmeans_monitor; }
 
@@ -164,14 +218,14 @@ public:
   bool is_hgraph_enabled() const { return enable_hgraph_; }
 
 protected:
-  int inner_build(const ObIArray<float*> &input_vectors);
-  int quick_centers(const ObIArray<float*> &input_vectors); // use samples as finally centers
-  virtual int init_first_center(const ObIArray<float*> &input_vectors);
+  int inner_build(const ObKmeansVectorInput &input_vectors);
+  int quick_centers(const ObKmeansVectorInput &input_vectors); // use samples as finally centers
+  virtual int init_first_center(const ObKmeansVectorInput &input_vectors);
   // use kmeans++ to init centers
-  virtual int init_centers(const ObIArray<float*> &input_vectors);
-  int calc_distances_parallel(const ObIArray<float*> &input_vectors,
+  virtual int init_centers(const ObKmeansVectorInput &input_vectors);
+  int calc_distances_parallel(const ObKmeansVectorInput &input_vectors,
                              float *current_center, float &sum);
-  double calc_imbalance_factor(const ObIArray<float*> &input_vectors, int32_t *data_cnt_in_cluster);
+  double calc_imbalance_factor(const ObKmeansVectorInput &input_vectors, int32_t *data_cnt_in_cluster);
   void set_centers_distance(float* centers_distance, int64_t i, int64_t j, float distance);
   float get_centers_distance(float* centers_distance, int64_t i, int64_t j);
 
@@ -208,17 +262,17 @@ public:
     destroy();
   }
   virtual void destroy() override;
-  int assign_vectors_range(const ObIArray<float *> &input_vectors, int64_t start_idx, int64_t end_idx,
+  int assign_vectors_range(const ObKmeansVectorInput &input_vectors, int64_t start_idx, int64_t end_idx,
                            float *centers_distance, int32_t *data_cnt_in_cluster, float &dis_obj,
                            bool use_safe_add = false);
 
 protected:
-  virtual int do_kmeans(const ObIArray<float*> &input_vectors) override;
+  virtual int do_kmeans(const ObKmeansVectorInput &input_vectors) override;
 
 private:
-  int search_nearest_center(const ObIArray<float *> &input_vectors, float *centers_distance,
+  int search_nearest_center(const ObKmeansVectorInput &input_vectors, float *centers_distance,
                             int32_t *data_cnt_in_cluster, float &dis_obj);
-  int assign_vectors_parallel(const ObIArray<float *> &input_vectors, float *centers_distance,
+  int assign_vectors_parallel(const ObKmeansVectorInput &input_vectors, float *centers_distance,
                               int32_t *data_cnt_in_cluster, float &dis_obj);
 
 protected:
@@ -348,11 +402,9 @@ public:
                K(ctx_));
 
 private:
-  int split_vector(float* vector, ObArrayArray<float*> &splited_arrs);
-  int prepare_splited_arrs(ObArrayArray<float *> &splited_arrs);
   void wait_kmeans_task_finish(ObKmeansBuildTask *build_tasks, ObKmeansBuildTaskHandler &handle);
   int do_build_task_local(const common::ObTableID &table_id, const common::ObTabletID &tablet_id,
-                          ObKmeansBuildTaskHandler &handle, const ObArrayArray<float *> &splited_arrs,
+                          ObKmeansBuildTaskHandler &handle, const ObKmeansSplitInput *split_inputs,
                           ObKmeansBuildTask *build_tasks, int task_idx, ObInsertMonitor *insert_monitor);
 
 private:
@@ -576,7 +628,7 @@ struct ObKmeansBuildTaskCtx {
   common::ObTableID table_id_;
   common::ObTabletID tablet_id_;
   int m_idx_;
-  const ObIArray<float *> *vectors_;
+  const ObKmeansVectorInput *vectors_;
   ObInsertMonitor *insert_monitor_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObKmeansBuildTaskCtx);
@@ -607,7 +659,7 @@ struct ObKmeansDistanceCalcTaskCtx {
   int64_t start_idx_;
   int64_t end_idx_;
   float sum_;
-  const ObIArray<float *> *vectors_;
+  const ObKmeansVectorInput *vectors_;
   float *current_center_;
   float *weight_;
   int64_t dim_;
@@ -637,7 +689,7 @@ struct ObKmeansAssignTaskCtx {
   }
   int64_t start_idx_;
   int64_t end_idx_;
-  const ObIArray<float*> *input_vectors_;
+  const ObKmeansVectorInput *input_vectors_;
   float* centers_distance_;
   int32_t* data_cnt_in_cluster_;
   float dis_obj_;
@@ -684,7 +736,7 @@ public:
   ObKmeansDistanceCalcTask() : ObKmeansBaseTask() {}
   virtual ~ObKmeansDistanceCalcTask() { reset(); }
   int init(int64_t start_idx, int64_t end_idx,
-           const ObIArray<float *> *vectors,
+           const ObKmeansVectorInput *vectors,
            float *current_center, float *weight, const int64_t dim);
   void reset() override;
   int do_work() override;
@@ -706,7 +758,7 @@ public:
   ObKmeansAssignTask() : ObKmeansBaseTask(), algo_(nullptr) {}
   virtual ~ObKmeansAssignTask() = default;
 
-  int init(int64_t start_idx, int64_t end_idx, ObElkanKmeansAlgo *algo, const ObIArray<float *> *input_vectors,
+  int init(int64_t start_idx, int64_t end_idx, ObElkanKmeansAlgo *algo, const ObKmeansVectorInput *input_vectors,
            float *centers_distance, int32_t *data_cnt_in_cluster);
   virtual void reset() override;
   virtual void set_task_stop() override {
@@ -733,7 +785,7 @@ public:
   ObKmeansBuildTask() : ObKmeansBaseTask(), algo_(nullptr) {}
   virtual ~ObKmeansBuildTask() { reset(); }
   int init(const common::ObTableID &table_id, const common::ObTabletID &tablet_id, int m_idx, ObKmeansAlgo *algo,
-           const ObIArray<float *> *vectors, ObInsertMonitor *insert_monitor);
+           const ObKmeansVectorInput *vectors, ObInsertMonitor *insert_monitor);
   void reset() override {
     ObKmeansBaseTask::reset();
     algo_ = nullptr;
