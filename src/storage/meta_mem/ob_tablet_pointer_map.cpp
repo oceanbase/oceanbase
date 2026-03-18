@@ -56,6 +56,17 @@ int ObTabletPointerMap::erase(const ObTabletMapKey &key, ObTabletHandle &guard)
   } else if (OB_ITEM_NOT_SETTED == ret) {
     need_erase = true;
     ret = OB_SUCCESS;  // ignore ret error, may be creating failure.
+  } else if (OB_IO_ERROR == ret) {
+    int tmp_ret = common::OB_SUCCESS;
+    bool can_skip = false;
+    if (OB_SUCCESS != (tmp_ret = check_can_skip_shared_tablet(key, can_skip))) {
+      LOG_WARN("failed to check can skip shared tablet", K(ret), K(key));
+    } else if (can_skip) {
+      need_erase = true;
+      ret = OB_SUCCESS;  // ignore ret error, shared tablet can be skipped when ls offline.
+    } else {
+      STORAGE_LOG(WARN, "failed to get meta obj", K(ret), K(key));
+    }
   } else {
     STORAGE_LOG(WARN, "fail to get meta obj", K(ret), K(key));
   }
@@ -1081,6 +1092,38 @@ int ObTabletPointerMap::set_tablet_next_meta_version(const ObTabletMapKey &key, 
       t_ptr->set_next_meta_version(next_meta_version);
       STORAGE_LOG(INFO, "set tablet next meta version", K(ret), K(t_ptr->next_meta_version_),
         K(t_ptr->last_gc_version_));
+    }
+  }
+  return ret;
+}
+
+int ObTabletPointerMap::check_can_skip_shared_tablet(
+    const ObTabletMapKey &key,
+    bool &can_skip)
+{
+  int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
+  ObTabletPointerHandle ptr_hdl(*this);
+  ObTabletPointer *t_ptr = nullptr;
+  can_skip = false;
+
+  if (OB_UNLIKELY(!key.is_valid())) {
+    ret = common::OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
+  } else { // read lock
+    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
+      STORAGE_LOG(WARN, "fail to get pointer handle", K(ret), K(key));
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
+      ret = common::OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr));
+    } else if (!t_ptr->get_ls()->is_offline() || !t_ptr->get_addr().is_sslog() || t_ptr->is_in_memory()) {
+      can_skip = false;
+    } else {
+      can_skip = true;
+      FLOG_INFO("skip check shared tablet", K(key), KPC(t_ptr));
     }
   }
   return ret;

@@ -76,7 +76,9 @@ public:
       const char *buf,
       const int64_t buf_len);
   int set_tablet_next_meta_version(const ObTabletMapKey &key, const int64_t next_meta_version);
-
+  int check_can_skip_shared_tablet(
+      const ObTabletMapKey &key,
+      bool &can_skip);
 private:
   static int read_from_disk(
       const bool is_full_load,

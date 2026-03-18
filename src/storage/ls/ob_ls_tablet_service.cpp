@@ -7822,9 +7822,31 @@ int ObLSTabletService::SetMemtableFrozenOperator::operator()(const common::ObTab
   int ret = OB_SUCCESS;
   ObTabletHandle handle;
   cur_tablet_id_ = tablet_id;
+  bool can_skip_tablet = false;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (OB_UNLIKELY(!tablet_id.is_valid()) || OB_ISNULL(tablet_svr_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(tablet_svr_));
+  } else {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (is_shared_storage) {
+      ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+      ObTabletMapKey key(tablet_svr_->ls_->get_ls_id(), tablet_id);
+      if (OB_ISNULL(t3m)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant meta mem mgr should not be NUL", K(ret));
+      } else if (OB_FAIL(t3m->check_can_skip_shared_tablet(key, can_skip_tablet))) {
+        LOG_WARN("failed to check can skip shared tablet", K(ret), K(key));
+      }
+    }
+#else
+    can_skip_tablet = false;
+#endif
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (can_skip_tablet)  {
+    FLOG_INFO("tablet addr is sslog which without tablet first meta, skip set memtable frozen", K(tablet_id));
   } else if (OB_FAIL(tablet_svr_->get_tablet(tablet_id,
                                              handle,
                                              ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT,
@@ -9947,6 +9969,7 @@ int ObLSTabletService::rewrite_tablet_for_ss_change_version_(
   }
   return ret;
 }
+
 #endif
 
 } // namespace storage

@@ -3516,6 +3516,24 @@ int ObTenantMetaMemMgr::hook_tablet(
   return ret;
 }
 
+int ObTenantMetaMemMgr::check_can_skip_shared_tablet(
+    const ObTabletMapKey &key,
+    bool &can_skip)
+{
+  int ret = OB_SUCCESS;
+  can_skip = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(tablet_map_.check_can_skip_shared_tablet(key, can_skip))) {
+    LOG_WARN("failed to check can skip shared tablet", K(ret), K(key));
+  }
+  return ret;
+}
+
 #endif
 
 

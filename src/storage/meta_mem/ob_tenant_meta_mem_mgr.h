@@ -385,6 +385,9 @@ public:
       const ObTabletMapKey &key,
       const char *buf,
       const int64_t buf_len);
+  int check_can_skip_shared_tablet(
+      const ObTabletMapKey &key,
+      bool &can_skip);
 #endif
 
 public:
