@@ -143,24 +143,24 @@ int ObDirectLoadOriginTable::get_tablet_handle(ObTabletHandle &tablet_handle) co
 }
 
 int ObDirectLoadOriginTable::get_major_and_ddl_sstable(
-  ObTabletHandle &tablet_handle, blocksstable::ObSSTable *&major_sstable,
+  ObTabletTableIterator &tablet_table_iter, blocksstable::ObSSTable *&major_sstable,
   common::ObIArray<blocksstable::ObSSTable *> &ddl_sstables) const
 {
   int ret = OB_SUCCESS;
   major_sstable = nullptr;
   ObITable *table = nullptr;
-  ObTabletTableIterator table_iter;
+  ObTabletHandle tablet_handle;
   if (OB_FAIL(get_tablet_handle(tablet_handle))) {
     LOG_WARN("fail to get tablet handle", KR(ret));
-  } else if (OB_FAIL(table_iter.set_tablet_handle(tablet_handle))) {
+  } else if (OB_FAIL(tablet_table_iter.set_tablet_handle(tablet_handle))) {
     LOG_WARN("fail to set tablet handle", KR(ret));
-  } else if (OB_FAIL(table_iter.refresh_read_tables_from_tablet(
+  } else if (OB_FAIL(tablet_table_iter.refresh_read_tables_from_tablet(
                INT64_MAX, false /*allow_not_ready*/, false /*major_sstable_only*/,
                false /*need_split_src_table*/, false /*need_split_dst_table*/))) {
     LOG_WARN("fail to refresh read tables", KR(ret));
   }
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(table_iter.table_iter()->get_next(table))) {
+    if (OB_FAIL(tablet_table_iter.table_iter()->get_next(table))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to get next table", KR(ret));
       } else {

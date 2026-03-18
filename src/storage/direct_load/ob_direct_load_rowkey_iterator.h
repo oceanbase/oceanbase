@@ -70,12 +70,12 @@ public:
   virtual ~ObDirectLoadMacroBlockEndKeyIterator();
   int init(blocksstable::ObSSTableSecMetaIterator *macro_meta_iter);
   int init(blocksstable::ObSSTableSecMetaIterator *macro_meta_iter,
-           const ObTabletHandle &tablet_handle);
+           const ObTabletTableIterator &tablet_table_iter);
   int get_next_rowkey(const blocksstable::ObDatumRowkey *&rowkey) override;
 private:
   blocksstable::ObSSTableSecMetaIterator *macro_meta_iter_;
   blocksstable::ObDatumRowkey rowkey_;
-  ObTabletHandle tablet_handle_;
+  ObTabletTableIterator tablet_table_iter_;
   bool is_inited_;
 };
 

@@ -24,6 +24,7 @@ namespace storage
 {
 class ObDirectLoadOriginTableScanner;
 class ObDirectLoadOriginTableGetter;
+class ObTabletTableIterator;
 
 struct ObDirectLoadOriginTableCreateParam
 {
@@ -90,7 +91,7 @@ public:
   bool is_valid() const { return is_inited_; }
   const ObDirectLoadOriginTableMeta &get_meta() const {return meta_; }
   int get_tablet_handle(ObTabletHandle &tablet_handle) const;
-  int get_major_and_ddl_sstable(ObTabletHandle &tablet_handle,
+  int get_major_and_ddl_sstable(ObTabletTableIterator &tablet_table_iter,
     blocksstable::ObSSTable *&major_sstable,
     common::ObIArray<blocksstable::ObSSTable *> &ddl_sstables) const;
 

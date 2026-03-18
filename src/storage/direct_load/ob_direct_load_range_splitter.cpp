@@ -16,6 +16,7 @@
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_index_block_meta_scanner.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
@@ -35,7 +36,7 @@ int ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
   const ObITableReadInfo &index_read_info,
   ObIAllocator &allocator,
   ObIDirectLoadDatumRowkeyIterator *&rowkey_iter,
-  const ObTabletHandle &tablet_handle)
+  const ObTabletTableIterator &tablet_table_iter)
 {
   int ret = OB_SUCCESS;
   ObSSTableSecMetaIterator *macro_meta_iter = nullptr;
@@ -48,7 +49,7 @@ int ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
                          OB_NEWx(ObDirectLoadMacroBlockEndKeyIterator, (&allocator)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObDirectLoadMacroBlockEndKeyIterator", KR(ret));
-  } else if (OB_FAIL(end_key_iter->init(macro_meta_iter, tablet_handle))) {
+  } else if (OB_FAIL(end_key_iter->init(macro_meta_iter, tablet_table_iter))) {
     LOG_WARN("fail to init rowkey iter", KR(ret));
   } else {
     rowkey_iter = end_key_iter;
@@ -131,17 +132,17 @@ int ObDirectLoadRangeSplitUtils::construct_origin_table_rowkey_iters(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(origin_table), K(scan_range));
   } else {
-    ObTabletHandle tablet_handle;
+    ObTabletTableIterator tablet_table_iter;
     ObArray<ObSSTable *> ddl_sstables;
     blocksstable::ObSSTable *major_sstable = nullptr;
     if (OB_FAIL(
-          origin_table->get_major_and_ddl_sstable(tablet_handle, major_sstable, ddl_sstables))) {
+          origin_table->get_major_and_ddl_sstable(tablet_table_iter, major_sstable, ddl_sstables))) {
       LOG_WARN("fail to get major sstable", KR(ret));
     } else if (nullptr != major_sstable) {
-      const ObITableReadInfo &read_info = tablet_handle.get_obj()->get_rowkey_read_info();
+      const ObITableReadInfo &read_info = tablet_table_iter.get_tablet()->get_rowkey_read_info();
       ObIDirectLoadDatumRowkeyIterator *rowkey_iter = nullptr;
       if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
-            major_sstable, scan_range, read_info, allocator, rowkey_iter, tablet_handle))) {
+            major_sstable, scan_range, read_info, allocator, rowkey_iter, tablet_table_iter))) {
         LOG_WARN("fail to construct rowkey iter", KR(ret));
       } else if (OB_FAIL(iter_guard.push_back(rowkey_iter))) {
         LOG_WARN("fail to push back rowkey iter", KR(ret));
@@ -154,12 +155,12 @@ int ObDirectLoadRangeSplitUtils::construct_origin_table_rowkey_iters(
         }
       }
     } else {
-      const ObITableReadInfo &read_info = tablet_handle.get_obj()->get_rowkey_read_info();
+      const ObITableReadInfo &read_info = tablet_table_iter.get_tablet()->get_rowkey_read_info();
       for (int64_t i = 0; OB_SUCC(ret) && i < ddl_sstables.count(); ++i) {
         ObSSTable *ddl_sstable = ddl_sstables.at(i);
         ObIDirectLoadDatumRowkeyIterator *rowkey_iter = nullptr;
         if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
-              ddl_sstable, scan_range, read_info, allocator, rowkey_iter, tablet_handle))) {
+              ddl_sstable, scan_range, read_info, allocator, rowkey_iter, tablet_table_iter))) {
           LOG_WARN("fail to construct rowkey iter", KR(ret));
         } else if (OB_FAIL(iter_guard.push_back(rowkey_iter))) {
           LOG_WARN("fail to push back rowkey iter", KR(ret));
@@ -449,11 +450,11 @@ int ObDirectLoadSampleInfo::get_origin_info(ObDirectLoadOriginTable *origin_tabl
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(origin_table));
   } else {
-    ObTabletHandle tablet_handle;
+    ObTabletTableIterator tablet_table_iter;
     ObSSTable *major_sstable = nullptr;
     ObArray<ObSSTable *> ddl_sstables;
     if (OB_FAIL(
-                 origin_table->get_major_and_ddl_sstable(tablet_handle, major_sstable, ddl_sstables))) {
+                 origin_table->get_major_and_ddl_sstable(tablet_table_iter, major_sstable, ddl_sstables))) {
       LOG_WARN("fail to get major sstable", KR(ret));
     } else if (nullptr != major_sstable) {
       ObSSTableMetaHandle meta_handle;

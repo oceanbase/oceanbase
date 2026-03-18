@@ -31,6 +31,7 @@ class ObDirectLoadOriginTable;
 class ObDirectLoadSSTable;
 class ObDirectLoadMultipleSSTable;
 class ObTabletHandle;
+class ObTabletTableIterator;
 
 class ObDirectLoadRangeSplitUtils
 {
@@ -40,7 +41,7 @@ public:
                                    const storage::ObITableReadInfo &index_read_info,
                                    common::ObIAllocator &allocator,
                                    ObIDirectLoadDatumRowkeyIterator *&rowkey_iter,
-                                   const ObTabletHandle &tablet_handle);
+                                   const ObTabletTableIterator &tablet_table_iter);
   static int construct_rowkey_iter(ObDirectLoadMultipleSSTable *sstable,
                                    const ObDirectLoadTableDataDesc &table_data_desc,
                                    common::ObIAllocator &allocator,
