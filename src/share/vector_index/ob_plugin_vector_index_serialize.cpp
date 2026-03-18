@@ -298,6 +298,7 @@ int ObVectorIndexSerializer::deserialize(ObVectorIndexMeta& meta, ObIStreamBuf::
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
     lib::ObLightBacktraceGuard light_backtrace_guard(false);
     ObVectorIndexSegmentMeta &seg_meta = meta.bases_.at(0);
+    ObVidBound vid_bound;
     if (OB_FAIL(seg_meta.segment_handle_->fdeserialize(in))) {
       LOG_WARN("fail to do vsag deserialize", K(ret));
       if (streambuf.get_error_code() != OB_SUCCESS && streambuf.get_error_code() != OB_ITER_END) {
@@ -307,12 +308,18 @@ int ObVectorIndexSerializer::deserialize(ObVectorIndexMeta& meta, ObIStreamBuf::
     } else if (OB_FALSE_IT(seg_meta.segment_handle_->set_is_base())) {
     } else if (OB_FAIL(seg_meta.segment_handle_->immutable_optimize())) {
       LOG_WARN("fail to index immutable_optimize", K(ret));
+    } else if (OB_FAIL(seg_meta.segment_handle_->get_vid_bound(vid_bound.min_vid_, vid_bound.max_vid_))) {
+      LOG_WARN("fail to get vid bound", K(ret));
+    } else if (OB_FALSE_IT(seg_meta.segment_handle_->set_read_vid_bound(vid_bound))) {
     } else if (OB_FAIL(seg_meta.deep_copy_seg_key(param.start_key_, param.end_key_))) {
       LOG_WARN("failed to deep copy seg key", K(ret), K(seg_meta));
     } else {
       // MARK AS legacy base segment (backward compatibility)
       seg_meta.seg_type_ = ObVectorIndexSegmentType::LEGACY_BASE;
       seg_meta.index_type_ = param.index_type_;
+    }
+    if (OB_FAIL(ret)) {
+      seg_meta.segment_handle_.reset();
     }
   }
   if (OB_FAIL(ret)) {

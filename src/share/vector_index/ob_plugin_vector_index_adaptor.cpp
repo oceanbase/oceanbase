@@ -4193,10 +4193,6 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
         // if table 5 has visible row, we should get key, data and visible row total 3 column
         ret = OB_SCHEMA_EAGAIN;
         LOG_INFO("row is invisible, maybe is doing async task, skip load", K(ret), KPC(row));
-      } else if (get_snapshot_key_prefix().empty() || get_snapshot_key_prefix().prefix_match("renew")) {
-        if (OB_FAIL(deserialize_snap_data(query_cond, row))) {
-          LOG_WARN("failed to deserialize snap data", K(ret));
-        }
       } else if (get_snapshot_key_prefix().empty()
           || !row->storage_datums_[0].get_string().prefix_match(get_snapshot_key_prefix())
           || (is_snap_inited() && ! snap_data_->has_complete_))

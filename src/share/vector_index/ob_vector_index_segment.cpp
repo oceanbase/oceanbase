@@ -1785,6 +1785,7 @@ int ObVecIdxSnapshotData::build_finished(ObIAllocator &allocator)
     } else if (OB_FAIL(builder_->segment_handle_->get_vid_bound(min_vid, max_vid))) {
       LOG_WARN("get_vid_bound fail", K(ret), K(builder_->segment_handle_));
     } else {
+      builder_->segment_handle_->set_read_vid_bound(ObVidBound(min_vid, max_vid));
       last_res_seg_info_.mem_used_ = builder_->segment_handle_->get_mem_used();
       last_res_seg_info_.min_vid_ = min_vid;
       last_res_seg_info_.max_vid_ = max_vid;
@@ -1882,6 +1883,9 @@ int ObVecIdxSnapshotData::load_segment(ObIAllocator &allocator, ObPluginVectorIn
   if (OB_FAIL(ObVectorIndexSegment::deserialize(seg_meta.segment_handle_, tenant_id, adaptor, param))) {
     LOG_WARN("serialize index failed.", K(ret));
   }
+  if (OB_FAIL(ret)) {
+    seg_meta.segment_handle_.reset();
+  }
   return ret;
 }
 
@@ -1911,6 +1915,9 @@ int ObVecIdxSnapshotData::load_segment(ObPluginVectorIndexAdaptor *adaptor,
     }
   }
 
+  if (OB_FAIL(ret)) {
+    seg_meta.segment_handle_.reset();
+  }
   if (OB_NOT_NULL(snap_data_iter)) {
     int tmp_ret = MTL(ObAccessService*)->revert_scan_iter(snap_data_iter);
     if (tmp_ret != OB_SUCCESS) {
