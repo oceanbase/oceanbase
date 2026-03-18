@@ -1825,7 +1825,8 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
   ObArenaAllocator allocator(lib::ObMemAttr(MTL_ID(), "SSMinorSched"));
   ObTabletHandle tablet_handle;
   bool skip = false;
-  bool can_exec_ss_minor = false;
+  bool can_generate_new_tablet = true;
+  bool unused_can_gc_sstable = true;
   ObSSMetaUpdateMetaInfo meta_info;
   share::SCN ss_tablet_version;
   if (!ObTabletSSMinorMergeHelper::can_schedule(ls_id, tablet_id)) {
@@ -1843,9 +1844,15 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
   } else if (!tablet_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet handle is invalid", K(ret));
-  } else if (OB_FAIL(ObSSTabletMergeHelper::check_can_exec_merge(tablet_handle, true/*need_check_split*/, can_exec_ss_minor))) {
+  } else if (OB_FAIL(ObSSTabletMergeHelper::check_can_generate_new_tablet(
+      tablet_handle,
+      ObMetaUpdateReason::TABLET_COMPACT_ADD_DATA_MINOR_SSTABLE/*update_reason*/,
+      true/*need_check_split*/,
+      can_generate_new_tablet,
+      unused_can_gc_sstable))) {
+    // update reason = TABLET_COMPACT_ADD_DATA_MINOR_SSTABLE or TABLET_COMPACT_ADD_MDS_MINOR_SSTABLE has the same effect.
     LOG_WARN("check can exec minor compact failed", K(ret), K(ls_id), K(tablet_id), K(transfer_scn));
-  } else if (!can_exec_ss_minor) {
+  } else if (!can_generate_new_tablet) {
     skip = true;
     LOG_INFO("tablet can not exec ss minor compaction", K(ret), K(ls_id), K(tablet_id), K(transfer_scn));
   } else {
