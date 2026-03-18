@@ -170,6 +170,7 @@ private:
   int calculate_ss_min_restore_scn_(share::SCN &min_restore_scn);
 #endif
   int do_cancel_();
+  int check_and_handle_sslog_table_size_(const share::ObBackupStatus::Status &status);
   // new function for generate file list
   int generate_backup_set_file_list_();
   int generate_backup_meta_info_file_list_();

@@ -2376,6 +2376,7 @@ bool ObBackupUtils::is_need_retry_error(const int err)
     case OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH:
     case OB_BACKUP_FILE_NOT_EXIST:
     case OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT:
+    case OB_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED:
       bret = false;
       break;
     default:

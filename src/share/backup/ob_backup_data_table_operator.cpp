@@ -1592,6 +1592,7 @@ int ObBackupTaskOperator::get_backup_task(
         EXTRACT_UINT_FIELD_MYSQL(*result, OB_STR_END_SCN, end_scn, uint64_t);
         EXTRACT_UINT_FIELD_MYSQL(*result, OB_STR_USER_LS_START_SCN, user_ls_start_scn, uint64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_INCARNATION, set_task_attr.incarnation_id_, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_RESULT, set_task_attr.result_, int);
         EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_STATUS, status_str, OB_INNER_TABLE_DEFAULT_KEY_LENTH, tmp_str_len);
         EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_PATH, backup_path_str, OB_MAX_BACKUP_DEST_LENGTH, tmp_str_len);
         EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_MINOR_TURN_ID, set_task_attr.minor_turn_id_, int64_t);

@@ -133,6 +133,49 @@ int ObBackupSetTaskMgr::advance_status_(
 }
 
 
+ERRSIM_POINT_DEF(EN_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED);
+int ObBackupSetTaskMgr::check_and_handle_sslog_table_size_(const ObBackupStatus::Status &status)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (ObBackupStatus::Status::FAILED == status
+      || ObBackupStatus::Status::CANCELED == status
+      || ObBackupStatus::Status::CANCELING == status) {
+    // No need to check in terminal or canceling status
+  } else if (GCTX.is_shared_storage_mode()) {
+    bool is_exceeded = false;
+#ifdef ERRSIM
+    if (OB_FAIL(EN_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED)) {
+      is_exceeded = true;
+      ret = OB_SUCCESS;
+      LOG_INFO("[DATA_BACKUP]errsim: force sslog table size exceeded", K(status), K(set_task_attr_));
+    }
+#endif
+    if (OB_SUCC(ret) && !is_exceeded) {
+      storage::ObSSGarbageCollectorService *gc_service = nullptr;
+      if (OB_ISNULL(gc_service = MTL(storage::ObSSGarbageCollectorService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSGarbageCollectorService should not be null", K(ret), K_(meta_tenant_id));
+      } else if (OB_FAIL(gc_service->sslog_table_size_exceeded(is_exceeded))) {
+        LOG_WARN("failed to check sslog table size", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && is_exceeded) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(do_enable_ss_gc_())) {
+        LOG_ERROR("[DATA_BACKUP]failed to enable ss gc when sslog table size exceeded",
+                  K(tmp_ret), K(status), K(set_task_attr_));
+      }
+      ret = OB_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED;
+      LOG_ERROR("[DATA_BACKUP]sslog table size exceeded during backup, "
+                "backup must fail to allow gc to reclaim space",
+                K(ret), K(status), K(set_task_attr_));
+    }
+  }
+#endif
+  return ret;
+}
+
 int ObBackupSetTaskMgr::process()
 {
   int ret = OB_SUCCESS;
@@ -142,103 +185,104 @@ int ObBackupSetTaskMgr::process()
     LOG_WARN("[DATA_BACKUP]tenant backup set task mgr not init", K(ret));
   } else {
     ObBackupStatus::Status status = set_task_attr_.status_.status_;
-    switch (status) {
-      case ObBackupStatus::Status::INIT: {
-        if (OB_FAIL(persist_sys_ls_task_())) {
-          LOG_WARN("[DATA_BACKUP]failed to persist log stream task", K(ret), K(set_task_attr_));
+    if (OB_FAIL(check_and_handle_sslog_table_size_(status))) {
+      LOG_WARN("[DATA_BACKUP]sslog table size check failed", K(ret), K(set_task_attr_));
+    } else {
+      switch (status) {
+        case ObBackupStatus::Status::INIT: {
+          if (OB_FAIL(persist_sys_ls_task_())) {
+            LOG_WARN("[DATA_BACKUP]failed to persist log stream task", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::DISABLE_SS_GC: {
-        if (OB_FAIL(disable_ss_gc_())) {
-          LOG_WARN("[DATA_BACKUP]failed to disable ss gc", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::DISABLE_SS_GC: {
+          if (OB_FAIL(disable_ss_gc_())) {
+            LOG_WARN("[DATA_BACKUP]failed to disable ss gc", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::WAIT_SS_CLOG_CHECKPOINT: {
-        if (OB_FAIL(wait_ss_clog_checkpoint_())) {
-          LOG_WARN("[DATA_BACKUP]failed to wait ss clog checkpoint", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::WAIT_SS_CLOG_CHECKPOINT: {
+          if (OB_FAIL(wait_ss_clog_checkpoint_())) {
+            LOG_WARN("[DATA_BACKUP]failed to wait ss clog checkpoint", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::SS_WAIT_LS_CONSISTENCY: {
-        if (OB_FAIL(wait_ss_ls_consistency_())) {
-          LOG_WARN("[DATA_BACKUP]failed to wait ss ls consistency", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::SS_WAIT_LS_CONSISTENCY: {
+          if (OB_FAIL(wait_ss_ls_consistency_())) {
+            LOG_WARN("[DATA_BACKUP]failed to wait ss ls consistency", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::BACKUP_SYS_META: {
-        if (OB_FAIL(backup_sys_meta_())) {
-          LOG_WARN("fail to backup sys meta", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::BACKUP_SYS_META: {
+          if (OB_FAIL(backup_sys_meta_())) {
+            LOG_WARN("fail to backup sys meta", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::BACKUP_USER_META: {
-        if (OB_FAIL(backup_user_meta_())) {
-          LOG_WARN("[DATA_BACKUP]failed to backup meta", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::BACKUP_USER_META: {
+          if (OB_FAIL(backup_user_meta_())) {
+            LOG_WARN("[DATA_BACKUP]failed to backup meta", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::BACKUP_META_FINISH: {
-        if (OB_FAIL(backup_meta_finish_())) {
-          LOG_WARN("[DATA_BACKUP]failed to backup meta finish", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::BACKUP_META_FINISH: {
+          if (OB_FAIL(backup_meta_finish_())) {
+            LOG_WARN("[DATA_BACKUP]failed to backup meta finish", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::BACKUP_USER_DATA: {
-        if (OB_FAIL(backup_data_())) {
-          LOG_WARN("[DATA_BACKUP]failed to backup data", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::BACKUP_USER_DATA: {
+          if (OB_FAIL(backup_data_())) {
+            LOG_WARN("[DATA_BACKUP]failed to backup data", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::ENABLE_SS_GC: {
-        if (OB_FAIL(enable_ss_gc_())) {
-          LOG_WARN("[DATA_BACKUP]failed to enable ss gc", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::ENABLE_SS_GC: {
+          if (OB_FAIL(enable_ss_gc_())) {
+            LOG_WARN("[DATA_BACKUP]failed to enable ss gc", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::BACKUP_FUSE_TABLET_META: {
-        if (OB_FAIL(backup_fuse_tablet_meta_())) {
-          LOG_WARN("[DATA_BACKUP]failed to backup fuse tablet meta", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::BACKUP_FUSE_TABLET_META: {
+          if (OB_FAIL(backup_fuse_tablet_meta_())) {
+            LOG_WARN("[DATA_BACKUP]failed to backup fuse tablet meta", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::PREPARE_BACKUP_LOG: {
-        DEBUG_SYNC(BEFORE_BACKUP_COMPLEMENT_LOG);
-        if (OB_FAIL(prepare_backup_log_())) {
-          LOG_WARN("[DATA_BACKUP]failed to prepare backup log", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::PREPARE_BACKUP_LOG: {
+          DEBUG_SYNC(BEFORE_BACKUP_COMPLEMENT_LOG);
+          if (OB_FAIL(prepare_backup_log_())) {
+            LOG_WARN("[DATA_BACKUP]failed to prepare backup log", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::BEFORE_BACKUP_LOG: {
-        if (OB_FAIL(before_backup_log_())) {
-          LOG_WARN("[DATA_BACKUP]failed to before backup log", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::BEFORE_BACKUP_LOG: {
+          if (OB_FAIL(before_backup_log_())) {
+            LOG_WARN("[DATA_BACKUP]failed to before backup log", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::BACKUP_LOG: {
-        if (OB_FAIL(backup_completing_log_())) {
-          LOG_WARN("[DATA_BACKUP]failed to backup completing log", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::BACKUP_LOG: {
+          if (OB_FAIL(backup_completing_log_())) {
+            LOG_WARN("[DATA_BACKUP]failed to backup completing log", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::COMPLETED: 
-      case ObBackupStatus::Status::FAILED: 
-      case ObBackupStatus::Status::CANCELED: {
-        if (OB_FAIL(enable_ss_gc_())) {
-          LOG_WARN("[DATA_BACKUP]failed to do enable ss gc", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::COMPLETED:
+        case ObBackupStatus::Status::FAILED:
+        case ObBackupStatus::Status::CANCELED: {
+          break;
         }
-        break;
-      }
-      case ObBackupStatus::Status::CANCELING: {
-        if (OB_FAIL(do_cancel_())) {
-          LOG_WARN("[DATA_BACKUP]failed to cancel backup", K(ret), K(set_task_attr_));
+        case ObBackupStatus::Status::CANCELING: {
+          if (OB_FAIL(do_cancel_())) {
+            LOG_WARN("[DATA_BACKUP]failed to cancel backup", K(ret), K(set_task_attr_));
+          }
+          break;
         }
-        break;
-      }
-      default: {
-        ret = OB_ERR_SYS;
-        LOG_ERROR("[DATA_BACKUP]unknown backup status", K(ret), K(set_task_attr_));
+        default: {
+          ret = OB_ERR_SYS;
+          LOG_ERROR("[DATA_BACKUP]unknown backup status", K(ret), K(set_task_attr_));
+        }
       }
     }
   }
@@ -746,8 +790,6 @@ int ObBackupSetTaskMgr::enable_ss_gc_()
         LOG_WARN("failed to commit trans", KR(ret));
       } else {
         set_task_attr_.status_ = next_status;
-        ROOTSERVICE_EVENT_ADD("backup_data", "enable ss gc success", "tenant_id",
-            job_attr_->tenant_id_, "job_id", job_attr_->job_id_, "task_id", set_task_attr_.task_id_);
         LOG_INFO("[BACKUP_DATA]succeed enable ss gc", K(ret), K(set_task_attr_));
         backup_service_->wakeup();
       }
@@ -780,6 +822,9 @@ int ObBackupSetTaskMgr::do_enable_ss_gc_()
     } else if (OB_FAIL(meta_ss_gc_srv->remove_tablet_version_retention_scn_for_both_tenants(
                  storage::ObSSGCRetentionTaskType::BACKUP, task_id))) {
       LOG_WARN("failed to remove retention scn for both tenants", K(ret), K(task_id));
+    } else {
+      ROOTSERVICE_EVENT_ADD("backup_data", "enable ss gc success", "tenant_id",
+        job_attr_->tenant_id_, "job_id", job_attr_->job_id_, "task_id", set_task_attr_.task_id_);
     }
 #endif
   }
@@ -2931,12 +2976,12 @@ int ObBackupSetTaskMgr::deal_failed_set_task(ObMySQLTransaction &trans)
         LOG_WARN("fail to set backup set files failed", K(ret));
       } else if (OB_FAIL(advance_status_(trans, set_task_attr_.status_, job_attr_->result_, set_task_attr_.end_scn_,
           job_attr_->end_ts_))) {
-        LOG_WARN("[DATA_BACKUP]failed to advance set task status to FAILED", K(ret), K(set_task_attr_), 
+        LOG_WARN("[DATA_BACKUP]failed to advance set task status to FAILED", K(ret), K(set_task_attr_),
         "failed job result", job_attr_->result_);
-      } 
+      }
     }
   }
-  
+
 
   return ret;
 }
@@ -3374,6 +3419,8 @@ int ObBackupSetTaskMgr::do_clean_up()
     LOG_WARN("[DATA_BACKUP]not init", K(ret));
   } else if (OB_FAIL(backup_service_->check_leader())) {
     LOG_WARN("[DATA_BACKUP]failed to check lease", K(ret));
+  } else if (OB_FAIL(do_enable_ss_gc_())) {
+    LOG_WARN("[DATA_BACKUP]failed to enable ss gc during clean up", K(ret), K(set_task_attr_));
   } else if (OB_FAIL(ObBackupSkippedTabletOperator::batch_move_skip_tablet(*sql_proxy_, set_task_attr_.tenant_id_, set_task_attr_.task_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to move skip tablet", K(ret));
   } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(set_task_attr_.tenant_id_)))) {

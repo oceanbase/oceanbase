@@ -142,6 +142,7 @@ storage_unittest(test_backup_block_file_reader_writer backup/test_backup_block_f
 if(OB_BUILD_CLOSE_MODULES)
 storage_unittest(test_ss_backup_extern_info_mgr backup/test_ss_backup_extern_info_mgr.cpp)
 storage_unittest(test_ss_ha_macro_delete_dedup backup/test_ss_ha_macro_delete_dedup.cpp)
+storage_unittest(test_ss_backup_common_header backup/test_ss_backup_common_header.cpp)
 endif()
 
 #storage_unittest(test_create_tablet_clog tx_storage/test_create_tablet_clog.cpp)
