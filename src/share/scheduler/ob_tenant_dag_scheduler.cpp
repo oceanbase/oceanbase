@@ -3302,7 +3302,7 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
   bool cancel_flag = false;
   int64_t cancel_dag_cnt = 0;
 
-  common::SpinRLockGuard guard(prio_rwlock_);
+  common::SpinWLockGuard guard(prio_rwlock_);
   for (int64_t i = 0; i < 2; ++i) {
     ObDagListIndex list_idx = loop_list[i];
     ObIDag *head = dag_list_[list_idx].get_header();
