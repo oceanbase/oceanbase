@@ -391,6 +391,7 @@ int ObHybridSearchCgService::generate_vec_aux_table_ctdef(ObLogTableScan &op,
         aux_ctdef->table_param_.set_is_mlog_table(table_schema->is_mlog_table());
         aux_ctdef->table_param_.set_plan_enable_rich_format(opt_ctx->get_enable_rich_vector_format());
         aux_ctdef->table_param_.get_enable_lob_locator_v2() = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
+        aux_ctdef->table_param_.set_is_vec_index(table_schema->is_vec_index());
       }
     }
 

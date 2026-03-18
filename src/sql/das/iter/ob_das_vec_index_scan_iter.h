@@ -50,23 +50,20 @@ struct ObVecIndexBitmap
   ObIAllocator *allocator_;
   int64_t min_vid_;
   int64_t max_vid_;
-  int64_t min_vid_bound_;
-  int64_t max_vid_bound_;
   uint64_t tenant_id_;
 
   ObVecIndexBitmap(ObIAllocator *allocator)
     : type_(VIDS), capacity_(0), valid_cnt_(0), allocator_(allocator),
-      min_vid_(INT64_MAX), max_vid_(INT64_MIN), min_vid_bound_(INT64_MAX),
-      max_vid_bound_(INT64_MIN), tenant_id_(MTL_ID())
+      min_vid_(INT64_MAX), max_vid_(INT64_MIN), tenant_id_(MTL_ID())
   {
     vids_ = nullptr;
   }
 
   void set_allocator(ObIAllocator *allocator) { allocator_ = allocator; }
-  int init(int64_t min_vid, int64_t max_vid, uint64_t capacity);
+  int init(uint64_t capacity);
   int add_vid(int64_t vid);
   bool test(int64_t vid);
-  int get_valid_cnt() { return valid_cnt_; }
+  int64_t get_valid_cnt() { return valid_cnt_; }
   int64_t *get_vids() { return (type_ == VIDS) ? vids_ : nullptr; }
   void reset();
 

@@ -122,7 +122,6 @@ public:
       sort_expr_(nullptr),
       search_vec_(nullptr),
       distance_calc_(nullptr),
-      only_complete_data_(false),
       distance_threshold_(FLT_MAX),
       adaptor_(nullptr),
       ada_ctx_(MTL_ID(), 0, &vec_op_alloc_, nullptr),
@@ -176,13 +175,13 @@ private:
   int process_adaptor_state_brute_force(ObIAllocator &allocator, bool is_vectorized);
   int process_adaptor_state_pre_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
   int process_adaptor_state_pre_filter_brute_force(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
-                                                    int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
+                                                    int64_t *&brute_vids, int64_t& brute_cnt, bool& need_complete_data,
                                                     bool check_need_complete_data = true);
   int process_adaptor_state_pre_filter_brute_force_not_bq(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
-                                                    int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
+                                                    int64_t *&brute_vids, int64_t& brute_cnt, bool& need_complete_data,
                                                     bool check_need_complete_data = true);
   int process_adaptor_state_pre_filter_brute_force_bq(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
-                                                    int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
+                                                    int64_t *&brute_vids, int64_t& brute_cnt, bool& need_complete_data,
                                                     bool check_need_complete_data = true);
   int process_adaptor_state_post_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
   int process_adaptor_state_post_filter_once(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
@@ -243,11 +242,11 @@ private:
   int query_brute_force_distances(ObPluginVectorIndexAdaptor* adaptor,
                                   const ObString& search_vec,
                                   int64_t* brute_vids,
-                                  int brute_cnt,
+                                  int64_t brute_cnt,
                                   ObVecIdxQueryResult& dist_result);
   int merge_and_sort_brute_force_results_bq(const ObVecIdxQueryResult& dist_result,
                                             int64_t* brute_vids,
-                                            int brute_cnt,
+                                            int64_t brute_cnt,
                                             ObSimpleMaxHeap& snap_heap,
                                             ObSimpleMaxHeap& incr_heap,
                                             bool& need_complete_data,

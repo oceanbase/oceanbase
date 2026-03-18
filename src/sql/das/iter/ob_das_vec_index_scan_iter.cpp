@@ -28,24 +28,28 @@ OB_SERIALIZE_MEMBER((ObDASVecIndexScanRtDef, ObDASAttachRtDef));
 OB_SERIALIZE_MEMBER((ObDASVecIndexHNSWScanRtDef, ObDASVecIndexScanRtDef));
 
 
-int ObVecIndexBitmap::init(int64_t min_vid, int64_t max_vid, uint64_t capacity)
+int ObVecIndexBitmap::init(uint64_t capacity)
 {
   int ret = OB_SUCCESS;
 
-  if (max_vid < min_vid || min_vid < 0 || max_vid < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid vid bound", K(ret), K(max_vid), K(min_vid));
-  } else if (OB_ISNULL(allocator_)) {
+  if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is null", K(ret));
+  } else if (capacity == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("capacity is 0", K(ret));
   } else {
-    min_vid_bound_ = min_vid;
-    max_vid_bound_ = max_vid;
-    capacity_ = capacity;
-    type_ = VIDS;
-    if (OB_ISNULL(vids_ = static_cast<int64_t *>(allocator_->alloc(sizeof(int64_t) * capacity_)))) {
+    int64_t *tmp_vids = static_cast<int64_t *>(allocator_->alloc(sizeof(int64_t) * capacity));
+    if (OB_ISNULL(tmp_vids)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc vids", K(ret));
+      LOG_WARN("failed to alloc vids", K(ret), K(capacity));
+    } else {
+      capacity_ = capacity;
+      type_ = VIDS;
+      min_vid_ = INT64_MAX;
+      max_vid_ = INT64_MIN;
+      valid_cnt_ = 0;
+      vids_ = tmp_vids;
     }
   }
 
@@ -60,11 +64,7 @@ int ObVecIndexBitmap::add_vid(int64_t vid)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("vids_ is null", K(ret));
     } else if (valid_cnt_ >= capacity_) {
-      if (min_vid_ < min_vid_bound_ || max_vid_ > max_vid_bound_) {
-        if(OB_FAIL(upgrade_to_roaring_bitmap())) {
-          LOG_WARN("failed to upgrade to roaring bitmap", K(ret));
-        }
-      } else if (OB_FAIL(upgrade_to_byte_array())) {
+      if (OB_FAIL(upgrade_to_byte_array())) {
         LOG_WARN("failed to upgrade to byte array", K(ret));
       }
 
@@ -81,18 +81,16 @@ int ObVecIndexBitmap::add_vid(int64_t vid)
     if (OB_ISNULL(bitmap_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("bitmap_ is null", K(ret));
-    } else if (vid < min_vid_bound_ || vid > max_vid_bound_) {
+    } else if (vid < min_vid_ || vid > max_vid_) {
       if (OB_FAIL(upgrade_to_roaring_bitmap())) {
         LOG_WARN("failed to upgrade to roaring bitmap", K(ret));
       } else if (OB_FAIL(add_vid(vid))) {
         LOG_WARN("failed to add vid after upgrade", K(ret));
       }
     } else {
-      int64_t real_idx = vid - min_vid_bound_;
+      int64_t real_idx = vid - min_vid_;
       bitmap_[real_idx >> 3] |= uint8_t(0x1 << (real_idx & 0x7));
       valid_cnt_++;
-      min_vid_ = min(min_vid_, vid);
-      max_vid_ = max(max_vid_, vid);
     }
   } else if (type_ == ROARING_BITMAP) {
     if (OB_ISNULL(roaring_bitmap_)) {
@@ -103,8 +101,6 @@ int ObVecIndexBitmap::add_vid(int64_t vid)
       ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(roaring_bitmap_, vid));
       if (OB_SUCC(ret)) {
         valid_cnt_++;
-        min_vid_ = min(min_vid_, vid);
-        max_vid_ = max(max_vid_, vid);
       }
     }
   } else {
@@ -130,38 +126,50 @@ int ObVecIndexBitmap::upgrade_to_byte_array()
     type_ = BYTE_ARRAY;
     bitmap_ = nullptr;
     capacity_ = 0;
-  } else if (valid_cnt_ != 0) {
-    int64_t vid_range = max_vid_bound_ - min_vid_bound_ + 1;
-    uint64_t bitmap_size = (vid_range + 7) / 8;
-
-    if (bitmap_size > NORMAL_BITMAP_MAX_SIZE) {
+  } else if (max_vid_ < min_vid_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid vid range", K(ret), K(min_vid_), K(max_vid_));
+  } else {
+    int64_t vid_range = max_vid_ - min_vid_ + 1;
+    if (OB_UNLIKELY(vid_range <= 0)) {
       if (OB_FAIL(upgrade_to_roaring_bitmap())) {
         LOG_WARN("failed to upgrade to roaring bitmap", K(ret));
       }
     } else {
-      uint8_t *new_bitmap = nullptr;
-      if (OB_ISNULL(new_bitmap = static_cast<uint8_t *>(allocator_->alloc(sizeof(uint8_t) * bitmap_size)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc bitmap", K(ret), K(bitmap_size));
-      } else {
-        memset(new_bitmap, 0, sizeof(uint8_t) * bitmap_size);
-        capacity_ = vid_range;
-        for (uint64_t i = 0; i < valid_cnt_; i++) {
-          int64_t vid = vids_[i];
-          if (vid >= min_vid_bound_ && vid <= max_vid_bound_) {
-            int64_t real_idx = vid - min_vid_bound_;
-            new_bitmap[real_idx >> 3] |= uint8_t(0x1 << (real_idx & 0x7));
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("vid out of range", K(ret), K(vid), K(min_vid_bound_), K(max_vid_bound_));
-          }
-        }
+      uint64_t bitmap_size = static_cast<uint64_t>(vid_range + 7) / 8;
 
-        if (OB_SUCC(ret) && OB_NOT_NULL(new_bitmap)) {
-          allocator_->free(vids_);
-          vids_ = nullptr;
-          bitmap_ = new_bitmap;
-          type_ = BYTE_ARRAY;
+      if (bitmap_size > NORMAL_BITMAP_MAX_SIZE) {
+        if (OB_FAIL(upgrade_to_roaring_bitmap())) {
+          LOG_WARN("failed to upgrade to roaring bitmap", K(ret));
+        }
+      } else {
+        uint8_t *new_bitmap = nullptr;
+        if (OB_ISNULL(new_bitmap = static_cast<uint8_t *>(allocator_->alloc(sizeof(uint8_t) * bitmap_size)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc bitmap", K(ret), K(bitmap_size));
+        } else {
+          memset(new_bitmap, 0, sizeof(uint8_t) * bitmap_size);
+          for (uint64_t i = 0; OB_SUCC(ret) && i < valid_cnt_; i++) {
+            int64_t vid = vids_[i];
+            int64_t real_idx = vid - min_vid_;
+            if (OB_UNLIKELY(real_idx < 0 || static_cast<uint64_t>(real_idx >> 3) >= bitmap_size)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("vid out of bitmap range", K(ret), K(vid), K(min_vid_), K(max_vid_), K(real_idx), K(bitmap_size));
+            } else {
+              new_bitmap[real_idx >> 3] |= uint8_t(0x1 << (real_idx & 0x7));
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            capacity_ = vid_range;
+            allocator_->free(vids_);
+            vids_ = nullptr;
+            bitmap_ = new_bitmap;
+            type_ = BYTE_ARRAY;
+          } else if (OB_NOT_NULL(new_bitmap)) {
+            allocator_->free(new_bitmap);
+            new_bitmap = nullptr;
+          }
         }
       }
     }
@@ -197,7 +205,7 @@ int ObVecIndexBitmap::upgrade_to_roaring_bitmap()
       if (bitmap_[i]) {
         for (uint64_t j = 0; j < 8 && OB_SUCC(ret); j++) {
           if (bitmap_[i] & (1 << j)) {
-            uint64_t val = i * 8 + j + min_vid_bound_;
+            uint64_t val = i * 8 + j + min_vid_;
             ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(new_bitmap, val));
           }
         }
@@ -232,8 +240,8 @@ bool ObVecIndexBitmap::test(int64_t vid)
   if (type_ == VIDS) {
     // do nothing
   } else if (type_ == BYTE_ARRAY) {
-    if (vid >= min_vid_bound_ && vid <= max_vid_bound_) {
-      int64_t real_idx = vid - min_vid_bound_;
+    if (vid >= min_vid_ && vid <= max_vid_) {
+      int64_t real_idx = vid - min_vid_;
       bret = ((bitmap_[real_idx >> 3] & (0x1 << (real_idx & 0x7))) != 0);
     }
   } else if (type_ == ROARING_BITMAP) {
@@ -264,6 +272,8 @@ void ObVecIndexBitmap::reset()
   type_ = VIDS;
   capacity_ = 0;
   valid_cnt_ = 0;
+  min_vid_ = INT64_MAX;
+  max_vid_ = INT64_MIN;
 }
 
 int ObVecIndexBitmapIter::init(ObVecIndexBitmap *bitmap)

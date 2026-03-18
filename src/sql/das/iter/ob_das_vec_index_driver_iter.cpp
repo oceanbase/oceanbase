@@ -469,20 +469,16 @@ int ObDASVecIndexDriverIter::build_bitmap_from_filter_iter(share::ObPluginVector
 {
   int ret = OB_SUCCESS;
 
-  ObVidBound bound;
-  const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
-  if (OB_FAIL(adaptor->get_vid_bound(bound))) {
-    LOG_WARN("failed to get vid bound", K(ret));
-  } else if (OB_FAIL(bitmap_.init(bound.min_vid_, bound.max_vid_, MAX_HNSW_BRUTE_FORCE_SIZE))) {
-    LOG_WARN("failed to init bitmap", K(ret));
-  }
-
   ObEvalCtx *eval_ctx = vec_index_driver_rtdef_->eval_ctx_;
   int64_t batch_row_count = eval_ctx->max_batch_size_ > 0 ?
                             min(eval_ctx->max_batch_size_, ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE) :
                             ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
-
   bool index_end = false;
+
+  const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
+  if (OB_FAIL(bitmap_.init(MAX_HNSW_BRUTE_FORCE_SIZE))) {
+    LOG_WARN("failed to init bitmap", K(ret));
+  }
   while (OB_SUCC(ret) && !index_end) {
     int64_t scan_row_cnt = 0;
     filter_iter_->clear_evaluated_flag();
@@ -725,11 +721,8 @@ int ObDASVecIndexDriverIter::fetch_vids_from_vec_index(share::ObPluginVectorInde
       bool need_bitmap = filter_mode_ == ObVecFilterMode::VEC_FILTER_MODE_SEARCH_DRIVER_FILTER
                          && nullptr != filter_iter_;
       if (need_bitmap && total_count > 0) {
-        ObVidBound bound;
         const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
-        if (OB_FAIL(adaptor->get_vid_bound(bound))) {
-          LOG_WARN("failed to get vid bound", K(ret));
-        } else if (OB_FAIL(bitmap_.init(bound.min_vid_, bound.max_vid_, MAX_HNSW_BRUTE_FORCE_SIZE))) {
+        if (OB_FAIL(bitmap_.init(MAX_HNSW_BRUTE_FORCE_SIZE))) {
           LOG_WARN("failed to init bitmap", K(ret));
         } else {
           const int64_t *vids = adaptor_vid_iter->get_vids();

@@ -117,7 +117,6 @@ int ObDASVecIndexHNSWScanIter::inner_reuse()
   }
 
   query_cond_ = nullptr;
-  only_complete_data_ = false;
   first_post_filter_search_ = true;
 
   // memory reset
@@ -304,7 +303,7 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_pre_filter_brute_force(
                         ObVectorQueryAdaptorResultContext *ada_ctx,
                         ObPluginVectorIndexAdaptor* adaptor,
                         int64_t *&brute_vids,
-                        int& brute_cnt,
+                        int64_t& brute_cnt,
                         bool& need_complete_data,
                         bool check_need_complete_data)
 {
@@ -325,7 +324,7 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_
                         ObVectorQueryAdaptorResultContext *ada_ctx,
                         ObPluginVectorIndexAdaptor* adaptor,
                         int64_t *&brute_vids,
-                        int& brute_cnt,
+                        int64_t& brute_cnt,
                         bool& need_complete_data,
                         bool check_need_complete_data)
 {
@@ -335,10 +334,10 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_
   ObVecIdxQueryResult dist_result;
 
   uint64_t limit = limit_;
-  uint64_t capaticy = limit > brute_cnt ? brute_cnt : limit;
+  uint64_t capacity = limit > brute_cnt ? brute_cnt : limit;
   ObArenaAllocator &allocator = mem_context_->get_arena_allocator();
-  ObSimpleMaxHeap max_heap(&allocator, capaticy);
-  if (capaticy == 0) {
+  ObSimpleMaxHeap max_heap(&allocator, capacity);
+  if (capacity == 0) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(adaptor)) {
     ret = OB_BAD_NULL_ERROR;
@@ -356,7 +355,7 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_
   } else if (dist_result.distances_.count() == 1) {
     const float* distances = dist_result.distances_.at(0);
     ObVectorIndexSegmentHandle &segment = dist_result.segments_.at(0);
-    for (int i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
+    for (int64_t i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
       double distance = distances[i];
       if (distance != -1 && distance <= distance_threshold_) {
         max_heap.push(brute_vids[i], distance, segment.get());
@@ -366,7 +365,7 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_
     }
   } else {
     const int64_t segment_cnt = dist_result.segments_.count();
-    for (int i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
+    for (int64_t i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
       double distance = -1;
       int64_t k = 0;
       for (; k < segment_cnt && (distance = dist_result.distances_.at(k)[i]) == -1; ++k);
@@ -463,7 +462,7 @@ int ObDASVecIndexHNSWScanIter::init_brute_force_params(ObVectorQueryAdaptorResul
 int ObDASVecIndexHNSWScanIter::query_brute_force_distances(ObPluginVectorIndexAdaptor* adaptor,
                                                   const ObString& search_vec,
                                                   int64_t* brute_vids,
-                                                  int brute_cnt,
+                                                  int64_t brute_cnt,
                                                   ObVecIdxQueryResult& dist_result)
 {
   INIT_SUCC(ret);
@@ -484,7 +483,7 @@ int ObDASVecIndexHNSWScanIter::query_brute_force_distances(ObPluginVectorIndexAd
 
 int ObDASVecIndexHNSWScanIter::merge_and_sort_brute_force_results_bq(const ObVecIdxQueryResult& dist_result,
                                                             int64_t* brute_vids,
-                                                            int brute_cnt,
+                                                            int64_t brute_cnt,
                                                             ObSimpleMaxHeap& snap_heap,
                                                             ObSimpleMaxHeap& incr_heap,
                                                             bool& need_complete_data,
@@ -500,7 +499,7 @@ int ObDASVecIndexHNSWScanIter::merge_and_sort_brute_force_results_bq(const ObVec
       need_complete_data = check_need_complete_data ? true : false;
     } else {
       const int64_t segment_cnt = dist_result.segments_.count();
-      for (int i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
+      for (int64_t i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
         double distance = -1;
         int64_t k = 0;
         for (; k < segment_cnt && (distance = dist_result.distances_.at(k)[i]) == -1; ++k);
@@ -625,7 +624,7 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_pre_filter_brute_force_bq(
                         ObVectorQueryAdaptorResultContext *ada_ctx,
                         ObPluginVectorIndexAdaptor* adaptor,
                         int64_t *&brute_vids,
-                        int& brute_cnt,
+                        int64_t& brute_cnt,
                         bool& need_complete_data,
                         bool check_need_complete_data)
 {
@@ -675,7 +674,7 @@ int ObDASVecIndexHNSWScanIter::process_adaptor_state_pre_filter(
 
   if (go_brute_force_ && bitmap_->type_ == ObVecIndexBitmap::VIDS) {
     int64_t *brute_vids = bitmap_->get_vids();
-    int brute_cnt = bitmap_->get_valid_cnt();
+    int64_t brute_cnt = bitmap_->get_valid_cnt();
 
     bool need_complete_data = false;
     if (OB_FAIL(process_adaptor_state_pre_filter_brute_force(ada_ctx, adaptor, brute_vids, brute_cnt, need_complete_data, true))) {
@@ -747,8 +746,8 @@ int ObDASVecIndexHNSWScanIter::init_pre_filter(ObVectorQueryAdaptorResultContext
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("bitmap_ is null", K(ret));
     } else {
-      uint64_t capacity = (bitmap_->max_vid_bound_ - bitmap_->min_vid_bound_ + 7) / 8 * 8;
-      if (OB_FAIL(ada_ctx->init_prefilter(bitmap_->bitmap_, bitmap_->min_vid_bound_, bitmap_->max_vid_bound_, capacity, bitmap_->valid_cnt_))) {
+      uint64_t capacity = (bitmap_->max_vid_ - bitmap_->min_vid_ + 7) / 8 * 8;
+      if (OB_FAIL(ada_ctx->init_prefilter(bitmap_->bitmap_, bitmap_->min_vid_, bitmap_->max_vid_, capacity, bitmap_->valid_cnt_))) {
         LOG_WARN("init prefilter with byte array bitmap failed", K(ret));
       }
     }
