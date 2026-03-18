@@ -510,6 +510,7 @@ function obd_prepare_bin {
     then
         obs_version=$(cat $HOME/oceanbase/tools/deploy/obd/.observer_obd_plugin_version)
     else
+        $DOWNLOAD_DIR/bin/observer -V
         obs_version=`$DOWNLOAD_DIR/bin/observer -V 2>&1 | grep -E "observer \(OceanBase([ \_]CE)? ([.0-9]+)\)" | grep -Eo '([.0-9]+)'`
     fi
 
