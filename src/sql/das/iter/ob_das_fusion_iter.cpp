@@ -693,9 +693,6 @@ int ObDASFusionIter::calculate_weight_sum_score()
       }
     }
   }
-  for (int64_t doc_idx = 0; OB_SUCC(ret) && doc_idx < doc_count; ++doc_idx) {
-    ObDASFusionDocInfo &doc = fusion_docs_.at(doc_idx);
-  }
   return ret;
 }
 
@@ -709,7 +706,10 @@ int ObDASFusionIter::calculate_rrf_score()
   // Step 1: For each path, sort documents by score and assign ranks
   // Use a temporary array of (doc_idx, score) pairs for sorting
   common::ObSEArray<ObDASFusionScoreEntry, 64> doc_score_pairs;
-  if (OB_FAIL(doc_score_pairs.reserve(doc_count))) {
+  if (OB_UNLIKELY(weights_.count() != path_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("weights count not equal to path_count", K(ret), K(weights_.count()), K(path_count));
+  } else if (OB_FAIL(doc_score_pairs.reserve(doc_count))) {
     LOG_WARN("failed to reserve doc_score_pairs", K(ret), K(doc_count));
   }
   for (int64_t path_idx = 0; OB_SUCC(ret) && path_idx < path_count; ++path_idx) {
@@ -750,18 +750,19 @@ int ObDASFusionIter::calculate_rrf_score()
   }
 
   // Step 2: Calculate RRF score for each document
-  // RRF score = sum(1 / (k + rank_i)) for all paths where document exists
-  for (int64_t doc_idx = 0; OB_SUCC(ret) && doc_idx < doc_count; ++doc_idx) {
-    ObDASFusionDocInfo &doc = fusion_docs_.at(doc_idx);
-    doc.fusion_score_ = 0.0;
-
-    for (int64_t path_idx = 0; path_idx < path_count; ++path_idx) {
-      if (doc.has_path(path_idx) && path_idx < doc.rank_scores.count()) {
+  // RRF score = sum(weight_i * 1 / (k + rank_i)) for all paths where document exists
+  for (int64_t path_idx = 0; OB_SUCC(ret) && path_idx < path_count; ++path_idx) {
+    double weight = weights_.at(path_idx);
+    for (int64_t doc_idx = 0; OB_SUCC(ret) && doc_idx < doc_count; ++doc_idx) {
+      ObDASFusionDocInfo &doc = fusion_docs_.at(doc_idx);
+      if (doc.has_path(path_idx)) {
         int64_t rank = doc.rank_scores.at(path_idx);
-        if (rank > 0) {
-          // RRF contribution: 1 / (k + rank)
+        if (rank <= 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("rank is less than 0", K(ret), K(rank));
+        } else {
           double rrf_contribution = 1.0 / (rank_constant + static_cast<double>(rank));
-          doc.fusion_score_ += rrf_contribution;
+          doc.fusion_score_ += weight * rrf_contribution;
         }
       }
     }
@@ -1091,11 +1092,11 @@ int ObDASFusionIter::set_scores_batch_rich_format(int64_t start_idx,
       // Set scores for each row in batch
       for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
         int64_t doc_idx = sorted_doc_indices_.at(start_idx + i);
-        const ObDASFusionDocInfo &doc = fusion_docs_.at(doc_idx);
         if (doc_idx < 0 || doc_idx >= fusion_docs_.count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid doc_idx", K(ret), K(doc_idx), K(fusion_docs_.count()));
         } else {
+          const ObDASFusionDocInfo &doc = fusion_docs_.at(doc_idx);
           // Set fusion score
           fusion_score_vec->set_double(i, doc.fusion_score_);
           // Set path scores
@@ -1159,11 +1160,11 @@ int ObDASFusionIter::set_scores_batch_non_rich_format(int64_t start_idx,
 
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
       int64_t doc_idx = sorted_doc_indices_.at(start_idx + i);
-      const ObDASFusionDocInfo &doc = fusion_docs_.at(doc_idx);
       if (doc_idx < 0 || doc_idx >= fusion_docs_.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid doc_idx", K(ret), K(doc_idx), K(fusion_docs_.count()));
       } else {
+        const ObDASFusionDocInfo &doc = fusion_docs_.at(doc_idx);
         fusion_datums[i].set_double(doc.fusion_score_);
         for (int64_t path_idx = 0; OB_SUCC(ret) && path_idx < path_count; ++path_idx) {
           if (!doc.has_path(path_idx)) {
