@@ -68,10 +68,12 @@ int ObCreateTableExecutor::prepare_stmt(ObCreateTableStmt &stmt,
   obrpc::ObCreateTableArg &create_table_arg = stmt.get_create_table_arg();
   create_table_name = create_table_arg.schema_.get_table_name_str();
   uint64_t tmp_table_id = OB_INVALID_ID;
+  bool is_mysql_tmp_table = stmt.get_create_table_arg().schema_.is_mysql_tmp_table();
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null schema guard");
-  } else if (OB_FAIL(schema_guard->get_table_id(my_session.get_effective_tenant_id(),
+  } else if (!is_mysql_tmp_table &&
+             OB_FAIL(schema_guard->get_table_id(my_session.get_effective_tenant_id(),
                                                 stmt.get_database_name(),
                                                 create_table_name,
                                                 false /*is_index*/,
