@@ -222,7 +222,7 @@ public:
   static const int64_t CHECK_DDL_REDO_LOG_FINISH_INTERVAL = 1000; // 1ms
   ObDDLRedoLogHandle();
   ~ObDDLRedoLogHandle();
-  int wait(const int64_t timeout = DDL_REDO_LOG_TIMEOUT);
+  int wait();
   void reset();
   bool is_valid() const { return nullptr != cb_  && scn_.is_valid_and_not_min(); }
   TO_STRING_KV(KPC_(cb), K_(scn));

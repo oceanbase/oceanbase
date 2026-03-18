@@ -1142,12 +1142,13 @@ void ObDDLRedoLogHandle::reset()
   }
 }
 
-int ObDDLRedoLogHandle::wait(const int64_t timeout)
+int ObDDLRedoLogHandle::wait()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cb_)) {
   } else {
     bool finish = false;
+    const int64_t timeout = GCONF._data_storage_io_timeout;
     const int64_t start_time = ObTimeUtility::current_time();
     while (OB_SUCC(ret) && !finish) {
       if (OB_FAIL(THIS_WORKER.check_status())) {
