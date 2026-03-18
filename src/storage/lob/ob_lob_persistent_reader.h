@@ -44,42 +44,40 @@ struct ObPersistLobReaderCacheKey
   TO_STRING_KV(K(ls_id_), K(tablet_id_), K(snapshot_));
 };
 
-struct ObPersistLobReaderCacheNode : public ObDLinkBase<ObPersistLobReaderCacheNode>
-{
-  ObPersistLobReaderCacheNode():
-    key_(),
-    reader_(nullptr)
-  {}
-
-  ObPersistLobReaderCacheKey key_;
-  ObLobMetaIterator *reader_;
-};
-
 class ObPersistLobReaderCache
 {
 public:
-  static const int DEFAULT_CAP = 10;
+  static const uint32_t TIMEOUT_CHECK_THROTTLE_INTERVAL = 1024;
 
-public:
-  ObPersistLobReaderCache(int32_t cap = DEFAULT_CAP):
+  ObPersistLobReaderCache():
     allocator_(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE/*8KB*/, MTL_ID()),
-    cap_(cap)
+    cached_key_(),
+    cached_reader_(nullptr),
+    last_cached_time_us_(0),
+    timeout_check_call_count_(0)
   {}
   ~ObPersistLobReaderCache();
 
+  // If cached reader exists and param.tablet_id matches, return it; else return nullptr.
   int get(ObPersistLobReaderCacheKey key, ObLobMetaIterator *&reader);
+  // Replace cached reader: reset and free old one if exists, then store (key, reader).
   int put(ObPersistLobReaderCacheKey key, ObLobMetaIterator *reader);
 
   ObLobMetaIterator* alloc_reader(const ObLobAccessCtx *access_ctx);
   ObIAllocator& get_allocator() { return allocator_; }
 
+  // If cached iter has been held longer than timeout_us (default 10s), reset it to release memtable ref.
+  void check_and_release_if_timeout(const int64_t timeout_us = 10 * 1000 * 1000);
+
 private:
-  int remove_first();
+  void reset_and_clear();
 
 private:
   ObArenaAllocator allocator_;
-  const int32_t cap_;
-  ObDList<ObPersistLobReaderCacheNode> list_;
+  ObPersistLobReaderCacheKey cached_key_;
+  ObLobMetaIterator *cached_reader_;
+  int64_t last_cached_time_us_;
+  uint32_t timeout_check_call_count_;  // throttle: only do real check every TIMEOUT_CHECK_THROTTLE_INTERVAL calls
 };
 
 
