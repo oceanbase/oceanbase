@@ -207,13 +207,15 @@ private:
                                                              int64_t &old_trx_lock_timeout,
                                                              bool &need_restore_session,
                                                              bool &need_reset_trx_lock_timeout,
+                                                             bool &need_restore_diagnosis,
                                                              sqlclient::ObISQLConnection *&conn);
 
   static int restore_session_for_online_stat(sql::ObSQLSessionInfo *session,
                                              sql::ObSQLSessionInfo::StmtSavedValue &saved_value,
                                              int64_t nested_count,
                                              int64_t old_trx_lock_timeout,
-                                             bool need_reset_trx_lock_timeout);
+                                             bool need_reset_trx_lock_timeout,
+                                             bool need_restore_diagnosis);
   static int merge_split_gather_tab_stats(ObIArray<ObOptTableStat *> &all_tstats,
                                           ObIArray<ObOptTableStat *> &cur_all_tstats);
 
