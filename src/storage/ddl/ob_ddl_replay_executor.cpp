@@ -623,9 +623,9 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
   ObMacroBlockHandle macro_handle;
   bool need_replay = true;
   int32_t private_transfer_epoch = -1;
+  bool is_major_sstable_exist = false;
   bool block_exist_need_replay = false;
 
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   int64_t checksum = 0;
   int tmp_ret = OB_SUCCESS;
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
@@ -635,11 +635,9 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
     }
   } else if (!need_replay) {
     // do nothing
-  } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("fail to fetch table store", K(ret));
-  } else if (!table_store_wrapper.get_member()->get_major_sstables().empty()) {
-    // major sstable already exist, means ddl commit success
+  } else if (tablet_handle.is_valid() && (tablet_handle.get_obj()->get_major_table_count() > 0 || tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable())) {
     need_replay = false;
+    is_major_sstable_exist = true;
     if (REACH_TIME_INTERVAL(1000L * 1000L)) {
       LOG_INFO("no need to replay ddl log, because the major sstable already exist", K_(tablet_id));
     }
@@ -734,7 +732,6 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
       macro_block.end_row_id_ = redo_info.end_row_id_;
       const int64_t snapshot_version = redo_info.table_key_.get_snapshot_version();
       const ObITable::TableKey &table_key = redo_info.table_key_;
-      bool is_major_sstable_exist = false;
       uint64_t data_format_version = redo_info.data_format_version_;
       ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
       ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
@@ -743,19 +740,8 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
         LOG_WARN("unexpected err", K(ret));
       } else if (ObDDLUtil::use_idempotent_mode(data_format_version)) {
         // Do not fetch direct load mgr.
-      } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
-          ls_->get_ls_id(),
-          redo_info.table_key_.tablet_id_,
-          true/* is_full_direct_load */,
-          direct_load_mgr_handle,
-          is_major_sstable_exist))) {
-        if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
-          need_replay = false;
-          ret = OB_SUCCESS;
-          LOG_INFO("major sstable already exist, ship replay", K(ret), K(scn_), K(table_key));
-        } else {
-          LOG_WARN("get tablet mgr failed", K(ret), K(table_key));
-        }
+      } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr(ObTabletDirectLoadMgrKey(redo_info.table_key_.tablet_id_, ObDirectLoadType::DIRECT_LOAD_DDL), direct_load_mgr_handle))) {
+        LOG_WARN("get tablet mgr failed", K(ret), K(table_key));
       } else if (data_format_version <= 0) {
         data_format_version = direct_load_mgr_handle.get_obj()->get_tenant_data_version();
       }
