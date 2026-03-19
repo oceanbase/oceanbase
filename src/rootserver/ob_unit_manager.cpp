@@ -16,7 +16,7 @@
 
 #include "ob_unit_manager.h"
 #include "share/ob_max_id_fetcher.h"
-#include "share/ob_tenant_memstore_info_operator.h"
+#include "share/ob_tenant_memory_info_operator.h"
 #include "rootserver/ddl_task/ob_sys_ddl_util.h"  // for ObSysDDLServiceUtil
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_disaster_recovery_task_utils.h"
@@ -8444,23 +8444,73 @@ int ObUnitManager::check_shrink_memory(
     const double max_used_ratio = 0.9;
     const double shrink_ratio = static_cast<double>(new_memory)
         / static_cast<double>(old_memory);
-    int64_t max_used_memory = 0;
-    ObArray<ObTenantMemstoreInfoOperator::TenantServerMemInfo> mem_infos;
-    ObTenantMemstoreInfoOperator mem_info_operator(*proxy_);
+    ObArray<ObTenantMemoryInfoOperator::TenantServerMemoryInfo> tenant_mem_infos;
+    ObTenantMemoryInfoOperator mem_info_operator(*srv_rpc_proxy_, *proxy_, pool.tenant_id_);
     if (OB_FAIL(ret)) {
-      // failed
-    } else if (OB_FAIL(mem_info_operator.get(pool.tenant_id_, unit_servers, mem_infos))) {
-      LOG_WARN("mem_info_operator get failed", K(ret));
+    } else if (OB_FAIL(mem_info_operator.init())) {
+      LOG_WARN("fail to init mem_info_operator", KR(ret));
+    } else if (OB_FAIL(mem_info_operator.get(unit_servers, tenant_mem_infos))) {
+      LOG_WARN("mem_info_operator get failed", KR(ret));
     } else {
-      FOREACH_CNT_X(mem_info, mem_infos, OB_SUCCESS == ret) {
-        max_used_memory = static_cast<int64_t>(static_cast<double>(mem_info->memstore_limit_)
-            * shrink_ratio * max_used_ratio);
-        if (mem_info->total_memstore_used_ > max_used_memory) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "requested memory over 90 percent of total available memory");
-          LOG_WARN("new memory will cause memory use percentage over ninety percentage",
-              "mem_info", *mem_info, K(old_memory), K(new_memory),
-              K(max_used_ratio), K(max_used_memory), K(ret));
+      FOREACH_CNT_X(tenant_mem_info, tenant_mem_infos, OB_SUCCESS == ret) {
+        const share::TenantMemstoreInfo &memstore_info = tenant_mem_info->get_memstore_info();
+        const share::TenantVectorMemInfo &vector_mem_info = tenant_mem_info->get_vector_mem_info();
+        int64_t max_memstore_mem = static_cast<int64_t>(static_cast<double>(memstore_info.memstore_limit_) * shrink_ratio * max_used_ratio);
+        int64_t vector_mem_used = vector_mem_info.raw_malloc_size_ +
+                                  vector_mem_info.index_metadata_size_ +
+                                  vector_mem_info.vector_mem_hold_;
+        int64_t max_vector_mem = static_cast<int64_t>(static_cast<double>(vector_mem_info.vector_mem_limit_)
+          * shrink_ratio * max_used_ratio);
+        if (vector_mem_used > max_vector_mem) {
+          ObSqlString message_to_user;
+          const char *view_name = OB_GV_OB_VECTOR_MEMORY_TNAME;
+          char ip_buf[common::OB_IP_STR_BUFF] = "";
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_5) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected: vector_mem_used > max_vector_mem but version < 4.3.5.5",
+                     K(vector_mem_used), K(max_vector_mem), KCV(GET_MIN_CLUSTER_VERSION()), KR(ret));
+          } else if (OB_FAIL(!tenant_mem_info->get_server().ip_to_string(ip_buf, sizeof(ip_buf)))) {
+            LOG_WARN("fail to convert server ip to string", KR(ret));
+          } else if (OB_FAIL(message_to_user.assign_fmt(
+              "The memory of vector index needs to be less than %.0f%% of the new memory "
+              "[tenant_id: %ld, server: %s:%d, old vector mem limit: %ld, vector_mem_used: %ld, new_memory: %ld, old_memory: %ld] "
+              "please check view %s, "
+              "shrink is",
+              max_used_ratio * 100,
+              tenant_mem_info->get_tenant_id(), ip_buf, tenant_mem_info->get_server().get_port(),
+              vector_mem_info.vector_mem_limit_,
+              vector_mem_used,
+              new_memory, old_memory, view_name))) {
+            LOG_WARN("fail to construct message to user", KR(ret));
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, message_to_user.ptr());
+            LOG_WARN("new memory is not enough for vector index",
+                     K(*tenant_mem_info), K(old_memory), K(new_memory), K(max_used_ratio), K(max_vector_mem), K(ret));
+          }
+        } else if (memstore_info.total_memstore_used_ > max_memstore_mem) {
+          ObSqlString message_to_user;
+          const char *view_name = mem_info_operator.is_oracle_mode() ? OB_GV_OB_MEMSTORE_ORA_TNAME : OB_GV_OB_MEMSTORE_TNAME;
+          char ip_buf[common::OB_IP_STR_BUFF] = "";
+          if (OB_FAIL(!tenant_mem_info->get_server().ip_to_string(ip_buf, sizeof(ip_buf)))) {
+            LOG_WARN("fail to convert server ip to string", KR(ret));
+          } else if (OB_FAIL(message_to_user.assign_fmt(
+              "The memory of memstore needs to be less than %.0f%% of the new memory "
+              "[tenant_id: %ld, server: %s:%d, old memstore limit: %ld, memstore used: %ld, new_memory: %ld, old_memory: %ld] "
+              "please check view %s, "
+              "shrink is",
+              max_used_ratio * 100,
+              tenant_mem_info->get_tenant_id(), ip_buf, tenant_mem_info->get_server().get_port(),
+              memstore_info.memstore_limit_,
+              memstore_info.total_memstore_used_,
+              new_memory, old_memory, view_name))) {
+            LOG_WARN("fail to construct message to user", KR(ret));
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, message_to_user.ptr());
+            LOG_WARN("new memory is not enough for memstore",
+                     K(*tenant_mem_info), K(old_memory), K(new_memory), K(max_used_ratio), K(max_memstore_mem), K(ret));
+          }
         }
       }
     }

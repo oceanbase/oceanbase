@@ -1294,6 +1294,7 @@ PCODE_DEF(OB_CHECK_SYS_TABLE_SCHEMA, 0x1679)
 // for tablet physical row count
 PCODE_DEF(OB_FETCH_TABLET_PHYSICAL_ROW_CNT, 0x1681)
 
+PCODE_DEF(OB_GET_TENANT_MEMORY_INFO, 0x1692)
 //**** 注意：在此行之前增加新的RPC ID ******
 //
 //占位须知：

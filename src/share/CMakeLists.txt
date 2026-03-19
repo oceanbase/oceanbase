@@ -255,7 +255,7 @@ ob_set_subtarget(ob_share common
   ob_tenant_role.cpp
   ob_tenant_switchover_status.cpp
   ob_tenant_mem_limit_getter.cpp
-  ob_tenant_memstore_info_operator.cpp
+  ob_tenant_memory_info_operator.cpp
   ob_thread_mgr.cpp
   ob_time_utility2.cpp
   ob_time_zone_info_manager.cpp
