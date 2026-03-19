@@ -23,6 +23,9 @@
 #include "unittest/storage/test_dml_common.h"
 #include "storage/test_tablet_helper.h"
 #include "storage/shared_storage/ob_ss_object_access_util.h"
+#include "storage/shared_storage/mem_macro_cache/ob_ss_mem_macro_cache.h"
+#include "storage/shared_storage/ob_ss_io_common_op.h"
+#include "storage/shared_storage/ob_file_manager.h"
 #undef private
 #undef protected
 
@@ -371,6 +374,104 @@ TEST_F(TestSSMCPrewarmStruct, empty_hot_macro_infos)
   ASSERT_EQ(0, prewarm_stat.major_compaction_pwm_stat_.add_cnt());
 }
 
+// Verify ObSSMacroBlockPrewarmIOCallback stores actual size in mem_macro_cache when object is smaller than standard macro size.
+TEST_F(TestSSMCPrewarmStruct, prewarm_callback_actual_size)
+{
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+  ASSERT_NE(nullptr, mem_macro_cache);
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->clear_mem_macro_cache());
+  const int64_t actual_macro_size = 1 * 1024 * 1024;
+  const int64_t standard_macro_size = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
+  const int64_t test_macro_second_id = 777;
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_DATA_MACRO);
+  macro_id.set_second_id(test_macro_second_id);
+  const uint64_t tenant_id = MTL_ID();
+  const int64_t effective_tablet_id = macro_id.second_id();
+  ObArenaAllocator allocator;
+
+  // 1. write 1MB data to object storage
+  char *write_buf = static_cast<char *>(allocator.alloc(actual_macro_size));
+  ASSERT_NE(nullptr, write_buf);
+  MEMSET(write_buf, 'P', actual_macro_size);
+  ObStorageObjectWriteInfo write_info;
+  write_info.io_desc_.set_wait_event(1);
+  write_info.buffer_ = write_buf;
+  write_info.offset_ = 0;
+  write_info.size_ = actual_macro_size;
+  write_info.io_timeout_ms_ = 5 * 1000;
+  write_info.mtl_tenant_id_ = tenant_id;
+  ObStorageObjectHandle write_handle;
+  ASSERT_EQ(OB_SUCCESS, write_handle.set_macro_block_id(macro_id));
+  ObSSObjectStorageWriter object_storage_writer;
+  ASSERT_EQ(OB_SUCCESS, object_storage_writer.aio_write(write_info, write_handle));
+  ASSERT_EQ(OB_SUCCESS, write_handle.wait());
+
+  // 2. verify object storage file is exist, and local file is not exist
+  bool is_exist = false;
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_remote_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_TRUE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_FALSE(is_exist);
+
+  // 3. read with standard_macro_size and set prewarm callback
+  char *read_buf = static_cast<char *>(allocator.alloc(standard_macro_size));
+  ASSERT_NE(nullptr, read_buf);
+  MEMSET(read_buf, '\0', standard_macro_size);
+  ObStorageObjectReadInfo read_info;
+  read_info.macro_block_id_ = macro_id;
+  read_info.offset_ = 0;
+  read_info.size_ = standard_macro_size;
+  read_info.io_desc_.set_wait_event(1);
+  read_info.buf_ = read_buf;
+  read_info.mtl_tenant_id_ = tenant_id;
+  read_info.set_ls_epoch_id(0);
+  read_info.set_effective_tablet_id(ObTabletID(effective_tablet_id));
+  read_info.io_timeout_ms_ = 5 * 1000;
+  ObStorageObjectHandle read_handle;
+  ObIAllocator *callback_allocator = nullptr;
+  ObSSMacroBlockPrewarmIOCallback *macro_prewarm_callback = nullptr;
+  ObSSIOCommonOp ss_io_common_op;
+  ASSERT_EQ(OB_SUCCESS, ss_io_common_op.get_io_callback_allocator(tenant_id, callback_allocator));
+  ASSERT_NE(nullptr, callback_allocator);
+  ASSERT_NE(nullptr, macro_prewarm_callback = static_cast<ObSSMacroBlockPrewarmIOCallback *>(
+            callback_allocator->alloc(sizeof(ObSSMacroBlockPrewarmIOCallback))));
+  macro_prewarm_callback = new(macro_prewarm_callback) ObSSMacroBlockPrewarmIOCallback(
+      callback_allocator, macro_id, effective_tablet_id, read_buf, standard_macro_size, &read_handle);
+  read_info.io_callback_ = macro_prewarm_callback;
+
+  ObSSObjectStorageReader object_storage_reader;
+  ASSERT_EQ(OB_SUCCESS, object_storage_reader.aio_read(read_info, read_handle));
+  ASSERT_EQ(OB_SUCCESS, read_handle.wait());
+
+  // 4. read from mem_macro_cache and verify actual size
+  char *get_buf = static_cast<char *>(allocator.alloc(standard_macro_size));
+  ASSERT_NE(nullptr, get_buf);
+  ObIOInfo io_info;
+  io_info.tenant_id_ = tenant_id;
+  io_info.offset_ = 0;
+  io_info.size_ = standard_macro_size;
+  io_info.flag_.set_wait_event(1);
+  io_info.timeout_us_ = 5 * 1000 * 1000;
+  io_info.buf_ = get_buf;
+  io_info.user_data_buf_ = get_buf;
+  io_info.effective_tablet_id_ = effective_tablet_id;
+
+  ObStorageObjectHandle obj_handle;
+  bool is_hit_cache = false;
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->get(macro_id, io_info, obj_handle, is_hit_cache));
+  ASSERT_TRUE(is_hit_cache) << "prewarm callback should have put 1MB into mem_macro_cache";
+  ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
+
+  // 5. verify actual size
+  ASSERT_EQ(actual_macro_size, obj_handle.get_data_size());
+  for (int64_t i = 0; i < actual_macro_size; ++i) {
+    ASSERT_EQ('P', obj_handle.get_buffer()[i]) << "data mismatch at offset " << i;
+  }
+}
 
 } // namespace storage
 } // namespace oceanbase
