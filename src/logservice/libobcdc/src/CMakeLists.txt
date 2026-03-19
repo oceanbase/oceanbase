@@ -188,6 +188,15 @@ else()
     )
   endif()
   add_dependencies(obcdc obcdc_objects)
+  if (BUILD_CDC_ONLY)
+    # Compress DWARF sections in-place after linking so eu-strip can process the binary
+    # without hitting size limits. Full debug info is preserved; the debuginfo RPM
+    # generation pipeline (find-debuginfo.sh) is unaffected.
+    add_custom_command(TARGET obcdc POST_BUILD
+      COMMAND ${OB_OBJCOPY_BIN} --compress-debug-sections $<TARGET_FILE:obcdc>
+      COMMENT "Compressing DWARF sections in libobcdc.so to reduce eu-strip input size"
+    )
+  endif()
 endif()
 set_target_properties(obcdc PROPERTIES
   PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/libobcdc.h;${CMAKE_SOURCE_DIR}/deps/oblib/src/lib/ob_errno.h"
