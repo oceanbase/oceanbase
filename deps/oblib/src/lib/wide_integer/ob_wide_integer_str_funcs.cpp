@@ -350,6 +350,7 @@ int from_string(const char *buf, const int64_t length, ObIAllocator &allocator,
   bool visited_floating_point = false;
   uint64_t tmp_sum;
   int64_t buf_len = length;
+  bool is_truncated = false;
   static const uint64_t pows[DIGITS10_CNT + 1] =
   { 1,
     10,
@@ -392,7 +393,7 @@ int from_string(const char *buf, const int64_t length, ObIAllocator &allocator,
     pos++;
   }
 
-  while (OB_SUCC(ret) && pos < buf_len)
+  while (OB_SUCC(ret) && pos < buf_len && !is_truncated)
   {
     tmp_sum = 0;
     int i = 0;
@@ -429,6 +430,14 @@ int from_string(const char *buf, const int64_t length, ObIAllocator &allocator,
       } else {
         ret = OB_INVALID_NUMERIC;
         COMMON_LOG(WARN, "unexpected char", K(buf[pos]));
+      }
+      if (OB_SUCC(ret) && precision >= MAX_PRECISION_DECIMAL_INT_512) {
+        COMMON_LOG(WARN, "decimal precision exceeds maximum, truncating", 
+                    K(precision), K(MAX_PRECISION_DECIMAL_INT_512));
+        // Evaluate whether adding tmp_res and tmp_sum would exceed the precision limit, 
+        // and stop further parsing if so
+        is_truncated = true;
+        break;
       }
     } // for end
     tmp_res = tmp_res * pows[i] + tmp_sum;
