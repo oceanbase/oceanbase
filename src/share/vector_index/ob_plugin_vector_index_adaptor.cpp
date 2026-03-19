@@ -2098,11 +2098,11 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
           lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
           lib::ObLightBacktraceGuard light_backtrace_guard(false);
           if (!is_sparse_vector_index_type()) {
-            if (OB_FAIL(segment_builder->add_index(vectors, vids, dim, extra_info_buf, num))) {
+            if (OB_FAIL(segment_builder->add_index(vectors, vids, dim, extra_info_buf, num, param->extra_info_actual_size_))) {
               LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
             }
           } else {
-            if (OB_FAIL(segment_builder->add_index(lens, dims, vals, vids, num, extra_info_buf))) {
+            if (OB_FAIL(segment_builder->add_index(lens, dims, vals, vids, num, extra_info_buf, param->extra_info_actual_size_))) {
               LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
             }
           }
@@ -2136,11 +2136,11 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
           if (segment_builder->has_build_) {
             // directly write into index
             if (!is_sparse_vector_index_type()) {
-              if (OB_FAIL(segment_builder->add_index(vectors, vids, dim, extra_info_buf, num))) {
+              if (OB_FAIL(segment_builder->add_index(vectors, vids, dim, extra_info_buf, num, param->extra_info_actual_size_))) {
                 LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
               }
             } else {
-              if (OB_FAIL(segment_builder->add_index(lens, dims, vals, vids, num, extra_info_buf))) {
+              if (OB_FAIL(segment_builder->add_index(lens, dims, vals, vids, num, extra_info_buf, param->extra_info_actual_size_))) {
                 LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
               }
             }
@@ -2172,11 +2172,11 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
               lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
               lib::ObLightBacktraceGuard light_backtrace_guard(false);
               if (!is_sparse_vector_index_type()) {
-                if (OB_FAIL(segment_builder->add_index(vectors, vids, dim, extra_info_buf, num))) {
+                if (OB_FAIL(segment_builder->add_index(vectors, vids, dim, extra_info_buf, num, param->extra_info_actual_size_))) {
                   LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
                 }
               } else {
-                if (OB_FAIL(segment_builder->add_index(lens, dims, vals, vids, num, extra_info_buf))) {
+                if (OB_FAIL(segment_builder->add_index(lens, dims, vals, vids, num, extra_info_buf, param->extra_info_actual_size_))) {
                   LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
                 }
               }
@@ -6230,7 +6230,7 @@ int ObPluginVectorIndexAdaptor::persist_incr_segment(const ObLSID &ls_id)
     LOG_WARN("fail to get tx_desc", K(ret));
   } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, ls_id, timeout, snapshot))) {
     LOG_WARN("fail to get snapshot", K(ret));
-  } else if (OB_FAIL(get_lob_tablet_id(ls_id, ctx.data_tablet_id_, ctx.lob_meta_tablet_id_, ctx.lob_meta_tablet_id_))) {
+  } else if (OB_FAIL(get_lob_tablet_id(ls_id, ctx.data_tablet_id_, ctx.lob_meta_tablet_id_, ctx.lob_piece_tablet_id_))) {
     LOG_WARN("get_lob_tablet_id fail", K(ret), K(ls_id), K(ctx.data_tablet_id_));
   } else if (OB_FAIL(snap_table_handler.init(ls_id, this->get_data_table_id(), this->get_snapshot_table_id(), this->get_snap_tablet_id()))) {
     LOG_WARN("init snap table handler fail", K(ret));

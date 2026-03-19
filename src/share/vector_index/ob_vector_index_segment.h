@@ -741,8 +741,8 @@ public:
 
   int check_vid_range(const int64_t vid, bool &has_skip_vid);
   int serialize(const uint64_t tenant_id, ObHNSWSerializeCallback::CbParam &param);
-  int add_index(float* vecs, int64_t* ids, int dim, char *extra_info, int size);
-  int add_index(uint32_t *lens, uint32_t *dims, float *vals, int64_t *ids, int size, char *extra_infos);
+  int add_index(float* vecs, int64_t* ids, int dim, char *extra_info, int size, int64_t extra_info_actual_size = 0);
+  int add_index(uint32_t *lens, uint32_t *dims, float *vals, int64_t *ids, int size, char *extra_infos, int64_t extra_info_actual_size = 0);
 
   TO_STRING_KV(KP(this), K_(is_inited), K_(seg_type), K_(has_build), K_(need_vid_check),
       K_(segment_handle), KP_(vid_array), KP_(vec_array), KP_(extra_info_buf),

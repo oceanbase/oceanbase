@@ -1484,41 +1484,54 @@ int ObVectorIndexSegmentBuilder::check_vid_range(const int64_t vid, bool &has_sk
   return ret;
 }
 
-int ObVectorIndexSegmentBuilder::add_index(float* vecs, int64_t* ids, int dim, char *extra_info, int size)
+int ObVectorIndexSegmentBuilder::add_index(float* vecs, int64_t* ids, int dim, char *extra_info, int size, int64_t extra_info_actual_size)
 {
   int ret = OB_SUCCESS;
+  char *curr_extra_info = nullptr;
   for (int i = 0; i < size && OB_SUCC(ret); ++i) {
     bool has_skip_vid = false;
     const int64_t vid = ids[i];
     if (OB_FAIL(check_vid_range(vid, has_skip_vid))) {
       LOG_WARN("check vid range fail", K(ret), KP(ids), K(size));
     } else if (has_skip_vid) {
-    } else if (OB_FAIL(segment_handle_->add_index(vecs, ids + i, dim, extra_info, 1))) {
-      LOG_WARN("failed to add index.", K(ret), K(dim), K(size));
-    } else if (OB_NOT_NULL(ibitmap_) && OB_NOT_NULL(ibitmap_->insert_bitmap_)) {
-      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ibitmap_->tenant_id_, "VIBitmap"));
-      TCWLockGuard lock_guard(ibitmap_->rwlock_);
-      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ibitmap_->insert_bitmap_, vid));
+    } else {
+      curr_extra_info = (OB_NOT_NULL(extra_info) && extra_info_actual_size > 0)
+                        ? (extra_info + i * extra_info_actual_size) : extra_info;
+      if (OB_FAIL(segment_handle_->add_index(vecs + i * dim, ids + i, dim, curr_extra_info, 1))) {
+        LOG_WARN("failed to add index.", K(ret), K(dim), K(size));
+      } else if (OB_NOT_NULL(ibitmap_) && OB_NOT_NULL(ibitmap_->insert_bitmap_)) {
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ibitmap_->tenant_id_, "VIBitmap"));
+        TCWLockGuard lock_guard(ibitmap_->rwlock_);
+        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ibitmap_->insert_bitmap_, vid));
+      }
     }
   }
   return ret;
 }
 
-int ObVectorIndexSegmentBuilder::add_index(uint32_t *lens, uint32_t *dims, float *vals, int64_t *ids, int size, char *extra_infos)
+int ObVectorIndexSegmentBuilder::add_index(uint32_t *lens, uint32_t *dims, float *vals, int64_t *ids, int size, char *extra_infos, int64_t extra_info_actual_size)
 {
   int ret = OB_SUCCESS;
+  uint32_t curr_offset = 0;
+  char *curr_extra_infos = nullptr;
   for (int i = 0; i < size && OB_SUCC(ret); ++i) {
     bool has_skip_vid = false;
     const int64_t vid = ids[i];
     if (OB_FAIL(check_vid_range(vid, has_skip_vid))) {
       LOG_WARN("check vid range fail", K(ret), KP(ids), K(size));
-    } else if (has_skip_vid){
-    } else if (OB_FAIL(segment_handle_->add_index(lens, dims, vals, ids + i, 1, extra_infos))) {
-      LOG_WARN("failed to add index.", K(ret), K(size));
-    } else if (OB_NOT_NULL(ibitmap_) && OB_NOT_NULL(ibitmap_->insert_bitmap_)) {
-      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ibitmap_->tenant_id_, "VIBitmap"));
-      TCWLockGuard lock_guard(ibitmap_->rwlock_);
-      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ibitmap_->insert_bitmap_, vid));
+    } else if (has_skip_vid) {
+      curr_offset += lens[i];
+    } else {
+      curr_extra_infos = (OB_NOT_NULL(extra_infos) && extra_info_actual_size > 0)
+                         ? (extra_infos + i * extra_info_actual_size) : extra_infos;
+      if (OB_FAIL(segment_handle_->add_index(lens + i, dims + curr_offset, vals + curr_offset, ids + i, 1, curr_extra_infos))) {
+        LOG_WARN("failed to add index.", K(ret), K(size));
+      } else if (OB_NOT_NULL(ibitmap_) && OB_NOT_NULL(ibitmap_->insert_bitmap_)) {
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ibitmap_->tenant_id_, "VIBitmap"));
+        TCWLockGuard lock_guard(ibitmap_->rwlock_);
+        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ibitmap_->insert_bitmap_, vid));
+      }
+      curr_offset += lens[i];
     }
   }
   return ret;
