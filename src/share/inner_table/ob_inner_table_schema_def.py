@@ -18274,6 +18274,7 @@ def_table_schema(
 # 12601: __all_virtual_sandbox_process
 # 12602: __all_virtual_optstat_catalog_global_prefs
 # 12603: __all_virtual_tenant_worker_group
+# 12604: __all_virtual_keyword
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -18869,6 +18870,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15546', all_def_ke
 # 15550: __all_external_resource
 # 15551: __all_java_policy
 # 15552: __all_virtual_tenant_worker_group
+# 15553: __all_virtual_keyword
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -47056,6 +47058,7 @@ def_table_schema(
 # 21721: CDB_SCHEDULER_RUNNING_JOBS
 # 21722: CDB_SCHEDULER_JOBS
 # 21723: GV$OB_TENANT_WORKER_GROUPS
+# 21724: V$OB_KEYWORDS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -69933,6 +69936,7 @@ def_table_schema(
 
 # 25319: DBA_JAVA_POLICY
 # 25320: USER_JAVA_POLICY
+# 25321: V$OB_KEYWORDS
 
 #
 # 余留位置（此行之前占位）
