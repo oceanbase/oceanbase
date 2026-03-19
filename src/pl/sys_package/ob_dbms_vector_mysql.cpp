@@ -467,6 +467,14 @@ int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
     LOG_WARN("string low to up failed", K(ret), K(param_str));
   } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(param_str, idx_type, index_param))) {
     LOG_WARN("fail to parser params from string", K(ret), K(param_str));
+  } else if (index_param.type_ == VIAT_IVF_PQ && index_param.m_ == 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ivf_pq vector index param m needs to be set", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ivf_pq vector index param m not set is");
+  } else if (index_param.type_ == VIAT_IVF_PQ && (dim_count % index_param.m_ != 0 || dim_count < index_param.m_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ivf vector index param m needs to be divisible by dim, or less than dim", K(ret), K(dim_count), K(index_param.m_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index m not to be divisible by dim or greater than dim is");
   } else if (index_param.dist_algorithm_ == VIDA_MAX) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unexpected setting of vector index param, distance has not been set",
