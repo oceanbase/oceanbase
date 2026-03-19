@@ -171,25 +171,21 @@ public:
 
 struct ObExternalTableAccessOptions
 {
-  ObExternalTableAccessOptions() :
-    enable_prebuffer_(false), enable_page_cache_(false), enable_disk_cache_(false), cache_options_()
+  ObExternalTableAccessOptions()
+      : enable_prebuffer_(false), enable_memory_cache_(false), enable_disk_cache_(false),
+        enable_parquet_page_cache_(false), cache_options_()
   {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
       enable_prebuffer_ = tenant_config->_enable_external_table_prefetch;
-      enable_page_cache_ = tenant_config->_enable_external_table_memory_cache;
+      enable_memory_cache_ = tenant_config->_enable_external_table_memory_cache;
       enable_disk_cache_ = tenant_config->_enable_external_table_disk_cache;
-    }
-  }
-  ObExternalTableAccessOptions(const bool enable_page_cache, const bool enable_disk_cache,
-                               const ObFilePreBuffer::CacheOptions &options) :
-    enable_prebuffer_(false),
-    enable_page_cache_(enable_page_cache), enable_disk_cache_(enable_disk_cache),
-    cache_options_(options)
-  {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (tenant_config.is_valid()) {
-      enable_prebuffer_ = tenant_config->_enable_external_table_prefetch;
+      enable_parquet_page_cache_ = tenant_config->_enable_external_table_parquet_page_cache;
+
+      if (!enable_prebuffer_ || !enable_memory_cache_) {
+        // parquet page cache rely on memory cache
+        enable_parquet_page_cache_ = false;
+      }
     }
   }
   static ObExternalTableAccessOptions defaults()
@@ -206,18 +202,22 @@ struct ObExternalTableAccessOptions
   }
   static ObExternalTableAccessOptions disable_cache_defaults()
   {
-    return ObExternalTableAccessOptions(/*enable_page_cache=*/false,
-                                        /*enable_disk_cache=*/false,
-                                        ObFilePreBuffer::CacheOptions::defaults());
+    ObExternalTableAccessOptions options = defaults();
+    options.enable_memory_cache_ = false;
+    options.enable_disk_cache_ = false;
+    options.enable_parquet_page_cache_ = false;
+    return options;
   }
   TO_STRING_KV(K_(enable_prebuffer),
-               K_(enable_page_cache),
+               K_(enable_memory_cache),
                K_(enable_disk_cache),
+               K_(enable_parquet_page_cache),
                K_(cache_options));
 
   bool enable_prebuffer_;
-  bool enable_page_cache_;
+  bool enable_memory_cache_;
   bool enable_disk_cache_;
+  bool enable_parquet_page_cache_;
   ObFilePreBuffer::CacheOptions cache_options_;
 };
 

@@ -218,7 +218,7 @@ int ObIcebergFileIOUtils::read(ObIAllocator &allocator,
                                       file_size,
                                       INT64_MAX);
       ObExternalTableAccessOptions options = ObExternalTableAccessOptions::lazy_defaults();
-      ObExternalFileCacheOptions cache_options(options.enable_page_cache_,
+      ObExternalFileCacheOptions cache_options(options.enable_memory_cache_,
                                                options.enable_disk_cache_);
       if (!enable_cache) {
         // 对于 version-hint 这种文件，不进 cache，避免读到老的 snapshot

@@ -29,6 +29,7 @@
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/engine/table/ob_external_table_pushdown_filter.h"
 #include "sql/engine/table/ob_parquet_dict_filter.h"
+#include "sql/engine/table/parquet/ob_parquet_page_mgr.h"
 #include "storage/access/ob_sstable_index_filter.h"
 #include <parquet/page_index.h>
 #include <parquet/stream_reader.h>
@@ -52,19 +53,18 @@ enum FilterCalcMode {
   FORCE_LAZY_CALC,
 };
 
+// 如果 ParquetPageMgr 开启，这个方法其实不会被用到
 struct ReadPages
 {
   ReadPages(int64_t &cur_col_id,
             int64_t &cur_eager_id,
             common::ObIArray<int64_t> &read_row_counts,
-            common::ObIArray<ObArray<std::pair<int64_t, int64_t>> *> &page_skip_ranges,
-            ObLakeTableParquetReaderMetrics &reader_metrics)
-            : cur_col_id_(cur_col_id),
-              cur_eager_id_(cur_eager_id),
-              read_row_counts_(read_row_counts),
-              page_skip_ranges_(page_skip_ranges),
-              reader_metrics_(reader_metrics) {}
-  bool operator() (const parquet::DataPageStats& stats)
+            common::ObIArray<ObArray<std::pair<int64_t, int64_t>> *> &page_skip_ranges)
+      : cur_col_id_(cur_col_id), cur_eager_id_(cur_eager_id), read_row_counts_(read_row_counts),
+        page_skip_ranges_(page_skip_ranges)
+  {
+  }
+  bool operator()(const parquet::DataPageStats &stats)
   {
     bool can_skip = false;
     int64_t begin = read_row_counts_.at(cur_eager_id_);
@@ -75,14 +75,7 @@ struct ReadPages
         can_skip = true;
       }
     }
-    if (!can_skip) {
-      ++reader_metrics_.selected_page_count_;
-      //ObTaskController::get().allow_next_syslog();
-      //LOG_INFO("print can not skip", K(cur_col_id_), K(state_.cur_row_group_idx_), K(begin), K(end));
-    } else {
-      ++reader_metrics_.skipped_page_count_;
-      //ObTaskController::get().allow_next_syslog();
-      //LOG_INFO("print can skip", K(cur_col_id_), K(state_.cur_row_group_idx_), K(begin), K(end));
+    if (can_skip) {
       read_row_counts_.at(cur_eager_id_) += stats.num_values; /*TODO: check if is correct*/
     }
     return can_skip;
@@ -90,10 +83,72 @@ struct ReadPages
   int64_t &cur_col_id_;
   int64_t &cur_eager_id_;
   common::ObIArray<int64_t> &read_row_counts_;
-  common::ObIArray<ObArray<std::pair<int64_t, int64_t>> *> &page_skip_ranges_;
-  ObLakeTableParquetReaderMetrics &reader_metrics_;
+  const common::ObIArray<ObArray<std::pair<int64_t, int64_t>> *> &page_skip_ranges_;
 };
 
+struct ObParquetPageLocation
+{
+  // File offset of the data page.
+  int64_t offset_;
+  // Total compressed size of the data page and header.
+  int32_t compressed_page_size_;
+  // Row id of the first row in the page within the row group.
+  int64_t first_row_index_;
+  // Page total rows
+  int64_t num_rows_;
+
+  TO_STRING_KV(K(offset_), K(compressed_page_size_), K(first_row_index_), K(num_rows_));
+};
+
+struct ObPageLocationCmp
+{
+  bool operator()(const ObParquetPageLocation &page, int64_t offset) const
+  {
+    return page.offset_ < offset;
+  }
+};
+
+struct SkipPageCallback
+{
+  SkipPageCallback(
+      int64_t &cur_col_id,
+      int64_t &cur_eager_id,
+      common::ObIArray<int64_t> &read_row_counts,
+      ObFixedArray<ObArray<ObParquetPageLocation> *, ObIAllocator> &all_column_page_locations)
+      : cur_col_id_(cur_col_id), cur_eager_id_(cur_eager_id), read_row_counts_(read_row_counts),
+        all_column_page_locations_(all_column_page_locations)
+  {
+  }
+  void operator()(int64_t skip_page_offset)
+  {
+    const ObArray<ObParquetPageLocation> *column_page_locations
+        = all_column_page_locations_.at(cur_col_id_);
+    if (OB_ISNULL(column_page_locations)) {
+      throw parquet::ParquetException("Parquet page location error");
+    }
+
+    // Binary search to find the page with the exact skip_page_offset
+    ObArray<ObParquetPageLocation>::const_iterator it
+        = std::lower_bound(column_page_locations->begin(),
+                           column_page_locations->end(),
+                           skip_page_offset,
+                           ObPageLocationCmp());
+
+    // If not found or offset doesn't match exactly, throw exception
+    if (it == column_page_locations->end() || it->offset_ != skip_page_offset) {
+      throw parquet::ParquetException("skip page error");
+    }
+
+    int64_t found_page_idx = std::distance(column_page_locations->begin(), it);
+
+    // Advance the read row count for this column
+    read_row_counts_.at(cur_eager_id_) += it->num_rows_;
+  }
+  int64_t &cur_col_id_;
+  int64_t &cur_eager_id_;
+  common::ObIArray<int64_t> &read_row_counts_;
+  const ObFixedArray<ObArray<ObParquetPageLocation> *, ObIAllocator> &all_column_page_locations_;
+};
 
 class ObParquetIteratorState : public ObExternalIteratorState {
 public:
@@ -153,6 +208,7 @@ public:
   static const constexpr double EAGER_CALC_CUT_RATIO = 0.66;
   ObParquetTableRowIterator() :
     read_props_(&arrow_alloc_),
+    eager_read_props_(&arrow_alloc_),
     bit_vector_cache_(NULL),
     options_(),
     file_prebuffer_(data_access_driver_),
@@ -167,6 +223,7 @@ public:
     rg_page_index_reader_(nullptr),
     page_skip_ranges_(allocator_),
     page_selected_read_ranges_(allocator_),
+    all_column_page_locations_(allocator_),
     stat_(),
     mode_(FilterCalcMode::DYNAMIC_EAGER_CALC),
     reader_metrics_(),
@@ -175,6 +232,7 @@ public:
   virtual ~ObParquetTableRowIterator();
 
   int init(const storage::ObTableScanParam *scan_param) override;
+  int init_read_props();
   int get_next_row() override;
   int get_next_rows(int64_t &count, int64_t capacity) override;
   static bool is_parquet_store_utc(const parquet::LogicalType *logtype);
@@ -458,6 +516,7 @@ private:
   static int to_numeric_hive(const char *str, const int32_t length, char *buf, const int64_t data_len,
                              const ObDatumMeta &meta, common::ObIAllocator &alloc, blocksstable::ObStorageDatum &datum);
   int pre_buffer(std::shared_ptr<parquet::RowGroupReader> rg_reader);
+  int prepare_parquet_page_mgr();
   int compute_column_id_by_index_type(int index, int &file_col_id, const bool is_collection_column);
   int pre_buffer(ObFilePreBuffer &file_prebuffer,
                  ObFilePreBuffer::ColumnRangeSlicesList &column_range_slice_list);
@@ -487,7 +546,10 @@ private:
   void clear_eager_flags(ObEvalCtx &eval_ctx);
   void move_next();
   void increase_read_rows(const int64_t rows, const bool only_eager);
-  int prepare_page_ranges(const int64_t num_rows);
+  int prepare_page_ranges(std::shared_ptr<parquet::RowGroupReader> rg_reader, const int64_t num_rows);
+  int prepare_all_column_page_locations(
+      int64_t rg_num_rows,
+      std::shared_ptr<parquet::RowGroupPageIndexReader> &rg_page_index);
   int64_t get_real_skip_count(const int64_t curr_idx,
                               const int64_t num_rows_to_skip,
                               const int64_t column_id);
@@ -503,6 +565,17 @@ private:
   // 根据字典编码检查结果，动态更新 load_funcs_
   int update_load_funcs_for_dict_optimization();
   int collect_dict_filter_executors(ObPushdownFilterExecutor *filter);
+
+  bool is_enable_rg_parquet_page_mgr() const;
+  // Functor for checking if page manager is enabled
+  struct IsEnablePageMgrFunctor {
+    ObParquetTableRowIterator* iter;
+
+    bool operator()() const {
+      return iter->is_enable_rg_parquet_page_mgr();
+    }
+  };
+
 private:
   ObParquetIteratorState state_;
   lib::ObMemAttr mem_attr_;
@@ -510,10 +583,12 @@ private:
   ObArenaAllocator str_res_mem_;
   ObArrowMemPool arrow_alloc_;
   parquet::ReaderProperties read_props_;
+  parquet::ReaderProperties eager_read_props_;
   ObExternalFileAccess data_access_driver_;
   ObExternalFileAccess eager_data_access_driver_;
   std::unique_ptr<parquet::ParquetFileReader> file_reader_;
   std::unique_ptr<parquet::ParquetFileReader> eager_file_reader_;
+  ObParquetPageMgr parquet_page_mgr_;
   std::shared_ptr<parquet::FileMetaData> file_meta_;
   common::ObArrayWrap<int> column_indexs_;
   common::ObArrayWrap<std::shared_ptr<parquet::ColumnReader>> column_readers_;
@@ -539,10 +614,13 @@ private:
   ParquetSectorIterator sector_iter_;
   std::shared_ptr<parquet::PageIndexReader> page_index_reader_;
   std::shared_ptr<parquet::RowGroupPageIndexReader> rg_page_index_reader_;
-  // place each skiped page's [page_start_row, page_rows]
+  bool has_duplicated_column_; // 标记该文件会不会对同一个物理列扫描两次
+  // place each column skiped page's [page_start_row, page_rows]
   common::ObFixedArray<ObArray<std::pair<int64_t, int64_t>> *, ObIAllocator> page_skip_ranges_;
-  // place each selected page's [page_offset, page_size]
+  // place each column selected page's [page_offset, page_size]
   common::ObFixedArray<ObArray<std::pair<int64_t, int64_t>> *, ObIAllocator> page_selected_read_ranges_;
+  // 每个 column 的 page locations
+  common::ObFixedArray<ObArray<ObParquetPageLocation> *, ObIAllocator> all_column_page_locations_;
   ParquetStatInfo stat_;
   FilterCalcMode mode_;
   ObLakeTableParquetReaderMetrics reader_metrics_;

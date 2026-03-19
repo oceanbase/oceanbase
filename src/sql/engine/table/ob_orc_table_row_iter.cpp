@@ -760,7 +760,7 @@ int ObOrcTableRowIterator::next_file()
             ObExternalFileUrlInfo file_info(scan_param_->external_file_location_,
                                             scan_param_->external_file_access_info_, url_.string(),
                                             file_content_digest, file_size, modify_time);
-            ObExternalFileCacheOptions cache_options(options_.enable_page_cache_,
+            ObExternalFileCacheOptions cache_options(options_.enable_memory_cache_,
                                                      options_.enable_disk_cache_);
             if (OB_FAIL(data_access_driver_.open(file_info, cache_options))) {
               if (OB_OBJECT_NOT_EXIST == ret || OB_HDFS_PATH_NOT_FOUND == ret) {

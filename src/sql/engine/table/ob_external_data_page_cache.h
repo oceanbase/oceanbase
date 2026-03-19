@@ -66,7 +66,9 @@ private:
 class ObExternalDataPageCacheValue : public common::ObIKVCacheValue
 {
 public:
-  explicit ObExternalDataPageCacheValue(char *buf, const int64_t valid_data_size);
+  ObExternalDataPageCacheValue(char *buf,
+                               const int64_t valid_data_size,
+                               const bool is_decompressed);
   ~ObExternalDataPageCacheValue();
   int64_t size() const override;
   int deep_copy(
@@ -76,12 +78,14 @@ public:
   bool is_valid() const { return NULL != buf_ && size() > 0; }
   char *get_buffer() { return buf_; }
   int64_t get_valid_data_size() const { return valid_data_size_; }
+  bool is_decompressed() const { return is_decompressed_; }
   void set_buffer(char *buf, const int64_t valid_data_size) { buf_ = buf; valid_data_size_ = valid_data_size; }
-  TO_STRING_KV(KP(buf_), K(valid_data_size_));
+  TO_STRING_KV(KP(buf_), K(valid_data_size_), K(is_decompressed_));
 
 private:
   char *buf_;
   int64_t valid_data_size_;
+  bool is_decompressed_; // mark page's cache value is decompressed
   DISALLOW_COPY_AND_ASSIGN(ObExternalDataPageCacheValue);
 };
 
@@ -97,6 +101,7 @@ public:
     handle_.reset();
     value_ = NULL;
   }
+  int assign(const ObExternalDataPageCacheValueHandle &other);
   TO_STRING_KV(KP(value_), K(handle_));
   ObExternalDataPageCacheValue *value_;
   common::ObKVCacheHandle handle_;

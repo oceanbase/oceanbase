@@ -86,8 +86,8 @@ int ObLakeTablePreBufferMetrics::update_specific_profile_(ObProfileId eager_inte
   SET_METRIC_VAL(ObMetricId::LAKE_TABLE_HIT_COUNT, hit_count_);
   SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ASYNC_IO_COUNT, async_io_count_);
   SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ASYNC_IO_SIZE, async_io_size_);
-  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_TOTAL_IO_WAIT_TIME, total_io_wait_time_us_);
-  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MAX_IO_WAIT_TIME, max_io_wait_time_us_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_TOTAL_IO_WAIT_TIME, total_io_wait_time_ns_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MAX_IO_WAIT_TIME, max_io_wait_time_ns_);
   SET_METRIC_VAL(ObMetricId::LAKE_TABLE_TOTAL_READ_SIZE, total_read_size_);
   return ret;
 }
@@ -97,13 +97,17 @@ void ObLakeTablePreBufferMetrics::dump_metrics()
   LOG_INFO("dump metrics", K_(label), KPC(this));
 }
 
-int ObLakeTableIOMetrics::update_profile()
+void ObLakeTableParquetPageMgrMetrics::dump_metrics()
+{
+  LOG_INFO("dump metrics", K_(label), KPC(this));
+}
+
+int ObLakeTableParquetPageMgrMetrics::update_profile()
 {
   int ret = OB_SUCCESS;
-  if (label_.case_compare_equal(IO_METRICS_LABEL)) {
-    ret = update_specific_profile_(ObProfileId::LAKE_TABLE_NON_EAGER);
-  } else if (label_.case_compare_equal(EAGER_IO_METRICS_LABEL)) {
-    ret = update_specific_profile_(ObProfileId::LAKE_TABLE_EAGER);
+  ObProfileSwitcher switcher(ObProfileId::LAKE_TABLE_PARQUET_PAGE_MGR);
+  if (label_.case_compare_equal(PARQUET_PAGE_MGR_METRICS_LABEL)) {
+    ret = update_specific_profile_();
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid metric label", K_(label), K(ret));
@@ -111,42 +115,118 @@ int ObLakeTableIOMetrics::update_profile()
   return ret;
 }
 
-int ObLakeTableIOMetrics::update_specific_profile_(ObProfileId eager_intend)
+int ObLakeTableParquetPageMgrMetrics::update_specific_profile_()
+{
+  int ret = OB_SUCCESS;
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_HIT_COUNT, cached_page_hit_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_HIT_SIZE, cached_page_hit_size_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_MISS_COUNT, cached_page_miss_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_MISS_SIZE, cached_page_miss_size_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ASYNC_IO_SIZE, async_io_size_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ASYNC_IO_COUNT, async_io_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_TOTAL_IO_WAIT_TIME, total_io_wait_time_ns_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MAX_IO_WAIT_TIME, max_io_wait_time_ns_);
+  return ret;
+}
+
+int ObLakeTableIOMetrics::update_profile()
+{
+  int ret = OB_SUCCESS;
+  if (label_.case_compare_equal(IO_METRICS_LABEL)) {
+    ret = update_specific_profile_(ObProfileId::LAKE_TABLE_NON_EAGER);
+  } else if (label_.case_compare_equal(EAGER_IO_METRICS_LABEL)) {
+    ret = update_specific_profile_(ObProfileId::LAKE_TABLE_EAGER);
+  } else if (label_.case_compare_equal(PARQUET_PAGE_MGR_IO_METRICS_LABEL)) {
+    ObProfileSwitcher switcher(ObProfileId::LAKE_TABLE_PARQUET_PAGE_MGR);
+    ret = update_specific_profile_(std::nullopt);
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid metric label", K_(label), K(ret));
+  }
+  return ret;
+}
+
+int ObLakeTableIOMetrics::update_specific_profile_(std::optional<ObProfileId> eager_intend)
 {
   int ret = OB_SUCCESS;
   {
     ObProfileSwitcher switcher(ObProfileId::LAKE_TABLE_FILE_READER);
-    ObProfileSwitcher eager_switcher(eager_intend);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_READ_COUNT, access_count_);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_SYNC_READ_COUNT, sync_read_count_);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ASYNC_READ_COUNT, async_read_count_);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_READ_IO_SIZE, access_io_size_);
+    if (eager_intend.has_value()) {
+      ObProfileSwitcher eager_switcher(eager_intend.value());
+      ret = update_file_reader_profile_();
+    } else {
+      ret = update_file_reader_profile_();
+    }
   }
   {
     ObProfileSwitcher switcher(ObProfileId::LAKE_TABLE_MEM_CACHE);
-    ObProfileSwitcher eager_switcher(eager_intend);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MEM_CACHE_HIT_COUNT, mem_cache_hit_count_);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MEM_CACHE_MISS_COUNT, mem_cache_miss_count_);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MEM_CACHE_HIT_IO_SIZE, mem_cache_hit_io_size_);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MEM_CACHE_MISS_IO_SIZE, mem_cache_miss_io_size_);
+    if (eager_intend.has_value()) {
+      ObProfileSwitcher eager_switcher(eager_intend.value());
+      ret = update_mem_cache_profile_();
+    } else {
+      ret = update_mem_cache_profile_();
+    }
   }
   {
     ObProfileSwitcher switcher(ObProfileId::LAKE_TABLE_DISK_CACHE);
-    ObProfileSwitcher eager_switcher(eager_intend);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_DISK_CACHE_HIT_COUNT, disk_cache_hit_count_);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_DISK_CACHE_MISS_COUNT, disk_cache_miss_count_);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_DISK_CACHE_HIT_IO_SIZE, disk_cache_hit_io_size_);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_DISK_CACHE_MISS_IO_SIZE, disk_cache_miss_io_size_);
+    if (eager_intend.has_value()) {
+      ObProfileSwitcher eager_switcher(eager_intend.value());
+      ret = update_disk_cache_profile_();
+    } else {
+      ret = update_disk_cache_profile_();
+    }
   }
   {
     ObProfileSwitcher switcher(ObProfileId::LAKE_TABLE_STORAGE_IO);
-    ObProfileSwitcher eager_switcher(eager_intend);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MAX_IO_TIME, max_io_time_us_);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_AVG_IO_TIME,
-                   (io_count_ > 0 ? total_io_time_us_ / io_count_ : 0));
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_TOTAL_IO_TIME, total_io_time_us_);
-    SET_METRIC_VAL(ObMetricId::LAKE_TABLE_STORAGE_IO_COUNT, io_count_);
+    if (eager_intend.has_value()) {
+      ObProfileSwitcher eager_switcher(eager_intend.value());
+      ret = update_storage_io_profile_();
+    } else {
+      ret = update_storage_io_profile_();
+    }
   }
+  return ret;
+}
+
+int ObLakeTableIOMetrics::update_file_reader_profile_()
+{
+  int ret = OB_SUCCESS;
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_READ_COUNT, access_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_SYNC_READ_COUNT, sync_read_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_ASYNC_READ_COUNT, async_read_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_READ_IO_SIZE, access_io_size_);
+  return ret;
+}
+
+int ObLakeTableIOMetrics::update_mem_cache_profile_()
+{
+  int ret = OB_SUCCESS;
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MEM_CACHE_HIT_COUNT, mem_cache_hit_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MEM_CACHE_MISS_COUNT, mem_cache_miss_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MEM_CACHE_HIT_IO_SIZE, mem_cache_hit_io_size_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MEM_CACHE_MISS_IO_SIZE, mem_cache_miss_io_size_);
+  return ret;
+}
+
+int ObLakeTableIOMetrics::update_disk_cache_profile_()
+{
+  int ret = OB_SUCCESS;
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_DISK_CACHE_HIT_COUNT, disk_cache_hit_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_DISK_CACHE_MISS_COUNT, disk_cache_miss_count_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_DISK_CACHE_HIT_IO_SIZE, disk_cache_hit_io_size_);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_DISK_CACHE_MISS_IO_SIZE, disk_cache_miss_io_size_);
+  return ret;
+}
+
+int ObLakeTableIOMetrics::update_storage_io_profile_()
+{
+  int ret = OB_SUCCESS;
+  // profile 的时间单位是 ns，这里 us 需要 *1000
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_MAX_IO_TIME, max_io_time_us_ * 1000);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_AVG_IO_TIME,
+                 (io_count_ > 0 ? total_io_time_us_ * 1000 / io_count_ : 0));
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_TOTAL_IO_TIME, total_io_time_us_ * 1000);
+  SET_METRIC_VAL(ObMetricId::LAKE_TABLE_STORAGE_IO_COUNT, io_count_);
   return ret;
 }
 

@@ -1689,6 +1689,11 @@ ob_set_subtarget(ob_sql iceberg
   table_format/iceberg/scan/delete_file_index.cpp
 )
 
+ob_set_subtarget(ob_sql parquet
+  engine/table/parquet/ob_parquet_page_mgr.cpp
+  engine/table/parquet/ob_parquet_page_buffer.cpp
+)
+
 ob_add_new_object_target(ob_sql ob_sql)
 ob_add_new_object_target(ob_sql_extra ob_sql_extra)
 

@@ -267,14 +267,14 @@ int ObFilePreBuffer::RangeCacheEntry::wait(ObLakeTablePreBufferMetrics &metrics)
   int ret = OB_SUCCESS;
   if (is_waited_) {
   } else {
-    const int64_t start_ts = ObTimeUtility::current_time();
+    const int64_t start_ts = ObTimeUtility::current_time_ns();
     if (OB_FAIL(io_handle_.wait())) {
       LOG_WARN("failed to wait io handle", K(ret));
     } else {
       is_waited_ = true;
-      const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-      metrics.total_io_wait_time_us_ += cost_ts;
-      metrics.max_io_wait_time_us_ = MAX(metrics.max_io_wait_time_us_, cost_ts);
+      const int64_t cost_ts = ObTimeUtility::current_time_ns() - start_ts;
+      metrics.total_io_wait_time_ns_ += cost_ts;
+      metrics.max_io_wait_time_ns_ = MAX(metrics.max_io_wait_time_ns_, cost_ts);
     }
   }
   return ret;
@@ -561,7 +561,7 @@ int ObFilePreBuffer::read(int64_t position, int64_t length, void* out)
               && num_prefetched < options_.prefetch_limit_) {
           RangeCacheEntry *cache_entry = nullptr;
           if (OB_FAIL(column_cache_entry->pop_front(cache_entry))) {
-            LOG_WARN("failed to pop fromt", K(ret));
+            LOG_WARN("failed to pop front", K(ret));
           } else if (OB_FAIL(async_read_range(*cache_entry))) {
             LOG_WARN("failed to async read range", K(ret));
           } else {

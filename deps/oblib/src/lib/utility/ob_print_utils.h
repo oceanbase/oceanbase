@@ -559,6 +559,21 @@ template<typename T1, typename T2>
   return ret;
 }
 
+template<typename T1, typename T2, typename T3>
+    inline int databuff_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const std::tuple<T1, T2, T3> &obj)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(databuff_printf(buf, buf_len, pos, "["))) {
+  } else if (OB_FAIL(databuff_print_obj(buf, buf_len, pos, std::get<0>(obj)))) {
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ", "))) {
+  } else if (OB_FAIL(databuff_print_obj(buf, buf_len, pos, std::get<1>(obj)))) {
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ", "))) {
+  } else if (OB_FAIL(databuff_print_obj(buf, buf_len, pos, std::get<2>(obj)))) {
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "]"))) {
+  } else {}
+  return ret;
+}
+
 template<int64_t N>
 inline int databuff_print_obj(char *buf, const int64_t buf_len,
                               int64_t &pos, const ObFixedLengthString<N> &obj)

@@ -2999,6 +2999,9 @@ DEF_CAP(external_table_csv_max_buffer_size, OB_TENANT_PARAMETER, "1G", "[0B,)",
         "Maximum buffer size for parsing CSV external table files. "
         "Range: [0B, +∞), default: 1G",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_external_table_parquet_page_cache, OB_TENANT_PARAMETER, "True",
+         "enable external table parquet page cache",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_orc_filter_pushdown_level, OB_TENANT_PARAMETER, "4", "[0, 4]",
         "This parameter controls the filter pushdown level for ORC external tables, "

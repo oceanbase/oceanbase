@@ -79,7 +79,10 @@ struct ObExternalFileUrlInfo
   {}
   TO_STRING_KV(K_(location), K_(access_info), K_(url), K_(content_digest), K_(file_size),
                K_(modify_time));
+  ObString get_url() const { return url_; }
+  ObString get_content_digest() const { return content_digest_; }
   int64_t get_file_size() const { return file_size_; }
+  int64_t get_modify_time() const { return modify_time_; }
 private:
   const ObString location_;
   const ObString access_info_;

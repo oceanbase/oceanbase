@@ -134,7 +134,7 @@ SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_HIT_COUNT, metric::Unit::INT, "lake table hi
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ASYNC_IO_COUNT, metric::Unit::INT, "lake table async io count", "lake table async io count", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ASYNC_IO_SIZE, metric::Unit::BYTES, "lake table async io size", "lake table async io size", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_TOTAL_IO_WAIT_TIME, metric::Unit::TIME_NS, "lake table total io wait time", "lake table total io wait time", M_SUM, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MAX_IO_WAIT_TIME, metric::Unit::TIME_NS, "lake table max io wait time", "lake table max io wait time", E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MAX_IO_WAIT_TIME, metric::Unit::TIME_NS, "lake table max io wait time", "lake table max io wait time", M_AVG | E_MAX, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_TOTAL_READ_SIZE, metric::Unit::BYTES, "lake table total read size", "lake table total read size", M_SUM, metric::Level::CRITICAL)
 
 // Lake Table IO
@@ -150,7 +150,7 @@ SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_DISK_CACHE_HIT_COUNT, metric::Unit::INT, "la
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_DISK_CACHE_MISS_COUNT, metric::Unit::INT, "lake table disk cache miss count", "lake table disk cache miss count", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_DISK_CACHE_HIT_IO_SIZE, metric::Unit::BYTES, "lake table disk cache hit io size", "lake table disk cache hit io size", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_DISK_CACHE_MISS_IO_SIZE, metric::Unit::BYTES, "lake table disk cache miss io size", "lake table disk cache miss io size", M_SUM, metric::Level::CRITICAL)
-SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MAX_IO_TIME, metric::Unit::TIME_NS, "lake table max io time", "lake table total io wait time", E_MAX, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_MAX_IO_TIME, metric::Unit::TIME_NS, "lake table max io time", "lake table total io wait time", M_AVG | E_MAX, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_AVG_IO_TIME, metric::Unit::TIME_NS, "lake table avg io time", "lake table avg io time", M_AVG, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_TOTAL_IO_TIME, metric::Unit::TIME_NS, "lake table total io time", "lake table total io time", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_STORAGE_IO_COUNT, metric::Unit::INT, "lake table storage io count", "lake table storage io count", M_SUM, metric::Level::CRITICAL)
@@ -181,6 +181,12 @@ SQL_MONITOR_STATNAME_DEF(IS_HIT_PLAN, metric::Unit::INT, "is hit plan", "is hit 
 SQL_MONITOR_STATNAME_DEF(CPU_TIME, metric::Unit::TIME_NS, "cpu time", "cpu time", M_AVG | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(DTL_BLOCKING_TIME, metric::Unit::TIME_NS, "dtl blocking time", "receive block dtl channel time", M_AVG | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(DUMP_RW_TIME, metric::Unit::CPU_CYCLE, "read/write time for dumped data", "read/write time for dumped data", M_AVG | E_MIN | E_MAX, metric::Level::AD_HOC)
+
+// Lake Table Parquet Page Mgr
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_HIT_COUNT, metric::Unit::INT, "parquetPageMgr cached page hit count", "parquetPageMgr cached page hit count", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_HIT_SIZE, metric::Unit::BYTES, "parquetPageMgr cached page hit size", "parquetPageMgr cached page hit size", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_MISS_COUNT, metric::Unit::INT, "parquetPageMgr cached page miss count", "parquetPageMgr cached page miss count", M_SUM, metric::Level::CRITICAL)
+SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_MISS_SIZE, metric::Unit::BYTES, "parquetPageMgr cached page miss size", "parquetPageMgr cached page miss size", M_SUM, metric::Level::CRITICAL)
 
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)

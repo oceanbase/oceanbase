@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_BASIC_OB_LAKE_TABLE_READER_PROFILE_H_
 #define OCEANBASE_BASIC_OB_LAKE_TABLE_READER_PROFILE_H_
 
+#include <optional>
+
 #include "lib/container/ob_se_array.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "lib/statistic_event/ob_stat_event.h"
@@ -30,6 +32,8 @@ static constexpr const char *IO_METRICS_LABEL = "IO_METRICS";
 static constexpr const char *EAGER_IO_METRICS_LABEL = "EAGER_IO_METRICS";
 static constexpr const char *PREBUFFER_METRICS_LABEL = "PREBUFFER_METRICS";
 static constexpr const char *EAGER_PREBUFFER_METRICS_LABEL = "EAGER_PREBUFFER_METRICS";
+static constexpr const char *PARQUET_PAGE_MGR_IO_METRICS_LABEL = "PARQUET_PAGE_MGR_IO_METRICS";
+static constexpr const char *PARQUET_PAGE_MGR_METRICS_LABEL = "PARQUET_PAGE_MGR_METRICS";
 
 struct ObLakeTableIMetrics
 {
@@ -96,26 +100,50 @@ struct ObLakeTablePreBufferMetrics : public ObLakeTableIMetrics
 public:
   ObLakeTablePreBufferMetrics() :
     prebuffer_count_(0), miss_count_(0), hit_count_(0), async_io_count_(0),
-    async_io_size_(0), total_io_wait_time_us_(0), max_io_wait_time_us_(0),
+    async_io_size_(0), total_io_wait_time_ns_(0), max_io_wait_time_ns_(0),
     total_read_size_(0)
   {}
   virtual int update_profile() override;
   virtual void dump_metrics() override;
   VIRTUAL_TO_STRING_KV(K_(prebuffer_count), K_(miss_count), K_(hit_count),
-                       K_(async_io_count), K_(async_io_size), K_(total_io_wait_time_us),
-                       K_(max_io_wait_time_us), K_(total_read_size));
+                       K_(async_io_count), K_(async_io_size), K_(total_io_wait_time_ns),
+                       K_(max_io_wait_time_ns), K_(total_read_size));
 
   int64_t prebuffer_count_; // number of prebuffer calls
   int64_t miss_count_;
   int64_t hit_count_;
   int64_t async_io_count_; // number of async read calls
   int64_t async_io_size_; // total size of async read IO
-  int64_t total_io_wait_time_us_; // total waiting time for async read IO
-  int64_t max_io_wait_time_us_; // max waiting time for async read IO
+  int64_t total_io_wait_time_ns_; // total waiting time for async read IO
+  int64_t max_io_wait_time_ns_; // max waiting time for async read IO
   int64_t total_read_size_; // total size read from the prebuffer
 
 private:
   int update_specific_profile_(ObProfileId id);
+};
+
+struct ObLakeTableParquetPageMgrMetrics : public ObLakeTableIMetrics
+{
+public:
+  ObLakeTableParquetPageMgrMetrics()
+  {}
+  virtual int update_profile() override;
+  virtual void dump_metrics() override;
+  VIRTUAL_TO_STRING_KV(K_(cached_page_hit_count), K_(cached_page_hit_size), K_(cached_page_miss_count),
+                       K_(cached_page_miss_size), K_(async_io_count), K_(async_io_size),
+                       K_(total_io_wait_time_ns), K_(max_io_wait_time_ns));
+
+  int64_t cached_page_hit_count_ = 0;
+  int64_t cached_page_hit_size_ = 0;
+  int64_t cached_page_miss_count_ = 0;
+  int64_t cached_page_miss_size_ = 0;
+  int64_t async_io_count_ = 0; // number of async read calls
+  int64_t async_io_size_ = 0; // total size of async read IO
+  int64_t total_io_wait_time_ns_ = 0; // total waiting time for async read IO
+  int64_t max_io_wait_time_ns_ = 0; // max waiting time for async read IO
+
+private:
+  int update_specific_profile_();
 };
 
 struct ObLakeTableIOMetrics : public ObLakeTableIMetrics
@@ -200,7 +228,11 @@ public:
   int64_t total_io_time_us_; // total waiting time for read IO
 
 private:
-  int update_specific_profile_(ObProfileId id);
+  int update_specific_profile_(std::optional<ObProfileId> id);
+  int update_file_reader_profile_();
+  int update_mem_cache_profile_();
+  int update_disk_cache_profile_();
+  int update_storage_io_profile_();
 };
 
 class ObLakeTableReaderProfile

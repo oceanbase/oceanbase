@@ -108,11 +108,21 @@ DEF_TO_STRING(ObExternalDataPageCacheKey) {
   return pos;
 };
 
+int ObExternalDataPageCacheValueHandle::assign(const ObExternalDataPageCacheValueHandle &other)
+{
+  int ret = OB_SUCCESS;
+  value_ = other.value_;
+  OZ(handle_.assign(other.handle_));
+  return ret;
+}
+
 /* -------------------------- ObExternalDataPageCacheValue --------------------------- */
 ObExternalDataPageCacheValue::ObExternalDataPageCacheValue(char *buf,
-                                                           const int64_t valid_data_size) :
+                                                           const int64_t valid_data_size,
+                                                           const bool is_decompressed) :
   buf_(buf),
-  valid_data_size_(valid_data_size)
+  valid_data_size_(valid_data_size),
+  is_decompressed_(is_decompressed)
 {}
 
 ObExternalDataPageCacheValue::~ObExternalDataPageCacheValue()
@@ -139,7 +149,7 @@ int ObExternalDataPageCacheValue::deep_copy(
     STORAGE_LOG(WARN, "invalid external page cache value", KR(ret));
   } else {
     ObExternalDataPageCacheValue *page_cache_value =
-      new (buf) ObExternalDataPageCacheValue(buf + sizeof(*this), valid_data_size_);
+      new (buf) ObExternalDataPageCacheValue(buf + sizeof(*this), valid_data_size_, is_decompressed_);
     MEMCPY(buf + sizeof(*this), buf_, size() - sizeof(*this));
     value = page_cache_value;
   }
@@ -203,7 +213,10 @@ void ObExternalDataPageCache::try_put_page_to_cache(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(key), K(value));
   } else if (OB_FAIL(put(key, value, false/*overwrite*/))) {
-    STORAGE_LOG(WARN, "fail to put tmp page into cache", KR(ret), K(key), K(value));
+    if (ret != OB_ENTRY_EXIST) {
+      // avoid print log frequently
+      STORAGE_LOG(WARN, "fail to put tmp page into cache", KR(ret), K(key), K(value));
+    }
   } else {
     // refresh the page cache score by calling get_page() to prevent eviction,
     // otherwise its score is 0 and may be evicted immediately
@@ -419,7 +432,7 @@ int ObExCachedReadPageIOCallback::inner_process_cache_pages_(
     const int64_t page_size)
 {
   int ret = OB_SUCCESS;
-  ObExternalDataPageCacheValue value(nullptr, 0);
+  ObExternalDataPageCacheValue value(nullptr, 0, false);
   int64_t page_count = valid_size / page_size + (valid_size % page_size == 0 ? 0 : 1);
   if (OB_UNLIKELY(valid_size <= 0 || OB_ISNULL(data_buffer))) {
     ret = OB_INVALID_DATA;
