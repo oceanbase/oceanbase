@@ -867,7 +867,6 @@ int ObExprMul::mul_number_batch(BATCH_EVAL_FUNC_ARG_DECL)
       }
       if (l_datums.at(i)->is_null() || r_datums.at(i)->is_null()) {
         results.at(i)->set_null();
-        eval_flags.set(i);
         continue;
       }
       ObNumber res_num;
@@ -882,7 +881,6 @@ int ObExprMul::mul_number_batch(BATCH_EVAL_FUNC_ARG_DECL)
       if (ObNumber::try_fast_mul(l_num, r_num, res_digits, *res_desc)) {
         results.at(i)->set_pack(sizeof(number::ObCompactNumber) +
                                 res_desc->len_ * sizeof(*res_digits));
-        eval_flags.set(i);
         // LOG_DEBUG("mul speedup", K(l_num.format()),
         // K(r_num.format()), K(res_num.format()));
       } else {
@@ -891,7 +889,6 @@ int ObExprMul::mul_number_batch(BATCH_EVAL_FUNC_ARG_DECL)
           LOG_WARN("mul num failed", K(ret), K(l_num), K(r_num));
         } else {
           results.at(i)->set_number(res_num);
-          eval_flags.set(i);
         }
         local_alloc.free();
       }

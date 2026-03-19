@@ -212,7 +212,6 @@ int ObExprArrayDifference::eval_array_difference_batch(const ObExpr &expr, ObEva
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (arr_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) {
@@ -275,7 +274,6 @@ int ObExprArrayDifference::eval_array_difference_vector(const ObExpr &expr, ObEv
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
       }
-      eval_flags.set(idx);
       if (arr_vec->is_null(idx)) {
         is_null_res = true;
       } else {

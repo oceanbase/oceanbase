@@ -2138,6 +2138,36 @@ int ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large(ObExecContext &ctx
   return ret;
 }
 
+int ObSysVarOnCheckFuncs::check_and_convert_max_execution_time(ObExecContext &ctx,
+                                                               const ObSetVar &set_var,
+                                                               const ObBasicSysVar &sys_var,
+                                                               const common::ObObj &in_val,
+                                                               common::ObObj &out_val)
+{
+  UNUSED(ctx);
+  UNUSED(set_var);
+  UNUSED(sys_var);
+
+  int ret = OB_SUCCESS;
+  int64_t max_exec_time = 0;
+
+  if (true == set_var.is_set_default_) {
+    // do nothing
+  } else if (OB_FAIL(in_val.get_int(max_exec_time))) {
+  } else if (max_exec_time < MAX_EXECUTION_TIME_MIN) {
+    max_exec_time = MAX_EXECUTION_TIME_MIN;
+    out_val.set_int(max_exec_time);
+    LOG_USER_WARN(OB_ERR_MAX_EXECUTION_TIME_TRUNCATED);
+  } else if (max_exec_time > MAX_EXECUTION_TIME_MAX) {
+    max_exec_time = MAX_EXECUTION_TIME_MAX;
+    out_val.set_int(max_exec_time);
+    LOG_USER_WARN(OB_ERR_MAX_EXECUTION_TIME_TRUNCATED);
+  } else {
+    out_val = in_val;
+  }
+  return ret;
+}
+
 int ObSysVarOnCheckFuncs::check_and_convert_tx_isolation(ObExecContext &ctx,
                                                          const ObSetVar &set_var,
                                                          const ObBasicSysVar &sys_var,

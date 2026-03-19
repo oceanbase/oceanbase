@@ -3283,6 +3283,18 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_ob_enable_pl_async_commit(int_val != 0));
       break;
     }
+    case SYS_VAR_JSON_FLOAT_FULL_PRECISION: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_json_float_full_precision(int_val != 0));
+      break;
+    }
+    case SYS_VAR_MAX_EXECUTION_TIME: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_max_execution_time(int_val));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -3842,6 +3854,18 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_ob_enable_pl_async_commit(int_val != 0));
+      break;
+    }
+    case SYS_VAR_MAX_EXECUTION_TIME: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_max_execution_time(int_val));
+      break;
+    }
+    case SYS_VAR_JSON_FLOAT_FULL_PRECISION: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_json_float_full_precision(int_val != 0));
       break;
     }
     default: {

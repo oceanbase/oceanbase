@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/engine/expr/ob_expr_estimate_ndv.h"
+#include "share/aggregate/util.h"
 
 namespace oceanbase
 {
@@ -1720,6 +1721,14 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         }
         break;
       }
+      case T_FUN_WINDOW_FUNNEL: {
+        // window_funnel返回uint32（范围0到N）
+        result_type.set_type(ObUInt32Type);
+        result_type.set_calc_type(ObUInt32Type);
+        result_type.set_accuracy(ObAccuracy::MAX_ACCURACY[ObUInt32Type]);
+        expr.set_result_type(result_type);
+        break;
+      }
       case T_FUN_SYS_BIT_AND:
       case T_FUN_SYS_BIT_OR:
       case T_FUN_SYS_BIT_XOR: {
@@ -2482,6 +2491,65 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                && expr.is_param_distinct()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector aggregation with distinct is");
+    } else if (T_FUN_WINDOW_FUNNEL == expr.get_expr_type()) {
+      if (i == 0) {
+        // timestamp column
+        if (lib::is_oracle_mode() &&
+            (ob_is_number_tc(param_expr->get_data_type())
+             || ob_is_decimal_int_tc(param_expr->get_data_type()))) {
+          ObCastMode def_cast_mode = CM_NONE;
+          ObExprResType res_type = param_expr->get_result_type();
+          res_type.set_calc_meta(res_type.get_obj_meta());
+          res_type.set_calc_type(ObIntType);
+          if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, my_session_, def_cast_mode))) {
+            LOG_WARN("get_default_cast_mode failed", K(ret));
+          } else if (OB_FAIL(try_add_cast_expr(expr, i, res_type, def_cast_mode))) {
+            LOG_WARN("try_add_cast_expr failed", K(ret), K(i), K(expr));
+          }
+        } else if (!ob_is_datetime_tc(param_expr->get_data_type()) &&
+                   !ob_is_date_tc(param_expr->get_data_type()) &&
+                   !ob_is_int_uint_tc(param_expr->get_data_type()) &&
+                   !ob_is_time_tc(param_expr->get_data_type()) &&
+                   !ob_is_mysql_datetime_tc(param_expr->get_data_type()) &&
+                   !ob_is_mysql_date_tc(param_expr->get_data_type())) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "time or int type", K(param_expr->get_data_type()));
+        }
+      } else if (i == 1) {
+        // window column
+        if (!param_expr->is_const_expr()) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "integer const expr", K(param_expr->get_data_type()));
+        } else if (ob_is_int_tc(param_expr->get_data_type())) {
+          // do nothing
+        } else if (ob_is_number_tc(param_expr->get_data_type())
+                   || ob_is_decimal_int_tc(param_expr->get_data_type())) {
+          ObCastMode def_cast_mode = CM_NONE;
+          ObExprResType res_type = param_expr->get_result_type();
+          res_type.set_calc_meta(res_type.get_obj_meta());
+          res_type.set_calc_type(ObIntType);
+          if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, my_session_, def_cast_mode))) {
+            LOG_WARN("get_default_cast_mode failed", K(ret));
+          } else if (OB_FAIL(try_add_cast_expr(expr, i, res_type, def_cast_mode))) {
+            LOG_WARN("try_add_cast_expr failed", K(ret), K(i), K(expr));
+          }
+        } else {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "integer const expr", K(param_expr->get_data_type()));
+        }
+      } else if (i == 2) {
+        // mode column
+        if (!param_expr->is_const_expr() || !ob_is_string_type(param_expr->get_data_type())) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "const string type", K(param_expr->get_data_type()));
+        }
+      } else if (i >= share::aggregate::WINDOW_FUNNEL_CONDITION_START_IDX && i < expr.get_real_param_count()) {
+        // condition columns
+        if (!ob_is_int_tc(param_expr->get_data_type())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error, condition column must be int type", K(ret), K(param_expr->get_data_type()));
+        }
+      }
     }
   }
   return ret;

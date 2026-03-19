@@ -95,7 +95,6 @@ int ObExprHash::calc_hash_value_expr_batch(
         continue;
       } else {
         expr.locate_expr_datum(ctx, i).set_uint(batch_hash_vals[i]);
-        eval_flags.set(i);
       }
     }
   }
@@ -114,7 +113,6 @@ static int set_hash_value_vector(VECTOR_EVAL_FUNC_ARG_DECL, uint64_t *hash_vals)
       continue;
     }
     res_vec->set_uint(idx, hash_vals[idx]);
-    eval_flags.set(idx);
   }
   return ret;
 }

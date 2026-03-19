@@ -30,13 +30,16 @@ int ObAdaptiveQS<Store_Row>::init(common::ObIArray<Store_Row *> &sort_rows,
   int ret = OB_SUCCESS;
   can_encode = true;
   sort_rows_.set_allocator(&alloc);
+  tmp_sort_rows_.set_allocator(&alloc);
   if (rows_end - rows_begin <= 0) {
     // do nothing
   } else if (rows_begin < 0 || rows_end > sort_rows.count()) {
     ret = OB_INVALID_ARGUMENT;
     SQL_ENG_LOG(WARN, "invalid argument", K(rows_begin), K(rows_end), K(sort_rows.count()), K(ret));
   } else if (OB_FAIL(sort_rows_.prepare_allocate(rows_end - rows_begin))) {
-    SQL_ENG_LOG(WARN, "failed to init", K(ret));
+    SQL_ENG_LOG(WARN, "failed to init sort_rows_", K(ret));
+  } else if (OB_FAIL(tmp_sort_rows_.prepare_allocate(rows_end - rows_begin))) {
+    SQL_ENG_LOG(WARN, "failed to init tmp_sort_rows_", K(ret));
   } else {
     for (int64_t i = 0; can_encode && i < rows_end - rows_begin; i++) {
       AQSItem &item = sort_rows_[i];
@@ -58,96 +61,174 @@ int ObAdaptiveQS<Store_Row>::init(common::ObIArray<Store_Row *> &sort_rows,
 }
 
 /*
- * AQS sort performance as follows:
+ * =============================================
+ * AQS is a hybrid sorting algorithm that combines 3-way partitioning quicksort
+ * with radix sort, optimized for sorting variable-length byte strings.
  *
- *  step1:         | datas |<---------------------------+
- *   quicksort         |                                |
- *      +--------------+-------------+                  |
- *      |              |             |                  |
- *  less than(lt)   equal to(eq)    great than(gt)      |
- *      |                                               |
- *step2: do radix sort and distribute buckets           |
- *       for each buckets redo this process             |
- *  |bucket0| ... |bucket255|                           |
- *            |                                         |
- *            +-----------------------------------------+
+ * Key Features:
+ * 1. Uses two arrays (sort_rows_ and tmp_sort_rows_) that swap roles during sorting
+ * 2. Equal elements stay in source array (already sorted, no further processing needed)
+ * 3. Less-than and greater-than elements go to target array for recursive sorting
+ * 4. Uses 2-byte cache (sub_cache_) to accelerate comparisons
+ * 5. Small arrays (< 16 elements): Use insertion sort
+ *
+ * Algorithm Flow:
+ * ===============
+ *
+ * Phase 1: 3-Way Partitioning (aqs_cps_qs)
+ * ----------------------------------------
+ * Input:  source array [a1, a2, pivot, a3, a4, ...]
+ *                           ↓
+ *         Select pivot (median-of-three), compare all elements
+ *                           ↓
+ * Output: ┌─────────────────────────────────────────────────┐
+ *         │ source: [   eq   ] (done, no more processing)  │
+ *         │ target: [lt][lt]  ...gap...  [gt][gt][gt]       │
+ *         └─────────────────────────────────────────────────┘
+ *         Note: gt elements are written backwards and need reverse
+ *
+ * Phase 2: Radix Distribution (aqs_radix → radixsort_by_byte)
+ * -----------------------------------------------------------
+ * For elements that need further sorting (lt and gt parts):
+ *
+ * 1. Update cache with next byte after common_prefix
+ * 2. Count frequency of each byte value (0-255)
+ * 3. Distribute into 256 buckets based on byte value
+ *
+ *    source: [e1,e2,e3,e4,e5,...]
+ *              ↓   ↓  ↓  ↓  ↓
+ *    target: [bucket₀][bucket₁]...[bucket₂₅₅]
+ *              ↓
+ *    Each non-empty bucket recursively goes to Phase 1
+ *
+ * Dual-Array Swapping Mechanism:
+ * ==============================
+ * The 'swap' parameter controls which array is source/target:
+ *
+ *   swap=false:  source=sort_rows_,     target=tmp_sort_rows_
+ *   swap=true:   source=tmp_sort_rows_, target=sort_rows_
+ *
+ * Data Flow Example (3 levels of recursion):
+ * ------------------------------------------
+ *   Level 0 (swap=false):
+ *     Read from:  sort_rows_     (source)
+ *     Write to:   tmp_sort_rows_ (target - lt/gt parts)
+ *     eq stays in: sort_rows_    (source - eq part)
+ *
+ *   Level 1 (swap=true):
+ *     Read from:  tmp_sort_rows_ (source)
+ *     Write to:   sort_rows_     (target - lt/gt parts)
+ *     eq stays in: tmp_sort_rows_(source - eq part)
+ *
+ *   Level 2 (swap=false):
+ *     Read from:  sort_rows_     (source)
+ *     Write to:   tmp_sort_rows_ (target - lt/gt parts)
+ *     eq stays in: sort_rows_    (source - eq part)
+ *
+ * Finally: Copy all row_ptr_ back to sort_rows_ to get final sorted result
  */
 template <typename Store_Row>
 void ObAdaptiveQS<Store_Row>::aqs_cps_qs(int64_t l, int64_t r, int64_t common_prefix,
-                                         int64_t depth_limit, int64_t cache_offset)
+                                         int64_t cache_offset, bool swap)
 {
-  int64_t lt = l + 1, gt = r, m = (l - r) / 2 + r;
-  int64_t differ_at = INT64_MAX, lt_cp = INT64_MAX, gt_cp = INT64_MAX;
-  if ((r - l) < 16) {
-    insertion_sort(l, r, common_prefix, cache_offset);
-    // return;
-  } else {
-    // choose best pivot
-    if (compare_vals(m, l, differ_at, common_prefix, cache_offset) > 0)
-      swap(m, l);
-    if (compare_vals(l, r - 1, differ_at, common_prefix, cache_offset) > 0)
-      swap(l, r - 1);
-    if (compare_vals(m, l, differ_at, common_prefix, cache_offset) > 0)
-      swap(m, l);
-
-    for (uint64_t i = l + 1; i < gt; i++) {
-      int compare_res = compare_vals(i, l, differ_at, common_prefix, cache_offset);
-      if (compare_res < 0) {
-        if (i + 1 < gt) {
-          __builtin_prefetch(sort_rows_.at(i + 1).key_ptr_);
-        }
-        lt_cp = min(differ_at, lt_cp);
-        swap(i, lt);
-        lt++;
-      } else if (compare_res == 0) {
-        if (i + 1 < gt) {
-          __builtin_prefetch(sort_rows_.at(i + 1).key_ptr_);
-        }
-      } else {
-        gt_cp = min(differ_at, gt_cp);
-        gt--;
-        swap(i, gt);
-        i--;
+  common::ObFixedArray<AQSItem, common::ObIAllocator> &source = swap ? tmp_sort_rows_ : sort_rows_;
+  common::ObFixedArray<AQSItem, common::ObIAllocator> &target = swap ? sort_rows_ : tmp_sort_rows_;
+  if (OB_UNLIKELY(l >= r)) {
+  } else if ((r - l) < 16) {
+    insertion_sort(l, r, common_prefix, cache_offset, swap);
+    if (swap) {
+      for (int64_t i = l; i < r; i++) {
+        // todo: optimize this
+        sort_rows_.at(i).row_ptr_ = tmp_sort_rows_.at(i).row_ptr_;
       }
     }
-    lt--;
-    swap(lt, l);
-    depth_limit--;
-    if (lt != l)
-      aqs_radix(l, lt, lt_cp, cache_offset, depth_limit);
-    if (gt != r)
-      aqs_radix(gt, r, gt_cp, cache_offset, depth_limit);
+  } else {
+    int64_t differ_at = INT64_MAX;
+
+    // 三数取中选pivot
+    AQSItem pivot;
+    int64_t m = l + (r - l) / 2;
+    int cmp_lm = compare_vals(source.at(l), source.at(m), differ_at, common_prefix, cache_offset);
+    int cmp_mr = compare_vals(source.at(m), source.at(r - 1), differ_at, common_prefix, cache_offset);
+    int cmp_lr = compare_vals(source.at(l), source.at(r - 1), differ_at, common_prefix, cache_offset);
+    if ((cmp_lm <= 0 && cmp_mr <= 0) || (cmp_lm >= 0 && cmp_mr >= 0)) {
+      pivot = source.at(m);
+    } else if ((cmp_lm >= 0 && cmp_lr <= 0) || (cmp_lm <= 0 && cmp_lr >= 0)) {
+      pivot = source.at(l);
+    } else {
+      pivot = source.at(r - 1);
+    }
+
+    // 划分lt/eq/gt三个部分
+    int64_t lt_count = 0, eq_count = 0, gt_count = 0;
+    int64_t lt_cp = INT64_MAX, gt_cp = INT64_MAX;
+
+    for (int64_t i = l; i < r; i++) {
+      int cmp = compare_vals(source.at(i), pivot, differ_at,
+                             common_prefix, cache_offset);
+      if (cmp < 0) {
+        target.at(l + lt_count++) = source.at(i);
+        lt_cp = std::min(differ_at, lt_cp);
+      } else if (cmp == 0) {
+        source.at(l + eq_count++) = source.at(i);
+      } else {
+        target.at(r - gt_count - 1) = source.at(i);
+        gt_count++;
+        gt_cp = std::min(differ_at, gt_cp);
+      }
+    }
+
+    // gt need to be reversed, to keep the original order
+    std::reverse(target.begin() + (r - gt_count), target.begin() + r);
+
+    for (int64_t i = eq_count - 1; i >= 0; i--) {
+      source.at(l + lt_count + i).row_ptr_ = source.at(l + i).row_ptr_;
+    }
+
+    if (swap) {
+      for (int64_t i = 0; i < eq_count; i++) {
+        sort_rows_.at(l + lt_count + i).row_ptr_ = tmp_sort_rows_.at(l + lt_count + i).row_ptr_;
+      }
+    }
+
+    // 递归处理 lt 和 gt
+    if (lt_count > 0) {
+      aqs_radix(l, l + lt_count, lt_cp, cache_offset, !swap);
+    }
+    if (gt_count > 0) {
+      aqs_radix(l + lt_count + eq_count, r, gt_cp, cache_offset, !swap);
+    }
   }
 }
 
 template <typename Store_Row>
 void ObAdaptiveQS<Store_Row>::insertion_sort(int64_t l, int64_t r, int64_t common_prefix,
-                                             int64_t cache_offset)
+                                             int64_t cache_offset, bool swap)
 {
-  for (int i = l + 1; i < r; i++) {
+  common::ObFixedArray<AQSItem, common::ObIAllocator> &arr = swap ? tmp_sort_rows_ : sort_rows_;
+  for (int64_t i = l + 1; i < r; i++) {
     int64_t idx = i;
     int64_t differ_at = 0;
     while ((idx - 1) >= l
-           && compare_vals(idx, idx - 1, differ_at, common_prefix, cache_offset) < 0) {
-      swap(idx, idx - 1);
+           && compare_vals(arr.at(idx), arr.at(idx - 1), differ_at, common_prefix, cache_offset) < 0) {
+      std::swap(arr.at(idx), arr.at(idx - 1));
       idx--;
     }
   }
 }
 
 template <typename Store_Row>
-void ObAdaptiveQS<Store_Row>::aqs_radix(int64_t l, int64_t r, int64_t common_prefix, int64_t offset,
-                                        int64_t depth_limit)
+void ObAdaptiveQS<Store_Row>::aqs_radix(int64_t l, int64_t r, int64_t common_prefix, int64_t offset, bool swap)
 {
-  int more_pos = l, done_pos = l;
+  common::ObFixedArray<AQSItem, common::ObIAllocator> &source = swap ? tmp_sort_rows_ : sort_rows_;
+  common::ObFixedArray<AQSItem, common::ObIAllocator> &target = swap ? sort_rows_ : tmp_sort_rows_;
+
+  int done_pos = l;
   int cache_offset = offset;
 
-  for (int i = l; i < r; i++) {
-    if (sort_rows_.at(i).len_ == common_prefix) {
-      swap(i, more_pos);
-      swap(more_pos, done_pos);
-      more_pos++;
-      done_pos++;
+  for (int64_t i = l; i < r; i++) {
+    if (source.at(i).len_ == common_prefix) {
+      std::swap(source[i], source[done_pos++]);
       continue;
     }
 
@@ -171,84 +252,111 @@ void ObAdaptiveQS<Store_Row>::aqs_radix(int64_t l, int64_t r, int64_t common_pre
     int val = common_prefix - offset;
     // first and last byte of cache is effective
     if (val == 0) {
-      // only last byte of the cache is effective
+      // cache 有效，不更新
     } else if (val == 1) {
-      sort_rows_.at(i).sub_cache_[0] = sort_rows_.at(i).sub_cache_[1];
-      cache_offset = common_prefix + 1;
-      // values in the cache are totally ineffective
+      // only last byte of the cache is effective
+      source.at(i).sub_cache_[0] = source.at(i).sub_cache_[1];
+      cache_offset = common_prefix;
     } else {
-      unsigned char *x = ((unsigned char *)(sort_rows_.at(i).key_ptr_)) + common_prefix;
-      sort_rows_.at(i).sub_cache_[0] = *x;
-      cache_offset = common_prefix + 1;
-    }
-
-    if (sort_rows_.at(i).len_ == common_prefix + 1) {
-      swap(i, more_pos);
-      more_pos++;
-    } else {
+      unsigned char *x = ((unsigned char *)(source.at(i).key_ptr_)) + common_prefix;
+      source.at(i).sub_cache_[0] = *x;
+      cache_offset = common_prefix;
     }
   }
-  inplace_radixsort_more_bucket(done_pos, r, 7, common_prefix, depth_limit, cache_offset,
-                                (common_prefix - offset) != 0);
+
+  radixsort_by_byte(done_pos, r, common_prefix, cache_offset, swap);
+  if (swap) {
+    for (int64_t i = l; i < done_pos; i++) {
+      sort_rows_.at(i).row_ptr_ = tmp_sort_rows_.at(i).row_ptr_;
+    }
+  }
 }
 
-// use dfs to do radix sort
-// reference: https://en.wikipedia.org/wiki/Radix_sort
 template <typename Store_Row>
-void ObAdaptiveQS<Store_Row>::inplace_radixsort_more_bucket(int64_t l, int64_t r, int64_t div_val,
-                                                            int64_t common_prefix,
-                                                            int64_t depth_limit,
-                                                            int64_t cache_offset, bool update)
+void ObAdaptiveQS<Store_Row>::radixsort_by_byte(int64_t l, int64_t r,
+                                                 int64_t common_prefix,
+                                                 int64_t cache_offset,
+                                                 bool swap)
 {
-  if (l >= r || l + 1 == r) {
-    // do nothing
+  common::ObFixedArray<AQSItem, common::ObIAllocator> &source = swap ? tmp_sort_rows_ : sort_rows_;
+  common::ObFixedArray<AQSItem, common::ObIAllocator> &target = swap ? sort_rows_ : tmp_sort_rows_;
+
+  if (l >= r) {
+  } else if (l + 1 == r) {
+    if (swap) {
+      sort_rows_.at(l).row_ptr_ = tmp_sort_rows_.at(l).row_ptr_;
+    }
   } else {
-    if (div_val == -1) {
-      int more_l = l;
-      for (int i = l; i < r; i++) {
-        if (sort_rows_.at(i).len_ == common_prefix + 1) {
-          swap(more_l, i);
-          more_l++;
-        }
-      }
+    int64_t locations[RADIX_LOCATIONS] = {0};
+    int64_t *counts = locations + 1;
+    for (int64_t i = l; i < r; i++) {
+      unsigned char byte_val = source.at(i).sub_cache_[0];
+      counts[byte_val]++;
+    }
+    int64_t max_count = 0;
+    for (int64_t radix = 0; radix < VALUES_PER_RADIX; radix++) {
+      max_count = std::max(max_count, counts[radix]);
+      counts[radix] += locations[radix];
+    }
 
-      // update cache
-      if (update) {
-        if (more_l < r) {
-          __builtin_prefetch((&sort_rows_.at(more_l).len_));
-          __builtin_prefetch(((unsigned char *)(sort_rows_.at(more_l).key_ptr_)) + common_prefix);
-        }
-        for (int i = more_l; i < r; i++) {
-          unsigned char *x = ((unsigned char *)(sort_rows_.at(i).key_ptr_)) + common_prefix;
-          if (i + 1 < r) {
-            __builtin_prefetch((&sort_rows_.at(i + 1).len_));
-            __builtin_prefetch(((unsigned char *)(sort_rows_.at(i + 1).key_ptr_)) + common_prefix);
+    if (max_count != (r - l)) {
+      // 基数排序到辅助数组
+      for (int64_t i = l; i < r; i++) {
+        unsigned char byte_val = source.at(i).sub_cache_[0];
+        target.at(l + locations[byte_val]) = source.at(i);
+        locations[byte_val]++;
+      }
+      swap = !swap;
+
+      // 对每一个基数做aqs
+      int64_t radix_count = locations[0];
+      for (int64_t radix = 0; radix < VALUES_PER_RADIX; radix++) {
+        if (radix_count != 0) {
+          // update cache
+          int64_t new_l = (locations[radix] - radix_count) + l;
+          int64_t new_r = new_l + radix_count;
+          int more_l = new_l;
+          for (int64_t i = new_l; i < new_r; i++) {
+            if (target.at(i).len_ == common_prefix + 1) {
+              std::swap(target.at(i), target.at(more_l++));
+            } else {
+              unsigned char *x = ((unsigned char *)(target.at(i).key_ptr_)) + common_prefix;
+              target.at(i).sub_cache_[0] = *(x + 1);
+              target.at(i).sub_cache_[1] = (common_prefix + 2 == target.at(i).len_) ? 0x00 : *(x + 2);
+            }
           }
-          sort_rows_.at(i).sub_cache_[0] = *(x + 1);
-          sort_rows_.at(i).sub_cache_[1] =
-            (common_prefix + 2 == sort_rows_.at(i).len_) ? 0x00 : *(x + 2);
+          if (more_l < new_r) {
+            aqs_cps_qs(more_l, new_r, common_prefix + 1, cache_offset + 1, swap);
+          }
+          if (swap) {
+            for (int64_t i = new_l; i < more_l; i++) {
+              sort_rows_.at(i).row_ptr_ = tmp_sort_rows_.at(i).row_ptr_;
+            }
+          }
+        }
+        radix_count = locations[radix + 1] - locations[radix];
+      }
+    } else {
+      // update cache
+      int more_l = l;
+      for (int64_t i = l; i < r; i++) {
+        if (source.at(i).len_ == common_prefix + 1) {
+          std::swap(source.at(i), source.at(more_l++));
+        } else {
+          unsigned char *x = ((unsigned char *)(source.at(i).key_ptr_)) + common_prefix;
+          source.at(i).sub_cache_[0] = *(x + 1);
+          source.at(i).sub_cache_[1] = (common_prefix + 2 == source.at(i).len_) ? 0x00 : *(x + 2);
         }
       }
-      aqs_cps_qs(more_l, r, common_prefix + 1, depth_limit, cache_offset);
-      return;
-    }
-
-    int divide_line = l;
-    __builtin_prefetch((&sort_rows_.at(l).sub_cache_[0]));
-    for (int i = l; i < r; i++) {
-      // byte b = index_bytes[i];
-      if (i + 1 < r)
-        __builtin_prefetch((&sort_rows_.at(i + 1).sub_cache_[0]));
-      if ((sort_rows_.at(i).sub_cache_[0] & masks[div_val]) == 0) {
-        swap(i, divide_line);
-        divide_line++;
+      if (swap) {
+        for (int64_t i = l; i < more_l; i++) {
+          sort_rows_.at(i).row_ptr_ = tmp_sort_rows_.at(i).row_ptr_;
+        }
       }
+      aqs_cps_qs(more_l, r, common_prefix + 1, cache_offset + 1, swap);
     }
-    inplace_radixsort_more_bucket(l, divide_line, div_val - 1, common_prefix, depth_limit,
-                                  cache_offset, update);
-    inplace_radixsort_more_bucket(divide_line, r, div_val - 1, common_prefix, depth_limit,
-                                  cache_offset, update);
   }
+  return;
 }
 
 template <typename Store_Row>
@@ -276,7 +384,7 @@ int ObAdaptiveQS<Store_Row>::fast_cmp_normal(const unsigned char *s, const unsig
  *      to index key and use key to do comparison.
  */
 template <typename Store_Row>
-int ObAdaptiveQS<Store_Row>::compare_cache(AQSItem &l, AQSItem &r, int64_t &differ_at,
+int ObAdaptiveQS<Store_Row>::compare_vals(AQSItem &l, AQSItem &r, int64_t &differ_at,
                                            int64_t common_prefix, int64_t cache_offset)
 {
   int64_t cache_ends = cache_offset + 2;
@@ -322,13 +430,6 @@ int ObAdaptiveQS<Store_Row>::compare_cache(AQSItem &l, AQSItem &r, int64_t &diff
     }
   }
   return res;
-}
-
-template <typename Store_Row>
-int ObAdaptiveQS<Store_Row>::compare_vals(int64_t l, int64_t r, int64_t &differ_at,
-                                          int64_t common_prefix, int64_t cache_offset)
-{
-  return compare_cache(sort_rows_.at(l), sort_rows_.at(r), differ_at, common_prefix, cache_offset);
 }
 
 /*********************************** end ObAdaptiveQS **********************************/

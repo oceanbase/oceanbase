@@ -79,7 +79,6 @@ struct StringFloatCastImpl
               }
             }
           }
-          eval_flags.set_all(bound.start(), bound.end());
         } else {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             if (input_vector->is_null(i)) {
@@ -98,7 +97,6 @@ struct StringFloatCastImpl
               }
             }
           }
-          eval_flags.set_all(bound.start(), bound.end());
         }
       } else {
         for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
@@ -119,7 +117,6 @@ struct StringFloatCastImpl
               }
             }
           }
-          eval_flags.set(i);
         }
       }
     }

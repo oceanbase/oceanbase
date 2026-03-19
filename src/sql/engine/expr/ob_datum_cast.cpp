@@ -3756,9 +3756,6 @@ int cast_eval_arg_batch(const ObExpr &expr,
           result->set_null();
         }
       }
-      if (OB_SUCC(ret)) {
-        eval_flags.set(i);
-      }
     }
   }
 
@@ -4625,7 +4622,10 @@ static int common_string_json(const ObExpr &expr,
                                  || in_type == ObTextType
                                  || in_type == ObMediumTextType
                                  || in_type == ObLongTextType);
-
+      ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+      bool json_float_full_precision =
+        OB_NOT_NULL(session) ? session->get_local_json_float_full_precision() : false;
+      ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag, ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
       if (!is_oracle && in_cs_type == CS_TYPE_BINARY) {
         j_base = &j_opaque;
       } else if (is_oracle && CM_IS_IMPLICIT_CAST(expr.extra_) && OB_ISNULL(j_text.ptr())) {
@@ -11698,6 +11698,7 @@ CAST_FUNC_NAME(string, collection)
       ObString res_str;
       const ObSqlCollectionInfo *dst_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(dst_meta.value_);
       ObCollectionTypeBase *dst_coll_type = dst_coll_info->collection_meta_;
+      sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *child_res,
                   expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_str))) {
         LOG_WARN("fail to get real data.", K(ret), K(in_str));
@@ -11712,7 +11713,7 @@ CAST_FUNC_NAME(string, collection)
         }
       } else if (dst_coll_type->type_id_== ObNestedType::OB_ARRAY_TYPE) {
         if (cs_type != CS_TYPE_BINARY) {
-          if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, static_cast<ObCollectionArrayType *>(dst_coll_type)->element_type_))) {
+          if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, static_cast<ObCollectionArrayType *>(dst_coll_type)->element_type_, session))) {
             LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
           }
         } else {
@@ -11722,7 +11723,7 @@ CAST_FUNC_NAME(string, collection)
         }
       } else if (dst_coll_type->type_id_ == ObNestedType::OB_MAP_TYPE || dst_coll_type->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
         bool is_sparse_vector = dst_coll_type->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE;
-        if (OB_FAIL(ObArrayCastUtils::string_cast_map(temp_allocator, in_str, arr_dst, static_cast<ObCollectionMapType *>(dst_coll_type), expr.extra_, is_sparse_vector))) {
+        if (OB_FAIL(ObArrayCastUtils::string_cast_map(temp_allocator, in_str, arr_dst, static_cast<ObCollectionMapType *>(dst_coll_type), expr.extra_, is_sparse_vector, session))) {
           LOG_WARN("map cast failed", K(ret), K(dst_coll_info));
         }
       } else {
@@ -19246,7 +19247,6 @@ DEF_BATCH_CAST_FUNC(ObDecimalIntTC, ObIntTC)
           continue;
         } else if (arg_dv.at(i)->is_null()) {
           result_dv.at(i)->set_null();
-          eval_flags.set(i);
         } else if (OB_FAIL(wide::to_string(arg_dv.at(i)->get_decimal_int(),
                                            arg_dv.at(i)->get_int_bytes(), in_scale, buffer, buf_len,
                                            pos))) {
@@ -19255,8 +19255,6 @@ DEF_BATCH_CAST_FUNC(ObDecimalIntTC, ObIntTC)
           ObString num_str(pos, buffer);
           if (OB_FAIL(common_string_int(expr, expr.extra_, num_str, false, *result_dv.at(i)))) {
             LOG_WARN("common_string_int failed", K(ret));
-          } else {
-            eval_flags.set(i);
           }
         }
       } // end for
@@ -19285,7 +19283,6 @@ DEF_BATCH_CAST_FUNC(ObDecimalIntTC, ObUIntTC)
           continue;
         } else if (arg_dv.at(i)->is_null()) {
           result_dv.at(i)->set_null();
-          eval_flags.set(i);
         } else if (OB_FAIL(wide::to_string(arg_dv.at(i)->get_decimal_int(),
                                            arg_dv.at(i)->get_int_bytes(), in_scale, buffer, buf_len,
                                            pos))) {
@@ -19294,8 +19291,6 @@ DEF_BATCH_CAST_FUNC(ObDecimalIntTC, ObUIntTC)
           ObString num_str(pos, buffer);
           if (OB_FAIL(common_string_uint(expr, num_str, false, *result_dv.at(i)))) {
             LOG_WARN("common_string_uint failed", K(ret));
-          } else {
-            eval_flags.set(i);
           }
         }
       } // end for
@@ -19312,7 +19307,6 @@ DEF_BATCH_CAST_FUNC(ObDecimalIntTC, ObNumberTC)
       continue;                                                                                    \
     } else if (arg_dv.at(i)->is_null()) {                                                          \
       result_dv.at(i)->set_null();                                                                 \
-      eval_flags.set(i);                                                                           \
     } else {                                                                                       \
       const int_type *v = reinterpret_cast<const int_type *>(arg_dv.at(i)->get_decimal_int());     \
       number::ObNumber tmp_nmb;                                                                    \
@@ -19324,11 +19318,9 @@ DEF_BATCH_CAST_FUNC(ObDecimalIntTC, ObNumberTC)
           LOG_WARN("numeric_negative_check failed", K(ret));                                       \
         } else {                                                                                   \
           result_dv.at(i)->set_number(tmp_nmb);                                                    \
-          eval_flags.set(i);                                                                       \
         }                                                                                          \
       } else {                                                                                     \
         result_dv.at(i)->set_number(tmp_nmb);                                                      \
-        eval_flags.set(i);                                                                         \
       }                                                                                            \
     }                                                                                              \
   }
@@ -19386,18 +19378,15 @@ DEF_BATCH_CAST_FUNC(ObDecimalIntTC, ObNumberTC)
               ret = cast_number(i);
             }
           }
-          if (OB_SUCC(ret)) { eval_flags.set_all(batch_size); }
         } else {
           for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
             if (eval_flags.at(i) || skip.at(i)) {
               continue;
             } else if (arg_dv.at(i)->is_null()) {
               result_dv.at(i)->set_null();
-              eval_flags.set(i);
             } else if (OB_FAIL(cast_number(i))) {
               LOG_WARN("cast number failed", K(ret));
             } else {
-              eval_flags.set(i);
             }
           }
         }

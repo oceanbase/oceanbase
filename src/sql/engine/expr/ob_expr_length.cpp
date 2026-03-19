@@ -201,7 +201,6 @@ int ObExprLength::calc_mysql_length_vector_dispatch(const ObExpr &expr,
       }
       res_vec->set_int(idx, res_length);
     }
-    eval_flags.set(idx);
   } // for end
   return ret;
 }
@@ -277,7 +276,6 @@ int ObExprLength::calc_oracle_length_vector_dispatch(const ObExpr &expr,
         }
       }
     }
-    eval_flags.set(idx);
   } // for end
   return ret;
 }

@@ -16,6 +16,7 @@
 
 #include "observer/mysql/obmp_query.h"
 #include "observer/mysql/obmp_utils.h"
+#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {
@@ -110,6 +111,8 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
   } else if (OB_FAIL(result.close())) {
     LOG_WARN("result close failed, let's leave process(). EndTransCb will clean this mess", K(ret));
   } else {
+    // Add non-readonly SELECT disable timer warning after execution, before any response uses warning_count.
+    ObSQLUtils::add_non_ro_select_disable_timer_warning_if_needed(session_, result.get_exec_context().get_physical_plan_ctx());
     // async 并没有调用 ObSqlEndTransCb 回复  OK 包
     // 所以 二合一协议的 OK 包也要放在这里处理
     if (is_prexecute_) {
@@ -140,10 +143,8 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
   LOG_DEBUG("test if async end trans submitted",
             K(ret), K(async_resp_used), K(retry_ctrl_.need_retry()));
 
-  //if the error code is ob_timeout, we add more error info msg for dml query.
-  if (OB_TIMEOUT == ret && session_.is_user_session()) {
-    LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - session_.get_query_start_time());
-  }
+  // Log user error for timeout and max execution time errors
+  ObSQLUtils::log_user_error_for_timeout(ret, session_, result.get_exec_context().get_physical_plan_ctx());
 
   // 错误处理，没有走异步的时候负责回错误包
   if (!OB_SUCC(ret) && !async_resp_used && !retry_ctrl_.need_retry()) {

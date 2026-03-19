@@ -124,7 +124,6 @@ int ObExprNot::eval_not_batch(const ObExpr &expr,
           continue;
         }
         ObDatum &datum = expr.args_[0]->locate_expr_datum(ctx, i);
-        eval_flags.set(i);
         if (datum.is_null()) {
           results[i].set_null();
         } else {
@@ -159,7 +158,6 @@ static int inner_eval_not_vector(const ObExpr &expr,
         res_vec->set_int(idx, static_cast<int64_t>(0 == arg_vec->get_int(idx)));
       }
     }
-    eval_flags.set_all(bound.start(), bound.end());
   } else {
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {
@@ -169,7 +167,6 @@ static int inner_eval_not_vector(const ObExpr &expr,
       } else {
         res_vec->set_int(idx, static_cast<int64_t>(0 == arg_vec->get_int(idx)));
       }
-      eval_flags.set(idx);
     }
   }
   return ret;

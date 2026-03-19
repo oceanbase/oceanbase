@@ -37,7 +37,7 @@ OB_STMT_TYPE_DEF(T_ALTER_TABLE, get_alter_table_stmt_need_privs, 22, ACTION_TYPE
 OB_STMT_TYPE_DEF(T_CREATE_INDEX, get_create_index_stmt_need_privs, 23, ACTION_TYPE_CREATE_INDEX)
 OB_STMT_TYPE_DEF(T_DROP_INDEX, get_drop_index_stmt_need_privs, 24, ACTION_TYPE_DROP_INDEX)
 OB_STMT_TYPE_DEF(T_CREATE_VIEW, err_stmt_type_priv, 25, ACTION_TYPE_CREATE_VIEW)
-OB_STMT_TYPE_DEF_UNKNOWN_AT(T_ALTER_VIEW, err_stmt_type_priv, 26)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_ALTER_VIEW, get_alter_view_stmt_need_privs, 26)
 OB_STMT_TYPE_DEF(T_DROP_VIEW, err_stmt_type_priv, 27, ACTION_TYPE_DROP_VIEW)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HELP, no_priv_needed, 28)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_SHOW_TABLES, err_stmt_type_priv, 29)

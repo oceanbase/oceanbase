@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_json_param_type.h"
 #include "sql/engine/expr/ob_expr_demote_cast.h"
 #include "lib/geo/ob_sdo_geo_object.h"
+#include "share/aggregate/util.h"
 
 namespace oceanbase
 {
@@ -1081,6 +1082,32 @@ int ObRawExprPrinter::print(ObCaseOpRawExpr *expr)
   return ret;
 }
 
+int ObRawExprPrinter::print_window_funnel(ObAggFunRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (expr->get_real_param_count() < 4) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected error", K(ret), K(expr->get_param_count()),
+                                      K(expr->get_real_param_count()), K(expr));
+  } else {
+    DATA_PRINTF("window_funnel(");
+    // window_funnel(window, mode, timestamp, cond1, cond2, ...)
+    // params:(timestamp, window, mode, cond1, cond2, ...)
+    PRINT_EXPR(expr->get_real_param_exprs().at(share::aggregate::WINDOW_FUNNEL_WINDOW_EXPR_IDX));
+    DATA_PRINTF(", ");
+    PRINT_EXPR(expr->get_real_param_exprs().at(share::aggregate::WINDOW_FUNNEL_MODE_EXPR_IDX));
+    DATA_PRINTF(",");
+    PRINT_EXPR(expr->get_real_param_exprs().at(share::aggregate::WINDOW_FUNNEL_TIMESTAMP_EXPR_IDX));
+    for (int64_t i = share::aggregate::WINDOW_FUNNEL_CONDITION_START_IDX;
+          OB_SUCC(ret) && i < expr->get_real_param_count(); ++i) {
+      DATA_PRINTF(",");
+      PRINT_EXPR(expr->get_real_param_exprs().at(i));
+    }
+    DATA_PRINTF(")");
+  }
+  return ret;
+}
+
 int ObRawExprPrinter::print_ora_json_arrayagg(ObAggFunRawExpr *expr)
 {
   int ret = OB_SUCCESS;
@@ -1297,6 +1324,12 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
 
       // on null
       DATA_PRINTF(")");
+      break;
+    }
+    case T_FUN_WINDOW_FUNNEL: {
+      if (OB_FAIL(print_window_funnel(expr))) {
+        LOG_WARN("fail to print window_funnel.", K(ret));
+      }
       break;
     }
     case T_FUN_ORA_JSON_ARRAYAGG: {
@@ -4053,6 +4086,23 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
           LOG_WARN("failed to print order items.", K(ret));
         } else {/* do nothing. */  }
         DATA_PRINTF(")");
+        break;
+      }
+      case T_FUN_WINDOW_FUNNEL: {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(print_window_funnel(expr->get_agg_expr()))) {
+          LOG_WARN("failed to print window_funnel.", K(ret));
+        } else {
+          DATA_PRINTF(" over(");
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(print_partition_exprs(expr))) {
+            LOG_WARN("failed to print partition exprs.", K(ret));
+          } else if (OB_FAIL(print_order_items(expr))) {
+            LOG_WARN("failed to print order items.", K(ret));
+          } else {
+            DATA_PRINTF(")");
+          }
+        }
         break;
       }
       case T_WIN_FUN_CUME_DIST: {

@@ -184,17 +184,14 @@ struct ObDoArithVectorBaseEval
       for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
         ret = ArithOp::null_check_vector_op(*res_vec, *left_vec, *right_vec, idx, args...);
       }
-      eval_flags.set_all(bound.start(), bound.end());
     } else if (cond == 5) { // all_rows_active == true, evaluated = false, all_not_null = true
       for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
         ret = ArithOp::vector_op(*res_vec, *left_vec, *right_vec, idx, args...);
       }
-      eval_flags.set_all(bound.start(), bound.end());
     } else {
       for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
         if (!skip.at(idx) && !eval_flags.at(idx)) {
           ret = ArithOp::null_check_vector_op(*res_vec, *left_vec, *right_vec, idx, args...);
-          eval_flags.set(idx);
         }
       }
     }
@@ -240,7 +237,6 @@ struct ObDoArithFixedVectorEval
           ret = ArithOp::raw_check(res_arr[idx], left_arr[idx], right_arr[idx]);
         }
       }
-      eval_flags.set_all(bound.start(), bound.end());
     } else {
       ret = ObDoArithVectorBaseEval<ResVector, LeftVector, RightVector, ArithOp>()(
         expr, ctx, skip, bound, right_evaluated, args...);
@@ -287,7 +283,6 @@ struct ObDoArithFixedConstVectorEval
           ret = ArithOp::raw_check(res_arr[idx], left_arr[idx], *right_val);
         }
       }
-      eval_flags.set_all(bound.start(), bound.end());
     } else {
       ret = ObDoArithVectorBaseEval<ResVector, LeftVector, RightVector, ArithOp>()(
         expr, ctx, skip, bound, right_evaluated, args...);
@@ -334,7 +329,6 @@ struct ObDoArithConstFixedVectorEval
           ret = ArithOp::raw_check(res_arr[idx], *left_val, right_arr[idx]);
         }
       }
-      eval_flags.set_all(bound.start(), bound.end());
     } else {
       ret = ObDoArithVectorBaseEval<ResVector, LeftVector, RightVector, ArithOp>()(
         expr, ctx, skip, bound, right_evaluated, args...);
@@ -418,20 +412,17 @@ inline int ObDoNumberVectorEval(VECTOR_EVAL_FUNC_ARG_DECL, const bool right_eval
         }
       }
     }
-    eval_flags.set_all(bound.start(), bound.end());
   } else if (need_calc) {
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (eval_flags.at(idx) || skip.at(idx)) { continue; }
       if (left_vec->is_null(idx) || right_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
         continue;
       }
       if (std::is_same<ResVector, ObDiscreteFormat>::value) {
         res_vec->unset_null(idx);
       }
       ret = nmb_eval_op(idx, left_vec, right_vec, res_vec, nmb_fast_op, local_alloc);
-      if (OB_SUCC(ret)) { eval_flags.set(idx); }
     }
   }
   return ret;

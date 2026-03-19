@@ -936,6 +936,10 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
       } else {
         ret = (*eval_batch_func_)(*this, ctx, skip, size);
       }
+      if (OB_SUCC(ret) && batch_result_) {
+        get_evaluated_flags(ctx).bit_calculate(get_evaluated_flags(ctx), skip, EvalBound(size),
+                                [](const uint64_t l, const uint64_t r) { return (l | (~r)); });
+      }
       if (OB_SUCC(ret)) {
         #ifndef NDEBUG
           if (is_oracle_mode() && (ob_is_string_tc(datum_meta_.type_) || ob_is_raw(datum_meta_.type_))) {
@@ -1407,16 +1411,25 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
 
   LOG_DEBUG("need evaluate", K(need_evaluate), KP(this));
   if (OB_SUCC(ret) && need_evaluate) {
+    EvalBound single_bound = EvalBound(1);
+    const EvalBound &eval_bound = batch_result_ ? bound : single_bound;
     if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
       SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else if (OB_FAIL(
-                 (*eval_vector_func_)(*this, ctx, *rt_skip, batch_result_ ? bound : EvalBound(1)))) {
+                 (*eval_vector_func_)(*this, ctx, *rt_skip, eval_bound))) {
       if (const_dry_run) {
         ret = OB_SUCCESS;
       } else {
         set_all_null(ctx, BATCH_SIZE());
       }
     } else {
+      if (!batch_result_) {
+      } else if (eval_bound.get_all_rows_active()) {
+        get_evaluated_flags(ctx).set_all(eval_bound.start(), eval_bound.end());
+      } else {
+        get_evaluated_flags(ctx).bit_calculate(get_evaluated_flags(ctx), skip, eval_bound,
+                                [](const uint64_t l, const uint64_t r) { return (l | (~r)); });
+      }
       info.set_evaluated(true);
     }
   }
@@ -1499,13 +1512,26 @@ int expr_default_eval_vector_func(const ObExpr &expr,
                              const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
+  ObExpr::EvalBatchFunc default_batch_func = expr_default_eval_batch_func;
   if (!expr.batch_result_) {
     ObDatum *datum = NULL;
     ret = expr.eval(ctx, datum);
-  } else if (OB_LIKELY(bound.is_full_size())) {
-    ret = (*expr.eval_batch_func_)(expr, ctx, skip, bound.batch_size());
   } else {
-    ret = expr_default_eval_batch_func(expr, ctx, skip, bound);
+    if (expr.eager_evaluation()
+        && expr.eval_batch_func_ == default_batch_func) {
+      for (int param_index = 0; OB_SUCC(ret) && param_index < expr.arg_cnt_; param_index++) {
+        if (T_OP_ROW != expr.args_[param_index]->type_
+            && OB_FAIL(expr.args_[param_index]->eval_vector(ctx, skip, bound))) {
+          SQL_LOG(WARN, "evaluate parameter failed", K(ret), K(param_index));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_LIKELY(bound.is_full_size())) {
+      ret = (*expr.eval_batch_func_)(expr, ctx, skip, bound.batch_size());
+    } else {
+      ret = expr_default_eval_batch_func(expr, ctx, skip, bound);
+    }
   }
 
   return ret;

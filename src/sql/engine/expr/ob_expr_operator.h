@@ -686,6 +686,8 @@ public:
   virtual common::ObCastMode get_cast_mode() const;
   virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   static int check_first_param_not_time(const common::ObIArray<ObRawExpr *> &exprs, bool &not_time);
+  inline void set_eval_order(const bool flag) { eager_evaluation_ = flag; }
+  inline bool eager_evaluation() const { return eager_evaluation_; }
   //Extract the info of sys vars which need to be used in resolving or excuting into local_sys_vars.
   DECLARE_SET_LOCAL_SESSION_VARS;
   static int add_local_var_to_expr(share::ObSysVarClassType var_type, const ObBasicSessionInfo *session, ObLocalSessionVar &local_vars);
@@ -791,6 +793,7 @@ protected:
   bool is_valid_for_generated_col_;
   bool is_internal_for_mysql_;
   bool is_internal_for_oracle_;
+  bool eager_evaluation_;
 };
 
 class ObSQLSessionInfo;
@@ -825,7 +828,8 @@ inline ObExprOperator::ObExprOperator(common::ObIAllocator &alloc,
       extra_serialize_(0),
       is_valid_for_generated_col_(valid_for_generated_col == 1),
       is_internal_for_mysql_(is_internal_for_mysql),
-      is_internal_for_oracle_(is_internal_for_oracle)
+      is_internal_for_oracle_(is_internal_for_oracle),
+      eager_evaluation_(false)
 {
 }
 

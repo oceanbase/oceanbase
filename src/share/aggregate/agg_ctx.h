@@ -266,6 +266,12 @@ struct RuntimeContext
     return get_extra_stores(agg_col_id, agg_cell)->data_store;
   }
 
+  inline WindowFunnelVecExtraResult *&get_extra_window_funnel_store(const int64_t agg_col_id,
+                                                                 const char *agg_cell)
+  {
+    return get_extra_stores(agg_col_id, agg_cell)->window_funnel_store_;
+  }
+
   inline TopFreHistVecExtraResult *&get_extra_top_fre_hist_store(const int64_t agg_col_id,
                                                                  const char *agg_cell)
   {

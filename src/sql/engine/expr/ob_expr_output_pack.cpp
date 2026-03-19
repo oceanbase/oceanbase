@@ -192,7 +192,6 @@ int ObExprOutputPack::eval_output_pack_batch(const ObExpr &expr, ObEvalCtx &ctx,
                                   extra_info, schema_guard, result[i]))) {
         LOG_WARN("failed to process oneline", K(ret));
       }
-      eval_flags.set(i);
     }
   }
   return ret;

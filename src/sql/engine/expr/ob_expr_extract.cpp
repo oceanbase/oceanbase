@@ -500,7 +500,6 @@ int ObExprExtract::calc_extract_mysql_batch(
           continue;
         } else if (datum_array[j].is_null()) {
           results[j].set_null();
-          eval_flags.set(j);
         } else {
           bool is_null = false;
           int64_t value = 0;
@@ -514,7 +513,6 @@ int ObExprExtract::calc_extract_mysql_batch(
             } else {
               results[j].set_int(value);
             }
-            eval_flags.set(j);
           }
         }
       }
@@ -567,7 +565,6 @@ int ObExprExtract::calc_extract_oracle_batch(
             continue;
           } else if (datum_array[j].is_null()) {
             results[j].set_null();
-            eval_flags.set(j);
           } else if (OB_FAIL(ObExprExtract::calc_oracle(session,
                       ctx,
                       type,
@@ -587,7 +584,6 @@ int ObExprExtract::calc_extract_oracle_batch(
             } else {
               results[j].set_string(str_res);
             }
-            eval_flags.set(j);
           }
         }
       }
@@ -642,7 +638,6 @@ int process_vector_oracle(const ObExpr &expr, const T_ARG_VEC &arg_date_vec, ObO
         } else {
           res_vec.set_string(i, str_res);
         }
-        eval_flags.set(i);
       }
     }
   }
@@ -731,7 +726,6 @@ int process_vector_mysql(const ObExpr &expr, const T_ARG_VEC &arg_date_vec, ObOb
         } else {
           res_vec.set_int(i, value);
         }
-        eval_flags.set(i);
       }
     }
   }

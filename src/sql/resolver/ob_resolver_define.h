@@ -260,6 +260,11 @@ class ObPLBlockNS;
 class ObPLPackageGuard;
 }
 
+namespace obrpc
+{
+struct ObDependencyObjDDLArg;
+}
+
 namespace sql
 {
 class ObSQLSessionInfo;
@@ -386,7 +391,8 @@ struct ObResolverParams
        is_returning_(false),
        is_in_view_(false),
        is_htable_(false),
-       disable_shared_expr_(false)
+       disable_shared_expr_(false),
+       alter_view_compile_args_(NULL)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
 
@@ -463,6 +469,7 @@ public:
   bool is_in_view_;
   bool is_htable_;
   bool disable_shared_expr_;
+  common::ObIArray<obrpc::ObDependencyObjDDLArg> *alter_view_compile_args_;
 };
 } // end namespace sql
 } // end namespace oceanbase

@@ -222,9 +222,6 @@ int inner_encode_string(VECTOR_EVAL_FUNC_ARG_DECL, bool is_encode)
         res_vec->set_string(i, output_str);
       }
     }
-    if (OB_SUCC(ret)) {
-      eval_flags.set(i);
-    }
   }
   return ret;
 }
@@ -307,9 +304,6 @@ int ObExprURLCODEC::eval_url_codec_batch(BATCH_EVAL_FUNC_ARG_DECL, bool is_encod
           } else {
             results[i].set_string(output_str);
           }
-        }
-        if (OB_SUCC(ret)) {
-          eval_flags.set(i);
         }
       }
     }

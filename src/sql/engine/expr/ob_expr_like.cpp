@@ -1259,7 +1259,6 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
               }
             }
           }
-          eval_flags.set(i);
         }
       }
     }
@@ -1316,7 +1315,6 @@ int ObExprLike::match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL,
                                                         pattern_val, escape_wc, ret));
         }
       }
-      eval_flags.set(i);
     }
   }
   return ret;
@@ -1343,7 +1341,6 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
     for (int64_t i = 0; i < size; i++) {
       if (!skip.contain(i)) {
         res_datums[i].set_null();
-        eval_flags.set(i);
       }
     }
     expr.get_eval_info(ctx).set_notnull(false);
@@ -1463,7 +1460,6 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
     for (int64_t i = bound.start(); i < bound.end(); i++) {
       if (!skip.at(i)) {
         res_vec->set_null(i);
-        eval_flags.set(i);
       }
     }
     expr.get_eval_info(ctx).set_notnull(false);

@@ -19,11 +19,14 @@
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
 #include "sql/engine/basic/ob_group_join_buffer_v2.h"
 #include "sql/engine/basic/ob_vector_result_holder.h"
+#include "sql/engine/basic/ob_temp_row_store.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+
+typedef std::pair<int64_t, int64_t> RowPair;
 
 class ObNestedLoopJoinVecSpec : public ObJoinVecSpec
 {
@@ -85,6 +88,59 @@ public:
     JS_CARTESIAN_OPTIMIZED_PROCESS
   };
 
+  struct ObBatchRowsHolder
+  {
+    ObBatchRowsHolder(): need_save_(true), need_restore_(false), vec_hlder_()
+    {
+    }
+    int init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx)
+    {
+      return vec_hlder_.init(exprs, eval_ctx);
+    }
+    int save(int64_t batch_size)
+    {
+      int ret = OB_SUCCESS;
+      need_restore_ = true;
+      if (need_save_) {
+        need_save_ = false;
+        ret = vec_hlder_.save(batch_size);
+      }
+      return ret;
+    }
+    int restore()
+    {
+      int ret = OB_SUCCESS;
+      need_save_ = true;
+      if (need_restore_) {
+        ret = vec_hlder_.restore();
+        need_restore_ = false;
+      }
+      return ret;
+    }
+    void reset()
+    {
+      need_save_ = true;
+      need_restore_ = false;
+      vec_hlder_.reset();
+    }
+    bool need_save_;
+    bool need_restore_;
+    ObVectorsResultHolder vec_hlder_;
+  };
+
+class ObNLJVecMemChecker
+{
+public:
+  ObNLJVecMemChecker(int64_t row_cnt):
+    cur_row_cnt_(row_cnt)
+    {}
+  bool operator()(int64_t max_row_cnt)
+  {
+    return cur_row_cnt_ > max_row_cnt;
+  }
+  int64_t cur_row_cnt_;
+};
+
   ObNestedLoopJoinVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
 
   virtual int inner_open() override;
@@ -98,7 +154,11 @@ public:
   { return OPEN_SELF_FIRST; }
 
   int prepare_rescan_params(bool is_group = false);
-  virtual void destroy() override { ObJoinVecOp::destroy(); }
+  virtual void destroy() override
+  {
+    sql_mem_processor_.unregister_profile_if_necessary();
+    ObJoinVecOp::destroy();
+  }
 
   // ObBatchRescanCtl &get_batch_rescan_ctl() { return batch_rescan_ctl_; }
   int fill_cur_row_rescan_param();
@@ -137,6 +197,21 @@ private:
 
   int get_next_batch_from_right(const ObBatchRows *right_brs);
 
+  int init_output_cache();
+  int is_cache_full(bool &is_full);
+  void set_row_store_it_age(ObTempBlockStore::IterationAge *age)
+  {
+    left_row_reader_.set_iteration_age(age);
+    right_row_reader_.set_iteration_age(age);
+  }
+  int compact_row_to_vector(const RowMeta &row_meta,
+                            const ObCompactRow **compact_rows,
+                            const common::ObIArray<ObExpr *> &exprs,
+                            int64_t rows_cnt);
+  template<bool need_store_right>
+  int store_child_batch(const int64_t l_idx, const ObBatchRows *right_brs, int64_t &l_id, int64_t &r_start_id, int64_t &r_end_id);
+  void reset_output_cache();
+
 public:
   ObJoinBatchState batch_state_;
   bool is_left_end_;
@@ -151,6 +226,27 @@ public:
   bool is_cartesian_;
   bool cartesian_opt_;
   int64_t  right_total_row_cnt_;
+  bool need_restore_drive_row_;
+
+  // 输出缓存相关成员
+  ObSqlWorkAreaProfile profile_;
+  ObSqlMemMgrProcessor sql_mem_processor_;
+  ObBatchRowsHolder right_hldr_;   // 右支backup,restore
+  ObRATempRowStore left_row_store_;   // 缓存左侧行
+  ObRATempRowStore right_row_store_;  // 缓存右侧行
+  ObTempBlockStore::IterationAge rows_it_age_;
+  ObRATempRowStore::RAReader left_row_reader_;   // 左侧行读取器
+  ObRATempRowStore::RAReader right_row_reader_;  // 右侧行读取器
+  common::ObArray<RowPair> output_pairs_; // 待输出的行对列表
+  const ObCompactRow **left_rows_;
+  const ObCompactRow **right_rows_;
+  int64_t cur_output_idx_;
+  bool need_store_drive_row_;
+  bool end_after_cache_output_;
+  int64_t drive_row_idx_;
+  ObCompactRow *mocked_null_row_;
+  lib::MemoryContext cache_mem_context_;  // 缓存内存上下文
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNestedLoopJoinVecOp);
 };

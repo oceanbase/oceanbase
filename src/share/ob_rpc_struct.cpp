@@ -2073,6 +2073,39 @@ OB_SERIALIZE_MEMBER((ObSetCommentArg, ObDDLArg),
                      table_comment_,
                      op_type_);
 
+DEF_TO_STRING(ObAlterViewArg)
+{
+  int64_t pos = 0;
+  J_KV(K_(alter_view_action),
+       K_(tenant_id),
+       K_(view_id),
+       K_(database_id),
+       K_(database_name),
+       K_(view_name),
+       K_(target_view_error_code),
+       K_(alter_view_compile_args));
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER((ObAlterViewArg, ObDDLArg),
+                     alter_view_action_,
+                     tenant_id_,
+                     view_id_,
+                     database_id_,
+                     database_name_,
+                     view_name_,
+                     target_view_error_code_,
+                     alter_view_compile_args_);
+
+DEF_TO_STRING(ObAlterViewRes)
+{
+  int64_t pos = 0;
+  J_KV(K_(ret));
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER(ObAlterViewRes, ret_);
+
 bool ObAlterTableArg::is_valid() const
 {
   // TODO(shaohang.lsh): add more check if needed

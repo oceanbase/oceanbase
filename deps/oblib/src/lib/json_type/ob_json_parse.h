@@ -39,6 +39,7 @@ public:
   static const uint32_t JSN_UNIQUE_FLAG = 4;
   static const uint32_t JSN_SCHEMA_FLAG = 8;
   static const uint32_t JSN_PRESERVE_DUP_FLAG = 16;
+  static const uint32_t JSN_FLOAT_FULL_PRECISION_FLAG = 32;
 
   static const int PARSE_SYNTAXERR_MESSAGE_LENGTH = 256;
   static int get_tree(ObIAllocator *allocator, const ObString &text,

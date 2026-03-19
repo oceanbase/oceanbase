@@ -160,13 +160,28 @@ struct WinExprEvalCtx
   WinExprEvalCtx(RowStore &input_rows, WinFuncColExpr &win_col, const int64_t tenant_id) :
     input_rows_(input_rows), win_col_(win_col),
     allocator_(ObModIds::OB_SQL_WINDOW_LOCAL, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id,
-               ObCtxIds::WORK_AREA)
+               ObCtxIds::WORK_AREA), input_brs_(nullptr), partition_start_index_in_expr_(-1), expr_to_row_store_offset_(0)
   {}
+
+  void set_index_in_expr(const int64_t partition_end_index_in_expr, const int64_t total_size, const ObBatchRows *input_brs);
 
   char *reserved_buf(int32_t len)
   {
     return (char *)allocator_.alloc(len);
   }
+
+  // if the partition is too small, we can evaluate the expression in the expr directly
+  // return true & set partition_start_index_in_expr if this optimize can be applied
+  static bool
+  allow_eval_in_expr(const WinFuncColExpr &win_col,
+                     const int64_t partition_end_index_in_expr,
+                     const int64_t total_size, const ObBatchRows *input_brs,
+                     int64_t & /* out */ partition_start_index_in_expr);
+
+  bool use_tiny_partition_opt() const {
+    return partition_start_index_in_expr_ >= 0;
+  }
+
   ~WinExprEvalCtx()
   {
     allocator_.reset();
@@ -175,6 +190,19 @@ struct WinExprEvalCtx
   sql::WinFuncColExpr &win_col_;
   // used for tmp memory allocating during partition process.
   common::ObArenaAllocator allocator_;
+
+  // the following members & interfaces are used for tiny partition calculation
+  // optimization. In such case, the whole partition resides in the current batch,
+  // starts from partition_start_index_in_expr_. We'll directly use the
+  // input_brs_ to avoid extra memcpy from the RowStore.
+  const ObBatchRows* input_brs_;
+  int64_t partition_start_index_in_expr_;
+  int64_t partition_end_index_in_expr_;
+  // the relative offset of the partition start index in expr to the start index in the row store
+  int64_t expr_to_row_store_offset_;
+
+  ObExprPtrIArray& get_input_exprs();
+  ObEvalCtx& eval_ctx_();
 };
 
 class IWinExpr
@@ -183,13 +211,13 @@ public:
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *res, bool &is_null) = 0;
   virtual int collect_part_results(WinExprEvalCtx &ctx, const int64_t row_start,
-                                   const int64_t row_end, const ObBitVector &skip) = 0;
+                                   const int64_t row_end, const bool all_active, const ObBitVector &skip) = 0;
   virtual int accum_process_window(WinExprEvalCtx &ctx, const Frame &cur_frame,
                                    const Frame &prev_frame, const int64_t row_idx, char *res,
                                    bool &is_null) = 0;
   virtual int process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
                                 const int64_t part_end, const int64_t row_start,
-                                const int64_t row_end, const ObBitVector &skip) = 0;
+                                const int64_t row_end, const ObBitVector &skip, bool all_active) = 0;
   // used to generate extra ctx for expr evaluation
   virtual int generate_extra() = 0;
 
@@ -204,7 +232,7 @@ class WinExprWrapper: public IWinExpr
 public:
   virtual int process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
                                 const int64_t part_end, const int64_t row_start,
-                                const int64_t row_end, const ObBitVector &skip) override;
+                                const int64_t row_end, const ObBitVector &skip, bool all_active) override;
   virtual int generate_extra() override
   {
     return OB_SUCCESS;
@@ -260,7 +288,7 @@ public:
   virtual bool is_aggregate_expr() const override final { return false; }
 
   virtual int collect_part_results(WinExprEvalCtx &ctx, const int64_t row_start,
-                                   const int64_t row_end, const ObBitVector &skip) override final;
+                                   const int64_t row_end, const bool all_active, const ObBitVector &skip) override final;
 };
 
 template<ObItemType rank_op>
@@ -344,7 +372,7 @@ public:
 class AggrExpr final: public WinExprWrapper<AggrExpr>
 {
 public:
-  AggrExpr(): aggr_processor_(nullptr), last_valid_frame_(), last_aggr_row_(nullptr) {}
+  AggrExpr(): aggr_processor_(nullptr), last_valid_frame_(), last_aggr_row_(nullptr), expr_row_cnt_(0), store_row_cnt_(0) {}
   int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                      char *res, bool &is_null) override;
 
@@ -352,12 +380,17 @@ public:
                            const int64_t row_idx, char *res, bool &is_null) override;
   bool is_aggregate_expr() const override { return true; }
   virtual int collect_part_results(WinExprEvalCtx &ctx, const int64_t row_start,
-                                   const int64_t row_end, const ObBitVector &skip) override;
+                                   const int64_t row_end, const bool all_active, const ObBitVector &skip) override;
   static int set_result_for_invalid_frame(WinExprEvalCtx &ctx, char *agg_row);
 
   virtual void destroy() override;
 
 private:
+  int process_agg_expr_from_store(WinExprEvalCtx &ctx, const Frame &frame,
+                             char *agg_row, int64_t &pushdown_skip_cnt);
+  int process_agg_expr_from_expr(WinExprEvalCtx &ctx, const Frame &frame,
+                             char *agg_row);
+
   int calc_pushdown_skips(WinExprEvalCtx &ctx, const int64_t batch_size, sql::ObBitVector &skip, bool &all_active);
 
   template <typename ColumnFmt>
@@ -369,6 +402,10 @@ public:
   Frame last_valid_frame_;
   aggregate::RemovalInfo last_removal_info_;
   char *last_aggr_row_;
+private:
+  // metrics: number of result rows that processed in expr/store
+  int64_t expr_row_cnt_;
+  int64_t store_row_cnt_;
 };
 
 int cmp_prev_row(WinExprEvalCtx &ctx, const int64_t cur_idx, int &cmp_ret);

@@ -16,6 +16,7 @@
 #include "rpc/obmysql/packet/ompk_eof.h"
 #include "observer/mysql/obmp_query.h"
 #include "observer/mysql/obmp_utils.h"
+#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {
@@ -128,6 +129,8 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
     } else {
       process_ok = true;
 
+      // Add non-readonly SELECT disable timer warning after execution (after UDF/SPI may have reset buffer), before reading warning_count for EOF.
+      ObSQLUtils::add_non_ro_select_disable_timer_warning_if_needed(session_, result.get_exec_context().get_physical_plan_ctx());
       OMPKEOF eofp;
       bool need_send_eof = false;
       const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
@@ -213,6 +216,8 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
     } else {
       if (!result.has_implicit_cursor()) {
         //no implicit cursor, send one ok packet to client
+        // Add non-readonly SELECT disable timer warning after execution, before reading warning_count for OK packet.
+        ObSQLUtils::add_non_ro_select_disable_timer_warning_if_needed(session_, result.get_exec_context().get_physical_plan_ctx());
         ObOKPParam ok_param;
         ok_param.message_ = const_cast<char*>(result.get_message());
         ok_param.affected_rows_ = result.get_affected_rows();
@@ -259,9 +264,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
   OX (session_.reset_top_query_string());
   session_.set_top_trace_id(nullptr);
   //if the error code is ob_timeout, we add more error info msg for dml query.
-  if (OB_TIMEOUT == ret && session_.is_user_session()) {
-    LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - session_.get_query_start_time());
-  }
+  ObSQLUtils::log_user_error_for_timeout(ret, session_, result.get_exec_context().get_physical_plan_ctx());
 
   if (OB_FAIL(ret) &&
       !process_ok &&

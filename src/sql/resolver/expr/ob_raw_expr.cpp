@@ -30,6 +30,7 @@
 #include "sql/engine/expr/ob_expr_sql_udt_construct.h"
 #include "sql/engine/expr/ob_expr_priv_attribute_access.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "share/aggregate/util.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -4358,6 +4359,34 @@ int ObAggFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
       } else if (OB_FAIL(get_real_param_exprs().at(0)->get_name(buf, buf_len, pos, type))) {
           LOG_WARN("fail to get_name", K(i), K(ret));
       } else {}
+    } else if (T_FUN_WINDOW_FUNNEL == get_expr_type()) {
+      // window_funnel(window, mode, timestamp, cond1, cond2, ...)
+      // params:(timestamp, window, mode, cond1, cond2, ...)
+      if (get_real_param_count() <= share::aggregate::WINDOW_FUNNEL_CONDITION_START_IDX) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("invalid number of arguments", K(ret), K(get_expr_type()));
+      } else if (OB_FAIL(get_real_param_exprs().at(
+                          share::aggregate::WINDOW_FUNNEL_WINDOW_EXPR_IDX)->get_name(buf, buf_len, pos, type))) {
+        LOG_WARN("fail to get_name", K(share::aggregate::WINDOW_FUNNEL_WINDOW_EXPR_IDX), K(ret));
+      } else if (OB_FAIL(BUF_PRINTF(", "))) {
+      } else if (OB_FAIL(get_real_param_exprs().at(
+                          share::aggregate::WINDOW_FUNNEL_MODE_EXPR_IDX)->get_name(buf, buf_len, pos, type))) {
+        LOG_WARN("fail to get_name", K(share::aggregate::WINDOW_FUNNEL_MODE_EXPR_IDX), K(ret));
+      } else if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      } else if (OB_FAIL(get_real_param_exprs().at(
+                          share::aggregate::WINDOW_FUNNEL_TIMESTAMP_EXPR_IDX)->get_name(buf, buf_len, pos, type))) {
+        LOG_WARN("fail to get_name", K(share::aggregate::WINDOW_FUNNEL_TIMESTAMP_EXPR_IDX), K(ret));
+      } else {
+        for (int64_t i = share::aggregate::WINDOW_FUNNEL_CONDITION_START_IDX;
+              OB_SUCC(ret) && i < get_real_param_count(); ++i) {
+          if (OB_FAIL(BUF_PRINTF(", "))) {
+            LOG_WARN("fail to BUF_PRINTF", K(ret));
+          } else if (OB_FAIL(get_real_param_exprs().at(i)->get_name(buf, buf_len, pos, type))) {
+            LOG_WARN("fail to get_name", K(i), K(ret));
+          }
+        }
+      }
     } else {
       for (; OB_SUCC(ret) && i < get_real_param_count() - 1; ++i) {
         if (OB_ISNULL(get_real_param_exprs().at(i))) {

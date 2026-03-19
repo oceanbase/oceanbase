@@ -353,7 +353,6 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(
         continue;
       } else if (str_vec->is_null(idx) || strlist_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         ObString str = str_vec->get_string(idx),
                  strlist = strlist_vec->get_string(idx);
@@ -363,7 +362,6 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(
                    K(expr.args_[1]->is_static_const_));
         } else {
           res_vec->set_uint(idx, res_pos);
-          eval_flags.set(idx);
         }
       }
     }
@@ -390,7 +388,6 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL)
         continue;
       } else if (str_vec->is_null(idx) || strlist_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         ObString str = str_vec->get_string(idx), strlist = strlist_vec->get_string(idx);
         ret = search_with_const_set(expr, ctx, str, strlist, cs_type, res_pos);
@@ -398,7 +395,6 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL)
           LOG_WARN("search str in str list failed", K(ret), K(expr.args_[1]->is_static_const_));
         } else {
           res_vec->set_uint(idx, res_pos);
-          eval_flags.set(idx);
         }
       }
     }

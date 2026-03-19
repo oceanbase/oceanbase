@@ -736,7 +736,6 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
                unit_type_vec->is_null(idx) ||
                interval_vec->is_null(idx)) {
       res_vec->set_null(idx);
-      eval_flags.set(idx);
       continue;
     }
     DateType date = 0;
@@ -746,7 +745,6 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
       LOG_WARN("get date usec from vec failed", K(ret), K(date), K(usec), K(tz_offset));
     } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
       res_vec->set_null(idx);
-      eval_flags.set(idx);
     } else {
       int64_t res_dt_val = 0;
       int64_t dt_val = date * USECS_PER_DAY + usec;
@@ -768,7 +766,6 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
                                                res_dt_val, is_add, date_sql_mode))) {
         if (OB_UNLIKELY(OB_INVALID_DATE_VALUE == ret || OB_TOO_MANY_DATETIME_PARTS == ret)) {
           res_vec->set_null(idx);
-          eval_flags.set(idx);
           if (OB_TOO_MANY_DATETIME_PARTS == ret) {
             // LOG_USER_WARN(OB_TOO_MANY_DATETIME_PARTS);
             LOG_WARN("OB_TOO_MANY_DATETIME_PARTS", K(ret));
@@ -781,18 +778,15 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
           LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
         } else {
           res_vec->set_date(idx, d_val);
-          eval_flags.set(idx);
         }
       } else if (ObDateTimeType == res_type) {
         res_vec->set_datetime(idx, res_dt_val);
-        eval_flags.set(idx);
       } else if (ObMySQLDateType == res_type) {
         ObMySQLDate md_val = 0;
         if (OB_FAIL(ObTimeConverter::datetime_to_mdate(res_dt_val, NULL, md_val))) {
           LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
         } else {
           res_vec->set_mysql_date(idx, md_val);
-          eval_flags.set(idx);
         }
       } else if (ObMySQLDateTimeType == res_type) {
         ObMySQLDateTime mdatetime = 0;
@@ -800,7 +794,6 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
           LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
         } else {
           res_vec->set_mysql_datetime(idx, mdatetime);
-          eval_flags.set(idx);
         }
 
       } else {

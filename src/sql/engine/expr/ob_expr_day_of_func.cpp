@@ -751,7 +751,6 @@ int ObExprDayName::calc_result_type1(ObExprResType &type,
     continue;                                  \
   } else if (arg_vec->is_null(idx)) {          \
     res_vec->set_null(idx);                    \
-    eval_flags.set(idx);                       \
     continue;                                  \
   }                                            \
 }
@@ -827,7 +826,6 @@ int vector_dayofyear(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip
             res_vec->set_int(idx, dt_yday);
           }
         }
-        eval_flags.set(idx);
       });
     }
   }
@@ -929,7 +927,6 @@ int vector_dayofmonth(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &ski
           }
         }
         res_vec->set_int(idx, dt_mday);
-        eval_flags.set(idx);
       });
     }
   }
@@ -995,7 +992,6 @@ int vector_dayofweek(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip
           int64_t dayofweek = days % 7 + 1;  // start from sun. copy from calc_dayofweek
           res_vec->set_int(idx, dayofweek);
         }
-        eval_flags.set(idx);
       });
     }
   }
@@ -1076,7 +1072,6 @@ int vector_dayname(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, 
           size_t len = strlen(day_name[dt_wday-1]);
           res_vec->set_string(idx, ObString(len, day_name[dt_wday-1]));
         }
-        eval_flags.set(idx);
       });
     }
   }

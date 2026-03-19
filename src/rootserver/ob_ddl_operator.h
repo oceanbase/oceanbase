@@ -989,7 +989,8 @@ public:
                           const int64_t schema_version,
                           const share::schema::ObObjectStatus new_status,
                           const bool update_object_status_ignore_version,
-                          common::ObMySQLTransaction &trans);
+                          common::ObMySQLTransaction &trans,
+                          const common::ObString *ddl_stmt_str = nullptr);
   int update_view_columns(const share::schema::ObTableSchema &view_schema,
                           common::ObMySQLTransaction &trans);
   int reset_view_status(common::ObMySQLTransaction &trans,

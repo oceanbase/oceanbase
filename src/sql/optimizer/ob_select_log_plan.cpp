@@ -554,6 +554,16 @@ int ObSelectLogPlan::candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &
   ObSQLSessionInfo *session = nullptr;
   ObQueryCtx *query_ctx = nullptr;
   bool enable_hash_rollup = false;
+  bool force_use_hash_rollup = false;
+
+  // Check if there is window_funnel aggregate function
+  for (int64_t i = 0; !force_use_hash_rollup && i < aggr_items.count(); ++i) {
+    if (OB_NOT_NULL(aggr_items.at(i)) &&
+        T_FUN_WINDOW_FUNNEL == aggr_items.at(i)->get_expr_type()) {
+      force_use_hash_rollup = true;
+    }
+  }
+
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("get best plan failed", K(ret));
   } else if (OB_ISNULL(best_plan)
@@ -575,7 +585,8 @@ int ObSelectLogPlan::candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &
     bool disable_during_upgrade = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0
                                    && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0);
     bool rowsets_enabled = true;
-    enable_hash_rollup = has_rollup_opt_param ?
+    enable_hash_rollup = force_use_hash_rollup ? true :
+                            has_rollup_opt_param ?
                                 (hash_rollup_policy.get_string().case_compare("auto") == 0
                                  || hash_rollup_policy.get_string().case_compare("forced") == 0) :
                                 ((tenant_config.is_valid()
@@ -610,6 +621,11 @@ int ObSelectLogPlan::candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &
   } else if (!groupby_plans.empty()) {
     LOG_TRACE("succeed to allocate rollup group by plan", K(groupby_plans.count()));
     OPT_TRACE("succeed to allocate rollup group by plan");
+  } else if (force_use_hash_rollup) {
+    // window_funnel must use hash rollup plan
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("window_funnel must use hash rollup plan", K(ret), K(force_use_hash_rollup),
+             K(enable_hash_rollup));
   } else {
     SMART_VAR(GroupingOpHelper, groupby_helper) {
       if (OB_FAIL(init_groupby_helper(group_by_exprs,

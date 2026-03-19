@@ -887,6 +887,11 @@ public:
                                                  const ObBasicSysVar &sys_var,
                                                  const common::ObObj &in_val,
                                                  common::ObObj &out_val);
+  static int check_and_convert_max_execution_time(sql::ObExecContext &ctx,
+                                                  const ObSetVar &set_var,
+                                                  const ObBasicSysVar &sys_var,
+                                                  const common::ObObj &in_val,
+                                                  common::ObObj &out_val);
   static int check_and_convert_max_user_connections(sql::ObExecContext &ctx,
                                                     const ObSetVar &set_var,
                                                     const ObBasicSysVar &sys_var,

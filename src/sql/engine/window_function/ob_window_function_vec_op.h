@@ -200,6 +200,19 @@ private:
     COORDINATE,
     FINAL
   };
+  // Indicate whether current batch(from child op.get_next_batch) has been reset
+  // for batch calculation only work when tiny partition optimization is applied.
+  // If most of the rows may hit tiny partition optimization, we should call
+  // clear_evaluated_flag() && eval_aggr_param_batch() only once at the beginning of the batch
+  enum class BATCH_PARTITION_DISTRIBUTION {
+    INIT = 0,
+    // most of the rows hit tiny partition optimization
+    TINY_PARTITION = 1,
+    // few rows hit tiny partition optimization
+    MIX_PARTITION = 2,
+    // some of the rows hit tiny partition optimization, but from current row won't hit
+    BIG_PARTITION = 3
+  } batch_partition_distribution_{BATCH_PARTITION_DISTRIBUTION::INIT};
 
 public:
   ObWindowFunctionVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input):
@@ -325,7 +338,7 @@ private:
 
   int add_aggr_res_row_for_participator(WinFuncColExpr *end, winfunc::RowStore &store);
 
-  int compute_wf_values(WinFuncColExpr *end, int64_t &check_times);
+  int compute_wf_values(WinFuncColExpr *end, int64_t &check_times, const int64_t partition_end_index_in_expr = -1, const ObBatchRows *input_brs = nullptr);
 
   int set_null_results_of_wf(WinFuncColExpr &wf, const int64_t batch_size,
                              const ObBitVector &nullres_skip);
@@ -433,6 +446,7 @@ private:
   }
 
   int init_hp_infras_group_mgr();
+  int init_batch(bool eval_in_expr, WinFuncColExpr *end, const ObBatchRows *input_brs, int next_row_idx);
 public:
   struct OpBatchCtx { // values used to help batch-calculation
     const ObCompactRow **stored_rows_;
@@ -468,6 +482,9 @@ public:
   };
 public:
   ObWindowFunctionVecOp::OpBatchCtx &get_batch_ctx() { return batch_ctx_; }
+  // called in compute_wf_values && WinExpr
+  // whether should clear evaluated flag for exprs in the current batch
+  bool is_mostly_tiny_partition() const { return batch_partition_distribution_ == BATCH_PARTITION_DISTRIBUTION::TINY_PARTITION; }
 private:
   friend class WinFuncColExpr;
   template<typename T> friend class winfunc::WinExprWrapper;

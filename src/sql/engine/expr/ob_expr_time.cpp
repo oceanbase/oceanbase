@@ -443,7 +443,6 @@ int ObExprMonthName::calc_result_type1(ObExprResType &type,
     continue;                                  \
   } else if (arg_vec->is_null(idx)) {          \
     res_vec->set_null(idx);                    \
-    eval_flags.set(idx);                       \
     continue;                                  \
   }                                            \
 }
@@ -502,7 +501,6 @@ int vector_year(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, con
           year = ob_time.parts_[DT_YEAR];
         }
         res_vec->set_int(idx, year);
-        eval_flags.set(idx);
       });
     }
   }
@@ -604,7 +602,6 @@ int vector_month(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, co
         } else {
           res_vec->set_int(idx, ob_time.parts_[DT_MON]);
         }
-        eval_flags.set(idx);
       });
     }
   }
@@ -704,7 +701,6 @@ int vector_month_name(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &ski
           size_t len = strlen(month_name[month-1]);
           res_vec->set_string(idx, ObString(len, month_name[month-1]));
         }
-        eval_flags.set(idx);
       });
     }
   }
@@ -804,7 +800,6 @@ int vector_hour(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, con
         } else {
           res_vec->set_int(idx, static_cast<int32_t>(usec / 3600000000));
         }
-        eval_flags.set(idx);
       });
     }
   }
@@ -874,7 +869,6 @@ int vector_minute(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, c
           // res_vec->set_int(idx, static_cast<int32_t>(secs / SECS_PER_MIN));
           res_vec->set_int(idx, static_cast<int32_t>(usec % 3600000000 / 60000000));
         }
-        eval_flags.set(idx);
       });
     }
   }

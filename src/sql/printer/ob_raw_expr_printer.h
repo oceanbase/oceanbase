@@ -159,6 +159,7 @@ private:
   int print_json_object(ObSysFunRawExpr *expr);
   int print_ora_json_arrayagg(ObAggFunRawExpr *expr);
   int print_ora_json_objectagg(ObAggFunRawExpr *expr);
+  int print_window_funnel(ObAggFunRawExpr *expr);
   int print_partition_exprs(ObWinFunRawExpr *expr);
   int print_order_items(ObWinFunRawExpr *expr);
   int print_window_clause(ObWinFunRawExpr *expr);

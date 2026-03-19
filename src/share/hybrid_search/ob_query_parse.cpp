@@ -35,7 +35,7 @@ const ObString ObESQueryParser::MSM_KEY("minimum_should_match");
 const ObString ObESQueryParser::FTS_SUB_SCORE_PREFIX("_fts_sub_score_");
 const ObString ObESQueryParser::HIDDEN_COLUMN_VISIBLE_HINT("opt_param('hidden_column_visible', 'true')");
 
-int ObESQueryParser::parse(const common::ObString &req_str, ObQueryReqFromJson *&query_req)
+int ObESQueryParser::parse(const common::ObString &req_str, ObQueryReqFromJson *&query_req, sql::ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   ObJsonNode *j_node = NULL;
@@ -44,6 +44,10 @@ int ObESQueryParser::parse(const common::ObString &req_str, ObQueryReqFromJson *
   ObIJsonBase *fusion_node = NULL;
   uint64_t err_offset = 0;
   uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG | ObJsonParser::JSN_UNIQUE_FLAG;
+  bool json_float_full_precision =
+    OB_NOT_NULL(session) ? session->get_local_json_float_full_precision() : false;
+  ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag,
+                   ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
   if (OB_FAIL(ObJsonParser::parse_json_text(&alloc_, req_str.ptr(), req_str.length(), syntaxerr, &err_offset, j_node, parse_flag))) {
     LOG_WARN("failed to parse array text", K(ret), K(req_str), KCSTRING(syntaxerr), K(err_offset));
   } else if (OB_FAIL(init_default_params(*j_node))) {

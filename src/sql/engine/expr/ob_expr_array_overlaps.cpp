@@ -155,7 +155,6 @@ int ObExprArrayOverlaps::eval_array_relations_batch(const ObExpr &expr, ObEvalCt
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       bool bret = false;
       if (l_array.at(j)->is_null() || r_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
@@ -220,14 +219,12 @@ int ObExprArrayOverlaps::eval_array_relation_vector(const ObExpr &expr, ObEvalCt
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else if (relation == OVERLAPS && OB_FAIL(l_arr_obj->overlaps(*r_arr_obj, bret))) {
         LOG_WARN("array overlaps failed", K(ret));
       } else if (relation == CONTAINS_ALL && OB_FAIL(l_arr_obj->contains_all(*r_arr_obj, bret))) {
         LOG_WARN("array contains all failed", K(ret));
       } else {
         res_vec->set_bool(idx, bret);
-        eval_flags.set(idx);
       }
     }
   }

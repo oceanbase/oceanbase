@@ -77,6 +77,14 @@ struct ObRemoteSqlInfo
   bool sql_from_pl_;
 };
 
+// How timeout is chosen for this statement: query_timeout, max_exec_timeout, or fallback to query_timeout (need warn).
+enum ObTimeoutStrategy
+{
+  OB_TIMEOUT_STRATEGY_QUERY_TIMEOUT = 0,           // use query_timeout directly
+  OB_TIMEOUT_STRATEGY_MAX_EXEC_TIME = 1,         // use max_execution_time directly (readonly select)
+  OB_TIMEOUT_STRATEGY_QUERY_TIMEOUT_FALLBACK = 2     // would use max_exec but fallback to query_timeout (non-readonly select), show warning at response
+};
+
 /* refer to a group of array params
  * values clause using now
  */
@@ -567,6 +575,8 @@ public:
   inline bool get_is_direct_insert_plan() const { return is_direct_insert_plan_; }
   inline void set_enable_adaptive_pc(bool v) { enable_adaptive_pc_ = v; }
   inline bool enable_adaptive_pc() const { return enable_adaptive_pc_; }
+  void set_timeout_strategy(ObTimeoutStrategy strategy) { timeout_strategy_ = strategy; }
+  ObTimeoutStrategy get_timeout_strategy() const { return timeout_strategy_; }
   bool is_param_datum_frame_inited() const { return param_frame_ptrs_.count() > 0; }
   void get_param_frame_info(int64_t param_idx,
                             ObDatum *&datum,
@@ -726,6 +736,7 @@ private:
   bool is_direct_insert_plan_; // for direct load: insert into/overwrite select
   bool check_pdml_affected_rows_; // now only worked for pdml checking affected_rows
   bool enable_adaptive_pc_;
+  ObTimeoutStrategy timeout_strategy_;
 };
 
 }

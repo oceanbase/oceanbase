@@ -34,6 +34,7 @@ void ObPhyPlanHint::reset()
   parallel_ = -1;
   monitor_ = false;
   table_lock_mode_ = 0;
+  max_execution_time_ = -1;
 }
 
 OB_SERIALIZE_MEMBER(ObPhyPlanHint,
@@ -44,7 +45,8 @@ OB_SERIALIZE_MEMBER(ObPhyPlanHint,
                     log_level_,
                     parallel_,
                     monitor_,
-                    table_lock_mode_);
+                    table_lock_mode_,
+                    max_execution_time_);
 
 int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator)
 {
@@ -56,6 +58,7 @@ int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator
   parallel_ = other.parallel_;
   monitor_ = other.monitor_;
   table_lock_mode_ = other.table_lock_mode_;
+  max_execution_time_ = other.max_execution_time_;
   if (OB_FAIL(ob_write_string(allocator, other.log_level_, log_level_))) {
     LOG_WARN("Failed to deep copy log level", K(ret));
   }
@@ -151,6 +154,21 @@ void ObGlobalHint::merge_query_timeout_hint(int64_t hint_time)
       query_timeout_ = hint_time;
     } else {
       query_timeout_ = std::min(hint_time, query_timeout_);
+    }
+  }
+}
+
+void ObGlobalHint::merge_max_execution_time_hint(int64_t hint_time)
+{
+  if (hint_time > UNSET_MAX_EXECUTION_TIME) {
+    if (OB_UNLIKELY(hint_time > MAX_EXECUTION_TIME_MAX)) {
+      LOG_USER_WARN(OB_ERR_MAX_EXECUTION_TIME_TRUNCATED);
+      hint_time = std::min(MAX_EXECUTION_TIME_MAX, hint_time);
+    }
+    if (max_execution_time_ <= 0) {
+      max_execution_time_ = hint_time;
+    } else {
+      max_execution_time_ = std::min(hint_time, max_execution_time_);
     }
   }
 }
@@ -377,6 +395,7 @@ void ObGlobalHint::reset()
   topk_precision_ = -1;
   sharding_minimum_row_count_ = 0;
   query_timeout_ = UNSET_QUERY_TIMEOUT;
+  max_execution_time_ = UNSET_MAX_EXECUTION_TIME;
   read_consistency_ = common::INVALID_CONSISTENCY;
   plan_cache_policy_ = OB_USE_PLAN_CACHE_INVALID;
   force_trace_log_ = false;
@@ -418,6 +437,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_read_consistency_hint(other.read_consistency_, other.frozen_version_);
   merge_topk_hint(other.topk_precision_, other.sharding_minimum_row_count_);
   merge_query_timeout_hint(other.query_timeout_);
+  merge_max_execution_time_hint(other.max_execution_time_);
   enable_lock_early_release_ |= other.enable_lock_early_release_;
   merge_log_level_hint(other.log_level_);
   enable_lock_early_release_ |= other.enable_lock_early_release_;
@@ -526,6 +546,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && UNSET_QUERY_TIMEOUT != query_timeout_) { //QUERY_TIMEOUT
     PRINT_GLOBAL_HINT_NUM("QUERY_TIMEOUT", query_timeout_);
+  }
+  if (OB_SUCC(ret) && UNSET_MAX_EXECUTION_TIME != max_execution_time_) { //MAX_EXECUTION_TIME
+    PRINT_GLOBAL_HINT_NUM("MAX_EXECUTION_TIME", max_execution_time_);
   }
   if (OB_SUCC(ret) && OB_FAIL(dblink_hints_.print(buf, buf_len, pos, outline_indent))) { // DBLINK_INFO
     LOG_WARN("failed to print dblink hints", K(ret), K(dblink_hints_));

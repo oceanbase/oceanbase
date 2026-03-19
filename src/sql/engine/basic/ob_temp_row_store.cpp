@@ -185,7 +185,7 @@ int ObTempRowStoreBase<RA>::RowBlock::calc_row_size(const common::ObIArray<ObExp
       continue;
     }
     ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
-    VectorFormat format = vec->get_format();
+    VectorFormat format = exprs.at(col_idx)->get_format(ctx);
     if (OB_LIKELY(!static_cast<ObVectorBase *>(vec)->is_collection_expr())) {
       if (VEC_DISCRETE == format) {
         ObDiscreteBase *disc_vec = static_cast<ObDiscreteBase *>(vec);

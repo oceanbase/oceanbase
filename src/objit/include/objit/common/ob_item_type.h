@@ -974,6 +974,7 @@ typedef enum ObItemType
   T_FUN_SYS_EMBEDDED_VEC = 1928,
   T_FUN_SYS_AI_PROMPT = 1929,
   T_FUN_SYS_VEC_VISIBLE = 1930, // vector index table 5
+  T_FUN_SYS_NLS_CHARSET_ID = 1948,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -1056,6 +1057,7 @@ typedef enum ObItemType
   T_FUN_SYS_BUCKET = 2086,
   T_FUN_SYS_VOID = 2096,
   T_FUN_COLLECT_FILE_LIST = 2097,
+  T_FUN_WINDOW_FUNNEL = 2100,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -1077,7 +1079,10 @@ typedef enum ObItemType
   T_PSEUDO_RELEVANCE_SCORE = 3042, // relecance score for sparse retireval
   T_PSEUDO_EXTERNAL_FILE_URL = 3043,
   T_PSEUDO_DDL_SLICE_ID = 3044,
+
   T_PSEUDO_HIDDEN_CLUSTERING_KEY = 3045,
+  T_PSEUDO_WINDOW_FUNNEL_TIME = 3046,
+  T_PSEUDO_WINDOW_FUNNEL_EVENT_IDX = 3047,
   T_WINDOW_FUNCTION = 3151,
   T_WIN_GENERALIZED_WINDOW = 3152,
   T_WIN_NEW_GENERALIZED_WINDOW = 3153,
@@ -2956,6 +2961,8 @@ typedef enum ObItemType
   T_PARALLEL_PARSE_ON_SINGLE_FILE = 4946, // disable parallel parse single csv
   T_PARALLEL_PARSE_FILE_SIZE_THRESHOLD = 4957,
   T_MAX_ROW_LENGTH = 4958,
+  T_ALTER_VIEW_COMPILE = 4968,   // ALTER VIEW ... COMPILE action node
+  T_MAX_EXECUTION_TIME = 4969,    // for max_execution_time hint
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -3128,7 +3135,8 @@ extern const char *get_type_name(int type);
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR) || \
                          (op) == T_FUN_INNER_PREFIX_MAX || \
                          (op) == T_FUN_INNER_PREFIX_MIN || \
-                         ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX))
+                         ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX) || \
+                         (op) == T_FUN_WINDOW_FUNNEL)
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
   ((op) == T_LEVEL || (op) == T_CONNECT_BY_ISLEAF || (op) == T_CONNECT_BY_ISCYCLE || (op) == T_ORA_ROWSCN)

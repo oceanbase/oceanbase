@@ -534,7 +534,6 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprWeek, raw_expr) {
         continue;                                                                 \
       } else if (arg_vec->is_null(idx) || mode_vec->is_null(idx)) {               \
         res_vec->set_null(idx);                                                   \
-        eval_flags.set(idx);                                                      \
         continue;                                                                 \
       }                                                                           \
       BODY;                                                                       \
@@ -553,7 +552,6 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprWeek, raw_expr) {
         continue;                                                                 \
       } else if (arg_vec->is_null(idx)) {                                         \
         res_vec->set_null(idx);                                                   \
-        eval_flags.set(idx);                                                      \
         continue;                                                                 \
       }                                                                           \
       BODY;                                                                       \
@@ -612,7 +610,6 @@ int vector_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &ski
             ObTimeConverter::to_week(DT_WEEK_GE_4_BEGIN, year, dt_yday, wday, week, delta);
             res_vec->set_int(idx, week);
           }
-          eval_flags.set(idx);
         }
       });
     }
@@ -776,7 +773,6 @@ int ObExprWeek::vector_week(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVecto
               }
             }
           }
-          eval_flags.set(idx);
         });
       } else {  // 1 == expr.arg_cnt_
         BATCH_CALC_WITHOUT_MODE({
@@ -804,9 +800,7 @@ int ObExprWeek::vector_week(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVecto
               ObTimeConverter::to_week(DT_WEEK_ZERO_BEGIN + DT_WEEK_SUN_BEGIN, year, dt_yday, wday, week, /*unused*/delta);
               res_vec->set_int(idx, week);
             }
-            eval_flags.set(idx);
           }
-          eval_flags.set(idx);
         });
       }
     }

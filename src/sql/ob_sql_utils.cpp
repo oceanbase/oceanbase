@@ -26,6 +26,8 @@
 #include "storage/ob_locality_manager.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/resource_manager/ob_resource_manager.h"
+#include "sql/engine/ob_exec_context.h"
+#include "sql/engine/ob_physical_plan_ctx.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -113,6 +115,30 @@ int ObSQLUtils::check_rowsets_enabled(const ObSQLSessionInfo *session,
     }
   }
   return ret;
+}
+
+void ObSQLUtils::add_non_ro_select_disable_timer_warning_if_needed(sql::ObSQLSessionInfo &session,
+                                                                   ObPhysicalPlanCtx *plan_ctx)
+{
+  if (OB_NOT_NULL(plan_ctx) && session.is_user_session()
+      && OB_TIMEOUT_STRATEGY_QUERY_TIMEOUT_FALLBACK == plan_ctx->get_timeout_strategy()) {
+    LOG_USER_WARN(OB_NON_RO_SELECT_DISABLE_TIMER);
+  }
+}
+
+void ObSQLUtils::log_user_error_for_timeout(int &ret,
+                                           sql::ObSQLSessionInfo &session,
+                                           ObPhysicalPlanCtx *plan_ctx)
+{
+  if (OB_TIMEOUT == ret && session.is_user_session()) {
+    if (OB_NOT_NULL(plan_ctx) && OB_TIMEOUT_STRATEGY_MAX_EXEC_TIME == plan_ctx->get_timeout_strategy()) {
+      ret = OB_OUT_OF_MAX_EXECUTION_TIME;
+      LOG_USER_ERROR(OB_OUT_OF_MAX_EXECUTION_TIME);
+    } else {
+      int64_t query_start_time = session.get_query_start_time();
+      LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - query_start_time);
+    }
+  }
 }
 
 bool ObSQLUtils::is_trans_commit_need_disconnect_err(int err)
@@ -6266,11 +6292,62 @@ int ObSQLUtils::check_column_with_res_mapping_rule(const ObResolverParams *resol
   return ret;
 }
 
-int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
+static int filter_dep_obj_pairs(const ObReferenceObjTable::DependencyObjKeyItemPairs &src,
+                                ObReferenceObjTable::DependencyObjKeyItemPairs &dst,
+                                const uint64_t dep_obj_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t dep_obj_id_i64 = static_cast<int64_t>(dep_obj_id);
+  for (int64_t i = 0; OB_SUCC(ret) && i < src.count(); ++i) {
+    const ObReferenceObjTable::DependencyObjKeyItemPair &pair = src.at(i);
+    if (OB_INVALID_ID == dep_obj_id || pair.dep_obj_key_.dep_obj_id_ == dep_obj_id_i64) {
+      if (OB_FAIL(dst.push_back(pair))) {
+        LOG_WARN("failed to push dependency obj pair", K(ret), K(dep_obj_id), K(i), K(pair));
+      }
+    }
+  }
+  return ret;
+}
+
+static int generate_alter_view_compile_arg(const share::schema::ObTableSchema &view_schema,
+                                          const share::schema::ObReferenceObjTable &ref_obj_table,
+                                          const bool reset_view_column_infos,
+                                          common::ObIArray<obrpc::ObDependencyObjDDLArg> &alter_view_compile_args)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObDependencyObjDDLArg dep_arg;
+  share::schema::ObReferenceObjTable::DependencyObjKeyItemPairs insert_dep_objs;
+  share::schema::ObReferenceObjTable::DependencyObjKeyItemPairs update_dep_objs;
+  share::schema::ObReferenceObjTable::DependencyObjKeyItemPairs delete_dep_objs;
+  share::schema::ObReferenceObjTable::ObGetDependencyObjOp op(&insert_dep_objs, &update_dep_objs, &delete_dep_objs);
+  const uint64_t table_id = view_schema.get_table_id();
+
+  dep_arg.tenant_id_ = view_schema.get_tenant_id();
+  dep_arg.reset_view_column_infos_ = reset_view_column_infos;
+  if (OB_FAIL(ref_obj_table.get_ref_obj_table().foreach_refactored(op))) {
+    LOG_WARN("traverse ref obj version table failed", K(ret), K(table_id));
+  } else if (OB_FAIL(op.get_callback_ret())) {
+    LOG_WARN("traverse ref obj version table failed", K(ret), K(table_id));
+  } else if (OB_FAIL(filter_dep_obj_pairs(insert_dep_objs, dep_arg.insert_dep_objs_, table_id))) {
+    LOG_WARN("failed to filter insert_dep_objs", K(ret), K(table_id));
+  } else if (OB_FAIL(filter_dep_obj_pairs(update_dep_objs, dep_arg.update_dep_objs_, table_id))) {
+    LOG_WARN("failed to filter update_dep_objs", K(ret), K(table_id));
+  } else if (OB_FAIL(filter_dep_obj_pairs(delete_dep_objs, dep_arg.delete_dep_objs_, table_id))) {
+    LOG_WARN("failed to filter delete_dep_objs", K(ret), K(table_id));
+  } else if (OB_FAIL(dep_arg.schema_.assign(view_schema))) {
+    LOG_WARN("failed to assign view schema", K(ret), K(table_id));
+  } else if (OB_FAIL(alter_view_compile_args.push_back(dep_arg))) {
+    LOG_WARN("failed to push dep arg to alter_view_compile_args", K(ret), K(table_id));
+  }
+  return ret;
+}
+
+int ObSQLUtils::submit_compile_view_task(const share::schema::ObTableSchema &old_view_schema,
                                      ObSelectStmt *select_stmt,
                                      bool reset_column_infos,
                                      ObIAllocator &alloc,
-                                     ObSQLSessionInfo &session_info)
+                                     ObSQLSessionInfo &session_info,
+                                     common::ObIArray<obrpc::ObDependencyObjDDLArg> *alter_view_compile_args)
 {
   int ret = OB_SUCCESS;
   ObTableSchema new_view_schema(&alloc);
@@ -6350,16 +6427,28 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
         LOG_WARN("failed to check sys view changed", K(ret));
       } else if (!select_stmt->get_ref_obj_table()->is_inited() || (old_view_schema.is_sys_view() && !changed)) {
         // do nothing
-      } else if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue().add_view_id_to_set(new_view_schema.get_table_id()))) {
-        if (OB_HASH_EXIST == ret) {
-          ret = OB_SUCCESS;
-          LOG_WARN("table id exists", K(new_view_schema.get_table_id()));
-        } else {
-          LOG_WARN("failed to set table id", K(ret));
+      } else if (alter_view_compile_args != NULL) {
+        // Synchronous path (ALTER VIEW COMPILE): generate DDL arg from dependency table
+        if (OB_FAIL(generate_alter_view_compile_arg(new_view_schema,
+                                              *select_stmt->get_ref_obj_table(),
+                                              false /*reset_view_column_infos*/,
+                                              *alter_view_compile_args))) {
+          LOG_WARN("failed to generate alter view compile arg", K(ret));
         }
-      } else if (OB_FAIL(select_stmt->get_ref_obj_table()->process_reference_obj_table(
-        new_view_schema.get_tenant_id(), new_view_schema.get_table_id(), &new_view_schema, GCTX.sql_engine_->get_dep_info_queue()))) {
-        LOG_WARN("failed to process reference obj table", K(ret), K(new_view_schema), K(old_view_schema));
+      } else {
+        // Asynchronous path: add to queue set first, then process reference obj table
+        if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue().add_view_id_to_set(new_view_schema.get_table_id()))) {
+          if (OB_HASH_EXIST == ret) {
+            ret = OB_SUCCESS;
+            LOG_WARN("table id exists", K(new_view_schema.get_table_id()));
+          } else {
+            LOG_WARN("failed to set table id", K(ret));
+          }
+        } else if (OB_FAIL(select_stmt->get_ref_obj_table()->process_reference_obj_table(
+            new_view_schema.get_tenant_id(), new_view_schema.get_table_id(), &new_view_schema,
+            GCTX.sql_engine_->get_dep_info_queue()))) {
+          LOG_WARN("failed to process reference obj table", K(ret), K(new_view_schema), K(old_view_schema));
+        }
       }
     } else if (lib::is_oracle_mode()) {
       bool already_invalid = false;
@@ -6370,30 +6459,43 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
       } else if (!new_view_schema.is_view_table() || new_view_schema.get_column_count() <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get wrong schema", K(ret), K(new_view_schema));
-      } else if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue().add_view_id_to_set(new_view_schema.get_table_id()))) {
-        if (OB_HASH_EXIST == ret) {
-          ret = OB_SUCCESS;
-          LOG_WARN("table id exists", K(new_view_schema.get_table_id()));
-        } else {
-          LOG_WARN("failed to set table id", K(ret));
+      } else if (alter_view_compile_args != NULL) {
+        // Synchronous path: convert task to DDL arg and push to external list alter_view_compile_args
+        obrpc::ObDependencyObjDDLArg dep_arg;
+        dep_arg.tenant_id_ = new_view_schema.get_tenant_id();
+        dep_arg.reset_view_column_infos_ = true;
+        if (OB_FAIL(dep_arg.schema_.assign(new_view_schema))) {
+          LOG_WARN("failed to assign view schema", K(ret));
+        } else if (OB_FAIL(alter_view_compile_args->push_back(dep_arg))) {
+          LOG_WARN("failed to push dep_arg to alter_view_compile_args (reset_column_infos)", K(ret));
         }
       } else {
-        SMART_VAR(sql::ObMaintainObjDepInfoTask, task, new_view_schema.get_tenant_id()) {
-          if (OB_FAIL(task.assign_view_schema(new_view_schema))) {
-            LOG_WARN("failed to assign view schema", K(ret));
-          } else if (FALSE_IT(task.set_reset_view_column_infos(true))) {
-          } else if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue().push(task))) {
-            LOG_WARN("push task failed", K(ret));
-          }
-        }
-        if (OB_FAIL(ret)) {
-          int tmp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (tmp_ret = GCTX.sql_engine_->get_dep_info_queue().erase_view_id_from_set(new_view_schema.get_table_id()))) {
-            LOG_WARN("failed to erase obj id", K(tmp_ret), K(ret));
-          }
-           if (OB_SIZE_OVERFLOW == ret) {
+        // Asynchronous path: push to async queue
+        if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue().add_view_id_to_set(new_view_schema.get_table_id()))) {
+          if (OB_HASH_EXIST == ret) {
             ret = OB_SUCCESS;
-            LOG_TRACE("async queue is full");
+            LOG_WARN("table id exists", K(new_view_schema.get_table_id()));
+          } else {
+            LOG_WARN("failed to set table id", K(ret));
+          }
+        } else {
+          SMART_VAR(sql::ObMaintainObjDepInfoTask, task, new_view_schema.get_tenant_id()) {
+            if (OB_FAIL(task.assign_view_schema(new_view_schema))) {
+              LOG_WARN("failed to assign view schema", K(ret));
+            } else if (FALSE_IT(task.set_reset_view_column_infos(true))) {
+            } else if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue().push(task))) {
+              LOG_WARN("push task failed", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
+            int tmp_ret = OB_SUCCESS;
+            if (OB_SUCCESS != (tmp_ret = GCTX.sql_engine_->get_dep_info_queue().erase_view_id_from_set(new_view_schema.get_table_id()))) {
+              LOG_WARN("failed to erase obj id", K(tmp_ret), K(ret));
+            }
+             if (OB_SIZE_OVERFLOW == ret) {
+              ret = OB_SUCCESS;
+              LOG_TRACE("async queue is full");
+            }
           }
         }
       }

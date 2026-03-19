@@ -221,6 +221,7 @@
 #include "ob_expr_encode_sortkey.h"
 #include "ob_expr_hash.h"
 #include "ob_expr_nlssort.h"
+#include "ob_expr_nls_charset_id.h"
 #include "ob_expr_json_object.h"
 #include "ob_expr_json_extract.h"
 #include "ob_expr_json_contains.h"
@@ -1462,6 +1463,15 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprIsNan::eval_is_nan,                                  /* 887 */
   ObExprCollectFileList::collect_file_list,                           /* 888 */
   ObExprVoid::calc_void_expr,                                         /* 889 */
+  NULL, // ObExprRandCanonical::calc_random_expr_canonical            /* 890 */
+  NULL, // ObExprLoadFile::eval_load_file,                            /* 891 */
+  NULL, // ObExprAIParseDocument::eval_ai_parse_document              /* 892 */
+  NULL, // ObExprSearchIndexInnerPath::calc_search_index_inner_path,  /* 893 */
+  NULL, // ObExprSearchIndexInnerValue::calc_search_index_inner_value, /* 894 */
+  NULL, // ObExprToTypeName::eval_to_type_name,                       /* 895 */
+  NULL, // ObExprToFloat64OrNull::eval_to_float64_or_null,            /* 896 */
+  NULL, // ObExprNewTime::eval_new_time,                              /* 897 */
+  ObExprNLSCharsetId::eval_nls_charset_id,                            /* 898 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1908,6 +1918,71 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_RIGHT_SHIFT>,          /* 257 */
   NULL, // ObExprCrc32::calc_crc32_expr_vector,                          /* 258 */
   NULL, // ObExprFromBase64::eval_from_base64_vector                     /* 259 */
+  NULL, // ObExprArrayContains::eval_array_contains_vector_int32_t,      /* 260 */
+  NULL, // ObExprSecond::calc_second_vector,                             /* 261 */
+  NULL, // ObExprMicrosecond::calc_microsecond_vector,                   /* 262 */
+  NULL, // ObExprSecToTime::calc_sectotime_vector,                       /* 263 */
+  NULL, // ObExprUsecToTime::calc_usec_to_time_vector,                   /* 264 */
+  NULL, // ObExprTimestamp::calc_timestamp1_vector,                      /* 265 */
+  NULL, // ObExprWeekDay::calc_weekday_vector,                           /* 266 */
+  NULL, // ObExprTimeDiff::calc_timediff_vector,                         /* 267 */
+  NULL, // ObExprIsIpv4::calc_is_ipv4_vector,                            /* 268 */
+  NULL, // ObExprIsIpv6::calc_is_ipv6_vector,                            /* 269 */
+  NULL, // ObExprIsIpv4Mapped::calc_is_ipv4_mapped_vector,               /* 270 */
+  NULL, // ObExprIsIpv4Compat::calc_is_ipv4_compat_vector,               /* 271 */
+  NULL, // ObExprInet6Ntoa::calc_inet6_ntoa_vector,                      /* 272 */
+  NULL, // ObExprInet6Aton::calc_inet6_aton_vector,                      /* 273 */
+  NULL, // ObExprAtan::eval_number_atan_vector,                          /* 274 */
+  NULL, // ObExprAtan::eval_double_atan_vector,                          /* 275 */
+  NULL, // ObExprAtan2::eval_number_atan2_vector,                        /* 276 */
+  NULL, // ObExprAtan2::eval_double_atan2_vector,                        /* 277 */
+  NULL, // ObExprDegrees::calc_degrees_vector_expr,                      /* 278 */
+  NULL, // ObExprRadians::calc_radians_vector_expr,                      /* 279 */
+  NULL, // ObExprExp::eval_double_exp_vector,                            /* 280 */
+  NULL, // ObExprExp::eval_number_exp_vector,                            /* 281 */
+  NULL, // ObExprSign::eval_sign_vector_int,                             /* 282 */
+  NULL, // ObExprSign::eval_sign_vector_number,                          /* 283 */
+  NULL, // ObExprDateTrunc::eval_date_trunc_vector,                      /* 284 */
+  NULL, // ObExprToDate::calc_to_date_with_format_vector,                /* 285 */
+  NULL, // ObExprConcat::eval_concat_vector,                             /* 286 */
+  NULL, // ObExprLpad::calc_mysql_lpad_expr_vector,                      /* 287 */
+  NULL, // ObExprRpad::calc_mysql_rpad_expr_vector,                      /* 288 */
+  NULL, // ObExprOracleLpad::calc_oracle_lpad_expr_vector,               /* 289 */
+  NULL, // ObExprOracleRpad::calc_oracle_rpad_expr_vector,               /* 290 */
+  NULL, // ObExprLeft::calc_left_vector,                                 /* 291 */
+  NULL, // ObExprRight::calc_right_vector,                               /* 292 */
+  NULL, // ObExprAcos::eval_double_acos_vector,                          /* 293 */
+  NULL, // ObExprAcos::eval_number_acos_vector,                          /* 294 */
+  NULL, // ObExprAsin::eval_double_asin_vector,                          /* 295 */
+  NULL, // ObExprAsin::eval_number_asin_vector,                          /* 296 */
+  NULL, // ObExprHex::eval_hex_vector,                                   /* 297 */
+  NULL, // ObExprSha::eval_sha_vector,                                   /* 298 */
+  NULL, // ObExprSha2::eval_sha2_vector,                                 /* 299 */
+  NULL, // ObExprAesEncrypt::eval_aes_encrypt_vector,                    /* 300 */
+  NULL, // ObExprAesDecrypt::eval_aes_decrypt_vector,                    /* 301 */
+  NULL, // ObExprEditDistance::calc_edit_distance_vector,                /* 302 */
+  NULL, // ObExprEditDistanceUTF8::calc_edit_distance_utf8_vector,       /* 303 */
+  NULL, // ObExprDateAddClickhouse::calc_date_add_ck_vector,             /* 304 */
+  NULL, // ObExprDateSubClickhouse::calc_date_sub_ck_vector,             /* 305 */
+  NULL, // ObExprTime::calc_time_vector,                                 /* 306 */
+  NULL, // ObExprQuote::eval_quote_vector,                               /* 307 */
+  NULL, // ObExprUnhex::eval_unhex_vector,                               /* 308 */
+  NULL, // ObExprAddMonths::calc_add_months_vector,                      /* 309 */
+  NULL, // ObExprMonthsAdd::calc_months_add_vector,                      /* 310 */
+  NULL, // ObExprParseDateTime::calc_parse_date_time_vector              /* 311 */
+  NULL, // ObExprReverse::calc_reverse_expr_vector,                      /* 312 */
+  NULL, // ObExprIsNan::eval_is_nan_vector,                              /* 313 */
+  NULL, // ObExprSpace::eval_space_vector,                               /* 314 */
+  NULL, // ObExprIfNull::eval_ifnull_vector,                             /* 315 */
+  NULL, // ObExprQuarter::calc_quarter_vector,                           /* 316 */
+  NULL, // ObExprToDays::calc_to_days_vector,                            /* 317 */
+  NULL, // ObExprRandCanonical::calc_random_expr_canonical_vector        /* 318 */
+  NULL, // ObExprLoadFile::eval_load_file_vector,                        /* 319 */
+  NULL, // ObExprAIParseDocument::eval_ai_parse_document_vector          /* 320 */
+  NULL, // ObExprToTypeName::eval_to_type_name_vector,                   /* 321 */
+  NULL, // ObExprToFloat64OrNull::eval_to_float64_or_null_vector,        /* 322 */
+  NULL, // ObExprNewTime::eval_new_time_vector,                          /* 323 */
+  ObExprNLSCharsetId::eval_nls_charset_id_vector,                        /* 324 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

@@ -419,7 +419,6 @@ int ObExprConvertTZ::convert_tz_vector(const ObExpr &expr,
           }
         }
       }
-      eval_flags.set(idx);
     }
   }
   return ret;
@@ -448,7 +447,6 @@ int ObExprConvertTZ::convert_tz_vector_const(const ObExpr &expr,
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) { continue; }
       res_vec->set_null(idx);
-      eval_flags.set(idx);
     }
   } else {
     ObString tz_str_s = expr.args_[1]->get_vector(ctx)->get_string(0);
@@ -458,7 +456,6 @@ int ObExprConvertTZ::convert_tz_vector_const(const ObExpr &expr,
       if (skip.at(idx) || eval_flags.at(idx)) { continue; }
       if (arg_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
         continue;
       }
       IN_TYPE left_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
@@ -474,7 +471,6 @@ int ObExprConvertTZ::convert_tz_vector_const(const ObExpr &expr,
           res_vec->set_datetime(idx,res_val);
         }
       }
-      eval_flags.set(idx);
     }
   }
   return ret;

@@ -100,7 +100,7 @@ class ObDriverRowIterator
 public:
   ObDriverRowIterator();
   ~ObDriverRowIterator() { }
-  int get_next_left_row();
+  int get_next_left_row(bool &new_batch);
   int rescan_left();
   void bind_group_params_to_das_ctx(GroupParamBackupGuard &guard);
   int fill_cur_row_group_param();
@@ -125,6 +125,7 @@ public:
   int get_cur_group_id() const { return join_buffer_.get_cur_group_id(); }
   int get_group_rescan_cnt() const { return join_buffer_.get_group_rescan_cnt(); }
   int64_t get_left_batch_size() { return left_brs_ == nullptr ? 0 : left_brs_->size_; }
+  void reset_left_expr_extend_size() { left_expr_extend_size_ = 0; }
 
   int init(ObOperator *op, const int64_t op_group_scan_size,
           const common::ObIArray<ObDynamicParamSetter> *rescan_params,

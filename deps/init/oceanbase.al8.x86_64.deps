@@ -27,7 +27,7 @@ devdeps-lua-5.4.3-162024092718.al8.x86_64.rpm
 devdeps-oss-c-sdk-3.11.2-142025100915.al8.x86_64.rpm
 devdeps-zlib-static-1.2.13-82024102414.al8.x86_64.rpm
 devdeps-ncurses-static-6.5-62025040314.al8.x86_64.rpm
-devdeps-boost-1.74.0-72024092811.al8.x86_64.rpm
+devdeps-boost-1.74.0-112025121712.al8.x86_64.rpm
 devdeps-abseil-cpp-20211102.0-62024122014.al8.x86_64.rpm
 devdeps-s2geometry-0.10.0-122024122617.al8.x86_64.rpm
 devdeps-icu-69.1-232024120517.al8.x86_64.rpm

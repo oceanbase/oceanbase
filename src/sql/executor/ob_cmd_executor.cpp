@@ -24,6 +24,7 @@
 #include "sql/resolver/ddl/ob_create_mlog_stmt.h"
 #include "sql/resolver/ddl/ob_drop_mlog_stmt.h"
 #include "sql/resolver/ddl/ob_alter_database_stmt.h"
+#include "sql/resolver/ddl/ob_alter_view_stmt.h"
 #include "sql/resolver/ddl/ob_drop_database_stmt.h"
 #include "sql/resolver/ddl/ob_create_database_stmt.h"
 #include "sql/resolver/ddl/ob_use_database_stmt.h"
@@ -101,6 +102,7 @@
 #include "sql/engine/cmd/ob_tenant_executor.h"
 #include "sql/engine/cmd/ob_set_names_executor.h"
 #include "sql/engine/cmd/ob_alter_system_executor.h"
+#include "sql/engine/cmd/ob_alter_view_executor.h"
 #include "sql/engine/cmd/ob_set_password_executor.h"
 #include "sql/engine/cmd/ob_tablegroup_executor.h"
 #include "sql/engine/cmd/ob_database_executor.h"
@@ -464,6 +466,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         break;
       }
       case stmt::T_ALTER_VIEW: {
+        DEFINE_EXECUTE_CMD(ObAlterViewStmt, ObAlterViewExecutor);
         break;
       }
       case stmt::T_CREATE_TABLE_LIKE: {

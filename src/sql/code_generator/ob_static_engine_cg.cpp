@@ -119,6 +119,7 @@
 #include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
 #include "sql/engine/aggregate/ob_hash_distinct_vec_op.h"
 #include "sql/engine/aggregate/ob_scalar_aggregate_vec_op.h"
+#include "share/aggregate/util.h"
 #include "share/vector/expr_cmp_func.h"
 #include "sql/engine/sort/ob_sort_vec_op.h"
 #include "sql/engine/set/ob_hash_union_vec_op.h"
@@ -669,8 +670,9 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
       ret = check_op_vectorization(op, schema_guard, session->use_rich_format(), disable_vectorize);
       if (OB_FAIL(ret)) {
       } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
-         LOG_DEBUG("TableScan base table rows ", K(op->get_card()));
-         scan_cardinality = common::max(scan_cardinality, op->get_card());
+        double range_row_count = static_cast<ObLogTableScan *>(op)->get_phy_query_range_row_count();
+        LOG_DEBUG("TableScan base table rows ", K(range_row_count));
+        scan_cardinality = common::max(scan_cardinality, range_row_count);
       }
       if (OB_SUCC(ret) && !disable_vectorize) {
         const ObDMLStmt *stmt = NULL;
@@ -5711,7 +5713,8 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObHashGroupBySpec &spec,
           || T_FUN_JSON_OBJECTAGG == aggr_info.get_expr_type()
           || T_FUN_ORA_JSON_OBJECTAGG == aggr_info.get_expr_type()
           || T_FUN_ORA_XMLAGG == aggr_info.get_expr_type()
-          || T_FUNC_SYS_ARRAY_AGG == aggr_info.get_expr_type()) {
+          || T_FUNC_SYS_ARRAY_AGG == aggr_info.get_expr_type()
+          || T_FUN_WINDOW_FUNNEL == aggr_info.get_expr_type()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("this aggr func is not supported in hash group by", K(ret), K(aggr_info));
       }
@@ -8201,7 +8204,99 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
     }
 
     ObSEArray<ObExpr*, 16> all_param_exprs;
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (T_FUN_WINDOW_FUNNEL == raw_expr.get_expr_type()) {
+      ObExpr *timestamp_expr = nullptr;
+      ObExpr *time_window_expr = nullptr;
+      ObExpr *mode_expr = nullptr;
+      if (OB_FAIL(generate_rt_expr(*raw_expr.get_real_param_exprs().at(
+                    share::aggregate::WINDOW_FUNNEL_TIMESTAMP_EXPR_IDX), timestamp_expr))) {
+        LOG_WARN("failed to generate_rt_expr", K(ret));
+      } else if (OB_ISNULL(timestamp_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("timestamp_expr is null ", K(ret), K(timestamp_expr));
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("timestamp_expr is not datetime type ", K(ret), K(timestamp_expr));
+      } else if (OB_FAIL(all_param_exprs.push_back(timestamp_expr))) {
+        LOG_WARN("failed to push_back param_expr", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*raw_expr.get_real_param_exprs().at(
+                  share::aggregate::WINDOW_FUNNEL_WINDOW_EXPR_IDX), time_window_expr))) {
+        LOG_WARN("failed to generate_rt_expr", K(ret));
+      } else if (OB_ISNULL(time_window_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("time_window_expr is null ", K(ret), K(time_window_expr));
+      } else if (OB_FAIL(all_param_exprs.push_back(time_window_expr))) {
+        LOG_WARN("failed to push_back param_expr", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*raw_expr.get_real_param_exprs().at(
+                          share::aggregate::WINDOW_FUNNEL_MODE_EXPR_IDX), mode_expr))) {
+        LOG_WARN("failed to generate_rt_expr", K(ret));
+      } else if (OB_ISNULL(mode_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mode_expr is null ", K(ret), K(mode_expr));
+      } else if (OB_FAIL(all_param_exprs.push_back(mode_expr))) {
+        LOG_WARN("failed to push_back param_expr", K(ret));
+      } else {
+        for (int64_t i = share::aggregate::WINDOW_FUNNEL_PSEUDO_TIME_EXPR_IDX;
+              OB_SUCC(ret) && i < share::aggregate::WINDOW_FUNNEL_CONDITION_START_IDX; ++i) {
+          ObExpr* pseudo_expr = nullptr;
+          if (OB_FAIL(generate_rt_expr(*raw_expr.get_real_param_exprs().at(i), pseudo_expr))) {
+            LOG_WARN("failed to generate_rt_expr", K(ret));
+          } else if (OB_ISNULL(pseudo_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expr is null ", K(ret), K(expr));
+          } else if (OB_FAIL(all_param_exprs.push_back(pseudo_expr))) {
+            LOG_WARN("failed to push_back pseudo_expr to param_exprs", K(ret));
+          } else if (i == share::aggregate::WINDOW_FUNNEL_PSEUDO_TIME_EXPR_IDX) {
+            aggr_info.has_order_by_ = true;
+            int64_t sort_count = 1;
+            if (OB_FAIL(aggr_info.sort_collations_.init(sort_count))) {
+              LOG_WARN("failed to init collations", K(ret));
+            } else if (OB_FAIL(aggr_info.sort_cmp_funcs_.init(sort_count))) {
+              LOG_WARN("failed to init sort_cmp_funcs_", K(ret));
+            } else {
+              // The pseudo_time_expr will be at index 0 in sort_collations_
+              ObSortFieldCollation field_collation(0, pseudo_expr->datum_meta_.cs_type_, true, NULL_LAST);
+              ObSortCmpFunc cmp_func;
+              cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(pseudo_expr->datum_meta_.type_,
+                                                                      pseudo_expr->datum_meta_.type_,
+                                                                      field_collation.null_pos_,
+                                                                      field_collation.cs_type_,
+                                                                      pseudo_expr->datum_meta_.scale_,
+                                                                      lib::is_oracle_mode(),
+                                                                      pseudo_expr->obj_meta_.has_lob_header(),
+                                                                      pseudo_expr->datum_meta_.precision_,
+                                                                      pseudo_expr->datum_meta_.precision_);
+              if (OB_ISNULL(cmp_func.cmp_func_)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
+              } else if (OB_FAIL(aggr_info.sort_collations_.push_back(field_collation))) {
+                LOG_WARN("failed to push back field collation", K(ret));
+              } else if (OB_FAIL(aggr_info.sort_cmp_funcs_.push_back(cmp_func))) {
+                LOG_WARN("failed to push back sort function", K(ret));
+              }
+            }
+          }
+        }
+        // 生成 condition_exprs 并收集它们
+        ObSEArray<ObExpr*, 16> condition_exprs;
+        for (int64_t i = share::aggregate::WINDOW_FUNNEL_CONDITION_START_IDX;
+              OB_SUCC(ret) && i < raw_expr.get_real_param_count(); ++i) {
+          ObExpr *expr = nullptr;
+          const ObRawExpr &param_raw_expr = *raw_expr.get_real_param_exprs().at(i);
+          if (OB_FAIL(generate_rt_expr(param_raw_expr, expr))) {
+            LOG_WARN("failed to generate_rt_expr", K(ret));
+          } else if (OB_ISNULL(expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expr is null ", K(ret), K(expr));
+          } else if (OB_FAIL(all_param_exprs.push_back(expr))) {
+            LOG_WARN("failed to push_back param_expr", K(ret));
+          } else if (OB_FAIL(condition_exprs.push_back(expr))) {
+            LOG_WARN("failed to push_back condition_expr", K(ret));
+          }
+        }
+      }
+    } else {
       const ObOrderDirection order_direction = default_asc_direction();
       const bool is_ascending = is_ascending_direction(order_direction);
       const common::ObCmpNullPos null_pos = ((is_null_first(order_direction) ^ is_ascending)

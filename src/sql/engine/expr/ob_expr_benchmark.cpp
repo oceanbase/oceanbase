@@ -102,7 +102,6 @@ int ObExprBenchmark::eval_benchmark_batch(const ObExpr &expr,
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       result[j].set_null();
     }
     if (!loop_count->is_null() && loop_count->get_int() < 0) {
@@ -124,7 +123,6 @@ int ObExprBenchmark::eval_benchmark_batch(const ObExpr &expr,
           OZ (clear_all_flags(exprs_to_clear, ctx));
           OZ (expr.args_[1]->eval_batch(ctx, skip, batch_size));
         }
-        OX (eval_flags.set(j));
         OX (result[j].set_int32(0));
       }
     }

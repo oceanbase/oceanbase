@@ -18,6 +18,7 @@
 #include "sql/resolver/ddl/ob_drop_mlog_stmt.h"
 #include "sql/resolver/ddl/ob_create_database_stmt.h"
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
+#include "sql/resolver/ddl/ob_alter_view_stmt.h"
 #include "src/sql/resolver/ddl/ob_sequence_stmt.h"
 #include "sql/resolver/ddl/ob_create_outline_stmt.h"
 #include "sql/resolver/ddl/ob_alter_outline_stmt.h"
@@ -1688,6 +1689,36 @@ int get_alter_table_stmt_need_privs(
           ADD_NEED_PRIV(need_priv);
         }
       }
+    }
+  }
+  return ret;
+}
+
+int get_alter_view_stmt_need_privs(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (OB_UNLIKELY(stmt::T_ALTER_VIEW != basic_stmt->get_stmt_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Stmt type should be T_ALTER_VIEW",
+             K(ret), "stmt type", basic_stmt->get_stmt_type());
+  } else {
+    ObNeedPriv need_priv;
+    const ObAlterViewStmt *stmt = static_cast<const ObAlterViewStmt*>(basic_stmt);
+    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, stmt->get_database_name()))) {
+      LOG_WARN("Can not alter view in the database", K(session_priv), K(ret),
+               "database_name", stmt->get_database_name());
+    } else {
+      need_priv.db_ = stmt->get_database_name();
+      need_priv.table_ = stmt->get_view_name();
+      need_priv.priv_set_ = OB_PRIV_ALTER;
+      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      ADD_NEED_PRIV(need_priv);
     }
   }
   return ret;

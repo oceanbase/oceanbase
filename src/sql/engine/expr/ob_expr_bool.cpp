@@ -248,7 +248,6 @@ static int eval_vector_expr_bool(const ObExpr &expr,
         res_vec->set_int(idx, static_cast<int64_t>(arg_is_true));
       }
     }
-    eval_flags.set_all(bound.start(), bound.end());
   } else {
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {
@@ -264,7 +263,6 @@ static int eval_vector_expr_bool(const ObExpr &expr,
           res_vec->set_int(idx, static_cast<int64_t>(arg_is_true));
         }
       }
-      eval_flags.set(idx);
     }
   }
   return ret;

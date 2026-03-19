@@ -117,17 +117,14 @@ static int inner_decint_div_mysql_vec_fn(VECTOR_EVAL_FUNC_ARG_DECL)
         ret = div_fn(*res_vec, *l_vec, *r_vec, i, round_up_scale, is_err_div_by_zero,
                      expr.div_calc_scale_);
       }
-      if (OB_SUCC(ret)) { eval_flags.set_all(bound.start(), bound.end()); }
     } else {
       for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
         if (skip.at(i) || eval_flags.at(i)) {
         } else if (l_vec->is_null(i) || r_vec->is_null(i)) {
           res_vec->set_null(i);
-          eval_flags.set(i);
         } else {
           ret = div_fn(*res_vec, *l_vec, *r_vec, i, round_up_scale, is_err_div_by_zero,
                        expr.div_calc_scale_);
-          if (OB_SUCC(ret)) { eval_flags.set(i); }
         }
       }
     }
@@ -171,13 +168,9 @@ int ObExprDiv::decint_div_mysql_batch_fn(BATCH_EVAL_FUNC_ARG_DECL)
       if (skip.at(i) || eval_flags.at(i)) {
       } else if (l_vec.at(i)->is_null() || r_vec.at(i)->is_null()) {
         res_datums[i].set_null();
-        eval_flags.set(i);
       } else {
         ret = div_fn(res_datums[i], *l_vec.at(i), *r_vec.at(i), expr.is_error_div_by_zero_,
                      round_up_scale, expr.div_calc_scale_);
-        if (OB_SUCC(ret)) {
-          eval_flags.set(i);
-        }
       }
     }
   }

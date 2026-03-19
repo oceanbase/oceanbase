@@ -62,7 +62,6 @@ int ObExprNvl2Oracle::calc_nvl2_oracle_expr_batch(const ObExpr &expr,
       if (skip.at(i) || eval_flags.at(i)) {
         continue;
       }
-      eval_flags.set(i);
       ObDatum *arg0 = args0.at(i);
       ObDatum *arg1 = args1.at(i);
       ObDatum *arg2 = args2.at(i);

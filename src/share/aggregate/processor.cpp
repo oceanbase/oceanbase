@@ -556,10 +556,30 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
     ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(i);
     bool extra_store_inited = false;
     switch (aggr_info.get_expr_type()) {
+    case T_FUN_WINDOW_FUNNEL: {
+      agg_ctx.need_advance_collect_ = true;
+      ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);
+      if (OB_FAIL(alloc_extra_stores(agg_ctx, extra))) {
+        SQL_LOG(WARN, "alloc extra struct failed", K(ret));
+      } else {
+        WindowFunnelVecExtraResult *&window_funnel_store = extra->window_funnel_store_;
+        if (nullptr == window_funnel_store) {
+          void *tmp_buf = NULL;
+          if (OB_ISNULL(tmp_buf = agg_ctx.allocator_.alloc(sizeof(WindowFunnelVecExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else if (OB_FALSE_IT(window_funnel_store = new (tmp_buf) WindowFunnelVecExtraResult(
+                                  extra_allocator, *agg_ctx.op_monitor_info_))) {
+            // do nothing
+          }
+        }
+      }
+      break;
+    }
     case T_FUN_WM_CONCAT:
     case T_FUN_KEEP_WM_CONCAT:
     case T_FUN_GROUP_CONCAT: {
-      if (aggr_info.has_order_by_) {
+      if (aggr_info.has_order_by_ || aggr_info.get_expr_type() == T_FUN_WINDOW_FUNNEL) {
         agg_ctx.need_advance_collect_ = true;
         ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);
 
@@ -835,14 +855,14 @@ int Processor::single_row_agg_batch(AggrRowPtr *agg_rows, const int64_t batch_si
   return ret;
 }
 
-int Processor::eval_aggr_param_batch(const ObBatchRows &brs)
+int Processor::eval_aggr_param_batch(const ObBatchRows &brs, const uint16_t start_idx, const uint16_t end_idx, bool all_rows_active)
 {
   int ret = OB_SUCCESS;
-  bool need_calc_param = (brs.size_ != 0);
+  bool need_calc_param = end_idx > start_idx;
   for (int i = 0; OB_SUCC(ret) && need_calc_param && i < agg_ctx_.aggr_infos_.count(); i++) {
     ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(i);
     for (int j = 0; OB_SUCC(ret) && j < aggr_info.param_exprs_.count(); j++) {
-      if (OB_FAIL(aggr_info.param_exprs_.at(j)->eval_vector(agg_ctx_.eval_ctx_, brs))) {
+      if (OB_FAIL(aggr_info.param_exprs_.at(j)->eval_vector(agg_ctx_.eval_ctx_, *brs.skip_, sql::EvalBound(brs.size_, start_idx, end_idx, all_rows_active)))) {
         SQL_LOG(WARN, "eval params batch failed", K(ret));
       }
     }

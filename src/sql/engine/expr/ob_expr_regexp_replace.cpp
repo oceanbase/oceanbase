@@ -329,7 +329,6 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
                                       VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
                                       expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
       }
-      eval_flags.set(i);
     }
   } else if (lib::is_mysql_mode() && !pattern->is_null(0) && pattern->get_string(0).empty()) {
     if (NULL == match_type || !match_type->is_null(0)) {
@@ -341,7 +340,6 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
           continue;
         } else {
           res_vec->set_null(i);
-          eval_flags.set(i);
         }
       }
     }
@@ -429,7 +427,6 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
                  && ob_is_empty_lob(expr.args_[0]->datum_meta_.type_, text_vec,
                                     expr.args_[0]->obj_meta_.has_lob_header(), i)) {
         res_vec->set_string(i, text_vec->get_string(i));
-        eval_flags.set(i);
       } else {
         ObString text_utf16;
         ObString text_str;
@@ -465,7 +462,6 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
                     res_replace, is_no_pattern_to_replace, res_coll_type, out_alloc, tmp_alloc, i);
         }
       }
-      eval_flags.set(i);
     }
   }
   #undef GET_VECTOR
@@ -507,7 +503,6 @@ int ObExprRegexpReplace::vector_hs_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL)
                                       VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
                                       expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
       }
-      eval_flags.set(i);
     }
   } else if (lib::is_mysql_mode() && !pattern->is_null(0) && pattern->get_string(0).empty()) {
     if (NULL == match_type || !match_type->is_null(0)) {
@@ -519,7 +514,6 @@ int ObExprRegexpReplace::vector_hs_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL)
           continue;
         } else {
           res_vec->set_null(i);
-          eval_flags.set(i);
         }
       }
     }
@@ -615,7 +609,6 @@ int ObExprRegexpReplace::vector_hs_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL)
                  && ob_is_empty_lob(expr.args_[0]->datum_meta_.type_, text_vec,
                                     expr.args_[0]->obj_meta_.has_lob_header(), i)) {
         res_vec->set_string(i, text_vec->get_string(i));
-        eval_flags.set(i);
       } else {
         ObString text_utf8;
         ObString text_str;
@@ -651,7 +644,6 @@ int ObExprRegexpReplace::vector_hs_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL)
                     res_replace, is_no_pattern_to_replace, res_coll_type, out_alloc, tmp_alloc, i);
         }
       }
-      eval_flags.set(i);
     }
   }
   #undef GET_VECTOR

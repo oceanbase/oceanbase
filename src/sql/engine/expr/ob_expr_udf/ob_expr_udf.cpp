@@ -708,8 +708,6 @@ int ObExprUDF::eval_external_udf_vector(const ObExpr &expr,
 
         if (OB_FAIL(transfer_obj_to_vec(buf, res_vec, idx, expr, ctx))) {
           LOG_WARN("failed to transfer_obj_to_vec", K(ret), K(buf), K(res_vec), K(idx));
-        } else {
-          eval_flags.set(idx);
         }
       }
     }
@@ -808,7 +806,6 @@ int ObExprUDF::eval_udf_vector(VECTOR_EVAL_FUNC_ARG_DECL)
     }
     OZ (build_udf_ctx(expr, ctx.exec_ctx_, udf_ctx));
     OX (batch_info_guard.set_batch_idx(idx));
-    OX (eval_flags.set(idx));
     OZ (transfer_vec_to_obj(udf_ctx->get_obj_stack(), arg_vec, expr, idx));
     OZ (eval_udf_single(expr, ctx, *udf_ctx, result));
     OZ (transfer_obj_to_vec(result, res_vec, idx, expr, ctx));
@@ -836,7 +833,6 @@ int ObExprUDF::eval_udf_batch(
     ObExprUDFCtx *udf_ctx = nullptr;
     OZ (build_udf_ctx(expr, ctx.exec_ctx_, udf_ctx));
     OX (batch_info_guard.set_batch_idx(j));
-    OX (eval_flags.set(j));
     OZ (transfer_datum_to_objs(expr, ctx, udf_ctx->get_obj_stack()));
     OZ (eval_udf_single(expr, ctx, *udf_ctx, result));
     OZ (res_datum.at(j)->from_obj(result, expr.obj_datum_map_));

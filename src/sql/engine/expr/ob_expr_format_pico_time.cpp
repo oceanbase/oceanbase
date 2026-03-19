@@ -80,7 +80,6 @@ int ObExprFormatPicoTime::eval_format_pico_time_batch(const ObExpr &expr,
       } else {
         // do nothing
       }
-      eval_flags.set(i);
     }
   }
   return ret;

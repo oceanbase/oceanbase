@@ -210,7 +210,6 @@ int ObExprAIEmbed::get_vector_params(const ObExpr &expr,
         } else if (OB_FAIL(contents.push_back(content))) {
           LOG_WARN("fail to push back content", K(ret), K(idx));
         }
-        eval_flags.set(idx);
       }
     }
   }
@@ -260,7 +259,6 @@ int ObExprAIEmbed::pack_json_array_to_res_vector(const ObExpr &expr,
           } else if (OB_FAIL(ObAIFuncJsonUtils::inner_pack_raw_str_to_res(raw_str, expr, ctx, res_vec, idx))) {
             LOG_WARN("fail to pack json result", K(ret));
           }
-          eval_flags.set(idx);
           idx++;
         }
         current_batch_size++;

@@ -83,7 +83,8 @@ inline bool has_extra_info(ObAggrInfo &info)
   case T_FUN_TOP_FRE_HIST:
   case T_FUN_AGG_UDF:
   case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
-  case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
+  case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
+  case T_FUN_WINDOW_FUNNEL: {
     has = true;
     break;
   }
@@ -1208,6 +1209,300 @@ public:
 
 private:
   IAggregate *agg_;
+};
+
+template<typename Aggregate>
+class WindowFunnelWrapper : public BatchAggregateWrapper<WindowFunnelWrapper<Aggregate>>
+{
+  using BaseClass = BatchAggregateWrapper<WindowFunnelWrapper<Aggregate>>;
+public:
+  static const VecValueTypeClass IN_TC = Aggregate::IN_TC;
+  static const VecValueTypeClass OUT_TC = Aggregate::OUT_TC;
+  static const int64_t SMALL_BATCH_SIZE = 16;
+public:
+  WindowFunnelWrapper(): agg_(nullptr) {}
+
+  inline void set_inner_aggregate(Aggregate *agg) {
+    agg_ = agg;
+  }
+
+  int init(RuntimeContext &agg_ctx, const int64_t agg_col_id, ObIAllocator &allocator) override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(agg_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "invalid null aggregate", K(ret));
+    } else if (OB_FAIL(agg_->init(agg_ctx, agg_col_id, allocator))) {
+      SQL_LOG(WARN, "init aggregate failed", K(ret));
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt, typename  ConditionFmt, bool fast_path>
+  OB_INLINE int add_condition_col(RuntimeContext &agg_ctx, ColumnFmt &time_column,
+                                  ConditionFmt &conditios_column, const sql::ObBitVector &skip,
+                                  const sql::EvalBound &bound, const int32_t condition_idx,
+                                  const int32_t agg_col_id, char *agg_cell)
+  {
+    int ret = OB_SUCCESS;
+    WindowFunnelVecExtraResult *extra =
+          reinterpret_cast<WindowFunnelVecExtraResult *>(agg_ctx.get_extra_window_funnel_store(agg_col_id, agg_cell));
+    for (int64_t i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+      if (!fast_path) {
+        if (skip.at(i) || conditios_column.is_null(i) || time_column.is_null(i)) {
+          continue;
+        }
+      }
+      if (conditios_column.get_bool(i)) {
+        RTCType<IN_TC> time = *reinterpret_cast<const RTCType<IN_TC> *>(time_column.get_payload(i));
+        ret = extra->add_event(condition_idx, time, agg_ctx.allocator_,
+                               agg_ctx.aggr_infos_.at(agg_col_id), agg_ctx.eval_ctx_,
+                               agg_ctx.op_monitor_info_, agg_ctx.io_event_observer_, agg_ctx.in_window_func_);
+      }
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt>
+  OB_INLINE int add_batch_rows(RuntimeContext &agg_ctx, const sql::ObBitVector &skip,
+                     const sql::EvalBound &bound, const ObExpr &param_expr,
+                     const int32_t agg_col_id, char *agg_cell, const RowSelector row_sel)
+  {
+    int ret = OB_SUCCESS;
+    ObEvalCtx &ctx = agg_ctx.eval_ctx_;
+    ColumnFmt *columns = static_cast<ColumnFmt *>(param_expr.get_vector(ctx));
+    bool all_not_null = !columns->has_null();
+    bool is_all_active = bound.get_all_rows_active();
+    void *tmp_res = nullptr;
+    int64_t calc_info = 0;
+    ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(agg_col_id);
+    OB_ASSERT(row_sel.is_empty());
+    for (int64_t cond_idx = WINDOW_FUNNEL_CONDITION_START_IDX;
+        OB_SUCC(ret) && cond_idx < aggr_info.param_exprs_.count(); cond_idx++) {
+      const ObExpr *condition_expr = agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_.at(cond_idx);
+      VectorFormat fmt = condition_expr->get_format(ctx);
+      ObIVector *condition_column = condition_expr->get_vector(ctx);
+      all_not_null = all_not_null && !condition_column->has_null();
+      if (is_all_active && all_not_null) {
+        switch (fmt) {
+        case common::VEC_FIXED: {
+          ret = add_condition_col<ColumnFmt, fixlen_fmt<VEC_TC_INTEGER>, true>(
+            agg_ctx, *columns, *static_cast<fixlen_fmt<VEC_TC_INTEGER> *>(condition_column),
+            skip, bound, cond_idx - WINDOW_FUNNEL_CONDITION_START_IDX, agg_col_id, agg_cell);
+          break;
+        }
+        case common::VEC_UNIFORM: {
+          ret = add_condition_col<ColumnFmt, uniform_fmt<VEC_TC_INTEGER, false>, true>(
+            agg_ctx, *columns, *static_cast<uniform_fmt<VEC_TC_INTEGER, false> *>(condition_column),
+            skip, bound, cond_idx - WINDOW_FUNNEL_CONDITION_START_IDX, agg_col_id, agg_cell);
+          break;
+        }
+        case common::VEC_UNIFORM_CONST: {
+          ret = add_condition_col<ColumnFmt, uniform_fmt<VEC_TC_INTEGER, true>, true>(
+            agg_ctx, *columns, *static_cast<uniform_fmt<VEC_TC_INTEGER, true> *>(condition_column),
+            skip, bound, cond_idx - WINDOW_FUNNEL_CONDITION_START_IDX, agg_col_id, agg_cell);
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+        }
+        }
+
+      } else {
+        switch (fmt) {
+        case common::VEC_FIXED: {
+          ret = add_condition_col<ColumnFmt, fixlen_fmt<VEC_TC_INTEGER>, false>(
+            agg_ctx, *columns, *static_cast<fixlen_fmt<VEC_TC_INTEGER> *>(condition_column),
+            skip, bound, cond_idx - WINDOW_FUNNEL_CONDITION_START_IDX, agg_col_id, agg_cell);
+          break;
+        }
+        case common::VEC_UNIFORM: {
+          ret = add_condition_col<ColumnFmt, uniform_fmt<VEC_TC_INTEGER, false>, false>(
+            agg_ctx, *columns, *static_cast<uniform_fmt<VEC_TC_INTEGER, false> *>(condition_column),
+            skip, bound, cond_idx - WINDOW_FUNNEL_CONDITION_START_IDX, agg_col_id, agg_cell);
+          break;
+        }
+        case common::VEC_UNIFORM_CONST: {
+          ret = add_condition_col<ColumnFmt, uniform_fmt<VEC_TC_INTEGER, true>, false>(
+            agg_ctx, *columns, *static_cast<uniform_fmt<VEC_TC_INTEGER, true> *>(condition_column),
+            skip, bound, cond_idx - WINDOW_FUNNEL_CONDITION_START_IDX, agg_col_id, agg_cell);
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+        }
+        }
+      }
+    }
+    return ret;
+  }
+
+  int add_batch_rows(RuntimeContext &agg_ctx, const int32_t agg_col_id,
+                     const sql::ObBitVector &skip, const sql::EvalBound &bound, char *agg_cell,
+                     const RowSelector row_sel = RowSelector{}) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(agg_cell);
+    OB_ASSERT(agg_ != NULL);
+    ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
+    ObIArray<ObExpr *> &param_exprs = aggr_info.param_exprs_;
+    OB_ASSERT(0 < param_exprs.count());
+
+    WindowFunnelVecExtraResult *extra =
+      reinterpret_cast<WindowFunnelVecExtraResult *>(agg_ctx.get_extra_window_funnel_store(agg_col_id, agg_cell));
+
+    if (OB_ISNULL(extra)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "invalid null extra", K(ret), K(agg_col_id), KP(extra));
+    } else {
+      sql::ObEvalCtx &ctx = agg_ctx.eval_ctx_;
+      ObIArray<ObExpr *> &param_exprs = aggr_info.param_exprs_;
+      VectorFormat fmt = VEC_INVALID;
+      ObExpr *param_expr = nullptr;
+      fmt = param_exprs.at(0)->get_format(ctx);
+      param_expr = param_exprs.at(0);
+      switch (fmt) {
+      case common::VEC_UNIFORM: {
+        ret = add_batch_rows<uniform_fmt<IN_TC, false>>(
+          agg_ctx, skip, bound, *param_expr, agg_col_id, agg_cell, row_sel);
+        break;
+      }
+      case common::VEC_UNIFORM_CONST: {
+        ret = add_batch_rows<uniform_fmt<IN_TC, true>>(
+          agg_ctx, skip, bound, *param_expr, agg_col_id, agg_cell, row_sel);
+        break;
+      }
+      case common::VEC_FIXED: {
+        ret = add_batch_rows<fixlen_fmt<IN_TC>>(
+          agg_ctx, skip, bound, *param_expr, agg_col_id, agg_cell, row_sel);
+        break;
+      }
+      case common::VEC_DISCRETE: {
+        ret = add_batch_rows<discrete_fmt<IN_TC>>(
+          agg_ctx, skip, bound, *param_expr, agg_col_id, agg_cell, row_sel);
+        break;
+      }
+      case common::VEC_CONTINUOUS: {
+        ret = add_batch_rows<continuous_fmt<IN_TC>>(
+          agg_ctx, skip, bound, *param_expr, agg_col_id, agg_cell, row_sel);
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "unexpected fmt", K(fmt), K(*param_exprs.at(0)));
+      }
+      }
+    }
+    return ret;
+  }
+
+  int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx, AggrRowPtr group_row,
+                         AggrRowPtr rollup_row, int64_t cur_rollup_group_idx,
+                         int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_ERR_UNEXPECTED;
+    return ret;
+  }
+
+  int eval_group_extra_result(RuntimeContext &agg_ctx, const int32_t agg_col_id,
+                              const int32_t group_id) override
+  {
+    int ret = OB_SUCCESS;
+    OB_ASSERT(agg_col_id < agg_ctx.aggr_infos_.count());
+    OB_ASSERT(agg_ctx.aggr_infos_.at(agg_col_id).expr_ != NULL);
+    ObExpr *agg_expr = agg_ctx.aggr_infos_.at(agg_col_id).expr_;
+    char *agg_cell = nullptr;
+    int32_t agg_cell_len = 0;
+    agg_ctx.get_agg_payload(agg_col_id, group_id, (const char *&)agg_cell, agg_cell_len);
+    OB_ASSERT(agg_ != NULL);
+    sql::ObEvalCtx &ctx = agg_ctx.eval_ctx_;
+    WindowFunnelVecExtraResult *extra = reinterpret_cast<WindowFunnelVecExtraResult *>(
+      agg_ctx.get_extra_window_funnel_store(agg_col_id, (const char *)agg_cell));
+    ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
+    bool use_sort = extra->sort_inited_;
+    int64_t calc_info = 0;
+    if (OB_ISNULL(extra)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "Invalid null extra or extra not inited", K(ret));
+    } else if (OB_FAIL(extra->prepare_for_eval(aggr_info, agg_ctx.eval_ctx_, agg_ctx.op_monitor_info_,
+                                               agg_ctx.io_event_observer_, agg_ctx.allocator_, agg_ctx.in_window_func_))) {
+      SQL_LOG(WARN, "prepare for eval failed", K(ret));
+      // After eval_group_extra_result(), extra will be reuse(), so need to update agg_cell using event_list_.
+    } else if (!use_sort && OB_FAIL(agg_->eval_events_list(agg_ctx, agg_col_id, agg_cell))) {
+      SQL_LOG(WARN, "eval events list failed", K(ret));
+    } else if (use_sort) {
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      char *skip_mem = nullptr;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(skip_mem = (char *)alloc_guard.get_allocator().alloc(
+                            ObBitVector::memory_size(ctx.max_batch_size_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_LOG(WARN, "allocate memory failed", K(ret));
+      } else {
+        ObBitVector &mock_skip = *to_bit_vector(skip_mem);
+        mock_skip.reset(ctx.max_batch_size_);
+        while (OB_SUCC(ret)) {
+          int64_t read_rows = 0;
+          if (OB_FAIL(extra->get_next_batch(ctx, read_rows))) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              SQL_LOG(WARN, "get row from distinct set failed", K(ret));
+            }
+            break;
+          } else if (read_rows <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_LOG(WARN, "read unexpected zero rows", K(ret));
+          } else {
+            sql::EvalBound bound(read_rows, true);
+            if (OB_FAIL(agg_->add_batch_rows(agg_ctx, agg_col_id, mock_skip, bound, agg_cell))) {
+              SQL_LOG(WARN, "add batch rows failed", K(ret));
+            }
+          }
+        }
+      }
+    }
+    return ret;
+  }
+
+  template <typename ResultFmt>
+  int collect_group_result(RuntimeContext &agg_ctx, const ObExpr &agg_expr, int32_t agg_col_id,
+                           const char *agg_cell, const int32_t agg_cell_len)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(agg_->template collect_group_result<ResultFmt>(
+        agg_ctx, agg_expr, agg_col_id, agg_cell, agg_cell_len))) {
+      SQL_LOG(WARN, "collect group result failed", K(ret));
+    }
+    return ret;
+  }
+
+  inline int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
+                         const bool is_null, const char *data, const int32_t data_len,
+                         int32_t agg_col_idx, char *agg_cell) override
+  {
+    // FIXME: opt performance
+    int ret = OB_ERR_UNEXPECTED;
+    return ret;
+  }
+  void reuse() override
+  {
+    if (agg_ != NULL) {
+      agg_->reuse();
+    }
+  }
+
+  void destroy() override
+  {
+    if (agg_ != NULL) {
+      agg_->destroy();
+      agg_ = nullptr;
+    }
+  }
+  TO_STRING_KV("wrapper_type", "window_funnel_wrapper", KP_(agg));
+
+private:
+  Aggregate *agg_;
 };
 
 //helper functions

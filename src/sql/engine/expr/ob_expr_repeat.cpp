@@ -360,7 +360,6 @@ int ObExprRepeat::repeat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       batch_info_guard.set_batch_idx(idx);
       if (arg0_vec->is_null(idx) || arg1_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         // prepare & init needed params
         ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
@@ -395,7 +394,6 @@ int ObExprRepeat::repeat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
             res_vec->set_string(idx, output);
           }
         }
-        eval_flags.set(idx);
       }
     }
   }

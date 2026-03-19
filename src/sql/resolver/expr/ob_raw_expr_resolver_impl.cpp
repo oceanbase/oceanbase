@@ -1026,7 +1026,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
       case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
       case T_FUN_ARG_MAX:
-      case T_FUN_ARG_MIN: {
+      case T_FUN_ARG_MIN:
+      case T_FUN_WINDOW_FUNNEL: {
         if (OB_FAIL(process_agg_node(node, expr))) {
           LOG_WARN("fail to process agg node", K(ret), K(node));
         }
@@ -5892,6 +5893,68 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
           LOG_WARN("fail to add param expr", K(ret));
         }
       }
+    } else if (T_FUN_WINDOW_FUNNEL == node->type_) {
+      const ParseNode *window_node = nullptr;
+      const ParseNode *mode_node = nullptr;
+      const ParseNode *expr_list_node = nullptr;
+      const ParseNode *timestamp_node = nullptr;
+      ObRawExpr *timestamp_expr = nullptr;
+      ObRawExpr *window_expr = nullptr;
+      ObRawExpr *mode_expr = nullptr;
+      ObRawExpr *pseudo_time_expr = nullptr;
+      ObRawExpr *pseudo_event_idx_expr = nullptr;
+      if (OB_UNLIKELY(3 != node->num_child_
+                      || OB_ISNULL(window_node = node->children_[0])
+                      || OB_ISNULL(mode_node = node->children_[1])
+                      || OB_ISNULL(expr_list_node = node->children_[2])
+                      || expr_list_node->num_child_ <= 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error, node expected 3 arguments", K(ret), K(node->num_child_));
+      } else if (OB_ISNULL(timestamp_node = expr_list_node->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error, timestamp node is null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(timestamp_node, timestamp_expr)))) {
+        LOG_WARN("fail to recursive resolve timestamp expr", K(ret));
+      } else if (OB_FAIL(agg_expr->add_real_param_expr(timestamp_expr))) {
+        LOG_WARN("fail to add param expr", K(ret));
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(window_node, window_expr)))) {
+        LOG_WARN("fail to recursive resolve window expr", K(ret));
+      } else if (OB_FAIL(agg_expr->add_real_param_expr(window_expr))) {
+        LOG_WARN("fail to add param expr", K(ret));
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(mode_node, mode_expr)))) {
+        LOG_WARN("fail to recursive resolve mode expr", K(ret));
+      } else if (OB_FAIL(agg_expr->add_real_param_expr(mode_expr))) {
+        LOG_WARN("fail to add param expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_pseudo_columns_for_window_funnel(ctx_.expr_factory_,
+                                                                                *(ctx_.session_info_),
+                                                                                timestamp_expr,
+                                                                                pseudo_time_expr,
+                                                                                pseudo_event_idx_expr))) {
+        LOG_WARN("fail to build pseudo columns for window funnel", K(ret));
+      } else if (OB_FAIL(agg_expr->add_real_param_expr(pseudo_time_expr))) {
+        LOG_WARN("fail to add param expr", K(ret));
+      } else if (OB_FAIL(agg_expr->add_real_param_expr(pseudo_event_idx_expr))) {
+        LOG_WARN("fail to add param expr", K(ret));
+      } else {
+        for (int64_t i = 1; OB_SUCC(ret) && i < expr_list_node->num_child_; ++i) {
+          ObRawExpr *condition_expr = nullptr;
+          ParseNode *condition_node = expr_list_node->children_[i];
+          ObRawExpr *new_condition_expr = nullptr;
+          if (OB_ISNULL(condition_node)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected error, condition node is null", K(ret));
+          } else if (OB_FAIL(SMART_CALL(recursive_resolve(condition_node, condition_expr)))) {
+            LOG_WARN("fail to recursive resolve condition expr", K(ret));
+          } else if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(condition_expr, new_condition_expr, ctx_.expr_factory_))) {
+            LOG_WARN("fail to try add bool expr", K(ret));
+          } else if (OB_ISNULL(new_condition_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("new condition expr is null", K(ret));
+          } else if (OB_FAIL(agg_expr->add_real_param_expr(new_condition_expr))) {
+            LOG_WARN("fail to add param expr", K(ret));
+          }
+        }
+      }
     } else if (T_FUN_COUNT != node->type_
         || (T_FUN_COUNT == node->type_ && 2 == node->num_child_ && T_ALL == node->children_[0]->type_)
         || T_FUN_GROUPING == node->type_) {
@@ -8664,7 +8727,8 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
         || T_FUN_JSON_ARRAYAGG == func_type
         || T_FUN_JSON_OBJECTAGG == func_type
         || T_FUN_ARG_MIN == func_type
-        || T_FUN_ARG_MAX == func_type) {
+        || T_FUN_ARG_MAX == func_type
+        || T_FUN_WINDOW_FUNNEL == func_type) {
       ctx_.is_win_agg_ = true;
       if (T_FUN_PL_AGG_UDF == func_type) {
         ParseNode *agg_udf_node = NULL;

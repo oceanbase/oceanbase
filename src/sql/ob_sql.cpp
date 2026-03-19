@@ -41,6 +41,7 @@
 #include "pl/ob_pl_resolver.h"
 #include "sql/ob_sql_ccl_rule_manager.h"
 #include "share/diagnosis/ob_runtime_profile.h"
+#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {
@@ -1498,9 +1499,7 @@ int ObSql::do_real_prepare(const ObString &sql,
     }
   }
   //if the error code is ob_timeout, we add more error info msg for dml query.
-  if (OB_UNLIKELY(OB_TIMEOUT == ret && session.is_user_session())) {
-    LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - session.get_query_start_time());
-  }
+  ObSQLUtils::log_user_error_for_timeout(ret, session, result.get_exec_context().get_physical_plan_ctx());
   LOG_INFO("add ps cache", K(info_ctx.normalized_sql_), K(param_cnt), K(ret));
   return ret;
 }
@@ -5520,9 +5519,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
     result.get_physical_plan()->set_gen_plan_usec(ObTimeUtility::current_time() - gen_plan_start_time);
   }
   //if the error code is ob_timeout, we add more error info msg for dml query.
-  if (OB_UNLIKELY(OB_TIMEOUT == ret && session.is_user_session())) {
-    LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - result.get_session().get_query_start_time());
-  }
+  ObSQLUtils::log_user_error_for_timeout(ret, session, result.get_exec_context().get_physical_plan_ctx());
   return ret;
 }
 

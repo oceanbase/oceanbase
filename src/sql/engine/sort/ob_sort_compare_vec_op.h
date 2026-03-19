@@ -122,6 +122,15 @@ template <typename Store_Row, bool has_addon>
 class GeneralCompare : public CompareBase
 {
 public:
+  struct StableTopNSortKey
+  {
+  public:
+    StableTopNSortKey() : row_(nullptr), seq_num_(0) {}
+    StableTopNSortKey(const Store_Row *row, int64_t seq_num) : row_(const_cast<Store_Row *>(row)), seq_num_(seq_num) {}
+    Store_Row *row_;
+    int64_t seq_num_;
+    TO_STRING_KV(KP(row_), K(seq_num_));
+  };
   using SortVecOpChunk = ObSortVecOpChunk<Store_Row, has_addon>;
   GeneralCompare(ObIAllocator &allocator) : CompareBase(allocator)
   {}
@@ -134,6 +143,7 @@ public:
   bool operator()(const Store_Row *r, ObEvalCtx &eval_ctx);
   int with_ties_cmp(const Store_Row *r, ObEvalCtx &eval_ctx);
   int with_ties_cmp(const Store_Row *l, const Store_Row *r);
+  int stable_cmp(const StableTopNSortKey &l, const StableTopNSortKey &r);
 
 protected:
   int compare(const Store_Row *l, const Store_Row *r, const RowMeta *row_meta);
@@ -145,6 +155,15 @@ class SingleColCompare : public CompareBase
 {
   typedef int (*CmpFunc) (const void*, const void*);
 public:
+  struct StableTopNSortKey
+  {
+  public:
+    StableTopNSortKey() : row_(nullptr), seq_num_(0) {}
+    StableTopNSortKey(const Store_Row *row, int64_t seq_num) : row_(const_cast<Store_Row *>(row)), seq_num_(seq_num) {}
+    Store_Row *row_;
+    int64_t seq_num_;
+    TO_STRING_KV(KP(row_), K(seq_num_));
+  };
   using SortVecOpChunk = ObSortVecOpChunk<Store_Row, false>;
   SingleColCompare(ObIAllocator &allocator) : CompareBase(allocator)
   {}
@@ -161,6 +180,7 @@ public:
   OB_INLINE bool operator()(const Store_Row *r, ObEvalCtx &eval_ctx);
   OB_INLINE int with_ties_cmp(const Store_Row *r, ObEvalCtx &eval_ctx);
   OB_INLINE int with_ties_cmp(const Store_Row *l, const Store_Row *r);
+  int stable_cmp(const StableTopNSortKey &l, const StableTopNSortKey &r);
 
 protected:
   OB_INLINE int compare(const Store_Row *l, const Store_Row *r, const RowMeta *row_meta);
@@ -214,6 +234,15 @@ class FixedCompare : public CompareBase
 
 public:
   using SortVecOpChunk = ObSortVecOpChunk<Store_Row, has_addon>;
+  struct StableTopNSortKey
+  {
+  public:
+    StableTopNSortKey() : row_(nullptr), seq_num_(0) {}
+    StableTopNSortKey(const Store_Row *row, int64_t seq_num) : row_(const_cast<Store_Row *>(row)), seq_num_(seq_num) {}
+    Store_Row *row_;
+    int64_t seq_num_;
+    TO_STRING_KV(KP(row_), K(seq_num_));
+  };
   FixedCompare(ObIAllocator &allocator) : CompareBase(allocator), basic_cmp_funcs_(allocator)
   {}
   ~FixedCompare()
@@ -234,6 +263,7 @@ public:
   bool operator()(const Store_Row *r, ObEvalCtx &eval_ctx);
   int with_ties_cmp(const Store_Row *r, ObEvalCtx &eval_ctx);
   int with_ties_cmp(const Store_Row *l, const Store_Row *r);
+  int stable_cmp(const StableTopNSortKey &l, const StableTopNSortKey &r);
 
 protected:
   int compare(const Store_Row *l, const Store_Row *r, const RowMeta *row_meta);

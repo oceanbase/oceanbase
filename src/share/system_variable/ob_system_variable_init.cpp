@@ -979,10 +979,11 @@ static struct VarsInit{
 
     [&] (){
       ObSysVars[63].default_value_ = "0" ;
-      ObSysVars[63].info_ = "" ;
+      ObSysVars[63].info_ = "The execution timeout for SELECT statements in milliseconds(ms)" ;
       ObSysVars[63].name_ = "max_execution_time" ;
       ObSysVars[63].data_type_ = ObIntType ;
-      ObSysVars[63].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[63].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[63].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_max_execution_time" ;
       ObSysVars[63].id_ = SYS_VAR_MAX_EXECUTION_TIME ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_EXECUTION_TIME)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_MAX_EXECUTION_TIME] = 63 ;
@@ -11525,19 +11526,32 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[841].default_value_ = "5000" ;
-      ObSysVars[841].info_ = "Number of SHA256 iterations for password hash stored to disk" ;
-      ObSysVars[841].name_ = "caching_sha2_password_digest_rounds" ;
+      ObSysVars[841].default_value_ = "0" ;
+      ObSysVars[841].info_ = "Parse number in JSON with full precision (but slower)" ;
+      ObSysVars[841].name_ = "json_float_full_precision" ;
       ObSysVars[841].data_type_ = ObIntType ;
-      ObSysVars[841].min_val_ = "5000" ;
-      ObSysVars[841].max_val_ = "4095000" ;
-      ObSysVars[841].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[841].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
-      ObSysVars[841].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
+      ObSysVars[841].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[841].id_ = SYS_VAR_JSON_FLOAT_FULL_PRECISION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_JSON_FLOAT_FULL_PRECISION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_JSON_FLOAT_FULL_PRECISION] = 841 ;
+      ObSysVars[841].base_value_ = "0" ;
+    ObSysVars[841].alias_ = "OB_SV_JSON_FLOAT_FULL_PRECISION" ;
+    }();
+
+    [&] (){
+      ObSysVars[842].default_value_ = "5000" ;
+      ObSysVars[842].info_ = "Number of SHA256 iterations for password hash stored to disk" ;
+      ObSysVars[842].name_ = "caching_sha2_password_digest_rounds" ;
+      ObSysVars[842].data_type_ = ObIntType ;
+      ObSysVars[842].min_val_ = "5000" ;
+      ObSysVars[842].max_val_ = "4095000" ;
+      ObSysVars[842].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[842].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
+      ObSysVars[842].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 841 ;
-      ObSysVars[841].base_value_ = "5000" ;
-    ObSysVars[841].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 842 ;
+      ObSysVars[842].base_value_ = "5000" ;
+    ObSysVars[842].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -11546,7 +11560,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 842;
+static int64_t var_amount = 843;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

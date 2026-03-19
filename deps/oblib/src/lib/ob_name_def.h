@@ -1138,6 +1138,7 @@
 #define N_XMLSEQUENCE                       "xmlsequence"
 #define N_DELETEXML                         "deletexml"
 #define N_NLS_INITCAP                       "nls_initcap"
+#define N_NLS_CHARSET_ID                    "nls_charset_id"
 #define N_PRIV_SQL_UDT_CONSTRUCT            "_udt_construct"
 #define N_PRIV_UDT_ATTR_ACCESS              "_udt_attr_access"
 #define N_TEMP_TABLE_SSID                   "temp_table_ssid"

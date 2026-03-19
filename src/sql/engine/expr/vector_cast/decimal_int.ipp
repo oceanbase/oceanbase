@@ -90,7 +90,6 @@ struct __decint_cast_impl
             }
           }
         }
-        eval_flags.set_all(bound.start(), bound.end());
       } else {
         for (int i = bound.start(); i < bound.end(); i++) {
           if (skip.at(i) || eval_flags.at(i)) { continue; }
@@ -99,7 +98,6 @@ struct __decint_cast_impl
           } else {
             scale_up_task(i);
           }
-          eval_flags.set(i);
         }
       }
     } else {
@@ -115,7 +113,6 @@ struct __decint_cast_impl
             }
           }
         }
-        eval_flags.set_all(bound.start(), bound.end());
       } else {
         for (int i = bound.start(); i < bound.end(); i++) {
           if (skip.at(i) || eval_flags.at(i)) { continue; }
@@ -124,7 +121,6 @@ struct __decint_cast_impl
           } else {
             scale_down_task(i);
           }
-          eval_flags.set(i);
         }
       }
     }
@@ -199,7 +195,6 @@ struct __decint_cast_impl
             }
           }
         }
-        eval_flags.set_all(bound.start(), bound.end());
       } else {
         for (int i = bound.start(); i < bound.end(); i++) {
           if (skip.at(i) || eval_flags.at(i)) {
@@ -209,7 +204,6 @@ struct __decint_cast_impl
           } else {
             scale_up_task(i);
           }
-          eval_flags.set(i);
         }
       }
     } else {
@@ -227,7 +221,6 @@ struct __decint_cast_impl
             }
           }
         }
-        eval_flags.set_all(bound.start(), bound.end());
       } else {
         for (int i = bound.start(); i < bound.end(); i++) {
           if (skip.at(i) || eval_flags.at(i)) {
@@ -237,7 +230,6 @@ struct __decint_cast_impl
           } else {
             scale_down_task(i);
           }
-          eval_flags.set(i);
         }
       }
     }
@@ -321,7 +313,6 @@ struct __decint_cast_impl
             }
           }
         }
-        eval_flags.set_all(bound.start(), bound.end());
       } else {
         for (int i = bound.start(); i < bound.end(); i++) {
           if (skip.at(i) || eval_flags.at(i)) {
@@ -331,7 +322,6 @@ struct __decint_cast_impl
           } else {
             scale_up_task(i);
           }
-          eval_flags.set(i);
         }
       }
     } else {
@@ -347,7 +337,6 @@ struct __decint_cast_impl
             }
           }
         }
-        eval_flags.set_all(bound.start(), bound.end());
       } else {
         for (int i = bound.start(); i < bound.end(); i++) {
           if (skip.at(i) || eval_flags.at(i)) {
@@ -357,7 +346,6 @@ struct __decint_cast_impl
           } else {
             scale_down_task(i);
           }
-          eval_flags.set(i);
         }
       }
     }
@@ -385,7 +373,6 @@ struct __decint_cast_impl
           }
         }
       }
-      eval_flags.set_all(bound.start(), bound.end());
     } else {
       for (int i = bound.start(); i < bound.end(); i++) {
         if (skip.at(i) || eval_flags.at(i)) {
@@ -395,7 +382,6 @@ struct __decint_cast_impl
         } else {
           output_vector->set_payload(i, input_vector->get_payload(i), sizeof(in_type));
         }
-        eval_flags.set(i);
       }
     }
   }
@@ -539,7 +525,6 @@ struct __decint_cast_impl
             }
           }
           if (OB_SUCC(ret)) {
-            eval_flags.set_all(bound.start(), bound.end());
           }
         } else {
           if (!is_cast_unmb) {
@@ -551,9 +536,6 @@ struct __decint_cast_impl
               } else {
                 ret = cast_nmb(i);
               }
-              if (OB_SUCC(ret)) {
-                eval_flags.set(i);
-              }
             }
           } else {
             for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
@@ -564,7 +546,6 @@ struct __decint_cast_impl
               } else {
                 ret = cast_unmb(i);
               }
-              if (OB_SUCC(ret)) { eval_flags.set(i); }
             }
           }
         }
@@ -592,7 +573,6 @@ struct __decint_cast_impl
             }
           }
           if (OB_SUCC(ret)) {
-            eval_flags.set(i);
             tmp_alloc.free();
           }
         }

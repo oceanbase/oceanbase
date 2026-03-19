@@ -10228,6 +10228,92 @@ public:
   bool reset_view_column_infos_; // for oracle mode, recompile invalid view will reset its data type to undefined
 };
 
+struct ObAlterViewArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum AlterViewAction {
+    COMPILE_VIEW = 0,          // ALTER VIEW COMPILE
+    SET_EDITIONABLE,           // Future: ALTER VIEW EDITIONABLE
+    SET_NONEDITIONABLE,        // Future: ALTER VIEW NONEDITIONABLE
+    NO_OPERATION = 1000
+  };
+
+  ObAlterViewArg()
+    : ObDDLArg(),
+      alter_view_action_(COMPILE_VIEW),
+      tenant_id_(common::OB_INVALID_TENANT_ID),
+      view_id_(common::OB_INVALID_ID),
+      database_id_(common::OB_INVALID_ID),
+      database_name_(),
+      view_name_(),
+      target_view_error_code_(common::OB_SUCCESS),
+      alter_view_compile_args_()
+  {}
+
+  bool is_valid() const
+  {
+    return common::OB_INVALID_TENANT_ID != tenant_id_
+           && common::OB_INVALID_ID != view_id_
+           && common::OB_INVALID_ID != database_id_
+           && !view_name_.empty();
+  }
+
+  virtual bool is_allow_when_upgrade() const { return true; }
+
+  int assign(const ObAlterViewArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(ObDDLArg::assign(other))) {
+      // do nothing
+    } else if (OB_FAIL(alter_view_compile_args_.assign(other.alter_view_compile_args_))) {
+      // do nothing
+    } else {
+      alter_view_action_ = other.alter_view_action_;
+      tenant_id_ = other.tenant_id_;
+      view_id_ = other.view_id_;
+      database_id_ = other.database_id_;
+      target_view_error_code_ = other.target_view_error_code_;
+      database_name_ = other.database_name_;
+      view_name_ = other.view_name_;
+    }
+    return ret;
+  }
+
+  DECLARE_TO_STRING;
+
+  AlterViewAction alter_view_action_;
+  uint64_t tenant_id_;
+  uint64_t view_id_;
+  uint64_t database_id_;
+  common::ObString database_name_;
+  common::ObString view_name_;
+  int target_view_error_code_;  // Target view's resolve result
+  common::ObSEArray<ObDependencyObjDDLArg, 8> alter_view_compile_args_;  // Dependent views to recompile
+};
+
+struct ObAlterViewRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAlterViewRes() : ret_(common::OB_SUCCESS) {}
+
+  void reset()
+  {
+    ret_ = common::OB_SUCCESS;
+  }
+
+  int assign(const ObAlterViewRes &other)
+  {
+    ret_ = other.ret_;
+    return common::OB_SUCCESS;
+  }
+
+  DECLARE_TO_STRING;
+
+  int ret_;  // Execution result
+};
+
 struct ObRsListArg
 {
   OB_UNIS_VERSION(1);

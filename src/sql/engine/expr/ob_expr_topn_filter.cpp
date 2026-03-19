@@ -178,7 +178,6 @@ inline int ObExprTopNFilterContext::bypass(const ObExpr &expr, ObEvalCtx &ctx,
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   if (OB_FAIL(ObBitVector::flip_foreach(
           skip, batch_size, [&](int64_t idx) __attribute__((always_inline)) {
-            eval_flags.set(idx);
             results[idx].set_int(1);
             ++total_count;
             return OB_SUCCESS;
@@ -220,7 +219,6 @@ inline int ObExprTopNFilterContext::bypass(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("failed to proc_by_pass", K(res_format), K(ret));
   } else {
     total_count_ += valid_cnt;
-    eval_flags.set_all(true);
     // if msg not ready, add n_times_ and check ready every ROW_COUNT_CHECK_INTERVAL
     if (!dynamic_disable()) {
       n_rows_ += valid_cnt;
@@ -400,7 +398,6 @@ int ObExprTopNFilter::eval_topn_filter_batch(const ObExpr &expr, ObEvalCtx &ctx,
     // topn filter ctx may be null in das.
     if (OB_FAIL(ObBitVector::flip_foreach(
             skip, batch_size, [&](int64_t idx) __attribute__((always_inline)) {
-              eval_flags.set(idx);
               results[idx].set_int(1);
               return OB_SUCCESS;
             }))) {}
@@ -430,8 +427,6 @@ int ObExprTopNFilter::eval_topn_filter_vector(const ObExpr &expr, ObEvalCtx &ctx
     }
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to proc_by_pass for das", K(res_format), K(ret));
-    } else {
-      eval_flags.set_all(true);
     }
   } else {
     ret = topn_filter_ctx->state_machine(expr, ctx, skip, bound);

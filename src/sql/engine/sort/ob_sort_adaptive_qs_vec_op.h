@@ -92,6 +92,9 @@ template <typename Store_Row>
 class ObAdaptiveQS
 {
 public:
+  static constexpr int64_t INSERTION_SORT_THRESHOLD = 16;
+  static constexpr int64_t VALUES_PER_RADIX = 256;
+  static constexpr int64_t RADIX_LOCATIONS = VALUES_PER_RADIX + 1;
   struct AQSItem
   {
     unsigned char *key_ptr_;
@@ -113,28 +116,25 @@ public:
   }
   void sort(int64_t rows_begin, int64_t rows_end)
   {
-    aqs_cps_qs(0, sort_rows_.count(), 0, 0, 0);
-    for (int64_t i = 0; i < sort_rows_.count() && i < (rows_end - rows_begin); ++i) {
-      orig_sort_rows_.at(i + rows_begin) = sort_rows_.at(i).row_ptr_;
+    int64_t count = rows_end - rows_begin;
+    aqs_cps_qs(0, count, 0, 0, false);
+    for (int64_t i = 0; i < count; ++i) {
+      orig_sort_rows_.at(i + rows_begin) = sort_rows_[i].row_ptr_;
     }
   }
   void reset()
   {
     sort_rows_.reset();
+    tmp_sort_rows_.reset();
   }
-  void aqs_cps_qs(int64_t l, int64_t r, int64_t common_prefix, int64_t depth_limit,
-                  int64_t cache_offset);
-  void aqs_radix(int64_t l, int64_t r, int64_t common_prefix, int64_t offset, int64_t depth_limit);
-  void inplace_radixsort_more_bucket(int64_t l, int64_t r, int64_t div_val, int64_t common_prefix,
-                                     int64_t depth_limit, int64_t cache_offset, bool update);
-  void insertion_sort(int64_t l, int64_t r, int64_t common_prefix, int64_t cache_offset);
-  inline void swap(int64_t l, int64_t r)
-  {
-    std::swap(sort_rows_[r], sort_rows_[l]);
-  }
-  inline int compare_vals(int64_t l, int64_t r, int64_t &differ_at, int64_t common_prefix,
-                          int64_t cache_offset);
-  inline int compare_cache(AQSItem &l, AQSItem &r, int64_t &differ_at, int64_t common_prefix,
+  void aqs_cps_qs(int64_t l, int64_t r, int64_t common_prefix,
+                  int64_t cache_offset, bool swap);
+  void aqs_radix(int64_t l, int64_t r, int64_t common_prefix, int64_t offset,
+                 bool swap);
+  void radixsort_by_byte(int64_t l, int64_t r, int64_t common_prefix,
+                         int64_t cache_offset, bool swap);
+  void insertion_sort(int64_t l, int64_t r, int64_t common_prefix, int64_t cache_offset, bool swap);
+  inline int compare_vals(AQSItem &l, AQSItem &r, int64_t &differ_at, int64_t common_prefix,
                            int64_t cache_offset);
   static int fast_cmp_normal(const unsigned char *s, const unsigned char *t, int64_t length,
                              int64_t &differ_at, int64_t cache_ends);
@@ -151,6 +151,7 @@ public:
   const RowMeta &row_meta_;
   common::ObIArray<Store_Row *> &orig_sort_rows_;
   common::ObFixedArray<AQSItem, common::ObIAllocator> sort_rows_;
+  common::ObFixedArray<AQSItem, common::ObIAllocator> tmp_sort_rows_;
   common::ObIAllocator &alloc_;
 };
 

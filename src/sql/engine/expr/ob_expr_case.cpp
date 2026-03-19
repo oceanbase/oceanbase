@@ -313,7 +313,6 @@ int ObExprCase::eval_case_batch(const ObExpr &expr,
               continue;
             }
             results[j].set_datum(*then_datums.at(j));
-            eval_flags.set(j);
           }
 
           // rows matched in this round should not match in next round, therefor,
@@ -334,7 +333,6 @@ int ObExprCase::eval_case_batch(const ObExpr &expr,
               continue;
             }
             results[j].set_datum(*else_datums.at(j));
-            eval_flags.set(j);
           }
         }
       } else {
@@ -343,7 +341,6 @@ int ObExprCase::eval_case_batch(const ObExpr &expr,
             continue;
           }
           results[j].set_null();
-          eval_flags.set(j);
         }
       }
     }
@@ -401,7 +398,6 @@ static int eval_match_then(const ObExpr &expr, ObEvalCtx &ctx,
                           const int64_t &then_expr_idx)
 {
   int ret = OB_SUCCESS;
-  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   ThenVec *then_vec = static_cast<ThenVec *>(expr.args_[then_expr_idx]->get_vector(ctx));
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
@@ -413,7 +409,6 @@ static int eval_match_then(const ObExpr &expr, ObEvalCtx &ctx,
     } else {
       res_vec->set_payload_shallow(j, then_vec->get_payload(j), then_vec->get_length(j));
     }
-    eval_flags.set(j);
   }
   return ret;
 }
@@ -571,7 +566,6 @@ static int inner_eval_case_vector(const ObExpr &expr,
           }
           ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
           res_vec->set_null(j);
-          eval_flags.set(j);
         }
       }
     }

@@ -3176,7 +3176,11 @@ int JsonTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(doc_type);
     ObJsonInType expect_type = ObJsonInType::JSON_TREE;
     uint32_t parse_flag = lib::is_oracle_mode() ? ObJsonParser::JSN_RELAXED_FLAG : ObJsonParser::JSN_DEFAULT_FLAG;
-
+    sql::ObSQLSessionInfo *session = ctx.exec_ctx_ ? ctx.exec_ctx_->get_my_session() : NULL;
+    bool json_float_full_precision =
+        OB_NOT_NULL(session) ? session->get_local_json_float_full_precision() : false;
+    ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag,
+                     ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
     // json type input, or has is json check
     bool is_ensure_json = lib::is_oracle_mode() && (doc_type != ObJsonType);
 

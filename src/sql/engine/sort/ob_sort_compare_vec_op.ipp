@@ -79,7 +79,29 @@ bool GeneralCompare<Store_Row, has_addon>::operator()(const SortVecOpChunk *l,
     // Return the reverse order since the heap top is the maximum element.
     // NOTE: can not return !(*this)(l->row_, r->row_)
     //       because we should always return false if l == r.
-    less = (*this)(r->sk_row_, l->sk_row_);
+    const Store_Row *l_row = l->sk_row_;
+    const Store_Row *r_row = r->sk_row_;
+    if (CompareBase::ENABLE == encode_sk_state_) {
+      ObLength l_len = 0;
+      ObLength r_len = 0;
+      const char *l_data = nullptr;
+      const char *r_data = nullptr;
+      l_row->get_cell_payload(*sk_row_meta_, 0, l_data, l_len);
+      r_row->get_cell_payload(*sk_row_meta_, 0, r_data, r_len);
+      int cmp = 0;
+      cmp = MEMCMP(l_data, r_data, min(l_len, r_len));
+      less = cmp != 0 ? (cmp > 0) : (l_len != r_len ? (l_len > r_len) : l->chunk_idx_ > r->chunk_idx_);
+    } else if (CompareBase::FALLBACK_TO_DISABLE == encode_sk_state_ && has_addon) {
+      const Store_Row *l_real_cmp_row = l_row->get_addon_ptr(*sk_row_meta_);
+      const Store_Row *r_real_cmp_row = r_row->get_addon_ptr(*sk_row_meta_);
+      int cmp = compare(l_real_cmp_row, r_real_cmp_row, addon_row_meta_);
+      less = cmp != 0 ? (cmp < 0) : (l->chunk_idx_ > r->chunk_idx_);
+    } else {
+      __builtin_prefetch(l, 0 /* read */, 2 /*high temp locality*/);
+      __builtin_prefetch(r, 0 /* read */, 2 /*high temp locality*/);
+      int cmp = compare(l_row, r_row, sk_row_meta_);
+      less = cmp != 0 ? (cmp < 0) : (l->chunk_idx_ > r->chunk_idx_);
+    }
   }
   return less;
 }
@@ -176,6 +198,16 @@ int GeneralCompare<Store_Row, has_addon>::compare(const Store_Row *r, ObEvalCtx 
     } else {
       cmp = sort_collation.is_ascending_ ? -cmp : cmp;
     }
+  }
+  return cmp;
+}
+
+template <typename Store_Row, bool has_addon>
+int GeneralCompare<Store_Row, has_addon>::stable_cmp(const StableTopNSortKey &l, const StableTopNSortKey &r)
+{
+  int cmp = compare(l.row_, r.row_, sk_row_meta_);
+  if (cmp == 0) {
+    cmp = (r.seq_num_ - l.seq_num_) > 0 ? 1 : -1;
   }
   return cmp;
 }
@@ -298,7 +330,10 @@ bool SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::operator()(const S
     // Return the reverse order since the heap top is the maximum element.
     // NOTE: can not return !(*this)(l->row_, r->row_)
     //       because we should always return false if l == r.
-    less = (*this)(r->sk_row_, l->sk_row_);
+    __builtin_prefetch(l, 0 /* read */, 2 /*high temp locality*/);
+    __builtin_prefetch(r, 0 /* read */, 2 /*high temp locality*/);
+    int cmp = compare(l->sk_row_, r->sk_row_, sk_row_meta_);
+    less = cmp != 0 ? (cmp < 0) : (l->chunk_idx_ > r->chunk_idx_);
   }
   return less;
 }
@@ -389,6 +424,16 @@ int SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::compare(const Store
     const unsigned char *r_data = reinterpret_cast<const unsigned char *>(
       reinterpret_cast<const char *>(r) + FIXED_DATA_OFFSET);
     cmp = -cmp_func_(l_data, r_data);
+  }
+  return cmp;
+}
+
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort>
+int SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::stable_cmp(const StableTopNSortKey &l, const StableTopNSortKey &r)
+{
+  int cmp = compare(l.row_, r.row_, sk_row_meta_);
+  if (cmp == 0) {
+    cmp = (r.seq_num_ - l.seq_num_) > 0 ? 1 : -1;
   }
   return cmp;
 }
@@ -530,7 +575,10 @@ bool FixedCompare<Store_Row, has_addon>::operator()(const SortVecOpChunk *l,
     // Return the reverse order since the heap top is the maximum element.
     // NOTE: can not return !(*this)(l->row_, r->row_)
     //       because we should always return false if l == r.
-    less = (*this)(r->sk_row_, l->sk_row_);
+    __builtin_prefetch(l, 0 /* read */, 2 /*high temp locality*/);
+    __builtin_prefetch(r, 0 /* read */, 2 /*high temp locality*/);
+    int cmp = compare(l->sk_row_, r->sk_row_, sk_row_meta_);
+    less = cmp != 0 ? (cmp < 0) : (l->chunk_idx_ > r->chunk_idx_);
   }
   return less;
 }
@@ -617,6 +665,16 @@ int FixedCompare<Store_Row, has_addon>::compare(const Store_Row *r, ObEvalCtx &e
     r_data = r->get_cell_payload(*row_meta, sort_collation.field_idx_);
     cmp = basic_cmp_funcs_.at(i)(l_data, l_null, r_data, r_null);
     cmp = sort_collation.is_ascending_ ? -cmp : cmp;
+  }
+  return cmp;
+}
+
+template <typename Store_Row, bool has_addon>
+int FixedCompare<Store_Row, has_addon>::stable_cmp(const StableTopNSortKey &l, const StableTopNSortKey &r)
+{
+  int cmp = compare(l.row_, r.row_, sk_row_meta_);
+  if (cmp == 0) {
+    cmp = (r.seq_num_ - l.seq_num_) > 0 ? 1 : -1;
   }
   return cmp;
 }

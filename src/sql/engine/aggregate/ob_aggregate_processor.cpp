@@ -1494,7 +1494,8 @@ int ObAggregateProcessor::init()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr node is null", K(aggr_info), K(i), K(ret));
     } else if (T_FUN_ARG_MIN == aggr_info.get_expr_type() ||
-               T_FUN_ARG_MAX == aggr_info.get_expr_type()) {
+               T_FUN_ARG_MAX == aggr_info.get_expr_type() ||
+               T_FUN_WINDOW_FUNNEL == aggr_info.get_expr_type()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("this agg func not supported vec1.0", K(aggr_info.get_expr_type()));
     } else {

@@ -125,7 +125,6 @@ int ObExprArrayDistinct::eval_array_distinct_batch(const ObExpr &expr, ObEvalCtx
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       bool bret = false;
       if (in_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
@@ -193,7 +192,6 @@ int ObExprArrayDistinct::eval_array_distinct_vector(const ObExpr &expr, ObEvalCt
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else if (OB_FAIL(l_arr_obj->distinct(tmp_allocator, res_obj))) {
         LOG_WARN("array distinct failed", K(ret));
       } else if (OB_FAIL(res_obj->init())) {
@@ -210,7 +208,6 @@ int ObExprArrayDistinct::eval_array_distinct_vector(const ObExpr &expr, ObEvalCt
         LOG_WARN("set array res failed", K(ret));
       }
       if (OB_SUCC(ret) && !is_null_res) {
-        eval_flags.set(idx);
         res_obj->clear();
       }
     }

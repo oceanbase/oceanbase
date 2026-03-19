@@ -26,6 +26,7 @@
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
+#include "sql/resolver/ddl/ob_alter_view_stmt.h"
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
 
 namespace oceanbase

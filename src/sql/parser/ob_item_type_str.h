@@ -82,6 +82,9 @@ inline const char *ob_aggr_func_str(ObItemType aggr_func)
     case T_FUN_ARG_MIN:
       ret = "ARG_MIN";
       break;
+    case T_FUN_WINDOW_FUNNEL:
+      ret = "WINDOW_FUNNEL";
+      break;
     default:
       break;
   }

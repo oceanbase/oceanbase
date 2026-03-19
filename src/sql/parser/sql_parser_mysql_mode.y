@@ -169,7 +169,7 @@ FROZEN_VERSION TOPK QUERY_TIMEOUT READ_CONSISTENCY LOG_LEVEL USE_PLAN_CACHE
 TRACE_LOG LOAD_BATCH_SIZE TRANS_PARAM OPT_PARAM OB_DDL_SCHEMA_VERSION FORCE_REFRESH_LOCATION_CACHE
 ENABLE_PARALLEL_DAS_DML DISABLE_PARALLEL_DAS_DML DISABLE_PARALLEL_DML ENABLE_PARALLEL_DML MONITOR NO_PARALLEL CURSOR_SHARING_EXACT
 MAX_CONCURRENT DOP TRACING NO_QUERY_TRANSFORMATION NO_COST_BASED_QUERY_TRANSFORMATION BLOCKING RESOURCE_GROUP
-PX_NODE_POLICY PX_NODE_ADDRS PX_NODE_COUNT DML_PARALLEL DISABLE_OP_RICH_FORMAT TABLE_LOCK_MODE DISABLE_TRIGGER
+PX_NODE_POLICY PX_NODE_ADDRS PX_NODE_COUNT DML_PARALLEL DISABLE_OP_RICH_FORMAT TABLE_LOCK_MODE DISABLE_TRIGGER MAX_EXECUTION_TIME
 // transform hint
 NO_REWRITE MERGE_HINT NO_MERGE_HINT NO_EXPAND USE_CONCAT NO_UNNEST
 PLACE_GROUP_BY NO_PLACE_GROUP_BY INLINE MATERIALIZE SEMI_TO_INNER NO_SEMI_TO_INNER
@@ -282,7 +282,7 @@ END_P SET_VAR DELIMITER
 
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG CATALOGS CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
-        CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_INDEX_TYPE COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
+        CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_INDEX_TYPE COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPILE COMPACT COMPLETION COMPLETE
         COMPRESSED COMPRESSION COMPRESSION_BLOCK_SIZE COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONCURRENT_LIMITING_RULE CONDENSED CONDITIONAL CONFIGS CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP CREDENTIAL
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT CACHE_REFRESH_INTERVAL_SEC
@@ -344,7 +344,7 @@ END_P SET_VAR DELIMITER
 
         QUANTIFIER_TABLE QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK QUOTA_NAME
 
-        RANGE RB_AND_AGG RB_AND_CARDINALITY_AGG RB_BUILD_AGG RB_ITERATE RB_OR_AGG RB_OR_CARDINALITY_AGG REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
+        RANGE RB_AND_AGG RB_AND_CARDINALITY_AGG RB_BUILD_AGG RB_ITERATE RB_OR_AGG RB_OR_CARDINALITY_AGG REBUILD RECOMPILE RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
@@ -378,7 +378,7 @@ END_P SET_VAR DELIMITER
         VALID VALUE VARIANCE VARIABLES VERBOSE VERIFY VERSION VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
         VAR_SAMP VALIDATION VECTOR VECTOR_DISTANCE MICRO_INDEX_CLUSTERED VECTOR_SIMILARITY
 
-        WAIT WAREHOUSE WARNINGS WASH WEEK WEIGHT_STRING WHENEVER WORK WRAPPER WINDOW WEAK WITH_COLUMN_GROUP WITHOUT
+        WAIT WAREHOUSE WARNINGS WASH WEEK WEIGHT_STRING WHENEVER WORK WRAPPER WINDOW WINDOW_FUNNEL WEAK WITH_COLUMN_GROUP WITHOUT
 
         X509 XA XID XML
 
@@ -442,6 +442,7 @@ END_P SET_VAR DELIMITER
 %type <node> add_key_or_index_opt add_key_or_index add_unique_key_opt add_unique_key add_constraint_uniq_key_opt add_constraint_uniq_key add_constraint_pri_key_opt add_constraint_pri_key add_primary_key_opt add_primary_key add_spatial_index_opt add_spatial_index
 %type <node> index_hint_definition index_hint_list
 %type <node> intnum_list
+%type <node> max_execution_time_value
 %type <node> qb_name_option qb_name_string qb_name_list multi_qb_name_list
 %type <node> coalesce_strategy_list
 %type <node> join_condition inner_join_type except_full_outer_join_type opt_outer natural_join_type opt_full_table_factor
@@ -494,7 +495,7 @@ END_P SET_VAR DELIMITER
 %type <node> drop_index_stmt hint_options opt_expr_as_list expr_as_list expr_with_opt_alias substr_params opt_comma substr_or_substring
 %type <node> /*frozen_type*/ opt_binary
 %type <node> ip_port
-%type <node> create_view_stmt view_name opt_column_list opt_mv_column_list mv_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option opt_tablet_id_no_empty
+%type <node> create_view_stmt view_name opt_column_list opt_mv_column_list mv_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option opt_tablet_id_no_empty alter_view_compile_action
 %type <node> create_mview_stmt create_mview_opts mview_refresh_opt mv_refresh_on_clause mv_refresh_mode mv_refresh_interval mv_start_clause mv_next_clause mv_nested_refresh_opt mview_nested_refresh_mode
 %type <ival> mv_refresh_method mview_enable_disable
 %type <node> name_list opt_name_list
@@ -2354,6 +2355,11 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_CONCAT, 4, $3, group_concat_exprs, $5, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $9);
 }
+| WINDOW_FUNNEL '(' INTNUM ',' STRING_VALUE ',' expr_list ')' OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_WINDOW_FUNNEL, 3, $3, $5, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $10);
+}
 | LISTAGG '(' opt_distinct expr_list opt_order_by opt_separator ')' OVER new_generalized_window_clause
 {
   ParseNode *group_concat_exprs = $4;
@@ -2868,6 +2874,10 @@ MOD '(' expr ',' expr ')'
 {
   ParseNode *group_concat_exprs = $4;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_CONCAT, 4, $3, group_concat_exprs, $5, $6);
+}
+| WINDOW_FUNNEL '(' INTNUM ',' STRING_VALUE ',' expr_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_WINDOW_FUNNEL, 3, $3, $5, $7);
 }
 | TOP_K_FRE_HIST '(' DECIMAL_VAL ',' bit_expr  ','  INTNUM ','  expr_const ')'
 {
@@ -10045,6 +10055,37 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
   dup_expr_string($10, result, @10.first_column, @10.last_column);
   $$->reserved_ = 1; /* is alter view */
 }
+| alter_with_opt_hint opt_algorithm opt_definer opt_sql_security VIEW IF EXISTS view_name alter_view_compile_action
+{
+  ParseNode *if_exists_node = NULL;
+  (void)($1);
+  UNUSED($2);
+  UNUSED($3);
+  UNUSED($4);
+  UNUSED($6);
+  UNUSED($7);
+  malloc_terminal_node(if_exists_node, result->malloc_pool_, T_IF_EXISTS);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_VIEW, 3, if_exists_node, $8, $9);
+}
+| alter_with_opt_hint opt_algorithm opt_definer opt_sql_security VIEW view_name alter_view_compile_action
+{
+  (void)($1);
+  UNUSED($2);
+  UNUSED($3);
+  UNUSED($4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_VIEW, 3, NULL, $6, $7);
+}
+;
+
+alter_view_compile_action:
+COMPILE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ALTER_VIEW_COMPILE);
+}
+| RECOMPILE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ALTER_VIEW_COMPILE);
+}
 ;
 
 /*****************************************************************************
@@ -12731,6 +12772,17 @@ NAME_OB
   $$ = $1;
 }
 
+max_execution_time_value:
+INTNUM
+{
+  $$=$1;
+}
+| NEG_SIGN INTNUM
+{
+  $2->value_ = -$2->value_;
+  $$ = $2;
+}
+
 global_hint:
 READ_CONSISTENCY '(' consistency_level ')'
 {
@@ -12744,6 +12796,10 @@ READ_CONSISTENCY '(' consistency_level ')'
 | QUERY_TIMEOUT '(' INTNUM ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_QUERY_TIMEOUT, 1, $3);
+}
+| MAX_EXECUTION_TIME '(' max_execution_time_value ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MAX_EXECUTION_TIME, 1, $3);
 }
 | FROZEN_VERSION '(' INTNUM ')'
 {
@@ -26972,6 +27028,7 @@ ACCESS_INFO
 |       COMMENT
 |       COMMIT
 |       COMMITTED
+|       COMPILE
 |       COMPACT
 |       COMPLETE
 |       COMPLETION
@@ -27439,6 +27496,7 @@ ACCESS_INFO
 |       READ_ERROR_LOG
 |       READ_ONLY
 |       REBUILD
+|       RECOMPILE
 |       RECOVER
 |       RECOVERY
 |       RECOVERY_WINDOW
@@ -27718,6 +27776,7 @@ ACCESS_INFO
 |       WEIGHT_STRING
 |       WHENEVER
 |       WINDOW
+|       WINDOW_FUNNEL
 |       WITHOUT
 |       WORK
 |       WRAPPER

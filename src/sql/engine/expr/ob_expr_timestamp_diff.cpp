@@ -257,7 +257,6 @@ int ObExprTimeStampDiff::vector_timestamp_diff(const ObExpr &expr,
       } else if (left_arg_vec->is_null(idx) || right_arg_vec->is_null(idx)
                  || unit_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
         continue;
       }
       int64_t res_int = 0;
@@ -271,7 +270,6 @@ int ObExprTimeStampDiff::vector_timestamp_diff(const ObExpr &expr,
       } else {
         res_vec->set_int(idx, res_int);
       }
-      eval_flags.set(idx);
     }
   }
   return ret;

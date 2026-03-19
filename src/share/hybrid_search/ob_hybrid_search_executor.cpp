@@ -182,7 +182,7 @@ int ObHybridSearchExecutor::parse_search_params(
     ObESQueryParser parser(allocator_, need_wrap_result, &table_name, &database_name);
     if (OB_FAIL(construct_column_index_info(allocator_, database_name, table_name, parser.get_index_name_map(), parser.get_user_column_names()))) {
       LOG_WARN("fail to construnct column index info", KR(ret), K(search_params_str));
-    } else if (OB_FAIL(parser.parse(search_params_str, query_req))) {
+    } else if (OB_FAIL(parser.parse(search_params_str, query_req, session_info_))) {
       LOG_WARN("fail to parse search params", KR(ret), K(search_params_str));
     }
   }

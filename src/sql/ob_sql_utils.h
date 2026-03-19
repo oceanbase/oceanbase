@@ -42,6 +42,9 @@ namespace oceanbase
 namespace share {
 class ObHDFSStorageInfo;
 }
+namespace obrpc {
+struct ObDependencyObjDDLArg;
+}
 namespace sql
 {
 class RowDesc;
@@ -72,6 +75,7 @@ class ObResolverParams;
 class ObGlobalHint;
 class ObSqlSchemaGuard;
 struct ObPlanCacheCtx;
+class ObMaintainObjDepInfoTask;
 
 struct EstimatedPartition {
   common::ObAddr addr_;
@@ -359,6 +363,11 @@ public:
   static int check_and_convert_context_namespace(const common::ObCollationType cs_type,
                                                  common::ObString &name);
   static bool cause_implicit_commit(ParseResult &result);
+  static void add_non_ro_select_disable_timer_warning_if_needed(sql::ObSQLSessionInfo &session,
+                                                                 ObPhysicalPlanCtx *plan_ctx);
+  static void log_user_error_for_timeout(int &ret,
+                                         sql::ObSQLSessionInfo &session,
+                                         ObPhysicalPlanCtx *plan_ctx);
   static bool is_end_trans_stmt(const ParseResult &result);
   static bool is_commit_stmt(const ParseResult &result);
   static bool is_modify_tenant_stmt(ParseResult &result);
@@ -734,11 +743,12 @@ public:
                                                 ObPCResourceMapRule &resource_map_rule,
                                                 uint64_t &group_id);
 
-  static int async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
+  static int submit_compile_view_task(const share::schema::ObTableSchema &old_view_schema,
                                   ObSelectStmt *select_stmt,
                                   bool reset_column_infos,
                                   common::ObIAllocator &alloc,
-                                  sql::ObSQLSessionInfo &session_info);
+                                  sql::ObSQLSessionInfo &session_info,
+                                  common::ObIArray<obrpc::ObDependencyObjDDLArg> *alter_view_compile_args = NULL);
   static int check_sys_view_changed(const share::schema::ObTableSchema &old_view_schema,
                                     const share::schema::ObTableSchema &new_view_schema,
                                     bool &changed);

@@ -8322,7 +8322,12 @@ int ObDMLResolver::do_expand_view(TableItem &view_item, ObChildStmtResolver &vie
         LOG_WARN("failed to resolve view", K(ret));
       } else if (OB_UNLIKELY(OB_ERR_VIEW_INVALID == ret && lib::is_mysql_mode())) {
         // do nothing
-      } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(*view_schema, view_stmt,reset_column_infos, *allocator_, *session_info_))) {
+      } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::submit_compile_view_task(*view_schema,
+                                                                          view_stmt,
+                                                                          reset_column_infos,
+                                                                          *allocator_,
+                                                                          *session_info_,
+                                                                          params_.alter_view_compile_args_))) {
         LOG_WARN("failed to add recompile view task", K(tmp_ret));
         if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
           tmp_ret = OB_SUCCESS; //ignore
@@ -16115,6 +16120,12 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     case T_QUERY_TIMEOUT: {
       CHECK_HINT_PARAM(hint_node, 1) {
         global_hint.merge_query_timeout_hint(child0->value_);
+      }
+      break;
+    }
+    case T_MAX_EXECUTION_TIME: {
+      CHECK_HINT_PARAM(hint_node, 1) {
+        global_hint.merge_max_execution_time_hint(child0->value_);
       }
       break;
     }

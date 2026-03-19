@@ -11590,7 +11590,8 @@ int ObDDLOperator::update_table_status(const ObTableSchema &orig_table_schema,
                                        const int64_t schema_version,
                                        const ObObjectStatus new_status,
                                        const bool update_object_status_ignore_version,
-                                       ObMySQLTransaction &trans)
+                                       ObMySQLTransaction &trans,
+                                       const common::ObString *ddl_stmt_str /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
@@ -11618,7 +11619,8 @@ int ObDDLOperator::update_table_status(const ObTableSchema &orig_table_schema,
     *Except for drop view, there is no way to reduce the column count,
     *and there is no need to consider the table mode of this view before
     */
-  } else if (OB_FAIL(schema_service->get_table_sql_service().update_table_attribute(trans, new_schema, op, update_object_status_ignore_version) )) {
+  } else if (OB_FAIL(schema_service->get_table_sql_service().update_table_attribute(
+               trans, new_schema, op, update_object_status_ignore_version, ddl_stmt_str))) {
     LOG_WARN("update table status failed", K(ret));
   }
   return ret;

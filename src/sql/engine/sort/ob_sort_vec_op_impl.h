@@ -30,6 +30,8 @@
 #include "sql/engine/sort/ob_pd_topn_sort_filter.h"
 #include "sql/engine/sort/ob_partition_topn_sort_vec_op.h"
 
+#include <boost/sort/sort.hpp>
+
 namespace oceanbase {
 namespace sql {
 #define SK_RC_DOWNCAST_P(row) const_cast<Store_Row *>(row)
@@ -45,6 +47,7 @@ template <typename Compare, typename Store_Row, bool has_addon>
 class ObSortVecOpImpl : public ObISortVecOpImpl
 {
   using SortVecOpChunk = ObSortVecOpChunk<Store_Row, has_addon>;
+  using StableTopNSortKey = typename Compare::StableTopNSortKey;
 
 public:
   explicit ObSortVecOpImpl(ObMonitorNode &op_monitor_info, lib::MemoryContext &mem_context, ObSqlWorkAreaType profile_type) :
@@ -54,7 +57,7 @@ public:
     addon_collations_(nullptr), cmp_sort_collations_(nullptr), sk_row_meta_(nullptr),
     addon_row_meta_(nullptr), sk_exprs_(nullptr), addon_exprs_(nullptr), cmp_sk_exprs_(nullptr),
     all_exprs_(allocator_), sk_vec_ptrs_(allocator_), addon_vec_ptrs_(allocator_),
-    eval_ctx_(nullptr), comp_(allocator_), sk_store_(&allocator_), addon_store_(&allocator_),
+    eval_ctx_(nullptr), comp_(allocator_), stable_comp_(comp_), sk_store_(&allocator_), addon_store_(&allocator_),
     inmem_row_size_(0), mem_check_interval_mask_(1), row_idx_(0), quick_sort_array_(),
     heap_iter_begin_(false), imms_heap_(nullptr), ems_heap_(nullptr),
     next_stored_row_func_(&ObSortVecOpImpl::array_next_stored_row), exec_ctx_(nullptr),
@@ -66,7 +69,7 @@ public:
     sort_exprs_getter_(allocator_),
     store_row_factory_(allocator_, sql_mem_processor_, sk_row_meta_, addon_row_meta_, inmem_row_size_, topn_cnt_),
     topn_filter_(nullptr), is_topn_filter_enabled_(false), is_fixed_key_sort_enabled_(false), fixed_sort_key_len_(0),
-    compress_type_(NONE_COMPRESSOR), tempstore_read_alignment_size_(0)
+    compress_type_(NONE_COMPRESSOR), tempstore_read_alignment_size_(0), seq_num_(0)
   {}
   virtual ~ObSortVecOpImpl()
   {
@@ -107,7 +110,7 @@ public:
                           ObTempRowStore &row_store);
   int init_sort_temp_row_store(const int64_t batch_size);
   int init_store_row_factory();
-  int init_eager_topn_filter(const common::ObIArray<Store_Row *> *dumped_rows, const int64_t max_batch_size);
+  int init_eager_topn_filter(int64_t dumped_rows_count, const int64_t max_batch_size);
   int add_batch(const ObBatchRows &input_brs, const int64_t start_pos, int64_t *append_row_count);
   int add_batch(const ObBatchRows &input_brs, const int64_t start_pos, bool &sort_need_dump,
                 int64_t *append_row_count)
@@ -189,6 +192,81 @@ public:
     Compare &compare_;
   };
 
+  class StableSortKeyComparer
+  {
+  public:
+    StableSortKeyComparer(Compare &compare) : compare_(compare) {}
+    bool operator()(const StableTopNSortKey &l, const StableTopNSortKey &r)
+    {
+      return compare_.stable_cmp(l, r) > 0;
+    }
+
+    int get_error_code()
+    {
+      return compare_.get_error_code();
+    }
+    Compare &compare_;
+  };
+
+  class HeapSortInputFunctor
+  {
+  public:
+    HeapSortInputFunctor(int64_t &row_pos, int64_t &ties_array_pos, ObSortVecOpImpl *sort_impl)
+      : row_pos_(row_pos), ties_array_pos_(ties_array_pos), sort_impl_(sort_impl) {}
+
+    int operator()(const Store_Row *&sk_row, const Store_Row *&addon_row)
+    {
+      int ret = OB_SUCCESS;
+      if (row_pos_ >= sort_impl_->heap_rows_->count() && ties_array_pos_ >= sort_impl_->ties_array_.count()) {
+        ret = OB_ITER_END;
+      } else if (row_pos_ < sort_impl_->heap_rows_->count()) {
+        sk_row = sort_impl_->heap_rows_->at(row_pos_).row_;
+        if (has_addon) {
+          addon_row = sk_row->get_addon_ptr(*sort_impl_->sk_row_meta_);
+        }
+        row_pos_ += 1;
+      } else {
+        sk_row = sort_impl_->ties_array_.at(ties_array_pos_);
+        if (has_addon) {
+          addon_row = sk_row->get_addon_ptr(*sort_impl_->sk_row_meta_);
+        }
+        ties_array_pos_ += 1;
+      }
+      return ret;
+    }
+
+  private:
+    int64_t &row_pos_;
+    int64_t &ties_array_pos_;
+    ObSortVecOpImpl *sort_impl_;
+  };
+
+  class QuickSortInputFunctor
+  {
+  public:
+    QuickSortInputFunctor(int64_t &row_pos, ObSortVecOpImpl *sort_impl)
+      : row_pos_(row_pos), sort_impl_(sort_impl) {}
+
+    int operator()(const Store_Row *&sk_row, const Store_Row *&addon_row)
+    {
+      int ret = OB_SUCCESS;
+      if (row_pos_ >= sort_impl_->rows_->count()) {
+        ret = OB_ITER_END;
+      } else {
+        sk_row = sort_impl_->rows_->at(row_pos_);
+        if (has_addon) {
+          addon_row = sk_row->get_addon_ptr(*sort_impl_->sk_row_meta_);
+        }
+        row_pos_ += 1;
+      }
+      return ret;
+    }
+
+  private:
+    int64_t &row_pos_;
+    ObSortVecOpImpl *sort_impl_;
+  };
+
 protected:
   typedef int (ObSortVecOpImpl::*NextStoredRowFunc)(const Store_Row *&sr);
   int sort_inmem_data();
@@ -258,6 +336,21 @@ protected:
                                             has_addon>::FILTER_RATIO)
                : sql_mem_processor_.get_mem_bound();
   }
+
+  OB_INLINE int64_t get_rows_count()
+  {
+    int64_t ret = 0;
+    if (use_heap_sort_) {
+      if (OB_NOT_NULL(heap_rows_)) {
+        ret = heap_rows_->count();
+      }
+    } else {
+      if (OB_NOT_NULL(rows_)) {
+        ret = rows_->count();
+      }
+    }
+    return ret;
+  }
   int preprocess_dump(bool &dumped);
   // before add row process: update date used memory, try dump ...
   int before_add_row();
@@ -311,13 +404,15 @@ protected:
                          int64_t &append_row_count);
   int add_sort_batch_row(const uint16_t selector[], const int64_t row_size);
   int update_max_available_mem_size_periodically();
+  int eager_topn_filter(common::ObIArray<StableTopNSortKey> *sorted_dumped_rows);
   int eager_topn_filter(common::ObIArray<Store_Row *> *sorted_dumped_rows);
+  int eager_topn_filter_update(const common::ObIArray<StableTopNSortKey> *sorted_dumped_rows);
   int eager_topn_filter_update(const common::ObIArray<Store_Row *> *sorted_dumped_rows);
   int init_fixed_key_sort();
   int do_fixed_key_sort(int64_t begin);
   int init_partition_topn_sort(ObSortVecOpContext &ctx);
   template <typename Input>
-  int build_chunk(const int64_t level, Input &input)
+  int build_chunk(const int64_t level, Input &input, const int64_t chunk_idx = -1)
   {
     int ret = OB_SUCCESS;
     const int64_t curr_time = ObTimeUtility::fast_current_time();
@@ -403,7 +498,27 @@ protected:
     if (OB_SUCC(ret)) {
       // In increase sort, chunk->level_ may less than the last of sort chunks.
       // insert the chunk to the upper bound the level.
+      //
+      // Add the `chunk_idx_` field to ensure stable comparison between chunks.
+      // +-------------------------------------------------------------------------------+
+      // |         |  chunk1 |  chunk2 |  chunk3 |  chunk4 |  chunk5 |  chunk6 |  chunk7 |
+      // +---------+---------+---------+---------+---------+---------+---------+---------+
+      // |   idx   |    0    |    1    |    2    |    3    |    4    |    5    |    6    |
+      // +---------+---------+---------+---------+---------+---------+---------+---------+
+      // |  level  |    0    |    0    |    0    |    0    |    0    |    0    |    0    |
+      // +---------+---------+---------+---------+---------+---------+---------+---------+
+      //                +--------    merge    -------+
+      // +---------+---------+---------+---------+---------+
+      // |   idx   |    4    |    5    |    6    |    0    |
+      // +---------+---------+---------+---------+---------+
+      // |  level  |    0    |    0    |    0    |    1    |
+      // +---------+---------+---------+---------+---------+
       SortVecOpChunk *pos = sort_chunks_.get_last();
+      if (chunk_idx >= 0) {
+        chunk->chunk_idx_ = chunk_idx;
+      } else {
+        chunk->chunk_idx_ = sort_chunks_.get_size();
+      }
       for (; pos != sort_chunks_.get_header() && pos->level_ > level; pos = pos->get_prev()) {}
       pos = pos->get_next();
       if (!sort_chunks_.add_before(pos, chunk)) {
@@ -460,8 +575,7 @@ protected:
   static const int64_t INMEMORY_MERGE_SORT_WARN_WAYS = 10000;
   typedef common::ObBinaryHeap<Store_Row **, Compare, 16> IMMSHeap;
   typedef common::ObBinaryHeap<SortVecOpChunk *, Compare, MAX_MERGE_WAYS> EMSHeap;
-  typedef common::ObBinaryHeap<Store_Row *, Compare> TopnHeap;
-
+  typedef common::ObBinaryHeap<StableTopNSortKey, StableSortKeyComparer> TopnHeap;
   union
   {
     struct
@@ -493,6 +607,7 @@ protected:
   common::ObFixedArray<ObIVector *, common::ObIAllocator> addon_vec_ptrs_;
   ObEvalCtx *eval_ctx_;
   Compare comp_;
+  StableSortKeyComparer stable_comp_;
   ObTempRowStore sk_store_;
   ObTempRowStore addon_store_;
   int64_t inmem_row_size_;
@@ -531,6 +646,7 @@ protected:
   common::ObArray<Store_Row *> sorted_dumped_rows_ptrs_;
   Store_Row *last_ties_row_;
   common::ObIArray<Store_Row *> *rows_;
+  common::ObIArray<StableTopNSortKey> *heap_rows_;
   ObTempRowStore::BlockHolder blk_holder_;
   ObSortKeyFetcher sort_exprs_getter_;
   ObSortVecOpStoreRowFactory<Store_Row, has_addon> store_row_factory_;
@@ -541,6 +657,7 @@ protected:
   ObCompressorType compress_type_;
   ObPushDownTopNFilter pd_topn_filter_;
   int64_t tempstore_read_alignment_size_;
+  int64_t seq_num_;
 };
 
 } // end namespace sql

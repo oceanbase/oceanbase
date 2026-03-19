@@ -1193,7 +1193,9 @@ int ObTableColumns::resolve_view_definition(
     ObSelectStmt *&select_stmt,
     ObRawExprFactory &expr_factory,
     ObStmtFactory &stmt_factory,
-    bool throw_error) {
+    bool throw_error,
+    common::ObIArray<obrpc::ObDependencyObjDDLArg> *alter_view_compile_args)
+{
   int ret = OB_SUCCESS;
   /*
     之前这里的逻辑是先切租户再resolve视图定义，然而resolver层已经有一套切租户的
@@ -1249,6 +1251,7 @@ int ObTableColumns::resolve_view_definition(
         resolver_ctx.expr_factory_ = &expr_factory;
         resolver_ctx.stmt_factory_ = &stmt_factory;
         resolver_ctx.sql_proxy_ = GCTX.sql_proxy_;
+        resolver_ctx.alter_view_compile_args_ = alter_view_compile_args;
         if (OB_ISNULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create query context failed", K(ret));
@@ -1305,21 +1308,6 @@ int ObTableColumns::resolve_view_definition(
               LOG_WARN("select_stmt should not NULL", K(ret));
             } else { /*do-nothing*/ }
           }
-        }
-        int tmp_ret = OB_SUCCESS;
-        bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
-        if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
-          LOG_WARN("failed to resolve view", K(ret));
-        } else if (OB_UNLIKELY(OB_ERR_VIEW_INVALID == ret && lib::is_mysql_mode())) {
-          // do nothing
-        } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(table_schema, select_stmt, reset_column_infos, *allocator, *session))) {
-          LOG_WARN("failed to add recompile view task", K(tmp_ret));
-          if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
-            tmp_ret = OB_SUCCESS; //ignore
-          }
-        }
-        if (OB_SUCCESS == ret) {
-          ret = tmp_ret;
         }
       }
     }

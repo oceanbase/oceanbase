@@ -275,8 +275,12 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
 
       ObJsonInType expect_type = need_to_tree ? ObJsonInType::JSON_TREE : j_in_type;
       bool relax_json = (lib::is_oracle_mode() && relax);
+      sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+      bool json_float_full_precision =
+        OB_NOT_NULL(session) ? session->get_local_json_float_full_precision() : false;
       uint32_t parse_flag = relax_json ? ObJsonParser::JSN_RELAXED_FLAG : 0;
       ADD_FLAG_IF_NEED(preserve_dup, parse_flag, ObJsonParser::JSN_PRESERVE_DUP_FLAG);
+      ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag, ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
       if (is_oracle && j_str.length() == 0) {
         is_null = true;
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,

@@ -466,7 +466,7 @@ int ObDriverRowIterator::init(ObOperator *op, const int64_t op_group_scan_size,
 
 void ObDriverRowIterator::destroy()
 {
-  if (op_->is_vectorized()) {
+  if (OB_NOT_NULL(op_) && op_->is_vectorized()) {
     left_batch_.reset();
     right_batch_.reset();
   }
@@ -513,13 +513,14 @@ int ObDriverRowIterator::fill_cur_row_group_param()
   return ret;
 }
 
-int ObDriverRowIterator::get_next_left_row()
+int ObDriverRowIterator::get_next_left_row(bool &new_batch)
 {
   int ret = OB_SUCCESS;
   bool get_row = false;
   op_->set_pushdown_param_null(*rescan_params_);
   left_expr_extend_size_ = 0;
   l_idx_++;
+  new_batch = false;
   while (!get_row && OB_SUCC(ret)) {
     // current batch has left row, no need to get left batch
     if (OB_NOT_NULL(left_brs_) && l_idx_ < left_brs_->size_) {
@@ -543,6 +544,7 @@ int ObDriverRowIterator::get_next_left_row()
       } else if (need_backup_left_ && OB_FAIL(left_batch_.save(left_->is_vectorized() ? op_max_batch_size_ : 1))) { // backup left_batch for NLJ
         LOG_WARN("failed to get backup left batch rows", K(ret));
       }
+      new_batch = true;
       l_idx_ = 0;
       LOG_TRACE("end get next batch from left", K(left_brs_->size_), K(left_brs_->end_));
     }
@@ -598,8 +600,9 @@ int ObDriverRowIterator::extend_left_next_batch_rows(int64_t &expect_rows_cnt,
                                                      int64_t times)
 {
   int ret = OB_SUCCESS;
+  bool new_batch = false;
   if (l_idx_ < left_brs_->size_) {
-  } else if (OB_FAIL(get_next_left_row())) {
+  } else if (OB_FAIL(get_next_left_row(new_batch))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next left row", K(ret));
     }
@@ -614,6 +617,7 @@ int ObDriverRowIterator::extend_left_next_batch_rows(int64_t &expect_rows_cnt,
 
 int ObDriverRowIterator::restore_drive_row(int from_idx, int to_idx)
 {
+  left_expr_extend_size_ = 0;
   return left_batch_.restore_single_row(from_idx, to_idx);
 }
 

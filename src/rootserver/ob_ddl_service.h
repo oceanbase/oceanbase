@@ -639,6 +639,12 @@ public:
   int modify_hidden_table_not_null_column_state(const obrpc::ObAlterTableArg &alter_table_arg);
   int restore_the_table_to_split_completed_state(obrpc::ObAlterTableArg &alter_table_arg);
   int maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLArg &arg);
+  // Batch variant: handle multiple dependency-maintenance args in ONE RS transaction,
+  // then publish schema once. Used by ALTER VIEW ... COMPILE to avoid per-arg commit/version bump
+  // causing subsequent recompile_view() tasks to be ignored as stale.
+  int maintain_obj_dependency_info_batch(const uint64_t tenant_id,
+                                         const common::ObIArray<obrpc::ObDependencyObjDDLArg> &args,
+                                         const common::ObString *ddl_stmt_str);
   int process_schema_object_dependency(
       const uint64_t tenant_id,
       const share::schema::ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
@@ -1117,7 +1123,11 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   // lock mview object, unlock when ddl trans end
   // Must before locking the container table
   int lock_mview(ObMySQLTransaction &trans, const ObSimpleTableSchemaV2 &table_schema);
-  int recompile_view(const ObTableSchema &view_schema, const bool reset_view_column_infos, ObDDLSQLTransaction &trans);
+  int recompile_view(const ObTableSchema &view_schema,
+                     const bool reset_view_column_infos,
+                     ObDDLSQLTransaction &trans,
+                     share::schema::ObSchemaGetterGuard &schema_guard,
+                     const common::ObString *ddl_stmt_str = nullptr);
   int recompile_all_views_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t > &view_ids);
   int try_add_dep_info_for_all_synonyms_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t> &synonym_ids);
   int try_check_and_set_table_schema_in_tablegroup(

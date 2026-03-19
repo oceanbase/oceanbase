@@ -356,7 +356,8 @@ void ObVectorsResultHolder::ObColResultHolder::convert_continuous_to_uniform(ObU
 void ObVectorsResultHolder::ObColResultHolder::restore_uniform_base_single_row(ObUniformBase &vec,
                                                                                int64_t from_idx,
                                                                                int64_t to_idx,
-                                                                               bool is_const) const
+                                                                               bool is_const,
+                                                                               char *res_buf) const
 {
   if (is_const) {
     vec.append_rows_multiple_times(
@@ -365,6 +366,9 @@ void ObVectorsResultHolder::ObColResultHolder::restore_uniform_base_single_row(O
     vec.append_rows_multiple_times(vec.get_datums() == datums_ ? frame_datums_
                                                                : datums_,
                                    from_idx, from_idx + 1, 1, to_idx);
+  }
+  if (OB_NOT_NULL(frame_data_)) {
+    MEMCPY(res_buf, frame_data_, is_const ? len_ : len_ * max_row_cnt_);
   }
 }
 
@@ -400,10 +404,11 @@ void ObVectorsResultHolder::ObColResultHolder::extend_discrete_base_vector(ObDis
 
 void ObVectorsResultHolder::ObColResultHolder::extend_uniform_base_vector(ObUniformBase &vec,
                                                                           const int64_t src_start_idx,
-                                                                          const int64_t srt_end_idx,
+                                                                          const int64_t src_end_idx,
                                                                           const int64_t size,
                                                                           const int64_t start_dst_idx,
-                                                                          const bool is_const) const
+                                                                          const bool is_const,
+                                                                          char *res_buf) const
 {
   if (is_const) {
     vec.append_rows_multiple_times(
@@ -412,7 +417,10 @@ void ObVectorsResultHolder::ObColResultHolder::extend_uniform_base_vector(ObUnif
   } else {
     vec.append_rows_multiple_times(
         vec.get_datums() == datums_ ? frame_datums_ : datums_, src_start_idx,
-        srt_end_idx, size, start_dst_idx);
+        src_end_idx, size, start_dst_idx);
+  }
+  if (OB_NOT_NULL(frame_data_)) {
+    MEMCPY(res_buf, frame_data_, is_const ? len_ : len_ * max_row_cnt_);
   }
 }
 
@@ -673,6 +681,7 @@ int ObVectorsResultHolder::rows_extend(int64_t src_start_idx, int64_t src_end_id
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs_->count(); ++i) {
     VectorFormat backup_format = backup_cols_[i].header_.format_;
     VectorFormat extend_format = backup_cols_[i].get_extend_vec_format();
+    char *res_buf = exprs_->at(i)->get_rev_buf(*eval_ctx_);
     LOG_DEBUG("drive row extended for NLJ_VEC_2, and backup format is", K(i), K(backup_format), K(extend_format));
     switch(backup_format) {
       case VEC_FIXED:
@@ -690,11 +699,11 @@ int ObVectorsResultHolder::rows_extend(int64_t src_start_idx, int64_t src_end_id
         break;
       case VEC_UNIFORM:
         backup_cols_[i].extend_uniform_base_vector(static_cast<ObUniformBase &>
-                                          (*exprs_->at(i)->get_vector(*eval_ctx_)), src_start_idx, src_end_idx, size, start_dst_idx, false);
+                                          (*exprs_->at(i)->get_vector(*eval_ctx_)), src_start_idx, src_end_idx, size, start_dst_idx, false, res_buf);
         break;
       case VEC_UNIFORM_CONST:
         backup_cols_[i].extend_uniform_base_vector(static_cast<ObUniformBase &>
-                                          (*exprs_->at(i)->get_vector(*eval_ctx_)), src_start_idx, src_end_idx, size, start_dst_idx, true);
+                                          (*exprs_->at(i)->get_vector(*eval_ctx_)), src_start_idx, src_end_idx, size, start_dst_idx, true, res_buf);
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -805,6 +814,7 @@ int ObVectorsResultHolder::restore_single_row(int64_t from_idx, int64_t to_idx) 
     for (int64_t i = 0; OB_SUCC(ret) && i < exprs_->count(); ++i) {
       VectorFormat backup_format = backup_cols_[i].header_.format_;
       VectorFormat extend_format = backup_cols_[i].get_extend_vec_format();
+      char *res_buf = exprs_->at(i)->get_rev_buf(*eval_ctx_);
       if (OB_FAIL(exprs_->at(i)->init_vector(*eval_ctx_, extend_format, eval_ctx_->max_batch_size_))) {
         LOG_WARN("failed to init vector for backup expr", K(i), K(backup_format), K(extend_format), K(ret));
       } else {
@@ -827,11 +837,11 @@ int ObVectorsResultHolder::restore_single_row(int64_t from_idx, int64_t to_idx) 
               break;
             case VEC_UNIFORM:
               backup_cols_[i].restore_uniform_base_single_row(static_cast<ObUniformBase &>
-                                              (*exprs_->at(i)->get_vector(*eval_ctx_)), from_idx, to_idx, false);
+                                              (*exprs_->at(i)->get_vector(*eval_ctx_)), from_idx, to_idx, false, res_buf);
               break;
             case VEC_UNIFORM_CONST:
               backup_cols_[i].restore_uniform_base_single_row(static_cast<ObUniformBase &>
-                                              (*exprs_->at(i)->get_vector(*eval_ctx_)), from_idx, to_idx, true);
+                                              (*exprs_->at(i)->get_vector(*eval_ctx_)), from_idx, to_idx, true, res_buf);
               break;
             default:
               ret = OB_ERR_UNEXPECTED;

@@ -29,6 +29,7 @@
 #include "sql/resolver/ddl/ob_truncate_table_resolver.h"
 #include "sql/resolver/ddl/ob_create_table_like_resolver.h"
 #include "sql/resolver/ddl/ob_alter_table_resolver.h"
+#include "sql/resolver/ddl/ob_alter_view_resolver.h"
 #include "sql/resolver/ddl/ob_drop_table_resolver.h"
 #include "sql/resolver/ddl/ob_create_index_resolver.h"
 #include "sql/resolver/ddl/ob_create_mlog_resolver.h"
@@ -362,17 +363,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         break;
       }
       case T_ALTER_VIEW: {
-#if 0
-        ObAlterViewResolver stmt_resolver(params_);
-        if (OB_FAIL(stmt_resolver.resolve(*node))) {
-          LOG_WARN("execute alter view resolver failed", K(ret));
-        }
-
-        stmt = stmt_resolver.get_basic_stmt();
-#endif
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support to alter view");
-	      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter view");
+        REGISTER_STMT_RESOLVER(AlterView);
         break;
       }
       case T_DROP_VIEW:

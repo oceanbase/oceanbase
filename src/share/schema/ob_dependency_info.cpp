@@ -24,7 +24,6 @@ namespace share
 {
 namespace schema
 {
-
 ObDependencyInfo::ObDependencyInfo()
 {
   reset();

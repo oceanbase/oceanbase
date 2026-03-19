@@ -71,6 +71,8 @@ extern int init_arg_min_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col
                                        ObIAllocator &allocator, IAggregate *&agg);
 extern int init_arg_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                        ObIAllocator &allocator, IAggregate *&agg);
+extern int init_window_funnel_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                        ObIAllocator &allocator, IAggregate *&agg);
 extern int init_wm_concat_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                     ObIAllocator &allocator, IAggregate *&agg);
 extern int init_string_prefix_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
@@ -124,6 +126,7 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_HYBRID_HIST, hybrid_hist, i);
         INIT_AGGREGATE_CASE(T_FUN_ARG_MIN, arg_min, i);
         INIT_AGGREGATE_CASE(T_FUN_ARG_MAX, arg_max, i);
+        INIT_AGGREGATE_CASE(T_FUN_WINDOW_FUNNEL, window_funnel, i);
         INIT_AGGREGATE_CASE(T_FUN_GROUP_ID, grouping, i);
         INIT_AGGREGATE_CASE(T_FUN_WM_CONCAT, wm_concat, i);
         INIT_AGGREGATE_CASE(T_FUN_KEEP_WM_CONCAT, wm_concat, i);
@@ -152,6 +155,7 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
 
 #define RTSIZE(vec_tc) sizeof(RTCType<vec_tc>)
 const int64_t constexpr string_reserved_size = sizeof(char *) + sizeof(int32_t); // <char *, len>
+const int64_t constexpr ptr_reserved_size = sizeof(void *);
 static const int32_t reserved_sizes[] = {
   0,                                    // NULL
   RTSIZE(VEC_TC_INTEGER),               // integer
@@ -276,6 +280,11 @@ static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id
     case T_FUN_ARG_MAX:
     case T_FUN_ARG_MIN: {
       ret_size = arg_minmax_agg_tmp_size(info);
+      break;
+    }
+    case T_FUN_WINDOW_FUNNEL: {
+      ret_size = 2 * ptr_reserved_size;
+      break;
     }
     default: break;
     }

@@ -323,7 +323,6 @@ int vector_timestamp_add(
         continue;
       } else if (arg_vec->is_null(idx) || unit_type_vec->is_null(idx) || interval_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
         continue;
       }
       char *buf = NULL;
@@ -365,7 +364,6 @@ int vector_timestamp_add(
                     K(ret), K(res), K(nls_format), K(in_scale), K(buf), K(out_len));
         } else {
           res_vec->set_string(idx, ObString(out_len, buf));
-          eval_flags.set(idx);
         }
       }
       if (OB_FAIL(ret)) {
@@ -373,7 +371,6 @@ int vector_timestamp_add(
           ret = OB_SUCCESS;
         }
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       }
     }
   }

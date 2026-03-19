@@ -16,6 +16,7 @@
 #include "lib/json_type/ob_json_parse.h"
 #include <fast_float/fast_float.h>
 #include "src/share/object/ob_obj_cast_util.h"
+#include "sql/session/ob_sql_session_info.h"
 #include <string>
 #include <regex>
 
@@ -595,7 +596,8 @@ int ObArrayCastUtils::string_cast_map(common::ObIAllocator &alloc,
                                       ObIArrayType *&dst,
                                       const ObCollectionMapType *dst_map_type,
                                       ObCastMode cast_mode,
-                                      const bool is_sparse_vector)
+                                      const bool is_sparse_vector,
+                                      sql::ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   std::string src_text(arr_text.ptr(), arr_text.length());
@@ -610,6 +612,10 @@ int ObArrayCastUtils::string_cast_map(common::ObIAllocator &alloc,
   uint64_t err_offset = 0;
   ObJsonNode *j_node = NULL;
   uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
+  bool json_float_full_precision =
+    OB_NOT_NULL(session) ? session->get_local_json_float_full_precision() : false;
+  ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag,
+                   ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
   if (OB_FAIL(ObJsonParser::parse_json_text(&alloc, src_text.data(), src_text.length(), syntaxerr, &err_offset, j_node, parse_flag))) {
     LOG_WARN("failed to parse array text", K(ret), K(arr_text), KCSTRING(syntaxerr), K(err_offset));
   } else if (j_node->json_type() != ObJsonNodeType::J_OBJECT) {
@@ -861,13 +867,18 @@ int ObArrayCastUtils::string_cast_vector(common::ObIAllocator &alloc, ObString &
 }
 
 int ObArrayCastUtils::string_cast(common::ObIAllocator &alloc, ObString &arr_text,
-                                  ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type)
+                                  ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type,
+                                  sql::ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   const char *syntaxerr = NULL;
   uint64_t err_offset = 0;
   ObJsonNode *j_node = NULL;
   uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
+  bool json_float_full_precision =
+    OB_NOT_NULL(session) ? session->get_local_json_float_full_precision() : false;
+  ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag,
+                   ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
   if (OB_FAIL(
           ObJsonParser::parse_json_text(&alloc, arr_text.ptr(), arr_text.length(), syntaxerr, &err_offset, j_node, parse_flag))) {
     LOG_WARN("failed to parse array text", K(ret), K(arr_text), KCSTRING(syntaxerr), K(err_offset));

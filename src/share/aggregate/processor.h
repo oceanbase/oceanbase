@@ -112,8 +112,11 @@ public:
 
   // TODO: remove aggr_cell_len for add_batch_rows
   // TODO: add eval_param_batch
+  int eval_aggr_param_batch(const ObBatchRows &brs, const uint16_t start_idx, const uint16_t end_idx, bool all_rows_active);
 
-  int eval_aggr_param_batch(const ObBatchRows &brs);
+  int eval_aggr_param_batch(const ObBatchRows &brs) {
+    return eval_aggr_param_batch(brs, 0, brs.size_, brs.all_rows_active_);
+  }
 
   int generate_group_rows(AggrRowPtr *row_arr, const int32_t batch_size);
   int add_one_aggregate_row(AggrRowPtr data, const int32_t row_size,

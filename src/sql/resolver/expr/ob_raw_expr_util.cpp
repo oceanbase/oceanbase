@@ -8653,6 +8653,36 @@ int ObRawExprUtils::build_pseudo_ddl_slice_id(ObRawExprFactory &factory,
   return ret;
 }
 
+int ObRawExprUtils::build_pseudo_columns_for_window_funnel(ObRawExprFactory &factory,
+                                                            const ObSQLSessionInfo &session_info,
+                                                            ObRawExpr *timestamp_expr,
+                                                            ObRawExpr *&pseudo_time,
+                                                            ObRawExpr *&pseudo_event_idx)
+{
+  int ret = OB_SUCCESS;
+  ObOpPseudoColumnRawExpr *pseudo_time_expr = NULL;
+  ObOpPseudoColumnRawExpr *pseudo_event_idx_expr = NULL;
+  ObRawExprResType res_type;
+  res_type.set_int();
+  res_type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
+  res_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+  OZ(build_op_pseudo_column_expr(factory, T_PSEUDO_WINDOW_FUNNEL_TIME, "WINDOW_FUNNEL_TIME",
+                                 res_type, pseudo_time_expr));
+  OZ(pseudo_time_expr->formalize(&session_info));
+  OZ(pseudo_time_expr->add_flag(IS_INNER_ADDED_EXPR));
+  OZ(build_op_pseudo_column_expr(factory, T_PSEUDO_WINDOW_FUNNEL_EVENT_IDX, "WINDOW_FUNNEL_EVENT_IDX",
+                                 res_type, pseudo_event_idx_expr));
+  OZ(pseudo_event_idx_expr->formalize(&session_info));
+  OZ(pseudo_event_idx_expr->add_flag(IS_INNER_ADDED_EXPR));
+  if (OB_SUCC(ret)) {
+    pseudo_time = pseudo_time_expr;
+    pseudo_event_idx = pseudo_event_idx_expr;
+    LOG_DEBUG("debug build pseudo for window funnel", K(ret), K(lbt()), K(pseudo_time_expr), K(pseudo_event_idx_expr));
+  }
+  return ret;
+}
+
+
 int ObRawExprUtils::build_pseudo_random(ObRawExprFactory &factory,
                                         const ObSQLSessionInfo &session_info,
                                         ObRawExpr *&out)

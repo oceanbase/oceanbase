@@ -7269,6 +7269,11 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
                                  || in_type == ObTextType
                                  || in_type == ObMediumTextType
                                  || in_type == ObLongTextType);
+    sql::ObSQLSessionInfo *session = (params.exec_ctx_ != NULL) ? params.exec_ctx_->get_my_session() : NULL;
+    bool json_float_full_precision =
+        OB_NOT_NULL(session) ? session->get_local_json_float_full_precision() : false;
+    ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag,
+                     ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
     if (expect_type == ObJsonType && j_text.length() == 0 && cast_mode == 0) { // add column json null
       j_base = &j_null;
     } else if (is_oracle && (OB_ISNULL(j_text.ptr()) || j_text.length() == 0)) {
@@ -11382,6 +11387,7 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
       ObIAllocator &temp_allocator = *params.allocator_v2_;
       ObIArrayType *arr_dst = NULL;
       ObString res_str;
+      ObSQLSessionInfo *session = params.exec_ctx_ ? params.exec_ctx_->get_my_session() : nullptr;
       const ObSqlCollectionInfo *dst_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(dst_meta.value_);
       ObCollectionArrayType *dst_arr_type = static_cast<ObCollectionArrayType *>(dst_coll_info->collection_meta_);
       if (dst_coll_info->collection_meta_->type_id_ != ObNestedType::OB_VECTOR_TYPE && OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
@@ -11395,7 +11401,7 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
         }
       } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
         if (cs_type != CS_TYPE_BINARY) {
-          if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
+          if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_, session))) {
             LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
           }
         } else {
@@ -11406,7 +11412,7 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
       } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
                  || dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
         bool is_sparse_vector = dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE;
-        if (OB_FAIL(ObArrayCastUtils::string_cast_map(temp_allocator, in_str, arr_dst, static_cast<ObCollectionMapType *>(dst_coll_info->collection_meta_), cast_mode, is_sparse_vector))) {
+        if (OB_FAIL(ObArrayCastUtils::string_cast_map(temp_allocator, in_str, arr_dst, static_cast<ObCollectionMapType *>(dst_coll_info->collection_meta_), cast_mode, is_sparse_vector, session))) {
           LOG_WARN("map cast failed", K(ret), K(dst_coll_info));
         }
       } else {

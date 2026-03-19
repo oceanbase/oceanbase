@@ -603,6 +603,7 @@ public:
   bool get_local_ob_enable_parameter_anonymous_block() const;
   bool get_local_ob_enable_ps_parameter_anonymous_block() const;
   bool get_local_cursor_sharing_mode() const;
+  bool get_local_json_float_full_precision() const;
   ObLengthSemantics get_local_nls_length_semantics() const;
   ObLengthSemantics get_actual_nls_length_semantics() const;
   int64_t get_local_ob_org_cluster_id() const;
@@ -749,6 +750,11 @@ public:
   int get_query_timeout(int64_t &query_timeout) const
   {
     query_timeout = sys_vars_cache_.get_ob_query_timeout();
+    return common::OB_SUCCESS;
+  }
+  int get_max_execution_time(int64_t &max_execution_time) const
+  {
+    max_execution_time = sys_vars_cache_.get_max_execution_time();
     return common::OB_SUCCESS;
   }
   int64_t get_query_timeout_ts() const; //获取当前query超时的绝对时间
@@ -2001,8 +2007,10 @@ public:
         current_default_catalog_(0),
         security_version_(0),
         ob_enable_ps_parameter_anonymous_block_(false),
-        plsql_can_transform_sql_to_assign_(false),
-        ob_enable_pl_async_commit_(false)
+        plsql_can_transform_sql_to_assign_(true),
+        max_execution_time_(MAX_EXECUTION_TIME_MIN),
+        ob_enable_pl_async_commit_(false),
+        json_float_full_precision_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -2078,6 +2086,8 @@ public:
       collation_database_ = CS_TYPE_INVALID;
       plsql_optimize_level_ = 0;
       ob_enable_pl_async_commit_ = false;
+      max_execution_time_  = MAX_EXECUTION_TIME_MIN;
+      json_float_full_precision_ = false;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -2137,7 +2147,9 @@ public:
             character_set_client_ == other.character_set_client_ &&
             collation_database_ == other.collation_database_ &&
             plsql_optimize_level_ == other.plsql_optimize_level_ &&
-            ob_enable_pl_async_commit_ == other.ob_enable_pl_async_commit_;
+            ob_enable_pl_async_commit_ == other.ob_enable_pl_async_commit_ &&
+            max_execution_time_ == other.max_execution_time_ &&
+            json_float_full_precision_ == other.json_float_full_precision_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2254,7 +2266,7 @@ public:
                  K_(optimizer_use_sql_plan_baselines), K_(optimizer_capture_sql_plan_baselines),
                  K_(is_result_accurate), K_(character_set_results),
                  K_(character_set_connection), K_(ob_pl_block_timeout), K_(ob_plsql_ccflags),
-                 K_(iso_nls_currency), K_(log_row_value_option), K_(ob_max_read_stale_time), K_(default_lob_inrow_threshold));
+                 K_(iso_nls_currency), K_(log_row_value_option), K_(ob_max_read_stale_time), K_(default_lob_inrow_threshold), K_(max_execution_time));
   public:
     static const int64_t MAX_NLS_FORMAT_STR_LEN = 256;
 
@@ -2330,7 +2342,9 @@ public:
     uint64_t security_version_;
     bool ob_enable_ps_parameter_anonymous_block_;
     bool plsql_can_transform_sql_to_assign_;
+    int64_t max_execution_time_;
     bool ob_enable_pl_async_commit_;
+    bool json_float_full_precision_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2404,7 +2418,8 @@ private:
     DEF_SYS_VAR_BIT_ENUM(collation_database, 61)
     DEF_SYS_VAR_BIT_ENUM(plsql_optimize_level, 62)
     DEF_SYS_VAR_BIT_ENUM(ob_enable_pl_async_commit, 63)
-
+    DEF_SYS_VAR_BIT_ENUM(json_float_full_precision, 64)
+    DEF_SYS_VAR_BIT_ENUM(max_execution_time, 65)
     BIT_MAX_POSITION = 128  // max position is 128 now
   };
 #undef DEF_SYS_VAR_BIT_ENUM
@@ -2560,6 +2575,8 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, character_set_client);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, collation_database);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, plsql_optimize_level);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, json_float_full_precision);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, max_execution_time);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -3037,6 +3054,11 @@ inline bool ObBasicSessionInfo::get_local_ob_enable_parameter_anonymous_block() 
 inline bool ObBasicSessionInfo::get_local_ob_enable_ps_parameter_anonymous_block() const
 {
   return sys_vars_cache_.get_ob_enable_ps_parameter_anonymous_block();
+}
+
+inline bool ObBasicSessionInfo::get_local_json_float_full_precision() const
+{
+  return sys_vars_cache_.get_json_float_full_precision();
 }
 
 inline ObLengthSemantics ObBasicSessionInfo::get_local_nls_length_semantics() const

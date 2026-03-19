@@ -553,7 +553,6 @@ int ObExprDateFormat::vector_date_format(const ObExpr &expr,
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) { continue; }
       res_vec->set_null(idx);
-      eval_flags.set(idx);
     }
   } else {
     const ObTimeZoneInfo *local_tz_info = (ObTimestampType == expr.args_[0]->datum_meta_.type_) ? tz_info : NULL;
@@ -695,18 +694,15 @@ int ObExprDateFormat::vector_date_format(const ObExpr &expr,
             for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
               res_vec->set_payload_shallow(idx, buf[idx], len[idx]);
             }
-            eval_flags.set_all(bound.start(), bound.end());
           } else {
             for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
               if (skip.at(idx) || eval_flags.at(idx)) {
                 continue;
               } else if (arg_vec->is_null(idx) || res_null[idx]) {
                 res_vec->set_null(idx);
-                eval_flags.set(idx);
                 continue;
               }
               res_vec->set_payload_shallow(idx, buf[idx], len[idx]);
-              eval_flags.set(idx);
             }
           }
         }

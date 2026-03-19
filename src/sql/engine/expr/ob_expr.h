@@ -805,6 +805,14 @@ public:
     }
   }
 
+  OB_INLINE bool eager_evaluation() const
+  {
+    return (arg_cnt_ <= 1
+            && type_ != T_OP_EXISTS
+            && type_ != T_OP_NOT_EXISTS)
+           || eager_evaluation_;
+  }
+
   TO_STRING_KV("type", get_type_name(type_),
               K_(datum_meta),
               K_(obj_meta),
@@ -903,6 +911,7 @@ public:
       uint64_t is_fixed_length_data_:1; // wether data of this expr is fixed length
       uint64_t nullable_:1;
       uint64_t is_hidden_clustering_key_column_:1;
+      uint64_t eager_evaluation_:1;
     };
     uint64_t flag_;
   };

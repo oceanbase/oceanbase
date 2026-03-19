@@ -1132,6 +1132,11 @@ public:
   static int build_pseudo_random(ObRawExprFactory &factory,
                                  const ObSQLSessionInfo &session_info,
                                  ObRawExpr *&out);
+  static int build_pseudo_columns_for_window_funnel(ObRawExprFactory &factory,
+                                                    const ObSQLSessionInfo &session_info,
+                                                    ObRawExpr *timestamp_expr,
+                                                    ObRawExpr *&pseudo_time,
+                                                    ObRawExpr *&pseudo_event_idx);
   static int build_grouping_id(ObRawExprFactory &factory, const ObSQLSessionInfo &session_info,
                                ObOpPseudoColumnRawExpr *&out);
   static bool is_pseudo_column_like_expr(const ObRawExpr &expr);

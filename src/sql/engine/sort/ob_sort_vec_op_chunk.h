@@ -63,6 +63,7 @@ struct ObSortVecOpChunk : public common::ObDLinkBase<ObSortVecOpChunk<Store_Row,
 
 public:
   int64_t level_;
+  int64_t chunk_idx_;
   ObTempRowStore sk_store_;
   ObTempRowStore addon_store_;
   ObTempRowStore::Iterator sk_row_iter_;

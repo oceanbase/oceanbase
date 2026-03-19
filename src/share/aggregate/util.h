@@ -709,6 +709,9 @@ inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_
   case T_FUN_WM_CONCAT: {
     return (!has_rollup && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0);
   }
+  case T_FUN_WINDOW_FUNNEL: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_1;
+  }
   default:
     return false;
   }
@@ -791,6 +794,14 @@ inline bool agg_res_not_null(const ObItemType agg_op)
   VEC_TC_MYSQL_DATETIME,      \
   VEC_TC_MYSQL_DATE,          \
   VEC_TC_ROARINGBITMAP
+
+// window_funnel parameter indices
+constexpr int64_t WINDOW_FUNNEL_TIMESTAMP_EXPR_IDX = 0;
+constexpr int64_t WINDOW_FUNNEL_WINDOW_EXPR_IDX = 1;
+constexpr int64_t WINDOW_FUNNEL_MODE_EXPR_IDX = 2;
+constexpr int64_t WINDOW_FUNNEL_PSEUDO_TIME_EXPR_IDX = 3;
+constexpr int64_t WINDOW_FUNNEL_PSEUDO_EVENT_IDX_EXPR_IDX = 4;
+constexpr int64_t WINDOW_FUNNEL_CONDITION_START_IDX = 5;
 
 } // end namespace aggregate
 } // end namespace share

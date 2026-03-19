@@ -90,14 +90,12 @@ int vector_fromdays(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
         res_vec->set_date(idx, ObTimeConverter::ZERO_DATE);
       }
     }
-    eval_flags.set_all(bound.start(), bound.end());
   } else {
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
       } else if (arg_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
         continue;
       }
       int32_t value = arg_vec->get_int32(idx);
@@ -106,7 +104,6 @@ int vector_fromdays(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
       } else {
         res_vec->set_date(idx, ObTimeConverter::ZERO_DATE);
       }
-      eval_flags.set(idx);
     }
   }
   return ret;

@@ -3446,12 +3446,10 @@ int ObRelationalExprOperator::eval_batch_min_max_compare(
                  r_datum.is_outrow() || r_datum.is_ext() ) {
         if (l_datum.is_null() || r_datum.is_null()) {
           results[i].set_null();
-          eval_flags.set(i);
         } else if (OB_FAIL(get_min_max_cmp_ret(&l_datum, &r_datum, cmp_ret))) {
           LOG_WARN("fail to get min max cmp ret");
         } else {
           results[i].set_int(is_expected_cmp_ret(get_cmp_op(expr.type_), cmp_ret));
-          eval_flags.set(i);
         }
         LOG_DEBUG("current compare object(ObDatum) min max status",
           K(l_datum.is_outrow()),
@@ -3543,12 +3541,10 @@ int ObRelationalExprOperator::eval_vector_min_max_compare(
                     r_datum.is_outrow() || r_datum.is_ext() ) {
             if (l_datum.is_null() || r_datum.is_null()) {
               res_vec->set_null(i);
-              eval_flags.set(i);
             } else if (OB_FAIL(get_min_max_cmp_ret(&l_datum, &r_datum, cmp_ret))) {
               LOG_WARN("fail to get min max cmp ret");
             } else {
               res_vec->set_int(i, is_expected_cmp_ret(get_cmp_op(expr.type_), cmp_ret));
-              eval_flags.set(i);
             }
             LOG_DEBUG("current compare object(ObDatum) min max status",
               K(l_datum.is_outrow()), K(l_datum.is_ext()),
@@ -6048,7 +6044,6 @@ int ObBitwiseExprOperator::inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMo
 
         if (l_vec->is_null(i) || r_vec->is_null(i)) {
           res_vec->set_null(i);
-          eval_flags.set(i);
         } else {
           ObDatum left_datum = ObDatum(l_vec->get_payload(i), l_vec->get_length(i), false);
           ObDatum right_datum = ObDatum(r_vec->get_payload(i), r_vec->get_length(i), false);
@@ -6073,7 +6068,6 @@ int ObBitwiseExprOperator::inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMo
               LOG_WARN("get ObNumber from int64 failed", K(ret), K(res));
             } else {
               res_vec->set_number(i, tmp);
-              eval_flags.set(i);
             }
           }
         }
@@ -6088,7 +6082,6 @@ int ObBitwiseExprOperator::inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMo
 
         if (l_vec->is_null(i) || r_vec->is_null(i)) {
           res_vec->set_null(i);
-          eval_flags.set(i);
         } else {
           ObDatum left_datum = ObDatum(l_vec->get_payload(i), l_vec->get_length(i), false);
           ObDatum right_datum = ObDatum(r_vec->get_payload(i), r_vec->get_length(i), false);
@@ -6124,7 +6117,6 @@ int ObBitwiseExprOperator::inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMo
             }
 
             res_vec->set_uint(i, res);
-            eval_flags.set(i);
           }
         }
       }

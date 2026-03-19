@@ -255,7 +255,7 @@ public :
     alloc_(alloc), source_cols_(), need_json_wrap_(need_json_wrap), table_name_(*table_name), database_name_(*database_name), index_name_map_(),
     user_cols_(), out_cols_(nullptr), enable_es_mode_(enable_es_mode), fusion_config_(), default_size_(nullptr) {}
   virtual ~ObESQueryParser() {}
-  int parse(const common::ObString &req_str, ObQueryReqFromJson *&query_req);
+  int parse(const common::ObString &req_str, ObQueryReqFromJson *&query_req, sql::ObSQLSessionInfo *session = nullptr);
   inline ColumnIndexNameMap &get_index_name_map() { return index_name_map_; }
   inline ObIArray<ObString> &get_user_column_names() { return user_cols_; }
 private :

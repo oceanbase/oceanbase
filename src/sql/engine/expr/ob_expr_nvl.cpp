@@ -421,7 +421,6 @@ int ObExprNvlUtil::calc_nvl_expr_batch(const ObExpr &expr,
       if (skip.at(i) || eval_flags.at(i)) {
         continue;
       }
-      eval_flags.set(i);
       ObDatum *arg0 = args0.at(i);
       ObDatum *arg1 = args1.at(i);
       if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
@@ -568,7 +567,6 @@ int ObExprNaNvl::eval_nanvl_batch(const ObExpr &expr,
       param1 = &expr.args_[0]->locate_expr_datum(ctx, i);
       if (param1->is_null() && ObOBinDoubleType != ob_obj_type_to_oracle_type(expr.args_[0]->datum_meta_.get_type())) {
         results[i].set_null();
-        eval_flags.set(i);
         my_skip.set(i);
       }
     }
@@ -584,7 +582,6 @@ int ObExprNaNvl::eval_nanvl_batch(const ObExpr &expr,
         bool ret_bool = false;
         param1 = &expr.args_[0]->locate_expr_datum(ctx, i);
         param2 = &expr.args_[1]->locate_expr_datum(ctx, i);
-        eval_flags.set(i);
         if (param1->is_null() || (param2->is_null() && ObDoubleType != expr.args_[1]->datum_meta_.get_type())) {
           results[i].set_null();
         } else if (OB_FAIL(eval_nanvl_util(expr, results[i], param1, param2, ret_bool))){

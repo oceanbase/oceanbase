@@ -991,11 +991,22 @@ struct VecTCCmpCalc<VEC_TC_STRING, VEC_TC_STRING>
     OB_ASSERT(l_meta.get_collation_type() == r_meta.get_collation_type());
     bool end_with_space =
       is_calc_with_end_space(l_meta.get_type(), r_meta.get_type(), lib::is_oracle_mode(),
-                             l_meta.get_collation_type(), r_meta.get_collation_type());
-    cmp_ret =
-      ObCharset::strcmpsp(l_meta.get_collation_type(), reinterpret_cast<const char *>(l_v), l_len,
-                          reinterpret_cast<const char *>(r_v), r_len, end_with_space);
-    cmp_ret = (cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0));
+                            l_meta.get_collation_type(), r_meta.get_collation_type());
+    if (end_with_space
+        && (l_meta.get_collation_type() == CS_TYPE_UTF8MB4_BIN
+            || l_meta.get_collation_type() == CS_TYPE_UTF8MB4_0900_BIN)) {
+      int64_t cmp_len = std::min(l_len, r_len);
+      cmp_ret = MEMCMP(l_v, r_v, cmp_len);
+      cmp_ret = (cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0));
+      if (OB_UNLIKELY(cmp_ret == 0)) {
+        cmp_ret = l_len > r_len ? 1 : (l_len < r_len ? -1 : 0);
+      }
+    } else {
+      cmp_ret =
+        ObCharset::strcmpsp(l_meta.get_collation_type(), reinterpret_cast<const char *>(l_v), l_len,
+                            reinterpret_cast<const char *>(r_v), r_len, end_with_space);
+      cmp_ret = (cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0));
+    }
     return OB_SUCCESS;
   }
 };

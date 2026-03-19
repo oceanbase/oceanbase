@@ -1924,6 +1924,11 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
           ObJsonBuffer jbuf(&allocator);
           ObJsonInType in_type = ObJsonInType::JSON_BIN;
           uint32_t parse_flag = lib::is_mysql_mode() ? 0 : ObJsonParser::JSN_RELAXED_FLAG;
+          sql::ObSQLSessionInfo *session = ctx_.get_my_session();
+          bool json_float_full_precision =
+            OB_NOT_NULL(ctx_.get_my_session()) ? ctx_.get_my_session()->get_local_json_float_full_precision() : false;
+          ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag,
+                           ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
           if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
                                                                 datum,
                                                                 datum_meta,
@@ -2427,6 +2432,11 @@ int ObSelectIntoOp::set_odps_column_value_oracle(apsara::odps::sdk::ODPSTableRec
           ObJsonBuffer jbuf(&allocator);
           ObJsonInType in_type = ObJsonInType::JSON_BIN;
           uint32_t parse_flag = lib::is_mysql_mode() ? 0 : ObJsonParser::JSN_RELAXED_FLAG;
+          sql::ObSQLSessionInfo *session = ctx_.get_my_session();
+          bool json_float_full_precision =
+            OB_NOT_NULL(ctx_.get_my_session()) ? ctx_.get_my_session()->get_local_json_float_full_precision() : false;
+          ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag,
+                           ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
           if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
                                                                 datum,
                                                                 datum_meta,
@@ -3238,6 +3248,11 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObOdpsJniConnec
             ObJsonBuffer jbuf(&alloc);
             ObJsonInType in_type = ObJsonInType::JSON_BIN;
             uint32_t parse_flag = lib::is_mysql_mode() ? 0 : ObJsonParser::JSN_RELAXED_FLAG;
+            sql::ObSQLSessionInfo *session = ctx_.get_my_session();
+            bool json_float_full_precision =
+              OB_NOT_NULL(ctx_.get_my_session()) ? ctx_.get_my_session()->get_local_json_float_full_precision() : false;
+            ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag,
+                             ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
             if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc,
                                                                   &expr_vector,
                                                                   meta,

@@ -73,7 +73,8 @@ public:
       sql::ObSelectStmt *&select_stmt,
       sql::ObRawExprFactory &expr_factory,
       sql::ObStmtFactory &stmt_factory,
-      bool throw_error);
+      bool throw_error,
+      common::ObIArray<obrpc::ObDependencyObjDDLArg> *alter_view_compile_args = NULL);
   // skip inner added implicit cast and bool expr.
   static const sql::ObRawExpr *skip_inner_added_expr(const sql::ObRawExpr *expr);
   static int set_col_attrs_according_binary_expr(const uint64_t tenant_id,

@@ -403,7 +403,6 @@ static int do_round_by_type_batch_with_check(const int64_t scale, const ObExpr &
             continue;
         }
         ObDatum &x_datum = x_datums[i];
-        eval_flags.set(i);
         if (x_datum.is_null()) {
           results[i].set_null();
         } else{
@@ -431,7 +430,6 @@ static int do_round_by_type_batch_with_check(const int64_t scale, const ObExpr &
           continue;
         } else {
           ObDatum &x_datum = x_datums[i];
-          eval_flags.set(i);
           if (x_datum.is_null()) {
             results[i].set_null();
           } else if (OB_FAIL(ObExprFuncRound::calc_round_decimalint(
@@ -448,7 +446,6 @@ static int do_round_by_type_batch_with_check(const int64_t scale, const ObExpr &
             continue;
         }
         ObDatum &x_datum = x_datums[i];
-        eval_flags.set(i);
         if (x_datum.is_null()) {
           results[i].set_null();
         } else{
@@ -465,7 +462,6 @@ static int do_round_by_type_batch_with_check(const int64_t scale, const ObExpr &
             continue;
         }
         ObDatum &x_datum = x_datums[i];
-        eval_flags.set(i);
         if (x_datum.is_null()) {
           results[i].set_null();
         } else{
@@ -481,7 +477,6 @@ static int do_round_by_type_batch_with_check(const int64_t scale, const ObExpr &
             continue;
         }
         ObDatum &x_datum = x_datums[i];
-        eval_flags.set(i);
         if (x_datum.is_null()) {
           results[i].set_null();
         } else{
@@ -501,7 +496,6 @@ static int do_round_by_type_batch_with_check(const int64_t scale, const ObExpr &
             continue;
         }
         ObDatum &x_datum = x_datums[i];
-        eval_flags.set(i);
         if (x_datum.is_null()) {
           results[i].set_null();
         } else{
@@ -527,7 +521,6 @@ if (IsCheck) {                             \
     continue;                              \
   } else if (left_vec->is_null(j)) {       \
     res_vec->set_null(j);                  \
-    eval_flags.set(j);                     \
     continue;                              \
   }                                        \
 }
@@ -547,7 +540,6 @@ public:
       for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
         ret = eval_scalar(arg_vec, i, res_vec);
       }
-      eval_flags_.set_all(bound_.start(), bound_.end());
     } else {
       for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
         if (skip_.at(i) || eval_flags_.at(i)) {
@@ -557,7 +549,6 @@ public:
         } else {
           ret = eval_scalar(arg_vec, i, res_vec);
         }
-        eval_flags_.set(i);
       }
     }
     return ret;
@@ -676,7 +667,6 @@ public:
           }
         }
       }
-      eval_flags_.set_all(bound_.start(), bound_.end());
     } else {
       for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
         if (skip_.at(i) || eval_flags_.at(i)) {
@@ -700,7 +690,6 @@ public:
             }
           }
         }
-        eval_flags_.set(i);
       }
     }
     return ret;
@@ -797,7 +786,6 @@ static int do_round_by_type_vector(const int64_t scale, const ObExpr &expr,
           LOG_WARN("eval round of res_nmb failed", K(ret), K(scale), K(res_nmb));
         } else {
           res_vec->set_number(j, res_nmb);
-          eval_flags.set(j);
         }
       }
       break;
@@ -996,9 +984,6 @@ static int do_round_by_type_batch_without_check(const int64_t scale, const ObExp
       LOG_WARN("unexpected arg type", K(ret), K(x_type));
       break;
     }
-  }
-  if (OB_SUCC(ret)) {
-    eval_flags.set_all(batch_size);
   }
   return ret;
 }
@@ -1218,10 +1203,8 @@ int ObExprFuncRound::calc_round_expr_numeric2_batch(const ObExpr &expr,
     }
     if (OB_SUCC(ret)) {
       if (fmt_datum->is_null()) {
-        ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
         ObDatum *results = expr.locate_batch_datums(ctx);
         for (int64_t i = 0; i < batch_size; ++i) {
-          eval_flags.set(i);
           results[i].set_null();
         }
       } else {
@@ -1301,10 +1284,8 @@ int ObExprFuncRound::inner_calc_round_expr_numeric2_vector(const ObExpr &expr,
     }
     if (OB_SUCC(ret)) {
       if (fmt_datum->is_null()) {
-        ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
         ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
         for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
-          eval_flags.set(j);
           res_vec->set_null(j);
         }
       } else {
@@ -1417,7 +1398,6 @@ int ObExprFuncRound::calc_round_expr_datetime1_batch(const ObExpr &expr,
       }
       int64_t dt = 0;
       ObDatum &x_datum = expr.args_[0]->locate_expr_datum(ctx, i);
-      eval_flags.set(i);
       if (x_datum.is_null()) {
         results[i].set_null();
       } else if (OB_FAIL(calc_round_expr_datetime_inner(x_datum, fmt_str, ctx, dt, expr))) {
@@ -1472,7 +1452,6 @@ int ObExprFuncRound::inner_calc_round_expr_datetime1_vector(const ObExpr &expr,
         res_vec->set_datetime(j, dt);
       }
     }
-    eval_flags.set(j);
   }
   return ret;
 }
@@ -1518,7 +1497,6 @@ int ObExprFuncRound::calc_round_expr_datetime2_batch(const ObExpr &expr,
       }
       int64_t dt = 0;
       ObDatum &x_datum = x_datums[i];
-      eval_flags.set(i);
       if (x_datum.is_null() || fmt_datum->is_null()) {
         results[i].set_null();
       } else if (OB_FAIL(calc_round_expr_datetime_inner(x_datum, fmt_datum->get_string(), ctx, dt,
@@ -1567,7 +1545,6 @@ int ObExprFuncRound::inner_calc_round_expr_datetime2_vector(const ObExpr &expr,
         continue;
       }
       int64_t dt = 0;
-      eval_flags.set(j);
       if (left_vec->is_null(j) || fmt_datum->is_null()) {
         res_vec->set_null(j);
       } else {

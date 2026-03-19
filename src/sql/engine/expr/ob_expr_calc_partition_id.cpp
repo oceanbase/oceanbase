@@ -654,14 +654,12 @@ static int inner_fast_calc_partition_level_one_vector(const ObExpr &expr,
         } else {
           res_vec->set_int(row_idx, ObTabletID::INVALID_TABLET_ID);
         }
-        eval_flags.set(row_idx);
       } else if (CalcIdType == CALC_PARTITION_ID) {
         if (OB_NOT_NULL(partition)) {
           res_vec->set_int(row_idx, partition->get_part_id());
         } else {
           res_vec->set_int(row_idx, OB_INVALID_ID);
         }
-        eval_flags.set(row_idx);
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected calc_id_type", K(CalcIdType), K(ret));
@@ -845,7 +843,6 @@ int ObExprCalcPartitionBase::calc_partition_level_one_vector(const ObExpr &expr,
         LOG_WARN("add interval part failed", K(ret), KPC(calc_part_info), K(row));
       } else {
         res_vec->unset_null(row_idx);
-        eval_flags.set(row_idx);
         if (CALC_TABLET_ID == calc_part_info->calc_id_type_) {
           res_vec->set_int(row_idx, tablet_id.id());
         } else if (CALC_PARTITION_ID == calc_part_info->calc_id_type_) {
@@ -934,7 +931,6 @@ int ObExprCalcPartitionBase::calc_partition_level_one_vector(const ObExpr &expr,
               }
               if (OB_SUCC(ret)) {
                 res_vec->unset_null(row_idx);
-                eval_flags.set(row_idx);
                 if (CALC_TABLET_ID == calc_part_info->calc_id_type_) {
                   res_vec->set_int(row_idx, tablet_id.id());
                 } else if (CALC_PARTITION_ID == calc_part_info->calc_id_type_) {

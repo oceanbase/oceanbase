@@ -452,8 +452,6 @@ static int simd_eval_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVecto
   }                                                                                                 \
   batch_cnt = (unit_cnt % 8) * (unit / val_size);                                                   \
   output_idx += batch_cnt;                                                                          \
-  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);                                          \
-  eval_flags.set_all(bound.start(), bound.end());                                                   \
   OB_ASSERT(output_idx == bound.end());
 
   int ret = OB_SUCCESS;

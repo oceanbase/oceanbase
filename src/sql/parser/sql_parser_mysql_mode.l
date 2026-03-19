@@ -1028,6 +1028,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>FROZEN_VERSION { return FROZEN_VERSION; }
 <hint>TOPK { return TOPK; }
 <hint>QUERY_TIMEOUT { return QUERY_TIMEOUT; }
+<hint>MAX_EXECUTION_TIME { return MAX_EXECUTION_TIME; }
 <hint>READ_CONSISTENCY  { return READ_CONSISTENCY; }
 <hint>WEAK  { return WEAK; }
 <hint>STRONG  { return STRONG; }

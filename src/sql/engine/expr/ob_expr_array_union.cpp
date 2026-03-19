@@ -260,7 +260,6 @@ int ObExprArraySetOperation::eval_array_set_operation_batch(const ObExpr &expr,
     if (skip.at(j) || eval_flags.at(j)) {
       continue;
     }
-    eval_flags.set(j);
     if (ob_is_null(expr.obj_meta_.get_type())) {
       is_null_res = true;
     } else {
@@ -353,7 +352,6 @@ int ObExprArraySetOperation::eval_array_set_operation_vector(const ObExpr &expr,
     if (skip.at(j) || eval_flags.at(j)) {
       continue;
     }
-    eval_flags.set(j);
     if (ob_is_null(expr.obj_meta_.get_type())) {
       is_null_res = true;
     } else {

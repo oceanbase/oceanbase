@@ -87,7 +87,6 @@ static int vector_sin(const ObExpr &expr,
         res_vec->set_number(idx, res_nmb);
       }
     }
-    eval_flags.set(idx);
   }
 
   return ret;

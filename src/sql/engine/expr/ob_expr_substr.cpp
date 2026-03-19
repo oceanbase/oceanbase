@@ -766,7 +766,6 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
             continue;
           } else {
             results[j].set_null();
-            eval_flags.set(j);
           }
         }
       } else {
@@ -786,7 +785,6 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
             continue;
           } else if (datum_array[j].is_null()) {
             results[j].set_null();
-            eval_flags.set(j);
           } else if(!ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
             if (OB_FAIL(substr(output, datum_array[j].get_string(), pos,
                                min(len, datum_array[j].get_string().length()),
@@ -800,7 +798,6 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
               } else {
                 results[j].set_string(output);
               }
-              eval_flags.set(j);
             }
           } else { // text tc
             const ObDatumMeta &input_meta = expr.args_[0]->datum_meta_;
@@ -826,8 +823,6 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
                                                 true,
                                                 j))) {
               LOG_WARN("eval substr text failed", K(ret));
-            } else {
-              eval_flags.set(j);
             }
           }
         }
@@ -884,7 +879,6 @@ int ObExprSubstr::vector_substr(VECTOR_EVAL_FUNC_ARG_DECL)
           continue;
         } else {
           res_vec->set_null(idx);
-          eval_flags.set(idx);
         }
       }
     } else {
@@ -908,7 +902,6 @@ int ObExprSubstr::vector_substr(VECTOR_EVAL_FUNC_ARG_DECL)
           continue;
         } else if (arg0_vec->is_null(idx)) {
           res_vec->set_null(idx);
-          eval_flags.set(idx);
         } else {
           // 2.1 deal with string tc
           if (!ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
@@ -924,7 +917,6 @@ int ObExprSubstr::vector_substr(VECTOR_EVAL_FUNC_ARG_DECL)
               } else {
                 res_vec->set_string(idx, output);
               }
-              eval_flags.set(idx);
             }
           // 2.2 deal with text tc
           } else {
@@ -953,8 +945,6 @@ int ObExprSubstr::vector_substr(VECTOR_EVAL_FUNC_ARG_DECL)
                                                 true,
                                                 idx))) {
               LOG_WARN("eval substr text failed", K(ret));
-            } else {
-              eval_flags.set(idx);
             }
           }
         }

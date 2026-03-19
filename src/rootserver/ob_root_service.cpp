@@ -3338,6 +3338,37 @@ int ObRootService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLA
   return ret;
 }
 
+int ObRootService::alter_view(const obrpc::ObAlterViewArg &arg, obrpc::ObAlterViewRes &res)
+{
+  LOG_DEBUG("receive alter view compile arg", K(arg));
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.exec_tenant_id_, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(arg.exec_tenant_id_));
+  } else if (obrpc::ObAlterViewArg::COMPILE_VIEW == arg.alter_view_action_) {
+    if (data_version < DATA_VERSION_4_4_2_1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("version lower than 4.4.2.1 does not support alter view compile", KR(ret));
+    } else {
+      const ObString *ddl_stmt_str = arg.ddl_stmt_str_.empty() ? nullptr : &arg.ddl_stmt_str_;
+      if (OB_FAIL(ddl_service_.maintain_obj_dependency_info_batch(arg.tenant_id_, arg.alter_view_compile_args_, ddl_stmt_str))) {
+        LOG_WARN("failed to maintain obj dependency info batch", KR(ret), "dep_view_count",
+          arg.alter_view_compile_args_.count(), K(arg.view_id_), K(arg.view_name_));
+      }
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only COMPILE_VIEW action is supported currently", KR(ret), K(arg.alter_view_action_));
+  }
+  return ret;
+}
+
 int ObRootService::mview_complete_refresh(const obrpc::ObMViewCompleteRefreshArg &arg,
                                           obrpc::ObMViewCompleteRefreshRes &res)
 {

@@ -118,10 +118,10 @@ private:
     void restore_fixed_base_single_row(ObFixedLengthBase &vec, int64_t from_idx, int64_t to_idx) const;
     void restore_discrete_base_single_row(ObDiscreteBase &vec, int64_t from_idx, int64_t to_idx) const;
     void restore_continuous_base_single_row(ObVectorBase &vec, int64_t from_idx, int64_t to_idx, VectorFormat dst_fmt) const;
-    void restore_uniform_base_single_row(ObUniformBase &vec, int64_t from_idx, int64_t to_idx, bool is_const) const;
+    void restore_uniform_base_single_row(ObUniformBase &vec, int64_t from_idx, int64_t to_idx, bool is_const, char *res_buf) const;
     void extend_fixed_base_vector(ObFixedLengthBase &vec, const int64_t src_start_idx, const int64_t srt_end_idx, const int64_t size, const int64_t start_dst_idx) const;
     void extend_discrete_base_vector(ObDiscreteBase &vec, const int64_t src_start_idx, const int64_t srt_end_idx, const int64_t size, const int64_t start_dst_idx) const;
-    void extend_uniform_base_vector(ObUniformBase &vec, const int64_t src_start_idx, const int64_t srt_end_idx, const int64_t size, const int64_t start_dst_idx, const bool is_const) const;
+    void extend_uniform_base_vector(ObUniformBase &vec, const int64_t src_start_idx, const int64_t srt_end_idx, const int64_t size, const int64_t start_dst_idx, const bool is_const, char *res_buf) const;
     void extend_continuous_base_vector(ObVectorBase &vec, const int64_t src_start_idx, const int64_t srt_end_idx, const int64_t size, const int64_t start_dst_idx, const VectorFormat dst_fmt) const;
     void convert_continuous_to_fixed(ObFixedLengthBase &vec, const int64_t from_idx, const int64_t to_idx) const;
     void convert_continuous_to_discrete(ObDiscreteBase &vec, const int64_t from_idx, const int64_t to_idx) const;

@@ -128,7 +128,6 @@ int ObExprArrayLength::eval_array_length_batch(const ObExpr &expr,
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (arr_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (OB_FAIL( ObArrayExprUtils::get_array_type_by_subschema_id(ctx, subschema_id, arr_type))) {
@@ -184,7 +183,6 @@ int ObExprArrayLength::eval_array_length_vector(const ObExpr &expr,
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
       }
-      eval_flags.set(idx);
       ObString arr_str = arr_vec->get_string(idx);
       if (arr_vec->is_null(idx)) {
         res_vec->set_null(idx);

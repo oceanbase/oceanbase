@@ -20549,7 +20549,7 @@ int ObDDLService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLAr
       && OB_FAIL(process_schema_object_dependency(tenant_id, arg.delete_dep_objs_,
       schema_guard, trans, ddl_operator, ObReferenceObjTable::DELETE_OP))) {
       LOG_WARN("failed to process delete object dependency", K(ret));
-    } else if (arg.schema_.is_valid() && OB_FAIL(recompile_view(arg.schema_, arg.reset_view_column_infos_, trans))) {
+    } else if (arg.schema_.is_valid() && OB_FAIL(recompile_view(arg.schema_, arg.reset_view_column_infos_, trans, schema_guard))) {
       LOG_WARN("failed to recompile view", K(ret));
     }
     if (trans.is_started()) {
@@ -20567,6 +20567,83 @@ int ObDDLService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLAr
   }
   if (OB_SUCC(ret)) {
     ret = tmp_ret;
+  }
+  return ret;
+}
+
+int ObDDLService::maintain_obj_dependency_info_batch(
+    const uint64_t tenant_id,
+    const common::ObIArray<obrpc::ObDependencyObjDDLArg> &args,
+    const common::ObString *ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    ObSchemaService *schema_service = schema_service_->get_schema_service();
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    if (OB_ISNULL(schema_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema_service must not null", KR(ret));
+    } else {
+      ObDDLSQLTransaction trans(schema_service_);
+      share::schema::ObSchemaGetterGuard schema_guard;
+      int64_t refreshed_schema_version = 0;
+      if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+        LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+        LOG_WARN("failed to start trans", KR(ret), K(tenant_id), K(refreshed_schema_version));
+      } else {
+        // Apply all dependency updates and recompiles inside one transaction.
+        for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); ++i) {
+          const obrpc::ObDependencyObjDDLArg &arg = args.at(i);
+          if (!arg.is_valid()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid dependency obj ddl arg", KR(ret), K(i), K(arg));
+          } else if (arg.tenant_id_ != tenant_id) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("tenant_id mismatch in batch args", KR(ret), K(i), K(tenant_id), K(arg.tenant_id_));
+          } else if (!arg.update_dep_objs_.empty()
+              && OB_FAIL(process_schema_object_dependency(tenant_id, arg.update_dep_objs_,
+                  schema_guard, trans, ddl_operator, share::schema::ObReferenceObjTable::UPDATE_OP))) {
+            LOG_WARN("failed to process update object dependency", KR(ret), K(i));
+          } else if (!arg.insert_dep_objs_.empty()
+              && OB_FAIL(process_schema_object_dependency(tenant_id, arg.insert_dep_objs_,
+                  schema_guard, trans, ddl_operator, share::schema::ObReferenceObjTable::INSERT_OP))) {
+            LOG_WARN("failed to process insert object dependency", KR(ret), K(i));
+          } else if (!arg.delete_dep_objs_.empty()
+              && OB_FAIL(process_schema_object_dependency(tenant_id, arg.delete_dep_objs_,
+                  schema_guard, trans, ddl_operator, share::schema::ObReferenceObjTable::DELETE_OP))) {
+            LOG_WARN("failed to process delete object dependency", KR(ret), K(i));
+          } else if (arg.schema_.is_valid()
+              && OB_FAIL(recompile_view(arg.schema_, arg.reset_view_column_infos_, trans, schema_guard, ddl_stmt_str))) {
+            LOG_WARN("failed to recompile view", KR(ret), K(i));
+          }
+        }
+      }
+      if (trans.is_started()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, KR(tmp_ret));
+          ret = (OB_SUCC(ret)) ? tmp_ret : ret;
+        }
+      }
+    }
+
+    // publish schema once
+    int tmp_ret = OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+    } else if (OB_SUCCESS != (tmp_ret = publish_schema(tenant_id))) {
+      LOG_WARN("publish_schema failed", KR(tmp_ret), K(tenant_id));
+    }
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
   }
   return ret;
 }
@@ -35283,7 +35360,11 @@ int ObDDLService::clean_global_context(const ObContextSchema &context_schema)
   return ret;
 }
 
-int ObDDLService::recompile_view(const ObTableSchema &view_schema, const bool reset_view_column_infos, ObDDLSQLTransaction &trans)
+int ObDDLService::recompile_view(const ObTableSchema &view_schema,
+                                 const bool reset_view_column_infos,
+                                 ObDDLSQLTransaction &trans,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 const common::ObString *ddl_stmt_str /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = view_schema.get_tenant_id();
@@ -35292,7 +35373,6 @@ int ObDDLService::recompile_view(const ObTableSchema &view_schema, const bool re
   uint64_t data_version = 0;
   CK (OB_NOT_NULL(schema_service_) && OB_NOT_NULL(schema_service = schema_service_->get_schema_service()));
   LOG_TRACE("recompile view", K(view_schema.get_table_id()), K(view_schema.get_table_name()), K(ret), K(reset_view_column_infos));
-  ObSchemaGetterGuard schema_guard;
   const ObSimpleTableSchemaV2 *view_schema_in_guard = nullptr;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
@@ -35302,8 +35382,6 @@ int ObDDLService::recompile_view(const ObTableSchema &view_schema, const bool re
   } else if (!view_schema.is_view_table()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wrong schema get", K(ret), K(view_schema));
-  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, view_schema.get_table_id(), view_schema_in_guard))) {
     LOG_WARN("failed to get simpile table schema", K(ret));
   } else if (nullptr == view_schema_in_guard) {
@@ -35325,7 +35403,7 @@ int ObDDLService::recompile_view(const ObTableSchema &view_schema, const bool re
       LOG_WARN("failed to add view column info", K(ret));
     } else if (OB_FAIL(ddl_operator.update_table_status(new_view_schema, refreshed_schema_version,
                                                         new_status, update_object_status_ignore_version,
-                                                        trans))) {
+                                                        trans, ddl_stmt_str))) {
       LOG_WARN("failed to update table status", K(ret));
     }
   }

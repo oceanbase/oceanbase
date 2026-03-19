@@ -38,6 +38,7 @@ ob_set_subtarget(ob_share_extra ALONE
   aggregate/hybrid_hist.cpp
   aggregate/wm_concat.cpp
   aggregate/str_prefix_max.cpp
+  aggregate/window_funnel.cpp
 
   vector/expr_cmp_func.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_0.cpp
