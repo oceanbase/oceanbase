@@ -147,6 +147,9 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
   if (NULL != value) {
     int ret = OB_SUCCESS;
     ObPLContext *pl_ctx = reinterpret_cast<ObPLContext *>(pl_context);
+    if (OB_NOT_NULL(pl_ctx)) {
+      pl_ctx->register_stack_frames();
+    }
     ObPLExecState *frame = NULL;
     ObIAllocator *pl_allocator = NULL;
     CK (OB_NOT_NULL(pl_ctx));

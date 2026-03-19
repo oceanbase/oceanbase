@@ -461,32 +461,31 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
         call_proc_info->set_package_id(proc_info->get_package_id());
         call_proc_info->set_routine_id(proc_info->get_subprogram_id());
       }
-
+      CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
+      CK (OB_NOT_NULL(params_.sql_proxy_));
+      CK (OB_NOT_NULL(session_info_));
       for (int64_t i = 0; OB_SUCC(ret) && i < proc_info->get_param_count(); ++i) {
         const ObRoutineParam *param_info = proc_info->get_routine_params().at(i);
         const ObRawExpr *param_expr = params.at(i);
         pl::ObPLDataType pl_type;
         CK (OB_NOT_NULL(param_info));
         CK (OB_NOT_NULL(param_expr));
-
-        if (OB_SUCC(ret)) {
-          CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
-          CK (OB_NOT_NULL(params_.sql_proxy_));
-          CK (OB_NOT_NULL(session_info_));
-          OX (pl_type.set_enum_set_ctx(&call_proc_info->get_enum_set_ctx()));
-          OZ (pl::ObPLDataType::transform_from_iparam(param_info,
-                                                      *(schema_checker_->get_schema_mgr()),
-                                                      *(session_info_),
-                                                      *(params_.sql_proxy_),
-                                                      pl_type,
-                                                      NULL,
-                                                      &params_.package_guard_->dblink_guard_));
-        }
+        OX (pl_type.set_enum_set_ctx(&call_proc_info->get_enum_set_ctx()));
+        OZ (pl::ObPLDataType::transform_from_iparam(param_info,
+                                                    *(schema_checker_->get_schema_mgr()),
+                                                    *(session_info_),
+                                                    *(params_.sql_proxy_),
+                                                    pl_type,
+                                                    NULL,
+                                                    &params_.package_guard_->dblink_guard_));
         if (OB_SUCC(ret)) {
           const ObRawExpr* param = params.at(i);
           CK (OB_NOT_NULL(param));
           if (param->get_expr_type() == T_QUESTIONMARK) {
             OZ (call_proc_info->add_question_mark_idx(i));
+            if (session_info_->enable_pl_null_literal_parameterization()) {
+              OZ (pl::ObPLResolver::modify_null_param_using_deduced_type(param, pl_type, nullptr));
+            }
           }
           if (param_info->is_out_sp_param() || param_info->is_inout_sp_param()) {
             if (lib::is_mysql_mode()
@@ -589,7 +588,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
         && 0 != params_.cur_sql_.length()
         && NULL == stmt->get_dblink_routine_info()) {
       if (NULL != params_.param_list_) {
-        OZ (call_proc_info->set_params_info(*params_.param_list_));
+        OZ (call_proc_info->set_params_info(*params_.param_list_, false, session_info_->enable_pl_null_literal_parameterization(), &params));
       }
       OX (call_proc_info->get_stat_for_update().type_ = pl::ObPLCacheObjectType::CALL_STMT_TYPE);
       OX (call_proc_info->get_stat_for_update().compile_time_ = compile_end - compile_start);

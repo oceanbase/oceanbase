@@ -76,7 +76,8 @@ private:
                       bool is_dynamic,
                       bool is_inner_parse,
                       bool &is_include_old_new_in_trigger,
-                      bool &contain_sensitive_data);
+                      bool &contain_sensitive_data,
+                      bool &has_null_param);
   int parse_stmt_block(ObParseCtx &parse_ctx,
                        ObStmtNodeTree *&multi_stmt);
   int reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,

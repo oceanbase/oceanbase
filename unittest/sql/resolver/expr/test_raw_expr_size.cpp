@@ -143,10 +143,7 @@ TEST(TestRawExprSize, expr_member_size)
     PRINT_SIZE(of_result, expr.value_)
     PRINT_SIZE(of_result, expr.literal_prefix_)
     PRINT_SIZE(of_result, expr.obj_meta_)
-    PRINT_SIZE(of_result, expr.is_date_unit_)
-    PRINT_SIZE(of_result, expr.is_literal_bool_)
-    PRINT_SIZE(of_result, expr.is_batch_stmt_parameter_)
-    PRINT_SIZE(of_result, expr.is_dynamic_eval_questionmark_)
+    PRINT_SIZE(of_result, expr.bool_flags_)
     PRINT_SIZE(of_result, expr.orig_questionmark_type_)
     of_result << std::endl;
   }

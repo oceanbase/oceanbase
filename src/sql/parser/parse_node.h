@@ -221,6 +221,7 @@ typedef struct _PLParseInfo
   bool is_pl_parse_expr_; //用于标识当前parser逻辑是否在解析PLParser的expr
   bool is_forbid_pl_fp_;
   bool is_inner_parse_;
+  bool has_null_param_; // 是否存在null literal
   int last_pl_symbol_pos_; //上一个pl变量的结束位置
   bool is_parse_dynamic_sql_;
   int plsql_line_;

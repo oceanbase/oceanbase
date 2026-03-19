@@ -901,6 +901,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
 
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
+  bool is_pure_null = pl::ObPLResolver::is_parameterized_null_param(expr);
   if (OB_FAIL(ret)) {
     // do nothing ...
   } else if (!resolve_ctx.is_prepare_with_params_
@@ -908,7 +909,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
              && (resolve_ctx.is_prepare_protocol_ || !resolve_ctx.is_sql_scope_
                  || resolve_ctx.session_info_.get_pl_context() != NULL)
              && (ObUnknownType == expr->get_result_type().get_type()
-                 || ObNullType == expr->get_result_type().get_type()
+                 || (ObNullType == expr->get_result_type().get_type() && !is_pure_null)
                  || (is_oracle_mode() ? expr->get_result_type().is_oracle_question_mark_type()
                                       : expr->get_result_type().is_mysql_question_mark_type()))) {
     OX (match_info =
@@ -931,7 +932,9 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
              && ObNullType == expr->get_result_type().get_type()) {
     OX (match_info =
             (ObRoutineMatchInfo::MatchInfo(false, ObNullType, dst_pl_type.get_obj_type())));
-  } else if (T_NULL == expr->get_expr_type() || ObNullTC == ob_obj_type_class(src_type)) {
+  } else if (T_NULL == expr->get_expr_type()
+             || ObNullTC == ob_obj_type_class(src_type)
+             || is_pure_null) {
     // NULL可以匹配任何类型
     OX (match_info =
       (ObRoutineMatchInfo::MatchInfo(false,
@@ -1590,6 +1593,76 @@ int ObResolverUtils::pick_routine(const pl::ObPLResolveCtx &resolve_ctx,
     OX (routine_info = match_infos.at(0).routine_info_);
   } else { // 存在多个匹配, 继续pick
     OZ (pick_routine(match_infos, routine_info));
+  }
+  OZ (record_deduced_type(resolve_ctx, routine_info, expr_params, routine_infos.count() > 1));
+  return ret;
+}
+
+int ObResolverUtils::record_deduced_type(const pl::ObPLResolveCtx &resolve_ctx,
+                                         const ObIRoutineInfo *&routine_info,
+                                         const common::ObIArray<ObRawExpr *> &expr_params,
+                                         bool is_from_overloaded_routine)
+{
+  int ret = OB_SUCCESS;
+  bool enable_share_cache = resolve_ctx.session_info_.enable_pl_null_literal_parameterization();
+  if (enable_share_cache && OB_NOT_NULL(routine_info)) {
+    pl::ObPLSymbolTable *symbol_table = OB_NOT_NULL(resolve_ctx.secondary_namespace_) ?
+                const_cast<pl::ObPLSymbolTable*>(resolve_ctx.secondary_namespace_->get_symbol_table()) : nullptr;
+
+    // For UDT member functions (non-static), the first parameter in routine_info is SELF parameter
+    int64_t param_offset = 0;
+    if (routine_info->is_udt_routine() && !routine_info->is_udt_static_routine()) {
+      ObIRoutineParam *first_param = nullptr;
+      if (OB_SUCC(routine_info->get_routine_param(0, first_param))
+          && OB_NOT_NULL(first_param)
+          && first_param->is_self_param()) {
+        // Check if expr_params already contains SELF parameter
+        if (expr_params.count() > 0 && expr_params.at(0)->has_flag(IS_UDT_UDF_SELF_PARAM)) {
+          // expr_params already contains SELF parameter, no offset needed
+          param_offset = 0;
+        } else {
+          // expr_params doesn't contain SELF parameter, skip SELF in routine_info
+          param_offset = 1;
+        }
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr_params.count(); ++i) {
+      ObRawExpr *expr = const_cast<ObRawExpr *>(expr_params.at(i));
+      int64_t routine_param_pos = i + param_offset;
+      if (OB_NOT_NULL(expr) && T_SP_CPARAM == expr->get_expr_type()) {
+        // if param is => format,we should get the real value expr from call_expr
+        ObCallParamRawExpr* call_expr = static_cast<ObCallParamRawExpr*>(expr);
+        if (OB_NOT_NULL(call_expr)) {
+          expr = call_expr->get_expr();
+          // For named parameter binding, find the actual position by name
+          ObString &param_name = call_expr->get_name();
+          OZ (routine_info->find_param_by_name(param_name, routine_param_pos));
+        }
+      }
+      if (OB_SUCC(ret) && OB_NOT_NULL(expr) && T_QUESTIONMARK == expr->get_expr_type()) {
+        ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(expr);
+        int64_t param_idx = c_expr->get_value().get_unknown();
+        ObIRoutineParam *routine_param = nullptr;
+        OZ (routine_info->get_routine_param(routine_param_pos, routine_param));
+        CK (OB_NOT_NULL(routine_param));
+        if (OB_FAIL(ret)) {
+        } else if (is_from_overloaded_routine) {
+          if (OB_NOT_NULL(symbol_table)) {
+            CK (param_idx >= 0 && param_idx < symbol_table->get_count());
+            ObPLVar *var = const_cast<ObPLVar*>(symbol_table->get_symbol(param_idx));
+            if (OB_NOT_NULL(var)) {
+              OX (var->set_is_from_overloaded_routine(true));
+            }
+          } else {
+            OX (c_expr->set_is_from_overloaded_routine(true));
+          }
+        } else {
+          pl::ObPLDataType pl_type = routine_param->get_pl_data_type();
+          OZ (pl::ObPLResolver::modify_null_param_using_deduced_type(expr, pl_type, symbol_table));
+        }
+      }
+    }
   }
   return ret;
 }

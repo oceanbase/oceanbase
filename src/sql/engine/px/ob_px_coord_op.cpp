@@ -541,8 +541,7 @@ int ObPxCoordOp::inner_close()
   if (should_terminate_running_dfos) {
     if (OB_SUCCESS != (terminate_ret = terminate_running_dfos(coord_info_.dfo_mgr_))) {
       // #issue/44180396
-      if (OB_NOT_NULL(ctx_.get_my_session()) &&
-          ctx_.get_my_session()->get_trans_result().is_incomplete()) {
+      if (ctx_.get_trans_result().is_incomplete()) {
         ret = terminate_ret;
       } else {
         LOG_WARN("fail to terminate running dfo, ignore ret", K(terminate_ret));
@@ -798,10 +797,10 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
   }
   if (!collect_trans_result_ok) {
     ObSQLSessionInfo *session = ctx_.get_my_session();
-    session->get_trans_result().set_incomplete();
+    ctx_.get_trans_result().set_incomplete();
     LOG_WARN("collect trans_result fail", K(ret),
              "session_id", session->get_server_sid(),
-             "trans_result", session->get_trans_result());
+             "trans_result", ctx_.get_trans_result());
 
   }
   return ret;
@@ -841,13 +840,13 @@ int ObPxCoordOp::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
         sqc.set_interrupt_by_dm(false);
         const DASTabletLocIArray &access_locations = sqc.get_access_table_locations();
         for (int64_t i = 0; i < access_locations.count() && OB_SUCC(ret); i++) {
-          if (OB_FAIL(ctx_.get_my_session()->get_trans_result().add_touched_ls(access_locations.at(i)->ls_id_))) {
+          if (OB_FAIL(ctx_.get_trans_result().add_touched_ls(access_locations.at(i)->ls_id_))) {
             LOG_WARN("add touched ls failed", K(ret));
           }
         }
         const DASTabletLocIArray &extra_access_locations = sqc.get_extra_access_table_locations();
         for (int64_t i = 0; i < extra_access_locations.count() && OB_SUCC(ret); i++) {
-          if (OB_FAIL(ctx_.get_my_session()->get_trans_result().add_touched_ls(extra_access_locations.at(i)->ls_id_))) {
+          if (OB_FAIL(ctx_.get_trans_result().add_touched_ls(extra_access_locations.at(i)->ls_id_))) {
             LOG_WARN("add touched ls failed", K(ret));
           }
         }

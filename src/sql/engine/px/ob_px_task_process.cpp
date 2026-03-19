@@ -649,7 +649,7 @@ int ObPxTaskProcess::record_tx_desc()
       transaction::ObTxDesc *&task_tx_desc = arg_.sqc_task_ptr_->get_tx_desc();
       task_tx_desc = cur_tx_desc;
       cur_tx_desc = NULL;
-      OZ (arg_.sqc_task_ptr_->get_tx_result().assign(cur_session->get_trans_result()));
+      OZ (arg_.sqc_task_ptr_->get_tx_result().assign(cur_exec_ctx->get_trans_result()));
     }
   }
   return ret;

@@ -93,6 +93,8 @@ protected:
     sql::ObSQLSessionInfo::StmtSavedValue *session_saved_value_;
     uint64_t database_id_;
     char *database_name_;
+    sql::ObAuditRecordData audit_record_;
+    sql::ObAuditRecordData *origin_audit_record_;
   };
 
 protected:

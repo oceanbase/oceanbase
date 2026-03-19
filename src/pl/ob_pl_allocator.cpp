@@ -19,15 +19,6 @@ namespace oceanbase
 namespace pl
 {
 
-PlMemEntifyDestroyGuard::~PlMemEntifyDestroyGuard()
-{
-  int ret = 0;
-  if (nullptr != ref_) {
-    DESTROY_CONTEXT(ref_);
-    ref_ = nullptr;
-  }
-}
-
 int ObPLAllocator1::init(ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
@@ -37,9 +28,13 @@ int ObPLAllocator1::init(ObIAllocator *alloc)
   CK (OB_NOT_NULL(parent_allocator_));
   if (OB_SUCC(ret)) {
     if (OB_NOT_NULL(alloc)) {
-      allocator_ = alloc;
+      if (typeid(*alloc) == typeid(ObPLAllocator1)) {
+        allocator_ = static_cast<ObPLAllocator1 *>(alloc)->get_actual_allocator();
+      } else {
+        allocator_ = alloc;
+      }
     } else {
-      allocator_ = reinterpret_cast<ObVSliceAlloc *>(parent_allocator_->alloc(sizeof(ObVSliceAlloc)));
+      allocator_ = reinterpret_cast<ObLiteFIFOAllocator *>(parent_allocator_->alloc(sizeof(ObLiteFIFOAllocator)));
       if (OB_ISNULL(allocator_)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memory for allocator", K(ret));
@@ -56,8 +51,10 @@ int ObPLAllocator1::init(ObIAllocator *alloc)
         CK (OB_NOT_NULL(arena_allocator));
         OX (memattr_ = arena_allocator->get_arena().get_page_allocator().get_attr());
       }
-      OX (new (allocator_)ObVSliceAlloc(memattr_, BLOCK_SIZE, alloc_mgr_));
+      OX (new (allocator_)ObLiteFIFOAllocator(MTL_ID()));
+      OX (static_cast<ObLiteFIFOAllocator *>(allocator_)->init(nullptr, BLOCK_SIZE, memattr_));
       OX (use_malloc_ = (-EVENT_CALL(EventTable::EN_PL_MEMORY_ALLOCA_SWITCH)) > 0);
+      OX (need_destroy_allocator_ = true);
     }
     OX (is_inited_ = true);
   }
@@ -81,9 +78,7 @@ void* ObPLAllocator1::alloc(const int64_t size, const ObMemAttr &attr)
       if (use_malloc_) {
         ptr = ob_malloc(size, attr);
       } else {
-        SMART_CALL(OB_NOT_NULL(ptr = allocator_->alloc(size, attr)));
-        int64_t addr = int64_t(ptr);
-        //LOG_ERROR("===henry:alloc ptr===", K(addr));
+        ptr = allocator_->alloc(size, attr);
       }
     }
   }
@@ -105,7 +100,7 @@ void* ObPLAllocator1::realloc(const void *ptr, const int64_t size, const ObMemAt
       if (use_malloc_) {
         newptr = ob_realloc(const_cast<void *>(ptr), size, attr);
       } else {
-        SMART_CALL(OB_NOT_NULL(newptr = allocator_->realloc(ptr, size, attr)));
+        newptr = allocator_->realloc(ptr, size, attr);
       }
     }
   }
@@ -115,16 +110,14 @@ void* ObPLAllocator1::realloc(const void *ptr, const int64_t size, const ObMemAt
 void ObPLAllocator1::free(void *ptr)
 {
   int ret = OB_SUCCESS;
-  int64_t addr = int64_t(ptr);
-  //LOG_ERROR("===henry:free ptr===", K(addr));
   if (!is_inited_ || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("must be init ObPLAllocator1, before using it to free", K(ret));
   } else {
     if (use_malloc_) {
       ob_free(ptr);
-    } else {
-      SMART_CALL(FALSE_IT(allocator_->free(ptr)));
+    } else if (OB_NOT_NULL(ptr)) {
+      allocator_->free(ptr);
     }
   }
 }
@@ -143,11 +136,12 @@ void ObPLAllocator1::reset()
 void ObPLAllocator1::destroy()
 {
   if (is_inited_) {
-    if (allocator_ != parent_allocator_) {
-      OB_ASSERT(typeid(*allocator_) == typeid(ObVSliceAlloc));
-      static_cast<ObVSliceAlloc *>(allocator_)->~ObVSliceAlloc();
+    if (need_destroy_allocator_) {
+      OB_ASSERT(typeid(*allocator_) == typeid(ObLiteFIFOAllocator));
+      static_cast<ObLiteFIFOAllocator *>(allocator_)->~ObLiteFIFOAllocator();
       parent_allocator_->free(allocator_);
       allocator_ = nullptr;
+      need_destroy_allocator_ = false;
     }
     is_inited_ = false;
   }

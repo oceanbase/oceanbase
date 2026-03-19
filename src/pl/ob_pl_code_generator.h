@@ -182,7 +182,7 @@ public:
                     sql::ObSQLSessionInfo &session_info,
                     share::schema::ObSchemaGetterGuard &schema_guard,
                     ObPLCompileUnitAST &func_ast,
-                    common::ObIArray<ObSqlExpression*> &exprs,
+                    common::ObIArray<ObSqlExpression *> &exprs,
                     jit::ObLLVMHelper &helper,
                     jit::ObLLVMDIHelper &di_helper,
                     bool oracle_mode)
@@ -221,8 +221,10 @@ public:
     code_coverage_mode_(session_info_.get_pl_code_coverage() != nullptr),
     global_strings_(),
     int_buffer_(allocator),
+    int32_buffer_(allocator),
     objparam_buffer_(allocator),
-    dispatch_map_()
+    dispatch_map_(),
+    bb_id_(0)
     { }
 
   virtual ~ObPLCodeGenerator() {}
@@ -267,29 +269,10 @@ public:
                     jit::ObLLVMValue &pl_integer_range_array_value,
                     jit::ObLLVMValue &is_bulk);
   int generate_into_restore(const ObIArray<int64_t> &into, const common::ObIArray<sql::ObRawExpr*> *exprs, const ObPLSymbolTable *symbol_table);
-  int generate_exception(jit::ObLLVMValue &type,
-                         jit::ObLLVMValue &ob_error_code,
-                         jit::ObLLVMValue &error_code,
-                         jit::ObLLVMValue &sql_state,
-                         jit::ObLLVMValue &str_len,
-                         jit::ObLLVMValue &level,
-                         jit::ObLLVMBasicBlock &normal,
-                         jit::ObLLVMValue &line_number,
-                         bool in_notfound,
-                         bool in_warning,
-                         bool signal);
   int generate_close_loop_cursor(bool is_from_exception, int64_t dest_level);
 #ifdef OB_BUILD_ORACLE_PL
   int generate_eh_adjust_call_stack(jit::ObLLVMValue &loc, jit::ObLLVMValue &error_code);
 #endif
-  int generate_destruct_out_params();
-  int raise_exception(jit::ObLLVMValue &exception,
-                      jit::ObLLVMValue &error_code,
-                      jit::ObLLVMValue &sql_staten,
-                      jit::ObLLVMBasicBlock &normal,
-                      bool in_notfound,
-                      bool in_warning,
-                      bool signal);
   int generate_declare_cursor(const ObPLStmt &s, const int64_t  &cursor_index);
   int generate_open(const ObPLStmt &s,
                     const ObPLSql &cursor_sql,
@@ -355,8 +338,35 @@ public:
   int generate_sql(const ObPLSqlStmt &s, jit::ObLLVMValue &ret_err);
   int generate_after_sql(const ObPLSqlStmt &s, jit::ObLLVMValue &ret_err);
   int generate_dynamic_sql(const ObPLExecuteStmt &s, ObPLCGBufferGuard &out_param_guard, jit::ObLLVMValue &params, jit::ObLLVMValue &ret_err);
-  int generate_after_dynamic_sql(const ObPLExecuteStmt &s, jit::ObLLVMValue &params, jit::ObLLVMValue &ret_err);
+  int generate_after_dynamic_sql(const ObPLExecuteStmt &s, jit::ObLLVMValue &ret_err);
   int generate_reset_objparam(jit::ObLLVMValue &result, int64_t udt_id = OB_INVALID_ID, int8_t actual_type = 0, int8_t extend_type = -1);
+  int generate_destruct_out_params();
+  int raise_exception(jit::ObLLVMValue &exception,
+                      jit::ObLLVMValue &error_code,
+                      jit::ObLLVMValue &sql_staten,
+                      jit::ObLLVMBasicBlock &normal,
+                      bool in_notfound,
+                      bool in_warning,
+                      bool signal);
+  int raise_mysql_ob_fail_exception(jit::ObLLVMValue &error_code,
+                                    jit::ObLLVMValue &sql_state);
+  int generate_exception(jit::ObLLVMValue &type,
+                         jit::ObLLVMValue &ob_error_code,
+                         jit::ObLLVMValue &error_code,
+                         jit::ObLLVMValue &sql_state,
+                         jit::ObLLVMValue &str_len,
+                         jit::ObLLVMValue &level,
+                         jit::ObLLVMBasicBlock &normal,
+                         jit::ObLLVMValue &line_number,
+                         bool in_notfound,
+                         bool in_warning,
+                         bool signal,
+                         bool is_mysql_ob_fail = false);
+  int generate_ob_fail(jit::ObLLVMBasicBlock &fail_branch,
+                       jit::ObLLVMBasicBlock &success_branch,
+                       bool in_notfound,
+                       bool in_warning,
+                       bool signal);
   int check_success(jit::ObLLVMValue &ret_err,
                     int64_t stmt_id = OB_INVALID_ID,
                     bool in_notfound = false,
@@ -380,15 +390,8 @@ public:
   ObSqlExpression *get_expr(int64_t i) { return i < 0 || i >= exprs_.count() ? NULL : exprs_.at(i); }
   int generate_goto_label(const ObPLStmt &stmt);
   int generate_destruct_obj(const ObPLStmt &s, jit::ObLLVMValue &src_datum);
-  int generate_out_param(
-    const ObPLStmt &s,
-    const ObIArray<InOutParam> &param_desc,
-    jit::ObLLVMValue &params,
-    int64_t i);
-  int generate_out_params(
-    const ObPLStmt &s,
-    const ObIArray<InOutParam> &param_desc,
-    jit::ObLLVMValue &params);
+  int generate_out_param(const ObPLStmt &s, const ObIArray<InOutParam> &param_desc, int64_t i);
+  int generate_out_params(const ObPLStmt &s, const ObIArray<InOutParam> &param_desc);
   int generate_update_package_changed_info(
     const ObPLStmt &s, uint64_t package_id, uint64_t var_idx);
   int restart_cg_when_goto_dest(const ObPLStmt &stmt);
@@ -858,6 +861,7 @@ private:
   int generate_di_prototype();
 
   int get_int_buffer(jit::ObLLVMValue &result);
+  int get_int32_buffer(jit::ObLLVMValue &result);
   int get_char_buffer(jit::ObLLVMValue &result);
   int get_condition_buffer(jit::ObLLVMValue &result);
   int get_data_type_buffer(jit::ObLLVMValue &result);
@@ -869,11 +873,14 @@ private:
   int64_t get_int_buffer_idx() { return int_buffer_idx_; };
   void set_int_buffer_idx(int64_t idx) { int_buffer_idx_ = idx; }
 
+  int64_t get_int32_buffer_idx() { return int32_buffer_idx_; };
+  void set_int32_buffer_idx(int64_t idx) { int32_buffer_idx_ = idx; }
+
   int get_into_type_array_buffer(int64_t size, jit::ObLLVMValue &result);
   int get_return_type_array_buffer(int64_t size, jit::ObLLVMValue &result);
   int get_argv_array_buffer(int64_t size, jit::ObLLVMValue &result);
 
-// continue handler
+  // continue handler
 public:
   jit::ObLLVMBasicBlock &get_continue_handler_dispatcher() { return continue_handler_dispatcher_; }
   jit::ObLLVMValue &get_dispatch_stmt_id() { return dispatch_stmt_id_; }
@@ -951,6 +958,9 @@ private:
   ObPLSEArray<jit::ObLLVMValue> int_buffer_;
   int64_t int_buffer_idx_ = 0;
 
+  ObPLSEArray<jit::ObLLVMValue> int32_buffer_;
+  int64_t int32_buffer_idx_ = 0;
+
   ObPLSEArray<jit::ObLLVMValue> objparam_buffer_;
   int64_t objparam_buffer_idx_ = 0;
 
@@ -970,10 +980,23 @@ private:
   // continue handler
   using DispatchMap =
       common::hash::ObHashMap<uint64_t, jit::ObLLVMBasicBlock, common::hash::NoPthreadDefendMode>;
-  DispatchMap dispatch_map_;
+  DispatchMap dispatch_map_;  // key: stmt_id, value: llvm bb
   jit::ObLLVMBasicBlock continue_handler_dispatcher_;
   jit::ObLLVMSwitch dispatch_switch_inst_;
   jit::ObLLVMValue dispatch_stmt_id_;
+
+  // mysql check_success
+  jit::ObLLVMBasicBlock mysql_ob_fail_branch_;
+  jit::ObLLVMBasicBlock mysql_ob_fail_call_raise_;
+  jit::ObLLVMPhi phi_in_warning_;
+  jit::ObLLVMPhi phi_in_notfound_;
+  jit::ObLLVMPhi phi_is_signal_;
+  jit::ObLLVMPhi phi_is_catchable_;
+  jit::ObLLVMPhi phi_bb_id_;
+  uint64_t bb_id_;  // index blocks that could branch to mysql ob_fail block
+  jit::ObLLVMSwitch mysql_ob_success_switch_;
+  jit::ObLLVMSwitch mysql_raise_exception_switch_;
+  jit::ObLLVMValue mysql_exception_;
 };
 
 class ObPLCodeGenerateVisitor : public ObPLStmtVisitor
@@ -1039,6 +1062,7 @@ public:
   ObPLCGBufferGuard(ObPLCodeGenerator &generator)
     : generator_(generator),
       int_buffer_idx_(generator.get_int_buffer_idx()),
+      int32_buffer_idx_(generator.get_int32_buffer_idx()),
       objparam_buffer_idx_(generator.get_objparam_buffer_idx()),
       old_guard_(generator.top_buffer_guard_)
   {
@@ -1060,6 +1084,7 @@ public:
   }
 
   GENERATE_BUFFER_GETTER(int_buffer)
+  GENERATE_BUFFER_GETTER(int32_buffer)
   GENERATE_BUFFER_GETTER(condition_buffer)
   GENERATE_BUFFER_GETTER(data_type_buffer)
   GENERATE_BUFFER_GETTER(char_buffer)
@@ -1104,6 +1129,7 @@ private:
 private:
   ObPLCodeGenerator &generator_;
   int64_t int_buffer_idx_;
+  int64_t int32_buffer_idx_;
   int64_t objparam_buffer_idx_;
   int64_t objparam_count_ = 0;
   ObPLCGBufferGuard *old_guard_ = nullptr;

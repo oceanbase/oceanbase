@@ -14,9 +14,12 @@
 #define OB_JIT_MEMORY_MANAGER_H
 
 #include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
+#include "llvm/ADT/StringRef.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/page_arena.h"
 #include "core/ob_jit_allocator.h"
+
+#include <functional>
 
 namespace oceanbase {
 namespace jit {
@@ -28,8 +31,9 @@ class ObJitMemoryManager : public llvm::RTDyldMemoryManager
   explicit ObJitMemoryManager(const ObJitMemoryManager&);
   void operator=(const ObJitMemoryManager&);
 public:
-  explicit ObJitMemoryManager(ObJitAllocator &allocator)
-      : allocator_(allocator)
+  using EHFrameCallback = std::function<void(const uint8_t*, size_t)>;
+  explicit ObJitMemoryManager(ObJitAllocator &allocator, EHFrameCallback cb = nullptr)
+      : allocator_(allocator), eh_frame_cb_(cb)
   {}
   virtual ~ObJitMemoryManager() {}
 
@@ -62,9 +66,9 @@ public:
   /// operations needed to reliably use the memory are also performed.
   ///
   /// Returns true if an error occurred, false otherwise.
-  virtual bool finalizeMemory(std::string *ErrMsg = 0) {
-    return allocator_.finalize();
-  }
+  virtual bool finalizeMemory(std::string *ErrMsg = 0);
+
+  virtual void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
 
 #if defined(__aarch64__)
   /// Inform the memory manager about the total amount of memory required to
@@ -95,6 +99,7 @@ private:
 
 private:
   ObJitAllocator &allocator_;
+  EHFrameCallback eh_frame_cb_;
 };
 
 }  // core

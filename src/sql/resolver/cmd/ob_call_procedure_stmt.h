@@ -74,6 +74,7 @@ public:
   inline bool is_out_param_by_question_mark_idx(int64_t i) const {
     return i < question_mark_idx_.count() && is_out_param(question_mark_idx_.at(i));
   }
+  inline const ObIArray<int64_t> &get_question_mark_idx() const { return question_mark_idx_; }
   int add_out_param(int64_t i,
                     int64_t mode,
                     const ObString &name,

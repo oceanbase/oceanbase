@@ -3217,6 +3217,11 @@ DEF_BOOL(_enable_foreign_key_gts_opt, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_nested_sql_local_optimize, OB_TENANT_PARAMETER, "False",
          "enable or disable nested sql use local plan first",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_pl_null_literal_parameterization, OB_TENANT_PARAMETER, "False",
+        "Enable parameterization of NULL literals in anonymous blocks to improve cache hit rate.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_STR(ob_vector_search_strategy, OB_TENANT_PARAMETER, "RECALL_FIRST",
         "The strategy of vector index searching. If it is set to RECALL_FIRST, which is default value, the search strategy is deep-search mode."
         "If it is set to LATENCY_FIRST, the search strategy is response-first mode.",

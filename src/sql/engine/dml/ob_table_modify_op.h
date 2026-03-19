@@ -230,7 +230,7 @@ public:
 public:
   int open_inner_conn();
   int close_inner_conn();
-  int begin_nested_session(bool skip_cur_stmt_tables);
+  int begin_nested_session();
   int end_nested_session();
   int execute_write(const char *sql);
   int execute_read(const char *sql, common::ObMySQLProxy::MySQLResult &res);

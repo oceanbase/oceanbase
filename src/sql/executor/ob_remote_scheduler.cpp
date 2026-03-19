@@ -164,7 +164,7 @@ int ObRemoteScheduler::build_remote_task(ObExecContext &ctx,
     LOG_WARN("get ls ids failed", K(ret));
   } else if(OB_FAIL(remote_task.assign_ls_list(task_ls_list))) {
     LOG_WARN("fail to assign ls list", K(ret));
-  } else if (OB_FAIL(session->get_trans_result().add_touched_ls(task_ls_list))) {
+  } else if (OB_FAIL(ctx.get_trans_result().add_touched_ls(task_ls_list))) {
     LOG_WARN("add touched ls failed", K(ret));
   } else if (OB_ISNULL(DAS_CTX(ctx).get_table_loc_list().get_first()) ||
              OB_ISNULL(first_tablet_loc = DAS_CTX(ctx).get_table_loc_list().get_first()->get_first_tablet_loc())) {

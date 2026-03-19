@@ -628,15 +628,19 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
       LOG_WARN("assign format failed", K(ret));
     } else {
       SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-        if (OB_FAIL(sql_proxy->read(result, tenant_id_, query_inner_sql.ptr()))) {
-          LOG_WARN("execute query failed", K(ret), K(query_inner_sql), K(tenant_id_));
+        const uint64_t exec_tenant_id = get_exec_tenant_id();
+        if (OB_INVALID_ID == exec_tenant_id) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected tenant id", K(ret));
+        } else if (OB_FAIL(sql_proxy->read(result, exec_tenant_id, query_inner_sql.ptr()))) {
+          LOG_WARN("execute query failed", K(ret), K(query_inner_sql), K(exec_tenant_id));
         } else if (OB_NOT_NULL(result.get_result())) {
           if (OB_FAIL(result.get_result()->next())) {
             if (OB_ITER_END == ret) {
               op = ObRoutinePersistentInfo::ObPLOperation::INSERT;
               ret = OB_SUCCESS;
             } else {
-              LOG_WARN("failed to get next", K(ret), K(tenant_id_));
+              LOG_WARN("failed to get next", K(ret), K(exec_tenant_id));
             }
           } else {
             EXTRACT_INT_FIELD_MYSQL(*(result.get_result()), "merge_version", merge_version, int64_t);
@@ -644,11 +648,8 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
             if (OB_SUCC(ret)) {
               bool match = true;
               int64_t tenant_schema_version = OB_INVALID_VERSION;
-              if (OB_INVALID_ID == tenant_id_belongs_) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected tenant id", K(ret));
-              } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_belongs_, tenant_schema_version))) {
-                LOG_WARN("fail to get schema version", K(ret), K(tenant_id_belongs_));
+              if (OB_FAIL(schema_guard.get_schema_version(exec_tenant_id, tenant_schema_version))) {
+                LOG_WARN("fail to get schema version", K(ret), K(exec_tenant_id));
               } else if (merge_version == tenant_schema_version) {
                 op = ObRoutinePersistentInfo::ObPLOperation::NONE;
               } else if (merge_version < tenant_schema_version) {
@@ -941,13 +942,13 @@ int ObRoutinePersistentInfo::insert_or_update_dll_to_disk(schema::ObSchemaGetter
   if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id_);
+    const uint64_t exec_tenant_id = get_exec_tenant_id();
     ObDMLSqlSplicer dml;
     int64_t tenant_schema_version = OB_INVALID_VERSION;
-    if (OB_INVALID_ID == tenant_id_belongs_) {
+    if (OB_INVALID_ID == exec_tenant_id) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected tenant id", K(ret));
-    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_belongs_, tenant_schema_version))) {
+    } else if (OB_FAIL(schema_guard.get_schema_version(exec_tenant_id, tenant_schema_version))) {
       LOG_WARN("fail to get schema version");
     } else if (OB_FAIL(gen_routine_storage_dml(exec_tenant_id, dml, tenant_schema_version, binary, stack_sizes, extra_info_str))) {
       LOG_WARN("gen table dml failed", K(ret));
@@ -1180,6 +1181,17 @@ int ObRoutinePersistentInfo::decode_stack_sizes(ObPLCompileUnit &unit, char *buf
   }
 
   return ret;
+}
+
+uint64_t ObRoutinePersistentInfo::get_exec_tenant_id()
+{
+  uint64_t exec_tenant_id = OB_INVALID_ID;
+  if (OB_SYS_TENANT_ID == tenant_id_belongs_) {
+    exec_tenant_id = OB_SYS_TENANT_ID;
+  } else {
+    exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id_);
+  }
+  return exec_tenant_id;
 }
 
 } // namespace pl

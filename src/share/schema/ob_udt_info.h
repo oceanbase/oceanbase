@@ -418,7 +418,7 @@ public:
   int transform_to_pl_type(common::ObIAllocator &allocator,
                            ObSchemaGetterGuard &schema_guard,
                            const pl::ObUserDefinedType *&pl_type) const;
-  int transform_to_pl_type(const ObUDTTypeAttr* attr_info, pl::ObPLDataType &pl_type) const;
+  int transform_to_pl_type(const ObUDTTypeAttr* attr_info, ObSchemaGetterGuard &schema_guard, pl::ObPLDataType &pl_type) const;
   int transform_to_pl_type(const ObUDTCollectionType *coll_info, pl::ObPLDataType &pl_type) const;
 
   //getter

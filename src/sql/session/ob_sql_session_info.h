@@ -629,6 +629,53 @@ public:
     USER_SESSION,
     INNER_SESSION
   };
+  class ObAuditRecordDataWrapper
+  {
+  public:
+    ObAuditRecordDataWrapper() : audit_record_(), audit_record_ptr_(&audit_record_) {}
+    ~ObAuditRecordDataWrapper() { reset(); }
+    void reset()
+    {
+      audit_record_.reset();
+      audit_record_ptr_ = &audit_record_;
+    }
+    void switch_audit_record_ptr(ObAuditRecordData *audit_record_ptr)
+    {
+#ifdef OB_BUILD_DEBUG
+      if (OB_ISNULL(audit_record_ptr)) {
+        OB_ASSERT(false);
+      }
+#endif
+      audit_record_ptr_ = audit_record_ptr;
+    }
+    ObAuditRecordData &get_audit_record() { return *audit_record_ptr_; }
+    const ObAuditRecordData &get_audit_record() const { return *audit_record_ptr_; }
+  private:
+    ObAuditRecordData audit_record_; // top sql audit record
+    ObAuditRecordData *audit_record_ptr_; // current sql audit record
+  };
+  class ObAuditRecordDataWrapperGuard
+  {
+  public:
+    ObAuditRecordDataWrapperGuard(ObSQLSessionInfo *session, ObAuditRecordData &audit_record_ptr)
+      : session_(session),
+        origin_audit_record_ptr_(nullptr)
+    {
+      if (OB_NOT_NULL(session_)) {
+        origin_audit_record_ptr_ = &session_->get_raw_audit_record();
+        session_->switch_audit_record_ptr(&audit_record_ptr);
+      }
+    }
+    ~ObAuditRecordDataWrapperGuard()
+    {
+      if (OB_NOT_NULL(session_) && OB_NOT_NULL(origin_audit_record_ptr_)) {
+        session_->switch_audit_record_ptr(origin_audit_record_ptr_);
+      }
+    }
+  private:
+    ObSQLSessionInfo *session_;
+    ObAuditRecordData *origin_audit_record_ptr_;
+  };
   // for switch stmt.
   class StmtSavedValue : public ObBasicSessionInfo::StmtSavedValue
   {
@@ -645,7 +692,6 @@ public:
     inline void reset()
     {
       ObBasicSessionInfo::StmtSavedValue::reset();
-      audit_record_.reset();
       session_type_ = INVALID_TYPE;
       inner_flag_ = false;
       is_ignore_stmt_ = false;
@@ -657,7 +703,6 @@ public:
       db_name_.reset();
     }
   public:
-    ObAuditRecordData audit_record_;
     SessionType session_type_;
     bool inner_flag_;
     bool is_ignore_stmt_;
@@ -806,6 +851,7 @@ public:
                                  force_unstreaming_cursor_(false),
                                  conf_enable_sql_audit_(false),
                                  extend_sql_plan_monitor_metrics_(false),
+                                 enable_pl_null_literal_parameterization_(false),
                                  session_(session)
     {
     }
@@ -864,6 +910,7 @@ public:
     bool force_unstreaming_cursor() const { return force_unstreaming_cursor_; }
     bool conf_enable_sql_audit() const { return conf_enable_sql_audit_; }
     bool extend_sql_plan_monitor_metrics() const { return extend_sql_plan_monitor_metrics_; }
+    bool enable_pl_null_literal_parameterization() const { return enable_pl_null_literal_parameterization_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -906,6 +953,7 @@ public:
     bool force_unstreaming_cursor_;
     bool conf_enable_sql_audit_;
     bool extend_sql_plan_monitor_metrics_;
+    bool enable_pl_null_literal_parameterization_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1294,19 +1342,20 @@ public:
   }
   void reset_audit_record(bool need_retry = false)
   {
+    ObAuditRecordData &audit_record = audit_record_wrapper_.get_audit_record();
     if (!need_retry) {
-      audit_record_.reset();
+      audit_record.reset();
     } else {
       // memset without try_cnt_ and exec_timestamp_
-      int64_t try_cnt = audit_record_.try_cnt_;
-      ObExecTimestamp exec_timestamp = audit_record_.exec_timestamp_;
-      audit_record_.reset();
-      audit_record_.try_cnt_ = try_cnt;
-      audit_record_.exec_timestamp_ = exec_timestamp;
+      int64_t try_cnt = audit_record.try_cnt_;
+      ObExecTimestamp exec_timestamp = audit_record.exec_timestamp_;
+      audit_record.reset();
+      audit_record.try_cnt_ = try_cnt;
+      audit_record.exec_timestamp_ = exec_timestamp;
     }
   }
-  ObAuditRecordData &get_raw_audit_record() { return audit_record_; }
-  const ObAuditRecordData &get_raw_audit_record() const { return audit_record_; }
+  ObAuditRecordData &get_raw_audit_record() { return audit_record_wrapper_.get_audit_record(); }
+  const ObAuditRecordData &get_raw_audit_record() const { return audit_record_wrapper_.get_audit_record(); }
   //在最最终需要push record到audit buffer中时使用该方法，
   //该方法会将一些session中能够拿到的并且重试过程中不会变化的
   //字段初始化
@@ -1319,6 +1368,10 @@ public:
 
   void set_is_remote(bool is_remote) { is_remote_session_ = is_remote; }
   bool is_remote_session() const { return is_remote_session_; }
+  void switch_audit_record_ptr(ObAuditRecordData *audit_record_ptr)
+  {
+    return audit_record_wrapper_.switch_audit_record_ptr(audit_record_ptr);
+  }
 
   int save_session(StmtSavedValue &saved_value);
   int save_sql_session(StmtSavedValue &saved_value);
@@ -1326,7 +1379,7 @@ public:
   int restore_session(StmtSavedValue &saved_value);
   ObExecContext *get_cur_exec_ctx() { return cur_exec_ctx_; }
   const ObExecContext *get_cur_exec_ctx() const { return cur_exec_ctx_; }
-  int begin_nested_session(StmtSavedValue &saved_value, bool skip_cur_stmt_tables = false);
+  int begin_nested_session(StmtSavedValue &saved_value);
   int end_nested_session(StmtSavedValue &saved_value);
 
   //package state related
@@ -1693,6 +1746,12 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.force_enable_plan_tracing();
   }
+
+  bool enable_pl_null_literal_parameterization()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_pl_null_literal_parameterization();
+  }
   const AdaptivePCConf get_adaptive_pc_conf()
   {
     AdaptivePCConf conf;
@@ -1853,8 +1912,7 @@ private:
   common::ObWarningBuffer warnings_buf_;
   common::ObWarningBuffer show_warnings_buf_;
   sql::ObEndTransAsyncCallback end_trans_cb_;
-  ObAuditRecordData audit_record_;
-
+  ObAuditRecordDataWrapper audit_record_wrapper_;
   ObPrivSet user_priv_set_;
   ObPrivSet db_priv_set_;
   int64_t curr_trans_start_time_;

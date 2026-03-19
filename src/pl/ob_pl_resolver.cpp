@@ -4096,6 +4096,65 @@ int ObPLResolver::is_return_ref_cursor_type(const ObRawExpr *expr, bool &is_ref_
   return ret;
 }
 
+int ObPLResolver::modify_null_param_using_deduced_type(const ObRawExpr *expr,
+                                                     const ObPLDataType &expected_type,
+                                                     ObPLSymbolTable *symbol_table)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(expr) && T_QUESTIONMARK == expr->get_expr_type()) {
+    const ObConstRawExpr *c_expr = static_cast<const ObConstRawExpr*>(expr);
+    int64_t param_idx = c_expr->get_value().get_unknown();
+    const common::ObDataType *dt = expected_type.get_data_type();
+    if (OB_NOT_NULL(dt)
+      && !dt->get_meta_type().is_ext()
+      && is_parameterized_null_param(expr)) {
+      ObCollationType collation_type = dt->get_collation_type();
+      bool has_effective_collation = true;
+      if (ob_is_string_or_lob_type(dt->get_obj_type())) {
+        if (CS_TYPE_ANY == collation_type) {
+          // do not use deduce type when collation is CS_TYPE_ANY
+          has_effective_collation = false;
+        }
+      }
+      if (!has_effective_collation) {
+      } else {
+        if (OB_NOT_NULL(symbol_table)) {
+          ObPLVar *var = const_cast<ObPLVar*>(symbol_table->get_symbol(param_idx));
+          if (OB_NOT_NULL(var) && var->get_type().is_obj_type()) {
+            ObPLDataType &var_type = var->get_type();
+            if (OB_NOT_NULL(var_type.get_data_type())) {
+              var_type.get_data_type()->set_obj_type(dt->get_obj_type());
+              var_type.get_data_type()->set_collation_type(collation_type);
+              var_type.get_data_type()->set_accuracy(dt->get_accuracy());
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObConstRawExpr *mutable_expr = const_cast<ObConstRawExpr*>(c_expr);
+          ObObjMeta meta;
+          OX (meta.set_type(dt->get_obj_type()));
+          OX (meta.set_collation_type(dt->get_collation_type()));
+          OX (mutable_expr->set_meta_type(meta));
+          OX (mutable_expr->set_accuracy(dt->get_accuracy()));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObPLResolver::is_parameterized_null_param(const ObRawExpr *expr)
+{
+  bool ret = false;
+  if (OB_NOT_NULL(expr) && T_QUESTIONMARK == expr->get_expr_type()) {
+    const sql::ObRawExprResType& result_type = expr->get_result_type();
+    if (ObNullType == result_type.get_type() && 4 == result_type.get_accuracy().get_length()) {
+        ret = true;
+    }
+  }
+  return ret;
+}
+
 int ObPLResolver::check_assign_type(const ObPLDataType &dest_data_type, const ObRawExpr *right_expr)
 {
   int ret = OB_SUCCESS;
@@ -4107,7 +4166,9 @@ int ObPLResolver::check_assign_type(const ObPLDataType &dest_data_type, const Ob
     } else if (dest_data_type.is_cursor_type()) {
       bool is_ref_cursor_type = false;
       OZ (is_return_ref_cursor_type(right_expr, is_ref_cursor_type));
-      if (OB_SUCC(ret) && !is_ref_cursor_type && T_NULL != right_expr->get_expr_type()) {
+      bool is_null = T_NULL == right_expr->get_expr_type()
+                            || is_parameterized_null_param(right_expr);
+      if (OB_SUCC(ret) && !is_ref_cursor_type && !is_null) {
         ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
         LOG_WARN("expression wrong type", K(ret));
       }
@@ -8553,6 +8614,7 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
   ObArray<int64_t> expr_idxs;
   int64_t index = common::OB_INVALID_INDEX;
   sql::ObSPIService::ObSPIPrepareResult prepare_result;
+  bool has_return_type = false;
   CK (OB_NOT_NULL(sql_node));
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(record_type = static_cast<ObRecordType*>(resolve_ctx_.allocator_.alloc(sizeof(ObRecordType))))) {
@@ -8647,6 +8709,7 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
       cursor_type.set_type_from(record_type->get_type_from());
     } else {
       ObArenaAllocator allocator;
+      has_return_type = true;
       const ObUserDefinedType *cursor_user_type = NULL;
       if (OB_FAIL(current_block_->get_namespace().get_user_type(cursor_type.get_user_type_id(),
                                                                 cursor_user_type, &allocator))) {
@@ -8689,7 +8752,8 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
                                                              ObPLCursor::DEFINED,
                                                              prepare_result.has_dup_column_name_,
                                                              index,
-                                                             prepare_result.is_skip_locked_))) {
+                                                             prepare_result.is_skip_locked_,
+                                                             has_return_type))) {
         LOG_WARN("failed to add cursor to symbol table",
                  K(cursor_name),
                  K(sql_node->str_value_),
@@ -8898,7 +8962,9 @@ int ObPLResolver::resolve_declare_cursor(
                                                                    formal_params,
                                                                    ObPLCursor::DECLARED,
                                                                    false,
-                                                                   cursor_index))) {
+                                                                   cursor_index,
+                                                                   false,
+                                                                   return_type.is_valid_type()))) {
               LOG_WARN("failed to add cursor to symbol table", K(name), K(ret));
             } else if (OB_NOT_NULL(stmt)) {
               stmt->set_cursor_index(cursor_index);
@@ -9095,7 +9161,9 @@ int ObPLResolver::resolve_declare_ref_cursor(
                                                                dummy_formal_params,
                                                                ObPLCursor::DECLARED,
                                                                false,
-                                                               index))) {
+                                                               index,
+                                                               false,
+                                                               true))) {
            LOG_WARN("failed to add cursor to symbol table", K(ident_name), K(return_type), K(index), K(ret));
         } else {
           stmt->set_cursor_index(index);
@@ -9446,7 +9514,9 @@ int ObPLResolver::resolve_fetch(
         } else {
           bool is_compatible = true;
           const ObRecordType *return_type = static_cast<const ObRecordType*>(cursor_type);
-          stmt->set_user_type(cursor_type);
+          if (cursor->has_return_type()) {
+            stmt->set_user_type(cursor_type);
+          }
           if (return_type->get_record_member_count() != stmt->get_data_type().count()
               && return_type->get_record_member_count() != stmt->get_into().count()) {
             ret = OB_ERR_WRONG_FETCH_INTO_NUM;
@@ -11059,7 +11129,10 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
   const ObDataType *data_type =
     OB_NOT_NULL(expected_type) ? expected_type->get_data_type() : NULL;
   if (OB_SUCC(ret) && !simple_pls_integer && OB_NOT_NULL(data_type) && OB_NOT_NULL(expr) && !pl_sql_format_convert) {
-    need_cast = check_need_cast(*data_type, *expr);
+    need_cast = check_need_cast(*data_type,
+                                expr->get_result_type().get_obj_meta(),
+                                expr->get_result_type().get_accuracy(),
+                                true);
   }
 
   // check boolean expr legal
@@ -11097,6 +11170,13 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
       ret = OB_ERR_EXPRESSION_WRONG_TYPE;
       LOG_WARN("expression is of wrong type", K(ret), KPC(data_type), KPC(expr));
     }
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(expected_type)
+    && resolve_ctx_.session_info_.enable_pl_null_literal_parameterization()) {
+    CK (OB_NOT_NULL(current_block_->get_namespace().get_symbol_table()));
+    OZ (modify_null_param_using_deduced_type(expr, *expected_type,
+                                           current_block_->get_namespace().get_symbol_table()));
   }
 
   // Step 7: do actually cast
@@ -11179,25 +11259,23 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
 }
 
 bool ObPLResolver::check_need_cast(const ObDataType &data_type,
-                                  const ObRawExpr &expr)
+                                  const ObObjMeta &src_meta,
+                                  const ObAccuracy &src_accuracy,
+                                  bool check_cs_level)
 {
   bool need_cast = false;
   if (ob_is_enum_or_set_type(data_type.get_obj_type())) {
     need_cast = true;
-  } else if (expr.get_result_type().get_obj_meta() != data_type.get_meta_type()) {
+  } else if (src_meta.get_type() != data_type.get_obj_type() ||
+             src_meta.get_collation_type() != data_type.get_collation_type() ||
+             (check_cs_level && src_meta.get_collation_level() != data_type.get_collation_level())) {
     need_cast = true;
   } else if (data_type.get_meta_type().is_integer_type()) {
     need_cast = false;
-  } else if (expr.get_result_type().get_accuracy() != data_type.get_accuracy()) {// according to ObTableSchema::check_alter_column_accuracy
+  } else if (src_accuracy != data_type.get_accuracy()) {// according to ObTableSchema::check_alter_column_accuracy
     need_cast = true;
-    ObObjType in_type  = expr.get_result_type().get_type();
-    ObObjType out_type = data_type.get_obj_type();
-    ObCollationType in_cs_type = expr.get_result_type().get_collation_type();
-    ObCollationType out_cs_type = data_type.get_collation_type();
-    const ObAccuracy &src_accuracy = expr.get_result_type().get_accuracy();
+    ObObjType in_type  = src_meta.get_type();
     const ObAccuracy &dst_accuracy = data_type.get_accuracy();
-    const ObObjMeta &src_meta = expr.get_result_type();
-    const ObObjMeta &dst_meta = data_type.get_meta_type();
     bool is_type_reduction = false;
 
     if (ob_is_number_or_decimal_int_tc(in_type)) {
@@ -17613,7 +17691,8 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
                                           cursor.get_state(),
                                           cursor.is_dup_column(),
                                           cursor.is_skip_locked(),
-                                          cursor.get_package_body_id()));
+                                          cursor.get_package_body_id(),
+                                          cursor.has_return_type()));
     OZ (ns.get_cursors().push_back(ns.get_cursor_table()->get_count() - 1));
     OX (index = ns.get_cursor_table()->get_count() - 1);
   }

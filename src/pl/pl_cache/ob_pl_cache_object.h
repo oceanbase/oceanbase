@@ -34,7 +34,8 @@ struct ObPlParamInfo : public sql::ObParamInfo
   ObPlParamInfo() :
     sql::ObParamInfo(),
     pl_type_(PL_INVALID_TYPE),
-    udt_id_(OB_INVALID_ID)
+    udt_id_(OB_INVALID_ID),
+    is_null_deduced_type_(false)
   {}
   ~ObPlParamInfo() {}
   void reset()
@@ -42,6 +43,7 @@ struct ObPlParamInfo : public sql::ObParamInfo
     ObParamInfo::reset();
     pl_type_ = PL_INVALID_TYPE;
     udt_id_ = OB_INVALID_ID;
+    is_null_deduced_type_ = false;
   }
 
   TO_STRING_KV(K_(flag),
@@ -51,10 +53,12 @@ struct ObPlParamInfo : public sql::ObParamInfo
                K_(is_oracle_null_value),
                K_(col_type),
                K_(pl_type),
-               K_(udt_id));
+               K_(udt_id),
+               K_(is_null_deduced_type));
 
   uint8_t pl_type_;
   uint64_t udt_id_;
+  bool is_null_deduced_type_;
   static const int64_t MAX_STR_DES_LEN_PL = 96;
 
   OB_UNIS_VERSION_V(1);
@@ -211,7 +215,14 @@ public:
   inline const sql::DependenyTableStore &get_dependency_table() const { return dependency_tables_; }
   int init_dependency_table_store(int64_t dependency_table_cnt) { return dependency_tables_.init(dependency_table_cnt); }
   inline sql::DependenyTableStore &get_dependency_table() { return dependency_tables_; }
-  int set_params_info(const ParamStore &params, bool is_anonymous = false);
+  int set_params_info(const ParamStore &params,
+                      bool is_anonymous = false,
+                      bool enable_share_cache = false,
+                      common::ObIArray<sql::ObRawExpr*> *param_exprs = nullptr);
+  int set_param_info_for_null_param(bool is_anonymous,
+                                    ObPlParamInfo &param_info,
+                                    int64_t param_idx,
+                                    common::ObIArray<sql::ObRawExpr*> *param_exprs = nullptr);
   const common::Ob2DArray<ObPlParamInfo,
                           common::OB_MALLOC_BIG_BLOCK_SIZE,
                           common::ObWrapperAllocator, false> &get_params_info() const { return params_info_; }

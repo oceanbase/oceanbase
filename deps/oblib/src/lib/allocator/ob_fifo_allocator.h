@@ -30,7 +30,7 @@ namespace oceanbase
 {
 namespace common
 {
-class ObFIFOAllocator : public common::ObIAllocator
+class ObLiteFIFOAllocator : public common::ObIAllocator
 {
   friend class ::ObFIFOAllocatorSpecialPageParamTest;
   friend class ::ObFIFOAllocatorAlignParamTest;
@@ -85,8 +85,8 @@ public:
     BasePageHeader *page_header_;
   } __attribute__((aligned (16)));
 public:
-  explicit ObFIFOAllocator(const uint64_t tenant_id = OB_SERVER_TENANT_ID);
-  virtual ~ObFIFOAllocator();
+  explicit ObLiteFIFOAllocator(const uint64_t tenant_id = OB_SERVER_TENANT_ID);
+  virtual ~ObLiteFIFOAllocator();
 
   int init(ObIAllocator *allocator,
            const int64_t page_size,
@@ -94,14 +94,15 @@ public:
            const int64_t init_size=0,
            const int64_t idle_size=256L << 10,
            const int64_t max_size=INT64_MAX);
-  void reset();
+  virtual void reset();
+  virtual void free(void *p);
+  virtual int set_idle(const int64_t idle_size, const bool sync=false);
+  virtual int set_max(const int64_t max_size, const bool sync=false);
+  virtual void *inner_alloc_align(const int64_t size, const int64_t align);
   void *alloc(const int64_t size);
   void *alloc(const int64_t size, const ObMemAttr &attr);
-  void free(void *p);
   void set_label(const lib::ObLabel &label) { attr_.label_ = label; }
   void set_attr(const ObMemAttr &attr) { attr_ = attr; }
-  int set_idle(const int64_t idle_size, const bool sync=false);
-  int set_max(const int64_t max_size, const bool sync=false);
   int64_t get_max() const { return max_size_; }
   bool is_inited() const { return is_inited_; }
 
@@ -128,7 +129,6 @@ public:
   }
 
 private:
-  void *inner_alloc_align(const int64_t size, const int64_t align);
   BasePageHeader *get_page_header(void *p);
   bool check_param(const int64_t size, const int64_t align);
   bool check_magic(void *p, int64_t &size);
@@ -160,9 +160,24 @@ private:
   PageList special_page_list_;
   int64_t normal_used_;
   int64_t special_total_;
-  mutable ObSpinLock lock_;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObFIFOAllocator);
+  DISALLOW_COPY_AND_ASSIGN(ObLiteFIFOAllocator);
+};
+
+class ObFIFOAllocator : public ObLiteFIFOAllocator
+{
+public:
+  explicit ObFIFOAllocator(const uint64_t tenant_id = OB_SERVER_TENANT_ID)
+    : ObLiteFIFOAllocator(tenant_id), lock_(ObLatchIds::OB_FIFO_ALLOCATOR_LOCK)
+  {}
+  virtual ~ObFIFOAllocator() {}
+  virtual void reset();
+  virtual void free(void *p);
+  virtual int set_idle(const int64_t idle_size, const bool sync=false);
+  virtual int set_max(const int64_t max_size, const bool sync=false);
+  virtual void *inner_alloc_align(const int64_t size, const int64_t align);
+private:
+  mutable ObSpinLock lock_;
 };
 
 }

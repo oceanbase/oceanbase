@@ -741,6 +741,19 @@ void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSes
   }
 }
 
+void ObPLContext::register_stack_frames()
+{
+  for (int64_t i = exec_stack_.count() - 1; i >= 0; --i) {
+    if (OB_NOT_NULL(exec_stack_.at(i))) {
+      // only register if not registered yet
+      if (!exec_stack_.at(i)->is_eh_registered()) {
+        exec_stack_.at(i)->get_function().get_helper().ensure_registered();
+        exec_stack_.at(i)->set_eh_registered(true);
+      }
+    }
+  }
+}
+
 ObPLContext::~ObPLContext()
 {
   if (OB_NOT_NULL(pl_execute_cache_)) {
@@ -2490,8 +2503,42 @@ bool ObPL::forbid_anony_parameter(ObSQLSessionInfo &session, bool is_ps_mode, bo
   }
   return ret;
 }
+int ObPL::parameter_ps_call_stmt(ObSQLSessionInfo &session,
+                                 ParseResult &parse_result,
+                                 ObPlanCacheCtx &pc_ctx,
+                                 ObString &no_param_sql,
+                                 ObIAllocator &allocator,
+                                 ParamStore &param_store)
+{
+  int ret = OB_SUCCESS;
+  bool forbid_by_null_param = parse_result.pl_parse_info_.has_null_param_
+                          && !session.enable_pl_null_literal_parameterization();
+  if (forbid_by_null_param) {
+    pc_ctx.ps_need_parameterized_ = false;
+  } else if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(allocator,
+                                                              false,
+                                                              pc_ctx,
+                                                              parse_result.result_tree_,
+                                                              param_store,
+                                                              session.get_charsets4parser()))) {
+    LOG_INFO("parameterize call procedure syntax tree failed", K(ret));
+    pc_ctx.ps_need_parameterized_ = false;
+    pc_ctx.fixed_param_idx_.reset();
+    pc_ctx.fp_result_.raw_params_.reset();
+    ret = OB_SUCCESS;
+  }
+  if (OB_SUCC(ret)) {
+    if (!pc_ctx.ps_need_parameterized_) {
+      pc_ctx.fixed_param_idx_.reset();
+      pc_ctx.fp_result_.raw_params_.reset();
+    } else {
+      no_param_sql = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+    }
+  }
+  return ret;
+}
 
-bool ObPL::parameter_ps_anonymous_block(ObExecContext &ctx,
+int ObPL::parameter_ps_anonymous_block(ObExecContext &ctx,
                                         ObIAllocator &allocator,
                                         ParseResult &parse_result,
                                         ObString &no_param_sql,
@@ -2508,30 +2555,34 @@ bool ObPL::parameter_ps_anonymous_block(ObExecContext &ctx,
   } else if (OB_ISNULL(block = parse_result.result_tree_->children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected block", K(ret));
-  } else if (ObPL::forbid_anony_parameter(*ctx.get_my_session(), true,
-                                          block->children_[0]->is_forbid_anony_parameter_)) {
-    // forbid parameter, do nothing
-    pc_ctx.ps_need_parameterized_ = false;
-    pc_ctx.fixed_param_idx_.reset();
-    pc_ctx.fp_result_.raw_params_.reset();
-    no_param_sql.reset();
-  } else if (OB_FAIL(parameter_anonymous_block(ctx,
-                                              block->children_[0],
-                                              exec_params,
-                                              allocator,
-                                              true,
-                                              no_param_sql,
-                                              &pc_ctx))) {
-    LOG_WARN("parameterize anonymous syntax tree failed", K(ret));
-    pc_ctx.ps_need_parameterized_ = false;
-    pc_ctx.fixed_param_idx_.reset();
-    pc_ctx.fp_result_.raw_params_.reset();
-    no_param_sql.reset();
-    ret = OB_SUCCESS;
-  } else if (!pc_ctx.ps_need_parameterized_) {
-    pc_ctx.fixed_param_idx_.reset();
-    pc_ctx.fp_result_.raw_params_.reset();
-    no_param_sql.reset();
+  } else {
+    bool forbid_by_null_param = parse_result.pl_parse_info_.has_null_param_
+                                && !ctx.get_my_session()->enable_pl_null_literal_parameterization();
+    if (ObPL::forbid_anony_parameter(*ctx.get_my_session(), true,
+                                     block->children_[0]->is_forbid_anony_parameter_ || forbid_by_null_param)) {
+      // forbid parameter, do nothing
+      pc_ctx.ps_need_parameterized_ = false;
+      pc_ctx.fixed_param_idx_.reset();
+      pc_ctx.fp_result_.raw_params_.reset();
+      no_param_sql.reset();
+    } else if (OB_FAIL(parameter_anonymous_block(ctx,
+                                                block->children_[0],
+                                                exec_params,
+                                                allocator,
+                                                true,
+                                                no_param_sql,
+                                                &pc_ctx))) {
+      LOG_WARN("parameterize anonymous syntax tree failed", K(ret));
+      pc_ctx.ps_need_parameterized_ = false;
+      pc_ctx.fixed_param_idx_.reset();
+      pc_ctx.fp_result_.raw_params_.reset();
+      no_param_sql.reset();
+      ret = OB_SUCCESS;
+    } else if (!pc_ctx.ps_need_parameterized_) {
+      pc_ctx.fixed_param_idx_.reset();
+      pc_ctx.fp_result_.raw_params_.reset();
+      no_param_sql.reset();
+    }
   }
 
   return ret;
@@ -3495,7 +3546,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
 
     OZ (compiler.compile(
       block_node, stmt_id, *routine, &params, ctx.get_sql_ctx()->is_prepare_protocol_));
-    OZ (routine->set_params_info(params, true));
+    OZ (routine->set_params_info(params, true, ctx.get_my_session()->enable_pl_null_literal_parameterization()));
   }
 
   int64_t compile_end = ObClockGenerator::getClock();
@@ -3591,6 +3642,10 @@ int ObPL::check_trigger_arg(ParamStore &params, const ObPLFunction &func, ObPLCo
 
 ObPLExecState::~ObPLExecState()
 {
+  if (is_eh_registered_) {
+    func_.get_helper().unregister_eh_frame();
+    is_eh_registered_ = false;
+  }
 #ifdef OB_BUILD_ORACLE_PL
   if (dwarf_helper_ != NULL) {
     dwarf_helper_->~ObDWARFHelper();
@@ -3789,6 +3844,104 @@ int ObPLExecCtx::calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &re
     OZ (ObSPIService::spi_calc_expr_at_idx(this, expr_idx, OB_INVALID_INDEX, &result));
   } else {
     OZ (ObSPIService::spi_calc_package_expr(this, package_id, expr_idx, &result));
+  }
+  return ret;
+}
+
+ObPLExecCtx::~ObPLExecCtx()
+{
+  if (OB_NOT_NULL(mem_context_)) {
+    DESTROY_CONTEXT(mem_context_);
+    mem_context_ = nullptr;
+  }
+}
+
+int ObPLExecCtx::get_param_store_for_sql(ObIAllocator &allocator, ParamStore *&param_store)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(param_store_for_sql_)) {
+    void *buf = allocator.alloc(sizeof(ParamStore));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for param store", K(ret));
+    } else {
+      param_store_for_sql_ = new (buf) ParamStore(ObWrapperAllocator(allocator));
+      if (OB_FAIL(param_store_for_sql_->reserve(10))) {
+        LOG_WARN("failed to reserve param store", K(ret));
+      }
+    }
+  } else {
+    param_store_for_sql_->reuse();
+  }
+  if (OB_SUCC(ret)) {
+    param_store = param_store_for_sql_;
+  }
+  return ret;
+}
+
+int ObSPIResultSetCache::get_spi_result_set(ObSPIResultSet *&spi_result_set)
+{
+  int ret = OB_SUCCESS;
+  spi_result_set = nullptr;
+  if (OB_ISNULL(spi_result_set_)) {
+    void *buf = alloc_.alloc(sizeof(ObSPIResultSet) * SPI_RESULT_SET_BUFFER_SIZE);
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for spi result set", K(ret));
+    } else {
+      spi_result_set_ = reinterpret_cast<ObSPIResultSet *>(buf);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (used_cnt_ < SPI_RESULT_SET_BUFFER_SIZE) {
+      spi_result_set = &spi_result_set_[used_cnt_];
+      used_cnt_++;
+      new (spi_result_set) ObSPIResultSet(this, true);
+    } else { // if buffer is full, directly create a new one
+      void *buf = alloc_.alloc(sizeof(ObSPIResultSet));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory for spi result set", K(ret));
+      } else {
+        spi_result_set = reinterpret_cast<ObSPIResultSet *>(buf);
+        new (spi_result_set) ObSPIResultSet(this, false);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPLExecCtx::get_spi_result_set(ObSPIResultSet *&spi_result_set)
+{
+  int ret = OB_SUCCESS;
+  ObPLExecuteCache *pl_execute_cache = nullptr;
+  CK (OB_NOT_NULL(pl_ctx_));
+  OZ (pl_ctx_->get_pl_execute_cache(pl_execute_cache));
+  CK (OB_NOT_NULL(pl_execute_cache));
+  OZ (pl_execute_cache->get_spi_result_set_cache().get_spi_result_set(spi_result_set));
+  return ret;
+}
+
+int ObPLExecCtx::get_mem_context_for_sql(lib::MemoryContext &mem_context)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mem_context_)) {
+    lib::ContextParam param;
+    param.set_mem_attr(MTL_ID(),
+                    ObModIds::OB_RESULT_SET,
+                    ObCtxIds::DEFAULT_CTX_ID)
+    .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+    .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)
+    .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
+      LOG_WARN("create memory entity failed", K(ret));
+    }
+  } else {
+    mem_context_->reset_remain_one_page();
+    lib::__MemoryContext__::destory_child_context(mem_context_);
+  }
+  if (OB_SUCC(ret)) {
+    mem_context = mem_context_;
   }
   return ret;
 }

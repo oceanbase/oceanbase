@@ -116,7 +116,7 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
         ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
         my_session->get_tx_desc() = tx_desc;
         my_session->reset_first_need_txn_stmt_type();
-        my_session->get_trans_result().reset();
+        exec_ctx.get_trans_result().reset();
         my_session->reset_tx_variable();
         exec_ctx.set_need_disconnect(false);
       } else if (NULL == tx_desc || !tx_desc->is_valid() || !xid.is_valid() || xid.empty()) {
@@ -218,7 +218,7 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
       my_session->get_tx_desc() = tx_desc;
       my_session->get_raw_audit_record().trans_id_ = tx_id;
       my_session->reset_first_need_txn_stmt_type();
-      my_session->get_trans_result().reset();
+      exec_ctx.get_trans_result().reset();
       my_session->reset_tx_variable();
       my_session->disassociate_xa();
     }
@@ -282,7 +282,7 @@ int ObTMService::tm_rollback(ObExecContext &exec_ctx,
       my_session->get_tx_desc() = tx_desc;
       my_session->get_raw_audit_record().trans_id_ = tx_id;
       my_session->reset_first_need_txn_stmt_type();
-      my_session->get_trans_result().reset();
+      exec_ctx.get_trans_result().reset();
       my_session->reset_tx_variable();
       my_session->disassociate_xa();
     }
@@ -417,7 +417,7 @@ int ObTMService::revert_tx_for_callback(ObExecContext &exec_ctx)
       // do nothing
     }
     my_session->reset_first_need_txn_stmt_type();
-    my_session->get_trans_result().reset();
+    exec_ctx.get_trans_result().reset();
     my_session->reset_tx_variable();
     my_session->disassociate_xa();
   }

@@ -739,6 +739,16 @@ public:
                                   ObRawExpr *&expr);
   static int check_update_column(const ObPLBlockNS &ns, uint64_t var_idx, const ObIArray<ObObjAccessIdx>& access_idxs,
                                  sql::ObSQLSessionInfo &session_info, share::schema::ObSchemaGetterGuard &schema_guard);
+  static bool is_parameterized_null_param(const ObRawExpr *expr);
+
+  static int modify_null_param_using_deduced_type(const ObRawExpr *expr,
+                                                const ObPLDataType &expected_type,
+                                                ObPLSymbolTable *symbol_table = nullptr);
+
+  static bool check_need_cast(const ObDataType &data_type,
+                                  const ObObjMeta &src_meta,
+                                  const ObAccuracy &src_accuracy,
+                                  bool check_cs_level = false);
 
 private:
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLDeclareVarStmt *stmt, ObPLFunctionAST &func_ast);
@@ -896,8 +906,6 @@ private:
                    sql::ObRawExpr *&expr, uint64_t line_number = 0, /* where this expr called */
                    bool need_add = true, const ObPLDataType *expected_type = NULL,
                    bool is_behind_limit = false, bool is_add_bool = false);
-  bool check_need_cast(const ObDataType &data_type,
-                                    const ObRawExpr &expr);
   int resolve_columns(ObRawExpr *&expr, ObArray<sql::ObQualifiedName> &columns, ObPLCompileUnitAST &unit_ast);
   int formalize_expr(ObRawExpr &expr);
   static int formalize_expr(ObRawExpr &expr, const ObSQLSessionInfo *session_info, const ObPLINS &ns);

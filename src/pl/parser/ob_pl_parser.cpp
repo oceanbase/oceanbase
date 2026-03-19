@@ -141,6 +141,7 @@ int ObPLParser::parse(const ObString &stmt_block,
   int ret = OB_SUCCESS;
   bool is_include_old_new_in_trigger = false;
   bool contain_sensitive_data = false;
+  bool has_null_param = false;
   ObQuestionMarkCtx question_mark_ctx;
   if (OB_FAIL(parse_procedure(stmt_block,
                               orig_stmt_block,
@@ -150,7 +151,8 @@ int ObPLParser::parse(const ObString &stmt_block,
                               parse_result.is_dynamic_sql_,
                               is_inner_parse,
                               is_include_old_new_in_trigger,
-                              contain_sensitive_data))) {
+                              contain_sensitive_data,
+                              has_null_param))) {
     if (OB_SIZE_OVERFLOW != ret) {
       LOG_WARN("parse stmt block failed", K(ret), K(ObString(MIN(MAX_PRINT_LEN, stmt_block.length()) ,stmt_block.ptr())),
                                                   K(ObString(MIN(MAX_PRINT_LEN, orig_stmt_block.length()) ,orig_stmt_block.ptr())));
@@ -169,6 +171,7 @@ int ObPLParser::parse(const ObString &stmt_block,
     parse_result.end_col_ = stmt_block.length();
     parse_result.is_include_old_new_in_trigger_ = is_include_old_new_in_trigger;
     parse_result.contain_sensitive_data_ = contain_sensitive_data;
+    parse_result.pl_parse_info_.has_null_param_ = has_null_param;
   }
   return ret;
 }
@@ -181,7 +184,8 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
                                 bool is_dynamic,
                                 bool is_inner_parse,
                                 bool &is_include_old_new_in_trigger,
-                                bool &contain_sensitive_data)
+                                bool &contain_sensitive_data,
+                                bool &has_null_param)
 {
   int ret = OB_SUCCESS;
   ObParseCtx parse_ctx;
@@ -253,6 +257,7 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
     question_mark_ctx = parse_ctx.question_mark_ctx_;
     is_include_old_new_in_trigger = parse_ctx.is_include_old_new_in_trigger_;
     contain_sensitive_data = parse_ctx.contain_sensitive_data_;
+    has_null_param = (parse_ctx.has_null_param_ == 1);
   }
   return ret;
 }

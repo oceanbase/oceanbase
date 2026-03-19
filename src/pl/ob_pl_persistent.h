@@ -180,6 +180,7 @@ public:
                             const ObRoutinePersistentInfo::ObPLOperation op);
 
   int mask_special_compile_mode(ObSQLSessionInfo &session_info);
+  uint64_t get_exec_tenant_id();
   static void construst_special_compile_mode(uint64_t &mode, ObSQLSessionInfo &session_info);
 
   static int has_same_name_dependency_with_public_synonym(

@@ -126,7 +126,8 @@ public:
       is_default_construct_(false),
       is_formal_param_(false),
       is_referenced_(false),
-      is_default_expr_access_external_state_(false) {}
+      is_default_expr_access_external_state_(false),
+      is_from_overloaded_routine_(false) {}
   virtual ~ObPLVar() {}
 
   inline const common::ObString &get_name() const { return name_; }
@@ -155,6 +156,8 @@ public:
   inline bool is_referenced() const { return is_referenced_; }
   inline void set_is_default_expr_has_reroute_factor(bool val) { is_default_expr_access_external_state_ = val; }
   inline bool is_default_expr_access_external_state() const { return is_default_expr_access_external_state_; }
+  inline void set_is_from_overloaded_routine(bool val) { is_from_overloaded_routine_ = val; }
+  inline bool is_from_overloaded_routine() const { return is_from_overloaded_routine_; }
   inline ObIArray<std::pair<ObString, bool>> &get_trigger_ref_cols() { return trigger_ref_cols_; };
   inline const ObIArray<std::pair<ObString, bool>> &get_trigger_ref_cols() const { return trigger_ref_cols_; };
 
@@ -165,7 +168,8 @@ public:
                K_(is_not_null),
                K_(is_default_construct),
                K_(is_formal_param),
-               K_(is_default_expr_access_external_state));
+               K_(is_default_expr_access_external_state),
+               K_(is_from_overloaded_routine));
 private:
   common::ObString name_;
   ObPLDataType type_; //主要用来表示类型，同时要存储变量的初始值或default值，运行状态的值不存储在这里
@@ -180,6 +184,7 @@ private:
   bool is_default_expr_access_external_state_;
   // 对于 trigger 的入参 rowtype，body 中显示调用的列 <col_name, is_write>>
   common::ObSEArray<std::pair<ObString, bool>, 4> trigger_ref_cols_;
+  bool is_from_overloaded_routine_; // 是否是重载函数调用的参数
 };
 
 class ObPLSymbolTable
@@ -572,7 +577,8 @@ public:
       formal_params_(allocator),
       state_(INVALID),
       has_dup_column_name_(false),
-      pkg_body_id_(0) /*0 means not set yet, Why not set to Invalid, Cause When create body resolver, pkg_body_id is INVALID ID*/ {}
+      pkg_body_id_(0) /*0 means not set yet, Why not set to Invalid, Cause When create body resolver, pkg_body_id is INVALID ID*/,
+      has_return_type_(false) {}
   virtual ~ObPLCursor() {}
 
   inline bool is_package_cursor() const
@@ -623,6 +629,9 @@ public:
   inline uint64_t get_package_body_id() const { return pkg_body_id_; }
   inline bool is_define_in_body() const { return pkg_body_id_ != 0; }
 
+  inline void set_has_return_type(bool has_return_type) { has_return_type_ = has_return_type; }
+  inline bool has_return_type() const { return has_return_type_; }
+
   int set(const ObString &sql,
           const ObIArray<int64_t> &expr_idxs,
           const common::ObString &ps_sql,
@@ -649,6 +658,7 @@ protected:
   CursorState state_;
   bool has_dup_column_name_;
   uint64_t pkg_body_id_; // It means CURSOR is declare in spec and define in body, sql params will save in body instead of spec.
+  bool has_return_type_;
 };
 
 class ObPLCursorTable
@@ -681,7 +691,8 @@ public:
                  ObPLCursor::CursorState state = ObPLCursor::DEFINED,
                  bool has_dup_column_name = false,
                  bool skip_locked = false,
-                 uint64_t package_body_id = 0);
+                 uint64_t package_body_id = 0,
+                 bool has_return_type = false);
 
   TO_STRING_KV(K_(cursors));
 
@@ -1406,7 +1417,8 @@ public:
                  ObPLCursor::CursorState state,
                  bool has_dup_column_name,
                  int64_t &index,
-                 bool skip_locked = false);
+                 bool skip_locked = false,
+                 bool has_return_type = false);
   int add_questionmark_cursor(const int64_t symbol_idx);
   inline const common::ObIArray<sql::ObRawExpr*> *get_exprs() const { return exprs_; }
   inline void set_exprs(common::ObIArray<sql::ObRawExpr*> *exprs) { exprs_ = exprs; }

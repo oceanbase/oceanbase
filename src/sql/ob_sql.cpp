@@ -1386,25 +1386,13 @@ int ObSql::do_real_prepare(const ObString &sql,
         LOG_WARN("parameterize anonymous syntax tree failed", K(ret));
       }
     } else if (!is_inner_sql && stmt::T_CALL_PROCEDURE == stmt_type) {
-      if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(allocator,
-                                                                  false,
-                                                                  pc_ctx,
-                                                                  parse_result.result_tree_,
-                                                                  param_store,
-                                                                  session.get_charsets4parser()))) {
-        LOG_INFO("parameterize call procedure syntax tree failed", K(ret));
-        pc_ctx.ps_need_parameterized_ = false;
-        pc_ctx.fixed_param_idx_.reset();
-        pc_ctx.fp_result_.raw_params_.reset();
-        ret = OB_SUCCESS;
-      }
-      if (OB_SUCC(ret)) {
-        if (!pc_ctx.ps_need_parameterized_) {
-          pc_ctx.fixed_param_idx_.reset();
-          pc_ctx.fp_result_.raw_params_.reset();
-        } else {
-          info_ctx.no_param_sql_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
-        }
+      if (OB_FAIL(ObPL::parameter_ps_call_stmt(session,
+                                               parse_result,
+                                               pc_ctx,
+                                               info_ctx.no_param_sql_,
+                                               allocator,
+                                               param_store))) {
+        LOG_WARN("parameterize call procedure syntax tree failed", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
@@ -2258,6 +2246,7 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
   bool enable_mysql_compatible_dates = false;
+  bool is_pl_stmt = stmt::T_ANONYMOUS_BLOCK == stmt_type || stmt::T_CALL_PROCEDURE == stmt_type;
   if (raw_params.empty()) {
     // do nothing
   } else if (raw_params_idx.count() != raw_params.count()) {
@@ -2304,6 +2293,9 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
                                                       session.get_min_const_integer_precision(),
                                                       session.get_exec_min_cluster_version()))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
+    } else if (is_pl_stmt && FALSE_IT(value.set_raw_text_info(static_cast<int32_t>(raw_param->raw_sql_offset_),
+                                                static_cast<int32_t>(raw_param->text_len_)))) {
+      LOG_WARN("fail to set raw text info", K(ret));
     } else if (OB_FAIL(add_param_to_param_store(value, fixed_param_store))) {
       LOG_WARN("failed to add param to param store", K(ret), K(value), K(fixed_param_store));
     } else {
@@ -3257,6 +3249,16 @@ int ObSql::generate_stmt(ParseResult &parse_result,
         ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, tmp_node, stmt);
       } else {
         ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
+      }
+      if (OB_SUCC(ret) && stmt::T_ANONYMOUS_BLOCK == context.stmt_type_) {
+        ObAnonymousBlockStmt *anonymous_stmt = static_cast<ObAnonymousBlockStmt *>(stmt);
+        ParseNode *body = anonymous_stmt->get_body();
+        if (OB_NOT_NULL(body)
+          && OB_NOT_NULL(resolver_ctx.session_info_)
+          && !body->is_forbid_anony_parameter_) {
+          body->is_forbid_anony_parameter_ =
+          parse_result.pl_parse_info_.has_null_param_ && !resolver_ctx.session_info_->enable_pl_null_literal_parameterization();
+        }
       }
 
       //check if current sql is using expected resource group

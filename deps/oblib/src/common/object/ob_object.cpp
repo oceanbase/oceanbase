@@ -2811,6 +2811,7 @@ void ParamFlag::reset()
   is_boolean_ = false;
   is_batch_parameter_ = false;
   ignore_scale_check_ = false;
+  need_strict_type_match_ = false;
 }
 
 

@@ -1550,6 +1550,8 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
       ctx.set_is_online_stats_gathering(true);
       const ObString stash_savepoint_name("online stat stash savepoint");
       bool has_stash_savepoint = false;
+      ObAuditRecordData audit_record;
+      ObSQLSessionInfo::ObAuditRecordDataWrapperGuard guard(ctx.get_my_session(), audit_record);
       //lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
       if (OB_FAIL(ObDbmsStatsUtils::cancel_async_gather_stats(ctx))) {
         LOG_WARN("failed to cancel async gather stats", K(ret));

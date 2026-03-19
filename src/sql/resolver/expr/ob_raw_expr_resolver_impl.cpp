@@ -3674,7 +3674,13 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             c_expr->set_obj_param(param);
 
             sql::ObRawExprResType result_type = c_expr->get_result_type();
-            if (result_type.get_length() == -1) {
+            if (const_cast<ObSQLSessionInfo*>(session_info)->enable_pl_null_literal_parameterization()
+              && nullptr != ctx_.secondary_namespace_
+              && T_PL_SCOPE == ctx_.current_scope_
+              && ObNullType == param.get_param_meta().get_type()
+              && 4 == param.get_raw_text_len()) { // parameterized null param
+              result_type.set_length(4);
+            } else if (result_type.get_length() == -1) {
               if (result_type.is_varchar() || result_type.is_nvarchar2()) {
                 result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
               } else if (result_type.is_char() || result_type.is_nchar()) {
@@ -3801,6 +3807,15 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             c_expr->set_accuracy(param.get_accuracy());
             c_expr->set_result_flag(param.get_result_flag()); // not_null etc
             c_expr->set_obj_param(param);
+            if (const_cast<ObSQLSessionInfo*>(session_info)->enable_pl_null_literal_parameterization()
+              && T_PL_SCOPE == ctx_.current_scope_
+              && nullptr != ctx_.secondary_namespace_
+              && ObNullType == param.get_param_meta().get_type()
+              && 4 == param.get_raw_text_len()) {
+              sql::ObRawExprResType result_type = c_expr->get_result_type();
+              result_type.set_length(4);
+              c_expr->set_result_type(result_type);
+            }
           }
           if (OB_SUCC(ret) && nullptr != ctx_.secondary_namespace_) {
             const pl::ObPLSymbolTable* symbol_table = NULL;

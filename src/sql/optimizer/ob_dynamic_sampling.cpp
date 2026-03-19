@@ -558,6 +558,8 @@ int ObDynamicSampling::estimate_rowcount(int64_t max_ds_timeout,
   bool is_sess_in_retry = false;
   int last_query_retry_err = OB_SUCCESS;
   int64_t session_query_timeout = 0;
+  ObAuditRecordData audit_record;
+  ObSQLSessionInfo::ObAuditRecordDataWrapperGuard guard(session_info, audit_record);
   if (!is_big_table_ && OB_FAIL(add_block_sample_info(sample_block_ratio_, seed_, sample_str))) {
     LOG_WARN("failed to add block sample info", K(ret));
   } else if (OB_FAIL(add_basic_hint_info(basic_hint_str, max_ds_timeout, is_big_table_ ? 1 : degree))) {

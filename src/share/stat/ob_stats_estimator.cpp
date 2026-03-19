@@ -424,6 +424,8 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
   ObCharsetType old_connection_charset_type = CHARSET_UTF8MB4;
   ObCharsetType old_result_charset_type = CHARSET_UTF8MB4;
   ObCollationType old_collation_type = CS_TYPE_UTF8MB4_GENERAL_CI;
+  ObAuditRecordData audit_record;
+  ObSQLSessionInfo::ObAuditRecordDataWrapperGuard guard(session, audit_record);
   bool need_restore = false;
   if (OB_ISNULL(sql_proxy) || OB_ISNULL(session) ||
       OB_UNLIKELY(dst_opt_stats.empty() || raw_sql.empty())) {

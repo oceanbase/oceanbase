@@ -17,6 +17,7 @@
 #include "share/table/ob_table.h" // for ObTableApiCredential
 #include "observer/table/group/ob_table_group_factory.h"
 #include "share/table/ob_table_rpc_struct.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -217,7 +218,9 @@ public:
   {
     if (OB_NOT_NULL(sess_node_val_)) {
       int ret = OB_SUCCESS;
-      sess_node_val_->get_sess_info().get_trans_result().reset();
+      if (OB_NOT_NULL(sess_node_val_->get_sess_info().get_cur_exec_ctx())) {
+        sess_node_val_->get_sess_info().get_cur_exec_ctx()->get_trans_result().reset();
+      }
       sess_node_val_->reset_tx_desc();
       if (OB_FAIL(sess_node_val_->push_back_to_queue())) {
         COMMON_LOG(WARN, "fail to push back session to queue", K(ret));

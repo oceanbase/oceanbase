@@ -264,7 +264,7 @@ public:
 public:
   // nested session and sql execute for foreign key.
   int begin_nested_session(sql::ObSQLSessionInfo::StmtSavedValue &saved_session,
-                           SavedValue &saved_conn, bool skip_cur_stmt_tables);
+                           SavedValue &saved_conn);
   int end_nested_session(sql::ObSQLSessionInfo::StmtSavedValue &saved_session,
                          SavedValue &saved_conn);
   bool is_extern_session() const { return NULL != extern_session_; }

@@ -45,7 +45,7 @@
       "value": {
         "BIGINT":1
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "BIGINT":1
       },
@@ -80,7 +80,7 @@
       "value": {
         "DECIMAL":"1"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "DECIMAL":"1"
       },
@@ -117,7 +117,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "VARCHAR":"\",
         "collation":"utf8mb4_general_ci",
@@ -183,7 +183,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "VARCHAR":"1",
         "collation":"utf8mb4_general_ci",
@@ -222,7 +222,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "VARCHAR":"1",
         "collation":"utf8mb4_general_ci",
@@ -261,7 +261,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "VARCHAR":"\",
         "collation":"utf8mb4_general_ci",
@@ -327,7 +327,7 @@
       "value": {
         "BIGINT":2
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "BIGINT":2
       },
@@ -384,7 +384,7 @@
           "value": {
             "BIGINT":1
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":1
           },
@@ -419,7 +419,7 @@
           "value": {
             "BIGINT":2
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":2
           },
@@ -454,7 +454,7 @@
           "value": {
             "BIGINT":3
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":3
           },
@@ -522,7 +522,7 @@
       "value": {
         "BIGINT":2
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "BIGINT":2
       },
@@ -579,7 +579,7 @@
           "value": {
             "BIGINT":1
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":1
           },
@@ -614,7 +614,7 @@
           "value": {
             "BIGINT":2
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":2
           },
@@ -649,7 +649,7 @@
           "value": {
             "BIGINT":3
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":3
           },
@@ -740,7 +740,7 @@
           "value": {
             "BIGINT":1
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":1
           },
@@ -802,7 +802,7 @@
           "value": {
             "BIGINT":1
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":1
           },
@@ -891,7 +891,7 @@
           "value": {
             "BIGINT":100
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":100
           },
@@ -953,7 +953,7 @@
           "value": {
             "BIGINT":0
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":0
           },
@@ -1044,7 +1044,7 @@
           "value": {
             "BIGINT":100
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":100
           },
@@ -1128,7 +1128,7 @@
               "value": {
                 "BIGINT":0
               },
-              "is_dynamic_questionmark":false,
+              "is_dynamic_questionmark":0,
               "param": {
                 "BIGINT":0
               },
@@ -1190,7 +1190,7 @@
               "value": {
                 "BIGINT":100
               },
-              "is_dynamic_questionmark":false,
+              "is_dynamic_questionmark":0,
               "param": {
                 "BIGINT":100
               },
@@ -1302,7 +1302,7 @@
       "collation":"utf8mb4_general_ci",
       "coercibility":"COERCIBLE"
     },
-    "is_dynamic_questionmark":false,
+    "is_dynamic_questionmark":0,
     "param": {
       "VARCHAR":"good",
       "collation":"utf8mb4_general_ci",
@@ -1342,7 +1342,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "VARCHAR":"sam",
         "collation":"utf8mb4_general_ci",
@@ -1381,7 +1381,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "VARCHAR":"lee",
         "collation":"utf8mb4_general_ci",
@@ -1422,7 +1422,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "VARCHAR":"yong",
         "collation":"utf8mb4_general_ci",
@@ -1461,7 +1461,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "VARCHAR":"handsome",
         "collation":"utf8mb4_general_ci",
@@ -1527,7 +1527,7 @@
       "collation":"utf8mb4_general_ci",
       "coercibility":"COERCIBLE"
     },
-    "is_dynamic_questionmark":false,
+    "is_dynamic_questionmark":0,
     "param": {
       "VARCHAR":"false",
       "collation":"utf8mb4_general_ci",
@@ -1587,7 +1587,7 @@
           "value": {
             "BIGINT":1
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":1
           },
@@ -1622,7 +1622,7 @@
           "value": {
             "BIGINT":0
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":0
           },
@@ -1665,7 +1665,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "VARCHAR":"true",
         "collation":"utf8mb4_general_ci",
@@ -1796,7 +1796,7 @@
       "value": {
         "DECIMAL":"3.14"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "DECIMAL":"3.14"
       },
@@ -2083,7 +2083,7 @@
       "value": {
         "BIGINT":1
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "BIGINT":1
       },
@@ -2322,7 +2322,7 @@
   "value": {
     "BIGINT":10
   },
-  "is_dynamic_questionmark":false,
+  "is_dynamic_questionmark":0,
   "param": {
     "BIGINT":10
   },
@@ -2385,7 +2385,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"SYSCONST"
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "VARCHAR":"auto_increment_increment",
         "collation":"utf8mb4_general_ci",
@@ -2422,7 +2422,7 @@
       "value": {
         "BIGINT":0
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "BIGINT":0
       },
@@ -2588,7 +2588,7 @@
       "value": {
         "BIGINT":10
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "BIGINT":10
       },
@@ -2623,7 +2623,7 @@
       "value": {
         "BIGINT":10
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "BIGINT":10
       },
@@ -2710,7 +2710,7 @@
           "value": {
             "BIGINT":10
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":10
           },
@@ -3059,7 +3059,7 @@
       "value": {
         "BIGINT":3
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "BIGINT":3
       },
@@ -3163,7 +3163,7 @@
       "value": {
         "BIGINT":1
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "BIGINT":1
       },
@@ -3399,7 +3399,7 @@
           "value": {
             "BIGINT":1
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":1
           },
@@ -3434,7 +3434,7 @@
           "value": {
             "BIGINT":2
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":2
           },
@@ -3469,7 +3469,7 @@
           "value": {
             "BIGINT":3
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":3
           },
@@ -3504,7 +3504,7 @@
           "value": {
             "BIGINT":4
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":4
           },
@@ -3634,7 +3634,7 @@
           "value": {
             "BIGINT":2
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":2
           },
@@ -3737,7 +3737,7 @@
           "value": {
             "BIGINT":10
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":10
           },
@@ -3826,7 +3826,7 @@
           "value": {
             "BIGINT":10
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":10
           },
@@ -3861,7 +3861,7 @@
           "value": {
             "BIGINT":10
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":10
           },
@@ -4033,7 +4033,7 @@
           "value": {
             "BIGINT":1
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":1
           },
@@ -4068,7 +4068,7 @@
           "value": {
             "BIGINT":2
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":2
           },
@@ -4222,7 +4222,7 @@
               "value": {
                 "BIGINT":10
               },
-              "is_dynamic_questionmark":false,
+              "is_dynamic_questionmark":0,
               "param": {
                 "BIGINT":10
               },
@@ -4257,7 +4257,7 @@
               "value": {
                 "BIGINT":10
               },
-              "is_dynamic_questionmark":false,
+              "is_dynamic_questionmark":0,
               "param": {
                 "BIGINT":10
               },
@@ -4364,7 +4364,7 @@
           "value": {
             "BIGINT":30
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":30
           },
@@ -4503,7 +4503,7 @@
                   "value": {
                     "BIGINT":1
                   },
-                  "is_dynamic_questionmark":false,
+                  "is_dynamic_questionmark":0,
                   "param": {
                     "BIGINT":1
                   },
@@ -4585,7 +4585,7 @@
               "value": {
                 "UNKNOWN":0
               },
-              "is_dynamic_questionmark":false,
+              "is_dynamic_questionmark":0,
               "param": {
                 "UNKNOWN":0
               },
@@ -4649,7 +4649,7 @@
                 "collation":"utf8mb4_general_ci",
                 "coercibility":"COERCIBLE"
               },
-              "is_dynamic_questionmark":false,
+              "is_dynamic_questionmark":0,
               "param": {
                 "VARCHAR":"abc",
                 "collation":"utf8mb4_general_ci",
@@ -4760,7 +4760,7 @@
             "collation":"utf8mb4_general_ci",
             "coercibility":"COERCIBLE"
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "VARCHAR":"def",
             "collation":"utf8mb4_general_ci",
@@ -4908,7 +4908,7 @@
                     "collation":"utf8mb4_general_ci",
                     "coercibility":"COERCIBLE"
                   },
-                  "is_dynamic_questionmark":false,
+                  "is_dynamic_questionmark":0,
                   "param": {
                     "VARCHAR":"abc",
                     "collation":"utf8mb4_general_ci",
@@ -4945,7 +4945,7 @@
                   "value": {
                     "BIGINT":45
                   },
-                  "is_dynamic_questionmark":false,
+                  "is_dynamic_questionmark":0,
                   "param": {
                     "BIGINT":45
                   },
@@ -4985,7 +4985,7 @@
               "value": {
                 "BIGINT":46
               },
-              "is_dynamic_questionmark":false,
+              "is_dynamic_questionmark":0,
               "param": {
                 "BIGINT":46
               },
@@ -5025,7 +5025,7 @@
           "value": {
             "BIGINT":-4290838506
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "BIGINT":-4290838506
           },
@@ -5065,7 +5065,7 @@
       "value": {
         "BIGINT":-4290838506
       },
-      "is_dynamic_questionmark":false,
+      "is_dynamic_questionmark":0,
       "param": {
         "BIGINT":-4290838506
       },
@@ -5236,7 +5236,7 @@
             "collation":"utf8mb4_general_ci",
             "coercibility":"COERCIBLE"
           },
-          "is_dynamic_questionmark":false,
+          "is_dynamic_questionmark":0,
           "param": {
             "VARCHAR":"\",
             "collation":"utf8mb4_general_ci",

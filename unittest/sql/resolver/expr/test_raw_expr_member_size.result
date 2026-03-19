@@ -35,10 +35,7 @@
 | expr.value_ | 16 |
 | expr.literal_prefix_ | 16 |
 | expr.obj_meta_ | 4 |
-| expr.is_date_unit_ | 1 |
-| expr.is_literal_bool_ | 1 |
-| expr.is_batch_stmt_parameter_ | 1 |
-| expr.is_dynamic_eval_questionmark_ | 1 |
+| expr.bool_flags_ | 1 |
 | expr.orig_questionmark_type_ | 16 |
 
 | class | sizeof(class) |

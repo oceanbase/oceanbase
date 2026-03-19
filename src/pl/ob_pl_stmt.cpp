@@ -323,7 +323,8 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
                                 ObPLCursor::CursorState state,
                                 bool has_dup_column_name,
                                 bool skip_locked,
-                                uint64_t package_body_id)
+                                uint64_t package_body_id,
+                                bool has_return_type)
 {
   int ret = OB_SUCCESS;
   // CK (OB_LIKELY(cursors_.count() < FUNC_MAX_CURSORS));
@@ -348,6 +349,7 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
       cursor->set_rowid_table_id(rowid_table_id);
       cursor->set_skip_locked(skip_locked);
       cursor->set_package_body_id(package_body_id);
+      cursor->set_has_return_type(has_return_type);
       if (has_dup_column_name) {
         cursor->set_dup_column();
       }
@@ -1169,7 +1171,8 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                             ObPLCursor::CursorState state,
                             bool has_dup_column_name,
                             int64_t &index,
-                            bool skip_locked)
+                            bool skip_locked,
+                            bool has_return_type)
 {
   int ret = OB_SUCCESS;
   bool is_dup = false;
@@ -1202,7 +1205,9 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                                                       formal_params,
                                                       state,
                                                       has_dup_column_name,
-                                                      skip_locked))) {
+                                                      skip_locked,
+                                                      0,
+                                                      has_return_type))) {
       LOG_WARN("failed to add condition to condition table", K(ret));
     } else {
       index = cursors_.at(cursors_.count() - 1);

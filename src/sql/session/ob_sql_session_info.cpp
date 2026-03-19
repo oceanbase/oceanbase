@@ -99,6 +99,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       warnings_buf_(),
       show_warnings_buf_(),
       end_trans_cb_(),
+      audit_record_wrapper_(),
       user_priv_set_(),
       db_priv_set_(),
       curr_trans_start_time_(0),
@@ -293,7 +294,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     warnings_buf_.reset();
     show_warnings_buf_.reset();
     end_trans_cb_.reset(),
-    audit_record_.reset();
+    audit_record_wrapper_.reset();
     user_priv_set_ = 0;
     db_priv_set_ = 0;
     curr_trans_start_time_ = 0;
@@ -2348,15 +2349,16 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
                                            ObExecuteMode mode)
 {
   int ret = OB_SUCCESS;
-  audit_record_.trace_id_ = *ObCurTraceId::get_trace_id();
-  audit_record_.request_type_ = mode;
-  audit_record_.session_id_ = get_sid();
-  audit_record_.proxy_session_id_ = get_proxy_sessid();
+  ObAuditRecordData &audit_record = audit_record_wrapper_.get_audit_record();
+  audit_record.trace_id_ = *ObCurTraceId::get_trace_id();
+  audit_record.request_type_ = mode;
+  audit_record.session_id_ = get_sid();
+  audit_record.proxy_session_id_ = get_proxy_sessid();
   // sql audit don't distinguish between two tenant IDs
-  audit_record_.tenant_id_ = get_effective_tenant_id();
-  audit_record_.user_id_ = get_user_id();
-  audit_record_.proxy_user_id_ = get_proxy_user_id();
-  audit_record_.effective_tenant_id_ = get_effective_tenant_id();
+  audit_record.tenant_id_ = get_effective_tenant_id();
+  audit_record.user_id_ = get_user_id();
+  audit_record.proxy_user_id_ = get_proxy_user_id();
+  audit_record.effective_tenant_id_ = get_effective_tenant_id();
   if (EXECUTE_INNER == mode
       || EXECUTE_LOCAL == mode
       || EXECUTE_PS_PREPARE == mode
@@ -2367,18 +2369,18 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
       || EXECUTE_PS_FETCH == mode
       || EXECUTE_PL_EXECUTE == mode) {
     // consistency between tenant_id_ and tenant_name_
-    audit_record_.tenant_name_ = const_cast<char *>(get_effective_tenant_name().ptr());
-    audit_record_.tenant_name_len_ = min(get_effective_tenant_name().length(),
+    audit_record.tenant_name_ = const_cast<char *>(get_effective_tenant_name().ptr());
+    audit_record.tenant_name_len_ = min(get_effective_tenant_name().length(),
                                          OB_MAX_TENANT_NAME_LENGTH);
-    audit_record_.user_name_ = const_cast<char *>(get_user_name().ptr());
-    audit_record_.user_name_len_ = min(get_user_name().length(),
+    audit_record.user_name_ = const_cast<char *>(get_user_name().ptr());
+    audit_record.user_name_len_ = min(get_user_name().length(),
                                        OB_MAX_USER_NAME_LENGTH);
-    audit_record_.db_name_ = const_cast<char *>(get_database_name().ptr());
-    audit_record_.db_name_len_ = min(get_database_name().length(),
+    audit_record.db_name_ = const_cast<char *>(get_database_name().ptr());
+    audit_record.db_name_len_ = min(get_database_name().length(),
                                      OB_MAX_DATABASE_NAME_LENGTH);
 
-    audit_record_.proxy_user_name_ = const_cast<char *>(get_proxy_user_name().ptr());
-    audit_record_.proxy_user_name_len_ = min(get_proxy_user_name().length(),
+    audit_record.proxy_user_name_ = const_cast<char *>(get_proxy_user_name().ptr());
+    audit_record.proxy_user_name_len_ = min(get_proxy_user_name().length(),
                                        OB_MAX_USER_NAME_LENGTH);
 
     if (EXECUTE_PS_EXECUTE == mode
@@ -2387,57 +2389,58 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
         || EXECUTE_PS_GET_PIECE == mode
         || EXECUTE_PS_SEND_LONG_DATA == mode
         || EXECUTE_PS_FETCH == mode
-        || (EXECUTE_PL_EXECUTE == mode && audit_record_.sql_len_ > 0)) {
-      // spi_cursor_open may not use process_record to set audit_record_.sql_
-      // so only EXECUTE_PL_EXECUTE == mode && audit_record_.sql_len_ > 0 do not set sql
+        || (EXECUTE_PL_EXECUTE == mode && audit_record.sql_len_ > 0)) {
+      // spi_cursor_open may not use process_record to set audit_record.sql_
+      // so only EXECUTE_PL_EXECUTE == mode && audit_record.sql_len_ > 0 do not set sql
       //ps模式对应的sql在协议层中设置, session的current_query_中没值
       // do nothing
     } else {
       ObString sql = get_current_query_string();
-      audit_record_.sql_ = const_cast<char *>(sql.ptr());
-      audit_record_.sql_len_ = min(sql.length(), get_tenant_query_record_size_limit());
-      audit_record_.sql_cs_type_ = get_local_collation_connection();
+      audit_record.sql_ = const_cast<char *>(sql.ptr());
+      audit_record.sql_len_ = min(sql.length(), get_tenant_query_record_size_limit());
+      audit_record.sql_cs_type_ = get_local_collation_connection();
     }
 
-    if (OB_FAIL(get_database_id(audit_record_.db_id_))) {
+    if (OB_FAIL(get_database_id(audit_record.db_id_))) {
       LOG_WARN("fail to get database id", K(ret));
-    } else if (audit_record_.db_id_ == OB_INVALID_ID) {
-      audit_record_.db_id_ = OB_MOCK_DEFAULT_DATABASE_ID;
+    } else if (audit_record.db_id_ == OB_INVALID_ID) {
+      audit_record.db_id_ = OB_MOCK_DEFAULT_DATABASE_ID;
     }
   } else if (EXECUTE_REMOTE == mode || EXECUTE_DIST == mode) {
-    audit_record_.tenant_name_ = NULL;
-    audit_record_.tenant_name_len_ = 0;
-    audit_record_.user_name_ = NULL;
-    audit_record_.user_name_len_ = 0;
-    audit_record_.db_name_ = NULL;
-    audit_record_.db_name_len_ = 0;
-    audit_record_.sql_ = NULL;
-    audit_record_.sql_len_ = 0;
-    audit_record_.sql_cs_type_ = CS_TYPE_INVALID;
+    audit_record.tenant_name_ = NULL;
+    audit_record.tenant_name_len_ = 0;
+    audit_record.user_name_ = NULL;
+    audit_record.user_name_len_ = 0;
+    audit_record.db_name_ = NULL;
+    audit_record.db_name_len_ = 0;
+    audit_record.sql_ = NULL;
+    audit_record.sql_len_ = 0;
+    audit_record.sql_cs_type_ = CS_TYPE_INVALID;
   }
 
-  audit_record_.txn_free_route_flag_ = txn_free_route_ctx_.get_audit_record();
-  audit_record_.txn_free_route_version_ = txn_free_route_ctx_.get_global_version();
+  audit_record.txn_free_route_flag_ = txn_free_route_ctx_.get_audit_record();
+  audit_record.txn_free_route_version_ = txn_free_route_ctx_.get_global_version();
   trace::UUID trc_uuid = OBTRACE->get_trace_id();
   int64_t pos = 0;
   if (trc_uuid.is_inited()) {
-    trc_uuid.tostring(audit_record_.flt_trace_id_, OB_MAX_UUID_STR_LENGTH + 1, pos);
+    trc_uuid.tostring(audit_record.flt_trace_id_, OB_MAX_UUID_STR_LENGTH + 1, pos);
   } else {
     // do nothing
   }
-  audit_record_.flt_trace_id_[pos] = '\0';
-  audit_record_.stmt_type_ = get_stmt_type();
+  audit_record.flt_trace_id_[pos] = '\0';
+  audit_record.stmt_type_ = get_stmt_type();
   bool ac = false;
   get_autocommit(ac);
-  audit_record_.trans_status_ = is_in_transaction() == false ? TRANS_NOT_OPENED :
+  audit_record.trans_status_ = is_in_transaction() == false ? TRANS_NOT_OPENED :
                 (ac == false ? IMPLICIT_TRANS : COMMIT_TRANS);
-  return audit_record_;
+  return audit_record;
 }
 
 void ObSQLSessionInfo::update_stat_from_exec_record()
 {
-  session_stat_.total_logical_read_ += (audit_record_.exec_record_.memstore_read_row_count_
-                                        + audit_record_.exec_record_.ssstore_read_row_count_);
+  ObAuditRecordData &audit_record = audit_record_wrapper_.get_audit_record();
+  session_stat_.total_logical_read_ += (audit_record.exec_record_.memstore_read_row_count_
+                                        + audit_record.exec_record_.ssstore_read_row_count_);
 //  session_stat_.total_logical_write_ += 0;
 //  session_stat_.total_physical_read_ += 0;
 //  session_stat_.total_lock_count_ += 0;
@@ -2445,8 +2448,9 @@ void ObSQLSessionInfo::update_stat_from_exec_record()
 
 void ObSQLSessionInfo::update_stat_from_exec_timestamp()
 {
-  session_stat_.total_cpu_time_us_ += audit_record_.exec_timestamp_.executor_t_;
-  session_stat_.total_exec_time_us_ += audit_record_.exec_timestamp_.elapsed_t_;
+  ObAuditRecordData &audit_record = audit_record_wrapper_.get_audit_record();
+  session_stat_.total_cpu_time_us_ += audit_record.exec_timestamp_.executor_t_;
+  session_stat_.total_exec_time_us_ += audit_record.exec_timestamp_.elapsed_t_;
 }
 
 void ObSQLSessionInfo::update_alive_time_stat()
@@ -3420,8 +3424,6 @@ int ObSQLSessionInfo::save_session(StmtSavedValue &saved_value)
 int ObSQLSessionInfo::save_sql_session(StmtSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
-  OX (saved_value.audit_record_.assign(audit_record_));
-  OX (audit_record_.reset());
   OX (saved_value.inner_flag_ = inner_flag_);
   OX (saved_value.session_type_ = session_type_);
   OX (saved_value.read_uncommited_ = read_uncommited_);
@@ -3443,7 +3445,6 @@ int ObSQLSessionInfo::restore_sql_session(StmtSavedValue &saved_value)
   OX (inner_flag_ = saved_value.inner_flag_);
   OX (read_uncommited_ = saved_value.read_uncommited_);
   OX (is_ignore_stmt_ = saved_value.is_ignore_stmt_);
-  OX (audit_record_.assign(saved_value.audit_record_));
 #ifdef OB_BUILD_SPM
   OX (select_plan_type_ = saved_value.select_plan_type_);
 #endif
@@ -3453,7 +3454,9 @@ int ObSQLSessionInfo::restore_sql_session(StmtSavedValue &saved_value)
     OZ (update_sys_variable(share::SYS_VAR__CURRENT_DEFAULT_CATALOG, obj));
   }
   OX (set_database_id(saved_value.db_id_));
-  OZ (set_default_database(saved_value.db_name_.string()));
+  if (get_database_name() != saved_value.db_name_.string()) {
+    OZ (set_default_database(saved_value.db_name_.string()));
+  }
   return ret;
 }
 
@@ -3465,11 +3468,11 @@ int ObSQLSessionInfo::restore_session(StmtSavedValue &saved_value)
   return ret;
 }
 
-int ObSQLSessionInfo::begin_nested_session(StmtSavedValue &saved_value, bool skip_cur_stmt_tables)
+int ObSQLSessionInfo::begin_nested_session(StmtSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
   OV (nested_count_ >= 0, OB_ERR_UNEXPECTED, nested_count_);
-  OZ (ObBasicSessionInfo::begin_nested_session(saved_value, skip_cur_stmt_tables));
+  OZ (ObBasicSessionInfo::begin_nested_session(saved_value));
   OZ (save_sql_session(saved_value));
   OX (nested_count_++);
   LOG_DEBUG("begin_nested_session", K(ret), K_(nested_count));
@@ -3592,6 +3595,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&enable_sql_ccl_rule_, tenant_config->_enable_sql_ccl_rule);
       ATOMIC_STORE(&enable_streaming_cursor_prefetch_, tenant_config->_enable_streaming_cursor_prefetch);
       ATOMIC_STORE(&force_unstreaming_cursor_, tenant_config->_force_unstreaming_cursor);
+      ATOMIC_STORE(&enable_pl_null_literal_parameterization_, tenant_config->_enable_pl_null_literal_parameterization);
       extend_sql_plan_monitor_metrics_ = tenant_config->_extend_sql_plan_monitor_metrics;
     }
     conf_enable_sql_audit_ = GCONF.enable_sql_audit;

@@ -102,7 +102,7 @@ int ObXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
     } else if (OB_FAIL(MTL(transaction::ObXAService*)->xa_start_for_mysql(xid,
             flags, my_session->get_server_sid(), my_session->get_sid(), tx_param, tx_desc))) {
       LOG_WARN("mysql xa start failed", K(ret), K(tx_param));
-      my_session->get_trans_result().reset();
+      ctx.get_trans_result().reset();
       my_session->reset_tx_variable();
       ctx.set_need_disconnect(false);
     } else {
@@ -220,7 +220,7 @@ int ObXaPrepareExecutor::execute(ObExecContext &ctx, ObXaPrepareStmt &stmt)
       LOG_WARN("mysql xa prepare failed", K(ret), K(xid));
     }
     if (need_exit) {
-      my_session->get_trans_result().reset();
+      ctx.get_trans_result().reset();
       my_session->reset_tx_variable();
       my_session->disassociate_xa();
       ctx.set_need_disconnect(false);
@@ -289,7 +289,7 @@ int ObXaCommitExecutor::execute(ObExecContext &ctx, ObXaCommitStmt &stmt)
           LOG_WARN("mysql xa commit failed", K(ret), K(xid));
         }
         if (need_exit) {
-          my_session->get_trans_result().reset();
+          ctx.get_trans_result().reset();
           my_session->reset_tx_variable();
           my_session->disassociate_xa();
           ctx.set_need_disconnect(false);
@@ -384,7 +384,7 @@ int ObXaRollbackExecutor::execute(ObExecContext &ctx, ObXaRollBackStmt &stmt)
         LOG_WARN("mysql xa rollback failed", K(ret), K(xid));
       }
       if (need_exit) {
-        my_session->get_trans_result().reset();
+        ctx.get_trans_result().reset();
         my_session->reset_tx_variable();
         my_session->disassociate_xa();
         ctx.set_need_disconnect(false);

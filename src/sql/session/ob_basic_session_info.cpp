@@ -63,7 +63,6 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       sys_var_base_version_(OB_INVALID_VERSION),
       proxy_user_id_(OB_INVALID_ID),
       tx_desc_(NULL),
-      tx_result_(),
       reserved_read_snapshot_version_(),
       xid_(),
       associated_xa_(false),
@@ -261,7 +260,6 @@ int ObBasicSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
     LOG_WARN("fail to init debug sync actions", K(ret));
   } else if (OB_FAIL(set_session_state(SESSION_INIT))) {
     LOG_WARN("fail to set session stat", K(ret));
-/*  } else if (FALSE_IT(tx_result_.set_trans_desc(&trans_desc_))) { */
   } else {
     sessid_ = sessid;
     proxy_sessid_ = proxy_sessid;
@@ -289,7 +287,6 @@ void ObBasicSessionInfo::destroy()
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tx_desc != NULL", KPC(this), KPC_(tx_desc));
   }
   tx_desc_ = NULL;
-  tx_result_.reset();
   xid_.reset();
   associated_xa_ = false;
   cached_tenant_config_version_ = 0;
@@ -437,7 +434,6 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   proxy_sessid_ = VALID_PROXY_SESSID;
   global_vars_version_ = 0;
 
-  tx_result_.reset();
   total_stmt_tables_.reset();
   cur_stmt_tables_.reset();
   // reset() of user_var_val_map_ and debug_sync_actions_ will keep some memory
@@ -7112,7 +7108,7 @@ void ObBasicSessionInfo::set_session_sleep()
   }
 }
 
-int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip_cur_stmt_tables)
+int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
   saved_value.cur_phy_plan_ = cur_phy_plan_;
@@ -7142,12 +7138,6 @@ int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip
     }
     OX (saved_value.cur_query_len_ = truncated_len);
     OX (thread_data_.cur_query_len_ = 0);
-    OZ (saved_value.total_stmt_tables_.assign(total_stmt_tables_));
-    if (!skip_cur_stmt_tables) {
-      OZ (merge_stmt_tables(), total_stmt_tables_, cur_stmt_tables_);
-    }
-    OZ (saved_value.cur_stmt_tables_.assign(cur_stmt_tables_));
-    OX (cur_stmt_tables_.reset());
     OX (sys_vars_cache_.get_autocommit_info(saved_value.inc_autocommit_));
     OX (sys_vars_cache_.set_autocommit_info(false));
   }
@@ -7157,27 +7147,25 @@ int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip
   return ret;
 }
 
-int ObBasicSessionInfo::stmt_save_session(StmtSavedValue &saved_value, bool skip_cur_stmt_tables)
+int ObBasicSessionInfo::stmt_save_session(StmtSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
-  OZ (base_save_session(saved_value, skip_cur_stmt_tables));
-  OZ (saved_value.tx_result_.assign(tx_result_));
-  OX (tx_result_.reset());
+  OZ (base_save_session(saved_value));
   OX (saved_value.cur_query_start_time_ = thread_data_.cur_query_start_time_);
   OX (thread_data_.cur_query_start_time_ = 0);
   OX (saved_value.stmt_type_ = stmt_type_);
   return ret;
 }
 
-int ObBasicSessionInfo::save_basic_session(StmtSavedValue &saved_value, bool skip_cur_stmt_tables)
+int ObBasicSessionInfo::save_basic_session(StmtSavedValue &saved_value)
 {
-  return stmt_save_session(saved_value, skip_cur_stmt_tables);
+  return stmt_save_session(saved_value);
 }
 
-int ObBasicSessionInfo::begin_nested_session(StmtSavedValue &saved_value, bool skip_cur_stmt_tables)
+int ObBasicSessionInfo::begin_nested_session(StmtSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
-  OZ (SMART_CALL(save_basic_session(saved_value, skip_cur_stmt_tables)));
+  OZ (SMART_CALL(save_basic_session(saved_value)));
   return ret;
 }
 
@@ -7185,8 +7173,6 @@ int ObBasicSessionInfo::base_restore_session(BaseSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
   OX (sys_vars_cache_.set_autocommit_info(saved_value.inc_autocommit_));
-  OZ (cur_stmt_tables_.assign(saved_value.cur_stmt_tables_));
-  OZ (total_stmt_tables_.assign(saved_value.total_stmt_tables_));
 //OX (thread_data_.cur_query_start_time_ = saved_value.cur_query_start_time_);
   // 4013 scene, len may be -1, illegal.
   int64_t len = MAX(MIN(saved_value.cur_query_len_, thread_data_.cur_query_buf_len_ - 1), 0);
@@ -7207,10 +7193,6 @@ int ObBasicSessionInfo::stmt_restore_session(StmtSavedValue &saved_value)
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   thread_data_.cur_query_start_time_ = saved_value.cur_query_start_time_;
-  if (OB_TMP_FAIL(tx_result_.merge_result(saved_value.tx_result_))) {
-    LOG_WARN("failed to merge trans result", K(tmp_ret));
-    ret = COVER_SUCC(tmp_ret);
-  }
   if (OB_TMP_FAIL(base_restore_session(saved_value))) {
     LOG_WARN("failed to restore base session", K(tmp_ret));
     ret = COVER_SUCC(tmp_ret);
@@ -7236,14 +7218,12 @@ int ObBasicSessionInfo::trans_save_session(TransSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
   LockGuard lock_guard(thread_data_mutex_);
-  OZ (base_save_session(saved_value, false));
+  OZ (base_save_session(saved_value));
   /*
    * save transaction context
    */
   OX (saved_value.tx_desc_ = tx_desc_);
   OX (tx_desc_ = NULL);
-  OZ (saved_value.tx_result_.assign(tx_result_));
-  OX (tx_result_.reset());
   OX (saved_value.trans_flags_ = trans_flags_);
   OX (trans_flags_.reset());
   OX (saved_value.nested_count_ = nested_count_);
@@ -7264,10 +7244,6 @@ int ObBasicSessionInfo::trans_restore_session(TransSavedValue &saved_value)
   /*
    * restore means switch to saved transaction context, drop current one.
    */
-  if (OB_TMP_FAIL(tx_result_.assign(saved_value.tx_result_))) {
-    LOG_WARN("failed to assign trans result", K(tmp_ret));
-    ret = COVER_SUCC(tmp_ret);
-  }
   if (OB_NOT_NULL(tx_desc_)) {
     MTL(transaction::ObTransService *)->release_tx(*tx_desc_);
   }
@@ -7309,54 +7285,6 @@ int ObBasicSessionInfo::set_end_stmt()
   return ret;
 }
 
-int ObBasicSessionInfo::init_stmt_tables()
-{
-  int ret = OB_SUCCESS;
-  if (!is_nested_session() && !is_fast_select()) {
-    // cur stmt is top stmt.
-    total_stmt_tables_.reset();
-    cur_stmt_tables_.reset();
-  }
-  return ret;
-}
-
-int ObBasicSessionInfo::merge_stmt_tables()
-{
-  int ret = OB_SUCCESS;
-  int64_t idx = -1;
-  for (int i = 0; OB_SUCC(ret) && i < cur_stmt_tables_.count(); i++) {
-    idx = -1;
-    OZ (add_var_to_array_no_dup(total_stmt_tables_, cur_stmt_tables_.at(i), &idx));
-    if (0 <= idx && idx < total_stmt_tables_.count()) {
-      OX (total_stmt_tables_.at(idx).set_stmt_type(cur_stmt_tables_.at(i).get_stmt_type()));
-    }
-  }
-  return ret;
-}
-
-int ObBasicSessionInfo::skip_mutating(uint64_t table_id, stmt::StmtType &saved_stmt_type)
-{
-  int ret = OB_SUCCESS;
-  int64_t idx = -1;
-  TableStmtType table_stmt_type(table_id);
-  if (has_exist_in_array(cur_stmt_tables_, table_stmt_type, &idx) &&
-      0 <= idx && idx < cur_stmt_tables_.count()) {
-    OX (cur_stmt_tables_.at(idx).skip_mutating(saved_stmt_type));
-  }
-  return ret;
-}
-
-int ObBasicSessionInfo::restore_mutating(uint64_t table_id, stmt::StmtType saved_stmt_type)
-{
-  int ret = OB_SUCCESS;
-  int64_t idx = -1;
-  TableStmtType table_stmt_type(table_id);
-  if (has_exist_in_array(cur_stmt_tables_, table_stmt_type, &idx) &&
-      0 <= idx && idx < cur_stmt_tables_.count()) {
-    OX (cur_stmt_tables_.at(idx).restore_mutating(saved_stmt_type));
-  }
-  return ret;
-}
 
 int ObBasicSessionInfo::set_time_zone(const ObString &str_val, const bool is_oralce_mode,
                                      const bool check_timezone_valid)

@@ -503,6 +503,21 @@ int ObLLVMSwitch::add_case(const ObLLVMValue &value, ObLLVMBasicBlock &block)
   return ret;
 }
 
+int ObLLVMPhi::add_incoming(ObLLVMValue &value, ObLLVMBasicBlock &block)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_v())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("v_ is NULL", K(ret));
+  } else if (OB_ISNULL(value.get_v()) || OB_ISNULL(block.get_v())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("value is NULL", K(ret));
+  } else {
+    get_v()->addIncoming(value.get_v(), block.get_v());
+  }
+  return ret;
+}
+
 ObLLVMHelper::~ObLLVMHelper()
 {
   OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
@@ -738,6 +753,20 @@ int ObLLVMHelper::verify_module()
     jc_->Builder.reset();
   }
   return ret;
+}
+
+void ObLLVMHelper::ensure_registered()
+{
+  if (jit_) {
+    jit_->ensure_registered();
+  }
+}
+
+void ObLLVMHelper::unregister_eh_frame()
+{
+  if (jit_) {
+    jit_->unregister_eh_frame();
+  }
 }
 
 int ObLLVMHelper::get_function_address(const ObString &name, uint64_t &addr)
@@ -1396,6 +1425,27 @@ int ObLLVMHelper::create_sub(ObLLVMValue &value1, ObLLVMValue &value2, ObLLVMVal
     if (OB_ISNULL(value)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to create gep", K(ret));
+    } else {
+      result.set_v(value);
+    }
+  }
+  return ret;
+}
+
+int ObLLVMHelper::create_or(ObLLVMValue &value1, ObLLVMValue &value2, ObLLVMValue &result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(jc_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jc is NULL", K(ret));
+  } else if (OB_ISNULL(value1.get_v()) || OB_ISNULL(value2.get_v())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("value is NULL", K(value1), K(value2), K(ret));
+  } else {
+    llvm::Value *value = jc_->get_builder().CreateOr(value1.get_v(), value2.get_v());
+    if (OB_ISNULL(value)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to create or", K(ret));
     } else {
       result.set_v(value);
     }
@@ -2287,6 +2337,28 @@ int ObLLVMHelper::create_phi(const ObString &name,
     }
   }
 
+  return ret;
+}
+
+int ObLLVMHelper::create_phi(const common::ObString &name, ObLLVMType &type, ObLLVMPhi &result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(jc_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jc is NULL", K(jc_), K(ret));
+  } else if (OB_ISNULL(type.get_v())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("value is NULL", K(name), K(type), K(ret));
+  } else {
+    llvm::PHINode *phi = jc_->get_builder().CreatePHI(
+        type.get_v(), 64 /* trivial estimate */, make_string_ref(name));
+    if (OB_ISNULL(phi)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to create LLVM PHI node", K(ret));
+    } else {
+      result.set_v(phi);
+    }
+  }
   return ret;
 }
 

@@ -332,10 +332,13 @@ int ObPLCompiler::compile(
           } else {
             OZ (func.add_in_arg(i));
           }
-          if (OB_SUCC(ret)
-              && OB_NOT_NULL(params)
-              && symbol->get_name().case_compare_equal(ObPLResolver::ANONYMOUS_SQL_ARG)) {
-            params->at(i).set_need_to_check_type(false);
+          if (OB_SUCC(ret) && OB_NOT_NULL(params)) {
+            if (symbol->get_name().case_compare_equal(ObPLResolver::ANONYMOUS_SQL_ARG)) {
+              params->at(i).set_need_to_check_type(false);
+            }
+            if (symbol->is_from_overloaded_routine()) {
+              params->at(i).set_need_strict_type_match(true);
+            }
           }
         }
         if (OB_SUCC(ret)) {
@@ -891,9 +894,10 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
       OZ (generate_package_cursors(package_ast, package_ast.get_cursor_table(), package));
       if (OB_SUCC(ret)) {
         uint64_t session_database_id = package_ast.get_compile_flag().compile_with_invoker_right() ? package_ast.get_invoker_db_id() : session_info_.get_database_id();
+        uint64_t database_id = package.get_database_id();
         ObRoutinePersistentInfo routine_storage(MTL_ID(),
-                                          package.get_database_id(),
-                                          session_database_id,
+                                          database_id,
+                                          (OB_SYS_DATABASE_ID == database_id) ? OB_SYS_DATABASE_ID : session_database_id,
                                           package.get_id(),
                                           get_tenant_id_by_object_id(package.get_id()));
         ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
@@ -1374,7 +1378,8 @@ int ObPLCompiler::generate_package_cursors(
                                   ast_cursor->get_state(),
                                   ast_cursor->is_dup_column(),
                                   ast_cursor->is_skip_locked(),
-                                  ast_cursor->get_package_body_id()));
+                                  ast_cursor->get_package_body_id(),
+                                  ast_cursor->has_return_type()));
     }
   }
   return ret;

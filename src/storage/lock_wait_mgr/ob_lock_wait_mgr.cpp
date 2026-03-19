@@ -193,7 +193,7 @@ void ObLockWaitMgr::handle_lock_conflict(const ObExecContext &exec_ctx,
         on_lock_conflict(*tx, is_lock_wait_timeout);
       }
     } else {
-      transaction::ObTxExecResult &result = session.get_trans_result();
+      transaction::ObTxExecResult &result = const_cast<ObExecContext&>(exec_ctx).get_trans_result();
       on_lock_conflict(const_cast<ObSArray<storage::ObRowConflictInfo>&>(result.get_conflict_info_array()),
          NULL, session.get_server_sid(), is_lock_wait_timeout);
     }

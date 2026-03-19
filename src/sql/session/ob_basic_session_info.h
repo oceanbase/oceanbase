@@ -301,7 +301,7 @@ public:
                                   common::ObWrapperAllocator> SysVarNameValMap;
   typedef lib::ObLockGuard<common::ObRecursiveMutex> LockGuard;
 
-  class TableStmtType
+  class TableStmtType // unused code
   {
     OB_UNIS_VERSION_V(1);
   public:
@@ -326,15 +326,6 @@ public:
     inline bool is_mutating() const
     {
       return stmt_type_ != stmt::T_SELECT;
-    }
-    inline void skip_mutating(stmt::StmtType &saved_stmt_type)
-    {
-      saved_stmt_type = get_stmt_type();
-      set_stmt_type(stmt::T_SELECT);
-    }
-    inline void restore_mutating(stmt::StmtType saved_stmt_type)
-    {
-      set_stmt_type(saved_stmt_type);
     }
     inline stmt::StmtType get_stmt_type() const
     {
@@ -449,8 +440,6 @@ public:
       cur_query_len_ = 0;
       cur_query_buf_len_ = 0;
       cur_query_ = NULL;
-      total_stmt_tables_.reset();
-      cur_stmt_tables_.reset();
       read_uncommited_ = false;
       inc_autocommit_ = false;
       need_serial_exec_ = false;
@@ -461,8 +450,6 @@ public:
     volatile int64_t cur_query_len_;
 //  int64_t cur_query_start_time_;          // 用于计算事务超时时间，如果在base_save_session接口中操作
                                             // 会导致start_trans报事务超时失败，不放在基类中。
-    common::ObSEArray<TableStmtType, 4> total_stmt_tables_;
-    common::ObSEArray<TableStmtType, 2> cur_stmt_tables_;
 //  bool in_transaction_;                   // 对应TransSavedValue的trans_flags_，不放在基类中。
     bool read_uncommited_;
     bool inc_autocommit_;
@@ -492,13 +479,11 @@ public:
     inline void reset()
     {
       BaseSavedValue::reset();
-      tx_result_.reset();
       cur_query_start_time_ = 0;
       in_transaction_ = false;
       stmt_type_ = sql::stmt::StmtType::T_NONE;
     }
   public:
-    transaction::ObTxExecResult tx_result_;
     int64_t cur_query_start_time_;
     bool in_transaction_;
     sql::stmt::StmtType stmt_type_;
@@ -516,14 +501,12 @@ public:
       BaseSavedValue::reset();
       tx_desc_ = NULL;
       trans_flags_.reset();
-      tx_result_.reset();
       nested_count_ = -1;
       xid_.reset();
     }
   public:
     transaction::ObTxDesc *tx_desc_;
     TransFlags trans_flags_;
-    transaction::ObTxExecResult tx_result_;
     int64_t nested_count_;
     transaction::ObXATransID xid_;
   };
@@ -1637,18 +1620,14 @@ public:
   bool is_nested_session() const { return nested_count_ > 0; }
   int64_t get_nested_count() const { return nested_count_; }
   void set_nested_count(int64_t nested_count) { nested_count_ = nested_count; }
-  int save_base_session(BaseSavedValue &saved_value, bool skip_cur_stmt_tables = false);
-  int restore_base_session(BaseSavedValue &saved_value, bool skip_cur_stmt_tables = false);
-  int save_basic_session(StmtSavedValue &saved_value, bool skip_cur_stmt_tables = false);
+  int save_base_session(BaseSavedValue &saved_value);
+  int restore_base_session(BaseSavedValue &saved_value);
+  int save_basic_session(StmtSavedValue &saved_value);
   int restore_basic_session(StmtSavedValue &saved_value);
-  int begin_nested_session(StmtSavedValue &saved_value, bool skip_cur_stmt_tables = false);
+  int begin_nested_session(StmtSavedValue &saved_value);
   int end_nested_session(StmtSavedValue &saved_value);
   int begin_autonomous_session(TransSavedValue &saved_value);
   int end_autonomous_session(TransSavedValue &saved_value);
-  int init_stmt_tables();
-  int merge_stmt_tables();
-  int skip_mutating(uint64_t table_id, stmt::StmtType &saved_stmt_type);
-  int restore_mutating(uint64_t table_id, stmt::StmtType saved_stmt_type);
   int set_start_stmt();
   int set_end_stmt();
   bool has_start_stmt() { return nested_count_ >= 0; }
@@ -1747,9 +1726,9 @@ protected:
   int process_session_debug_sync(const common::ObObj &val, const bool is_global,
                                 const bool is_update_sys_var);
   // session切换接口
-  int base_save_session(BaseSavedValue &saved_value, bool skip_cur_stmt_tables = false);
+  int base_save_session(BaseSavedValue &saved_value);
   int base_restore_session(BaseSavedValue &saved_value);
-  int stmt_save_session(StmtSavedValue &saved_value, bool skip_cur_stmt_tables = false);
+  int stmt_save_session(StmtSavedValue &saved_value);
   int stmt_restore_session(StmtSavedValue &saved_value);
   int trans_save_session(TransSavedValue &saved_value);
   int trans_restore_session(TransSavedValue &saved_value);
@@ -2707,7 +2686,6 @@ private:
    *******************************************/
 protected:
   transaction::ObTxDesc *tx_desc_;
-  transaction::ObTxExecResult tx_result_; // TODO: move to QueryCtx/ExecCtx
   // reserved read snapshot version for current or previous stmt in the txn. And
   // it is used for multi-version garbage colloector to collect ative snapshot.
   // While it may be empty for the txn with ac = 1 and remote execution whose
@@ -2722,7 +2700,6 @@ public:
   transaction::ObTransID get_tx_id() const { return tx_desc_ != NULL ? tx_desc_->get_tx_id() : transaction::ObTransID(); }
   transaction::ObTxDesc /*Nullable*/ *&get_tx_desc() { return tx_desc_; }
   const transaction::ObTxDesc /*Nullable*/ *get_tx_desc() const { return tx_desc_; }
-  transaction::ObTxExecResult &get_trans_result() { return tx_result_; }
   bool associated_xa() const { return associated_xa_; }
   int associate_xa(const transaction::ObXATransID &xid) { associated_xa_ = true; return xid_.set(xid); }
   void disassociate_xa() { associated_xa_ = false; xid_.reset(); }
@@ -2731,8 +2708,8 @@ public:
   void shadow_top_query_string() { shadow_top_query_string_ = true; }
   bool has_top_query_string() const { return thread_data_.top_query_len_ > 0 && thread_data_.top_query_ != nullptr; }
 private:
-  common::ObSEArray<TableStmtType, 2> total_stmt_tables_;
-  common::ObSEArray<TableStmtType, 1> cur_stmt_tables_;
+  common::ObSEArray<TableStmtType, 2> total_stmt_tables_;  // unused code, keep for compatibility
+  common::ObSEArray<TableStmtType, 1> cur_stmt_tables_;  // unused code, keep for compatibility
   char ssl_cipher_buff_[64];
   // following 3 params are used to diagnosis session leak.
   char sess_bt_buff_[MAX_SESS_BT_BUFF_SIZE];

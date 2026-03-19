@@ -296,6 +296,10 @@ public:
                          const ObString &dblink_name = ObString(""),
                          ObIAllocator *allocator = NULL,
                          ObSynonymChecker *synonym_checker = NULL);
+  static int record_deduced_type(const pl::ObPLResolveCtx &resolve_ctx,
+                                 const ObIRoutineInfo *&routine_info,
+                                 const common::ObIArray<ObRawExpr *> &expr_params,
+                                 bool is_from_overloaded_routine);
   static int get_routine(const pl::ObPLResolveCtx &resolve_ctx,
                          uint64_t tenant_id,
                          const ObString &current_database,

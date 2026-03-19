@@ -19,7 +19,7 @@ namespace oceanbase
 {
 namespace common
 {
-ObFIFOAllocator::ObFIFOAllocator(const uint64_t tenant_id /*= OB_SERVER_TENANT_ID */)
+  ObLiteFIFOAllocator::ObLiteFIFOAllocator(const uint64_t tenant_id /*= OB_SERVER_TENANT_ID */)
     : is_inited_(false),
       allocator_(nullptr),
       page_size_(0),
@@ -28,19 +28,18 @@ ObFIFOAllocator::ObFIFOAllocator(const uint64_t tenant_id /*= OB_SERVER_TENANT_I
       max_size_(0),
       current_using_(nullptr),
       normal_used_(0),
-      special_total_(0),
-      lock_(ObLatchIds::OB_FIFO_ALLOCATOR_LOCK)
+      special_total_(0)
 {
 }
 
-ObFIFOAllocator::~ObFIFOAllocator()
+ObLiteFIFOAllocator::~ObLiteFIFOAllocator()
 {
   reset();
   allocator_ = nullptr;
   is_inited_ = false;
 }
 
-int ObFIFOAllocator::init(ObIAllocator *allocator,
+int ObLiteFIFOAllocator::init(ObIAllocator *allocator,
          const int64_t page_size,
          const ObMemAttr &attr,
          const int64_t init_size,
@@ -90,13 +89,12 @@ int ObFIFOAllocator::init(ObIAllocator *allocator,
   return ret;
 }
 
-int ObFIFOAllocator::set_idle(const int64_t idle_size, const bool sync)
+int ObLiteFIFOAllocator::set_idle(const int64_t idle_size, const bool sync)
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> guard(lock_);
   if (OB_UNLIKELY(!is_inited_) || OB_UNLIKELY(nullptr == allocator_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObFIFOAllocator not init", K(is_inited_), KP(allocator_), KCSTRING(lbt()));
+    LOG_WARN("ObLiteFIFOAllocator not init", K(is_inited_), KP(allocator_), KCSTRING(lbt()));
   } else if (idle_size < 0) {
     LOG_WARN("invalid arg", K(idle_size));
   } else {
@@ -111,7 +109,7 @@ int ObFIFOAllocator::set_idle(const int64_t idle_size, const bool sync)
 }
 
 // Separate this function is to bypass some states, such as lock, is_inited_
-int ObFIFOAllocator::sync_idle(const int64_t idle_size, const int64_t max_size)
+int ObLiteFIFOAllocator::sync_idle(const int64_t idle_size, const int64_t max_size)
 {
   int ret = OB_SUCCESS;
   if (normal_total() < idle_size) {
@@ -152,13 +150,12 @@ int ObFIFOAllocator::sync_idle(const int64_t idle_size, const int64_t max_size)
 }
 
 
-int ObFIFOAllocator::set_max(const int64_t max_size, const bool sync)
+int ObLiteFIFOAllocator::set_max(const int64_t max_size, const bool sync)
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> guard(lock_);
   if (OB_UNLIKELY(!is_inited_) || OB_UNLIKELY(nullptr == allocator_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObFIFOAllocator not init", K(is_inited_), KP(allocator_), KCSTRING(lbt()));
+    LOG_WARN("ObLiteFIFOAllocator not init", K(is_inited_), KP(allocator_), KCSTRING(lbt()));
   } else if (max_size < page_size_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(max_size), K(page_size_));
@@ -178,9 +175,8 @@ int ObFIFOAllocator::set_max(const int64_t max_size, const bool sync)
   return ret;
 }
 
-void ObFIFOAllocator::reset()
+void ObLiteFIFOAllocator::reset()
 {
-  ObLockGuard<ObSpinLock> guard(lock_);
   if (IS_NOT_INIT || OB_ISNULL(allocator_)) {
     // do nothing
   } else {
@@ -216,7 +212,7 @@ void ObFIFOAllocator::reset()
   }
 }
 
-ObFIFOAllocator::BasePageHeader *ObFIFOAllocator::get_page_header(void *p)
+ObLiteFIFOAllocator::BasePageHeader *ObLiteFIFOAllocator::get_page_header(void *p)
 {
   BasePageHeader *page_header = nullptr;
   if (OB_ISNULL(p)) {
@@ -229,7 +225,7 @@ ObFIFOAllocator::BasePageHeader *ObFIFOAllocator::get_page_header(void *p)
   return page_header;
 }
 
-bool ObFIFOAllocator::check_param(const int64_t size, const int64_t align)
+bool ObLiteFIFOAllocator::check_param(const int64_t size, const int64_t align)
 {
   bool bool_ret = true;
   if (align <= 0 || align > page_size_ / 2) {
@@ -249,7 +245,7 @@ bool ObFIFOAllocator::check_param(const int64_t size, const int64_t align)
 }
 
 
-bool ObFIFOAllocator::check_magic(void *p, int64_t &size)
+bool ObLiteFIFOAllocator::check_magic(void *p, int64_t &size)
 {
   bool bool_ret = true;
   if (OB_ISNULL(p)) {
@@ -274,25 +270,24 @@ bool ObFIFOAllocator::check_magic(void *p, int64_t &size)
 }
 
 
-void *ObFIFOAllocator::alloc(const int64_t size)
+void *ObLiteFIFOAllocator::alloc(const int64_t size)
 {
   return inner_alloc_align(size, 16);
 }
 
-void *ObFIFOAllocator::alloc(const int64_t size, const ObMemAttr &attr)
+void *ObLiteFIFOAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 {
   UNUSED(attr);
   return inner_alloc_align(size, 16);
 }
 
-void *ObFIFOAllocator::inner_alloc_align(const int64_t size, const int64_t align)
+void *ObLiteFIFOAllocator::inner_alloc_align(const int64_t size, const int64_t align)
 {
-  ObLockGuard<ObSpinLock> guard(lock_);
   void *ptr = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
-    LOG_WARN_RET(OB_NOT_INIT, "ObFIFOAllocator not init");
+    LOG_WARN_RET(OB_NOT_INIT, "ObLiteFIFOAllocator not init");
   } else if (!check_param(size, align)) {
-    LOG_WARN_RET(OB_INVALID_ARGUMENT, "ObFIFOAllocator alloc(size, align) parameter Error.", K(size), K(align));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "ObLiteFIFOAllocator alloc(size, align) parameter Error.", K(size), K(align));
   } else if (is_normal_page_enough(size, align)) {
     ptr = alloc_normal(size, align);
   } else {
@@ -303,10 +298,10 @@ void *ObFIFOAllocator::inner_alloc_align(const int64_t size, const int64_t align
 }
 
 // get a new page, set current_using_ pointing to it.
-void ObFIFOAllocator::alloc_new_normal_page()
+void ObLiteFIFOAllocator::alloc_new_normal_page()
 {
   if (IS_NOT_INIT || OB_ISNULL(allocator_)) {
-    LOG_ERROR_RET(OB_NOT_INIT, "ObFIFOAllocator not init");
+    LOG_ERROR_RET(OB_NOT_INIT, "ObLiteFIFOAllocator not init");
   } else {
     NormalPageHeader *new_page = nullptr;
     if (free_page_list_.get_size() > 0) {
@@ -340,7 +335,7 @@ void ObFIFOAllocator::alloc_new_normal_page()
 // try to alloc at current_using_,
 // return nullptr if can not alloc(free space is not enough)
 // or a non-zero address if succeed. */
-void *ObFIFOAllocator::try_alloc(int64_t size, int64_t align)
+void *ObLiteFIFOAllocator::try_alloc(int64_t size, int64_t align)
 {
   char *ptr = nullptr;
   if (nullptr == current_using_) {
@@ -367,11 +362,10 @@ void *ObFIFOAllocator::try_alloc(int64_t size, int64_t align)
   return ptr;
 }
 
-void ObFIFOAllocator::free(void *p)
+void ObLiteFIFOAllocator::free(void *p)
 {
-  ObLockGuard<ObSpinLock> guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
-    LOG_ERROR_RET(OB_NOT_INIT, "ObFIFOAllocator not init");
+    LOG_ERROR_RET(OB_NOT_INIT, "ObLiteFIFOAllocator not init");
   } else {
     int64_t size = 0;
     if (nullptr == p) {
@@ -397,12 +391,12 @@ void ObFIFOAllocator::free(void *p)
   }
 }
 
-void *ObFIFOAllocator::alloc_normal(int64_t size, int64_t align)
+void *ObLiteFIFOAllocator::alloc_normal(int64_t size, int64_t align)
 {
   void *ptr = nullptr;
   void *new_space = nullptr;
   if (OB_UNLIKELY(!is_inited_) || OB_UNLIKELY(nullptr == allocator_)) {
-    LOG_ERROR_RET(OB_NOT_INIT, "ObFIFOAllocator not init");
+    LOG_ERROR_RET(OB_NOT_INIT, "ObLiteFIFOAllocator not init");
   } else {
     if (nullptr == current_using_) {
       if (total() + page_size_ <= max_size_) {
@@ -434,7 +428,7 @@ void *ObFIFOAllocator::alloc_normal(int64_t size, int64_t align)
   return ptr;
 }
 
-void ObFIFOAllocator::free_normal(NormalPageHeader *page, int64_t size)
+void ObLiteFIFOAllocator::free_normal(NormalPageHeader *page, int64_t size)
 {
   page->ref_count_--;
   if (page == current_using_ && 1 == current_using_->ref_count_) {
@@ -467,12 +461,12 @@ void ObFIFOAllocator::free_normal(NormalPageHeader *page, int64_t size)
    |  hole              |
    |--------------------|
 */
-void *ObFIFOAllocator::alloc_special(int64_t size, int64_t align)
+void *ObLiteFIFOAllocator::alloc_special(int64_t size, int64_t align)
 {
   void *ptr = NULL;
 
   if (OB_UNLIKELY(!is_inited_) || OB_UNLIKELY(NULL == allocator_)) {
-    LOG_ERROR_RET(OB_NOT_INIT, "ObFIFOAllocator not init", K(is_inited_));
+    LOG_ERROR_RET(OB_NOT_INIT, "ObLiteFIFOAllocator not init", K(is_inited_));
   } else if (OB_UNLIKELY(size <= 0) || OB_UNLIKELY(align <= 0)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid argument", K(size), K(align));
   } else {
@@ -505,11 +499,41 @@ void *ObFIFOAllocator::alloc_special(int64_t size, int64_t align)
   return ptr;
 }
 
-void ObFIFOAllocator::free_special(SpecialPageHeader *special_page)
+void ObLiteFIFOAllocator::free_special(SpecialPageHeader *special_page)
 {
   special_page_list_.remove(&special_page->node_);
   special_total_ -= special_page->real_size_;
   allocator_->free(special_page);
+}
+
+void ObFIFOAllocator::reset()
+{
+  ObLockGuard<ObSpinLock> guard(lock_);
+  ObLiteFIFOAllocator::reset();
+}
+
+void ObFIFOAllocator::free(void *p)
+{
+  ObLockGuard<ObSpinLock> guard(lock_);
+  ObLiteFIFOAllocator::free(p);
+}
+
+int ObFIFOAllocator::set_idle(const int64_t idle_size, const bool sync)
+{
+  ObLockGuard<ObSpinLock> guard(lock_);
+  return ObLiteFIFOAllocator::set_idle(idle_size, sync);
+}
+
+int ObFIFOAllocator::set_max(const int64_t max_size, const bool sync)
+{
+  ObLockGuard<ObSpinLock> guard(lock_);
+  return ObLiteFIFOAllocator::set_max(max_size, sync);
+}
+
+void *ObFIFOAllocator::inner_alloc_align(const int64_t size, const int64_t align)
+{
+  ObLockGuard<ObSpinLock> guard(lock_);
+  return ObLiteFIFOAllocator::inner_alloc_align(size, align);
 }
 
 } // end of namespace common

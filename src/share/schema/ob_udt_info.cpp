@@ -521,7 +521,7 @@ int ObUDTTypeInfo::transform_to_pl_type(const ObUDTCollectionType *coll_info, pl
     data_type.set_charset_type(ObCharset::charset_type_by_coll(data_type.get_collation_type()));
     pl_type.set_data_type(data_type);
   } else if (coll_info->is_coll_type()) {
-    pl_type.set_user_type_id(pl::ObPLType::PL_NESTED_TABLE_TYPE, coll_info->get_elem_type_id());
+    pl_type.set_user_type_id(coll_info->is_varray() ? pl::ObPLType::PL_VARRAY_TYPE : pl::ObPLType::PL_NESTED_TABLE_TYPE, coll_info->get_elem_type_id());
     pl_type.set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
   } else if (coll_info->is_obj_type()) {
     pl_type.set_user_type_id(pl::ObPLType::PL_RECORD_TYPE, coll_info->get_elem_type_id());
@@ -539,7 +539,7 @@ int ObUDTTypeInfo::transform_to_pl_type(const ObUDTCollectionType *coll_info, pl
   return ret;
 }
 
-int ObUDTTypeInfo::transform_to_pl_type(const ObUDTTypeAttr* attr_info, pl::ObPLDataType &pl_type) const
+int ObUDTTypeInfo::transform_to_pl_type(const ObUDTTypeAttr* attr_info, ObSchemaGetterGuard &schema_guard, pl::ObPLDataType &pl_type) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(attr_info)) {
@@ -561,9 +561,14 @@ int ObUDTTypeInfo::transform_to_pl_type(const ObUDTTypeAttr* attr_info, pl::ObPL
     pl_type.set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
 #ifdef OB_BUILD_ORACLE_PL
   } else if (attr_info->is_coll_type()) {
-    pl_type.set_user_type_id(pl::ObPLType::PL_NESTED_TABLE_TYPE,
-                             attr_info->get_type_attr_id());
-    pl_type.set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
+    const ObUDTTypeInfo *udt_info = NULL;
+    pl::ObPLType type = pl::ObPLType::PL_NESTED_TABLE_TYPE;
+    OZ (schema_guard.get_udt_info(attr_info->get_tenant_id(), attr_info->get_type_attr_id(), udt_info));
+    if (OB_NOT_NULL(udt_info)) {
+      type = udt_info->is_varray() ? pl::ObPLType::PL_VARRAY_TYPE : pl::ObPLType::PL_NESTED_TABLE_TYPE;
+    }
+    OX (pl_type.set_user_type_id(type, attr_info->get_type_attr_id()));
+    OX (pl_type.set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT));
   } else if (attr_info->is_opaque_type()) {
     pl_type.set_user_type_id(pl::ObPLType::PL_OPAQUE_TYPE,
                              attr_info->get_type_attr_id());
@@ -637,7 +642,7 @@ int ObUDTTypeInfo::transform_to_pl_type(common::ObIAllocator &allocator,
         if (OB_ISNULL(get_attrs().at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("attribute info is NULL", K(ret), K(i));
-        } else if (OB_FAIL(transform_to_pl_type(get_attrs().at(i), attr_type))) {
+        } else if (OB_FAIL(transform_to_pl_type(get_attrs().at(i), schema_guard, attr_type))) {
           LOG_WARN("failed to transform to pl type from ObUDTTypeAttr", K(ret));
         } else if (OB_FAIL(deep_copy_name(allocator, get_attrs().at(i)->get_name(), copy_attr_name))) {
           LOG_WARN("failed to deep copy attribute name", K(ret));

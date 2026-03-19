@@ -2771,21 +2771,15 @@ class ObConstRawExpr :
 {
 public:
   ObConstRawExpr()
-    :is_date_unit_(false),
-     is_literal_bool_(false),
-     is_batch_stmt_parameter_(false),/*: precalc_expr_(NULL)*/
-     is_dynamic_eval_questionmark_(false),
-     orig_questionmark_type_()
+    : bool_flags_(0),
+      orig_questionmark_type_()
   {
     set_expr_class(EXPR_CONST);
     extra_.array_param_group_id_ = -1;
   }
   ObConstRawExpr(common::ObIAllocator &alloc)
     : ObTerminalRawExpr(alloc),
-      is_date_unit_(false),
-      is_literal_bool_(false),
-      is_batch_stmt_parameter_(false),
-      is_dynamic_eval_questionmark_(false),
+      bool_flags_(0),
       orig_questionmark_type_()
   {
     set_expr_class(EXPR_CONST);
@@ -2793,10 +2787,7 @@ public:
   }
   ObConstRawExpr(const oceanbase::common::ObObj &val, ObItemType expr_type = T_INVALID)
     : ObTerminalRawExpr(expr_type),
-      is_date_unit_(false),
-      is_literal_bool_(false),
-      is_batch_stmt_parameter_(false),
-      is_dynamic_eval_questionmark_(false),
+      bool_flags_(0),
       orig_questionmark_type_()
   {
     set_value(val);
@@ -2838,7 +2829,8 @@ public:
   virtual int get_expr_dep_session_vars(const ObBasicSessionInfo *session,
                                         ObLocalSessionVar &dep_vars);
   int set_dynamic_eval_questionmark(const ObRawExprResType &dst_type);
-
+  void set_is_from_overloaded_routine(bool val) { is_from_overloaded_routine_ = val; }
+  bool is_from_overloaded_routine() const { return is_from_overloaded_routine_; }
   bool is_dynamic_eval_questionmark() const { return is_dynamic_eval_questionmark_; }
   const ObRawExprResType &get_orig_qm_type() const { return orig_questionmark_type_; }
   DECLARE_VIRTUAL_TO_STRING;
@@ -2849,13 +2841,20 @@ private:
   common::ObString literal_prefix_; //仅在编译期使用, 执行期无关
   common::ObObjMeta obj_meta_;
   common::ObObj param_;
-  bool is_date_unit_;
-  // for mysql mode to distinguish tinyint and literal bool
-  bool is_literal_bool_;
-  // is_batch_stmt_parameter_ only used for array_binding batch_execution optimization
-  // Indicates that the current parameter is the batch parameter
-  bool is_batch_stmt_parameter_;
-  bool is_dynamic_eval_questionmark_;
+  union {
+    uint8_t bool_flags_;
+    struct {
+      uint8_t is_date_unit_ : 1;
+      // for mysql mode to distinguish tinyint and literal bool
+      uint8_t is_literal_bool_ : 1;
+      // is_batch_stmt_parameter_ only used for array_binding batch_execution optimization
+      // Indicates that the current parameter is the batch parameter
+      uint8_t is_batch_stmt_parameter_ : 1;
+      uint8_t is_dynamic_eval_questionmark_ : 1;
+      uint8_t is_from_overloaded_routine_ : 1; // for pl null literal parameterization
+      uint8_t reserved_ : 3; // Reserved for future use
+    };
+  };
   ObRawExprResType orig_questionmark_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConstRawExpr);

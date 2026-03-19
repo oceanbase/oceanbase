@@ -603,6 +603,7 @@ public:
 
   void set_granule_type(ObGranuleType granule_type) { current_granule_type_ = granule_type; }
   bool is_block_granule_type() { return current_granule_type_ == OB_BLOCK_RANGE_GRANULE; }
+  transaction::ObTxExecResult &get_trans_result() { return tx_result_; }
 
 private:
   pl::ObPLPackageGuard* get_package_guard();
@@ -817,6 +818,7 @@ protected:
 
   // Granule type for current GI task
   ObGranuleType current_granule_type_;
+  transaction::ObTxExecResult tx_result_;
 
   common::hash::ObHashMap<ObOdpsPartitionKey, int64_t> odps_partition_str_to_file_size_;
 private:

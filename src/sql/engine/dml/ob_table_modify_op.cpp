@@ -259,7 +259,7 @@ int ForeignKeyHandle::check_exist_inner_sql(ObTableModifyOp &op,
     }
     LOG_DEBUG("foreign_key_check_exist", "stmt", stmt_buf, K(row), K(fk_arg));
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      if (OB_FAIL(op.begin_nested_session(fk_arg.is_self_ref_))) {
+      if (OB_FAIL(op.begin_nested_session())) {
         LOG_WARN("failed to begin nested session", K(ret), K(stmt_buf));
       } else {
         // must call end_nested_session() if begin_nested_session() success.
@@ -415,7 +415,7 @@ int ForeignKeyHandle::cascade(ObTableModifyOp &op,
   }
   if (OB_SUCC(ret) && stmt_pos > 0) {
     LOG_DEBUG("foreign_key_cascade", "stmt", stmt_buf, K(old_row), K(new_row), K(fk_arg));
-    if (OB_FAIL(op.begin_nested_session(fk_arg.is_self_ref_))) {
+    if (OB_FAIL(op.begin_nested_session())) {
       LOG_WARN("failed to begin nested session", K(ret));
     } else {
       if (OB_FAIL(op.execute_write(stmt_buf))) {
@@ -484,7 +484,7 @@ int ForeignKeyHandle::set_null(ObTableModifyOp &op,
 
   if (OB_SUCC(ret) && stmt_pos > 0) {
     LOG_DEBUG("foreign key cascade set null", "stmt", stmt_buf, K(old_row), K(fk_arg));
-    if (OB_FAIL(op.begin_nested_session(fk_arg.is_self_ref_))) {
+    if (OB_FAIL(op.begin_nested_session())) {
       LOG_WARN("failed to begin nested session", K(ret));
     } else {
       if (OB_FAIL(op.execute_write(stmt_buf))) {
@@ -1097,14 +1097,13 @@ int ObTableModifyOp::close_inner_conn()
   return ret;
 }
 
-int ObTableModifyOp::begin_nested_session(bool skip_cur_stmt_tables)
+int ObTableModifyOp::begin_nested_session()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(inner_conn_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("inner connection is NULL", K(ret));
-  } else if (OB_FAIL(inner_conn_->begin_nested_session(get_saved_session(), saved_conn_,
-                                                       skip_cur_stmt_tables))) {
+  } else if (OB_FAIL(inner_conn_->begin_nested_session(get_saved_session(), saved_conn_))) {
     LOG_WARN("failed to begin nested session", K(ret));
   }
   return ret;

@@ -73,14 +73,6 @@ static constexpr const char* OB_PL_MOD_DEF[PL_MOD_IDX_NUM] =
       : "PlTemp"
 
 
-class PlMemEntifyDestroyGuard
-{
-public:
-  PlMemEntifyDestroyGuard(lib::MemoryContext &entity) : ref_(entity) {}
-  ~PlMemEntifyDestroyGuard();
-private:
-  lib::MemoryContext &ref_;
-};
 
 class ObPLAllocator1 : public common::ObIAllocator
 {
@@ -90,7 +82,8 @@ public:
     memattr_(ObMemAttr(MTL_ID(), "PlTemp", ObCtxIds::DEFAULT_CTX_ID)),
     parent_allocator_(parent_alloc),
     allocator_(nullptr),
-    use_malloc_(false) {}
+    use_malloc_(false),
+    need_destroy_allocator_(false) {}
 
   virtual ~ObPLAllocator1() {
     destroy();
@@ -139,6 +132,7 @@ private:
   common::ObBlockAllocMgr alloc_mgr_;
   common::ObIAllocator *allocator_;
   bool use_malloc_;
+  bool need_destroy_allocator_;
 };
 
 }

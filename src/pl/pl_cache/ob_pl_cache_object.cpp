@@ -15,6 +15,7 @@
 #include "pl/pl_cache/ob_pl_cache.h"
 #include "src/share/ob_truncated_string.h"
 #include "pl/ob_pl_package.h"
+#include "sql/resolver/cmd/ob_call_procedure_stmt.h"
 
 namespace oceanbase
 {
@@ -82,7 +83,10 @@ int ObPLCacheObject::inc_concurrent_num()
   return ret;
 }
 
-int ObPLCacheObject::set_params_info(const ParamStore &params, bool is_anonymous)
+int ObPLCacheObject::set_params_info(const ParamStore &params,
+                                      bool is_anonymous,
+                                      bool enable_share_cache,
+                                      common::ObIArray<sql::ObRawExpr*> *param_exprs)
 {
   int ret = OB_SUCCESS;
   int64_t N = params.count();
@@ -144,6 +148,11 @@ int ObPLCacheObject::set_params_info(const ParamStore &params, bool is_anonymous
           param_info.pl_type_ = PL_INTEGER_TYPE;
         }
       }
+      if (enable_share_cache
+        && !param_info.flag_.need_strict_type_match_
+        && ObNullType == param_info.type_) {
+        OZ (set_param_info_for_null_param(is_anonymous, param_info, i, param_exprs));
+      }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(params_info_.push_back(param_info))) {
@@ -152,6 +161,65 @@ int ObPLCacheObject::set_params_info(const ParamStore &params, bool is_anonymous
     }
     param_info.reset();
   }
+  return ret;
+}
+
+int ObPLCacheObject::set_param_info_for_null_param(bool is_anonymous,
+                                                   ObPlParamInfo &param_info,
+                                                   int64_t param_idx,
+                                                   common::ObIArray<sql::ObRawExpr*> *param_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObPLDataType pl_type;
+  if (is_anonymous) {
+    ObPLFunction *func = static_cast<ObPLFunction *>(this);
+    CK (OB_NOT_NULL(func));
+    if (OB_SUCC(ret) && param_idx < func->get_variables().count()) {
+      pl_type = func->get_variables().at(param_idx);
+      if (func->get_out_args().has_member(param_idx)) {
+        param_info.flag_.need_strict_type_match_ = true;
+      } else if (pl_type.is_obj_type()) {
+        param_info.type_ = pl_type.get_obj_type();
+        param_info.col_type_ = pl_type.get_data_type()->get_collation_type();
+      }
+    }
+  } else {
+    sql::ObCallProcedureInfo *call_proc_info = static_cast<sql::ObCallProcedureInfo *>(this);
+    CK (OB_NOT_NULL(call_proc_info));
+    if (OB_SUCC(ret) && OB_NOT_NULL(param_exprs)) {
+      // Use question_mark_idx_ to get the correct expression index
+      // For example: call proc(arg1, ?, arg3, ?, arg5)
+      //   question_mark_idx_ = [1, 3]
+      //   param_idx 0 -> expr_idx 1 (second param expression)
+      //   param_idx 1 -> expr_idx 3 (fourth param expression)
+      const common::ObIArray<int64_t> &question_mark_idx = call_proc_info->get_question_mark_idx();
+      int64_t expr_idx = -1;
+      if (param_idx < question_mark_idx.count()) {
+        expr_idx = question_mark_idx.at(param_idx);
+      }
+      if (expr_idx < 0 || expr_idx >= param_exprs->count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr_idx is out of range", K(ret), K(expr_idx), K(param_exprs->count()));
+      } else if (call_proc_info->is_out_param(expr_idx)) {
+        param_info.flag_.need_strict_type_match_ = true;
+      } else {
+        sql::ObRawExpr *param_expr = param_exprs->at(expr_idx);
+        if (OB_NOT_NULL(param_expr) && T_QUESTIONMARK == param_expr->get_expr_type()) {
+          ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(param_expr);
+          if (c_expr->is_from_overloaded_routine()) {
+            param_info.flag_.need_strict_type_match_ = true;
+          } else {
+            param_info.type_ = param_expr->get_result_type().get_type();
+            param_info.col_type_ = param_expr->get_result_type().get_collation_type();
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && ObTinyIntType == param_info.type_) {
+    OX (param_info.flag_.is_boolean_ = true);
+  }
+  OX (param_info.is_null_deduced_type_ = true);
   return ret;
 }
 

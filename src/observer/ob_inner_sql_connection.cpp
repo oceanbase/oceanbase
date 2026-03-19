@@ -2363,13 +2363,13 @@ lib::Worker::CompatMode ObInnerSQLConnection::get_compat_mode() const
 // nested session and sql execute for foreign key.
 
 int ObInnerSQLConnection::begin_nested_session(ObSQLSessionInfo::StmtSavedValue &saved_session,
-                                               SavedValue &saved_conn, bool skip_cur_stmt_tables)
+                                               SavedValue &saved_conn)
 {
   int ret = OB_SUCCESS;
   if (!is_extern_session()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("connection is not extern session", K(ret));
-  } else if (OB_FAIL(extern_session_->begin_nested_session(saved_session, skip_cur_stmt_tables))) {
+  } else if (OB_FAIL(extern_session_->begin_nested_session(saved_session))) {
     LOG_WARN("failed to begin nested session", K(ret));
   } else {
     saved_conn.ref_ctx_ = ref_ctx_;

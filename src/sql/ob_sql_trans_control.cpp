@@ -719,7 +719,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
     OZ (session->get_pl_end_trans_cb().check_dependency_has_modified_tables(plan, session));
   }
   OX (tenant_id = session->get_effective_tenant_id());
-  OX (session->get_trans_result().reset());
+  OX (exec_ctx.get_trans_result().reset());
   OZ (get_tx_service(session, txs), tenant_id);
   OZ (acquire_tx_if_need_(txs, *session));
   OZ (stmt_sanity_check_(session, plan, plan_ctx));
@@ -819,7 +819,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
     stmt::StmtType stmt_type = plan->get_stmt_type();
     bool has_for_update = plan->has_for_update();
     bool use_das = plan->use_das();
-    ObTxExecResult &trans_result = session->get_trans_result();
+    ObTxExecResult &trans_result = exec_ctx.get_trans_result();
     int64_t query_start_time = session->get_query_start_time();
     ObTxReadSnapshot &snapshot = das_ctx.get_snapshot();
     ObTxSEQ savepoint = das_ctx.get_savepoint();
@@ -1654,7 +1654,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, co
       && (session->enable_enhanced_cursor_validation() || session->is_pl_async_commit())) {
       OZ (tx_desc->add_modified_tables(plan->get_dml_table_ids()), plan->get_dml_table_ids());
     }
-    ObTxExecResult &tx_result = session->get_trans_result();
+    ObTxExecResult &tx_result = exec_ctx.get_trans_result();
     if (OB_E(EventTable::EN_TX_RESULT_INCOMPLETE, session->get_server_sid()) tx_result.is_incomplete()) {
       if (!rollback) {
         LOG_ERROR("trans result incomplete, but rollback not issued");
@@ -1773,14 +1773,14 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, co
              "stmt_type", stmt_type,
              K(savepoint),
              "tx_desc", PC(session->get_tx_desc()),
-             "trans_result", session->get_trans_result(),
+             "trans_result", exec_ctx.get_trans_result(),
              K(rollback),
              K(need_rollback),
              KPC(session),
              K(exec_ctx.get_errcode()));
   }
   if (OB_NOT_NULL(session)) {
-    session->get_trans_result().reset();
+    exec_ctx.get_trans_result().reset();
   }
   return ret;
 }
@@ -1862,7 +1862,7 @@ int ObSqlTransControl::get_trans_result(ObExecContext &exec_ctx, ObTxExecResult 
 
 int ObSqlTransControl::get_trans_result(ObExecContext &exec_ctx)
 {
-  return get_trans_result(exec_ctx, exec_ctx.get_my_session()->get_trans_result());
+  return get_trans_result(exec_ctx, exec_ctx.get_trans_result());
 }
 
 int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session,
@@ -1892,7 +1892,9 @@ int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session,
       }
     }
   }
-  session->get_trans_result().reset();
+  if (OB_NOT_NULL(static_cast<ObSQLSessionInfo*>(session)->get_cur_exec_ctx())) {
+    static_cast<ObSQLSessionInfo*>(session)->get_cur_exec_ctx()->get_trans_result().reset();
+  }
   session->reset_tx_variable(reset_trans_variable);
   return ret;
 }

@@ -321,6 +321,8 @@ int ObSqlPlan::inner_store_sql_plan_for_explain(ObExecContext *ctx,
   int64_t save_nested_count = 0;
   int64_t affected_rows = 0;
   bool need_restore_session = false;
+  ObAuditRecordData audit_record;
+  ObSQLSessionInfo::ObAuditRecordDataWrapperGuard guard(ctx->get_my_session(), audit_record);
   ObSqlString sql;
   if (OB_ISNULL(ctx) ||
       OB_ISNULL(ctx->get_sql_proxy()) ||

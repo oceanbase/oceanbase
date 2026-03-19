@@ -182,7 +182,8 @@ int ObExprOpSubQueryInPl::eval_subquery(const ObExpr &expr,
     pl::ObPLExecCtx pl_exec_ctx(&alloc, &alloc, &ctx.exec_ctx_, params, nullptr, &ret, nullptr);
 
     SMART_VAR(ObSPIResultSet, spi_result) {
-      OZ (spi_result.init(*session));
+      OZ (spi_result.init_memory_context(*session));
+      OZ (spi_result.init_result_set(*session));
       OZ (spi_result.start_nested_stmt_if_need(&pl_exec_ctx, info->route_sql_, static_cast<stmt::StmtType>(info->type_), false));
 
       if (OB_SUCC(ret)) {
