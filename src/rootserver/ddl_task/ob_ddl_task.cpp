@@ -947,6 +947,9 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_CREATE_SEARCH_INDEX:
       ddl_type_str =  "create search index";
       break;
+    case DDL_DROP_SEARCH_INDEX:
+      ddl_type_str =  "drop search index";
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
   }

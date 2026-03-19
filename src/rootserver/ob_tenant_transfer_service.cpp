@@ -1606,6 +1606,7 @@ int ObTenantTransferService::get_related_table_schemas_(
   ObRefreshSchemaStatus schema_status;
   schema_status.tenant_id_ = tenant_id_;
   ObArray<uint64_t> related_table_ids;
+  ObArray<uint64_t> search_def_index_ids;
   ObSchemaService *schema_service = NULL;
   const uint64_t primary_table_id = table_schema.get_table_id();
   ObArray<ObAuxTableMetaInfo> related_infos;
@@ -1633,10 +1634,35 @@ int ObTenantTransferService::get_related_table_schemas_(
   } else {
     TTS_INFO("get related table infos", K(schema_version), K(primary_table_id), K(related_infos));
   }
+  // Search data index is stored as an aux table of search def index rather than the primary table.
+  // Collect one more level here so transfer keeps the whole search index family on the same LS.
+  ARRAY_FOREACH_X(related_infos, idx, cnt, OB_SUCC(ret)) {
+    if (share::schema::is_search_def_index(related_infos.at(idx).index_type_)
+        && OB_FAIL(search_def_index_ids.push_back(related_infos.at(idx).table_id_))) {
+      LOG_WARN("push back search def index id failed", KR(ret), K(related_infos.at(idx)));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < search_def_index_ids.count(); ++i) {
+    ObArray<ObAuxTableMetaInfo> child_infos;
+    if (OB_FAIL(schema_service->fetch_aux_tables(
+            schema_status,
+            tenant_id_,
+            search_def_index_ids.at(i),
+            schema_version,
+            *sql_proxy_,
+            child_infos))) {
+      LOG_WARN("fail to fetch search data index infos", KR(ret), K_(tenant_id),
+          K(schema_status), K(schema_version), "search_def_index_id", search_def_index_ids.at(i));
+    } else if (OB_FAIL(append(related_infos, child_infos))) {
+      LOG_WARN("append child related infos failed", KR(ret), K(child_infos),
+          "search_def_index_id", search_def_index_ids.at(i));
+    }
+  }
   ARRAY_FOREACH(related_infos, idx) {
     const ObAuxTableMetaInfo &info = related_infos.at(idx);
     const uint64_t related_table_id = info.table_id_;
-    if (is_related_table(info.table_type_, info.index_type_)) {
+    if (is_related_table(info.table_type_, info.index_type_)
+        && !has_exist_in_array(related_table_ids, related_table_id)) {
       if (OB_FAIL(related_table_ids.push_back(related_table_id))) {
         LOG_WARN("push back failed", KR(ret), K(related_table_id));
       }
