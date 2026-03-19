@@ -5998,9 +5998,15 @@ int ObSelectResolver::resolve_column_ref_in_all_namespace(
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref table first failed", K(ret), K(q_name));
     }
   }
+  bool skip_parent_namespace = false;
+  if (lib::is_oracle_mode() && OB_ERR_BAD_FIELD_ERROR == ret && q_name.tbl_name_.empty()
+      && 0 == q_name.col_name_.case_compare(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)) {
+    // skip parent namespace lookup for oracle rowid pseudo column
+    skip_parent_namespace = true;
+  }
   ObQueryRefRawExpr *query_ref = NULL;
   for (ObDMLResolver *cur_resolver = get_parent_namespace_resolver();
-      OB_ERR_BAD_FIELD_ERROR == ret && cur_resolver != NULL;
+      OB_ERR_BAD_FIELD_ERROR == ret && cur_resolver != NULL && !skip_parent_namespace;
       cur_resolver = cur_resolver->get_parent_namespace_resolver()) {
     ObRawExpr *exec_param = NULL;
     ObIArray<ObExecParamRawExpr*> *query_ref_exec_params = NULL;
