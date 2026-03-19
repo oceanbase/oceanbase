@@ -879,6 +879,12 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
       CLOG_LOG(WARN, "check_if_tenant_has_been_dropped_ failed", K(tmp_ret), K(tenant_id), K(ls_id));
     } else if (is_tenant_dropping_or_dropped) {
       // The LS delay deletion mechanism will no longer take effect when the tenant is dropped.
+#ifdef OB_BUILD_SHARED_STORAGE
+      // update ss_ls_meta first and then change the local meta.
+      if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, offline_scn))) {
+        CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(ls_id), K(offline_scn));
+      } else
+#endif
       if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
         CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
       }
@@ -890,6 +896,12 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
          MTL_GET_TENANT_ROLE_CACHE() == share::ObTenantRole::CLONE_TENANT)) {
       // restore tenant, not need gc delay
       // for clone tenant, we can ensure no ls's changes during clone procedure, so no need to deal with gc status
+#ifdef OB_BUILD_SHARED_STORAGE
+      // update ss_ls_meta first and then change the local meta.
+      if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, offline_scn))) {
+        CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(ls_id), K(offline_scn));
+      } else
+#endif
       if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
         CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
       }
@@ -912,6 +924,12 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
         const int64_t current_time_us = common::ObTimeUtility::current_time();
 
         if ((current_time_us - offline_log_ts_us) >= ls_gc_delay_time) {
+#ifdef OB_BUILD_SHARED_STORAGE
+          // update ss_ls_meta first and then change the local meta.
+          if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, offline_scn))) {
+            CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(ls_id), K(offline_scn));
+          } else
+#endif
           if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
             CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
           }
