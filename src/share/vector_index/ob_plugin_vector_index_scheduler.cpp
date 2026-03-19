@@ -888,13 +888,12 @@ int ObPluginVectorIndexLoadScheduler::try_schedule_task(ObPluginVectorIndexMgr *
       }
     } else {
       inc_dag_ref();
-      if (task_ctx->task_start_time_ == OB_INVALID_ID) {
-        task_ctx->task_start_time_ = ObTimeUtility::current_time();
-      }
       task_ctx->in_queue_ = true;
       // dag maybe already finished, and set status to finish/cancel,
       // but here change it to running and could not be scheduler later
       task_ctx->task_status_ = OB_TTL_TASK_RUNNING;
+      LOG_DEBUG("memdata sync task scheduled", K(task_ctx->index_tablet_id_),
+               K(task_ctx->index_table_id_), K(task_ctx->failure_times_));
     }
   } else {
     LOG_DEBUG("status when try schedule task", KPC(mgr), K(task_ctx));
@@ -994,7 +993,11 @@ int ObPluginVectorIndexLoadScheduler::generate_vec_idx_memdata_dag(ObPluginVecto
       LOG_WARN("fail to add vector index memdata sync dag to queue", KR(ret));
     }
   } else {
-    FLOG_INFO("build vector index memdata sync dag success", KR(ret), KPC(task_ctx));
+    if (task_ctx->task_start_time_ == OB_INVALID_ID) {
+      task_ctx->task_start_time_ = ObTimeUtility::current_time();
+    }
+    FLOG_INFO("build vector index memdata sync dag success",
+      KR(ret), K(mgr->get_tenant_id()), K(mgr->get_ls_id()), KPC(task_ctx));
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(dag)) {
@@ -1021,6 +1024,9 @@ int ObPluginVectorIndexLoadScheduler::check_task_state(ObPluginVectorIndexMgr *m
     LOG_WARN("vector index adapter or memdata load ctx is null", KR(ret), KPC(mgr), KPC(task_ctx));
   } else {
     common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
+    const int64_t e2e_cost_us = (task_ctx->task_start_time_ > 0)
+        ? (ObTimeUtility::current_time() - task_ctx->task_start_time_)
+        : -1;
     // change log level to debug later
     if (task_ctx->task_status_ == OB_TTL_TASK_CANCEL
         || task_ctx->task_status_ == OB_TTL_TASK_FINISH) {
@@ -1030,31 +1036,44 @@ int ObPluginVectorIndexLoadScheduler::check_task_state(ObPluginVectorIndexMgr *m
       // will schedule this
       if (task_ctx->err_code_ == OB_SUCCESS) {
         task_ctx->task_status_ = OB_TTL_TASK_FINISH;
-        LOG_INFO("current memdata sync task finish", KR(ret), KPC(task_ctx));
+        LOG_INFO("current memdata sync task finish",
+          K(tenant_id_), K(ls_->get_ls_id()), K(task_ctx->index_table_id_), K(e2e_cost_us));
         // task success, schedule next
       } else if (in_retry_list(task_ctx->err_code_)) {
-        task_ctx->task_status_ = OB_TTL_TASK_PREPARE; // reset ot prepare state, will rescheduler by timer or dag task
-        LOG_INFO("current memdata sync task failed, will retry", K(task_ctx->err_code_));
+        task_ctx->failure_times_++;
+        LOG_INFO("current memdata sync task failed, will retry",
+          K(tenant_id_), K(ls_->get_ls_id()), K(task_ctx->index_table_id_),
+          K(e2e_cost_us), K(task_ctx->err_code_), K(task_ctx->failure_times_));
+        task_ctx->task_status_ = OB_TTL_TASK_PREPARE; // reset to prepare state, will rescheduled by timer or dag task
       } else if (OB_PARTITION_NOT_EXIST == task_ctx->err_code_
                  || OB_PARTITION_IS_BLOCKED == task_ctx->err_code_
                  || OB_TABLE_NOT_EXIST == task_ctx->err_code_
                  || OB_ERR_UNKNOWN_TABLE == task_ctx->err_code_
                  || OB_LS_NOT_EXIST == task_ctx->err_code_
                  || OB_TABLET_NOT_EXIST == task_ctx->err_code_) {
-        LOG_INFO("cancel current memdata sync task since partition state change", KR(ret), KPC(task_ctx));
         task_ctx->task_status_ = OB_TTL_TASK_CANCEL;
+        LOG_INFO("current memdata sync task canceled due to partition state change",
+          K(tenant_id_), K(ls_->get_ls_id()), K(task_ctx->index_table_id_),
+          K(e2e_cost_us), K(task_ctx->err_code_));
         // canceled, schedule next
       } else if (OB_ALLOCATE_MEMORY_FAILED == task_ctx->err_code_
                  || OB_ERR_VSAG_MEM_LIMIT_EXCEEDED == task_ctx->err_code_) {
-        LOG_WARN("cancel current memdata sync task since out of resources", KR(ret), KPC(task_ctx));
         task_ctx->task_status_ = OB_TTL_TASK_CANCEL;
+        LOG_WARN("current memdata sync task canceled due to resource limit",
+          K(tenant_id_), K(ls_->get_ls_id()), K(task_ctx->index_table_id_),
+          K(e2e_cost_us), K(task_ctx->err_code_));
       } else { // retry
-        LOG_WARN("current memdata sync task report error, will retry", KR(ret), KPC(task_ctx));
-        task_ctx->task_status_ = OB_TTL_TASK_PREPARE; // reset ot prepare state, will rescheduler by timer or dag task
         task_ctx->failure_times_++;
+        LOG_WARN("current memdata sync task failed, will retry",
+          K(tenant_id_), K(ls_->get_ls_id()), K(task_ctx->index_table_id_),
+          K(e2e_cost_us), K(task_ctx->err_code_), K(task_ctx->failure_times_));
         if (task_ctx->failure_times_ >= 3) {
           task_ctx->task_status_ = OB_TTL_TASK_CANCEL;
-          LOG_WARN("current memdata sync task failed too many times, cancel it", KR(ret), KPC(task_ctx));
+          LOG_WARN("current memdata sync task failed too many times, cancel it",
+            K(tenant_id_), K(ls_->get_ls_id()), K(task_ctx->index_table_id_),
+            K(e2e_cost_us), K(task_ctx->err_code_), K(task_ctx->failure_times_));
+        } else {
+          task_ctx->task_status_ = OB_TTL_TASK_PREPARE; // reset to prepare state, will rescheduled by timer or dag task
         }
       }
     } else {
@@ -1093,10 +1112,16 @@ int ObPluginVectorIndexLoadScheduler::check_ls_task_state(ObPluginVectorIndexMgr
     ls_task_ctx.all_finished_ = true;
     ls_task_ctx.need_memdata_sync_ = false;
     LOG_INFO("memdata sync all task finished",
-      K(tenant_id_), K(ls_->get_ls_id()), K(finished_count), K(total_count));
+      K(tenant_id_), K(ls_->get_ls_id()), K(finished_count), K(total_count),
+      K(processing_finished), K(ls_task_ctx.all_finished_),
+      K(mgr->get_mem_sync_info().get_processing_size()),
+      K(mgr->get_mem_sync_info().get_waiting_size()));
   } else {
-    LOG_INFO("memdata sync task remaining",
-      K(tenant_id_), K(ls_->get_ls_id()), K(finished_count), K(total_count));
+      LOG_DEBUG("memdata sync task remaining",
+      K(tenant_id_), K(ls_->get_ls_id()), K(finished_count), K(total_count),
+      K(processing_finished), K(mgr->get_ls_task_ctx().all_finished_),
+      K(mgr->get_mem_sync_info().get_processing_size()),
+      K(mgr->get_mem_sync_info().get_waiting_size()));
   }
   return ret;
 }
@@ -1476,6 +1501,7 @@ int ObPluginVectorIndexLoadScheduler::submit_log_()
     LOG_WARN("get empty tablet id array", KR(ret));
   } else {
     ObVectorIndexSyncLog ls_log(tablet_id_array_, table_id_array_);
+    const int64_t sync_task_count = tablet_id_array_.count();
     palf::LSN lsn;
     SCN base_scn = SCN::min_scn();
     SCN scn;
@@ -1502,12 +1528,12 @@ int ObPluginVectorIndexLoadScheduler::submit_log_()
                                              ObVectorIndexSyncLogCb::VECTOR_INDEX_SYNC_LOG_MAX_LENGTH,
                                              pos))) {
       TRANS_LOG(WARN, "ObVectorIndexSyncLog serialize base header error",
-        KR(ret), KP(cb_.log_buffer_), K(pos));
+        KR(ret), KP(cb_.log_buffer_), K(pos), K(sync_task_count), K(log_size));
     } else if (OB_FAIL(ls_log.serialize(cb_.log_buffer_,
                                         ObVectorIndexSyncLogCb::VECTOR_INDEX_SYNC_LOG_MAX_LENGTH,
                                         pos))) {
       TRANS_LOG(WARN, "ObVectorIndexSyncLog serialize vec index memdata sync log error",
-        KR(ret), KP(cb_.log_buffer_), K(pos));
+        KR(ret), KP(cb_.log_buffer_), K(pos), K(sync_task_count), K(log_size));
     } else if (OB_FAIL(ls_->get_log_handler()->append(cb_.log_buffer_,
                                                       pos,
                                                       base_scn,
@@ -1518,11 +1544,12 @@ int ObPluginVectorIndexLoadScheduler::submit_log_()
                                                       scn))) {
       cb_.reset();
       TRANS_LOG(WARN, "vector index memdata sync log submit error",
-        KR(ret), KP(cb_.log_buffer_), K(pos));
+        KR(ret), KP(cb_.log_buffer_), K(pos), K(sync_task_count), K(log_size));
     } else {
       is_logging_ = true;
       TRANS_LOG(INFO, "submit vector index memdata sync log success",
-        K(tenant_id_), K(ls_->get_ls_id()), K(base_scn), K(lsn), K(scn));
+        K(tenant_id_), K(ls_->get_ls_id()), K(sync_task_count), K(log_size),
+        K(base_scn), K(lsn), K(scn), K(tablet_id_array_.count()));
     }
     tablet_id_array_.reuse();
     table_id_array_.reuse();
@@ -1544,19 +1571,17 @@ int ObPluginVectorIndexLoadScheduler::handle_replay_result(ObVectorIndexSyncLog 
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *mgr = nullptr;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-  if (!tenant_config.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail get tenant_config", KR(ret), K(tenant_id_));
-  } else if (OB_FAIL(vector_index_service_->acquire_vector_index_mgr(ls_->get_ls_id(), mgr))) {
+  if (OB_FAIL(vector_index_service_->acquire_vector_index_mgr(ls_->get_ls_id(), mgr))) {
     LOG_WARN("fail to acquire vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
   } else if (OB_ISNULL(mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
-  } else if (tenant_config->load_vector_index_on_follower && OB_FAIL(mgr->get_mem_sync_info().add_task_to_waiting_map(ls_log))){
+  } else if (OB_FAIL(mgr->get_mem_sync_info().add_task_to_waiting_map(ls_log))){
     LOG_WARN("memdata sync failed to add task", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
   }
   if (ret == OB_ALLOCATE_MEMORY_FAILED) {
+    LOG_WARN("memory allocation failed during replay, task may be incomplete",
+             KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
     ret = OB_SUCCESS;
   }
   return ret;
@@ -1858,35 +1883,32 @@ int ObVectorIndexTask::process()
   } else {
     bool need_stop = false;
     const uint64_t tenant_id = vec_idx_scheduler_->get_tenant_id();
+    lib::ContextParam param;
+    // use dag mtl id for param refer to TTLtask
+    param.set_mem_attr(MTL_ID(), "VecIdxTaskCP", ObCtxIds::DEFAULT_CTX_ID)
+      .set_properties(lib::USE_TL_PAGE_OPTIONAL);
+    CREATE_WITH_TEMP_CONTEXT(param) {
 
-    while(!need_stop && OB_SUCC(ret)) {
-      lib::ContextParam param;
-      // use dag mtl id for param refer to TTLtask
-      param.set_mem_attr(MTL_ID(), "VecIdxTaskCP", ObCtxIds::DEFAULT_CTX_ID)
-        .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-      CREATE_WITH_TEMP_CONTEXT(param) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (!tenant_config.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail get tenant_config", KR(ret), K(MTL_ID()));
+      } else if (!vec_idx_scheduler_->get_ls_leader() && !tenant_config->load_vector_index_on_follower) {
+        need_stop = true;
+        common::ObSpinLockGuard ctx_guard(task_ctx_->lock_);
+        task_ctx_->task_status_ = OB_TTL_TASK_CANCEL;
+        LOG_INFO("do not load memdata to ls follower", K(ret), K(tenant_config->load_vector_index_on_follower));
+      }
 
-        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-        if (!tenant_config.is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail get tenant_config", KR(ret), K(MTL_ID()));
-        } else if (!vec_idx_scheduler_->get_ls_leader() && !tenant_config->load_vector_index_on_follower) {
-          need_stop = true;
-          common::ObSpinLockGuard ctx_guard(task_ctx_->lock_);
-          task_ctx_->task_status_ = OB_TTL_TASK_CANCEL;
-          LOG_INFO("dont not load memdata to ls follower", K(ret), K(tenant_config->load_vector_index_on_follower));
-        }
+      if (OB_FAIL(ret) || need_stop) {
+      } else if (OB_FAIL(process_one())) {
+        LOG_WARN("fail to process one", KR(ret), K(ls_id_), KPC(task_ctx_));
+      }
+      ret = OB_SUCCESS; // continue to try schedular remainig tasks
 
-        if (OB_FAIL(ret) || need_stop) {
-        } else if (OB_FAIL(process_one())) {
-          LOG_WARN("fail to process one", KR(ret), K(ls_id_), KPC(task_ctx_));
-        }
-        ret = OB_SUCCESS; // continue to try schedular remainig tasks
-
-        if (OB_FAIL(vec_idx_scheduler_->check_task_state(vec_idx_mgr_, task_ctx_, need_stop))) {
-          LOG_WARN("fail to check task state", KR(ret), K(ls_id_), KPC(task_ctx_));
-          ret = OB_SUCCESS; // cover memdata sync failure
-        }
+      if (OB_FAIL(vec_idx_scheduler_->check_task_state(vec_idx_mgr_, task_ctx_, need_stop))) {
+        LOG_WARN("fail to check task state", KR(ret), K(ls_id_), KPC(task_ctx_));
+        ret = OB_SUCCESS; // cover memdata sync failure
       }
     }
   }
@@ -1935,9 +1957,10 @@ int ObVectorIndexTask::process_one()
     }
   }
 
-  int64_t cost = ObTimeUtil::current_time() - start_time;
+  int64_t cur_time = ObTimeUtil::current_time();
+  int64_t cost = cur_time - start_time;
   LOG_INFO("memdata sync finish process one", K(cost), K(allocator_.used()), K(allocator_.total()),
-    K(ls_id_), KPC(task_ctx_));
+    K(ls_id_), KPC(task_ctx_), K(cur_time - task_ctx_->task_start_time_));
   allocator_.reset();
   LOG_INFO("memdata sync check allocator use", K(allocator_.used()), K(allocator_.total()),
     K(ls_id_), KPC(task_ctx_));
@@ -1981,10 +2004,16 @@ int ObVectorIndexMemSyncInfo::count_processing_finished(bool &is_finished,
   int ret = OB_SUCCESS;
   is_finished = false;
   uint32_t count = 0;
+  ObSEArray<ObTabletID, 16> tablet_id_array;
 
   VectorIndexMemSyncMap &current_task_map = get_processing_map();
   FOREACH(iter, current_task_map) {
+    ObTabletID tablet_id = iter->first;
     ObPluginVectorIndexTaskCtx *ctx = iter->second;
+    if (OB_FAIL(tablet_id_array.push_back(tablet_id))) {
+      LOG_WARN("failed to collect tablet id for memdata sync summary", K(ret), K(tablet_id));
+      ret = OB_SUCCESS;
+    }
     if (OB_ISNULL(ctx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("memdata sync get null memdta_ctx", KPC(ctx));
@@ -1996,6 +2025,7 @@ int ObVectorIndexMemSyncInfo::count_processing_finished(bool &is_finished,
 
   finished_count = count;
   total_count = current_task_map.size();
+  LOG_INFO("dump memdata sync task summary", K(finished_count), K(total_count), K(tablet_id_array));
 
   if (OB_SUCC(ret)) {
     if (count > 0 && count == total_count) {
@@ -2030,7 +2060,7 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(ObVectorIndexSyncLog &ls_l
           LOG_INFO("memdata sync success get replay vector index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
         }
       }
-    } else { // // task already set, not scheduled
+    } else { // task already set, not scheduled
       LOG_INFO("memdata sync duplicate vector index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
     }
     if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
@@ -2046,7 +2076,7 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(VectorIndexAdaptorMap &ada
 {
   int ret = OB_SUCCESS;
   common::ObSpinLockGuard ctx_guard(switch_lock_); // prevent context switch in maintance thread
-  VectorIndexMemSyncMap &current_map = get_processing_map();
+  VectorIndexMemSyncMap &current_map = get_waiting_map();
   FOREACH(iter, adapter_map) {
     // only use complete adapter, tablet id of no.3 aux index table
     ObPluginVectorIndexAdaptor *adapter = iter->second;
@@ -2055,7 +2085,7 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(VectorIndexAdaptorMap &ada
       // do nothing
     } else if (tablet_id == adapter->get_inc_tablet_id()) {
       char *task_ctx_buf =
-        static_cast<char *>(get_processing_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
+        static_cast<char *>(get_waiting_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
       ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
       if (OB_ISNULL(task_ctx_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2068,7 +2098,7 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(VectorIndexAdaptorMap &ada
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
         task_ctx->~ObPluginVectorIndexTaskCtx();
-        get_processing_allocator().free(task_ctx);
+        get_waiting_allocator().free(task_ctx);
         task_ctx = nullptr;
       }
     }
@@ -2080,9 +2110,9 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(ObTabletID &tablet_id, int
 {
   int ret = OB_SUCCESS;
   common::ObSpinLockGuard ctx_guard(switch_lock_); // prevent context switch in maintance thread
-  VectorIndexMemSyncMap &current_map = get_processing_map();
+  VectorIndexMemSyncMap &current_map = get_waiting_map();
   char *task_ctx_buf =
-    static_cast<char *>(get_processing_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
+    static_cast<char *>(get_waiting_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
   ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
   if (OB_ISNULL(task_ctx_buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2095,7 +2125,7 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(ObTabletID &tablet_id, int
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
     task_ctx->~ObPluginVectorIndexTaskCtx();
-    get_processing_allocator().free(task_ctx);
+    get_waiting_allocator().free(task_ctx);
     task_ctx = nullptr;
   }
   return ret;

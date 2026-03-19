@@ -4780,13 +4780,17 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(ObPlu
         || current_bitmap_count > follower_sync_statistics_.vbitmap_count_ + VEC_INDEX_INCR_DATA_SYNC_THRESHOLD
         || current_snapshot_count != follower_sync_statistics_.snap_count_) { // use scn_ in memdata for compare
       need_sync = true;
-      LOG_INFO("need sync to follower",
+      LOG_INFO("vector index memdata sync need trigger",
+        K(tenant_id_), K(data_tablet_id_), K(data_table_id_),
         K(follower_sync_statistics_), K(current_incr_count), K(current_bitmap_count),
-        K(current_snapshot_count), KPC(this));
+        K(current_snapshot_count), K(current_snap_incr_seg_cnt), K(current_snap_incr_vec_cnt),
+        K(current_snap_base_seg_cnt), K(current_snap_base_vec_cnt));
     } else {
-      LOG_DEBUG("not need sync to follower",
+      LOG_DEBUG("vector index memdata sync skip trigger",
+        K(tenant_id_), K(data_tablet_id_), K(data_table_id_),
         K(follower_sync_statistics_), K(current_incr_count), K(current_bitmap_count),
-        K(current_snapshot_count), KPC(this));
+        K(current_snapshot_count), K(current_snap_incr_seg_cnt), K(current_snap_incr_vec_cnt),
+        K(current_snap_base_seg_cnt), K(current_snap_base_vec_cnt));
     }
     if (is_leader && OB_FAIL(check_can_sync_to_follower(mgr, current_snapshot_count, need_sync))) {
       LOG_WARN("fail to check can sync to follower", K(ret));

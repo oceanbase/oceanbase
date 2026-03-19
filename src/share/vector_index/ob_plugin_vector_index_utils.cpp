@@ -643,6 +643,11 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
       K(vid_id_scan_allocator.used()), K(vid_id_scan_allocator.total()),
       K(data_scan_allocator.used()), K(data_scan_allocator.total()),
       K(batch_temp_allocator.used()), K(batch_temp_allocator.total()));
+    if (OB_SUCC(ret)) {
+      LOG_INFO("refresh memdata vector done",
+        K(ls_id), K(target_scn), K(ada_ctx.get_count()), K(ada_ctx.get_curr_idx()),
+        K(adapter->get_incr_vsag_mem_used()), K(adapter->get_snap_vsag_mem_used()));
+    }
   }
 
   if (OB_NOT_NULL(tsc_service)) {
@@ -1026,6 +1031,10 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     }
     snapshot_idx_iter = nullptr;
   }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("refresh memdata snap done",
+      K(ls_id), K(target_scn), K(index_count), K(is_meta_data), K(meta_scn));
+  }
   return ret;
 }
 
@@ -1146,7 +1155,12 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
         LOG_WARN("fail to check_delta_buffer_table_readnext_status.", K(ret));
       } else if (OB_FAIL(try_sync_vbitmap_memdata(ls_id, adapter, target_scn, allocator, ada_ctx))) {
         LOG_WARN("failed to sync vbitmap", KR(ret));
-      } else if (ada_ctx.get_status() == PVQ_COM_DATA) {
+      } else {
+        LOG_INFO("refresh memdata delta ready",
+          K(ls_id), K(target_scn), K(ada_ctx.get_status()),
+          K(ada_ctx.get_count()), K(ada_ctx.get_vec_cnt()));
+      }
+      if (OB_SUCC(ret) && ada_ctx.get_status() == PVQ_COM_DATA) {
         if (OB_FAIL(read_vector_info(adapter, allocator, ls_id, target_scn, ada_ctx))) {
           LOG_WARN("failed to read vector_info", KR(ret));
         }
@@ -1281,6 +1295,7 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
         bool has_replace = false;
         if (OB_SUCC(ret)) {
           // Set replace scn before replace_old_adapter
+          DEBUG_SYNC(BEFORE_REPLACE_OLD_ADAPTOR);
           RWLock::WLockGuard lock_guard(vec_idx_mgr->get_adapter_map_lock());
           if (OB_FAIL(new_adapter->set_replace_scn(target_scn))) {
             LOG_WARN("failed to set replace scn", K(ret), K(target_scn));

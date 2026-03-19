@@ -1599,7 +1599,6 @@ int ObPluginVectorIndexMgr::replace_old_adapter_with_scn_check(ObPluginVectorInd
     LOG_WARN("get null adapter", KR(ret));
   } else {
     // Optimistic lock: compare and swap
-    DEBUG_SYNC(BEFORE_REPLACE_OLD_ADAPTOR);
     ObPluginVectorIndexAdaptor *cur_adapter = nullptr;
     if (OB_FAIL(complete_index_adpt_map_.get_refactored(new_adapter->get_inc_tablet_id(), cur_adapter))) {
       if (OB_HASH_NOT_EXIST == ret) {
