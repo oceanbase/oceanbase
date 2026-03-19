@@ -987,11 +987,11 @@ int ObTmpFileWriteCache::build_task_in_block_(
             task = nullptr;
           }
           break;
+        } else if (FALSE_IT(actual_flush_cnt += task->get_page_cnt())){
         } else if (OB_FAIL(schedule_flush_task_(task))) {
           LOG_WARN("fail to schedule flush task", KR(ret), KPC(task));
         } else {
           ++task_cnt;
-          actual_flush_cnt += task->get_page_cnt();
           LOG_DEBUG("build_task_ succ", K(actual_flush_cnt),
               "io_waiting_queue_size", io_waiting_queue_.size(), K(task_cnt), KPC(task));
         }
@@ -1064,6 +1064,7 @@ int ObTmpFileWriteCache::collect_pages_(
 int ObTmpFileWriteCache::schedule_flush_task_(ObTmpFileFlushTask *task)
 {
   int ret = OB_SUCCESS;
+  int64_t metrics_page_cnt = task->get_page_cnt();
   if (OB_ISNULL(task)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("task is null", KR(ret));
@@ -1076,7 +1077,7 @@ int ObTmpFileWriteCache::schedule_flush_task_(ObTmpFileFlushTask *task)
         LOG_ERROR("fail to schedule flush dispatch task", KR(tmp_ret), K(i));
       }
     }
-    metrics_.record_flush_task(task->get_page_cnt());
+    metrics_.record_flush_task(metrics_page_cnt);
   }
   return ret;
 }
@@ -1142,6 +1143,7 @@ int ObTmpFileWriteCache::dispatch_flush_tasks_batch_(ObTmpFileFlushBatchTimerTas
     }
 
     if (OB_SUCC(ret)) {
+      metrics_page_cnt += task->get_page_cnt();
       if (OB_FAIL(io_waiting_queue_.push(task))) {
         LOG_ERROR("fail to add task to io waiting queue", KR(ret), KPC(task));
         if (OB_TMP_FAIL(task->cancel(ret))) {
@@ -1152,7 +1154,6 @@ int ObTmpFileWriteCache::dispatch_flush_tasks_batch_(ObTmpFileFlushBatchTimerTas
         }
       } else {
         ++task_cnt;
-        metrics_page_cnt += task->get_page_cnt();
         if (OB_TMP_FAIL(try_schedule_flush_wait_task_(0/*delay_us*/))) {
           LOG_ERROR("fail to schedule flush wait task", KR(tmp_ret));
         }

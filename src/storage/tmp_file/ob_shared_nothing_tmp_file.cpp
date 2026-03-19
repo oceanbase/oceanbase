@@ -1057,10 +1057,8 @@ int ObSharedNothingTmpFile::inner_write_page_(const int64_t page_offset,
     LOG_WARN("unexpected null", KR(ret), K(fd_), KP(page), KP(block));
   } else {
     MEMCPY(page->get_buffer() + page_offset, write_buf, write_size);
-    if ((page_offset + write_size) % ObTmpFileGlobal::PAGE_SIZE == 0) {
-      page->set_is_full(true);
-    }
-    if (OB_FAIL(block->insert_page_into_flushing_list(page_handle))) {
+    bool is_full = (page_offset + write_size) % ObTmpFileGlobal::PAGE_SIZE == 0;
+    if (OB_FAIL(block->insert_page_into_flushing_list(page_handle, is_full))) {
       LOG_WARN("fail to insert page into flushing list", KR(ret), K(fd_), KPC(page), KPC(block));
     }
   }

@@ -224,10 +224,6 @@ int ObTmpFileBlock::destroy()
     if (OB_NOT_NULL(flush_blk_node_.get_next()) || OB_NOT_NULL(prealloc_blk_node_.get_prev())) {
       LOG_ERROR("invalid list", KPC(this));
     }
-    if (full_page_cnt_in_flushing_list_ != 0) {
-      LOG_ERROR("full page cnt in flushing list is not 0",
-          KR(ret), K(full_page_cnt_in_flushing_list_), KPC(this));
-    }
     block_index_ = ObTmpFileGlobal::INVALID_TMP_FILE_BLOCK_INDEX;
     macro_block_id_.reset();
     is_in_deleting_ = false;
@@ -388,10 +384,8 @@ int ObTmpFileBlock::release_pages(const int64_t begin_page_id, const int64_t pag
         LOG_WARN("fail to remove page from flushing status", KR(ret), K(page_id), KPC(this));
       }
     }
-    if (OB_SUCC(ret) && old_flushing_page_num > 0) {
-      if (OB_FAIL(update_block_flush_level_())) {
-        LOG_WARN("fail to update block flush level", KR(ret), K(old_flushing_page_num), KPC(this));
-      }
+    if (FAILEDx(update_block_flush_level_())) {
+      LOG_WARN("fail to update block flush level", KR(ret), K(old_flushing_page_num), KPC(this));
     }
   }
 
@@ -512,12 +506,16 @@ int ObTmpFileBlock::reinsert_into_flush_prio_mgr_()
 }
 
 // No action needed if this page is already in the flushing list
-int ObTmpFileBlock::insert_page_into_flushing_list(ObTmpFilePageHandle &page_handle)
+int ObTmpFileBlock::insert_page_into_flushing_list(ObTmpFilePageHandle &page_handle,
+                                                   const bool is_full)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lock_);
   const int64_t old_flushing_page_num = flushing_page_list_.get_size();
 
+  if (is_full) {
+    page_handle.get_page()->set_is_full(true);
+  }
   if (OB_UNLIKELY(!is_valid_without_lock())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tmp file block is invalid", KR(ret), KPC(this));

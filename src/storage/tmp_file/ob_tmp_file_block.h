@@ -96,7 +96,8 @@ public:
 
 public:
   int reinsert_into_flush_prio_mgr();
-  int insert_page_into_flushing_list(ObTmpFilePageHandle &page_handle);
+  int insert_page_into_flushing_list(ObTmpFilePageHandle &page_handle,
+                                     const bool is_full = false);
   int insert_pages_into_flushing_list(ObIArray<ObTmpFilePageHandle> &page_arr);
   int init_flushing_page_iterator(ObTmpFileBlockFlushingPageIterator &iter,
                                   int64_t &flushing_page_num);
