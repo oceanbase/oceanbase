@@ -2811,8 +2811,8 @@
 #        INNER JOIN (
 #            SELECT tenant_id, table_id
 #            FROM oceanbase.__all_virtual_column_group
+#            WHERE column_group_type NOT IN (0, 1)
 #            GROUP BY tenant_id, table_id
-#            HAVING COUNT(*) > 1
 #        ) cg ON t.tenant_id = cg.tenant_id AND t.table_id = cg.table_id
 #        INNER JOIN (
 #            SELECT DISTINCT tenant_id, data_table_id
