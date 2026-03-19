@@ -501,7 +501,8 @@ int ObDASQueryStringRtDef::generate_op(
     if (OB_FAIL(ret)) {
     } else if (1 == group_ops.count()) {
       op = group_ops.at(0);
-    } else if (min_should_match >= group_cnt && !has_pushdown_filter) {
+    } else if ((MATCH_OPERATOR_AND == default_operator_datum->get_int()
+        || min_should_match >= group_cnt) && !has_pushdown_filter) {
       ObDASConjunctionOp *conj_op = nullptr;
       ObDASConjunctionOpParam conj_op_param(group_ops);
       if (OB_FAIL(search_ctx.create_op(conj_op_param, conj_op))) {
