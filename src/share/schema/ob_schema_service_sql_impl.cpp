@@ -266,9 +266,9 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       cluster_schema_status_(ObClusterSchemaStatus::NORMAL_STATUS),
       gen_schema_version_map_(),
       schema_service_(NULL),
-      object_ids_mutex_(),
-      normal_tablet_ids_mutex_(),
-      extended_tablet_ids_mutex_(),
+      object_ids_mutex_(common::ObLatchIds::SCHEMA_OBJECT_IDS_LOCK),
+      normal_tablet_ids_mutex_(common::ObLatchIds::SCHEMA_NORMAL_TABLET_IDS_LOCK),
+      extended_tablet_ids_mutex_(common::ObLatchIds::SCHEMA_EXTENDED_TABLET_IDS_LOCK),
       sequence_id_()
 {
 }

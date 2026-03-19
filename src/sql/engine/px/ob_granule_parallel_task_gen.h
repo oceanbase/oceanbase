@@ -342,20 +342,20 @@ public:
       : readers_parallelism_(0), gi_pump_(nullptr),
         tsc_op_id_(common::OB_INVALID_ID), gi_attri_flag_(0),
         generating_thread_count_(0),
-        lock_for_global_tasks_collect_(),
+        lock_for_global_tasks_collect_(common::ObLatchIds::GI_GLOBAL_TASK_COLLECT_LOCK),
         global_task_results_(), stage_cond_() {
           global_task_results_.set_attr(common::ObMemAttr(MTL_ID(), MEM_ATTR_EXT_TASK_GEN));
-          stage_cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT);
+          stage_cond_.init(common::ObWaitEventIds::GI_STAGE_COND_WAIT);
         }
 
   GIOneStageParallelTaskGen(int64_t tsc_op_id, uint64_t gi_attri_flag,
                             ObGranulePump *pump, int64_t readers_parallelism)
       : readers_parallelism_(readers_parallelism), gi_pump_(pump),
         tsc_op_id_(tsc_op_id), gi_attri_flag_(gi_attri_flag),
-        generating_thread_count_(0), lock_for_global_tasks_collect_(), global_task_results_(),
+        generating_thread_count_(0), lock_for_global_tasks_collect_(common::ObLatchIds::GI_GLOBAL_TASK_COLLECT_LOCK), global_task_results_(),
         stage_cond_() {
           global_task_results_.set_attr(common::ObMemAttr(MTL_ID(), MEM_ATTR_EXT_TASK_GEN));
-          stage_cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT);
+          stage_cond_.init(common::ObWaitEventIds::GI_STAGE_COND_WAIT);
         }
   virtual ~GIOneStageParallelTaskGen();
   virtual int gen_task_parallel(ObExecContext &exec_ctx, ObGranuleIteratorOp *gi_op, ObTaskGenContext *ctx) override;

@@ -150,7 +150,8 @@ struct ObCheckpointUnitDiagnoseInfo
       rec_scn_(),
       create_flush_dag_time_(MAX_TIME),
       merge_finish_time_(MAX_TIME),
-      start_gc_time_(MAX_TIME) {}
+      start_gc_time_(MAX_TIME),
+      lock_(common::ObLatchIds::OB_CHECKPOINT_UNIT_DIAGNOSE_INFO_LOCK) {}
 
   share::SCN start_scn_;
   share::SCN end_scn_;
@@ -205,7 +206,7 @@ public:
       allocator_(arena_),
       checkpoint_unit_diagnose_info_map_(),
       memtable_diagnose_info_map_(),
-      lock_()
+      lock_(common::ObLatchIds::OB_TRACE_INFO_LOCK)
   { memset(thread_name_, 0, oceanbase::OB_THREAD_NAME_BUF_LEN); }
   virtual ~ObTraceInfo() { reset(); }
   void init(const int64_t trace_id,
@@ -452,6 +453,7 @@ public:
   ObCheckpointDiagnoseMgr(int64_t max_trace_info_size = 100)
     : first_pos_(0),
       last_pos_(-1),
+      pos_lock_(common::ObLatchIds::OB_CHECKPOINT_DIAGNOSE_MGR_POS_LOCK),
       max_trace_info_size_(max_trace_info_size),
       is_inited_(false)
   {}

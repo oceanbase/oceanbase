@@ -11,6 +11,9 @@
  */
 
 #include "lib/atomic/ob_atomic.h"
+#include "lib/lock/ob_spin_lock.h"
+#include "lib/stat/ob_latch_define.h"
+#include <type_traits>
 #include "common/ob_clock_generator.h"
 
 namespace oceanbase
@@ -29,7 +32,14 @@ ObPool<BlockAllocatorT, LockT>::ObPool(int64_t obj_size, int64_t block_size,
       freelist_(NULL),
       blocklist_(NULL),
       block_allocator_(alloc),
-      lock_()
+      lock_([]{
+        // Use if constexpr to handle different lock types at compile time
+        if constexpr (std::is_same<LockT, ObSpinLock>::value) {
+          return ObSpinLock(common::ObLatchIds::OB_OBJECT_POOL_LOCK);
+        } else {
+          return LockT();
+        }
+      }())
 {
   if (OB_UNLIKELY(obj_size_ < static_cast<int64_t>(sizeof(FreeNode)))) {
     LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "obj_size_ < size of FreeNode");

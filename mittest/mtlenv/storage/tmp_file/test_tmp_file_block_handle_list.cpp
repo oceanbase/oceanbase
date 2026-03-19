@@ -111,7 +111,7 @@ TEST_F(TestTmpFileBlockHandleList, test_concurrent)
   int ret = OB_SUCCESS;
   const int64_t MAX_BLOCK_NUM = 10240;
   const int64_t MAX_THREAD_NUM = 20;
-  ObSpinLock lock;
+  ObSpinLock lock(common::ObLatchIds::TEST_LATCH_LOCK);
   ObTmpFileBlockHandleList list;
   list.init(ObTmpFileBlockHandleList::FLUSH_NODE);
   std::vector<int64_t> block_indexes;
@@ -156,7 +156,7 @@ TEST_F(TestTmpFileBlockHandleList, test_for_each)
   int ret = OB_SUCCESS;
   const int64_t MAX_BLOCK_NUM = 10240;
   const int64_t MAX_THREAD_NUM = 20;
-  ObSpinLock lock;
+  ObSpinLock lock(common::ObLatchIds::TEST_LATCH_LOCK);
   ObTmpFileBlockHandleList list;
   list.init(ObTmpFileBlockHandleList::FLUSH_NODE);
   std::vector<int64_t> block_indexes;

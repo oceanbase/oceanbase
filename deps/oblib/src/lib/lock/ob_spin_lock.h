@@ -31,7 +31,7 @@ namespace common
 class ObSpinLock
 {
 public:
-  explicit ObSpinLock(uint32_t latch_id = ObLatchIds::DEFAULT_SPIN_LOCK);
+  explicit ObSpinLock(uint32_t latch_id);
   ~ObSpinLock();
   int lock();
   int lock(const int64_t timeout_us);

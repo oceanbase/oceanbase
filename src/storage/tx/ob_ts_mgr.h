@@ -359,7 +359,7 @@ class ObTsMgr : public share::ObThreadPool, public ObITsMgr
 {
   friend class ObTsSourceInfoGuard;
 public:
-  ObTsMgr() { reset(); }
+  ObTsMgr() : lock_(common::ObLatchIds::OB_TS_MGR_LOCK) { reset(); }
   ~ObTsMgr() { destroy(); }
   int init(const common::ObAddr &server,
            share::schema::ObMultiVersionSchemaService &schema_service,

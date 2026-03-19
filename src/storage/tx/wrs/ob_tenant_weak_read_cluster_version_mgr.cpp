@@ -180,14 +180,14 @@ ObTenantWeakReadClusterVersionMgr::ServerInfo::ServerInfo() :
     total_part_count_(0),
     generate_tstamp_(0),
     is_skipped_(false),
-    lock_()
+    lock_(common::ObLatchIds::WRS_CLUSTER_SERVER_INFO_LOCK)
 {
 }
 
 ObTenantWeakReadClusterVersionMgr::ServerInfo::ServerInfo(const ObAddr &addr,
     const SCN version,
     const int64_t valid_part_count,
-    const int64_t total_part_count)
+    const int64_t total_part_count) : lock_(common::ObLatchIds::WRS_CLUSTER_SERVER_INFO_LOCK)
 {
   addr_ = addr;
   version_ = version;

@@ -29,7 +29,7 @@ namespace tablelock
 
 ObLockMemtableMgr::ObLockMemtableMgr()
   : ls_id_(),
-    lock_def_()
+    lock_def_(common::ObLatchIds::OB_LOCK_MEMTABLE_MGR_LOCK)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(lock_def_.init(lib::ObMemAttr(MTL_ID(), "LockMemtableMgr")))) {

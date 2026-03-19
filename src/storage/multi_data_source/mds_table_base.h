@@ -107,7 +107,7 @@ public:
   max_aborted_scn_(share::SCN::min_scn()),
   total_node_cnt_(0),
   construct_sequence_(0),
-  lock_(),
+  lock_(common::ObLatchIds::OB_MDS_TABLE_BASE_LOCK),
   trace_id_(checkpoint::INVALID_TRACE_ID) { construct_sequence_ = ObMdsGlobalSequencer::generate_senquence(); }
   virtual ~MdsTableBase()
   {

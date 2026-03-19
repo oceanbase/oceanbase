@@ -29,7 +29,7 @@ class ObPriorityQueue
 public:
   enum { PRIO_CNT = PRIOS };
 
-  ObPriorityQueue() : sem_(), queue_(), size_(0), limit_(INT64_MAX) {}
+  ObPriorityQueue() : sem_(common::ObWaitEventIds::PRIORITY_QUEUE_COND_WAIT), queue_(), size_(0), limit_(INT64_MAX) {}
   ~ObPriorityQueue() {}
 
   void set_limit(int64_t limit) { limit_ = limit; }
@@ -365,7 +365,7 @@ private:
 
   class Queue_ {
   public:
-    Queue_(): size(0), is_queue_idle(false) {}
+    Queue_(): cond(common::ObWaitEventIds::PRIORITY_QUEUE_COND_WAIT), size(0), is_queue_idle(false) {}
     ~Queue_() {}
     SCondTemp<3> cond;
     ObLinkQueue q[PRIO_CNT];

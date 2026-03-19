@@ -102,7 +102,7 @@ void TGMgr::destroy_tg(int tg_id, bool is_exist)
 
 int TGMgr::alloc_tg_id(int start)
 {
-  common::ObLatchMutexGuard guard(lock_, common::ObLatchIds::DEFAULT_MUTEX);
+  common::ObLatchMutexGuard guard(lock_, common::ObLatchIds::TG_ID_LOCK);
   int tg_id = bs_.find_first_significant(MAX(start, tg_seq_ % MAX_ID));
   if (-1 == tg_id && start < tg_seq_ % MAX_ID) {
     tg_id = bs_.find_first_significant(start);
@@ -116,7 +116,7 @@ int TGMgr::alloc_tg_id(int start)
 
 void TGMgr::free_tg_id(int tg_id)
 {
-  common::ObLatchMutexGuard guard(lock_, common::ObLatchIds::DEFAULT_MUTEX);
+  common::ObLatchMutexGuard guard(lock_, common::ObLatchIds::TG_ID_LOCK);
   bs_.set(tg_id);
 }
 

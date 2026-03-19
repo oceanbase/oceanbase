@@ -467,7 +467,7 @@ void ObIOBenchRunner::run1()
 /******************             IOBenchController              **********************/
 
 ObIOBenchController::ObIOBenchController()
-  : tg_id_(-1), running_mutex_(), start_ts_(0), finish_ts_(0), ret_code_(OB_SUCCESS)
+  : tg_id_(-1), running_mutex_(common::ObLatchIds::OB_IO_BENCH_CONTROLLER_RUNNING_MUTEX), start_ts_(0), finish_ts_(0), ret_code_(OB_SUCCESS)
 {
 
 }
@@ -641,7 +641,7 @@ ObIOCalibration::ObIOCalibration()
   : is_inited_(false),
     baseline_iops_(0),
     io_ability_(),
-    lock_()
+    lock_(common::ObLatchIds::OB_IO_BENCH_CONTROLLER_DRW_LOCK)
 {
 }
 

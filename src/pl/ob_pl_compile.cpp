@@ -28,7 +28,7 @@ using namespace schema;
 using namespace sql;
 namespace pl {
 
-ObMutex ObPLCompiler::package_dep_info_lock_;
+ObMutex ObPLCompiler::package_dep_info_lock_(common::ObLatchIds::OB_PL_COMPILER_MUTEX);
 
 int ObPLCompiler::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                                    const DependenyTableStore &dep_schema_objs)

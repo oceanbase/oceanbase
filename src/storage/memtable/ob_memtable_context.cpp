@@ -29,8 +29,8 @@ namespace memtable
 {
 ObMemtableCtx::ObMemtableCtx()
     : ObIMemtableCtx(),
-      rwlock_(),
-      lock_(),
+      rwlock_(common::ObLatchIds::OB_MEMTABLE_CTX_RW_LOCK),
+      lock_(common::ObLatchIds::OB_MEMTABLE_CTX_BYTE_LOCK),
       end_code_(OB_SUCCESS),
       tx_status_(ObTxStatus::NORMAL),
       elr_state_(ELR_STATE_INIT),

@@ -17,7 +17,7 @@ namespace oceanbase
 namespace logservice
 {
 ObLogHandlerBase::ObLogHandlerBase() :
-  lock_(),
+  lock_(common::ObLatchIds::OB_LOG_HANDLER_BASE_LOCK),
   role_(common::FOLLOWER),
   proposal_id_(palf::INVALID_PROPOSAL_ID),
   id_(-1),

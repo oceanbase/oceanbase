@@ -68,7 +68,7 @@ int ObCopyTabletRecordExtraInfo::update_max_reuse_mgr_size(ObMacroBlockReuseMgr 
 
 /******************ObPhysicalCopyCtx*********************/
 ObPhysicalCopyCtx::ObPhysicalCopyCtx()
-  : lock_(),
+  : lock_(common::ObLatchIds::OB_PHYSICAL_COPY_CTX_LOCK),
     tenant_id_(OB_INVALID_ID),
     ls_id_(),
     tablet_id_(),

@@ -49,6 +49,7 @@ private:
   class ObLockWrapper : public common::ObSpinLock
   {
   public:
+    explicit ObLockWrapper(uint32_t latch_id) : common::ObSpinLock(latch_id) {}
     inline int64_t to_string(char *buf, const int64_t len) const { return 0; }
   } CACHE_ALIGNED;
 

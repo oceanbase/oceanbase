@@ -43,6 +43,7 @@ public :
                    failure_times_(0),
                    is_dirty_(false),
                    need_refresh_(true),
+                   lock_(common::ObLatchIds::OB_TTL_TASK_CTX_LOCK),
                    in_queue_(false) {}
   bool is_valid()
   {
@@ -92,6 +93,7 @@ public:
   ObTabletTTLScheduler()
   : is_inited_(false),
     tenant_id_(common::OB_INVALID_TENANT_ID),
+    lock_(common::ObLatchIds::OB_TABLET_TTL_SCHEDULER_LOCK),
     schema_service_(NULL),
     sql_proxy_(NULL),
     is_timer_start_(false),

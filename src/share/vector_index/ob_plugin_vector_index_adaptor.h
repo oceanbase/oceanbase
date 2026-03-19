@@ -509,7 +509,7 @@ struct ObVecIndexLoadInfo {
 
 typedef ObSEArray<ObVecIndexLoadInfo, 2> ObVecIndexLoadInfos;  // insert vids cnt, delete vids cnt
 struct ObVectorIndexDumpInfo {
-  ObVectorIndexDumpInfo()
+  ObVectorIndexDumpInfo() : dump_info_lock_(common::ObLatchIds::OB_VECTOR_INDEX_DUMP_INFO_LOCK)
   {
     incr_complete_info_.set_attr(ObMemAttr(MTL_ID(), "VecDumpInfo"));
     vbitmap_table_load_info_.set_attr(ObMemAttr(MTL_ID(), "VecDumpInfo"));

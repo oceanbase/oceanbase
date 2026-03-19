@@ -178,7 +178,7 @@ ObRebuildService::ObRebuildService()
     thread_cond_(),
     wakeup_cnt_(0),
     ls_service_(nullptr),
-    map_lock_(),
+    map_lock_(common::ObLatchIds::OB_REBUILD_SERVICE_MAP_LOCK),
     rebuild_ctx_map_(),
     fast_sleep_cnt_(0)
 {

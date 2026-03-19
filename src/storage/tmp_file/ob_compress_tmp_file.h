@@ -68,7 +68,7 @@ public:
   struct WaitTask : public common::ObDLinkBase<WaitTask>
   {
     WaitTask() : start_offset_(-1),
-                 write_cond_() {}
+                 write_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::COMPRESS_TMP_FILE_COND_WAIT) {}
     OB_INLINE bool is_valid()
     {
       return 0 <= start_offset_;

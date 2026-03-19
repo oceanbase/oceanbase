@@ -44,7 +44,7 @@ public:
     meta_existed_(false),
     ls_snapshot_mgr_(nullptr),
     meta_handler_(nullptr),
-    mutex_() {}
+    mutex_(common::ObLatchIds::TENANT_SNAPSHOT_MUTEX) {}
 
   ~ObTenantSnapshot() { reset(); }
   int destroy();

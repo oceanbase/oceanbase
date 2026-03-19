@@ -142,7 +142,7 @@ int ObColumnChecksumCalculator::calc_column_checksum(
 }
 
 ObColumnChecksumAccumulator::ObColumnChecksumAccumulator()
-  : is_inited_(false), column_checksum_(NULL), allocator_(ObModIds::OB_SSTABLE_CHECKSUM_CALCULATOR), column_cnt_(0), lock_()
+  : is_inited_(false), column_checksum_(NULL), allocator_(ObModIds::OB_SSTABLE_CHECKSUM_CALCULATOR), column_cnt_(0), lock_(common::ObLatchIds::OB_COLUMN_CHECKSUM_ACCUMULATOR_LOCK)
 {
 }
 

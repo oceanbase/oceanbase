@@ -25,7 +25,8 @@ namespace palf
 {
 
 LogModeMgr::LogModeMgr()
-    : is_inited_(false),
+    : lock_(common::ObLatchIds::LOG_MODE_MGR_SPIN_LOCK),
+      is_inited_(false),
       palf_id_(-1),
       self_(),
       applied_mode_meta_(),

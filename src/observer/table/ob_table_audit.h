@@ -266,7 +266,7 @@ public:
           if (OB_ISNULL(req_manager)) {
             ret = OB_ERR_UNEXPECTED;
             COMMON_LOG(WARN, "fail to get request manager", K(ret), K(record_.tenant_id_));
-          } else if (OB_FAIL(req_manager->record_request(record_, enable_stats, record_limit))) {
+          } else if (OB_FAIL(req_manager->record_request(record_, enable_stats, record_limit, false, nullptr))) {
             if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
               COMMON_LOG(DEBUG, "cannot allocate mem for record", K(ret));
               ret = OB_SUCCESS;

@@ -372,7 +372,7 @@ typedef ObBLMgr<ObBLKey, ObBLValue> ObLsBLMgr;
 class ObBLService : public ObThreadPool
 {
 public:
-  ObBLService() : is_inited_(false), is_running_(false), thread_cond_() {}
+  ObBLService() : is_inited_(false), is_running_(false), thread_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::BLACK_LIST_THREAD_COND_WAIT) {}
   ~ObBLService() { destroy(); }
   int init();
   void reset();

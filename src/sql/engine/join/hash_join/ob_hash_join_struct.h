@@ -339,6 +339,7 @@ public:
 
 struct ObHJSharedTableInfo
 {
+  ObHJSharedTableInfo() : lock_(common::ObLatchIds::OB_HJ_SHARED_TABLE_INFO_LOCK), cond_(common::ObWaitEventIds::HJ_SHARED_TABLE_INFO_COND_WAIT) {}
   int64_t sqc_thread_count_;
 
   ObSpinLock lock_;

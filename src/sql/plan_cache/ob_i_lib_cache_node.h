@@ -100,7 +100,7 @@ public:
   ObILibCacheNode(ObPlanCache *lib_cache, lib::MemoryContext &mem_context)
     : mem_context_(mem_context),
       allocator_(mem_context->get_safe_arena_allocator()),
-      rwlock_(),
+      rwlock_(common::ObLatchIds::OB_ILIB_CACHE_NODE_LOCK),
       ref_count_(0),
       lib_cache_(lib_cache),
       co_list_lock_(common::ObLatchIds::PLAN_SET_LOCK),

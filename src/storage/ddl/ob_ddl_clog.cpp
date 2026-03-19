@@ -149,7 +149,7 @@ void ObDDLStartClogCb::try_release()
 
 ObDDLMacroBlockClogCb::ObDDLMacroBlockClogCb()
   : is_inited_(false), status_(), ls_id_(), macro_block_id_(),
-    data_buffer_lock_(), is_data_buffer_freed_(false), ddl_macro_block_(), snapshot_version_(0), data_format_version_(0), with_cs_replica_(false)
+    data_buffer_lock_(common::ObLatchIds::OB_DDL_CLOG_DATA_BUFFER_LOCK), is_data_buffer_freed_(false), ddl_macro_block_(), snapshot_version_(0), data_format_version_(0), with_cs_replica_(false)
 {
 
 }

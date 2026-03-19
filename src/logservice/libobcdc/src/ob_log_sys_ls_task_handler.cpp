@@ -131,7 +131,7 @@ ObLogSysLsTaskHandler::ObLogSysLsTaskHandler() :
     stop_flag_(true),
     sys_ls_fetch_queue_(),
     ddl_part_trans_count_(0),
-    wait_formatted_cond_()
+    wait_formatted_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT)
 {}
 
 ObLogSysLsTaskHandler::~ObLogSysLsTaskHandler()

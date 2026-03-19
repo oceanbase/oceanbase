@@ -112,7 +112,7 @@ public:
   friend class ObTxLogCbPoolRefGuard;
 
 public:
-  ObTxLogCbPool() { force_reset_(); }
+  ObTxLogCbPool() : free_list_lock_(common::ObLatchIds::OB_TX_LOG_CB_POOL_FREE_LIST_LOCK) { force_reset_(); }
 
   int init();
 
@@ -182,6 +182,7 @@ private:
 
   struct LogCbPoolStat
   {
+    LogCbPoolStat() : rw_lock_(common::ObLatchIds::OB_TX_LOG_CB_POOL_STAT_RW_LOCK) {}
     int64_t occupying_count_;
     int64_t occupied_count_;
     int64_t occupied_time_;

@@ -31,7 +31,7 @@ class ObTimeWheelTask : public ObDLinkBase<ObTimeWheelTask>
 public:
   static const int64_t INVALID_BUCKET_IDX = -1;
 public:
-  ObTimeWheelTask() : lock_() { reset(); }
+  ObTimeWheelTask() : lock_(common::ObLatchIds::OB_TRANS_TIMEWHEEL_TASK_LOCK) { reset(); }
   virtual ~ObTimeWheelTask() { destroy(); }
   void reset();
   void destroy() {}
@@ -73,7 +73,7 @@ typedef ObDList<ObTimeWheelTask> TaskList;
 class TaskBucket
 {
 public:
-  TaskBucket() : lock_() {}
+  TaskBucket() : lock_(common::ObLatchIds::OB_TRANS_TASK_BUCKET_LOCK) {}
   ~TaskBucket() {}
 
   void lock() { (void)lock_.lock(); }

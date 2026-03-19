@@ -134,7 +134,7 @@ typename MdsUnit<K, V>::const_reverse_iterator MdsUnit<K, V>::crend()
 { return const_reverse_iterator(nullptr); }
 
 template <typename K, typename V>
-MdsUnit<K, V>::MdsUnit() {}
+MdsUnit<K, V>::MdsUnit() : lock_(common::ObLatchIds::OB_MDS_UNIT_LOCK) {}
 
 template <typename K, typename V>
 MdsUnit<K, V>::~MdsUnit()
@@ -640,6 +640,7 @@ void MdsUnit<K, V>::report_event_(const char (&event_str)[N],
 
 template <typename V>
 MdsUnit<DummyKey, V>::MdsUnit()
+  : lock_(common::ObLatchIds::OB_MDS_UNIT_LOCK)
 {
   single_row_.v_.key_ = &(single_row_.k_);
   single_row_.v_.p_mds_unit_ = this;

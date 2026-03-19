@@ -350,7 +350,7 @@ int LogFileDataBuffer::prepare_write_buffer_()
 
 LogFileDataBufferPool::LogFileDataBufferPool():
     is_inited_(false),
-    lock_(ObLatchIds::DEFAULT_SPIN_RWLOCK),
+    lock_(ObLatchIds::LOG_FILE_DATA_BUFFER_POOL_LOCK),
     tenant_id_(OB_INVALID_TENANT_ID),
     max_hold_buffer_cnt_(0),
     allocated_req_cnt_(0),

@@ -30,7 +30,7 @@ public:
   virtual ~ObBucketLock();
   int init(
       const uint64_t bucket_cnt,
-      const uint32_t latch_id = ObLatchIds::DEFAULT_BUCKET_LOCK,
+      const uint32_t latch_id,
       const lib::ObLabel &label = ObModIds::BUCKET_LOCK,
       const uint64_t tenant_id = OB_SERVER_TENANT_ID);
   int init(

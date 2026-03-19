@@ -99,7 +99,7 @@ class ObTTLTaskScheduler : public common::ObTimerTask
 public:
   ObTTLTaskScheduler()
   : del_ten_arr_(), sql_proxy_(nullptr), is_inited_(false), periodic_launched_(false),
-    need_reload_(true), is_leader_(true), need_do_for_switch_(true)
+    need_reload_(true), mutex_(common::ObLatchIds::OB_TTL_TASK_SCHEDULER_LOCK), is_leader_(true), need_do_for_switch_(true)
   {}
   virtual ~ObTTLTaskScheduler() {}
 

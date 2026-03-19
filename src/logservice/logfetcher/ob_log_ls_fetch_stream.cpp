@@ -70,7 +70,7 @@ const char *FetchStream::print_state(State state)
   return str;
 }
 
-FetchStream::FetchStream() : fetch_log_arpc_(*this)
+FetchStream::FetchStream() : fetch_log_arpc_(*this), stat_lock_(common::ObLatchIds::FETCH_STREAM_LOCK)
 {
   reset();
 }

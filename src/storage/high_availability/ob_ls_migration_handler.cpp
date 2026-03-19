@@ -162,7 +162,7 @@ ObLSMigrationHandler::ObLSMigrationHandler()
     start_ts_(0),
     finish_ts_(0),
     task_list_(),
-    lock_(),
+    lock_(common::ObLatchIds::OB_LS_MIGRATION_HANDLER_LOCK),
     status_(ObLSMigrationHandlerStatus::INIT),
     result_(OB_SUCCESS),
     is_stop_(false),

@@ -92,7 +92,7 @@ public:
         phy_plan_ctx_(phy_plan_ctx), session_(session), phy_plan_(phy_plan),
         sqcs_(sqcs), allocator_(ObModIds::OB_SQL_PX_ASYNC_SQC_RPC),
         return_cb_count_(0), error_index_(0) {
-    cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT);
+    cond_.init(common::ObWaitEventIds::PX_SQC_ASYNC_PROXY_COND_WAIT);
   }
 
   ~ObPxSqcAsyncProxy() { destroy(); }

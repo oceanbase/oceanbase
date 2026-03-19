@@ -36,7 +36,8 @@ public:
   static const int64_t GET_LEADER_RETRY_TIMEOUT = 1 * 1000LL * 1000LL; // 1s
 public:
 	ObTableLoadResourceService()
-    : rw_lock_(common::ObLatchIds::TABLE_LOAD_RESOURCE_SERVICE_LOCK),
+    : switch_lock_(common::ObLatchIds::TABLE_LOAD_RESOURCE_SERVICE_SWITCH_LOCK),
+      rw_lock_(common::ObLatchIds::TABLE_LOAD_RESOURCE_SERVICE_LOCK),
       resource_manager_(nullptr),
       tenant_id_(common::OB_INVALID_ID),
       is_inited_(false)

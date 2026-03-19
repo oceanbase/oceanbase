@@ -75,7 +75,7 @@ public:
 public:
   void clear() { map_.clear(); }
 
-  ObMockPalfKV() : map_(), base_gts_(0), lock_(), max_gc_version_(),allocator_(),watch_key_errsim_(false) {}
+  ObMockPalfKV() : map_(), base_gts_(0), lock_(common::ObLatchIds::OB_MOCK_PALF_KV_LOCK), max_gc_version_(),allocator_(),watch_key_errsim_(false) {}
 
   void reset()
   {}

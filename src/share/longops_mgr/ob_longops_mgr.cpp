@@ -35,7 +35,7 @@ int ObLongopsMgr::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLongopsMgr has been inited", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(DEFAULT_BUCKET_NUM))) {
+  } else if (OB_FAIL(bucket_lock_.init(DEFAULT_BUCKET_NUM, common::ObLatchIds::OB_LONGOPS_MGR_BUCKET_LOCK))) {
     LOG_WARN("failed to init bucket lock", K(ret));
   } else if (OB_FAIL(map_.create(DEFAULT_BUCKET_NUM, "ObLongopsMgr"))) {
     LOG_WARN("failed to init resource map", K(ret));

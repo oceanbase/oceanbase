@@ -193,7 +193,8 @@ public:
   hash_bkt_(),
   buffer_(nullptr),
   buffer_len_(0),
-  inner_mock_allocator_() {}
+  inner_mock_allocator_(),
+  lock_(common::ObLatchIds::OB_RECYCLE_MULTI_KV_CACHE_SPIN_LOCK) {}
   ObRecycleMultiKVCache(const ObRecycleMultiKVCache &) = delete;
   ~ObRecycleMultiKVCache();
   template <int N>

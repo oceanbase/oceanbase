@@ -15,7 +15,7 @@
 using namespace oceanbase::lib;
 ObResourceLimiter::ObResourceLimiter(int64_t max, int64_t min)
   : max_(max), min_(min),
-    hold_(0), cache_(0), mutex_(),
+    hold_(0), cache_(0), mutex_(common::ObLatchIds::RESOURCE_LIMITER_MUTEX),
     parent_(NULL), child_(NULL), next_(NULL)
 {}
 

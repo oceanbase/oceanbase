@@ -28,7 +28,7 @@ namespace storage
 
 ObStorageLogWriter::ObStorageLogWriter()
   : is_inited_(false), flush_seq_(0), write_align_size_(0),
-    file_size_(0),  write_offset_(0), cursor_(),
+    file_size_(0),  write_offset_(0), cursor_(), cursor_lock_(common::ObLatchIds::OB_STORAGE_LOG_WRITER_SPIN_LOCK),
     retry_write_policy_(ObLogRetryWritePolicy::INVALID_RETRY_WRITE),
     log_write_policy_(ObLogWritePolicy::INVALID_WRITE), nop_log_(),
     nop_data_param_(), file_handler_(), batch_write_buf_(), slog_write_runner_()

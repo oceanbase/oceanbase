@@ -67,7 +67,7 @@ public:
         ls_id_(),
         mgr_(NULL),
         trans_service_(NULL),
-        rwlock_(common::ObLatchIds::CLOG_CKPT_RWLOCK) {
+        rwlock_(common::ObLatchIds::OB_LS_TX_SERVICE_RWLOCK) {
     reset_();
   }
   ~ObLSTxService() {}

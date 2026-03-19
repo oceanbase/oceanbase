@@ -281,7 +281,7 @@ int ObBackupTaskIndexRebuilderMgr::check_is_last_item_for_table_key_(
 
 ObBackupTabletIndexBlockBuilderMgr::ObBackupTabletIndexBlockBuilderMgr()
   : is_inited_(false),
-    mutex_(),
+    mutex_(common::ObLatchIds::BACKUP_TABLET_INDEX_BLOCK_BUILDER_MUTEX),
     tenant_id_(OB_INVALID_ID),
     ls_id_(),
     sstable_builder_map_()
@@ -679,7 +679,7 @@ int ObBackupTabletIndexBlockBuilderMgr::remove_sstable_index_builder(const commo
 
 ObBackupTabletSSTableIndexBuilderMgr::ObBackupTabletSSTableIndexBuilderMgr()
   : is_inited_(false),
-    mutex_(),
+    mutex_(common::ObLatchIds::BACKUP_TABLET_SS_TABLE_INDEX_BUILDER_MUTEX),
     tablet_id_(),
     table_keys_(),
     builders_(),

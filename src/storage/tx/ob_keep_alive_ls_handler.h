@@ -143,7 +143,7 @@ class ObKeepAliveLSHandler : public logservice::ObIReplaySubHandler,
 public:
   const int64_t KEEP_ALIVE_GTS_INTERVAL = 100 * 1000;
 public:
-  ObKeepAliveLSHandler() : submit_buf_(nullptr) { reset(); }
+  ObKeepAliveLSHandler() : lock_(common::ObLatchIds::OB_KEEP_ALIVE_LS_HANDLER_LOCK), submit_buf_(nullptr) { reset(); }
   int init(const int64_t tenant_id, const share::ObLSID &ls_id,logservice::ObLogHandler * log_handler_ptr);
 
   void stop();

@@ -24,7 +24,7 @@ ObLSReservedSnapshotMgr::ObLSReservedSnapshotMgr()
    min_reserved_snapshot_(0),
    next_reserved_snapshot_(0),
    snapshot_lock_(ObLatchIds::LS_RESERVED_SNAPSHOT_LOCK),
-   sync_clog_lock_(),
+   sync_clog_lock_(common::ObLatchIds::LS_RESERVED_SNAPSHOT_MGR_LOCK),
    ls_(nullptr),
    ls_handle_(),
    dependent_tablet_set_(),

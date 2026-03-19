@@ -86,7 +86,7 @@ Cond::wait_impl(const M& mutex) const
   LockState state;
   mutex.unlock(state);
   oceanbase::common::ObWaitEventGuard
-      wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_COND_WAIT, 0, reinterpret_cast<uint64_t>(this));
+      wait_guard(oceanbase::common::ObWaitEventIds::COND_WAIT_FOR_BASE_CLASS, 0, reinterpret_cast<uint64_t>(this));
   const int rc = ob_pthread_cond_wait(&_cond, state.mutex);
   mutex.lock(state);
 
@@ -119,7 +119,7 @@ Cond::timed_wait_impl(const M& mutex, const ObSysTime& timeout) const
     ts.tv_sec  = tv.tv_sec + timeout/1000;
     ts.tv_nsec = tv.tv_usec * 1000 + ( timeout % 1000 ) * 1000000;*/
     oceanbase::common::ObWaitEventGuard
-        wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_COND_WAIT, timeout.toMicroSeconds(), reinterpret_cast<uint64_t>(this));
+        wait_guard(oceanbase::common::ObWaitEventIds::COND_WAIT_FOR_BASE_CLASS, timeout.toMicroSeconds(), reinterpret_cast<uint64_t>(this));
     const int rc = ob_pthread_cond_timedwait(&_cond, state.mutex, &ts);
     mutex.lock(state);
 

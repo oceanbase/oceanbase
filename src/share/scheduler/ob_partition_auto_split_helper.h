@@ -155,7 +155,7 @@ class ObSplitTaskCache
 public:
   ObSplitTaskCache()
     : inited_(false), total_tasks_(0), tenant_id_(OB_INVALID_TENANT_ID),
-      host_tenant_id_(OB_INVALID_TENANT_ID), lock_()
+      host_tenant_id_(OB_INVALID_TENANT_ID), lock_(common::ObLatchIds::OB_SPLIT_TASK_CACHE_LOCK)
     {}
   virtual ~ObSplitTaskCache() {}
   virtual int pop_tasks(const int64_t num_tasks_to_pop, ObIArray<ObSplitTask*> &task_array, ObIAllocator &allocator) = 0;
@@ -279,7 +279,7 @@ class ObSplitTaskPollingMgr
   };
 public:
   ObSplitTaskPollingMgr(const bool is_root_server, const ObSplitCacheType cache_type)
-    : is_root_server_(is_root_server), cache_type_(cache_type), inited_(false), total_tasks_(0)
+    : is_root_server_(is_root_server), cache_type_(cache_type), inited_(false), total_tasks_(0), lock_(common::ObLatchIds::OB_SPLIT_TASK_POLLING_MGR_LOCK)
     {}
   ~ObSplitTaskPollingMgr() { reset(); }
   int init();

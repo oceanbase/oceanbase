@@ -31,7 +31,7 @@ class ObPxWorkNotifier
 {
 public:
   ObPxWorkNotifier() : start_worker_count_(0), finish_worker_count_(0),
-  expect_worker_count_(0), cond_() {}
+  expect_worker_count_(0), cond_(common::ObWaitEventIds::OB_PX_WORK_NOTIFIER_COND_WAIT) {}
   ~ObPxWorkNotifier() = default;
 
   int wait_all_worker_start();

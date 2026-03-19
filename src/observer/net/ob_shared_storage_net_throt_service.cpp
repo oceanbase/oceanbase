@@ -21,7 +21,7 @@ namespace oceanbase
 {
 namespace rootserver
 {
-ObSharedStorageNetThrotManager::ObSharedStorageNetThrotManager() : is_inited_(false), lock_()
+ObSharedStorageNetThrotManager::ObSharedStorageNetThrotManager() : is_inited_(false), lock_(common::ObLatchIds::OB_SHARED_STORAGE_NET_THROT_MANAGER_LOCK)
 {}
 
 ObSharedStorageNetThrotManager::~ObSharedStorageNetThrotManager()

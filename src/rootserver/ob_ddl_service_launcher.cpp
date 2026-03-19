@@ -27,7 +27,8 @@ namespace rootserver
 {
 bool ObDDLServiceLauncher::is_ddl_service_started_ = false;
 ObDDLServiceLauncher::ObDDLServiceLauncher()
-  : inited_(false)
+  : inited_(false),
+    rw_lock_(common::ObLatchIds::OB_DDL_SERVICE_LAUNCHER_SPIN_RW_LOCK)
 {
 }
 

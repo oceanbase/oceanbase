@@ -39,7 +39,7 @@ public:
   const int64_t ONE_SECOND_US = 1 * 1000 * 1000L;
   const static int64_t CHECK_INTERVAL_US = 10 * 1000 * 1000L; // 10s
   TabletLocationStatistics() :
-    lock_(), task_cnt_(0), tablet_suc_cnt_(0), tablet_fail_cnt_(0),
+    lock_(common::ObLatchIds::OB_TABLET_LOCATION_STATISTICS_LOCK), task_cnt_(0), tablet_suc_cnt_(0), tablet_fail_cnt_(0),
     total_exec_us_(0), total_wait_us_(0) {}
   ~TabletLocationStatistics() {}
   void dump_statistics(const int exec_ret,
@@ -70,7 +70,7 @@ public:
   const int64_t ONE_SECOND_US = 1 * 1000 * 1000L;
 public:
   TabletLocationRateLimit() :
-    lock_(), tablet_cnt_(0), start_ts_(common::OB_INVALID_TIMESTAMP) {}
+    lock_(common::ObLatchIds::OB_TABLET_LOCATION_RATE_LIMIT_LOCK), tablet_cnt_(0), start_ts_(common::OB_INVALID_TIMESTAMP) {}
   ~TabletLocationRateLimit() {}
   void control_rate_limit(const int64_t tablet_cnt,
                           const int64_t exec_ts,

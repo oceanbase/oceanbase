@@ -42,6 +42,7 @@ ObTableLoadCoordinatorCtx::ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx)
     sequence_schema_(&allocator_),
     last_trans_gid_(1024),
     next_session_id_(0),
+    op_lock_(common::ObLatchIds::OB_TABLE_LOAD_COORDINATOR_CTX_MUTEX),
     status_lock_(common::ObLatchIds::TABLE_LOAD_COORDINATOR_STATUS_LOCK),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),

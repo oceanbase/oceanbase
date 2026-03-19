@@ -467,7 +467,8 @@ int OSDQMetric::print_csv_dump_()
 }
 
 OSDQMetric::OSDQMetric()
-  : is_inited_(false),
+  : mutex_(common::ObLatchIds::OB_ADMIN_COMMON_LOCK),
+    is_inited_(false),
     summary_cnt_(0),
     start_real_time_us_(ObTimeUtility::current_time()),
     last_real_time_us_(start_real_time_us_),
@@ -1406,7 +1407,7 @@ void ObAdminObjectStorageDriverQualityExecutor::free_scene_(OSDQScene *&scene)
 
 //=========================== OSDQFileSet ===============================
 
-OSDQFileSet::OSDQFileSet() {}
+OSDQFileSet::OSDQFileSet() : mutex_(common::ObLatchIds::OB_ADMIN_COMMON_LOCK) {}
 OSDQFileSet::~OSDQFileSet()
 {
   FilePathMap::iterator it = file_path_map_.begin();

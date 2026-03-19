@@ -75,7 +75,7 @@ ObTenantMediumChecker::ObTenantMediumChecker()
     error_tablet_cnt_(0),
     tablet_ls_set_(),
     ls_info_map_(),
-    lock_(),
+    lock_(common::ObLatchIds::OB_TENANT_MEDIUM_CHECKER_LOCK),
     ls_locality_cache_empty_(true),
     ls_locality_cache_refresh_success_(true)
 {}

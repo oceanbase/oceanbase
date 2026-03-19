@@ -164,7 +164,11 @@ private:
   bool is_inited_;
   common::ObSmallAllocator node_allocator_;
   TabletAutoincMgrMap tablet_autoinc_mgr_map_;
-  lib::ObMutex init_node_mutexs_[INIT_NODE_MUTEX_NUM];
+  struct InitNodeMutexWrapper {
+    lib::ObMutex mutex_;
+    InitNodeMutexWrapper() : mutex_(common::ObLatchIds::TABLET_AUTO_INCREMENT_SERVICE_LOCK) {}
+  };
+  InitNodeMutexWrapper init_node_mutexs_[INIT_NODE_MUTEX_NUM];
 };
 
 

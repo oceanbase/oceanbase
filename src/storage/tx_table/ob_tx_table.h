@@ -79,7 +79,7 @@ class ObTxTable
 
   struct CtxMinStartScnInfo
   {
-    CtxMinStartScnInfo() { reset(); }
+    CtxMinStartScnInfo() : lock_(common::ObLatchIds::OB_TX_TABLE_CTX_MIN_START_SCN_LOCK) { reset(); }
 
     void reset()
     {

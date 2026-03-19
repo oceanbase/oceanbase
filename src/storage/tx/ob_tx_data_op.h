@@ -137,7 +137,8 @@ public:
     undo_status_list_(),
     tx_op_list_(),
     tx_data_allocator_(allocator),
-    op_allocator_(op_allocator) {}
+    op_allocator_(op_allocator),
+    lock_(common::ObLatchIds::OB_TX_DATA_OP_LOCK) {}
   ~ObTxDataOp() {}
   int64_t inc_ref() { return ATOMIC_AAF(&ref_cnt_, 1); }
   void dec_ref();

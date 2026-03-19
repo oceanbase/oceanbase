@@ -64,18 +64,18 @@ namespace common
 //   ObDiagnoseTenantInfo tenant_info;
 //   ObWaitEventHistory &history = info.get_event_history();
 //   for (uint64_t i = 0; i <2; i++) {
-//     info.notify_wait_begin(ObWaitEventIds::DEFAULT_COND_WAIT, 0, 0, 0, 0);
+//     info.notify_wait_begin(ObWaitEventIds::UNITEST_COND_WAIT, 0, 0, 0, 0);
 //     EXPECT_EQ(1, history.curr_pos_);
 //     EXPECT_EQ(1, history.item_cnt_);
 //     EXPECT_EQ(1, history.nest_cnt_);
-//     EXPECT_EQ(ObWaitEventIds::DEFAULT_COND_WAIT, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
+//     EXPECT_EQ(ObWaitEventIds::UNITEST_COND_WAIT, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
 //     EXPECT_EQ(0, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].level_);
 //     ::usleep(1);
-//     info.notify_wait_end(&tenant_info, OB_WAIT_EVENTS[ObWaitEventIds::DEFAULT_COND_WAIT].is_phy_, false);
+//     info.notify_wait_end(&tenant_info, OB_WAIT_EVENTS[ObWaitEventIds::UNITEST_COND_WAIT].is_phy_, false);
 //     EXPECT_EQ(1, history.curr_pos_);
 //     EXPECT_EQ(1, history.item_cnt_);
 //     EXPECT_EQ(0, history.nest_cnt_);
-//     EXPECT_EQ(ObWaitEventIds::DEFAULT_COND_WAIT, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
+//     EXPECT_EQ(ObWaitEventIds::UNITEST_COND_WAIT, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
 //     EXPECT_EQ(0, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].level_);
 //     info.notify_wait_begin(ObWaitEventIds::MT_READ_LOCK_WAIT, 0, 0, 0, 0);
 //     EXPECT_EQ(2, history.curr_pos_);
@@ -126,12 +126,12 @@ namespace common
 //     EXPECT_EQ(1, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].level_);
 //     info.notify_wait_end(&tenant_info, OB_WAIT_EVENTS[ObWaitEventIds::MT_READ_LOCK_WAIT].is_phy_, false);
 //     if (1 == i) {
-//       info.notify_wait_begin(ObWaitEventIds::DEFAULT_COND_WAIT, 0, 0, 0, 0);
+//       info.notify_wait_begin(ObWaitEventIds::UNITEST_COND_WAIT, 0, 0, 0, 0);
 //       ::usleep(1);
-//       info.notify_wait_end(&tenant_info, OB_WAIT_EVENTS[ObWaitEventIds::DEFAULT_COND_WAIT].is_phy_, false);
-//       info.notify_wait_begin(ObWaitEventIds::DEFAULT_COND_WAIT, 0, 0, 0, 0);
+//       info.notify_wait_end(&tenant_info, OB_WAIT_EVENTS[ObWaitEventIds::UNITEST_COND_WAIT].is_phy_, false);
+//       info.notify_wait_begin(ObWaitEventIds::UNITEST_COND_WAIT, 0, 0, 0, 0);
 //       ::usleep(1);
-//       info.notify_wait_end(&tenant_info, OB_WAIT_EVENTS[ObWaitEventIds::DEFAULT_COND_WAIT].is_phy_, false);
+//       info.notify_wait_end(&tenant_info, OB_WAIT_EVENTS[ObWaitEventIds::UNITEST_COND_WAIT].is_phy_, false);
 //       info.notify_wait_end(&tenant_info, OB_WAIT_EVENTS[ObWaitEventIds::MT_READ_LOCK_WAIT].is_phy_, false);
 //       EXPECT_EQ(2, history.curr_pos_);
 //       EXPECT_EQ(2, history.item_cnt_);
@@ -141,11 +141,11 @@ namespace common
 //       EXPECT_EQ(history.items_[8].wait_begin_time_, history.items_[(history.curr_pos_ - 1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].wait_begin_time_);
 //       EXPECT_EQ(history.items_[9].wait_end_time_, history.items_[(history.curr_pos_ - 1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].wait_end_time_);
 //     } else {
-//       info.notify_wait_end(&tenant_info, OB_WAIT_EVENTS[ObWaitEventIds::DEFAULT_COND_WAIT].is_phy_, false);
+//       info.notify_wait_end(&tenant_info, OB_WAIT_EVENTS[ObWaitEventIds::UNITEST_COND_WAIT].is_phy_, false);
 //       EXPECT_EQ(1, history.curr_pos_);
 //       EXPECT_EQ(1, history.item_cnt_);
 //       EXPECT_EQ(0, history.nest_cnt_);
-//       EXPECT_EQ(ObWaitEventIds::DEFAULT_COND_WAIT, history.items_[(history.curr_pos_ - 1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
+//       EXPECT_EQ(ObWaitEventIds::UNITEST_COND_WAIT, history.items_[(history.curr_pos_ - 1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
 //       EXPECT_EQ(0, history.items_[(history.curr_pos_ - 1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].level_);
 //     }
 //     info.reset();
@@ -192,7 +192,7 @@ TEST(ObDiagnoseSessionInfo, normal)
       begin_time = ::oceanbase::common::ObTimeUtility::current_time();
       for (int i = 0; i < 1000000; i++) {
         ObWaitEventGuard wait_guard(ObWaitEventIds::MT_READ_LOCK_WAIT);
-        ObWaitEventGuard wait_guard1(ObWaitEventIds::DEFAULT_COND_WAIT);
+        ObWaitEventGuard wait_guard1(ObWaitEventIds::UNITEST_COND_WAIT);
       }
       end_time = ::oceanbase::common::ObTimeUtility::current_time();
       printf("scan sysstat time: %ld us\n", (end_time - begin_time));

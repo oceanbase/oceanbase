@@ -599,7 +599,7 @@ void ObPxTargetCond::notifyAll()
 void ObPxTargetCond::usleep(const int64_t us)
 {
   if (us > 0) {
-    ObMonitor<Mutex> monitor;
+    ObMonitor<Mutex> monitor(common::ObLatchIds::PX_TARGET_COND_WAIT);
     THIS_WORKER.sched_wait();
     oceanbase::common::ObWaitEventGuard
         wait_guard(oceanbase::common::ObWaitEventIds::PX_TARGET_WAIT, us);

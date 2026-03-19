@@ -601,7 +601,8 @@ class ObLSDupTabletsMgr
 {
 public:
   ObLSDupTabletsMgr()
-      : changing_new_set_(nullptr), removing_old_set_(nullptr), tablet_set_diag_info_log_buf_(nullptr),tablet_id_diag_info_log_buf_(nullptr)
+      : dup_tablets_lock_(common::ObLatchIds::OB_DUP_TABLE_LS_HANDLER_LOCK),
+        changing_new_set_(nullptr), removing_old_set_(nullptr), tablet_set_diag_info_log_buf_(nullptr),tablet_id_diag_info_log_buf_(nullptr)
   {
     reset();
   }

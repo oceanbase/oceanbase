@@ -221,7 +221,7 @@ int ObResourceMap<Key, Value>::init(
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(bucket_num), K(total_limit), K(hold_limit),
         K(page_size), K(tenant_id));
-  } else if (OB_FAIL(bucket_lock_.init(bkt_num, ObLatchIds::DEFAULT_BUCKET_LOCK, ObMemAttr(tenant_id, "ResourMapLock")))) {
+  } else if (OB_FAIL(bucket_lock_.init(bkt_num, ObLatchIds::RESOURCE_MAP_LOCK, ObMemAttr(tenant_id, "ResourMapLock")))) {
     STORAGE_LOG(WARN, "fail to init bucket lock", K(ret), K(bkt_num));
   } else if (OB_FAIL(map_.create(bkt_num, attr, attr))) {
     STORAGE_LOG(WARN, "fail to create map", K(ret));
@@ -251,7 +251,7 @@ int ObResourceMap<Key, Value>::init(const int64_t bucket_num, const ObMemAttr &a
   } else if (OB_UNLIKELY(bucket_num <= 0 || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(bucket_num), K(tenant_id));
-  } else if (OB_FAIL(bucket_lock_.init(bkt_num, ObLatchIds::DEFAULT_BUCKET_LOCK, ObMemAttr(tenant_id, "ResourMapLock")))) {
+  } else if (OB_FAIL(bucket_lock_.init(bkt_num, ObLatchIds::RESOURCE_MAP_LOCK, ObMemAttr(tenant_id, "ResourMapLock")))) {
     STORAGE_LOG(WARN, "fail to init bucket lock", K(ret), K(bkt_num));
   } else if (OB_FAIL(map_.create(bkt_num, attr, attr))) {
     STORAGE_LOG(WARN, "fail to create map", K(ret));

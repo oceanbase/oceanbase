@@ -57,6 +57,7 @@ class MockOb2pcCtx : public ObTxCycleTwoPhaseCommitter,
                      public ObMailHandler<ObTwoPhaseCommitMsgType>
 {
 public:
+  MockOb2pcCtx() : latch_(common::ObLatchIds::TRANS_CTX_LOCK) {}
   int init(ObMailBoxMgr<ObTwoPhaseCommitMsgType> *mgr);
   virtual int handle(const ObMail<ObTwoPhaseCommitMsgType>& mail) override;
   int64_t get_addr() { return addr_; }

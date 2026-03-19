@@ -244,7 +244,7 @@ ObUnitManager::ObUnitManager(ObServerManager &server_mgr, ObZoneManager &zone_mg
     tenant_pools_allocator_(OB_MALLOC_NORMAL_BLOCK_SIZE, ObMalloc(ObModIds::OB_RS_UNIT_MANAGER)),
     server_migrate_units_map_(),
     migrate_units_allocator_(OB_MALLOC_NORMAL_BLOCK_SIZE, ObMalloc(ObModIds::OB_RS_UNIT_MANAGER)),
-    lock_(ObLatchIds::UNIT_MANAGER_LOCK),
+    lock_(common::ObLatchIds::OB_UNIT_MANAGER_SPIN_RW_LOCK),
     schema_service_(NULL), root_balance_(NULL)
 {
 }

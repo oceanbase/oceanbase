@@ -84,6 +84,10 @@ struct ObBackupComplementLogCtx final {
   int64_t retry_id_;
   ObBackupReportCtx report_ctx_;
   bool is_only_calc_stat_;
+  ObBackupComplementLogCtx() : mutex_(common::ObLatchIds::OB_BACKUP_COMPLEMENT_LOG_CTX_MUTEX)
+  {
+  }
+
 
   bool is_valid() const;
   bool operator==(const ObBackupComplementLogCtx &other) const;

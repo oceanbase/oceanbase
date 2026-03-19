@@ -180,8 +180,8 @@ public:
   typedef RWLock::WLockGuardWithRetryInterval WLockGuardWithRetryInterval;
 
   ObLSTxCtxMgr()
-      : tx_log_adapter_(&log_adapter_def_), rwlock_(ObLatchIds::DEFAULT_SPIN_RWLOCK),
-        minor_merge_lock_(ObLatchIds::DEFAULT_SPIN_RWLOCK)
+      : tx_log_adapter_(&log_adapter_def_), rwlock_(ObLatchIds::LS_TX_CTX_MGR_LOCK),
+        minor_merge_lock_(ObLatchIds::LS_TX_CTX_MGR_MINOR_MERGE_LOCK)
 
   {
     reset();

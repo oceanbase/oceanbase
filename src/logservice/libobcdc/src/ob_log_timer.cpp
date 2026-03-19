@@ -32,7 +32,7 @@ ObLogFixedTimer::ObLogFixedTimer() :
     tid_(0),
     err_handler_(NULL),
     task_queue_(),
-    task_cond_(),
+    task_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::LOG_TIMER_COND_WAIT),
     allocator_(),
     stop_flag_(true)
 {}

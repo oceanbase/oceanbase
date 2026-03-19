@@ -25,7 +25,7 @@ namespace rootserver
 class ObNetEndpointIngressManager
 {
 public:
-  ObNetEndpointIngressManager() : ingress_plan_map_(), total_bw_limit_(0), lock_()
+  ObNetEndpointIngressManager() : ingress_plan_map_(), total_bw_limit_(0), lock_(common::ObLatchIds::OB_NET_ENDPOINT_INGRESS_MANAGER_LOCK)
   {}
   ~ObNetEndpointIngressManager() = default;
   int init();

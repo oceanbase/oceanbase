@@ -27,7 +27,8 @@ using namespace table;
  * ObTableLoadAssignedTaskManager
  */
 ObTableLoadAssignedTaskManager::ObTableLoadAssignedTaskManager()
-  : is_inited_(false)
+  : mutex_(common::ObLatchIds::OB_TABLE_LOAD_ASSIGNED_TASK_MANAGER_MUTEX),
+  is_inited_(false)
 {
 }
 

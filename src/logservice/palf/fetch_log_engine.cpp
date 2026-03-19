@@ -98,7 +98,7 @@ FetchLogEngine::FetchLogEngine()
     palf_env_impl_(NULL),
     allocator_(NULL),
     replayable_point_(),
-    cache_lock_(),
+    cache_lock_(common::ObLatchIds::OB_FETCH_LOG_TASK_CACHE_LOCK),
     fetch_task_cache_(),
     fetch_wait_cost_stat_("[PALF STAT FETCH LOG TASK IN QUEUE TIME]", PALF_STAT_PRINT_INTERVAL_US),
     fetch_log_cost_stat_("[PALF STAT FETCH LOG EXECUTE COST TIME]", PALF_STAT_PRINT_INTERVAL_US)

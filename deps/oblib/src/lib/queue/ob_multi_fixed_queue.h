@@ -49,9 +49,13 @@ private:
   void destroy_queue_(const int64_t queue_num);
 
 private:
+  struct QueueCondWrapper {
+    ObCond cond_;
+    QueueCondWrapper() : cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::MULTI_FIXED_QUEUE_COND_WAIT) {}
+  };
   bool                        inited_;
   ObFixedQueue<void>          queue_[MAX_QUEUE_NUM];
-  ObCond                      queue_conds_[MAX_QUEUE_NUM];
+  QueueCondWrapper            queue_conds_[MAX_QUEUE_NUM];
   int64_t                     queue_num_;
 
 private:
@@ -130,7 +134,7 @@ int ObMultiFixedQueue<MAX_QUEUE_NUM>::push(void *data, const uint64_t hash_val, 
     ret = OB_INVALID_ARGUMENT;
   } else {
     int64_t index = hash_val % queue_num_;
-    ObCond &cond = queue_conds_[index];
+    ObCond &cond = queue_conds_[index].cond_;
     int64_t end_time = timeout + ::oceanbase::common::ObTimeUtility::current_time();
 
     while (true) {
@@ -168,7 +172,7 @@ int ObMultiFixedQueue<MAX_QUEUE_NUM>::pop(void *&data, const int64_t queue_index
   } else if (0 > queue_index || queue_index >= MAX_QUEUE_NUM) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    ObCond &cond = queue_conds_[queue_index];
+    ObCond &cond = queue_conds_[queue_index].cond_;
     int64_t end_time = timeout + ::oceanbase::common::ObTimeUtility::current_time();
 
     data = NULL;

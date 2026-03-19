@@ -24,7 +24,7 @@ ObTabletDDLInfo::ObTabletDDLInfo()
   : ddl_schema_version_(0),
     ddl_schema_refreshed_ts_(OB_INVALID_TIMESTAMP),
     schema_version_change_scn_(SCN::min_scn()),
-    rwlock_()
+    rwlock_(common::ObLatchIds::TABLET_DDL_INFO_LOCK)
 {
 }
 

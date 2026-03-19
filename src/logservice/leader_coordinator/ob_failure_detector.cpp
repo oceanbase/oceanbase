@@ -37,7 +37,7 @@ ObFailureDetector::ObFailureDetector()
       has_add_disk_full_event_(false),
       has_election_silent_event_(false),
       palf_disk_hang_detector_(),
-      lock_(common::ObLatchIds::ELECTION_LOCK)
+      lock_(common::ObLatchIds::PALF_DISK_HANG_DETECTOR_SPIN_LOCK)
 {
   COORDINATOR_LOG(INFO, "ObFailureDetector constructed");
 }

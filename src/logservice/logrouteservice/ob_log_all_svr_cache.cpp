@@ -31,7 +31,7 @@ ObLogAllSvrCache::ObLogAllSvrCache() :
     all_server_cache_update_interval_(0),
     all_zone_cache_update_interval_(0),
     assign_region_(""),
-    region_lock_(),
+    region_lock_(common::ObLatchIds::OB_LOG_ALL_SVR_CACHE_LOCK),
     cur_version_(0),
     cur_zone_version_(0),
     zone_need_update_(false),

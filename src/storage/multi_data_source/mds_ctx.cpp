@@ -22,10 +22,11 @@ namespace storage
 namespace mds
 {
 
-MdsCtx::MdsCtx() : state_(TwoPhaseCommitState::STATE_INIT), writer_(), seq_no_(transaction::ObTxSEQ::MIN_VAL()) {}
+MdsCtx::MdsCtx() : state_(TwoPhaseCommitState::STATE_INIT), lock_(common::ObLatchIds::OB_MDS_CTX_LOCK), writer_(), seq_no_(transaction::ObTxSEQ::MIN_VAL()) {}
 
 MdsCtx::MdsCtx(const MdsWriter &writer, const transaction::ObTxSEQ start_seq)
   : state_(TwoPhaseCommitState::STATE_INIT),
+    lock_(common::ObLatchIds::OB_MDS_CTX_LOCK),
     writer_(writer),
     seq_no_(start_seq)
 {

@@ -31,7 +31,8 @@ ObTxDataMemtableMgr::ObTxDataMemtableMgr()
   : is_freezing_(false),
     ls_id_(),
     tx_data_table_(nullptr),
-    ls_tablet_svr_(nullptr)
+    ls_tablet_svr_(nullptr),
+    lock_def_(common::ObLatchIds::OB_TX_DATA_MEMTABLE_MGR_SPIN_RW_LOCK)
 {
   lock_.lock_type_ = LockType::OB_SPIN_RWLOCK;
   lock_.lock_ = &lock_def_;

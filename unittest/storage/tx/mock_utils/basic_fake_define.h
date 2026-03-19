@@ -412,6 +412,7 @@ public:
 class ObFakeTxLogAdapter : public ObITxLogAdapter, public share::ObThreadPool
 {
 public:
+  ObFakeTxLogAdapter() : cond_(ObWaitEventIds::UNITEST_COND_WAIT) {}
   virtual int start() {
     int ret = OB_SUCCESS;
     ObThreadPool::set_run_wrapper(MTL_CTX());

@@ -29,7 +29,7 @@ ObTableQueryASyncMgr::ObTableQueryASyncMgr()
     session_id_(0),
     is_inited_(false),
     session_count_(0),
-    lock_(),
+    lock_(common::ObLatchIds::OB_TABLE_QUERY_SESSION_MGR_LOCK),
     rpc_proxy_(nullptr),
     id_request_rpc_(nullptr)
 {
@@ -100,9 +100,6 @@ int ObTableQueryASyncMgr::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableQueryASyncMgr init twice", K(ret), KPC(this));
   } else {
-    for (int64_t i = 0; i < DEFAULT_LOCK_ARR_SIZE; ++i) {
-      locker_arr_[i].set_latch_id(ObLatchIds::TABLE_API_LOCK);
-    }
     ObMemAttr attr(MTL_ID(), "TblAQueryAlloc");
     if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
       LOG_WARN("fail to init allocator", K(ret));

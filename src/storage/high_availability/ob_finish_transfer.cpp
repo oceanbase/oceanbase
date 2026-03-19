@@ -45,7 +45,7 @@ ObTxFinishTransfer::ObTxFinishTransfer()
       tenant_id_(OB_INVALID_ID),
       src_ls_id_(),
       dest_ls_id_(),
-      mutex_(),
+      mutex_(common::ObLatchIds::TRANSFER_FINISH_TRANSFER_MUTEX),
       cond_(),
       sql_proxy_(NULL),
       round_(0),

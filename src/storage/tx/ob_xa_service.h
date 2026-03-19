@@ -49,7 +49,7 @@ class ObStmtParam;
 struct ObXACacheItem {
 public:
   static const int64_t XA_CACHE_ITEM_EXPIRE_TIME = 2000000; // 2s
-  ObXACacheItem(): state_(ObXATransState::UNKNOWN), create_timestamp_(0) {}
+  ObXACacheItem(): lock_(common::ObLatchIds::OB_XA_SERVICE_CACHE_ITEM_LOCK), state_(ObXATransState::UNKNOWN), create_timestamp_(0) {}
   ~ObXACacheItem() { reset(); }
   void reset()
   {

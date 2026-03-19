@@ -78,7 +78,8 @@ void ObSqlEndTransCb::callback(int cb_param)
     bool reuse_tx = OB_SUCCESS == cb_param
       || OB_TRANS_COMMITED == cb_param
       || OB_TRANS_ROLLBACKED == cb_param;
-      ObSqlTransControl::reset_session_tx_state(session_info, reuse_tx);
+    ObSQLUtils::fixup_commit_time(*session_info);
+    ObSqlTransControl::reset_session_tx_state(session_info, reuse_tx);
     sessid = session_info->get_server_sid();
     proxy_sessid = session_info->get_proxy_sessid();
     send_response_packet(cb_param, session_info);

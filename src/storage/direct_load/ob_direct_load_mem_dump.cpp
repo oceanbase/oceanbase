@@ -38,6 +38,7 @@ ObDirectLoadMemDump::Context::Context(ObDirectLoadMemContext *mem_ctx)
     safe_allocator_(allocator_),
     finished_sub_dump_count_(0),
     sub_dump_count_(0),
+    mutex_(common::ObLatchIds::DIRECT_LOAD_MEM_DUMP_CONTEXT_MUTEX),
     mem_ctx_(mem_ctx)
 {
   allocator_.set_tenant_id(MTL_ID());

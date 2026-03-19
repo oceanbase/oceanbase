@@ -300,7 +300,7 @@ TestConcurrentT3M::TestConcurrentT3M(
     ls_id_(TestTenantMetaMemMgr::TEST_LS_ID),
     t3m_(t3m),
     tenant_base_(tenant_base),
-    lock_(),
+    lock_(common::ObLatchIds::TEST_LATCH_LOCK),
     allocator_(allocator)
 {
   set_thread_count(static_cast<int32_t>(thread_cnt_));

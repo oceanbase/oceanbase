@@ -53,7 +53,7 @@ private:
   class BufferNode
   {
   public:
-    BufferNode() : issued_(false), last_used_timestamp_(OB_INVALID_TIMESTAMP), buffer_() {}
+    BufferNode() : rwlock_(common::ObLatchIds::OB_LARGE_BUFFER_POOL_BUFFER_NODE_RWLOCK) {}
     BufferNode(const BufferNode &other);
     explicit BufferNode(const char *buffer);
     ~BufferNode();

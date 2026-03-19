@@ -102,7 +102,8 @@ public:
       tenant_id_(0),
       tg_id_(-1),
       destroyed_(false),
-      mysql_proxy_(NULL)
+      mysql_proxy_(NULL),
+      lock_(common::ObLatchIds::OB_OPT_STAT_MONITOR_MANAGER_LOCK)
       {}
   virtual ~ObOptStatMonitorManager() { if (inited_) { destroy(); }  }
   void destroy();

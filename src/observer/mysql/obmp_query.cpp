@@ -826,7 +826,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
 
     // some statistics must be recorded for plan stat, even though sql audit disabled
     bool first_record = (1 == audit_record.try_cnt_);
-    ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+    ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_, async_resp_used);
     audit_record.exec_timestamp_.update_stage_time();
 
     // store the warning message from the most recent statement in the current session
@@ -1191,7 +1191,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 
       // some statistics must be recorded for plan stat, even though sql audit disabled
       bool first_record = (1 == audit_record.try_cnt_);
-      ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+      ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_, async_resp_used);
       audit_record.exec_timestamp_.update_stage_time();
 
       if (enable_perf_event && !THIS_THWORKER.need_retry()
@@ -1743,6 +1743,8 @@ inline void ObMPQuery::record_stat(const stmt::StmtType type,
               EVENT_INC(SQL_FAIL_COUNT);
             }
           }
+        } else {
+          LOG_WARN_RET(OB_SUCCESS, "unexpected stmt type for T_END_TRANS", K(session));
         }
         break;
 

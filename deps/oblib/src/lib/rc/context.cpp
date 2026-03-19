@@ -24,7 +24,7 @@ __MemoryContext__ &__MemoryContext__::root()
 {
   static __MemoryContext__ *root = nullptr;
   if (OB_UNLIKELY(nullptr == root)) {
-    static lib::ObMutex mutex;
+    static lib::ObMutex mutex(common::ObLatchIds::OB_MEMORY_CONTEXT_ROOT_MUTEX);
     lib::ObMutexGuard guard(mutex);
     if (nullptr == root) {
       ContextParam param;

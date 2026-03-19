@@ -26,8 +26,7 @@ template<class T>
 class ObDirectLoadEasyQueue //性能很差的一个queue，主要为了方便使用
 {
 public:
-  ObDirectLoadEasyQueue() : malloc_(ObMemAttr(MTL_ID(), "TLD_EasyQueue")), queue_(malloc_) {}
-
+  ObDirectLoadEasyQueue() : malloc_(ObMemAttr(MTL_ID(), "TLD_EasyQueue")), queue_(malloc_), mutex_(common::ObLatchIds::OB_DIRECT_LOAD_EASY_QUEUE_MUTEX) {}
   int push(const T &e) {
     int ret = OB_SUCCESS;
     lib::ObMutexGuard guard(mutex_);

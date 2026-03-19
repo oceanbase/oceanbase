@@ -72,7 +72,7 @@ struct ObPoolArenaHead
       K(last_miss_return_ts),
       KP(next));
   void reset() {
-    new (&lock) common::ObByteLock();
+    new (&lock) common::ObByteLock(common::ObLatchIds::OB_SERVER_OBJECT_POOL_ARENA_LATCH_ID);
     borrow_cnt = 0;
     return_cnt = 0;
     miss_cnt = 0;

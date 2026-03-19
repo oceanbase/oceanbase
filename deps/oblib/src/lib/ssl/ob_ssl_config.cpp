@@ -23,7 +23,7 @@ struct ssl_st {
 };
 
 static SSL_CTX* gs_ssl_ctx_array[OB_SSL_CTX_ID_MAX][OB_SSL_ROLE_MAX];
-static SpinRWLock gs_ssl_array_lock;
+static SpinRWLock gs_ssl_array_lock(common::ObLatchIds::OB_SSL_ARRAY_LOCK);
 static struct ssl_st gs_ssl_array[FD_MAX];
 
 const char tls_ciphers_list[]= "!aNULL:!eNULL:!EXPORT:!LOW:!MD5:!DES:!RC2:!RC4:!PSK:"

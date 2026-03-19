@@ -30,6 +30,7 @@ WriteCacheShrinkContext::WriteCacheShrinkContext()
     current_max_used_watermark_(0),
     last_shrink_complete_ts_(ObTimeUtility::current_time()),
     shrink_begin_ts_(0),
+    shrink_lock_(common::ObLatchIds::WRITE_CACHE_SHRINK_CONTEXT_SPIN_LOCK),
     shrink_list_()
 {}
 

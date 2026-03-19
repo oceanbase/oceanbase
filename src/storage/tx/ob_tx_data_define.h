@@ -140,7 +140,7 @@ private:
   static const int64_t UNIS_VERSION = 1;
 
 public:
-  ObUndoStatusList() : head_(nullptr), undo_node_cnt_(0) {}
+  ObUndoStatusList() : head_(nullptr), undo_node_cnt_(0), lock_(common::ObLatchIds::OB_UNDO_STATUS_NODE_LOCK) {}
   ObUndoStatusList &operator= (const ObUndoStatusList &rhs)
   {
     head_ = rhs.head_;
@@ -412,7 +412,7 @@ private:
     bool is_valid_;
     common::SpinRWLock lock_;
 
-    CacheItem() : tx_data_(), is_valid_(false) {}
+    CacheItem() : tx_data_(), is_valid_(false), lock_(common::ObLatchIds::OB_TX_DATA_CACHE_ITEM_LOCK) {}
 
     void reset()
     {

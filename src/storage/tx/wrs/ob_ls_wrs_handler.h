@@ -37,7 +37,7 @@ class ObLS;
 class ObLSWRSHandler
 {
 public:
-  ObLSWRSHandler() { reset(); }
+  ObLSWRSHandler() : lock_(common::ObLatchIds::OB_LS_WRS_HANDLER_LOCK) { reset(); }
   ~ObLSWRSHandler() { reset(); }
   int init(const share::ObLSID &ls_id);
   void reset();

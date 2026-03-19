@@ -34,7 +34,7 @@ ObTenantStorageMetaService::ObTenantStorageMetaService()
     slogger_(),
     shared_object_rwriter_(),
     shared_object_raw_rwriter_(),
-    wait_gc_map_lock_(),
+    wait_gc_map_lock_(common::ObLatchIds::OB_TENANT_STORAGE_META_SERVICE_WAIT_GC_MAP_LOCK),
     wait_gc_tablet_arr_map_()
 {}
 

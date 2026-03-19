@@ -90,7 +90,7 @@ inline void LogThrottlingStat::stop_throttling()
 class LogWritingThrottle
 {
 public:
-  LogWritingThrottle() {reset();}
+  LogWritingThrottle():lock_(common::ObLatchIds::OB_LOG_WRITER_THROTTLE_LOCK) {reset();}
   ~LogWritingThrottle() {reset();}
   void reset();
   //invoked by gc thread

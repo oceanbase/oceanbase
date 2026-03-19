@@ -26,7 +26,7 @@ namespace transaction
 class ObTransCond
 {
 public:
-  ObTransCond() { reset(); }
+  ObTransCond() : monitor_(common::ObLatchIds::TRANS_RESULT_COND_WAIT) { reset(); }
   ~ObTransCond() {}
   void reset();
 public:

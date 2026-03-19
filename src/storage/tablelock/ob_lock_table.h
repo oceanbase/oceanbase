@@ -75,7 +75,8 @@ public:
     : is_inited_(false),
       parent_(nullptr),
       lock_mt_mgr_(nullptr),
-      lock_memtable_handle_() {}
+      lock_memtable_handle_(),
+      rw_lock_(common::ObLatchIds::OB_LOCK_TABLE_LOCK) {}
   ~ObLockTable() {}
   int init(storage::ObLS *parent);
   int prepare_for_safe_destroy();

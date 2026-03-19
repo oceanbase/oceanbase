@@ -37,6 +37,7 @@ public:
         threads_(nullptr),
         stack_size_(global_thread_stack_size),
         stop_(true),
+        lock_(common::ObLatchIds::OB_THREADS_LOCK),
         run_wrapper_(nullptr),
         numa_info_()
   {}

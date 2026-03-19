@@ -93,6 +93,7 @@ ObTenantInfo::ObTenantInfo()
     frozen_scn_(0),
     freeze_cnt_(0),
     last_halt_ts_(0),
+    lock_(common::ObLatchIds::OB_TENANT_INFO_SPIN_RW_LOCK),
     slow_freeze_(false),
     slow_freeze_timestamp_(0),
     slow_freeze_mt_retire_clock_(0),

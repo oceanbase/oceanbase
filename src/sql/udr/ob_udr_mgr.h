@@ -82,7 +82,7 @@ class ObUDRMgr
   friend class ObUDRRefreshTask;
 public:
   ObUDRMgr()
-  : mutex_(),
+  : mutex_(common::ObLatchIds::OB_U_D_R_REFRESH_TASK_MUTEX),
     inner_allocator_(NULL),
     inited_(false),
     destroyed_(false),

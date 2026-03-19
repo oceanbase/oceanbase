@@ -2728,7 +2728,8 @@ ObDeviceChannel::ObDeviceChannel()
     allocator_(nullptr),
     device_handle_(nullptr),
     used_io_depth_(0),
-    max_io_depth_(0)
+    max_io_depth_(0),
+    lock_for_sync_io_(common::ObLatchIds::OB_SYNC_IO_CHANNEL_SPIN_LOCK)
 {
 
 }

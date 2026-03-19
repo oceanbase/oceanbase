@@ -26,7 +26,7 @@ const int32_t INIT_RPC_MAX_VERSION = 74;
 class MockRootRpcProxy : public ObCommonRpcProxy
 {
 public:
-  MockRootRpcProxy() : latest_version_lock_(),
+  MockRootRpcProxy() : latest_version_lock_(common::ObLatchIds::OB_TEST_MOCK_RPC_PROXY_MUTEX),
                        rpc_read_count_(0)
   {}
   virtual ~MockRootRpcProxy() {}

@@ -57,7 +57,7 @@ class ObTxDataTable
 public:
   struct MemtableHandlesCache
   {
-    MemtableHandlesCache() { reuse(); }
+    MemtableHandlesCache() : lock_(common::ObLatchIds::OB_TX_DATA_TABLE_MEMTABLE_HANDLES_CACHE_LOCK) { reuse(); }
     ~MemtableHandlesCache() { memtable_handles_.reset(); }
     int64_t memtable_head_;
     int64_t memtable_tail_;

@@ -44,7 +44,7 @@ ObRemoteLogWriter::ObRemoteLogWriter() :
   ls_svr_(NULL),
   restore_service_(NULL),
   worker_(NULL),
-  task_cond_()
+  task_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::REMOTE_LOG_WRITER_COND_WAIT)
 {}
 
 ObRemoteLogWriter::~ObRemoteLogWriter()

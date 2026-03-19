@@ -25,7 +25,8 @@ class ObTableGroupFactory final
 {
 public:
   ObTableGroupFactory(common::ObIAllocator &alloc)
-      : alloc_(alloc)
+      : alloc_(alloc),
+        lock_(common::ObLatchIds::OB_TABLE_GROUP_FACTORY_LOCK)
   {}
   virtual ~ObTableGroupFactory() { free_all(); }
   TO_STRING_KV(K(used_list_.get_size()),
@@ -106,11 +107,28 @@ void ObTableGroupFactory<T>::free_all()
 
 class ObTableGroupOpFactory final
 {
+private:
+  class SpinLockWrapper
+  {
+  public:
+    SpinLockWrapper()
+      : lock_(common::ObLatchIds::OB_TABLE_GROUP_OP_FACTORY_LOCK)
+    {}
+    ~SpinLockWrapper() = default;
+    common::ObSpinLock &get_lock() { return lock_; }
+    const common::ObSpinLock &get_lock() const { return lock_; }
+  private:
+    common::ObSpinLock lock_;
+    DISALLOW_COPY_AND_ASSIGN(SpinLockWrapper);
+  };
 public:
   ObTableGroupOpFactory(common::ObIAllocator &allocator)
       : allocator_(allocator)
-  {}
-  virtual ~ObTableGroupOpFactory() { free_all(); }
+  {
+  }
+  virtual ~ObTableGroupOpFactory() {
+    free_all();
+  }
   TO_STRING_KV(K(used_list_),
                K(free_list_));
 public:
@@ -123,8 +141,15 @@ public:
   int64_t get_total_mem() const { return allocator_.total(); }
   void free_all();
 private:
+  common::ObSpinLock* get_lock(int index) {
+    return &locks_[index].get_lock();
+  }
+  const common::ObSpinLock* get_lock(int index) const {
+    return &locks_[index].get_lock();
+  }
+private:
   common::ObIAllocator &allocator_;
-  common::ObSpinLock locks_[ObTableGroupType::TYPE_MAX];
+  SpinLockWrapper locks_[ObTableGroupType::TYPE_MAX];
   common::ObDList<ObITableOp> used_list_[ObTableGroupType::TYPE_MAX];
   common::ObDList<ObITableOp> free_list_[ObTableGroupType::TYPE_MAX];
 };

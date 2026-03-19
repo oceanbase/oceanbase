@@ -166,7 +166,7 @@ ObTenantCheckpointSlogHandler::ObTenantCheckpointSlogHandler()
     replay_tablet_disk_addr_map_(),
     replay_wait_gc_tablet_set_(),
     replay_gc_tablet_set_(),
-    super_block_mutex_(),
+    super_block_mutex_(common::ObLatchIds::CHECKPOINT_SLOG_HANDLER_SUPER_BLOCK_LOCK),
     ckpt_info_()
 {
 }

@@ -28,10 +28,23 @@ class ObTenantMutilAllocator;
 
 class ObTenantMutilAllocatorMgr
 {
+private:
+  class RwLockWrapper
+  {
+  public:
+    RwLockWrapper()
+      : lock_(oceanbase::common::ObLatchIds::TENANT_MUTIL_ALLOCATOR_LOCK)
+    {}
+    ~RwLockWrapper() = default;
+    obsys::ObRWLock<> &get_lock() { return lock_; }
+  private:
+    obsys::ObRWLock<> lock_;
+    DISALLOW_COPY_AND_ASSIGN(RwLockWrapper);
+  };
 public:
   typedef ObTenantMutilAllocator TMA;
   ObTenantMutilAllocatorMgr()
-    : is_inited_(false), locks_(), tma_array_(),
+    : is_inited_(false), tma_array_(),
       clog_entry_alloc_(ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_LOG_TASK_BODY), OB_MALLOC_MIDDLE_BLOCK_SIZE, clog_body_blk_alloc_)
   {}
   ~ObTenantMutilAllocatorMgr()
@@ -66,8 +79,10 @@ private:
   static const uint64_t ARRAY_SIZE = PRESERVED_TENANT_COUNT + 1;
 
 private:
+  obsys::ObRWLock<>& get_lock(int64_t index);
+private:
   bool is_inited_;
-  obsys::ObRWLock<> locks_[ARRAY_SIZE];
+  RwLockWrapper locks_[ARRAY_SIZE];
   ObTenantMutilAllocator *tma_array_[ARRAY_SIZE];
   ObBlockAllocMgr clog_body_blk_alloc_;
   ObVSliceAlloc clog_entry_alloc_;

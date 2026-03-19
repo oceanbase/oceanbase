@@ -61,7 +61,7 @@ ObTenantSpace &ObTenantSpace::root()
 {
   static ObTenantSpace *root = nullptr;
   if (OB_UNLIKELY(nullptr == root)) {
-    static lib::ObMutex mutex;
+    static lib::ObMutex mutex(common::ObLatchIds::OB_TENANT_SPACE_ROOT_LOCK);
     lib::ObMutexGuard guard(mutex);
     if (nullptr == root) {
       static ObTenantSpace tmp(nullptr);
@@ -77,7 +77,7 @@ ObResourceOwner &ObResourceOwner::root()
 {
   static ObResourceOwner *root = nullptr;
   if (OB_UNLIKELY(nullptr == root)) {
-    static lib::ObMutex mutex;
+    static lib::ObMutex mutex(common::ObLatchIds::OB_RESOURCE_OWNER_ROOT_LOCK);
     lib::ObMutexGuard guard(mutex);
     if (nullptr == root) {
       static ObResourceOwner tmp(common::OB_SERVER_TENANT_ID);

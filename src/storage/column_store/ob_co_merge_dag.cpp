@@ -444,7 +444,7 @@ int ObCOMergeScheduleTask::process()
  */
 ObCOMergeBatchExeDag::ObCOMergeBatchExeDag()
  : ObCOMergeDag(ObDagType::DAG_TYPE_CO_MERGE_BATCH_EXECUTE),
-   exe_lock_(),
+   exe_lock_(common::ObLatchIds::OB_CO_MERGE_EXE_DAG_LOCK),
    start_cg_idx_(0),
    end_cg_idx_(0),
    retry_create_task_(false),
@@ -1127,7 +1127,7 @@ ObCOMergeDagNet::ObCOMergeDagNet()
     is_inited_(false),
     finish_added_(false),
     batch_reduced_(false),
-    ctx_lock_(),
+    ctx_lock_(common::ObLatchIds::OB_CO_MERGE_DAG_NET_CTX_LOCK),
     merge_batch_size_(DEFAULT_CG_MERGE_BATCH_SIZE),
     batch_dag_cnt_(0),
     merge_status_(COMergeStatus::NOT_INIT),

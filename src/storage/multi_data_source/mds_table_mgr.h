@@ -33,7 +33,7 @@ class MdsTableBase;
 class RemovedMdsTableRecorder// tablet leak will resulting mds table leak, we must prove it
 {
 public:
-  RemovedMdsTableRecorder() = default;
+  RemovedMdsTableRecorder() : lock_(common::ObLatchIds::OB_MDS_TABLE_MGR_LOCK) {}
   void record(MdsTableBase *mds_table);
   void del(MdsTableBase *mds_table);
   bool check_is_list_head(MdsTableBase *mds_table) {

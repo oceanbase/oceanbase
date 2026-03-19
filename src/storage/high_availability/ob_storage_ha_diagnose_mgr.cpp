@@ -140,7 +140,7 @@ ObStorageHADiagMgr::ObStorageHADiagMgr()
     allocator_(),
     task_list_(),
     service_(nullptr),
-    lock_()
+    lock_(common::ObLatchIds::OB_STORAGE_HA_DIAGNOSE_MGR_LOCK)
 {
 }
 

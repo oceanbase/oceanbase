@@ -27,6 +27,7 @@ ObTableLoadErrorRowHandler::ObTableLoadErrorRowHandler()
     max_error_row_count_(0),
     result_info_(nullptr),
     job_stat_(nullptr),
+    mutex_(common::ObLatchIds::OB_TABLE_LOAD_ERROR_ROW_HANDLER_MUTEX),
     error_row_count_(0),
     is_inited_(false)
 {

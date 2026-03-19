@@ -19740,7 +19740,8 @@ def_table_schema(
                          tx_table_read_cnt as TX_TABLE_READ_CNT,
                          outrow_lob_cnt as OUTROW_LOB_CNT,
                          ss_object_storage_reads as OBJECT_STORAGE_READS,
-                         parent_trace_id as PARENT_TRACE_ID
+                         parent_trace_id as PARENT_TRACE_ID,
+                         commit_time as COMMIT_TIME
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -20164,7 +20165,8 @@ def_table_schema(
     TX_TABLE_READ_CNT,
     OUTROW_LOB_CNT,
     OBJECT_STORAGE_READS,
-    PARENT_TRACE_ID
+    PARENT_TRACE_ID,
+    COMMIT_TIME
   FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -68081,7 +68083,8 @@ def_table_schema(
                          tx_table_read_cnt as TX_TABLE_READ_CNT,
                          outrow_lob_cnt as OUTROW_LOB_CNT,
                          ss_object_storage_reads as OBJECT_STORAGE_READS,
-                         parent_trace_id as PARENT_TRACE_ID
+                         parent_trace_id as PARENT_TRACE_ID,
+                         commit_time as COMMIT_TIME
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -68208,7 +68211,8 @@ CCL_MATCH_TIME,
 TX_TABLE_READ_CNT,
 OUTROW_LOB_CNT,
 OBJECT_STORAGE_READS,
-PARENT_TRACE_ID
+PARENT_TRACE_ID,
+COMMIT_TIME
 FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )

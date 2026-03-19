@@ -96,7 +96,10 @@ private:
 
 /***********************************************Single Row*************************************************************/
 struct A { ObSpinLock lock_; };
-struct B { MdsLock lock_; };
+struct B {
+  B() : lock_(common::ObLatchIds::OB_TEST_MDS_TABLE_LOCK) {}
+  MdsLock lock_;
+};
 
 #define GET_REAL_MDS_TABLE(mds_table) (*((MdsTableImpl<UnitTestMdsTable>*)(static_cast<guard::LightDataBlock<MdsTableImpl<UnitTestMdsTable>>*>((mds_table.p_mds_table_base_.ctrl_ptr_->p_data_block_))->data_)))
 
@@ -673,7 +676,7 @@ TEST_F(TestMdsTable, test_recalculate_flush_scn_op) {
 // }
 
 TEST_F(TestMdsTable, test_rw_lock_rrlock) {
-  MdsLock lock;
+  MdsLock lock(common::ObLatchIds::OB_TEST_MDS_TABLE_LOCK);
   std::thread t1([&lock]() {
     MdsRLockGuard lg(lock);
     ob_usleep(1_s);
@@ -687,7 +690,7 @@ TEST_F(TestMdsTable, test_rw_lock_rrlock) {
 }
 
 TEST_F(TestMdsTable, test_rw_lock_wrlock) {
-  MdsLock lock;
+  MdsLock lock(common::ObLatchIds::OB_TEST_MDS_TABLE_LOCK);
   std::thread t1([&lock]() {
     MdsWLockGuard lg(lock);
     ob_usleep(1_s);
@@ -702,7 +705,7 @@ TEST_F(TestMdsTable, test_rw_lock_wrlock) {
 }
 
 TEST_F(TestMdsTable, test_rw_lock_rwlock) {
-  MdsLock lock;
+  MdsLock lock(common::ObLatchIds::OB_TEST_MDS_TABLE_LOCK);
   std::thread t1([&lock]() {
     ob_usleep(200_ms);
     MdsWLockGuard lg(lock);
@@ -717,7 +720,7 @@ TEST_F(TestMdsTable, test_rw_lock_rwlock) {
 }
 
 TEST_F(TestMdsTable, test_rw_lock_wwlock) {
-  MdsLock lock;
+  MdsLock lock(common::ObLatchIds::OB_TEST_MDS_TABLE_LOCK);
   std::thread t1([&lock]() {
     MdsWLockGuard lg(lock);
     ob_usleep(1_s);

@@ -37,7 +37,7 @@ class ObAllTenantInfoCache
 {
 public:
   ObAllTenantInfoCache()
-     : lock_(),
+     : lock_(common::ObLatchIds::OB_ALL_TENANT_INFO_CACHE_LOCK),
        tenant_info_(),
        last_sql_update_time_(OB_INVALID_TIMESTAMP),
        dump_tenant_info_interval_(DUMP_TENANT_INFO_INTERVAL),
@@ -92,7 +92,7 @@ class ObAllServiceNamesCache
 {
 public:
   ObAllServiceNamesCache()
-    : lock_(),
+    : lock_(common::ObLatchIds::OB_ALL_SERVICE_NAMES_CACHE_LOCK),
       tenant_id_(OB_INVALID_TENANT_ID),
       epoch_(0),
       all_service_names_(),

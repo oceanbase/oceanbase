@@ -45,7 +45,7 @@ public:
     ObRaQueue::destroy();
   }
 
-  int push(void* p, int64_t& leaf_idx, int64_t root_idx, int64_t& seq, int64_t leaf_queue_size);
+  int push(void* p, int64_t& leaf_idx, int64_t root_idx, int64_t& seq, int64_t leaf_queue_size, int64_t &assigned_seq_id);
 
 private:
   void wait_ref_clear(int64_t seq) {
@@ -236,7 +236,7 @@ public:
     return ret;
   }
 
-  int push(void* p, int64_t& seq);
+  int push(void* p, int64_t& seq, int64_t& assigned_seq_id);
   ObLeafQueue* pop();
   void* get(uint64_t seq, DlRef* ref);
   void revert(DlRef* ref);

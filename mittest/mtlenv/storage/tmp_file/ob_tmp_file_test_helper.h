@@ -36,7 +36,7 @@ void print_hex_data(const char *buffer, int64_t length)
 
 void dump_hex_data(const char *buffer, int length, const std::string &filename)
 {
-  static SpinRWLock lock_;
+  static SpinRWLock lock_(common::ObLatchIds::TEST_LATCH_LOCK);
   SpinWLockGuard guard(lock_);
   std::ifstream ifile(filename);
   if (ifile) {
@@ -71,7 +71,7 @@ bool compare_and_print_hex_data(const char *lhs, const char *rhs,
                                 std::string &filename)
 {
   bool is_equal = false;
-  static SpinRWLock lock_;
+  static SpinRWLock lock_(common::ObLatchIds::TEST_LATCH_LOCK);
   SpinWLockGuard guard(lock_);
   static int64_t idx = 0;
   filename.clear();

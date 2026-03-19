@@ -60,7 +60,7 @@ class ObLSDDLLogHandler : public logservice::ObIReplaySubHandler,
                           public logservice::ObICheckpointSubHandler
 {
 public:
-  ObLSDDLLogHandler() : is_inited_(false), is_online_(false), ls_(nullptr), last_rec_scn_() {}
+  ObLSDDLLogHandler() : is_inited_(false), is_online_(false), ls_(nullptr), online_lock_(common::ObLatchIds::OB_LS_DDL_LOG_HANDLER_LOCK), ddl_log_replayer_(), last_rec_scn_(), active_ddl_kv_mgr_() {}
   ~ObLSDDLLogHandler() { reset(); }
 
 public:

@@ -51,7 +51,7 @@ ObDASTCB::ObDASTCB()
     delta_read_row_cnt_(0),
     mem_profile_key_(),
     das_execute_remote_info_(),
-    tcb_lock_()
+    tcb_lock_(common::ObLatchIds::OB_DASTCB_LOCK)
 {
 }
 

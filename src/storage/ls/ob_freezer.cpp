@@ -94,7 +94,7 @@ ObFreezerStat::ObFreezerStat()
     freeze_snapshot_version_(),
     diagnose_info_(),
     memtables_info_(),
-    lock_()
+    lock_(common::ObLatchIds::OB_FREEZER_STAT_LOCK)
 {}
 
 ObFreezerStat::~ObFreezerStat()
@@ -373,7 +373,7 @@ ObFreezer::ObFreezer()
     high_priority_freeze_cnt_(0),
     low_priority_freeze_cnt_(0),
     pend_replay_cnt_(0),
-    byte_lock_(),
+    byte_lock_(common::ObLatchIds::OB_FREEZER_LOCK),
     need_resubmit_log_(false),
     enable_(false),
     is_inited_(false),
@@ -393,7 +393,7 @@ ObFreezer::ObFreezer(ObLS *ls)
     high_priority_freeze_cnt_(0),
     low_priority_freeze_cnt_(0),
     pend_replay_cnt_(0),
-    byte_lock_(),
+    byte_lock_(common::ObLatchIds::OB_FREEZER_LOCK),
     need_resubmit_log_(false),
     enable_(false),
     is_inited_(false),

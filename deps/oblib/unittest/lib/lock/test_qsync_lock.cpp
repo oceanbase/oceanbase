@@ -24,7 +24,7 @@ using namespace common;
 TEST(TestQSyncLock, basic)
 {
   lib::ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "TestQSyncLock");
-  ObQSyncLock lock;
+  ObQSyncLock lock(common::ObLatchIds::OB_TEST_QSYNC_LOCK);
   lock.init(mem_attr);
   for (int i=0;i<100;i++) {
     ObQSyncLockReadGuard read_guard(lock);
@@ -35,7 +35,7 @@ TEST(TestQSyncLock, basic)
 TEST(TestQSyncLock, concurrent)
 {
   lib::ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "TestQSyncLock");
-  ObQSyncLock lock;
+  ObQSyncLock lock(common::ObLatchIds::OB_TEST_QSYNC_LOCK);
   lock.init(mem_attr);
   std::vector<std::thread> ths;
   bool g_stop = false;

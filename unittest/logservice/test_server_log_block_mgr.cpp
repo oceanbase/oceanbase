@@ -36,7 +36,7 @@ public:
   static void SetUpTestCase();
 
   static void TearDownTestCase();
-  TestServerLogBlockMgr()
+  TestServerLogBlockMgr() : lock_(common::ObLatchIds::OB_SERVER_LOG_BLOCK_MGR_RWLOCK)
   {}
   virtual ~TestServerLogBlockMgr()
   {}

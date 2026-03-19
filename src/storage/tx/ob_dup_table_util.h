@@ -123,7 +123,10 @@ class ObDupTableLSHandler : public logservice::ObIReplaySubHandler,
 {
 public:
   ObDupTableLSHandler()
-      : ls_state_helper_("DupTableLSHandler"), lease_mgr_ptr_(nullptr), ts_sync_mgr_ptr_(nullptr),
+      : init_rw_lock_(common::ObLatchIds::OB_DUP_TABLE_UTIL_INIT_RW_LOCK),
+        ls_state_helper_("DupTableLSHandler"),
+        committing_dup_trx_lock_(common::ObLatchIds::OB_DUP_TABLE_COMMITTING_DUP_TRX_LOCK),
+        lease_mgr_ptr_(nullptr), ts_sync_mgr_ptr_(nullptr),
         tablets_mgr_ptr_(nullptr), log_operator_(nullptr)
   {
     reset();

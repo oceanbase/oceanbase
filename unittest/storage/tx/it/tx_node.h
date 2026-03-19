@@ -61,7 +61,7 @@ public:
   QueueConsumer(ObString name,
                 ObLinkQueue *q,
                 std::function<int(T*)> func):
-    name_(name), queue_(q), func_(func), cond_() {}
+    name_(name), queue_(q), func_(func), cond_(ObWaitEventIds::UNITEST_COND_WAIT) {}
   virtual int start() {
     int ret = OB_SUCCESS;
     ObThreadPool::set_run_wrapper(MTL_CTX());
@@ -331,7 +331,7 @@ public:
   struct MsgPack : ObLink {
     MsgPack(const ObAddr &addr, ObString &body, bool is_sync_msg = false)
       : recv_time_(ObTimeUtility::current_time()), sender_(addr),
-        body_(body), is_sync_msg_(is_sync_msg), resp_ready_(false), resp_(), cond_() {}
+        body_(body), is_sync_msg_(is_sync_msg), resp_ready_(false), resp_(), cond_(ObWaitEventIds::UNITEST_COND_WAIT) {}
     int64_t recv_time_;
     ObAddr sender_;
     ObString body_;

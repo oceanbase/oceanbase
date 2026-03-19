@@ -35,16 +35,17 @@ enum PacketPriority
 
 class ObCond
 {
-  static const int64_t SPIN_WAIT_NUM = 0;
   static const int64_t BUSY_INTERVAL = 1000;
 public:
-  explicit ObCond(const int64_t spin_wait_num = SPIN_WAIT_NUM);
+  static const int64_t SPIN_WAIT_NUM = 0;
+  explicit ObCond(const int64_t spin_wait_num, const int64_t event_no);
   ~ObCond();
 public:
   void signal();
   int timedwait(const int64_t time_us);
   int wait();
 private:
+  int64_t event_no_;
   const int64_t spin_wait_num_;
   volatile bool bcond_;
   int64_t last_waked_time_;
@@ -74,7 +75,7 @@ class S2MQueueThread
                index(0),
                run_flag(true),
                stop_flag(false),
-               queue_cond(),
+               queue_cond(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::S2M_QUEUE_THREAD_COND_WAIT),
                using_flag(false),
                last_active_time(0),
                spec_task_queue(),

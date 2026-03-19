@@ -40,7 +40,7 @@ int ObTabletLSMap::init()
     LOG_WARN("Fail to allocate ObTabletLSCache memory, ", KR(ret), LITERAL_K(BUCKETS_CNT));
   } else {
     for (int64_t i = 0 ; i < LOCK_SLOT_CNT && OB_SUCC(ret); ++i) {
-      new(buckets_lock_ + i) ObQSyncLock();
+      new(buckets_lock_ + i) ObQSyncLock(common::ObLatchIds::OB_TABLET_LS_MAP_BUCKETS_LOCK);
       if (OB_FAIL((buckets_lock_ + i)->init(mem_attr))) {
         LOG_WARN("buckets_lock_ init fail", KR(ret), K(OB_SERVER_TENANT_ID));
         for (int64_t j = 0 ; j <= i; ++j) {

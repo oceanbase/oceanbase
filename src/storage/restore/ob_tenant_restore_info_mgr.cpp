@@ -26,6 +26,7 @@ namespace storage
 
 ObTenantRestoreInfoMgr::ObTenantRestoreInfoMgr()
   : is_inited_(false),
+    mutex_(common::ObLatchIds::OB_TENANT_RESTORE_INFO_MGR_LOCK),
     refresh_info_task_(*this),
     is_refreshed_(false),
     tenant_id_(OB_INVALID_TENANT_ID),

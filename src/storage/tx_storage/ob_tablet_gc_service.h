@@ -51,6 +51,7 @@ public:
       ls_(NULL),
       tablet_persist_trigger_(TABLET_PERSIST | TABLET_GC),
       update_enabled_(true),
+      gc_rwlock_(common::ObLatchIds::OB_TABLET_GC_SERVICE_RWLOCK),
       is_inited_(false)
   {}
   ~ObTabletGCHandler() {

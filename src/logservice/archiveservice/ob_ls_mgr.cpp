@@ -174,7 +174,7 @@ ObArchiveLSMgr::ObArchiveLSMgr() :
   round_mgr_(NULL),
   log_service_(NULL),
   persist_mgr_(NULL),
-  cond_()
+  cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::ARCHIVE_LS_MGR_COND_WAIT)
 {}
 
 ObArchiveLSMgr::~ObArchiveLSMgr()

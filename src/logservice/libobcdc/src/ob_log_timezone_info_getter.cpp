@@ -86,7 +86,7 @@ ObCDCTimeZoneInfoGetter& ObCDCTimeZoneInfoGetter::get_instance()
 ObCDCTimeZoneInfoGetter::ObCDCTimeZoneInfoGetter()
   : inited_(false),
     tz_tid_(0),
-    tz_cond_(),
+    tz_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT),
     stop_flag_(true),
     mysql_proxy_(NULL),
     systable_helper_(NULL),

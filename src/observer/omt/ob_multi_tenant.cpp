@@ -425,7 +425,7 @@ int ObMultiTenant::init(ObAddr myaddr,
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObMultiTenant has been inited", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(OB_TENANT_LOCK_BUCKET_NUM))) {
+  } else if (OB_FAIL(bucket_lock_.init(OB_TENANT_LOCK_BUCKET_NUM, common::ObLatchIds::MULTI_TENANT_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else {
     myaddr_ = myaddr;

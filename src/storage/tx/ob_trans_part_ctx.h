@@ -176,6 +176,7 @@ public:
         has_extra_log_cb_group_(false),
         reserve_log_cb_group_(true/*is_reserve*/),
         extra_cb_group_list_(),
+        log_cb_lock_(common::ObLatchIds::OB_TRANS_PART_CTX_LOG_CB_LOCK),
         role_state_(TxCtxRoleState::FOLLOWER),
         coord_prepare_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE,
                                 ModulePageAllocator(reserve_allocator_, "PREPARE_INFO")),

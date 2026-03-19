@@ -50,7 +50,7 @@ int ObTabletHandleIndexMap::TabletHandleFootprint::assign(const TabletHandleFoot
   return ret;
 }
 
-ObTabletHandleIndexMap::ObTabletHandleIndexMap() : max_index_(0), is_inited_(false)
+ObTabletHandleIndexMap::ObTabletHandleIndexMap() : rw_lock_(common::ObLatchIds::OB_TABLET_HANDLE_INDEX_MAP_RW_LOCK), max_index_(0), is_inited_(false)
 {
 }
 

@@ -104,7 +104,7 @@ public:
                                                      storage::ObLS *ls);
 
 public:
-  ObTxRetainCtxMgr() : retain_ctx_list_() { reset(); }
+  ObTxRetainCtxMgr() : retain_ctx_lock_(common::ObLatchIds::OB_TX_RETAIN_CTX_MGR_LOCK), retain_ctx_list_() { reset(); }
   void reset();
 
   static void *alloc_object(const int64_t size);

@@ -32,7 +32,7 @@ public:
   typedef ObLockT<ObUtilMutex> Lock;
   typedef ObTryLockT<ObUtilMutex> TryLock;
 
-  ObUtilMutex();
+  ObUtilMutex(long long latch_id);
   ~ObUtilMutex();
 
   void lock() const;
@@ -53,6 +53,7 @@ private:
   void unlock(LockState&) const;
   void lock(LockState&) const;
   mutable pthread_mutex_t _mutex;
+  long long latch_id_;
 
   friend class Cond;
 };

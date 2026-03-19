@@ -14,6 +14,7 @@
 #define OB_MONITOR_H
 #include "lib/lock/ob_lock.h"
 #include "lib/lock/cond.h"
+#include "lib/lock/mutex.h"
 
 
 namespace obutil
@@ -23,6 +24,7 @@ namespace obutil
  * wait (block) for a certain condition to become false. Monitors also have a mechanism for signaling other threads
  * that their condition has been met.
  */
+class ObUtilMutex;
 template <class T>
 class ObMonitor
 {
@@ -31,7 +33,7 @@ public:
   typedef ObLockT<ObMonitor<T> > Lock;
   typedef ObTryLockT<ObMonitor<T> > TryLock;
 
-  ObMonitor();
+  ObMonitor(int64_t latch_id);
   ~ObMonitor();
 
   void lock() const;
@@ -55,7 +57,7 @@ private:
 };
 
 template <class T>
-ObMonitor<T>::ObMonitor() :
+ObMonitor<T>::ObMonitor(int64_t latch_id) :
   nnotify_(0)
 {
 }
@@ -162,5 +164,116 @@ ObMonitor<T>::notify_impl(int nnotify) const
     }
   }
 }
+
+template <>
+class ObMonitor<obutil::Mutex>
+{
+public:
+
+  typedef ObLockT<ObMonitor<obutil::Mutex> > Lock;
+  typedef ObTryLockT<ObMonitor<obutil::Mutex> > TryLock;
+
+  ObMonitor(int64_t latch_id) :
+    mutex_(latch_id), nnotify_(0)
+  {
+  }
+
+  ~ObMonitor() {}
+
+  void lock() const
+  {
+    mutex_.lock();
+    if(mutex_.will_unlock()) {
+      nnotify_ = 0;
+    }
+  }
+  void unlock() const
+  {
+    if(mutex_.will_unlock()) {
+      notify_impl(nnotify_);
+    }
+    mutex_.unlock();
+  }
+  bool trylock() const
+  {
+    bool result = mutex_.trylock();
+    if(result && mutex_.will_unlock()) {
+      nnotify_ = 0;
+    }
+    return result;
+  }
+
+  bool wait() const
+  {
+    notify_impl(nnotify_);
+  #ifdef _NO_EXCEPTION
+    const bool bRet = cond_.wait_impl(mutex_);
+    nnotify_ = 0;
+    return bRet;
+  #else
+    try {
+      cond_.wait_impl(mutex_);
+    } catch(...) {
+      nnotify_ = 0;
+      throw;
+    }
+
+    nnotify_ = 0;
+    return true;
+  #endif
+  }
+  bool timed_wait(const ObSysTime& timeout) const
+  {
+    notify_impl(nnotify_);
+  #ifdef _NO_EXCEPTION
+    const bool rc = cond_.timed_wait_impl(mutex_, timeout);
+    nnotify_ = 0;
+    return rc;
+  #else
+    try {
+      cond_.timed_wait_impl(mutex_, timeout);
+    } catch(...) {
+      nnotify_ = 0;
+      throw;
+    }
+    nnotify_ = 0;
+    return true;
+  #endif
+  }
+  void notify()
+  {
+    if(nnotify_ != -1) {
+      ++nnotify_;
+    }
+  }
+  void notify_all()
+  {
+    nnotify_ = -1;
+  }
+
+private:
+
+  ObMonitor(const ObMonitor&);
+  ObMonitor& operator=(const ObMonitor&);
+
+  void notify_impl(int nnotify) const
+  {
+    if (nnotify == 0) {
+    } else if (nnotify == -1) {
+      cond_.broadcast();
+    } else {
+      while(nnotify > 0) {
+        cond_.signal();
+        --nnotify;
+      }
+    }
+  }
+
+  mutable Cond cond_;
+  obutil::Mutex mutex_;
+  mutable int nnotify_;
+};
+
+
 }//end namespace
 #endif

@@ -24,7 +24,7 @@ namespace storage
 
 /******************ObStorageHAResultMgr*********************/
 ObStorageHAResultMgr::ObStorageHAResultMgr()
-  : lock_(),
+  : lock_(common::ObLatchIds::OB_STORAGE_H_A_RESULT_MGR_LOCK),
     result_(OB_SUCCESS),
     retry_count_(0),
     allow_retry_(true),
@@ -679,7 +679,7 @@ int ObStorageHADagUtils::inc_config_version_with_log_service(
 /******************ObHATabletGroupCtx*********************/
 ObHATabletGroupCtx::ObHATabletGroupCtx(const TabletGroupCtxType type)
   : is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::OB_STORAGE_HA_DAG_TABLET_GROUP_CTX_LOCK),
     tablet_id_array_(),
     index_(0),
     type_(type)
@@ -771,7 +771,7 @@ void ObHATabletGroupCtx::inner_reuse()
 /******************ObHATabletGroupCtx*********************/
 ObHATabletGroupMgr::ObHATabletGroupMgr()
   : is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::OB_STORAGE_HA_DAG_TABLET_GROUP_ARRAY_LOCK),
     allocator_("HATGMgr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     tablet_group_ctx_array_(),
     index_(0)

@@ -31,7 +31,8 @@ ObSqlStatManager::ObSqlStatManager(int64_t tenant_id)
       memory_evict_low_percentage_(MEMORY_EVICT_LOW_DEFAULT),
       allocator_(),
       alloc_handle_(&allocator_, SQL_STAT_MAX_COUNT),
-      sql_stat_infos_(alloc_handle_)
+      sql_stat_infos_(alloc_handle_),
+      mutex_(common::ObLatchIds::SQL_STAT_MGR_LOCK)
 {}
 
 ObSqlStatManager::~ObSqlStatManager()

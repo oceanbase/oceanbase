@@ -88,7 +88,8 @@ struct ObBatchExecInfo
 struct ObBatchExecCollector
 {
   ObBatchExecCollector()
-    : remain_task_cnt_(0),
+    : lock_(common::ObLatchIds::OB_BATCH_EXEC_COLLECTOR_LOCK),
+      remain_task_cnt_(0),
       info_(),
       merge_history_()
   {}

@@ -41,7 +41,7 @@ int ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(ObDataStoreD
 
 ObSSTablePrivateObjectCleaner::ObSSTablePrivateObjectCleaner()
     : new_macro_block_ids_(),
-      lock_(),
+      lock_(common::ObLatchIds::OB_SSTABLE_PRIVATE_OBJECT_CLEANER_LOCK),
       is_ss_mode_(false),
       task_succeed_(false)
 {

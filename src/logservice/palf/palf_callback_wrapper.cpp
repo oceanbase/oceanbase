@@ -15,7 +15,7 @@ namespace oceanbase
 {
 namespace palf
 {
-PalfFSCbWrapper::PalfFSCbWrapper() : list_() {}
+PalfFSCbWrapper::PalfFSCbWrapper() : list_(), lock_(common::ObLatchIds::PALF_FS_CB_WRAPPER_SPIN_LOCK) {}
 PalfFSCbWrapper::~PalfFSCbWrapper() {}
 
 int PalfFSCbWrapper::add_cb_impl(PalfFSCbNode *cb_impl)
@@ -57,7 +57,8 @@ int PalfFSCbWrapper::update_end_lsn(int64_t id, const LSN &end_lsn, const share:
   return ret;
 }
 
-PalfRoleChangeCbWrapper::PalfRoleChangeCbWrapper() : list_() {}
+PalfRoleChangeCbWrapper::PalfRoleChangeCbWrapper() : list_(),
+  lock_(common::ObLatchIds::OB_PALF_ROLE_CHANGE_CB_WRAPPER_LOCK) {}
 PalfRoleChangeCbWrapper::~PalfRoleChangeCbWrapper() {}
 
 int PalfRoleChangeCbWrapper::add_cb_impl(PalfRoleChangeCbNode *cb_impl)
@@ -121,7 +122,8 @@ int PalfRoleChangeCbWrapper::on_need_change_leader(const int64_t id, const ObAdd
   return ret;
 }
 
-PalfRebuildCbWrapper::PalfRebuildCbWrapper() : list_() {}
+PalfRebuildCbWrapper::PalfRebuildCbWrapper() : list_(),
+  lock_(common::ObLatchIds::OB_PALF_REBUILD_CB_WRAPPER_LOCK) {}
 PalfRebuildCbWrapper::~PalfRebuildCbWrapper() {}
 
 int PalfRebuildCbWrapper::add_cb_impl(PalfRebuildCbNode *cb_impl)
@@ -167,15 +169,15 @@ int PalfRebuildCbWrapper::on_rebuild(const int64_t id, const LSN &lsn)
 
 
 LogPlugins::LogPlugins()
-  : loc_lock_(),
+  : loc_lock_(common::ObLatchIds::OB_PALF_CALLBACK_WRAPPER_LOC_LOCK),
     loc_cb_(NULL),
-    palf_monitor_lock_(),
+    palf_monitor_lock_(common::ObLatchIds::OB_PALF_CALLBACK_WRAPPER_PALF_MONITOR_LOCK),
     palf_monitor_(NULL),
-    palflite_monitor_lock_(),
+    palflite_monitor_lock_(common::ObLatchIds::OB_PALF_CALLBACK_WRAPPER_PALFLITE_MONITOR_LOCK),
     palflite_monitor_(NULL),
-    locality_cb_lock_(),
+    locality_cb_lock_(common::ObLatchIds::OB_PALF_CALLBACK_WRAPPER_LOCALITY_CB_LOCK),
     locality_cb_(NULL),
-    reconfig_checker_cb_lock_(),
+    reconfig_checker_cb_lock_(common::ObLatchIds::OB_PALF_CALLBACK_WRAPPER_RECONFIG_CHECKER_CB_LOCK),
     reconfig_checker_cb_(NULL) { }
 
 LogPlugins::~LogPlugins()

@@ -138,7 +138,8 @@ public:
   };
 public:
   ObTableRelatedSysVars()
-      : is_inited_(false)
+      : is_inited_(false),
+        lock_(common::ObLatchIds::OB_TABLE_SYSTEM_VARIABLE_LOCK)
   {}
   virtual ~ObTableRelatedSysVars() {}
   int update_sys_vars(bool only_update_dynamic_vars);

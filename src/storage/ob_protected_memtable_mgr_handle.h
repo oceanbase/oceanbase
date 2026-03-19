@@ -100,10 +100,10 @@ class ObProtectedMemtableMgrHandle
 public:
   ObProtectedMemtableMgrHandle()
     : memtable_mgr_handle_(),
-      memtable_mgr_handle_lock_() {}
+      memtable_mgr_handle_lock_(common::ObLatchIds::OB_PROTECTED_MEMTABLE_MGR_HANDLE_LOCK) {}
   ObProtectedMemtableMgrHandle(const ObMemtableMgrHandle &memtable_mgr_handle)
     : memtable_mgr_handle_(memtable_mgr_handle),
-      memtable_mgr_handle_lock_() {}
+      memtable_mgr_handle_lock_(common::ObLatchIds::OB_PROTECTED_MEMTABLE_MGR_HANDLE_LOCK) {}
   ObProtectedMemtableMgrHandle& operator=(const ObProtectedMemtableMgrHandle &r)
   {
     SpinWLockGuard guard(memtable_mgr_handle_lock_);

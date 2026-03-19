@@ -379,7 +379,8 @@ ObSSTableMergeHistory::ObSSTableMergeHistory(const bool need_free_param)
     static_info_(),
     running_info_(),
     block_info_(),
-    diagnose_info_()
+    diagnose_info_(),
+    lock_(common::ObLatchIds::OB_MERGE_BLOCK_INFO_MUTEX)
 {}
 
 void ObSSTableMergeHistory::reset()

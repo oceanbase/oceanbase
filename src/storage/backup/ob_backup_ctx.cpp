@@ -1227,7 +1227,7 @@ ObLSBackupCtx::ObLSBackupCtx()
       bandwidth_throttle_(NULL),
       mview_dep_tablet_map_(),
       wait_reuse_across_sstable_time_(0),
-      mv_mutex_(),
+      mv_mutex_(common::ObLatchIds::OB_BACKUP_LS_BACKUP_MV_MUTEX),
       ls_clog_checkpoint_scn_(share::SCN::min_scn()),
       is_newly_created_ls_(true)
 {}

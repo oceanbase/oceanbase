@@ -26,7 +26,7 @@ namespace palf
 class FixedSlidingWindowSlot
 {
 public:
-  FixedSlidingWindowSlot(): ref_(0) {}
+  FixedSlidingWindowSlot(): ref_(0), slot_lock_(common::ObLatchIds::OB_FIXED_SLIDING_WINDOW_SLOT_LOCK) {}
   virtual ~FixedSlidingWindowSlot() {}
 public:
   virtual bool can_be_slid() = 0;
@@ -75,6 +75,7 @@ class FixedSlidingWindow
 {
 public:
   FixedSlidingWindow():
+    lock_(common::ObLatchIds::OB_FIXED_SLIDING_WINDOW_LOCK),
     is_inited_(false),
     begin_sn_(common::OB_INVALID_LOG_ID),
     end_sn_(common::OB_INVALID_LOG_ID),

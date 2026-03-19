@@ -870,7 +870,7 @@ public:
                K(readable_ckpt_base_scn_is_accurate_));
 
 public:
-  ObDupTableLSCheckpoint() { reset(); }
+  ObDupTableLSCheckpoint() : ckpt_rw_lock_(common::ObLatchIds::OB_DUP_TABLE_CKPT_RW_LOCK) { reset(); }
   void default_init(const share::ObLSID &ls_id) { dup_ls_meta_.ls_id_ = ls_id; }
 
   bool is_useful_meta() const;
@@ -995,7 +995,8 @@ public:
                         ObDupTableLSLeaseMgr *lease_mgr,
                         ObLSDupTabletsMgr *tablets_mgr,
                         DupTableInterfaceStat *interface_stat)
-      : ls_id_(ls_id), block_buf_(nullptr), log_handler_(log_handler), dup_ls_ckpt_(dup_ls_ckpt),
+      : log_lock_(common::ObLatchIds::OB_DUP_TABLE_LOG_LOCK),
+        ls_id_(ls_id), block_buf_(nullptr), log_handler_(log_handler), dup_ls_ckpt_(dup_ls_ckpt),
         lease_mgr_ptr_(lease_mgr), tablet_mgr_ptr_(tablets_mgr), interface_stat_ptr_(interface_stat)
   {
     reset();

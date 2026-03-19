@@ -192,7 +192,7 @@ int ObCachedCatalogSchemaMgr::get_lake_table_metadata(ObIAllocator &allocator,
   const int64_t bucket_id = cache_key.hash() % LOAD_CACHE_LOCK_CNT;
   int64_t total_wait_secs = 0;
 
-  while (OB_FAIL(fill_cache_locks_[bucket_id].lock(LOCK_TIMEOUT)) && OB_TIMEOUT == ret
+  while (OB_FAIL(get_lock(bucket_id)->lock(LOCK_TIMEOUT)) && OB_TIMEOUT == ret
          && OB_SUCC(THIS_WORKER.check_status())) {
     total_wait_secs += (LOCK_TIMEOUT / 1000000);
     LOG_WARN("ObCachedCatalogSchemaMgr cache wait", K(total_wait_secs));
@@ -278,8 +278,8 @@ int ObCachedCatalogSchemaMgr::get_lake_table_metadata(ObIAllocator &allocator,
     }
   }
 
-  if (fill_cache_locks_[bucket_id].self_locked()) {
-    fill_cache_locks_[bucket_id].unlock();
+  if (get_lock(bucket_id)->self_locked()) {
+    get_lock(bucket_id)->unlock();
   }
 #undef ASSIGN_VALUE_FROM_CACHE
   return ret;

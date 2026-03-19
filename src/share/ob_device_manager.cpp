@@ -236,7 +236,7 @@ int ObClusterStateMgr::is_supported_azblob_version() const
 }
 
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
-ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), is_init_(false)
+ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), lock_(common::ObLatchIds::OB_DEVICE_MANAGER_LOCK), is_init_(false)
 {
 }
 

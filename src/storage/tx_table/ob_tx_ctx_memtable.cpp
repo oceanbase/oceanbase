@@ -31,7 +31,7 @@ ObTxCtxMemtable::ObTxCtxMemtable()
     is_frozen_(false),
     ls_ctx_mgr_guard_(),
     freezer_(nullptr),
-    flush_lock_(),
+    flush_lock_(common::ObLatchIds::OB_TX_CTX_MEMTABLE_FLUSH_LOCK),
     max_end_scn_(share::SCN::min_scn())
 {
 }

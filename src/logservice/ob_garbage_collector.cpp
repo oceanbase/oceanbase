@@ -369,6 +369,7 @@ ObGCHandler::ObGCHandler() : is_inited_(false),
                              block_tx_ts_(OB_INVALID_TIMESTAMP),
                              block_log_debug_time_(OB_INVALID_TIMESTAMP),
                              log_sync_stopped_(false),
+                             rec_scn_lock_(common::ObLatchIds::OB_GC_HANDLER_SPIN_LOCK),
                              last_print_dba_log_ts_(OB_INVALID_TIMESTAMP)
 {
   rec_scn_.set_max();

@@ -21,7 +21,7 @@ LargeBufferPool::LargeBufferPool() :
   total_limit_(0),
   label_(),
   array_(),
-  rwlock_()
+  rwlock_(common::ObLatchIds::OB_LARGE_BUFFER_POOL_RWLOCK)
 {
   array_.set_attr(SET_USE_500("LargeBufferPool"));
 }
@@ -158,10 +158,11 @@ LargeBufferPool::BufferNode::BufferNode(const char *label) :
   issued_(false),
   last_used_timestamp_(OB_INVALID_TIMESTAMP),
   buffer_(label),
-  rwlock_()
+  rwlock_(common::ObLatchIds::OB_LARGE_BUFFER_POOL_BUFFER_NODE_RWLOCK)
 {}
 
 LargeBufferPool::BufferNode::BufferNode(const BufferNode &other)
+  : rwlock_(common::ObLatchIds::OB_LARGE_BUFFER_POOL_BUFFER_NODE_RWLOCK)
 {
   assign(other);
 }

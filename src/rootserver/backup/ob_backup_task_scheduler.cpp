@@ -1188,6 +1188,7 @@ int ObBackupTaskSchedulerQueue::get_schedule_tasks(
 ObBackupTaskScheduler::ObBackupTaskScheduler()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
+    scheduler_mtx_(common::ObLatchIds::OB_BACKUP_TASK_SCHEDULER_MUTEX),
     queue_(),
     rpc_proxy_(nullptr),
     sql_proxy_(nullptr),

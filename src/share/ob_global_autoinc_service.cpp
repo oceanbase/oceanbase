@@ -123,9 +123,6 @@ int ObGlobalAutoIncService::init(const ObAddr &addr, ObMySQLProxy *mysql_proxy)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("gais request rpc is null", K(ret), KP(gais_request_rpc_));
   } else {
-    for (int64_t i = 0; i < MUTEX_NUM; ++i) {
-      op_mutex_[i].set_latch_id(common::ObLatchIds::AUTO_INCREMENT_GAIS_LOCK);
-    }
     self_ = addr;
     is_inited_ = true;
   }
@@ -170,7 +167,7 @@ int ObGlobalAutoIncService::handle_next_autoinc_request(
   const AutoincKey &key = request.autoinc_key_;
   const uint64_t desired_count = request.desired_cnt_;
   bool is_leader = false;
-  lib::ObMutex &mutex = op_mutex_[key.hash() % MUTEX_NUM];
+  lib::ObMutex &mutex = op_mutex_[key.hash() % MUTEX_NUM].mutex_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("global service is not init", K(ret));
@@ -264,7 +261,7 @@ int ObGlobalAutoIncService::handle_curr_autoinc_request(const ObGAISAutoIncKeyAr
   uint64_t sequence_value = 0;
   uint64_t sync_value = 0;
   bool is_leader = false;
-  lib::ObMutex &mutex = op_mutex_[key.hash() % MUTEX_NUM];
+  lib::ObMutex &mutex = op_mutex_[key.hash() % MUTEX_NUM].mutex_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("global service is not init", K(ret));
@@ -317,7 +314,7 @@ int ObGlobalAutoIncService::handle_push_autoinc_request(
   int ret = OB_SUCCESS;
   const AutoincKey &key = request.autoinc_key_;
   bool is_leader = false;
-  lib::ObMutex &mutex = op_mutex_[key.hash() % MUTEX_NUM];
+  lib::ObMutex &mutex = op_mutex_[key.hash() % MUTEX_NUM].mutex_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("global service is not init", K(ret));
@@ -384,7 +381,7 @@ int ObGlobalAutoIncService::handle_clear_autoinc_cache_request(const ObGAISAutoI
   int ret = OB_SUCCESS;
   const AutoincKey &key = request.autoinc_key_;
   bool is_leader = false;
-  lib::ObMutex &mutex = op_mutex_[key.hash() % MUTEX_NUM];
+  lib::ObMutex &mutex = op_mutex_[key.hash() % MUTEX_NUM].mutex_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("global service is not init", K(ret));
@@ -677,10 +674,10 @@ int ObGlobalAutoIncService::wait_all_requests_to_finish()
   const int64_t abs_timeout_us = ObTimeUtility::current_time() + BROADCAST_OP_TIMEOUT;
   for (int64_t i = 0; OB_SUCC(ret) && i < MUTEX_NUM; i++) {
     // wait for all working threads to finish
-    if (OB_FAIL(op_mutex_[i].lock(abs_timeout_us))) {
+    if (OB_FAIL(op_mutex_[i].mutex_.lock(abs_timeout_us))) {
       LOG_WARN("fail to lock mutex", K(ret), K(i));
     } else {
-      op_mutex_[i].unlock();
+      op_mutex_[i].mutex_.unlock();
     }
   }
   return ret;

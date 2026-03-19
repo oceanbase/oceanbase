@@ -30,7 +30,7 @@ namespace transaction
 class ObCtxTxData
 {
 public:
-  ObCtxTxData() { reset(); }
+  ObCtxTxData() : lock_(common::ObLatchIds::OB_CTX_TX_DATA_LOCK) { reset(); }
   void reset();
   void destroy();
 

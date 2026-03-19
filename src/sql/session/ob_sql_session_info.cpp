@@ -195,6 +195,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       external_resource_schema_cache_(nullptr),
       has_ccl_rule_(false),
       last_update_ccl_cnt_time_(-1),
+      curr_request_id_(0),
       trans_gtt_v2_sequence_(0),
       min_data_version_of_init_sess_(0)
 {

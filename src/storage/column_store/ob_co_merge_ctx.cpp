@@ -32,7 +32,7 @@ ObCOTabletMergeCtx::ObCOTabletMergeCtx(
     cg_merge_info_array_(nullptr),
     merged_sstable_array_(nullptr),
     cg_schedule_status_array_(nullptr),
-    cg_tables_handle_lock_(),
+    cg_tables_handle_lock_(common::ObLatchIds::OB_CO_TABLET_MERGE_CTX_MUTEX),
     merged_cg_tables_handle_(MTL_ID()),
     mocked_row_store_cg_(),
     mocked_row_store_table_read_info_(),

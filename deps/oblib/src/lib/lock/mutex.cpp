@@ -1,9 +1,10 @@
 #include "lib/lock/mutex.h"
 #include "lib/oblog/ob_log.h"
+#include "lib/stat/ob_diagnose_info.h"
 using namespace oceanbase::common;
 namespace obutil
 {
-ObUtilMutex::ObUtilMutex()
+ObUtilMutex::ObUtilMutex(long long latch_id) : latch_id_(latch_id)
 {
   const int rt = pthread_mutex_init(&_mutex, NULL);
 #ifdef _NO_EXCEPTION
@@ -53,6 +54,12 @@ bool ObUtilMutex::trylock() const
 
 void ObUtilMutex::lock() const
 {
+  ObWaitEventGuard wait_guard(
+    ObLatchDesc::wait_event_idx(latch_id_),
+    0,
+    reinterpret_cast<uint64_t>(this),
+    0,
+    0);
   const int rt = pthread_mutex_lock(&_mutex);
 #ifdef _NO_EXCEPTION
   assert( rt == 0 );

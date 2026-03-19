@@ -614,6 +614,7 @@ public:
                                  const ObExecuteMode exec_mode,
                                  ObSQLSessionInfo &session,
                                  bool is_sensitive = false);
+  static void fixup_commit_time(ObSQLSessionInfo &session);
   static int64_t get_query_record_size_limit(uint64_t tenant_id)
   {
     int64_t thredhold = OB_MAX_SQL_LENGTH;

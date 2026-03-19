@@ -20,6 +20,7 @@ using namespace share;
 namespace logservice
 {
 ObReplayHandler::ObReplayHandler(storage::ObLS *ls)
+  : lock_(common::ObLatchIds::OB_REPLAY_HANDLER_LOCK)
 {
   reset();
   ls_ = ls;

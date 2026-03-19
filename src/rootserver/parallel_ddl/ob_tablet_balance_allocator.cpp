@@ -26,7 +26,7 @@ using namespace oceanbase::rootserver;
 ObNonPartitionedTableTabletCache::ObNonPartitionedTableTabletCache(
   const uint64_t tenant_id,
   common::ObMySQLProxy &sql_proxy)
-  : mutex_(),
+  : mutex_(common::ObLatchIds::OB_NON_PARTITIONED_TABLE_TABLET_CACHE_MUTEX),
     tenant_id_(tenant_id),
     sql_proxy_(sql_proxy),
     allocator_(ObMemAttr(OB_SYS_TENANT_ID, "NonPartTabtCac", ObCtxIds::SCHEMA_SERVICE),
@@ -234,7 +234,7 @@ void ObNonPartitionedTableTabletCache::dump_cache_()
 }
 
 ObNonPartitionedTableTabletAllocator::ObNonPartitionedTableTabletAllocator()
-  : rwlock_(),
+  : rwlock_(common::ObLatchIds::OB_NON_PARTITIONED_TABLE_TABLET_ALLOCATOR_RW_LOCK),
     allocator_(ObMemAttr(OB_SYS_TENANT_ID, "NonPartTenCac", ObCtxIds::SCHEMA_SERVICE)),
     tenant_cache_(),
     sql_proxy_(NULL),

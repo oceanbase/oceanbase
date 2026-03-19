@@ -54,8 +54,8 @@ bool RoleChangeEvent::operator==(const RoleChangeEvent &rhs) const
   return event_type_ == rhs.event_type_ && ls_id_ == rhs.ls_id_;
 }
 
-RoleChangeEventSet::RoleChangeEventSet()
-{}
+RoleChangeEventSet::RoleChangeEventSet() :
+    lock_(common::ObLatchIds::ROLE_CHANGE_EVENT_SET_SPIN_LOCK){}
 
 RoleChangeEventSet::~RoleChangeEventSet()
 {}

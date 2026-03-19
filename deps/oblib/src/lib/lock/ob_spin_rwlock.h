@@ -28,7 +28,7 @@ namespace common
 class SpinRWLock
 {
 public:
-  explicit SpinRWLock(uint32_t latch_id = ObLatchIds::DEFAULT_SPIN_RWLOCK)
+  explicit SpinRWLock(uint32_t latch_id)
       : latch_(), latch_id_(latch_id)
   {
   }

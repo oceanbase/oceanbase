@@ -34,7 +34,7 @@ ObArchiveService::ObArchiveService() :
   timer_(),
   log_service_(NULL),
   ls_svr_(NULL),
-  cond_()
+  cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::ARCHIVE_SERVICE_COND_WAIT)
 {}
 
 ObArchiveService::~ObArchiveService()

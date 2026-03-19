@@ -180,7 +180,9 @@ class ObMockObjectManager
 public:
   static unordered_map<ObInjectErrKey, ObInjectedErr*> inject_err_map;
   ObMockObjectManager()
-    : is_sleeping_(false),
+    : sleep_cond_(ObWaitEventIds::UNITEST_COND_WAIT),
+      hang_cond_(ObWaitEventIds::UNITEST_COND_WAIT),
+      is_sleeping_(false),
       is_hanging_up_(false),
       process_point_(0),
       process_point_for_write_(true), tenant_(nullptr),

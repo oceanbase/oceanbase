@@ -120,7 +120,7 @@ typedef share::ObLightHashMap<ObTransID,
 class ObDefensiveCheckMgr
 {
 public:
-  ObDefensiveCheckMgr() : is_inited_(false)  { }
+  ObDefensiveCheckMgr() : is_inited_(false), lock_(common::ObLatchIds::OB_DEFENSIVE_CHECK_MGR_LATCH_ID)  { }
   ~ObDefensiveCheckMgr() { destroy(); }
   int init(const lib::ObMemAttr &mem_attr);
   void reset();

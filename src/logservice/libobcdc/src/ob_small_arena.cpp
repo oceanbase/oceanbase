@@ -33,7 +33,7 @@ ObSmallArena::ObSmallArena() :
     large_page_list_(NULL),
     small_alloc_count_(0),
     large_alloc_count_(0),
-    lock_()
+    lock_(common::ObLatchIds::OB_CDC_SMALL_ARENA_LATCH_ID)
 {
 }
 

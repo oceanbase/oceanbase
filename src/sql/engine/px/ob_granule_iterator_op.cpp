@@ -36,7 +36,7 @@ int ObGITaskReBalancer::init(ObExecContext *ctx, ObGranulePump *gi_pump, int64_t
   if (OB_ISNULL(buf1) || OB_ISNULL(buf2) || OB_ISNULL(buf3)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(total_worker_count));
-  } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT))) {
+  } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::GI_TASK_REBALANCER_COND_WAIT))) {
     LOG_WARN("failed to init conditional variable");
   } else {
     split_gi_task_cost_ = split_gi_task_cost;

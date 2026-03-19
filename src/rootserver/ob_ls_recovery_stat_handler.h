@@ -118,7 +118,7 @@ private:
 class ObLSRecoveryStatHandler
 {
 public:
-  ObLSRecoveryStatHandler() { reset(true); }
+  ObLSRecoveryStatHandler() : ref_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::OB_LS_RECOVERY_STAT_HANDLER_REF_COND), lock_(common::ObLatchIds::OB_LS_RECOVERY_STAT_HANDLER_LOCK) { reset(true); }
   ~ObLSRecoveryStatHandler() { reset(false); }
   void reset(const bool is_init = false);
   int init(const uint64_t tenant_id, ObLS *ls);

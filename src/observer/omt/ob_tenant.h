@@ -66,7 +66,8 @@ public:
       group_id_(0),
       is_inited_(false),
       concurrency_(0),
-      active_threads_(0)
+      active_threads_(0),
+      recycle_lock_(common::ObLatchIds::OB_PX_POOL_RECYCLE_LOCK)
   {}
   virtual void stop();
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
@@ -151,7 +152,7 @@ public:
     pools = nullptr;
   }
 public:
-  ObPxPools() : tenant_id_(common::OB_INVALID_ID)
+  ObPxPools() : tenant_id_(common::OB_INVALID_ID), lock_(common::ObLatchIds::OB_PX_POOLS_LOCK)
   {}
   ~ObPxPools()
   {

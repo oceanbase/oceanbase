@@ -145,8 +145,8 @@ private:
 class AtomicOperator
 {
 public:
-  AtomicOperator() : v_(0) {}
-  AtomicOperator(int64_t v) : v_(v) {}
+  AtomicOperator() : lock_(common::ObLatchIds::TEST_LATCH_LOCK), v_(0) {}
+  AtomicOperator(int64_t v) : lock_(common::ObLatchIds::TEST_LATCH_LOCK), v_(v) {}
   void inc()
   {
     lib::ObMutexGuard guard(lock_);

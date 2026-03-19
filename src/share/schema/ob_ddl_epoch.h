@@ -49,9 +49,9 @@ public:
       sql_proxy_(NULL),
       schema_service_(NULL),
       ddl_epoch_stat_(),
-      lock_(),
-      lock_for_promote_(),
-      mutex_for_promote_() {}
+      lock_(common::ObLatchIds::OB_DDL_EPOCH_LOCK),
+      lock_for_promote_(common::ObLatchIds::OB_DDL_EPOCH_PROMOTE_LOCK),
+      mutex_for_promote_(common::ObLatchIds::OB_DDL_EPOCH_MUTEX) {}
   int init(ObMySQLProxy *sql_proxy, share::schema::ObMultiVersionSchemaService *schema_service);
   // 获取本地ddl_epoch
   int get_ddl_epoch(uint64_t tenant_id, int64_t &ddl_epoch);

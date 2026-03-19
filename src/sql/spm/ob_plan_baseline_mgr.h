@@ -96,7 +96,8 @@ public:
     destroyed_(false),
     tg_id_(-1),
     last_sync_time_(-1),
-    trl_(nullptr) {}
+    trl_(nullptr),
+    lock_(common::ObLatchIds::OB_PLAN_BASELINE_MGR_SPIN_RW_LOCK) {}
   ~ObPlanBaselineMgr();
   static int mtl_init(ObPlanBaselineMgr* &node_list);
   static void mtl_stop(ObPlanBaselineMgr* &node_list);

@@ -56,7 +56,7 @@ int ObUpgradeStorageFormatVersionTask::process()
 }
 
 ObUpgradeStorageFormatVersionExecutor::ObUpgradeStorageFormatVersionExecutor()
-  : is_inited_(false), is_stopped_(false), execute_(false), rwlock_(), root_service_(nullptr), ddl_service_(nullptr)
+  : is_inited_(false), is_stopped_(false), execute_(false), rwlock_(common::ObLatchIds::OB_UPGRADE_STORAGE_FORMAT_VERSION_EXECUTOR_RWLOCK), root_service_(nullptr), ddl_service_(nullptr)
 {
 }
 
