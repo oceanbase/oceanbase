@@ -202,6 +202,7 @@ bool ObCgroupCtrl::check_cgroup_status()
     } else if (OB_TMP_FAIL(regist_observer_to_cgroup(OTHER_CGROUP_DIR))) {
       LOG_WARN_RET(tmp_ret, "regist observer thread to cgroup failed", K(tmp_ret), K(OTHER_CGROUP_DIR));
     } else {
+      G_RES_MGR.get_plan_mgr().refresh_global_background_cpu();
       need_regist_cgroup = true;
       valid_ = true;
       LOG_INFO("init cgroup success");

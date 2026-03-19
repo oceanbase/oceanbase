@@ -312,7 +312,18 @@ int ObAllVirtualThread::read_real_cgroup_path()
         cgroup_path_buf_[0] = '\0';
         while (fgets(read_buff, sizeof(read_buff), file) != NULL && !is_find) {
           const char* match_begin =  strstr(read_buff, ":/");
-          const char* match_cpu =  strstr(read_buff, "cpu");
+          // Match "cpu" as a standalone subsystem: the character immediately after
+          // "cpu" must be ':' or ',' to avoid matching "cpuset" or "cpuacct".
+          const char* match_cpu = NULL;
+          const char* p = read_buff;
+          while ((p = strstr(p, "cpu")) != NULL) {
+            char after = *(p + 3);
+            if (after == ':' || after == ',') {
+              match_cpu = p;
+              break;
+            }
+            p += 3;
+          }
           if (match_begin != NULL && match_cpu != NULL) {
             is_find = true;
             match_begin += discard_len;
