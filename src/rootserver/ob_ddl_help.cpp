@@ -379,19 +379,19 @@ int ObTableGroupHelp::check_partition_option(
   if (tablegroup.get_sharding().empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablegroup sharding can not be empty", KR(ret));
-  } else if (tablegroup.get_sharding() == OB_PARTITION_SHARDING_NONE) {
+  } else if (tablegroup.is_sharding_none()) {
     is_matched = true;
   } else if (table.is_partitioned_table() && table.is_interval_part()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("interval part add to tablegroup when sharding is not NONE",
             KR(ret), K(tablegroup_id), K(table_id));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "add interval part table to tablegroup when sharding is not NONE");
-  } else if (tablegroup.get_sharding() == OB_PARTITION_SHARDING_PARTITION) {
+  } else if (tablegroup.is_sharding_partition()) {
     // check level one partitions info
     if (OB_FAIL(check_table_partition_option(&table, first_table_schema, schema_guard, false, is_matched))) {
       LOG_WARN("fail to check partition sharding type", KR(ret), K(tablegroup_id), K(table_id), K(is_matched));
     }
-  } else if (tablegroup.get_sharding() == OB_PARTITION_SHARDING_ADAPTIVE) {
+  } else if (tablegroup.is_sharding_adaptive()) {
     //check level one and two partitions info
     if (OB_FAIL(check_table_partition_option(&table, first_table_schema, schema_guard, true, is_matched))) {
       LOG_WARN("fail to check adaptive sharding type", KR(ret), K(tablegroup_id), K(table_id), K(is_matched));
@@ -415,6 +415,8 @@ int ObTableGroupHelp::modify_sharding_type(const ObAlterTablegroupArg &arg,
   int ret = OB_SUCCESS;
   bool is_matched = false;
   ObTablegroupSchema new_tablegroup_schema;
+  const ObString scope = arg.alter_option_bitset_.has_member(ObAlterTablegroupArg::SCOPE) ?
+                         arg.alter_tablegroup_schema_.get_scope() : tablegroup_schema.get_scope();
   if (arg.alter_option_bitset_.has_member(ObAlterTablegroupArg::SHARDING)) {
     if (is_sys_tablegroup_id(tablegroup_schema.get_tablegroup_id())) {
       ret = OB_OP_NOT_ALLOW;
@@ -427,13 +429,17 @@ int ObTableGroupHelp::modify_sharding_type(const ObAlterTablegroupArg &arg,
     } else if (new_tablegroup_schema.get_sharding().empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new tablegroup schema's sharding should not be empty", KR(ret));
-    } else if (new_tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_NONE) {
+    } else if (!ObTablegroupSchema::is_sharding_scope_matched(new_tablegroup_schema.get_sharding(), scope)) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("sharding and scope are not matched", KR(ret), K(new_tablegroup_schema.get_sharding()), K(scope));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "sharding and scope are not matched");
+    } else if (new_tablegroup_schema.is_sharding_none()) {
       is_matched = true;
-    } else if (new_tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_PARTITION) {
+    } else if (new_tablegroup_schema.is_sharding_partition()) {
       if (OB_FAIL(check_all_table_partition_option(new_tablegroup_schema, schema_guard, false, is_matched))) {
         LOG_WARN("fail to check table sharding partition", KR(ret), K(new_tablegroup_schema));
       }
-    } else if (new_tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_ADAPTIVE) {
+    } else if (new_tablegroup_schema.is_sharding_adaptive()) {
       if (OB_FAIL(check_all_table_partition_option(new_tablegroup_schema, schema_guard, true, is_matched))) {
         LOG_WARN("fail to check table sharding adaptive", KR(ret), K(new_tablegroup_schema));
       }
@@ -447,6 +453,62 @@ int ObTableGroupHelp::modify_sharding_type(const ObAlterTablegroupArg &arg,
     } else if (OB_SUCC(ret) && !is_matched) {
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("can not modify sharding type", KR(ret), K(new_tablegroup_schema.get_sharding()));
+    }
+  }
+  return ret;
+}
+
+int ObTableGroupHelp::modify_scope_type(const ObAlterTablegroupArg &arg,
+                                        const ObTablegroupSchema &tablegroup_schema,
+                                        common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  bool is_matched = false;
+  ObTablegroupSchema new_tablegroup_schema;
+  const uint64_t tenant_id = tablegroup_schema.get_tenant_id();
+  uint64_t data_version = OB_INVALID_VERSION;
+  ObString sharding = arg.alter_option_bitset_.has_member(ObAlterTablegroupArg::SHARDING) ?
+                      arg.alter_tablegroup_schema_.get_sharding() : tablegroup_schema.get_sharding();
+  if (arg.alter_option_bitset_.has_member(ObAlterTablegroupArg::SCOPE)) {
+    if (OB_ISNULL(schema_service_) || OB_ISNULL(sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null ptr", KR(ret), KP(schema_service_), KP(sql_proxy_));
+    } else if (is_sys_tablegroup_id(tablegroup_schema.get_tablegroup_id())) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("modify sys tablegroup's scope type is not allowed", KR(ret), K(tablegroup_schema.get_tablegroup_id()));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "modify sys tablegroup's scope type");
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+    } else if (data_version < DATA_VERSION_4_4_2_1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can not modify scope type for tablegroup before 4.4.2.1", KR(ret), K(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify scope type for tablegroup before 4.4.2.1 is");
+    } else if (OB_FAIL(new_tablegroup_schema.assign(tablegroup_schema))) {
+      LOG_WARN("fail to assign tablegroup schema", KR(ret), K(tablegroup_schema));
+    } else if (OB_FAIL(new_tablegroup_schema.set_scope(arg.alter_tablegroup_schema_.get_scope()))) {
+      LOG_WARN("fail to set tablegroup name", KR(ret), K(tablegroup_schema));
+    } else if (OB_FAIL(new_tablegroup_schema.set_sharding(sharding))) {
+      LOG_WARN("fail to set tablegroup sharding", KR(ret), K(tablegroup_schema));
+    } else if (new_tablegroup_schema.get_scope().empty()) {
+      LOG_WARN("new tablegroup schema's scope should not be empty", KR(ret));
+    } else {
+      is_matched = ObTablegroupSchema::is_sharding_scope_matched(sharding, new_tablegroup_schema.get_scope());
+    }
+    if (OB_SUCC(ret) && is_matched) {
+      ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+      // update scope type
+      if (OB_FAIL(ddl_operator.alter_tablegroup(new_tablegroup_schema, trans, &arg.ddl_stmt_str_))) {
+        LOG_WARN("fail to alter tablegroup scope type", KR(ret), K(new_tablegroup_schema));
+      }
+    } else if (OB_SUCC(ret) && !is_matched) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("can not modify scope type and sharding are not matched", KR(ret), K(new_tablegroup_schema.get_scope()), K(sharding));
+      char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
+      (void)snprintf(err_msg, sizeof(err_msg),
+                     "modify sharding is %.*s and scope is %.*s",
+                     sharding.length(), sharding.ptr(),
+                     new_tablegroup_schema.get_scope().length(), new_tablegroup_schema.get_scope().ptr());
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
     }
   }
   return ret;

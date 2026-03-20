@@ -3388,6 +3388,7 @@ public:
   inline int set_table_name(const common::ObString &name) { return deep_copy_str(name, tablegroup_name_); }
   inline int set_comment(const common::ObString &comment) { return deep_copy_str(comment, comment_); }
   inline int set_sharding(const common::ObString &sharding) { return deep_copy_str(sharding, sharding_); }
+  inline int set_scope(const common::ObString &scope) { return deep_copy_str(scope, scope_); }
 
   inline int set_split_partition(const common::ObString &split_partition) { return deep_copy_str(split_partition, split_partition_name_); }
   inline int set_split_rowkey(const common::ObRowkey &rowkey)
@@ -3402,6 +3403,7 @@ public:
   inline const char *get_tablegroup_name_str() const { return extract_str(tablegroup_name_); }
   inline const char *get_comment() const { return  extract_str(comment_); }
   inline const common::ObString &get_sharding() const { return sharding_; }
+  inline const common::ObString &get_scope() const { return scope_; }
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
   inline const common::ObString &get_table_name() const { return tablegroup_name_; }
   virtual const char *get_entity_name() const override { return extract_str(tablegroup_name_); }
@@ -3464,6 +3466,38 @@ public:
   inline virtual uint64_t get_database_id() const { return 0; }
   inline virtual void set_database_id(const uint64_t database_id) { UNUSED(database_id); }
   inline virtual void set_table_id(const uint64_t tablegroup_id) override { tablegroup_id_ = tablegroup_id; }
+  static bool is_sharding_scope_matched(const common::ObString &sharding, const common::ObString &scope)
+  {
+    bool is_matched = false;
+    if (scope.empty()) {
+      is_matched = true;
+    } else if (0 == sharding.case_compare(OB_PARTITION_SHARDING_NONE)) {
+      is_matched = true;
+    } else if (0 == sharding.case_compare(OB_PARTITION_SHARDING_PARTITION)
+               || 0 == sharding.case_compare(OB_PARTITION_SHARDING_ADAPTIVE)) {
+      if (0 == scope.case_compare(OB_TABLEGROUP_SCOPE_CLUSTER)) {
+        is_matched = true;
+      }
+    }
+    return is_matched;
+  }
+  bool is_sharding_none() const { return sharding_.case_compare(OB_PARTITION_SHARDING_NONE) == 0; }
+  bool is_sharding_partition() const { return sharding_.case_compare(OB_PARTITION_SHARDING_PARTITION) == 0; }
+  bool is_sharding_adaptive() const { return sharding_.case_compare(OB_PARTITION_SHARDING_ADAPTIVE) == 0; }
+  bool is_scope_server() const
+  {
+    return 0 == scope_.case_compare(OB_TABLEGROUP_SCOPE_SERVER)
+           || (scope_.empty() && is_sharding_none());
+  }
+  bool is_scope_zone() const
+  {
+    return 0 == scope_.case_compare(OB_TABLEGROUP_SCOPE_ZONE);
+  }
+  bool is_scope_cluster() const
+  {
+    return 0 == scope_.case_compare(OB_TABLEGROUP_SCOPE_CLUSTER)
+           || (scope_.empty() && (is_sharding_partition() || is_sharding_adaptive()));
+  }
   inline int64_t get_part_func_expr_num() const { return part_func_expr_num_; }
   inline void set_part_func_expr_num(const int64_t part_func_expr_num) { part_func_expr_num_ = part_func_expr_num; }
   inline int64_t get_sub_part_func_expr_num() const { return sub_part_func_expr_num_; }
@@ -3490,6 +3524,7 @@ private:
   common::ObString tablegroup_name_;
   common::ObString comment_;
   common::ObString sharding_;
+  common::ObString scope_;
   //2.0 add
   int64_t part_func_expr_num_;
   int64_t sub_part_func_expr_num_;

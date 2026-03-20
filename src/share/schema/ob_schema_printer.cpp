@@ -3405,19 +3405,23 @@ int ObSchemaPrinter::print_tablegroup_definition_tablegroup_options(
     }
   }
   if (OB_SUCC(ret)) {
-    bool is_oracle_mode = false;
     uint64_t compat_version = OB_INVALID_VERSION;
     uint64_t tenant_id = tablegroup_schema.get_tenant_id();
-    if (OB_FAIL(tablegroup_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
-    SHARE_SCHEMA_LOG(WARN, "fail to check oracle mode", KR(ret), K(tablegroup_id));
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-        LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
-    } else if (compat_version >= DATA_VERSION_4_2_0_0) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      SHARE_SCHEMA_LOG(WARN, "get min data_version failed", KR(ret), K(tenant_id));
+    } else {
       const ObString sharding = tablegroup_schema.get_sharding();
       if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                   " SHARDING = \'%.*s\'",
                                   sharding.length(), sharding.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print tablegroup sharding", K(ret), K(tablegroup_schema.get_sharding()));
+      } else if (compat_version >= DATA_VERSION_4_4_2_1
+                 && !tablegroup_schema.get_scope().empty()) {
+        const ObString scope = tablegroup_schema.get_scope();
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                                    " SCOPE = '%.*s'", scope.length(), scope.ptr()))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print tablegroup scope", KR(ret), K(scope));
+        }
       }
     }
   }

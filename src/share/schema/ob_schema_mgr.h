@@ -264,7 +264,8 @@ public:
                K_(tablegroup_name),
                K_(partition_status),
                K_(partition_schema_version),
-               K_(sharding));
+               K_(sharding),
+               K_(scope));
   virtual void reset();
   bool is_valid() const;
   inline int64_t get_convert_size() const;
@@ -281,6 +282,9 @@ public:
   inline int set_sharding(const common::ObString &sharding)
   { return deep_copy_str(sharding, sharding_); }
   inline const common::ObString &get_sharding() const { return sharding_; }
+  inline int set_scope(const common::ObString &scope)
+  { return deep_copy_str(scope, scope_); }
+  inline const common::ObString &get_scope() const { return scope_; }
   inline ObTenantTablegroupId get_tenant_tablegroup_id() const
   { return ObTenantTablegroupId(tenant_id_, tablegroup_id_); }
 
@@ -298,9 +302,23 @@ public:
                                          || partition_status_ == PARTITION_STATUS_PHYSICAL_SPLITTING; }
   bool has_self_partition() const { return false; }
 
-  bool is_sharding_none() const { return sharding_ == OB_PARTITION_SHARDING_NONE; }
-  bool is_sharding_partition() const { return sharding_ == OB_PARTITION_SHARDING_PARTITION; }
-  bool is_sharding_adaptive() const { return sharding_ == OB_PARTITION_SHARDING_ADAPTIVE; }
+  bool is_sharding_none() const { return sharding_.case_compare(OB_PARTITION_SHARDING_NONE) == 0; }
+  bool is_sharding_partition() const { return sharding_.case_compare(OB_PARTITION_SHARDING_PARTITION) == 0; }
+  bool is_sharding_adaptive() const { return sharding_.case_compare(OB_PARTITION_SHARDING_ADAPTIVE) == 0; }
+  bool is_scope_server() const
+  {
+    return 0 == scope_.case_compare(OB_TABLEGROUP_SCOPE_SERVER)
+           || (scope_.empty() && is_sharding_none());
+  }
+  bool is_scope_zone() const
+  {
+    return 0 == scope_.case_compare(OB_TABLEGROUP_SCOPE_ZONE);
+  }
+  bool is_scope_cluster() const
+  {
+    return 0 == scope_.case_compare(OB_TABLEGROUP_SCOPE_CLUSTER)
+           || (scope_.empty() && (is_sharding_partition() || is_sharding_adaptive()));
+  }
 private:
   uint64_t tenant_id_;
   uint64_t tablegroup_id_;
@@ -309,6 +327,7 @@ private:
   ObPartitionStatus partition_status_;
   int64_t partition_schema_version_;
   common::ObString sharding_;
+  common::ObString scope_;
 };
 
 template<class K, class V>

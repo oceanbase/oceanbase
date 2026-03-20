@@ -494,10 +494,18 @@ int ObDBMSBalance::get_and_check_tablegroup_id_by_name_(
   } else if (OB_ISNULL(tablegroup_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", KR(ret), K(tablegroup_name), K(tablegroup_id), K(tablegroup_schema));
+  } else if (OB_UNLIKELY(!ObTablegroupSchema::is_sharding_scope_matched(tablegroup_schema->get_sharding(),
+      tablegroup_schema->get_scope()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid sharding-scope combination", KR(ret), KPC(tablegroup_schema));
   } else if (!tablegroup_schema->is_sharding_none()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support sharding tablegroup", KR(ret), K(tablegroup_name), K(tablegroup_id));
+    LOG_WARN("not support tg balance weight for sharding partition or adaptive tablegroup", KR(ret), KPC(tablegroup_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "sharding partition or adaptive tablegroup are");
+  } else if (tablegroup_schema->is_scope_cluster()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support tg balance weight for scope cluster tablegroup", KR(ret), KPC(tablegroup_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "scope cluster tablegroup is");
   } else {
     tablegroup_id = tablegroup_schema->get_tablegroup_id();
   }

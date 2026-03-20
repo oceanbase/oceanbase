@@ -9950,6 +9950,11 @@ TABLEGROUP_ID opt_equal_mark INTNUM
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLEGROUP_SHARDING, 1, $3);
 }
+| SCOPE opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLEGROUP_SCOPE, 1, $3);
+}
 | MAX_USED_PART_ID opt_equal_mark INTNUM
 {
   (void)($2);

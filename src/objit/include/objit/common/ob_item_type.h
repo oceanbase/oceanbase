@@ -2963,6 +2963,7 @@ typedef enum ObItemType
   T_PARALLEL_PARSE_ON_SINGLE_FILE = 4946, // disable parallel parse single csv
   T_PARALLEL_PARSE_FILE_SIZE_THRESHOLD = 4957,
   T_MAX_ROW_LENGTH = 4958,
+  T_TABLEGROUP_SCOPE = 4966,
   T_ALTER_VIEW_COMPILE = 4968,   // ALTER VIEW ... COMPILE action node
   T_MAX_EXECUTION_TIME = 4969,    // for max_execution_time hint
   T_EXTERNAL_LANGUAGE = 4978,

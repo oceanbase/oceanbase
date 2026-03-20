@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_BALANCE_LS_PRIMARY_ZONE_H
 #define OCEANBASE_ROOTSERVER_OB_BALANCE_LS_PRIMARY_ZONE_H
 #include "lib/container/ob_array.h"//ObIArray
+#include "lib/hash/ob_hashmap.h"//ObHashMap
 #include "common/ob_zone.h"//ObZone
 namespace oceanbase
 {
@@ -63,15 +64,23 @@ public:
     common::ObZone &new_primary_zone,
     common::ObSqlString &new_zone_priority);
   static int check_sys_ls_primary_zone_balanced(const uint64_t tenant_id, int &check_ret);
+  static int check_user_ls_primary_zone_balanced(const uint64_t tenant_id, bool &is_balanced);
 
 private:
+  static int inner_try_adjust_user_ls_primary_zone_(
+    const uint64_t tenant_id,
+    const bool only_check_balanced,
+    bool &is_balanced);
   static int adjust_primary_zone_by_ls_group_(const common::ObIArray<common::ObArray<common::ObZone>> &multi_level_primary_zone_array,
-                                       const ObIArray<share::ObLSPrimaryZoneInfo> &primary_zone_infos);
+                                       const ObIArray<share::ObLSPrimaryZoneInfo> &primary_zone_infos,
+                                       const bool only_check_need_update,
+                                       bool &need_update,
+                                       common::hash::ObHashMap<common::ObZone, int64_t> &old_to_new_pz_index_map);
   static int set_ls_to_primary_zone_(const common::ObIArray<common::ObZone> &primary_zone_array,
                              const ObIArray<share::ObLSPrimaryZoneInfo> &primary_zone_infos,
-                             const bool is_first_level,
                              common::ObIArray<common::ObZone> &ls_primary_zone,
-                             common::ObIArray<uint64_t> &count_group_by_zone);
+                             common::ObIArray<uint64_t> &count_group_by_zone,
+                             common::hash::ObHashMap<common::ObZone, int64_t> &old_to_new_pz_index_map);
   static int balance_ls_primary_zone_(const common::ObIArray<common::ObZone> &primary_zone_array,
                               common::ObIArray<common::ObZone> &ls_primary_zone,
                               common::ObIArray<uint64_t> &count_group_by_zone);

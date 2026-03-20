@@ -60,8 +60,7 @@ public:
   }
 
   bool is_non_part_table_bg() const { return NON_PART_BG_ID == *this; }
-  bool is_sharding_none_tablegroup_bg() const { return SHARDING_NONE_TABLEGROUP_BG_ID == *this; }
-
+  bool is_single_pg_tablegroup_bg() const { return SINGLE_PG_TABLEGROUP_BG_ID == *this; }
   bool is_valid() const {
     return OB_INVALID_ID != id_high_
            && OB_INVALID_ID != id_low_;
@@ -76,7 +75,7 @@ public:
 public:
   static const ObBalanceGroupID NON_PART_BG_ID;
   static const ObBalanceGroupID DUP_TABLE_BG_ID;
-  static const ObBalanceGroupID SHARDING_NONE_TABLEGROUP_BG_ID;
+  static const ObBalanceGroupID SINGLE_PG_TABLEGROUP_BG_ID;
 
   uint64_t id_high_;
   uint64_t id_low_;
@@ -85,13 +84,22 @@ public:
 class ObBalanceGroup
 {
 public:
-  ObBalanceGroup() : id_(), name_() {}
+  enum Scope
+  {
+    BG_SCOPE_SERVER = 0,
+    BG_SCOPE_ZONE,
+    BG_SCOPE_CLUSTER,
+    BG_SCOPE_MAX,
+  };
+public:
+  ObBalanceGroup() : id_(), name_(), scope_(BG_SCOPE_CLUSTER) {}
   ~ObBalanceGroup() {}
 
   const ObBalanceGroupID &id() const { return id_; }
   const ObBalanceGroupName &name() const { return name_; }
-
-  int init_by_tablegroup(const share::schema::ObSimpleTablegroupSchema &tg,
+  Scope scope() const { return scope_; }
+  template <typename TablegroupSchema>
+  int init_by_tablegroup(const TablegroupSchema &tg,
       const int64_t max_part_level,
       const int64_t part_group_index = 0);
   int init_by_table(const share::schema::ObSimpleTableSchemaV2 &table_schema,
@@ -104,18 +112,32 @@ public:
   bool operator !=(const ObBalanceGroup &other) const {
     return !(*this == other);
   }
+  bool is_scope_zone() const { return BG_SCOPE_ZONE == scope_; }
   bool is_non_part_table_bg() const { return id_.is_non_part_table_bg(); }
+  bool is_single_pg_tablegroup_bg() const { return id_.is_single_pg_tablegroup_bg(); }
   bool is_valid() const { return id_.is_valid() && !name_.is_empty(); }
-
-  TO_STRING_KV(K_(id), K_(name));
+  static const char *scope_to_str(const Scope scope)
+  {
+    const char *str = "BG_SCOPE_UNKNOWN";
+    switch (scope) {
+      case BG_SCOPE_SERVER:  str = "BG_SCOPE_SERVER"; break;
+      case BG_SCOPE_ZONE:    str = "BG_SCOPE_ZONE"; break;
+      case BG_SCOPE_CLUSTER: str = "BG_SCOPE_CLUSTER"; break;
+      case BG_SCOPE_MAX:     str = "BG_SCOPE_MAX"; break;
+      default: break;
+    }
+    return str;
+  }
+  TO_STRING_KV(K_(id), K_(name), "scope", scope_to_str(scope_));
 public:
   const static char* NON_PART_BG_NAME;
   const static char* DUP_TABLE_BG_NAME;
-  const static char* SHARDING_NONE_TABLEGROUP_BG_NAME;
+  const static char* SINGLE_PG_TABLEGROUP_BG_NAME;
 private:
   ObBalanceGroupID id_;
   ObBalanceGroupName name_;
   // TODO: add type
+  Scope scope_;
 };
 
 

@@ -1363,7 +1363,17 @@ int ObTenantBalanceService::trigger_partition_balance(
   } else if (OB_FAIL(init_partition_balance_for_trigger_(tenant_id, partition_balance))) {
     LOG_WARN("init partition balance failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(partition_balance.process(ObBalanceJobID(), balance_timeout))) { // gen new job
-    LOG_WARN("fail to process partition_balance", KR(ret));
+    if (OB_REBALANCE_TASK_CANT_EXEC == ret) {
+      // user ls primary zone not balanced, report error to user
+      LOG_WARN("fail to process partition_balance because user ls primary zone not balanced",
+          KR(ret), K(tenant_id));
+      ret = OB_OP_NOT_ALLOW;
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW,
+          "tenant user ls leader not balanced for now, enable_ls_leader_balance may be turned off, "
+          "trigger partition balance");
+    } else {
+      LOG_WARN("fail to process partition_balance", KR(ret));
+    }
   } else if (partition_balance.get_balance_task().empty()) {
     ret = OB_PARTITION_ALREADY_BALANCED;
     ISTAT("partitions are already balanced", KR(ret), K(tenant_id));
@@ -1489,7 +1499,16 @@ int ObTenantBalanceService::try_finish_doing_partition_balance_job_(
       ObPartitionBalance::GEN_TRANSFER_TASK))) {
     LOG_WARN("init failed", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(partition_balance.process(job.get_job_id()))) { // use old job_id
-    LOG_WARN("fail to process partition_balance", KR(ret));
+    if (OB_REBALANCE_TASK_CANT_EXEC == ret) {
+      ret = OB_SUCCESS;
+      new_status = ObBalanceJobStatus(ObBalanceJobStatus::BALANCE_JOB_STATUS_CANCELING);
+      ISTAT("cancel partition balance job because user ls primary zone need to be balanced", K(job));
+      if (OB_FAIL(comment.assign("Canceled because user ls primary zone need to be balanced"))) {
+        LOG_WARN("assign failed", KR(ret), K(job));
+      }
+    } else {
+      LOG_WARN("fail to process partition_balance", KR(ret));
+    }
   } else if (partition_balance.get_balance_task().empty()) {
     new_status = ObBalanceJobStatus(ObBalanceJobStatus::BALANCE_JOB_STATUS_COMPLETED);
     is_finished = true;

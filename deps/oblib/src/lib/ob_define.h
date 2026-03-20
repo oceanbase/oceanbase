@@ -726,6 +726,10 @@ const char *const OB_PARTITION_SHARDING_NONE = "NONE";
 const char *const OB_PARTITION_SHARDING_PARTITION = "PARTITION";
 const char *const OB_PARTITION_SHARDING_ADAPTIVE = "ADAPTIVE";
 
+// tablegroup scope
+const char *const OB_TABLEGROUP_SCOPE_SERVER = "SERVER";
+const char *const OB_TABLEGROUP_SCOPE_ZONE = "ZONE";
+const char *const OB_TABLEGROUP_SCOPE_CLUSTER = "CLUSTER";
 // partid pseudo column
 const char *const OB_PART_ID_PSEUDO_COLUMN_NAME = "__ob_partition_id";
 const char *const OB_PART_NAME_PSEUDO_COLUMN_NAME = "__ob_partition_name";
@@ -983,7 +987,8 @@ const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 30L * 60L * 1000L * 1000
 const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 7L * 24L * 60L * 60L * 1000L * 1000L; // 7days
 #endif
 
-const int64_t OB_MAX_PARTITION_SHARDING_LENGTH = 10;
+const int64_t OB_MAX_PARTITION_SHARDING_LENGTH = 20;
+const int64_t OB_MAX_TABLEGROUP_SCOPE_LENGTH = 20;
 
 // The default user name of the standby database to log in to the main database
 const char *const OB_STANDBY_USER_NAME = "__oceanbase_inner_standby_user";

@@ -39,6 +39,7 @@ public:
   virtual int set_primary_zone(const common::ObString &zone) override;
   virtual int set_locality(const common::ObString &locality) override;
   virtual int set_tablegroup_sharding(const common::ObString &sharding) override;
+  virtual int set_tablegroup_scope(const common::ObString &scope) override;
   inline void set_alter_option_set(const common::ObBitSet<> &alter_option_set);
   bool is_alter_partition() const { return alter_tablegroup_arg_.is_alter_partitions(); }
   virtual int set_tablegroup_id(uint64_t tablegroup_id) override;

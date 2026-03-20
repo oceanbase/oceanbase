@@ -54,6 +54,11 @@ int ObAlterTablegroupStmt::set_tablegroup_sharding(const common::ObString &shard
   return alter_tablegroup_arg_.alter_tablegroup_schema_.set_sharding(sharding);
 }
 
+int ObAlterTablegroupStmt::set_tablegroup_scope(const common::ObString &scope)
+{
+  return alter_tablegroup_arg_.alter_tablegroup_schema_.set_scope(scope);
+}
+
 } //namespace sql
 } //namespace oceanbase
 

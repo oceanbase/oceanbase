@@ -536,6 +536,7 @@ all_tablegroup_def = dict(
       ('partition_schema_version', 'int', 'true', '0'),
       ('sub_part_template_flags', 'int', 'false', '0'),
       ('sharding', 'varchar:OB_MAX_PARTITION_SHARDING_LENGTH', 'false', 'ADAPTIVE'),
+      ('scope', 'varchar:OB_MAX_TABLEGROUP_SCOPE_LENGTH', 'false', ''),
     ],
 )
 
@@ -23488,7 +23489,15 @@ def_table_schema(
 
          CAST(NULL AS SIGNED) AS SUBPARTITIONING_KEY_COUNT,
 
-         SHARDING
+         SHARDING,
+         (CASE
+            WHEN SCOPE IN ('', 'NULL') THEN
+              (CASE
+                 WHEN UPPER(SHARDING) = 'NONE' THEN 'SERVER'
+                 WHEN UPPER(SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'
+               END)
+            ELSE SCOPE
+          END) AS SCOPE
 
   FROM OCEANBASE.__ALL_TABLEGROUP
   """.replace("\n", " "),
@@ -23520,7 +23529,15 @@ def_table_schema(
 
          CAST(NULL AS SIGNED) AS SUBPARTITIONING_KEY_COUNT,
 
-         SHARDING
+         SHARDING,
+         (CASE
+            WHEN SCOPE IN ('', 'NULL') THEN
+              (CASE
+                 WHEN UPPER(SHARDING) = 'NONE' THEN 'SERVER'
+                 WHEN UPPER(SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'
+               END)
+            ELSE SCOPE
+          END) AS SCOPE
 
   FROM OCEANBASE.__ALL_VIRTUAL_TABLEGROUP
   """.replace("\n", " "),
@@ -23717,7 +23734,15 @@ def_table_schema(
   SELECT TG.TABLEGROUP_NAME AS TABLEGROUP_NAME,
          D.DATABASE_NAME AS OWNER,
          T.TABLE_NAME AS TABLE_NAME,
-         TG.SHARDING AS SHARDING
+         TG.SHARDING AS SHARDING,
+         (CASE
+            WHEN TG.SCOPE IN ('', 'NULL') THEN
+              (CASE
+                 WHEN UPPER(TG.SHARDING) = 'NONE' THEN 'SERVER'
+                 WHEN UPPER(TG.SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'
+               END)
+            ELSE TG.SCOPE
+          END) AS SCOPE
   FROM OCEANBASE.__ALL_TABLE AS T
   JOIN OCEANBASE.__ALL_DATABASE AS D
   ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID
@@ -23743,7 +23768,15 @@ def_table_schema(
          TG.TABLEGROUP_NAME AS TABLEGROUP_NAME,
          D.DATABASE_NAME AS OWNER,
          T.TABLE_NAME AS TABLE_NAME,
-         TG.SHARDING AS SHARDING
+         TG.SHARDING AS SHARDING,
+         (CASE
+            WHEN TG.SCOPE IN ('', 'NULL') THEN
+              (CASE
+                 WHEN UPPER(TG.SHARDING) = 'NONE' THEN 'SERVER'
+                 WHEN UPPER(TG.SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'
+               END)
+            ELSE TG.SCOPE
+          END) AS SCOPE
   FROM OCEANBASE.__ALL_VIRTUAL_TABLE AS T
   JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE AS D
   ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID
@@ -32393,6 +32426,14 @@ SELECT
     TG.TABLEGROUP_NAME,
     TG.TABLEGROUP_ID,
     TG.SHARDING,
+    (CASE
+       WHEN TG.SCOPE IN ('', 'NULL') THEN
+         (CASE
+            WHEN UPPER(TG.SHARDING) = 'NONE' THEN 'SERVER'
+            WHEN UPPER(TG.SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'
+          END)
+       ELSE TG.SCOPE
+     END) AS SCOPE,
     /* same with ObSimpleTableSchemaV2::is_global_index_table() */
     CASE WHEN A.INDEX_TYPE IN (3,4,11,17,18,19) THEN 'GLOBAL'
          WHEN A.INDEX_TYPE IN (1,2,5,7,8,10,12,13,14,15,16,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44) THEN 'LOCAL'
@@ -32630,6 +32671,14 @@ SELECT
     TG.TABLEGROUP_NAME,
     TG.TABLEGROUP_ID,
     TG.SHARDING,
+    (CASE
+       WHEN TG.SCOPE IN ('', 'NULL') THEN
+         (CASE
+            WHEN UPPER(TG.SHARDING) = 'NONE' THEN 'SERVER'
+            WHEN UPPER(TG.SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'
+          END)
+       ELSE TG.SCOPE
+     END) AS SCOPE,
     /* same with ObSimpleTableSchemaV2::is_global_index_table() */
     CASE WHEN A.INDEX_TYPE IN (3,4,11,17,18,19) THEN 'GLOBAL'
          WHEN A.INDEX_TYPE IN (1,2,5,7,8,10,12,13,14,15,16,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44) THEN 'LOCAL'
@@ -61513,7 +61562,15 @@ def_table_schema(
 
          CAST(NULL AS NUMBER) AS SUBPARTITIONING_KEY_COUNT,
 
-         SHARDING
+         SHARDING,
+         (CASE
+            WHEN SCOPE IS NULL OR SCOPE IN ('', 'NULL') THEN
+              (CASE
+                 WHEN UPPER(SHARDING) = 'NONE' THEN 'SERVER'
+                 WHEN UPPER(SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'
+               END)
+            ELSE SCOPE
+          END) AS SCOPE
   FROM SYS.ALL_VIRTUAL_TABLEGROUP_REAL_AGENT
   """.replace("\n", " "),
 )
@@ -61627,7 +61684,15 @@ def_table_schema(
   SELECT TG.TABLEGROUP_NAME AS TABLEGROUP_NAME,
          D.DATABASE_NAME AS OWNER,
          T.TABLE_NAME AS TABLE_NAME,
-         TG.SHARDING AS SHARDING
+         TG.SHARDING AS SHARDING,
+         (CASE
+            WHEN TG.SCOPE IS NULL OR TG.SCOPE IN ('', 'NULL') THEN
+              (CASE
+                 WHEN UPPER(TG.SHARDING) = 'NONE' THEN 'SERVER'
+                 WHEN UPPER(TG.SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'
+               END)
+            ELSE TG.SCOPE
+          END) AS SCOPE
   FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
   JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
   ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID
@@ -74410,6 +74475,14 @@ SELECT
     TG.TABLEGROUP_NAME,
     TG.TABLEGROUP_ID,
     TG.SHARDING,
+    (CASE
+       WHEN TG.SCOPE IS NULL OR TG.SCOPE IN ('', 'NULL') THEN
+         (CASE
+            WHEN UPPER(TG.SHARDING) = 'NONE' THEN 'SERVER'
+            WHEN UPPER(TG.SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'
+          END)
+       ELSE TG.SCOPE
+     END) AS SCOPE,
     /* same with ObSimpleTableSchemaV2::is_global_index_table() */
     CASE WHEN A.INDEX_TYPE IN (3,4,11,17,18,19) THEN 'GLOBAL'
          WHEN A.INDEX_TYPE IN (1,2,5,7,8,10,12,13,14,15,16,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44) THEN 'LOCAL'

@@ -27,6 +27,42 @@ namespace rootserver
 {
 #define PB_INFO(fmt, args...) LOG_INFO("[PARTITION_BALANCE] " fmt, ##args)
 
+bool ObLSDesc::less_unweighted_pg_cnt(const ObLSDesc *left, const ObLSDesc *right)
+{
+  bool bret = false;
+  if (OB_ISNULL(left) || OB_ISNULL(right)) {
+    // return false by default
+  } else if (left->get_unweighted_partgroup_cnt() < right->get_unweighted_partgroup_cnt()) {
+    bret = true;
+  } else if (left->get_unweighted_partgroup_cnt() == right->get_unweighted_partgroup_cnt()) {
+    bret = less_data_size(left, right);
+  }
+  return bret;
+}
+
+bool ObLSDesc::less_data_size(const ObLSDesc *left, const ObLSDesc *right)
+{
+  bool bret = false;
+  if (OB_ISNULL(left) || OB_ISNULL(right)) {
+    // return false by default
+  } else if (left->get_data_size() < right->get_data_size()) {
+    bret = true;
+  } else if (left->get_data_size() == right->get_data_size()) {
+    bret = left->get_ls_id() > right->get_ls_id();
+  }
+  return bret;
+}
+
+bool ObLSDesc::compare_by_primary_zone(const ObLSDesc *left, const ObLSDesc *right)
+{
+  if (OB_ISNULL(left) || OB_ISNULL(right)) {
+    // return false by default
+  } else if (left->get_primary_zone() < right->get_primary_zone()) {
+    return true;
+  }
+  return false;
+}
+
 ObPartTransferJobGenerator::ObPartTransferJobGenerator()
     : inited_(false),
       tenant_id_(OB_INVALID_TENANT_ID),
@@ -430,8 +466,8 @@ int ObPartTransferJobGenerator::gen_transfer_tasks_between_normal_ls_()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(balance_job_),
         "normal_to_normal_part_map_ size", normal_to_normal_part_map_.size());
-  } else if (balance_job_.get_balance_strategy().is_part_balance_intra_group_weight() &&
-      OB_FAIL(optimize_transfer_path_for_weight_balance())) {
+  } else if (balance_job_.get_balance_strategy().need_optimize_transfer_path() &&
+      OB_FAIL(optimize_transfer_path())) {
     LOG_WARN("optimize transfer path for weight balance failed", KR(ret), K(balance_job_));
   } else {
     for (ObTransferPartMap::const_iterator iter = normal_to_normal_part_map_.begin();
@@ -563,14 +599,14 @@ int ObPartTransferJobGenerator::choose_dup_ls_transfer_ls_group_id_(
 
 // e.g. original transfer path: LS1->LS2, LS2->LS3, LS3->LS4
 //      optimized transfer path: LS1->LS4
-int ObPartTransferJobGenerator::optimize_transfer_path_for_weight_balance()
+int ObPartTransferJobGenerator::optimize_transfer_path()
 {
   int ret = OB_SUCCESS;
   hash::ObHashMap<ObTransferPartInfo, ObArray<ObTransferTaskKey>> part_map;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("check inner stat failed", KR(ret));
   } else if (OB_UNLIKELY(!balance_job_.is_valid()
-      || !balance_job_.get_balance_strategy().is_part_balance_intra_group_weight())) {
+      || !balance_job_.get_balance_strategy().need_optimize_transfer_path())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(balance_job_));
   } else if (normal_to_normal_part_map_.empty()) {

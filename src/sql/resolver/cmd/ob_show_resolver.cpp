@@ -1472,9 +1472,9 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
 
             if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, compat_version))) {
               LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
-            } else if (compat_version < DATA_VERSION_4_2_0_0) {
-              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLEGROUPS);
-              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLEGROUPS,
+            } else if (compat_version < DATA_VERSION_4_4_2_1) {
+              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLEGROUPS_V2);
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLEGROUPS_V2,
                             REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
                             REAL_NAME(OB_ALL_TABLEGROUP_TNAME, OB_ALL_VIRTUAL_TABLEGROUP_REAL_AGENT_ORA_TNAME),
                             REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
@@ -1485,8 +1485,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                             is_oracle_mode ? real_tenant_id : sql_tenant_id,
                             is_oracle_mode ? real_tenant_id : sql_tenant_id);
             } else {
-              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLEGROUPS_V2);
-              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLEGROUPS_V2,
+              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLEGROUPS_V3);
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLEGROUPS_V3,
                             REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
                             REAL_NAME(OB_ALL_TABLEGROUP_TNAME, OB_ALL_VIRTUAL_TABLEGROUP_REAL_AGENT_ORA_TNAME),
                             REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
@@ -3914,19 +3914,6 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_CHARSET,
                        "SELECT charset AS Charset, description AS `Description`, default_collation AS `Default collation`, max_length AS `Maxlen` FROM %s.%s",
                        R"(SELECT "CHARSET" AS "CHARSET", "DESCRIPTION" AS "DESCRIPTION", "DEFAULT_COLLATION" AS "DEFAULT COLLATION", "MAX_LENGTH" AS "MAXLEN" FROM %s.%s)",
                        "Charset");
-DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS,
-                       NULL,
-                       "SELECT t1.Tablegroup_name AS Tablegroup_name, t2.Table_name AS Table_name, t3.Database_name AS Database_name \
-                        FROM %s.%s t1 LEFT JOIN %s.%s  t2 ON (t1.tablegroup_id = t2.tablegroup_id and t2.tenant_id = %lu) \
-                        LEFT JOIN %s.%s  t3 ON (t2.database_id = t3.database_id and t3.tenant_id = %lu) \
-                        WHERE t1.tenant_id = %lu \
-                        ORDER BY t1.tablegroup_name, t2.table_name",
-                        "SELECT T1.TABLEGROUP_NAME AS \"TABLEGROUP_NAME\", T2.TABLE_NAME AS \"TABLE_NAME\", T3.DATABASE_NAME AS \"DATABASE_NAME\" \
-                        FROM %s.%s T1 LEFT JOIN %s.%s  T2 ON (T1.TABLEGROUP_ID = T2.TABLEGROUP_ID AND T2.TENANT_ID = %lu) \
-                        LEFT JOIN %s.%s  T3 ON (T2.DATABASE_ID = T3.DATABASE_ID AND T3.TENANT_ID = %lu) \
-                        WHERE T1.TENANT_ID = %lu \
-                        ORDER BY T1.TABLEGROUP_NAME, T2.TABLE_NAME",
-                       "Tablegroup_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS_V2,
                        NULL,
                        "SELECT t1.Tablegroup_name AS Tablegroup_name, t2.Table_name AS Table_name, t3.Database_name AS Database_name, t1.Sharding AS Sharding \
@@ -3940,6 +3927,35 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS_V2,
                         WHERE T1.TENANT_ID = %lu \
                         ORDER BY T1.TABLEGROUP_NAME, T2.TABLE_NAME",
                        "Tablegroup_name");
+DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS_V3,
+                        NULL,
+                        "SELECT t1.Tablegroup_name AS Tablegroup_name, t2.Table_name AS Table_name, t3.Database_name AS Database_name, t1.Sharding AS Sharding, \
+                         (CASE \
+                            WHEN t1.Scope IS NULL OR t1.Scope IN ('', 'NULL') THEN \
+                              (CASE \
+                                 WHEN UPPER(t1.Sharding) = 'NONE' THEN 'SERVER' \
+                                 WHEN UPPER(t1.Sharding) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER' \
+                               END) \
+                            ELSE t1.Scope \
+                          END) AS Scope \
+                         FROM %s.%s t1 LEFT JOIN %s.%s  t2 ON (t1.tablegroup_id = t2.tablegroup_id and t2.tenant_id = %lu AND t2.table_type in (0, 3, 6)) \
+                         LEFT JOIN %s.%s  t3 ON (t2.database_id = t3.database_id and t3.tenant_id = %lu) \
+                         WHERE t1.tenant_id = %lu \
+                         ORDER BY t1.tablegroup_name, t2.table_name",
+                         "SELECT T1.TABLEGROUP_NAME AS \"TABLEGROUP_NAME\", T2.TABLE_NAME AS \"TABLE_NAME\", T3.DATABASE_NAME AS \"DATABASE_NAME\", T1.SHARDING AS \"SHARDING\", \
+                         (CASE \
+                            WHEN T1.SCOPE IS NULL OR T1.SCOPE IN ('', 'NULL') THEN \
+                              (CASE \
+                                 WHEN UPPER(T1.SHARDING) = 'NONE' THEN 'SERVER' \
+                                 WHEN UPPER(T1.SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER' \
+                               END) \
+                            ELSE T1.SCOPE \
+                          END) AS \"SCOPE\" \
+                         FROM %s.%s T1 LEFT JOIN %s.%s  T2 ON (T1.TABLEGROUP_ID = T2.TABLEGROUP_ID AND T2.TENANT_ID = %lu AND T2.TABLE_TYPE in (0, 3, 6)) \
+                         LEFT JOIN %s.%s  T3 ON (T2.DATABASE_ID = T3.DATABASE_ID AND T3.TENANT_ID = %lu) \
+                         WHERE T1.TENANT_ID = %lu \
+                         ORDER BY T1.TABLEGROUP_NAME, T2.TABLE_NAME",
+                        "Tablegroup_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_VARIABLES,
                        NULL,
                        "SELECT /*+parallel(1)*/ variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",

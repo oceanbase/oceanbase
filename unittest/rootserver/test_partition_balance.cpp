@@ -45,13 +45,15 @@ ObArray<TestTransferTask> g_transfer_task_arr;
 
 int ObPartitionBalance::prepare_ls_()
 {
+  common::ObZone primary_zone;
+  (void)primary_zone.assign("z1");
   int ls_cnt = g_ls_cnt;
   allocator_.reset();
   ls_desc_array_.reset();
   ls_desc_map_.reuse();
   bg_map_.reuse();
   for (int i = 1; i <= ls_cnt; i++) {
-    auto ls_desc = new ObLSDesc(ObLSID(i), 0);
+    auto ls_desc = new ObLSDesc(ObLSID(i), 0, primary_zone);
     ls_desc_array_.push_back(ls_desc);
     ls_desc_map_.set_refactored(ls_desc->ls_id_, ls_desc);
   }
@@ -131,7 +133,8 @@ private:
       int64_t part_group_uid = part_object_id;
       int64_t tablet_size = data_size/unweighted_part_cnt;
       int64_t balance_weight = 0;
-      if (OB_FAIL(pb_.add_part_to_bg_map_(ls_id, bg, mock_table_schema, part_group_uid, new_part, tablet_size, balance_weight))) {
+      int64_t part_balance_weight = 0;
+      if (OB_FAIL(pb_.add_new_part_to_update_maps_(ls_id, bg, mock_table_schema, part_group_uid, new_part, tablet_size, balance_weight, part_balance_weight))) {
         LOG_WARN("add new partition group to balance group failed", KR(ret), K(ls_id), K(bg), K(new_part));
       } else if (OB_FAIL(pb_.ls_desc_map_.get_refactored(ls_id, ls_desc))) {
       } else {

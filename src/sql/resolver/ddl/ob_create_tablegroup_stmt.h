@@ -35,6 +35,7 @@ public:
   virtual int set_primary_zone(const common::ObString &zone) override;
   virtual int set_locality(const common::ObString &locality) override;
   virtual int set_tablegroup_sharding(const common::ObString &sharding) override;
+  virtual int set_tablegroup_scope(const common::ObString &scope) override;
   obrpc::ObCreateTablegroupArg &get_create_tablegroup_arg();
   virtual obrpc::ObDDLArg &get_ddl_arg() { return create_tablegroup_arg_; }
   virtual int set_tablegroup_id(uint64_t tablegroup_id) override;
@@ -69,6 +70,11 @@ inline int ObCreateTablegroupStmt::set_tablegroup_id(
 inline int ObCreateTablegroupStmt::set_tablegroup_sharding(const common::ObString &sharding)
 {
   return create_tablegroup_arg_.tablegroup_schema_.set_sharding(sharding);
+}
+
+inline int ObCreateTablegroupStmt::set_tablegroup_scope(const common::ObString &scope)
+{
+  return create_tablegroup_arg_.tablegroup_schema_.set_scope(scope);
 }
 
 }  //namespace sql

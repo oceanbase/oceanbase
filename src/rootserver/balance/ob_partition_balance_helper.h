@@ -28,23 +28,61 @@ class ObMySQLProxy;
 namespace rootserver
 {
 
+// Stats for balance groups with ZONE scope.
+// Note: this is used by ObPartitionBalance to maintain scope_zone_bg_stat_map_.
+class ObScopeZoneBGStatInfo
+{
+public:
+  ObScopeZoneBGStatInfo() : bg_data_size_(0), bg_weight_(0) {}
+  ObScopeZoneBGStatInfo(int64_t bg_data_size, int64_t bg_weight, const common::ObZone &zone)
+      : bg_data_size_(bg_data_size), bg_weight_(bg_weight), zone_(zone) {}
+  void reset()
+  {
+    bg_data_size_ = 0;
+    bg_weight_ = 0;
+    zone_.reset();
+  }
+  bool is_valid() const { return !zone_.is_empty() && bg_weight_ >= 0 && bg_data_size_ >= 0; }
+  void add_bg_data_size(int64_t value) { bg_data_size_ += value; }
+  int64_t get_bg_data_size() const { return bg_data_size_; }
+  int64_t get_bg_weight() const { return bg_weight_; }
+  const common::ObZone &get_zone() const { return zone_; }
+  TO_STRING_KV(K_(bg_data_size), K_(bg_weight), K_(zone));
+
+private:
+  int64_t bg_data_size_;
+  int64_t bg_weight_;
+  common::ObZone zone_;
+};
+
 class ObLSDesc
 {
 public:
-  ObLSDesc(share::ObLSID ls_id, uint64_t ls_group_id)
+  ObLSDesc(share::ObLSID ls_id, uint64_t ls_group_id, const common::ObZone &primary_zone)
       : ls_id_(ls_id),
         ls_group_id_(ls_group_id),
         unweighted_partgroup_cnt_(0),
         weighted_partgroup_cnt_(0),
         data_size_(0),
-        balance_weight_(0) {}
+        balance_weight_(0),
+        primary_zone_(primary_zone) {}
   ~ObLSDesc() {}
+  void reset_stat() {
+    unweighted_partgroup_cnt_ = 0;
+    weighted_partgroup_cnt_ = 0;
+    data_size_ = 0;
+    balance_weight_ = 0;
+  }
+  static bool less_unweighted_pg_cnt(const ObLSDesc *left, const ObLSDesc *right);
+  static bool less_data_size(const ObLSDesc *left, const ObLSDesc *right);
+  static bool compare_by_primary_zone(const ObLSDesc *left, const ObLSDesc *right);
   share::ObLSID get_ls_id() const { return ls_id_; }
   int64_t get_partgroup_cnt() const { return unweighted_partgroup_cnt_ + weighted_partgroup_cnt_; }
   int64_t get_unweighted_partgroup_cnt() const { return unweighted_partgroup_cnt_; }
   int64_t get_data_size() const { return data_size_; }
   uint64_t get_ls_group_id() const { return ls_group_id_; }
   int64_t get_balance_weight() const { return balance_weight_; }
+  const common::ObZone &get_primary_zone() const { return primary_zone_; }
   void add_data_size(int64_t size) { data_size_ += size; }
   void add_partgroup(int64_t count, int64_t size, int64_t balance_weight) {
     data_size_ += size;
@@ -56,7 +94,7 @@ public:
     }
   }
   TO_STRING_KV(K_(ls_id), K_(ls_group_id), K_(unweighted_partgroup_cnt),
-      K_(weighted_partgroup_cnt), K_(data_size), K_(balance_weight));
+      K_(weighted_partgroup_cnt), K_(data_size), K_(balance_weight), K_(primary_zone));
 private:
   share::ObLSID ls_id_;
   uint64_t ls_group_id_;
@@ -64,6 +102,7 @@ private:
   int64_t weighted_partgroup_cnt_;
   int64_t data_size_;
   int64_t balance_weight_;
+  common::ObZone primary_zone_;
 };
 
 typedef common::hash::ObHashMap<share::ObLSID, uint64_t> ObLSGroupIDMap;
@@ -119,7 +158,7 @@ private:
       const share::ObLSID &src_ls_id,
       const share::ObLSID &dest_ls_id,
       uint64_t &ls_group_id);
-  int optimize_transfer_path_for_weight_balance();
+  int optimize_transfer_path();
   int gen_part_map_by_transfer_map_(
       hash::ObHashMap<share::ObTransferPartInfo, ObArray<share::ObTransferTaskKey>> &part_map);
   int merge_transfer_task_for_each_part_(

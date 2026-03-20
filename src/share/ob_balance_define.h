@@ -62,6 +62,10 @@ public:
     LB_LS_GROUP_COUNT = 15,
     LB_UNIT_LIST = 16,
     LB_LS_COUNT = 17,
+    // Partition Balance (zone scope tablegroup)
+    PB_INTER_ZONE = 18,
+    PB_INTER_ZONE_WEIGHT = 19,
+    PB_INTER_ZONE_DISK = 20,
     MAX_STRATEGY
   };
   static const char* BALANCE_STRATEGY_STR_ARRAY[MAX_STRATEGY + 1];
@@ -74,11 +78,14 @@ public:
   bool is_valid() const { return val_ >= LB_MIGRATE && val_ < MAX_STRATEGY; }
   bool is_partition_balance_strategy() const
   {
-    return (val_ >= PB_COMPAT_OLD && val_ <= PB_PART_DISK);
+    return (val_ >= PB_COMPAT_OLD && val_ <= PB_PART_DISK)
+        || PB_INTER_ZONE == val_
+        || PB_INTER_ZONE_WEIGHT == val_
+        || PB_INTER_ZONE_DISK == val_;
   }
   bool is_new_ls_balance_strategy() const
   {
-    return val_ >= LB_DUP_LS && val_ < MAX_STRATEGY;
+    return val_ >= LB_DUP_LS && val_ <= LB_LS_COUNT;
   }
   bool is_ls_balance_by_migrate() const { return LB_MIGRATE == val_; }
   bool is_ls_balance_by_alter() const { return LB_ALTER == val_; }
@@ -86,7 +93,13 @@ public:
   bool is_ls_balance_by_shrink() const { return LB_SHRINK == val_; }
   bool is_ls_balance_by_factor() const { return LB_SCALE_OUT_FACTOR == val_; }
   bool is_partition_balance_compatible_strategy() const { return PB_COMPAT_OLD == val_; }
-  bool is_part_balance_intra_group_weight() const { return PB_INTRA_GROUP_WEIGHT == val_; }
+  bool need_optimize_transfer_path() const
+  {
+    return PB_INTRA_GROUP_WEIGHT == val_
+        || PB_INTER_ZONE == val_
+        || PB_INTER_ZONE_WEIGHT == val_
+        || PB_INTER_ZONE_DISK == val_;
+  }
   bool is_unit_list_balance() const
   {
     return LB_UNIT_LIST == val_;
@@ -107,6 +120,8 @@ public:
   const char *str() const;
   int parse_from_str(const ObString &str);
   TO_STRING_KV(K_(val), "val", str());
+private:
+  int64_t get_partition_balance_strategy_order_(const STRATEGY strategy) const;
 private:
   STRATEGY val_;
 };

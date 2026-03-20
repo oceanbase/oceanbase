@@ -877,6 +877,17 @@ DEF_TIME(partition_balance_schedule_interval, OB_TENANT_PARAMETER, "2h", "[0s,]"
          "Default value 2h and the value 0s means disable partition balance. "
          "Range: [0s, +∞)",
          ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(zone_disk_balance_tolerance_percentage, OB_TENANT_PARAMETER, "10", "[1, 100]",
+        "controls the tolerance level of the inter-zone disk balancing algorithm for tablegroups. "
+        "Disk rebalancing is triggered only when the difference between the highest and lowest disk usage zones "
+        "exceeds the tolerance percentage of the highest zone's usage. Range: [1, 100] in percentage; "
+        "setting 100 means disable inter-zone tablegroup disk balance.",
+        ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(_partition_balance_disk_threshold, OB_TENANT_PARAMETER, "50G", "[1G,)",
+        "controls the trigger threshold for disk balancing in the partition balancing algorithm. "
+        "When the disk usage of single LS exceeds this threshold, the disk-related balancing strategies "
+        "is triggered. Range: [1G, +∞)",
+        ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(ls_scale_out_factor, OB_TENANT_PARAMETER, "1", "[1, 10]",
         "Parameters can allow tenant to have enough LS to meet the scaling requirements, "
         "and disabling transfer when scaling can also achieve a flat effect. "

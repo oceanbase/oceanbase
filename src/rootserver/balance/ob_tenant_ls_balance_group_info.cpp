@@ -89,9 +89,10 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
     const share::ObLSID &dest_ls_id,
     const int64_t tablet_size,
     const uint64_t part_group_uid,
-    const int64_t balance_weight)
+    const int64_t bg_balance_weight,
+    const int64_t part_balance_weight)
 {
-  UNUSEDx(dest_ls_id);
+  UNUSEDx(dest_ls_id, bg_balance_weight);
   int ret = OB_SUCCESS;
   ObLSBalanceGroupInfo *ls_bg_info = NULL;
   ObTransferPartInfo part_info(table_schema.get_table_id(), part_object_id);
@@ -104,10 +105,10 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
       || !is_valid_id(part_group_uid)
       || !src_ls_id.is_valid_with_tenant(tenant_id_)
       || tablet_size < 0
-      || balance_weight < 0)) {
+      || part_balance_weight < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(table_schema), K(part_object_id),
-        K(src_ls_id), K(tablet_size), K(part_group_uid), K(balance_weight));
+        K(src_ls_id), K(tablet_size), K(part_group_uid), K(part_balance_weight));
   } else if (OB_FAIL(get_or_create(src_ls_id, ls_bg_info))) {
     LOG_WARN("get or create ls balance group info fail", KR(ret), K(src_ls_id));
   } else if (OB_ISNULL(ls_bg_info)) {
@@ -119,9 +120,9 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
       part_info,
       tablet_size,
       part_group_uid,
-      balance_weight))) {
+      part_balance_weight))) {
     LOG_WARN("append part into balance group for LS balance group info fail", KR(ret), K(bg),
-        K(part_info), K(tablet_size), K(part_group_uid), K(balance_weight), K(table_schema));
+        K(part_info), K(tablet_size), K(part_group_uid), K(part_balance_weight), K(table_schema));
   }
   return ret;
 }

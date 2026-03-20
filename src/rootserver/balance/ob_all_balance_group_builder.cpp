@@ -20,12 +20,12 @@
 #define ISTAT(fmt, args...) FLOG_INFO("[BALANCE_GROUP_BUILDER] " fmt, K_(mod), ##args)
 #define WSTAT(fmt, args...) FLOG_WARN("[BALANCE_GROUP_BUILDER] " fmt, K_(mod), ##args)
 
-#define ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, balance_weight) \
+#define ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, bg_balance_weight, part_balance_weight) \
     do {\
-      if (FAILEDx(add_new_part_(bg, table_schema, part_object_id, tablet_id, part_group_uid, balance_weight))) {\
+      if (FAILEDx(add_new_part_(bg, table_schema, part_object_id, tablet_id, part_group_uid, bg_balance_weight, part_balance_weight))) {\
         LOG_WARN("add new partition fail", KR(ret), K(bg), K(part_object_id), K(part_group_uid), \
         K(pre_dest_ls_id_), K(pre_dup_to_normal_dest_ls_id_), K(pre_bg_id_), K(pre_part_group_uid_), \
-        K(balance_weight), K(table_schema));\
+        K(bg_balance_weight), K(part_balance_weight), K(table_schema));\
       }\
     } while (0)
 
@@ -348,7 +348,11 @@ int ObAllBalanceGroupBuilder::build_balance_group_for_tablegroup_(
   int ret = OB_SUCCESS;
   uint64_t tablegroup_id = tablegroup_schema.get_tablegroup_id();
 
-  if (is_sys_tablegroup_id(tablegroup_id)) {
+  if (OB_UNLIKELY(!ObTablegroupSchema::is_sharding_scope_matched(
+      tablegroup_schema.get_sharding(), tablegroup_schema.get_scope()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablegroup sharding-scope combination", KR(ret), K(tablegroup_schema));
+  } else if (is_sys_tablegroup_id(tablegroup_id)) {
     // skip sys tablegroup
   } else if (table_schemas.empty()) {
     ISTAT("table_schemas empty in tablegroup, need not build balance group", K_(tenant_id), K(tablegroup_schema));
@@ -356,7 +360,7 @@ int ObAllBalanceGroupBuilder::build_balance_group_for_tablegroup_(
   } else if (OB_FAIL(check_table_schemas_in_tablegroup_(table_schemas))) { // defensive check
     LOG_WARN("check table schemas for tablegroup failed", KR(ret), K(tenant_id_), K(tablegroup_schema));
   } else if (tablegroup_schema.is_sharding_none() || PARTITION_LEVEL_ZERO == max_part_level) {
-    // sharding none tablegroup or non-partition tables always distribute together on same LS
+    // iterate all partitions in the tablegroup equally
     if (OB_FAIL(build_bg_for_tablegroup_sharding_none_(tablegroup_schema, table_schemas, max_part_level))) {
       LOG_WARN("fail to build balance group for tablegroup NONE sharding or non-part tables", KR(ret), K(tenant_id_),
           K(tablegroup_schema), K(max_part_level));
@@ -441,9 +445,24 @@ int ObAllBalanceGroupBuilder::build_balance_group_for_table_not_in_tablegroup_(
   return ret;
 }
 
-// 1. All part in one partition group and balance group.
+// 1. This function handles two occasions:
+//   a. All partitions in one partition group and balance group. (SINGLE_PG_TABLEGROUP_BG)
+//   b. All partitions in one balance group, but each partition in one partition group.
+//      Including: sharding none && scope zone/cluster tablegroup
 // 2. Global indexes of primary table in sharding none tablegroup are in the same balance group.
-// 3. Ignore all balance weight except for tablegroup weight.
+// 3. For SINGLE_PG_TABLEGROUP_BG / scope zone tablegroup, ignore all balance weight except for tablegroup weight;
+//    for scope cluster tablegroup, balance weight is the weight of partition.
+//
+// Note:
+// In version before 4.4.1, each sharding none tablegroup was an independent balance group.
+// In version 4.4.1 and later, all sharding none tablegroups were integrated into one special balance group,
+//   called SHARDING_NONE_TABLEGROUP_BG, and each tablegroup became a partition group,
+//   so that all sharding none tablegroups can be evenly distributed on LSes.
+// In version 4.4.2.1 and later, scope is introduced, SHARDING_NONE_TABLEGROUP_BG is renamed to SINGLE_PG_TABLEGROUP_BG,
+//   and it includes:
+//   * sharding none && scope server tablegroup
+//   * sharding partition/adaptive && non-part tables tablegroup
+//     (newly added, which behave like sharding none && scope server tablegroup)
 int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_none_(
     const ObSimpleTablegroupSchema &tablegroup_schema,
     const ObArray<const ObSimpleTableSchemaV2*> &table_schemas,
@@ -454,60 +473,28 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_none_(
   const ObString &tablegroup_name = tablegroup_schema.get_tablegroup_name();
   const uint64_t tablegroup_id = tablegroup_schema.get_tablegroup_id();
   ObArray<const ObSimpleTableSchemaV2 *> global_index_schemas;
+  ObArray<const ObSimpleTableSchemaV2 *> table_and_global_index_schemas;
   int64_t tablegroup_weight = 0;
   if (OB_FAIL(bg.init_by_tablegroup(tablegroup_schema, max_part_level))) {
     LOG_WARN("init balance group by tablegroup fail", KR(ret), K(bg), K(max_part_level),
         K(tablegroup_schema));
   } else if (OB_FAIL(obj_weight_mgr_.get_tablegroup_weight(
-    tablegroup_id,
+      tablegroup_id,
       tablegroup_weight))) {
     LOG_WARN("get tablegroup weight failed", KR(ret), K(tablegroup_schema));
   } else if (OB_FAIL(get_global_indexes_of_tables_(table_schemas, global_index_schemas))) {
     LOG_WARN("get global indexes of tables failed", KR(ret), K(table_schemas));
-  } else if (OB_FAIL(add_part_to_bg_for_tablegroup_sharding_none_(
-      bg,
-      tablegroup_id,
-      table_schemas,
-      tablegroup_weight))) {
-    LOG_WARN("add part to bg for tablegroup sharding none failed",
-        KR(ret), K(bg), K(table_schemas));
-  } else if (OB_FAIL(add_part_to_bg_for_tablegroup_sharding_none_(
-      bg,
-      tablegroup_id,
-      global_index_schemas,
-      0/*tablegroup_weight*/))) { // ignore balance weight for global indexes
-    LOG_WARN("add global index part to bg for tablegroup sharding none failed",
-        KR(ret), K(bg), K(global_index_schemas));
-  }
-
-  ISTAT("build balance group for table group of NONE sharding or non-partition tables",
-      KR(ret), K(max_part_level), K(tablegroup_schema), "table_count", table_schemas.count(),
-      "global_index_count", global_index_schemas.count(), K(tablegroup_weight));
-  return ret;
-}
-
-int ObAllBalanceGroupBuilder::add_part_to_bg_for_tablegroup_sharding_none_(
-    const ObBalanceGroup &bg,
-    const uint64_t tablegroup_id,
-    const ObArray<const ObSimpleTableSchemaV2*> &table_schemas,
-    const int64_t tablegroup_weight)
-{
-  int ret = OB_SUCCESS;
-  bool weight_is_set = false;
-  // In the previous version, each sharding none tablegroup was an independent balance group with part_group_uid = 0.
-  // Starting from version 4.4.1, all sharding none tablegroups were integrated into one balance group,
-  // and each tablegroup became a partition group.
-  // "part_group_uid = tablegroup_id" means all partitions in the tablegroup belong to the same partition group for each LS.
-  const uint64_t part_group_uid = tablegroup_id;
-  if (OB_UNLIKELY(bg.name().is_empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid balance group", KR(ret), K(bg));
+  } else if (OB_FAIL(append(table_and_global_index_schemas, table_schemas))) {
+    LOG_WARN("append array failed", KR(ret), K(table_schemas));
+  } else if (OB_FAIL(append(table_and_global_index_schemas, global_index_schemas))) {
+    LOG_WARN("append array failed", KR(ret), K(global_index_schemas));
   } else {
-    ARRAY_FOREACH(table_schemas, idx) {
-      const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(idx);
+    bool is_first_part = true;
+    ARRAY_FOREACH(table_and_global_index_schemas, idx) {
+      const ObSimpleTableSchemaV2 *table_schema = table_and_global_index_schemas.at(idx);
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table_schema is null", KR(ret), K(table_schema), K(idx));
+        LOG_WARN("table_schema is null", KR(ret), KP(table_schema), K(idx));
       } else {
         ObPartitionSchemaIter iter(*table_schema, CHECK_PARTITION_MODE_NORMAL);
         ObPartitionSchemaIter::Info info;
@@ -517,19 +504,29 @@ int ObAllBalanceGroupBuilder::add_part_to_bg_for_tablegroup_sharding_none_(
               ret = OB_SUCCESS;
               break;
             }
+          } else if (bg.is_single_pg_tablegroup_bg()) {
+            // SINGLE_PG_TABLEGROUP_BG:
+            // - All partitions in a tablegroup form ONE partition group (PG) in this balance group.
+            //   Use tablegroup_id as part_group_uid.
+            // - Take tablegroup weight as PG balance weight, passed with the first partition.
+            ADD_NEW_PART(bg, *table_schema, info.object_id_, info.tablet_id_, tablegroup_id, 0/*bg_balance_weight*/,
+                is_first_part ? tablegroup_weight : 0/*part_balance_weight*/);
           } else {
-            ObObjectID part_object_id = info.object_id_;
-            ObTabletID tablet_id = info.tablet_id_;
-            // ignore all balance weight except for tablegroup weight
-            const int64_t obj_weight = weight_is_set ? 0 : tablegroup_weight;
-
-            ADD_NEW_PART(bg, *table_schema, part_object_id, tablet_id, part_group_uid, obj_weight);
-            weight_is_set = true;
+            // SCOPE ZONE / CLUSTER tablegroup:
+            // - Each partition is an independent PG, so part_group_uid = part_object_id.
+            // - Take tablegroup weight as BG balance weight.
+            // - PG balance weight is 0. Do not support partition balance weight for now.
+            ADD_NEW_PART(bg, *table_schema, info.object_id_, info.tablet_id_, info.object_id_, tablegroup_weight,
+                0/*part_balance_weight*/);
           }
-        } // end while
+          is_first_part = false;
+        } // end for each partition
       }
-    } // end ARRAY_FOREACH
+    } // end for each table or global index
   }
+  ISTAT("build balance group for table group of NONE sharding or non-partition tables",
+      KR(ret), K(max_part_level), K(tablegroup_schema), "table_count", table_schemas.count(),
+      "global_index_count", global_index_schemas.count(), K(tablegroup_weight));
   return ret;
 }
 
@@ -652,7 +649,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_partition_(
           ObObjectID part_object_id = part_info.get_part_id();
           ObTabletID tablet_id = part_info.get_tablet_id();
 
-          ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, obj_weight);
+          ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, 0/*bg_balance_weight*/, obj_weight);
         }
       } else if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
         int64_t sub_part_num = 0;
@@ -669,7 +666,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_partition_(
               ObTabletID tablet_id = part_info.get_tablet_id();
               obj_weight = 0; // TODO: support subpart balance weight later
 
-              ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, obj_weight);
+              ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, 0/*bg_balance_weight*/, obj_weight);
             }
           }
         }
@@ -730,7 +727,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_subpart_(
             ObTabletID tablet_id = part_info.get_tablet_id();
             const int64_t obj_weight = 0; //TODO: support subpart balance weight later
 
-            ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, obj_weight);
+            ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, 0/*bg_balance_weight*/, obj_weight);
           }
         }
       }
@@ -768,7 +765,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_zero_(const ObSimpleTableSc
     ObTabletID tablet_id = table_schema.get_tablet_id();
     const uint64_t part_group_uid = table_schema.get_table_id(); // each table is an independent partition group
 
-    ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, obj_weight);
+    ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, 0/*bg_balance_weight*/, obj_weight);
   }
   return ret;
 }
@@ -801,7 +798,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_one_(const ObSimpleTableSch
         ObTabletID tablet_id = part->get_tablet_id();
         const uint64_t part_group_uid = part_object_id; // each partition is an independent partition group
 
-        ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, obj_weight);
+        ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, 0/*bg_balance_weight*/, obj_weight);
       }
     }
   }
@@ -845,7 +842,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_two_(const ObSimpleTableSch
             const uint64_t part_group_uid = part_object_id; // each subpartition is an independent partition group
             const int64_t obj_weight = 0; // TODO: support subpart balance weight later
 
-            ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, obj_weight);
+            ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, 0/*bg_balance_weight*/, obj_weight);
           }
         }
       }
@@ -860,7 +857,8 @@ int ObAllBalanceGroupBuilder::add_new_part_(
     const ObObjectID part_object_id,
     const ObTabletID tablet_id,
     const uint64_t part_group_uid,
-    const int64_t balance_weight)
+    const int64_t bg_balance_weight,
+    const int64_t part_balance_weight)
 {
   int ret = OB_SUCCESS;
   ObLSID src_ls_id;
@@ -877,10 +875,10 @@ int ObAllBalanceGroupBuilder::add_new_part_(
       || !is_valid_id(part_object_id)
       || !tablet_id.is_valid()
       || !is_valid_id(part_group_uid)
-      || balance_weight < 0)) {
+      || bg_balance_weight < 0 || part_balance_weight < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(bg), K(part_object_id), K(tablet_id),
-        K(part_group_uid), K(balance_weight), K(table_schema));
+        K(part_group_uid), K(bg_balance_weight), K(part_balance_weight), K(table_schema));
   } else if (OB_FAIL(tablet_to_ls_.get(tablet_id, src_ls_id))) {
     LOG_WARN("fail to get LS info for tablet, tablet may be dropped", KR(ret), K(tablet_id), K(table_schema));
     if (OB_HASH_NOT_EXIST == ret) {
@@ -923,10 +921,11 @@ int ObAllBalanceGroupBuilder::add_new_part_(
         dest_ls_id,
         tablet_size,
         part_group_uid,
-        balance_weight))) {
+        bg_balance_weight,
+        part_balance_weight))) {
       LOG_WARN("callback handle new partition fail", KR(ret), K(bg),
           K(part_object_id), K(tablet_id), K(src_ls_id), K(dest_ls_id), K(tablet_size),
-          K(part_group_uid), K(balance_weight), K(pre_dest_ls_id_),
+          K(part_group_uid), K(bg_balance_weight), K(part_balance_weight), K(pre_dest_ls_id_),
           K(pre_dup_to_normal_dest_ls_id_), K(pre_bg_id_), K(pre_part_group_uid_), K(table_schema));
     } else {
       pre_bg_id_ = bg.id();

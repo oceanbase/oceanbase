@@ -1233,7 +1233,7 @@ int ObInnerTableSchema::dba_ob_tablegroups_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TABLEGROUP_NAME,           CAST("NONE" AS CHAR(13)) AS PARTITIONING_TYPE,           CAST("NONE" AS CHAR(13)) AS SUBPARTITIONING_TYPE,           CAST(NULL AS SIGNED) AS PARTITION_COUNT,           CAST(NULL AS SIGNED) AS DEF_SUBPARTITION_COUNT,           CAST(NULL AS SIGNED) AS PARTITIONING_KEY_COUNT,           CAST(NULL AS SIGNED) AS SUBPARTITIONING_KEY_COUNT,           SHARDING    FROM OCEANBASE.__ALL_TABLEGROUP   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TABLEGROUP_NAME,           CAST("NONE" AS CHAR(13)) AS PARTITIONING_TYPE,           CAST("NONE" AS CHAR(13)) AS SUBPARTITIONING_TYPE,           CAST(NULL AS SIGNED) AS PARTITION_COUNT,           CAST(NULL AS SIGNED) AS DEF_SUBPARTITION_COUNT,           CAST(NULL AS SIGNED) AS PARTITIONING_KEY_COUNT,           CAST(NULL AS SIGNED) AS SUBPARTITIONING_KEY_COUNT,           SHARDING,          (CASE             WHEN SCOPE IN ('', 'NULL') THEN               (CASE                  WHEN UPPER(SHARDING) = 'NONE' THEN 'SERVER'                  WHEN UPPER(SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'                END)             ELSE SCOPE           END) AS SCOPE    FROM OCEANBASE.__ALL_TABLEGROUP   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1284,7 +1284,7 @@ int ObInnerTableSchema::cdb_ob_tablegroups_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,           TABLEGROUP_NAME,           CAST("NONE" AS CHAR(13)) AS PARTITIONING_TYPE,           CAST("NONE" AS CHAR(13)) AS SUBPARTITIONING_TYPE,           CAST(NULL AS SIGNED) AS PARTITION_COUNT,           CAST(NULL AS SIGNED)  AS DEF_SUBPARTITION_COUNT,           CAST(NULL AS SIGNED) AS PARTITIONING_KEY_COUNT,           CAST(NULL AS SIGNED) AS SUBPARTITIONING_KEY_COUNT,           SHARDING    FROM OCEANBASE.__ALL_VIRTUAL_TABLEGROUP   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,           TABLEGROUP_NAME,           CAST("NONE" AS CHAR(13)) AS PARTITIONING_TYPE,           CAST("NONE" AS CHAR(13)) AS SUBPARTITIONING_TYPE,           CAST(NULL AS SIGNED) AS PARTITION_COUNT,           CAST(NULL AS SIGNED)  AS DEF_SUBPARTITION_COUNT,           CAST(NULL AS SIGNED) AS PARTITIONING_KEY_COUNT,           CAST(NULL AS SIGNED) AS SUBPARTITIONING_KEY_COUNT,           SHARDING,          (CASE             WHEN SCOPE IN ('', 'NULL') THEN               (CASE                  WHEN UPPER(SHARDING) = 'NONE' THEN 'SERVER'                  WHEN UPPER(SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'                END)             ELSE SCOPE           END) AS SCOPE    FROM OCEANBASE.__ALL_VIRTUAL_TABLEGROUP   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1641,7 +1641,7 @@ int ObInnerTableSchema::dba_ob_tablegroup_tables_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TG.TABLEGROUP_NAME AS TABLEGROUP_NAME,          D.DATABASE_NAME AS OWNER,          T.TABLE_NAME AS TABLE_NAME,          TG.SHARDING AS SHARDING   FROM OCEANBASE.__ALL_TABLE AS T   JOIN OCEANBASE.__ALL_DATABASE AS D   ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID   JOIN OCEANBASE.__ALL_TABLEGROUP AS TG   ON T.TENANT_ID = TG.TENANT_ID AND T.TABLEGROUP_ID = TG.TABLEGROUP_ID   WHERE T.TABLE_TYPE in (0, 3, 6)   AND T.TABLE_MODE >> 12 & 15 in (0,1)   AND T.INDEX_ATTRIBUTES_SET & 16 = 0   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TG.TABLEGROUP_NAME AS TABLEGROUP_NAME,          D.DATABASE_NAME AS OWNER,          T.TABLE_NAME AS TABLE_NAME,          TG.SHARDING AS SHARDING,          (CASE             WHEN TG.SCOPE IN ('', 'NULL') THEN               (CASE                  WHEN UPPER(TG.SHARDING) = 'NONE' THEN 'SERVER'                  WHEN UPPER(TG.SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'                END)             ELSE TG.SCOPE           END) AS SCOPE   FROM OCEANBASE.__ALL_TABLE AS T   JOIN OCEANBASE.__ALL_DATABASE AS D   ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID   JOIN OCEANBASE.__ALL_TABLEGROUP AS TG   ON T.TENANT_ID = TG.TENANT_ID AND T.TABLEGROUP_ID = TG.TABLEGROUP_ID   WHERE T.TABLE_TYPE in (0, 3, 6)   AND T.TABLE_MODE >> 12 & 15 in (0,1)   AND T.INDEX_ATTRIBUTES_SET & 16 = 0   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1692,7 +1692,7 @@ int ObInnerTableSchema::cdb_ob_tablegroup_tables_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT T.TENANT_ID AS TENANT_ID,          TG.TABLEGROUP_NAME AS TABLEGROUP_NAME,          D.DATABASE_NAME AS OWNER,          T.TABLE_NAME AS TABLE_NAME,          TG.SHARDING AS SHARDING   FROM OCEANBASE.__ALL_VIRTUAL_TABLE AS T   JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE AS D   ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID   JOIN OCEANBASE.__ALL_VIRTUAL_TABLEGROUP AS TG   ON T.TENANT_ID = TG.TENANT_ID AND T.TABLEGROUP_ID = TG.TABLEGROUP_ID   WHERE T.TABLE_TYPE in (0, 3, 6)   AND T.TABLE_MODE >> 12 & 15 in (0,1)   AND T.INDEX_ATTRIBUTES_SET & 16 = 0   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT T.TENANT_ID AS TENANT_ID,          TG.TABLEGROUP_NAME AS TABLEGROUP_NAME,          D.DATABASE_NAME AS OWNER,          T.TABLE_NAME AS TABLE_NAME,          TG.SHARDING AS SHARDING,          (CASE             WHEN TG.SCOPE IN ('', 'NULL') THEN               (CASE                  WHEN UPPER(TG.SHARDING) = 'NONE' THEN 'SERVER'                  WHEN UPPER(TG.SHARDING) IN ('PARTITION', 'ADAPTIVE') THEN 'CLUSTER'                END)             ELSE TG.SCOPE           END) AS SCOPE   FROM OCEANBASE.__ALL_VIRTUAL_TABLE AS T   JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE AS D   ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID   JOIN OCEANBASE.__ALL_VIRTUAL_TABLEGROUP AS TG   ON T.TENANT_ID = TG.TENANT_ID AND T.TABLEGROUP_ID = TG.TABLEGROUP_ID   WHERE T.TABLE_TYPE in (0, 3, 6)   AND T.TABLE_MODE >> 12 & 15 in (0,1)   AND T.INDEX_ATTRIBUTES_SET & 16 = 0   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

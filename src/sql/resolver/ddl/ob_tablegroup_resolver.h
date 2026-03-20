@@ -219,8 +219,9 @@ int ObTableGroupResolver::resolve_tablegroup_option(T *stmt, ParseNode *node)
             const char *sharding_str = option_node->children_[0]->str_value_;
             common::ObString tablegroup_sharding;
             tablegroup_sharding.assign_ptr(sharding_str, static_cast<int32_t>(sharding_length));
-            if (tablegroup_sharding != OB_PARTITION_SHARDING_NONE && tablegroup_sharding != OB_PARTITION_SHARDING_PARTITION
-                && tablegroup_sharding != OB_PARTITION_SHARDING_ADAPTIVE) {
+            if (tablegroup_sharding.case_compare(OB_PARTITION_SHARDING_NONE) != 0
+                && tablegroup_sharding.case_compare(OB_PARTITION_SHARDING_PARTITION) != 0
+                && tablegroup_sharding.case_compare(OB_PARTITION_SHARDING_ADAPTIVE) != 0) {
               ret = OB_INVALID_ARGUMENT;
               SQL_RESV_LOG(WARN, "invalid tablegroup sharding attribute", K(ret),
                          "sharding", tablegroup_sharding);
@@ -231,6 +232,45 @@ int ObTableGroupResolver::resolve_tablegroup_option(T *stmt, ParseNode *node)
           }
           if (OB_SUCC(ret) && OB_FAIL(alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::SHARDING))) {
             SQL_LOG(WARN, "fail to add member", K(ret));
+          }
+          break;
+        }
+        case T_TABLEGROUP_SCOPE: {
+          uint64_t data_version = OB_INVALID_VERSION;
+          if (OB_ISNULL(option_node->children_) || option_node->num_child_ != 1) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_RESV_LOG(WARN, "invalid tablegroup scope attribute", KR(ret),
+                         "num_child", option_node->num_child_);
+          } else if (OB_ISNULL(option_node->children_[0])) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "option_node child is null", KR(ret));
+          } else if (OB_ISNULL(session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "session_info_ is null", K(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
+            LOG_WARN("get min data_version failed", K(ret));
+          } else if (data_version < DATA_VERSION_4_4_2_1) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("can not use scope attribute for tablegroup before 4.4.2.1", KR(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "use scope attribute for tablegroup before 4.4.2.1 is");
+          } else {
+            int64_t scope_length = option_node->children_[0]->str_len_;
+            const char *scope_str = option_node->children_[0]->str_value_;
+            common::ObString tablegroup_scope;
+            tablegroup_scope.assign_ptr(scope_str, static_cast<int32_t>(scope_length));
+            // validate scope: must be one of SERVER/ZONE/CLUSTER
+            if (tablegroup_scope.case_compare(OB_TABLEGROUP_SCOPE_SERVER) != 0
+                && tablegroup_scope.case_compare(OB_TABLEGROUP_SCOPE_ZONE) != 0
+                && tablegroup_scope.case_compare(OB_TABLEGROUP_SCOPE_CLUSTER) != 0) {
+              ret = OB_INVALID_ARGUMENT;
+              SQL_RESV_LOG(WARN, "invalid tablegroup scope attribute", KR(ret), K(tablegroup_scope));
+              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "scope attribute");
+            } else if (OB_FAIL(stmt->set_tablegroup_scope(tablegroup_scope))) {
+              SQL_LOG(WARN, "set_tablegroup_scope", KR(ret));
+            }
+          }
+          if (OB_SUCC(ret) && OB_FAIL(alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::SCOPE))) {
+            SQL_LOG(WARN, "fail to add member", KR(ret));
           }
           break;
         }

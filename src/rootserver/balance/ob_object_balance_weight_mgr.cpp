@@ -169,7 +169,8 @@ int ObObjectBalanceWeightMgr::check_if_obj_weight_is_expired_(
       tablegroup_schema))) { // the tablegroup_id is also recorded in the table_id column
     LOG_WARN("get tablegroup schema failed", KR(ret), K(obj_key));
   } else if (OB_NOT_NULL(tablegroup_schema)) {
-    if (!tablegroup_schema->is_sharding_none()) {
+    if (tablegroup_schema->is_scope_cluster()) {
+      // only support tablegroup level weight for scope server/zone tablegroup
       is_expired = true;
     } else {
       // tablegroup level weight is valid, do nothing

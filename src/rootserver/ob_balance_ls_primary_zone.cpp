@@ -27,10 +27,27 @@ namespace rootserver
 int ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  const bool only_check_balanced = false;
+  bool is_balanced = true;
+  if (OB_FAIL(inner_try_adjust_user_ls_primary_zone_(tenant_id, only_check_balanced, is_balanced))) {
+    LOG_WARN("failed to adjust user ls primary zone", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObBalanceLSPrimaryZone::inner_try_adjust_user_ls_primary_zone_(
+    const uint64_t tenant_id,
+    const bool only_check_balanced,
+    bool &is_balanced)
+{
+  int ret = OB_SUCCESS;
   share::ObLSStatusOperator status_op;
   share::ObLSPrimaryZoneInfoArray info_array;
   ObArray<ObArray<ObZone>> multi_level_primary_zone_array;
   share::schema::ObTenantSchema tenant_schema;
+  // record old primary_zone -> new primary_zone index mapping for set_ls_to_primary_zone_,
+  // try to keep same-zone LS staying same-zone across ls groups.
+  common::hash::ObHashMap<ObZone, int64_t> old_to_new_pz_index_map;
   if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_));
@@ -45,9 +62,13 @@ int ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(const uint64_t tenan
   } else if (OB_FAIL(status_op.get_ls_primary_zone_info_by_order_ls_group(
           tenant_id, info_array, *GCTX.sql_proxy_))) {
     LOG_WARN("failed to get ls primary zone info array", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(old_to_new_pz_index_map.create(DEFAULT_ZONE_COUNT, "LSPZMap"))) {
+    LOG_WARN("failed to create old_to_new_pz_index_map", KR(ret));
   } else {
     uint64_t last_ls_group_id = OB_INVALID_ID;
     share::ObLSPrimaryZoneInfoArray tmp_info_array;
+    is_balanced = true;
+    bool need_update = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < info_array.count(); ++i) {
       //TODO ls group id maybe zero
       const ObLSPrimaryZoneInfo &info = info_array.at(i);
@@ -57,10 +78,13 @@ int ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(const uint64_t tenan
         }
         if (last_ls_group_id != info.get_ls_group_id()) {
           //process the ls group
-          if (OB_FAIL(adjust_primary_zone_by_ls_group_(multi_level_primary_zone_array, tmp_info_array))) {
-            LOG_WARN("failed to update primary zone of each ls group", KR(ret),
-                K(tmp_info_array), K(multi_level_primary_zone_array));
+          if (OB_FAIL(adjust_primary_zone_by_ls_group_(multi_level_primary_zone_array,
+                  tmp_info_array, only_check_balanced, need_update,
+                  old_to_new_pz_index_map))) {
+            LOG_WARN("failed to adjust primary zone of each ls group", KR(ret), K(tmp_info_array),
+                K(multi_level_primary_zone_array), K(only_check_balanced));
           } else {
+            is_balanced = need_update ? false : is_balanced;
             tmp_info_array.reset();
             last_ls_group_id = info.get_ls_group_id();
           }
@@ -71,9 +95,13 @@ int ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(const uint64_t tenan
       }
     }
     if (OB_SUCC(ret) && 0 < tmp_info_array.count()) {
-      if (OB_FAIL(adjust_primary_zone_by_ls_group_(multi_level_primary_zone_array, tmp_info_array))) {
-        LOG_WARN("failed to update primary zone of each ls group", KR(ret),
-            K(tmp_info_array), K(multi_level_primary_zone_array));
+      if (OB_FAIL(adjust_primary_zone_by_ls_group_(multi_level_primary_zone_array,
+              tmp_info_array, only_check_balanced, need_update,
+              old_to_new_pz_index_map))) {
+        LOG_WARN("failed to adjust primary zone of each ls group", KR(ret), K(tmp_info_array),
+            K(multi_level_primary_zone_array), K(only_check_balanced));
+      } else {
+        is_balanced = need_update ? false : is_balanced;
       }
     }
   }
@@ -98,7 +126,10 @@ int ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(const uint64_t tenan
 //   for level 1, z3 and z4 both have 1 ls taking it as first zone.
 int ObBalanceLSPrimaryZone::adjust_primary_zone_by_ls_group_(
     const common::ObIArray<common::ObArray<common::ObZone>> &multi_level_primary_zone_array,
-    const ObIArray<ObLSPrimaryZoneInfo> &primary_zone_infos)
+    const ObIArray<ObLSPrimaryZoneInfo> &primary_zone_infos,
+    const bool only_check_need_update,
+    bool &need_update,
+    common::hash::ObHashMap<common::ObZone, int64_t> &old_to_new_pz_index_map)
 {
   int ret = OB_SUCCESS;
   const int64_t ls_count = primary_zone_infos.count();
@@ -115,6 +146,7 @@ int ObBalanceLSPrimaryZone::adjust_primary_zone_by_ls_group_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can not be sys ls", KR(ret), K(ls_count), K(primary_zone_infos));
   } else {
+    need_update = false;
     // Init arrays for storing balance result: primary_zone and zone_priority.
     // Following two arrays are match with primary_zone_infos
     ObArray<ObZone> new_primary_zone_array;
@@ -140,14 +172,24 @@ int ObBalanceLSPrimaryZone::adjust_primary_zone_by_ls_group_(
       //while guaranteeing that the number of the zone with the most is no less than the average.
       const ObArray<ObZone> &primary_zone_array = multi_level_primary_zone_array.at(level_idx);
       ObArray<ObZone> ls_primary_zone;// first zone of each ls in this level
-      ObSEArray<uint64_t, 3> count_group_by_zone;//ls count placing in first place of each zone
-      if (OB_FAIL(set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, 0 == level_idx/*is_first_level*/,
-            ls_primary_zone, count_group_by_zone))) {
-        LOG_WARN("failed to set ls to primary zone", KR(ret), K(primary_zone_array), K(primary_zone_infos));
-      } else if (OB_FAIL(balance_ls_primary_zone_(primary_zone_array, ls_primary_zone, count_group_by_zone))) {
-        LOG_WARN("failed to balance ls primary zone", KR(ret), K(ls_primary_zone), K(count_group_by_zone));
-      } else if (0 == level_idx && OB_FAIL(new_primary_zone_array.assign(ls_primary_zone))) {
-        LOG_WARN("failed to assign primary zone", KR(ret), K(ls_primary_zone));
+      if (0 == level_idx) {
+        ObSEArray<uint64_t, DEFAULT_ZONE_COUNT> count_group_by_zone;//ls count placing in first place of each zone
+        if (OB_FAIL(set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos,
+              ls_primary_zone, count_group_by_zone, old_to_new_pz_index_map))) {
+          LOG_WARN("failed to set ls to primary zone", KR(ret), K(primary_zone_array), K(primary_zone_infos));
+        } else if (OB_FAIL(balance_ls_primary_zone_(primary_zone_array, ls_primary_zone, count_group_by_zone))) {
+          LOG_WARN("failed to balance ls primary zone", KR(ret), K(ls_primary_zone), K(count_group_by_zone));
+        } else if (OB_FAIL(new_primary_zone_array.assign(ls_primary_zone))) {
+          LOG_WARN("failed to assign primary zone", KR(ret), K(ls_primary_zone));
+        }
+      } else {
+        // Non-first level: round-robin assignment across zones, naturally balanced.
+        const int64_t primary_zone_count = primary_zone_array.count();
+        for (int64_t i = 0; OB_SUCC(ret) && i < ls_count; ++i) {
+          if (OB_FAIL(ls_primary_zone.push_back(primary_zone_array.at(i % primary_zone_count)))) {
+            LOG_WARN("failed to push back ls primary zone", KR(ret), K(i));
+          }
+        }
       }
 
       // update zone_priority for each ls, append level primary zone first, then other zones
@@ -176,9 +218,17 @@ int ObBalanceLSPrimaryZone::adjust_primary_zone_by_ls_group_(
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_count; ++i) {
       const ObZone &new_primary_zone = new_primary_zone_array.at(i);
       const ObSqlString &new_zone_priority = new_zone_priority_array.at(i);
-      if (OB_FAIL(try_update_ls_primary_zone(primary_zone_infos.at(i), new_primary_zone, new_zone_priority))) {
-        LOG_WARN("failed to update ls primary zone", KR(ret), "primary_zone_info", primary_zone_infos.at(i),
-            K(new_primary_zone), K(new_zone_priority));
+      bool tmp_need_update = false;
+      if (OB_FAIL(need_update_ls_primary_zone(primary_zone_infos.at(i), new_primary_zone, new_zone_priority, tmp_need_update))) {
+        LOG_WARN("failed to check need update ls primary zone", KR(ret), K(primary_zone_infos.at(i)), K(new_primary_zone), K(new_zone_priority));
+      } else {
+        need_update = tmp_need_update ? true : need_update;
+      }
+      if (OB_SUCC(ret) && !only_check_need_update && tmp_need_update) {
+        if (OB_FAIL(try_update_ls_primary_zone(primary_zone_infos.at(i), new_primary_zone, new_zone_priority))) {
+          LOG_WARN("failed to update ls primary zone", KR(ret), "primary_zone_info", primary_zone_infos.at(i),
+              K(new_primary_zone), K(new_zone_priority));
+        }
       }
     }// end for each ls
   }
@@ -188,9 +238,9 @@ int ObBalanceLSPrimaryZone::adjust_primary_zone_by_ls_group_(
 int ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(
     const common::ObIArray<ObZone> &primary_zone_array,
     const ObIArray<ObLSPrimaryZoneInfo> &primary_zone_infos,
-    const bool is_first_level,
     common::ObIArray<common::ObZone> &ls_primary_zone,
-    common::ObIArray<uint64_t> &count_group_by_zone)
+    common::ObIArray<uint64_t> &count_group_by_zone,
+    common::hash::ObHashMap<common::ObZone, int64_t> &old_to_new_pz_index_map)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 == primary_zone_array.count()
@@ -208,12 +258,9 @@ int ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(
         LOG_WARN("failed to push back", KR(ret), K(idx));
       }
     }
-    const ObZone empty_zone;
-    // For first level, try to keep current primary_zone.
-    // For other levels, just set empty zone first, and re-choose all ls primary_zone to min count zone later
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_count; ++i) {
-      const ObZone &current_zone = is_first_level ? primary_zone_infos.at(i).get_primary_zone() : empty_zone;
-      if (is_first_level && has_exist_in_array(primary_zone_array, current_zone, &index)) {
+      const ObZone &current_zone = primary_zone_infos.at(i).get_primary_zone();
+      if (has_exist_in_array(primary_zone_array, current_zone, &index)) {
         count_group_by_zone.at(index)++;
       } else if (OB_FAIL(index_not_primary_zone.push_back(i))) {
         LOG_WARN("failed to push back", KR(ret), K(i), K(current_zone));
@@ -222,31 +269,45 @@ int ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(
         LOG_WARN("failed to push back current zone", KR(ret), K(i), K(current_zone));
       }
     }
-    //1. take all ls primary zone to tenant primary zone, choose the less primary zone count
-    int64_t min_count = INT64_MAX;
-    int64_t min_index = 0;
+    // take all ls primary zone to tenant primary zone, for ls not in tenant primary zone:
+    // 1. Try to get old zone to new zone mapping recorded,
+    // 2. If mapping not found, choose the least ls count zone and record in map.
     for (int64_t i = 0; OB_SUCC(ret) && i < index_not_primary_zone.count(); ++i) {
       const int64_t ls_index = index_not_primary_zone.at(i);
-      min_count = INT64_MAX;
-      ARRAY_FOREACH_X(primary_zone_array, idx, cnt, OB_SUCC(ret)) {
-        if (min_count > count_group_by_zone.at(idx)) {
-          min_count = count_group_by_zone.at(idx);
-          min_index = idx;
-        }
-      }//end for search min count
-      if (OB_FAIL(ret)) {
-      } else if (min_index >= primary_zone_count) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to found min count", KR(ret), K(min_index), K(primary_zone_array));
-      } else if (OB_FAIL(ls_primary_zone.at(ls_index).assign(primary_zone_array.at(min_index)))) {
-        LOG_WARN("failed to assign primary zone", KR(ret), K(min_index), K(min_count), K(ls_index));
+      int64_t target_zone_index = OB_INVALID_INDEX_INT64;
+      const ObZone &old_zone = primary_zone_infos.at(ls_index).get_primary_zone();
+      if (old_zone.is_empty()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid primary_zone info", KR(ret), "primary_zone_info", primary_zone_infos.at(ls_index));
+      } else if (OB_SUCC(old_to_new_pz_index_map.get_refactored(old_zone, target_zone_index))) {
+        // found mapping, use it.
+      } else if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("failed to get old zone mapping", KR(ret), K(old_zone), K(ls_index));
       } else {
-        count_group_by_zone.at(min_index)++;
+        ret = OB_SUCCESS;
+        int64_t min_count = INT64_MAX;
+        ARRAY_FOREACH_NORET(primary_zone_array, zone_idx) {
+          if (min_count > count_group_by_zone.at(zone_idx)) {
+            min_count = count_group_by_zone.at(zone_idx);
+            target_zone_index = zone_idx;
+          }
+        }//end for search min count
+        if (OB_FAIL(old_to_new_pz_index_map.set_refactored(old_zone, target_zone_index))) {
+          LOG_WARN("failed to cache old zone mapping", KR(ret), K(old_zone), K(target_zone_index), K(ls_index));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (target_zone_index >= primary_zone_count || target_zone_index < 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected target zone index", KR(ret), K(target_zone_index), K(primary_zone_array));
+      } else if (OB_FAIL(ls_primary_zone.at(ls_index).assign(primary_zone_array.at(target_zone_index)))) {
+        LOG_WARN("failed to assign primary zone", KR(ret), K(target_zone_index), K(ls_index));
+      } else {
+        count_group_by_zone.at(target_zone_index)++;
       }
     }
   }
   return ret;
-
 }
 
 int ObBalanceLSPrimaryZone::balance_ls_primary_zone_(
@@ -483,6 +544,19 @@ int ObBalanceLSPrimaryZone::check_sys_ls_primary_zone_balanced(const uint64_t te
     check_ret = OB_SUCCESS;
   } else {
     check_ret = OB_NEED_WAIT;
+  }
+  return ret;
+}
+
+int ObBalanceLSPrimaryZone::check_user_ls_primary_zone_balanced(const uint64_t tenant_id, bool &is_balanced)
+{
+  int ret = OB_SUCCESS;
+  is_balanced = true;
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only user tenant are allowed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(inner_try_adjust_user_ls_primary_zone_(tenant_id, true/* only check balanced */, is_balanced))) {
+    LOG_WARN("failed to check user ls primary zone balanced", KR(ret), K(tenant_id));
   }
   return ret;
 }

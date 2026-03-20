@@ -79,6 +79,9 @@ public:
                            const ObTablegroupSchema &tablegroup_schema,
                            common::ObMySQLTransaction &trans,
                            ObSchemaGetterGuard &schema_guard);
+  int modify_scope_type(const obrpc::ObAlterTablegroupArg &arg,
+                        const ObTablegroupSchema &tablegroup_schema,
+                        common::ObMySQLTransaction &trans);
 
 private:
 

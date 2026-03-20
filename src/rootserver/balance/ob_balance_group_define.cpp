@@ -25,12 +25,18 @@ namespace rootserver
 
 const ObBalanceGroupID ObBalanceGroupID::NON_PART_BG_ID = ObBalanceGroupID(0, 0);
 const ObBalanceGroupID ObBalanceGroupID::DUP_TABLE_BG_ID = ObBalanceGroupID(0, 1);
-const ObBalanceGroupID ObBalanceGroupID::SHARDING_NONE_TABLEGROUP_BG_ID = ObBalanceGroupID(0, 2);
+// The single pg tablegroup corresponds to the SHARDING_NONE_TABLEGROUP in older versions before scope was supported.
+// Including:
+//   i. sharding none && scope server tablegroup
+//   ii. sharding partition/adaptive && non-partition tables tablegroup
+const ObBalanceGroupID ObBalanceGroupID::SINGLE_PG_TABLEGROUP_BG_ID = ObBalanceGroupID(0, 2);
 const char* ObBalanceGroup::NON_PART_BG_NAME = "NON_PART_TABLE";
 const char* ObBalanceGroup::DUP_TABLE_BG_NAME = "DUP_TABLE";
-const char* ObBalanceGroup::SHARDING_NONE_TABLEGROUP_BG_NAME = "SHARDING_NONE_TABLEGROUP";
+const char* ObBalanceGroup::SINGLE_PG_TABLEGROUP_BG_NAME = "SINGLE_PG_TABLEGROUP";
 
-int ObBalanceGroup::init_by_tablegroup(const ObSimpleTablegroupSchema &tg,
+template <typename TablegroupSchema>
+int ObBalanceGroup::init_by_tablegroup(
+    const TablegroupSchema &tg,
     const int64_t max_part_level,
     const int64_t part_group_index/* = 0*/)
 {
@@ -38,31 +44,46 @@ int ObBalanceGroup::init_by_tablegroup(const ObSimpleTablegroupSchema &tg,
   ObSqlString bg_name_str;
   const ObString &tg_name = tg.get_tablegroup_name();
 
-  if (tg.is_sharding_none()) {
-    if (OB_FAIL(bg_name_str.append_fmt("%s", SHARDING_NONE_TABLEGROUP_BG_NAME))) {
+  if (OB_UNLIKELY(!tg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablegroup schema", KR(ret), K(tg));
+  } else if (tg.is_scope_server() ||
+      ((tg.is_sharding_partition() || tg.is_sharding_adaptive()) && PARTITION_LEVEL_ZERO == max_part_level)) {
+    // single pg tablegroup, belongs to cluster scope special balance group
+    if (OB_FAIL(bg_name_str.append_fmt("%s", SINGLE_PG_TABLEGROUP_BG_NAME))) {
       LOG_WARN("fail to append fmt", KR(ret), K(tg));
     } else {
-      id_ = ObBalanceGroupID::SHARDING_NONE_TABLEGROUP_BG_ID;
+      id_ = ObBalanceGroupID::SINGLE_PG_TABLEGROUP_BG_ID;
+      scope_ = BG_SCOPE_CLUSTER;
     }
-  } else if (tg.is_sharding_partition()
-      || (tg.is_sharding_adaptive()
-          && (PARTITION_LEVEL_ZERO == max_part_level || PARTITION_LEVEL_ONE == max_part_level))) {
-    // Table Group is a independent balance group
+  } else if (tg.is_sharding_none() || tg.is_sharding_partition()
+      || (tg.is_sharding_adaptive() && PARTITION_LEVEL_ONE == max_part_level)) {
+    // whole tablegroup as one balance group
     if (OB_FAIL(bg_name_str.append_fmt("TABLEGROUP_%s", tg_name.ptr()))) {
       LOG_WARN("fail to append fmt", KR(ret), K(tg));
     } else {
       id_ = ObBalanceGroupID(tg.get_tablegroup_id(), 0);
+      if (tg.is_scope_cluster()) {
+        scope_ = BG_SCOPE_CLUSTER;
+      } else if (tg.is_scope_zone()) {
+        scope_ = BG_SCOPE_ZONE;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected tablegroup scope", KR(ret), K(tg));
+      }
     }
-  } else if (!tg.is_sharding_adaptive() || PARTITION_LEVEL_TWO != max_part_level || part_group_index < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(max_part_level), K(part_group_index), K(tg));
-  } else {
+  } else if (tg.is_sharding_adaptive() && PARTITION_LEVEL_TWO == max_part_level && part_group_index >= 0) {
     // Every one-level partition is an independent balance group
     if (OB_FAIL(bg_name_str.append_fmt("TABLEGROUP_%s_PART_GROUP_%ld", tg_name.ptr(), part_group_index))) {
       LOG_WARN("fail to append fmt", KR(ret), K(tg));
     } else {
       id_ = ObBalanceGroupID(tg.get_tablegroup_id(), part_group_index);
+      // sharding adaptive tablegroup, only support cluster scope by now.
+      scope_ = BG_SCOPE_CLUSTER;
     }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(max_part_level), K(part_group_index), K(tg));
   }
 
   if (OB_FAIL(ret)) {
@@ -128,6 +149,9 @@ int ObBalanceGroup::init_by_table(const ObSimpleTableSchemaV2 &table_schema,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(name_.assign(bg_name_str.ptr()))) {
     LOG_WARN("fail to assign bg name", KR(ret), K(bg_name_str));
+  } else {
+    // For none-tablegroup table, only support CLUSTER scope by now.
+    scope_ = BG_SCOPE_CLUSTER;
   }
   return ret;
 }
@@ -183,6 +207,11 @@ int ObPartGroupInfo::assign(const ObPartGroupInfo &other)
   }
   return ret;
 }
+
+template int ObBalanceGroup::init_by_tablegroup<share::schema::ObTablegroupSchema>(
+    const share::schema::ObTablegroupSchema&, const int64_t, const int64_t);
+template int ObBalanceGroup::init_by_tablegroup<share::schema::ObSimpleTablegroupSchema>(
+    const share::schema::ObSimpleTablegroupSchema&, const int64_t, const int64_t);
 
 }
 }

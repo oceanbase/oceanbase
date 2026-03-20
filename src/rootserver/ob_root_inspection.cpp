@@ -295,11 +295,11 @@ int ObTableGroupChecker::check_part_option(const ObSimpleTableSchemaV2 &table, O
     } else if (OB_ISNULL(tablegroup)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablegroup schema is null", KR(ret), KT(tablegroup_id));
-    } else if (tablegroup->get_sharding() == OB_PARTITION_SHARDING_NONE) {
+    } else if (tablegroup->is_sharding_none()) {
       //no need to check,just ignore
-    } else if (tablegroup->get_sharding() == OB_PARTITION_SHARDING_PARTITION
-              || tablegroup->get_sharding() == OB_PARTITION_SHARDING_ADAPTIVE) {
-      bool check_sub_part = tablegroup->get_sharding() == OB_PARTITION_SHARDING_PARTITION ? false : true;
+    } else if (tablegroup->is_sharding_partition()
+              || tablegroup->is_sharding_adaptive()) {
+      bool check_sub_part = tablegroup->is_sharding_partition() ? false : true;
       if (OB_FAIL(check_part_option_map_.get_refactored(tablegroup_id, table_in_map))) {
         //set to the map while not in check_part_option_map_
         if (OB_HASH_NOT_EXIST == ret) {

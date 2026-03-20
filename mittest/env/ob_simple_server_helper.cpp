@@ -46,6 +46,9 @@ int SimpleServerHelper::create_ls(uint64_t tenant_id, ObAddr addr)
     sql.assign_fmt("insert into __all_ls_status (tenant_id, ls_id, status, ls_group_id, unit_group_id, primary_zone) values(%ld, %ld,'NORMAL', 1001, 1001, 'zone1')", tenant_id, ls_id.id());
     if (FAILEDx(GCTX.sql_proxy_->write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     }
+    sql.assign_fmt("insert into __all_ls_election_reference_info (tenant_id, ls_id, manual_leader_server, zone_priority) values(%ld, %ld, '0.0.0.0:0', 'zone1')", tenant_id, ls_id.id());
+    if (FAILEDx(GCTX.sql_proxy_->write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+    }
   }
   share::SCN merge_scn;
   if (OB_FAIL(ret)) {

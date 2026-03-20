@@ -277,8 +277,53 @@ private:
   int alloc_tablet_for_add_part_in_tablegroup_sharding_partition(
     const share::schema::ObTableSchema &table_schema,
     const share::schema::ObTableSchema &origin_table_schema);
+    int alloc_tablet_round_robin_in_target_zone_(
+      const common::ObZone &target_zone,
+      const common::ObIArray<share::ObLSID> &available_ls_id_array,
+      const int64_t part_num);
+  // For SHARDING=NONE, SCOPE=ZONE tablegroup
+  int alloc_tablet_for_tablegroup_sharding_none_scope_zone_(
+      const share::schema::ObTableSchema &primary_schema,
+      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTablegroupSchema &tablegroup_schema);
+  // For SHARDING=NONE, SCOPE=CLUSTER tablegroup
+  int alloc_tablet_for_tablegroup_sharding_none_scope_cluster_(
+      const share::schema::ObTableSchema &primary_schema,
+      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTablegroupSchema &tablegroup_schema);
+  // For SHARDING=NONE, SCOPE=ZONE tablegroup
+  int alloc_tablet_for_empty_tablegroup_sharding_none_scope_zone_(
+    const share::schema::ObTableSchema &table_schema,
+    const share::schema::ObTablegroupSchema &tablegroup_schema,
+    const common::ObIArray<share::ObLSID> &ls_id_array);
+// For SHARDING=NONE, SCOPE=CLUSTER tablegroup
+  int alloc_tablet_for_empty_tablegroup_sharding_none_scope_cluster_(
+      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTablegroupSchema &tablegroup_schema,
+      const common::ObIArray<share::ObLSID> &ls_id_array);
+  int alloc_tablet_to_same_ls_(
+      const share::schema::ObTableSchema &table_schema,
+      const common::ObIArray<share::ObLSID> &ls_id_array);
+  int alloc_tablet_to_primary_schema_first_ls_(
+    const share::schema::ObTableSchema &primary_schema,
+    const share::schema::ObTableSchema &table_schema);
+  // Get available LS filtered by primary zone
+  int get_available_ls_by_primary_zone_(
+      const common::ObZone &target_zone,
+      const common::ObIArray<share::ObLSID> &available_ls_id_array,
+      common::ObIArray<share::ObLSID> &zone_ls_array);
+  // Choose target zone for empty tablegroup
+  int choose_zone_for_empty_zone_tablegroup_(
+      common::ObZone &target_zone);
+  // Get first table's primary zone from tablegroup
+  int get_first_table_primary_zone_(
+      const share::schema::ObTableSchema &primary_schema,
+      common::ObZone &target_zone);
   int64_t fetch_ls_offset() {
     return ATOMIC_FAA(&alloc_tablet_ls_offset_, 1);
+  }
+  uint64_t fetch_zone_offset() {
+    return ATOMIC_FAA(&alloc_zone_offset_, 1);
   }
 private:
   static const int64_t MAX_TENANT_LS_CNT = 1024;
@@ -298,6 +343,7 @@ private:
   bool inited_;
   bool is_add_partition_;
   static int64_t alloc_tablet_ls_offset_;
+  static uint64_t alloc_zone_offset_;
   bool use_parallel_ddl_;
   const share::schema::ObTableSchema *data_table_schema_;
 };

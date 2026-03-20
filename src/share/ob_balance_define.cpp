@@ -69,6 +69,9 @@ const char* ObBalanceStrategy::BALANCE_STRATEGY_STR_ARRAY[MAX_STRATEGY + 1] =
   "LS group count balance",
   "unit list balance",
   "LS count balance",
+  "zone tablegroup count balance",
+  "zone tablegroup weight balance",
+  "zone disk balance",
   "invalid", // MAX_STRATEGY
 };
 
@@ -102,14 +105,46 @@ int ObBalanceStrategy::parse_from_str(const ObString &str)
   return ret;
 }
 
-// PB_ATTR_ALIGN -> PB_INTRA_GROUP_WEIGHT -> PB_INTRA_GROUP -> PB_INTER_GROUP -> PB_PART_DISK
+// Use an explicit order instead of enum value to keep compatibility
+// when new strategies are appended to the end of STRATEGY.
+//
+// Partition Balance stage order:
+//   PB_ATTR_ALIGN
+//   PB_INTER_ZONE_WEIGHT -> PB_INTER_ZONE -> PB_INTER_ZONE_DISK
+//   PB_INTRA_GROUP_WEIGHT
+//   PB_INTRA_GROUP
+//   PB_INTER_GROUP
+//   PB_PART_DISK
+int64_t ObBalanceStrategy::get_partition_balance_strategy_order_(const STRATEGY strategy) const
+{
+  int64_t order = OB_INVALID_INDEX_INT64;
+  switch (strategy) {
+    case ObBalanceStrategy::PB_ATTR_ALIGN:         order = 0; break;
+    case ObBalanceStrategy::PB_INTER_ZONE_WEIGHT:  order = 1; break;
+    case ObBalanceStrategy::PB_INTER_ZONE:         order = 2; break;
+    case ObBalanceStrategy::PB_INTER_ZONE_DISK:    order = 3; break;
+    case ObBalanceStrategy::PB_INTRA_GROUP_WEIGHT: order = 4; break;
+    case ObBalanceStrategy::PB_INTRA_GROUP:        order = 5; break;
+    case ObBalanceStrategy::PB_INTER_GROUP:        order = 6; break;
+    case ObBalanceStrategy::PB_PART_DISK:          order = 7; break;
+    default: break;
+  }
+  return order;
+}
+
 bool ObBalanceStrategy::can_be_next_partition_balance_strategy(const ObBalanceStrategy &old_strategy) const
 {
-  return is_partition_balance_strategy()
+  bool bret = false;
+  if (is_partition_balance_strategy()
       && old_strategy.is_partition_balance_strategy()
       && !is_partition_balance_compatible_strategy()
-      && !old_strategy.is_partition_balance_compatible_strategy()
-      && val_ > old_strategy.val_;
+      && !old_strategy.is_partition_balance_compatible_strategy()) {
+    const int64_t new_order = get_partition_balance_strategy_order_(val_);
+    const int64_t old_order = get_partition_balance_strategy_order_(old_strategy.val_);
+    bret = (new_order != OB_INVALID_INDEX_INT64 && old_order != OB_INVALID_INDEX_INT64)
+            && new_order > old_order;
+  }
+  return bret;
 }
 
 // ObBalanceStrategy is supported in v4.2.1.9, v4.2.4.0, v4.4.1.0

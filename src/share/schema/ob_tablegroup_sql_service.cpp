@@ -75,7 +75,8 @@ int ObTablegroupSqlService::update_tablegroup(ObTablegroupSchema &new_schema,
                                           exec_tenant_id, new_schema.get_tablegroup_id())))
       || OB_FAIL(dml.add_column("comment", new_schema.get_comment()))
       || OB_FAIL(dml.add_column("schema_version", new_schema.get_schema_version()))
-      || OB_FAIL(dml.add_column("sharding", new_schema.get_sharding()))
+      || OB_FAIL(add_upper_column_("sharding", new_schema.get_sharding(), dml))
+      || OB_FAIL(gen_tablegroup_scope_(tenant_id, new_schema, dml))
       || OB_FAIL(dml.add_column("tablegroup_name", ObHexEscapeSqlStr(new_schema.get_tablegroup_name_str())))) {
     LOG_WARN("fail to add pk column", K(ret), K(new_schema));
   }
@@ -254,6 +255,48 @@ int ObTablegroupSqlService::add_tablegroup(
   return ret;
 }
 
+int ObTablegroupSqlService::add_upper_column_(
+    const char *col_name,
+    const ObString &value,
+    ObDMLSqlSplicer &dml)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObString upper_value;
+  if (value.empty()) {
+    upper_value = ObString("");
+  } else if (OB_FAIL(ObCharset::toupper(ObCharset::get_default_collation(ObCharset::get_default_charset()),
+                                        value, upper_value, allocator))) {
+    LOG_WARN("fail to convert to upper case", KR(ret), K(col_name), K(value));
+  }
+  if (FAILEDx(dml.add_column(col_name, ObHexEscapeSqlStr(upper_value)))) {
+    LOG_WARN("add upper case column failed", KR(ret), K(col_name), K(upper_value));
+  }
+  return ret;
+}
+
+int ObTablegroupSqlService::gen_tablegroup_scope_(
+    const uint64_t tenant_id,
+    const ObTablegroupSchema &tablegroup_schema,
+    ObDMLSqlSplicer &dml)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = OB_INVALID_VERSION;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("get min data_version failed", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_4_2_1
+             && !tablegroup_schema.get_scope().empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("can not handle tablegroup scope before 4.4.2.1", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "handle tablegroup scope before 4.4.2.1 is");
+  } else if (compat_version >= DATA_VERSION_4_4_2_1) {
+    if (OB_FAIL(add_upper_column_("scope", tablegroup_schema.get_scope(), dml))) {
+      LOG_WARN("add column scope failed", KR(ret), K(tablegroup_schema.get_scope()));
+    }
+  }
+  return ret;
+}
+
 int ObTablegroupSqlService::gen_tablegroup_dml(
     const uint64_t exec_tenant_id,
     const ObTablegroupSchema &tablegroup_schema,
@@ -296,7 +339,8 @@ int ObTablegroupSqlService::gen_tablegroup_dml(
           || OB_FAIL(dml.add_column("partition_schema_version", tablegroup_schema.get_partition_schema_version()))
           || OB_FAIL(dml.add_column("schema_version", tablegroup_schema.get_schema_version()))
           || OB_FAIL(dml.add_column("sub_part_template_flags", tablegroup_schema.get_sub_part_template_flags()))
-          || OB_FAIL(dml.add_column("sharding", tablegroup_schema.get_sharding()))) {
+          || OB_FAIL(add_upper_column_("sharding", tablegroup_schema.get_sharding(), dml))
+          || OB_FAIL(gen_tablegroup_scope_(tenant_id, tablegroup_schema, dml))) {
         LOG_WARN("add column failed", K(ret));
       }
     }

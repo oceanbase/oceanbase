@@ -49,6 +49,12 @@ private:
   int gen_tablegroup_dml(const uint64_t exec_tenant_id,
                          const share::schema::ObTablegroupSchema &tablegroup_schema,
                          share::ObDMLSqlSplicer &dml);
+  int add_upper_column_(const char *col_name,
+                        const common::ObString &value,
+                        share::ObDMLSqlSplicer &dml);
+  int gen_tablegroup_scope_(const uint64_t tenant_id,
+                            const share::schema::ObTablegroupSchema &tablegroup_schema,
+                            ObDMLSqlSplicer &dml);
 
   DISALLOW_COPY_AND_ASSIGN(ObTablegroupSqlService);
 };

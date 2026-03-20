@@ -79,16 +79,77 @@ public:
       const ObLSID &dest_ls_id,
       const int64_t tablet_size,
       const uint64_t part_group_uid,
-      const int64_t balance_weight);
+      const int64_t bg_balance_weight,
+      const int64_t part_balance_weight);
 
   typedef hash::ObHashMap<ObBalanceGroup, ObArray<ObBalanceGroupInfo *>> ObBalanceGroupMap;
-
-  static const int64_t PART_BALANCE_THRESHOLD_SIZE =  50 * 1024L * 1024L * 1024L; // 50GB
+  typedef hash::ObHashMap<ObBalanceGroup, ObScopeZoneBGStatInfo> ObScopeZoneBGStatMap;
 
 private:
+  class ZoneBGItem
+  {
+  public:
+    enum MetricType {
+      WEIGHT,
+      DISK
+    };
+    ZoneBGItem() : bg_(), data_disk_(0), weight_(0) {}
+    ~ZoneBGItem() {}
+    int init(const ObBalanceGroup &bg, const int64_t data_disk, const int64_t weight);
+    bool is_valid() const { return bg_.is_valid() && data_disk_ >= 0 && weight_ >= 0; }
+    const ObBalanceGroup &get_bg() const { return bg_; }
+    template <MetricType metric_type>
+    int64_t get_metric() const;
+    template <MetricType metric_type>
+    static bool less(const ZoneBGItem &l, const ZoneBGItem &r)
+    {
+      return l.get_metric<metric_type>() < r.get_metric<metric_type>();
+    }
+    TO_STRING_KV(K_(bg), K_(data_disk), K_(weight));
+  private:
+    ObBalanceGroup bg_;
+    int64_t data_disk_;
+    int64_t weight_;
+  };
+  class ZoneBGStat
+  {
+  public:
+    ZoneBGStat() : zone_(), bg_items_() {}
+    ~ZoneBGStat() {}
+    int init(const ObZone &zone);
+    int add_bg_item(const ZoneBGItem &bg_item);
+    int remove_last_bg_item(ZoneBGItem &last_bg_item);
+    const ObZone &get_zone() const { return zone_; }
+    int64_t get_bg_cnt() const { return bg_items_.count(); }
+    ObArray<ZoneBGItem> &get_bg_items() { return bg_items_; }
+    template <ObPartitionBalance::ZoneBGItem::MetricType metric_type>
+    int64_t get_total() const;
+    template <ObPartitionBalance::ZoneBGItem::MetricType metric_type>
+    static bool less(const ZoneBGStat &l, const ZoneBGStat &r)
+    {
+      return l.get_total<metric_type>() < r.get_total<metric_type>();
+    }
+    TO_STRING_KV(K_(zone), "bg_cnt", bg_items_.count());
+  private:
+    ObZone zone_;
+    ObArray<ZoneBGItem> bg_items_;
+  };
+
   int prepare_balance_group_();
   int split_out_weighted_bg_map_();
   int save_balance_group_stat_();
+  int get_ls_primary_zone_array_(ObIArray<ObZone> &primary_zone_array);
+  // build zone statistics for BG_SCOPE_ZONE balance group
+  int build_zone_bg_stat_array_(
+      ObIArray<ZoneBGStat> &unweighted_zone_stats,
+      ObIArray<ZoneBGStat> &weighted_zone_stats);
+  // zone scope tablegroup weight balance between zones (only for bg_weight > 0)
+  int process_balance_zone_tablegroup_weight_();
+  // zone scope tablegroup count balance between zones (only for bg_weight == 0)
+  int process_balance_zone_tablegroup_count_();
+  // zone scope tablegroup disk balance between zones (swap only)
+  int process_balance_zone_tablegroup_disk_();
+
   int process_weight_balance_intragroup_();
   // balance group inner balance
   int process_balance_partition_inner_();
@@ -97,24 +158,43 @@ private:
   // ls disk balance
   int process_balance_partition_disk_();
 
+  // Helper: balance ZONE scope BGs within each zone separately.
+  // Shared by process_balance_partition_{extend,disk}_.
+  typedef int (ObPartitionBalance::*BalanceWithinLSDescArrayFunc)(
+      const ObBalanceGroup::Scope, ObArray<ObLSDesc *> &);
+  template <BalanceWithinLSDescArrayFunc balance_func>
+  int balance_scope_zone_bg_within_each_zone_();
+
   int prepare_ls_();
-  int prepare_ls_desc_();
-  int add_part_to_bg_map_(
+  int prepare_ls_desc_(const ObBalanceGroup::Scope scope = ObBalanceGroup::BG_SCOPE_MAX);
+  int add_new_part_to_update_maps_(
       const ObLSID &ls_id,
       ObBalanceGroup &bg,
       const schema::ObSimpleTableSchemaV2 &table_schema,
       const uint64_t part_group_uid,
       const ObTransferPartInfo &part_info,
       const int64_t tablet_size,
-      const int64_t balance_weight);
+      const int64_t bg_balance_weight,
+      const int64_t part_balance_weight);
+  int try_transfer_part_to_primary_zone_ls_in_group_(
+      const ObTransferPartInfo &part_info,
+      const ObLSDesc *src_ls_desc,
+      const ObZone &target_primary_zone);
+  int get_ls_desc_in_same_ls_group_on_target_zone_(
+      const ObLSDesc *src_ls_desc,
+      const ObZone &target_zone,
+      ObLSDesc *&dest_ls_desc);
+  int try_transfer_zone_scope_bg_to_zone_(
+      const ObBalanceGroup &bg,
+      const ObZone &target_zone);
   int get_bg_info_by_ls_id_(
       ObBalanceGroupMap &bg_map,
-      ObBalanceGroup &bg,
+      const ObBalanceGroup &bg,
       const ObLSID &ls_id,
       ObBalanceGroupInfo *&bg_info);
   int get_or_create_bg_ls_array_(
       ObBalanceGroupMap &bg_map,
-      ObBalanceGroup &bg,
+      const ObBalanceGroup &bg,
       ObArray<ObBalanceGroupInfo *> *&bg_ls_array);
   int add_transfer_task_(
       const ObLSID &src_ls_id,
@@ -127,6 +207,7 @@ private:
       const int64_t size,
       const int64_t balance_weight);
   int try_swap_part_group_(
+      const ObBalanceGroup::Scope scope,
       ObLSDesc &src_ls,
       ObLSDesc &dest_ls,
       int64_t part_group_min_size,
@@ -139,6 +220,10 @@ private:
       int64_t &swap_cnt);
   bool check_ls_need_swap_(int64_t ls_more_size, int64_t ls_less_size);
   bool is_bg_with_balance_weight_(const ObArray<ObBalanceGroupInfo *> &ls_pg_desc_arr);
+  int filter_bg_ls_by_primary_zone_(
+      const ObArray<ObBalanceGroupInfo *> &bg_ls_array,
+      const ObZone &primary_zone,
+      ObArray<ObBalanceGroupInfo *> &filtered_bg_ls_array);
   int get_ls_balance_weight_avg_(
       const ObArray<ObBalanceGroupInfo *> &ls_pg_desc_arr,
       const int64_t begin_idx,
@@ -160,7 +245,43 @@ private:
       ObBalanceGroupInfo *src_ls,
       ObBalanceGroupInfo *dest_ls,
       int64_t &transfer_cnt);
-
+  template <ObPartitionBalance::ZoneBGItem::MetricType metric_type>
+  int get_zone_metric_avg_(
+      const ObIArray<ZoneBGStat> &zone_stats,
+      const int64_t begin_idx,
+      const int64_t end_idx,
+      double &avg) const;
+  int try_move_zone_bg_by_weight_(
+      ZoneBGStat &src_zone_stat,
+      ZoneBGStat &dest_zone_stat,
+      const double avg,
+      int64_t &transfer_bg_cnt);
+  template <ObPartitionBalance::ZoneBGItem::MetricType metric_type>
+  int try_swap_zone_bg_by_metric_(
+      ZoneBGStat &src_zone_stat,
+      ZoneBGStat &dest_zone_stat,
+      const double avg,
+      int64_t &transfer_bg_cnt);
+  int move_zone_bg_item_(
+      ZoneBGStat &src_zone_stat,
+      ZoneBGStat &dest_zone_stat,
+      const int64_t src_idx);
+  int swap_zone_bg_items_(
+      ZoneBGStat &left_zone_stat,
+      ZoneBGStat &right_zone_stat,
+      const int64_t left_idx,
+      const int64_t right_idx);
+  int balance_zone_tablegroup_disk_(
+      ObSEArray<ZoneBGStat, DEFAULT_ZONE_COUNT> &zone_stats);
+  bool check_need_zone_disk_balance_(
+      const ZoneBGStat &max_zone_stat,
+      const ZoneBGStat &min_zone_stat) const;
+  int balance_partition_extend_within_ls_desc_array_(
+      const ObBalanceGroup::Scope scope,
+      ObArray<ObLSDesc *> &ls_desc_array);
+  int balance_partition_disk_within_ls_desc_array_(
+      const ObBalanceGroup::Scope scope,
+      ObArray<ObLSDesc *> &ls_desc_array);
 private:
   bool inited_;
   uint64_t tenant_id_;
@@ -178,6 +299,8 @@ private:
   // record all balance group in bg_map when building and then split the weighted balance group out
   ObBalanceGroupMap bg_map_;
   ObBalanceGroupMap weighted_bg_map_;
+
+  ObScopeZoneBGStatMap scope_zone_bg_stat_map_;
 
   ObBalanceGroupLSStatOperator bg_ls_stat_operator_;
   TaskMode task_mode_;
