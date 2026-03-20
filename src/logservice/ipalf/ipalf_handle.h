@@ -25,6 +25,10 @@
 
 namespace oceanbase
 {
+namespace logservice
+{
+class AppendCb;
+}
 namespace palf
 {
 class LogIOContext;
@@ -63,6 +67,7 @@ public:
                      const void *buffer,
                      const int64_t nbytes,
                      const share::SCN &ref_scn,
+                     logservice::AppendCb *cb,
                      palf::LSN &lsn,
                      share::SCN &scn) = 0;
 

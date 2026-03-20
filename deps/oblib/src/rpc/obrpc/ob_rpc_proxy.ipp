@@ -66,6 +66,7 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode_));
     ObRpcMemPool pool(src_tenant_id, pcode_label);
     ObSyncRespCallback cb(pool, proxy_);
+    cb.set_rpc_start_ts(start_ts);
     char* pnio_req = NULL;
     int64_t pnio_req_sz = 0, resp_sz = 0;
     const char* resp = NULL;
@@ -96,7 +97,8 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
         start_ts + relative_timeout,
         static_cast<int16_t>(set.idx_of_pcode(pcode_)),
         ObSyncRespCallback::client_cb,
-        &cb
+        &cb,
+        &cb.stats_
       };
       cb.gtid_ = gtid;
       if (0 != (pn_err = pn_send(gtid, dst_.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
@@ -108,7 +110,11 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
       if (NULL != pnio_req) {
         pn_send_free(pnio_req); // if pn_send is not executed or executed failed, release memory allocated in rpc_encode_req
       }
-    } else if (OB_FAIL(cb.wait(proxy_.timeout(), pcode_, pnio_req_sz))) {
+    } else if (OB_FAIL(cb.wait(proxy_.timeout(), pcode_, pnio_req_sz,
+                               dst_.using_ipv4()
+                               ? static_cast<int64_t>((static_cast<uint64_t>(dst_.get_port()) << 32)
+                                                      | static_cast<uint64_t>(dst_.get_ipv4()))
+                               : 0))) {
       RPC_LOG(WARN, "stream rpc execute fail", K(ret), K(dst_));
     } else if (NULL == (resp = cb.get_resp(resp_sz))) {
       ret = common::OB_ERR_UNEXPECTED;
@@ -224,6 +230,7 @@ int SSHandle<pcodeStruct>::abort()
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode_));
     ObRpcMemPool pool(src_tenant_id, pcode_label);
     ObSyncRespCallback cb(pool, proxy_);
+    cb.set_rpc_start_ts(start_ts);
     char* pnio_req = NULL;
     int64_t pnio_req_sz = 0, resp_sz = 0;
     const char* resp = NULL;
@@ -254,7 +261,8 @@ int SSHandle<pcodeStruct>::abort()
         start_ts + relative_timeout,
         static_cast<int16_t>(set.idx_of_pcode(pcode_)),
         ObSyncRespCallback::client_cb,
-        &cb
+        &cb,
+        &cb.stats_
       };
       cb.gtid_ = gtid;
       if (0 != (pn_err = pn_send(gtid, dst_.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
@@ -269,7 +277,11 @@ int SSHandle<pcodeStruct>::abort()
     } else if (FALSE_IT(proxy_.set_detect_session_killed(false))) {
     } else if (OB_FAIL(cb.wait(proxy_.timeout(),
                                OB_TEST_PCODE, /* this pcode make it not to trigger pn_terminate_pkt when sending abort request */
-                               pnio_req_sz))) {
+                               pnio_req_sz,
+                               dst_.using_ipv4()
+                               ? static_cast<int64_t>((static_cast<uint64_t>(dst_.get_port()) << 32)
+                                                      | static_cast<uint64_t>(dst_.get_ipv4()))
+                               : 0))) {
       RPC_LOG(WARN, "stream rpc execute fail", K(ret), K(dst_));
     } else if (NULL == (resp = cb.get_resp(resp_sz))) {
       ret = common::OB_ERR_UNEXPECTED;

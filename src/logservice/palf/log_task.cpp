@@ -12,6 +12,7 @@
 
 #include "log_task.h"
 #include "log_sliding_window.h"
+#include "logservice/ob_append_callback.h"
 
 namespace oceanbase
 {
@@ -137,7 +138,8 @@ LogTask::LogTask()
      submit_ts_(OB_INVALID_TIMESTAMP),
      flushed_ts_(OB_INVALID_TIMESTAMP),
      push_log_type_(PushLogType::PUSH_LOG),
-     lock_()
+     lock_(),
+     first_cb_(nullptr)
 {
   reset();
 }
@@ -161,6 +163,7 @@ void LogTask::reset()
   freeze_ts_ = OB_INVALID_TIMESTAMP;
   submit_ts_ = OB_INVALID_TIMESTAMP;
   flushed_ts_ = OB_INVALID_TIMESTAMP;
+  first_cb_ = nullptr;
 }
 
 bool LogTask::can_be_slid()
@@ -441,5 +444,14 @@ bool LogTask::is_fetch_log_type() const
   return PushLogType::FETCH_LOG_RESP == ATOMIC_LOAD(&push_log_type_);
 }
 
+void LogTask::set_first_cb(logservice::AppendCb *cb)
+{
+  ATOMIC_STORE(&first_cb_, cb);
+}
+
+logservice::AppendCb *LogTask::get_first_cb() const
+{
+  return ATOMIC_LOAD(&first_cb_);
+}
 }  // namespace palf
 }  // namespace oceanbase

@@ -25,6 +25,7 @@ struct pktc_cb_t {
   pktc_resp_cb_func_t resp_cb;
   pktc_req_t* req;
   struct pktc_sk_t* sk;
+  struct pn_req_time_stat* trace_stats;
   int errcode;
 };
 

@@ -641,8 +641,10 @@ ObWaitEventGuard::ObWaitEventGuard(const int64_t event_no, const uint64_t timeou
     : event_no_(0), di_(nullptr), is_atomic_(is_atomic)
 {
   di_ = ObLocalDiagnosticInfo::get();
+  //when event_no_ is not 0, it means the wait event is already recorded, so we don't need to record it again.
   if (OB_NOT_NULL(di_) && di_->get_ash_stat().is_active_session_ &&
-      oceanbase::lib::is_diagnose_info_enabled()) {
+      oceanbase::lib::is_diagnose_info_enabled() &&
+      di_->get_ash_stat().event_no_ == 0) {
     need_record_ = true;
     event_no_ = event_no;
     oceanbase::lib::Thread::event_no_ = event_no;

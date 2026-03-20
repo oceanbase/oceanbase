@@ -67,6 +67,10 @@ static void pktc_resp_cb_on_msg(pktc_t* io, pktc_msg_t* msg) {
     pktc_cb_t* cb = structof(hlink, pktc_cb_t, hash_link);
     dlink_delete(&cb->timer_dlink);
     dlink_delete(&cb->sk_dlink);
+    if (cb->trace_stats) {
+      int64_t diff = msg->ctime_us - cb->trace_stats->rpc_start_ts;
+      cb->trace_stats->read_resp_diff = (int32_t)diff;
+    }
     pktc_do_cb(io, cb, msg);
   } else {
     rk_info("resp cb not found: packet_id=%lu", id);

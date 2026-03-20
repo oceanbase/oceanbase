@@ -23,3 +23,7 @@ int64_t rk_get_corse_us()
   clock_gettime(CLOCK_REALTIME_COARSE, &tp);
   return tp.tv_sec * 1000000 + tp.tv_nsec/1000;
 }
+
+int64_t rk_get_trace_us() {
+  return rk_get_us();
+}

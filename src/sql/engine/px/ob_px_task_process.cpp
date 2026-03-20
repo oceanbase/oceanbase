@@ -193,6 +193,7 @@ int ObPxTaskProcess::process()
 
     if (enable_perf_event) {
       exec_record.record_end();
+      print_sql_trace_info(audit_record);
       exec_record.max_wait_event_ = max_wait_desc;
       exec_record.wait_time_end_ = total_wait_desc.time_waited_;
       exec_record.wait_count_end_ = total_wait_desc.total_waits_;

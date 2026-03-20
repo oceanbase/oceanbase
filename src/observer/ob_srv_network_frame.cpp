@@ -259,6 +259,7 @@ int ObSrvNetworkFrame::reload_config()
   int32_t tcp_keepcnt       = static_cast<int>(GCONF.tcp_keepcnt);
   int32_t user_timeout      = static_cast<int>(GCONF.dead_socket_detection_timeout);
   int32_t rpc_thread_count  = static_cast<int>(GCONF.net_thread_count);
+  int64_t slow_rpc_threshold_us = static_cast<int64_t>(GCONF.trace_log_slow_query_watermark);
   if (0 == rpc_thread_count) {
     rpc_thread_count = get_default_net_thread_count();
     if (2 == rpc_thread_count) {
@@ -303,6 +304,7 @@ int ObSrvNetworkFrame::reload_config()
       LOG_WARN("Failed to set rpc net thread count", K(rpc_thread_count));
     }
   }
+  ATOMIC_STORE(&obrpc::ObRespCallback::trace_log_slow_query_watermark_, slow_rpc_threshold_us);
   return ret;
 }
 

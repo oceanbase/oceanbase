@@ -706,6 +706,7 @@ int ObTenantTmpFileManagerWithMTLSwitch::write(const uint64_t tenant_id,
         LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
       }
     }
+    EVENT_ADD(TMP_FILE_WRITE_BYTES, io_info.size_);
     ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(tmp_file_mgr)) {

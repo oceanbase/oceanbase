@@ -692,6 +692,7 @@ private:
   int check_brs();
   int save_brs();
   int setup_op_feedback_info();
+  void print_table_scan_monitor_info() const;
   // child can implement this interface, but can't call this directly
   virtual int inner_drain_exch() { return common::OB_SUCCESS; }
 

@@ -52,9 +52,9 @@ WAIT_EVENT_DEF(OMT_WAIT, 12001, "sched wait", "req type", "req start timestamp",
 WAIT_EVENT_DEF(OMT_IDLE, 12002, "sched idle", "wait start timestamp", "", "", IDLE, true, true)
 
 // NETWORK 13000-13999
-WAIT_EVENT_DEF(SYNC_RPC, 13000, "sync rpc", "pcode", "size", "", NETWORK, true, true)
+WAIT_EVENT_DEF(SYNC_RPC, 13000, "sync rpc", "pcode", "network cost and server cost", "ip and port", NETWORK, true, true)
 WAIT_EVENT_DEF(MYSQL_RESPONSE_WAIT_CLIENT, 13001, "mysql response wait client", "", "", "", IDLE, true, true)
-WAIT_EVENT_DEF(DAS_ASYNC_RPC_LOCK_WAIT, 13002, "das wait remote response", "", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(DAS_ASYNC_RPC_LOCK_WAIT, 13002, "das wait remote response", "ip and port", "network cost", "server cost", NETWORK, true, true)
 WAIT_EVENT_DEF(ASYNC_EXTERNAL_TABLE_LOCK_WAIT, 13003, "external table wait remote response", "", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(NETWORK_QUEUE_WAIT, 13004, "wait in request queue", "pcode", "level", "priority", CONFIGURATION, true, true)
 WAIT_EVENT_DEF(DTL_TRANSMIT_MSG_WAIT, 13005, "wait dtl transmit message response", "address", "channel type", "", NETWORK, true, true)

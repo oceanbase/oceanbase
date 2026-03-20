@@ -62,7 +62,7 @@ int my_sk_consume(my_sk_t* s, int64_t time_limit, int64_t* avail_bytes) {
       if (0 != (err = my_sk_handle_msg(s, &msg))) {
         rk_info("handle msg fail: %d", err);
       }
-      s->sk_diag_info.read_process_time += (rk_get_us() - msg.ctime_us);
+      s->sk_diag_info.read_process_time += (rk_get_trace_us() - msg.ctime_us);
     }
   }
   return err;

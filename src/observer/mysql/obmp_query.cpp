@@ -22,6 +22,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "observer/ob_server.h"
 #include "sql/ob_sql_mock_schema_utils.h"
+#include "lib/trace/ob_trace_event.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::obmysql;
@@ -543,6 +544,9 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
         }
         //set session retry state
         session.set_session_in_retry(retry_ctrl_.need_retry());
+        if (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type()) {
+          NG_TRACE_EXT(local_retry_info, OB_ID(ret), ret);
+        }
       } while (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type());
       //@notice: after the async packet is responsed,
       //the easy_buf_ hold by the sql string may have been released.
@@ -855,6 +859,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
 
   if (enable_perf_event) {
     audit_record.exec_record_.record_end();
+    print_sql_trace_info(audit_record);
     record_stat(stmt_type, exec_end_timestamp_, session, ret, is_commit, is_rollback);
     audit_record.stmt_type_ = stmt_type;
     audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
@@ -1255,6 +1260,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 
     if (enable_perf_event) {
       audit_record.exec_record_.record_end();
+      print_sql_trace_info(audit_record);
       record_stat(result.get_stmt_type(), exec_end_timestamp_, result.get_session(), ret, result.is_commit_cmd(), result.is_rollback_cmd());
       audit_record.stmt_type_ = result.get_stmt_type();
       audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;

@@ -119,6 +119,7 @@ class ObTestRpcProxy : public ObRpcProxy {
 public:
   DEFINE_TO(ObTestRpcProxy);
   RPC_AP(PR5 async_rpc_test, OB_TEST2_PCODE, (TestRpcRequest), obrpc::Int64);
+  RPC_AP(PR5 async_rpc_test2, OB_TEST3_PCODE, (TestRpcRequest), obrpc::Int64);
 };
 class ObTestRpcCb : public obrpc::ObTestRpcProxy::AsyncCB<OB_TEST2_PCODE> {
 public:

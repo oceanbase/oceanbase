@@ -13,6 +13,7 @@
 #pragma once
 #include <stdint.h>
 #include <netinet/in.h>
+#include "rpc/pnio/interface/req_time_stat.h"
 #ifndef PN_API
 #define PN_API
 #endif
@@ -33,7 +34,7 @@
 
 #define RATE_UNLIMITED INT64_MAX
 
-typedef int (*serve_cb_t)(int grp, const char* b, int64_t sz, uint64_t req_id);
+typedef int (*serve_cb_t)(int grp, const char* b, int64_t sz, uint64_t req_id, int64_t req_arrival_ts);
 typedef int (*client_cb_t)(void* arg, int io_err, const char* b, int64_t sz);
 
 #ifndef RK_CACHE_ALIGNED
@@ -64,6 +65,7 @@ typedef struct pn_comm_t
   PN_COMM;
 } pn_comm_t;
 
+struct pn_req_time_stat;
 typedef struct pn_pkt_t
 {
   char* buf;
@@ -72,6 +74,7 @@ typedef struct pn_pkt_t
   int16_t categ_id;
   client_cb_t cb;
   void* arg;
+  pn_req_time_stat* trace_stats;
 } pn_pkt_t;
 
 PN_API int64_t pn_set_keepalive_timeout(int64_t user_timeout);

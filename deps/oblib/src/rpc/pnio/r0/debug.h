@@ -98,7 +98,7 @@ inline void eloop_delay_warn(int64_t start_us, int64_t warn_us) {
 void delay_warn(const char* msg, int64_t start_us, int64_t warn_us)
 {
   if (warn_us > 0) {
-    int64_t delay = rk_get_corse_us() - start_us;
+    int64_t delay = rk_get_trace_us() - start_us;
     if (delay > warn_us && PNIO_REACH_TIME_INTERVAL(500*1000)) {
       rk_warn("[delay_warn] %s delay high: %ld, start_us=%ld", msg, delay, start_us);
     }

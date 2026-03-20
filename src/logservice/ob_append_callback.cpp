@@ -27,7 +27,7 @@ ObLink* AppendCbBase::__get_member_address(AppendCb *ptr)
 
 void AppendCb::set_cb_first_handle_ts(const int64_t ts)
 {
-  if (OB_INVALID_TIMESTAMP != cb_first_handle_ts_) {
+  if (OB_INVALID_TIMESTAMP == cb_first_handle_ts_) {
     cb_first_handle_ts_ = ts;
   }
 }

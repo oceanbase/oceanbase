@@ -548,8 +548,23 @@ int ObRpcProcessorBase::part_response(const int retcode, bool is_last)
       } else {
         pkt->set_content(using_buffer_->get_data(), using_buffer_->get_position());
       }
+      const int64_t timeout_us = rpc_pkt_->get_timeout();
+      const int64_t receive_ts = rpc_pkt_->get_receive_ts();
+      const ObRpcCostTime cost_time = pkt->get_cost_time();
       if (OB_FAIL(do_response(rsp))) {
         RPC_OBRPC_LOG(WARN, "response data fail", K(ret));
+      } else {
+        const int64_t elapsed_time = common::ObTimeUtility::current_time() - receive_ts
+                                     + 2000; // account for 2ms network latency
+        if (OB_UNLIKELY(elapsed_time > timeout_us && OB_SUCCESS == retcode)) {
+          int pcode = m_get_pcode();
+          RPC_OBRPC_LOG_RET(WARN, OB_TIMEOUT,
+              "The RPC is at or near timeout, the sender may have already timeout",
+              K(pcode),
+              K(timeout_us),
+              K(elapsed_time),
+              K(cost_time));
+        }
       }
     } else {
       int response_retcode = retcode != OB_SUCCESS ? retcode : ret;

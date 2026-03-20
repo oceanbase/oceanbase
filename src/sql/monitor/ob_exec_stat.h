@@ -36,6 +36,11 @@ EVENT_INFO(SCHEDULE_TIME, schedule_time)
 EVENT_INFO(NETWORK_WAIT_TIME, network_wait_time)
 EVENT_INFO(TX_TABLE_READ_CNT, tx_table_read_cnt)
 EVENT_INFO(OUTROW_LOB_CNT, outrow_lob_cnt)
+EVENT_INFO(LOCK_FOR_READ_TIME, lock_for_read_time)
+EVENT_INFO(LOCK_FOR_READ_COUNT, lock_for_read_count)
+EVENT_INFO(MEMTABLE_WRITE_THROTTLE_TIME, memtable_write_throttle_time)
+EVENT_INFO(DAS_WAIT_REMOTE_TIME, das_wait_remote_time)
+EVENT_INFO(TMP_FILE_WRITE_BYTES, tmp_file_write_bytes)
 #endif
 
 #ifndef OCEANBASE_SQL_OB_EXEC_STAT_H
@@ -44,6 +49,7 @@ EVENT_INFO(OUTROW_LOB_CNT, outrow_lob_cnt)
 #include "lib/wait_event/ob_wait_event.h"
 #include "lib/statistic_event/ob_stat_event.h"
 #include "lib/net/ob_addr.h"
+#include "lib/trace/ob_trace_event.h"
 #include "sql/ob_sql_define.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "lib/stat/ob_diagnostic_info.h"
@@ -84,6 +90,17 @@ struct ObExecRecord
    ret;                                                        \
  })
 
+#define WAIT_EVENT_GET_STAT(wait_event_arr, wait_event_id)      \
+ ({                                                            \
+   int64_t ret = 0;                                             \
+   oceanbase::common::ObWaitEventStat *stat = NULL;             \
+   if (OB_SUCCESS == wait_event_arr.get(oceanbase::common::ObWaitEventIds::wait_event_id, stat) \
+       && NULL != stat) {                                       \
+     ret = stat->time_waited_;                                  \
+   }                                                            \
+   ret;                                                         \
+ })
+
 #define RECORD(se) \
   do { \
     oceanbase::common::ObDiagnosticInfo *diag_session_info = \
@@ -112,6 +129,14 @@ struct ObExecRecord
       network_wait_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::NETWORK_WAIT_TIME);                   \
       tx_table_read_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::TX_TABLE_READ_CNT);                   \
       outrow_lob_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::OUTROW_LOB_CNT);                   \
+      lock_for_read_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_WAIT_READ_LOCK_TIME); \
+      lock_for_read_count_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_LOCK_FAIL_COUNT) \
+                                  + EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_LOCK_SUCC_COUNT); \
+      das_wait_remote_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::DAS_WAIT_REMOTE_RESPONSE_TIME); \
+      tmp_file_write_bytes_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::TMP_FILE_WRITE_BYTES); \
+      oceanbase::common::ObWaitEventContainer &wait_event_arr = diag_session_info->get_event_stats(); \
+      memtable_write_throttle_time_##se##_ = \
+          WAIT_EVENT_GET_STAT(wait_event_arr, STORAGE_WRITING_THROTTLE_SLEEP); \
     } \
   } while(0);
 
@@ -155,6 +180,11 @@ struct ObExecRecord
     UPDATE_EVENT(network_wait_time);
     UPDATE_EVENT(tx_table_read_cnt);
     UPDATE_EVENT(outrow_lob_cnt);
+    UPDATE_EVENT(lock_for_read_time);
+    UPDATE_EVENT(lock_for_read_count);
+    UPDATE_EVENT(memtable_write_throttle_time);
+    UPDATE_EVENT(das_wait_remote_time);
+    UPDATE_EVENT(tmp_file_write_bytes);
   }
 
   uint64_t get_cur_memstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {
@@ -480,6 +510,39 @@ struct ObAuditRecordData {
   int64_t ccl_match_time_;
   int64_t cursor_elapsed_;
 };
+
+inline void print_sql_trace_info(const ObAuditRecordData &audit_record)
+{
+  if (oceanbase::lib::is_trace_log_enabled()) {
+    const ObExecRecord &exec_record = audit_record.exec_record_;
+    int64_t lock_for_read_time = exec_record.get_lock_for_read_time();
+    int64_t lock_for_read_count = exec_record.get_lock_for_read_count();
+    int64_t memtable_write_throttle_time = exec_record.get_memtable_write_throttle_time();
+    int64_t das_wait_remote_time = exec_record.get_das_wait_remote_time();
+    int64_t tmp_file_write_bytes = exec_record.get_tmp_file_write_bytes();
+
+    constexpr int64_t BUFFER_TABLE_THRESHOLD = 1000;
+    int64_t total_memstore_read_row_count = exec_record.get_memstore_read_row_count() + (audit_record.sql_len_ > 0 ? audit_record.total_memstore_read_row_count_ : 0);
+    int64_t total_ssstore_read_row_count = exec_record.get_ssstore_read_row_count() + (audit_record.sql_len_ > 0 ? audit_record.total_ssstore_read_row_count_ : 0) ;
+
+    int64_t pushdown_storage_filter_row_count = exec_record.get_pushdown_storage_filter_row_cnt();
+    int64_t return_rows = max(audit_record.return_rows_, 1);
+    bool is_buffer_table = total_memstore_read_row_count + total_ssstore_read_row_count - return_rows
+                           - pushdown_storage_filter_row_count > return_rows * BUFFER_TABLE_THRESHOLD;
+
+    NG_TRACE_EXT(sql_info,
+                  OB_ID(lock_for_read_time), lock_for_read_time,
+                  OB_ID(lock_for_read_count), lock_for_read_count,
+                  OB_ID(memtable_write_throttle_time), memtable_write_throttle_time,
+                  OB_ID(das_wait_remote_time), das_wait_remote_time,
+                  OB_ID(tmp_file_write_bytes), tmp_file_write_bytes,
+                  OB_ID(sql_total_read_row_count), total_memstore_read_row_count + total_ssstore_read_row_count,
+                  OB_ID(sql_output_row_count), audit_record.return_rows_,
+                  OB_ID(sql_pushdown_storage_filter_row_count), pushdown_storage_filter_row_count,
+                  OB_ID(is_buffer_table), is_buffer_table
+    );
+  }
+}
 
 } //namespace sql
 } //namespace oceanbase

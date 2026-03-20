@@ -47,6 +47,10 @@ namespace common
 class ObMember;
 class ObILogAllocator;
 }
+namespace logservice
+{
+class AppendCb;
+}
 namespace palf
 {
 class FlushLogCbCtx;
@@ -271,6 +275,7 @@ public:
                          const char *buf,
                          const int64_t buf_len,
                          const share::SCN &ref_scn,
+                         logservice::AppendCb *cb,
                          LSN &lsn,
                          share::SCN &scn) = 0;
   // 提交group_log到palf
@@ -710,6 +715,7 @@ public:
                  const char *buf,
                  const int64_t buf_len,
                  const share::SCN &ref_scn,
+                 logservice::AppendCb *cb,
                  LSN &lsn,
                  share::SCN &scn) override final;
 

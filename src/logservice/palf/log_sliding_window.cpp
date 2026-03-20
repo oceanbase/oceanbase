@@ -16,6 +16,7 @@
 #include "log_io_task_cb_utils.h"
 #include "log_config_mgr.h"
 #include "log_mode_mgr.h"
+#include "logservice/ob_append_callback.h"
 namespace oceanbase
 {
 using namespace share;
@@ -424,6 +425,7 @@ int LogSlidingWindow::leader_wait_sw_slot_ready_(const int64_t log_id)
 int LogSlidingWindow::submit_log(const char *buf,
                                  const int64_t buf_len,
                                  const SCN &ref_scn,
+                                 logservice::AppendCb *cb,
                                  LSN &lsn,
                                  SCN &result_scn)
 {
@@ -506,6 +508,14 @@ int LogSlidingWindow::submit_log(const char *buf,
           if (OB_SUCCESS != (tmp_ret = try_feedback_freeze_log_task_(log_id))) {
             PALF_LOG(ERROR, "try_feedback_freeze_log_task failed", KR(tmp_ret), K(log_id));
           }
+          if (OB_NOT_NULL(cb)) {
+            cb->set_log_id(log_id);
+            LogTaskGuard guard(this);
+            LogTask *log_task = nullptr;
+            if (OB_SUCCESS == guard.get_log_task(log_id, log_task) && nullptr != log_task) {
+              log_task->set_first_cb(cb);
+            }
+          }
         }
       } else {
         // this log need to be appended to last log
@@ -515,6 +525,9 @@ int LogSlidingWindow::submit_log(const char *buf,
         } else {
           PALF_LOG(TRACE, "append_to_group_log_ success", K_(palf_id), K_(self), K(log_id), K(lsn), K(scn),
               K(valid_log_size), K(is_need_handle), K(is_need_handle_next));
+          if (OB_NOT_NULL(cb)) {
+            cb->set_log_id(log_id);
+          }
         }
       }
       // inc append count
@@ -2235,7 +2248,17 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       const int64_t log_freeze_ts = log_task->get_freeze_ts();
       const int64_t log_submit_ts = log_task->get_submit_ts();
       const int64_t log_flush_ts = log_task->get_flushed_ts();
+      logservice::AppendCb *first_cb = log_task->get_first_cb();
       log_task->unlock();
+
+      const int64_t slide_out_ts = common::ObTimeUtility::current_time();
+      if (OB_NOT_NULL(first_cb)) {
+        first_cb->set_gen_ts(log_gen_ts);
+        first_cb->set_freeze_ts(log_freeze_ts);
+        first_cb->set_submit_ts(log_submit_ts);
+        first_cb->set_flushed_ts(log_flush_ts);
+        first_cb->set_slide_out_ts(slide_out_ts);
+      }
 
       // Verifying accum_checksum firstly.
       if (OB_FAIL(checksum_.verify_accum_checksum(log_task_header.data_checksum_,

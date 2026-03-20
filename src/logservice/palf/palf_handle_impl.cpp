@@ -415,6 +415,7 @@ int PalfHandleImpl::submit_log(
     const char *buf,
     const int64_t buf_len,
     const SCN &ref_scn,
+    logservice::AppendCb *cb,
     LSN &lsn,
     SCN &scn)
 {
@@ -438,7 +439,7 @@ int PalfHandleImpl::submit_log(
       PALF_LOG(WARN, "cannot submit_log", KPC(this), KP(buf), K(buf_len), "role",
           state_mgr_.get_role(), "state", state_mgr_.get_state(), "proposal_id",
           state_mgr_.get_proposal_id(), K(opts), "mode_mgr can_append", mode_mgr_.can_append());
-    } else if (OB_FAIL(sw_.submit_log(buf, buf_len, ref_scn, lsn, scn))) {
+    } else if (OB_FAIL(sw_.submit_log(buf, buf_len, ref_scn, cb, lsn, scn))) {
       if (OB_EAGAIN != ret) {
         PALF_LOG(WARN, "submit_log failed", KPC(this), KP(buf), K(buf_len));
       }

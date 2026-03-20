@@ -85,12 +85,13 @@ int PalfHandle::append(const PalfAppendOptions &opts,
                        const void *buffer,
                        const int64_t nbytes,
                        const SCN &ref_scn,
+                       logservice::AppendCb *cb,
                        LSN &lsn,
                        SCN &scn)
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ret = palf_handle_impl_->submit_log(opts, static_cast<const char*>(buffer), nbytes, ref_scn, lsn, scn);
+  ret = palf_handle_impl_->submit_log(opts, static_cast<const char*>(buffer), nbytes, ref_scn, cb, lsn, scn);
   return ret;
 }
 

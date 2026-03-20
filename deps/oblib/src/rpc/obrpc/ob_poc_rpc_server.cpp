@@ -63,7 +63,7 @@ using namespace oceanbase::obrpc;
 using namespace oceanbase::rpc;
 
 frame::ObReqDeliver* global_deliver;
-int ObPocServerHandleContext::create(int64_t resp_id, const ObRpcPacket &tmp_pkt, int64_t sz, ObRequest*& req)
+int ObPocServerHandleContext::create(int64_t resp_id, const ObRpcPacket &tmp_pkt, int64_t sz, ObRequest*& req, int64_t req_arrival_ts)
 {
   int ret = OB_SUCCESS;
   ObPocServerHandleContext* ctx = NULL;
@@ -121,7 +121,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const ObRpcPacket &tmp_pkt
           } else {
             packet_data = tmp_pkt.get_cdata();
           }
-          int64_t receive_ts = ObTimeUtility::current_time();
+          int64_t receive_ts = req_arrival_ts;
           pkt->set_receive_ts(receive_ts);
           int64_t pkt_id = pn_get_pkt_id(resp_id);
           if (OB_LIKELY(pkt_id >= 0)) {
@@ -132,8 +132,6 @@ int ObPocServerHandleContext::create(int64_t resp_id, const ObRpcPacket &tmp_pkt
           req->set_packet(pkt);
           req->set_receive_timestamp(pkt->get_receive_ts());
           req->set_request_arrival_time(pkt->get_receive_ts());
-          req->set_arrival_push_diff(common::ObTimeUtility::current_time());
-
           const int64_t fly_ts = receive_ts - pkt->get_timestamp();
           if (fly_ts > oceanbase::common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
             ObAddr peer = ctx->get_peer();
@@ -262,7 +260,7 @@ inline void ObPocServerHandleContext::set_trace_point(int32_t trace_point)
   pn_set_trace_point(resp_id_, trace_point);
 }
 
-int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
+int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id, int64_t req_arrival_ts)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -292,10 +290,11 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
       }
       if (OB_TMP_FAIL(lock_ret)) {
         RPC_LOG_RET(WARN, tmp_ret, "lock_tenant_list failed");
-      } else if (OB_TMP_FAIL(ObPocServerHandleContext::create(resp_id, tmp_pkt, sz, req))) {
+      } else if (OB_TMP_FAIL(ObPocServerHandleContext::create(resp_id, tmp_pkt, sz, req, req_arrival_ts))) {
         RPC_LOG_RET(WARN, tmp_ret, "created req is null", K(tmp_ret), K(sz), K(resp_id));
       } else {
         timeguard.click();
+        req->set_arrival_push_diff(ObTimeUtility::current_time());
         global_deliver->deliver(*req);
       }
       if (OB_LIKELY(is_to_tenant_queue && OB_SUCCESS == lock_ret)) {

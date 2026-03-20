@@ -285,6 +285,7 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
 
   if (enable_perf_event) {
     audit_record.exec_record_.record_end();
+    print_sql_trace_info(audit_record);
     audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
     audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
     audit_record.update_event_stage_state();

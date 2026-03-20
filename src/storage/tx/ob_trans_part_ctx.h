@@ -676,6 +676,30 @@ private:
   // redo lsns is stored when submit log, when log fails to majority
   // and is callbacked via on_failure, redo lsns should be fixed
   int fix_redo_lsns_(const ObTxLogCb *log_cb);
+  struct ObLogTimeinfo
+  {
+    int64_t log_id_;
+    int64_t gen_ts_;
+    int64_t append_start_ts_;
+    int64_t gen_to_freeze_;
+    int64_t freeze_to_submit_;
+    int64_t submit_to_flush_;
+    int64_t flush_to_slide_;
+    int64_t append_start_to_append_finish_;
+    int64_t append_finish_to_first_handle_;
+    int64_t first_handle_to_finish_;
+    int64_t append_finish_to_finish_;
+  };
+  void calc_palf_cb_timing_(const ObTxLogCb *log_cb, ObLogTimeinfo &timing);
+  void record_on_fail_cb_trace_(const int ret,
+                                const ObTxLogType log_type,
+                                const SCN &log_ts,
+                                const ObTxLogCb *log_cb);
+  void record_log_succ_cb_trace_(const int ret,
+                                      const ObTxLogType log_type,
+                                      const SCN &log_ts,
+                                      const palf::LSN &log_lsn,
+                                      const ObTxLogCb *log_cb);
 
   int search_unsubmitted_dup_table_redo_() __attribute__((__noinline__));
   int dup_table_tx_redo_sync_(const bool need_retry_by_task = true);

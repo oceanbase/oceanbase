@@ -13,7 +13,13 @@
 typedef struct pkts_sk_t pkts_sk_t;
 typedef struct pkts_req_t pkts_req_t;
 typedef struct pkts_t pkts_t;
-typedef int (*pkts_handle_func_t)(pkts_t* pkts, void* req_handle, const char* b, int64_t s, uint64_t chid);
+typedef struct pkts_msg_t {
+  int64_t sz;
+  char* payload;
+  int64_t ctime_us;
+} pkts_msg_t;
+
+typedef int (*pkts_handle_func_t)(pkts_t* pkts, void* req_handle, pkts_msg_t* msg, uint64_t chid);
 typedef void (*pkts_flush_cb_func_t)(pkts_req_t* req);
 #define HOLD_BY_UP_LAYER_TIMEOUT 9000000
 

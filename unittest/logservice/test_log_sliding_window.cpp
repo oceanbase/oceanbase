@@ -212,7 +212,7 @@ TEST_F(TestLogSlidingWindow, test_to_follower_pending)
   LSN lsn;
   share::SCN scn;
   buf_len = 2 * 1024 * 1024;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   EXPECT_EQ(OB_SUCCESS, log_sw_.to_follower_pending(last_lsn));
 }
 
@@ -265,7 +265,7 @@ TEST_F(TestLogSlidingWindow, test_report_log_task_trace)
   share::SCN ref_scn;
   ref_scn.convert_for_logservice(99);
   buf_len = 2 * 1024 * 1024;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   EXPECT_EQ(OB_SUCCESS, log_sw_.report_log_task_trace(1));
 }
 
@@ -289,32 +289,32 @@ TEST_F(TestLogSlidingWindow, test_submit_log)
   ref_scn.convert_for_logservice(99);
   LSN lsn;
   share::SCN scn;
-  EXPECT_EQ(OB_NOT_INIT, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_NOT_INIT, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
         &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, plugins_, base_info, true));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(NULL, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(NULL, buf_len, ref_scn, NULL, lsn, scn));
   buf_len = 0;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   buf_len = 64 * 1024 * 1024;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   buf_len = 1000;
   ref_scn.reset();
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   ref_scn.convert_for_logservice(99);
   buf_len = 2 * 1024 * 1024;
   for (int i = 0; i < 8; ++i) {
-    EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+    EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   }
   // append to last group log
   buf_len = 1 * 1024 * 1024;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   buf_len = 2 * 1024 * 1024;
   for (int i = 0; i < 11; ++i) {
-    EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+    EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   }
   PALF_LOG(INFO, "current lsn", K(lsn), K(buf_len));
   // 40M已填充39M，无法继续submit 2M log
-  EXPECT_EQ(OB_EAGAIN, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_EAGAIN, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
 }
 
 TEST_F(TestLogSlidingWindow, test_submit_group_log)
@@ -389,7 +389,7 @@ TEST_F(TestLogSlidingWindow, test_receive_log)
   share::SCN ref_scn;
   ref_scn.convert_for_logservice(999);
   share::SCN scn;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   // update lsn for next group entry
   lsn.val_ = lsn.val_ + LogEntryHeader::HEADER_SER_SIZE + buf_len;
   // generate new group entry
@@ -569,7 +569,7 @@ TEST_F(TestLogSlidingWindow, test_after_flush_log)
   ref_scn.convert_for_logservice(999);
   LSN lsn;
   share::SCN scn;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.after_flush_log(flush_log_ctx));
 
   flush_log_ctx.log_id_ = PALF_SLIDING_WINDOW_SIZE + 100;
@@ -620,7 +620,7 @@ TEST_F(TestLogSlidingWindow, test_truncate_log)
   LSN lsn;
   share::SCN scn;
   // submit first log
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   EXPECT_EQ(OB_SUCCESS, log_sw_.period_freeze_last_log());
   // generate new group entry
   LogEntryHeader log_entry_header;
@@ -741,7 +741,7 @@ TEST_F(TestLogSlidingWindow, test_ack_log)
   ref_scn.convert_for_logservice(999);
   LSN lsn;
   share::SCN scn;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   LSN end_lsn = lsn + LogEntryHeader::HEADER_SER_SIZE + buf_len;
   ObAddr server;
   server.set_ip_addr("127.0.0.1", 12346);
@@ -786,7 +786,7 @@ TEST_F(TestLogSlidingWindow, test_truncate_for_rebuild)
   ref_scn.convert_for_logservice(999);
   LSN lsn;
   share::SCN scn;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   // generate new group entry
   LogEntryHeader log_entry_header;
   LogGroupEntryHeader group_header;

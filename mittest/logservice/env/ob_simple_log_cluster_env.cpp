@@ -988,7 +988,7 @@ int ObSimpleLogClusterTestEnv::submit_log_impl(PalfHandleImplGuard &leader,
         ob_usleep(10);
         LSN lsn;
         share::SCN scn;
-        ret = leader.palf_handle_impl_->submit_log(opts, buf, real_log_data_size, ref_scn, lsn, scn);
+        ret = leader.palf_handle_impl_->submit_log(opts, buf, real_log_data_size, ref_scn, NULL, lsn, scn);
         if (OB_SUCC(ret) && lsn.is_valid()) {
           lsn_array.push_back(lsn);
           scn_array.push_back(scn);

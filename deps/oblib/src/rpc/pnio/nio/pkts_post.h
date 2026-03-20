@@ -59,7 +59,7 @@ static void pkts_post_io(pkts_t* io, pkts_req_t* r) {
 }
 
 int pkts_resp(pkts_t* io, pkts_req_t* req) {
-  PNIO_DELAY_WARN(req->ctime_us = rk_get_corse_us());
+  PNIO_DELAY_WARN(req->ctime_us = rk_get_trace_us());
   int64_t queue_cnt = 0;
   int64_t queue_sz = 0;
   link_t* req_link = (link_t*)(&req->link);
@@ -80,7 +80,7 @@ static int pkts_handle_req_queue(pkts_t* io) {
   int64_t sc_queue_time = 0;
   while((l = sc_queue_pop(&io->req_queue))) {
     pkts_req_t* req = structof(l, pkts_req_t, link);
-    int64_t cur_time = rk_get_corse_us();
+    int64_t cur_time = rk_get_trace_us();
     int64_t delay_time = cur_time - req->ctime_us;
     if (delay_time > HANDLE_DELAY_WARN_US && PNIO_REACH_TIME_INTERVAL(500*1000)) {
       rk_warn("[delay_warn] delay high: %ld", delay_time);

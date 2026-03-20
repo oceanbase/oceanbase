@@ -1368,6 +1368,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
     if (enable_perf_event) {
       audit_record.exec_record_.record_end();
+      print_sql_trace_info(audit_record);
       record_stat(result.get_stmt_type(), exec_end_timestamp_, session, ret, result);
       audit_record.stmt_type_ = result.get_stmt_type();
       audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;

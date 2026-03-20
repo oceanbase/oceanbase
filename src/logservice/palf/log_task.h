@@ -22,6 +22,11 @@
 
 namespace oceanbase
 {
+namespace logservice
+{
+class AppendCb;
+}
+
 namespace palf
 {
 class LogGroupEntryHeader;
@@ -149,6 +154,8 @@ public:
   int64_t get_flushed_ts() const { return ATOMIC_LOAD(&(flushed_ts_)); }
   PushLogType get_push_log_type() const { return ATOMIC_LOAD(&push_log_type_);}
   bool is_fetch_log_type() const;
+  void set_first_cb(logservice::AppendCb *cb);
+  logservice::AppendCb *get_first_cb() const;
   TO_STRING_KV(K_(header), K_(state_map), K_(ref_cnt),
       K_(gen_ts), K_(freeze_ts), K_(submit_ts), K_(flushed_ts),
       "gen_to_freeze cost time", freeze_ts_ - gen_ts_,
@@ -168,6 +175,7 @@ private:
   mutable int64_t flushed_ts_;
   mutable PushLogType push_log_type_;
   mutable common::ObLatch lock_;
+  logservice::AppendCb *first_cb_;
 };
 } // end namespace palf
 } // end namespace oceanbase

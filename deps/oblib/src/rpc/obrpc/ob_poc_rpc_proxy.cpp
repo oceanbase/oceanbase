@@ -13,6 +13,7 @@
 #include "ob_poc_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 extern "C" {
 #include "rpc/pnio/r0/futex.h"
 }
@@ -61,9 +62,13 @@ int ObSyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
   rk_futex_wake(&cond_, 1);
   return ret;
 }
-int ObSyncRespCallback::wait(const int64_t wait_timeout_us, const int64_t pcode, const int64_t req_sz)
+int ObSyncRespCallback::wait(
+    const int64_t wait_timeout_us,
+    const int64_t pcode,
+    const int64_t req_sz,
+    const int64_t server_ip_port)
 {
-  ObWaitEventGuard wait_guard(ObWaitEventIds::SYNC_RPC, wait_timeout_us / 1000, pcode, req_sz);
+  ObWaitEventGuard wait_guard(ObWaitEventIds::SYNC_RPC, wait_timeout_us / 1000, pcode, 0, server_ip_port);
   const struct timespec ts = {1, 0};
   bool has_terminated = false;
   while(ATOMIC_LOAD(&cond_) == 0) {
@@ -81,6 +86,31 @@ int ObSyncRespCallback::wait(const int64_t wait_timeout_us, const int64_t pcode,
       }
     }
     rk_futex_wait(&cond_, 0, &ts);
+  }
+  if (OB_SUCCESS == send_ret_ && OB_NOT_NULL(resp_) && sz_ > 0) {
+    int ret = OB_SUCCESS;
+    ObRpcPacket ret_pkt;
+    if (OB_SUCC(rpc_decode_ob_packet(resp_, sz_, ret_pkt))) {
+      const ObRpcCostTime &recv_cost = ret_pkt.get_cost_time();
+      const int64_t server_cost = static_cast<int64_t>(recv_cost.arrival_push_diff_)
+          + static_cast<int64_t>(recv_cost.push_pop_diff_)
+          + static_cast<int64_t>(recv_cost.pop_process_start_diff_)
+          + static_cast<int64_t>(recv_cost.process_start_end_diff_)
+          + static_cast<int64_t>(recv_cost.process_end_response_diff_);
+      const int64_t send_recv_rt = static_cast<int64_t>(stats_.read_resp_diff)
+          - static_cast<int64_t>(stats_.write_sock_diff);
+      const int64_t net_time = send_recv_rt - server_cost;
+      const uint64_t packed_cost = (static_cast<uint64_t>(static_cast<uint32_t>(net_time)) << 32)
+          | static_cast<uint32_t>(server_cost);
+      ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+      if (OB_NOT_NULL(di)) {
+        //p2 may overflow
+        di->get_ash_stat().p2_ = packed_cost;
+        di->get_ash_stat().p3_ = static_cast<uint64_t>(server_ip_port);
+        di->get_curr_wait().p2_ = packed_cost;
+        di->get_curr_wait().p3_ = static_cast<uint64_t>(server_ip_port);
+      }
+    }
   }
   return send_ret_;
 }
@@ -174,6 +204,16 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
         RPC_LOG(WARN, "ucb.process fail", K(tmp_ret));
       }
       after_process_time = ObTimeUtility::current_time();
+      int32_t rpc_net_time = get_net_time(ret_pkt.get_cost_time());
+      int32_t rpc_io_time = get_rpc_io_time(ret_pkt.get_cost_time());
+      if (is_trace_slow_rpc()) {
+        int64_t slow_watermark = ObRespCallback::trace_log_slow_query_watermark_;
+        if (slow_watermark > 0 && (rpc_io_time > slow_watermark || rpc_net_time > slow_watermark)) {
+          RPC_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "slow async rpc",
+            K(pcode), K_(trace_rpc_dst), K(rpc_io_time), K(rpc_net_time),
+            KPC(this), "dst_cost", ret_pkt.get_cost_time());
+        }
+      }
     }
     if (cb_cloned) {
       ucb_->~AsyncCB();
@@ -277,5 +317,6 @@ int ObPocClientStub::check_blacklist(const common::ObAddr& addr) {
   return ret;
 }
 ObPocClientStub global_poc_client;
+volatile int64_t ObRespCallback::trace_log_slow_query_watermark_ = 0;
 }; // end namespace obrpc
 }; // end namespace oceanbase

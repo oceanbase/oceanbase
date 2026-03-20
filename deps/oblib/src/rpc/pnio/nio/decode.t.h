@@ -19,7 +19,7 @@ static int my_sk_do_decode(my_sk_t* s, my_msg_t* msg, int64_t* avail_bytes) {
         && NULL != b && (req_sz = my_decode((char*)b, sz)) > 0 && req_sz > sz) {
     sz = req_sz;
     if (0 == s->sk_diag_info.last_read_time) {
-      s->sk_diag_info.last_read_time = rk_get_us();
+      s->sk_diag_info.last_read_time = rk_get_trace_us();
     }
   }
   if (req_sz <= 0) {
@@ -29,7 +29,7 @@ static int my_sk_do_decode(my_sk_t* s, my_msg_t* msg, int64_t* avail_bytes) {
     *msg = (my_msg_t) { .sz = req_sz, .payload = (char*)b, .ctime_us = s->sk_diag_info.last_read_time};
     if (NULL != b) {
       int64_t read_time = 0;
-      int64_t cur_time = rk_get_us();
+      int64_t cur_time = rk_get_trace_us();
       if (0 == s->sk_diag_info.last_read_time) {
         s->sk_diag_info.last_read_time = cur_time;
         msg->ctime_us = cur_time;

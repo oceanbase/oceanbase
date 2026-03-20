@@ -16,6 +16,7 @@
 #include "sql/das/ob_data_access_service.h"
 #include "sql/engine/px/ob_px_interruption.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include "rpc/obrpc/ob_poc_rpc_proxy.h"
 
 namespace oceanbase
 {
@@ -318,6 +319,26 @@ int ObDASAsyncAccessP::process()
     LOG_WARN("failed to process das async rpc", K(ret));
   }
   return OB_SUCCESS;
+}
+
+int ObRpcDasAsyncAccessCallBack::decode(void *pkt)
+{
+  int ret = obrpc::ObDASRpcProxy::AsyncCB<obrpc::OB_DAS_ASYNC_ACCESS>::decode(pkt);
+  if (OB_SUCCESS == ret && 0 != gtid_ && NULL != pkt) {
+    obrpc::ObRpcPacket *rpkt = reinterpret_cast<obrpc::ObRpcPacket*>(pkt);
+    const obrpc::ObRpcCostTime &recv_cost = rpkt->get_cost_time();
+    obrpc::ObRespCallback *resp_cb = reinterpret_cast<obrpc::ObRespCallback*>(low_level_cb_);
+    if (OB_NOT_NULL(resp_cb)) {
+      net_time_us_ = resp_cb->get_net_time(recv_cost);
+      server_cost_us_ = static_cast<int32_t>(static_cast<int64_t>(recv_cost.arrival_push_diff_)
+          + static_cast<int64_t>(recv_cost.push_pop_diff_)
+          + static_cast<int64_t>(recv_cost.pop_process_start_diff_)
+          + static_cast<int64_t>(recv_cost.process_start_end_diff_)
+          + static_cast<int64_t>(recv_cost.process_end_response_diff_));
+      has_net_time_ = true;
+    }
+  }
+  return ret;
 }
 
 void ObRpcDasAsyncAccessCallBack::on_timeout()

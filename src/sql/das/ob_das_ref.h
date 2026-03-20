@@ -292,6 +292,7 @@ private:
   int create_task_map();
   int move_local_tasks_to_last();
   int wait_all_executing_tasks();
+  void record_max_wait_diagnostic_info();
   int process_remote_task_resp();
   bool check_rcode_can_retry(int ret);
   int cancel_all_async_callbacks();

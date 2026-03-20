@@ -1797,7 +1797,7 @@ int ObLogHandler::append_(const void *buffer,
         ret = OB_NOT_RUNNING;
       } else if (LEADER != ATOMIC_LOAD(&role_)) {
         ret = OB_NOT_MASTER;
-      } else if (OB_FAIL(palf_handle_->append(opts, final_buf, final_nbytes, ref_scn, lsn, scn))) {
+      } else if (OB_FAIL(palf_handle_->append(opts, final_buf, final_nbytes, ref_scn, cb, lsn, scn))) {
         if (REACH_TIME_INTERVAL(1*1000*1000)) {
           CLOG_LOG(WARN, "palf_handle_ append failed", K(ret), KPC(this));
         }

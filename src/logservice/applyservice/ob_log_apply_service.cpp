@@ -269,7 +269,8 @@ ObApplyStatus::ObApplyStatus()
       cb_wait_thread_stat_("[APPLY STAT CB IN QUEUE TIME]", 5 * 1000 * 1000),
       cb_wait_commit_stat_("[APPLY STAT CB WAIT COMMIT TIME]", 5 * 1000 * 1000),
       cb_execute_stat_("[APPLY STAT CB EXECUTE TIME]", 5 * 1000 * 1000),
-      cb_stat_("[APPLY STAT CB TOTAL TIME]", 5 * 1000 * 1000)
+      cb_stat_("[APPLY STAT CB TOTAL TIME]", 5 * 1000 * 1000),
+      slow_trace_threshold_(1000 * 1000)
 {
 }
 
@@ -463,6 +464,7 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
     int64_t cb_first_handle_time = OB_INVALID_TIMESTAMP;
     int64_t cb_start_time = OB_INVALID_TIMESTAMP;
     int64_t idx = cb_queue->idx();
+    ObLogTsInfo ts_info;
     RLockGuard guard(lock_);
     do {
       ObLink *link = NULL;
@@ -481,15 +483,15 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
           CLOG_LOG(ERROR, "cb_queue pop failed", KPC(cb_queue), KPC(this), K(ret));
         } else {
           scn = cb->__get_scn();
-          get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time);
+          get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time, ts_info);
           CLOG_LOG(TRACE, "cb on_success", K(lsn), K(scn), KP(link->next_), KPC(cb_queue), KPC(this));
           if (OB_FAIL(cb->on_success())) {
             // 不处理此类失败情况
             CLOG_LOG(ERROR, "cb on_success failed", KP(cb), K(ret), KPC(this));
             ret = OB_SUCCESS;
           }
-          statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
-                              cb_first_handle_time, cb_start_time, idx);
+          statistics_cb_cost_(cb, lsn, scn, append_start_time, append_finish_time,
+                              cb_first_handle_time, cb_start_time, idx, ts_info);
           cb_queue->inc_total_apply_cb_cnt();
         }
       } else if (FOLLOWER == role_) {
@@ -498,14 +500,14 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
           CLOG_LOG(ERROR, "cb_queue pop failed", KPC(cb_queue), KPC(this), K(ret));
         } else {
           scn = cb->__get_scn();
-          get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time);
+          get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time, ts_info);
           CLOG_LOG(INFO, "cb on_failure", K(lsn), K(scn), KP(link->next_), KPC(cb_queue), KPC(this));
           if (OB_FAIL(cb->on_failure())) {
             CLOG_LOG(ERROR, "cb on_failure failed", KP(cb), K(ret), KPC(this));
             ret = OB_SUCCESS;
           }
-          statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
-                              cb_first_handle_time, cb_start_time, idx);
+          statistics_cb_cost_(cb, lsn, scn, append_start_time, append_finish_time,
+                              cb_first_handle_time, cb_start_time, idx, ts_info);
           cb_queue->inc_total_apply_cb_cnt();
         }
       } else {
@@ -893,6 +895,7 @@ int ObApplyStatus::handle_drop_cb_queue_(ObApplyServiceQueueTask &cb_queue)
   int64_t cb_first_handle_time = OB_INVALID_TIMESTAMP;
   int64_t cb_start_time = OB_INVALID_TIMESTAMP;
   int64_t idx = cb_queue.idx();
+  ObLogTsInfo ts_info;
   do {
     ObLink *link = NULL;
     AppendCb *cb = NULL;
@@ -908,14 +911,14 @@ int ObApplyStatus::handle_drop_cb_queue_(ObApplyServiceQueueTask &cb_queue)
     } else {
       lsn = cb->__get_lsn();
       scn = cb->__get_scn();
-      get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time);
+      get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time, ts_info);
       CLOG_LOG(INFO, "cb on_failure", K(lsn), K(scn), KP(link->next_), K(cb_queue), KPC(this));
       if (OB_FAIL(cb->on_failure())) {
         CLOG_LOG(ERROR, "cb on_failure failed", KP(cb), K(ret), KPC(this));
         ret = OB_SUCCESS;
       }
-      statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
-                          cb_first_handle_time, cb_start_time, idx);
+      statistics_cb_cost_(cb, lsn, scn, append_start_time, append_finish_time,
+                          cb_first_handle_time, cb_start_time, idx, ts_info);
       cb_queue.inc_total_apply_cb_cnt();
     }
   } while (OB_SUCC(ret) && (!is_queue_empty));
@@ -927,7 +930,8 @@ void ObApplyStatus::get_cb_trace_(AppendCb *cb,
                                   int64_t &append_start_time,
                                   int64_t &append_finish_time,
                                   int64_t &cb_first_handle_time,
-                                  int64_t &cb_start_time)
+                                  int64_t &cb_start_time,
+                                  ObLogTsInfo &ts_info)
 {
   if (NULL != cb) {
     cb_start_time = ObTimeUtility::fast_current_time();
@@ -938,25 +942,28 @@ void ObApplyStatus::get_cb_trace_(AppendCb *cb,
     } else {
       cb_first_handle_time = cb->get_cb_first_handle_ts();
     }
+    ts_info = cb->get_ts_info();
   }
 }
 
-void ObApplyStatus::statistics_cb_cost_(const LSN &lsn,
+void ObApplyStatus::statistics_cb_cost_(AppendCb *cb,
+                                        const LSN &lsn,
                                         const SCN &scn,
                                         const int64_t append_start_time,
                                         const int64_t append_finish_time,
                                         const int64_t cb_first_handle_time,
                                         const int64_t cb_start_time,
-                                        const int64_t idx)
+                                        const int64_t idx,
+                                        ObLogTsInfo &ts_info)
 {
   // no need to print debug log when config [default value is true] is false;
   if (REACH_TIME_INTERVAL(10 * 1000)) {
     const int64_t cb_finish_time = common::ObClockGenerator::getClock();
-    int64_t total_cost_time = cb_finish_time - append_start_time;
-    int64_t append_cost_time = append_finish_time - append_start_time;
-    int64_t cb_wait_thread_time = cb_first_handle_time - append_finish_time;
-    int64_t cb_wait_commit_time = cb_start_time - cb_first_handle_time;
-    int64_t cb_cost_time = cb_finish_time - cb_start_time;
+    const int64_t total_cost_time = cb_finish_time - append_start_time;
+    const int64_t append_cost_time = append_finish_time - append_start_time;
+    const int64_t cb_wait_thread_time = cb_first_handle_time - append_finish_time;
+    const int64_t cb_wait_commit_time = cb_start_time - cb_first_handle_time;
+    const int64_t cb_cost_time = cb_finish_time - cb_start_time;
     cb_append_stat_.stat(append_cost_time);
     cb_wait_thread_stat_.stat(cb_wait_thread_time);
     cb_wait_commit_stat_.stat(cb_wait_commit_time);
@@ -966,6 +973,48 @@ void ObApplyStatus::statistics_cb_cost_(const LSN &lsn,
       CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "cb cost too much time", K(lsn), K(scn), K(idx), K(total_cost_time), K(append_cost_time),
                K(cb_wait_thread_time), K(cb_wait_commit_time), K(cb_cost_time), K(append_start_time), K(append_finish_time),
                K(cb_first_handle_time), K(cb_finish_time));
+    }
+  }
+
+  if (oceanbase::lib::is_trace_log_enabled()) {
+    const int64_t cb_finish_time = common::ObClockGenerator::getClock();
+    const int64_t total_cost_time = cb_finish_time - append_start_time;
+    const int64_t append_cost_time = append_finish_time - append_start_time;
+    const int64_t cb_wait_thread_time = cb_first_handle_time - append_finish_time;
+    const int64_t cb_wait_commit_time = cb_start_time - cb_first_handle_time;
+    const int64_t cb_cost_time = cb_finish_time - cb_start_time;
+    //same frequency as cb_stat_
+    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+      //not atomic, we think the error is acceptable
+      const int64_t SLOW_CB_THRESHOLD_RATIO = 10;
+      const int64_t MIN_SLOW_CB_THRESHOLD_US = 1 * 1000;
+      const int64_t MAX_SLOW_CB_THRESHOLD_US = 1000 * 1000;
+      int64_t count = 0;
+      int64_t curr_sum = 0;
+      cb_stat_.get_stat(count, curr_sum);
+      if (count > 0) {
+        ATOMIC_STORE(&slow_trace_threshold_, min(max(curr_sum / count, MIN_SLOW_CB_THRESHOLD_US) * SLOW_CB_THRESHOLD_RATIO, MAX_SLOW_CB_THRESHOLD_US));
+      }
+    }
+
+    const int64_t slow_trace_threshold = ATOMIC_LOAD(&slow_trace_threshold_);
+    if (total_cost_time > slow_trace_threshold) {
+        int64_t log_id = ts_info.log_id_;
+        int64_t gen_ts = ts_info.gen_ts_;
+        int64_t freeze_ts = ts_info.freeze_ts_;
+        int64_t submit_ts = ts_info.submit_ts_;
+        int64_t flushed_ts = ts_info.flushed_ts_;
+        int64_t slide_out_ts = ts_info.slide_out_ts_;
+
+        const int64_t gen_to_freeze = freeze_ts - gen_ts;
+        const int64_t freeze_to_submit = submit_ts - freeze_ts;
+        const int64_t submit_to_flush = flushed_ts - submit_ts;
+        const int64_t flush_to_slide = slide_out_ts - flushed_ts;
+        CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "slow cb detected",
+            K_(ls_id), K(lsn), K(scn), K(idx), K(total_cost_time), K(slow_trace_threshold),
+            K(append_cost_time), K(cb_wait_thread_time), K(cb_wait_commit_time), K(cb_cost_time),
+            K(log_id), K(gen_ts), K(freeze_ts), K(submit_ts), K(flushed_ts), K(slide_out_ts),
+            K(gen_to_freeze), K(freeze_to_submit), K(submit_to_flush), K(flush_to_slide));
     }
   }
 }

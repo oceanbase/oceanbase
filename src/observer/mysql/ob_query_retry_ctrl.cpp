@@ -17,6 +17,7 @@
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "observer/mysql/obmp_query.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "lib/trace/ob_trace_event.h"
 
 namespace oceanbase
 {
@@ -1436,6 +1437,9 @@ void ObQueryRetryCtrl::start_schema_error_retry_wait_event(ObSQLSessionInfo &ses
         error_code,
         ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(table_id_),
         ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(table_schema_version_));
+  NG_TRACE_EXT(retry_wait_begin, OB_ID(ret), error_code,
+               OB_ID(tid), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(table_id_),
+               OB_ID(version), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(table_schema_version_));
 }
 
 void ObQueryRetryCtrl::start_location_error_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
@@ -1445,6 +1449,8 @@ void ObQueryRetryCtrl::start_location_error_retry_wait_event(ObSQLSessionInfo &s
         error_code,
         ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(ls_id_),
         0);
+  NG_TRACE_EXT(retry_wait_begin, OB_ID(ret), error_code,
+               OB_ID(ls_id), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(ls_id_));
 }
 
 void ObQueryRetryCtrl::start_rowlock_retry_wait_event(ObSQLSessionInfo &session)
@@ -1454,6 +1460,10 @@ void ObQueryRetryCtrl::start_rowlock_retry_wait_event(ObSQLSessionInfo &session)
         ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_tx_id_),
         ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_data_seq_num_),
         ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_lock_timestamp_));
+  NG_TRACE_EXT(retry_wait_begin, OB_ID(ret), OB_TRY_LOCK_ROW_CONFLICT,
+        OB_ID(holder_tx_id), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_tx_id_),
+        OB_ID(holder_data_seq_num), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_data_seq_num_),
+        OB_ID(holder_lock_timestamp), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_lock_timestamp_));
 }
 
 void ObQueryRetryCtrl::start_px_worker_insufficient_retry_wait_event(
@@ -1464,6 +1474,10 @@ void ObQueryRetryCtrl::start_px_worker_insufficient_retry_wait_event(
       ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(dop_),
       ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(required_px_workers_number_),
       ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(admitted_px_workers_number_));
+  NG_TRACE_EXT(retry_wait_begin, OB_ID(ret), OB_ERR_INSUFFICIENT_PX_WORKER,
+               OB_ID(arg1), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(dop_),
+               OB_ID(arg2), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(required_px_workers_number_),
+               OB_ID(arg3), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(admitted_px_workers_number_));
 }
 
 void ObQueryRetryCtrl::start_gts_not_ready_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
@@ -1473,6 +1487,8 @@ void ObQueryRetryCtrl::start_gts_not_ready_retry_wait_event(ObSQLSessionInfo &se
         error_code,
         ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(sys_ls_leader_addr_),
         0);
+  NG_TRACE_EXT(retry_wait_begin, OB_ID(ret), error_code,
+               OB_ID(addr), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(sys_ls_leader_addr_));
 }
 
 void ObQueryRetryCtrl::start_log_cb_not_ready_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
@@ -1482,6 +1498,8 @@ void ObQueryRetryCtrl::start_log_cb_not_ready_retry_wait_event(ObSQLSessionInfo 
         error_code,
         ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(ls_id_),
         0);
+  NG_TRACE_EXT(retry_wait_begin, OB_ID(ret), error_code,
+               OB_ID(ls_id), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(ls_id_));
 }
 
 void ObQueryRetryCtrl::start_replica_not_readable_retry_wait_event(ObSQLSessionInfo &session)
@@ -1493,6 +1511,9 @@ void ObQueryRetryCtrl::start_replica_not_readable_retry_wait_event(ObSQLSessionI
         ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(tablet_id_),
         0);
   }
+  NG_TRACE_EXT(retry_wait_begin, OB_ID(ret), OB_REPLICA_NOT_READABLE,
+               OB_ID(ls_id), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(ls_id_),
+               OB_ID(arg1), ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(tablet_id_));
 }
 
 void ObQueryRetryCtrl::start_other_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
@@ -1502,6 +1523,7 @@ void ObQueryRetryCtrl::start_other_retry_wait_event(ObSQLSessionInfo &session, c
         error_code,
         0,
         0);
+  NG_TRACE_EXT(retry_wait_begin, OB_ID(ret), error_code);
 }
 }/* ns observer*/
 }/* ns oceanbase */

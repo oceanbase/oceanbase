@@ -17,9 +17,11 @@
 #include "rpc/ob_request.h"
 #include "rpc/obrpc/ob_rpc_stat.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
+#include "lib/oblog/ob_trace_log.h"
 
 extern "C" {
 #include "rpc/pnio/interface/group.h"
+#include "rpc/pnio/interface/req_time_stat.h"
 }
 namespace oceanbase
 {
@@ -31,7 +33,70 @@ inline bool is_interrupt_error(int ret)
   return ret == OB_ERR_SESSION_INTERRUPTED || ret == OB_ERR_QUERY_INTERRUPTED;
 }
 
-class ObSyncRespCallback
+typedef pn_req_time_stat ObRpcTimeStat;
+
+class ObRespCallback
+{
+public:
+  static volatile int64_t trace_log_slow_query_watermark_;
+  ObRpcTimeStat stats_;
+  ObRespCallback() { memset(&stats_, 0, sizeof(stats_)); }
+  ~ObRespCallback() {}
+  void set_rpc_start_ts(int64_t ts) { stats_.rpc_start_ts = ts; }
+
+  /**
+   * @return Time spent on serializing the RPC request and submitting it over to the IO thread.
+   */
+  int32_t get_submit_time() const {
+    return stats_.submit_io_diff;
+  }
+
+  /**
+   * @return End-to-end RPC latency, from request sending to response reception
+   */
+  int32_t get_rpc_total_time() const {
+    return stats_.handle_cb_diff;
+  }
+
+  /**
+   * @return Time spent in the RPC I/O thread when sending rpc request, including both sender and receiver side.
+   */
+  int32_t get_rpc_io_time(const ObRpcCostTime& recv_cost) const {
+    int32_t send_time = stats_.write_sock_diff;
+    int32_t recv_time = recv_cost.arrival_push_diff_;
+    return send_time + recv_time;
+  }
+
+  /**
+   * @return Time spent on the network, including both sender and receiver side.
+   *         Note: Here we roughly attribute the RPC response processing time in the IO thread to network time,
+   *               because the write_socket_time of response can not be passed to the sender side.
+   */
+  int32_t get_net_time(const ObRpcCostTime& recv_cost) const {
+    int64_t server_cost = recv_cost.arrival_push_diff_
+                          + recv_cost.push_pop_diff_
+                          + recv_cost.pop_process_start_diff_
+                          + recv_cost.process_start_end_diff_
+                          + recv_cost.process_end_response_diff_;
+    int64_t send_recv_rt = stats_.read_resp_diff - stats_.write_sock_diff;
+    int64_t net_time = send_recv_rt - server_cost;
+    return static_cast<int32_t>(net_time);
+  }
+
+  int64_t to_string(char *buf, const int64_t len) const {
+    int64_t pos = 0;
+    (void)databuff_printf(buf, len, pos, "{rpc_start_ts:%ld, submit_io:%d, submit_sock:%d, write_sock:%d, read_resp:%d, handle_cb:%d}",
+                    stats_.rpc_start_ts,
+                    stats_.submit_io_diff,
+                    stats_.submit_sock_queue_diff,
+                    stats_.write_sock_diff,
+                    stats_.read_resp_diff,
+                    stats_.handle_cb_diff);
+    return pos;
+  }
+};
+
+class ObSyncRespCallback : public ObRespCallback
 {
 public:
   ObSyncRespCallback(ObRpcMemPool& pool, ObRpcProxy& proxy)
@@ -39,7 +104,7 @@ public:
   ~ObSyncRespCallback() {}
   void* alloc(int64_t sz) { return pool_.alloc(sz); }
   int handle_resp(int io_err, const char* buf, int64_t sz);
-  int wait(const int64_t wait_timeout_us, const int64_t pcode, const int64_t req_sz);
+  int wait(const int64_t wait_timeout_us, const int64_t pcode, const int64_t req_sz, const int64_t server_ip_port);
   const char* get_resp(int64_t& sz) {
     sz = sz_;
     return resp_;
@@ -63,10 +128,10 @@ public:
 
 typedef rpc::frame::ObReqTransport::AsyncCB UAsyncCB;
 class Handle;
-class ObAsyncRespCallback
+class ObAsyncRespCallback : public ObRespCallback
 {
 public:
-  ObAsyncRespCallback(ObRpcMemPool& pool, UAsyncCB* ucb): pkt_nio_cb_(NULL), pool_(pool), ucb_(ucb) {}
+  ObAsyncRespCallback(ObRpcMemPool& pool, UAsyncCB* ucb): pkt_nio_cb_(NULL), pool_(pool), ucb_(ucb), trace_rpc_dst_() {}
   ~ObAsyncRespCallback() {}
   // static ObAsyncRespCallback* create(ObRpcMemPool& pool, UAsyncCB* ucb);
   static int create(ObRpcMemPool& pool, UAsyncCB* ucb, ObAsyncRespCallback*& ret_cb);
@@ -79,11 +144,18 @@ public:
     }
     return ret;
   }
+  void set_trace_slow_rpc(const ObAddr& dst) {
+    trace_rpc_dst_ = dst;
+  }
+  bool is_trace_slow_rpc() const {
+    return trace_rpc_dst_.is_valid();
+  }
 
 private:
   void* pkt_nio_cb_;
   ObRpcMemPool& pool_;
   UAsyncCB* ucb_;
+  ObAddr trace_rpc_dst_;
 };
 
 void init_ucb(ObRpcProxy& proxy, UAsyncCB* ucb, const common::ObAddr& addr, int64_t send_ts, int64_t payload_sz);
@@ -130,6 +202,7 @@ public:
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode));
     ObRpcMemPool pool(src_tenant_id, pcode_label);
     ObSyncRespCallback cb(pool, proxy);
+    cb.set_rpc_start_ts(start_ts);
     char* req = NULL;
     int64_t req_sz = 0;
     const char* resp = NULL;
@@ -162,7 +235,8 @@ public:
           start_ts + relative_timeout,
           static_cast<int16_t>(set.idx_of_pcode(pcode)),
           ObSyncRespCallback::client_cb,
-          &cb
+          &cb,
+          &cb.stats_
         };
         cb.gtid_ = gtid;
         if (0 != (sys_err = pn_send(gtid, addr.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
@@ -181,13 +255,20 @@ public:
           EVENT_ADD(RPC_PACKET_OUT_BYTES, req_sz);
         }
         int64_t timeout = get_proxy_timeout(proxy);
-        if (OB_FAIL(cb.wait(timeout, pcode, req_sz))) {
+        int64_t server_ip_port = addr.using_ipv4()
+            ? static_cast<int64_t>((static_cast<uint64_t>(addr.get_port()) << 32)
+                                   | static_cast<uint64_t>(addr.get_ipv4()))
+            : 0;
+        if (OB_FAIL(cb.wait(timeout, pcode, req_sz, server_ip_port))) {
           RPC_LOG(WARN, "sync rpc execute fail", K(ret), K(addr), K(pcode), K(timeout));
         } else if (NULL == (resp = cb.get_resp(resp_sz))) {
           ret = common::OB_ERR_UNEXPECTED;
           RPC_LOG(WARN, "sync rpc execute success but resp is null", K(ret), K(addr), K(pcode), K(timeout));
         } else if (OB_FAIL(rpc_decode_resp(resp, resp_sz, out, resp_pkt, rcode))) {
           RPC_LOG(WARN, "execute rpc fail", K(addr), K(pcode), K(ret), K(timeout));
+        } else {
+          const int32_t net_time_us = cb.get_net_time(resp_pkt.get_cost_time());
+          NG_TRACE_EXT(sync_rpc_ts, OB_ID(addr), addr, OB_ID(net_time_us), net_time_us);
         }
       } else if (NULL != req) {
         pn_send_free(req); // if pn_send is not executed or executed failed, release memory allocated in rpc_encode_req
@@ -254,6 +335,7 @@ public:
       } else if (OB_FAIL(ObAsyncRespCallback::create(*pool, ucb, cb))) {
         RPC_LOG(WARN, "create ObAsyncRespCallback failed", K(ucb));
       } else if (OB_NOT_NULL(cb)) {
+        cb->set_rpc_start_ts(start_ts);
         auto newcb = reinterpret_cast<UCB*>(cb->get_ucb());
         if (newcb) {
           set_ucb_args(newcb, args);
@@ -261,6 +343,9 @@ public:
         }
         ucb->gtid_ = gtid;
         pkt_id_ptr = &ucb->pkt_id_;
+        if (oceanbase::lib::is_trace_log_enabled() && OB_LIKELY(THE_TRACE != nullptr)) {
+          cb->set_trace_slow_rpc(addr);
+        }
       }
       IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", req_sz, pcode, src_tenant_id);
       timeguard.click(rpc_timeguard_str);
@@ -272,7 +357,8 @@ public:
           start_ts + get_proxy_timeout(proxy),
           static_cast<int16_t>(set.idx_of_pcode(pcode)),
           ObAsyncRespCallback::client_cb,
-          cb
+          cb,
+          (NULL != cb) ? &cb->stats_ : NULL
         };
         if (0 != (sys_err = pn_send(
             gtid,

@@ -36,6 +36,10 @@ namespace common
 {
 class ObILogAllocator;
 }
+namespace logservice
+{
+class AppendCb;
+}
 namespace palf
 {
 class PalfFSCbWrapper;
@@ -240,6 +244,7 @@ public:
   virtual int submit_log(const char *buf,
                  const int64_t buf_len,
                  const share::SCN &ref_scn,
+                 logservice::AppendCb *cb,
                  LSN &lsn,
                  share::SCN &scn);
   virtual int submit_group_log(const LSN &lsn,

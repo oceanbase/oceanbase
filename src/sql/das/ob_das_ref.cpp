@@ -15,6 +15,10 @@
 #include "sql/das/ob_data_access_service.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include "lib/oblog/ob_trace_log.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/stat/ob_diagnose_info.h"
+#include "lib/time/ob_time_utility.h"
 
 namespace oceanbase
 {
@@ -486,11 +490,50 @@ int ObDASRef::cancel_all_async_callbacks()
   return ret;
 }
 
+void ObDASRef::record_max_wait_diagnostic_info()
+{
+  int64_t max_total_time_us = 0;
+  int32_t record_net_time_us = 0;
+  int32_t record_server_cost_us = 0;
+  uint64_t dst_ip_port = 0;
+  bool found = false;
+  DLIST_FOREACH_NORET(curr, async_cb_list_.get_obj_list()) {
+    ObRpcDasAsyncAccessCallBack *async_cb = curr->get_obj();
+    if (OB_NOT_NULL(async_cb) && async_cb->has_net_time()) {
+      const int32_t net_time_us = async_cb->get_net_time_us();
+      const int32_t server_cost_us = async_cb->get_server_cost_us();
+      const int64_t total_time_us = static_cast<int64_t>(net_time_us) + static_cast<int64_t>(server_cost_us);
+      if (!found || total_time_us > max_total_time_us) {
+        found = true;
+        max_total_time_us = total_time_us;
+        record_net_time_us = net_time_us;
+        record_server_cost_us = server_cost_us;
+        const common::ObAddr &dst_addr = async_cb->get_dst_addr();
+        dst_ip_port = (static_cast<uint64_t>(dst_addr.get_port()) << 32)
+                      | static_cast<uint64_t>(dst_addr.get_ipv4());
+      }
+    }
+  }
+  if (found) {
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      di->get_ash_stat().p1_ = dst_ip_port;
+      di->get_ash_stat().p2_ = static_cast<uint64_t>(record_net_time_us);
+      di->get_ash_stat().p3_ = static_cast<uint64_t>(record_server_cost_us);
+      di->get_curr_wait().p1_ = dst_ip_port;
+      di->get_curr_wait().p2_ = static_cast<uint64_t>(record_net_time_us);
+      di->get_curr_wait().p3_ = static_cast<uint64_t>(record_server_cost_us);
+    }
+  }
+}
+
 int ObDASRef::wait_all_executing_tasks()
 {
   int ret = OB_SUCCESS;
   if (das_ref_count_ctx_.is_need_wait()) {
+    const int64_t wait_start_time = ObTimeUtility::current_time();
     ObThreadCondGuard guard(das_ref_count_ctx_.get_cond());
+    ObWaitEventGuard das_wait_guard(ObWaitEventIds::DAS_ASYNC_RPC_LOCK_WAIT, 0, 0, 0, 0);
     while (OB_SUCC(ret) && OB_SUCC(get_exec_ctx().check_status()) &&
            das_ref_count_ctx_.get_current_concurrency() < das_ref_count_ctx_.get_max_das_task_concurrency()) {
       // we cannot use ObCond here because it can not explicitly lock mutex, causing concurrency problem.
@@ -502,8 +545,12 @@ int ObDASRef::wait_all_executing_tasks()
         }
       }
     }
+    record_max_wait_diagnostic_info();
+    const int64_t wait_time = ObTimeUtility::current_time() - wait_start_time;
+    if (wait_time > 0) {
+      EVENT_ADD(DAS_WAIT_REMOTE_RESPONSE_TIME, wait_time);
+    }
   }
-
   if (OB_FAIL(ret)) {
     int64_t save_ret = ret;
     bool need_retry_cancel_cb = false;
@@ -602,9 +649,15 @@ int ObDASRef::process_remote_task_resp()
   int ret = OB_SUCCESS;
   int save_ret = OB_SUCCESS;
   DLIST_FOREACH_X(curr, async_cb_list_.get_obj_list(), OB_SUCC(ret)) {
-    const sql::ObDASTaskResp &task_resp = curr->get_obj()->get_task_resp();
-    const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = curr->get_obj()->get_task_ops();
-    curr->get_obj()->set_visited(true);
+    ObRpcDasAsyncAccessCallBack *async_cb = curr->get_obj();
+    const sql::ObDASTaskResp &task_resp = async_cb->get_task_resp();
+    const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = async_cb->get_task_ops();
+    async_cb->set_visited(true);
+    if (oceanbase::lib::is_trace_log_enabled() && async_cb->has_net_time()) {
+      const common::ObAddr &dst = async_cb->get_dst_addr();
+      const int32_t net_time_us = async_cb->get_net_time_us();
+      NG_TRACE_EXT(async_das_ts, OB_ID(addr), dst, OB_ID(net_time_us), net_time_us);
+    }
     if (OB_UNLIKELY(OB_SUCCESS != task_resp.get_err_code())) {
       LOG_WARN("das async execution failed", K(task_resp));
       for (int i = 0; i < task_ops.count(); i++) {

@@ -121,12 +121,16 @@ public:
         is_timeout_(false),
         is_invalid_(false),
         is_visited_(false),
-        context_(context)
+        context_(context),
+        net_time_us_(0),
+        server_cost_us_(0),
+        has_net_time_(false)
   {
     // we need das_factory to allocate task op result on receiving rpc response.
     result_.set_das_factory(factory);
   }
   ~ObRpcDasAsyncAccessCallBack() = default;
+  int decode(void *pkt) override;
   void on_timeout() override;
   void on_invalid() override;
   void set_visited(bool value) { is_visited_ = value; }
@@ -135,6 +139,10 @@ public:
   bool is_invalid() const { return is_invalid_; }
   bool is_timeout() const { return is_timeout_; }
   bool is_processed() const { return is_processed_; }
+  bool has_net_time() const { return has_net_time_; }
+  int32_t get_net_time_us() const { return net_time_us_; }
+  int32_t get_server_cost_us() const { return server_cost_us_; }
+  const common::ObAddr &get_dst_addr() const { return dst_; }
   void set_args(const Request &arg);
   oceanbase::rpc::frame::ObReqTransport::AsyncCB *clone(
       const oceanbase::rpc::frame::SPAlloc &alloc) const;
@@ -151,6 +159,9 @@ private:
   bool is_invalid_;
   bool is_visited_;
   ObDasAsyncRpcCallBackContext *context_;
+  int32_t net_time_us_;
+  int32_t server_cost_us_;
+  bool has_net_time_;
 };
 
 class ObDASSyncFetchP : public ObDASSyncFetchResRpcProcessor

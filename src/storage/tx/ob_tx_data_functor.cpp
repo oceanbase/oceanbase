@@ -17,6 +17,7 @@
 #include "storage/high_availability/ob_tablet_group_restore.h"
 #include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -375,7 +376,9 @@ OB_INLINE
 void LockForReadFunctor::lock_for_read_end_(const uint64_t lock_start_time,
                                             const int ret) const
 {
-  const uint64_t lock_use_time = rdtsc() - lock_start_time;
+  const uint64_t lock_cycles = rdtsc() - lock_start_time;
+  static const uint64_t scale = (1000 << 20) / OBSERVER_FREQUENCE.get_cpu_frequency_khz();
+  const uint64_t lock_use_time = (lock_cycles * scale) >> 20;
   EVENT_ADD(MEMSTORE_WAIT_READ_LOCK_TIME, lock_use_time);
   if (memtable::is_mvcc_lock_related_error_(ret)) {
     EVENT_INC(MEMSTORE_READ_LOCK_FAIL_COUNT);

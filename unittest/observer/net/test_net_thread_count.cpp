@@ -34,11 +34,19 @@ namespace oceanbase
 namespace observer
 {
 OB_DEFINE_PROCESSOR_S(Test, OB_TEST2_PCODE, ObRpcTestP);
+OB_DEFINE_PROCESSOR_S(Test, OB_TEST3_PCODE, ObRpcStatTestP);
 int ObRpcTestP::process()
 {
   int ret = OB_SUCCESS;
   result_ = OB_EAGAIN;
   ob_usleep(6 * 1000 * 1000);
+  return ret;
+}
+int ObRpcStatTestP::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("ObRpcStatTestP process");
+  usleep(1000);
   return ret;
 }
 }; // end of namespace observer
@@ -48,9 +56,9 @@ void *post_rpc(void *data);
 
 class SimpleRpcServer {
 public:
-  SimpleRpcServer(int port): pid_(-1), port_(port), is_client_(false) {}
+  SimpleRpcServer(int port): pid_(-1), port_(port), is_client_(false), simple_run_ts_(0) {}
   SimpleRpcServer(int port, const ObAddr &dst): pid_(-1), port_(port),
-    is_client_(true), dst_(dst) {}
+    is_client_(true), dst_(dst), simple_run_ts_(0) {}
   const int server_set_thread_count_delay = 2 * 1000 * 1000;
   const int normal_delay = 4 * 1000 * 1000;
   int server_run()
@@ -73,6 +81,7 @@ public:
     ObTestRpcServerCtx rpc_ctx;
     ObSrvRpcXlator *xlator = &rpc_ctx.translator_.rpc_xlator_;
     RPC_PROCESSOR(ObRpcTestP, gctx_);
+    RPC_PROCESSOR(ObRpcStatTestP, gctx_);
     if (OB_FAIL(rpc_ctx.init())) {
       LOG_WARN("rpc_ctx init failed");
     } else if (OB_FAIL(server.start(port_, net_thread_count, &rpc_ctx.deliver_))) {
@@ -80,6 +89,8 @@ public:
       LOG_ERROR("set_thread_count failed");
     } else if (OB_FAIL(server.update_tcp_keepalive_params(3 * 1000 * 1000))) {
       LOG_WARN("update_tcp_keepalive_params failed");
+    } else if (simple_run_ts_ > 0) {
+      usleep(simple_run_ts_);
     } else {
       for (int i = 0; i < 3 && OB_SUCC(ret); i++) {
         ob_usleep(server_set_thread_count_delay);
@@ -177,6 +188,7 @@ public:
   int port_;
   bool is_client_;
   ObAddr dst_;
+  int simple_run_ts_;
 };
 
 void *post_rpc(void *data)
@@ -342,6 +354,177 @@ TEST_F(TestNetThreadCount, update_rpc_thread_count)
   ASSERT_EQ(client_end.destroy(), OB_SUCCESS);
 }
 
+class TestReqTimeStatCb : public obrpc::ObTestRpcProxy::AsyncCB<OB_TEST3_PCODE> {
+public:
+  int64_t ret_code_;
+  ObRpcCostTime rpc_cost_time_;
+  ObRespCallback resp_cb_;
+  common::ObThreadCond cond_;
+  bool finished_;
+  TestReqTimeStatCb() : ret_code_(-1), finished_(false)
+  {
+    cond_.init(0);
+  }
+  ~TestReqTimeStatCb() {}
+  void set_args(const Request &arg) override
+  {
+    UNUSED(arg);
+  }
+  oceanbase::rpc::frame::ObReqTransport::AsyncCB *clone(
+      const oceanbase::rpc::frame::SPAlloc &alloc) const override
+  {
+  UNUSED(alloc);
+  return const_cast<rpc::frame::ObReqTransport::AsyncCB *>(
+      static_cast<const rpc::frame::ObReqTransport::AsyncCB * const>(this));
+  }
+  int decode(void *pkt) override
+  {
+    int ret = obrpc::ObTestRpcProxy::AsyncCB<OB_TEST3_PCODE>::decode(pkt);
+    if (OB_SUCCESS == ret) {
+      (void)cond_.lock();
+      rpc_cost_time_ = reinterpret_cast<ObRpcPacket*>(pkt)->hdr_.cost_time_;
+      (void)cond_.unlock();
+    }
+    return ret;
+  }
+  int process() override
+  {
+    ObAsyncRespCallback* cb = reinterpret_cast<ObAsyncRespCallback*>(this->low_level_cb_);
+    (void)cond_.lock();
+    ret_code_ = OB_SUCCESS;
+    finished_ = true;
+    resp_cb_ = *reinterpret_cast<ObRespCallback*>(cb);
+    LOG_INFO("TestReqTimeStatCb get response", K_(result), K_(rcode));
+    (void)cond_.signal();
+    (void)cond_.unlock();
+    return OB_SUCCESS;
+  }
+  void on_timeout() override
+  {
+    (void)cond_.lock();
+    ret_code_ = OB_TIMEOUT;
+    finished_ = true;
+    LOG_INFO("TestReqTimeStatCb timeout", K_(result), K(get_error()));
+    (void)cond_.signal();
+    (void)cond_.unlock();
+  }
+  int wait(const int64_t timeout_us = 2 * 1000 * 1000) {
+    int ret = OB_SUCCESS;
+    const int64_t deadline = ObTimeUtility::current_time() + timeout_us;
+    (void)cond_.lock();
+    while (!finished_ && OB_SUCC(ret)) {
+      const int64_t now = ObTimeUtility::current_time();
+      if (now >= deadline) {
+        ret = OB_TIMEOUT;
+        break;
+      }
+      const uint64_t wait_us = static_cast<uint64_t>(deadline - now);
+      ret = cond_.wait_us(wait_us);
+      if (OB_TIMEOUT == ret && !finished_) {
+        break;
+      } else if (OB_TIMEOUT == ret && finished_) {
+        ret = OB_SUCCESS;
+      }
+    }
+    (void)cond_.unlock();
+    return ret;
+  }
+  ObRespCallback* get_resp_callback() {
+    return &resp_cb_;
+  }
+  int64_t get_ret_code() {
+    int64_t code = -1;
+    (void)cond_.lock();
+    code = ret_code_;
+    (void)cond_.unlock();
+    return code;
+  }
+};
+
+TEST_F(TestNetThreadCount, req_time_stat)
+{
+  ObRespCallback::trace_log_slow_query_watermark_ = 200;
+  oceanbase::lib::ObPerfModeGuard::get_tl_instance() = false;
+  ObAddr dst;
+  int port = find_port();
+  uint32_t local_ip_value = 0;
+  dst.set_ip_addr("127.0.0.1", port);
+  // server init
+  SimpleRpcServer server_end(port);
+  server_end.simple_run_ts_ = 1000000;
+  ASSERT_EQ(server_end.start(), OB_SUCCESS);
+  usleep(100000); // wait for server to start
+ // client init
+ ObPocRpcServer &server = global_poc_server;
+ int err = 0;
+ ASSERT_EQ(server.start_net_client(1), OB_SUCCESS);
+
+  // send rpc and test the req time stat
+  ObTestRpcProxy rpc_proxy;
+  ObReqTransport dummy_transport(NULL, NULL);
+  rpc_proxy.init(&dummy_transport);
+  TestRpcRequest arg;
+
+  int post_count = 0;
+  char rpc_time_stat_str[256];
+
+  // prewarm
+  {
+    TestReqTimeStatCb cb;
+    rpc_proxy.to(dst).by(OB_SYS_TENANT_ID).timeout(1000000).async_rpc_test2(arg, &cb);
+    ASSERT_EQ(cb.wait(2 * 1000 * 1000), OB_SUCCESS);
+    cb.get_resp_callback()->to_string(rpc_time_stat_str, sizeof(rpc_time_stat_str));
+    LOG_INFO("prewarm req_time_stat", K(rpc_time_stat_str), K(cb.rpc_cost_time_));
+  }
+
+  // start test
+  int test_rpc_count = 10;
+  TestReqTimeStatCb cb_list[test_rpc_count];
+  int64_t rpc_start_time_list[test_rpc_count];
+  int64_t rpc_submit_time_list[test_rpc_count];
+  int64_t rpc_end_time_list[test_rpc_count];
+
+  for (int i = 0; i < test_rpc_count; i++) {
+    rpc_start_time_list[i] = ObTimeUtility::current_time();
+    int rpc_ret = rpc_proxy.to(dst).by(OB_SYS_TENANT_ID).timeout(1000000).async_rpc_test2(arg, &cb_list[i]);
+    rpc_submit_time_list[i] = ObTimeUtility::current_time();
+    LOG_INFO("rpc_submit_time", K(rpc_submit_time_list[i]), K(dst));
+    EXPECT_EQ(rpc_ret, OB_SUCCESS);
+  }
+  for (int i = 0; i < test_rpc_count; i++) {
+    int64_t& rpc_start_time = rpc_start_time_list[i];
+    int64_t& rpc_submit_time = rpc_submit_time_list[i];
+    int64_t& rpc_end_time = rpc_end_time_list[i];
+    TestReqTimeStatCb& cb = cb_list[i];
+    ASSERT_EQ(cb.wait(2 * 1000 * 1000), OB_SUCCESS);
+    rpc_end_time = ObTimeUtility::current_time();
+
+    ObRespCallback* resp_cb = cb.get_resp_callback();
+    resp_cb->to_string(rpc_time_stat_str, sizeof(rpc_time_stat_str));
+    LOG_INFO("req_time_stat", K(rpc_time_stat_str), K(cb.rpc_cost_time_));
+
+    const int32_t MAX_NEAR_TIME_US = 4000;
+    EXPECT_EQ(cb.get_ret_code(), OB_SUCCESS);
+    int32_t submit_time = resp_cb->get_submit_time();
+    EXPECT_NEAR(submit_time, rpc_submit_time - rpc_start_time, MAX_NEAR_TIME_US);
+    EXPECT_LT(submit_time, MAX_NEAR_TIME_US);
+    EXPECT_GT(submit_time, 0);
+    int32_t rpc_total_time = resp_cb->get_rpc_total_time();
+    EXPECT_NEAR(rpc_total_time, rpc_end_time - rpc_start_time, MAX_NEAR_TIME_US);
+    EXPECT_LT(rpc_total_time, MAX_NEAR_TIME_US);
+    EXPECT_GT(rpc_total_time, 0);
+
+    int32_t rpc_io_time = resp_cb->get_rpc_io_time(cb.rpc_cost_time_);
+    EXPECT_LT(rpc_io_time, 5000);
+    EXPECT_GT(rpc_io_time, 0);
+    int32_t net_time = resp_cb->get_net_time(cb.rpc_cost_time_);
+    EXPECT_LT(net_time, MAX_NEAR_TIME_US);
+    EXPECT_GT(net_time, 0);
+  }
+  global_poc_server.destroy();
+  EXPECT_EQ(server_end.destroy(), OB_SUCCESS);
+}
+
 }; // end of namespace unittest
 
 } // end namespace oceanbase
@@ -349,7 +532,7 @@ TEST_F(TestNetThreadCount, update_rpc_thread_count)
 int main(int argc, char **argv)
 {
   system("rm -f test_net_thread_count.log");
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_log_level("TRACE");
   OB_LOGGER.set_file_name("test_net_thread_count.log", true);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

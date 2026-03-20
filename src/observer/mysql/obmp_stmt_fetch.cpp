@@ -217,6 +217,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
 
     if (enable_perf_event) {
       audit_record.exec_record_.record_end();
+      print_sql_trace_info(audit_record);
       record_stat(stmt::T_EXECUTE, exec_end_timestamp_);
       audit_record.stmt_type_ = stmt::T_EXECUTE;
       audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;

@@ -1820,6 +1820,7 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
       audit_record.exec_timestamp_.update_stage_time();
       if (enable_perf_event) {
         audit_record.exec_record_.record_end();
+        print_sql_trace_info(audit_record);
         ObInnerSQLConnection::record_stat(*my_session,stmt::T_END_TRANS, ret, true);
         audit_record.stmt_type_ = stmt::T_END_TRANS;
         audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;

@@ -41,6 +41,7 @@ class AppendCbTask;
 class ObApplyStatus;
 class ObLogApplyService;
 class ObApplyStatusGuard;
+struct ObLogTsInfo;
 
 enum class ObApplyServiceTaskType
 {
@@ -227,14 +228,17 @@ private:
                      int64_t &append_start_time,
                      int64_t &append_finish_time,
                      int64_t &cb_first_handle_time,
-                     int64_t &cb_start_time);
-  void statistics_cb_cost_(const palf::LSN &lsn,
+                     int64_t &cb_start_time,
+                     ObLogTsInfo &ts_info);
+  void statistics_cb_cost_(AppendCb *cb,
+                           const palf::LSN &lsn,
                            const share::SCN &scn,
                            const int64_t append_start_time,
                            const int64_t append_finish_time,
                            const int64_t cb_first_handle_time,
                            const int64_t cb_start_time,
-                           const int64_t idx);
+                           const int64_t idx,
+                           ObLogTsInfo &ts_info);
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
@@ -270,6 +274,7 @@ private:
   ObMiniStat::ObStatItem cb_wait_commit_stat_; //从第一次被处理到真正回调之间的耗时
   ObMiniStat::ObStatItem cb_execute_stat_; //cb执行on_success/on_failure的耗时
   ObMiniStat::ObStatItem cb_stat_; //cb从产生到执行on_success的耗时
+  int64_t slow_trace_threshold_;   // 过去一段时间计算出的慢回调阈值
 };
 
 class ObApplyStatusHandlerAlloc

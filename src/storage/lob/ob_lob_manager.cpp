@@ -18,6 +18,7 @@
 #include "storage/lob/ob_lob_handler.h"
 #include "storage/lob/ob_lob_locator_struct.h"
 #include "storage/lob/ob_lob_tablet_dml.h"
+#include "lib/oblog/ob_trace_log.h"
 
 namespace oceanbase
 {
@@ -2215,6 +2216,10 @@ int ObLobManager::append_outrow(
 int ObLobManager::query_outrow(ObLobAccessParam& param, ObLobQueryIter *&result)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE_EXT(S_lob_outrow_query_begin,
+               OB_ID(lob_length), param.byte_size_,
+               OB_ID(lob_offset), param.offset_,
+               OB_ID(lob_len), param.len_);
   ObLobQueryIterHandler handler(param);
   if (OB_FAIL(handler.init(lob_ctx_.lob_meta_mngr_))) {
     LOG_WARN("init handler fail", K(ret), K(param));
@@ -2224,12 +2229,17 @@ int ObLobManager::query_outrow(ObLobAccessParam& param, ObLobQueryIter *&result)
     result = handler.result_;
     EVENT_INC(ObStatEventIds::OUTROW_LOB_CNT);
   }
+  NG_TRACE(S_lob_outrow_query_end);
   return ret;
 }
 
 int ObLobManager::query_outrow(ObLobAccessParam& param, ObString &buffer)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE_EXT(S_lob_outrow_query_begin,
+               OB_ID(lob_length), param.byte_size_,
+               OB_ID(lob_offset), param.offset_,
+               OB_ID(lob_len), param.len_);
   ObLobQueryDataHandler handler(param, buffer);
   if (OB_FAIL(handler.init(lob_ctx_.lob_meta_mngr_))) {
     LOG_WARN("init handler fail", K(ret), K(param));
@@ -2238,6 +2248,7 @@ int ObLobManager::query_outrow(ObLobAccessParam& param, ObString &buffer)
   } else {
     EVENT_INC(ObStatEventIds::OUTROW_LOB_CNT);
   }
+  NG_TRACE(S_lob_outrow_query_end);
   return ret;
 }
 

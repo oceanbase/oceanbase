@@ -191,7 +191,7 @@ static int pnl_dispatch_accept(int fd, const void* b, int sz)
   return err;
 }
 
-static int pn_pkts_handle_func(pkts_t* pkts, void* req_handle, const char* b, int64_t s, uint64_t chid);
+static int pn_pkts_handle_func(pkts_t* pkts, void* req_handle, pkts_msg_t* msg, uint64_t chid);
 
 static pn_t* pn_alloc()
 {
@@ -417,6 +417,10 @@ static void pn_pktc_flush_cb(pktc_req_t* r)
   pn_client_req_t* pn_req = structof(r, pn_client_req_t, req);
   pktc_cb_t* cb = r->resp_cb;
   if (cb) {
+    if (likely(cb->trace_stats)) {
+      int64_t diff = rk_get_trace_us() - cb->trace_stats->rpc_start_ts;
+      cb->trace_stats->write_sock_diff = (int32_t)diff;
+    }
     cb->req = NULL;
   }
   cfifo_free(pn_req);
@@ -434,6 +438,10 @@ static void pn_pktc_resp_cb(pktc_cb_t* cb, const char* resp, int64_t sz)
     cb->sk->sk_diag_info.done_cnt ++;
   }
   PNIO_DELAY_WARN(STAT_TIME_GUARD(eloop_client_cb_count, eloop_client_cb_time));
+  if (likely(cb->trace_stats)) {
+    int64_t diff = rk_get_trace_us() - cb->trace_stats->rpc_start_ts;
+    cb->trace_stats->handle_cb_diff = (int32_t)diff;
+  }
   pn_cb->client_cb(pn_cb->arg, cb->errcode, resp, sz);
   cfifo_free(pn_cb);
 }
@@ -451,6 +459,7 @@ static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, co
   pktc_req_t* r = &pn_req->req;
   pn_cb->client_cb = pkt->cb;
   pn_cb->arg = pkt->arg;
+  cb->trace_stats = pkt->trace_stats;
   cb->id = pkt_id;
   cb->expire_us = pkt->expire_us;
   cb->resp_cb = pn_pktc_resp_cb;
@@ -505,7 +514,6 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_p
   const int64_t sz = pkt->sz;
   const int16_t categ_id = pkt->categ_id;
   const int64_t expire_us = pkt->expire_us;
-  const void* arg = pkt->arg;
 
   pn_grp_t* pgrp = locate_grp(gtid>>32);
   pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
@@ -525,8 +533,7 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_p
     if (NULL == r) {
       err = ENOMEM;
     } else {
-      if (NULL != arg) {
-        *((void**)arg) = r;
+      if (NULL != pkt_id_ret) {
         *pkt_id_ret = pkt_id;
       }
       err = pktc_post(&pn->pktc, r);
@@ -647,10 +654,10 @@ static pn_resp_ctx_t* create_resp_ctx(pn_t* pn, void* req_handle, uint64_t sock_
   return ctx;
 }
 
-static int pn_pkts_handle_func(pkts_t* pkts, void* req_handle, const char* b, int64_t s, uint64_t chid)
+static int pn_pkts_handle_func(pkts_t* pkts, void* req_handle, pkts_msg_t* msg, uint64_t chid)
 {
   int err = 0;
-  uint64_t pkt_id = eh_packet_id(b);
+  uint64_t pkt_id = eh_packet_id(msg->payload);
   pn_t* pn = structof(pkts, pn_t, pkts);
   pn_resp_ctx_t* ctx = create_resp_ctx(pn, req_handle, chid, pkt_id);
   if (NULL == ctx) {
@@ -658,7 +665,7 @@ static int pn_pkts_handle_func(pkts_t* pkts, void* req_handle, const char* b, in
   } else {
     PNIO_DELAY_WARN(STAT_TIME_GUARD(eloop_server_process_count, eloop_server_process_time));
     tw_regist_timeout(&pkts->resp_ctx_hold, &ctx->time_dlink, HOLD_BY_UP_LAYER_TIMEOUT);
-    err = pn->serve_cb(pn->gid, b, s, (uint64_t)ctx);
+    err = pn->serve_cb(pn->gid, msg->payload, msg->sz, (uint64_t)ctx, msg->ctime_us);
   }
   return err;
 }
@@ -922,6 +929,31 @@ PN_API inline void pn_set_trace_info(uint64_t req_id, int64_t tenant_id, int16_t
   ctx->trace_id[3] = trace_id[3];
 }
 
+static void get_tcp_diag(int fd, char* tcp_diag, size_t size) {
+  struct tcp_info ti;
+  memset(&ti, 0, sizeof(ti));
+  socklen_t ti_len = sizeof(ti);
+  int sq = -1;
+  int rq = -1;
+
+  ioctl(fd, TIOCOUTQ, &sq);
+  ioctl(fd, TIOCINQ, &rq);
+
+  if (getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &ti_len) == 0) {
+    snprintf(tcp_diag, size,
+             "st:%d, rtt:%u, rtvar:%u, rto:%u, cwnd:%u, unacked:%u, retr:%u/%u, sq:%d, rq:%d",
+             ti.tcpi_state,
+             ti.tcpi_rtt,             /* Smoothed Round Trip Time (us) */
+             ti.tcpi_rttvar,          /* RTT Variance */
+             ti.tcpi_rto,             /* Retransmission Timeout (us) */
+             ti.tcpi_snd_cwnd,        /* Sending Congestion Window */
+             ti.tcpi_unacked,         /* Unacknowledged Packets */
+             ti.tcpi_retransmits,     /* Unrecovered retransmissions */
+             ti.tcpi_total_retrans,   /* Total retransmissions for connection */
+             sq,                      /* Send Queue (Bytes) */
+             rq);                     /* Recv Queue (Bytes) */
+  }
+}
 void pn_print_diag_info(pn_comm_t* pn_comm) {
   pn_t* pn = (pn_t*)pn_comm;
   int64_t client_cnt = 0;
@@ -930,13 +962,17 @@ void pn_print_diag_info(pn_comm_t* pn_comm) {
   char sock_buf[PNIO_NIO_SOCK_ADDR_LEN] = {'\0'};
   dlink_for(&pn->pktc.sk_list, p) {
     pktc_sk_t* s = structof(p, pktc_sk_t, list_link);
-    rk_info("client:%p_%s, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
+    char tcp_diag[256] = "failed";
+    get_tcp_diag(s->fd, tcp_diag, sizeof(tcp_diag));
+    rk_info("client:%p_%s, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu, "
+            "tcp_diag:%s",
               s, my_sock_t_str(s, sock_buf, sizeof(sock_buf)),
               s->wq.cnt, s->wq.sz,
               s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
               s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
               s->sk_diag_info.doing_cnt, s->sk_diag_info.done_cnt,
-              s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time);
+              s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time,
+              tcp_diag);
     client_cnt++;
   }
   int ttid = get_current_pnio()->tid;
@@ -944,15 +980,17 @@ void pn_print_diag_info(pn_comm_t* pn_comm) {
     dlink_for(&pn->pkts.sk_list, p) {
       pkts_sk_t* s = structof(p, pkts_sk_t, list_link);
       char peer_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
+      char tcp_diag[128] = "failed";
+      get_tcp_diag(s->fd, tcp_diag, sizeof(tcp_diag));
       rk_info("[%d]server:%p_%s, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu, "
-                "relocate_status:%d",
+                "relocate_status:%d, tcp_diag:%s",
                 ttid, s, my_sock_t_str(s, sock_buf, sizeof(sock_buf)),
                 s->wq.cnt, s->wq.sz,
                 s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
                 s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
                 s->sk_diag_info.doing_cnt, s->sk_diag_info.done_cnt,
                 s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time,
-                s->relocate_status);
+                s->relocate_status, tcp_diag);
       server_cnt++;
     }
   }

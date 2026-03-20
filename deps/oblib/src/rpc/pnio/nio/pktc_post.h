@@ -12,12 +12,13 @@
 
 static pktc_sk_t* pktc_do_connect(pktc_t* cl, addr_t dest) {
   pktc_sk_t* sk = NULL;
+  char dst_buf[PNIO_NIO_FD_ADDR_LEN] = {'\0'};
   ef(!(sk = pktc_sk_new(&cl->sf)));
   sk->pc = cl;
   sk->dest = dest;
   sk->peer = dest;
   ef((sk->fd = async_connect(dest, cl->dispatch_id)) < 0);
-  rk_info("sk_new: sk=%p, fd=%d", sk, sk->fd);
+  rk_info("sk_new: sk=%p, fd=%d, dst=%s", sk, sk->fd, addr_str(dest, dst_buf, sizeof(dst_buf)));
   ef(eloop_regist(cl->ep, (sock_t*)sk, EPOLLIN|EPOLLOUT));
   return sk;
   el();
@@ -67,6 +68,10 @@ static int pktc_do_post(pktc_t* io, pktc_sk_t* sk, pktc_req_t* r) {
     // drop req
   } else {
     if (cb) {
+      if (cb->trace_stats) {
+        int64_t diff = rk_get_trace_us() - cb->trace_stats->rpc_start_ts;
+        cb->trace_stats->submit_sock_queue_diff = (int32_t)diff;
+      }
       sk->sk_diag_info.doing_cnt ++;
       dlink_insert(&sk->cb_head, &cb->sk_dlink);
       ihash_insert(&io->cb_map, &cb->hash_link);
@@ -98,7 +103,11 @@ static void pktc_post_io(pktc_t* io, pktc_req_t* r) {
 }
 
 int pktc_post(pktc_t* io, pktc_req_t* req) {
-  req->ctime_us = rk_get_corse_us();
+  req->ctime_us = rk_get_trace_us();
+  if (likely(req->resp_cb && req->resp_cb->trace_stats)) {
+    int32_t diff = (int32_t)(req->ctime_us - req->resp_cb->trace_stats->rpc_start_ts);
+    req->resp_cb->trace_stats->submit_io_diff = max(diff, 0);
+  }
   if (req->msg.s < (int64_t)sizeof(req->msg)) {
     return -EINVAL;
   }
@@ -132,7 +141,7 @@ static int pktc_handle_req_queue(pktc_t* io) {
       }
       cfifo_free(cmd_req);
     } else {
-      int64_t cur_time = rk_get_corse_us();
+      int64_t cur_time = rk_get_trace_us();
       int64_t delay_time = cur_time - req->ctime_us;
       if (delay_time > HANDLE_DELAY_WARN_US && PNIO_REACH_TIME_INTERVAL(500*1000)) {
         rk_warn("[delay_warn] delay high: %ld", delay_time);

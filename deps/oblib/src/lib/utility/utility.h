@@ -1239,6 +1239,18 @@ public:
       }
     ~ObStatItem() {}
   public:
+    void get_stat(int64_t &stat_count, int64_t &accum_count) const
+    {
+      stat_count = ATOMIC_LOAD(&stat_count_);
+      accum_count = ATOMIC_LOAD(&accum_count_);
+    }
+
+    void reset_stat()
+    {
+      (void)ATOMIC_SET(&stat_count_, 0);
+      (void)ATOMIC_SET(&accum_count_, 0);
+    }
+
     void set_extra_info(const char *extra_info)
     {
       MEMCPY(extra_info_, extra_info, MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH);

@@ -348,6 +348,7 @@ public:
   inline void set_group_id(int32_t group_id);
   inline int32_t get_group_id() const;
   inline uint64_t get_data_version() const;
+  inline const ObRpcCostTime &get_cost_time() const { return hdr_.cost_time_; }
 
   int encode_ez_header(char *buf, int64_t len, int64_t &pos);
   TO_STRING_KV(K(hdr_), K(chid_), K(clen_), K_(assemble), K_(msg_count), K_(payload));

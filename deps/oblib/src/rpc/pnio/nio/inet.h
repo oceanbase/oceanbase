@@ -11,6 +11,8 @@
  */
 
 #include <netinet/tcp.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
 #define PNIO_NIO_ADDR_LEN (INET6_ADDRSTRLEN + 6)
 #define PNIO_NIO_FD_ADDR_LEN 140
 #define PNIO_NIO_SOCK_ADDR_LEN 160

@@ -22,6 +22,7 @@
 #include "logservice/ob_log_service.h"
 #include "storage/ddl/ob_ddl_inc_clog_callback.h"
 #include "storage/tx/ob_tx_log_operator.h"
+#include "lib/container/ob_array_wrap.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
@@ -2870,14 +2871,92 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
         TRANS_LOG(ERROR, "unknown log type", K(ret), K(*this));
       }
     }
-    REC_TRANS_TRACE_EXT(tlog_, log_sync_succ_cb,
-                        OB_ID(ret), ret,
-                        OB_ID(log_type), (void*)log_type,
-                        OB_ID(t), log_ts,
-                        OB_ID(offset), log_lsn,
-                        OB_ID(ref), get_ref());
+    record_log_succ_cb_trace_(ret, log_type, log_ts, log_lsn, log_cb);
   }
   return ret;
+}
+
+void ObPartTransCtx::record_log_succ_cb_trace_(const int ret,
+                                                    const ObTxLogType log_type,
+                                                    const SCN &log_ts,
+                                                    const palf::LSN &log_lsn,
+                                                    const ObTxLogCb *log_cb)
+{
+  ObLogTimeinfo timing;
+  calc_palf_cb_timing_(log_cb, timing);
+  const int64_t palf_stat_values[] = {
+    timing.log_id_,
+    timing.gen_ts_,
+    timing.gen_to_freeze_,
+    timing.freeze_to_submit_,
+    timing.submit_to_flush_,
+    timing.flush_to_slide_,
+  };
+  const int64_t apply_stat_values[] = {
+    timing.append_start_ts_,
+    timing.append_start_to_append_finish_,
+    timing.append_finish_to_first_handle_,
+    timing.first_handle_to_finish_,
+    timing.append_finish_to_finish_,
+  };
+  const ObArrayWrap<int64_t> palf_stat(palf_stat_values, sizeof(palf_stat_values) / sizeof(palf_stat_values[0]));
+  const ObArrayWrap<int64_t> apply_stat(apply_stat_values, sizeof(apply_stat_values) / sizeof(apply_stat_values[0]));
+  REC_TRANS_TRACE_EXT(tlog_, palf_and_apply_service_info,
+                      OB_ID(ret), ret,
+                      OB_ID(log_type), (void*)log_type,
+                      OB_ID(t), log_ts,
+                      OB_ID(offset), log_lsn,
+                      OB_ID(ref), get_ref(),
+                      OB_ID(palf_stat), palf_stat,
+                      OB_ID(apply_stat), apply_stat);
+
+}
+
+void ObPartTransCtx::calc_palf_cb_timing_(const ObTxLogCb *log_cb, ObLogTimeinfo &timing)
+{
+  const int64_t gen_ts = log_cb->get_gen_ts();
+  const int64_t freeze_ts = log_cb->get_freeze_ts();
+  const int64_t submit_ts = log_cb->get_palf_submit_ts();
+  const int64_t flushed_ts = log_cb->get_flushed_ts();
+  const int64_t slide_out_ts = log_cb->get_slide_out_ts();
+  const int64_t append_start_ts = log_cb->get_append_start_ts();
+  const int64_t append_finish_ts = log_cb->get_append_finish_ts();
+  const int64_t cb_first_handle_ts = log_cb->get_cb_first_handle_ts();
+  const int64_t gen_to_freeze = (OB_INVALID_TIMESTAMP != gen_ts && OB_INVALID_TIMESTAMP != freeze_ts)
+                                ? (freeze_ts - gen_ts)
+                                : OB_INVALID_TIMESTAMP;
+  const int64_t freeze_to_submit = (OB_INVALID_TIMESTAMP != freeze_ts && OB_INVALID_TIMESTAMP != submit_ts)
+                                   ? (submit_ts - freeze_ts)
+                                   : OB_INVALID_TIMESTAMP;
+  const int64_t submit_to_flush = (OB_INVALID_TIMESTAMP != submit_ts && OB_INVALID_TIMESTAMP != flushed_ts)
+                                  ? (flushed_ts - submit_ts)
+                                  : OB_INVALID_TIMESTAMP;
+  const int64_t flush_to_slide = (OB_INVALID_TIMESTAMP != flushed_ts && OB_INVALID_TIMESTAMP != slide_out_ts)
+                                 ? (slide_out_ts - flushed_ts)
+                                 : OB_INVALID_TIMESTAMP;
+  const int64_t append_start_to_append_finish = (OB_INVALID_TIMESTAMP != append_start_ts && OB_INVALID_TIMESTAMP != append_finish_ts)
+                                              ? (append_finish_ts - append_start_ts)
+                                              : OB_INVALID_TIMESTAMP;
+  const int64_t append_finish_to_first_handle = (OB_INVALID_TIMESTAMP != append_finish_ts && OB_INVALID_TIMESTAMP != cb_first_handle_ts)
+                                              ? (cb_first_handle_ts - append_finish_ts)
+                                              : OB_INVALID_TIMESTAMP;
+  const int64_t first_handle_to_finish = (OB_INVALID_TIMESTAMP != cb_first_handle_ts)
+                                         ? (ObClockGenerator::getClock() - cb_first_handle_ts)
+                                         : OB_INVALID_TIMESTAMP;
+  const int64_t append_finish_to_finish = (OB_INVALID_TIMESTAMP != append_finish_ts)
+                                         ? (ObClockGenerator::getClock() - append_finish_ts)
+                                         : OB_INVALID_TIMESTAMP;
+  timing.log_id_ = log_cb->get_log_id();
+  timing.gen_ts_ = gen_ts;
+  timing.append_start_ts_ = append_start_ts;
+  timing.gen_to_freeze_ = gen_to_freeze;
+  timing.freeze_to_submit_ = freeze_to_submit;
+  timing.submit_to_flush_ = submit_to_flush;
+  timing.flush_to_slide_ = flush_to_slide;
+  timing.append_start_to_append_finish_ = append_start_to_append_finish;
+  timing.append_finish_to_first_handle_ = append_finish_to_first_handle;
+  timing.first_handle_to_finish_ = first_handle_to_finish;
+  timing.append_finish_to_finish_ = append_finish_to_finish;
 }
 
 int ObPartTransCtx::common_on_success_(ObTxLogCb *log_cb)
@@ -2974,6 +3053,39 @@ int ObPartTransCtx::fix_redo_lsns_(const ObTxLogCb *log_cb)
   return ret;
 }
 
+void ObPartTransCtx::record_on_fail_cb_trace_(const int ret,
+                                             const ObTxLogType log_type,
+                                             const SCN &log_ts,
+                                             const ObTxLogCb *log_cb)
+{
+  ObLogTimeinfo timing;
+  calc_palf_cb_timing_(log_cb, timing);
+  const int64_t palf_stat_values[] = {
+    timing.log_id_,
+    timing.gen_ts_,
+    timing.gen_to_freeze_,
+    timing.freeze_to_submit_,
+    timing.submit_to_flush_,
+    timing.flush_to_slide_,
+  };
+  const int64_t apply_stat_values[] = {
+    timing.append_start_ts_,
+    timing.append_start_to_append_finish_,
+    timing.append_finish_to_first_handle_,
+    timing.first_handle_to_finish_,
+    timing.append_finish_to_finish_,
+  };
+  const ObArrayWrap<int64_t> palf_stat(palf_stat_values, sizeof(palf_stat_values) / sizeof(palf_stat_values[0]));
+  const ObArrayWrap<int64_t> apply_stat(apply_stat_values, sizeof(apply_stat_values) / sizeof(apply_stat_values[0]));
+  REC_TRANS_TRACE_EXT(tlog_, palf_and_apply_service_info,
+    OB_ID(ret), ret,
+    OB_ID(log_type), (void*)log_type,
+    OB_ID(t), log_ts,
+    OB_ID(ref), get_ref(),
+    OB_ID(palf_stat), palf_stat,
+    OB_ID(apply_stat), apply_stat);
+}
+
 int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
 {
   int ret = OB_SUCCESS;
@@ -3061,7 +3173,7 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
                                                   - log_cb->get_submit_ts(),
                                               log_cb->get_submit_ts());
       busy_cbs_.remove(log_cb);
-      return_log_cb_(log_cb, true);
+      ObTxLogCb *tmp_log_cb = log_cb;
       log_cb = NULL;
       if (ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
         sub_state_.clear_info_log_submitted();
@@ -3086,11 +3198,9 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
           ret = COVER_SUCC(tmp_ret);
         }
       }
-      REC_TRANS_TRACE_EXT(tlog_, on_fail_cb,
-                          OB_ID(ret), ret,
-                          OB_ID(log_type), (void*)log_type,
-                          OB_ID(t), log_ts,
-                          OB_ID(ref), get_ref());
+      record_on_fail_cb_trace_(ret, log_type, log_ts, tmp_log_cb);
+      return_log_cb_(tmp_log_cb, true);
+      tmp_log_cb = NULL;
       TRANS_LOG(INFO, "ObPartTransCtx::on_failure end", KR(ret), K(*this), KPC(log_cb));
     }
     int tmp_ret = OB_SUCCESS;

@@ -27,6 +27,10 @@ namespace share
 {
 class SCN;
 }
+namespace logservice
+{
+class AppendCb;
+}
 namespace ipalf
 {
 class IPalfHandle;
@@ -86,6 +90,7 @@ public:
                      const void *buffer,
                      const int64_t nbytes,
                      const share::SCN &ref_scn,
+                     logservice::AppendCb *cb,
                      LSN &lsn,
                      share::SCN &scn) override final;
 

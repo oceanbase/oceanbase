@@ -21,6 +21,7 @@
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "lib/thread/threads.h"
+#include "lib/trace/ob_trace_event.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -386,6 +387,9 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
                 ObDiagnosticInfoSwitchGuard guard(di);
                 if (di) {
                   di->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
+                  if (di->get_ash_stat().retry_wait_event_no_ != 0) {
+                    NG_TRACE(retry_wait_end);
+                  }
                 }
 #ifdef ENABLE_DEBUG_LOG
                 if (OB_ISNULL(di)) {

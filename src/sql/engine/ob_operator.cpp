@@ -17,6 +17,7 @@
 #include "observer/ob_server.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "lib/trace/ob_trace_event.h"
 
 namespace oceanbase
 {
@@ -1214,6 +1215,7 @@ int ObOperator::close()
     ret = tmp_ret; // overwrite child's error code.
     LOG_WARN("Close this operator failed", K(ret), "op_type", op_name());
   }
+  print_table_scan_monitor_info();
   IGNORE_RETURN submit_op_monitor_node();
   IGNORE_RETURN setup_op_feedback_info();
   if (nullptr != dummy_allocator_ && nullptr != dummy_ptr_) {
@@ -1222,6 +1224,31 @@ int ObOperator::close()
     dummy_allocator_ = nullptr;
   }
   return ret;
+}
+
+void ObOperator::print_table_scan_monitor_info() const
+{
+  if (oceanbase::lib::is_trace_log_enabled()) {
+    constexpr int64_t BUFFER_TABLE_THRESHOLD = 1000;
+    if (PHY_TABLE_SCAN == spec_.type_) {
+      int64_t total_read = op_monitor_info_.otherstat_3_value_ + op_monitor_info_.otherstat_4_value_;
+      int64_t filtered = op_monitor_info_.otherstat_7_value_;
+      int64_t output = op_monitor_info_.output_row_count_;
+      int64_t churn_score = total_read - output - filtered;
+      bool is_buffer_table = churn_score > output * BUFFER_TABLE_THRESHOLD;
+      NG_TRACE_EXT(table_scan_monitor_info,
+        OB_ID(op_name), op_name(),
+        OB_ID(op_id), spec_.id_,
+        OB_ID(io_read_bytes), op_monitor_info_.otherstat_1_value_,
+        OB_ID(ssstore_read_bytes), op_monitor_info_.otherstat_2_value_,
+        OB_ID(base_read_row_cnt), op_monitor_info_.otherstat_3_value_,
+        OB_ID(delta_read_row_cnt), op_monitor_info_.otherstat_4_value_,
+        OB_ID(is_buffer_table), is_buffer_table,
+        OB_ID(operator_output), output,
+        OB_ID(operator_filtered), filtered
+      );
+    }
+  }
 }
 
 int ObOperator::setup_op_feedback_info()

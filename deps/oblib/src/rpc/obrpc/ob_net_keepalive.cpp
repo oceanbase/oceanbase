@@ -20,6 +20,7 @@
 #include "rpc/frame/ob_net_easy.h"
 #include "io/easy_negotiation.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include <netinet/tcp.h>
 
 extern "C" {
 extern int ob_epoll_wait(int __epfd, struct epoll_event *__events,
@@ -36,6 +37,34 @@ namespace oceanbase
 {
 namespace obrpc
 {
+
+static void get_tcp_diag_info(int fd, char* tcp_diag, size_t size) {
+  struct tcp_info ti;
+  memset(&ti, 0, sizeof(ti));
+  socklen_t ti_len = sizeof(ti);
+  int sq = -1;
+  int rq = -1;
+
+  ioctl(fd, TIOCOUTQ, &sq);
+  ioctl(fd, TIOCINQ, &rq);
+
+  if (getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &ti_len) == 0) {
+    snprintf(tcp_diag, size,
+             "st:%d, rtt:%u, rtvar:%u, rto:%u, cwnd:%u, unacked:%u, retr:%u/%u, sq:%d, rq:%d",
+             ti.tcpi_state,
+             ti.tcpi_rtt,             /* Smoothed Round Trip Time (us) */
+             ti.tcpi_rttvar,          /* RTT Variance */
+             ti.tcpi_rto,             /* Retransmission Timeout (us) */
+             ti.tcpi_snd_cwnd,        /* Sending Congestion Window */
+             ti.tcpi_unacked,         /* Unacknowledged Packets */
+             ti.tcpi_retransmits,     /* Unrecovered retransmissions */
+             ti.tcpi_total_retrans,   /* Total retransmissions for connection */
+             sq,                      /* Send Queue (Bytes) */
+             rq);                     /* Recv Queue (Bytes) */
+  } else {
+    snprintf(tcp_diag, size, "failed to get tcp_info");
+  }
+}
 
 #define KEEPALIVE_INTERVAL 200 * 1000         // 200ms
 #define WINDOW_LENGTH      3000 * 1000        // 3s
@@ -674,9 +703,16 @@ int ret = OB_SUCCESS;
       }
       if (dump_status) {
         char addr_buf[OB_IP_PORT_STR_BUFF] = {'\0'};
-        _LOG_INFO("dump dest keepalive data states, addr: %s, last_write_ts_=%ld, last_read_ts_=%ld, in_black_=%d",
+        client *c = rs->c_;
+        char tcp_diag[256] = "failed";
+        int tcp_fd = -1;
+        if (c != NULL) {
+          tcp_fd = c->fd_;
+          get_tcp_diag_info(c->fd_, tcp_diag, sizeof(tcp_diag));
+        }
+        _LOG_INFO("dump dest keepalive data states, addr: %s, last_write_ts_=%ld, last_read_ts_=%ld, in_black_=%d, tcp_fd:%d, tcp_diag: %s",
             addr_to_string(addr_buf, sizeof(addr_buf), rs->svr_addr_),
-            rs->last_write_ts_, rs->last_read_ts_, rs->in_black_);
+            rs->last_write_ts_, rs->last_read_ts_, rs->in_black_, tcp_fd, tcp_diag);
       }
       client *c = rs->c_;
       if (!c) {

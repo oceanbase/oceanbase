@@ -10,12 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-typedef struct pkts_msg_t {
-  int64_t sz;
-  char* payload;
-  int64_t ctime_us;
-} pkts_msg_t;
-
 static int64_t pkts_decode(char* b, int64_t s) { return eh_decode(b, s);}
 
 void pkts_flush_cb(pkts_t* io, pkts_req_t* req) {
@@ -36,7 +30,7 @@ static int pkts_sk_handle_msg(pkts_sk_t* s, pkts_msg_t* msg) {
   pkts_t* pkts = structof(s->fty, pkts_t, sf);
   s->sk_diag_info.doing_cnt ++;
   s->processing_cnt ++;
-  int ret = pkts->on_req(pkts, s->ib.b, msg->payload, msg->sz, s->id);
+  int ret = pkts->on_req(pkts, s->ib.b, msg, s->id);
   ib_consumed(&s->ib, msg->sz);
   return ret;
 }
