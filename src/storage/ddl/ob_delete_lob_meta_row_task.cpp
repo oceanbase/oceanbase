@@ -693,6 +693,7 @@ int ObVecIdxSnapTableLobDelIter::get_next_row(blocksstable::ObDatumRow *&row)
       }
     } else if (info_.lob_id_.tablet_id_ != tablet_id_) {// skip
     } else if (OB_FALSE_IT(param_->used_seq_cnt_ = 0)) {
+    } else if (OB_FAIL(prepare_seq_no(*param_))) {
       LOG_WARN("prepare seq no", K(ret));
     } else if (OB_FAIL(update_seq_no())) {
       LOG_WARN("update_seq_no fail", K(ret));
