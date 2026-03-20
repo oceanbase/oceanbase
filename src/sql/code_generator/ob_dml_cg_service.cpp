@@ -1046,6 +1046,7 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
   uint64_t ref_table_id = index_dml_info.ref_table_id_;
   // 主表的index_tid_和ref_table_id_都是一样的
   scan_ctdef.ref_table_id_ = ref_table_id;
+  scan_ctdef.is_get_ = true;
   const uint64_t tenant_id = MTL_ID();
   if (OB_ISNULL(op.get_plan()) ||
       OB_ISNULL(schema_guard = op.get_plan()->get_optimizer_context().get_sql_schema_guard()) ||
