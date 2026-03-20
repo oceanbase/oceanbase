@@ -145,6 +145,8 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "CREATE SENSITIVE RULE"; break;
     case OB_PRIV_PLAINACCESS:
       name = "PLAINACCESS"; break;
+    case OB_PRIV_APPLICATION_PASSWORD_ADMIN:
+      name = "APPLICATION_PASSWORD_ADMIN"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));
@@ -309,17 +311,40 @@ int ObDDLSqlGenerator::gen_set_passwd_sql(const ObAccountArg &account,
                                           const ObString &password,
                                           ObSqlString &sql_string,
                                           const ObString &plugin,
-                                          const bool is_oracle_mode)
+                                          const bool is_oracle_mode,
+                                          const bool retain_current_password,
+                                          const bool discard_old_password)
 {
   int ret = OB_SUCCESS;
   char ALTER_USER_WITH_PLUGIN_SQL[] = "ALTER USER `%.*s`@`%.*s` IDENTIFIED WITH %.*s AS '%.*s'";
-  char ALTER_USER_WITH_PLUGIN_ORACLE_SQL[] = "ALTER USER `%.*s`@`%.*s` IDENTIFIED WITH %.*s BY VALUES '%.*s'";
+  char ALTER_USER_WITH_PLUGIN_ORACLE_SQL[] = "ALTER USER `%.*s` IDENTIFIED WITH %.*s BY VALUES '%.*s'";
+  char ALTER_USER_DISCARD_OLD_PASSWORD_SQL[] = "ALTER USER `%.*s`@`%.*s` DISCARD OLD PASSWORD";
+  char ALTER_USER_EXPIRE_ROLLOVER_SQL[] = "ALTER USER `%.*s` EXPIRE PASSWORD ROLLOVER PERIOD";
   ObCStringHelper helper;
   const char *password_str = helper.convert(ObHexEscapeSqlStr(password.ptr(), false, false));
   const char *plugin_str = helper.convert(ObHexEscapeSqlStr(plugin.ptr(), false, false));
   if (OB_UNLIKELY(!account.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("username or password should not be null", K(account), K(password), K(ret));
+  } else if (discard_old_password) {
+    // DISCARD OLD PASSWORD (MySQL mode) / EXPIRE PASSWORD ROLLOVER PERIOD (Oracle mode)
+    if (!is_oracle_mode) {
+      // MySQL: ALTER USER ... DISCARD OLD PASSWORD
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(ALTER_USER_DISCARD_OLD_PASSWORD_SQL, is_oracle_mode),
+                                        account.user_name_.length(),
+                                        account.user_name_.ptr(),
+                                        account.host_name_.length(),
+                                        account.host_name_.ptr()))) {
+        LOG_WARN("append sql failed", K(account), K(ret));
+      }
+    } else {
+      // Oracle: ALTER USER ... EXPIRE PASSWORD ROLLOVER PERIOD
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(ALTER_USER_EXPIRE_ROLLOVER_SQL, is_oracle_mode),
+                                        account.user_name_.length(),
+                                        account.user_name_.ptr()))) {
+        LOG_WARN("append sql failed", K(account), K(ret));
+      }
+    }
   } else if (plugin.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("plugin should not be empty", K(ret));
@@ -335,14 +360,17 @@ int ObDDLSqlGenerator::gen_set_passwd_sql(const ObAccountArg &account,
                                       static_cast<int32_t>(strlen(password_str)),
                                       password_str))) {
       LOG_WARN("append sql failed", K(account), K(password), K(plugin), K(ret));
+    } else if (retain_current_password) {
+      // Append RETAIN CURRENT PASSWORD for MySQL mode
+      if (OB_FAIL(sql_string.append(" RETAIN CURRENT PASSWORD"))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
     }
   } else {
     // ALTER USER ... IDENTIFIED WITH plugin BY VALUES ...
     if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(ALTER_USER_WITH_PLUGIN_ORACLE_SQL, is_oracle_mode),
                                       account.user_name_.length(),
                                       account.user_name_.ptr(),
-                                      account.host_name_.length(),
-                                      account.host_name_.ptr(),
                                       static_cast<int32_t>(strlen(plugin_str)),
                                       plugin_str,
                                       static_cast<int32_t>(strlen(password_str)),

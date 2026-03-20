@@ -428,6 +428,20 @@ public:
       const uint64_t user_id,
       const ObIArray<uint64_t> &role_id_array);
 
+  static int check_ora_restricted_session(
+      share::schema::ObSchemaGetterGuard &guard,
+      const uint64_t tenant_id,
+      const uint64_t user_id,
+      const ObIArray<uint64_t> &role_id_array);
+
+  static int check_ora_login_priv(
+      share::schema::ObSchemaGetterGuard &guard,
+      const uint64_t tenant_id,
+      const uint64_t user_id,
+      const share::ObRawPriv p1,
+      const common::ObString &priv_name,
+      const ObIArray<uint64_t> &role_id_array);
+
   static int check_ora_ddl_priv(
       share::schema::ObSchemaGetterGuard &guard,
       const uint64_t tenant_id,

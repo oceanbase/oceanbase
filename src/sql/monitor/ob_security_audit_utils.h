@@ -73,6 +73,7 @@ enum class ObAuditTrailType{
   OS,
   DB,
   DB_EXTENDED,
+  LOG,
 };
 
 ObAuditTrailType get_audit_trail_type_from_string(const common::ObString &string);
@@ -196,17 +197,23 @@ public:
 public:
   ObSecurityAuditUtils() {}
 
-  static int handle_security_audit(ObSQLSessionInfo &session,
-                                   const stmt::StmtType stmt_type,
-                                   const common::ObString &action_sql,
-                                   const common::ObString &comment_text,
-                                   const int return_code);
+  static int handle_connect_security_audit(ObSQLSessionInfo &session,
+                                           const stmt::StmtType stmt_type,
+                                           const common::ObString &action_sql,
+                                           const common::ObString &comment_text,
+                                           const common::ObString &user_name,
+                                           const common::ObString &client_ip,
+                                           const common::ObString &db_name,
+                                           const ObAddr &peer_addr,
+                                           const int return_code);
   static int handle_security_audit(ObResultSet &result,
                                    share::schema::ObSchemaGetterGuard *schema_guard,
                                    const sql::ObStmt *stmt,
                                    const common::ObString &current_sql,
                                    const common::ObString &comment_text,
-                                                                 const int return_code);
+                                   const int return_code,
+                                   const bool is_sensitive = false,
+                                   const ObAuditRecordData *audit_record = NULL);
   static int check_allow_audit(ObSQLSessionInfo &session, bool &allow_audit);
   static int check_allow_audit(ObSQLSessionInfo &session, ObAuditTrailType &at_type);
   static int do_security_audit_record(ObSQLSessionInfo &session,
@@ -214,7 +221,13 @@ public:
                                       const sql::ObStmt *stmt,
                                       ObResultSet *result,
                                       AuditDataParam &filled_param,
-                                      const ObAuditTrailType at_type);
+                                      const ObAuditTrailType at_type,
+                                      const bool is_sensitive,
+                                      const ObAuditRecordData *audit_record);
+  static int gen_audit_log(ObSQLSessionInfo &session,
+                           const ObAuditRecordData &audit_record,
+                           const bool is_sensitive,
+                           const stmt::StmtType stmt_type);
   static int gen_audit_records(ObSQLSessionInfo &session,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                AuditDataParam &param,
@@ -322,6 +335,7 @@ public:
 
 private:
   static const char* priv_names[];
+  static const char* type_name[];
   static const ObCheckAllowAuditFunc check_allow_audit_funcs_[];
   static const int check_allow_funcs_nums_;
 };

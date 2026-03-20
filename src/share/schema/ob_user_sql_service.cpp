@@ -646,6 +646,13 @@ int ObUserSqlService::set_passwd_impl(
         LOG_WARN("add plugin column failed", K(user_info.get_plugin()), K(ret));
       }
     }
+    if (OB_SUCC(ret) && compat_version >= DATA_VERSION_4_4_2_1) {
+      if (OB_FAIL(dml.add_column("old_password", ObHexEscapeSqlStr(user_info.get_old_password())))) {
+        LOG_WARN("add old_password column failed", K(user_info.get_old_password()), K(ret));
+      } else if (OB_FAIL(dml.add_column("old_password_start_time", user_info.get_old_password_start_time()))) {
+        LOG_WARN("add old_password_start_time column failed", K(user_info.get_old_password_start_time()), K(ret));
+      }
+    }
 
     // udpate __all_user table
     if (FAILEDx(exec.exec_update(OB_ALL_USER_TNAME, dml, affected_rows))) {
@@ -1095,6 +1102,7 @@ int ObUserSqlService::gen_user_dml(
     if ((user.get_priv_set() & OB_PRIV_ACCESS_AI_MODEL) != 0) { priv_others |= OB_PRIV_OTHERS_ACCESS_AI_MODEL; }
     if ((user.get_priv_set() & OB_PRIV_CREATE_SENSITIVE_RULE) != 0) { priv_others |= OB_PRIV_OTHERS_CREATE_SENSITIVE_RULE; }
     if ((user.get_priv_set() & OB_PRIV_PLAINACCESS) != 0) { priv_others |= OB_PRIV_OTHERS_PLAINACCESS; }
+    if ((user.get_priv_set() & OB_PRIV_APPLICATION_PASSWORD_ADMIN) != 0) { priv_others |= OB_PRIV_OTHERS_APPLICATION_PASSWORD_ADMIN; }
   }
   if (OB_FAIL(ret)) {
   } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
@@ -1114,6 +1122,10 @@ int ObUserSqlService::gen_user_dml(
              && ((priv_others & OB_PRIV_OTHERS_CREATE_SENSITIVE_RULE) != 0 || (priv_others & OB_PRIV_OTHERS_PLAINACCESS) != 0)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_3_5_3 or DATA_VERSION_4_4_2_0", K(ret), K(user.get_priv(OB_PRIV_CREATE_SENSITIVE_RULE)), K(user.get_priv(OB_PRIV_PLAINACCESS)));
+  } else if (compat_version < DATA_VERSION_4_4_2_1
+            && (priv_others & OB_PRIV_OTHERS_APPLICATION_PASSWORD_ADMIN) != 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_4_2_1", K(ret), K(user.get_priv(OB_PRIV_APPLICATION_PASSWORD_ADMIN)));
   } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
     LOG_WARN("add PRIV_OTHERS column failed", K(priv_others), K(ret));
   }
@@ -1133,6 +1145,13 @@ int ObUserSqlService::gen_user_dml(
     // do nothing
   } else if (OB_FAIL(dml.add_column("plugin", ObHexEscapeSqlStr(user.get_plugin())))) {
     LOG_WARN("add plugin column failed", K(user.get_plugin()), K(ret));
+  }
+  if (OB_SUCC(ret) && compat_version >= DATA_VERSION_4_4_2_1) {
+    if (OB_FAIL(dml.add_column("old_password", ObHexEscapeSqlStr(user.get_old_password())))) {
+      LOG_WARN("add old_password column failed", K(user.get_old_password()), K(ret));
+    } else if (OB_FAIL(dml.add_column("old_password_start_time", user.get_old_password_start_time()))) {
+      LOG_WARN("add old_password_start_time column failed", K(user.get_old_password_start_time()), K(ret));
+    }
   }
   return ret;
 }

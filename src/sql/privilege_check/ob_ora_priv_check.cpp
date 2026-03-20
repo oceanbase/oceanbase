@@ -2207,22 +2207,50 @@ int ObOraSysChecker::check_ora_connect_priv(
     const ObIArray<uint64_t> &role_id_array)
 {  
   int ret = OB_SUCCESS;
+  OZ (check_ora_login_priv(guard, tenant_id, user_id, PRIV_ID_CREATE_SESSION,
+                           "CREATE SESSION", role_id_array));
+  return ret;
+}
+
+int ObOraSysChecker::check_ora_restricted_session(
+    ObSchemaGetterGuard &guard,
+    const uint64_t tenant_id,
+    const uint64_t user_id,
+    const ObIArray<uint64_t> &role_id_array)
+{
+  int ret = OB_SUCCESS;
+  OZ (check_ora_login_priv(guard, tenant_id, user_id, PRIV_ID_RESTRICTED_SESSION,
+                           "RESTRICTED SESSION", role_id_array));
+  return ret;
+}
+
+int ObOraSysChecker::check_ora_login_priv(
+    ObSchemaGetterGuard &guard,
+    const uint64_t tenant_id,
+    const uint64_t user_id,
+    const share::ObRawPriv p1,
+    const ObString &priv_name,
+    const ObIArray<uint64_t> &role_id_array)
+{
+  int ret = OB_SUCCESS;
   if (!is_super_user(user_id)) {
     const ObUserInfo *user_info = NULL;
-    ObRawPriv need_priv = PRIV_ID_CREATE_SESSION;
     OZ (guard.get_user_info(tenant_id, user_id, user_info), user_id);
-    OZ (check_p1(guard, tenant_id, user_id, need_priv, role_id_array));
+    OZ (check_p1(guard, tenant_id, user_id, p1, role_id_array));
     if (ret == OB_ERR_NO_PRIVILEGE) {
       ret = OB_ERR_NO_LOGIN_PRIVILEGE;
+      LOG_WARN("user has no login privilege", K(ret), K(user_id));
       if (user_info != NULL) {
         LOG_USER_ERROR(OB_ERR_NO_LOGIN_PRIVILEGE, 
-                        user_info->get_user_name_str().length(),
-                        user_info->get_user_name_str().ptr());
+                       user_info->get_user_name_str().length(),
+                       user_info->get_user_name_str().ptr(),
+                       priv_name.length(),
+                       priv_name.ptr());
       }
     }
   }
   return ret;
-}    
+}
 
 /* ddl的对外接口，供仅需要系统权限场景下调用
    1. 需要系统权限

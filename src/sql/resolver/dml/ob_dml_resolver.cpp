@@ -9055,10 +9055,7 @@ int ObDMLResolver::resolve_special_expr(ObRawExpr *&expr, ObStmtScope scope)
     // do nothing
   } else if (stmt->is_select_stmt() && T_FIELD_LIST_SCOPE == scope) {
     // do nothing
-  } else if (T_FUN_SYS_AUDIT_LOG_SET_FILTER == expr->get_expr_type() ||
-             T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == expr->get_expr_type() ||
-             T_FUN_SYS_AUDIT_LOG_SET_USER == expr->get_expr_type() ||
-             T_FUN_SYS_AUDIT_LOG_REMOVE_USER == expr->get_expr_type()) {
+  } else if (OB_UNLIKELY(ObRawExprUtils::is_audit_log_expr(expr))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("use audit log function in dml stmt is not supported", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function in dml stmt");

@@ -1406,7 +1406,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
     bool is_need_retry = THIS_THWORKER.need_retry() ||
         RETRY_TYPE_NONE != retry_ctrl_.get_retry_type();
     (void)ObSQLUtils::handle_audit_record(is_need_retry, EXECUTE_LOCAL, session,
-        ctx_.is_sensitive_);
+        ctx_.is_sensitive_, ctx_.cur_stmt_, &result, ctx_.schema_guard_);
 #ifdef OB_BUILD_AUDIT_SECURITY
     // 对于触发重试的语句不需要进行审计，以免一条语句被审计多次
     if (!retry_ctrl_.need_retry() && !async_resp_used) {

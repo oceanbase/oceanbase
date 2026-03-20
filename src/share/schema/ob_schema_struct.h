@@ -5011,7 +5011,7 @@ public:
      max_user_connections_(0),
      proxied_user_info_(NULL), proxied_user_info_capacity_(0), proxied_user_info_cnt_(0),
      proxy_user_info_(NULL), proxy_user_info_capacity_(0), proxy_user_info_cnt_(0), user_flags_(),
-     trigger_list_(), plugin_()
+     trigger_list_(), plugin_(), old_password_(), old_password_start_time_(common::OB_INVALID_TIMESTAMP)
   { }
   explicit ObUserInfo(common::ObIAllocator *allocator);
   virtual ~ObUserInfo();
@@ -5107,7 +5107,8 @@ public:
                K_(profile_id), K_(proxied_user_info_cnt), K_(proxy_user_info_cnt),
                "proxied info", ObArrayWrap<ObProxyInfo*>(proxied_user_info_, proxied_user_info_cnt_),
                "proxy info", ObArrayWrap<ObProxyInfo*>(proxy_user_info_, proxy_user_info_cnt_),
-               K_(user_flags), K_(trigger_list), K_(plugin)
+               K_(user_flags), K_(trigger_list), K_(plugin),
+               K_(old_password), K_(old_password_start_time)
               );
   bool role_exists(const uint64_t role_id, const uint64_t option) const;
   int get_seq_by_role_id(uint64_t role_id, uint64_t &seq) const;
@@ -5121,6 +5122,12 @@ public:
   inline common::ObIArray<uint64_t> &get_trigger_list() { return trigger_list_; }
   inline const common::ObIArray<uint64_t> &get_trigger_list() const { return trigger_list_; }
   inline void reset_trigger_list() { trigger_list_.reset(); }
+  inline int set_old_password(const char *old_password) { return deep_copy_str(old_password, old_password_); }
+  inline int set_old_password(const common::ObString &old_password) { return deep_copy_str(old_password, old_password_); }
+  inline void set_old_password_start_time(int64_t ts) { old_password_start_time_ = ts; }
+  inline const char* get_old_password() const { return extract_str(old_password_); }
+  inline const common::ObString& get_old_password_str() const { return old_password_; }
+  inline int64_t get_old_password_start_time() const { return old_password_start_time_; }
 private:
   int add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info);
   int assign_proxy_info_array_(ObProxyInfo **src_arr,
@@ -5161,6 +5168,8 @@ private:
   ObUserFlags user_flags_;
   common::ObSArray<uint64_t> trigger_list_;
   common::ObString plugin_;
+  common::ObString old_password_;
+  int64_t old_password_start_time_;
   DISABLE_COPY_ASSIGN(ObUserInfo);
 };
 
@@ -8446,6 +8455,7 @@ public:
     PASSWORD_VERIFY_FUNCTION,
     PASSWORD_LIFE_TIME,
     PASSWORD_GRACE_TIME,
+    PASSWORD_ROLLOVER_TIME,
     /*
     PASSWORD_REUSE_TIME,
     PASSWORD_REUSE_MAX,
@@ -8462,7 +8472,6 @@ public:
   };
 
 
-  static const int64_t DEFAULT_PARAM_VALUES[MAX_PARAMS];
   static const int64_t INVALID_PARAM_VALUES[MAX_PARAMS];
   static const char *PARAM_VALUE_NAMES[MAX_PARAMS];
 
@@ -8472,7 +8481,7 @@ public:
 
   TO_STRING_KV(K_(tenant_id), K_(profile_id), K_(schema_version), K_(profile_name),
                K_(failed_login_attempts), K_(password_lock_time), K_(password_life_time),
-               K_(password_grace_time));
+               K_(password_grace_time), K_(password_rollover_time));
 
   bool is_valid() const;
   void reset();
@@ -8490,6 +8499,7 @@ public:
   inline void set_password_lock_time(const int64_t value) { password_lock_time_ = value; }
   inline void set_password_life_time(const int64_t value) { password_life_time_ = value; }
   inline void set_password_grace_time(const int64_t value) { password_grace_time_ = value; }
+  inline void set_password_rollover_time(const int64_t value) { password_rollover_time_ = value; }
 
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_profile_id() const { return profile_id_; }
@@ -8500,15 +8510,13 @@ public:
   inline int64_t get_password_lock_time() const { return password_lock_time_; }
   inline int64_t get_password_life_time() const { return password_life_time_; }
   inline int64_t get_password_grace_time() const { return password_grace_time_; }
+  inline int64_t get_password_rollover_time() const { return password_rollover_time_; }
 
   inline ObTenantProfileId get_tenant_profile_id() const { return ObTenantProfileId(tenant_id_, profile_id_); }
 
   int set_value(const int64_t type, const int64_t value);
-  int set_default_value(const int64_t type);
-  int set_default_values();
   int set_default_values_v2();
   int set_invalid_values();
-  static int get_default_value(const int64_t type, int64_t &value);
 
   inline const char *get_password_verify_function() const { return extract_str(password_verify_function_); }
   inline const common::ObString &get_password_verify_function_str() const { return password_verify_function_; }
@@ -8524,6 +8532,7 @@ private:
   common::ObString password_verify_function_;
   int64_t password_life_time_;
   int64_t password_grace_time_;
+  int64_t password_rollover_time_;
 };
 
 common::ObIAllocator *&schema_stack_allocator();

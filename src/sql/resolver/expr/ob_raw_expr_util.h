@@ -1451,6 +1451,7 @@ public:
       common::ObIArray<sql::ObQualifiedName> &q_name,
       bool nullable);
   static bool is_invalid_type_for_compare(const ObRawExprResType &type);
+  static bool is_audit_log_expr(const ObRawExpr *expr);
 private:
   static int need_extra_cast_for_enumset(const ObRawExprResType &src_type,
                                          const ObRawExprResType &dst_type,

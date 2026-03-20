@@ -1139,6 +1139,7 @@ class SqlKeywords:
          RESET
          RESTORE
          RESUME
+         RETAIN
          RETURNED_SQLSTATE
          RETURNS
          REVERSE
@@ -1773,6 +1774,7 @@ class SqlKeywords:
          PARTITIONS
          PASSWORD
          PASSWORD_LOCK_TIME
+         PASSWORD_ROLLOVER_TIME
          PAUSE
          PHASE
          PLUGIN

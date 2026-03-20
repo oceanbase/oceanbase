@@ -1257,6 +1257,8 @@
 #define N_AUDIT_LOG_FILTER_REMOVE_FILTER    "audit_log_filter_remove_filter"
 #define N_AUDIT_LOG_FILTER_SET_USER         "audit_log_filter_set_user"
 #define N_AUDIT_LOG_FILTER_REMOVE_USER      "audit_log_filter_remove_user"
+#define N_AUDIT_LOG_ENCRYPTION_PASSWOR_SET  "audit_log_encryption_password_set"
+#define N_AUDIT_LOG_ENCRYPTION_PASSWORD_GET "audit_log_encryption_password_get"
 #define N_CAN_ACCESS_TRIGGER                "can_access_trigger"
 #define N_SPLIT_PART                        "split_part"
 #define N_RB_ITERATE                        "rb_iterate"

@@ -31,6 +31,7 @@
 #include "lib/encrypt/ob_rsa_getter.h"
 #include "common/ob_version_def.h"
 #include "lib/net/ob_net_util.h"
+#include "share/ob_get_compat_mode.h"
 namespace oceanbase
 {
 using namespace share;
@@ -998,75 +999,79 @@ int ObMPBase::handle_caching_sha2_authentication_if_need(
   return ret;
 }
 
-int ObMPBase::try_caching_sha2_fast_auth(
-    ObUserLoginInfo &login_info,
-    ObSMConnection *conn,
-    ObSQLSessionInfo &session,
-    const ObUserInfo *matched_user_info,
-    bool &need_full_auth)
+int ObMPBase::try_caching_sha2_fast_auth(ObUserLoginInfo &login_info,
+                                         ObSMConnection *conn,
+                                         ObSQLSessionInfo &session,
+                                         const ObUserInfo *matched_user_info,
+                                         bool &need_full_auth)
 {
   int ret = OB_SUCCESS;
   need_full_auth = false;
-
+  ObSchemaGetterGuard schema_guard;
   // Check if user info is provided
-  if (OB_ISNULL(matched_user_info)) {
+  if (OB_ISNULL(matched_user_info) || OB_ISNULL(gctx_.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("user not found in pre-check", K(ret));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(conn->tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(conn->tenant_id_));
   } else {
-    ObCachingSha2Handle cache_handle;
     ObString user_name = login_info.user_name_;
     ObString host_name = matched_user_info->get_host_name_str();
     int64_t password_last_changed_timestamp = matched_user_info->get_password_last_changed();
-    int cache_ret = ObCachingSha2CacheMgr::get_instance().get_digest(user_name,
-                                                                     host_name,
-                                                                     conn->tenant_id_,
-                                                                     password_last_changed_timestamp,
-                                                                     cache_handle);
-    if (OB_SUCCESS == cache_ret && OB_NOT_NULL(cache_handle.digest_)) {
-      // Cache hit, try fast auth
-      LOG_TRACE("caching_sha2_password: cache hit, attempting fast auth",
-                K(user_name), K(host_name));
-
-      ObString cached_digest(cache_handle.digest_->get_digest_len(),
-                             cache_handle.digest_->get_digest());
-      bool fast_auth_success_flag = false;
-
-      int verify_ret = ObSha256Crypt::verify_fast_auth_scramble(
-                        login_info.passwd_,
-                        ObString(ObSMConnection::SCRAMBLE_BUF_SIZE, login_info.scramble_str_.ptr()),
-                        cached_digest,
-                        fast_auth_success_flag);
-
-      if (OB_SUCCESS != verify_ret) {
-        LOG_WARN("Failed to verify fast auth scramble", K(verify_ret), K(login_info));
-        fast_auth_success_flag = false;
-        need_full_auth = true;
-      } else if (fast_auth_success_flag) {
-        // Fast auth succeeded, send FAST_AUTH_SUCCESS flag
-        need_full_auth = false;
-        LOG_TRACE("caching_sha2_password: fast auth succeeded, sending fast_auth_success",
-                  K(user_name), K(host_name));
-        OMPKCachingSha2Response fast_auth_response(FAST_AUTH_SUCCESS);
-        if (OB_FAIL(packet_sender_.response_packet(fast_auth_response, &session))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to send fast_auth_success flag", K(ret));
-        } else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to flush fast_auth_success flag", K(ret));
-        } else {
-          LOG_INFO("sent fast_auth_success flag (0x03), fast auth completed");
-        }
+    int64_t old_password_start_time = matched_user_info->get_old_password_start_time();
+    int64_t password_rollover_time = 0;
+    bool fast_auth_success_flag = false;
+    bool is_oracle_mode = false;
+    bool need_try_old_password = false;
+    uint64_t user_id = matched_user_info->get_user_id();
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(conn->tenant_id_, is_oracle_mode))) {
+      LOG_WARN("fail to check compat mode", K(ret), K(conn->tenant_id_));
+    } else if (OB_FAIL(schema_guard.try_caching_sha2_fast_auth_verify(login_info,
+                                                                      host_name,
+                                                                      conn->tenant_id_,
+                                                                      password_last_changed_timestamp,
+                                                                      fast_auth_success_flag))) {
+      LOG_WARN("Failed to verify fast auth", K(ret), K(login_info));
+    } else if (!fast_auth_success_flag && old_password_start_time != OB_INVALID_TIMESTAMP) {
+      // try to check dual password
+      if (!is_oracle_mode) {
+        need_try_old_password = true;
+      } else if (OB_FAIL(schema_guard.get_user_password_rollover_time(conn->tenant_id_,
+                                                                      user_id,
+                                                                      password_rollover_time))) {
+        LOG_WARN("fail to get password rollover time", K(ret), K(conn->tenant_id_), K(user_id));
+      } else if (password_rollover_time > 0) {
+        int64_t expire_ts = old_password_start_time + password_rollover_time;
+        expire_ts = (expire_ts < old_password_start_time) ? INT64_MAX : expire_ts;
+        need_try_old_password = (ObTimeUtility::current_time() < expire_ts);
+      }
+      if (OB_SUCC(ret) && need_try_old_password
+          && OB_FAIL(schema_guard.try_caching_sha2_fast_auth_verify(login_info,
+                                                                    host_name,
+                                                                    conn->tenant_id_,
+                                                                    old_password_start_time,
+                                                                    fast_auth_success_flag))) {
+        LOG_WARN("Failed to verify fast auth", K(ret), K(login_info));
+      }
+    }
+    if (OB_SUCC(ret) && fast_auth_success_flag) {
+      // Fast auth succeeded, send FAST_AUTH_SUCCESS flag
+      need_full_auth = false;
+      LOG_TRACE("caching_sha2_password: fast auth succeeded, sending fast_auth_success", K(user_name), K(host_name));
+      OMPKCachingSha2Response fast_auth_response(FAST_AUTH_SUCCESS);
+      if (OB_FAIL(packet_sender_.response_packet(fast_auth_response, &session))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to send fast_auth_success flag", K(ret));
+      } else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to flush fast_auth_success flag", K(ret));
       } else {
-        // Fast auth failed (password mismatch)
-        need_full_auth = true;
-        LOG_TRACE("caching_sha2_password: fast auth password mismatch, need full auth",
-                  K(user_name), K(host_name));
+        LOG_INFO("sent fast_auth_success flag (0x03), fast auth completed");
       }
     } else {
-      // Cache miss
+      // Fast auth failed (password mismatch) or cache miss
       need_full_auth = true;
-      LOG_TRACE("caching_sha2_password: cache miss, need full auth",
-                K(cache_ret), K(user_name), K(host_name));
+      LOG_TRACE("caching_sha2_password: fast auth failed or cache miss, need full auth", K(user_name), K(host_name));
     }
   }
   return ret;

@@ -1291,6 +1291,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprAuditLogRemoveFilter, EAGER_EVALUATION);
     REG_OP(ObExprAuditLogSetUser, EAGER_EVALUATION);
     REG_OP(ObExprAuditLogRemoveUser, EAGER_EVALUATION);
+    REG_OP(ObExprAuditLogPasswordGet, EAGER_EVALUATION);
+    REG_OP(ObExprAuditLogPasswordSet, EAGER_EVALUATION);
     REG_OP(ObExprIsEnabledRole, EAGER_EVALUATION);
     REG_OP(ObExprSm3, EAGER_EVALUATION);
     REG_OP(ObExprSm4Encrypt, SHORT_CIRCUIT_EVALUATION);

@@ -13026,12 +13026,12 @@ static const _error _error_OB_ERR_NO_LOGIN_PRIVILEGE = {
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
       .str_error             = "user lacks CREATE SESSION privilege logon denied",
-      .str_user_error        = "user %.*s lacks CREATE SESSION privilege; logon denied",
+      .str_user_error        = "user %.*s lacks %.*s privilege; logon denied",
       .oracle_errno          = 1045,
       .oracle_str_error      = "ORA-01045: user lacks CREATE SESSION privilege; logon denied",
-      .oracle_str_user_error = "ORA-01045: user %.*s lacks CREATE SESSION privilege; logon denied",
+      .oracle_str_user_error = "ORA-01045: user %.*s lacks %.*s privilege; logon denied",
       .ob_str_error          = "OBE-01045: user lacks CREATE SESSION privilege; logon denied",
-      .ob_str_user_error     = "OBE-01045: user %.*s lacks CREATE SESSION privilege; logon denied"
+      .ob_str_user_error     = "OBE-01045: user %.*s lacks %.*s privilege; logon denied"
 };
 static const _error _error_OB_ERR_CANNOT_REVOKE_PRIVILEGES_YOU_DID_NOT_GRANT = {
       .error_name            = "OB_ERR_CANNOT_REVOKE_PRIVILEGES_YOU_DID_NOT_GRANT",

@@ -56,7 +56,13 @@ protected:
                             ObEvalCtx &ctx,
                             const bool is_valid,
                             const common::ObString &error_info,
-                            ObDatum &expr_datum);
+                            ObDatum &expr_datum,
+                            const common::ObString &str = "");
+  static int fill_res_buf(const ObExpr &expr,
+                          ObEvalCtx &ctx,
+                          const bool is_error,
+                          const common::ObString &value,
+                          ObDatum &expr_datum);
 private:
   int check_data_version(common::ObExprTypeCtx &type_ctx) const;
   int check_param_type(const ObExprResType &type) const;
@@ -119,6 +125,48 @@ public:
 private :
   //disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprAuditLogRemoveUser);
+};
+
+class ObExprAuditLogPassword : public ObExprAuditLogFunc
+{
+public:
+  ObExprAuditLogPassword(common::ObIAllocator &alloc,
+                           ObExprOperatorType type,
+                           const char *name,
+                           int32_t param_num);
+  virtual ~ObExprAuditLogPassword() {}
+protected:
+  int check_data_version(common::ObExprTypeCtx &type_ctx) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprAuditLogPassword);
+};
+
+class ObExprAuditLogPasswordSet : public ObExprAuditLogPassword
+{
+public:
+  explicit ObExprAuditLogPasswordSet(common::ObIAllocator &alloc);
+  virtual ~ObExprAuditLogPasswordSet() {}
+  virtual int calc_result_type0(ObExprResType &type,
+                                common::ObExprTypeCtx &type_ctx) const override;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int eval_set_encryption_password(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+};
+
+class ObExprAuditLogPasswordGet: public ObExprAuditLogPassword
+{
+public:
+  explicit ObExprAuditLogPasswordGet(common::ObIAllocator &alloc);
+  virtual ~ObExprAuditLogPasswordGet() {}
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types_array,
+                                int64_t param_num,
+                                ObExprTypeCtx &type_ctx) const override;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int eval_get_encryption_password(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 };
 
 }

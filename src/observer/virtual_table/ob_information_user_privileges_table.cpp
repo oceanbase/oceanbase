@@ -101,6 +101,8 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "CREATE SENSITIVE RULE";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_PLAINACCESS_SHIFT] =
                                                    "PLAINACCESS";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_APPLICATION_PASSWORD_ADMIN_SHIFT] =
+                                                   "APPLICATION_PASSWORD_ADMIN";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()

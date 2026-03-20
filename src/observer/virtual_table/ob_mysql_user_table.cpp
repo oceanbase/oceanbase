@@ -12,6 +12,7 @@
 
 #include "observer/virtual_table/ob_mysql_user_table.h"
 #include "lib/charset/ob_charset.h"
+#include "lib/string/ob_sql_string.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -19,6 +20,39 @@ namespace oceanbase
 {
 namespace observer
 {
+
+static int append_json_escaped_string(ObSqlString &sql, const ObString &str)
+{
+  int ret = OB_SUCCESS;
+  const char *ptr = str.ptr();
+  int64_t len = str.length();
+  for (int64_t i = 0; OB_SUCC(ret) && i < len; ++i) {
+    unsigned char c = static_cast<unsigned char>(ptr[i]);
+
+    if (c == '"') {
+      ret = sql.append("\\\"");
+    } else if (c == '\\') {
+      ret = sql.append("\\\\");
+    } else if (c == '\b') {
+      ret = sql.append("\\b");
+    } else if (c == '\f') {
+      ret = sql.append("\\f");
+    } else if (c == '\n') {
+      ret = sql.append("\\n");
+    } else if (c == '\r') {
+      ret = sql.append("\\r");
+    } else if (c == '\t') {
+      ret = sql.append("\\t");
+    } else if (c >= 32 && c <= 126) {
+      ret = sql.append_fmt("%c", c);
+    } else {
+      char hex_buf[8] = {0};
+      snprintf(hex_buf, sizeof(hex_buf), "\\u%04X", c);
+      ret = sql.append(hex_buf);
+    }
+  }
+  return ret;
+}
 
 ObMySQLUserTable::ObMySQLUserTable()
     : ObVirtualTableScannerIterator(),
@@ -151,6 +185,25 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   EXIST_PRIV_CASE(CREATE_TABLESPACE);
                   EXIST_PRIV_CASE(CREATE_ROLE);
                   EXIST_PRIV_CASE(DROP_ROLE);
+                  case (USER_ATTRIBUTES): {
+                    ObSqlString json_builder;
+                    ObString json_str;
+                    if (user_info->get_old_password_start_time() == OB_INVALID_TIMESTAMP) {
+                      cells[col_idx].set_null();
+                    } else if (OB_FAIL(json_builder.assign("{\"additional_password\":\""))) {
+                      SERVER_LOG(WARN, "failed to assign json head", K(ret));
+                    } else if (OB_FAIL(append_json_escaped_string(json_builder, user_info->get_old_password_str()))) {
+                      SERVER_LOG(WARN, "failed to append escaped password", K(ret));
+                    } else if (OB_FAIL(json_builder.append("\"}"))) {
+                      SERVER_LOG(WARN, "failed to append json tail", K(ret));
+                    } else if (OB_FAIL(ob_write_string(*allocator_, json_builder.string(), json_str))) {
+                      SERVER_LOG(WARN, "failed to write json string", K(ret));
+                    } else {
+                      cells[col_idx].set_string(ObLongTextType, json_str);
+                      cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                    }
+                    break;
+                  }
                   COLUMN_SET_WITH_TYPE(SSL_TYPE, varchar, ssl_type_str);
                   COLUMN_SET_WITH_TYPE(SSL_CIPHER, varchar, user_info->get_ssl_cipher());
                   COLUMN_SET_WITH_TYPE(X509_ISSUER, varchar, user_info->get_x509_issuer());

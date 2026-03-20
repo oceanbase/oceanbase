@@ -2005,6 +2005,7 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_ACCESS_AI_MODEL) != 0 ? OB_PRIV_ACCESS_AI_MODEL : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_SENSITIVE_RULE) != 0 ? OB_PRIV_CREATE_SENSITIVE_RULE : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_PLAINACCESS) != 0 ? OB_PRIV_PLAINACCESS : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_APPLICATION_PASSWORD_ADMIN) != 0 ? OB_PRIV_APPLICATION_PASSWORD_ADMIN : 0);
     if (OB_SUCC(ret)) {
       int64_t default_flags = 0;
       //In user schema def, flag is a int column.
@@ -2016,6 +2017,25 @@ int ObSchemaRetrieveUtils::fill_user_schema(
       ObString default_plugin;
       EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE( result, plugin, user_info,
                                               false, ignore_column_error, default_plugin);
+    }
+    if (OB_SUCC(ret)) {
+      ObString default_old_password;
+      EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result,
+                                                              old_password,
+                                                              user_info,
+                                                              false,
+                                                              ignore_column_error,
+                                                              default_old_password);
+    }
+    if (OB_SUCC(ret)) {
+      int64_t default_old_password_start_time = -1;
+      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result,
+                                                          old_password_start_time,
+                                                          user_info,
+                                                          int64_t,
+                                                          false,
+                                                          ignore_column_error,
+                                                          default_old_password_start_time);
     }
   }
   return ret;
@@ -5910,6 +5930,10 @@ int ObSchemaRetrieveUtils::fill_profile_schema(
         int64_t, false, ignore_column_error, INT64_MAX);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, password_grace_time, profile_schema,
         int64_t, false, ignore_column_error, INT64_MAX);
+    int64_t default_password_rollover_time = 0;
+    ignore_column_error = true;
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, password_rollover_time, profile_schema,
+        int64_t, false, ignore_column_error, default_password_rollover_time);
   }
   return ret;
 }

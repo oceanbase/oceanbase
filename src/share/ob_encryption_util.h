@@ -80,6 +80,17 @@ enum ObCipherOpMode {
 class ObBlockCipher
 {
 public:
+  static int encrypt_init(const ObCipherOpMode mode, EVP_CIPHER_CTX *&ctx,
+                          const char *key, const int64_t key_len,
+                          const char *iv, const int64_t iv_len,
+                          const char *aad, const int64_t aad_len);
+  static int do_encrypt(const ObCipherOpMode mode, EVP_CIPHER_CTX *ctx,
+                        const char *data, const int64_t data_len,
+                        char *buf, const int64_t buf_len, int64_t &out_len);
+  static int encrypt_finish(const ObCipherOpMode mode, EVP_CIPHER_CTX *ctx,
+                            const char *aad, const int64_t aad_len,
+                            char *buf, const int64_t buf_len, int64_t &out_len,
+                            char *tag, const int64_t tag_len);
   static int encrypt(const char *key, const int64_t key_len,
                      const char *data, const int64_t data_len, const int64_t buf_len,
                      const char *iv, const int64_t iv_len, const char *aad, const int64_t aad_len,
@@ -125,6 +136,7 @@ const int64_t OB_MAX_ENCRYPTED_KEY_LENGTH = 256;
 const int64_t OB_INTERNAL_ENCRYPTED_KEY_LENGTH = 32;
 const int64_t OB_CLOG_ENCRYPT_MASTER_KEY_LEN = 32;
 const int64_t OB_CLOG_ENCRYPT_TABLE_KEY_LEN = 32;
+const int64_t OB_AUDIT_ENCRYPT_PASSWORD_LENGTH = 32;
 
 class ObEncryptionUtil
 {
@@ -301,7 +313,7 @@ public:
   void destroy();
   int  load(const common::ObString& engine);
   ObEncryptEngineType get_engine_type(const common::ObString& engine);
-  ENGINE* get_tde_engine(ObCipherOpMode &mode) const;
+  ENGINE* get_tde_engine(const ObCipherOpMode mode) const;
   int reload_config();
 private:
   bool is_inited_;

@@ -458,6 +458,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigAuditLogStrategyChecker);
 };
 
+class ObConfigAuditLogEncryptionChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAuditLogEncryptionChecker() {}
+  virtual ~ObConfigAuditLogEncryptionChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAuditLogEncryptionChecker);
+};
+
 class ObConfigWorkAreaPolicyChecker
   : public ObConfigChecker
 {

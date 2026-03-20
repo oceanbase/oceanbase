@@ -113,6 +113,8 @@ int ObSetPasswordExecutor::execute(ObExecContext &ctx, ObSetPasswordStmt &stmt)
       arg.max_user_connections_= stmt.get_max_user_connections();
       arg.modify_max_connections_ = stmt.get_modify_max_connections();
       arg.plugin_ = plugin;
+      arg.retain_current_password_ = stmt.get_retain_current_password();
+      arg.discard_old_password_ = stmt.get_discard_old_password();
       if (stmt.get_need_enc()) {
         if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(passwd, plugin, arg.passwd_, enc_buf, CACHING_SHA2_PASSWD_BUF_LEN, session))) {
           LOG_WARN("Encrypt passwd failed", K(ret));

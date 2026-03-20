@@ -85,6 +85,7 @@ const char *ObPrivMgr::priv_names_[] = {
     "ALTER AI MODEL",             // index 56
     "DROP AI MODEL",              // index 57
     "ACCESS AI MODEL",            // index 58
+    "APPLICATION_PASSWORD_ADMIN", // index 59
 };
 
 ObPrivMgr::ObPrivMgr()

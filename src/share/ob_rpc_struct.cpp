@@ -5307,7 +5307,9 @@ OB_DEF_SERIALIZE(ObSetPasswdArg)
               modify_max_connections_,
               max_connections_per_hour_,
               max_user_connections_,
-              plugin_);
+              plugin_,
+              retain_current_password_,
+              discard_old_password_);
   return ret;
 }
 
@@ -5320,6 +5322,8 @@ OB_DEF_DESERIALIZE(ObSetPasswdArg)
   x509_issuer_.reset();
   x509_subject_.reset();
   plugin_.reset();
+  retain_current_password_ = false;
+  discard_old_password_ = false;
 
   BASE_DESER((, ObDDLArg));
   LST_DO_CODE(OB_UNIS_DECODE,
@@ -5334,7 +5338,9 @@ OB_DEF_DESERIALIZE(ObSetPasswdArg)
               modify_max_connections_,
               max_connections_per_hour_,
               max_user_connections_,
-              plugin_);
+              plugin_,
+              retain_current_password_,
+              discard_old_password_);
   return ret;
 }
 
@@ -5353,7 +5359,9 @@ OB_DEF_SERIALIZE_SIZE(ObSetPasswdArg)
               modify_max_connections_,
               max_connections_per_hour_,
               max_user_connections_,
-              plugin_);
+              plugin_,
+              retain_current_password_,
+              discard_old_password_);
   return len;
 }
 

@@ -405,6 +405,7 @@ int ObCreateInnerSchemaExecutor::check_and_create_default_profile(ObSchemaGetter
     profile_schema.set_password_lock_time(USECS_PER_DAY);
     profile_schema.set_password_life_time(ObProfileSchema::UNLIMITED_VALUE);
     profile_schema.set_password_grace_time(ObProfileSchema::UNLIMITED_VALUE);
+    profile_schema.set_password_rollover_time(0);
     profile_schema.set_failed_login_attempts(ObProfileSchema::UNLIMITED_VALUE);
     profile_schema.set_password_verify_function("NULL");
     profile_schema.set_profile_name("DEFAULT");

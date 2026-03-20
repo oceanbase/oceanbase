@@ -19,7 +19,8 @@ ObSetPasswordStmt::ObSetPasswordStmt(ObIAllocator *name_pool)
     : ObDDLStmt(name_pool, stmt::T_SET_PASSWORD),
       masked_sql_(), tenant_id_(false), need_enc_(false), for_current_user_(false),
       modify_max_connections_(false), max_connections_per_hour_(OB_INVALID_ID),
-      max_user_connections_(OB_INVALID_ID)
+      max_user_connections_(OB_INVALID_ID), retain_current_password_(false),
+      discard_old_password_(false)
 {
 }
 
@@ -27,7 +28,8 @@ ObSetPasswordStmt::ObSetPasswordStmt()
     : ObDDLStmt(NULL, stmt::T_SET_PASSWORD),
       masked_sql_(), tenant_id_(false), need_enc_(false), for_current_user_(false),
       modify_max_connections_(false), max_connections_per_hour_(OB_INVALID_ID),
-      max_user_connections_(OB_INVALID_ID)
+      max_user_connections_(OB_INVALID_ID), retain_current_password_(false),
+      discard_old_password_(false)
 {
 }
 

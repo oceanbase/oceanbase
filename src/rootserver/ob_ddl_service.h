@@ -2317,7 +2317,9 @@ private:
                           const common::ObString &new_passwd,
                           const common::ObString *ddl_stmt_str,
                           share::schema::ObSchemaGetterGuard &schema_guard,
-                          const common::ObString &plugin);
+                          const common::ObString &plugin,
+                          const bool retain_current_password = false,
+                          const bool discard_old_password = false);
   int set_max_connection_in_trans(const uint64_t tenant_id,
                                   const uint64_t user_id,
                                   const uint64_t max_connections_per_hour,

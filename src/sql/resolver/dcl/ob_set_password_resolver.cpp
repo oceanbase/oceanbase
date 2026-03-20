@@ -14,6 +14,7 @@
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "lib/encrypt/ob_sha256_crypt.h"
+#include "lib/time/ob_time_utility.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/parser/parse_node.h"
 using namespace oceanbase::sql;
@@ -105,7 +106,7 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Session info  and nodeshould not be NULL", KP(session_info_), KP(node), K(ret));
-  } else if (OB_UNLIKELY(T_SET_PASSWORD != node->type_) || OB_UNLIKELY(6 != node->num_child_)) {
+  } else if (OB_UNLIKELY(T_SET_PASSWORD != node->type_) || OB_UNLIKELY(7 != node->num_child_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Set password ParseNode error", K(node->type_), K(node->num_child_), K(ret));
   } else if (OB_ISNULL(set_pwd_stmt = create_stmt<ObSetPasswordStmt>())) {
@@ -124,6 +125,12 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
     ObSSLType ssl_type = ObSSLType::SSL_TYPE_NOT_SPECIFIED;
     ObString infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_MAX)] = {};
     bool need_set_password = true;
+    ObString password;
+    bool need_enc = false;
+    ObSchemaGetterGuard schema_guard;
+    const ObUserInfo *user_info = NULL;
+    uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    bool is_in_rollover = false;
     // resolve user and host name
     if (OB_SUCC(ret) && NULL != node->children_[0]) {
       ParseNode *user_hostname_node = node->children_[0];
@@ -153,9 +160,23 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
       host_name = session_host_name;
       set_pwd_stmt->set_for_current_user(true);
     }
+    // get user info
+    if (OB_ISNULL(GCTX.schema_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema service is null", K(ret));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("failed to get tenant schema guard", K(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_name, host_name, user_info))) {
+      LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_name), K(host_name));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_USER_NOT_EXIST;
+      LOG_WARN("user not exist", K(ret), K(user_name), K(host_name));
+    } else {
+      plugin = user_info->get_plugin();
+    }
     // resolve require and resource option
     if (OB_FAIL(ret)) {
-    } else if ((NULL == node->children_[1]) && (NULL == node->children_[2])) {
+    } else if (OB_NOT_NULL(node->children_[3])) {
       need_set_password = false;
       const ParseNode *child_node = node->children_[3];
       if (OB_ISNULL(child_node)) {
@@ -174,8 +195,73 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("alter user ParseNode error", K(ret), K(child_node->type_));
       }
     }
-    // resolve password and plugin
+    // resolve RETAIN or DISCARD password option（MySQL）/ Oracle EXPIRE PASSWORD ROLLOVER PERIOD
+    if (OB_SUCC(ret) && OB_NOT_NULL(node->children_[6])) {
+      if (!(compat_version >= DATA_VERSION_4_4_2_1)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("RETAIN CURRENT PASSWORD/DISCARD OLD PASSWORD/EXPIRE PASSWORD ROLLOVER PERIOD not supported before DATA_VERSION_4_4_2_1", K(ret), K(compat_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "RETAIN CURRENT PASSWORD/DISCARD OLD PASSWORD/EXPIRE PASSWORD ROLLOVER PERIOD before version 4.4.2.1");
+      } else {
+        ParseNode *retain_or_discard_node = node->children_[6];
+        if (lib::is_mysql_mode()) {
+          if (retain_or_discard_node->value_ == 0) {
+            set_pwd_stmt->set_discard_old_password(true);
+          } else if (retain_or_discard_node->value_ == 1) {
+            set_pwd_stmt->set_retain_current_password(true);
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("alter user ParseNode error", K(ret));
+          }
+        } else if (lib::is_oracle_mode()) {
+          // Oracle: EXPIRE PASSWORD ROLLOVER PERIOD 复用该节点，value=0
+          if (retain_or_discard_node->value_ == 0) {
+            set_pwd_stmt->set_discard_old_password(true);
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("alter user ParseNode error", K(ret));
+          }
+        }
+      }
+    }
+    // In Oracle mode, if 'discard' is not explicitly specified, whether to retain the current password is determined based on the rollover window.
+    if (OB_SUCC(ret)
+        && lib::is_oracle_mode()
+        && !set_pwd_stmt->get_discard_old_password()
+        && compat_version >= DATA_VERSION_4_4_2_1) {
+      const int64_t start_ts = user_info->get_old_password_start_time();
+      int64_t password_rollover_time = 0;
+      if (OB_FAIL(schema_guard.get_user_password_rollover_time(tenant_id,
+                                                               user_info->get_user_id(),
+                                                               password_rollover_time))) {
+        LOG_WARN("fail to get password rollover time", K(ret), K(tenant_id), KPC(user_info));
+      } else if (password_rollover_time <= 0) {
+        // dual password is not enabled, do nothing
+      } else if (OB_INVALID_TIMESTAMP == start_ts) {
+        // dual password enabled, but no old password set, retain current password
+        set_pwd_stmt->set_retain_current_password(true);
+      } else {
+        // dual password enabled, retain current password if not in rollover period
+        int64_t expire_ts = start_ts + password_rollover_time;
+        expire_ts = (expire_ts < start_ts) ? INT64_MAX : expire_ts;
+        is_in_rollover = (ObTimeUtility::current_time() < expire_ts);
+        set_pwd_stmt->set_retain_current_password(!is_in_rollover);
+      }
+    }
+    // Check for empty password when RETAIN CURRENT PASSWORD is specified (MySQL compatibility)
+    if (OB_SUCC(ret) && lib::is_mysql_mode() && set_pwd_stmt->get_retain_current_password()) {
+      // Check if current password is empty
+      if (user_info->get_passwd_str().empty()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("current password is empty, cannot retain", K(ret), K(user_name), K(host_name));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "retain current password when current password is empty");
+      }
+    }
+    // resolve password
     if (OB_FAIL(ret) || !need_set_password) {
+    } else if (set_pwd_stmt->get_discard_old_password()) {
+      password = user_info->get_passwd_str();
+      plugin = user_info->get_plugin();
+      need_enc = false;
     } else if (OB_ISNULL(node->children_[1]) || OB_ISNULL(node->children_[2])) {
       ret = OB_ERR_PARSE_SQL;
       LOG_WARN("The child 1 or child 2 should not be NULL",
@@ -185,28 +271,11 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
                "child 2",
                node->children_[2]);
     } else {
-      ObString password(static_cast<int32_t>(node->children_[1]->str_len_), node->children_[1]->str_value_);
-      // get user plugin info
-      ObSchemaGetterGuard schema_guard;
-      const ObUserInfo *user_info = NULL;
-      uint64_t tenant_id = session_info_->get_effective_tenant_id();
-      if (OB_ISNULL(GCTX.schema_service_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema service is null", K(ret));
-      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-        LOG_WARN("failed to get tenant schema guard", K(ret), K(tenant_id));
-      } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_name, host_name, user_info))) {
-        LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_name), K(host_name));
-      } else if (OB_ISNULL(user_info)) {
-        ret = OB_USER_NOT_EXIST;
-        LOG_WARN("user not exist", K(ret), K(user_name), K(host_name));
-      } else {
-        plugin = user_info->get_plugin();
-      }
+      password.assign_ptr(node->children_[1]->str_value_, static_cast<int32_t>(node->children_[1]->str_len_));
       // resolve password
       if (OB_SUCC(ret)) {
         // set need_enc
-        bool need_enc = (1 == node->children_[2]->value_) ? true : false;
+        need_enc = (1 == node->children_[2]->value_) ? true : false;
         // deal with plugin info
         if (NULL == node->children_[5]) {
           // [set password xxx], can not change auth plugin, use user's plugin
@@ -247,35 +316,69 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
             LOG_WARN("fail to check password strength", K(ret));
           } else if (0 == password.length()) {
             // empty password, do not need to encrypt
-            set_pwd_stmt->set_need_enc(false);
+            // Check if RETAIN CURRENT PASSWORD is specified with empty new password (MySQL compatibility)
+            if (lib::is_mysql_mode() && set_pwd_stmt->get_retain_current_password()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("new password is empty, cannot retain current password", K(ret), K(user_name), K(host_name));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "retain current password when new password is empty");
+            } else {
+              set_pwd_stmt->set_need_enc(false);
+            }
           } else {
             set_pwd_stmt->set_need_enc(true);
           }
         }
       }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
-              params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
-          LOG_WARN("failed to check data version for auth plugin", K(ret));
-        } else if (OB_UNLIKELY(!is_plugin_supported)) {
+    }
+    // handle plugin change scenarios when retain_current_password is set
+    if (OB_SUCC(ret)
+        && !ObEncryptedHelper::is_same_auth_plugin(plugin, user_info->get_plugin())
+        && compat_version >= DATA_VERSION_4_4_2_1) {
+      if (lib::is_oracle_mode()) {
+        if (is_in_rollover) {
+          // not allowed to change plugin during rollover period
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
-        } else if (OB_FAIL(set_pwd_stmt->set_user_password(user_name,
-                                                           host_name,
-                                                           password,
-                                                           ObEncryptedHelper::format_plugin_name(plugin)))) {
-          LOG_WARN("Failed to set UserPasswordStmt");
-        } else if (OB_FAIL(set_pwd_stmt->add_ssl_info(get_ssl_type_string(ssl_type),
-                                                      infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
-                                                      infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
-                                                      infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)]))) {
-          LOG_WARN("Failed to add_ssl_info", K(ssl_type),
-                   "ISSUER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
-                   "CIPHER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
-                   "SUBJECT", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)], K(ret));
+          LOG_WARN("not support change password plugin in password rollover period", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "change password plugin in password rollover period");
+        } else {
+          // allow plugin change, but do not retain current password
+          set_pwd_stmt->set_retain_current_password(false);
+          LOG_USER_WARN(OB_NOT_SUPPORTED, "retain current password when change password plugin");
         }
+      } else if (set_pwd_stmt->get_retain_current_password()) {
+        // MySQL mode: if retain_current_password is set, plugin change is not allowed
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("new plugin is different from old plugin, retain old password",
+                  K(plugin),
+                  K(user_info->get_plugin()),
+                  K(ret));
+        LOG_USER_WARN(OB_NOT_SUPPORTED, "new plugin is different from old plugin, retain old password");
       }
     }
+    // set user password and ssl info (only when need to set password, since resource option and require scenarios handle this internally)
+    if (OB_SUCC(ret) && need_set_password) {
+      if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
+            params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
+        LOG_WARN("failed to check data version for auth plugin", K(ret));
+      } else if (OB_UNLIKELY(!is_plugin_supported)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+      } else if (OB_FAIL(set_pwd_stmt->set_user_password(user_name,
+                                                         host_name,
+                                                         password,
+                                                         ObEncryptedHelper::format_plugin_name(plugin)))) {
+        LOG_WARN("Failed to set UserPasswordStmt");
+      } else if (OB_FAIL(set_pwd_stmt->add_ssl_info(get_ssl_type_string(ssl_type),
+                                                    infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                                                    infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                                                    infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)]))) {
+        LOG_WARN("Failed to add_ssl_info", K(ssl_type),
+                 "ISSUER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                 "CIPHER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                 "SUBJECT", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)], K(ret));
+      }
+    }
+    // check privileges
     if (OB_SUCC(ret)) {
       if (OB_FAIL(check_dcl_on_inner_user(node->type_,
                                           params_.session_info_->get_priv_user_id(),

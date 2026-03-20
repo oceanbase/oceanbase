@@ -505,6 +505,13 @@ bool ObConfigAuditLogStrategyChecker::check(const ObConfigItem &t) const
       || 0 == tmp_string.case_compare("SYNCHRONOUS");
 }
 
+bool ObConfigAuditLogEncryptionChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_string(t.str());
+  return 0 == tmp_string.case_compare("NONE")
+      || 0 == tmp_string.case_compare("AES");
+}
+
 bool ObConfigWorkAreaPolicyChecker::check(const ObConfigItem &t) const
 {
   const ObString tmp_str(t.str());

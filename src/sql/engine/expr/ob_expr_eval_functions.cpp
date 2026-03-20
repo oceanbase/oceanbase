@@ -1466,12 +1466,19 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRandCanonical::calc_random_expr_canonical            /* 890 */
   NULL, // ObExprLoadFile::eval_load_file,                            /* 891 */
   NULL, // ObExprAIParseDocument::eval_ai_parse_document              /* 892 */
-  NULL, // ObExprSearchIndexInnerPath::calc_search_index_inner_path,  /* 893 */
-  NULL, // ObExprSearchIndexInnerValue::calc_search_index_inner_value, /* 894 */
+  NULL, // ObExprSearchIndexInnerPath::calc_search_index_inner_path   /* 893 */
+  NULL, // ObExprSearchIndexInnerValue::calc_search_index_inner_value /* 894 */
   NULL, // ObExprToTypeName::eval_to_type_name,                       /* 895 */
   NULL, // ObExprToFloat64OrNull::eval_to_float64_or_null,            /* 896 */
   NULL, // ObExprNewTime::eval_new_time,                              /* 897 */
   ObExprNLSCharsetId::eval_nls_charset_id,                            /* 898 */
+  NULL, // calc_cbrt_expr_mysql,                                      /* 899 */
+  NULL, // ObExprE::eval_e,                                           /* 900 */
+  NULL, // ObExprCountSubstrings::eval_count_substrings,              /* 901 */
+  NULL, // ObExprCollationTypeToCharset::eval_collation_type_to_charset,     /* 902 */
+  NULL, // ObExprCollationTypeToCollation::eval_collation_type_to_collation, /* 903 */
+  ObExprAuditLogPasswordGet::eval_get_encryption_password,            /* 904 */
+  ObExprAuditLogPasswordSet::eval_set_encryption_password,            /* 905 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

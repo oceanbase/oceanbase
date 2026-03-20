@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_profile_sql_service.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "common/ob_version_def.h"
 
 namespace oceanbase
 {
@@ -69,19 +70,27 @@ int ObProfileSqlService::gen_sql(ObSqlString &sql,
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = schema.get_tenant_id();
+  uint64_t compat_version = 0;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(
-                       exec_tenant_id, schema.get_tenant_id()), "tenant_id", "%lu");
-  SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_schema_id(
-                       exec_tenant_id, schema.get_profile_id()), "profile_id", "%lu");
-  SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, schema.get_profile_name_str().ptr(),
-                                  schema.get_profile_name_str().length(), "profile_name");
-  SQL_COL_APPEND_VALUE(sql, values, schema.get_failed_login_attempts(), "failed_login_attempts", "%ld");
-  SQL_COL_APPEND_VALUE(sql, values, schema.get_password_lock_time(), "password_lock_time", "%ld");
-  SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, schema.get_password_verify_function_str().ptr(),
-                                  schema.get_password_verify_function_str().length(), "password_verify_function");
-  SQL_COL_APPEND_VALUE(sql, values, schema.get_password_life_time(), "password_life_time", "%ld");
-  SQL_COL_APPEND_VALUE(sql, values, schema.get_password_grace_time(), "password_grace_time", "%ld");
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else {
+    SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(
+                         exec_tenant_id, schema.get_tenant_id()), "tenant_id", "%lu");
+    SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_schema_id(
+                         exec_tenant_id, schema.get_profile_id()), "profile_id", "%lu");
+    SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, schema.get_profile_name_str().ptr(),
+                                    schema.get_profile_name_str().length(), "profile_name");
+    SQL_COL_APPEND_VALUE(sql, values, schema.get_failed_login_attempts(), "failed_login_attempts", "%ld");
+    SQL_COL_APPEND_VALUE(sql, values, schema.get_password_lock_time(), "password_lock_time", "%ld");
+    SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, schema.get_password_verify_function_str().ptr(),
+                                    schema.get_password_verify_function_str().length(), "password_verify_function");
+    SQL_COL_APPEND_VALUE(sql, values, schema.get_password_life_time(), "password_life_time", "%ld");
+    SQL_COL_APPEND_VALUE(sql, values, schema.get_password_grace_time(), "password_grace_time", "%ld");
+    if (OB_SUCC(ret) && compat_version >= DATA_VERSION_4_4_2_1) {
+      SQL_COL_APPEND_VALUE(sql, values, schema.get_password_rollover_time(), "password_rollover_time", "%ld");
+    }
+  }
   return ret;
 }
 

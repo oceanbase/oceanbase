@@ -8452,10 +8452,7 @@ int ObSelectResolver::check_audit_log_stmt(ObSelectStmt *select_stmt)
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (T_FUN_SYS_AUDIT_LOG_SET_FILTER == expr->get_expr_type() ||
-                 T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == expr->get_expr_type() ||
-                 T_FUN_SYS_AUDIT_LOG_SET_USER == expr->get_expr_type() ||
-                 T_FUN_SYS_AUDIT_LOG_REMOVE_USER == expr->get_expr_type()) {
+      } else if (ObRawExprUtils::is_audit_log_expr(expr)) {
         is_contain = true;
       }
     }

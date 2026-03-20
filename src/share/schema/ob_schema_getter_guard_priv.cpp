@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 
 #include "share/schema/ob_schema_getter_guard.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/schema/ob_schema_mgr.h"
 #include "sql/resolver/ob_schema_checker.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
@@ -727,6 +728,8 @@ int ObSchemaGetterGuard::check_user_priv(const ObSessionPrivInfo &session_priv,
         LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "CREATE USER or CREATE ROLE");
       } else if (priv_set == (OB_PRIV_DROP_ROLE | OB_PRIV_CREATE_USER) && !check_all) {
         LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "CREATE USER or DROP ROLE");
+      } else if (priv_set == (OB_PRIV_APPLICATION_PASSWORD_ADMIN | OB_PRIV_CREATE_USER) && !check_all) {
+        LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "APPLICATION_PASSWORD_ADMIN or CREATE USER");
       } else {
         LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, priv_name);
       }
@@ -2220,6 +2223,20 @@ int ObSchemaGetterGuard::get_sensitive_rule_priv_with_user_id(const uint64_t ten
     LOG_WARN("get sensitive_rule priv with user_id failed", KR(ret), K(tenant_id), K(user_id));
   }
 
+  return ret;
+}
+
+int ObSchemaGetterGuard::check_ora_restricted_session(
+    const ObSessionPrivInfo &s_priv,
+    const common::ObIArray<uint64_t> &enable_role_id_array)
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(s_priv.tenant_id_));
+  if (tenant_config.is_valid() && tenant_config->_enable_restricted_session) {
+    OZ (sql::ObOraSysChecker::check_ora_restricted_session(*this, s_priv.tenant_id_,
+                                                           s_priv.user_id_, enable_role_id_array),
+        s_priv.tenant_id_, s_priv.user_id_);
+  }
   return ret;
 }
 

@@ -42,6 +42,9 @@
 #include "sql/ob_sql_ccl_rule_manager.h"
 #include "share/diagnosis/ob_runtime_profile.h"
 #include "sql/ob_sql_utils.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/audit/ob_audit_log_utils.h"
+#endif
 
 namespace oceanbase
 {
@@ -3536,9 +3539,11 @@ int ObSql::generate_plan(ParseResult &parse_result,
   } else if (OB_FAIL(ObSecurityAuditUtils::check_allow_audit(
                       *sql_ctx.session_info_, allow_audit))) {
     LOG_WARN("Failed to check allow audit", K(ret));
-  } else if (allow_audit &&
-             OB_FAIL(ObSecurityAuditUtils::get_audit_units(
-                      basic_stmt->get_stmt_type(), basic_stmt, audit_units))) {
+  } else if (!allow_audit && OB_FAIL(ObAuditLogUtils::check_allow_audit(
+                          *sql_ctx.session_info_, allow_audit))) {
+    LOG_WARN("Failed to check allow audit log", K(ret));
+  } else if (allow_audit && OB_FAIL(ObSecurityAuditUtils::get_audit_units(
+                          basic_stmt->get_stmt_type(), basic_stmt, audit_units))) {
     LOG_WARN("Failed to get audit units", K(ret));
 #endif
   } else if (OB_FAIL(sql_ctx.session_info_->get_sys_variable(

@@ -2597,8 +2597,17 @@ int get_create_user_privs(
       case stmt::T_RENAME_USER :
       case stmt::T_DROP_USER :
       case stmt::T_CREATE_USER : {
-        if (stmt::T_SET_PASSWORD == stmt_type
+        // For SET PASSWORD, check APPLICATION_PASSWORD_ADMIN or CREATE USER
+        // when modifying own password with RETAIN CURRENT PASSWORD or DISCARD OLD PASSWORD
+        if ((stmt::T_SET_PASSWORD == stmt_type)
             && static_cast<const ObSetPasswordStmt*>(basic_stmt)->get_for_current_user()) {
+          const ObSetPasswordStmt *set_pwd_stmt = static_cast<const ObSetPasswordStmt *>(basic_stmt);
+          if (set_pwd_stmt->get_retain_current_password() || set_pwd_stmt->get_discard_old_password()) {
+            need_priv.priv_set_ = OB_PRIV_APPLICATION_PASSWORD_ADMIN | OB_PRIV_CREATE_USER;
+            need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+            need_priv.priv_check_type_ = OB_PRIV_CHECK_ANY;
+            ADD_NEED_PRIV(need_priv);
+          }
         } else if (stmt::T_ALTER_USER_PROFILE == stmt_type
                    && lib::is_mysql_mode()
                    && !!static_cast<const ObAlterUserProfileStmt*>(basic_stmt)->get_set_role_flag()) {

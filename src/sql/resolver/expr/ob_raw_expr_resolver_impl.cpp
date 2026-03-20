@@ -8132,10 +8132,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
   }
 
   if (OB_SUCC(ret)) {
-    if (T_FUN_SYS_AUDIT_LOG_SET_FILTER == func_expr->get_expr_type()
-        || T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == func_expr->get_expr_type()
-        || T_FUN_SYS_AUDIT_LOG_SET_USER == func_expr->get_expr_type()
-        || T_FUN_SYS_AUDIT_LOG_REMOVE_USER == func_expr->get_expr_type()) {
+    if (ObRawExprUtils::is_audit_log_expr(func_expr)) {
       if (OB_UNLIKELY(!is_root_expr)) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function as param is");
@@ -8223,6 +8220,8 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
     case T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER:
     case T_FUN_SYS_AUDIT_LOG_SET_USER:
     case T_FUN_SYS_AUDIT_LOG_REMOVE_USER:
+    case T_FUN_SYS_AUDIT_LOG_PASSWORD_SET:
+    case T_FUN_SYS_AUDIT_LOG_PASSWORD_GET:
       for (int64_t i = 0; OB_SUCC(ret) && i < func_expr.get_param_count(); ++i) {
         ObRawExpr *param_expr = func_expr.get_param_expr(i);
         if (OB_ISNULL(param_expr)) {

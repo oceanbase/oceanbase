@@ -588,7 +588,9 @@ public:
                          const common::ObString &passwd,
                          const common::ObString *ddl_stmt_str,
                          common::ObMySQLTransaction &trans,
-                         const common::ObString &plugin);
+                         const common::ObString &plugin,
+                         const bool retain_current_password,
+                         const bool discard_old_password);
   virtual int set_max_connections(const uint64_t tenant_id,
                                   const uint64_t user_id,
                                   const uint64_t max_connections_per_hour,
@@ -1221,6 +1223,13 @@ private:
   int try_create_tablegroup_for_database_(
       common::ObMySQLTransaction &trans,
       share::schema::ObDatabaseSchema &database_schema);
+  int calc_old_password_info(const bool discard_old_password,
+                             const bool retain_current_password,
+                             const ObString &plugin,
+                             const share::schema::ObUserInfo *user_info,
+                             common::ObString &old_password,
+                             int64_t &old_password_start_time);
+
 private:
   static const int64_t ENCRYPT_KEY_LENGTH = 15;
 protected:

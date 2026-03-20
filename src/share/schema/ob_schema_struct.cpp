@@ -8762,6 +8762,9 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_PLAINACCESS) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" PLAINACCESS,");
   }
+  if ((priv_set_ & OB_PRIV_APPLICATION_PASSWORD_ADMIN) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" APPLICATION_PASSWORD_ADMIN,");
+  }
 
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
@@ -9053,7 +9056,9 @@ ObUserInfo::ObUserInfo(ObIAllocator *allocator)
     proxy_user_info_cnt_(0),
     user_flags_(),
     trigger_list_(),
-    plugin_()
+    plugin_(),
+    old_password_(),
+    old_password_start_time_(OB_INVALID_TIMESTAMP)
 {
 }
 
@@ -9167,6 +9172,10 @@ int ObUserInfo::assign(const ObUserInfo &other)
       if (OB_SUCC(ret) && trigger_list_.assign(other.trigger_list_)) {
         LOG_WARN("assign trigger list failed", K(ret));
       }
+      if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(other.old_password_, old_password_))) {
+        LOG_WARN("Fail to deep copy old_password", K(ret));
+      }
+      old_password_start_time_ = other.old_password_start_time_;
     }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
@@ -9310,6 +9319,8 @@ void ObUserInfo::reset()
   ObSchema::reset();
   ObPriv::reset();
   plugin_.reset();
+  old_password_.reset();
+  old_password_start_time_ = OB_INVALID_TIMESTAMP;
 }
 
 int64_t ObUserInfo::get_convert_size() const
@@ -9341,6 +9352,7 @@ int64_t ObUserInfo::get_convert_size() const
   }
   convert_size += trigger_list_.get_data_size();
   convert_size += plugin_.length() + 1;
+  convert_size += old_password_.length() + 1;
   return convert_size;
 }
 
@@ -9394,6 +9406,8 @@ OB_DEF_SERIALIZE(ObUserInfo)
     LST_DO_CODE(OB_UNIS_ENCODE, user_flags_);
     LST_DO_CODE(OB_UNIS_ENCODE, trigger_list_);
     LST_DO_CODE(OB_UNIS_ENCODE, plugin_);
+    LST_DO_CODE(OB_UNIS_ENCODE, old_password_);
+    LST_DO_CODE(OB_UNIS_ENCODE, old_password_start_time_);
   }
   return ret;
 }
@@ -9495,6 +9509,8 @@ OB_DEF_DESERIALIZE(ObUserInfo)
       LST_DO_CODE(OB_UNIS_DECODE, user_flags_);
       LST_DO_CODE(OB_UNIS_DECODE, trigger_list_);
       LST_DO_CODE(OB_UNIS_DECODE, plugin_);
+      LST_DO_CODE(OB_UNIS_DECODE, old_password_);
+      LST_DO_CODE(OB_UNIS_DECODE, old_password_start_time_);
     }
   }
 
@@ -9537,6 +9553,8 @@ OB_DEF_SERIALIZE_SIZE(ObUserInfo)
   LST_DO_CODE(OB_UNIS_ADD_LEN, user_flags_);
   LST_DO_CODE(OB_UNIS_ADD_LEN, trigger_list_);
   LST_DO_CODE(OB_UNIS_ADD_LEN, plugin_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, old_password_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, old_password_start_time_);
   return len;
 }
 
@@ -13171,7 +13189,8 @@ ObProfileSchema::ObProfileSchema(ObIAllocator *allocator)
     password_lock_time_(-1),
     password_verify_function_(),
     password_life_time_(-1),
-    password_grace_time_(-1)
+    password_grace_time_(-1),
+    password_rollover_time_(-1)
 {
 }
 
@@ -13204,6 +13223,7 @@ ObProfileSchema &ObProfileSchema::operator=(const ObProfileSchema &other)
       password_lock_time_ = other.password_lock_time_;
       password_life_time_ = other.password_life_time_;
       password_grace_time_ = other.password_grace_time_;
+      password_rollover_time_ = other.password_rollover_time_;
     }
 
     if (OB_FAIL(ret)) {
@@ -13237,6 +13257,7 @@ void ObProfileSchema::reset()
   password_verify_function_.reset();
   password_life_time_ = -1;
   password_grace_time_ = -1;
+  password_rollover_time_ = -1;
 }
 
 int64_t ObProfileSchema::get_convert_size() const
@@ -13263,35 +13284,13 @@ int ObProfileSchema::set_value(const int64_t type, const int64_t value)
   case PASSWORD_GRACE_TIME:
     set_password_grace_time(value);
     break;
+  case PASSWORD_ROLLOVER_TIME:
+    set_password_rollover_time(value);
+    break;
   default:
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unknown type", K(type));
     break;
-  }
-  return ret;
-}
-
-int ObProfileSchema::set_default_value(const int64_t type)
-{
-  int ret = OB_SUCCESS;
-  if (type < 0 || type >= MAX_PARAMS) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unknown type", K(type));
-  } else if (type == PASSWORD_VERIFY_FUNCTION) {
-    password_verify_function_.reset();
-  } else if (OB_FAIL(set_value(type, DEFAULT_PARAM_VALUES[type]))) {
-    LOG_WARN("fail to set schema default value", K(ret));
-  }
-  return ret;
-}
-
-int ObProfileSchema::set_default_values()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < MAX_PARAMS; ++i) {
-    if (i != PASSWORD_VERIFY_FUNCTION && OB_FAIL(set_value(i, DEFAULT_PARAM_VALUES[i]))) {
-      LOG_WARN("fail to set schema value", K(ret));
-    }
   }
   return ret;
 }
@@ -13320,33 +13319,14 @@ int ObProfileSchema::set_invalid_values()
   return ret;
 }
 
-int ObProfileSchema::get_default_value(const int64_t type, int64_t &value)
-{
-  int ret = OB_SUCCESS;
-  if (type < 0 || type >= MAX_PARAMS || type == PASSWORD_VERIFY_FUNCTION) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unknown type", K(type));
-  } else {
-    value = DEFAULT_PARAM_VALUES[type];
-  }
-  return ret;
-}
-
-const int64_t ObProfileSchema::DEFAULT_PARAM_VALUES[] = {
-  10,                   //times
-  USECS_PER_DAY,        //1 day
-  -1,                   //nouse
-  180 * USECS_PER_DAY,  //180 day
-  7 * USECS_PER_DAY,    //7 day
-};
 const int64_t ObProfileSchema::INVALID_PARAM_VALUES[] = {
   -1,        //times
   -1,        //1 day
   -1,        //nouse
   -1,        //1 day
   -1,        //1 day
+  -1,        //invalid rollover time
 };
-static_assert(ARRAYSIZEOF(ObProfileSchema::DEFAULT_PARAM_VALUES) == ObProfileSchema::MAX_PARAMS, "array size");
 static_assert(ARRAYSIZEOF(ObProfileSchema::INVALID_PARAM_VALUES) == ObProfileSchema::MAX_PARAMS, "array size");
 
 const char* ObProfileSchema::PARAM_VALUE_NAMES[] = {
@@ -13355,6 +13335,7 @@ const char* ObProfileSchema::PARAM_VALUE_NAMES[] = {
   "PASSWORD_VERIFY_FUNCTION",
   "PASSWORD_LIFE_TIME",
   "PASSWORD_GRACE_TIME",
+  "PASSWORD_ROLLOVER_TIME",
 };
 
 static_assert(ARRAYSIZEOF(ObProfileSchema::PARAM_VALUE_NAMES) == ObProfileSchema::MAX_PARAMS, "array size");
@@ -13368,7 +13349,8 @@ OB_SERIALIZE_MEMBER(ObProfileSchema,
                     password_lock_time_,
                     password_verify_function_,
                     password_life_time_,
-                    password_grace_time_);
+                    password_grace_time_,
+                    password_rollover_time_);
 
 ObDirectorySchema::ObDirectorySchema()
   : ObSchema()

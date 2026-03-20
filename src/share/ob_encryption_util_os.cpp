@@ -689,7 +689,7 @@ void ObTdeEncryptEngineLoader::destroy()
   }
 }
 
-ENGINE* ObTdeEncryptEngineLoader::get_tde_engine(ObCipherOpMode &mode) const
+ENGINE* ObTdeEncryptEngineLoader::get_tde_engine(const ObCipherOpMode mode) const
 {
   ObEncryptEngineType type = OB_INVALID_ENGINE;
   if (ObEncryptionUtil::is_aes_encryption(mode)) {

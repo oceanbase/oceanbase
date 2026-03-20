@@ -57,7 +57,9 @@ public:
                                 const common::ObString &passwd,
                                 common::ObSqlString &sql_string,
                                 const common::ObString &plugin,
-                                const bool is_oracle_mode);
+                                const bool is_oracle_mode,
+                                const bool retain_current_password,
+                                const bool discard_old_password);
   static int gen_set_max_connections_sql(const obrpc::ObAccountArg &account,
                                         const uint64_t max_connections_per_hour,
                                         const uint64_t max_user_connections,

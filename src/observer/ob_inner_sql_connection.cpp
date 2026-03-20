@@ -684,7 +684,7 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   ObSQLUtils::handle_audit_record(false, sql::PSCursor == audit_record.exec_timestamp_.exec_type_
                                          ? EXECUTE_PS_EXECUTE :
                                            (is_from_pl ? EXECUTE_PL_EXECUTE : EXECUTE_INNER),
-                                  session, sql_ctx.is_sensitive_);
+                                  session, sql_ctx.is_sensitive_, sql_ctx.cur_stmt_, &result_set, sql_ctx.schema_guard_);
 
   // 临时allocator 申请的内存，需要在这里 置 NULL
   {

@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_profile_resolver.h"
 #include "sql/resolver/ddl/ob_create_profile_stmt.h"
+#include "sql/resolver/ob_resolver_utils.h"
+#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {
@@ -44,6 +46,24 @@ int ObUserProfileResolver::fill_arg(int64_t type, ObObj &value, obrpc::ObProfile
   if (OB_ISNULL(params_.allocator_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid allocator", K(ret));
+  } else if (ObProfileSchema::PASSWORD_ROLLOVER_TIME == type) {
+    // Check data version for PASSWORD_ROLLOVER_TIME
+    uint64_t tenant_id = OB_INVALID_ID;
+    uint64_t compat_version = 0;
+    if (OB_ISNULL(params_.session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info is null", K(ret));
+    } else if (OB_FALSE_IT(tenant_id = params_.session_info_->get_effective_tenant_id())) {
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+    } else if (!(compat_version >= DATA_VERSION_4_4_2_1)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("PASSWORD_ROLLOVER_TIME not supported before DATA_VERSION_4_4_2_1", K(ret), K(compat_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "PASSWORD_ROLLOVER_TIME before version 4.4.2.1");
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else {
     switch (type) {
     case ObProfileSchema::FAILED_LOGIN_ATTEMPTS:
@@ -57,6 +77,7 @@ int ObUserProfileResolver::fill_arg(int64_t type, ObObj &value, obrpc::ObProfile
     case ObProfileSchema::PASSWORD_LOCK_TIME:
     case ObProfileSchema::PASSWORD_LIFE_TIME:
     case ObProfileSchema::PASSWORD_GRACE_TIME:
+    case ObProfileSchema::PASSWORD_ROLLOVER_TIME:
       switch (value.get_type()) {
       case ObNumberType: {
         if (OB_FAIL(value.get_number(num_value))) {
@@ -100,9 +121,16 @@ int ObUserProfileResolver::fill_arg(int64_t type, ObObj &value, obrpc::ObProfile
       LOG_WARN("not support profile type", K(type));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "specified profile type");
     }
-    if (OB_SUCC(ret) && schema_value <= 0) {
-      ret = OB_ERR_INVALID_RESOURCE_LIMIT;
-      LOG_USER_ERROR(OB_ERR_INVALID_RESOURCE_LIMIT, ObProfileSchema::PARAM_VALUE_NAMES[type]);
+    if (OB_SUCC(ret)) {
+      if (ObProfileSchema::PASSWORD_ROLLOVER_TIME == type) {
+        if (schema_value < 0) {
+          ret = OB_ERR_INVALID_RESOURCE_LIMIT;
+          LOG_USER_ERROR(OB_ERR_INVALID_RESOURCE_LIMIT, ObProfileSchema::PARAM_VALUE_NAMES[type]);
+        }
+      } else if (schema_value <= 0) {
+        ret = OB_ERR_INVALID_RESOURCE_LIMIT;
+        LOG_USER_ERROR(OB_ERR_INVALID_RESOURCE_LIMIT, ObProfileSchema::PARAM_VALUE_NAMES[type]);
+      }
     }
   }
 
@@ -206,79 +234,128 @@ int ObUserProfileResolver::resolve(const ParseNode &parse_tree)
 
       for (int64_t i = 0; OB_SUCC(ret) && i < param_list->num_child_; ++i) {
         ParseNode *param_pair = NULL;
-        ParseNode *param_type = NULL;
         ParseNode *param_value = NULL;
 
         if (OB_ISNULL(param_pair = param_list->children_[i])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("param is null", K(ret));
-        } else if (param_pair->type_ != T_PROFILE_PAIR
-                   || param_pair->num_child_ != 2) {
+        } else if (param_pair->type_ != T_PROFILE_PAIR || param_pair->num_child_ != 1) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected node type", K(ret), K(param_pair->type_), K(param_pair->num_child_));
-        } else if (OB_ISNULL(param_type = param_pair->children_[0])
-                   || param_type->type_ != T_INT) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected node", K(ret), KP(param_type));
-        } else if (OB_ISNULL(param_value = param_pair->children_[1])) {
+        } else if (OB_ISNULL(param_value = param_pair->children_[0])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected node", KP(ret));
         } else {
-          if (ObProfileSchema::PASSWORD_VERIFY_FUNCTION == param_type->value_) {
+          int64_t param_type = param_pair->value_;
+          if (ObProfileSchema::PASSWORD_VERIFY_FUNCTION == param_type) {
             if (OB_FAIL(resolver_password_verify_function(param_value, arg))) {
               LOG_WARN("fail to resolver verify function name", K(ret));
             }
           } else {
             ObObjParam numeric_value;
-            ObString literal_prefix;
-            ObDataTypeCastParams dtc_params = params_.session_info_->get_dtc_params();
-            const ObLengthSemantics length_semantics
-                = params_.session_info_->get_local_nls_length_semantics();
-            switch(param_value->type_) {
-            case T_INT:
-            case T_NUMBER:
-            case T_DOUBLE:
-            case T_FLOAT:
-              if (OB_FAIL(ObResolverUtils::resolve_const(param_value,
-                                                         create_profile_stmt->get_stmt_type(),
-                                                         *params_.allocator_,
-                                                         dtc_params.connection_collation_,
-                                                         dtc_params.nls_collation_nation_,
-                                                         NULL,
-                                                         numeric_value,
-                                                         false,
-                                                         literal_prefix,
-                                                         length_semantics,
-                                                         dtc_params.nls_collation_,
-                                                         NULL,
-                                                         params_.session_info_->get_sql_mode(),
-                                                         false, // FIXME: enable decimal int
-                                                         compat_type,
-                                                         false /*enable_mysql_compatible_dates*/,
-                                                         params_.session_info_->get_min_const_integer_precision(),
-                                                         params_.session_info_->get_exec_min_cluster_version()))) {
-                LOG_WARN("fail to resolve const", K(ret));
-              } else if (OB_FAIL(fill_arg(param_type->value_, numeric_value, arg))) {
-                LOG_WARN("fail to fill arg", K(ret), K(param_type->value_));
+            switch (param_value->type_) {
+              case T_INT:
+              case T_NUMBER:
+              case T_DOUBLE:
+              case T_FLOAT:
+              case T_OP_ADD:
+              case T_OP_MINUS:
+              case T_OP_MUL:
+              case T_OP_DIV: {
+                // Resolve numeric constant expression using resolve_const_expr
+                ObRawExpr *raw_expr = NULL;
+                if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_, *param_value, raw_expr, NULL))) {
+                  LOG_WARN("fail to resolve const expr", K(ret));
+                } else if (OB_ISNULL(raw_expr)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("resolved expr is null", K(ret));
+                } else if (!raw_expr->is_static_scalar_const_expr()) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("expression is not a static const expr", K(ret), K(*raw_expr));
+                } else {
+                  ObObj result_obj;
+                  bool got_result = false;
+                  if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(params_.session_info_->get_cur_exec_ctx(),
+                                                                        raw_expr,
+                                                                        result_obj,
+                                                                        got_result,
+                                                                        *params_.allocator_))) {
+                    LOG_WARN("failed to calc const or calculable expr", K(ret));
+                  } else if (!got_result) {
+                    ret = OB_ERR_INVALID_RESOURCE_LIMIT;
+                    LOG_WARN("failed to get result from expression", K(ret));
+                  } else if (!ob_is_numeric_type(result_obj.get_type())) {
+                    ret = OB_ERR_INVALID_RESOURCE_LIMIT;
+                    LOG_WARN("expression result is not numeric", K(ret), K(result_obj.get_type()));
+                  } else {
+                    if (result_obj.is_number()) {
+                      number::ObNumber num;
+                      if (OB_FAIL(result_obj.get_number(num))) {
+                        LOG_WARN("fail to get number", K(ret));
+                      } else {
+                        numeric_value.set_number(num);
+                      }
+                    } else if (ob_is_double_type(result_obj.get_type())) {
+                      double d_value = 0;
+                      if (OB_FAIL(result_obj.get_double(d_value))) {
+                        LOG_WARN("fail to get double", K(ret));
+                      } else {
+                        numeric_value.set_double(d_value);
+                      }
+                    } else if (ob_is_float_type(result_obj.get_type())) {
+                      float f_value = 0;
+                      if (OB_FAIL(result_obj.get_float(f_value))) {
+                        LOG_WARN("fail to get float", K(ret));
+                      } else {
+                        numeric_value.set_float(f_value);
+                      }
+                    } else if (ob_is_integer_type(result_obj.get_type())) {
+                      number::ObNumber num;
+                      if (OB_FAIL(num.from(result_obj.get_int(), *params_.allocator_))) {
+                        LOG_WARN("fail to convert int to number", K(ret));
+                      } else {
+                        numeric_value.set_number(num);
+                      }
+                    } else if (ob_is_decimal_int(result_obj.get_type())) {
+                      number::ObNumber num;
+                      if (OB_FAIL(wide::to_number(result_obj.get_decimal_int(),
+                                                  result_obj.get_int_bytes(),
+                                                  result_obj.get_scale(),
+                                                  *params_.allocator_,
+                                                  num))) {
+                        LOG_WARN("fail to convert decimal int to number", K(ret));
+                      } else {
+                        numeric_value.set_number(num);
+                      }
+                    } else {
+                      ret = OB_ERR_INVALID_RESOURCE_LIMIT;
+                      LOG_WARN("unsupported result type for profile expression", K(ret), K(result_obj.get_type()));
+                    }
+                    if (OB_SUCC(ret)) {
+                      if (OB_FAIL(fill_arg(param_type, numeric_value, arg))) {
+                        LOG_WARN("fail to fill arg from expression", K(ret), K(param_type));
+                      }
+                    }
+                  }
+                }
+                break;
               }
-              break;
-            case T_PROFILE_UNLIMITED:
-              if (OB_FAIL(arg.schema_.set_value(param_type->value_, INT64_MAX))) {
-                LOG_WARN("fail to set schema value", K(ret));
-              }
-              break;
-            case T_PROFILE_DEFAULT:
-              if (0 == arg.schema_.get_profile_name_str().case_compare("DEFAULT")) {
+              case T_PROFILE_UNLIMITED:
+                if (OB_FAIL(arg.schema_.set_value(param_type, INT64_MAX))) {
+                  LOG_WARN("fail to set schema value", K(ret));
+                }
+                break;
+              case T_PROFILE_DEFAULT:
+                if (0 == arg.schema_.get_profile_name_str().case_compare("DEFAULT")) {
+                  ret = OB_ERR_INVALID_RESOURCE_LIMIT;
+                  LOG_WARN("invalid default profile can not have a default value", K(ret));
+                } else if (OB_FAIL(arg.schema_.set_value(param_type, ObProfileSchema::DEFAULT_VALUE))) {
+                  LOG_WARN("fail to set schema default value", K(param_type), K(ret));
+                }
+                break;
+              default:
                 ret = OB_ERR_INVALID_RESOURCE_LIMIT;
-                LOG_WARN("invalid default profile can not have a default value", K(ret));
-              } else if (OB_FAIL(arg.schema_.set_value(param_type->value_,
-                                                       ObProfileSchema::DEFAULT_VALUE))) {
-                LOG_WARN("fail to set schema default value", K(param_type->value_), K(ret));
-              }
-              break;
-            default:
-              ret = OB_ERR_INVALID_RESOURCE_LIMIT;
-              LOG_WARN("unknown value type", K(param_value->type_));
+                LOG_WARN("unknown value type", K(param_value->type_));
             }
           }
         }

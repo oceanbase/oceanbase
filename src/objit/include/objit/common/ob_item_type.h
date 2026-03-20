@@ -975,6 +975,8 @@ typedef enum ObItemType
   T_FUN_SYS_AI_PROMPT = 1929,
   T_FUN_SYS_VEC_VISIBLE = 1930, // vector index table 5
   T_FUN_SYS_NLS_CHARSET_ID = 1948,
+  T_FUN_SYS_AUDIT_LOG_PASSWORD_SET = 1949,
+  T_FUN_SYS_AUDIT_LOG_PASSWORD_GET = 1950,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,

@@ -424,6 +424,7 @@
 # 573: __wr_active_session_history_v2
 # 577: __all_tablet_to_global_temporary_table
 # 579: __wr_sqlstat_v2
+# 591: __all_audit_log_encryption_password
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1354,6 +1355,8 @@
 # 12580: __all_tablet_to_global_temporary_table  # BASE_TABLE_NAME
 # 12582: __all_virtual_wr_sqlstat_v2
 # 12582: __wr_sqlstat_v2  # BASE_TABLE_NAME
+# 12599: __all_virtual_audit_log_encryption_password
+# 12599: __all_audit_log_encryption_password  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT

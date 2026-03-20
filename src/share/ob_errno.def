@@ -1078,7 +1078,7 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_DUPLICATED_UNIQUE_KEY, -5358, ER_DUP_ENTRY, "2300
 DEFINE_ORACLE_ERROR(OB_DOUBLE_OVERFLOW, -5359, ER_WARN_DATA_OUT_OF_RANGE, "22003", "result Double value is out of range", 1426, "Double value overflow");
 
 DEFINE_ORACLE_ERROR(OB_ERR_NO_SYS_PRIVILEGE, -5360, -1, "HY000", "insufficient privileges", 1031, "insufficient privileges");
-DEFINE_ORACLE_ERROR_EXT(OB_ERR_NO_LOGIN_PRIVILEGE, -5361, -1, "HY000", "user lacks CREATE SESSION privilege logon denied", "user %.*s lacks CREATE SESSION privilege; logon denied", 1045, "user lacks CREATE SESSION privilege; logon denied", "user %.*s lacks CREATE SESSION privilege; logon denied");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_NO_LOGIN_PRIVILEGE, -5361, -1, "HY000", "user lacks CREATE SESSION privilege logon denied", "user %.*s lacks %.*s privilege; logon denied", 1045, "user lacks CREATE SESSION privilege; logon denied", "user %.*s lacks %.*s privilege; logon denied");
 DEFINE_ORACLE_ERROR(OB_ERR_CANNOT_REVOKE_PRIVILEGES_YOU_DID_NOT_GRANT, -5362, OB_ERR_NO_GRANT, "42000", "No such grant defined", 1927, "cannot REVOKE privileges you did not grant");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_SYSTEM_PRIVILEGES_NOT_GRANTED_TO, -5363, -1, "HY000", "system privileges not granted to", "system privileges not granted to '%.*s'", 1952, "system privileges not granted to", "system privileges not granted to '%.*s'");
 DEFINE_ORACLE_ERROR(OB_ERR_ONLY_SELECT_AND_ALTER_PRIVILEGES_ARE_VALID_FOR_SEQUENCES, -5364, -1, "HY000", "only SELECT and ALTER privileges are valid for sequences", 2205, "only SELECT and ALTER privileges are valid for sequences");

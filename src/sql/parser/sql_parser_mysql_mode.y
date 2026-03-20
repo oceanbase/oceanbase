@@ -271,7 +271,7 @@ END_P SET_VAR DELIMITER
 %token <non_reserved_keyword>
 //-----------------------------non_reserved keyword begin-------------------------------------------
         ACCESS ACCESS_INFO ACCESSID ACCESSKEY ACCESSTYPE ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE AI ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
-        APPID APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
+        APPID APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE APPLICATION_PASSWORD_ADMIN
         ARBITRATION ARG_MAX ARG_MIN ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
         AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ARCHIVELOG_PIECE ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH API_MODE APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
 
@@ -347,7 +347,7 @@ END_P SET_VAR DELIMITER
         RANGE RB_AND_AGG RB_AND_CARDINALITY_AGG RB_BUILD_AGG RB_ITERATE RB_OR_AGG RB_OR_CARDINALITY_AGG REBUILD RECOMPILE RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
-        RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
+        RESTORE RESUME RETAIN RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
         ROARINGBITMAP ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROW_GROUP_SIZE ROW_INDEX_STRIDE ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
         RANK READ_ERROR_LOG READ_ONLY RECOVERY REJECT ROLE RULE RULES
@@ -461,7 +461,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_user_stmt user_specification user_specification_list user password opt_host_name user_with_host_name opt_auth_plugin opt_auth_plugin_with
 %type <node> drop_user_stmt user_list user_specification_without_password user_specification_with_password
 %type <node> create_role_stmt drop_role_stmt role_list role_with_host role user_specification_without_password_list
-%type <node> set_password_stmt opt_for_user
+%type <node> set_password_stmt opt_for_user opt_retain_current_password
 %type <node> rename_user_stmt rename_info rename_list
 %type <node> rename_table_stmt rename_table_actions rename_table_action
 %type <node> truncate_table_stmt
@@ -17924,21 +17924,21 @@ STRING_VALUE
  *
  *****************************************************************************/
 set_password_stmt:
-SET PASSWORD opt_for_user COMP_EQ STRING_VALUE
+SET PASSWORD opt_for_user COMP_EQ STRING_VALUE opt_retain_current_password
 {
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $5, need_enc_node, NULL, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, $5, need_enc_node, NULL, NULL, NULL, $6);
 }
-| SET PASSWORD opt_for_user COMP_EQ PASSWORD '(' password ')'
+| SET PASSWORD opt_for_user COMP_EQ PASSWORD '(' password ')' opt_retain_current_password
 {
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $7, need_enc_node, NULL, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, $7, need_enc_node, NULL, NULL, NULL, $9);
 }
-| alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin BY password
+| alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin BY password opt_retain_current_password
 {
   (void)($1);
   ParseNode *need_enc_node = NULL;
@@ -17946,9 +17946,9 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   malloc_terminal_node(from_alter, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $7, need_enc_node, NULL, $5, from_alter);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, $7, need_enc_node, NULL, $5, from_alter, $8);
 }
-| alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin AS password
+| alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin AS password opt_retain_current_password
 {
   (void)($1);
   ParseNode *need_enc_node = NULL;
@@ -17956,23 +17956,44 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   malloc_terminal_node(from_alter, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $7, need_enc_node, NULL, $5, from_alter);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, $7, need_enc_node, NULL, $5, from_alter, $8);
 }
 | alter_with_opt_hint USER user_with_host_name require_specification
 {
   (void)($1);
   ParseNode *require_node = NULL;
   merge_nodes(require_node, result, T_TLS_OPTIONS, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, NULL, NULL, require_node, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, NULL, NULL, require_node, NULL, NULL, NULL);
 }
 | alter_with_opt_hint USER user_with_host_name WITH resource_option_list
 {
   (void)($1);
   ParseNode *res_opt_node = NULL;
   merge_nodes(res_opt_node, result, T_USER_RESOURCE_OPTIONS, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, NULL, NULL, res_opt_node, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, NULL, NULL, res_opt_node, NULL, NULL, NULL);
+}
+| alter_with_opt_hint USER user_with_host_name DISCARD OLD PASSWORD
+{
+  (void)($1);
+  ParseNode *from_alter = NULL;
+  ParseNode *retain_or_discard_node = NULL;
+  malloc_terminal_node(from_alter, result->malloc_pool_, T_BOOL);
+  malloc_terminal_node(retain_or_discard_node, result->malloc_pool_, T_BOOL);
+  retain_or_discard_node->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, NULL, NULL, NULL, NULL, from_alter, retain_or_discard_node);
 }
 ;
+
+opt_retain_current_password:
+RETAIN CURRENT PASSWORD
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_BOOL);
+  $$->value_ = 1;
+}
+| /**/
+{
+  $$ = NULL;
+}
 
 opt_for_user:
 FOR user opt_host_name
@@ -19003,6 +19024,11 @@ role_with_host
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_PLAINACCESS;
+}
+| APPLICATION_PASSWORD_ADMIN
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_APPLICATION_PASSWORD_ADMIN;
 }
 ;
 
@@ -27497,6 +27523,7 @@ ACCESS_INFO
 |       READ_ONLY
 |       REBUILD
 |       RECOMPILE
+|       RETAIN
 |       RECOVER
 |       RECOVERY
 |       RECOVERY_WINDOW
@@ -27871,6 +27898,7 @@ unreserved_keyword_ambiguous_roles:
 |       SHUTDOWN
 |       ENCRYPT
 |       DECRYPT
+|       APPLICATION_PASSWORD_ADMIN
 ;
 
 /*注释掉的关键字有规约冲突暂时注释了,都是一些sql中常用的关键字,后面按需打开,增加这块代码逻辑是为了支持在mysql中允许以

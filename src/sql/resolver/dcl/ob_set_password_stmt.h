@@ -48,6 +48,10 @@ public:
   uint64_t get_max_connections_per_hour() { return max_connections_per_hour_; }
   void set_max_user_connections(uint64_t value) { max_user_connections_ = value; }
   uint64_t get_max_user_connections() { return max_user_connections_; }
+  bool get_retain_current_password() const { return retain_current_password_; }
+  void set_retain_current_password(bool retain_current_password) { retain_current_password_ = retain_current_password; }
+  bool get_discard_old_password() const { return discard_old_password_; }
+  void set_discard_old_password(bool discard_old_password) { discard_old_password_ = discard_old_password; }
   DECLARE_VIRTUAL_TO_STRING;
 private:
   // data members
@@ -63,6 +67,8 @@ private:
   uint64_t max_connections_per_hour_;
   uint64_t max_user_connections_;
   common::ObStrings plugins_;
+  bool retain_current_password_;
+  bool discard_old_password_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSetPasswordStmt);
 };

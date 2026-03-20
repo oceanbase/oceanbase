@@ -215,11 +215,16 @@ int ObExprAuditLogFunc::parse_definition(const ObString &str,
 #ifdef OB_BUILD_AUDIT_SECURITY
   definition = str;
   definition = definition.trim();
-  uint64_t audit_class = 0;
+  ObArenaAllocator allocator;
+  ObAuditLogFilter filter;
+  filter.set_allocator(&allocator);
   if (OB_UNLIKELY(definition.empty())) {
     is_valid = false;
     error_info = "JSON parsing error";
-  } else if (OB_FAIL(ObAuditLogUtils::parse_filter_definition(definition, is_valid, audit_class))) {
+  } else if (OB_FAIL(ObAuditLogUtils::parse_filter_definition(definition,
+                                                              is_valid,
+                                                              filter,
+                                                              allocator))) {
     LOG_WARN("failed to parse filter definition", K(ret));
   } else if (!is_valid) {
     error_info = "JSON parsing error";
@@ -232,11 +237,16 @@ int ObExprAuditLogFunc::fill_res_datum(const ObExpr &expr,
                                        ObEvalCtx &ctx,
                                        const bool is_valid,
                                        const common::ObString &error_info,
-                                       ObDatum &expr_datum)
+                                       ObDatum &expr_datum,
+                                       const common::ObString &value)
 {
   int ret = OB_SUCCESS;
   if (is_valid) {
-    expr_datum.set_string("OK");
+    if (value.empty()) {
+      expr_datum.set_string("OK");
+    } else {
+      expr_datum.set_string(value);
+    }
   } else {
     int64_t buf_len = error_info.length() + strlen("ERROR: .") + 1;
     int64_t res_len = 0;
@@ -537,6 +547,209 @@ int ObExprAuditLogRemoveUser::eval_remove_user(const ObExpr &expr, ObEvalCtx &ct
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(fill_res_datum(expr, ctx, is_valid, error_info, expr_datum))) {
+      LOG_WARN("failed to fill expr_datum", K(ret), K(is_valid), K(error_info));
+    }
+  }
+#endif
+  return ret;
+}
+
+ObExprAuditLogPasswordSet::ObExprAuditLogPasswordSet(ObIAllocator &alloc)
+  : ObExprAuditLogPassword(alloc, T_FUN_SYS_AUDIT_LOG_PASSWORD_SET, N_AUDIT_LOG_ENCRYPTION_PASSWOR_SET, 0)
+{
+}
+
+int ObExprAuditLogPasswordSet::calc_result_type0(ObExprResType &type,
+                                                           ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_data_version(type_ctx))) {
+    LOG_WARN("failed to check data version");
+  } else {
+    type.set_varchar();
+    type.set_collation_type(type_ctx.get_coll_type());
+    type.set_collation_level(common::CS_LEVEL_COERCIBLE);
+    type.set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
+  }
+  return ret;
+}
+
+int ObExprAuditLogPasswordSet::cg_expr(ObExprCGCtx &op_cg_ctx,
+                                                 const ObRawExpr &raw_expr,
+                                                 ObExpr &expr) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(op_cg_ctx);
+  UNUSED(raw_expr);
+  expr.eval_func_ = eval_set_encryption_password;
+  return ret;
+}
+
+int ObExprAuditLogPasswordSet::eval_set_encryption_password(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_AUDIT_SECURITY
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null session", K(ret));
+  } else {
+    ObString error_info;
+    bool is_valid = true;
+    if (OB_FAIL(check_privilege(ctx, is_valid, error_info))) {
+      LOG_WARN("failed to check privilege", K(ret));
+    } else if (is_valid) {
+      uint64_t tenant_id = session->get_effective_tenant_id();
+      ObAuditLogTableOperator table_operator;
+      ObMySQLTransaction trans;
+      char password[OB_AUDIT_ENCRYPT_PASSWORD_LENGTH] = {0};
+      char enc_password[OB_MAX_ENCRYPTED_KEY_LENGTH];
+      int64_t encrypted_len = 0;
+      int64_t pwd_id = ObTimeUtility::current_time();
+      if (OB_FAIL(ObKeyGenerator::generate_encrypt_key_char(password, OB_AUDIT_ENCRYPT_PASSWORD_LENGTH))) {
+        LOG_WARN("failed to generate password", K(ret));
+      } else if (OB_FAIL(ObEncryptionUtil::encrypt_sys_data(tenant_id, password, OB_AUDIT_ENCRYPT_PASSWORD_LENGTH,
+                                                            enc_password, OB_MAX_ENCRYPTED_KEY_LENGTH, encrypted_len))) {
+        LOG_WARN("failed to encrypt password", K(ret), K(tenant_id));
+      } else if (OB_FAIL(trans.start(ctx.exec_ctx_.get_sql_proxy(), tenant_id))) {
+        LOG_WARN("failed to start transaction", K(ret));
+      } else if (OB_FAIL(table_operator.init(tenant_id, &trans))) {
+        LOG_WARN("failed to init table operator", K(ret));
+      } else if (OB_FAIL(table_operator.set_audit_encryption_password(tenant_id, pwd_id, ObString(encrypted_len, enc_password)))) {
+        LOG_WARN("failed to set audit encryption password", K(ret), K(encrypted_len));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(fill_res_datum(expr, ctx, is_valid, error_info, expr_datum))) {
+      LOG_WARN("failed to fill expr_datum", K(ret), K(is_valid), K(error_info));
+    }
+  }
+#endif
+  return ret;
+}
+
+ObExprAuditLogPassword::ObExprAuditLogPassword(ObIAllocator &alloc,
+                                                   ObExprOperatorType type,
+                                                   const char *name,
+                                                   int32_t param_num)
+  : ObExprAuditLogFunc(alloc, type, name, param_num)
+{
+}
+
+int ObExprAuditLogPassword::check_data_version(common::ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  const ObSQLSessionInfo *session = type_ctx.get_session();
+  uint64_t data_version = 0;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null session", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
+  } else if (!(data_version >= DATA_VERSION_4_4_2_1)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, get_name());
+  }
+  return ret;
+}
+
+ObExprAuditLogPasswordGet::ObExprAuditLogPasswordGet(ObIAllocator &alloc)
+  : ObExprAuditLogPassword(alloc, T_FUN_SYS_AUDIT_LOG_PASSWORD_GET, N_AUDIT_LOG_ENCRYPTION_PASSWORD_GET, ObSqlParamNumFlag::ZERO_OR_ONE)
+{
+}
+
+int ObExprAuditLogPasswordGet::calc_result_typeN(ObExprResType &type,
+                                                      ObExprResType *types_array,
+                                                      int64_t param_num,
+                                                      ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_data_version(type_ctx))) {
+    LOG_WARN("failed to check data version");
+  } else if (param_num < 0 || param_num > 1) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid param num", K(ret), K(param_num));
+  } else {
+    type.set_varchar();
+    type.set_collation_type(type_ctx.get_coll_type());
+    type.set_collation_level(common::CS_LEVEL_COERCIBLE);
+    type.set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
+    if (1 == param_num && OB_NOT_NULL(types_array)) {
+      types_array[0].set_calc_type(ObUInt64Type);
+    }
+  }
+  return ret;
+}
+
+int ObExprAuditLogPasswordGet::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &expr) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr_cg_ctx);
+  UNUSED(raw_expr);
+  expr.eval_func_ = eval_get_encryption_password;
+  return ret;
+}
+
+int ObExprAuditLogPasswordGet::eval_get_encryption_password(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_AUDIT_SECURITY
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  ObDatum *arg0 = NULL;
+  ObString enc_password;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null session", K(ret));
+  } else if (1 == expr.arg_cnt_ && OB_FAIL(expr.eval_param_value(ctx, arg0))) {
+    LOG_WARN("evaluate parameters values failed", K(ret));
+  } else {
+    ObString error_info;
+    bool is_valid = true;
+    char password[OB_MAX_ENCRYPTED_KEY_LENGTH] = {0};
+    int64_t pwd_len = 0;
+    char *res_buf = NULL;
+    if (OB_FAIL(check_privilege(ctx, is_valid, error_info))) {
+      LOG_WARN("failed to check privilege", K(ret));
+    } else if (is_valid) {
+      uint64_t tenant_id = session->get_effective_tenant_id();
+      ObAuditLogTableOperator table_operator;
+      ObMySQLTransaction trans;
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &tmp_allocator = alloc_guard.get_allocator();
+      int64_t pwd_id = 0;
+      int64_t cur_pwd_id = 0;
+      if (OB_NOT_NULL(arg0)) {
+        pwd_id = arg0->get_uint64();
+      }
+      if (OB_FAIL(trans.start(ctx.exec_ctx_.get_sql_proxy(), tenant_id))) {
+        LOG_WARN("fail to start transaction", K(ret));
+      } else if (OB_FAIL(table_operator.init(tenant_id, &trans))) {
+        LOG_WARN("failed to init audit log table operator", K(ret), K(tenant_id));
+      } else if (OB_FAIL(table_operator.get_audit_encryption_password(tenant_id, pwd_id, tmp_allocator,
+                                                                      cur_pwd_id, enc_password))) {
+        LOG_WARN("failed to get audit encryption password", K(ret), K(tenant_id), K(pwd_id));
+      } else if (enc_password.empty()) {
+        is_valid = false;
+        error_info = "Audit encryption password not found";
+      } else if (OB_FAIL(ObEncryptionUtil::decrypt_sys_data(tenant_id, enc_password.ptr(), enc_password.length(),
+                                                            password, OB_MAX_ENCRYPTED_KEY_LENGTH, pwd_len))) {
+        LOG_WARN("failed to decrypt sys data", K(ret), K(tenant_id), K(enc_password));
+      } else if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, pwd_len))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret), K(pwd_len));
+      } else {
+        MEMCPY(res_buf, password, pwd_len);
+      }
+      if (trans.is_started()) {
+        int temp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(ret), K(temp_ret));
+          ret = OB_SUCC(ret) ? temp_ret : ret;
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(fill_res_datum(expr, ctx, is_valid, error_info, expr_datum, ObString(pwd_len, res_buf)))) {
       LOG_WARN("failed to fill expr_datum", K(ret), K(is_valid), K(error_info));
     }
   }

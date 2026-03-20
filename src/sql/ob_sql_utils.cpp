@@ -5100,7 +5100,10 @@ void ObSQLUtils::record_execute_time(const ObPhyPlanType type,
 int ObSQLUtils::handle_audit_record(bool need_retry,
                                     const ObExecuteMode exec_mode,
                                     ObSQLSessionInfo &session,
-                                    bool is_sensitive)
+                                    bool is_sensitive,
+                                    const ObStmt *stmt,
+                                    ObResultSet *result,
+                                    share::schema::ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
   if (need_retry) {
@@ -5121,7 +5124,10 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
         }
       }
 #ifdef OB_BUILD_AUDIT_SECURITY
-      (void) ObAuditLogUtils::handle_sql_audit_log(session, audit_record, is_sensitive);
+      (void) ObAuditLogUtils::handle_sql_audit_log(session, audit_record, is_sensitive, stmt, result, schema_guard);
+      if (NULL != result) {
+        (void) ObSecurityAuditUtils::handle_security_audit(*result, schema_guard, stmt, "", "", ret, is_sensitive, &audit_record);
+      }
 #endif
     }
   }

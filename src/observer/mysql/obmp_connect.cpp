@@ -479,15 +479,16 @@ int ObMPConnect::process()
                                     use_ssl ? "true" : "false",
                                     get_cs_protocol_type_name(protoType));
 
-      (void)ObSecurityAuditUtils::handle_security_audit(*session,
-                                                        stmt::T_LOGIN,
-                                                        ObString::make_string("CONNECT"),
-                                                        comment_text.string(),
-                                                        proc_ret);
+      (void)ObSecurityAuditUtils::handle_connect_security_audit(*session,
+                                                                stmt::T_LOGIN,
+                                                                ObString::make_string("CONNECT"),
+                                                                comment_text.string(),
+                                                                user_name_, client_ip_, db_name_,
+                                                                get_peer(), proc_ret);
       if (OB_SUCC(proc_ret)) {
-        ObAuditLogUtils::hanlde_connect_audit_log(*session, "LOGIN");
+        ObAuditLogUtils::handle_connect_audit_log(*session, "LOGIN");
       } else {
-        ObAuditLogUtils::hanlde_connect_fail_audit_log(*session, user_name_, client_ip_,
+        ObAuditLogUtils::handle_connect_fail_audit_log(*session, user_name_, client_ip_,
                                                        db_name_, get_peer(), proc_ret);
       }
 #endif

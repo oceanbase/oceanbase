@@ -31934,6 +31934,8 @@ int ObDDLService::set_passwd(const ObSetPasswdArg &arg)
   const uint64_t max_user_connections = arg.max_user_connections_;
   const share::schema::ObSSLType ssl_type = arg.ssl_type_;
   const ObString &plugin = arg.plugin_;
+  const bool retain_current_password = arg.retain_current_password_;
+  const bool discard_old_password = arg.discard_old_password_;
 
   ObSchemaGetterGuard schema_guard;
   bool is_oracle_mode = false;
@@ -31965,11 +31967,13 @@ int ObDDLService::set_passwd(const ObSetPasswdArg &arg)
         }
       } else {
         if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name),
-              passwd, ddl_stmt_str, plugin, is_oracle_mode))) {
+              passwd, ddl_stmt_str, plugin, is_oracle_mode,
+              retain_current_password, discard_old_password))) {
           LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else if (OB_FAIL(set_passwd_in_trans(tenant_id, user_id, passwd,
-                                        &ddl_sql, schema_guard, plugin))) {
+                                        &ddl_sql, schema_guard, plugin,
+                                        retain_current_password, discard_old_password))) {
           LOG_WARN("Set passwd failed", K(tenant_id), K(user_id), K(passwd), K(ret));
         }
       }
@@ -32032,7 +32036,9 @@ int ObDDLService::set_passwd_in_trans(
     const common::ObString &new_passwd,
     const ObString *ddl_stmt_str,
     share::schema::ObSchemaGetterGuard &schema_guard,
-    const common::ObString &plugin)
+    const common::ObString &plugin,
+    const bool retain_current_password,
+    const bool discard_old_password)
 {
   int ret = OB_SUCCESS;
   ObDDLSQLTransaction trans(schema_service_);
@@ -32054,7 +32060,9 @@ int ObDDLService::set_passwd_in_trans(
                                           new_passwd,
                                           ddl_stmt_str,
                                           trans,
-                                          plugin))) {
+                                          plugin,
+                                          retain_current_password,
+                                          discard_old_password))) {
         LOG_WARN("fail to set password", K(ret), K(tenant_id), K(user_id), K(new_passwd));
       }
       if (trans.is_started()) {
@@ -32687,10 +32695,23 @@ int ObDDLService::grant(const ObGrantArg &arg)
               bool is_oracle_mode = false;
               if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(arg.tenant_id_, is_oracle_mode))) {
                 LOG_WARN("fail to check is oracle mode", K(ret));
-              } else if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name), pwd, ddl_stmt_str, plugin, is_oracle_mode))) {
+              } else if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name),
+                                                                       pwd,
+                                                                       ddl_stmt_str,
+                                                                       plugin,
+                                                                       is_oracle_mode,
+                                                                       false,
+                                                                       false))) {
                 LOG_WARN("gen set passwd sql failed", K(user_name), K(host_name), K(pwd), K(ret));
               } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
-              } else if (OB_FAIL(set_passwd_in_trans(arg.tenant_id_, user_id, pwd, &ddl_sql, schema_guard, plugin))) {
+              } else if (OB_FAIL(set_passwd_in_trans(arg.tenant_id_,
+                                                     user_id,
+                                                     pwd,
+                                                     &ddl_sql,
+                                                     schema_guard,
+                                                     plugin,
+                                                     false /*retain_current_password*/,
+                                                     false /*discard_old_password*/))) {
                 LOG_WARN("Set password error", KR(ret), K(arg), K(user_id), K(pwd), K(ddl_sql));
               }
             }
@@ -33345,6 +33366,12 @@ int ObDDLService::grant_revoke_user(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_3_5_3 or DATA_VERSION_4_4_2_0", K(ret), K(priv_set));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke create sensitive rule/plainaccess privilege");
+    } else if (compat_version < DATA_VERSION_4_4_2_1
+               && !is_ora_mode
+               && (0 != (priv_set & OB_PRIV_APPLICATION_PASSWORD_ADMIN))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_4_2_1", K(ret), K(priv_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke application_password_admin privilege");
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {

@@ -613,7 +613,10 @@ public:
   static int handle_audit_record(bool need_retry,
                                  const ObExecuteMode exec_mode,
                                  ObSQLSessionInfo &session,
-                                 bool is_sensitive = false);
+                                 bool is_sensitive = false,
+                                 const ObStmt *stmt = NULL,
+                                 ObResultSet *result = NULL,
+                                 share::schema::ObSchemaGetterGuard *schema_guard = NULL);
   static void fixup_commit_time(ObSQLSessionInfo &session);
   static int64_t get_query_record_size_limit(uint64_t tenant_id)
   {

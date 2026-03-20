@@ -1532,6 +1532,10 @@ DEF_STR_WITH_CHECKER(audit_log_strategy, OB_TENANT_PARAMETER, "ASYNCHRONOUS",
          "SYNCHRONOUS: Log synchronously.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
          "ASYNCHRONOUS, PERFORMANCE, SYNCHRONOUS");
+DEF_STR_WITH_CHECKER(audit_log_encryption, OB_TENANT_PARAMETER, "NONE",
+         common::ObConfigAuditLogEncryptionChecker,
+         "the type of encryption for the audit log file, values: NONE, AES",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //ddl 超时时间
 DEF_TIME(_ob_ddl_timeout, OB_CLUSTER_PARAMETER, "1000s", "[1s,3216672000s)",
@@ -3199,6 +3203,11 @@ DEF_CAP(syslog_sync_size_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
         "When the accumulated syslog data reaches this threshold, the system automatically performs disk synchronization."
         "Value 0 disables this function.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_restricted_session, OB_TENANT_PARAMETER, "False",
+         "specifies whether to enable restricted session",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "1000",
         "The upper limit of ivf iter-filter search nums. Range: [0,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

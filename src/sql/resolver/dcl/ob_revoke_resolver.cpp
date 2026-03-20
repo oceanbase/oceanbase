@@ -500,6 +500,11 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_3_5_3 or DATA_VERSION_4_4_2_0", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke create sensitive rule/plainaccess privilege");
+          } else if (compat_version < DATA_VERSION_4_4_2_1
+                     && ((priv_set & OB_PRIV_APPLICATION_PASSWORD_ADMIN) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_4_2_1", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke application_password_admin privilege");
           }
           if (OB_FAIL(ret)) {
           } else {
