@@ -15350,6 +15350,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
               LOG_WARN("fail to push back", KR(ret), KPC(tmp_table_schema));
             }
           }
+          common::ObArray<share::ObLSID> ls_id_array;
           if (OB_FAIL(ret)) {
           } else if (obrpc::ObAlterTableArg::DROP_PARTITION == alter_table_arg.alter_part_type_
                      || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
@@ -15365,6 +15366,12 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                 LOG_WARN("fail to init tablet drop", KR(ret), K(del_table_schema_ptrs));
               } else if (OB_FAIL(tablet_drop.add_drop_tablets_of_table_arg(del_table_schema_ptrs))) {
                 LOG_WARN("failed to add drop tablets", KR(ret), K(del_table_schema_ptrs));
+              } else if ((obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
+                         || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_)
+                        && del_table_schema_ptrs.count() > 0
+                        && OB_NOT_NULL(del_table_schema_ptrs.at(0))
+                        && OB_FAIL(tablet_drop.get_ls_from_table(*del_table_schema_ptrs.at(0), false, ls_id_array))) {
+                LOG_WARN("fail to get ls for truncate partition", KR(ret), K(del_table_schema_ptrs));
               } else if (OB_FAIL(tablet_drop.execute())) {
                 LOG_WARN("failed to execute", KR(ret), K(del_table_schema_ptrs));
               }
@@ -15386,7 +15393,6 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
               ObTableCreator table_creator(tenant_id,
                                            frozen_scn,
                                            trans);
-              common::ObArray<share::ObLSID> ls_id_array;
               const ObTableSchema *tmp_table_schema = inc_table_schema_ptrs.at(0);
               const ObTablegroupSchema *tablegroup_schema = NULL; // keep NULL if no tablegroup
               ObNewTableTabletAllocator new_table_tablet_allocator(tenant_id, schema_guard, sql_proxy_);
@@ -15408,10 +15414,15 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                   LOG_WARN("tablegroup_schema is null", KR(ret), KPC(tmp_table_schema));
                 }
               }
+              if (OB_SUCC(ret) && !ls_id_array.empty()
+                  && OB_FAIL(ObNewTableTabletAllocator::check_and_replace_ls(
+                      sql_proxy_, trans, tenant_id, ls_id_array))) {
+                LOG_WARN("fail to check and replace ls", KR(ret), K(tenant_id), K(ls_id_array));
+              }
               if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *tmp_table_schema, tablegroup_schema, true))) {
+              } else if (ls_id_array.empty() && OB_FAIL(new_table_tablet_allocator.prepare(trans, *tmp_table_schema, tablegroup_schema, true))) {
                 LOG_WARN("failed to prepare tablet allocator", KR(ret), KPC(tmp_table_schema));
-              } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
+              } else if (ls_id_array.empty() && OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
                 LOG_WARN("fail to get ls id array", KR(ret));
               } else if (OB_FAIL(table_creator.add_create_tablets_of_tables_arg(
                       inc_table_schema_ptrs,
@@ -25279,6 +25290,10 @@ int ObDDLService::inner_drop_and_create_tablet_(const int64_t &schema_version,
     } else if (OB_FAIL(tablet_drop.execute())) {
       LOG_WARN("failed to execute tablet drop", KR(ret), K(tenant_id));
     }
+  }
+  if (FAILEDx(ObNewTableTabletAllocator::check_and_replace_ls(
+      sql_proxy_, trans, tenant_id, orig_ls_id_array))) {
+    LOG_WARN("fail to check and replace ls", KR(ret), K(tenant_id), K(orig_ls_id_array));
   }
   if (OB_SUCC(ret)) {
     tenant_id = new_table_schemas.at(0)->get_tenant_id();

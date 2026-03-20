@@ -187,6 +187,11 @@ public:
   int get_ls_id_array(
       common::ObIArray<share::ObLSID> &ls_id_array);
   int finish(const bool commit);
+  static int check_and_replace_ls(
+             common::ObISQLClient *sql_proxy,
+             ObMySQLTransaction &trans,
+             const uint64_t tenant_id,
+             common::ObIArray<share::ObLSID> &ls_id_array);
 private:
   int alloc_ls_for_sys_tablet(
       const share::schema::ObTableSchema &table_schema);
@@ -246,20 +251,22 @@ private:
       const common::ObIArray<share::ObLSID> &ls_id_array,
       const int64_t partition_num);
   int check_and_replace_ls_(common::ObMySQLTransaction &trans, const uint64_t tenant_id);
-  void find_last_user_ls_(
-      const common::ObIArray<share::ObLSID> &ls_id_array,
-      int64_t &index);
-  int lock_and_check_ls_(
-      common::ObMySQLTransaction &trans,
-      const uint64_t tenant_id,
-      const common::ObIArray<share::ObLSID> &locked_ls_id_array,
-      const share::ObLSID &ls_id,
-      share::ObLSAttr &ls_attr);
-  int choose_new_ls_(
-      const uint64_t tenant_id,
-      const share::ObLSAttr &old_ls_attr,
-      const share::ObLSID &prev_ls_id,
-      share::ObLSID &new_ls_id);
+  static void find_last_user_ls_(
+         const common::ObIArray<share::ObLSID> &ls_id_array,
+         int64_t &index);
+  static int lock_and_check_ls_(
+             common::ObISQLClient *sql_proxy,
+             ObMySQLTransaction &trans,
+             const uint64_t tenant_id,
+             const common::ObIArray<share::ObLSID> &locked_ls_id_array,
+             const share::ObLSID &ls_id,
+             share::ObLSAttr &ls_attr);
+  static int choose_new_ls_(
+             common::ObISQLClient *sql_proxy,
+             const uint64_t tenant_id,
+             const share::ObLSAttr &old_ls_attr,
+             const share::ObLSID &prev_ls_id,
+             share::ObLSID &new_ls_id);
   int generate_ls_array_by_primary_schema(
       const share::schema::ObTableSchema &primary_schema,
       common::ObArray<share::ObLSID> &pre_ls_id_array);

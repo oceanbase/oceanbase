@@ -1821,19 +1821,35 @@ int ObNewTableTabletAllocator::check_and_replace_ls_(
     const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObLSID> locked_ls_id_array;
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObNewTableTabletAllocator not init", KR(ret));
-  } else if (OB_FAIL(locked_ls_id_array.reserve(ls_id_array_.count()))) {
-    LOG_WARN("reserve failed", KR(ret), K(tenant_id), K_(ls_id_array));
+  } else if (OB_FAIL(check_and_replace_ls(sql_proxy_, trans, tenant_id, ls_id_array_))) {
+    LOG_WARN("check_and_replace_ls failed", KR(ret), K(tenant_id), K_(ls_id_array));
+  }
+  return ret;
+}
+
+int ObNewTableTabletAllocator::check_and_replace_ls(
+    ObISQLClient *sql_proxy,
+    ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    ObIArray<ObLSID> &ls_id_array)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObLSID> locked_ls_id_array;
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql_proxy is null", KR(ret));
+  } else if (OB_FAIL(locked_ls_id_array.reserve(ls_id_array.count()))) {
+    LOG_WARN("reserve failed", KR(ret), K(tenant_id), K(ls_id_array));
   } else {
-    ARRAY_FOREACH(ls_id_array_, idx) {
+    ARRAY_FOREACH(ls_id_array, idx) {
       ObLSID prev_ls_id;
       ObLSID new_ls_id;
       ObLSAttr new_ls_attr;
       ObLSAttr curr_ls_attr;
-      const ObLSID curr_ls_id = ls_id_array_.at(idx);
+      const ObLSID curr_ls_id = ls_id_array.at(idx);
       if (idx > 0) {
         int64_t index = OB_INVALID_INDEX;
         find_last_user_ls_(locked_ls_id_array, index);
@@ -1844,22 +1860,24 @@ int ObNewTableTabletAllocator::check_and_replace_ls_(
       if (curr_ls_id.is_sys_ls()) { // do not lock sys ls
         new_ls_id = curr_ls_id;
       } else if (OB_FAIL(lock_and_check_ls_(
+          sql_proxy,
           trans,
           tenant_id,
           locked_ls_id_array,
           curr_ls_id,
           curr_ls_attr))) {
         if (OB_STATE_NOT_MATCH == ret) {
-          if (OB_FAIL(choose_new_ls_(tenant_id, curr_ls_attr, prev_ls_id, new_ls_id))) {
+          if (OB_FAIL(choose_new_ls_(sql_proxy, tenant_id, curr_ls_attr, prev_ls_id, new_ls_id))) {
             LOG_WARN("choose new ls failed", KR(ret),
                 K(tenant_id), K(curr_ls_attr), K(prev_ls_id), K(new_ls_id));
+          // new ls should not be OB_STATE_NOT_MATCH
           } else if (OB_FAIL(lock_and_check_ls_(
+              sql_proxy,
               trans,
               tenant_id,
               locked_ls_id_array,
               new_ls_id,
               new_ls_attr))) {
-            // new ls should not be OB_STATE_NOT_MATCH
             LOG_WARN("check and lock ls failed", KR(ret),
                 K(tenant_id), K(locked_ls_id_array), K(new_ls_id), K(new_ls_attr));
           } else {
@@ -1878,13 +1896,13 @@ int ObNewTableTabletAllocator::check_and_replace_ls_(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (locked_ls_id_array.count() != ls_id_array_.count()) {
+    } else if (locked_ls_id_array.count() != ls_id_array.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls_id_array count not match", KR(ret), K(tenant_id),
-          "tmp_ls_id_arry count", locked_ls_id_array.count(),
-          "ls_id_array_ count", ls_id_array_.count(), K(locked_ls_id_array), K_(ls_id_array));
-    } else if (OB_FAIL(ls_id_array_.assign(locked_ls_id_array))) {
-      LOG_WARN("assign failed", KR(ret), K(locked_ls_id_array), K_(ls_id_array));
+          "locked count", locked_ls_id_array.count(),
+          "orig count", ls_id_array.count(), K(locked_ls_id_array), K(ls_id_array));
+    } else if (OB_FAIL(ls_id_array.assign(locked_ls_id_array))) {
+      LOG_WARN("assign failed", KR(ret), K(locked_ls_id_array), K(ls_id_array));
     }
   }
   return ret;
@@ -1905,6 +1923,7 @@ void ObNewTableTabletAllocator::find_last_user_ls_(
 }
 
 int ObNewTableTabletAllocator::lock_and_check_ls_(
+    ObISQLClient *sql_proxy,
     ObMySQLTransaction &trans,
     const uint64_t tenant_id,
     const ObIArray<ObLSID> &locked_ls_id_array,
@@ -1913,16 +1932,16 @@ int ObNewTableTabletAllocator::lock_and_check_ls_(
 {
   int ret = OB_SUCCESS;
   ls_attr.reset();
-  if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObNewTableTabletAllocator not init", KR(ret));
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql_proxy is null", KR(ret));
   } else if (!ls_id.is_valid_with_tenant(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(tenant_id), K(ls_id));
   } else if (common::has_exist_in_array(locked_ls_id_array, ls_id)) {
     // ls has been locked
   } else {
-    ObLSAttrOperator ls_operator(tenant_id, sql_proxy_);
+    ObLSAttrOperator ls_operator(tenant_id, sql_proxy);
     if (OB_FAIL(ObLSObjLockUtil::lock_ls_in_trans(
         trans,
         tenant_id,
@@ -1947,20 +1966,21 @@ int ObNewTableTabletAllocator::lock_and_check_ls_(
 }
 
 int ObNewTableTabletAllocator::choose_new_ls_(
+    ObISQLClient *sql_proxy,
     const uint64_t tenant_id,
     const ObLSAttr &old_ls_attr,
     const ObLSID &prev_ls_id,
     ObLSID &new_ls_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObNewTableTabletAllocator not init", KR(ret));
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql_proxy is null", KR(ret));
   } else if (!old_ls_attr.is_valid() || !old_ls_attr.ls_is_normal()) {
     if (prev_ls_id.is_valid()) {
       new_ls_id = prev_ls_id;
     } else {
-      ObLSAttrOperator ls_operator(tenant_id, sql_proxy_);
+      ObLSAttrOperator ls_operator(tenant_id, sql_proxy);
       if (OB_FAIL(ls_operator.get_random_normal_user_ls(new_ls_id))) {
         LOG_WARN("get random normal user ls failed", KR(ret), K(tenant_id), K(new_ls_id));
       }
@@ -1968,7 +1988,7 @@ int ObNewTableTabletAllocator::choose_new_ls_(
   } else if (old_ls_attr.get_ls_flag().is_block_tablet_in()) {
     //only in 4200 canbe block tablet in, no need process data_version
     if (OB_FAIL(ObBalanceTaskTableOperator::get_merge_task_dest_ls_by_src_ls(
-        *sql_proxy_,
+        *sql_proxy,
         tenant_id,
         old_ls_attr.get_ls_id(),
         new_ls_id))) {
