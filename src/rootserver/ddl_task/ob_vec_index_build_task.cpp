@@ -1787,6 +1787,8 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
   const ObDatabaseSchema *database_schema = nullptr;
   const ObTableSchema *data_table_schema = nullptr;
 
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_SUBMIT_DROP_TASK);
+
   obrpc::ObDropIndexArg drop_index_arg;
   obrpc::ObDropIndexRes drop_index_res;
   ObString index_name;

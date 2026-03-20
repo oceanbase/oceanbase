@@ -99,6 +99,7 @@ private:
   int fail();
   int send_build_single_replica_request();
   int check_build_single_replica(bool &is_end);
+  int check_snapshot_table_exist(bool &is_exist);
   virtual int cleanup_impl() override;
   virtual bool is_error_need_retry(const int ret_code) override
   {

@@ -530,8 +530,6 @@ int ObVectorIndexRefresher::do_rebuild() {
     LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObVectorIndexRefresher::get_current_scn(refresh_ctx_->scn_))) {
     LOG_WARN("fail to get current scn", KR(ret));
-  } else {
-    DEBUG_SYNC(BEFORE_DBMS_VECTOR_REBUILD);
   }
   // 1. get base_table row count ( if need )
   // 2. get domain_table row count (if need )
@@ -635,6 +633,8 @@ int ObVectorIndexRefresher::do_rebuild() {
     FLOG_INFO("[VEC_INDEX][REBUILD] no need to start rebuild", K(base_table_row_cnt), K(index_id_table_row_cnt), K(domain_table_row_cnt), K(refresh_ctx_->delta_rate_threshold_));
   }
   
+  DEBUG_SYNC(BEFORE_DBMS_VECTOR_REBUILD);
+
   if (OB_FAIL(ret)) {
   } else if (domain_table_schema->is_vec_hnsw_index() &&
              !idx_parameters.empty() &&
@@ -671,7 +671,15 @@ int ObVectorIndexRefresher::do_rebuild() {
     rebuild_index_arg.vidx_refresh_info_.index_params_ = idx_parameters;
     rebuild_index_arg.rebuild_index_type_ = obrpc::ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_VEC;
     rebuild_index_arg.rebuild_index_online_ = rebuild_index_online;
-    if (OB_ISNULL(GCTX.rs_mgr_)) {
+
+    if (OB_FAIL(rebuild_index_arg.based_schema_object_infos_.push_back(
+                ObBasedSchemaObjectInfo(domain_table_schema->get_table_id(), TABLE_SCHEMA,
+                                      domain_table_schema->get_schema_version(), tenant_id)))) {
+      LOG_WARN("fail to push back index table based schema info", KR(ret));
+    }
+    
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(GCTX.rs_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("GCTX.rs_mgr is null", K(ret));
     } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {

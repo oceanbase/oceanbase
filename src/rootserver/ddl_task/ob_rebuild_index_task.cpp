@@ -461,7 +461,16 @@ int ObRebuildIndexTask::create_and_wait_rebuild_task_finish(const ObDDLTaskStatu
     }
     LOG_WARN("check ddl task finish failed", K(ret), K(index_build_task_id_));
   } 
-  
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_VEC_INDEX_HNSW_REBUILD_CREATE_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("errsim ddl execute building the subtask of rebuild index failed", KR(ret));
+    }
+  }
+#endif
+
   if (state_finished || OB_FAIL(ret)) {
     DEBUG_SYNC(REBUILD_INDEX_WAIT_CREATE_TASK_FINISH);
     (void)switch_status(new_status, true, ret);
