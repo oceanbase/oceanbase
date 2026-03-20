@@ -9190,7 +9190,7 @@ int ObResolverUtils::uv_check_has_non_inner_join(const TableItem &table_item, bo
 }
 
 int ObResolverUtils::uv_check_dup_base_col(const TableItem &table_item,
-    bool &has_dup, bool &has_non_col_ref)
+                                           bool &has_dup, bool &has_non_col_ref)
 {
   int ret = OB_SUCCESS;
   has_dup = false;
@@ -9229,6 +9229,57 @@ int ObResolverUtils::uv_check_dup_base_col(const TableItem &table_item,
       }
     }
     LOG_TRACE("uv check dup base col", K(table_item), KPC(table_item.ref_query_), K(has_dup), K(has_non_col_ref));
+  }
+  return ret;
+}
+
+int ObResolverUtils::uv_check_dup_base_col(const TableItem &table_item,
+                                           const ObIArray<ColumnItem> &column_items,
+                                           const ObIArray<ObColumnRefRawExpr *> &values_desc,
+                                           bool &has_dup, bool &has_non_col_ref)
+{
+  int ret = OB_SUCCESS;
+  has_dup = false;
+  has_non_col_ref = false;
+  if (table_item.is_generated_table() && NULL != table_item.ref_query_) {
+    const uint64_t base_tid = table_item.get_base_table_item().ref_id_;
+    const ObIArray<SelectItem> &select_items = table_item.ref_query_->get_select_items();
+    ObSEArray<int64_t, 32> cids;
+    ObBitSet<> column_item_bitmap;
+    if (OB_UNLIKELY(column_items.count() <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column items count is 0", K(ret));
+    } else if (OB_FAIL(column_item_bitmap.prepare_allocate(column_items.count()))) {
+      LOG_WARN("prepare allocate column item bitmap failed", K(ret));
+    }
+
+    FOREACH_CNT_X(values_expr, values_desc, OB_SUCC(ret) && !has_dup) {
+      if (OB_ISNULL(*values_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("values expr is NULL", K(ret));
+      } else if (T_REF_COLUMN != (*values_expr)->get_expr_type()) {
+        has_non_col_ref = true;
+      } else {
+        const uint64_t table_id = (*values_expr)->get_table_id();
+        const uint64_t column_id = (*values_expr)->get_column_id();
+        const ColumnItem *column_item = NULL;
+        for (int64_t i = 0; NULL == column_item && i < column_items.count(); ++i) {
+          if (column_items.at(i).table_id_ == table_id && column_items.at(i).column_id_ == column_id) {
+            column_item = &column_items.at(i);
+          }
+        }
+        if (OB_ISNULL(column_item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column item is NULL", K(ret));
+        } else if (column_item->base_tid_ == base_tid) {
+          if (column_item_bitmap.has_member(column_item->base_cid_)) {
+            has_dup = true;
+          } else if (OB_FAIL(column_item_bitmap.add_member(column_item->base_cid_))) {
+            LOG_WARN("add column item bitmap failed", K(ret));
+          }
+        }
+      }
+    }
   }
   return ret;
 }

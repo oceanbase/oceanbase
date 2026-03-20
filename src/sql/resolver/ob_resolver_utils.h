@@ -765,6 +765,11 @@ public:
   static int uv_check_dup_base_col(const TableItem &table_item,
                                    bool &has_dup,
                                    bool &has_nol_col_ref);
+  static int uv_check_dup_base_col(const TableItem &table_item,
+                                   const ObIArray<ColumnItem> &column_items,
+                                   const ObIArray<ObColumnRefRawExpr *> &values_desc,
+                                   bool &has_dup,
+                                   bool &has_nol_col_ref);
 
   static int uv_mysql_insertable_join(const TableItem &table_item, const uint64_t base_tid, bool &insertable);
 

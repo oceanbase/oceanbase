@@ -1493,7 +1493,10 @@ int ObInsertResolver::check_view_insertable()
     if (OB_SUCC(ret)) {
       bool has_dup_col = false;
       bool has_non_col_ref = false;
-      if (OB_FAIL(ObResolverUtils::uv_check_dup_base_col(*table, has_dup_col, has_non_col_ref))) {
+      if (OB_FAIL(ObResolverUtils::uv_check_dup_base_col(*table,
+                                                         stmt->get_column_items(),
+                                                         stmt->get_insert_table_info().values_desc_,
+                                                         has_dup_col, has_non_col_ref))) {
         LOG_WARN("check update view hash duplicate column failed", K(ret));
       } else {
         LOG_DEBUG("update view check duplicate column", K(has_dup_col), K(has_non_col_ref));
