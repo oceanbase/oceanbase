@@ -2651,7 +2651,7 @@ int ObPLDDLService::drop_external_resource(const obrpc::ObDropExternalResourceAr
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected NULL old schema after check", K(ret), K(arg), K(is_exist));
     } else if (OB_FAIL(schema.assign(*old_schema))) {
-      LOG_WARN("failed to assign tp new_schema", K(ret), KPC(old_schema));
+      LOG_WARN("failed to assign to new_schema", K(ret), KPC(old_schema));
     } else if (OB_FAIL(schema_guard.get_schema_version(arg.tenant_id_, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(arg));
     } else if (OB_FAIL(trans.start(ddl_service.sql_proxy_, arg.tenant_id_, refreshed_schema_version))) {
@@ -2662,6 +2662,341 @@ int ObPLDDLService::drop_external_resource(const obrpc::ObDropExternalResourceAr
       result.resource_id_ = schema.get_resource_id();
       result.schema_version_ = schema.get_schema_version();
       result.type_ = schema.get_type();
+    }
+
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ddl_service.publish_schema(arg.tenant_id_))) {
+      LOG_WARN("publish schema failed", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+
+template <typename ArgType>
+int ObPLDDLService::check_java_policy_env(share::schema::ObSchemaGetterGuard &schema_guard,
+                                          const ArgType &arg,
+                                          rootserver::ObDDLService &ddl_service,
+                                          const char *udf_not_support_msg,
+                                          const char *version_not_support_msg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg.tenant_id_;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  uint64_t data_version = 0;
+
+  if (OB_FAIL(ObPLDDLService::check_env_before_ddl(schema_guard, arg, ddl_service))) {
+    LOG_WARN("failed to check_env_before_ddl", K(ret), K(tenant_id));
+  } else if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid tenant_config", K(ret), K(tenant_id));
+  } else if (!tenant_config->ob_enable_java_udf) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, udf_not_support_msg);
+    LOG_WARN("ob_enable_java_udf is not enabled", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(tenant_id));
+  } else if (data_version < DATA_VERSION_4_4_2_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, version_not_support_msg);
+    LOG_WARN("java policy is only supported after 4.4.2", K(ret));
+  }
+  return ret;
+}
+
+int ObPLDDLService::create_java_policy(const obrpc::ObCreateJavaPolicyArg &arg,
+                                       obrpc::ObCreateJavaPolicyRes &result,
+                                       rootserver::ObDDLService &ddl_service)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+
+  if (OB_FAIL(check_java_policy_env(schema_guard, arg, ddl_service, "ob_enable_java_udf is not enabled, create java policy is", "before version 4.4.2, create java policy is"))) {
+    LOG_WARN("failed to check java policy env", K(ret), K(arg));
+  } else {
+    bool is_exist = false;
+    ObSimpleJavaPolicySchema new_schema;
+    ObDDLSQLTransaction trans(ddl_service.schema_service_);
+    ObPLDDLOperator pl_operator(*ddl_service.schema_service_, *ddl_service.sql_proxy_);
+    int64_t refreshed_schema_version = 0;
+
+    if (OB_FAIL(schema_guard.check_java_policy_exist(arg.tenant_id_,
+                                                     arg.kind_,
+                                                     arg.grantee_,
+                                                     arg.type_schema_,
+                                                     arg.type_name_,
+                                                     arg.name_,
+                                                     arg.action_,
+                                                     is_exist))) {
+      LOG_WARN("failed to check java policy exist", K(ret), K(arg));
+    } else if (is_exist) {
+      ret = OB_ERR_ALREADY_EXISTS;
+      LOG_WARN("java policy already exists", K(ret), K(arg));
+    } else if (OB_FAIL(schema_guard.get_schema_version(arg.tenant_id_, refreshed_schema_version))) {
+      LOG_WARN("failed to get tenant schema version", KR(ret), K(arg));
+    } else if (OB_FAIL(trans.start(ddl_service.sql_proxy_, arg.tenant_id_, refreshed_schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(arg), K(refreshed_schema_version));
+    } else {
+      if (OB_FAIL(pl_operator.create_java_policy(arg, new_schema, trans))) {
+        LOG_WARN("failed to create_java_policy", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      result.key_ = new_schema.get_key();
+      result.schema_version_ = new_schema.get_schema_version();
+    }
+
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ddl_service.publish_schema(arg.tenant_id_))) {
+      LOG_WARN("publish schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObPLDDLService::drop_java_policy(const obrpc::ObDropJavaPolicyArg &arg,
+                                     obrpc::ObDropJavaPolicyRes &result,
+                                     rootserver::ObDDLService &ddl_service)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+
+  if (OB_FAIL(check_java_policy_env(schema_guard, arg, ddl_service, "ob_enable_java_udf is not enabled, drop java policy is", "before version 4.4.2, drop java policy is"))) {
+    LOG_WARN("failed to check java policy env", K(ret), K(arg));
+  } else {
+    const ObSimpleJavaPolicySchema *target_schema = NULL;
+    ObSimpleJavaPolicySchema schema;
+
+    if (common::OB_INVALID_ID != arg.key_) {
+      if (OB_FAIL(schema_guard.get_java_policy_schema(arg.tenant_id_, arg.key_, target_schema))) {
+        LOG_WARN("failed to get java policy schema", K(ret), K(arg));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Invalid java policy drop key", K(ret), K(arg));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(target_schema)) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("java policy not exist", K(ret), K(arg));
+      } else if (OB_FAIL(schema.assign(*target_schema))) {
+        LOG_WARN("failed to assign schema", K(ret));
+      } else {
+        ObDDLSQLTransaction trans(ddl_service.schema_service_);
+        ObPLDDLOperator pl_operator(*ddl_service.schema_service_, *ddl_service.sql_proxy_);
+        int64_t refreshed_schema_version = 0;
+
+        if (OB_FAIL(schema_guard.get_schema_version(arg.tenant_id_, refreshed_schema_version))) {
+          LOG_WARN("failed to get tenant schema version", KR(ret), K(arg));
+        } else if (OB_FAIL(trans.start(ddl_service.sql_proxy_, arg.tenant_id_, refreshed_schema_version))) {
+          LOG_WARN("start transaction failed", KR(ret), K(arg), K(refreshed_schema_version));
+        } else if (OB_FAIL(pl_operator.drop_java_policy(schema, arg.ddl_stmt_str_, trans))) {
+          LOG_WARN("failed to drop_java_policy", K(ret));
+        } else {
+          result.key_ = schema.get_key();
+          result.schema_version_ = schema.get_schema_version();
+        }
+
+        if (trans.is_started()) {
+          int temp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+            LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+            ret = (OB_SUCC(ret)) ? temp_ret : ret;
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ddl_service.publish_schema(arg.tenant_id_))) {
+      LOG_WARN("publish schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObPLDDLService::modify_java_policy(const obrpc::ObModifyJavaPolicyArg &arg,
+                                       obrpc::ObModifyJavaPolicyRes &result,
+                                       rootserver::ObDDLService &ddl_service)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+
+  if (OB_FAIL(check_java_policy_env(schema_guard, arg, ddl_service, "ob_enable_java_udf is not enabled, modify java policy is", "before version 4.4.2, modify java policy is"))) {
+    LOG_WARN("failed to check java policy env", K(ret), K(arg));
+  } else {
+    const ObSimpleJavaPolicySchema *target_schema = NULL;
+    ObSimpleJavaPolicySchema new_schema;
+
+    if (common::OB_INVALID_ID == arg.key_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid key", K(ret), K(arg));
+    } else if (OB_FAIL(schema_guard.get_java_policy_schema(arg.tenant_id_, arg.key_, target_schema))) {
+      LOG_WARN("failed to get java policy schema", K(ret), K(arg));
+    } else if (OB_ISNULL(target_schema)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("java policy not exist", K(ret), K(arg));
+    } else if (OB_FAIL(new_schema.assign(*target_schema))) { // Copy existing
+      LOG_WARN("failed to assign new_schema", K(ret));
+    } else {
+
+      ObDDLSQLTransaction trans(ddl_service.schema_service_);
+      ObPLDDLOperator pl_operator(*ddl_service.schema_service_, *ddl_service.sql_proxy_);
+      int64_t refreshed_schema_version = 0;
+
+      if (OB_FAIL(schema_guard.get_schema_version(arg.tenant_id_, refreshed_schema_version))) {
+        LOG_WARN("failed to get tenant schema version", KR(ret), K(arg));
+      } else if (OB_FAIL(trans.start(ddl_service.sql_proxy_, arg.tenant_id_, refreshed_schema_version))) {
+        LOG_WARN("start transaction failed", KR(ret), K(arg), K(refreshed_schema_version));
+      } else if (OB_FAIL(pl_operator.modify_java_policy(arg, new_schema, trans))) {
+        LOG_WARN("failed to modify_java_policy", K(ret));
+      } else {
+        result.key_ = new_schema.get_key();
+        result.schema_version_ = new_schema.get_schema_version();
+      }
+
+      if (trans.is_started()) {
+        int temp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+           LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+           ret = (OB_SUCC(ret)) ? temp_ret : ret;
+        }
+      }
+    }
+  }
+
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ddl_service.publish_schema(arg.tenant_id_))) {
+      LOG_WARN("publish schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObPLDDLService::ora_upload_jar_external_resource(const obrpc::ObOraUploadJarArg &arg,
+                                                     obrpc::ObOraUploadJarRes &result,
+                                                     rootserver::ObDDLService &ddl_service)
+{
+  int ret = OB_SUCCESS;
+
+  ObSchemaGetterGuard schema_guard;
+  const ObDatabaseSchema *db_schema = nullptr;
+
+  uint64_t data_version = 0;
+
+  if (OB_FAIL(check_env_before_ddl(schema_guard, arg, ddl_service))) {
+    LOG_WARN("failed to check_env_before_ddl", K(ret), K(arg));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, data_version))) {
+    LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(arg));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_2_1 || data_version < DATA_VERSION_4_4_2_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ora_upload_jar_external_resource version is not supported",
+             K(ret), K(arg), K(data_version), K(GET_MIN_CLUSTER_VERSION()));
+  } else if (OB_FAIL(schema_guard.get_database_schema(arg.tenant_id_, arg.database_id_, db_schema))) {
+    LOG_WARN("failed to get_database_schema", K(ret), K(arg));
+  } else if (OB_ISNULL(db_schema)) {
+    ret = OB_ERR_BAD_DATABASE;
+    LOG_WARN("database does not exist", K(ret), K(arg));
+  } else if (db_schema->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_WARN("Can't not drop external resource of db in recyclebin", K(ret), K(arg), KPC(db_schema));
+  } else {
+    int64_t schema_version = OB_INVALID_SCHEMA_VERSION;
+    ObDDLSQLTransaction trans(ddl_service.schema_service_);
+    ObPLDDLOperator pl_operator(*ddl_service.schema_service_, *ddl_service.sql_proxy_);
+    bool jar_exist = false;
+
+    if (OB_FAIL(schema_guard.get_schema_version(arg.tenant_id_, schema_version))) {
+      LOG_WARN("failed to get tenant schema version", KR(ret), K(arg));
+    } else if (OB_FAIL(schema_guard.check_external_resource_exist(arg.tenant_id_, arg.database_id_, arg.jar_name_, jar_exist))) {
+      LOG_WARN("failed to check_external_resource_exist", K(ret), K(arg));
+    } else if (jar_exist && !arg.is_force_) {
+      LOG_WARN("external resource with jar_name already exists, skip loading", K(ret), K(arg));
+    } else if (OB_FAIL(trans.start(ddl_service.sql_proxy_, arg.tenant_id_, schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(arg), K(schema_version));
+    } else if (OB_FAIL(pl_operator.ora_upload_jar_external_resource(arg, result, schema_guard, trans))) {
+      LOG_WARN("failed to ora_upload_jar_external_resource", K(ret));
+    }
+
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ddl_service.publish_schema(arg.tenant_id_))) {
+      LOG_WARN("publish schema failed", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObPLDDLService::ora_drop_jar_external_resource(const obrpc::ObOraDropJarArg &arg,
+                                                  obrpc::ObOraDropJarRes &result,
+                                                  rootserver::ObDDLService &ddl_service)
+{
+  int ret = OB_SUCCESS;
+
+  ObSchemaGetterGuard schema_guard;
+  const ObDatabaseSchema *db_schema = nullptr;
+
+  uint64_t data_version = 0;
+
+  if (OB_FAIL(check_env_before_ddl(schema_guard, arg, ddl_service))) {
+    LOG_WARN("failed to check_env_before_ddl", K(ret), K(arg));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, data_version))) {
+    LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(arg));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_2_1 || data_version < DATA_VERSION_4_4_2_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ora_upload_jar_external_resource version is not supported",
+             K(ret), K(arg), K(data_version), K(GET_MIN_CLUSTER_VERSION()));
+  } else {
+    int64_t schema_version = OB_INVALID_SCHEMA_VERSION;
+    ObDDLSQLTransaction trans(ddl_service.schema_service_);
+    ObPLDDLOperator pl_operator(*ddl_service.schema_service_, *ddl_service.sql_proxy_);
+    const ObSimpleExternalResourceSchema *jar_schema = nullptr;
+    ObSimpleExternalResourceSchema new_schema;
+
+    if (OB_FAIL(schema_guard.get_schema_version(arg.tenant_id_, schema_version))) {
+      LOG_WARN("failed to get tenant schema version", KR(ret), K(arg));
+    } else if (OB_FAIL(schema_guard.get_external_resource_schema(arg.tenant_id_, arg.jar_id_, jar_schema))) {
+      LOG_WARN("failed to check_external_resource_exist", K(ret), K(arg));
+    } else if (OB_ISNULL(jar_schema)) {
+      LOG_INFO("jar external resource not found, skip dropping", K(ret), K(arg), K(schema_version));
+    } else if (OB_FAIL(new_schema.assign(*jar_schema))) {
+      LOG_WARN("failed to assign to new_schema", K(ret), KPC(jar_schema), K(new_schema));
+    } else if (OB_FAIL(trans.start(ddl_service.sql_proxy_, arg.tenant_id_, schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(arg), K(schema_version));
+    } else if (OB_FAIL(pl_operator.ora_drop_jar_external_resource(new_schema, arg, result, schema_guard, trans))) {
+      LOG_WARN("failed to ora_drop_jar_external_resource", K(ret));
     }
 
     if (trans.is_started()) {

@@ -31,6 +31,7 @@
 #include "share/schema/ob_ccl_schema_struct.h"
 #include "share/schema/ob_ccl_rule_mgr.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
+#include "share/schema/ob_java_policy_mgr.h"
 
 namespace oceanbase
 {
@@ -66,6 +67,7 @@ class ObSimpleSysVariableSchema;
 class ObSimpleTablegroupSchema;
 class ObSimpleTenantSchema;
 class ObSimpleTriggerSchema;
+class ObSimpleJavaPolicySchema;
 class ObSimpleMockFKParentTableSchema;
 class ObMockFKParentTableSchema;
 class ObTablegroupSchema;
@@ -887,6 +889,27 @@ public:
                    const common::ObString &name,
                    const ObUDF *&udf_info,
                    bool &exist);
+
+  // java policy
+  int get_java_policy_schema(const uint64_t tenant_id,
+                             const uint64_t key,
+                             const ObSimpleJavaPolicySchema *&schema);
+
+  int get_java_policy_schemas_in_tenant(const uint64_t tenant_id,
+                                        common::ObIArray<const ObSimpleJavaPolicySchema *> &schemas);
+
+  int get_java_policy_schemas_of_grantee(const uint64_t tenant_id,
+                                         const uint64_t grantee_id,
+                                         common::ObIArray<const ObSimpleJavaPolicySchema *> &schemas);
+
+  int check_java_policy_exist(const uint64_t tenant_id,
+                              const ObSimpleJavaPolicySchema::JavaPolicyKind kind,
+                              const uint64_t grantee,
+                              const uint64_t type_schema,
+                              const common::ObString &type_name,
+                              const common::ObString &name,
+                              const common::ObString &action,
+                              bool &is_exist);
 
   // udt
   int check_udt_exist(uint64_t tenant_id, uint64_t database_id,

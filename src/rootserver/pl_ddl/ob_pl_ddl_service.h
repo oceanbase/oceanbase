@@ -19,6 +19,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_dependency_info.h"
 #include "share/ob_external_resource_rpc_struct.h"
+#include "share/ob_java_policy_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -122,13 +123,39 @@ public:
   static int drop_external_resource(const obrpc::ObDropExternalResourceArg &arg,
                                     obrpc::ObDropExternalResourceRes &result,
                                     rootserver::ObDDLService &ddl_service);
+  static int ora_upload_jar_external_resource(const obrpc::ObOraUploadJarArg &arg,
+                                              obrpc::ObOraUploadJarRes &result,
+                                              rootserver::ObDDLService &ddl_service);
+  static int ora_drop_jar_external_resource(const obrpc::ObOraDropJarArg &arg,
+                                            obrpc::ObOraDropJarRes &result,
+                                            rootserver::ObDDLService &ddl_service);
   //----End of functions for managing external resource----
+
+  //----Functions for managing java policy----
+  static int create_java_policy(const obrpc::ObCreateJavaPolicyArg &arg,
+                                obrpc::ObCreateJavaPolicyRes &result,
+                                rootserver::ObDDLService &ddl_service);
+  static int drop_java_policy(const obrpc::ObDropJavaPolicyArg &arg,
+                              obrpc::ObDropJavaPolicyRes &result,
+                              rootserver::ObDDLService &ddl_service);
+  static int modify_java_policy(const obrpc::ObModifyJavaPolicyArg &arg,
+                                obrpc::ObModifyJavaPolicyRes &result,
+                                rootserver::ObDDLService &ddl_service);
+  //----End of functions for managing java policy----
+
 
 private:
   template <typename ArgType>
   static int check_env_before_ddl(share::schema::ObSchemaGetterGuard &schema_guard,
                                   const ArgType &arg,
                                   rootserver::ObDDLService &ddl_service);
+
+  template <typename ArgType>
+  static int check_java_policy_env(share::schema::ObSchemaGetterGuard &schema_guard,
+                                   const ArgType &arg,
+                                   rootserver::ObDDLService &ddl_service,
+                                   const char *udf_not_support_msg,
+                                   const char *version_not_support_msg);
   //----Functions for managing routine----
   static int create_routine(ObRoutineInfo &routine_info,
                             const ObRoutineInfo* old_routine_info,

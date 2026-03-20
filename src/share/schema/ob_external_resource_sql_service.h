@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_SHARE_SCHEMA_OB_EXTERNAL_RESOURCE_SQL_SERVICE_H_
 #define OCEANBASE_SHARE_SCHEMA_OB_EXTERNAL_RESOURCE_SQL_SERVICE_H_
 
+#include <optional>
+
 #include "ob_ddl_sql_service.h"
 
 namespace oceanbase
@@ -57,7 +59,8 @@ int create_external_resource(const ObSimpleExternalResourceSchema &new_schema,
 
 int drop_external_resource(const ObSimpleExternalResourceSchema &schema,
                            const ObString &ddl_stmt,
-                           common::ObISQLClient &sql_client);
+                           common::ObISQLClient &sql_client,
+                           const std::optional<std::pair<ObString, ObString>> &extra_cond = std::nullopt);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExternalResourceSqlService);

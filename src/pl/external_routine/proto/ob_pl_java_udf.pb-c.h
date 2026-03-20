@@ -28,6 +28,7 @@ PROTOBUF_C__BEGIN_DECLS
 
 
 typedef struct ObPl__JavaUdf__BatchedArgs ObPl__JavaUdf__BatchedArgs;
+typedef struct ObPl__JavaUdf__Permission ObPl__JavaUdf__Permission;
 typedef struct ObPl__JavaUdf__Values ObPl__JavaUdf__Values;
 typedef struct ObPl__JavaUdf__ByteValues ObPl__JavaUdf__ByteValues;
 typedef struct ObPl__JavaUdf__ShortValues ObPl__JavaUdf__ShortValues;
@@ -51,10 +52,28 @@ struct  ObPl__JavaUdf__BatchedArgs
   uint64_t batch_size;
   size_t n_args;
   ObPl__JavaUdf__Values **args;
+  size_t n_permissions;
+  ObPl__JavaUdf__Permission **permissions;
 };
 #define OB_PL__JAVA_UDF__BATCHED_ARGS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ob_pl__java_udf__batched_args__descriptor) \
-, 0, 0,NULL }
+, 0, 0,NULL, 0,NULL }
+
+
+struct  ObPl__JavaUdf__Permission
+{
+  ProtobufCMessage base;
+  /*
+   * true for grant, false for restrict
+   */
+  protobuf_c_boolean is_grant;
+  ProtobufCBinaryData type;
+  ProtobufCBinaryData name;
+  ProtobufCBinaryData action;
+};
+#define OB_PL__JAVA_UDF__PERMISSION__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ob_pl__java_udf__permission__descriptor) \
+, 0, {0,NULL}, {0,NULL}, {0,NULL} }
 
 
 typedef enum {
@@ -209,6 +228,25 @@ ObPl__JavaUdf__BatchedArgs *
                       const uint8_t       *data);
 void   ob_pl__java_udf__batched_args__free_unpacked
                      (ObPl__JavaUdf__BatchedArgs *message,
+                      ProtobufCAllocator *allocator);
+/* ObPl__JavaUdf__Permission methods */
+void   ob_pl__java_udf__permission__init
+                     (ObPl__JavaUdf__Permission         *message);
+size_t ob_pl__java_udf__permission__get_packed_size
+                     (const ObPl__JavaUdf__Permission   *message);
+size_t ob_pl__java_udf__permission__pack
+                     (const ObPl__JavaUdf__Permission   *message,
+                      uint8_t             *out);
+size_t ob_pl__java_udf__permission__pack_to_buffer
+                     (const ObPl__JavaUdf__Permission   *message,
+                      ProtobufCBuffer     *buffer);
+ObPl__JavaUdf__Permission *
+       ob_pl__java_udf__permission__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   ob_pl__java_udf__permission__free_unpacked
+                     (ObPl__JavaUdf__Permission *message,
                       ProtobufCAllocator *allocator);
 /* ObPl__JavaUdf__Values methods */
 void   ob_pl__java_udf__values__init
@@ -405,6 +443,9 @@ void   ob_pl__java_udf__byte_buffer_values__free_unpacked
 typedef void (*ObPl__JavaUdf__BatchedArgs_Closure)
                  (const ObPl__JavaUdf__BatchedArgs *message,
                   void *closure_data);
+typedef void (*ObPl__JavaUdf__Permission_Closure)
+                 (const ObPl__JavaUdf__Permission *message,
+                  void *closure_data);
 typedef void (*ObPl__JavaUdf__Values_Closure)
                  (const ObPl__JavaUdf__Values *message,
                   void *closure_data);
@@ -442,6 +483,7 @@ typedef void (*ObPl__JavaUdf__ByteBufferValues_Closure)
 /* --- descriptors --- */
 
 extern const ProtobufCMessageDescriptor ob_pl__java_udf__batched_args__descriptor;
+extern const ProtobufCMessageDescriptor ob_pl__java_udf__permission__descriptor;
 extern const ProtobufCMessageDescriptor ob_pl__java_udf__values__descriptor;
 extern const ProtobufCMessageDescriptor ob_pl__java_udf__byte_values__descriptor;
 extern const ProtobufCMessageDescriptor ob_pl__java_udf__short_values__descriptor;

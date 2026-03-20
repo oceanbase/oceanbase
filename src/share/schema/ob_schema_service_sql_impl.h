@@ -46,6 +46,7 @@
 #include "share/schema/ob_external_resource_sql_service.h"
 #include "share/schema/ob_location_sql_service.h"
 #include "share/schema/ob_ai_model_sql_service.h"
+#include "share/schema/ob_java_policy_sql_service.h"
 #include "share/schema/ob_ccl_rule_sql_service.h"
 #include "share/schema/ob_sensitive_rule_sql_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
@@ -143,6 +144,7 @@ public:
   GET_DDL_SQL_SERVICE_FUNC(AiModel, ai_model)
   GET_DDL_SQL_SERVICE_FUNC(CCLRule, ccl_rule)
   GET_DDL_SQL_SERVICE_FUNC(SensitiveRule, sensitive_rule)
+  GET_DDL_SQL_SERVICE_FUNC(JavaPolicy, java_policy)
 
   /* sequence_id related */
   virtual int init_sequence_id_by_rs_epoch(const int64_t rootservice_epoch); // for compatible use
@@ -259,6 +261,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(sensitive_rule_priv, ObSensitiveRulePriv);
+  GET_ALL_SCHEMA_FUNC_DECLARE(java_policy, ObSimpleJavaPolicySchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -344,6 +347,7 @@ public:
   virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id);
   virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id);
   virtual int fetch_new_external_resource_id(const uint64_t tenant_id, uint64_t &new_external_resource_id);
+  virtual int fetch_new_java_policy_id(const uint64_t tenant_id, uint64_t &new_java_policy_id);
   virtual int fetch_new_location_id(const uint64_t tenant_id, uint64_t &new_location_id);
   virtual int fetch_new_sensitive_rule_id(const uint64_t tenant_id, uint64_t &new_sensitive_rule_id);
 //  virtual int insert_sys_param(const ObSysParam &sys_param,
@@ -423,6 +427,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(sensitive_rule_priv, ObSensitiveRulePriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(sensitive_column, ObSensitiveColumnSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(java_policy, ObSimpleJavaPolicySchema);
 
   //batch will split big query into batch query, each time MAX_IN_QUERY_PER_TIME
   //get_batch_xxx_schema will call fetch_all_xxx_schema
@@ -524,6 +529,7 @@ public:
   FETCH_SCHEMAS_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(sensitive_rule_priv, ObSensitiveRulePriv);
   FETCH_SCHEMAS_FUNC_DECLARE(sensitive_column, ObSensitiveColumnSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(java_policy, ObSimpleJavaPolicySchema);
 
   int fetch_mock_fk_parent_table_column_info(
       const ObRefreshSchemaStatus &schema_status,
@@ -1383,6 +1389,7 @@ private:
   ObCatalogSqlService catalog_service_;
   ObExternalResourceSqlService external_resource_service_;
   ObAiModelSqlService ai_model_service_;
+  ObJavaPolicySqlService java_policy_service_;
   ObCCLRuleSqlService ccl_rule_service_;
   ObSensitiveRuleSqlService sensitive_rule_service_;
 

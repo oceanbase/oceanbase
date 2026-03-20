@@ -25,6 +25,7 @@
 #include "share/ls/ob_ls_info.h"
 #include "share/ob_lonely_table_clean_rpc_struct.h"
 #include "share/ob_external_resource_rpc_struct.h"
+#include "share/ob_java_policy_rpc_struct.h"
 #include "share/ob_create_hidden_tablev2_rpc_struct.h"
 
 namespace oceanbase

@@ -106,6 +106,176 @@ public:
     return ret;
   }
 
+  static int get_executor_class(JNIEnv &env, jclass &executor_class, jmethodID &execute)
+  {
+    int ret = OB_SUCCESS;
+
+    static std::tuple<ObLatchMutex, jclass, jmethodID> cached_executor;
+
+    executor_class = nullptr;
+    execute = nullptr;
+
+    ObLatchMutexGuard guard(std::get<0>(cached_executor), ObLatchIds::JAVA_EXECUTOR_CLASS_LOCK);
+
+    if (OB_ISNULL(std::get<1>(cached_executor))) {
+      jobject loader = nullptr;
+      jmethodID load_class_method = nullptr;
+      jstring class_name = nullptr;
+      jobject class_obj = nullptr;
+      jclass global_executor = nullptr;
+      jmethodID execute_method = nullptr;
+
+      if (OB_FAIL(get_executor_class_loader(env, loader, load_class_method))) {
+        PL_LOG(WARN, "failed to get_executor_class_loader", K(ret), K(loader), K(load_class_method));
+      } else if (OB_ISNULL(loader) || OB_ISNULL(load_class_method)) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN, "unexpected NULL executor class loader or load class method", K(ret), K(loader), K(load_class_method));
+      } else if (OB_ISNULL(class_name = env.NewStringUTF("com.oceanbase.internal.ObJavaUDFExecutor"))) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN,"unexpected NULL string", K(ret));
+      } else if (FALSE_IT(class_obj = env.CallObjectMethod(loader, load_class_method, class_name))) {
+        // unreachable
+      } else if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+        PL_LOG(WARN, "failed to create call loadClass of ObJavaUDFExecutorClassLoader", K(ret));
+      } else if (OB_ISNULL(class_obj)) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN,"unexpected NULL ObJavaUDFExecutor class", K(ret));
+      } else if (
+          FALSE_IT(
+              execute_method = env.GetStaticMethodID(
+                  static_cast<jclass>(class_obj),
+                  "execute",
+                  "("
+                    "Ljava/lang/Object;"       // obj, UDF object
+                    "Ljava/lang/String;"       // methodName, java String type
+                    "J"                        // sessionId, java long type
+                    "J"                        // timeoutTs, java long type
+                    "[Ljava/lang/Object;"      // argTypes, java Object[] type
+                    "Ljava/nio/ByteBuffer;"    // argValues, java ByteBuffer type
+                    "Ljava/lang/Object;"       // resultType, java Object type
+                  ")"
+                  "Ljava/nio/ByteBuffer;"      // return value, java ByteBuffer type
+                ))) {
+        // unreachable
+      } else if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+        PL_LOG(WARN, "failed to find execute method in ObJavaUDFExecutor class", K(ret));
+      } else if (OB_ISNULL(execute_method)) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN,"unexpected NULL execute method of ObJavaUDFExecutor class", K(ret));
+      } else if (OB_ISNULL(global_executor = static_cast<jclass>(env.NewGlobalRef(class_obj)))) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN,"unexpected NULL NewGlobalRef", K(ret));
+      } else {
+        std::get<1>(cached_executor) = global_executor;
+        std::get<2>(cached_executor) = execute_method;
+      }
+
+      ObJavaUtils::delete_local_ref(class_obj, &env);
+      ObJavaUtils::delete_local_ref(class_name, &env);
+    }
+
+    if (OB_SUCC(ret)) {
+      executor_class = std::get<1>(cached_executor);
+      execute = std::get<2>(cached_executor);
+    }
+
+    return ret;
+  }
+
+  static int get_executor_class_loader(JNIEnv &env, jobject &loader, jmethodID &load_class_method)
+  {
+    int ret = OB_SUCCESS;
+
+    static std::tuple<ObLatchMutex, jobject, jmethodID> cached_loader;
+
+    loader = nullptr;
+    load_class_method = nullptr;
+
+    ObLatchMutexGuard guard(std::get<0>(cached_loader), ObLatchIds::JAVA_EXECUTOR_CLASS_LOCK);
+
+    if (OB_ISNULL(std::get<1>(cached_loader))) {
+      jclass loader_class = nullptr;
+      jmethodID init = nullptr;
+      jobject loader_obj = nullptr;
+
+      jstring security_manager_class_name = nullptr;
+      jclass security_manager_class = nullptr;
+      jmethodID sm_init = nullptr;
+
+      jmethodID load_class_method_id = nullptr;
+      jobject global_loader = nullptr;
+
+      loader_class = env.FindClass("com/oceanbase/internal/ObJavaUDFExecutorClassLoader");
+
+      if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+        PL_LOG(WARN, "failed to find ObJavaUDFExecutorClassLoader class", K(ret));
+      } else if (OB_ISNULL(loader_class)) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN, "unexpected NULL ObJavaUDFExecutorClassLoader class", K(ret));
+      } else if (FALSE_IT(init = env.GetMethodID(loader_class, "<init>", "()V"))) {
+        // unreachable
+      } else if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+        PL_LOG(WARN, "failed to find init method of ObJavaUDFExecutorClassLoader", K(ret));
+      } else if (OB_ISNULL(init)) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN, "unexpected NULL init method of ObJavaUDFExecutorClassLoader", K(ret));
+      } else if (FALSE_IT(loader_obj = env.NewObject(loader_class, init))) {
+        // unreachable
+      } else if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+        PL_LOG(WARN, "failed to create new ObJavaUDFExecutorClassLoader", K(ret));
+      } else if (OB_ISNULL(loader_obj)) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN, "unexpected NULL ObJavaUDFExecutorClassLoader object", K(ret));
+      } else if (FALSE_IT(load_class_method_id = env.GetMethodID(loader_class, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;"))) {
+        // unreachable
+      } else if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+        PL_LOG(WARN, "failed to GetMethodID loadClass from ObJavaUDFExecutorClassLoader", K(ret));
+      } else if (OB_ISNULL(load_class_method_id)) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN, "unexpected NULL loadClass method", K(ret));
+      } else if (OB_ISNULL(global_loader = env.NewGlobalRef(loader_obj))) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN, "unexpected NULL NewGlobalRef for loader", K(ret));
+      } else if (OB_ISNULL(security_manager_class_name = env.NewStringUTF("com.oceanbase.internal.ObJavaUDFSecurityManager"))) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN, "unexpected NULL String for ObJavaUDFSecurityManager class name", K(ret));
+      } else if (FALSE_IT(security_manager_class = static_cast<jclass>(env.CallObjectMethod(loader_obj, load_class_method_id, security_manager_class_name)))) {
+        // unreachable
+      } else if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+        PL_LOG(WARN, "failed to call CallObjectMethod for ObJavaUDFSecurityManager class", K(ret));
+      } else if (OB_ISNULL(security_manager_class)) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN, "unexpected NULL ObJavaUDFSecurityManager class", K(ret));
+      } else if (FALSE_IT(sm_init = env.GetStaticMethodID(security_manager_class, "init", "()V"))) {
+        // unreachable
+      } else if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+        PL_LOG(WARN, "failed to get methodID init for ObJavaUDFSecurityManager class", K(ret));
+      } else if (OB_ISNULL(sm_init)) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN, "unexpected NULL init method for ObJavaUDFSecurityManager class", K(ret));
+      } else if (FALSE_IT(env.CallStaticVoidMethod(security_manager_class, sm_init))) {
+        // unreachable
+      } else if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+        PL_LOG(WARN, "failed to call init method for ObJavaUDFSecurityManager class", K(ret));
+      } else {
+        std::get<1>(cached_loader) = global_loader;
+        std::get<2>(cached_loader) = load_class_method_id;
+      }
+
+      ObJavaUtils::delete_local_ref(security_manager_class_name, &env);
+      ObJavaUtils::delete_local_ref(security_manager_class, &env);
+      ObJavaUtils::delete_local_ref(loader_obj, &env);
+      ObJavaUtils::delete_local_ref(loader_class, &env);
+    }
+
+    if (OB_SUCC(ret)) {
+      loader = std::get<1>(cached_loader);
+      load_class_method = std::get<2>(cached_loader);
+    }
+
+    return ret;
+  }
+
   static int get_udf_loader_class(JNIEnv &env, jclass &loader_class, jmethodID &constructor, jmethodID &find_class_method)
   {
     int ret = OB_SUCCESS;
@@ -119,14 +289,34 @@ public:
     ObLatchMutexGuard guard(std::get<0>(cached_class_loader), ObLatchIds::UDF_LOADER_CLASS_LOCK);
 
     if (OB_ISNULL(std::get<1>(cached_class_loader))) {
+      jobject executor_classloader = nullptr;
+      jmethodID executor_classloader_loadclass_method = nullptr;
+      jstring loader_class_name = nullptr;
       jclass loader_class = nullptr;
       jclass global_class = nullptr;
       jmethodID tmp_constructor = nullptr;
       jmethodID tmp_find_class_method = nullptr;
 
-      loader_class = env.FindClass("com/oceanbase/internal/ObJavaUDFClassLoader");
-
-      if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+      if (OB_FAIL(get_executor_class_loader(env,
+                                            executor_classloader,
+                                            executor_classloader_loadclass_method))) {
+        PL_LOG(WARN, "failed to get executor classloader", K(ret));
+      } else if (OB_ISNULL(executor_classloader) || OB_ISNULL(executor_classloader_loadclass_method)) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN,
+               "unexpected NULL executor classloader or executor classloader loadclass method",
+               K(ret),
+               K(executor_classloader),
+               K(executor_classloader_loadclass_method));
+      } else if (OB_ISNULL(loader_class_name = env.NewStringUTF("com.oceanbase.internal.ObJavaUDFClassLoader"))) {
+        ret = OB_ERR_UNEXPECTED;
+        PL_LOG(WARN, "unexpected NULL string for ObJavaUDFClassLoader class name", K(ret));
+      } else if (FALSE_IT(loader_class =
+                              static_cast<jclass>(env.CallObjectMethod(executor_classloader,
+                                                                       executor_classloader_loadclass_method,
+                                                                       loader_class_name)))) {
+        // unreachable
+      } else if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
         PL_LOG(WARN, "failed to find ObJavaUDFClassLoader class", K(ret));
       } else if (OB_ISNULL(loader_class)) {
         ret = OB_ERR_UNEXPECTED;
@@ -154,6 +344,7 @@ public:
         std::get<3>(cached_class_loader) = tmp_find_class_method;
       }
 
+      ObJavaUtils::delete_local_ref(loader_class_name, &env);
       ObJavaUtils::delete_local_ref(loader_class, &env);
     }
 
@@ -165,6 +356,20 @@ public:
 
     return ret;
   }
+
+  static int ob_string_to_jstring(JNIEnv &env, ObIAllocator &alloc, const ObString &str, jstring &result);
+
+  static int trans_jar_to_classes(const ObString &jar_binary,
+                                  ObIArray<std::pair<ObString, ObString>> &classes,
+                                  JNIEnv &env,
+                                  jobject &buffer_handle);
+
+private:
+  static int parse_binary_response(const char *buffer,
+                                   int64_t buffer_size,
+                                   int64_t &pos,
+                                   ObString &content);
+
 };
 
 class ObToJavaTypeMapperBase

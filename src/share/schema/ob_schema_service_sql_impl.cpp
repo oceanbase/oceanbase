@@ -261,6 +261,7 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       catalog_service_(*this),
       external_resource_service_(*this),
       ai_model_service_(*this),
+      java_policy_service_(*this),
       ccl_rule_service_(*this),
       sensitive_rule_service_(*this),
       cluster_schema_status_(ObClusterSchemaStatus::NORMAL_STATUS),
@@ -1402,6 +1403,7 @@ GET_ALL_SCHEMA_FUNC_DEFINE(ai_model, ObAiModelSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(ccl_rule, ObSimpleCCLRuleSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(sensitive_rule, ObSensitiveRuleSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(sensitive_rule_priv, ObSensitiveRulePriv);
+GET_ALL_SCHEMA_FUNC_DEFINE(java_policy, ObSimpleJavaPolicySchema);
 
 int ObSchemaServiceSQLImpl::get_all_db_privs(ObISQLClient &client,
     const ObRefreshSchemaStatus &schema_status,
@@ -3336,6 +3338,7 @@ FETCH_NEW_SCHEMA_ID(LOCATION, location);
 FETCH_NEW_SCHEMA_ID(AI_MODEL, ai_model);
 FETCH_NEW_SCHEMA_ID(CCL_RULE, ccl_rule);
 FETCH_NEW_SCHEMA_ID(SENSITIVE_RULE, sensitive_rule);
+FETCH_NEW_SCHEMA_ID(JAVA_POLICY, java_policy);
 
 #undef FETCH_NEW_SCHEMA_ID
 
@@ -3755,6 +3758,7 @@ GET_BATCH_SCHEMAS_FUNC_DEFINE(ccl_rule, ObSimpleCCLRuleSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(sensitive_rule, ObSensitiveRuleSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(sensitive_rule_priv, ObSensitiveRulePriv);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(sensitive_column, ObSensitiveColumnSchema);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(java_policy, ObSimpleJavaPolicySchema);
 
 
 int ObSchemaServiceSQLImpl::sql_append_pure_ids(
@@ -5639,6 +5643,53 @@ FETCH_SCHEMAS_FUNC_DEFINE(rls_context, ObRlsContextSchema, OB_ALL_RLS_CONTEXT_HI
 FETCH_SCHEMAS_FUNC_DEFINE(catalog, ObCatalogSchema, OB_ALL_CATALOG_HISTORY_TNAME);
 FETCH_SCHEMAS_FUNC_DEFINE(location, ObLocationSchema, OB_ALL_TENANT_LOCATION_HISTORY_TNAME);
 FETCH_SCHEMAS_FUNC_DEFINE(ccl_rule, ObSimpleCCLRuleSchema, OB_ALL_CCL_RULE_HISTORY_TNAME);
+
+int ObSchemaServiceSQLImpl::fetch_java_policys(
+    ObISQLClient &sql_client,
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObIArray<ObSimpleJavaPolicySchema> &schema_array,
+    const SchemaKey *schema_keys,
+    const int64_t schema_key_size)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+    const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+    if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = 0",
+                               OB_ALL_JAVA_POLICY_HISTORY_TNAME))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (NULL != schema_keys && schema_key_size > 0) {
+      if (OB_FAIL(sql.append_fmt(" AND `key` in"))) {
+        LOG_WARN("append failed", K(ret));
+      } else if (OB_FAIL(SQL_APPEND_SCHEMA_ID(java_policy, schema_keys, schema_key_size, sql))) {
+         LOG_WARN("sql append java_policy id failed", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+      if (OB_FAIL(sql.append(" ORDER BY tenant_id desc, `key` desc, schema_version desc"))) {
+        LOG_WARN("sql append failed", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result. ", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_java_policy_schema(tenant_id, *result, schema_array))) {
+        LOG_WARN("failed to retrieve java_policy schema", K(ret));
+      } else {
+        LOG_DEBUG("finish fetch schema", K(sql.string()), K(tenant_id), K(schema_array));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObSchemaServiceSQLImpl::fetch_all_mock_fk_parent_table_info(
       const ObRefreshSchemaStatus &schema_status,

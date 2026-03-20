@@ -2965,6 +2965,7 @@ typedef enum ObItemType
   T_MAX_ROW_LENGTH = 4958,
   T_ALTER_VIEW_COMPILE = 4968,   // ALTER VIEW ... COMPILE action node
   T_MAX_EXECUTION_TIME = 4969,    // for max_execution_time hint
+  T_EXTERNAL_LANGUAGE = 4978,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

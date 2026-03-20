@@ -64,6 +64,51 @@ void   ob_pl__java_udf__batched_args__free_unpacked
   assert(message->base.descriptor == &ob_pl__java_udf__batched_args__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   ob_pl__java_udf__permission__init
+                     (ObPl__JavaUdf__Permission         *message)
+{
+  static const ObPl__JavaUdf__Permission init_value = OB_PL__JAVA_UDF__PERMISSION__INIT;
+  *message = init_value;
+}
+size_t ob_pl__java_udf__permission__get_packed_size
+                     (const ObPl__JavaUdf__Permission *message)
+{
+  assert(message->base.descriptor == &ob_pl__java_udf__permission__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t ob_pl__java_udf__permission__pack
+                     (const ObPl__JavaUdf__Permission *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &ob_pl__java_udf__permission__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t ob_pl__java_udf__permission__pack_to_buffer
+                     (const ObPl__JavaUdf__Permission *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &ob_pl__java_udf__permission__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+ObPl__JavaUdf__Permission *
+       ob_pl__java_udf__permission__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (ObPl__JavaUdf__Permission *)
+     protobuf_c_message_unpack (&ob_pl__java_udf__permission__descriptor,
+                                allocator, len, data);
+}
+void   ob_pl__java_udf__permission__free_unpacked
+                     (ObPl__JavaUdf__Permission *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &ob_pl__java_udf__permission__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   ob_pl__java_udf__values__init
                      (ObPl__JavaUdf__Values         *message)
 {
@@ -514,7 +559,7 @@ void   ob_pl__java_udf__byte_buffer_values__free_unpacked
   assert(message->base.descriptor == &ob_pl__java_udf__byte_buffer_values__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor ob_pl__java_udf__batched_args__field_descriptors[2] =
+static const ProtobufCFieldDescriptor ob_pl__java_udf__batched_args__field_descriptors[3] =
 {
   {
     "batch_size",
@@ -540,15 +585,28 @@ static const ProtobufCFieldDescriptor ob_pl__java_udf__batched_args__field_descr
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "permissions",
+    3,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(ObPl__JavaUdf__BatchedArgs, n_permissions),
+    offsetof(ObPl__JavaUdf__BatchedArgs, permissions),
+    &ob_pl__java_udf__permission__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ob_pl__java_udf__batched_args__field_indices_by_name[] = {
   1,   /* field[1] = args */
   0,   /* field[0] = batch_size */
+  2,   /* field[2] = permissions */
 };
 static const ProtobufCIntRange ob_pl__java_udf__batched_args__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor ob_pl__java_udf__batched_args__descriptor =
 {
@@ -558,11 +616,88 @@ const ProtobufCMessageDescriptor ob_pl__java_udf__batched_args__descriptor =
   "ObPl__JavaUdf__BatchedArgs",
   "ob_pl.java_udf",
   sizeof(ObPl__JavaUdf__BatchedArgs),
-  2,
+  3,
   ob_pl__java_udf__batched_args__field_descriptors,
   ob_pl__java_udf__batched_args__field_indices_by_name,
   1,  ob_pl__java_udf__batched_args__number_ranges,
   (ProtobufCMessageInit) ob_pl__java_udf__batched_args__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor ob_pl__java_udf__permission__field_descriptors[4] =
+{
+  {
+    "is_grant",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(ObPl__JavaUdf__Permission, is_grant),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "type",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(ObPl__JavaUdf__Permission, type),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "name",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(ObPl__JavaUdf__Permission, name),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "action",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(ObPl__JavaUdf__Permission, action),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ob_pl__java_udf__permission__field_indices_by_name[] = {
+  3,   /* field[3] = action */
+  0,   /* field[0] = is_grant */
+  2,   /* field[2] = name */
+  1,   /* field[1] = type */
+};
+static const ProtobufCIntRange ob_pl__java_udf__permission__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 4 }
+};
+const ProtobufCMessageDescriptor ob_pl__java_udf__permission__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ob_pl.java_udf.Permission",
+  "Permission",
+  "ObPl__JavaUdf__Permission",
+  "ob_pl.java_udf",
+  sizeof(ObPl__JavaUdf__Permission),
+  4,
+  ob_pl__java_udf__permission__field_descriptors,
+  ob_pl__java_udf__permission__field_indices_by_name,
+  1,  ob_pl__java_udf__permission__number_ranges,
+  (ProtobufCMessageInit) ob_pl__java_udf__permission__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor ob_pl__java_udf__values__field_descriptors[10] =

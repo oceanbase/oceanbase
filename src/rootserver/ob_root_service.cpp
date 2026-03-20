@@ -6565,6 +6565,68 @@ int ObRootService::drop_udt(const ObDropUDTArg &arg)
   return ret;
 }
 
+//----Functions for managing java_policy----
+int ObRootService::create_java_policy(const obrpc::ObCreateJavaPolicyArg &arg,
+                                     obrpc::ObCreateJavaPolicyRes &result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(ObPLDDLService::create_java_policy(arg, result, ddl_service_))) {
+    LOG_WARN("failed to ObPLDDLService::create_java_policy", K(ret), K(arg));
+  }
+
+  LOG_INFO("out create_java_policy", K(ret), K(arg));
+
+  return ret;
+}
+
+int ObRootService::drop_java_policy(const obrpc::ObDropJavaPolicyArg &arg,
+                                   obrpc::ObDropJavaPolicyRes &result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(ObPLDDLService::drop_java_policy(arg, result, ddl_service_))) {
+    LOG_WARN("failed to ObPLDDLService::drop_java_policy", K(ret), K(arg));
+  }
+
+  LOG_INFO("out drop_java_policy", K(ret), K(arg));
+
+  return ret;
+}
+
+int ObRootService::modify_java_policy(const obrpc::ObModifyJavaPolicyArg &arg,
+                                     obrpc::ObModifyJavaPolicyRes &result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(ObPLDDLService::modify_java_policy(arg, result, ddl_service_))) {
+    LOG_WARN("failed to ObPLDDLService::modify_java_policy", K(ret), K(arg));
+  }
+
+  LOG_INFO("out modify_java_policy", K(ret), K(arg));
+
+  return ret;
+}
+//----End of functions for managing java_policy----
+
 int ObRootService::alter_udt_with_res(const obrpc::ObAlterUDTArg &arg,
                                       obrpc::ObRoutineDDLRes &res)
 {
@@ -11394,6 +11456,46 @@ int ObRootService::drop_external_resource(const obrpc::ObDropExternalResourceArg
   }
 
   LOG_INFO("out drop_external_resource", K(ret), K(arg));
+
+  return ret;
+}
+
+int ObRootService::ora_upload_jar_external_resource(const obrpc::ObOraUploadJarArg &arg,
+                                                    obrpc::ObOraUploadJarRes &result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(ObPLDDLService::ora_upload_jar_external_resource(arg, result, ddl_service_))) {
+    LOG_WARN("failed to ObPLDDLService::ora_upload_jar_external_resource", K(ret), K(arg));
+  }
+
+  LOG_INFO("out ora_upload_jar_external_resource", K(ret), K(arg), K(result));
+
+  return ret;
+}
+
+int ObRootService::ora_drop_jar_external_resource(const obrpc::ObOraDropJarArg &arg,
+                                                  obrpc::ObOraDropJarRes &result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(ObPLDDLService::ora_drop_jar_external_resource(arg, result, ddl_service_))) {
+    LOG_WARN("failed to ObPLDDLService::ora_drop_jar_external_resource", K(ret), K(arg));
+  }
+
+  LOG_INFO("out ora_drop_jar_external_resource", K(ret), K(arg), K(result));
 
   return ret;
 }

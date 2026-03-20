@@ -492,6 +492,7 @@ int ObPLCompiler::compile(
       }
       OZ (ObPLDependencyUtil::add_dependency_objects(&func_ast.get_dependency_table(), deps));
     }
+
     ObSchemaObjVersion obj_version(routine.get_routine_id(),
                                    routine.get_schema_version(),
                                    routine.is_procedure() ? DEPENDENCY_PROCEDURE : DEPENDENCY_FUNCTION);
@@ -552,6 +553,10 @@ int ObPLCompiler::compile(
   FLT_SET_TAG(pl_compile_resolve_time, resolve_end - parse_end);
   //Step 4: Code Generator
   if (OB_SUCC(ret)) {
+    if (func_ast.is_external_routine()) {
+      func.set_external_routine();
+    }
+
     HEAP_VAR(ObPLCodeGenerator, cg, func.get_allocator(), session_info_,
              schema_guard_,
              func_ast,
@@ -570,7 +575,8 @@ int ObPLCompiler::compile(
       bool enable_persistent = GCONF._enable_persistent_compiled_routine
                                && func_ast.get_can_cached()
                                && !func_ast.has_incomplete_rt_dep_error()
-                               && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
+                               && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty())
+                               && !func_ast.is_external_routine();
       FLT_SET_TAG(pl_compile_is_persist, enable_persistent);
       OZ (routine_storage.mask_special_compile_mode(session_info_));
       OZ (cg.init());
@@ -1632,6 +1638,9 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
                    routine->get_di_helper(),
                    lib::is_oracle_mode()) {
             lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
+            if (routine_ast->is_external_routine()) {
+              routine->set_external_routine();
+            }
             if (OB_FAIL(cg.init())) {
               LOG_WARN("init code generator failed", K(ret));
             } else if (OB_FAIL(cg.generate(*routine))) {

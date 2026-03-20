@@ -25,6 +25,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "rootserver/ob_locality_util.h"
+#include "share/schema/ob_java_policy_mgr.h"
 
 namespace oceanbase
 {
@@ -468,6 +469,8 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(catalog);
   RETRIEVE_SCHEMA_FUNC_DECLARE(ccl_rule);
   RETRIEVE_SCHEMA_FUNC_DECLARE(ai_model);
+  template <typename T>
+  static int retrieve_java_policy_schema(const uint64_t tenant_id, T &result, common::ObIArray<ObSimpleJavaPolicySchema> &schema_array);
 
   template <typename T>
   static int retrieve_external_resource_schema(const uint64_t tenant_id, T &result, ObIArray<ObSimpleExternalResourceSchema> &schema_array);
@@ -549,6 +552,7 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
   FILL_SCHEMA_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
   FILL_SCHEMA_FUNC_DECLARE(sensitive_column, ObSensitiveColumnSchema);
+  FILL_SCHEMA_FUNC_DECLARE(java_policy, ObSimpleJavaPolicySchema);
 
   //for full schema
   template<typename T>

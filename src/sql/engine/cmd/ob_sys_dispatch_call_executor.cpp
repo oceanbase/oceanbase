@@ -53,6 +53,8 @@ int ObSysDispatchCallExecutor::execute(ObExecContext &ctx, ObSysDispatchCallStmt
                    stmt.get_designated_tenant_id(),
                    stmt.get_designated_tenant_name(),
                    stmt.get_tenant_compat_mode()));
+  // to identify the real tenant
+  OX (session->set_login_tenant_id(ctx.get_my_session()->get_login_tenant_id()));
   CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(ctx.get_sql_proxy()->get_pool())));
   OZ (pool->acquire_spi_conn(session, conn));
   OZ (conn->execute_write(stmt.get_designated_tenant_id(), stmt.get_call_stmt(), affected_rows),

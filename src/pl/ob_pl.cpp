@@ -37,6 +37,7 @@
 #include "pl/ob_pl_exception_handling.h"
 #include "observer/mysql/ob_async_cmd_driver.h"
 #include "observer/ob_server.h"
+#include "pl/external_routine/ob_java_udf.h"
 namespace oceanbase
 {
 using namespace common;
@@ -5382,6 +5383,46 @@ int ObPL::simple_execute(ObPLExecCtx *ctx, int64_t argc, int64_t *argv)
 
     }
   }
+  return ret;
+}
+
+// for external routines that not implemented in PL language, such as Java UDF
+int ObPL::external_execute(ObPLExecCtx *ctx, int64_t argc, int64_t *argv)
+{
+  int ret = OB_SUCCESS;
+
+  ObPLFunction *func = nullptr;
+  ObObj *ctx_result = nullptr;
+
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(func = ctx->func_));
+  CK (OB_NOT_NULL(ctx_result = ctx->result_));
+  CK (func->is_external_routine());
+  CK (ObExternalRoutineType::INTERNAL_ROUTINE != func->get_external_routine_type());
+  CK (!func->get_external_routine_entry().empty());
+
+  if (OB_SUCC(ret)) {
+    switch (func->get_external_routine_type()) {
+      case ObExternalRoutineType::EXTERNAL_ORACLE_JAVA_ROUTINE: {
+        ObOraJavaRoutineExecutor executor(*ctx, *func);
+
+        if (OB_FAIL(executor.init())) {
+          LOG_WARN("failed to init ObOraJavaRoutineExecutor", K(ret));
+        } else if (OB_FAIL(executor.execute(argc, argv))) {
+          LOG_WARN("failed to execute Oracle Java routine", K(ret));
+        }
+      } break;
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN(
+            "external routine type not supported", K(ret), K(func->get_external_routine_type()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "external routine type");
+      } break;
+    }
+  }
+
+  LOG_INFO("finished to external execute", K(ret), KPC(func), KPC(ctx_result));
+
   return ret;
 }
 

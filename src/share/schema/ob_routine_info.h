@@ -112,12 +112,14 @@ enum class ObExternalRoutineType
   EXTERNAL_JAVA_UDF_FROM_RES = 2,
   EXTERNAL_PY_UDF_FROM_URL = 3,
   EXTERNAL_PY_UDF_FROM_RES = 4,
+  EXTERNAL_ORACLE_JAVA_ROUTINE = 5,
 };
 
 OB_INLINE bool is_java_external_routine(ObExternalRoutineType type)
 {
   return type == ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_URL
-           || type == ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_RES;
+           || type == ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_RES
+           || type == ObExternalRoutineType::EXTERNAL_ORACLE_JAVA_ROUTINE;
 }
 
 class ObIRoutineParam

@@ -34,6 +34,7 @@
 #endif
 #include "pl/external_routine/ob_external_resource.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
+#include "pl/external_routine/ob_java_udf.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -197,7 +198,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       last_update_ccl_cnt_time_(-1),
       curr_request_id_(0),
       trans_gtt_v2_sequence_(0),
-      min_data_version_of_init_sess_(0)
+      min_data_version_of_init_sess_(0),
+      ora_java_session_state_(nullptr)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -836,6 +838,12 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
       get_session_allocator().free(cache);
       cache = nullptr;
       external_resource_schema_cache_ = nullptr;
+    }
+
+    if (OB_NOT_NULL(ora_java_session_state_)) {
+      ora_java_session_state_->~ObOraJavaSessionState();
+      get_session_allocator().free(ora_java_session_state_);
+      ora_java_session_state_ = nullptr;
     }
   }
 }

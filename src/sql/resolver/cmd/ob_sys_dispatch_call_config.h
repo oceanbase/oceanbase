@@ -39,6 +39,7 @@
   V(DBMS_STATS, SET_TABLE_PREFS)            \
   V(DBMS_STATS, DELETE_SCHEMA_PREFS)        \
   V(DBMS_STATS, DELETE_TABLE_PREFS)         \
-  V(DBMS_UDR, *)
+  V(DBMS_UDR, *)                            \
+  V(DBMS_JAVA, *)
 
 #endif  // OCEANBASE_SRC_SQL_RESOLVER_CMD_OB_SYS_DISPATCH_CALL_CONFIG_H_

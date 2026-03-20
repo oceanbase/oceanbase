@@ -6690,6 +6690,89 @@ int ObSchemaRetrieveUtils::fill_ai_model_schema(const uint64_t tenant_id,
   return ret;
 }
 
+template <typename T>
+int ObSchemaRetrieveUtils::retrieve_java_policy_schema(const uint64_t tenant_id,
+                                                       T &result,
+                                                       ObIArray<ObSimpleJavaPolicySchema> &schema_array)
+{
+  int ret = common::OB_SUCCESS;
+  uint64_t prev_id = common::OB_INVALID_ID;
+  ObArenaAllocator allocator(ObMemAttr(tenant_id, "SchJavaPol"));
+  ObSimpleJavaPolicySchema schema(&allocator);
+  int64_t count = 0;
+  while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    schema.reset();
+    allocator.reuse();
+    bool is_deleted = false;
+    count++;
+    if (OB_FAIL(fill_java_policy_schema(tenant_id, result, schema, is_deleted))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to fill java_policy schema ", K(ret));
+    } else if (schema.get_key() == prev_id) {
+       SHARE_SCHEMA_LOG(DEBUG, "ignore duplicated java_policy", "key", schema.get_key(), "version", schema.get_schema_version());
+    } else if (is_deleted) {
+      SHARE_SCHEMA_LOG(INFO, "java_policy is is_deleted, don't add",
+               "key", schema.get_key());
+    } else if (OB_FAIL(schema_array.push_back(schema))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to push back", K(schema), K(ret));
+    } else {
+      SHARE_SCHEMA_LOG(INFO, "retrieve java_policy schema succeed", K(schema));
+    }
+    if (OB_SUCC(ret)) {
+      prev_id = schema.get_key();
+    }
+  }
+  if (ret != common::OB_ITER_END) {
+    SHARE_SCHEMA_LOG(WARN, "fail to get all java_policy schema. iter quit. ", K(ret));
+  } else {
+    ret = common::OB_SUCCESS;
+    SHARE_SCHEMA_LOG(INFO, "retrieve all java_policy schemas succeed", K(schema_array));
+  }
+  return ret;
+}
+
+template <typename T>
+int ObSchemaRetrieveUtils::fill_java_policy_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObSimpleJavaPolicySchema &schema,
+    bool &is_deleted)
+{
+  int ret = OB_SUCCESS;
+  uint64_t key = OB_INVALID_ID;
+  EXTRACT_INT_FIELD_MYSQL(result, "key", key, uint64_t);
+  schema.set_key(key);
+  schema.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+
+  if (OB_SUCC(ret) && !is_deleted) {
+    int64_t schema_version = 0;
+    int64_t kind = 0;
+    int64_t status = 0;
+    EXTRACT_INT_FIELD_MYSQL(result, "schema_version", schema_version, int64_t);
+    schema.set_schema_version(schema_version);
+
+    EXTRACT_INT_FIELD_MYSQL(result, "kind", kind, int64_t);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, grantee, schema, uint64_t);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, type_schema, schema, uint64_t);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, type_name, schema, true, false, "");
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, name, schema, true, false, "");
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, action, schema, true, false, "");
+    EXTRACT_INT_FIELD_MYSQL(result, "status", status, int64_t);
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (!ObSimpleJavaPolicySchema::is_valid_java_policy_kind(static_cast<ObSimpleJavaPolicySchema::JavaPolicyKind>(kind))
+               || !ObSimpleJavaPolicySchema::is_valid_java_policy_status(static_cast<ObSimpleJavaPolicySchema::JavaPolicyStatus>(status))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected java policy kind or status", K(ret), K(kind), K(status));
+    } else {
+      schema.set_kind(static_cast<ObSimpleJavaPolicySchema::JavaPolicyKind>(kind));
+      schema.set_status(static_cast<ObSimpleJavaPolicySchema::JavaPolicyStatus>(status));
+    }
+  }
+  return ret;
+}
+
 } //end of namespace schema
 } //end of namespace share
 } //end of namespace oceanbase

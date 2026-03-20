@@ -235,6 +235,7 @@ public:
 
   int generate_normal(ObPLFunction &pl_func);
   int generate_simple(ObPLFunction &pl_func);
+  int generate_external(ObPLFunction &pl_func);
 
   int generate_global_string(const ObString &string, jit::ObLLVMValue &str, jit::ObLLVMValue &len);
   int generate_string(const ObString &string, jit::ObLLVMValue &str, jit::ObLLVMValue &len);

@@ -70,6 +70,7 @@ class ObPLCacheCtx;
 class ObPLExecuteCache;
 class ObPLExecInfo;
 class ObPLAllocator1;
+class ObOraJavaRoutineInfo;
 
 class ObPLProfilerTimeStack;
 
@@ -128,6 +129,7 @@ class ObPLFunctionBase
   static const int64_t IS_UDT_CONS = 9; // udt constructor
   static const int64_t HAS_DEBUG_PRIV = 10;
   static const int64_t IS_PRAGMA_INTERFACE = 11;
+  static const int64_t IS_EXTERNAL_ROUTINE = 12;
 
 public:
   ObPLFunctionBase()
@@ -188,7 +190,7 @@ public:
     ret_type_.set_enum_set_ctx(enum_set_ctx);
     return ret_type_.set_type_info(type_info);
   }
-  inline bool is_function()
+  inline bool is_function() const
   {
     return STANDALONE_FUNCTION == proc_type_
           || PACKAGE_FUNCTION == proc_type_
@@ -229,6 +231,24 @@ public:
   inline void clean_debug_priv() {
     flag_.del_member(HAS_DEBUG_PRIV);
   }
+  inline bool is_external_routine() const {
+    return flag_.has_member(IS_EXTERNAL_ROUTINE);
+  }
+  inline void set_external_routine() {
+    flag_.add_member(IS_EXTERNAL_ROUTINE);
+  }
+  inline const ObString &get_external_routine_entry() const {
+    return external_routine_entry_;
+  }
+  inline void set_external_routine_entry(const ObString &external_routine_entry){
+    external_routine_entry_ = external_routine_entry;
+  }
+  inline const ObExternalRoutineType &get_external_routine_type() const {
+    return external_routine_type_;
+  }
+  inline void set_external_routine_type(const ObExternalRoutineType &external_routine_type) {
+    external_routine_type_ = external_routine_type;
+  }
 
 private:
   //基础信息
@@ -244,6 +264,8 @@ private:
   ObPLDataType ret_type_;
   int64_t arg_count_; //参数一定在符号表的最前面
   ObPLFlag flag_;
+  ObExternalRoutineType external_routine_type_;
+  ObString external_routine_entry_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPLFunctionBase);
 };
@@ -568,6 +590,9 @@ public:
 
   int is_readonly_arg(int64_t var_idx) const { return readonly_args_.has_member(var_idx); }
 
+  inline ObOraJavaRoutineInfo *get_ora_java_routine_info() const { return ora_java_routine_info_; }
+  inline void set_ora_java_routine_info(ObOraJavaRoutineInfo *info) { ora_java_routine_info_ = info; }
+
   TO_STRING_KV(K_(ns),
                K_(ref_count),
                K_(tenant_schema_version),
@@ -581,7 +606,9 @@ public:
                K_(priv_user),
                K_(stat),
                K_(stack_size),
-               K_(pre_calc_default_values));
+               K_(pre_calc_default_values),
+               "external_routine_type", get_external_routine_type(),
+               "external_routine_entry", get_external_routine_entry());
 
 private:
   static int check_can_pre_calc_default_value(bool &can_calc, const ObRawExpr &expr);
@@ -612,6 +639,7 @@ private:
   bool is_special_pkg_invoke_right_;
   common::ObSEArray<ObObjParam, 4> pre_calc_default_values_;
   common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE> readonly_args_;
+  ObOraJavaRoutineInfo *ora_java_routine_info_ = nullptr;
 
   DISALLOW_COPY_AND_ASSIGN(ObPLFunction);
 };
@@ -1597,6 +1625,8 @@ public:
                               ObString &no_param_sql,
                               ObIAllocator &allocator,
                               ParamStore &param_store);
+
+  static int external_execute(ObPLExecCtx *ctx, int64_t argc, int64_t *argv);
 
 private:
   common::ObMySQLProxy *sql_proxy_;

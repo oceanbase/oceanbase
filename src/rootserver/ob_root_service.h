@@ -68,6 +68,7 @@
 #include "rootserver/ob_objpriv_mysql_ddl_service.h"
 #include "rootserver/ob_ccl_ddl_service.h"
 #include "rootserver/ob_sensitive_rule_ddl_service.h"
+#include "share/ob_java_policy_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -744,7 +745,15 @@ public:
   //----Functions for managing external resource----
   int create_external_resource(const obrpc::ObCreateExternalResourceArg &arg, obrpc::ObCreateExternalResourceRes &result);
   int drop_external_resource(const obrpc::ObDropExternalResourceArg &arg, obrpc::ObDropExternalResourceRes &result);
+  int ora_upload_jar_external_resource(const obrpc::ObOraUploadJarArg &arg, obrpc::ObOraUploadJarRes &result);
+  int ora_drop_jar_external_resource(const obrpc::ObOraDropJarArg &arg, obrpc::ObOraDropJarRes &result);
   //----End of functions for managing external resource----
+
+  //----Functions for managing java_policy----
+  int create_java_policy(const obrpc::ObCreateJavaPolicyArg &arg, obrpc::ObCreateJavaPolicyRes &result);
+  int drop_java_policy(const obrpc::ObDropJavaPolicyArg &arg, obrpc::ObDropJavaPolicyRes &result);
+  int modify_java_policy(const obrpc::ObModifyJavaPolicyArg &arg, obrpc::ObModifyJavaPolicyRes &result);
+  //----End of functions for managing java_policy----
 
   //----Functions for managing ai model----
   int create_ai_model(const obrpc::ObCreateAiModelArg &arg);

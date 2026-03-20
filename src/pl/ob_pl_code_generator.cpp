@@ -19,6 +19,8 @@
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "parser/parse_stmt_item_type.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
+#include "external_routine/ob_java_udf.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -9629,7 +9631,9 @@ int ObPLCodeGenerator::generate(ObPLFunction &pl_func)
   bool forbid_profile = session_info_.get_local_ob_enable_parameter_anonymous_block()
                         && pl_func.get_proc_type() == STANDALONE_ANONYMOUS;
   profile_mode_ = profile_mode_ && !forbid_profile;
-  if (debug_mode_
+  if (pl_func.is_external_routine()) {
+    OZ (generate_external(pl_func));
+  } else if (debug_mode_
       || profile_mode_
       || code_coverage_mode_
       || !ast.get_is_all_sql_stmt()
@@ -11622,6 +11626,49 @@ int ObPLCodeGenerator::generate_init_continue_handler_dispatcher()
 
     OZ (set_current(current));
   }
+  return ret;
+}
+
+int ObPLCodeGenerator::generate_external(ObPLFunction &pl_func)
+{
+  int ret = OB_SUCCESS;
+
+  ObPLFunctionAST &ast = static_cast<ObPLFunctionAST&>(ast_);
+
+  ObString entry;
+
+  OZ (prepare_expression(pl_func));
+  OZ (final_expression(pl_func));
+  OZ (codegen_expression(pl_func));
+  OZ (pl_func.get_enum_set_ctx().assgin(get_ast().get_enum_set_ctx()));
+  OZ (pl_func.set_variables(get_ast().get_symbol_table()));
+  OZ (pl_func.get_dependency_table().assign(get_ast().get_dependency_table()));
+  OZ (pl_func.add_members(get_ast().get_flag()));
+  OX (pl_func.set_pipelined(get_ast().get_pipelined()));
+  OX (pl_func.set_action((uint64_t)(&ObPL::external_execute)));
+  OX (pl_func.set_can_cached(get_ast().get_can_cached()));
+  OX (pl_func.set_is_all_sql_stmt(get_ast().get_is_all_sql_stmt()));
+  OX (pl_func.set_has_parallel_affect_factor(get_ast().has_parallel_affect_factor()));
+  OX (pl_func.set_has_incomplete_rt_dep_error(get_ast().has_incomplete_rt_dep_error()));
+  OX (pl_func.set_external_routine_type(get_ast().get_external_routine_type()));
+  OZ (ob_write_string(pl_func.get_allocator(), get_ast().get_external_routine_entry(), entry));
+  OX (pl_func.set_external_routine_entry(entry));
+
+  if (OB_SUCC(ret)) {
+    ObOraJavaRoutineInfo *info = static_cast<ObOraJavaRoutineInfo *>(pl_func.get_allocator().alloc(sizeof(ObOraJavaRoutineInfo)));
+    if (OB_ISNULL(info)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObOraJavaRoutineInfo", K(ret));
+    } else if (OB_ISNULL(info = new (info) ObOraJavaRoutineInfo())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to placement new ObOraJavaRoutineInfo", K(ret));
+    } else if (OB_FAIL(ObOraJavaRoutineInfo::parse_java_routine_info(pl_func.get_allocator(), entry, *info))) {
+      LOG_WARN("failed to parse java routine info", K(ret));
+    } else {
+      pl_func.set_ora_java_routine_info(info);
+    }
+  }
+
   return ret;
 }
 

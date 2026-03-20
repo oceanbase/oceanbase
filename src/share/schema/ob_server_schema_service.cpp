@@ -378,6 +378,8 @@ void ObServerSchemaService::AllSchemaKeys::reset()
   del_sensitive_rule_keys_.clear();
   new_sensitive_rule_priv_keys_.clear();
   del_sensitive_rule_priv_keys_.clear();
+  new_java_policy_keys_.clear();
+  del_java_policy_keys_.clear();
 }
 
 int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
@@ -568,6 +570,10 @@ int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
     LOG_WARN("failed to create new_sensitive_rule_priv_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_sensitive_rule_priv_keys_.create(bucket_size))) {
     LOG_WARN("failed to create del_sensitive_rule_priv_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_java_policy_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_java_policy_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_java_policy_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_java_policy_keys hashset", K(bucket_size), K(ret));
   }
   return ret;
 }
@@ -714,6 +720,9 @@ int ObServerSchemaService::del_tenant_operation(
   } else if (OB_FAIL(del_operation(tenant_id,
              new_flag ? schema_keys.new_sensitive_rule_priv_keys_ : schema_keys.del_sensitive_rule_priv_keys_))) {
     LOG_WARN("fail to del sensitive_rule_priv operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_java_policy_keys_ : schema_keys.del_java_policy_keys_))) {
+    LOG_WARN("fail to del java_policy operation", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -2604,6 +2613,93 @@ int ObServerSchemaService::get_increment_udf_keys(
       if (OB_SUCCESS != hash_ret) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to add new udf id", K(hash_ret), KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_java_policy_keys(
+  const ObSchemaMgr &schema_mgr,
+  const ObSchemaOperation &schema_operation,
+  AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+
+  if (!(schema_operation.op_type_ > OB_DDL_JAVA_POLICY_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_JAVA_POLICY_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t java_policy_id = schema_operation.java_policy_id_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.java_policy_id_ = java_policy_id;
+    schema_key.schema_version_ = schema_version;
+
+    if (OB_DDL_DROP_JAVA_POLICY == schema_operation.op_type_) {
+      hash_ret = schema_keys.new_java_policy_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to del dropped java policy id", K(hash_ret), KR(ret));
+      } else {
+        const ObSimpleJavaPolicySchema *java_policy = NULL;
+        if (OB_FAIL(schema_mgr.java_policy_mgr_.get_java_policy_schema(tenant_id, java_policy_id, java_policy))) {
+          LOG_WARN("failed to get java policy schema", K(tenant_id), K(java_policy_id), KR(ret));
+        } else if (NULL != java_policy) {
+          hash_ret = schema_keys.del_java_policy_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add del java policy id", K(hash_ret), KR(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_java_policy_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add new java policy id", K(hash_ret), KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_java_policy_keys_reversely(
+  const ObSchemaMgr &schema_mgr,
+  const ObSchemaOperation &schema_operation,
+  AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_JAVA_POLICY_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_JAVA_POLICY_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t java_policy_id = schema_operation.java_policy_id_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.java_policy_id_ = java_policy_id;
+    schema_key.schema_version_ = schema_version;
+
+    bool is_delete = (OB_DDL_CREATE_JAVA_POLICY == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObSimpleJavaPolicySchema *java_policy = NULL;
+    if (OB_FAIL(schema_mgr.java_policy_mgr_.get_java_policy_schema(tenant_id, java_policy_id, java_policy))) {
+      LOG_WARN("failed to get java policy schema", K(tenant_id), K(java_policy_id), KR(ret));
+    } else if (NULL != java_policy) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_java_policy_keys_,
+          schema_keys.new_java_policy_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
       }
     }
   }
@@ -4934,6 +5030,7 @@ int ObServerSchemaService::fetch_increment_schemas(
   GET_BATCH_SCHEMAS(ai_model, ObAiModelSchema, AiModelKeys);
   GET_BATCH_SCHEMAS(ccl_rule, ObSimpleCCLRuleSchema, CCLRuleKeys);
   GET_BATCH_SCHEMAS(sensitive_rule, ObSensitiveRuleSchema, SensitiveRuleKeys);
+  GET_BATCH_SCHEMAS(java_policy, ObSimpleJavaPolicySchema, JavaPolicyKeys);
 
   // After the schema is split, ordinary tenants do not refresh the tenant schema and system table schema
   const uint64_t tenant_id = schema_status.tenant_id_;
@@ -5109,6 +5206,9 @@ int ObServerSchemaService::apply_increment_schema_to_cache(
   } else if (OB_FAIL(apply_ai_model_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr))) {
     LOG_WARN("fail to apply ai_model schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_java_policy_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr))) {
+    LOG_WARN("fail to apply java_policy schema to cache", KR(ret), K(tenant_id));
   }
 
   return ret;
@@ -5273,6 +5373,7 @@ APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, ai_model, ObAiModelSchema, AiModelKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, ccl_rule, ObSimpleCCLRuleSchema, CCLRuleKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, sensitive_rule, ObSensitiveRuleSchema, SensitiveRuleKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, sensitive_rule_priv, ObSensitiveRulePriv, SensitiveRulePrivKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, java_policy, ObSimpleJavaPolicySchema, JavaPolicyKeys);
 
 int ObServerSchemaService::update_schema_mgr(ObISQLClient &sql_client,
                                              const ObRefreshSchemaStatus &schema_status,
@@ -5772,6 +5873,11 @@ int ObServerSchemaService::replay_log(
           if (OB_FAIL(get_increment_sensitive_rule_priv_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment sensitive rule priv id", K(ret));
           }
+        } else if (schema_operation.op_type_ > OB_DDL_JAVA_POLICY_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_JAVA_POLICY_OPERATION_END) {
+          if (OB_FAIL(get_increment_java_policy_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment java policy id", K(ret));
+          }
         }
       }
     }
@@ -6019,6 +6125,11 @@ int ObServerSchemaService::replay_log_reversely(
                  && schema_operation.op_type_ < OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_END) {
         if (OB_FAIL(get_increment_sensitive_rule_priv_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment sensitive_rule_priv keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_JAVA_POLICY_OPERATION_BEGIN
+                 && schema_operation.op_type_ < OB_DDL_JAVA_POLICY_OPERATION_END) {
+        if (OB_FAIL(get_increment_java_policy_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment java_policy keys reversely", KR(ret));
         }
       } else {
         // ingore other operaton.
@@ -7438,6 +7549,7 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       INIT_ARRAY(ObSimpleCCLRuleSchema, simple_ccl_rules);
       INIT_ARRAY(ObSensitiveRuleSchema, simple_sensitive_rules);
       INIT_ARRAY(ObSensitiveRulePriv, sensitive_rule_privs);
+      INIT_ARRAY(ObSimpleJavaPolicySchema, simple_java_policys);
       #undef INIT_ARRAY
       ObSimpleSysVariableSchema simple_sys_variable;
 
@@ -7700,6 +7812,18 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         }
       }
 
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_JAVA_POLICY_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_java_policys(
+          sql_client, schema_status, schema_version, tenant_id, simple_java_policys))) {
+          LOG_WARN("get all java_policy schema failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
       const bool refresh_full_schema = true;
       // add simple schema for cache
       if (OB_FAIL(ret)) {
@@ -7793,6 +7917,8 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         LOG_WARN("add sensitive_rules failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_sensitive_rule_privs(sensitive_rule_privs))) {
         LOG_WARN("add sensitive_rule_privs failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->java_policy_mgr_.add_java_policies(simple_java_policys))) {
+        LOG_WARN("add java_policys failed", K(ret));
       }
 
       LOG_INFO("add schemas for tenant finish",
@@ -7832,7 +7958,8 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
                "catalog_privs", catalog_privs.count(),
                "ccl_rules", simple_ccl_rules.count(),
                "sensitive_rules", simple_sensitive_rules.count(),
-               "sensitive_rule_privs", sensitive_rule_privs.count()
+               "sensitive_rule_privs", sensitive_rule_privs.count(),
+               "java_policys", simple_java_policys.count()
               );
     }
 

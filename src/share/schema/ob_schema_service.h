@@ -52,6 +52,7 @@ class ObTriggerInfo;
 class ObUDTTypeInfo;
 class ObSimpleExternalResourceSchema;
 class ObAiModelSchema;
+class ObSimpleJavaPolicySchema;
 
 enum ObSchemaOperationCategory
 {
@@ -401,6 +402,11 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_ALTER_AI_MODEL, )                                   \
   ACT(OB_DDL_DROP_AI_MODEL, )                                    \
   ACT(OB_DDL_AI_MODEL_OPERATION_END, = 2163)                     \
+  ACT(OB_DDL_JAVA_POLICY_OPERATION_BEGIN, = 2164)                \
+  ACT(OB_DDL_CREATE_JAVA_POLICY,)                                \
+  ACT(OB_DDL_DROP_JAVA_POLICY,)                                  \
+  ACT(OB_DDL_MODIFY_JAVA_POLICY,)                                \
+  ACT(OB_DDL_JAVA_POLICY_OPERATION_END, = 2170)                  \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -455,6 +461,7 @@ IS_DDL_TYPE(EXTERNAL_RESOURCE, external_resource)
 IS_DDL_TYPE(AI_MODEL, ai_model)
 IS_DDL_TYPE(CCL_RULE, ccl_rule)
 IS_DDL_TYPE(SENSITIVE_RULE, sensitive_rule)
+IS_DDL_TYPE(JAVA_POLICY, java_policy)
 
 struct ObSchemaOperation
 {
@@ -509,6 +516,7 @@ public:
     uint64_t external_resource_id_;
     uint64_t ai_model_id_;
     uint64_t sensitive_rule_id_;
+    uint64_t java_policy_id_;
   };
   union {
     common::ObString table_name_;
@@ -524,6 +532,7 @@ public:
     common::ObString external_resource_name_;
     common::ObString ai_model_name_;
     common::ObString sensitive_rule_name_;
+    common::ObString java_policy_name_;
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;
@@ -817,6 +826,7 @@ class ObExternalResourceSqlService;
 class ObAiModelSqlService;
 class ObCCLRuleSqlService;
 class ObSensitiveRuleSqlService;
+class ObJavaPolicySqlService;
 class ObSchemaService
 {
 public:
@@ -880,6 +890,7 @@ public:
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(ExternalResource, external_resource);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(AiModel, ai_model);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(CCLRule, ccl_rule);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(JavaPolicy, java_policy);
 
 
   /* sequence_id related */
@@ -1034,6 +1045,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ai_model, ObAiModelSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObSimpleCCLRuleSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(java_policy, ObSimpleJavaPolicySchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule, ObSensitiveRuleSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
@@ -1117,10 +1129,10 @@ public:
   virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id) = 0;
   virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id) = 0;
   virtual int fetch_new_external_resource_id(const uint64_t tenant_id, uint64_t &new_external_resource_id) = 0;
+  virtual int fetch_new_java_policy_id(const uint64_t tenant_id, uint64_t &new_java_policy_id) = 0;
   virtual int fetch_new_ai_model_id(const uint64_t tenant_id, uint64_t &new_ai_model_id) = 0;
   virtual int fetch_new_ccl_rule_id(const uint64_t tenant_id, uint64_t &new_ccl_rule_id) = 0;
   virtual int fetch_new_sensitive_rule_id(const uint64_t tenant_id, uint64_t &new_sensitive_rule_id) = 0;
-
 //------------------For managing privileges-----------------------------//
   #define GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)  \
     virtual int get_batch_##SCHEMA##s(const ObRefreshSchemaStatus &schema_status,\
@@ -1183,7 +1195,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule, ObSensitiveRuleSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule_priv, ObSensitiveRulePriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sensitive_column, ObSensitiveColumnSchema);
-
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(java_policy, ObSimpleJavaPolicySchema);
 
   //--------------For manaing recyclebin -----//
   virtual int insert_recyclebin_object(

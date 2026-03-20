@@ -211,7 +211,7 @@ int ObExprUDF::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObEx
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (ObExternalRoutineType::INTERNAL_ROUTINE != fun_sys.get_external_routine_type()) {
+  } else if (ObExternalRoutineType::INTERNAL_ROUTINE != fun_sys.get_external_routine_type() && lib::is_mysql_mode()) {
     uint64_t routine_id = fun_sys.get_udf_id();
     uint64_t tenant_id = pl::get_tenant_id_by_object_id(routine_id);
     const ObRoutineInfo *routine_info = nullptr;

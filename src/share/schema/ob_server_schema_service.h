@@ -46,6 +46,7 @@
 #include "share/schema/ob_ai_model_mgr.h"
 #include "share/schema/ob_ccl_rule_mgr.h"
 #include "share/schema/ob_sensitive_rule_mgr.h"
+#include "share/schema/ob_java_policy_mgr.h"
 
 namespace oceanbase
 {
@@ -117,6 +118,7 @@ struct SchemaKey
     uint64_t ai_model_id_;
     uint64_t ccl_rule_id_;
     uint64_t sensitive_rule_id_;
+    uint64_t java_policy_id_;
   };
   union {
     common::ObString table_name_;
@@ -386,6 +388,10 @@ struct SchemaKey
   {
     return ObSensitiveRulePrivSortKey(tenant_id_, user_id_, sensitive_rule_name_);
   }
+  ObTenantJavaPolicyId get_java_policy_key() const
+  {
+    return ObTenantJavaPolicyId(tenant_id_, java_policy_id_);
+  }
 };
 
 struct VersionHisKey
@@ -536,6 +542,7 @@ public:
   SCHEMA_KEY_FUNC(ai_model);
   SCHEMA_KEY_FUNC(ccl_rule);
   SCHEMA_KEY_FUNC(sensitive_rule);
+  SCHEMA_KEY_FUNC(java_policy);
   #undef SCHEMA_KEY_FUNC
 
   struct udf_key_hash_func {
@@ -915,6 +922,7 @@ public:
   SCHEMA_KEYS_DEF(ccl_rule, CCLRuleKeys);
   SCHEMA_KEYS_DEF(sensitive_rule, SensitiveRuleKeys);
   SCHEMA_KEYS_DEF(sensitive_rule_priv, SensitiveRulePrivKeys);
+  SCHEMA_KEYS_DEF(java_policy, JavaPolicyKeys);
 
   #undef SCHEMA_KEYS_DEF
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
@@ -1079,6 +1087,10 @@ public:
     SensitiveRulePrivKeys new_sensitive_rule_priv_keys_;
     SensitiveRulePrivKeys del_sensitive_rule_priv_keys_;
 
+    // java_policy
+    JavaPolicyKeys new_java_policy_keys_;
+    JavaPolicyKeys del_java_policy_keys_;
+
     void reset();
     int create(int64_t bucket_size);
 
@@ -1138,6 +1150,7 @@ public:
     common::ObArray<ObTableSchema *> non_sys_tables_;
     common::ObArray<ObSimpleExternalResourceSchema> simple_external_resource_schemas_;
     common::ObArray<ObAiModelSchema> simple_ai_model_schemas_;
+    common::ObArray<ObSimpleJavaPolicySchema> simple_java_policy_schemas_;
     common::ObArenaAllocator allocator_;
   };
 
@@ -1335,6 +1348,7 @@ private:
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(ccl_rule);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(sensitive_rule);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(sensitive_rule_priv);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(java_policy);
 #undef GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE
 
 
@@ -1389,6 +1403,7 @@ private:
   APPLY_SCHEMA_TO_CACHE(sensitive_rule, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(sensitive_column, ObSensitiveRuleMgr);
   APPLY_SCHEMA_TO_CACHE(sensitive_rule_priv, ObPrivMgr);
+  APPLY_SCHEMA_TO_CACHE(java_policy, ObSchemaMgr);
 #undef APPLY_SCHEMA_TO_CACHE
 
   // replay log

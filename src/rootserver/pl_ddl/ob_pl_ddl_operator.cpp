@@ -26,6 +26,7 @@
 #include "pl/ob_pl_package_type.h"
 #endif
 #include "share/schema/ob_external_resource_sql_service.h"
+#include "share/schema/ob_java_policy_sql_service.h"
 
 namespace oceanbase
 {
@@ -1762,9 +1763,10 @@ int ObPLDDLOperator::create_external_resource(const obrpc::ObCreateExternalResou
     new_schema.set_resource_id(new_schema_id);
     new_schema.set_database_id(arg.database_id_);
     new_schema.set_type(arg.type_);
-    new_schema.set_name(arg.name_);
 
-    if (!new_schema.is_valid()) {
+    if (OB_FAIL(new_schema.set_name(arg.name_))) {
+      LOG_WARN("failed to set name", K(ret), K(arg), K(new_schema));
+    } else if (!new_schema.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("new schema is invalid", K(ret), K(arg), K(new_schema));
     } else if (OB_FAIL(schema_service->get_external_resource_sql_service()
@@ -1778,7 +1780,8 @@ int ObPLDDLOperator::create_external_resource(const obrpc::ObCreateExternalResou
 
 int ObPLDDLOperator::drop_external_resource(ObSimpleExternalResourceSchema &schema,
                                             const ObString &ddl_stmt,
-                                            ObMySQLTransaction &trans)
+                                            ObMySQLTransaction &trans,
+                                            const std::optional<std::pair<ObString, ObString>> &extra_cond)
 {
   int ret = OB_SUCCESS;
 
@@ -1796,8 +1799,285 @@ int ObPLDDLOperator::drop_external_resource(ObSimpleExternalResourceSchema &sche
     LOG_WARN("failed to gen_new_schema_version", K(ret), K(tenant_id));
   } else if (FALSE_IT(schema.set_schema_version(new_schema_version))) {
     // unreachable
-  } else if (OB_FAIL(schema_service->get_external_resource_sql_service().drop_external_resource(schema, ddl_stmt, trans))) {
+  } else if (OB_FAIL(schema_service->get_external_resource_sql_service().drop_external_resource(schema, ddl_stmt, trans, extra_cond))) {
     LOG_WARN("failed to drop_external_resource", K(ret), K(schema));
+  }
+
+  return ret;
+}
+
+int ObPLDDLOperator::create_java_policy(const obrpc::ObCreateJavaPolicyArg &arg,
+                                        ObSimpleJavaPolicySchema &new_schema,
+                                        ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  uint64_t new_schema_id = OB_INVALID_ID;
+  const uint64_t tenant_id = arg.tenant_id_;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service->fetch_new_java_policy_id(tenant_id, new_schema_id))) {
+    LOG_WARN("failed to fetch_new_java_policy_id", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("failed to gen_new_schema_version", K(ret));
+  } else {
+    new_schema.set_key(new_schema_id);
+    new_schema.set_schema_version(new_schema_version);
+    new_schema.set_tenant_id(arg.tenant_id_);
+    new_schema.set_kind(arg.kind_);
+    new_schema.set_grantee(arg.grantee_);
+    new_schema.set_type_schema(arg.type_schema_);
+    new_schema.set_status(arg.status_);
+
+    if (OB_FAIL(new_schema.set_type_name(arg.type_name_))) {
+      LOG_WARN("failed to set type_name", K(ret));
+    } else if (OB_FAIL(new_schema.set_name(arg.name_))) {
+      LOG_WARN("failed to set name", K(ret));
+    } else if (OB_FAIL(new_schema.set_action(arg.action_))) {
+      LOG_WARN("failed to set action", K(ret));
+    } else if (!new_schema.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid schema arg", K(ret), K(new_schema));
+    } else if (OB_FAIL(schema_service->get_java_policy_sql_service().create_java_policy(new_schema, arg.ddl_stmt_str_, trans))) {
+      LOG_WARN("failed to create_java_policy", K(ret), K(new_schema));
+    }
+  }
+
+  return ret;
+}
+
+int ObPLDDLOperator::drop_java_policy(ObSimpleJavaPolicySchema &schema,
+                                      const ObString &ddl_stmt,
+                                      ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+
+  const uint64_t tenant_id = schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (!schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid schema arg", K(ret), K(schema));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("failed to gen_new_schema_version", K(ret), K(tenant_id));
+  } else {
+    schema.set_schema_version(new_schema_version);
+    if (OB_FAIL(schema_service->get_java_policy_sql_service().drop_java_policy(schema, ddl_stmt, trans))) {
+      LOG_WARN("failed to drop_java_policy", K(ret), K(schema));
+    }
+  }
+
+  return ret;
+}
+
+int ObPLDDLOperator::modify_java_policy(const obrpc::ObModifyJavaPolicyArg &arg,
+                                        ObSimpleJavaPolicySchema &schema,
+                                        ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("failed to gen_new_schema_version", K(ret));
+  } else {
+    schema.set_status(arg.status_);
+    schema.set_schema_version(new_schema_version);
+    if (!schema.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid schema arg", K(ret), K(schema));
+    } else if (OB_FAIL(schema_service->get_java_policy_sql_service().modify_java_policy(schema, arg.ddl_stmt_str_, trans))) {
+      LOG_WARN("failed to modify_java_policy", K(ret), K(schema));
+    }
+  }
+
+  return ret;
+}
+
+int ObPLDDLOperator::ora_upload_jar_external_resource(const obrpc::ObOraUploadJarArg &arg,
+                                                      obrpc::ObOraUploadJarRes &result,
+                                                      ObSchemaGetterGuard &schema_guard,
+                                                      ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+
+  const uint64_t tenant_id = arg.tenant_id_;
+  uint64_t jar_schema_id = OB_INVALID_ID;
+  const ObString &jar_name = arg.jar_name_;
+  int64_t new_schema_version = OB_INVALID_SCHEMA_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+
+  const ObSimpleExternalResourceSchema *old_jar_schema = nullptr;
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ora upload jar arg", K(ret), K(arg));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("failed to gen_new_schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_external_resource_schema(tenant_id, arg.database_id_, jar_name, old_jar_schema))) {
+    LOG_WARN("failed to get_external_resource_schema", K(ret), K(tenant_id), K(arg.database_id_), K(jar_name));
+  } else if (OB_NOT_NULL(old_jar_schema)) {
+    CK (arg.is_force_);
+
+    if (OB_SUCC(ret)) {
+      ObSimpleExternalResourceSchema old_jar_schema_copy;
+
+      if (OB_FAIL(old_jar_schema_copy.assign(*old_jar_schema))) {
+        LOG_WARN("failed to assign old jar schema", K(ret), K(old_jar_schema), K(old_jar_schema_copy));
+      } else if (FALSE_IT(old_jar_schema_copy.set_schema_version(new_schema_version))) {
+        // unreachable
+      } else if (OB_FAIL(drop_external_resource(old_jar_schema_copy, arg.ddl_stmt_str_, trans))) {
+        LOG_WARN("failed to drop_external_resource", K(ret), K(old_jar_schema_copy));
+      } else {
+        result.del_jar_id_ = old_jar_schema_copy.get_resource_id();
+        old_jar_schema = nullptr;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(schema_service->fetch_new_external_resource_id(tenant_id, jar_schema_id))) {
+    LOG_WARN("failed to fetch_new_external_resource_id", K(ret), K(tenant_id));
+  } else {
+    ObSimpleExternalResourceSchema jar_schema;
+    jar_schema.set_schema_version(new_schema_version);
+    jar_schema.set_tenant_id(arg.tenant_id_);
+    jar_schema.set_resource_id(jar_schema_id);
+    jar_schema.set_database_id(arg.database_id_);
+    jar_schema.set_type(ObSimpleExternalResourceSchema::JAVA_ORACLE_JAR_TYPE);
+
+    if (OB_FAIL(jar_schema.set_name(jar_name))) {
+      LOG_WARN("failed to set name", K(ret), K(arg), K(jar_name), K(jar_schema));
+    } else if (!jar_schema.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("new schema is invalid", K(ret), K(arg), K(jar_schema));
+    } else if (OB_FAIL(schema_service->get_external_resource_sql_service().create_external_resource(
+                   jar_schema, arg.jar_binary_, "", arg.ddl_stmt_str_, trans))) {
+      LOG_WARN("failed to create jar external_resource", K(ret), K(jar_schema), K(arg));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < arg.class_names_.count(); ++i) {
+        const ObString &class_name = arg.class_names_.at(i);
+        const ObSimpleExternalResourceSchema *old_schema = nullptr;
+
+        if (OB_FAIL(schema_guard.get_external_resource_schema(tenant_id, arg.database_id_, class_name, old_schema))) {
+          LOG_WARN("failed to check_external_resource_exist", K(ret), K(tenant_id), K(arg.database_id_), K(class_name));
+        } else if (arg.is_force_ && OB_NOT_NULL(old_schema)) {
+          ObSimpleExternalResourceSchema old_schema_copy;
+
+          if (OB_FAIL(old_schema_copy.assign(*old_schema))) {
+            LOG_WARN("failed to assign old schema", K(ret), K(old_schema), K(old_schema_copy));
+          } else if (FALSE_IT(old_schema_copy.set_schema_version(new_schema_version))) {
+            // unreachable
+          } else if (OB_FAIL(drop_external_resource(old_schema_copy, arg.ddl_stmt_str_, trans))) {
+            LOG_WARN("failed to drop_external_resource", K(ret), K(old_schema_copy));
+          } else if (OB_FAIL(result.del_class_ids_.push_back(old_schema_copy.get_resource_id()))) {
+            LOG_WARN("failed to push back del class id", K(ret), K(arg), K(i), K(class_name), K(old_schema_copy));
+          } else {
+            old_schema = nullptr;
+          }
+        }
+
+        if (OB_SUCC(ret) && OB_ISNULL(old_schema)) {
+          int64_t class_schema_version = OB_INVALID_VERSION;
+          uint64_t class_schema_id = OB_INVALID_ID;
+
+          ObSqlString jar_id;
+
+          ObSimpleExternalResourceSchema class_schema;
+          class_schema.set_tenant_id(arg.tenant_id_);
+          class_schema.set_database_id(arg.database_id_);
+          class_schema.set_type(ObSimpleExternalResourceSchema::JAVA_ORACLE_JAR_CLASS_TYPE);
+
+          if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, class_schema_version))) {
+            LOG_WARN("failed to gen_new_schema_version", K(ret), K(tenant_id));
+          } else if (FALSE_IT(class_schema.set_schema_version(class_schema_version))) {
+            // unreachable
+          } else if (OB_FAIL(schema_service->fetch_new_external_resource_id(tenant_id, class_schema_id))) {
+            LOG_WARN("failed to fetch_new_external_resource_id", K(ret), K(tenant_id), K(arg), K(i), K(class_name));
+          } else if (FALSE_IT(class_schema.set_resource_id(class_schema_id))) {
+            // unreachable
+          } else if (OB_FAIL(class_schema.set_name(class_name))) {
+            LOG_WARN("failed to set name", K(ret), K(arg), K(class_name), K(class_schema));
+          } else if (!class_schema.is_valid()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("new class schema is invalid", K(ret), K(arg), K(class_schema), K(class_name));
+          } else if (OB_FAIL(jar_id.append_fmt("%lu", jar_schema_id))) {
+            LOG_WARN("failed to assign jar id", K(ret), K(jar_schema_id));
+          } else if (OB_FAIL(schema_service->get_external_resource_sql_service()
+                              .create_external_resource(class_schema, jar_id.string(), "", arg.ddl_stmt_str_, trans))) {
+            LOG_WARN("failed to create class external_resource", K(ret), K(class_schema), K(arg), K(class_name));
+          } else if (OB_FAIL(result.class_ids_.push_back(class_schema_id))) {
+            LOG_WARN("failed to push back class id", K(ret), K(i), K(class_schema_id), K(arg));
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    result.jar_id_ = jar_schema_id;
+    result.schema_version_ = new_schema_version;
+  }
+
+  return ret;
+}
+
+int ObPLDDLOperator::ora_drop_jar_external_resource(ObSimpleExternalResourceSchema &schema,
+                                                    const obrpc::ObOraDropJarArg &arg,
+                                                    obrpc::ObOraDropJarRes &result,
+                                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                                    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+
+  ObSqlString jar_id;
+
+  if (OB_FAIL(drop_external_resource(schema, arg.ddl_stmt_str_, trans))) {
+    LOG_WARN("failed to drop jar external resource", K(ret), K(schema));
+  } else if (OB_FAIL(jar_id.append_fmt("%lu", schema.get_resource_id()))) {
+    LOG_WARN("failed to append jar id", K(ret), K(schema));
+  } else {
+    const ObSimpleExternalResourceSchema *old_schema = nullptr;
+    ObSimpleExternalResourceSchema class_schema;
+    std::optional<std::pair<ObString, ObString>> extra_cond = std::make_optional(std::make_pair("content", jar_id.string()));
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.class_names_.count(); ++i) {
+      const ObString &class_name = arg.class_names_.at(i);
+
+      if (OB_FAIL(schema_guard.get_external_resource_schema(schema.get_tenant_id(), schema.get_database_id(), class_name, old_schema))) {
+        LOG_WARN("failed to get_external_resource_schema", K(ret), K(schema), K(class_name));
+      } else if (OB_ISNULL(old_schema)) {
+        // do nothing
+      } else if (OB_FAIL(class_schema.assign(*old_schema))) {
+        LOG_WARN("failed to assign class schema", K(ret), KPC(old_schema), K(class_schema));
+      } else if (OB_FAIL(drop_external_resource(class_schema, arg.ddl_stmt_str_, trans, extra_cond))) {
+        LOG_WARN("failed to drop_external_resource", K(ret), K(class_schema), K(jar_id));
+      } else if (OB_FAIL(result.del_class_ids_.push_back(class_schema.get_resource_id()))) {
+        LOG_WARN("failed to push back del class id", K(ret), K(class_schema), K(jar_id));
+      } else {
+        old_schema = nullptr;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    result.jar_id_ = schema.get_resource_id();
+    result.schema_version_ = schema.get_schema_version();
   }
 
   return ret;

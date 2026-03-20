@@ -1907,9 +1907,8 @@ int ObResolverUtils::get_routine(const pl::ObPLResolveCtx &resolve_ctx,
              K(db_name), K(package_name), K(routine_name), K(ret));
   } else {
     if (!candidate_routine_infos.empty()) {
-      if (lib::is_mysql_mode()) {
-        CK (1 == candidate_routine_infos.count());
-        OX (routine = static_cast<const ObRoutineInfo *>(candidate_routine_infos.at(0)));
+      if (lib::is_mysql_mode() && 1 == candidate_routine_infos.count()) {
+        routine = static_cast<const ObRoutineInfo *>(candidate_routine_infos.at(0));
       } else {
         OZ (pick_routine(resolve_ctx, expr_params, candidate_routine_infos, routine));
         LOG_TRACE("call ObResolverUtils::get_routine fit routine",

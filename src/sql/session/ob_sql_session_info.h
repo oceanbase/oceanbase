@@ -68,6 +68,7 @@ struct ObPLExecRecursionCtx;
 struct ObPLSqlCodeInfo;
 class ObPLContext;
 class ObDbmsCursorInfo;
+class ObOraJavaSessionState;
 #ifdef OB_BUILD_ORACLE_PL
 namespace debugger
 {
@@ -2143,6 +2144,8 @@ public:
   void *get_external_resource_schema_cache() { return external_resource_schema_cache_; }
   void set_external_resource_schema_cache(void *cache) { external_resource_schema_cache_ = cache; }
   void set_retry_wait_event_begin_time();
+  pl::ObOraJavaSessionState *get_ora_java_session_state() { return ora_java_session_state_; }
+  void set_ora_java_session_state(pl::ObOraJavaSessionState *ora_java_session_state) { ora_java_session_state_ = ora_java_session_state; }
 
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
@@ -2195,6 +2198,7 @@ private:
 
   private:
   pl::ObUtlHttp* ob_utl_http_info_ = NULL;
+  pl::ObOraJavaSessionState* ora_java_session_state_ = nullptr;
 
   public:
   pl::ObUtlHttp* get_ob_utl_http_info() {return ob_utl_http_info_;}

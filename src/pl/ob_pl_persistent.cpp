@@ -263,7 +263,14 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
                 int8_t cur_level = 0;
                 int16_t sub_id = 0;
                 OZ (cg.init());
-                if (cg.get_debug_mode()
+                if (routine_ast->is_external_routine()) {
+                  OX (routine->set_external_routine());
+                  OZ (SMART_CALL(decode_dll(session_info, schema_guard, routine->get_exec_env(), *routine_ast, *routine, buf, len, pos, cur_level, sub_id)));
+                  CK (sub_id == routine_idx + 1);
+                  CK (0 == routine->get_action());
+                  OZ (cg.generate_external(*routine));
+                  OX (routine->set_ret_type(routine_ast->get_ret_type()));
+                } else if (cg.get_debug_mode()
                     || cg.get_profile_mode()
                     || cg.get_code_coverage_mode()
                     || !routine_ast->get_is_all_sql_stmt()

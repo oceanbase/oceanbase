@@ -98,7 +98,8 @@ int ObExternalResourceSqlService::create_external_resource(const ObSimpleExterna
 
 int ObExternalResourceSqlService::drop_external_resource(const ObSimpleExternalResourceSchema &schema,
                                                          const ObString &ddl_stmt,
-                                                         common::ObISQLClient &sql_client)
+                                                         common::ObISQLClient &sql_client,
+                                                         const std::optional<std::pair<ObString, ObString>> &extra_cond)
 {
   int ret = OB_SUCCESS;
 
@@ -116,14 +117,19 @@ int ObExternalResourceSqlService::drop_external_resource(const ObSimpleExternalR
     LOG_WARN("failed to add column", K(ret), K(schema));
   } else if (OB_FAIL(sql.add_pk_column("resource_id", schema.get_resource_id()))) {
     LOG_WARN("failed to add column", K(ret), K(schema));
+  } else if (extra_cond.has_value() && OB_FAIL(sql.add_column(extra_cond->first.ptr(), ObHexEscapeSqlStr(extra_cond->second)))) {
+    LOG_WARN("failed to add column", K(ret), K(schema));
   } else if (OB_FAIL(sql.splice_delete_sql(OB_ALL_EXTERNAL_RESOURCE_TNAME, buffer))) {
     LOG_WARN("failed to splice_delete_sql", K(ret));
   } else if (OB_FAIL(sql_client.write(exec_tenant_id, buffer.ptr(), affected_rows))) {
     LOG_WARN("failed to execute write", K(ret), K(buffer));
-  } else if (!is_single_row(affected_rows)) {
+  } else if (!extra_cond.has_value() &&!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected value", K(affected_rows), K(buffer), K(ret));
-  } else {
+    LOG_WARN("unexpected value", K(extra_cond.has_value()), K(affected_rows), K(buffer), K(ret));
+  } else if (extra_cond.has_value() && !is_zero_row(affected_rows) && !is_single_row(affected_rows)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected value", K(extra_cond.has_value()), K(affected_rows), K(buffer), K(ret));
+  } else if (is_single_row(affected_rows)) {
     buffer.reuse();
 
     if (OB_FAIL(buffer.append_fmt(
@@ -140,20 +146,20 @@ int ObExternalResourceSqlService::drop_external_resource(const ObSimpleExternalR
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected value", K(affected_rows), K(buffer), K(ret));
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    ObSchemaOperation opt;
-    opt.tenant_id_ = schema.get_tenant_id();
-    opt.database_id_ = schema.get_database_id();
-    opt.external_resource_id_ = schema.get_resource_id();
-    opt.op_type_ = OB_DDL_DROP_EXTERNAL_RESOURCE;
-    opt.schema_version_ = schema.get_schema_version();
-    opt.external_resource_name_ = schema.get_name();
-    opt.ddl_stmt_str_ = ddl_stmt;
+    if (OB_SUCC(ret)) {
+      ObSchemaOperation opt;
+      opt.tenant_id_ = schema.get_tenant_id();
+      opt.database_id_ = schema.get_database_id();
+      opt.external_resource_id_ = schema.get_resource_id();
+      opt.op_type_ = OB_DDL_DROP_EXTERNAL_RESOURCE;
+      opt.schema_version_ = schema.get_schema_version();
+      opt.external_resource_name_ = schema.get_name();
+      opt.ddl_stmt_str_ = ddl_stmt;
 
-    if (OB_FAIL(log_operation(opt, sql_client))) {
-      LOG_WARN("Failed to log operation", K(ret));
+      if (OB_FAIL(log_operation(opt, sql_client))) {
+        LOG_WARN("Failed to log operation", K(ret));
+      }
     }
   }
 

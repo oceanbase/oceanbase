@@ -229,6 +229,20 @@ int ObCreateRoutineResolver::resolve_sp_body(const ParseNode *parse_node,
     } else if (OB_FAIL(routine_info.set_routine_body(routine_body))) {
       LOG_WARN("failed to set routine body", K(ret));
     }
+
+    if (OB_SUCC(ret) && OB_UNLIKELY(T_EXTERNAL_LANGUAGE == parse_node->type_)) {
+      const ParseNode *entry = nullptr;
+      CK (1 == parse_node->num_child_);
+      CK (OB_NOT_NULL(entry = parse_node->children_[0]));
+
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(routine_info.set_external_routine_entry(ObString(entry->str_len_, entry->str_value_)))) {
+        LOG_WARN("failed to set external routine entry", K(ret));
+      } else {
+        routine_info.set_external_routine_type(ObExternalRoutineType::EXTERNAL_ORACLE_JAVA_ROUTINE);
+      }
+    }
   }
   return ret;
 }
@@ -1059,6 +1073,8 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
     }
     OZ (resolve_aggregate_body(body_node, crt_routine_arg->routine_info_));
     OX (crt_routine_arg->routine_info_.set_is_aggregate());
+  } else if (T_EXTERNAL_LANGUAGE == body_node->type_) {
+    // do nothing
   } else {
     OZ (analyze_router_sql(crt_routine_arg));
   }

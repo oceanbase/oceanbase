@@ -88,6 +88,7 @@ ob_set_subtarget(ob_share ALONE
   ob_lonely_table_clean_rpc_struct.cpp
   ob_create_hidden_tablev2_rpc_struct.cpp
   ob_external_resource_rpc_struct.cpp
+  ob_java_policy_rpc_struct.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -632,6 +633,8 @@ ob_set_subtarget(ob_share schema
   schema/ob_sensitive_rule_mgr.cpp
   schema/ob_sensitive_rule_schema_struct.cpp
   schema/ob_sensitive_rule_sql_service.cpp
+  schema/ob_java_policy_mgr.cpp
+  schema/ob_java_policy_sql_service.cpp
 )
 
 ob_set_subtarget(ob_share stat

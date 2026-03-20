@@ -694,6 +694,23 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         }
       }
         break;
+      case T_EXTERNAL_LANGUAGE: {
+        uint64_t data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+          LOG_WARN("failed to get data version", K(ret));
+        } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_2_1 || data_version < DATA_VERSION_4_4_2_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("Oracle External UDF is only supported after 4.4.2", K(ret));
+        } else {
+          const ParseNode *entry = nullptr;
+          CK (1 == parse_tree->num_child_);
+          CK (OB_NOT_NULL(entry = parse_tree->children_[0]));
+          OX (func.set_external_routine());
+          OX (func.set_external_routine_type(ObExternalRoutineType::EXTERNAL_ORACLE_JAVA_ROUTINE));
+          OX (func.set_external_routine_entry(ObString(entry->str_len_, entry->str_value_)));
+        }
+      }
+        break;
       default:{
         NOT_SUPPORT_IN_ROUTINE
       }

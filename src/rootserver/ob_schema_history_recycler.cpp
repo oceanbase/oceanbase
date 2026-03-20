@@ -999,6 +999,11 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                          sensitive_rule_id, table_id, column_id);
     ret = OB_SUCCESS; // overwrite ret
 
+    // --------------------------- java_policy ---------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, java_policy, OB_ALL_JAVA_POLICY_HISTORY_TNAME,
+                         key);
+    ret = OB_SUCCESS; // overwrite ret
+
 #undef RECYCLE_FIRST_SCHEMA
     int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
     ROOTSERVICE_EVENT_ADD("schema_recycler", "batch_recycle_by_tenant",
@@ -1332,9 +1337,9 @@ int ObRecycleSchemaExecutor::gen_fill_schema_history_sql(
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_stop())) {
     LOG_WARN("schema history recycler is stopped", K(ret));
-  } else if (OB_FAIL(sql.assign_fmt("select %s, schema_version, is_deleted from %s "
+  } else if (OB_FAIL(sql.assign_fmt("select `%s`, schema_version, is_deleted from %s "
                                     "where tenant_id = 0 and schema_version <= %ld "
-                                    "order by tenant_id, %s, schema_version "
+                                    "order by tenant_id, `%s`, schema_version "
                                     "limit %ld, %ld",
                                     schema_key_name_, table_name_,
                                     schema_version_, schema_key_name_, start_idx,
@@ -1597,7 +1602,7 @@ int ObRecycleSchemaExecutor::gen_batch_recycle_schema_history_sql(
   } else if (dropped_schema_keys.count() <= 0) {
     // skip
   } else {
-    if (OB_FAIL(sql.assign_fmt("delete from %s where (tenant_id, %s) in ( ",
+    if (OB_FAIL(sql.assign_fmt("delete from %s where (tenant_id, `%s`) in ( ",
                                 table_name_, schema_key_name_))) {
       LOG_WARN("fail to assign sql", K(ret), K_(tenant_id), K_(schema_version));
     }
@@ -1662,7 +1667,7 @@ int ObRecycleSchemaExecutor::gen_batch_compress_schema_history_sql(
     for (int64_t i = 0; OB_SUCC(ret) && i < compress_schema_infos.count(); i++) {
       if (OB_FAIL(check_stop())) {
         LOG_WARN("schema history recycler is stopped", K(ret));
-      } else if (OB_FAIL(sql.append_fmt("%s (%s = %ld and schema_version < %ld)",
+      } else if (OB_FAIL(sql.append_fmt("%s (`%s` = %ld and schema_version < %ld)",
                                         0 == i ? "" : "or", schema_key_name_,
                                         compress_schema_infos.at(i).key_.first_schema_id_,
                                         compress_schema_infos.at(i).max_schema_version_))) {

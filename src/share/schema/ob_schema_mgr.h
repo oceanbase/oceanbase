@@ -46,6 +46,7 @@
 #include "share/schema/ob_ai_model_mgr.h"
 #include "share/schema/ob_ccl_rule_mgr.h"
 #include "share/schema/ob_sensitive_rule_mgr.h"
+#include "share/schema/ob_java_policy_mgr.h"
 
 namespace oceanbase
 {
@@ -785,6 +786,21 @@ public:
       const common::ObNameCaseMode &case_mode,
       const ObAiModelSchema *&ai_model_schema) const;
 
+  // java policy
+  int get_java_policy_schema(
+      const uint64_t tenant_id,
+      const uint64_t key,
+      const ObSimpleJavaPolicySchema *&java_policy_schema) const;
+
+  int get_java_policy_schemas_in_tenant(
+      const uint64_t tenant_id,
+      common::ObIArray<const ObSimpleJavaPolicySchema *> &schema_array) const;
+
+  int get_java_policy_schemas_of_grantee(
+    const uint64_t tenant_id,
+    const uint64_t grantee_id,
+    common::ObIArray<const ObSimpleJavaPolicySchema *> &schema_array) const;
+
   // other
   int get_tenant_schemas(common::ObIArray<const ObSimpleTenantSchema *> &tenant_schemas) const;
    int get_tenant_ids(common::ObIArray<uint64_t> &tenant_ids) const;
@@ -975,6 +991,11 @@ private:
   int add_sensitive_rules(const common::ObIArray<ObSensitiveRuleSchema> &sensitive_rule_schemas);
   int add_sensitive_rule(const ObSensitiveRuleSchema &sensitive_rule_schema);
   int del_sensitive_rule(const ObTenantSensitiveRuleId &id);
+
+  // java policy
+  int add_java_policys(const common::ObIArray<ObSimpleJavaPolicySchema> &java_policy_schemas);
+  int add_java_policy(const ObSimpleJavaPolicySchema &java_policy_schema);
+  int del_java_policy(const ObTenantJavaPolicyId &id);
 private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator &allocator_;
@@ -1041,6 +1062,7 @@ private:
   TableInfos mlog_infos_;
   ObExternalResourceMgr external_resource_mgr_;
   ObAiModelMgr ai_model_mgr_;
+  ObJavaPolicyMgr java_policy_mgr_;
 };
 
 }//end of namespace schema

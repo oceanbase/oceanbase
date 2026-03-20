@@ -158,16 +158,18 @@ int ObJavaUtils::exception_check(JNIEnv *env)
         // unreachable
       } else if (FALSE_IT(env->ExceptionClear())) {
         // unreachable
-      } else if (OB_FAIL(ObJavaUtils::get_cached_class(*env, "java/lang/Object", object))) {
-        LOG_WARN("failed to get_cached_class java/lang/Object", K(ret));
+      } else if (OB_ISNULL(object = env->FindClass("java/lang/Object"))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL java/lang/Object class", K(ret));
       } else if (OB_ISNULL(toString = env->GetMethodID(object, "toString", "()Ljava/lang/String;"))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL toString", K(ret));
       } else if (OB_ISNULL(error_string = static_cast<jstring>(env->CallObjectMethod(exception, toString)))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL error_string", K(ret));
-      } else if (OB_FAIL(ObJavaUtils::get_cached_class(*env, "java/util/concurrent/TimeoutException", timeout))) {
-        LOG_WARN("faield to get_cached_class java/util/concurrent/TimeoutException");
+      } else if (OB_ISNULL(timeout = env->FindClass("java/util/concurrent/TimeoutException"))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL java/util/concurrent/TimeoutException class", K(ret));
       } else {
         const char *ptr = env->GetStringUTFChars(error_string, nullptr);
         ObString msg(ptr);
@@ -176,7 +178,13 @@ int ObJavaUtils::exception_check(JNIEnv *env)
           ret = OB_TIMEOUT;
         } else {
           ret = OB_JNI_JAVA_EXCEPTION_ERROR;
-          LOG_USER_ERROR(OB_JNI_JAVA_EXCEPTION_ERROR, msg.length(), msg.ptr());
+
+          ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
+          if (OB_NOT_NULL(wb) && STRLEN(wb->get_err_msg()) > 0) {
+            // do nothing
+          } else {
+            LOG_USER_ERROR(OB_JNI_JAVA_EXCEPTION_ERROR, msg.length(), msg.ptr());
+          }
         }
 
         LOG_WARN("Java exception occurred", K(ret), K(msg));
@@ -207,6 +215,147 @@ void ObJavaUtils::protobuf_c_allocator_free(void *allocator_data, void *pointer)
   if (OB_NOT_NULL(allocator_data)) {
     static_cast<ObIAllocator *>(allocator_data)->free(pointer);
   }
+}
+
+int ObJavaUtils::ob_string_to_jstring(JNIEnv &env, ObIAllocator &alloc, const ObString &str, jstring &result)
+{
+  int ret = OB_SUCCESS;
+  result = nullptr;
+
+  if (str.empty()) {
+    if (OB_ISNULL(result = env.NewStringUTF(""))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL jstring for empty string", K(ret));
+    }
+  } else {
+    char *buf = nullptr;
+
+    if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(str.length() + 1)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for null-terminated string", K(ret), K(str));
+    } else {
+      MEMCPY(buf, str.ptr(), str.length());
+      buf[str.length()] = '\0';
+      result = env.NewStringUTF(buf);
+
+      if (OB_FAIL(exception_check(&env))) {
+        LOG_WARN("failed to NewStringUTF", K(ret), K(str));
+      } else if (OB_ISNULL(result)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL jstring", K(ret), K(str));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObJavaUtils::trans_jar_to_classes(const ObString &jar_binary,
+                                      ObIArray<std::pair<ObString, ObString>> &classes,
+                                      JNIEnv &env,
+                                      jobject &buffer_handle)
+{
+  int ret = OB_SUCCESS;
+
+  jclass jar_utils = nullptr;
+  jmethodID trans_jar_method = nullptr;
+  jbyteArray jar_binary_array = nullptr;
+  jbyte *jar_binary_array_ptr = nullptr;
+
+  if (OB_FAIL(ObJavaUtils::get_cached_class(env, "com/oceanbase/internal/ObOraUtils", jar_utils))) {
+    LOG_WARN("failed to get_cached_class com/oceanbase/internal/ObOraUtils", K(ret));
+  } else if (FALSE_IT(trans_jar_method = env.GetStaticMethodID(jar_utils, "transJarToClasses", "([B)Ljava/nio/ByteBuffer;"))) {
+    // unreachable
+  } else if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+    LOG_WARN("failed to find transJarToClasses method", K(ret));
+  } else if (OB_ISNULL(trans_jar_method)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL transJarToClasses method", K(ret));
+  } else if (FALSE_IT(jar_binary_array = env.NewByteArray(jar_binary.length()))) {
+    // unreachable
+  } else if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+    LOG_WARN("failed to NewByteArray", K(ret));
+  } else if (OB_ISNULL(jar_binary_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL jar_binary_array", K(ret));
+  } else if (OB_ISNULL(jar_binary_array_ptr = env.GetByteArrayElements(jar_binary_array, nullptr))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL jar_binary_array_ptr", K(ret));
+  } else {
+    MEMCPY(jar_binary_array_ptr, jar_binary.ptr(), jar_binary.length());
+    env.ReleaseByteArrayElements(jar_binary_array, jar_binary_array_ptr, 0);
+    jar_binary_array_ptr = nullptr;
+  }
+
+  if (OB_SUCC(ret)) {
+    buffer_handle = env.CallStaticObjectMethod(jar_utils, trans_jar_method, jar_binary_array);
+    const char *buffer = nullptr;
+    int64_t buffer_size = OB_INVALID_SIZE;
+
+    if (OB_FAIL(ObJavaUtils::exception_check(&env))) {
+      LOG_WARN("failed to call transJarToClasses method", K(ret));
+    } else if (OB_ISNULL(buffer_handle)) {
+      // do nothing
+    } else if (OB_ISNULL(buffer = static_cast<const char*>(env.GetDirectBufferAddress(buffer_handle)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL GetDirectBufferAddress", K(ret));
+    } else if (0 > (buffer_size = env.GetDirectBufferCapacity(buffer_handle))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL GetDirectBufferCapacity", K(ret), K(buffer_size));
+    } else {
+      int64_t pos = 0;
+      while (OB_SUCC(ret) && pos < buffer_size) {
+        ObString name;
+        ObString binary;
+
+        if (OB_FAIL(parse_binary_response(buffer, buffer_size, pos, name))) {
+          LOG_WARN("failed to parse class name", K(ret), K(buffer), K(buffer_size), K(pos));
+        } else if (OB_FAIL(parse_binary_response(buffer, buffer_size, pos, binary))) {
+          LOG_WARN("failed to parse class binary", K(ret), K(buffer), K(buffer_size), K(pos));
+        } else if (name.prefix_match("oracle/")) {
+          // Oracle ojdbc package, which is system built-in, ignore
+        } else if (OB_FAIL(classes.push_back(std::make_pair(name, binary)))) {
+          LOG_WARN("failed to push back class", K(ret), K(name), K(binary));
+        }
+      }
+    }
+
+    LOG_INFO("finished to trans_jar_to_classes", K(ret), K(classes));
+
+  }
+
+  ObJavaUtils::delete_local_ref(jar_binary_array, &env);
+
+  return ret;
+}
+
+int ObJavaUtils::parse_binary_response(const char *buffer,
+                                       int64_t buffer_size,
+                                       int64_t &pos,
+                                       ObString &content)
+{
+  int ret = OB_SUCCESS;
+  uint32_t content_length = 0;
+
+  if (OB_UNLIKELY(OB_ISNULL(buffer) || 0 >= buffer_size || 0 > pos || pos >= buffer_size)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid buffer", K(ret), K(buffer), K(buffer_size), K(pos));
+  } else if (OB_UNLIKELY(pos + sizeof(content_length) > buffer_size)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("length buffer size overflow", K(ret), K(buffer_size), K(pos));
+  } else if (FALSE_IT(content_length = ntohl(*reinterpret_cast<const uint32_t *>(buffer + pos)))) {
+    // unreachable
+  } else if (FALSE_IT(pos += sizeof(content_length))) {
+    // unreachable
+  } else if (pos + content_length > buffer_size) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("content buffer size overflow", K(ret), K(buffer_size), K(pos), K(content_length));
+  } else {
+    content.assign_ptr(buffer + pos, content_length);
+    pos += content_length;
+  }
+
+  return ret;
 }
 
 int ObToJavaByteTypeMapper::operator()(const common::ObObj &obj, int64_t idx)
@@ -443,6 +592,10 @@ int ObToJavaByteBufferTypeMapper::operator()(const ObObj &obj, int64_t idx)
     if (obj.is_lob_storage()) {
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_alloc, obj, buffer))) {
         LOG_WARN("failed to read_real_string_data", K(ret), K(obj), K(buffer));
+      }
+    } else if (obj.is_raw()) {
+      if (OB_FAIL(obj.get_raw(buffer))) {
+        LOG_WARN("failed to get_raw", K(ret), K(obj), K(buffer));
       }
     } else {
       if (OB_FAIL(obj.get_string(buffer))) {
