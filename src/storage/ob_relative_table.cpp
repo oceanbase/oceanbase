@@ -469,6 +469,11 @@ bool ObRelativeTable::is_unique_index() const
   return schema_param_->is_unique_index();
 }
 
+bool ObRelativeTable::is_global_unique_index() const
+{
+  return schema_param_->is_global_unique_index();
+}
+
 bool ObRelativeTable::is_domain_index() const
 {
   return schema_param_->is_domain_index();

@@ -90,6 +90,7 @@ public:
   bool is_index_local_storage() const;
   bool can_read_index() const;
   bool is_unique_index() const;
+  bool is_global_unique_index() const;
   bool is_domain_index() const;
   bool is_spatial_index() const;
   bool is_fts_index() const;

@@ -3576,7 +3576,7 @@ int ObLSTabletService::update_rows(
 
       // for major mv base table need update full column
       if (dml_param.table_param_->get_data_table().get_mv_mode().table_referenced_by_fast_lsm_mv_flag_ ||
-          run_ctx.is_delete_insert_table_) {
+          run_ctx.is_delete_insert_table_ || relative_table.is_global_unique_index()) {
         ctx.update_full_column_ =  true;
       }
 
@@ -3931,7 +3931,7 @@ int ObLSTabletService::delete_rows(
     } else {
       tablet_handle.reset();
       // for delete_insert table need update full column
-      if (run_ctx.is_delete_insert_table_) {
+      if (run_ctx.is_delete_insert_table_ || run_ctx.relative_table_.is_global_unique_index()) {
         ctx.update_full_column_ =  true;
       }
 

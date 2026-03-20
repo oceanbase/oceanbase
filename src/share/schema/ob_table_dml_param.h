@@ -80,6 +80,7 @@ public:
   { return is_index_table(); }
   OB_INLINE bool can_read_index() const { return ObTableSchema::can_read_index(index_status_); }
   OB_INLINE bool is_unique_index() const { return ObTableSchema::is_unique_index(index_type_); }
+  OB_INLINE bool is_global_unique_index() const { return ObTableSchema::is_global_unique_index_table(index_type_); }
   OB_INLINE bool is_domain_index() const { return ObTableSchema::is_domain_index(index_type_); }
   OB_INLINE bool is_spatial_index() const { return ObTableSchema::is_spatial_index(index_type_); }
   OB_INLINE bool is_fts_index() const { return share::schema::is_fts_index(index_type_); }
