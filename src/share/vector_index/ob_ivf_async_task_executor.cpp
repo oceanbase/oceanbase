@@ -237,7 +237,6 @@ bool ObIvfAsyncTaskExector::check_operation_allow()
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
   bool bret = true;
-  bool is_active_time = true;
 
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
     bret = false;
@@ -246,13 +245,10 @@ bool ObIvfAsyncTaskExector::check_operation_allow()
     bret = false;
     LOG_DEBUG("vector index async task can not work with data version less than 4_3_5_3",
               K(tenant_data_version));
-  } else if (ObVecIndexAsyncTaskUtil::in_active_time(tenant_id_, is_active_time)) {
-    bret = false;
-    LOG_WARN("fail to get active time");
-  } else if (!is_active_time) {
-    bret = false;
-    LOG_INFO("skip this round, not in active time.");
   }
+  //  disable active time check, just check data version. because active time is used by hnsw async task.
+  //  if you want to turn off ivf async task, you need to implement a independent judgment logic for ivf, 
+  //  not dependent on the judgment logic of hnsw.
   return bret;
 }
 
