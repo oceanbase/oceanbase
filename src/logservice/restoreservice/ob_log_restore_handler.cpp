@@ -10,9 +10,24 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <utility>
+
 #include "ob_log_restore_handler.h"
 #include "logservice/ob_log_service.h"       // ObLogService
 #include "ob_remote_log_source_allocator.h"  // ObResSrcAlloctor
+#include "logservice/palf/log_entry.h"       // LogEntry
+#include "logservice/palf/log_group_entry.h" // LogGroupEntry
+#include "logservice/ob_log_base_header.h"   // ObLogBaseHeader
+#include "logservice/palf/log_sync_mode_mgr.h" // ObSyncModeLog, ObSyncModeLogType
+#include "logservice/palf/palf_env.h"
+#include "logservice/transportservice/ob_log_standby_ack_service.h" // ObLogStandbyAckService
+#include "storage/ls/ob_ls.h"                 // ObLS
+#include "storage/ob_storage_struct.h"       // ObLSHandle, ObLSGetMod
+#include "lib/utility/ob_sort.h"             // ob_sort
+#include "lib/container/ob_se_array.h"       // ObSEArray
+#include "share/rc/ob_tenant_base.h"         // MTL_ID, mtl_malloc, mtl_free
+#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
+#include "share/config/ob_server_config.h"   // GCONF
 
 namespace oceanbase
 {
@@ -92,8 +107,14 @@ ObLogRestoreHandler::ObLogRestoreHandler() :
   cur_delay_count_(0),
   last_delay_count_(0),
   cur_stat_info_(),
-  last_stat_info_()
-{}
+  last_stat_info_(),
+  sync_mode_change_lock_(common::ObLatchIds::TRANSPORT_SERVICE_TASK_LOCK),
+  pre_async_scn_()
+{
+#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
+  ignore_restore_source_for_test_ = false;
+#endif
+}
 
 ObLogRestoreHandler::~ObLogRestoreHandler()
 {
@@ -112,14 +133,27 @@ int ObLogRestoreHandler::init(const int64_t id, ipalf::IPalfEnv *palf_env)
   } else if (OB_FAIL(palf_env->open(id, palf_handle))) {
     CLOG_LOG(WARN, "get palf_handle failed", K(ret), K(id));
   } else {
+    common::ObILogAllocator *alloc_mgr = nullptr;
     id_ = id;
     palf_handle_ = palf_handle;
     palf_env_ = palf_env;
     role_ = FOLLOWER;
     enable_logservice_ = GCONF.enable_logservice;
     is_in_stop_state_ = false;
-    is_inited_ = true;
-    CLOG_LOG(INFO, "ObLogRestoreHandler init success", K(id), K(role_), K(palf_handle));
+    palf::PalfEnv *palf_env_impl = static_cast<palf::PalfEnv*>(palf_env_);
+    if (!enable_logservice_ && (OB_ISNULL(palf_env_impl)
+        || OB_ISNULL(palf_env_impl->get_palf_env_impl())
+        || OB_ISNULL(alloc_mgr = palf_env_impl->get_palf_env_impl()->get_log_allocator()))) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(WARN, "get palf log allocator failed", K(ret), K(id), KP(palf_env_impl));
+    } else if (!enable_logservice_ && OB_FAIL(transport_task_queue_.init(alloc_mgr,
+                                                 this,
+                                                 ObLogTransportTaskQueue::MAX_QUEUE_SIZE))) {
+      CLOG_LOG(WARN, "init transport task queue failed", K(ret), K(id));
+    } else {
+      is_inited_ = true;
+      CLOG_LOG(INFO, "ObLogRestoreHandler init success", K(id), K(role_), K(palf_handle));
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -133,6 +167,8 @@ int ObLogRestoreHandler::init(const int64_t id, ipalf::IPalfEnv *palf_env)
 int ObLogRestoreHandler::stop()
 {
   int ret = OB_SUCCESS;
+  // Stop queue admission first to block new push/process attempts.
+  transport_task_queue_.stop();
   WLockGuard guard(lock_);
   if (IS_INIT) {
     is_in_stop_state_ = true;
@@ -146,6 +182,10 @@ int ObLogRestoreHandler::stop()
 
 void ObLogRestoreHandler::destroy()
 {
+  // stop transport task queue first to block new push/process attempts.
+  // destroy transport task queue after stop to ensure no new tasks are processed.
+  transport_task_queue_.stop();
+  transport_task_queue_.destroy();
   WLockGuard guard(lock_);
   if (IS_INIT) {
     is_in_stop_state_ = true;
@@ -163,6 +203,7 @@ void ObLogRestoreHandler::destroy()
     last_stat_info_.reset();
     role_ = ObRole::INVALID_ROLE;
     context_.reset();
+    pre_async_scn_.reset();
   }
   if (NULL != parent_) {
     ObResSrcAlloctor::free(parent_);
@@ -191,6 +232,10 @@ void ObLogRestoreHandler::destroy()
 //
 void ObLogRestoreHandler::switch_role(const common::ObRole &role, const int64_t proposal_id)
 {
+  // follower to leader, clear transport task queue to reset begin sn from new leader commited end log id
+  if (role_ != role && false == is_strong_leader(role_)) {
+    clear_transport_task_queue_();
+  }
   WLockGuard guard(lock_);
   role_ = role;
   proposal_id_ = proposal_id;
@@ -346,55 +391,393 @@ int ObLogRestoreHandler::clean_source()
 }
 
 ERRSIM_POINT_DEF(ERRSIM_SUBMIT_LOG_ERROR);
-int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
-                                   const palf::LSN &lsn,
-                                   const SCN &scn,
-                                   const char *buf,
-                                   const int64_t buf_size)
+
+int ObLogRestoreHandler::validate_raw_write_params_(const int64_t proposal_id,
+                                                     const palf::LSN &lsn,
+                                                     const char *buf,
+                                                     const int64_t buf_size) const
 {
   int ret = OB_SUCCESS;
-  int64_t wait_times = 0;
-  const bool need_nonblock = true;
-  palf::PalfAppendOptions opts;
-  opts.need_nonblock = need_nonblock;
-  opts.need_check_proposal_id = true;
-  while (wait_times < MAX_RAW_WRITE_RETRY_TIMES) {
-    do {
-      ret = OB_SUCCESS;
-      RLockGuard guard(lock_);
-      if (IS_NOT_INIT) {
-        ret = OB_NOT_INIT;
-      } else if (is_in_stop_state_) {
-        ret = OB_IN_STOP_STATE;
-      } else if (LEADER != role_) {
-        ret = OB_NOT_MASTER;
-      } else if (OB_UNLIKELY(!lsn.is_valid()
-            || NULL == buf
-            || 0 >= buf_size
-            || 0 >= proposal_id)) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_IN_STOP_STATE;
+  } else if (LEADER != role_) {
+    ret = OB_NOT_MASTER;
+  } else if (OB_UNLIKELY(!lsn.is_valid()
+        || NULL == buf
+        || 0 >= buf_size
+        || 0 >= proposal_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(proposal_id), K(lsn), K(buf), K(buf_size));
+  } else if (proposal_id != proposal_id_) {
+    ret = OB_NOT_MASTER;
+    CLOG_LOG(INFO, "stale task, just skip", K(proposal_id), K(proposal_id_), K(lsn), K(id_));
+  } else if ((NULL == parent_ || restore_to_end_unlock_())
+#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
+             && !ignore_restore_source_for_test_
+#endif
+            ) {
+    ret = OB_RESTORE_LOG_TO_END;
+    CLOG_LOG(INFO, "submit log to end, just skip", K(ret), K(lsn), KPC(this));
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::parse_log_type_(const char *buf,
+                                         const int64_t buf_size,
+                                         ObLogBaseType &log_type,
+                                         ObSyncModeLogType &sync_mode_log_type,
+                                         ObLogBaseHeader &log_base_header,
+                                         bool &is_standby_dest) const
+{
+  int ret = OB_SUCCESS;
+  log_type = ObLogBaseType::INVALID_LOG_BASE_TYPE;
+  sync_mode_log_type = ObSyncModeLogType::SYNC_MODE_UNKNOWN_TYPE;
+  is_standby_dest = true;
+
+  if (OB_ISNULL(buf) || buf_size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid log data, skip parsing log type", K(ret), KP(buf), K(buf_size));
+  } else {
+    // 先反序列化 LogGroupEntry 获取 payload
+    palf::LogGroupEntry group_entry;
+    int64_t group_entry_pos = 0;
+    if (OB_FAIL(group_entry.deserialize(buf, buf_size, group_entry_pos))) {
+      CLOG_LOG(WARN, "deserialize LogGroupEntry failed", K(ret), K(id_), K(buf_size));
+    } else {
+      // 从 group entry 的 payload 中遍历所有 LogEntry
+      const char *payload_buf = group_entry.get_data_buf();
+      const int64_t payload_size = group_entry.get_data_len();
+      if (OB_ISNULL(payload_buf) || payload_size <= 0) {
         ret = OB_INVALID_ARGUMENT;
-        CLOG_LOG(WARN, "invalid argument", K(ret), K(proposal_id), K(lsn), K(buf), K(buf_size));
-      } else if (proposal_id != proposal_id_) {
-        ret = OB_NOT_MASTER;
-        CLOG_LOG(INFO, "stale task, just skip", K(proposal_id), K(proposal_id_), K(lsn), K(id_));
-      } else if (NULL == parent_ || restore_to_end_unlock_()) {
-        ret = OB_RESTORE_LOG_TO_END;
-        CLOG_LOG(INFO, "submit log to end, just skip", K(ret), K(lsn), KPC(this));
+        CLOG_LOG(WARN, "invalid payload, skip parsing log type", K(ret), KP(payload_buf), K(payload_size));
       } else {
-        opts.proposal_id = proposal_id_;
-        // errsim fake error
-        if (ERRSIM_SUBMIT_LOG_ERROR) {
-          ret = ERRSIM_SUBMIT_LOG_ERROR;
-          CLOG_LOG(TRACE, "errsim submit log error");
+        int64_t curr_pos = 0;
+        int64_t log_entry_idx = 0;
+        bool found_sync_mode_log = false;
+        // 遍历 payload 中的所有 LogEntry
+        while (OB_SUCCESS == ret && curr_pos < payload_size) {
+          palf::LogEntry log_entry;
+          int64_t log_entry_pos = 0;
+          // 反序列化 LogEntry（包含 LogEntryHeader + data）
+          if (OB_FAIL(log_entry.deserialize(payload_buf + curr_pos, payload_size - curr_pos, log_entry_pos))) {
+            if (OB_ITER_END != ret) {
+              CLOG_LOG(WARN, "deserialize LogEntry failed", K(ret), K(id_),
+                       K(log_entry_idx), K(curr_pos), K(payload_size));
+            }
+          } else {
+            // 从 LogEntry 的 data_buf 中解析 ObLogBaseHeader
+            const char *log_entry_data_buf = log_entry.get_data_buf();
+            const int64_t log_entry_data_len = log_entry.get_data_len();
+            if (OB_NOT_NULL(log_entry_data_buf) && log_entry_data_len > 0) {
+              ObLogBaseHeader entry_log_base_header;
+              int64_t entry_header_pos = 0;
+              if (OB_SUCCESS == (ret = entry_log_base_header.deserialize(log_entry_data_buf, log_entry_data_len, entry_header_pos))
+                  && entry_log_base_header.is_valid()) {
+                ObLogBaseType entry_log_type = entry_log_base_header.get_log_type();
+                // 如果是强同步特殊日志，继续解析获取具体的类型（SYNC/ASYNC/PRE_ASYNC）
+                // ObSyncModeLog 包含 ObLogBaseHeader header_，所以需要从 pos=0 开始反序列化整个 ObSyncModeLog
+                if (ObLogBaseType::SYNC_MODE_LOG_BASE_TYPE == entry_log_type) {
+                  ObSyncModeLog sync_mode_log;
+                  int64_t sync_log_pos = 0;  // 从 0 开始，因为 ObSyncModeLog 包含 header_
+                  if (OB_SUCCESS == (ret = sync_mode_log.deserialize(log_entry_data_buf, log_entry_data_len, sync_log_pos))) {
+                    sync_mode_log_type = static_cast<ObSyncModeLogType>(sync_mode_log.get_log_type());
+                    log_type = entry_log_type;
+                    log_base_header = entry_log_base_header;
+                    found_sync_mode_log = true;
+                    // 检查当前备库是否为强同步下游
+                    share::ObSyncStandbyStatusAttr protection_info = sync_mode_log.get_protection_info();
+                    CLOG_LOG(INFO, "parsed sync mode log protection info", K(sync_mode_log));
+                    if (protection_info.get_cluster_id() != GCONF.cluster_id || protection_info.get_tenant_id() != MTL_ID()) {
+                      is_standby_dest = false;
+                    }
+
+                    CLOG_LOG(INFO, "parsed sync mode log type", K(sync_mode_log_type), K(id_),
+                             K(log_entry_idx), K(log_entry.get_scn()), K(log_entry_data_len));
+                  } else {
+                    CLOG_LOG(WARN, "deserialize ObSyncModeLog failed", K(ret), K(id_),
+                             K(log_entry_idx), K(log_entry_data_len), K(entry_header_pos));
+                  }
+                }
+                // 记录第一条非特殊日志的类型
+                if (!found_sync_mode_log && ObLogBaseType::INVALID_LOG_BASE_TYPE == log_type) {
+                  log_type = entry_log_type;
+                  log_base_header = entry_log_base_header;
+                }
+              }
+            }
+            // 移动到下一个 LogEntry
+            curr_pos += log_entry.get_serialize_size();
+            log_entry_idx++;
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;  // 正常结束
+        }
+        CLOG_LOG(INFO, "parsed log type from restore handler", K(log_type), K(sync_mode_log_type),
+                 K(id_), K(log_base_header), K(payload_size), K(log_entry_idx), K(found_sync_mode_log));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::handle_sync_mode_log_(const int64_t proposal_id,
+                                                const palf::LSN &lsn,
+                                                const share::SCN &scn,
+                                                ObSyncModeLogType sync_mode_log_type,
+                                                const bool is_standby_dest,
+                                                int64_t &new_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  storage::ObLS *ls = nullptr;
+  ObLSHandle ls_handle;
+  ObLogService *log_service = MTL(ObLogService*);
+  int64_t mode_version = INVALID_PROPOSAL_ID;
+  palf::SyncMode curr_sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
+  palf::SyncMode target_sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
+  palf::AccessMode curr_access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
+
+  if (OB_ISNULL(log_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "ObLogService is null, skip change sync mode", K(id_));
+  } else if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(share::ObLSID(id_), ls_handle, ObLSGetMod::LOG_MOD))) {
+    CLOG_LOG(WARN, "get ls failed", K(ret), K(id_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "ls is null", K(ret), K(id_));
+  } else if (OB_FAIL(palf_handle_->get_sync_mode(mode_version, curr_sync_mode))) {
+    CLOG_LOG(WARN, "get_sync_mode failed", K(ret), K(id_));
+  } else if (OB_FAIL(palf_handle_->get_access_mode(curr_access_mode))) {
+    CLOG_LOG(WARN, "get_access_mode failed", K(ret), K(id_));
+  } else {
+    // 根据日志类型确定target_sync_mode
+    // 收到SYNC日志，并且强同步下游是自己，修改为SYNC
+    if (is_standby_dest && ObSyncModeLogType::SYNC == sync_mode_log_type
+        && curr_access_mode == palf::AccessMode::RAW_WRITE) {
+      target_sync_mode = palf::SyncMode::SYNC;
+      // 收到 SYNC 日志时，清空 pre_async_scn_，因为已经重新进入强同步模式
+      pre_async_scn_.reset();
+    // 收到PRE_ASYNC日志，不区分强同步备库还是第三方备库，直接修改为PRE_ASYNC
+    } else if (ObSyncModeLogType::PRE_ASYNC == sync_mode_log_type
+        && curr_access_mode == palf::AccessMode::RAW_WRITE) {
+      target_sync_mode = palf::SyncMode::PRE_ASYNC;
+      // 记录 PRE_ASYNC 日志的 SCN，用于后续判断 ASYNC 日志是否可以接受
+      pre_async_scn_ = scn;
+      CLOG_LOG(INFO, "recorded pre_async_scn for ASYNC log acceptance check",
+               K(id_), K(scn), K(pre_async_scn_));
+    // 第三方备库收到SYNC日志，修改为PRE_ASYNC
+    } else if (!is_standby_dest && ObSyncModeLogType::SYNC == sync_mode_log_type
+        && curr_access_mode == palf::AccessMode::RAW_WRITE) {
+      target_sync_mode = palf::SyncMode::PRE_ASYNC;
+    // 处理 ASYNC 日志：修改为 ASYNC
+    } else if (ObSyncModeLogType::ASYNC == sync_mode_log_type
+        && curr_access_mode == palf::AccessMode::RAW_WRITE) {
+      target_sync_mode = palf::SyncMode::ASYNC;
+      // ASYNC 日志处理完成后，清空 pre_async_scn_
+      pre_async_scn_.reset();
+      CLOG_LOG(INFO, "ASYNC log processed, cleared pre_async_scn", K(id_), K(scn));
+    } else {
+      CLOG_LOG(WARN, "invalid sync mode log type", K(sync_mode_log_type), K(curr_access_mode));
+    }
+
+    // 如果目标sync_mode与当前不同，则修改
+    if (target_sync_mode != palf::SyncMode::INVALID_SYNC_MODE
+        && curr_sync_mode != target_sync_mode) {
+      int64_t new_mode_version = INVALID_PROPOSAL_ID;
+      if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, target_sync_mode,
+                                                 new_mode_version, new_proposal_id))) {
+        CLOG_LOG(WARN, "change_sync_mode failed", K(ret), K(id_), K(mode_version),
+                 K(curr_sync_mode), K(target_sync_mode), K(scn), K(lsn));
+      } else {
+        CLOG_LOG(INFO, "change_sync_mode success for sync mode log",
+                 K(id_), K(curr_sync_mode), K(target_sync_mode),
+                 K(mode_version), K(new_mode_version), K(new_proposal_id), K(scn));
+
+        // 等待备库上 palf proposal_id 和 restore_handler 的 proposal_id 一致（阻塞等待）
+        // wait_proposal_id_consistent_() 内部会尝试获取读锁，所以必须在释放写锁后调用
+        // TODO by qingxia: 暂时注释掉，等待 sync mode 变更不杀事务合入，后续再放开
+        // TODO by qingxia: 在 sync mode 变更和选举并发的情况下，可能这里还是会卡住等30s
+        // int wait_ret = wait_proposal_id_consistent_(new_proposal_id);
+        // if (OB_FAIL(wait_ret)) {
+        //   CLOG_LOG(WARN, "wait proposal_id consistent failed", K(id_), K(wait_ret));
+        // }
+
+        // 通知 ack service 更新 sync_mode 缓存
+        ObLogStandbyAckService *ack_service = log_service->get_log_standby_ack_service();
+        if (OB_ISNULL(ack_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          CLOG_LOG(WARN, "ack_service is null", KR(ret), K(id_));
         } else {
-          ret = palf_handle_->raw_write(opts, lsn, buf, buf_size);
-          if (OB_SUCC(ret)) {
-            uint64_t tenant_id = palf_env_->get_tenant_id();
-            EVENT_TENANT_ADD(ObStatEventIds::RESTORE_WRITE_LOG_SIZE, buf_size, tenant_id);
+          bool is_sync_mode = (target_sync_mode == palf::SyncMode::SYNC);
+          int tmp_ret = ack_service->update_sync_mode_cache(share::ObLSID(id_),
+                                                             new_mode_version,
+                                                             target_sync_mode,
+                                                             is_sync_mode);
+          if (OB_SUCCESS != tmp_ret) {
+            CLOG_LOG(WARN, "update_sync_mode_cache failed", K(tmp_ret),
+                     K(id_), K(target_sync_mode), K(is_sync_mode));
+          } else {
+            CLOG_LOG(INFO, "update_sync_mode_cache success",
+                     K(id_), K(target_sync_mode), K(is_sync_mode), K(new_mode_version));
           }
         }
       }
-    } while (0);
+    } else {
+      CLOG_LOG(TRACE, "no need to change sync mode",
+               K(id_), K(curr_sync_mode), K(target_sync_mode));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogRestoreHandler::check_async_log_acceptable_(const share::SCN &async_log_scn) const
+{
+  int ret = OB_SUCCESS;
+  share::SCN tenant_sync_scn;
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+
+  if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "ObTenantInfoLoader is null", KR(ret), K(id_));
+  } else if (OB_FAIL(tenant_info_loader->get_sync_scn(tenant_sync_scn))) {
+    CLOG_LOG(WARN, "get_sync_scn failed", KR(ret), K(id_));
+  } else if (!pre_async_scn_.is_valid()) {
+    // 如果没有记录 pre_async_scn_，可能是：
+    // 1. 重启后丢失
+    // 2. 从未收到过 PRE_ASYNC 日志
+    // 这种情况下，直接接受 ASYNC 日志
+    CLOG_LOG(INFO, "pre_async_scn_ is invalid, accept ASYNC log directly",
+             K(id_), K(async_log_scn), K(tenant_sync_scn));
+  } else if (tenant_sync_scn < pre_async_scn_) {
+    // 条件不满足：租户的 sync_scn 还没有超过 pre_async_scn_
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {  // 每秒打印一次日志
+      CLOG_LOG(INFO, "ASYNC log cannot be accepted, tenant sync_scn not exceed pre_async_scn",
+               K(id_), K(tenant_sync_scn), K(pre_async_scn_), K(async_log_scn));
+    }
+  } else {
+    // 条件满足：租户的 sync_scn 已经超过 pre_async_scn_
+    CLOG_LOG(INFO, "ASYNC log can be accepted, tenant sync_scn exceed pre_async_scn",
+             K(id_), K(tenant_sync_scn), K(pre_async_scn_), K(async_log_scn));
+  }
+
+  return ret;
+}
+
+int ObLogRestoreHandler::wait_proposal_id_consistent_(const int64_t new_proposal_id) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t CHECK_INTERVAL_US = 500L; // 500us
+  const int64_t MAX_WAIT_TIME_US = 30 * 1000 * 1000L; // 30秒超时 //TODO by ziqi: 改为可配置或传入timeout
+  int64_t start_time_us = ObTimeUtility::current_time();
+  bool is_consistent = false;
+
+  // 阻塞等待直到 proposal_id 一致
+  while (OB_SUCC(ret) && !is_consistent) {
+    // 检查超时
+    int64_t elapsed_time_us = ObTimeUtility::current_time() - start_time_us;
+    if (elapsed_time_us > MAX_WAIT_TIME_US) {
+      ret = OB_TIMEOUT;
+      CLOG_LOG(WARN, "wait proposal_id consistent timeout", K(ret), K(id_), K(new_proposal_id),
+               K(elapsed_time_us), K(MAX_WAIT_TIME_US));
+      break;
+    }
+
+    int64_t restore_handler_proposal_id = palf::INVALID_PROPOSAL_ID;
+    common::ObRole restore_handler_role = common::FOLLOWER;
+    if (OB_FAIL(get_role(restore_handler_role, restore_handler_proposal_id))) {
+      CLOG_LOG(WARN, "get role failed", KR(ret), K(id_));
+      ob_usleep(CHECK_INTERVAL_US);
+      continue;
+    } else if (new_proposal_id < restore_handler_proposal_id) {
+      ret = OB_NOT_MASTER;
+      CLOG_LOG(WARN, "new_proposal_id is less than restore_handler_proposal_id",
+               KR(ret), K(id_), K(new_proposal_id), K(restore_handler_proposal_id));
+      break;
+    } else if (new_proposal_id == restore_handler_proposal_id) {
+      is_consistent = true;
+      CLOG_LOG(INFO, "proposal_id consistent between palf and restore_handler",
+               K(id_), K(restore_handler_proposal_id), K(new_proposal_id),
+               K(restore_handler_role), K(elapsed_time_us));
+    } else {
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
+        CLOG_LOG(INFO, "waiting for proposal_id consistent",
+                 K(id_), K(restore_handler_proposal_id), K(new_proposal_id),
+                 K(restore_handler_role), K(elapsed_time_us));
+      }
+      ob_usleep(CHECK_INTERVAL_US);
+    }
+  }
+
+  return ret;
+}
+
+int ObLogRestoreHandler::do_raw_write_(const int64_t proposal_id,
+                                       const palf::LSN &lsn,
+                                       const char *buf,
+                                       const int64_t buf_size) const
+{
+  int ret = OB_SUCCESS;
+  palf::PalfAppendOptions opts;
+  opts.need_nonblock = true;
+  opts.need_check_proposal_id = true;
+  opts.proposal_id = proposal_id;
+
+  // errsim fake error
+  if (ERRSIM_SUBMIT_LOG_ERROR) {
+    ret = ERRSIM_SUBMIT_LOG_ERROR;
+    CLOG_LOG(TRACE, "errsim submit log error");
+  } else {
+    ret = palf_handle_->raw_write(opts, lsn, buf, buf_size);
+    if (OB_SUCC(ret)) {
+      uint64_t tenant_id = palf_env_->get_tenant_id();
+      EVENT_TENANT_ADD(ObStatEventIds::RESTORE_WRITE_LOG_SIZE, buf_size, tenant_id);
+    } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+      // 日志已存在（LSN 小于当前可写位置），可能是被其他来源（如 log fetcher）已写入
+      // 当作成功处理，避免重复写入
+      ret = OB_SUCCESS;
+      CLOG_LOG(TRACE, "log already exists (OB_ERR_OUT_OF_LOWER_BOUND), treat as success",
+               K(id_), K(lsn), K(buf_size));
+    } else {
+      CLOG_LOG(WARN, "raw write failed", K(ret), K(id_), K(lsn), K(buf_size));
+    }
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::do_raw_write_with_retry_(const int64_t proposal_id,
+                                                  const palf::LSN &lsn,
+                                                  const char *buf,
+                                                  const int64_t buf_size,
+                                                  const bool need_sync_mode_lock)
+{
+  int ret = OB_SUCCESS;
+  int64_t wait_times = 0;
+
+  while (wait_times < MAX_RAW_WRITE_RETRY_TIMES) {
+    ret = OB_SUCCESS;
+    if (need_sync_mode_lock) {
+      // 普通日志获取 sync_mode_change_lock_ 的读锁
+      // 这样在 change_sync_mode 执行期间（持有写锁）会被阻塞
+      SyncModeRLockGuard sync_mode_rguard(sync_mode_change_lock_);
+      RLockGuard guard(lock_);
+      if (OB_FAIL(validate_raw_write_params_(proposal_id, lsn, buf, buf_size))) {
+        CLOG_LOG(WARN, "validate_raw_write_params_ failed", KR(ret), K(id_), K(proposal_id), K(lsn), K(buf_size));
+      } else if (OB_FAIL(do_raw_write_(proposal_id, lsn, buf, buf_size))) {
+        CLOG_LOG(WARN, "do_raw_write_ failed", KR(ret), K(id_), K(proposal_id), K(lsn), K(buf_size));
+      }
+    } else {
+      // sync_mode_log 不需要获取 sync_mode_change_lock_，因为它已经持有写锁
+      RLockGuard guard(lock_);
+      if (OB_FAIL(validate_raw_write_params_(proposal_id, lsn, buf, buf_size))) {
+        CLOG_LOG(WARN, "validate_raw_write_params_ failed", KR(ret), K(id_), K(proposal_id), K(lsn), K(buf_size));
+      } else if (OB_FAIL(do_raw_write_(proposal_id, lsn, buf, buf_size))) {
+        CLOG_LOG(WARN, "do_raw_write_ failed", KR(ret), K(id_), K(proposal_id), K(lsn), K(buf_size));
+      }
+    }
 
     if (OB_EAGAIN == ret) {
       ++wait_times;
@@ -404,10 +787,79 @@ int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
       }
       ob_usleep(sleep_us);
     } else {
-      // other ret code, end loop
       break;
     }
   }
+
+  return ret;
+}
+
+int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
+                                   const palf::LSN &lsn,
+                                   const SCN &scn,
+                                   const char *buf,
+                                   const int64_t buf_size)
+{
+  int ret = OB_SUCCESS;
+  // 解析日志类型
+  ObLogBaseHeader log_base_header;
+  ObLogBaseType log_type = ObLogBaseType::INVALID_LOG_BASE_TYPE;
+  ObSyncModeLogType sync_mode_log_type = ObSyncModeLogType::SYNC_MODE_UNKNOWN_TYPE;
+  bool is_standby_dest = false;
+  if (OB_FAIL(parse_log_type_(buf, buf_size, log_type, sync_mode_log_type, log_base_header, is_standby_dest))) {
+    CLOG_LOG(WARN, "parse log type from buffer failed", KR(ret), K(id_), K(lsn), K(buf_size));
+  } else {
+    // 如果是强同步升降级的特殊日志，需要修改sync_mode
+    bool is_sync_mode_log = (ObLogBaseType::SYNC_MODE_LOG_BASE_TYPE == log_type
+                            && (ObSyncModeLogType::SYNC == sync_mode_log_type
+                            || ObSyncModeLogType::ASYNC == sync_mode_log_type
+                            || ObSyncModeLogType::PRE_ASYNC == sync_mode_log_type));
+    CLOG_LOG(INFO, "check sync mode log", K(is_sync_mode_log), K(log_type), K(sync_mode_log_type), K(id_), K(lsn));
+
+    // 如果是 ASYNC 日志，需要检查租户的 sync_scn 是否已经超过 pre_async_scn_
+    if (ObSyncModeLogType::ASYNC == sync_mode_log_type) {
+      if (OB_FAIL(check_async_log_acceptable_(scn))) {
+        if (OB_EAGAIN == ret) {
+          CLOG_LOG(INFO, "ASYNC log not acceptable yet, will retry", K(id_), K(lsn), K(scn));
+        } else {
+          CLOG_LOG(WARN, "check_async_log_acceptable_ failed", KR(ret), K(id_), K(lsn), K(scn));
+        }
+        return ret;  // 条件不满足，直接返回让调用方重试
+      }
+    }
+
+    // 如果是 sync_mode_log，先修改 sync_mode，再写日志
+    if (is_sync_mode_log) {
+      // 获取写锁，阻止新的日志提交，防止在 change_sync_mode 期间有新日志导致滑动窗口问题
+      SyncModeWLockGuard sync_mode_wguard(sync_mode_change_lock_);
+      CLOG_LOG(INFO, "acquired sync_mode_change_lock_ write lock before change_sync_mode",
+              K(id_), K(lsn), K(sync_mode_log_type));
+
+      // 先修改 sync_mode
+      int64_t new_proposal_id = proposal_id;
+      if (OB_FAIL(handle_sync_mode_log_(proposal_id, lsn, scn, sync_mode_log_type, is_standby_dest, new_proposal_id))) {
+        CLOG_LOG(WARN, "handle_sync_mode_log_ failed", KR(ret), K(id_), K(lsn), K(scn), K(sync_mode_log_type));
+      } else {
+        CLOG_LOG(INFO, "handle_sync_mode_log_ success, now write log", K(id_), K(lsn), K(scn), K(sync_mode_log_type),
+                 K(proposal_id), K(new_proposal_id));
+
+        // 再写日志，不需要获取 sync_mode_change_lock_ 读锁（因为已经持有写锁）
+        if (OB_FAIL(do_raw_write_with_retry_(new_proposal_id, lsn, buf, buf_size, false))) {
+          CLOG_LOG(WARN, "do_raw_write_with_retry_ failed", KR(ret), K(id_), K(lsn), K(buf_size));
+        } else {
+          CLOG_LOG(INFO, "sync_mode_log write success", K(id_), K(lsn), K(scn), K(sync_mode_log_type));
+        }
+      }
+      // sync_mode_wguard 析构时自动释放写锁
+    } else {
+      // 普通日志需要获取 sync_mode_change_lock_ 的读锁
+      // 这样在 change_sync_mode 执行期间（持有写锁）会被阻塞
+      if (OB_FAIL(do_raw_write_with_retry_(proposal_id, lsn, buf, buf_size, true))) {
+        CLOG_LOG(WARN, "do_raw_write_with_retry_ failed", KR(ret), K(id_), K(lsn), K(buf_size));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -892,6 +1344,115 @@ bool ObLogRestoreHandler::restore_to_end() const
   RLockGuard guard(lock_);
   return restore_to_end_unlock_();
 }
+
+void ObLogRestoreHandler::clear_transport_task_queue_()
+{
+  transport_task_queue_.clear();
+}
+
+int ObLogRestoreHandler::submit_transport_task(const ObLogTransportReq &req)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t early_drop_lsn_gap_limit = static_cast<uint64_t>(palf::FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE);
+  palf::LSN end_lsn;
+  int64_t end_log_id = OB_INVALID_LOG_ID;
+  ObLogTransportTaskHolder task_holder;
+
+  {
+    RLockGuard guard(lock_);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      CLOG_LOG(WARN, "restore handler not init", K(ret), K_(id));
+    } else if (is_in_stop_state_) {
+      ret = OB_IN_STOP_STATE;
+      CLOG_LOG(WARN, "restore handler is stopping", K(ret), K_(id));
+    } else if (OB_UNLIKELY(!req.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      CLOG_LOG(WARN, "invalid request", K(ret), K(req));
+    } else if (OB_ISNULL(palf_handle_) || !palf_handle_->is_valid()) {
+      ret = OB_NOT_INIT;
+      CLOG_LOG(WARN, "palf handle is invalid", K(ret), K_(id), KP_(palf_handle));
+    } else if (false == is_strong_leader(role_)) {
+      ret = OB_NOT_MASTER;
+      CLOG_LOG(WARN, "restore handler not master", K(ret), K_(id));
+    } else if (OB_FAIL(palf_handle_->get_end_lsn(end_lsn))) {
+      CLOG_LOG(WARN, "get end lsn failed", K(ret), K_(id));
+    } else if (OB_FAIL(palf_handle_->get_end_log_id(end_log_id))) {
+      CLOG_LOG(WARN, "get end log id failed", K(ret), K_(id));
+    } else if (end_lsn.is_valid() && req.end_lsn_ <= end_lsn) {
+      ret = OB_ERR_OUT_OF_LOWER_BOUND;
+      CLOG_LOG(TRACE, "drop already committed transport task", KR(ret), K_(id), K(end_lsn), K(req));
+    } else if (end_lsn.is_valid() && req.end_lsn_ > end_lsn
+              && req.end_lsn_ - end_lsn > early_drop_lsn_gap_limit) {
+      transport_task_queue_.inc_early_drop_far_lsn();
+      ret = OB_ERR_OUT_OF_UPPER_BOUND;
+      CLOG_LOG(WARN, "early drop far lsn transport task", KR(ret), K_(id), K(end_lsn), "task_end_lsn",
+        req.end_lsn_, "lsn_gap", req.end_lsn_ - end_lsn,
+        K(early_drop_lsn_gap_limit), K(req.log_size_));
+    } else {
+    }
+  }
+
+  // lock-free submit transport task
+  if (OB_FAIL(ret)) { // skip if previous check failed
+  } else if (OB_FAIL(ObLogTransportTaskHolder::borrowed(&req, task_holder))) {
+    CLOG_LOG(WARN, "build borrowed transport task holder failed", K(ret), K(req));
+  } else if (OB_FAIL(transport_task_queue_.push(std::move(task_holder), end_log_id))) {
+    if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+      CLOG_LOG(TRACE, "drop stale transport task by queue", K_(id), K(end_log_id), K(req));
+      ret = OB_SUCCESS;
+    } else if (OB_ENTRY_EXIST == ret) {
+      CLOG_LOG(TRACE, "drop duplicate transport task by queue", K_(id), K(end_log_id), K(req));
+      ret = OB_SUCCESS;
+    } else if (OB_ERR_OUT_OF_UPPER_BOUND == ret) {
+      CLOG_LOG(WARN, "task out of window", K(ret), K_(id), K(req.start_lsn_), K(req.end_lsn_));
+    } else if (OB_SIZE_OVERFLOW == ret) {
+      CLOG_LOG(WARN, "transport task queue is full", K(ret), K_(id), K(req.start_lsn_), K(req.end_lsn_));
+    } else {
+      CLOG_LOG(WARN, "push transport task failed", K(ret), K_(id), K(req.start_lsn_), K(req.end_lsn_));
+    }
+  } else {
+    CLOG_LOG(TRACE, "submit_transport_task succ", K(id_), K(req.start_lsn_), K(req.end_lsn_));
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::process_transport_tasks(const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  common::ObRole role = ObRole::INVALID_ROLE;
+  int64_t proposal_id = INVALID_PROPOSAL_ID;
+
+  if (OB_FAIL(get_role(role, proposal_id))) {
+    CLOG_LOG(WARN, "get role failed", K(ret), K(id_));
+  } else if (!is_strong_leader(role)) {
+    ret = OB_NOT_MASTER;
+    CLOG_LOG(TRACE, "not leader, no need process transport tasks", K(ret), K(id_));
+#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
+    CLOG_LOG(INFO, "not leader, no need process transport tasks",
+             K(ret), K(id_), K(role), K(proposal_id), K(GCONF.self_addr_));
+#endif
+  } else {
+    palf::LSN current_end_lsn;
+    int64_t end_log_id = OB_INVALID_LOG_ID;
+    if (OB_FAIL(palf_handle_->get_end_lsn(current_end_lsn))) {
+      CLOG_LOG(WARN, "get end lsn failed", K(ret), K(id_));
+    } else if (OB_FAIL(palf_handle_->get_end_log_id(end_log_id))) {
+      CLOG_LOG(WARN, "get end log id failed", K(ret), K(id_));
+    } else {
+      int64_t processed_count = 0;
+      ret = transport_task_queue_.process(proposal_id,
+                                          end_log_id,
+                                          processed_count,
+                                          batch_size);
+      CLOG_LOG(INFO, "process transport tasks",
+               K(ret), K(id_), K(role), K(proposal_id),
+               K(current_end_lsn), K(end_log_id), K(processed_count), K(batch_size), K(GCONF.self_addr_));
+    }
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_LS_STATE_NOT_MATCH);
 int ObLogRestoreHandler::check_restore_to_newest_from_service_(
     const share::ObRestoreSourceServiceAttr &service_attr,
@@ -940,10 +1501,10 @@ int ObLogRestoreHandler::check_restore_to_newest_from_service_(
       CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(archive_scn), K(end_scn));
     }
   }
-   if (OB_UNLIKELY(ERRSIM_LS_STATE_NOT_MATCH)) {
+  if (OB_UNLIKELY(ERRSIM_LS_STATE_NOT_MATCH)) {
     ret = OB_SUCC(ret) ? OB_SOURCE_LS_STATE_NOT_MATCH : ret;
     CLOG_LOG(WARN, "ERRSIM_LS_STATE_NOT_MATCH is on", KR(ret));
-   }
+  }
   // if connect to source tenant denied, rewrite ret_code
   if (-ER_ACCESS_DENIED_ERROR == ret) {
     ret = OB_PASSWORD_WRONG;
@@ -1332,7 +1893,7 @@ void ObLogRestoreHandler::print_stat()
     int64_t delay_count_delta = cur_delay_count_ - last_delay_count_;
 
     CLOG_LOG(INFO, "[RESTORE_HANDLER] [STAT]", K(id_), K(delay_count_delta),
-        K(delta_stat), K(mean_stat), KPC(this),
+        K(delta_stat), K(mean_stat), KPC(this), K(transport_task_queue_),
         "restore_delay", context_.max_fetch_scn_.is_valid() ?
         context_.max_fetch_scn_.convert_to_ts(true) - context_.last_fetch_ts_ : 0);
   }

@@ -424,6 +424,8 @@
 # 573: __wr_active_session_history_v2
 # 577: __all_tablet_to_global_temporary_table
 # 579: __wr_sqlstat_v2
+# 581: __all_sync_standby_dest
+# 582: __all_sync_standby_status
 # 586: __all_java_policy
 # 587: __all_java_policy_history
 # 587: __all_java_policy  # BASE_TABLE_NAME
@@ -1358,6 +1360,10 @@
 # 12580: __all_tablet_to_global_temporary_table  # BASE_TABLE_NAME
 # 12582: __all_virtual_wr_sqlstat_v2
 # 12582: __wr_sqlstat_v2  # BASE_TABLE_NAME
+# 12584: __all_virtual_sync_standby_dest
+# 12584: __all_sync_standby_dest  # BASE_TABLE_NAME
+# 12585: __all_virtual_sync_standby_status
+# 12585: __all_sync_standby_status  # BASE_TABLE_NAME
 # 12594: __all_virtual_java_policy
 # 12594: __all_java_policy  # BASE_TABLE_NAME
 # 12595: __all_virtual_java_policy_history
@@ -2112,6 +2118,11 @@
 # 15538: __all_sensitive_rule  # BASE_TABLE_NAME
 # 15539: ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT
 # 15539: __all_sensitive_column  # BASE_TABLE_NAME
+# 15540: ALL_VIRTUAL_SYNC_STANDBY_DEST
+# 15540: __all_sync_standby_dest  # BASE_TABLE_NAME
+# 15540: __all_virtual_sync_standby_dest  # BASE_TABLE_NAME1
+# 15541: ALL_VIRTUAL_SYNC_STANDBY_STATUS_REAL_AGENT
+# 15541: __all_sync_standby_status  # BASE_TABLE_NAME
 # 15550: ALL_VIRTUAL_EXTERNAL_RESOURCE_REAL_AGENT
 # 15550: __all_external_resource  # BASE_TABLE_NAME
 # 15551: ALL_VIRTUAL_JAVA_POLICY_REAL_AGENT
@@ -2692,6 +2703,8 @@
 # 21693: GV$OB_SS_OBJECT_TYPE_IO_STAT
 # 21694: V$OB_SS_OBJECT_TYPE_IO_STAT
 # 21697: DBA_TABLES
+# 21706: CDB_OB_SYNC_STANDBY_DEST
+# 21707: DBA_OB_SYNC_STANDBY_DEST
 # 21718: DBA_JAVA_POLICY
 # 21719: USER_JAVA_POLICY
 # 21720: DBA_SCHEDULER_RUNNING_JOBS
@@ -3237,6 +3250,7 @@
 # 28289: DBA_OB_SENSITIVE_RULES
 # 28290: DBA_OB_SENSITIVE_COLUMNS
 # 28291: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
+# 28294: DBA_OB_SYNC_STANDBY_DEST
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME

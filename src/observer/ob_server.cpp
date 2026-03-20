@@ -3514,7 +3514,19 @@ void ObServer::check_log_replay_over(const ObIArray<uint64_t> &tenant_ids, const
       weak_read_service_.check_tenant_can_start_service(tenant_id, can_start_service, min_version);
         // check wait and retry
       if (!can_start_service) {
-        ob_usleep(1000 * 1000);
+        int tmp_ret = OB_SUCCESS;
+        bool is_tenant_dropped = false;
+        if (OB_NOT_NULL(GCTX.schema_service_) &&
+            OB_TMP_FAIL(GCTX.schema_service_->check_if_tenant_has_been_dropped(tenant_id,
+              is_tenant_dropped))) {
+          LOG_INFO("failed to check if tenant has been dropped", KR(tmp_ret), K(tenant_id));
+        } else if (is_tenant_dropped) {
+          can_start_service = true;
+        } else {
+          ob_usleep(1000 * 1000);
+        }
+      }
+      if (!can_start_service) {
         // check success
       } else if (i == tenant_ids.count() -1) {
         FLOG_INFO("[OBSERVER_NOTICE] all tenant replay log finished, start to service ", K(tenant_ids));

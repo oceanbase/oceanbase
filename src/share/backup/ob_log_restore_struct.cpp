@@ -13,11 +13,66 @@
 #define USING_LOG_PREFIX SHARE
 #include "ob_log_restore_struct.h"
 #include "share/backup/ob_backup_config.h"
+#include "share/ob_cluster_version.h"
+#include "share/ob_log_restore_proxy.h"
+#include "rootserver/standby/ob_protection_mode_utils.h"
 
 
 using namespace oceanbase;
 using namespace common;
 using namespace share;
+
+int ObServiceAttrBase::parse_from_str(const ObString &attr, const char *delimiter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(attr) || OB_UNLIKELY(0 == attr.length() || attr.length() > OB_MAX_BACKUP_DEST_LENGTH)
+      || OB_ISNULL(delimiter) || 0 == STRLEN(delimiter)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(attr), K(delimiter));
+  } else {
+    char tmp_str[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
+    if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", static_cast<int>(attr.length()), attr.ptr()))) {
+      LOG_WARN("fail to print attr", KR(ret), K(attr));
+    } else {
+      char *token = nullptr;
+      char *saveptr = nullptr;
+      for (char *str = tmp_str; OB_SUCC(ret); str = nullptr) {
+        token = ::STRTOK_R(str, delimiter, &saveptr);
+        if (nullptr == token) {
+          break;
+        } else if (OB_FAIL(do_parse_sub_config(token))) {
+          LOG_WARN("fail to parse sub config", KR(ret), K(token));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServiceAttrBase::do_parse_sub_config(char *sub_value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sub_value) || OB_UNLIKELY(0 == STRLEN(sub_value) ||
+      STRLEN(sub_value) > OB_MAX_BACKUP_DEST_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(sub_value));
+  } else {
+    char *token = nullptr;
+    char *saveptr = nullptr;
+    bool not_exist = false;
+    if (OB_ISNULL(token = ::STRTOK_R(sub_value, "=", &saveptr))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("fail to split sub_value str", K(token), KP(sub_value));
+    } else if (OB_FALSE_IT(str_tolower(token, strlen(token)))) {
+    } else if (OB_FAIL(do_parse_key_value(token, saveptr, not_exist))) {
+      LOG_WARN("fail to parse key value", KR(ret), K(token), K(saveptr));
+    } else if (not_exist) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("key value not exist", KR(ret), K(token), K(saveptr), K(not_exist));
+    }
+  }
+  return ret;
+}
 
 ObRestoreSourceServiceUser::ObRestoreSourceServiceUser()
   : user_name_(),
@@ -46,6 +101,17 @@ bool ObRestoreSourceServiceUser::is_valid() const
       && (ObCompatibilityMode::OCEANBASE_MODE != mode_)
       && (tenant_id_ != OB_INVALID_TENANT_ID)
       && (cluster_id_ != OB_INVALID_CLUSTER_ID);
+}
+
+bool ObRestoreSourceServiceUser::is_valid_for_connect() const
+{
+  return STRLEN(user_name_) != 0
+      && STRLEN(tenant_name_) != 0;
+}
+
+bool ObRestoreSourceServiceUser::is_same_tenant(const ObRestoreSourceServiceUser &user) const
+{
+  return (tenant_id_ == user.tenant_id_) && (cluster_id_ == user.cluster_id_);
 }
 
 bool ObRestoreSourceServiceUser::operator== (const ObRestoreSourceServiceUser &other) const
@@ -77,6 +143,228 @@ int ObRestoreSourceServiceUser::assign(const ObRestoreSourceServiceUser &user)
   return ret;
 }
 
+int ObRestoreSourceServiceAttr::check_target_tenant_valid(const uint64_t self_tenant_id, const bool for_verify,
+  ObLogRestoreProxyUtil &proxy)
+{
+  int ret = OB_SUCCESS;
+  bool source_is_self = false;
+  bool cluster_id_dup = false;
+  int64_t cluster_id = OB_INVALID_CLUSTER_ID;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  if (!for_verify && OB_FAIL(check_restore_source_is_self_(source_is_self, self_tenant_id))) {
+    LOG_WARN("failed to check restore source is self", KR(ret), K(*this), K(self_tenant_id));
+  } else if (source_is_self) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("set tenant itself as log_restore_source/sync_standby_dest is not allowed");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set tenant itself as log_restore_source/sync_standby_dest is");
+  } else if (!for_verify && OB_FAIL(proxy.check_different_cluster_with_same_cluster_id(user_.cluster_id_, cluster_id_dup))) {
+    LOG_WARN("failed to check different cluster with same cluster id", KR(ret), K(*this), K(self_tenant_id));
+  } else if (cluster_id_dup) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("different cluster with same cluster id is not allowed");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "different cluster with same cluster id is");
+  } else if (for_verify && OB_FAIL(proxy.check_begin_lsn(user_.tenant_id_))) {
+    LOG_WARN("check_begin_lsn failed", KR(ret), K(*this), K(self_tenant_id));
+  } else if (OB_FAIL(check_tenant_not_changed(proxy, tenant_id, cluster_id))) {
+    LOG_WARN("check tenant change failed", KR(ret), K(*this), K(self_tenant_id));
+  }
+  return ret;
+}
+
+int ObRestoreSourceServiceAttr::init_for_first_connection(
+  const uint64_t standby_tenant_id, const bool for_verify, ObLogRestoreProxyUtil &proxy)
+{
+  int ret = OB_SUCCESS;
+  uint64_t user_data_version = OB_INVALID_VERSION;
+  ObArray<common::ObAddr> sql_addr_list;
+  ObArray<int32_t> svr_port_list;
+  if (OB_FAIL(init_proxy_utils(standby_tenant_id, proxy))) {
+    LOG_WARN("failed to init proxy utils", KR(ret), K(*this), K(standby_tenant_id));
+  } else if (OB_FAIL(check_target_tenant_valid(standby_tenant_id, for_verify, proxy))) {
+    LOG_WARN("failed to check target tenant valid", KR(ret), K(*this), K(standby_tenant_id));
+  } else if (OB_FAIL(proxy.get_compatibility_mode(user_.tenant_id_, user_.mode_))) {
+    LOG_WARN("failed to get compatibility mode", KR(ret), K(*this), K(standby_tenant_id));
+  } else if (!for_verify) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(standby_tenant_id, user_data_version))) {
+      LOG_WARN("failed to get user data version", KR(ret), K(standby_tenant_id));
+    } else if (user_data_version >= standby::ObProtectionModeUtils::get_protection_mode_data_version()) {
+      if (OB_FAIL(proxy.get_server_ip_and_svr_port_list(
+          user_.tenant_id_, sql_addr_list, svr_port_list))) {
+        LOG_WARN("failed to get server ip and svr port list", KR(ret), K(*this), K(user_.tenant_id_));
+      } else if (OB_FAIL(set_sql_addr_and_svr_port_list(sql_addr_list, svr_port_list))) {
+        LOG_WARN("failed to set sql addr and svr port list", KR(ret), K(sql_addr_list), K(svr_port_list));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreSourceServiceAttr::init_proxy_utils(
+  const uint64_t standby_tenant_id, ObLogRestoreProxyUtil &proxy)
+{
+  int ret = OB_SUCCESS;
+  char passwd[OB_MAX_PASSWORD_LENGTH + 1] = { 0 }; //unencrypted password
+  ObSqlString user_and_tenant;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  int64_t cluster_id = OB_INVALID_CLUSTER_ID;
+  if (!service_host_is_valid() || !service_password_is_valid() || !user_.is_valid_for_connect()
+    || !is_valid_tenant_id(standby_tenant_id) || !is_user_tenant(standby_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("self is invalid, cannot connection primary tenant", KR(ret), K(*this),
+      K(standby_tenant_id));
+  } else if (OB_FAIL(get_password(passwd, sizeof(passwd)))) {
+    LOG_WARN("get servcie attr password failed");
+  } else if (OB_FAIL(get_user_str_(user_and_tenant))) {
+    LOG_WARN("get user str failed", K(user_.user_name_),
+             K(user_.tenant_name_));
+  } else {
+    ObArray<common::ObAddr> sql_addr_list;
+    if (OB_FAIL(get_sql_addr_list(sql_addr_list))) {
+      LOG_WARN("failed to get sql addr list", KR(ret), K(*this));
+    } else if (OB_FAIL(proxy.try_init(standby_tenant_id, sql_addr_list,
+                                      user_and_tenant.ptr(), passwd))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("proxy connect to primary db failed", K(sql_addr_list),
+               K(user_and_tenant), K(standby_tenant_id));
+    }
+  }
+  if (FAILEDx(check_tenant_not_changed(proxy, tenant_id, cluster_id))) {
+    LOG_WARN("check tenant not changed failed", KR(ret), K(*this), K(standby_tenant_id));
+  } else {
+    user_.tenant_id_ = tenant_id;
+    user_.cluster_id_ = cluster_id;
+  }
+  return ret;
+}
+
+int ObRestoreSourceServiceAttr::check_tenant_not_changed(ObLogRestoreProxyUtil &proxy, uint64_t &tenant_id, int64_t &cluster_id)
+{
+  int ret = OB_SUCCESS;
+  if (!proxy.is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("proxy is not inited", KR(ret));
+  } else if (OB_FAIL(proxy.get_tenant_id(user_.tenant_name_, tenant_id))) {
+    LOG_WARN("get primary tenant id failed", KR(ret), K(user_));
+  } else if (OB_FAIL(proxy.get_cluster_id(tenant_id, cluster_id))) {
+    LOG_WARN("get primary cluster id failed", KR(ret), K(user_.tenant_id_));
+  } else if ((user_.tenant_id_ != tenant_id && user_.tenant_id_ != OB_INVALID_TENANT_ID)
+      || (user_.cluster_id_ != cluster_id && user_.cluster_id_ != OB_INVALID_CLUSTER_ID)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("primary tenant id or cluster id is not match", KR(ret), K(user_.tenant_id_),
+        K(tenant_id), K(user_.cluster_id_), K(cluster_id));
+  }
+  return ret;
+}
+
+ObRestoreSourceServiceAddr::ObRestoreSourceServiceAddr()
+  : sql_addr_(),
+    svr_port_(0),
+    svr_port_valid_(false)
+{
+}
+
+void ObRestoreSourceServiceAddr::reset()
+{
+  sql_addr_.reset();
+  svr_port_ = 0;
+  svr_port_valid_ = false;
+}
+
+bool ObRestoreSourceServiceAddr::is_valid() const
+{
+  const bool sql_valid = sql_addr_.is_valid();
+  const bool svr_valid = !svr_port_valid_ || svr_port_ > 0;
+  return sql_valid && svr_valid;
+}
+
+bool ObRestoreSourceServiceAddr::is_svr_port_valid() const
+{
+  return svr_port_valid_;
+}
+
+int ObRestoreSourceServiceAddr::set_sql_addr(const common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!addr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid sql addr", KR(ret), K(addr));
+  } else {
+    sql_addr_ = addr;
+  }
+  return ret;
+}
+
+int ObRestoreSourceServiceAddr::set_svr_port(const int32_t svr_port)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(svr_port <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid svr port", KR(ret), K(svr_port));
+  } else {
+    svr_port_ = svr_port;
+    svr_port_valid_ = true;
+  }
+  return ret;
+}
+
+bool ObRestoreSourceServiceAddr::is_same_sql_addr(const common::ObAddr &addr) const
+{
+  return sql_addr_ == addr;
+}
+
+int ObRestoreSourceServiceAddr::get_sql_addr(common::ObAddr &addr) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!sql_addr_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql addr is invalid", KR(ret), K(sql_addr_));
+  } else {
+    addr = sql_addr_;
+  }
+  return ret;
+}
+
+int ObRestoreSourceServiceAddr::get_svr_addr(common::ObAddr &addr) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!sql_addr_.is_valid() || !svr_port_valid_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("svr addr is invalid", KR(ret), K(sql_addr_), K(svr_port_valid_));
+  } else {
+    addr = sql_addr_;
+    addr.set_port(svr_port_);
+  }
+  return ret;
+}
+
+bool ObRestoreSourceServiceAddr::operator==(const ObRestoreSourceServiceAddr &other) const
+{
+  bool bret = false;
+  if (sql_addr_ == other.sql_addr_) {
+    if (svr_port_valid_ != other.svr_port_valid_) {
+      bret = false;
+    } else if (!svr_port_valid_) {
+      bret = true;
+    } else {
+      bret = (svr_port_ == other.svr_port_);
+    }
+  }
+  return bret;
+}
+
+DEF_TO_STRING(ObRestoreSourceServiceAddr)
+{
+  int64_t pos = 0;
+  pos = sql_addr_.to_string(buf, buf_len);
+  if (svr_port_valid_ && pos > 0) {
+    const int ret = databuff_printf(buf, buf_len, pos, "+%d", svr_port_);
+    if (OB_SUCCESS != ret) {
+      LOG_WARN("fail to print svr port", KR(ret), K_(svr_port), K(buf_len), K(pos));
+    }
+  }
+  return pos;
+}
+
 ObRestoreSourceServiceAttr::ObRestoreSourceServiceAttr()
   : addr_(),
     user_()
@@ -91,6 +379,21 @@ void ObRestoreSourceServiceAttr::reset()
   encrypt_passwd_[0] = '\0';
 }
 
+int ObRestoreSourceServiceAttr::parse_service_attr_from_item(const ObLogRestoreSourceItem &item)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString value;
+  if (item.type_ != ObLogRestoreSourceType::SERVICE) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(item));
+  } else if (OB_FAIL(value.assign(item.value_))) {
+    LOG_WARN("failed to assign restore source valuel", KR(ret), K(item));
+  } else if (OB_FAIL(parse_service_attr_from_str(value))) {
+    LOG_WARN("failed to parse service attr from str", KR(ret), K(value));
+  }
+  return ret;
+}
+
 /*
    parse service attr from string
    eg: "ip_list=127.0.0.1:1001;127.0.0.1:1002,USER=restore_user@primary_tenant,PASSWORD=xxxxxx,TENANT_ID=1002,
@@ -99,75 +402,43 @@ void ObRestoreSourceServiceAttr::reset()
 int ObRestoreSourceServiceAttr::parse_service_attr_from_str(ObSqlString &value)
 {
   int ret = OB_SUCCESS;
-  char tmp_str[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
-  char *token = nullptr;
-  char *saveptr = nullptr;
-
-  if (OB_UNLIKELY(value.empty() || value.length() > OB_MAX_BACKUP_DEST_LENGTH)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("log restore source attr value is invalid");
-  } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", static_cast<int>(value.length()), value.ptr()))) {
-    LOG_WARN("fail to print attr value", K(value));
-  } else {
-    token = tmp_str;
-    for (char *str = token; OB_SUCC(ret); str = nullptr) {
-      token = ::STRTOK_R(str, ",", &saveptr);
-      if (nullptr == token) {
-        break;
-      } else if (OB_FAIL(do_parse_sub_service_attr(token))) {
-        LOG_WARN("fail to parse service attr str", K(token));
-      }
-    }
+  if (OB_FAIL(parse_from_str(value.string(), ","))) {
+    LOG_WARN("failed to parse service attr from str", KR(ret), K(value));
   }
   return ret;
 }
 
-int ObRestoreSourceServiceAttr::do_parse_sub_service_attr(const char *sub_value)
+int ObRestoreSourceServiceAttr::do_parse_key_value(const char *key, const char *value, bool &not_exist)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(sub_value) || OB_UNLIKELY(0 == STRLEN(sub_value) || STRLEN(sub_value) > OB_MAX_BACKUP_DEST_LENGTH)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("log restore source service attr sub value is invalid", K(sub_value));
-  } else {
-    char tmp_str[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
-    char *token = nullptr;
-    char *saveptr = nullptr;
-    if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%s", sub_value))) {
-      LOG_WARN("fail to print sub_value", K(sub_value));
-    } else if (OB_ISNULL(token = ::STRTOK_R(tmp_str, "=", &saveptr))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to split sub_value str", K(token), KP(tmp_str));
-    } else if (OB_FALSE_IT(str_tolower(token, strlen(token)))) {
-    } else if (0 == STRCASECMP(token, OB_STR_IP_LIST)) {
-      if (OB_FAIL(parse_ip_port_from_str(saveptr, ";"/*delimiter*/))) {
-        LOG_WARN("fail to parse ip list from str", K(token), K(saveptr));
-      }
-    } else if (0 == STRCASECMP(token, OB_STR_USER)) {
-      if (OB_FAIL(set_service_user_config(saveptr))) {
-        LOG_WARN("fail to set restore service user and tenant", K(token), K(saveptr));
-      }
-    } else if (0 == STRCASECMP(token, OB_STR_TENANT_ID)) {
-      if (OB_FAIL(set_service_tenant_id(saveptr))) {
-        LOG_WARN("fail to set restore service user and tenant", K(token), K(saveptr));
-      }
-    } else if (0 == STRCASECMP(token, OB_STR_CLUSTER_ID)) {
-      if (OB_FAIL(set_service_cluster_id(saveptr))) {
-        LOG_WARN("fail to set restore service user and tenant", K(token), K(saveptr));
-      }
-    } else if (0 == STRCASECMP(token, OB_COMPATIBILITY_MODE)) {
-      if (OB_FAIL(set_service_compatibility_mode(saveptr))) {
-        LOG_WARN("fail to set restore service compatibility mode", K(token), K(saveptr));
-      }
-    } else if (0 == STRCASECMP(token, OB_STR_PASSWORD)) {
-      if (OB_FAIL(set_service_passwd_no_encrypt(saveptr))) {
-        LOG_WARN("fail to set restore service passwd", K(token), K(saveptr));
-      }
-    } else if (0 == STRCASECMP(token, OB_STR_IS_ENCRYPTED)) {
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("log restore source service do not have this config", K(token));
+  not_exist = false;
+  if (0 == STRCASECMP(key, OB_STR_IP_LIST)) {
+    if (OB_FAIL(parse_ip_port_from_str(value, ";"/*delimiter*/))) {
+      LOG_WARN("fail to parse ip list from str", K(key), K(value));
     }
+  } else if (0 == STRCASECMP(key, OB_STR_USER)) {
+    if (OB_FAIL(set_service_user_config(value))) {
+      LOG_WARN("fail to set restore service user and tenant", K(key), K(value));
+    }
+  } else if (0 == STRCASECMP(key, OB_STR_TENANT_ID)) {
+    if (OB_FAIL(set_service_tenant_id(value))) {
+      LOG_WARN("fail to set restore service user and tenant", K(key), K(value));
+    }
+  } else if (0 == STRCASECMP(key, OB_STR_CLUSTER_ID)) {
+    if (OB_FAIL(set_service_cluster_id(value))) {
+      LOG_WARN("fail to set restore service user and tenant", K(key), K(value));
+    }
+  } else if (0 == STRCASECMP(key, OB_COMPATIBILITY_MODE)) {
+    if (OB_FAIL(set_service_compatibility_mode(value))) {
+      LOG_WARN("fail to set restore service compatibility mode", K(key), K(value));
+    }
+  } else if (0 == STRCASECMP(key, OB_STR_PASSWORD)) {
+    if (OB_FAIL(set_service_passwd_no_encrypt(value))) {
+      LOG_WARN("fail to set restore service passwd", K(key), K(value));
+    }
+  } else if (0 == STRCASECMP(key, OB_STR_IS_ENCRYPTED)) {
+  } else {
+    not_exist = true;
   }
   return ret;
 }
@@ -289,14 +560,14 @@ int ObRestoreSourceServiceAttr::parse_ip_port_from_str(const char *ip_list, cons
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ip_list) || OB_ISNULL(delimiter) || OB_UNLIKELY(STRLEN(ip_list) > OB_MAX_RESTORE_SOURCE_IP_LIST_LEN)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("log restore source service ip list is invalid");
+    LOG_WARN("log restore source service ip list is invalid", KR(ret));
   }
 
   char tmp_str[OB_MAX_RESTORE_SOURCE_IP_LIST_LEN + 1] = { 0 };
   char *token = nullptr;
   char *saveptr = nullptr;
   if (FAILEDx(databuff_printf(tmp_str, sizeof(tmp_str), "%s", ip_list))) {
-    LOG_WARN("fail to get ip list", K(ip_list));
+    LOG_WARN("fail to get ip list", KR(ret), K(ip_list));
   } else {
     token = tmp_str;
     for (char *str = token; OB_SUCC(ret); str = nullptr) {
@@ -304,17 +575,106 @@ int ObRestoreSourceServiceAttr::parse_ip_port_from_str(const char *ip_list, cons
       if (nullptr == token) {
         break;
       } else {
+        char *plus_pos = nullptr;
         ObAddr addr;
-        if (OB_FAIL(addr.parse_from_string(ObString(token)))) {
-          LOG_WARN("fail to parse addr", K(addr), K(token));
+        ObRestoreSourceServiceAddr service_addr;
+        plus_pos = strrchr(token, '+');
+        if (nullptr != plus_pos) {
+          const char *svr_port_str = plus_pos + 1;
+          int64_t svr_port = 0;
+          char *endptr = nullptr;
+          svr_port = ::strtol(svr_port_str, &endptr, 10);
+          if (OB_ISNULL(endptr) || '\0' != *endptr || svr_port <= 0 || svr_port > INT32_MAX) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("svr_port is invalid", KR(ret), K(ip_list), K(svr_port_str));
+          } else if (OB_FAIL(service_addr.set_svr_port(static_cast<int32_t>(svr_port)))) {
+            LOG_WARN("fail to set svr port", KR(ret), K(svr_port));
+          } else {
+            *plus_pos = '\0';
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(addr.parse_from_string(ObString(token)))) {
+          LOG_WARN("fail to parse addr", KR(ret), K(addr), K(token));
         } else if (!addr.is_valid()) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("service addr is invalid", K(addr), K(ip_list));
-        } else if (OB_FAIL(addr_.push_back(addr))){
-          LOG_WARN("fail to push addr", K(addr));
+          LOG_WARN("service addr is invalid", KR(ret), K(addr), K(ip_list));
+        } else if (OB_FAIL(service_addr.set_sql_addr(addr))) {
+          LOG_WARN("fail to set sql addr", KR(ret), K(addr));
+        } else if (OB_FAIL(addr_.push_back(service_addr))) {
+          LOG_WARN("fail to push addr", KR(ret), K(service_addr));
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObRestoreSourceServiceAttr::set_sql_addr_and_svr_port_list(
+    const common::ObIArray<common::ObAddr> &addr_list,
+    const common::ObIArray<int32_t> &svr_port_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(addr_list.empty() || svr_port_list.empty()
+      || addr_list.count() != svr_port_list.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("svr addr list is invalid", KR(ret), K(addr_list), K(svr_port_list));
+  } else {
+    addr_.reset();
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < addr_list.count(); ++idx) {
+      ObRestoreSourceServiceAddr service_addr;
+      if (OB_FAIL(service_addr.set_sql_addr(addr_list.at(idx)))) {
+        LOG_WARN("fail to set sql addr", KR(ret), K(addr_list.at(idx)));
+      } else if (OB_FAIL(service_addr.set_svr_port(svr_port_list.at(idx)))) {
+        LOG_WARN("fail to set svr port", KR(ret), K(svr_port_list.at(idx)));
+      } else if (OB_FAIL(addr_.push_back(service_addr))) {
+        LOG_WARN("fail to push addr", KR(ret), K(service_addr));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreSourceServiceAttr::set_sql_addr_list(const common::ObIArray<common::ObAddr> &addr_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(addr_list.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql addr list is empty", KR(ret), K(addr_list));
+  } else {
+    addr_.reset();
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < addr_list.count(); ++idx) {
+      ObRestoreSourceServiceAddr service_addr;
+      if (OB_FAIL(service_addr.set_sql_addr(addr_list.at(idx)))) {
+        LOG_WARN("fail to set sql addr", KR(ret), K(addr_list.at(idx)));
+      } else if (OB_FAIL(addr_.push_back(service_addr))) {
+        LOG_WARN("fail to push addr", KR(ret), K(service_addr));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreSourceServiceAttr::get_sql_addr_list(common::ObIArray<common::ObAddr> &addr_list) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < addr_.count(); ++idx) {
+    common::ObAddr addr;
+    if (OB_FAIL(addr_.at(idx).get_sql_addr(addr))) {
+      LOG_WARN("fail to get sql addr", KR(ret), K(addr_.at(idx)));
+    } else if (OB_FAIL(addr_list.push_back(addr))) {
+      LOG_WARN("fail to push sql addr", KR(ret), K(addr));
+    }
+  }
+  return ret;
+}
+
+int ObRestoreSourceServiceAttr::get_service_addr_list(
+    common::ObIArray<ObRestoreSourceServiceAddr> &addr_list) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(addr_list.assign(addr_))) {
+    LOG_WARN("fail to assign service addr list", KR(ret), K(addr_));
   }
   return ret;
 }
@@ -333,12 +693,29 @@ bool ObRestoreSourceServiceAttr::service_user_is_valid() const
 
 bool ObRestoreSourceServiceAttr::service_host_is_valid() const
 {
-   return !addr_.empty();
+  bool is_valid = !addr_.empty();
+  for (int64_t idx = 0; idx < addr_.count() && is_valid; ++idx) {
+    if (!addr_.at(idx).is_valid()) {
+      is_valid = false;
+    }
+  }
+  return is_valid;
 }
 
 bool ObRestoreSourceServiceAttr::service_password_is_valid() const
 {
    return strlen(encrypt_passwd_) != 0;
+}
+
+bool ObRestoreSourceServiceAttr::has_svr_port() const
+{
+  bool has_svr_port = !addr_.empty();
+  for (int64_t idx = 0; idx < addr_.count() && has_svr_port; ++idx) {
+    if (!addr_.at(idx).is_svr_port_valid()) {
+      has_svr_port = false;
+    }
+  }
+  return has_svr_port;
 }
 
 int ObRestoreSourceServiceAttr::gen_config_items(common::ObIArray<BackupConfigItemPair> &items) const
@@ -438,6 +815,18 @@ int ObRestoreSourceServiceAttr::gen_config_items(common::ObIArray<BackupConfigIt
   return ret;
 }
 
+int ObRestoreSourceServiceAttr::gen_service_attr_str(ObSqlString &str) const
+{
+  int ret = OB_SUCCESS;
+  char value_string[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
+  if (OB_FAIL(gen_service_attr_str(value_string, sizeof(value_string)))) {
+    LOG_WARN("failed to gen service attr str", KR(ret));
+  } else if (OB_FAIL(str.assign(value_string))) {
+    LOG_WARN("failed to assign service attr str", KR(ret), K(value_string));
+  }
+  return ret;
+}
+
 int ObRestoreSourceServiceAttr::gen_service_attr_str(char *buf, const int64_t buf_size) const
 {
   int ret = OB_SUCCESS;
@@ -476,11 +865,11 @@ int ObRestoreSourceServiceAttr::get_ip_list_str_(char *buf, const int64_t buf_si
   ObSqlString str;
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid ip list argument", KP(buf), K(buf_size));
+    LOG_WARN("invalid ip list argument", KR(ret), KP(buf), K(buf_size));
   } else if (OB_FAIL(get_ip_list_str_(str))) {
-    LOG_WARN("get ip list str failed");
+    LOG_WARN("get ip list str failed", KR(ret));
   } else if (OB_FAIL(databuff_printf(buf, buf_size, "%.*s", static_cast<int>(str.length()), str.ptr()))) {
-    LOG_WARN("fail to print str", K(str));
+    LOG_WARN("fail to print str", KR(ret), K(str));
   }
   return ret;
 }
@@ -488,17 +877,22 @@ int ObRestoreSourceServiceAttr::get_ip_list_str_(char *buf, const int64_t buf_si
 int ObRestoreSourceServiceAttr::get_ip_list_str_(ObSqlString &str) const
 {
   int ret = OB_SUCCESS;
-
-  ARRAY_FOREACH_N(addr_, idx, cnt) {
+  bool use_svr_port_effective = has_svr_port();
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < addr_.count(); ++idx) {
     char ip_str[MAX_IP_PORT_LENGTH] = { 0 };
-    const ObAddr ip = addr_.at(idx);
-    if (OB_FAIL(ip.ip_port_to_string(ip_str, sizeof(ip_str)))) {
-      LOG_WARN("fail to convert ip port to string", K(ip), K(ip_str));
-    } else {
-      if (0 == idx && (OB_FAIL(str.assign_fmt("%s", ip_str)))) {
-        LOG_WARN("fail to assign ip str", K(str) ,K(ip), K(ip_str));
-      } else if ( 0 != idx && OB_FAIL(str.append_fmt(";%s", ip_str))) {
-        LOG_WARN("fail to append ip str", K(str), K(ip), K(ip_str));
+    common::ObAddr sql_addr;
+    if (OB_FAIL(addr_.at(idx).get_sql_addr(sql_addr))) {
+      LOG_WARN("fail to get sql addr", KR(ret), K(addr_.at(idx)));
+    } else if (OB_FAIL(sql_addr.ip_port_to_string(ip_str, sizeof(ip_str)))) {
+      LOG_WARN("fail to convert ip port to string", KR(ret), K(sql_addr), K(ip_str));
+    } else if (0 == idx && (OB_FAIL(str.assign_fmt("%s", ip_str)))) {
+      LOG_WARN("fail to assign ip str", KR(ret), K(str) ,K(sql_addr), K(ip_str));
+    } else if (0 != idx && OB_FAIL(str.append_fmt(";%s", ip_str))) {
+      LOG_WARN("fail to append ip str", KR(ret), K(str), K(sql_addr), K(ip_str));
+    } else if (use_svr_port_effective) {
+      const int32_t svr_port = addr_.at(idx).get_svr_port();
+      if (OB_FAIL(str.append_fmt("+%d", svr_port))) {
+        LOG_WARN("fail to append svr port", KR(ret), K(str), K(sql_addr), K(svr_port));
       }
     }
   }
@@ -746,19 +1140,34 @@ bool ObRestoreSourceServiceAttr::compare_addr_(common::ObArray<common::ObAddr> a
 {
   int bret = true;
   int ret = OB_SUCCESS;
-  if (addr.size() != this->addr_.size()) {
+  if (addr.size() != addr_.size()) {
     bret = false;
   } else {
-    ARRAY_FOREACH_N(addr, idx, cnt) {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < addr.count(); ++idx) {
       bool tmp_cmp = false;
-      ARRAY_FOREACH_N(this->addr_, idx1, cnt1) {
-        if (addr.at(idx) == this->addr_.at(idx1)) {
+      for (int64_t idx1 = 0; OB_SUCC(ret) && idx1 < addr_.count(); ++idx1) {
+        if (addr_.at(idx1).is_same_sql_addr(addr.at(idx))) {
           tmp_cmp = true;
         }
       }
       if (!tmp_cmp) {
         bret = false;
         break;
+      }
+    }
+  }
+  return bret;
+}
+
+bool ObRestoreSourceServiceAttr::compare_addr_list_(const common::ObArray<ObRestoreSourceServiceAddr> &addr) const
+{
+  int bret = true;
+  if (addr.size() != addr_.size()) {
+    bret = false;
+  } else {
+    for (int64_t idx = 0; bret && idx < addr.count(); ++idx) {
+      if (!has_exist_in_array(addr_, addr.at(idx))) {
+        bret = false;
       }
     }
   }
@@ -785,7 +1194,7 @@ bool ObRestoreSourceServiceAttr::operator==(const ObRestoreSourceServiceAttr &ot
   return (this->user_ == other.user_)
          && (STRLEN(this->encrypt_passwd_) == STRLEN(other.encrypt_passwd_))
          && (0 == STRCMP(this->encrypt_passwd_, other.encrypt_passwd_))
-         && compare_addr_(other.addr_);
+         && compare_addr_list_(other.addr_);
 }
 
 int ObRestoreSourceServiceAttr::assign(const ObRestoreSourceServiceAttr &attr)

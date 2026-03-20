@@ -55,6 +55,7 @@
 #include "storage/tablelock/ob_lock_table.h"
 #include "lib/hash/ob_multi_mod_ref_mgr.h"
 #include "logservice/ob_garbage_collector.h"
+#include "logservice/palf/log_sync_mode_mgr.h"
 #include "logservice/leader_coordinator/election_priority_impl/election_priority_impl.h"
 #include "storage/high_availability/ob_ls_migration_handler.h"
 #include "storage/high_availability/ob_ls_remove_member_handler.h"
@@ -1181,6 +1182,7 @@ private:
   rootserver::ObLSRecoveryStatHandler ls_recovery_stat_handler_;
   ObLSMemberListService member_list_service_;
   ObLSBlockTxService block_tx_service_;
+  logservice::ObSyncModeLogHandler sync_mode_log_handler_;
   table::ObTenantTabletTTLMgr tablet_ttl_mgr_;
 #ifdef OB_BUILD_SHARED_STORAGE
   // for shared storage ls replica prewarm

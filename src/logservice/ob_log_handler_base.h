@@ -17,6 +17,7 @@
 #include "common/ob_role.h"
 #include "ipalf/ipalf_handle.h"
 #include "palf/palf_handle.h"
+#include "palf/log_define.h"
 
 namespace oceanbase
 {
@@ -44,6 +45,18 @@ public:
                           common::ObRole &new_role,
                           int64_t &new_proposal_id,
                           bool &is_pending_state) const;
+  // @breif query role, proposal_id and sync_mode from ObLogHandlerBase and palf atomically.
+  // @param[out], curr_role, role of ObLogHandler.
+  // @param[out], curr_proposal_id, proposal_id of ObLogHandler.
+  // @param[out], new_role, role of palf.
+  // @param[out], new_proposal_id, proposal_id of palf.
+  // @param[out], sync_mode, sync_mode of palf, consistent with new_proposal_id.
+  int prepare_switch_role(common::ObRole &curr_role,
+                          int64_t &curr_proposal_id,
+                          common::ObRole &new_role,
+                          int64_t &new_proposal_id,
+                          bool &is_pending_state,
+                          palf::SyncMode &sync_mode) const;
   // NB: only called by ObRoleChangeService
   virtual void switch_role(const common::ObRole &role, const int64_t proposal_id) = 0;
   int advance_election_epoch_and_downgrade_priority(const int64_t downgrade_priority_time_us,

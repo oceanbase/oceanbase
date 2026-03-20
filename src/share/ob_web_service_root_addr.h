@@ -53,74 +53,12 @@ class ObCommonRpcProxy;
 namespace share
 {
 
-struct ObRedoTransportOption
-{
-  OB_UNIS_VERSION(1);
-public:
-  static const int64_t DEFAULT_NET_TIMEOUT = 30 * 1000 * 1000; //30s
-  static const int64_t DEFAULT_REOPEN = 300 * 1000 * 1000; //300s
-  static const int64_t DEFAULT_MAX_FAILURE = 0;//0 always retry
-  enum RedoOptionProfile
-  {
-    INVALID_TYPE = -1,
-    SYNC = 0,
-    ASYNC,
-    NET_TIMEOUT,
-    REOPEN,
-    MAX_FAILURE,
-  };
-  int64_t net_timeout_;
-  int64_t reopen_;
-  int64_t max_failure_;
-  bool is_sync_;
-  ObRedoTransportOption() : net_timeout_(DEFAULT_NET_TIMEOUT),
-                          reopen_(DEFAULT_REOPEN),
-                          max_failure_(DEFAULT_MAX_FAILURE),
-                          is_sync_(false) {}
-  void reset()
-  {
-    net_timeout_ = DEFAULT_NET_TIMEOUT;
-    reopen_ = DEFAULT_REOPEN;
-    max_failure_ = DEFAULT_MAX_FAILURE;
-    is_sync_ = false;
-  }
-  ObRedoTransportOption &operator =(const ObRedoTransportOption &other);
-  int assign(const ObRedoTransportOption &other);
-  bool operator !=(const ObRedoTransportOption &other) const;
-  bool operator ==(const ObRedoTransportOption &other) const;
-  int append_redo_transport_options_change(const common::ObString &redo_transport_options_str);
-  int get_redo_transport_options_str(common::ObSqlString &str) const;
-  bool get_is_sync() const { return is_sync_; }
-  TO_STRING_KV(K_(net_timeout), K_(reopen), K_(max_failure), K_(is_sync));
-private:
-  RedoOptionProfile str_to_redo_transport_options(const char *str);
-};
-
-struct ObClusterRsAddr
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObClusterRsAddr()
-    : cluster_id_(common::OB_INVALID_ID),
-      addr_()
-  {}
-  virtual ~ObClusterRsAddr() {}
-  void reset();
-  bool is_valid() const;
-  int assign(const ObClusterRsAddr &other);
-  TO_STRING_KV(K_(cluster_id), K_(addr));
-public:
-  int64_t cluster_id_;
-  common::ObAddr addr_;
-};
-
 struct ObClusterAddr
 {
   OB_UNIS_VERSION(1);
 public:
   int64_t cluster_id_;
   common::ObClusterRole cluster_role_;
-  common::ObClusterStatus cluster_status_;
   int64_t timestamp_;
   common::ObFixedLengthString<common::OB_MAX_CLUSTER_NAME_LENGTH> cluster_name_;
   ObAddrList addr_list_;
@@ -128,38 +66,26 @@ public:
   //unique internal label of cluster
   int64_t cluster_idx_;
   int64_t current_scn_;//the current flashback point of cluster
-  share::ObRedoTransportOption redo_transport_options_;
-  common::ObProtectionLevel protection_level_;
 
   share::ObClusterSyncStatus sync_status_;
   int64_t last_hb_ts_;
   ObClusterAddr() : cluster_id_(common::OB_INVALID_ID), cluster_role_(common::INVALID_CLUSTER_ROLE),
-    cluster_status_(common::INVALID_CLUSTER_STATUS), timestamp_(0),
-    cluster_name_(), addr_list_(), readonly_addr_list_(),
+    timestamp_(0), cluster_name_(), addr_list_(), readonly_addr_list_(),
     cluster_idx_(common::OB_INVALID_INDEX),
     current_scn_(common::OB_INVALID_VERSION),
-    redo_transport_options_(),
-    protection_level_(common::INVALID_PROTECTION_LEVEL),
     sync_status_(NOT_AVAILABLE), last_hb_ts_(common::OB_INVALID_TIMESTAMP) {}
   void reset();
   int assign(const ObClusterAddr &other);
   bool is_valid() const;
   int get_addr_list_str(common::ObString &addr_list_str);
-  int append_redo_transport_options_change(common::ObString &redo_transport_options,
-                                           common::ObIAllocator &alloc) const;
   int construct_rootservice_list(common::ObString &rootservice_list,
                                  common::ObIAllocator &alloc) const;
 
-  bool is_added() const
-  { return common::INVALID_CLUSTER_STATUS != cluster_status_
-           && common::REGISTERED != cluster_status_
-           && common::MAX_CLUSTER_STATUS != cluster_status_; }
   bool operator==(const ObClusterAddr &other) const;
-  TO_STRING_KV(K_(cluster_id), K_(cluster_role), K_(cluster_status),
+  TO_STRING_KV(K_(cluster_id), K_(cluster_role),
                K_(timestamp), K_(cluster_name),
                K_(addr_list), K_(readonly_addr_list), K_(cluster_idx),
-               K_(current_scn), K_(redo_transport_options), K_(protection_level),
-               K_(sync_status), K_(last_hb_ts));
+               K_(current_scn), K_(sync_status), K_(last_hb_ts));
 };
 
 typedef common::ObIArray<ObClusterAddr> ObClusterIAddrList;

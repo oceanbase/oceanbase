@@ -716,6 +716,258 @@ TEST(TestBitFlip, test_log_group_entry_header)
   }
 }
 
+// TEST(TestSyncFlag, test_sync_flag_basic)
+// {
+//   PALF_LOG(INFO, "test_sync_flag_basic");
+//   const int64_t BUFSIZE = 1 << 21;
+//   LogGroupEntryHeader header;
+//   LogEntryHeader log_entry_header;
+//   int64_t log_group_entry_header_size = header.get_serialize_size();
+//   int64_t log_entry_header_size = log_entry_header.get_serialize_size();
+//   int64_t header_size = log_group_entry_header_size + log_entry_header_size;
+//   char buf[BUFSIZE];
+//   char ptr[BUFSIZE] = "helloworld";
+//   // 数据部分
+//   memcpy(buf + header_size, ptr, strlen(ptr));
+
+//   const char *data = buf + header_size;
+//   int64_t data_len = strlen(ptr);
+//   share::SCN max_scn = share::SCN::min_scn();
+//   int64_t log_id = 1;
+//   LSN committed_lsn;
+//   committed_lsn.val_ = 1;
+//   int64_t proposal_id = 1;
+//   int64_t log_checksum = 0;
+
+//   // test LogEntry and LogEntryHeader
+//   EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(data, data_len, share::SCN::base_scn()));
+//   int64_t tmp_pos = 0;
+//   EXPECT_EQ(OB_SUCCESS,
+//             log_entry_header.serialize(buf + log_group_entry_header_size, BUFSIZE, tmp_pos));
+//   EXPECT_EQ(tmp_pos, log_entry_header_size);
+
+//   // test LogGroupEntryHeader with sync flag enabled
+//   LogWriteBuf write_buf;
+//   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(buf, data_len + header_size));
+//   max_scn.set_base();
+
+//   // Test sync flag = true
+//   bool is_padding_log = false;
+//   bool is_raw_write = false;
+//   EXPECT_EQ(OB_SUCCESS,
+//             header.generate(is_raw_write, is_padding_log, write_buf,
+//                             data_len + log_entry_header_size,
+//                             max_scn, log_id, committed_lsn, proposal_id, log_checksum));
+//   header.update_accumulated_checksum(10);
+//   header.update_header_checksum();
+
+//   // Verify sync flag is set correctly (only in VERSION3)
+//   if (header.version_ == LogGroupEntryHeader::LOG_GROUP_ENTRY_HEADER_VERSION3) {
+//     EXPECT_TRUE(header.is_sync());
+//     PALF_LOG(INFO, "sync flag is enabled in VERSION3", K(header));
+//   } else {
+//     PALF_LOG(INFO, "sync flag not supported in this version", K(header.version_));
+//   }
+
+//   EXPECT_TRUE(header.is_valid());
+//   EXPECT_TRUE(header.check_header_integrity());
+//   EXPECT_TRUE(header.check_integrity(buf + log_group_entry_header_size,
+//                                      data_len + log_entry_header_size));
+
+//   // Test serialize and deserialize with sync flag
+//   int64_t pos = 0;
+//   EXPECT_EQ(OB_SUCCESS, header.serialize(buf, BUFSIZE, pos));
+//   EXPECT_EQ(pos, header.get_serialize_size());
+
+//   pos = 0;
+//   LogGroupEntryHeader header1;
+//   EXPECT_EQ(OB_SUCCESS, header1.deserialize(buf, BUFSIZE, pos));
+//   EXPECT_TRUE(header1.check_header_integrity());
+//   EXPECT_TRUE(header1.check_integrity(buf + log_group_entry_header_size,
+//                                        data_len + log_entry_header_size));
+
+//   // Verify sync flag is preserved after deserialize
+//   if (header.version_ == LogGroupEntryHeader::LOG_GROUP_ENTRY_HEADER_VERSION3) {
+//     EXPECT_TRUE(header1.is_sync());
+//     EXPECT_EQ(header.is_sync(), header1.is_sync());
+//   }
+//   EXPECT_TRUE(header1 == header);
+// }
+
+// TEST(TestSyncFlag, test_sync_flag_with_other_flags)
+// {
+//   PALF_LOG(INFO, "test_sync_flag_with_other_flags");
+//   const int64_t BUFSIZE = 1 << 21;
+//   LogGroupEntryHeader header;
+//   LogEntryHeader log_entry_header;
+//   int64_t log_group_entry_header_size = header.get_serialize_size();
+//   int64_t log_entry_header_size = log_entry_header.get_serialize_size();
+//   int64_t header_size = log_group_entry_header_size + log_entry_header_size;
+//   char buf[BUFSIZE];
+//   char ptr[BUFSIZE] = "helloworld";
+//   memcpy(buf + header_size, ptr, strlen(ptr));
+
+//   const char *data = buf + header_size;
+//   int64_t data_len = strlen(ptr);
+//   share::SCN max_scn = share::SCN::min_scn();
+//   int64_t log_id = 1;
+//   LSN committed_lsn;
+//   committed_lsn.val_ = 1;
+//   int64_t proposal_id = 1;
+//   int64_t log_checksum = 0;
+
+//   EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(data, data_len, share::SCN::base_scn()));
+//   int64_t tmp_pos = 0;
+//   EXPECT_EQ(OB_SUCCESS,
+//             log_entry_header.serialize(buf + log_group_entry_header_size, BUFSIZE, tmp_pos));
+
+//   LogWriteBuf write_buf;
+//   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(buf, data_len + header_size));
+//   max_scn.set_base();
+
+//   // Test all combinations of flags with sync flag
+//   std::vector<std::tuple<bool, bool, bool>> flag_combinations = {
+//     {false, false, true},  // sync only
+//     {true, false, true},   // raw_write + sync
+//     {false, true, true},   // padding + sync
+//     {true, true, true},    // raw_write + padding + sync
+//   };
+
+//   for (auto &flags : flag_combinations) {
+//     bool is_raw_write = std::get<0>(flags);
+//     bool is_padding_log = std::get<1>(flags);
+//     bool is_sync = std::get<2>(flags);
+
+//     header.reset();
+//     EXPECT_EQ(OB_SUCCESS,
+//               header.generate(is_raw_write, is_padding_log, is_sync, write_buf,
+//                               data_len + log_entry_header_size,
+//                               max_scn, log_id, committed_lsn, proposal_id, log_checksum));
+//     header.update_accumulated_checksum(10);
+//     header.update_header_checksum();
+
+//     EXPECT_TRUE(header.is_valid());
+//     EXPECT_TRUE(header.check_header_integrity());
+
+//     if (header.version_ == LogGroupEntryHeader::LOG_GROUP_ENTRY_HEADER_VERSION3) {
+//       EXPECT_EQ(is_sync, header.is_sync());
+//       EXPECT_EQ(is_raw_write, header.is_raw_write());
+//       EXPECT_EQ(is_padding_log, header.is_padding_log());
+
+//       // Test serialize/deserialize
+//       int64_t pos = 0;
+//       EXPECT_EQ(OB_SUCCESS, header.serialize(buf, BUFSIZE, pos));
+//       pos = 0;
+//       LogGroupEntryHeader header1;
+//       EXPECT_EQ(OB_SUCCESS, header1.deserialize(buf, BUFSIZE, pos));
+//       EXPECT_TRUE(header1.check_header_integrity());
+//       EXPECT_EQ(is_sync, header1.is_sync());
+//       EXPECT_EQ(is_raw_write, header1.is_raw_write());
+//       EXPECT_EQ(is_padding_log, header1.is_padding_log());
+
+//       PALF_LOG(INFO, "test flag combination", K(is_raw_write), K(is_padding_log), K(is_sync),
+//                K(header), K(header1));
+//     }
+//   }
+// }
+
+// TEST(TestSyncFlag, test_sync_flag_wrap_checksum)
+// {
+//   PALF_LOG(INFO, "test_sync_flag_wrap_checksum");
+//   const int64_t BUFSIZE = 1 << 21;
+//   LogGroupEntryHeader header;
+//   LogEntryHeader log_entry_header;
+//   int64_t group_entry_header_size = header.get_serialize_size();
+//   int64_t log_entry_header_size = log_entry_header.get_serialize_size();
+//   int64_t total_header_size = group_entry_header_size + log_entry_header_size;
+//   char buf[BUFSIZE];
+//   char ptr[BUFSIZE] = "helloworld";
+//   // 数据部分
+//   memcpy(buf + total_header_size, ptr, strlen(ptr));
+
+//   bool is_padding_log = false;
+//   const char *data = buf + total_header_size;
+//   int64_t data_len = strlen(ptr);
+//   memcpy(buf + total_header_size + data_len + log_entry_header_size, ptr, strlen(ptr));
+//   share::SCN max_scn = share::SCN::min_scn();
+//   int64_t log_id = 1;
+//   LSN committed_lsn;
+//   committed_lsn.val_ = 1;
+//   int64_t proposal_id = 1;
+//   int64_t log_checksum = 0;
+
+//   // test LogEntry and LogEntryHeader
+//   EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(data, data_len, share::SCN::base_scn()));
+//   int64_t tmp_pos = 0, new_pos = 0;
+//   EXPECT_EQ(OB_SUCCESS,
+//             log_entry_header.serialize(buf + group_entry_header_size, BUFSIZE, tmp_pos));
+//   EXPECT_EQ(tmp_pos, log_entry_header_size);
+//   EXPECT_EQ(OB_SUCCESS,
+//             log_entry_header.serialize(buf + total_header_size + data_len, BUFSIZE, new_pos));
+//   EXPECT_EQ(new_pos, log_entry_header_size);
+
+//   // test LogGroupEntryHeader with sync flag and wrap scenario
+//   LogWriteBuf write_buf;
+//   int64_t group_log_data_len = 0;
+//   int64_t group_log_len = group_entry_header_size + (log_entry_header_size + data_len);
+
+//   bool is_raw_write = false;
+//   bool is_sync = true;
+//   max_scn.set_base();
+
+//   // Test wrap scenario with sync flag enabled
+//   for (int64_t sub_val = 1; sub_val < group_log_len; ++sub_val) {
+//     write_buf.reset();
+//     EXPECT_EQ(OB_SUCCESS, write_buf.push_back(buf, sub_val));
+//     EXPECT_EQ(OB_SUCCESS, write_buf.push_back(buf + sub_val, group_log_len - sub_val));
+//     group_log_data_len = group_log_len - group_entry_header_size;
+
+//     header.reset();
+//     PALF_LOG(INFO, "before group_header generate with sync flag", K(group_log_data_len),
+//              K(write_buf), K(sub_val), K(is_sync));
+//     EXPECT_EQ(OB_SUCCESS,
+//               header.generate(is_raw_write, is_padding_log, is_sync, write_buf, group_log_data_len,
+//                               max_scn, log_id, committed_lsn, proposal_id, log_checksum));
+//     header.update_accumulated_checksum(10);
+//     header.update_header_checksum();
+
+//     if (header.version_ == LogGroupEntryHeader::LOG_GROUP_ENTRY_HEADER_VERSION3) {
+//       EXPECT_TRUE(header.is_sync());
+//       EXPECT_TRUE(header.check_header_integrity());
+
+//       // Verify checksum calculation is correct with wrap and sync flag
+//       int64_t pos = 0;
+//       EXPECT_EQ(OB_SUCCESS, header.serialize(buf, BUFSIZE, pos));
+//       pos = 0;
+//       LogGroupEntryHeader header1;
+//       EXPECT_EQ(OB_SUCCESS, header1.deserialize(buf, BUFSIZE, pos));
+//       EXPECT_TRUE(header1.check_header_integrity());
+//       EXPECT_TRUE(header1.is_sync());
+//     }
+//   }
+
+//   // Test with multiple entries and sync flag
+//   group_log_len = group_entry_header_size + 2 * (log_entry_header_size + data_len);
+//   for (int64_t sub_val = 1; sub_val < group_log_len; ++sub_val) {
+//     write_buf.reset();
+//     EXPECT_EQ(OB_SUCCESS, write_buf.push_back(buf, sub_val));
+//     EXPECT_EQ(OB_SUCCESS, write_buf.push_back(buf + sub_val, group_log_len - sub_val));
+//     group_log_data_len = group_log_len - group_entry_header_size;
+
+//     header.reset();
+//     EXPECT_EQ(OB_SUCCESS,
+//               header.generate(is_raw_write, is_padding_log, is_sync, write_buf, group_log_data_len,
+//                               max_scn, log_id, committed_lsn, proposal_id, log_checksum));
+//     header.update_accumulated_checksum(10);
+//     header.update_header_checksum();
+
+//     if (header.version_ == LogGroupEntryHeader::LOG_GROUP_ENTRY_HEADER_VERSION3) {
+//       EXPECT_TRUE(header.is_sync());
+//       EXPECT_TRUE(header.check_header_integrity());
+//     }
+//   }
+// }
+
 } // namespace unittest
 } // namespace oceanbase
 

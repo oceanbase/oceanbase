@@ -381,6 +381,8 @@ bool ObTenantInfoLoader::act_as_standby_()
     LOG_WARN("failed to get tenant_info", KR(ret));
   } else if (tenant_info.is_primary() && tenant_info.is_normal_status()) {
     act_as_standby = false;
+  } else if (tenant_info.get_protection_mode().is_sync_mode()) {
+    act_as_standby = true;
   }
 
   return act_as_standby;
@@ -618,6 +620,24 @@ int ObTenantInfoLoader::check_is_primary_normal_status(bool &is_primary_normal_s
       LOG_WARN("failed to get tenant info", KR(ret));
     } else {
       is_primary_normal_status = tenant_info.is_primary() && tenant_info.is_normal_status();
+    }
+  }
+  return ret;
+}
+
+int ObTenantInfoLoader::check_is_sync_mode(bool &is_sync_mode)
+{
+  int ret = OB_SUCCESS;
+  is_sync_mode = false;
+  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
+    is_sync_mode = false;
+  } else {
+    // user tenant
+    share::ObAllTenantInfo tenant_info;
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else {
+      is_sync_mode = tenant_info.get_protection_mode().is_sync_mode();
     }
   }
   return ret;

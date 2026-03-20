@@ -107,13 +107,15 @@ int MockTxLogAdapter::submit_log(const char *buf,
                                  const share::SCN &base_ts,
                                  ObTxBaseLogCb *cb,
                                  const bool need_nonblock,
-                                 const int64_t retry_timeout_us)
+                                 const int64_t retry_timeout_us,
+                                 const bool skip_pre_async_wait)
 {
   int ret = OB_SUCCESS;
   int64_t ts = 0;
   palf::LSN lsn;
   share::SCN scn;
   UNUSED(need_nonblock);
+  UNUSED(skip_pre_async_wait);
   if (ATOMIC_LOAD(&is_running_)) {
 
     {

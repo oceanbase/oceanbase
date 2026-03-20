@@ -22,6 +22,7 @@
 #include "logservice/palf/palf_callback.h"
 #include "logservice/applyservice/ob_log_apply_service.h"
 #include "logservice/replayservice/ob_log_replay_service.h"
+#include "logservice/transportservice/ob_log_transport_service.h"
 #include "logservice/rcservice/ob_role_change_handler.h"
 namespace oceanbase
 {
@@ -31,7 +32,8 @@ enum class RoleChangeEventType {
   INVALID_RC_EVENT_TYPE = 0,
   CHANGE_LEADER_EVENT_TYPE = 1,
   ROLE_CHANGE_CB_EVENT_TYPE = 2,
-  MAX_RC_EVENT_TYPE = 3
+  SYNC_MODE_EVENT_TYPE = 3,
+  MAX_RC_EVENT_TYPE = 4
 };
 
 struct RoleChangeEvent {
@@ -72,7 +74,8 @@ public:
   ~ObRoleChangeService();
   int init(storage::ObLSService *ls_service,
            logservice::ObLogApplyService *apply_service,
-           logservice::ObILogReplayService *replay_service);
+           logservice::ObILogReplayService *replay_service,
+           logservice::ObLogTransportService *transport_service);
   int start();
   void wait();
   void stop();
@@ -80,6 +83,7 @@ public:
   void handle(void *task);
   int on_role_change(const int64_t id) final override;
   int on_need_change_leader(const int64_t ls_id, const common::ObAddr &dst_addr) final override;
+  int on_sync_mode_change(const int64_t id) override;
   int diagnose(RCDiagnoseInfo &diagnose_info);
 
 private:
@@ -95,7 +99,8 @@ private:
     INVALID_TYPE = 0,
     WAIT_REPLAY_DONE_TIMEOUT = 1,
     WAIT_REPLACE_DONE_TIMEOUT = 2,
-    MAX_TYPE = 3
+    WAIT_STANDBY_SYNC_TIMEOUT = 3,
+    MAX_TYPE = 4
   };
   class RetrySubmitRoleChangeEventCtx {
   public:
@@ -107,7 +112,8 @@ private:
     bool need_retry() const
     {
       return RetrySubmitRoleChangeEventReason::WAIT_REPLAY_DONE_TIMEOUT == reason_
-             || RetrySubmitRoleChangeEventReason::WAIT_REPLACE_DONE_TIMEOUT == reason_;
+             || RetrySubmitRoleChangeEventReason::WAIT_REPLACE_DONE_TIMEOUT == reason_
+             || RetrySubmitRoleChangeEventReason::WAIT_STANDBY_SYNC_TIMEOUT == reason_;
     }
     void set_retry_reason(const RetrySubmitRoleChangeEventReason &reason)
     {
@@ -133,11 +139,16 @@ private:
                                                    RetrySubmitRoleChangeEventCtx &retry_ctx);
   int handle_change_leader_event_for_log_handler_(const common::ObAddr &dst_addr,
                                                   ObLS *ls);
-
+  int handle_sync_mode_event_for_log_handler_(const palf::AccessMode &curr_access_mode,
+                                              ObLS *ls,
+                                              RetrySubmitRoleChangeEventCtx &retry_ctx);
+  int handle_sync_mode_event_for_restore_handler_(const palf::AccessMode &curr_access_mode,
+                                                  ObLS *ls);
   // retval
   //   - OB_SUCCESS
   //   - OB_TIMEOUT, means wait replay finish timeout.
   int switch_follower_to_leader_(const int64_t new_proposal_id,
+                                 const palf::SyncMode sync_mode,
                                  ObLS *ls,
                                  RetrySubmitRoleChangeEventCtx &retry_ctx);
   int switch_leader_to_follower_forcedly_(const int64_t new_proposal_id,
@@ -149,6 +160,7 @@ private:
   int switch_follower_to_follower_(const int64_t new_proposal_id, ObLS *ls);
   int switch_leader_to_leader_(const int64_t new_proposal_id,
                                const int64_t curr_proposal_id,
+                               const palf::SyncMode sync_mode,
                                ObLS *ls,
                                RetrySubmitRoleChangeEventCtx &retry_ctx);
 
@@ -163,6 +175,14 @@ private:
   int switch_leader_to_leader_restore_(const int64_t new_proposal_id,
                                        const int64_t curr_proposal_id,
                                        ObLS *ls);
+  int switch_leader_to_leader_in_sync_mode_(const int64_t new_proposal_id,
+                                            const int64_t curr_proposal_id,
+                                            const palf::SyncMode sync_mode,
+                                            ObLS *ls,
+                                            RetrySubmitRoleChangeEventCtx &retry_ctx);
+  int switch_leader_to_leader_restore_in_sync_mode_(const int64_t new_proposal_id,
+                                                    const int64_t curr_proposal_id,
+                                                    ObLS *ls);
   // wait replay finish with timeout.
   int wait_replay_service_replay_done_(const share::ObLSID &ls_id,
                                        const palf::LSN &end_lsn,
@@ -174,14 +194,22 @@ private:
   int wait_apply_service_apply_done_when_change_leader_(const ObLogHandler *log_handler,
                                                         const int64_t proposal_id,
                                                         const share::ObLSID &ls_id,
-                                                        palf::LSN &end_lsn);
+                                                        palf::LSN &end_lsn,
+                                                        const common::ObAddr &dst_addr);
+  int wait_standby_sync_in_sync_mode_(const share::ObLSID &ls_id, const int64_t timeout_us);
   bool need_execute_role_change(const int64_t curr_proposal_id,
                                 const common::ObRole curr_role,
                                 const int64_t new_proposal_id,
                                 const common::ObRole new_role,
                                 const bool is_pending_state,
                                 const bool is_offline) const;
-
+  bool need_execute_sync_mode_change(const int64_t curr_proposal_id,
+                                     const common::ObRole curr_role,
+                                     const int64_t new_proposal_id,
+                                     const common::ObRole new_role,
+                                     const bool is_pending_state,
+                                     const bool is_offline,
+                                     const palf::SyncMode curr_sync_mode) const;
   bool is_append_mode(const palf::AccessMode &access_mode) const;
   bool is_raw_write_or_flashback_mode(const palf::AccessMode &access_mode) const;
 private:
@@ -200,9 +228,11 @@ private:
 private:
   static constexpr int64_t EACH_ROLE_CHANGE_COST_MAX_TIME = 1 * 1000 * 1000;
   static constexpr int64_t WAIT_REPLAY_DONE_TIMEOUT_US = 2 * 1000 * 1000;
+  static constexpr int64_t WAIT_STANDBY_SYNC_TIMEOUT_US = 2 * 1000 * 1000;
   storage::ObLSService *ls_service_;
   logservice::ObLogApplyService *apply_service_;
   logservice::ObILogReplayService *replay_service_;
+  logservice::ObLogTransportService *transport_service_;
   RoleChangeEventSet rc_set_;
   int tg_id_;
   RCDiagnoseInfo cur_task_info_; // for diagnose

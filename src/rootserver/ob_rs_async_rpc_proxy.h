@@ -68,6 +68,7 @@ RPC_F(obrpc::OB_BATCH_DETECT_SESSION_ALIVE, obrpc::ObBatchDetectSessionAliveArg,
 RPC_F(obrpc::OB_DETECT_CLIENT_SESSION_ALIVE, obrpc::UInt64, obrpc::Bool, ObDetectClientSessionAliveProxy);
 RPC_F(obrpc::OB_GET_LS_ACCESS_MODE, obrpc::ObGetLSAccessModeInfoArg, obrpc::ObLSAccessModeInfo, ObGetLSAccessModeProxy);
 RPC_F(obrpc::OB_CHANGE_LS_ACCESS_MODE, obrpc::ObLSAccessModeInfo, obrpc::ObChangeLSAccessModeRes, ObChangeLSAccessModeProxy);
+RPC_F(obrpc::OB_CHANGE_LS_SYNC_MODE, obrpc::ObChangeLSSyncModeArg, obrpc::ObChangeLSSyncModeRes, ObChangeLSSyncModeProxy);
 RPC_F(obrpc::OB_BATCH_GET_TABLET_AUTOINC_SEQ, obrpc::ObBatchGetTabletAutoincSeqArg,
     obrpc::ObBatchGetTabletAutoincSeqRes, ObBatchGetTabletAutoincSeqProxy);
 RPC_F(obrpc::OB_BATCH_SET_TABLET_AUTOINC_SEQ, obrpc::ObBatchSetTabletAutoincSeqArg,
@@ -75,6 +76,8 @@ RPC_F(obrpc::OB_BATCH_SET_TABLET_AUTOINC_SEQ, obrpc::ObBatchSetTabletAutoincSeqA
 RPC_F(obrpc::OB_CLEAR_TABLET_AUTOINC_SEQ_CACHE, obrpc::ObClearTabletAutoincSeqCacheArg,
     obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_CLEAR_TABLET_AUTOINC_SEQ_CACHE>::Response, ObClearTabletAutoincSeqCacheProxy);
 RPC_F(obrpc::OB_GET_LS_SYNC_SCN, obrpc::ObGetLSSyncScnArg, obrpc::ObGetLSSyncScnRes, ObGetLSSyncScnProxy);
+RPC_F(obrpc::OB_GET_LS_STANDBY_SYNC_SCN, obrpc::ObGetLSStandbySyncScnArg,
+    obrpc::ObGetLSStandbySyncScnRes, ObGetLSStandbySyncScnProxy);
 RPC_F(obrpc::OB_INIT_TENANT_CONFIG, obrpc::ObInitTenantConfigArg,
     obrpc::ObInitTenantConfigRes, ObInitTenantConfigProxy);
 RPC_F(obrpc::OB_GET_LEADER_LOCATIONS, obrpc::ObGetLeaderLocationsArg,

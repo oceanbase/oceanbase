@@ -41,6 +41,7 @@ namespace share
 {
 class ObLSTableOperator;
 class SCN;
+class ObAllTenantInfo;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -243,6 +244,11 @@ public:
       const share::ObLSID &dest_id,
       const share::SCN &transfer_scn,
       bool &replay_finish);
+  static int check_transfer_task_replay_for_lossless_failover(
+      const share::ObLSID &src_ls,
+      const share::ObLSID &dest_ls,
+      const share::ObAllTenantInfo &tenant_info,
+      bool &replay_finish);
   static int create_ls_in_user_tenant(
       const uint64_t tenant_id,
       const uint64_t ls_group_id,
@@ -282,6 +288,12 @@ private:
   static int check_ls_transfer_replay_(const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const share::SCN &transfer_scn,
+      bool &replay_finish);
+  static int check_ls_exist_(const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      bool &ls_exist);
+  static int check_ls_replay_to_latest_for_lossless_failover_(const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
       bool &replay_finish);
   static int choose_new_unit_group_or_list_(const share::ObLSID &ls_id,
       common::ObISQLClient &sql_proxy,

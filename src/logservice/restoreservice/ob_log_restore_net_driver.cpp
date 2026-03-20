@@ -274,15 +274,18 @@ int ObLogRestoreNetDriver::refresh_proxy_(const share::ObRestoreSourceServiceAtt
   const char *db_name = common::ObCompatibilityMode::ORACLE_MODE == source.user_.mode_ ? OB_ORA_SYS_SCHEMA_NAME : OB_SYS_DATABASE_NAME;
   char passwd[OB_MAX_PASSWORD_LENGTH + 1] = {0};
   ObSqlString user;
+  ObArray<common::ObAddr> sql_addr_list;
   if (OB_FAIL(source.get_password(passwd, sizeof(passwd)))) {
     LOG_WARN("get_password failed", K(source));
   } else if (OB_FAIL(source.get_user_str_(user))) {
     LOG_WARN("get user str failed", K(source));
+  } else if (OB_FAIL(source.get_sql_addr_list(sql_addr_list))) {
+    LOG_WARN("get sql addr list failed", KR(ret), K(source));
   } else if (proxy_.is_inited()) {
-    if (OB_FAIL(proxy_.refresh_conn(source.addr_, user.ptr(), passwd, db_name))) {
+    if (OB_FAIL(proxy_.refresh_conn(sql_addr_list, user.ptr(), passwd, db_name))) {
       LOG_WARN("refresh_conn failed", K(source));
     }
-  } else if (OB_FAIL(proxy_.init(MTL_ID(), source.addr_, user.ptr(), passwd, db_name))) {
+  } else if (OB_FAIL(proxy_.init(MTL_ID(), sql_addr_list, user.ptr(), passwd, db_name))) {
     LOG_WARN("proxy init failed", K(source));
   }
   return ret;

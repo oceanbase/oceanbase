@@ -2457,6 +2457,15 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
   return ret;
 }
 
+int ObSetProtectionModeExecutor::execute(ObExecContext &ctx, ObSetProtectionModeStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(OB_STANDBY_SERVICE.set_protection_mode(stmt.get_arg()))) {
+    LOG_WARN("failed to set_protection_mode", KR(ret), K(stmt.get_arg()));
+  }
+  return ret;
+}
+
 int ObSwitchTenantExecutor::execute(ObExecContext &ctx, ObSwitchTenantStmt &stmt)
 {
   int ret = OB_SUCCESS;

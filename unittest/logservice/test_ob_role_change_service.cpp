@@ -99,7 +99,8 @@ public:
                      const bool need_nonblock,
                      logservice::AppendCb *cb,
                      palf::LSN &lsn,
-                     share::SCN &scn)
+                     share::SCN &scn,
+                     const bool skip_pre_async_wait = false)
   {
     UNUSED(need_nonblock);
     UNUSED(buffer);
@@ -108,6 +109,7 @@ public:
     UNUSED(cb);
     UNUSED(lsn);
     UNUSED(scn);
+    UNUSED(skip_pre_async_wait);
     return OB_SUCCESS;
   }
   virtual int get_role(common::ObRole &role, int64_t &proposal_id) const
@@ -124,13 +126,17 @@ public:
   virtual int prepare_switch_role(common::ObRole &curr_role,
                                   int64_t &curr_proposal_id,
                                   common::ObRole &new_role,
-                                  int64_t &new_proposal_id)
+                                  int64_t &new_proposal_id,
+                                  bool &is_pending_state,
+                                  palf::SyncMode &sync_mode)
   {
     curr_role = curr_role_;
     curr_proposal_id = curr_proposal_id_;
     new_role = new_role_;
     new_proposal_id = new_proposal_id_;
-    PALF_LOG(INFO, "MockObLogHandler prepare_switch_role", K(curr_role), K(curr_proposal_id), K(new_role), K(new_proposal_id));
+    is_pending_state = false;
+    sync_mode = palf::SyncMode::ASYNC;
+    PALF_LOG(INFO, "MockObLogHandler prepare_switch_role", K(curr_role), K(curr_proposal_id), K(new_role), K(new_proposal_id), K(is_pending_state), K(sync_mode));
     return OB_SUCCESS;
   }
   virtual void switch_role(const common::ObRole &role, const int64_t proposal_id)

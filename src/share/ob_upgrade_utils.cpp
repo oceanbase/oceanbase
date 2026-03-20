@@ -2183,6 +2183,50 @@ int ObUpgradeFor4420Processor::grant_priv(const ObPrivSet user_priv_set,
 }
 
 /* =========== 4420 upgrade processor end ============= */
+/* =========== 4421 upgrade processor start ============= */
+
+int ObUpgradeFor4421Processor::finish_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(finish_upgrade_for_sync_standby_status_())) {
+    LOG_WARN("fail to finish upgrade for sync_standby_status", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4421Processor::finish_upgrade_for_sync_standby_status_()
+{
+  int ret = OB_SUCCESS;
+  bool is_primary_tenant = false;
+  ObSyncStandbyStatusOperator sync_standby_status_operator(tenant_id_, sql_proxy_);
+  ObProtectionStat protection_stat;
+  if (OB_ISNULL(sql_proxy_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(schema_service_), K(tenant_id_));
+  } else if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("not user tenant, ignore", K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("not primary tenant, ignore", K(tenant_id_));
+  } else if (OB_SUCC(sync_standby_status_operator.read_sync_standby_status(*sql_proxy_, false,
+      protection_stat))) {
+    LOG_INFO("sync standby status already exists, skip", KR(ret), K(tenant_id_));
+  } else {
+    ret = OB_SUCCESS;
+    START_TRANSACTION(sql_proxy_, tenant_id_);
+    if (FAILEDx(sync_standby_status_operator.init_sync_standby_status(trans))) {
+      LOG_WARN("failed to init sync standby status", KR(ret), K(tenant_id_));
+    }
+    END_TRANSACTION(trans);
+    LOG_INFO("finish upgrade for sync standby status finished", KR(ret), K(tenant_id_));
+  }
+  return ret;
+}
+
+/* =========== 4421 upgrade processor end ============= */
 
 } // end share
 } // end oceanbase

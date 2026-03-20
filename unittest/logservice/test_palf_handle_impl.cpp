@@ -26,7 +26,11 @@
 #include "lib/oblog/ob_log_print_kv.h"
 #include "lib/oblog/ob_log_module.h"
 #include "logservice/palf/log_engine.h"
+#define private public
 #include "logservice/palf/palf_handle_impl.h"
+#include "logservice/palf/log_sliding_window.h"
+#include "logservice/palf/lsn_allocator.h"
+#undef private
 #include "logservice/palf/lsn.h"
 #include "logservice/palf/log_io_task_cb_thread_pool.h"
 #include "logservice/palf/log_reader_utils.h"
@@ -36,9 +40,14 @@
 #include "logservice/palf/log_entry_header.h"
 #include "logservice/palf/log_entry.h"
 #include "logservice/palf/log_group_entry_header.h"
-#include "logservice/palf/palf_handle_impl.h"
 #include "logservice/palf/palf_iterator.h"
 #include "logservice/palf/log_group_entry.h"
+#ifdef OB_BUILD_ARBITRATION
+#include "close_modules/arbitration/logservice/arbserver/palf_handle_lite.h"
+#endif
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "close_modules/shared_log_service/logservice/libpalf/libpalf_handle.h"
+#endif
 
 namespace oceanbase
 {
@@ -277,6 +286,79 @@ int TestLogService::generate_data(LogWriteBuf &write_buf, char *&buf, int buf_le
 
 //   palf_handle_impl_guard_.get_palf_handle_impl()->free_log_entry_iterator();
 // }
+
+TEST(TestPalfHandleImpl, get_end_log_id_no_submit)
+{
+  PalfHandleImpl impl;
+  share::SCN scn = share::SCN::base_scn();
+  const int64_t base_log_id = FIRST_VALID_LOG_ID - 1;
+  ASSERT_EQ(OB_SUCCESS, impl.sw_.lsn_allocator_.init(base_log_id, scn, LSN(0)));
+
+  int64_t end_log_id = OB_INVALID_LOG_ID;
+  int64_t max_log_id = OB_INVALID_LOG_ID;
+  EXPECT_EQ(OB_SUCCESS, impl.get_end_log_id(end_log_id));
+  EXPECT_EQ(OB_SUCCESS, impl.get_max_log_id(max_log_id));
+  EXPECT_EQ(OB_INVALID_LOG_ID, end_log_id);
+  EXPECT_EQ(base_log_id, max_log_id);
+  EXPECT_LT(end_log_id, max_log_id);
+}
+
+TEST(TestPalfHandleImpl, get_end_log_id_before_slide)
+{
+  PalfHandleImpl impl;
+  share::SCN scn = share::SCN::base_scn();
+  const int64_t base_log_id = FIRST_VALID_LOG_ID - 1;
+  ASSERT_EQ(OB_SUCCESS, impl.sw_.lsn_allocator_.init(base_log_id, scn, LSN(0)));
+
+  const int64_t max_log_id = base_log_id + 5;
+  const LSN max_lsn(100);
+  ASSERT_EQ(OB_SUCCESS, impl.sw_.lsn_allocator_.inc_update_last_log_info(max_lsn, max_log_id, scn));
+  ATOMIC_STORE(&impl.sw_.last_slide_log_id_, base_log_id);
+
+  int64_t end_log_id = OB_INVALID_LOG_ID;
+  int64_t queried_max_log_id = OB_INVALID_LOG_ID;
+  EXPECT_EQ(OB_SUCCESS, impl.get_end_log_id(end_log_id));
+  EXPECT_EQ(OB_SUCCESS, impl.get_max_log_id(queried_max_log_id));
+  EXPECT_EQ(base_log_id, end_log_id);
+  EXPECT_EQ(max_log_id, queried_max_log_id);
+  EXPECT_LT(end_log_id, queried_max_log_id);
+}
+
+TEST(TestPalfHandleImpl, get_end_log_id_tracks_last_slide)
+{
+  PalfHandleImpl impl;
+  share::SCN scn = share::SCN::base_scn();
+  ASSERT_EQ(OB_SUCCESS, impl.sw_.lsn_allocator_.init(10, scn, LSN(0)));
+  ATOMIC_STORE(&impl.sw_.last_slide_log_id_, 10);
+
+  int64_t end_log_id = OB_INVALID_LOG_ID;
+  int64_t max_log_id = OB_INVALID_LOG_ID;
+  EXPECT_EQ(OB_SUCCESS, impl.get_end_log_id(end_log_id));
+  EXPECT_EQ(OB_SUCCESS, impl.get_max_log_id(max_log_id));
+  EXPECT_EQ(10, end_log_id);
+  EXPECT_EQ(10, max_log_id);
+  EXPECT_LE(end_log_id, max_log_id);
+}
+
+#ifdef OB_BUILD_ARBITRATION
+TEST(TestPalfHandleLite, get_end_log_id_not_supported)
+{
+  palflite::PalfHandleLite handle;
+  int64_t log_id = 0;
+  EXPECT_EQ(OB_NOT_SUPPORTED, handle.get_end_log_id(log_id));
+  EXPECT_EQ(OB_INVALID_LOG_ID, log_id);
+}
+#endif
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+TEST(TestLibPalfHandle, get_end_log_id_not_supported)
+{
+  libpalf::LibPalfHandle handle;
+  int64_t log_id = 0;
+  EXPECT_EQ(OB_NOT_SUPPORTED, handle.get_end_log_id(log_id));
+  EXPECT_EQ(OB_INVALID_LOG_ID, log_id);
+}
+#endif
 } // END of unittest
 } // end of oceanbase
 
@@ -287,6 +369,15 @@ int main(int argc, char **argv)
   OB_LOGGER.set_file_name("test_palf_handle_impl.log", true);
   OB_LOGGER.set_log_level("TRACE");
   PALF_LOG(INFO, "begin unittest::test_palf_handle_impl");
+  const uint64_t tenant_id = 1001;
+  const uint64_t server_tenant_id = OB_SERVER_TENANT_ID;
+  auto malloc = ObMallocAllocator::get_instance();
+  if (NULL == malloc->get_tenant_ctx_allocator(tenant_id, 0)) {
+    malloc->create_and_add_tenant_allocator(tenant_id);
+  }
+  if (NULL == malloc->get_tenant_ctx_allocator(server_tenant_id, 0)) {
+    malloc->create_and_add_tenant_allocator(server_tenant_id);
+  }
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

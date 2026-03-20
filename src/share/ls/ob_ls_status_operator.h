@@ -510,6 +510,11 @@ public:
                                  ObLSStatusInfoIArray &ls_array,
                                  ObISQLClient &client);
 
+  int get_all_ls_status_by_order_for_protection_mode(const uint64_t tenant_id,
+                                 const bool ignore_wait_offline,
+                                 ObLSStatusInfoIArray &ls_status_info_array,
+                                 ObISQLClient &client);
+
   // get duplicate ls status info with smallest ls id
   // @params[in]  tenant_id, which tenant to get
   // @params[in]  client, client to execute sql

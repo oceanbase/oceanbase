@@ -515,6 +515,24 @@ int PalfHandleImpl::get_role(common::ObRole &role,
   return ret;
 }
 
+int PalfHandleImpl::get_role_and_sync_mode(common::ObRole &role,
+                                           int64_t &proposal_id,
+                                           SyncMode &sync_mode,
+                                           bool &is_pending_state) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret));
+  } else if (OB_FAIL(get_role(role, proposal_id, is_pending_state))) {
+    PALF_LOG(WARN, "get_role failed", K(ret), KPC(this));
+  } else if (OB_FAIL(mode_mgr_.get_sync_mode(sync_mode))) {
+    PALF_LOG(WARN, "get_sync_mode failed", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 int PalfHandleImpl::change_leader_to(const common::ObAddr &dest_addr)
 {
   int ret = OB_SUCCESS;
@@ -1272,10 +1290,10 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
         }
         PALF_EVENT("change_access_mode success", palf_id_, K(ret), KPC(this),
             K(proposal_id), K(access_mode), K(ref_scn), K(time_guard), K_(sw));
-        int64_t curr_mode_version;
-        mode_mgr_.get_mode_version(curr_mode_version);
         PALF_REPORT_INFO_KV(K(proposal_id), K(ref_scn));
-        plugins_.record_access_mode_change_event(palf_id_, mode_version, curr_mode_version, prev_access_mode, access_mode, EXTRA_INFOS);
+        int64_t new_mode_version = INVALID_PROPOSAL_ID;
+        mode_mgr_.get_mode_version(new_mode_version);
+        plugins_.record_access_mode_change_event(palf_id_, mode_version, new_mode_version, prev_access_mode, access_mode, EXTRA_INFOS);
       }
       if (OB_EAGAIN == ret) {
         ob_usleep(1000);
@@ -2366,6 +2384,136 @@ int PalfHandleImpl::get_access_mode_ref_scn(int64_t &mode_version,
     PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret), KPC(this));
   } else if (OB_FAIL(mode_mgr_.get_access_mode_ref_scn(mode_version, access_mode, ref_scn))) {
     PALF_LOG(WARN, "get_access_mode_ref_scn failed", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::change_sync_mode(const int64_t proposal_id,
+                                     const int64_t mode_version,
+                                     const SyncMode &sync_mode,
+                                     int64_t &new_mode_version,
+                                     int64_t &new_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  SyncMode prev_sync_mode;
+  new_proposal_id = INVALID_PROPOSAL_ID;
+  bool is_initial_config_version = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (INVALID_PROPOSAL_ID == proposal_id ||
+             INVALID_PROPOSAL_ID == mode_version ||
+             false == is_valid_sync_mode(sync_mode)) {
+    // ref_scn is not used in change_sync_mode, it will be preserved from current mode_meta
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K_(self),
+        K(proposal_id), K(mode_version), K(sync_mode));
+  } else if (OB_FAIL(config_mgr_.is_initial_config_version(is_initial_config_version))) {
+    PALF_LOG(WARN, "failed to check if initial config version", K(ret), K_(palf_id), K(proposal_id), K(mode_version), K(sync_mode));
+  } else if (is_initial_config_version) {
+    ret = OB_STATE_NOT_MATCH;
+    PALF_LOG(WARN, "not set initial_member_list yet, cannot change sync_mode", K(ret), K_(palf_id), K(proposal_id), K(mode_version), K(sync_mode));
+  } else if (OB_FAIL(mode_change_lock_.trylock())) {
+    // require lock to protect status from concurrent change_sync_mode
+    ret = OB_EAGAIN;
+    PALF_LOG(WARN, "another change_sync_mode is running, try again", K(ret), K_(palf_id),
+        K_(self), K(proposal_id), K(sync_mode));
+  } else if (OB_FAIL(config_change_lock_.trylock())) {
+    // forbid to change sync mode when reconfiguration is doing
+    mode_change_lock_.unlock();
+    ret = OB_EAGAIN;
+    PALF_LOG(WARN, "reconfiguration is running, try again", K(ret), K_(palf_id),
+        K_(self), K(proposal_id), K(sync_mode));
+  } else if (OB_FAIL(mode_mgr_.get_sync_mode(prev_sync_mode))) {
+    PALF_LOG(WARN, "get old sync_mode failed", K(ret), K_(palf_id),
+        K_(self), K(proposal_id), K(sync_mode));
+  } else {
+    PALF_EVENT("start change_sync_mode", palf_id_, K(ret), KPC(this),
+        K(proposal_id), K(sync_mode), K_(sw));
+    ret = OB_EAGAIN;
+    bool first_run = true;
+    int64_t out_proposal_id = INVALID_PROPOSAL_ID;
+    common::ObTimeGuard time_guard("change_sync_mode", 10 * 1000);
+    while (OB_EAGAIN == ret) {
+      bool is_state_changed = false;
+      {
+        RLockGuard guard(lock_);
+        is_state_changed = mode_mgr_.is_state_changed();
+      }
+      if (is_state_changed) {
+        WLockGuard guard(lock_);
+        if (first_run && proposal_id != state_mgr_.get_proposal_id()) {
+          ret = OB_STATE_NOT_MATCH;
+          PALF_LOG(WARN, "can not change_sync_mode", K(ret), K_(palf_id),
+              K_(self), K(proposal_id), "palf proposal_id", state_mgr_.get_proposal_id());
+        } else if (OB_SUCC(mode_mgr_.change_sync_mode(mode_version, sync_mode, out_proposal_id))) {
+          // ref_scn parameter is ignored, current ref_scn will be preserved
+          PALF_LOG(INFO, "change_sync_mode success", K(ret), K_(palf_id), K_(self), K(proposal_id),
+              K(mode_version), K(sync_mode), K(out_proposal_id));
+        } else if (OB_EAGAIN != ret) {
+          PALF_LOG(WARN, "change_sync_mode failed", K(ret), K_(palf_id), K_(self), K(proposal_id),
+              K(mode_version), K(sync_mode));
+        }
+        first_run = false;
+        time_guard.click("do_once_change");
+      }
+      // do role_change after change_sync_mode success
+      if (OB_SUCC(ret)) {
+        RLockGuard guard(lock_);
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = role_change_cb_wrpper_.on_role_change(palf_id_))) { //TODO by ziqi: change to on_sync_mode_change
+          PALF_LOG(WARN, "on_sync_mode_change failed", K(tmp_ret), K_(palf_id), K_(self));
+        }
+        PALF_EVENT("change_sync_mode success", palf_id_, K(ret), KPC(this),
+            K(proposal_id), K(sync_mode), K(time_guard), K_(sw));
+        mode_mgr_.get_sync_mode_version(new_mode_version);
+        new_proposal_id = out_proposal_id;
+        PALF_REPORT_INFO_KV(K(proposal_id));
+        plugins_.record_sync_mode_change_event(palf_id_, mode_version, new_mode_version, prev_sync_mode, sync_mode, EXTRA_INFOS);
+      }
+      if (OB_EAGAIN == ret) {
+        ob_usleep(1000);
+      }
+    }
+    PALF_EVENT("change_sync_mode finish", palf_id_, K(ret), KPC(this),
+        K(proposal_id), K(sync_mode), K(time_guard), K_(sw));
+    config_change_lock_.unlock();
+    mode_change_lock_.unlock();
+  }
+  return ret;
+}
+int PalfHandleImpl::get_sync_mode(int64_t &mode_version, SyncMode &sync_mode) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(mode_mgr_.get_sync_mode(mode_version, sync_mode))) {
+    PALF_LOG(WARN, "get_sync_mode failed", K(ret), KPC(this));
+  }
+  return ret;
+}
+int PalfHandleImpl::get_sync_mode_version(int64_t &mode_version) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(mode_mgr_.get_sync_mode_version(mode_version))) {
+    PALF_LOG(WARN, "get_sync_mode_version failed", K(ret), KPC(this));
+  }
+  return ret;
+}
+int PalfHandleImpl::get_sync_mode(SyncMode &sync_mode) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(mode_mgr_.get_sync_mode(sync_mode))) {
+    PALF_LOG(WARN, "get_sync_mode failed", K(ret), KPC(this));
   }
   return ret;
 }
@@ -5189,7 +5337,9 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
     palf_stat.role_ = (LEADER == curr_role && curr_state == ACTIVE)? LEADER: FOLLOWER;
     palf_stat.log_proposal_id_ = state_mgr_.get_proposal_id();
     (void)config_mgr_.get_config_version(palf_stat.config_version_);
+    // TODO(ziqi): change here to get_sync_and_access_mode
     (void)mode_mgr_.get_access_mode(palf_stat.mode_version_, palf_stat.access_mode_);
+    (void)mode_mgr_.get_sync_mode(palf_stat.mode_version_, palf_stat.sync_mode_);
     (void)config_mgr_.get_curr_member_list(palf_stat.paxos_member_list_, palf_stat.paxos_replica_num_);
     (void)config_mgr_.get_arbitration_member(palf_stat.arbitration_member_);
     (void)config_mgr_.get_degraded_learner_list(palf_stat.degraded_list_);
@@ -5629,6 +5779,7 @@ PalfStat::PalfStat()
       config_version_(),
       mode_version_(INVALID_PROPOSAL_ID),
       access_mode_(AccessMode::INVALID_ACCESS_MODE),
+      sync_mode_(SyncMode::INVALID_SYNC_MODE),
       paxos_member_list_(),
       paxos_replica_num_(-1),
       arbitration_member_(),
@@ -5661,6 +5812,7 @@ void PalfStat::reset()
   config_version_.reset();
   mode_version_ = INVALID_PROPOSAL_ID;
   access_mode_ = AccessMode::INVALID_ACCESS_MODE;
+  sync_mode_ = SyncMode::INVALID_SYNC_MODE;
   paxos_member_list_.reset();
   paxos_replica_num_ = -1;
   learner_list_.reset();
@@ -5820,7 +5972,7 @@ int PalfHandleImpl::get_io_statistic_info(int64_t &last_working_time,
 OB_SERIALIZE_MEMBER(PalfStat, self_, palf_id_, role_, log_proposal_id_, config_version_,
   mode_version_, access_mode_, paxos_member_list_, paxos_replica_num_, allow_vote_,
   replica_type_, begin_lsn_, begin_scn_, base_lsn_, end_lsn_, end_scn_, max_lsn_, max_scn_,
-  arbitration_member_, degraded_list_, is_in_sync_, is_need_rebuild_, learner_list_);
+  arbitration_member_, degraded_list_, is_in_sync_, is_need_rebuild_, learner_list_, sync_mode_);
 
 template<typename LogEntryType>
 int PalfHandleImpl::alloc_iterator_from_scn_(const SCN &scn,

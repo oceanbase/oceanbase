@@ -55,6 +55,12 @@ public:
                                       const palf::AccessMode& prev_access_mode,
                                       const palf::AccessMode& curr_access_mode,
                                       const char *extra_info = NULL) override final;
+  int record_sync_mode_change_event(const int64_t palf_id,
+                                    const int64_t prev_mode_version,
+                                    const int64_t curr_mode_verion,
+                                    const palf::SyncMode& prev_sync_mode,
+                                    const palf::SyncMode& curr_sync_mode,
+                                    const char *extra_info = NULL) override final;
   int record_set_base_lsn_event(const int64_t palf_id, const palf::LSN &new_base_lsn) override final;
   int record_enable_sync_event(const int64_t palf_id) override final;
   int record_disable_sync_event(const int64_t palf_id) override final;
@@ -122,7 +128,8 @@ private:
     FLASHBACK,
     TRUNCATE,
     ENTER_ELECTION_SILENT,
-    EXIT_ELECTION_SILENT
+    EXIT_ELECTION_SILENT,
+    SYNC_MODE_TRANSITION
   };
 
   const char *type_to_string_(const EventType &event) const
@@ -163,6 +170,8 @@ private:
         return "ENTER ELECTION SILENT";
       case (EventType::EXIT_ELECTION_SILENT):
         return "EXIT ELECTION SILENT";
+      case (EventType::SYNC_MODE_TRANSITION):
+        return "SYNC MODE TRANSITION";
       default:
         return "UNKNOWN";
     }

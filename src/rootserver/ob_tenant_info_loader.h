@@ -242,6 +242,7 @@ public:
   * @param[out] is_primary_normal_status
   */
  int check_is_primary_normal_status(bool &is_primary_normal_status);
+ int check_is_sync_mode(bool &is_sync_mode);
  int check_is_prepare_flashback_for_switch_to_primary_status(bool &is_prepare);
 
  int refresh_tenant_info();

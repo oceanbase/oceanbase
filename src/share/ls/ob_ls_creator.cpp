@@ -23,6 +23,9 @@
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
 #include "share/restore/ob_tenant_clone_table_operator.h"
 #include "share/ob_global_stat_proxy.h" // for ObGlobalStatProxy
+#include "rootserver/standby/ob_tenant_role_transition_service.h"
+#include "logservice/ob_log_service.h"
+#include "rootserver/standby/ob_protection_mode_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -415,6 +418,66 @@ int ObLSCreator::do_create_ls_(const ObLSAddr &addr,
 
 ERRSIM_POINT_DEF(ERRSIM_CREATE_LS_SKIP_UPDATE_LS_STATUS)
 ERRSIM_POINT_DEF(ERRSIM_CREATE_LS_SKIP_SET_MEMBER_LIST)
+
+int ObLSCreator::set_ls_sync_mode_(int64_t &switchover_epoch)
+{
+  DEBUG_SYNC(BEFORE_CREATE_LS_SET_SYNC_MODE);
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  ObProtectionStat protection_stat;
+  ObArray<ObLSID> ls_ids;
+  ObArray<obrpc::ObLSAccessModeInfo> ls_access_infos;
+  palf::SyncMode target_sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
+  ObSyncStandbyStatusAttr protection_log;
+  if (OB_FAIL(ls_ids.push_back(id_))) {
+    LOG_WARN("failed to push_back id", KR(ret), K(id_));
+  } else if (OB_FAIL(rootserver::ObLSLogModeModifier::get_ls_access_mode(tenant_id_, ls_ids,
+      ls_access_infos))) {
+    LOG_WARN("failed to get ls access mode", KR(ret), K(tenant_id_), K(ls_ids));
+  } else if (ls_access_infos.count() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls access info is not valid", KR(ret), K(tenant_id_), K(ls_ids), K(ls_access_infos));
+  } else if (FALSE_IT(DEBUG_SYNC(BEFORE_CREATE_LS_GET_TENANT_INFO))) {
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, proxy_, false/* for_update */,
+      tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K_(tenant_id));
+  } else if (FALSE_IT(DEBUG_SYNC(AFTER_CREATE_LS_GET_TENANT_INFO))) {
+  } else if (FALSE_IT(switchover_epoch = tenant_info.get_switchover_epoch())) {
+  } else if (GCONF.enable_logservice || ls_access_infos.at(0).get_access_mode() != palf::AccessMode::APPEND) {
+    // ignore standby tenants or logservice
+  } else if (OB_FAIL(protection_stat.init(tenant_info))) {
+    LOG_WARN("failed to init protection stat", KR(ret), K(tenant_info));
+  } else if (OB_FAIL(standby::ObProtectionModeUtils::get_sync_standby_status_attr(tenant_id_,
+      tenant_info.get_switchover_epoch(), protection_log))) {
+    LOG_WARN("failed to get sync standby status attr", KR(ret), K(tenant_id_), K(switchover_epoch));
+  } else if (protection_stat.is_async_to_sync()
+    || (protection_stat.is_steady() && protection_stat.get_protection_level().is_sync_level())) {
+    // set to SYNC
+    if (OB_FAIL(rootserver::ObLSLogModeModifier::change_ls_sync_mode_and_check_result(
+      tenant_id_, ls_access_infos, palf::SyncMode::SYNC, protection_log, SCN::min_scn()))) {
+      LOG_WARN("failed to change ls access mode", KR(ret), K(tenant_id_), K(ls_access_infos));
+    }
+  } else {
+    ObLSAccessModeInfo &info = ls_access_infos.at(0);
+    // set to PRE_ASYNC/ASYNC
+    // when creating ls in primary tenant, mode_version is set to PALF_INITIAL_PROPOSAL_ID
+    // so if mode_version is PALF_INITIAL_PROPOSAL_ID, async/sync log is not written, we need to write
+    if (info.get_sync_mode() == palf::SyncMode::ASYNC
+        && info.get_mode_version() != PALF_INITIAL_PROPOSAL_ID) {
+      LOG_INFO("sync_mode is async and mode_version is not 0, no need to change sync_mode", KR(ret), K(info));
+    } else if (OB_FAIL(rootserver::ObLSLogModeModifier::change_ls_sync_mode_and_check_result(
+      tenant_id_, ls_access_infos, palf::SyncMode::PRE_ASYNC, protection_log, SCN::min_scn()))) {
+      LOG_WARN("failed to change ls access mode", KR(ret), K(tenant_id_), K(ls_access_infos));
+    } else if (OB_FAIL(rootserver::ObLSLogModeModifier::change_ls_sync_mode_and_check_result(
+      tenant_id_, ls_access_infos, palf::SyncMode::ASYNC, protection_log, SCN::min_scn()))) {
+      LOG_WARN("failed to change ls access mode", KR(ret), K(tenant_id_), K(ls_access_infos));
+    } else {
+      DEBUG_SYNC(AFTER_CREATE_LS_SET_SYNC_MODE);
+    }
+  }
+  return ret;
+}
+
 int ObLSCreator::process_after_has_member_list_(
     const common::ObMemberList &member_list,
     const common::ObMember &arbitration_service,
@@ -422,6 +485,7 @@ int ObLSCreator::process_after_has_member_list_(
     const common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
+  int64_t switchover_epoch = ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
@@ -435,15 +499,26 @@ int ObLSCreator::process_after_has_member_list_(
     LOG_WARN("sql proxy is null", KR(ret));
   } else if (OB_UNLIKELY(ERRSIM_CREATE_LS_SKIP_UPDATE_LS_STATUS)) {
     LOG_INFO("errsim create ls skip update ls status", KR(ret), K(tenant_id_), K(id_));
+  } else if (OB_FAIL(set_ls_sync_mode_(switchover_epoch))) {
+    LOG_WARN("failed to set ls sync mode", KR(ret), K(switchover_epoch));
   } else {
     //create end
     DEBUG_SYNC(BEFORE_PROCESS_AFTER_HAS_MEMBER_LIST);
     share::ObLSStatusOperator ls_operator;
-    if (OB_FAIL(ls_operator.update_ls_status(
+    ObAllTenantInfo tenant_info;
+    const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id_);
+    START_TRANSACTION(proxy_, exec_tenant_id);
+    if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans, true, tenant_info))) {
+      LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id_));
+    } else if (switchover_epoch != tenant_info.get_switchover_epoch()) {
+      ret = OB_NEED_RETRY;
+      LOG_WARN("switchover epoch is not match", KR(ret), K(switchover_epoch), K(tenant_info));
+    } else if (OB_FAIL(ls_operator.update_ls_status_in_trans(
             tenant_id_, id_, share::OB_LS_CREATING, share::OB_LS_CREATED,
-            share::NORMAL_SWITCHOVER_STATUS, *proxy_))) {
+            share::NORMAL_SWITCHOVER_STATUS, trans))) {
       LOG_WARN("failed to update ls status", KR(ret), K(id_));
     }
+    END_TRANSACTION(trans);
   }
   return ret;
 }

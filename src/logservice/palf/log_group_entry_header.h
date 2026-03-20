@@ -129,6 +129,7 @@ private:
   static const int16_t LOG_GROUP_ENTRY_HEADER_VERSION2;
   static const int64_t PADDING_TYPE_MASK_VERSION2;
   static const int64_t RAW_WRITE_MASK_VERSION2;
+  static const int64_t SYNC_MASK_VERSION;
   static const int64_t CRC16_MASK;
   static const int64_t PARITY_MASK;
 private:
@@ -160,6 +161,8 @@ private:
   //
   // LOG_GROUP_ENTRY_HEADER_VERSION2
   // | sign bit | PADDING bit | RAW WRITE BIT | 45 unused bit | 16 crc16 bit|
+  // after max-protection mode, RAW_WRITE is abstracted as whether replaying log is needed to be controlled by replayable_point_scn
+  // not only access_mode is raw_write
   mutable int64_t flag_;
 };
 

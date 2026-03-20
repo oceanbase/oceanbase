@@ -160,8 +160,8 @@ public:
   LSN get_curr_read_lsn() const;
 
   TO_STRING_KV(KP(buf_), K_(next_round_pread_size), K_(curr_read_pos), K_(curr_read_buf_start_pos),
-      K_(curr_read_buf_end_pos), KPC(log_storage_), K_(curr_entry_is_raw_write), K_(curr_entry_size),
-      K_(prev_entry_scn), K_(curr_entry), K_(init_mode_version), K_(accumulate_checksum),
+      K_(curr_read_buf_end_pos), KPC(log_storage_), K_(curr_entry_is_raw_write),
+      K_(curr_entry_size), K_(prev_entry_scn), K_(curr_entry), K_(init_mode_version), K_(accumulate_checksum),
       K_(curr_entry_is_padding), K_(padding_entry_size), K_(padding_entry_scn));
 
 private:
@@ -336,6 +336,7 @@ private:
     //     as the log_scn_ of info. consider that, replayable_point_scn is 12, the min scn of group log
     //     is 7 and max scn of group 15, we should not return this log. meanwhile, we should use
     //     scn 7 to update next_min_scn.
+    //
     } else if (true == curr_entry_is_raw_write) {
       SCN min_scn;
       bool is_group_iterator = std::is_same<ENTRY, LogGroupEntry>::value;

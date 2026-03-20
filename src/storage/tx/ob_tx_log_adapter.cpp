@@ -142,7 +142,8 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
                                  const SCN &base_scn,
                                  ObTxBaseLogCb *cb,
                                  const bool need_nonblock,
-                                 const int64_t retry_timeout_us)
+                                 const int64_t retry_timeout_us,
+                                 const bool skip_pre_async_wait)
 {
   int ret = OB_SUCCESS;
   palf::LSN lsn;
@@ -192,12 +193,13 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
                   K(need_nonblock));
       } else if (is_big_log
                  && OB_FAIL(log_handler_->append_big_log(buf, size, base_scn, block_flag,
-                                                         allow_compression, cb, lsn, scn))) {
+                                                         allow_compression, cb, lsn, scn,
+                                                         skip_pre_async_wait))) {
         TRANS_LOG(WARN, "append big log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
               K(need_nonblock), K(block_flag), K(expire_us), K(is_big_log));
       } else if (!is_big_log
                  && OB_FAIL(log_handler_->append(buf, size, base_scn, block_flag, allow_compression,
-                                                 cb, lsn, scn))) {
+                                                 cb, lsn, scn, skip_pre_async_wait))) {
         TRANS_LOG(WARN, "append log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
               K(need_nonblock), K(block_flag), K(expire_us));
       } else {

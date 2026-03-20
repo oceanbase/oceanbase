@@ -17,6 +17,7 @@
 #include "share/ob_primary_zone_util.h"//ObPrimaryZoneUtil
 #include "share/ob_global_stat_proxy.h"//get_current_data_version
 #include "rootserver/standby/ob_recovery_ls_service.h"//ObRecoveryLSHelper
+#include "rootserver/standby/ob_standby_service.h"
 #include "rootserver/ob_ls_balance_helper.h"//ObTenantLSBalanceInfo
 #include "rootserver/ob_tenant_balance_service.h"
 #include "logservice/ob_log_service.h"//ObLogService
@@ -360,6 +361,8 @@ int ObLSServiceHelper::update_ls_recover_in_trans(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_LS_SYNC_SCN_DELAY);
+
 int ObLSServiceHelper::get_ls_replica_sync_scn(const uint64_t tenant_id,
       const ObLSID &ls_id, share::SCN &sync_scn)
 {
@@ -373,8 +376,10 @@ int ObLSServiceHelper::get_ls_replica_sync_scn(const uint64_t tenant_id,
       SCN end_scn;
       SCN checkpoint_scn;
       logservice::ObLogService *log_svr = MTL(logservice::ObLogService*);
+      logservice::ObLogTransportService *transport_svr = nullptr;
       ObLSService *ls_svr = MTL(ObLSService *);
       ObLSHandle ls_handle;
+      palf::AccessMode access_mode;
 
       if (OB_ISNULL(ls_svr) || OB_ISNULL(log_svr)) {
         ret = OB_INVALID_ARGUMENT;
@@ -389,9 +394,21 @@ int ObLSServiceHelper::get_ls_replica_sync_scn(const uint64_t tenant_id,
         } else if (FALSE_IT(checkpoint_scn = ls->get_clog_checkpoint_scn())) {
         } else if (OB_FAIL(log_svr->open_palf(ls_id, palf_handle_guard))) {
           LOG_WARN("failed to open palf", KR(ret), K(ls_id));
-        } else if (OB_FAIL(palf_handle_guard.get_end_scn(end_scn))) {
-          LOG_WARN("failed to get end scn", KR(ret));
+        } else if (OB_FAIL(palf_handle_guard.get_access_mode(access_mode))) {
+          LOG_WARN("failed to get access mode", KR(ret), K(ls_id));
         } else {
+          if (is_user_tenant(tenant_id) && !GCONF.enable_logservice && access_mode == palf::AccessMode::APPEND) {
+            if (OB_ISNULL(transport_svr = log_svr->get_log_transport_service())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get log transport service failed", KR(ret), K(tenant_id), KP(log_svr), KP(transport_svr));
+            } else if (OB_FAIL(transport_svr->get_sync_end_scn(ls_id, end_scn))) {
+              LOG_WARN("failed to get sync end scn", KR(ret), K(ls_id));
+            }
+          } else {
+            if (OB_FAIL(palf_handle_guard.get_end_scn(end_scn))) {
+              LOG_WARN("failed to get end scn", KR(ret));
+            }
+          }
           //The end_scn of PALF will be set to the SCN corresponding to the LSN in the checkpoint information,
           //which is smaller than the SCN recorded in the checkpoint information.
           //Therefore, in the recovery scenario, the end_scn of the LS will be smaller than readable_scn
@@ -399,6 +416,11 @@ int ObLSServiceHelper::get_ls_replica_sync_scn(const uint64_t tenant_id,
           //set sync_scn = max(end_scn, checkpoint_scn);
           sync_scn = SCN::max(end_scn, checkpoint_scn);
           LOG_DEBUG("get sync scn", K(tenant_id), K(ls_id), K(sync_scn), K(end_scn), K(checkpoint_scn));
+          if (ERRSIM_LS_SYNC_SCN_DELAY != 0) {
+            sync_scn = SCN::minus(sync_scn, abs(ERRSIM_LS_SYNC_SCN_DELAY) * 1000LL * 1000LL * 1000LL);
+            LOG_WARN("errsim ls sync scn delay", KR(ret), K(tenant_id), K(ls_id), K(sync_scn),
+              K(end_scn), K(checkpoint_scn), K(ERRSIM_LS_SYNC_SCN_DELAY));
+          }
         }
       }
     }
@@ -1453,14 +1475,77 @@ int ObLSServiceHelper::check_transfer_task_replay(const uint64_t tenant_id,
   return ret;
 }
 
+int ObLSServiceHelper::check_transfer_task_replay_for_lossless_failover(
+    const share::ObLSID &src_ls,
+    const share::ObLSID &dest_ls,
+    const share::ObAllTenantInfo &tenant_info,
+    bool &replay_finish)
+{
+  int ret = OB_SUCCESS;
+  replay_finish = true;
+  const uint64_t tenant_id = tenant_info.get_tenant_id();
+  if (OB_UNLIKELY(!src_ls.is_valid() || !dest_ls.is_valid() || !tenant_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(src_ls), K(dest_ls), K(tenant_info));
+  } else if (OB_UNLIKELY(!tenant_info.is_prepare_flashback_for_lossless_failover_to_primary_status())) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("tenant switchover status is not lossless failover", KR(ret), K(tenant_info));
+  } else if (OB_FAIL(check_ls_replay_to_latest_for_lossless_failover_(tenant_id, src_ls, replay_finish))) {
+    LOG_WARN("failed to check src ls replay to latest for lossless failover", KR(ret), K(tenant_id), K(src_ls));
+  } else if (!replay_finish) {
+    LOG_WARN("src ls has not replay to latest", K(tenant_id), K(src_ls));
+  } else if (OB_FAIL(check_ls_replay_to_latest_for_lossless_failover_(tenant_id, dest_ls, replay_finish))) {
+    LOG_WARN("failed to check dest ls replay to latest for lossless failover", KR(ret), K(tenant_id), K(dest_ls));
+  } else if (!replay_finish) {
+    LOG_WARN("dest ls has not replay to latest", K(tenant_id), K(dest_ls));
+  }
+  return ret;
+}
+
+int ObLSServiceHelper::check_ls_replay_to_latest_for_lossless_failover_(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    bool &replay_finish)
+{
+  int ret = OB_SUCCESS;
+  replay_finish = true;
+  ObSEArray<share::ObLSID, 1> ls_id_array;
+  ObSEArray<obrpc::ObCheckpoint, 1> checkpoints;
+  SCN end_scn = SCN::min_scn();
+  bool ls_exist = true;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(check_ls_exist_(tenant_id, ls_id, ls_exist))) {
+    LOG_WARN("failed to check ls exist", KR(ret), K(tenant_id), K(ls_id));
+  } else if (!ls_exist) {
+    LOG_INFO("ls not exist, no need check", K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ls_id_array.push_back(ls_id))) {
+    LOG_WARN("failed to push back ls id", KR(ret), K(ls_id));
+  } else if (OB_FAIL(standby::ObStandbyService::get_checkpoints_by_rpc<ObIArray<ObLSID>>(
+      tenant_id,
+      ls_id_array,
+      false/* check_sync_to_latest */,
+      checkpoints))) {
+    LOG_WARN("failed to get checkpoints by rpc", KR(ret), K(tenant_id), K(ls_id_array));
+  } else if (OB_UNLIKELY(1 != checkpoints.count()) || OB_UNLIKELY(checkpoints.at(0).get_ls_id() != ls_id)
+      || OB_UNLIKELY(!checkpoints.at(0).get_cur_sync_scn().is_valid_and_not_min())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected checkpoints", KR(ret), K(tenant_id), K(ls_id), K(checkpoints));
+  } else if (FALSE_IT(end_scn = checkpoints.at(0).get_cur_sync_scn())) {
+  } else if (OB_FAIL(check_ls_transfer_replay_(tenant_id, ls_id, end_scn, replay_finish))) {
+    LOG_WARN("failed to check ls replay to end_scn", KR(ret), K(tenant_id), K(ls_id), K(end_scn));
+  }
+  return ret;
+}
+
 int ObLSServiceHelper::check_ls_transfer_replay_(const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const share::SCN &transfer_scn,
       bool &replay_finish)
 {
   int ret = OB_SUCCESS;
-  ObLSStatusOperator ls_operator;
-  share::ObLSStatusInfo ls_status;
+  bool ls_exist = true;
   SCN readable_scn;
   replay_finish = true;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
@@ -1468,6 +1553,30 @@ int ObLSServiceHelper::check_ls_transfer_replay_(const uint64_t tenant_id,
         || !transfer_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(transfer_scn));
+  } else if (OB_FAIL(check_ls_exist_(tenant_id, ls_id, ls_exist))) {
+    LOG_WARN("failed to check ls exist", KR(ret), K(tenant_id), K(ls_id));
+  } else if (!ls_exist) {
+  } else if (OB_FAIL(get_ls_all_replica_readable_scn_(tenant_id, ls_id, readable_scn))) {
+    LOG_WARN("failed to get ls all replica readable scn", KR(ret), K(tenant_id), K(ls_id));
+  } else if (readable_scn < transfer_scn) {
+    replay_finish = false;
+    LOG_INFO("need wait, ls has not replay finish transfer", K(tenant_id),
+        K(ls_id), K(readable_scn), K(transfer_scn));
+  }
+  return ret;
+}
+
+int ObLSServiceHelper::check_ls_exist_(const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    bool &ls_exist)
+{
+  int ret = OB_SUCCESS;
+  ObLSStatusOperator ls_operator;
+  share::ObLSStatusInfo ls_status;
+  ls_exist = true;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_));
@@ -1475,16 +1584,11 @@ int ObLSServiceHelper::check_ls_transfer_replay_(const uint64_t tenant_id,
           ls_status, *GCTX.sql_proxy_))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
-      LOG_INFO("src ls not exist, no need check", K(tenant_id), K(ls_id));
+      ls_exist = false;
+      LOG_INFO("ls not exist, no need check", K(tenant_id), K(ls_id));
     } else {
       LOG_WARN("failed to get ls status info", KR(ret), K(tenant_id), K(ls_id));
     }
-  } else if (OB_FAIL(get_ls_all_replica_readable_scn_(tenant_id, ls_id, readable_scn))) {
-    LOG_WARN("failed to get ls all replica readable scn", KR(ret), K(tenant_id), K(ls_id));
-  } else if (readable_scn < transfer_scn) {
-    replay_finish = false;
-    LOG_INFO("need wait, ls has not replay finish transfer", K(tenant_id),
-        K(ls_id), K(readable_scn), K(transfer_scn));
   }
   return ret;
 }

@@ -209,6 +209,7 @@ int ObTxLSLogWriter::submit_ls_log_(T &ls_log,
   ObSpinLockGuard cb_guard(cbs_lock_);
   ObTxLSLogCb *cb = nullptr;
   int64_t replay_hint = generate_replay_hint_(T::LOG_TYPE);
+  const bool skip_pre_async_wait = (ObTxLogType::TX_START_WORKING_LOG == T::LOG_TYPE);
   if (OB_FAIL(get_log_cb_(T::LOG_TYPE, cb))) {
     if (OB_TX_NOLOGCB == ret) {
       ret = OB_EAGAIN;
@@ -217,7 +218,13 @@ int ObTxLSLogWriter::submit_ls_log_(T &ls_log,
     }
   } else if (nullptr == cb || OB_FAIL(cb->serialize_ls_log(ls_log, replay_hint, barrier_type))) {
     TRANS_LOG(WARN, "[TxLsLogWriter] serialize ls log error", KR(ret), K(T::LOG_TYPE), KP(cb));
-  } else if (OB_FAIL(tx_log_adapter_->submit_log(cb->get_log_buf(), cb->get_log_pos(), share::SCN::min_scn(), cb, need_nonblock))) {
+  } else if (OB_FAIL(tx_log_adapter_->submit_log(cb->get_log_buf(),
+                                                 cb->get_log_pos(),
+                                                 share::SCN::min_scn(),
+                                                 cb,
+                                                 need_nonblock,
+                                                 ObITxLogAdapter::DEFAULT_RETRY_TIMEOUT_US,
+                                                 skip_pre_async_wait))) {
     TRANS_LOG(WARN, "[TxLsLogWriter] submit ls log failed", KR(ret), K(T::LOG_TYPE), K(ls_id_), KPC(cb));
     return_log_cb_(cb);
     cb = nullptr;

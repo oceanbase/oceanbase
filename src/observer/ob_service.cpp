@@ -22,11 +22,13 @@
 #include "share/ob_version.h"
 #include "share/deadlock/ob_deadlock_inner_table_service.h"
 #include "share/ob_tablet_replica_checksum_operator.h" // ObTabletReplicaChecksumItem
+#include "share/location_cache/ob_location_struct.h"
 
 #include "sql/optimizer/ob_storage_estimator.h"
 #include "rootserver/ob_bootstrap.h"
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "rootserver/ob_tenant_event_history_table_operator.h" // TENANT_EVENT_INSTANCE
+#include "rootserver/standby/ob_protection_mode_mgr.h"
 #include "observer/ob_server.h"
 #include "ob_server_event_history_table_operator.h"
 #include "storage/ddl/ob_tablet_lob_split_task.h"
@@ -34,6 +36,7 @@
 #include "storage/ddl/ob_build_index_task.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "logservice/ob_log_service.h"        // ObLogService
+#include "logservice/transportservice/ob_log_transport_service.h"
 #include "logservice/archiveservice/ob_archive_service.h"
 #include "storage/backup/ob_backup_handler.h"
 #include "storage/backup/ob_ls_backup_clean_mgr.h"
@@ -2446,6 +2449,37 @@ int ObService::clear_location_cache()
   return ret;
 }
 
+int ObService::clear_sync_standby_dest_cache(const obrpc::ObClearSyncStandbyDestCacheArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else {
+    const uint64_t meta_tenant_id = gen_meta_tenant_id(arg.get_tenant_id());
+    MTL_SWITCH(meta_tenant_id) {
+      standby::ObProtectionModeMgr *protection_mode_mgr = MTL(standby::ObProtectionModeMgr *);
+      if (OB_ISNULL(protection_mode_mgr)) {
+        ret = OB_SUCCESS;
+        LOG_INFO("protection mode mgr is null, skip clear sync_standby_dest cache", KR(ret), K(arg));
+      } else if (OB_FAIL(protection_mode_mgr->clear_sync_standby_dest_cache())) {
+        if (OB_NOT_INIT == ret) {
+          ret = OB_SUCCESS;
+          LOG_INFO("protection mode mgr is not inited, skip clear sync_standby_dest cache", KR(ret), K(arg));
+        } else {
+          LOG_WARN("failed to clear sync standby dest cache", KR(ret), K(arg));
+        }
+      } else {
+        protection_mode_mgr->wakeup();
+      }
+    }
+  }
+  return ret;
+}
+
 int ObService::set_ds_action(const obrpc::ObDebugSyncActionArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -3558,6 +3592,33 @@ int ObService::get_leader_locations(
   return ret;
 }
 
+int ObService::get_ls_location(
+    const obrpc::ObGetLSLocationArg &arg,
+    share::ObLSLocation &result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObService not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_UNLIKELY(arg.get_cluster_id() != GCONF.cluster_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cluster_id not match", KR(ret), K(arg));
+  } else if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location_service is null", KR(ret));
+  } else if (OB_FAIL(GCTX.location_service_->nonblock_get(
+             GCONF.cluster_id, arg.get_tenant_id(), arg.get_ls_id(), result))) {
+    LOG_WARN("nonblock_get ls location failed", KR(ret), K(arg));
+  } else if (OB_UNLIKELY(!result.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ls location is invalid", KR(ret), K(arg), K(result));
+  }
+  return ret;
+}
+
 int ObService::check_backup_dest_connectivity(const obrpc::ObCheckBackupConnectivityArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -3687,6 +3748,57 @@ int ObService::get_ls_sync_scn(
     }
   }
   LOG_INFO("finish get_ls_sync_scn", KR(ret), K(cur_sync_scn), K(cur_restore_source_max_scn), K(arg), K(result));
+  return ret;
+}
+ERRSIM_POINT_DEF(ERRSIM_GET_LS_STANDBY_SYNC_SCN_ERROR);
+ERRSIM_POINT_DEF(ERRSIM_GET_LS_STANDBY_SYNC_SCN_DELAY);
+
+int ObService::get_ls_standby_sync_scn(
+    const ObGetLSStandbySyncScnArg &arg,
+    ObGetLSStandbySyncScnRes &result)
+{
+  int ret = OB_SUCCESS;
+  SCN palf_sync_scn = SCN::min_scn();
+  SCN standby_sync_scn = SCN::min_scn();
+  LOG_INFO("start get_ls_standby_sync_scn", K(arg));
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invalid", KR(ret), K(arg));
+  } else if (OB_FAIL(ERRSIM_GET_LS_STANDBY_SYNC_SCN_ERROR)) {
+    LOG_WARN("failed to get ls standby sync scn for errsim", KR(ret), K(arg));
+  } else {
+    const uint64_t tenant_id = arg.get_tenant_id();
+    ObLSID ls_id = arg.get_ls_id();
+    MTL_SWITCH(tenant_id) {
+      logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
+      logservice::ObLogTransportService *transport_service = nullptr;
+      if (OB_ISNULL(log_service) || OB_ISNULL(transport_service = log_service->get_log_transport_service())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("log_service or transport_service is null", KR(ret), KP(log_service), KP(transport_service));
+      } else if (OB_FAIL(transport_service->get_standby_sync_scn(ls_id, palf_sync_scn, standby_sync_scn))) {
+        LOG_WARN("failed to get standby sync scn from transport service", KR(ret), K(ls_id));
+      } else if (!palf_sync_scn.is_valid_and_not_min() || !standby_sync_scn.is_valid_and_not_min()) {
+        ret = OB_NEED_RETRY;
+        LOG_WARN("palf_sync_scn or standby_sync_scn is invalid", KR(ret), K(ls_id), K(palf_sync_scn), K(standby_sync_scn));
+      } else {
+        if (ERRSIM_GET_LS_STANDBY_SYNC_SCN_DELAY != 0) {
+          const int64_t delay_ns = abs(ERRSIM_GET_LS_STANDBY_SYNC_SCN_DELAY) * 1000LL * 1000LL * 1000LL;
+          palf_sync_scn = SCN::minus(palf_sync_scn, delay_ns);
+          standby_sync_scn = SCN::minus(standby_sync_scn, delay_ns);
+          LOG_WARN("ls standby sync scn errsim enabled", KR(ret), K(tenant_id), K(ls_id),
+              K(palf_sync_scn), K(standby_sync_scn), K(ERRSIM_GET_LS_STANDBY_SYNC_SCN_DELAY));
+        }
+        if (OB_FAIL(result.init(tenant_id, ls_id, palf_sync_scn, standby_sync_scn))) {
+          LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), K(palf_sync_scn),
+                                       K(standby_sync_scn));
+        }
+      }
+    }
+  }
   return ret;
 }
 

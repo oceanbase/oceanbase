@@ -79,7 +79,9 @@ public:
           const SCN &recovery_until_scn = SCN::base_scn(),
           const ObArchiveMode &log_mode = NOARCHIVE_MODE,
           const share::ObLSID &max_ls_id = share::SYS_LS,
-          const share::ObRestoreDataMode &restore_data_mode = NORMAL_RESTORE_DATA_MODE);
+          const share::ObRestoreDataMode &restore_data_mode = NORMAL_RESTORE_DATA_MODE,
+          const ObProtectionMode &protection_mode = ObProtectionMode(ObProtectionMode::MAXIMUM_PERFORMANCE_MODE),
+          const ObProtectionLevel &protection_level = ObProtectionLevel(ObProtectionLevel::MAXIMUM_PERFORMANCE_LEVEL));
  ObAllTenantInfo &operator=(const ObAllTenantInfo &other);
  void assign(const ObAllTenantInfo &other);
  void reset();
@@ -111,6 +113,7 @@ public:
 IS_TENANT_STATUS(normal) 
 IS_TENANT_STATUS(switching_to_primary)
 IS_TENANT_STATUS(prepare_flashback_for_failover_to_primary)
+IS_TENANT_STATUS(prepare_flashback_for_lossless_failover_to_primary)
 IS_TENANT_STATUS(flashback) 
 IS_TENANT_STATUS(switching_to_standby)
 IS_TENANT_STATUS(prepare_switching_to_standby)
@@ -123,7 +126,8 @@ IS_TENANT_STATUS(prepare_flashback_for_switch_to_primary)
     "replayable_scn", replayable_scn_.get_val_for_inner_table_field(),
     "readable_scn", readable_scn_.get_val_for_inner_table_field(),
     "recovery_until_scn", recovery_until_scn_.get_val_for_inner_table_field(),
-    "log_mode", log_mode_.to_str(), "max_ls_id", max_ls_id_.id(), K_(restore_data_mode));
+    "log_mode", log_mode_.to_str(), "max_ls_id", max_ls_id_.id(), K_(restore_data_mode),
+    K_(protection_mode), K_(protection_level));
   DECLARE_TO_YSON_KV;
 
   // Getter&Setter
@@ -150,6 +154,8 @@ public:\
   Property_declare_var(ObArchiveMode, log_mode)
   Property_declare_var(share::ObLSID, max_ls_id)
   Property_declare_var(share::ObRestoreDataMode, restore_data_mode)
+  Property_declare_var(share::ObProtectionMode, protection_mode)
+  Property_declare_var(share::ObProtectionLevel, protection_level)
 #undef Property_declare_var
 private:
   ObTenantRole tenant_role_;
@@ -222,6 +228,7 @@ private:
                                 int64_t &ora_rowscn,
                                 ObAllTenantInfo &tenant_info);
   public:
+  // TODO(shouju.zyp for MPT): add function to update protection mode and protection level
     /**
      * @description: update tenant recovery status
      * @param[in] tenant_id
@@ -255,6 +262,27 @@ private:
                                   const ObTenantSwitchoverStatus &status);
 
     /**
+     * @description: update tenant protection mode and level of __all_tenant_info
+     * @param[in] tenant_id
+     * @param[in] proxy
+     * @param[in] switchover_epoch : the update is according to this switchover_epoch
+     * @param[in] new_protection_mode : target protection mode to be update
+     * @param[in] new_protection_level : target protection level to be update
+     * @param[in] min_switchover_epoch : the min_switchover_epoch this function will return
+     * @param[out] new_switchover_epoch : new switchover epoch
+     * return :
+     *   OB_SUCCESS update tenant protection mode and level successfully
+     *   OB_NEED_RETRY switchover_epoch or new_protection_mode or new_protection_level not match, need retry
+     */
+    static int update_tenant_protection_mode_and_level(
+        const uint64_t tenant_id, const ObTenantRole &tenant_role,
+        ObISQLClient *proxy, const int64_t switchover_epoch,
+        const ObProtectionMode &new_protection_mode,
+        const ObProtectionLevel &new_protection_level,
+        const int64_t min_switchover_epoch,
+        int64_t &new_switchover_epoch);
+
+    /**
      * @description: update tenant status in trans
      * @param[in] tenant_id
      * @param[in] trans
@@ -277,7 +305,8 @@ private:
       const share::SCN &replayable_scn,
       const share::SCN &readable_scn,
       const share::SCN &recovery_until_scn,
-      const int64_t old_switchover_epoch);
+      const int64_t old_switchover_epoch,
+      int64_t &new_switchover_epoch);
 
     /**
      * @description: update tenant role of __all_tenant_info
@@ -323,7 +352,8 @@ private:
       const ObTenantSwitchoverStatus &new_status,
       int64_t &new_switchover_epoch);
 
-    static int fill_cell(common::sqlclient::ObMySQLResult *result, ObAllTenantInfo &tenant_info, int64_t &ora_rowscn);
+    static int fill_cell(common::sqlclient::ObMySQLResult *result, ObAllTenantInfo &tenant_info,
+        bool is_upper_case, int64_t *ora_rowscn = nullptr);
      /**
      * @description: update tenant max ls id while create ls or upgrade, in upgrade from 4100 to 4200,
      *               create ls no need to update max ls id while max_ls_id is zero. after update max_ls_id in post_upgrade,

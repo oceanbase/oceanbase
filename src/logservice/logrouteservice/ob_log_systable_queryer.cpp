@@ -20,12 +20,16 @@ namespace oceanbase
 {
 namespace logservice
 {
+
+constexpr int64_t OB_LOG_SYSTABLE_QUERYER_SQL_QUERY_TIMEOUT_US = 10_s;
+
 ObLogSysTableQueryer::ObLogSysTableQueryer() :
     is_inited_(false),
     is_across_cluster_(false),
     cluster_id_(OB_INVALID_CLUSTER_ID),
     sql_proxy_(NULL),
-    err_handler_(NULL)
+    err_handler_(NULL),
+    sql_query_timeout_us_(OB_LOG_SYSTABLE_QUERYER_SQL_QUERY_TIMEOUT_US)
 {
 
 }
@@ -38,19 +42,24 @@ ObLogSysTableQueryer::~ObLogSysTableQueryer()
 int ObLogSysTableQueryer::init(const int64_t cluster_id,
     const bool is_across_cluster,
     common::ObISQLClient &sql_proxy,
-    logfetcher::IObLogErrHandler *err_handler)
+    logfetcher::IObLogErrHandler *err_handler,
+    const int64_t sql_query_timeout_us)
 {
   int ret = OB_SUCCESS;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("ObLogSysTableQueryer has inited", KR(ret));
+  } else if (OB_UNLIKELY(sql_query_timeout_us <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid sql query timeout", KR(ret), K(sql_query_timeout_us));
   } else {
     is_across_cluster_ = is_across_cluster;
     cluster_id_ = cluster_id;
     sql_proxy_ = &sql_proxy;
     is_inited_ = true;
     err_handler_ = err_handler;
+    sql_query_timeout_us_ = sql_query_timeout_us;
   }
 
   return ret;
@@ -63,6 +72,7 @@ void ObLogSysTableQueryer::destroy()
   cluster_id_ = OB_INVALID_CLUSTER_ID;
   sql_proxy_ = NULL;
   err_handler_ = NULL;
+  sql_query_timeout_us_ = OB_LOG_SYSTABLE_QUERYER_SQL_QUERY_TIMEOUT_US;
 }
 
 int ObLogSysTableQueryer::get_ls_log_info(
@@ -89,10 +99,10 @@ int ObLogSysTableQueryer::get_ls_log_info(
 
     SMART_VAR(ObISQLClient::ReadResult, result) {
       if (OB_FAIL(sql.assign_fmt(
-          "SELECT %s FROM %s"
+          "SELECT /*+query_timeout(%ld)*/ %s FROM %s"
           " WHERE tenant_id = %lu AND ls_id = %lu"
           " ORDER BY tenant_id, ls_id, svr_ip, svr_port ASC",
-          select_fields, log_stat_view_name,
+          sql_query_timeout_us_, select_fields, log_stat_view_name,
           tenant_id, ls_id.id()))) {
         LOG_WARN("assign sql string failed", KR(ret), K(tenant_id),
                 K(ls_id));
@@ -134,9 +144,9 @@ int ObLogSysTableQueryer::get_all_units_info(
 
     SMART_VAR(ObISQLClient::ReadResult, result) {
       if (OB_FAIL(sql.assign_fmt(
-          "SELECT %s FROM %s"
+          "SELECT /*+query_timeout(%ld)*/ %s FROM %s"
           " WHERE tenant_id = %lu",
-          select_fields, OB_GV_OB_UNITS_TNAME, tenant_id))) {
+          sql_query_timeout_us_, select_fields, OB_GV_OB_UNITS_TNAME, tenant_id))) {
         LOG_WARN("assign sql string failed", KR(ret), K(cluster_id_), K(tenant_id));
       // Use OB_SYS_TENANT_ID to query the GV$OB_UNITS
       } else if (OB_FAIL(do_query_(OB_SYS_TENANT_ID, sql, result))) {
@@ -174,9 +184,9 @@ int ObLogSysTableQueryer::get_all_server_info(
 
     SMART_VAR(ObISQLClient::ReadResult, result) {
       if (OB_FAIL(sql.assign_fmt(
-          "SELECT /*+READ_CONSISTENCY(WEAK)*/ "
+          "SELECT /*+READ_CONSISTENCY(WEAK) query_timeout(%ld)*/ "
           "%s FROM %s",
-          select_fields, OB_ALL_SERVER_TNAME))) {
+          sql_query_timeout_us_, select_fields, OB_ALL_SERVER_TNAME))) {
         LOG_WARN("assign sql string failed", KR(ret), K(cluster_id_), K(tenant_id));
       } else if (OB_FAIL(do_query_(tenant_id, sql, result))) {
         LOG_WARN("do_query_ failed", KR(ret), K(cluster_id_), K(tenant_id), "sql", sql.ptr());
@@ -213,10 +223,10 @@ int ObLogSysTableQueryer::get_all_zone_info(
     int64_t record_count;
     SMART_VAR(ObISQLClient::ReadResult, result) {
       if (OB_FAIL(sql.assign_fmt(
-          "SELECT /*+READ_CONSISTENCY(WEAK)*/ "
+          "SELECT /*+READ_CONSISTENCY(WEAK) query_timeout(%ld)*/ "
           "%s FROM %s "
           "WHERE name = \'%s\'",
-          select_fields, OB_ALL_ZONE_TNAME, region))) {
+          sql_query_timeout_us_, select_fields, OB_ALL_ZONE_TNAME, region))) {
         LOG_WARN("assign sql string failed", KR(ret), K(cluster_id_), K(tenant_id));
       } else if (OB_FAIL(do_query_(tenant_id, sql, result))) {
         LOG_WARN("do_query_ failed", KR(ret), K(cluster_id_), K(tenant_id), "sql", sql.ptr());
@@ -253,10 +263,10 @@ int ObLogSysTableQueryer::get_all_zone_type_info(
 
     SMART_VAR(ObISQLClient::ReadResult, result) {
       if (OB_FAIL(sql.assign_fmt(
-          "SELECT /*+READ_CONSISTENCY(WEAK)*/ "
+          "SELECT /*+READ_CONSISTENCY(WEAK) query_timeout(%ld)*/ "
           "%s FROM %s "
           "WHERE name = \'%s\'",
-          select_fields, OB_ALL_ZONE_TNAME, zone_type))) {
+          sql_query_timeout_us_, select_fields, OB_ALL_ZONE_TNAME, zone_type))) {
         LOG_WARN("assign sql string failed", KR(ret), K(cluster_id_), K(tenant_id));
       } else if (OB_FAIL(do_query_(tenant_id, sql, result))) {
         LOG_WARN("do_query_ failed", KR(ret), K(cluster_id_), K(tenant_id), "sql", sql.ptr());
@@ -291,9 +301,9 @@ int ObLogSysTableQueryer::get_logservice_model_info(
 
     SMART_VAR(ObISQLClient::ReadResult, result) {
       if (OB_FAIL(sql.assign_fmt(
-          "SELECT %s FROM %s "
+          "SELECT /*+query_timeout(%ld)*/ %s FROM %s "
           "WHERE name = \'%s\'",
-          select_fields, OB_GV_OB_PARAMETERS_TNAME, zone_type))) {
+          sql_query_timeout_us_, select_fields, OB_GV_OB_PARAMETERS_TNAME, zone_type))) {
         LOG_WARN("assign sql string failed", KR(ret), K(cluster_id_), K(tenant_id));
       } else if (OB_FAIL(do_query_(OB_SYS_TENANT_ID, sql, result))) {
         LOG_WARN("do_query_ failed", KR(ret), K(cluster_id_), K(tenant_id), "sql", sql.ptr());

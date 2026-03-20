@@ -214,6 +214,7 @@ void ObKeepAliveLSHandler::print_stat_info()
   ObCStringHelper helper;
   TRANS_LOG(INFO, "[Keep Alive Stat] LS Keep Alive Info", "tenant_id",          MTL_ID(),
                                                           "LS_ID",              ls_id_,
+                                                          "Cb_Busy_Cnt",        stat_info_.cb_busy_cnt,
                                                           "Not_Master_Cnt",     stat_info_.not_master_cnt,
                                                           "Near_To_GTS_Cnt",    stat_info_.near_to_gts_cnt,
                                                           "Other_Error_Cnt",    stat_info_.other_error_cnt,

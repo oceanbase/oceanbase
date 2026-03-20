@@ -318,11 +318,12 @@ TEST(TestLogMetaInfos, test_log_mode_meta)
   share::SCN invalid_scn;
   // Test invalid argument
   EXPECT_FALSE(log_mode_meta1.is_valid());
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, 1, AccessMode::INVALID_ACCESS_MODE, share::SCN::min_scn()));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, 1, AccessMode::APPEND, invalid_scn));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, INVALID_PROPOSAL_ID, AccessMode::APPEND, share::SCN::min_scn()));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(INVALID_PROPOSAL_ID, 1, AccessMode::APPEND, share::SCN::min_scn()));
-  EXPECT_EQ(OB_SUCCESS, log_mode_meta1.generate(1, 1, AccessMode::APPEND, share::SCN::min_scn()));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, 1, AccessMode::INVALID_ACCESS_MODE, SyncMode::ASYNC, share::SCN::min_scn()));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, 1, AccessMode::APPEND, SyncMode::INVALID_SYNC_MODE, share::SCN::min_scn()));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, 1, AccessMode::APPEND, SyncMode::ASYNC, invalid_scn));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, INVALID_PROPOSAL_ID, AccessMode::APPEND, SyncMode::ASYNC, share::SCN::min_scn()));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(INVALID_PROPOSAL_ID, 1, AccessMode::APPEND, SyncMode::ASYNC, share::SCN::min_scn()));
+  EXPECT_EQ(OB_SUCCESS, log_mode_meta1.generate(1, 1, AccessMode::APPEND, SyncMode::ASYNC, share::SCN::min_scn()));
   EXPECT_TRUE(log_mode_meta1.is_valid());
 
   // Test serialize and deserialize
@@ -335,6 +336,7 @@ TEST(TestLogMetaInfos, test_log_mode_meta)
   const bool equal = (log_mode_meta1.mode_version_ == log_mode_meta2.mode_version_ &&
                       log_mode_meta1.proposal_id_ == log_mode_meta2.proposal_id_ &&
                       log_mode_meta1.access_mode_ == log_mode_meta2.access_mode_ &&
+                      log_mode_meta1.sync_mode_ == log_mode_meta2.sync_mode_ &&
                       log_mode_meta1.ref_scn_ == log_mode_meta2.ref_scn_);
   EXPECT_TRUE(equal);
 }

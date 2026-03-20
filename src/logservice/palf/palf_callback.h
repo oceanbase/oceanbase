@@ -39,6 +39,7 @@ class PalfRoleChangeCb
 public:
   virtual int on_role_change(const int64_t id) = 0;
   virtual int on_need_change_leader(const int64_t ls_id, const common::ObAddr &new_leader) = 0;
+  virtual int on_sync_mode_change(const int64_t id) = 0;
 };
 
 class PalfRebuildCb
@@ -85,6 +86,12 @@ public:
                                               const AccessMode& prev_access_mode,
                                               const AccessMode& curr_access_mode,
                                               const char *extra_info = NULL) = 0;
+  virtual int record_sync_mode_change_event(const int64_t palf_id,
+                                            const int64_t prev_mode_version,
+                                            const int64_t curr_mode_verion,
+                                            const SyncMode& prev_sync_mode,
+                                            const SyncMode& curr_sync_mode,
+                                            const char *extra_info = NULL) = 0;
   virtual int record_set_base_lsn_event(const int64_t palf_id, const LSN &new_base_lsn) = 0;
   virtual int record_enable_sync_event(const int64_t palf_id) = 0;
   virtual int record_disable_sync_event(const int64_t palf_id) = 0;

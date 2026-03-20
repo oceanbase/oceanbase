@@ -101,7 +101,8 @@ public:
                          const share::SCN &base_ts,
                          ObTxBaseLogCb *cb,
                          const bool need_nonblock,
-                         const int64_t retry_timeout_us = 1000) override;
+                         const int64_t retry_timeout_us = ObITxLogAdapter::DEFAULT_RETRY_TIMEOUT_US,
+                         const bool skip_pre_async_wait = false) override;
 private:
   transaction::ObLSTxCtxMgr *mgr_;
   hash::ObHashMap<ObTransID, ObTxLogType> tx_injects_;

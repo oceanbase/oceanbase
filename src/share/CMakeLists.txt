@@ -176,7 +176,6 @@ ob_set_subtarget(ob_share common
   ob_bg_thread_monitor.cpp
   ob_cascad_member.cpp
   ob_cascad_member_list.cpp
-  ob_cluster_role.cpp
   ob_cluster_version.cpp
   ob_column_checksum_error_operator.cpp
   ob_core_table_proxy.cpp
@@ -285,6 +284,7 @@ ob_set_subtarget(ob_share common
   ob_inner_kv_table_operator.cpp
   ob_inner_table_operator.cpp
   ob_standby_upgrade.cpp
+  ob_sync_standby_status_mds_helper.cpp
   ob_common_id.cpp
   ob_cluster_event_history_table_operator.cpp
   scn.cpp
@@ -306,6 +306,10 @@ ob_set_subtarget(ob_share common
   ob_perf_stat.cpp
   ob_flashback_standby_log_struct.cpp
   ob_flashback_log_scn_table_operator.cpp
+  ob_sync_standby_dest_operator.cpp
+  ob_sync_standby_dest_parser.cpp
+  ob_sync_standby_dest_utils.cpp
+  ob_sync_standby_status_operator.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed

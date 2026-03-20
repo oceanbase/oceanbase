@@ -122,6 +122,26 @@ int PalfRoleChangeCbWrapper::on_need_change_leader(const int64_t id, const ObAdd
   return ret;
 }
 
+int PalfRoleChangeCbWrapper::on_sync_mode_change(const int64_t id)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_UNLIKELY(true == list_.is_empty())) {
+    PALF_LOG(INFO, "the role change callback list is empty", K(id));
+  } else {
+    ObSpinLockGuard guard(lock_);
+    DLIST_FOREACH(node, list_) {
+      PalfRoleChangeCb *rc_cb = node->rc_cb_;
+      if (NULL == rc_cb) {
+        ret = OB_ERR_UNEXPECTED;
+        PALF_LOG(ERROR, "PalfRoleChangeCb is NULL, unexpect error", K(ret), KPC(node), K(id));
+      } else if (OB_FAIL(rc_cb->on_sync_mode_change(id))) {
+        PALF_LOG(WARN, "on_sync_mode_change failed", K(ret), K(id), KPC(node));
+      }
+    }
+  }
+  return ret;
+}
+
 PalfRebuildCbWrapper::PalfRebuildCbWrapper() : list_(),
   lock_(common::ObLatchIds::OB_PALF_REBUILD_CB_WRAPPER_LOCK) {}
 PalfRebuildCbWrapper::~PalfRebuildCbWrapper() {}

@@ -298,6 +298,7 @@ int ObLSAttrOperator::operator_ls_in_trans_(
     bool skip_sub_trans = false;
     ObAllTenantInfo tenant_info;
     ObSEArray<ObLSAttr, 1> duplicate_ls_attrs;
+    ObProtectionStat protection_stat;
     if (ls_attr.get_ls_id().is_sys_ls()) {
       if (OB_LS_NORMAL == ls_attr.get_ls_status()) {
         skip_sub_trans = true;
@@ -315,6 +316,11 @@ int ObLSAttrOperator::operator_ls_in_trans_(
       ret = OB_NEED_RETRY;
       LOG_WARN("tenant not in specified switchover status", K_(tenant_id), K(working_sw_status),
                K(tenant_info));
+    } else if (OB_FAIL(protection_stat.init(tenant_info))) {
+      LOG_WARN("failed to init protection stat", KR(ret), K(tenant_info));
+    } else if (!protection_stat.is_steady()) {
+      ret = OB_NEED_RETRY;
+      LOG_WARN("protection stat is not steady, need retry", KR(ret), K(protection_stat));
     } else if (OB_LS_OP_CREATE_PRE == ls_attr.get_ls_operation_type()) {
       if (OB_LS_NORMAL != sys_ls_attr.get_ls_status()) {
         //for sys ls, need insert_ls, but ls_status is normal

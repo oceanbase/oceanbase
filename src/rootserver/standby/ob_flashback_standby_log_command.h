@@ -15,7 +15,7 @@
 
 #include "share/ob_flashback_standby_log_struct.h"
 #include "share/ob_tenant_info_proxy.h"
-#include "rootserver/standby/ob_tenant_role_transition_service.h"//ObLSAccessModeModifier, ObTenantRoleTransAllLSInfo
+#include "rootserver/standby/ob_tenant_role_transition_service.h"//ObLSLogModeModifier, ObTenantRoleTransAllLSInfo
 #include <share/scn.h>
 
 namespace oceanbase
@@ -101,7 +101,6 @@ private:
       const share::ObAllTenantInfo &tenant_info,
       const share::SCN &flashback_log_scn);
   int check_restore_source_empty_(const uint64_t tenant_id, ObISQLClient *proxy);
-  int clear_fetched_log_cache_(const uint64_t tenant_id);
   int do_flashback_(const uint64_t tenant_id, const share::SCN &flashback_log_scn);
   int change_ls_access_mode_back_to_raw_rw_(const uint64_t tenant_id, const uint64_t switchover_epoch);
 private:

@@ -17,6 +17,7 @@
 #include "rootserver/ob_root_utils.h"//ObRootUtils
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // ObTenantSnapshotUtil
 #include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
+#include "rootserver/standby/ob_protection_mode_utils.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -88,7 +89,9 @@ int ObAllTenantInfo::init(
     const SCN &recovery_until_scn,
     const ObArchiveMode &log_mode,
     const share::ObLSID &max_ls_id,
-    const share::ObRestoreDataMode &restore_data_mode)
+    const share::ObRestoreDataMode &restore_data_mode,
+    const share::ObProtectionMode &protection_mode,
+    const share::ObProtectionLevel &protection_level)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
@@ -102,11 +105,13 @@ int ObAllTenantInfo::init(
                   || !log_mode.is_valid()
                   || !is_valid_tenant_scn(sync_scn, replayable_scn, readable_scn, recovery_until_scn)
                   || !max_ls_id.is_valid()
-                  || !restore_data_mode.is_valid())) {
+                  || !restore_data_mode.is_valid()
+                  || !protection_mode.is_valid()
+                  || !protection_level.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tenant_role), K(switchover_status),
              K(switchover_epoch), K(sync_scn), K(replayable_scn), K(readable_scn), K(recovery_until_scn),
-             K(log_mode), K(max_ls_id), K(restore_data_mode));
+             K(log_mode), K(max_ls_id), K(restore_data_mode), K(protection_mode), K(protection_level));
   } else {
     tenant_id_ = tenant_id;
     tenant_role_ = tenant_role;
@@ -119,6 +124,8 @@ int ObAllTenantInfo::init(
     log_mode_ = log_mode;
     max_ls_id_ = max_ls_id;
     restore_data_mode_ = restore_data_mode;
+    protection_mode_ = protection_mode;
+    protection_level_ = protection_level;
   }
   return ret;
 }
@@ -138,6 +145,8 @@ void ObAllTenantInfo::assign(const ObAllTenantInfo &other)
     log_mode_ = other.log_mode_;
     max_ls_id_ = other.max_ls_id_;
     restore_data_mode_ = other.restore_data_mode_;
+    protection_mode_ = other.protection_mode_;
+    protection_level_ = other.protection_level_;
   }
   return ;
 }
@@ -159,6 +168,8 @@ void ObAllTenantInfo::reset()
   // They need be reset to the VALID default value.
   // Consider serialization compatibility for old binary RPC packet.
   restore_data_mode_ = NORMAL_RESTORE_DATA_MODE;
+  protection_mode_.reset();
+  protection_level_.reset();
 }
 
 OB_SERIALIZE_MEMBER(ObAllTenantInfo, tenant_id_, tenant_role_,
@@ -166,7 +177,8 @@ OB_SERIALIZE_MEMBER(ObAllTenantInfo, tenant_id_, tenant_role_,
                     replayable_scn_,
                     readable_scn_,   // FARM COMPAT WHITELIST
                     recovery_until_scn_, log_mode_,
-                    max_ls_id_, restore_data_mode_);
+                    max_ls_id_, restore_data_mode_,
+                     protection_mode_, protection_level_);
 
 ObAllTenantInfo& ObAllTenantInfo::operator= (const ObAllTenantInfo &other)
 {
@@ -210,6 +222,9 @@ int ObAllTenantInfoProxy::init_tenant_info(
       LOG_WARN("fail to assign fmt", K(ret), K(sql));
     } else if (compat_version >= DATA_VERSION_4_3_3_0 && OB_FAIL(sql.append_fmt(", restore_data_mode"))) {
       LOG_WARN("fail to append sql", K(ret), K(sql));
+    } else if (compat_version >= standby::ObProtectionModeUtils::get_protection_mode_data_version() &&
+        OB_FAIL(sql.append_fmt(", protection_mode, protection_level"))) {
+      LOG_WARN("fail to append sql", K(ret), K(sql));
     } else if (OB_FAIL(sql.append_fmt(
                       ") values(%lu, '%s', '%s', %ld, %lu, %lu, %lu, %lu, '%s', %ld",
                       tenant_info.get_tenant_id(),
@@ -225,6 +240,10 @@ int ObAllTenantInfoProxy::init_tenant_info(
       LOG_WARN("fail to append sql", K(ret), K(sql));
     } else if (compat_version >= DATA_VERSION_4_3_3_0
                && OB_FAIL(sql.append_fmt(", '%s'", tenant_info.get_restore_data_mode().to_str()))) {
+      LOG_WARN("fail to append sql", K(ret), K(sql), K(tenant_info));
+    } else if (compat_version >= standby::ObProtectionModeUtils::get_protection_mode_data_version()
+        && OB_FAIL(sql.append_fmt(", '%s', '%s'", tenant_info.get_protection_mode().to_str(),
+        tenant_info.get_protection_level().to_str()))) {
       LOG_WARN("fail to append sql", K(ret), K(sql), K(tenant_info));
     }
     if (FAILEDx(sql.append_fmt(")"))) {
@@ -451,7 +470,7 @@ int ObAllTenantInfoProxy::load_pure_tenant_info_(const uint64_t tenant_id,
           LOG_WARN("failed to get sql result", KR(ret));
         } else if (OB_FAIL(result->next())) {
           LOG_WARN("failed to get tenant info", KR(ret), K(sql));
-        } else if (OB_FAIL(fill_cell(result, tenant_info, ora_rowscn))) {
+        } else if (OB_FAIL(fill_cell(result, tenant_info, false/* is_upper_case */, &ora_rowscn))) {
           LOG_WARN("failed to fill cell", KR(ret), K(sql));
         }
       }
@@ -549,7 +568,8 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status_in_trans(
   return ret;
 }
 
-int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, ObAllTenantInfo &tenant_info, int64_t &ora_rowscn)
+int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result,
+    ObAllTenantInfo &tenant_info, bool is_upper_case, int64_t *ora_rowscn)
 {
   int ret = OB_SUCCESS;
   tenant_info.reset();
@@ -557,6 +577,20 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("result is null", KR(ret));
   } else {
+    const char *tenant_role_column = is_upper_case ? "TENANT_ROLE" : "tenant_role";
+    const char *status_column = is_upper_case ? "SWITCHOVER_STATUS" : "switchover_status";
+    const char *tenant_id_column = is_upper_case ? "TENANT_ID" : "tenant_id";
+    const char *switchover_epoch_column = is_upper_case ? "SWITCHOVER_EPOCH" : "switchover_epoch";
+    const char *sync_scn_column = is_upper_case ? "SYNC_SCN" : "sync_scn";
+    const char *replay_scn_column = is_upper_case ? "REPLAYABLE_SCN" : "replayable_scn";
+    const char *sts_scn_column = is_upper_case ? "READABLE_SCN" : "readable_scn";
+    const char *recovery_until_scn_column = is_upper_case ? "RECOVERY_UNTIL_SCN" : "recovery_until_scn";
+    const char *log_mode_column = is_upper_case ? "LOG_MODE" : "log_mode";
+    const char *restore_data_mode_column = is_upper_case ? "RESTORE_DATA_MODE" : "restore_data_mode";
+    const char *protection_mode_column = is_upper_case ? "PROTECTION_MODE" : "protection_mode";
+    const char *protection_level_column = is_upper_case ? "PROTECTION_LEVEL" : "protection_level";
+    const char *ora_rowscn_column = is_upper_case ? "ORA_ROWSCN" : "ORA_ROWSCN";
+    const char *max_ls_id_column = is_upper_case ? "MAX_LS_ID" : "max_ls_id";
     ObString tenant_role_str;
     ObString status_str;
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
@@ -565,34 +599,48 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     uint64_t replay_scn_val = OB_INVALID_SCN_VAL;
     uint64_t sts_scn_val = OB_INVALID_SCN_VAL;
     uint64_t recovery_until_scn_val = OB_INVALID_SCN_VAL;
-    ora_rowscn = 0;
     ObString log_mode_str;
     ObString log_mode_default_value("NOARCHIVELOG");
     ObString restore_data_mode_str;
     ObString retore_data_mode_default_value("NORMAL");
+    ObString protection_mode_str;
+    ObString protection_level_str;
+    ObProtectionMode protection_mode_default_value(ObProtectionMode::MAXIMUM_PERFORMANCE_MODE);
+    ObProtectionLevel protection_level_default_value(ObProtectionLevel::MAXIMUM_PERFORMANCE_LEVEL);
+    ObString protection_mode_default_value_str(protection_mode_default_value.to_str());
+    ObString protection_level_default_value_str(protection_level_default_value.to_str());
     SCN sync_scn;
     SCN replay_scn;
     SCN sts_scn;
     SCN recovery_until_scn;
     int64_t ls_id_value = DEFAULT_MAX_LS_ID;
-    EXTRACT_VARCHAR_FIELD_MYSQL(*result, "tenant_role", tenant_role_str);
-    EXTRACT_VARCHAR_FIELD_MYSQL(*result, "switchover_status", status_str);
-    EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", tenant_id, uint64_t);
-    EXTRACT_INT_FIELD_MYSQL(*result, "switchover_epoch", switchover_epoch, int64_t);
-    EXTRACT_UINT_FIELD_MYSQL(*result, "sync_scn", sync_scn_val, uint64_t);
-    EXTRACT_UINT_FIELD_MYSQL(*result, "replayable_scn", replay_scn_val, uint64_t);
-    EXTRACT_UINT_FIELD_MYSQL(*result, "readable_scn", sts_scn_val, uint64_t);
-    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "max_ls_id", ls_id_value, int64_t, true, true, DEFAULT_MAX_LS_ID);
-    EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "recovery_until_scn", recovery_until_scn_val, uint64_t, false /* skip_null_error */, true /* skip_column_error */, OB_MAX_SCN_TS_NS);
-    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "log_mode", log_mode_str,
+    EXTRACT_VARCHAR_FIELD_MYSQL(*result, tenant_role_column, tenant_role_str);
+    EXTRACT_VARCHAR_FIELD_MYSQL(*result, status_column, status_str);
+    EXTRACT_INT_FIELD_MYSQL(*result, tenant_id_column, tenant_id, uint64_t);
+    EXTRACT_INT_FIELD_MYSQL(*result, switchover_epoch_column, switchover_epoch, int64_t);
+    EXTRACT_UINT_FIELD_MYSQL(*result, sync_scn_column, sync_scn_val, uint64_t);
+    EXTRACT_UINT_FIELD_MYSQL(*result, replay_scn_column, replay_scn_val, uint64_t);
+    EXTRACT_UINT_FIELD_MYSQL(*result, sts_scn_column, sts_scn_val, uint64_t);
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, max_ls_id_column, ls_id_value, int64_t, true, true, DEFAULT_MAX_LS_ID);
+    EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, recovery_until_scn_column, recovery_until_scn_val, uint64_t, false /* skip_null_error */, true /* skip_column_error */, OB_MAX_SCN_TS_NS);
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, log_mode_column, log_mode_str,
                 false /* skip_null_error */, true /* skip_column_error */, log_mode_default_value);
-    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "restore_data_mode", restore_data_mode_str,
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, restore_data_mode_column, restore_data_mode_str,
                 false /* skip_null_error */, true /* skip_column_error */, retore_data_mode_default_value);
-    EXTRACT_INT_FIELD_MYSQL(*result, "ORA_ROWSCN", ora_rowscn, int64_t);
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, protection_mode_column, protection_mode_str,
+                false /* skip_null_error */, true /* skip_column_error */, protection_mode_default_value_str);
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, protection_level_column, protection_level_str,
+                false /* skip_null_error */, true /* skip_column_error */, protection_level_default_value_str);
+    if (OB_NOT_NULL(ora_rowscn)) {
+      *ora_rowscn = 0;
+      EXTRACT_INT_FIELD_MYSQL(*result, ora_rowscn_column, *ora_rowscn, int64_t);
+    }
     ObTenantRole tmp_tenant_role(tenant_role_str);
     ObTenantSwitchoverStatus tmp_tenant_sw_status(status_str);
     ObArchiveMode tmp_log_mode(log_mode_str);
     ObRestoreDataMode tmp_restore_data_mode(restore_data_mode_str);
+    ObProtectionMode tmp_protection_mode(protection_mode_str);
+    ObProtectionLevel tmp_protection_level(protection_level_str);
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to get result", KR(ret));
       //tenant_id in inner table can be used directly
@@ -607,10 +655,12 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     } else if (OB_FAIL(tenant_info.init(
             tenant_id, tmp_tenant_role,
             tmp_tenant_sw_status, switchover_epoch,
-            sync_scn, replay_scn, sts_scn, recovery_until_scn, tmp_log_mode, ObLSID(ls_id_value), tmp_restore_data_mode))) {
+            sync_scn, replay_scn, sts_scn, recovery_until_scn, tmp_log_mode, ObLSID(ls_id_value),
+            tmp_restore_data_mode, tmp_protection_mode, tmp_protection_level))) {
       LOG_WARN("failed to init tenant info", KR(ret), K(tenant_id), K(tmp_tenant_role), K(tenant_role_str),
           K(tmp_tenant_sw_status), K(status_str), K(switchover_epoch), K(sync_scn), K(recovery_until_scn),
-          K(log_mode_str), K(tmp_log_mode), K(ls_id_value), K(tmp_restore_data_mode));
+          K(log_mode_str), K(tmp_log_mode), K(ls_id_value), K(tmp_restore_data_mode),
+          K(tmp_protection_mode), K(tmp_protection_level));
     }
   }
   return ret;
@@ -817,6 +867,64 @@ int ObAllTenantInfoProxy::update_tenant_switchover_status(
   return ret;
 }
 
+int ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
+    const uint64_t tenant_id, const ObTenantRole &tenant_role,
+    ObISQLClient *proxy, const int64_t switchover_epoch,
+    const ObProtectionMode &new_protection_mode,
+    const ObProtectionLevel &new_protection_level,
+    const int64_t min_switchover_epoch,
+    int64_t &new_switchover_epoch)
+{
+  int ret = OB_SUCCESS;
+  int64_t begin_time = ObTimeUtility::current_time();
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  ObTimeoutCtx ctx;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_user_tenant(tenant_id)
+    || OB_INVALID_VERSION == switchover_epoch || OB_ISNULL(proxy) || !tenant_role.is_valid()
+    || !new_protection_mode.is_valid() || !new_protection_level.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(switchover_epoch), K(new_protection_mode),
+      K(new_protection_level), KP(proxy), K(tenant_role));
+  } else if (tenant_role.is_primary()) {
+    new_switchover_epoch = common::max(min_switchover_epoch,
+        common::max(switchover_epoch + 1, ObTimeUtility::current_time()));
+  } else {
+    if (switchover_epoch < min_switchover_epoch) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("switchover epoch should not be changed for non primary tenant", KR(ret),
+        K(switchover_epoch), K(min_switchover_epoch));
+    } else {
+      new_switchover_epoch = switchover_epoch;
+    }
+  }
+  if (FAILEDx(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+    LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+    // TODO(shouju.zyp for MPT): switchover_epoch should be larger than switchover_epoch in sync standby status
+  } else if (OB_FAIL(sql.assign_fmt(
+    "update %s set protection_mode = '%s', protection_level = '%s', switchover_epoch = %ld "
+    "where tenant_id = %lu and switchover_epoch = %ld and tenant_role = '%s'",
+    OB_ALL_TENANT_INFO_TNAME, new_protection_mode.to_str(), new_protection_level.to_str(), new_switchover_epoch,
+    tenant_id, switchover_epoch, tenant_role.to_str()))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(switchover_epoch), K(new_protection_mode),
+      K(new_protection_level), K(tenant_role));
+  } else if (OB_FAIL(proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to execute sql", KR(ret), K(exec_tenant_id), K(sql));
+  } else if (0 == affected_rows) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("switchover may concurrency, need retry", KR(ret), K(switchover_epoch), K(sql));
+  } else if (!is_single_row(affected_rows)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect updating one row", KR(ret), K(affected_rows), K(sql));
+  }
+
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  ROOTSERVICE_EVENT_ADD("tenant_info", "update_tenant_protection_mode_and_level", K(ret), K(tenant_id),
+    K(new_protection_mode), K(new_protection_level), K(switchover_epoch), K(cost));
+  return ret;
+}
+
 int ObAllTenantInfoProxy::update_tenant_recovery_until_scn(
     const uint64_t tenant_id,
     common::ObMySQLTransaction &trans,
@@ -889,7 +997,8 @@ int ObAllTenantInfoProxy::update_tenant_status(
     const share::SCN &replayable_scn,
     const share::SCN &readable_scn,
     const share::SCN &recovery_until_scn,
-    const int64_t old_switchover_epoch)
+    const int64_t old_switchover_epoch,
+    int64_t &new_switchover_epoch)
 {
   int64_t begin_time = ObTimeUtility::current_time();
   int ret = OB_SUCCESS;
@@ -897,7 +1006,6 @@ int ObAllTenantInfoProxy::update_tenant_status(
   ObSqlString sql;
   int64_t affected_rows = 0;
   ObTimeoutCtx ctx;
-  int64_t new_switchover_epoch = OB_INVALID_VERSION;
   ObLogRestoreSourceMgr restore_source_mgr;
   ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_TENANT_ROLE_OR_SWITCHOVER_STATUS);
 
@@ -905,7 +1013,6 @@ int ObAllTenantInfoProxy::update_tenant_status(
     || !new_role.is_valid()
     || !old_status.is_valid()
     || !new_status.is_valid()
-    || old_status == new_status
     || !sync_scn.is_valid_and_not_min()
     || !replayable_scn.is_valid_and_not_min()
     || !readable_scn.is_valid_and_not_min()
@@ -982,6 +1089,7 @@ int ObAllTenantInfoProxy::update_tenant_status(
   return ret;
 }
 
+// TODO(shouju.zyp for MPT): change here to support protection mode and protection level
 int ObAllTenantInfoProxy::get_new_switchover_epoch_(
     const int64_t old_switchover_epoch,
     const ObTenantSwitchoverStatus &old_status,
@@ -989,6 +1097,7 @@ int ObAllTenantInfoProxy::get_new_switchover_epoch_(
     int64_t &new_switchover_epoch)
 {
   int ret = OB_SUCCESS;
+  bool need_update_switchover_epoch = false;
   new_switchover_epoch = OB_INVALID_VERSION;
 
   //update switchover epoch when entering and leaving normal switchover status
@@ -997,8 +1106,17 @@ int ObAllTenantInfoProxy::get_new_switchover_epoch_(
     || !new_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(old_switchover_epoch), K(old_status), K(new_status));
+    // two situations:
+    // 1. normal to other or other to normal, init switchover epoch in ObTenantRoleTransitionService
+    // 2. lossless failover to lossless failover, used to update sync_scn and replayable_scn. all value may not changed, so we change switchover_epoch to avoid concurrency
   } else if ((share::NORMAL_SWITCHOVER_STATUS == new_status
              || share::NORMAL_SWITCHOVER_STATUS == old_status) && (old_status != new_status)) {
+    need_update_switchover_epoch = true;
+  } else if (old_status == new_status && old_status.is_prepare_flashback_for_lossless_failover_to_primary_status()) {
+    need_update_switchover_epoch = true;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (need_update_switchover_epoch) {
     new_switchover_epoch = max(old_switchover_epoch + 1, ObTimeUtility::current_time());
   } else {
     new_switchover_epoch = old_switchover_epoch;

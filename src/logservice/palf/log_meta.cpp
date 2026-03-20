@@ -54,7 +54,7 @@ int LogMeta::generate_by_palf_base_info(const PalfBaseInfo &palf_base_info,
     version_ = LOG_META_VERSION;
     log_prepare_meta_.generate(LogVotedFor(), init_log_proposal_id);
     log_config_meta_.generate_for_default(init_log_proposal_id, init_config_info, init_config_info);
-    log_mode_meta_.generate(init_log_proposal_id, init_log_proposal_id, access_mode, init_ref_scn);
+    log_mode_meta_.generate(init_log_proposal_id, init_log_proposal_id, access_mode, SyncMode::ASYNC, init_ref_scn); //TODO by ziqi: init sync mode
     const bool allow_vote = (replica_type != ARBITRATION_REPLICA);
     log_replica_property_meta_.generate(allow_vote, replica_type);
     PALF_LOG(INFO, "generate_by_palf_base_info success", KPC(this));

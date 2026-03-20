@@ -68,6 +68,12 @@ ob_set_subtarget(ob_logservice common_mixed
   replayservice/ob_replay_handler.cpp
   replayservice/ob_replay_status.cpp
   replayservice/ob_tablet_replay_executor.cpp
+  transportservice/ob_log_transport_service.cpp
+  transportservice/ob_log_transport_rpc_define.cpp
+  transportservice/ob_log_standby_rpc_processor.cpp
+  transportservice/ob_log_standby_transport_worker.cpp
+  transportservice/ob_log_standby_ack_service.cpp
+  transportservice/ob_log_transport_resp_processor.cpp
 )
 
 ob_set_subtarget(ob_logservice leader_coordinator
@@ -157,6 +163,7 @@ ob_set_subtarget(ob_logservice palf
   palf/log_block_pool_interface.cpp
   palf/palf_options.cpp
   palf/log_mode_mgr.cpp
+  palf/log_sync_mode_mgr.cpp
   palf/log_updater.cpp
   palf/log_io_utils.cpp
   palf/log_io_worker_wrapper.cpp
@@ -179,6 +186,8 @@ ob_set_subtarget(ob_logservice restoreservice
   restoreservice/ob_fetch_log_task.cpp
   restoreservice/ob_log_restore_define.cpp
   restoreservice/ob_log_restore_handler.cpp
+  transportservice/ob_log_transport_task_owner_state.cpp
+  transportservice/ob_log_transport_task_queue.cpp
   restoreservice/ob_log_restore_rpc.cpp
   restoreservice/ob_log_restore_rpc_define.cpp
   restoreservice/ob_log_restore_service.cpp

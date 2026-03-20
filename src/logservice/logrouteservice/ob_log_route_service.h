@@ -94,6 +94,8 @@ public:
   void destroy();
   virtual void handle(void *task);
 
+  bool is_stopped() const { return ATOMIC_LOAD(&is_stopped_); }
+
 public:
   //// Obtain and modify related parameters
   // Background refresh time

@@ -22,6 +22,9 @@ namespace oceanbase
 {
 namespace logservice
 {
+
+constexpr int64_t OB_LOG_ROUTE_SERVICE_SQL_QUERY_TIMEOUT_US = 10_s;
+
 ObLogRouteService::ObLogRouteService() :
     is_inited_(false),
     cluster_id_(OB_INVALID_CLUSTER_ID),
@@ -105,7 +108,8 @@ int ObLogRouteService::init(ObISQLClient *proxy,
   } else if (OB_FAIL(svr_blacklist_.init(external_server_blacklist, false/*is_sql_server*/))) {
     LOG_WARN("ObLogSvrBlacklist init failed", KR(ret), K(cluster_id), K(is_across_cluster),
         K(external_server_blacklist));
-  } else if (OB_FAIL(systable_queryer_.init(cluster_id, is_across_cluster, *proxy, err_handler))) {
+  } else if (OB_FAIL(systable_queryer_.init(cluster_id, is_across_cluster, *proxy,
+          err_handler, OB_LOG_ROUTE_SERVICE_SQL_QUERY_TIMEOUT_US))) {
     LOG_WARN("systable_queryer_ init failed", KR(ret), K(cluster_id), K(is_across_cluster));
   } else if (OB_FAIL(all_svr_cache_.init(systable_queryer_, is_tenant_mode, source_tenant_id, prefer_region,
           all_server_cache_update_interval_sec, all_zone_cache_update_interval_sec))) {
@@ -148,6 +152,7 @@ int ObLogRouteService::init(ObISQLClient *proxy,
     blacklist_history_clear_interval_min_ = blacklist_history_clear_interval_min * _MIN_;
 
     is_stopped_ = true;
+    all_svr_cache_.stop();
     is_tenant_mode_ = is_tenant_mode;
     is_inited_ = true;
 
@@ -173,6 +178,7 @@ int ObLogRouteService::start()
   } else if (OB_FAIL(timer_.schedule_repeate_task_immediately(ls_route_timer_task_, timer_task_interval))) {
     LOG_WARN("fail to schedule min minor sstable gc task", K(ret), K(timer_task_interval));
   } else {
+    all_svr_cache_.start();
     is_stopped_ = false;
     LOG_INFO("ObLogRouteService start succ", K(timer_id_), K(tg_id_), K(timer_task_interval));
   }
@@ -184,6 +190,7 @@ void ObLogRouteService::stop()
 {
   LOG_INFO("ObLogRouteService stop begin");
   is_stopped_ = true;
+  all_svr_cache_.stop();
   timer_.stop();
   LOG_INFO("ObLogRouteService stop finish");
 }
@@ -212,6 +219,8 @@ void ObLogRouteService::wait()
 void ObLogRouteService::destroy()
 {
   LOG_INFO("ObLogRouteService destroy begin");
+  is_stopped_ = true;
+  all_svr_cache_.stop();
   timer_.destroy();
   ls_route_timer_task_.destroy();
   timer_id_ = -1;
@@ -272,9 +281,10 @@ void ObLogRouteService::handle(void *task)
   int ret = OB_SUCCESS;
   ObLSRouterAsynTask *asyn_task = static_cast<ObLSRouterAsynTask *>(task);
 
-  if (is_stopped_) {
-    // ignore handle
-    LOG_DEBUG("ignore handle asyn_task while log_route_service is in stop state", KPC(asyn_task));
+  if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("ignore handle asyn_task while log_route_service is in stop state", KR(ret), KPC(asyn_task),
+        K(tg_id_));
   } else if (OB_ISNULL(asyn_task)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("asyn_task is nullptr", KR(ret), KPC(asyn_task));
@@ -296,7 +306,11 @@ void ObLogRouteService::handle(void *task)
     } else {
       // If exist, update
       if (OB_FAIL(update_server_list_(router_key, *router_value))) {
-        LOG_WARN("update_server_list_ failed", KR(ret), K(router_key));
+        if (OB_IN_STOP_STATE == ret) {
+          LOG_WARN("skip updating server list because route service is stopping", KR(ret), K(router_key));
+        } else {
+          LOG_WARN("update_server_list_ failed", KR(ret), K(router_key));
+        }
       } else {}
     }
   }
@@ -826,12 +840,20 @@ int ObLogRouteService::get_ls_svr_list_(const ObLSRouterKey &router_key,
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(query_ls_log_info_and_update_(router_key, svr_list))) {
-    LOG_WARN("failed to query_ls_log_info_and_update_", K(router_key), K(svr_list));
+    if (OB_IN_STOP_STATE == ret) {
+      LOG_WARN("skip querying ls log info because route service is stopping", KR(ret), K(router_key));
+    } else {
+      LOG_WARN("failed to query_ls_log_info_and_update_", KR(ret), K(router_key), K(svr_list));
+    }
   } else if (0 == svr_list.count()) {
     // 1. Log Stream quickly GC in the transfer scenario, so the Log Stream can not get server list from GV$OB_LOG_STAT
     // 2. We employ the complementary mechanism of querying the server list from GV$OB_UNITS
     if (OB_FAIL(query_units_info_and_update_(router_key, svr_list))) {
-      LOG_WARN("failed to query_units_info_and_update", K(router_key), K(svr_list));
+      if (OB_IN_STOP_STATE == ret) {
+        LOG_WARN("skip querying units info because route service is stopping", KR(ret), K(router_key));
+      } else {
+        LOG_WARN("failed to query_units_info_and_update", KR(ret), K(router_key), K(svr_list));
+      }
     }
   }
 
@@ -870,9 +892,12 @@ int ObLogRouteService::query_ls_log_info_and_update_(const ObLSRouterKey &router
   int ret = OB_SUCCESS;
 
   ObLSLogInfo ls_log_info;
-  if (OB_FAIL(systable_queryer_.get_ls_log_info(router_key.get_tenant_id(),
+  if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("skip querying ls log info because route service is stopping", KR(ret), K(router_key));
+  } else if (OB_FAIL(systable_queryer_.get_ls_log_info(router_key.get_tenant_id(),
       router_key.get_ls_id(), ls_log_info))) {
-    LOG_WARN("failed to get_ls_log_info", K(router_key));
+    LOG_WARN("failed to get_ls_log_info", KR(ret), K(router_key));
   } else {
     svr_list.reset();
     const ObLSLogInfo::LogStatRecordArray &log_stat_records = ls_log_info.get_log_stat_array();
@@ -899,8 +924,11 @@ int ObLogRouteService::query_units_info_and_update_(const ObLSRouterKey &router_
   int ret = OB_SUCCESS;
 
   ObUnitsRecordInfo units_record_info;
-  if (OB_FAIL(systable_queryer_.get_all_units_info(router_key.get_tenant_id(), units_record_info))) {
-    LOG_WARN("failed to get_all_units_info", K(router_key));
+  if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("skip querying units info because route service is stopping", KR(ret), K(router_key));
+  } else if (OB_FAIL(systable_queryer_.get_all_units_info(router_key.get_tenant_id(), units_record_info))) {
+    LOG_WARN("failed to get_all_units_info", KR(ret), K(router_key));
   } else {
     const ObUnitsRecordInfo::ObUnitsRecordArray &units_record_array = units_record_info.get_units_record_array();
     ARRAY_FOREACH_NORET(units_record_array, idx) {
@@ -963,7 +991,11 @@ int ObLogRouteService::handle_when_ls_route_info_not_exist_(
     new(router_value) ObLSRouterValue();
 
     if (OB_FAIL(update_server_list_(router_key, *router_value))) {
-      LOG_WARN("update_server_list_ failed", KR(ret), K(router_key));
+      if (OB_IN_STOP_STATE == ret) {
+        LOG_WARN("skip initializing server list because route service is stopping", KR(ret), K(router_key));
+      } else {
+        LOG_WARN("update_server_list_ failed", KR(ret), K(router_key));
+      }
       // SQL execution may fail, reset ret is OB_SUCCESS to ensure that the key is inserted into the map
       ret = OB_SUCCESS;
     }
@@ -1059,6 +1091,10 @@ int ObLogRouteService::update_all_ls_server_list_()
   } else if (OB_LIKELY(ls_svr_list_last_update_time_ != OB_INVALID_TIMESTAMP
       && ls_svr_list_last_update_time_ + background_refresh_time_sec_ > current_timestamp)) {
     // not touch update interval, ignore
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("route service is stopping, skip updating ls server list", KR(ret),
+        K(current_timestamp), K(background_refresh_time), K(ls_svr_list_last_update_time_));
   } else {
     ObAllLSRouterKeyGetter all_ls_routerkey_getter;
     if (OB_FAIL(ls_router_map_.for_each(all_ls_routerkey_getter))) {
@@ -1069,17 +1105,35 @@ int ObLogRouteService::update_all_ls_server_list_()
       ObLSRouterValueUpdater updater(tmp_svr_list);
 
       ARRAY_FOREACH_NORET(router_keys, idx) {
-        tmp_svr_list.reset();
         const ObLSRouterKey &key = router_keys.at(idx);
+        if (is_stopped()) {
+          ret = OB_IN_STOP_STATE;
+          LOG_WARN("stop updating ls server list because route service is stopping", KR(ret), K(key),
+              K(idx), "count", router_keys.count());
+          break;
+        }
+        tmp_svr_list.reset();
         if (OB_FAIL(get_ls_svr_list_(key, tmp_svr_list))) {
-          LOG_WARN("failed to get_ls_svr_list when update_all_ls_server_list", K(key), K(idx),
-            "count", router_keys.count());
+          if (OB_IN_STOP_STATE == ret) {
+            LOG_WARN("skip updating ls server list because route service is stopping", KR(ret), K(key), K(idx),
+              "count", router_keys.count());
+          } else {
+            LOG_WARN("failed to get_ls_svr_list when update_all_ls_server_list", KR(ret), K(key),
+                K(idx), "count", router_keys.count());
+          }
         } else if (OB_FAIL(ls_router_map_.operate(key, updater))) {
           if (OB_ENTRY_NOT_EXIST != ret) {
-            LOG_WARN("failed to update router_value for key", K(key));
+            LOG_WARN("failed to update router_value for key", KR(ret), K(key), K(idx),
+                "count", router_keys.count());
           }
         }
 
+        if (is_stopped()) {
+          ret = OB_IN_STOP_STATE;
+          LOG_WARN("stop registering async ls update task because route service is stopping",
+              KR(ret), K(key), K(idx), "count", router_keys.count());
+          break;
+        }
         if (OB_FAIL(ret) && OB_ENTRY_NOT_EXIST != ret) {
           // registe a task to update ls_server_list for failed task
           if (OB_FAIL(registered(key.get_tenant_id(), key.get_ls_id()))) {
@@ -1116,7 +1170,11 @@ int ObLogRouteService::update_server_list_(
   } else {
     LSSvrList tmp_svr_list;
     if (OB_FAIL(get_ls_svr_list_(router_key, tmp_svr_list))) {
-      LOG_WARN("failed to get_ls_svr_list when update_server_list", K(router_key));
+      if (OB_IN_STOP_STATE == ret) {
+        LOG_WARN("skip updating server list because route service is stopping", KR(ret), K(router_key));
+      } else {
+        LOG_WARN("failed to get_ls_svr_list when update_server_list", KR(ret), K(router_key));
+      }
     } else {
       router_value.refresh_ls_svr_list(tmp_svr_list);
     }
@@ -1140,12 +1198,17 @@ int ObLogRouteService::query_units_info_and_update_(
     LSSvrList &ls_svr_list = router_value.get_ls_svr_list();
     ObUnitsRecordInfo units_record_info;
 
-    if (OB_FAIL(systable_queryer_.get_all_units_info(router_key.get_tenant_id(), units_record_info))) {
+    if (is_stopped()) {
+      ret = OB_IN_STOP_STATE;
+      LOG_WARN("skip querying the GV$OB_UNITS because route service is stopping", KR(ret), K(router_key));
+    } else if (OB_FAIL(systable_queryer_.get_all_units_info(router_key.get_tenant_id(), units_record_info))) {
       if (OB_NEED_RETRY == ret) {
-        LOG_WARN("query the GV$OB_UNITS failed, need retry", KR(ret));
+        LOG_WARN("query the GV$OB_UNITS failed, need retry", KR(ret), K(router_key));
         ret = OB_SUCCESS;
+      } else if (OB_IN_STOP_STATE == ret) {
+        LOG_WARN("skip querying the GV$OB_UNITS because route service is stopping", KR(ret), K(router_key));
       } else {
-        LOG_WARN("query the GV$OB_UNITS failed, will be retried later", KR(ret));
+        LOG_WARN("query the GV$OB_UNITS failed, will be retried later", KR(ret), K(router_key));
       }
     } else {
       ObUnitsRecordInfo::ObUnitsRecordArray &units_record_array = units_record_info.get_units_record_array();
@@ -1174,6 +1237,10 @@ int ObLogRouteService::update_all_server_and_zone_cache_()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogRouteService has not been inited", KR(ret));
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("skip updating server and zone cache because route service is stopping", KR(ret),
+        K(cluster_id_), K(tg_id_));
   } else {
     all_svr_cache_.query_and_update();
   }
@@ -1213,8 +1280,16 @@ void ObLogRouteService::ObLSRouteTimerTask::runTimerTask()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLSRouteTimerTask has not been inited", KR(ret));
+  } else if (log_route_service_.is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("skip ls route timer task because route service is stopping", KR(ret),
+        K(log_route_service_.timer_id_), K(log_route_service_.tg_id_));
   } else if (OB_FAIL(log_route_service_.update_all_server_and_zone_cache_())) {
     LOG_WARN("ObLogRouteService update_all_server_and_zone_cache_ failed", KR(ret));
+  } else if (log_route_service_.is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("skip remaining ls route timer task because route service is stopping", KR(ret),
+        K(log_route_service_.timer_id_), K(log_route_service_.tg_id_));
   } else if (OB_FAIL(log_route_service_.update_all_ls_server_list_())) {
     LOG_WARN("ObLogRouteService update_all_ls_server_list_ failed", KR(ret));
   } else {

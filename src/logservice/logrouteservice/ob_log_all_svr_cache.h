@@ -69,6 +69,9 @@ public:
       const int64_t all_server_cache_update_interval_sec,
       const int64_t all_zone_cache_update_interval_sec);
   void destroy();
+  void start() { ATOMIC_SET(&is_stopped_, false); }
+  void stop() { ATOMIC_SET(&is_stopped_, true); }
+  bool is_stopped() const { return ATOMIC_LOAD(&is_stopped_); }
   void query_and_update();
 
 private:
@@ -236,6 +239,7 @@ private:
 private:
   bool                  is_tenant_mode_;
   uint64_t              tenant_id_;
+  volatile bool         is_stopped_;
   ObLogSysTableQueryer  *systable_queryer_;
   int64_t               all_server_cache_update_interval_;
   int64_t               all_zone_cache_update_interval_;

@@ -40,7 +40,8 @@ public:
   int init(const int64_t cluster_id,
       const bool is_across_cluster,
       common::ObISQLClient &sql_proxy,
-      logfetcher::IObLogErrHandler *err_handler);
+      logfetcher::IObLogErrHandler *err_handler,
+      const int64_t sql_query_timeout_us);
   bool is_inited() const { return is_inited_; }
   void destroy();
 
@@ -122,6 +123,7 @@ private:
   int64_t cluster_id_;                 // ClusterID
   common::ObISQLClient *sql_proxy_;    // sql_proxy to use
   logfetcher::IObLogErrHandler *err_handler_;
+  int64_t sql_query_timeout_us_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLogSysTableQueryer);
 };

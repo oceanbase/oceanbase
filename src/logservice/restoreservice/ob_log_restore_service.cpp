@@ -34,6 +34,7 @@ ObLogRestoreService::ObLogRestoreService() :
   fetch_log_impl_(),
   fetch_log_worker_(),
   writer_(),
+  standby_transport_worker_(),
   error_reporter_(),
   restore_source_(),
   query_restore_source_ts_(OB_INVALID_TIMESTAMP),
@@ -79,6 +80,8 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
     LOG_WARN("fetch_log_worker_ init failed", K(ret));
   } else if (OB_FAIL(writer_.init(tenant_id, ls_svr, this, &fetch_log_worker_))) {
     LOG_WARN("remote_log_writer init failed");
+  } else if (OB_FAIL(standby_transport_worker_.init(tenant_id, ls_svr, log_service))) {
+    LOG_WARN("standby_transport_worker_ init failed", K(ret));
   } else if (OB_FAIL(error_reporter_.init(tenant_id, ls_svr))) {
     LOG_WARN("error_reporter_ init failed", K(ret));
   } else if (OB_FAIL(allocator_.init(tenant_id))) {
@@ -107,6 +110,7 @@ void ObLogRestoreService::destroy()
   inited_ = false;
   fetch_log_worker_.destroy();
   writer_.destroy();
+  standby_transport_worker_.destroy();
   location_adaptor_.destroy();
   archive_driver_.destroy();
   net_driver_.destroy();
@@ -141,6 +145,8 @@ int ObLogRestoreService::start()
     LOG_WARN("ERRSIM_LOG_RESTORE_SERVICE_RESTART1 opened", KR(ret));
   } else if (OB_FAIL(writer_.start())) {
     LOG_WARN("remote_log_writer start failed");
+  } else if (OB_FAIL(standby_transport_worker_.start())) {
+    LOG_WARN("standby_transport_worker_ start failed", K(ret));
   } else if (OB_FAIL(ObThreadPool::start())) {
     LOG_WARN("restore service start failed", K(ret));
   } else {
@@ -154,6 +160,7 @@ void ObLogRestoreService::stop()
   net_driver_.stop();
   fetch_log_worker_.stop();
   writer_.stop();
+  standby_transport_worker_.stop();
   ObThreadPool::stop();
   LOG_INFO("ObLogRestoreService thread stop", "tenant_id", MTL_ID());
 }
@@ -163,6 +170,7 @@ void ObLogRestoreService::wait()
   net_driver_.wait();
   fetch_log_worker_.wait();
   writer_.wait();
+  standby_transport_worker_.wait();
   ObThreadPool::wait();
   LOG_INFO("ObLogRestoreService thread wait", "tenant_id", MTL_ID());
 }
@@ -184,7 +192,26 @@ int ObLogRestoreService::restart()
   } else if (OB_FAIL(start())) {
     LOG_WARN("failed to start ObLogService");
   } else {
-    LOG_INFO("ObLogRestoreService restart succ", KP(init_transport_), KP(init_ls_svr_), KP(init_log_service_));
+    // After restart, ensure restore_source_ is updated to reflect the current state
+    // of log_restore_source table before returning. This prevents accepting logs from
+    // old primary if the table has been cleared but memory hasn't been updated yet.
+    if (is_user_tenant(MTL_ID())) {
+      share::ObLogRestoreSourceItem source;
+      bool source_exist = false;
+      // Reset timestamp to force immediate update
+      query_restore_source_ts_ = OB_INVALID_TIMESTAMP;
+      // Force update restore_source_ to reflect current table state
+      reset_restore_source_();
+      if (OB_FAIL(update_upstream_(source, source_exist))) {
+        LOG_WARN("failed to update upstream after restart", K(ret));
+      } else if (source_exist) {
+        LOG_WARN("restore_source is not empty", KP(init_transport_), KP(init_ls_svr_), KP(init_log_service_));
+      } else {
+        LOG_INFO("reset log restore source succ", KP(init_transport_), KP(init_ls_svr_), KP(init_log_service_));
+      }
+    } else {
+      LOG_INFO("ObLogRestoreService restart succ", KP(init_transport_), KP(init_ls_svr_), KP(init_log_service_));
+    }
   }
 
   return ret;

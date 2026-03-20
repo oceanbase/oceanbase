@@ -1257,6 +1257,31 @@ int ObChangeExternalStorageDestMgr::set_attribute(const common::ObString &attrib
   return ret;
 }
 
+int ObBackupConfigUtil::get_item_user_tenant_id(
+  const obrpc::ObAdminSetConfigItem &item,
+  share::schema::ObMultiVersionSchemaService &schema_service,
+  uint64_t &exec_tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if ((common::is_sys_tenant(item.exec_tenant_id_) && item.tenant_name_.is_empty())
+      || (common::is_user_tenant(item.exec_tenant_id_) && !item.tenant_name_.is_empty())
+      || common::is_meta_tenant(item.exec_tenant_id_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup config only support user tenant", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup config only support user tenant");
+  } else if (!item.tenant_name_.is_empty()) {
+    schema::ObSchemaGetterGuard guard;
+    if (OB_FAIL(schema_service.get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+      LOG_WARN("fail to get tenant schema guard", K(ret));
+    } else if (OB_FAIL(guard.get_tenant_id(ObString(item.tenant_name_.ptr()), exec_tenant_id))) {
+      LOG_WARN("fail to get tenant id", K(ret));
+    }
+  } else {
+    exec_tenant_id = item.exec_tenant_id_;
+  }
+  return ret;
+}
+
 int ObBackupConfigUtil::admin_set_backup_config(
     common::ObMySQLProxy &sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
@@ -1278,24 +1303,8 @@ int ObBackupConfigUtil::admin_set_backup_config(
     uint64_t exec_tenant_id = OB_INVALID_TENANT_ID;
     ObMySQLTransaction trans;
     config_parser_mgr.reset();
-    if ((common::is_sys_tenant(item.exec_tenant_id_) && item.tenant_name_.is_empty())
-        || (common::is_user_tenant(item.exec_tenant_id_) && !item.tenant_name_.is_empty())
-        || common::is_meta_tenant(item.exec_tenant_id_)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("backup config only support user tenant", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup config only support user tenant");
-    } else if (!item.tenant_name_.is_empty()) {
-      schema::ObSchemaGetterGuard guard;
-      if (OB_FAIL(schema_service.get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
-        LOG_WARN("fail to get tenant schema guard", K(ret));
-      } else if (OB_FAIL(guard.get_tenant_id(ObString(item.tenant_name_.ptr()), exec_tenant_id))) {
-        LOG_WARN("fail to get tenant id", K(ret));
-      }
-    } else {
-      exec_tenant_id = item.exec_tenant_id_;
-    }
-
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(get_item_user_tenant_id(item, schema_service, exec_tenant_id))) {
+      LOG_WARN("failed to get exec tenant id from ObAdminSetConfigItem", KR(ret), K(item));
     } else if (OB_FAIL(trans.start(&sql_proxy, gen_meta_tenant_id(exec_tenant_id)))) {
       LOG_WARN("fail to start trans", K(ret));
     } else {

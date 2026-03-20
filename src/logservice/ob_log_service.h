@@ -25,6 +25,8 @@
 #include "rcservice/ob_role_change_service.h"
 #include "restoreservice/ob_log_restore_service.h"     // ObLogRestoreService
 #include "replayservice/ob_log_replay_service.h"
+#include "transportservice/ob_log_transport_service.h"
+#include "transportservice/ob_log_standby_ack_service.h"
 #ifndef OB_BUILD_ARBITRATION
 #include "ob_net_keepalive_adapter.h"
 #else
@@ -239,6 +241,8 @@ public:
   ObLogRestoreService *get_log_restore_service() { return &restore_service_; }
   ObLogReplayService *get_log_replay_service()  { return &replay_service_; }
   ObLogApplyService *get_log_apply_service()  { return &apply_service_; }
+  ObLogTransportService *get_log_transport_service() { return &transport_service_; }
+  ObLogStandbyAckService *get_log_standby_ack_service() { return &standby_ack_service_; }
 #ifdef OB_BUILD_ARBITRATION
   ObArbitrationService *get_arbitration_service() { return &arb_service_; }
 
@@ -284,6 +288,8 @@ private:
 
   ObLogApplyService apply_service_;
   ObLogReplayService replay_service_;
+  ObLogTransportService transport_service_;
+  ObLogStandbyAckService standby_ack_service_;
   ObRoleChangeService role_change_service_;
   ObLocationAdapter location_adapter_;
   ObLSAdapter ls_adapter_;

@@ -1,3 +1,7 @@
+if (ENABLE_DEBUG_LOG)
+  add_definitions(-DOB_LOG_RESTORE_QUEUE_TEST_INFRA)
+endif()
+
 function(ob_unittest case)
   if(ARGC EQUAL 1)
     add_executable(${case} ${case}.cpp)

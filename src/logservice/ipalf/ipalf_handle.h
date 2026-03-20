@@ -194,6 +194,8 @@ public:
   virtual int get_end_scn(share::SCN &scn) const = 0;
   virtual int get_max_lsn(palf::LSN &lsn) const = 0;
   virtual int get_max_scn(share::SCN &scn) const = 0;
+  virtual int get_max_log_id(int64_t &log_id) const = 0;
+  virtual int get_end_log_id(int64_t &log_id) const = 0;
 
   //================= 分布式相关接口 =========================
 
@@ -205,6 +207,10 @@ public:
 	//
 	// @return :TODO
   virtual int get_role(common::ObRole &role, int64_t &proposal_id, bool &is_pending_state) const = 0;
+  virtual int get_role_and_sync_mode(common::ObRole &role,
+                                     int64_t &proposal_id,
+                                     palf::SyncMode &sync_mode,
+                                     bool &is_pending_state) const = 0;
   virtual int get_palf_id(int64_t &palf_id) const = 0;
   virtual int get_palf_epoch(int64_t &palf_epoch) const = 0;
 
@@ -246,7 +252,14 @@ public:
   virtual int get_access_mode_ref_scn(int64_t &mode_version,
                                       ipalf::AccessMode &access_mode,
                                       share::SCN &ref_scn) const = 0;
-
+  virtual int change_sync_mode(const int64_t proposal_id,
+                               const int64_t mode_version,
+                               const ipalf::SyncMode &sync_mode,
+                               int64_t &new_mode_version,
+                               int64_t &out_proposal_id) = 0;
+  virtual int get_sync_mode(int64_t &mode_version, ipalf::SyncMode &sync_mode) const = 0;
+  virtual int get_sync_mode(ipalf::SyncMode &sync_mode) const = 0;
+  virtual int get_sync_mode_version(int64_t &mode_version) const = 0;
 	//================= 回调函数注册 ===========================
   // @brief: register a callback to PalfHandleImpl, and do something in
   // this callback when file size has changed.

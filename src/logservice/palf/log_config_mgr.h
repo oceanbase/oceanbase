@@ -500,6 +500,7 @@ public:
   bool is_sync_to_degraded_learners() const;
   int forward_initial_config_meta_to_arb();
   int force_set_member_list(const LogConfigChangeArgs &args, const int64_t proposal_id);
+  int is_initial_config_version(bool &is_initial_config_version);
   // ================ Config Change ==================
   // ==================== Child ========================
   virtual int register_parent();

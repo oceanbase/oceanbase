@@ -52,6 +52,7 @@ using namespace share;
 using namespace rootserver;
 namespace share
 {
+class ObRestoreSourceServiceAttr;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -81,6 +82,8 @@ public:
    * @return return code
    */
   int switch_tenant(const obrpc::ObSwitchTenantArg &arg);
+
+  int set_protection_mode(const share::ObSetProtectionModeArg &arg);
 
   /**
    * @description:
@@ -136,10 +139,27 @@ public:
   static int get_tenant_status(
       const uint64_t tenant_id,
       ObTenantStatus &status);
+  template <typename LSStatusArray>
+  static int get_checkpoints_by_rpc(
+      const uint64_t tenant_id,
+      const LSStatusArray &status_info_array,
+      const bool get_latest_scn,
+      ObIArray<obrpc::ObCheckpoint> &checkpoints);
+
+  /**
+   * @description:
+   *    clear fetched log cache for all servers of the tenant
+   * @param[in] tenant_id
+   * @return return code
+   */
+  int clear_fetched_log_cache(const uint64_t tenant_id);
 
 
 private:
   int check_inner_stat_();
+
+  int check_tenant_can_set_protection_mode_(ObMySQLTransaction &trans, const uint64_t user_tenant_id,
+    const ObProtectionMode &target_protection_mode, const ObAllTenantInfo &tenant_info);
 
   /**
    * @description:

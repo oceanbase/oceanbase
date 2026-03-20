@@ -131,7 +131,7 @@ TEST_F(TestObSimpleLogApplyFunc, apply)
   EXPECT_EQ(OB_SUCCESS, ap_sv.init(palf_env, &ls_adapter));
   EXPECT_EQ(OB_SUCCESS, ap_sv.start());
   EXPECT_EQ(OB_SUCCESS, ap_sv.add_ls(ls_id));
-  EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 1));
+  EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 1, palf::SyncMode::ASYNC));
   const int64_t idx_1 = (leader_idx + 1) % get_node_cnt();
   const int64_t idx_2 = (leader_idx + 2) % get_node_cnt();
 
@@ -192,7 +192,7 @@ TEST_F(TestObSimpleLogApplyFunc, apply)
   EXPECT_EQ(OB_SUCCESS, switch_leader(id, leader_idx, leader));
   leader.reset();
   sleep(2);
-  EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 3));
+  EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 3, palf::SyncMode::ASYNC));
   EXPECT_EQ(OB_SUCCESS, ap_sv.get_max_applied_scn(ls_id, min_scn));
   EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, new_leader_idx));
   CLOG_LOG(INFO, "check switch leader", K(new_leader_idx), K(leader_idx));
@@ -277,7 +277,7 @@ TEST_F(TestObSimpleLogApplyFunc, get_max_decided_scn)
   EXPECT_EQ(OB_SUCCESS, ap_sv.init(palf_env, &ls_adapter));
   EXPECT_EQ(OB_SUCCESS, ap_sv.start());
   EXPECT_EQ(OB_SUCCESS, ap_sv.add_ls(ls_id));
-  EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 1));
+  EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 1, palf::SyncMode::ASYNC));
   const int64_t idx_1 = (leader_idx + 1) % get_node_cnt();
   const int64_t idx_2 = (leader_idx + 2) % get_node_cnt();
   share::SCN ref_scn;
@@ -400,7 +400,7 @@ TEST_F(TestObSimpleLogApplyFunc, get_max_decided_scn_no_more_log_after_switch_to
   EXPECT_EQ(OB_SUCCESS, ap_sv.init(palf_env, &ls_adapter));
   EXPECT_EQ(OB_SUCCESS, ap_sv.start());
   EXPECT_EQ(OB_SUCCESS, ap_sv.add_ls(ls_id));
-  EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 1));
+  EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 1, palf::SyncMode::ASYNC));
   const int64_t idx_1 = (leader_idx + 1) % get_node_cnt();
   const int64_t idx_2 = (leader_idx + 2) % get_node_cnt();
   share::SCN ref_scn;

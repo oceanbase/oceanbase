@@ -85,6 +85,7 @@ public:
   LogConfigVersion config_version_;
   int64_t mode_version_;
   AccessMode access_mode_;
+  SyncMode sync_mode_;
   ObMemberList paxos_member_list_;
   int64_t paxos_replica_num_;
   common::ObMember arbitration_member_;
@@ -102,7 +103,7 @@ public:
   bool is_in_sync_;
   bool is_need_rebuild_;
   TO_STRING_KV(K_(self), K_(palf_id), K_(role), K_(log_proposal_id), K_(config_version), K_(mode_version),
-      K_(access_mode), K_(paxos_member_list), K_(paxos_replica_num), K_(learner_list), K_(allow_vote), K_(replica_type),
+      K_(access_mode), K_(sync_mode), K_(paxos_member_list), K_(paxos_replica_num), K_(learner_list), K_(allow_vote), K_(replica_type),
       K_(begin_lsn), K_(begin_scn), K_(base_lsn), K_(end_lsn), K_(end_scn), K_(max_lsn), K_(max_scn),
       K_(is_in_sync), K_(is_need_rebuild));
 };
@@ -297,6 +298,11 @@ public:
   virtual int get_role(common::ObRole &role,
                        int64_t &proposal_id,
                        bool &is_pending_state) const = 0;
+  // 原子获取 role/proposal_id/sync_mode，保证一致性
+  virtual int get_role_and_sync_mode(common::ObRole &role,
+                                     int64_t &proposal_id,
+                                     SyncMode &sync_mode,
+                                     bool &is_pending_state) const = 0;
   // 获取 palf_id
   virtual int get_palf_id(int64_t &palf_id) const = 0;
   // 切主接口，用于内部调试用，任何正式功能不应依赖此接口
@@ -445,6 +451,8 @@ public:
   // return the block length which the previous data was committed
   virtual const LSN get_end_lsn() const = 0;
   virtual LSN get_max_lsn() const = 0;
+  virtual int get_max_log_id(int64_t &log_id) const = 0;
+  virtual int get_end_log_id(int64_t &log_id) const = 0;
   virtual const share::SCN get_max_scn() const = 0;
   virtual const share::SCN get_end_scn() const = 0;
   virtual int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const = 0;
@@ -569,6 +577,14 @@ public:
   virtual int get_access_mode_ref_scn(int64_t &mode_version,
                                       AccessMode &access_mode,
                                       SCN &ref_scn) const = 0;
+  virtual int change_sync_mode(const int64_t proposal_id,
+                               const int64_t mode_version,
+                               const SyncMode &sync_mode,
+                               int64_t &new_mode_version,
+                               int64_t &out_proposal_id) = 0;
+  virtual int get_sync_mode(int64_t &mode_version, SyncMode &sync_mode) const = 0;
+  virtual int get_sync_mode(SyncMode &sync_mode) const = 0;
+  virtual int get_sync_mode_version(int64_t &mode_version) const = 0;
   virtual int handle_committed_info(const common::ObAddr &server,
                             const int64_t &msg_proposal_id,
                             const int64_t prev_log_id,
@@ -726,6 +742,10 @@ public:
   int get_role(common::ObRole &role,
                int64_t &proposal_id,
                bool &is_pending_state) const override final;
+  int get_role_and_sync_mode(common::ObRole &role,
+                             int64_t &proposal_id,
+                             SyncMode &sync_mode,
+                             bool &is_pending_state) const override final;
   int get_palf_id(int64_t &palf_id) const override final;
   int change_leader_to(const common::ObAddr &dest_addr) override final;
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
@@ -828,6 +848,14 @@ public:
   int get_access_mode_ref_scn(int64_t &mode_version,
                               AccessMode &access_mode,
                               SCN &ref_scn) const override final;
+  int change_sync_mode(const int64_t proposal_id,
+                       const int64_t mode_version,
+                       const SyncMode &sync_mode,
+                       int64_t &new_mode_version,
+                       int64_t &out_proposal_id) override final;
+  int get_sync_mode(int64_t &mode_version, SyncMode &sync_mode) const override final;
+  int get_sync_mode(SyncMode &sync_mode) const override final;
+  int get_sync_mode_version(int64_t &mode_version) const override final;
   // =========================== Iterator start ============================
   int alloc_palf_buffer_iterator(const LSN &offset, PalfBufferIterator &iterator) override final;
   int alloc_palf_buffer_iterator(const SCN &scn, PalfBufferIterator &iterator) override final;
@@ -872,6 +900,18 @@ public:
   LSN get_max_lsn() const override final
   {
     return sw_.get_max_lsn();
+  }
+
+  int get_max_log_id(int64_t &log_id) const override final
+  {
+    log_id = sw_.get_max_log_id();
+    return OB_SUCCESS;
+  }
+
+  int get_end_log_id(int64_t &log_id) const override final
+  {
+    log_id = sw_.get_last_slide_log_id();
+    return OB_SUCCESS;
   }
 
   const share::SCN get_max_scn() const override final

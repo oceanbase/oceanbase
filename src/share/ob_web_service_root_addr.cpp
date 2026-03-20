@@ -21,40 +21,17 @@ using namespace common;
 
 namespace share
 {
-void ObClusterRsAddr::reset()
-{
-  cluster_id_ = OB_INVALID_ID;
-  addr_.reset();
-}
-
-bool ObClusterRsAddr::is_valid() const
-{
-  return cluster_id_ > 0 && addr_.is_valid();
-}
-
-int ObClusterRsAddr::assign(const ObClusterRsAddr &other)
-{
-  int ret = OB_SUCCESS;
-  if (this != &other) {
-    cluster_id_ = other.cluster_id_;
-    addr_ = other.addr_;
-  }
-  return ret;
-}
 
 void ObClusterAddr::reset()
 {
   cluster_id_ = common::OB_INVALID_ID;
   cluster_role_ = INVALID_CLUSTER_ROLE;
-  cluster_status_ = INVALID_CLUSTER_STATUS;
   timestamp_ = 0;
   cluster_name_.reset();
   addr_list_.reuse();
   readonly_addr_list_.reuse();
   cluster_idx_ = common::OB_INVALID_INDEX;
   current_scn_ = OB_INVALID_VERSION;
-  redo_transport_options_.reset();
-  protection_level_ = common::MAXIMUM_PERFORMANCE_LEVEL;
   sync_status_ = NOT_AVAILABLE;
   last_hb_ts_ = common::OB_INVALID_TIMESTAMP;
 }
@@ -82,10 +59,7 @@ int ObClusterAddr::assign(const ObClusterAddr &other)
     cluster_id_ = other.cluster_id_;
     cluster_idx_ = other.cluster_idx_;
     cluster_role_ = other.cluster_role_;
-    cluster_status_ = other.cluster_status_;
     current_scn_ = other.current_scn_;
-    redo_transport_options_ = other.redo_transport_options_;
-    protection_level_ = other.protection_level_;
     sync_status_ = other.sync_status_;
     last_hb_ts_ = other.last_hb_ts_;
     timestamp_ = other.timestamp_;
@@ -103,12 +77,9 @@ bool ObClusterAddr::operator==(const ObClusterAddr &other) const
              || cluster_id_ != other.cluster_id_
              || cluster_idx_ != other.cluster_idx_
              || cluster_role_ != other.cluster_role_
-             || cluster_status_ != other.cluster_status_
              || cluster_name_ != other.cluster_name_
              || current_scn_ != other.current_scn_
-             || timestamp_ != other.timestamp_
-             || redo_transport_options_ != other.redo_transport_options_
-             || protection_level_ != other.protection_level_) {
+             || timestamp_ != other.timestamp_) {
     b_ret = false;
   } else {
     b_ret = true;
@@ -132,20 +103,6 @@ bool ObClusterAddr::operator==(const ObClusterAddr &other) const
   }
   return b_ret;
 }
-int ObClusterAddr::append_redo_transport_options_change(
-    common::ObString &redo_transport_options,
-    common::ObIAllocator &alloc) const
-{
-  int ret = OB_SUCCESS;
-  ObSqlString str;
-
-  if (OB_FAIL(redo_transport_options_.get_redo_transport_options_str(str))) {
-    LOG_WARN("fail to redo_transport_options", KR(ret), K(redo_transport_options_));
-  } else if (OB_FAIL(ob_write_string(alloc, str.string(), redo_transport_options))) {
-    LOG_WARN("failed to write stirng", KR(ret), K(str));
-  }
-  return ret;
-}
 
 int ObClusterAddr::construct_rootservice_list(
     common::ObString &rootservice_list,
@@ -164,11 +121,6 @@ int ObClusterAddr::construct_rootservice_list(
   }
   return ret;
 }
-
-OB_SERIALIZE_MEMBER(ObClusterAddr, cluster_id_, cluster_role_, addr_list_,
-                    readonly_addr_list_, timestamp_, cluster_name_, cluster_idx_,
-                    cluster_status_, current_scn_, redo_transport_options_, protection_level_,
-                    sync_status_, last_hb_ts_);
 
 int ObWebServiceRootAddr::build_new_config_url(char* buf, const int64_t buf_len,
                                                const char* config_url, const int64_t cluster_id)
@@ -903,318 +855,10 @@ int ObWebServiceRootAddr::get_all_cluster_info(common::ObServerConfig *config,
   int ret = OB_SUCCESS;
   UNUSED(config);
   cluster_list.reset();
-  //if (OB_ISNULL(config)) {
-  //  ret = OB_INVALID_ARGUMENT;
-  //  LOG_WARN("invalid argument", K(ret), K(config));
-  //} else {
-  //  const char *url = config->obconfig_url.str();
-  //  const char *appname = config->cluster.str();
-  //  int64_t timeout_ms = config->rpc_timeout / 1000;
-  //  const int64_t buf_len = OB_MAX_CONFIG_URL_LENGTH;
-  //  char buf[buf_len] = {'\0'};
-  //  if (NULL == url || NULL == appname || timeout_ms <= 0) {
-  //    ret = OB_ERR_UNEXPECTED;
-  //    LOG_ERROR("NULL url or NULL appname or invalid timeout",
-  //              K(ret), KP(url), KP(appname), K(timeout_ms));
-  //  } else {
-  //    int64_t pos = 0;
-  //    ObString tmp_url(strlen(url), url);
-  //    if (OB_ISNULL(tmp_url.find('?'))) {
-  //      BUF_PRINTF("%s?%s=2", url, JSON_VERSION);
-  //    } else {
-  //      BUF_PRINTF("%s&%s=2", url, JSON_VERSION);
-  //    }
-  //  }
-  //  ObSqlString json;
-  //  if (OB_FAIL(ret)) {
-  //  } else if (OB_FAIL(call_service(NULL, json, buf, timeout_ms))) {
-  //    LOG_WARN("fail to call service", K(ret), K(buf));
-  //  } else if (json.empty()) {
-  //    ret = OB_ERR_UNEXPECTED;
-  //    LOG_WARN("web service returned empty result", K(ret));
-  //  } else if (OB_FAIL(get_all_cluster_info(json.ptr(), cluster_list))) {
-  //    LOG_WARN("fail to get all cluster addr", K(ret), K(json), K(buf));
-  //  } else {
-  //    LOG_INFO("get all cluster addr success", K(cluster_list));
-  //  }
-  //}
   return ret;
 }
 
-//int ObWebServiceRootAddr::get_all_cluster_info(const char *json_str,
-//                                               ObClusterIAddrList &cluster_list)
-//{
-//  int ret = OB_SUCCESS;
-//  ObArenaAllocator allocator(ObModIds::OB_JSON_PARSER);
-//  json::Parser parser;
-//  json::Value *root = NULL;
-//  if (NULL == json_str) {
-//    ret = OB_INVALID_ARGUMENT;
-//    LOG_WARN("invalid argument", K(ret), KP(json_str));
-//  } else if (OB_FAIL(parser.init(&allocator))) {
-//    LOG_WARN("json parser init failed", K(ret));
-//  } else if (OB_FAIL(parser.parse(json_str, strlen(json_str), root))) {
-//    LOG_WARN("parse json failed", K(ret), K(json_str));
-//  } else if (NULL == root) {
-//    ret = OB_ERR_UNEXPECTED;
-//    LOG_WARN("no root value", K(ret));
-//  } else {
-//    cluster_list.reuse();
-//    json::Value *data = NULL;
-//    //  check return code and get data filed
-//    if (json::JT_OBJECT != root->get_type()) {
-//      ret = OB_ERR_UNEXPECTED;
-//      LOG_WARN("error json format", K(ret), K(json_str), "root", *root);
-//    } else {
-//      DLIST_FOREACH(it, root->get_object()) {
-//        if (it->name_.case_compare(JSON_RES_DATA) == 0) {
-//          data = it->value_;
-//        }
-//        if (it->name_.case_compare(JSON_RES_CODE) == 0) {
-//          if (NULL == it->value_) {
-//            ret = OB_ERR_UNEXPECTED;
-//            LOG_WARN("NULL value pointer", K(ret));
-//          } else if (json::JT_NUMBER != it->value_->get_type()) {
-//            ret = OB_ERR_UNEXPECTED;
-//            LOG_WARN("unexpected code type", K(ret), "type", it->value_->get_type());
-//          } else {
-//            const int64_t code = it->value_->get_number();
-//            if (200 != code) {
-//              ret = OB_OBCONFIG_RETURN_ERROR;
-//              LOG_WARN("return code not success", K(ret), K(code));
-//            }
-//          }
-//        }
-//      }
-//    }
-//
-//    // check appname and get data
-//    if (OB_SUCC(ret)) {
-//      if (OB_ISNULL(data)) {
-//        ret = OB_ERR_UNEXPECTED;
-//        LOG_WARN("no data filed found", K(ret));
-//      } else if (json::JT_ARRAY != data->get_type()) {
-//        ret = OB_INVALD_WEB_SERVICE_CONTENT;
-//        LOG_WARN("data filed not array", K(ret), "data", *data);
-//      } else {
-//        ObClusterAddr cluster_addr;
-//        DLIST_FOREACH(it, data->get_array()) {
-//          if (json::JT_OBJECT != it->get_type()) {
-//            ret = OB_ERR_UNEXPECTED;
-//            LOG_WARN("not object in array", K(ret), "type", it->get_type());
-//            break;
-//          }
-//          cluster_addr.reset();
-//          DLIST_FOREACH(p, it->get_object()) {
-//            if (p->name_.case_compare(JSON_OB_CLUSTER) == 0) {
-//              if (OB_ISNULL(p->value_)) {
-//                ret = OB_ERR_UNEXPECTED;
-//                LOG_WARN("NULL value pointer", K(ret));
-//              } else if (json::JT_STRING != p->value_->get_type()) {
-//                ret = OB_ERR_UNEXPECTED;
-//                LOG_WARN("unexpected address type", K(ret), "type", p->value_->get_type());
-//              } else {
-//                cluster_addr.cluster_name_ = p->value_->get_string();
-//              }
-//            } else if (p->name_.case_compare(JSON_TIMESTAMP) == 0) {
-//              if (NULL == p->value_) {
-//                ret = OB_ERR_UNEXPECTED;
-//                LOG_WARN("NULL value pointer", K(ret));
-//              } else if (json::JT_NUMBER != p->value_->get_type()) {
-//                ret = OB_ERR_UNEXPECTED;
-//                LOG_WARN("unexpected cluster_id type", K(ret), "type", p->value_->get_type());
-//              } else {
-//                cluster_addr.timestamp_ = p->value_->get_number();
-//              }
-//            } else if (p->name_.case_compare(JSON_OB_CLUSTER_ID) == 0) {
-//              if (NULL == p->value_) {
-//                ret = OB_ERR_UNEXPECTED;
-//                LOG_WARN("NULL value pointer", K(ret));
-//              } else if (json::JT_NUMBER != p->value_->get_type()) {
-//                ret = OB_ERR_UNEXPECTED;
-//                LOG_WARN("unexpected cluster_id type", K(ret), "type", p->value_->get_type());
-//              } else {
-//                cluster_addr.cluster_id_ = p->value_->get_number();
-//              }
-//            } else if (p->name_.case_compare(JSON_TYPE) == 0) {
-//              if (OB_ISNULL(p->value_)) {
-//                ret = OB_ERR_UNEXPECTED;
-//                LOG_WARN("NULL value pointer", K(ret));
-//              } else if (json::JT_STRING != p->value_->get_type()) {
-//                ret = OB_ERR_UNEXPECTED;
-//                LOG_WARN("unexpected cluster type", K(ret), "type", p->value_->get_type());
-//              } else if (p->value_->get_string().case_compare(JSON_PRIMARY) == 0) {
-//                cluster_addr.cluster_role_ = PRIMARY_CLUSTER;
-//              } else if (p->value_->get_string().case_compare(JSON_STANDBY) == 0) {
-//                cluster_addr.cluster_role_ = STANDBY_CLUSTER;
-//              } else {
-//                ret = OB_ERR_UNEXPECTED;
-//                LOG_WARN("invalid cluster type", K(ret), "type", p->value_->get_string());
-//              }
-//            } else if (p->name_.case_compare(JSON_RS_LIST) == 0) {
-//              if (OB_FAIL(get_addr_list(p->value_, cluster_addr.addr_list_))) {
-//                LOG_WARN("fail to get addr list", K(ret), K(p));
-//              }
-//            } else if (p->name_.case_compare(JSON_READONLY_RS_LIST) == 0) {
-//              if (OB_FAIL(get_addr_list(p->value_, cluster_addr.readonly_addr_list_))) {
-//                LOG_WARN("fail to get addr list", K(ret), K(p));
-//              }
-//            }
-//          }
-//          if (OB_FAIL(ret)) {
-//            //nothing todo
-//          } else if (OB_FAIL(cluster_list.push_back(cluster_addr))) {
-//            LOG_WARN("fail to push back cluster addr", K(ret), K(cluster_addr));
-//          } else {
-//            LOG_INFO("push back cluster addr success", K(cluster_addr));
-//          }
-//        } //end DLIST_FOREACH(it, data->get_array(
-//      }
-//    }
-//  }
-//  return ret;
-//}
 
 
-static const char *redo_transport_options_strs[] = {"SYNC", "ASYNC", "NET_TIMEOUT", "REOPEN", "MAX_FAILURE"};
-
-
-ObRedoTransportOption::RedoOptionProfile ObRedoTransportOption::str_to_redo_transport_options(const char *str)
-{
-  RedoOptionProfile redo_transport_options = RedoOptionProfile::INVALID_TYPE;
-  if (OB_ISNULL(str)) {
-    //nothing
-  } else {
-    ObString option(str);
-    for (int64_t i = 0; i < ARRAYSIZEOF(redo_transport_options_strs); i++) {
-      if (0 == option.case_compare(redo_transport_options_strs[i])) {
-        redo_transport_options = static_cast<RedoOptionProfile>(i);
-        break;
-      }
-    }
-  }
-  return redo_transport_options;
-}
-OB_SERIALIZE_MEMBER(ObRedoTransportOption, net_timeout_, reopen_, max_failure_, is_sync_);
-
-int ObRedoTransportOption::append_redo_transport_options_change(
-    const ObString &redo_transport_options_str) {
-  int ret = OB_SUCCESS;
-  //incremental update
-  if (redo_transport_options_str.empty()) {
-  } else {
-    SMART_VAR(char[OB_MAX_CONFIG_VALUE_LEN], format_str) {
-      ObCStringHelper helper;
-      if (OB_FAIL(ObConfigLogArchiveOptionsItem::format_option_str(
-              helper.convert(redo_transport_options_str),
-              redo_transport_options_str.length(),
-              format_str,
-              OB_MAX_CONFIG_VALUE_LEN))) {
-        LOG_WARN("failed to format option str", KR(ret));
-      } else {
-        char *saveptr = NULL;
-        char *key_name = STRTOK_R(format_str, " ", &saveptr);
-        while(OB_NOT_NULL(key_name) && OB_SUCC(ret)) {
-          char *s = NULL;
-          char *value_str = NULL;
-          RedoOptionProfile redo_transport_options = str_to_redo_transport_options(key_name);
-          if (RedoOptionProfile::INVALID_TYPE == redo_transport_options) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("failed to construct redo option", KR(ret),
-                K(redo_transport_options_str), K(redo_transport_options));
-          } else if (RedoOptionProfile::SYNC == redo_transport_options) {
-            is_sync_ = true;
-          } else if (RedoOptionProfile::ASYNC == redo_transport_options) {
-            is_sync_ = false;
-          } else if (OB_ISNULL(s = STRTOK_R(NULL, " ", &saveptr))) {
-            ret = OB_ERR_PARAM_INVALID;
-            LOG_WARN("failed to get value", KR(ret), K(saveptr));
-          } else if (0 != ObString::make_string("=").case_compare(s)) {
-            ret = OB_ERR_PARAM_INVALID;
-            LOG_WARN("expect \"=\"", KR(ret), K(s), K(saveptr));
-          } else if (OB_ISNULL(value_str = STRTOK_R(NULL, " ", &saveptr))) {
-            ret = OB_ERR_PARAM_INVALID;
-            LOG_WARN("failed to get value", KR(ret), K(saveptr));
-          } else {
-            int64_t value = 0;
-            if (OB_FAIL(ob_atoll(value_str, value))) {
-              LOG_WARN("failed to get number", KR(ret), K(value_str));
-            } else if (OB_UNLIKELY(value < 0)) {
-              ret = OB_ERR_PARAM_INVALID;
-              LOG_WARN("value should not be negative number", KR(ret), K(value_str));
-            } else if (RedoOptionProfile::NET_TIMEOUT == redo_transport_options) {
-              net_timeout_ = value;
-            } else if (RedoOptionProfile::REOPEN == redo_transport_options) {
-              reopen_ = value;
-            } else if (RedoOptionProfile::MAX_FAILURE == redo_transport_options) {
-              max_failure_ = value;
-            } else {
-              ret = OB_ERR_PARAM_INVALID;
-              LOG_WARN("unknown redo option", KR(ret), K(redo_transport_options));
-            }
-          }
-          if (OB_FAIL(ret)) {
-          } else {
-            key_name = STRTOK_R(NULL, " ", &saveptr);
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObRedoTransportOption::assign(const ObRedoTransportOption &other)
-{
-  int ret = OB_SUCCESS;
-  if (this != &other) {
-    net_timeout_ = other.net_timeout_;
-    reopen_ = other.reopen_;
-    max_failure_ = other.max_failure_;
-    is_sync_ = other.is_sync_;
-  }
-  return ret;
-}
-
-ObRedoTransportOption& ObRedoTransportOption::operator=(const ObRedoTransportOption &other)
-{
-  int ret = OB_SUCCESS;
-  if (this != &other) {
-    if (OB_FAIL(assign(other))) {
-      LOG_WARN("fail to assign", KR(ret), K(other));
-    }
-  }
-  return *this;
-}
-
-bool ObRedoTransportOption::operator!=(const ObRedoTransportOption &other) const
-{
-  return !(*this == other);
-}
-bool ObRedoTransportOption::operator==(const ObRedoTransportOption &other) const
-{
-  return net_timeout_ == other.net_timeout_
-         && reopen_ == other.reopen_
-         && max_failure_ == other.max_failure_
-         && is_sync_ == other.is_sync_;
-}
-
-int ObRedoTransportOption::get_redo_transport_options_str(ObSqlString &str) const
-{
-  int ret = OB_SUCCESS;
-  if (is_sync_) {
-    if (OB_FAIL(str.assign("SYNC "))) {
-      LOG_WARN("failed to assign str", KR(ret));
-    }
-  } else if (OB_FAIL(str.assign("ASYNC "))) {
-    LOG_WARN("failed to assign str", KR(ret));
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(str.append_fmt("NET_TIMEOUT = %ld",
-                                    net_timeout_))) {
-    LOG_WARN("failed to assign str", KR(ret), "this", *this);
-  }
-  return ret;
-}
 } // end namespace share
 } // end oceanbase

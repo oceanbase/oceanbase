@@ -83,31 +83,17 @@ bool ObRootServiceRoleChecker::is_rootserver()
 {
   bool bret = false;
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = OB_SYS_TENANT_ID;
-
-  MTL_SWITCH(tenant_id) {
-    int64_t proposal_id = -1;
-    ObRole role = FOLLOWER;
-    palf::PalfHandleGuard palf_handle_guard;
-    logservice::ObLogService *log_service = nullptr;
-
-    if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(log_service->open_palf(SYS_LS, palf_handle_guard))) {
-      LOG_WARN("open palf failed", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
-      LOG_WARN("get role failed", KR(ret), K(tenant_id));
-    } else {
-      bret = (is_strong_leader(role));
-      LOG_DEBUG("get __all_core_table role", K(role), K(bret));
-    }
-  } else {
+  int64_t proposal_id = -1;
+  ObRole role = FOLLOWER;
+  if (OB_FAIL(ObRootUtils::get_proposal_id(OB_SYS_TENANT_ID, SYS_LS, proposal_id, role))) {
     if (OB_TENANT_NOT_IN_SERVER == ret) {
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("fail to get tenant storage", KR(ret), "tenant_id", OB_SYS_TENANT_ID);
     }
+  } else {
+      bret = (is_strong_leader(role));
+      LOG_DEBUG("get __all_core_table role", K(role), K(bret));
   }
   return bret;
 }
@@ -2076,25 +2062,29 @@ int ObRootUtils::check_left_f_in_primary_zone(ObZoneManager &zone_mgr,
   return ret;
 }
 
-int ObRootUtils::get_proposal_id_from_sys_ls(int64_t &proposal_id, ObRole &role)
+int ObRootUtils::get_proposal_id(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      int64_t &proposal_id, ObRole &role)
 {
   int ret = OB_SUCCESS;
-  storage::ObLSHandle ls_handle;
-  logservice::ObLogHandler *handler = nullptr;
-  MTL_SWITCH(OB_SYS_TENANT_ID) {
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(SYS_LS, ls_handle, ObLSGetMod::RS_MOD))) {
-      LOG_WARN("fail to get ls", KR(ret));
-    } else if (OB_UNLIKELY(!ls_handle.is_valid())
-        || OB_ISNULL(ls_handle.get_ls())
-        || OB_ISNULL(handler = ls_handle.get_ls()->get_log_handler())) {
+  palf::PalfHandleGuard palf_handle_guard;
+  logservice::ObLogService *log_service = nullptr;
+  MTL_SWITCH(tenant_id) {
+    if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", KR(ret), KP(ls_handle.get_ls()),
-          KP(ls_handle.get_ls()->get_log_handler()));
-    } else if (OB_FAIL(handler->get_role(role, proposal_id))) {
-      LOG_WARN("fail to get role", KR(ret));
-          }
+      LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
+      LOG_WARN("open palf failed", KR(ret), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
+      LOG_WARN("get role failed", KR(ret), K(tenant_id), K(ls_id));
+    }
   }
   return ret;
+
+}
+
+int ObRootUtils::get_proposal_id_from_sys_ls(int64_t &proposal_id, ObRole &role)
+{
+  return get_proposal_id(OB_SYS_TENANT_ID, SYS_LS, proposal_id, role);
 }
 
 int ObRootUtils::try_notify_switch_ls_leader(

@@ -220,6 +220,16 @@ public:
       const bool need_for_update,
       ObLSRecoveryStat &ls_recovery,
       ObISQLClient &client);
+  /*
+   * description: get all ls recovery stat for ma
+   * @param[in] tenant_id
+   * @param[in] client
+   * @param[out] ls_recovery_array
+   * */
+  int get_all_ls_recovery_stat_for_ma_by_order(
+      const uint64_t tenant_id,
+      ObISQLClient &client,
+      common::ObIArray<ObLSRecoveryStat> &ls_recovery_array);
     /*
    * description: get tenant recovery stat, the min sync_scn and readable_ts of all ls
    * @param[in] tenant_id

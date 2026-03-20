@@ -16,6 +16,7 @@
 #include "log_config_mgr.h"
 #include "log_io_task_cb_utils.h"
 #include "log_sliding_window.h"
+#include "palf_options.h"
 
 namespace oceanbase
 {
@@ -157,6 +158,31 @@ int LogModeMgr::get_access_mode_ref_scn(int64_t &mode_version,
     mode_version = applied_mode_meta_.mode_version_;
     access_mode = applied_mode_meta_.access_mode_;
     ref_scn = applied_mode_meta_.ref_scn_;
+  }
+  return ret;
+}
+
+int LogModeMgr::get_sync_mode(SyncMode &sync_mode) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogModeMgr has inited", K(ret));
+  } else {
+    sync_mode = applied_mode_meta_.sync_mode_;
+  }
+  return ret;
+}
+
+int LogModeMgr::get_sync_mode(int64_t &mode_version, SyncMode &sync_mode) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogModeMgr has inited", K(ret));
+  } else {
+    mode_version = applied_mode_meta_.mode_version_;
+    sync_mode = applied_mode_meta_.sync_mode_;
   }
   return ret;
 }
@@ -380,7 +406,56 @@ int LogModeMgr::change_access_mode(
         K(access_mode), K_(applied_mode_meta));
   } else {
     const bool is_reconfirm = false;
-    ret = switch_state_(access_mode, ref_scn, is_reconfirm);
+    // Keep sync_mode unchanged when changing access_mode
+    const SyncMode sync_mode = applied_mode_meta_.sync_mode_;
+    int64_t unused_proposal_id = INVALID_PROPOSAL_ID;
+    ret = switch_state_(access_mode, sync_mode, ref_scn, is_reconfirm, unused_proposal_id);
+  }
+  return ret;
+}
+
+int LogModeMgr::change_sync_mode(
+    const int64_t mode_version,
+    const SyncMode &sync_mode,
+    int64_t &out_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  out_proposal_id = INVALID_PROPOSAL_ID;
+  common::ObSpinLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (false == is_valid_sync_mode(sync_mode) ||
+             INVALID_PROPOSAL_ID == mode_version ||
+             mode_version < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K_(self), K(sync_mode),
+        K(mode_version));
+  } else if (OB_FAIL(can_change_access_mode_(mode_version))) {
+    // Reuse the same validation logic as access_mode
+    PALF_LOG(WARN, "can_change_sync_mode failed", K(ret), K_(palf_id), K_(self));
+  } else if (applied_mode_meta_.sync_mode_ == sync_mode) {
+    ret = OB_SUCCESS;
+    out_proposal_id = state_mgr_->get_proposal_id();
+    PALF_LOG(INFO, "don't need change sync_mode to self", K_(palf_id), K_(self),
+        K(sync_mode), K_(applied_mode_meta));
+  } else {
+    const bool is_reconfirm = false;
+    // Keep access_mode and ref_scn unchanged when changing sync_mode
+    const AccessMode access_mode = applied_mode_meta_.access_mode_;
+    const SCN preserved_ref_scn = applied_mode_meta_.ref_scn_;
+    ret = switch_state_(access_mode, sync_mode, preserved_ref_scn, is_reconfirm, out_proposal_id);
+  }
+  return ret;
+}
+
+int LogModeMgr::get_sync_mode_version(int64_t &mode_version) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogModeMgr has inited", K(ret));
+  } else {
+    mode_version = ATOMIC_LOAD(reinterpret_cast<const int64_t *>(&applied_mode_meta_.mode_version_));
   }
   return ret;
 }
@@ -398,17 +473,21 @@ int LogModeMgr::reconfirm_mode_meta()
   } else {
     const bool is_reconfirm = true;
     SCN invalid_scn;
-    ret = switch_state_(AccessMode::INVALID_ACCESS_MODE, invalid_scn, is_reconfirm);
+    int64_t unused_proposal_id = INVALID_PROPOSAL_ID;
+    ret = switch_state_(AccessMode::INVALID_ACCESS_MODE, SyncMode::INVALID_SYNC_MODE, invalid_scn, is_reconfirm, unused_proposal_id);
   }
   return ret;
 }
 
 int LogModeMgr::switch_state_(const AccessMode &access_mode,
+                              const SyncMode &sync_mode,
                               const SCN &ref_scn,
-                              const bool is_reconfirm)
+                              const bool is_reconfirm,
+                              int64_t &out_proposal_id)
 {
   int ret = OB_SUCCESS;
   bool change_done = false;
+  out_proposal_id = INVALID_PROPOSAL_ID;
   switch (state_) {
     case (ModeChangeState::MODE_INIT):
     {
@@ -496,9 +575,10 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
         LogModeMeta mode_meta = max_majority_accepted_mode_meta_;
         mode_meta.proposal_id_ = new_proposal_id_;
         const bool is_applied_mode_meta = false;
-        if (false == is_reconfirm && OB_FAIL(mode_meta.generate(new_proposal_id_, mode_version, access_mode, ref_scn))) {
+        if (false == is_reconfirm
+            && OB_FAIL(mode_meta.generate(new_proposal_id_, mode_version, access_mode, sync_mode, ref_scn))) {
           PALF_LOG(WARN, "generate mode_meta failed", K(ret), K_(palf_id), K_(self),
-              K(access_mode), K(ref_scn), K_(new_proposal_id));
+              K(access_mode), K(sync_mode), K(ref_scn), K_(new_proposal_id));
         } else if (OB_FAIL(submit_accept_req_(new_proposal_id_, is_applied_mode_meta, mode_meta))) {
           PALF_LOG(WARN, "submit_accept_req_ failed", K(ret), K_(palf_id), K_(self),
               K(mode_meta), K_(new_proposal_id));
@@ -515,6 +595,7 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
   }
   if (true == change_done) {
     ret = OB_SUCCESS;
+    out_proposal_id = new_proposal_id_;
     reset_status_();
   } else if (OB_SUCCESS != ret && OB_EAGAIN != ret) {
     PALF_LOG(ERROR, "switch_state failed", K(ret), K_(palf_id), "state", state2str_(state_), K_(follower_list),

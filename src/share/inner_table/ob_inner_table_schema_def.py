@@ -4196,6 +4196,8 @@ def_table_schema(
     ('log_mode', 'varchar:100', 'false', 'NOARCHIVELOG'),
     ('max_ls_id', 'int', 'false', '0'),
     ('restore_data_mode', 'varchar:128', 'false', 'NORMAL'),
+    ('protection_mode', 'varchar:128', 'false', 'MAXIMUM PERFORMANCE'),
+    ('protection_level', 'varchar:128', 'false', 'MAXIMUM PERFORMANCE'),
   ],
 )
 
@@ -8522,6 +8524,7 @@ all_ai_model_endpoint_def = dict(
 )
 def_table_schema(**all_ai_model_endpoint_def)
 
+
 # 573 : __wr_active_session_history_v2
 
 def_table_schema(
@@ -8694,6 +8697,45 @@ def_table_schema(
         ('error_count_delta', 'bigint', 'false', '0'),
         ('latest_active_time', 'timestamp', 'true'),
     ],
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name    = '__all_sync_standby_dest',
+  table_id = '581',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('dest_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+      ('value', 'longtext'),
+  ],
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name    = '__all_sync_standby_status',
+  table_id      = '582',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+  ],
+
+  in_tenant_space = True,
+  is_cluster_private = False,
+
+  normal_columns = [
+      ('protection_mode', 'varchar:128'),
+      ('protection_level', 'varchar:128'),
+      ('switchover_epoch', 'int'),
+  ],
 )
 
 all_java_policy = dict(
@@ -13642,7 +13684,8 @@ def_table_schema(
   ('max_scn', 'uint'),
   ('arbitration_member', 'varchar:128'),
   ('degraded_list', 'varchar:1024'),
-  ('learner_list', 'longtext')
+  ('learner_list', 'longtext'),
+  ('sync_mode', 'varchar:128'),
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -17596,6 +17639,16 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_sqlstat_v2']))
 
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12584',
+  table_name = '__all_virtual_sync_standby_dest',
+  keywords = all_def_keywords['__all_sync_standby_dest'],
+  in_tenant_space = True))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12585',
+  table_name = '__all_virtual_sync_standby_status',
+  keywords = all_def_keywords['__all_sync_standby_status']))
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12594',
   table_name = '__all_virtual_java_policy',
@@ -18187,9 +18240,10 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keyword
 # 15535: __all_virtual_wr_active_session_history_v2
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15535', all_def_keywords['__all_virtual_wr_active_session_history_v2'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15536', all_def_keywords['__all_virtual_wr_sqlstat_v2'])))
-
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15538', all_def_keywords['__all_sensitive_rule']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15539', all_def_keywords['__all_sensitive_column']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15540', all_def_keywords['__all_virtual_sync_standby_dest']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15541', all_def_keywords['__all_sync_standby_status']))
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15550', all_def_keywords['__all_external_resource']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15551', all_def_keywords['__all_java_policy']))
@@ -22821,7 +22875,15 @@ SELECT A.TENANT_ID,
             WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
             ELSE E.LATEST_FLASHBACK_LOG_SCN
         END) AS FLASHBACK_LOG_SCN,
-        A.INFO AS COMMENT
+        A.INFO AS COMMENT,
+        B.PROTECTION_MODE AS PROTECTION_MODE,
+        (CASE
+            WHEN B.PROTECTION_LEVEL IS NULL THEN NULL
+            WHEN B.PROTECTION_MODE = 'MAXIMUM PERFORMANCE' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PERFORMANCE' THEN 'MAXIMUM PERFORMANCE'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM AVAILABILITY' AND B.PROTECTION_LEVEL = 'MAXIMUM PERFORMANCE' THEN 'RESYNCHRONIZATION'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM AVAILABILITY' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PERFORMANCE' THEN 'RESYNCHRONIZATION'
+            ELSE B.PROTECTION_LEVEL END
+        ) AS PROTECTION_LEVEL
 FROM OCEANBASE.__ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT AS A
 LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TENANT_INFO AS B
     ON A.TENANT_ID = B.TENANT_ID
@@ -31799,6 +31861,7 @@ def_table_schema(
     PROPOSAL_ID,
     CONFIG_VERSION,
     ACCESS_MODE,
+    SYNC_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
     CASE in_sync
@@ -31837,6 +31900,7 @@ def_table_schema(
     PROPOSAL_ID,
     CONFIG_VERSION,
     ACCESS_MODE,
+    SYNC_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
     IN_SYNC,
@@ -35157,7 +35221,8 @@ def_table_schema(
   SELECT a.TENANT_ID,
         TENANT_NAME,
         SVR_IP,
-        SQL_PORT
+        SQL_PORT,
+        SVR_PORT
   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE a, OCEANBASE.DBA_OB_TENANTS b
   WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID and b.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
@@ -35176,7 +35241,8 @@ def_table_schema(
   SELECT a.TENANT_ID,
         TENANT_NAME,
         SVR_IP,
-        SQL_PORT
+        SQL_PORT,
+        SVR_PORT
   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE a, OCEANBASE.DBA_OB_TENANTS b
   WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;
   """.replace("\n", " ")
@@ -45220,6 +45286,41 @@ FROM
 """.replace("\n", " ")
 )
 
+def_table_schema(
+  owner           = 'shouju.zyp',
+  table_name      = 'CDB_OB_SYNC_STANDBY_DEST',
+  table_id        = '21706',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT TENANT_ID,
+    DEST_ID,
+    VALUE
+  FROM OCEANBASE.__ALL_VIRTUAL_SYNC_STANDBY_DEST;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'shouju.zyp',
+  table_name      = 'DBA_OB_SYNC_STANDBY_DEST',
+  table_id        = '21707',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TENANT_ID,
+    DEST_ID,
+    VALUE
+  FROM OCEANBASE.__ALL_VIRTUAL_SYNC_STANDBY_DEST
+  WHERE TENANT_ID = EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
 
 def_table_schema(
       owner = 'xumengqiang.xmq',
@@ -63850,7 +63951,15 @@ SELECT A.TENANT_ID,
           WHEN A.TENANT_ID = 1 THEN NULL
           WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN NULL
           ELSE E.LATEST_FLASHBACK_LOG_SCN END) AS FLASHBACK_LOG_SCN,
-        A.INFO AS "COMMENT"
+        A.INFO AS "COMMENT",
+        B.PROTECTION_MODE AS PROTECTION_MODE,
+        (CASE
+            WHEN B.PROTECTION_LEVEL IS NULL THEN NULL
+            WHEN B.PROTECTION_MODE = 'MAXIMUM PERFORMANCE' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PERFORMANCE' THEN 'MAXIMUM PERFORMANCE'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM AVAILABILITY' AND B.PROTECTION_LEVEL = 'MAXIMUM PERFORMANCE' THEN 'RESYNCHRONIZATION'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM AVAILABILITY' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PERFORMANCE' THEN 'RESYNCHRONIZATION'
+            ELSE B.PROTECTION_LEVEL END
+        ) AS PROTECTION_LEVEL
 FROM SYS.ALL_VIRTUAL_TENANT_SYS_AGENT A
 LEFT JOIN SYS.ALL_VIRTUAL_TENANT_INFO B
     ON A.TENANT_ID = B.TENANT_ID
@@ -74236,6 +74345,7 @@ def_table_schema(
     PROPOSAL_ID,
     CONFIG_VERSION,
     ACCESS_MODE,
+    SYNC_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
     CASE in_sync
@@ -74276,6 +74386,7 @@ def_table_schema(
     PROPOSAL_ID,
     CONFIG_VERSION,
     ACCESS_MODE,
+    SYNC_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
     IN_SYNC,
@@ -75229,7 +75340,8 @@ def_table_schema(
   SELECT a.TENANT_ID,
         TENANT_NAME,
         SVR_IP,
-        SQL_PORT
+        SQL_PORT,
+        SVR_PORT
   FROM SYS.ALL_VIRTUAL_LS_META_TABLE a, SYS.DBA_OB_TENANTS b
   WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;
   """.replace("\n", " ")
@@ -80229,6 +80341,27 @@ def_table_schema(
   WHERE TP.PRIVILEGE = 'PLAINACCESS'
   ORDER BY TP.TABLE_NAME, TP.GRANTEE;
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'shouju.zyp',
+  table_name      = 'DBA_OB_SYNC_STANDBY_DEST',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28294',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TENANT_ID,
+    DEST_ID,
+    VALUE
+  FROM SYS.ALL_VIRTUAL_SYNC_STANDBY_DEST
+  WHERE TENANT_ID = EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
 )
 
 # 余留位置（此行之前占位）

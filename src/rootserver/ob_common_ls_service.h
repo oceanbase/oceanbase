@@ -55,6 +55,53 @@ struct PalfBaseInfo;
 }
 namespace rootserver
 {
+class ObRestoreSourceAttrUpdater
+{
+public:
+  ObRestoreSourceAttrUpdater();
+  ~ObRestoreSourceAttrUpdater();
+  int init(const uint64_t user_tenant_id, common::ObMySQLProxy *proxy);
+  bool is_inited() const { return inited_; }
+  void reset();
+  int update_restore_source_attr_periodically();
+protected:
+  virtual int fetch_current_restore_source_attr(ObRestoreSourceServiceAttr &restore_source_attr, bool &need_update) = 0;
+  virtual int update_restore_source_attr(const ObRestoreSourceServiceAttr &restore_source_attr) = 0;
+  virtual const char *get_change_target() = 0;
+protected:
+  bool inited_;
+  uint64_t user_tenant_id_;
+  common::ObMySQLProxy *proxy_;
+  ObLogRestoreProxyUtil remote_proxy_;
+  bool remote_is_avaliable_;
+};
+class ObPrimaryRestoreSourceAttrUpdater : public ObRestoreSourceAttrUpdater
+{
+public:
+  ObPrimaryRestoreSourceAttrUpdater();
+  ~ObPrimaryRestoreSourceAttrUpdater();
+private:
+  int fetch_current_restore_source_attr(ObRestoreSourceServiceAttr &restore_source_attr, bool &need_update) override;
+  const char *get_change_target() override { return "log_restore_source"; }
+  int update_restore_source_attr(const ObRestoreSourceServiceAttr &restore_source_attr) override;
+  bool need_update_ip_list_(ObLogRestoreSourceItem &item);
+  int do_update_restore_source_(const ObRestoreSourceServiceAttr &old_attr, ObLogRestoreSourceMgr &restore_source_mgr);
+  int get_restore_source_value_(ObLogRestoreSourceItem &item, ObSqlString &standby_source_value);
+  int update_source_inner_table_(char *buf, const int64_t buf_size, ObMySQLTransaction &trans, const ObLogRestoreSourceItem &item);
+};
+class ObStandbyRestoreSourceAttrUpdater : public ObRestoreSourceAttrUpdater
+{
+public:
+  ObStandbyRestoreSourceAttrUpdater();
+  ~ObStandbyRestoreSourceAttrUpdater();
+protected:
+  int fetch_current_restore_source_attr(ObRestoreSourceServiceAttr &restore_source_attr, bool &need_update) override;
+  int update_restore_source_attr(const ObRestoreSourceServiceAttr &restore_source_attr) override;
+  const char *get_change_target() override { return "sync_standby_dest"; }
+private:
+  int64_t net_timeout_;
+  int64_t health_check_time_;
+};
 /*description:
  *COMMON_LS_SERVICE thread: Started on the leader of the meta tenant sys ls
  * 1. adjust sys ls primary zone of meta and user tenant
@@ -67,7 +114,8 @@ class ObCommonLSService : public ObTenantThreadHelper,
                            public logservice::ObIReplaySubHandler
 {
 public:
-  ObCommonLSService():inited_(false), tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL), restore_proxy_(), primary_is_avaliable_(true) {}
+  ObCommonLSService():inited_(false), tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL),
+    primary_restore_source_attr_updater_(), standby_restore_source_attr_updater_() {}
   virtual ~ObCommonLSService() {}
   int init();
   void destroy();
@@ -92,8 +140,9 @@ private:
       const share::schema::ObTenantSchema &tenant_schema);
   int try_create_ls_(const share::schema::ObTenantSchema &tenant_schema);
   //ls group maybe has more than one unit group, need fix
+  int try_modify_ls_unit_group_(const share::schema::ObTenantSchema &tenant_schema);
+  void try_update_ip_list();
   int try_modify_ls_unit_group_or_unit_list_(const share::schema::ObTenantSchema &tenant_schema);
-  void try_update_primary_ip_list();
   bool need_update_ip_list_(share::ObLogRestoreSourceItem &item);
   int get_restore_source_value_(ObLogRestoreSourceItem &item, ObSqlString &standby_source_value);
   int do_update_restore_source_(ObRestoreSourceServiceAttr &old_attr, ObLogRestoreSourceMgr &restore_source_mgr);
@@ -114,8 +163,8 @@ private:
   bool inited_;
   uint64_t tenant_id_;
   common::ObMySQLProxy *proxy_;
-  ObLogRestoreProxyUtil restore_proxy_;
-  bool primary_is_avaliable_;
+  ObPrimaryRestoreSourceAttrUpdater primary_restore_source_attr_updater_;
+  ObStandbyRestoreSourceAttrUpdater standby_restore_source_attr_updater_;
 };
 }
 }

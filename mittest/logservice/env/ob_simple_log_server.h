@@ -490,6 +490,7 @@ protected:
   int update_disk_opts_no_lock_(const PalfDiskOptions &opts);
   int add_ls_to_ls_map_(const int64_t palf_id);
   int init_log_kv_cache_();
+  int destroy_uniq_task_queue_();
 
 private:
   int64_t cluster_id_;

@@ -1042,7 +1042,7 @@ TEST_F(TestLogSlidingWindow, test_group_entry_truncate)
   log_entry_size += (pos + log_data_len);
   // gen group log
   LogWriteBuf write_buf;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
+  EXPECT_EQ(OB_INVALID_ARGUMENT, group_header.generate(false, false,write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   const int64_t total_group_log_size = group_header_size + log_entry_size;
   const int64_t first_part_len = total_group_log_size / 2;

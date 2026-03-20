@@ -506,11 +506,13 @@ public:
                  const share::SCN &base_ts,
                  ObTxBaseLogCb *cb,
                  const bool need_nonblock,
-                 const int64_t retry_timeout_us)
+                 const int64_t retry_timeout_us,
+                 const bool skip_pre_async_wait = false)
   {
     int ret = OB_SUCCESS;
     logservice::ObLogBaseHeader base_header;
     int64_t tmp_pos = 0;
+    UNUSED(skip_pre_async_wait);
     if (OB_FAIL(base_header.deserialize(buf, size, tmp_pos))) {
       LOG_WARN("log base header deserialize error", K(ret));
     } else {

@@ -106,6 +106,7 @@ private:
       const bool create_with_palf,
       const palf::PalfBaseInfo &palf_base_info);
 
+  int set_ls_sync_mode_(int64_t &switchover_epoch);
  int construct_clone_tenant_ls_addrs_(const uint64_t source_tenant_id,
                                       ObLSAddr &addr);
  int do_create_ls_(const ObLSAddr &addr,

@@ -1339,6 +1339,7 @@ ob_set_subtarget(ob_sql resolver
 
 ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_switch_tenant_resolver.cpp
+  resolver/cmd/ob_set_protection_mode_resolver.cpp
   resolver/cmd/ob_alter_system_resolver.cpp
   resolver/cmd/ob_backup_clean_resolver.cpp
   resolver/cmd/ob_alter_system_stmt.cpp

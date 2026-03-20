@@ -61,6 +61,7 @@ public:
   void del_cb_impl(PalfRoleChangeCbNode *cb_impl);
   int on_role_change(int64_t id);
   int on_need_change_leader(const int64_t id, const ObAddr &new_leader);
+  int on_sync_mode_change(const int64_t id);
 private:
   ObDList<PalfRoleChangeCbNode> list_;
   ObSpinLock lock_;
@@ -119,6 +120,7 @@ public:
   PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_reconfiguration_event);
   PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_replica_type_change_event);
   PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_access_mode_change_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_sync_mode_change_event);
   PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_set_base_lsn_event);
   PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_enable_sync_event);
   PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_disable_sync_event);

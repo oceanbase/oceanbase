@@ -2174,12 +2174,16 @@ int LogConfigMgr::try_resend_config_log_(const int64_t proposal_id)
   int ret = OB_SUCCESS;
   if (INIT == state_ &&
       resend_log_list_.get_member_number() != 0 &&
-      resend_config_version_.is_valid() &&
-      palf_reach_time_interval(PALF_RESEND_CONFIG_LOG_INTERVAL_US, last_submit_config_log_time_us_) &&
-      OB_FAIL(log_engine_->submit_change_config_meta_req(resend_log_list_, proposal_id,
-          reconfig_barrier_.prev_log_proposal_id_, reconfig_barrier_.prev_lsn_,
-          reconfig_barrier_.prev_mode_pid_, log_ms_meta_))) {
-    PALF_LOG(WARN, "resend config log failed", KR(ret), K(proposal_id), K(resend_config_version_), K_(log_ms_meta));
+      resend_config_version_.is_valid()) {
+    if (log_ms_meta_.proposal_id_ != proposal_id) {
+      PALF_LOG(INFO, "proposal_id has changed because of mode change, stop resending config log",
+               K_(palf_id), K_(self), K(proposal_id), "meta_proposal_id", log_ms_meta_.proposal_id_, K_(resend_log_list), K_(resend_config_version));
+    } else if (palf_reach_time_interval(PALF_RESEND_CONFIG_LOG_INTERVAL_US, last_submit_config_log_time_us_) &&
+               OB_FAIL(log_engine_->submit_change_config_meta_req(resend_log_list_, proposal_id,
+                reconfig_barrier_.prev_log_proposal_id_, reconfig_barrier_.prev_lsn_,
+                reconfig_barrier_.prev_mode_pid_, log_ms_meta_))) {
+      PALF_LOG(WARN, "resend config log failed", KR(ret), K(proposal_id), K(resend_config_version_), K_(log_ms_meta));
+    }
   }
   return ret;
 }
@@ -2596,6 +2600,20 @@ int LogConfigMgr::force_set_member_list(const LogConfigChangeArgs &args, const i
     }
   }
 
+  return ret;
+}
+
+int LogConfigMgr::is_initial_config_version(bool &is_initial_config_version)
+{
+  int ret = OB_SUCCESS;
+  is_initial_config_version = false;
+  SpinLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogConfigMgr is not inited!", K(ret));
+  } else {
+    is_initial_config_version = log_ms_meta_.curr_.config_.config_version_.is_initial_version();
+  }
   return ret;
 }
 

@@ -320,6 +320,7 @@ int ObPrimaryLSService::try_set_next_ls_status_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_BEFORE_DELETE_LS);
 int ObPrimaryLSService::try_delete_ls_(const share::ObLSStatusInfo &status_info)
 {
   int ret = OB_SUCCESS;
@@ -340,7 +341,9 @@ int ObPrimaryLSService::try_delete_ls_(const share::ObLSStatusInfo &status_info)
     } else if (can_offline) {
       // User LS should be deleted from __all_ls
       if (!status_info.ls_id_.is_sys_ls()) {
-        if (OB_FAIL(ls_operator.delete_ls(status_info.ls_id_, status_info.status_, working_sw_status))) {
+        if (OB_FAIL(ERRSIM_BEFORE_DELETE_LS)) {
+          LOG_INFO("ERRSIM_BEFORE_DELETE_LS, skip delete ls", K(tenant_id_), K(status_info));
+        } else if (OB_FAIL(ls_operator.delete_ls(status_info.ls_id_, status_info.status_, working_sw_status))) {
           LOG_WARN("failed to delete ls", KR(ret), K(status_info));
         }
       } else {
@@ -557,6 +560,7 @@ int ObPrimaryLSService::create_all_user_ls_for_creating_tenant_(
     const ObTenantSchema &tenant_schema)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   uint64_t ls_created_count = 0;
   if (tenant_id != tenant_schema.get_tenant_id() || !is_valid_tenant_id(tenant_id) ||
       !tenant_schema.is_creating() || OB_ISNULL(GCTX.sql_proxy_)) {
@@ -586,18 +590,22 @@ int ObPrimaryLSService::create_all_user_ls_for_creating_tenant_(
         } else if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id, ls_id,
                 false /*need_for_update*/, recovery_stat, *GCTX.sql_proxy_))) {
           LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id));
-        } else if (OB_FAIL(ObCommonLSService::do_create_user_ls(tenant_schema, status_info,
+        } else if (OB_TMP_FAIL(ObCommonLSService::do_create_user_ls(tenant_schema, status_info,
                 recovery_stat.get_create_scn(), false/*create_with_palf*/, palf_base_info,
                 OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
           // create ls
           // ls status == CREATED, ls == CREATING
-          LOG_WARN("failed to create user ls", KR(ret), K(tenant_schema), K(status_info), K(recovery_stat));
+          LOG_WARN("failed to create user ls", KR(tmp_ret), K(tenant_schema), K(status_info), K(recovery_stat));
         } else if (OB_FAIL(ERRSIM_AFTER_CREATE_ONE_LS)) {
           LOG_WARN("ERRSIM_AFTER_CREATE_ONE_LS", KR(ret));
         } else {
           ls_created_count++;
         }
       }
+    }
+    if (OB_SUCC(ret) && ls_created_count != ls_array.count()) {
+      ret = OB_NEED_RETRY;
+      LOG_WARN("failed to create user ls", KR(ret), K(ls_created_count), K(ls_array));
     }
   }
   LOG_INFO("created user ls count", KR(ret), K(tenant_id), K(ls_created_count));

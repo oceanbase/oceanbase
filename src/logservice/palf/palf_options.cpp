@@ -134,6 +134,34 @@ int get_access_mode(const common::ObString &str, AccessMode &mode)
   return ret;
 }
 
+static const char *sync_mode_strs[] = {
+  "INVALID_SYNC_MODE",
+  "SYNC",
+  "ASYNC",
+  "PRE_ASYNC"
+};
+
+int get_sync_mode(const common::ObString &str, SyncMode &mode)
+{
+  int ret = OB_SUCCESS;
+  if (str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    mode = SyncMode::INVALID_SYNC_MODE;
+    for (int64_t i = 0; i < ARRAYSIZEOF(sync_mode_strs); i++) {
+      if (0 == str.case_compare(sync_mode_strs[i])) {
+        mode = static_cast<SyncMode>(i);
+        break;
+      }
+    }
+  }
+
+  if (SyncMode::INVALID_SYNC_MODE == mode) {
+    ret = OB_ERR_UNEXPECTED;
+  }
+  return ret;
+}
+
 void PalfThrottleOptions::reset()
 {
   total_disk_space_ = -1;

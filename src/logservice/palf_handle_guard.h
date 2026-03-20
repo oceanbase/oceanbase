@@ -228,6 +228,9 @@ public:
   DELEGATE_PTR_WITH_RET(palf_handle_, change_access_mode, int);
   DELEGATE_PTR_WITH_RET(palf_handle_, get_access_mode, int);
   DELEGATE_PTR_WITH_RET(palf_handle_, flashback, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, change_sync_mode, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, get_sync_mode, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, get_sync_mode_version, int);
   // CONST_DELEGATE_PTR_WITH_RET(palf_handle_, stat, int);
   // DELEGATE_PTR_WITH_RET(palf_handle_, try_lock_config_change, int);
   // DELEGATE_PTR_WITH_RET(palf_handle_, unlock_config_change, int);

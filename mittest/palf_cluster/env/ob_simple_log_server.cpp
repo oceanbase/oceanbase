@@ -288,6 +288,8 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
   deliver_.destroy();
   guard.click("destroy");
   log_service_.destroy();
+  // to avoid OB_INIT_TWICE error on restart. uniq task queue class doesn't destroy in fact.
+  destroy_uniq_task_queue_();
 
   log_block_pool_.destroy();
   guard.click("destroy_palf_env");
@@ -320,6 +322,22 @@ int ObSimpleLogServer::simple_restart(const std::string &cluster_name, const int
     guard.click("simple_start");
     SERVER_LOG(INFO, "simple_restart success", K(ret), K(guard));
   }
+  return ret;
+}
+
+int ObSimpleLogServer::destroy_uniq_task_queue_()
+{
+  int ret = OB_SUCCESS;
+  log_service_.standby_ack_service_.ack_task_queue_.inited_ = false;
+  log_service_.standby_ack_service_.ack_task_queue_.cond_.destroy();
+  log_service_.standby_ack_service_.ack_task_queue_.task_set_.destroy();
+  log_service_.standby_ack_service_.ack_task_queue_.group_map_.destroy();
+  log_service_.standby_ack_service_.ack_task_queue_.processing_task_set_.destroy();
+  log_service_.standby_ack_service_.ack_task_queue_.groups_.clear();
+  log_service_.standby_ack_service_.ack_task_queue_.cur_group_ = nullptr;
+  log_service_.standby_ack_service_.ack_task_queue_.processing_thread_count_ = 0;
+  log_service_.standby_ack_service_.ack_task_queue_.barrier_task_count_ = 0;
+  log_service_.standby_ack_service_.ack_task_queue_.updater_ = nullptr;
   return ret;
 }
 

@@ -261,6 +261,10 @@ public:
       obrpc::ObSrvRpcProxy &rpc_proxy,
       share::schema::ObMultiVersionSchemaService &schema_service,
       const obrpc::ObAdminSetConfigArg &arg);
+  static int get_item_user_tenant_id(
+    const obrpc::ObAdminSetConfigItem &item,
+    share::schema::ObMultiVersionSchemaService &schema_service,
+    uint64_t &user_tenant_id);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupConfigUtil);
 };

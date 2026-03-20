@@ -166,6 +166,7 @@
 #include "sql/resolver/cmd/ob_trigger_storage_cache_resolver.h"
 #endif
 #include "sql/resolver/cmd/ob_sys_dispatch_call_resolver.h"
+#include "sql/resolver/cmd/ob_set_protection_mode_resolver.h"
 
 namespace oceanbase
 {
@@ -479,6 +480,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_SWITCHOVER: {
         REGISTER_STMT_RESOLVER(SwitchTenant);
+        break;
+      }
+      case T_SET_PROTECTION_MODE: {
+        REGISTER_STMT_RESOLVER(SetProtectionMode);
         break;
       }
       case T_RECOVER: {

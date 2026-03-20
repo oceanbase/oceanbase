@@ -26,6 +26,7 @@
 #include "ob_log_restore_net_driver.h"                      // ObLogRestoreNetDriver
 #include "ob_log_restore_archive_driver.h"                  // ObLogRestoreArchiveDriver
 #include "ob_remote_log_writer.h"                           // ObRemoteLogWriter
+#include "logservice/transportservice/ob_log_standby_transport_worker.h"  // ObLogStandbyTransportWorker
 
 namespace oceanbase
 {
@@ -61,6 +62,7 @@ public:
 
 public:
   ObLogResSvrRpc *get_log_restore_proxy() { return &proxy_; }
+  ObLogStandbyTransportWorker *get_log_standby_transport_worker() { return &standby_transport_worker_; }
 
 public:
   int init(rpc::frame::ObReqTransport *transport,
@@ -98,6 +100,7 @@ private:
   ObRemoteFetchLogImpl fetch_log_impl_;
   ObRemoteFetchWorker fetch_log_worker_;
   ObRemoteLogWriter writer_;
+  ObLogStandbyTransportWorker standby_transport_worker_;
   ObRemoteErrorReporter error_reporter_;
   ObLogRestoreSourceItem restore_source_;
   int64_t query_restore_source_ts_;

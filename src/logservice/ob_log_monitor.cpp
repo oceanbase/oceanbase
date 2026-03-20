@@ -147,6 +147,40 @@ int ObLogMonitor::record_access_mode_change_event(const int64_t palf_id,
   return ret;
 }
 
+int ObLogMonitor::record_sync_mode_change_event(const int64_t palf_id,
+                                                  const int64_t prev_mode_version,
+                                                  const int64_t curr_mode_verion,
+                                                  const palf::SyncMode& prev_sync_mode,
+                                                  const palf::SyncMode& curr_sync_mode,
+                                                  const char *extra_info)
+{
+  int ret = OB_SUCCESS;
+  const int64_t mtl_id = MTL_ID();
+  const EventType event = EventType::SYNC_MODE_TRANSITION;
+  const int64_t MAX_BUF_LEN = 32;
+  char prev_sync_mode_str[MAX_BUF_LEN] = {'\0'};
+  char curr_sync_mode_str[MAX_BUF_LEN] = {'\0'};
+  if (OB_FAIL(palf::sync_mode_to_string(prev_sync_mode, prev_sync_mode_str, sizeof(prev_sync_mode_str)))) {
+    PALF_LOG(WARN, "sync_mode_to_string failed", K(prev_sync_mode));
+  } else if (OB_FAIL(palf::sync_mode_to_string(curr_sync_mode, curr_sync_mode_str, sizeof(curr_sync_mode_str)))) {
+    PALF_LOG(WARN, "sync_mode_to_string failed", K(prev_sync_mode));
+  } else if (OB_NOT_NULL(extra_info)) {
+    SERVER_EVENT_ADD_WITH_RETRY(LOG_MONITOR_EVENT_FMT_PREFIX,
+        "PREV_MODE_VERSION", prev_mode_version,
+        "CURR_MODE_VERSION", curr_mode_verion,
+        "PREV_SYNC_MODE", prev_sync_mode_str,
+        "CURR_SYNC_MODE", curr_sync_mode_str,
+        extra_info);
+  } else {
+    SERVER_EVENT_ADD_WITH_RETRY(LOG_MONITOR_EVENT_FMT_PREFIX,
+        "PREV_MODE_VERSION", prev_mode_version,
+        "CURR_MODE_VERSION", curr_mode_verion,
+        "PREV_SYNC_MODE", prev_sync_mode_str,
+        "CURR_SYNC_MODE", curr_sync_mode_str);
+  }
+  return ret;
+}
+
 int ObLogMonitor::record_set_base_lsn_event(const int64_t palf_id, const palf::LSN &new_base_lsn)
 {
   int ret = OB_SUCCESS;

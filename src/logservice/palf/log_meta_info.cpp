@@ -11,6 +11,7 @@
  */
 
 #include "log_meta_info.h"
+#include "share/ob_cluster_version.h"  // GET_MIN_CLUSTER_VERSION
 
 namespace oceanbase
 {
@@ -1106,6 +1107,7 @@ LogModeMeta::LogModeMeta()
       proposal_id_(INVALID_PROPOSAL_ID),
       mode_version_(INVALID_PROPOSAL_ID),
       access_mode_(AccessMode::INVALID_ACCESS_MODE),
+      sync_mode_(SyncMode::INVALID_SYNC_MODE),
       ref_scn_()
 {}
 
@@ -1117,19 +1119,42 @@ LogModeMeta::~LogModeMeta()
 int LogModeMeta::generate(const int64_t proposal_id,
                           const int64_t mode_version,
                           const AccessMode &access_mode,
+                          const SyncMode &sync_mode,
                           const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
   if (INVALID_PROPOSAL_ID == mode_version ||
       INVALID_PROPOSAL_ID == proposal_id ||
       false == is_valid_access_mode(access_mode) ||
+      false == is_valid_sync_mode(sync_mode) ||
       !ref_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K(proposal_id), K(mode_version), K(access_mode), K(sync_mode), K(ref_scn));
   } else {
-    version_ = LOG_MODE_META_VERSION;
+    // For arbitration replicas, GET_MIN_DATA_VERSION may fail, try to use binary version as fallback
+    if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
+      PALF_LOG(WARN, "get tenant data version failed, try to use binary version as fallback", K(ret));
+      // Check binary version, if >= 4.4.2.0, use V2 version
+      const uint64_t binary_version = GET_MIN_CLUSTER_VERSION();
+      if (binary_version >= CLUSTER_VERSION_4_4_2_1) {
+        version_ = LOG_MODE_META_VERSION_V2;
+        PALF_LOG(INFO, "use binary version to determine meta version", K(binary_version), K(version_));
+      } else {
+        version_ = LOG_MODE_META_VERSION;
+        PALF_LOG(INFO, "use default old version for compatibility", K(binary_version), K(version_));
+      }
+    } else {
+      if (tenant_data_version >= DATA_VERSION_4_4_2_1) {
+        version_ = LOG_MODE_META_VERSION_V2;
+      } else {
+        version_ = LOG_MODE_META_VERSION;
+      }
+    }
     proposal_id_ = proposal_id;
     mode_version_ = mode_version;
     access_mode_ = access_mode;
+    sync_mode_ = sync_mode;
     ref_scn_ = ref_scn;
   }
   return ret;
@@ -1137,11 +1162,21 @@ int LogModeMeta::generate(const int64_t proposal_id,
 
 bool LogModeMeta::is_valid() const
 {
-  return LOG_MODE_META_VERSION == version_ &&
-         INVALID_PROPOSAL_ID != proposal_id_ &&
-         INVALID_PROPOSAL_ID != mode_version_ &&
-         is_valid_access_mode(access_mode_) &&
-         ref_scn_.is_valid();
+  bool valid = false;
+  if (LOG_MODE_META_VERSION_V2 == version_) {
+    valid = (INVALID_PROPOSAL_ID != proposal_id_ &&
+             INVALID_PROPOSAL_ID != mode_version_ &&
+             is_valid_access_mode(access_mode_) &&
+             is_valid_sync_mode(sync_mode_) &&
+             ref_scn_.is_valid());
+  } else {
+    // Version 1 doesn't have sync_mode_, don't check it
+    valid = (INVALID_PROPOSAL_ID != proposal_id_ &&
+             INVALID_PROPOSAL_ID != mode_version_ &&
+             is_valid_access_mode(access_mode_) &&
+             ref_scn_.is_valid());
+  }
+  return valid;
 }
 
 void LogModeMeta::reset()
@@ -1150,6 +1185,7 @@ void LogModeMeta::reset()
   proposal_id_ = INVALID_PROPOSAL_ID;
   mode_version_ = INVALID_PROPOSAL_ID;
   access_mode_ = AccessMode::INVALID_ACCESS_MODE;
+  sync_mode_ = SyncMode::INVALID_SYNC_MODE;
   ref_scn_.reset();
 }
 
@@ -1159,10 +1195,11 @@ void LogModeMeta::operator=(const LogModeMeta &mode_meta)
   this->proposal_id_ = mode_meta.proposal_id_;
   this->mode_version_ = mode_meta.mode_version_;
   this->access_mode_ = mode_meta.access_mode_;
+  this->sync_mode_ = mode_meta.sync_mode_;
   this->ref_scn_ = mode_meta.ref_scn_;
 }
 
-DEFINE_SERIALIZE(LogModeMeta)
+DEFINE_SERIALIZE(LogModeMeta) // FARM COMPAT WHITELIST
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
@@ -1173,9 +1210,13 @@ DEFINE_SERIALIZE(LogModeMeta)
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, version_)) ||
              OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, proposal_id_)) ||
              OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, mode_version_)) ||
-             OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, static_cast<int64_t>(access_mode_))) ||
-             OB_FAIL(ref_scn_.fixed_serialize(buf, buf_len, new_pos))) {
+             OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, static_cast<int64_t>(access_mode_)))) {
     PALF_LOG(ERROR, "LogModeMeta serialize failed", K(ret), K(new_pos));
+  } else if (LOG_MODE_META_VERSION_V2 == version_ &&
+             OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, static_cast<int64_t>(sync_mode_)))) {
+    PALF_LOG(ERROR, "LogModeMeta serialize sync_mode_ failed", K(ret), K(new_pos));
+  } else if (OB_FAIL(ref_scn_.fixed_serialize(buf, buf_len, new_pos))) {
+    PALF_LOG(ERROR, "LogModeMeta serialize ref_scn_ failed", K(ret), K(new_pos));
   } else {
     PALF_LOG(TRACE, "LogModeMeta serialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
     pos = new_pos;
@@ -1189,15 +1230,29 @@ DEFINE_DESERIALIZE(LogModeMeta)
   int64_t new_pos = pos;
   if (NULL == buf || 0 >= data_len) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &version_)) ||
-             OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &proposal_id_)) ||
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &version_))) {
+    PALF_LOG(ERROR, "LogModeMeta deserialize version_ failed", K(ret), K(new_pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &proposal_id_)) ||
              OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &mode_version_)) ||
-             OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, reinterpret_cast<int64_t *>(&access_mode_))) ||
-             OB_FAIL(ref_scn_.fixed_deserialize(buf, data_len, new_pos))) {
+             OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, reinterpret_cast<int64_t *>(&access_mode_)))) {
     PALF_LOG(ERROR, "LogModeMeta deserialize failed", K(ret), K(new_pos));
   } else {
-    PALF_LOG(TRACE, "LogModeMeta deserialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
-    pos = new_pos;
+    // Handle version compatibility: version 1 doesn't have sync_mode_
+    if (LOG_MODE_META_VERSION_V2 == version_) {
+      if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, reinterpret_cast<int64_t *>(&sync_mode_)))) {
+        PALF_LOG(ERROR, "LogModeMeta deserialize sync_mode_ failed", K(ret), K(new_pos));
+      }
+    } else {
+      // Version 1 doesn't have sync_mode_, set default value
+      sync_mode_ = SyncMode::ASYNC;
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ref_scn_.fixed_deserialize(buf, data_len, new_pos))) {
+      PALF_LOG(ERROR, "LogModeMeta deserialize ref_scn_ failed", K(ret), K(new_pos));
+    }
+    if (OB_SUCC(ret)) {
+      PALF_LOG(TRACE, "LogModeMeta deserialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
+      pos = new_pos;
+    }
   }
   return ret;
 }
@@ -1209,6 +1264,9 @@ DEFINE_GET_SERIALIZE_SIZE(LogModeMeta)
   size += serialization::encoded_length_i64(proposal_id_);
   size += serialization::encoded_length_i64(mode_version_);
   size += serialization::encoded_length_i64(static_cast<int64_t>(access_mode_));
+  if (LOG_MODE_META_VERSION_V2 == version_) {
+    size += serialization::encoded_length_i64(static_cast<int64_t>(sync_mode_));
+  }
   size += ref_scn_.get_fixed_serialize_size();
   return size;
 }

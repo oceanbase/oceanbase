@@ -102,7 +102,7 @@ TEST_F(TestLogModeMgr, test_init)
   LogModeMgr mode_mgr;
   LogModeMeta valid_meta, invalid_meta;
   ObAddr invalid_addr;
-  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, 1, AccessMode::APPEND, share::SCN::base_scn()));
+  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, 1, AccessMode::APPEND, SyncMode::ASYNC, share::SCN::base_scn()));
   EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(-1, addr1, valid_meta,
       mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(1, invalid_addr, valid_meta,
@@ -191,7 +191,7 @@ TEST_F(TestLogModeMgr, test_receive_mode_meta)
   PALF_LOG(INFO, "test_receive_mode_meta case");
   int64_t pid = 1;
   LogModeMeta valid_meta, invalid_meta;
-  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, 1, AccessMode::APPEND, share::SCN::base_scn()));
+  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, 1, AccessMode::APPEND, SyncMode::ASYNC, share::SCN::base_scn()));
   bool has_accepted = false;
 
   {
@@ -222,7 +222,7 @@ TEST_F(TestLogModeMgr, test_receive_mode_meta)
     // can accpet
     LogModeMgr mode_mgr;
     init_test_mode_mgr_env(addr1, valid_meta, mode_mgr, FOLLOWER, ACTIVE);
-    EXPECT_EQ(OB_SUCCESS, valid_meta.generate(2, 2, AccessMode::APPEND, share::SCN::base_scn()));
+    EXPECT_EQ(OB_SUCCESS, valid_meta.generate(2, 2, AccessMode::APPEND, SyncMode::ASYNC, share::SCN::base_scn()));
     EXPECT_TRUE(mode_mgr.can_receive_mode_meta(pid, valid_meta, has_accepted));
     EXPECT_FALSE(has_accepted);
     EXPECT_EQ(OB_SUCCESS, mode_mgr.receive_mode_meta(addr2, 2, false, valid_meta));
@@ -244,7 +244,7 @@ TEST_F(TestLogModeMgr, test_can_change_access_mode)
   const AccessMode access_mode = AccessMode::APPEND;
   const share::SCN ref_scn = share::SCN::base_scn();
   LogModeMeta valid_meta;
-  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, mode_version, AccessMode::APPEND, share::SCN::base_scn()));
+  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, mode_version, AccessMode::APPEND, SyncMode::ASYNC, share::SCN::base_scn()));
   {
     LogModeMgr mode_mgr;
     // role check
@@ -333,7 +333,7 @@ TEST_F(TestLogModeMgr, test_change_access_mode)
   const AccessMode access_mode = AccessMode::APPEND;
   const share::SCN ref_scn = share::SCN::base_scn();
   LogModeMeta valid_meta;
-  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, mode_version, AccessMode::APPEND, share::SCN::base_scn()));
+  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, mode_version, AccessMode::APPEND, SyncMode::ASYNC, share::SCN::base_scn()));
   {
     // not init, invalid args
     LogModeMgr mode_mgr;

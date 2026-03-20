@@ -391,7 +391,18 @@ private:
                  const lib::Worker::CompatMode compat_mode);
 };
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 2, 1)
+class ObUpgradeFor4421Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4421Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4421Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override { return common::OB_SUCCESS; }
+  virtual int finish_upgrade() override;
+private:
+  int finish_upgrade_for_sync_standby_status_();
+};
+
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

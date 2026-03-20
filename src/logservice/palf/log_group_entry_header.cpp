@@ -51,7 +51,8 @@ LogGroupEntryHeader::~LogGroupEntryHeader()
 bool LogGroupEntryHeader::is_valid() const
 {
   return LogGroupEntryHeader::MAGIC == magic_
-         && (LOG_GROUP_ENTRY_HEADER_VERSION == version_ || LOG_GROUP_ENTRY_HEADER_VERSION2 == version_)
+         && (LOG_GROUP_ENTRY_HEADER_VERSION == version_
+             || LOG_GROUP_ENTRY_HEADER_VERSION2 == version_)
          && INVALID_PROPOSAL_ID != proposal_id_
          && true == committed_end_lsn_.is_valid()
          && true == max_scn_.is_valid()
@@ -107,7 +108,7 @@ int LogGroupEntryHeader::generate(const bool is_raw_write,
       PALF_LOG(ERROR, "calculate_log_checksum_ failed", K(ret), KPC(this));
     }
   }
-  PALF_LOG(TRACE, "LogGroupEntryHeader generate", K(ret), K(is_padding_log), K(*this), K(data_checksum));
+  PALF_LOG(TRACE, "LogGroupEntryHeader generate", K(ret), K(is_padding_log), K(is_raw_write), K(*this), K(data_checksum));
   return ret;
 }
 
@@ -423,7 +424,8 @@ bool LogGroupEntryHeader::check_header_checksum_() const
 {
   bool bool_ret = false;
   const uint16_t header_checksum = calculate_header_checksum_();
-  if (LOG_GROUP_ENTRY_HEADER_VERSION2 != version_ && LOG_GROUP_ENTRY_HEADER_VERSION != version_) {
+  if (LOG_GROUP_ENTRY_HEADER_VERSION2 != version_
+      && LOG_GROUP_ENTRY_HEADER_VERSION != version_) {
     PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "check_header_checksum_ failed, invalid version_", KPC(this));
   } else {
     int64_t mask = get_header_checksum_mask_();
@@ -600,7 +602,7 @@ bool LogGroupEntryHeader::check_compatibility() const
   bool bool_ret = false;
   if (!is_valid()) {
     PALF_LOG_RET(WARN, OB_EAGAIN, "invalid LogGroupEntryHeader", KPC(this));
-  } else if (LOG_GROUP_ENTRY_HEADER_VERSION2 == version_ && LOG_GROUP_ENTRY_HEADER_VERSION2 != get_version_()) {
+  } else if ((LOG_GROUP_ENTRY_HEADER_VERSION2 == version_ && LOG_GROUP_ENTRY_HEADER_VERSION2 != get_version_())) {
     PALF_LOG_RET(WARN, OB_EAGAIN, "data version not match!!!", KPC(this));
   } else {
     bool_ret = true;

@@ -45,11 +45,28 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreSourceLocationConfigParser);
 };
 
+class ObServiceConfigParser
+{
+public:
+  ObServiceConfigParser(ObRestoreSourceServiceAttr &service_attr) : service_attr_(service_attr) {}
+  ~ObServiceConfigParser() {}
+  int parse_from(const common::ObString &value);
+protected:
+  virtual int do_parse_token_(char *token, char *value);
+private:
+  int do_parse_sub_config_(const common::ObString &config_str);
+  int do_parse_restore_service_host_(const common::ObString &name, const common::ObString &value);
+  int do_parse_restore_service_user_(const common::ObString &name, const common::ObString &value);
+  int do_parse_restore_service_passwd_(const common::ObString &name, const common::ObString &value);
+private:
+  ObRestoreSourceServiceAttr &service_attr_;
+};
+
 class ObLogRestoreSourceServiceConfigParser : public ObIBackupConfigItemParser
 {
 public:
   ObLogRestoreSourceServiceConfigParser(const ObBackupConfigType::Type &type, const uint64_t tenant_id)
-    : ObIBackupConfigItemParser(type, tenant_id) {}
+    : ObIBackupConfigItemParser(type, tenant_id), parser_(service_attr_) {}
   virtual ~ObLogRestoreSourceServiceConfigParser() {}
   virtual int parse_from(const common::ObSqlString &value) override;
   virtual int update_inner_config_table(common::ObISQLClient &trans) override;
@@ -61,15 +78,13 @@ public:
   int get_primary_server_addr(const common::ObSqlString &value,
   uint64_t &primary_tenant_id, uint64_t &primary_cluster_id,
   ObIArray<common::ObAddr> &addr_list);
+
 private:
-  int do_parse_sub_config_(const common::ObString &config_str);
-  int do_parse_restore_service_host_(const common::ObString &name, const common::ObString &value);
-  int do_parse_restore_service_user_(const common::ObString &name, const common::ObString &value);
-  int do_parse_restore_service_passwd_(const common::ObString &name, const common::ObString &value);
   int check_doing_service_restore_(common::ObISQLClient &trans, bool &is_doing);
   int update_data_backup_dest_config_(common::ObISQLClient &trans);
   int construct_restore_sql_proxy_(ObLogRestoreProxyUtil &log_restore_proxy);
 private:
+  ObServiceConfigParser parser_;
   ObRestoreSourceServiceAttr service_attr_;
   bool is_empty_;
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreSourceServiceConfigParser);

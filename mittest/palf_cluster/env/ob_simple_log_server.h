@@ -210,6 +210,7 @@ protected:
   int init_network_(const common::ObAddr &addr, const bool is_bootstrap);
   int init_log_service_(const std::string &cluster_name);
   int init_memory_dump_timer_();
+  int destroy_uniq_task_queue_();
 
 private:
   int64_t node_id_;

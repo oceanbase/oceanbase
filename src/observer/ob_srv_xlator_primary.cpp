@@ -27,6 +27,9 @@
 #include "logservice/palf/log_rpc_processor.h"
 #include "logservice/logrpc/ob_log_rpc_processor.h"
 #include "logservice/cdcservice/ob_cdc_rpc_processor.h"
+#include "logservice/transportservice/ob_log_transport_resp_processor.h"
+#include "logservice/transportservice/ob_log_standby_rpc_processor.h"
+#include "observer/ob_rpc_processor_simple.h"
 
 #include "observer/net/ob_rpc_reverse_keepalive.h"
 
@@ -219,6 +222,12 @@ void oceanbase::observer::init_srv_xlator_for_logservice(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(logservice::LogProbeRsP);
 #endif
   RPC_PROCESSOR(logservice::LogGetCkptReqP);
+  // 主库接收备库ACK的RPC processor
+  RPC_PROCESSOR(logservice::ObLogTransportRespP);
+  // 主库处理备库获取日志流位置的 RPC processor
+  RPC_PROCESSOR(ObGetLSLocationP, gctx_);
+  // 备库接收主库日志传输的RPC processor
+  RPC_PROCESSOR(logservice::ObLogStandbyTransportP);
 }
 
 void oceanbase::observer::init_srv_xlator_for_palfenv(ObSrvRpcXlator *xlator)

@@ -25,7 +25,6 @@ TEST(TestRestoreSource, test_net_standby_restore_source)
 {
   ObSqlString source_str;
   char original_str[1000] = "ip_list=127.0.0.1:1001;127.0.0.1:1002,USER=restore_user@primary_tenant,PASSWORD=38344B42344C61477232324839306F3093231FF975D957829E4813195215E5B0,TENANT_ID=9223372036854775807,CLUSTER_ID=4294967295,COMPATIBILITY_MODE=MYSQL,IS_ENCRYPTED=false";
-  char passwd_str[OB_MAX_PASSWORD_LENGTH + 1] = { 0 };
   source_str.assign(original_str);
 
   ObSqlString user_and_tenant;
@@ -53,9 +52,11 @@ TEST(TestRestoreSource, test_net_standby_restore_source)
 
 // check attr
   common::ObAddr addr1(common::ObAddr::VER::IPV4, "127.0.0.1", 1001);
-  EXPECT_TRUE(attr.addr_.at(0) == addr1);
   common::ObAddr addr2(common::ObAddr::VER::IPV4, "127.0.0.1", 1002);
-  EXPECT_TRUE(attr.addr_.at(1) == addr2);
+  common::ObArray<common::ObAddr> addr_list;
+  (void)attr.get_sql_addr_list(addr_list);
+  EXPECT_EQ(addr_list.at(0), addr1);
+  EXPECT_EQ(addr_list.at(1), addr2);
 
   (void)attr.get_ip_list_str_(ip_list);
   EXPECT_EQ(0, STRCMP(ip_list.ptr(),"127.0.0.1:1001;127.0.0.1:1002"));
@@ -76,7 +77,9 @@ TEST(TestRestoreSource, test_net_standby_restore_source)
   EXPECT_TRUE(attr.service_user_is_valid());
   EXPECT_TRUE(attr.service_host_is_valid());
   EXPECT_TRUE(attr.is_valid());
-  EXPECT_TRUE(attr.compare_addr_(tmp_attr.addr_));
+  common::ObArray<common::ObAddr> tmp_addr_list;
+  (void)tmp_attr.get_sql_addr_list(tmp_addr_list);
+  EXPECT_TRUE(attr.compare_addr_(tmp_addr_list));
   EXPECT_TRUE(attr == tmp_attr);
 
 // check invalid attr
@@ -92,6 +95,26 @@ TEST(TestRestoreSource, test_net_standby_restore_source)
   (void)attr3.assign(attr);
   attr3.addr_.destroy();
   EXPECT_FALSE(attr3.is_valid());
+
+  // check attr with svr_port
+  ObSqlString source_str_with_svr_port;
+  char original_str_with_svr_port[1000] = "ip_list=127.0.0.1:1001+2001;127.0.0.1:1002+2002,USER=restore_user@primary_tenant,PASSWORD=38344B42344C61477232324839306F3093231FF975D957829E4813195215E5B0,TENANT_ID=9223372036854775807,CLUSTER_ID=4294967295,COMPATIBILITY_MODE=MYSQL,IS_ENCRYPTED=false";
+  addr_list.reset();
+  source_str_with_svr_port.assign(original_str_with_svr_port);
+
+  share::ObRestoreSourceServiceAttr attr_with_svr_port;
+  (void)attr_with_svr_port.parse_service_attr_from_str(source_str_with_svr_port);
+  EXPECT_TRUE(attr_with_svr_port.is_valid());
+  EXPECT_TRUE(attr_with_svr_port.has_svr_port());
+  (void)attr_with_svr_port.get_sql_addr_list(addr_list);
+  EXPECT_EQ(addr_list.at(0), addr1);
+  EXPECT_EQ(addr_list.at(1), addr2);
+  EXPECT_TRUE(attr_with_svr_port.addr_.at(0).is_svr_port_valid());
+  EXPECT_TRUE(attr_with_svr_port.addr_.at(1).is_svr_port_valid());
+  EXPECT_EQ(2001, attr_with_svr_port.addr_.at(0).get_svr_port());
+  EXPECT_EQ(2002, attr_with_svr_port.addr_.at(1).get_svr_port());
+  (void)attr_with_svr_port.get_ip_list_str_(ip_list);
+  EXPECT_EQ(0, STRCMP(ip_list.ptr(),"127.0.0.1:1001+2001;127.0.0.1:1002+2002"));
 }
 
 } // end of unittest

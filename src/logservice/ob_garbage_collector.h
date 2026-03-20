@@ -51,6 +51,7 @@ class SCN;
 }
 namespace logservice
 {
+class ObLogHandler;
 enum ObGCLSLOGType
 {
   UNKNOWN_TYPE = 0,
@@ -294,6 +295,7 @@ public:
   int gc_check_invalid_member_seq(const int64_t gc_seq, bool &need_gc);
   static bool is_valid_ls_gc_state(const LSGCState &state);
   static bool is_ls_offline_gc_state(const LSGCState &state);
+  static bool is_ls_offline_finished(const LSGCState &state);
   void set_log_sync_stopped();
   bool is_log_sync_stopped() const {return ATOMIC_LOAD(&log_sync_stopped_);}
 
@@ -372,6 +374,7 @@ private:
   int overwrite_set_gc_state_retcode_(const int ret_code,
                                       const LSGCState gc_state,
                                       const ObLSID &ls_id);
+  int check_ls_sync_scn_for_gc_(const share::SCN &offline_scn);
 private:
   bool is_inited_;
   mutable RWLock rwlock_; //for leader revoke/takeover submit log

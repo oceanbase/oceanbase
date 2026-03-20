@@ -39,11 +39,13 @@ int LogRequestHandler::change_access_mode_(const LogChangeAccessModeCmd &req)
     if (OB_FAIL(get_palf_handle_guard_(palf_id, palf_handle_guard))) {
       CLOG_LOG(WARN, "get_palf_handle_guard_ failed", K(ret), K(palf_id));
     } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
-    } else if (OB_FAIL(palf_handle_guard.change_access_mode(proposal_id, req.mode_version_,
-        req.access_mode_, req.ref_scn_))) {
-      CLOG_LOG(WARN, "change_access_mode failed", K(ret), K(palf_id), K(server));
     } else {
-      CLOG_LOG(INFO, "change_access_mode success", K(ret), K(req));
+      if (OB_FAIL(palf_handle_guard.change_access_mode(proposal_id, req.mode_version_,
+          req.access_mode_, req.ref_scn_))) {
+        CLOG_LOG(WARN, "change_access_mode failed", K(ret), K(palf_id), K(server));
+      } else {
+        CLOG_LOG(INFO, "change_access_mode success", K(ret), K(req));
+      }
     }
   }
   return ret;

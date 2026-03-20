@@ -21,6 +21,13 @@
 #include "share/backup/ob_backup_config.h" // ObBackupConfigParserMgr
 #include "storage/high_availability/ob_transfer_lock_utils.h" // ObMemberListLockUtils
 #include "share/ob_license_utils.h"
+#include "share/ob_sync_standby_dest_operator.h"
+#include "src/rootserver/standby/ob_protection_mode_utils.h"
+#include "share/ob_server_check_utils.h"
+#include "share/ob_flashback_standby_log_struct.h"
+#include "rootserver/ob_rs_async_rpc_proxy.h"
+#include "rootserver/ob_root_utils.h"
+#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -33,6 +40,117 @@ using namespace storage;
 using namespace tenant_event;
 namespace standby
 {
+
+static share::ObLSID get_ls_id_from_elem(const share::ObLSStatusInfo &status_info)
+{
+  return status_info.ls_id_;
+}
+
+static share::ObLSID get_ls_id_from_elem(const share::ObLSID &input_ls_id)
+{
+  return input_ls_id;
+}
+
+template <typename LSStatusArray>
+int ObStandbyService::get_checkpoints_by_rpc(
+    const uint64_t tenant_id,
+    const LSStatusArray &status_info_array,
+    const bool check_sync_to_latest,
+    ObIArray<obrpc::ObCheckpoint> &checkpoints)
+{
+  int ret = OB_SUCCESS;
+  checkpoints.reset();
+
+  LOG_INFO("start to get_checkpoints_by_rpc", KR(ret), K(tenant_id), K(check_sync_to_latest), K(status_info_array));
+  if (!is_user_tenant(tenant_id) || 0 >= status_info_array.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(status_info_array));
+  } else if (OB_ISNULL(GCTX.location_service_) || OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", KR(ret), KP(GCTX.location_service_), KP(GCTX.srv_rpc_proxy_));
+  } else {
+    ObAddr leader;
+    ObGetLSSyncScnProxy proxy(
+        *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::get_ls_sync_scn);
+    obrpc::ObGetLSSyncScnArg arg;
+    //由于在check_sync_to_latest，需要给上游发RPC或者SQL获取准确的end_scn，所以会存在嵌套
+    //RPC的概率，OBCG_DBA_COMMAND这个队列是需要的时候创建，个数和租户的CPU相关，如果发生
+    //嵌套RPC的话，可能会出现资源型饿死的可能性。
+    //在不需要检查check_sync_to_latest使用OBCG_DBA_COMMAND，否则为了避免嵌套RPC，使用NORMAL队列
+    const uint64_t group_id = check_sync_to_latest ? 0 : share::OBCG_DBA_COMMAND;
+    for (int64_t i = 0; OB_SUCC(ret) && i < status_info_array.count(); ++i) {
+      const auto &ls_status = status_info_array.at(i);
+      const share::ObLSID ls_id = get_ls_id_from_elem(ls_status);
+      const int64_t timeout_us = !THIS_WORKER.is_timeout_ts_valid() ?
+        GCONF.rpc_timeout : THIS_WORKER.get_timeout_remain();
+      if (OB_FAIL(GCTX.location_service_->get_leader(
+        GCONF.cluster_id, tenant_id, ls_id, false, leader))) {
+        LOG_WARN("failed to get leader", KR(ret), K(tenant_id), K(ls_id));
+      } else if (OB_FAIL(arg.init(tenant_id, ls_id, check_sync_to_latest))) {
+        LOG_WARN("failed to init arg", KR(ret), K(tenant_id), K(ls_id));
+      // use meta rpc process thread
+      } else if (OB_FAIL(proxy.call(leader, timeout_us, GCONF.cluster_id, tenant_id, group_id, arg))) {
+        LOG_WARN("failed to send rpc", KR(ret), K(leader), K(timeout_us),
+            K(tenant_id), K(arg), K(group_id));
+      }
+    }//end for
+    //get result
+    ObArray<int> return_code_array;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+      LOG_WARN("fail to check return cnt", KR(ret), "return_cnt", return_code_array.count());
+    } else if (status_info_array.count() != return_code_array.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rpc count not equal to result count", KR(ret),
+                K(return_code_array.count()), K(return_code_array.count()));
+    } else {
+      ObGetLSSyncScnRes res;
+      for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); ++i) {
+        tmp_ret = return_code_array.at(i);
+        if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
+          LOG_WARN("get checkpoints: send rpc failed", KR(ret), KR(tmp_ret), K(i));
+          const obrpc::ObGetLSSyncScnArg &arg = proxy.get_args().at(i);
+          if (OB_SUCCESS !=(tmp_ret = GCTX.location_service_->nonblock_renew(
+                    GCONF.cluster_id, tenant_id, arg.get_ls_id()))) {
+            LOG_WARN("failed to renew location", KR(tmp_ret), K(tenant_id), K(arg));
+          }
+        } else {
+          const auto *result = proxy.get_results().at(i);
+          const ObAddr &leader = proxy.get_dests().at(i);
+          if (OB_ISNULL(result)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("result is null", KR(ret), K(i));
+          } else {
+            ObCheckpoint checkpoint(result->get_ls_id(), result->get_cur_sync_scn(), result->get_cur_restore_source_next_scn());
+            if (OB_FAIL(checkpoints.push_back(checkpoint))) {
+              LOG_WARN("failed to push back checkpoint", KR(ret), K(checkpoint));
+            }
+          }
+        }
+      }
+    }
+  }
+  LOG_INFO("finish get_checkpoints_by_rpc", KR(ret), K(tenant_id), K(check_sync_to_latest),
+      K(status_info_array), K(checkpoints));
+  return ret;
+}
+
+template int ObStandbyService::get_checkpoints_by_rpc<share::ObLSStatusInfoIArray>(
+    const uint64_t tenant_id,
+    const share::ObLSStatusInfoIArray &status_info_array,
+    const bool check_sync_to_latest,
+    ObIArray<obrpc::ObCheckpoint> &checkpoints);
+
+template int ObStandbyService::get_checkpoints_by_rpc<ObIArray<share::ObLSID> >(
+    const uint64_t tenant_id,
+    const ObIArray<share::ObLSID> &status_info_array,
+    const bool check_sync_to_latest,
+    ObIArray<obrpc::ObCheckpoint> &checkpoints);
 
 int ObStandbyService::init(
            ObMySQLProxy *sql_proxy,
@@ -143,6 +261,151 @@ void ObStandbyService::tenant_event_end_(
       break;
     default :break;
   }
+}
+
+int ObStandbyService::check_tenant_can_set_protection_mode_(ObMySQLTransaction &trans,
+  const uint64_t user_tenant_id, const ObProtectionMode &target_protection_mode,
+  const ObAllTenantInfo &tenant_info)
+{
+  int ret = OB_SUCCESS;
+  ObProtectionModeUtils protectioin_mode_utils;
+  bool is_sync = false;
+  bool is_empty = false;
+  ObSyncStandbyDestStruct sync_standby_dest_struct;
+  ObProtectionStat protection_stat;
+  ObTimeoutCtx ctx;
+  // 1. primary tenant
+  if (!tenant_info.is_primary()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("tenant is not primary", KR(ret), K(tenant_info));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant is not primary, set protection mode is");
+  // 2. not in switchover
+  } else if (!tenant_info.is_normal_status()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("tenant is in switchover status", KR(ret), K(tenant_info));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant is in switchover status, set protection mode is");
+  } else if (OB_FAIL(protection_stat.init(tenant_info))) {
+    LOG_WARN("failed to init protection stat", KR(ret), K(tenant_info));
+  // 3. tenant is not downgrading if planning to change to maximum protection mode
+  } else if (protection_stat.is_sync_to_async() && target_protection_mode.is_maximum_protection()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("protection stat is sync to async, cannot set protection mode", KR(ret), K(user_tenant_id));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "protection stat is sync to async, set protection mode is");
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
+    LOG_WARN("failed to set default timeout", KR(ret));
+  }
+  // 4. standby tenant is sync
+  if (!target_protection_mode.is_maximum_protection() || OB_FAIL(ret)) {
+  } else if (OB_FAIL(protectioin_mode_utils.init(user_tenant_id))) {
+    LOG_WARN("failed to init protection mode utils", KR(ret), K(user_tenant_id));
+  } else if (OB_FAIL(protectioin_mode_utils.wait_standby_tenant_sync(ctx))) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("wait standby tenant sync timeout", KR(ret), K(user_tenant_id));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "wait standby tenant sync timeout, set protection mode is");
+    } else {
+      LOG_WARN("failed to wait standby tenant sync", KR(ret), K(user_tenant_id));
+    }
+  // 5. no ls is creating
+  } else if (OB_FAIL(ObProtectionModeUtils::check_ls_status_for_upgrade_protection_level(
+      user_tenant_id, trans))) {
+    LOG_WARN("failed to check no ls is creating for set protection mode", KR(ret), K(user_tenant_id));
+  }
+  // 6. check sync standby dest is not empty
+  if (OB_FAIL(ret)) {
+  } else if (protection_stat.get_protection_mode().is_maximum_availability()) {
+    // if current protection mode is maximum availability, sync_standby_dest is always valid
+  } else if (target_protection_mode.is_maximum_performance()) {
+    // if target protection mode is maximum performance, no need to check sync standby dest
+  } else if (OB_FAIL(ObProtectionModeUtils::get_tenant_sync_standby_dest(user_tenant_id, trans,
+      true/*for_update*/, is_empty, sync_standby_dest_struct))) {
+    LOG_WARN("failed to get tenant sync standby dest", KR(ret), K(user_tenant_id));
+  } else if (is_empty || !sync_standby_dest_struct.is_valid()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("tenant sync standby dest is invalid or empty", KR(ret), K(user_tenant_id), K(is_empty), K(sync_standby_dest_struct));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant sync standby dest is invalid or empty, set protection mode is");
+  }
+  return ret;
+}
+
+int ObStandbyService::set_protection_mode(const share::ObSetProtectionModeArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  ObMySQLTransaction trans;
+  const uint64_t user_tenant_id = arg.get_tenant_id();
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(user_tenant_id);
+  ObProtectionMode target_protection_mode = arg.get_protection_mode();
+  ObProtectionLevel target_protection_level;
+  ObProtectionMode current_protection_mode;
+  ObProtectionLevel current_protection_level;
+  int64_t new_switchover_epoch = OB_INVALID_VERSION;
+  bool protection_mode_enable = false;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("inner stat error", KR(ret), K_(inited));
+  } else if (OB_FAIL(ObProtectionModeUtils::check_tenant_data_version_for_protection_mode(
+          user_tenant_id, protection_mode_enable))) {
+    LOG_WARN("failed to check tenant data version for protection mode", KR(ret), K(user_tenant_id));
+  } else if (!protection_mode_enable) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("tenant is not upgraded, set protection mode is not allowed", KR(ret), K(user_tenant_id));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant is not upgraded, set protection mode");
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("set protection mode in logservice is not supported", KR(ret), K(user_tenant_id),
+        K(GCONF.enable_logservice));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set protection mode in logservice");
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg), K(user_tenant_id));
+  } else if (!is_user_tenant(user_tenant_id)) {
+    // checked in ObSetProtectionModeResolver::resolve
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant is not user tenant", KR(ret), K(user_tenant_id));
+  } else if (OB_FAIL(trans.start(sql_proxy_, meta_tenant_id))) {
+    LOG_WARN("failed to start trans", KR(ret), K(meta_tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(user_tenant_id, &trans, true/*for_update*/, tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K(user_tenant_id));
+  } else if (OB_UNLIKELY(!tenant_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant info is not valid", KR(ret), K(tenant_info));
+  } else if (OB_FAIL(check_tenant_can_set_protection_mode_(trans, user_tenant_id,
+    target_protection_mode, tenant_info))) {
+    LOG_WARN("failed to check tenant can set protection mode", KR(ret), K(user_tenant_id), K(target_protection_mode), K(tenant_info));
+  } else if (FALSE_IT(current_protection_mode = tenant_info.get_protection_mode())) {
+  } else if (FALSE_IT(current_protection_level = tenant_info.get_protection_level())) {
+  } else if (current_protection_mode == target_protection_mode) {
+    LOG_INFO("protection mode is already the same, no need to set", KR(ret), K(user_tenant_id),
+      K(arg), K(tenant_info));
+  } else if (OB_FAIL(ObProtectionStat::get_next_protection_level(current_protection_mode, current_protection_level,
+    target_protection_mode, target_protection_level))) {
+    LOG_WARN("failed to get next protection level", KR(ret), K(current_protection_mode),
+      K(current_protection_level), K(target_protection_mode));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
+      user_tenant_id, tenant_info.get_tenant_role(), &trans, tenant_info.get_switchover_epoch(), target_protection_mode,
+      target_protection_level, tenant_info.get_switchover_epoch()/* min switchover epoch */,
+      new_switchover_epoch))) {
+    LOG_WARN("failed to update tenant protection mode and level", KR(ret), K(user_tenant_id),
+      K(target_protection_mode), K(target_protection_level), K(tenant_info));
+  } else if (new_switchover_epoch == tenant_info.get_switchover_epoch()) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("switchover epoch is not changed, need retry", KR(ret), K(user_tenant_id), K(tenant_info), K(new_switchover_epoch));
+    LOG_USER_ERROR(OB_NEED_RETRY, "switchover epoch is not changed, need retry");
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to end trans", KR(ret), K(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  if (FAILEDx(ObProtectionModeUtils::wait_protection_stat_steady(
+          user_tenant_id, target_protection_mode, sql_proxy_))) {
+    LOG_WARN("failed to wait protection stat steady", KR(ret), K(user_tenant_id));
+  } else {
+    LOG_INFO("protection stat is steady", KR(ret), K(user_tenant_id));
+  }
+  return ret;
 }
 
 int ObStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
@@ -572,6 +835,7 @@ int ObStandbyService::switch_to_standby(
 {
   int ret = OB_SUCCESS;
   const int32_t group_id = share::OBCG_DBA_COMMAND;
+  ObProtectionStat protection_stat;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
   } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
@@ -594,6 +858,13 @@ int ObStandbyService::switch_to_standby(
           ret = OB_OP_NOT_ALLOW;
           LOG_WARN("recovery_until_scn has been changed ", KR(ret), K(tenant_id), K(tenant_info));
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recovery_until_scn has been changed, switchover to standby is");
+        } else if (OB_FAIL(protection_stat.init(tenant_info))) {
+          LOG_WARN("failed to init protection stat", KR(ret), K(tenant_info));
+        } else if (!protection_stat.is_steady()) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("protection stat is not steady, switchover to standby is not allowed", KR(ret),
+              K(tenant_info), K(protection_stat));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "protection stat is not steady, switchover to standby is");
         } else if (is_verify) {
           // skip
         } else if (OB_FAIL(update_tenant_status_before_sw_to_standby_(
@@ -1052,6 +1323,68 @@ int ObStandbyService::check_ls_restore_status_(const uint64_t tenant_id)
     }
   }
 
+  return ret;
+}
+
+int ObStandbyService::clear_fetched_log_cache(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_timestamp = ObTimeUtility::current_time();
+  ObArray<ObAddr> tenant_online_servers;
+  ObClearFetchedLogCacheArg arg;
+  ObArray<int> return_code_array;
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObServerCheckUtils::check_offline_and_get_tenants_servers(tenant_id,
+      false /* allow_temp_offline */, tenant_online_servers, "FLASHBACK STANDBY LOG"))) {
+    // ensure the tenant has no units on temp. offline servers
+    LOG_WARN("fail to execute check_and_get_tenants_online_servers", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(arg.init(tenant_id))) {
+    LOG_WARN("fail to init arg", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.srv_rpc_proxy_ is null", KR(ret), KP(GCTX.srv_rpc_proxy_));
+  } else {
+    const uint64_t group_id = share::OBCG_DBA_COMMAND;
+    ObClearFetchedLogCacheProxy proxy(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::clear_fetched_log_cache);
+    int tmp_ret = OB_SUCCESS;
+    ObTimeoutCtx ctx;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_online_servers.count(); i++) {
+      const ObAddr &server = tenant_online_servers.at(i);
+      if (OB_FAIL(ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+        LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+      } else if (OB_FAIL(proxy.call(server, ctx.get_timeout(), GCONF.cluster_id, tenant_id, group_id, arg))) {
+        LOG_WARN("failed to send rpc", KR(ret), KR(tmp_ret), K(server), K(ctx), K(tenant_id), K(arg));
+      }
+    }
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
+    if (FAILEDx(proxy.check_return_cnt(return_code_array.count()))) {
+      LOG_WARN("fail to check return cnt", KR(ret), "return_cnt", return_code_array.count());
+    }
+    ARRAY_FOREACH_X(proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
+      const ObClearFetchedLogCacheRes *result = proxy.get_results().at(idx);
+      const ObAddr &dest_addr = proxy.get_dests().at(idx);
+      ret = return_code_array.at(idx);
+      if (OB_FAIL(ret)) {
+        LOG_WARN("fail to send rpc", KR(ret), K(dest_addr), K(idx));
+        if (OB_TENANT_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_ISNULL(result)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret), KP(result));
+      } else if (OB_UNLIKELY(!result->is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid result", KR(ret), KPC(result), K(dest_addr));
+      }
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - start_timestamp;
+  FLOG_INFO("clear_fetched_log_cache", KR(ret), K(tenant_id), K(tenant_online_servers), K(cost));
   return ret;
 }
 

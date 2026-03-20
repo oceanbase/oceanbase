@@ -56,15 +56,18 @@ private:
 class ObITxLogAdapter
 {
 public:
+  static constexpr int64_t DEFAULT_RETRY_TIMEOUT_US = 1000;
 
   virtual void reset() {}
 
+  // TODO by ziqi：确定接口最终实现
   virtual int submit_log(const char *buf,
                          const int64_t size,
                          const share::SCN &base_ts,
                          ObTxBaseLogCb *cb,
                          const bool need_nonblock,
-                         const int64_t retry_timeout_us = 1000) = 0;
+                         const int64_t retry_timeout_us = DEFAULT_RETRY_TIMEOUT_US,
+                         const bool skip_pre_async_wait = false) = 0;
 
   virtual int get_role(bool &is_leader, int64_t &epoch) = 0;
   virtual int get_max_decided_scn(share::SCN &scn) = 0;
@@ -110,7 +113,8 @@ public:
                  const share::SCN &base_ts,
                  ObTxBaseLogCb *cb,
                  const bool need_nonblock,
-                 const int64_t retry_timeout_us = 1000);
+                 const int64_t retry_timeout_us = DEFAULT_RETRY_TIMEOUT_US,
+                 const bool skip_pre_async_wait = false);
   int get_role(bool &is_leader, int64_t &epoch);
   int get_max_decided_scn(share::SCN &scn);
   int get_palf_committed_max_scn(share::SCN &scn) const;

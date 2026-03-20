@@ -276,6 +276,7 @@ void ObLSRecoveryReportor::idle_some_time_()
     while (idle_count < idle_target_cnt && !stop_) {
       int64_t idle_time = ObTenantRoleTransitionConstants::STANDBY_UPDATE_LS_RECOVERY_STAT_TIME_US;
       bool is_primary_normal_status = true;
+      bool is_sync_mode = false;
       bool is_changing_member_list = false;
       idle_count++;
       if (OB_FAIL(ret)) {
@@ -283,7 +284,10 @@ void ObLSRecoveryReportor::idle_some_time_()
       } else if (OB_FAIL(tenant_info_loader->check_is_primary_normal_status(is_primary_normal_status))) {
         idle_target_cnt = 1;
         LOG_WARN("fail to get tenant status", KR(ret), K_(tenant_id));
-      } else if (!is_primary_normal_status) {
+      } else if (OB_FAIL(tenant_info_loader->check_is_sync_mode(is_sync_mode))) {
+        idle_target_cnt = 1;
+        LOG_WARN("fail to get tenant protection mode", KR(ret), K_(tenant_id));
+      } else if (!is_primary_normal_status || is_sync_mode) {
         // We use _keepalive_interval here to control report interval;
         // To minimize the latency, the keepalive_interval in the primary database would be lower down;
         // And the report interval should also be the same to improve efficiency,

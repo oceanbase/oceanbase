@@ -965,8 +965,7 @@ int ObBootstrap::prepare_create_partition(
   if (OB_SUCC(ret)) {
     LOG_INFO("succeed prepare create table partition",
              "table_id", tschema.get_table_id(),
-             "table_name", tschema.get_table_name(),
-             "cluster_role", cluster_role_to_str(arg_.cluster_role_));
+             "table_name", tschema.get_table_name());
   }
 
   BOOTSTRAP_CHECK_SUCCESS();

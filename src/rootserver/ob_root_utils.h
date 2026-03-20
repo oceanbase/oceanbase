@@ -32,6 +32,7 @@ namespace share
 {
 class ObILSPropertyGetter;
 class ObZoneReplicaAttrSet;
+class ObLSID;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -665,6 +666,8 @@ public:
                                      common::ObIArray<common::ObAddr> &this_server_list,
                                      common::ObIArray<common::ObAddr> &other_server_list,
                                      common::ObIArray<uint64_t> &tenant_ids);
+  static int get_proposal_id(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      int64_t &proposal_id, ObRole &role);
   static int get_proposal_id_from_sys_ls(int64_t &proposal_id, ObRole &role);
 
   static int notify_switch_leader(

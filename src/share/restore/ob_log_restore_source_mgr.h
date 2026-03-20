@@ -62,8 +62,9 @@ public:
   int get_source_for_update(ObLogRestoreSourceItem &item, common::ObMySQLTransaction &trans);
 
   static int get_backup_dest(const ObLogRestoreSourceItem &item, ObBackupDest& dest);
+  static int64_t get_default_log_restore_source_id() { return OB_DEFAULT_LOG_RESTORE_SOURCE_ID; }
 private:
-  const int64_t OB_DEFAULT_LOG_RESTORE_SOURCE_ID = 1;
+  static const int64_t OB_DEFAULT_LOG_RESTORE_SOURCE_ID;
 private:
   bool is_inited_;
   uint64_t tenant_id_;       // user tenant id

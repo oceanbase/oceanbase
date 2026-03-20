@@ -2960,6 +2960,7 @@ typedef enum ObItemType
   T_TABLE_VERSION_QUERY_TIMESTAMP = 4919,
   T_TABLE_LOCK_MODE_HINT = 4920,  // to lock table before execute dml
   T_DISABLE_TRIGGER_HINT = 4936, // for trigger hint
+  T_SET_PROTECTION_MODE = 4942,
   T_PARALLEL_PARSE_ON_SINGLE_FILE = 4946, // disable parallel parse single csv
   T_PARALLEL_PARSE_FILE_SIZE_THRESHOLD = 4957,
   T_MAX_ROW_LENGTH = 4958,

@@ -228,6 +228,10 @@ namespace rootserver
   class ObDDLScheduler;
   class ObDDLServiceLauncher;
 }
+namespace standby
+{
+  class ObProtectionModeMgr;
+}
 namespace observer
 {
   class ObTenantMetaChecker;
@@ -419,6 +423,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObArchiveSchedulerService*,        \
       rootserver::ObDRService*,                      \
       rootserver::ObDRSSLOGService*,                 \
+      standby::ObProtectionModeMgr*,                  \
       storage::ObTenantSSTableMergeInfoMgr*,         \
       share::ObDagWarningHistoryManager*,            \
       compaction::ObScheduleSuspectInfoMgr*,         \

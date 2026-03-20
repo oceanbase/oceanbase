@@ -5238,9 +5238,13 @@ int ObAlterSystemSetResolver::resolve(const ParseNode &parse_tree)
           ObString name(var->str_len_, var->str_value_);
           share::ObBackupConfigChecker backup_config_checker;
           bool is_backup_config = false;
+          const char *const OB_STR_SYNC_STANDBY_DEST = "sync_standby_dest";
           if (OB_FAIL(backup_config_checker.check_config_name(name, is_backup_config))) {
             LOG_WARN("fail to check config name", K(ret), K(name));
           } else if (is_backup_config) {
+            set_parameters = true;
+            break;
+          } else if (0 == name.case_compare(OB_STR_SYNC_STANDBY_DEST)) {
             set_parameters = true;
             break;
           } else {

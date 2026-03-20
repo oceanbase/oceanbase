@@ -866,6 +866,36 @@ int ObLSStatusOperator::get_all_ls_status_by_order(
   }
   return ret;
 }
+int ObLSStatusOperator::get_all_ls_status_by_order_for_protection_mode(
+    const uint64_t tenant_id,
+    const bool ignore_wait_offline,
+    ObLSStatusInfoIArray &ls_array, ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  ls_array.reset();
+  ObLSStatusInfoArray ori_ls_array;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant_id is not valid", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_all_ls_status_by_order(tenant_id, ori_ls_array, client))) {
+    LOG_WARN("failed to get_all_ls_status_by_order", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ori_ls_array.count(); ++i) {
+      const ObLSStatusInfo &info = ori_ls_array.at(i);
+      if (ls_is_pre_tenant_dropping_status(info.get_status()) || ls_is_tenant_dropping_status(info.get_status())) {
+        ret = OB_TENANT_HAS_BEEN_DROPPED;
+        LOG_WARN("tenant has been dropped", KR(ret), K(info));
+      } else if (ls_is_creating_status(info.get_status()) || ls_is_create_abort_status(info.get_status())) {
+        LOG_INFO("ignore ls", KR(ret), K(info));
+      } else if (ls_is_wait_offline_status(info.get_status()) && ignore_wait_offline) {
+        LOG_INFO("ignore ls", KR(ret), K(info), K(ignore_wait_offline));
+      } else if (OB_FAIL(ls_array.push_back(info))) {
+        LOG_WARN("failed to push_back", KR(ret), K(info), K(ls_array));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObLSStatusOperator::get_all_ls_status_by_order_for_switch_tenant(
     const uint64_t tenant_id,

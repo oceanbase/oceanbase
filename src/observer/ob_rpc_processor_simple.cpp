@@ -88,6 +88,9 @@
 #include "close_modules/arbitration/share/arbitration_service/ob_arbitration_service_utils.h" // for ObArbitrationServiceUtils
 #endif
 #include "share/backup/ob_backup_connectivity.h"
+#include "rootserver/standby/ob_protection_mode_mgr.h"
+#include "src/rootserver/ob_tenant_info_loader.h"
+#include "src/rootserver/ob_common_ls_service.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 
 namespace oceanbase
@@ -585,6 +588,18 @@ int ObGetLeaderLocationsP::process()
     LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
   } else {
     ret = gctx_.ob_service_->get_leader_locations(arg_, result_);
+  }
+  return ret;
+}
+
+int ObGetLSLocationP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->get_ls_location(arg_, result_);
   }
   return ret;
 }
@@ -1878,13 +1893,25 @@ int ObRpcGetLSAccessModeP::process()
       LOG_WARN("log_handler is null", KR(ret), K(ls_id));
     } else {
       palf::AccessMode mode;
-      int64_t mode_version = palf::INVALID_PROPOSAL_ID;
+      int64_t access_mode_version = palf::INVALID_PROPOSAL_ID;
+      int64_t sync_mode_version = palf::INVALID_PROPOSAL_ID;
       int64_t second_proposal_id = 0;
       const SCN ref_scn = SCN::min_scn();
-      if (OB_FAIL(log_handler->get_access_mode(mode_version, mode))) {
+      palf::SyncMode sync_mode = palf::SyncMode::ASYNC;
+      if (OB_FAIL(log_handler->get_access_mode(access_mode_version, mode))) {
         LOG_WARN("failed to get access mode", KR(ret), K(ls_id));
-      } else if (OB_FAIL(result_.init(tenant_id, ls_id, mode_version, mode, ref_scn, share::SCN::min_scn()))) {
-        LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), K(mode_version), K(mode));
+      } else if (!GCONF.enable_logservice) { // TODO(ziqi): remove enable_logservice
+        if (OB_FAIL(log_handler->get_sync_mode(sync_mode_version, sync_mode))) {
+          LOG_WARN("failed to get access mode", KR(ret), K(ls_id));
+          // TODO(ziqi): use one function to get both access_mode and sync_mode
+        } else if (access_mode_version != sync_mode_version) {
+          ret = OB_NEED_RETRY;
+          LOG_WARN("mode_version not match", KR(ret), K(access_mode_version), K(sync_mode_version));
+        }
+      }
+      if (FAILEDx(result_.init(tenant_id, ls_id, access_mode_version, mode, ref_scn,
+          share::SCN::min_scn(), sync_mode))) {
+        LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), K(access_mode_version), K(mode));
       } else if (OB_FAIL(log_ls_svr->get_palf_role(ls_id, role, second_proposal_id))) {
         COMMON_LOG(WARN, "failed to get palf role", KR(ret), K(ls_id));
       } else if (first_proposal_id != second_proposal_id || !is_strong_leader(role)) {
@@ -1952,13 +1979,75 @@ int ObRpcChangeLSAccessModeP::process()
     }
     change_access_mode_cost = ObTimeUtility::current_time() - begin_time;
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = result_.init(tenant_id, ls_id, ret, wait_sync_scn_cost, change_access_mode_cost))) {
+    if (OB_SUCCESS != (tmp_ret = result_.init(tenant_id, ls_id, ret, wait_sync_scn_cost,
+        change_access_mode_cost))) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), KR(tmp_ret), K(wait_sync_scn_cost), K(change_access_mode_cost));
     } else {
       //if ret  not OB_SUCCESS, res can not return
       ret = OB_SUCCESS;
     }
+  }
+  return ret;
+}
+
+int ObRpcChangeLSSyncModeP::process()
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg_.get_tenant_id();
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObLSService *ls_svr = nullptr;
+  ObLS *ls = nullptr;
+  ObLSID ls_id = arg_.get_ls_id();
+  ObLSHandle handle;
+  logservice::ObLogHandler *log_handler = NULL;
+  share::SCN end_scn;
+  int64_t new_mode_version = palf::INVALID_PROPOSAL_ID;
+
+  CLOG_LOG(INFO, "ObRpcChangeLSSyncModeP::process begin", KR(ret), K(tenant_id), K(ls_id), K(arg_));
+  if (GCONF.enable_logservice) {
+    // in logservice, this RPC should not be called
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("change sync mode is not supported in logservice mode", KR(ret), K(tenant_id), K(ls_id), K(arg_));
+  } else if (tenant_id != MTL_ID()) {
+    ret = guard.switch_to(tenant_id);
+  }
+  if (OB_SUCC(ret)) {
+    ls_svr = MTL(ObLSService*);
+    if (OB_ISNULL(ls_svr)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "mtl ObLSService should not be null", KR(ret));
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+      COMMON_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
+    } else if (OB_ISNULL(ls = handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "ls should not be null", KR(ret));
+    } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log_handler is null", KR(ret), K(ls_id), KP(log_handler));
+    } else {
+      const int64_t abs_timeout_us = nullptr == rpc_pkt_ ? 0 : get_receive_timestamp() + rpc_pkt_->get_timeout();
+      if (OB_FAIL(log_handler->process_change_sync_mode(
+          arg_.get_mode_version(),
+          arg_.get_sync_mode(),
+          arg_.get_ref_scn(),
+          arg_.get_protection_log(),
+          end_scn,
+          new_mode_version,
+          abs_timeout_us))) {
+        LOG_WARN("change_sync_mode_with_transport failed", KR(ret), K(ls_id), K(arg_));
+      }
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = result_.init(tenant_id, ls_id, end_scn, new_mode_version, ret))) {
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+      LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), KR(tmp_ret), K(end_scn));
+    } else {
+      //if ret  not OB_SUCCESS, res can not return
+      ret = OB_SUCCESS;
+    }
+    CLOG_LOG(INFO, "ObRpcChangeLSSyncModeP::process end", KR(ret), K(tenant_id), K(ls_id), K(arg_));
   }
   return ret;
 }
@@ -3272,6 +3361,18 @@ int ObRpcGetLSSyncScnP::process()
   return ret;
 }
 
+int ObRpcGetLSStandbySyncScnP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->get_ls_standby_sync_scn(arg_, result_))) {
+    COMMON_LOG(WARN, "failed to get_ls_standby_sync_scn", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
 int ObRpcGetTenantResP::process()
 {
   int ret = OB_SUCCESS;
@@ -3716,11 +3817,32 @@ int ObRpcNotifyTenantThreadP::process()
       } else if (obrpc::ObNotifyTenantThreadArg::RESTORE_SERVICE == arg_.get_thread_type()) {
         rootserver::ObRestoreService *service = MTL(rootserver::ObRestoreService*);
         WAKE_UP_TENANT_SERVICE
+      } else if (obrpc::ObNotifyTenantThreadArg::PROTECTION_MODE_MGR == arg_.get_thread_type()) {
+        standby::ObProtectionModeMgr *service = MTL(standby::ObProtectionModeMgr*);
+        WAKE_UP_TENANT_SERVICE
+      } else if (obrpc::ObNotifyTenantThreadArg::TENANT_INFO_LOADER == arg_.get_thread_type()) {
+        rootserver::ObTenantInfoLoader *service = MTL(rootserver::ObTenantInfoLoader*);
+        WAKE_UP_TENANT_SERVICE
+      } else if (obrpc::ObNotifyTenantThreadArg::COMMON_LS_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObCommonLSService *service = MTL(rootserver::ObCommonLSService*);
+        WAKE_UP_TENANT_SERVICE
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected thread type", KR(ret), K(arg_));
       }
     }
+  }
+  return ret;
+}
+
+int ObClearSyncStandbyDestCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else {
+    ret = gctx_.ob_service_->clear_sync_standby_dest_cache(arg_);
   }
   return ret;
 }

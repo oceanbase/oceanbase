@@ -483,6 +483,7 @@ private:
   bool need_execute_fetch_(const FetchTriggerType &fetch_trigger_type);
   bool need_use_batch_rpc_(const int64_t buf_size,
                            const bool is_fetch_log) const;
+  bool is_sync_mode_() const;
 public:
   typedef common::ObLinearHashMap<common::ObAddr, LsnTsInfo> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小

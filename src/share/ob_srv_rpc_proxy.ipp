@@ -20,6 +20,8 @@
       (obrpc::ObInitTenantConfigArg), obrpc::ObInitTenantConfigRes);
   RPC_AP(PR3 get_leader_locations, OB_GET_LEADER_LOCATIONS,
       (obrpc::ObGetLeaderLocationsArg), obrpc::ObGetLeaderLocationsResult);
+  RPC_S(PR3 get_ls_location, OB_GET_LS_LOCATION,
+      (obrpc::ObGetLSLocationArg), share::ObLSLocation);
   RPC_S(PR5 fetch_sys_ls, OB_FETCH_SYS_LS,
         share::ObLSReplica);
   RPC_S(PR5 broadcast_rs_list, OB_BROADCAST_RS_LIST, (obrpc::ObRsListArg));
@@ -236,6 +238,7 @@
   RPC_S(PR5 check_backup_dest_connectivity, OB_CHECK_BACKUP_DEST_CONNECTIVITY, (ObCheckBackupConnectivityArg));
   RPC_AP(PR1 get_ls_access_mode, OB_GET_LS_ACCESS_MODE, (obrpc::ObGetLSAccessModeInfoArg), obrpc::ObLSAccessModeInfo);
   RPC_AP(PR1 change_ls_access_mode, OB_CHANGE_LS_ACCESS_MODE, (obrpc::ObLSAccessModeInfo), obrpc::ObChangeLSAccessModeRes);
+  RPC_AP(PR1 change_ls_sync_mode, OB_CHANGE_LS_SYNC_MODE, (obrpc::ObChangeLSSyncModeArg), obrpc::ObChangeLSSyncModeRes);
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 svr_accept_plan_baseline, obrpc::OB_SERVER_ACCEPT_PLAN_BASELINE, (obrpc::ObModifyPlanBaselineArg));
   RPC_S(PR5 svr_cancel_evolve_task, obrpc::OB_SERVER_CANCEL_EVOLVE_TASK, (obrpc::ObModifyPlanBaselineArg));
@@ -248,6 +251,8 @@
   RPC_S(PR5 start_transfer_task, OB_START_TRANSFER_TASK, (ObStartTransferTaskArg));
   RPC_S(PR5 finish_transfer_task, OB_FINISH_TRANSFER_TASK, (ObFinishTransferTaskArg));
   RPC_AP(PR1 get_ls_sync_scn, OB_GET_LS_SYNC_SCN, (obrpc::ObGetLSSyncScnArg), obrpc::ObGetLSSyncScnRes);
+  RPC_AP(PR1 get_ls_standby_sync_scn, OB_GET_LS_STANDBY_SYNC_SCN,
+      (obrpc::ObGetLSStandbySyncScnArg), obrpc::ObGetLSStandbySyncScnRes);
   RPC_AP(PR5 refresh_tenant_info, OB_REFRESH_TENANT_INFO, (obrpc::ObRefreshTenantInfoArg), obrpc::ObRefreshTenantInfoRes);
   RPC_S(PR5 sync_rewrite_rules, OB_SYNC_REWRITE_RULES, (ObSyncRewriteRuleArg));
   RPC_AP(PR1 get_ls_replayed_scn, OB_GET_LS_REPLAYED_SCN, (ObGetLSReplayedScnArg), obrpc::ObGetLSReplayedScnRes);
@@ -272,6 +277,7 @@
   RPC_AP(PR5 flush_ls_archive, OB_FLUSH_LS_ARCHIVE, (obrpc::ObFlushLSArchiveArg), obrpc::Int64);
   RPC_S(PR5 notify_clone_scheduler, OB_NOTIFY_CLONE_SCHEDULER, (obrpc::ObNotifyCloneSchedulerArg), obrpc::ObNotifyCloneSchedulerResult);
   RPC_S(PR5 notify_tenant_thread, OB_NOTIFY_TENANT_THREAD, (obrpc::ObNotifyTenantThreadArg));
+  RPC_S(PR5 clear_sync_standby_dest_cache, OB_CLEAR_SYNC_STANDBY_DEST_CACHE, (obrpc::ObClearSyncStandbyDestCacheArg));
   RPC_S(PR5 admin_alter_ls, OB_ADMIN_ALTER_LS, (share::ObAlterLSArg), share::ObAlterLSRes);
   RPC_AP(PR5 tablet_major_freeze, OB_TABLET_MAJOR_FREEZE, (ObTabletMajorFreezeArg), obrpc::Int64);
   RPC_AP(PR5 shared_storage_net_throt_predict, OB_SHARED_STORAGE_NET_THROT_PREDICT, (obrpc::ObSSNTEndpointArg), obrpc::ObSharedDeviceResourceArray);

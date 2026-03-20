@@ -259,10 +259,11 @@ TEST_F(TestObSimpleLogClusterAccessMode, prev_log_slide)
   int64_t curr_pid = 0;
   ObRole role;
   bool state;
+  int64_t unused_out_proposal_id = 0;
   std::vector<PalfHandleImplGuard*> palf_list;
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(role, curr_pid, state));
-  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->mode_mgr_.switch_state_(AccessMode::RAW_WRITE, share::SCN::min_scn(), false));
+  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->mode_mgr_.switch_state_(AccessMode::RAW_WRITE, SyncMode::ASYNC, share::SCN::min_scn(), false, unused_out_proposal_id));
   // can not submit_log, config_change in prepare state
   EXPECT_FALSE(leader.palf_handle_impl_->mode_mgr_.can_append());
   LogConfigChangeArgs args(ObMember(get_cluster()[3]->get_addr(), 1), 0, ADD_LEARNER);
@@ -277,7 +278,7 @@ TEST_F(TestObSimpleLogClusterAccessMode, prev_log_slide)
   // wait prepare req reaches majority
   sleep(1);
   // switch to accept state
-  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->mode_mgr_.switch_state_(AccessMode::RAW_WRITE, share::SCN::min_scn(), false));
+  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->mode_mgr_.switch_state_(AccessMode::RAW_WRITE, SyncMode::ASYNC, share::SCN::min_scn(), false, unused_out_proposal_id));
   EXPECT_TRUE(leader.palf_handle_impl_->mode_mgr_.can_append());
   int64_t new_pid = 0;
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(role, new_pid, state));

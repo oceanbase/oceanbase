@@ -63,7 +63,7 @@
 #include "close_modules/shared_storage/storage/incremental/share/ob_shared_ls_meta.h"
 #endif
 #include "observer/table/common/ob_table_query_session_id_service.h"
-
+#include "rootserver/standby/ob_protection_mode_mgr.h"
 namespace oceanbase
 {
 using namespace share;
@@ -244,6 +244,8 @@ int ObLS::init(const share::ObLSID &ls_id,
         LOG_WARN("failed to init member list service", K(ret));
       } else if (OB_FAIL(block_tx_service_.init(this))) {
         LOG_WARN("failed to init block tx service", K(ret));
+      } else if (OB_FAIL(sync_mode_log_handler_.init(this))) {
+        LOG_WARN("failed to init sync mode log handler", K(ret));
       } else if (OB_FAIL(ls_transfer_status_.init(this))) {
         LOG_WARN("failed to init transfer status", K(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -925,6 +927,7 @@ void ObLS::destroy()
     ls_recovery_stat_handler_.reset();
     member_list_service_.destroy();
     block_tx_service_.destroy();
+    sync_mode_log_handler_.reset();
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
       ls_prewarm_handler_.destroy();
@@ -1149,6 +1152,7 @@ int ObLS::register_common_service()
   REGISTER_TO_LOGSERVICE(MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
   REGISTER_TO_LOGSERVICE(TRANSFER_HANDLER_LOG_BASE_TYPE, &transfer_handler_);
   REGISTER_TO_LOGSERVICE(LS_BLOCK_TX_SERVICE_LOG_BASE_TYPE, &block_tx_service_);
+  REGISTER_TO_LOGSERVICE(SYNC_MODE_LOG_BASE_TYPE, &sync_mode_log_handler_);
   REGISTER_TO_LOGSERVICE(TABLE_LOCK_LOG_BASE_TYPE, &lock_table_);
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode()) {
@@ -1259,6 +1263,7 @@ int ObLS::register_sys_service()
     if (is_meta_tenant(tenant_id)) {
       REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       REGISTER_TO_LOGSERVICE(SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, MTL(ObTenantSnapshotScheduler *));
+      REGISTER_TO_LOGSERVICE(PROTECTION_MODE_MGR_LOG_BASE_TYPE, MTL(standby::ObProtectionModeMgr *));
     }
   }
 
@@ -1332,6 +1337,7 @@ void ObLS::unregister_common_service_()
   UNREGISTER_FROM_LOGSERVICE(MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
   UNREGISTER_FROM_LOGSERVICE(TRANSFER_HANDLER_LOG_BASE_TYPE, &transfer_handler_);
   UNREGISTER_FROM_LOGSERVICE(LS_BLOCK_TX_SERVICE_LOG_BASE_TYPE, &block_tx_service_);
+  UNREGISTER_FROM_LOGSERVICE(SYNC_MODE_LOG_BASE_TYPE, &sync_mode_log_handler_);
   UNREGISTER_FROM_LOGSERVICE(TABLE_LOCK_LOG_BASE_TYPE, &lock_table_);
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode()) {
@@ -1450,6 +1456,8 @@ void ObLS::unregister_sys_service_()
       ObTenantSnapshotScheduler * snapshot_scheduler = MTL(ObTenantSnapshotScheduler*);
       UNREGISTER_FROM_LOGSERVICE(SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, snapshot_scheduler);
       UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
+      standby::ObProtectionModeMgr* protection_mode_mgr = MTL(standby::ObProtectionModeMgr*);
+      UNREGISTER_FROM_LOGSERVICE(PROTECTION_MODE_MGR_LOG_BASE_TYPE, protection_mode_mgr);
     }
   }
 }
@@ -2248,6 +2256,8 @@ int ObLS::finish_storage_meta_replay()
   int ret = OB_SUCCESS;
   ObMigrationStatus current_migration_status;
   ObMigrationStatus new_migration_status;
+  LSGCState gc_state = LSGCState::INVALID_LS_GC_STATE;
+  SCN offline_scn;
   int64_t read_lock = 0;
   int64_t write_lock = LSLOCKALL;
   const int64_t start_ts = ObTimeUtility::current_time();
@@ -2267,7 +2277,19 @@ int ObLS::finish_storage_meta_replay()
     LOG_WARN("failed to init tablet for compact", K(ret));
   } else if (OB_FAIL(running_state_.create_finish(ls_meta_.ls_id_))) {
     LOG_WARN("create finish failed", KR(ret), K(ls_meta_));
-  } else {
+  } else if (OB_FAIL(ls_meta_.get_gc_state(gc_state))) {
+    LOG_WARN("failed to get gc state", K(ret), K(ls_meta_));
+  } else if (ObGCHandler::is_ls_offline_finished(gc_state)
+             && OB_FAIL(ls_meta_.get_offline_scn(offline_scn))) {
+    LOG_WARN("failed to get offline scn", K(ret), K(ls_meta_), K(gc_state));
+  } else if (ObGCHandler::is_ls_offline_finished(gc_state) && offline_scn.is_valid()) {
+    // restore offline mark after storage meta replay (converge state, do not block other LS)
+    if (log_handler_.is_valid() && OB_FAIL(log_handler_.mark_ls_gc_state())) {
+      LOG_WARN("failed to mark log handler offline after replay", K(ret), K(ls_meta_),
+          K(gc_state), K(offline_scn));
+    }
+  }
+  if (OB_SUCC(ret)) {
     // after slog replayed, the ls must be offlined state.
     update_state_seq_();
   }
@@ -3078,8 +3100,13 @@ int ObLS::set_gc_state(const LSGCState &gc_state, const share::SCN &offline_scn)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret), K(ls_meta_));
-  } else {
-    ret = ls_meta_.set_gc_state(gc_state, offline_scn);
+  } else if ((ObGCHandler::is_ls_offline_finished(gc_state))
+             && offline_scn.is_valid()
+             && OB_FAIL(log_handler_.mark_ls_gc_state())) {
+    LOG_WARN("failed to mark log handler offline after set gc state",
+        K(ret), K(ls_meta_), K(gc_state), K(offline_scn));
+  } else if (OB_FAIL(ls_meta_.set_gc_state(gc_state, offline_scn))) {
+    LOG_WARN("failed to set gc state", K(ret), K(ls_meta_), K(gc_state), K(offline_scn));
   }
   return ret;
 }

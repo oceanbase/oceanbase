@@ -84,6 +84,7 @@
 #include "share/ob_license_utils.h"
 #include "parallel_ddl/ob_drop_table_helper.h" // ObDropTableHelper
 #include "share/backup/ob_backup_clean_util.h"
+#include "share/ob_sync_standby_dest_utils.h"
 
 namespace oceanbase
 {
@@ -8179,8 +8180,9 @@ int ObRootService::admin_refresh_schema(const obrpc::ObAdminRefreshSchemaArg &ar
 int ObRootService::admin_set_config(obrpc::ObAdminSetConfigArg &arg)
 {
   int ret = OB_SUCCESS;
+  bool is_set_sync_standby_dest = false;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
   common::ObSArray<common::ObFixedLengthString<MAX_ROOTSERVICE_EVENT_VALUE_LENGTH + 1>> old_values;
-
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -8226,6 +8228,13 @@ int ObRootService::admin_set_config(obrpc::ObAdminSetConfigArg &arg)
         LOG_WARN("schema service must not be null", K(ret));
     } else if (OB_FAIL(share::ObBackupConfigUtil::admin_set_backup_config(sql_proxy_, rpc_proxy_, *schema_service_, arg))) {
       LOG_WARN("fail to set backup config", K(ret), K(arg));
+    }
+  } else if (OB_FAIL(share::ObSyncStandbyDestUtils::check_set_sync_standby_dest(arg,
+      is_set_sync_standby_dest, tenant_id))) {
+    LOG_WARN("failed to check set sync standby dest", KR(ret), K(arg));
+  } else if (is_set_sync_standby_dest) {
+    if (OB_FAIL(share::ObSyncStandbyDestUtils::admin_set_sync_standby_dest_config(arg))) {
+      LOG_WARN("failed to set sync standby dest config", KR(ret), K(arg));
     }
   } else {
     ObSystemAdminCtx ctx;

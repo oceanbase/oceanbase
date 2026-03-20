@@ -278,13 +278,17 @@ int ObFlashbackStandbyLogCommand::process_flashback_status_(
 {
   int ret = OB_SUCCESS;
   int64_t new_switchover_epoch = OB_INVALID_VERSION;
+  int64_t start_timestamp = OB_INVALID_TIMESTAMP;
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(check_requirements_for_flashback_status_(tenant_info, flashback_log_scn))) {
     LOG_WARN("fail to check_requirements_for_flashback_status_", KR(ret), K(tenant_info), K(flashback_log_scn));
-  } else if (OB_FAIL(clear_fetched_log_cache_(tenant_id))) {
+  } else if (FALSE_IT(start_timestamp = ObTimeUtility::current_time())) {
+  } else if (OB_FAIL(OB_STANDBY_SERVICE.clear_fetched_log_cache(tenant_id))) {
     LOG_WARN("fail to clear fetched log cache", KR(ret), K(tenant_id));
+  } else if (FALSE_IT(event_.set_clear_fetched_log_cache_cost(
+      ObTimeUtility::current_time() - start_timestamp))) {
   } else if (OB_FAIL(do_flashback_(tenant_id, flashback_log_scn))) {
     LOG_WARN("fail to do flashback", KR(ret), K(tenant_id), K(flashback_log_scn));
   } else if (OB_UNLIKELY(ERRSIM_AFTER_FLASHBACK)) {
@@ -389,68 +393,6 @@ int ObFlashbackStandbyLogCommand::check_restore_source_empty_(const uint64_t ten
   return ret;
 }
 
-int ObFlashbackStandbyLogCommand::clear_fetched_log_cache_(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  int64_t start_timestamp = ObTimeUtility::current_time();
-  ObArray<ObAddr> tenant_online_servers;
-  ObClearFetchedLogCacheArg arg;
-  ObArray<int> return_code_array;
-  if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(ObServerCheckUtils::check_offline_and_get_tenants_servers(tenant_id,
-      false /* allow_temp_offline */, tenant_online_servers, "FLASHBACK STANDBY LOG"))) {
-    // ensure the tenant has no units on temp. offline servers
-    LOG_WARN("fail to execute check_and_get_tenants_online_servers", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(arg.init(tenant_id))) {
-    LOG_WARN("fail to init arg", KR(ret), K(tenant_id));
-  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("GCTX.srv_rpc_proxy_ is null", KR(ret), KP(GCTX.srv_rpc_proxy_));
-  } else {
-    const uint64_t group_id = share::OBCG_DBA_COMMAND;
-    ObClearFetchedLogCacheProxy proxy(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::clear_fetched_log_cache);
-    int tmp_ret = OB_SUCCESS;
-    ObTimeoutCtx ctx;
-    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_online_servers.count(); i++) {
-      const ObAddr &server = tenant_online_servers.at(i);
-      if (OB_FAIL(ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
-        LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
-      } else if (OB_FAIL(proxy.call(server, ctx.get_timeout(), GCONF.cluster_id, tenant_id, group_id, arg))) {
-        LOG_WARN("failed to send rpc", KR(ret), KR(tmp_ret), K(server), K(ctx), K(tenant_id), K(arg));
-      }
-    }
-    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
-      LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    }
-    if (FAILEDx(proxy.check_return_cnt(return_code_array.count()))) {
-      LOG_WARN("fail to check return cnt", KR(ret), "return_cnt", return_code_array.count());
-    }
-    ARRAY_FOREACH_X(proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
-      const ObClearFetchedLogCacheRes *result = proxy.get_results().at(idx);
-      const ObAddr &dest_addr = proxy.get_dests().at(idx);
-      ret = return_code_array.at(idx);
-      if (OB_FAIL(ret)) {
-        LOG_WARN("fail to send rpc", KR(ret), K(dest_addr), K(idx));
-        if (OB_TENANT_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        }
-      } else if (OB_ISNULL(result)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", KR(ret), KP(result));
-      } else if (OB_UNLIKELY(!result->is_valid())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid result", KR(ret), KPC(result), K(dest_addr));
-      }
-    }
-  }
-  int64_t cost =ObTimeUtility::current_time() - start_timestamp;
-  FLOG_INFO("clear_fetched_log_cache", KR(ret), K(tenant_id), K(tenant_online_servers), K(cost));
-  event_.set_clear_fetched_log_cache_cost(cost);
-  return ret;
-}
 
 int ObFlashbackStandbyLogCommand::clear_local_fetched_log_cache(
     const ObClearFetchedLogCacheArg &arg,
@@ -513,6 +455,8 @@ int ObFlashbackStandbyLogCommand::change_ls_access_mode_back_to_raw_rw_(const ui
   share::ObLSStatusInfoArray status_info_array;
   ObLSStatusOperator status_op;
   palf::AccessMode target_access_mode = logservice::ObLogService::get_palf_access_mode(STANDBY_TENANT_ROLE);
+  palf::SyncMode target_sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
+  ObAllTenantInfo tenant_info;
   if (OB_UNLIKELY(!is_user_tenant(tenant_id) || OB_INVALID_VERSION == switchover_epoch)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(switchover_epoch));
@@ -522,11 +466,15 @@ int ObFlashbackStandbyLogCommand::change_ls_access_mode_back_to_raw_rw_(const ui
   } else if (OB_FAIL(status_op.get_all_ls_status_by_order_for_flashback_log(
       tenant_id, status_info_array, *GCTX.sql_proxy_))) {
     LOG_WARN("fail to get_all_ls_status_by_order_for_flashback_log", KR(ret), K(tenant_id), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_, false, tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
   } else if (OB_FAIL(event_.add_all_flashback_ls(status_info_array))) {
     LOG_WARN("fail to add all flashback ls", KR(ret), K(status_info_array));
+  } else if (OB_FAIL(ObTenantRoleTransitionService::get_target_sync_mode_(tenant_info, target_sync_mode))) {
+    LOG_WARN("failed to get target sync mode", KR(ret), K(tenant_info));
   } else {
-    ObLSAccessModeModifier ls_access_mode_modifier(tenant_id, switchover_epoch, SCN::base_scn(),
-        share::SCN::min_scn(), target_access_mode, &status_info_array, GCTX.sql_proxy_, GCTX.srv_rpc_proxy_);
+    ObLSLogModeModifier ls_access_mode_modifier(tenant_id, switchover_epoch, SCN::base_scn(),
+        share::SCN::min_scn(), target_access_mode, target_sync_mode, &status_info_array, GCTX.sql_proxy_, GCTX.srv_rpc_proxy_);
     if (OB_FAIL(ls_access_mode_modifier.change_ls_access_mode())) {
       LOG_WARN("fail to change ls access mode", KR(ret), K(tenant_id));
     }

@@ -846,7 +846,8 @@ int InjectTxFaultHelper::submit_log(const char *buf,
                                     const share::SCN &base_ts,
                                     ObTxBaseLogCb *cb,
                                     const bool need_nonblock,
-                                    const int64_t retry_timeout_us)
+                                    const int64_t retry_timeout_us,
+                                    const bool skip_pre_async_wait)
 {
 
   int ret = OB_SUCCESS;
@@ -895,7 +896,9 @@ int InjectTxFaultHelper::submit_log(const char *buf,
                                                 size,
                                                 base_ts,
                                                 cb,
-                                                need_nonblock))) {
+                                                need_nonblock,
+                                                retry_timeout_us,
+                                                skip_pre_async_wait))) {
   }
   return ret;
 }

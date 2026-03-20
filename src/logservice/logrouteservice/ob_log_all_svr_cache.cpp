@@ -27,6 +27,7 @@ namespace logservice
 ObLogAllSvrCache::ObLogAllSvrCache() :
     is_tenant_mode_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
+    is_stopped_(true),
     systable_queryer_(NULL),
     all_server_cache_update_interval_(0),
     all_zone_cache_update_interval_(0),
@@ -279,6 +280,7 @@ int ObLogAllSvrCache::init(
   } else {
     is_tenant_mode_ = is_tenant_mode;
     tenant_id_ = tenant_id;
+    is_stopped_ = true;
     systable_queryer_ = &systable_queryer;
     all_server_cache_update_interval_ = all_server_cache_update_interval_sec * _SEC_;
     all_zone_cache_update_interval_ = all_zone_cache_update_interval_sec * _SEC_;
@@ -296,6 +298,7 @@ int ObLogAllSvrCache::init(
 void ObLogAllSvrCache::destroy()
 {
   LOG_INFO("destroy all svr cache begin");
+  is_stopped_ = true;
   systable_queryer_ = NULL;
   all_server_cache_update_interval_ = 0;
   all_zone_cache_update_interval_ = 0;
@@ -322,7 +325,12 @@ void ObLogAllSvrCache::query_and_update()
   if (! is_tenant_mode_) {
     if (need_update_zone_()) {
       if (OB_FAIL(update_zone_cache_())) {
-        LOG_ERROR("update zone cache error", KR(ret));
+        if (OB_IN_STOP_STATE == ret) {
+          LOG_WARN("skip updating zone cache because route service is stopping", KR(ret),
+              K(is_tenant_mode_), K(tenant_id_));
+        } else {
+          LOG_ERROR("update zone cache error", KR(ret));
+        }
       } else if (OB_FAIL(purge_stale_zone_records_())) {
         LOG_ERROR("purge stale records fail", KR(ret));
       } else {
@@ -335,7 +343,12 @@ void ObLogAllSvrCache::query_and_update()
 
       if (REACH_TIME_INTERVAL_THREAD_LOCAL(all_svr_cache_update_interval)) {
         if (OB_FAIL(update_server_cache_())) {
-          LOG_ERROR("update server cache error", KR(ret));
+          if (OB_IN_STOP_STATE == ret) {
+            LOG_WARN("skip updating server cache because route service is stopping", KR(ret),
+                K(is_tenant_mode_), K(tenant_id_));
+          } else {
+            LOG_ERROR("update server cache error", KR(ret));
+          }
         } else if (OB_FAIL(purge_stale_records_())) {
           LOG_ERROR("purge stale records fail", KR(ret));
         } else {
@@ -349,7 +362,12 @@ void ObLogAllSvrCache::query_and_update()
 
     if (REACH_TIME_INTERVAL_THREAD_LOCAL(all_svr_cache_update_interval)) {
       if (OB_FAIL(update_unit_info_cache_())) {
-        LOG_WARN("update_unit_info_cache_ failed", KR(ret));
+        if (OB_IN_STOP_STATE == ret) {
+          LOG_WARN("skip updating unit cache because route service is stopping", KR(ret),
+              K(is_tenant_mode_), K(tenant_id_));
+        } else {
+          LOG_WARN("update_unit_info_cache_ failed", KR(ret));
+        }
       }
     }
   }
@@ -388,21 +406,31 @@ int ObLogAllSvrCache::update_zone_cache_()
   if (OB_ISNULL(systable_queryer_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid systable queryer", KR(ret), K(systable_queryer_));
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("skip updating zone cache because route service is stopping", KR(ret),
+        K(tenant_id), K(is_tenant_mode_), K(tenant_id_));
   } else if (OB_FAIL(systable_queryer_->get_all_zone_info(tenant_id, all_zone_info))) {
     if (OB_NEED_RETRY == ret) {
       LOG_WARN("query all zone info need retry", KR(ret));
       ret = OB_SUCCESS;
     } else if (OB_IN_STOP_STATE == ret) {
-      LOG_WARN("ls is in stop state when query zone info", KR(ret));
+      LOG_WARN("query all zone info stopped because route service is stopping", KR(ret),
+          K(tenant_id), K(is_tenant_mode_), K(tenant_id_));
     } else {
       LOG_ERROR("query all zone info fail", KR(ret));
     }
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("skip querying zone type because route service is stopping", KR(ret),
+        K(tenant_id), K(is_tenant_mode_), K(tenant_id_));
   } else if (OB_FAIL(systable_queryer_->get_all_zone_type_info(tenant_id, all_zone_type_info))) {
     if (OB_NEED_RETRY == ret) {
       LOG_WARN("query all zone type need retry", KR(ret));
       ret = OB_SUCCESS;
     } else if (OB_IN_STOP_STATE == ret) {
-      LOG_WARN("ls is in stop state when query zone type info", KR(ret));
+      LOG_WARN("query all zone type stopped because route service is stopping", KR(ret),
+          K(tenant_id), K(is_tenant_mode_), K(tenant_id_));
     } else {
       LOG_ERROR("query all zone type fail", KR(ret));
     }
@@ -470,12 +498,17 @@ int ObLogAllSvrCache::update_server_cache_()
   if (OB_ISNULL(systable_queryer_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid systable queryer", KR(ret), K(systable_queryer_));
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("skip updating server cache because route service is stopping", KR(ret),
+        K(tenant_id), K(is_tenant_mode_), K(tenant_id_));
   } else if (OB_FAIL(systable_queryer_->get_all_server_info(tenant_id, all_server_info))) {
     if (OB_NEED_RETRY == ret) {
       LOG_WARN("query all server info need retry", KR(ret));
       ret = OB_SUCCESS;
     } else if (OB_IN_STOP_STATE == ret) {
-      LOG_WARN("ls is in stop state when query server info", KR(ret));
+      LOG_WARN("query all server info stopped because route service is stopping", KR(ret),
+          K(tenant_id), K(is_tenant_mode_), K(tenant_id_));
     } else {
       LOG_ERROR("query all server info fail", KR(ret));
     }
@@ -539,12 +572,16 @@ int ObLogAllSvrCache::update_unit_info_cache_()
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid tenant_id", KR(ret), K(tenant_id_));
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("skip updating unit cache because route service is stopping", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(systable_queryer_->get_all_units_info(tenant_id_, units_record_info))) {
     if (OB_NEED_RETRY == ret) {
       LOG_WARN("query the GV$OB_UNITS failed, need retry", KR(ret));
       ret = OB_SUCCESS;
     } else if (OB_IN_STOP_STATE == ret) {
-      LOG_WARN("ls is in stop state when query units info", KR(ret));
+      LOG_WARN("query the GV$OB_UNITS stopped because route service is stopping", KR(ret),
+          K(tenant_id_), K(is_tenant_mode_));
     } else {
       LOG_WARN("query the GV$OB_UNITS failed, will be retried later", KR(ret));
     }

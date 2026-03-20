@@ -364,6 +364,36 @@ int ObLSRecoveryStatOperator::get_ls_recovery_stat(
   return ret;
 }
 
+int ObLSRecoveryStatOperator::get_all_ls_recovery_stat_for_ma_by_order(
+    const uint64_t tenant_id,
+    ObISQLClient &client,
+    common::ObIArray<ObLSRecoveryStat> &ls_recovery_array)
+{
+  int ret = OB_SUCCESS;
+  ls_recovery_array.reset();
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    common::ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt(
+            "select a.* from %s as a join %s as b "
+            "on a.tenant_id = b.tenant_id and a.ls_id = b.ls_id "
+            "where a.tenant_id = %lu and b.status not in ('%s', '%s', '%s') order by a.ls_id",
+            OB_ALL_LS_RECOVERY_STAT_TNAME,
+            OB_ALL_LS_STATUS_TNAME,
+            tenant_id,
+            ls_status_to_str(OB_LS_CREATING),
+            ls_status_to_str(OB_LS_CREATE_ABORT),
+            ls_status_to_str(OB_LS_WAIT_OFFLINE)))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(exec_read(tenant_id, sql, client, this, ls_recovery_array))) {
+      LOG_WARN("failed to read ls recovery stat", KR(ret), K(tenant_id), K(sql));
+    }
+  }
+  return ret;
+}
+
 
 int ObLSRecoveryStatOperator::fill_cell(common::sqlclient::ObMySQLResult*result, ObLSRecoveryStat &ls_recovery)
 {

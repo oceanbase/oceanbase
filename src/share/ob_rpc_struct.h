@@ -108,6 +108,7 @@
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/ai_service/ob_ai_service_struct.h"
+#include "share/ob_sync_standby_status_operator.h"
 
 namespace oceanbase
 {
@@ -4302,17 +4303,19 @@ public:
                         access_mode_(palf::AccessMode::INVALID_ACCESS_MODE),
                         ref_scn_(),
                         addr_(),
-                        sys_ls_end_scn_() {}
+                        sys_ls_end_scn_(),
+                        sync_mode_(palf::SyncMode::INVALID_SYNC_MODE) {}
   ~ObLSAccessModeInfo() {}
   bool is_valid() const;
   int init(uint64_t tenant_id, const share::ObLSID &ls_idd,
            const int64_t mode_version,
            const palf::AccessMode &access_mode,
            const share::SCN &ref_scn,
-           const share::SCN &sys_ls_end_scn);
+           const share::SCN &sys_ls_end_scn,
+           const palf::SyncMode &sync_mode);
   int assign(const ObLSAccessModeInfo &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(mode_version),
-               K_(access_mode), K_(ref_scn), K_(sys_ls_end_scn));
+  TO_STRING_KV("arg_type", "ObLSAccessModeInfo", K_(tenant_id), K_(ls_id), K_(mode_version),
+               K_(access_mode), K_(ref_scn), K_(sys_ls_end_scn), K_(sync_mode));
   uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -4337,6 +4340,10 @@ public:
   {
     return sys_ls_end_scn_;
   }
+  palf::SyncMode get_sync_mode() const
+  {
+    return sync_mode_;
+  }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSAccessModeInfo);
 private:
@@ -4347,6 +4354,7 @@ private:
   share::SCN ref_scn_;
   ObAddr addr_;//no used, add in 4200 RC1
   share::SCN sys_ls_end_scn_; // new arg in V4.2.0
+  palf::SyncMode sync_mode_;
 };
 
 struct ObChangeLSAccessModeRes
@@ -4354,12 +4362,16 @@ struct ObChangeLSAccessModeRes
   OB_UNIS_VERSION(1);
 public:
   ObChangeLSAccessModeRes(): tenant_id_(OB_INVALID_TENANT_ID),
-                              ls_id_(), ret_(common::OB_SUCCESS), wait_sync_scn_cost_(0), change_access_mode_cost_(0) {}
+                              ls_id_(), ret_(common::OB_SUCCESS), wait_sync_scn_cost_(0),
+                              change_access_mode_cost_(0) {}
   ~ObChangeLSAccessModeRes() {}
   bool is_valid() const;
-  int init(uint64_t tenant_id, const share::ObLSID& ls_id, const int result, const int64_t wait_sync_scn_cost, const int64_t change_access_mode_cost);
+  int init_with_error(int ret_code);
+  int init(uint64_t tenant_id, const share::ObLSID& ls_id, const int result,
+    const int64_t wait_sync_scn_cost, const int64_t change_access_mode_cost);
   int assign(const ObChangeLSAccessModeRes &other);
-  TO_STRING_KV(K_(tenant_id), "ls_id", ls_id_.id(), K_(ret), K_(wait_sync_scn_cost), K_(change_access_mode_cost));
+  TO_STRING_KV(K_(tenant_id), "ls_id", ls_id_.id(), K_(ret), K_(wait_sync_scn_cost),
+      K_(change_access_mode_cost));
   int get_result() const
   {
     return ret_;
@@ -4374,6 +4386,7 @@ public:
   }
   int64_t get_wait_sync_scn_cost() const { return wait_sync_scn_cost_; }
   int64_t get_change_access_mode_cost() const { return change_access_mode_cost_; }
+  void set_result(int ret_code) { ret_ = ret_code; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObChangeLSAccessModeRes);
 private:
@@ -4382,6 +4395,61 @@ private:
   int ret_;
   int64_t wait_sync_scn_cost_;
   int64_t change_access_mode_cost_;
+};
+
+struct ObChangeLSSyncModeArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObChangeLSSyncModeArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), mode_version_(0), ref_scn_(), sync_mode_(), protection_log_() {}
+  ~ObChangeLSSyncModeArg() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t mode_version,
+      const share::SCN &ref_scn, const palf::SyncMode &sync_mode,
+      const share::ObSyncStandbyStatusAttr &protection_log);
+  int assign(const ObChangeLSSyncModeArg &other);
+  TO_STRING_KV("arg_type", "ObChangeLSSyncModeArg", K_(tenant_id), K_(ls_id), K_(mode_version),
+      K_(ref_scn), K_(sync_mode), K_(protection_log));
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  share::ObLSID get_ls_id() const { return ls_id_; }
+  int64_t get_mode_version() const { return mode_version_; }
+  const share::SCN& get_ref_scn() const { return ref_scn_; }
+  palf::SyncMode get_sync_mode() const { return sync_mode_; }
+  const share::ObSyncStandbyStatusAttr &get_protection_log() const { return protection_log_; }
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  int64_t mode_version_;
+  share::SCN ref_scn_;
+  palf::SyncMode sync_mode_;
+  share::ObSyncStandbyStatusAttr protection_log_;
+};
+
+
+struct ObChangeLSSyncModeRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObChangeLSSyncModeRes() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), mode_version_(0), ret_(common::OB_SUCCESS) {}
+  ~ObChangeLSSyncModeRes() {}
+  bool is_valid() const;
+  int init_with_error(int ret_code);
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &special_log_scn,
+    const int64_t mode_version, const int ret_code);
+  int assign(const ObChangeLSSyncModeRes &other);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(special_log_scn), K_(mode_version), K_(ret));
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  share::ObLSID get_ls_id() const { return ls_id_; }
+  int64_t get_mode_version() const { return mode_version_; }
+  share::SCN get_special_log_scn() const { return special_log_scn_; }
+  int get_result() const { return ret_; }
+  void set_result(int ret_code) { ret_ = ret_code; }
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  share::SCN special_log_scn_;
+  int64_t mode_version_;
+  int ret_;
 };
 
 struct ObNotifySwitchLeaderArg
@@ -4439,6 +4507,9 @@ public:
     DISASTER_RECOVERY_SERVICE,
     ARBITRATION_SERVICE,
     RESTORE_SERVICE,
+    PROTECTION_MODE_MGR,
+    TENANT_INFO_LOADER,
+    COMMON_LS_SERVICE,
   };
   ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
   ~ObNotifyTenantThreadArg() {}
@@ -4462,6 +4533,21 @@ private:
 private:
   uint64_t tenant_id_;
   TenantThreadType thread_type_;
+};
+
+struct ObClearSyncStandbyDestCacheArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObClearSyncStandbyDestCacheArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObClearSyncStandbyDestCacheArg() {}
+  TO_STRING_KV(K_(tenant_id));
+  int init(const uint64_t tenant_id);
+  int assign(const ObClearSyncStandbyDestCacheArg &other);
+  bool is_valid() const { return is_user_tenant(tenant_id_) && is_valid_tenant_id(tenant_id_); }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+private:
+  uint64_t tenant_id_;
 };
 
 struct ObCreateTabletInfo
@@ -8892,6 +8978,55 @@ private:
   share::ObLSID ls_id_;
   share::SCN cur_sync_scn_;
   share::SCN cur_restore_source_next_scn_;
+};
+
+struct ObGetLSStandbySyncScnArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetLSStandbySyncScnArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_() {}
+  ~ObGetLSStandbySyncScnArg() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  int assign(const ObGetLSStandbySyncScnArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  share::ObLSID get_ls_id() const { return ls_id_; }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObGetLSStandbySyncScnArg);
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
+
+struct ObGetLSStandbySyncScnRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetLSStandbySyncScnRes()
+      : tenant_id_(OB_INVALID_TENANT_ID),
+        ls_id_(),
+        palf_sync_scn_(),
+        standby_sync_scn_()
+  {}
+  ~ObGetLSStandbySyncScnRes() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const share::SCN &palf_sync_scn, const share::SCN &standby_sync_scn);
+  int assign(const ObGetLSStandbySyncScnRes &other);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(palf_sync_scn), K_(standby_sync_scn));
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  share::ObLSID get_ls_id() const { return ls_id_; }
+  share::SCN get_palf_sync_scn() const { return palf_sync_scn_; }
+  share::SCN get_standby_sync_scn() const { return standby_sync_scn_; }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObGetLSStandbySyncScnRes);
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  share::SCN palf_sync_scn_;
+  share::SCN standby_sync_scn_;
 };
 
 struct ObRefreshTenantInfoArg
@@ -15029,6 +15164,27 @@ public:
   share::schema::ObSchemaOperationType ddl_type_;
   share::schema::ObSensitiveRuleSchema schema_;
   uint64_t user_id_; // grant privilege when create
+};
+
+struct ObGetLSLocationArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetLSLocationArg() : cluster_id_(OB_INVALID_CLUSTER_ID), tenant_id_(common::OB_INVALID_TENANT_ID), ls_id_() {}
+  ~ObGetLSLocationArg() {}
+  int init(const int64_t cluster_id, const uint64_t tenant_id, const share::ObLSID &ls_id);
+  int assign(const ObGetLSLocationArg &other);
+  void reset();
+  bool is_valid() const;
+  int64_t get_cluster_id() const { return cluster_id_; }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  TO_STRING_KV(K_(cluster_id), K_(tenant_id), K_(ls_id));
+
+private:
+  int64_t cluster_id_;
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
 };
 
 }//end namespace obrpc

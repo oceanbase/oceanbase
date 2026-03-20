@@ -174,11 +174,20 @@ public:
                     palf::LSN &end_lsn);
   //主备切换相关
   //int can_switch_to_follower(bool &can_revoke); //非最大保护模式不需要
-  int switch_to_leader(const int64_t new_proposal_id);
+  int switch_to_leader(const int64_t new_proposal_id,
+                       const palf::SyncMode &sync_mode);
   int switch_to_follower();
+  void mark_ls_gc_state();
+  bool is_ls_gc_state() const { return true == ATOMIC_LOAD(&is_ls_gc_state_); }
   //palf相关
   int update_palf_committed_end_lsn(const palf::LSN &end_lsn, const share::SCN &end_scn, const int64_t proposal_id);
   share::SCN get_palf_committed_end_scn() const;
+  // For MPT
+  int update_standby_committed_end_lsn(const palf::LSN &end_lsn, const share::SCN &end_scn);
+  int clear_standby_committed_end_lsn();  // 关闭强同步时清除备库位点
+  int enable_sync_mode(const int64_t new_proposal_id);
+  int disable_sync_mode(const int64_t proposal_id);
+  int update_min_committed_end_lsn_();
   int unregister_file_size_cb();
   void close_palf_handle();
   //最大连续回调位点
@@ -212,9 +221,13 @@ public:
   void reset_meta();
   TO_STRING_KV(K(ls_id_),
                K(role_),
+               K(is_ls_gc_state_),
                K(proposal_id_),
                K(palf_committed_end_lsn_),
                K(palf_committed_end_scn_),
+               K(standby_committed_end_lsn_),
+               K(standby_committed_end_scn_),
+               K(min_committed_end_lsn_),
                K(last_check_scn_),
                K(max_applied_cb_scn_));
 private:
@@ -249,6 +262,7 @@ private:
 private:
   bool is_inited_;
   bool is_in_stop_state_; //stop后不能上任, 残留的cb会继续处理
+  bool is_ls_gc_state_;  // LS已写过offline日志的标记，为true时强同步不再等待备库位点
   int64_t ref_cnt_; // guarantee the effectiveness of self memory
   share::ObLSID ls_id_;
   common::ObRole role_;
@@ -256,8 +270,10 @@ private:
   ObLogApplyService *ap_sv_;
   palf::LSN palf_committed_end_lsn_;
   share::SCN palf_committed_end_scn_;
-  //LSN standy_committed_end_lsn_;
-  //palf::LSN min_committed_end_lsn_;
+  palf::LSN standby_committed_end_lsn_;
+  share::SCN standby_committed_end_scn_;
+  bool is_sync_mode_;
+  palf::LSN min_committed_end_lsn_;
   share::SCN last_check_scn_; //当前待确认的最大连续回调位点
   share::SCN max_applied_cb_scn_; //该位点前的cb保证都已经回调完成
   ObApplyServiceSubmitTask submit_task_;
@@ -333,7 +349,9 @@ public:
   int is_apply_done(const share::ObLSID &id,
                     bool &is_done,
                     palf::LSN &end_lsn);
-  int switch_to_leader(const share::ObLSID &id, const int64_t proposal_id);
+  int switch_to_leader(const share::ObLSID &id,
+                       const int64_t proposal_id,
+                       const palf::SyncMode &sync_mode);
   int switch_to_follower(const share::ObLSID &id);
   int get_max_applied_scn(const share::ObLSID &id, share::SCN &scn);
   int get_palf_committed_end_scn(const share::ObLSID &id, share::SCN &scn);

@@ -950,6 +950,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObSwitchTenantStmt, ObSwitchTenantExecutor);
         break;
       }
+      case stmt::T_SET_PROTECTION_MODE: {
+        DEFINE_EXECUTE_CMD(ObSetProtectionModeStmt, ObSetProtectionModeExecutor);
+        break;
+      }
       case stmt::T_RECOVER: {
         DEFINE_EXECUTE_CMD(ObRecoverTenantStmt, ObRecoverTenantExecutor);
         break;

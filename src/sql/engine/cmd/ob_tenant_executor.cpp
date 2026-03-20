@@ -27,6 +27,7 @@
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "share/ls/ob_ls_status_operator.h"
 #include "rootserver/ob_tenant_ddl_service.h"
+#include "src/rootserver/standby/ob_tenant_role_transition_service.h"
 namespace oceanbase
 {
 using namespace common;
@@ -42,6 +43,7 @@ int check_sys_var_options(ObExecContext &ctx,
 int ObCreateTenantExecutor::execute(ObExecContext &ctx, ObCreateTenantStmt &stmt)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::current_time();
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
@@ -88,6 +90,11 @@ int ObCreateTenantExecutor::execute(ObExecContext &ctx, ObCreateTenantStmt &stmt
     } else if (OB_TMP_FAIL(wait_user_ls_valid_(tenant_id))) {
       LOG_WARN("failed to wait user ls valid, but ignore", KR(tmp_ret), K(tenant_id));
     }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_TMP_FAIL(ObTenantRoleTransitionService::notify_thread(gen_meta_tenant_id(tenant_id),
+      obrpc::ObNotifyTenantThreadArg::COMMON_LS_SERVICE))) {
+    LOG_WARN("failed to notify common ls service", KR(tmp_ret), K(tenant_id));
   }
   LOG_INFO("[CREATE TENANT] create tenant", KR(ret), K(create_tenant_arg),
            "cost", ObTimeUtility::current_time() - start_ts);

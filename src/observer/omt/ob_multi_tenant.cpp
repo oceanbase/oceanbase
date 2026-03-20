@@ -156,6 +156,7 @@
 #include "observer/table/ob_htable_rowkey_mgr.h"
 #include "sql/ob_sql_ccl_rule_manager.h"
 #include "sql/monitor/ob_sql_stat_manager.h"
+#include "rootserver/standby/ob_protection_mode_mgr.h"
 #include "observer/report/ob_tenant_offline_tablet_cleanup_service.h"
 #include "lib/thread/thread_mgr_interface.h"
 
@@ -487,6 +488,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, rootserver::ObCreateStandbyFromNetActor::mtl_init, nullptr, rootserver::ObCreateStandbyFromNetActor::mtl_stop, rootserver::ObCreateStandbyFromNetActor::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObPrimaryLSService::mtl_init, nullptr, rootserver::ObPrimaryLSService::mtl_stop, rootserver::ObPrimaryLSService::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObCommonLSService::mtl_init, nullptr, rootserver::ObCommonLSService::mtl_stop, rootserver::ObCommonLSService::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, standby::ObProtectionModeMgr::mtl_init, nullptr, standby::ObProtectionModeMgr::mtl_stop, standby::ObProtectionModeMgr::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObDRService::mtl_init, nullptr, rootserver::ObDRService::mtl_stop, rootserver::ObDRService::mtl_wait, mtl_destroy_default);
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {

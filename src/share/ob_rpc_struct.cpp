@@ -16,6 +16,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "share/table/ob_table_ddl_struct.h"
 #include "share/ob_heartbeat_handler.h"
+#include "rootserver/standby/ob_protection_mode_utils.h"
 
 namespace oceanbase
 {
@@ -7579,6 +7580,69 @@ int ObGetLSSyncScnRes::assign(const ObGetLSSyncScnRes &other)
   }
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObGetLSStandbySyncScnArg, tenant_id_, ls_id_);
+bool ObGetLSStandbySyncScnArg::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_) && is_user_tenant(tenant_id_) && ls_id_.is_valid();
+}
+int ObGetLSStandbySyncScnArg::init(const uint64_t tenant_id, const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_user_tenant(tenant_id) || !ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+  }
+  return ret;
+}
+int ObGetLSStandbySyncScnArg::assign(const ObGetLSStandbySyncScnArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObGetLSStandbySyncScnRes, tenant_id_, ls_id_, palf_sync_scn_, standby_sync_scn_);
+bool ObGetLSStandbySyncScnRes::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_) && is_user_tenant(tenant_id_)
+      && ls_id_.is_valid()
+      && palf_sync_scn_.is_valid_and_not_min()
+      && standby_sync_scn_.is_valid_and_not_min();
+}
+int ObGetLSStandbySyncScnRes::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const share::SCN &palf_sync_scn, const share::SCN &standby_sync_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_user_tenant(tenant_id) || !ls_id.is_valid()
+      || !palf_sync_scn.is_valid_and_not_min() || !standby_sync_scn.is_valid_and_not_min())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(palf_sync_scn), K(standby_sync_scn));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    palf_sync_scn_ = palf_sync_scn;
+    standby_sync_scn_ = standby_sync_scn;
+  }
+  return ret;
+}
+int ObGetLSStandbySyncScnRes::assign(const ObGetLSStandbySyncScnRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+    palf_sync_scn_ = other.palf_sync_scn_;
+    standby_sync_scn_ = other.standby_sync_scn_;
+  }
+  return ret;
+}
 OB_SERIALIZE_MEMBER(ObGetTenantResArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObTenantLogicalRes, server_, arg_);
 int ObTenantLogicalRes::init(const ObAddr &server, const ObUserResourceCalculateArg &arg)
@@ -10305,7 +10369,10 @@ bool ObLSAccessModeInfo::is_valid() const
       && ls_id_.is_valid()
       && palf::INVALID_PROPOSAL_ID != mode_version_
       && palf::AccessMode::INVALID_ACCESS_MODE != access_mode_
-      && ref_scn_.is_valid();
+      && ref_scn_.is_valid()
+      && (!standby::ObProtectionModeUtils::check_cluster_version_for_protection_mode()
+          || GCONF.enable_logservice
+          || palf::SyncMode::INVALID_SYNC_MODE != sync_mode_);
     // only check sys_ls_end_scn when it's needed
 }
 int ObLSAccessModeInfo::init(
@@ -10313,7 +10380,8 @@ int ObLSAccessModeInfo::init(
     const int64_t mode_version,
     const palf::AccessMode &access_mode,
     const SCN &ref_scn,
-    const share::SCN &sys_ls_end_scn)
+    const share::SCN &sys_ls_end_scn,
+    const palf::SyncMode &sync_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
@@ -10324,7 +10392,7 @@ int ObLSAccessModeInfo::init(
     // only check sys_ls_end_scn when it's needed
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id),
-    K(mode_version), K(access_mode), K(ref_scn), K(sys_ls_end_scn));
+    K(mode_version), K(access_mode), K(ref_scn), K(sys_ls_end_scn), K(sync_mode));
 
   } else {
     tenant_id_ = tenant_id;
@@ -10333,6 +10401,7 @@ int ObLSAccessModeInfo::init(
     access_mode_ = access_mode;
     ref_scn_ = ref_scn;
     sys_ls_end_scn_ = sys_ls_end_scn;
+    sync_mode_ = sync_mode;
   }
   return ret;
 }
@@ -10346,14 +10415,28 @@ int ObLSAccessModeInfo::assign(const ObLSAccessModeInfo &other)
     access_mode_ = other.access_mode_;
     ref_scn_ = other.ref_scn_;
     sys_ls_end_scn_ = other.sys_ls_end_scn_;
+    sync_mode_ = other.sync_mode_;
   }
   return ret;
 }
-OB_SERIALIZE_MEMBER(ObLSAccessModeInfo, tenant_id_, ls_id_, mode_version_, access_mode_, ref_scn_, addr_, sys_ls_end_scn_);
+OB_SERIALIZE_MEMBER(ObLSAccessModeInfo, tenant_id_, ls_id_, mode_version_, access_mode_, ref_scn_,
+  addr_, sys_ls_end_scn_, sync_mode_);
 
 bool ObChangeLSAccessModeRes::is_valid() const
 {
-  return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid() && wait_sync_scn_cost_ >= 0 && change_access_mode_cost_ >= 0;
+  return (ret_ != OB_SUCCESS) || (OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid() && wait_sync_scn_cost_ >= 0
+    && change_access_mode_cost_ >= 0);
+}
+int ObChangeLSAccessModeRes::init_with_error(int ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ret_code == OB_SUCCESS)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ret_code));
+  } else {
+    ret_ = ret_code;
+  }
+  return ret;
 }
 int ObChangeLSAccessModeRes::init(
     uint64_t tenant_id, const ObLSID &ls_id,
@@ -10365,7 +10448,8 @@ int ObChangeLSAccessModeRes::init(
                   || wait_sync_scn_cost < 0
                   || change_access_mode_cost < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(wait_sync_scn_cost), K(change_access_mode_cost));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(wait_sync_scn_cost),
+      K(change_access_mode_cost));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
@@ -10389,7 +10473,115 @@ int ObChangeLSAccessModeRes::assign(const ObChangeLSAccessModeRes &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObChangeLSAccessModeRes, tenant_id_, ls_id_, ret_, wait_sync_scn_cost_, change_access_mode_cost_);
+OB_SERIALIZE_MEMBER(ObChangeLSAccessModeRes, tenant_id_, ls_id_, ret_, wait_sync_scn_cost_,
+  change_access_mode_cost_);
+
+bool ObChangeLSSyncModeArg::is_valid() const
+{
+  bool valid = true;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id_) || !is_user_tenant(tenant_id_))) {
+    valid = false;
+  } else if (OB_UNLIKELY(!ls_id_.is_valid())) {
+    valid = false;
+  } else if (OB_UNLIKELY(mode_version_ < 0)) {
+    valid = false;
+  } else if (OB_UNLIKELY(!ref_scn_.is_valid())) {
+    valid = false;
+  } else if (!GCONF.enable_logservice &&
+      standby::ObProtectionModeUtils::check_cluster_version_for_protection_mode()
+      && OB_UNLIKELY(palf::SyncMode::INVALID_SYNC_MODE == sync_mode_)) {
+    valid = false;
+  } else if (OB_UNLIKELY(!protection_log_.is_valid())) {
+    valid = false;
+  }
+  return valid;
+}
+int ObChangeLSSyncModeArg::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const int64_t mode_version, const share::SCN &ref_scn, const palf::SyncMode &sync_mode,
+    const ObSyncStandbyStatusAttr &protection_log)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id) || !is_user_tenant(tenant_id) || !ls_id.is_valid()
+    || mode_version < 0 || !ref_scn.is_valid() || palf::SyncMode::INVALID_SYNC_MODE == sync_mode
+    || !protection_log.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(mode_version), K(ref_scn),
+      K(sync_mode), K(protection_log));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    mode_version_ = mode_version;
+    ref_scn_ = ref_scn;
+    sync_mode_ = sync_mode;
+    protection_log_ = protection_log;
+  }
+  return ret;
+}
+
+int ObChangeLSSyncModeArg::assign(const ObChangeLSSyncModeArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+    mode_version_ = other.mode_version_;
+    ref_scn_ = other.ref_scn_;
+    sync_mode_ = other.sync_mode_;
+    protection_log_ = other.protection_log_;
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObChangeLSSyncModeArg, tenant_id_, ls_id_, mode_version_, ref_scn_, sync_mode_, protection_log_);
+
+bool ObChangeLSSyncModeRes::is_valid() const
+{
+  return (ret_ != OB_SUCCESS) || (is_valid_tenant_id(tenant_id_) && is_user_tenant(tenant_id_) && ls_id_.is_valid()
+    && mode_version_ >= 0);
+}
+
+int ObChangeLSSyncModeRes::init_with_error(int ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ret_code == OB_SUCCESS)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ret_code));
+  } else {
+    ret_ = ret_code;
+  }
+  return ret;
+}
+
+int ObChangeLSSyncModeRes::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const share::SCN &special_log_scn, const int64_t mode_version, const int ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_user_tenant(tenant_id))
+    || !ls_id.is_valid() || mode_version < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(special_log_scn), K(mode_version));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    mode_version_ = mode_version;
+    special_log_scn_ = special_log_scn;
+    ret_ = ret_code;
+  }
+  return ret;
+}
+
+int ObChangeLSSyncModeRes::assign(const ObChangeLSSyncModeRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+    mode_version_ = other.mode_version_;
+    special_log_scn_ = other.special_log_scn_;
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObChangeLSSyncModeRes, tenant_id_, ls_id_, special_log_scn_, mode_version_, ret_);
 
 int ObNotifySwitchLeaderArg::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
     const common::ObAddr &leader, const SwitchLeaderComment &comment)
@@ -10459,6 +10651,29 @@ int ObNotifyTenantThreadArg::assign(const ObNotifyTenantThreadArg &other)
 }
 
 OB_SERIALIZE_MEMBER(ObNotifyTenantThreadArg, tenant_id_, thread_type_);
+
+int ObClearSyncStandbyDestCacheArg::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id) || !is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+int ObClearSyncStandbyDestCacheArg::assign(const ObClearSyncStandbyDestCacheArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObClearSyncStandbyDestCacheArg, tenant_id_);
 
 bool ObBatchRemoveTabletArg::is_valid() const
 {
@@ -14883,6 +15098,52 @@ OB_SERIALIZE_MEMBER((ObSensitiveRuleDDLArg, ObDDLArg),
                      ddl_type_,
                      schema_,
                      user_id_);
+
+int ObGetLSLocationArg::init(
+    const int64_t cluster_id,
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id
+      || !is_valid_tenant_id(tenant_id)
+      || !ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
+  } else {
+    cluster_id_ = cluster_id;
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+  }
+  return ret;
+}
+
+int ObGetLSLocationArg::assign(const ObGetLSLocationArg &other)
+{
+  int ret = common::OB_SUCCESS;
+  if (this != &other) {
+    cluster_id_ = other.cluster_id_;
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+  }
+  return ret;
+}
+
+void ObGetLSLocationArg::reset()
+{
+  cluster_id_ = OB_INVALID_CLUSTER_ID;
+  tenant_id_ = common::OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+}
+
+bool ObGetLSLocationArg::is_valid() const
+{
+  return OB_INVALID_CLUSTER_ID != cluster_id_
+      && is_valid_tenant_id(tenant_id_)
+      && ls_id_.is_valid();
+}
+
+OB_SERIALIZE_MEMBER(ObGetLSLocationArg, cluster_id_, tenant_id_, ls_id_);
 
 }//end namespace obrpc
 }//end namespace oceanbase

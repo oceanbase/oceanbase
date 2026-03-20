@@ -14,6 +14,7 @@
 #include "ob_log_restore_source_mgr.h"
 
 using namespace oceanbase::share;
+const int64_t ObLogRestoreSourceMgr::OB_DEFAULT_LOG_RESTORE_SOURCE_ID = 1;
 int ObLogRestoreSourceMgr::init(const uint64_t tenant_id, ObISQLClient *proxy)
 {
   int ret = OB_SUCCESS;

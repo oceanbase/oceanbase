@@ -44,6 +44,7 @@ struct ObLSAttr;
 struct ObLSRecoveryStat;
 class SCN;
 class ObBalanceTaskHelper;
+class ObSyncStandbyStatusAttr;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -59,6 +60,7 @@ namespace logservice
 {
 class ObLogHandler;
 class ObGCLSLog;
+class ObSyncModeLog;
 }
 namespace palf
 {
@@ -96,11 +98,31 @@ private:
  int process_ls_log_(const ObAllTenantInfo &tenant_info,
                      share::SCN &start_scn,
                      palf::PalfBufferIterator &iterator);
+
+ template <typename LOG>
+ int process_log_(const LOG &log, const share::SCN &sync_scn, const bool need_check_sync_scn);
+ int process_log_in_trans_(ObMySQLTransaction &trans,
+    const ObTenantRole::Role &role,
+    const transaction::ObTxBufferNodeArray &source_data,
+    const share::SCN &sync_scn,
+    bool &has_operation);
+
+ int process_log_in_trans_(ObMySQLTransaction &trans,
+    const ObTenantRole::Role &role,
+    const logservice::ObSyncModeLog &sync_mode_log,
+    const share::SCN &sync_scn,
+    bool &has_operation);
+
  int process_upgrade_log_(const share::SCN &sync_scn,
      const transaction::ObTxBufferNode &node);
  int process_upgrade_data_version_log_(const share::SCN &sync_scn,
                                        const transaction::ObTxBufferNode &node,
                                        common::ObMySQLTransaction &trans);
+ int process_sync_standby_status_log_(const share::SCN &sync_scn,
+                                       const transaction::ObTxBufferNode &node,
+                                       common::ObMySQLTransaction &trans);
+ int set_protection_stat_(const share::ObSyncStandbyStatusAttr &attr,
+    common::ObMySQLTransaction &trans);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
                         const share::SCN &syn_scn);
  int process_ls_table_in_trans_(const transaction::ObTxBufferNode &node,

@@ -12,6 +12,7 @@
 
 #include "ob_garbage_collector.h"
 #include "ob_log_service.h"
+#include "ob_log_base_type.h"
 #include "ob_switch_leader_adapter.h"
 #include "archiveservice/ob_archive_service.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
@@ -25,6 +26,8 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/ob_shared_meta_service.h"
 #endif
+#include "rootserver/standby/ob_protection_mode_utils.h"
+#include "rootserver/ob_ls_service_helper.h"
 
 namespace oceanbase
 {
@@ -710,6 +713,11 @@ bool ObGCHandler::is_ls_offline_gc_state(const LSGCState &state)
   return LSGCState::LS_OFFLINE == state;
 }
 
+bool ObGCHandler::is_ls_offline_finished(const LSGCState &state)
+{
+  return LSGCState::LS_OFFLINE <= state;
+}
+
 bool ObGCHandler::is_ls_blocked_state_(const LSGCState &state)
 {
   return LSGCState::LS_BLOCKED == state;
@@ -793,6 +801,81 @@ bool ObGCHandler::is_tablet_clear_(const ObGarbageCollector::LSStatus &ls_status
   return bool_ret;
 }
 
+int ObGCHandler::check_ls_sync_scn_for_gc_(const share::SCN &offline_scn)
+{
+  // for standby tenant, we need to get the sync scn from the primary tenant
+  // for primary tenant, we need to get the sync scn from the ls itself
+  int ret = OB_SUCCESS;
+  share::SCN sync_scn;
+  bool need_check_sync_scn = false;
+  ObLogHandler *log_handler = nullptr;
+  palf::SyncMode sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
+  palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
+  int64_t mode_version = 0;
+  if (OB_ISNULL(ls_) || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "ls_ is nullptr or sql_proxy_ is nullptr", KR(ret), KP(ls_), KP(GCTX.sql_proxy_));
+  } else if (!is_user_tenant(MTL_ID())) {
+    CLOG_LOG(INFO, "not user tenant, no need to check tenant gc by offline scn", K(MTL_ID()));
+  } else if (OB_ISNULL(log_handler = ls_->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "log_handler is nullptr", KR(ret));
+  } else if (GCONF.enable_logservice) {
+    CLOG_LOG(INFO, "logservice is enabled, no need to check tenant gc by offline scn");
+  } else if (OB_FAIL(log_handler->get_sync_mode(mode_version, sync_mode))) {
+    CLOG_LOG(WARN, "get_sync_mode failed", KR(ret));
+  } else if (sync_mode != palf::SyncMode::SYNC) {
+    CLOG_LOG(INFO, "sync mode is not sync, no need to check tenant gc by offline scn", K(sync_mode));
+  } else if (OB_FAIL(log_handler->get_access_mode(mode_version, access_mode))) {
+    CLOG_LOG(WARN, "get_access_mode failed", KR(ret));
+  } else if (AccessMode::APPEND != access_mode) {
+    need_check_sync_scn = true;
+    // standby tenant
+    share::ObLogRestoreProxyUtil restore_proxy_util;
+    bool log_restore_source_is_empty = false;
+    share::ObRestoreSourceServiceAttr restore_source_service_attr;
+    if (OB_FAIL(standby::ObProtectionModeUtils::get_tenant_restore_source(MTL_ID(),
+        log_restore_source_is_empty, restore_source_service_attr))) {
+      CLOG_LOG(WARN, "get_log_restore_source failed", KR(ret));
+    } else if (log_restore_source_is_empty) {
+      // bad case: tenant switchover to standby, and not set log_restore_source, this LS may gc before standby fetch offline log
+      need_check_sync_scn = false;
+      CLOG_LOG(INFO, "log restore source is empty, no need to check tenant gc by offline scn", K(log_restore_source_is_empty));
+    } else if (OB_FAIL(restore_proxy_util.init_with_service_attr(MTL_ID(), &restore_source_service_attr))) {
+      CLOG_LOG(WARN, "init_with_service_attr failed", KR(ret));
+    } else if (OB_FAIL(restore_proxy_util.get_ls_sync_scn(ls_->get_ls_id(), sync_scn))) {
+      CLOG_LOG(WARN, "get_ls_sync_scn failed", KR(ret));
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        need_check_sync_scn = false;
+        CLOG_LOG(INFO, "ls is removed in primary tenant, standby can gc ls", KR(ret),
+            "ls_id", ls_->get_ls_id());
+        ret = OB_SUCCESS;
+      }
+    }
+  } else {
+    need_check_sync_scn = true;
+    // primary tenant or tenant in flashback status
+    if (OB_FAIL(rootserver::ObLSServiceHelper::get_ls_replica_sync_scn(MTL_ID(), ls_->get_ls_id(), sync_scn))) {
+      CLOG_LOG(WARN, "failed to get sync_scn", KR(ret), "ls_id", ls_->get_ls_id());
+    } else {
+      CLOG_LOG(INFO, "get sync scn", KR(ret), "ls_id", ls_->get_ls_id(), K(sync_scn));
+    }
+  }
+  if (need_check_sync_scn && OB_SUCC(ret)) {
+    if (!sync_scn.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      CLOG_LOG(WARN, "sync scn is invalid", KR(ret));
+    } else if (sync_scn < offline_scn) {
+      ret = OB_NEED_WAIT;
+      CLOG_LOG(WARN, "sync scn is less than offline scn, cannot gc ls", KR(ret),
+          "ls_id", ls_->get_ls_id(), K(sync_scn), K(offline_scn));
+    } else {
+      CLOG_LOG(INFO, "sync scn is greater than offline scn, can gc ls", K(sync_scn), K(offline_scn));
+    }
+  }
+  return ret;
+}
+
 void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_status)
 {
   int ret = OB_SUCCESS;
@@ -819,6 +902,8 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait readable_scn", K(ret), K(ls_id), K(gc_state), K(offline_scn), K(readable_scn));
   } else if (concurrency_control::ObDataValidationService::need_delay_resource_recycle(ls_id)) {
     CLOG_LOG(INFO, "need delay resource recycle", K(ls_id));
+  } else if (OB_FAIL(check_ls_sync_scn_for_gc_(offline_scn))) {
+    CLOG_LOG(WARN, "failed to check primary tenant gc", KR(ret), K(offline_scn), K(ls_id));
   } else if (OB_FAIL(check_if_tenant_in_archive_(tenant_in_archive))) {
     CLOG_LOG(WARN, "check_if_tenant_in_archive_ failed", K(ret), K(ls_id), K(gc_state));
   } else if (! tenant_in_archive) {
@@ -1306,6 +1391,7 @@ void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
         CLOG_LOG(WARN, "failed to submit OFFLINE_LS log", K(ls_id), K(gc_state));
       } else if (is_success) {
         CLOG_LOG(INFO, "OFFLINE_LS has callback on_success", K(ls_id), K(gc_state));
+        DEBUG_SYNC(LS_GC_AFTER_SUBMIT_OFFLINE_LOG);
         (void)try_check_and_set_wait_gc_(ls_status);
       } else {
         CLOG_LOG(WARN, "OFFLINE_LS has not callback on_success", K(ls_id), K(gc_state));

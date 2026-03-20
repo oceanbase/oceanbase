@@ -48,6 +48,7 @@
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "rootserver/ob_load_inner_table_schema_executor.h"
 #include "share/ob_license_utils.h"
+#include "share/ob_sync_standby_status_operator.h"
 
 #define MODIFY_LOCALITY_NOT_ALLOWED() \
         do { \
@@ -1593,6 +1594,11 @@ int ObTenantDDLService::init_tenant_env_after_schema_(
             0, /*heartbeat_service_epoch*/
             0 /* service_name_epoch */))) {
       LOG_WARN("fail to init service epoch", KR(ret));
+    }
+  } else if (is_user_tenant(tenant_id)) {
+    ObSyncStandbyStatusOperator sync_standby_status_operator(user_tenant_id, sql_proxy_);
+    if (OB_FAIL(sync_standby_status_operator.init_sync_standby_status(trans))) {
+      LOG_WARN("failed to init sync standby status", KR(ret));
     }
   }
   if (trans.is_started()) {
@@ -5319,6 +5325,10 @@ int ObTenantDDLService::drop_tenant(const ObDropTenantArg &arg)
       //if standby tenant and no recyclebin, need drop force
       drop_force = true;
       FLOG_INFO("is standby tenant, need drop force", K(tenant_info));
+    } else if (!tenant_info.get_protection_mode().is_maximum_performance() && !open_recyclebin) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("drop strong sync tenant is not allowed", KR(ret), K(arg), K(tenant_info));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "should drop tenant force, drop tenant in strong sync mode is");
     }
   }
   if (OB_FAIL(ret)) {
