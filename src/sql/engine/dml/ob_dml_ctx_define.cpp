@@ -753,36 +753,40 @@ OB_DEF_DESERIALIZE(ObInsertUpCtDef)
   if (OB_ISNULL(ins_ctdef_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc ins_ctdef failed", K(ret));
+  } else {
+    OB_UNIS_DECODE(*ins_ctdef_);
   }
-  OB_UNIS_DECODE(*ins_ctdef_);
   ObDMLCtDefAllocator<ObUpdCtDef> upd_ctdef_allocator(alloc_);
   upd_ctdef_ = upd_ctdef_allocator.alloc();
   if (OB_ISNULL(upd_ctdef_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc upd_ctdef failed", K(ret));
+  } else {
+    OB_UNIS_DECODE(*upd_ctdef_);
   }
-  OB_UNIS_DECODE(*upd_ctdef_);
   OB_UNIS_DECODE(do_opt_path_);
   OB_UNIS_DECODE(do_index_lookup_);
   OB_UNIS_DECODE(unique_key_conv_exprs_);
   OB_UNIS_DECODE(unique_index_rowkey_exprs_);
 
   ObDMLCtDefAllocator<ObDASScanCtDef> das_scan_ctdef_allocator(alloc_);
-  if (do_index_lookup_) {
+  if (OB_SUCC(ret) && do_index_lookup_) {
     das_index_scan_ctdef_ = das_scan_ctdef_allocator.alloc();
     if (OB_ISNULL(das_index_scan_ctdef_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc das index scan ctdef failed", K(ret));
+    } else {
+      OB_UNIS_DECODE(*das_index_scan_ctdef_);
     }
-    OB_UNIS_DECODE(*das_index_scan_ctdef_);
   }
-  if (do_opt_path_) {
+  if (OB_SUCC(ret) && do_opt_path_) {
     lookup_ctdef_for_batch_ = das_scan_ctdef_allocator.alloc();
     if (OB_ISNULL(lookup_ctdef_for_batch_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc lookup ctdef for batch failed", K(ret));
+    } else {
+      OB_UNIS_DECODE(*lookup_ctdef_for_batch_);
     }
-    OB_UNIS_DECODE(*lookup_ctdef_for_batch_);
   }
   OB_UNIS_DECODE(enable_do_update_directly_);
   return ret;

@@ -1333,6 +1333,47 @@ int ObTableInsertUpOp::update_row_to_das()
       LOG_WARN("unexpected location change with primary table", K(ret));
     } else if (OB_FAIL(ObDMLService::check_row_whether_changed(*upd_ctdef, upd_rtdef, eval_ctx_))) {
       LOG_WARN("check row whether changed failed", K(ret), KPC(upd_ctdef));
+    } else if (i > 0 && !insert_up_rtdefs_.at(0).upd_rtdef_.is_row_changed_) {
+      /* Fix for is_row_changed_ inconsistency between primary table and global indexes.
+      *
+      * Background:
+      * In the INSERT ON DUPLICATE KEY UPDATE (insert_up) path, primary_rtdef_ is null
+      * for global index rtdefs (unlike the normal UPDATE path where it is set). This
+      * means each global index independently evaluates is_row_changed_ via
+      * check_row_whether_changed(), which may produce a different result than the
+      * primary table. For example, the primary table skips auto_filled_timestamp
+      * columns (ON UPDATE CURRENT_TIMESTAMP) during comparison, but when a global
+      * index evaluates independently (primary_rtdef_=null), it does NOT skip them,
+      * potentially concluding the row has changed when the primary says it hasn't.
+      *
+      * We cannot simply set primary_rtdef_ for insert_up global indexes (as done in
+      * normal UPDATE) because insert_up includes ALL global indexes in the ctdef list
+      * (needed for the INSERT part), not just those with overlapping updated columns.
+      * If a global index inherits is_row_changed_=true from primary but none of its
+      * index columns are actually being updated, the storage layer will reject the
+      * update with error 4002 (updated_column_ids is empty).
+      *
+      * Fix: When the primary table says the row hasn't changed (is_row_changed_=false),
+      * force all global indexes to also treat the row as unchanged, regardless of their
+      * independent evaluation result.
+      *
+      * All scenarios of is_row_changed_ for global indexes after this fix:
+      *
+      * | Primary  | Index independent | Force set | Behavior                        |
+      * |----------|-------------------|-----------|---------------------------------|
+      * | false    | true              | false     | Both lock, consistent           |
+      * | false    | false             | false     | Both lock, consistent           |
+      * | true     | true              | true      | Both update (or del+ins), ok    |
+      * | true     | false             | false     | Primary updates, index locks,ok |
+      *
+      * The critical case is row 1: without the fix, primary does lock while the
+      * index does delete+insert, causing data inconsistency between main table
+      * and global index.
+      */
+      upd_rtdef.is_row_changed_ = false;
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(update_row_to_das(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc))) {
       LOG_WARN("fail to update row to das", K(ret), KPC(upd_ctdef));
     }
