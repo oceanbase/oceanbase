@@ -1097,10 +1097,10 @@ public:
   void gen_gtt_session_scope_unique_id();
   void gen_gtt_trans_scope_unique_id();
   void set_trans_gtt_v2_sequence(const int64_t sequence);
-  int64_t get_session_gtt_v2_sequence() const;
-  int64_t get_trans_gtt_v2_sequence() const;
+  int64_t get_session_gtt_v2_sequence();
+  int64_t get_trans_gtt_v2_sequence();
   void update_trans_gtt_v2_sequence();
-  uint64_t get_min_data_version_of_init_sess() const { return ATOMIC_LOAD(&min_data_version_of_init_sess_); }
+  uint64_t get_min_data_version_of_init_sess();
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
   common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
   int add_dblink_sequence_schema(ObSequenceSchema *schema);

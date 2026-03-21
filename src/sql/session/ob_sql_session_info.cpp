@@ -4320,9 +4320,6 @@ void ObSQLSessionInfo::gen_gtt_trans_scope_unique_id()
 
 void ObSQLSessionInfo::set_trans_gtt_v2_sequence(const int64_t sequence)
 {
-  if (get_min_data_version_of_init_sess() == 0) {
-    ATOMIC_STORE(&min_data_version_of_init_sess_, get_data_version());
-  }
   ATOMIC_STORE(&trans_gtt_v2_sequence_, sequence);
 }
 
@@ -4333,7 +4330,7 @@ void ObSQLSessionInfo::update_trans_gtt_v2_sequence()
   LOG_INFO("update trans gtt v2 sequence", K(get_trans_gtt_v2_sequence()));
 }
 
-int64_t ObSQLSessionInfo::get_session_gtt_v2_sequence() const
+int64_t ObSQLSessionInfo::get_session_gtt_v2_sequence()
 {
   int64_t result = ATOMIC_LOAD(&gtt_session_scope_unique_id_);
   if (get_min_data_version_of_init_sess() >= DATA_VERSION_4_4_2_1) {
@@ -4342,7 +4339,16 @@ int64_t ObSQLSessionInfo::get_session_gtt_v2_sequence() const
   return result;
 }
 
-int64_t ObSQLSessionInfo::get_trans_gtt_v2_sequence() const
+uint64_t ObSQLSessionInfo::get_min_data_version_of_init_sess()
+{
+  if (ATOMIC_LOAD(&min_data_version_of_init_sess_) == 0) {
+    uint64_t data_version = get_data_version();
+    ATOMIC_VCASx(&min_data_version_of_init_sess_, 0, data_version, LA_ATOMIC_ID);
+  }
+  return ATOMIC_LOAD(&min_data_version_of_init_sess_);
+}
+
+int64_t ObSQLSessionInfo::get_trans_gtt_v2_sequence()
 {
   int64_t result = ATOMIC_LOAD(&gtt_trans_scope_unique_id_);
   if (get_min_data_version_of_init_sess() >= DATA_VERSION_4_4_2_1) {
