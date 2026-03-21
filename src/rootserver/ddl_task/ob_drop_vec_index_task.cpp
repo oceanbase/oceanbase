@@ -169,6 +169,7 @@ int ObDropVecIndexTask::obtain_snapshot(const share::ObDDLTaskStatus next_task_s
 {
   int ret = OB_SUCCESS;
   bool state_finished = false;
+  bool is_snapshot_table_exist = true;
   ObDDLTaskStatus old_status = task_status_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -185,13 +186,34 @@ int ObDropVecIndexTask::obtain_snapshot(const share::ObDDLTaskStatus next_task_s
     if (OB_FAIL(switch_status(next_task_status, true, ret))) {
       LOG_WARN("fail to switch task status", K(ret), K(next_task_status));
     }
-  } else if (OB_FAIL(ObDDLUtil::obtain_snapshot(next_task_status, vec_index_snapshot_data_.table_id_,
-                                                vec_index_snapshot_data_.table_id_, snapshot_version_,
-                                                this))) {
-    LOG_WARN("fail to obtain_snapshot", K(ret), K(snapshot_version_));
-  } else {
-    state_finished = true;
+  } else if (OB_FAIL(check_snapshot_table_exist(is_snapshot_table_exist))) {
+    LOG_WARN("fail to check snapshot table exist", K(ret));
   }
+
+  // 统一后置处理：skip 且成功时，强制切到 DROP_AUX_INDEX_TABLE
+  if (OB_SUCC(ret) && !state_finished) {
+    if (!is_snapshot_table_exist) { // snapshot table not exist, skip obtain snapshot
+      if (OB_FAIL(switch_status(ObDDLTaskStatus::DROP_AUX_INDEX_TABLE, true, ret))) {
+        LOG_WARN("fail to switch task status when skip obtain snapshot", K(ret));
+      } else {
+        state_finished = true;
+      }
+    } else if (OB_FAIL(ObDDLUtil::obtain_snapshot(next_task_status,
+                                                  vec_index_snapshot_data_.table_id_,
+                                                  vec_index_snapshot_data_.table_id_,
+                                                  snapshot_version_,
+                                                  this))) {
+      LOG_WARN("fail to obtain_snapshot", K(ret), K(snapshot_version_));
+    } else if (snapshot_version_ <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("snapshot version is invalid", K(ret), K(snapshot_version_));
+    } else if (OB_FAIL(update_task_message())) {
+      LOG_WARN("fail to snapshot_version_ to __all_ddl_task_status", K(ret));
+    } else {
+      state_finished = true;
+    }
+  }
+
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(common::EventTable::EN_VEC_INDEX_OBTAIN_SNAPSHOT_ERR) OB_SUCCESS;
@@ -200,6 +222,7 @@ int ObDropVecIndexTask::obtain_snapshot(const share::ObDDLTaskStatus next_task_s
     }
   }
 #endif
+
   if (state_finished && OB_SUCC(ret)) {
     LOG_INFO("success to obtain_snapshot", K(ret));
   } else if (next_task_status == task_status_) {  // resume old task status and retry
@@ -216,6 +239,8 @@ int ObDropVecIndexTask::drop_lob_meta_row(const ObDDLTaskStatus next_task_status
 {
   int ret = OB_SUCCESS;
   bool is_build_replica_end = false;
+  bool is_exist = true;
+  DEBUG_SYNC(DROP_VECTOR_INDEX_BEFORE_DELETE_LOB_META);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDropVecIndexTask is not inited", K(ret));
@@ -223,9 +248,13 @@ int ObDropVecIndexTask::drop_lob_meta_row(const ObDDLTaskStatus next_task_status
     ret = OB_TASK_EXPIRED;
     LOG_WARN("task status not match", K(ret), K(task_status_));
   } else if (OB_UNLIKELY(snapshot_version_ <= 0)) {
-    is_build_replica_end = true; // switch to fail.
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected snapshot", K(ret), KPC(this));
+    is_build_replica_end = true;
+    LOG_INFO("finish drop lob meta and release snapshot", K(ret));
+  } else if (vec_index_snapshot_data_.is_valid() && !del_lob_meta_row_task_submitted_ && OB_FAIL(check_snapshot_table_exist(is_exist))) {
+    LOG_WARN("fail to check snapshot table exist", K(ret));
+  } else if (!is_exist) {
+    is_build_replica_end = true;
+    LOG_INFO("snapshot table not exist, skip drop lob meta row", K(ret));
   } else if (vec_index_snapshot_data_.is_valid() && !del_lob_meta_row_task_submitted_ && OB_FAIL(send_build_single_replica_request())) {
     LOG_WARN("fail to send build single replica request", K(ret));
   } else if (vec_index_snapshot_data_.is_valid() && del_lob_meta_row_task_submitted_ && OB_FAIL(check_build_single_replica(is_build_replica_end))) {
@@ -234,7 +263,12 @@ int ObDropVecIndexTask::drop_lob_meta_row(const ObDDLTaskStatus next_task_status
     is_build_replica_end = true;
   }
   if (is_build_replica_end) {
-    ret = OB_SUCC(ret) ? delte_lob_meta_job_ret_code_ : ret;
+    DEBUG_SYNC(DROP_VECTOR_INDEX_AFTER_DELETE_LOB_META);
+    // Only consume async job return code when the delete-lob-meta job was actually submitted.
+    // For skip paths (e.g. snapshot table not exist), keep current ret to allow state transition.
+    if (OB_SUCC(ret) && del_lob_meta_row_task_submitted_) {
+      ret = delte_lob_meta_job_ret_code_;
+    }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(common::EventTable::EN_VEC_INDEX_DROP_LOB_META_ROW_ERR) OB_SUCCESS;
@@ -246,7 +280,7 @@ int ObDropVecIndexTask::drop_lob_meta_row(const ObDDLTaskStatus next_task_status
     if (OB_FAIL(ret)) {
       LOG_WARN("fail in delete lob meta row", K(ret));
     } else if (OB_FAIL(finish())) {
-      LOG_WARN("fail in release snapshot", K(ret));
+      LOG_WARN("fail to release snapshot", K(ret));
     } else if (OB_FAIL(switch_status(next_task_status, true/*enable_flt*/, ret))) {
       LOG_WARN("fail to switch task status", K(ret), K(next_task_status));
     } else {
@@ -828,8 +862,14 @@ int ObDropVecIndexTask::create_drop_index_task(
   } else if (OB_FAIL(guard.get_table_schema(tenant_id_, index_schema->get_data_table_id(), data_table_schema))) {
     LOG_WARN("fail to get data table schema", K(ret), K(index_schema->get_data_table_id()));
   } else if (OB_UNLIKELY(nullptr == database_schema || nullptr == data_table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, schema is nullptr", K(ret), KP(database_schema), KP(data_table_schema));
+    if (OB_ISNULL(data_table_schema) && drop_index_arg_.is_hidden_) {
+      task_id = -1;
+      LOG_INFO("hidden data_table maybe removed when offline ddl is failed, skip drop",
+        K(ret), K(index_tid), K(index_name));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, schema is nullptr", K(ret), KP(database_schema), KP(data_table_schema));
+    }
   } else if (is_domain_index && OB_FAIL(drop_index_sql.assign(drop_index_arg_.ddl_stmt_str_))) {
     LOG_WARN("assign user drop index sql failed", K(ret));
   } else {
@@ -915,6 +955,14 @@ int ObDropVecIndexTask::finish()
   } else if (snapshot_version_ > 0 && OB_FAIL(release_snapshot(snapshot_version_))) {
     LOG_WARN("release snapshot failed", K(ret));
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_VEC_INDEX_HNSW_RELEASE_SNAPSHOT_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[ERRSIM] fail to finish after release snapshot", K(ret), K(snapshot_version_));
+    }
+  }
+#endif
   return ret;
 }
 
@@ -931,8 +979,8 @@ int ObDropVecIndexTask::exit_all_dags_and_clean()
     if (REACH_COUNT_INTERVAL(1000L)) {
       LOG_INFO("wait all delete lob meta row data dag exit", K(dst_tenant_id_), K(task_id_));
     }
-  } else if (OB_FAIL(finish())) {
-    LOG_WARN("finish tans failed", K(ret));
+  } else if (OB_FAIL(finish())) { // try release hold snapshot
+    LOG_WARN("finish execute failed", K(ret));
   } else if (OB_FAIL(cleanup())) {
     LOG_WARN("cleanup failed", K(ret));
   }
@@ -949,6 +997,8 @@ int ObDropVecIndexTask::cleanup_impl()
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(finish())) { // try release hold snapshot
+    LOG_WARN("finish execute failed", K(ret));
   } else if (OB_FAIL(report_error_code(unused_str))) {
     LOG_WARN("report error code failed", K(ret));
   } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(*GCTX.sql_proxy_, tenant_id_, task_id_))) {
@@ -1029,6 +1079,27 @@ int ObDropVecIndexTask::check_build_single_replica(bool &is_end)
       del_lob_meta_row_task_submitted_ = false;
       delte_lob_meta_request_time_ = 0;
     }
+  }
+  return ret;
+}
+
+// check whether all leaders have completed the task
+int ObDropVecIndexTask::check_snapshot_table_exist(bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *snapshot_table_schema = nullptr;
+  const int64_t table_id = vec_index_snapshot_data_.table_id_;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, snapshot_table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(table_id));
+  } else if (OB_ISNULL(snapshot_table_schema)) {
+    is_exist = false;
+    LOG_WARN("snapshot table is not exist", K(table_id));
   }
   return ret;
 }

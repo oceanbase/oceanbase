@@ -7892,6 +7892,8 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
               const ObString &data_table_name = origin_table_schema.get_table_name_str();
               ret = OB_ERR_KEY_DOES_NOT_EXISTS;
               LOG_USER_ERROR(OB_ERR_KEY_DOES_NOT_EXISTS, ori_index_name.length(), ori_index_name.ptr(), data_table_name.length(), data_table_name.ptr());
+          } else if (OB_FAIL(ObVectorIndexUtil::check_rename_rebuild_confilt(schema_guard, trans, *this, origin_table_schema, ori_index_name))) {
+            LOG_WARN("fail to check vector rename and rebuild confilt", K(ret), K(ori_index_name));
           } else {
             SMART_VAR(ObTableSchema, new_index_schema) {
               if (OB_FAIL(ddl_operator.alter_table_rename_index(
@@ -28640,7 +28642,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
 int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
-  LOG_DEBUG("RS start to rebuild vec index", K(arg));
+  LOG_INFO("RS start to rebuild vec index", K(arg));
 
   if (OB_FAIL(check_inner_stat())) {
     ret = OB_INNER_STAT_ERROR;
@@ -28687,7 +28689,7 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
       const ObTableSchema *index_table_schema = NULL;
       ObIndexBuilder index_builder(*this);
       uint64_t tenant_data_version = 0;
-      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, arg.index_table_id_, index_table_schema))) {
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, arg.database_name_, arg.index_name_, true/*index*/, index_table_schema))) {
         LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(index_table_schema));
       } else if (OB_ISNULL(index_table_schema)) {
         ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
@@ -28695,11 +28697,15 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
         LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, arg.index_name_.length(), arg.index_name_.ptr());
       } else if (!ObVectorIndexUtil::check_index_is_all_ready(schema_guard, *table_schema, *index_table_schema)) {
         ret = OB_NOT_SUPPORTED;
+        LOG_WARN("rebuild on not ready vector index is not support", K(ret), KPC(index_table_schema));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "rebuild on not ready vector index is");
       } else if (OB_FAIL(check_vec_index_conflict(table_schema->get_tenant_id(), data_table_id))) {
         if (OB_EAGAIN != ret) {
           LOG_WARN("failed to check vec index ", K(ret));
         }
+      } else if (arg.is_need_check_based_schema_objects() &&
+                 OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+        LOG_WARN("index table schema changed since rebuild request, parallel ddl conflict", KR(ret), K(arg));
       } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
         LOG_WARN("get min data version failed", K(ret), K(tenant_id));
       } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
