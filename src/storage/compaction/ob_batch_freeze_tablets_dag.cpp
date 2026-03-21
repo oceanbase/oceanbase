@@ -50,7 +50,7 @@ int64_t ObBatchFreezeTabletsParam::to_string(
     int64_t last_schedule_merge_scn = -1;
     for (int64_t i = start_idx; i < end_idx; ++i) {
       const ObTabletSchedulePair &tablet_pair = tablet_info_array_.at(i);
-      if (i != 0) {
+      if (i != start_idx) {
         J_COMMA();
       }
       J_OBJ_START();
