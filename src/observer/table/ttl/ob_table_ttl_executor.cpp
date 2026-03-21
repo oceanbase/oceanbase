@@ -334,8 +334,8 @@ int ObTableApiTTLExecutor::update_row_to_das()
     if (!is_row_changed_) {
       // do nothing
     } else if (constraint_value.new_row_source_ != ObNewRowSource::FROM_UPDATE) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected row source", K(ret), K(constraint_value.new_row_source_));
+      // do_lookup_and_build_base_map may return multiple rows (multiple unique index conflicts).
+      // Only the current row is marked FROM_UPDATE in update_row_to_conflict_checker; others stay FROM_SCAN. Skip non-FROM_UPDATE entries.
     } else { // FROM_UPDATE
       // baseline_datum_row_ 代表存储扫描回来的冲突旧行
       // current_datum_row_ 当前更新的新行
