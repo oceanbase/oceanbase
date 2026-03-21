@@ -106,6 +106,7 @@ namespace schema
         LOG_WARN("fail to load all sys vars", KR(ret)); \
       } else if (OB_FAIL(session_info.load_default_configs_in_pc())) { \
         LOG_WARN("fail to load default configs in pc", KR(ret)); \
+      } else if (FALSE_IT(session_info.get_ddl_info().get_inner_ddl_info().set_ddl_check_default_value(true))) { \
       } else if (OB_FAIL(FUNC(args, expr_factory, exec_ctx, allocator))) { \
         LOG_WARN("fail to build expr", KR(ret)); \
       } \
