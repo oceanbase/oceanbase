@@ -8512,7 +8512,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
                 && -1 == in_result_type.get_accuracy().get_length()))) {
       dst_obj = obj;
       LOG_DEBUG("same type directyly copy", K(obj), K(dst_obj), K(in_result_type));
-    } else if (!ObPLResolver::check_need_cast(in_result_type, current_type.get_meta_type(), current_type.get_accuracy())) {
+    } else if (current_type.get_obj_type() != ObExtendType && !ObPLResolver::check_need_cast(in_result_type, current_type.get_meta_type(), current_type.get_accuracy())) {
       dst_obj = obj;
     } else if (obj.is_null()
                && in_result_type.get_meta_type().is_ext()
