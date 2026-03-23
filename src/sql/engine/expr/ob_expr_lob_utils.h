@@ -161,6 +161,9 @@ class ObTextStringHelper
 public:
   static const uint32_t DEAFULT_LOB_PREFIX_BYTE_LEN = 4000;
 
+  // Give LOB reader cache a chance to release timeout iter when entering LOB read path (e.g. inrow fast path that skips get_full_data).
+  static void reset_lob_iter_if_timeout(sql::ObExecContext *exec_ctx);
+
   static int get_string(const ObExpr &expr, ObIAllocator &allocator, int64_t idx,
                         ObDatum *datum, ObString &str)
   {
@@ -208,10 +211,12 @@ public:
     } else if (is_lob_storage(meta.type_)) {
       const ObLobCommon& lob = datum.get_lob_data();
       if (datum.len_ != 0 && !lob.is_mem_loc_ && lob.in_row_) {
+        reset_lob_iter_if_timeout(exec_ctx);
         str.assign_ptr(lob.get_inrow_data_ptr(), static_cast<int32_t>(lob.get_byte_size(datum.len_)));
       } else {
         const ObMemLobCommon *memlob = reinterpret_cast<const ObMemLobCommon*>(datum.ptr_);
         if (datum.len_ != 0 && memlob->has_inrow_data_ && memlob->has_extern_ == 0 && (memlob->type_ != ObMemLobType::TEMP_DELTA_LOB)) {
+          reset_lob_iter_if_timeout(exec_ctx);
           if (memlob->is_simple_) {
             str.assign_ptr(memlob->data_, static_cast<int32_t>(datum.len_ - sizeof(ObMemLobCommon)));
           } else {
@@ -254,12 +259,14 @@ public:
     } else if (is_lob_storage(meta.type_)) {
       const ObLobCommon& lob = vector->get_lob_data(idx);
       if (vector->get_length(idx) != 0 && !lob.is_mem_loc_ && lob.in_row_) {
+        reset_lob_iter_if_timeout(exec_ctx);
         str.assign_ptr(lob.get_inrow_data_ptr(),
                        static_cast<int32_t>(lob.get_byte_size(vector->get_length(idx))));
       } else {
         const ObMemLobCommon *memlob =
           reinterpret_cast<const ObMemLobCommon *>(vector->get_payload(idx));
         if (vector->get_length(idx) != 0 && memlob->has_inrow_data_ && memlob->has_extern_ == 0) {
+          reset_lob_iter_if_timeout(exec_ctx);
           if (memlob->is_simple_) {
             str.assign_ptr(memlob->data_,
                            static_cast<int32_t>(vector->get_length(idx) - sizeof(ObMemLobCommon)));
