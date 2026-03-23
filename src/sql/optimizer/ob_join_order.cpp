@@ -6887,7 +6887,7 @@ int ObJoinOrder::update_cost_and_cardinality(const Path &path)
 {
   int ret = OB_SUCCESS;
   if (JOIN != type_ || OB_ISNULL(OPT_CTX.get_query_ctx()) ||
-      !OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP8, COMPAT_VERSION_4_3_5,
+      !OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP8, COMPAT_VERSION_4_3_0,
                                                          COMPAT_VERSION_4_3_5_BP6)) {
     if (best_cost_ < 0 || best_cost_ > path.get_cost()) {
       best_cost_ = path.get_cost();
@@ -17258,7 +17258,7 @@ int ObJoinOrder::calc_cardinality(const ObJoinOrder *left_tree,
     get_plan()->get_selectivity_ctx().clear();
 
     // choose the minimal ambient cardinality and maximum output rowcnt
-    if (!OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP8, COMPAT_VERSION_4_3_5,
+    if (!OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP8, COMPAT_VERSION_4_3_0,
                                                            COMPAT_VERSION_4_3_5_BP6)) {
       for (int64_t i = 0; i < ambient_card_.count(); i ++) {
         ambient_card_.at(i) = std::min(ambient_card_.at(i), current_join_ambient_card_.at(i));
