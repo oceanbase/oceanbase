@@ -831,7 +831,7 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
   int64_t foreign_key_checks = 0;
   uint64_t tenant_data_version = 0;
   bool supprt_check_pdml_affected_row = false;
-  int64_t timeout_timestamp = 0;
+  int64_t timeout_timestamp = INT64_MAX;  // Defensive: initialize to INT64_MAX to avoid timeout if not set
   int64_t query_timeout_timestamp = 0;
   int64_t max_exec_timeout_timestamp = 0;
   if (OB_ISNULL(phy_plan_ctx_) || OB_ISNULL(my_session_) || OB_ISNULL(sql_ctx_)) {
@@ -889,9 +889,10 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       bool is_readonly_select = plan.is_plain_select();
       bool has_max_exec_time_cap = !my_session_->is_obproxy_mode() || my_session_->get_proxy_cap_flags().is_max_execution_time_support();
       LOG_DEBUG("check has_max_exec_time_cap", K(my_session_->get_proxy_cap_flags().is_max_execution_time_support()));
-      if (OB_NOT_NULL(get_parent_ctx())) {
+      if (OB_NOT_NULL(get_parent_ctx()) && OB_TIMEOUT_STRATEGY_UNDEFINED != get_parent_ctx()->phy_plan_ctx_->get_timeout_strategy()) {
         timeout_timestamp = get_parent_ctx()->phy_plan_ctx_->get_timeout_timestamp();
         timeout_strategy = get_parent_ctx()->phy_plan_ctx_->get_timeout_strategy();
+        LOG_DEBUG("Inherit timeout timestamp from parent context", K(timeout_timestamp));
       } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_2_1 ||
           max_execution_time <= MAX_EXECUTION_TIME_MIN ||
           max_execution_time > MAX_EXECUTION_TIME_MAX ||
@@ -912,6 +913,9 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       phy_plan_ctx_->set_is_direct_insert_plan(plan.get_enable_append());
       phy_plan_ctx_->set_consistency_level(consistency);
       phy_plan_ctx_->set_timeout_timestamp(timeout_timestamp);
+      LOG_DEBUG("Timeout settings", K(timeout_strategy), K(max_execution_time),
+                K(plan_timeout), K(timeout_timestamp), K(query_timeout_timestamp),
+                K(max_exec_timeout_timestamp));
       phy_plan_ctx_->set_rich_format(my_session_->use_rich_format());
       reference_my_plan(&plan);
       phy_plan_ctx_->set_ignore_stmt(plan.is_ignore());

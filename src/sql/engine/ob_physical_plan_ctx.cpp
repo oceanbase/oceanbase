@@ -119,7 +119,7 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       is_direct_insert_plan_(false),
       check_pdml_affected_rows_(false),
       enable_adaptive_pc_(false),
-      timeout_strategy_(OB_TIMEOUT_STRATEGY_QUERY_TIMEOUT)
+      timeout_strategy_(OB_TIMEOUT_STRATEGY_UNDEFINED)
 {
 }
 

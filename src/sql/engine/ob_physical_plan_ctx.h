@@ -80,9 +80,10 @@ struct ObRemoteSqlInfo
 // How timeout is chosen for this statement: query_timeout, max_exec_timeout, or fallback to query_timeout (need warn).
 enum ObTimeoutStrategy
 {
-  OB_TIMEOUT_STRATEGY_QUERY_TIMEOUT = 0,           // use query_timeout directly
-  OB_TIMEOUT_STRATEGY_MAX_EXEC_TIME = 1,         // use max_execution_time directly (readonly select)
-  OB_TIMEOUT_STRATEGY_QUERY_TIMEOUT_FALLBACK = 2     // would use max_exec but fallback to query_timeout (non-readonly select), show warning at response
+  OB_TIMEOUT_STRATEGY_UNDEFINED = 0,               // undefined strategy, need to be set later
+  OB_TIMEOUT_STRATEGY_QUERY_TIMEOUT = 1,           // use query_timeout directly
+  OB_TIMEOUT_STRATEGY_MAX_EXEC_TIME = 2,           // use max_execution_time directly (readonly select)
+  OB_TIMEOUT_STRATEGY_QUERY_TIMEOUT_FALLBACK = 3   // would use max_exec but fallback to query_timeout (non-readonly select), show warning at response
 };
 
 /* refer to a group of array params
