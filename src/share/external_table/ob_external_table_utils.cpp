@@ -2261,7 +2261,7 @@ int ObExternalTableUtils::concat_external_file_location(const ObString &location
       OZ (full_path.append(sub_path));
     } else if (*(full_path.ptr() + full_path.length() - 1) == '/'
           && sub_path[0] == '/') {
-      OZ (full_path.append(sub_path.ptr() + 1));
+      OZ (full_path.append(sub_path.ptr() + 1, sub_path.length() - 1));
     } else {
       OZ (full_path.append(sub_path));
     }

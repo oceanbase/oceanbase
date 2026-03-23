@@ -382,11 +382,16 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
     } else if (unhit_part_path.count() > 0) {
       ObSEArray<ObHiveFileDesc, 16> part_files;
       ObSEArray<int64_t, 16> part_file_counts;
+      ObString access_info;
+      CK (OB_NOT_NULL(sql_schema_guard_->get_schema_guard()));
+      OZ (ObExternalTableUtils::get_external_file_location_access_info(*table_schema,
+                                                                       *sql_schema_guard_->get_schema_guard(),
+                                                                       access_info));
       if (OB_FAIL(ObExternalTableUtils::collect_external_file_list_with_cache(*(exec_ctx.get_my_session()),
                                                                               table_schema->get_tenant_id(),
                                                                               unhit_part_path,
                                                                               unhit_part_id,
-                                                                              table_schema->get_external_file_location_access_info(),
+                                                                              access_info,
                                                                               empty_patten,
                                                                               exec_ctx.get_allocator(),
                                                                               refresh_interval_sec * 1000,
