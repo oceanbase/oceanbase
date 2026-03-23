@@ -14,6 +14,10 @@
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "storage/ls/ob_ls.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
+#include "share/ob_ddl_common.h"
+#include "share/schema/ob_multi_version_schema_service.h"
+#include "share/schema/ob_schema_getter_guard.h"
+#include "share/scheduler/ob_sys_task_stat.h"
 
 namespace oceanbase
 {
@@ -81,10 +85,151 @@ int ObVecITaskExecutor::resume_task()
   return ret;
 }
 
+int ObVecITaskExecutor::check_has_hnsw_ddl(
+    common::hash::ObHashSet<uint64_t> &conflict_table_id_set,
+    common::hash::ObHashSet<uint64_t> &conflict_index_task_set)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  share::schema::ObSchemaGetterGuard schema_guard;
+
+  if (OB_FAIL(share::schema::ObMultiVersionSchemaService::get_instance()
+                  .get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(sql.assign_fmt(
+                 "SELECT object_id, target_object_id, ddl_type FROM %s WHERE ddl_type IN (%d, %d, %d)",
+                 OB_ALL_DDL_TASK_STATUS_TNAME,
+                 static_cast<int>(DDL_DROP_VEC_INDEX),
+                 static_cast<int>(DDL_CREATE_VEC_INDEX),
+                 static_cast<int>(DDL_REBUILD_INDEX)))) {
+    LOG_WARN("fail to assign sql", K(ret));
+  } else {
+    LOG_DEBUG("check_has_hnsw_ddl", K(sql), K(tenant_id_));
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      static const int64_t DDL_CONFLICT_CHECK_TIMEOUT_US = 5L * 1000L * 1000L; // 5s
+      common::sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id_, sql.ptr(), nullptr, DDL_CONFLICT_CHECK_TIMEOUT_US))) {
+        LOG_WARN("fail to read ddl task status", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret));
+      } else {
+        LOG_DEBUG("check_has_hnsw_ddl result", K(result->get_column_count()));
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          uint64_t object_id = OB_INVALID_ID;
+          uint64_t target_object_id = OB_INVALID_ID;
+          int64_t ddl_type = static_cast<int64_t>(DDL_INVALID);
+          EXTRACT_INT_FIELD_MYSQL(*result, "object_id", object_id, uint64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "target_object_id", target_object_id, uint64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "ddl_type", ddl_type, int64_t);
+          if (OB_SUCC(ret)) {
+            if (static_cast<ObDDLType>(ddl_type) == DDL_REBUILD_INDEX) {
+              // REBUILD parent task's target_object_id is old index id.
+              // For HNSW rebuild this can directly match running async task's inc_table_id.
+              if (OB_FAIL(conflict_index_task_set.set_refactored(target_object_id, 0))) {
+                if (OB_HASH_EXIST == ret) {
+                  ret = OB_SUCCESS;
+                } else {
+                  LOG_WARN("fail to insert rebuild target to conflict_index_task_set",
+                           K(ret), K(target_object_id), K(ddl_type));
+                }
+              }
+            } else {
+              const share::schema::ObSimpleTableSchemaV2 *simple_schema = nullptr;
+              int tmp_ret = OB_SUCCESS;
+              if (OB_TMP_FAIL(schema_guard.get_simple_table_schema(tenant_id_, object_id, simple_schema))) {
+                LOG_WARN("fail to get simple table schema, skip this ddl record",
+                        K(tmp_ret), K(object_id));
+              } else if (OB_ISNULL(simple_schema)) {
+                // table may have been dropped concurrently, skip
+              } else if (simple_schema->is_user_hidden_table()) {
+                // offline DDL sub-task: object_id is hidden table, map back to original
+                const uint64_t original_table_id = simple_schema->get_association_table_id();
+                if (OB_FAIL(conflict_table_id_set.set_refactored(original_table_id, 0 /*not overwrite*/))) {
+                  if (OB_HASH_EXIST == ret) {
+                    ret = OB_SUCCESS;
+                  } else {
+                    LOG_WARN("fail to insert to conflict_table_id_set", K(ret), K(original_table_id));
+                  }
+                }
+              } else {
+                // direct DDL: target_object_id == inc_table_id (delta_buffer) for both CREATE and DROP
+                if (OB_FAIL(conflict_index_task_set.set_refactored(target_object_id, 0))) {
+                  if (OB_HASH_EXIST == ret) {
+                    ret = OB_SUCCESS;
+                  } else {
+                    LOG_WARN("fail to insert to conflict_index_task_set", K(ret), K(target_object_id));
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  LOG_DEBUG("check_has_hnsw_ddl done", K(ret),
+            "conflict_table_cnt", conflict_table_id_set.size(),
+            "conflict_index_cnt", conflict_index_task_set.size());
+  return ret;
+}
+
+int ObVecITaskExecutor::check_task_ddl_conflict(
+    ObVecIndexAsyncTaskCtx *task_ctx,
+    ObPluginVectorIndexMgr *index_ls_mgr,
+    const common::hash::ObHashSet<uint64_t> &conflict_table_id_set,
+    const common::hash::ObHashSet<uint64_t> &conflict_index_task_set,
+    bool &is_conflict)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(task_ctx) || OB_ISNULL(index_ls_mgr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(task_ctx), KP(index_ls_mgr));
+  } else if (task_ctx->task_status_.trigger_type_ != ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO) {
+    // manually triggered tasks are not subject to DDL scheduling policy
+  } else {
+    const uint64_t inc_table_id = task_ctx->task_status_.table_id_;
+    LOG_DEBUG("check_task_ddl_conflict", K(inc_table_id), K(conflict_index_task_set.size()));
+    // index-level check: inc_table_id == target_object_id for both CREATE and DROP VEC INDEX
+    if (OB_HASH_EXIST == conflict_index_task_set.exist_refactored(inc_table_id)) {
+      is_conflict = true;
+    }
+    // table-level check for offline DDL scenario
+    if (OB_SUCC(ret) && !is_conflict) {
+      ObPluginVectorIndexAdapterGuard adpt_guard;
+      ObTabletID tablet_id(task_ctx->task_status_.tablet_id_);
+      if (OB_FAIL(index_ls_mgr->get_adapter_inst_guard(tablet_id, adpt_guard))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          // Adapter not found in manager maps, typically means schema/index removed.
+          // Treat as conflict so stale async tasks can be finished and cleaned proactively.
+          is_conflict = true;
+          LOG_TRACE("adapter not exist, treat as conflict", K(tablet_id), KPC(task_ctx));
+          ret = OB_SUCCESS; // non-fatal: do not block scheduler loop
+        } else {
+          LOG_WARN("fail to get adapter guard, skip table-level conflict check",
+                   K(ret), K(tablet_id));
+        }
+      } else if (OB_NOT_NULL(adpt_guard.get_adatper())) {
+        const uint64_t data_table_id = adpt_guard.get_adatper()->get_data_table_id();
+        LOG_DEBUG("check_task_ddl_conflict", K(data_table_id), K(conflict_table_id_set.size()));
+        if (OB_HASH_EXIST == conflict_table_id_set.exist_refactored(data_table_id)) {
+          is_conflict = true;
+        }
+      }
+    }
+  }
+  LOG_DEBUG("check_task_ddl_conflict done", K(ret), K(is_conflict));
+  return ret;
+}
+
 int ObVecITaskExecutor::start_task()
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  DEBUG_SYNC(START_VECTOR_INDEX_ASYNC_TASK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector async task not init", K(ret));
@@ -97,6 +242,24 @@ int ObVecITaskExecutor::start_task()
   } else {
     ObVecIndexTaskCtxArray task_ctx_array;
     ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
+
+    // Build conflict sets lazily: only query DDL task status when there are tasks to process.
+    common::hash::ObHashSet<uint64_t> conflict_table_id_set;
+    common::hash::ObHashSet<uint64_t> conflict_index_task_set;
+    bool ddl_conflict_checked = false;
+    if (task_opt.get_async_task_map().size() > 0) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(conflict_table_id_set.create(16))) {
+        LOG_WARN("fail to create conflict_table_id_set, skip DDL conflict check", K(tmp_ret));
+      } else if (OB_TMP_FAIL(conflict_index_task_set.create(16))) {
+        LOG_WARN("fail to create conflict_index_task_set, skip DDL conflict check", K(tmp_ret));
+      } else if (OB_TMP_FAIL(check_has_hnsw_ddl(conflict_table_id_set, conflict_index_task_set))) {
+        LOG_WARN("fail to check hnsw ddl, skip DDL conflict check", K(tmp_ret));
+      } else {
+        ddl_conflict_checked = true;
+      }
+    }
+
     FOREACH_X(iter, task_opt.get_async_task_map(), OB_SUCC(ret)) {
       ObTabletID tablet_id = iter->first;
       ObVecIndexAsyncTaskCtx *task_ctx = iter->second;
@@ -106,6 +269,17 @@ int ObVecITaskExecutor::start_task()
       } else if (OB_FAIL(check_task_result(task_ctx))) {
         LOG_WARN("fail to check task result", K(ret), KPC(task_ctx));
       } else {
+        bool is_conflict = false;
+        if (ddl_conflict_checked) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(check_task_ddl_conflict(task_ctx, index_ls_mgr,
+                                                   conflict_table_id_set,
+                                                   conflict_index_task_set,
+                                                   is_conflict))) {
+            LOG_WARN("fail to check task ddl conflict, treat as no conflict",
+                     K(tmp_ret), KPC(task_ctx));
+          }
+        }
         switch (task_ctx->task_status_.status_) {
           case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE:
           {
@@ -113,7 +287,18 @@ int ObVecITaskExecutor::start_task()
             common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
             ObVecIndexAsyncTaskHandler &task_handle = vector_index_service_->get_vec_async_task_handle();
             int tmp_ret = OB_SUCCESS;
-            if (task_ctx->in_thread_pool_) {                // skip push task
+            if (is_conflict) {
+              // switch task status to FINISH and set ret code to CANCELED
+              task_ctx->task_status_.status_   = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
+              task_ctx->task_status_.ret_code_ = OB_CANCELED;
+              LOG_INFO("cancel hnsw async PREPARE task due to DDL conflict", KPC(task_ctx));
+              if (OB_FAIL(update_status_and_ret_code(task_ctx))) {
+                LOG_WARN("fail to update status for conflicted PREPARE task",
+                         K(ret), K(tenant_id_), K(ls_->get_ls_id()), KPC(task_ctx));
+              } else if (OB_FAIL(task_ctx_array.push_back(task_ctx))) {
+                LOG_WARN("fail to push back task_ctx_array", K(ret), K(task_ctx));
+              }
+            } else if (task_ctx->in_thread_pool_) {
               LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
             } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls_->get_ls_id(), task_ctx, task_opt.get_allocator()))) {
               LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
@@ -128,9 +313,17 @@ int ObVecITaskExecutor::start_task()
           }
           case ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_RUNNING:
           {
+            if (is_conflict && task_ctx->in_thread_pool_ && task_ctx->sys_task_id_.is_valid()) {
+              int tmp_ret = OB_SUCCESS;
+              if (OB_TMP_FAIL(SYS_TASK_STATUS_MGR.cancel_task(task_ctx->sys_task_id_))) {
+                LOG_WARN("fail to cancel conflicted RUNNING task", K(tmp_ret), KPC(task_ctx));
+              } else {
+                LOG_INFO("cancel hnsw async RUNNING task due to DDL conflict", KPC(task_ctx));
+              }
+            }
             if (OB_FAIL(update_status_and_ret_code(task_ctx))) {
               LOG_WARN("fail to update task status to inner table",
-                K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
+                       K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
             }
             break;
           }

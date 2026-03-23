@@ -691,6 +691,8 @@ int ObVecIndexBuildTask::prepare_aux_index_tables()
   bool state_finished = false;
   const ObIndexType aux_delta_buffer_type = ObIndexType::INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
   const ObIndexType aux_index_id_type = ObIndexType::INDEX_TYPE_VEC_INDEX_ID_LOCAL;
+
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_AUX_INDEX_TABLES);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));

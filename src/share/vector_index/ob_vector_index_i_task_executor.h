@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_OB_VECTOR_INDEX_I_TASK_EXECUTOR_H_
 
 #include "share/vector_index/ob_vector_index_async_task_util.h"
+#include "lib/hash/ob_hashset.h"
 
 namespace oceanbase
 {
@@ -50,6 +51,18 @@ protected:
   int clear_task_ctxs(ObVecIndexAsyncTaskOption &task_opt, const ObVecIndexTaskCtxArray &task_ctx_array);
   int check_task_result(ObVecIndexAsyncTaskCtx *task_ctx);
   int insert_new_task(ObVecIndexTaskCtxArray &task_ctx_array);
+
+  // Query __all_ddl_task_status for HNSW-related DDL tasks (type 14/15/17),
+  // populate two conflict sets for coarse-grained (table-level) and fine-grained (index-level) matching.
+  int check_has_hnsw_ddl(common::hash::ObHashSet<uint64_t> &conflict_table_id_set,
+                          common::hash::ObHashSet<uint64_t> &conflict_index_task_set);
+  // Check whether a given task ctx conflicts with active DDL, considering trigger type.
+  // Sets is_conflict=true when a conflict is detected; on error, is_conflict is left unchanged.
+  int check_task_ddl_conflict(ObVecIndexAsyncTaskCtx *task_ctx,
+                              ObPluginVectorIndexMgr *index_ls_mgr,
+                              const common::hash::ObHashSet<uint64_t> &conflict_table_id_set,
+                              const common::hash::ObHashSet<uint64_t> &conflict_index_task_set,
+                              bool &is_conflict);
 
   bool is_inited_;
   uint64_t tenant_id_;
