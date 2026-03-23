@@ -15627,13 +15627,13 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         // alter column group delayed
         if (OB_SUCC(ret) && (ObDDLType::DDL_ALTER_COLUMN_GROUP_DELAYED == ddl_type)) {
           ObArray<ObAuxTableMetaInfo> simple_index_infos;
-          bool has_ivf_index = false;
+          bool has_vec_index = false;
           if (OB_FAIL(orig_table_schema->get_simple_index_infos(simple_index_infos))) {
             SERVER_LOG(WARN, "get simple_index_infos without delay_deleted_tid failed", K(ret));
           } else {
-            for (int64_t j = 0; OB_SUCC(ret) && j < simple_index_infos.count() && !has_ivf_index; ++j) {
-              if (is_vec_ivf_index(simple_index_infos.at(j).index_type_)) {
-                has_ivf_index = true;
+            for (int64_t j = 0; OB_SUCC(ret) && j < simple_index_infos.count() && !has_vec_index; ++j) {
+              if (is_vec_domain_index(simple_index_infos.at(j).index_type_)) {
+                has_vec_index = true;
               }
             }
           }
@@ -15642,10 +15642,10 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("compat version not support", K(ret), K(tenant_data_version));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5, alter column group delayed");
-          } else if (has_ivf_index) {
+          } else if (has_vec_index) {
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("create ivf index on table with column store not supported", K(ret), KPC(orig_table_schema));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ivf index on table with column store is");
+            LOG_WARN("create vector index on table with column store not supported", K(ret), KPC(orig_table_schema));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on table with column store is");
           } else if (GCTX.is_shared_storage_mode()) {
             ret = OB_NOT_SUPPORTED;
             SQL_RESV_LOG(WARN, "alter column group delayed does not support shared storage mode", K(ret));
@@ -22368,8 +22368,8 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
     const ObSchemaGetterGuard::CheckTableType &check_table_type = !is_recover_restore_table ?
                                                                   ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE :
                                                                   ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES;
-    bool disallow_ivf_index = false;
-    if (OB_SUCC(ret) && OB_FAIL(hidden_table_schema.get_is_column_store(disallow_ivf_index))) {
+    bool is_column_store = false;
+    if (OB_SUCC(ret) && OB_FAIL(hidden_table_schema.get_is_column_store(is_column_store))) {
       LOG_WARN("fail to get is column store", K(ret), K(hidden_table_schema));
     }
     const bool disallow_vec_index = hidden_table_schema.is_partitioned_table() && hidden_table_schema.is_table_without_pk();
@@ -22382,10 +22382,10 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
       } else if (OB_ISNULL(index_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema should not be null", K(ret));
-      } else if (disallow_ivf_index && index_table_schema->is_vec_ivf_index()) {
+      } else if (is_column_store && index_table_schema->is_vec_index() && !index_table_schema->is_fts_index()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("create ivf index on column table not supported", K(ret), K(hidden_table_schema), KPC(index_table_schema));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ivf index on column table");
+        LOG_WARN("create vector index on table with column store not supported", K(ret), K(hidden_table_schema), KPC(index_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on table with column store");
       } else if (disallow_vec_index && index_table_schema->is_vec_index() && !index_table_schema->is_vec_spiv_index()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("create vector index on partition table without primary key not supported", K(ret), K(hidden_table_schema), KPC(index_table_schema));
