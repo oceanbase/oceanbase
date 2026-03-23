@@ -426,6 +426,8 @@
 # 579: __wr_sqlstat_v2
 # 581: __all_sync_standby_dest
 # 582: __all_sync_standby_status
+# 585: __all_table_archive_history
+# 585: __all_table  # BASE_TABLE_NAME
 # 586: __all_java_policy
 # 587: __all_java_policy_history
 # 587: __all_java_policy  # BASE_TABLE_NAME

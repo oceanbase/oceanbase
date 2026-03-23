@@ -274,6 +274,15 @@
               OLD_LS_FLAG,
               SQL);
   };
+
+  class SCHEMA_HISTORY_RECYCLER {
+    public:
+      // keep strings consistent with existing event usage/tests
+      DEF_MODULE(SCHEMA_HISTORY_RECYCLER, "schema_history_recycler");
+      DEF_EVENT(SCHEMA_HISTORY_RECYCLER, BATCH_RECYCLE_BY_TENANT, "batch_recycle_by_tenant",
+                recycle_schema_version);
+  };
+
 #endif
 #endif
 ////////////////////////////////////////////////////////////////

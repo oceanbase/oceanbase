@@ -291,6 +291,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       } else if (job_info.is_mysql_event_job()) { //mysql event
         OZ (what.append_fmt("%.*s",
               job_info.get_what().length(), job_info.get_what().ptr()));
+      } else if (job_info.is_purge_recyclebin_job()) { //purge recyclebin is raw DDL
+        OZ (what.append_fmt("%.*s",
+            job_info.get_what().length(), job_info.get_what().ptr()));
       } else {
         //mysql mode not support anonymous block
         OZ (what.append_fmt("CALL %.*s;",

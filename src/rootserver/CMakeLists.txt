@@ -102,7 +102,6 @@ ob_set_subtarget(ob_rootserver common
   ob_system_admin_util.cpp
   ob_update_rs_list_task.cpp
   ob_upgrade_storage_format_version_executor.cpp
-  ob_schema_history_recycler.cpp
   ob_alter_locality_finish_checker.cpp
   ob_lob_piece_builder.cpp
   ob_lob_meta_builder.cpp
@@ -125,7 +124,6 @@ ob_set_subtarget(ob_rootserver common
   ob_location_ddl_service.cpp
   ob_objpriv_mysql_ddl_operator.cpp
   ob_objpriv_mysql_ddl_service.cpp
-  ob_objpriv_mysql_schema_history_recycler.cpp
   ob_ai_model_ddl_operator.cpp
   ob_ai_model_ddl_service.cpp
   ob_create_index_on_empty_table_helper.cpp

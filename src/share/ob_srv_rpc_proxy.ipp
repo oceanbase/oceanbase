@@ -318,3 +318,6 @@
   RPC_S(PR5 check_backup_dest_validity, OB_CHECK_BACKUP_DEST_VALIDITY, (obrpc::ObRemoteCheckBackupDestValidityArg));
   RPC_S(PR5 write_backup_dest_format_file, OB_WRITE_BACKUP_DEST_FORMAT_FILE, (obrpc::ObRemoteCheckBackupDestValidityArg));
   RPC_AP(PR5 get_tenant_memory_info, OB_GET_TENANT_MEMORY_INFO, (obrpc::ObGetTenantMemoryInfoArg), obrpc::ObGetTenantMemoryInfoResult);
+  RPC_S(PR5 run_inspection, OB_RUN_INSPECTION, (obrpc::ObRunInspectionArg));
+  RPC_AP(PR5 async_run_inspection, OB_ASYNC_RUN_INSPECTION, (obrpc::ObRunInspectionArg));
+  RPC_S(PR5 get_inspection_status, OB_GET_INSPECTION_STATUS, (obrpc::ObGetInspectionStatusArg), obrpc::ObGetInspectionStatusResult);

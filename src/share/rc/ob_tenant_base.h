@@ -291,10 +291,12 @@ class ObHMSClientPoolMgr;
 class ObTabletSplitTaskCache;
 #endif
 class ObBackupDestIOPermissionMgr;
+class ObInspectionService;
 namespace schema
 {
   class ObTenantSchemaService;
   class ObAddIntervalPartitionController;
+  class ObSchemaHistoryRecycleService;
 }
 namespace detector
 {
@@ -539,7 +541,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       share::ObBackupDestIOPermissionMgr*,           \
       share::ObHMSClientPoolMgr*,                     \
       share::schema::ObAddIntervalPartitionController*, \
-      observer::ObTenantTabletCleanupService*        \
+      observer::ObTenantTabletCleanupService*, \
+      share::schema::ObSchemaHistoryRecycleService*, \
+      share::ObInspectionService*                    \
   )
 
 

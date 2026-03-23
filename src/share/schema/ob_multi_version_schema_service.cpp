@@ -220,6 +220,26 @@ int ObSchemaGetterController::init(ObMultiVersionSchemaService *schema_service)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_MOCK_TABLE_SCHEMA_VERSION_UPPER_BOUND);
+void ObSchemaGetterController::get_errsim_schema_version_for_table_(
+    const ObSchemaType schema_type,
+    const uint64_t tenant_id,
+    const uint64_t schema_id,
+    int64_t &errsim_schema_version)
+{
+  errsim_schema_version = OB_INVALID_VERSION;
+  if (TABLE_SCHEMA != schema_type) {
+    // do nothing
+  } else {
+    // inject schema version for get table schema
+    int tmp_ret = OB_E(ERRSIM_MOCK_TABLE_SCHEMA_VERSION_UPPER_BOUND, schema_id) OB_SUCCESS;
+    if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+      errsim_schema_version = -ERRSIM_MOCK_TABLE_SCHEMA_VERSION_UPPER_BOUND.item_.error_code_;
+      LOG_INFO("[ERRSIM] mock table schema version", K(tenant_id), K(schema_id), K(errsim_schema_version));
+    }
+  }
+}
+
 int ObSchemaGetterController::get_schema(
   const ObSchemaMgr *mgr,
   const ObRefreshSchemaStatus &schema_status,
@@ -236,10 +256,12 @@ int ObSchemaGetterController::get_schema(
   schema = NULL;
   int64_t start_time = ObTimeUtility::current_time();
   bool is_object_level_parallelism = false;
+  int64_t errsim_schema_version = OB_INVALID_VERSION;
+  get_errsim_schema_version_for_table_(schema_type, tenant_id, schema_id, errsim_schema_version);
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else {
-    while (OB_SUCC(ret)) {
+    while (OB_SUCC(ret) && OB_LIKELY(OB_INVALID_VERSION == errsim_schema_version)) {
       // try to get schema from cache
       if (OB_FAIL(schema_service_->schema_cache_.get_schema(schema_type,
                                                             tenant_id,
@@ -290,7 +312,7 @@ int ObSchemaGetterController::get_schema(
                                     schema_status,
                                     schema_type,
                                     schema_id,
-                                    schema_version,
+                                    OB_INVALID_VERSION == errsim_schema_version ? schema_version : errsim_schema_version,
                                     handle,
                                     schema))) {
         LOG_WARN("fail to construct schema", KR(ret), K(schema_status), K(schema_type), K(schema_id), K(schema_version));

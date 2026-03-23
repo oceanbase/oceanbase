@@ -8605,6 +8605,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_WR_SQLSTAT_V2_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_WR_SQLSTAT_V2_SCHEMA_VERSION); break;
     case OB_ALL_SYNC_STANDBY_DEST_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SYNC_STANDBY_DEST_SCHEMA_VERSION); break;
     case OB_ALL_SYNC_STANDBY_STATUS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SYNC_STANDBY_STATUS_SCHEMA_VERSION); break;
+    case OB_ALL_TABLE_ARCHIVE_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_ARCHIVE_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_SCHEMA_VERSION); break;
@@ -11227,6 +11228,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_WR_SQLSTAT_V2_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_WR_SQLSTAT_V2_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_SYNC_STANDBY_DEST_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SYNC_STANDBY_DEST_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_SYNC_STANDBY_STATUS_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SYNC_STANDBY_STATUS_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_META_SCHEMA_VERSION); break;
@@ -11589,6 +11591,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_WR_SQLSTAT_V2_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_WR_SQLSTAT_V2_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_SYNC_STANDBY_DEST_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SYNC_STANDBY_DEST_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_SYNC_STANDBY_STATUS_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SYNC_STANDBY_STATUS_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_PIECE_SCHEMA_VERSION); break;

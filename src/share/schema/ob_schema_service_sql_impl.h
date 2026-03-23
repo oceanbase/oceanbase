@@ -1340,6 +1340,20 @@ private:
 
   bool in_parallel_ddl_thread_();
   bool need_column_group(const ObTableSchema &table_schema);
+
+  void record_fallback_to_archive_history_event_(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const int64_t schema_version);
+  int fetch_table_schema_from_history_table_(
+      const ObRefreshSchemaStatus &schema_status,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const int64_t schema_version,
+      const char *table_name,
+      common::ObISQLClient &sql_client,
+      common::ObIAllocator &allocator,
+      ObTableSchema *&table_schema);
 private:
   common::ObMySQLProxy *mysql_proxy_;
   // record last schema version of log operation while execute ddl

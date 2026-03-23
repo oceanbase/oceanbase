@@ -1005,11 +1005,11 @@ def copy_keywords(keywords):
 
   return new_keywords
 
-def gen_history_table_def(table_id, keywords):
+def gen_history_table_def_(table_id, keywords, table_name_suffix):
   new_keywords = copy_keywords(keywords)
 
   new_keywords["table_id"] = table_id
-  new_keywords["table_name"] = "%s_history" % new_keywords["table_name"]
+  new_keywords["table_name"] = "%s%s" % (new_keywords["table_name"], table_name_suffix)
   rowkey_columns = new_keywords["rowkey_columns"]
   rowkey_columns.append(("schema_version", "int"))
 
@@ -1031,6 +1031,17 @@ def gen_history_table_def(table_id, keywords):
   cols.insert(0, ('is_deleted', 'int'))
 
   return new_keywords
+
+def gen_history_table_def(table_id, keywords):
+  return gen_history_table_def_(table_id, keywords, "_history")
+
+def gen_archive_history_table_def(table_id, keywords):
+  """
+  Generate schema for archive history table based on base system table definition.
+  The generated schema should be identical to gen_history_table_def().
+  e.g. __all_table -> __all_table_archive_history
+  """
+  return gen_history_table_def_(table_id, keywords, "_archive_history")
 
 def gen_history_table_def_of_task(table_id, keywords):
   new_keywords = copy_keywords(keywords)

@@ -144,7 +144,7 @@ DEF_BOOL(enable_upgrade_mode, OB_CLUSTER_PARAMETER, "False",
          "Value: True: turned on; False: turned off;",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(schema_history_expire_time, OB_CLUSTER_PARAMETER, "7d", "[1m, 30d]",
+DEF_TIME(schema_history_expire_time, OB_TENANT_PARAMETER, "7d", "[1m, 30d]",
          "the expire time for schema history, from 1min to 30days, "
          "with default 7days. Range: [1m, 30d]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1622,6 +1622,7 @@ DEF_STR(tde_method, OB_TENANT_PARAMETER, "none",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
         "none, bkmi, bkmi_sm, ceair, aliyun, aliyun_aes256, internal");
 
+// deprecated
 DEF_TIME(schema_history_recycle_interval, OB_CLUSTER_PARAMETER, "10m", "[0s,]",
          "the time interval between the schedules of schema history recyle task. "
          "Range: [0s, +∞)",
@@ -3253,3 +3254,11 @@ DEF_STR(ob_vector_search_strategy, OB_TENANT_PARAMETER, "RECALL_FIRST",
 DEF_TIME(_vector_pre_filtering_timeout, OB_TENANT_PARAMETER, "50ms", "[10ms,)",
         "Control the period of pre-filtering stage in vector index search. Range: [10ms, )",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME_WITH_CHECKER(schema_history_archive_expire_time, OB_TENANT_PARAMETER, "0",
+                      common::ObConfigSchemaHistoryArchiveExpireTimeChecker,
+                      "[0, 365d]",
+                      "the expire time for schema history archived into __all_xxx_archived_history, "
+                      "0 means disable GC, otherwise keep at least 30 days and at most 365 days. "
+                      "Default 0. Range: {0} & [30d, 365d]",
+                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

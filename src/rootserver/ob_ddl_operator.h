@@ -1220,6 +1220,10 @@ private:
       const share::schema::ObSysVariableSchema &sys_variable,
       const uint64_t tenant_id,
       common::ObMySQLTransaction &trans);
+  int init_tenant_inspection_job(
+      const share::schema::ObSysVariableSchema &sys_variable,
+      const uint64_t tenant_id,
+      ObMySQLTransaction &trans);
   int try_create_tablegroup_for_database_(
       common::ObMySQLTransaction &trans,
       share::schema::ObDatabaseSchema &database_schema);

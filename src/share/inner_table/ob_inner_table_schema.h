@@ -703,6 +703,7 @@ public:
   static int wr_sqlstat_v2_schema(share::schema::ObTableSchema &table_schema);
   static int all_sync_standby_dest_schema(share::schema::ObTableSchema &table_schema);
   static int all_sync_standby_status_schema(share::schema::ObTableSchema &table_schema);
+  static int all_table_archive_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_audit_log_encryption_password_schema(share::schema::ObTableSchema &table_schema);
@@ -3087,6 +3088,7 @@ public:
   static int wr_sqlstat_v2_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_sync_standby_dest_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_sync_standby_status_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_table_archive_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_audit_log_encryption_password_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -3449,6 +3451,7 @@ public:
   static int wr_sqlstat_v2_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_sync_standby_dest_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_sync_standby_status_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_table_archive_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_audit_log_encryption_password_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -4064,6 +4067,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::wr_sqlstat_v2_schema,
   ObInnerTableSchema::all_sync_standby_dest_schema,
   ObInnerTableSchema::all_sync_standby_status_schema,
+  ObInnerTableSchema::all_table_archive_history_schema,
   ObInnerTableSchema::all_java_policy_schema,
   ObInnerTableSchema::all_java_policy_history_schema,
   ObInnerTableSchema::all_audit_log_encryption_password_schema,
@@ -6684,6 +6688,7 @@ const uint64_t tenant_space_tables [] = {
   OB_WR_SQLSTAT_V2_TID,
   OB_ALL_SYNC_STANDBY_DEST_TID,
   OB_ALL_SYNC_STANDBY_STATUS_TID,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_TID,
   OB_ALL_JAVA_POLICY_TID,
   OB_ALL_JAVA_POLICY_HISTORY_TID,
   OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_TID,
@@ -8843,6 +8848,7 @@ const uint64_t tenant_space_tables [] = {
   OB_WR_SQLSTAT_V2_AUX_LOB_META_TID,
   OB_ALL_SYNC_STANDBY_DEST_AUX_LOB_META_TID,
   OB_ALL_SYNC_STANDBY_STATUS_AUX_LOB_META_TID,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_META_TID,
   OB_ALL_JAVA_POLICY_AUX_LOB_META_TID,
   OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_TID,
   OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_META_TID,
@@ -9178,6 +9184,7 @@ const uint64_t tenant_space_tables [] = {
   OB_WR_SQLSTAT_V2_AUX_LOB_PIECE_TID,
   OB_ALL_SYNC_STANDBY_DEST_AUX_LOB_PIECE_TID,
   OB_ALL_SYNC_STANDBY_STATUS_AUX_LOB_PIECE_TID,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_JAVA_POLICY_AUX_LOB_PIECE_TID,
   OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_PIECE_TID,  };
@@ -9913,6 +9920,7 @@ const char* const tenant_space_table_names [] = {
   OB_WR_SQLSTAT_V2_TNAME,
   OB_ALL_SYNC_STANDBY_DEST_TNAME,
   OB_ALL_SYNC_STANDBY_STATUS_TNAME,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_TNAME,
   OB_ALL_JAVA_POLICY_TNAME,
   OB_ALL_JAVA_POLICY_HISTORY_TNAME,
   OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_TNAME,
@@ -12072,6 +12080,7 @@ const char* const tenant_space_table_names [] = {
   OB_WR_SQLSTAT_V2_AUX_LOB_META_TNAME,
   OB_ALL_SYNC_STANDBY_DEST_AUX_LOB_META_TNAME,
   OB_ALL_SYNC_STANDBY_STATUS_AUX_LOB_META_TNAME,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_JAVA_POLICY_AUX_LOB_META_TNAME,
   OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_META_TNAME,
@@ -12407,6 +12416,7 @@ const char* const tenant_space_table_names [] = {
   OB_WR_SQLSTAT_V2_AUX_LOB_PIECE_TNAME,
   OB_ALL_SYNC_STANDBY_DEST_AUX_LOB_PIECE_TNAME,
   OB_ALL_SYNC_STANDBY_STATUS_AUX_LOB_PIECE_TNAME,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_JAVA_POLICY_AUX_LOB_PIECE_TNAME,
   OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_PIECE_TNAME,  };
@@ -15869,6 +15879,14 @@ LOBMapping const lob_aux_table_mappings [] = {
     OB_ALL_SYNC_STANDBY_STATUS_AUX_LOB_PIECE_TID,
     ObInnerTableSchema::all_sync_standby_status_aux_lob_meta_schema,
     ObInnerTableSchema::all_sync_standby_status_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_TABLE_ARCHIVE_HISTORY_TID,
+    OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_table_archive_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_table_archive_history_aux_lob_piece_schema
   },
 
   {

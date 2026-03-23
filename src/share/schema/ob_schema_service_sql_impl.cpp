@@ -18,6 +18,7 @@
 #include "src/rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "src/rootserver/ob_root_service.h" // for ObRootService
 #include "observer/ob_sql_client_decorator.h"
+#include "observer/ob_server_event_history_table_operator.h" // for SERVER_EVENT_ADD
 #include "share/inner_table/ob_sslog_table_schema.h"
 #include "sql/engine/expr/ob_expr_like.h"
 
@@ -285,6 +286,62 @@ bool ObSchemaServiceSQLImpl::check_inner_stat()
   if (IS_NOT_INIT) {
     LOG_ERROR("not init");
     ret = false;
+  }
+  return ret;
+}
+
+void ObSchemaServiceSQLImpl::record_fallback_to_archive_history_event_(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const int64_t schema_version)
+{
+  char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {0};
+  ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();
+  if (OB_NOT_NULL(trace_id)) {
+    (void)trace_id->to_string(trace_id_buf, sizeof(trace_id_buf));
+  }
+  SERVER_EVENT_ADD("schema", "fallback_to_archive_history",
+                   "tenant_id", tenant_id,
+                   "table_id", table_id,
+                   "schema_version", schema_version,
+                   "trace_id", trace_id_buf);
+}
+
+int ObSchemaServiceSQLImpl::fetch_table_schema_from_history_table_(
+    const ObRefreshSchemaStatus &schema_status,
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const int64_t schema_version,
+    const char *table_name,
+    common::ObISQLClient &sql_client,
+    common::ObIAllocator &allocator,
+    ObTableSchema *&table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+  const bool check_deleted = true;
+  table_schema = NULL;
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL,
+                               table_name,
+                               fill_extract_tenant_id(schema_status, tenant_id)))) {
+      LOG_WARN("append sql failed", KR(ret));
+    } else if (OB_FAIL(sql.append_fmt(" AND table_id = %lu and schema_version <= %ld order by schema_version desc limit 1",
+                                      fill_extract_schema_id(schema_status, table_id),
+                                      schema_version))) {
+      LOG_WARN("append table_id and schema_version failed", KR(ret), K(table_id), K(schema_version));
+    } else if (OB_FAIL(sql_client.read(res, exec_tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(sql));
+    } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get result. ", KR(ret));
+    } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_table_schema(
+                       tenant_id, check_deleted, *result, allocator, table_schema))) {
+      LOG_WARN("failed to retrieve table schema", KR(ret), K(check_deleted));
+    }
   }
   return ret;
 }
@@ -6849,40 +6906,39 @@ int ObSchemaServiceSQLImpl::fetch_table_info(
     ObTableSchema *&table_schema)
 {
   int ret = OB_SUCCESS;
-  ObSqlString sql;
-  const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
-  const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
-  const char *table_name = NULL;
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", K(ret));
-  } else if (OB_FAIL(ObSchemaUtils::get_all_table_history_name(exec_tenant_id,
-                                                               table_name,
-                                                               schema_service_))) {
-    LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
-  } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL,
-                                    table_name,
-                                    fill_extract_tenant_id(schema_status, tenant_id)))) {
-    LOG_WARN("append sql failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(" AND table_id = %lu and schema_version <= %ld order by schema_version desc limit 1",
-                                    fill_extract_schema_id(schema_status, table_id),
-                                    schema_version))) {
-    LOG_WARN("append table_id and schema_version failed", K(ret), K(table_id),
-             K(schema_version));
-  } else {
-    const bool check_deleted = true;
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
-      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
-      if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
-        LOG_WARN("execute sql failed", K(sql), K(ret));
-      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get result. ", K(ret));
-      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_table_schema(
-                 tenant_id, check_deleted, *result, allocator, table_schema))) {
-        LOG_WARN("failed to retrieve all table schema:", K(check_deleted), K(ret));
+  } else if (OB_FAIL(fetch_table_schema_from_history_table_(
+                     schema_status,
+                     tenant_id,
+                     table_id,
+                     schema_version,
+                     OB_ALL_TABLE_HISTORY_TNAME,
+                     sql_client,
+                     allocator,
+                     table_schema))) {
+    if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret) {
+      // schema history may be recycled, retry with archive history table.
+      FLOG_WARN("Table schema history is empty, retry with archive history table. Consider to turn off schema history archive gc.",
+                KR(ret), K(tenant_id), K(table_id), K(schema_version), K(lbt()));
+      record_fallback_to_archive_history_event_(tenant_id, table_id, schema_version);
+      // reset ret and retry with archive history table, so this call will not be affected.
+
+      // overwrite ret
+      if (OB_FAIL(fetch_table_schema_from_history_table_(
+                  schema_status,
+                  tenant_id,
+                  table_id,
+                  schema_version,
+                  OB_ALL_TABLE_ARCHIVE_HISTORY_TNAME,
+                  sql_client,
+                  allocator,
+                  table_schema))) {
+        LOG_WARN("failed to fetch table schema from archive history table", KR(ret));
       }
+    } else {
+      LOG_WARN("failed to fetch table schema from history table", KR(ret), K(tenant_id), K(table_id), K(schema_version));
     }
   }
 

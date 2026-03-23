@@ -50,7 +50,6 @@
 #include "rootserver/ob_upgrade_storage_format_version_executor.h"
 #include "rootserver/ob_create_inner_schema_executor.h"
 #include "rootserver/ob_update_rs_list_task.h"
-#include "rootserver/ob_schema_history_recycler.h"
 #include "share/ls/ob_ls_info.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "rootserver/ob_disaster_recovery_task_mgr.h"
@@ -451,10 +450,8 @@ public:
   obrpc::ObCommonRpcProxy &get_common_rpc_proxy() { return common_proxy_; }
   obrpc::ObSrvRpcProxy &get_rpc_proxy() { return rpc_proxy_; }
   common::ObWorkQueue &get_task_queue() { return task_queue_; }
-  common::ObWorkQueue &get_inspect_task_queue() { return inspect_task_queue_; }
   common::ObServerConfig *get_server_config() { return config_; }
   int64_t get_core_meta_table_version() { return core_meta_table_version_; }
-  ObSchemaHistoryRecycler &get_schema_history_recycler() { return schema_history_recycler_; }
   ObRootMinorFreeze &get_root_minor_freeze() { return root_minor_freeze_; }
   int admin_clear_balance_task(const obrpc::ObAdminClearBalanceTaskArg &arg);
   int check_server_have_enough_resource_for_delete_server(
@@ -892,9 +889,6 @@ public:
   // @see ObRefreshServerTask
   int schedule_refresh_server_timer_task(const int64_t delay);
   int schedule_primary_cluster_inspection_task();
-  int schedule_recyclebin_task(int64_t delay);
-  // @see ObInspector
-  int schedule_inspector_task();
   int schedule_update_rs_list_task();
   int schedule_update_all_server_config_task();
   //update statistic cache
@@ -1138,19 +1132,15 @@ private:
 
   // the single task queue for all async tasks and timer tasks
   common::ObWorkQueue task_queue_;
-  common::ObWorkQueue inspect_task_queue_;
 
   // async timer tasks
   ObRestartTask restart_task_;  // not repeat & no retry
   ObRefreshServerTask refresh_server_task_;  // not repeat & no retry
   ObCheckServerTask check_server_task_;      // repeat & no retry
-  ObSelfCheckTask self_check_task_;  //repeat to succeed & no retry
   ObRefreshIOCalibrationTask refresh_io_calibration_task_; // retry to succeed & no repeat
   ObZoneStorageOperationTask zone_storage_operation_task_;  // repeat & no retry
   share::ObEventTableClearTask event_table_clear_task_;  // repeat & no retry
 
-  ObInspector inspector_task_;     // repeat & no retry
-  ObPurgeRecyclebinTask purge_recyclebin_task_;     // not repeat & no retry
   // for set_config
   ObLatch set_config_lock_;
 
@@ -1166,7 +1156,6 @@ private:
   ObRsStatus rs_status_;
 
   int64_t fail_count_;
-  ObSchemaHistoryRecycler schema_history_recycler_;
 #ifdef OB_BUILD_TDE_SECURITY
   // master key manager
   ObRsMasterKeyManager master_key_mgr_;

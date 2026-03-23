@@ -268,6 +268,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.ORACLE, "dbms_data_dict", "dbms_data_dict.sql", "dbms_data_dict_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_plsql_code_coverage", "dbms_plsql_code_coverage.sql", "dbms_plsql_code_coverage_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_java", "dbms_java.sql", "dbms_java_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "dbms_schema", "dbms_schema.sql", "dbms_schema_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     # MySQL
     SysPackConfig(SysPackGroup.MYSQL, "dbms_stats", "dbms_stats_mysql.sql", "dbms_stats_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_scheduler", "dbms_scheduler_mysql.sql", "dbms_scheduler_mysql_body.sql"),
@@ -295,6 +296,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.MYSQL, "dbms_balance", "dbms_balance_mysql.sql", "dbms_balance_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_data_dict", "dbms_data_dict_mysql.sql", "dbms_data_dict_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_python", "dbms_python_mysql.sql", "dbms_python_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_schema", "dbms_schema_mysql.sql", "dbms_schema_body_mysql.sql"),
     # Oracle Special
     SysPackConfig(SysPackGroup.ORACLE_SPECIAL, "__dbms_upgrade", "__dbms_upgrade.sql", "__dbms_upgrade_body.sql", orc_build_req=True),
     # MySQL Special

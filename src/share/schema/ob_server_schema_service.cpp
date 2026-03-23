@@ -4932,10 +4932,14 @@ int ObServerSchemaService::fetch_increment_schemas(
     } else {                                                                              \
       ALLOW_NEXT_LOG();                                                                   \
       LOG_INFO("get batch "#SCHEMA"s success", K(schema_keys));                           \
-      if (schema_keys.size() != simple_schemas.size()) {                                  \
+      if (schema_keys.size() < simple_schemas.size()) {                                   \
         ret = OB_ERR_UNEXPECTED;                                                          \
-        LOG_ERROR("unexpected "#SCHEMA" result cnt",                                      \
+        LOG_ERROR("unexpected "#SCHEMA" result cnt, this should never happen",            \
                   KR(ret), K(schema_keys.size()), K(simple_schemas.size()));              \
+      } else if (schema_keys.size() > simple_schemas.size()) {                            \
+        ret = OB_ERR_SCHEMA_HISTORY_EMPTY;                                                \
+        LOG_ERROR("unexpected "#SCHEMA" result cnt, schema history may be recycled",      \
+                  KR(ret), K(schema_keys.size()), K(simple_schemas.size()), K(schema_version));\
       }                                                                                   \
     }                                                                                     \
   }
@@ -4953,10 +4957,14 @@ int ObServerSchemaService::fetch_increment_schemas(
     } else {                                                                              \
       ALLOW_NEXT_LOG();                                                                   \
       LOG_INFO("get batch "#SCHEMA"s success", K(schema_keys));                           \
-      if (schema_keys.size() != simple_schemas.size()) {                                  \
+      if (schema_keys.size() < simple_schemas.size()) {                                   \
         ret = OB_ERR_UNEXPECTED;                                                          \
-        LOG_ERROR("unexpected "#SCHEMA" result cnt",                                      \
+        LOG_ERROR("unexpected "#SCHEMA" result cnt, this should never happen",            \
                   KR(ret), K(schema_keys.size()), K(simple_schemas.size()));              \
+      } else if (schema_keys.size() > simple_schemas.size()) {                            \
+        ret = OB_ERR_SCHEMA_HISTORY_EMPTY;                                                \
+        LOG_ERROR("unexpected "#SCHEMA" result cnt, schema history may be recycled",      \
+                  KR(ret), K(schema_keys.size()), K(simple_schemas.size()), K(schema_version));\
       }                                                                                   \
     }                                                                                     \
   }

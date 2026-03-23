@@ -114,6 +114,7 @@ RPC_F(obrpc::OB_CLEAR_FETCHED_LOG_CACHE, share::ObClearFetchedLogCacheArg, share
 RPC_F(obrpc::OB_CHECK_BACKUP_DEST_RW_CONSISTENCY, obrpc::ObCheckBackupDestRWConsistencyArg, obrpc::Int64, ObCheckBackupDestRWConsistencyProxy);
 RPC_F(obrpc::OB_CHECK_SYS_TABLE_SCHEMA, obrpc::ObCheckSysTableSchemaArg, obrpc::ObCheckSysTableSchemaResult, ObCheckSysTableSchemaProxy);
 RPC_F(obrpc::OB_GET_TENANT_MEMORY_INFO, obrpc::ObGetTenantMemoryInfoArg, obrpc::ObGetTenantMemoryInfoResult, ObGetTenantMemoryInfoProxy);
+RPC_F(obrpc::OB_ASYNC_RUN_INSPECTION, obrpc::ObRunInspectionArg, obrpc::ObRpcProxy::NoneT, ObAsyncRunInspectionProxy);
 
 
 }//end namespace rootserver

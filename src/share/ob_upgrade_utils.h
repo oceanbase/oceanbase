@@ -397,10 +397,12 @@ public:
   ObUpgradeFor4421Processor() : ObBaseUpgradeProcessor() {}
   virtual ~ObUpgradeFor4421Processor() {}
   virtual int pre_upgrade() override { return common::OB_SUCCESS; }
-  virtual int post_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
   virtual int finish_upgrade() override;
 private:
   int finish_upgrade_for_sync_standby_status_();
+  int post_upgrade_for_schema_history_recycle_();
+  int post_upgrade_for_inspection_jobs_();
 };
 
 /* =========== special upgrade processor end   ============= */

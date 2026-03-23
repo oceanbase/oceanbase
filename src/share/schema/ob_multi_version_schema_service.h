@@ -125,6 +125,11 @@ public:
                 common::ObKVCacheHandle &handle,
                 const ObSchema *&schema);
 private:
+  static void get_errsim_schema_version_for_table_(
+      const ObSchemaType schema_type,
+      const uint64_t tenant_id,
+      const uint64_t schema_id,
+      int64_t &errsim_schema_version);
   int check_inner_stat_() const;
   int construct_schema_(const ObSchemaMgr *mgr,
                         const ObRefreshSchemaStatus &schema_status,

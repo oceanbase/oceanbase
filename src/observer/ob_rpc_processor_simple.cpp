@@ -92,6 +92,7 @@
 #include "src/rootserver/ob_tenant_info_loader.h"
 #include "src/rootserver/ob_common_ls_service.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
+#include "share/ob_inspection_service.h"
 
 namespace oceanbase
 {
@@ -5004,7 +5005,7 @@ int ObCheckSysTableSchemaP::process()
   if (!arg_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(arg));
-  } else if (OB_FAIL(rootserver::ObSysTableInspection::check_sys_table_schema(arg_, result_))) {
+  } else if (OB_FAIL(rootserver::ObRootInspection::check_sys_table_schema(arg_, result_))) {
     LOG_WARN("failed to check_sys_table_schema", KR(ret), K_(arg), K_(result));
   }
   return ret;
@@ -5077,6 +5078,68 @@ int ObCheckNestedMViewMdsP::process()
       result_.ret_ = ret;
       result_.target_data_sync_scn_ = min_target_scn;
       ret = OB_SUCCESS; // cover_ret
+    }
+  }
+  return ret;
+}
+
+#define RUN_INSPECTION_PROCESS_IMPL(PROCESSOR)                                                   \
+int PROCESSOR::process()                                                                         \
+{                                                                                                \
+  int ret = OB_SUCCESS;                                                                          \
+  const uint64_t tenant_id = arg_.get_tenant_id();                                               \
+  bool is_leader = false;                                                                        \
+  if (!arg_.is_valid()) {                                                                        \
+    ret = OB_INVALID_ARGUMENT;                                                                   \
+    LOG_WARN("invalid argument", KR(ret), K_(arg));                                              \
+  } else {                                                                                       \
+    MTL_SWITCH(tenant_id) {                                                                      \
+      share::ObInspectionService *inspection_service = MTL(share::ObInspectionService *);       \
+      if (OB_ISNULL(inspection_service)) {                                                       \
+        ret = OB_ERR_UNEXPECTED;                                                                 \
+        LOG_WARN("inspection service is null", KR(ret), K(tenant_id));                           \
+      } else if (OB_FAIL(storage::ObStorageHAUtils::check_ls_is_leader(tenant_id, SYS_LS, is_leader))) { \
+        LOG_WARN("fail to check sys ls is leader", KR(ret), K(tenant_id));                       \
+      } else if (!is_leader) {                                                                   \
+        ret = OB_NOT_MASTER;                                                                     \
+        LOG_WARN("is not sys ls leader, need retry", KR(ret), K(tenant_id), K(is_leader));      \
+      } else if (OB_FAIL(inspection_service->run_inspection())) {                                \
+        LOG_WARN("run inspection failed", KR(ret), K(tenant_id));                                \
+      }                                                                                          \
+    } else {                                                                                     \
+      LOG_WARN("switch tenant failed", KR(ret), K(tenant_id));                                   \
+    }                                                                                            \
+  }                                                                                              \
+  return ret;                                                                                    \
+}
+
+RUN_INSPECTION_PROCESS_IMPL(ObRunInspectionP);
+RUN_INSPECTION_PROCESS_IMPL(ObAsyncRunInspectionP);
+#undef RUN_INSPECTION_PROCESS_IMPL
+
+int ObGetInspectionStatusP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.get_tenant_id();
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(tenant_id) {
+      share::ObInspectionService *inspection_service = MTL(share::ObInspectionService *);
+      if (OB_ISNULL(inspection_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inspection service is null", KR(ret), K(tenant_id));
+      } else {
+        result_.tenant_id_ = tenant_id;
+        result_.sys_stat_passed_ = inspection_service->is_sys_stat_passed();
+        result_.sys_param_passed_ = inspection_service->is_sys_param_passed();
+        result_.sys_table_schema_passed_ = inspection_service->is_sys_table_schema_passed();
+        result_.data_version_passed_ = inspection_service->is_data_version_passed();
+        result_.all_checked_ = inspection_service->is_all_checked();
+      }
+    } else {
+      LOG_WARN("switch tenant failed", KR(ret), K(tenant_id));
     }
   }
   return ret;

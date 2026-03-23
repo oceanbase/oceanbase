@@ -18,6 +18,7 @@
 #include "ob_tenant.h"
 #include "rpc/obmysql/ob_sql_nio_server.h"
 #include "share/schema/ob_tenant_schema_service.h"
+#include "share/schema/ob_schema_history_recycle_service.h"
 #include "observer/mysql/obsm_conn_callback.h"
 #include "sql/dtl/ob_dtl_fc_server.h"
 #include "sql/das/ob_das_id_service.h"
@@ -159,6 +160,7 @@
 #include "rootserver/standby/ob_protection_mode_mgr.h"
 #include "observer/report/ob_tenant_offline_tablet_cleanup_service.h"
 #include "lib/thread/thread_mgr_interface.h"
+#include "share/ob_inspection_service.h" // ObInspectionService
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -650,6 +652,8 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObHMSClientPoolMgr::mtl_init, nullptr, ObHMSClientPoolMgr::mtl_stop, ObHMSClientPoolMgr::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, share::schema::ObAddIntervalPartitionController::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(ObTenantTabletCleanupService::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, ObTenantTabletCleanupService::mtl_destroy);
+    MTL_BIND2(mtl_new_default, share::schema::ObSchemaHistoryRecycleService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, share::ObInspectionService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
   }
 
   if (OB_SUCC(ret)) {

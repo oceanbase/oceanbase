@@ -90,6 +90,7 @@
 #include "pl/sys_package/ob_dbms_xprofile.h"
 #include "pl/sys_package/ob_dbms_data_dict.h"
 #include "pl/sys_package/ob_dbms_python.h"
+#include "pl/sys_package/ob_dbms_schema.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -977,6 +978,11 @@ DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(DBMS_HYBRID_VECTOR_MYSQL_GET_SQL, ObDB
 
 #undef DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE
   // end of dbms_hybrid_search
+
+  //start of dbms_schema
+  INTERFACE_DEF(INTERFACE_DBMS_SCHEMA_RECYCLE_SCHEMA_HISTORY, "DBMS_SCHEMA_RECYCLE_SCHEMA_HISTORY", (ObDBMSSchema::recycle_schema_history))
+  INTERFACE_DEF(INTERFACE_DBMS_SCHEMA_RUN_INSPECTION, "DBMS_SCHEMA_RUN_INSPECTION", (ObDBMSSchema::run_inspection))
+  //end of dbms_schema
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif
