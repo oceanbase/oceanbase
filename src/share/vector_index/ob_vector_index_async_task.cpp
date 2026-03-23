@@ -13,6 +13,7 @@
 #include "ob_vector_index_async_task.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "src/storage/ls/ob_ls.h"
+#include "lib/hash/ob_hashset.h"
 
 namespace oceanbase
 {
@@ -82,6 +83,7 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
   ObArray<ObVecIndexAsyncTaskCtx*> task_ctx_array;
+  DEBUG_SYNC(LOAD_VECTOR_INDEX_ASYNC_TASK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector async task not init", KR(ret));
@@ -93,65 +95,109 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
     ObIAllocator *allocator = task_opt.get_allocator();
     const int64_t current_task_cnt = ObVecIndexAsyncTaskUtil::get_processing_task_cnt(task_opt);
 
-    RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
-    FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), 
-        OB_SUCC(ret) && (task_ctx_array.count() + current_task_cnt <= MAX_ASYNC_TASK_PROCESSING_COUNT)) {
-      ObTabletID tablet_id = iter->first;
-      ObPluginVectorIndexAdaptor *adapter = iter->second;
-      if (OB_ISNULL(adapter)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected nullptr", K(ret));
-      } else if (adapter->is_need_async_optimal()) {
-        int64_t new_task_id = OB_INVALID_ID;
-        int64_t index_table_id = OB_INVALID_ID;
-        bool inc_new_task = false;
-        common::ObCurTraceId::TraceId new_trace_id;
-
-        char *task_ctx_buf = static_cast<char *>(allocator->alloc(sizeof(ObVecIndexAsyncTaskCtx)));
-        ObVecIndexAsyncTaskCtx* task_ctx = nullptr;
-        if (OB_ISNULL(task_ctx_buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("async task ctx is null", K(ret));
-        } else if (FALSE_IT(task_ctx = new(task_ctx_buf) ObVecIndexAsyncTaskCtx())) {
-        } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id_, new_task_id))) {
-          LOG_WARN("fail to fetch new task id", K(ret), K(tenant_id_));
-        } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::get_table_id_from_adapter(adapter, tablet_id, index_table_id))) { // only get table 3 table_id to generate new task
-          LOG_WARN("fail to get table id from adapter", K(ret), K(tablet_id));
-        } else if (OB_INVALID_ID == index_table_id) {
-          LOG_DEBUG("index table id is invalid, skip", K(ret)); // skip to next
-        } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(++task_trace_base_num, allocator, new_trace_id))) {
-          LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
-        } else {
-          LOG_DEBUG("start load task", K(ret), K(tablet_id), K(tenant_id_), K(task_trace_base_num), K(ls_->get_ls_id()));
-          // 1. update task_ctx to async task map
-          task_ctx->tenant_id_ = tenant_id_;
-          task_ctx->ls_ = ls_;
-          task_ctx->task_status_.tablet_id_ = tablet_id.id();
-          task_ctx->task_status_.tenant_id_ = tenant_id_;
-          task_ctx->task_status_.table_id_ = index_table_id;
-          task_ctx->task_status_.task_id_ = new_task_id;
-          task_ctx->task_status_.task_type_ = ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL;
-          task_ctx->task_status_.trigger_type_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO;
-          task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
-          task_ctx->task_status_.trace_id_ = new_trace_id;
-          task_ctx->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time());
-          task_ctx->allocator_.set_tenant_id(tenant_id_);
-          if (OB_FAIL(index_ls_mgr->get_async_task_opt().add_task_ctx(tablet_id, task_ctx, inc_new_task))) { // not overwrite
-            LOG_WARN("fail to add task ctx", K(ret));
-          } else if (inc_new_task && OB_FAIL(task_ctx_array.push_back(task_ctx))) {
-            LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
-          }
-        }
-        if (OB_FAIL(ret)) { // release memory when fail
-          if (OB_NOT_NULL(task_ctx)) {
-            task_ctx->~ObVecIndexAsyncTaskCtx();
-            allocator->free(task_ctx); // arena need free
-            task_ctx = nullptr;
-          }
+    common::hash::ObHashSet<uint64_t> conflict_table_id_set;
+    common::hash::ObHashSet<uint64_t> conflict_index_task_set;
+    bool need_optimize_and_check_conflict = false;
+    //first check if there are any adapters that need to be optimized
+    {
+      RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
+      FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret) && !need_optimize_and_check_conflict) {
+        ObPluginVectorIndexAdaptor *adapter = iter->second;
+        if (OB_ISNULL(adapter)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr", K(ret));
+        } else if (adapter->is_need_async_optimal()) {
+          need_optimize_and_check_conflict = true;
         }
       }
     }
-    LOG_INFO("finish load async task", K(ret), K(ls_->get_ls_id()), K(task_ctx_array.count()), K(current_task_cnt));
+    // If some adapters need async optimization, check DDL conflicts then create new tasks.
+    if (OB_SUCC(ret) && need_optimize_and_check_conflict) {
+      // check DDL conflicts
+      bool conflict_sets_ready = false;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(conflict_table_id_set.create(16))) {
+        LOG_INFO("fail to create conflict_table_id_set, skip DDL conflict check", K(tmp_ret));
+      } else if (OB_TMP_FAIL(conflict_index_task_set.create(16))) {
+        LOG_INFO("fail to create conflict_index_task_set, skip DDL conflict check", K(tmp_ret));
+      } else if (OB_TMP_FAIL(check_has_hnsw_ddl(conflict_table_id_set, conflict_index_task_set))) {
+        // if DDL conflict check fails, treat it as "no conflict"
+        // and continue creating async tasks to avoid blocking the scheduling pipeline.
+        LOG_INFO("fail to check hnsw ddl, skip DDL conflict check", K(tmp_ret));
+      } else {
+        conflict_sets_ready = true;
+      }
+      // create new tasks
+      RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
+      FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(),
+          OB_SUCC(ret) && (task_ctx_array.count() + current_task_cnt <= MAX_ASYNC_TASK_PROCESSING_COUNT)) {
+        ObTabletID tablet_id = iter->first;
+        ObPluginVectorIndexAdaptor *adapter = iter->second;
+        if (OB_ISNULL(adapter)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr", K(ret));
+        } else if (adapter->is_need_async_optimal()) {
+          // Skip task creation if this adapter's index conflicts with an active DDL.
+          const uint64_t data_table_id = adapter->get_data_table_id();
+          const uint64_t inc_table_id  = adapter->get_inc_table_id();
+          if (conflict_sets_ready &&
+              (OB_HASH_EXIST == conflict_table_id_set.exist_refactored(data_table_id) ||
+               OB_HASH_EXIST == conflict_index_task_set.exist_refactored(inc_table_id))) {
+            LOG_DEBUG("skip creating hnsw async task due to DDL conflict",
+                      K(tenant_id_), K(tablet_id), K(data_table_id), K(inc_table_id));
+          } else {
+            int64_t new_task_id = OB_INVALID_ID;
+            int64_t index_table_id = OB_INVALID_ID;
+            bool inc_new_task = false;
+            common::ObCurTraceId::TraceId new_trace_id;
+
+            char *task_ctx_buf = static_cast<char *>(allocator->alloc(sizeof(ObVecIndexAsyncTaskCtx)));
+            ObVecIndexAsyncTaskCtx* task_ctx = nullptr;
+            if (OB_ISNULL(task_ctx_buf)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("async task ctx is null", K(ret));
+            } else if (FALSE_IT(task_ctx = new(task_ctx_buf) ObVecIndexAsyncTaskCtx())) {
+            } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id_, new_task_id))) {
+              LOG_WARN("fail to fetch new task id", K(ret), K(tenant_id_));
+            } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::get_table_id_from_adapter(adapter, tablet_id, index_table_id))) { // only get table 3 table_id to generate new task
+              LOG_WARN("fail to get table id from adapter", K(ret), K(tablet_id));
+            } else if (OB_INVALID_ID == index_table_id) {
+              LOG_DEBUG("index table id is invalid, skip", K(ret)); // skip to next
+            } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(++task_trace_base_num, allocator, new_trace_id))) {
+              LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
+            } else {
+              LOG_DEBUG("start load task", K(ret), K(tablet_id), K(tenant_id_), K(task_trace_base_num), K(ls_->get_ls_id()));
+              // 1. update task_ctx to async task map
+              task_ctx->tenant_id_ = tenant_id_;
+              task_ctx->ls_ = ls_;
+              task_ctx->task_status_.tablet_id_ = tablet_id.id();
+              task_ctx->task_status_.tenant_id_ = tenant_id_;
+              task_ctx->task_status_.table_id_ = index_table_id;
+              task_ctx->task_status_.task_id_ = new_task_id;
+              task_ctx->task_status_.task_type_ = ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL;
+              task_ctx->task_status_.trigger_type_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO;
+              task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+              task_ctx->task_status_.trace_id_ = new_trace_id;
+              task_ctx->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time());
+              task_ctx->allocator_.set_tenant_id(tenant_id_);
+              if (OB_FAIL(index_ls_mgr->get_async_task_opt().add_task_ctx(tablet_id, task_ctx, inc_new_task))) { // not overwrite
+                LOG_WARN("fail to add task ctx", K(ret));
+              } else if (inc_new_task && OB_FAIL(task_ctx_array.push_back(task_ctx))) {
+                LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
+              }
+            }
+            if (OB_FAIL(ret)) { // release memory when fail
+              if (OB_NOT_NULL(task_ctx)) {
+                task_ctx->~ObVecIndexAsyncTaskCtx();
+                allocator->free(task_ctx); // arena need free
+                task_ctx = nullptr;
+              }
+            }
+          } 
+        }
+      }
+      LOG_INFO("finish load async task", K(ret), K(ls_->get_ls_id()), K(task_ctx_array.count()), K(current_task_cnt));
+    } 
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(insert_new_task(task_ctx_array))) {
