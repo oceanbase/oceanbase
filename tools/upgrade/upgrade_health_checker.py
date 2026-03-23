@@ -407,17 +407,6 @@ def get_version(version_str):
   version = (major << 32) | (minor << 16) | (major_patch << 8) | minor_patch
   return version
 
-def get_max_zone_count(query_cur):
-  sql = "select count(*) from oceanbase.DBA_OB_ZONES"
-  try:
-    (desc, results) = query_cur.exec_query(sql, print_when_succ=False)
-    if len(results) == 0:
-      return 0
-    return results[0][0]
-  except Exception as e:
-    logging.exception('fail to query DBA_OB_ZONES')
-    raise
-
 # 检查集群版本是否支持向量索引（>= 4.3.3.0）
 def check_cluster_version_for_vector_index(query_cur):
   try:
@@ -495,7 +484,7 @@ def parse_sync_info(sync_info_str):
   
   return result
 
-# 获得指定租户的副本数
+# 获得指定租户的副本数（按租户和 LS 分组）
 def get_expected_replica_count(query_cur):
   sql = """select tenant_id, ls_id, count(*) as replica_count from oceanbase.CDB_OB_LS_LOCATIONS
            where ls_id != 1
@@ -509,19 +498,26 @@ def get_expected_replica_count(query_cur):
     logging.exception('fail to query CDB_OB_LS_LOCATIONS')
     raise
 
-  tenant_replica_count = {}
+  # 返回结构：{tenant_id: {ls_id: replica_count}}
+  tenant_ls_replica_count = {}
   for tenant_id, ls_id, count in results:
-    if tenant_id not in tenant_replica_count:
-      tenant_replica_count[tenant_id] = count
-    elif count != tenant_replica_count[tenant_id]:
-      logging.error("Inconsistent replica count: tenant_id=%d, ls_id=%s, expected=%d, actual=%d",
-                    tenant_id, ls_id, tenant_replica_count[tenant_id], count)
-      raise MyError("Inconsistent replica count: tenant_id={0}, ls_id={1}, expected={2}, actual={3}".format(
-        tenant_id, ls_id, tenant_replica_count[tenant_id], count))
+    if tenant_id not in tenant_ls_replica_count:
+      tenant_ls_replica_count[tenant_id] = {}
+    tenant_ls_replica_count[tenant_id][ls_id] = count
 
-  logging.info("Got expected replica count from CDB_OB_LS_LOCATIONS: %d tenants, details: %s",
-               len(tenant_replica_count), tenant_replica_count)
-  return tenant_replica_count
+  # 统计信息：每个租户有多少个不同的副本数配置
+  for tenant_id, ls_counts in tenant_ls_replica_count.items():
+    unique_counts = set(ls_counts.values())
+    if len(unique_counts) > 1:
+      logging.info("Tenant %d has multiple replica configurations: %d LS groups with different counts: %s",
+                   tenant_id, len(ls_counts), dict(ls_counts))
+    else:
+      logging.info("Tenant %d has uniform replica count: %d (across %d LS)",
+                   tenant_id, list(unique_counts)[0], len(ls_counts))
+
+  logging.info("Got expected replica count from CDB_OB_LS_LOCATIONS: %d tenants, %d total LS",
+               len(tenant_ls_replica_count), sum(len(ls_dict) for ls_dict in tenant_ls_replica_count.values()))
+  return tenant_ls_replica_count
 
 # 按租户和tablet分组，同时区分HNSW/HGRAPH和IVF索引
 def group_by_tenant_and_tablet(results):
@@ -557,7 +553,7 @@ def group_by_tenant_and_tablet(results):
 
   return grouped
 
-def check_tenant_hnsw_index_loaded(tenant_id, tablets, incr_history, expected_replica_count, max_zone_count):
+def check_tenant_hnsw_index_loaded(tenant_id, tablets, incr_history, tenant_ls_replica_count):
   # snap_cnt放宽条件
   SNAP_MAX_PER_TABLET = 100000       # 不一致快照索引单个tablet不超过10W向量
   SNAP_MAX_TABLETS = 30              # 不一致快照索引tablet数量低于30个
@@ -584,15 +580,31 @@ def check_tenant_hnsw_index_loaded(tenant_id, tablets, incr_history, expected_re
   for tablet_id, tablet_info in tablets.items():
     replicas = tablet_info['replicas']
     data_table_id = tablet_info['data_table_id']
+    ls_id = tablet_info['ls_id']
     actual_count = len(replicas)
 
-    # 检查1: 副本数是否匹配
-    if actual_count > max_zone_count or actual_count < expected_replica_count:
+    # 根据 tablet 所属的 LS ID 获取预期的副本数
+    expected_count = tenant_ls_replica_count.get(ls_id, 0)
+    if expected_count == 0:
+      logging.warn("No replica count found for tenant %d LS %d (tablet %d), will retry",
+                   tenant_id, ls_id, tablet_id)
+      return False, [{
+        'tablet_id': tablet_id,
+        'data_table_id': data_table_id,
+        'ls_id': ls_id,
+        'reason': 'ls_replica_count_not_found',
+        'expected': 'unknown',
+        'actual': actual_count
+      }]
+
+    # 检查 1: 副本数是否匹配
+    if actual_count < expected_count:
       pending_list.append({
         'tablet_id': tablet_id,
         'data_table_id': data_table_id,
+        'ls_id': ls_id,
         'reason': 'replica_count_mismatch',
-        'expected': expected_replica_count,
+        'expected': expected_count,
         'actual': actual_count
       })
       continue
@@ -771,10 +783,8 @@ def check_vector_index_loaded(query_cur, zone, timeout):
           logging.warn("Query returned empty, may be query unstable, will retry")
         else:
           tenant_expected_replica_count = get_expected_replica_count(query_cur)
-          max_zone_count = get_max_zone_count(query_cur)
-          logging.info("Zone count: %d", max_zone_count)
 
-          result, tenant_stats = check_vector_index_loaded_one_round(grouped, tenant_expected_replica_count, incr_history, max_zone_count, max_times - times, max_times)
+          result, tenant_stats = check_vector_index_loaded_one_round(grouped, tenant_expected_replica_count, incr_history, max_times - times, max_times)
           if result == 'success':
             check_done = 1
           else:
@@ -790,26 +800,34 @@ def check_vector_index_loaded(query_cur, zone, timeout):
       if check_done == 0:
         time.sleep(10)
 
-def check_vector_index_loaded_one_round(grouped, tenant_expected_replica_count, incr_history, max_zone_count, current_round, max_round):
+def check_vector_index_loaded_one_round(grouped, tenant_expected_replica_count, incr_history, current_round, max_round):
   # 收集HNSW索引的tablet信息
   # 检查HNSW/HGRAPH索引
   all_loaded = 1
   hnsw_tenant_stats = {}
 
   for tenant_id, tablets in grouped['hnsw'].items():
-    expected_count = tenant_expected_replica_count.get(tenant_id, 0)
-    if expected_count == 0:
+    tenant_ls_counts = tenant_expected_replica_count.get(tenant_id, {})
+    if not tenant_ls_counts:
       logging.warn("No replica count found for tenant %d, will retry", tenant_id)
       return 'retry', {}
 
-    loaded, pending_list = check_tenant_hnsw_index_loaded(tenant_id, tablets, incr_history, expected_count, max_zone_count)
+    loaded, pending_list = check_tenant_hnsw_index_loaded(
+        tenant_id, tablets, incr_history, tenant_ls_counts)
+
+    # 统计该租户的副本数分布（用于日志）
+    unique_counts = set(tenant_ls_counts.values())
+    if len(unique_counts) > 1:
+      expected_count_str = "variable({})".format(dict(tenant_ls_counts))
+    else:
+      expected_count_str = str(list(unique_counts)[0])
 
     hnsw_tenant_stats[tenant_id] = {
       'loaded': loaded,
       'total': len(tablets),
       'pending': len(pending_list),
       'pending_list': pending_list,
-      'expected_replica_count': expected_count
+      'expected_replica_count': expected_count_str
     }
 
     if len(pending_list) > 0:
