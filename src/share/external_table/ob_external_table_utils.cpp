@@ -2180,10 +2180,7 @@ int ObExternalTableUtils::collect_external_file_list_with_cache(
   }
 
   ObHiveFileDesc *desc = NULL;
-  if (reorder_part_id.count() < tmp_external_table_files.count()) {
-    // 可能是个空分区， tmp_external_table_files 就为空
-    // 但会存在 part_id
-    // 所以 part_id 的个数需要大于等于文件个数
+  if (reorder_part_id.count() != tmp_external_table_files.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to check count", K(reorder_part_id.count()), K(tmp_external_table_files.count()));
   }

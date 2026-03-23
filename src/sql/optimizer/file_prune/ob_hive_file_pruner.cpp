@@ -380,7 +380,7 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
                                                     unhit_part_id, unhit_part_path))) {
       LOG_WARN("failed to get cached files");
     } else if (unhit_part_path.count() > 0) {
-      ObSEArray<ObHiveFileDesc, 16> newly_fetched_files;
+      ObSEArray<ObHiveFileDesc, 16> part_files;
       ObSEArray<int64_t, 16> part_file_counts;
       if (OB_FAIL(ObExternalTableUtils::collect_external_file_list_with_cache(*(exec_ctx.get_my_session()),
                                                                               table_schema->get_tenant_id(),
@@ -390,20 +390,32 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
                                                                               empty_patten,
                                                                               exec_ctx.get_allocator(),
                                                                               refresh_interval_sec * 1000,
-                                                                              newly_fetched_files,
+                                                                              part_files,
                                                                               part_file_counts))) {
         LOG_WARN("failed to collect external file list");
-      } else if (OB_FAIL(append(filtered_files, newly_fetched_files))) {
+      } else if (OB_FAIL(append(filtered_files, part_files))) {
         LOG_WARN("failed to append file");
+      } else if (part_file_counts.count() != unhit_part_id.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected count", K(part_file_counts.count()), K(unhit_part_id.count()));
       } else {
         int64_t file_idx = 0;
-        for (int64_t i = 0; OB_SUCC(ret) && i < unhit_part_id.count(); ++i) {
-          ObArrayWrap<ObHiveFileDesc> cur_part_files(&newly_fetched_files.at(0) + file_idx, part_file_counts.at(i));
-          if (OB_FAIL(cache_info->add_cached_file(unhit_part_id.at(i), cur_part_files))) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < part_file_counts.count(); ++i) {
+          int64_t file_count = part_file_counts.at(i);
+          ObHiveFileDesc* head = part_files.empty() ? nullptr : &part_files.at(0) + file_idx;
+          ObArrayWrap<ObHiveFileDesc> cur_part_files(head, file_count);
+          if (OB_UNLIKELY(file_idx + file_count > part_files.count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected part file count", K(file_idx), K(file_count), K(part_files.count()));
+          } else if (OB_FAIL(cache_info->add_cached_file(unhit_part_id.at(i), cur_part_files))) {
             LOG_WARN("failed to add cached files");
           } else {
-            file_idx += part_file_counts.at(i);
+            file_idx += file_count;
           }
+        }
+        if (OB_SUCC(ret) && OB_UNLIKELY(file_idx != part_files.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("part file count larger than newly fetched file count", K(file_idx), K(part_files.count()));
         }
       }
     }
