@@ -197,7 +197,7 @@ OB_INLINE int ObTableDeleteOp::open_table_for_each()
 OB_INLINE int ObTableDeleteOp::close_table_for_each()
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCCESS == ctx_.get_errcode()) {
+  if (OB_SUCCESS == ctx_.get_errcode() || (MY_SPEC.is_returning_ && OB_ITER_END == ctx_.get_errcode())) {
     for (int64_t i = 0; OB_SUCC(ret) && i < del_rtdefs_.count(); ++i) {
       if (!del_rtdefs_.at(i).empty()) {
         const ObDelCtDef &primary_del_ctdef = *MY_SPEC.del_ctdefs_.at(i).at(0);

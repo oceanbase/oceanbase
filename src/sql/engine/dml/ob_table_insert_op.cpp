@@ -435,7 +435,7 @@ int ObTableInsertOp::inner_close()
 OB_INLINE int ObTableInsertOp::close_table_for_each()
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCCESS == ctx_.get_errcode()) {
+  if (OB_SUCCESS == ctx_.get_errcode() || (MY_SPEC.is_returning_ && OB_ITER_END == ctx_.get_errcode())) {
     for (int64_t i = 0; OB_SUCC(ret) && i < ins_rtdefs_.count(); ++i) {
       if (!ins_rtdefs_.at(i).empty()) {
         const ObInsCtDef &primary_ins_ctdef = *MY_SPEC.ins_ctdefs_.at(i).at(0);
