@@ -850,12 +850,6 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
     }
     if (OB_FAIL(ret)) {
     } else if (new_distance_is_set && new_type_is_set) {
-      if (ObVectorIndexAlgorithmType::VIAT_HNSW_BQ == new_vec_param.type_
-          && ObVectorIndexDistAlgorithm::VIDA_L2 != new_vec_param.dist_algorithm_) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support distance algorithm for hnsw bq index", K(ret), K(new_index_params));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "current distance algorithm for hnsw bq index is");
-      }
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unexpected setting of vector index param, distance or type has not been set", 
