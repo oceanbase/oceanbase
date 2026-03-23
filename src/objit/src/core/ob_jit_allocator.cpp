@@ -236,6 +236,8 @@ ObJitMemoryBlock *ObJitMemoryGroup::alloc_new_block(int64_t sz, int64_t p_flags)
     ObJitMemory::release_mapped_memory(block);
   }
 
+  LOG_DEBUG("finished to alloc new block", K(ret), K(sz), K(p_flags));
+
   return ret;
 }
 
@@ -269,8 +271,8 @@ void ObJitMemoryGroup::reserve(int64_t sz, int64_t align, int64_t p_flags)
 
     block_cnt_++;
     total_ += cur->size();
-    LOG_INFO("AARCH64: reserve ObJitMemoryGroup successed",
-             K(header_), K(total_), K(block_cnt_), K(*cur));
+    LOG_DEBUG("AARCH64: reserve ObJitMemoryGroup successed",
+              K(header_), K(total_), K(block_cnt_), K(*cur));
   } else {
     LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "AARCH64: reserve ObJitMemoryGroup failed", K(header_), K(total_), K(*cur));
   }

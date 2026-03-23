@@ -79,19 +79,20 @@ public:
   ///
   /// Note that by default the callback is disabled. To enable it
   /// redefine the method needsToReserveAllocationSpace to return true.
-  virtual void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
-                                      uintptr_t RODataSize,
-                                      uint32_t RODataAlign,
-                                      uintptr_t RWDataSize,
-                                      uint32_t RWDataAlign)
+  void reserveAllocationSpace(uintptr_t CodeSize,
+                              llvm::Align CodeAlign,
+                              uintptr_t RODataSize,
+                              llvm::Align RODataAlign,
+                              uintptr_t RWDataSize,
+                              llvm::Align RWDataAlign) override
   {
-    int64_t sz = CodeSize + CodeAlign + RODataSize + RODataAlign + RWDataSize + RWDataAlign;
-    int64_t align = MAX3(CodeAlign, RODataAlign, RWDataAlign);
+    int64_t sz = CodeSize + CodeAlign.value() + RODataSize + RODataAlign.value() + RWDataSize + RWDataAlign.value();
+    int64_t align = MAX3(CodeAlign.value(), RODataAlign.value(), RWDataAlign.value());
     allocator_.reserve(JMT_RWE, sz, align);
   }
 
   /// Override to return true to enable the reserveAllocationSpace callback.
-  virtual bool needsToReserveAllocationSpace() { return true; }
+  bool needsToReserveAllocationSpace() override { return true; }
 #endif
 
 private:
