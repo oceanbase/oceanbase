@@ -4115,13 +4115,15 @@ int ObPLResolver::is_return_ref_cursor_type(const ObRawExpr *expr, bool &is_ref_
 
 int ObPLResolver::modify_null_param_using_deduced_type(const ObRawExpr *expr,
                                                      const ObPLDataType &expected_type,
-                                                     ObPLSymbolTable *symbol_table)
+                                                     ObPLSymbolTable *symbol_table,
+                                                     bool is_from_overloaded_routine)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(expr) && T_QUESTIONMARK == expr->get_expr_type()) {
     const ObConstRawExpr *c_expr = static_cast<const ObConstRawExpr*>(expr);
     int64_t param_idx = c_expr->get_value().get_unknown();
     const common::ObDataType *dt = expected_type.get_data_type();
+    ObConstRawExpr *mutable_expr = const_cast<ObConstRawExpr*>(c_expr);
     if (OB_NOT_NULL(dt)
       && !dt->get_meta_type().is_ext()
       && is_parameterized_null_param(expr)) {
@@ -4147,13 +4149,22 @@ int ObPLResolver::modify_null_param_using_deduced_type(const ObRawExpr *expr,
           }
         }
         if (OB_SUCC(ret)) {
-          ObConstRawExpr *mutable_expr = const_cast<ObConstRawExpr*>(c_expr);
           ObObjMeta meta;
           OX (meta.set_type(dt->get_obj_type()));
           OX (meta.set_collation_type(dt->get_collation_type()));
           OX (mutable_expr->set_meta_type(meta));
           OX (mutable_expr->set_accuracy(dt->get_accuracy()));
         }
+      }
+    }
+    if (OB_SUCC(ret) && is_from_overloaded_routine) {
+      if (OB_NOT_NULL(symbol_table) && param_idx >= 0 && param_idx < symbol_table->get_count()) {
+        ObPLVar *var = const_cast<ObPLVar*>(symbol_table->get_symbol(param_idx));
+        if (OB_NOT_NULL(var)) {
+          OX (var->set_is_from_overloaded_routine(true));
+        }
+      } else {
+        OX (mutable_expr->set_is_from_overloaded_routine(true));
       }
     }
   }

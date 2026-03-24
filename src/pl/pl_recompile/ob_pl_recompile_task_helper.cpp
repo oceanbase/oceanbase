@@ -544,7 +544,7 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
     OZ (query_inner_sql.assign_fmt("select KEY_ID, MERGE_VERSION, EXTRA_INFO FROM %s",
                   OB_ALL_NCOMP_DLL_V2_TNAME));
     OZ (refresh_latest_schema_guard(tenant_id, OB_INVALID_VERSION, latest_schema_guard, current_schema_guard));
-    LOG_INFO("JBKTEST, update recomp table", K(ret));
+    //LOG_INFO("JBKTEST, update recomp table", K(ret));
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         OZ (sql_proxy->read(res, tenant_id, query_inner_sql.ptr()));
@@ -579,7 +579,7 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
               if (OB_SUCC(ret) && is_valid) {
                 batch_dep_objs.set_refactored(key_id, true, 1);
               } else {
-                LOG_WARN("JBKTEST recompile task update recomp table failed or not valid!", K(ret), K(key_id), K(is_valid));
+                LOG_WARN("recompile task update recomp table failed or not valid!", K(ret), K(key_id), K(is_valid));
               }
             }
           }
@@ -611,7 +611,7 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
       OZ (update_sql.append_fmt(")"));
       OZ (sql_proxy->write(tenant_id, update_sql.ptr(), affected_rows));
     }
-    LOG_INFO("JBKTEST update recomp table sql:", K(query_inner_sql), K(update_sql));
+    // LOG_INFO("JBKTEST update recomp table sql:", K(query_inner_sql), K(update_sql));
     if (batch_dep_objs.created()) {
       int tmp_ret = batch_dep_objs.destroy();
       ret = OB_SUCCESS == ret ? tmp_ret : ret;

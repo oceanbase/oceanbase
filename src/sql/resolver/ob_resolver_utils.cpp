@@ -1611,17 +1611,27 @@ int ObResolverUtils::record_deduced_type(const pl::ObPLResolveCtx &resolve_ctx,
 
     // For UDT member functions (non-static), the first parameter in routine_info is SELF parameter
     int64_t param_offset = 0;
-    if (routine_info->is_udt_routine() && !routine_info->is_udt_static_routine()) {
+    if (routine_info->is_udt_routine()
+      && !routine_info->is_udt_static_routine()
+      && expr_params.count() > 0
+      && OB_NOT_NULL(expr_params.at(0))) {
       ObIRoutineParam *first_param = nullptr;
-      if (OB_SUCC(routine_info->get_routine_param(0, first_param))
-          && OB_NOT_NULL(first_param)
-          && first_param->is_self_param()) {
-        // Check if expr_params already contains SELF parameter
-        if (expr_params.count() > 0 && expr_params.at(0)->has_flag(IS_UDT_UDF_SELF_PARAM)) {
-          // expr_params already contains SELF parameter, no offset needed
-          param_offset = 0;
+      ObRawExpr *first_arg = expr_params.at(0);
+      if (first_arg->has_flag(IS_UDT_UDF_SELF_PARAM)) {
+        param_offset = 0;
+      } else if (routine_info->is_udt_cons()) {
+        param_offset = 1;
+      } else {
+        uint64_t src_type_id = OB_INVALID_ID;
+        ObObjType src_type;
+        if (T_SP_CPARAM == first_arg->get_expr_type()) {
+          ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr*>(first_arg);
+          OZ (get_type_and_type_id(call_expr->get_expr(), src_type, src_type_id));
         } else {
-          // expr_params doesn't contain SELF parameter, skip SELF in routine_info
+          OZ (get_type_and_type_id(first_arg, src_type, src_type_id));
+        }
+        if (OB_SUCC(ret)
+          && (src_type_id != routine_info->get_package_id())) {
           param_offset = 1;
         }
       }
@@ -1647,19 +1657,9 @@ int ObResolverUtils::record_deduced_type(const pl::ObPLResolveCtx &resolve_ctx,
         OZ (routine_info->get_routine_param(routine_param_pos, routine_param));
         CK (OB_NOT_NULL(routine_param));
         if (OB_FAIL(ret)) {
-        } else if (is_from_overloaded_routine) {
-          if (OB_NOT_NULL(symbol_table)) {
-            CK (param_idx >= 0 && param_idx < symbol_table->get_count());
-            ObPLVar *var = const_cast<ObPLVar*>(symbol_table->get_symbol(param_idx));
-            if (OB_NOT_NULL(var)) {
-              OX (var->set_is_from_overloaded_routine(true));
-            }
-          } else {
-            OX (c_expr->set_is_from_overloaded_routine(true));
-          }
         } else {
           pl::ObPLDataType pl_type = routine_param->get_pl_data_type();
-          OZ (pl::ObPLResolver::modify_null_param_using_deduced_type(expr, pl_type, symbol_table));
+          OZ (pl::ObPLResolver::modify_null_param_using_deduced_type(expr, pl_type, symbol_table, is_from_overloaded_routine));
         }
       }
     }

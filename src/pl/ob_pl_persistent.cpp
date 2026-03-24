@@ -921,7 +921,7 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
     OZ (concat_ids_sql.append_fmt("| "));
   }
   OZ (ObSQLUtils::md5(concat_ids_sql.string(), extra_info.dep_obj_ids_md5_, dep_obj_ids_md5_len));
-  LOG_INFO("JBKTEST: extra info ",K(ret),K(concat_ids_sql), K(extra_info.dep_obj_ids_md5_));
+  //LOG_INFO("JBKTEST: extra info ",K(ret),K(concat_ids_sql), K(extra_info.dep_obj_ids_md5_));
   return ret;
 }
 

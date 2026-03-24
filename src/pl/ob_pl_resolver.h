@@ -743,7 +743,8 @@ public:
 
   static int modify_null_param_using_deduced_type(const ObRawExpr *expr,
                                                 const ObPLDataType &expected_type,
-                                                ObPLSymbolTable *symbol_table = nullptr);
+                                                ObPLSymbolTable *symbol_table = nullptr,
+                                                bool is_from_overloaded_routine = false);
 
   static bool check_need_cast(const ObDataType &data_type,
                                   const ObObjMeta &src_meta,
