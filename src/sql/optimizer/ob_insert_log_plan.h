@@ -74,7 +74,11 @@ protected:
 
   /** @brief Allocate SELECTINTO on top of plan candidates when insert into external table*/
   int candi_allocate_select_into_for_insert();
-  int allocate_select_into_as_top_for_insert(ObLogicalOperator *&old_top);
+  int prepare_external_table_info_for_insert(const schema::ObTableSchema *&table_schema,
+                                             common::ObString &external_properties);
+  int allocate_select_into_as_top_for_insert(ObLogicalOperator *&old_top,
+                                             const schema::ObTableSchema &table_schema,
+                                             const common::ObString &external_properties);
 
   int get_osg_type(bool is_multi_part_dml,
                    ObShardingInfo *insert_table_sharding,

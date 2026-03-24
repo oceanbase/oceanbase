@@ -157,8 +157,7 @@ public:
       curr_partition_num_(0),
       external_properties_(),
       format_type_(ObExternalFileFormat::FormatType::CSV_FORMAT),
-      is_odps_cpp_table_(false),
-      is_odps_java_table_(false),
+      use_odps_jni_connector_(false),
 #ifdef OB_BUILD_CPP_ODPS
       upload_(NULL),
       record_writer_(NULL),
@@ -460,8 +459,7 @@ private:
   int curr_partition_num_;
   ObExternalFileFormat external_properties_;
   ObExternalFileFormat::FormatType format_type_;
-  bool is_odps_cpp_table_;
-  bool is_odps_java_table_;
+  bool use_odps_jni_connector_;
 #ifdef OB_BUILD_CPP_ODPS
   apsara::odps::sdk::IUploadPtr upload_;
   apsara::odps::sdk::IRecordWriterPtr record_writer_;

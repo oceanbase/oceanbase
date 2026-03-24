@@ -15,6 +15,8 @@
 #include "sql/optimizer/ob_insert_log_plan.h"
 #include "sql/optimizer/ob_log_expr_values.h"
 #include "sql/optimizer/ob_log_insert_all.h"
+#include "sql/optimizer/ob_explain_note.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "share/stat/ob_dbms_stats_utils.h"
@@ -1779,13 +1781,21 @@ int ObInsertLogPlan::candi_allocate_select_into_for_insert()
   ObExchangeInfo exch_info;
   CandidatePlan candidate_plan;
   ObSEArray<CandidatePlan, 4> select_into_plans;
+  const ObTableSchema *table_schema = NULL;
+  ObString external_properties;
   int64_t dml_parallel = ObGlobalHint::UNSET_PARALLEL;
   int64_t server_cnt = 0;
-  if (OB_FAIL(get_parallel_info_from_candidate_plans(server_cnt, dml_parallel))) {
+  if (OB_FAIL(prepare_external_table_info_for_insert(table_schema,
+                                                       external_properties))) {
+    LOG_WARN("failed to prepare external table info for insert", K(ret));
+  } else if (OB_FAIL(get_parallel_info_from_candidate_plans(server_cnt, dml_parallel))) {
     LOG_WARN("failed to get parallel info from candidate plans", K(ret));
-  } else if (dml_parallel > 1) {
-    exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
+  } else {
+    if (dml_parallel > 1) {
+      exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
+    }
   }
+
   for (int64_t i = 0 ; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
     candidate_plan = candidates_.candidate_plans_.at(i);
     if (OB_ISNULL(candidate_plan.plan_tree_)) {
@@ -1794,7 +1804,12 @@ int ObInsertLogPlan::candi_allocate_select_into_for_insert()
     } else if (candidate_plan.plan_tree_->is_sharding()
                && OB_FAIL((allocate_exchange_as_top(candidate_plan.plan_tree_, exch_info)))) {
       LOG_WARN("failed to allocate exchange as top", K(ret));
-    } else if (OB_FAIL(allocate_select_into_as_top_for_insert(candidate_plan.plan_tree_))) {
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(allocate_select_into_as_top_for_insert(candidate_plan.plan_tree_,
+                                                              *table_schema,
+                                                              external_properties))) {
       LOG_WARN("failed to allocate select into", K(ret));
     } else if (OB_FAIL(select_into_plans.push_back(candidate_plan))) {
       LOG_WARN("failed to push back candidate plan", K(ret));
@@ -1808,49 +1823,87 @@ int ObInsertLogPlan::candi_allocate_select_into_for_insert()
   return ret;
 }
 
-int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&old_top)
+int ObInsertLogPlan::prepare_external_table_info_for_insert(const ObTableSchema *&table_schema,
+                                                            ObString &external_properties)
 {
   int ret = OB_SUCCESS;
-  ObLogSelectInto *select_into = NULL;
-  ObSchemaGetterGuard *schema_guard = NULL;
-  const ObTableSchema *table_schema = NULL;
+  ObSqlSchemaGuard *sql_schema_guard = NULL;
   ObSQLSessionInfo *session_info = NULL;
   const ObInsertStmt *stmt = get_stmt();
-  ObColumnRefRawExpr *col_expr = NULL;
-  if (OB_ISNULL(old_top) || OB_ISNULL(stmt)
-      || OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard())
+  ObString effective_format;
+  const ObString *table_format_or_properties = NULL;
+  external_properties.reset();
+  table_schema = NULL;
+  if (OB_ISNULL(stmt)
+      || OB_ISNULL(sql_schema_guard = get_optimizer_context().get_sql_schema_guard())
       || OB_ISNULL(session_info = get_optimizer_context().get_session_info())
+      || OB_ISNULL(get_optimizer_context().get_query_ctx())
       || stmt->get_table_items().count() != 2
-      || OB_ISNULL(stmt->get_table_item(0)) || OB_ISNULL(stmt->get_table_item(1))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Get unexpected null", K(ret), K(old_top), K(schema_guard), K(session_info), K(stmt));
-  } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
-                                                    stmt->get_insert_table_info().ref_table_id_,
-                                                    table_schema))) {
+      || OB_ISNULL(stmt->get_table_item(0))
+      || OB_ISNULL(stmt->get_table_item(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret), K(stmt), K(sql_schema_guard), K(session_info));
+  } else if (OB_FAIL(sql_schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                        stmt->get_insert_table_info().ref_table_id_,
+                                                        table_schema))) {
     LOG_WARN("get table schema from schema guard failed", K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(table_format_or_properties = &(
+             table_schema->get_external_file_format().empty()
+             ? table_schema->get_external_properties()
+             : table_schema->get_external_file_format()))) {
+  } else if (table_format_or_properties->empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("external properties is empty", K(ret));
+  } else if (table_schema->get_lake_table_format() != share::ObLakeTableFormat::ICEBERG
+             && table_schema->get_external_properties().empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to insert into external table which is not in odps or iceberg",
+             K(ret), K(table_schema->get_lake_table_format()), K(table_schema->get_external_properties()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table which is not in odps or iceberg");
+  } else if (OB_FAIL(ObSQLUtils::apply_odps_hints_to_format_str(
+                 *table_format_or_properties,
+                 get_optimizer_context().get_query_ctx()->get_global_hint().opt_params_,
+                 get_allocator(),
+                 effective_format))) {
+    LOG_WARN("failed to apply odps hints to format str", K(ret));
+  } else {
+    if (!effective_format.empty()) {
+      external_properties = effective_format;
+    } else if (OB_FAIL(ob_write_string(get_allocator(), *table_format_or_properties, external_properties))) {
+      LOG_WARN("failed to append string", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&old_top,
+                                                            const ObTableSchema &table_schema,
+                                                            const ObString &external_properties)
+{
+  int ret = OB_SUCCESS;
+  ObLogSelectInto *select_into = NULL;
+  ObSqlSchemaGuard* sql_schema_guard = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  const ObInsertStmt *stmt = get_stmt();
+  ObColumnRefRawExpr *col_expr = NULL;
+  ObObj outfile_obj;
+  if (OB_ISNULL(old_top) || OB_ISNULL(stmt)
+      || OB_ISNULL(sql_schema_guard = get_optimizer_context().get_sql_schema_guard())
+      || OB_ISNULL(session_info = get_optimizer_context().get_session_info())
+      || stmt->get_table_items().count() != 2
+      || OB_ISNULL(stmt->get_table_item(0)) || OB_ISNULL(stmt->get_table_item(1))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Get unexpected null", K(ret), K(old_top), K(sql_schema_guard), K(session_info), K(stmt));
   } else if (OB_ISNULL(select_into = static_cast<ObLogSelectInto *>(
                        get_log_op_factory().allocate(*this, LOG_SELECT_INTO)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for ObLogSelectInto failed", K(ret));
   } else {
-    ObString external_properties;
-    const ObString &table_format_or_properties = table_schema->get_external_file_format().empty()
-                                            ? table_schema->get_external_properties()
-                                            : table_schema->get_external_file_format();
     const ObInsertTableInfo& table_info = stmt->get_insert_table_info();
-    if (table_format_or_properties.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("external properties is empty", K(ret));
-    } else if (table_schema->get_external_properties().empty()) { //目前只支持写odps外表 其他类型暂不支持
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support to insert into external table which is not in odps", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table which is not in odps");
-    } else if (OB_FAIL(ob_write_string(get_allocator(), table_format_or_properties, external_properties))) {
-      LOG_WARN("failed to append string", K(ret));
-    } else if (OB_FAIL(select_into->get_select_exprs().assign(table_info.column_conv_exprs_))) {
+    if (OB_FAIL(select_into->get_select_exprs().assign(table_info.column_conv_exprs_))) {
       LOG_WARN("failed to get select exprs", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < table_info.values_desc_.count(); i++) {
@@ -1866,7 +1919,10 @@ int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&
       select_into->set_external_properties(external_properties);
       select_into->set_external_partition(stmt->get_table_item(0)->external_table_partition_);
       select_into->set_child(ObLogicalOperator::first_child, old_top);
+    }
+
       // compute property
+    if (OB_SUCC(ret)) {
       if (OB_FAIL(select_into->compute_property())) {
         LOG_WARN("failed to compute equal set", K(ret));
       } else {

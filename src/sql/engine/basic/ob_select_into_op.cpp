@@ -24,6 +24,7 @@
 #include <memory>
 
 #include "ob_select_into_op.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
 #include "lib/charset/ob_charset_string_helper.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
@@ -88,9 +89,15 @@ int ObSelectIntoOp::inner_open()
       }
       case ObExternalFileFormat::FormatType::ODPS_FORMAT:
       {
-        if (!GCONF._use_odps_jni_connector) {
+        use_odps_jni_connector_ = GCONF._use_odps_jni_connector;
+        int8_t unused_mode = 0;
+        if (OB_FAIL(ObSQLUtils::parse_odps_jni_params_from_format_str(
+                MY_SPEC.external_properties_.str_,
+                use_odps_jni_connector_,
+                unused_mode))) {
+          LOG_WARN("failed to parse odps jni params from format str", K(ret));
+        } else if (!use_odps_jni_connector_) {
 #if defined(OB_BUILD_CPP_ODPS)
-          is_odps_cpp_table_ = true;
           if (OB_FAIL(init_odps_tunnel())) {
             LOG_WARN("failed to init odps tunnel", K(ret));
           }
@@ -100,7 +107,6 @@ int ObSelectIntoOp::inner_open()
 #endif
         } else {
 #if defined(OB_BUILD_JNI_ODPS)
-          is_odps_java_table_ = true;
           if (OB_FAIL(init_odps_jni_tunnel())) {
             LOG_WARN("failed to init odps jni", K(ret));
           }
@@ -569,11 +575,7 @@ int ObSelectIntoOp::inner_get_next_row()
     } else {
       ++row_count;
       if (ObExternalFileFormat::FormatType::ODPS_FORMAT == format_type_) {
-        if (is_odps_cpp_table_ == is_odps_java_table_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid table mode for odps table", K(ret),
-                   K(is_odps_cpp_table_), K(is_odps_java_table_));
-        } else if (is_odps_cpp_table_) {
+        if (!use_odps_jni_connector_) {
 #if defined (OB_BUILD_CPP_ODPS)
           if (OB_FAIL(into_odps())) {
             LOG_WARN("into odps failed", K(ret));
@@ -666,7 +668,7 @@ int ObSelectIntoOp::inner_get_next_batch(const int64_t max_row_cnt)
         brs_.skip_->deep_copy(*(child_brs->skip_), brs_.size_);
         row_count += brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_);
         if (ObExternalFileFormat::FormatType::ODPS_FORMAT == format_type_) {
-          if (!GCONF._use_odps_jni_connector) {
+          if (!use_odps_jni_connector_) {
 #if defined (OB_BUILD_CPP_ODPS)
             if (OB_FAIL(into_odps_batch(brs_))) {
               LOG_WARN("into odps batch failed", K(ret));
@@ -760,7 +762,7 @@ int ObSelectIntoOp::inner_close()
   ObExternalFileWriter *data_writer = NULL;
   int64_t estimated_bytes = 0;
   if (ObExternalFileFormat::FormatType::ODPS_FORMAT == format_type_) {
-    if (!GCONF._use_odps_jni_connector) {
+    if (!use_odps_jni_connector_) {
 #if defined (OB_BUILD_CPP_ODPS)
       if (OB_FAIL(odps_commit_upload())) {
         LOG_WARN("failed to commit upload", K(ret));
@@ -5326,7 +5328,7 @@ void ObSelectIntoOp::destroy()
 {
   ObExternalFileWriter *data_writer = NULL;
   if (ObExternalFileFormat::FormatType::ODPS_FORMAT == format_type_) {
-    if (!GCONF._use_odps_jni_connector) {
+    if (!use_odps_jni_connector_) {
 #if defined(OB_BUILD_CPP_ODPS)
       ObMallocHookAttrGuard guard(ObMemAttr(MTL_ID(), "IntoOdps"));
       upload_.reset();

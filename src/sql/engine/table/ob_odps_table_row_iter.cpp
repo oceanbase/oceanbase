@@ -532,7 +532,7 @@ int ObODPSTableRowIterator::print_type_map_user_info(apsara::odps::sdk::ODPSColu
         }
       }
     }
-    LOG_USER_ERROR(OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH, odps_type_cstr, ob_type_cstr);
+    LOG_WARN("odps type mismatch", K(ret), K(odps_type_cstr), K(ob_type_cstr));
   } catch (apsara::odps::sdk::OdpsTunnelException& ex) {
     if (OB_SUCC(ret)) {
       ret = OB_ODPS_ERROR;

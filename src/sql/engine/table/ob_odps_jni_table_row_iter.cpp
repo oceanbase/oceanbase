@@ -2554,7 +2554,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
             if (!(text_type_length_is_valid_at_runtime(type, judge_length)
                 || varchar_length_is_valid_at_runtime(type, out_charset, judge_length, expr.max_length_))) {
               ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-              LOG_WARN("unexpected data length", K(ret), K(out_length), K(judge_length), K(expr.max_length_), K(type));
+              LOG_WARN("odps type mismatch", K(ret), K(out_length), K(judge_length), K(expr.max_length_), K(type));
             } else {
               ObString temp_str(out_length, str);
               ObString in_str;
