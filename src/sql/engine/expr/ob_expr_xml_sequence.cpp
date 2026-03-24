@@ -190,19 +190,14 @@ int ObExprXmlSequence::eval_xml_sequence(const ObExpr &expr, ObEvalCtx &ctx, ObD
     result.set_extend(reinterpret_cast<int64_t>(coll), coll->get_type());
     OZ(res.from_obj(result, expr.obj_datum_map_));
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_NOT_NULL(coll->get_allocator())) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_ISNULL(exec_ctx.get_pl_ctx())) {
-        tmp_ret = exec_ctx.init_pl_ctx();
-      }
-      if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(exec_ctx.get_pl_ctx())) {
-        tmp_ret = exec_ctx.get_pl_ctx()->add(result);
-      }
+    if (OB_NOT_NULL(coll) && OB_NOT_NULL(coll->get_allocator())) {
+      sql::ObPLComplexTypeMgr *pl_complex_type_mgr = exec_ctx.get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+      int tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result);
       if (OB_SUCCESS != tmp_ret) {
-        LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+        int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
+        LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
 
   }
