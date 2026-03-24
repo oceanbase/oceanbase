@@ -301,6 +301,11 @@ int ObOptimizerTraceImpl::append_ptr(const void *ptr)
   return append_format<32>("ptr:%p", ptr);
 }
 
+int ObOptimizerTraceImpl::append(const void *ptr)
+{
+  return append_ptr(ptr);
+}
+
 int ObOptimizerTraceImpl::append()
 {
   int ret = OB_SUCCESS;
@@ -570,9 +575,16 @@ int ObOptimizerTraceImpl::append(const Path *path)
     new_line();
     append("tables:", path->parent_);
     if (path->is_access_path()) {
-      new_line();
       const AccessPath& ap = static_cast<const AccessPath&>(*path);
       const ObIndexMetaInfo &index_info = ap.est_cost_info_.index_meta_info_;
+      if (ap.is_inner_path_) {
+        if (ap.is_valid_inner_path_) {
+          append("valid inner path");
+        } else {
+          append("invalid inner path");
+        }
+      }
+      new_line();
       if (ap.is_index_merge_path()) {
         const IndexMergePath& index_merge_path = static_cast<const IndexMergePath&>(ap);
         append("is index merge: True, index merge tree:", index_merge_path.root_);
@@ -603,6 +615,14 @@ int ObOptimizerTraceImpl::append(const Path *path)
       }
       new_line();
       append("output row count before revising:", ap.get_output_row_count());
+    } else if (path->is_subquery_path()) {
+      const SubQueryPath& subquery_path = static_cast<const SubQueryPath&>(*path);
+      append("subquery id:", subquery_path.subquery_id_);
+      if (subquery_path.is_valid_inner_path_) {
+        append(", valid inner path");
+      }
+      new_line();
+      append(subquery_path.root_);
     }
     new_line();
     append("cost:", path->cost_, ",card:", path->parent_->get_output_rows(),

@@ -319,6 +319,7 @@ public:
   int append_format(const char *format, const ARGS&... args);
   int append_lower(const char* msg);
   int append_ptr(const void *ptr);
+  int append(const void *ptr);
   int append();
   int append(const bool &value);
   int append(const char* msg);
