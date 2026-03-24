@@ -30,6 +30,7 @@
 #include "share/ls/ob_ls_status_operator.h"
 #include "share/ls/ob_ls_i_life_manager.h"
 #include "rootserver/ob_tenant_balance_service.h" // ObTenantBalanceService
+#include "lib/hash/ob_hashmap.h"  // hash::ObHashMap
 
 
 namespace oceanbase
@@ -44,6 +45,49 @@ using ::testing::Return;
 using namespace schema;
 using namespace rootserver;
 using namespace common;
+
+static void assert_merge_transfer_same_primary_zone(
+    const ObArray<ObLSStatusInfo> &initial_ls_array,
+    const ObArray<share::ObBalanceTask> &task_array)
+{
+  hash::ObHashMap<int64_t, ObZone> zone_map;
+  ASSERT_EQ(OB_SUCCESS, zone_map.create(1024, "LsZoneMap"));
+  // 1) 初始映射
+  for (int64_t i = 0; i < initial_ls_array.count(); ++i) {
+    const int64_t ls_id = initial_ls_array.at(i).ls_id_.id_;
+    const ObZone &zone = initial_ls_array.at(i).primary_zone_;
+    ASSERT_EQ(OB_SUCCESS, zone_map.set_refactored(ls_id, zone, 0/*overwrite*/));
+  }
+  // 2) 遍历任务，维护 SPLIT 产生的新 ls 的 zone 映射
+  for (int64_t i = 0; i < task_array.count(); ++i) {
+    const share::ObBalanceTask &t = task_array.at(i);
+    const ObBalanceTaskType &task_type = t.get_task_type();
+    if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT) == task_type) {
+      const int64_t src_id = t.get_src_ls_id().id_;
+      const int64_t dst_id = t.get_dest_ls_id().id_;
+      ObZone src_zone;
+      ASSERT_EQ(OB_SUCCESS, zone_map.get_refactored(src_id, src_zone));
+      // 新 ls 继承 src 的 primary zone
+      ASSERT_EQ(OB_SUCCESS, zone_map.set_refactored(dst_id, src_zone, 0/*overwrite*/));
+    }
+  }
+  // 3) 校验 MERGE/TRANSFER 的 src/dest 在相同 primary zone
+  for (int64_t i = 0; i < task_array.count(); ++i) {
+    const share::ObBalanceTask &t = task_array.at(i);
+    const ObBalanceTaskType &task_type = t.get_task_type();
+    if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_MERGE) == task_type
+        || ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_TRANSFER) == task_type) {
+      const int64_t src_id = t.get_src_ls_id().id_;
+      const int64_t dst_id = t.get_dest_ls_id().id_;
+      ObZone src_zone;
+      ObZone dst_zone;
+      ASSERT_EQ(OB_SUCCESS, zone_map.get_refactored(src_id, src_zone));
+      ASSERT_EQ(OB_SUCCESS, zone_map.get_refactored(dst_id, dst_zone));
+      ASSERT_TRUE(src_zone == dst_zone);
+    }
+  }
+}
+
 class TestBalanceOperator : public unittest::ObSimpleClusterTestBase
 {
 public:
@@ -360,9 +404,13 @@ TEST_F(TestBalanceOperator, balance_execute)
     ASSERT_EQ(OB_SUCCESS, ret);
     LOG_INFO("testtest", K(job), K(task_array));
     ASSERT_EQ(6, task_array.count());
+    // 先alter平铺，再split出新ls
+    // alter
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[0].get_task_type());
+    // split + alter
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT), task_array[1].get_task_type());
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[2].get_task_type());
+    // split + alter + merge
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT), task_array[3].get_task_type());
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[4].get_task_type());
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_MERGE), task_array[5].get_task_type());
@@ -413,9 +461,9 @@ TEST_F(TestBalanceOperator, balance_execute)
     ret = lg_cnt.balance(false);
     ASSERT_EQ(OB_SUCCESS, ret);
     LOG_INFO("testtest", K(job), K(task_array));
+    // expand one lsg by alter, because LS count not balanced
     ASSERT_EQ(1, task_array.count());
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[0].get_task_type());
-
   }
   //2->3 修改ls_group_id1002 的unit_list到另外一个unit_group
   ObUnitIDList unit_id_list1;
@@ -437,9 +485,9 @@ TEST_F(TestBalanceOperator, balance_execute)
     ret = lg_cnt.balance(false);
     ASSERT_EQ(OB_SUCCESS, ret);
     LOG_INFO("testtest", K(job), K(task_array));
+    // expand one lsg by alter, because LS count not balanced
     ASSERT_EQ(1, task_array.count());
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[0].get_task_type());
-
   }
   //变更成异构zone
   zone_list.at(0).unit_cnt_ = 2;
@@ -464,9 +512,16 @@ TEST_F(TestBalanceOperator, balance_execute)
     ret = lg_cnt.balance(false);
     ASSERT_EQ(OB_SUCCESS, ret);
     LOG_INFO("testtest", K(job), K(task_array));
-    ASSERT_EQ(2, task_array.count());
-    ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[0].get_task_type());
+    // expand two lsg by transfer, because LS count is balanced (2 LS per LSG, primary_zone_num=1, ls_scale_out_factor=2)
+    ASSERT_EQ(8, task_array.count());
+    ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT), task_array[0].get_task_type());
     ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[1].get_task_type());
+    ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT), task_array[2].get_task_type());
+    ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[3].get_task_type());
+    ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT), task_array[4].get_task_type());
+    ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[5].get_task_type());
+    ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT), task_array[6].get_task_type());
+    ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[7].get_task_type());
 
   }
   //构造出6个日志流组的情况
@@ -629,12 +684,6 @@ TEST_F(TestBalanceOperator, merge_task)
 
 TEST_F(TestBalanceOperator, test_ls_group_count_balance)
 {
-  // 验证日志流组扩容场景，扩容11个以上lsg时不会发生core dump
-  // 构造如下初始形态：
-  // 1) 两个可用区：zone1 有 1 个 unit，zone2 有 12 个 unit
-  // 2) 初始只有 1 个普通 LS，落在 zone1 的唯一 unit 与 zone2 的第 1 个 unit 上
-  //    因而 zone2 其余 11 个 unit 空闲（无 LS）
-  // 期望：balance 后产生 11 个 split 任务与 11 个 alter 任务
   uint64_t tenant_id = 1002;
   ObArenaAllocator allocator("TntLSBalance" , OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
   int ret = OB_SUCCESS;
@@ -660,7 +709,13 @@ TEST_F(TestBalanceOperator, test_ls_group_count_balance)
     ASSERT_EQ(OB_SUCCESS, ret);
   };
 
-  // zones: zone1 = 1 unit, zone2 = 12 units
+  // case1:
+  // 验证日志流组扩容场景，扩容11个以上lsg时不会发生core dump
+  // 构造如下初始形态：
+  // 1) 两个可用区：zone1 有 1 个 unit，zone2 有 12 个 unit
+  // 2) 初始只有 1 个普通 LS，落在 zone1 的唯一 unit 与 zone2 的第 1 个 unit 上
+  //    因而 zone2 其余 11 个 unit 空闲（无 LS）
+  // 期望：balance 后产生 11 个 split 任务与 11 个 alter 任务
   ObDisplayZoneUnitCnt z1("zone1", 1);
   ObDisplayZoneUnitCnt z2("zone2", 12);
   ObZoneUnitCntList zone_list;
@@ -687,11 +742,11 @@ TEST_F(TestBalanceOperator, test_ls_group_count_balance)
 
   // 目标配置：primary_zone_num = 1, ls_scale_out_factor = 1（根据单测逻辑，期望扩到其余空单元）
   ObBalanceJobDesc job_desc;
-  ObTenantLSBalanceInfo balance_job(allocator);
   ret = job_desc.init_without_job(1 /*tenant id not used here*/, zone_list, 1 /*primary_zone_num*/, 1 /*ls_scale_out_factor*/, true /*enable_rebalance*/, true /*enable_transfer*/, false /*enable_gts_standalone*/);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   MTL_SWITCH(tenant_id) {
+    ObTenantLSBalanceInfo balance_job(allocator);
     ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
     ASSERT_EQ(OB_SUCCESS, ret);
     share::ObBalanceJob job;
@@ -723,6 +778,124 @@ TEST_F(TestBalanceOperator, test_ls_group_count_balance)
     ASSERT_EQ(11, split_cnt);
     ASSERT_EQ(11, alter_cnt);
     LOG_INFO("ls group count balance expand 1->12 on zone2", K(job), K(task_array.count()), K(split_cnt), K(alter_cnt));
+  }
+
+  // case2:
+  // LS count 非均衡时：先 alter 平铺已有 LS，若仍有空 LSG 则 transfer 补齐（每个至少 1 个 LS）
+  // - zone: z1/z2/z3，各2个unit（总6个unit）
+  // - 初始 LSG: 1 个（LSG_A=4001），位于同一个 cell（unit list = {1000, 1002, 1004}）
+  // - 组内 LS 数：LSG_A=4。目标组内 LS 数 = 3，LS count 不均衡
+  // - alter 后 4 个 LS 平铺到 3 个 LSG 无空位，fill_empty_lsg_with_one_ls_by_transfer_ 跳过，预期仅 ALTER（无 SPLIT）
+  zone_list.reuse();
+  ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z1"), 2)));
+  ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z2"), 2)));
+  ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z3"), 2)));
+  unit_array.reuse();
+  ret = construct_unit_array(zone_list, unit_array);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ls_array.reuse();
+  construct_ls(1, 0, {}); // sys ls
+  const int64_t lsg_a = 4001;
+  construct_ls(4001, lsg_a, {1000, 1002, 1004});
+  construct_ls(4002, lsg_a, {1000, 1002, 1004});
+  construct_ls(4003, lsg_a, {1000, 1002, 1004});
+  construct_ls(4004, lsg_a, {1000, 1002, 1004});
+
+  ret = job_desc.init_without_job(tenant_id, zone_list, 3 /*primary_zone_num*/, 1 /*ls_scale_out_factor*/,
+      true /*enable_rebalance*/, true /*enable_transfer*/, false /*enable_gts_standalone*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  MTL_SWITCH(tenant_id) {
+    ObTenantLSBalanceInfo balance_job(allocator);
+    ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    share::ObBalanceJob job;
+    common::ObArray<share::ObBalanceTask> task_array;
+    lsg_op_array.reuse();
+    unit_op_array.reuse();
+    ObLSGroupCountBalance lg_cnt(&balance_job, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+
+    ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(true));
+    job.reset();
+    ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(false));
+    ASSERT_TRUE(job.is_valid());
+
+    int64_t split_cnt = 0;
+    int64_t alter_cnt = 0;
+    ARRAY_FOREACH(task_array, i) {
+      const ObBalanceTaskType &tt = task_array.at(i).get_task_type();
+      if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT) == tt) {
+        ++split_cnt;
+      } else if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER) == tt) {
+        ++alter_cnt;
+      }
+    }
+    ASSERT_EQ(0, split_cnt);
+    ASSERT_GT(alter_cnt, 0);
+    LOG_INFO("ls group count balance case expand by alter", K(job), K(split_cnt), K(alter_cnt));
+  }
+
+
+  // case3:
+  // LS count 不均衡时：先 alter 平铺，若仍有空 LSG 则 fill_empty_lsg_with_one_ls_by_transfer_ 补齐
+  // - zone: z1/z2/z3，各5个unit（总15个unit）
+  // - 初始 LSG: 1 个（LSG_C=5001），位于同一个 cell（unit list = {1000, 1005, 1010}）
+  // - 组内 LS 数：LSG_C=4。目标 LSG 数 = 5，LS count 不均衡
+  // - alter 后 4 个 LS 平铺到 5 个 LSG 仍有 1 个空 LSG，预期产生
+  //   - 2 ALTER
+  //   - 3 SPLIT 3 ALTER 2 MERGE
+  zone_list.reuse();
+  ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z1"), 5)));
+  ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z2"), 5)));
+  ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z3"), 5)));
+  unit_array.reuse();
+  ret = construct_unit_array(zone_list, unit_array);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ls_array.reuse();
+  construct_ls(1, 0, {}); // sys ls
+  const int64_t lsg_c = 5001;
+  construct_ls(5001, lsg_c, {1000, 1005, 1010});
+  construct_ls(5002, lsg_c, {1000, 1005, 1010});
+  construct_ls(5003, lsg_c, {1000, 1005, 1010});
+  construct_ls(5004, lsg_c, {1000, 1005, 1010});
+
+  ret = job_desc.init_without_job(tenant_id, zone_list, 5 /*primary_zone_num*/, 1 /*ls_scale_out_factor*/,
+      true /*enable_rebalance*/, true /*enable_transfer*/, false /*enable_gts_standalone*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  MTL_SWITCH(tenant_id) {
+    ObTenantLSBalanceInfo balance_job(allocator);
+    ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    share::ObBalanceJob job;
+    common::ObArray<share::ObBalanceTask> task_array;
+    lsg_op_array.reuse();
+    unit_op_array.reuse();
+    ObLSGroupCountBalance lg_cnt(&balance_job, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+
+    ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(true));
+    job.reset();
+    ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(false));
+    ASSERT_TRUE(job.is_valid());
+
+    int64_t split_cnt = 0;
+    int64_t alter_cnt = 0;
+    int64_t merge_cnt = 0;
+    ARRAY_FOREACH(task_array, i) {
+      const ObBalanceTaskType &tt = task_array.at(i).get_task_type();
+      if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT) == tt) {
+        ++split_cnt;
+      } else if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER) == tt) {
+        ++alter_cnt;
+      } else if (ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_MERGE) == tt) {
+        ++merge_cnt;
+      }
+    }
+    ASSERT_EQ(4, split_cnt);
+    ASSERT_EQ(7, alter_cnt);
+    ASSERT_EQ(3, merge_cnt);
+    LOG_INFO("ls group count balance case expand by transfer", K(job), K(split_cnt), K(alter_cnt), K(merge_cnt));
   }
 }
 
@@ -1103,6 +1276,391 @@ TEST_F(TestBalanceOperator, ObBalanceJobDesc)
   ASSERT_TRUE(need_cancel && 0 != comment.string().compare(old_comment.string()));
   LOG_INFO("TEST: check_if_need_cancel_by_job_desc_", K(comment), K(need_cancel), K(balance_service->job_desc_), K(job_desc));
   ASSERT_EQ(OB_SUCCESS, old_comment.assign(comment));
+}
+
+// 验证日志流组个数均衡和组内日志流个数均衡过程中, 保证分区leader不切主
+TEST_F(TestBalanceOperator, ls_balance_keep_no_switch_leader)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = 1002;
+  ObArenaAllocator allocator("TntLSBalance" , OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  common::ObMySQLProxy *sql_proxy = get_curr_observer().get_gctx().sql_proxy_;
+  common::ObArray<share::ObLSGroupUnitListOp> lsg_op_array;
+  common::ObArray<share::ObUnitUGOp> unit_op_array;
+  ObTenantRole tenant_role(ObTenantRole::Role::PRIMARY_TENANT);
+  auto add_ls = [&](ObArray<ObLSStatusInfo> &ls_array,
+                    const uint64_t tenant_id_local,
+                    const int64_t ls_id_val,
+                    const int64_t lsg_id,
+                    const char *zone_str,
+                    const std::initializer_list<int64_t> unit_ids)->int {
+    int r = OB_SUCCESS;
+    ObUnitIDList unit_id_list;
+    for (const auto &uid : unit_ids) {
+      int tmp_ret = unit_id_list.push_back(ObDisplayUnitID(uid));
+      if (OB_SUCCESS != tmp_ret) { return tmp_ret; }
+    }
+    ObLSStatusInfo info;
+    ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
+    int tmp_ret = info.init(tenant_id_local, ObLSID(ls_id_val), lsg_id, share::OB_LS_NORMAL, 0, ObZone(zone_str), flag, unit_id_list);
+    if (OB_SUCCESS != tmp_ret) { return tmp_ret; }
+    tmp_ret = ls_array.push_back(info);
+    if (OB_SUCCESS != tmp_ret) { return tmp_ret; }
+    return OB_SUCCESS;
+  };
+
+  // 1) 日志流组个数扩容, 且 enable_transfer 关闭，仅 ALTER
+  // LSG num 1 -> 2, 6 LS
+  {
+    ObArray<ObUnit> unit_array;
+    ObZoneUnitCntList zone_list;
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z1"), 2)));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z2"), 2)));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z3"), 2)));
+    ASSERT_EQ(OB_SUCCESS, construct_unit_array(zone_list, unit_array));
+
+    ObArray<ObLSStatusInfo> ls_array;
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1, 0, "z1", {}));
+    const int64_t LSG1 = 1001;
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1101, LSG1, "z1", {1000,1002,1004}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1102, LSG1, "z3", {1000,1002,1004}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1103, LSG1, "z2", {1000,1002,1004}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1104, LSG1, "z2", {1000,1002,1004}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1105, LSG1, "z1", {1000,1002,1004}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1106, LSG1, "z3", {1000,1002,1004}));
+
+    // zone buckets for verifying altered LS primary zone diversity
+    ObArray<int64_t> z1_ls; ObArray<int64_t> z2_ls; ObArray<int64_t> z3_ls;
+    ASSERT_EQ(OB_SUCCESS, z1_ls.push_back(1101));
+    ASSERT_EQ(OB_SUCCESS, z1_ls.push_back(1105));
+    ASSERT_EQ(OB_SUCCESS, z2_ls.push_back(1103));
+    ASSERT_EQ(OB_SUCCESS, z2_ls.push_back(1104));
+    ASSERT_EQ(OB_SUCCESS, z3_ls.push_back(1102));
+    ASSERT_EQ(OB_SUCCESS, z3_ls.push_back(1106));
+
+    ObBalanceJobDesc job_desc;
+    ASSERT_EQ(OB_SUCCESS, job_desc.init_without_job(tenant_id, zone_list, 3, 2, true, false, false));
+    ObTenantLSBalanceInfo balance_job(allocator);
+
+    MTL_SWITCH(tenant_id) {
+      ASSERT_EQ(OB_SUCCESS, balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role));
+      share::ObBalanceJob job;
+      ObArray<share::ObBalanceTask> task_array;
+      ObLSGroupCountBalance lg_cnt(&balance_job, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+      ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(false));
+      LOG_INFO("testtest: ls_balance_keep_no_switch_leader 1", K(job), K(task_array));
+      // 预期为将 3 个 LS ALTER 到新日志流组，且被 ALTER 的 LS 覆盖 3 个不同primary zone
+      int64_t alter_cnt = 0;
+      bool altered_z1 = false, altered_z2 = false, altered_z3 = false;
+      ARRAY_FOREACH(task_array, i) {
+        if (task_array.at(i).get_task_type() == ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER)) {
+          const int64_t src_id = task_array.at(i).get_src_ls_id().id_;
+          if (has_exist_in_array(z1_ls, src_id)) altered_z1 = true;
+          if (has_exist_in_array(z2_ls, src_id)) altered_z2 = true;
+          if (has_exist_in_array(z3_ls, src_id)) altered_z3 = true;
+          ++alter_cnt;
+        } else {
+          // enable_transfer=false, 预期仅 ALTER
+          ASSERT_TRUE(false);
+        }
+      }
+      ASSERT_EQ(3, alter_cnt);
+      ASSERT_TRUE(altered_z1 && altered_z2 && altered_z3);
+    }
+  }
+
+  // 2) 日志流组个数扩容, 且 enable_transfer 开启
+  // LSG num 2 -> 3, 每组3个LS
+  {
+    ObArray<ObUnit> unit_array;
+    ObZoneUnitCntList zone_list;
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z1"), 3)));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z2"), 3)));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z3"), 3)));
+    ASSERT_EQ(OB_SUCCESS, construct_unit_array(zone_list, unit_array));
+
+    ObArray<ObLSStatusInfo> ls_array;
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1, 0, "z1", {})); // sys ls
+
+    // 初始：LSG1: [LS1@z1, LS2@z2, LS3@z3], LSG2: [LS4@z1, LS5@z2, LS6@z3]
+    const int64_t LSG1 = 2001;
+    const int64_t LSG2 = 2002;
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1201, LSG1, "z1", {1000,1003,1006}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1202, LSG1, "z2", {1000,1003,1006}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1203, LSG1, "z3", {1000,1003,1006}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1204, LSG2, "z1", {1000,1003,1006}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1205, LSG2, "z2", {1000,1003,1006}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1206, LSG2, "z3", {1000,1003,1006}));
+
+    ObBalanceJobDesc job_desc;
+    // enable_transfer=true
+    ASSERT_EQ(OB_SUCCESS, job_desc.init_without_job(tenant_id, zone_list, /*primary_zone_num*/3, /*ls_scale_out_factor*/1,
+                                                    /*enable_rebalance*/true, /*enable_transfer*/true, /*enable_gts_standalone*/false));
+    ObTenantLSBalanceInfo balance_job(allocator);
+    MTL_SWITCH(tenant_id) {
+      ASSERT_EQ(OB_SUCCESS, balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role));
+      share::ObBalanceJob job;
+      ObArray<share::ObBalanceTask> task_array;
+      ObLSGroupCountBalance lg_cnt(&balance_job, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+      ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(false));
+      LOG_INFO("testtest: ls_balance_keep_no_switch_leader 2", K(job), K(task_array));
+
+      int64_t split_cnt = 0;
+      int64_t merge_cnt = 0;
+      ARRAY_FOREACH(task_array, i) {
+        const auto &t = task_array.at(i);
+        if (t.get_task_type() == ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT)) {
+          ++split_cnt;
+        } else if (t.get_task_type() == ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_MERGE)) {
+          ++merge_cnt;
+        }
+      }
+      ASSERT_EQ(6, split_cnt);
+      ASSERT_EQ(3, merge_cnt);
+      assert_merge_transfer_same_primary_zone(ls_array, task_array);
+    }
+  }
+
+  // 3) 日志流组个数缩容, 且 enable_transfer 关闭，仅 ALTER
+  // LSG num 3 -> 2, 每组4个LS
+  {
+    ObArray<ObUnit> unit_array;
+    ObZoneUnitCntList zone_list;
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z1"), 2)));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z2"), 2)));
+    ASSERT_EQ(OB_SUCCESS, construct_unit_array(zone_list, unit_array));
+
+    ObArray<ObLSStatusInfo> ls_array;
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1, 0, "z1", {})); // sys ls
+
+    // 初始：
+    // 1个源日志流组，2个目标日志流组，每组4个LS
+    // 目标日志流组 LSG1: [LS1@z1, LS3@z2, LS2@z1, LS4@z2]
+    // 目标日志流组 LSG2: [LS5@z1, LS6@z1, LS7@z2, LS8@z2]
+    // 源日志流组 LSG3: [LS9@z1, LS10@z1, LS11@z2, LS12@z2]
+    const int64_t LSG1 = 3001;
+    const int64_t LSG2 = 3002;
+    const int64_t LSG3 = 3003;
+    // 目标 LSG1：z1, z1, z2, z2
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1301, LSG1, "z1", {1000,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1303, LSG1, "z2", {1000,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1302, LSG1, "z1", {1000,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1304, LSG1, "z2", {1000,1002}));
+    // 目标 LSG2：z1, z1, z2, z2
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1305, LSG2, "z1", {1000,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1306, LSG2, "z1", {1000,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1307, LSG2, "z2", {1000,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1308, LSG2, "z2", {1000,1002}));
+    // 源日志流组 LSG3:（顺序：z1, z2, z1, z2）
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1309, LSG3, "z1", {1000,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1310, LSG3, "z1", {1000,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1311, LSG3, "z2", {1000,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1312, LSG3, "z2", {1000,1002}));
+
+    // 源LS primary zone集合
+    ObArray<int64_t> src_z1_ids; ObArray<int64_t> src_z2_ids;
+    ASSERT_EQ(OB_SUCCESS, src_z1_ids.push_back(1309));
+    ASSERT_EQ(OB_SUCCESS, src_z1_ids.push_back(1310));
+    ASSERT_EQ(OB_SUCCESS, src_z2_ids.push_back(1311));
+    ASSERT_EQ(OB_SUCCESS, src_z2_ids.push_back(1312));
+
+    ObBalanceJobDesc job_desc;
+    ASSERT_EQ(OB_SUCCESS, job_desc.init_without_job(tenant_id, zone_list, /*primary_zone_num*/2, /*ls_scale_out_factor*/2,
+                                                    /*enable_rebalance*/true, /*enable_transfer*/false, /*enable_gts_standalone*/false));
+    ObTenantLSBalanceInfo balance_job(allocator);
+    MTL_SWITCH(tenant_id) {
+      ASSERT_EQ(OB_SUCCESS, balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role));
+      share::ObBalanceJob job;
+      ObArray<share::ObBalanceTask> task_array;
+      ObLSGroupCountBalance lg_cnt(&balance_job, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+      ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(false));
+      LOG_INFO("testtest: ls_balance_keep_no_switch_leader 3", K(job), K(task_array));
+
+      int64_t alter_cnt = 0;
+      int64_t to_lsg1_z1 = 0;
+      int64_t to_lsg1_z2 = 0;
+      int64_t to_lsg2_z1 = 0;
+      int64_t to_lsg2_z2 = 0;
+      ARRAY_FOREACH(task_array, i) {
+        const auto &t = task_array.at(i);
+        if (t.get_task_type() == ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER)) {
+          const int64_t src_id = t.get_src_ls_id().id_;
+          const int64_t dst_lsg = t.get_ls_group_id();
+          const bool is_z1_src = has_exist_in_array(src_z1_ids, src_id);
+          const bool is_z2_src = has_exist_in_array(src_z2_ids, src_id);
+          // 所有源必须来自 LSG3（即应当属于 z1/z2 源集合之一）
+          ASSERT_TRUE(is_z1_src || is_z2_src);
+          if (is_z1_src) {
+            if (dst_lsg == LSG1) { ++to_lsg1_z1; }
+            if (dst_lsg == LSG2) { ++to_lsg2_z1; }
+          }
+          if (is_z2_src) {
+            if (dst_lsg == LSG1) { ++to_lsg1_z2; }
+            if (dst_lsg == LSG2) { ++to_lsg2_z2; }
+          }
+          ++alter_cnt;
+        } else {
+          // enable_transfer=false, 预期仅 ALTER
+          ASSERT_TRUE(false);
+        }
+      }
+      // 校验共有 4 个 ALTER 任务，且全部来自 LSG3，并按primary zone在两个目标组均衡分布（各 z1/z2 各 1）
+      ASSERT_EQ(4, alter_cnt);
+      ASSERT_EQ(1, to_lsg1_z1);
+      ASSERT_EQ(1, to_lsg1_z2);
+      ASSERT_EQ(1, to_lsg2_z1);
+      ASSERT_EQ(1, to_lsg2_z2);
+    }
+  }
+
+  // 4) 日志流组个数缩容, 且 enable_transfer 开启
+  // LSG num 3 -> 1, 每组3个LS
+  {
+    ObArray<ObUnit> unit_array;
+    ObZoneUnitCntList zone_list;
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z1"), 1)));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z2"), 1)));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z3"), 1)));
+    ASSERT_EQ(OB_SUCCESS, construct_unit_array(zone_list, unit_array));
+
+    ObArray<ObLSStatusInfo> ls_array;
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1, 0, "z1", {})); // sys ls
+    const int64_t LSG1 = 4001;
+    const int64_t LSG2 = 4002;
+    const int64_t LSG3 = 4003;
+    // 目的 LSG1: 3
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1401, LSG1, "z1", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1402, LSG1, "z2", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1403, LSG1, "z3", {1000,1001,1002}));
+    // 源 LSG2: 3
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1404, LSG2, "z1", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1405, LSG2, "z2", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1406, LSG2, "z3", {1000,1001,1002}));
+    // 源 LSG3: 3
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1407, LSG3, "z1", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1408, LSG3, "z2", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1409, LSG3, "z3", {1000,1001,1002}));
+
+    ObBalanceJobDesc job_desc;
+    ASSERT_EQ(OB_SUCCESS, job_desc.init_without_job(tenant_id, zone_list, 3, 1, true, true, false));
+    ObTenantLSBalanceInfo balance_job(allocator);
+
+    MTL_SWITCH(tenant_id) {
+      ASSERT_EQ(OB_SUCCESS, balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role));
+      share::ObBalanceJob job;
+      ObArray<share::ObBalanceTask> task_array;
+      ObLSGroupCountBalance lg_cnt(&balance_job, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+      ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(false));
+      LOG_INFO("testtest: ls_balance_keep_no_switch_leader 4", K(job), K(task_array));
+      int64_t merge_cnt = 0;
+      int64_t alter_cnt = 0;
+      ARRAY_FOREACH(task_array, i) {
+        if (task_array.at(i).get_task_type() == ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_MERGE)) {
+          ++merge_cnt;
+        } else if (task_array.at(i).get_task_type() == ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER)) {
+          ++alter_cnt;
+        }
+      }
+      ASSERT_EQ(12, task_array.count());
+      ASSERT_EQ(6, alter_cnt);
+      ASSERT_EQ(6, merge_cnt);
+      assert_merge_transfer_same_primary_zone(ls_array, task_array);
+    }
+  }
+
+  // 5) 日志流组内个数扩容
+  // ls_scale_out_factor 2 -> 3, LS count 6 -> 9
+  {
+    ObArray<ObUnit> unit_array;
+    ObZoneUnitCntList zone_list;
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z1"), 1)));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z2"), 1)));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z3"), 1)));
+    ASSERT_EQ(OB_SUCCESS, construct_unit_array(zone_list, unit_array));
+
+    ObArray<ObLSStatusInfo> ls_array;
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1, 0, "z1", {}));
+    const int64_t LSG1 = 5001;
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1501, LSG1, "z1", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1502, LSG1, "z2", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1503, LSG1, "z3", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1504, LSG1, "z1", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1505, LSG1, "z2", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1506, LSG1, "z3", {1000,1001,1002}));
+
+    ObBalanceJobDesc job_desc;
+    ASSERT_EQ(OB_SUCCESS, job_desc.init_without_job(tenant_id, zone_list, 3, /*ls_scale_out_factor*/3, true, true, false));
+    ObTenantLSBalanceInfo balance_job(allocator);
+
+    MTL_SWITCH(tenant_id) {
+      ASSERT_EQ(OB_SUCCESS, balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role));
+      share::ObBalanceJob job;
+      ObArray<share::ObBalanceTask> task_array;
+      ObLSCountBalance lg_cnt(&balance_job, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+      ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(false));
+      LOG_INFO("testtest: ls_balance_keep_no_switch_leader 5", K(job), K(task_array));
+      int64_t split_cnt = 0;
+      int64_t transfer_cnt = 0;
+      ARRAY_FOREACH(task_array, i) {
+        if (task_array.at(i).get_task_type() == ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_SPLIT)) {
+          ++split_cnt;
+        } else if (task_array.at(i).get_task_type() == ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_TRANSFER)) {
+          ++transfer_cnt;
+        }
+      }
+      ASSERT_EQ(3, split_cnt);
+      ASSERT_EQ(3, transfer_cnt);
+      assert_merge_transfer_same_primary_zone(ls_array, task_array);
+    }
+  }
+
+  // 6) 日志流组内个数缩容
+  // ls_scale_out_factor 3 -> 1, LS count 9 -> 3
+  {
+    ObArray<ObUnit> unit_array;
+    ObZoneUnitCntList zone_list;
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z1"), 1)));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z2"), 1)));
+    ASSERT_EQ(OB_SUCCESS, zone_list.push_back(ObDisplayZoneUnitCnt(ObZone("z3"), 1)));
+    ASSERT_EQ(OB_SUCCESS, construct_unit_array(zone_list, unit_array));
+
+    ObArray<ObLSStatusInfo> ls_array;
+    // sys ls
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1, 0, "z1", {}));
+    const int64_t LSG1 = 6001;
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1601, LSG1, "z1", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1602, LSG1, "z1", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1603, LSG1, "z1", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1604, LSG1, "z2", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1605, LSG1, "z2", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1606, LSG1, "z2", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1607, LSG1, "z3", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1608, LSG1, "z3", {1000,1001,1002}));
+    ASSERT_EQ(OB_SUCCESS, add_ls(ls_array, tenant_id, 1609, LSG1, "z3", {1000,1001,1002}));
+
+    ObBalanceJobDesc job_desc;
+    ASSERT_EQ(OB_SUCCESS, job_desc.init_without_job(tenant_id, zone_list, /*primary_zone_num*/3, /*ls_scale_out_factor*/1,
+                                                    /*enable_rebalance*/true, /*enable_transfer*/true, /*enable_gts_standalone*/false));
+    ObTenantLSBalanceInfo balance_job(allocator);
+
+    MTL_SWITCH(tenant_id) {
+      ASSERT_EQ(OB_SUCCESS, balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role));
+      share::ObBalanceJob job;
+      ObArray<share::ObBalanceTask> task_array;
+      ObLSCountBalance lg_cnt(&balance_job, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+      ASSERT_EQ(OB_SUCCESS, lg_cnt.balance(false));
+      LOG_INFO("testtest: ls_balance_keep_no_switch_leader 6", K(job), K(task_array));
+      int64_t merge_cnt = 0;
+      ARRAY_FOREACH(task_array, i) {
+        if (task_array.at(i).get_task_type() == ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_MERGE)) {
+          ++merge_cnt;
+        }
+      }
+      ASSERT_EQ(6, task_array.count());
+      ASSERT_EQ(6, merge_cnt);
+      assert_merge_transfer_same_primary_zone(ls_array, task_array);
+    }
+  }
 }
 
 } // namespace share
