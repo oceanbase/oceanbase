@@ -1124,7 +1124,6 @@ int ObTenantTransferService::get_tablet_ids_for_oracle_tmp_table_v2_(
 }
 
 int ObTenantTransferService::get_tablet_ids_for_oracle_tmp_table_v2_for_unlock_(
-    const share::ObLSID &ls_id,
     const common::ObIArray<common::ObTableID> &table_ids,
     const share::ObTransferTabletList &trans_tablet_list,
     common::ObIArray<common::ObTabletID> &temporary_tablet_ids)
@@ -1134,9 +1133,9 @@ int ObTenantTransferService::get_tablet_ids_for_oracle_tmp_table_v2_for_unlock_(
   if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || table_ids.empty())) {
+  } else if (OB_UNLIKELY(table_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(ls_id), K(table_ids), K(trans_tablet_list));
+    LOG_WARN("invalid args", KR(ret), K(table_ids), K(trans_tablet_list));
   } else if (OB_FAIL(ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(
       *sql_proxy_,
       tenant_id_,
@@ -1151,8 +1150,7 @@ int ObTenantTransferService::get_tablet_ids_for_oracle_tmp_table_v2_for_unlock_(
       const ObTabletID &tablet_id = trans_tablet_list.at(idx).tablet_id();
       ARRAY_FOREACH(session_tablet_infos, j) {
         const storage::ObSessionTabletInfo &session_tablet_info = session_tablet_infos.at(j);
-        if (session_tablet_info.get_ls_id() == ls_id
-            && session_tablet_info.get_tablet_id() == tablet_id) {
+        if (session_tablet_info.get_tablet_id() == tablet_id) {
           if (OB_FAIL(temporary_tablet_ids.push_back(tablet_id))) {
             LOG_WARN("push back failed", KR(ret), K(tablet_id), K(temporary_tablet_ids));
           }
@@ -2092,7 +2090,7 @@ int ObTenantTransferService::unlock_table_and_part_(
         if (OB_FAIL(table_ids.push_back(table_schema->get_table_id()))) {
           LOG_WARN("push back table id failed", KR(ret), "table_id", table_schema->get_table_id());
         } else if (OB_FAIL(get_tablet_ids_for_oracle_tmp_table_v2_for_unlock_(
-            dest_ls, table_ids, trans_tablet_list, tablet_ids_get_by_table_id))) {
+            table_ids, trans_tablet_list, tablet_ids_get_by_table_id))) {
           LOG_WARN("get tablet ids for oracle tmp table v2 for unlock failed",
               KR(ret), K(dest_ls), K(table_ids), K(trans_tablet_list));
         }
@@ -2110,7 +2108,8 @@ int ObTenantTransferService::unlock_table_and_part_(
       if(OB_FAIL(ret)) {
       } else if (tablet_ids_get_by_table_id.empty()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet ids get by table id is empty", KR(ret), K(trans_tablet_list), K(tablet_ids_get_by_table_id));
+        LOG_WARN("tablet ids get by table id is empty", KR(ret), K(trans_tablet_list), K(tablet_ids_get_by_table_id),
+         KPC(table_schema));
       } else if (OB_FAIL(ObOnlineDDLLock::unlock_for_transfer(
           tenant_id_,
           table_schema->get_table_id(),
