@@ -8698,9 +8698,9 @@ int ObUnitManager::check_shrink_memory(
           ObSqlString message_to_user;
           const char *view_name = OB_GV_OB_VECTOR_MEMORY_TNAME;
           char ip_buf[common::OB_IP_STR_BUFF] = "";
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_2_1) {
+          if (!SUPPORT_TENANT_MEMORY_RPC_FOR_SHRINK(GET_MIN_CLUSTER_VERSION())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected: vector_mem_used > max_vector_mem but version < 4.4.2.1",
+            LOG_WARN("unexpected: vector_mem_used > max_vector_mem but version not in supported ranges",
                      K(vector_mem_used), K(max_vector_mem), KCV(GET_MIN_CLUSTER_VERSION()), KR(ret));
           } else if (OB_FAIL(!tenant_mem_info->get_server().ip_to_string(ip_buf, sizeof(ip_buf)))) {
             LOG_WARN("fail to convert server ip to string", KR(ret));

@@ -49,7 +49,7 @@ int ObTenantMemoryInfoOperator::get(const common::ObIArray<common::ObAddr> &serv
   mem_infos.reset();
   if (servers.count() == 0) {
     // do nothing
-  } else if (OB_UNLIKELY(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_2_1)) {
+  } else if (OB_UNLIKELY(!SUPPORT_TENANT_MEMORY_RPC_FOR_SHRINK(GET_MIN_CLUSTER_VERSION()))) {
     if (OB_FAIL(get_by_sql(servers, mem_infos))) {
       LOG_WARN("fail to get from sql", KR(ret), K(servers));
     }
