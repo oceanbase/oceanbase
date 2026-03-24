@@ -6,6 +6,8 @@ cd "${WORKSPACE:?}"
 mkdir -p "${TASK_DIR:?}"
 build_type="${PACKAGE_TYPE:-debug}"
 
+sed -i 's/mirrors.aliyun.com/mirrors.cloud.aliyuncs.com/g' "${WORKSPACE}/deps/init/oceanbase.el7.x86_64.deps"
+
 if [[ -x "${WORKSPACE}/build.sh" ]]; then
   bash "${WORKSPACE}/build.sh" "$build_type" --init 2>&1 | tee "${TASK_DIR}/compile_init.output"
   [[ ${PIPESTATUS[0]} -ne 0 ]] && exit 1
