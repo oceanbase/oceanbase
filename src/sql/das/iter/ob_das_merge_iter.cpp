@@ -531,10 +531,13 @@ bool ObDASMergeIter::has_pseudo_part_id_columnref()
          pseudo_partition_index_expr_ != NULL || pseudo_sub_partition_index_expr_ != NULL;
 }
 
-int ObDASMergeIter::get_cur_diagnosis_info(ObDiagnosisManager* diagnosis_manager) {
+int ObDASMergeIter::get_cur_diagnosis_info(ObDiagnosisManager *diagnosis_manager)
+{
   int ret = OB_SUCCESS;
-
-  if (seq_task_idx_ >= das_tasks_arr_.count()) {
+  if (OB_ISNULL(diagnosis_manager)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected diagnosis manager is null", K(ret));
+  } else if (seq_task_idx_ >= das_tasks_arr_.count()) {
     // do nothing
   } else if (seq_task_idx_ >= 0) {
     ObDASScanOp *scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
@@ -547,24 +550,26 @@ int ObDASMergeIter::get_cur_diagnosis_info(ObDiagnosisManager* diagnosis_manager
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected result iter is null", K(ret));
       } else {
-        ObDASIter *das_iter = static_cast<ObDASIter*>(base_iter);
-        if (das_iter->get_type() != ObDASIterType::DAS_ITER_SCAN) {
+        ObDASIter *das_iter = dynamic_cast<ObDASIter *>(base_iter);
+        if (OB_ISNULL(das_iter) || das_iter->get_type() != ObDASIterType::DAS_ITER_SCAN) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected result iter type", K(ret), K(das_iter->get_type()));
+          LOG_WARN("unexpected result iter type", K(ret), KP(base_iter), KPC(scan_op));
         } else {
-          ObDASScanIter *das_scan_iter = static_cast<ObDASScanIter *>(das_iter);
-          ObExternalTableRowIterator *ext_iter = static_cast<ObExternalTableRowIterator *>(
-                                                            das_scan_iter->get_output_result_iter());
-          if (OB_ISNULL(ext_iter)) {
+          ObDASScanIter *das_scan_iter = dynamic_cast<ObDASScanIter *>(das_iter);
+          if (OB_ISNULL(das_scan_iter)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected result iter type", K(ret));
+            LOG_WARN("unexpected das scan iter type", K(ret), KPC(das_iter));
           } else {
-            if (!ext_iter->is_diagnosis_supported()) {
+            ObDiagnosisInfoProvider *diagnosis_provider
+                = dynamic_cast<ObDiagnosisInfoProvider *>(das_scan_iter->get_output_result_iter());
+            if (OB_ISNULL(diagnosis_provider) || !diagnosis_provider->is_diagnosis_supported()) {
               ret = OB_NOT_SUPPORTED;
-              LOG_WARN("diagnosis is not supported in external table scan", K(ret));
+              LOG_WARN("diagnosis is not supported in current result iter",
+                       K(ret),
+                       KP(das_scan_iter->get_output_result_iter()));
             } else {
-              diagnosis_manager->set_cur_file_url(ext_iter->get_cur_file_url());
-              diagnosis_manager->set_cur_line_number(ext_iter->get_cur_line_num());
+              diagnosis_manager->set_cur_file_url(diagnosis_provider->get_cur_file_url());
+              diagnosis_manager->set_cur_line_number(diagnosis_provider->get_cur_line_num());
             }
           }
         }
