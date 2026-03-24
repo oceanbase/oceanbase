@@ -423,6 +423,7 @@ int ObLSCreator::set_ls_sync_mode_(int64_t &switchover_epoch)
 {
   DEBUG_SYNC(BEFORE_CREATE_LS_SET_SYNC_MODE);
   int ret = OB_SUCCESS;
+  bool enable_protection_mode = false;
   ObAllTenantInfo tenant_info;
   ObProtectionStat protection_stat;
   ObArray<ObLSID> ls_ids;
@@ -445,6 +446,11 @@ int ObLSCreator::set_ls_sync_mode_(int64_t &switchover_epoch)
   } else if (FALSE_IT(switchover_epoch = tenant_info.get_switchover_epoch())) {
   } else if (GCONF.enable_logservice || ls_access_infos.at(0).get_access_mode() != palf::AccessMode::APPEND) {
     // ignore standby tenants or logservice
+  } else if (OB_FAIL(standby::ObProtectionModeUtils::check_tenant_data_version_for_protection_mode(
+      tenant_id_, enable_protection_mode))) {
+    LOG_WARN("failed to check tenant data version", KR(ret), K_(tenant_id));
+  } else if (!enable_protection_mode) {
+    LOG_INFO("tenant data version not support protection mode, skip set sync mode", K_(tenant_id));
   } else if (OB_FAIL(protection_stat.init(tenant_info))) {
     LOG_WARN("failed to init protection stat", KR(ret), K(tenant_info));
   } else if (OB_FAIL(standby::ObProtectionModeUtils::get_sync_standby_status_attr(tenant_id_,
