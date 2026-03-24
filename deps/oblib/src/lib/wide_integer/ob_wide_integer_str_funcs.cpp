@@ -349,6 +349,8 @@ int from_string(const char *buf, const int64_t length, ObIAllocator &allocator,
   bool parse_end = false;
   bool visited_floating_point = false;
   uint64_t tmp_sum;
+  int64_t leading_zero_cnt = 0;
+  bool significant_digit_seen = false;
   int64_t buf_len = length;
   bool is_truncated = false;
   static const uint64_t pows[DIGITS10_CNT + 1] =
@@ -421,6 +423,11 @@ int from_string(const char *buf, const int64_t length, ObIAllocator &allocator,
           visited_floating_point = true;
         }
       } else if (buf[pos] >= '0' && buf[pos] <= '9') {
+        if (OB_UNLIKELY(!significant_digit_seen && buf[pos] == '0' && !visited_floating_point)) {
+          leading_zero_cnt++;
+        } else {
+          significant_digit_seen = true;
+        }
         precision++;
         tmp_sum = tmp_sum * 10 + buf[pos] - '0';
         i++;
@@ -431,9 +438,9 @@ int from_string(const char *buf, const int64_t length, ObIAllocator &allocator,
         ret = OB_INVALID_NUMERIC;
         COMMON_LOG(WARN, "unexpected char", K(buf[pos]));
       }
-      if (OB_SUCC(ret) && precision >= MAX_PRECISION_DECIMAL_INT_512) {
+      if (OB_SUCC(ret) && OB_UNLIKELY(precision - leading_zero_cnt >= MAX_PRECISION_DECIMAL_INT_512)) {
         COMMON_LOG(WARN, "decimal precision exceeds maximum, truncating",
-                    K(precision), K(MAX_PRECISION_DECIMAL_INT_512));
+                    K(precision), K(MAX_PRECISION_DECIMAL_INT_512), K(leading_zero_cnt));
         // Evaluate whether adding tmp_res and tmp_sum would exceed the precision limit,
         // and stop further parsing if so
         is_truncated = true;
@@ -442,6 +449,7 @@ int from_string(const char *buf, const int64_t length, ObIAllocator &allocator,
     } // for end
     tmp_res = tmp_res * pows[i] + tmp_sum;
   }
+  precision = MIN(precision, MAX_PRECISION_DECIMAL_INT_512);
   if (precision <= 0) {
     // hasn't met digits yet, invalid number
     // e.g.
