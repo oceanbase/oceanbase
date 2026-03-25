@@ -1195,6 +1195,7 @@ private:
   int update_self_region_();
   int force_set_member_list_(const common::ObMemberList &new_member_list, const int64_t new_replica_num);
   int inc_config_version(int64_t timeout_us) override final;
+  int precheck_before_set_initial_member_list_(const int64_t proposal_id, bool &can_set_initial_member_list);
 
   // ========================= flashback ==============================
   int can_do_flashback_(const int64_t mode_version,

@@ -264,6 +264,36 @@ int PalfHandleImpl::start()
   return ret;
 }
 
+int PalfHandleImpl::precheck_before_set_initial_member_list_(
+    const int64_t proposal_id,
+    bool &can_set_initial_member_list)
+{
+  // caller holds lock_
+  // caller make sure is_inited_ is true
+  int ret = OB_SUCCESS;
+  const int64_t config_proposal_id = config_mgr_.get_accept_proposal_id();
+  bool is_initial_config_version = false;
+  can_set_initial_member_list = false;
+  if (OB_FAIL(config_mgr_.is_initial_config_version(is_initial_config_version))) {
+    PALF_LOG(WARN, "get is_initial_config_version failed", K(ret), KPC(this));
+  // NOTE: Only flush the initial config meta when the proposal_id is accepted by the config mgr.
+  // If we flush the initial config meta with such an intermediate proposal_id, the follower may
+  // persist a proposal_id that is newer than the leader's stable view,
+  // making mode_mgr_ state transition failed.
+  } else if (false == is_initial_config_version) {
+    // config is already set, make set_initial_member_list success without calling LogConfigMgr::set_initial_member_list()
+    PALF_LOG(INFO, "config is already initialized, make set_initial_member_list success", KPC(this),
+        K(config_proposal_id), K(proposal_id), K(is_initial_config_version), K(can_set_initial_member_list));
+  } else if (config_proposal_id < proposal_id) {
+    ret = OB_STATE_NOT_MATCH;
+    PALF_LOG(WARN, "config is not initialized, but proposal_id is in-flight, refuse to avoid racing with change sync/access mode",
+        K(ret), KPC(this), K(config_proposal_id), K(proposal_id), K(is_initial_config_version));
+  } else {
+    can_set_initial_member_list = true;
+  }
+  return ret;
+}
+
 int PalfHandleImpl::set_initial_member_list(
     const common::ObMemberList &member_list,
     const int64_t paxos_replica_num,
@@ -278,7 +308,12 @@ int PalfHandleImpl::set_initial_member_list(
     {
       WLockGuard guard(lock_);
       const int64_t proposal_id = state_mgr_.get_proposal_id();
-      if (OB_FAIL(config_mgr_.set_initial_member_list(member_list, paxos_replica_num, learner_list,
+      bool can_set_initial_member_list = false;
+      if (OB_FAIL(precheck_before_set_initial_member_list_(proposal_id, can_set_initial_member_list))) {
+        PALF_LOG(WARN, "precheck_before_set_initial_member_list_ failed", K(ret), KPC(this));
+      } else if (false == can_set_initial_member_list) {
+        // already set initial config, make set_initial_member_list success
+      } else if (OB_FAIL(config_mgr_.set_initial_member_list(member_list, paxos_replica_num, learner_list,
           proposal_id, config_version))) {
         PALF_LOG(WARN, "LogConfigMgr set_initial_member_list failed", K(ret), KPC(this));
       }
@@ -311,7 +346,12 @@ int PalfHandleImpl::set_initial_member_list(
     {
       WLockGuard guard(lock_);
       const int64_t proposal_id = state_mgr_.get_proposal_id();
-      if (OB_FAIL(config_mgr_.set_initial_member_list(member_list, arb_member, paxos_replica_num, \
+      bool can_set_initial_member_list = false;
+      if (OB_FAIL(precheck_before_set_initial_member_list_(proposal_id, can_set_initial_member_list))) {
+        PALF_LOG(WARN, "precheck_before_set_initial_member_list_ failed", K(ret), KPC(this));
+      } else if (false == can_set_initial_member_list) {
+        // already set initial config, make set_initial_member_list success
+      } else if (OB_FAIL(config_mgr_.set_initial_member_list(member_list, arb_member, paxos_replica_num, \
           learner_list, proposal_id, config_version))) {
         PALF_LOG(WARN, "LogConfigMgr set_initial_member_list failed", K(ret), KPC(this));
       }
