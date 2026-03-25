@@ -238,7 +238,7 @@ int ObLogSubPlanFilter::do_re_est_cost(EstimateCostInfo &param, double &card, do
                                                              get_plan()->get_predicate_selectivities(),
                                                              &complex_filter_flag))) {
     LOG_WARN("failed to calc selectivity", K(ret));
-  } else if (sel <= OB_DOUBLE_EPSINON || param.need_row_count_ >= child->get_card() * sel || complex_filter_flag) {
+  } else if (sel <= OB_DOUBLE_EPSINON || param.need_row_count_ >= child->get_card() * sel || (ObEnableOptRowGoal::AUTO == get_plan()->get_optimizer_context().get_enable_opt_row_goal() && complex_filter_flag)) {
     param.need_row_count_ = -1;
   } else {
     param.need_row_count_ /= sel;

@@ -10247,7 +10247,7 @@ int JoinPath::get_re_estimate_param(EstimateCostInfo &param,
     }
 
     if (OB_SUCC(ret)) {
-      if (is_complex_join){
+      if (is_complex_join && ObEnableOptRowGoal::AUTO == plan->get_optimizer_context().get_enable_opt_row_goal()){
         right_param.need_row_count_ = -1;
         left_param.need_row_count_ = -1;
       } else if (param.need_row_count_ >= card || param.need_row_count_ < 0) {
@@ -10269,7 +10269,7 @@ int JoinPath::get_re_estimate_param(EstimateCostInfo &param,
 
       if (right_path_->is_inner_path() && (right_param.need_row_count_ > 1 || right_param.need_row_count_ < 0)
           && (LEFT_SEMI_JOIN == join_type_ || LEFT_ANTI_JOIN == join_type_)
-          && ObEnableOptRowGoal::OFF != parent_->get_plan()->get_optimizer_context().get_enable_opt_row_goal()) {
+          && ObEnableOptRowGoal::OFF != plan->get_optimizer_context().get_enable_opt_row_goal()) {
         right_param.need_row_count_ = 1;
       }
 
