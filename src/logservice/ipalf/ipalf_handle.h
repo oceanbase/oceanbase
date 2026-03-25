@@ -63,6 +63,7 @@ public:
   virtual bool operator==(const IPalfHandle &rhs) const = 0;
 
   //================ 文件访问相关接口 =======================
+   //当log task滑出时访问了cb指针，因此需要保证从滑动窗口滑出时cb指针的有效性，否则这里应该传入空指针
   virtual int append(const PalfAppendOptions &opts,
                      const void *buffer,
                      const int64_t nbytes,

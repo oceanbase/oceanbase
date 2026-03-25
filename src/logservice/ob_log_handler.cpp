@@ -1847,7 +1847,8 @@ int ObLogHandler::emergency_append(const void *buffer,
           ret = OB_NOT_MASTER;
           CLOG_LOG(WARN, "proposal_id not match", K(ret), KPC(this), K(proposal_id), K(expected_proposal_id));
         } else if (OB_FALSE_IT(opts.proposal_id = proposal_id)) {
-        } else if (OB_FAIL(palf_handle_->append(opts, final_buf, final_nbytes, ref_scn, cb, lsn, scn))) {
+        //在log task从slide window中滑出时，需要访问cb指针填信息，而此处无法cb在sliding out时的有效性，因此传入nullptr
+        } else if (OB_FAIL(palf_handle_->append(opts, final_buf, final_nbytes, ref_scn, nullptr, lsn, scn))) {
           CLOG_LOG(WARN, "emergency append to palf failed", K(ret), KPC(this));
         } else {
           cb->set_append_finish_ts(ObTimeUtility::fast_current_time());
