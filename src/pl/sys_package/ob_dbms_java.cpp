@@ -27,6 +27,8 @@ namespace oceanbase
 namespace pl
 {
 
+ERRSIM_POINT_DEF(OBPL_JAVA_POLICY_SKIP_STRONG_CHECK, "skip Java side strong check when creating java policy");
+
 int ObDBMSJava::loadjava_mysql(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
 {
   int ret = OB_SUCCESS;
@@ -917,7 +919,11 @@ int ObDBMSJava::create_permission_impl(ObPLExecCtx &ctx,
 
       ObSQLSessionInfo &session = *ctx.exec_ctx_->get_my_session();
 
-      if (OB_FAIL(check_permission_whitelist(type_name, name, action, is_whitelisted))) {
+      int skip_strong_check = OB_E(OBPL_JAVA_POLICY_SKIP_STRONG_CHECK) OB_SUCCESS;
+
+      if (OB_UNLIKELY(OB_SUCCESS != skip_strong_check)) {
+        // do nothing
+      } else if (OB_FAIL(check_permission_whitelist(type_name, name, action, is_whitelisted))) {
         LOG_WARN("failed to check permission whitelist", K(ret), K(type_name), K(name), K(action));
       } else if (!is_whitelisted) {
         if (OB_SYS_TENANT_ID != session.get_login_tenant_id()) {
