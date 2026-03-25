@@ -1559,6 +1559,7 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
     LOG_WARN("fail to fetch commit scn from tx_table", K(ret), K(tx_id));
   }
 
+  DEBUG_SYNC(ASYNC_TASK_BEFORE_REPLACE_OLD_ADAPTOR);
   RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
   if (OB_SUCC(ret)) {
     // can skip only use when create vector index and no dml 
