@@ -5094,15 +5094,26 @@ int PROCESSOR::process()                                                        
     LOG_WARN("invalid argument", KR(ret), K_(arg));                                              \
   } else {                                                                                       \
     MTL_SWITCH(tenant_id) {                                                                      \
-      share::ObInspectionService *inspection_service = MTL(share::ObInspectionService *);       \
+      share::ObInspectionService *inspection_service = MTL(share::ObInspectionService *);        \
+      ObAddr leader_addr;                                                                        \
       if (OB_ISNULL(inspection_service)) {                                                       \
         ret = OB_ERR_UNEXPECTED;                                                                 \
         LOG_WARN("inspection service is null", KR(ret), K(tenant_id));                           \
-      } else if (OB_FAIL(storage::ObStorageHAUtils::check_ls_is_leader(tenant_id, SYS_LS, is_leader))) { \
-        LOG_WARN("fail to check sys ls is leader", KR(ret), K(tenant_id));                       \
+      } else if (OB_ISNULL(GCTX.location_service_)) {                                            \
+        ret = OB_ERR_UNEXPECTED;                                                                 \
+        LOG_WARN("location service is null", KR(ret), K(tenant_id));                             \
+      } else if (OB_FAIL(GCTX.location_service_->get_leader(                                     \
+                         GCONF.cluster_id,                                                       \
+                         tenant_id,                                                              \
+                         SYS_LS,                                                                 \
+                         false/*force_renew*/,                                                   \
+                         leader_addr))) {                                                        \
+        LOG_WARN("failed to get sys ls leader", KR(ret), "cluster_id", GCONF.cluster_id.get_value(), K(tenant_id)); \
+      } else if (FALSE_IT(is_leader = (GCONF.self_addr_ == leader_addr))) {                      \
       } else if (!is_leader) {                                                                   \
         ret = OB_NOT_MASTER;                                                                     \
-        LOG_WARN("is not sys ls leader, need retry", KR(ret), K(tenant_id), K(is_leader));      \
+        LOG_WARN("is not sys ls leader, need retry", KR(ret), K(tenant_id),                      \
+            K(is_leader), K(leader_addr), "self", GCONF.self_addr_);                             \
       } else if (OB_FAIL(inspection_service->run_inspection())) {                                \
         LOG_WARN("run inspection failed", KR(ret), K(tenant_id));                                \
       }                                                                                          \
