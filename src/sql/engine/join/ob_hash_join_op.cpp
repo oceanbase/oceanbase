@@ -1223,6 +1223,8 @@ int ObHashJoinOp::reuse_for_next_chunk()
     // reuse buckets
     PartHashJoinTable &hash_table = hash_table_;
 
+    cur_tuple_ = nullptr;
+
     int64_t row_count = profile_.get_row_count();
     if (row_count > hash_table.row_count_) {
       hash_table.row_count_ = row_count;
@@ -5618,6 +5620,7 @@ int ObHashJoinOp::find_next_matched_tuple(ObHashJoinStoredJoinRow *&tuple)
   }
   while (OB_SUCC(ret)) {
     if (cur_row_idx_ >= left_part_rows_->count()) {
+      cur_tuple_ = nullptr;
       ret = OB_ITER_END;
       break;
     }
@@ -5765,6 +5768,7 @@ int ObHashJoinOp::find_next_unmatched_tuple(ObHashJoinStoredJoinRow *&tuple)
   }
   while (OB_SUCC(ret)) {
     if (cur_row_idx_ >= left_part_rows_->count()) {
+      cur_tuple_ = nullptr;
       ret = OB_ITER_END;
       break;
     }
@@ -5781,7 +5785,6 @@ int ObHashJoinOp::fill_left_join_result_batch()
 {
   int ret = OB_SUCCESS;
   PartHashJoinTable &htable = hash_table_;
-  ObHashJoinStoredJoinRow *tuple = cur_tuple_;
   int64_t batch_idx = 0;
   if (brs_.size_ > 0) {
     brs_.skip_->reset(brs_.size_);
