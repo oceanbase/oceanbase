@@ -2315,6 +2315,40 @@ do {                                                                            
   }                                                                                         \
 } while (0)
 
+int ObPL::transform_tree_non_terminal_children(PlTransformTreeCtx &trans_ctx,
+                                                ParseNode *root,
+                                                ParseNode *no_param_root,
+                                                ObExecContext &ctx,
+                                                ParseResult &parse_result)
+{
+  int ret = OB_SUCCESS;
+  if (root->type_ == T_SP_PROC_STMT_LIST
+      && root->num_child_ == no_param_root->num_child_
+      && root->num_child_ > 0) {
+    int64_t split = root->num_child_;
+    for (int64_t i = 0; i < root->num_child_; ++i) {
+      ParseNode *c = no_param_root->children_[i];
+      if (OB_ISNULL(c) || T_SP_DECL_HANDLER != c->type_) {
+        split = i;
+        break;
+      }
+    }
+    for (int64_t i = split; OB_SUCC(ret) && i < root->num_child_; ++i) {
+      OZ (SMART_CALL(ObPL::transform_tree(trans_ctx, root->children_[i],
+                                          no_param_root->children_[i], ctx, parse_result)));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < split; ++i) {
+      OZ (SMART_CALL(ObPL::transform_tree(trans_ctx, root->children_[i],
+                                          no_param_root->children_[i], ctx, parse_result)));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < root->num_child_ && i < no_param_root->num_child_; ++i) {
+      OZ (SMART_CALL(ObPL::transform_tree(trans_ctx, root->children_[i],
+                                          no_param_root->children_[i], ctx, parse_result)));
+    }
+  }
+  return ret;
+}
 int ObPL::transform_tree(PlTransformTreeCtx &trans_ctx, ParseNode *root, ParseNode *no_param_root, ObExecContext &ctx, ParseResult &parse_result)
 {
   int ret = OB_SUCCESS;
@@ -2348,9 +2382,7 @@ int ObPL::transform_tree(PlTransformTreeCtx &trans_ctx, ParseNode *root, ParseNo
     } else if (T_SQL_STMT == no_param_root->type_) {
       TRANSFORM_AND_TRANS_SQL(root);
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < root->num_child_ && i < no_param_root->num_child_; ++i) {
-        OZ (SMART_CALL(transform_tree(trans_ctx, root->children_[i], no_param_root->children_[i], ctx, parse_result)));
-      }
+      OZ (transform_tree_non_terminal_children(trans_ctx, root, no_param_root, ctx, parse_result));
     }
   }
   return ret;

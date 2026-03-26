@@ -1488,8 +1488,13 @@ public:
                               bool is_ps_mode,
                               ObString &parameter_sql,
                               ObPlanCacheCtx *pc_ctx = nullptr);
-  int transform_tree(PlTransformTreeCtx &trans_ctx, ParseNode *block, ParseNode *no_param_root, ObExecContext &ctx, ParseResult &parse_result);
-  int trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContext &ctx);
+  static int  transform_tree_non_terminal_children(PlTransformTreeCtx &trans_ctx,
+                                                    ParseNode *root,
+                                                    ParseNode *no_param_root,
+                                                    ObExecContext &ctx,
+                                                    ParseResult &parse_result);
+  static int transform_tree(PlTransformTreeCtx &trans_ctx, ParseNode *block, ParseNode *no_param_root, ObExecContext &ctx, ParseResult &parse_result);
+  static int trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContext &ctx);
   // for anonymous
   int execute(sql::ObExecContext &ctx,
               ParamStore &params,
