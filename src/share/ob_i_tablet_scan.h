@@ -536,6 +536,7 @@ ObVTableScanParam() :
       is_get_(false),
       force_refresh_lc_(false),
       is_for_foreign_check_(false),
+      cache_aware_row_num_(0),
       output_exprs_(NULL),
       calc_exprs_(NULL),
       aggregate_exprs_(NULL),
@@ -620,6 +621,7 @@ ObVTableScanParam() :
   bool is_get_;
   bool force_refresh_lc_;
   bool is_for_foreign_check_;
+  int64_t cache_aware_row_num_;
 
   //
   // for static typing engine, set to NULL if the old engine is used

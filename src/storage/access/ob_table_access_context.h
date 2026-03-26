@@ -78,7 +78,6 @@ struct ObTableScanStoreStat
     pushdown_micro_access_cnt_ = 0;
     empty_read_cnt_ = 0;
     rowkey_prefix_ = 0;
-    in_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
     out_row_cnt_ = 0;
     major_sstable_read_row_cnt_ = 0;
     minor_sstable_read_row_cnt_ = 0;
@@ -88,14 +87,13 @@ struct ObTableScanStoreStat
     skip_index_skip_block_cnt_ = 0;
   }
 public:
-  OB_INLINE bool enable_get_row_cache() const
+  OB_INLINE bool enable_get_row_cache(const int64_t threshold) const
   {
-    return row_cache_miss_cnt_ < in_row_cache_threshold_
-           || row_cache_hit_cnt_ > row_cache_miss_cnt_ / 2;
+    return row_cache_miss_cnt_ < threshold || row_cache_hit_cnt_ > row_cache_miss_cnt_ / 2;
   }
-  OB_INLINE bool enable_put_row_cache() const
+  OB_INLINE bool enable_put_row_cache(const int64_t threshold) const
   {
-    return row_cache_put_cnt_ < in_row_cache_threshold_;
+    return row_cache_put_cnt_ < threshold;
   }
   OB_INLINE bool enable_put_fuse_row_cache(const int64_t threshold) const
   {
@@ -120,7 +118,7 @@ public:
                K_(block_cache_hit_cnt), K_(block_cache_miss_cnt),
                K_(fuse_row_cache_hit_cnt), K_(fuse_row_cache_miss_cnt), K_(fuse_row_cache_put_cnt),
                K_(micro_access_cnt), K_(pushdown_micro_access_cnt),
-               K_(empty_read_cnt), K_(rowkey_prefix), K_(in_row_cache_threshold),
+               K_(empty_read_cnt), K_(rowkey_prefix),
                K_(major_sstable_read_row_cnt), K_(minor_sstable_read_row_cnt), K_(memstore_read_row_cnt),
                K_(blockscan_row_cnt), K_(storage_filtered_row_cnt), K_(skip_index_skip_block_cnt));
   int64_t row_cache_hit_cnt_;
@@ -137,7 +135,6 @@ public:
   int64_t pushdown_micro_access_cnt_;
   int64_t empty_read_cnt_;
   int64_t rowkey_prefix_;
-  int64_t in_row_cache_threshold_;
   int64_t out_row_cnt_;
   int64_t major_sstable_read_row_cnt_;
   int64_t minor_sstable_read_row_cnt_;
@@ -160,10 +157,10 @@ struct ObTableAccessContext
       && NULL != stmt_allocator_
       && NULL != allocator_; }
   inline bool enable_get_row_cache() const {
-    return query_flag_.is_use_row_cache() && !use_fuse_row_cache_ && table_store_stat_.enable_get_row_cache() && !need_scn_ && !tablet_id_.is_ls_inner_tablet() && !has_truncate_filter();
+    return query_flag_.is_use_row_cache() && !use_fuse_row_cache_ && table_store_stat_.enable_get_row_cache(cache_aware_row_num_) && !need_scn_ && !tablet_id_.is_ls_inner_tablet() && !has_truncate_filter();
   }
   inline bool enable_put_row_cache() const {
-    return query_flag_.is_use_row_cache() && !use_fuse_row_cache_ && table_store_stat_.enable_put_row_cache() && !need_scn_ && !tablet_id_.is_ls_inner_tablet() && !has_truncate_filter();
+    return query_flag_.is_use_row_cache() && !use_fuse_row_cache_ && table_store_stat_.enable_put_row_cache(cache_aware_row_num_) && !need_scn_ && !tablet_id_.is_ls_inner_tablet() && !has_truncate_filter();
   }
   inline bool enable_bf_cache() const {
     return query_flag_.is_use_bloomfilter_cache() && table_store_stat_.enable_bf_cache() && !need_scn_ && !tablet_id_.is_ls_inner_tablet();
@@ -349,8 +346,8 @@ public:
   lib::MemoryContext scan_mem_; // scan/rescan level memory entity, only for query
   common::ObTableScanStatistic *table_scan_stat_;
   ObTableScanStoreStat table_store_stat_;
+  int64_t cache_aware_row_num_;
   int64_t out_cnt_;
-  int64_t in_row_cache_threshold_;
   common::ObVersionRange trans_version_range_;
   const common::ObSEArray<int64_t, 4, common::ModulePageAllocator> *range_array_pos_;
   share::SCN merge_scn_;
