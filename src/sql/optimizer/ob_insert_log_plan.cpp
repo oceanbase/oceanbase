@@ -1857,12 +1857,11 @@ int ObInsertLogPlan::prepare_external_table_info_for_insert(const ObTableSchema 
   } else if (table_format_or_properties->empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("external properties is empty", K(ret));
-  } else if (table_schema->get_lake_table_format() != share::ObLakeTableFormat::ICEBERG
-             && table_schema->get_external_properties().empty()) {
+  } else if (table_schema->get_external_properties().empty()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support to insert into external table which is not in odps or iceberg",
+    LOG_WARN("not support to insert into external table which is not in odps",
              K(ret), K(table_schema->get_lake_table_format()), K(table_schema->get_external_properties()));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table which is not in odps or iceberg");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table which is not in odps");
   } else if (OB_FAIL(ObSQLUtils::apply_odps_hints_to_format_str(
                  *table_format_or_properties,
                  get_optimizer_context().get_query_ctx()->get_global_hint().opt_params_,
