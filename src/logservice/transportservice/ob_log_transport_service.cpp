@@ -889,10 +889,10 @@ int LogTransportStatus::switch_to_follower()
     // TODO by ziqi: 增加超时机制，避免无限等待，补充case测试
     if (need_wait_standby_sync) {
       const int64_t MAX_WAIT_TIME_US = 10 * 1000; // 10ms
-      while (is_enabled_without_lock()) {
+      palf::LSN palf_end_lsn = get_palf_committed_end_lsn();
+      while (is_sync_mode_enabled()) {
         {
           RLockGuard guard(lock_);
-          palf::LSN palf_end_lsn = get_palf_committed_end_lsn();
           palf::LSN standby_end_lsn = get_standby_committed_end_lsn();
 
           if (standby_end_lsn.is_valid() && standby_end_lsn >= palf_end_lsn) {
