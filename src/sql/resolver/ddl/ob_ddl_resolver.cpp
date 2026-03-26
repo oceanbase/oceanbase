@@ -1957,6 +1957,13 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               ret = OB_NOT_SUPPORTED;
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "set vertical partition table as queuing table mode");
               SQL_RESV_LOG(WARN, "Vertical partition table cannot set queuing table mode", K(ret));
+            } else {
+              // When resolver executed in new observer, it only sets mode_flag_ in alter_table_schema.
+              // BUT old RS use set_table_mode(int32_t, which is deprecated) which overwrites the entire mode_.
+              // We must fill in all other fields from the original table for rolling upgrade compatibility.
+              const uint32_t new_mode_flag = table_mode_.mode_flag_;
+              table_mode_ = tbl_schema->get_table_mode_struct();
+              table_mode_.mode_flag_ = new_mode_flag;
             }
           }
         }
