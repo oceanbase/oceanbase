@@ -556,8 +556,11 @@ int ObNestedLoopJoinVecOp::output()
     int output_cnt = 0;
     if (output_pairs_.count() <= cur_output_idx_) {
       reset_output_cache();
-      drive_iter_.restore_drive_row(drive_iter_.get_left_batch_idx(), drive_iter_.get_left_batch_idx());
-      drive_row_idx_ = drive_iter_.get_left_batch_idx();
+      if (end_after_cache_output_) {
+      } else {
+	drive_iter_.restore_drive_row(drive_iter_.get_left_batch_idx(), drive_iter_.get_left_batch_idx());
+	drive_row_idx_ = drive_iter_.get_left_batch_idx();
+      }
     } else {
       const ObCompactRow **left_rows = left_rows_;
       const ObCompactRow **right_rows = right_rows_;
