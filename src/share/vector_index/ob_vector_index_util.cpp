@@ -1150,6 +1150,32 @@ int ObVectorIndexUtil::check_table_has_vector_of_fts_index(
   return ret;
 }
 
+int ObVectorIndexUtil::check_table_has_vector_index(const ObTableSchema &data_table_schema, ObSchemaGetterGuard &schema_guard, 
+    bool &has_vec_index)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  const int64_t tenant_id = data_table_schema.get_tenant_id();
+  has_vec_index = false;
+
+  if (OB_FAIL(data_table_schema.get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("fail to get simple index infos failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_vec_index && i < simple_index_infos.count(); ++i) {
+      const ObTableSchema *index_table_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
+        LOG_WARN("fail to get index_table_schema", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
+      } else if (index_table_schema->is_vec_index()) {  
+        has_vec_index = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObVectorIndexUtil::check_has_extra_info(const ObTableSchema &data_table_schema, ObSchemaGetterGuard &schema_guard,
                                             bool &has_extra_info)
 {
@@ -2550,7 +2576,14 @@ int ObVectorIndexUtil::check_vec_index_param(
     int64_t vector_dim = 0;
     bool is_sparse_vec_col = false;
     const ObColumnSchemaV2 *col_schema = nullptr;
-    if(OB_ISNULL(col_schema = tbl_schema.get_column_schema(vec_column_name))){
+    bool has_string_lob_in_key = false;
+    if (OB_FAIL(tbl_schema.has_string_lob_in_rowkey_or_partkey(has_string_lob_in_key))) {
+      LOG_WARN("fail to check string lob in rowkey or partkey", K(ret), K(tbl_schema));
+    } else if (has_string_lob_in_key) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("creating vector index on table with STRING type as primary key opartition key is not supported", K(ret), K(tbl_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "creating vector index on table with STRING type as primary key or partition key is");
+    } else if(OB_ISNULL(col_schema = tbl_schema.get_column_schema(vec_column_name))){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null column schema", K(ret), KP(col_schema));
     } else if (!col_schema->is_valid()) {
