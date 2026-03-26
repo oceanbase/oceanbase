@@ -100,7 +100,7 @@ public:
   int advance_user_ls_status_for_creating_tenant();
   int create_duplicate_ls();
 private:
-  int check_has_one_normal_ls();
+  int check_user_ls_normal(const bool only_check_one);
   int check_mini_mode_create_ls();
   int process_all_ls(const share::schema::ObTenantSchema &tenant_schema,
       bool in_creating_tenant = false);

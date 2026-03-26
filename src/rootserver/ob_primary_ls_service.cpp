@@ -612,26 +612,29 @@ int ObPrimaryLSService::create_all_user_ls_for_creating_tenant_(
   return ret;
 }
 
-int ObPrimaryLSService::check_has_one_normal_ls()
+int ObPrimaryLSService::check_user_ls_normal(const bool only_check_one)
 {
   int ret = OB_SUCCESS;
   ObLSStatusInfoArray ls_status_array;
   share::ObLSStatusOperator status_op;
   bool has_normal_ls = false;
+  bool all_normal = true;
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null pointer", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(status_op.get_all_ls_status_by_order(tenant_id_, ls_status_array, *GCTX.sql_proxy_))) {
-    LOG_WARN("failed to get get all ls status", KR(ret));
+    LOG_WARN("failed to get all ls status", KR(ret));
   } else if (OB_UNLIKELY(0 == ls_status_array.count())) {
     ret = OB_NEED_RETRY;
     LOG_WARN("ls array can not be empty", KR(ret), K(ls_status_array));
   } else {
-    FOREACH_X(status, ls_status_array, !has_normal_ls && OB_SUCC(ret)) {
+    FOREACH_X(status, ls_status_array, OB_SUCC(ret)) {
       ObLSID ls_id = status->get_ls_id();
       if (!ls_id.is_user_ls()) {
       } else if (status->is_normal()) {
         has_normal_ls = true;
+      } else {
+        all_normal = false;
       }
     }
   }
@@ -639,6 +642,9 @@ int ObPrimaryLSService::check_has_one_normal_ls()
   } else if (!has_normal_ls) {
     ret = OB_NEED_RETRY;
     LOG_WARN("has no normal ls, need retry", KR(ret), K(ls_status_array));
+  } else if (!only_check_one && !all_normal) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("not all ls are normal, need retry", KR(ret), K(ls_status_array));
   }
   return ret;
 }
@@ -680,8 +686,9 @@ int ObPrimaryLSService::advance_user_ls_status_for_creating_tenant()
       LOG_WARN("failed to process_all_ls_status_to_steady_, make ls to normal failed", KR(tmp_ret),
           K(tenant_id_));
     }
-    if (OB_FAIL(check_has_one_normal_ls())) {
-      LOG_WARN("failed to check has one normal ls", KR(ret));
+    // 1c1g tenant may fail to create more than one user ls due to memory limit, so we only need to check one ls normal
+    if (OB_FAIL(check_user_ls_normal(MTL_IS_MINI_MODE()/*only_check_one*/))) {
+      LOG_WARN("failed to check user ls normal", KR(ret), "only_check_one", MTL_IS_MINI_MODE());
     } else {
       LOG_INFO("succeed to advance user ls status for creating tenant", KR(ret), K(tenant_id_));
     }

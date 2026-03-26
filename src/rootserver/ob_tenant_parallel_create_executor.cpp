@@ -107,6 +107,7 @@ int ObParallelCreateTenantExecutor::execute(obrpc::UInt64 &tenant_id)
     }
   }
   // 6. finish create tenant
+  DEBUG_SYNC(BEFORE_FINISH_CREATE_TENANT);
   if (CLICK_TMP_FAIL(finish_create_tenant_(ret))) {
     LOG_WARN("failed to finish create tenant", KR(tmp_ret), KR(ret));
     ret = OB_SUCC(ret) ? tmp_ret : ret;
