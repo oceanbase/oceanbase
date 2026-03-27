@@ -2855,10 +2855,7 @@ int ObRangeGenerator::generate_tmp_search_index_domain_param(const ObRangeNode &
         for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
           ObObj elem_obj;
           elem_obj.set_meta_type(elem_meta);
-          if (arr_obj->is_null(i)) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("get unexpected null", K(ret));
-          } else if (OB_FAIL(arr_obj->elem_at(i, elem_obj))) {
+          if (OB_FAIL(arr_obj->elem_at(i, elem_obj))) {
             LOG_WARN("failed to get array element", K(ret), K(i));
           } else {
             objs_ptr[i] = elem_obj;

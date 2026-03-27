@@ -45,6 +45,16 @@ public:
     path_.set_null();
   }
 
+  // array column null / placeholder: path = type meta (e.g. ARRAY(INT)), value null
+  explicit ObSearchIndexRow(uint64_t column_idx, uint64_t doc_id, const ObString &path)
+    : column_idx_(column_idx),
+      path_(path.ptr(), path.length(), false),
+      value_(),
+      doc_id_(doc_id)
+  {
+    value_.set_null();
+  }
+
   explicit ObSearchIndexRow(uint64_t column_idx, ObString &path, ObString &value, uint64_t doc_id)
     : column_idx_(column_idx),
       path_(path.ptr(), path.length(), false),
@@ -121,7 +131,8 @@ private:
         obj_meta_(),
         arr_type_(nullptr),
         elem_generator_(nullptr),
-        config_filter_(nullptr) {}
+        config_filter_(nullptr),
+        array_index_path_() {}
     virtual ~Generator() {}
 
     int init(const uint64_t column_idx, const ObObjMeta &obj_meta,
@@ -156,6 +167,7 @@ private:
     common::ObCollectionArrayType *arr_type_;
     Generator *elem_generator_;
     const ObSearchIndexConfigFilter *config_filter_;
+    common::ObString array_index_path_;
   };
 
 public:

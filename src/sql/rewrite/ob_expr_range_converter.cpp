@@ -4685,7 +4685,7 @@ int ObExprRangeConverter::fill_scalar_search_index_range_node(const ObColumnRefR
   ObRawExpr *path_expr = nullptr;
   if (OB_FAIL(ObSearchIndexQueryRangeUtils::build_column_idx_expr(ctx_, column_expr, column_idx_expr))) {
     LOG_WARN("failed to build column idx expr", K(ret));
-  } else if (OB_FAIL(ObSearchIndexQueryRangeUtils::build_null_path_expr(ctx_, path_expr))) {
+  } else if (OB_FAIL(ObSearchIndexQueryRangeUtils::build_array_or_scalar_path_expr(ctx_, path_expr))) {
     LOG_WARN("failed to build json single path expr", K(ret));
   } else if (OB_FAIL(get_final_expr_idx(column_idx_expr, get_column_meta(SEARCH_INDEX_COL_IDX), col_idx_val))) {
     LOG_WARN("failed to get final expr idx for col_idx", K(ret));
@@ -5090,7 +5090,7 @@ int ObExprRangeConverter::convert_domain_expr_on_search_index(const ObRawExpr *d
         LOG_WARN("failed to get final search index value param idx", K(ret));
       } else if (OB_FAIL(fill_scalar_search_index_range_node(*column_expr, value_param_idx,
                                                              ObItemType::T_OP_EQ,
-                                                             false,
+                                                             true,
                                                              range_node))) {
         LOG_WARN("failed to fill scalar search index range node", K(ret));
       } else if (ctx_.search_index_range_ctx_->need_constraint()) {
@@ -5230,7 +5230,7 @@ int ObExprRangeConverter::fill_search_index_domain_range_node(const ObColumnRefR
       path_expr = path_prefix_expr;
     }
   } else {
-    if (OB_FAIL(ObSearchIndexQueryRangeUtils::build_null_path_expr(ctx_, path_expr))) {
+    if (OB_FAIL(ObSearchIndexQueryRangeUtils::build_array_or_scalar_path_expr(ctx_, path_expr))) {
       LOG_WARN("failed to build null path expr", K(ret));
     }
   }

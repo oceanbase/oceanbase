@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "lib/udt/ob_collection_type.h"
+#include "lib/udt/ob_array_utils.h"
 
 namespace oceanbase
 {
@@ -98,16 +99,33 @@ int ObSearchIndexRowGenerator::Generator::init_array_generator(const common::ObC
     } else {
       arr_type_ = static_cast<common::ObCollectionArrayType *>(dst);
       uint32_t depth = 0;
-      const ObDataType *basic_elem_type = &(arr_type_->get_basic_meta(depth));
-      ObObjMeta elem_meta = basic_elem_type->get_meta_type();
-      void *elem_generator_ptr = nullptr;
-      if (OB_ISNULL(elem_generator_ptr = inner_allocator_.alloc(sizeof(Generator)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory for element generator", K(ret));
+      const ObDataType &basic_elem = arr_type_->get_basic_meta(depth);
+      char path_buf[64];
+      if (OB_FAIL(common::ObArrayUtil::get_type_name(static_cast<common::ObNestedType>(arr_type_->type_id_),
+                                                     basic_elem, path_buf, sizeof(path_buf)))) {
+        LOG_WARN("fail to get array type name", K(ret));
       } else {
-        elem_generator_ = new (elem_generator_ptr) Generator(allocator_, inner_allocator_);
-        if (OB_FAIL(elem_generator_->init(column_idx_, elem_meta, nullptr, nullptr))) {
-          LOG_WARN("fail to init element generator", K(ret));
+        const int32_t path_len = static_cast<int32_t>(strlen(path_buf));
+        char *copy = static_cast<char *>(inner_allocator_.alloc(path_len));
+        if (OB_ISNULL(copy)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc array index path", K(ret));
+        } else {
+          MEMCPY(copy, path_buf, path_len);
+          array_index_path_.assign_ptr(copy, path_len);
+          ObObjMeta elem_meta = basic_elem.get_meta_type();
+          void *elem_generator_ptr = nullptr;
+          if (OB_ISNULL(elem_generator_ptr = inner_allocator_.alloc(sizeof(Generator)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to allocate memory for element generator", K(ret));
+          } else {
+            elem_generator_ = new (elem_generator_ptr) Generator(allocator_, inner_allocator_);
+            if (OB_FAIL(elem_generator_->init(column_idx_, elem_meta, nullptr, nullptr))) {
+              LOG_WARN("fail to init element generator", K(ret));
+            } else {
+              elem_generator_->array_index_path_ = array_index_path_;
+            }
+          }
         }
       }
     }
@@ -221,7 +239,11 @@ int ObSearchIndexRowGenerator::Generator::generate_rows(
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(rows.push_back(ObSearchIndexRow(column_idx_, value, doc_id)))) {
+      if (!array_index_path_.empty()) {
+        if (OB_FAIL(rows.push_back(ObSearchIndexRow(column_idx_, array_index_path_, value, doc_id)))) {
+          LOG_WARN("fail to push back gin row", K(ret));
+        }
+      } else if (OB_FAIL(rows.push_back(ObSearchIndexRow(column_idx_, value, doc_id)))) {
         LOG_WARN("fail to push back gin row", K(ret));
       }
     }
@@ -370,18 +392,21 @@ int ObSearchIndexRowGenerator::Generator::generate_rows_for_array_obj(
     uint32_t len = distinct_arr_obj->size();
     for (uint32_t i = 0; OB_SUCC(ret) && i < len; ++i) {
       if (distinct_arr_obj->is_null(i)) {
-        continue;
-      }
-      common::ObObj elem_obj;
-      ObDatum elem_datum;
-      char elem_datum_buf[common::OBJ_DATUM_MAX_RES_SIZE] = {0};
-      elem_datum.ptr_ = elem_datum_buf;
-      if (OB_FAIL(distinct_arr_obj->elem_at(i, elem_obj))) {
-        LOG_WARN("fail to get array element", K(ret), K(i));
-      } else if (OB_FAIL(elem_datum.from_obj(elem_obj))) {
-        LOG_WARN("fail to convert obj to datum", K(ret), K(elem_obj));
-      } else if (OB_FAIL(elem_generator_->generate_rows(doc_id, elem_datum, rows))) {
-        LOG_WARN("fail to generate gin rows for array element", K(ret), K(i));
+        if (OB_FAIL(rows.push_back(ObSearchIndexRow(column_idx_, doc_id, array_index_path_)))) {
+          LOG_WARN("fail to push back gin row", K(ret));
+        }
+      } else {
+        common::ObObj elem_obj;
+        ObDatum elem_datum;
+        char elem_datum_buf[common::OBJ_DATUM_MAX_RES_SIZE] = {0};
+        elem_datum.ptr_ = elem_datum_buf;
+        if (OB_FAIL(distinct_arr_obj->elem_at(i, elem_obj))) {
+          LOG_WARN("fail to get array element", K(ret), K(i));
+        } else if (OB_FAIL(elem_datum.from_obj(elem_obj))) {
+          LOG_WARN("fail to convert obj to datum", K(ret), K(elem_obj));
+        } else if (OB_FAIL(elem_generator_->generate_rows(doc_id, elem_datum, rows))) {
+          LOG_WARN("fail to generate gin rows for array element", K(ret), K(i));
+        }
       }
     }
   }

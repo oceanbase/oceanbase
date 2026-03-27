@@ -48,18 +48,31 @@ int ObSearchIndexQueryRangeUtils::build_column_idx_expr(ObQueryRangeCtx &ctx,
   return ret;
 }
 
-int ObSearchIndexQueryRangeUtils::build_null_path_expr(ObQueryRangeCtx &ctx, ObRawExpr *&path_expr)
+int ObSearchIndexQueryRangeUtils::build_array_or_scalar_path_expr(ObQueryRangeCtx &ctx, ObRawExpr *&path_expr)
 {
   int ret = OB_SUCCESS;
   if (!ctx.is_search_index()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not a search index", K(ret));
   } else {
-    ObRawExpr *null_expr = NULL;
-    if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx.expr_factory_, null_expr))) {
-      LOG_WARN("failed to build null expr for path", K(ret));
+    const ObString &array_type_path = ctx.search_index_range_ctx_->array_type_path_;
+    if (!array_type_path.empty()) {
+      // Array column: path in index is type string e.g. "ARRAY(INT)"
+      ObConstRawExpr *path_const_expr = NULL;
+      if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*ctx.expr_factory_, ObVarcharType,
+                                                           array_type_path, CS_TYPE_BINARY,
+                                                           path_const_expr))) {
+        LOG_WARN("failed to build const string expr for array type path", K(ret));
+      } else {
+        path_expr = path_const_expr;
+      }
     } else {
-      path_expr = null_expr;
+      ObRawExpr *null_expr = NULL;
+      if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx.expr_factory_, null_expr))) {
+        LOG_WARN("failed to build null expr for path", K(ret));
+      } else {
+        path_expr = null_expr;
+      }
     }
   }
   return ret;

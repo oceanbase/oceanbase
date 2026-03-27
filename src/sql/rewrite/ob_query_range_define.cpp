@@ -2036,6 +2036,10 @@ int ObSearchIndexRangeCtx::init(const ObTableSchema *base_table_schema,
           LOG_WARN("collection info is null", K(ret));
         } else {
           need_constraint_ = ObSearchIndexConstraint::need_array_string_constraint(*coll_info);
+          const ObString def_str = coll_info->get_def_string();
+          if (!def_str.empty() && OB_FAIL(ob_write_string(allocator, def_str, array_type_path_))) {
+            LOG_WARN("failed to copy array type path", K(ret), K(def_str));
+          }
         }
       }
       if (ob_is_json(column_meta_.column_type_.get_type())) {

@@ -18,7 +18,7 @@ public:
   static int build_column_idx_expr(ObQueryRangeCtx &ctx,
                                    const ObColumnRefRawExpr &column_expr,
                                    ObRawExpr *&column_idx_expr);
-  static int build_null_path_expr(ObQueryRangeCtx &ctx, ObRawExpr *&path_expr);
+  static int build_array_or_scalar_path_expr(ObQueryRangeCtx &ctx, ObRawExpr *&path_expr);
 
   static int build_json_single_path_expr(ObQueryRangeCtx &ctx,
                                          const ObRawExpr &const_expr,

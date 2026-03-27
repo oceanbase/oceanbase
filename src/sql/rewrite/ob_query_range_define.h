@@ -248,7 +248,7 @@ struct ObSearchIndexRangeCtx
 {
 public:
   ObSearchIndexRangeCtx() : column_meta_(), column_idx_(OB_INVALID_INDEX), need_constraint_(false),
-    path_prefix_(), pick_type_(T_NULL), json_filter_(nullptr) {}
+    path_prefix_(), array_type_path_(), pick_type_(T_NULL), json_filter_(nullptr) {}
 
   ~ObSearchIndexRangeCtx();
 
@@ -262,13 +262,14 @@ public:
   inline bool need_constraint() const { return need_constraint_; }
   const share::ObSearchIndexConfigFilter *get_json_filter() const { return json_filter_; }
 
-  TO_STRING_KV(K_(column_meta), K_(column_idx), K_(path_prefix), K_(pick_type), KP_(json_filter));
+  TO_STRING_KV(K_(column_meta), K_(column_idx), K_(path_prefix), K_(array_type_path), K_(pick_type), KP_(json_filter));
 
   // selected column info
   ObRangeColumnMeta column_meta_;  // column meta used to extract search index range.
   int64_t column_idx_;             // column index in search index table.
   bool need_constraint_;           // constraint to check string length
-  ObString path_prefix_;           // current literal path string.
+  ObString path_prefix_;           // current literal path string (JSON path).
+  ObString array_type_path_;       // for array column: type string e.g. "ARRAY(INT)" used as path in index.
   ObItemType pick_type_;           // current pick type
   share::ObSearchIndexConfigFilter *json_filter_; // json path and type filter
 };
