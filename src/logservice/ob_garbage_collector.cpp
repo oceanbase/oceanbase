@@ -825,7 +825,7 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
   } else if (ignore) {
 #ifdef OB_BUILD_SHARED_STORAGE
     // update ss_ls_meta first and then change the local meta.
-    if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, offline_scn))) {
+    if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, SCN::invalid_scn()))) {
       CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(ls_id), K(offline_scn));
     } else
 #endif
@@ -837,7 +837,7 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
   } else if (scn >= offline_scn) {
 #ifdef OB_BUILD_SHARED_STORAGE
     // update ss_ls_meta first and then change the local meta.
-    if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, offline_scn))) {
+    if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, SCN::invalid_scn()))) {
       CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(ls_id), K(offline_scn));
     } else
 #endif
@@ -874,7 +874,7 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
       // The LS delay deletion mechanism will no longer take effect when the tenant is dropped.
 #ifdef OB_BUILD_SHARED_STORAGE
       // update ss_ls_meta first and then change the local meta.
-      if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, offline_scn))) {
+      if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, SCN::invalid_scn()))) {
         CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(ls_id), K(offline_scn));
       } else
 #endif
@@ -891,7 +891,7 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
       // for clone tenant, we can ensure no ls's changes during clone procedure, so no need to deal with gc status
 #ifdef OB_BUILD_SHARED_STORAGE
       // update ss_ls_meta first and then change the local meta.
-      if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, offline_scn))) {
+      if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, SCN::invalid_scn()))) {
         CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(ls_id), K(offline_scn));
       } else
 #endif
@@ -919,7 +919,7 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
         if ((current_time_us - offline_log_ts_us) >= ls_gc_delay_time) {
 #ifdef OB_BUILD_SHARED_STORAGE
           // update ss_ls_meta first and then change the local meta.
-          if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, offline_scn))) {
+          if (GCTX.is_shared_storage_mode() && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::WAIT_GC, SCN::invalid_scn()))) {
             CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(ls_id), K(offline_scn));
           } else
 #endif
