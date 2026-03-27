@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * definition of PartTransID(identify a PartTrans)
  */
 
 #include "ob_cdc_define.h"

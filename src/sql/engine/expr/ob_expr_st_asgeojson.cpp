@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for _st_asgeojson.
  */
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_st_asgeojson.h"

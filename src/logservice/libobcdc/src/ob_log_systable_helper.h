@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * ObCDCSysTableHelper impl
- * Class For Query System Table
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_SYSTABLE_HELPER_H_

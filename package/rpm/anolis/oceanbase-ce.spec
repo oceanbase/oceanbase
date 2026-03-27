@@ -3,7 +3,7 @@ Version: %{VERSION}
 Release: %{RELEASE}
 Summary: oceanbase-ce
 Group: Applications/Databases
-License: Mulan PubL v2.
+License: Apache-2.0
 Url: https://open.oceanbase.com/
 Vendor: OceanBase Inc.
 Prefix: /home/admin/oceanbase

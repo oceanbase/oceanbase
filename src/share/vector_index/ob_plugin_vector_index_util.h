@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file is for define of plugin vector index util
  */
 
 #ifndef OCEANBASE_SHARE_PLUGIN_VECTOR_INDEX_UTIL_H_

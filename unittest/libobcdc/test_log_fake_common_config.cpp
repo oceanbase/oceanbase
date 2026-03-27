@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Test of ObLogFakeCommonConfig
  */
 
 #include <gtest/gtest.h>

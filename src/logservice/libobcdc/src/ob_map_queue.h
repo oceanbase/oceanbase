@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Multi-thread queue based on hash map.
  */
 
 #ifndef OCEANBASE_MAP_QUEUE_H__

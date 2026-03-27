@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * ObCDCRSSQLServerProvider impl
- * Get the RootsServer list from ConfigURL or RSLIST
  */
 
 #define USING_LOG_PREFIX OBLOG

@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * WorkingMode define
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_WORK_MODE_H_

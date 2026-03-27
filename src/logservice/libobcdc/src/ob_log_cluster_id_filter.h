@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Cluster ID Filter
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_CLUSTER_ID_FILTER_H_

@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * SortedLinkList, NOT THREAD SAFE!
- * only support push node, remove node is not supported currently
  */
 
 #ifndef OCEANBSE_OBCDC_SORTED_LIGHTY_LIST_

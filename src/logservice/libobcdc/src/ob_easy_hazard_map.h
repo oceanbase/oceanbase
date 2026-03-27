@@ -1,12 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * ObEasyHazardMap
- * An easy-to-use HashMap that supports the get/revert/remove interface and implements the methods:
- * 1. use ObObConcurrentHashMapDoNotUseWithHazardValue as a HashMap that supports Hazard protection
- * 2. use ObSmallObjPool as the Value object allocator
- * 3. Require a fixed size of Value object
  */
 
 #ifndef OCEANBASE_LIBOBCDC_EASY_HAZARD_MAP_

@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Log LSN Filter
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_LSN_FILTER_H_

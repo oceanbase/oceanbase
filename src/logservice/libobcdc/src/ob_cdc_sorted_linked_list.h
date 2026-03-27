@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2023 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * SortedLinkList, NOT THREAD SAFE!
  */
 
 #ifndef OCEANBSE_OBCDC_SORTED_LINKED_LIST_

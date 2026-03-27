@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- *  Define resource recovery tasks, for asynchronous recovery
  */
 
 #ifndef OCEANBASE_LIBOBCDC_RESOURCE_RECYCLE_TASK_H__

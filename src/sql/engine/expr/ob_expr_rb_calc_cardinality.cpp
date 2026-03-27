@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for rb_and_cardinality, rb_or_cardinality, rb_xor_cardinality,
- * rb_andnot_cardinality, rb_and_null2empty_cardinality, rb_or_null2empty_cardinality,
- * rb_andnot_null2empty_cardinality.
  */
 
 #define USING_LOG_PREFIX SQL_ENG

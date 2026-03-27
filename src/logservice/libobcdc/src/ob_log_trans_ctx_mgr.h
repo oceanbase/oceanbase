@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * TransCtx manager
  */
 
 #ifndef OCEANBASE_LIBOBCDC_LOG_TRANS_CTX_MGR_

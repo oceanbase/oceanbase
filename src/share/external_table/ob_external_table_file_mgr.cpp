@@ -539,15 +539,9 @@ int ObExternalTableFileManager::get_external_files_from_cache(
                                                             tmp_external_table_files,
                                                             reorder_part_id))) {
       LOG_WARN("failed collect file list with cache", K(ret), K(part_paths), K(access_info));
-    } else if (reorder_part_id.count() < tmp_external_table_files.count()) {
-      // 可能是个空分区，或是个空的非分区表， tmp_external_table_files 就为空
-      // 但会存在 part_id
-      // 所以 part_id 的个数需要大于等于文件个数
+    } else if (reorder_part_id.count() != tmp_external_table_files.count()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to check count.",
-               K(ret),
-               K(tmp_external_table_files.count()),
-               K(reorder_part_id.count()));
+      LOG_WARN("failed to check count.", K(ret), K(tmp_external_table_files.count()), K(reorder_part_id.count()));
     } else {
       int64_t file_id_base = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < tmp_external_table_files.count(); ++i) {
@@ -1829,13 +1823,13 @@ int ObExternalTableFileManager::get_one_location_from_cache(
     if (OB_NOT_NULL(table_files_from_cache)) {
       ObExternalTableFiles *files = NULL;
       int64_t cnt = table_files_from_cache->file_urls_.count();
-      if (cnt == 0) {
-        // empty, ignore
-      } else if (OB_ISNULL(files = OB_NEWx(ObExternalTableFiles, &allocator))) {
+      if (OB_ISNULL(files = OB_NEWx(ObExternalTableFiles, &allocator))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc for external table files", K(ret), K(key));
       } else if (OB_FAIL(external_table_files.push_back(files))) {
         LOG_WARN("failed to add external table file", K(ret));
+      } else if (cnt == 0) {
+        // do nothing
       } else if (OB_FAIL(files->file_urls_.allocate_array(allocator, cnt))
                  || OB_FAIL(files->file_sizes_.allocate_array(allocator, cnt))
                  || OB_FAIL(files->modify_times_.allocate_array(allocator, cnt))) {
@@ -1975,7 +1969,7 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
       } else if (OB_FALSE_IT(external_table_files.at(cnt_from_cache + i)->create_ts_
                              = ObTimeUtil::current_time_ms())) {
       } else if (OB_FALSE_IT(external_table_files.at(cnt_from_cache + i)->modify_ts_
-                             = (refresh_interval_ms > 0) ? 0 : modify_ts.at(idx))) {
+                             = (refresh_interval_ms <= 0 && try_cache) ? modify_ts.at(idx) : 0)) {
       } else if (OB_FALSE_IT(reorder_part_id.push_back(part_id.at(idx)))) {
       } else if (OB_FAIL(insert_one_location_to_cache(tenant_id,
                                                       tmp_location.at(i),

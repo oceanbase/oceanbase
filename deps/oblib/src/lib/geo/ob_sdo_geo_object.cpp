@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation support for the sdo geometry object abstraction.
  */
 #define USING_LOG_PREFIX LIB
 #include "ob_sdo_geo_object.h"

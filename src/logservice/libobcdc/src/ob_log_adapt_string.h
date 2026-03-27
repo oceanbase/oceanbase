@@ -1,10 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Adaptive strings
- * 1. manage your own memory
- * 2. double size if memory is not enough
  */
 
 #ifndef OCEANBASE_OB_LOG_ADAPT_STRING_H__

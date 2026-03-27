@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains interface define for the xml util abstraction.
  */
 
 #ifndef OCEANBASE_SQL_OB_XML_UTIL

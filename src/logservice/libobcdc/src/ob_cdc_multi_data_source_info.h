@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * MultiDataSourceNode and MultiDataSourceInfo
  */
 
 #ifndef OCEANBASE_LIBOBCDC_MULTI_DATA_SOURCE_INFO_H_

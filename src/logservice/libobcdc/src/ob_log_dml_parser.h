@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * DML type task parser, work thread pool
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_DML_PARSER_H_

@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2025 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file is for define of plugin vector index util
  */
 #ifndef OB_STORAGE_COLUMN_STORE_OB_CO_MERGE_LOG_H_
 #define OB_STORAGE_COLUMN_STORE_OB_CO_MERGE_LOG_H_

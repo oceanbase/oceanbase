@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for rb_to_string.
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_RB_TO_STRING_

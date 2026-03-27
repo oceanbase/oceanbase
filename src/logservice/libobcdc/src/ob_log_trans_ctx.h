@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- *  TransCtx: Context for Distributed Transactions
  */
 
 #ifndef OCEANBASE_LIBOBCDC_TRANS_CTX_

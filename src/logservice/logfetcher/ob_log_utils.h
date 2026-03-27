@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * OBCDC Utilities
  */
 
 #ifndef OCEANBASE_LOG_FETCHER_UTILS_H__

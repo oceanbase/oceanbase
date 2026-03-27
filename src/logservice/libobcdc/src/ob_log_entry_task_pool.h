@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * ObLogEntryTask Pool
  */
 
 #ifndef OCEANBASE_SRC_LIBOBLOG_OB_LOG_ENTRY_TASK_POOL_

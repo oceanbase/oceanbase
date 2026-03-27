@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains interface support for the xml & json basic interface abstraction.
  */
 
 #ifndef OCEANBASE_MUL_MODE_BIN_BASE

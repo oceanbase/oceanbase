@@ -1,24 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * ResourceCollector
- * Uniform recovery of resources such as Binlog Record, PartTransTask and TransCtx
- *
- * I. The DDL transaction recycling strategy is as follows.
- *   1. mark a Binlog Record as recyclable
- *   2. When all Binlog Records in a PartTransTask are marked recyclable, the PartTransTask is marked recyclable
- *  3. When all PartTransTasks in a TransCtx are marked recyclable, then the TransCtx is actually recycled
- *  4. when the TransCtx is actually recycled, start actually recycling all the PartTransTasks in the TransCtx
- *  5. When the PartTransTask is actually reclaimed, start actually reclaiming the Binlog Record
- *
- * II. The DML transaction recycling strategy is as follows.
- *    1. When a Binlog Record is received, it is actually recycled asynchronously, and the reference count of the PartTransTask is decremented
- *   2. When all Binlog Records in a PartTransTask are marked as recyclable, the PartTransTask is marked as recyclable
- *   3. When all the PartTransTasks in a TransCtx are marked recyclable, the TransCtx is actually recycled
- *   4. When the TransCtx is actually recycled, start actually recycling all the PartTransTasks in the TransCtx
- *
- * III. HEARTBEAT/BEGIN/COMMIT direct asynchronous recycling
  */
 
 #ifndef OCEANBASE_LIBOBCDC_RESOURCE_COLLECTOR_H__

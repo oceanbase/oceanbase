@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2022 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
  */
 
 #ifndef OCEANBASE_LOG_META_DATA_REFRESH_MODE_H_

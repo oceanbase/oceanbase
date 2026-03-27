@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2022 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * This file defines test_ob_cdc_part_trans_resolver.cpp
  */
 
 #include "gtest/gtest.h"

@@ -1,4 +1,4 @@
-/**ob_das_scan_op.cpp
+/**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
  */

@@ -21,7 +21,7 @@
         <img alt="building status" src="https://img.shields.io/github/actions/workflow/status/oceanbase/oceanbase/compile.yml?branch=master" />
     </a>
     <a href="https://github.com/oceanbase/oceanbase/blob/master/LICENSE">
-        <img alt="license" src="https://img.shields.io/badge/license-MulanPubL--2.0-blue" />
+        <img alt="license" src="https://img.shields.io/badge/license-Apache--2.0-blue" />
     </a>
 </p>
 
@@ -120,7 +120,7 @@ Contributions are highly appreciated. Read the [development guide](https://ocean
 
 # License
 
-OceanBase Database is licensed under the Mulan Public License, Version 2. See the [LICENSE](LICENSE) file for more info.
+OceanBase Database is licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for more info.
 
 # Community
 

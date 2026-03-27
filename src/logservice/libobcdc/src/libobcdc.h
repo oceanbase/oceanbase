@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * OBCDC header file
- * This file defines interface of OBCDC
  */
 
 #ifndef  OCEANBASE_LIBOBCDC_LIBOBCDC_

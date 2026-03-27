@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Partition Service Information
  */
 
 #ifndef OCEANBASE_LOG_FETCHER_DATA_FILTER_H__

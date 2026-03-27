@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation support for the json and xml binary aggregate.
  */
 
 #ifndef OCEANBASE_SQL_OB_BINARY_AGGREGATE

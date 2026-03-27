@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * This file defines test_ob_cdc_part_trans_resolver.cpp
  */
 
 #define USING_LOG_PREFIX OBLOG

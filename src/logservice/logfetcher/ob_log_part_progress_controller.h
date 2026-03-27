@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * PartProgressController
  */
 
 #ifndef OCEANBASE_LOG_FETCHER_PART_PROGRESS_CONTROLLER_H__

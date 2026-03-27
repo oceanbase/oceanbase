@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file is for func existsnode(xml).
  */
 
 #include "ob_expr_existsnode_xml.h"

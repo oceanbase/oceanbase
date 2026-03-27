@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- *  Factory class for Partitioned Transaction Log Resolver
  */
 
 #define USING_LOG_PREFIX OBLOG_FETCHER

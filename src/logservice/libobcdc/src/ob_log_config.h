@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * config module
  */
 
 #ifndef OCEANBASE_LIBOBCDC_CONFIG_H__

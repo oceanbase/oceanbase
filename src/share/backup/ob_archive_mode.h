@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 20222 OceanBase
+ * Copyright (c) 2022 OceanBase
  * SPDX-License-Identifier: Apache-2.0
  */
 

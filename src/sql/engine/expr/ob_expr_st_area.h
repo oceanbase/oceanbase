@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for ob_expr_st_area.
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_ST_AREA_H_

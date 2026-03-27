@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for sys_makexml.
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_SYS_MAKEXML_H_

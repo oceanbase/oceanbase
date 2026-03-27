@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * TableIdCache update info data struct in OBCDC
  */
 
 #ifndef OCEANBASE_LIBOBCDC_TIC_UPDATE_INFO_H__

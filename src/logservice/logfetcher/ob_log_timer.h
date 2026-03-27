@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * A simple timer based on HashMap with fixed sleep time
  */
 
 #ifndef OCEANBASE_LOG_FETCHER_TIMER_H__

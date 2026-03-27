@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * OBCDC Storage based on rocksdb
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_ROCKSDB_IMPL_H_

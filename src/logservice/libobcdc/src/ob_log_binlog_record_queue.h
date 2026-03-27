@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Binlog Record Queue
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_BINLOG_RECORD_QUEUE_

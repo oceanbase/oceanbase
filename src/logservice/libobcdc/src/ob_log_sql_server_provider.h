@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * ObCDCRSSQLServerProvider define
- * Get the RootsServer list from ConfigURL or RSLIST
  */
 
 #ifndef OCEANBASE_LIBOBCDC_SQL_SERVER_PROVIDER_H__

@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for json_exists.
  */
 
 #ifndef OCEANBASE_SRC_SQL_ENGINE_EXPR_OB_EXPR_JSON_EXISTS_H

@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for json_depth.
  */
 
 #define USING_LOG_PREFIX SQL_ENG

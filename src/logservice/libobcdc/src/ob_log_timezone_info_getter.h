@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * TimeZone Info Getter
  */
 
 #ifndef OCEANBASE_LIBOBCDC_TIMEZONE_INFO_GETTER_H__

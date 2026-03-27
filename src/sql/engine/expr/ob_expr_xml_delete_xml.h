@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file is for func deletexml.
  */
 
 #ifndef OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_XML_DELETE_XML_H

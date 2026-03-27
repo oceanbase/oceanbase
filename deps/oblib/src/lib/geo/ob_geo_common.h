@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation support for the geometry common abstraction.
  */
 
 #ifndef OCEANBASE_LIB_GEO_OB_GEO_COMMON_

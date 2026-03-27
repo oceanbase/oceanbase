@@ -1,7 +1,7 @@
 /**
  * Copyright (c) 2025 OceanBase
  * SPDX-License-Identifier: Apache-2.0
-*/
+ */
 #ifndef OCEANBASE_SHARE_AGGREGATE_STR_PREFIX_MAX_H
 #define OCEANBASE_SHARE_AGGREGATE_STR_PREFIX_MAX_H
 

@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2025 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for ai_prompt expression.
  */
 
 #define USING_LOG_PREFIX SQL_ENG

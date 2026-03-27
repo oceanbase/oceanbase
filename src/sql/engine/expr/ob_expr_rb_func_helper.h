@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file is for define of func rb expr helper
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_RB_FUNC_HELPER_

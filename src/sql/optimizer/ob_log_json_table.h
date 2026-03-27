@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation support for the log json table abstraction.
  */
 
 #ifndef _OB_LOG_JSON_TABLE_H

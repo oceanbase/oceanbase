@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * OBCDC header file
- * This file defines interface of OBCDC
  */
 
 #define USING_LOG_PREFIX OBLOG_FETCHER

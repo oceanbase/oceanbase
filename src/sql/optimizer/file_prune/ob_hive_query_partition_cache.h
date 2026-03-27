@@ -27,19 +27,7 @@ public:
   ObNewRowWrap(const common::ObNewRow &row) : row_(&row)
   {}
   ~ObNewRowWrap() {};
-  uint64_t hash(uint64_t seed) const
-  {
-    uint64_t hash_val = seed;
-    for (int64_t i = 0; i < row_->get_count(); i++) {
-      const ObObj &obj = row_->get_cell(i);
-      if (obj.is_string_type()) {
-        hash_val = common::murmurhash(obj.get_string_ptr(), obj.get_string_len(), hash_val);
-      } else {
-        hash_val = obj.hash(hash_val);
-      }
-    }
-    return hash_val;
-  }
+  int hash(uint64_t &hash_val) const;
   ObNewRowWrap& operator=(const ObNewRowWrap &other)
   {
     row_ = other.row_;

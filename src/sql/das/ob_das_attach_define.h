@@ -1,10 +1,6 @@
 /**
  * Copyright (c) 2022 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * ob_das_attach_define.h
- *
- *      Author: yuming<>
  */
 #ifndef OBDEV_SRC_SQL_DAS_OB_DAS_ATTACH_DEFINE_H_
 #define OBDEV_SRC_SQL_DAS_OB_DAS_ATTACH_DEFINE_H_

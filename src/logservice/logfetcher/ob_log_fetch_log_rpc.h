@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Fetching log-related RPC implementation
  */
 
 #ifndef OCEANBASE_LOG_FETCHER_FETCH_LOG_RPC_H__

@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file is for func xmlattributes.
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_XML_ATTRIBUTES_H_

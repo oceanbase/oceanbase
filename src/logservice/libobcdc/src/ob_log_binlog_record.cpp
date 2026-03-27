@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Binlog Record
  */
 
 #define USING_LOG_PREFIX OBLOG_FORMATTER

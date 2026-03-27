@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2023 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Fetching log-related RPC implementation
  */
 
 #define USING_LOG_PREFIX OBLOG_FETCHER

@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * OBCDC general tools
  */
 
 #ifndef OCEANBASE_LIBOBCDC_SRC_OB_LOG_TRACE_ID_

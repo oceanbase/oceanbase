@@ -1,16 +1,7 @@
-/*************************************************************************
-  * Copyright (c) 2022 OceanBase
-  * OceanBase is licensed under Mulan PubL v2.
-  * You can use this software according to the terms and conditions of the Mulan PubL v2
-  * You may obtain a copy of Mulan PubL v2 at:
-  *          http://license.coscl.org.cn/MulanPubL-2.0
-  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-  * See the Mulan PubL v2 for more details.
-  * File Name   : ob_column_oriented_sstable.h
-  * Created  on : 09/05/2022
- ************************************************************************/
+/**
+ * Copyright (c) 2022 OceanBase
+ * SPDX-License-Identifier: Apache-2.0
+ */
 #ifndef _OB_COLUMN_ORIENTED_SSTABLE_H
 #define _OB_COLUMN_ORIENTED_SSTABLE_H
 

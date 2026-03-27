@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for rb_and, rb_or, rb_xor, rb_andnot,
- * rb_and_null2empty,rb_or_null2empty, rb_andnot_null2empty.
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_RB_CALC_

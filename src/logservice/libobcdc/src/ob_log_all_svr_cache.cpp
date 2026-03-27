@@ -1,10 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * cache of tables below in sys tenant
- * oceanbase.__all_server
- * oceanbase.__all_zone
  */
 
 #define USING_LOG_PREFIX OBLOG

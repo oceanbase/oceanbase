@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Table Matcher
  */
 
 #ifndef OCEANBASE_LIBOBCDC_TABLE_MATCHER_H__

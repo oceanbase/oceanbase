@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Partitioned transaction parser that translate partition transaction into statements
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_PART_TRANS_PARSER_H_

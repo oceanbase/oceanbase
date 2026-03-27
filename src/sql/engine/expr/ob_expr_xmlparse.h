@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file is for func xmlparse.
  */
 
 #ifndef OCEANBASE_SRC_SQL_ENGINE_EXPR_OB_EXPR_XMLPARSE_H

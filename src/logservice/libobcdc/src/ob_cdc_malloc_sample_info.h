@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * OBCDC malloc sample info
  */
 
 #ifndef OCEANBASE_LIBOBCDC_MALLOC_SAMPLE_INFO_H__

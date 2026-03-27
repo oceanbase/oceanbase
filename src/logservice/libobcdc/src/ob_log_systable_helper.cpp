@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * ObCDCSysTableHelper define
- * Class For Query System Table
  */
 
 #define USING_LOG_PREFIX  OBLOG_FETCHER

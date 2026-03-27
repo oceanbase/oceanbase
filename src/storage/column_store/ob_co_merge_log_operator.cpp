@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2025 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file is for define of plugin vector index util
  */
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION

@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for rb_and, rb_or, rb_xor, rb_andnot,
- * rb_and_null2empty,rb_or_null2empty, rb_andnot_null2empty.
  */
 
 #define USING_LOG_PREFIX SQL_ENG

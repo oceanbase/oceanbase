@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Block: aggregate small log
  */
 
 #ifndef OCEANBASE_LIBOBCDC_LOG_BLOCK_H_

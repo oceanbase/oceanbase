@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- *  Factory class for Partitioned Transaction Log Resolver
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_PART_TRANS_RESOLVER_FACTORY_H__

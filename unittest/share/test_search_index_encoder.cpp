@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2024 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains tests for ObSearchIndexEncoder.
  */
 
 #include <gtest/gtest.h>

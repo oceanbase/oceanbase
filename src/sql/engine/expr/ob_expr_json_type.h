@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for json_type.
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_TYPE_H_

@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for ob_array_expr_utils.
  */
 
 #ifndef OCEANBASE_SQL_OB_ARRAY_EXPR_UTILS_H_

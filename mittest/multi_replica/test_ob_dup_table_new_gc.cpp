@@ -1,7 +1,7 @@
 // owner: weixiaoxian.wxx
 // owner group: transaction
 
-/*
+/**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
  */

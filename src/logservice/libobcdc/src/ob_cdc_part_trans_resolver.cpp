@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * TransLogResolver: identify TransLog type and handle based on the type
  */
 
 #define USING_LOG_PREFIX OBLOG_FETCHER

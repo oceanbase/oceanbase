@@ -1,8 +1,7 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file is for implementation of func json_array
-*/
+ */
 
 
 #define USING_LOG_PREFIX SQL_ENG

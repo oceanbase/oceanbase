@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2022 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * LogMetaDataService Fetcher Data Dispatcher
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_META_DATA_FETCHER_DISPATCHER

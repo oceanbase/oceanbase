@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Tenant TabletIDToTableIDInfo
  */
 
 #ifndef OCEANBASE_LIBOBCDC_TABLET_TO_TABLE_INFO_H__

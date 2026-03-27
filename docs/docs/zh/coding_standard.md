@@ -38,14 +38,7 @@ C代码的实现文件命名为.c，头文件命名为.h，C++代码的实现文
 目前（2021-3），observer & obproxy所有源代码文件头中必须使用如下版权信息：
 ```cpp
 Copyright (c) 2021 OceanBase
-OceanBase is licensed under Mulan PubL v2.
-You can use this software according to the terms and conditions of the Mulan PubL v2.
-You may obtain a copy of Mulan PubL v2 at:
-         http://license.coscl.org.cn/MulanPubL-2.0
-THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-See the Mulan PubL v2 for more details.
+SPDX-License-Identifier: Apache-2.0
 ```
 
 ## 2.3 头文件代码

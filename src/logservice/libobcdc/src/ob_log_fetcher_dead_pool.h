@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Fetcher DEAD Pool: For processing fetch log tasks that are in the process of being deleted
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_FETCHER_DEAD_POOL_H__

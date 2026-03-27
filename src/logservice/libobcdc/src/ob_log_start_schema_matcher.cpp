@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Data Start Schema Matcher
  */
 
 #include "ob_log_start_schema_matcher.h"

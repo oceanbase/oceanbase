@@ -1,7 +1,7 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
-*/
+ */
 
 #include "ob_tablet_pointer_handle.h"
 #include "storage/meta_mem/ob_tablet_pointer_map.h"

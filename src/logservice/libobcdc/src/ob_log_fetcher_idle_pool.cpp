@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Fetcher IDLE Pool
- * For processing partition tasks in IDLE status
  */
 
 #define USING_LOG_PREFIX  OBLOG_FETCHER

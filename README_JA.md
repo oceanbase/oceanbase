@@ -21,7 +21,7 @@
         <img alt="building status" src="https://img.shields.io/github/actions/workflow/status/oceanbase/oceanbase/compile.yml?branch=master" />
     </a>
     <a href="https://github.com/oceanbase/oceanbase/blob/master/LICENSE">
-        <img alt="license" src="https://img.shields.io/badge/license-MulanPubL--2.0-blue" />
+        <img alt="license" src="https://img.shields.io/badge/license-Apache--2.0-blue" />
     </a>
 </p>
 
@@ -139,7 +139,7 @@ OceanBase は 2,000 社を超える顧客にサービスを提供しており、
 
 # ライセンス
 
-OceanBase は、Mulan Public License バージョン 2 に基づいてライセンスされています。詳細については、[LICENSE](LICENSE) ファイルを参照してください。
+OceanBase は、Apache License 2.0 に基づいてライセンスされています。詳細については、[LICENSE](LICENSE) ファイルを参照してください。
 
 # コミュニティ
 

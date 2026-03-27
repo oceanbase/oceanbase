@@ -1,12 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * implement ObLogBatchBuffer from ObBatchBuffer
- * 1. aggregate small buffer, then submit to BufferConsumer,
- *    after buffer consumed, handle callback of each small buffer
- * 2. Support big buffer for big row
- * 3. API is more simple
  */
 
 #define USING_LOG_PREFIX OBLOG

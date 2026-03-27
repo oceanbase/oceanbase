@@ -1,11 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * statics participants br output and support suggest for redo_dispatcher
- * TODO: statics feature is in Sorter module, dispatcher invoke function to get a struct which
- * record trans_id/skew log_stream/redo count suggested to dispatch. Sorter will own a seperate
- * thread to handle the statics work.
  */
 
 #ifndef OCEANBASE_LIBOBCDC_TRANS_DISPATCH_CTX_

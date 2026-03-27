@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Partitioned transaction dispatcher, responsible for dispatching partitioned transaction tasks
  */
 
 #define USING_LOG_PREFIX OBLOG_FETCHER

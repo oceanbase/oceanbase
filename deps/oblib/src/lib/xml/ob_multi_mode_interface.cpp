@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains parts interface implement for the multi mode type data abstraction.
  */
 
 #define USING_LOG_PREFIX LIB

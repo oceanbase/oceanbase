@@ -1,13 +1,6 @@
 /**
  * Copyright (c) 2023 OceanBase
- * OceanBase is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -68,7 +61,7 @@
  *    {
  *      "OceanBase Corporation",            // author
  *      OBP_MAKE_VERSION(1, 0, 0),          // version
- *      OBP_LICENSE_MULAN_PSL_V2,           // license
+ *      OBP_LICENSE_APACHE_V2,           // license
  *      plugin_init,                        // init routine
  *      plugin_deinit,                      // deinit routine(optional)
  *    } OBP_DECLARE_PLUGIN_END;
@@ -113,8 +106,6 @@ enum OBP_PUBLIC_API ObPluginType
 #define OBP_LICENSE_BSD           "BSD"
 #define OBP_LICENSE_MIT           "MIT"
 #define OBP_LICENSE_APACHE_V2     "Apache 2.0"
-#define OBP_LICENSE_MULAN_PUBL_V2 "Mulan PubL v2"
-#define OBP_LICENSE_MULAN_PSL_V2  "Mulan PSL v2"
 
 /**
  * The version type

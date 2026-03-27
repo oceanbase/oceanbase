@@ -1,13 +1,6 @@
-/*
- * Copyright (c) 2021 OceanBase Technology Co.,Ltd.
- * OceanBase is licensed under Mulan PubL v1.
- * You can use this software according to the terms and conditions of the Mulan PubL v1.
- * You may obtain a copy of Mulan PubL v1 at:
- *          http://license.coscl.org.cn/MulanPubL-1.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v1 for more details.
+/**
+ * Copyright (c) 2021 OceanBase
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef OCEANBASE_SRC_PL_SYS_PACKAGE_JSON_ARRAY_TYPE_H_

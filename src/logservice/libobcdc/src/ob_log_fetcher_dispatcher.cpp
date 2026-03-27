@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Fetcher Data Dispatcher
- * After the data is generated (PartTransTask) in Fetcher, it is distributed through the data distributor
  */
 
 #define USING_LOG_PREFIX OBLOG_FETCHER

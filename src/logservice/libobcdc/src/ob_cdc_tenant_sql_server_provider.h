@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * ObCDCTenantSQLServerProvider define
  */
 
 #ifndef OCEANBASE_LIBOBCDC_TENANT_SQL_SERVER_PROVIDER_H__

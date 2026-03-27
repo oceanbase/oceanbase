@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Streamn Worker
  */
 
 #ifndef OCEANBASE_LOG_FETCHER_OB_LS_WORKER_H__

@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * tenant task queue
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_TENANT_TASK_QUEUE_H__

@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2022 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * The interface definition of Fetcher Data Dispatcher
- * After the data is generated (PartTransTask) in Fetcher, it is distributed through the data distributor
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_FETCHER_DISPATCHER_INTERFACE_H_

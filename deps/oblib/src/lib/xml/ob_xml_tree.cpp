@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains interface support for the xml tree abstraction.
  */
 #define USING_LOG_PREFIX LIB
 #include "ob_xml_tree.h"

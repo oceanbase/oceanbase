@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Tenant Data Struct in OBCDC
  */
 
 #ifndef OCEANBASE_LIBOBCDC_TENANT_H__

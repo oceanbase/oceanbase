@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2022 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
  */
 #ifndef OCEANBASE_LIBOCDC_OB_LOG_FETCHING_MODE_H_
 #define OCEANBASE_LIBOCDC_OB_LOG_FETCHING_MODE_H_

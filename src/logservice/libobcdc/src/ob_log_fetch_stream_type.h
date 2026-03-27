@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- *  Fetch log stream type
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_FETCH_STREAM_TYPE_H__

@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * KV store stat
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_STORE_SERVICE_STAT_H_

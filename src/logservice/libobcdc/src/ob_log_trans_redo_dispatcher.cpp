@@ -1,10 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Redo Read Task Dispatch Module. Dispatch read_redo_task into RedoReader module if redo data is in storage
- * Module Input: TransCtx
- * A Plugin Called by Sequencer
  */
 
 #define USING_LOG_PREFIX OBLOG_DISPATCHER

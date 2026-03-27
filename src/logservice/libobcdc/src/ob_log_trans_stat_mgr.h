@@ -1,10 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Transaction statistics
- * 1. tps: number of transactions per second
- * 2. rps: number of statements per second
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_TRANS_STAT_INFO_H__

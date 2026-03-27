@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains implementation for _st_point.
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_PRIV_ST_POINT_

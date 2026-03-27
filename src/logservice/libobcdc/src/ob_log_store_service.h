@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Definition of K-V interface
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_STORE_SERVICE_H_

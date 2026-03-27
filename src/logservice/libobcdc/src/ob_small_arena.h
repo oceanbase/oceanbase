@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * A Small Arena Allocator for OBCDC
  */
 
 #ifndef OCEANBASE_LIBOBCDC_SRC_OB_SMALL_ARENA_

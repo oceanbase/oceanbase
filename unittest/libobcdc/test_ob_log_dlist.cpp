@@ -1,12 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Test ObLogDlist
- * 1. This file is used to test the functionality of (ob_log_dlist.h), path: src/logservice/libobcdc/src/ob_log_dlist
- * 2. The single test of test_ob_log_dlist starts from the following two aspects.
- * (1) basic functional tests
- * (2) Boundary tests
  */
 
 #define USING_LOG_PREFIX OBLOG_FETCHER

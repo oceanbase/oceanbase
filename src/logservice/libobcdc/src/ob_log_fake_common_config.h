@@ -1,9 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Fake Common Config
- * Only for public modules that depend on ObCommonConfig
  */
 
 #ifndef OCEANBASE_LIBOBCDC_FAKE_COMMON_CONFIG_H__

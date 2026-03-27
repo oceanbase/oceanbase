@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * This file defines MySQLConnector for OBCDC
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_MYSQL_CONNECTOR_H_

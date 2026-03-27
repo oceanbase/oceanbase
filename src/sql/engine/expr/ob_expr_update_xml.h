@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file is for func updatexml.
  */
 
 #ifndef OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_UPDATE_XML_H

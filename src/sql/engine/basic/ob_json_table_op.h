@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file contains interface support for the json table abstraction.
  */
 
 #ifndef OCEANBASE_BASIC_OB_JSON_TABLE_OP_H_

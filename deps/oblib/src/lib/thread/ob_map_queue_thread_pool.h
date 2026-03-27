@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2023 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Thread pool with ObMapQueue
  */
 
 #ifndef OCEANBASE_COMMON_MAP_QUEUE_THREAD_POOL_H__

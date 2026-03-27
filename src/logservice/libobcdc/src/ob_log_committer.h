@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Committer
  */
 
 #ifndef OCEANBASE_LIBOBCDC_COMMITTER_H__

@@ -1,7 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- * This file is for func insertchildxml.
  */
 
 #ifndef OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_INSERT_CHILD_XML_H

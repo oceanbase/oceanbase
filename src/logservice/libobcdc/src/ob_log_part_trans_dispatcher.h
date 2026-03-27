@@ -1,8 +1,6 @@
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
- *
- * Partitioned transaction dispatcher, responsible for dispatching partitioned transaction tasks
  */
 
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_PART_TRANS_DISPATCHER_H__
