@@ -6873,17 +6873,20 @@ int ObUnitManager::get_tenant_gts_unit_ids(
       LOG_WARN("failed to get ls status info", KR(ret), K(tenant_id));
     } else if (OB_FAIL(sys_ls_info.get_unit_list(unit_ids_tmp))) {
       LOG_WARN("fail to get unit list ids", KR(ret), K(sys_ls_info));
+    } else if (unit_ids_tmp.count() <= 0) {
+      // gts unit ids not set, empty array, no need to filter out LOGONLY units
     } else if (OB_FAIL(ut_operator.init(*GCTX.sql_proxy_))) {
       LOG_WARN("fail to init unit table operator", KR(ret));
     } else if (OB_FAIL(ut_operator.get_units_by_unit_ids(unit_ids_tmp, units_tmp))) {
       LOG_WARN("fail to get unit by ids", KR(ret), K(tenant_id), K(unit_ids_tmp));
-    }
-    // SYS LS L-replicas do not standalone. filter out LOGONLY units in sys ls unit_list.
-    ARRAY_FOREACH(units_tmp, idx) {
-      if (!ObReplicaTypeCheck::gts_standalone_applicable(units_tmp.at(idx).replica_type_)) {
-        // skip
-      } else if (OB_FAIL(unit_ids.push_back(units_tmp.at(idx).unit_id_))) {
-        LOG_WARN("fail to push back", KR(ret), K(units_tmp.at(idx).unit_id_));
+    } else {
+      // SYS LS L-replicas do not standalone. filter out LOGONLY units in sys ls unit_list.
+      ARRAY_FOREACH(units_tmp, idx) {
+        if (!ObReplicaTypeCheck::gts_standalone_applicable(units_tmp.at(idx).replica_type_)) {
+          // skip
+        } else if (OB_FAIL(unit_ids.push_back(units_tmp.at(idx).unit_id_))) {
+          LOG_WARN("fail to push back", KR(ret), K(units_tmp.at(idx).unit_id_));
+        }
       }
     }
   }
