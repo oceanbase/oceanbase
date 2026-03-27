@@ -330,12 +330,18 @@ int ObPushDownTopNFilterMsg::filter_out_data_vector(
     int64_t filter_count = 0;
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     VectorFormat res_format = expr.get_format(ctx);
-    if (VEC_UNIFORM == res_format) {
-      IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
-    } else if (VEC_FIXED == res_format) {
+    if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
       ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
+    } else if (VEC_UNIFORM == res_format) {
+      IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
+    } else if (VEC_UNIFORM_CONST == res_format) {
+      IntegerUniCVec *res_vec = static_cast<IntegerUniCVec *>(expr.get_vector(ctx));
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected res_format", K(res_format));
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);

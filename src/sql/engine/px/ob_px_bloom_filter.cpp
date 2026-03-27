@@ -646,14 +646,15 @@ int inner_might_contain(ObPxBloomFilter *bloom_filter, int64_t *bits_array,
 #endif
       if (!is_match) {
         filter_count += 1;
-        if (std::is_same<ResVec, IntegerUniVec>::value) {
+        if (std::is_same<ResVec, IntegerFixedVec>::value) {
+        } else {
           res_vec->set_int(i, 0);
         }
       } else {
-        if (std::is_same<ResVec, IntegerUniVec>::value) {
-          res_vec->set_int(i, 1);
-        } else {
+        if (std::is_same<ResVec, IntegerFixedVec>::value) {
           res_vec->set_payload(i, &is_match_payload, sizeof(int64_t));
+        } else {
+          res_vec->set_int(i, 1);
         }
       }
     }
@@ -689,6 +690,10 @@ int inner_might_contain(ObPxBloomFilter *bloom_filter, int64_t *bits_array,
 #define BLOOM_FILTER_DISPATCH_RES_FORMAT(function, all_rows_active, support_simd, res_format)      \
   if (res_format == VEC_FIXED) {                                                                   \
     ret = function<all_rows_active, support_simd, IntegerFixedVec>(                                \
+        this, bits_array_, block_mask_, expr, ctx, skip, bound, hash_values, total_count,          \
+        filter_count);                                                                             \
+  } else if (res_format == VEC_UNIFORM_CONST) {                                                    \
+    ret = function<all_rows_active, support_simd, IntegerUniCVec>(                                 \
         this, bits_array_, block_mask_, expr, ctx, skip, bound, hash_values, total_count,          \
         filter_count);                                                                             \
   } else {                                                                                         \

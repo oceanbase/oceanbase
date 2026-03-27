@@ -903,9 +903,15 @@ int ObRFBloomFilterMsg::might_contain_vector(
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
       ret = proc_filter_not_active(res_vec, skip, bound);
+    } else if (VEC_UNIFORM_CONST == res_format) {
+      IntegerUniCVec *res_vec = static_cast<IntegerUniCVec *>(expr.get_vector(ctx));
+      ret = proc_filter_not_active(res_vec, skip, bound);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
       ret = proc_filter_not_active(res_vec, skip, bound);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected res_format", K(res_format));
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);
@@ -918,9 +924,15 @@ int ObRFBloomFilterMsg::might_contain_vector(
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
       ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
+    } else if (VEC_UNIFORM_CONST == res_format) {
+      IntegerUniCVec *res_vec = static_cast<IntegerUniCVec *>(expr.get_vector(ctx));
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
       ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected res_format", K(res_format));
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);
@@ -998,6 +1010,16 @@ int ObRFBloomFilterMsg::insert_by_row_vector(
                                                            child_brs, batch_hash_values))) {
              LOG_WARN("failed to cal insert_partition_bloom_filter");
           }
+        } else if (VEC_UNIFORM_CONST == arg_format) {
+          IntegerUniCVec *arg_vec =
+              static_cast<IntegerUniCVec *>(calc_tablet_id_expr->get_vector(eval_ctx));
+          if (OB_FAIL(arg_vec->murmur_hash_v3(*calc_tablet_id_expr, batch_hash_values,
+                                              *(child_brs->skip_), bound, &seed, false))) {
+            LOG_WARN("failed to cal murmur_hash_v2");
+          } else if (OB_FAIL(insert_partition_bloom_filter(arg_vec,
+                                                           child_brs, batch_hash_values))) {
+             LOG_WARN("failed to cal insert_partition_bloom_filter");
+          }
         } else if (VEC_FIXED == arg_format) {
           IntegerFixedVec *arg_vec =
               static_cast<IntegerFixedVec *>(calc_tablet_id_expr->get_vector(eval_ctx));
@@ -1008,6 +1030,9 @@ int ObRFBloomFilterMsg::insert_by_row_vector(
                                                            child_brs, batch_hash_values))) {
              LOG_WARN("failed to cal insert_partition_bloom_filter");
           }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected arg_format", K(arg_format));
         }
       }
     } else {

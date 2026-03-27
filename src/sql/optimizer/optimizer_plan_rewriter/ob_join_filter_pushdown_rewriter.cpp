@@ -77,6 +77,8 @@ struct NoWindowPredicate {
 };
 
 // Helper functor for filtering out special expressions
+
+ERRSIM_POINT_DEF(ENABLE_CONST_RF);
 struct NoSpecialExprPredicate {
   int operator()(JoinFilterMetaInfo* rtf, bool &result) const {
     int ret = OB_SUCCESS;
@@ -84,7 +86,7 @@ struct NoSpecialExprPredicate {
     if (OB_ISNULL(rtf) || OB_ISNULL(rtf->use_expr_) || OB_ISNULL(rtf->create_expr_)) {
       result = false;
     } else {
-      result = !rtf->use_expr_->get_relation_ids().is_empty() && !rtf->use_expr_->is_nested_expr() && !rtf->create_expr_->is_nested_expr()
+      result = (ENABLE_CONST_RF || !rtf->use_expr_->get_relation_ids().is_empty()) && !rtf->use_expr_->is_nested_expr() && !rtf->create_expr_->is_nested_expr()
                 && rtf->use_expr_->is_deterministic() && !rtf->use_expr_->has_flag(CNT_ROWNUM);
     }
     return ret;

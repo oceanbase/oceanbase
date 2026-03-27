@@ -804,6 +804,9 @@ int ObRFRangeFilterVecMsg::do_might_contain_vector(
           if (VEC_UNIFORM == res_format) {
             IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
             res_vec->set_int(batch_i, is_match ? 1 : 0);
+          } else if (VEC_UNIFORM_CONST == res_format) {
+            IntegerUniCVec *res_vec = static_cast<IntegerUniCVec *>(expr.get_vector(ctx));
+            res_vec->set_int(batch_i, is_match ? 1 : 0);
           } else if (VEC_FIXED == res_format) {
             IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
             if (is_match) {
@@ -811,6 +814,9 @@ int ObRFRangeFilterVecMsg::do_might_contain_vector(
             } else {
               // do nothing, already set not match in preset_not_match
             }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected res_format", K(res_format));
           }
         }
       }
@@ -841,9 +847,15 @@ int ObRFRangeFilterVecMsg::might_contain_vector(
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
       ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
+    } else if (VEC_UNIFORM_CONST == res_format) {
+      IntegerUniCVec *res_vec = static_cast<IntegerUniCVec *>(expr.get_vector(ctx));
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
       ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected res_format", K(res_format));
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);
@@ -1721,19 +1733,20 @@ int ObRFInFilterVecMsg::do_might_contain_vector_impl(
     }
   }
 
-#define IN_FILTER_PROBE_HELPER                                                                     \
-  is_match = sm_hash_set_.test_hash(right_hash_vals[batch_i]);                                     \
-  if (!is_match) {                                                                                 \
-    filter_count++;                                                                                \
-    if (std::is_same<ResVec, IntegerUniVec>::value) {                                              \
-      res_vec->set_int(batch_i, 0);                                                                \
-    }                                                                                              \
-  } else {                                                                                         \
-    if (std::is_same<ResVec, IntegerUniVec>::value) {                                              \
-      res_vec->set_int(batch_i, 1);                                                                \
-    } else {                                                                                       \
-      res_vec->set_payload(batch_i, &is_match_payload, sizeof(int64_t));                           \
-    }                                                                                              \
+#define IN_FILTER_PROBE_HELPER                                                 \
+  is_match = sm_hash_set_.test_hash(right_hash_vals[batch_i]);                 \
+  if (!is_match) {                                                             \
+    filter_count++;                                                            \
+    if (std::is_same<ResVec, IntegerFixedVec>::value) {                        \
+    } else {                                                                   \
+      res_vec->set_int(batch_i, 0);                                            \
+    }                                                                          \
+  } else {                                                                     \
+    if (std::is_same<ResVec, IntegerFixedVec>::value) {                        \
+      res_vec->set_payload(batch_i, &is_match_payload, sizeof(int64_t));       \
+    } else {                                                                   \
+      res_vec->set_int(batch_i, 1);                                            \
+    }                                                                          \
   }
 
   if (OB_FAIL(ret)) {
@@ -1767,8 +1780,13 @@ int ObRFInFilterVecMsg::do_might_contain_vector_impl(
 #define IN_FILTER_DISPATCH_RES_FORMAT(function, res_format)                                        \
   if (res_format == VEC_FIXED) {                                                                   \
     ret = function<IntegerFixedVec>(expr, ctx, skip, bound, filter_ctx);                           \
-  } else {                                                                                         \
+  } else if (VEC_UNIFORM_CONST == res_format) {                                                    \
+    ret = function<IntegerUniCVec>(expr, ctx, skip, bound, filter_ctx);                            \
+  } else if (VEC_UNIFORM == res_format) {                                                          \
     ret = function<IntegerUniVec>(expr, ctx, skip, bound, filter_ctx);                             \
+  } else {                                                                                         \
+    ret = OB_ERR_UNEXPECTED;                                                                       \
+    LOG_WARN("unexpected res_format", K(res_format));                                              \
   }
 
 int ObRFInFilterVecMsg::might_contain_vector(
@@ -1785,9 +1803,15 @@ int ObRFInFilterVecMsg::might_contain_vector(
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
       ret = proc_filter_not_active(res_vec, skip, bound);
+    } else if (VEC_UNIFORM_CONST == res_format) {
+      IntegerUniCVec *res_vec = static_cast<IntegerUniCVec *>(expr.get_vector(ctx));
+      ret = proc_filter_not_active(res_vec, skip, bound);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
       ret = proc_filter_not_active(res_vec, skip, bound);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected res_format", K(res_format));
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);
@@ -1800,9 +1824,15 @@ int ObRFInFilterVecMsg::might_contain_vector(
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
       ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
+    } else if (VEC_UNIFORM_CONST == res_format) {
+      IntegerUniCVec *res_vec = static_cast<IntegerUniCVec *>(expr.get_vector(ctx));
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
       ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected res_format", K(res_format));
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);

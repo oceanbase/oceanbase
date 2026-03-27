@@ -237,10 +237,9 @@ struct ObP2PDatahubMsgGuard
 template <typename ResVec>
 static int proc_filter_not_active(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound);
 
-template <>
-int proc_filter_not_active<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip,
-                                          const EvalBound &bound)
-{
+template <typename ResVec>
+int proc_filter_not_active(ResVec *res_vec, const ObBitVector &skip,
+                           const EvalBound &bound) {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBitVector::flip_foreach(
           skip, bound, [&](int64_t idx) __attribute__((always_inline)) {

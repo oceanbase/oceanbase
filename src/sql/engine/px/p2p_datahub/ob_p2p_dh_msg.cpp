@@ -179,13 +179,12 @@ int ObP2PDatahubMsgBase::proc_filter_empty<IntegerFixedVec>(IntegerFixedVec *res
   return ret;
 }
 
-template <>
-int ObP2PDatahubMsgBase::proc_filter_empty<IntegerUniVec>(IntegerUniVec *res_vec,
-                                                          const ObBitVector &skip,
-                                                          const EvalBound &bound,
-                                                          int64_t &total_count,
-                                                          int64_t &filter_count)
-{
+template <typename ResVec>
+int ObP2PDatahubMsgBase::proc_filter_empty(ResVec *res_vec,
+                                           const ObBitVector &skip,
+                                           const EvalBound &bound,
+                                           int64_t &total_count,
+                                           int64_t &filter_count) {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBitVector::flip_foreach(
           skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
