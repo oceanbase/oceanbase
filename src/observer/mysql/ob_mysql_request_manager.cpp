@@ -174,9 +174,7 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
       }
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      record = new(buf)ObMySQLRequestRecord();
-      record->allocator_ = &allocator_;
-      record->data_ = audit_record;
+      record = new(buf)ObMySQLRequestRecord(&allocator_, audit_record);
       //deep copy sql
       if ((audit_record.sql_len_ > 0) && (NULL != audit_record.sql_)) {
         int64_t stmt_len = min(audit_record.sql_len_, query_record_size_limit);

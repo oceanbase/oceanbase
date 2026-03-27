@@ -53,6 +53,9 @@ public:
 public:
   ObMySQLRequestRecord()
     : allocator_(nullptr) {}
+  ObMySQLRequestRecord(common::ObConcurrentFIFOAllocator *allocator,
+                    const sql::ObAuditRecordData &data)
+    : allocator_(allocator), data_(data) {}
   virtual ~ObMySQLRequestRecord();
 
 public:
