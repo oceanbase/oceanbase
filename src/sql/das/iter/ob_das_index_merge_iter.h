@@ -88,6 +88,7 @@ public:
         relevances_(nullptr)
     {}
     int init(common::ObIAllocator &allocator,
+             common::ObIAllocator &row_store_allocator,
              const common::ObIArray<ObExpr*> *exprs,
              ObEvalCtx *eval_ctx,
              int64_t max_size,

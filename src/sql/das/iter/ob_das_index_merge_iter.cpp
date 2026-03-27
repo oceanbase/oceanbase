@@ -13,6 +13,7 @@ namespace sql
 {
 
 int ObDASIndexMergeIter::IndexMergeRowStore::init(common::ObIAllocator &allocator,
+                                                  common::ObIAllocator &row_store_allocator,
                                                   const common::ObIArray<ObExpr*> *exprs,
                                                   ObEvalCtx *eval_ctx,
                                                   int64_t max_size,
@@ -46,7 +47,7 @@ int ObDASIndexMergeIter::IndexMergeRowStore::init(common::ObIAllocator &allocato
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(max_size), K(ret));
   } else {
-    row_store_->set_allocator(allocator);
+    row_store_->set_allocator(row_store_allocator);
     count_ = 0;
     idx_ = 0;
     mock_skip_ = mock_skip;
@@ -353,7 +354,7 @@ int ObDASIndexMergeIter::inner_init(ObDASIterParam &param)
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid child iter", K(i), K(child), K(ret));
           } else if (OB_FAIL(row_store.init(
-              alloc, child->get_output(), eval_ctx_, max_size_, is_reverse_, rowkey_is_uint64_, mock_skip_))) {
+              alloc, mem_ctx_->get_malloc_allocator(), child->get_output(), eval_ctx_, max_size_, is_reverse_, rowkey_is_uint64_, mock_skip_))) {
             LOG_WARN("failed to init row store", K(ret));
           } else if (child_scan_rtdef != nullptr) {
             // need to prepare scan param for normal scan node
