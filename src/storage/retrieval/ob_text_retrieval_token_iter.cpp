@@ -752,8 +752,6 @@ int ObTextRetrievalTokenIter::estimate_token_doc_cnt()
     if (OB_ISNULL(total_doc_cnt_param_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null total doc cnt expr", K(ret));
-    } else if (0 == token_doc_cnt_) {
-      max_token_relevance_ = 0;
     } else {
       int64_t total_doc_cnt = 0;
       if (total_doc_cnt_param_expr->enable_rich_format()
