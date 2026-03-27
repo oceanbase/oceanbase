@@ -888,10 +888,18 @@ int ObGroupByPushDownPlanRewriter::rewrite_groupby_node(ObLogGroupBy *groupby,
       }
       // 将改写发生后的替换关系存起来，后续有一个阶段会集中替换聚合表达式(ObLogPlan::perform_group_by_pushdown)
       for (int64_t i = 0; OB_SUCC(ret) && i < groupby->get_aggr_funcs().count(); ++i) {
-        if (OB_FAIL(groupby->get_plan()->
-                    add_overwrite_group_replaced_exprs(
-                      std::pair<ObRawExpr *, ObRawExpr *>(groupby->get_aggr_funcs().at(i),
-                                                          result->new_aggr_exprs_.at(i))))) {
+        bool need_cast = false;
+        if (OB_FAIL(ObTransformUtils::check_need_add_cast(opt_ctx_.get_expr_factory(),
+                                                          old_aggr_exprs.at(i)->get_result_type(),
+                                                          result->new_aggr_exprs_.at(i)->get_result_type(),
+                                                          opt_ctx_.get_session_info(),
+                                                          need_cast))) {
+          LOG_WARN("failed to check need add cast", K(ret));
+        } else if (OB_UNLIKELY(need_cast)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected result type", K(ret), KPC(old_aggr_exprs.at(i)), KPC(result->new_aggr_exprs_.at(i)));
+        } else if (OB_FAIL(groupby->get_plan()->add_overwrite_group_replaced_exprs(std::pair<ObRawExpr *, ObRawExpr *>(
+                   groupby->get_aggr_funcs().at(i), result->new_aggr_exprs_.at(i))))) {
           LOG_WARN("failed push back overwrite mapping expr pair");
         }
       }
@@ -1143,11 +1151,11 @@ int ObGroupByPushDownPlanRewriter::generate_mask_aggr_param_expr(ObItemType aggr
 }
 
 int ObGroupByPushDownPlanRewriter::distribute_aggr_expr(ObRawExpr *aggr_expr,
-                                                          ObLogicalOperator *left_child,
-                                                          ObLogicalOperator *right_child,
-                                                          ObGroupByPushdownContext &left_ctx,
-                                                          ObGroupByPushdownContext &right_ctx,
-                                                          bool &is_from_single_side)
+                                                        ObLogicalOperator *left_child,
+                                                        ObLogicalOperator *right_child,
+                                                        ObGroupByPushdownContext &left_ctx,
+                                                        ObGroupByPushdownContext &right_ctx,
+                                                        bool &is_from_single_side)
 {
   int ret = OB_SUCCESS;
   is_from_single_side = true;
@@ -1359,6 +1367,11 @@ int ObGroupByPushDownPlanRewriter::try_rewrite_as_mask_aggr_expr(ObRawExpr *aggr
         LOG_WARN("failed to add replaced expr", K(ret));
       } else if (OB_FAIL(copier.copy_on_replace(case_when_expr, rewrited_expr))) {
         LOG_WARN("failed to copy on replace", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(opt_ctx_.get_expr_factory(),
+                                                                        aggr_expr,
+                                                                        rewrited_expr,
+                                                                        opt_ctx_.get_session_info()))) {
+        LOG_WARN("failed to add cast for replace if need", K(ret));
       } else if (OB_FAIL(result->new_aggr_exprs_.push_back(rewrited_expr))) {
         LOG_WARN("failed to push back new expr", K(ret));
       } else {
@@ -1623,6 +1636,11 @@ int ObGroupByPushDownPlanRewriter::rewrite_join_aggr_exprs(ObSEArray<ObRawExpr *
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(new_expr->formalize(opt_ctx_.get_session_info()))) {
         LOG_WARN("failed to formalize expr", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(opt_ctx_.get_expr_factory(),
+                                                                        aggr_expr,
+                                                                        new_expr,
+                                                                        opt_ctx_.get_session_info()))) {
+        LOG_WARN("failed to add cast for rewritten aggr expr", K(ret));
       } else if (OB_FAIL(new_aggr_exprs.push_back(new_expr))) {
         LOG_WARN("failed to push back new expr", K(ret));
       }
@@ -1989,6 +2007,7 @@ int ObGroupByPushDownPlanRewriter::get_aggr_item_for_new_groupby(ObLogicalOperat
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx->aggr_exprs_.count(); ++i) {
       ObAggFunRawExpr *new_aggr_expr = NULL;
+      ObRawExpr *new_expr = NULL;
       if (OB_ISNULL(ctx->aggr_exprs_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null aggr expr", K(ret));
@@ -2010,8 +2029,14 @@ int ObGroupByPushDownPlanRewriter::get_aggr_item_for_new_groupby(ObLogicalOperat
         LOG_WARN("failed to formalize new aggr expr", K(ret));
       } else if (OB_FAIL(aggr_items.push_back(new_aggr_expr))) {
         LOG_WARN("failed to push back new aggr expr", K(ret));
+      } else if (FALSE_IT(new_expr = new_aggr_expr)) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(opt_ctx_.get_expr_factory(),
+                                                                        ctx->aggr_exprs_.at(i),
+                                                                        new_expr,
+                                                                        opt_ctx_.get_session_info()))) {
+        LOG_WARN("failed to add cast for replace if need", K(ret));
       } else {
-        result->new_aggr_exprs_.at(i) = new_aggr_expr;
+        result->new_aggr_exprs_.at(i) = new_expr;
       }
     } // for end
     // build count(*) expr
