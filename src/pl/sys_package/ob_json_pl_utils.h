@@ -65,6 +65,7 @@ public:
   static int get_json_array(sql::ObExecContext &ctx, ObJsonNode*& json_val);
   static int get_json_boolean(sql::ObExecContext &ctx, ObObj &data, ObJsonNode*& json_val);
   static int get_json_null(sql::ObExecContext &ctx, ObJsonNode*& json_val);
+  static int clone_json_node_to_target(ObJsonNode *target_doc, ObJsonNode *src_node, ObJsonNode *&dst_node);
   static int set_on_error(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
   static int check_on_error(ObObj &obj, int& err_val);
   static bool proc_on_error(common::ObObj &result, int error_behavior, int &ret);
