@@ -12,13 +12,13 @@ namespace oceanbase {
 namespace sql {
 class ObExprInetCommon {
   public :
-  inline static int str_to_ipv4_nosimd(int len, const char *str, bool& is_ip_format_invalid, in_addr* ipv4addr);
-  inline static int str_to_ipv4(int len, const char *str, bool& is_ip_format_invalid, in_addr* ipv4addr);
-  inline static int str_to_ipv6(int len, const char *str, bool& is_ip_format_invalid, in6_addr* ipv6addr);
-  inline static int str_to_ip(int len, const char *str, bool& is_ip_format_invalid, in6_addr* ipv6addr, bool is_ipv6, bool& is_pure_ipv4);
+  inline static int str_to_ipv4_nosimd(const char *str, int len, bool& is_ip_format_invalid, in_addr* ipv4addr);
+  inline static int str_to_ipv4(const char *str, int len, bool& is_ip_format_invalid, in_addr* ipv4addr);
+  inline static int str_to_ipv6(const char *str, int len, bool& is_ip_format_invalid, in6_addr* ipv6addr);
+  inline static int str_to_ip(const char *str, int len, bool is_ipv4_valid, bool& is_ip_format_invalid, in6_addr* ipv6addr, bool& is_pure_ipv4);
   static int ip_to_str(ObString& ip_binary, bool& is_ip_format_invalid, ObString& ip_str);
-  static int ipv4_to_str(char* ipv4_binary_ptr, ObString& ip_str);
-  static int ipv6_to_str(char* ipv6_binary_ptr, ObString& ip_str);
+  static int ipv4_to_str(char* ipv4_binary_ptr, int32_t length, ObString& ip_str);
+  static int ipv6_to_str(char* ipv6_binary_ptr, int32_t length, ObString& ip_str);
   inline static uint8_t unhex(char c);
 };
 
@@ -34,7 +34,7 @@ public:
 private:
   // helper func
   template <typename T>
-  static int ob_inet_aton(T& result, const common::ObString& text, bool& is_ip_format_invalid);
+  static int ob_inet_aton(T& result, const common::ObString &text, bool &is_ip_format_invalid);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprInetAton);
@@ -89,15 +89,16 @@ public:
 
 private:
   // helper func
-  static int inet6_aton(const ObString& ip, bool& is_ip_format_invalid, ObString& str_result);
+  static int inet6_aton(const ObString &ip, bool &is_ip_format_invalid, in6_addr *addr, int32_t &addr_len);
 
   // vector helper functions
   static inline int inet6_aton_vector_inner(const ObExpr &expr,
-                                             const ObString &ip_str,
-                                             ObString &str_result,
-                                             bool& is_ip_format_invalid,
-                                             int64_t idx,
-                                             ObEvalCtx &ctx);
+                                            const ObString &ip_str,
+                                            in6_addr *&addr,
+                                            int32_t &addr_len,
+                                            bool& is_ip_format_invalid,
+                                            int64_t idx,
+                                            ObEvalCtx &ctx);
   template <typename ArgVec, typename ResVec>
   static int inet6_aton_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
@@ -126,8 +127,7 @@ public:
   static int calc_is_ipv4_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 private:
   // helper func
-  template <typename T>
-  static int is_ipv4(T& result, const common::ObString& text);
+  static int is_ipv4(const common::ObString &text, bool &is_ip_invalid);
   template <typename ArgVec, typename ResVec>
   static int is_ipv4_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   template <typename ResVec>
@@ -161,8 +161,7 @@ public:
 
 private:
   // helper func
-  template <typename T>
-  static void is_ipv4_mapped(T& result, const common::ObString& num_val);
+  static void is_ipv4_mapped(const common::ObString &num_val, bool &is_ip_invalid);
 
   // vectorization helper functions
   template<typename ResVec>
@@ -197,8 +196,7 @@ public:
 
 private:
   // helper func
-  template <typename T>
-  static void is_ipv4_compat(T& result, const common::ObString& num_val);
+  static void is_ipv4_compat(const common::ObString &num_val, bool &is_ip_invalid);
 
   static inline bool str_is_ipv4_compat(struct in6_addr * num_val);
   template<typename ResVec>
@@ -232,8 +230,7 @@ public:
   static int calc_is_ipv6_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 private:
   // helper func
-  template <typename T>
-  static int is_ipv6(T& result, const common::ObString& num_val);
+  static int is_ipv6(const common::ObString &text, bool &is_ip_invalid);
   template <typename ArgVec, typename ResVec>
   static int is_ipv6_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   template <typename ResVec>

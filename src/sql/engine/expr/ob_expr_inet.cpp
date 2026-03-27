@@ -179,7 +179,7 @@ OB_DECLARE_SSE42_SPECIFIC_CODE(
 )
 #endif
 
-inline int ObExprInetCommon::str_to_ipv4_nosimd(int len, const char *str, bool &is_ip_format_invalid, in_addr *ipv4addr)
+inline int ObExprInetCommon::str_to_ipv4_nosimd(const char *str, int len, bool &is_ip_format_invalid, in_addr *ipv4addr)
 {
   int ret = OB_SUCCESS;
   if (7 > len || INET_ADDRSTRLEN - 1 < len) {
@@ -253,7 +253,7 @@ inline uint8_t ObExprInetCommon::unhex(char c)
   return hex_table[static_cast<uint8_t>(c)];
 }
 
-inline int ObExprInetCommon::str_to_ipv6(int len, const char *str, bool &is_ip_format_invalid, in6_addr *ipv6addr)
+inline int ObExprInetCommon::str_to_ipv6(const char *str, int len, bool &is_ip_format_invalid, in6_addr *ipv6addr)
 {
   int ret = OB_SUCCESS;
   if (2 > len || INET6_ADDRSTRLEN - 1 < len) {
@@ -301,7 +301,7 @@ inline int ObExprInetCommon::str_to_ipv6(int len, const char *str, bool &is_ip_f
           is_ip_format_invalid = true;
         }
       } else if (*c == '.' && (ipv6_ptr - (uint16_t *)ipv6addr < 7)) {
-        ret = str_to_ipv4(len - (c - str) + count_hex, c - count_hex, is_ip_format_invalid, (in_addr *)ipv6_ptr);
+        ret = str_to_ipv4(c - count_hex, len - (c - str) + count_hex, is_ip_format_invalid, (in_addr *)ipv6_ptr);
         ipv6_ptr += 1;
         mixed = true;
         break;
@@ -326,34 +326,35 @@ inline int ObExprInetCommon::str_to_ipv6(int len, const char *str, bool &is_ip_f
   return ret;
 }
 
-inline int ObExprInetCommon::str_to_ipv4(int len, const char *str, bool &is_ip_format_invalid, in_addr *ipv4addr)
+inline int ObExprInetCommon::str_to_ipv4(const char *str, int len, bool &is_ip_format_invalid, in_addr *ipv4addr)
 {
   int ret = OB_SUCCESS;
   #if defined(__GNUC__) && defined(__x86_64__)
     if (common::is_arch_supported(ObTargetArch::SSE42)) {
       ret = specific::sse42::str_to_ipv4_sse42(str, len, is_ip_format_invalid, ipv4addr);
     } else {
-      ret = ObExprInetCommon::str_to_ipv4_nosimd(len, str, is_ip_format_invalid, ipv4addr);
+      ret = ObExprInetCommon::str_to_ipv4_nosimd(str, len, is_ip_format_invalid, ipv4addr);
     }
   #else
-    ret = ObExprInetCommon::str_to_ipv4_nosimd(len, str, is_ip_format_invalid, ipv4addr);
+    ret = ObExprInetCommon::str_to_ipv4_nosimd(str, len, is_ip_format_invalid, ipv4addr);
   #endif
   return ret;
 }
 
-inline int ObExprInetCommon::str_to_ip(int len, const char *str, bool &is_ip_format_invalid, in6_addr *ipv6addr, bool is_ipv6, bool &is_pure_ipv4)
+// is_ipv4_valid：ipv4_addr is valid or not
+inline int ObExprInetCommon::str_to_ip(const char *str, int len, bool is_ipv4_valid, bool &is_ip_format_invalid, in6_addr *ipv6addr, bool &is_pure_ipv4)
 {
   int ret = OB_SUCCESS;
   is_pure_ipv4 = false;
   if (len < 7) {
-    ret = str_to_ipv6(len, str, is_ip_format_invalid, ipv6addr);
+    ret = str_to_ipv6(str, len, is_ip_format_invalid, ipv6addr);
   } else {
     bool has_colon = str[1] == ':' || str[2] == ':' || str[3] == ':' || str[4] == ':';
     bool has_dot = str[len - 4] == '.' || str[len - 3] == '.' || str[len - 2] == '.';
     if (has_colon) {
-      ret = str_to_ipv6(len, str, is_ip_format_invalid, ipv6addr);
-    } else if (!is_ipv6 && has_dot) {
-      ret = str_to_ipv4(len, str, is_ip_format_invalid, (in_addr *)((uint8_t *)ipv6addr + 12));
+      ret = str_to_ipv6(str, len, is_ip_format_invalid, ipv6addr);
+    } else if (is_ipv4_valid && has_dot) {
+      ret = str_to_ipv4(str, len, is_ip_format_invalid, (in_addr *)ipv6addr);
       is_pure_ipv4 = true;
     } else {
       is_ip_format_invalid = true;
@@ -362,10 +363,9 @@ inline int ObExprInetCommon::str_to_ip(int len, const char *str, bool &is_ip_for
   return ret;
 }
 
-
-
-inline int ObExprInetCommon::ipv4_to_str(char *ipv4_binary_ptr,  ObString &ip_str)
+int ObExprInetCommon::ipv4_to_str(char *ipv4_binary_ptr, int32_t length, ObString &ip_str)
 {
+  int ret = OB_SUCCESS;
   static const char *str_table[256] = {
     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
     "10", "11", "12", "13", "14", "15", "16", "17", "18", "19",
@@ -394,128 +394,141 @@ inline int ObExprInetCommon::ipv4_to_str(char *ipv4_binary_ptr,  ObString &ip_st
     "240", "241", "242", "243", "244", "245", "246", "247", "248", "249",
     "250", "251", "252", "253", "254", "255"
   };
+  if (length == sizeof(in_addr)) {
+    const uint8_t *bytes = (const uint8_t *)ipv4_binary_ptr;
+    char ipv4_str[INET_ADDRSTRLEN];
+    int32_t idx = 0;
+    #define APPEND_BYTE_STR(byte_val) \
+      if ((byte_val) > 99) { \
+        ipv4_str[idx++] = str_table[(byte_val)][0]; \
+        ipv4_str[idx++] = str_table[(byte_val)][1]; \
+        ipv4_str[idx++] = str_table[(byte_val)][2]; \
+      } else if ((byte_val) > 9) { \
+        ipv4_str[idx++] = str_table[(byte_val)][0]; \
+        ipv4_str[idx++] = str_table[(byte_val)][1]; \
+      } else { \
+        ipv4_str[idx++] = str_table[(byte_val)][0]; \
+      }
 
-  const uint8_t* bytes = (const uint8_t *)ipv4_binary_ptr;
-  char* ip_str_ptr = ip_str.ptr()+ip_str.length();
+    APPEND_BYTE_STR(bytes[0]);
+    ipv4_str[idx++] = '.';
+    APPEND_BYTE_STR(bytes[1]);
+    ipv4_str[idx++] = '.';
+    APPEND_BYTE_STR(bytes[2]);
+    ipv4_str[idx++] = '.';
+    APPEND_BYTE_STR(bytes[3]);
 
-  #define APPEND_BYTE_STR(byte_val) \
-    if ((byte_val) > 99) { \
-      *ip_str_ptr++ = str_table[(byte_val)][0]; \
-      *ip_str_ptr++ = str_table[(byte_val)][1]; \
-      *ip_str_ptr++ = str_table[(byte_val)][2]; \
-    } else if ((byte_val) > 9) { \
-      *ip_str_ptr++ = str_table[(byte_val)][0]; \
-      *ip_str_ptr++ = str_table[(byte_val)][1]; \
-    } else { \
-      *ip_str_ptr++ = str_table[(byte_val)][0]; \
+    if (ip_str.write(ipv4_str, idx) != idx) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("write ipv4 string failed", K(ret));
     }
-
-  APPEND_BYTE_STR(bytes[0]);
-  *ip_str_ptr++ = '.';
-  APPEND_BYTE_STR(bytes[1]);
-  *ip_str_ptr++ = '.';
-  APPEND_BYTE_STR(bytes[2]);
-  *ip_str_ptr++ = '.';
-  APPEND_BYTE_STR(bytes[3]);
-
-  ip_str.set_length(static_cast<ObString::obstr_size_t>(ip_str_ptr - ip_str.ptr()));
-  return OB_SUCCESS;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ipv4 binary length is not 4", K(ret));
+  }
+  return ret;
 }
 
-inline int ObExprInetCommon::ipv6_to_str(char *ipv6_binary_ptr, ObString &ip_str)
+int ObExprInetCommon::ipv6_to_str(char *ipv6_binary_ptr, int32_t length, ObString &ip_str)
 {
+  int ret = OB_SUCCESS;
   static const char str_table[16] = {
     '0', '1', '2', '3', '4', '5', '6', '7',
     '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
   };
-  int gap = -1, gap_len = -1;
-  int rg = -1, rg_len = -1;
-  const uint16_t *ipv6_ptr = (const uint16_t *) ipv6_binary_ptr;
-  //find longest gap
-  for (int i = 0; i < 8; ++i) {
-    if (0 == *(ipv6_ptr + i)) {
-      if (-1 == rg_len) {
-        rg_len = 1;
-        rg = i;
-      } else {
-        rg_len++;
-      }
-    } else {
-      if (rg_len > gap_len) {
-        gap = rg;
-        gap_len = rg_len;
-      } else {
-      }
-      rg_len = -1;
-    }
-  }
-  if (rg_len > gap_len) {
-    gap = rg;
-    gap_len = rg_len;
-  } else {
-  }
-
-  char *p = ip_str.ptr();
-  for (int i = 0; i < 8; ++i) {
-    if (gap == i) {
-      if (0 == i) {
-        *p = ':';
-        ++p;
-      } else {
-      }
-      *p = ':';
-      ++p;
-      i += gap_len - 1;  //skip gap
-    } else {
-      // Convert each 16-bit group to hex
-      if (*(ipv6_ptr + i) == 0) {
-        *p++ = '0';
-      } else {
-        // Convert to hex, skip leading zeros
-        if ((*(ipv6_ptr + i) >> 4 & 0x0f) != 0) {
-          *p++ = str_table[*(ipv6_ptr + i) >> 4 & 0x0f];
-          *p++ = str_table[*(ipv6_ptr + i) & 0x0f];
-          *p++ = str_table[*(ipv6_ptr + i) >> 12];
-          *p++ = str_table[*(ipv6_ptr + i) >> 8 & 0x0f];
-        } else if ((*(ipv6_ptr + i) & 0x0f) != 0) {
-          *p++ = str_table[*(ipv6_ptr + i) & 0x0f];
-          *p++ = str_table[*(ipv6_ptr + i) >> 12];
-          *p++ = str_table[*(ipv6_ptr + i) >> 8 & 0x0f];
-        } else if (*(ipv6_ptr + i) >> 12 != 0) {
-          *p++ = str_table[*(ipv6_ptr + i) >> 12];
-          *p++ = str_table[*(ipv6_ptr + i) >> 8 & 0x0f];
+  if (length == sizeof(in6_addr)) {
+    int gap = -1, gap_len = -1;
+    int rg = -1, rg_len = -1;
+    const uint16_t *ipv6_ptr = (const uint16_t *) ipv6_binary_ptr;
+    //find longest gap
+    for (int i = 0; i < 8; ++i) {
+      if (0 == *(ipv6_ptr + i)) {
+        if (-1 == rg_len) {
+          rg_len = 1;
+          rg = i;
         } else {
-          *p++ = str_table[*(ipv6_ptr + i) >> 8 & 0x0f];
+          rg_len++;
+        }
+      } else {
+        if (rg_len > gap_len) {
+          gap = rg;
+          gap_len = rg_len;
+        } else {
+        }
+        rg_len = -1;
+      }
+    }
+    if (rg_len > gap_len) {
+      gap = rg;
+      gap_len = rg_len;
+    } else {
+    }
+
+    char ipv6_str[INET6_ADDRSTRLEN];
+    int32_t idx = 0;
+    for (int i = 0; i < 8; ++i) {
+      if (gap == i) {
+        if (0 == i) {
+          ipv6_str[idx++] = ':';
+        } else {
+        }
+        ipv6_str[idx++] = ':';
+        i += gap_len - 1;  //skip gap
+      } else {
+        // Convert each 16-bit group to hex
+        if (*(ipv6_ptr + i) == 0) {
+          ipv6_str[idx++] = '0';
+        } else {
+          // Convert to hex, skip leading zeros
+          if ((*(ipv6_ptr + i) >> 4 & 0x0f) != 0) {
+            ipv6_str[idx++] = str_table[*(ipv6_ptr + i) >> 4 & 0x0f];
+            ipv6_str[idx++] = str_table[*(ipv6_ptr + i) & 0x0f];
+            ipv6_str[idx++] = str_table[*(ipv6_ptr + i) >> 12];
+            ipv6_str[idx++] = str_table[*(ipv6_ptr + i) >> 8 & 0x0f];
+          } else if ((*(ipv6_ptr + i) & 0x0f) != 0) {
+            ipv6_str[idx++] = str_table[*(ipv6_ptr + i) & 0x0f];
+            ipv6_str[idx++] = str_table[*(ipv6_ptr + i) >> 12];
+            ipv6_str[idx++] = str_table[*(ipv6_ptr + i) >> 8 & 0x0f];
+          } else if (*(ipv6_ptr + i) >> 12 != 0) {
+            ipv6_str[idx++] = str_table[*(ipv6_ptr + i) >> 12];
+            ipv6_str[idx++] = str_table[*(ipv6_ptr + i) >> 8 & 0x0f];
+          } else {
+            ipv6_str[idx++] = str_table[*(ipv6_ptr + i) >> 8 & 0x0f];
+          }
+        }
+        if (i != 7) {
+          ipv6_str[idx++] = ':';
         }
       }
-      if (i != 7) {
-        *p = ':';
-        ++p;
-      }
     }
+    if (ip_str.write(ipv6_str, idx) != idx) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("write ipv6 string failed", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ipv6 binary length is not 16", K(ret));
   }
-  ip_str.set_length(static_cast<ObString::obstr_size_t>(p - ip_str.ptr()));
-  return OB_SUCCESS;
+  return ret;
 }
 
 inline int ObExprInetCommon::ip_to_str(ObString &ip_binary, bool &is_ip_format_invalid, ObString &ip_str)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_ISNULL(ip_binary.ptr()) || OB_ISNULL(ip_str.ptr()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ip or result is null", K(ret), K(ip_binary.ptr()), K(ip_str.ptr()));
+  if (ip_binary.empty()) {
+    is_ip_format_invalid = true;
   } else if (sizeof(in_addr) == ip_binary.length()) {
-    ipv4_to_str(ip_binary.ptr(), ip_str);
+    ipv4_to_str(ip_binary.ptr(), ip_binary.length(), ip_str);
   } else if (sizeof(in6_addr) == ip_binary.length()) {
-    const uint32_t* ip_uint32_ptr = (const uint32_t *)ip_binary.ptr();
-    if (ip_uint32_ptr[0] == 0 && ip_uint32_ptr[1] == 0 && ip_uint32_ptr[2] == 0 && (*((uint16_t *)ip_uint32_ptr+6) > 0x0000)) {
+    const uint32_t *ip_uint32_ptr = (const uint32_t *)ip_binary.ptr();
+    if (ip_uint32_ptr[0] == 0 && ip_uint32_ptr[1] == 0 && ip_uint32_ptr[2] == 0 && (*((uint16_t *)ip_uint32_ptr + 6) > 0x0000)) {
       ip_str.write("::", 2);
-      ipv4_to_str(ip_binary.ptr() + 12, ip_str);
+      ipv4_to_str(ip_binary.ptr() + 12, ip_binary.length() - 12, ip_str);
     } else if (ip_uint32_ptr[0] == 0 && ip_uint32_ptr[1] == 0 && ip_uint32_ptr[2] == 0xFFFF0000) {
       ip_str.write("::ffff:", 7);
-      ipv4_to_str(ip_binary.ptr() + 12, ip_str);
+      ipv4_to_str(ip_binary.ptr() + 12, ip_binary.length() - 12, ip_str);
     } else {
-      ipv6_to_str(ip_binary.ptr(), ip_str);
+      ipv6_to_str(ip_binary.ptr(), ip_binary.length(), ip_str);
     }
   } else {
     is_ip_format_invalid = true;
@@ -622,7 +635,7 @@ int ObExprInetAton::calc_inet_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
         LOG_WARN("fail to execute ob_inet_aton", K(ret));
       } else if (is_ip_format_invalid) {
         uint64_t cast_mode = 0;
-        ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
+        ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
         ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
         ObSQLMode sql_mode = 0;
         if (OB_UNLIKELY(OB_ISNULL(session))) {
@@ -677,7 +690,7 @@ inline int ObExprInet6Ntoa::calc_result_type1(
   const sql::ObSQLSessionInfo *session = type_ctx.get_session();
   if (OB_UNLIKELY(OB_ISNULL(session))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session is null",K(ret));
+    LOG_WARN("session is null", K(ret));
   } else {
     type.set_collation_type(get_default_collation_type(type.get_type(), type_ctx));
   }
@@ -712,34 +725,31 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
     if (text.is_null()) {
       expr_datum.set_null();
     } else {
-      char * buf = NULL;
-      CK(expr.res_buf_len_ >= MAX_IP_ADDR_LENGTH);
-      if (OB_FAIL(ret)) {
-        LOG_WARN("result buf size greater than MAX_IP_ADDR_LENGTH", K(ret));
+      char *buf = NULL;
+      if (expr.res_buf_len_ < MAX_IP_ADDR_LENGTH) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result buf size less than MAX_IP_ADDR_LENGTH", K(ret));
       } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, MAX_IP_ADDR_LENGTH))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(MAX_IP_ADDR_LENGTH));
       } else {
-        bool is_ip_format_invalid = false;
         ObString num_val;
+        bool is_ip_format_invalid = false;
         ObString ip_str(MAX_IP_ADDR_LENGTH, 0, buf);
-        if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, &text, num_val))) {
-          LOG_WARN("fail to get string from text", K(ret));
-        } else if ((!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)
-                    && !ob_is_binary(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)
-                    && !ob_is_blob(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_))
-                   || num_val.length() == 0) {
+        MEMSET(ip_str.ptr(), 0, MAX_IP_ADDR_LENGTH);
+        if ((!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+             && !ob_is_binary(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+             && !ob_is_blob(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_))) {
           is_ip_format_invalid = true;
-          LOG_WARN("ip format invalid", K(ret), K(text));
+        } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, &text, num_val))) {
+          LOG_WARN("fail to get string from text", K(ret));
         } else if (OB_FAIL(ObExprInetCommon::ip_to_str(num_val, is_ip_format_invalid, ip_str))) {
           LOG_WARN("fail to execute ip_to_str", K(ret));
-        } else if (!is_ip_format_invalid) {
-          expr_datum.set_string(ip_str);
         }
-
-        if (OB_SUCC(ret) && is_ip_format_invalid) {
+        if (OB_FAIL(ret)) {
+        } else if (is_ip_format_invalid) {
           uint64_t cast_mode = 0;
-          ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
+          ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
           ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
           ObSQLMode sql_mode = 0;
           if (OB_UNLIKELY(OB_ISNULL(session))) {
@@ -756,9 +766,11 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
               expr_datum.set_null(); //support no strict sql_mode
             } else {
               ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("ip format invalid", K(ret),K(text));
+              LOG_WARN("ip format invalid", K(ret), K(text));
             }
           }
+        } else {
+          expr_datum.set_string(ip_str);
         }
       }
     }
@@ -776,7 +788,7 @@ inline int ObExprInet6Ntoa::inet6_ntoa_vector_inner(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
-  if (num_val.length() == 0) {
+  if (num_val.empty()) {
     is_ip_format_invalid = true;
   } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, MAX_IP_ADDR_LENGTH, idx))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -801,7 +813,7 @@ int ObExprInet6Ntoa::inet6_ntoa_vector(VECTOR_EVAL_FUNC_ARG_DECL)
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
 
   uint64_t cast_mode = 0;
-  ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   ObSolidifiedVarsGetter helper(expr, ctx, session);
   ObSQLMode sql_mode = 0;
   if (OB_ISNULL(session)) {
@@ -863,7 +875,7 @@ int ObExprInet6Ntoa::inet6_ntoa_vector(VECTOR_EVAL_FUNC_ARG_DECL)
         if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, num_val))) {
           LOG_WARN("fail to get string from vector", K(ret));
         } else if (OB_FAIL(inet6_ntoa_vector_inner(expr, num_val, ip_str, is_ip_format_invalid, ctx, idx))) {
-            LOG_WARN("fail to execute inet6_ntoa_vector_inner", K(ret));
+          LOG_WARN("fail to execute inet6_ntoa_vector_inner", K(ret));
         } else if (is_ip_format_invalid) {
           if (CM_IS_WARN_ON_FAIL(cast_mode)) {
             res_vec->set_null(idx);
@@ -943,33 +955,35 @@ int ObExprInet6Aton::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, 
   return ret;
 }
 
-int ObExprInet6Aton::calc_inet6_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprInet6Aton::calc_inet6_aton(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.eval_param_value(ctx))) {
-    LOG_WARN("inet6_ntoa expr eval param value failed", K(ret));
+    LOG_WARN("inet6_aton expr eval param value failed", K(ret));
   } else {
-    char * buf = NULL;
-    CK(expr.res_buf_len_ >= sizeof(in6_addr));
-    if (OB_FAIL(ret)) {
-      LOG_WARN("result buf size greater than sizeof(in6_addr)", K(ret));
-    } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, sizeof(in6_addr)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(sizeof(in6_addr)));
+    ObDatum &text = expr.locate_param_datum(ctx, 0);
+    if (text.is_null()) {
+      expr_datum.set_null();
     } else {
-      ObDatum& text = expr.locate_param_datum(ctx, 0);
-      ObString m_text = text.get_string();
-      bool is_ip_format_invalid = false;
-      if (text.is_null()) {
-        expr_datum.set_null();
+      in6_addr *addr = nullptr;
+      int32_t addr_len = static_cast<int32_t>(sizeof(in6_addr));
+      if (expr.res_buf_len_ < sizeof(in6_addr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result buf size less than sizeof(in6_addr)", K(ret));
+      } else if (OB_ISNULL(addr = (in6_addr *)expr.get_str_res_mem(ctx, addr_len))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(sizeof(in6_addr)));
       } else {
-        ObString str_result(sizeof(in6_addr), 0, buf);
-        MEMSET(str_result.ptr(), 0, sizeof(in6_addr));
-        if (OB_FAIL(inet6_aton(m_text, is_ip_format_invalid, str_result))) {
+        ObString m_text;
+        bool is_ip_format_invalid = false;
+        MEMSET(addr, 0, addr_len);
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, &text, m_text))) {
+          LOG_WARN("fail to get string from text", K(ret));
+        } else if (OB_FAIL(inet6_aton(m_text, is_ip_format_invalid, addr, addr_len))) {
           LOG_WARN("fail to execute inet6_aton", K(ret));
         } else if (is_ip_format_invalid) {
           uint64_t cast_mode = 0;
-          ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
+          ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
           ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
           ObSQLMode sql_mode = 0;
           if (OB_ISNULL(session)) {
@@ -992,7 +1006,7 @@ int ObExprInet6Aton::calc_inet6_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
             }
           }
         } else {
-          expr_datum.set_string(str_result);
+          expr_datum.set_string((char *)addr, addr_len);
         }
       }
     }
@@ -1003,28 +1017,22 @@ int ObExprInet6Aton::calc_inet6_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
 
 inline int ObExprInet6Aton::inet6_aton_vector_inner(const ObExpr &expr,
                                                     const ObString &ip_str,
-                                                    ObString &str_result,
+                                                    in6_addr *&addr,
+                                                    int32_t &addr_len,
                                                     bool &is_ip_format_invalid,
                                                     int64_t idx,
                                                     ObEvalCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  bool is_pure_ipv4 = false;
-  char *result_buf = nullptr;
-  if (OB_ISNULL(result_buf = expr.get_str_res_mem(ctx, sizeof(in6_addr), idx))) {
+  if (ip_str.empty()) {
+    is_ip_format_invalid = true;
+  } else if (OB_ISNULL(addr = (in6_addr *)expr.get_str_res_mem(ctx, addr_len, idx))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Failed to allocate memory for inet6_aton result", K(ret), K(sizeof(in6_addr)));
+    LOG_WARN("Failed to allocate memory for inet6_aton result", K(ret), K(addr_len));
   } else {
-    MEMSET(result_buf, 0, sizeof(in6_addr));
-    if (OB_FAIL(ObExprInetCommon::str_to_ip(ip_str.length(), ip_str.ptr(), is_ip_format_invalid,
-                                            (in6_addr *)result_buf, false, is_pure_ipv4))) {
-      LOG_WARN("fail to execute str_to_ip", K(ret));
-    } else if (is_ip_format_invalid) {
-      // pass
-    } else if (is_pure_ipv4) {
-      str_result = ObString(sizeof(in_addr), (char *)((uint8_t *)result_buf + 12));
-    } else {
-      str_result = ObString(sizeof(in6_addr), result_buf);
+    MEMSET(addr, 0, sizeof(in6_addr));
+    if (OB_FAIL(inet6_aton(ip_str, is_ip_format_invalid, addr, addr_len))) {
+      LOG_WARN("fail to execute inet6_aton", K(ret));
     }
   }
   return ret;
@@ -1039,7 +1047,7 @@ int ObExprInet6Aton::inet6_aton_vector(VECTOR_EVAL_FUNC_ARG_DECL)
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
 
   uint64_t cast_mode = 0;
-  ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   ObSolidifiedVarsGetter helper(expr, ctx, session);
   ObSQLMode sql_mode = 0;
   if (OB_ISNULL(session)) {
@@ -1061,11 +1069,13 @@ int ObExprInet6Aton::inet6_aton_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       if (eval_flags.at(idx)) {
         continue;
       } else {
-        ObString ip_str = arg_vec->get_string(idx);
+        ObString ip_str;
         bool is_ip_format_invalid = false;
-        ObString str_result;
-
-        if (OB_FAIL(inet6_aton_vector_inner(expr, ip_str, str_result, is_ip_format_invalid, idx, ctx))) {
+        in6_addr *addr = nullptr;
+        int32_t addr_len = static_cast<int32_t>(sizeof(in6_addr));
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, ip_str))) {
+          LOG_WARN("fail to get string from text", K(ret));
+        } else if (OB_FAIL(inet6_aton_vector_inner(expr, ip_str, addr, addr_len, is_ip_format_invalid, idx, ctx))) {
           LOG_WARN("fail to execute inet6_aton_vector_inner", K(ret));
         } else if (is_ip_format_invalid) {
           if (CM_IS_WARN_ON_FAIL(cast_mode)) {
@@ -1077,7 +1087,7 @@ int ObExprInet6Aton::inet6_aton_vector(VECTOR_EVAL_FUNC_ARG_DECL)
             LOG_WARN("ip format invalid", K(ret));
           }
         } else {
-          res_vec->set_string(idx, str_result);
+          res_vec->set_string(idx, (char *)addr, addr_len);
         }
       }
     }
@@ -1089,11 +1099,13 @@ int ObExprInet6Aton::inet6_aton_vector(VECTOR_EVAL_FUNC_ARG_DECL)
         res_vec->set_null(idx);
         continue;
       } else {
-        ObString ip_str = arg_vec->get_string(idx);
+        ObString ip_str;
         bool is_ip_format_invalid = false;
-        ObString str_result;
-
-        if (OB_FAIL(inet6_aton_vector_inner(expr, ip_str, str_result, is_ip_format_invalid, idx, ctx))) {
+        in6_addr *addr = nullptr;
+        int32_t addr_len = static_cast<int32_t>(sizeof(in6_addr));
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, ip_str))) {
+          LOG_WARN("fail to get string from text", K(ret));
+        } else if (OB_FAIL(inet6_aton_vector_inner(expr, ip_str, addr, addr_len, is_ip_format_invalid, idx, ctx))) {
           LOG_WARN("fail to execute inet6_aton_vector_inner", K(ret));
         } else if (is_ip_format_invalid) {
           if (CM_IS_WARN_ON_FAIL(cast_mode)) {
@@ -1105,7 +1117,7 @@ int ObExprInet6Aton::inet6_aton_vector(VECTOR_EVAL_FUNC_ARG_DECL)
             LOG_WARN("ip format invalid", K(ret));
           }
         } else {
-          res_vec->set_string(idx, str_result);
+          res_vec->set_string(idx, (char *)addr, addr_len);
         }
       }
     }
@@ -1140,22 +1152,26 @@ int ObExprInet6Aton::calc_inet6_aton_vector(VECTOR_EVAL_FUNC_ARG_DECL)
   return ret;
 }
 
-int ObExprInet6Aton::inet6_aton(const ObString &ip, bool &is_ip_format_invalid, ObString &str_result)
+int ObExprInet6Aton::inet6_aton(const ObString &ip, bool &is_ip_format_invalid, in6_addr *addr, int32_t &addr_len)
 {
   int ret = OB_SUCCESS;
   bool is_pure_ipv4 = false;
-  char *result_buf = str_result.ptr();
-  if (OB_UNLIKELY(OB_ISNULL(result_buf))) {
+  if (ip.empty()) {
+    is_ip_format_invalid = true;
+  } else if (OB_ISNULL(addr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("result_buf is null", K(ret));
-  } else if (OB_FAIL(ObExprInetCommon::str_to_ip(ip.length(), ip.ptr(), is_ip_format_invalid, (in6_addr *)result_buf, false, is_pure_ipv4))) {
+    LOG_WARN("inet6_aton output addr is null", K(ret));
+  } else if (addr_len != sizeof(in6_addr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inet6_aton result buffer length is not 16", K(ret), K(addr_len));
+  } else if (OB_FAIL(ObExprInetCommon::str_to_ip(ip.ptr(), ip.length(), true, is_ip_format_invalid, addr, is_pure_ipv4))) {
     LOG_WARN("fail to execute str_to_ip", K(ret));
   } else if (is_ip_format_invalid) {
     // pass
   } else if (is_pure_ipv4) {
-    str_result.assign((char *)((uint8_t *)result_buf + 12), static_cast<int32_t>(sizeof(in_addr)));
+    addr_len = static_cast<int32_t>(sizeof(in_addr));
   } else {
-    str_result.assign(result_buf, static_cast<int32_t>(sizeof(in6_addr)));
+    addr_len = static_cast<int32_t>(sizeof(in6_addr));
   }
   return ret;
 }
@@ -1177,18 +1193,14 @@ ObExprIsIpv4::ObExprIsIpv4(ObIAllocator& alloc)
 ObExprIsIpv4::~ObExprIsIpv4()
 {}
 
-template <typename T>
-int ObExprIsIpv4::is_ipv4(T& result, const ObString& text)
+int ObExprIsIpv4::is_ipv4(const ObString &text, bool &is_ip_invalid)
 {
   int ret = OB_SUCCESS;
   struct in_addr addr;
-  bool is_ip_invalid = false;
   if (OB_UNLIKELY(text.empty())) {
     is_ip_invalid = true;
-  } else if (OB_FAIL(ObExprInetCommon::str_to_ipv4(text.length(), text.ptr(), is_ip_invalid, &addr))) {
+  } else if (OB_FAIL(ObExprInetCommon::str_to_ipv4(text.ptr(), text.length(), is_ip_invalid, &addr))) {
     LOG_WARN("fail to execute str_to_ipv4", K(ret));
-  } else {
-    result.set_int(is_ip_invalid ? 0 : 1);
   }
   return ret;
 }
@@ -1201,7 +1213,7 @@ inline int ObExprIsIpv4::is_ipv4_vector_inner(const ObString &str_val, ResVec *r
   bool is_ip_invalid = false;
   if (OB_UNLIKELY(str_val.empty())) {
     res_vec->set_int(idx, 0ULL);
-  } else if (OB_FAIL(ObExprInetCommon::str_to_ipv4(str_val.length(), str_val.ptr(), is_ip_invalid, &addr))) {
+  } else if (OB_FAIL(ObExprInetCommon::str_to_ipv4(str_val.ptr(), str_val.length(), is_ip_invalid, &addr))) {
     LOG_WARN("fail to execute str_to_ipv4", K(ret));
   } else {
     res_vec->set_int(idx, is_ip_invalid ? 0ULL : 1ULL);
@@ -1224,22 +1236,26 @@ int ObExprIsIpv4::is_ipv4_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       if (eval_flags.at(idx)) {
         continue;
       } else {
-        ObString text_val = arg_vec->get_string(idx);
-        if (OB_FAIL(is_ipv4_vector_inner<ResVec>(text_val, res_vec, idx))) {
+        ObString text_val;
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, text_val))) {
+          LOG_WARN("fail to get string from text", K(ret));
+        } else if (OB_FAIL(is_ipv4_vector_inner<ResVec>(text_val, res_vec, idx))) {
           LOG_WARN("fail to execute is_ipv4_vector_inner", K(ret));
         }
       }
     }
   } else {
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
-      if (eval_flags.at(idx)||skip.at(idx)) {
+      if (eval_flags.at(idx) || skip.at(idx)) {
         continue;
       } else if (arg_vec->is_null(idx)) {
-        res_vec->set_int(idx, 0);
+        res_vec->set_null(idx);
         continue;
       } else {
-        ObString text_val = arg_vec->get_string(idx);
-        if (OB_FAIL(is_ipv4_vector_inner<ResVec>(text_val, res_vec, idx))) {
+        ObString text_val;
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, text_val))) {
+          LOG_WARN("fail to get string from text", K(ret));
+        } else if (OB_FAIL(is_ipv4_vector_inner<ResVec>(text_val, res_vec, idx))) {
           LOG_WARN("fail to execute is_ipv4_vector_inner", K(ret));
         }
       }
@@ -1273,12 +1289,16 @@ int ObExprIsIpv4::calc_is_ipv4(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr
     LOG_WARN("is_ipv4 expr eval param value failed", K(ret));
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
-    ObString m_text = text.get_string();
+    ObString m_text;
+    bool is_ip_invalid = false;
     if (text.is_null()) {
-      expr_datum.set_int(0);
-    } else if (OB_FAIL(is_ipv4(expr_datum, m_text))) {
+      expr_datum.set_null();
+    } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, &text, m_text))) {
+      LOG_WARN("fail to get string from text", K(ret));
+    } else if (OB_FAIL(is_ipv4(m_text, is_ip_invalid))) {
       LOG_WARN("fail to execute is_ipv4", K(ret));
     } else {
+      expr_datum.set_int(is_ip_invalid ? 0 : 1);
     }
   }
   return ret;
@@ -1345,40 +1365,40 @@ int ObExprIsIpv4Mapped::calc_is_ipv4_mapped(const ObExpr& expr, ObEvalCtx& ctx, 
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
     ObString m_text;
+    bool is_ip_invalid = false;
     if (text.is_null()) {
-      expr_datum.set_int(0);
-    } else if (!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)
-               && !ob_is_binary(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)
-               && !ob_is_blob(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)) {
+      expr_datum.set_null();
+    } else if (!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+               && !ob_is_binary(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+               && !ob_is_blob(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)) {
       expr_datum.set_int(0);
     } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, &text, m_text))) {
       LOG_WARN("fail to get string from text", K(ret));
     } else {
-      is_ipv4_mapped(expr_datum, m_text);
+      is_ipv4_mapped(m_text, is_ip_invalid);
+      expr_datum.set_int(is_ip_invalid ? 0 : 1);
     }
   }
   return ret;
 }
 
-template <typename T>
-inline void ObExprIsIpv4Mapped::is_ipv4_mapped(T& result, const ObString& num_val)
+inline void ObExprIsIpv4Mapped::is_ipv4_mapped(const ObString &num_val, bool &is_ip_invalid)
 {
-  int ipv4_ret = 1;
-  if (sizeof(in6_addr) != num_val.length()) { //length of binary ipv6 addr is 16
-    ipv4_ret = 0;
+  if (num_val.empty()) {
+    is_ip_invalid = true;
+  } else if (sizeof(in6_addr) != num_val.length()) { //length of binary ipv6 addr is 16
+    is_ip_invalid = true;
   } else {
-    ipv4_ret = IN6_IS_ADDR_V4MAPPED((struct in6_addr *) num_val.ptr());
+    is_ip_invalid = !IN6_IS_ADDR_V4MAPPED((struct in6_addr *) num_val.ptr());
   }
-  result.set_int(ipv4_ret);
 }
 
 template<typename ResVec>
 inline int ObExprIsIpv4Mapped::is_ipv4_mapped_vector_inner(const ObString &num_val, ResVec *res_vec, int64_t idx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(num_val.ptr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("num_val is null", K(ret));
+  if (num_val.empty()) {
+    res_vec->set_int(idx, 0);
   } else if (sizeof(in6_addr) != num_val.length()) {
     res_vec->set_int(idx, 0);
   } else {
@@ -1418,7 +1438,7 @@ int ObExprIsIpv4Mapped::is_ipv4_mapped_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       if (eval_flags.at(idx) || skip.at(idx)) {
         continue;
       } else if (arg_vec->is_null(idx)) {
-        res_vec->set_int(idx, 0);
+        res_vec->set_null(idx);
         continue;
       } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, num_val))) {
         LOG_WARN("fail to get string from vector", K(ret));
@@ -1491,8 +1511,9 @@ int ObExprIsIpv4Compat::calc_is_ipv4_compat(const ObExpr& expr, ObEvalCtx& ctx, 
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
     ObString m_text;
+    bool is_ip_invalid = false;
     if (text.is_null()) {
-      expr_datum.set_int(0);
+      expr_datum.set_null();
     } else if (!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
                && !ob_is_binary(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
                && !ob_is_blob(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)) {
@@ -1500,31 +1521,30 @@ int ObExprIsIpv4Compat::calc_is_ipv4_compat(const ObExpr& expr, ObEvalCtx& ctx, 
     } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, &text, m_text))) {
       LOG_WARN("fail to get string from text", K(ret));
     } else {
-      is_ipv4_compat(expr_datum, m_text);
+      is_ipv4_compat(m_text, is_ip_invalid);
+      expr_datum.set_int(is_ip_invalid ? 0 : 1);
     }
   }
   return ret;
 }
 
-template <typename T>
-void ObExprIsIpv4Compat::is_ipv4_compat(T& result, const ObString& num_val)
+void ObExprIsIpv4Compat::is_ipv4_compat(const ObString &num_val, bool &is_ip_invalid)
 {
-  int ipv4_ret = 1;
-  if (sizeof(in6_addr) != num_val.length()) { //length of binary ipv6 addr is 16
-    ipv4_ret = 0;
+  if (num_val.empty()) {
+    is_ip_invalid = true;
+  } else if (sizeof(in6_addr) != num_val.length()) {  //length of binary ipv6 addr is 16
+    is_ip_invalid = true;
   } else {
-    ipv4_ret = IN6_IS_ADDR_V4COMPAT((struct in6_addr *) num_val.ptr());
+    is_ip_invalid = !IN6_IS_ADDR_V4COMPAT((struct in6_addr *) num_val.ptr());
   }
-  result.set_int(ipv4_ret);
 }
 
 template<typename ResVec>
 inline int ObExprIsIpv4Compat::is_ipv4_compat_vector_inner(const ObString &num_val, ResVec *res_vec, int64_t idx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(num_val.ptr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("num_val is null", K(ret));
+  if (num_val.empty()) {
+    res_vec->set_int(idx, 0);
   } else if (sizeof(in6_addr) != num_val.length()) {
     res_vec->set_int(idx, 0);
   } else {
@@ -1564,7 +1584,7 @@ int ObExprIsIpv4Compat::is_ipv4_compat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       if (eval_flags.at(idx) || skip.at(idx)) {
         continue;
       } else if (arg_vec->is_null(idx)) {
-        res_vec->set_int(idx, 0);
+        res_vec->set_null(idx);
         continue;
       } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, num_val))) {
         LOG_WARN("fail to get string from vector", K(ret));
@@ -1636,30 +1656,31 @@ int ObExprIsIpv6::calc_is_ipv6(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr
     LOG_WARN("is_ipv6 expr eval param value failed", K(ret));
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
-    ObString m_text = text.get_string();
+    ObString m_text;
+    bool is_ip_invalid = false;
     if (text.is_null()) {
-      expr_datum.set_int(0);
-    } else if (OB_FAIL(is_ipv6(expr_datum, m_text))) {
+      expr_datum.set_null();
+    } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, &text, m_text))) {
+      LOG_WARN("fail to get string from text", K(ret));
+    } else if (OB_FAIL(is_ipv6(m_text, is_ip_invalid))) {
       LOG_WARN("fail to execute is_ipv6", K(ret));
+    } else {
+      expr_datum.set_int(is_ip_invalid ? 0 : 1);
     }
   }
   return ret;
 }
 
-template <typename T>
-int ObExprIsIpv6::is_ipv6(T& result, const ObString& text)
+
+int ObExprIsIpv6::is_ipv6(const ObString &text, bool &is_ip_invalid)
 {
   int ret = OB_SUCCESS;
   struct in6_addr addr;
-  bool is_ip_invalid = false;
   bool is_pure_ipv4 = false;
   if (OB_UNLIKELY(text.empty())) {
     is_ip_invalid = true;
-    result.set_int(0);
-  } else if (OB_FAIL(ObExprInetCommon::str_to_ip(text.length(), text.ptr(), is_ip_invalid, &addr, true, is_pure_ipv4))) {
+  } else if (OB_FAIL(ObExprInetCommon::str_to_ip(text.ptr(), text.length(), false, is_ip_invalid, &addr, is_pure_ipv4))) {
     LOG_WARN("fail to execute str_to_ip", K(ret));
-  } else {
-    result.set_int(is_ip_invalid ? 0 : 1);
   }
   return ret;
 }
@@ -1672,9 +1693,8 @@ inline int ObExprIsIpv6::is_ipv6_vector_inner(const ObString &str_val, ResVec *r
   bool is_ip_invalid = false;
   bool is_pure_ipv4 = false;
   if (OB_UNLIKELY(str_val.empty())) {
-    is_ip_invalid = true;
     res_vec->set_int(idx, 0ULL);
-  } else if (OB_FAIL(ObExprInetCommon::str_to_ip(str_val.length(), str_val.ptr(), is_ip_invalid, &addr, true, is_pure_ipv4))) {
+  } else if (OB_FAIL(ObExprInetCommon::str_to_ip(str_val.ptr(), str_val.length(), false, is_ip_invalid, &addr, is_pure_ipv4))) {
     LOG_WARN("fail to execute str_to_ip", K(ret));
   } else {
     res_vec->set_int(idx, is_ip_invalid ? 0ULL : 1ULL);
@@ -1696,8 +1716,10 @@ int ObExprIsIpv6::is_ipv6_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       if (eval_flags.at(idx)) {
         continue;
       } else {
-        ObString text_val = arg_vec->get_string(idx);
-        if (OB_FAIL(is_ipv6_vector_inner<ResVec>(text_val, res_vec, idx))) {
+        ObString text_val;
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, text_val))) {
+          LOG_WARN("fail to get string from vector", K(ret));
+        } else if (OB_FAIL(is_ipv6_vector_inner<ResVec>(text_val, res_vec, idx))) {
           LOG_WARN("fail to execute is_ipv6_vector_inner", K(ret));
         }
       }
@@ -1707,11 +1729,13 @@ int ObExprIsIpv6::is_ipv6_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       if (eval_flags.at(idx)||skip.at(idx)) {
         continue;
       } else if (arg_vec->is_null(idx)) {
-        res_vec->set_int(idx, 0);
+        res_vec->set_null(idx);
         continue;
       } else {
-        ObString text_val = arg_vec->get_string(idx);
-        if (OB_FAIL(is_ipv6_vector_inner<ResVec>(text_val, res_vec, idx))) {
+        ObString text_val;
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, text_val))) {
+          LOG_WARN("fail to get string from vector", K(ret));
+        } else if (OB_FAIL(is_ipv6_vector_inner<ResVec>(text_val, res_vec, idx))) {
           LOG_WARN("fail to execute is_ipv6_vector_inner", K(ret));
         }
       }
