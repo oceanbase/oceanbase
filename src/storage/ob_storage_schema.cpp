@@ -2111,13 +2111,8 @@ int ObStorageSchema::get_skip_index_col_attr_by_schema(
     // column_info_simplified path
     if (share::schema::is_fts_doc_word_aux(index_type_) ||
         share::schema::is_fts_index_aux(index_type_)) {
-      // handle FTS index specially
-      // FTS auxiliary table: use ObFtsIndexBuilderUtil to generate skip index
-      // attr for non-rowkey columns
-      if (OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_aux_skip_index_attrs(
-              skip_idx_attrs, column_types, attr_idx))) {
-        LOG_WARN("failed to generate FTS skip index attrs", K(ret));
-      }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fts index should not be column info simplified!", KPC(this));
     }
   }
 
@@ -2342,21 +2337,8 @@ int ObStorageSchema::get_multi_version_column_descs(common::ObIArray<share::sche
   } else if (column_info_simplified_) {
     if (share::schema::is_fts_index_aux(index_type_) ||
         share::schema::is_fts_doc_word_aux(index_type_)) {
-      if (OB_FAIL(get_mulit_version_rowkey_column_ids(column_descs))) {
-        LOG_WARN("failed to get rowkey column descs", K(ret));
-      } else {
-        const int64_t schema_rowkey_end =
-            column_descs.count() - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() - 1;
-        uint32_t schema_rowkey_max_column_id = OB_APP_MIN_COLUMN_ID;
-        for (int64_t i = 0; i < schema_rowkey_end; ++i) {
-          schema_rowkey_max_column_id = max(schema_rowkey_max_column_id, column_descs.at(i).col_id_);
-        }
-        const int64_t start_column_id = schema_rowkey_max_column_id + 1;
-        if (OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_aux_non_rowkey_column_descs(
-                column_descs, start_column_id))) {
-          LOG_WARN("failed to generate FTS auxiliary table non-rowkey column descs", K(ret));
-        }
-      }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fts index should not be column info simplified!", KPC(this));
     } else {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "not support get multi version column desc array when column simplified", K(ret), KPC(this));
@@ -2445,7 +2427,11 @@ void ObStorageSchema::update_column_cnt_and_schema_version(
   column_cnt_ = MAX(column_cnt_, input_col_cnt);
   store_column_cnt_ = MAX(store_column_cnt_, input_store_col_cnt);
   schema_version_ = MAX(schema_version_, input_schema_version);
-  if (column_cnt_ != column_array_.count() || origin_store_column_cnt != store_column_cnt_ || origin_schema_version < schema_version_) {
+  if (column_cnt_ != column_array_.count() ||
+      origin_store_column_cnt != store_column_cnt_ ||
+      (origin_schema_version < schema_version_ &&
+       !share::schema::is_fts_doc_word_aux(index_type_) &&
+       !share::schema::is_fts_index_aux(index_type_))) {
     // In the scenario of column modification that increase the width of integer column
     // because cs encoding will discard MSB side data(truncate the integer to its width)
     // if we use the stale storage schema for the encoding of mini / minor sstables
@@ -2453,6 +2439,7 @@ void ObStorageSchema::update_column_cnt_and_schema_version(
     // To avoid this, when the table is user data table(currently only user data table support minor encoding)
     // if the schema version increases(there may be column modification that increase the width of integer column)
     // it will simplify the storage schema.
+    // For FTS index, the column info should not be simplified.
     // TODO @cuiyuntian.cyt cs encoding should not truncate interger
     column_info_simplified_ = true;
     STORAGE_LOG(INFO, "update column cnt",
