@@ -330,7 +330,6 @@ int64_t ObTabletDDLKvMgr::get_idx(const int64_t pos) const
 
 int ObTabletDDLKvMgr::add_idempotence_checker()
 {
-  int ret = OB_SUCCESS;
   ObLatchWGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
   return add_idempotence_checker_nolock();
 }
@@ -368,10 +367,27 @@ int ObTabletDDLKvMgr::check_idem_block_exist(const ObDDLMacroBlockType block_typ
                                              bool &is_marco_block_already_exist)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(add_idempotence_checker())) {
-    LOG_WARN("failed to add idempotence checker", K(ret));
-  } else if (OB_FAIL(idem_checker_.check_block_exist(block_type, direct_load_type, macro_block_id, logic_id, checksum, table_type, is_marco_block_already_exist))) {
-    LOG_WARN("failed to check block exist", K(ret));
+  bool need_retry_with_init = false;
+  {
+    ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+    if (OB_UNLIKELY(!idem_checker_.is_inited())) {
+      need_retry_with_init = true;
+    } else if (OB_FAIL(idem_checker_.check_block_exist(block_type, direct_load_type, macro_block_id, logic_id, checksum, table_type, is_marco_block_already_exist))) {
+      LOG_WARN("failed to check block exist", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && need_retry_with_init) {
+    ObLatchWGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+    if (OB_FAIL(add_idempotence_checker_nolock())) {
+      LOG_WARN("failed to add idempotence checker", K(ret));
+    } else {
+      if (OB_UNLIKELY(!idem_checker_.is_inited())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("idem checker is not inited", K(ret));
+      } else if (OB_FAIL(idem_checker_.check_block_exist(block_type, direct_load_type, macro_block_id, logic_id, checksum, table_type, is_marco_block_already_exist))) {
+        LOG_WARN("failed to check block exist", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -383,7 +399,30 @@ int ObTabletDDLKvMgr::set_idem_block_checksum(const ObDDLMacroBlockType block_ty
                                               const int64_t checksum,
                                               const ObITable::TableType table_type)
 {
-  return idem_checker_.set_block_checksum(block_type, direct_load_type, block_id, logic_id, checksum, table_type);
+  int ret = OB_SUCCESS;
+  bool need_retry_with_init = false;
+  {
+    ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+    if (OB_UNLIKELY(!idem_checker_.is_inited())) {
+      need_retry_with_init = true;
+    } else if (OB_FAIL(idem_checker_.set_block_checksum(block_type, direct_load_type, block_id, logic_id, checksum, table_type))) {
+      LOG_WARN("failed to set block checksum", K(ret), K(block_id), K(logic_id), K(checksum), K(table_type));
+    }
+  }
+  if (OB_SUCC(ret) && need_retry_with_init) {
+    ObLatchWGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+    if (OB_FAIL(add_idempotence_checker_nolock())) {
+      LOG_WARN("failed to add idempotence checker", K(ret));
+    } else {
+      if (OB_UNLIKELY(!idem_checker_.is_inited())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("idem checker is not inited", K(ret));
+      } else if (OB_FAIL(idem_checker_.set_block_checksum(block_type, direct_load_type, block_id, logic_id, checksum, table_type))) {
+        LOG_WARN("failed to set block checksum", K(ret), K(block_id), K(logic_id), K(checksum), K(table_type));
+      }
+    }
+  }
+  return ret;
 }
 
 int ObTabletDDLKvMgr::remove_idempotence_checker()
