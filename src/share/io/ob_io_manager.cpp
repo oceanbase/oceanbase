@@ -1045,6 +1045,7 @@ int ObIOManager::pread(ObIOInfo &info, int64_t &read_size)
     LOG_WARN("invalid argument", K(ret), K(info));
   } else {
     info.flag_.set_read();
+    info.flag_.set_sync_();
     info.timeout_us_ = MAX_IO_WAIT_TIME_MS * 1000;
     ObIOHandle handle;
     if (OB_FAIL(tenant_aio(info, handle))) {
@@ -1083,6 +1084,7 @@ int ObIOManager::pwrite(ObIOInfo &info, int64_t &write_size)
     LOG_WARN("invalid argument", K(ret), K(info));
   } else {
     info.flag_.set_write();
+    info.flag_.set_sync_();
     info.timeout_us_ = MAX_IO_WAIT_TIME_MS * 1000;
     ObIOHandle handle;
     if (OB_FAIL(tenant_aio(info, handle))) {

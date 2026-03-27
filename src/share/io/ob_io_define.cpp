@@ -851,7 +851,8 @@ int ObIOResult::set_flag_sync_or_async_(const ObIOInfo &info)
     LOG_WARN("invalid argument", KR(ret), K(info));
   } else {
     if (info.fd_.device_handle_->is_local_device() || info.fd_.device_handle_->is_local_cache_device()) {
-      flag_.set_async_();
+      // io_manager.pwrite/pread will set flag_.set_sync_()
+      // otherwise, keep default behavior
     } else if (info.fd_.device_handle_->is_object_device()) {
       // is_object_storage_async_io_ indicates that the handle(such as ObStorageAsyncReader)
       // supports asynchronous I/O, but not all the interfaces of the handle support async io.

@@ -39,6 +39,7 @@ namespace common
 {
 
 class ObObjectDevice;
+class ObIOManager;
 
 // the timestamp adjustment will not adjust until the queue is idle for more than this time
 static constexpr int64_t CLOCK_IDLE_THRESHOLD_US = 100 * 1000L;  // 100ms
@@ -194,6 +195,7 @@ private:
 
 private:
   friend struct ObIOResult;
+  friend class ObIOManager;
   void set_func_type(const uint8_t func_type);
   void set_resource_group_id(const uint64_t group_id);
   static constexpr int64_t IO_MODE_BIT = 4; // read, write, append
