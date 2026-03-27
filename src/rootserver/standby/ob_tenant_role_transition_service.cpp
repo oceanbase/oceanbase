@@ -404,14 +404,14 @@ int ObTenantRoleTransitionService::failover_to_primary()
     if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("common rpc proxy is null", KR(ret), KP(GCTX.rs_mgr_), KP(GCTX.rs_rpc_proxy_));
+    } else if (OB_FAIL(ObProtectionModeUtils::wait_protection_stat_steady(
+            tenant_id_, tenant_info.get_protection_mode(), sql_proxy_))) {
+      LOG_WARN("failed to wait protection stat steady", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
       LOG_WARN("failed to set default timeout ctx", KR(ret));
     } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to_rs(*GCTX.rs_mgr_)
           .timeout(ctx.get_abs_timeout() - ObTimeUtility::current_time()).broadcast_schema(arg))) {
       LOG_WARN("failed to broadcast schema", KR(ret), K(arg));
-    } else if (OB_FAIL(ObProtectionModeUtils::wait_protection_stat_steady(
-            tenant_id_, tenant_info.get_protection_mode(), sql_proxy_))) {
-      LOG_WARN("failed to wait protection stat steady", KR(ret), K(tenant_id_));
     }
   }
 
