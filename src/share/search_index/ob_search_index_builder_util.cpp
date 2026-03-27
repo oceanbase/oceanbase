@@ -85,31 +85,44 @@ int ObSearchIndexBuilderUtil::set_search_index_table_columns(
   } else {
     int64_t rowkey_pos = 0;
     const int64_t tenant_id = data_schema.get_tenant_id();
+    const int64_t ts_suffix = ObTimeUtility::current_time();
     struct ColumnDef {
-      const char *name;
+      const char *name_prefix;
       ObObjType type;
       int64_t length;
       bool is_binary;
       bool is_rowkey;
     } columns[] = {
-      {"COL_IDX",    ObIntType,     0,                          false, true},
-      {"PATH",       ObVarcharType, SEARCH_INDEX_PATH_LENGTH,   true, true},
-      {"VALUE",      ObVarcharType, SEARCH_INDEX_VALUE_LENGTH,  true,  true},
-      {"DOC_ID",     ObUInt64Type,  0,                          false, true},
+      {"COL_IDX",    ObIntType,     0,                         false, true},
+      {"PATH",       ObVarcharType, SEARCH_INDEX_PATH_LENGTH,  true,  true},
+      {"VALUE",      ObVarcharType, SEARCH_INDEX_VALUE_LENGTH, true,  true},
+      {"DOC_ID",     ObUInt64Type,  0,                         false, true},
     };
     const int64_t column_cnt = static_cast<int64_t>(sizeof(columns) / sizeof(columns[0]));
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
       const ColumnDef &c = columns[i];
-      if (OB_FAIL(add_search_index_column(data_schema,
-                                          index_schema,
-                                          tenant_id,
-                                          c.name,
-                                          c.type,
-                                          c.length,
-                                          c.is_binary,
-                                          c.is_rowkey,
-                                          rowkey_pos))) {
-        LOG_WARN("failed to add search column", K(ret), K(i), K(c.name));
+      char generated_name[OB_MAX_COLUMN_NAME_LENGTH] = {'\0'};
+      int64_t name_pos = 0;
+      if (OB_FAIL(databuff_printf(generated_name,
+                                  OB_MAX_COLUMN_NAME_LENGTH,
+                                  name_pos,
+                                  "__%s_%ld",
+                                  c.name_prefix,
+                                  ts_suffix))) {
+        LOG_WARN("failed to generate search column name", K(ret), K(i), K(c.name_prefix), K(ts_suffix));
+      } else if (name_pos <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected generated search column name", K(ret), K(i), K(c.name_prefix), K(ts_suffix));
+      } else if (OB_FAIL(add_search_index_column(data_schema,
+                                                 index_schema,
+                                                 tenant_id,
+                                                 generated_name,
+                                                 c.type,
+                                                 c.length,
+                                                 c.is_binary,
+                                                 c.is_rowkey,
+                                                 rowkey_pos))) {
+        LOG_WARN("failed to add search column", K(ret), K(i), K(generated_name));
       }
     }
     if (OB_SUCC(ret)) {
