@@ -209,6 +209,16 @@ void ObDASTokenOpHelper::init_text_retrieval_param(
   text_retrieval_param.use_rich_format_ = use_rich_format_;
 }
 
+void ObDASTokenOpHelper::reset_scan_range()
+{
+  obj_buf_[1].set_min_value();    // doc id of start key
+  obj_buf_[3].set_max_value();    // doc id of end key
+  inv_idx_scan_range_.start_key_.assign(obj_buf_, 2);
+  inv_idx_scan_range_.end_key_.assign(obj_buf_ + 2, 2);
+  inv_idx_scan_range_.border_flag_.set_inclusive_start();
+  inv_idx_scan_range_.border_flag_.set_inclusive_end();
+}
+
 int ObDASTokenOpHelper::rescan()
 {
   int ret = OB_SUCCESS;
@@ -222,6 +232,7 @@ int ObDASTokenOpHelper::rescan()
     const bool need_relevance = ir_ctdef_->need_calc_relevance();
     ObIDASSearchOp::switch_tablet_id(inv_idx_tablet_id_, inv_idx_scan_param_);
     ObIDASSearchOp::switch_tablet_id(inv_idx_tablet_id_, inv_idx_agg_param_);
+    reset_scan_range();
     if (OB_FAIL(inv_idx_scan_iter_.reuse())) {
       LOG_WARN("failed to reuse inv idx scan iter", K(ret));
     } else if (need_relevance && OB_FAIL(inv_idx_agg_iter_.reuse())) {

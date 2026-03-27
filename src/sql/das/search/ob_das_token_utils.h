@@ -40,6 +40,7 @@ private:
       ObDASScanIterParam &iter_param);
   void init_text_retrieval_param(
       ObTextRetrievalScanIterParam &text_retrieval_param);
+  void reset_scan_range();
 private:
   static constexpr int64_t OBJ_BUF_SIZE = 4;
   ObDASSearchCtx &search_ctx_;
