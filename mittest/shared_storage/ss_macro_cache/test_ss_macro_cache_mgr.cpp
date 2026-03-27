@@ -493,6 +493,30 @@ TEST_F(TestSSMacroCacheMgr, force_evict_by_macro_id_write_cache)
   ASSERT_EQ(nullptr, macro_cache_mgr->meta_map_.get(macro_id));
 }
 
+TEST_F(TestSSMacroCacheMgr, evict_by_macro_id_when_meta_not_exist)
+{
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+
+  const uint64_t tablet_id = 200010;
+  const uint64_t server_id = 1;
+  bool is_write_cache = false;
+
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
+  macro_id.set_second_id(tablet_id);
+  macro_id.set_third_id(server_id);
+  macro_id.set_macro_private_transfer_epoch(0);
+  macro_id.set_tenant_seq(100);
+  ASSERT_TRUE(macro_id.is_valid());
+
+  ASSERT_EQ(nullptr, macro_cache_mgr->meta_map_.get(macro_id));
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->evict_by_macro_id(macro_id, is_write_cache));
+  ASSERT_EQ(nullptr, macro_cache_mgr->meta_map_.get(macro_id));
+  ASSERT_FALSE(is_write_cache);
+}
+
 TEST_F(TestSSMacroCacheMgr, clear_macro_cache)
 {
   int ret = OB_SUCCESS;
