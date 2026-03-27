@@ -891,10 +891,10 @@ int ObCOSSTableRowScanner::update_continuous_range(
 int ObCOSSTableRowScanner::fetch_rows()
 {
   int ret = OB_SUCCESS;
-  if (iter_param_->has_lob_column_out()) {
-    access_ctx_->reuse_lob_locator_helper();
-  }
   if (nullptr == group_by_cell_) {
+    if (iter_param_->has_lob_column_out()) {
+      access_ctx_->reuse_lob_locator_helper();
+    }
     ret = fetch_output_rows();
   } else {
     ret = fetch_group_by_rows();
@@ -1123,6 +1123,9 @@ int ObCOSSTableRowScanner::fetch_group_by_rows()
   if (group_by_cell_->is_processing()) {
     can_group_by = true;
   } else {
+    if (iter_param_->has_lob_column_out()) {
+      access_ctx_->reuse_lob_locator_helper();
+    }
     can_group_by = is_new_group_;
     if (can_group_by && OB_FAIL(group_by_processor->decide_can_group_by(group_by_col_offset, can_group_by))) {
       LOG_WARN("Failed to check group by info", K(ret));
@@ -1182,9 +1185,6 @@ int ObCOSSTableRowScanner::do_group_by()
   int ret = OB_SUCCESS;
   const int32_t group_by_col_offset = 0; // TODO(yht146439) multiple columns in cg
   ObICGGroupByProcessor *group_by_processor = group_by_iters_.at(0);
-  if (nullptr !=access_ctx_->lob_locator_helper_) {
-    access_ctx_->lob_locator_helper_->reuse();
-  }
   if (OB_FAIL(group_by_processor->read_distinct(group_by_col_offset))) {
     LOG_WARN("Failed to read distinct", K(ret));
   } else if (OB_FAIL(group_by_processor->fill_group_by_col_lob_locator())) {

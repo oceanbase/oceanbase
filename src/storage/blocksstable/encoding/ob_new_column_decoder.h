@@ -49,6 +49,7 @@ public:
 
   int read_distinct(
       const ObColumnParam *col_param,
+      ObIAllocator &allocator,
       storage::ObGroupByCellBase &group_by_cell) const;
 
   int read_reference(
@@ -150,7 +151,7 @@ public:
       const char **cell_datas,
       storage::ObGroupByCellBase &group_by_cell)  const override
   {
-    return common_decoder_.read_distinct(ctx.col_param_, group_by_cell);
+    return common_decoder_.read_distinct(ctx.col_param_, *ctx.allocator_, group_by_cell);
   }
 
   virtual int read_reference(

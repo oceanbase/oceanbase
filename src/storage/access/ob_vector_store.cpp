@@ -457,6 +457,9 @@ int ObVectorStore::check_can_group_by(
     can_group_by = true;
   } else {
     int64_t micro_row_count = 0;
+    if (iter_param_->has_lob_column_out()) {
+      context_.reuse_lob_locator_helper();
+    }
     if (OB_FAIL(reader->get_row_count(micro_row_count))) {
       LOG_WARN("Failed to get micro row count", K(ret));
     } else {
@@ -503,9 +506,6 @@ int ObVectorStore::do_group_by(
   blocksstable::ObIMicroBlockDecoder *decoder = static_cast<blocksstable::ObIMicroBlockDecoder*>(reader);
   const int32_t group_by_col_offset = group_by_cell_->get_group_by_col_offset();
   const char **cell_data = group_by_cell_->get_cell_datas();
-  if (nullptr != context_.lob_locator_helper_) {
-    context_.lob_locator_helper_->reuse();
-  }
   if (OB_FAIL(decoder->read_distinct(group_by_col_offset, nullptr == cell_data ? cell_data_ptrs_ : cell_data,
       is_pad_char_to_full_length(context_.sql_mode_), *group_by_cell_))) {
     LOG_WARN("Failed to read distinct", K(ret));
