@@ -148,8 +148,8 @@ public:
   PLAN_VISITOR_VISIT_DECL(delete, ObLogDelete)
   PLAN_VISITOR_VISIT_DECL(insert, ObLogInsert)
 
-  protected:
-  // do notuse dipatch_visit in visitor
+private:
+  // do notuse dipatch_visit in visitor impementation
   // use visit instead
   int dispatch_visit(ObLogicalOperator* plannode, C* context, R*& result);
 
@@ -159,7 +159,7 @@ public:
     if (OB_ISNULL(plannode)) {
       return OB_ERR_UNEXPECTED;
     }
-    return dispatch_visit(plannode, context, result);
+    return SMART_CALL(dispatch_visit(plannode, context, result));
   }
 };
 
@@ -172,7 +172,7 @@ public:
     int ret = OB_SUCCESS;
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(SMART_CALL((this->dispatch_visit(child, context, result))))) {
+    } else if (OB_FAIL(SMART_CALL((this->visit(child, context, result))))) {
     }
     return ret;
   }
@@ -225,7 +225,7 @@ SimplePlanVisitor() {}
     int ret = OB_SUCCESS;
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(SMART_CALL((this->dispatch_visit(child, context, result))))) {
+    } else if (OB_FAIL(SMART_CALL((this->visit(child, context, result))))) {
     }
     return ret;
   }

@@ -405,7 +405,7 @@ struct NoSpecialExprPredicate {
       } else {
         // do prune and update for left child first
         RewriterResult *dummy_result = NULL;
-        if (OB_FAIL(this->dispatch_visit(joinnode->get_child(0), NULL, dummy_result))) {
+        if (OB_FAIL(SMART_CALL(this->visit(joinnode->get_child(0), NULL, dummy_result)))) {
           LOG_WARN("failed to visit left child", K(ret));
         } else {
           bool has_valid_producer = false;
@@ -534,7 +534,7 @@ struct NoSpecialExprPredicate {
       if (OB_FAIL(ret)) {
       } else {
         RewriterResult *dummy_result2 = NULL;
-        if (OB_FAIL(this->dispatch_visit(joinnode->get_child(1), NULL, dummy_result2))) {
+        if (OB_FAIL(SMART_CALL(this->visit(joinnode->get_child(1), NULL, dummy_result2)))) {
           LOG_WARN("failed to visit right child", K(ret));
         }
       }
@@ -1503,9 +1503,9 @@ struct NoSpecialExprPredicate {
             // only push to right side of nested-loop join if
             // left is at most scalar
             // or is nlj withoug params down
-          } else if (OB_FAIL((this->dispatch_visit(left_child, to_left_context, result)))) {
+          } else if (OB_FAIL(SMART_CALL(this->visit(left_child, to_left_context, result)))) {
             LOG_WARN("failed to rewrite child", K(ret), K(joinnode->get_name()));
-          } else if (OB_FAIL((this->dispatch_visit(right_child, to_right_context, result)))) {
+          } else if (OB_FAIL(SMART_CALL(this->visit(right_child, to_right_context, result)))) {
             LOG_WARN("failed to rewrite child", K(ret), K(joinnode->get_name()));
           }
         }
@@ -1698,7 +1698,7 @@ struct NoSpecialExprPredicate {
         LOG_WARN("failed to filter by predicate", K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < subplanfilter->get_num_of_child(); ++i) {
-          if (OB_FAIL((this->dispatch_visit(subplanfilter->get_child(i), i == 0 ? context : NULL, result)))) {
+          if (OB_FAIL(SMART_CALL(this->visit(subplanfilter->get_child(i), i == 0 ? context : NULL, result)))) {
             LOG_WARN("failed to rewrite child", K(ret));
           }
         }
@@ -1760,7 +1760,7 @@ struct NoSpecialExprPredicate {
                                                               child_select_exprs,
                                                               child_op->get_table_set()))) {
               LOG_WARN("failed to map context", K(ret));
-            } else if (OB_FAIL(this->dispatch_visit(child_op, pushdown_context, result))) {
+            } else if (OB_FAIL(SMART_CALL(this->visit(child_op, pushdown_context, result)))) {
               LOG_WARN("failed to rewrite child", K(ret));
             }
           }
