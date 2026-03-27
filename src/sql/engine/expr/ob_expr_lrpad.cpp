@@ -7,6 +7,7 @@
 
 #include "sql/engine/expr/ob_expr_lrpad.h"
 #include "sql/engine/ob_exec_context.h"
+#include "lib/utility/ob_tracepoint.h"
 
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/charset/ob_charset_string_helper.h"
@@ -1162,7 +1163,7 @@ int ObExprBaseLRpad::init_pad_ctx(const ObExpr &expr,
     if (OB_FAIL(ret)) {
     } else {
       int64_t repeat_count = (length + pad_len - 1) / pad_len;
-      repeat_count = std::min(repeat_count, max_result_size / str_pad.length());
+      repeat_count = std::min(repeat_count, (max_result_size + str_pad.length() - 1) / str_pad.length());
       char *pad_buf = static_cast<char *>(exec_ctx.get_allocator().alloc(str_pad.length() * repeat_count));
       if (OB_ISNULL(pad_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1690,7 +1691,9 @@ int ObExprLpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_mysql_lpad_expr;
-  rt_expr.eval_vector_func_ = calc_mysql_lpad_expr_vector;
+  if ((OB_E(EventTable::EN_ENABLE_VEC_LRPAD) OB_SUCCESS) != OB_SUCCESS) {
+    rt_expr.eval_vector_func_ = calc_mysql_lpad_expr_vector;
+  }
   return ret;
 }
 
@@ -1739,7 +1742,9 @@ int ObExprRpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_mysql_rpad_expr;
-  rt_expr.eval_vector_func_ = calc_mysql_rpad_expr_vector;
+  if ((OB_E(EventTable::EN_ENABLE_VEC_LRPAD) OB_SUCCESS) != OB_SUCCESS) {
+    rt_expr.eval_vector_func_ = calc_mysql_rpad_expr_vector;
+  }
   return ret;
 }
 
@@ -1822,7 +1827,9 @@ int ObExprOracleLpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
       info->is_called_in_sql_ = is_called_in_sql();
       rt_expr.extra_info_ = extra_info;
       rt_expr.eval_func_ = calc_oracle_lpad_expr;
-      rt_expr.eval_vector_func_ = calc_oracle_lpad_expr_vector;
+      if ((OB_E(EventTable::EN_ENABLE_VEC_LRPAD) OB_SUCCESS) != OB_SUCCESS) {
+        rt_expr.eval_vector_func_ = calc_oracle_lpad_expr_vector;
+      }
     }
   }
   return ret;
@@ -1907,7 +1914,9 @@ int ObExprOracleRpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
       info->is_called_in_sql_ = is_called_in_sql();
       rt_expr.extra_info_ = extra_info;
       rt_expr.eval_func_ = calc_oracle_rpad_expr;
-      rt_expr.eval_vector_func_ = calc_oracle_rpad_expr_vector;
+      if ((OB_E(EventTable::EN_ENABLE_VEC_LRPAD) OB_SUCCESS) != OB_SUCCESS) {
+        rt_expr.eval_vector_func_ = calc_oracle_rpad_expr_vector;
+      }
     }
   }
   return ret;

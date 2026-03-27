@@ -411,6 +411,7 @@ GLOBAL_ERRSIM_POINT_DEF(566, EN_COST_MODEL_TEST, "test cost model for mysqltest 
 GLOBAL_ERRSIM_POINT_DEF(567, EN_CHECK_STMT_VALID, "Reporting error when stmt not valid after transform");
 GLOBAL_ERRSIM_POINT_DEF(568, EN_SET_CONFIG_WAIT_SYNC_TIMEOUT, "timeout in seconds for waiting config sync when set config");
 GLOBAL_ERRSIM_POINT_DEF(569, EN_MVIEW_DEFENSIVE_CHECK, "Whether allow to do some defensive checks for materialized mview");
+GLOBAL_ERRSIM_POINT_DEF(570, EN_ENABLE_VEC_LRPAD, "Used to control whether to turn on the vectorization 2.0 lrpad operator. It is turned off by default.");
 // 600-700 For PX use
 GLOBAL_ERRSIM_POINT_DEF(600, EN_PX_SQC_EXECUTE_FAILED, "");
 GLOBAL_ERRSIM_POINT_DEF(601, EN_PX_SQC_INIT_FAILED, "Used to simulate the scenario of failure to init sub query coordinator");
