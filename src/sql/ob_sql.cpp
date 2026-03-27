@@ -3695,8 +3695,8 @@ int ObSql::generate_plan(ParseResult &parse_result,
     } else if (OB_UNLIKELY(NULL == phy_plan)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("Failed to alloc physical plan from tc factory", K(ret));
+    } else if (OB_NOT_NULL(pc_ctx) && OB_FALSE_IT(phy_plan->create_reason_.from_recorder(pc_ctx->recorder_))) {
     } else {
-      phy_plan->create_reason_.from_recorder(pc_ctx->recorder_);
       phy_plan->stat_.plan_id_ = phy_plan->get_object_id();
       // update is_use_jit flag
       phy_plan->set_use_rich_format(sql_ctx.session_info_->use_rich_format());
