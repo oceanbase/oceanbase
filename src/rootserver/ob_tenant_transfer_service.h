@@ -184,7 +184,6 @@ private:
       const common::ObIArray<common::ObTableID> &table_ids,
       common::ObIArray<common::ObTabletID> &temporary_tablet_ids);
   int get_tablet_ids_for_oracle_tmp_table_v2_for_unlock_(
-      const share::ObLSID &ls_id,
       const common::ObIArray<common::ObTableID> &table_ids,
       const share::ObTransferTabletList &trans_tablet_list,
       common::ObIArray<common::ObTabletID> &temporary_tablet_ids);
