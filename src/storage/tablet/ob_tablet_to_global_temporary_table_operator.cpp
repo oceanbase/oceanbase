@@ -249,7 +249,7 @@ int ObTabletToGlobalTmpTableOperator::point_get(
       ObSqlString sql;
       common::ObSEArray<storage::ObSessionTabletInfo, 1> infos;
       if (FAILEDx(sql.append_fmt(
-          "SELECT %s FROM %s WHERE table_id = %lu AND sequence = %ld AND session_id = %u",
+          "SELECT %s FROM %s WHERE table_id = %lu AND sequence = %ld AND session_id = %lu",
           query_column_str,
           OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TNAME,
           table_id,
