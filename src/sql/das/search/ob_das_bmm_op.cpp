@@ -205,6 +205,13 @@ int ObDASBMMOp::do_advance_to(const ObDASRowID &target, ObDASRowID &curr_id, dou
     ret = OB_NOT_INIT;
     LOG_WARN("not initialized", K(ret));
   } else {
+    if (0 == min_competitive_score_ && query_optional_) {
+      // otherwise, merge iters must be involved, which are advanced below
+      ObDASRowID temp_id;
+      if (OB_FAIL(advance_filter_to(target, curr_filter_id_))) {
+        LOG_WARN("failed to advance filter op", K(ret), K(target));
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < merge_iters_.count(); ++i) {
       if (OB_ISNULL(merge_iters_[i])) {
         ret = OB_ERR_UNEXPECTED;
