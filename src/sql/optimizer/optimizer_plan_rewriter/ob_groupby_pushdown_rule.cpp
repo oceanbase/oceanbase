@@ -76,6 +76,8 @@ int ObGroupByPushdownContext::assign(const ObGroupByPushdownContext &other)
     need_count_ = other.need_count_;
     enable_reshuffle_ = other.enable_reshuffle_;
     enable_place_groupby_ = other.enable_place_groupby_;
+    benefit_from_reshuffle_ = other.benefit_from_reshuffle_;
+    in_broadcast_side_path_ = other.in_broadcast_side_path_;
   }
   return ret;
 }
@@ -959,6 +961,9 @@ int ObGroupByPushDownPlanRewriter::compute_push_through_join_params(ObLogJoin *j
       bool disable_reshuffle = join->get_dist_method() != DistAlgo::DIST_BC2HOST_NONE
                               && join->get_dist_method() != DistAlgo::DIST_BROADCAST_NONE
                               && join->get_dist_method() != DistAlgo::DIST_NONE_BROADCAST;
+      bool left_is_broadcast_side = join->get_dist_method() == DistAlgo::DIST_BROADCAST_NONE
+                                    || join->get_dist_method() == DistAlgo::DIST_BC2HOST_NONE;
+      bool right_is_broadcast_side = join->get_dist_method() == DistAlgo::DIST_NONE_BROADCAST;
       left_ctx.reset();
       right_ctx.reset();
       can_push_to_left = try_push_to_left;
@@ -971,6 +976,8 @@ int ObGroupByPushDownPlanRewriter::compute_push_through_join_params(ObLogJoin *j
       right_ctx.enable_place_groupby_ = true;
       left_ctx.benefit_from_reshuffle_ = true;
       right_ctx.benefit_from_reshuffle_ = true;
+      left_ctx.in_broadcast_side_path_ = left_is_broadcast_side;
+      right_ctx.in_broadcast_side_path_ = right_is_broadcast_side;
       if (OB_FAIL(distribute_groupby_exprs(ctx->groupby_exprs_,
                                            left_child,
                                            right_child,
@@ -1714,33 +1721,40 @@ int ObGroupByPushDownPlanRewriter::set_context_flags_for_exchange(ObLogExchange 
   if (OB_ISNULL(exchange) || OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), KP(exchange), KP(ctx));
-  } else if (exchange->is_slave_mapping()) {
-    ctx->enable_reshuffle_ = false;
-    ctx->enable_place_groupby_ = false;
-    OPT_TRACE("set context flags for exchange, is slave mapping, disable reshuffle and place groupby");
   } else {
-    OPT_TRACE("set context flags for exchange: ", exchange->get_name(), exchange->get_op_id());
-    switch (exchange->get_dist_method()) {
-      case ObPQDistributeMethod::HASH:
-      case ObPQDistributeMethod::PARTITION: {
-        ctx->enable_reshuffle_ = true;
-        ctx->enable_place_groupby_ = true;
-        ctx->benefit_from_reshuffle_ = false;
-        break;
-      }
-      case ObPQDistributeMethod::BC2HOST:
-      case ObPQDistributeMethod::BROADCAST:
-      case ObPQDistributeMethod::RANDOM: {
-        ctx->enable_reshuffle_ = true;
-        ctx->enable_place_groupby_ = true;
-        ctx->benefit_from_reshuffle_ = true;
-        break;
-      }
-      default: {
-        ctx->enable_reshuffle_ = false;
-        ctx->enable_place_groupby_ = false;
-        ctx->benefit_from_reshuffle_ = false;
-        break;
+    if (exchange->get_dist_method() == ObPQDistributeMethod::BC2HOST
+        || exchange->get_dist_method() == ObPQDistributeMethod::BROADCAST) {
+      // The pushdown path has crossed a broadcast/BC2HOST exchange, clear the marker.
+      ctx->in_broadcast_side_path_ = false;
+    }
+    if (exchange->is_slave_mapping()) {
+      ctx->enable_reshuffle_ = false;
+      ctx->enable_place_groupby_ = false;
+      OPT_TRACE("set context flags for exchange, is slave mapping, disable reshuffle and place groupby");
+    } else {
+      OPT_TRACE("set context flags for exchange: ", exchange->get_name(), exchange->get_op_id());
+      switch (exchange->get_dist_method()) {
+        case ObPQDistributeMethod::HASH:
+        case ObPQDistributeMethod::PARTITION: {
+          ctx->enable_reshuffle_ = true;
+          ctx->enable_place_groupby_ = true;
+          ctx->benefit_from_reshuffle_ = false;
+          break;
+        }
+        case ObPQDistributeMethod::BC2HOST:
+        case ObPQDistributeMethod::BROADCAST:
+        case ObPQDistributeMethod::RANDOM: {
+          ctx->enable_reshuffle_ = true;
+          ctx->enable_place_groupby_ = true;
+          ctx->benefit_from_reshuffle_ = true;
+          break;
+        }
+        default: {
+          ctx->enable_reshuffle_ = false;
+          ctx->enable_place_groupby_ = false;
+          ctx->benefit_from_reshuffle_ = false;
+          break;
+        }
       }
     }
   }
@@ -2103,6 +2117,8 @@ int ObGroupByPushDownPlanRewriter::try_place_groupby(ObLogicalOperator *op,
   if (OB_FAIL(ret)) {
   } else if (!ctx->enable_place_groupby_) {
     OPT_TRACE("enable_place_groupby_ is false, do nothing");
+  } else if (ctx->in_broadcast_side_path_) {
+    OPT_TRACE("in broadcast side path, do nothing");
   } else if (op->get_parent()->get_type() == log_op_def::LOG_GROUP_BY) {
     OPT_TRACE("parent is groupby, do nothing");
     // do nothing

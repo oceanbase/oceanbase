@@ -75,7 +75,8 @@ struct ObGroupByPushdownContext : public RewriterContext
         need_count_(false),
         enable_reshuffle_(false),
         enable_place_groupby_(false),
-        benefit_from_reshuffle_(false)
+        benefit_from_reshuffle_(false),
+        in_broadcast_side_path_(false)
   {}
   virtual ~ObGroupByPushdownContext() {}
 
@@ -88,6 +89,7 @@ struct ObGroupByPushdownContext : public RewriterContext
     enable_reshuffle_ = false;
     enable_place_groupby_ = false;
     benefit_from_reshuffle_ = false;
+    in_broadcast_side_path_ = false;
   }
 
   /**
@@ -160,12 +162,18 @@ struct ObGroupByPushdownContext : public RewriterContext
   // we should disable reshuffle to avoid unnecessary shuffle operations.
   bool benefit_from_reshuffle_;
 
+  // Whether current pushdown path is still inside join-broadcast side before crossing
+  // the real BROADCAST/BC2HOST exchange node.
+  // When true, placing groupby must be disabled on this path.
+  bool in_broadcast_side_path_;
+
   TO_STRING_KV(K_(groupby_exprs),
                K_(aggr_exprs),
                K_(need_count),
                K_(enable_reshuffle),
                K_(enable_place_groupby),
-               K_(benefit_from_reshuffle));
+               K_(benefit_from_reshuffle),
+               K_(in_broadcast_side_path));
 };
 
 /**

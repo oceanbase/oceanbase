@@ -57,7 +57,11 @@ public:
 struct ObDistinctPushdownContext : public RewriterContext
 {
   ObDistinctPushdownContext()
-      : RewriterContext(), enable_reshuffle_(false), enable_place_distinct_(false), benefit_from_reshuffle_(false)
+      : RewriterContext(),
+        enable_reshuffle_(false),
+        enable_place_distinct_(false),
+        benefit_from_reshuffle_(false),
+        in_broadcast_side_path_(false)
   {}
   virtual ~ObDistinctPushdownContext() {}
 
@@ -68,6 +72,7 @@ struct ObDistinctPushdownContext : public RewriterContext
     enable_reshuffle_ = false;
     enable_place_distinct_ = false;
     benefit_from_reshuffle_ = false;
+    in_broadcast_side_path_ = false;
   }
 
   int merge_with(const common::ObIArray<ObRawExpr*> &lower_distinct_exprs,
@@ -108,7 +113,16 @@ struct ObDistinctPushdownContext : public RewriterContext
   // we should disable reshuffle to avoid unnecessary shuffle operations.
   bool benefit_from_reshuffle_;
 
-  TO_STRING_KV(K_(distinct_exprs), K_(enable_reshuffle), K_(enable_place_distinct), K_(benefit_from_reshuffle));
+  // Whether current pushdown path is still inside join-broadcast side before crossing
+  // the real BROADCAST/BC2HOST exchange node.
+  // When true, placing distinct must be disabled on this path.
+  bool in_broadcast_side_path_;
+
+  TO_STRING_KV(K_(distinct_exprs),
+               K_(enable_reshuffle),
+               K_(enable_place_distinct),
+               K_(benefit_from_reshuffle),
+               K_(in_broadcast_side_path));
 };
 
 struct ObDistinctPushdownResult {

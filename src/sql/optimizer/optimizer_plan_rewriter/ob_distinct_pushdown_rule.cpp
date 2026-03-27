@@ -74,6 +74,7 @@ int ObDistinctPushdownContext::assign(const ObDistinctPushdownContext &other)
     enable_reshuffle_ = other.enable_reshuffle_;
     enable_place_distinct_ = other.enable_place_distinct_;
     benefit_from_reshuffle_ = other.benefit_from_reshuffle_;
+    in_broadcast_side_path_ = other.in_broadcast_side_path_;
   }
   return ret;
 }
@@ -454,6 +455,9 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
         ObDistinctPushdownResult *right_result_ptr = &right_result;
         ObDistinctPushdownContext left_context;
         ObDistinctPushdownContext right_context;
+        bool left_is_broadcast_side = join->get_dist_method() == DistAlgo::DIST_BROADCAST_NONE
+                                      || join->get_dist_method() == DistAlgo::DIST_BC2HOST_NONE;
+        bool right_is_broadcast_side = join->get_dist_method() == DistAlgo::DIST_NONE_BROADCAST;
         bool current_context_empty = false;
         // prepare left context
         if (left_implicit_distinct) {
@@ -464,6 +468,7 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
             left_context.enable_place_distinct_ = false;
             left_context.enable_reshuffle_ = false;
             left_context.benefit_from_reshuffle_ = false;
+            left_context.in_broadcast_side_path_ = left_is_broadcast_side;
           }
         } else if (try_push_to_left) {
           if (NULL == ctx || ctx->is_empty()) {
@@ -476,6 +481,7 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
               left_context.enable_place_distinct_ = true;
               left_context.enable_reshuffle_ &= !disable_reshuffle;
               left_context.benefit_from_reshuffle_ = true;
+              left_context.in_broadcast_side_path_ = left_is_broadcast_side;
             }
           }
           if (OB_FAIL(ret)) {
@@ -514,6 +520,7 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
             right_context.enable_place_distinct_ = false;
             right_context.enable_reshuffle_ = false;
             right_context.benefit_from_reshuffle_ = false;
+            right_context.in_broadcast_side_path_ = right_is_broadcast_side;
           }
         } else if (try_push_to_right) {
           if (NULL == ctx || ctx->is_empty()) {
@@ -528,6 +535,7 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
               right_context.enable_place_distinct_ = true;
               right_context.enable_reshuffle_ &= !disable_reshuffle;
               right_context.benefit_from_reshuffle_ = true;
+              right_context.in_broadcast_side_path_ = right_is_broadcast_side;
             }
           }
           if (OB_FAIL(ret)) {
@@ -1129,6 +1137,11 @@ int ObDistinctPushDownPlanRewriter::set_context_flags_for_exchange(ObLogExchange
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), KP(exchange), KP(ctx));
   } else {
+    if (exchange->get_dist_method() == ObPQDistributeMethod::BC2HOST
+        || exchange->get_dist_method() == ObPQDistributeMethod::BROADCAST) {
+      // The pushdown path has crossed a broadcast/BC2HOST exchange, clear the marker.
+      ctx->in_broadcast_side_path_ = false;
+    }
     if (exchange->is_slave_mapping()) {
       OPT_TRACE("set context flags for exchange", exchange->get_name(), "is slave mapping, disable reshuffle and place distinct");
       ctx->enable_reshuffle_ = false;
@@ -1281,6 +1294,8 @@ int ObDistinctPushDownPlanRewriter::try_place_distinct(ObLogicalOperator *op,
       result->set_is_materialized(true);
       transform_happened_ = true;
     }
+  } else if (ctx->in_broadcast_side_path_) {
+    OPT_TRACE("try place distinct", op->get_name(), "in broadcast side path, do nothing");
   } else {
     double ndv = 0;
     double cut_ratio = 0;
@@ -1312,7 +1327,8 @@ int ObDistinctPushDownPlanRewriter::try_place_distinct(ObLogicalOperator *op,
       double partial_cut_ratio = op->get_card() / std::max(partial_ndv, 1.0);
       if (partial_cut_ratio < nopushdown_cut_ratio) {
         double final_cut_ratio = op->get_card() / std::max(ndv, 1.0);
-        bool enable_reshuffle = ctx->enable_reshuffle_ && ctx->benefit_from_reshuffle_;
+        bool enable_reshuffle = ctx->enable_reshuffle_
+                                && ctx->benefit_from_reshuffle_;
         if (enable_reshuffle && (final_cut_ratio > nopushdown_cut_ratio)) {
           // allocate exchange only when cut_ratio is not enough, and become enough after shuffle
           need_reshuffle = true;
