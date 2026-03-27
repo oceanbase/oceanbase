@@ -357,6 +357,7 @@ int ObExprTimeDiff::calc_timediff_for_string_vector(const ObExpr &expr, ObEvalCt
       if (OB_FAIL(ret)) {
         if (CM_IS_WARN_ON_FAIL(cast_mode)) {
           ret = OB_SUCCESS; // Reset ret for this row, continue processing
+          res_vec->set_null(idx);
         }
         // If not warning mode, let ret propagate to stop batch processing
       }
