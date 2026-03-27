@@ -972,6 +972,7 @@ int ObPxSubCoord::start_ddl()
       ddl_dag_param.ddl_task_param_.schema_version_ = schema_version; // for idempotence, the schema version must be fixed, so get it from task record
       ddl_dag_param.ddl_task_param_.is_no_logging_ = is_no_logging;
       ddl_dag_param.ddl_task_param_.is_offline_index_rebuild_ = is_offline_index_rebuild;
+      ddl_dag_param.ddl_task_param_.is_vec_tablet_rebuild_ = is_vec_tablet_rebuild;
       ddl_dag_param.ddl_task_param_.max_batch_size_ = phy_plan->get_batch_size();
       ddl_dag_param.ddl_task_param_.is_partition_local_ = GET_MY_SESSION(*exec_ctx)->get_ddl_info().is_partition_local_ddl();
       if (OB_FAIL(get_participants(sqc_arg_.sqc_, ddl_table_id, ddl_dag_param.ls_tablet_ids_))) {

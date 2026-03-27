@@ -385,7 +385,7 @@ struct ObDDLTaskParam
 {
 public:
   ObDDLTaskParam() : tenant_data_version_(0), snapshot_version_(0), schema_version_(0), ddl_task_id_(0), execution_id_(0),
-    target_table_id_(0),  is_no_logging_(false), max_batch_size_(0), is_offline_index_rebuild_(false), is_partition_local_(false) {}
+    target_table_id_(0),  is_no_logging_(false), max_batch_size_(0), is_offline_index_rebuild_(false), is_partition_local_(false), is_vec_tablet_rebuild_(false) {}
   void reset()
   {
     tenant_data_version_ = 0;
@@ -398,9 +398,10 @@ public:
     max_batch_size_ = 0;
     is_offline_index_rebuild_ = false;
     is_partition_local_ = false;
+    is_vec_tablet_rebuild_ = false;
   }
   bool is_valid() const { return ddl_task_id_ > 0 && execution_id_ >= 0 && tenant_data_version_ > 0 && snapshot_version_ >= 0 && target_table_id_ > 0 && schema_version_ > 0; }
-  TO_STRING_KV(K_(ddl_task_id), K_(execution_id), K_(tenant_data_version), K_(snapshot_version), K_(target_table_id), K_(schema_version), K_(is_no_logging), K_(max_batch_size), K_(is_offline_index_rebuild), K_(is_partition_local));
+  TO_STRING_KV(K_(ddl_task_id), K_(execution_id), K_(tenant_data_version), K_(snapshot_version), K_(target_table_id), K_(schema_version), K_(is_no_logging), K_(max_batch_size), K_(is_offline_index_rebuild), K_(is_partition_local), K_(is_vec_tablet_rebuild));
 public:
   /* necessary param */
   uint64_t tenant_data_version_;
@@ -415,6 +416,7 @@ public:
   int64_t max_batch_size_; // for batch rows when load data, from hint named load_batch_size
   bool is_offline_index_rebuild_;
   bool is_partition_local_;
+  bool is_vec_tablet_rebuild_;  // true when building HNSW index in rebuild scenario (vec tablet rebuild)
 };
 
 struct ObDDLAutoincParam
@@ -535,7 +537,8 @@ public:
                                    const uint64_t table_id,
                                    const uint64_t tenant_data_version,
                                    common::ObArenaAllocator &allocator,
-                                   ObDDLTableSchema &ddl_table_schema);
+                                   ObDDLTableSchema &ddl_table_schema,
+                                   const bool is_vec_tablet_rebuild = false);
 private:
   static int fill_vector_index_schema_item(const uint64_t tenant_id,
                                            ObSchemaGetterGuard &schema_guard,

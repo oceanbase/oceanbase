@@ -207,6 +207,8 @@ int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
       LOG_WARN("get tenant schema failed", K(ret), K(dest_tenant_id_));
     } else if (OB_FAIL(ObDDLTableSchema::fill_ddl_table_schema(schema_guard, dest_tenant_id_, dest_table_id_, data_format_version_, allocator_, ddl_table_schema_))) {
       LOG_WARN("fill ddl table schema failed", K(ret));
+    } else if (FALSE_IT(ddl_table_schema_.table_item_.is_vec_tablet_rebuild_ = false)) {
+      // Complement data is never vec tablet rebuild; avoid false positive when dest is available HNSW.
     } else if (FALSE_IT(ddl_table_schema_.src_tenant_id_ = orig_tenant_id)) {
     } else if (OB_FAIL(fill_tablet_param())) {
       LOG_WARN("fill tablet param failed", K(ret));

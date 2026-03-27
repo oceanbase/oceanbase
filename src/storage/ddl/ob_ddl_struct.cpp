@@ -808,7 +808,8 @@ int ObDDLTableSchema::fill_ddl_table_schema(
     const uint64_t table_id,
     const uint64_t tenant_data_version,
     ObArenaAllocator &allocator,
-    ObDDLTableSchema &ddl_table_schema)
+    ObDDLTableSchema &ddl_table_schema,
+    const bool is_vec_tablet_rebuild)
 {
   int ret = OB_SUCCESS;
   ObArray<ObColDesc> column_descs;
@@ -837,7 +838,8 @@ int ObDDLTableSchema::fill_ddl_table_schema(
     ddl_table_schema.table_item_.lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
     ddl_table_schema.table_item_.compress_type_ = table_schema->get_compressor_type();
     ddl_table_schema.table_item_.index_type_ = table_schema->get_index_type();
-    ddl_table_schema.table_item_.is_vec_tablet_rebuild_ = !table_schema->is_unavailable_index() && table_schema->is_vec_hnsw_index();
+    // Only set true for HNSW when: (1) index is already available, or (2) caller explicitly indicates rebuild (new index is unavailable during build).
+    ddl_table_schema.table_item_.is_vec_tablet_rebuild_ = table_schema->is_vec_hnsw_index() && is_vec_tablet_rebuild;
     ddl_table_schema.data_table_id_ = table_schema->get_data_table_id();
     if (OB_FAIL(ddl_table_schema.column_descs_.assign(column_descs))) {
       LOG_WARN("assign column descs failed", K(ret));

@@ -164,7 +164,7 @@ int ObDDLIndependentDag::init_ddl_table_schema()
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("get tenant schema failed", K(ret), K(tenant_id));
-  } else if (OB_FAIL(ObDDLTableSchema::fill_ddl_table_schema(schema_guard, tenant_id, ddl_task_param_.target_table_id_, ddl_task_param_.tenant_data_version_, arena_, ddl_table_schema_))) {
+  } else if (OB_FAIL(ObDDLTableSchema::fill_ddl_table_schema(schema_guard, tenant_id, ddl_task_param_.target_table_id_, ddl_task_param_.tenant_data_version_, arena_, ddl_table_schema_, ddl_task_param_.is_vec_tablet_rebuild_))) {
     LOG_WARN("fill ddl table schema failed", K(ret));
   }
 
