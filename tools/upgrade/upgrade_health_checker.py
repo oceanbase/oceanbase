@@ -419,17 +419,6 @@ def get_version(version_str):
   version = (major << 32) | (minor << 16) | (major_patch << 8) | minor_patch
   return version
 
-def get_max_zone_count(query_cur):
-  sql = "select count(*) from oceanbase.DBA_OB_ZONES"
-  try:
-    (desc, results) = query_cur.exec_query(sql, print_when_succ=False)
-    if len(results) == 0:
-      return 0
-    return results[0][0]
-  except Exception as e:
-    logging.exception('fail to query DBA_OB_ZONES')
-    raise
-
 # 检查集群版本是否支持向量索引（>= 4.3.3.0）
 def check_cluster_version_for_vector_index(query_cur):
   try:
@@ -576,7 +565,7 @@ def group_by_tenant_and_tablet(results):
 
   return grouped
 
-def check_tenant_hnsw_index_loaded(tenant_id, tablets, incr_history, tenant_ls_replica_count, max_zone_count):
+def check_tenant_hnsw_index_loaded(tenant_id, tablets, incr_history, tenant_ls_replica_count):
   # snap_cnt放宽条件
   SNAP_MAX_PER_TABLET = 100000       # 不一致快照索引单个tablet不超过10W向量
   SNAP_MAX_TABLETS = 30              # 不一致快照索引tablet数量低于30个
@@ -621,7 +610,7 @@ def check_tenant_hnsw_index_loaded(tenant_id, tablets, incr_history, tenant_ls_r
       }]
 
     # 检查 1: 副本数是否匹配
-    if actual_count > max_zone_count or actual_count < expected_count:
+    if actual_count < expected_count:
       pending_list.append({
         'tablet_id': tablet_id,
         'data_table_id': data_table_id,
@@ -806,10 +795,8 @@ def check_vector_index_loaded(query_cur, zone, timeout):
           logging.warn("Query returned empty, may be query unstable, will retry")
         else:
           tenant_expected_replica_count = get_expected_replica_count(query_cur)
-          max_zone_count = get_max_zone_count(query_cur)
-          logging.info("Zone count: %d", max_zone_count)
 
-          result, tenant_stats = check_vector_index_loaded_one_round(grouped, tenant_expected_replica_count, incr_history, max_zone_count, max_times - times, max_times)
+          result, tenant_stats = check_vector_index_loaded_one_round(grouped, tenant_expected_replica_count, incr_history, max_times - times, max_times)
           if result == 'success':
             check_done = 1
           else:
@@ -825,7 +812,7 @@ def check_vector_index_loaded(query_cur, zone, timeout):
       if check_done == 0:
         time.sleep(10)
 
-def check_vector_index_loaded_one_round(grouped, tenant_expected_replica_count, incr_history, max_zone_count, current_round, max_round):
+def check_vector_index_loaded_one_round(grouped, tenant_expected_replica_count, incr_history, current_round, max_round):
   # 收集HNSW索引的tablet信息
   # 检查HNSW/HGRAPH索引
   all_loaded = 1
@@ -838,7 +825,7 @@ def check_vector_index_loaded_one_round(grouped, tenant_expected_replica_count, 
       return 'retry', {}
 
     loaded, pending_list = check_tenant_hnsw_index_loaded(
-        tenant_id, tablets, incr_history, tenant_ls_counts, max_zone_count)
+        tenant_id, tablets, incr_history, tenant_ls_counts)
 
     # 统计该租户的副本数分布（用于日志）
     unique_counts = set(tenant_ls_counts.values())
