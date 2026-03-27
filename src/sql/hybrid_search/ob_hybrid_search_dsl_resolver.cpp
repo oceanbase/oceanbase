@@ -1021,7 +1021,7 @@ int ObDSLResolver::get_json_string_from_node(const ParseNode *node, ObString &js
   return ret;
 }
 
-int ObDSLResolver::get_user_column_expr(const ObString &col_name, ObColumnRefRawExpr *&col_expr)
+int ObDSLResolver::get_user_column_expr(ObString &col_name, ObColumnRefRawExpr *&col_expr)
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory *expr_factory = params_.expr_factory_;
@@ -1030,6 +1030,8 @@ int ObDSLResolver::get_user_column_expr(const ObString &col_name, ObColumnRefRaw
   if (col_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column name is empty", K(ret));
+  } else if (OB_FAIL(ObCharset::tolower(CS_TYPE_UTF8MB4_GENERAL_CI, col_name, col_name, *allocator_))) {
+    LOG_WARN("fail to lower column name", K(ret), K(col_name));
   } else if (OB_NOT_NULL(existing_col_item = stmt_->get_column_item(table_item_.table_id_, col_name))) {
     col_expr = existing_col_item->expr_;
   } else if (OB_FAIL(col_schema_map_.get_refactored(col_name, col_schema))) {
@@ -2674,7 +2676,12 @@ int ObDSLResolver::resolve_slop(ObIJsonBase &req_node, int32_t &slop)
 {
   int ret = OB_SUCCESS;
   double slop_double = 0.0;
-  if (OB_FAIL(req_node.to_double(slop_double))) {
+  ObJsonNodeType json_type = req_node.json_type();
+  if (!ObIJsonBase::is_json_number_type(json_type) && json_type != ObJsonNodeType::J_STRING) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "slop, should be number or string type");
+    LOG_WARN("slop should be number or string type", K(ret), K(json_type));
+  } else if (OB_FAIL(req_node.to_double(slop_double))) {
     LOG_WARN("fail to get double value from slop", K(ret));
   } else if (slop_double < 0.0 || slop_double != static_cast<int64_t>(slop_double)) {
     ret = OB_INVALID_ARGUMENT;
@@ -3393,6 +3400,11 @@ int ObDSLResolver::resolve_term(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
   } else if (is_scalar_json_type(col_para->json_type())) {
     value_node = col_para;
   } else if (col_para->json_type() == ObJsonNodeType::J_OBJECT) {
+    if (col_para->element_count() == 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "param of term, should not be empty");
+      LOG_WARN("param of term should not be empty", K(ret));
+    }
     for (uint64_t i = 0; OB_SUCC(ret) && i < col_para->element_count(); i++) {
       ObString key;
       ObIJsonBase *sub_node = nullptr;

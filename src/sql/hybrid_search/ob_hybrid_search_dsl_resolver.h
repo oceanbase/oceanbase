@@ -307,7 +307,7 @@ private :
   int get_field_expr_and_path(const ObString &field_name, ObColumnRefRawExpr *&col_expr, ObString &path_str);
   int get_fulltext_index_schema(const ObString &field_name, const ObTableSchema *&index_schema);
   int get_json_string_from_node(const ParseNode *node, ObString &json_str);
-  int get_user_column_expr(const ObString &col_name, ObColumnRefRawExpr *&col_expr);
+  int get_user_column_expr(ObString &col_name, ObColumnRefRawExpr *&col_expr);
   int init_bool_info(ObIJsonBase &req_node, int32_t &msm, ObConstRawExpr *&boost_expr);
   int init_col_idx_map();
   int init_col_schema_map();
