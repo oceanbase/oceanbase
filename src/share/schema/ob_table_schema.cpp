@@ -11203,9 +11203,10 @@ int ObTableSchema::get_search_data_index_tid(uint64_t &tid) const
   if (is_search_def_index()) {
     if (1 != get_index_tid_count()
       || !share::schema::is_search_data_index(get_simple_index_infos().at(0).index_type_)) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_SCHEMA_EAGAIN;
       LOG_WARN("the search index definition table and the search index data table should"
-                                  " correspond one-to-one", K(ret), K(get_index_tid_count()));
+               " correspond one-to-one",
+               K_(data_table_id), K_(table_id), K(get_index_tid_count()), K(ret));
     } else {
       tid = get_simple_index_infos().at(0).table_id_;
     }
